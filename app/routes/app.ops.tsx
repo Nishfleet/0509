@@ -1,31 +1,110 @@
 import type { ReactNode } from "react";
-import { useLoaderData } from "react-router";
+import { Form, useActionData, useLoaderData } from "react-router";
 import { LocalTime } from "~/components/local-time";
-import type { LoaderFunctionArgs } from "react-router";
+import { ActionFeedback } from "~/components/action-feedback";
+import { SubmitButton } from "~/components/submit-button";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 export const meta = () => [{ title: "Ops | Five to Nine" }];
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
-  const { requireSession } = await import("~/lib/auth.server");
-  const { getEnv } = await import("~/lib/context.server");
-  const { isOpsUserAllowed } = await import("~/lib/env.server");
-  const env = getEnv(context);
-  const session = await requireSession(env, request);
-
-  if (!isOpsUserAllowed(env, session.user.email)) {
-    throw new Response("Forbidden", { status: 403 });
-  }
-
-  const { getOperatorSnapshot } = await import("~/lib/data.server");
-  const snapshot = await getOperatorSnapshot(env);
+  const { env } = await requireOpsAccess(context, request);
+  const {
+    createBillingEmailReconciliationKey,
+    getOperatorSnapshot,
+    listOutstandingBillingLifecycleProviderUnknownAttempts,
+  } = await import("~/lib/data.server");
+  const [rawSnapshot, outstandingBillingAttempts] = await Promise.all([
+    getOperatorSnapshot(env),
+    listOutstandingBillingLifecycleProviderUnknownAttempts(env, { limit: 50 }),
+  ]);
+  const snapshot = maskOperatorSnapshot(rawSnapshot);
 
   return {
     snapshot,
+    outstandingBillingAttempts: outstandingBillingAttempts.map((attempt) => ({
+      attemptId: attempt.id,
+      recipient: maskDeliveryTarget(attempt.targetValue),
+      templateName: attempt.templateName,
+      provider: attempt.provider,
+      createdAt: attempt.createdAt,
+      updatedAt: attempt.updatedAt,
+      reconciliationKey: createBillingEmailReconciliationKey(),
+    })),
+  };
+}
+
+export async function action({ context, request }: ActionFunctionArgs) {
+  const { env, session } = await requireOpsAccess(context, request);
+  const formData = await request.formData();
+  const intent = String(formData.get("intent") ?? "");
+  if (intent !== "reconcile-billing-email") {
+    return { ok: false, intent, message: "Unknown operator action." };
+  }
+
+  const { BILLING_EMAIL_EVIDENCE_CLASSIFICATIONS, reconcileBillingEmailAttemptWithAudit } =
+    await import("~/lib/data.server");
+  const classificationValue = String(formData.get("classification") ?? "");
+  const classification = BILLING_EMAIL_EVIDENCE_CLASSIFICATIONS.find(
+    (value) => value === classificationValue,
+  );
+  if (!classification) {
+    return {
+      ok: false,
+      intent,
+      attemptId: String(formData.get("attemptId") ?? ""),
+      message: "Choose a supported provider-evidence classification.",
+    };
+  }
+  const outcomeValue = String(formData.get("outcome") ?? "");
+  const outcome = outcomeValue === "sent" || outcomeValue === "failed" ? outcomeValue : null;
+  if (!outcome) {
+    return {
+      ok: false,
+      intent,
+      attemptId: String(formData.get("attemptId") ?? ""),
+      message: "Choose the provider-confirmed outcome.",
+    };
+  }
+
+  const result = await reconcileBillingEmailAttemptWithAudit(env, {
+    operatorUserId: session.user.id,
+    attemptId: String(formData.get("attemptId") ?? ""),
+    idempotencyKey: String(formData.get("reconciliationKey") ?? ""),
+    expectedUpdatedAt: String(formData.get("expectedUpdatedAt") ?? ""),
+    outcome,
+    classification,
+    evidenceReference: String(formData.get("evidenceReference") ?? ""),
+    observedAt: String(formData.get("observedAt") ?? ""),
+  });
+  if (result.ok) {
+    return {
+      ok: true,
+      intent,
+      attemptId: result.attemptId,
+      message:
+        result.outcome === "sent"
+          ? "Marked sent from verified provider evidence. No email was resent."
+          : "Marked failed from verified provider evidence. This action did not resend email.",
+    };
+  }
+  const messages = {
+    invalid_evidence: "Provider evidence is incomplete or does not match the selected outcome.",
+    idempotency_conflict: "This reconciliation key was already used for different evidence. Refresh before retrying.",
+    stale: "This attempt changed before reconciliation. Refresh and verify its current provider state.",
+    not_found: "This attempt no longer exists. Refresh the operator desk.",
+  } as const;
+  return {
+    ok: false,
+    intent,
+    attemptId: String(formData.get("attemptId") ?? ""),
+    message: messages[result.reason],
   };
 }
 
 export default function OpsRoute() {
-  const { snapshot } = useLoaderData<typeof loader>();
+  const { snapshot, outstandingBillingAttempts } = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
 
   return (
     <section className="f9-app-stack">
@@ -63,8 +142,82 @@ export default function OpsRoute() {
               <>
                 <p className="f9-app-kicker">{item.watchlist_name}</p>
                 <h3>Run failed</h3>
-                <p>{item.error_message ?? item.error_code ?? "Unknown run failure."}</p>
+                <p>{describeRunFailure(item.error_code)}</p>
                 <p className="f9-muted-copy">{formatTimestamp(item.started_at)}</p>
+              </>
+            )}
+          />
+
+          <OpsSection
+            empty="No billing lifecycle emails are awaiting provider reconciliation."
+            items={outstandingBillingAttempts}
+            title="Billing email provider reconciliation"
+            renderItem={(item) => (
+              <>
+                <p className="f9-app-kicker">{item.provider} · {item.templateName ?? "Billing lifecycle"}</p>
+                <h3>Email to {item.recipient}</h3>
+                <p>
+                  Confirm the outcome in provider logs or a controlled inbox. This records evidence and state only; it never resends an email.
+                </p>
+                <p className="f9-muted-copy">
+                  Unknown since <LocalTime iso={item.updatedAt} />
+                </p>
+                <Form className="f9-app-stack" method="post">
+                  <input name="intent" type="hidden" value="reconcile-billing-email" />
+                  <input name="attemptId" type="hidden" value={item.attemptId} />
+                  <input name="expectedUpdatedAt" type="hidden" value={item.updatedAt} />
+                  <input name="reconciliationKey" type="hidden" value={item.reconciliationKey} />
+                  <label>
+                    Provider-confirmed outcome
+                    <select name="outcome" required>
+                      <option value="">Choose outcome</option>
+                      <option value="sent">Sent or delivered</option>
+                      <option value="failed">Not accepted or failed</option>
+                    </select>
+                  </label>
+                  <label>
+                    Evidence source
+                    <select name="classification" required>
+                      <option value="">Choose evidence source</option>
+                      <option value="cloudflare_email_log">Cloudflare Email log</option>
+                      <option value="controlled_inbox_receipt">Controlled inbox receipt</option>
+                      <option value="provider_rejection_log">Provider rejection log</option>
+                    </select>
+                  </label>
+                  <label>
+                    Provider evidence reference
+                    <input
+                      autoComplete="off"
+                      maxLength={160}
+                      name="evidenceReference"
+                      pattern="[A-Za-z0-9][A-Za-z0-9._:-]{5,159}"
+                      placeholder="provider_event_12345"
+                      required
+                    />
+                  </label>
+                  <label>
+                    Provider observed at (UTC ISO 8601)
+                    <input
+                      autoComplete="off"
+                      name="observedAt"
+                      placeholder="2026-07-15T18:01:00Z"
+                      required
+                    />
+                  </label>
+                  <SubmitButton
+                    className="f9-secondary-button"
+                    intent="reconcile-billing-email"
+                    match={{ attemptId: item.attemptId }}
+                    pendingLabel="Recording…"
+                  >
+                    Record provider evidence
+                  </SubmitButton>
+                </Form>
+                <ActionFeedback
+                  data={actionData}
+                  intent="reconcile-billing-email"
+                  match={{ attemptId: item.attemptId }}
+                />
               </>
             )}
           />
@@ -89,7 +242,7 @@ export default function OpsRoute() {
             renderItem={(item) => (
               <>
                 <p className="f9-app-kicker">{item.watchlist_name}</p>
-                <h3>{item.failure_reason ?? item.failure_code ?? "Evidence check failed"}</h3>
+                <h3>{describeProofFailure(item.failure_code)}</h3>
                 <p className="f9-muted-copy">{formatTimestamp(item.attempted_at)}</p>
               </>
             )}
@@ -165,7 +318,7 @@ export default function OpsRoute() {
               <>
                 <p className="f9-app-kicker">{formatDiscoveryProvider(item.provider)}</p>
                 <h3>{formatDiscoveryStatus(item.status)}</h3>
-                <p>{item.summary}</p>
+                <p>{describeDiscoveryProviderState(item.status)}</p>
                 <p className="f9-muted-copy">
                   {item.lastFailureAt ? (
                     <>Last failure {formatTimestamp(item.lastFailureAt)}</>
@@ -201,6 +354,52 @@ export default function OpsRoute() {
       </div>
     </section>
   );
+}
+
+async function requireOpsAccess(context: LoaderFunctionArgs["context"], request: Request) {
+  const { requireSession } = await import("~/lib/auth.server");
+  const { getEnv } = await import("~/lib/context.server");
+  const { isOpsUserAllowed } = await import("~/lib/env.server");
+  const env = getEnv(context);
+  const session = await requireSession(env, request);
+  if (!isOpsUserAllowed(env, session.user.email)) {
+    throw new Response("Forbidden", { status: 403 });
+  }
+  return { env, session };
+}
+
+function maskOperatorSnapshot<T extends {
+  deliveryAttention: Array<{ target_value: string }>;
+  blockedTargets: Array<{ target_value: string }>;
+}>(snapshot: T): T {
+  return {
+    ...snapshot,
+    deliveryAttention: snapshot.deliveryAttention.map((item) => ({
+      ...item,
+      target_value: maskDeliveryTarget(item.target_value),
+    })),
+    blockedTargets: snapshot.blockedTargets.map((item) => ({
+      ...item,
+      target_value: maskDeliveryTarget(item.target_value),
+    })),
+  } as T;
+}
+
+function maskDeliveryTarget(value: string) {
+  const normalized = value.trim();
+  const at = normalized.lastIndexOf("@");
+  if (at > 0) {
+    const local = normalized.slice(0, at);
+    const domain = normalized.slice(at + 1);
+    const [host, ...suffix] = domain.split(".");
+    return `${maskSegment(local)}@${maskSegment(host)}${suffix.length ? `.${suffix.at(-1)}` : ""}`;
+  }
+  const digits = normalized.replace(/\D/g, "");
+  return digits.length >= 4 ? `••••${digits.slice(-4)}` : "••••";
+}
+
+function maskSegment(value: string) {
+  return value ? `${value[0]}•••` : "•••";
 }
 
 function MetricCard(props: { label: string; value: number }) {
@@ -263,10 +462,35 @@ function describeDeliveryAttention(item: {
   error_message: string | null;
 }) {
   if (item.status === "pending" && item.webhook_status === "provider_unknown") {
-    return item.error_message ?? "Provider outcome is unknown; check Cloudflare Email Sending logs.";
+    return "Provider outcome is unknown. Verify it in provider logs before reconciling; do not resend blindly.";
   }
 
-  return item.error_message ?? "Delivery failed for an operational reason.";
+  return "Delivery failed. Use the provider log and structured attempt record for diagnosis.";
+}
+
+function describeRunFailure(errorCode: string | null) {
+  if (errorCode === "provider_unavailable") {
+    return "The discovery provider was unavailable. Retry after provider health recovers.";
+  }
+  if (errorCode === "capacity_unavailable" || errorCode === "rate_limited") {
+    return "The run could not acquire provider capacity. Check the scheduled retry and quota state.";
+  }
+  return "The run failed. Inspect structured logs using the run identifier; raw provider errors are intentionally hidden here.";
+}
+
+function describeProofFailure(failureCode: string | null) {
+  if (failureCode === "capture_timeout") return "Evidence capture timed out";
+  if (failureCode === "provider_unavailable") return "Evidence provider unavailable";
+  if (failureCode === "budget_exhausted") return "Evidence budget exhausted";
+  return "Evidence check failed";
+}
+
+function describeDiscoveryProviderState(status: string) {
+  if (status === "healthy") return "Recent source checks succeeded.";
+  if (status === "degraded") {
+    return "Source checks are degraded. Review structured discovery logs before promising fresh coverage.";
+  }
+  return "Fresh source coverage is unavailable. Keep customer-facing status in degraded mode until a live check succeeds.";
 }
 
 function formatTimestamp(value: string) {

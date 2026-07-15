@@ -191,6 +191,38 @@ const digest: DigestRecord = {
   ],
 };
 
+const sparseReport = {
+	kind: "report" as const,
+	reportId: "collection:collection-1",
+	resourceType: "collection" as const,
+	resourceId: "collection-1",
+	title: "Sparse report",
+	rows: [
+		{
+			id: "row-1",
+			advertiser: null,
+			previewHeadline: null,
+			offer: null,
+			cta: null,
+			formatLabel: "unknown",
+			languageLabel: null,
+			previewImageUrl: null,
+			creativeText: null,
+			translatedText: null,
+			landingPage: {
+				url: null,
+				headline: null,
+				captureLabel: null,
+				capturedAt: null,
+				signals: [],
+			},
+			analysisFields: [],
+			tags: [],
+			note: null,
+		},
+	],
+};
+
 function setupMocks(authOk = true, actionsWriteEnabled = true, workspaceUserId = apiKey.userId) {
   mockAgencyWorkspacePlan();
   const isMemberWorkspace = workspaceUserId !== apiKey.userId;
@@ -414,6 +446,7 @@ describe("customer API v1", () => {
     expect(body.toolActivation.blockedCapabilities).toContain("billing changes");
     expect(body.toolActivation.blockedCapabilities).toContain("team invites");
     expect(body.toolActivation.blockedCapabilities).toContain("customer API key creation, rotation, and revocation");
+		expect(body.toolActivation.blockedCapabilities).toContain("report branding configuration and logo uploads");
     expect(body.notLiveYet).not.toContain("MCP server");
     expect(body.notLiveYet).toContain("TikTok ingestion");
     expect(body.notLiveYet).toContain(BROAD_WRITE_API_NON_GOAL);
@@ -578,6 +611,40 @@ describe("customer API v1", () => {
       },
     );
   });
+
+	it("keeps sparse report fields string-valued on the API v1 transport", async () => {
+		const runCustomerAgentAction = vi.fn().mockResolvedValue({
+			audit: { id: "audit-report", status: "succeeded" },
+			replayed: true,
+			result: { ok: true, action: "report.create", report: sparseReport },
+		});
+		vi.doMock("~/lib/customer-agent-actions.server", () => ({
+			customerAgentActionErrorPayload: vi.fn(),
+			normalizeCustomerAgentActionName: vi.fn(() => "report.create"),
+			runCustomerAgentAction,
+		}));
+
+		const response = await postActionApi({
+			action: "report.create",
+			input: { reportId: "collection:collection-1" },
+		});
+		const body = await response.json() as {
+			result: { report: { rows: Array<Record<string, unknown>> } };
+		};
+		const row = body.result.report.rows[0] as {
+			advertiser: string;
+			translatedText: string;
+			landingPage: { url: string; captureLabel: string };
+		};
+
+		expect(row.advertiser).toBe("Ad context unavailable");
+		expect(row.translatedText).toBe("Translation unavailable");
+		expect(row.landingPage).toMatchObject({
+			url: "Landing page unavailable",
+			captureLabel: "Not checked yet",
+		});
+		expect(sparseReport.rows[0]?.advertiser).toBeNull();
+	});
 
   it("rejects forged WhatsApp delivery settings by API key", async () => {
     vi.doUnmock("~/lib/customer-agent-actions.server");

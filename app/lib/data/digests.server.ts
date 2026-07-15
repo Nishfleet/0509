@@ -22,7 +22,10 @@ import {
 	DIGEST_STRATEGY_GENERATION_READY,
 	readDigestStrategyNote,
 } from "~/lib/digest-strategy";
-import { DIGEST_ITEM_SET_PROVENANCE } from "~/lib/digest-provenance";
+import {
+	DIGEST_ITEM_SET_PROVENANCE,
+	selectDigestCohort,
+} from "~/lib/digest-provenance";
 import type { AppEnv } from "~/lib/env.server";
 import type {
   DigestDeliveryRecord,
@@ -152,10 +155,15 @@ export async function createDigestRun(
 	const createdAt = nowIso();
 	const db = ensureDb(env);
 	const itemInputs = options?.items;
+	const cohort = itemInputs === undefined ? null : selectDigestCohort(itemInputs);
 	const persistedSummary = itemInputs === undefined
 		? summary
 		: {
 				...summary,
+				totalEligibleEvents: cohort!.totalEligibleEvents,
+				includedEvents: cohort!.includedEvents,
+				omittedEvents: cohort!.omittedEvents,
+				totalEvents: cohort!.totalEligibleEvents,
 				digestItemSetProvenance: DIGEST_ITEM_SET_PROVENANCE,
 			};
 	const insertStatement = db
@@ -182,44 +190,46 @@ export async function createDigestRun(
 			createdAt,
 		);
 
-	const results = itemInputs === undefined
+	const itemInsert = cohort === null
+		? null
+		: db
+				.prepare(
+					`
+					  INSERT INTO digest_item (
+					    id, digest_run_id, watchlist_id, watchlist_name, event_type,
+					    title, summary, metadata_json, created_at
+					  )
+					  SELECT
+					    json_extract(value, '$.id'), ?,
+					    json_extract(value, '$.watchlistId'),
+					    json_extract(value, '$.watchlistName'),
+					    json_extract(value, '$.eventType'),
+					    json_extract(value, '$.title'),
+					    json_extract(value, '$.summary'),
+					    json_extract(value, '$.metadata'), ?
+					  FROM json_each(?)
+					  INNER JOIN digest_run ON digest_run.id = ?
+					`,
+				)
+				.bind(
+					id,
+					createdAt,
+					JSON.stringify(
+						cohort.items.map((input) => ({
+							id: createId(),
+							watchlistId: input.watchlistId,
+							watchlistName: input.watchlistName,
+							eventType: input.eventType,
+							title: input.title,
+							summary: input.summary,
+							metadata: input.metadata ?? {},
+						})),
+					),
+					id,
+				);
+	const results = itemInsert === null
 		? [await insertStatement.run()]
-		: await db.batch([
-				insertStatement,
-				...itemInputs.map((input) =>
-					db
-						.prepare(
-              `
-                INSERT INTO digest_item (
-                  id,
-                  digest_run_id,
-                  watchlist_id,
-                  watchlist_name,
-                  event_type,
-                  title,
-                  summary,
-                  metadata_json,
-                  created_at
-                )
-                SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
-                FROM digest_run
-                WHERE id = ?
-              `,
-						)
-						.bind(
-							createId(),
-							id,
-							input.watchlistId,
-							input.watchlistName,
-							input.eventType,
-							input.title,
-							input.summary,
-							jsonValue(input.metadata ?? {}),
-							createdAt,
-							id,
-						),
-				),
-			]);
+		: await db.batch([insertStatement, itemInsert]);
 
 	const created = Number(results[0]?.meta?.changes ?? 0) > 0;
 	if (created) {

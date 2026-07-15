@@ -24,7 +24,8 @@ reconcileWhatsAppSetupTargetByProviderMessageId,
 
 export {
   listRetryableInstantAttempts,
-listStaleBillingLifecycleEmailAttempts,
+  listStaleBillingLifecycleEmailAttempts,
+  listOutstandingBillingLifecycleProviderUnknownAttempts,
   listDeliveryAttempts,
   getDeliveryAttemptByIdempotencyKey,
   reconcileDeliveryAttemptByProviderMessageId,

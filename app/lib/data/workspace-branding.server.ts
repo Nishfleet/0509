@@ -95,15 +95,14 @@ export async function upsertWorkspaceBranding(
 		brandLogo?: string | null | undefined;
 	},
 ) {
-  const current = await getWorkspaceBranding(env, userId);
   const hasBrandName = Object.prototype.hasOwnProperty.call(input, "brandName");
   const hasBrandWebsite = Object.prototype.hasOwnProperty.call(input, "brandWebsite");
 	const hasBrandLogo = Object.prototype.hasOwnProperty.call(input, "brandLogo");
-  const brandName = hasBrandName ? normalizeWorkspaceBrandName(input.brandName) : current.brandName;
-  const brandWebsite = hasBrandWebsite
-    ? normalizeWorkspaceBrandWebsite(input.brandWebsite)
-    : current.brandWebsite;
-	const brandLogo = hasBrandLogo ? normalizeWorkspaceBrandLogo(input.brandLogo) : current.brandLogo;
+	const brandName = hasBrandName ? normalizeWorkspaceBrandName(input.brandName) : null;
+	const brandWebsite = hasBrandWebsite
+		? normalizeWorkspaceBrandWebsite(input.brandWebsite)
+		: null;
+	const brandLogo = hasBrandLogo ? normalizeWorkspaceBrandLogo(input.brandLogo) : null;
 
   await run(
     env,
@@ -111,9 +110,18 @@ export async function upsertWorkspaceBranding(
       INSERT INTO workspace_branding (user_id, brand_name, brand_website, brand_logo, updated_at)
       VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(user_id) DO UPDATE SET
-        brand_name = excluded.brand_name,
-        brand_website = excluded.brand_website,
-        brand_logo = excluded.brand_logo,
+				brand_name = CASE
+					WHEN ? = 1 THEN excluded.brand_name
+					ELSE workspace_branding.brand_name
+				END,
+				brand_website = CASE
+					WHEN ? = 1 THEN excluded.brand_website
+					ELSE workspace_branding.brand_website
+				END,
+				brand_logo = CASE
+					WHEN ? = 1 THEN excluded.brand_logo
+					ELSE workspace_branding.brand_logo
+				END,
         updated_at = excluded.updated_at
     `,
     userId,
@@ -121,7 +129,13 @@ export async function upsertWorkspaceBranding(
     brandWebsite,
 		brandLogo,
     nowIso(),
+		hasBrandName ? 1 : 0,
+		hasBrandWebsite ? 1 : 0,
+		hasBrandLogo ? 1 : 0,
   );
 
-	return { brandName, brandWebsite, brandLogo };
+	// Return the durable row rather than the caller's partial input. Omitted
+	// fields are preserved by the atomic upsert above, even when another tab
+	// updates a different field between requests.
+	return getWorkspaceBranding(env, userId);
 }

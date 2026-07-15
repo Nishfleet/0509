@@ -1,5 +1,6 @@
 import { Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
+import { useEffect, useState } from "react";
 
 import { AdLongevityPill } from "~/components/ad-longevity-pill";
 import { AdThumb } from "~/components/ad-thumb";
@@ -9,6 +10,7 @@ import { ReportView } from "~/components/report-view";
 import { ShareBrandIdentity } from "~/components/share-brand-identity";
 import { DigestIntelligence, DigestMovementSummary, DigestProofPacket } from "~/components/digest-intelligence";
 import type { DigestShareSnapshot } from "~/lib/digest-share";
+import type { AppEnv } from "~/lib/env.server";
 import { formatAdvertiserLabel } from "~/lib/landing-page-display";
 import { emptyInsightDepthSummary } from "~/lib/insight-depth";
 import {
@@ -126,7 +128,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
 // the sharer's plan. A failed plan lookup downgrades to the honest print
 // button instead of advertising a download that would 403.
 async function resolveShareReportPdfPath(
-	env: unknown,
+	env: AppEnv,
 	share: { isSnapshot: boolean; resourceType: ShareResourceType; userId: string },
 	token: string,
 ) {
@@ -136,7 +138,7 @@ async function resolveShareReportPdfPath(
 
 	try {
 		const { getUserPlan, canUsePlanFeature } = await import("~/lib/plan.server");
-		const plan = await getUserPlan(env as never, share.userId);
+		const plan = await getUserPlan(env, share.userId);
     return canUsePlanFeature(plan, "pdf_reports") ? `/share/${token}/pdf` : null;
 	} catch {
 		return null;
@@ -155,6 +157,12 @@ export default function ShareRoute() {
 	);
 	const pdfVariant = Boolean("pdfVariant" in data && data.pdfVariant);
 	const pdfPath = "pdfPath" in data && typeof data.pdfPath === "string" ? data.pdfPath : null;
+	const [pdfPreparing, setPdfPreparing] = useState(false);
+	useEffect(() => {
+		if (!pdfPreparing) return;
+		const timeout = setTimeout(() => setPdfPreparing(false), 75_000);
+		return () => clearTimeout(timeout);
+	}, [pdfPreparing]);
 
   return (
     <main className={`f9-share-page${pdfVariant ? " f9-share-pdf" : ""}`}>
@@ -186,8 +194,21 @@ export default function ShareRoute() {
 								<p className="f9-panel-toolbar-heading">{reportSnapshot.title}</p>
               </div>
 							{pdfVariant ? null : pdfPath ? (
-								<a className="f9-secondary-button" href={pdfPath}>
-									Download PDF
+								<a
+									aria-busy={pdfPreparing}
+									aria-disabled={pdfPreparing}
+									className="f9-secondary-button"
+									data-pdf-preparing={pdfPreparing ? "true" : "false"}
+									href={pdfPath}
+									onClick={(event) => {
+										if (pdfPreparing) {
+											event.preventDefault();
+											return;
+										}
+										setPdfPreparing(true);
+									}}
+								>
+									{pdfPreparing ? "Preparing…" : "Download PDF"}
 								</a>
 							) : (
 								<button

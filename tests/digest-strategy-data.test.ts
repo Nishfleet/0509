@@ -88,7 +88,7 @@ expect(first).toMatchObject({ created: true, digestRunId: expect.any(String) });
 expect(second).toEqual({ created: false, digestRunId: first.digestRunId });
 const stored = await getDigest(env, first.digestRunId);
 expect(stored?.summary).toMatchObject({
-digestItemSetProvenance: "atomic-v1",
+digestItemSetProvenance: "atomic-v2",
 strategyParagraph: `${PARAGRAPH} first`,
 });
 expect(stored?.items).toEqual([
@@ -340,7 +340,10 @@ expect(secondId).toBe(firstId);
 expect((await getDigest(env, firstId))?.summary).toEqual({
 totalEvents: 0,
 watchlists: 1,
-digestItemSetProvenance: "atomic-v1",
+totalEligibleEvents: 0,
+includedEvents: 0,
+omittedEvents: 0,
+digestItemSetProvenance: "atomic-v2",
 });
 
 await updateDigestRunSummary(env, firstId, {
@@ -349,7 +352,7 @@ strategyParagraph: PARAGRAPH,
 strategyGeneratedAt: "2026-07-13T05:01:00.000Z",
 });
 expect((await getDigest(env, firstId))?.summary).toMatchObject({
-digestItemSetProvenance: "atomic-v1",
+digestItemSetProvenance: "atomic-v2",
 strategyParagraph: PARAGRAPH,
 });
 } finally {

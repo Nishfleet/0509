@@ -107,7 +107,15 @@ afterEach(() => {
 
 describe("workspace branding persistence", () => {
   it("upserts a trimmed brand name keyed by the owner", async () => {
-    const mock = createCapturingDb();
+    const mock = createCapturingDb([
+			{
+				user_id: "user-1",
+				brand_name: "Northwind Growth",
+				brand_website: null,
+				brand_logo: null,
+				updated_at: "2026-06-12T00:00:00.000Z",
+			},
+		]);
 
     const result = await upsertWorkspaceBranding({ DB: mock.db } as never, "user-1", {
       brandName: "  Northwind Growth  ",
@@ -124,10 +132,20 @@ describe("workspace branding persistence", () => {
     expect(upsert?.bindings[2]).toBeNull();
 		expect(upsert?.bindings[3]).toBeNull();
 		expect(typeof upsert?.bindings[4]).toBe("string");
+		expect(upsert?.bindings.slice(5)).toEqual([1, 0, 0]);
+		expect(mock.statements[0]?.sql).toContain("INSERT INTO workspace_branding");
   });
 
   it("caps the brand name at 60 characters", async () => {
-    const mock = createCapturingDb();
+    const mock = createCapturingDb([
+			{
+				user_id: "user-1",
+				brand_name: "A".repeat(60),
+				brand_website: null,
+				brand_logo: null,
+				updated_at: "2026-06-12T00:00:00.000Z",
+			},
+		]);
     const longName = "A".repeat(80);
 
     const result = await upsertWorkspaceBranding({ DB: mock.db } as never, "user-1", {
@@ -142,7 +160,15 @@ describe("workspace branding persistence", () => {
   });
 
   it("clears branding to NULL when the brand name is empty or whitespace", async () => {
-    const mock = createCapturingDb();
+    const mock = createCapturingDb([
+			{
+				user_id: "user-1",
+				brand_name: null,
+				brand_website: null,
+				brand_logo: null,
+				updated_at: "2026-06-12T00:00:00.000Z",
+			},
+		]);
 
     const result = await upsertWorkspaceBranding({ DB: mock.db } as never, "user-1", {
       brandName: "   ",
@@ -189,7 +215,8 @@ describe("workspace branding persistence", () => {
       {
         user_id: "user-1",
         brand_name: "Northwind Growth",
-        brand_website: null,
+				brand_website: "https://northwind.example",
+				brand_logo: null,
         updated_at: "2026-06-12T00:00:00.000Z",
       },
     ]);
@@ -206,9 +233,42 @@ describe("workspace branding persistence", () => {
     const upsert = mock.statements.find((statement) =>
       statement.sql.includes("INSERT INTO workspace_branding"),
     );
-    expect(upsert?.bindings[1]).toBe("Northwind Growth");
+		expect(upsert?.bindings[1]).toBeNull();
     expect(upsert?.bindings[2]).toBe("https://northwind.example");
+		expect(upsert?.bindings.slice(5)).toEqual([0, 1, 0]);
   });
+
+	it("preserves concurrent partial website and logo updates atomically", async () => {
+		const sqlite = createSqliteD1();
+		const pngLogo = `data:image/png;base64,${"A".repeat(400)}`;
+		try {
+			sqlite.sqlite.exec("CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL);");
+			sqlite.sqlite.exec("INSERT INTO user (id) VALUES ('user-1');");
+			applyMigration(sqlite.sqlite, "migrations/0026_workspace_branding.sql");
+			applyMigration(sqlite.sqlite, "migrations/0043_workspace_brand_website.sql");
+			applyMigration(sqlite.sqlite, "migrations/0066_workspace_brand_logo.sql");
+
+			await upsertWorkspaceBranding({ DB: sqlite.db } as never, "user-1", {
+				brandName: "Northwind Growth",
+			});
+			await Promise.all([
+				upsertWorkspaceBranding({ DB: sqlite.db } as never, "user-1", {
+					brandWebsite: "https://northwind.example",
+				}),
+				upsertWorkspaceBranding({ DB: sqlite.db } as never, "user-1", {
+					brandLogo: pngLogo,
+				}),
+			]);
+
+			expect(await getWorkspaceBranding({ DB: sqlite.db } as never, "user-1")).toEqual({
+				brandName: "Northwind Growth",
+				brandWebsite: "https://northwind.example",
+				brandLogo: pngLogo,
+			});
+		} finally {
+			sqlite.close();
+		}
+	});
 
   it("round-trips brand website through the migrated workspace branding table", async () => {
     const sqlite = createSqliteD1();
@@ -305,6 +365,33 @@ describe("workspace branding persistence", () => {
 			sqlite.close();
 		}
 	});
+
+	it("preserves pre-existing branding when migration 0066 adds the logo column", () => {
+		const sqlite = createSqliteD1();
+		try {
+			sqlite.sqlite.exec("CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL);");
+			sqlite.sqlite.exec("INSERT INTO user (id) VALUES ('user-1');");
+			applyMigration(sqlite.sqlite, "migrations/0026_workspace_branding.sql");
+			applyMigration(sqlite.sqlite, "migrations/0043_workspace_brand_website.sql");
+			sqlite.sqlite.exec(
+				"INSERT INTO workspace_branding (user_id, brand_name, brand_website, updated_at) VALUES ('user-1', 'Northwind Growth', 'https://northwind.example', '2026-06-12T00:00:00.000Z')",
+			);
+
+			applyMigration(sqlite.sqlite, "migrations/0066_workspace_brand_logo.sql");
+
+			expect(
+				sqlite.sqlite
+					.prepare("SELECT brand_name, brand_website, brand_logo FROM workspace_branding WHERE user_id = ?")
+					.get("user-1"),
+			).toEqual({
+				brand_name: "Northwind Growth",
+				brand_website: "https://northwind.example",
+				brand_logo: null,
+			});
+		} finally {
+			sqlite.close();
+		}
+	});
 });
 
 describe("workspace brand logo normalizer", () => {
@@ -348,7 +435,15 @@ describe("workspace brand logo normalizer", () => {
 	});
 
 	it("nulls out an invalid logo on upsert instead of storing it", async () => {
-		const mock = createCapturingDb();
+		const mock = createCapturingDb([
+			{
+				user_id: "user-1",
+				brand_name: null,
+				brand_website: null,
+				brand_logo: null,
+				updated_at: "2026-06-12T00:00:00.000Z",
+			},
+		]);
 
 		const result = await upsertWorkspaceBranding({ DB: mock.db } as never, "user-1", {
 			brandLogo: "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=",

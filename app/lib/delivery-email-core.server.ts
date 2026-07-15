@@ -102,10 +102,10 @@ export async function sendCloudflareEmail(
 		return {
 			provider: EMAIL_PROVIDER,
 			status: "failed" as const,
-			webhookStatus: "failed" as const,
+			webhookStatus: "provider_unknown" as const,
 			providerMessageId: null,
 			providerStatusLastSeenAt: statusSeenAt,
-			errorMessage: `Cloudflare Email send failed: ${error instanceof Error ? error.message : "unknown error"}.`,
+			errorMessage: `Cloudflare Email send outcome is unknown after provider exception: ${error instanceof Error ? error.message : "unknown error"}.`,
 			deliveredAt: null,
 		};
 	}

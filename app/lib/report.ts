@@ -137,6 +137,55 @@ export function isReportDocument(value: unknown): value is ReportDocument {
 }
 
 /**
+ * API v1 and MCP exposed report fields as strings before sparse reports began
+ * using null internally. Keep the truthful nullable document for UI, storage,
+ * and public snapshots, but adapt only the transport response so existing
+ * clients do not receive a mutative contract change.
+ */
+export function adaptLegacyReportTransportResult<T>(value: T): T {
+	if (!isPlainRecord(value)) {
+		return value;
+	}
+	const direct = adaptLegacyReportRecord(value);
+	const nested = isPlainRecord(direct.result)
+		? adaptLegacyReportRecord(direct.result)
+		: null;
+	return (nested && nested !== direct.result
+		? { ...direct, result: nested }
+		: direct) as T;
+}
+
+function adaptLegacyReportRecord(value: Record<string, unknown>) {
+	if (!isReportDocument(value.report)) {
+		return value;
+	}
+
+	return {
+		...value,
+		report: {
+			...value.report,
+			rows: value.report.rows.map((row) => ({
+				...row,
+				advertiser: row.advertiser ?? "Ad context unavailable",
+				previewHeadline: row.previewHeadline ?? "Preview unavailable",
+				offer: row.offer ?? "Offer unavailable",
+				cta: row.cta ?? "CTA unavailable",
+				languageLabel: row.languageLabel ?? "Language unavailable",
+				creativeText: row.creativeText ?? "Creative text unavailable",
+				translatedText: row.translatedText ?? "Translation unavailable",
+				landingPage: {
+					...row.landingPage,
+					url: row.landingPage.url ?? "Landing page unavailable",
+					headline:
+						row.landingPage.headline ?? "Landing page headline unavailable",
+					captureLabel: row.landingPage.captureLabel ?? "Not checked yet",
+				},
+			})),
+		},
+	};
+}
+
+/**
  * Canonical public-share renderability check for immutable report snapshots.
  * Collection snapshots can be safely normalized from sparse row objects.
  * Watchlist snapshots additionally require the verified-proof provenance the

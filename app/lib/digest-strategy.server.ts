@@ -10,6 +10,7 @@
 import { readDigestIntelligence } from "~/lib/change-intelligence";
 import { DIGEST_STRATEGY_MODEL } from "~/lib/digest-strategy";
 import type { AppEnv } from "~/lib/env.server";
+import { promiseWithTimeout } from "~/lib/fetch-timeout.server";
 import {
 	classifyDigestItemSource,
 	isDigestDecisionCandidate,
@@ -42,6 +43,7 @@ const MAX_LINE_LENGTH = 300;
 const MIN_PARAGRAPH_LENGTH = 80;
 const MAX_PARAGRAPH_LENGTH = 600;
 const MAX_OUTPUT_TOKENS = 200;
+const AI_STRATEGY_TIMEOUT_MS = 30_000;
 
 const SYSTEM_PROMPT =
 	"You summarize competitor ad and landing-page changes for a marketing team. " +
@@ -84,7 +86,7 @@ export async function buildWeeklyStrategyParagraph(
   }
 
   try {
-    const response = await env.AI.run(DIGEST_STRATEGY_MODEL, {
+		const response = await promiseWithTimeout(env.AI.run(DIGEST_STRATEGY_MODEL, {
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         {
@@ -99,7 +101,7 @@ export async function buildWeeklyStrategyParagraph(
         },
       ],
       max_tokens: MAX_OUTPUT_TOKENS,
-    });
+		}), AI_STRATEGY_TIMEOUT_MS, "Digest strategy generation timed out.");
     const raw =
       typeof response === "string"
         ? response

@@ -1,5 +1,6 @@
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
@@ -836,6 +837,15 @@ describe("billing page", () => {
     expect(markup).toContain('value="pricing"');
 		expect(markup).toContain("Prices are shown in your local currency automatically");
 		expect(markup).not.toContain("Every plan checkout must validate");
+  });
+
+  it("submits every first-party Dodo checkout as a full-document navigation", () => {
+    const source = readFileSync("app/routes/app.billing.tsx", "utf8");
+    const checkoutForms = source.match(
+      /<Form action="\/api\/billing\/dodo\/checkout" method="post" reloadDocument>/g,
+    );
+
+    expect(checkoutForms).toHaveLength(2);
   });
 
   it("keeps plan checkout disabled while a pending Dodo checkout exists", async () => {

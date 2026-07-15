@@ -286,6 +286,7 @@ eventType: "landing_page_offer_changed",
 title: "Persisted offer change",
 summary: "The persisted winner changed its offer.",
 metadata: {
+eventId: "event-persisted",
 eventStatus: "confirmed",
 sourceStatus: "proof_backed",
 priorityScore: 79,

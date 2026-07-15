@@ -77,8 +77,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
       origin: new URL(request.url).origin,
       executionContext,
     }, actionName, input);
+		const { adaptLegacyReportTransportResult } = await import("~/lib/report");
 
-    return actionResponse(result);
+		return actionResponse(adaptLegacyReportTransportResult(result));
   } catch (error) {
     const payload = customerAgentActionErrorPayload(error);
     return actionResponse(payload.body, payload.status);

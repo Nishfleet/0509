@@ -559,7 +559,7 @@ export default function BillingRoute() {
 											Price unavailable
 										</button>
                   ) : canStartCheckout && checkoutSku ? (
-                    <Form action="/api/billing/dodo/checkout" method="post">
+                    <Form action="/api/billing/dodo/checkout" method="post" reloadDocument>
                       <input name="sku" type="hidden" value={checkoutSku} />
                       {selectedSource ? <input name="source" type="hidden" value={selectedSource} /> : null}
                       <SubmitButton
@@ -787,7 +787,7 @@ export default function BillingRoute() {
 										Price unavailable
 									</button>
                 ) : isPaid && ready ? (
-                  <Form action="/api/billing/dodo/checkout" method="post">
+                  <Form action="/api/billing/dodo/checkout" method="post" reloadDocument>
                     <input name="sku" type="hidden" value={sku} />
                     {selectedSource ? <input name="source" type="hidden" value={selectedSource} /> : null}
                     <SubmitButton

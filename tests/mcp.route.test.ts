@@ -161,6 +161,38 @@ const digest: DigestRecord = {
   ],
 };
 
+const sparseReport = {
+	kind: "report" as const,
+	reportId: "collection:collection-1",
+	resourceType: "collection" as const,
+	resourceId: "collection-1",
+	title: "Sparse report",
+	rows: [
+		{
+			id: "row-1",
+			advertiser: null,
+			previewHeadline: null,
+			offer: null,
+			cta: null,
+			formatLabel: "unknown",
+			languageLabel: null,
+			previewImageUrl: null,
+			creativeText: null,
+			translatedText: null,
+			landingPage: {
+				url: null,
+				headline: null,
+				captureLabel: null,
+				capturedAt: null,
+				signals: [],
+			},
+			analysisFields: [],
+			tags: [],
+			note: null,
+		},
+	],
+};
+
 function setupMocks(authOk = true, actionsWriteEnabled = true) {
   mockAgencyWorkspacePlan();
   const getWorkspaceReadiness = vi.fn().mockResolvedValue(readinessPayload);
@@ -700,6 +732,49 @@ describe("MCP route", () => {
       }),
     );
   });
+
+	it("keeps sparse report fields string-valued on the MCP transport", async () => {
+		setupMocks();
+		const runCustomerAgentAction = vi.fn().mockResolvedValue({
+			audit: { id: "audit-report", status: "succeeded" },
+			replayed: true,
+			result: { ok: true, action: "report.share", report: sparseReport },
+		});
+		vi.doMock("~/lib/customer-agent-actions.server", () => ({
+			customerAgentActionErrorPayload: vi.fn(),
+			runCustomerAgentAction,
+		}));
+
+		const response = await postMcp({
+			jsonrpc: "2.0",
+			id: "report-transport",
+			method: "tools/call",
+			params: {
+				name: "share_report",
+				arguments: {
+					reportId: "collection:collection-1",
+					idempotencyKey: "share-report-transport",
+				},
+			},
+		});
+		const body = await response.json() as {
+			result: {
+				structuredContent: {
+					result: { report: { rows: Array<Record<string, unknown>> } };
+				};
+			};
+		};
+		const row = body.result.structuredContent.result.report.rows[0] as {
+			previewHeadline: string;
+			creativeText: string;
+			landingPage: { headline: string };
+		};
+
+		expect(row.previewHeadline).toBe("Preview unavailable");
+		expect(row.creativeText).toBe("Creative text unavailable");
+		expect(row.landingPage.headline).toBe("Landing page headline unavailable");
+		expect(sparseReport.rows[0]?.creativeText).toBeNull();
+	});
 
   it("dispatches every advertised MCP write tool to the expected audited action", async () => {
     setupMocks();

@@ -33,9 +33,13 @@ async function mockRouter(useLoaderData: MockUseLoaderData) {
 
     return {
       ...actual,
+      Form: ({ children, ...props }: { children?: ReactNode } & Record<string, unknown>) =>
+        React.createElement("form", props, children),
       Link: ({ children, to, ...props }: { children?: ReactNode; to?: string } & Record<string, unknown>) =>
         React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+      useActionData: vi.fn().mockReturnValue(null),
       useLoaderData: vi.fn(useLoaderData),
+      useNavigation: vi.fn().mockReturnValue({ state: "idle", formData: null }),
     };
   });
 }
@@ -86,7 +90,9 @@ describe("ops route", () => {
     })),
     }));
     vi.doMock("~/lib/data.server", () => ({
+      createBillingEmailReconciliationKey: vi.fn(() => "ops-billing-email-reconcile:11111111-1111-4111-8111-111111111111"),
       getOperatorSnapshot,
+      listOutstandingBillingLifecycleProviderUnknownAttempts: vi.fn().mockResolvedValue([]),
     }));
 
     const { loader } = await import("~/routes/app.ops");
@@ -103,6 +109,7 @@ describe("ops route", () => {
           failingRuns: 1,
         }),
       }),
+      outstandingBillingAttempts: [],
     });
     expect(getOperatorSnapshot).toHaveBeenCalledTimes(1);
   });
@@ -225,7 +232,7 @@ describe("ops route", () => {
             watchlist_id: null,
             watchlist_name: null,
             channel: "email",
-            target_value: "ops@example.com",
+            target_value: "o•••@e•••.com",
             status: "pending",
             webhook_status: "provider_unknown",
             provider_status_last_seen_at: "2026-07-02T00:00:00.000Z",
@@ -237,6 +244,7 @@ describe("ops route", () => {
         discoveryFailures: [],
         discoveryProviders: [],
       },
+      outstandingBillingAttempts: [],
     }));
 
     const { default: OpsRoute } = await import("~/routes/app.ops");
@@ -244,8 +252,116 @@ describe("ops route", () => {
 
     expect(markup).toContain("Delivery attention");
     expect(markup).toContain("Recent delivery attention");
-    expect(markup).toContain("Email to ops@example.com");
-    expect(markup).toContain("Cloudflare Email send outcome is unknown after provider timeout.");
+    expect(markup).toContain("Email to o•••@e•••.com");
+    expect(markup).toContain("Provider outcome is unknown.");
+    expect(markup).not.toContain("ops@example.com");
+    expect(markup).not.toContain("provider timeout");
     expect(markup).not.toContain("No recent delivery failures.");
+  });
+
+  it("masks recipient targets before operator loader data is serialized", async () => {
+    const getOperatorSnapshot = vi.fn().mockResolvedValue({
+      summary: {
+        failingRuns: 0,
+        stuckRuns: 0,
+        failedProofs: 0,
+        budgetBlockedProofs: 0,
+        blockedTargets: 1,
+        deliveryFailures: 0,
+        deliveryAttention: 1,
+        degradedWatchlists: 0,
+        discoveryFailures: 0,
+        discoveryProvidersNeedingAttention: 0,
+      },
+      failingRuns: [],
+      stuckRuns: [],
+      failedProofs: [],
+      budgetBlockedProofs: [],
+      blockedTargets: [{ target_value: "+919876543210" }],
+      deliveryFailures: [],
+      deliveryAttention: [{ target_value: "owner@example.com" }],
+      degradedWatchlists: [],
+      discoveryFailures: [],
+      discoveryProviders: [],
+    });
+    vi.doMock("~/lib/auth.server", () => ({ requireSession: vi.fn().mockResolvedValue(session) }));
+    vi.doMock("~/lib/data.server", () => ({
+      createBillingEmailReconciliationKey: vi.fn(() => "ops-billing-email-reconcile:11111111-1111-4111-8111-111111111111"),
+      getOperatorSnapshot,
+      listOutstandingBillingLifecycleProviderUnknownAttempts: vi.fn().mockResolvedValue([
+        {
+          id: "attempt-1",
+          targetValue: "billing@example.com",
+          templateName: "billing_refund_revoked",
+          provider: "cloudflare_email",
+          createdAt: "2026-07-15T18:00:00.000Z",
+          updatedAt: "2026-07-15T18:00:00.000Z",
+        },
+      ]),
+    }));
+
+    const { loader } = await import("~/routes/app.ops");
+    const result = await loader({
+      context: createContext({ OPS_ALLOWLIST_EMAILS: "owner@example.com" }),
+      request: new Request("http://localhost/app/ops"),
+    } as never);
+    const serialized = JSON.stringify(result);
+
+    expect(serialized).toContain("o•••@e•••.com");
+    expect(serialized).toContain("b•••@e•••.com");
+    expect(serialized).toContain("••••3210");
+    expect(serialized).not.toContain("owner@example.com");
+    expect(serialized).not.toContain("billing@example.com");
+    expect(serialized).not.toContain("+919876543210");
+  });
+
+  it("records provider evidence without invoking an email send", async () => {
+    const reconcileBillingEmailAttemptWithAudit = vi.fn().mockResolvedValue({
+      ok: true,
+      replayed: false,
+      attemptId: "attempt-1",
+      outcome: "sent",
+      classification: "controlled_inbox_receipt",
+      observedAt: "2026-07-15T18:01:00.000Z",
+      reconciledAt: "2026-07-15T18:02:00.000Z",
+    });
+    vi.doMock("~/lib/auth.server", () => ({ requireSession: vi.fn().mockResolvedValue(session) }));
+    vi.doMock("~/lib/data.server", () => ({
+      BILLING_EMAIL_EVIDENCE_CLASSIFICATIONS: [
+        "cloudflare_email_log",
+        "controlled_inbox_receipt",
+        "provider_rejection_log",
+      ],
+      reconcileBillingEmailAttemptWithAudit,
+    }));
+    const formData = new FormData();
+    formData.set("intent", "reconcile-billing-email");
+    formData.set("attemptId", "attempt-1");
+    formData.set("reconciliationKey", "ops-billing-email-reconcile:11111111-1111-4111-8111-111111111111");
+    formData.set("expectedUpdatedAt", "2026-07-15T18:00:00.000Z");
+    formData.set("outcome", "sent");
+    formData.set("classification", "controlled_inbox_receipt");
+    formData.set("evidenceReference", "inbox_receipt_12345");
+    formData.set("observedAt", "2026-07-15T18:01:00Z");
+
+    const { action } = await import("~/routes/app.ops");
+    const result = await action({
+      context: createContext({ OPS_ALLOWLIST_EMAILS: "owner@example.com" }),
+      request: new Request("http://localhost/app/ops", { method: "POST", body: formData }),
+    } as never);
+
+    expect(result).toMatchObject({
+      ok: true,
+      attemptId: "attempt-1",
+      message: expect.stringContaining("No email was resent"),
+    });
+    expect(reconcileBillingEmailAttemptWithAudit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        operatorUserId: "user-1",
+        attemptId: "attempt-1",
+        outcome: "sent",
+      }),
+    );
   });
 });

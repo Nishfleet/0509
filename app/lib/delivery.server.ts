@@ -125,6 +125,9 @@ export interface DeliverWeeklyDigestInput {
   digestRunId: string;
   periodStart: string;
   periodEnd: string;
+  totalEligibleEvents?: number;
+  includedEvents?: number;
+  omittedEvents?: number;
   items: DigestDeliveryItem[];
   // Present when the period had zero changes but successful scans: the
   // digest becomes an "all quiet" heartbeat (email only).
@@ -660,6 +663,9 @@ async function deliverDigestToEmailTarget(
     name: input.userName,
     periodStart: input.periodStart,
     periodEnd: input.periodEnd,
+    totalEligibleEvents: input.totalEligibleEvents,
+    includedEvents: input.includedEvents,
+    omittedEvents: input.omittedEvents,
     items: input.items,
     heartbeat: input.heartbeat ?? null,
 strategyParagraph: input.strategyParagraph ?? null,
@@ -1477,6 +1483,9 @@ function renderDigestEmail(
     name: string;
     periodStart: string;
     periodEnd: string;
+    totalEligibleEvents?: number;
+    includedEvents?: number;
+    omittedEvents?: number;
     items: DigestDeliveryItem[];
     heartbeat?: DigestHeartbeat | null;
 strategyParagraph?: string | null;
@@ -1490,6 +1499,9 @@ strategyParagraph?: string | null;
     name: input.name,
     periodStart: input.periodStart,
     periodEnd: input.periodEnd,
+    totalEligibleEvents: input.totalEligibleEvents,
+    includedEvents: input.includedEvents,
+    omittedEvents: input.omittedEvents,
     items: input.items,
     heartbeat: input.heartbeat ?? null,
 strategyParagraph: input.strategyParagraph ?? null,

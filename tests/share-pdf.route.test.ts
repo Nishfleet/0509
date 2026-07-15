@@ -70,9 +70,11 @@ function mockCollaborators(input: {
 	plan?: string;
 	ipLimit?: Response | null;
 	dailyLimit?: Response | null;
+	singleFlightLimit?: Response | null;
 }) {
 	const enforceSharePdfRateLimit = vi.fn(async () => input.ipLimit ?? null);
 	const enforceSharePdfDailyCap = vi.fn(async () => input.dailyLimit ?? null);
+	const claimSharePdfSingleFlight = vi.fn(async () => input.singleFlightLimit ?? null);
 	const share = input.share === undefined ? AGENCY_SHARE : input.share;
 	const getShareLink = vi.fn(async () => share);
 	const getUserPlan = vi.fn(async () => input.plan ?? "agency");
@@ -81,6 +83,7 @@ function mockCollaborators(input: {
 	vi.doMock("~/lib/rate-limit.server", () => ({
 		enforceSharePdfRateLimit,
 		enforceSharePdfDailyCap,
+		claimSharePdfSingleFlight,
 	}));
 	vi.doMock("~/lib/data.server", () => ({ getShareLink }));
 	vi.doMock("~/lib/plan.server", () => ({ getUserPlan }));
@@ -89,6 +92,7 @@ function mockCollaborators(input: {
 	return {
 		enforceSharePdfRateLimit,
 		enforceSharePdfDailyCap,
+		claimSharePdfSingleFlight,
 		getShareLink,
 		getUserPlan,
 		installPublicBrowserRequestGuard,
