@@ -23,12 +23,21 @@ const SNAPSHOT_RETENTION_DAYS = 90;
 
 const PRESENCE_ITEM_RETENTION_DAYS = 180;
 
-export async function runRetentionSweep(env: AppEnv) {
+export type RetentionSweepResult = {
+  deleted: Record<string, number>;
+  /** Stable step names only; database/provider error details are never returned. */
+  failedSteps: string[];
+};
+
+export async function runRetentionSweep(
+  env: AppEnv,
+  options: { now?: Date } = {},
+): Promise<RetentionSweepResult> {
   if (!env.DB) {
-    return { deleted: {} as Record<string, number> };
+    return { deleted: {}, failedSteps: [] };
   }
 
-  const now = Date.now();
+  const now = options.now?.getTime() ?? Date.now();
   const cutoff = (days: number) => new Date(now - days * DAY_MS).toISOString();
 
   const steps: Array<{ name: string; sql: string; bindings: unknown[] }> = [
@@ -158,6 +167,7 @@ export async function runRetentionSweep(env: AppEnv) {
   ];
 
   const deleted: Record<string, number> = {};
+  const failedSteps: string[] = [];
 
   for (const step of steps) {
     try {
@@ -166,8 +176,11 @@ export async function runRetentionSweep(env: AppEnv) {
     } catch (error) {
       // One stuck table must not stop the rest of the sweep.
       console.error(`[retention] delete failed for ${step.name}`, error);
+      // Keep the returned summary customer-safe: step names are a fixed
+      // allowlist above, while database errors may include sensitive details.
+      failedSteps.push(step.name);
     }
   }
 
-  return { deleted };
+  return { deleted, failedSteps };
 }

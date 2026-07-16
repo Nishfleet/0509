@@ -55,6 +55,8 @@ describe("public auxiliary rebuild", () => {
     expect(publicAuxSurface).toContain("cancellation stay backed by signed-in support cases");
     expect(publicAuxSurface).toContain("team-seat changes may require");
     expect(publicAuxSurface).toContain("owner confirmation");
+    expect(publicAuxSurface).toContain("applicable billing and support policy");
+    expect(publicAuxSurface).not.toMatch(/purchases are final|refunds cannot be made/i);
     expect(publicAuxSurface).not.toContain("100% customer satisfaction");
   });
 });

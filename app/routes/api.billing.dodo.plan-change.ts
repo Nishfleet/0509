@@ -16,6 +16,7 @@ export function loader(_args: LoaderFunctionArgs) {
 export async function action({ context, request }: ActionFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
+  const { enforceBillingProviderRateLimit } = await import("~/lib/rate-limit.server");
   const {
     DODO_SUBSCRIPTION_PLAN_CHANGE_PENDING_STATUS,
     claimDodoSubscriptionPlanChange,
@@ -92,6 +93,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   const { validateDodo0509PlanCheckout } = await import("~/lib/dodo-pricing.server");
+  const validationLimitResponse = await enforceBillingProviderRateLimit(
+    request,
+    env,
+    workspaceUserId,
+    "pricing",
+    context.cloudflare?.ctx,
+  );
+  if (validationLimitResponse) throw validationLimitResponse;
   const checkoutValidation = await validateDodo0509PlanCheckout({
     env,
     request,
@@ -108,6 +117,22 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const timing = planChangeTiming(billing.plan, billing.billingInterval, target);
   let preview: Record<string, unknown>;
   let subscriptionCurrency: string;
+  const currencyLimitResponse = await enforceBillingProviderRateLimit(
+    request,
+    env,
+    workspaceUserId,
+    "pricing",
+    context.cloudflare?.ctx,
+  );
+  if (currencyLimitResponse) throw currencyLimitResponse;
+  const previewLimitResponse = await enforceBillingProviderRateLimit(
+    request,
+    env,
+    workspaceUserId,
+    "pricing",
+    context.cloudflare?.ctx,
+  );
+  if (previewLimitResponse) throw previewLimitResponse;
   try {
     [subscriptionCurrency, preview] = await Promise.all([
       getDodo0509SubscriptionCurrency({
@@ -152,6 +177,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   const claimedStatus = DODO_SUBSCRIPTION_PLAN_CHANGE_PENDING_STATUS;
+  const mutationLimitResponse = await enforceBillingProviderRateLimit(
+    request,
+    env,
+    workspaceUserId,
+    "mutation",
+    context.cloudflare?.ctx,
+  );
+  if (mutationLimitResponse) throw mutationLimitResponse;
     const claimed = await claimDodoSubscriptionPlanChange(env, {
       userId: workspaceUserId,
       status: claimedStatus,

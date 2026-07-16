@@ -160,7 +160,11 @@ describe("account page", () => {
     expect(markup).toContain("This device is signed in until");
     expect(markup).toContain("sign-in options");
     expect(markup).not.toContain("session-1");
-    expect(markup).toContain("Delete this account");
+    expect(markup).toContain("Request account deletion support");
+    expect(markup).toContain("This sends a support deletion request");
+    expect(markup).toContain("Send support deletion request");
+    expect(markup).toContain("Nothing is deleted automatically or in-app");
+    expect(markup).not.toContain("Delete this account");
     expect(markup).toContain("support@0509.io");
     expect(markup).toContain("My brand");
     expect(markup).toContain("save-brand-profile");

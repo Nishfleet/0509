@@ -1275,6 +1275,118 @@ describe("deliverWeeklyDigest", () => {
     expect(sendMock).not.toHaveBeenCalled();
     expect(upsertDeliveryTarget).not.toHaveBeenCalled();
   });
+
+  it("binds auto-provisioned delivery to the current verified account email", async () => {
+    const sendMock = mockEmailSend("msg_current_email");
+    const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-current-email");
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+    const oldTarget = {
+      id: "email-target-old",
+      userId: "user-1",
+      watchlistId: null,
+      channel: "email",
+      targetValue: "old@example.com",
+      validationStatus: "validated",
+      isValidated: true,
+      isOptedIn: true,
+      optInSource: "account_email",
+      optedInAt: "2026-04-19T00:00:00.000Z",
+      isPaused: false,
+      pausedAt: null,
+      optedOutAt: null,
+      templateEligible: false,
+      lastSuccessfulDeliveryAt: null,
+      lastSuccessfulAttemptId: null,
+      providerIdentifier: null,
+      metadata: { autoProvisioned: true },
+      createdAt: "2026-04-19T00:00:00.000Z",
+      updatedAt: "2026-04-19T00:00:00.000Z",
+    };
+    const currentTarget = { ...oldTarget, id: "email-target-current", targetValue: "new@example.com" };
+    let targets = [oldTarget];
+    const migrateAutoProvisionedEmailTargets = vi.fn().mockImplementation(async () => {
+      targets = [currentTarget];
+      return 1;
+    });
+
+    vi.doMock("~/lib/data.server", () => ({
+      getUserDeliveryProfile: vi.fn().mockResolvedValue({
+        id: "user-1",
+        email: "new@example.com",
+        name: "Owner",
+        emailVerified: true,
+      }),
+      listAdsByIds: vi.fn().mockResolvedValue([]),
+      createDeliveryAttempt,
+      updateDeliveryAttemptResult,
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
+        id: "workspace-1",
+        userId: "user-1",
+        sensitivityMode: "balanced",
+        instantEnabled: false,
+        digestEnabled: true,
+        emailEnabled: true,
+        whatsappEnabled: false,
+        slackEnabled: false,
+        quietHours: null,
+        timezone: "UTC",
+        createdAt: "2026-04-19T00:00:00.000Z",
+        updatedAt: "2026-04-19T00:00:00.000Z",
+      }),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn().mockImplementation(async () => targets),
+      migrateAutoProvisionedEmailTargets,
+      upsertDeliveryTarget: vi.fn(),
+      upsertDigestDelivery: vi.fn(),
+    }));
+
+    const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+    const result = await deliverWeeklyDigest(emailEnv as never, {
+      userId: "user-1",
+      userName: "Owner",
+      accountEmail: "old@example.com",
+      digestRunId: "digest-current-email",
+      periodStart: "2026-04-12T00:00:00.000Z",
+      periodEnd: "2026-04-19T00:00:00.000Z",
+      items: [],
+    });
+
+    expect(migrateAutoProvisionedEmailTargets).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      "new@example.com",
+    );
+    expect(result.details[0]?.targetValue).toBe("new@example.com");
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(sendMock.mock.calls[0]?.[0]?.to).toBe("new@example.com");
+  });
+
+  it("emits no customer attempts when the current account email is unverified", async () => {
+    const sendMock = mockEmailSend("msg_unverified");
+    vi.doMock("~/lib/data.server", () => ({
+      getUserDeliveryProfile: vi.fn().mockResolvedValue({
+        id: "user-1",
+        email: "owner@example.com",
+        name: "Owner",
+        emailVerified: false,
+      }),
+    }));
+
+    const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+    const result = await deliverWeeklyDigest(emailEnv as never, {
+      userId: "user-1",
+      userName: "Owner",
+      accountEmail: "owner@example.com",
+      digestRunId: "digest-unverified",
+      periodStart: "2026-04-12T00:00:00.000Z",
+      periodEnd: "2026-04-19T00:00:00.000Z",
+      items: [],
+    });
+
+    expect(result).toMatchObject({ attempts: 0, channels: [], details: [] });
+    expect(sendMock).not.toHaveBeenCalled();
+  });
 });
 
 describe("deliverWatchlistAlerts", () => {

@@ -1,5 +1,6 @@
 import { Form, Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
+import type { ReactNode } from "react";
 
 import { CheckoutReturnNotice } from "~/components/checkout-return-notice";
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
@@ -118,6 +119,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { dailyProofCapForPlan } = await import("~/lib/monitoring.server");
   const { listActiveProofCreditGrants } = await import("~/lib/plan.server");
   const { previewDodo0509PlanPrices } = await import("~/lib/dodo-pricing.server");
+  const { enforceBillingProviderRateLimit } = await import("~/lib/rate-limit.server");
   const { publicCommercialLaunchSummary } = await import("~/lib/commercial-launch-gate.server");
   const [
     billing,
@@ -132,7 +134,17 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     checkPlanLimit(env, workspaceUserId, "watchlists"),
     checkPlanLimit(env, workspaceUserId, "collections"),
     listActiveProofCreditGrants(env, workspaceUserId),
-    previewDodo0509PlanPrices({ env, request, trustProxyHeaders: false }),
+    (async () => {
+      const rateLimitResponse = await enforceBillingProviderRateLimit(
+        request,
+        env,
+        workspaceUserId,
+        "pricing",
+        context.cloudflare?.ctx,
+      );
+      if (rateLimitResponse) throw rateLimitResponse;
+      return previewDodo0509PlanPrices({ env, request, trustProxyHeaders: false });
+    })(),
   ]);
   const customerBilling = {
     plan: billing.plan,
@@ -174,6 +186,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         billing,
         workspaceUserId,
         target: planChangePreviewTarget,
+        ctx: context.cloudflare?.ctx,
       })
     : null;
 
@@ -269,6 +282,12 @@ export default function BillingRoute() {
         title="Billing & usage"
       />
     <section className="f9-app-stack">
+      <BillingLifecycleSummary
+        billing={billing}
+        canManageBilling={canManageBilling}
+        email={data.email}
+        hasPortal={data.hasPortal}
+      />
       {data.invalidCheckoutTarget ? (
         <div
           aria-atomic="true"
@@ -404,30 +423,6 @@ export default function BillingRoute() {
         </div>
       ) : null}
 
-      {hasPaymentIssue ? (
-        <article className="f9-checkout-banner is-pending" aria-live="polite">
-          <div>
-            <span className="f9-app-kicker">Payment issue</span>
-            <h2>Your last renewal payment didn't go through.</h2>
-            <p>
-              Your {planLabel} plan is still active while the payment provider retries.{" "}
-              {canManageBilling && data.hasPortal
-                ? "Open Dodo's hosted portal to update the payment method, or email "
-                : "Please check the card on the receipt email from Dodo Payments, or email "}
-              <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we'll help sort it out before anything
-              is interrupted.
-            </p>
-            {canManageBilling && data.hasPortal ? (
-              <Form action="/api/billing/dodo/portal" method="post">
-                <SubmitButton className="f9-primary-button" pendingLabel="Redirecting…">
-                  Update payment method
-                </SubmitButton>
-              </Form>
-            ) : null}
-          </div>
-        </article>
-      ) : null}
-
       <article className="f9-app-panel f9-plan-picker-panel" id="plans">
         <div className="f9-panel-toolbar">
           <div>
@@ -508,7 +503,9 @@ export default function BillingRoute() {
               >
                 <div className="f9-app-plan-card-head">
                   <div>
-                    <span className="f9-app-kicker">{plan.name}</span>
+                    <h3>
+                      <span className="f9-app-kicker">{plan.name}</span>
+                    </h3>
                     {planCyclePrice ? (
                       <strong>{planCyclePrice}</strong>
                     ) : planPriceUnavailable ? (
@@ -850,8 +847,7 @@ export default function BillingRoute() {
                 ? "Prefer support? "
                 : ""}
               <Link to="/app/support?category=billing">Open a billing support case</Link> from{" "}
-              {data.email}. Cancellation stops future renewals — you keep access until the end of the
-              period you've paid for.
+              {data.email}. {cancellationAccessCopy(billingLifecycleKind(billing))}
             </span>
           </div>
           <div className="f9-work-row">
@@ -864,17 +860,197 @@ export default function BillingRoute() {
           <div className="f9-work-row">
             <strong>Refunds</strong>
             <span>
-              Five to Nine is a digital product delivered immediately, so purchases are final and we
-              don't offer refunds (<Link to="/terms">terms</Link>). Something not working as
-              expected? <Link to="/app/support?category=billing">Open a billing support case</Link> and
-              we'll troubleshoot it with the account trail attached.
+              Questions about a charge, cancellation, or refund?{" "}
+              <a href={SUPPORT_MAILTO}>Email {SUPPORT_EMAIL}</a> or{" "}
+              <Link to="/app/support?category=billing">open a billing support case</Link>. See the{" "}
+              <Link to="/terms">current Terms</Link> for the applicable terms.
             </span>
           </div>
         </div>
       </article>
-    </section>
+  </section>
     </DashboardPage>
   );
+}
+
+type BillingSummaryBilling = {
+  plan: string;
+  dodoStatus: string | null;
+  dodoNextBillingAt?: string | null;
+  billingInterval?: "monthly" | "annual" | null;
+  planUpdatedAt?: string | null;
+  hasDodoPlanChangePendingTarget?: boolean | null;
+};
+
+type BillingLifecycleKind =
+  | "free"
+  | "refunded"
+  | "cancelled"
+  | "expired"
+  | "payment-issue"
+  | "cancellation-scheduled"
+  | "plan-change-scheduled"
+  | "plan-change-pending"
+  | "active";
+
+function billingLifecycleKind(billing: BillingSummaryBilling): BillingLifecycleKind {
+  // Provider terminal states win over a stale local plan label. Rendering a
+  // terminal subscription as active would invite a second bad billing action
+  // while reconciliation is still repairing the local row.
+  if (billing.dodoStatus === "refunded") return "refunded";
+  if (billing.dodoStatus === "subscription.cancelled") return "cancelled";
+  if (billing.dodoStatus === "subscription.expired") return "expired";
+  if (billing.plan === "free") {
+    return "free";
+  }
+  if (PAYMENT_ISSUE_STATUSES.has(billing.dodoStatus ?? "")) return "payment-issue";
+  if (billing.dodoStatus === CANCELLATION_SCHEDULED_STATUS) return "cancellation-scheduled";
+  if (billing.dodoStatus === PLAN_CHANGE_SCHEDULED_STATUS) return "plan-change-scheduled";
+  if (isBlockingPlanChangeStatus(
+    billing.dodoStatus,
+    billing.planUpdatedAt ?? null,
+    billing.hasDodoPlanChangePendingTarget,
+  )) {
+    return "plan-change-pending";
+  }
+  return "active";
+}
+
+function BillingLifecycleSummary({
+  billing,
+  canManageBilling,
+  email,
+  hasPortal,
+}: {
+  billing: BillingSummaryBilling;
+  canManageBilling: boolean;
+  email: string;
+  hasPortal: boolean;
+}) {
+  const kind = billingLifecycleKind(billing);
+  const planLabel = billing.plan.charAt(0).toUpperCase() + billing.plan.slice(1);
+  const isPaid = billing.plan !== "free";
+  const headingId = "billing-lifecycle-heading";
+
+  let kicker = "Billing status";
+  let title = "Plan active";
+  let message: ReactNode = `${planLabel} is active.`;
+  let className = "f9-checkout-banner";
+
+  if (kind === "payment-issue") {
+    kicker = "Payment issue";
+    title = "Your last payment needs attention.";
+    className += " is-pending";
+    message = canManageBilling && hasPortal ? (
+      <>
+        Your {planLabel} plan is still active. Update your payment method in Dodo's hosted portal,
+        or email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> if you need help. Cancellation remains
+        available through billing support.
+      </>
+    ) : (
+      <>
+        Your {planLabel} plan is still active. Please check the card on the receipt email from Dodo
+        Payments, or email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> if you need help.
+        Cancellation remains available through billing support.
+      </>
+    );
+  } else if (kind === "cancellation-scheduled") {
+    kicker = "Cancellation scheduled";
+    title = `${planLabel} will cancel at the end of this billing period.`;
+    message = (
+      <>
+        Your {planLabel} plan remains active until the end of the current billing period
+        {billing.dodoNextBillingAt ? (
+          <>
+            {" "}(<LocalTime fallback={billing.dodoNextBillingAt} iso={billing.dodoNextBillingAt} mode="date" />)
+          </>
+        ) : null}
+        . After that, paid access ends and the account moves to Free.
+      </>
+    );
+  } else if (kind === "refunded") {
+    kicker = "Refunded";
+    title = "Paid access has ended.";
+    message = "This account is on the free plan. The refunded payment no longer provides paid-plan access.";
+  } else if (kind === "cancelled") {
+    kicker = "Subscription cancelled";
+    title = "Paid access has ended.";
+    message = "This account is on the free plan after the subscription was cancelled.";
+  } else if (kind === "expired") {
+    kicker = "Subscription expired";
+    title = "Paid access has ended.";
+    message = "This account is on the free plan after the subscription expired.";
+  } else if (kind === "free") {
+    kicker = "Free account";
+    title = "No paid plan is active.";
+    message = "Choose a plan below to start paid monitoring.";
+  } else if (kind === "plan-change-scheduled") {
+    kicker = "Plan change scheduled";
+    title = `${planLabel} stays active until the scheduled change.`;
+    message = "Your current plan remains active until Dodo applies the scheduled change.";
+  } else if (kind === "plan-change-pending") {
+    kicker = "Plan change pending";
+    title = `${planLabel} stays active while the change is processed.`;
+    message = "Dodo is processing a plan change for this subscription. Your current plan remains active.";
+  }
+
+  return (
+    <article aria-labelledby={headingId} aria-live="polite" className={className}>
+      <div>
+        <span className="f9-app-kicker">{kicker}</span>
+        <h2 id={headingId}>{title}</h2>
+        <p>{message}</p>
+        {kind === "payment-issue" && canManageBilling && hasPortal ? (
+          <Form action="/api/billing/dodo/portal" method="post">
+            <SubmitButton className="f9-primary-button" pendingLabel="Redirecting…">
+              Update payment method
+            </SubmitButton>
+          </Form>
+        ) : kind === "free" || kind === "refunded" || kind === "cancelled" || kind === "expired" ? (
+          <Link className="f9-primary-button" to="/app/billing?source=billing#plans">
+            Choose a plan
+          </Link>
+        ) : canManageBilling && hasPortal ? (
+          <Form action="/api/billing/dodo/portal" method="post">
+            <SubmitButton className="f9-primary-button" pendingLabel="Redirecting…">
+              Open billing portal
+            </SubmitButton>
+          </Form>
+        ) : (
+          <Link className="f9-primary-button" to="/app/support?category=billing">
+            Open billing support
+          </Link>
+        )}
+      </div>
+      <div className="f9-sr-only" aria-live="polite">
+        {isPaid ? `Current ${planLabel} plan status: ${formatBillingStatus(
+          billing.plan,
+          billing.dodoStatus,
+          billing.planUpdatedAt ?? null,
+          billing.hasDodoPlanChangePendingTarget,
+        )}.` : `Current status: ${formatBillingStatus(
+          billing.plan,
+          billing.dodoStatus,
+          billing.planUpdatedAt ?? null,
+          billing.hasDodoPlanChangePendingTarget,
+        )}.`}
+        {canManageBilling ? "" : ` Billing is managed by the workspace owner for ${email}.`}
+      </div>
+    </article>
+  );
+}
+
+function cancellationAccessCopy(kind: BillingLifecycleKind) {
+  if (kind === "cancellation-scheduled") {
+    return "Your cancellation is scheduled; paid access remains available until the current period ends.";
+  }
+  if (kind === "refunded" || kind === "cancelled" || kind === "expired" || kind === "free") {
+    return "Paid access has ended. Choose a plan to start again.";
+  }
+  if (kind === "payment-issue") {
+    return "Your current plan is active while this payment issue is resolved.";
+  }
+  return "Cancellation stops future renewals — you keep access until the end of the period you've paid for.";
 }
 
 function PriceLoadingSkeleton() {
@@ -995,7 +1171,7 @@ function PlanChangeNotice({
   if (notice === "payment-issue") {
     return (
       <div className="f9-message is-error" role="alert">
-        <p>Update your payment method before changing plans. Dodo has a payment retry in progress.</p>
+        <p>Update your payment method before changing plans. Dodo marked the payment as failed.</p>
       </div>
     );
   }
@@ -1015,15 +1191,21 @@ function formatBillingStatus(
   planUpdatedAt: string | null,
   hasPlanChangePendingTarget?: boolean | null,
 ) {
+  if (dodoStatus === "refunded") {
+    return plan === "free" ? "Refunded — reverted to the free account" : "Refunded — paid access ended";
+  }
+  if (dodoStatus === "subscription.cancelled") {
+    return plan === "free" ? "Cancelled — on the free account" : "Cancelled — paid access ended";
+  }
+  if (dodoStatus === "subscription.expired") {
+    return plan === "free" ? "Expired — on the free account" : "Expired — paid access ended";
+  }
   if (plan === "free") {
-    if (dodoStatus === "refunded") return "Refunded — reverted to the free account";
-    if (dodoStatus === "subscription.cancelled") return "Cancelled — on the free account";
-    if (dodoStatus === "subscription.expired") return "Expired — on the free account";
     return "Free account";
   }
 
   if (dodoStatus && PAYMENT_ISSUE_STATUSES.has(dodoStatus)) {
-    return "Active — payment retry in progress";
+    return "Active — payment issue needs attention";
   }
 
   if (dodoStatus === CANCELLATION_SCHEDULED_STATUS) {
@@ -1116,12 +1298,14 @@ async function loadPlanChangePreviewNotice({
   billing,
   workspaceUserId,
   target,
+  ctx,
 }: {
   env: AppEnv;
   request: Request;
   billing: UserPlanBillingInfo;
   workspaceUserId: string;
   target: PlanChangePreviewTarget;
+  ctx?: ExecutionContext;
 }): Promise<PlanChangePreviewNotice | null> {
   if (
     billing.plan === "free" ||
@@ -1161,6 +1345,15 @@ async function loadPlanChangePreviewNotice({
   };
 
   const { validateDodo0509PlanCheckout } = await import("~/lib/dodo-pricing.server");
+  const { enforceBillingProviderRateLimit } = await import("~/lib/rate-limit.server");
+  const validationLimitResponse = await enforceBillingProviderRateLimit(
+    request,
+    env,
+    workspaceUserId,
+    "pricing",
+    ctx,
+  );
+  if (validationLimitResponse) throw validationLimitResponse;
   const validation = await validateDodo0509PlanCheckout({
     env,
     request,
@@ -1172,6 +1365,22 @@ async function loadPlanChangePreviewNotice({
   const timing = planChangeTiming(billing.plan, billing.billingInterval, selfServeTarget);
   if (timing.effectiveAt !== target.effectiveAt) return null;
 
+  const currencyLimitResponse = await enforceBillingProviderRateLimit(
+    request,
+    env,
+    workspaceUserId,
+    "pricing",
+    ctx,
+  );
+  if (currencyLimitResponse) throw currencyLimitResponse;
+  const previewLimitResponse = await enforceBillingProviderRateLimit(
+    request,
+    env,
+    workspaceUserId,
+    "pricing",
+    ctx,
+  );
+  if (previewLimitResponse) throw previewLimitResponse;
   try {
     const [subscriptionCurrency, preview] = await Promise.all([
       getDodo0509SubscriptionCurrency({

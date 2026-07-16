@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("~/lib/plan.server", () => ({
   getUserPlan: vi.fn().mockResolvedValue("agency"),
   getEffectiveWorkspacePlan: vi.fn().mockResolvedValue("agency"),
-  checkPlanLimit: vi.fn().mockResolvedValue({ allowed: true, limit: 75, current: 1 }),
+  checkPlanLimit: vi
+    .fn()
+    .mockResolvedValue({ allowed: true, limit: 75, current: 1 }),
   PLAN_LIMITS: { agency: { digests: true } },
 }));
 
@@ -33,7 +35,8 @@ const discoveryStatus = {
   status: "cache_only",
   provider: "meta_library_browser",
   mode: "cache",
-  summary: "Cached live results are available, but fresh discovery is degraded.",
+  summary:
+    "Cached live results are available, but fresh discovery is degraded.",
   lastCheckedAt: "2026-05-15T00:00:00.000Z",
   lastErrorCode: "login_wall",
   lastErrorMessage: "Meta returned a login wall.",
@@ -68,74 +71,78 @@ describe("source access route loader", () => {
   it("returns only safe customer Meta connection fields", async () => {
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
-    })),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => ({})),
     }));
     vi.doMock("~/lib/ad-source.server", () => ({
-      resolveCommercialAdSourceStatus: vi.fn().mockResolvedValue(discoveryStatus),
+      resolveCommercialAdSourceStatus: vi
+        .fn()
+        .mockResolvedValue(discoveryStatus),
     }));
-    const listDeliveryTargets = vi.fn(async (_env: unknown, _userId: string, options: { channel: string }) => {
-      if (options.channel === "slack") {
+    const listDeliveryTargets = vi.fn(
+      async (_env: unknown, _userId: string, options: { channel: string }) => {
+        if (options.channel === "slack") {
+          return [
+            {
+              id: "slack-target-1",
+              userId: "user-1",
+              watchlistId: null,
+              channel: "slack",
+              targetValue: "slack:abc123",
+              validationStatus: "validated",
+              isValidated: true,
+              isOptedIn: true,
+              optInSource: "manual_slack_webhook",
+              optedInAt: "2026-06-06T00:00:00.000Z",
+              isPaused: false,
+              pausedAt: null,
+              optedOutAt: null,
+              templateEligible: true,
+              lastSuccessfulDeliveryAt: null,
+              lastSuccessfulAttemptId: null,
+              providerIdentifier: "abc123",
+              metadata: {
+                displayName: "Growth alerts",
+              },
+              createdAt: "2026-06-06T00:00:00.000Z",
+              updatedAt: "2026-06-06T00:00:00.000Z",
+            },
+          ];
+        }
+
         return [
           {
-            id: "slack-target-1",
+            id: "whatsapp-target-1",
             userId: "user-1",
-            watchlistId: null,
-            channel: "slack",
-            targetValue: "slack:abc123",
-            validationStatus: "validated",
-            isValidated: true,
+            watchlistId: "watchlist-1",
+            channel: "whatsapp",
+            targetValue: "+919999999999",
+            validationStatus: "pending",
+            isValidated: false,
             isOptedIn: true,
-            optInSource: "manual_slack_webhook",
+            optInSource: "manual",
             optedInAt: "2026-06-06T00:00:00.000Z",
             isPaused: false,
             pausedAt: null,
             optedOutAt: null,
-            templateEligible: true,
+            templateEligible: false,
             lastSuccessfulDeliveryAt: null,
             lastSuccessfulAttemptId: null,
-            providerIdentifier: "abc123",
-            metadata: {
-              displayName: "Growth alerts",
-            },
+            providerIdentifier: null,
+            metadata: {},
             createdAt: "2026-06-06T00:00:00.000Z",
             updatedAt: "2026-06-06T00:00:00.000Z",
           },
         ];
-      }
-
-      return [
-        {
-          id: "whatsapp-target-1",
-          userId: "user-1",
-          watchlistId: "watchlist-1",
-          channel: "whatsapp",
-          targetValue: "+919999999999",
-          validationStatus: "pending",
-          isValidated: false,
-          isOptedIn: true,
-          optInSource: "manual",
-          optedInAt: "2026-06-06T00:00:00.000Z",
-          isPaused: false,
-          pausedAt: null,
-          optedOutAt: null,
-          templateEligible: false,
-          lastSuccessfulDeliveryAt: null,
-          lastSuccessfulAttemptId: null,
-          providerIdentifier: null,
-          metadata: {},
-          createdAt: "2026-06-06T00:00:00.000Z",
-          updatedAt: "2026-06-06T00:00:00.000Z",
-        },
-      ];
-    });
+      },
+    );
 
     vi.doMock("~/lib/data.server", () => ({
       getCustomerMetaConnection: vi.fn().mockResolvedValue({
@@ -193,7 +200,12 @@ describe("source access route loader", () => {
         status: "healthy",
         tokenLastFour: "1234",
       },
-      discoveryStatus,
+      discoveryStatus: {
+        status: "cache_only",
+        summary: expect.stringContaining("showing your most recent results"),
+        recovery: "Review tracking access and retry when ready.",
+      },
+      canManageSourceAccess: true,
     });
     expect(JSON.stringify(result)).not.toContain("+919999999999");
     expect(JSON.stringify(result)).not.toContain("example-key-prefix");
@@ -212,12 +224,12 @@ describe("source access route action", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
-    })),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => ({ BETTER_AUTH_SECRET: "secret" })),
@@ -248,7 +260,7 @@ describe("source access route action", () => {
     );
     expect(result).toEqual({
       ok: true,
-      message: "Connected.",
+      message: "Backup source access is connected and ready.",
     });
   });
 
@@ -291,11 +303,97 @@ describe("source access route action", () => {
       }),
     } as never);
 
-    expect(saveCustomerMetaToken).toHaveBeenCalledWith(expect.anything(), "user-1", "EAABlegacytoken");
+    expect(saveCustomerMetaToken).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      "EAABlegacytoken",
+    );
     expect(result).toEqual({
       ok: true,
-      message: "Connected from old route.",
+      message: "Backup source access is connected and ready.",
     });
+  });
+
+  it("returns closed customer-safe action copy for raw provider failures", async () => {
+    const saveCustomerMetaToken = vi.fn().mockResolvedValue({
+      ok: false,
+      testResult: {
+        ok: false,
+        status: "degraded",
+        errorCode: "RAW_ACTION_ERROR_CODE_SENTINEL",
+        summary: "RAW_ACTION_SUMMARY_SENTINEL",
+      },
+    });
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireWorkspaceSession: vi.fn().mockResolvedValue({
+        workspaceUserId: "user-1",
+        isMember: false,
+      }),
+    }));
+    vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => ({})) }));
+    vi.doMock("~/lib/customer-meta.server", () => ({
+      disconnectCustomerMetaToken: vi.fn(),
+      retestSavedCustomerMetaToken: vi.fn(),
+      saveCustomerMetaToken,
+    }));
+
+    const { action } = await import("~/routes/app.source-access");
+    const formData = new FormData();
+    formData.set("intent", "connect-meta-token");
+    formData.set("metaToken", "EAABraw-action-token");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/source-access", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      ok: false,
+      message:
+        "Source access could not be verified. Check the token and try again.",
+    });
+    expect(JSON.stringify(result)).not.toContain("RAW_ACTION");
+  });
+
+  it("does not load or return owner token metadata for workspace members", async () => {
+    const getCustomerMetaConnection = vi.fn().mockResolvedValue({
+      status: "healthy",
+      tokenLastFour: "9876",
+      summary: "RAW_MEMBER_CONNECTION_SENTINEL",
+      lastCheckedAt: null,
+      updatedAt: "2026-07-15T00:00:00.000Z",
+    });
+    vi.doMock("~/lib/auth.server", () => ({
+      requireWorkspaceSession: vi.fn().mockResolvedValue({
+        workspaceUserId: "owner-1",
+        isMember: true,
+      }),
+    }));
+    vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => ({})) }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      resolveCommercialAdSourceStatus: vi
+        .fn()
+        .mockResolvedValue(discoveryStatus),
+    }));
+    vi.doMock("~/lib/data.server", () => ({ getCustomerMetaConnection }));
+
+    const { loader } = await import("~/routes/app.source-access");
+    const result = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app/source-access"),
+    } as never);
+
+    expect(getCustomerMetaConnection).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      connection: null,
+      canManageSourceAccess: false,
+    });
+    expect(JSON.stringify(result)).not.toContain("9876");
+    expect(JSON.stringify(result)).not.toContain("RAW_MEMBER_CONNECTION");
   });
 
   it.each(["connect-meta-token", "retest-meta-token", "disconnect-meta-token"])(

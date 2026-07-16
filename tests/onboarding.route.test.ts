@@ -681,6 +681,7 @@ describe("onboarding route", () => {
         current: 0,
         limit: 3,
       }),
+      getUserPlan: vi.fn().mockResolvedValue("agency"),
     }));
 
     const { action } = await import("~/routes/app.onboard");
@@ -775,6 +776,77 @@ describe("onboarding route", () => {
     });
     expect(completeUserOnboarding).toHaveBeenCalledWith({}, "user-1");
   });
+
+  it.each(["free", "scout", "starter"] as const)(
+    "keeps %s CSV activation but does not create an Agency-only client room",
+    async (plan) => {
+      const completeUserOnboarding = vi.fn().mockResolvedValue(undefined);
+      const createWatchlistWithinLimit = vi.fn().mockResolvedValue({
+        status: "created",
+        watchlist: { id: "watch-1", targetLabel: "Boat Lifestyle" },
+        current: 1,
+        limit: plan === "free" ? 1 : 3,
+      });
+      const queueFirstWatchlistScan = vi.fn();
+      const upsertClientRoom = vi.fn();
+
+      vi.doMock("~/lib/auth.server", () => authModuleFromSession({
+        user: {
+          id: "user-1",
+          email: "owner@example.com",
+          name: "Owner",
+          onboardedAt: null,
+        },
+        session: {
+          id: "session-1",
+          userId: "user-1",
+          expiresAt: "2026-04-03T00:00:00.000Z",
+        },
+      }));
+      vi.doMock("~/lib/data.server", () => ({
+        completeUserOnboarding,
+        createWatchlistWithinLimit,
+        listWatchlists: vi.fn().mockResolvedValue([]),
+        upsertAgentMemory: vi.fn(),
+        upsertClientRoom,
+        upsertWorkspaceBranding: vi.fn(),
+      }));
+      vi.doMock("~/lib/monitoring.server", () => ({
+        queueFirstWatchlistScan,
+      }));
+      vi.doMock("~/lib/plan.server", () => ({
+        checkPlanLimit: vi.fn().mockResolvedValue({
+          allowed: true,
+          current: 0,
+          limit: plan === "free" ? 1 : 3,
+        }),
+        getUserPlan: vi.fn().mockResolvedValue(plan),
+      }));
+
+      const { action } = await import("~/routes/app.onboard");
+      const formData = new FormData();
+      formData.set("intent", "create-market-desk-import");
+      formData.set("competitors", "name,website,client\nBoat Lifestyle,boat-lifestyle.com,Client A");
+      formData.append("selectedRowIds", "row-2");
+
+      await expectRedirect(
+        () =>
+          action({
+            context: createContext(),
+            request: new Request("http://localhost/app/onboard", {
+              method: "POST",
+              body: formData,
+            }),
+          } as never),
+        "/app?setup=market-desk&created=1",
+      );
+
+      expect(createWatchlistWithinLimit).toHaveBeenCalledTimes(1);
+      expect(queueFirstWatchlistScan).toHaveBeenCalledTimes(1);
+      expect(upsertClientRoom).not.toHaveBeenCalled();
+      expect(completeUserOnboarding).toHaveBeenCalledWith({}, "user-1");
+    },
+  );
 
   it("does not silently create selected bulk rows beyond the current plan cap", async () => {
     const completeUserOnboarding = vi.fn().mockResolvedValue(undefined);
@@ -1196,6 +1268,52 @@ describe("onboarding route", () => {
     expect(markup).toContain("View plans");
     expect(markup).toContain('href="/app/billing?source=onboarding#plans"');
     expect(markup).not.toContain("Create watchlist for");
+  });
+
+  it.each([
+    ["nykaa.com", "/search?website=nykaa.com"],
+    ["", "/search"],
+  ] as const)("preserves a valid onboarding website in Search first (%s)", async (prefillWebsite, expectedHref) => {
+    vi.doMock("react-router", async () => {
+      const actual = await vi.importActual<typeof import("react-router")>("react-router");
+      const React = await import("react");
+
+      return {
+        ...actual,
+        Form: ({ children, ...props }: MockFormProps) =>
+          React.createElement("form", props, children),
+        Link: ({ children, to, ...props }: MockLinkProps) =>
+          React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+        useActionData: vi.fn().mockReturnValue(null),
+        useLoaderData: vi.fn().mockReturnValue({
+          session: {
+            user: {
+              id: "user-1",
+              email: "owner@example.com",
+              name: "Owner",
+              onboardedAt: null,
+            },
+          },
+          plan: "free",
+          watchlistLimit: {
+            allowed: true,
+            current: 0,
+            limit: 1,
+          },
+          brandWebsite: null,
+          prefillWebsite,
+          resumeSetup: false,
+          visitorCountry: "India",
+        }),
+        useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
+      };
+    });
+
+    const { default: AppOnboardRoute } = await import("~/routes/app.onboard");
+    const markup = renderToStaticMarkup(createElement(AppOnboardRoute));
+
+    expect(markup).toContain(`href="${expectedHref.replaceAll("&", "&amp;")}"`);
+    expect(markup).toContain("Search first instead");
   });
 
   it("pluralizes the bulk-import create button correctly", async () => {

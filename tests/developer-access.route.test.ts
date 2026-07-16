@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("~/lib/plan.server", () => ({
@@ -40,6 +41,13 @@ afterEach(() => {
 
 
 describe("developer access route action", () => {
+  it("renders a clear owner-managed empty state for members", () => {
+    const source = readFileSync("app/routes/app.developer-access.ui.tsx", "utf8");
+
+    expect(source).toContain("API keys are managed by the account owner");
+    expect(source).toContain("ownerManagedApiKeys");
+  });
+
   it("loads a clear Agency-plan lock reason before API-key submit", async () => {
     const { getUserPlan } = await import("~/lib/plan.server");
     vi.mocked(getUserPlan).mockResolvedValue("starter");
@@ -87,8 +95,19 @@ describe("developer access route action", () => {
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => ({ DB: {} })),
     }));
+    const listCustomerApiKeys = vi.fn().mockResolvedValue([
+      {
+        id: "owner-secret",
+        name: "Owner key",
+        keyPrefix: "f9_live_owner",
+        actionsWriteEnabled: true,
+        lastUsedAt: null,
+        revokedAt: null,
+        createdAt: "2026-05-15T00:00:00.000Z",
+      },
+    ]);
     vi.doMock("~/lib/data.server", () => ({
-      listCustomerApiKeys: vi.fn().mockResolvedValue([]),
+      listCustomerApiKeys,
     }));
 
     const { loader } = await import("~/routes/app.developer-access");
@@ -102,6 +121,7 @@ describe("developer access route action", () => {
       createDisabledReason: "Only Owner can create or revoke API keys for this workspace.",
       apiKeys: [],
     });
+    expect(listCustomerApiKeys).not.toHaveBeenCalled();
   });
 
   it("creates a customer API key and returns the one-time secret", async () => {

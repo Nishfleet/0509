@@ -7,6 +7,7 @@
 
 import {
   execute as run,
+  ensureDb,
   queryAll as many,
   queryOne as one,
 } from "~/lib/data/d1.server";
@@ -141,9 +142,9 @@ export async function createSupportCase(
         });
         if (reopened) {
           return {
-            ...reopened,
-            alreadyExists: false,
-            reopened: true,
+            ...reopened.record,
+            alreadyExists: !reopened.didReopen,
+            ...(reopened.didReopen ? { reopened: true } : {}),
           };
         }
       }
@@ -155,9 +156,15 @@ export async function createSupportCase(
     }
   }
 
-  await run(
-    env,
-    `
+  const eventId = createId();
+  const eventMessage = supportCaseOpenedEventMessage(input.context ?? {});
+  const eventMetadata = jsonValue({
+    category: normalized.category,
+    priority: normalized.priority,
+    ...supportCaseOpenedEventMetadata(input.context ?? {}),
+  });
+  const db = ensureDb(env);
+  const caseInsert = db.prepare(`
       INSERT OR IGNORE INTO support_case (
         id,
         user_id,
@@ -172,7 +179,7 @@ export async function createSupportCase(
         updated_at
       )
       VALUES (?, ?, ?, ?, ?, 'open', ?, ?, ?, ?, ?)
-    `,
+    `).bind(
     id,
     input.userId,
     requestKey,
@@ -184,6 +191,59 @@ export async function createSupportCase(
     timestamp,
     timestamp,
   );
+  const eventInsert = requestKey
+    ? db.prepare(`
+        INSERT INTO support_case_event (
+          id,
+          case_id,
+          user_id,
+          event_type,
+          message,
+          visible_to_customer,
+          metadata_json,
+          created_at
+        )
+        SELECT ?, ?, ?, 'case_opened', ?, 1, ?, ?
+        WHERE EXISTS (
+          SELECT 1
+          FROM support_case
+          WHERE id = ?
+            AND user_id = ?
+            AND request_key = ?
+        )
+      `).bind(
+        eventId,
+        id,
+        input.userId,
+        eventMessage,
+        eventMetadata,
+        timestamp,
+        id,
+        input.userId,
+        requestKey,
+      )
+    : db.prepare(`
+        INSERT INTO support_case_event (
+          id,
+          case_id,
+          user_id,
+          event_type,
+          message,
+          visible_to_customer,
+          metadata_json,
+          created_at
+        )
+        VALUES (?, ?, ?, 'case_opened', ?, 1, ?, ?)
+      `).bind(
+        eventId,
+        id,
+        input.userId,
+        eventMessage,
+        eventMetadata,
+        timestamp,
+      );
+
+  await db.batch([caseInsert, eventInsert]);
 
   if (requestKey) {
     const row = await one<SupportCaseRow>(
@@ -204,15 +264,6 @@ export async function createSupportCase(
     }
 
     const createdNewCase = row.id === id;
-    if (createdNewCase) {
-      await recordSupportCaseOpenedEvent(env, {
-        caseId: row.id,
-        userId: input.userId,
-        category: normalized.category,
-        priority: normalized.priority,
-        context: input.context ?? {},
-      });
-    }
 
     return {
       ...toSupportCaseRecord(row),
@@ -236,14 +287,6 @@ export async function createSupportCase(
   if (!row) {
     return null;
   }
-
-  await recordSupportCaseOpenedEvent(env, {
-    caseId: row.id,
-    userId: input.userId,
-    category: normalized.category,
-    priority: normalized.priority,
-    context: input.context ?? {},
-  });
 
   return {
     ...toSupportCaseRecord(row),
@@ -318,6 +361,7 @@ export async function createSupportCaseEvent(
     message: unknown;
     visibleToCustomer?: boolean;
     metadata?: JsonRecord | null;
+    idempotencyKey?: string | null;
   },
 ) {
   const eventType = readSupportCaseEventType(input.eventType);
@@ -326,11 +370,46 @@ export async function createSupportCaseEvent(
   }
 
   const message = normalizeSupportCaseEventMessage(input.message);
+  const idempotencyKey = typeof input.idempotencyKey === "string"
+    ? input.idempotencyKey.trim()
+    : null;
+  if (idempotencyKey !== null && (idempotencyKey.length === 0 || idempotencyKey.length > 160)) {
+    throw new SupportCaseInputError(
+      "invalid_support_case_event_idempotency_key",
+      "Choose a valid support case event key.",
+    );
+  }
   const id = createId();
   const timestamp = nowIso();
+  const metadata = jsonValue({
+    ...(input.metadata ?? {}),
+    ...(idempotencyKey ? { idempotencyKey } : {}),
+  });
   await run(
     env,
+    idempotencyKey
+      ? `
+      INSERT INTO support_case_event (
+        id,
+        case_id,
+        user_id,
+        event_type,
+        message,
+        visible_to_customer,
+        metadata_json,
+        created_at
+      )
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM support_case_event
+        WHERE case_id = ?
+          AND user_id = ?
+          AND event_type = ?
+          AND json_extract(metadata_json, '$.idempotencyKey') = ?
+      )
     `
+      : `
       INSERT INTO support_case_event (
         id,
         case_id,
@@ -349,19 +428,31 @@ export async function createSupportCaseEvent(
     eventType,
     message,
     input.visibleToCustomer === false ? 0 : 1,
-    jsonValue(input.metadata ?? {}),
+    metadata,
     timestamp,
+    ...(idempotencyKey ? [input.caseId, input.userId, eventType, idempotencyKey] : []),
   );
 
   const row = await one<SupportCaseEventRow>(
     env,
+    idempotencyKey
+      ? `
+      SELECT *
+      FROM support_case_event
+      WHERE case_id = ?
+        AND user_id = ?
+        AND event_type = ?
+        AND json_extract(metadata_json, '$.idempotencyKey') = ?
+      ORDER BY created_at ASC
+      LIMIT 1
     `
+      : `
       SELECT *
       FROM support_case_event
       WHERE id = ?
       LIMIT 1
     `,
-    id,
+    ...(idempotencyKey ? [input.caseId, input.userId, eventType, idempotencyKey] : [id]),
   );
 
   return row ? toSupportCaseEventRecord(row) : null;
@@ -421,34 +512,6 @@ function normalizeSupportCaseEventMessage(value: unknown) {
   return message;
 }
 
-async function recordSupportCaseOpenedEvent(
-  env: AppEnv,
-  input: {
-    caseId: string;
-    userId: string;
-    category: SupportCaseCategory;
-    priority: SupportCasePriority;
-    context: JsonRecord;
-  },
-) {
-  try {
-    await createSupportCaseEvent(env, {
-      caseId: input.caseId,
-      userId: input.userId,
-      eventType: "case_opened",
-      message: supportCaseOpenedEventMessage(input.context),
-      visibleToCustomer: true,
-      metadata: {
-        category: input.category,
-        priority: input.priority,
-        ...supportCaseOpenedEventMetadata(input.context),
-      },
-    });
-  } catch (error) {
-    console.error("[support] opened case event persistence failed", error);
-  }
-}
-
 async function reopenSupportCaseForRequest(
   env: AppEnv,
   input: {
@@ -462,9 +525,18 @@ async function reopenSupportCaseForRequest(
     timestamp: string;
   },
 ) {
-  await run(
-    env,
-    `
+  const eventId = createId();
+  const eventMetadata = jsonValue({
+    category: input.category,
+    priority: input.priority,
+    fromStatus: "closed",
+    toStatus: "open",
+    transitionAt: input.timestamp,
+    ...supportCaseOpenedEventMetadata(input.context),
+  });
+  const db = ensureDb(env);
+  const results = await db.batch([
+    db.prepare(`
       UPDATE support_case
       SET category = ?,
           priority = ?,
@@ -476,16 +548,57 @@ async function reopenSupportCaseForRequest(
       WHERE id = ?
         AND user_id = ?
         AND status = 'closed'
-    `,
-    input.category,
-    input.priority,
-    input.subject,
-    input.detail,
-    jsonValue(input.context),
-    input.timestamp,
-    input.caseId,
-    input.userId,
-  );
+    `).bind(
+      input.category,
+      input.priority,
+      input.subject,
+      input.detail,
+      jsonValue(input.context),
+      input.timestamp,
+      input.caseId,
+      input.userId,
+    ),
+    db.prepare(`
+      INSERT INTO support_case_event (
+        id,
+        case_id,
+        user_id,
+        event_type,
+        message,
+        visible_to_customer,
+        metadata_json,
+        created_at
+      )
+      SELECT ?, ?, ?, 'status_changed', ?, 1, ?, ?
+      WHERE EXISTS (
+        SELECT 1
+        FROM support_case
+        WHERE id = ?
+          AND user_id = ?
+          AND status = 'open'
+          AND updated_at = ?
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM support_case_event
+        WHERE case_id = ?
+          AND event_type = 'status_changed'
+          AND json_extract(metadata_json, '$.transitionAt') = ?
+      )
+    `).bind(
+      eventId,
+      input.caseId,
+      input.userId,
+      "Support case reopened from a new signed-in request.",
+      eventMetadata,
+      input.timestamp,
+      input.caseId,
+      input.userId,
+      input.timestamp,
+      input.caseId,
+      input.timestamp,
+    ),
+  ]);
 
   const row = await one<SupportCaseRow>(
     env,
@@ -503,45 +616,10 @@ async function reopenSupportCaseForRequest(
     return null;
   }
 
-  await recordSupportCaseReopenedEvent(env, {
-    caseId: row.id,
-    userId: input.userId,
-    category: input.category,
-    priority: input.priority,
-    context: input.context,
-  });
-
-  return toSupportCaseRecord(row);
-}
-
-async function recordSupportCaseReopenedEvent(
-  env: AppEnv,
-  input: {
-    caseId: string;
-    userId: string;
-    category: SupportCaseCategory;
-    priority: SupportCasePriority;
-    context: JsonRecord;
-  },
-) {
-  try {
-    await createSupportCaseEvent(env, {
-      caseId: input.caseId,
-      userId: input.userId,
-      eventType: "status_changed",
-      message: "Support case reopened from a new signed-in request.",
-      visibleToCustomer: true,
-      metadata: {
-        category: input.category,
-        priority: input.priority,
-        fromStatus: "closed",
-        toStatus: "open",
-        ...supportCaseOpenedEventMetadata(input.context),
-      },
-    });
-  } catch (error) {
-    console.error("[support] reopened case event persistence failed", error);
-  }
+  return {
+    record: toSupportCaseRecord(row),
+    didReopen: Number(results[0]?.meta?.changes ?? 0) === 1,
+  };
 }
 
 function supportCaseOpenedEventMessage(context: JsonRecord) {

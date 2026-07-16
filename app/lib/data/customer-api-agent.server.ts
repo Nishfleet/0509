@@ -6,6 +6,7 @@
  */
 
 import {
+  ensureDb,
   execute as run,
   queryAll as many,
   queryOne as one,
@@ -39,6 +40,86 @@ interface AgentActionAuditRow {
   created_at: string;
   updated_at: string;
 }
+
+/**
+ * The Journey 4 writes are intentionally narrow.  Callers must prepare one
+ * owner-scoped resource statement (including any ownership/precondition
+ * predicates) and this primitive appends the guarded audit completion inside
+ * the same D1 batch.  Keeping the effect as one statement is deliberate: D1
+ * exposes batch transactions, not a portable transaction callback, and a
+ * multi-statement resource writes may provide a bounded statement list; all
+ * effect statements and the guarded audit completion still share one batch.
+ */
+export type AtomicCustomerAgentActionName =
+  | "share.create"
+  | "report.share"
+  | "client_room.upsert";
+
+export interface PreparedAtomicCustomerAgentEffect<T extends JsonRecord = JsonRecord> {
+  statement: D1PreparedStatement | readonly D1PreparedStatement[];
+  effectExpectations?: readonly ("one" | "delete")[];
+  classifyBatchFailure?: () => "stale_write" | null | Promise<"stale_write" | null>;
+  result: T;
+  resourceType?: string | null;
+  resourceId?: string | null;
+  metadata?: JsonRecord | null;
+}
+
+export class AtomicCustomerAgentActionConflictError extends Error {
+  constructor(message = "Idempotency key was already used for different input.") {
+    super(message);
+    this.name = "AtomicCustomerAgentActionConflictError";
+  }
+}
+
+export class AtomicCustomerAgentActionReplayUnavailableError extends Error {
+  constructor(message = "Previous agent action has not completed successfully.") {
+    super(message);
+    this.name = "AtomicCustomerAgentActionReplayUnavailableError";
+  }
+}
+
+export class AtomicCustomerAgentActionBatchUnavailableError extends Error {
+  constructor() {
+    super("D1 batch transactions are required for this agent action.");
+    this.name = "AtomicCustomerAgentActionBatchUnavailableError";
+  }
+}
+
+export class AtomicCustomerAgentActionStaleWriteError extends Error {
+  constructor(message = "This resource changed since it was read. Reload it and retry with a new idempotency key.") {
+    super(message);
+    this.name = "AtomicCustomerAgentActionStaleWriteError";
+  }
+}
+
+export interface AtomicCustomerAgentActionInput<T extends JsonRecord = JsonRecord> {
+  userId: string;
+  apiKeyId?: string | null;
+  actionName: AtomicCustomerAgentActionName;
+  idempotencyKey: string;
+  requestFingerprint: string;
+  metadata?: JsonRecord | null;
+  prepare: (
+    db: D1Database,
+    auditId: string,
+  ) => PreparedAtomicCustomerAgentEffect<T> | Promise<PreparedAtomicCustomerAgentEffect<T>>;
+}
+
+export interface AtomicCustomerAgentActionResult<T extends JsonRecord = JsonRecord> {
+  audit: AgentActionAuditRecord;
+  replayed: boolean;
+  result: T;
+}
+
+const ATOMIC_ACTION_STARTED_STALE_AFTER_MS = 15 * 60 * 1_000;
+const ATOMIC_ACTION_TERMINALIZE_ATTEMPTS = 3;
+
+type AtomicCustomerAgentActionFailureCode =
+  | "atomic_prepare_failed"
+  | "atomic_batch_failed"
+  | "atomic_stale_started"
+  | "stale_write";
 
 function toAgentActionAuditRecord(row: AgentActionAuditRow): AgentActionAuditRecord {
   return {
@@ -290,6 +371,434 @@ export async function finishAgentActionAudit(
 
   const row = await one<AgentActionAuditRow>(env, "SELECT * FROM agent_action_audit WHERE id = ?", auditId);
   return row ? toAgentActionAuditRecord(row) : null;
+}
+
+function assertAtomicRequestMatches(
+  existing: AgentActionAuditRecord,
+  actionName: AtomicCustomerAgentActionName,
+  requestFingerprint: string,
+  apiKeyId: string | null,
+) {
+  if (
+    existing.actionName !== actionName ||
+    (existing.apiKeyId ?? null) !== apiKeyId
+  ) {
+    throw new AtomicCustomerAgentActionConflictError();
+  }
+
+  const existingFingerprint = existing.metadata?.requestFingerprint;
+  if (
+    typeof existingFingerprint !== "string" ||
+    existingFingerprint.trim() !== requestFingerprint
+  ) {
+    throw new AtomicCustomerAgentActionConflictError();
+  }
+}
+
+function isStartedAtomicActionStale(audit: AgentActionAuditRecord, now = Date.now()) {
+  if (audit.status !== "started") {
+    return false;
+  }
+  const updatedAt = Date.parse(audit.updatedAt);
+  return Number.isFinite(updatedAt) && now - updatedAt >= ATOMIC_ACTION_STARTED_STALE_AFTER_MS;
+}
+
+async function terminalizeStartedAtomicActionAudit(
+  env: AppEnv,
+  input: {
+    auditId: string;
+    userId: string;
+    apiKeyId: string | null;
+    actionName: AtomicCustomerAgentActionName;
+    idempotencyKey: string;
+    requestFingerprint: string;
+    errorCode: AtomicCustomerAgentActionFailureCode;
+  },
+) {
+  const result = await run(
+    env,
+    `
+      UPDATE agent_action_audit
+      SET status = 'failed',
+          result_json = NULL,
+          error_code = ?,
+          error_message = 'The action did not complete. Use a new idempotency key to retry.',
+          updated_at = ?
+      WHERE id = ?
+        AND user_id = ?
+        AND ((api_key_id = ?) OR (api_key_id IS NULL AND ? IS NULL))
+        AND action_name = ?
+        AND idempotency_key = ?
+        AND status = 'started'
+        AND json_extract(metadata_json, '$.requestFingerprint') = ?
+    `,
+    input.errorCode,
+    nowIso(),
+    input.auditId,
+    input.userId,
+    input.apiKeyId,
+    input.apiKeyId,
+    input.actionName,
+    input.idempotencyKey,
+    input.requestFingerprint,
+  );
+  return Number(result.meta?.changes ?? 0) === 1;
+}
+
+async function terminalizeStartedAtomicActionAuditWithRetry(
+  env: AppEnv,
+  input: Parameters<typeof terminalizeStartedAtomicActionAudit>[1],
+) {
+  for (let attempt = 1; attempt <= ATOMIC_ACTION_TERMINALIZE_ATTEMPTS; attempt += 1) {
+    try {
+      return await terminalizeStartedAtomicActionAudit(env, input);
+    } catch {
+      if (attempt === ATOMIC_ACTION_TERMINALIZE_ATTEMPTS) {
+        throw new AtomicCustomerAgentActionReplayUnavailableError(
+          "Action recovery is temporarily unavailable. Retry with the same idempotency key.",
+        );
+      }
+    }
+  }
+  return false;
+}
+
+async function replayExistingAtomicAction<T extends JsonRecord>(
+  env: AppEnv,
+  existing: AgentActionAuditRecord,
+  input: AtomicCustomerAgentActionInput<T>,
+  idempotencyKey: string,
+  requestFingerprint: string,
+): Promise<AtomicCustomerAgentActionResult<T>> {
+  const apiKeyId = input.apiKeyId ?? null;
+  assertAtomicRequestMatches(
+    existing,
+    input.actionName,
+    requestFingerprint,
+    apiKeyId,
+  );
+  let current = existing;
+  if (current.status === "started" && isStartedAtomicActionStale(current)) {
+    const terminalized = await terminalizeStartedAtomicActionAuditWithRetry(env, {
+      auditId: existing.id,
+      userId: input.userId,
+      apiKeyId,
+      actionName: input.actionName,
+      idempotencyKey,
+      requestFingerprint,
+      errorCode: "atomic_stale_started",
+    });
+    if (terminalized) {
+      current = {
+        ...existing,
+        status: "failed",
+        result: null,
+        errorCode: "atomic_stale_started",
+      };
+    } else {
+      const refreshed = await findAgentActionAuditByIdempotencyKey(
+        env,
+        input.userId,
+        idempotencyKey,
+      );
+      if (!refreshed) {
+        throw new AtomicCustomerAgentActionReplayUnavailableError();
+      }
+      assertAtomicRequestMatches(
+        refreshed,
+        input.actionName,
+        requestFingerprint,
+        apiKeyId,
+      );
+      current = refreshed;
+    }
+  }
+  if (current.status === "failed" && current.errorCode === "stale_write") {
+    throw new AtomicCustomerAgentActionStaleWriteError();
+  }
+  if (current.status !== "succeeded" || !current.result) {
+    throw new AtomicCustomerAgentActionReplayUnavailableError(
+      current.status === "started"
+        ? "Action recovery is still in progress. Retry with the same idempotency key."
+        : "Previous agent action did not complete. Use a new idempotency key to retry.",
+    );
+  }
+  return {
+    audit: current,
+    replayed: true,
+    result: current.result as T,
+  };
+}
+
+/**
+ * Executes a Journey 4 customer-agent effect and its successful audit as one
+ * D1 batch.  The effect is prepared before the batch, but it is never run by
+ * a sequential fallback.  A zero-change effect or an audit predicate miss
+ * deliberately aborts the batch; the resource stays unchanged and the exact
+ * started audit is then terminalized as failed for deterministic recovery.
+ */
+export async function runAtomicCustomerAgentAction<T extends JsonRecord = JsonRecord>(
+  env: AppEnv,
+  input: AtomicCustomerAgentActionInput<T>,
+): Promise<AtomicCustomerAgentActionResult<T>> {
+  const idempotencyKey = input.idempotencyKey.trim();
+  const requestFingerprint = input.requestFingerprint.trim();
+  if (!idempotencyKey) {
+    throw new TypeError("An idempotency key is required for atomic customer actions.");
+  }
+  if (!requestFingerprint) {
+    throw new TypeError("A request fingerprint is required for atomic customer actions.");
+  }
+
+  const db = ensureDb(env);
+  const existing = await findAgentActionAuditByIdempotencyKey(env, input.userId, idempotencyKey);
+  if (existing) {
+    return replayExistingAtomicAction(
+      env,
+      existing,
+      input,
+      idempotencyKey,
+      requestFingerprint,
+    );
+  }
+
+  // Check the transaction capability before claiming a started audit. This
+  // keeps an unsupported runtime retryable and guarantees no effect fallback.
+  if (typeof db.batch !== "function") {
+    throw new AtomicCustomerAgentActionBatchUnavailableError();
+  }
+
+  const metadata = {
+    ...(input.metadata ?? {}),
+    requestFingerprint,
+  } satisfies JsonRecord;
+  const claim = await claimAgentActionAudit(env, {
+    userId: input.userId,
+    apiKeyId: input.apiKeyId ?? null,
+    actionName: input.actionName,
+    idempotencyKey,
+    metadata,
+  });
+  if (!claim) {
+    throw new Error("Could not create agent action audit.");
+  }
+  if (!claim.claimed) {
+    return replayExistingAtomicAction(
+      env,
+      claim.audit,
+      input,
+      idempotencyKey,
+      requestFingerprint,
+    );
+  }
+
+  // The callback only prepares SQL and the deterministic response. No effect
+  // is executed until the batch below has been assembled.
+  let prepared: PreparedAtomicCustomerAgentEffect<T>;
+  try {
+    prepared = await input.prepare(db, claim.audit.id);
+  } catch (error) {
+    await terminalizeStartedAtomicActionAuditWithRetry(env, {
+      auditId: claim.audit.id,
+      userId: input.userId,
+      apiKeyId: input.apiKeyId ?? null,
+      actionName: input.actionName,
+      idempotencyKey,
+      requestFingerprint,
+      errorCode: "atomic_prepare_failed",
+    });
+    throw error;
+  }
+  let timestamp: string;
+  let atomicBatch: D1PreparedStatement[];
+  try {
+    timestamp = nowIso();
+    const auditMetadata = jsonValue({
+      ...metadata,
+      ...(prepared.metadata ?? {}),
+      // Prepared metadata may add safe resource context, but it must never
+      // replace the fingerprint that guarded the started audit and effect SQL.
+      requestFingerprint,
+    });
+    const auditResult = jsonValue(prepared.result);
+    const completeAudit = db
+      .prepare(
+        `
+          UPDATE agent_action_audit
+          SET status = 'succeeded',
+              resource_type = ?,
+              resource_id = ?,
+              result_json = ?,
+              error_code = NULL,
+              error_message = NULL,
+              metadata_json = ?,
+              updated_at = ?
+          WHERE id = ?
+            AND user_id = ?
+            AND ((api_key_id = ?) OR (api_key_id IS NULL AND ? IS NULL))
+            AND action_name = ?
+            AND idempotency_key = ?
+            AND status = 'started'
+            AND json_extract(metadata_json, '$.requestFingerprint') = ?
+        `,
+      )
+      .bind(
+        prepared.resourceType ?? null,
+        prepared.resourceId ?? null,
+        auditResult,
+        auditMetadata,
+        timestamp,
+        claim.audit.id,
+        input.userId,
+        input.apiKeyId ?? null,
+        input.apiKeyId ?? null,
+        input.actionName,
+        idempotencyKey,
+        requestFingerprint,
+      );
+
+    const effectStatements = Array.isArray(prepared.statement)
+      ? [...prepared.statement]
+      : [prepared.statement];
+    const effectExpectations = prepared.effectExpectations
+      ? [...prepared.effectExpectations]
+      : effectStatements.map(() => "one" as const);
+    if (
+      effectStatements.length === 0 ||
+      effectStatements.length > 64 ||
+      effectExpectations.length !== effectStatements.length
+    ) {
+      throw new TypeError("Atomic customer action effects must be a bounded non-empty statement list.");
+    }
+
+    // SQLite has no portable RAISE() outside triggers. A malformed JSON
+    // expression deterministically aborts the transaction when an effect that
+    // must mutate one row reports zero/multiple changes. Explicit delete steps
+    // are allowed to report zero when the resource set is already empty.
+    const effectBatchStatements: D1PreparedStatement[] = [];
+    effectStatements.forEach((statement, index) => {
+      effectBatchStatements.push(statement);
+      effectBatchStatements.push(
+        db.prepare(
+          effectExpectations[index] === "one"
+            ? `SELECT CASE WHEN changes() = 1 THEN 1 ELSE json_extract('{', '$') END AS effect_committed`
+            : `SELECT 1 AS delete_committed`,
+        ).bind(),
+      );
+    });
+    const requireAuditCompletion = db.prepare(
+      `SELECT CASE WHEN changes() > 0 THEN 1 ELSE json_extract('{', '$') END AS committed`,
+    ).bind();
+    atomicBatch = [
+      ...effectBatchStatements,
+      completeAudit,
+      requireAuditCompletion,
+    ];
+  } catch (error) {
+    await terminalizeStartedAtomicActionAuditWithRetry(env, {
+      auditId: claim.audit.id,
+      userId: input.userId,
+      apiKeyId: input.apiKeyId ?? null,
+      actionName: input.actionName,
+      idempotencyKey,
+      requestFingerprint,
+      errorCode: "atomic_prepare_failed",
+    });
+    throw error;
+  }
+
+  try {
+    await db.batch(atomicBatch);
+  } catch (error) {
+    let refreshed: AgentActionAuditRecord | null;
+    try {
+      refreshed = await findAgentActionAuditByIdempotencyKey(env, input.userId, idempotencyKey);
+    } catch {
+      throw new AtomicCustomerAgentActionReplayUnavailableError(
+        "Action commit status is temporarily unavailable. Retry with the same idempotency key.",
+      );
+    }
+    if (!refreshed) {
+      throw new AtomicCustomerAgentActionReplayUnavailableError(
+        "Action commit status is temporarily unavailable. Retry with the same idempotency key.",
+      );
+    }
+    if (refreshed.status !== "started") {
+      return replayExistingAtomicAction(
+        env,
+        refreshed,
+        input,
+        idempotencyKey,
+        requestFingerprint,
+      );
+    }
+
+    let errorCode: AtomicCustomerAgentActionFailureCode = "atomic_batch_failed";
+    try {
+      if (await prepared.classifyBatchFailure?.() === "stale_write") {
+        errorCode = "stale_write";
+      }
+    } catch {
+      // A classification read must never hide the original batch failure.
+    }
+    const terminalized = await terminalizeStartedAtomicActionAuditWithRetry(env, {
+      auditId: claim.audit.id,
+      userId: input.userId,
+      apiKeyId: input.apiKeyId ?? null,
+      actionName: input.actionName,
+      idempotencyKey,
+      requestFingerprint,
+      errorCode,
+    });
+    if (!terminalized) {
+      let latest: AgentActionAuditRecord | null;
+      try {
+        latest = await findAgentActionAuditByIdempotencyKey(env, input.userId, idempotencyKey);
+      } catch {
+        throw new AtomicCustomerAgentActionReplayUnavailableError(
+          "Action recovery is temporarily unavailable. Retry with the same idempotency key.",
+        );
+      }
+      if (!latest) {
+        throw new AtomicCustomerAgentActionReplayUnavailableError();
+      }
+      return replayExistingAtomicAction(
+        env,
+        latest,
+        input,
+        idempotencyKey,
+        requestFingerprint,
+      );
+    }
+    if (errorCode === "stale_write") {
+      throw new AtomicCustomerAgentActionStaleWriteError();
+    }
+    throw error;
+  }
+  // The final changes() guard is inside the same batch, so a resolved batch is
+  // already the commit proof. A read after commit can fail independently and
+  // must not turn a durable customer effect into a false-negative response.
+  const completed: AgentActionAuditRecord = {
+    ...claim.audit,
+    resourceType: prepared.resourceType ?? null,
+    resourceId: prepared.resourceId ?? null,
+    status: "succeeded",
+    result: prepared.result,
+    errorCode: null,
+    errorMessage: null,
+    metadata: {
+      ...metadata,
+      ...(prepared.metadata ?? {}),
+      requestFingerprint,
+    },
+    updatedAt: timestamp,
+  };
+
+  return {
+    audit: completed,
+    replayed: false,
+    result: prepared.result,
+  };
 }
 
 export async function closeCounterMoveFollowUp(

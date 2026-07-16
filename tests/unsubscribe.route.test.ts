@@ -173,10 +173,10 @@ describe("unsubscribe route", () => {
   });
 
   it("action opts the target out and pauses it", async () => {
-    const upsertDeliveryTarget = vi.fn().mockResolvedValue(null);
+    const suppressEmailTargetsForUserAndAddress = vi.fn().mockResolvedValue(1);
     vi.doMock("~/lib/data.server", () => ({
       getDeliveryTargetById: vi.fn().mockResolvedValue(emailTarget()),
-      upsertDeliveryTarget,
+      suppressEmailTargetsForUserAndAddress,
     }));
 
     const url = await signedUrl();
@@ -188,30 +188,23 @@ describe("unsubscribe route", () => {
     } as never);
 
     expect(data).toMatchObject({ valid: true, alreadyUnsubscribed: true });
-    expect(upsertDeliveryTarget).toHaveBeenCalledWith(
+    expect(suppressEmailTargetsForUserAndAddress).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({
+      {
         userId: "user-1",
-        channel: "email",
         targetValue: "owner@example.com",
-        isOptedIn: false,
-        isPaused: true,
-        pausedAt: expect.any(String),
-        optedOutAt: expect.any(String),
-        metadata: expect.objectContaining({
-          unsubscribedVia: "email_unsubscribe_link",
-        }),
-      }),
+        source: "email_unsubscribe_link",
+      },
     );
   });
 
   it("action is idempotent for already unsubscribed targets", async () => {
-    const upsertDeliveryTarget = vi.fn();
+    const suppressEmailTargetsForUserAndAddress = vi.fn();
     vi.doMock("~/lib/data.server", () => ({
       getDeliveryTargetById: vi
         .fn()
         .mockResolvedValue(emailTarget({ optedOutAt: "2026-05-01T00:00:00.000Z" })),
-      upsertDeliveryTarget,
+      suppressEmailTargetsForUserAndAddress,
     }));
 
     const url = await signedUrl();
@@ -223,14 +216,14 @@ describe("unsubscribe route", () => {
     } as never);
 
     expect(data).toMatchObject({ valid: true, alreadyUnsubscribed: true });
-    expect(upsertDeliveryTarget).not.toHaveBeenCalled();
+    expect(suppressEmailTargetsForUserAndAddress).not.toHaveBeenCalled();
   });
 
   it("action rejects non-email targets", async () => {
-    const upsertDeliveryTarget = vi.fn();
+    const suppressEmailTargetsForUserAndAddress = vi.fn();
     vi.doMock("~/lib/data.server", () => ({
       getDeliveryTargetById: vi.fn().mockResolvedValue(emailTarget({ channel: "whatsapp" })),
-      upsertDeliveryTarget,
+      suppressEmailTargetsForUserAndAddress,
     }));
 
     const url = await signedUrl();
@@ -242,6 +235,22 @@ describe("unsubscribe route", () => {
     } as never);
 
     expect(data).toEqual({ valid: false, alreadyUnsubscribed: false, maskedEmail: null });
-    expect(upsertDeliveryTarget).not.toHaveBeenCalled();
+    expect(suppressEmailTargetsForUserAndAddress).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when the atomic suppression helper is unavailable", async () => {
+    vi.doMock("~/lib/data.server", () => ({
+      getDeliveryTargetById: vi.fn().mockResolvedValue(emailTarget()),
+    }));
+
+    const url = await signedUrl();
+    const { action } = await import("../app/routes/unsubscribe");
+    const data = await action({
+      context,
+      request: new Request(url, { method: "POST" }),
+      params: {},
+    } as never);
+
+    expect(data).toEqual({ valid: false, alreadyUnsubscribed: false, maskedEmail: null });
   });
 });

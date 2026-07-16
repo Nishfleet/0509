@@ -7,7 +7,7 @@ import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 const description =
-  "Five to Nine trust and security basics, including data handled, retention, backups, subprocessors, and non-claims.";
+  "Five to Nine trust and security basics, including data handled, retention, backups, external services, and non-claims.";
 
 export const links: LinksFunction = () => canonicalLinks("/trust");
 
@@ -51,11 +51,24 @@ export default function TrustRoute() {
         </p>
       </PublicDocBlock>
 
-      <PublicDocBlock title="Subprocessors and providers">
+      <PublicDocBlock title="External services and providers">
         <ul className="f9-doc-list">
-          <li>Cloudflare: hosting, storage, Workers AI, and email delivery.</li>
-          <li>Dodo Payments: checkout, subscriptions, receipts, and billing portal.</li>
-          <li>Meta public Ad Library surfaces and customer-provided Meta access when the customer connects it.</li>
+          <li>Cloudflare is configured for hosting, storage, Workers AI, and email delivery; live provider availability is not measured here.</li>
+          <li>Dodo Payments is configured for checkout, subscriptions, receipts, and billing portal flows; live billing availability is not guaranteed here.</li>
+          <li>Meta public Ad Library surfaces and customer-provided Meta access are provider-dependent when the customer connects them.</li>
+          <li>
+            Site Rep provides the assistant on anonymous public pages. Using it sends the page address,
+            the visitor's question and feedback, and any name, email, or follow-up details the visitor
+            chooses to submit to Site Rep for answers and requested follow-up. See Site Rep's{" "}
+            <a href="https://siterep.net/privacy" rel="noreferrer" target="_blank">
+              Privacy
+            </a>{" "}
+            and{" "}
+            <a href="https://siterep.net/trust" rel="noreferrer" target="_blank">
+              Trust
+            </a>{" "}
+            notes.
+          </li>
         </ul>
       </PublicDocBlock>
 

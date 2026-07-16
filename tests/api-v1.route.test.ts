@@ -12,6 +12,7 @@ import {
   BROAD_WRITE_API_NON_GOAL,
   CUSTOMER_AGENT_ACTION_NAMES,
 } from "~/lib/agent-action-catalog";
+import { encodeListCursor } from "~/lib/list-pagination";
 import { mockAgencyWorkspacePlan } from "./helpers/agency-plan-mock";
 
 const EXPECTED_CUSTOMER_AGENT_ACTION_NAMES = [
@@ -221,6 +222,24 @@ function setupMocks(authOk = true, actionsWriteEnabled = true, workspaceUserId =
     getWatchlist: vi.fn().mockResolvedValue(watchlist),
     listCollectionItems: vi.fn().mockResolvedValue([collectionItem]),
     listWatchEvents: vi.fn().mockResolvedValue([watchEvent]),
+    listCollectionItemsPage: vi.fn().mockResolvedValue({
+      items: [collectionItem],
+      nextCursor: null,
+    }),
+    listWatchEventsPage: vi.fn().mockResolvedValue({
+      items: [watchEvent],
+      nextCursor: null,
+    }),
+    isActiveCustomerApiKey: vi.fn().mockResolvedValue(true),
+    enforceAuthenticatedApiLimit: vi.fn().mockResolvedValue(null),
+    verifyAuthenticatedApiIdentity: vi.fn().mockResolvedValue(null),
+    createAuthenticatedApiLimitContext: vi.fn((env, identity) => ({
+      identity,
+      isIdentityActive: () => mocks.isActiveCustomerApiKey(env, {
+        apiKeyId: identity.apiKeyId,
+        userId: identity.actorUserId,
+      }),
+    })),
   };
 
   vi.doMock("~/lib/api-keys.server", () => ({
@@ -237,6 +256,11 @@ function setupMocks(authOk = true, actionsWriteEnabled = true, workspaceUserId =
     getEnv: vi.fn(() => ({ DB: {} })),
   }));
   vi.doMock("~/lib/data.server", () => mocks);
+  vi.doMock("~/lib/authenticated-api-limits.server", () => ({
+    enforceAuthenticatedApiLimit: mocks.enforceAuthenticatedApiLimit,
+    verifyAuthenticatedApiIdentity: mocks.verifyAuthenticatedApiIdentity,
+    createAuthenticatedApiLimitContext: mocks.createAuthenticatedApiLimitContext,
+  }));
   vi.doMock("~/lib/workspace.server", () => ({
     resolveWorkspace: vi.fn().mockResolvedValue({
       workspaceUserId,
@@ -503,7 +527,93 @@ describe("customer API v1", () => {
     expect(body.resourceType).toBe("collection");
     expect(body.items[0]?.advertiser).toBe("Nykaa");
     expect(body.insightDepth.topHooks[0]?.label).toBe("Routine-first bundle");
+    expect(body).not.toHaveProperty("pagination");
     expect(mocks.getCollection).toHaveBeenCalledWith(expect.anything(), "collection-1", "user-1");
+    expect(mocks.listCollectionItems).toHaveBeenCalledWith(expect.anything(), "collection-1");
+    expect(mocks.listCollectionItemsPage).not.toHaveBeenCalled();
+  });
+
+  it("preserves legacy no-query export cardinality above one hundred records", async () => {
+    const mocks = setupMocks();
+    mocks.listCollectionItems.mockResolvedValue(
+      Array.from({ length: 150 }, (_, index) => ({
+        ...collectionItem,
+        id: `item-${index + 1}`,
+      })),
+    );
+    mocks.listWatchEvents.mockResolvedValue(
+      Array.from({ length: 180 }, (_, index) => ({
+        ...watchEvent,
+        id: `event-${index + 1}`,
+      })),
+    );
+
+    const collectionResponse = await loadApi("https://0509.io/api/v1/collections/collection-1?format=json");
+    const watchlistResponse = await loadApi("https://0509.io/api/v1/watchlists/watchlist-1?format=json");
+    const collectionBody = await collectionResponse.json() as { items: unknown[] };
+    const watchlistBody = await watchlistResponse.json() as { events: unknown[] };
+
+    expect(collectionBody.items).toHaveLength(150);
+    expect(watchlistBody.events).toHaveLength(180);
+    expect(mocks.listCollectionItems).toHaveBeenCalledWith(expect.anything(), "collection-1");
+    expect(mocks.listWatchEvents).toHaveBeenCalledWith(expect.anything(), "watchlist-1", 200);
+    expect(mocks.listCollectionItemsPage).not.toHaveBeenCalled();
+    expect(mocks.listWatchEventsPage).not.toHaveBeenCalled();
+  });
+
+  it("returns bounded cursor pagination for collection exports", async () => {
+    const mocks = setupMocks();
+    const cursor = encodeListCursor("2026-04-18T00:00:00.000Z", "item-1");
+    mocks.listCollectionItemsPage.mockResolvedValue({
+      items: [collectionItem],
+      nextCursor: "next-cursor",
+    });
+
+    const response = await loadApi(
+      `https://0509.io/api/v1/collections/collection-1?format=json&limit=25&cursor=${encodeURIComponent(cursor)}`,
+    );
+    const body = await response.json() as { pagination: { limit: number; nextCursor: string | null } };
+
+    expect(mocks.listCollectionItemsPage).toHaveBeenCalledWith(
+      expect.anything(),
+      "collection-1",
+      { limit: 25, cursor },
+    );
+    expect(body.pagination).toEqual({ limit: 25, nextCursor: "next-cursor" });
+    expect(response.headers.get("x-0509-next-cursor")).toBe("next-cursor");
+  });
+
+  it("authorizes a member API export against the workspace owner", async () => {
+    const mocks = setupMocks(true, true, "owner-1");
+    const response = await loadApi("https://0509.io/api/v1/collections/collection-1?format=json");
+
+    expect(response.status).toBe(200);
+    expect(mocks.getCollection).toHaveBeenCalledWith(
+      expect.anything(),
+      "collection-1",
+      "owner-1",
+    );
+  });
+
+  it("enforces read limits after authentication across workspace, actor, and key identity", async () => {
+    const mocks = setupMocks(true, true, "owner-1");
+    mocks.enforceAuthenticatedApiLimit.mockResolvedValue(
+      Response.json({ error: "rate_limited" }, { status: 429 }),
+    );
+    const response = await loadApi("https://0509.io/api/v1/collections/collection-1?format=json");
+
+    expect(response.status).toBe(429);
+    expect(mocks.enforceAuthenticatedApiLimit).toHaveBeenCalledWith(expect.objectContaining({
+      identity: {
+        workspaceUserId: "owner-1",
+        actorUserId: "user-1",
+        apiKeyId: "api-key-1",
+      },
+      operation: "api.v1.resource.read",
+      actionClass: "read",
+      isIdentityActive: expect.any(Function),
+    }));
+    expect(mocks.getCollection).not.toHaveBeenCalled();
   });
 
   it("rejects forged Slack export requests by API key", async () => {
@@ -571,12 +681,79 @@ describe("customer API v1", () => {
         apiKeyId: "api-key-1",
         idempotencyKey: "pause-watchlist-1",
         source: "api_v1",
+        authorizeExternalEffect: expect.any(Function),
       }),
       "watchlist.pause",
       {
         watchlistId: "watchlist-1",
       },
     );
+  });
+
+  it("applies the stricter action policy before an API write runs", async () => {
+    const mocks = setupMocks();
+    mocks.enforceAuthenticatedApiLimit.mockResolvedValue(
+      Response.json(
+        { error: "rate_limited", message: "Too many authenticated requests. Please try again shortly." },
+        { status: 429, headers: { "Retry-After": "19" } },
+      ),
+    );
+    const runCustomerAgentAction = vi.fn();
+    vi.doMock("~/lib/customer-agent-actions.server", () => ({
+      customerAgentActionErrorPayload: vi.fn(),
+      normalizeCustomerAgentActionName: vi.fn(() => "watchlist.refresh"),
+      runCustomerAgentAction,
+    }));
+
+    const { action } = await import("~/routes/api.v1.actions");
+    const response = await action({
+      context: { cloudflare: { env: { DB: {} }, ctx: { waitUntil: vi.fn() } } },
+      request: new Request("https://0509.io/api/v1/actions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${fakeApiKey("test")}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action: "watchlist.refresh",
+          input: { watchlistId: "watchlist-1" },
+        }),
+      }),
+    } as never);
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBe("19");
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      error: "rate_limited",
+      message: "Too many authenticated requests. Please try again shortly.",
+      retryAfterSeconds: 19,
+    });
+    expect(mocks.enforceAuthenticatedApiLimit).toHaveBeenCalledWith(expect.objectContaining({
+      actionName: "watchlist.refresh",
+      operation: "api.v1.actions",
+    }));
+    expect(mocks.enforceAuthenticatedApiLimit).toHaveBeenCalledTimes(1);
+    expect(runCustomerAgentAction).not.toHaveBeenCalled();
+  });
+
+  it("rejects oversized action payloads before parsing or dispatch", async () => {
+    setupMocks();
+    const { action } = await import("~/routes/api.v1.actions");
+    const response = await action({
+      context: { cloudflare: { env: { DB: {} } } },
+      request: new Request("https://0509.io/api/v1/actions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${fakeApiKey("test")}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ action: "watchlist.pause", detail: "x".repeat(70_000) }),
+      }),
+    } as never);
+
+    expect(response.status).toBe(413);
+    await expect(response.json()).resolves.toMatchObject({ error: "request_too_large" });
   });
 
   it("rejects forged WhatsApp delivery settings by API key", async () => {

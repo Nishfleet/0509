@@ -87,6 +87,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { checkPlanLimit } = await import("~/lib/plan.server");
   const { completeUserOnboarding, upsertWorkspaceBranding } = await import("~/lib/data.server");
   const env = getEnv(context);
+  const { resolveE2EProviderDeny, sanitizeE2EProviderEnv } = await import("~/lib/e2e-provider.server");
+  const providerDeny = await resolveE2EProviderDeny(env, request);
+  if (providerDeny.failClosed && !providerDeny.enabled) {
+    throw new Response("The local release-proof environment is unavailable.", { status: 503 });
+  }
+  const scanEnv = providerDeny.enabled ? sanitizeE2EProviderEnv(env) : env;
   const { session, workspaceUserId, isMember } = await requireWorkspaceSession(env, request);
 
   if (isMember) {
@@ -246,6 +252,13 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     const { createWatchlistWithinLimit, upsertAgentMemory, upsertClientRoom } = await import("~/lib/data.server");
     const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
+    const clientRoomContextRequested = rowsToCreate.some((row) => Boolean(row.client));
+    let clientRoomEntitled = false;
+    if (clientRoomContextRequested) {
+      const { getUserPlan } = await import("~/lib/plan.server");
+      const { canUsePlanFeature } = await import("~/lib/plan-entitlements");
+      clientRoomEntitled = canUsePlanFeature(await getUserPlan(env, workspaceUserId), "client_reports");
+    }
     let createdCount = 0;
     const queuedWatchlistIds = new Set<string>();
     const liveRejectedRows: Array<Pick<CompetitorImportRow, "id" | "rowNumber" | "status" | "reason">> = [];
@@ -270,12 +283,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
         watchlistId: watchlist.id,
         watchlistLabel: watchlist.targetLabel,
         upsertAgentMemory,
-        upsertClientRoom,
+        upsertClientRoom: clientRoomEntitled ? upsertClientRoom : undefined,
       });
       if (result.status === "created" && !queuedWatchlistIds.has(watchlist.id)) {
         queuedWatchlistIds.add(watchlist.id);
         createdCount += 1;
-        queueFirstWatchlistScan(env, context.cloudflare?.ctx, watchlist);
+        await queueFirstWatchlistScan(scanEnv, context.cloudflare?.ctx, watchlist);
       }
     }
 
@@ -374,7 +387,17 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
     const watchlist = watchlistResult.watchlist;
-    queueFirstWatchlistScan(env, context.cloudflare?.ctx, watchlist);
+    try {
+      await queueFirstWatchlistScan(scanEnv, context.cloudflare?.ctx, watchlist);
+    } catch {
+      return {
+        ok: false,
+        intent,
+        error: "first_scan_dispatch_delayed",
+        message:
+          "Competitor saved, but the activation scan is delayed. Submit again to retry the same safe scan.",
+      };
+    }
 
     await saveOptionalBrandWebsite();
     await completeUserOnboarding(env, session.user.id);
@@ -486,7 +509,7 @@ async function persistCompetitorImportContext(input: {
   watchlistId: string;
   watchlistLabel: string;
   upsertAgentMemory: typeof import("~/lib/data.server").upsertAgentMemory;
-  upsertClientRoom: typeof import("~/lib/data.server").upsertClientRoom;
+  upsertClientRoom?: typeof import("~/lib/data.server").upsertClientRoom;
 }) {
   if (!hasCompetitorImportContext(input.row)) {
     return;
@@ -503,7 +526,7 @@ async function persistCompetitorImportContext(input: {
     });
   }
 
-  if (!input.row.client) {
+  if (!input.row.client || !input.upsertClientRoom) {
     return;
   }
 
@@ -570,6 +593,9 @@ export default function AppOnboardRoute() {
   const competitorQuery = competitorWebsite.searchTerm ?? "";
   const canCreateWatchlist = data.watchlistLimit.allowed && data.watchlistLimit.limit > 0;
   const atWatchlistCap = !data.watchlistLimit.allowed && data.watchlistLimit.limit > 0;
+  const searchFirstPath = competitorWebsite.raw && !competitorWebsite.error
+    ? `/search?website=${encodeURIComponent(competitorWebsite.raw)}`
+    : "/search";
 
   return (
     <DashboardPage>
@@ -759,7 +785,7 @@ export default function AppOnboardRoute() {
                 {data.resumeSetup ? "Back to dashboard" : "Skip for now"}
               </SubmitButton>
             </Form>
-            <Link className="f9-text-link" to="/search">
+            <Link className="f9-text-link" to={searchFirstPath}>
               Search first instead
             </Link>
           </div>

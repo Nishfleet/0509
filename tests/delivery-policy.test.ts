@@ -209,6 +209,22 @@ describe("delivery policy", () => {
     expect(decision.deferredByQuietHours).toBe(true);
   });
 
+  it("fails safe to UTC instead of throwing for a legacy invalid timezone", () => {
+    const decision = evaluateDeliveryPolicy({
+      lane: "customer",
+      event: watchEvent(),
+      workspaceConfig: {
+        ...workspaceConfig,
+        timezone: "Not/AZone",
+      },
+      watchlistConfig: null,
+      now: "2026-04-18T23:30:00.000Z",
+    });
+
+    expect(decision.deferredByQuietHours).toBe(true);
+    expect(decision.instantEligible).toBe(false);
+  });
+
   it("builds stable batch keys from competitor, watchlist, and short time window", () => {
     const first = buildDeliveryBatchKey({
       watchlistId: "watch-1",

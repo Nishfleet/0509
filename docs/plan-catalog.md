@@ -6,9 +6,9 @@ Authoritative entitlements live in `app/lib/plan-entitlements.ts`. Prices are lo
 
 | Plan | Watchlists | Boards | Included evidence checks / month | Monitoring | Digests | Seats |
 |------|------------|--------|----------------------------------|------------|---------|-------|
-| Scout | 3 | 10 | 50 | Monday scheduled | Weekly | 1 |
-| Starter | 10 | 25 | 250 | Daily scheduled | Daily + weekly | 1 |
-| Agency | 75 | 250 | 2,500 | Daily scheduled, highest queue priority | Daily + weekly | 3 (owner included) |
+| Scout | 3 | 10 | 50 | Every 6 hours | Weekly | 1 |
+| Starter | 10 | 25 | 250 | Every 3 hours | Daily + weekly | 1 |
+| Agency | 75 | 250 | 2,500 | Every 3 hours, highest queue priority | Daily + weekly | 3 (owner included) |
 
 ## Monthly included allowance
 
@@ -50,6 +50,6 @@ Scheduled monitoring is included. One evidence check = one successful, unique, n
 
 Customer copy: see `EVIDENCE_USAGE_CUSTOMER_COPY` in `app/lib/pricing.ts`.
 
-## Production status (2026-07-01)
+## Historical production status (2026-07-01)
 
-Entitlement catalog and evidence usage accounting are live in production. Dodo checkout, signed-webhook billing, top-ups, and Scout/Starter monthly and annual localized pricing are live-proven by the launch canaries. The current commercial truth lives in `docs/final-self-serve-ga-scorecard.md`.
+The entitlement catalog and evidence usage accounting were live on the dated production version. Dodo checkout, signed-webhook billing, top-ups, and Scout/Starter monthly and annual localized pricing passed the dated launch canaries. This is not current-candidate evidence; the canonical release verdict is 0/6 until the exact all-six Gate A–C proof and deployed canaries pass.

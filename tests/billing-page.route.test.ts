@@ -35,6 +35,7 @@ afterEach(() => {
   vi.doUnmock("~/lib/dodo-pricing.server");
   vi.doUnmock("~/lib/plan.server");
   vi.doUnmock("~/lib/monitoring.server");
+  vi.doUnmock("~/lib/rate-limit.server");
 });
 
 function mockBillingLoaderDependencies(input: {
@@ -91,6 +92,9 @@ function mockBillingLoaderDependencies(input: {
   }));
   vi.doMock("~/lib/context.server", () => ({
     getEnv: vi.fn(() => ({})),
+  }));
+  vi.doMock("~/lib/rate-limit.server", () => ({
+    enforceBillingProviderRateLimit: vi.fn().mockResolvedValue(null),
   }));
   vi.doMock("~/lib/data.server", () => ({
     getUserPlanBillingInfo,
@@ -296,6 +300,30 @@ describe("billing page", () => {
         trustProxyHeaders: false,
       }),
     );
+  });
+
+  it("fails closed before billing pricing reaches Dodo", async () => {
+    const mocks = mockBillingLoaderDependencies({
+      billing: {
+        plan: "starter",
+        dodoStatus: "subscription.active",
+        billingInterval: "monthly",
+        planUpdatedAt: "2026-06-04T12:00:00.000Z",
+      },
+    });
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforceBillingProviderRateLimit: vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: "rate_limit_unavailable" }), { status: 503 }),
+      ),
+    }));
+    const { loader } = await import("~/routes/app.billing");
+    const response = (await loader({
+      context: {},
+      request: new Request("https://0509.io/app/billing"),
+      params: {},
+    } as never).catch((error) => error)) as Response;
+    expect(response.status).toBe(503);
+    expect(mocks.previewDodo0509PlanPrices).not.toHaveBeenCalled();
   });
 
   it("derives plan-change preview amounts server-side instead of trusting URL params", async () => {
@@ -770,7 +798,8 @@ describe("billing page", () => {
     expect(markup).toContain('action="/api/billing/dodo/portal"');
     expect(markup).toContain("support@0509.io");
     expect(markup).toContain("Cancellation");
-    expect(markup).toContain("payment retry in progress");
+    expect(markup).toContain("payment issue needs attention");
+    expect(markup).not.toContain("payment retry in progress");
   });
 
   it("keeps the dunning banner support-backed when the Dodo portal is unavailable", async () => {
@@ -1460,5 +1489,66 @@ describe("billing page", () => {
     expect(markup).not.toContain("f9-skeleton-price");
     expect(markup).not.toContain("Loading price");
     expect(markup).not.toContain('aria-busy="true"');
+  });
+
+  it("puts the lifecycle summary before the plan picker and gives every plan a heading", async () => {
+    mockReactRouterRender(billingRenderData({
+      billing: {
+        plan: "starter",
+        dodoStatus: "subscription.active",
+        billingInterval: "monthly",
+        dodoNextBillingAt: "2026-08-04T12:00:00.000Z",
+      },
+      hasPortal: true,
+    }));
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup.indexOf('id="billing-lifecycle-heading"')).toBeGreaterThan(-1);
+    expect(markup.indexOf('id="billing-lifecycle-heading"')).toBeLessThan(markup.indexOf('id="plans"'));
+    expect(markup).toMatch(/<h3><span class="f9-app-kicker">Scout<\/span><\/h3>/);
+    expect(markup).toMatch(/<h3><span class="f9-app-kicker">Starter<\/span><\/h3>/);
+    expect(markup).toMatch(/<h3><span class="f9-app-kicker">Agency<\/span><\/h3>/);
+  });
+
+  it.each([
+    ["refunded", "Refunded", "paid access has ended", "keep access until"],
+    ["subscription.cancelled", "Subscription cancelled", "paid access has ended", "keep access until"],
+    ["subscription.expired", "Subscription expired", "paid access has ended", "keep access until"],
+  ])("keeps terminal %s states from promising paid-period access", async (status, label, expectedCopy, forbiddenCopy) => {
+    vi.resetModules();
+    mockReactRouterRender(billingRenderData({
+      billing: { plan: "free", dodoStatus: status },
+      hasPortal: false,
+    }));
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain(`>${label}<`);
+    expect(markup.toLowerCase()).toContain(expectedCopy);
+    expect(markup.toLowerCase()).not.toContain(forbiddenCopy);
+    expect(markup).toContain("Choose a plan");
+  });
+
+  it("states scheduled cancellation access precisely and avoids an unproven retry claim", async () => {
+    mockReactRouterRender(billingRenderData({
+      billing: {
+        plan: "starter",
+        dodoStatus: "cancellation_scheduled",
+        billingInterval: "monthly",
+        dodoNextBillingAt: "2026-08-04T12:00:00.000Z",
+      },
+      hasPortal: true,
+    }));
+
+    const { default: BillingRoute } = await import("~/routes/app.billing");
+    const markup = renderToStaticMarkup(createElement(BillingRoute));
+
+    expect(markup).toContain("Cancellation scheduled");
+    expect(markup).toContain("paid access ends");
+    expect(markup).not.toContain("payment retry in progress");
+    expect(markup).not.toContain("payment provider retries");
   });
 });

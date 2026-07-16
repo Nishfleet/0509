@@ -262,14 +262,50 @@ describe("watchlist pause/resume action", () => {
 });
 
 describe("sendDeliveryTestEmail", () => {
+  it("fails closed when no owned target id is supplied", async () => {
+    const emailSend = vi.fn();
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("scout"),
+    }));
+    vi.doMock("~/lib/data.server", () => ({}));
+
+    const { sendDeliveryTestEmail } = await import("~/lib/delivery.server");
+    const sent = await sendDeliveryTestEmail(
+      { EMAIL: { send: emailSend }, EMAIL_FROM_EMAIL: "alerts@0509.io" } as never,
+      {
+        userId: "user-1",
+        email: "untrusted@example.com",
+        name: "Owner",
+        idempotencyKey: "delivery-test:user-1:missing-target:request-1",
+      },
+    );
+
+    expect(sent).toBe(false);
+    expect(emailSend).not.toHaveBeenCalled();
+  });
+
   it("sends through the shared email path and records a delivery_test attempt", async () => {
     const emailSend = vi.fn().mockResolvedValue({ messageId: "msg_test_1" });
-    const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
+    const claimEmailTargetForDispatch = vi.fn().mockResolvedValue({
+      id: "target-1",
+      targetValue: "owner@example.com",
+    });
+    const claimInstantDeliveryAttempt = vi.fn().mockResolvedValue({
+      attemptId: "attempt-1",
+      claimUpdatedAt: "2026-07-15T04:00:00.000Z",
+      duplicate: null,
+      reclaimed: false,
+    });
+    const markInstantDeliveryDispatchStarted = vi.fn().mockResolvedValue(
+      "2026-07-15T04:00:01.000Z",
+    );
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn().mockResolvedValue("scout"),
     }));
     vi.doMock("~/lib/data.server", () => ({
-      createDeliveryAttempt,
+      claimEmailTargetForDispatch,
+      claimInstantDeliveryAttempt,
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
       getDeliveryTargetById: vi.fn(),
       getDeliveryTargetByProviderIdentifier: vi.fn(),
@@ -277,8 +313,9 @@ describe("sendDeliveryTestEmail", () => {
       getWorkspaceDeliveryConfig: vi.fn(),
       legacyWorkspaceDeliveryDefaults: vi.fn(),
       listDeliveryTargets: vi.fn().mockResolvedValue([]),
+      markInstantDeliveryDispatchStarted,
       reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
-      updateDeliveryAttemptResult: vi.fn(),
+      updateDeliveryAttemptResult,
       upsertDeliveryTarget: vi.fn(),
       upsertDigestDelivery: vi.fn(),
     }));
@@ -286,7 +323,13 @@ describe("sendDeliveryTestEmail", () => {
     const { sendDeliveryTestEmail } = await import("~/lib/delivery.server");
     const sent = await sendDeliveryTestEmail(
       { EMAIL: { send: emailSend }, EMAIL_FROM_EMAIL: "alerts@0509.io" } as never,
-      { userId: "user-1", email: "owner@example.com", name: "Owner" },
+      {
+        userId: "user-1",
+        email: "owner@example.com",
+        name: "Owner",
+        targetId: "target-1",
+        idempotencyKey: "delivery-test:user-1:target-1:request-1",
+      },
     );
 
     expect(sent).toBe(true);
@@ -294,9 +337,225 @@ describe("sendDeliveryTestEmail", () => {
     expect(payload.to).toBe("owner@example.com");
     expect(payload.subject).toContain("Test email");
 
-    const attempt = createDeliveryAttempt.mock.calls[0]?.[1];
-    expect(attempt.templateName).toBe("delivery_test");
-    expect(attempt.status).toBe("sent");
+    expect(claimInstantDeliveryAttempt).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        deliveryTargetId: "target-1",
+        targetValue: "owner@example.com",
+        templateName: "delivery_test",
+      }),
+    );
+    expect(markInstantDeliveryDispatchStarted).toHaveBeenCalledTimes(1);
+    expect(updateDeliveryAttemptResult).toHaveBeenCalledWith(
+      expect.anything(),
+      "attempt-1",
+      expect.objectContaining({ status: "sent", targetValue: "owner@example.com" }),
+    );
+  });
+
+  it("claims the target immediately before sending and records its target id", async () => {
+    const emailSend = vi.fn().mockResolvedValue({ messageId: "msg_target_claim" });
+    const claimEmailTargetForDispatch = vi.fn().mockResolvedValue({
+      id: "target-1",
+      targetValue: "owner@example.com",
+    });
+    const claimInstantDeliveryAttempt = vi.fn().mockResolvedValue({
+      attemptId: "attempt-target-claim",
+      claimUpdatedAt: "2026-07-15T04:00:00.000Z",
+      duplicate: null,
+      reclaimed: false,
+    });
+    const markInstantDeliveryDispatchStarted = vi.fn().mockResolvedValue(
+      "2026-07-15T04:00:01.000Z",
+    );
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("scout"),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      claimEmailTargetForDispatch,
+      claimInstantDeliveryAttempt,
+      markInstantDeliveryDispatchStarted,
+      updateDeliveryAttemptResult,
+    }));
+
+    const { sendDeliveryTestEmail } = await import("~/lib/delivery.server");
+    const sent = await sendDeliveryTestEmail(
+      { EMAIL: { send: emailSend }, EMAIL_FROM_EMAIL: "alerts@0509.io" } as never,
+      {
+        userId: "user-1",
+        email: "stale@example.com",
+        name: "Owner",
+        targetId: "target-1",
+        idempotencyKey: "delivery-test:user-1:target-1:request-target-claim",
+      },
+    );
+
+    expect(sent).toBe(true);
+    expect(claimEmailTargetForDispatch).toHaveBeenCalledWith(expect.anything(), {
+      userId: "user-1",
+      targetId: "target-1",
+    });
+    expect(emailSend.mock.calls[0]?.[0]?.to).toBe("owner@example.com");
+    expect(claimInstantDeliveryAttempt).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        deliveryTargetId: "target-1",
+        targetValue: "owner@example.com",
+      }),
+    );
+  });
+
+  it("uses one durable idempotency key for repeated requests", async () => {
+    const emailSend = vi.fn().mockResolvedValue({ messageId: "msg_once" });
+    const claimEmailTargetForDispatch = vi.fn().mockResolvedValue({
+      id: "target-1",
+      targetValue: "Owner@Example.com",
+    });
+    const claimInstantDeliveryAttempt = vi
+      .fn()
+      .mockResolvedValueOnce({
+        attemptId: "attempt-once",
+        claimUpdatedAt: "2026-07-15T04:00:00.000Z",
+        duplicate: null,
+        reclaimed: false,
+      })
+      .mockResolvedValueOnce({
+        attemptId: null,
+        claimUpdatedAt: null,
+        duplicate: { id: "attempt-once", status: "sent" },
+        reclaimed: false,
+      });
+    const markInstantDeliveryDispatchStarted = vi.fn().mockResolvedValue(
+      "2026-07-15T04:00:01.000Z",
+    );
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("scout"),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      claimEmailTargetForDispatch,
+      claimInstantDeliveryAttempt,
+      markInstantDeliveryDispatchStarted,
+      updateDeliveryAttemptResult,
+    }));
+
+    const { sendDeliveryTestEmail } = await import("~/lib/delivery.server");
+    const input = {
+      userId: "user-1",
+      email: "stale@example.com",
+      name: "Owner",
+      targetId: "target-1",
+      idempotencyKey: "delivery-test:user-1:target-1:request-once",
+    };
+    await expect(
+      sendDeliveryTestEmail(
+        { EMAIL: { send: emailSend }, EMAIL_FROM_EMAIL: "alerts@0509.io" } as never,
+        input,
+      ),
+    ).resolves.toBe(true);
+    await expect(
+      sendDeliveryTestEmail(
+        { EMAIL: { send: emailSend }, EMAIL_FROM_EMAIL: "alerts@0509.io" } as never,
+        input,
+      ),
+    ).resolves.toBe(false);
+
+    expect(emailSend).toHaveBeenCalledTimes(1);
+    expect(claimInstantDeliveryAttempt).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      expect.objectContaining({ idempotencyKey: "delivery-test:user-1:target-1:request-once" }),
+    );
+    expect(claimInstantDeliveryAttempt).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      expect.objectContaining({ idempotencyKey: "delivery-test:user-1:target-1:request-once" }),
+    );
+  });
+
+  it("sends again when a later customer click carries a new request key", async () => {
+    const emailSend = vi.fn().mockResolvedValue({ messageId: "msg_later_click" });
+    const claimEmailTargetForDispatch = vi.fn().mockResolvedValue({
+      id: "target-1",
+      targetValue: "owner@example.com",
+    });
+    const claimInstantDeliveryAttempt = vi
+      .fn()
+      .mockResolvedValueOnce({
+        attemptId: "attempt-click-1",
+        claimUpdatedAt: "2026-07-15T04:00:00.000Z",
+        duplicate: null,
+        reclaimed: false,
+      })
+      .mockResolvedValueOnce({
+        attemptId: "attempt-click-2",
+        claimUpdatedAt: "2026-07-15T04:01:00.000Z",
+        duplicate: null,
+        reclaimed: false,
+      });
+    const markInstantDeliveryDispatchStarted = vi
+      .fn()
+      .mockResolvedValueOnce("2026-07-15T04:00:01.000Z")
+      .mockResolvedValueOnce("2026-07-15T04:01:01.000Z");
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("scout"),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      claimEmailTargetForDispatch,
+      claimInstantDeliveryAttempt,
+      markInstantDeliveryDispatchStarted,
+      updateDeliveryAttemptResult,
+    }));
+
+    const { sendDeliveryTestEmail } = await import("~/lib/delivery.server");
+    const baseInput = {
+      userId: "user-1",
+      email: "owner@example.com",
+      name: "Owner",
+      targetId: "target-1",
+    };
+    await expect(sendDeliveryTestEmail(
+      { EMAIL: { send: emailSend }, EMAIL_FROM_EMAIL: "alerts@0509.io" } as never,
+      { ...baseInput, idempotencyKey: "delivery-test:user-1:target-1:request-click-1" },
+    )).resolves.toBe(true);
+    await expect(sendDeliveryTestEmail(
+      { EMAIL: { send: emailSend }, EMAIL_FROM_EMAIL: "alerts@0509.io" } as never,
+      { ...baseInput, idempotencyKey: "delivery-test:user-1:target-1:request-click-2" },
+    )).resolves.toBe(true);
+
+    expect(emailSend).toHaveBeenCalledTimes(2);
+    expect(claimInstantDeliveryAttempt.mock.calls.map(([, call]) => call.idempotencyKey)).toEqual([
+      "delivery-test:user-1:target-1:request-click-1",
+      "delivery-test:user-1:target-1:request-click-2",
+    ]);
+  });
+
+  it("does not call the provider when the target CAS loses to unsubscribe", async () => {
+    const emailSend = vi.fn();
+    const claimEmailTargetForDispatch = vi.fn().mockResolvedValue(null);
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("scout"),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      claimEmailTargetForDispatch,
+    }));
+
+    const { sendDeliveryTestEmail } = await import("~/lib/delivery.server");
+    const sent = await sendDeliveryTestEmail(
+      { EMAIL: { send: emailSend }, EMAIL_FROM_EMAIL: "alerts@0509.io" } as never,
+      {
+        userId: "user-1",
+        email: "owner@example.com",
+        name: "Owner",
+        targetId: "target-1",
+        idempotencyKey: "delivery-test:user-1:target-1:request-unsubscribe",
+      },
+    );
+
+    expect(sent).toBe(false);
+    expect(emailSend).not.toHaveBeenCalled();
   });
 });
 
@@ -424,7 +683,17 @@ describe("account deletion billing guard", () => {
 describe("operator alert FK attribution", () => {
   function deliveryDataMock(userByEmail: string | null, oldest: string | null) {
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
+    const claimInstantDeliveryAttempt = vi.fn().mockResolvedValue({
+      attemptId: "attempt-1",
+      claimUpdatedAt: "2026-07-15T04:00:00.000Z",
+      duplicate: null,
+      reclaimed: false,
+    });
+    const markInstantDeliveryDispatchStarted = vi.fn().mockResolvedValue(
+      "2026-07-15T04:00:01.000Z",
+    );
     vi.doMock("~/lib/data.server", () => ({
+      claimInstantDeliveryAttempt,
       createDeliveryAttempt,
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
       getOldestUserId: vi.fn().mockResolvedValue(oldest),
@@ -435,17 +704,22 @@ describe("operator alert FK attribution", () => {
       getWorkspaceDeliveryConfig: vi.fn(),
       legacyWorkspaceDeliveryDefaults: vi.fn(),
       listDeliveryTargets: vi.fn().mockResolvedValue([]),
+      markInstantDeliveryDispatchStarted,
       reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
-      updateDeliveryAttemptResult: vi.fn(),
+      updateDeliveryAttemptResult: vi.fn().mockResolvedValue(true),
       upsertDeliveryTarget: vi.fn(),
       upsertDigestDelivery: vi.fn(),
     }));
-    return createDeliveryAttempt;
+    return {
+      claimInstantDeliveryAttempt,
+      createDeliveryAttempt,
+      markInstantDeliveryDispatchStarted,
+    };
   }
 
   it("attributes the ledger row to a REAL user id, never a synthetic one", async () => {
     const emailSend = vi.fn().mockResolvedValue({ messageId: "msg_op_1" });
-    const createDeliveryAttempt = deliveryDataMock(null, "founder-user-id");
+    const deliveryData = deliveryDataMock(null, "founder-user-id");
 
     const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
     const sent = await sendOperatorAlertEmail(
@@ -458,14 +732,16 @@ describe("operator alert FK attribution", () => {
     );
 
     expect(sent).toBe(true);
-    const attempt = createDeliveryAttempt.mock.calls[0]?.[1];
+    const attempt = deliveryData.claimInstantDeliveryAttempt.mock.calls[0]?.[1];
     expect(attempt.userId).toBe("founder-user-id");
     expect(attempt.userId).not.toBe("operator");
+    expect(deliveryData.markInstantDeliveryDispatchStarted).toHaveBeenCalledTimes(1);
+    expect(deliveryData.createDeliveryAttempt).not.toHaveBeenCalled();
   });
 
   it("stores only the case id for support-case operator alert snapshots", async () => {
     const emailSend = vi.fn().mockResolvedValue({ messageId: "msg_support_1" });
-    const createDeliveryAttempt = deliveryDataMock(null, "founder-user-id");
+    const deliveryData = deliveryDataMock(null, "founder-user-id");
 
     const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
     const sent = await sendOperatorAlertEmail(
@@ -486,7 +762,7 @@ describe("operator alert FK attribution", () => {
     );
 
     expect(sent).toBe(true);
-    const attempt = createDeliveryAttempt.mock.calls[0]?.[1];
+    const attempt = deliveryData.claimInstantDeliveryAttempt.mock.calls[0]?.[1];
     expect(attempt.payloadSnapshot).toEqual({
       kind: "support_case_operator_alert",
       caseId: "case-1",
@@ -497,7 +773,7 @@ describe("operator alert FK attribution", () => {
 
   it("stores only the case id for reopened support-case operator alert snapshots", async () => {
     const emailSend = vi.fn().mockResolvedValue({ messageId: "msg_support_reopen_1" });
-    const createDeliveryAttempt = deliveryDataMock(null, "founder-user-id");
+    const deliveryData = deliveryDataMock(null, "founder-user-id");
 
     const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
     const sent = await sendOperatorAlertEmail(
@@ -518,7 +794,7 @@ describe("operator alert FK attribution", () => {
     );
 
     expect(sent).toBe(true);
-    const attempt = createDeliveryAttempt.mock.calls[0]?.[1];
+    const attempt = deliveryData.claimInstantDeliveryAttempt.mock.calls[0]?.[1];
     expect(attempt.payloadSnapshot).toEqual({
       kind: "support_case_operator_alert",
       caseId: "case-1",
@@ -527,9 +803,9 @@ describe("operator alert FK attribution", () => {
     expect(JSON.stringify(attempt.payloadSnapshot)).not.toContain("owner@example.com");
   });
 
-  it("still sends (without a ledger row) when no user exists, and honors a custom idempotency key", async () => {
+  it("does not send when no real user can own the durable attempt", async () => {
     const emailSend = vi.fn().mockResolvedValue({ messageId: "msg_op_2" });
-    const createDeliveryAttempt = deliveryDataMock(null, null);
+    const deliveryData = deliveryDataMock(null, null);
 
     const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
     const sent = await sendOperatorAlertEmail(
@@ -541,9 +817,10 @@ describe("operator alert FK attribution", () => {
       { subject: "test", lines: ["signal"], idempotencyKey: "operator-deletion:user-9" },
     );
 
-    expect(sent).toBe(true);
-    expect(emailSend).toHaveBeenCalledTimes(1);
-    expect(createDeliveryAttempt).not.toHaveBeenCalled();
+    expect(sent).toBe(false);
+    expect(emailSend).not.toHaveBeenCalled();
+    expect(deliveryData.claimInstantDeliveryAttempt).not.toHaveBeenCalled();
+    expect(deliveryData.createDeliveryAttempt).not.toHaveBeenCalled();
   });
 
   it("retries failed operator alerts by updating the existing ledger row", async () => {
@@ -551,6 +828,12 @@ describe("operator alert FK attribution", () => {
     const createDeliveryAttempt = vi.fn();
     const updateDeliveryAttemptResult = vi.fn();
     vi.doMock("~/lib/data.server", () => ({
+      claimInstantDeliveryAttempt: vi.fn().mockResolvedValue({
+        attemptId: "attempt-failed-1",
+        claimUpdatedAt: "2026-07-15T04:00:00.000Z",
+        duplicate: null,
+        reclaimed: true,
+      }),
       createDeliveryAttempt,
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue({
         id: "attempt-failed-1",
@@ -564,8 +847,11 @@ describe("operator alert FK attribution", () => {
       getWorkspaceDeliveryConfig: vi.fn(),
       legacyWorkspaceDeliveryDefaults: vi.fn(),
       listDeliveryTargets: vi.fn().mockResolvedValue([]),
+      markInstantDeliveryDispatchStarted: vi.fn().mockResolvedValue(
+        "2026-07-15T04:00:01.000Z",
+      ),
       reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
-      updateDeliveryAttemptResult,
+      updateDeliveryAttemptResult: updateDeliveryAttemptResult.mockResolvedValue(true),
       upsertDeliveryTarget: vi.fn(),
       upsertDigestDelivery: vi.fn(),
     }));

@@ -28,7 +28,7 @@ const transfers = [
   },
   {
     theirs: "Creative inspiration browsing",
-    ours: "Live search — paste any competitor website, see their Meta ads, no account needed",
+    ours: "Search preview — paste a competitor website and inspect available Meta ads with source and freshness labels, no account needed",
   },
 ] as const;
 
@@ -58,7 +58,7 @@ export default function CompareMagicBriefRoute() {
           <BrandWordmark />
         </Link>
         <nav className="ld-nav-links" aria-label="Primary">
-          <Link to="/search?website=https%3A%2F%2Fnykaa.com">Live search</Link>
+          <Link to="/search?website=https%3A%2F%2Fnykaa.com">Search preview</Link>
           <Link to="/#pricing">Pricing</Link>
         </nav>
         <nav className="ld-nav-actions" aria-label="Account">
@@ -85,7 +85,7 @@ export default function CompareMagicBriefRoute() {
           person.
         </p>
 
-        <Form className="ld-command" method="get" action="/search" aria-label="Free live search">
+        <Form className="ld-command" method="get" action="/search" aria-label="Public search preview">
           <input
             aria-label="Competitor website"
             name="website"
@@ -136,7 +136,7 @@ export default function CompareMagicBriefRoute() {
         <p className="ld-pricing-note">
           Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> with your MagicBrief export (or just
           a list of brands you tracked) and we&rsquo;ll set up your collections and watchlists with
-          you. Plans from the <Link to="/#pricing">pricing page</Link> — live search stays free
+          you. Plans from the <Link to="/#pricing">pricing page</Link> — the public search preview stays free
           either way.
         </p>
       </section>

@@ -1,4 +1,4 @@
-import { Form, useActionData, useLoaderData } from "react-router";
+import { Form, Link, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
@@ -8,6 +8,7 @@ import { ConfirmSubmitButton } from "~/components/confirm-button";
 import { CopyButton } from "~/components/copy-button";
 import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
+import { isApprovedReportSnapshot } from "~/lib/report-approval";
 
 const RESOURCE_LABELS: Record<string, string> = {
   collection: "Collection",
@@ -16,10 +17,10 @@ const RESOURCE_LABELS: Record<string, string> = {
   report: "Report",
 };
 
-export const meta = () => [{ title: "Reports & shared links | Five to Nine" }];
+export const meta = () => [{ title: "Shared links | Five to Nine" }];
 
 export function HydrateFallback() {
-  return <DashboardRouteLoading title="Reports" />;
+  return <DashboardRouteLoading title="Shared links" />;
 }
 
 export function ErrorBoundary({ error }: { error: unknown }) {
@@ -37,14 +38,31 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const shares = await listActiveShareLinks(env, workspaceUserId);
 
   return {
-    shares: shares.map((share) => ({
+    shares: shares.map((share) => {
+      const reportApprovalCurrent =
+        share.resourceType === "report" &&
+        share.isSnapshot &&
+        isApprovedReportSnapshot(share.snapshotPayload);
+      return {
       id: share.id,
       url: `${origin}/share/${share.token}`,
       resourceLabel: RESOURCE_LABELS[share.resourceType] ?? share.resourceType,
       mode: share.isSnapshot ? "Snapshot" : "Live view",
+      state:
+        share.resourceType === "report" && share.isSnapshot
+          ? reportApprovalCurrent
+            ? "Approved current evidence"
+            : "Approval expired · review again"
+          : share.isSnapshot
+            ? "Snapshot"
+            : "Live view",
+      ...(share.resourceType === "report" && share.isSnapshot && !reportApprovalCurrent
+        ? { recoveryPath: `/app/reports/${share.resourceId}` }
+        : {}),
       createdAt: share.createdAt,
       expiresAt: share.expiresAt,
-    })),
+      };
+    }),
   };
 }
 
@@ -77,8 +95,9 @@ export default function SharesRoute() {
     <DashboardPage>
       <section className="f9-app-stack">
         <DashboardPageHeader
-          lead="Revoke snapshot and live-view links you've shared with clients or teammates."
-          title="Reports"
+          action={{ label: "Open reports", to: "/app/reports" }}
+          lead="Review and revoke snapshot or live-view links shared with clients or teammates."
+          title="Shared links"
         />
 
       <ActionFeedback data={actionData} fallback />
@@ -96,12 +115,16 @@ export default function SharesRoute() {
               <div className="f9-work-row" key={share.id}>
                 <div>
                   <strong>
-                    {share.resourceLabel} · {share.mode}
+                    {share.resourceLabel} · {share.state}
                   </strong>
                   <p>
-                    <a href={share.url} rel="noreferrer" target="_blank">
-                      {share.url}
-                    </a>
+                    {"recoveryPath" in share && typeof share.recoveryPath === "string" ? (
+                      <>This link is withheld until the evidence is reviewed again.</>
+                    ) : (
+                      <a href={share.url} rel="noreferrer" target="_blank">
+                        {share.url}
+                      </a>
+                    )}
                   </p>
                   <small>
                     Created {formatDate(share.createdAt)} ·{" "}
@@ -113,7 +136,13 @@ export default function SharesRoute() {
                   </small>
                 </div>
                 <div className="f9-action-row">
-                  <CopyButton value={share.url} />
+                  {"recoveryPath" in share && typeof share.recoveryPath === "string" ? (
+                    <Link className="f9-secondary-button" to={share.recoveryPath}>
+                      Review report
+                    </Link>
+                  ) : (
+                    <CopyButton value={share.url} />
+                  )}
                   <Form method="post">
                     <input name="intent" type="hidden" value="revoke-share" />
                     <input name="shareLinkId" type="hidden" value={share.id} />

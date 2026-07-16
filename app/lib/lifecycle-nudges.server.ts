@@ -27,6 +27,8 @@ interface ReadinessItemLike {
 interface LifecycleCounts {
   competitors: number;
   activeWatchlists: number;
+  completedScans?: number;
+  noChangeBaselines?: number;
   successfulProofs: number;
   sentDigests: number;
   deliveryTargets: number;
@@ -47,41 +49,53 @@ export function buildLifecycleNudges(input: {
   proofUsage?: ProofUsageLike | null;
   hasPaymentIssue?: boolean;
   includeBillingSupport?: boolean;
+  canUseClientRooms?: boolean;
+  canUseDeveloperAccess?: boolean;
 }): LifecycleNudge[] {
   const nudges: LifecycleNudge[] = [];
   const itemById = new Map(input.items.map((item) => [item.id, item]));
   const counts = input.counts;
   const proofUsage = input.proofUsage ?? null;
-  const hasFirstValue =
-    counts.activeWatchlists > 0 && counts.successfulProofs > 0 && counts.sentDigests > 0;
+  const hasFirstValue = counts.successfulProofs > 0 || (counts.noChangeBaselines ?? 0) > 0;
+  let activationNudge: LifecycleNudge | null = null;
 
   if (counts.competitors === 0) {
-    nudges.push({
+    activationNudge = {
       id: "first_competitor",
       title: "No first watchlist yet",
       detail: "Add one competitor so the first sweep and source trail can start.",
       href: "/search",
       priority: "high",
-    });
+    };
   } else if (counts.activeWatchlists === 0) {
-    nudges.push({
+    activationNudge = {
       id: "first_watchlist",
       title: "Watchlist is paused",
       detail: "Resume or create one active watchlist so retained checks can run.",
       href: "/app/watchlists",
       priority: "high",
-    });
-  } else if (counts.successfulProofs === 0) {
-    nudges.push({
+    };
+  } else if (!hasFirstValue) {
+    activationNudge = {
       id: "first_proof",
-      title: "First evidence is missing",
-      detail: "Refresh an active watchlist to attach landing-page evidence before sharing the account.",
+      title: "First check is still waiting",
+      detail: "Refresh the active watchlist to record a credible proof or an honest no-change baseline.",
       href: "/app/watchlists",
       priority: "high",
-    });
+    };
   }
 
-  if (counts.competitors > 0 && counts.sentDigests === 0) {
+  if (!hasFirstValue) {
+    const urgent = firstPreValueSafetyNudge(input, proofUsage);
+    if (urgent && activationNudge) {
+      return [urgent, { ...activationNudge, priority: "medium" }];
+    }
+    return activationNudge ? [activationNudge] : urgent ? [urgent] : [];
+  }
+
+  if (activationNudge) nudges.push(activationNudge);
+
+  if (counts.sentDigests === 0) {
     nudges.push({
       id: "first_digest",
       title: "No first digest yet",
@@ -110,17 +124,17 @@ export function buildLifecycleNudges(input: {
     });
   }
 
-  if (counts.activeApiKeys === 0) {
+  if ((input.canUseDeveloperAccess ?? false) && counts.activeApiKeys === 0) {
     nudges.push({
       id: "agent_setup",
       title: "Developer access is missing",
       detail: "Create a read key for exports; enable approved actions only for trusted workflows.",
       href: "/app/developer-access",
-      priority: hasFirstValue ? "low" : "medium",
+      priority: "low",
     });
   }
 
-  if ((counts.clientRooms ?? 0) === 0 && counts.activeWatchlists > 0) {
+  if ((input.canUseClientRooms ?? false) && (counts.clientRooms ?? 0) === 0 && counts.activeWatchlists > 0) {
     nudges.push({
       id: "client_room_setup",
       title: "No client room yet",
@@ -128,7 +142,11 @@ export function buildLifecycleNudges(input: {
       href: "/app/clients",
       priority: "low",
     });
-  } else if ((counts.clientRooms ?? 0) > 0 && (counts.agentMemoryEntries ?? 0) === 0) {
+  } else if (
+    (input.canUseClientRooms ?? false) &&
+    (counts.clientRooms ?? 0) > 0 &&
+    (counts.agentMemoryEntries ?? 0) === 0
+  ) {
     nudges.push({
       id: "client_context",
       title: "Client context is missing",
@@ -152,7 +170,7 @@ export function buildLifecycleNudges(input: {
     nudges.push({
       id: "payment_issue",
       title: "Payment issue",
-      detail: "Dodo is retrying the last renewal payment. Review billing before access is affected.",
+      detail: "Billing reported a payment issue. Review the current status before access is affected.",
       href: "/app/billing",
       priority: "high",
     });
@@ -168,9 +186,54 @@ export function buildLifecycleNudges(input: {
     });
   }
 
-  return dedupeNudges(nudges);
+  return orderNudges(dedupeNudges(nudges));
+}
+
+function firstPreValueSafetyNudge(
+  input: { hasPaymentIssue?: boolean },
+  proofUsage: ProofUsageLike | null,
+): LifecycleNudge | null {
+  if (input.hasPaymentIssue) {
+    return {
+      id: "payment_issue",
+      title: "Payment issue",
+      detail: "Billing reported a payment issue. Review the current status before access is affected.",
+      href: "/app/billing",
+      priority: "high",
+    };
+  }
+  if (proofUsage?.warningLevel === "exhausted") {
+    return {
+      id: "proof_usage",
+      title: "Usage near cap",
+      detail: `${proofUsage.used ?? 0} of ${proofUsage.limit ?? 0} evidence checks are used.`,
+      href: "/app/billing",
+      priority: "high",
+    };
+  }
+  return null;
 }
 
 function dedupeNudges(nudges: LifecycleNudge[]) {
   return Array.from(new Map(nudges.map((nudge) => [nudge.id, nudge])).values());
+}
+
+const postValueNudgeOrder: LifecycleNudge["id"][] = [
+  "payment_issue",
+  "proof_usage",
+  "delivery_proof",
+  "first_digest",
+  "client_context",
+  "client_room_setup",
+  "agent_setup",
+  "billing_support",
+];
+
+function orderNudges(nudges: LifecycleNudge[]) {
+  const order = new Map(postValueNudgeOrder.map((id, index) => [id, index]));
+  return [...nudges].sort(
+    (left, right) =>
+      (order.get(left.id) ?? postValueNudgeOrder.length) -
+      (order.get(right.id) ?? postValueNudgeOrder.length),
+  );
 }

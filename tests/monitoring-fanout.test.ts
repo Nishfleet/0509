@@ -12,7 +12,9 @@ import {
   ensureOrchestratedWatchlistRun,
   evaluateScheduledBrowserAccess,
   finishOrchestratedWatchlistRun,
+  hasActiveScheduledWatchlistRun,
   isFanoutEnabledForWorkspace,
+  markOrchestratedRunDispatched,
   reconcileOrchestratedWatchlistRuns,
   releaseMonitoringConcurrencySlot,
   resolveMonitoringFanoutMode,
@@ -126,12 +128,48 @@ function workflowEnv(
 ) {
   return {
     DB: db,
-    MONITORING_WORKFLOW: { createBatch, create: vi.fn() },
+    MONITORING_WORKFLOW: {
+      createBatch,
+      create: vi.fn(),
+      get: vi.fn(async () => ({
+        status: async () => ({ status: "running" as const }),
+        restart: vi.fn(),
+      })),
+    },
     MONITORING_FANOUT_MODE: "fanout",
     MONITORING_FANOUT_GLOBAL: "1",
     MONITORING_SCHEDULED_BROWSER_MODE: "all",
     ...overrides,
   } as never;
+}
+
+async function seedDispatchFixture() {
+  const { db, sqlite } = createSqliteD1();
+  await seedFanoutSchema(sqlite);
+  const watchlist = buildWatchlist(1);
+  const scheduledTime = Date.parse("2026-06-23T04:00:00.000Z");
+  const executionKey = buildWatchlistExecutionIdempotencyKey({
+    watchlistId: watchlist.id,
+    triggerType: "scheduled",
+    scheduledTime,
+    cron: "0 4 * * *",
+  });
+  const ensured = await ensureOrchestratedWatchlistRun({ DB: db } as never, {
+    watchlistId: watchlist.id,
+    triggerType: "scheduled",
+    executionKey,
+    pageBudget: 2,
+    scheduledTime,
+  });
+  return {
+    db,
+    sqlite,
+    watchlist,
+    scheduledTime,
+    executionKey,
+    runId: ensured.runId,
+    workflowInstanceId: await buildMonitoringWorkflowInstanceId(executionKey),
+  };
 }
 
 describe("monitoring workflow instance IDs", () => {
@@ -590,6 +628,55 @@ describe("monitoring fan-out scheduling (sqlite)", () => {
     expect(insertAttempts).toBe(2);
   });
 
+  it("reports a lost durable Workflow binding CAS instead of pretending it dispatched", async () => {
+    const { db, sqlite } = createSqliteD1();
+    await seedFanoutSchema(sqlite);
+    const watchlist = buildWatchlist(1);
+    const ensured = await ensureOrchestratedWatchlistRun({ DB: db } as never, {
+      watchlistId: watchlist.id,
+      triggerType: "scheduled",
+      executionKey: "binding-cas-test",
+      pageBudget: 2,
+      scheduledTime: Date.parse("2026-06-23T04:00:00.000Z"),
+    });
+    sqlite.prepare("UPDATE watchlist_run SET status = 'succeeded' WHERE id = ?").run(ensured.runId);
+
+    await expect(
+      markOrchestratedRunDispatched({ DB: db } as never, {
+        runId: ensured.runId,
+        workflowInstanceId: "monitor-v1-binding-cas-test",
+      }),
+    ).resolves.toBe(false);
+    expect(
+      sqlite.prepare("SELECT workflow_instance_id FROM watchlist_run WHERE id = ?").get(ensured.runId),
+    ).toEqual({ workflow_instance_id: null });
+  });
+
+  it("detects old queued scheduled runs that must block a manual overlap", async () => {
+    const { db, sqlite } = createSqliteD1();
+    await seedFanoutSchema(sqlite);
+    sqlite
+      .prepare(
+        `INSERT INTO watchlist_run (
+          id, watchlist_id, trigger_type, status, page_budget, summary_json,
+          started_at, created_at, updated_at, idempotency_key, queued_at
+        ) VALUES (?, ?, 'scheduled', 'pending', 2, '{}', ?, ?, ?, ?, ?)` ,
+      )
+      .run(
+        "scheduled-old",
+        "watch-1",
+        "2026-06-23T04:00:00.000Z",
+        "2026-06-23T04:00:00.000Z",
+        "2026-06-23T04:00:00.000Z",
+        "watchlist-run:scheduled:watch-1:adhoc:2026-06-23T04-00-00-000Z",
+        "2026-06-23T04:00:00.000Z",
+      );
+
+    await expect(hasActiveScheduledWatchlistRun({ DB: db } as never, "watch-1")).resolves.toBe(true);
+    sqlite.prepare("UPDATE watchlist_run SET status = 'succeeded' WHERE id = ?").run("scheduled-old");
+    await expect(hasActiveScheduledWatchlistRun({ DB: db } as never, "watch-1")).resolves.toBe(false);
+  });
+
   it("treats createBatch skipped IDs as duplicates, not dispatch failures", async () => {
     const { db, sqlite } = createSqliteD1();
     await seedFanoutSchema(sqlite);
@@ -627,6 +714,156 @@ describe("monitoring fan-out scheduling (sqlite)", () => {
     expect(result.dispatched).toBe(0);
     expect(result.duplicates).toBe(1);
     expect(result.failures).toHaveLength(0);
+    expect(result.outcomes).toEqual([{ runId: ensured.runId, status: "active" }]);
+  });
+
+  it.each(["errored", "terminated"] as const)(
+    "restarts an omitted %s Workflow instance",
+    async (status) => {
+      const fixture = await seedDispatchFixture();
+      const restart = vi.fn();
+      const get = vi.fn(async () => ({
+        status: async () => ({ status }),
+        restart,
+      }));
+      const createBatch = vi.fn().mockResolvedValue([]);
+
+      const result = await dispatchOrchestratedWatchlistJobsBatch(
+        workflowEnv(fixture.db, createBatch, {
+          MONITORING_WORKFLOW: { createBatch, create: vi.fn(), get },
+        }),
+        {
+          jobs: [
+            {
+              watchlist: fixture.watchlist,
+              runId: fixture.runId,
+              executionKey: fixture.executionKey,
+              workflowInstanceId: fixture.workflowInstanceId,
+              triggerType: "scheduled",
+              scheduledTime: fixture.scheduledTime,
+              cron: "0 4 * * *",
+            },
+          ],
+        },
+      );
+
+      expect(restart).toHaveBeenCalledTimes(1);
+      expect(result).toMatchObject({
+        dispatched: 1,
+        duplicates: 0,
+        failures: [],
+        outcomes: [{ runId: fixture.runId, status: "restarted" }],
+      });
+    },
+  );
+
+  it("returns a failed outcome when omitted Workflow lookup fails", async () => {
+    const fixture = await seedDispatchFixture();
+    const createBatch = vi.fn().mockResolvedValue([]);
+    const get = vi.fn().mockRejectedValue(new Error("instance lookup failed"));
+
+    const result = await dispatchOrchestratedWatchlistJobsBatch(
+      workflowEnv(fixture.db, createBatch, {
+        MONITORING_WORKFLOW: { createBatch, create: vi.fn(), get },
+      }),
+      {
+        jobs: [
+          {
+            watchlist: fixture.watchlist,
+            runId: fixture.runId,
+            executionKey: fixture.executionKey,
+            workflowInstanceId: fixture.workflowInstanceId,
+            triggerType: "scheduled",
+            scheduledTime: fixture.scheduledTime,
+          },
+        ],
+      },
+    );
+
+    expect(result.dispatched).toBe(0);
+    expect(result.duplicates).toBe(0);
+    expect(result.failures).toEqual([{ runId: fixture.runId, error: "instance lookup failed" }]);
+    expect(result.outcomes).toEqual([
+      { runId: fixture.runId, status: "failed", error: "instance lookup failed" },
+    ]);
+  });
+
+  it("returns a failed outcome when restarting an errored Workflow fails", async () => {
+    const fixture = await seedDispatchFixture();
+    const createBatch = vi.fn().mockResolvedValue([]);
+    const get = vi.fn(async () => ({
+      status: async () => ({ status: "errored" as const }),
+      restart: vi.fn().mockRejectedValue(new Error("restart failed")),
+    }));
+
+    const result = await dispatchOrchestratedWatchlistJobsBatch(
+      workflowEnv(fixture.db, createBatch, {
+        MONITORING_WORKFLOW: { createBatch, create: vi.fn(), get },
+      }),
+      {
+        jobs: [
+          {
+            watchlist: fixture.watchlist,
+            runId: fixture.runId,
+            executionKey: fixture.executionKey,
+            workflowInstanceId: fixture.workflowInstanceId,
+            triggerType: "scheduled",
+            scheduledTime: fixture.scheduledTime,
+          },
+        ],
+      },
+    );
+
+    expect(result.dispatched).toBe(0);
+    expect(result.failures).toEqual([{ runId: fixture.runId, error: "restart failed" }]);
+    expect(result.outcomes).toEqual([
+      { runId: fixture.runId, status: "failed", error: "restart failed" },
+    ]);
+  });
+
+  it("does not create an orphan Workflow when the durable run lost its owner", async () => {
+    const { db, sqlite } = createSqliteD1();
+    await seedFanoutSchema(sqlite);
+    const watchlist = buildWatchlist(1);
+    const executionKey = buildWatchlistExecutionIdempotencyKey({
+      watchlistId: watchlist.id,
+      triggerType: "scheduled",
+      scheduledTime: Date.parse("2026-06-23T04:00:00.000Z"),
+      cron: "0 4 * * *",
+    });
+    const ensured = await ensureOrchestratedWatchlistRun({ DB: db } as never, {
+      watchlistId: watchlist.id,
+      triggerType: "scheduled",
+      executionKey,
+      pageBudget: 2,
+      scheduledTime: Date.parse("2026-06-23T04:00:00.000Z"),
+    });
+    sqlite.prepare("UPDATE watchlist_run SET status = 'succeeded' WHERE id = ?").run(ensured.runId);
+    const createBatch = vi.fn().mockResolvedValue([{ id: "unexpected" }]);
+
+    const result = await dispatchOrchestratedWatchlistJobsBatch(workflowEnv(db, createBatch), {
+      jobs: [
+        {
+          watchlist,
+          runId: ensured.runId,
+          executionKey,
+          workflowInstanceId: await buildMonitoringWorkflowInstanceId(executionKey),
+          triggerType: "scheduled",
+          scheduledTime: Date.parse("2026-06-23T04:00:00.000Z"),
+          cron: "0 4 * * *",
+        },
+      ],
+    });
+
+    expect(createBatch).not.toHaveBeenCalled();
+    expect(result.dispatched).toBe(0);
+    expect(result.duplicates).toBe(0);
+    expect(result.failures).toEqual([
+      {
+        runId: ensured.runId,
+        error: "The scheduled scan durable Workflow binding was lost before dispatch.",
+      },
+    ]);
   });
 
   it("records rate-limit batch failures as retryable dispatch failures", async () => {
@@ -851,6 +1088,37 @@ describe("monitoring fan-out scheduling (sqlite)", () => {
     expect(row).toEqual({ status: "pending", error_code: null });
     expect(result.cancelled).toBe(0);
     expect(result.redispatched).toBe(1);
+  });
+
+  it("does not count an active duplicate as redispatched during reconciliation", async () => {
+    const { db, sqlite } = createSqliteD1();
+    await seedFanoutSchema(sqlite);
+    seedPendingOrchestratedRun(sqlite, "run-active-duplicate");
+    const createBatch = vi.fn(async () => []);
+    const get = vi.fn(async () => ({
+      status: async () => ({ status: "running" as const }),
+      restart: vi.fn(),
+    }));
+
+    const result = await reconcileOrchestratedWatchlistRuns(
+      {
+        DB: db,
+        MONITORING_WORKFLOW: { create: vi.fn(), createBatch, get },
+        MONITORING_FANOUT_MODE: "fanout",
+        MONITORING_FANOUT_GLOBAL: "1",
+        MONITORING_SCHEDULED_BROWSER_MODE: "all",
+        MONITORING_ORCHESTRATION_MAX_AGE_MS: "1",
+      } as never,
+      { mode: "fanout", leaseMs: 1 },
+    );
+
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(result.redispatched).toBe(0);
+    expect(result.cancelled).toBe(0);
+    const row = sqlite
+      .prepare("SELECT status, error_code FROM watchlist_run WHERE id = 'run-active-duplicate'")
+      .get() as { status: string; error_code: string | null };
+    expect(row).toEqual({ status: "pending", error_code: null });
   });
 
   it("still cancels old running jobs during fanout reconciliation", async () => {

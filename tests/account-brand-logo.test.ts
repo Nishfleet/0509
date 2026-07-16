@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import { readFileSync } from "node:fs";
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -254,6 +255,27 @@ describe("account agency logo action", () => {
 
     expect(result).toMatchObject({ ok: false, error: "plan_gated" });
     expect(upsertWorkspaceBranding).not.toHaveBeenCalled();
+  });
+});
+
+describe("account security copy and passkey removal", () => {
+  it("uses Better Auth's documented passkey deletion client method with accessible state", () => {
+    const source = readFileSync("app/routes/app.account.tsx", "utf8");
+
+    expect(source).toContain("authClient.passkey.deletePasskey({ id })");
+    expect(source).toContain("Remove passkey");
+    expect(source).toContain("Confirm — remove passkey?");
+    expect(source).toContain("Passkey removed.");
+    expect(source).toContain('aria-live="polite"');
+  });
+
+  it("describes account deletion as a support request rather than an in-app deletion", () => {
+    const source = readFileSync("app/routes/app.account.tsx", "utf8");
+
+    expect(source).toContain("support deletion request");
+    expect(source).toContain("nothing is deleted automatically or in-app");
+    expect(source).toContain("Support reviews and verifies the request");
+    expect(source).not.toContain("Permanently removes your account");
   });
 });
 

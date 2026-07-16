@@ -47,6 +47,7 @@ export function DeveloperAccessRoute() {
   const hasNewApiKeySecret = Boolean(actionData && "apiKeySecret" in actionData && actionData.apiKeySecret);
   const canCreateApiKeys = data.canCreateApiKeys !== false && !data.createDisabledReason;
   const createDisabledReason = data.createDisabledReason ?? null;
+  const ownerManagedApiKeys = Boolean(createDisabledReason?.startsWith("Only "));
 
   return (
     <DashboardPage>
@@ -225,8 +226,12 @@ export function DeveloperAccessRoute() {
               ))
             ) : (
               <EmptyState
-                description="Create one when you are ready to connect an external tool."
-                title="No API keys yet"
+                description={
+                  ownerManagedApiKeys
+                    ? createDisabledReason ?? "API keys are managed by the account owner."
+                    : "Create one when you are ready to connect an external tool."
+                }
+                title={ownerManagedApiKeys ? "API keys are managed by the account owner" : "No API keys yet"}
                 variant="row"
               />
             )}

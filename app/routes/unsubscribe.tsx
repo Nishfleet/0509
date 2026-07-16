@@ -77,29 +77,25 @@ export async function action({ context, request }: ActionFunctionArgs): Promise<
   }
 
   if (!target.optedOutAt) {
-    const { upsertDeliveryTarget } = await import("~/lib/data.server");
-    const now = new Date().toISOString();
-    await upsertDeliveryTarget(env, {
+    const data = await import("~/lib/data.server");
+    const suppressTargets = ("suppressEmailTargetsForUserAndAddress" in data
+      ? data.suppressEmailTargetsForUserAndAddress
+      : undefined) as unknown as
+      | ((
+          suppressEnv: typeof env,
+          input: { userId: string; targetValue: string; source?: string },
+        ) => Promise<number>)
+      | undefined;
+
+    if (typeof suppressTargets !== "function") {
+      // Never claim success when the atomic suppression adapter is unavailable.
+      return { valid: false, alreadyUnsubscribed: false, maskedEmail: null };
+    }
+
+    await suppressTargets(env, {
       userId: target.userId,
-      watchlistId: target.watchlistId,
-      channel: target.channel,
       targetValue: target.targetValue,
-      validationStatus: target.validationStatus,
-      isValidated: target.isValidated,
-      isOptedIn: false,
-      optInSource: target.optInSource,
-      optedInAt: target.optedInAt,
-      isPaused: true,
-      pausedAt: now,
-      optedOutAt: now,
-      templateEligible: target.templateEligible,
-      lastSuccessfulDeliveryAt: target.lastSuccessfulDeliveryAt,
-      lastSuccessfulAttemptId: target.lastSuccessfulAttemptId,
-      providerIdentifier: target.providerIdentifier,
-      metadata: {
-        ...target.metadata,
-        unsubscribedVia: "email_unsubscribe_link",
-      },
+      source: "email_unsubscribe_link",
     });
   }
 

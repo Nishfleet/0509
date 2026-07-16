@@ -23,6 +23,7 @@ export interface AppEnv {
   AI?: Ai;
   APP_NAME?: string;
   APP_ORIGIN?: string;
+  CF_VERSION_METADATA?: WorkerVersionMetadata;
   AUTH_PROVIDER?: string;
   BETTER_AUTH_GOOGLE_CLIENT_ID?: string;
   BETTER_AUTH_GOOGLE_CLIENT_SECRET?: string;
@@ -63,6 +64,8 @@ export interface AppEnv {
   DODO_PAYMENTS_API_KEY?: string;
   EMAIL?: EmailSendingBinding;
   EMAIL_FROM_EMAIL?: string;
+  /** Local release-proof guard. Never configure this in preview or production. */
+  E2E_PROVIDER_NETWORK_DENY?: string;
   E2E_TEST_MODE?: string;
   LANDING_PAGE_ARTIFACTS?: R2Bucket;
   LAUNCH_CANARY_EMAIL?: string;

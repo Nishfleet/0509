@@ -2,15 +2,18 @@
 // not trust it blindly: an invalid IANA name makes Intl.DateTimeFormat throw,
 // which would fail digest sends and page renders. Fall back to UTC instead —
 // the product's global-first default.
-export function safeTimeZone(timeZone: string | null | undefined): string {
-  if (!timeZone?.trim()) {
-    return "UTC";
-  }
+export function normalizeTimeZone(timeZone: string | null | undefined): string | null {
+  const candidate = timeZone?.trim();
+  if (!candidate) return null;
 
   try {
-    new Intl.DateTimeFormat("en-GB", { timeZone });
-    return timeZone;
+    new Intl.DateTimeFormat("en-GB", { timeZone: candidate });
+    return candidate;
   } catch {
-    return "UTC";
+    return null;
   }
+}
+
+export function safeTimeZone(timeZone: string | null | undefined): string {
+  return normalizeTimeZone(timeZone) ?? "UTC";
 }

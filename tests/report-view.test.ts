@@ -98,7 +98,10 @@ describe("ReportView", () => {
 
     expect(markup).toContain("Decision summary");
     expect(markup).toContain("Pricing page changed");
-    expect(markup).toContain("Why it matters");
+    expect(markup).toContain("Evidence summary");
+    expect(markup).toContain("Verified evidence attached. Review before sharing.");
+    expect(markup).not.toContain("Why it matters");
+    expect(markup).not.toContain("client-ready");
     expect(markup).toContain("High priority");
     expect(markup).toContain("Today: brief a counter-offer.");
     expect(markup).toContain("Source glossary");
@@ -185,6 +188,21 @@ describe("ReportView", () => {
     expect(markup).toContain("1 saved evidence item packaged for review.");
     expect(markup).toContain("This is a curated evidence set, not a live change alert.");
     expect(markup).not.toContain("No client-ready change needs action");
+  });
+
+  it("shows each event summary as a signal summary without duplicating it as impact copy", () => {
+    const report = {
+      ...legacyReport,
+      rows: [reportRow("row-signal", "https://example.com/source")],
+    };
+
+    const markup = renderToStaticMarkup(
+      createElement(ReportView, { report }),
+    );
+
+    expect(markup).toContain("Signal summary");
+    expect(markup).not.toContain("Why it matters");
+    expect(markup.match(/A new offer launched\./g)).toHaveLength(1);
   });
 });
 

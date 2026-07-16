@@ -241,24 +241,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
       return {
         ok: false,
         intent,
-        message: "Confirm that you understand deletion is permanent before sending the request.",
+        message: "Confirm that this sends a support deletion request and does not delete anything automatically or in-app.",
       };
     }
 
-    const { assertAccountDeletable } = await import("~/lib/auth.server");
-    const { createSupportCase, getUserPlanBillingInfo } = await import("~/lib/data.server");
-    const billing = await getUserPlanBillingInfo(env, session.user.id);
-    try {
-      assertAccountDeletable(billing);
-    } catch (error) {
-      return {
-        ok: false,
-        intent,
-        message: error instanceof Error
-          ? error.message
-          : "Cancel your subscription before requesting account deletion.",
-      };
-    }
+    const { createSupportCase } = await import("~/lib/data.server");
 
     const supportCase = await createSupportCase(env, {
       userId: session.user.id,
@@ -266,10 +253,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
       priority: "urgent",
       subject: "Delete my Five to Nine account",
       detail: [
-        "Signed-in account deletion request.",
+        "Signed-in support deletion request.",
         `Account email: ${session.user.email}`,
         `Account user ID: ${session.user.id}`,
-        "Support must verify by email before deleting account data.",
+        "Nothing is deleted automatically or in-app. Support reviews and verifies the request, then communicates the feasible process.",
       ].join("\n"),
       context: {
         createdFrom: "signed_in_account_deletion_request",
@@ -280,7 +267,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     });
 
     if (!supportCase) {
-      return { ok: false, intent, message: "Could not open the deletion request. Email support and we will handle it." };
+      return { ok: false, intent, message: "Could not open the support deletion request. Email support so we can review it." };
     }
 
     const notificationResult = await notifyAccountDeletionOperator(env, {
@@ -295,7 +282,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       return {
         ok: true,
         intent,
-        message: `Deletion request opened as case ${supportCase.id}. Support notification failed, so email ${SUPPORT_EMAIL} if you need it handled urgently.`,
+        message: `Support deletion request opened as case ${supportCase.id}. Support notification failed, so email ${SUPPORT_EMAIL} if you need it handled urgently. Nothing is deleted automatically or in-app.`,
       };
     }
 
@@ -303,8 +290,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
       ok: true,
       intent,
       message: supportCase.alreadyExists
-        ? `Deletion request is already open as case ${supportCase.id}.`
-        : `Deletion request opened as case ${supportCase.id}. We will verify by email before anything is deleted.`,
+        ? `Support deletion request is already open as case ${supportCase.id}. Support will review and verify it, then communicate the feasible process.`
+        : `Support deletion request opened as case ${supportCase.id}. Support will review and verify the request, then communicate the feasible process. Nothing is deleted automatically or in-app.`,
     };
   }
 
@@ -335,6 +322,8 @@ export default function AccountRoute() {
   const [passkeyPending, setPasskeyPending] = useState(false);
   const [passkeyMessage, setPasskeyMessage] = useState<string | null>(null);
   const [passkeyError, setPasskeyError] = useState<string | null>(null);
+  const [passkeyPendingId, setPasskeyPendingId] = useState<string | null>(null);
+  const [passkeyConfirmId, setPasskeyConfirmId] = useState<string | null>(null);
   const otherSessionCount = data.activeSessions.filter((session) => !session.isCurrent).length;
 
   return (
@@ -402,8 +391,8 @@ export default function AccountRoute() {
               <h2>Use this device to sign in faster</h2>
             </div>
           </div>
-          {passkeyMessage ? <p className="f9-message is-success">{passkeyMessage}</p> : null}
-          {passkeyError ? <p className="f9-message is-error">{passkeyError}</p> : null}
+          {passkeyMessage ? <p aria-live="polite" className="f9-message is-success" role="status">{passkeyMessage}</p> : null}
+          {passkeyError ? <p aria-live="polite" className="f9-message is-error" role="alert">{passkeyError}</p> : null}
           {data.passkeyControlsMessage ? (
             <p className="f9-muted-copy">{data.passkeyControlsMessage}</p>
           ) : (
@@ -439,6 +428,48 @@ export default function AccountRoute() {
                           "Not used yet"
                         )}
                       </span>
+                      <div className="f9-account-security-actions">
+                        {passkeyConfirmId === passkey.id ? (
+                          <>
+                            <button
+                              className="f9-secondary-button"
+                              disabled={passkeyPendingId === passkey.id}
+                              onClick={() => setPasskeyConfirmId(null)}
+                              type="button"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              className="f9-secondary-button"
+                              disabled={passkeyPendingId === passkey.id}
+                              onClick={() => {
+                                void removePasskey({
+                                  id: passkey.id,
+                                  setError: setPasskeyError,
+                                  setMessage: setPasskeyMessage,
+                                  setPendingId: setPasskeyPendingId,
+                                  setConfirmId: setPasskeyConfirmId,
+                                });
+                              }}
+                              type="button"
+                            >
+                              {passkeyPendingId === passkey.id ? "Removing…" : "Confirm — remove passkey?"}
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            className="f9-secondary-button"
+                            disabled={passkeyPendingId !== null}
+                            onClick={() => {
+                              setPasskeyError(null);
+                              setPasskeyConfirmId(passkey.id);
+                            }}
+                            type="button"
+                          >
+                            Remove passkey
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -458,7 +489,11 @@ export default function AccountRoute() {
           </div>
         </div>
         {brandProfileAction?.message ? (
-          <div className={`f9-message ${brandProfileAction.ok ? "is-success" : "is-error"}`}>
+          <div
+            aria-live={brandProfileAction.ok ? "polite" : "assertive"}
+            className={`f9-message ${brandProfileAction.ok ? "is-success" : "is-error"}`}
+            role={brandProfileAction.ok ? "status" : "alert"}
+          >
             <p>{brandProfileAction.message}</p>
           </div>
         ) : null}
@@ -601,36 +636,35 @@ export default function AccountRoute() {
         <div className="f9-panel-toolbar">
           <div>
             <span className="f9-app-kicker">Danger zone</span>
-            <h2>Delete this account</h2>
+            <h2>Request account deletion support</h2>
           </div>
         </div>
         {deletionAction?.message ? (
-          <div className={`f9-message ${deletionAction.ok ? "is-success" : "is-error"}`}>
+          <div
+            aria-live={deletionAction.ok ? "polite" : "assertive"}
+            className={`f9-message ${deletionAction.ok ? "is-success" : "is-error"}`}
+            role={deletionAction.ok ? "status" : "alert"}
+          >
             <p>{deletionAction.message}</p>
           </div>
         ) : null}
         <p>
-          Permanently removes your account, watchlists, history, and evidence. We email a
-          confirmation first; nothing is deleted until the request is verified. Deletion is blocked
-          while a subscription is active - cancel first from{" "}
-          <Link prefetch="intent" to="/app/billing">
-            Plan &amp; billing
-          </Link>{" "}
-          (you keep access until the end of the period you've paid for), or email{" "}
-          <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we'll handle both.
+          This sends a support deletion request. Nothing is deleted automatically or in-app.
+          Support reviews and verifies the request, then communicates the feasible process and any
+          timing. You can also email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> if you need help.
         </p>
         <Form className="f9-auth-form" method="post">
           <input name="intent" type="hidden" value="request-account-deletion" />
           <label className="f9-checkbox-row">
             <input name="confirmDeletion" required type="checkbox" value="yes" />
-            <span>I understand deletion is permanent and support will verify by email first.</span>
+            <span>I understand this is a support request, not an in-app deletion, and support will review and verify it.</span>
           </label>
           <SubmitButton
             className="f9-secondary-button"
             intent="request-account-deletion"
-            pendingLabel="Opening request…"
+            pendingLabel="Sending request…"
           >
-            Request account deletion
+            Send support deletion request
           </SubmitButton>
         </Form>
       </article>
@@ -667,6 +701,34 @@ async function registerPasskey(input: {
       input.setError("That passkey could not be added. Try again or use email sign-in.");
     }
     input.setPending(false);
+  }
+}
+
+async function removePasskey(input: {
+  id: string;
+  setConfirmId: (id: string | null) => void;
+  setError: (message: string | null) => void;
+  setMessage: (message: string | null) => void;
+  setPendingId: (id: string | null) => void;
+}) {
+  input.setError(null);
+  input.setMessage(null);
+  input.setPendingId(input.id);
+  try {
+    const { authClient } = await import("~/lib/auth-client");
+    const id = input.id;
+    const result = await authClient.passkey.deletePasskey({ id });
+    if (result.error) {
+      throw new Error(result.error.message || "passkey_delete_failed");
+    }
+
+    input.setPendingId(null);
+    input.setConfirmId(null);
+    input.setMessage("Passkey removed.");
+    window.setTimeout(() => window.location.reload(), 400);
+  } catch {
+    input.setPendingId(null);
+    input.setError("That passkey could not be removed. Try again or use email sign-in.");
   }
 }
 
@@ -750,7 +812,7 @@ async function notifyAccountDeletionOperator(
         `User ID: ${input.userId}`,
         "Category: Security, privacy, or deletion",
         "Priority: Urgent",
-        "Action: verify by email before deleting account data",
+        "Action: support reviews and verifies the request, then communicates the feasible process; nothing is deleted automatically or in-app",
       ],
       idempotencyKey,
     });

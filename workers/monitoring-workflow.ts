@@ -3,6 +3,7 @@ import {
   type WorkflowEvent,
   type WorkflowStep,
 } from "cloudflare:workers";
+import { NonRetryableError } from "cloudflare:workflows";
 
 import type { AppEnv } from "../app/lib/env.server";
 import {
@@ -15,16 +16,18 @@ import {
   resolveMonitoringConcurrencySlotLeaseMs,
   resolveMonitoringFanoutMode,
   type MonitoringWorkflowParams,
+  type ScheduledMonitoringWorkflowParams,
 } from "../app/lib/monitoring-fanout.server";
-import { preflightWatchlistWorkflowJob, runWatchlistWorkflowJob } from "../app/lib/monitoring.server";
+import {
+  preflightWatchlistWorkflowJob,
+  runFirstWatchlistScanWorkflowJob,
+  runWatchlistWorkflowJob,
+  type FirstWatchlistScanWorkflowParams,
+} from "../app/lib/monitoring.server";
 
 // LIVE in production when wrangler.jsonc sets MONITORING_FANOUT_MODE=fanout
 // (with MONITORING_FANOUT_GLOBAL=1). Do not delete this as "dead code" — the
 // inline path is only the unset-var fallback in resolveMonitoringFanoutMode().
-
-class NonRetryableError extends Error {
-  name = "NonRetryableError";
-}
 
 function concurrencySleepDuration(waitRound: number) {
   if (waitRound < 10) {
@@ -38,17 +41,37 @@ function concurrencySleepDuration(waitRound: number) {
 
 export class MonitoringWorkflow extends WorkflowEntrypoint<AppEnv, MonitoringWorkflowParams> {
   async run(event: WorkflowEvent<MonitoringWorkflowParams>, step: WorkflowStep) {
+    if (event.payload.kind === "first_scan") {
+      const firstScanPayload = event.payload as FirstWatchlistScanWorkflowParams;
+      return step.do(
+        "run-first-watchlist-scan",
+        {
+          timeout: `${Math.floor(MONITORING_WORKFLOW_SCAN_TIMEOUT_MS / 60_000)} minutes`,
+          retries: {
+            // A killed worker keeps its D1 lease. The 5/10/20/40 minute
+            // retry sequence reaches the first safe post-lease reclaim inside
+            // the 90-minute recovery bound without overlapping a live scan.
+            limit: 6,
+            delay: "5 minutes",
+            backoff: "exponential",
+          },
+        },
+        async () => runFirstWatchlistScanWorkflowJob(this.env, firstScanPayload),
+      );
+    }
+
+    const scheduledPayload = event.payload as ScheduledMonitoringWorkflowParams;
     if (resolveMonitoringFanoutMode(this.env) === "inline") {
       return {
         status: "cancelled" as const,
         reason: "fanout_disabled",
-        watchlistId: event.payload.watchlistId,
-        runId: event.payload.runId,
+        watchlistId: scheduledPayload.watchlistId,
+        runId: scheduledPayload.runId,
       };
     }
 
     const preflight = await step.do("preflight-watchlist-monitoring", async () =>
-      preflightWatchlistWorkflowJob(this.env, event.payload),
+      preflightWatchlistWorkflowJob(this.env, scheduledPayload),
     );
     if (preflight.status !== "ready") {
       return preflight;
@@ -62,7 +85,7 @@ export class MonitoringWorkflow extends WorkflowEntrypoint<AppEnv, MonitoringWor
 
       const claim = await step.do(buildMonitoringWorkflowConcurrencyStepName(waitRound), async () =>
         claimMonitoringConcurrencySlot(this.env, {
-          runId: event.payload.runId,
+          runId: scheduledPayload.runId,
           leaseMs: resolveMonitoringConcurrencySlotLeaseMs(this.env),
         }),
       );
@@ -94,7 +117,7 @@ export class MonitoringWorkflow extends WorkflowEntrypoint<AppEnv, MonitoringWor
           },
         },
         async () =>
-          runWatchlistWorkflowJob(this.env, event.payload, {
+          runWatchlistWorkflowJob(this.env, scheduledPayload, {
             concurrencyPermitToken: permitToken!,
           }),
       );

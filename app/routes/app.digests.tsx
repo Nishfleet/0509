@@ -20,8 +20,10 @@ import { PlanLimitState } from "~/components/plan-limit-state";
 import { ProofGlossary } from "~/components/proof-glossary";
 import { SubmitButton } from "~/components/submit-button";
 import { readDigestIntelligence } from "~/lib/change-intelligence";
+import { toPublicDeliveryAttemptSummary } from "~/lib/delivery-attempt-public";
 import { formatWatchEventTypeLabel } from "~/lib/landing-page-display";
 import { buildDigestInsightDepth } from "~/lib/insight-depth";
+import { canUsePlanFeature } from "~/lib/plan-entitlements";
 import {
   classifyDigestItemSource,
   priorityMixLabel,
@@ -77,16 +79,17 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         digest.id,
         summarizeDigestAttempts(
           recentDeliveryAttempts.filter((attempt) => attempt.digestRunId === digest.id),
-        ),
+        ).map(toPublicDeliveryAttemptSummary),
       ]),
     ),
     selectedDigest,
     selectedDigestAttempts: selectedDigest
       ? summarizeDigestAttempts(
           recentDeliveryAttempts.filter((attempt) => attempt.digestRunId === selectedDigest.id),
-        )
+        ).map(toPublicDeliveryAttemptSummary)
       : [],
     canAccessDigests: true,
+    plan,
   };
 }
 
@@ -113,7 +116,13 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
     const shareGate = await requireWorkspacePlanFeature(env, workspaceUserId, "share_links");
     if (!shareGate.ok) {
-      return { ok: false, message: "Share links are included in the Agency plan." };
+      return {
+        ok: false,
+        error: "plan_gated" as const,
+        feature: "share_links" as const,
+        plan: shareGate.plan,
+        message: "Share links are included in the Agency plan.",
+      };
     }
     const digestId = String(formData.get("digestId") ?? "");
     const digest = await getDigest(env, digestId);
@@ -151,6 +160,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
 export default function DigestsRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const plan = "plan" in data && data.plan ? data.plan : "free";
+  const canExport = canUsePlanFeature(plan, "export_csv") && canUsePlanFeature(plan, "export_json");
+  const canShare = canUsePlanFeature(plan, "share_links");
   const [searchParams] = useSearchParams();
   const navigation = useNavigation();
   const pendingDigestId =
@@ -216,6 +228,12 @@ export default function DigestsRoute() {
               ) : (
                 actionData.message
               )}
+            {!actionData.ok && (actionData.error === "plan_limit_exceeded" || actionData.error === "plan_gated") ? (
+              <>
+                {" "}
+                <Link to="/app/billing?source=digests#plans">View plans</Link> to unlock this control.
+              </>
+            ) : null}
           </p>
         </div>
       ) : null}
@@ -285,25 +303,39 @@ export default function DigestsRoute() {
                     </h2>
                   </div>
                   <div className="f9-action-row">
-                    <a
-                      className="f9-secondary-button"
-                      href={`/export/digest/${data.selectedDigest.id}`}
-                    >
-                      Export CSV
-                    </a>
-                    <a
-                      className="f9-secondary-button"
-                      href={`/export/digest/${data.selectedDigest.id}?format=json`}
-                    >
-                      JSON export
-                    </a>
-                    <Form method="post">
-                      <input name="intent" type="hidden" value="share-digest" />
-                      <input name="digestId" type="hidden" value={data.selectedDigest.id} />
-                      <SubmitButton className="f9-primary-button" intent="share-digest" pendingLabel="Creating…">
-                        Share snapshot
-                      </SubmitButton>
-                    </Form>
+                    {canExport ? (
+                      <>
+                        <a
+                          className="f9-secondary-button"
+                          href={`/export/digest/${data.selectedDigest.id}`}
+                        >
+                          Export CSV
+                        </a>
+                        <a
+                          className="f9-secondary-button"
+                          href={`/export/digest/${data.selectedDigest.id}?format=json`}
+                        >
+                          JSON export
+                        </a>
+                      </>
+                    ) : (
+                      <Link className="f9-secondary-button" to="/app/billing?source=digests#plans">
+                        Upgrade for exports
+                      </Link>
+                    )}
+                    {canShare ? (
+                      <Form method="post">
+                        <input name="intent" type="hidden" value="share-digest" />
+                        <input name="digestId" type="hidden" value={data.selectedDigest.id} />
+                        <SubmitButton className="f9-primary-button" intent="share-digest" pendingLabel="Creating…">
+                          Share snapshot
+                        </SubmitButton>
+                      </Form>
+                    ) : (
+                      <Link className="f9-primary-button" to="/app/billing?source=digests#plans">
+                        Upgrade to share
+                      </Link>
+                    )}
                   </div>
                 </div>
 
@@ -476,8 +508,7 @@ export default function DigestsRoute() {
   );
 }
 
-function summarizeDigestAttempts(
-  attempts: Array<{
+function summarizeDigestAttempts<T extends {
     channel: string;
     targetValue: string;
     status: string;
@@ -486,9 +517,8 @@ function summarizeDigestAttempts(
     providerStatusLastSeenAt?: string | null;
     sentAt?: string | null;
     createdAt: string;
-  }>,
-) {
-  const latestByChannelTarget = new Map<string, (typeof attempts)[number]>();
+  }>(attempts: T[]) {
+  const latestByChannelTarget = new Map<string, T>();
 
   for (const attempt of attempts) {
     const key = `${attempt.channel}:${attempt.targetValue}`;

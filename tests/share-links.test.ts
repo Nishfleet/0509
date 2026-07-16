@@ -12,6 +12,7 @@ import {
   revokeShareLink,
   SHARE_LINK_DEFAULT_TTL_DAYS,
 } from "~/lib/data.server";
+import { prepareAtomicShareLinkInsert } from "~/lib/data/shares.server";
 
 const session = {
   user: {
@@ -62,10 +63,40 @@ afterEach(() => {
   vi.doUnmock("~/lib/context.server");
   vi.doUnmock("~/lib/data.server");
   vi.doUnmock("~/lib/env.server");
+  vi.doUnmock("~/lib/report-approval");
   vi.doUnmock("react-router");
 });
 
 describe("share link persistence", () => {
+  it("prepares owner-scoped audited inserts for atomic agent shares", () => {
+    const mock = createCapturingDb();
+    const statement = prepareAtomicShareLinkInsert(mock.db as never, {
+      auditId: "audit-1",
+      userId: "user-1",
+      actionName: "share.create",
+      idempotencyKey: "share-1",
+      requestFingerprint: "fp-1",
+      resourceType: "collection",
+      resourceId: "collection-1",
+      ownerResourceType: "collection",
+      isSnapshot: false,
+      shareId: "link-1",
+      token: "token-1",
+      createdAt: "2026-07-15T00:00:00.000Z",
+      expiresAt: "2026-10-13T00:00:00.000Z",
+    });
+
+    expect(statement).toBeTruthy();
+    expect(mock.statements[0]?.sql).toContain("FROM agent_action_audit");
+    expect(mock.statements[0]?.sql).toContain("status = 'started'");
+    expect(mock.statements[0]?.sql).toContain(
+      "json_extract(metadata_json, '$.requestFingerprint') = ?",
+    );
+    expect(mock.statements[0]?.sql).toContain("FROM collection");
+    expect(mock.statements[0]?.bindings).toContain("audit-1");
+    expect(mock.statements[0]?.bindings).toContain("fp-1");
+  });
+
   it("stamps new share links with the default 90-day expiry", async () => {
     const mock = createCapturingDb();
     const before = Date.now();
@@ -88,13 +119,76 @@ describe("share link persistence", () => {
     expect(insert?.bindings).toContain(share.expiresAt);
   });
 
+  it("uses INSERT OR IGNORE plus owner-scoped active readback for deterministic publication ids", async () => {
+    const mock = createCapturingDb([
+      {
+        id: "report-share-id",
+        token: "opaque-token",
+        user_id: "user-1",
+        resource_type: "report",
+        resource_id: "collection:collection-1",
+        is_snapshot: 1,
+        snapshot_payload_json: JSON.stringify({ reviewState: "approved" }),
+        created_at: "2026-07-15T00:00:00.000Z",
+        expires_at: "2099-07-15T00:00:00.000Z",
+        revoked_at: null,
+      },
+    ]);
+
+    const share = await createShareLink({ DB: mock.db } as never, session, {
+      id: "report-share-id",
+      resourceType: "report",
+      resourceId: "collection:collection-1",
+      isSnapshot: true,
+      snapshotPayload: { reviewState: "approved" },
+    });
+
+    expect(share).toMatchObject({
+      id: "report-share-id",
+      token: "opaque-token",
+    });
+    const insert = mock.statements.find((statement) =>
+      statement.sql.includes("share_link"),
+    );
+    expect(insert?.sql).toContain("INSERT OR IGNORE INTO share_link");
+    const readback = mock.statements.find(
+      (statement) =>
+        statement.sql.includes("SELECT *") &&
+        statement.sql.includes("user_id = ?"),
+    );
+    expect(readback?.bindings.slice(0, 2)).toEqual([
+      "report-share-id",
+      "user-1",
+    ]);
+  });
+
+  it("fails closed when a deterministic publication id is already revoked or expired", async () => {
+    const mock = createCapturingDb([]);
+
+    await expect(
+      createShareLink({ DB: mock.db } as never, session, {
+        id: "revoked-report-share",
+        resourceType: "report",
+        resourceId: "collection:collection-1",
+        isSnapshot: true,
+      }),
+    ).rejects.toThrow("share_link_inactive");
+    expect(
+      mock.statements.some((statement) =>
+        statement.sql.includes("INSERT OR IGNORE INTO share_link"),
+      ),
+    ).toBe(true);
+  });
+
   it("only resolves tokens that are unrevoked and unexpired", async () => {
     const mock = createCapturingDb([]);
 
     const result = await getShareLink({ DB: mock.db } as never, "token-1");
 
     expect(result).toBeNull();
-    const select = mock.statements.find((statement) => statement.sql.includes("FROM share_link"));
+    const select = mock.statements.find((statement) =>
+      statement.sql.includes("FROM share_link"),
+    );
     expect(select?.sql).toContain("revoked_at IS NULL");
     expect(select?.sql).toContain("expires_at IS NULL OR expires_at >");
     expect(select?.bindings[0]).toBe("token-1");
@@ -118,7 +212,11 @@ describe("share link persistence", () => {
 
     const result = await getShareLink({ DB: mock.db } as never, "token-1");
 
-    expect(result).toMatchObject({ id: "share-1", expiresAt: null, revokedAt: null });
+    expect(result).toMatchObject({
+      id: "share-1",
+      expiresAt: null,
+      revokedAt: null,
+    });
   });
 
   it("loads an active share link by owner and id for idempotent replay", async () => {
@@ -137,7 +235,11 @@ describe("share link persistence", () => {
       },
     ]);
 
-    const result = await getShareLinkById({ DB: mock.db } as never, "user-1", "share-1");
+    const result = await getShareLinkById(
+      { DB: mock.db } as never,
+      "user-1",
+      "share-1",
+    );
 
     expect(result).toMatchObject({
       id: "share-1",
@@ -145,7 +247,9 @@ describe("share link persistence", () => {
       userId: "user-1",
       resourceType: "collection",
     });
-    const select = mock.statements.find((statement) => statement.sql.includes("FROM share_link"));
+    const select = mock.statements.find((statement) =>
+      statement.sql.includes("FROM share_link"),
+    );
     expect(select?.sql).toContain("id = ?");
     expect(select?.sql).toContain("user_id = ?");
     expect(select?.sql).toContain("revoked_at IS NULL");
@@ -155,16 +259,24 @@ describe("share link persistence", () => {
   it("revokes only the owner's link and reports whether anything changed", async () => {
     const mock = createCapturingDb([], 1);
 
-    const revoked = await revokeShareLink({ DB: mock.db } as never, "user-1", "share-1");
+    const revoked = await revokeShareLink(
+      { DB: mock.db } as never,
+      "user-1",
+      "share-1",
+    );
 
     expect(revoked).toBe(true);
-    const update = mock.statements.find((statement) => statement.sql.includes("UPDATE share_link"));
+    const update = mock.statements.find((statement) =>
+      statement.sql.includes("UPDATE share_link"),
+    );
     expect(update?.sql).toContain("AND user_id = ?");
     expect(update?.sql).toContain("revoked_at IS NULL");
     expect(update?.bindings.slice(1)).toEqual(["share-1", "user-1"]);
 
     const noChange = createCapturingDb([], 0);
-    expect(await revokeShareLink({ DB: noChange.db } as never, "user-2", "share-1")).toBe(false);
+    expect(
+      await revokeShareLink({ DB: noChange.db } as never, "user-2", "share-1"),
+    ).toBe(false);
   });
 
   it("lists only the user's active links", async () => {
@@ -172,7 +284,9 @@ describe("share link persistence", () => {
 
     await listActiveShareLinks({ DB: mock.db } as never, "user-1");
 
-    const select = mock.statements.find((statement) => statement.sql.includes("FROM share_link"));
+    const select = mock.statements.find((statement) =>
+      statement.sql.includes("FROM share_link"),
+    );
     expect(select?.sql).toContain("WHERE user_id = ?");
     expect(select?.sql).toContain("revoked_at IS NULL");
     expect(select?.bindings[0]).toBe("user-1");
@@ -245,7 +359,8 @@ describe("/share/:token route", () => {
       params: { token: "token-1" },
       request: new Request("https://0509.io/share/token-1"),
     } as never);
-    const payload = (result as unknown as { payload: Record<string, unknown> }).payload;
+    const payload = (result as unknown as { payload: Record<string, unknown> })
+      .payload;
     const serialized = JSON.stringify(payload);
 
     expect(payload).toMatchObject({
@@ -272,7 +387,7 @@ describe("/share/:token route", () => {
     expect(serialized).not.toContain("rawProviderPayload");
   });
 
-  it("sanitizes legacy report snapshot identifiers before returning loader data", async () => {
+  it("rejects legacy report snapshots that were never explicitly approved", async () => {
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => ({})),
     }));
@@ -299,7 +414,8 @@ describe("/share/:token route", () => {
           summary: "One move included.",
           generatedAt: "2026-06-08T01:00:00.000Z",
           aiWeeklySummary: {
-            paragraph: "Competitors concentrated this week's movement on promotional offers.",
+            paragraph:
+              "Competitors concentrated this week's movement on promotional offers.",
             generatedAt: "2026-06-08T01:05:00.000Z",
             periodEnd: "2026-06-08T01:00:00.000Z",
             strategyWatchlistIds: ["watch-internal-1"],
@@ -312,11 +428,25 @@ describe("/share/:token route", () => {
           rawProviderPayload: { id: "provider-msg-1" },
           stats: [{ label: "Moves", value: "1", secret: "stat-secret" }],
           insightDepth: {
-            topHooks: [{ label: "Offer", count: 1, detail: "Discount", ownerId: "owner-secret" }],
+            topHooks: [
+              {
+                label: "Offer",
+                count: 1,
+                detail: "Discount",
+                ownerId: "owner-secret",
+              },
+            ],
             mediaMix: [],
             campaignDurations: [],
             metricProof: [],
-            creativeTimeline: [{ label: "Launch", detail: "New offer", timestamp: "2026-06-08T01:00:00.000Z", secret: "timeline-secret" }],
+            creativeTimeline: [
+              {
+                label: "Launch",
+                detail: "New offer",
+                timestamp: "2026-06-08T01:00:00.000Z",
+                secret: "timeline-secret",
+              },
+            ],
             landingPageHistory: [],
             rawMetadata: { ownerId: "owner-secret" },
           },
@@ -357,10 +487,23 @@ describe("/share/:token route", () => {
                 headline: "",
                 captureLabel: "",
                 capturedAt: null,
-                signals: [{ label: "CTA", value: "Shop now", sourceLabel: "Landing page", rawProviderPayload: "provider-msg-1" }],
+                signals: [
+                  {
+                    label: "CTA",
+                    value: "Shop now",
+                    sourceLabel: "Landing page",
+                    rawProviderPayload: "provider-msg-1",
+                  },
+                ],
                 secret: "landing-secret",
               },
-              analysisFields: [{ label: "Offer", value: "20% off", rawMetadata: "provider-msg-1" }],
+              analysisFields: [
+                {
+                  label: "Offer",
+                  value: "20% off",
+                  rawMetadata: "provider-msg-1",
+                },
+              ],
               tags: ["discount"],
               note: null,
               ownerId: "owner-secret",
@@ -398,32 +541,14 @@ describe("/share/:token route", () => {
       params: { token: "token-1" },
       request: new Request("https://0509.io/share/token-1"),
     } as never);
-    const payload = (result as unknown as { payload: Record<string, unknown> }).payload;
-    const serialized = JSON.stringify(payload);
+    const payload = (
+      result as unknown as { payload: Record<string, unknown> | null }
+    ).payload;
 
-    expect(payload).toMatchObject({
-      kind: "report",
-      reportId: "shared-report",
-      resourceId: "shared",
-      aiWeeklySummary: {
-        paragraph: "Competitors concentrated this week's movement on promotional offers.",
-        generatedAt: "2026-06-08T01:05:00.000Z",
-        periodEnd: "2026-06-08T01:00:00.000Z",
-      },
-      rows: [expect.objectContaining({ id: "row-1" })],
-    });
-    expect(serialized).toContain("Competitors concentrated this week's movement");
-    expect(serialized).not.toContain("watch-internal-1");
-    expect(serialized).not.toContain("watch-event-internal-1");
-    expect(serialized).not.toContain("owner-secret");
-    expect(serialized).not.toContain("owner@example.com");
-    expect(serialized).not.toContain("provider-msg-1");
-    expect(serialized).not.toContain("rawProviderPayload");
-    expect(serialized).not.toContain("rawMetadata");
-    expect(serialized).not.toContain("landing-secret");
-    expect(serialized).not.toContain("stat-secret");
-    expect(serialized).not.toContain("timeline-secret");
-    expect(serialized).not.toContain("javascript:alert");
+    expect(payload).toBeNull();
+    expect(
+      (result as unknown as { pdfPath: string | null }).pdfPath,
+    ).toBeNull();
   });
 
   it("rejects legacy watchlist report snapshots that lack proof eligibility metadata", async () => {
@@ -461,7 +586,13 @@ describe("/share/:token route", () => {
               previewImageUrl: null,
               creativeText: "",
               translatedText: "",
-              landingPage: { url: "", headline: "", captureLabel: "", capturedAt: null, signals: [] },
+              landingPage: {
+                url: "",
+                headline: "",
+                captureLabel: "",
+                capturedAt: null,
+                signals: [],
+              },
               analysisFields: [],
               tags: [],
               note: null,
@@ -491,11 +622,18 @@ describe("/share/:token route", () => {
 
   it("does not render raw JSON for unsupported snapshot payloads", async () => {
     vi.doMock("react-router", async () => {
-      const actual = await vi.importActual<typeof import("react-router")>("react-router");
+      const actual =
+        await vi.importActual<typeof import("react-router")>("react-router");
       return {
         ...actual,
-        Link: ({ children, to, ...props }: { children: ReactNode; to: string }) =>
-          createElement("a", { href: to, ...props }, children),
+        Link: ({
+          children,
+          to,
+          ...props
+        }: {
+          children: ReactNode;
+          to: string;
+        }) => createElement("a", { href: to, ...props }, children),
         useLoaderData: vi.fn().mockReturnValue({
           mode: "snapshot",
           resourceType: "digest",
@@ -531,7 +669,9 @@ describe("deactivateWatchlistsBeyondPlanLimit", () => {
     );
 
     expect(changed).toBe(4);
-    const update = mock.statements.find((statement) => statement.sql.includes("UPDATE watchlist"));
+    const update = mock.statements.find((statement) =>
+      statement.sql.includes("UPDATE watchlist"),
+    );
     expect(update?.sql).toContain("SET is_active = 0");
     expect(update?.sql).toContain("ORDER BY created_at DESC");
     expect(update?.sql).toContain("LIMIT ?");
@@ -548,21 +688,45 @@ describe("deactivateWatchlistsBeyondPlanLimit", () => {
     );
 
     expect(changed).toBe(2);
-    const update = mock.statements.find((statement) => statement.sql.includes("UPDATE watchlist"));
+    const update = mock.statements.find((statement) =>
+      statement.sql.includes("UPDATE watchlist"),
+    );
     expect(update?.bindings.slice(1)).toEqual(["user-1", "user-1", 1]);
   });
 });
 
 describe("/app/shares route", () => {
+  it("names the route as shared-link administration, not the Reports index", async () => {
+    vi.doMock("react-router", async () => {
+      const actual = await vi.importActual<typeof import("react-router")>("react-router");
+      const React = await import("react");
+      return {
+        ...actual,
+        Link: ({ children, to, ...props }: { children?: ReactNode; to?: string } & Record<string, unknown>) =>
+          React.createElement("a", { ...props, href: to }, children),
+        useActionData: vi.fn().mockReturnValue(undefined),
+        useLoaderData: vi.fn().mockReturnValue({ shares: [] }),
+      };
+    });
+    const { default: SharesRoute, meta } = await import("~/routes/app.shares");
+    const markup = renderToStaticMarkup(createElement(SharesRoute));
+
+    expect(meta()).toEqual([{ title: "Shared links | Five to Nine" }]);
+    expect(markup).toContain("Shared links");
+    expect(markup).toContain("No active share links");
+    expect(markup).toContain('href="/app/reports"');
+    expect(markup).not.toContain("Reports &amp; shared links");
+  });
+
   it("lists active share links with absolute URLs", async () => {
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: "user-1",
-      isMember: false,
-      ownerName: null,
-    })),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: "user-1",
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => ({})),
@@ -601,22 +765,72 @@ describe("/app/shares route", () => {
         url: "https://0509.io/share/token-abc",
         resourceLabel: "Collection",
         mode: "Snapshot",
+        state: "Snapshot",
         createdAt: "2026-06-01T00:00:00.000Z",
         expiresAt: "2026-09-01T00:00:00.000Z",
       },
     ]);
   });
 
+  it("withholds an expired report approval and points the owner to re-review", async () => {
+    vi.doMock("~/lib/auth.server", () => ({
+      requireWorkspaceSession: vi.fn().mockResolvedValue({
+        session,
+        workspaceUserId: "user-1",
+        isMember: false,
+        ownerName: null,
+      }),
+    }));
+    vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => ({})) }));
+    vi.doMock("~/lib/env.server", () => ({ appOrigin: vi.fn(() => "https://0509.io") }));
+    vi.doMock("~/lib/report-approval", () => ({
+      isApprovedReportSnapshot: vi.fn(() => false),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listActiveShareLinks: vi.fn().mockResolvedValue([
+        {
+          id: "report-share-expired",
+          token: "expired-token",
+          userId: "user-1",
+          resourceType: "report",
+          resourceId: "collection:col-1",
+          isSnapshot: true,
+          snapshotPayload: {
+            reviewState: "approved",
+            evidenceState: "current",
+            approvalExpiresAt: "2020-01-01T00:00:00.000Z",
+          },
+          createdAt: "2026-07-01T00:00:00.000Z",
+          expiresAt: "2099-07-01T00:00:00.000Z",
+          revokedAt: null,
+        },
+      ]),
+      revokeShareLink: vi.fn(),
+    }));
+
+    const { loader } = await import("~/routes/app.shares");
+    const result = await loader({
+      context: {},
+      request: new Request("https://0509.io/app/shares"),
+      params: {},
+    } as never);
+
+    expect(result.shares[0]).toMatchObject({
+      state: "Approval expired · review again",
+      recoveryPath: "/app/reports/collection:col-1",
+    });
+  });
+
   it("revokes a link through the action with the session user's scope", async () => {
     const revokeShareLinkMock = vi.fn().mockResolvedValue(true);
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: "user-1",
-      isMember: false,
-      ownerName: null,
-    })),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: "user-1",
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => ({})),
@@ -627,7 +841,10 @@ describe("/app/shares route", () => {
     }));
 
     const { action } = await import("~/routes/app.shares");
-    const body = new URLSearchParams({ intent: "revoke-share", shareLinkId: "share-1" });
+    const body = new URLSearchParams({
+      intent: "revoke-share",
+      shareLinkId: "share-1",
+    });
     const result = await action({
       context: {},
       request: new Request("https://0509.io/app/shares", {
@@ -639,6 +856,10 @@ describe("/app/shares route", () => {
     } as never);
 
     expect(result).toMatchObject({ ok: true });
-    expect(revokeShareLinkMock).toHaveBeenCalledWith(expect.anything(), "user-1", "share-1");
+    expect(revokeShareLinkMock).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      "share-1",
+    );
   });
 });

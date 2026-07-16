@@ -144,6 +144,35 @@ describe("buildSearchAnswer", () => {
     });
   });
 
+  it.each(["degraded", "cache_only"] as const)(
+    "treats %s without cached ads as an unavailable live check",
+    (discoveryStatus) => {
+      const answer = buildSearchAnswer({
+        result: response({
+          ads: [],
+          cacheStatus: discoveryStatus === "cache_only" ? "stale" : "miss",
+          discoveryStatus,
+          discoverySummary: "Fresh checks are delayed and no cached results are available.",
+          discoveryFailureClass: "timeout",
+        }),
+        displayDomain: "boat-lifestyle.com",
+        isDomainSearch: true,
+        isBroaderScope: false,
+      });
+
+      expect(answer).toMatchObject({
+        state: "degraded",
+        title: "Search preview is temporarily unavailable",
+        summary: "Fresh competitor checks are delayed and no recent results are available for this search.",
+      });
+      expect(answer.facts).toContainEqual({
+        label: "Fresh ads",
+        value: "Delayed",
+        detail: "Delayed",
+      });
+    },
+  );
+
   it("does not turn an explicit zero verified count into proof", () => {
     const answer = buildSearchAnswer({
       result: response({
@@ -228,7 +257,7 @@ describe("buildSearchAnswer", () => {
 
     expect(answer).toMatchObject({
       state: "degraded",
-      title: "Live search is temporarily unavailable",
+      title: "Search preview is temporarily unavailable",
       summary: "Fresh competitor checks are delayed and no recent results are available for this search.",
       // Internal jargon must never leak to the customer-facing note.
       note: "Live ad checks are temporarily delayed. We'll retry automatically — results refresh as soon as checks recover.",

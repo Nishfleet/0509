@@ -1,10 +1,10 @@
 # Monitoring Fan-Out Rollout Runbook
 
-**Status:** LIVE GLOBAL FAN-OUT — Agency checkout is open with `MONITORING_FANOUT_MODE=fanout` and `MONITORING_FANOUT_GLOBAL=1`
+**Status:** FIXED-CANDIDATE/LIVE CONFIG RECORD — dated dispatch proof only; current Gate A–C release readiness is 0/6 with all six journeys active and four frozen candidates blocked. Agency checkout is open with `MONITORING_FANOUT_MODE=fanout` and `MONITORING_FANOUT_GLOBAL=1`, but the current all-six candidate/review/Gate C and real scan health still require refresh.
 
 ## Production reality after global fan-out deploy
 
-- Fan-out **behavior is active** in production after the 2026-06-28 internal Agency-scale dispatch proof.
+- Fan-out **behavior was active in the dated production proof** after the 2026-06-28 internal Agency-scale dispatch proof; verify current runtime/config before treating this as current Gate B/C evidence.
 - `MONITORING_FANOUT_MODE=fanout` is the production default.
 - `MONITORING_FANOUT_GLOBAL=1` is enabled; do not set `MONITORING_FANOUT_ALLOWLIST=*`.
 - Synthetic proof watchlists were deactivated after proof, and the internal owner plan was restored.
@@ -37,9 +37,9 @@
 - **Missing binding:** explicit fan-out records `workflow_binding_missing`, does **not** inline-scan
 - **Shadow:** counts eligible watchlists only; no D1 runs, no workflows, no deliveries
 
-## Schema-first deployment order
+## Schema-first deployment order (historical procedure; verify current ledger first)
 
-1. `npx wrangler d1 migrations list 0509 --remote` — confirm pending is exactly `0047`, `0048`
+1. `npx wrangler d1 migrations list 0509 --remote` — confirm the current pending set; the `0047`/`0048` expectation applies only to the historical rollout.
 2. `npx wrangler d1 migrations apply 0509 --remote`
 3. Confirm `No migrations to apply`
 4. `npm run deploy` with `MONITORING_FANOUT_MODE=fanout` and `MONITORING_FANOUT_GLOBAL=1` after live dispatch proof
@@ -57,9 +57,9 @@
 | **One nightly window** | reconciliation + inline rollback tests | Observe 04:00 UTC cron + warmup reconciliation | Pending drains; no unbounded `oldestQueuedAgeMs` |
 | **Agency sale gate** | `tests/commercial-launch-gate.test.ts` | Code opens only after `fanout` + allowlist/global + internal secret | Prod opens once live fan-out dispatch proof passes |
 
-**Simulated proof status (2026-06-24):** PASS — shadow, 75-job dispatch, mixed fleet ranking, slot drain, commercial gate holds, canary ladder evaluator.
+**Simulated proof status (2026-06-24, historical):** PASS — shadow, 75-job dispatch, mixed fleet ranking, slot drain, commercial gate holds, canary ladder evaluator.
 
-**Live proof status (2026-06-28):** PASS for dispatch — production cron queued 78 fan-out jobs for the internal Agency-scale proof workspace with 0 dispatch failures and 8 max concurrency slots. Synthetic proof watchlists were deactivated after proof to avoid recurring fake-target scan failures.
+**Live proof status (2026-06-28, historical fixed-candidate evidence):** PASS for dispatch — production cron queued 78 fan-out jobs for the internal Agency-scale proof workspace with 0 dispatch failures and 8 max concurrency slots. Synthetic proof watchlists were deactivated after proof to avoid recurring fake-target scan failures. This did not prove real customer-quality scan completion.
 
 ## Activation ladder
 
@@ -68,7 +68,7 @@
 3. **75-watchlist scheduling test** — allowlisted workspace only; validate with `--step fleet75 --remote`
 4. **One full nightly window** + reconciliation warmup observation (`--step nightly --remote`)
 5. **Pilot Agency allowlist** expansion
-6. **`MONITORING_FANOUT_GLOBAL=1`** after owner-approved dispatch proof — completed 2026-06-28; keep monitoring scan completion and dispatch failures after each nightly window
+6. **`MONITORING_FANOUT_GLOBAL=1`** after owner-approved dispatch proof — completed 2026-06-28 in the dated proof; keep monitoring scan completion and dispatch failures after each nightly window
 
 ### Canary tooling (read-only)
 
@@ -113,7 +113,7 @@ Set `MONITORING_FANOUT_MODE=inline` and redeploy.
 - Browser Rendering concurrent session ceiling vs `MONITORING_FANOUT_MAX_INFLIGHT`
 - In-flight workflow drain latency after rollback
 - The workflow scan step is capped at 30 minutes to stay within Cloudflare Workflows step limits
-- Continued proof that real customer jobs complete across nightly windows, not just dispatch successfully
+- Current Gate C proof that an operator-owned internal watchlist completes across nightly windows, not just dispatches successfully; target-buyer usefulness remains Gate D
 
 ## Plan-aware queue priority (2026-06-23, local only)
 
@@ -121,9 +121,9 @@ Branch `cursor/plan-entitlements-topups-no-prices-20260623` adds `watchlist_run.
 
 | Plan | Scheduled cadence | Queue priority (lower runs first) |
 |------|-------------------|-----------------------------------|
-| Agency | Daily | `0` |
-| Starter | Daily | `1` |
-| Scout | Monday only | `2` |
+| Agency | Every 3 hours | `0` |
+| Starter | Every 3 hours | `1` |
+| Scout | Every 6 hours | `2` |
 
 Top-up balance does **not** alter cadence or priority. Fan-out is globally enabled after the 2026-06-28 internal dispatch proof; priority fields govern the live workflow queue.
 
@@ -131,8 +131,8 @@ Top-up balance does **not** alter cadence or priority. Fan-out is globally enabl
 
 ## Agency sale verdict
 
-**Recommendation: OPEN with monitoring** after 2026-06-28 live dispatch proof.
+**Historical recommendation: OPEN with monitoring** after the 2026-06-28 live dispatch proof. Current Agency release readiness is 0/6 with the other journeys: a current Gate B/C claim still requires candidate-bound runtime evidence and an operator-owned internal scan tied to the deployed version/config.
 
 - Code gate (`commercial-launch-gate.server.ts`) correctly holds Agency when `inline` or `shadow`.
-- Simulated vitest proof is green; production has now dispatched an Agency-scale internal proof through Workflow fan-out.
-- Keep `MONITORING_FANOUT_GLOBAL=1` only while nightly dispatch failures stay at zero and real customer scan failures remain explainable.
+- Simulated vitest proof was green; production dispatched an Agency-scale internal proof through Workflow fan-out in the dated run.
+- Keep `MONITORING_FANOUT_GLOBAL=1` only while scheduled dispatch failures stay at zero and operator-owned internal scan failures remain explainable. Do not use customer data to prove the engineering gate.

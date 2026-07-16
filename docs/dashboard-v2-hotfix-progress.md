@@ -1,5 +1,7 @@
 # Dashboard V2 production hotfix — 2026-06-25
 
+This file records the fixed-candidate June 25 hotfix and polish evidence. Its test, reviewer, runtime, and smoke results are historical; they are not a current Gate B/C candidate pass or Gate D external proof.
+
 ## Baseline
 
 - **Starting runtime commit:** `cf6eca7e8067b0775ce8fe4fec29008025ac5046` (PR #245 merge on `main`)
@@ -58,7 +60,7 @@
 - **UX/accessibility (E):** APPROVE DASHBOARD HOTFIX — pending live screenshot pass after deploy
 - **Product red-team (F):** APPROVE DASHBOARD HOTFIX — no critical/high customer leakage in `app/routes/app*.tsx` surfaces
 
-## Validation
+## Historical Validation (2026-06-25)
 
 - `npm test` — 1275/1275
 - `npm run typecheck` — pass
@@ -75,7 +77,7 @@
 - **Rollback version:** `1f9ba087-50db-42a5-8c16-6c8556fbbd0c`
 - **Domains:** `0509.io`, `www.0509.io`, `api.0509.io`, `0509.in`, `www.0509.in`, `api.0509.in`
 
-## Production smokes (2026-06-25)
+## Historical Production Smokes (2026-06-25)
 
 - Public: `/api/health`, `/`, `/search`, `/help`, `/status`, `/bots/presence`, `/auth/login` — OK
 - `/help` — no Better Auth / internal workspace / MCP / Web mentions leakage (post #247)
@@ -113,13 +115,13 @@
 
 - **Reviewer D (post-fix):** APPROVE FINAL DASHBOARD V2
 
-### Validation
+### Historical Validation (final polish)
 
 - `npm test` — 1277/1277 (136 files)
 - `npm run typecheck` — pass
 - `npm run build` — pass
 - `node scripts/validate-d1-backup.mjs` — pass (dry-run)
-- Remote D1 — no migrations to apply
+- Remote D1 — no migrations to apply (historical snapshot)
 - `npm run canary:prod` — pass (post-deploy)
 
 ### Deployment
@@ -130,7 +132,7 @@
 - **Worker version:** `2ff3c030-39c1-4977-87a2-dd6347f05081`
 - **Rollback version:** `61e32596-383e-4c73-8ec3-cc4012b55c0a` (Dashboard V2 hotfix)
 
-### Production smokes (final polish)
+### Historical Production Smokes (final polish)
 
 - Public: `/api/health`, `/`, `/search`, `/help`, `/status`, `/auth/login` — OK
 - Marketing pricing: “Weekly digests”, “saved collections” live on `0509.io`

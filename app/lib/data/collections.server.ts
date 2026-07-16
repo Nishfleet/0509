@@ -52,6 +52,20 @@ interface CollectionItemRow {
   updated_at: string;
 }
 
+export type CreateCollectionWithinLimitResult =
+  | {
+      status: "created";
+      collection: CollectionRecord;
+      current: number;
+      limit: number;
+    }
+  | {
+      status: "over_cap";
+      collection: null;
+      current: number;
+      limit: number;
+    };
+
 const COLLECTION_LIST_COLUMNS = `
   id,
   user_id,
@@ -163,6 +177,60 @@ export async function createCollection(
 
   const row = await one<CollectionRow>(env, "SELECT * FROM collection WHERE id = ?", id);
   return row ? toCollectionRecord(row) : null;
+}
+
+/**
+ * Create a collection without allowing a concurrent request to consume the
+ * same final plan slot. The count check belongs in the INSERT ... SELECT so
+ * SQLite/D1 evaluates it and the write as one atomic operation.
+ */
+export async function createCollectionWithinLimit(
+  env: AppEnv,
+  userId: string,
+  input: { name: string; description?: string | null },
+  planLimit: number,
+): Promise<CreateCollectionWithinLimitResult> {
+  const limit = Math.max(0, Math.floor(planLimit));
+  const id = createId();
+  const timestamp = nowIso();
+
+  await run(
+    env,
+    `
+      INSERT INTO collection (id, user_id, name, description, created_at, updated_at)
+      SELECT ?, ?, ?, ?, ?, ?
+      WHERE ? > (
+        SELECT COUNT(*)
+        FROM collection
+        WHERE user_id = ?
+      )
+    `,
+    id,
+    userId,
+    input.name.trim(),
+    input.description?.trim() ?? null,
+    timestamp,
+    timestamp,
+    limit,
+    userId,
+  );
+
+  const collection = await getCollection(env, id, userId);
+  const current = await countCollections(env, userId);
+  if (collection) {
+    return { status: "created", collection, current, limit };
+  }
+
+  return { status: "over_cap", collection: null, current, limit };
+}
+
+async function countCollections(env: AppEnv, userId: string) {
+  const row = await one<{ count: number }>(
+    env,
+    "SELECT COUNT(*) AS count FROM collection WHERE user_id = ?",
+    userId,
+  );
+  return Number(row?.count ?? 0);
 }
 
 export async function listCollectionItemsPage(

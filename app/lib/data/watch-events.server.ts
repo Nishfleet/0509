@@ -20,6 +20,13 @@ import {
   type WatchEventRow,
 } from "~/lib/data/watchlist-rows.server";
 import type { AppEnv } from "~/lib/env.server";
+import {
+  decodeListCursor,
+  nextListCursorFromPage,
+  resolveListPageLimit,
+  type ListPageOptions,
+  type ListPageResult,
+} from "~/lib/list-pagination";
 import type {
   DedupeReason,
   ProofSkipReason,
@@ -56,6 +63,92 @@ export async function listWatchEvents(
     `,
     watchlistId,
     limit,
+  );
+
+  return rows.map(toWatchEventRecord);
+}
+
+export async function listWatchEventsPage(
+  env: AppEnv,
+  watchlistId: string,
+  options: ListPageOptions = {},
+): Promise<ListPageResult<ReturnType<typeof toWatchEventRecord>>> {
+  const limit = resolveListPageLimit(options.limit, 100);
+  const cursor = decodeListCursor(options.cursor);
+  const rows = await many<WatchEventRow>(
+    env,
+    `
+      SELECT *
+      FROM watch_event
+      WHERE watchlist_id = ?
+        ${cursor ? "AND (created_at < ? OR (created_at = ? AND id < ?))" : ""}
+      ORDER BY created_at DESC, id DESC
+      LIMIT ?
+    `,
+    ...(cursor
+      ? [watchlistId, cursor.sortValue, cursor.sortValue, cursor.id, limit]
+      : [watchlistId, limit]),
+  );
+  const items = rows.map(toWatchEventRecord);
+
+  return {
+    items,
+    nextCursor: nextListCursorFromPage(
+      items,
+      limit,
+      (item) => item.createdAt,
+      (item) => item.id,
+    ),
+  };
+}
+
+export async function listWatchEventsForRun(
+  env: AppEnv,
+  watchlistId: string,
+  runId: string,
+) {
+  const rows = await many<WatchEventRow>(
+    env,
+    `
+      SELECT *
+      FROM watch_event
+      WHERE watchlist_id = ?
+        AND run_id = ?
+      ORDER BY created_at ASC, id ASC
+    `,
+    watchlistId,
+    runId,
+  );
+
+  return rows.map(toWatchEventRecord);
+}
+
+/**
+ * Loads a single globally ordered activity window for a workspace. The join
+ * keeps ownership and active-watch filtering in SQL, avoiding one query per
+ * watchlist (and the dashboard's old first-six truncation).
+ */
+export async function listRecentWorkspaceWatchEvents(
+  env: AppEnv,
+  userId: string,
+  limit = 8,
+) {
+  const boundedLimit = Number.isFinite(limit)
+    ? Math.max(1, Math.min(Math.floor(limit), 8))
+    : 8;
+  const rows = await many<WatchEventRow>(
+    env,
+    `
+      SELECT watch_event.*
+      FROM watch_event
+      INNER JOIN watchlist ON watchlist.id = watch_event.watchlist_id
+      WHERE watchlist.user_id = ?
+        AND watchlist.is_active = 1
+      ORDER BY watch_event.created_at DESC, watch_event.id DESC
+      LIMIT ?
+    `,
+    userId,
+    boundedLimit,
   );
 
   return rows.map(toWatchEventRecord);
@@ -128,18 +221,18 @@ export async function listWatchEventsBetween(
 
   return rows.map(toWatchEventRecord);
 }
-async function getExistingProofBackedWatchEvent(
+async function getExistingWatchEvent(
   env: AppEnv,
   input: {
     watchlistId: string;
     runId: string;
     eventType: WatchEventType;
+    adId: string | null;
     proofCaptureId: string | null | undefined;
     title: string;
     summary: string;
   },
 ) {
-  if (!input.proofCaptureId) return null;
   const row = await one<{ id: string }>(
     env,
     `
@@ -148,7 +241,8 @@ async function getExistingProofBackedWatchEvent(
       WHERE watchlist_id = ?
         AND run_id = ?
         AND event_type = ?
-        AND proof_capture_id = ?
+        AND ad_id IS ?
+        AND proof_capture_id IS ?
         AND title = ?
         AND summary = ?
       ORDER BY created_at ASC
@@ -157,6 +251,7 @@ async function getExistingProofBackedWatchEvent(
     input.watchlistId,
     input.runId,
     input.eventType,
+    input.adId,
     input.proofCaptureId,
     input.title,
     input.summary,
@@ -185,28 +280,28 @@ export async function createWatchEvent(
     lastEvaluatedAt?: string | null;
   },
 ) {
-  const existingProofBackedEventId = await getExistingProofBackedWatchEvent(env, {
+  const existingEventId = await getExistingWatchEvent(env, {
     watchlistId: input.watchlistId,
     runId: input.runId,
     eventType: input.eventType,
+    adId: input.adId,
     proofCaptureId: input.proofCaptureId,
     title: input.title,
     summary: input.summary,
   });
-  if (existingProofBackedEventId) {
-    return existingProofBackedEventId;
+  if (existingEventId) {
+    return existingEventId;
   }
 
-  const id = input.proofCaptureId
-    ? await createStableId("watch_event", [
-        input.watchlistId,
-        input.runId,
-        input.eventType,
-        input.proofCaptureId,
-        input.title,
-        input.summary,
-      ])
-    : createId();
+  const id = await createStableId("watch_event", [
+    input.watchlistId,
+    input.runId,
+    input.eventType,
+    input.adId,
+    input.proofCaptureId ?? null,
+    input.title,
+    input.summary,
+  ]);
   const timestamp = nowIso();
   const status = input.status ?? "confirmed";
   try {
@@ -256,13 +351,14 @@ export async function createWatchEvent(
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (!input.proofCaptureId || !isUniqueConstraintError(message)) {
+    if (!isUniqueConstraintError(message)) {
       throw error;
     }
-    const existingId = await getExistingProofBackedWatchEvent(env, {
+    const existingId = await getExistingWatchEvent(env, {
       watchlistId: input.watchlistId,
       runId: input.runId,
       eventType: input.eventType,
+      adId: input.adId,
       proofCaptureId: input.proofCaptureId,
       title: input.title,
       summary: input.summary,
@@ -275,18 +371,18 @@ export async function createWatchEvent(
 
   return id;
 }
-async function getExistingProofBackedEventCandidate(
+async function getExistingEventCandidate(
   env: AppEnv,
   input: {
     watchlistId: string;
     runId: string;
     eventType: WatchEventType;
+    adId: string | null;
     proofTargetId: string | null | undefined;
     title: string;
     summary: string;
   },
 ) {
-  if (!input.proofTargetId) return null;
   const row = await one<{ id: string }>(
     env,
     `
@@ -295,7 +391,8 @@ async function getExistingProofBackedEventCandidate(
       WHERE watchlist_id = ?
         AND run_id = ?
         AND event_type = ?
-        AND proof_target_id = ?
+        AND ad_id IS ?
+        AND proof_target_id IS ?
         AND title = ?
         AND summary = ?
       ORDER BY created_at ASC
@@ -304,6 +401,7 @@ async function getExistingProofBackedEventCandidate(
     input.watchlistId,
     input.runId,
     input.eventType,
+    input.adId,
     input.proofTargetId,
     input.title,
     input.summary,
@@ -331,28 +429,28 @@ export async function createEventCandidate(
     lastEvaluatedAt?: string | null;
   },
 ) {
-  const existingProofBackedCandidateId = await getExistingProofBackedEventCandidate(env, {
+  const existingCandidateId = await getExistingEventCandidate(env, {
     watchlistId: input.watchlistId,
     runId: input.runId,
     eventType: input.eventType,
+    adId: input.adId,
     proofTargetId: input.proofTargetId,
     title: input.title,
     summary: input.summary,
   });
-  if (existingProofBackedCandidateId) {
-    return existingProofBackedCandidateId;
+  if (existingCandidateId) {
+    return existingCandidateId;
   }
 
-  const id = input.proofTargetId
-    ? await createStableId("event_candidate", [
-        input.watchlistId,
-        input.runId,
-        input.eventType,
-        input.proofTargetId,
-        input.title,
-        input.summary,
-      ])
-    : createId();
+  const id = await createStableId("event_candidate", [
+    input.watchlistId,
+    input.runId,
+    input.eventType,
+    input.adId,
+    input.proofTargetId ?? null,
+    input.title,
+    input.summary,
+  ]);
   const timestamp = nowIso();
   try {
     await run(
@@ -401,13 +499,14 @@ export async function createEventCandidate(
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (!input.proofTargetId || !isUniqueConstraintError(message)) {
+    if (!isUniqueConstraintError(message)) {
       throw error;
     }
-    const existingId = await getExistingProofBackedEventCandidate(env, {
+    const existingId = await getExistingEventCandidate(env, {
       watchlistId: input.watchlistId,
       runId: input.runId,
       eventType: input.eventType,
+      adId: input.adId,
       proofTargetId: input.proofTargetId,
       title: input.title,
       summary: input.summary,

@@ -95,9 +95,9 @@ describe("status route", () => {
     expect(markup).toContain("Five to Nine service status.");
     expect(markup).toContain("Core surfaces");
     expect(markup).toContain("Public search");
-    expect(markup).toContain("Email delivery is available for eligible accounts");
-    expect(markup).toContain("Recurring uptime checks are configured");
-    expect(markup).toContain("Available by account review");
+    expect(markup).toContain("Email delivery is in product scope");
+    expect(markup).toContain("Recurring uptime checks are configured and reviewed by the operator");
+    expect(markup).toContain("Held — account configuration");
     expect(markup).not.toContain("larger-account monitoring capacity");
     expect(markup).not.toContain("GA launch gate");
     expect(markup).not.toContain("GA launch proof");
@@ -111,5 +111,10 @@ describe("status route", () => {
     expect(markup).not.toContain("private canary");
     expect(markup).not.toContain("secret-token");
     expect(markup).not.toContain("hooks.slack.com");
+    expect(markup).toContain("configuration and scope information");
+    expect(markup).toContain("not a live provider-health monitor");
+    expect(markup).not.toMatch(/(?:search|checkout|billing|email delivery) (?:is|are) available/i);
+    expect(markup).not.toContain("Available for checking competitor ads");
+    expect(markup).not.toContain("Digest and alert emails are available");
   });
 });

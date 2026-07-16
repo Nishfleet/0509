@@ -188,6 +188,14 @@ function setupMocks(authOk = true, actionsWriteEnabled = true) {
     listAgentMemory: vi.fn().mockResolvedValue([]),
     listCollectionItems: vi.fn().mockResolvedValue([collectionItem]),
     listWatchEvents: vi.fn().mockResolvedValue([watchEvent]),
+    listCollectionItemsPage: vi.fn().mockResolvedValue({
+      items: [collectionItem],
+      nextCursor: null,
+    }),
+    listWatchEventsPage: vi.fn().mockResolvedValue({
+      items: [watchEvent],
+      nextCursor: null,
+    }),
     findAgentActionAuditByIdempotencyKey: vi.fn().mockResolvedValue(null),
     claimAgentActionAudit: vi.fn().mockResolvedValue({
       audit,
@@ -205,6 +213,16 @@ function setupMocks(authOk = true, actionsWriteEnabled = true) {
       })
     ),
     getWorkspaceReadiness,
+    isActiveCustomerApiKey: vi.fn().mockResolvedValue(true),
+    enforceAuthenticatedApiLimit: vi.fn().mockResolvedValue(null),
+    verifyAuthenticatedApiIdentity: vi.fn().mockResolvedValue(null),
+    createAuthenticatedApiLimitContext: vi.fn((env, identity) => ({
+      identity,
+      isIdentityActive: () => mocks.isActiveCustomerApiKey(env, {
+        apiKeyId: identity.apiKeyId,
+        userId: identity.actorUserId,
+      }),
+    })),
   };
 
   vi.doMock("~/lib/api-keys.server", () => ({
@@ -221,6 +239,11 @@ function setupMocks(authOk = true, actionsWriteEnabled = true) {
     getEnv: vi.fn(() => ({ DB: {} })),
   }));
   vi.doMock("~/lib/data.server", () => mocks);
+  vi.doMock("~/lib/authenticated-api-limits.server", () => ({
+    enforceAuthenticatedApiLimit: mocks.enforceAuthenticatedApiLimit,
+    verifyAuthenticatedApiIdentity: mocks.verifyAuthenticatedApiIdentity,
+    createAuthenticatedApiLimitContext: mocks.createAuthenticatedApiLimitContext,
+  }));
   vi.doMock("~/lib/workspace-readiness.server", () => ({
     getWorkspaceReadiness,
   }));
@@ -373,10 +396,12 @@ describe("MCP route", () => {
         },
       },
     });
-    for (const exportToolName of ["get_collection_export", "get_watchlist_export", "get_digest_export"]) {
+    for (const exportToolName of ["get_collection_export", "get_watchlist_export"]) {
       const exportSchema = body.result.tools.find((tool) => tool.name === exportToolName)?.inputSchema;
       expect(exportSchema).toMatchObject({
         properties: {
+          cursor: { type: "string", maxLength: 512 },
+          limit: { type: "integer", minimum: 1, maximum: 200, default: 100 },
           format: {
             enum: ["json"],
             description: "Use json for structured agent context.",
@@ -385,6 +410,14 @@ describe("MCP route", () => {
       });
       expect(JSON.stringify(exportSchema)).not.toContain("Slack-ready");
     }
+    expect(body.result.tools.find((tool) => tool.name === "get_digest_export")?.inputSchema).toMatchObject({
+      properties: {
+        format: {
+          enum: ["json"],
+          description: "Use json for structured agent context.",
+        },
+      },
+    });
     const counterMoveSchema = body.result.tools.find((tool) => tool.name === "create_counter_move_brief")?.inputSchema;
     expect(counterMoveSchema).toMatchObject({
       required: ["watchlistId", "idempotencyKey"],
@@ -403,6 +436,43 @@ describe("MCP route", () => {
       not: { required: ["watchlistId", "clientRoomId"] },
     });
     expect(listMemorySchema?.properties).not.toHaveProperty("idempotencyKey");
+    const shareReportSchema = body.result.tools.find((tool) => tool.name === "share_report")?.inputSchema;
+    expect(shareReportSchema).toMatchObject({
+      required: ["idempotencyKey", "reviewed"],
+      properties: {
+        reviewed: {
+          type: "boolean",
+          const: true,
+          description: "Confirms the current proof was explicitly reviewed before this share is created.",
+        },
+      },
+    });
+    const clientRoomMutationSchema = body.result.tools.find((tool) => tool.name === "upsert_client_room")?.inputSchema;
+    expect(clientRoomMutationSchema).toMatchObject({
+      properties: {
+        roomId: {
+          type: "string",
+          minLength: 1,
+          description: "Optional existing client room id to update.",
+        },
+        expectedUpdatedAt: {
+          type: "string",
+          minLength: 1,
+          description: "Required last observed updatedAt value when roomId is provided.",
+        },
+      },
+      oneOf: [
+        { required: ["roomId", "expectedUpdatedAt"] },
+        {
+          not: {
+            anyOf: [
+              { required: ["roomId"] },
+              { required: ["expectedUpdatedAt"] },
+            ],
+          },
+        },
+      ],
+    });
     expect(body.result.tools.find((tool) => tool.name === "list_client_rooms")?.inputSchema.properties).not.toHaveProperty("idempotencyKey");
     expect(body.result.tools.find((tool) => tool.name === "create_support_case")?.inputSchema).toMatchObject({
       required: ["category", "subject", "detail", "idempotencyKey"],
@@ -429,6 +499,84 @@ describe("MCP route", () => {
       },
     });
     expect(JSON.stringify(body.result.tools)).not.toContain("account-owned board");
+  });
+
+  it("fails before JSON-RPC dispatch when the authenticated read limit is exhausted", async () => {
+    const mocks = setupMocks();
+    mocks.enforceAuthenticatedApiLimit.mockResolvedValue(
+      Response.json({ error: "rate_limited" }, { status: 429 }),
+    );
+
+    const response = await postMcp({
+      jsonrpc: "2.0",
+      id: "limited-list",
+      method: "tools/list",
+      params: {},
+    });
+    const body = await response.json() as {
+      jsonrpc: string;
+      id: string;
+      error: { code: number; message: string; data: { error: string; retryAfterSeconds: number } };
+    };
+
+    expect(response.status).toBe(429);
+    expect(body).toEqual({
+      jsonrpc: "2.0",
+      id: "limited-list",
+      error: {
+        code: -32029,
+        message: "Too many authenticated requests. Please try again shortly.",
+        data: {
+          error: "rate_limited",
+          retryAfterSeconds: 1,
+        },
+      },
+    });
+    expect(mocks.enforceAuthenticatedApiLimit).toHaveBeenCalledWith(expect.objectContaining({
+      operation: "api.mcp",
+      actionClass: "read",
+      identity: expect.objectContaining({
+        actorUserId: "user-1",
+        apiKeyId: "api-key-1",
+      }),
+      isIdentityActive: expect.any(Function),
+    }));
+  });
+
+  it("keeps rate-limited notifications one-way with a 202 empty response", async () => {
+    const mocks = setupMocks();
+    mocks.enforceAuthenticatedApiLimit.mockResolvedValue(
+      Response.json(
+        { error: "rate_limited", message: "Too many authenticated requests. Please try again shortly." },
+        { status: 429, headers: { "Retry-After": "17" } },
+      ),
+    );
+
+    const response = await postMcp({
+      jsonrpc: "2.0",
+      method: "notifications/initialized",
+      params: {},
+    });
+
+    expect(response.status).toBe(202);
+    expect(await response.text()).toBe("");
+    expect(mocks.enforceAuthenticatedApiLimit).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects oversized JSON-RPC payloads before method dispatch", async () => {
+    setupMocks();
+    const response = await postMcp({
+      jsonrpc: "2.0",
+      id: "oversized",
+      method: "tools/call",
+      params: {
+        name: "create_support_case",
+        arguments: { detail: "x".repeat(70_000) },
+      },
+    });
+
+    expect(response.status).toBe(413);
+    await expect(response.json()).resolves.toMatchObject({ error: "request_too_large" });
   });
 
   it("hides write tools for read-only API keys", async () => {
@@ -491,6 +639,39 @@ describe("MCP route", () => {
       isMember: false,
       billingOwnerName: null,
       canManageBilling: true,
+    });
+  });
+
+  it("returns bounded collection pages with an explicit next cursor", async () => {
+    const mocks = setupMocks();
+    mocks.listCollectionItemsPage.mockResolvedValue({
+      items: [collectionItem],
+      nextCursor: "next-cursor",
+    });
+    const response = await postMcp({
+      jsonrpc: "2.0",
+      id: "collection-page",
+      method: "tools/call",
+      params: {
+        name: "get_collection_export",
+        arguments: {
+          collectionId: "collection-1",
+          limit: 25,
+        },
+      },
+    });
+    const body = await response.json() as {
+      result: { structuredContent: { pagination: { limit: number; nextCursor: string | null } } };
+    };
+
+    expect(mocks.listCollectionItemsPage).toHaveBeenCalledWith(
+      expect.anything(),
+      "collection-1",
+      { limit: 25, cursor: null },
+    );
+    expect(body.result.structuredContent.pagination).toEqual({
+      limit: 25,
+      nextCursor: "next-cursor",
     });
   });
 
@@ -689,6 +870,7 @@ describe("MCP route", () => {
         apiKeyId: "api-key-1",
         idempotencyKey: "create-glossier",
         source: "mcp",
+        authorizeExternalEffect: expect.any(Function),
         executionContext: expect.objectContaining({
           waitUntil: expect.any(Function),
         }),
@@ -699,6 +881,38 @@ describe("MCP route", () => {
         competitorWebsite: "glossier.com",
       }),
     );
+  });
+
+  it("adds an action-specific provider-spend claim before an MCP refresh", async () => {
+    const mocks = setupMocks();
+    vi.doMock("~/lib/customer-agent-actions.server", () => ({
+      customerAgentActionErrorPayload: vi.fn(),
+      runCustomerAgentAction: vi.fn().mockResolvedValue({
+        audit: { id: "audit-1", status: "succeeded" },
+        replayed: false,
+        result: { ok: true },
+      }),
+    }));
+
+    const response = await postMcp({
+      jsonrpc: "2.0",
+      id: "limited-refresh",
+      method: "tools/call",
+      params: {
+        name: "refresh_watchlist",
+        arguments: {
+          watchlistId: "watchlist-1",
+          idempotencyKey: "refresh-1",
+        },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.enforceAuthenticatedApiLimit).toHaveBeenCalledWith(expect.objectContaining({
+      operation: "api.mcp.action",
+      actionName: "watchlist.refresh",
+    }));
+    expect(mocks.enforceAuthenticatedApiLimit).toHaveBeenCalledTimes(1);
   });
 
   it("dispatches every advertised MCP write tool to the expected audited action", async () => {
@@ -819,7 +1033,7 @@ describe("MCP route", () => {
       {
         toolName: "share_report",
         actionName: "report.share",
-        args: { reportId: "collection:collection-1", idempotencyKey: "report-share-1" },
+        args: { reportId: "collection:collection-1", reviewed: true, idempotencyKey: "report-share-1" },
         idempotencyKey: "report-share-1",
       },
       {
@@ -848,7 +1062,12 @@ describe("MCP route", () => {
       {
         toolName: "upsert_client_room",
         actionName: "client_room.upsert",
-        args: { name: "Beauty client", idempotencyKey: "room-1" },
+        args: {
+          roomId: "room-1",
+          expectedUpdatedAt: "2026-07-15T10:00:00.000Z",
+          name: "Beauty client",
+          idempotencyKey: "room-1",
+        },
         idempotencyKey: "room-1",
       },
       {

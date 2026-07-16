@@ -1,4 +1,5 @@
-import { Link, NavLink, useNavigation } from "react-router";
+import { Link, NavLink, useLocation, useNavigation } from "react-router";
+import { useEffect, useRef, useState } from "react";
 
 import { SignOutButton } from "~/components/sign-out-button";
 import {
@@ -33,6 +34,17 @@ function navLinkClassName({ isActive, isPending }: { isActive: boolean; isPendin
   return [isActive ? "is-active" : null, isPending ? "is-pending" : null]
     .filter(Boolean)
     .join(" ") || undefined;
+}
+
+const MOBILE_UTILITY_NAV = [
+  { label: "Team", to: "/app/team" },
+  { label: "Client rooms", to: "/app/clients" },
+  { label: "Support", to: "/app/support" },
+  { label: "Billing", to: "/app/billing" },
+] as const;
+
+function navItemMatchesPath(item: { to: string; end?: boolean }, pathname: string) {
+  return item.end ? pathname === item.to : pathname === item.to || pathname.startsWith(`${item.to}/`);
 }
 
 function NavSections({ sections }: { sections: DashboardNavSection[] }) {
@@ -85,7 +97,40 @@ export function DashboardShell({
   const staff = DASHBOARD_STAFF_NAV.filter((item) => !item.requiresOps || showOpsNav);
   const mobileNav = isPublic ? [] : buildDashboardMobileNav({ showPresence: showPresenceNav });
   const navigation = useNavigation();
+  const location = useLocation();
   const isNavigating = Boolean(navigation.location);
+  const hasMountedRef = useRef(false);
+  const mainRef = useRef<HTMLDivElement>(null);
+  const mobilePrimaryRef = useRef<HTMLElement>(null);
+  const mobileUtilityRef = useRef<HTMLElement>(null);
+  const [routeAnnouncement, setRouteAnnouncement] = useState("");
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return;
+    }
+
+    const routeName = formatRouteName(location.pathname);
+    setRouteAnnouncement(`Navigated to ${routeName}.`);
+    const frame = window.requestAnimationFrame(() => {
+      mainRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [location.pathname]);
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      for (const nav of [mobilePrimaryRef.current, mobileUtilityRef.current]) {
+        nav?.querySelector<HTMLElement>('a[aria-current="page"]')?.scrollIntoView({
+          behavior: "auto",
+          block: "nearest",
+          inline: "center",
+        });
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [location.pathname]);
+  const currentMobileLabel = [...mobileNav, ...MOBILE_UTILITY_NAV]
+    .find((item) => navItemMatchesPath(item, location.pathname))?.label ?? "Navigate";
   const pageClasses = ["f9-dash-page", isPublic ? "f9-dash-page-public" : "f9-dash-page-app", pageClassName]
     .filter(Boolean)
     .join(" ");
@@ -168,7 +213,11 @@ export function DashboardShell({
 
         {!isPublic && mobileNav.length > 0 ? (
           <>
-            <nav aria-label="Primary" className="f9-dash-mobile-nav">
+            <p className="f9-dash-mobile-context">
+              <strong>{currentMobileLabel}</strong>
+              <span>Swipe for more</span>
+            </p>
+            <nav aria-label="Primary" className="f9-dash-mobile-nav" ref={mobilePrimaryRef}>
               {mobileNav.map((item) => (
                 <NavLink
                   className={navLinkClassName}
@@ -181,30 +230,37 @@ export function DashboardShell({
                 </NavLink>
               ))}
             </nav>
-            <div className="f9-dash-mobile-utility">
-              <Link prefetch="intent" to="/app/team">
-                Team
-              </Link>
-              <Link prefetch="intent" to="/app/clients">
-                Client rooms
-              </Link>
-              <Link prefetch="intent" to="/help">
-                Help
-              </Link>
-              <Link prefetch="intent" to="/app/billing">
-                Billing
-              </Link>
-              <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
+            <nav aria-label="Workspace and account" className="f9-dash-mobile-utility" ref={mobileUtilityRef}>
+              {MOBILE_UTILITY_NAV.map((item) => (
+                <NavLink
+                  className={navLinkClassName}
+                  key={item.to}
+                  prefetch="intent"
+                  to={item.to}
+                >
+                  {item.label}
+                </NavLink>
+              ))}
               <SignOutButton />
-            </div>
+            </nav>
           </>
         ) : null}
 
-        <div className="f9-cursor-main">
+        <div aria-live="polite" className="f9-sr-only" role="status">
+          {routeAnnouncement}
+        </div>
+        <div className="f9-cursor-main" ref={mainRef} tabIndex={-1}>
           {headerActions ? <header className="f9-dash-topbar">{headerActions}</header> : null}
           {children}
         </div>
       </div>
     </main>
   );
+}
+
+function formatRouteName(pathname: string) {
+  const segment = pathname.split("/").filter(Boolean).at(-1) ?? "overview";
+  return segment
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 }

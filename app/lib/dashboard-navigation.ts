@@ -27,7 +27,7 @@ export const DASHBOARD_PRIMARY_NAV: DashboardNavSection[] = [
   {
     title: "Monitor",
     items: [
-      { label: "Watchlists", to: "/app/watchlists" },
+      { label: "Competitors", to: "/app/watchlists" },
       { label: "Presence", to: "/app/presence", requiresPresence: true },
     ],
   },
@@ -38,13 +38,18 @@ export const DASHBOARD_PRIMARY_NAV: DashboardNavSection[] = [
   {
     title: "Review",
     items: [
-      { label: "Digests", to: "/app/digests" },
-      { label: "Reports", to: "/app/shares" },
+      { label: "Briefs", to: "/app/digests" },
+      { label: "Reports", to: "/app/reports" },
+      { label: "Shared links", to: "/app/shares" },
     ],
   },
 ];
 
 export const DASHBOARD_SETTINGS_NAV: DashboardNavSection[] = [
+  {
+    title: "Delivery",
+    items: [{ label: "Client rooms", to: "/app/clients" }],
+  },
   {
     title: "Workspace",
     items: [
@@ -52,7 +57,6 @@ export const DASHBOARD_SETTINGS_NAV: DashboardNavSection[] = [
       { label: "Source access", to: "/app/source-access" },
       { label: "Developer access", to: "/app/developer-access" },
       { label: "Team", to: "/app/team" },
-      { label: "Client rooms", to: "/app/clients" },
     ],
   },
   {
@@ -97,7 +101,7 @@ export function buildDashboardMobileNav(options: { showPresence: boolean }) {
   const items: DashboardNavItem[] = [
     { label: "Overview", to: "/app", end: true },
     { label: "Search", to: "/search" },
-    { label: "Watchlists", to: "/app/watchlists" },
+    { label: "Competitors", to: "/app/watchlists" },
   ];
 
   if (options.showPresence) {
@@ -106,7 +110,9 @@ export function buildDashboardMobileNav(options: { showPresence: boolean }) {
 
   items.push(
     { label: "Collections", to: "/app/collections" },
-    { label: "Digests", to: "/app/digests" },
+    { label: "Briefs", to: "/app/digests" },
+    { label: "Reports", to: "/app/reports" },
+    { label: "Shared links", to: "/app/shares" },
     { label: "Notifications", to: "/app/notifications" },
     { label: "Source access", to: "/app/source-access" },
     { label: "Developer access", to: "/app/developer-access" },

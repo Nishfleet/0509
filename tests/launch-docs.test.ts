@@ -7,7 +7,7 @@ function readDoc(path: string) {
 }
 
 describe("final launch documentation", () => {
-  it("keeps the authoritative scorecard on the live monthly/top-up posture after closeout", () => {
+  it("keeps dated release evidence subordinate to the canonical current 0/6 verdict", () => {
     const scorecard = readDoc("docs/final-self-serve-ga-scorecard.md");
     const progress = readDoc("docs/launch-hardening-progress.md");
     const ownerActions = readDoc("docs/ga-owner-actions.md");
@@ -16,15 +16,18 @@ describe("final launch documentation", () => {
     const planCatalog = readDoc("docs/plan-catalog.md");
     const uptimeWorkflow = readDoc(".github/workflows/uptime-health.yml");
 
-    expect(scorecard).toContain(
-      "SCOUT/STARTER MONTHLY AND ANNUAL, TOP-UPS, AND AGENCY SELF-SERVE RELEASED",
-    );
+    expect(scorecard).toContain("Historical release verdict");
+    expect(scorecard).toContain("Current Gate A–C release readiness is **0/6**");
+    expect(scorecard).toContain("current A–C open");
     expect(scorecard).toContain("Dodo's documented by-currency localized pricing mode");
     expect(scorecard).toContain("redacted Dodo API product proof confirmed");
     expect(scorecard).toContain("Dodo Product Collection membership is configured");
     expect(scorecard).toContain("owner-only in-app plan switching");
-    expect(planCatalog).toContain("Dodo checkout, signed-webhook billing, top-ups");
+    expect(planCatalog).toContain("Historical production status");
+    expect(planCatalog).toContain("not current-candidate evidence");
     expect(planCatalog).toContain("prices load from Dodo at runtime");
+    expect(planCatalog).toContain("Every 6 hours");
+    expect(planCatalog).toContain("Every 3 hours");
     expect(ownerActions).toContain("owner-only in-app switching");
     expect(ownerActions).toContain("Dodo's documented plan-change preview/change endpoints");
     expect(launchReadiness).toContain("Five to Nine Product Collection");
@@ -43,12 +46,12 @@ describe("final launch documentation", () => {
     expect(uptimeWorkflow).toContain("https://0509.io/api/health");
     expect(uptimeWorkflow).toContain('cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"');
     expect(ownerActions).toContain("D1-to-R2 scheduled backup");
-    expect(ownerActions).toContain("MANUAL BACKUP DONE / GITHUB SECRET MISSING");
+    expect(ownerActions).toContain("PROVEN DISPATCH 2026-07-13 / FUTURE OBSERVATION OPEN");
     expect(scorecard).toContain("Restore drill");
-    expect(scorecard).toContain("PASS local");
+    expect(scorecard).toContain("PASS LOCAL / REMOTE SCRATCH OPEN");
     expect(scorecard).toContain("WhatsApp stored target review");
     expect(scorecard).toContain("Agency fan-out proof");
-    expect(scorecard).toContain("PASS dispatch / WATCH scan health");
+    expect(scorecard).toContain("DATED PASS DISPATCH / EXTERNAL SCAN WATCH");
     expect(scorecard).toContain("aggregate schema, migration-ledger, plan, Dodo linkage, and retired-provider invariants passed");
     expect(launchReadiness).toContain("A fresh owner-operated manual backup uploaded to R2 on 2026-07-02");
     expect(launchReadiness).toContain("required Cloudflare repository secrets were absent on 2026-07-02");
@@ -88,6 +91,8 @@ describe("final launch documentation", () => {
     expect(planCatalog).not.toContain("prices unconfigured");
     expect(planCatalog).not.toContain("Checkout SKUs and amounts are unconfigured");
     expect(planCatalog).not.toContain("Dodo product IDs for v1 plan and top-up SKUs remain owner-configured");
+    expect(planCatalog).not.toContain("Monday scheduled");
+    expect(planCatalog).not.toContain("Daily scheduled");
   });
 
   it("marks older launch scorecards as historical instead of current truth", () => {

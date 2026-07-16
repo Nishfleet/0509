@@ -19,6 +19,8 @@ export {
   upsertDeliveryTarget,
   getDeliveryTargetById,
   getDeliveryTargetByProviderIdentifier,
+  claimEmailTargetForDispatch,
+  suppressEmailTargetsForUserAndAddress,
 } from "~/lib/data/delivery-records-targets.server";
 
 export {

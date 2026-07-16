@@ -9,13 +9,13 @@
 - Promise: `Track your brand and competitors today. See what changed, with proof. Know what to do next.`
 - Story: `Five to Nine` closes the gap between when a team stops checking and when the next decision gets made.
 - Positioning: lead with proof-backed competitor monitoring (Market Desk) and entity tracking across declared sources (Presence Desk), not a generic internet scanner.
-- Product shape: the public hook is read-only live search plus a sample watch; signed-in save and track starts the real monitoring product; workspace memory is the compounding layer.
+- Product shape: the public hook is a read-only search preview plus a sample watch; signed-in save and track starts the real monitoring product; workspace memory is the compounding layer.
 
 Canonical strategy note: `docs/superpowers/artifacts/2026-04-22-five-to-nine-north-star.md`
 
 ## Product shape
 
-- `Public trial` is the public hook: logged-out buyers can run read-only live search and inspect a sample tracked competitor, source trail, and digest preview before creating an account.
+- `Public trial` is the public hook: logged-out buyers can run a read-only search preview with explicit coverage/freshness truth and inspect a sample tracked competitor, source trail, and digest preview before creating an account.
 - `Analysis` is available after the preview: signed-in users save searches, track competitors, inspect deeper evidence, and save useful findings.
 - `Monitoring` is the retention loop: watchlists, run history, change detection, insight-depth summaries, observed campaign duration, daily and weekly digests.
 - `Presence Desk` tracks your brand and competitors across declared sources with proof-backed entity briefs. Website/open-web is the active GA source; social and marketplace sources are gated, planned, or manual-only until provider approval. Additional entity kinds such as clients, products, and creators require the planned entity-kind metadata slice.
@@ -45,7 +45,7 @@ Auth runtime decision: `docs/auth-runtime.md`
 - `/api/mcp` MCP JSON-RPC endpoint for account-owned readiness, exports, and narrow audited workspace actions with a customer API key
 - `/api/v1` machine-readable customer API index for workspace readiness, account exports, and audited agent actions
 - `/api/v1/:resourceType/:resourceId` customer API-key export endpoint for account-owned collections, watchlists, and digests
-- `/search` public read-only live search trial; save, track, collections, and deeper evidence enrichment require an account while private canary probes can force fresh live checks with the configured token
+- `/search` public read-only search preview with variable provider coverage; save, track, collections, and deeper evidence enrichment require an account while private canary probes can force fresh provider checks with the configured token
 - `/privacy`
 - `/terms`
 - `/api/pricing-preview`
@@ -115,6 +115,7 @@ Important bindings and secrets:
 ## Operations
 
 - Run `npm run backup:d1` before risky migrations or data-shape changes. It exports the remote Cloudflare D1 database into `backups/d1/`, which is intentionally gitignored.
+- Backup and release claims are evidence-lane specific: dated local validation or fixed-candidate proof is not a current Gate B/C pass, and provider/dashboard, scheduled-workflow, and alert evidence remains Gate C operational proof. Gate D is target-buyer market validation only. The current restore posture requires an authorized remote-scratch drill after the local transform/import smoke.
 - Every push to `main` must run `.github/workflows/deploy-production.yml`. That workflow uses the repo's production deploy script, then runs the public production smoke. If `CLOUDFLARE_ACCOUNT_ID` or `CLOUDFLARE_API_TOKEN` is missing from GitHub repository or `production` environment secrets, the workflow fails loudly instead of letting merged code look shipped.
 - Apply pending D1 migrations before deploying code that reads new tables. Destructive cleanup migrations that remove schema only after code stops reading it must run after the compatible Worker is deployed, with a fresh backup plus pre/post SQL evidence. `migrations/0012_rate_limit_events.sql` backs Worker request rate limiting; `migrations/0018_customer_api_keys.sql` backs customer API keys; `migrations/0019_slack_delivery.sql` backs dormant Slack delivery storage that is hidden from the GA offer; `migrations/0035_agent_action_audit.sql`, `0036_agent_memory.sql`, and `0037_client_rooms.sql` back audited agent actions, agent memory, and client rooms; `migrations/0042_better_auth_passkey.sql` backs Better Auth passkeys on databases that already ran the baseline auth migration.
 
@@ -139,5 +140,5 @@ Important bindings and secrets:
 - Use `npm run provider:bakeoff:launch` when comparing discovery providers for launch. The default bakeoff is useful for debugging, but the launch gate requires `current_0509` to return fresh live Ad Library results, not API fallback or cached live results.
 - The old `src/` Next.js app remains in the repo as legacy reference material and is no longer the live production runtime.
 - Production note: as of 2026-06-15, `https://0509.io`, `https://www.0509.io`, and `https://api.0509.io` are the primary production domains. Legacy `0509.in`, `www.0509.in`, and `api.0509.in` custom domains remain only to redirect old safe requests to the matching `.io` host while preserving signed provider callbacks.
-- Cloudflare readiness note: the D1 database exists, remote migrations are applied through the current production ledger except branch-local pending migrations, the `0509-landing-page-artifacts` R2 bucket is provisioned and bound, the Cloudflare zones are active, and the Worker preview remains live at `https://0509.nishant345.workers.dev`.
+- Cloudflare readiness note (historical repo/config posture): the D1 database exists, remote migrations were applied through the then-current production ledger except branch-local pending migrations, the `0509-landing-page-artifacts` R2 bucket is provisioned and bound, the Cloudflare zones are active, and the Worker preview remains live at `https://0509.nishant345.workers.dev`. Run the current migration-sync and candidate checks before treating this as release proof.
 - DNS note: `0509.io` is the primary domain. `0509.in` is legacy redirect compatibility only and must not be used in product copy, emails, auth origin, SEO files, or new customer links.

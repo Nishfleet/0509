@@ -4,6 +4,48 @@ import type { AppEnv } from "~/lib/env.server";
 import type { AppSession } from "~/lib/types";
 import type { WorkspaceContext } from "~/lib/workspace.server";
 
+export const AUTH_SESSION_UNAVAILABLE_MESSAGE =
+  "Authentication is temporarily unavailable. Please try again in a moment.";
+
+/**
+ * A request-local fault marker used only by the localhost Journey 6 fixture.
+ * The marker never changes a session or auth provider state; it makes this
+ * one lookup fail closed after every normal fixture boundary is re-verified.
+ */
+export const E2E_AUTH_FAULT_HEADER = "x-0509-e2e-auth-fault";
+export const E2E_AUTH_FAULT_VALUE = "unavailable";
+const E2E_AUTH_FAULT_USER_ID = "e2e-starter";
+const E2E_FIXTURE_COOKIE = "f9_e2e_fixture";
+const E2E_TEST_MODE_HEADER = "x-0509-e2e-test-mode";
+
+/**
+ * The session lookup could not establish whether a request is authenticated.
+ * This is deliberately distinct from a null session: null is a valid absent
+ * or invalid session result, while this error means the auth backend failed.
+ */
+export class AuthSessionUnavailableError extends Error {
+  constructor(cause?: unknown) {
+    super(AUTH_SESSION_UNAVAILABLE_MESSAGE, { cause });
+    this.name = "AuthSessionUnavailableError";
+  }
+}
+
+export function isAuthSessionUnavailableError(error: unknown): error is AuthSessionUnavailableError {
+  return error instanceof AuthSessionUnavailableError;
+}
+
+export function authSessionUnavailableResponse() {
+  return new Response(AUTH_SESSION_UNAVAILABLE_MESSAGE, {
+    status: 503,
+    statusText: "Authentication temporarily unavailable",
+    headers: {
+      "cache-control": "no-store",
+      "content-type": "text/plain; charset=utf-8",
+      "retry-after": "5",
+    },
+  });
+}
+
 // React Router hands the SAME Request object to every matched loader of a
 // document request (workers/app.ts passes one request into requestHandler),
 // so a WeakMap keyed by Request memoizes the session chain per invocation —
@@ -16,6 +58,72 @@ const workspaceCache = new WeakMap<
   Request,
   { userId: string; workspace: Promise<WorkspaceContext> }
 >();
+
+function isExactLoopbackRequest(request: Request) {
+  let url: URL;
+  try {
+    url = new URL(request.url);
+  } catch {
+    return false;
+  }
+
+  const port = Number(url.port);
+  return (
+    url.protocol === "http:" &&
+    url.hostname === "127.0.0.1" &&
+    url.username === "" &&
+    url.password === "" &&
+    Number.isInteger(port) &&
+    port >= 1_024 &&
+    port <= 65_535 &&
+    url.origin === `http://127.0.0.1:${port}`
+  );
+}
+
+function hasExactFixtureCookie(request: Request) {
+  const values = (request.headers.get("cookie") ?? "")
+    .split(";")
+    .map((part) => part.trim())
+    .filter((part) => part.startsWith(`${E2E_FIXTURE_COOKIE}=`));
+  if (values.length !== 1) return false;
+
+  let value = "";
+  try {
+    value = decodeURIComponent(values[0]!.slice(`${E2E_FIXTURE_COOKIE}=`.length));
+  } catch {
+    return false;
+  }
+  return value === E2E_AUTH_FAULT_USER_ID;
+}
+
+/**
+ * Synchronous portion of the fixture fault boundary. The async session lookup
+ * additionally verifies the local sentinel and provider network deny mode.
+ */
+export function resolveE2EAuthFaultRequest(request: Request) {
+  return (
+    request.headers.get(E2E_AUTH_FAULT_HEADER) === E2E_AUTH_FAULT_VALUE &&
+    request.headers.get(E2E_TEST_MODE_HEADER) === "1" &&
+    isExactLoopbackRequest(request) &&
+    hasExactFixtureCookie(request)
+  );
+}
+
+async function shouldInjectE2EAuthFault(env: AppEnv, request: Request) {
+  if (!resolveE2EAuthFaultRequest(request)) return false;
+
+  try {
+    const [{ resolveE2EProviderDeny }, { isE2ETestRequestEnabled }] = await Promise.all([
+      import("~/lib/e2e-provider.server"),
+      import("~/lib/e2e-auth.server"),
+    ]);
+    const networkDeny = await resolveE2EProviderDeny(env, request);
+    if (!networkDeny.enabled || !networkDeny.failClosed) return false;
+    return await isE2ETestRequestEnabled(env, request);
+  } catch {
+    return false;
+  }
+}
 
 export async function getOptionalSession(
   env: AppEnv,
@@ -42,22 +150,26 @@ async function lookupOptionalSession(
   env: AppEnv,
   request: Request,
 ): Promise<AppSession | null> {
-  const { getE2ETestSession } = await import("~/lib/e2e-auth.server");
-  const e2eSession = await getE2ETestSession(env, request);
-  if (e2eSession) {
-    return e2eSession;
-  }
-
-  if (!env.DB) {
-    return null;
+  if (await shouldInjectE2EAuthFault(env, request)) {
+    throw new AuthSessionUnavailableError();
   }
 
   try {
+    const { getE2ETestSession } = await import("~/lib/e2e-auth.server");
+    const e2eSession = await getE2ETestSession(env, request);
+    if (e2eSession) {
+      return e2eSession;
+    }
+
+    if (!env.DB) {
+      return null;
+    }
+
     const { getBetterAuthSession } = await import("~/lib/better-auth.server");
     return await getBetterAuthSession(env, request);
   } catch (error) {
     console.warn("Better Auth session lookup failed", error);
-    return null;
+    throw new AuthSessionUnavailableError(error);
   }
 }
 
@@ -107,7 +219,15 @@ export async function requireWorkspaceSession(
 }
 
 export async function requireSession(env: AppEnv, request: Request) {
-  const session = await getOptionalSession(env, request);
+  let session: AppSession | null;
+  try {
+    session = await getOptionalSession(env, request);
+  } catch (error) {
+    if (isAuthSessionUnavailableError(error)) {
+      throw authSessionUnavailableResponse();
+    }
+    throw error;
+  }
 
   if (!session) {
     const url = new URL(request.url);

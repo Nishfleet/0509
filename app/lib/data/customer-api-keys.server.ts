@@ -163,6 +163,27 @@ export async function getActiveCustomerApiKeyByHash(env: AppEnv, keyHash: string
   return row ? toCustomerApiKeyRecord(row) : null;
 }
 
+export async function isActiveCustomerApiKey(
+  env: AppEnv,
+  input: { apiKeyId: string; userId: string },
+) {
+  const row = await one<{ active: number }>(
+    env,
+    `
+      SELECT 1 AS active
+      FROM customer_api_key
+      WHERE id = ?
+        AND user_id = ?
+        AND revoked_at IS NULL
+      LIMIT 1
+    `,
+    input.apiKeyId,
+    input.userId,
+  );
+
+  return row?.active === 1;
+}
+
 export async function recordCustomerApiKeyUsed(env: AppEnv, apiKeyId: string) {
   const timestamp = nowIso();
   await run(

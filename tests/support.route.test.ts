@@ -306,6 +306,77 @@ describe("support route", () => {
     }));
     expect(getDeliveryAttemptByIdempotencyKey).toHaveBeenCalledWith({}, "support-case:case-1");
     expect(sendOperatorAlertEmail).not.toHaveBeenCalled();
+    expect(createSupportCaseEvent).toHaveBeenCalledWith({}, expect.objectContaining({
+      caseId: "case-1",
+      eventType: "support_notified",
+      idempotencyKey: "support-notification:case-1:sent",
+    }));
+  });
+
+  it("re-reads the durable attempt instead of reporting a false failure after a concurrent send", async () => {
+    mockAuth({ operatorNotified: false });
+    const createSupportCase = vi.fn().mockResolvedValue({ id: "case-1" });
+    const createSupportCaseEvent = vi.fn().mockResolvedValue({ id: "event-1" });
+    const getDeliveryAttemptByIdempotencyKey = vi.fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ status: "sent", webhookStatus: "delivered" });
+    mockDataServer({
+      createSupportCase,
+      createSupportCaseEvent,
+      getDeliveryAttemptByIdempotencyKey,
+    });
+
+    const { action } = await import("~/routes/app.support");
+    const formData = new FormData();
+    formData.set("intent", "create-support-case");
+    formData.set("category", "delivery");
+    formData.set("subject", "Digest did not arrive");
+    formData.set("detail", "Please check the digest delivery trail.");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/app/support", { method: "POST", body: formData }),
+    } as never);
+
+    expect(result).toMatchObject({ ok: true, caseId: "case-1" });
+    expect(createSupportCaseEvent).toHaveBeenCalledWith({}, expect.objectContaining({
+      eventType: "support_notified",
+      idempotencyKey: "support-notification:case-1:sent",
+    }));
+    expect(createSupportCaseEvent).not.toHaveBeenCalledWith({}, expect.objectContaining({
+      eventType: "support_notification_failed",
+    }));
+  });
+
+  it("reports an active or provider-unknown claim without recording a false failed event", async () => {
+    mockAuth({ operatorNotified: false });
+    const createSupportCase = vi.fn().mockResolvedValue({ id: "case-1" });
+    const createSupportCaseEvent = vi.fn();
+    const getDeliveryAttemptByIdempotencyKey = vi.fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ status: "pending", webhookStatus: "provider_unknown" });
+    mockDataServer({
+      createSupportCase,
+      createSupportCaseEvent,
+      getDeliveryAttemptByIdempotencyKey,
+    });
+
+    const { action } = await import("~/routes/app.support");
+    const formData = new FormData();
+    formData.set("intent", "create-support-case");
+    formData.set("category", "delivery");
+    formData.set("subject", "Digest did not arrive");
+    formData.set("detail", "Please check the digest delivery trail.");
+    const result = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/app/support", { method: "POST", body: formData }),
+    } as never);
+
+    expect(result).toEqual({
+      ok: false,
+      message: "Support case saved, but the email provider outcome is not confirmed. Email support@0509.io now if the request is urgent.",
+      caseId: "case-1",
+    });
     expect(createSupportCaseEvent).not.toHaveBeenCalled();
   });
 
@@ -822,5 +893,30 @@ describe("support route", () => {
     expect(markup).toContain("value=\"support-request-render-1\"");
     expect(markup).toContain("Plan changes start from the billing page");
     expect(markup).toContain("support@0509.io");
+  });
+
+  it("announces support action recovery without exposing raw errors", async () => {
+    await mockRouter({
+      email: "owner@example.com",
+      supportEmail: "support@0509.io",
+      supportRequestKey: "support-request-render-2",
+      selectedCategory: "other",
+      isWorkspaceMember: false,
+      cases: [],
+      selectedCase: null,
+      caseEvents: [],
+      requestedCaseMissing: false,
+    }, {
+      ok: false,
+      message: "Support case saved and notification is still being confirmed.",
+    });
+
+    const { default: SupportRoute } = await import("~/routes/app.support");
+    const markup = renderToStaticMarkup(createElement(SupportRoute));
+
+    expect(markup).toContain('role="alert"');
+    expect(markup).toContain('aria-live="assertive"');
+    expect(markup).toContain('aria-atomic="true"');
+    expect(markup).not.toContain("raw provider failure");
   });
 });

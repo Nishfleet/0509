@@ -3,6 +3,8 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import type { BillingLifecycleEmailOutboxInput } from "~/lib/delivery.server";
 
 const DODO_WEBHOOK_MAX_BODY_BYTES = 256_000;
+const DODO_WEBHOOK_PROCESSING_FAILURE_MESSAGE =
+  "Dodo webhook processing failed. The event will be retried.";
 type BillingLifecycleEmailKind =
   | "payment_issue"
   | "cancellation_scheduled"
@@ -20,6 +22,14 @@ function webhookTimestampIso(value: string | null) {
   const timestampSeconds = Number(value);
   if (!Number.isFinite(timestampSeconds) || timestampSeconds <= 0) return undefined;
   return new Date(timestampSeconds * 1000).toISOString();
+}
+
+function webhookEventOccurrenceIso(value: unknown) {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (trimmed.length === 0 || trimmed.length > 64) return undefined;
+  const timestamp = Date.parse(trimmed);
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : undefined;
 }
 
 export async function action({ context, request }: ActionFunctionArgs) {
@@ -50,6 +60,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
     getUserIdForDodoLifecycle,
     getUserPlanBillingInfo,
   } = await import("~/lib/data.server");
+  const { applyDodoCancellationReversalWithLedger } = await import(
+    "~/lib/data/billing-reconcile.server"
+  );
   const { getPlanLimit } = await import("~/lib/plan.server");
   const env = getEnv(context);
   const rawBody = await readRequestTextWithinLimit(request, DODO_WEBHOOK_MAX_BODY_BYTES);
@@ -73,6 +86,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const payloadTimestamp =
     request.headers.get("webhook-timestamp") ?? request.headers.get("svix-timestamp");
   const verifiedWebhookTimestamp = webhookTimestampIso(payloadTimestamp);
+  const eventOccurrenceTimestamp = webhookEventOccurrenceIso(envelope.timestamp);
 
   const claim = await beginDodoWebhookEventProcessing(env, {
     eventId,
@@ -99,10 +113,30 @@ export async function action({ context, request }: ActionFunctionArgs) {
         error: error instanceof Error ? error.message : String(error),
       },
     });
-    await failDodoWebhookEventProcessing(env, eventId, {
-      error: error instanceof Error ? error.message : String(error),
+    try {
+      await failDodoWebhookEventProcessing(env, eventId, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    } catch (ledgerError) {
+      // A failed finalization must not turn the provider response into an
+      // unbounded exception. Keep the retry signal while leaving the ledger
+      // state honest: this catch does not claim the failure transition won.
+      logBillingEvent(env, "error", "dodo.webhook.failure_ledger", "Dodo webhook failure ledger update failed", {
+        eventId,
+        details: {
+          error: ledgerError instanceof Error ? ledgerError.message : String(ledgerError),
+        },
+      });
+    }
+    // Keep provider retry semantics (Dodo retries every non-2xx response)
+    // without returning provider, database, or credential-bearing exception
+    // text to the signed webhook caller.
+    throw new Response(DODO_WEBHOOK_PROCESSING_FAILURE_MESSAGE, {
+      status: 500,
+      headers: {
+        "cache-control": "no-store",
+      },
     });
-    throw error;
   }
 
   async function processDodoEvent(): Promise<{
@@ -194,10 +228,64 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const subscriptionGrant = extractDodoSubscriptionGrant(env, payload);
     if (subscriptionGrant) {
       const cancellationScheduled = subscriptionGrant.cancellationScheduled === true;
+      const cancellationReversalRequested =
+        (subscriptionGrant.eventType === "subscription.updated" ||
+          subscriptionGrant.eventType === "subscription.plan_changed") &&
+        subscriptionGrant.cancellationScheduled === false;
       const planChangedWithoutProviderTimestamp =
-        subscriptionGrant.eventType === "subscription.plan_changed" &&
+        (subscriptionGrant.eventType === "subscription.plan_changed" ||
+          subscriptionGrant.eventType === "subscription.updated") &&
         !subscriptionGrant.hasProviderGrantTimestamp;
-      const fallbackGrantAt = planChangedWithoutProviderTimestamp ? verifiedWebhookTimestamp : undefined;
+      const fallbackGrantAt = planChangedWithoutProviderTimestamp
+        ? eventOccurrenceTimestamp ?? verifiedWebhookTimestamp
+        : undefined;
+      const acceptedGrantAt = subscriptionGrant.grantedAt ?? fallbackGrantAt;
+      const ordinarySubscriptionUpdate =
+        subscriptionGrant.eventType === "subscription.updated" && !cancellationScheduled;
+      // Only an explicit false from a signed subscription.updated or
+      // subscription.plan_changed payload may reverse a scheduled
+      // cancellation. Missing/null flags stay on the ordinary pending-claim
+      // path and can never imply reactivation.
+      if (cancellationReversalRequested && acceptedGrantAt) {
+        const cancellationReversal = await applyDodoCancellationReversalWithLedger(
+          env,
+          {
+            userId: subscriptionGrant.userId,
+            plan: subscriptionGrant.plan,
+            providerPaymentId: null,
+            providerProductId: subscriptionGrant.productId,
+            providerSubscriptionId: subscriptionGrant.subscriptionId,
+            providerCustomerId: subscriptionGrant.customerId,
+            nextBillingAt: subscriptionGrant.nextBillingAt,
+            status: subscriptionGrant.status,
+            grantedAt: acceptedGrantAt,
+            metadata: subscriptionGrant.metadata,
+          },
+          {
+            ...ledgerBase,
+            outcome: "processed",
+            metadata: {
+              action: "cancellation_reversal",
+              userId: subscriptionGrant.userId,
+              plan: subscriptionGrant.plan,
+              eventType: subscriptionGrant.eventType,
+            },
+          },
+        );
+        if (cancellationReversal.handled) {
+          return {
+            outcome: "processed",
+            metadata: {
+              action: "cancellation_reversal",
+              userId: subscriptionGrant.userId,
+              plan: subscriptionGrant.plan,
+              eventType: subscriptionGrant.eventType,
+              changed: cancellationReversal.changed,
+            },
+            body: { ok: true },
+          };
+        }
+      }
       // Live Dodo subscription payloads carry no updated_at (verified against
       // the live subscriptions API, 2026-07-13), so real plan_changed events
       // arrive without a provider grant timestamp. A pure scheduled
@@ -207,9 +295,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
       // take the normal grant path instead; the signature-verified webhook
       // envelope timestamp (fallbackGrantAt) preserves monotonic ordering.
       const requiresPendingPlanChange =
-        planChangedWithoutProviderTimestamp && !cancellationScheduled;
+        ordinarySubscriptionUpdate ||
+        (planChangedWithoutProviderTimestamp && !cancellationScheduled);
       const allowsPendingPlanChangeTarget =
-        planChangedWithoutProviderTimestamp && !cancellationScheduled;
+        ordinarySubscriptionUpdate ||
+        (planChangedWithoutProviderTimestamp && !cancellationScheduled);
       const cancellationOutbox = cancellationScheduled
         ? await prepareLifecycleEmailOutbox(subscriptionGrant.userId, (profile) => ({
             kind: "cancellation_scheduled",
@@ -231,10 +321,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
           providerCustomerId: subscriptionGrant.customerId,
           nextBillingAt: subscriptionGrant.nextBillingAt,
           status: cancellationScheduled ? "cancellation_scheduled" : subscriptionGrant.status,
-          grantedAt: subscriptionGrant.grantedAt ?? fallbackGrantAt,
+          grantedAt: acceptedGrantAt,
           metadata: subscriptionGrant.metadata,
           forcePlanChangePending: allowsPendingPlanChangeTarget,
           requirePlanChangePending: requiresPendingPlanChange,
+          requireProviderIdentityMatch: cancellationScheduled,
         },
         getPlanLimit(subscriptionGrant.plan, "watchlists"),
         {
@@ -367,6 +458,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
             userId,
             status: revocation.eventType,
             occurredAt: revocation.revokedAt,
+            providerPaymentId: revocation.paymentId,
+            providerSubscriptionId: revocation.subscriptionId,
           },
           {
             ...ledgerBase,
@@ -480,12 +573,17 @@ export async function action({ context, request }: ActionFunctionArgs) {
           paymentId: refund.paymentId,
           refundedAt: refund.refundedAt,
           userId: refundedUserId,
+          refundType: refund.refundType,
         },
         getPlanLimit("free", "watchlists"),
         {
           ...ledgerBase,
           outcome: "processed",
-          metadata: { action: "refund", paymentId: refund.paymentId },
+          metadata: {
+            action: "refund",
+            paymentId: refund.paymentId,
+            refundType: refund.refundType,
+          },
         },
         { lifecycleEmailOutbox: refundOutbox },
       );
@@ -500,6 +598,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         currentRefundState?.plan === "free" && currentRefundState.dodoStatus === "refunded";
       if (
         refundedUserId &&
+        (!("topUpChanged" in refundApplied) || refundApplied.topUpChanged !== true) &&
         (refundApplied?.changed === true || shouldRetryRefundEmail)
       ) {
         await sendBillingLifecycleEmailSafely("refund", refundedUserId, (delivery, profile) =>

@@ -12,7 +12,7 @@ import { LocalTime } from "~/components/local-time";
 import { PartialDataNotice } from "~/components/partial-data-notice";
 import { SubmitButton } from "~/components/submit-button";
 import { formatCoverageLabel, formatSourceCoverageStatus, formatTrackingMode } from "~/lib/presence-display";
-import { sanitizeCustomerFacingMessage } from "~/lib/customer-route-error";
+import { presenceCustomerErrorCopy, sanitizePresenceCoverageEntry } from "~/lib/presence-customer-copy";
 import type { PresenceConnectorId, PresenceTrackingMode } from "~/lib/presence-types";
 
 export const meta = () => [{ title: "Presence Desk | Five to Nine" }];
@@ -83,6 +83,10 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         ]
       : [];
   });
+  const customerSourceCoverage = {
+    self: selfCoverage.map((entry) => sanitizePresenceCoverageEntry(entry)),
+    competitor: competitorCoverage.map((entry) => sanitizePresenceCoverageEntry(entry)),
+  };
   const partialDataNotice =
     connectorResults.some((result) => result.status === "rejected")
       ? "Some connector availability details could not be loaded. Refresh to try again."
@@ -97,11 +101,11 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     competitorAllowed,
     connectors: resolvedConnectors,
     sourceCoverage: {
-      self: applyPresenceSourcePlanGates(selfCoverage, {
+      self: applyPresenceSourcePlanGates(customerSourceCoverage.self, {
         modeAllowed: selfAllowed,
         ...sourcePlanGates,
       }),
-      competitor: applyPresenceSourcePlanGates(competitorCoverage, {
+      competitor: applyPresenceSourcePlanGates(customerSourceCoverage.competitor, {
         modeAllowed: competitorAllowed,
         ...sourcePlanGates,
       }),
@@ -160,11 +164,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
       const targetId = String(form.get("targetId") ?? "");
       const result = await pollPresenceSourceTarget(env, workspaceUserId, targetId);
       if (!result.pollResult.ok) {
+        const copy = presenceCustomerErrorCopy(result.pollResult.errorCode);
         return {
           ok: false,
           intent,
           targetId,
-          message: sanitizeCustomerFacingMessage(result.pollResult.errorMessage ?? "Source check failed."),
+          message: copy.message,
         };
       }
       return {
@@ -182,7 +187,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }
   } catch (error) {
     if (error instanceof PresenceServiceError) {
-      return { ok: false, intent, message: sanitizeCustomerFacingMessage(error.message) };
+      return {
+        ok: false,
+        intent,
+        message: presenceCustomerErrorCopy(error.code).message,
+      };
     }
     throw error;
   }
@@ -193,9 +202,13 @@ export async function action({ context, request }: ActionFunctionArgs) {
 export default function PresenceIndexRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
-  const coverageRows = data.sourceCoverage.competitor.map((competitorEntry) => ({
+  const sourceCoverage = {
+    self: data.sourceCoverage.self.map((entry) => sanitizePresenceCoverageEntry(entry)),
+    competitor: data.sourceCoverage.competitor.map((entry) => sanitizePresenceCoverageEntry(entry)),
+  };
+  const coverageRows = sourceCoverage.competitor.map((competitorEntry) => ({
     competitorEntry,
-    selfEntry: data.sourceCoverage.self.find((entry) => entry.sourceId === competitorEntry.sourceId) ?? null,
+    selfEntry: sourceCoverage.self.find((entry) => entry.sourceId === competitorEntry.sourceId) ?? null,
   }));
 
   return (

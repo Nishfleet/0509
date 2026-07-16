@@ -44,10 +44,9 @@ export default function TermsRoute() {
               cancellation stops future renewals and access continues until the end of the period you have paid for.
             </p>
             <p>
-              Five to Nine is a digital product delivered immediately, so purchases are final and refunds cannot be
-              made. If something isn't working the way you expected, open a signed-in support case or email{" "}
+              If you need to ask about a charge, open a signed-in support case or email{" "}
               <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> if you cannot sign in, and we will troubleshoot it with the
-              account trail attached.
+              account trail attached and review the applicable billing and support policy.
             </p>
           </LegalBlock>
 

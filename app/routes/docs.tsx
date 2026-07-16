@@ -21,33 +21,67 @@ export default function DocsRoute() {
     <PublicDocShell
       kicker="Docs"
       title="Five to Nine docs."
-      intro="Short setup notes for getting from one competitor website to saved tracking and useful evidence."
+      intro="Task-focused guidance for finding one competitor, judging the proof, saving the work, and knowing what your plan actually includes. This documentation does not measure live provider availability."
     >
-      <PublicDocBlock title="Start with one competitor">
+      <PublicDocBlock title="Run a trustworthy first search">
         <ol className="f9-numbered-guide">
-          <li>Paste a competitor website into Search.</li>
-          <li>Save the competitor when the results are useful.</li>
-          <li>Open the watchlist to review ads, page evidence, and changes over time.</li>
-          <li>Save useful examples to a collection or share a report with the team.</li>
-          <li>Turn on email delivery when the team wants digests in the inbox.</li>
+          <li>
+            Open <Link to="/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com">the Nykaa search example</Link> or paste a competitor website into Search. Provider availability can vary.
+          </li>
+          <li>Check the source, verification label, and freshness before relying on a result.</li>
+          <li>Use broader matches only as candidates. They are not proof that an ad belongs to the website.</li>
+          <li>Create an account only when the evidence is useful enough to retain as a watchlist.</li>
         </ol>
       </PublicDocBlock>
 
-      <PublicDocBlock title="Available today">
+      <PublicDocBlock title="Understand the proof labels">
+        <dl className="proof-trail-list">
+          <div>
+            <dt>Verified</dt>
+            <dd>The result is linked to the requested competitor by the active search pipeline.</dd>
+          </div>
+          <div>
+            <dt>Related or broader</dt>
+            <dd>A useful lead that still needs human review before it becomes a competitor claim.</dd>
+          </div>
+          <div>
+            <dt>Cached</dt>
+            <dd>Previously captured provider evidence. Read its capture time before treating it as current.</dd>
+          </div>
+          <div>
+            <dt>Sample</dt>
+            <dd>Static product walkthrough data, always labeled sample-only and never presented as a live result.</dd>
+          </div>
+        </dl>
+      </PublicDocBlock>
+
+      <PublicDocBlock title="Troubleshoot empty or partial results">
+        <p>
+          No evidence is not proof that a competitor has no active ads. Coverage can be partial, delayed,
+          cached, or unavailable. Try the brand name with the website, review broader candidates manually,
+          and check <Link to="/status">Status</Link> for what the public page does and does not measure.
+          If a known active campaign still does not appear, open <Link to="/help">Help</Link> instead of
+          treating the empty state as a market conclusion.
+        </p>
+      </PublicDocBlock>
+
+      <PublicDocBlock title="Plan boundaries">
+        <p>These are documented plan entitlements, not a live availability guarantee; account and provider readiness still apply.</p>
         <ul className="f9-doc-list">
-          <li>Public competitor ad search from a website.</li>
-          <li>Saved watchlists, collections, digests, reports, share links, and exports.</li>
-          <li>Checkout, receipts, check packs, and billing support.</li>
-          <li>Email delivery for digests and high-priority change alerts.</li>
-          <li>Rate limits, plan caps, evidence-usage warnings, and service status.</li>
+          <li>Free is an activation path, not recurring monitoring: one retained watchlist, no scheduled scans, digests, collections, or included evidence checks.</li>
+          <li>Scout plan scope: three scheduled watchlists, a six-hour cadence, weekly email briefs, ten collections, and 50 included evidence checks each month.</li>
+          <li>Starter plan scope: daily briefs, urgent alerts, evidence capture, and exports, with ten watchlists on a three-hour cadence.</li>
+          <li>Agency plan scope: client reports, share links, PDF delivery, branding, API/MCP access, and team seats.</li>
+          <li>Unavailable actions should appear locked before click; server-side plan checks still apply.</li>
         </ul>
       </PublicDocBlock>
 
-      <PublicDocBlock title="Limited today">
+      <PublicDocBlock title="Coverage and trust boundaries">
         <ul className="f9-doc-list">
-          <li>Social connectors are disabled.</li>
-          <li>Spend, reach, and impression benchmarks are not included yet.</li>
-          <li>SOC 2, HIPAA, GDPR compliance, zero-retention, or no-training guarantees.</li>
+          <li>Do not infer spend, reach, impressions, ROAS, or a winning creative from public evidence.</li>
+          <li>Broad unsupported-channel monitoring and automatic client sends are not offered.</li>
+          <li>Social connectors and their delivery claims remain unavailable unless the signed-in product explicitly marks them ready.</li>
+          <li>Five to Nine does not claim SOC 2, HIPAA, GDPR compliance, zero retention, or no-training guarantees.</li>
         </ul>
       </PublicDocBlock>
 

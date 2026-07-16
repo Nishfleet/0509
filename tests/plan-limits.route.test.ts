@@ -157,6 +157,7 @@ describe("collection limit", () => {
     vi.doMock("~/lib/data.server", () => ({
       addExternalProofToCollection: vi.fn(),
       createCollection,
+      createCollectionWithinLimit: vi.fn(),
       createShareLink: vi.fn(),
       getCollection: vi.fn(),
       listCollectionItems: vi.fn(),
@@ -218,6 +219,7 @@ describe("collection limit", () => {
     vi.doMock("~/lib/data.server", () => ({
       addExternalProofToCollection,
       createCollection: vi.fn(),
+      createCollectionWithinLimit: vi.fn(),
       createShareLink: vi.fn(),
       getCollection: vi.fn(),
       listCollectionItems: vi.fn(),
@@ -529,7 +531,7 @@ describe("pricing CTA rendering", () => {
     expect(markup).toContain("/app/billing?source=dashboard-limit#plans");
   });
 
-  it("credits successful quiet dashboard checks even when no ads are found", async () => {
+  it("credits the free activation check without implying recurring quiet monitoring", async () => {
     await mockRouter({
       loaderData: {
         savedQueries: [],
@@ -564,9 +566,10 @@ describe("pricing CTA rendering", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("0 ads checked");
-    expect(markup).toContain("All quiet");
-    expect(markup).toContain("Completed checks found no action-worthy movement");
+    expect(markup).toContain("Activation check completed");
+    expect(markup).toContain("One-time activation check completed across 1 competitor");
+    expect(markup).toContain("Paid plans include recurring monitoring");
+    expect(markup).not.toContain("All quiet");
     expect(markup).not.toContain("Next sweep: tomorrow morning");
   });
 

@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("~/lib/plan.server", () => ({
   getUserPlan: vi.fn().mockResolvedValue("agency"),
   getEffectiveWorkspacePlan: vi.fn().mockResolvedValue("agency"),
-  checkPlanLimit: vi.fn().mockResolvedValue({ allowed: true, limit: 75, current: 1 }),
+  checkPlanLimit: vi
+    .fn()
+    .mockResolvedValue({ allowed: true, limit: 75, current: 1 }),
   PLAN_LIMITS: { agency: { digests: true } },
 }));
 
@@ -13,10 +15,12 @@ vi.mock("~/lib/ga-customer-surface", () => ({
   isSlackDeliveryCustomerFacing: vi.fn(() => false),
   isWhatsAppDeliveryCustomerFacing: vi.fn(() => false),
   slackDeliveryUnavailableMessage: vi.fn(
-    () => "Slack delivery is not available at general availability yet. Use email delivery.",
+    () =>
+      "Slack delivery is not available at general availability yet. Use email delivery.",
   ),
   whatsappDeliveryUnavailableMessage: vi.fn(
-    () => "WhatsApp delivery is not available at general availability yet. Use email delivery.",
+    () =>
+      "WhatsApp delivery is not available at general availability yet. Use email delivery.",
   ),
 }));
 
@@ -24,18 +28,23 @@ const discoveryStatus = {
   status: "cache_only",
   provider: "meta_library_browser",
   mode: "cache",
-  summary: "Cached live results are available, but fresh discovery is degraded.",
+  summary:
+    "Cached live results are available, but fresh discovery is degraded.",
   lastCheckedAt: "2026-05-15T00:00:00.000Z",
   lastErrorCode: "login_wall",
   lastErrorMessage: "Meta returned a login wall.",
 } as const;
 
 type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
-type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
+type MockLinkProps = { children?: ReactNode; to?: string } & Record<
+  string,
+  unknown
+>;
 
 async function mockRouter(loaderData: unknown, actionData?: unknown) {
   vi.doMock("react-router", async () => {
-    const actual = await vi.importActual<typeof import("react-router")>("react-router");
+    const actual =
+      await vi.importActual<typeof import("react-router")>("react-router");
     const React = await import("react");
 
     return {
@@ -43,7 +52,11 @@ async function mockRouter(loaderData: unknown, actionData?: unknown) {
       Form: ({ children, ...props }: MockFormProps) =>
         React.createElement("form", props, children),
       Link: ({ children, to, ...props }: MockLinkProps) =>
-        React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+        React.createElement(
+          "a",
+          { ...props, href: typeof to === "string" ? to : "" },
+          children,
+        ),
       useActionData: vi.fn().mockReturnValue(actionData),
       useLoaderData: vi.fn().mockReturnValue(loaderData),
       useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
@@ -53,7 +66,8 @@ async function mockRouter(loaderData: unknown, actionData?: unknown) {
 
 beforeEach(async () => {
   vi.resetModules();
-  const { isSlackDeliveryCustomerFacing, isWhatsAppDeliveryCustomerFacing } = await import("~/lib/ga-customer-surface");
+  const { isSlackDeliveryCustomerFacing, isWhatsAppDeliveryCustomerFacing } =
+    await import("~/lib/ga-customer-surface");
   vi.mocked(isSlackDeliveryCustomerFacing).mockReturnValue(false);
   vi.mocked(isWhatsAppDeliveryCustomerFacing).mockReturnValue(false);
 });
@@ -67,8 +81,11 @@ describe("workspace settings route components", () => {
   it("renders the legacy sources compatibility hub", async () => {
     await mockRouter(null);
 
-    const { default: SourcesCompatibilityRoute } = await import("~/routes/app.sources");
-    const markup = renderToStaticMarkup(createElement(SourcesCompatibilityRoute));
+    const { default: SourcesCompatibilityRoute } =
+      await import("~/routes/app.sources");
+    const markup = renderToStaticMarkup(
+      createElement(SourcesCompatibilityRoute),
+    );
 
     expect(markup).toContain("Workspace settings");
     expect(markup).toContain("Open notifications");
@@ -84,8 +101,11 @@ describe("workspace settings route components", () => {
       apiKeyPrefix: "example-legacy-prefix",
     });
 
-    const { default: SourcesCompatibilityRoute } = await import("~/routes/app.sources");
-    const markup = renderToStaticMarkup(createElement(SourcesCompatibilityRoute));
+    const { default: SourcesCompatibilityRoute } =
+      await import("~/routes/app.sources");
+    const markup = renderToStaticMarkup(
+      createElement(SourcesCompatibilityRoute),
+    );
 
     expect(markup).toContain("Copy this key now");
     expect(markup).toContain("example-legacy-prefix");
@@ -99,7 +119,8 @@ describe("workspace settings route components", () => {
       discoveryStatus,
     });
 
-    const { default: SourceAccessRoute } = await import("~/routes/app.source-access");
+    const { default: SourceAccessRoute } =
+      await import("~/routes/app.source-access");
     const markup = renderToStaticMarkup(createElement(SourceAccessRoute));
 
     expect(markup).toContain("Source access");
@@ -117,12 +138,43 @@ describe("workspace settings route components", () => {
     expect(markup).not.toContain("degraded");
   });
 
+  it("locks source access controls and hides token metadata for workspace members", async () => {
+    await mockRouter({
+      connection: {
+        status: "healthy",
+        tokenLastFour: "9876",
+        summary: "Backup source access is connected.",
+        lastCheckedAt: "2026-07-15T00:00:00.000Z",
+        updatedAt: "2026-07-15T00:00:00.000Z",
+      },
+      canManageSourceAccess: false,
+      discoveryStatus: {
+        status: "healthy",
+        summary: "Live ad checks are ready.",
+        lastCheckedAt: null,
+      },
+    });
+
+    const { default: SourceAccessRoute } =
+      await import("~/routes/app.source-access");
+    const markup = renderToStaticMarkup(createElement(SourceAccessRoute));
+
+    expect(markup).toContain("Source access is managed by the account owner.");
+    expect(markup).toContain(
+      "Only the account owner can add, retest, or disconnect backup source access.",
+    );
+    expect(markup).not.toContain("9876");
+    expect(markup).not.toContain("Paste the full Meta access token here");
+    expect(markup).not.toContain("Test and save access");
+  });
+
   it("renders developer access without source-token or delivery setup", async () => {
     await mockRouter({
       apiKeys: [],
     });
 
-    const { default: DeveloperAccessRoute } = await import("~/routes/app.developer-access");
+    const { default: DeveloperAccessRoute } =
+      await import("~/routes/app.developer-access");
     const markup = renderToStaticMarkup(createElement(DeveloperAccessRoute));
 
     expect(markup).toContain("Developer access");
@@ -157,7 +209,8 @@ describe("workspace settings route components", () => {
       },
     });
 
-    const { default: NotificationsRoute } = await import("~/routes/app.notifications");
+    const { default: NotificationsRoute } =
+      await import("~/routes/app.notifications");
     const markup = renderToStaticMarkup(createElement(NotificationsRoute));
 
     expect(markup).toContain("Notifications");
@@ -169,8 +222,12 @@ describe("workspace settings route components", () => {
     expect(markup).not.toContain("Create API key");
     expect(markup).not.toContain("Save Slack delivery");
     expect(markup).not.toContain("WhatsApp delivery");
-    expect(markup).not.toContain("WhatsApp delivery is enabled for this account");
-    expect(markup).not.toContain("WhatsApp is not available for this account yet");
+    expect(markup).not.toContain(
+      "WhatsApp delivery is enabled for this account",
+    );
+    expect(markup).not.toContain(
+      "WhatsApp is not available for this account yet",
+    );
     expect(markup).not.toContain("Save WhatsApp delivery");
     expect(markup).not.toContain("Delivery confirmation");
     expect(markup).not.toContain("0/3 usable");

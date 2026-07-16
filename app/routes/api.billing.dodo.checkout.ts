@@ -16,6 +16,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     "~/lib/dodo-billing.server"
   );
   const { resolveWorkspace } = await import("~/lib/workspace.server");
+  const { enforceBillingProviderRateLimit } = await import("~/lib/rate-limit.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
   const formData = await request.formData();
@@ -51,6 +52,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }
 
     const { validateDodo0509PlanCheckout } = await import("~/lib/dodo-pricing.server");
+    const pricingLimitResponse = await enforceBillingProviderRateLimit(
+      request,
+      env,
+      billingUserId,
+      "pricing",
+      context.cloudflare?.ctx,
+    );
+    if (pricingLimitResponse) throw pricingLimitResponse;
     const checkoutValidation = await validateDodo0509PlanCheckout({
       env,
       request,
@@ -74,6 +83,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
     throw redirect("/app/billing?checkout=top-up-requires-plan#plans", { status: 303 });
   } else {
     const { validateDodo0509TopUpCheckout } = await import("~/lib/dodo-pricing.server");
+    const pricingLimitResponse = await enforceBillingProviderRateLimit(
+      request,
+      env,
+      billingUserId,
+      "pricing",
+      context.cloudflare?.ctx,
+    );
+    if (pricingLimitResponse) throw pricingLimitResponse;
     const checkoutValidation = await validateDodo0509TopUpCheckout({
       env,
       request,
@@ -87,6 +104,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   let checkout;
   try {
+    const mutationLimitResponse = await enforceBillingProviderRateLimit(
+      request,
+      env,
+      billingUserId,
+      "mutation",
+      context.cloudflare?.ctx,
+    );
+    if (mutationLimitResponse) throw mutationLimitResponse;
     checkout = await createDodo0509CheckoutSession({
       env,
       request,

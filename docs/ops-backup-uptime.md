@@ -26,7 +26,7 @@
 - 2026-06-28 scheduled GitHub Actions backup run `28339411098` reached `node scripts/validate-d1-backup.mjs`, then failed at `Run approved D1-to-R2 backup` because the required Cloudflare repository secrets were not configured — the same failure repeated on `28758345164` (2026-07-05) and `29212868653` (2026-07-12) before the secrets were added.
 - 2026-07-13 GitHub Actions dispatch run `29225583866`: first successful Actions backup end-to-end — validation passed, remote D1 exported (15.7 MB), fresh timestamped object uploaded under the private R2 backup prefix. Actions backups are proven; the weekly schedule now runs off-machine.
 - 2026-07-13 operator-run manual backup: exported remote D1 (15.7 MB) and uploaded a fresh timestamped object under the private R2 backup prefix; `node scripts/validate-d1-backup.mjs` passed through migration `0065_watchlist_active_partial_index.sql` (migration replay + Dodo linkage preserved).
-- A remote scratch D1 restore attempt was intentionally isolated from production but hit `SQLITE_TOOBIG` on large exported insert statements. Production-like D1 rebuild is not proven until the export is split/transformed into D1-importable statements and restored into a scratch D1 database.
+- A remote scratch D1 restore attempt was intentionally isolated from production but hit `SQLITE_TOOBIG`: 12 single-row inserts in the 2026-07-13 export exceeded D1's documented 100,000-byte statement limit (maximum 395,537 bytes). `npm run restore:d1:transform -- <source.sql> --output <restore.sql>` now rewrites only supported oversized string literals into explicit-primary-key append statements, defaults to 90,000 bytes for headroom, and fails closed on unsupported SQL. The real 15.7 MB export transformed to a maximum 90,000-byte statement and matched the original local restore's integrity, foreign-key result, migration ledger, five plan rows, and five Dodo-linked rows. A remote scratch-D1 import is still required before production-like restore is `verified`.
 
 ### Post-deploy D1 cleanup evidence
 
@@ -46,14 +46,24 @@ The post command exits non-zero if legacy billing columns or the retired-provide
 RESTORE_DIR="$(mktemp -d -t 0509-restore.XXXXXX)"
 trap 'rm -rf "$RESTORE_DIR"' EXIT
 npx wrangler r2 object get 0509-landing-page-artifacts/backups/d1/<file>.sql --file "$RESTORE_DIR/restore.sql" --remote
-# Inspect restore.sql, then apply to an isolated local SQLite database:
-sqlite3 "$RESTORE_DIR/restore.sqlite" < "$RESTORE_DIR/restore.sql"
+# Inspect the source, then create a fail-closed D1-sized restore file. Cloudflare
+# limits each SQL statement to 100,000 bytes even when the whole import is below
+# the 5 GB import-file limit.
+npm run restore:d1:transform -- "$RESTORE_DIR/restore.sql" --output "$RESTORE_DIR/restore-d1.sql"
+
+# Apply the transformed file to an isolated local SQLite database:
+sqlite3 "$RESTORE_DIR/restore.sqlite" < "$RESTORE_DIR/restore-d1.sql"
 sqlite3 "$RESTORE_DIR/restore.sqlite" "PRAGMA integrity_check;"
 sqlite3 "$RESTORE_DIR/restore.sqlite" "PRAGMA foreign_key_check;"
+sqlite3 "$RESTORE_DIR/restore.sqlite" "SELECT COUNT(*), MIN(id), MAX(id), MAX(name) FROM d1_migrations;"
+sqlite3 "$RESTORE_DIR/restore.sqlite" "SELECT COUNT(*), SUM(dodo_payment_id IS NOT NULL OR dodo_subscription_id IS NOT NULL OR dodo_customer_id IS NOT NULL) FROM user_plan;"
 
-# Optional remote D1 scratch drill, only after splitting too-large statements:
+# Remote scratch drill: use only an explicitly authorized isolated database,
+# record aggregate results privately, and delete the scratch resource afterward.
 npx wrangler d1 create 0509-restore-test
-npx wrangler d1 execute 0509-restore-test --remote --file "$RESTORE_DIR/restore.sql"
+npx wrangler d1 execute 0509-restore-test --remote --file "$RESTORE_DIR/restore-d1.sql"
+# Repeat the integrity, foreign-key, migration-ledger, plan-row, Dodo-linkage,
+# and representative row-count queries against 0509-restore-test.
 ```
 
 Never execute a restore file against the production `0509` database without

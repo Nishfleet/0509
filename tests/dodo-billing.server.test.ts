@@ -11,7 +11,10 @@ import {
   getDodo0509SubscriptionCurrency,
   isDodoHostedCheckoutUrl,
   isDodoHostedCustomerPortalUrl,
+  DODO_WEBHOOK_TOLERANCE_SECONDS,
+  signDodoWebhookPayload,
   summarizeDodoSubscriptionPlanChangePreview,
+  verifyDodoWebhookRequest,
   verifyDodoSubscriptionPlanChangePreviewToken,
 } from "~/lib/dodo-billing.server";
 import * as fetchTimeout from "~/lib/fetch-timeout.server";
@@ -32,6 +35,108 @@ function jsonResponse(payload: unknown, init: ResponseInit = {}) {
 }
 
 describe("Dodo billing", () => {
+  it("accepts a valid Dodo Standard Webhooks signature", async () => {
+    const now = 1_700_000_000_000;
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(now);
+    try {
+      const env = { DODO_0509_WEBHOOK_SECRET: "webhook-secret" } as never;
+      const webhookId = "evt_signature_valid";
+      const webhookTimestamp = String(now / 1000);
+      const rawBody = JSON.stringify({ type: "payment.succeeded", data: { id: "pay_1" } });
+      const signature = await signDodoWebhookPayload(env, webhookId, webhookTimestamp, rawBody);
+
+      await expect(
+        verifyDodoWebhookRequest(
+          env,
+          new Request("https://0509.io/api/webhooks/dodo", {
+            method: "POST",
+            headers: {
+              "webhook-id": webhookId,
+              "webhook-timestamp": webhookTimestamp,
+              "webhook-signature": `v1=${signature}`,
+            },
+          }),
+          rawBody,
+        ),
+      ).resolves.toBeUndefined();
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  it("rejects an invalid Dodo Standard Webhooks signature", async () => {
+    const now = 1_700_000_000_000;
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(now);
+    try {
+      const env = { DODO_0509_WEBHOOK_SECRET: "webhook-secret" } as never;
+      const rawBody = JSON.stringify({ type: "payment.succeeded", data: { id: "pay_1" } });
+
+      await expect(
+        verifyDodoWebhookRequest(
+          env,
+          new Request("https://0509.io/api/webhooks/dodo", {
+            method: "POST",
+            headers: {
+              "webhook-id": "evt_signature_invalid",
+              "webhook-timestamp": String(now / 1000),
+              "webhook-signature": "v1=invalid",
+            },
+          }),
+          rawBody,
+        ),
+      ).rejects.toMatchObject({ status: 401 });
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  it("rejects a Dodo webhook when required signature headers are missing", async () => {
+    const env = { DODO_0509_WEBHOOK_SECRET: "webhook-secret" } as never;
+
+    await expect(
+      verifyDodoWebhookRequest(
+        env,
+        new Request("https://0509.io/api/webhooks/dodo", {
+          method: "POST",
+          headers: {
+            "webhook-id": "evt_signature_missing",
+            "webhook-timestamp": "1700000000",
+          },
+        }),
+        "{}",
+      ),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("rejects a correctly signed Dodo webhook outside the replay window", async () => {
+    const now = 1_700_000_000_000;
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(now);
+    try {
+      const env = { DODO_0509_WEBHOOK_SECRET: "webhook-secret" } as never;
+      const webhookId = "evt_signature_stale";
+      const webhookTimestamp = String(now / 1000 - DODO_WEBHOOK_TOLERANCE_SECONDS - 1);
+      const rawBody = JSON.stringify({ type: "payment.succeeded", data: { id: "pay_1" } });
+      const signature = await signDodoWebhookPayload(env, webhookId, webhookTimestamp, rawBody);
+
+      await expect(
+        verifyDodoWebhookRequest(
+          env,
+          new Request("https://0509.io/api/webhooks/dodo", {
+            method: "POST",
+            headers: {
+              "webhook-id": webhookId,
+              "webhook-timestamp": webhookTimestamp,
+              "webhook-signature": `v1=${signature}`,
+            },
+          }),
+          rawBody,
+        ),
+      ).rejects.toMatchObject({ status: 400 });
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
   it("creates a usage-bundle checkout with user and credit metadata", async () => {
     const fetcher = vi.fn().mockResolvedValue(
       jsonResponse({

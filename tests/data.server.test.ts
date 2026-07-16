@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { CREATIVE_TEXT_EXTRACTOR_VERSION } from "~/lib/creative-text.server";
 import type { AdRecord } from "~/lib/types";
 import {
+  claimEmailTargetForDispatch,
   claimDodoPlanCheckout,
   claimDodoSubscriptionPlanChange,
   clearDodoSubscriptionPlanChangeClaim,
@@ -22,6 +23,7 @@ import {
   createSupportCase,
   createSupportCaseEvent,
   createWatchEvent,
+  deleteUnscannedWatchlistCreatedByFailedAgentAction,
   DODO_PLAN_CHECKOUT_LOCK_MINUTES,
   DODO_SUBSCRIPTION_PLAN_CHANGE_LOCK_MINUTES,
   DODO_SUBSCRIPTION_PLAN_CHANGE_PENDING_STATUS,
@@ -49,10 +51,12 @@ import {
   isBlockingDodoSubscriptionPlanChangeStatus,
   markDodoSubscriptionPlanChangeScheduled,
   listRecentAgentActionAudits,
+  listRecentWorkspaceWatchEvents,
   listClientRooms,
   listAgentMemory,
   listAgentMemoryForClientRooms,
   getSupportCase,
+  getClientRoom,
   listSupportCases,
   listSupportCaseEvents,
   listActiveWatchlists,
@@ -75,6 +79,7 @@ import {
   upsertProofTarget,
   upsertWatchlistDeliveryConfig,
   upsertWorkspaceDeliveryConfig,
+  suppressEmailTargetsForUserAndAddress,
 } from "~/lib/data.server";
 
 function createMockDb(
@@ -145,8 +150,8 @@ function createSqliteD1() {
           bind(...bindings: unknown[]) {
             return {
               async run() {
-                sqlite.prepare(sql).run(...toSqliteBindings(bindings));
-                return { success: true };
+                const result = sqlite.prepare(sql).run(...toSqliteBindings(bindings));
+                return { success: true, meta: { changes: Number(result.changes ?? 0) } };
               },
               async all<T>() {
                 return {
@@ -156,6 +161,20 @@ function createSqliteD1() {
             };
           },
         };
+      },
+      async batch<T extends { run(): Promise<{ meta?: { changes?: number } }> }>(statements: T[]) {
+        sqlite.exec("BEGIN IMMEDIATE");
+        try {
+          const results = [];
+          for (const statement of statements) {
+            results.push(await statement.run());
+          }
+          sqlite.exec("COMMIT");
+          return results;
+        } catch (error) {
+          sqlite.exec("ROLLBACK");
+          throw error;
+        }
       },
     },
   };
@@ -173,6 +192,57 @@ function findStatement(
     needles.every((needle) => statement.sql.includes(needle)),
   );
 }
+
+describe("failed agent watchlist compensation", () => {
+  it("deletes only an unscanned watchlist and its generated mention target", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      sqlite.sqlite.exec(`
+        CREATE TABLE watchlist (id TEXT PRIMARY KEY, user_id TEXT NOT NULL);
+        CREATE TABLE watchlist_run (
+          id TEXT PRIMARY KEY,
+          watchlist_id TEXT NOT NULL,
+          FOREIGN KEY (watchlist_id) REFERENCES watchlist(id) ON DELETE CASCADE
+        );
+        CREATE TABLE web_mention_target (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          watchlist_id TEXT,
+          FOREIGN KEY (watchlist_id) REFERENCES watchlist(id) ON DELETE SET NULL
+        );
+        INSERT INTO watchlist (id, user_id) VALUES
+          ('unscanned', 'user-1'),
+          ('running', 'user-1');
+        INSERT INTO web_mention_target (id, user_id, watchlist_id) VALUES
+          ('mention-unscanned', 'user-1', 'unscanned'),
+          ('mention-running', 'user-1', 'running');
+        INSERT INTO watchlist_run (id, watchlist_id) VALUES ('run-1', 'running');
+      `);
+
+      await expect(
+        deleteUnscannedWatchlistCreatedByFailedAgentAction(
+          { DB: sqlite.db } as never,
+          "user-1",
+          "unscanned",
+        ),
+      ).resolves.toBe(true);
+      await expect(
+        deleteUnscannedWatchlistCreatedByFailedAgentAction(
+          { DB: sqlite.db } as never,
+          "user-1",
+          "running",
+        ),
+      ).resolves.toBe(false);
+
+      expect(sqlite.sqlite.prepare("SELECT id FROM watchlist ORDER BY id").all()).toEqual([{ id: "running" }]);
+      expect(sqlite.sqlite.prepare("SELECT id, watchlist_id FROM web_mention_target ORDER BY id").all()).toEqual([
+        { id: "mention-running", watchlist_id: "running" },
+      ]);
+    } finally {
+      sqlite.close();
+    }
+  });
+});
 
 describe("createLandingPageSnapshot", () => {
   it("persists structured landing-page fields and landing-page analysis provenance", async () => {
@@ -1009,34 +1079,24 @@ describe("support case persistence", () => {
     }
   });
 
-  it("does not fail case creation when the support case event table is unavailable", async () => {
+  it("rolls back case creation when the support case event table is unavailable", async () => {
     const sqlite = createSqliteD1();
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
       sqlite.sqlite.exec("CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL);");
       applyMigration(sqlite.sqlite, "migrations/0039_support_cases.sql");
       applyMigration(sqlite.sqlite, "migrations/0041_support_case_request_key.sql");
       sqlite.sqlite.exec("INSERT INTO user (id) VALUES ('user-1');");
 
-      const supportCase = await createSupportCase({ DB: sqlite.db } as never, {
+      await expect(createSupportCase({ DB: sqlite.db } as never, {
         userId: "user-1",
         category: "delivery",
         subject: "Digest missing",
         detail: "The digest did not arrive.",
-      });
+      })).rejects.toThrow();
       const cases = await listSupportCases({ DB: sqlite.db } as never, "user-1");
 
-      expect(supportCase).toMatchObject({
-        userId: "user-1",
-        subject: "Digest missing",
-      });
-      expect(cases).toHaveLength(1);
-      expect(consoleError).toHaveBeenCalledWith(
-        "[support] opened case event persistence failed",
-        expect.any(Error),
-      );
+      expect(cases).toHaveLength(0);
     } finally {
-      consoleError.mockRestore();
       sqlite.close();
     }
   });
@@ -1066,6 +1126,10 @@ describe("client room persistence", () => {
   it("upserts an account-owned room with linked resource refs", async () => {
     const mock = createMockDb([
       {
+        sqlIncludes: "AND id <> ?",
+        results: [],
+      },
+      {
         sqlIncludes: "FROM client_room_resource",
         results: [resourceRow],
       },
@@ -1092,20 +1156,20 @@ describe("client room persistence", () => {
       },
     );
 
-    const insert = findStatement(mock.statements, "INSERT INTO client_room");
-    expect(insert?.sql).toContain("ON CONFLICT(user_id, name)");
-    expect(insert?.bindings.slice(1, 6)).toEqual([
-      "user-1",
+    const update = findStatement(mock.statements, "UPDATE client_room");
+    expect(update?.bindings.slice(0, 5)).toEqual([
       "Beauty client",
       "Nykaa",
       "active",
       JSON.stringify({ goal: "Weekly proof review" }),
+      expect.any(String),
     ]);
     expect(findStatement(mock.statements, "DELETE FROM client_room_resource")?.bindings).toEqual([
       "room-1",
       "user-1",
     ]);
-    expect(findStatement(mock.statements, "INSERT INTO client_room_resource")?.bindings.slice(1, 6)).toEqual([
+    expect(findStatement(mock.statements, "INSERT INTO client_room_resource")?.bindings.slice(0, 6)).toEqual([
+      expect.any(String),
       "room-1",
       "user-1",
       "watchlist",
@@ -1269,6 +1333,50 @@ describe("client room persistence", () => {
     }
   });
 
+  it("returns the existing room identity and atomically replaces refs and approvals on repeated name upserts", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      sqlite.sqlite.exec("CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL);");
+      applyMigration(sqlite.sqlite, "migrations/0037_client_rooms.sql");
+      sqlite.sqlite.exec("INSERT INTO user (id) VALUES ('user-1');");
+
+      const first = await upsertClientRoom({ DB: sqlite.db } as never, "user-1", {
+        name: "Beauty client",
+        resourceRefs: [{ resourceType: "watchlist", resourceId: "watchlist-1" }],
+        notes: { goal: "Initial", reportApprovals: { approved: true } },
+      });
+      const second = await upsertClientRoom({ DB: sqlite.db } as never, "user-1", {
+        name: "Beauty client",
+        clientLabel: "Nykaa updated",
+        resourceRefs: [{ resourceType: "watchlist", resourceId: "watchlist-2" }],
+      });
+
+      expect(first?.id).toBeTruthy();
+      expect(second?.id).toBe(first?.id);
+      expect(second).toMatchObject({
+        clientLabel: "Nykaa updated",
+        notes: { goal: "Initial" },
+        resourceRefs: [{ resourceType: "watchlist", resourceId: "watchlist-2" }],
+      });
+      expect(second?.notes).not.toHaveProperty("reportApprovals");
+
+      const third = await upsertClientRoom({ DB: sqlite.db } as never, "user-1", {
+        name: "Beauty client",
+        resourceRefs: [{ resourceType: "watchlist", resourceId: "watchlist-3" }],
+        notes: { goal: "Updated", reportApprovals: { approved: true } },
+      });
+      expect(third?.id).toBe(first?.id);
+      expect(third).toMatchObject({
+        notes: { goal: "Updated" },
+        resourceRefs: [{ resourceType: "watchlist", resourceId: "watchlist-3" }],
+      });
+      expect(third?.notes).not.toHaveProperty("reportApprovals");
+      expect(sqlite.sqlite.prepare("SELECT COUNT(*) AS count FROM client_room").get()).toEqual({ count: 1 });
+    } finally {
+      sqlite.close();
+    }
+  });
+
   it("does not rename a room over another room with the same account name", async () => {
     const sqlite = createSqliteD1();
     try {
@@ -1296,6 +1404,69 @@ describe("client room persistence", () => {
       expect(second?.id).toBeTruthy();
       expect(renamed).toBeNull();
       expect(rooms.map((room) => room.name).sort()).toEqual(["Beauty client", "Retail client"]);
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("rejects stale room writes without changing newer notes or refs", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      sqlite.sqlite.exec("CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL);");
+      applyMigration(sqlite.sqlite, "migrations/0037_client_rooms.sql");
+      sqlite.sqlite.exec("INSERT INTO user (id) VALUES ('user-1');");
+      const created = await upsertClientRoom({ DB: sqlite.db } as never, "user-1", {
+        name: "Beauty client",
+        resourceRefs: [{ resourceType: "watchlist", resourceId: "watchlist-1" }],
+        notes: { goal: "Initial" },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 2));
+      const first = await upsertClientRoom({ DB: sqlite.db } as never, "user-1", {
+        roomId: created!.id,
+        expectedUpdatedAt: created!.updatedAt,
+        name: "Beauty client",
+        resourceRefs: [{ resourceType: "watchlist", resourceId: "watchlist-2" }],
+        notes: { goal: "Newer" },
+      });
+      await expect(upsertClientRoom({ DB: sqlite.db } as never, "user-1", {
+        roomId: created!.id,
+        expectedUpdatedAt: created!.updatedAt,
+        name: "Beauty client",
+        resourceRefs: [{ resourceType: "watchlist", resourceId: "watchlist-stale" }],
+        notes: { goal: "Stale" },
+      })).rejects.toMatchObject({ code: "stale_write", status: 409 });
+      expect(first?.notes).toEqual({ goal: "Newer" });
+      expect((await getClientRoom({ DB: sqlite.db } as never, "user-1", created!.id))?.resourceRefs)
+        .toEqual([{ resourceType: "watchlist", resourceId: "watchlist-2" }]);
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("rolls back the parent when resource replacement fails inside the batch", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      sqlite.sqlite.exec("CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL);");
+      applyMigration(sqlite.sqlite, "migrations/0037_client_rooms.sql");
+      sqlite.sqlite.exec("INSERT INTO user (id) VALUES ('user-1');");
+      const created = await upsertClientRoom({ DB: sqlite.db } as never, "user-1", {
+        name: "Beauty client",
+        resourceRefs: [{ resourceType: "watchlist", resourceId: "watchlist-1" }],
+        notes: { goal: "Initial" },
+      });
+      await expect(upsertClientRoom({ DB: sqlite.db } as never, "user-1", {
+        roomId: created!.id,
+        expectedUpdatedAt: created!.updatedAt,
+        name: "Beauty client",
+        resourceRefs: [
+          { resourceType: "watchlist", resourceId: "watchlist-2" },
+          { resourceType: "watchlist", resourceId: "watchlist-2" },
+        ],
+        notes: { goal: "Should roll back" },
+      })).rejects.toThrow();
+      const room = await getClientRoom({ DB: sqlite.db } as never, "user-1", created!.id);
+      expect(room?.notes).toEqual({ goal: "Initial" });
+      expect(room?.resourceRefs).toEqual([{ resourceType: "watchlist", resourceId: "watchlist-1" }]);
     } finally {
       sqlite.close();
     }
@@ -1353,6 +1524,7 @@ describe("Dodo billing persistence", () => {
         "2026-06-04T12:00:00.000Z",
         0,
         0,
+        0,
       ]);
     });
 
@@ -1393,6 +1565,13 @@ describe("Dodo billing persistence", () => {
         null,
         "active",
         "2026-06-04T12:00:00.000Z",
+        null,
+        0,
+        "user-1",
+        "prod_starter_annual",
+        "sub_123",
+        "cus_123",
+        0,
         0,
         0,
       ]);
@@ -1925,6 +2104,10 @@ describe("Dodo billing persistence", () => {
       null,
       "2026-07-01T00:00:00.000Z",
       "user-1",
+      null,
+      null,
+      null,
+      null,
       "2026-07-01T00:00:00.000Z",
     ]);
   });
@@ -2272,6 +2455,46 @@ describe("scheduled watchlist selection", () => {
     await listActiveWatchlists({ DB: mock.db } as never, { includeScout: true });
 
     expect(mock.statements[0]?.bindings).toEqual([1, 100, 0]);
+  });
+});
+
+describe("workspace recent watch events", () => {
+  it("loads one globally ordered bounded result across all active owned watchlists", async () => {
+    const rows = Array.from({ length: 8 }, (_, index) => ({
+      id: `event-${index}`,
+      watchlist_id: `watch-${index}`,
+      run_id: `run-${index}`,
+      event_type: "ad_new",
+      status: "confirmed",
+      importance_score: 70,
+      ad_id: null,
+      baseline_from_run_id: null,
+      candidate_id: null,
+      proof_capture_id: null,
+      title: `Move ${index}`,
+      summary: "A new ad appeared.",
+      metadata_json: "{}",
+      confirmed_at: `2026-06-20T00:0${index}:00.000Z`,
+      suppressed_at: null,
+      invalidated_at: null,
+      last_evaluated_at: `2026-06-20T00:0${index}:00.000Z`,
+      created_at: `2026-06-20T00:0${index}:00.000Z`,
+    }));
+    const mock = createMockDb([{ sqlIncludes: "FROM watch_event", results: rows }]);
+
+    const events = await listRecentWorkspaceWatchEvents({ DB: mock.db } as never, "workspace-1", 8);
+
+    expect(events).toHaveLength(8);
+    expect(events.map((event) => event.watchlistId)).toEqual(
+      rows.map((row) => row.watchlist_id),
+    );
+    expect(mock.statements).toHaveLength(1);
+    expect(mock.statements[0]?.sql).toContain("JOIN watchlist");
+    expect(mock.statements[0]?.sql).toContain("watchlist.user_id = ?");
+    expect(mock.statements[0]?.sql).toContain("watchlist.is_active = 1");
+    expect(mock.statements[0]?.sql).toContain("ORDER BY watch_event.created_at DESC");
+    expect(mock.statements[0]?.sql).toContain("LIMIT ?");
+    expect(mock.statements[0]?.bindings).toEqual(["workspace-1", 8]);
   });
 });
 
@@ -3294,6 +3517,8 @@ describe("getSuccessfulRunStatsForUserBetween", () => {
 
     expect(statsQuery?.sql).toContain("watchlist_run.finished_at >= ?");
     expect(statsQuery?.sql).toContain("watchlist_run.finished_at < ?");
+    expect(statsQuery?.sql).toContain("AS no_change_runs");
+    expect(statsQuery?.sql).toContain("json_type(watchlist_run.summary_json, '$.adsSeen')");
     expect(statsQuery?.sql).not.toContain("watchlist_run.started_at >= ?");
   });
 });
@@ -4022,6 +4247,106 @@ describe("upsertDeliveryTarget", () => {
     expect(
       statements.some((statement) => statement.sql.includes("INSERT INTO delivery_target")),
     ).toBe(false);
+  });
+});
+
+describe("email target dispatch and unsubscribe ordering", () => {
+  it("claims only the current verified account email and atomically suppresses every matching target", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      sqlite.sqlite.exec(`
+        CREATE TABLE user (
+          id TEXT PRIMARY KEY NOT NULL,
+          email TEXT NOT NULL,
+          emailVerified INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE TABLE delivery_target (
+          id TEXT PRIMARY KEY NOT NULL,
+          user_id TEXT NOT NULL,
+          watchlist_id TEXT,
+          channel TEXT NOT NULL,
+          target_value TEXT NOT NULL,
+          validation_status TEXT NOT NULL,
+          is_validated INTEGER NOT NULL,
+          is_opted_in INTEGER NOT NULL,
+          opt_in_source TEXT NOT NULL,
+          opted_in_at TEXT,
+          is_paused INTEGER NOT NULL,
+          paused_at TEXT,
+          opted_out_at TEXT,
+          template_eligible INTEGER NOT NULL,
+          last_successful_delivery_at TEXT,
+          last_successful_attempt_id TEXT,
+          provider_identifier TEXT,
+          metadata_json TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE TABLE delivery_attempt (
+          id TEXT PRIMARY KEY NOT NULL,
+          user_id TEXT NOT NULL,
+          delivery_target_id TEXT,
+          channel TEXT NOT NULL,
+          status TEXT NOT NULL,
+          webhook_status TEXT NOT NULL,
+          error_message TEXT,
+          failed_at TEXT,
+          updated_at TEXT NOT NULL
+        );
+        INSERT INTO user (id, email, emailVerified)
+        VALUES ('user-1', 'owner@example.com', 1);
+        INSERT INTO delivery_target (
+          id, user_id, watchlist_id, channel, target_value, validation_status,
+          is_validated, is_opted_in, opt_in_source, opted_in_at, is_paused,
+          paused_at, opted_out_at, template_eligible, last_successful_delivery_at,
+          last_successful_attempt_id, provider_identifier, metadata_json, created_at, updated_at
+        ) VALUES
+          ('target-workspace', 'user-1', NULL, 'email', 'Owner@Example.com', 'validated',
+           1, 1, 'account_email', '2026-07-15T00:00:00.000Z', 0,
+           NULL, NULL, 0, NULL, NULL, NULL, '{}', '2026-07-15T00:00:00.000Z', '2026-07-15T00:00:00.000Z'),
+          ('target-watchlist', 'user-1', 'watch-1', 'email', 'owner@example.com', 'validated',
+           1, 1, 'account_email', '2026-07-15T00:00:00.000Z', 0,
+           NULL, NULL, 0, NULL, NULL, NULL, '{}', '2026-07-15T00:00:00.000Z', '2026-07-15T00:00:00.000Z');
+        INSERT INTO delivery_attempt (
+          id, user_id, delivery_target_id, channel, status, webhook_status,
+          error_message, failed_at, updated_at
+        ) VALUES (
+          'attempt-pending', 'user-1', 'target-workspace', 'email', 'pending', 'pending',
+          NULL, NULL, '2026-07-15T00:00:00.000Z'
+        );
+      `);
+
+      await expect(claimEmailTargetForDispatch({ DB: sqlite.db } as never, {
+        userId: "user-1",
+        targetId: "target-workspace",
+      })).resolves.toMatchObject({ id: "target-workspace", targetValue: "owner@example.com" });
+
+      sqlite.sqlite.exec("UPDATE user SET emailVerified = 0 WHERE id = 'user-1'");
+      await expect(claimEmailTargetForDispatch({ DB: sqlite.db } as never, {
+        userId: "user-1",
+        targetId: "target-workspace",
+      })).resolves.toBeNull();
+      sqlite.sqlite.exec("UPDATE user SET emailVerified = 1 WHERE id = 'user-1'");
+
+      await expect(suppressEmailTargetsForUserAndAddress({ DB: sqlite.db } as never, {
+        userId: "user-1",
+        targetValue: "OWNER@example.com",
+      })).resolves.toBe(2);
+      const suppressed = sqlite.sqlite.prepare(
+        "SELECT COUNT(*) AS count FROM delivery_target WHERE is_opted_in = 0 AND is_paused = 1 AND opted_out_at IS NOT NULL",
+      ).get() as { count: number };
+      expect(Number(suppressed.count)).toBe(2);
+      const cancelledAttempt = sqlite.sqlite.prepare(
+        "SELECT status, webhook_status, error_message FROM delivery_attempt WHERE id = 'attempt-pending'",
+      ).get() as { status: string; webhook_status: string; error_message: string };
+      expect(cancelledAttempt).toMatchObject({
+        status: "failed",
+        webhook_status: "failed",
+        error_message: "Email delivery target was unsubscribed before dispatch.",
+      });
+    } finally {
+      sqlite.close();
+    }
   });
 });
 

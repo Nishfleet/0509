@@ -30,6 +30,10 @@ function isConfiguredSecret(value) {
  *   status: number | null,
  *   app: string | null,
  *   expectedApp: string | null,
+ *   expectedWorkerVersionId: string | null,
+ *   expectedSearchRolloutMode: string | null,
+ *   releaseIdentity: { workerVersionId: string | null, tag: string | null, timestamp: string | null, searchRolloutMode: string | null },
+ *   releaseIdentityOk: boolean,
  *   message: string | null,
  *   url: string
  * }} HealthCheckResult
@@ -52,6 +56,8 @@ function isConfiguredSecret(value) {
  *   baseUrl?: string,
  *   healthBaseUrls?: string[],
  *   expectedApp?: string | null,
+ *   expectedWorkerVersionId?: string | null,
+ *   expectedSearchRolloutMode?: string | null,
  *   queries?: string[],
  *   country?: string,
  *   mode?: "advertiser" | "keyword",
@@ -77,13 +83,122 @@ function resolveHealthBaseUrls(options, baseUrl) {
   return [...DEFAULT_CANARY_HEALTH_BASE_URLS];
 }
 
+/** @param {unknown} value */
+function normalizeExpectedWorkerVersionId(value) {
+  return normalizeSafeIdentifier(value);
+}
+
+/** @param {unknown} value */
+function normalizeExpectedSearchRolloutMode(value) {
+  if (typeof value !== "string" || !value.trim()) {
+    return "shadow";
+  }
+  return normalizeSafeMode(value);
+}
+
+/** @param {unknown} value */
+function normalizeSafeIdentifier(value) {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  return /^[A-Za-z0-9._-]{1,128}$/.test(normalized) ? normalized : null;
+}
+
+/** @param {unknown} value */
+function normalizeSafeMode(value) {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return /^[a-z0-9_-]{1,32}$/.test(normalized) ? normalized : null;
+}
+
+/** @param {unknown} value */
+function normalizeSafeTimestamp(value) {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/.test(normalized) &&
+    !Number.isNaN(Date.parse(normalized))
+    ? normalized
+    : null;
+}
+
+function emptyReleaseIdentity() {
+  return {
+    workerVersionId: null,
+    tag: null,
+    timestamp: null,
+    searchRolloutMode: null,
+  };
+}
+
+/** @param {unknown} value */
+function normalizeReleaseIdentity(value) {
+  if (!value || typeof value !== "object") {
+    return emptyReleaseIdentity();
+  }
+
+  const identity = /** @type {{ workerVersionId?: unknown, tag?: unknown, timestamp?: unknown, searchRolloutMode?: unknown }} */ (value);
+  return {
+    workerVersionId: normalizeSafeIdentifier(identity.workerVersionId),
+    tag: normalizeSafeIdentifier(identity.tag),
+    timestamp: normalizeSafeTimestamp(identity.timestamp),
+    searchRolloutMode: normalizeSafeMode(identity.searchRolloutMode),
+  };
+}
+
 /**
- * @param {{ baseUrl?: string, expectedApp?: string | null, fetchImpl?: typeof fetch }} [options]
+ * @param {{ workerVersionId: string | null, tag: string | null, timestamp: string | null, searchRolloutMode: string | null }} actual
+ * @param {string | null} expectedWorkerVersionId
+ * @param {string | null} expectedSearchRolloutMode
+ */
+function compareReleaseIdentity(actual, expectedWorkerVersionId, expectedSearchRolloutMode) {
+  if (!expectedWorkerVersionId) {
+    return {
+      ok: false,
+      message: "Missing expected Worker version ID; canary cannot prove release identity.",
+    };
+  }
+  if (!expectedSearchRolloutMode) {
+    return {
+      ok: false,
+      message: "Invalid expected search rollout mode; canary cannot prove rollout identity.",
+    };
+  }
+  if (!actual.workerVersionId) {
+    return {
+      ok: false,
+      message: "Health endpoint release identity is missing the Worker version ID.",
+    };
+  }
+  if (actual.workerVersionId !== expectedWorkerVersionId) {
+    return {
+      ok: false,
+      message: `Health endpoint Worker version mismatch: expected ${expectedWorkerVersionId}, got ${actual.workerVersionId}.`,
+    };
+  }
+  if (!actual.searchRolloutMode) {
+    return {
+      ok: false,
+      message: "Health endpoint release identity is missing the search rollout mode.",
+    };
+  }
+  if (actual.searchRolloutMode !== expectedSearchRolloutMode) {
+    return {
+      ok: false,
+      message: `Health endpoint search rollout mode mismatch: expected ${expectedSearchRolloutMode}, got ${actual.searchRolloutMode}.`,
+    };
+  }
+  return { ok: true, message: null };
+}
+
+/**
+ * @param {{ baseUrl?: string, expectedApp?: string | null, expectedWorkerVersionId?: string | null, expectedSearchRolloutMode?: string | null, fetchImpl?: typeof fetch }} [options]
  * @returns {Promise<HealthCheckResult>}
  */
 export async function checkHealthEndpoint(options = {}) {
   const baseUrl = options.baseUrl ?? DEFAULT_CANARY_BASE_URL;
-  const expectedApp = options.expectedApp ?? DEFAULT_CANARY_EXPECTED_APP;
+  const expectedApp = normalizeSafeIdentifier(options.expectedApp ?? DEFAULT_CANARY_EXPECTED_APP) ?? DEFAULT_CANARY_EXPECTED_APP;
+  const expectedWorkerVersionId = normalizeExpectedWorkerVersionId(
+    options.expectedWorkerVersionId ?? process.env.CANARY_EXPECTED_WORKER_VERSION_ID,
+  );
+  const expectedSearchRolloutMode = normalizeExpectedSearchRolloutMode(
+    options.expectedSearchRolloutMode ?? process.env.CANARY_EXPECTED_SEARCH_ROLLOUT_MODE,
+  );
   const fetchImpl = options.fetchImpl ?? fetch;
   const url = new URL("/api/health", baseUrl).toString();
 
@@ -95,21 +210,37 @@ export async function checkHealthEndpoint(options = {}) {
       signal: AbortSignal.timeout(10_000),
     });
     const payload = await response.json().catch(() => ({}));
-    const app = typeof payload?.app === "string" ? payload.app : null;
+    const app = normalizeSafeIdentifier(payload?.app);
     const appMatches = expectedApp ? app === expectedApp : true;
-    const healthy = response.ok && payload?.status === "ok" && appMatches;
+    const releaseIdentity = normalizeReleaseIdentity(payload?.releaseIdentity);
+    const releaseIdentityChecks = compareReleaseIdentity(
+      releaseIdentity,
+      expectedWorkerVersionId,
+      expectedSearchRolloutMode,
+    );
+    const healthy =
+      response.ok &&
+      payload?.status === "ok" &&
+      appMatches &&
+      releaseIdentityChecks.ok;
     const message =
       healthy
         ? null
         : !response.ok || payload?.status !== "ok"
           ? `Health endpoint returned ${response.status}.`
-          : `Health endpoint app mismatch: expected ${expectedApp}, got ${app ?? "unknown"}.`;
+          : !appMatches
+            ? `Health endpoint app mismatch: expected ${expectedApp}, got ${app ?? "unknown"}.`
+            : releaseIdentityChecks.message;
 
     return {
       ok: healthy,
       status: response.status,
       app,
       expectedApp,
+      expectedWorkerVersionId,
+      expectedSearchRolloutMode,
+      releaseIdentity,
+      releaseIdentityOk: releaseIdentityChecks.ok,
       message,
       url,
     };
@@ -119,7 +250,11 @@ export async function checkHealthEndpoint(options = {}) {
       status: null,
       app: null,
       expectedApp,
-      message: error instanceof Error ? error.message : "Unknown health check failure.",
+      expectedWorkerVersionId,
+      expectedSearchRolloutMode,
+      releaseIdentity: emptyReleaseIdentity(),
+      releaseIdentityOk: false,
+      message: "Health endpoint unreachable.",
       url,
     };
   }
@@ -179,7 +314,7 @@ export async function checkLaunchReadinessEndpoint(options = {}) {
     return {
       ok: false,
       status: null,
-      message: error instanceof Error ? error.message : "Unknown launch readiness check failure.",
+      message: "Launch readiness endpoint unreachable.",
       url,
       blockers: ["launch_readiness_unreachable"],
       signals: null,
@@ -193,7 +328,13 @@ export async function checkLaunchReadinessEndpoint(options = {}) {
  */
 export async function runProductionCanary(options = {}) {
   const baseUrl = options.baseUrl ?? DEFAULT_CANARY_BASE_URL;
-  const expectedApp = options.expectedApp ?? DEFAULT_CANARY_EXPECTED_APP;
+  const expectedApp = normalizeSafeIdentifier(options.expectedApp ?? DEFAULT_CANARY_EXPECTED_APP) ?? DEFAULT_CANARY_EXPECTED_APP;
+  const expectedWorkerVersionId = normalizeExpectedWorkerVersionId(
+    options.expectedWorkerVersionId ?? process.env.CANARY_EXPECTED_WORKER_VERSION_ID,
+  );
+  const expectedSearchRolloutMode = normalizeExpectedSearchRolloutMode(
+    options.expectedSearchRolloutMode ?? process.env.CANARY_EXPECTED_SEARCH_ROLLOUT_MODE,
+  );
   const queries = options.queries?.length ? options.queries : [...DOGFOOD_QUERIES];
   const country = options.country ?? DEFAULT_COUNTRY;
   const mode = options.mode ?? DEFAULT_MODE;
@@ -215,6 +356,8 @@ export async function runProductionCanary(options = {}) {
       await checkHealthEndpoint({
         baseUrl: healthBaseUrl,
         expectedApp,
+        expectedWorkerVersionId,
+        expectedSearchRolloutMode,
         fetchImpl: options.fetchImpl,
       }),
     );
@@ -224,6 +367,10 @@ export async function runProductionCanary(options = {}) {
     status: null,
     app: null,
     expectedApp,
+    expectedWorkerVersionId,
+    expectedSearchRolloutMode,
+    releaseIdentity: emptyReleaseIdentity(),
+    releaseIdentityOk: false,
     message: "No health endpoints configured.",
     url: new URL("/api/health", baseUrl).toString(),
   };
@@ -269,6 +416,8 @@ export async function runProductionCanary(options = {}) {
     baseUrl,
     health,
     healthChecks,
+    expectedWorkerVersionId,
+    expectedSearchRolloutMode,
     launchReadiness,
     queries,
     country,
@@ -286,11 +435,18 @@ export async function runProductionCanary(options = {}) {
  */
 export function formatProductionCanaryReport(report) {
   const healthChecks = report.healthChecks?.length ? report.healthChecks : [report.health];
+  const expectedVersion = normalizeSafeIdentifier(report.expectedWorkerVersionId) ?? "missing";
+  const expectedMode = normalizeSafeMode(report.expectedSearchRolloutMode) ?? "missing";
   const lines = healthChecks.map(
     (health) => `health: ${health.ok ? "ok" : "failed"} (${health.status ?? "no response"}) ${health.url}`,
   );
 
   for (const health of healthChecks) {
+    const actualVersion = normalizeSafeIdentifier(health.releaseIdentity?.workerVersionId) ?? "missing";
+    const actualMode = normalizeSafeMode(health.releaseIdentity?.searchRolloutMode) ?? "missing";
+    lines.push(
+      `health release: expected worker ${expectedVersion}, mode ${expectedMode}; actual worker ${actualVersion}, mode ${actualMode}`,
+    );
     if (health.message) {
       lines.push(`health note: ${health.url} ${health.message}`);
     }

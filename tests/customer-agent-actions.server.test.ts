@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { isApprovedReportSnapshot } from "~/lib/report-approval";
 import type { AgentActionAuditRecord, WatchEventRecord, WatchlistRecord } from "~/lib/types";
 
 const watchlist: WatchlistRecord = {
@@ -145,6 +146,19 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
     }),
     getUserPlan: vi.fn().mockResolvedValue(options.plan ?? "agency"),
     createCollection: vi.fn().mockResolvedValue(collection),
+    createCollectionWithinLimit: vi.fn().mockResolvedValue(options.planLimitAllowed === false
+      ? {
+        status: "over_cap",
+        collection: null,
+        limit: 10,
+        current: 10,
+      }
+      : {
+        status: "created",
+        collection,
+        limit: 10,
+        current: 2,
+      }),
     createWatchlist: vi.fn().mockResolvedValue(watchlist),
     createWatchlistWithinLimit: vi.fn().mockResolvedValue(options.planLimitAllowed === false
       ? {
@@ -159,6 +173,7 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
         limit: 10,
         current: 2,
       }),
+    deleteUnscannedWatchlistCreatedByFailedAgentAction: vi.fn().mockResolvedValue(true),
     getWatchlist: vi.fn().mockResolvedValue(watchlist),
     updateWatchlist: vi.fn().mockResolvedValue({
       ...watchlist,
@@ -182,6 +197,7 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
       createdAt: "2026-06-19T00:00:00.000Z",
       updatedAt: "2026-06-19T00:00:00.000Z",
     }),
+    getClientRoomByName: vi.fn().mockResolvedValue(null),
     getDigest: vi.fn().mockResolvedValue({
       id: "digest-1",
       userId: "user-1",
@@ -430,12 +446,16 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
   vi.doMock("~/lib/data.server", () => ({
     addExternalProofToCollection: mocks.addExternalProofToCollection,
     createCollection: mocks.createCollection,
+    createCollectionWithinLimit: mocks.createCollectionWithinLimit,
     createShareLink: mocks.createShareLink,
     createSupportCase: mocks.createSupportCase,
     createWatchlist: mocks.createWatchlist,
     createWatchlistWithinLimit: mocks.createWatchlistWithinLimit,
+    deleteUnscannedWatchlistCreatedByFailedAgentAction:
+      mocks.deleteUnscannedWatchlistCreatedByFailedAgentAction,
     getDeliveryTargetById: mocks.getDeliveryTargetById,
     getClientRoom: mocks.getClientRoom,
+    getClientRoomByName: mocks.getClientRoomByName,
     getCollection: mocks.getCollection,
     getDigest: mocks.getDigest,
     getShareLinkById: mocks.getShareLinkById,
@@ -476,6 +496,23 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
   vi.doMock("~/lib/ad-source.server", () => ({
     CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
   }));
+  vi.doMock("~/lib/agent-actions.server", async () => {
+    const actual = await vi.importActual<typeof import("~/lib/agent-actions.server")>("~/lib/agent-actions.server");
+    return {
+      ...actual,
+      runAtomicAgentAction: vi.fn(async (_env, _context, options) => {
+        const prepared = await options.prepare(
+          { prepare: () => ({ bind: () => ({}) }) } as never,
+          "audit-atomic",
+        );
+        return {
+          audit: auditRecord({ actionName: _context.actionName, status: "succeeded", result: prepared.result }),
+          replayed: false,
+          result: prepared.result,
+        };
+      }),
+    };
+  });
 
   return mocks;
 }
@@ -487,6 +524,8 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.resetModules();
+  vi.doUnmock("~/lib/agent-actions.server");
+  vi.doUnmock("~/lib/workspace.server");
 });
 
 describe("customerAgentActionErrorPayload", () => {
@@ -560,6 +599,36 @@ describe("runCustomerAgentAction", () => {
     expect(serialized).not.toContain(customerMetaConnection.tokenLastFour);
     expect(serialized).not.toContain(customerMetaConnection.lastErrorMessage);
     expect(serialized).not.toContain("tokenFingerprint");
+  });
+
+  it("rechecks API-key authority immediately before a Meta provider retest", async () => {
+    const mocks = setupMocks();
+    const authorizeExternalEffect = vi.fn().mockRejectedValue(
+      Response.json(
+        { error: "invalid_api_key", message: "Use an active Five to Nine API key." },
+        { status: 401 },
+      ),
+    );
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await expect(runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "retest-meta-source-revoked",
+        source: "api_v1",
+        authorizeExternalEffect,
+      },
+      "source.meta.retest",
+      {},
+    )).rejects.toMatchObject({
+      code: "invalid_api_key",
+      status: 401,
+    });
+
+    expect(authorizeExternalEffect).toHaveBeenCalledTimes(1);
+    expect(mocks.retestSavedCustomerMetaToken).not.toHaveBeenCalled();
   });
 
   it("reports missing Meta source setup without treating secret setup as agent-owned", async () => {
@@ -675,6 +744,43 @@ describe("runCustomerAgentAction", () => {
         resourceType: "watchlist",
         resourceId: "watchlist-1",
       }),
+    );
+  });
+
+  it("rechecks API-key authority before first-scan Workflow dispatch", async () => {
+    const mocks = setupMocks();
+    const authorizeExternalEffect = vi.fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(
+        Response.json(
+          { error: "invalid_api_key", message: "Use an active Five to Nine API key." },
+          { status: 401 },
+        ),
+      );
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await expect(runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "create-revoked-before-dispatch",
+        source: "api_v1",
+        authorizeExternalEffect,
+      },
+      "watchlist.create",
+      { targetLabel: "Glossier", queueFirstScan: true },
+    )).rejects.toMatchObject({
+      code: "invalid_api_key",
+      status: 401,
+    });
+
+    expect(authorizeExternalEffect).toHaveBeenCalledTimes(2);
+    expect(mocks.queueFirstWatchlistScan).not.toHaveBeenCalled();
+    expect(mocks.deleteUnscannedWatchlistCreatedByFailedAgentAction).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      "watchlist-1",
     );
   });
 
@@ -1009,10 +1115,10 @@ describe("runCustomerAgentAction", () => {
     const result = outcome.result as { collection: { id: string } };
     expect(result.collection.id).toBe("collection-1");
     expect(mocks.checkPlanLimit).toHaveBeenCalledWith(expect.anything(), "user-1", "collections");
-    expect(mocks.createCollection).toHaveBeenCalledWith(expect.anything(), "user-1", {
+    expect(mocks.createCollectionWithinLimit).toHaveBeenCalledWith(expect.anything(), "user-1", {
       name: "Client proof",
       description: "Proof for the weekly review.",
-    });
+    }, 10);
   });
 
   it("blocks free-plan manual refreshes before running scans", async () => {
@@ -1035,6 +1141,36 @@ describe("runCustomerAgentAction", () => {
       ),
     ).rejects.toBeInstanceOf(CustomerAgentActionError);
 
+    expect(mocks.runWatchlistManual).not.toHaveBeenCalled();
+  });
+
+  it("rechecks API-key authority immediately before a manual provider refresh", async () => {
+    const mocks = setupMocks();
+    const authorizeExternalEffect = vi.fn().mockRejectedValue(
+      Response.json(
+        { error: "invalid_api_key", message: "Use an active Five to Nine API key." },
+        { status: 401 },
+      ),
+    );
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await expect(runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "refresh-revoked",
+        source: "api_v1",
+        authorizeExternalEffect,
+      },
+      "watchlist.refresh",
+      { watchlistId: "watchlist-1" },
+    )).rejects.toMatchObject({
+      code: "invalid_api_key",
+      status: 401,
+    });
+
+    expect(authorizeExternalEffect).toHaveBeenCalledTimes(1);
     expect(mocks.runWatchlistManual).not.toHaveBeenCalled();
   });
 
@@ -1078,6 +1214,53 @@ describe("runCustomerAgentAction", () => {
 
   it("creates report snapshot share links from owned resources", async () => {
     const mocks = setupMocks();
+    mocks.listCollectionItems.mockResolvedValue([{
+      id: "item-1",
+      collectionId: "collection-1",
+      adId: externalAd.metaAdId,
+      note: "Saved evidence",
+      createdAt: "2026-06-19T00:00:00.000Z",
+      updatedAt: "2026-06-19T00:00:00.000Z",
+      tags: ["evidence"],
+      ad: {
+        ...externalAd,
+        landingPageUrl: "https://glossier.com/offer",
+        landingPage: {
+          rawUrl: "https://glossier.com/offer",
+          canonicalUrl: "https://glossier.com/offer",
+          rawHeadline: "Current offer",
+          normalizedHeadline: "current offer",
+          normalizedHeadlineHash: "current-offer",
+          captureMethod: "browser_render",
+          capturedAt: "2026-07-15T00:00:00.000Z",
+        },
+      },
+    }]);
+    let persistedSnapshot: unknown;
+    vi.doMock("~/lib/agent-actions.server", async () => {
+      const actual = await vi.importActual<typeof import("~/lib/agent-actions.server")>("~/lib/agent-actions.server");
+      return {
+        ...actual,
+        runAtomicAgentAction: vi.fn(async (_env, _context, options) => {
+          const prepared = await options.prepare(
+            {
+              prepare: () => ({
+                bind: (...bindings: unknown[]) => {
+                  persistedSnapshot = JSON.parse(String(bindings[6]));
+                  return {};
+                },
+              }),
+            } as never,
+            "audit-atomic",
+          );
+          return {
+            audit: auditRecord({ actionName: "report.share", status: "succeeded", result: prepared.result }),
+            replayed: false,
+            result: prepared.result,
+          };
+        }),
+      };
+    });
     const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
 
     const outcome = await runCustomerAgentAction(
@@ -1093,51 +1276,124 @@ describe("runCustomerAgentAction", () => {
       {
         resourceType: "collection",
         resourceId: "collection-1",
+        reviewed: true,
       },
     );
 
     const result = outcome.result as {
       report: { reportId: string };
       shareUrl: string;
+      share: { id: string; token: string; expiresAt: string };
     };
     expect(result.report.reportId).toBe("collection:collection-1");
-    expect(result.shareUrl).toBe("https://0509.io/share/sharetoken1");
-    expect(mocks.createShareLink).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        user: expect.objectContaining({ id: "user-1" }),
-      }),
-      expect.objectContaining({
-        resourceType: "report",
-        resourceId: "collection:collection-1",
-        isSnapshot: true,
-        snapshotPayload: expect.objectContaining({
-          reportId: "shared-report",
-          resourceId: "shared",
-        }),
-      }),
+    expect(result.shareUrl).toMatch(/^https:\/\/0509\.io\/share\//);
+    expect(mocks.createShareLink).not.toHaveBeenCalled();
+    expect(result.share).toEqual({
+      id: expect.any(String),
+      token: expect.any(String),
+      expiresAt: expect.any(String),
+    });
+    expect(isApprovedReportSnapshot(persistedSnapshot)).toBe(true);
+    expect(JSON.stringify(result)).not.toContain("evidenceFingerprint");
+  });
+
+  it("requires reviewed=true before preparing an atomic report share", async () => {
+    const mocks = setupMocks();
+    const { CustomerAgentActionError, runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await expect(
+      runCustomerAgentAction(
+        { DB: {} } as never,
+        {
+          userId: "user-1",
+          apiKeyId: "api-key-1",
+          idempotencyKey: "report-share-review-required",
+          source: "api_v1",
+        },
+        "report.share",
+        {
+          resourceType: "collection",
+          resourceId: "collection-1",
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: "review_required",
+      message: "Set reviewed to true before sharing the current report.",
+    } satisfies Partial<InstanceType<typeof CustomerAgentActionError>>);
+    expect(mocks.getCollection).not.toHaveBeenCalled();
+  });
+
+  it("uses the workspace owner for member report and client-room resource access", async () => {
+    const mocks = setupMocks();
+    mocks.listCollectionItems.mockResolvedValue([{
+      id: "item-1",
+      collectionId: "collection-1",
+      adId: externalAd.metaAdId,
+      note: "Saved evidence",
+      createdAt: "2026-06-19T00:00:00.000Z",
+      updatedAt: "2026-06-19T00:00:00.000Z",
+      tags: ["evidence"],
+      ad: {
+        ...externalAd,
+        landingPageUrl: "https://glossier.com/offer",
+        landingPage: {
+          rawUrl: "https://glossier.com/offer",
+          canonicalUrl: "https://glossier.com/offer",
+          rawHeadline: "Current offer",
+          normalizedHeadline: "current offer",
+          normalizedHeadlineHash: "current-offer",
+          captureMethod: "browser_render",
+          capturedAt: "2026-07-15T00:00:00.000Z",
+        },
+      },
+    }]);
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspaceDataUserId: vi.fn().mockResolvedValue("owner-1"),
+    }));
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    const reportOutcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      { userId: "member-2", apiKeyId: "member-key", idempotencyKey: "member-report-share", source: "api_v1" },
+      "report.share",
+      { resourceType: "collection", resourceId: "collection-1", reviewed: true },
     );
+    expect(mocks.getCollection).toHaveBeenCalledWith(expect.anything(), "collection-1", "owner-1");
+    expect((reportOutcome.result as { report: { resourceId: string } }).report.resourceId).toBe("collection-1");
+
+    const roomOutcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      { userId: "member-2", apiKeyId: "member-key", idempotencyKey: "member-room", source: "api_v1" },
+      "client_room.upsert",
+      {
+        name: "Beauty client",
+        resourceRefs: [{ resourceType: "report", resourceId: "collection:collection-1" }],
+      },
+    );
+    expect(mocks.getCollection).toHaveBeenCalledWith(expect.anything(), "collection-1", "owner-1");
+    expect((roomOutcome.result as { room: { userId: string } }).room.userId).toBe("owner-1");
   });
 
   it("replays report share actions with a reconstructed share URL", async () => {
     const mocks = setupMocks();
-    mocks.findAgentActionAuditByIdempotencyKey.mockResolvedValue(auditRecord({
-      actionName: "report.share",
-      status: "succeeded",
-      result: {
+    vi.doMock("~/lib/agent-actions.server", async () => {
+      const actual = await vi.importActual<typeof import("~/lib/agent-actions.server")>("~/lib/agent-actions.server");
+      const replayedResult = {
         ok: true,
         action: "report.share",
-        report: {
-          reportId: "collection:collection-1",
-        },
-        share: {
-          id: "share-1",
-          token: "[redacted]",
-          expiresAt: "2026-09-19T00:00:00.000Z",
-        },
-        shareUrl: "[redacted]",
-      },
-    }));
+        report: { reportId: "collection:collection-1" },
+        share: { id: "share-1", token: "sharetoken1", expiresAt: "2026-09-19T00:00:00.000Z" },
+        shareUrl: "https://0509.io/share/sharetoken1",
+      };
+      return {
+        ...actual,
+        runAtomicAgentAction: vi.fn().mockResolvedValue({
+          audit: auditRecord({ actionName: "report.share", status: "succeeded", result: replayedResult }),
+          replayed: true,
+          result: replayedResult,
+        }),
+      };
+    });
     const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
 
     const outcome = await runCustomerAgentAction(
@@ -1153,6 +1409,7 @@ describe("runCustomerAgentAction", () => {
       {
         resourceType: "collection",
         resourceId: "collection-1",
+        reviewed: true,
       },
     );
 
@@ -1161,7 +1418,7 @@ describe("runCustomerAgentAction", () => {
     expect(result.shareUrl).toBe("https://0509.io/share/sharetoken1");
     expect(result.share.token).toBe("sharetoken1");
     expect(mocks.createShareLink).not.toHaveBeenCalled();
-    expect(mocks.getShareLinkById).toHaveBeenCalledWith(expect.anything(), "user-1", "share-1");
+    expect(mocks.getShareLinkById).not.toHaveBeenCalled();
   });
 
   it("builds audited counter-move briefs from owned watchlists", async () => {
@@ -1605,6 +1862,33 @@ describe("runCustomerAgentAction", () => {
       quietHours: { startHour: 21, endHour: 8 },
       timezone: "Asia/Kolkata",
     });
+  });
+
+  it("rejects an invalid IANA timezone before an API or MCP delivery update", async () => {
+    const mocks = setupMocks();
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await expect(
+      runCustomerAgentAction(
+        { DB: {} } as never,
+        {
+          userId: "user-1",
+          apiKeyId: "api-key-1",
+          idempotencyKey: "delivery-settings-invalid-timezone",
+          source: "api_v1",
+        },
+        "delivery_settings.update",
+        {
+          watchlistId: "watchlist-1",
+          explicitApproval: true,
+          timezone: "Not/AZone",
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: "invalid_timezone",
+      status: 400,
+    });
+    expect(mocks.upsertWatchlistDeliveryConfig).not.toHaveBeenCalled();
   });
 
   it("preserves hidden Slack and WhatsApp settings when updating visible delivery fields", async () => {
@@ -2118,6 +2402,8 @@ describe("runCustomerAgentAction", () => {
         createdFrom: "agent_action",
         source: "api_v1",
         apiKeyId: "api-key-1",
+        requesterUserId: "user-1",
+        workspaceUserId: "user-1",
       },
     });
     expect(mocks.sendOperatorAlertEmail).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
@@ -2193,6 +2479,217 @@ describe("runCustomerAgentAction", () => {
     expect(mocks.claimAgentActionAudit).not.toHaveBeenCalled();
   });
 
+  it("stores member memory under the workspace owner and support cases under the member actor", async () => {
+    const mocks = setupMocks();
+    mocks.upsertAgentMemory.mockResolvedValueOnce({
+      id: "memory-member-1",
+      userId: "owner-1",
+      scope: "brand",
+      key: "voice",
+      watchlistId: null,
+      clientRoomId: null,
+      value: { tone: "plainspoken" },
+      source: "api_v1",
+      createdAt: "2026-07-15T00:00:00.000Z",
+      updatedAt: "2026-07-15T00:00:00.000Z",
+    });
+    mocks.createSupportCase.mockResolvedValueOnce({
+      id: "case-member-1",
+      userId: "member-2",
+      requestKey: "member-request",
+      category: "delivery",
+      priority: "normal",
+      status: "open",
+      subject: "Member digest did not arrive",
+      detail: "Please check the workspace delivery trail.",
+      context: {},
+      createdAt: "2026-07-15T00:00:00.000Z",
+      updatedAt: "2026-07-15T00:00:00.000Z",
+    });
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn().mockResolvedValue({
+        workspaceUserId: "owner-1",
+        isMember: true,
+        ownerName: "Owner",
+      }),
+      resolveWorkspaceDataUserId: vi.fn().mockResolvedValue("owner-1"),
+    }));
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "member-2",
+        apiKeyId: "member-key",
+        idempotencyKey: "member-memory",
+        source: "api_v1",
+      },
+      "memory.upsert",
+      { scope: "brand", key: "voice", value: { tone: "plainspoken" } },
+    );
+    expect(mocks.upsertAgentMemory).toHaveBeenCalledWith(
+      expect.anything(),
+      "owner-1",
+      expect.objectContaining({ key: "voice" }),
+    );
+
+    await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "member-2",
+        apiKeyId: "member-key",
+        idempotencyKey: "member-support",
+        source: "api_v1",
+      },
+      "support_case.create",
+      {
+        category: "delivery",
+        subject: "Member digest did not arrive",
+        detail: "Please check the workspace delivery trail.",
+      },
+    );
+
+    expect(mocks.createSupportCase).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      userId: "member-2",
+      requestKey: "member-support",
+      context: expect.objectContaining({
+        requesterUserId: "member-2",
+        apiKeyId: "member-key",
+        workspaceUserId: "owner-1",
+      }),
+    }));
+    expect(mocks.getUserDeliveryProfile).toHaveBeenCalledWith(expect.anything(), "member-2");
+    expect(mocks.claimAgentActionAudit).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      userId: "member-2",
+    }));
+
+    await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "member-2",
+        apiKeyId: "member-key",
+        source: "api_v1",
+      },
+      "support_case.list",
+      { status: "all" },
+    );
+    expect(mocks.listSupportCases).toHaveBeenCalledWith(expect.anything(), "member-2", {
+      status: "all",
+      limit: 20,
+    });
+  });
+
+  it("scopes the same member support request key by actor inside one owner workspace", async () => {
+    const mocks = setupMocks();
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn().mockResolvedValue({
+        workspaceUserId: "owner-1",
+        isMember: true,
+        ownerName: "Owner",
+      }),
+    }));
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+    const input = {
+      category: "delivery",
+      subject: "Digest did not arrive",
+      detail: "Please check the workspace delivery trail.",
+    };
+
+    await runCustomerAgentAction(
+      { DB: {} } as never,
+      { userId: "member-2", apiKeyId: "member-key-2", idempotencyKey: "shared-key", source: "api_v1" },
+      "support_case.create",
+      input,
+    );
+    await runCustomerAgentAction(
+      { DB: {} } as never,
+      { userId: "member-3", apiKeyId: "member-key-3", idempotencyKey: "shared-key", source: "api_v1" },
+      "support_case.create",
+      input,
+    );
+
+    expect(mocks.createSupportCase.mock.calls.map(([, request]) => ({
+      userId: request.userId,
+      requestKey: request.requestKey,
+    }))).toEqual([
+      { userId: "member-2", requestKey: "shared-key" },
+      { userId: "member-3", requestKey: "shared-key" },
+    ]);
+  });
+
+  it.each([
+    ["source.meta.retest", {}],
+    ["delivery_targets.list", {}],
+    ["delivery_settings.update", { watchlistId: "watchlist-1", emailEnabled: true }],
+    ["delivery_target.update", { targetId: "target-1", isPaused: true }],
+  ] as const)("rejects member %s agent actions before owner data or providers are reached", async (actionName, input) => {
+    const mocks = setupMocks();
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn().mockResolvedValue({
+        workspaceUserId: "owner-1",
+        isMember: true,
+        ownerName: "Owner",
+      }),
+    }));
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await expect(runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "member-2",
+        apiKeyId: "member-key",
+        idempotencyKey: `member-owner-action-${actionName}`,
+        source: "api_v1",
+      },
+      actionName,
+      input,
+    )).rejects.toMatchObject({
+      code: "workspace_owner_required",
+      status: 403,
+    });
+
+    expect(mocks.retestSavedCustomerMetaToken).not.toHaveBeenCalled();
+    expect(mocks.listDeliveryTargets).not.toHaveBeenCalled();
+    expect(mocks.upsertWatchlistDeliveryConfig).not.toHaveBeenCalled();
+    expect(mocks.upsertDeliveryTarget).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ category: "team", subject: "Add a teammate", detail: "Please add another teammate." }],
+    [{
+      category: "billing",
+      subject: "Cancel the workspace plan",
+      detail: "Please cancel the Agency workspace subscription.",
+    }],
+  ])("rejects member support requests that require workspace-owner authority", async (input) => {
+    const mocks = setupMocks();
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn().mockResolvedValue({
+        workspaceUserId: "owner-1",
+        isMember: true,
+        ownerName: "Owner",
+      }),
+    }));
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await expect(runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "member-2",
+        apiKeyId: "member-key",
+        idempotencyKey: `member-sensitive-support-${input.category}`,
+        source: "api_v1",
+      },
+      "support_case.create",
+      input,
+    )).rejects.toMatchObject({
+      code: "workspace_owner_required",
+      status: 403,
+    });
+    expect(mocks.createSupportCase).not.toHaveBeenCalled();
+    expect(mocks.sendOperatorAlertEmail).not.toHaveBeenCalled();
+  });
+
   it("returns a support fallback when agent operator notification resolves false", async () => {
     const mocks = setupMocks();
     mocks.sendOperatorAlertEmail.mockResolvedValueOnce(false);
@@ -2258,6 +2755,38 @@ describe("runCustomerAgentAction", () => {
       supportCase: { id: "case-1" },
     });
     consoleError.mockRestore();
+  });
+
+  it("saves support but does not email the operator after API-key authority is lost", async () => {
+    const mocks = setupMocks();
+    const authorizeExternalEffect = vi.fn().mockRejectedValue(
+      Response.json(
+        { error: "invalid_api_key", message: "Use an active Five to Nine API key." },
+        { status: 401 },
+      ),
+    );
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    const outcome = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "support-revoked-before-email",
+        source: "api_v1",
+        authorizeExternalEffect,
+      },
+      "support_case.create",
+      {
+        category: "delivery",
+        subject: "Digest did not arrive",
+        detail: "Please check the delivery trail.",
+      },
+    );
+
+    expect(outcome.result).toMatchObject({ ok: false, action: "support_case.create" });
+    expect(authorizeExternalEffect).toHaveBeenCalledTimes(1);
+    expect(mocks.sendOperatorAlertEmail).not.toHaveBeenCalled();
   });
 
   it("opens an agent support case when requester profile lookup fails", async () => {
@@ -2401,6 +2930,28 @@ describe("runCustomerAgentAction", () => {
 
   it("saves and lists client rooms with owned resource refs", async () => {
     const mocks = setupMocks();
+    mocks.listCollectionItems.mockResolvedValue([{
+      id: "item-1",
+      collectionId: "collection-1",
+      adId: externalAd.metaAdId,
+      note: "Saved evidence",
+      createdAt: "2026-06-19T00:00:00.000Z",
+      updatedAt: "2026-06-19T00:00:00.000Z",
+      tags: ["evidence"],
+      ad: {
+        ...externalAd,
+        landingPageUrl: "https://glossier.com/offer",
+        landingPage: {
+          rawUrl: "https://glossier.com/offer",
+          canonicalUrl: "https://glossier.com/offer",
+          rawHeadline: "Current offer",
+          normalizedHeadline: "current offer",
+          normalizedHeadlineHash: "current-offer",
+          captureMethod: "browser_render",
+          capturedAt: "2026-07-15T00:00:00.000Z",
+        },
+      },
+    }]);
     const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
 
     const outcome = await runCustomerAgentAction(
@@ -2433,31 +2984,10 @@ describe("runCustomerAgentAction", () => {
     );
 
     const result = outcome.result as { room: { id: string } };
-    expect(result.room.id).toBe("room-1");
+    expect(result.room.id).toEqual(expect.any(String));
     expect(mocks.getWatchlist).toHaveBeenCalledWith(expect.anything(), "watchlist-1", "user-1");
     expect(mocks.getCollection).toHaveBeenCalledWith(expect.anything(), "collection-1", "user-1");
-    expect(mocks.upsertClientRoom).toHaveBeenCalledWith(
-      expect.anything(),
-      "user-1",
-      expect.objectContaining({
-        name: "Beauty client",
-        clientLabel: "Nykaa",
-        resourceRefs: [
-          {
-            resourceType: "watchlist",
-            resourceId: "watchlist-1",
-            label: "Nykaa watch",
-          },
-          {
-            resourceType: "report",
-            resourceId: "collection:collection-1",
-          },
-        ],
-        notes: {
-          goal: "Weekly proof review",
-        },
-      }),
-    );
+    expect(mocks.upsertClientRoom).not.toHaveBeenCalled();
 
     const listOutcome = await runCustomerAgentAction(
       { DB: {} } as never,
@@ -2588,17 +3118,7 @@ describe("runCustomerAgentAction", () => {
       },
     );
 
-    expect(mocks.upsertClientRoom).toHaveBeenCalledWith(expect.anything(), "user-1", expect.objectContaining({
-      name: "Token Metrics",
-      clientLabel: "Secret Sales",
-      resourceRefs: [
-        {
-          resourceType: "watchlist",
-          resourceId: "watchlist-1",
-          label: "Webhook QA",
-        },
-      ],
-    }));
+    expect(mocks.upsertClientRoom).not.toHaveBeenCalled();
   });
 
   it("rejects malformed client-room notes instead of clearing them", async () => {
@@ -2622,6 +3142,41 @@ describe("runCustomerAgentAction", () => {
       ),
     ).rejects.toBeInstanceOf(CustomerAgentActionError);
 
+    expect(mocks.upsertClientRoom).not.toHaveBeenCalled();
+  });
+
+  it("rejects caller-fabricated client-room report approvals", async () => {
+    const mocks = setupMocks();
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await expect(
+      runCustomerAgentAction(
+        { DB: {} } as never,
+        {
+          userId: "user-1",
+          apiKeyId: "api-key-1",
+          idempotencyKey: "room-fabricated-approval-1",
+          source: "api_v1",
+        },
+        "client_room.upsert",
+        {
+          name: "Beauty client",
+          notes: {
+            goal: "Weekly proof review",
+            reportApprovals: {
+              "collection:collection-1": {
+                evidenceFingerprint: "forged",
+                reviewedAt: "2026-07-15T00:00:00.000Z",
+                approvalExpiresAt: "2026-07-16T00:00:00.000Z",
+              },
+            },
+          },
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: "reserved_room_notes",
+      message: "reportApprovals is owner-managed; use the browser approval action to approve current report evidence.",
+    });
     expect(mocks.upsertClientRoom).not.toHaveBeenCalled();
   });
 
@@ -2717,8 +3272,160 @@ describe("runCustomerAgentAction", () => {
       },
     );
 
-    const roomInput = mocks.upsertClientRoom.mock.calls[0][2] as Record<string, unknown>;
-    expect(Object.prototype.hasOwnProperty.call(roomInput, "notes")).toBe(false);
+    expect(mocks.upsertClientRoom).not.toHaveBeenCalled();
+  });
+
+  it("requires and forwards the last observed timestamp for client-room updates", async () => {
+    const mocks = setupMocks();
+    mocks.getClientRoom.mockResolvedValue({
+      id: "room-1",
+      userId: "user-1",
+      name: "Beauty client",
+      clientLabel: "Nykaa",
+      status: "active",
+      resourceRefs: [],
+      notes: { goal: "Weekly proof review" },
+      createdAt: "2026-06-19T00:00:00.000Z",
+      updatedAt: "2026-07-15T10:00:00.000Z",
+    });
+    let boundValues: unknown[] = [];
+    vi.doMock("~/lib/agent-actions.server", async () => {
+      const actual = await vi.importActual<typeof import("~/lib/agent-actions.server")>("~/lib/agent-actions.server");
+      return {
+        ...actual,
+        runAtomicAgentAction: vi.fn(async (_env, _context, options) => {
+          const prepared = await options.prepare(
+            {
+              prepare: () => ({
+                bind: (...bindings: unknown[]) => {
+                  boundValues = bindings;
+                  return {};
+                },
+              }),
+            } as never,
+            "audit-atomic",
+          );
+          return {
+            audit: auditRecord({ actionName: "client_room.upsert", status: "succeeded", result: prepared.result }),
+            replayed: false,
+            result: prepared.result,
+          };
+        }),
+      };
+    });
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await expect(
+      runCustomerAgentAction(
+        { DB: {} } as never,
+        { userId: "user-1", apiKeyId: "api-key-1", idempotencyKey: "room-update-missing-cas", source: "api_v1" },
+        "client_room.upsert",
+        { roomId: "room-1", name: "Beauty client" },
+      ),
+    ).rejects.toMatchObject({ code: "missing_expected_updated_at", status: 409 });
+
+    await runCustomerAgentAction(
+      { DB: {} } as never,
+      { userId: "user-1", apiKeyId: "api-key-1", idempotencyKey: "room-update-with-cas", source: "api_v1" },
+      "client_room.upsert",
+      {
+        roomId: "room-1",
+        expectedUpdatedAt: "2026-07-15T10:00:00.000Z",
+        name: "Beauty client revised",
+      },
+    );
+
+    expect(boundValues).toContain("2026-07-15T10:00:00.000Z");
+  });
+
+  it("clears stale report approvals from the committed and replayed result when refs change", async () => {
+    const mocks = setupMocks();
+    mocks.getClientRoom.mockResolvedValue({
+      id: "room-1",
+      userId: "user-1",
+      name: "Beauty client",
+      clientLabel: "Nykaa",
+      status: "active",
+      resourceRefs: [{
+        resourceType: "collection",
+        resourceId: "collection-1",
+        label: "Original report",
+      }],
+      notes: {
+        goal: "Weekly proof review",
+        reportApprovals: {
+          "collection:collection-1": {
+            evidenceFingerprint: "stale-fingerprint",
+            reviewedAt: "2026-07-15T09:00:00.000Z",
+          },
+        },
+      },
+      createdAt: "2026-06-19T00:00:00.000Z",
+      updatedAt: "2026-07-15T10:00:00.000Z",
+    });
+    let committedResult: Record<string, unknown> | null = null;
+    vi.doMock("~/lib/agent-actions.server", async () => {
+      const actual = await vi.importActual<typeof import("~/lib/agent-actions.server")>("~/lib/agent-actions.server");
+      return {
+        ...actual,
+        runAtomicAgentAction: vi.fn(async (_env, context, options) => {
+          if (committedResult) {
+            return {
+              audit: auditRecord({ actionName: context.actionName, status: "succeeded", result: committedResult }),
+              replayed: true,
+              result: committedResult,
+            };
+          }
+          const prepared = await options.prepare(
+            { prepare: () => ({ bind: () => ({}) }) } as never,
+            "audit-atomic",
+          );
+          committedResult = prepared.result;
+          return {
+            audit: auditRecord({ actionName: context.actionName, status: "succeeded", result: prepared.result }),
+            replayed: false,
+            result: prepared.result,
+          };
+        }),
+      };
+    });
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+    const input = {
+      roomId: "room-1",
+      expectedUpdatedAt: "2026-07-15T10:00:00.000Z",
+      name: "Beauty client",
+      resourceRefs: [{
+        resourceType: "watchlist" as const,
+        resourceId: "watchlist-1",
+        label: "Current proof",
+      }],
+    };
+    const context = {
+      userId: "user-1",
+      apiKeyId: "api-key-1",
+      idempotencyKey: "room-replace-refs-1",
+      source: "api_v1" as const,
+    };
+
+    const first = await runCustomerAgentAction(
+      { DB: {} } as never,
+      context,
+      "client_room.upsert",
+      input,
+    );
+    const replay = await runCustomerAgentAction(
+      { DB: {} } as never,
+      context,
+      "client_room.upsert",
+      input,
+    );
+
+    expect(first.replayed).toBe(false);
+    expect(replay.replayed).toBe(true);
+    expect((first.result as { room: { notes: Record<string, unknown> } }).room.notes).toEqual({
+      goal: "Weekly proof review",
+    });
+    expect(replay.result).toEqual(first.result);
   });
 
   it("rejects client-room refs that are not owned by the account", async () => {
@@ -2748,6 +3455,63 @@ describe("runCustomerAgentAction", () => {
       ),
     ).rejects.toBeInstanceOf(CustomerAgentActionError);
 
+    expect(mocks.upsertClientRoom).not.toHaveBeenCalled();
+  });
+
+  it("rejects client-room report refs without current evidence", async () => {
+    const mocks = setupMocks();
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await expect(
+      runCustomerAgentAction(
+        { DB: {} } as never,
+        { userId: "user-1", apiKeyId: "api-key-1", idempotencyKey: "room-empty-report", source: "api_v1" },
+        "client_room.upsert",
+        {
+          name: "Beauty client",
+          resourceRefs: [{ resourceType: "report", resourceId: "collection:collection-1" }],
+        },
+      ),
+    ).rejects.toMatchObject({ code: "evidence_not_ready" });
+    expect(mocks.upsertClientRoom).not.toHaveBeenCalled();
+  });
+
+  it("rejects client-room report refs for inactive watchlists", async () => {
+    const mocks = setupMocks();
+    mocks.getWatchlist.mockResolvedValue({ ...watchlist, isActive: false });
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await expect(
+      runCustomerAgentAction(
+        { DB: {} } as never,
+        { userId: "user-1", apiKeyId: "api-key-1", idempotencyKey: "room-inactive-report", source: "api_v1" },
+        "client_room.upsert",
+        {
+          name: "Beauty client",
+          resourceRefs: [{ resourceType: "report", resourceId: "watchlist:watchlist-1" }],
+        },
+      ),
+    ).rejects.toMatchObject({ code: "watchlist_not_found" });
+    expect(mocks.upsertClientRoom).not.toHaveBeenCalled();
+  });
+
+  it("rejects client-room report refs when watch events are not verified", async () => {
+    const mocks = setupMocks();
+    mocks.listWatchEvents.mockResolvedValue([{ ...watchEvent, status: "detected", proofCaptureId: null }]);
+    mocks.listAdsByIds.mockResolvedValue([externalAd]);
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await expect(
+      runCustomerAgentAction(
+        { DB: {} } as never,
+        { userId: "user-1", apiKeyId: "api-key-1", idempotencyKey: "room-unverified-report", source: "api_v1" },
+        "client_room.upsert",
+        {
+          name: "Beauty client",
+          resourceRefs: [{ resourceType: "report", resourceId: "watchlist:watchlist-1" }],
+        },
+      ),
+    ).rejects.toMatchObject({ code: "evidence_not_ready" });
     expect(mocks.upsertClientRoom).not.toHaveBeenCalled();
   });
 });

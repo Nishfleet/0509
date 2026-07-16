@@ -22,6 +22,12 @@ const notificationActionIntents = new Set([
   "resume-slack-webhook",
 ]);
 
+const slackNotificationIntents = new Set([
+  "save-slack-webhook",
+  "pause-slack-webhook",
+  "resume-slack-webhook",
+]);
+
 export function handlesNotificationIntent(intent: string) {
   return notificationActionIntents.has(intent);
 }
@@ -37,9 +43,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   } = await import("~/lib/env.server");
   const { slackTargetDisplayName } = await import("~/lib/slack.server");
   const { whatsappTargetDisplayName } = await import("~/lib/whatsapp.server");
+  const { getEffectiveWorkspacePlan } = await import("~/lib/plan.server");
+  const { canUsePlanFeature } = await import("~/lib/plan-entitlements");
   const env = getEnv(context);
   const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
+  const plan = await getEffectiveWorkspacePlan(env, workspaceUserId);
   const showSlackDelivery = isSlackDeliveryCustomerFacing();
+  const slackDeliveryEntitled = canUsePlanFeature(plan, "slack_delivery");
   const showWhatsAppDelivery = isWhatsAppDeliveryCustomerFacing();
   const whatsappProviderConfigured = showWhatsAppDelivery && isWhatsAppProviderConfigured(env);
   const whatsappCustomerReady = showWhatsAppDelivery && isCustomerWhatsAppReady(env);
@@ -77,6 +87,10 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   return {
     emailDeliveryReady: Boolean(session.user.email),
     showSlackDelivery,
+    slackDelivery: {
+      plan,
+      entitled: slackDeliveryEntitled,
+    },
     canManageWhatsAppDelivery:
       whatsappProviderConfigured && whatsappCustomerReady && whatsappWebhookConfigured,
     slackTargets: slackTargets.map((target) => ({
@@ -121,18 +135,22 @@ export async function action({ context, request }: ActionFunctionArgs) {
     };
   }
 
-  if (intent === "save-slack-webhook") {
+  if (slackNotificationIntents.has(intent)) {
     const { isSlackDeliveryCustomerFacing, slackDeliveryUnavailableMessage } = await import(
       "~/lib/ga-customer-surface"
     );
     if (!isSlackDeliveryCustomerFacing()) {
       return { ok: false, message: slackDeliveryUnavailableMessage() };
     }
+
     const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
     const slackGate = await requireWorkspacePlanFeature(env, workspaceUserId, "slack_delivery");
     if (!slackGate.ok) {
       return { ok: false, message: "Slack delivery is included in Starter and Agency plans." };
     }
+  }
+
+  if (intent === "save-slack-webhook") {
     const { saveSlackWebhookTarget } = await import("~/lib/slack.server");
     const {
       getWorkspaceDeliveryConfig,

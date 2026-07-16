@@ -7,7 +7,10 @@ import {
   sanitizeCustomerFacingMessage,
 } from "~/lib/customer-route-error";
 import { agencyCheckoutHeldCustomerCopy } from "~/lib/customer-billing-copy";
-import { buildDashboardMobileNav } from "~/lib/dashboard-navigation";
+import {
+  buildDashboardMobileNav,
+  DASHBOARD_SETTINGS_NAV,
+} from "~/lib/dashboard-navigation";
 
 const appLayout = readFileSync("app/routes/app-layout.tsx", "utf8");
 const appCss = readFileSync("app/app.css", "utf8");
@@ -20,23 +23,57 @@ const statusSource = readFileSync("app/routes/status.tsx", "utf8");
 const helpCatalog = readFileSync("app/lib/agent-action-catalog.ts", "utf8");
 
 describe("dashboard v2 production hotfix", () => {
-  it("uses fixed bottom mobile navigation instead of reordering main above rail", () => {
+  it("keeps compact mobile navigation in page flow without burying the page action", () => {
     expect(shellSource).toContain("f9-dash-mobile-nav");
     expect(shellSource).toContain("f9-dash-mobile-utility");
     expect(appCss).not.toMatch(/\.f9-cursor-main\s*\{[^}]*order:\s*1/s);
     expect(appCss).toContain("f9-cursor-rail-desktop");
+    expect(appCss).toMatch(
+      /\.f9-dash-page-app \.f9-dash-mobile-nav\s*\{[^}]*display:\s*flex[^}]*overflow-x:\s*auto/s,
+    );
+    expect(appCss).toMatch(
+      /\.f9-dash-page-app \.f9-dash-mobile-utility\s*\{[^}]*flex-wrap:\s*nowrap[^}]*overflow-x:\s*auto/s,
+    );
     expect(buildDashboardMobileNav({ showPresence: true }).map((item) => item.label)).toEqual([
       "Overview",
       "Search",
-      "Watchlists",
+      "Competitors",
       "Presence",
       "Collections",
-      "Digests",
+      "Briefs",
+      "Reports",
+      "Shared links",
       "Notifications",
       "Source access",
       "Developer access",
       "Account",
     ]);
+  });
+
+  it.each([
+    { label: "Competitors", path: "/app/watchlists" },
+    { label: "Briefs", path: "/app/digests" },
+    { label: "Reports", path: "/app/reports" },
+    { label: "Shared links", path: "/app/shares" },
+  ] as const)("keeps $label reachable from the mobile nav at $path", ({ label, path }) => {
+    expect(buildDashboardMobileNav({ showPresence: false })).toContainEqual(
+      expect.objectContaining({ label, to: path }),
+    );
+  });
+
+  it("does not duplicate Support in the mobile navigation helper", () => {
+    expect(buildDashboardMobileNav({ showPresence: true }).some((item) => item.label === "Support")).toBe(false);
+    const supportItems = DASHBOARD_SETTINGS_NAV.flatMap((section) => section.items).filter(
+      (item) => item.to === "/app/support",
+    );
+    expect(supportItems).toEqual([{ label: "Help & support", to: "/app/support" }]);
+  });
+
+  it("provides route-change focus and polite announcements without initial focus stealing", () => {
+    expect(shellSource).toContain("useLocation");
+    expect(shellSource).toContain('aria-live="polite"');
+    expect(shellSource).toContain("f9-sr-only");
+    expect(shellSource).toContain("hasMountedRef");
   });
 
   it("removes duplicate search topbar CTAs", () => {
@@ -57,9 +94,15 @@ describe("dashboard v2 production hotfix", () => {
   });
 
   it("exposes Team and Client rooms in the mobile utility strip", () => {
-    expect(shellSource).toContain('to="/app/team"');
-    expect(shellSource).toContain('to="/app/clients"');
+    const settingsItems = DASHBOARD_SETTINGS_NAV.flatMap((section) => section.items);
+    expect(settingsItems).toEqual(
+      expect.arrayContaining([
+        { label: "Team", to: "/app/team" },
+        { label: "Client rooms", to: "/app/clients" },
+      ]),
+    );
     expect(shellSource).toContain("f9-dash-mobile-utility");
+    expect(shellSource).toContain("MOBILE_UTILITY_NAV.map");
     expect(appCss).toMatch(/\.f9-dash-mobile-utility\s*\{[^}]*display:\s*none/s);
   });
 

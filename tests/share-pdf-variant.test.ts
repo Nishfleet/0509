@@ -4,10 +4,15 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildCollectionReport } from "~/lib/report-builder.server";
+import type { ReportDocument } from "~/lib/report";
+import {
+  createApprovedReportSnapshot,
+  reportEvidenceFingerprint,
+} from "~/lib/report-approval";
 
 import { applyMigration, createSqliteD1 } from "./helpers/sqlite-d1";
 
-const REPORT_SNAPSHOT_PAYLOAD = {
+const REPORT_BASE_PAYLOAD = {
   kind: "report",
   reportId: "shared-report",
   resourceType: "collection",
@@ -17,7 +22,8 @@ const REPORT_SNAPSHOT_PAYLOAD = {
   summary: "One saved item.",
   generatedAt: "2026-07-01T00:00:00.000Z",
   aiWeeklySummary: {
-    paragraph: "Competitors concentrated this week's movement on promotional offers.",
+    paragraph:
+      "Competitors concentrated this week's movement on promotional offers.",
     generatedAt: "2026-07-01T00:05:00.000Z",
     periodEnd: "2026-07-01T00:00:00.000Z",
   },
@@ -30,8 +36,34 @@ const REPORT_SNAPSHOT_PAYLOAD = {
     creativeTimeline: [],
     landingPageHistory: [],
   },
-  rows: [],
-};
+  rows: [
+    {
+      id: "row-1",
+      advertiser: "Competitor",
+      previewHeadline: "Board evidence",
+      offer: null,
+      cta: null,
+      formatLabel: "Image",
+      languageLabel: null,
+      previewImageUrl: null,
+      creativeText: null,
+      translatedText: null,
+      landingPage: {
+        url: "https://example.com/evidence",
+        headline: "Current evidence",
+        captureLabel: "Browser proof",
+        capturedAt: "2026-07-01T00:00:00.000Z",
+        signals: [],
+      },
+      analysisFields: [],
+      tags: [],
+      note: null,
+    },
+  ],
+} satisfies ReportDocument;
+
+const REPORT_SNAPSHOT_PAYLOAD =
+  createApprovedReportSnapshot(REPORT_BASE_PAYLOAD)!;
 
 const REPORT_SHARE = {
   id: "share-1",
@@ -46,6 +78,10 @@ const REPORT_SHARE = {
   revokedAt: null,
 };
 
+type MockShare = Omit<typeof REPORT_SHARE, "snapshotPayload"> & {
+  snapshotPayload: unknown;
+};
+
 function collectionSnapshotPayload({
   generatedAt = "2026-07-01T00:00:00.000Z",
   title = "Board",
@@ -53,22 +89,143 @@ function collectionSnapshotPayload({
   generatedAt?: string;
   title?: string;
 } = {}) {
-  return {
-    ...buildCollectionReport({
+  const report = buildCollectionReport({
+    collection: {
+      id: "col-1",
+      userId: "user-1",
+      name: title,
+      description: null,
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-01T00:00:00.000Z",
+    },
+    items: [
+      {
+        id: "item-1",
+        collectionId: "col-1",
+        adId: "meta-1",
+        note: "Saved evidence",
+        createdAt: "2026-07-15T00:00:00.000Z",
+        updatedAt: "2026-07-15T00:00:00.000Z",
+        tags: ["evidence"],
+        ad: {
+          metaAdId: "meta-1",
+          advertiser: "Competitor",
+          body: "Offer",
+          previewHeadline: "Offer",
+          previewSubhead: "",
+          hook: "Offer",
+          offer: "",
+          cta: "",
+          format: "image",
+          languageLabel: "English",
+          destinationType: "website",
+          landingPageUrl: "https://example.com/offer",
+          adSnapshotUrl: null,
+          countries: [],
+          platforms: [],
+          firstSeenAt: "2026-07-15T00:00:00.000Z",
+          lastSeenAt: "2026-07-15T00:00:00.000Z",
+          active: true,
+          researchSummary: "",
+          source: "external",
+          analysisFields: [],
+          landingPage: {
+            rawUrl: "https://example.com/offer",
+            canonicalUrl: "https://example.com/offer",
+            rawHeadline: "Current offer",
+            normalizedHeadline: "current offer",
+            normalizedHeadlineHash: "current-offer",
+            captureMethod: "browser_render",
+            capturedAt: "2026-07-15T00:00:00.000Z",
+          },
+        },
+      },
+    ],
+    generatedAt,
+  });
+  return createApprovedReportSnapshot({
+    ...report,
+    reportId: "shared-report",
+    resourceId: "shared",
+  })!;
+}
+
+const REVIEW_NONCE = "00000000-0000-4000-8000-000000000001";
+
+function reviewedBody(
+  intent: string,
+  reviewFingerprint: string,
+  reviewNonce = REVIEW_NONCE,
+) {
+  return new URLSearchParams({
+    intent,
+    reviewed: "true",
+    reviewFingerprint,
+    reviewNonce,
+  });
+}
+
+function collectionReviewFingerprint(
+  collectionName = "Board",
+  collectionItems?: unknown[],
+) {
+  const items = collectionItems ?? [
+    {
+      id: "item-1",
+      collectionId: "col-1",
+      adId: "meta-1",
+      note: "Saved evidence",
+      createdAt: "2026-07-15T00:00:00.000Z",
+      updatedAt: "2026-07-15T00:00:00.000Z",
+      tags: ["evidence"],
+      ad: {
+        metaAdId: "meta-1",
+        advertiser: "Competitor",
+        body: "Offer",
+        previewHeadline: "Offer",
+        previewSubhead: null,
+        hook: "Offer",
+        offer: null,
+        cta: null,
+        format: "image",
+        languageLabel: "English",
+        destinationType: "website",
+        landingPageUrl: "https://example.com/offer",
+        adSnapshotUrl: null,
+        countries: [],
+        platforms: [],
+        firstSeenAt: "2026-07-15T00:00:00.000Z",
+        lastSeenAt: "2026-07-15T00:00:00.000Z",
+        active: true,
+        researchSummary: null,
+        source: "external",
+        analysisFields: [],
+        landingPage: {
+          rawUrl: "https://example.com/offer",
+          canonicalUrl: "https://example.com/offer",
+          rawHeadline: "Current offer",
+          normalizedHeadline: "current offer",
+          normalizedHeadlineHash: "current-offer",
+          captureMethod: "browser_render",
+          capturedAt: "2026-07-15T00:00:00.000Z",
+        },
+      },
+    },
+  ];
+  return reportEvidenceFingerprint(
+    buildCollectionReport({
       collection: {
         id: "col-1",
         userId: "user-1",
-        name: title,
+        name: collectionName,
         description: null,
         createdAt: "2026-07-01T00:00:00.000Z",
         updatedAt: "2026-07-01T00:00:00.000Z",
       },
-      items: [],
-      generatedAt,
+      items: items as never,
+      generatedAt: "2026-07-15T00:00:00.000Z",
     }),
-    reportId: "shared-report",
-    resourceId: "shared",
-  };
+  );
 }
 
 function withSynchronizedStaleCountReads(
@@ -110,7 +267,7 @@ function withSynchronizedStaleCountReads(
 }
 
 function mockShareLoaderCollaborators(input: {
-  share?: typeof REPORT_SHARE;
+  share?: MockShare;
   plan?: string;
   branding?: {
     brandName: string | null;
@@ -120,7 +277,9 @@ function mockShareLoaderCollaborators(input: {
 }) {
   vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => ({})) }));
   vi.doMock("~/lib/plan-feature-gate.server", () => ({
-    resolveWorkspaceBrandIdentity: vi.fn().mockResolvedValue(input.branding ?? null),
+    resolveWorkspaceBrandIdentity: vi
+      .fn()
+      .mockResolvedValue(input.branding ?? null),
   }));
   vi.doMock("~/lib/plan.server", async () => {
     const { canUsePlanFeature } = await vi.importActual<
@@ -143,7 +302,8 @@ function mockShareLoaderCollaborators(input: {
 
 function mockUseLoaderData(data: Record<string, unknown>) {
   vi.doMock("react-router", async () => {
-    const actual = await vi.importActual<typeof import("react-router")>("react-router");
+    const actual =
+      await vi.importActual<typeof import("react-router")>("react-router");
     return {
       ...actual,
       Link: ({ children, to, ...props }: { children: ReactNode; to: string }) =>
@@ -169,6 +329,44 @@ afterEach(() => {
 });
 
 describe("/share/:token loader PDF affordances", () => {
+  it("fails closed for an unreviewed report snapshot", async () => {
+    mockShareLoaderCollaborators({
+      share: {
+        ...REPORT_SHARE,
+        snapshotPayload: {
+          ...REPORT_SNAPSHOT_PAYLOAD,
+          reviewState: "draft",
+        },
+      },
+    });
+    const { loader } = await import("~/routes/share.$token");
+    const result = (await loader({
+      context: {},
+      params: { token: "token-1" },
+      request: new Request("https://0509.io/share/token-1"),
+    } as never)) as Record<string, unknown>;
+    expect(result.payload).toBeNull();
+  });
+
+  it("fails closed for an expired approved report snapshot", async () => {
+    mockShareLoaderCollaborators({
+      share: {
+        ...REPORT_SHARE,
+        snapshotPayload: {
+          ...REPORT_SNAPSHOT_PAYLOAD,
+          approvalExpiresAt: "2020-01-01T00:00:00.000Z",
+        },
+      },
+    });
+    const { loader } = await import("~/routes/share.$token");
+    const result = (await loader({
+      context: {},
+      params: { token: "token-1" },
+      request: new Request("https://0509.io/share/token-1"),
+    } as never)) as Record<string, unknown>;
+    expect(result.payload).toBeNull();
+  });
+
   it("exposes only a pdf path (never plan details) for agency report snapshots", async () => {
     mockShareLoaderCollaborators({ plan: "agency" });
 
@@ -183,7 +381,8 @@ describe("/share/:token loader PDF affordances", () => {
     expect(result.pdfVariant).toBe(false);
     expect(result.payload).toMatchObject({
       aiWeeklySummary: {
-        paragraph: "Competitors concentrated this week's movement on promotional offers.",
+        paragraph:
+          "Competitors concentrated this week's movement on promotional offers.",
         generatedAt: "2026-07-01T00:05:00.000Z",
         periodEnd: "2026-07-01T00:00:00.000Z",
       },
@@ -257,7 +456,9 @@ describe("/share/:token PDF variant markup", () => {
     expect(markup).toContain("Northlight Media");
     expect(markup).toContain("https://northlight.example");
     expect(markup).toContain("Prepared with Five to Nine");
-    expect(markup).toContain("Competitors concentrated this week&#x27;s movement");
+    expect(markup).toContain(
+      "Competitors concentrated this week&#x27;s movement",
+    );
     expect(markup).not.toContain("Download PDF");
     expect(markup).not.toContain("Print report");
     expect(markup).not.toContain("<button");
@@ -331,6 +532,7 @@ describe("/app/reports/:id PDF wiring", () => {
   function mockReportsCollaborators(input: {
     pdfAllowed: boolean;
     collectionName?: string;
+    collectionItems?: unknown[];
     existingShares?: Array<Record<string, unknown>>;
     createShareLink?: ReturnType<typeof vi.fn>;
   }) {
@@ -344,20 +546,38 @@ describe("/app/reports/:id PDF wiring", () => {
     }));
     vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => ({})) }));
     vi.doMock("~/lib/plan-feature-gate.server", () => ({
-      requireWorkspacePlanFeature: vi.fn(async (_env: unknown, _userId: string, feature: string) => {
-        if (feature === "pdf_reports" && !input.pdfAllowed) {
-          return { ok: false, plan: "starter", response: new Response("denied", { status: 403 }) };
-        }
-        return { ok: true, plan: "agency" };
-      }),
+      requireWorkspacePlanFeature: vi.fn(
+        async (_env: unknown, _userId: string, feature: string) => {
+          if (feature === "pdf_reports" && !input.pdfAllowed) {
+            return {
+              ok: false,
+              plan: "starter",
+              response: new Response("denied", { status: 403 }),
+            };
+          }
+          return { ok: true, plan: "agency" };
+        },
+      ),
       resolveWorkspacePreparedBy: vi.fn().mockResolvedValue(null),
     }));
     const createShareLink =
-      input.createShareLink ?? vi.fn().mockResolvedValue({ id: "share-new", token: "fresh-token", expiresAt: null });
+      input.createShareLink ??
+      vi.fn().mockResolvedValue({
+        id: "share-new",
+        token: "fresh-token",
+        expiresAt: null,
+      });
+    const collectionItems = input.collectionItems ?? undefined;
+    const reviewFingerprint = collectionReviewFingerprint(
+      input.collectionName ?? "Board",
+      collectionItems,
+    );
     vi.doMock("~/lib/data.server", () => ({
       createShareLink,
       getLatestDigestRunSummaryForWatchlist: vi.fn().mockResolvedValue(null),
-      listActiveShareLinks: vi.fn().mockResolvedValue(input.existingShares ?? []),
+      listActiveShareLinks: vi
+        .fn()
+        .mockResolvedValue(input.existingShares ?? []),
       getCollection: vi.fn().mockResolvedValue({
         id: "col-1",
         name: input.collectionName ?? "Board",
@@ -365,19 +585,215 @@ describe("/app/reports/:id PDF wiring", () => {
       }),
       getWatchlist: vi.fn(),
       listAdsByIds: vi.fn().mockResolvedValue([]),
-      listCollectionItems: vi.fn().mockResolvedValue([]),
+      listCollectionItems: vi.fn().mockResolvedValue(
+        collectionItems ?? [
+          {
+            id: "item-1",
+            collectionId: "col-1",
+            adId: "meta-1",
+            note: "Saved evidence",
+            createdAt: "2026-07-15T00:00:00.000Z",
+            updatedAt: "2026-07-15T00:00:00.000Z",
+            tags: ["evidence"],
+            ad: {
+              metaAdId: "meta-1",
+              advertiser: "Competitor",
+              body: "Offer",
+              previewHeadline: "Offer",
+              previewSubhead: null,
+              hook: "Offer",
+              offer: null,
+              cta: null,
+              format: "image",
+              languageLabel: "English",
+              destinationType: "website",
+              landingPageUrl: "https://example.com/offer",
+              adSnapshotUrl: null,
+              countries: [],
+              platforms: [],
+              firstSeenAt: "2026-07-15T00:00:00.000Z",
+              lastSeenAt: "2026-07-15T00:00:00.000Z",
+              active: true,
+              researchSummary: null,
+              source: "external",
+              analysisFields: [],
+              landingPage: {
+                rawUrl: "https://example.com/offer",
+                canonicalUrl: "https://example.com/offer",
+                rawHeadline: "Current offer",
+                normalizedHeadline: "current offer",
+                normalizedHeadlineHash: "current-offer",
+                captureMethod: "browser_render",
+                capturedAt: "2026-07-15T00:00:00.000Z",
+              },
+            },
+          },
+        ],
+      ),
       listWatchEvents: vi.fn(),
     }));
-    return { createShareLink };
+    return { createShareLink, reviewFingerprint };
   }
+
+  it("requires an explicit owner review before minting a PDF snapshot", async () => {
+    const { createShareLink } = mockReportsCollaborators({ pdfAllowed: true });
+    const { action } = await import("~/routes/app.reports");
+    const result = await action({
+      context: {},
+      params: { id: "collection:col-1" },
+      request: new Request("https://0509.io/app/reports/collection:col-1", {
+        method: "POST",
+        body: new URLSearchParams({ intent: "download-pdf" }),
+      }),
+    } as never);
+
+    expect(result).toMatchObject({
+      error: "review_required",
+      intent: "download-pdf",
+    });
+    expect(createShareLink).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when the current report has no saved evidence", async () => {
+    const { createShareLink, reviewFingerprint } = mockReportsCollaborators({
+      pdfAllowed: true,
+      collectionItems: [],
+    });
+    const { action } = await import("~/routes/app.reports");
+    const result = await action({
+      context: {},
+      params: { id: "collection:col-1" },
+      request: new Request("https://0509.io/app/reports/collection:col-1", {
+        method: "POST",
+        body: reviewedBody("share-report", reviewFingerprint),
+      }),
+    } as never);
+
+    expect(result).toMatchObject({
+      error: "evidence_not_ready",
+      intent: "share-report",
+    });
+    expect(createShareLink).not.toHaveBeenCalled();
+  });
+
+  it("rejects a review bound to an older evidence fingerprint with the report recovery path", async () => {
+    const { createShareLink, reviewFingerprint } = mockReportsCollaborators({
+      pdfAllowed: true,
+    });
+    const { action } = await import("~/routes/app.reports");
+    const result = await action({
+      context: {},
+      params: { id: "collection:col-1" },
+      request: new Request("https://0509.io/app/reports/collection:col-1", {
+        method: "POST",
+        body: reviewedBody("share-report", `${reviewFingerprint}-stale`),
+      }),
+    } as never);
+
+    expect(result).toMatchObject({
+      error: "review_stale",
+      intent: "share-report",
+      recoveryPath: "/app/reports/collection:col-1",
+    });
+    expect(createShareLink).not.toHaveBeenCalled();
+  });
+
+  it("fails closed with a report recovery path when publish loses a revoke race", async () => {
+    const { createShareLink, reviewFingerprint } = mockReportsCollaborators({
+      pdfAllowed: true,
+      createShareLink: vi
+        .fn()
+        .mockRejectedValue(new Error("share_link_inactive")),
+    });
+    const { action } = await import("~/routes/app.reports");
+    const result = await action({
+      context: {},
+      params: { id: "collection:col-1" },
+      request: new Request("https://0509.io/app/reports/collection:col-1", {
+        method: "POST",
+        body: reviewedBody("share-report", reviewFingerprint),
+      }),
+    } as never);
+
+    expect(result).toMatchObject({
+      error: "share_link_inactive",
+      intent: "share-report",
+      recoveryPath: "/app/reports/collection:col-1",
+    });
+  });
+
+  it("derives the same owner-scoped publication id for same-page duplicate PDF submissions", async () => {
+    const { createShareLink, reviewFingerprint } = mockReportsCollaborators({
+      pdfAllowed: true,
+    });
+    const { action } = await import("~/routes/app.reports");
+    const request = () =>
+      new Request("https://0509.io/app/reports/collection:col-1", {
+        method: "POST",
+        body: reviewedBody("download-pdf", reviewFingerprint),
+      });
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        await action({
+          context: {},
+          params: { id: "collection:col-1" },
+          request: request(),
+        } as never);
+      } catch (thrown) {
+        expect((thrown as Response).status).toBe(303);
+      }
+    }
+
+    const firstId = (createShareLink.mock.calls[0]?.[2] as { id?: string }).id;
+    const secondId = (createShareLink.mock.calls[1]?.[2] as { id?: string }).id;
+    expect(firstId).toMatch(/^report_pdf_[0-9a-f]{64}$/);
+    expect(secondId).toBe(firstId);
+    expect(
+      (createShareLink.mock.calls[0]?.[2] as { token?: string }).token,
+    ).toBeUndefined();
+  });
+
+  it("derives a stable owner-scoped publication id for same-page duplicate shares", async () => {
+    const { createShareLink, reviewFingerprint } = mockReportsCollaborators({
+      pdfAllowed: true,
+    });
+    const { action } = await import("~/routes/app.reports");
+    const request = () =>
+      new Request("https://0509.io/app/reports/collection:col-1", {
+        method: "POST",
+        body: reviewedBody("share-report", reviewFingerprint),
+      });
+
+    await action({
+      context: {},
+      params: { id: "collection:col-1" },
+      request: request(),
+    } as never);
+    await action({
+      context: {},
+      params: { id: "collection:col-1" },
+      request: request(),
+    } as never);
+
+    const firstId = (createShareLink.mock.calls[0]?.[2] as { id?: string }).id;
+    const secondId = (createShareLink.mock.calls[1]?.[2] as { id?: string }).id;
+    expect(firstId).toMatch(/^report_share_[0-9a-f]{64}$/);
+    expect(secondId).toBe(firstId);
+    expect(
+      (createShareLink.mock.calls[0]?.[2] as { token?: string }).token,
+    ).toBeUndefined();
+  });
 
   it("download-pdf mints a snapshot share and 303-redirects to its /pdf", async () => {
     const now = 1_783_000_000_000;
     vi.spyOn(Date, "now").mockReturnValue(now);
-    const { createShareLink } = mockReportsCollaborators({ pdfAllowed: true });
+    const { createShareLink, reviewFingerprint } = mockReportsCollaborators({
+      pdfAllowed: true,
+    });
 
     const { action } = await import("~/routes/app.reports");
-    const body = new URLSearchParams({ intent: "download-pdf" });
+    const body = reviewedBody("download-pdf", reviewFingerprint);
     let redirected: Response | null = null;
     try {
       await action({
@@ -397,21 +813,29 @@ describe("/app/reports/:id PDF wiring", () => {
     expect(redirected?.headers.get("location")).toBe("/share/fresh-token/pdf");
     expect(createShareLink).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ user: expect.objectContaining({ id: "user-1" }) }),
+      expect.objectContaining({
+        user: expect.objectContaining({ id: "user-1" }),
+      }),
       expect.objectContaining({
         resourceType: "report",
         isSnapshot: true,
-        snapshotPayload: expect.objectContaining({ sharePurpose: "pdf-render" }),
+        snapshotPayload: expect.objectContaining({
+          sharePurpose: "pdf-render",
+        }),
         expiresAt: expect.any(String),
       }),
     );
 
-    const createInput = createShareLink.mock.calls[0]?.[2] as { expiresAt?: string };
-    expect(createInput.expiresAt).toBe(new Date(now + 10 * 60 * 1000).toISOString());
+    const createInput = createShareLink.mock.calls[0]?.[2] as {
+      expiresAt?: string;
+    };
+    expect(createInput.expiresAt).toBe(
+      new Date(now + 10 * 60 * 1000).toISOString(),
+    );
   });
 
   it("reuses a snapshot share minted moments ago instead of creating another", async () => {
-    const { createShareLink } = mockReportsCollaborators({
+    const { createShareLink, reviewFingerprint } = mockReportsCollaborators({
       pdfAllowed: true,
       existingShares: [
         {
@@ -421,7 +845,10 @@ describe("/app/reports/:id PDF wiring", () => {
           resourceType: "report",
           resourceId: "collection:col-1",
           isSnapshot: true,
-          snapshotPayload: { ...collectionSnapshotPayload(), sharePurpose: "pdf-render" },
+          snapshotPayload: {
+            ...collectionSnapshotPayload(),
+            sharePurpose: "pdf-render",
+          },
           createdAt: new Date(Date.now() - 60 * 1000).toISOString(),
           expiresAt: new Date(Date.now() + 9 * 60 * 1000).toISOString(),
           revokedAt: null,
@@ -438,7 +865,7 @@ describe("/app/reports/:id PDF wiring", () => {
         request: new Request("https://0509.io/app/reports/collection:col-1", {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ intent: "download-pdf" }).toString(),
+          body: reviewedBody("download-pdf", reviewFingerprint).toString(),
         }),
       } as never);
     } catch (thrown) {
@@ -450,7 +877,7 @@ describe("/app/reports/:id PDF wiring", () => {
   });
 
   it("does not reuse a canonical default-lifetime public snapshot for PDF rendering", async () => {
-    const { createShareLink } = mockReportsCollaborators({
+    const { createShareLink, reviewFingerprint } = mockReportsCollaborators({
       pdfAllowed: true,
       existingShares: [
         {
@@ -464,7 +891,9 @@ describe("/app/reports/:id PDF wiring", () => {
           createdAt: new Date(Date.now() - 60 * 1000).toISOString(),
           // The share-link helper's normal 90-day default is represented by
           // this long expiry; PDF downloads must mint their own short token.
-          expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+          expiresAt: new Date(
+            Date.now() + 90 * 24 * 60 * 60 * 1000,
+          ).toISOString(),
           revokedAt: null,
         },
       ],
@@ -479,7 +908,7 @@ describe("/app/reports/:id PDF wiring", () => {
         request: new Request("https://0509.io/app/reports/collection:col-1", {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ intent: "download-pdf" }).toString(),
+          body: reviewedBody("download-pdf", reviewFingerprint).toString(),
         }),
       } as never);
     } catch (thrown) {
@@ -491,14 +920,16 @@ describe("/app/reports/:id PDF wiring", () => {
       expect.anything(),
       expect.anything(),
       expect.objectContaining({
-        snapshotPayload: expect.objectContaining({ sharePurpose: "pdf-render" }),
+        snapshotPayload: expect.objectContaining({
+          sharePurpose: "pdf-render",
+        }),
         expiresAt: expect.any(String),
       }),
     );
   });
 
   it("mints a fresh PDF token when a matching render share is too close to expiry", async () => {
-    const { createShareLink } = mockReportsCollaborators({
+    const { createShareLink, reviewFingerprint } = mockReportsCollaborators({
       pdfAllowed: true,
       existingShares: [
         {
@@ -508,7 +939,10 @@ describe("/app/reports/:id PDF wiring", () => {
           resourceType: "report",
           resourceId: "collection:col-1",
           isSnapshot: true,
-          snapshotPayload: { ...collectionSnapshotPayload(), sharePurpose: "pdf-render" },
+          snapshotPayload: {
+            ...collectionSnapshotPayload(),
+            sharePurpose: "pdf-render",
+          },
           createdAt: new Date(Date.now() - 60 * 1000).toISOString(),
           expiresAt: new Date(Date.now() + 60 * 1000).toISOString(),
           revokedAt: null,
@@ -525,7 +959,7 @@ describe("/app/reports/:id PDF wiring", () => {
         request: new Request("https://0509.io/app/reports/collection:col-1", {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ intent: "download-pdf" }).toString(),
+          body: reviewedBody("download-pdf", reviewFingerprint).toString(),
         }),
       } as never);
     } catch (thrown) {
@@ -537,7 +971,7 @@ describe("/app/reports/:id PDF wiring", () => {
   });
 
   it("mints a fresh snapshot when the current report changed within the reuse window", async () => {
-    const { createShareLink } = mockReportsCollaborators({
+    const { createShareLink, reviewFingerprint } = mockReportsCollaborators({
       pdfAllowed: true,
       collectionName: "Board updated",
       existingShares: [
@@ -565,7 +999,7 @@ describe("/app/reports/:id PDF wiring", () => {
         request: new Request("https://0509.io/app/reports/collection:col-1", {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ intent: "download-pdf" }).toString(),
+          body: reviewedBody("download-pdf", reviewFingerprint).toString(),
         }),
       } as never);
     } catch (thrown) {
@@ -584,7 +1018,7 @@ describe("/app/reports/:id PDF wiring", () => {
   });
 
   it("mints a fresh snapshot instead of reusing a recent invalid legacy payload", async () => {
-    const { createShareLink } = mockReportsCollaborators({
+    const { createShareLink, reviewFingerprint } = mockReportsCollaborators({
       pdfAllowed: true,
       existingShares: [
         {
@@ -611,7 +1045,7 @@ describe("/app/reports/:id PDF wiring", () => {
         request: new Request("https://0509.io/app/reports/collection:col-1", {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ intent: "download-pdf" }).toString(),
+          body: reviewedBody("download-pdf", reviewFingerprint).toString(),
         }),
       } as never);
     } catch (thrown) {
@@ -622,26 +1056,29 @@ describe("/app/reports/:id PDF wiring", () => {
     expect(createShareLink).toHaveBeenCalledTimes(1);
   });
 
-  it("throws the plan-gate response for non-agency download-pdf attempts", async () => {
-    mockReportsCollaborators({ pdfAllowed: false });
+  it("returns mapped plan recovery for non-agency download-pdf attempts", async () => {
+    const { reviewFingerprint } = mockReportsCollaborators({
+      pdfAllowed: false,
+    });
 
     const { action } = await import("~/routes/app.reports");
-    let thrown: Response | null = null;
-    try {
-      await action({
-        context: {},
-        params: { id: "collection:col-1" },
-        request: new Request("https://0509.io/app/reports/collection:col-1", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ intent: "download-pdf" }).toString(),
-        }),
-      } as never);
-    } catch (error) {
-      thrown = error as Response;
-    }
+    const result = await action({
+      context: {},
+      params: { id: "collection:col-1" },
+      request: new Request("https://0509.io/app/reports/collection:col-1", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: reviewedBody("download-pdf", reviewFingerprint).toString(),
+      }),
+    } as never);
 
-    expect(thrown?.status).toBe(403);
+    expect(result).toMatchObject({
+      ok: false,
+      error: "plan_gated",
+      feature: "pdf_reports",
+      intent: "download-pdf",
+      upgradePath: "/app/billing?source=reports#plans",
+    });
   });
 });
 
@@ -651,12 +1088,14 @@ describe("share-pdf rate limit policies", () => {
     applyMigration(harness.sqlite, "migrations/0012_rate_limit_events.sql");
     const env = { DB: harness.db } as never;
 
-    const { enforceSharePdfRateLimit, enforceSharePdfDailyCap } = await import(
-      "~/lib/rate-limit.server"
+    const { enforceSharePdfRateLimit, enforceSharePdfDailyCap } =
+      await import("~/lib/rate-limit.server");
+    const request = new Request(
+      "https://0509.io/share/super-secret-token/pdf",
+      {
+        headers: { "cf-connecting-ip": "203.0.113.7" },
+      },
     );
-    const request = new Request("https://0509.io/share/super-secret-token/pdf", {
-      headers: { "cf-connecting-ip": "203.0.113.7" },
-    });
 
     expect(await enforceSharePdfRateLimit(request, env)).toBeNull();
     expect(await enforceSharePdfDailyCap(request, env, "sharer-1")).toBeNull();
@@ -669,7 +1108,10 @@ describe("share-pdf rate limit policies", () => {
       expect(row.route).toBe("/share/:token/pdf");
       expect(row.route).not.toContain("super-secret-token");
     }
-    expect(rows.map((row) => row.scope).sort()).toEqual(["share-pdf", "share-pdf-daily"]);
+    expect(rows.map((row) => row.scope).sort()).toEqual([
+      "share-pdf",
+      "share-pdf-daily",
+    ]);
 
     // Fail closed without a DB binding — these are the only spend gates.
     const closed = await enforceSharePdfRateLimit(request, {} as never);
@@ -682,9 +1124,8 @@ describe("share-pdf rate limit policies", () => {
     applyMigration(harness.sqlite, "migrations/0012_rate_limit_events.sql");
     const env = { DB: harness.db } as never;
 
-    const { enforceSharePdfRateLimit, enforceSharePdfDailyCap } = await import(
-      "~/lib/rate-limit.server"
-    );
+    const { enforceSharePdfRateLimit, enforceSharePdfDailyCap } =
+      await import("~/lib/rate-limit.server");
     const request = new Request("https://0509.io/share/token-x/pdf", {
       headers: { "cf-connecting-ip": "203.0.113.7" },
     });
@@ -696,9 +1137,15 @@ describe("share-pdf rate limit policies", () => {
     expect(ipBlocked?.status).toBe(429);
 
     for (let index = 0; index < 40; index += 1) {
-      expect(await enforceSharePdfDailyCap(request, env, "sharer-1")).toBeNull();
+      expect(
+        await enforceSharePdfDailyCap(request, env, "sharer-1"),
+      ).toBeNull();
     }
-    const dailyBlocked = await enforceSharePdfDailyCap(request, env, "sharer-1");
+    const dailyBlocked = await enforceSharePdfDailyCap(
+      request,
+      env,
+      "sharer-1",
+    );
     expect(dailyBlocked?.status).toBe(429);
     // A different sharer's budget is untouched.
     expect(await enforceSharePdfDailyCap(request, env, "sharer-2")).toBeNull();
@@ -708,8 +1155,11 @@ describe("share-pdf rate limit policies", () => {
   it("atomically admits only five concurrent requests from one viewer IP", async () => {
     const harness = createSqliteD1();
     applyMigration(harness.sqlite, "migrations/0012_rate_limit_events.sql");
-    const env = { DB: withSynchronizedStaleCountReads(harness.db, 12) } as never;
-    const { enforceSharePdfRateLimit } = await import("~/lib/rate-limit.server");
+    const env = {
+      DB: withSynchronizedStaleCountReads(harness.db, 12),
+    } as never;
+    const { enforceSharePdfRateLimit } =
+      await import("~/lib/rate-limit.server");
     const request = new Request("https://0509.io/share/token-x/pdf", {
       headers: { "cf-connecting-ip": "203.0.113.7" },
     });
@@ -719,9 +1169,13 @@ describe("share-pdf rate limit policies", () => {
     );
 
     expect(outcomes.filter((outcome) => outcome === null)).toHaveLength(5);
-    expect(outcomes.filter((outcome) => outcome?.status === 429)).toHaveLength(7);
+    expect(outcomes.filter((outcome) => outcome?.status === 429)).toHaveLength(
+      7,
+    );
     const row = harness.sqlite
-      .prepare("SELECT COUNT(*) AS count FROM rate_limit_events WHERE scope = 'share-pdf'")
+      .prepare(
+        "SELECT COUNT(*) AS count FROM rate_limit_events WHERE scope = 'share-pdf'",
+      )
       .get() as { count: number };
     expect(Number(row.count)).toBe(5);
     harness.close();
@@ -730,20 +1184,28 @@ describe("share-pdf rate limit policies", () => {
   it("atomically admits only forty concurrent render reservations per sharer", async () => {
     const harness = createSqliteD1();
     applyMigration(harness.sqlite, "migrations/0012_rate_limit_events.sql");
-    const env = { DB: withSynchronizedStaleCountReads(harness.db, 50) } as never;
+    const env = {
+      DB: withSynchronizedStaleCountReads(harness.db, 50),
+    } as never;
     const { enforceSharePdfDailyCap } = await import("~/lib/rate-limit.server");
     const request = new Request("https://0509.io/share/token-x/pdf", {
       headers: { "cf-connecting-ip": "203.0.113.7" },
     });
 
     const outcomes = await Promise.all(
-      Array.from({ length: 50 }, () => enforceSharePdfDailyCap(request, env, "sharer-1")),
+      Array.from({ length: 50 }, () =>
+        enforceSharePdfDailyCap(request, env, "sharer-1"),
+      ),
     );
 
     expect(outcomes.filter((outcome) => outcome === null)).toHaveLength(40);
-    expect(outcomes.filter((outcome) => outcome?.status === 429)).toHaveLength(10);
+    expect(outcomes.filter((outcome) => outcome?.status === 429)).toHaveLength(
+      10,
+    );
     const row = harness.sqlite
-      .prepare("SELECT COUNT(*) AS count FROM rate_limit_events WHERE scope = 'share-pdf-daily'")
+      .prepare(
+        "SELECT COUNT(*) AS count FROM rate_limit_events WHERE scope = 'share-pdf-daily'",
+      )
       .get() as { count: number };
     expect(Number(row.count)).toBe(40);
     harness.close();

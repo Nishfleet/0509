@@ -96,11 +96,13 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   if (intent === "revoke") {
     const memberId = String(formData.get("memberId") ?? "");
-    await revokeWorkspaceMember(env, {
+    const revoked = await revokeWorkspaceMember(env, {
       ownerUserId: session.user.id,
       memberRowId: memberId,
     });
-    return { ok: true, intent, memberId, message: "Seat revoked. Their access ends immediately." };
+    return revoked.ok
+      ? { ok: true, intent, memberId, message: "Seat revoked. Their access ends immediately." }
+      : { ok: false, intent, memberId, message: revoked.reason };
   }
 
   if (intent === "resend-invite") {

@@ -11,10 +11,12 @@ import {
  * @param {string[]} args
  */
 function parseArgs(args) {
-  /** @type {{ baseUrl: string | undefined, expectedApp: string | null, queries: string[], json: boolean, searchTimeoutMs: number | undefined, metaAdsStrict: boolean }} */
+  /** @type {{ baseUrl: string | undefined, expectedApp: string | null, expectedWorkerVersionId: string | null, expectedSearchRolloutMode: string, queries: string[], json: boolean, searchTimeoutMs: number | undefined, metaAdsStrict: boolean }} */
   const parsed = {
     baseUrl: process.env.CANARY_BASE_URL || undefined,
     expectedApp: process.env.CANARY_EXPECTED_APP || DEFAULT_CANARY_EXPECTED_APP,
+    expectedWorkerVersionId: process.env.CANARY_EXPECTED_WORKER_VERSION_ID || null,
+    expectedSearchRolloutMode: process.env.CANARY_EXPECTED_SEARCH_ROLLOUT_MODE || "shadow",
     queries: [],
     json: false,
     searchTimeoutMs: parsePositiveInteger(process.env.CANARY_SEARCH_TIMEOUT_MS),
@@ -35,6 +37,16 @@ function parseArgs(args) {
     }
     if (arg === "--expected-app" && args[index + 1]) {
       parsed.expectedApp = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (arg === "--expected-worker-version" && args[index + 1]) {
+      parsed.expectedWorkerVersionId = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (arg === "--expected-search-rollout-mode" && args[index + 1]) {
+      parsed.expectedSearchRolloutMode = args[index + 1];
       index += 1;
       continue;
     }
@@ -72,6 +84,8 @@ const config = parseArgs(process.argv.slice(2));
 const report = await runProductionCanary({
   baseUrl: config.baseUrl,
   expectedApp: config.expectedApp,
+  expectedWorkerVersionId: config.expectedWorkerVersionId,
+  expectedSearchRolloutMode: config.expectedSearchRolloutMode,
   queries: config.queries,
   canaryBypassToken: process.env.CANARY_BYPASS_TOKEN,
   searchTimeoutMs: config.searchTimeoutMs,

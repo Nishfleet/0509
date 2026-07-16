@@ -14,7 +14,7 @@ export const demoProof = {
     proofCount: 3,
     deliveryPreview: "Email digest with a markdown export preview",
     loop: [
-      "Run a public live search",
+      "Run the public search preview",
       "Create an account to save the competitor",
       "Receive the change brief with sources attached",
     ],

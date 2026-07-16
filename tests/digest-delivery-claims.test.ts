@@ -7,7 +7,7 @@ function digestInput() {
   return {
     userId: "user-1",
     userName: "Owner",
-    accountEmail: null,
+    accountEmail: "owner@example.com",
     digestRunId: "digest-1",
     periodStart: PERIOD_START,
     periodEnd: PERIOD_END,
@@ -97,6 +97,12 @@ function mockDataServer(input: {
     createDeliveryAttempt,
     updateDeliveryAttemptResult: input.updateDeliveryAttemptResult,
     getDeliveryAttemptByIdempotencyKey: input.getDeliveryAttemptByIdempotencyKey,
+    getUserDeliveryProfile: vi.fn().mockResolvedValue({
+      id: "user-1",
+      email: "owner@example.com",
+      name: "Owner",
+      emailVerified: true,
+    }),
     getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
       id: "workspace-1",
       userId: "user-1",

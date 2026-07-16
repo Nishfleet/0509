@@ -30,6 +30,7 @@ export {
   getWatchlist,
   createWatchlistWithinLimit,
   createWatchlist,
+  deleteUnscannedWatchlistCreatedByFailedAgentAction,
   updateWatchlist,
   setWatchlistActive,
   listWebMentionTargets,
@@ -79,9 +80,16 @@ export {
 } from "~/lib/data/watchlists.server";
 
 export {
+  listRecentWorkspaceWatchEvents,
+  listWatchEventsPage,
+  listWatchEventsForRun,
+} from "~/lib/data/watch-events.server";
+
+export {
   grantProofUsageCredit,
   grantDodoPlanAccess,
   DODO_WEBHOOK_PROCESSING_LEASE_MS,
+  applyDodoCancellationReversalWithLedger,
   applyDodoPlanGrantWithWatchlistReconcile,
   applyDodoPlanRevokeWithWatchlistReconcile,
   applyDodoRefundWithWatchlistReconcile,
@@ -128,6 +136,8 @@ export {
   upsertDeliveryTarget,
   getDeliveryTargetById,
   getDeliveryTargetByProviderIdentifier,
+  claimEmailTargetForDispatch,
+  suppressEmailTargetsForUserAndAddress,
   getUserDeliveryProfile,
   listDeliveryAttempts,
   getDeliveryAttemptByIdempotencyKey,
@@ -141,6 +151,21 @@ export {
   type BillingLifecycleOutboxGate,
   type InstantDeliveryAttemptClaimInput,
 } from "~/lib/data/delivery-records.server";
+
+export {
+  listBillingLifecycleReconciliationCandidates,
+  reconcileBillingLifecycleEmailAttempt,
+  type BillingLifecycleEmailReconciliationInput,
+  type BillingLifecycleEmailReconciliationResult,
+  type BillingLifecycleReconciliationCandidate,
+  type BillingLifecycleReconciliationOutcome,
+} from "~/lib/data/billing-lifecycle-reconciliation.server";
+
+export {
+  cleanupLaunchReadinessCanary,
+  type LaunchCanaryCleanupInput,
+  type LaunchCanaryCleanupResult,
+} from "~/lib/data/launch-canary-cleanup.server";
 
 export {
   createDigestRun,
@@ -160,6 +185,8 @@ export {
   listCollections,
   getCollection,
   createCollection,
+  createCollectionWithinLimit,
+  type CreateCollectionWithinLimitResult,
   listCollectionItemsPage,
   listCollectionItems,
   updateCollectionItem,
@@ -180,11 +207,13 @@ export {
   listAgentMemory,
   listAgentMemoryForClientRooms,
   getClientRoom,
+  getClientRoomByName,
   upsertClientRoom,
   listClientRooms,
   listCustomerApiKeys,
   insertCustomerApiKey,
   getActiveCustomerApiKeyByHash,
+  isActiveCustomerApiKey,
   recordCustomerApiKeyUsed,
   revokeCustomerApiKey,
   getCustomerMetaConnection,
@@ -229,6 +258,7 @@ export {
   getWeeklyBusinessSummary,
   getOperatorRiskSummary,
   getOperatorSnapshot,
+  getOperatorSupportCase,
   logMetaIntegrationStatus,
   getMetaIntegrationStatus,
   getLaunchReadinessSignals,

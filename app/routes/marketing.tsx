@@ -18,7 +18,8 @@ import type { RootLoaderData } from "~/root";
 
 const marketingDescription =
   "Five to Nine tracks competitor ads, offers, and landing pages so revenue teams can react before deals move.";
-const publicSearchTrialPath = "/search?website=https%3A%2F%2Fnykaa.com";
+const publicSearchTrialPath =
+  "/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com";
 
 export const links: LinksFunction = () => canonicalLinks("/");
 
@@ -29,17 +30,18 @@ export const meta: MetaFunction = () =>
     pathname: "/",
   });
 
-export async function loader({ context, request }: LoaderFunctionArgs) {
+const noPricingPreview = { available: false } as const;
+
+export async function loader({ context }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
-  const { previewDodo0509PlanPrices } = await import("~/lib/dodo-pricing.server");
   const { publicCommercialLaunchSummary } = await import("~/lib/commercial-launch-gate.server");
   const env = getEnv(context);
 
   return {
-    pricingPreview: await previewDodo0509PlanPrices({
-      env,
-      request,
-    }),
+    // Keep the document request provider-independent. The client hydrates
+    // buyer-country pricing from /api/pricing-preview after the page is
+    // visible, so an unavailable provider never blocks the homepage HTML.
+    pricingPreview: noPricingPreview,
     commercialLaunch: publicCommercialLaunchSummary(env),
   };
 }
@@ -55,19 +57,19 @@ const howSteps = [
   {
     step: "01",
     title: "Paste their website",
-    detail: "See a competitor's live ads immediately — free, before any account exists.",
+    detail: "Preview available competitor ads before creating an account. Coverage and freshness are labeled and can vary by source.",
   },
   {
     step: "02",
-    title: "We watch while you sleep",
+    title: "Paid monitoring keeps checking",
     detail:
-      "Five to Nine checks their ads, offers, CTAs, and forms, and saves screenshots, page text, and links for every change.",
+      "When scheduled monitoring is active on your paid plan, Five to Nine checks ads, offers, CTAs, and forms and saves source-linked evidence for each confirmed change.",
   },
   {
     step: "03",
-    title: "The morning brief lands",
+    title: "The weekly brief stays focused",
     detail:
-      "What changed and why it matters, before your day starts — with the screenshots and links your team needs to act fast.",
+      "When digest delivery is active, the brief groups meaningful changes with freshness, uncertainty, screenshots, links, and one next review.",
   },
 ] as const;
 
@@ -405,7 +407,7 @@ export default function MarketingRoute() {
         </Link>
 
         <nav className="ld-nav-links" aria-label="Primary">
-          <Link to={publicSearchTrialPath}>Live search</Link>
+          <Link to={publicSearchTrialPath}>Search preview</Link>
           <a href="#demo">Sample brief</a>
           <a href="#pricing">Pricing</a>
         </nav>
@@ -422,8 +424,8 @@ export default function MarketingRoute() {
 
       <section className="ld-hero">
         <Link className="f9-announcement" to={publicSearchTrialPath}>
-          <strong>Free live search</strong>
-          <span>See what changed before you sign up</span>
+          <strong>Free search preview</strong>
+          <span>Provider coverage and freshness vary</span>
         </Link>
 
         <p className="ld-case">
@@ -452,7 +454,7 @@ export default function MarketingRoute() {
               saves the screenshots, and files the brief — <b>before your alarm goes off.</b>
             </p>
 
-            <Form className="ld-command" method="get" action="/search" aria-label="Free live search">
+            <Form className="ld-command" method="get" action="/search" aria-label="Public search preview">
               <input
                 aria-label="Competitor website"
                 name="website"
@@ -463,7 +465,7 @@ export default function MarketingRoute() {
                 spellCheck={false}
               />
               <button type="submit">
-                See their live ads <span aria-hidden="true">→</span>
+                Preview available ads <span aria-hidden="true">→</span>
               </button>
             </Form>
 
@@ -473,8 +475,8 @@ export default function MarketingRoute() {
             </div>
 
             <p className="ld-honest" role="note">
-              <strong>No account needed.</strong> Search one competitor now. We label verified,
-              related, cached, and sample evidence separately.
+              <strong>No account needed.</strong> Preview one competitor now. We label source,
+              freshness, coverage, cached results, and sample evidence separately.
             </p>
           </div>
 
@@ -563,7 +565,7 @@ export default function MarketingRoute() {
             source, and next action before creating an account.
           </p>
           <div className="ld-proof-actions">
-            <Link to={publicSearchTrialPath}>Try live search</Link>
+            <Link to={publicSearchTrialPath}>Try the search preview</Link>
             <a href="#pricing">See plans</a>
           </div>
         </div>
@@ -718,15 +720,16 @@ export default function MarketingRoute() {
       <section className="f9-growth-pricing" id="pricing">
         <div className="ld-section-head">
           <span className="ld-kicker">Plans</span>
-          <h2>Competitor change alerts, priced to start now.</h2>
+          <h2>Choose the monitoring rhythm your team needs.</h2>
           <div className="ld-plan-summary" aria-label="Pricing summary">
             <span>Recommended launch plan</span>
             <strong>Start with Starter</strong>
             <p>3-hour competitor monitoring for 10 competitors, plus daily and weekly briefs.</p>
           </div>
           <p className="ld-pricing-note">
-            Free includes 1 watchlist to start. Review live search first, then upgrade for more
-            watchlists, Collections, scheduled scans, digests, and clear check caps. Save
+            Free includes one activation watchlist and its first baseline only. Review the public
+            search preview first; paid plans add scheduled checks, more watchlists, Collections,
+            digests, and clear check caps. Save
             winning ads to collections — and see how long each ad has been running when the Ad Library
             shares dates.
           </p>
@@ -975,7 +978,7 @@ export default function MarketingRoute() {
           )}
           <SubmitButton getAction={primaryCta} pendingLabel="Redirecting…">{primaryLabel}</SubmitButton>
         </Form>
-        <p>Live search is free — no account. Five to Nine — we work while you sleep.</p>
+        <p>Public search preview is free — no account. Paid plans can run scheduled checks when monitoring is active.</p>
       </section>
 
       <footer className="ld-footer">

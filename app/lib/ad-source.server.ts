@@ -7,6 +7,7 @@ import {
 } from "~/lib/data.server";
 import { hasBrowserRunQuickActions } from "~/lib/browser-run.server";
 import { buildDiscoveryCacheKey, resolveDiscoveryCacheTtlMs } from "~/lib/discovery-cache.server";
+import { resolveE2EFixtureProviderFromEnv } from "~/lib/e2e-provider.server";
 import type { AppEnv, BrowserBinding } from "~/lib/env.server";
 import { searchMetaLibraryByBrowser, CommercialDiscoveryError } from "~/lib/meta-library-browser.server";
 import { demoSearch, MetaApiError, filterAdsBySearchFilters, searchAds as searchMetaApiAds } from "~/lib/meta-api.server";
@@ -115,6 +116,11 @@ export function resolveCommercialDiscoveryProvider(
   env: AppEnv,
   options: Pick<SearchAdsViaSourceOptions, "customerMetaAdLibraryToken"> = {},
 ): AdDiscoveryProvider {
+  const fixtureProvider = resolveE2EFixtureProviderFromEnv(env);
+  if (fixtureProvider) {
+    return fixtureProvider;
+  }
+
   if (env.BROWSER || hasBrowserRunQuickActions(env) || env.BROWSERLESS_TOKEN?.trim()) {
     return "meta_library_browser";
   }
@@ -141,6 +147,12 @@ async function getRuntimeWorkerEnv(): Promise<AppEnv | null> {
 }
 
 async function resolveCommercialDiscoveryEnv(env: AppEnv): Promise<AppEnv> {
+  // The deterministic local release harness deliberately removes provider
+  // bindings. Never rehydrate them from the Worker runtime for that request.
+  if (env.E2E_PROVIDER_NETWORK_DENY?.trim() === "1") {
+    return env;
+  }
+
   if (env.BROWSER) {
     return env;
   }
@@ -317,6 +329,13 @@ export async function hasFreshDiscoveryCacheEntry(
   });
   const cacheKey =
     provider === "meta_api" && customerScopedCacheKey ? customerScopedCacheKey : baseCacheKey;
+  const fixtureProvider = resolveE2EFixtureProviderFromEnv(effectiveEnv);
+  if (fixtureProvider) {
+    const fixtureResult = await (
+      await import("~/lib/e2e-search.server")
+    ).readE2EFixtureSearchCache(effectiveEnv, cacheKey);
+    return fixtureResult?.cacheStatus === "hit";
+  }
   const cached = await getDiscoveryCacheEntry(effectiveEnv, cacheKey);
   if (!cached || !isUsableDiscoveryCache(provider, cached)) {
     return false;
@@ -341,7 +360,9 @@ export async function searchAdsViaSourceResolver(
   });
   const routeContext = options.purpose ?? "public_search";
   const forceLive = options.forceLive === true && provider !== "demo";
+  const fixtureProvider = resolveE2EFixtureProviderFromEnv(effectiveEnv);
   const providerState =
+    !fixtureProvider &&
     provider !== "demo" &&
     effectiveEnv.DB &&
     !(provider === "meta_api" && hasCustomerMetaToken)
@@ -372,6 +393,28 @@ export async function searchAdsViaSourceResolver(
     provider === "meta_api" && customerScopedCacheKey ? customerScopedCacheKey : baseCacheKey;
   const customerFallbackCacheKey =
     provider === "meta_library_browser" ? customerScopedCacheKey : null;
+
+  if (fixtureProvider) {
+    const fixtureResult = await (
+      await import("~/lib/e2e-search.server")
+    ).readE2EFixtureSearchCache(effectiveEnv, cacheKey);
+    if (fixtureResult) {
+      return fixtureResult;
+    }
+
+    return {
+      ads: [],
+      nextCursor: null,
+      source: fixtureProvider,
+      provider: fixtureProvider,
+      cacheStatus: "miss",
+      discoveryStatus: "degraded",
+      discoverySummary:
+        "This deterministic release-proof scenario is not present in the isolated cache.",
+      discoveryFailureClass: "browser_unavailable",
+    };
+  }
+
   const cached = effectiveEnv.DB ? await getDiscoveryCacheEntry(effectiveEnv, cacheKey) : null;
   const usableCached = isUsableDiscoveryCache(provider, cached) ? cached : null;
   if (!forceLive && usableCached && new Date(usableCached.expiresAt).getTime() > Date.now()) {

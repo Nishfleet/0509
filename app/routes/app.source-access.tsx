@@ -14,35 +14,58 @@ const sourceAccessActionIntents = new Set([
   "disconnect-meta-token",
 ]);
 
+function sourceAccessActionMessage(input: {
+  ok: boolean;
+  status?: string | null;
+  errorCode?: string | null;
+}) {
+  if (input.ok || input.status === "healthy") {
+    return "Backup source access is connected and ready.";
+  }
+
+  switch (input.errorCode) {
+    case "invalid_format":
+      return "Paste the full access token and try again.";
+    case "missing_connection":
+      return "No backup source access is connected yet.";
+    case "timeout":
+      return "The source access check timed out. Try again in a moment.";
+    case "network_error":
+    case "invalid_provider_response":
+      return "The source access check could not be completed. Try again in a moment.";
+    default:
+      return "Source access could not be verified. Check the token and try again.";
+  }
+}
+
 export function handlesSourceAccessIntent(intent: string) {
   return sourceAccessActionIntents.has(intent);
 }
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
-  const { resolveCommercialAdSourceStatus } = await import("~/lib/ad-source.server");
+  const { resolveCommercialAdSourceStatus } =
+    await import("~/lib/ad-source.server");
+  const { toCustomerDiscoveryStatus, toCustomerMetaConnection } =
+    await import("~/lib/discovery-customer-copy");
   const { getEnv } = await import("~/lib/context.server");
   const { getCustomerMetaConnection } = await import("~/lib/data.server");
   const env = getEnv(context);
-  const { workspaceUserId } = await requireWorkspaceSession(env, request);
+  const { workspaceUserId, isMember } = await requireWorkspaceSession(
+    env,
+    request,
+  );
   const [connection, discoveryStatus] = await Promise.all([
-    getCustomerMetaConnection(env, workspaceUserId),
+    isMember
+      ? Promise.resolve(null)
+      : getCustomerMetaConnection(env, workspaceUserId),
     resolveCommercialAdSourceStatus(env),
   ]);
 
   return {
-    connection: connection
-      ? {
-          status: connection.status,
-          tokenLastFour: connection.tokenLastFour,
-          summary: connection.summary,
-          lastCheckedAt: connection.lastCheckedAt,
-          lastErrorCode: connection.lastErrorCode,
-          lastErrorMessage: connection.lastErrorMessage,
-          updatedAt: connection.updatedAt,
-        }
-      : null,
-    discoveryStatus,
+    connection: connection ? toCustomerMetaConnection(connection) : null,
+    discoveryStatus: toCustomerDiscoveryStatus(discoveryStatus),
+    canManageSourceAccess: !isMember,
   };
 }
 
@@ -55,7 +78,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
     saveCustomerMetaToken,
   } = await import("~/lib/customer-meta.server");
   const env = getEnv(context);
-  const { workspaceUserId, isMember } = await requireWorkspaceSession(env, request);
+  const { workspaceUserId, isMember } = await requireWorkspaceSession(
+    env,
+    request,
+  );
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
 
@@ -72,7 +98,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     return {
       ok: result.ok,
-      message: result.testResult.summary,
+      message: sourceAccessActionMessage({
+        ok: result.ok || result.testResult?.ok === true,
+        status: result.testResult?.status,
+        errorCode: result.testResult?.errorCode,
+      }),
     };
   }
 
@@ -81,7 +111,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     return {
       ok: result.ok,
-      message: result.testResult.summary,
+      message: sourceAccessActionMessage({
+        ok: result.ok || result.testResult?.ok === true,
+        status: result.testResult?.status,
+        errorCode: result.testResult?.errorCode,
+      }),
     };
   }
 

@@ -75,6 +75,13 @@ export function isE2ETestAuthEnabled(env: AppEnv, request: Request) {
   return serverTestModeEnabled(env) && isLocalE2ETestRequest(request);
 }
 
+export async function isE2ETestRequestEnabled(env: AppEnv, request: Request) {
+  return (
+    isLocalE2ETestRequest(request) &&
+    (serverTestModeEnabled(env) || (await hasE2EDatabaseSentinel(env)))
+  );
+}
+
 export async function shouldClearE2ETestSessionCookie(env: AppEnv, request: Request) {
   if (!isLocalTestHostRequest(request) || !readE2ETestFixtureUserId(request)) {
     return false;
@@ -112,7 +119,7 @@ export async function getE2ETestSession(
     return null;
   }
 
-  if (!serverTestModeEnabled(env) && !(await hasE2EDatabaseSentinel(env))) {
+  if (!(await isE2ETestRequestEnabled(env, request))) {
     return null;
   }
 

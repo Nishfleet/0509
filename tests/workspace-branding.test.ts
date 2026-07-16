@@ -635,8 +635,14 @@ describe("account report-branding action", () => {
     expect(upsertWorkspaceBrandingMock).not.toHaveBeenCalled();
   });
 
-  it("blocks account deletion requests while billing is active", async () => {
-    const createSupportCase = vi.fn();
+  it("opens a support-only deletion request while billing is active", async () => {
+    const createSupportCase = vi.fn().mockResolvedValue({
+      alreadyExists: false,
+      id: "case-delete-paid-1",
+      updatedAt: "2026-07-15T04:00:00.000Z",
+    });
+    const createSupportCaseEvent = vi.fn().mockResolvedValue(null);
+    const sendOperatorAlertEmail = vi.fn().mockResolvedValue(true);
     vi.doMock("~/lib/auth.server", async () => {
       const actual = await vi.importActual<typeof import("~/lib/auth.server")>("~/lib/auth.server");
       return {
@@ -652,6 +658,8 @@ describe("account report-branding action", () => {
     });
     vi.doMock("~/lib/data.server", () => ({
       createSupportCase,
+      createSupportCaseEvent,
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
       getUserPlanBillingInfo: vi.fn().mockResolvedValue({
         dodoCustomerId: "cus_123",
         dodoNextBillingAt: null,
@@ -664,6 +672,7 @@ describe("account report-branding action", () => {
       getWorkspaceBranding: vi.fn(),
       upsertWorkspaceBranding: vi.fn(),
     }));
+    vi.doMock("~/lib/delivery.server", () => ({ sendOperatorAlertEmail }));
 
     const { action } = await import("~/routes/app.account");
     const formData = new FormData();
@@ -679,12 +688,13 @@ describe("account report-branding action", () => {
     } as never);
 
     expect(result).toEqual({
-      ok: false,
+      ok: true,
       intent: "request-account-deletion",
       message:
-        "Your subscription is still active. Start cancellation from Plan & billing or open a billing support case first - you keep access until the end of the period you've paid for, and can delete the account after that.",
+        "Support deletion request opened as case case-delete-paid-1. Support will review and verify the request, then communicate the feasible process. Nothing is deleted automatically or in-app.",
     });
-    expect(createSupportCase).not.toHaveBeenCalled();
+    expect(createSupportCase).toHaveBeenCalledTimes(1);
+    expect(sendOperatorAlertEmail).toHaveBeenCalledTimes(1);
   });
 
   it("opens and notifies a support case for free-plan account deletion requests", async () => {
@@ -767,7 +777,7 @@ describe("account report-branding action", () => {
       ok: true,
       intent: "request-account-deletion",
       message:
-        "Deletion request opened as case case-delete-1. We will verify by email before anything is deleted.",
+        "Support deletion request opened as case case-delete-1. Support will review and verify the request, then communicate the feasible process. Nothing is deleted automatically or in-app.",
     });
   });
 

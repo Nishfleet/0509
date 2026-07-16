@@ -38,8 +38,12 @@ export function DigestDecisionSummary({ items }: { items: DigestProofPacketItem[
           <dd>{decision.whatChanged}</dd>
         </div>
         <div>
-          <dt>Why it matters</dt>
-          <dd>{decision.whyItMatters}</dd>
+          <dt>Signal summary</dt>
+          <dd>{decision.signalSummary}</dd>
+        </div>
+        <div>
+          <dt>Evidence summary</dt>
+          <dd>{decision.evidenceSummary}</dd>
         </div>
         <div>
           <dt>Urgency</dt>
@@ -211,8 +215,8 @@ function summarizeProofPacket(items: DigestProofPacketItem[]) {
     title: `${changeLabel} packaged for handoff`,
     summary: `${top.item.title}: ${
       topClassification?.status === "verified_proof"
-        ? "ready to send as a client or teammate digest without rereading every event."
-        : "ready to review; add page evidence before sharing."
+        ? "Verified evidence attached. Review before sharing."
+        : "Evidence needs review; add page evidence before sharing."
     }`,
     decision: top.intelligence.recommendedAction,
     evidence: proofMixLabel(proofMix),
@@ -250,7 +254,8 @@ function summarizeDecision(items: DigestProofPacketItem[]) {
       title: "No action-worthy changes yet",
       description: "This digest is safe to skim: nothing needs a customer decision right now.",
       whatChanged: "No competitor movement worth action.",
-      whyItMatters: "Silence is useful only because the checks still ran.",
+      signalSummary: "Silence is useful only because the checks still ran.",
+      evidenceSummary: "No evidence signals attached yet.",
       urgency: "No action needed",
       proofStatus: "Evidence unavailable",
       source: "No source change detected",
@@ -267,9 +272,13 @@ function summarizeDecision(items: DigestProofPacketItem[]) {
 
   return {
     title: `${top.item.watchlistName || "Competitor"} needs review`,
-    description: summary,
+    description: "Review the evidence trail and next action before sharing.",
     whatChanged: title,
-    whyItMatters: summary,
+    signalSummary: summary,
+    evidenceSummary:
+      top.classification.status === "verified_proof"
+        ? "Verified evidence attached. Review before sharing."
+        : `Evidence status: ${top.classification.label}. Review before sharing.`,
     urgency,
     proofStatus: top.classification.label,
     source: top.classification.sourceTypeLabel,

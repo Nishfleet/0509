@@ -205,6 +205,7 @@ function mockMonitoringDependencies(input: {
     listRecentWorkspaceProofCaptures: vi.fn().mockResolvedValue([]),
     listSuccessfulProofCapturesForAd: vi.fn().mockResolvedValue([]),
     listWatchEvents: vi.fn().mockResolvedValue([]),
+    listWatchEventsForRun: vi.fn().mockResolvedValue([]),
     listAdsByIds: vi.fn().mockResolvedValue([]),
     listWatchEventsBetween: vi.fn().mockResolvedValue([]),
     listWatchlists: vi.fn().mockResolvedValue([]),
@@ -505,6 +506,7 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
     const { runWatchlistWorkflowJob } = await import("~/lib/monitoring.server");
 
     const result = await runWatchlistWorkflowJob(env as never, {
+      kind: "scheduled_scan",
       watchlistId: "watch-1",
       triggerType: "scheduled",
       executionKey: "watchlist-run:scheduled:watch-1:0-4:2026-07-03T15-00-00-000Z",
@@ -554,6 +556,7 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
     const { preflightWatchlistWorkflowJob } = await import("~/lib/monitoring.server");
 
     const result = await preflightWatchlistWorkflowJob(env as never, {
+      kind: "scheduled_scan",
       watchlistId: "watch-1",
       triggerType: "scheduled",
       executionKey: "watchlist-run:scheduled:watch-1:0-4:2026-07-03T15-00-00-000Z",

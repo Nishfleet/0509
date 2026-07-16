@@ -31,11 +31,11 @@ Five to Nine turns competitor ads and visible landing-page changes into source-b
 ## Product
 
 - Competitor monitoring for growth teams (Market Desk) plus proof-backed entity tracking (Presence Desk).
-- Public read-only search and a sample brief are available before signup.
-- Accounts unlock saved competitors, retained monitoring, reusable saved evidence, collections, digests, and reports.
+- Public read-only search and a sample brief are buyer-evaluation paths before signup; this text does not claim live availability.
+- Signed-in accounts are the path for saved competitors, retained monitoring, reusable saved evidence, collections, digests, and reports; this text describes the capability, not live account availability.
 - Saving competitor results, saved queries, watchlists, collections, reports, and delivery require an account.
 - Customer-facing views lead with what changed, why it matters, urgency, source status, freshness, and the next action before raw data or settings.
-- Authenticated collection, watchlist, and digest exports support CSV and JSON export. Watchlist and digest CSV exports include decision fields: priority, recommended next action, source status, source trail, freshness, and source URL when available.
+- Authenticated collection, watchlist, and digest exports support CSV and JSON export when the account path is configured. Watchlist and digest CSV exports include decision fields: priority, recommended next action, source status, source trail, freshness, and source URL when available; this text does not claim live export success.
 - Signed-in collections can store manual external evidence links from visible public sources, including visible spend, impression, and reach values when a user supplies them.
 - Customer API keys can read account-owned setup status, collection, watchlist, and digest exports.
 - Write-enabled customer API keys can perform approved workspace actions: ${AUDITED_AGENT_ACTION_GROUP_SUMMARY}.
@@ -44,7 +44,7 @@ Five to Nine turns competitor ads and visible landing-page changes into source-b
 - Paid customer support paths cover: ${CUSTOMER_SUPPORT_PATHS.map((path) => path.label).join(", ")}.
 - Public help, docs, API docs, status, changelog, and trust pages are available at /help, /docs, /api/docs, /status, /changelog, and /trust.
 - The public status page summarizes customer-facing surfaces without exposing private account activity.
-- Email delivery is available for eligible accounts.
+- Email delivery is in product scope for eligible accounts; this text does not measure live provider delivery.
 - Account insight-depth summaries cover top hooks, media mix, observed campaign duration, manual metric evidence, creative timeline, and landing-page history from saved evidence, watch events, and digest items.
 - Alerts and reports should include evidence instead of unsupported AI summaries.
 - Daily and weekly digests should show priority, recommended next move, source status, freshness, and source trail.
@@ -54,7 +54,8 @@ Five to Nine turns competitor ads and visible landing-page changes into source-b
 
 - Account access uses verified access paths.
 - Public brief previews are sample-only. Public search is read-only; retained monitoring and saved evidence require an account.
-- Checkout, plan access, and check limits follow the configured billing provider and visible plan caps.
+- Checkout, plan access, and check limits follow the configured billing provider and visible plan caps; this text does not claim live checkout or provider proof.
+- Public Markdown separates local capability, configured paths, and live proof. Public search, saved monitoring, digests, reports, share links, exports, checkout, and email need current account or provider proof before being described as live.
 - Tracking status is labeled honestly as live, recent, delayed, or sample data.
 - Recent results must not be described as fresh live results.
 - Backup Meta access is optional, owner-provided, tested before saving, stored encrypted, and used only for that account.
@@ -63,7 +64,7 @@ Five to Nine turns competitor ads and visible landing-page changes into source-b
 ## Pricing
 
 - Pricing display is localized from checkout preview for the buyer location.
-- There is no free retained-monitoring plan. Public live search is read-only; saved monitoring requires an account.
+- There is no free retained-monitoring plan. Public search is read-only; saved monitoring requires an account, and this text does not claim live search availability.
 - Starter is the recommended plan for retained competitor monitoring.
 - Scout is the entry plan after the public read-only search and sample brief: 3 watchlists, 10 Collections, 6-hour scans, weekly Digest, and 50 checks/month.
 - Starter includes 10 watchlists, 25 Collections, 3-hour scans, daily and weekly Digests, email Notifications, exports, and 250 checks/month.
@@ -89,10 +90,10 @@ Five to Nine turns competitor ads and visible landing-page changes into source-b
 Current product truth:
 - Market intelligence for revenue teams is the north-star product story.
 - Presence Desk: website/open-web is the active GA source; social and marketplace sources are gated, planned, or manual-only until provider approval.
-- Public read-only search is available for buyer evaluation, and sample brief previews are sample-only before signup.
+- Public read-only search is a buyer-evaluation path, and sample brief previews are sample-only before signup; this text does not claim live search availability.
 - Account access uses verified access paths.
-- Checkout, plan access, and check limits follow the configured billing provider and visible plan caps.
-- Email delivery is available for eligible accounts.
+- Checkout, plan access, and check limits follow the configured billing provider and visible plan caps; this text does not claim live checkout or provider proof.
+- Email delivery is in product scope for eligible accounts; this text does not measure live provider delivery.
 - Starter is the recommended plan. Paid plans have explicit caps: Scout includes 6-hour scans, weekly digest delivery, and 50 checks/month; Starter includes 3-hour scans, daily and weekly digest delivery, and 250 checks/month; Agency includes 3-hour scans, daily and weekly digests, and 2,500 checks/month. Purchased checks never expire, included checks reset monthly without rollover, and saved proof-backed captures use checks.
 - Tracking status is labeled honestly as live, recent, delayed, or sample data.
 - Recent results must not be described as fresh live results.
@@ -100,7 +101,7 @@ Current product truth:
 - Source-backed digest items include priority, recommendation, timestamp, and confidence trail.
 - Customer-facing views lead with what changed, why it matters, urgency, source status, freshness, and the next action before raw data or settings.
 - Insight depth includes observed campaign duration only when first-seen and last-seen evidence exists; manual external evidence links can add visible non-Meta evidence and user-supplied metric context to saved collections, but automated spend, reach, impression, and unsupported-channel benchmarks are not live. Automated non-Meta benchmarks are not live.
-- Account export links support CSV and JSON export for signed-in users. Watchlist and digest CSV exports include priority, recommended next action, source status, source trail, freshness, and source URL when available.
+- Account export links support CSV and JSON export for signed-in users when the account path is configured; this text does not claim live export success. Watchlist and digest CSV exports include priority, recommended next action, source status, source trail, freshness, and source URL when available.
 - Customer API keys support setup status plus collection, watchlist, and digest exports for account-owned data.
 - Write-enabled customer API keys support approved workspace actions: ${AUDITED_AGENT_ACTION_GROUP_SUMMARY}.
 - Restricted actions still require signed-in owner review: ${AGENT_BLOCKED_CAPABILITIES.join(", ")}.

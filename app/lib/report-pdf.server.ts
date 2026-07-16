@@ -14,6 +14,8 @@
 
 import puppeteer from "@cloudflare/puppeteer";
 
+import { isApprovedReportSnapshot } from "~/lib/report-approval";
+
 import type { AppEnv } from "~/lib/env.server";
 import { promiseWithTimeout } from "~/lib/fetch-timeout.server";
 import { canUsePlanFeature } from "~/lib/plan-entitlements";
@@ -67,6 +69,14 @@ export async function renderShareReportPdfResponse(
       404,
       "pdf_unavailable",
       "PDF export is only available for report snapshot shares.",
+    );
+  }
+
+  if (!isApprovedReportSnapshot(share.snapshotPayload)) {
+    return pdfErrorResponse(
+      409,
+      "evidence_not_ready",
+      "This report needs a fresh owner review before PDF export.",
     );
   }
 

@@ -36,8 +36,8 @@ describe("search rebuild", () => {
   });
 
   it("describes search as public before account-gated saved tracking", () => {
-    expect(searchRoute).toContain("Preview live competitor Meta ads before creating an account");
-    expect(searchRoute).toContain("sign in only when you want to save examples and track offer changes");
+    expect(searchRoute).toContain("Preview public competitor ad results before creating an account");
+    expect(searchRoute).toContain("Provider coverage and freshness vary");
     expect(searchRoute).not.toContain("Sign in to search competitor Meta ads");
   });
 
@@ -71,7 +71,7 @@ describe("search rebuild", () => {
   });
 
   it("keeps freshness warnings visible when non-empty results are cached or degraded", () => {
-    expect(searchRoute).toContain("discoverySummary && data.result.ads.length > 0");
+    expect(searchRoute).toContain("discoverySummary && visibleAds.length > 0");
     expect(searchRoute).toContain('className="f9-discovery-banner"');
   });
 

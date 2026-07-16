@@ -1,15 +1,37 @@
 #!/usr/bin/env node
 
-const DEFAULT_BASE_URL = "https://0509.io";
+import { pathToFileURL } from "node:url";
+import {
+  fetchCanary,
+  validateCanonicalBaseUrl,
+} from "./dodo-billing-canary.mjs";
+
+export const DEFAULT_BASE_URL = "https://0509.io";
+export const SUPPORTED_PROOF_PROVIDERS = Object.freeze(["browserless"]);
+
+/** @param {string | null | undefined} value */
+function normalizeProofProvider(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  if (SUPPORTED_PROOF_PROVIDERS.includes(value)) {
+    return value;
+  }
+  throw new Error(`Unsupported launch proof provider: ${value}.`);
+}
 
 /**
  * @param {string[]} args
  */
-function parseArgs(args) {
-  /** @type {{ baseUrl: string, json: boolean, proofProvider: string | null, requireSlack: boolean, requireWhatsApp: boolean }} */
+export function parseArgs(args) {
+  /** @type {{ baseUrl: string, json: boolean, cleanup: boolean, runId: string | null, digestRunId: string | null, proofCaptureId: string | null, proofProvider: string | null, requireSlack: boolean, requireWhatsApp: boolean }} */
   const parsed = {
     baseUrl: process.env.CANARY_BASE_URL || DEFAULT_BASE_URL,
     json: false,
+    cleanup: false,
+    runId: null,
+    digestRunId: null,
+    proofCaptureId: null,
     proofProvider: null,
     requireSlack: false,
     requireWhatsApp: false,
@@ -23,9 +45,12 @@ function parseArgs(args) {
       continue;
     }
     if (arg === "--proof-provider" && args[index + 1]) {
-      parsed.proofProvider = args[index + 1];
+      parsed.proofProvider = normalizeProofProvider(args[index + 1]);
       index += 1;
       continue;
+    }
+    if (arg === "--proof-provider") {
+      throw new Error("Missing value for --proof-provider.");
     }
     if (arg === "--require-slack") {
       parsed.requireSlack = true;
@@ -33,6 +58,25 @@ function parseArgs(args) {
     }
     if (arg === "--require-whatsapp") {
       parsed.requireWhatsApp = true;
+      continue;
+    }
+    if (arg === "--cleanup") {
+      parsed.cleanup = true;
+      continue;
+    }
+    if (arg === "--run-id" && args[index + 1]) {
+      parsed.runId = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (arg === "--digest-run-id" && args[index + 1]) {
+      parsed.digestRunId = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (arg === "--proof-capture-id" && args[index + 1]) {
+      parsed.proofCaptureId = args[index + 1];
+      index += 1;
       continue;
     }
     if (arg === "--json") {
@@ -43,13 +87,19 @@ function parseArgs(args) {
   return parsed;
 }
 
+/** @param {unknown} value */
+function isCleanupIdentifier(value) {
+  return typeof value === "string" && value.length > 0 && value.length <= 256 && value.trim() === value && !(/[\u0000-\u001f\u007f\s]/u.test(value));
+}
+
 /**
  * @param {{ baseUrl: string, proofProvider: string | null, requireSlack: boolean, requireWhatsApp: boolean }} config
  */
-function buildCanaryUrl(config) {
-  const url = new URL("/api/launch-readiness/canary", config.baseUrl);
-  if (config.proofProvider) {
-    url.searchParams.set("proofProvider", config.proofProvider);
+export function buildCanaryUrl(config) {
+  const url = new URL("/api/launch-readiness/canary", validateCanonicalBaseUrl(config.baseUrl));
+  const proofProvider = normalizeProofProvider(config.proofProvider);
+  if (proofProvider) {
+    url.searchParams.set("proofProvider", proofProvider);
   }
   if (config.requireSlack) {
     url.searchParams.set("requireSlack", "true");
@@ -102,31 +152,92 @@ function formatReport(payload) {
   return lines.join("\n");
 }
 
-const config = parseArgs(process.argv.slice(2));
-const token = process.env.CANARY_BYPASS_TOKEN?.trim();
+/**
+ * @param {unknown} payload
+ */
+function formatCleanupReport(payload) {
+  if (!payload || typeof payload !== "object") {
+    return "launch readiness canary cleanup: failed (invalid response)";
+  }
 
-if (!token) {
-  console.error("Missing CANARY_BYPASS_TOKEN; source .dev.vars or set the secret before running this canary.");
-  process.exit(1);
+  const body = /** @type {{ ok?: boolean, blocker?: string, cleanupTruth?: string, cleanup?: { preservedProofCaptureId?: string | null, deleted?: Record<string, number> } }} */ (payload);
+  const lines = [`launch readiness canary cleanup: ${body.ok ? "ok" : "failed"}`];
+  if (body.blocker) {
+    lines.push(`blocker: ${body.blocker}`);
+  }
+  if (body.cleanup?.preservedProofCaptureId) {
+    lines.push(`preserved proof capture: ${body.cleanup.preservedProofCaptureId}`);
+  }
+  if (body.cleanup?.deleted) {
+    const deleted = body.cleanup.deleted;
+    lines.push(
+      `deleted verified rows: ${deleted.watchlistRuns ?? 0} watch, ${deleted.digestItems ?? 0} digest items, ${deleted.digestDeliveries ?? 0} digest deliveries, ${deleted.deliveryAttempts ?? 0} delivery attempts, ${deleted.watchEvents ?? 0} events, ${deleted.digestRuns ?? 0} digests`,
+    );
+  }
+  if (body.cleanupTruth) {
+    lines.push(body.cleanupTruth);
+  }
+  return lines.join("\n");
 }
 
-const url = buildCanaryUrl(config);
-const response = await fetch(url, {
-  method: "POST",
-  headers: {
-    "user-agent": "0509-launch-readiness-proof-canary/1.0",
-    "x-0509-canary-token": token,
-  },
-  signal: AbortSignal.timeout(60_000),
-});
-const payload = await response.json().catch(() => null);
+/**
+ * @param {{ config?: ReturnType<typeof parseArgs>, token?: string, fetchImpl?: typeof fetch }} [input]
+ */
+export async function runCanary({ config = parseArgs([]), token = process.env.CANARY_BYPASS_TOKEN?.trim(), fetchImpl = fetch } = {}) {
+  if (config.cleanup) {
+    if (![config.runId, config.digestRunId, config.proofCaptureId].every(isCleanupIdentifier)) {
+      throw new Error("Cleanup requires --run-id, --digest-run-id, and --proof-capture-id with bounded non-empty values.");
+    }
+    if (config.proofProvider || config.requireSlack || config.requireWhatsApp) {
+      throw new Error("Cleanup cannot be combined with provider or delivery proof flags.");
+    }
+  } else if ([config.runId, config.digestRunId, config.proofCaptureId].some((value) => value !== null)) {
+    throw new Error("Cleanup IDs require the explicit --cleanup flag.");
+  }
 
-if (config.json) {
-  console.log(JSON.stringify(payload, null, 2));
-} else {
-  console.log(formatReport(payload));
+  if (!token) {
+    throw new Error("Missing CANARY_BYPASS_TOKEN; source .dev.vars or set the secret before running this canary.");
+  }
+
+  // buildCanaryUrl validates the exact canonical origin before fetchCanary can construct token headers.
+  const url = buildCanaryUrl(config);
+  const response = await fetchCanary({
+    url,
+    token,
+    userAgent: "0509-launch-readiness-proof-canary/1.0",
+    extraHeaders: config.cleanup ? { "x-0509-canary-operation": "cleanup" } : {},
+    body: config.cleanup
+      ? JSON.stringify({
+          runId: config.runId,
+          digestRunId: config.digestRunId,
+          proofCaptureId: config.proofCaptureId,
+        })
+      : undefined,
+    fetchImpl,
+  });
+  const payload = await response.json().catch(() => null);
+
+  return { payload, response };
 }
 
-if (!response.ok || !payload?.ok) {
-  process.exitCode = 1;
+async function main() {
+  const config = parseArgs(process.argv.slice(2));
+  try {
+    const { payload, response } = await runCanary({ config });
+    if (config.json) {
+      console.log(JSON.stringify(payload, null, 2));
+    } else {
+      console.log(config.cleanup ? formatCleanupReport(payload) : formatReport(payload));
+    }
+    if (!response.ok || !payload?.ok) {
+      process.exitCode = 1;
+    }
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await main();
 }

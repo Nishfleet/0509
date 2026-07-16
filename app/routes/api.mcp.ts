@@ -17,9 +17,19 @@ import type { AppEnv } from "~/lib/env.server";
 import type { CustomerAgentActionName } from "~/lib/customer-agent-actions.server";
 import type { CustomerApiKeyRecord } from "~/lib/types";
 import type { WorkspaceReadiness } from "~/lib/workspace-readiness.server";
+import { decodeListCursor } from "~/lib/list-pagination";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 const API_PLAN_REQUIREMENT = "Agency";
+const MAX_AUTHENTICATED_API_BODY_BYTES = 64 * 1024;
+type ApiLimitContext = {
+  identity: {
+    workspaceUserId: string;
+    actorUserId: string;
+    apiKeyId: string;
+  };
+  isIdentityActive: () => boolean | Promise<boolean>;
+};
 const READ_ONLY_TOOL_ANNOTATIONS = {
   readOnlyHint: true,
   destructiveHint: false,
@@ -56,6 +66,30 @@ const WRITE_TOOL_NAMES = new Set([
   "update_delivery_target",
   "list_web_mentions",
 ]);
+const TOOL_ACTION_NAMES: Readonly<Record<string, CustomerAgentActionName>> = {
+  retest_meta_source: "source.meta.retest",
+  create_watchlist: "watchlist.create",
+  update_watchlist: "watchlist.update",
+  refresh_watchlist: "watchlist.refresh",
+  pause_watchlist: "watchlist.pause",
+  resume_watchlist: "watchlist.resume",
+  create_collection: "collection.create",
+  add_external_proof: "proof.add_external",
+  list_delivery_targets: "delivery_targets.list",
+  update_delivery_settings: "delivery_settings.update",
+  update_delivery_target: "delivery_target.update",
+  create_share_link: "share.create",
+  create_report: "report.create",
+  share_report: "report.share",
+  create_counter_move_brief: "counter_move_brief.create",
+  upsert_memory: "memory.upsert",
+  list_memory: "memory.list",
+  upsert_client_room: "client_room.upsert",
+  list_client_rooms: "client_room.list",
+  create_support_case: "support_case.create",
+  list_support_cases: "support_case.list",
+  list_web_mentions: "web_mentions.list",
+};
 const MCP_TOOLS = [
   {
     name: "get_workspace_readiness",
@@ -81,7 +115,7 @@ const MCP_TOOLS = [
     title: "Get Collection Export",
     description:
       "Read an account-owned Five to Nine collection with saved competitor evidence and insight-depth summaries.",
-    inputSchema: resourceInputSchema("collectionId"),
+    inputSchema: resourceInputSchema("collectionId", { paginated: true }),
     annotations: READ_ONLY_TOOL_ANNOTATIONS,
   },
   {
@@ -89,7 +123,7 @@ const MCP_TOOLS = [
     title: "Get Watchlist Export",
     description:
       "Read an account-owned Five to Nine watchlist with recent source-backed changes and next-move intelligence.",
-    inputSchema: resourceInputSchema("watchlistId"),
+    inputSchema: resourceInputSchema("watchlistId", { paginated: true }),
     annotations: READ_ONLY_TOOL_ANNOTATIONS,
   },
   {
@@ -363,6 +397,7 @@ const MCP_TOOLS = [
         },
         timezone: {
           type: ["string", "null"],
+          description: "IANA timezone name such as Asia/Kolkata or UTC. Invalid timezone names are rejected.",
         },
         idempotencyKey: idempotencyKeySchema(),
       },
@@ -430,7 +465,7 @@ const MCP_TOOLS = [
     title: "Share Report",
     description:
       "Build and share a snapshot report for an account-owned collection or watchlist.",
-    inputSchema: reportInputSchema({ requiresIdempotency: true }),
+    inputSchema: reportInputSchema({ requiresIdempotency: true, requiresReview: true }),
     annotations: WRITE_TOOL_ANNOTATIONS,
   },
   {
@@ -695,12 +730,21 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
   const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
+  const {
+    createAuthenticatedApiLimitContext,
+    enforceAuthenticatedApiLimit,
+  } = await import("~/lib/authenticated-api-limits.server");
   const env = getEnv(context);
   const auth = await authenticateApiKeyRequest(env, request);
   if (!auth.ok) {
     return auth.response;
   }
   const workspaceUserId = await resolveWorkspaceDataUserId(env, auth.apiKey.userId);
+  const apiLimit = createAuthenticatedApiLimitContext(env, {
+    workspaceUserId,
+    actorUserId: auth.apiKey.userId,
+    apiKeyId: auth.apiKey.id,
+  });
   const mcpGate = await requireWorkspacePlanFeature(env, workspaceUserId, "mcp_access");
   if (!mcpGate.ok) {
     return mcpGate.response;
@@ -708,6 +752,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   const rpcRequest = await readJsonRpcRequest(request);
   if (!rpcRequest.ok) {
+    if (rpcRequest.response) return rpcRequest.response;
     return jsonRpcError(null, -32700, "Parse error");
   }
 
@@ -716,6 +761,26 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   const message = rpcRequest.value;
+  const actionName = message.method === "tools/call"
+    ? toolActionNameFromParams(message.params)
+    : null;
+  const limitResponse = await enforceAuthenticatedApiLimit({
+    env,
+    ...apiLimit,
+    operation: actionName ? "api.mcp.action" : "api.mcp",
+    ...(actionName ? { actionName } : { actionClass: "read" as const }),
+    request,
+  });
+  if (limitResponse) {
+    if (typeof message.id === "undefined") {
+      return new Response(null, {
+        status: 202,
+        headers: noStoreHeaders(),
+      });
+    }
+    return jsonRpcLimitResponse(message.id, limitResponse);
+  }
+
   if (typeof message.id === "undefined") {
     await handleNotification(message);
     return new Response(null, {
@@ -750,7 +815,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   if (message.method === "tools/call") {
     const executionContext = ((context.cloudflare as { ctx?: ExecutionContext } | undefined)?.ctx ?? null);
-    const result = await callTool(env, auth.apiKey, message.params, new URL(request.url).origin, executionContext);
+    const result = await callTool(
+      env,
+      auth.apiKey,
+      message.params,
+      new URL(request.url).origin,
+      executionContext,
+      apiLimit,
+    );
     if (!result.ok) {
       return jsonRpcError(message.id, -32602, result.message);
     }
@@ -765,7 +837,8 @@ async function callTool(
   apiKey: CustomerApiKeyRecord,
   params: unknown,
   origin: string,
-  executionContext: ExecutionContext | null = null,
+  executionContext: ExecutionContext | null,
+  apiLimit: ApiLimitContext,
 ): Promise<{ ok: true; value: Record<string, unknown> } | { ok: false; message: string }> {
   if (!params || typeof params !== "object") {
     return { ok: false, message: "tools/call params must be an object." };
@@ -816,11 +889,11 @@ async function callTool(
   }
 
   if (name === "get_collection_export") {
-    return buildCollectionToolResult(env, apiKey.userId, stringField(args, "collectionId"), format);
+    return buildCollectionToolResult(env, apiKey.userId, args, format);
   }
 
   if (name === "get_watchlist_export") {
-    return buildWatchlistToolResult(env, apiKey.userId, stringField(args, "watchlistId"), format);
+    return buildWatchlistToolResult(env, apiKey.userId, args, format);
   }
 
   if (name === "get_digest_export") {
@@ -828,91 +901,91 @@ async function callTool(
   }
 
   if (name === "retest_meta_source") {
-    return buildAgentActionToolResult(env, apiKey, "source.meta.retest", args, origin, executionContext);
+    return buildAgentActionToolResult(env, apiKey, "source.meta.retest", args, origin, executionContext, apiLimit);
   }
 
   if (name === "create_watchlist") {
-    return buildAgentActionToolResult(env, apiKey, "watchlist.create", args, origin, executionContext);
+    return buildAgentActionToolResult(env, apiKey, "watchlist.create", args, origin, executionContext, apiLimit);
   }
 
   if (name === "update_watchlist") {
-    return buildAgentActionToolResult(env, apiKey, "watchlist.update", args, origin, executionContext);
+    return buildAgentActionToolResult(env, apiKey, "watchlist.update", args, origin, executionContext, apiLimit);
   }
 
   if (name === "refresh_watchlist") {
-    return buildAgentActionToolResult(env, apiKey, "watchlist.refresh", args, origin, executionContext);
+    return buildAgentActionToolResult(env, apiKey, "watchlist.refresh", args, origin, executionContext, apiLimit);
   }
 
   if (name === "pause_watchlist") {
-    return buildAgentActionToolResult(env, apiKey, "watchlist.pause", args, origin, executionContext);
+    return buildAgentActionToolResult(env, apiKey, "watchlist.pause", args, origin, executionContext, apiLimit);
   }
 
   if (name === "resume_watchlist") {
-    return buildAgentActionToolResult(env, apiKey, "watchlist.resume", args, origin, executionContext);
+    return buildAgentActionToolResult(env, apiKey, "watchlist.resume", args, origin, executionContext, apiLimit);
   }
 
   if (name === "create_collection") {
-    return buildAgentActionToolResult(env, apiKey, "collection.create", args, origin, executionContext);
+    return buildAgentActionToolResult(env, apiKey, "collection.create", args, origin, executionContext, apiLimit);
   }
 
   if (name === "add_external_proof") {
-    return buildAgentActionToolResult(env, apiKey, "proof.add_external", args, origin, executionContext);
+    return buildAgentActionToolResult(env, apiKey, "proof.add_external", args, origin, executionContext, apiLimit);
   }
 
   if (name === "list_delivery_targets") {
-    return buildAgentActionToolResult(env, apiKey, "delivery_targets.list", args, origin, executionContext);
+    return buildAgentActionToolResult(env, apiKey, "delivery_targets.list", args, origin, executionContext, apiLimit);
   }
 
   if (name === "update_delivery_settings") {
-    return buildAgentActionToolResult(env, apiKey, "delivery_settings.update", args, origin, executionContext);
+    return buildAgentActionToolResult(env, apiKey, "delivery_settings.update", args, origin, executionContext, apiLimit);
   }
 
   if (name === "update_delivery_target") {
-    return buildAgentActionToolResult(env, apiKey, "delivery_target.update", args, origin, executionContext);
+    return buildAgentActionToolResult(env, apiKey, "delivery_target.update", args, origin, executionContext, apiLimit);
   }
 
   if (name === "create_share_link") {
-    return buildAgentActionToolResult(env, apiKey, "share.create", args, origin, executionContext);
+    return buildAgentActionToolResult(env, apiKey, "share.create", args, origin, executionContext, apiLimit);
   }
 
   if (name === "create_report") {
-    return buildAgentActionToolResult(env, apiKey, "report.create", args, origin, executionContext);
+    return buildAgentActionToolResult(env, apiKey, "report.create", args, origin, executionContext, apiLimit);
   }
 
   if (name === "share_report") {
-    return buildAgentActionToolResult(env, apiKey, "report.share", args, origin, executionContext);
+    return buildAgentActionToolResult(env, apiKey, "report.share", args, origin, executionContext, apiLimit);
   }
 
   if (name === "create_counter_move_brief") {
-    return buildAgentActionToolResult(env, apiKey, "counter_move_brief.create", args, origin, executionContext);
+    return buildAgentActionToolResult(env, apiKey, "counter_move_brief.create", args, origin, executionContext, apiLimit);
   }
 
   if (name === "upsert_memory") {
-    return buildAgentActionToolResult(env, apiKey, "memory.upsert", args, origin, executionContext);
+    return buildAgentActionToolResult(env, apiKey, "memory.upsert", args, origin, executionContext, apiLimit);
   }
 
   if (name === "list_memory") {
-    return buildAgentActionToolResult(env, apiKey, "memory.list", args, origin, executionContext);
+    return buildAgentActionToolResult(env, apiKey, "memory.list", args, origin, executionContext, apiLimit);
   }
 
   if (name === "upsert_client_room") {
-    return buildAgentActionToolResult(env, apiKey, "client_room.upsert", args, origin, executionContext);
+    return buildAgentActionToolResult(env, apiKey, "client_room.upsert", args, origin, executionContext, apiLimit);
   }
 
   if (name === "list_client_rooms") {
-    return buildAgentActionToolResult(env, apiKey, "client_room.list", args, origin, executionContext);
+    return buildAgentActionToolResult(env, apiKey, "client_room.list", args, origin, executionContext, apiLimit);
   }
 
   if (name === "create_support_case") {
-    return buildAgentActionToolResult(env, apiKey, "support_case.create", args, origin, executionContext);
+    return buildAgentActionToolResult(env, apiKey, "support_case.create", args, origin, executionContext, apiLimit);
   }
 
   if (name === "list_support_cases") {
-    return buildAgentActionToolResult(env, apiKey, "support_case.list", args, origin, executionContext);
+    return buildAgentActionToolResult(env, apiKey, "support_case.list", args, origin, executionContext, apiLimit);
   }
 
   if (name === "list_web_mentions") {
-    return buildAgentActionToolResult(env, apiKey, "web_mentions.list", args, origin, executionContext);
+    return buildAgentActionToolResult(env, apiKey, "web_mentions.list", args, origin, executionContext, apiLimit);
   }
 
   return { ok: false, message: `Unknown tool: ${name}` };
@@ -925,11 +998,13 @@ async function buildAgentActionToolResult(
   args: object,
   origin: string,
   executionContext: ExecutionContext | null,
+  apiLimit: ApiLimitContext,
 ) {
   const {
     customerAgentActionErrorPayload,
     runCustomerAgentAction,
   } = await import("~/lib/customer-agent-actions.server");
+  const { verifyAuthenticatedApiIdentity } = await import("~/lib/authenticated-api-limits.server");
 
   try {
     return structuredToolResult(await runCustomerAgentAction(env, {
@@ -939,6 +1014,14 @@ async function buildAgentActionToolResult(
       source: "mcp",
       origin,
       executionContext,
+      authorizeExternalEffect: async () => {
+        const response = await verifyAuthenticatedApiIdentity({
+          ...apiLimit,
+          operation: "api.mcp.external-effect",
+          actionName,
+        });
+        if (response) throw response;
+      },
     }, actionName, args as Record<string, unknown>));
   } catch (error) {
     const payload = customerAgentActionErrorPayload(error).body;
@@ -982,18 +1065,22 @@ function formatWorkspaceReadinessSummary(readiness: WorkspaceReadiness) {
 async function buildCollectionToolResult(
   env: AppEnv,
   userId: string,
-  collectionId: string | null,
+  args: object,
   format: AgentFormat,
 ) {
+  const collectionId = stringField(args, "collectionId");
   if (!collectionId) {
     return { ok: false as const, message: "collectionId is required." };
   }
+
+  const pageInput = readMcpPageInput(args);
+  if (!pageInput.ok) return pageInput.result;
 
   const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
   const workspaceUserId = await resolveWorkspaceDataUserId(env, userId);
   const {
     getCollection,
-    listCollectionItems,
+    listCollectionItemsPage,
   } = await import("~/lib/data.server");
   const {
     buildCollectionExportPayload,
@@ -1004,33 +1091,41 @@ async function buildCollectionToolResult(
     return toolNotFound("No account-owned collection was found for this API key.");
   }
 
-  const items = await listCollectionItems(env, collection.id);
+  const page = await listCollectionItemsPage(env, collection.id, pageInput.value);
   if (format === "slack") {
-    return textToolResult(await collectionExportResponse(collection, items, "slack").text(), {
+    return textToolResult(await collectionExportResponse(collection, page.items, "slack").text(), {
       resourceType: "collection",
       resourceId: collection.id,
       format,
+      pagination: { limit: pageInput.value.limit, nextCursor: page.nextCursor },
     });
   }
 
-  return structuredToolResult(buildCollectionExportPayload(collection, items));
+  return structuredToolResult({
+    ...buildCollectionExportPayload(collection, page.items),
+    pagination: { limit: pageInput.value.limit, nextCursor: page.nextCursor },
+  });
 }
 
 async function buildWatchlistToolResult(
   env: AppEnv,
   userId: string,
-  watchlistId: string | null,
+  args: object,
   format: AgentFormat,
 ) {
+  const watchlistId = stringField(args, "watchlistId");
   if (!watchlistId) {
     return { ok: false as const, message: "watchlistId is required." };
   }
+
+  const pageInput = readMcpPageInput(args);
+  if (!pageInput.ok) return pageInput.result;
 
   const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
   const workspaceUserId = await resolveWorkspaceDataUserId(env, userId);
   const {
     getWatchlist,
-    listWatchEvents,
+    listWatchEventsPage,
   } = await import("~/lib/data.server");
   const {
     buildWatchlistExportPayload,
@@ -1041,16 +1136,20 @@ async function buildWatchlistToolResult(
     return toolNotFound("No account-owned watchlist was found for this API key.");
   }
 
-  const events = await listWatchEvents(env, watchlist.id, 200);
+  const page = await listWatchEventsPage(env, watchlist.id, pageInput.value);
   if (format === "slack") {
-    return textToolResult(await watchlistExportResponse(watchlist, events, "slack").text(), {
+    return textToolResult(await watchlistExportResponse(watchlist, page.items, "slack").text(), {
       resourceType: "watchlist",
       resourceId: watchlist.id,
       format,
+      pagination: { limit: pageInput.value.limit, nextCursor: page.nextCursor },
     });
   }
 
-  return structuredToolResult(buildWatchlistExportPayload(watchlist, events));
+  return structuredToolResult({
+    ...buildWatchlistExportPayload(watchlist, page.items),
+    pagination: { limit: pageInput.value.limit, nextCursor: page.nextCursor },
+  });
 }
 
 async function buildDigestToolResult(
@@ -1179,15 +1278,67 @@ function errorToolResult(structuredContent: Record<string, unknown>) {
   };
 }
 
+function toolActionNameFromParams(params: unknown) {
+  if (!params || typeof params !== "object") return null;
+  const name = stringField(params, "name");
+  return name ? TOOL_ACTION_NAMES[name] ?? null : null;
+}
+
+function readMcpPageInput(args: object) {
+  const record = args as Record<string, unknown>;
+  const rawLimit = record.limit;
+  const limit = typeof rawLimit === "undefined" ? 100 : rawLimit;
+  const rawCursor = record.cursor;
+  const cursor = typeof rawCursor === "undefined" ? null : rawCursor;
+  if (
+    typeof limit !== "number" ||
+    !Number.isInteger(limit) ||
+    limit < 1 ||
+    limit > 200 ||
+    (cursor !== null && (
+      typeof cursor !== "string" ||
+      cursor.length > 512 ||
+      !decodeListCursor(cursor)
+    ))
+  ) {
+    return {
+      ok: false as const,
+      result: {
+        ok: false as const,
+        message: "Use limit 1–200 and a cursor returned by Five to Nine.",
+      },
+    };
+  }
+  return { ok: true as const, value: { limit, cursor } };
+}
+
 async function readJsonRpcRequest(request: Request) {
+  const contentLength = Number(request.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > MAX_AUTHENTICATED_API_BODY_BYTES) {
+    return { ok: false as const, response: mcpRequestTooLargeResponse() };
+  }
   try {
+    const body = await request.text();
+    if (new TextEncoder().encode(body).byteLength > MAX_AUTHENTICATED_API_BODY_BYTES) {
+      return { ok: false as const, response: mcpRequestTooLargeResponse() };
+    }
     return {
       ok: true as const,
-      value: await request.json(),
+      value: JSON.parse(body),
     };
   } catch {
-    return { ok: false as const };
+    return { ok: false as const, response: null };
   }
+}
+
+function mcpRequestTooLargeResponse() {
+  return Response.json(
+    {
+      error: "request_too_large",
+      message: "Authenticated MCP payloads must be 64 KB or smaller.",
+    },
+    { status: 413, headers: noStoreHeaders() },
+  );
 }
 
 function isJsonRpcRequest(value: unknown): value is JsonRpcRequest {
@@ -1228,7 +1379,7 @@ function stringField(value: object, field: string) {
   return typeof candidate === "string" && candidate.trim() ? candidate.trim() : null;
 }
 
-function resourceInputSchema(idName: string) {
+function resourceInputSchema(idName: string, options: { paginated?: boolean } = {}) {
   return {
     type: "object",
     properties: {
@@ -1242,6 +1393,19 @@ function resourceInputSchema(idName: string) {
         default: "json",
         description: customerAgentFormatDescription(),
       },
+      ...(options.paginated ? {
+        limit: {
+          type: "integer",
+          minimum: 1,
+          maximum: 200,
+          default: 100,
+        },
+        cursor: {
+          type: "string",
+          maxLength: 512,
+          description: "Opaque nextCursor returned by the previous page.",
+        },
+      } : {}),
     },
     required: [idName],
     additionalProperties: false,
@@ -1271,7 +1435,13 @@ function watchlistMutationInputSchema() {
   };
 }
 
-function reportInputSchema(options: { requiresIdempotency?: boolean } = {}) {
+function reportInputSchema(
+  options: { requiresIdempotency?: boolean; requiresReview?: boolean } = {},
+) {
+  const required = [
+    ...(options.requiresIdempotency ? ["idempotencyKey"] : []),
+    ...(options.requiresReview ? ["reviewed"] : []),
+  ];
   return {
     type: "object",
     properties: {
@@ -1286,9 +1456,16 @@ function reportInputSchema(options: { requiresIdempotency?: boolean } = {}) {
       resourceId: {
         type: "string",
       },
+      ...(options.requiresReview ? {
+        reviewed: {
+          type: "boolean",
+          const: true,
+          description: "Confirms the current proof was explicitly reviewed before this share is created.",
+        },
+      } : {}),
       idempotencyKey: idempotencyKeySchema(),
     },
-    required: options.requiresIdempotency ? ["idempotencyKey"] : [],
+    required,
     anyOf: [
       { required: ["reportId"] },
       { required: ["resourceType", "resourceId"] },
@@ -1330,7 +1507,13 @@ function clientRoomMutationInputSchema() {
     properties: {
       roomId: {
         type: "string",
+        minLength: 1,
         description: "Optional existing client room id to update.",
+      },
+      expectedUpdatedAt: {
+        type: "string",
+        minLength: 1,
+        description: "Required last observed updatedAt value when roomId is provided.",
       },
       name: {
         type: "string",
@@ -1370,6 +1553,17 @@ function clientRoomMutationInputSchema() {
       idempotencyKey: idempotencyKeySchema(),
     },
     required: ["name", "idempotencyKey"],
+    oneOf: [
+      { required: ["roomId", "expectedUpdatedAt"] },
+      {
+        not: {
+          anyOf: [
+            { required: ["roomId"] },
+            { required: ["expectedUpdatedAt"] },
+          ],
+        },
+      },
+    ],
     additionalProperties: false,
   };
 }
@@ -1406,6 +1600,40 @@ function jsonRpcError(id: JsonRpcId, code: number, message: string) {
       message,
     },
   });
+}
+
+function jsonRpcLimitResponse(id: JsonRpcId, response: Response) {
+  const isRateLimited = response.status === 429;
+  const retryAfterSeconds = retryAfterSecondsFromResponse(response);
+  const retryAfter = response.headers.get("Retry-After")?.trim();
+  return Response.json(
+    {
+      jsonrpc: "2.0",
+      id,
+      error: {
+        code: isRateLimited ? -32029 : -32003,
+        message: isRateLimited
+          ? "Too many authenticated requests. Please try again shortly."
+          : "Authenticated request limits are temporarily unavailable. Please try again shortly.",
+        data: {
+          error: isRateLimited ? "rate_limited" : "rate_limit_unavailable",
+          retryAfterSeconds,
+        },
+      },
+    },
+    {
+      status: response.status,
+      headers: {
+        ...noStoreHeaders(),
+        ...(retryAfter ? { "Retry-After": retryAfter } : {}),
+      },
+    },
+  );
+}
+
+function retryAfterSecondsFromResponse(response: Response) {
+  const value = Number(response.headers.get("Retry-After"));
+  return Number.isFinite(value) && value >= 1 ? Math.ceil(value) : 1;
 }
 
 function jsonResponse(payload: Record<string, unknown>) {

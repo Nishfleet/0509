@@ -12,7 +12,9 @@ function legacyReportLabelText(value: string) {
     .replace(/\bProof unavailable\b/g, "Evidence unavailable")
     .replace(/\bProof snapshot\b/g, "Saved evidence")
     .replace(/\bProof capture\b/g, "Evidence capture")
-    .replace(/\bproof capture\b/g, "evidence capture");
+    .replace(/\bproof capture\b/g, "evidence capture")
+    .replace(/\bnon[- ]client[- ]ready\b/gi, "unreviewed")
+    .replace(/\bclient[- ]ready\b/gi, "verified");
 }
 
 // Placeholder prose written into report snapshots before missing fields
@@ -84,8 +86,8 @@ export function ReportView({ report }: { report: ReportDocument }) {
         <section className="f9-proof-packet" aria-label="Report source coverage">
           <div>
             <span className="f9-app-kicker">Evidence and source coverage</span>
-            <h3>Client-ready evidence filter</h3>
-            <p className="f9-muted-copy">{report.sourceCoverage.note}</p>
+            <h3>Verified evidence filter</h3>
+            <p className="f9-muted-copy">{legacyReportLabelText(report.sourceCoverage.note)}</p>
           </div>
           <dl className="proof-trail-list">
             <div>
@@ -128,8 +130,8 @@ export function ReportView({ report }: { report: ReportDocument }) {
       </section>
       {report.rows.length === 0 ? (
         <EmptyState
-          description="Only client-ready changes with saved evidence are included in source-backed reports."
-          title="No client-ready evidence in this report"
+          description="Only changes with saved evidence are included in source-backed reports."
+          title="No verified evidence in this report"
         />
       ) : null}
     </div>
@@ -190,6 +192,7 @@ function ReportRowCard({ row }: { row: ReportDocument["rows"][number] }) {
         <section className="report-event">
           <p className="f9-app-kicker">Competitor change</p>
           <h3>{row.event.title}</h3>
+          <p className="f9-app-kicker">Signal summary</p>
           <p>{row.event.summary}</p>
           <dl className="proof-trail-list">
             <div>
@@ -360,13 +363,13 @@ function ReportDecisionSummary({ report }: { report: ReportDocument }) {
       <section className="f9-proof-packet" aria-label="Report decision summary">
         <div>
           <span className="f9-app-kicker">Decision summary</span>
-          <h3>No client-ready change needs action</h3>
+          <h3>No verified change needs action</h3>
           <p className="f9-muted-copy">{report.summary}</p>
         </div>
         <dl className="proof-trail-list">
           <div>
             <dt>What changed</dt>
-            <dd>No verified report row is ready to act on.</dd>
+            <dd>No verified report row needs action.</dd>
           </div>
           <div>
             <dt>Next action</dt>
@@ -386,7 +389,7 @@ function ReportDecisionSummary({ report }: { report: ReportDocument }) {
       <div>
         <span className="f9-app-kicker">Decision summary</span>
         <h3>{topEvent.title}</h3>
-        <p className="f9-muted-copy">{topEvent.summary}</p>
+        <p className="f9-muted-copy">Review the evidence trail and next action before sharing.</p>
       </div>
       <dl className="proof-trail-list">
         <div>
@@ -394,8 +397,8 @@ function ReportDecisionSummary({ report }: { report: ReportDocument }) {
           <dd>{topEvent.title}</dd>
         </div>
         <div>
-          <dt>Why it matters</dt>
-          <dd>{topEvent.summary}</dd>
+          <dt>Evidence summary</dt>
+          <dd>{reportEvidenceSummary(topEvent)}</dd>
         </div>
         <div>
           <dt>Urgency</dt>
@@ -422,6 +425,13 @@ function ReportDecisionSummary({ report }: { report: ReportDocument }) {
   );
 }
 
+function reportEvidenceSummary(event: NonNullable<ReportDocument["rows"][number]["event"]>) {
+  const status = legacyReportLabelText(event.proofStatusLabel);
+  return status === "Verified evidence"
+    ? "Verified evidence attached. Review before sharing."
+    : `Evidence status: ${status}. Review before sharing.`;
+}
+
 function CollectionDecisionSummary({ report }: { report: ReportDocument }) {
   const rowCount = report.rows.length;
   const rowLabel = `${rowCount} saved evidence item${rowCount === 1 ? "" : "s"}`;
@@ -440,7 +450,7 @@ function CollectionDecisionSummary({ report }: { report: ReportDocument }) {
           <dd>{hasRows ? `${rowLabel} packaged for review.` : "No saved evidence is in this report."}</dd>
         </div>
         <div>
-          <dt>Why it matters</dt>
+          <dt>Evidence summary</dt>
           <dd>
             {hasRows
               ? "This is a curated evidence set, not a live change alert."

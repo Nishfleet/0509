@@ -181,6 +181,65 @@ export async function getWatchlist(env: AppEnv, watchlistId: string, userId?: st
 
   return row ? toWatchlistRecord(row) : null;
 }
+
+/**
+ * Compensates a newly created agent watchlist when the final API-key fence
+ * fails before Workflow dispatch. A watchlist with any run is no longer safe
+ * to remove, so the transaction leaves it and its mention target untouched.
+ */
+export async function deleteUnscannedWatchlistCreatedByFailedAgentAction(
+  env: AppEnv,
+  userId: string,
+  watchlistId: string,
+) {
+  const db = ensureDb(env);
+  const results = await db.batch([
+    db.prepare(`
+      DELETE FROM web_mention_target
+      WHERE watchlist_id = ?
+        AND user_id = ?
+        AND NOT EXISTS (
+          SELECT 1
+          FROM watchlist_run
+          WHERE watchlist_id = ?
+        )
+    `).bind(watchlistId, userId, watchlistId),
+    db.prepare(`
+      DELETE FROM watchlist
+      WHERE id = ?
+        AND user_id = ?
+        AND NOT EXISTS (
+          SELECT 1
+          FROM watchlist_run
+          WHERE watchlist_id = ?
+        )
+    `).bind(watchlistId, userId, watchlistId),
+  ]);
+  if (Number(results[1]?.meta?.changes ?? 0) === 1) return true;
+
+  const unscannedStillPresent = await one<{ count: number }>(
+    env,
+    `
+      SELECT COUNT(*) AS count
+      FROM watchlist
+      WHERE id = ?
+        AND user_id = ?
+        AND NOT EXISTS (
+          SELECT 1
+          FROM watchlist_run
+          WHERE watchlist_id = ?
+        )
+    `,
+    watchlistId,
+    userId,
+    watchlistId,
+  );
+  if (Number(unscannedStillPresent?.count ?? 0) > 0) {
+    throw new Error("Unscanned watchlist compensation could not be confirmed.");
+  }
+  return false;
+}
+
 export interface CreateWatchlistInput {
   name: string;
   targetType: WatchTargetType;

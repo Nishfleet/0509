@@ -83,6 +83,16 @@ describe("runRetentionSweep", () => {
     expect(runDelete?.bindings[0]).toBe(5);
   });
 
+  it("accepts an explicit server clock without changing the process clock", async () => {
+    const mock = createCapturingDb();
+    const now = new Date("2026-07-15T12:00:00.000Z");
+
+    await runRetentionSweep({ DB: mock.db } as never, { now });
+
+    expect(mock.statements[0]?.bindings[0]).toBe("2026-06-15T12:00:00.000Z");
+    expect(mock.statements[1]?.bindings[0]).toBe("2026-07-08T12:00:00.000Z");
+  });
+
   it("continues the sweep when one table's delete fails", async () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const statements: string[] = [];
@@ -109,6 +119,34 @@ describe("runRetentionSweep", () => {
     expect(statements.length).toBe(8);
     expect(result.deleted.discovery_cache_entry).toBeUndefined();
     expect(result.deleted.delivery_attempt).toBe(1);
+    expect(result.failedSteps).toEqual(["discovery_cache_entry"]);
+    consoleError.mockRestore();
+  });
+
+  it("returns only deterministic step names when a deletion exposes sensitive error details", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const db = {
+      prepare(sql: string) {
+        return {
+          bind() {
+            return {
+              async run() {
+                if (sql.includes("meta_integration_log")) {
+                  throw new Error("D1 token=super-secret SQL=SELECT * FROM private_data");
+                }
+                return { success: true, meta: { changes: 0 } };
+              },
+            };
+          },
+        };
+      },
+    };
+
+    const result = await runRetentionSweep({ DB: db } as never);
+
+    expect(result.failedSteps).toEqual(["meta_integration_log"]);
+    expect(JSON.stringify(result)).not.toContain("super-secret");
+    expect(JSON.stringify(result)).not.toContain("private_data");
     consoleError.mockRestore();
   });
 });

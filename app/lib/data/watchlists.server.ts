@@ -12,6 +12,7 @@ export {
   getWatchlist,
   createWatchlistWithinLimit,
   createWatchlist,
+  deleteUnscannedWatchlistCreatedByFailedAgentAction,
   updateWatchlist,
   setWatchlistActive,
   type CreateWatchlistInput,

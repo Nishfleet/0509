@@ -19,6 +19,20 @@ type RateLimitPolicy = {
   atomicClaim?: boolean;
 };
 
+export type BillingProviderRateLimitKind = "pricing" | "mutation";
+
+const BILLING_PROVIDER_RATE_LIMITS: Record<
+  BillingProviderRateLimitKind,
+  { scope: string; limit: number; windowSeconds: number }
+> = {
+  // Pricing previews can fan out to one provider request per configured SKU,
+  // so keep their bucket separate from writes while still bounding spend.
+  pricing: { scope: "billing-provider-pricing", limit: 30, windowSeconds: 60 },
+  // Checkout, portal, and subscription mutations are materially more costly
+  // and must share one conservative owner budget.
+  mutation: { scope: "billing-provider-mutation", limit: 5, windowSeconds: 10 * 60 },
+};
+
 const CLEANUP_WINDOW_SECONDS = 2 * 60 * 60;
 // Scopes whose counting window exceeds the short cleanup horizon. Their
 // events must survive a full day plus slack or the daily caps silently reset.
@@ -94,6 +108,39 @@ export async function enforceSearchSelectionRateLimit(
       windowSeconds: 10 * 60,
       failClosed: true,
       keySeed: userId,
+    },
+    ctx,
+  );
+}
+
+/**
+ * Reserve capacity for a Dodo billing provider operation.
+ *
+ * The key is the authenticated workspace owner, rather than request headers,
+ * so rotating an IP or user-agent cannot reset spend. Both buckets use the
+ * atomic claim path and fail closed when D1 or its rate-limit table is absent.
+ */
+export async function enforceBillingProviderRateLimit(
+  request: Request,
+  env: AppEnv,
+  workspaceUserId: string,
+  kind: BillingProviderRateLimitKind,
+  ctx?: ExecutionContext,
+): Promise<Response | null> {
+  if (!workspaceUserId.trim()) return rateLimitUnavailableResponse();
+  const policy = BILLING_PROVIDER_RATE_LIMITS[kind];
+  return enforceRateLimitPolicy(
+    request,
+    env,
+    {
+      ...policy,
+      windowSeconds: policy.windowSeconds,
+      failClosed: true,
+      keySeed: workspaceUserId,
+      // All Dodo billing calls for this owner share the same budget, even
+      // when they originate from different route pathnames.
+      routeOverride: "billing-provider",
+      atomicClaim: true,
     },
     ctx,
   );

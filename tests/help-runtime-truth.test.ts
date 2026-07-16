@@ -1,0 +1,66 @@
+import { readFileSync } from "node:fs";
+
+import { createElement, type ReactNode } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
+
+beforeEach(() => {
+  vi.resetModules();
+  vi.doMock("react-router", async () => {
+    const actual = await vi.importActual<typeof import("react-router")>("react-router");
+    const React = await import("react");
+
+    return {
+      ...actual,
+      Link: ({ children, to, ...props }: MockLinkProps) =>
+        React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+    };
+  });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.resetModules();
+});
+
+describe("customer help runtime truth", () => {
+  it("explains activation, recurring monitoring, and delivery proof without overclaiming", async () => {
+    const { default: HelpRoute } = await import("~/routes/help");
+    const markup = renderToStaticMarkup(createElement(HelpRoute));
+
+    expect(markup).toContain("Free is an activation path, not recurring monitoring");
+    expect(markup).toContain("Paid plans add scheduled monitoring and digests");
+    expect(markup).toContain("Email delivery is in product scope");
+    expect(markup).toContain("does not measure live email-provider availability");
+    expect(markup).toContain("A manual refresh confirms a fresh check only; it does not confirm recurring delivery.");
+    expect(markup).toContain("If a scheduled digest does not arrive");
+    expect(markup).not.toMatch(/email delivery is available/i);
+    expect(markup).not.toMatch(/(?:Slack|WhatsApp) (?:delivery|notifications?) (?:is|are) available/i);
+    expect(markup).not.toMatch(/manual refresh[^.]{0,60}(?:confirms|proves) (?:a )?(?:scheduled|recurring )?delivery/i);
+  });
+
+  it("keeps billing, cancellation, and deletion contracts exact", async () => {
+    const { default: HelpRoute } = await import("~/routes/help");
+    const markup = renderToStaticMarkup(createElement(HelpRoute));
+
+    expect(markup).toContain("hosted billing portal");
+    expect(markup).toContain("Plan changes and cancellation stay backed by");
+    expect(markup).toContain("until portal subscription updates are confirmed");
+    expect(markup).toContain("Cancellation stops future renewals, and access continues until the end of the period you have paid for.");
+    expect(markup).toContain("Account deletion is a support request, not an automatic or in-app deletion.");
+    expect(markup).toContain("Nothing is deleted automatically or in-app.");
+    expect(markup).toContain("/app/support?category=billing");
+    expect(markup).toContain("/app/support?category=security");
+  });
+
+  it("does not expose candidate or frozen implementation claims in source or copy", async () => {
+    const source = readFileSync("app/routes/help.tsx", "utf8");
+    const { default: HelpRoute } = await import("~/routes/help");
+    const markup = renderToStaticMarkup(createElement(HelpRoute));
+    const customerCopy = `${source}\n${markup}`;
+
+    expect(customerCopy).not.toMatch(/candidate|frozen|Journey [345]/i);
+  });
+});
