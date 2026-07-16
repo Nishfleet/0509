@@ -255,6 +255,7 @@ export interface SearchResponse {
   cacheStatus?: DiscoveryCacheStatus;
   discoveryEmptyReason?: "no_results";
   discoveryStatus?: CommercialDiscoveryStatus;
+  discoveryProgress?: "warming";
   discoverySummary?: string | null;
   discoveryFailureClass?: DiscoveryFailureClass | null;
   searchIntent?: "domain" | "text";
