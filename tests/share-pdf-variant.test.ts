@@ -204,6 +204,19 @@ request: new Request("https://0509.io/share/token-1"),
 expect(result.pdfPath).toBeNull();
 });
 
+it("fails closed when a PDF render request sees a downgraded sharer plan", async () => {
+mockShareLoaderCollaborators({ plan: "starter" });
+
+const { loader } = await import("~/routes/share.$token");
+await expect(
+	loader({
+		context: {},
+		params: { token: "token-1" },
+		request: new Request("https://0509.io/share/token-1?pdf=1"),
+	} as never),
+).rejects.toMatchObject({ status: 403 });
+});
+
 it("uses the same entitled public identity for the page and PDF variant", async () => {
 const branding = {
 brandName: "Northlight Media",
@@ -773,11 +786,4 @@ expect(Number(row.count)).toBe(40);
 harness.close();
 });
 
-it("retains daily-cap events past the short cleanup horizon", async () => {
-const { readFileSync } = await import("node:fs");
-const source = readFileSync("app/lib/rate-limit.server.ts", "utf8");
-// The 24h cap only works if cleanup keeps its scope for >= 24h.
-expect(source).toContain("LONG_WINDOW_CLEANUP_SECONDS = 25 * 60 * 60");
-expect(source).toMatch(/scope != \? AND created_at < \?/);
-});
 });

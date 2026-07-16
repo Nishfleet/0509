@@ -495,6 +495,18 @@ function requireDigestSourceEventId(metadata: Record<string, unknown> | undefine
 }
 
 function readDigestExpectedItemCount(summary?: Record<string, unknown>) {
+	const hasCohortCounts =
+		Object.prototype.hasOwnProperty.call(summary ?? {}, "totalEligibleEvents") ||
+		Object.prototype.hasOwnProperty.call(summary ?? {}, "includedEvents") ||
+		Object.prototype.hasOwnProperty.call(summary ?? {}, "omittedEvents");
+	if (hasCohortCounts) {
+		const total = readNonNegativeInteger(summary?.totalEligibleEvents);
+		const included = readNonNegativeInteger(summary?.includedEvents);
+		const omitted = readNonNegativeInteger(summary?.omittedEvents);
+		return total !== null && included !== null && omitted !== null && total === included + omitted
+			? included
+			: null;
+	}
   const expectedItemCount = summary?.totalEvents;
   return Number.isSafeInteger(expectedItemCount) && Number(expectedItemCount) >= 0
     ? Number(expectedItemCount)

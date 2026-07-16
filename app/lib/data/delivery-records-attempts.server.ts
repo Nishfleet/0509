@@ -413,19 +413,80 @@ export type BillingLifecycleOutboxGate =
 	 */
 	| { kind: "ledger-processed"; eventId: string; processedAt: string };
 
+const BILLING_LIFECYCLE_OUTBOX_AFTER_MUTATION_SQL = `
+	INSERT OR IGNORE INTO delivery_attempt (
+		id,
+		user_id,
+		watchlist_id,
+		digest_run_id,
+		delivery_target_id,
+		lane,
+		channel,
+		provider,
+		status,
+		webhook_status,
+		target_value,
+		provider_message_id,
+		provider_status_last_seen_at,
+		template_name,
+		event_ids_json,
+		payload_snapshot_json,
+		idempotency_key,
+		error_message,
+		sent_at,
+		failed_at,
+		created_at,
+		updated_at
+	)
+	SELECT ?, ?, NULL, NULL, NULL, 'customer', 'email', ?, 'pending', 'pending', ?,
+			 NULL, NULL, ?, '[]', ?, ?, NULL, NULL, NULL, ?, ?
+	WHERE changes() > 0
+`;
+
+const BILLING_LIFECYCLE_OUTBOX_AFTER_LEDGER_SQL = `
+	INSERT OR IGNORE INTO delivery_attempt (
+		id,
+		user_id,
+		watchlist_id,
+		digest_run_id,
+		delivery_target_id,
+		lane,
+		channel,
+		provider,
+		status,
+		webhook_status,
+		target_value,
+		provider_message_id,
+		provider_status_last_seen_at,
+		template_name,
+		event_ids_json,
+		payload_snapshot_json,
+		idempotency_key,
+		error_message,
+		sent_at,
+		failed_at,
+		created_at,
+		updated_at
+	)
+	SELECT ?, ?, NULL, NULL, NULL, 'customer', 'email', ?, 'pending', 'pending', ?,
+			 NULL, NULL, ?, '[]', ?, ?, NULL, NULL, NULL, ?, ?
+	WHERE EXISTS (
+		SELECT 1 FROM dodo_webhook_event
+		WHERE event_id = ? AND outcome = 'processed' AND processed_at = ?
+	)
+`;
+
 export function buildBillingLifecycleOutboxStatement(
 	db: ReturnType<typeof ensureDb>,
 	spec: BillingLifecycleEmailOutboxSpec,
 	gate: BillingLifecycleOutboxGate,
 	timestamp: string,
 ) {
-	const gateSql =
+	const statement = db.prepare(
 		gate.kind === "prior-statement-changed"
-			? "changes() > 0"
-			: `EXISTS (
-					SELECT 1 FROM dodo_webhook_event
-					WHERE event_id = ? AND outcome = 'processed' AND processed_at = ?
-				)`;
+			? BILLING_LIFECYCLE_OUTBOX_AFTER_MUTATION_SQL
+			: BILLING_LIFECYCLE_OUTBOX_AFTER_LEDGER_SQL,
+	);
 	const gateBindings =
 		gate.kind === "prior-statement-changed" ? [] : [gate.eventId, gate.processedAt];
 
@@ -433,35 +494,7 @@ export function buildBillingLifecycleOutboxStatement(
 	// (redeliveries, racing sibling events, an existing failed/sent row). A
 	// plain INSERT conflict would abort the whole batch and roll back the plan
 	// mutation itself.
-	return db.prepare(`
-			INSERT OR IGNORE INTO delivery_attempt (
-				id,
-				user_id,
-				watchlist_id,
-				digest_run_id,
-				delivery_target_id,
-				lane,
-				channel,
-				provider,
-				status,
-				webhook_status,
-				target_value,
-				provider_message_id,
-				provider_status_last_seen_at,
-				template_name,
-				event_ids_json,
-				payload_snapshot_json,
-				idempotency_key,
-				error_message,
-				sent_at,
-				failed_at,
-				created_at,
-				updated_at
-			)
-			SELECT ?, ?, NULL, NULL, NULL, 'customer', 'email', ?, 'pending', 'pending', ?,
-						 NULL, NULL, ?, '[]', ?, ?, NULL, NULL, NULL, ?, ?
-			WHERE ${gateSql}
-		`).bind(
+	return statement.bind(
 		createId(),
 		spec.userId,
 		"cloudflare_email",
