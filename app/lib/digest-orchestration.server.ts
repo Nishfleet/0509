@@ -3,21 +3,21 @@ import {
   digestMetadataForEvent,
 } from "~/lib/change-intelligence";
 import {
-  claimDigestScheduleJob,
-  claimDigestScheduleJobExhaustionAlert,
-  completeDigestScheduleJob,
+	claimDigestScheduleJob,
+	claimDigestScheduleJobExhaustionAlert,
+	completeDigestScheduleJob,
   createDigestRun,
-  enqueueDigestScheduleJobs,
+	enqueueDigestScheduleJobs,
   exhaustStaleMaxAttemptDigestScheduleJobs,
-  failDigestScheduleJob,
+	failDigestScheduleJob,
   getDigest,
   getDigestByPeriod,
   getSuccessfulRunStatsForUserBetween,
   listAdsByIds,
-  listDigestScheduleJobsAwaitingAlert,
+	listDigestScheduleJobsAwaitingAlert,
   listRetryableDigestRuns,
-  listRetryableDigestScheduleJobs,
-  settleDigestScheduleJobExhaustionAlert,
+	listRetryableDigestScheduleJobs,
+	settleDigestScheduleJobExhaustionAlert,
   listWatchEventsBetween,
   listWatchlists,
 } from "~/lib/data.server";
@@ -115,52 +115,52 @@ export async function runDigestDeliveryCycle(
     limit: DIGEST_RETRY_SWEEP_LIMIT,
   });
   await enqueueDigestScheduleJobs(env, {
-    cadence,
-    periodStart: periodStartIso,
-    periodEnd: periodEndIso,
-  });
+		cadence,
+		periodStart: periodStartIso,
+		periodEnd: periodEndIso,
+	});
 
   const handledDigestRunIds = new Set<string>();
   let digestsSent = await drainDigestScheduleJobs(env, {
-    deadlineAt: options.deadlineAt,
-    strategyGenerationDeadlineAt,
-    handledDigestRunIds,
-  });
+		deadlineAt: options.deadlineAt,
+		strategyGenerationDeadlineAt,
+		handledDigestRunIds,
+	});
 
   digestsSent += await retryFailedDigests(env, {
     retryCandidates,
     handledDigestRunIds,
     strategyGenerationDeadlineAt,
-    deadlineAt: options.deadlineAt,
+		deadlineAt: options.deadlineAt,
   });
   return digestsSent;
 }
 
 export async function resumePendingDigestScheduleJobs(
-  env: AppEnv,
-  options: { deadlineAt?: number } = {},
+	env: AppEnv,
+	options: { deadlineAt?: number } = {},
 ) {
-  if (!env.DB) return 0;
-  const handledDigestRunIds = new Set<string>();
-  const strategyGenerationDeadlineAt = createDigestStrategyGenerationDeadline(
-    options.deadlineAt,
-  );
-  return drainDigestScheduleJobs(env, {
-    deadlineAt: options.deadlineAt,
-    strategyGenerationDeadlineAt,
-    handledDigestRunIds,
-  });
+	if (!env.DB) return 0;
+	const handledDigestRunIds = new Set<string>();
+	const strategyGenerationDeadlineAt = createDigestStrategyGenerationDeadline(
+		options.deadlineAt,
+	);
+	return drainDigestScheduleJobs(env, {
+		deadlineAt: options.deadlineAt,
+		strategyGenerationDeadlineAt,
+		handledDigestRunIds,
+	});
 }
 
 async function drainDigestScheduleJobs(
-  env: AppEnv,
-  input: {
-    deadlineAt?: number;
-    strategyGenerationDeadlineAt: number;
-    handledDigestRunIds: Set<string>;
-  },
+	env: AppEnv,
+	input: {
+		deadlineAt?: number;
+		strategyGenerationDeadlineAt: number;
+		handledDigestRunIds: Set<string>;
+	},
 ) {
-  const now = Date.now();
+	const now = Date.now();
   const staleRunningBefore = new Date(
     now - DIGEST_SCHEDULE_JOB_LEASE_MS,
   ).toISOString();
@@ -169,100 +169,100 @@ async function drainDigestScheduleJobs(
     maxAttempts: DIGEST_SCHEDULE_JOB_MAX_ATTEMPTS,
     now: new Date(now).toISOString(),
   });
-  const candidates = await listRetryableDigestScheduleJobs(env, {
+	const candidates = await listRetryableDigestScheduleJobs(env, {
     staleRunningBefore,
-    maxAttempts: DIGEST_SCHEDULE_JOB_MAX_ATTEMPTS,
-    limit: DIGEST_SCHEDULE_JOB_SWEEP_LIMIT,
-  });
-  let digestsSent = 0;
+		maxAttempts: DIGEST_SCHEDULE_JOB_MAX_ATTEMPTS,
+		limit: DIGEST_SCHEDULE_JOB_SWEEP_LIMIT,
+	});
+	let digestsSent = 0;
 
-  for (const candidate of candidates) {
-    if (input.deadlineAt !== undefined && Date.now() >= input.deadlineAt) break;
-    const processingToken = crypto.randomUUID();
-    const claimNow = new Date().toISOString();
-    const claimed = await claimDigestScheduleJob(env, {
-      jobId: candidate.id,
-      processingToken,
-      now: claimNow,
-      staleRunningBefore: new Date(
-        Date.now() - DIGEST_SCHEDULE_JOB_LEASE_MS,
-      ).toISOString(),
-      maxAttempts: DIGEST_SCHEDULE_JOB_MAX_ATTEMPTS,
-    });
-    if (!claimed) continue;
+	for (const candidate of candidates) {
+		if (input.deadlineAt !== undefined && Date.now() >= input.deadlineAt) break;
+		const processingToken = crypto.randomUUID();
+		const claimNow = new Date().toISOString();
+		const claimed = await claimDigestScheduleJob(env, {
+			jobId: candidate.id,
+			processingToken,
+			now: claimNow,
+			staleRunningBefore: new Date(
+				Date.now() - DIGEST_SCHEDULE_JOB_LEASE_MS,
+			).toISOString(),
+			maxAttempts: DIGEST_SCHEDULE_JOB_MAX_ATTEMPTS,
+		});
+		if (!claimed) continue;
 
-    try {
-      digestsSent += await runDigestForUser(env, {
-        user: {
-          id: claimed.userId,
-          email: claimed.userEmail,
-          name: claimed.userName,
-        },
-        cadence: claimed.cadence,
-        periodStart: claimed.periodStart,
-        periodEnd: claimed.periodEnd,
-        strategyGenerationDeadlineAt: input.strategyGenerationDeadlineAt,
-        handledDigestRunIds: input.handledDigestRunIds,
-      });
-      const completed = await completeDigestScheduleJob(env, {
-        jobId: claimed.id,
-        processingToken,
-        now: new Date().toISOString(),
-      });
-      if (!completed) {
-        throw new Error("Digest schedule job completion ownership was lost.");
-      }
-    } catch (error) {
+		try {
+			digestsSent += await runDigestForUser(env, {
+				user: {
+					id: claimed.userId,
+					email: claimed.userEmail,
+					name: claimed.userName,
+				},
+				cadence: claimed.cadence,
+				periodStart: claimed.periodStart,
+				periodEnd: claimed.periodEnd,
+				strategyGenerationDeadlineAt: input.strategyGenerationDeadlineAt,
+				handledDigestRunIds: input.handledDigestRunIds,
+			});
+			const completed = await completeDigestScheduleJob(env, {
+				jobId: claimed.id,
+				processingToken,
+				now: new Date().toISOString(),
+			});
+			if (!completed) {
+				throw new Error("Digest schedule job completion ownership was lost.");
+			}
+		} catch (error) {
       const exhausted =
         claimed.attemptCount >= DIGEST_SCHEDULE_JOB_MAX_ATTEMPTS;
-      const failed = await failDigestScheduleJob(env, {
-        jobId: claimed.id,
-        processingToken,
-        now: new Date().toISOString(),
-        errorCode: exhausted
-          ? "digest_schedule_job_exhausted"
-          : "digest_schedule_job_failed",
-        exhausted,
-      });
-      if (failed && exhausted) {
-        try {
+			const failed = await failDigestScheduleJob(env, {
+				jobId: claimed.id,
+				processingToken,
+				now: new Date().toISOString(),
+				errorCode: exhausted
+					? "digest_schedule_job_exhausted"
+					: "digest_schedule_job_failed",
+				exhausted,
+			});
+			if (failed && exhausted) {
+				try {
           await reportExhaustedDigestScheduleJobs(env, {
             limit: 1,
             jobId: claimed.id,
           });
-        } catch (alertError) {
-          // The exhausted row remains durable and the separate recovery sweep
-          // will retry its alert. Alerting must not strand later workspaces.
+				} catch (alertError) {
+					// The exhausted row remains durable and the separate recovery sweep
+					// will retry its alert. Alerting must not strand later workspaces.
           console.error(
             "Digest schedule exhaustion alert failed; recovery will retry.",
             {
-              jobId: claimed.id,
+						jobId: claimed.id,
               error:
                 alertError instanceof Error
                   ? alertError.message
                   : String(alertError),
             },
           );
-        }
-      }
-      // The durable failed row remains reclaimable. Continue so one workspace
-      // cannot prevent later customers from receiving their digest.
-      console.error(
-        `Digest schedule job ${claimed.id} failed; continuing with remaining jobs.`,
-        error,
-      );
-    }
-  }
+				}
+			}
+			// The durable failed row remains reclaimable. Continue so one workspace
+			// cannot prevent later customers from receiving their digest.
+			console.error(
+				`Digest schedule job ${claimed.id} failed; continuing with remaining jobs.`,
+				error,
+			);
+		}
+	}
 
-  return digestsSent;
+	return digestsSent;
 }
 
 export async function reportExhaustedDigestScheduleJobs(
-  env: AppEnv,
-  options: { limit?: number; jobId?: string } = {},
+	env: AppEnv,
+	options: { limit?: number; jobId?: string } = {},
 ) {
-  if (!env.DB) return 0;
-  const now = Date.now();
+	if (!env.DB) return 0;
+	const now = Date.now();
   const staleRunningBefore = new Date(
     now - DIGEST_SCHEDULE_JOB_LEASE_MS,
   ).toISOString();
@@ -271,45 +271,45 @@ export async function reportExhaustedDigestScheduleJobs(
     maxAttempts: DIGEST_SCHEDULE_JOB_MAX_ATTEMPTS,
     now: new Date(now).toISOString(),
   });
-  const candidates = await listDigestScheduleJobsAwaitingAlert(env, {
+	const candidates = await listDigestScheduleJobsAwaitingAlert(env, {
     staleAlertBefore: new Date(
       now - DIGEST_SCHEDULE_JOB_ALERT_LEASE_MS,
     ).toISOString(),
-    limit: options.limit ?? 25,
-  });
-  let alerted = 0;
-  for (const candidate of candidates) {
-    if (options.jobId && candidate.id !== options.jobId) continue;
-    const alertToken = crypto.randomUUID();
-    const claimed = await claimDigestScheduleJobExhaustionAlert(env, {
-      jobId: candidate.id,
-      alertToken,
-      now: new Date().toISOString(),
-      staleAlertBefore: new Date(
-        Date.now() - DIGEST_SCHEDULE_JOB_ALERT_LEASE_MS,
-      ).toISOString(),
-    });
-    if (!claimed) continue;
+		limit: options.limit ?? 25,
+	});
+	let alerted = 0;
+	for (const candidate of candidates) {
+		if (options.jobId && candidate.id !== options.jobId) continue;
+		const alertToken = crypto.randomUUID();
+		const claimed = await claimDigestScheduleJobExhaustionAlert(env, {
+			jobId: candidate.id,
+			alertToken,
+			now: new Date().toISOString(),
+			staleAlertBefore: new Date(
+				Date.now() - DIGEST_SCHEDULE_JOB_ALERT_LEASE_MS,
+			).toISOString(),
+		});
+		if (!claimed) continue;
 
-    const result = await reportScheduledTaskFailure(
-      env,
-      `digest_schedule_job_exhausted:${claimed.id}`,
-      new Error(
-        `Digest ${claimed.cadence} period ${claimed.periodStart} to ${claimed.periodEnd} exhausted ${claimed.attemptCount} attempts.`,
-      ),
-      { jobId: claimed.id, cadence: claimed.cadence },
-    );
+		const result = await reportScheduledTaskFailure(
+			env,
+			`digest_schedule_job_exhausted:${claimed.id}`,
+			new Error(
+				`Digest ${claimed.cadence} period ${claimed.periodStart} to ${claimed.periodEnd} exhausted ${claimed.attemptCount} attempts.`,
+			),
+			{ jobId: claimed.id, cadence: claimed.cadence },
+		);
     const alertRecorded =
       result.reason === "sent" || result.reason === "throttled";
-    await settleDigestScheduleJobExhaustionAlert(env, {
-      jobId: claimed.id,
-      alertToken,
-      now: new Date().toISOString(),
-      alerted: alertRecorded,
-    });
-    if (alertRecorded) alerted += 1;
-  }
-  return alerted;
+		await settleDigestScheduleJobExhaustionAlert(env, {
+			jobId: claimed.id,
+			alertToken,
+			now: new Date().toISOString(),
+			alerted: alertRecorded,
+		});
+		if (alertRecorded) alerted += 1;
+	}
+	return alerted;
 }
 
 async function runDigestForUser(
@@ -546,12 +546,12 @@ async function retryFailedDigests(
     retryCandidates: Awaited<ReturnType<typeof listRetryableDigestRuns>>;
     handledDigestRunIds: Set<string>;
     strategyGenerationDeadlineAt: number;
-    deadlineAt?: number;
+		deadlineAt?: number;
   },
 ) {
   let retried = 0;
   for (const candidate of input.retryCandidates) {
-    if (input.deadlineAt !== undefined && Date.now() >= input.deadlineAt) break;
+		if (input.deadlineAt !== undefined && Date.now() >= input.deadlineAt) break;
     if (input.handledDigestRunIds.has(candidate.id)) continue;
     try {
       const plan = await getUserPlan(env, candidate.userId);
@@ -697,24 +697,24 @@ function requireDigestSourceEventId(
 }
 
 function readDigestExpectedItemCount(summary?: Record<string, unknown>) {
-  const hasCohortCounts =
+	const hasCohortCounts =
     Object.prototype.hasOwnProperty.call(
       summary ?? {},
       "totalEligibleEvents",
     ) ||
-    Object.prototype.hasOwnProperty.call(summary ?? {}, "includedEvents") ||
-    Object.prototype.hasOwnProperty.call(summary ?? {}, "omittedEvents");
-  if (hasCohortCounts) {
-    const total = readNonNegativeInteger(summary?.totalEligibleEvents);
-    const included = readNonNegativeInteger(summary?.includedEvents);
-    const omitted = readNonNegativeInteger(summary?.omittedEvents);
+		Object.prototype.hasOwnProperty.call(summary ?? {}, "includedEvents") ||
+		Object.prototype.hasOwnProperty.call(summary ?? {}, "omittedEvents");
+	if (hasCohortCounts) {
+		const total = readNonNegativeInteger(summary?.totalEligibleEvents);
+		const included = readNonNegativeInteger(summary?.includedEvents);
+		const omitted = readNonNegativeInteger(summary?.omittedEvents);
     return total !== null &&
       included !== null &&
       omitted !== null &&
       total === included + omitted
-      ? included
-      : null;
-  }
+			? included
+			: null;
+	}
   const expectedItemCount = summary?.totalEvents;
   return Number.isSafeInteger(expectedItemCount) &&
     Number(expectedItemCount) >= 0

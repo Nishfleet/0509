@@ -5,7 +5,7 @@
  */
 
 import {
-  ensureDb,
+	ensureDb,
   execute as run,
   queryAll as many,
   queryOne as one,
@@ -18,13 +18,13 @@ import {
   type JsonRecord,
 } from "~/lib/data/helpers.server";
 import {
-  DIGEST_STRATEGY_GENERATION_PENDING,
-  DIGEST_STRATEGY_GENERATION_READY,
-  readDigestStrategyNote,
+	DIGEST_STRATEGY_GENERATION_PENDING,
+	DIGEST_STRATEGY_GENERATION_READY,
+	readDigestStrategyNote,
 } from "~/lib/digest-strategy";
 import {
-  DIGEST_ITEM_SET_PROVENANCE,
-  selectDigestCohort,
+	DIGEST_ITEM_SET_PROVENANCE,
+	selectDigestCohort,
 } from "~/lib/digest-provenance";
 import type { AppEnv } from "~/lib/env.server";
 import type {
@@ -39,7 +39,7 @@ interface DigestRunRow {
   user_id: string;
   period_start: string;
   period_end: string;
-  summary_json: string;
+	summary_json: string;
   created_at: string;
 }
 
@@ -71,67 +71,67 @@ interface DigestDeliveryRow {
 }
 
 export interface DigestRunClaim {
-  digestRunId: string;
-  created: boolean;
+	digestRunId: string;
+	created: boolean;
 }
 
 export interface DigestScheduleJob {
-  id: string;
-  userId: string;
-  userEmail: string;
-  userName: string;
-  cadence: "daily" | "weekly";
-  periodStart: string;
-  periodEnd: string;
-  attemptCount: number;
-  status: "pending" | "running" | "completed" | "failed" | "exhausted";
-  lastErrorCode: string | null;
-  updatedAt: string;
-  exhaustedAt: string | null;
-  exhaustionAlertedAt: string | null;
+	id: string;
+	userId: string;
+	userEmail: string;
+	userName: string;
+	cadence: "daily" | "weekly";
+	periodStart: string;
+	periodEnd: string;
+	attemptCount: number;
+	status: "pending" | "running" | "completed" | "failed" | "exhausted";
+	lastErrorCode: string | null;
+	updatedAt: string;
+	exhaustedAt: string | null;
+	exhaustionAlertedAt: string | null;
 }
 
 interface DigestScheduleJobRow {
-  id: string;
-  user_id: string;
-  user_email: string;
-  user_name: string;
-  cadence: DigestScheduleJob["cadence"];
-  period_start: string;
-  period_end: string;
-  attempt_count: number;
-  status: DigestScheduleJob["status"];
-  last_error_code: string | null;
-  updated_at: string;
-  exhausted_at: string | null;
-  exhaustion_alerted_at: string | null;
+	id: string;
+	user_id: string;
+	user_email: string;
+	user_name: string;
+	cadence: DigestScheduleJob["cadence"];
+	period_start: string;
+	period_end: string;
+	attempt_count: number;
+	status: DigestScheduleJob["status"];
+	last_error_code: string | null;
+	updated_at: string;
+	exhausted_at: string | null;
+	exhaustion_alerted_at: string | null;
 }
 
 export interface DigestRunItemInput {
-  watchlistId: string;
-  watchlistName: string;
-  eventType: WatchEventType;
-  title: string;
-  summary: string;
-  metadata?: JsonRecord;
+	watchlistId: string;
+	watchlistName: string;
+	eventType: WatchEventType;
+	title: string;
+	summary: string;
+	metadata?: JsonRecord;
 }
 
 function toDigestScheduleJob(row: DigestScheduleJobRow): DigestScheduleJob {
-  return {
-    id: row.id,
-    userId: row.user_id,
-    userEmail: row.user_email,
-    userName: row.user_name,
-    cadence: row.cadence,
-    periodStart: row.period_start,
-    periodEnd: row.period_end,
-    attemptCount: Number(row.attempt_count),
-    status: row.status,
-    lastErrorCode: row.last_error_code,
-    updatedAt: row.updated_at,
-    exhaustedAt: row.exhausted_at,
-    exhaustionAlertedAt: row.exhaustion_alerted_at,
-  };
+	return {
+		id: row.id,
+		userId: row.user_id,
+		userEmail: row.user_email,
+		userName: row.user_name,
+		cadence: row.cadence,
+		periodStart: row.period_start,
+		periodEnd: row.period_end,
+		attemptCount: Number(row.attempt_count),
+		status: row.status,
+		lastErrorCode: row.last_error_code,
+		updatedAt: row.updated_at,
+		exhaustedAt: row.exhausted_at,
+		exhaustionAlertedAt: row.exhaustion_alerted_at,
+	};
 }
 
 const DIGEST_SCHEDULE_JOB_SELECT = `
@@ -151,17 +151,17 @@ const DIGEST_SCHEDULE_JOB_SELECT = `
 `;
 
 export async function enqueueDigestScheduleJobs(
-  env: AppEnv,
-  input: {
-    cadence: DigestScheduleJob["cadence"];
-    periodStart: string;
-    periodEnd: string;
-  },
+	env: AppEnv,
+	input: {
+		cadence: DigestScheduleJob["cadence"];
+		periodStart: string;
+		periodEnd: string;
+	},
 ) {
-  const createdAt = nowIso();
-  const result = await run(
-    env,
-    `
+	const createdAt = nowIso();
+	const result = await run(
+		env,
+		`
 			INSERT OR IGNORE INTO digest_schedule_job (
 				id, user_id, cadence, period_start, period_end, status,
 				attempt_count, created_at, updated_at
@@ -181,28 +181,28 @@ export async function enqueueDigestScheduleJobs(
 			WHERE watchlist.is_active = 1
 			GROUP BY user.id
 		`,
-    input.cadence,
-    input.periodEnd,
-    input.cadence,
-    input.periodStart,
-    input.periodEnd,
-    createdAt,
-    createdAt,
-  );
-  return Number(result.meta?.changes ?? 0);
+		input.cadence,
+		input.periodEnd,
+		input.cadence,
+		input.periodStart,
+		input.periodEnd,
+		createdAt,
+		createdAt,
+	);
+	return Number(result.meta?.changes ?? 0);
 }
 
 export async function listRetryableDigestScheduleJobs(
-  env: AppEnv,
-  input: {
-    staleRunningBefore: string;
-    maxAttempts: number;
-    limit: number;
-  },
+	env: AppEnv,
+	input: {
+		staleRunningBefore: string;
+		maxAttempts: number;
+		limit: number;
+	},
 ) {
-  const rows = await many<DigestScheduleJobRow>(
-    env,
-    `
+	const rows = await many<DigestScheduleJobRow>(
+		env,
+		`
 				SELECT ${DIGEST_SCHEDULE_JOB_SELECT}
 			FROM digest_schedule_job
 			INNER JOIN user ON user.id = digest_schedule_job.user_id
@@ -217,11 +217,11 @@ export async function listRetryableDigestScheduleJobs(
 			ORDER BY digest_schedule_job.period_end ASC, digest_schedule_job.user_id ASC
 			LIMIT ?
 		`,
-    input.maxAttempts,
-    input.staleRunningBefore,
-    input.limit,
-  );
-  return rows.map(toDigestScheduleJob);
+		input.maxAttempts,
+		input.staleRunningBefore,
+		input.limit,
+	);
+	return rows.map(toDigestScheduleJob);
 }
 
 export async function exhaustStaleMaxAttemptDigestScheduleJobs(
@@ -253,18 +253,18 @@ export async function exhaustStaleMaxAttemptDigestScheduleJobs(
 }
 
 export async function claimDigestScheduleJob(
-  env: AppEnv,
-  input: {
-    jobId: string;
-    processingToken: string;
-    now: string;
-    staleRunningBefore: string;
-    maxAttempts: number;
-  },
+	env: AppEnv,
+	input: {
+		jobId: string;
+		processingToken: string;
+		now: string;
+		staleRunningBefore: string;
+		maxAttempts: number;
+	},
 ) {
-  const claim = await run(
-    env,
-    `
+	const claim = await run(
+		env,
+		`
 			UPDATE digest_schedule_job
 			SET status = 'running',
 				processing_token = ?,
@@ -279,18 +279,18 @@ export async function claimDigestScheduleJob(
 					OR (status = 'running' AND processing_started_at <= ?)
 				)
 		`,
-    input.processingToken,
-    input.now,
-    input.now,
-    input.jobId,
-    input.maxAttempts,
-    input.staleRunningBefore,
-  );
-  if (Number(claim.meta?.changes ?? 0) !== 1) return null;
+		input.processingToken,
+		input.now,
+		input.now,
+		input.jobId,
+		input.maxAttempts,
+		input.staleRunningBefore,
+	);
+	if (Number(claim.meta?.changes ?? 0) !== 1) return null;
 
-  const row = await one<DigestScheduleJobRow>(
-    env,
-    `
+	const row = await one<DigestScheduleJobRow>(
+		env,
+		`
 				SELECT ${DIGEST_SCHEDULE_JOB_SELECT}
 			FROM digest_schedule_job
 			INNER JOIN user ON user.id = digest_schedule_job.user_id
@@ -299,19 +299,19 @@ export async function claimDigestScheduleJob(
 				AND digest_schedule_job.processing_token = ?
 			LIMIT 1
 		`,
-    input.jobId,
-    input.processingToken,
-  );
-  return row ? toDigestScheduleJob(row) : null;
+		input.jobId,
+		input.processingToken,
+	);
+	return row ? toDigestScheduleJob(row) : null;
 }
 
 export async function completeDigestScheduleJob(
-  env: AppEnv,
-  input: { jobId: string; processingToken: string; now: string },
+	env: AppEnv,
+	input: { jobId: string; processingToken: string; now: string },
 ) {
-  const result = await run(
-    env,
-    `
+	const result = await run(
+		env,
+		`
 			UPDATE digest_schedule_job
 			SET status = 'completed',
 				processing_token = NULL,
@@ -322,28 +322,28 @@ export async function completeDigestScheduleJob(
 				AND status = 'running'
 				AND processing_token = ?
 		`,
-    input.now,
-    input.now,
-    input.jobId,
-    input.processingToken,
-  );
-  return Number(result.meta?.changes ?? 0) === 1;
+		input.now,
+		input.now,
+		input.jobId,
+		input.processingToken,
+	);
+	return Number(result.meta?.changes ?? 0) === 1;
 }
 
 export async function failDigestScheduleJob(
-  env: AppEnv,
-  input: {
-    jobId: string;
-    processingToken: string;
-    now: string;
-    errorCode: string;
-    exhausted?: boolean;
-  },
+	env: AppEnv,
+	input: {
+		jobId: string;
+		processingToken: string;
+		now: string;
+			errorCode: string;
+			exhausted?: boolean;
+		},
 ) {
-  const status = input.exhausted ? "exhausted" : "failed";
-  const result = await run(
-    env,
-    `
+	const status = input.exhausted ? "exhausted" : "failed";
+	const result = await run(
+		env,
+		`
 			UPDATE digest_schedule_job
 				SET status = ?,
 					processing_token = NULL,
@@ -355,42 +355,42 @@ export async function failDigestScheduleJob(
 				AND status = 'running'
 				AND processing_token = ?
 		`,
-    status,
-    input.errorCode,
-    status,
-    input.now,
-    input.now,
-    input.jobId,
-    input.processingToken,
-  );
-  return Number(result.meta?.changes ?? 0) === 1;
+		status,
+		input.errorCode,
+		status,
+		input.now,
+		input.now,
+		input.jobId,
+		input.processingToken,
+	);
+	return Number(result.meta?.changes ?? 0) === 1;
 }
 
 export async function listExhaustedDigestScheduleJobs(
-  env: AppEnv,
-  input: { limit: number },
+	env: AppEnv,
+	input: { limit: number },
 ) {
-  const limit = Math.max(1, Math.min(100, Math.floor(input.limit)));
-  const rows = await many<DigestScheduleJobRow>(
-    env,
-    `SELECT ${DIGEST_SCHEDULE_JOB_SELECT}
+	const limit = Math.max(1, Math.min(100, Math.floor(input.limit)));
+	const rows = await many<DigestScheduleJobRow>(
+		env,
+		`SELECT ${DIGEST_SCHEDULE_JOB_SELECT}
 		 FROM digest_schedule_job
 		 INNER JOIN user ON user.id = digest_schedule_job.user_id
 		 WHERE digest_schedule_job.status = 'exhausted'
 		 ORDER BY digest_schedule_job.exhausted_at ASC, digest_schedule_job.id ASC
 		 LIMIT ?`,
-    limit,
-  );
-  return rows.map(toDigestScheduleJob);
+		limit,
+	);
+	return rows.map(toDigestScheduleJob);
 }
 
 export async function listDigestScheduleJobsAwaitingAlert(
-  env: AppEnv,
-  input: { staleAlertBefore: string; limit: number },
+	env: AppEnv,
+	input: { staleAlertBefore: string; limit: number },
 ) {
-  const rows = await many<DigestScheduleJobRow>(
-    env,
-    `SELECT ${DIGEST_SCHEDULE_JOB_SELECT}
+	const rows = await many<DigestScheduleJobRow>(
+		env,
+		`SELECT ${DIGEST_SCHEDULE_JOB_SELECT}
 		 FROM digest_schedule_job
 		 INNER JOIN user ON user.id = digest_schedule_job.user_id
 		 WHERE digest_schedule_job.status = 'exhausted'
@@ -401,24 +401,24 @@ export async function listDigestScheduleJobsAwaitingAlert(
 		   )
 		 ORDER BY digest_schedule_job.exhausted_at ASC, digest_schedule_job.id ASC
 		 LIMIT ?`,
-    input.staleAlertBefore,
-    Math.max(1, Math.min(100, Math.floor(input.limit))),
-  );
-  return rows.map(toDigestScheduleJob);
+		input.staleAlertBefore,
+		Math.max(1, Math.min(100, Math.floor(input.limit))),
+	);
+	return rows.map(toDigestScheduleJob);
 }
 
 export async function claimDigestScheduleJobExhaustionAlert(
-  env: AppEnv,
-  input: {
-    jobId: string;
-    alertToken: string;
-    now: string;
-    staleAlertBefore: string;
-  },
+	env: AppEnv,
+	input: {
+		jobId: string;
+		alertToken: string;
+		now: string;
+		staleAlertBefore: string;
+	},
 ) {
-  const result = await run(
-    env,
-    `UPDATE digest_schedule_job
+	const result = await run(
+		env,
+		`UPDATE digest_schedule_job
 		 SET exhaustion_alert_token = ?,
 		     exhaustion_alert_started_at = ?,
 		     updated_at = ?
@@ -429,39 +429,39 @@ export async function claimDigestScheduleJobExhaustionAlert(
 		     exhaustion_alert_token IS NULL
 		     OR exhaustion_alert_started_at <= ?
 		   )`,
-    input.alertToken,
-    input.now,
-    input.now,
-    input.jobId,
-    input.staleAlertBefore,
-  );
-  if (Number(result.meta?.changes ?? 0) !== 1) return null;
-  const row = await one<DigestScheduleJobRow>(
-    env,
-    `SELECT ${DIGEST_SCHEDULE_JOB_SELECT}
+		input.alertToken,
+		input.now,
+		input.now,
+		input.jobId,
+		input.staleAlertBefore,
+	);
+	if (Number(result.meta?.changes ?? 0) !== 1) return null;
+	const row = await one<DigestScheduleJobRow>(
+		env,
+		`SELECT ${DIGEST_SCHEDULE_JOB_SELECT}
 		 FROM digest_schedule_job
 		 INNER JOIN user ON user.id = digest_schedule_job.user_id
 		 WHERE digest_schedule_job.id = ?
 		   AND digest_schedule_job.exhaustion_alert_token = ?
 		 LIMIT 1`,
-    input.jobId,
-    input.alertToken,
-  );
-  return row ? toDigestScheduleJob(row) : null;
+		input.jobId,
+		input.alertToken,
+	);
+	return row ? toDigestScheduleJob(row) : null;
 }
 
 export async function settleDigestScheduleJobExhaustionAlert(
-  env: AppEnv,
-  input: {
-    jobId: string;
-    alertToken: string;
-    now: string;
-    alerted: boolean;
-  },
+	env: AppEnv,
+	input: {
+		jobId: string;
+		alertToken: string;
+		now: string;
+		alerted: boolean;
+	},
 ) {
-  const result = await run(
-    env,
-    `UPDATE digest_schedule_job
+	const result = await run(
+		env,
+		`UPDATE digest_schedule_job
 		 SET exhaustion_alert_token = NULL,
 		     exhaustion_alert_started_at = NULL,
 		     exhaustion_alerted_at = CASE WHEN ? = 1 THEN ? ELSE NULL END,
@@ -469,32 +469,32 @@ export async function settleDigestScheduleJobExhaustionAlert(
 		 WHERE id = ?
 		   AND status = 'exhausted'
 		   AND exhaustion_alert_token = ?`,
-    input.alerted ? 1 : 0,
-    input.now,
-    input.now,
-    input.jobId,
-    input.alertToken,
-  );
-  return Number(result.meta?.changes ?? 0) === 1;
+		input.alerted ? 1 : 0,
+		input.now,
+		input.now,
+		input.jobId,
+		input.alertToken,
+	);
+	return Number(result.meta?.changes ?? 0) === 1;
 }
 
 interface DigestRunClaimOptions {
-  returnClaim: true;
-  /**
-   * When present, the claim and its complete item set are committed in one D1
-   * batch transaction. A losing claim writes neither the run nor any items.
-   */
-  items?: readonly DigestRunItemInput[];
+	returnClaim: true;
+	/**
+	 * When present, the claim and its complete item set are committed in one D1
+	 * batch transaction. A losing claim writes neither the run nor any items.
+	 */
+	items?: readonly DigestRunItemInput[];
 }
 
 function toDigestRunSummary(
   row: Pick<DigestRunRow, "summary_json">,
 ): JsonRecord {
-  // summary_json is free-form JSON; legacy rows may hold non-object payloads.
-  const parsed = parseJson<unknown>(row.summary_json, {});
-  return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-    ? (parsed as JsonRecord)
-    : {};
+	// summary_json is free-form JSON; legacy rows may hold non-object payloads.
+	const parsed = parseJson<unknown>(row.summary_json, {});
+	return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+		? (parsed as JsonRecord)
+		: {};
 }
 
 function toDigestItemRecord(row: DigestItemRow): DigestItemRecord {
@@ -530,19 +530,19 @@ function toDigestDeliveryRecord(row: DigestDeliveryRow): DigestDeliveryRecord {
 }
 
 export function createDigestRun(
-  env: AppEnv,
-  userId: string,
-  periodStart: string,
-  periodEnd: string,
-  summary: JsonRecord,
+	env: AppEnv,
+	userId: string,
+	periodStart: string,
+	periodEnd: string,
+	summary: JsonRecord,
 ): Promise<string>;
 export function createDigestRun(
-  env: AppEnv,
-  userId: string,
-  periodStart: string,
-  periodEnd: string,
-  summary: JsonRecord,
-  options: DigestRunClaimOptions,
+	env: AppEnv,
+	userId: string,
+	periodStart: string,
+	periodEnd: string,
+	summary: JsonRecord,
+	options: DigestRunClaimOptions,
 ): Promise<DigestRunClaim>;
 export async function createDigestRun(
   env: AppEnv,
@@ -550,27 +550,27 @@ export async function createDigestRun(
   periodStart: string,
   periodEnd: string,
   summary: JsonRecord,
-  options?: DigestRunClaimOptions,
+	options?: DigestRunClaimOptions,
 ): Promise<string | DigestRunClaim> {
   const id = createId();
-  const createdAt = nowIso();
-  const db = ensureDb(env);
-  const itemInputs = options?.items;
+	const createdAt = nowIso();
+	const db = ensureDb(env);
+	const itemInputs = options?.items;
   const cohort =
     itemInputs === undefined ? null : selectDigestCohort(itemInputs);
   const persistedSummary =
     itemInputs === undefined
-      ? summary
-      : {
-          ...summary,
-          totalEligibleEvents: cohort!.totalEligibleEvents,
-          includedEvents: cohort!.includedEvents,
-          omittedEvents: cohort!.omittedEvents,
-          totalEvents: cohort!.totalEligibleEvents,
-          digestItemSetProvenance: DIGEST_ITEM_SET_PROVENANCE,
-        };
-  const insertStatement = db
-    .prepare(
+		? summary
+		: {
+				...summary,
+				totalEligibleEvents: cohort!.totalEligibleEvents,
+				includedEvents: cohort!.includedEvents,
+				omittedEvents: cohort!.omittedEvents,
+				totalEvents: cohort!.totalEligibleEvents,
+				digestItemSetProvenance: DIGEST_ITEM_SET_PROVENANCE,
+			};
+	const insertStatement = db
+		.prepare(
       `
       INSERT INTO digest_run (
         id,
@@ -583,22 +583,22 @@ export async function createDigestRun(
       VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id, period_start, period_end) DO NOTHING
     `,
-    )
-    .bind(
-      id,
-      userId,
-      periodStart,
-      periodEnd,
-      jsonValue(persistedSummary),
-      createdAt,
-    );
+		)
+		.bind(
+			id,
+			userId,
+			periodStart,
+			periodEnd,
+			jsonValue(persistedSummary),
+			createdAt,
+		);
 
   const itemInsert =
     cohort === null
-      ? null
-      : db
-          .prepare(
-            `
+		? null
+		: db
+				.prepare(
+					`
 					  INSERT INTO digest_item (
 					    id, digest_run_id, watchlist_id, watchlist_name, event_type,
 					    title, summary, metadata_json, created_at
@@ -614,32 +614,32 @@ export async function createDigestRun(
 					  FROM json_each(?)
 					  INNER JOIN digest_run ON digest_run.id = ?
 					`,
-          )
-          .bind(
-            id,
-            createdAt,
-            JSON.stringify(
-              cohort.items.map((input) => ({
-                id: createId(),
-                watchlistId: input.watchlistId,
-                watchlistName: input.watchlistName,
-                eventType: input.eventType,
-                title: input.title,
-                summary: input.summary,
-                metadata: input.metadata ?? {},
-              })),
-            ),
-            id,
-          );
+				)
+				.bind(
+					id,
+					createdAt,
+					JSON.stringify(
+						cohort.items.map((input) => ({
+							id: createId(),
+							watchlistId: input.watchlistId,
+							watchlistName: input.watchlistName,
+							eventType: input.eventType,
+							title: input.title,
+							summary: input.summary,
+							metadata: input.metadata ?? {},
+						})),
+					),
+					id,
+				);
   const results =
     itemInsert === null
-      ? [await insertStatement.run()]
-      : await db.batch([insertStatement, itemInsert]);
+		? [await insertStatement.run()]
+		: await db.batch([insertStatement, itemInsert]);
 
-  const created = Number(results[0]?.meta?.changes ?? 0) > 0;
-  if (created) {
-    return options?.returnClaim ? { digestRunId: id, created: true } : id;
-  }
+	const created = Number(results[0]?.meta?.changes ?? 0) > 0;
+	if (created) {
+		return options?.returnClaim ? { digestRunId: id, created: true } : id;
+	}
 
   const row = await one<DigestRunRow>(
     env,
@@ -656,15 +656,15 @@ export async function createDigestRun(
     periodEnd,
   );
 
-  if (!row) {
+	if (!row) {
     throw new Error(
       "Digest period claim was not created and no existing run was found.",
     );
-  }
+	}
 
-  return options?.returnClaim
-    ? { digestRunId: row.id, created: false }
-    : row.id;
+	return options?.returnClaim
+		? { digestRunId: row.id, created: false }
+		: row.id;
 }
 
 /**
@@ -673,41 +673,41 @@ export async function createDigestRun(
  * for overlapping executions, retries, and reports.
  */
 export async function updateDigestRunSummary(
-  env: AppEnv,
-  digestRunId: string,
-  summary: JsonRecord,
+	env: AppEnv,
+	digestRunId: string,
+	summary: JsonRecord,
 ) {
-  const row = await one<Pick<DigestRunRow, "summary_json">>(
-    env,
-    "SELECT summary_json FROM digest_run WHERE id = ? LIMIT 1",
-    digestRunId,
-  );
-  const currentSummary = row ? toDigestRunSummary(row) : {};
-  const persistedSummary = { ...summary };
-  delete persistedSummary.digestItemSetProvenance;
+	const row = await one<Pick<DigestRunRow, "summary_json">>(
+		env,
+		"SELECT summary_json FROM digest_run WHERE id = ? LIMIT 1",
+		digestRunId,
+	);
+	const currentSummary = row ? toDigestRunSummary(row) : {};
+	const persistedSummary = { ...summary };
+	delete persistedSummary.digestItemSetProvenance;
   if (currentSummary.digestItemSetProvenance === DIGEST_ITEM_SET_PROVENANCE) {
-    persistedSummary.digestItemSetProvenance = DIGEST_ITEM_SET_PROVENANCE;
-  }
-  await run(
-    env,
-    "UPDATE digest_run SET summary_json = ? WHERE id = ?",
-    jsonValue(persistedSummary),
-    digestRunId,
-  );
+		persistedSummary.digestItemSetProvenance = DIGEST_ITEM_SET_PROVENANCE;
+	}
+	await run(
+		env,
+		"UPDATE digest_run SET summary_json = ? WHERE id = ?",
+		jsonValue(persistedSummary),
+		digestRunId,
+	);
 }
 
 export async function claimDigestStrategyGenerationLease(
-  env: AppEnv,
-  digestRunId: string,
-  input: {
-    expectedLeaseId: string;
-    expectedLeaseExpiresAt: string;
-    leaseId: string;
-    leaseExpiresAt: string;
-  },
+	env: AppEnv,
+	digestRunId: string,
+	input: {
+		expectedLeaseId: string;
+		expectedLeaseExpiresAt: string;
+		leaseId: string;
+		leaseExpiresAt: string;
+	},
 ) {
-  const result = await run(
-    env,
+	const result = await run(
+		env,
     `
       UPDATE digest_run
       SET summary_json = json_set(
@@ -720,48 +720,48 @@ export async function claimDigestStrategyGenerationLease(
         AND COALESCE(json_extract(summary_json, '$.strategyGenerationLeaseId'), '') = ?
         AND COALESCE(json_extract(summary_json, '$.strategyGenerationLeaseExpiresAt'), '') = ?
     `,
-    input.leaseId,
-    input.leaseExpiresAt,
-    digestRunId,
-    DIGEST_STRATEGY_GENERATION_PENDING,
-    input.expectedLeaseId,
-    input.expectedLeaseExpiresAt,
-  );
-  return Number(result.meta?.changes ?? 0) === 1;
+		input.leaseId,
+		input.leaseExpiresAt,
+		digestRunId,
+		DIGEST_STRATEGY_GENERATION_PENDING,
+		input.expectedLeaseId,
+		input.expectedLeaseExpiresAt,
+	);
+	return Number(result.meta?.changes ?? 0) === 1;
 }
 
 export async function completeDigestStrategyGeneration(
-  env: AppEnv,
-  digestRunId: string,
-  input: {
-    leaseId: string;
-    summary: JsonRecord;
-  },
+	env: AppEnv,
+	digestRunId: string,
+	input: {
+		leaseId: string;
+		summary: JsonRecord;
+	},
 ) {
-  const row = await one<Pick<DigestRunRow, "summary_json">>(
-    env,
-    "SELECT summary_json FROM digest_run WHERE id = ? LIMIT 1",
-    digestRunId,
-  );
-  if (!row) {
-    return false;
-  }
+	const row = await one<Pick<DigestRunRow, "summary_json">>(
+		env,
+		"SELECT summary_json FROM digest_run WHERE id = ? LIMIT 1",
+		digestRunId,
+	);
+	if (!row) {
+		return false;
+	}
 
-  const currentSummary = toDigestRunSummary(row);
-  const persistedSummary: JsonRecord = {
-    ...currentSummary,
-    ...input.summary,
-    strategyGenerationStatus: DIGEST_STRATEGY_GENERATION_READY,
-  };
-  delete persistedSummary.strategyGenerationLeaseId;
-  delete persistedSummary.strategyGenerationLeaseExpiresAt;
-  delete persistedSummary.digestItemSetProvenance;
+	const currentSummary = toDigestRunSummary(row);
+	const persistedSummary: JsonRecord = {
+		...currentSummary,
+		...input.summary,
+		strategyGenerationStatus: DIGEST_STRATEGY_GENERATION_READY,
+	};
+	delete persistedSummary.strategyGenerationLeaseId;
+	delete persistedSummary.strategyGenerationLeaseExpiresAt;
+	delete persistedSummary.digestItemSetProvenance;
   if (currentSummary.digestItemSetProvenance === DIGEST_ITEM_SET_PROVENANCE) {
-    persistedSummary.digestItemSetProvenance = DIGEST_ITEM_SET_PROVENANCE;
-  }
+		persistedSummary.digestItemSetProvenance = DIGEST_ITEM_SET_PROVENANCE;
+	}
 
-  const result = await run(
-    env,
+	const result = await run(
+		env,
     `
       UPDATE digest_run
       SET summary_json = ?
@@ -769,12 +769,12 @@ export async function completeDigestStrategyGeneration(
         AND json_extract(summary_json, '$.strategyGenerationStatus') = ?
         AND json_extract(summary_json, '$.strategyGenerationLeaseId') = ?
     `,
-    jsonValue(persistedSummary),
-    digestRunId,
-    DIGEST_STRATEGY_GENERATION_PENDING,
-    input.leaseId,
-  );
-  return Number(result.meta?.changes ?? 0) === 1;
+		jsonValue(persistedSummary),
+		digestRunId,
+		DIGEST_STRATEGY_GENERATION_PENDING,
+		input.leaseId,
+	);
+	return Number(result.meta?.changes ?? 0) === 1;
 }
 
 const LATEST_STRATEGY_SUMMARY_SCAN_LIMIT = 10;
@@ -785,12 +785,12 @@ const LATEST_STRATEGY_SUMMARY_SCAN_LIMIT = 10;
  * and mismatched notes fail closed. Read-only: never triggers generation.
  */
 export async function getLatestDigestRunSummaryForWatchlist(
-  env: AppEnv,
-  userId: string,
-  watchlistId: string,
+	env: AppEnv,
+	userId: string,
+	watchlistId: string,
 ) {
-  const rows = await many<DigestRunRow>(
-    env,
+	const rows = await many<DigestRunRow>(
+		env,
     `
       WITH
       js_whitespace(chars) AS (
@@ -824,26 +824,26 @@ export async function getLatestDigestRunSummaryForWatchlist(
       ORDER BY period_end DESC
       LIMIT ?
     `,
-    userId,
-    watchlistId,
-    LATEST_STRATEGY_SUMMARY_SCAN_LIMIT,
-  );
+		userId,
+		watchlistId,
+		LATEST_STRATEGY_SUMMARY_SCAN_LIMIT,
+	);
 
-  for (const row of rows) {
-    const note = readDigestStrategyNote(toDigestRunSummary(row));
-    if (
-      note?.watchlistIds?.length &&
-      note.watchlistIds.every((provenanceId) => provenanceId === watchlistId)
-    ) {
-      return {
-        paragraph: note.paragraph,
-        generatedAt: note.generatedAt,
-        periodEnd: row.period_end,
-      };
-    }
-  }
+	for (const row of rows) {
+		const note = readDigestStrategyNote(toDigestRunSummary(row));
+		if (
+			note?.watchlistIds?.length &&
+			note.watchlistIds.every((provenanceId) => provenanceId === watchlistId)
+		) {
+			return {
+				paragraph: note.paragraph,
+				generatedAt: note.generatedAt,
+				periodEnd: row.period_end,
+			};
+		}
+	}
 
-  return null;
+	return null;
 }
 
 export async function clearDigestItems(env: AppEnv, digestRunId: string) {
@@ -857,7 +857,7 @@ export async function clearDigestItems(env: AppEnv, digestRunId: string) {
 export async function addDigestItem(
   env: AppEnv,
   digestRunId: string,
-  input: DigestRunItemInput,
+	input: DigestRunItemInput,
 ) {
   await run(
     env,
@@ -890,17 +890,17 @@ export async function addDigestItem(
 export async function upsertDigestDelivery(
   env: AppEnv,
   digestRunId: string,
-  input: Omit<DigestDeliveryRecord, "id" | "digestRunId"> & {
-    /**
-     * Set ONLY by the writer that won the delivery-attempt claim for this
-     * run. A claim winner may honestly move a 'failed' aggregate back to
-     * 'pending' (e.g. its retry ended provider-unknown); mirror writers that
-     * merely observed someone else's in-flight attempt may not — under a
-     * duplicate cron fire their late 'pending' would bury the failure and
-     * hide the run from the failed-digest retry sweep forever.
-     */
-    allowPendingOverwriteOfFailed?: boolean;
-  },
+	input: Omit<DigestDeliveryRecord, "id" | "digestRunId"> & {
+		/**
+		 * Set ONLY by the writer that won the delivery-attempt claim for this
+		 * run. A claim winner may honestly move a 'failed' aggregate back to
+		 * 'pending' (e.g. its retry ended provider-unknown); mirror writers that
+		 * merely observed someone else's in-flight attempt may not — under a
+		 * duplicate cron fire their late 'pending' would bury the failure and
+		 * hide the run from the failed-digest retry sweep forever.
+		 */
+		allowPendingOverwriteOfFailed?: boolean;
+	},
 ) {
   const timestamp = nowIso();
   const allowPendingOverFailed =
@@ -970,12 +970,12 @@ export async function upsertDigestDelivery(
     input.deliveredAt,
     timestamp,
     timestamp,
-    allowPendingOverFailed,
-    allowPendingOverFailed,
-    allowPendingOverFailed,
-    allowPendingOverFailed,
-    allowPendingOverFailed,
-    allowPendingOverFailed,
+		allowPendingOverFailed,
+		allowPendingOverFailed,
+		allowPendingOverFailed,
+		allowPendingOverFailed,
+		allowPendingOverFailed,
+		allowPendingOverFailed,
   );
 }
 
@@ -1054,7 +1054,7 @@ export async function listDigests(
       userId: run.user_id,
       periodStart: run.period_start,
       periodEnd: run.period_end,
-      summary: toDigestRunSummary(run),
+			summary: toDigestRunSummary(run),
       createdAt: run.created_at,
       items: orderDigestItemRecords(itemsByDigestId.get(run.id) ?? []),
       delivery: delivery ? toDigestDeliveryRecord(delivery) : null,
@@ -1089,7 +1089,7 @@ export async function getDigest(env: AppEnv, digestRunId: string) {
     userId: run.user_id,
     periodStart: run.period_start,
     periodEnd: run.period_end,
-    summary: toDigestRunSummary(run),
+		summary: toDigestRunSummary(run),
     createdAt: run.created_at,
     items: orderDigestItemRecords(items),
     delivery: delivery ? toDigestDeliveryRecord(delivery) : null,
@@ -1128,7 +1128,7 @@ export async function listRetryableDigestRuns(
   env: AppEnv,
   input: {
     since: string;
-    stalePreDispatchBefore: string;
+		stalePreDispatchBefore: string;
     limit: number;
   },
 ) {
@@ -1236,8 +1236,8 @@ export async function listRetryableDigestRuns(
       LIMIT ?
     `,
     input.since,
-    input.stalePreDispatchBefore,
-    DIGEST_ITEM_SET_PROVENANCE,
+		input.stalePreDispatchBefore,
+		DIGEST_ITEM_SET_PROVENANCE,
     input.limit,
   );
 
