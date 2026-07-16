@@ -26,9 +26,11 @@ export interface DigestStrategyItemInput {
 }
 
 export interface BuildWeeklyStrategyParagraphInput {
-	items: DigestStrategyItemInput[];
+	items: readonly DigestStrategyItemInput[];
 	periodStart: string;
 	periodEnd: string;
+	/** Optional caller budget; the module's own timeout remains the hard cap. */
+	timeoutMs?: number;
 }
 
 export interface GeneratedDigestStrategy {
@@ -86,6 +88,10 @@ export async function buildWeeklyStrategyParagraph(
   }
 
   try {
+		const timeoutMs = Math.min(
+			AI_STRATEGY_TIMEOUT_MS,
+			Math.max(1, Math.floor(input.timeoutMs ?? AI_STRATEGY_TIMEOUT_MS)),
+		);
 		const response = await promiseWithTimeout(env.AI.run(DIGEST_STRATEGY_MODEL, {
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
@@ -101,7 +107,7 @@ export async function buildWeeklyStrategyParagraph(
         },
       ],
       max_tokens: MAX_OUTPUT_TOKENS,
-		}), AI_STRATEGY_TIMEOUT_MS, "Digest strategy generation timed out.");
+		}), timeoutMs, "Digest strategy generation timed out.");
     const raw =
       typeof response === "string"
         ? response
@@ -125,7 +131,7 @@ export function buildStrategyInputLines(items: DigestStrategyItemInput[]) {
   return buildStrategyInput(items).lines;
 }
 
-function buildStrategyInput(items: DigestStrategyItemInput[]) {
+function buildStrategyInput(items: readonly DigestStrategyItemInput[]) {
   const ranked = items
     .filter((item) => classifyDigestItemSource(item).status === "verified_proof")
     .map((item, index) => ({
