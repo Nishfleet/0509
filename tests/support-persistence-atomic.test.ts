@@ -6,14 +6,26 @@ import {
   listSupportCaseEvents,
   listSupportCases,
 } from "~/lib/data/support.server";
+import {
+  getOperatorSnapshot,
+  getOperatorSupportCase,
+} from "~/lib/data/workspace-ops.server";
 import { applyMigration, createSqliteD1 } from "./helpers/sqlite-d1";
 
 function migrateSupport(sqlite: ReturnType<typeof createSqliteD1>, includeEvents = true) {
   sqlite.sqlite.exec(`
-    CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL);
+    CREATE TABLE user (
+      id TEXT PRIMARY KEY NOT NULL,
+      email TEXT NOT NULL DEFAULT 'owner@example.com'
+    );
     CREATE TABLE delivery_attempt (
+      id TEXT PRIMARY KEY NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      webhook_status TEXT NOT NULL DEFAULT 'pending',
       idempotency_key TEXT,
-      payload_snapshot_json TEXT NOT NULL DEFAULT '{}'
+      payload_snapshot_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     );
   `);
   applyMigration(sqlite.sqlite, "migrations/0039_support_cases.sql");
@@ -25,6 +37,67 @@ function migrateSupport(sqlite: ReturnType<typeof createSqliteD1>, includeEvents
 }
 
 describe("support case atomic persistence", () => {
+  it("selects the latest alert generation when an older attempt is reconciled later", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      migrateSupport(sqlite);
+      const supportCase = await createSupportCase({ DB: sqlite.db } as never, {
+        userId: "user-1",
+        category: "security",
+        priority: "urgent",
+        subject: "Delete my Five to Nine account",
+        detail: "Signed-in support deletion request.",
+        requestKey: "account-deletion:user-1",
+      });
+      expect(supportCase).not.toBeNull();
+
+      const payload = JSON.stringify({
+        kind: "support_case_operator_alert",
+        caseId: supportCase!.id,
+      });
+      sqlite.sqlite.prepare(`
+        INSERT INTO delivery_attempt (
+          id, status, webhook_status, idempotency_key,
+          payload_snapshot_json, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        "original-alert",
+        "sent",
+        "delivered",
+        `support-case:${supportCase!.id}`,
+        payload,
+        "2026-07-16T10:00:00.000Z",
+        "2026-07-16T14:00:00.000Z",
+      );
+      const reopenedKey = `support-case-reopen:${supportCase!.id}:2026-07-16T12:00:00.000Z`;
+      sqlite.sqlite.prepare(`
+        INSERT INTO delivery_attempt (
+          id, status, webhook_status, idempotency_key,
+          payload_snapshot_json, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        "reopened-alert",
+        "failed",
+        "failed",
+        reopenedKey,
+        payload,
+        "2026-07-16T12:00:00.000Z",
+        "2026-07-16T12:00:00.000Z",
+      );
+
+      await expect(
+        getOperatorSupportCase({ DB: sqlite.db } as never, supportCase!.id),
+      ).resolves.toMatchObject({ alertIdempotencyKey: reopenedKey });
+      await expect(
+        getOperatorSnapshot({ DB: sqlite.db } as never),
+      ).resolves.toMatchObject({
+        supportCases: [expect.objectContaining({ alert_attempt_id: "reopened-alert" })],
+      });
+    } finally {
+      sqlite.close();
+    }
+  });
+
   it("rolls back the case when its opening audit event cannot persist", async () => {
     const sqlite = createSqliteD1();
     try {

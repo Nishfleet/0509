@@ -618,7 +618,21 @@ export async function getOperatorSnapshot(env: AppEnv) {
             FROM delivery_attempt AS candidate
             WHERE json_extract(candidate.payload_snapshot_json, '$.kind') = 'support_case_operator_alert'
               AND json_extract(candidate.payload_snapshot_json, '$.caseId') = support_case.id
-            ORDER BY candidate.updated_at DESC
+              AND (
+                candidate.idempotency_key = 'support-case:' || support_case.id
+                OR candidate.idempotency_key LIKE 'support-case-reopen:' || support_case.id || ':%'
+              )
+            ORDER BY
+              CASE
+                WHEN candidate.idempotency_key LIKE 'support-case-reopen:' || support_case.id || ':%'
+                  THEN substr(
+                    candidate.idempotency_key,
+                    length('support-case-reopen:' || support_case.id || ':') + 1
+                  )
+                ELSE ''
+              END DESC,
+              candidate.created_at DESC,
+              candidate.id DESC
             LIMIT 1
           )
         WHERE support_case.status = 'open'
@@ -696,7 +710,21 @@ export async function getOperatorSupportCase(env: AppEnv, caseId: string) {
           FROM delivery_attempt AS candidate
           WHERE json_extract(candidate.payload_snapshot_json, '$.kind') = 'support_case_operator_alert'
             AND json_extract(candidate.payload_snapshot_json, '$.caseId') = support_case.id
-          ORDER BY candidate.updated_at DESC
+            AND (
+              candidate.idempotency_key = 'support-case:' || support_case.id
+              OR candidate.idempotency_key LIKE 'support-case-reopen:' || support_case.id || ':%'
+            )
+          ORDER BY
+            CASE
+              WHEN candidate.idempotency_key LIKE 'support-case-reopen:' || support_case.id || ':%'
+                THEN substr(
+                  candidate.idempotency_key,
+                  length('support-case-reopen:' || support_case.id || ':') + 1
+                )
+              ELSE ''
+            END DESC,
+            candidate.created_at DESC,
+            candidate.id DESC
           LIMIT 1
         )
       WHERE support_case.id = ?
