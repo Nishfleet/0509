@@ -21,6 +21,7 @@ import { publicSeoFileForPathname } from "../app/lib/seo";
 import { enforceRequestRateLimit } from "../app/lib/rate-limit.server";
 import { runRetentionSweep } from "../app/lib/retention.server";
 import { scheduleBillingLifecycleEmailRecovery } from "./delivery-recovery";
+import { scheduleDigestScheduleExhaustionRecovery } from "./digest-schedule-recovery";
 import { primaryDomainRedirect } from "./primary-domain";
 import {
   resolveOperationalRiskAlertIdempotencyKey,
@@ -140,6 +141,7 @@ export default {
     }
 
     if (scheduledTask.kind === "discovery_warmup") {
+		scheduleDigestScheduleExhaustionRecovery(env, ctx);
 		ctx.waitUntil(
 			resumePendingDigestScheduleJobs(env, {
 				deadlineAt: Date.now() + DIGEST_RECOVERY_TIME_BUDGET_MS,

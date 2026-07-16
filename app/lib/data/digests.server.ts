@@ -84,6 +84,11 @@ export interface DigestScheduleJob {
 	periodStart: string;
 	periodEnd: string;
 	attemptCount: number;
+	status: "pending" | "running" | "completed" | "failed" | "exhausted";
+	lastErrorCode: string | null;
+	updatedAt: string;
+	exhaustedAt: string | null;
+	exhaustionAlertedAt: string | null;
 }
 
 interface DigestScheduleJobRow {
@@ -95,6 +100,11 @@ interface DigestScheduleJobRow {
 	period_start: string;
 	period_end: string;
 	attempt_count: number;
+	status: DigestScheduleJob["status"];
+	last_error_code: string | null;
+	updated_at: string;
+	exhausted_at: string | null;
+	exhaustion_alerted_at: string | null;
 }
 
 export interface DigestRunItemInput {
@@ -116,8 +126,29 @@ function toDigestScheduleJob(row: DigestScheduleJobRow): DigestScheduleJob {
 		periodStart: row.period_start,
 		periodEnd: row.period_end,
 		attemptCount: Number(row.attempt_count),
+		status: row.status,
+		lastErrorCode: row.last_error_code,
+		updatedAt: row.updated_at,
+		exhaustedAt: row.exhausted_at,
+		exhaustionAlertedAt: row.exhaustion_alerted_at,
 	};
 }
+
+const DIGEST_SCHEDULE_JOB_SELECT = `
+  digest_schedule_job.id,
+  digest_schedule_job.user_id,
+  user.email AS user_email,
+  user.name AS user_name,
+  digest_schedule_job.cadence,
+  digest_schedule_job.period_start,
+  digest_schedule_job.period_end,
+  digest_schedule_job.attempt_count,
+  digest_schedule_job.status,
+  digest_schedule_job.last_error_code,
+  digest_schedule_job.updated_at,
+  digest_schedule_job.exhausted_at,
+  digest_schedule_job.exhaustion_alerted_at
+`;
 
 export async function enqueueDigestScheduleJobs(
 	env: AppEnv,
@@ -172,15 +203,7 @@ export async function listRetryableDigestScheduleJobs(
 	const rows = await many<DigestScheduleJobRow>(
 		env,
 		`
-			SELECT
-				digest_schedule_job.id,
-				digest_schedule_job.user_id,
-				user.email AS user_email,
-				user.name AS user_name,
-				digest_schedule_job.cadence,
-				digest_schedule_job.period_start,
-				digest_schedule_job.period_end,
-				digest_schedule_job.attempt_count
+				SELECT ${DIGEST_SCHEDULE_JOB_SELECT}
 			FROM digest_schedule_job
 			INNER JOIN user ON user.id = digest_schedule_job.user_id
 			WHERE digest_schedule_job.attempt_count < ?
@@ -240,15 +263,7 @@ export async function claimDigestScheduleJob(
 	const row = await one<DigestScheduleJobRow>(
 		env,
 		`
-			SELECT
-				digest_schedule_job.id,
-				digest_schedule_job.user_id,
-				user.email AS user_email,
-				user.name AS user_name,
-				digest_schedule_job.cadence,
-				digest_schedule_job.period_start,
-				digest_schedule_job.period_end,
-				digest_schedule_job.attempt_count
+				SELECT ${DIGEST_SCHEDULE_JOB_SELECT}
 			FROM digest_schedule_job
 			INNER JOIN user ON user.id = digest_schedule_job.user_id
 			WHERE digest_schedule_job.id = ?
@@ -293,26 +308,144 @@ export async function failDigestScheduleJob(
 		jobId: string;
 		processingToken: string;
 		now: string;
-		errorCode: string;
-	},
+			errorCode: string;
+			exhausted?: boolean;
+		},
 ) {
+	const status = input.exhausted ? "exhausted" : "failed";
 	const result = await run(
 		env,
 		`
 			UPDATE digest_schedule_job
-			SET status = 'failed',
-				processing_token = NULL,
-				processing_started_at = NULL,
-				last_error_code = ?,
-				updated_at = ?
+				SET status = ?,
+					processing_token = NULL,
+					processing_started_at = NULL,
+					last_error_code = ?,
+					exhausted_at = CASE WHEN ? = 'exhausted' THEN ? ELSE exhausted_at END,
+					updated_at = ?
 			WHERE id = ?
 				AND status = 'running'
 				AND processing_token = ?
 		`,
+		status,
 		input.errorCode,
+		status,
+		input.now,
 		input.now,
 		input.jobId,
 		input.processingToken,
+	);
+	return Number(result.meta?.changes ?? 0) === 1;
+}
+
+export async function listExhaustedDigestScheduleJobs(
+	env: AppEnv,
+	input: { limit: number },
+) {
+	const limit = Math.max(1, Math.min(100, Math.floor(input.limit)));
+	const rows = await many<DigestScheduleJobRow>(
+		env,
+		`SELECT ${DIGEST_SCHEDULE_JOB_SELECT}
+		 FROM digest_schedule_job
+		 INNER JOIN user ON user.id = digest_schedule_job.user_id
+		 WHERE digest_schedule_job.status = 'exhausted'
+		 ORDER BY digest_schedule_job.exhausted_at ASC, digest_schedule_job.id ASC
+		 LIMIT ?`,
+		limit,
+	);
+	return rows.map(toDigestScheduleJob);
+}
+
+export async function listDigestScheduleJobsAwaitingAlert(
+	env: AppEnv,
+	input: { staleAlertBefore: string; limit: number },
+) {
+	const rows = await many<DigestScheduleJobRow>(
+		env,
+		`SELECT ${DIGEST_SCHEDULE_JOB_SELECT}
+		 FROM digest_schedule_job
+		 INNER JOIN user ON user.id = digest_schedule_job.user_id
+		 WHERE digest_schedule_job.status = 'exhausted'
+		   AND digest_schedule_job.exhaustion_alerted_at IS NULL
+		   AND (
+		     digest_schedule_job.exhaustion_alert_token IS NULL
+		     OR digest_schedule_job.exhaustion_alert_started_at <= ?
+		   )
+		 ORDER BY digest_schedule_job.exhausted_at ASC, digest_schedule_job.id ASC
+		 LIMIT ?`,
+		input.staleAlertBefore,
+		Math.max(1, Math.min(100, Math.floor(input.limit))),
+	);
+	return rows.map(toDigestScheduleJob);
+}
+
+export async function claimDigestScheduleJobExhaustionAlert(
+	env: AppEnv,
+	input: {
+		jobId: string;
+		alertToken: string;
+		now: string;
+		staleAlertBefore: string;
+	},
+) {
+	const result = await run(
+		env,
+		`UPDATE digest_schedule_job
+		 SET exhaustion_alert_token = ?,
+		     exhaustion_alert_started_at = ?,
+		     updated_at = ?
+		 WHERE id = ?
+		   AND status = 'exhausted'
+		   AND exhaustion_alerted_at IS NULL
+		   AND (
+		     exhaustion_alert_token IS NULL
+		     OR exhaustion_alert_started_at <= ?
+		   )`,
+		input.alertToken,
+		input.now,
+		input.now,
+		input.jobId,
+		input.staleAlertBefore,
+	);
+	if (Number(result.meta?.changes ?? 0) !== 1) return null;
+	const row = await one<DigestScheduleJobRow>(
+		env,
+		`SELECT ${DIGEST_SCHEDULE_JOB_SELECT}
+		 FROM digest_schedule_job
+		 INNER JOIN user ON user.id = digest_schedule_job.user_id
+		 WHERE digest_schedule_job.id = ?
+		   AND digest_schedule_job.exhaustion_alert_token = ?
+		 LIMIT 1`,
+		input.jobId,
+		input.alertToken,
+	);
+	return row ? toDigestScheduleJob(row) : null;
+}
+
+export async function settleDigestScheduleJobExhaustionAlert(
+	env: AppEnv,
+	input: {
+		jobId: string;
+		alertToken: string;
+		now: string;
+		alerted: boolean;
+	},
+) {
+	const result = await run(
+		env,
+		`UPDATE digest_schedule_job
+		 SET exhaustion_alert_token = NULL,
+		     exhaustion_alert_started_at = NULL,
+		     exhaustion_alerted_at = CASE WHEN ? = 1 THEN ? ELSE NULL END,
+		     updated_at = ?
+		 WHERE id = ?
+		   AND status = 'exhausted'
+		   AND exhaustion_alert_token = ?`,
+		input.alerted ? 1 : 0,
+		input.now,
+		input.now,
+		input.jobId,
+		input.alertToken,
 	);
 	return Number(result.meta?.changes ?? 0) === 1;
 }

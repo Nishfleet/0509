@@ -1214,7 +1214,7 @@ webhookStatus:"pending",
 
   it("skips opted-out email targets and never re-provisions the account email", async () => {
     const sendMock = mockEmailSend("msg_1");
-    const upsertDeliveryTarget = vi.fn();
+		const upsertDeliveryTarget = vi.fn();
 
     vi.doMock("~/lib/data.server", () => ({
       listAdsByIds: vi.fn().mockResolvedValue([]),
@@ -1911,7 +1911,7 @@ describe("reconcileDeliveryStatus", () => {
       createdAt: "2026-06-07T00:00:00.000Z",
       updatedAt: "2026-06-07T00:00:00.000Z",
     };
-    const upsertDeliveryTarget = vi.fn();
+		const reconcileWhatsAppSetupTargetFromAttempt = vi.fn();
 
     vi.doMock("~/lib/data.server", () => ({
       listAdsByIds: vi.fn().mockResolvedValue([]),
@@ -1923,7 +1923,8 @@ describe("reconcileDeliveryStatus", () => {
       legacyWorkspaceDeliveryDefaults: vi.fn(),
       listDeliveryTargets: vi.fn(),
       reconcileDeliveryAttemptByProviderMessageId: vi.fn().mockResolvedValue(attempt),
-      upsertDeliveryTarget,
+			reconcileWhatsAppSetupTargetFromAttempt,
+			upsertDeliveryTarget: vi.fn(),
       upsertDigestDelivery: vi.fn(),
     }));
     vi.doMock("~/lib/whatsapp.server", () => ({
@@ -1942,23 +1943,18 @@ describe("reconcileDeliveryStatus", () => {
     });
 
     expect(result).toEqual(attempt);
-    expect(upsertDeliveryTarget).toHaveBeenCalledWith(
+		expect(reconcileWhatsAppSetupTargetFromAttempt).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({
+			{
         userId: "user-1",
-        channel: "whatsapp",
-        targetValue: "919876543210",
-        validationStatus: "validated",
-        isValidated: true,
-        templateEligible: true,
-        lastSuccessfulDeliveryAt: "2026-06-07T00:00:00.000Z",
-        lastSuccessfulAttemptId: "attempt-setup-1",
-        providerIdentifier: "wamid.setup-1",
-        metadata: expect.objectContaining({
-          validationAttemptId: "attempt-setup-1",
-          validationWebhookStatus: "delivered",
-        }),
-      }),
+				targetId: "whatsapp-target-1",
+				attemptId: "attempt-setup-1",
+				providerMessageId: "wamid.setup-1",
+				validationGeneration: null,
+				webhookStatus: "delivered",
+				providerStatusLastSeenAt: "2026-06-07T00:00:00.000Z",
+				errorMessage: null,
+			},
     );
   });
 
@@ -1989,7 +1985,7 @@ describe("reconcileDeliveryStatus", () => {
       createdAt: "2026-06-07T01:00:00.000Z",
       updatedAt: "2026-06-07T01:00:00.000Z",
     };
-    const upsertDeliveryTarget = vi.fn();
+		const reconcileWhatsAppSetupTargetFromAttempt = vi.fn();
 
     vi.doMock("~/lib/data.server", () => ({
       listAdsByIds: vi.fn().mockResolvedValue([]),
@@ -2013,7 +2009,8 @@ describe("reconcileDeliveryStatus", () => {
       legacyWorkspaceDeliveryDefaults: vi.fn(),
       listDeliveryTargets: vi.fn(),
       reconcileDeliveryAttemptByProviderMessageId: vi.fn().mockResolvedValue(attempt),
-      upsertDeliveryTarget,
+			reconcileWhatsAppSetupTargetFromAttempt,
+			upsertDeliveryTarget: vi.fn(),
       upsertDigestDelivery: vi.fn(),
     }));
     vi.doMock("~/lib/whatsapp.server", () => ({
@@ -2032,19 +2029,18 @@ describe("reconcileDeliveryStatus", () => {
       errorMessage: "Recipient blocked delivery.",
     });
 
-    expect(upsertDeliveryTarget).toHaveBeenCalledWith(
+		expect(reconcileWhatsAppSetupTargetFromAttempt).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({
-        validationStatus: "invalid",
-        isValidated: false,
-        templateEligible: false,
-        lastSuccessfulDeliveryAt: "2026-06-06T01:00:00.000Z",
-        lastSuccessfulAttemptId: "attempt-existing",
-        metadata: expect.objectContaining({
-          validationWebhookStatus: "failed",
-          validationErrorMessage: "Recipient blocked delivery.",
-        }),
-      }),
+			{
+				userId: "user-1",
+				targetId: "whatsapp-target-1",
+				attemptId: "attempt-setup-2",
+				providerMessageId: "wamid.setup-2",
+				validationGeneration: null,
+				webhookStatus: "failed",
+				providerStatusLastSeenAt: "2026-06-07T01:00:00.000Z",
+				errorMessage: "Recipient blocked delivery.",
+			},
     );
   });
 
@@ -2107,8 +2103,8 @@ describe("reconcileDeliveryStatus", () => {
     expect(upsertDeliveryTarget).not.toHaveBeenCalled();
   });
 
-  it("ignores stale WhatsApp setup webhooks from older validation attempts", async () => {
-    const upsertDeliveryTarget = vi.fn();
+	it("delegates stale WhatsApp setup webhooks to generation-aware reconciliation", async () => {
+		const reconcileWhatsAppSetupTargetFromAttempt = vi.fn();
 
     vi.doMock("~/lib/data.server", () => ({
       listAdsByIds: vi.fn().mockResolvedValue([]),
@@ -2152,7 +2148,8 @@ describe("reconcileDeliveryStatus", () => {
         createdAt: "2026-06-07T03:00:00.000Z",
         updatedAt: "2026-06-07T03:00:00.000Z",
       }),
-      upsertDeliveryTarget,
+			reconcileWhatsAppSetupTargetFromAttempt,
+			upsertDeliveryTarget: vi.fn(),
       upsertDigestDelivery: vi.fn(),
     }));
     vi.doMock("~/lib/whatsapp.server", () => ({
@@ -2171,7 +2168,15 @@ describe("reconcileDeliveryStatus", () => {
       errorMessage: "Old setup failed.",
     });
 
-    expect(upsertDeliveryTarget).not.toHaveBeenCalled();
+		expect(reconcileWhatsAppSetupTargetFromAttempt).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({
+				targetId: "whatsapp-target-1",
+				attemptId: "attempt-setup-old",
+				providerMessageId: "wamid.setup-old",
+				webhookStatus: "failed",
+			}),
+		);
   });
 
   it("validates WhatsApp setup targets by provider id when the attempt is not found yet", async () => {

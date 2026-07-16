@@ -92,12 +92,14 @@ describe("ops route", () => {
     vi.doMock("~/lib/data.server", () => ({
       createBillingEmailReconciliationKey: vi.fn(() => "ops-billing-email-reconcile:11111111-1111-4111-8111-111111111111"),
       createDigestEmailReconciliationKey: vi.fn(() => "ops-digest-email-reconcile:11111111-1111-4111-8111-111111111111"),
+			createDigestScheduleJobRequeueKey: vi.fn(() => "digest-schedule-requeue:11111111-1111-4111-8111-111111111111"),
       createInstantChannelReconciliationKey: vi.fn((channel: string) => `ops-instant-${channel}-reconcile:11111111-1111-4111-8111-111111111111`),
       createInstantEmailReconciliationKey: vi.fn(() => "ops-instant-email-reconcile:11111111-1111-4111-8111-111111111111"),
       getOperatorSnapshot,
       listOutstandingBillingLifecycleProviderUnknownAttempts: vi.fn().mockResolvedValue([]),
       listOutstandingDigestProviderUnknownAttempts: vi.fn().mockResolvedValue([]),
       listOutstandingInstantProviderUnknownAttempts: vi.fn().mockResolvedValue([]),
+			listExhaustedDigestScheduleJobs: vi.fn().mockResolvedValue([]),
     }));
 
     const { loader } = await import("~/routes/app.ops");
@@ -117,6 +119,7 @@ describe("ops route", () => {
       outstandingBillingAttempts: [],
       outstandingDigestAttempts: [],
       outstandingInstantAttempts: [],
+		exhaustedDigestScheduleJobs: [],
     });
     expect(getOperatorSnapshot).toHaveBeenCalledTimes(1);
   });
@@ -291,6 +294,18 @@ describe("ops route", () => {
           reconciliationKey: "ops-instant-slack-reconcile:33333333-3333-4333-8333-333333333333",
         },
       ],
+		exhaustedDigestScheduleJobs: [
+		{
+			jobId: "digest-schedule:weekly:owner-1",
+			cadence: "weekly",
+			periodStart: "2026-07-06T05:00:00.000Z",
+			periodEnd: "2026-07-13T05:00:00.000Z",
+			attemptCount: 5,
+			lastErrorCode: "digest_schedule_job_exhausted",
+			updatedAt: "2026-07-13T05:05:00.000Z",
+			requeueKey: "digest-schedule-requeue:11111111-1111-4111-8111-111111111111",
+		},
+	],
     }));
 
     const { default: OpsRoute } = await import("~/routes/app.ops");
@@ -311,6 +326,9 @@ describe("ops route", () => {
     expect(markup).toContain('value="reconcile-instant-slack"');
     expect(markup).toContain('value="meta_whatsapp_message_log"');
     expect(markup).toContain('value="controlled_channel_observation"');
+		expect(markup).toContain("Digest periods awaiting operator recovery");
+		expect(markup).toContain("Requeue after repair");
+		expect(markup).toContain('value="requeue-digest-schedule-job"');
     expect(markup).not.toContain("ops@example.com");
     expect(markup).not.toContain("provider timeout");
     expect(markup).not.toContain("No recent delivery failures.");
@@ -345,6 +363,7 @@ describe("ops route", () => {
     vi.doMock("~/lib/data.server", () => ({
       createBillingEmailReconciliationKey: vi.fn(() => "ops-billing-email-reconcile:11111111-1111-4111-8111-111111111111"),
       createDigestEmailReconciliationKey: vi.fn(() => "ops-digest-email-reconcile:11111111-1111-4111-8111-111111111111"),
+			createDigestScheduleJobRequeueKey: vi.fn(() => "digest-schedule-requeue:11111111-1111-4111-8111-111111111111"),
       createInstantChannelReconciliationKey: vi.fn((channel: string) => `ops-instant-${channel}-reconcile:11111111-1111-4111-8111-111111111111`),
       createInstantEmailReconciliationKey: vi.fn(() => "ops-instant-email-reconcile:11111111-1111-4111-8111-111111111111"),
       getOperatorSnapshot,
@@ -377,6 +396,7 @@ describe("ops route", () => {
           updatedAt: "2026-07-15T18:00:00.000Z",
         },
       ]),
+			listExhaustedDigestScheduleJobs: vi.fn().mockResolvedValue([]),
     }));
 
     const { loader } = await import("~/routes/app.ops");
@@ -626,4 +646,41 @@ describe("ops route", () => {
       }),
     );
   });
+
+	it("requeues an exhausted digest period through the audited no-send recovery action", async () => {
+		const requeueExhaustedDigestScheduleJobWithAudit = vi.fn().mockResolvedValue({
+			ok: true,
+			replayed: false,
+			jobId: "digest-schedule:weekly:owner-1",
+			requeuedAt: "2026-07-16T12:00:00.000Z",
+		});
+		vi.doMock("~/lib/auth.server", () => ({ requireSession: vi.fn().mockResolvedValue(session) }));
+		vi.doMock("~/lib/data.server", () => ({ requeueExhaustedDigestScheduleJobWithAudit }));
+		const formData = new FormData();
+		formData.set("intent", "requeue-digest-schedule-job");
+		formData.set("jobId", "digest-schedule:weekly:owner-1");
+		formData.set("requeueKey", "digest-schedule-requeue:11111111-1111-4111-8111-111111111111");
+		formData.set("expectedUpdatedAt", "2026-07-16T11:59:00.000Z");
+
+		const { action } = await import("~/routes/app.ops");
+		const result = await action({
+			context: createContext({ OPS_ALLOWLIST_EMAILS: "owner@example.com" }),
+			request: new Request("http://localhost/app/ops", { method: "POST", body: formData }),
+		} as never);
+
+		expect(result).toMatchObject({
+			ok: true,
+			jobId: "digest-schedule:weekly:owner-1",
+			message: expect.stringContaining("guarded retry"),
+		});
+		expect(requeueExhaustedDigestScheduleJobWithAudit).toHaveBeenCalledWith(
+			expect.anything(),
+			{
+				operatorUserId: "user-1",
+				jobId: "digest-schedule:weekly:owner-1",
+				expectedUpdatedAt: "2026-07-16T11:59:00.000Z",
+				idempotencyKey: "digest-schedule-requeue:11111111-1111-4111-8111-111111111111",
+			},
+		);
+	});
 });

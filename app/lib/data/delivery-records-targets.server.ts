@@ -151,6 +151,39 @@ export async function upsertDeliveryTarget(
   });
   const timestamp = nowIso();
   if (existingTarget) {
+    const inputGeneration = readMetadataString(input.metadata, "validationGeneration");
+    const existingGeneration = readMetadataString(
+      existingTarget.metadata,
+      "validationGeneration",
+    );
+    const existingValidationMessageId = readMetadataString(
+      existingTarget.metadata,
+      "validationProviderMessageId",
+    );
+    const preserveCurrentWhatsAppValidation =
+      input.channel === "whatsapp" &&
+      input.validationStatus === "pending" &&
+      inputGeneration !== null &&
+      inputGeneration === existingGeneration &&
+      existingValidationMessageId !== null;
+    const effectiveInput = preserveCurrentWhatsAppValidation
+      ? {
+          ...input,
+          validationStatus: existingTarget.validationStatus,
+          isValidated: existingTarget.isValidated,
+          templateEligible: existingTarget.templateEligible,
+          lastSuccessfulDeliveryAt: existingTarget.lastSuccessfulDeliveryAt,
+          lastSuccessfulAttemptId: existingTarget.lastSuccessfulAttemptId,
+          providerIdentifier: existingTarget.providerIdentifier,
+          metadata: {
+            ...(input.metadata ?? {}),
+            ...existingTarget.metadata,
+            ...(input.metadata && "displayName" in input.metadata
+              ? { displayName: input.metadata.displayName }
+              : {}),
+          },
+        }
+      : input;
     await run(
       env,
       `
@@ -171,19 +204,19 @@ export async function upsertDeliveryTarget(
             updated_at = ?
         WHERE id = ?
       `,
-      input.validationStatus ?? "pending",
-      boolToInt(input.isValidated ?? false),
-      boolToInt(input.isOptedIn ?? false),
-      input.optInSource ?? null,
-      input.optedInAt ?? null,
-      boolToInt(input.isPaused ?? false),
-      input.pausedAt ?? null,
-      input.optedOutAt ?? null,
-      boolToInt(input.templateEligible ?? false),
-      input.lastSuccessfulDeliveryAt ?? null,
-      input.lastSuccessfulAttemptId ?? null,
-      input.providerIdentifier ?? null,
-      jsonValue(input.metadata ?? {}),
+      effectiveInput.validationStatus ?? "pending",
+      boolToInt(effectiveInput.isValidated ?? false),
+      boolToInt(effectiveInput.isOptedIn ?? false),
+      effectiveInput.optInSource ?? null,
+      effectiveInput.optedInAt ?? null,
+      boolToInt(effectiveInput.isPaused ?? false),
+      effectiveInput.pausedAt ?? null,
+      effectiveInput.optedOutAt ?? null,
+      boolToInt(effectiveInput.templateEligible ?? false),
+      effectiveInput.lastSuccessfulDeliveryAt ?? null,
+      effectiveInput.lastSuccessfulAttemptId ?? null,
+      effectiveInput.providerIdentifier ?? null,
+      jsonValue(effectiveInput.metadata ?? {}),
       timestamp,
       existingTarget.id,
     );
@@ -244,6 +277,126 @@ export async function upsertDeliveryTarget(
     limit: 1,
   });
   return target ?? null;
+}
+
+function readMetadataString(metadata: JsonRecord | undefined, key: string) {
+  const value = metadata?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+export async function reconcileWhatsAppSetupTargetFromAttempt(
+  env: AppEnv,
+  input: {
+    userId: string;
+    targetId: string;
+    attemptId: string;
+    providerMessageId: string;
+    validationGeneration: string | null;
+    webhookStatus: "pending" | "delivered" | "failed";
+    providerStatusLastSeenAt: string;
+    errorMessage: string | null;
+  },
+) {
+  const incomingSeenAt = Date.parse(input.providerStatusLastSeenAt);
+  if (!Number.isFinite(incomingSeenAt)) return null;
+
+  for (let retry = 0; retry < 2; retry += 1) {
+    const existing = await one<DeliveryTargetRow>(
+      env,
+      `SELECT * FROM delivery_target
+       WHERE id = ? AND user_id = ? AND channel = 'whatsapp'
+       LIMIT 1`,
+      input.targetId,
+      input.userId,
+    );
+    if (!existing) return null;
+
+    const metadata = parseJson<JsonRecord>(existing.metadata_json, {});
+    const currentGeneration = readMetadataString(metadata, "validationGeneration");
+    const currentMessageId = readMetadataString(metadata, "validationProviderMessageId");
+    if (
+      (input.validationGeneration !== null && currentGeneration !== input.validationGeneration) ||
+      (input.validationGeneration === null && currentMessageId !== input.providerMessageId) ||
+      (currentMessageId !== null && currentMessageId !== input.providerMessageId) ||
+      (existing.provider_identifier !== null &&
+        existing.provider_identifier !== input.providerMessageId)
+    ) {
+      return toDeliveryTargetRecord(existing);
+    }
+
+    const currentStatus = readMetadataString(metadata, "validationWebhookStatus");
+    const currentSeenAtValue = readMetadataString(metadata, "validationStatusLastSeenAt");
+    const currentSeenAt = currentSeenAtValue
+      ? Date.parse(currentSeenAtValue)
+      : Number.NEGATIVE_INFINITY;
+    const currentTerminal = currentStatus === "delivered" || currentStatus === "failed";
+    const incomingTerminal = input.webhookStatus !== "pending";
+    if (
+      incomingSeenAt < currentSeenAt ||
+      (currentTerminal && currentStatus !== input.webhookStatus) ||
+      (currentTerminal && !incomingTerminal)
+    ) {
+      return toDeliveryTargetRecord(existing);
+    }
+
+    const delivered = input.webhookStatus === "delivered";
+    const failed = input.webhookStatus === "failed";
+    const updatedAt = nowIso();
+    const nextMetadata: JsonRecord = {
+      ...metadata,
+      validationAttemptId: input.attemptId,
+      validationProviderMessageId: input.providerMessageId,
+      validationWebhookStatus: input.webhookStatus,
+      validationStatusLastSeenAt: input.providerStatusLastSeenAt,
+      validationErrorMessage: failed
+        ? input.errorMessage ?? "WhatsApp setup delivery failed."
+        : null,
+    };
+    const updated = await run(
+      env,
+      `UPDATE delivery_target
+       SET validation_status = ?,
+           is_validated = ?,
+           template_eligible = ?,
+           last_successful_delivery_at = ?,
+           last_successful_attempt_id = ?,
+           provider_identifier = ?,
+           metadata_json = ?,
+           updated_at = ?
+       WHERE id = ?
+         AND user_id = ?
+         AND channel = 'whatsapp'
+         AND updated_at = ?
+         AND metadata_json = ?
+         AND (provider_identifier IS NULL OR provider_identifier = ?)`,
+      delivered ? "validated" : failed ? "invalid" : existing.validation_status,
+      delivered ? 1 : failed ? 0 : existing.is_validated,
+      delivered ? 1 : failed ? 0 : existing.template_eligible,
+      delivered ? input.providerStatusLastSeenAt : existing.last_successful_delivery_at,
+      delivered ? input.attemptId : existing.last_successful_attempt_id,
+      input.providerMessageId,
+      jsonValue(nextMetadata),
+      updatedAt,
+      existing.id,
+      input.userId,
+      existing.updated_at,
+      existing.metadata_json,
+      input.providerMessageId,
+    );
+    if (Number(updated.meta?.changes ?? 0) === 1) {
+      const durable = await one<DeliveryTargetRow>(
+        env,
+        "SELECT * FROM delivery_target WHERE id = ?",
+        existing.id,
+      );
+      return durable ? toDeliveryTargetRecord(durable) : null;
+    }
+  }
+
+  return getDeliveryTargetById(env, {
+    userId: input.userId,
+    targetId: input.targetId,
+  });
 }
 
 async function getDeliveryTargetByUniqueFields(

@@ -132,6 +132,7 @@ export {
   upsertDeliveryTarget,
   getDeliveryTargetById,
   getDeliveryTargetByProviderIdentifier,
+  reconcileWhatsAppSetupTargetFromAttempt,
 reconcileWhatsAppSetupTargetByProviderMessageId,
   getUserDeliveryProfile,
   listDeliveryAttempts,
@@ -163,8 +164,17 @@ getLatestDigestRunSummaryForWatchlist,
 	claimDigestScheduleJob,
 	completeDigestScheduleJob,
 	failDigestScheduleJob,
+	listExhaustedDigestScheduleJobs,
+	listDigestScheduleJobsAwaitingAlert,
+	claimDigestScheduleJobExhaustionAlert,
+	settleDigestScheduleJobExhaustionAlert,
 	type DigestScheduleJob,
 } from "~/lib/data/digests.server";
+
+export {
+  createDigestScheduleJobRequeueKey,
+  requeueExhaustedDigestScheduleJobWithAudit,
+} from "~/lib/data/digest-schedule-recovery.server";
 
 export {
   listCollectionsPage,

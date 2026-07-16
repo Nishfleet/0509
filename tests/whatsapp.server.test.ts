@@ -15,10 +15,12 @@ return { entry: [{ changes: [{ value: { statuses } }] }] };
 function installSetupClaimHarness(options: {
   fetchMock: ReturnType<typeof vi.fn>;
   failFinalizeOnce?: boolean;
+  failTargetBindOnce?: boolean;
 }) {
   let target: Record<string, unknown> | null = null;
   let attempt: Record<string, unknown> | null = null;
   let failFinalizeOnce = options.failFinalizeOnce === true;
+  let failTargetBindOnce = options.failTargetBindOnce === true;
   const listDeliveryTargets = vi.fn(async () => (target ? [target] : []));
   const upsertDeliveryTarget = vi.fn(async (_env: unknown, input: Record<string, unknown>) => {
     target = {
@@ -64,11 +66,34 @@ function installSetupClaimHarness(options: {
       return true;
     },
   );
+  const reconcileWhatsAppSetupTargetFromAttempt = vi.fn(
+    async (_env: unknown, input: Record<string, unknown>) => {
+      if (failTargetBindOnce) {
+        failTargetBindOnce = false;
+        throw new Error("injected setup target-link failure");
+      }
+      if (!target) return null;
+      const metadata = target.metadata as Record<string, unknown>;
+      if (metadata.validationGeneration !== input.validationGeneration) return target;
+      target = {
+        ...target,
+        providerIdentifier: input.providerMessageId,
+        metadata: {
+          ...metadata,
+          validationAttemptId: input.attemptId,
+          validationProviderMessageId: input.providerMessageId,
+          validationWebhookStatus: input.webhookStatus,
+        },
+      };
+      return target;
+    },
+  );
   vi.stubGlobal("fetch", options.fetchMock);
   vi.doMock("~/lib/data.server", () => ({
     createDeliveryAttempt,
     getDeliveryAttemptByIdempotencyKey,
     listDeliveryTargets,
+    reconcileWhatsAppSetupTargetFromAttempt,
     updateDeliveryAttemptResult,
     upsertDeliveryTarget,
   }));
@@ -80,6 +105,7 @@ function installSetupClaimHarness(options: {
     get target() {
       return target;
     },
+    reconcileWhatsAppSetupTargetFromAttempt,
     updateDeliveryAttemptResult,
   };
 }
@@ -333,6 +359,38 @@ it("does not resend when setup acceptance is followed by local finalization fail
   expect(state.attempt).toMatchObject({ status: "pending", webhookStatus: "provider_unknown" });
 });
 
+it("repairs a lost post-acceptance target link without resending the setup message", async () => {
+  const fetchMock = vi.fn().mockResolvedValue(
+    Response.json({ messages: [{ id: "wamid.setup-linked" }] }),
+  );
+  const state = installSetupClaimHarness({ fetchMock, failTargetBindOnce: true });
+  const { saveWhatsAppDeliveryTarget } = await import("~/lib/whatsapp.server");
+  const input = {
+    userId: "user-1",
+    targetValue: "+91 98765 43210",
+    explicitOptIn: true,
+  };
+
+  await expect(saveWhatsAppDeliveryTarget(readyEnv as never, input)).rejects.toThrow(
+    "injected setup target-link failure",
+  );
+  await expect(saveWhatsAppDeliveryTarget(readyEnv as never, input)).resolves.toMatchObject({
+    providerIdentifier: "wamid.setup-linked",
+    metadata: expect.objectContaining({
+      validationProviderMessageId: "wamid.setup-linked",
+      validationGeneration: "initial",
+    }),
+  });
+
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(state.reconcileWhatsAppSetupTargetFromAttempt).toHaveBeenCalledTimes(2);
+  expect(state.attempt).toMatchObject({
+    status: "sent",
+    webhookStatus: "pending",
+    providerMessageId: "wamid.setup-linked",
+  });
+});
+
   it("saves a pending WhatsApp target and records the setup validation attempt", async () => {
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
     const listDeliveryTargets = vi.fn().mockResolvedValue([]);
@@ -347,11 +405,25 @@ it("does not resend when setup acceptance is followed by local finalization fail
         messages: [{ id: "wamid.setup-1" }],
       }),
     );
+    const reconcileWhatsAppSetupTargetFromAttempt = vi.fn(
+      async (_env: unknown, input: Record<string, unknown>) => ({
+        id: input.targetId,
+        userId: input.userId,
+        targetValue: "919876543210",
+        providerIdentifier: input.providerMessageId,
+        metadata: {
+          validationGeneration: input.validationGeneration,
+          validationProviderMessageId: input.providerMessageId,
+          validationWebhookStatus: input.webhookStatus,
+        },
+      }),
+    );
     vi.stubGlobal("fetch", fetchMock);
     vi.doMock("~/lib/data.server", () => ({
       createDeliveryAttempt,
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
       listDeliveryTargets,
+		reconcileWhatsAppSetupTargetFromAttempt,
       updateDeliveryAttemptResult: vi.fn().mockResolvedValue(true),
       upsertDeliveryTarget,
     }));
@@ -373,7 +445,7 @@ it("does not resend when setup acceptance is followed by local finalization fail
         }),
       }),
     );
-    expect(upsertDeliveryTarget).toHaveBeenCalledWith(
+		expect(upsertDeliveryTarget).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         userId: "user-1",
@@ -384,15 +456,22 @@ it("does not resend when setup acceptance is followed by local finalization fail
         isOptedIn: true,
         optInSource: "manual_whatsapp_setup",
         templateEligible: false,
-        providerIdentifier: "wamid.setup-1",
         metadata: expect.objectContaining({
           displayName: "Founder phone",
           validationTemplateName: "proof_digest_customer_v1",
-          validationProviderMessageId: "wamid.setup-1",
-          validationWebhookStatus: "pending",
         }),
       }),
     );
+		expect(reconcileWhatsAppSetupTargetFromAttempt).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({
+				targetId: "whatsapp-target-1",
+				attemptId: "attempt-1",
+				providerMessageId: "wamid.setup-1",
+				validationGeneration: "initial",
+				webhookStatus: "pending",
+			}),
+		);
     expect(createDeliveryAttempt).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -531,10 +610,24 @@ it("does not resend when setup acceptance is followed by local finalization fail
         }),
       ),
     );
+		const reconcileWhatsAppSetupTargetFromAttempt = vi.fn(
+			async (_env: unknown, input: Record<string, unknown>) => ({
+				id: input.targetId,
+				userId: input.userId,
+				targetValue: "919876543210",
+				providerIdentifier: input.providerMessageId,
+				metadata: {
+					validationGeneration: input.validationGeneration,
+					validationProviderMessageId: input.providerMessageId,
+					validationWebhookStatus: input.webhookStatus,
+				},
+			}),
+		);
     vi.doMock("~/lib/data.server", () => ({
       createDeliveryAttempt,
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
       listDeliveryTargets,
+			reconcileWhatsAppSetupTargetFromAttempt,
       updateDeliveryAttemptResult: vi.fn().mockResolvedValue(true),
       upsertDeliveryTarget,
     }));

@@ -12,23 +12,27 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const {
     createBillingEmailReconciliationKey,
     createDigestEmailReconciliationKey,
+		createDigestScheduleJobRequeueKey,
     createInstantChannelReconciliationKey,
     createInstantEmailReconciliationKey,
     getOperatorSnapshot,
     listOutstandingBillingLifecycleProviderUnknownAttempts,
     listOutstandingDigestProviderUnknownAttempts,
     listOutstandingInstantProviderUnknownAttempts,
+		listExhaustedDigestScheduleJobs,
   } = await import("~/lib/data.server");
   const [
     rawSnapshot,
     outstandingBillingAttempts,
     outstandingDigestAttempts,
     outstandingInstantAttempts,
+		exhaustedDigestScheduleJobs,
   ] = await Promise.all([
     getOperatorSnapshot(env),
     listOutstandingBillingLifecycleProviderUnknownAttempts(env, { limit: 50 }),
     listOutstandingDigestProviderUnknownAttempts(env, { limit: 50 }),
     listOutstandingInstantProviderUnknownAttempts(env, { limit: 50 }),
+		listExhaustedDigestScheduleJobs(env, { limit: 50 }),
   ]);
   const snapshot = maskOperatorSnapshot(rawSnapshot);
 
@@ -62,6 +66,16 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         ? createInstantEmailReconciliationKey()
         : createInstantChannelReconciliationKey(attempt.channel),
     })),
+		exhaustedDigestScheduleJobs: exhaustedDigestScheduleJobs.map((job) => ({
+			jobId: job.id,
+			cadence: job.cadence,
+			periodStart: job.periodStart,
+			periodEnd: job.periodEnd,
+			attemptCount: job.attemptCount,
+			lastErrorCode: job.lastErrorCode,
+			updatedAt: job.updatedAt,
+			requeueKey: createDigestScheduleJobRequeueKey(),
+		})),
   };
 }
 
@@ -69,6 +83,33 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { env, session } = await requireOpsAccess(context, request);
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
+	if (intent === "requeue-digest-schedule-job") {
+		const { requeueExhaustedDigestScheduleJobWithAudit } = await import("~/lib/data.server");
+		const jobId = String(formData.get("jobId") ?? "");
+		const result = await requeueExhaustedDigestScheduleJobWithAudit(env, {
+			operatorUserId: session.user.id,
+			jobId,
+			expectedUpdatedAt: String(formData.get("expectedUpdatedAt") ?? ""),
+			idempotencyKey: String(formData.get("requeueKey") ?? ""),
+		});
+		if (result.ok) {
+			return {
+				ok: true,
+				intent,
+				jobId: result.jobId,
+				message: result.replayed
+					? "This digest period was already requeued. No duplicate work was created."
+					: "Digest period requeued for one guarded retry. Refresh to follow its state.",
+			};
+		}
+		const messages = {
+			invalid: "This recovery request is incomplete. Refresh the operator desk.",
+			idempotency_conflict: "This recovery key was already used for different work. Refresh before retrying.",
+			stale: "This digest period changed before recovery. Refresh and inspect its current state.",
+			not_found: "This digest period no longer exists. Refresh the operator desk.",
+		} as const;
+		return { ok: false, intent, jobId, message: messages[result.reason] };
+	}
   const isBillingReconciliation = intent === "reconcile-billing-email";
   const isDigestReconciliation = intent === "reconcile-digest-email";
   const instantChannel = intent === "reconcile-instant-email"
@@ -175,6 +216,7 @@ export default function OpsRoute() {
     outstandingBillingAttempts,
     outstandingDigestAttempts,
     outstandingInstantAttempts,
+		exhaustedDigestScheduleJobs,
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
 
@@ -207,6 +249,43 @@ export default function OpsRoute() {
 
         <article className="f9-app-panel">
           <OpsSection
+				empty="No digest periods have exhausted their guarded retry budget."
+				items={exhaustedDigestScheduleJobs}
+				title="Digest periods awaiting operator recovery"
+				renderItem={(item) => (
+					<>
+						<p className="f9-app-kicker">{item.cadence} digest · {item.attemptCount} failed attempts</p>
+						<h3>Delivery period needs a guarded retry</h3>
+						<p>
+							The automatic retry budget is exhausted. Inspect structured logs for {item.lastErrorCode ?? "the recorded failure"}, then requeue this period once the cause is repaired.
+						</p>
+						<p className="f9-muted-copy">
+							Period <LocalTime iso={item.periodStart} /> to <LocalTime iso={item.periodEnd} /> · stopped <LocalTime iso={item.updatedAt} />
+						</p>
+						<Form method="post">
+							<input name="intent" type="hidden" value="requeue-digest-schedule-job" />
+							<input name="jobId" type="hidden" value={item.jobId} />
+							<input name="expectedUpdatedAt" type="hidden" value={item.updatedAt} />
+							<input name="requeueKey" type="hidden" value={item.requeueKey} />
+							<SubmitButton
+								className="f9-secondary-button"
+								intent="requeue-digest-schedule-job"
+								match={{ jobId: item.jobId }}
+								pendingLabel="Requeueing…"
+							>
+								Requeue after repair
+							</SubmitButton>
+						</Form>
+						<ActionFeedback
+							data={actionData}
+							intent="requeue-digest-schedule-job"
+							match={{ jobId: item.jobId }}
+						/>
+					</>
+				)}
+			/>
+
+			<OpsSection
             empty="No failed watchlist runs in the recent window."
             items={snapshot.failingRuns}
             title="What is failing"

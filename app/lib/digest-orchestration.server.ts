@@ -4,6 +4,7 @@ import {
 } from "~/lib/change-intelligence";
 import {
 	claimDigestScheduleJob,
+	claimDigestScheduleJobExhaustionAlert,
 	completeDigestScheduleJob,
   createDigestRun,
 	enqueueDigestScheduleJobs,
@@ -12,11 +13,14 @@ import {
   getDigestByPeriod,
   getSuccessfulRunStatsForUserBetween,
   listAdsByIds,
+	listDigestScheduleJobsAwaitingAlert,
   listRetryableDigestRuns,
 	listRetryableDigestScheduleJobs,
+	settleDigestScheduleJobExhaustionAlert,
   listWatchEventsBetween,
   listWatchlists,
 } from "~/lib/data.server";
+import { reportScheduledTaskFailure } from "~/lib/cron-failure-alert.server";
 import { isCustomerDigestEligibleEvent } from "~/lib/delivery-policy.server";
 import { deliveryPreDispatchStaleBefore } from "~/lib/delivery-attempt-lease";
 import {
@@ -52,6 +56,7 @@ const DIGEST_RETRY_SWEEP_LIMIT = 25;
 const DIGEST_SCHEDULE_JOB_SWEEP_LIMIT = 50;
 const DIGEST_SCHEDULE_JOB_MAX_ATTEMPTS = 5;
 const DIGEST_SCHEDULE_JOB_LEASE_MS = 15 * 60 * 1000;
+const DIGEST_SCHEDULE_JOB_ALERT_LEASE_MS = 15 * 60 * 1000;
 
 export interface DigestOrchestrationOptions {
   cadence?: DigestCadence;
@@ -197,12 +202,28 @@ async function drainDigestScheduleJobs(
 				throw new Error("Digest schedule job completion ownership was lost.");
 			}
 		} catch (error) {
-			await failDigestScheduleJob(env, {
+			const exhausted = claimed.attemptCount >= DIGEST_SCHEDULE_JOB_MAX_ATTEMPTS;
+			const failed = await failDigestScheduleJob(env, {
 				jobId: claimed.id,
 				processingToken,
 				now: new Date().toISOString(),
-				errorCode: "digest_schedule_job_failed",
+				errorCode: exhausted
+					? "digest_schedule_job_exhausted"
+					: "digest_schedule_job_failed",
+				exhausted,
 			});
+			if (failed && exhausted) {
+				try {
+					await reportExhaustedDigestScheduleJobs(env, { limit: 1, jobId: claimed.id });
+				} catch (alertError) {
+					// The exhausted row remains durable and the separate recovery sweep
+					// will retry its alert. Alerting must not strand later workspaces.
+					console.error("Digest schedule exhaustion alert failed; recovery will retry.", {
+						jobId: claimed.id,
+						error: alertError instanceof Error ? alertError.message : String(alertError),
+					});
+				}
+			}
 			// The durable failed row remains reclaimable. Continue so one workspace
 			// cannot prevent later customers from receiving their digest.
 			console.error(
@@ -213,6 +234,50 @@ async function drainDigestScheduleJobs(
 	}
 
 	return digestsSent;
+}
+
+export async function reportExhaustedDigestScheduleJobs(
+	env: AppEnv,
+	options: { limit?: number; jobId?: string } = {},
+) {
+	if (!env.DB) return 0;
+	const now = Date.now();
+	const candidates = await listDigestScheduleJobsAwaitingAlert(env, {
+		staleAlertBefore: new Date(now - DIGEST_SCHEDULE_JOB_ALERT_LEASE_MS).toISOString(),
+		limit: options.limit ?? 25,
+	});
+	let alerted = 0;
+	for (const candidate of candidates) {
+		if (options.jobId && candidate.id !== options.jobId) continue;
+		const alertToken = crypto.randomUUID();
+		const claimed = await claimDigestScheduleJobExhaustionAlert(env, {
+			jobId: candidate.id,
+			alertToken,
+			now: new Date().toISOString(),
+			staleAlertBefore: new Date(
+				Date.now() - DIGEST_SCHEDULE_JOB_ALERT_LEASE_MS,
+			).toISOString(),
+		});
+		if (!claimed) continue;
+
+		const result = await reportScheduledTaskFailure(
+			env,
+			`digest_schedule_job_exhausted:${claimed.id}`,
+			new Error(
+				`Digest ${claimed.cadence} period ${claimed.periodStart} to ${claimed.periodEnd} exhausted ${claimed.attemptCount} attempts.`,
+			),
+			{ jobId: claimed.id, cadence: claimed.cadence },
+		);
+		const alertRecorded = result.reason === "sent" || result.reason === "throttled";
+		await settleDigestScheduleJobExhaustionAlert(env, {
+			jobId: claimed.id,
+			alertToken,
+			now: new Date().toISOString(),
+			alerted: alertRecorded,
+		});
+		if (alertRecorded) alerted += 1;
+	}
+	return alerted;
 }
 
 async function runDigestForUser(
