@@ -124,6 +124,7 @@ export {
   listStaleBillingLifecycleEmailAttempts,
   listOutstandingBillingLifecycleProviderUnknownAttempts,
   listOutstandingDigestProviderUnknownAttempts,
+  listOutstandingInstantProviderUnknownAttempts,
   getWorkspaceDeliveryConfig,
   upsertWorkspaceDeliveryConfig,
   listDeliveryTargets,
@@ -218,8 +219,10 @@ export {
   BILLING_EMAIL_EVIDENCE_CLASSIFICATIONS,
   createBillingEmailReconciliationKey,
   createDigestEmailReconciliationKey,
+  createInstantEmailReconciliationKey,
   reconcileBillingEmailAttemptWithAudit,
   reconcileDigestEmailAttemptWithAudit,
+  reconcileInstantEmailAttemptWithAudit,
   type BillingEmailEvidenceClassification,
 } from "~/lib/data/operator-delivery-reconciliation.server";
 

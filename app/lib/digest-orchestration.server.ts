@@ -198,6 +198,7 @@ async function runDigestForUser(
 
   const digestCohort = selectDigestCohort(digestItems);
   const selectedDigestItems = digestCohort.items;
+  const orderedDigestItems = selectDigestCohort(digestItems, digestItems.length).items;
   const existingDigest = await getDigestByPeriod(
     env,
     user.id,
@@ -245,7 +246,7 @@ async function runDigestForUser(
         }
       : {}),
   };
-  const candidateItems = digestItems.map((item) => ({
+  const candidateItems = orderedDigestItems.map((item) => ({
     watchlistId: item.watchlistId,
     watchlistName: item.watchlistName,
     eventType: item.eventType,

@@ -790,19 +790,18 @@ async function deliverInstantEmailBatch(
     content: InstantAlertContent;
   },
 ): Promise<DigestAttemptSummary> {
-  const attemptDedupe = await resolveInstantAttemptDedupe(env, {
-    watchlistId: input.watchlistId,
-    lane: input.lane,
-    channel: "email",
-    targetValue: input.deliveryTarget.targetValue,
-    batchKey: input.batch.batchKey,
-    deferredByQuietHours: input.batch.deferredByQuietHours,
-  });
-  if (attemptDedupe.duplicate) {
-    return summarizeDeliveryAttempt(attemptDedupe.duplicate);
-  }
-
   if (input.batch.deferredByQuietHours) {
+    const attemptDedupe = await resolveInstantAttemptDedupe(env, {
+      watchlistId: input.watchlistId,
+      lane: input.lane,
+      channel: "email",
+      targetValue: input.deliveryTarget.targetValue,
+      batchKey: input.batch.batchKey,
+      deferredByQuietHours: true,
+    });
+    if (attemptDedupe.duplicate) {
+      return summarizeDeliveryAttempt(attemptDedupe.duplicate);
+    }
     await createDeliveryAttempt(env, {
       userId: input.userId,
       watchlistId: input.watchlistId,
@@ -841,58 +840,103 @@ async function deliverInstantEmailBatch(
     };
   }
 
+  const payloadSnapshot = {
+    kind: "instant_alert",
+    channel: "email",
+    batchKey: input.batch.batchKey,
+    subject: input.content.subject,
+    provisional: input.batch.provisional,
+    watchlistUrl: input.content.watchlistUrl,
+  };
+  const attemptClaim = await claimInstantEmailDeliveryAttempt(env, {
+    userId: input.userId,
+    watchlistId: input.watchlistId,
+    deliveryTargetId: input.deliveryTarget.id,
+    lane: input.lane,
+    targetValue: input.deliveryTarget.targetValue,
+    batchKey: input.batch.batchKey,
+    eventIds: input.batch.events.map((event) => event.id),
+    payloadSnapshot,
+  });
+  if (attemptClaim.duplicate) {
+    return summarizeDeliveryAttempt(attemptClaim.duplicate);
+  }
+  if (!attemptClaim.attemptId || !attemptClaim.claimUpdatedAt) {
+    throw new Error("Instant email delivery claim did not return an owned attempt.");
+  }
+  const { attemptId, claimUpdatedAt, idempotencyKey } = attemptClaim;
+
+  if (!isEmailSendingConfigured(env)) {
+    const failedAt = new Date().toISOString();
+    const errorMessage = "Email sending is not configured for this environment.";
+    const finalized = await updateDeliveryAttemptResult(env, attemptId, {
+      provider: EMAIL_PROVIDER,
+      status: "failed",
+      webhookStatus: "failed",
+      providerMessageId: null,
+      providerStatusLastSeenAt: null,
+      errorMessage,
+      sentAt: null,
+      failedAt,
+      updatedAt: failedAt,
+      expectedStatus: "pending",
+      expectedWebhookStatus: "pending",
+      expectedUpdatedAt: claimUpdatedAt,
+    });
+    if (finalized === false) {
+      const durable = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
+      if (durable) return summarizeDeliveryAttempt(durable);
+      throw new Error("Instant email configuration-failure claim disappeared.");
+    }
+    return {
+      channel: "email",
+      status: "failed",
+      targetValue: input.deliveryTarget.targetValue,
+      providerMessageId: null,
+      errorMessage,
+      deliveredAt: null,
+    };
+  }
+
+  const unsubscribeUrl = await buildUnsubscribeUrl(env, {
+    userId: input.deliveryTarget.userId,
+    targetId: input.deliveryTarget.id,
+  });
+  const dispatchStartedAt = await markProviderDispatch(
+    env,
+    attemptId,
+    EMAIL_PROVIDER,
+    claimUpdatedAt,
+  );
+  if (!dispatchStartedAt) {
+    const durable = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
+    if (!durable) throw new Error("Instant email delivery dispatch claim disappeared.");
+    return summarizeDeliveryAttempt(durable);
+  }
+
   const providerResult = await sendInstantEmail(env, {
     email: input.deliveryTarget.targetValue,
     subject: input.content.subject,
     html: input.content.html,
-    unsubscribeUrl: await buildUnsubscribeUrl(env, {
-      userId: input.deliveryTarget.userId,
-      targetId: input.deliveryTarget.id,
-    }),
+    unsubscribeUrl,
   });
-
-  let attemptId: string;
-  if (attemptDedupe.retryAttempt) {
-    await updateDeliveryAttemptResult(env, attemptDedupe.retryAttempt.id, {
-      provider: providerResult.provider,
-      status: providerResult.status,
-      webhookStatus: providerResult.webhookStatus,
-      providerMessageId: providerResult.providerMessageId,
-      providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
-      errorMessage: providerResult.errorMessage,
-      sentAt: providerAcceptedAt(providerResult),
-      failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
-    });
-    attemptId = attemptDedupe.retryAttempt.id;
-  } else {
-    attemptId = await createDeliveryAttempt(env, {
-      userId: input.userId,
-      watchlistId: input.watchlistId,
-      digestRunId: null,
-      deliveryTargetId: input.deliveryTarget.id,
-      lane: input.lane,
-      channel: "email",
-      provider: providerResult.provider,
-      status: providerResult.status,
-      webhookStatus: providerResult.webhookStatus,
-      targetValue: input.deliveryTarget.targetValue,
-      providerMessageId: providerResult.providerMessageId,
-      providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
-      templateName: null,
-      eventIds: input.batch.events.map((event) => event.id),
-      payloadSnapshot: {
-        kind: "instant_alert",
-        channel: "email",
-        batchKey: input.batch.batchKey,
-        subject: input.content.subject,
-        provisional: input.batch.provisional,
-        watchlistUrl: input.content.watchlistUrl,
-      },
-      idempotencyKey: attemptDedupe.idempotencyKey,
-      errorMessage: providerResult.errorMessage,
-      sentAt: providerAcceptedAt(providerResult),
-      failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
-    });
+  const finalized = await updateDeliveryAttemptResult(env, attemptId, {
+    provider: providerResult.provider,
+    status: providerResult.status,
+    webhookStatus: providerResult.webhookStatus,
+    providerMessageId: providerResult.providerMessageId,
+    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+    errorMessage: providerResult.errorMessage,
+    sentAt: providerAcceptedAt(providerResult),
+    failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+    expectedStatus: "pending",
+    expectedWebhookStatus: "provider_unknown",
+    expectedUpdatedAt: dispatchStartedAt,
+  });
+  if (finalized === false) {
+    const durable = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
+    if (durable) return summarizeDeliveryAttempt(durable);
+    throw new Error("Instant email delivery finalization claim disappeared.");
   }
   if (providerResult.status === "sent") {
     await persistDeliveryTargetSuccess(
@@ -911,6 +955,152 @@ async function deliverInstantEmailBatch(
     errorMessage: providerResult.errorMessage,
     deliveredAt: providerResult.deliveredAt,
   };
+}
+
+async function claimInstantEmailDeliveryAttempt(
+  env: AppEnv,
+  input: {
+    userId: string;
+    watchlistId: string;
+    deliveryTargetId: string;
+    lane: DeliveryLane;
+    targetValue: string;
+    batchKey: string;
+    eventIds: string[];
+    payloadSnapshot: Record<string, unknown>;
+  },
+): Promise<{
+  attemptId: string | null;
+  claimUpdatedAt: string | null;
+  idempotencyKey: string;
+  duplicate: DeliveryAttemptRecord | null;
+}> {
+  const keyInput = {
+    watchlistId: input.watchlistId,
+    lane: input.lane,
+    channel: "email" as const,
+    targetValue: input.targetValue,
+    batchKey: input.batchKey,
+  };
+  const idempotencyKey = buildInstantDeliveryAttemptIdempotencyKey({
+    ...keyInput,
+    attemptKind: "send",
+  });
+  const duplicate = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
+  if (duplicate) {
+    const stalePreDispatch = isStalePreDispatchAttempt(duplicate);
+    const definiteFailure =
+      duplicate.status === "failed" && duplicate.webhookStatus === "failed";
+    if (!stalePreDispatch && !definiteFailure) {
+      return { attemptId: null, claimUpdatedAt: null, idempotencyKey, duplicate };
+    }
+    const claimUpdatedAt = new Date().toISOString();
+    const retryClaimed = await updateDeliveryAttemptResult(env, duplicate.id, {
+      provider: EMAIL_PROVIDER,
+      status: "pending",
+      webhookStatus: "pending",
+      providerMessageId: null,
+      providerStatusLastSeenAt: null,
+      errorMessage: null,
+      sentAt: null,
+      failedAt: null,
+      payloadSnapshot: input.payloadSnapshot,
+      updatedAt: claimUpdatedAt,
+      expectedStatus: stalePreDispatch ? "pending" : "failed",
+      expectedWebhookStatus: stalePreDispatch ? "pending" : "failed",
+      expectedUpdatedAt: duplicate.updatedAt,
+    });
+    if (retryClaimed !== false) {
+      return { attemptId: duplicate.id, claimUpdatedAt, idempotencyKey, duplicate: null };
+    }
+    const concurrent = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
+    if (!concurrent) throw new Error("Instant email delivery retry claim disappeared.");
+    return { attemptId: null, claimUpdatedAt: null, idempotencyKey, duplicate: concurrent };
+  }
+
+  const legacyIdempotencyKey = buildLegacyInstantDeliveryAttemptIdempotencyKey(keyInput);
+  const legacyDuplicate = await getDeliveryAttemptByIdempotencyKey(env, legacyIdempotencyKey);
+  if (
+    legacyDuplicate?.status === "failed" &&
+    legacyDuplicate.webhookStatus === "failed"
+  ) {
+    const claimUpdatedAt = new Date().toISOString();
+    const retryClaimed = await updateDeliveryAttemptResult(env, legacyDuplicate.id, {
+      provider: EMAIL_PROVIDER,
+      status: "pending",
+      webhookStatus: "pending",
+      providerMessageId: null,
+      providerStatusLastSeenAt: null,
+      errorMessage: null,
+      sentAt: null,
+      failedAt: null,
+      payloadSnapshot: input.payloadSnapshot,
+      updatedAt: claimUpdatedAt,
+      expectedStatus: "failed",
+      expectedWebhookStatus: "failed",
+      expectedUpdatedAt: legacyDuplicate.updatedAt,
+    });
+    if (retryClaimed !== false) {
+      return {
+        attemptId: legacyDuplicate.id,
+        claimUpdatedAt,
+        idempotencyKey: legacyIdempotencyKey,
+        duplicate: null,
+      };
+    }
+    const concurrent = await getDeliveryAttemptByIdempotencyKey(env, legacyIdempotencyKey);
+    if (!concurrent) throw new Error("Legacy instant email retry claim disappeared.");
+    return {
+      attemptId: null,
+      claimUpdatedAt: null,
+      idempotencyKey: legacyIdempotencyKey,
+      duplicate: concurrent,
+    };
+  }
+  if (
+    legacyDuplicate &&
+    legacyDuplicate.status !== "skipped_due_to_quiet_hours"
+  ) {
+    return {
+      attemptId: null,
+      claimUpdatedAt: null,
+      idempotencyKey,
+      duplicate: legacyDuplicate,
+    };
+  }
+
+  const claimUpdatedAt = new Date().toISOString();
+  try {
+    const attemptId = await createDeliveryAttempt(env, {
+      userId: input.userId,
+      watchlistId: input.watchlistId,
+      digestRunId: null,
+      deliveryTargetId: input.deliveryTargetId,
+      lane: input.lane,
+      channel: "email",
+      provider: EMAIL_PROVIDER,
+      status: "pending",
+      webhookStatus: "pending",
+      targetValue: input.targetValue,
+      providerMessageId: null,
+      providerStatusLastSeenAt: null,
+      templateName: null,
+      eventIds: input.eventIds,
+      payloadSnapshot: input.payloadSnapshot,
+      idempotencyKey,
+      errorMessage: null,
+      sentAt: null,
+      failedAt: null,
+      timestamp: claimUpdatedAt,
+    });
+    return { attemptId, claimUpdatedAt, idempotencyKey, duplicate: null };
+  } catch (error) {
+    const concurrent = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
+    if (concurrent) {
+      return { attemptId: null, claimUpdatedAt: null, idempotencyKey, duplicate: concurrent };
+    }
+    throw error;
+  }
 }
 
 async function deliverInstantWhatsAppBatch(

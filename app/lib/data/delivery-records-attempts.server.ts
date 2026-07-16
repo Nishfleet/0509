@@ -21,12 +21,14 @@ export async function listRetryableInstantAttempts(
   env: AppEnv,
   input: {
     since: string;
+    stalePreDispatchBefore: string;
     limit: number;
   },
 ) {
-  // Instant alerts that were deferred by quiet hours (and never flushed) or
-  // failed at the provider. Successful re-sends update or supersede these
-  // rows, so they naturally drop out of this query.
+  // Email retries are fail-closed around the provider boundary: only quiet
+  // hours, definite failed/failed outcomes, and expired pending/pending
+  // pre-dispatch leases are eligible. provider_unknown is never auto-sent.
+  // Other channels retain their established failed-attempt behavior.
   const rows = await many<DeliveryAttemptRow>(
     env,
     `
@@ -35,12 +37,43 @@ export async function listRetryableInstantAttempts(
       WHERE lane = 'customer'
         AND watchlist_id IS NOT NULL
         AND digest_run_id IS NULL
+        AND idempotency_key LIKE 'instant:%'
         AND created_at >= ?
-        AND status IN ('skipped_due_to_quiet_hours', 'failed')
+        AND (
+          (
+            status = 'skipped_due_to_quiet_hours'
+            AND NOT EXISTS (
+              SELECT 1
+              FROM delivery_attempt AS dispatched_attempt
+              WHERE dispatched_attempt.idempotency_key = CASE
+                WHEN delivery_attempt.idempotency_key LIKE '%:quiet-hours'
+                  THEN substr(
+                    delivery_attempt.idempotency_key,
+                    1,
+                    length(delivery_attempt.idempotency_key) - length('quiet-hours')
+                  ) || 'send'
+                ELSE delivery_attempt.idempotency_key || ':send'
+              END
+            )
+          )
+          OR (
+            channel = 'email'
+            AND (
+              (status = 'failed' AND webhook_status = 'failed')
+              OR (
+                status = 'pending'
+                AND webhook_status = 'pending'
+                AND updated_at <= ?
+              )
+            )
+          )
+          OR (channel != 'email' AND status = 'failed')
+        )
       ORDER BY created_at ASC
       LIMIT ?
     `,
     input.since,
+    input.stalePreDispatchBefore,
     input.limit,
   );
 
@@ -172,6 +205,32 @@ export async function listOutstandingDigestProviderUnknownAttempts(
 					)
 				)
 				AND idempotency_key LIKE 'digest:%:customer:email:%'
+			ORDER BY created_at ASC
+			LIMIT ?
+		`,
+		limit,
+	);
+	return rows.map(toDeliveryAttemptRecord);
+}
+
+export async function listOutstandingInstantProviderUnknownAttempts(
+	env: AppEnv,
+	options: { limit?: number } = {},
+) {
+	const limit = Math.max(1, Math.min(200, Math.trunc(options.limit ?? 100)));
+	const rows = await many<DeliveryAttemptRow>(
+		env,
+		`
+			SELECT *
+			FROM delivery_attempt
+			WHERE lane = 'customer'
+				AND channel = 'email'
+				AND watchlist_id IS NOT NULL
+				AND digest_run_id IS NULL
+				AND delivery_target_id IS NOT NULL
+				AND webhook_status = 'provider_unknown'
+				AND status IN ('pending', 'failed')
+				AND idempotency_key LIKE 'instant:%:customer:email:%'
 			ORDER BY created_at ASC
 			LIMIT ?
 		`,

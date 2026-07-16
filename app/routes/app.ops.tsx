@@ -12,14 +12,22 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const {
     createBillingEmailReconciliationKey,
     createDigestEmailReconciliationKey,
+    createInstantEmailReconciliationKey,
     getOperatorSnapshot,
     listOutstandingBillingLifecycleProviderUnknownAttempts,
     listOutstandingDigestProviderUnknownAttempts,
+    listOutstandingInstantProviderUnknownAttempts,
   } = await import("~/lib/data.server");
-  const [rawSnapshot, outstandingBillingAttempts, outstandingDigestAttempts] = await Promise.all([
+  const [
+    rawSnapshot,
+    outstandingBillingAttempts,
+    outstandingDigestAttempts,
+    outstandingInstantAttempts,
+  ] = await Promise.all([
     getOperatorSnapshot(env),
     listOutstandingBillingLifecycleProviderUnknownAttempts(env, { limit: 50 }),
     listOutstandingDigestProviderUnknownAttempts(env, { limit: 50 }),
+    listOutstandingInstantProviderUnknownAttempts(env, { limit: 50 }),
   ]);
   const snapshot = maskOperatorSnapshot(rawSnapshot);
 
@@ -42,6 +50,14 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       updatedAt: attempt.updatedAt,
       reconciliationKey: createDigestEmailReconciliationKey(),
     })),
+    outstandingInstantAttempts: outstandingInstantAttempts.map((attempt) => ({
+      attemptId: attempt.id,
+      recipient: maskDeliveryTarget(attempt.targetValue),
+      provider: attempt.provider,
+      createdAt: attempt.createdAt,
+      updatedAt: attempt.updatedAt,
+      reconciliationKey: createInstantEmailReconciliationKey(),
+    })),
   };
 }
 
@@ -51,7 +67,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const intent = String(formData.get("intent") ?? "");
   const isBillingReconciliation = intent === "reconcile-billing-email";
   const isDigestReconciliation = intent === "reconcile-digest-email";
-  if (!isBillingReconciliation && !isDigestReconciliation) {
+  const isInstantReconciliation = intent === "reconcile-instant-email";
+  if (!isBillingReconciliation && !isDigestReconciliation && !isInstantReconciliation) {
     return { ok: false, intent, message: "Unknown operator action." };
   }
 
@@ -59,6 +76,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     BILLING_EMAIL_EVIDENCE_CLASSIFICATIONS,
     reconcileBillingEmailAttemptWithAudit,
     reconcileDigestEmailAttemptWithAudit,
+    reconcileInstantEmailAttemptWithAudit,
   } = await import("~/lib/data.server");
   const classificationValue = String(formData.get("classification") ?? "");
   const classification = BILLING_EMAIL_EVIDENCE_CLASSIFICATIONS.find(
@@ -85,7 +103,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   const reconcile = isBillingReconciliation
     ? reconcileBillingEmailAttemptWithAudit
-    : reconcileDigestEmailAttemptWithAudit;
+    : isDigestReconciliation
+      ? reconcileDigestEmailAttemptWithAudit
+      : reconcileInstantEmailAttemptWithAudit;
   const result = await reconcile(env, {
     operatorUserId: session.user.id,
     attemptId: String(formData.get("attemptId") ?? ""),
@@ -106,6 +126,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
           ? "Marked sent from verified provider evidence. No email was resent."
           : isDigestReconciliation
             ? "Marked failed from verified provider evidence. A later digest run may retry it safely; this action did not resend email."
+            : isInstantReconciliation
+              ? "Marked failed from verified provider evidence. A later alert recovery pass may retry it safely; this action did not resend email."
             : "Marked failed from verified provider evidence. This action did not resend email.",
     };
   }
@@ -124,7 +146,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
 }
 
 export default function OpsRoute() {
-  const { snapshot, outstandingBillingAttempts, outstandingDigestAttempts } = useLoaderData<typeof loader>();
+  const {
+    snapshot,
+    outstandingBillingAttempts,
+    outstandingDigestAttempts,
+    outstandingInstantAttempts,
+  } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
 
   return (
@@ -311,6 +338,80 @@ export default function OpsRoute() {
                 <ActionFeedback
                   data={actionData}
                   intent="reconcile-digest-email"
+                  match={{ attemptId: item.attemptId }}
+                />
+              </>
+            )}
+          />
+
+          <OpsSection
+            empty="No instant-alert emails are awaiting provider reconciliation."
+            items={outstandingInstantAttempts}
+            title="Instant-alert email provider reconciliation"
+            renderItem={(item) => (
+              <>
+                <p className="f9-app-kicker">{item.provider} · Instant alert</p>
+                <h3>Email to {item.recipient}</h3>
+                <p>
+                  Confirm whether Cloudflare accepted this alert. Recording evidence never resends it; only a confirmed rejection makes an automatic retry safe.
+                </p>
+                <p className="f9-muted-copy">
+                  Unknown since <LocalTime iso={item.updatedAt} />
+                </p>
+                <Form className="f9-app-stack" method="post">
+                  <input name="intent" type="hidden" value="reconcile-instant-email" />
+                  <input name="attemptId" type="hidden" value={item.attemptId} />
+                  <input name="expectedUpdatedAt" type="hidden" value={item.updatedAt} />
+                  <input name="reconciliationKey" type="hidden" value={item.reconciliationKey} />
+                  <label>
+                    Provider-confirmed outcome
+                    <select name="outcome" required>
+                      <option value="">Choose outcome</option>
+                      <option value="sent">Sent or delivered</option>
+                      <option value="failed">Not accepted or failed</option>
+                    </select>
+                  </label>
+                  <label>
+                    Evidence source
+                    <select name="classification" required>
+                      <option value="">Choose evidence source</option>
+                      <option value="cloudflare_email_log">Cloudflare Email log</option>
+                      <option value="controlled_inbox_receipt">Controlled inbox receipt</option>
+                      <option value="provider_rejection_log">Provider rejection log</option>
+                    </select>
+                  </label>
+                  <label>
+                    Provider evidence reference
+                    <input
+                      autoComplete="off"
+                      maxLength={160}
+                      name="evidenceReference"
+                      pattern="[A-Za-z0-9][A-Za-z0-9._:-]{5,159}"
+                      placeholder="provider_event_12345"
+                      required
+                    />
+                  </label>
+                  <label>
+                    Provider observed at (UTC ISO 8601)
+                    <input
+                      autoComplete="off"
+                      name="observedAt"
+                      placeholder="2026-07-15T18:01:00Z"
+                      required
+                    />
+                  </label>
+                  <SubmitButton
+                    className="f9-secondary-button"
+                    intent="reconcile-instant-email"
+                    match={{ attemptId: item.attemptId }}
+                    pendingLabel="Recording…"
+                  >
+                    Record provider evidence
+                  </SubmitButton>
+                </Form>
+                <ActionFeedback
+                  data={actionData}
+                  intent="reconcile-instant-email"
                   match={{ attemptId: item.attemptId }}
                 />
               </>

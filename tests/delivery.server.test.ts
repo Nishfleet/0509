@@ -1299,6 +1299,7 @@ describe("deliverWatchlistAlerts", () => {
   it("sends instant alerts for confirmed watch events that clear delivery policy", async () => {
     const sendMock = mockEmailSend("msg_instant_1");
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-instant-1");
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
     const upsertDeliveryTarget = vi.fn().mockResolvedValue({
       id: "email-target-1",
       userId: "user-1",
@@ -1344,6 +1345,7 @@ describe("deliverWatchlistAlerts", () => {
       legacyWorkspaceDeliveryDefaults: vi.fn(),
       listDeliveryTargets: vi.fn().mockResolvedValue([]),
       reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
+      updateDeliveryAttemptResult,
       upsertDeliveryTarget,
       upsertDigestDelivery: vi.fn(),
     }));
@@ -1419,8 +1421,29 @@ from:{email:"alerts@0509.io",name:"Five to Nine"},
         watchlistId: "watch-1",
         targetValue: "owner@example.com",
         eventIds: ["event-1"],
-        providerStatusLastSeenAt: expect.any(String),
-        sentAt: expect.any(String),
+        status: "pending",
+        webhookStatus: "pending",
+        providerStatusLastSeenAt: null,
+        sentAt: null,
+      }),
+    );
+    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      "attempt-instant-1",
+      expect.objectContaining({
+        status: "pending",
+        webhookStatus: "provider_unknown",
+        expectedWebhookStatus: "pending",
+      }),
+    );
+    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      "attempt-instant-1",
+      expect.objectContaining({
+        status: "sent",
+        expectedWebhookStatus: "provider_unknown",
       }),
     );
     // The referenced ad had no captured creative, so no image is embedded.
@@ -1594,6 +1617,7 @@ from:{email:"alerts@0509.io",name:"Five to Nine"},
       legacyWorkspaceDeliveryDefaults: vi.fn(),
       listDeliveryTargets: vi.fn().mockResolvedValue([]),
       reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
+      updateDeliveryAttemptResult: vi.fn().mockResolvedValue(true),
       upsertDeliveryTarget: vi.fn().mockResolvedValue({
         id: "email-target-1",
         userId: "user-1",
@@ -1774,6 +1798,7 @@ from:{email:"alerts@0509.io",name:"Five to Nine"},
       legacyWorkspaceDeliveryDefaults: vi.fn(),
       listDeliveryTargets: vi.fn().mockResolvedValue([]),
       reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
+      updateDeliveryAttemptResult: vi.fn().mockResolvedValue(true),
       upsertDeliveryTarget,
       upsertDigestDelivery: vi.fn(),
     }));
@@ -1850,7 +1875,8 @@ from:{email:"alerts@0509.io",name:"Five to Nine"},
     expect(createDeliveryAttempt).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        status: "sent",
+        status: "pending",
+        webhookStatus: "pending",
         idempotencyKey: expect.stringMatching(/:send$/),
       }),
     );
