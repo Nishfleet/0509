@@ -671,19 +671,15 @@ export async function action({ context, request }: ActionFunctionArgs) {
 		lifecycleUserId: string,
 		build: (profile: { email: string; name: string | null }) => BillingLifecycleEmailOutboxInput,
 	) {
-		try {
-			const profile = await getUserDeliveryProfile(env, lifecycleUserId);
-			if (!profile?.email) {
-				return undefined;
-			}
-			const delivery = await import("~/lib/delivery.server");
-			return await delivery.prepareBillingLifecycleEmailOutbox(
-				env,
-				build({ email: profile.email, name: profile.name }),
-			);
-		} catch {
+		const profile = await getUserDeliveryProfile(env, lifecycleUserId);
+		if (!profile?.email) {
 			return undefined;
 		}
+		const delivery = await import("~/lib/delivery.server");
+		return await delivery.prepareBillingLifecycleEmailOutbox(
+			env,
+			build({ email: profile.email, name: profile.name }),
+		);
 	}
 
 	async function sendBillingLifecycleEmailSafely(

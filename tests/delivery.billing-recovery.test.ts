@@ -658,6 +658,46 @@ status: "sent",
 }),
 );
 });
+it("reconciles a failed/provider_unknown attempt with provider evidence using its exact status", async () => {
+const failedUnknownAttempt = {
+id: "attempt-failed-unknown",
+provider: "cloudflare_email",
+status: "failed",
+webhookStatus: "provider_unknown",
+providerMessageId: null,
+providerStatusLastSeenAt: "2026-07-13T09:04:00.000Z",
+updatedAt: "2026-07-13T09:04:00.000Z",
+payloadSnapshot: billingPayload("billing_refund_revoked", {}),
+};
+const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+mockBillingDataServer({
+getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(failedUnknownAttempt),
+updateDeliveryAttemptResult,
+});
+const { reconcileBillingLifecycleEmailDelivery } = await import("~/lib/delivery.server");
+await expect(
+reconcileBillingLifecycleEmailDelivery(emailEnv as never, {
+idempotencyKey: "billing-refund:user-1:evt-failed-unknown",
+outcome: "sent",
+evidence: {
+reference: "controlled-inbox-failed-unknown",
+classification: "controlled_inbox_receipt",
+observedAt: "2026-07-13T09:05:00.000Z",
+},
+}),
+).resolves.toBe(true);
+expect(updateDeliveryAttemptResult).toHaveBeenCalledWith(
+expect.anything(),
+failedUnknownAttempt.id,
+expect.objectContaining({
+expectedStatus: "failed",
+expectedWebhookStatus: "provider_unknown",
+expectedUpdatedAt: failedUnknownAttempt.updatedAt,
+status: "sent",
+webhookStatus: "delivered",
+}),
+);
+});
 it("allows only the first of two conflicting billing reconciliations to win", async () => {
 let durableStatus = "pending";
 const pendingAttempt = {

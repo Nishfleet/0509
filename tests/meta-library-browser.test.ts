@@ -474,6 +474,62 @@ describe("searchMetaLibraryByBrowser", () => {
 		]);
 	});
 
+  it("selects the smallest nested rendered card boundary for each ad anchor", async () => {
+    const { parseRenderedMetaLibraryHtml } = await import(
+      "~/lib/meta-library-rendered-card-parser.server"
+    );
+
+    const result = parseRenderedMetaLibraryHtml(`
+      <main>
+        <article role="article">
+          <div><span><a href="/ads/library/?id=5555555555">First details</a></span>
+          <p>First nested creative</p></div>
+        </article>
+        <article data-ad-preview="true">
+          <div><a href="/ads/library/?id=6666666666">Second details</a>
+          <p>Second nested creative</p></div>
+        </article>
+      </main>
+    `);
+
+    expect(result.cards).toHaveLength(2);
+    expect(result.cards[0]).toMatchObject({
+      libraryId: "5555555555",
+      body: expect.stringContaining("First nested creative"),
+    });
+    expect(result.cards[0].body).not.toContain("Second nested creative");
+    expect(result.cards[1]).toMatchObject({
+      libraryId: "6666666666",
+      body: expect.stringContaining("Second nested creative"),
+    });
+  });
+
+  it("falls back to adjacent anchor blocks when rendered markup is unclosed", async () => {
+    const { parseRenderedMetaLibraryHtml } = await import(
+      "~/lib/meta-library-rendered-card-parser.server"
+    );
+
+    const result = parseRenderedMetaLibraryHtml(`
+      <div data-ad-preview="true"><section>
+        <a href="/ads/library/?id=7777777777">First details</a>
+        <strong>First malformed creative</strong>
+      <div data-ad-preview="true"><section>
+        <a href="/ads/library/?id=8888888888">Second details</a>
+        <strong>Second malformed creative</strong>
+    `);
+
+    expect(result.cards).toHaveLength(2);
+    expect(result.cards[0]).toMatchObject({
+      libraryId: "7777777777",
+      body: expect.stringContaining("First malformed creative"),
+    });
+    expect(result.cards[0].body).not.toContain("Second malformed creative");
+    expect(result.cards[1]).toMatchObject({
+      libraryId: "8888888888",
+      body: expect.stringContaining("Second malformed creative"),
+    });
+  });
+
   it("classifies Browserless fetch aborts as timeouts", async () => {
     mockFetchWithDns(
       vi.fn(async () => {

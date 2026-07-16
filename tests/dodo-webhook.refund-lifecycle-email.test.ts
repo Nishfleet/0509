@@ -30,12 +30,10 @@ describe("customer lifecycle billing emails", () => {
 					.mockResolvedValue({ id: "user-refund", email: "refunded@example.com", emailVerified: true, name: null }),
 			},
 		});
-		delivery.prepareBillingLifecycleEmailOutbox.mockRejectedValueOnce(new Error("outbox unavailable"));
-
 		const response = await deliverDodoWebhook("evt-refund-email", { type: "refund.succeeded" });
 
 		expect(await response.json()).toMatchObject({ ok: true, refunded: true });
-		expect(data.applyDodoRefundWithWatchlistReconcile.mock.calls[0]?.at(-1)).toEqual({ lifecycleEmailOutbox: undefined });
+		expectOutbox(data.applyDodoRefundWithWatchlistReconcile);
 		data.getUserPlanBillingInfo.mockResolvedValue({
 			plan: "free", dodoStatus: "refunded", dodoPaymentId: "pay-refund-b",
 			planUpdatedAt: "2026-07-10T00:00:00.000Z",
@@ -48,7 +46,6 @@ describe("customer lifecycle billing emails", () => {
 		data.getUserDeliveryProfile.mockResolvedValue(unverified);
 		await deliverDodoWebhook("evt-u-refund", { type: "refund.succeeded" });
 		expect(delivery.sendBillingRefundEmail).toHaveBeenCalledTimes(1);
-		expectOutbox(data.applyDodoRefundWithWatchlistReconcile);
 		expect(delivery.sendBillingRefundEmail).toHaveBeenCalledWith(
 			expect.anything(),
 			{
@@ -61,6 +58,32 @@ describe("customer lifecycle billing emails", () => {
 				retryWebhookOnExplicitFailure: true,
 			},
 		);
+	});
+
+	it("keeps the refund webhook retryable when durable email outbox preparation fails", async () => {
+		const { data, delivery } = mockWebhookDependencies({
+			billing: {
+				extractDodoRefund: vi.fn(() => ({
+					eventType: "refund.succeeded",
+					paymentId: "pay-outbox-failure",
+					refundId: "ref-outbox-failure",
+					refundedAt: "2026-07-05T00:00:00.000Z",
+					metadata: {},
+				})),
+			},
+			data: {
+				getUserIdForDodoPayment: vi.fn().mockResolvedValue("user-refund"),
+			},
+		});
+		const failure = new Error("outbox unavailable");
+		delivery.prepareBillingLifecycleEmailOutbox.mockRejectedValueOnce(failure);
+
+		await expect(
+			deliverDodoWebhook("evt-refund-outbox-failure", { type: "refund.succeeded" }),
+		).rejects.toBe(failure);
+
+		expect(data.applyDodoRefundWithWatchlistReconcile).not.toHaveBeenCalled();
+		expect(delivery.sendBillingRefundEmail).not.toHaveBeenCalled();
 	});
 
 	it("sends no refund email when the payment matches no user", async () => {

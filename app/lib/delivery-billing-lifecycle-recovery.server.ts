@@ -279,10 +279,14 @@ export async function reconcileBillingLifecycleEmailDelivery(
 		env,
 		input.idempotencyKey,
 	);
+	const hasReconcilableUnknownOutcome =
+		attempt?.webhookStatus === "provider_unknown" &&
+		(attempt.status === "pending" ||
+			(attempt.status === "failed" &&
+				Boolean(attempt.providerStatusLastSeenAt)));
 	if (
 		!attempt ||
-		attempt.status !== "pending" ||
-		attempt.webhookStatus !== "provider_unknown"
+		!hasReconcilableUnknownOutcome
 	) {
 		return false;
 	}
@@ -308,7 +312,7 @@ export async function reconcileBillingLifecycleEmailDelivery(
 				outcome: input.outcome,
 			},
 		},
-		expectedStatus: "pending",
+		expectedStatus: attempt.status,
 		expectedWebhookStatus: "provider_unknown",
 		expectedUpdatedAt: attempt.updatedAt,
 	});

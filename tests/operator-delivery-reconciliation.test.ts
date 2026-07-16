@@ -121,6 +121,58 @@ describe("operator billing email reconciliation", () => {
     });
   });
 
+  it.each([
+    ["sent", "controlled_inbox_receipt", "inbox_receipt_failed_unknown", "sent", "delivered"],
+    ["failed", "provider_rejection_log", "provider_reject_failed_unknown", "failed", "failed"],
+  ] as const)(
+    "reconciles a listed failed/provider_unknown attempt as %s",
+    async (outcome, classification, evidenceReference, expectedStatus, expectedWebhookStatus) => {
+      const harness = setup();
+      harness.sqlite
+        .prepare(
+          `
+            UPDATE delivery_attempt
+            SET status = 'failed',
+                provider_status_last_seen_at = '2026-07-15T18:00:30.000Z'
+            WHERE id = 'attempt-1'
+          `,
+        )
+        .run();
+
+      await expect(
+        reconcileBillingEmailAttemptWithAudit(
+          { DB: harness.db } as never,
+          input({ outcome, classification, evidenceReference }),
+        ),
+      ).resolves.toMatchObject({ ok: true, replayed: false, outcome });
+
+      expect(
+        harness.sqlite
+          .prepare(
+            `
+              SELECT status, webhook_status, payload_snapshot_json
+              FROM delivery_attempt
+              WHERE id = 'attempt-1'
+            `,
+          )
+          .get(),
+      ).toMatchObject({
+        status: expectedStatus,
+        webhook_status: expectedWebhookStatus,
+      });
+      const payload = harness.sqlite
+        .prepare("SELECT payload_snapshot_json FROM delivery_attempt WHERE id = 'attempt-1'")
+        .get() as { payload_snapshot_json: string };
+      expect(JSON.parse(payload.payload_snapshot_json)).toMatchObject({
+        billingLifecycleProviderEvidence: {
+          reference: evidenceReference,
+          classification,
+          outcome,
+        },
+      });
+    },
+  );
+
   it("replays the exact operator request without mutating the attempt twice", async () => {
     const harness = setup();
     const first = await reconcileBillingEmailAttemptWithAudit({ DB: harness.db } as never, input());

@@ -200,7 +200,6 @@ export default function TeamRoute() {
           </Form>
         ) : null}
 
-				<ActionFeedback data={actionData} intent="revoke" />
         {data.members.length > 0 ? (
           <div className="f9-work-list is-compact">
             {data.members.map((member) => {
@@ -230,6 +229,11 @@ export default function TeamRoute() {
 									<ActionFeedback
 										data={actionData}
 										intent="resend-invite"
+										match={{ memberId: member.id }}
+									/>
+									<ActionFeedback
+										data={actionData}
+										intent="revoke"
 										match={{ memberId: member.id }}
 									/>
                   <div className="f9-action-row">
