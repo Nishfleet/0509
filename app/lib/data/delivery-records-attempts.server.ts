@@ -144,8 +144,8 @@ export async function getDeliveryAttemptByIdempotencyKey(
 
 export interface InstantDeliveryAttemptClaimInput {
   userId: string;
-  watchlistId: string;
-  deliveryTargetId: string;
+  watchlistId: string | null;
+  deliveryTargetId: string | null;
   lane: DeliveryLane;
   channel: DeliveryChannel;
   provider: string;
@@ -171,6 +171,7 @@ export async function claimInstantDeliveryAttempt(
   duplicate: DeliveryAttemptRecord | null;
   reclaimed: boolean;
 }> {
+  const targetValue = normalizeAttemptTargetValue(input.channel, input.targetValue);
   const existing = await getDeliveryAttemptByIdempotencyKey(
     env,
     input.idempotencyKey,
@@ -212,7 +213,7 @@ export async function claimInstantDeliveryAttempt(
       sentAt: null,
       failedAt: null,
       payloadSnapshot: input.payloadSnapshot,
-      targetValue: input.targetValue,
+      targetValue,
       updatedAt: claimUpdatedAt,
       expectedStatus,
       expectedWebhookStatus,
@@ -251,7 +252,7 @@ export async function claimInstantDeliveryAttempt(
       provider: input.provider,
       status: quietHours ? "skipped_due_to_quiet_hours" : "pending",
       webhookStatus: quietHours ? "provider_unknown" : "pending",
-      targetValue: input.targetValue,
+      targetValue,
       providerMessageId: null,
       providerStatusLastSeenAt: null,
       templateName: input.templateName ?? null,
@@ -309,6 +310,25 @@ export async function markInstantDeliveryDispatchStarted(
         AND status = 'pending'
         AND webhook_status = 'pending'
         AND updated_at = ?
+        AND (
+          lane <> 'customer'
+          OR channel <> 'email'
+          OR EXISTS (
+            SELECT 1
+            FROM delivery_target AS target
+            JOIN user AS account ON account.id = target.user_id
+            WHERE target.id = delivery_attempt.delivery_target_id
+              AND target.user_id = delivery_attempt.user_id
+              AND target.channel = 'email'
+              AND target.is_opted_in = 1
+              AND target.is_paused = 0
+              AND target.opted_out_at IS NULL
+              AND target.is_validated = 1
+              AND target.validation_status = 'validated'
+              AND account.emailVerified = 1
+              AND lower(trim(account.email)) = lower(trim(target.target_value))
+          )
+        )
     `,
     dispatchStartedAt,
     attemptId,
@@ -414,6 +434,7 @@ export async function createDeliveryAttempt(
 ) {
   const id = createId();
   const timestamp = input.timestamp ?? nowIso();
+  const targetValue = normalizeAttemptTargetValue(input.channel, input.targetValue);
   await run(
     env,
     `
@@ -453,7 +474,7 @@ export async function createDeliveryAttempt(
     input.provider,
     input.status,
     input.webhookStatus,
-    input.targetValue,
+    targetValue,
     input.providerMessageId ?? null,
     input.providerStatusLastSeenAt ?? null,
     input.templateName ?? null,
@@ -468,6 +489,10 @@ export async function createDeliveryAttempt(
   );
 
   return id;
+}
+
+function normalizeAttemptTargetValue(channel: DeliveryChannel, value: string) {
+  return channel === "email" ? value.trim().toLowerCase() : value;
 }
 
 /**

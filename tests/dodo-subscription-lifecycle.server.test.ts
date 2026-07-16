@@ -165,7 +165,7 @@ describe("Dodo subscription lifecycle", () => {
     });
   });
 
-  it("extracts a full refund and ignores partial refunds and foreign brands", () => {
+  it("extracts full and partial succeeded refunds while rejecting non-terminal or foreign events", () => {
     const refundEnvelope = (overrides: Record<string, unknown> = {}) => ({
       type: "refund.succeeded",
       data: {
@@ -183,9 +183,17 @@ describe("Dodo subscription lifecycle", () => {
       eventType: "refund.succeeded",
       paymentId: "pay_1",
       refundId: "ref_1",
+      refundType: "full",
       refundedAt: "2026-07-05T00:00:00.000Z",
     });
-    expect(extractDodoRefund(lifecycleEnv, refundEnvelope({ is_partial: true }))).toBeNull();
+    expect(extractDodoRefund(lifecycleEnv, refundEnvelope({ is_partial: true }))).toMatchObject({
+      paymentId: "pay_1",
+      refundType: "partial",
+    });
+    expect(extractDodoRefund(lifecycleEnv, refundEnvelope({ is_partial: undefined }))).toBeNull();
+    expect(extractDodoRefund(lifecycleEnv, refundEnvelope({ is_partial: "false" }))).toBeNull();
+    expect(extractDodoRefund(lifecycleEnv, refundEnvelope({ status: "pending" }))).toBeNull();
+    expect(extractDodoRefund(lifecycleEnv, refundEnvelope({ status: "failed" }))).toBeNull();
     expect(extractDodoRefund(lifecycleEnv, refundEnvelope({ brand_id: "brand_other" }))).toBeNull();
     expect(extractDodoRefund(lifecycleEnv, { type: "refund.failed", data: {} })).toBeNull();
   });
@@ -340,6 +348,25 @@ describe("extractDodoSubscriptionGrant", () => {
     });
   });
 
+  it.each([
+    [false, false],
+    [null, null],
+    ["missing", null],
+  ])("preserves an explicit, null, or missing cancellation flag (%s)", (value, expected) => {
+    const overrides = value === "missing" ? { cancel_at_next_billing_date: undefined } : {
+      cancel_at_next_billing_date: value,
+    };
+    expect(
+      extractDodoSubscriptionGrant(
+        env,
+        subscriptionPayload("subscription.updated", overrides),
+      ),
+    ).toMatchObject({
+      eventType: "subscription.updated",
+      cancellationScheduled: expected,
+    });
+  });
+
 	  it("does not use previous billing date or subscription creation as the plan-changed event timestamp", () => {
 	    const grant = extractDodoSubscriptionGrant(
 	      env,
@@ -466,5 +493,21 @@ describe("extractDodoSubscriptionGrant", () => {
         subscriptionPayload("subscription.renewed", { brand_id: "brand_other" }),
       ),
     ).toBeNull();
+  });
+
+  it("routes an immediate subscription.updated cancellation to revocation", () => {
+    const payload = subscriptionPayload("subscription.updated", {
+      status: "cancelled",
+      cancel_at_next_billing_date: false,
+      cancelled_at: "2026-07-14T08:00:00.000Z",
+    });
+
+    expect(extractDodoSubscriptionGrant(env, payload)).toBeNull();
+    expect(extractDodoPlanRevocation(env, payload)).toMatchObject({
+      eventType: "subscription.updated",
+      action: "revoke",
+      subscriptionId: "sub_123",
+      revokedAt: "2026-07-14T08:00:00.000Z",
+    });
   });
 });

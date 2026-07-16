@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   claimInstantDeliveryAttempt,
   markInstantDeliveryDispatchStarted,
+  suppressEmailTargetsForUserAndAddress,
   updateDeliveryAttemptResult,
 } from "~/lib/data.server";
 import {
@@ -24,6 +25,31 @@ describe("delivery attempt retry claim (sqlite)", () => {
     const harness = createSqliteD1();
     fixtures.push(harness);
     harness.sqlite.exec(`
+      CREATE TABLE user (
+        id TEXT PRIMARY KEY NOT NULL,
+        email TEXT NOT NULL,
+        emailVerified INTEGER NOT NULL
+      );
+      INSERT INTO user (id, email, emailVerified)
+      VALUES ('user-1', 'owner@example.com', 1);
+      CREATE TABLE delivery_target (
+        id TEXT PRIMARY KEY NOT NULL,
+        user_id TEXT NOT NULL,
+        channel TEXT NOT NULL,
+        target_value TEXT NOT NULL,
+        validation_status TEXT NOT NULL,
+        is_validated INTEGER NOT NULL,
+        is_opted_in INTEGER NOT NULL,
+        is_paused INTEGER NOT NULL,
+        opted_out_at TEXT
+      );
+      INSERT INTO delivery_target (
+        id, user_id, channel, target_value, validation_status,
+        is_validated, is_opted_in, is_paused, opted_out_at
+      ) VALUES (
+        'target-1', 'user-1', 'email', 'owner@example.com',
+        'validated', 1, 1, 0, NULL
+      );
       CREATE TABLE delivery_attempt (
         id TEXT PRIMARY KEY NOT NULL,
         user_id TEXT NOT NULL,
@@ -83,6 +109,31 @@ describe("delivery attempt retry claim (sqlite)", () => {
     const harness = createSqliteD1();
     fixtures.push(harness);
     harness.sqlite.exec(`
+      CREATE TABLE user (
+        id TEXT PRIMARY KEY NOT NULL,
+        email TEXT NOT NULL,
+        emailVerified INTEGER NOT NULL
+      );
+      INSERT INTO user (id, email, emailVerified)
+      VALUES ('user-1', 'owner@example.com', 1);
+      CREATE TABLE delivery_target (
+        id TEXT PRIMARY KEY NOT NULL,
+        user_id TEXT NOT NULL,
+        channel TEXT NOT NULL,
+        target_value TEXT NOT NULL,
+        validation_status TEXT NOT NULL,
+        is_validated INTEGER NOT NULL,
+        is_opted_in INTEGER NOT NULL,
+        is_paused INTEGER NOT NULL,
+        opted_out_at TEXT
+      );
+      INSERT INTO delivery_target (
+        id, user_id, channel, target_value, validation_status,
+        is_validated, is_opted_in, is_paused, opted_out_at
+      ) VALUES (
+        'target-1', 'user-1', 'email', 'owner@example.com',
+        'validated', 1, 1, 0, NULL
+      );
       CREATE TABLE delivery_attempt (
         id TEXT PRIMARY KEY NOT NULL,
         user_id TEXT NOT NULL,
@@ -139,6 +190,121 @@ describe("delivery attempt retry claim (sqlite)", () => {
     const retry = await claimInstantDeliveryAttempt(env, input);
     expect(retry.attemptId).toBeNull();
     expect(retry.duplicate?.webhookStatus).toBe("provider_unknown");
+  });
+
+  it("makes unsubscribe win before dispatch while preserving dispatch-first provider_unknown", async () => {
+    const makeHarness = () => {
+      const harness = createSqliteD1();
+      harness.sqlite.exec(`
+        CREATE TABLE user (
+          id TEXT PRIMARY KEY NOT NULL,
+          email TEXT NOT NULL,
+          emailVerified INTEGER NOT NULL
+        );
+        INSERT INTO user (id, email, emailVerified)
+        VALUES ('user-1', 'owner@example.com', 1);
+        CREATE TABLE delivery_target (
+          id TEXT PRIMARY KEY NOT NULL,
+          user_id TEXT NOT NULL,
+          channel TEXT NOT NULL,
+          target_value TEXT NOT NULL,
+          opt_in_source TEXT,
+          validation_status TEXT NOT NULL,
+          is_validated INTEGER NOT NULL,
+          is_opted_in INTEGER NOT NULL,
+          is_paused INTEGER NOT NULL,
+          paused_at TEXT,
+          opted_out_at TEXT,
+          updated_at TEXT NOT NULL,
+          metadata_json TEXT
+        );
+        INSERT INTO delivery_target (
+          id, user_id, channel, target_value, opt_in_source, validation_status,
+          is_validated, is_opted_in, is_paused, paused_at, opted_out_at, updated_at, metadata_json
+        ) VALUES (
+          'target-1', 'user-1', 'email', 'Owner@Example.com', 'account_email',
+          'validated', 1, 1, 0, NULL, NULL, '2026-07-15T00:00:00.000Z', '{}'
+        );
+        CREATE TABLE delivery_attempt (
+          id TEXT PRIMARY KEY NOT NULL,
+          user_id TEXT NOT NULL,
+          watchlist_id TEXT,
+          digest_run_id TEXT,
+          delivery_target_id TEXT,
+          lane TEXT NOT NULL,
+          channel TEXT NOT NULL,
+          provider TEXT NOT NULL,
+          status TEXT NOT NULL,
+          webhook_status TEXT NOT NULL,
+          target_value TEXT NOT NULL,
+          provider_message_id TEXT,
+          provider_status_last_seen_at TEXT,
+          template_name TEXT,
+          event_ids_json TEXT NOT NULL DEFAULT '[]',
+          payload_snapshot_json TEXT NOT NULL DEFAULT '{}',
+          idempotency_key TEXT UNIQUE,
+          error_message TEXT,
+          sent_at TEXT,
+          failed_at TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+      `);
+      fixtures.push(harness);
+      return harness;
+    };
+    const input = (key: string) => ({
+      userId: "user-1",
+      watchlistId: "watch-1",
+      deliveryTargetId: "target-1",
+      lane: "customer" as const,
+      channel: "email" as const,
+      provider: "cloudflare_email",
+      targetValue: " Owner@Example.com ",
+      eventIds: ["event-1"],
+      payloadSnapshot: { kind: "instant_alert" },
+      idempotencyKey: key,
+    });
+
+    const unsubscribeWins = makeHarness();
+    const firstClaim = await claimInstantDeliveryAttempt(
+      { DB: unsubscribeWins.db } as never,
+      input("race-unsubscribe-wins"),
+    );
+    await suppressEmailTargetsForUserAndAddress(
+      { DB: unsubscribeWins.db } as never,
+      { userId: "user-1", targetValue: " owner@example.com " },
+    );
+    await expect(
+      markInstantDeliveryDispatchStarted(
+        { DB: unsubscribeWins.db } as never,
+        firstClaim.attemptId!,
+        firstClaim.claimUpdatedAt!,
+      ),
+    ).resolves.toBeNull();
+    expect(unsubscribeWins.sqlite.prepare(
+      "SELECT status, webhook_status, target_value FROM delivery_attempt",
+    ).get()).toMatchObject({ status: "failed", webhook_status: "failed", target_value: "owner@example.com" });
+
+    const dispatchWins = makeHarness();
+    const secondClaim = await claimInstantDeliveryAttempt(
+      { DB: dispatchWins.db } as never,
+      input("race-dispatch-wins"),
+    );
+    await expect(
+      markInstantDeliveryDispatchStarted(
+        { DB: dispatchWins.db } as never,
+        secondClaim.attemptId!,
+        secondClaim.claimUpdatedAt!,
+      ),
+    ).resolves.toEqual(expect.any(String));
+    await suppressEmailTargetsForUserAndAddress(
+      { DB: dispatchWins.db } as never,
+      { userId: "user-1", targetValue: "owner@example.com" },
+    );
+    expect(dispatchWins.sqlite.prepare(
+      "SELECT status, webhook_status FROM delivery_attempt",
+    ).get()).toMatchObject({ status: "pending", webhook_status: "provider_unknown" });
   });
 
   it("claims one failed retry, reclaims stale pending, and skips active pending", async () => {

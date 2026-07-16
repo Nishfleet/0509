@@ -4,7 +4,7 @@ import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 
 const description =
-  "Five to Nine changelog for delivery, billing, and public trust updates.";
+  "Customer-facing updates for Five to Nine, with clear product and availability boundaries.";
 
 export const links: LinksFunction = () => canonicalLinks("/changelog");
 
@@ -20,21 +20,22 @@ export default function ChangelogRoute() {
     <PublicDocShell
       kicker="Changelog"
       title="What changed in Five to Nine."
-      intro="Only shipped or explicitly gated changes are listed here. Roadmap claims stay out until they are verified."
+      intro="A short record of customer-visible changes. We keep planned work and unverified provider actions out until they are proven."
     >
       <PublicDocBlock title="2026-06-15">
         <ul className="f9-doc-list">
-          <li>Made `0509.io` the primary production domain and kept `.in` as redirect compatibility only.</li>
-          <li>Corrected email delivery documentation to match the live provider.</li>
+          <li>Updated public links and account-facing pages to use 0509.io.</li>
+          <li>Clarified notification guidance so it describes what customers can confirm today.</li>
           <li>Added public help, docs, API docs, status, changelog, and trust surfaces.</li>
-          <li>Kept WhatsApp unavailable for customers until account-level delivery is enabled.</li>
+          <li>WhatsApp notifications are not available yet; we will update this page only after customer delivery is verified.</li>
         </ul>
       </PublicDocBlock>
 
       <PublicDocBlock title="2026-06-13">
         <ul className="f9-doc-list">
-          <li>Hardened billing verification so signed plan and record-pack grants clean up after checks.</li>
-          <li>Kept Slack delivery claims limited until real customer delivery could be verified.</li>
+          <li>Billing checks now keep account access tied to confirmed payment information.</li>
+          <li>Some billing actions still require account-level confirmation before they can be described as available to everyone.</li>
+          <li>Slack notifications are not generally available yet; we will update this page after customer delivery is verified.</li>
         </ul>
       </PublicDocBlock>
     </PublicDocShell>

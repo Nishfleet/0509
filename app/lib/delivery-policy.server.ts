@@ -8,6 +8,7 @@ import type {
   WorkspaceDeliveryConfigRecord,
   DeliveryLane,
 } from "~/lib/types";
+import { safeTimeZone } from "~/lib/safe-timezone";
 
 const INSTANT_THRESHOLDS: Record<NormalizedSensitivityMode, number> = {
   quiet: 90,
@@ -254,7 +255,7 @@ function getLocalHour(timestamp: string, timezone: string | null) {
   const formatter = new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     hour12: false,
-    timeZone: timezone ?? "UTC",
+    timeZone: safeTimeZone(timezone),
   });
   return Number.parseInt(formatter.format(new Date(timestamp)), 10);
 }

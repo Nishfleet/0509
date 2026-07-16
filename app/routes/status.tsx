@@ -6,7 +6,7 @@ import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 
 const description =
-  "Current service status and launch posture for Five to Nine search, accounts, billing, and delivery.";
+  "Configuration and scope information for Five to Nine; this page is not a live provider-health monitor.";
 
 export const links: LinksFunction = () => canonicalLinks("/status");
 
@@ -37,51 +37,51 @@ export default function StatusRoute() {
     <PublicDocShell
       kicker="Status"
       title="Five to Nine service status."
-      intro="A plain view of what is available today, what is intentionally limited, and what customers can rely on now."
+      intro="This page provides configuration and scope information, not a live provider-health monitor. It does not measure live search, email, billing, or provider availability."
     >
       <PublicDocBlock title="Core surfaces">
         <dl className="proof-trail-list">
           <div>
             <dt>Public search</dt>
-            <dd>Available for checking competitor ads from a website.</dd>
+            <dd>Search is in product scope; this page does not measure live search availability.</dd>
           </div>
           <div>
             <dt>Accounts</dt>
-            <dd>Secure email-link sign-in for saved competitors, collections, digests, and reports.</dd>
+            <dd>Secure email-link sign-in is in product scope; this page does not measure live auth-provider availability.</dd>
           </div>
           <div>
             <dt>Billing</dt>
-            <dd>Checkout, receipts, invoices, and billing support are available for paid plans.</dd>
+            <dd>Checkout and billing are in product scope; this page does not measure live billing-provider availability.</dd>
           </div>
           <div>
             <dt>Email delivery</dt>
-            <dd>Digest and alert emails are available for eligible accounts.</dd>
+            <dd>Email delivery is in product scope; this page does not measure live email-provider availability.</dd>
           </div>
         </dl>
       </PublicDocBlock>
 
-      <PublicDocBlock title="Commercial availability">
+      <PublicDocBlock title="Commercial configuration">
         <dl className="proof-trail-list">
           <div>
             <dt>Scout</dt>
-            <dd>{data.commercialLaunch?.scoutSaleOpen ? "Available for checkout" : "Held — billing configuration"}</dd>
+            <dd>{data.commercialLaunch?.scoutSaleOpen ? "Configured for checkout (not live-checked)" : "Held — billing configuration"}</dd>
           </div>
           <div>
             <dt>Starter</dt>
-            <dd>{data.commercialLaunch?.starterSaleOpen ? "Available for checkout" : "Held — billing configuration"}</dd>
+            <dd>{data.commercialLaunch?.starterSaleOpen ? "Configured for checkout (not live-checked)" : "Held — billing configuration"}</dd>
           </div>
           <div>
             <dt>Agency</dt>
-            <dd>{data.commercialLaunch?.agencySaleOpen ? "Available for checkout" : "Available by account review"}</dd>
+            <dd>{data.commercialLaunch?.agencySaleOpen ? "Configured for account review (not live-checked)" : "Held — account configuration"}</dd>
           </div>
         </dl>
       </PublicDocBlock>
 
       <PublicDocBlock title="Limited today">
         <ul className="f9-doc-list">
-          <li>Email delivery is available for eligible accounts; delivery issues can be reviewed through support.</li>
-          <li>Dodo-backed plan switching is configured for linked paid subscriptions; support can help with changes when needed.</li>
-          <li>Recurring uptime checks are configured and reviewed by the operator.</li>
+          <li>Email delivery configuration and eligible-account scope can be reviewed through support; delivery is not measured here.</li>
+          <li>Dodo-backed plan switching is configured for linked paid subscriptions; this page does not report live billing-provider health.</li>
+          <li>Recurring uptime checks are configured and reviewed by the operator; this public page is not a live uptime monitor.</li>
           <li>Cancellation, deletion, and sensitive account changes still use the hosted portal or support path.</li>
         </ul>
       </PublicDocBlock>

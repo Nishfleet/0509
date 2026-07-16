@@ -48,13 +48,25 @@ export interface RootLoaderData {
 }
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
-  const { getCachedOptionalSession } = await import("~/lib/auth.server");
+  const {
+    authSessionUnavailableResponse,
+    getCachedOptionalSession,
+    isAuthSessionUnavailableError,
+  } = await import("~/lib/auth.server");
   const cloudflare = context.cloudflare as {
     country?: string | null;
     env: AppEnv;
   };
   const env = cloudflare.env;
-  const session = await getCachedOptionalSession(env, request);
+  let session: AppSession | null;
+  try {
+    session = await getCachedOptionalSession(env, request);
+  } catch (error) {
+    if (isAuthSessionUnavailableError(error)) {
+      throw authSessionUnavailableResponse();
+    }
+    throw error;
+  }
   const hasAuthCookie = hasSiteRepAuthCookie(request);
   const countryCode = cloudflare.country ?? request.headers.get("cf-ipcountry");
 
@@ -226,18 +238,30 @@ export function ErrorBoundary({ error }: { error: unknown }) {
   let stack: string | undefined;
 
   if (isRouteErrorResponse(error)) {
-    message = error.status === 404 ? "404" : "Error";
+    const authUnavailable =
+      error.status === 503 && error.statusText === "Authentication temporarily unavailable";
+    message = error.status === 404 ? "404" : error.status === 503 ? "Temporarily unavailable" : "Error";
     details =
       error.status === 404
         ? "The requested page could not be found."
-        : error.statusText || details;
+        : authUnavailable
+          ? "Authentication is temporarily unavailable. Please try again in a moment."
+          : error.status === 503
+            ? "This part of Five to Nine is temporarily unavailable. Please try again in a moment."
+            : error.statusText || details;
   } else if (import.meta.env.DEV && error && error instanceof Error) {
     details = error.message;
     stack = error.stack;
   }
 
   return (
-    <main className="f9-error-page">
+    <main
+      aria-live="assertive"
+      autoFocus
+      className="f9-error-page"
+      role="alert"
+      tabIndex={-1}
+    >
       <div className="f9-container f9-error-layout">
         <section className="f9-error-card">
           <span className="f9-app-kicker">Five to Nine</span>

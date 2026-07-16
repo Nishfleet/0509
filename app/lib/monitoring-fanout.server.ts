@@ -4,8 +4,13 @@ import { logAppEvent } from "~/lib/log.server";
 import { getWatchlist } from "~/lib/data.server";
 import { getScheduledMonitoringPolicy } from "~/lib/plan-entitlements";
 import type { WatchlistRecord, WatchlistRunRecord } from "~/lib/types";
+import type {
+  FirstWatchlistScanRunDescriptor,
+  FirstWatchlistScanWorkflowParams,
+} from "~/lib/monitoring.server";
 
-export interface MonitoringWorkflowParams {
+export interface ScheduledMonitoringWorkflowParams {
+  kind: "scheduled_scan";
   watchlistId: string;
   triggerType: WatchlistRunRecord["triggerType"];
   executionKey: string;
@@ -16,6 +21,10 @@ export interface MonitoringWorkflowParams {
   scheduledSlot: string;
   cron?: string | null;
 }
+
+export type MonitoringWorkflowParams =
+  | ScheduledMonitoringWorkflowParams
+  | FirstWatchlistScanWorkflowParams;
 
 export const MONITORING_WORKFLOW_ID_PREFIX = "monitor-v1-";
 export const MONITORING_WORKFLOW_ID_PATTERN = /^[a-zA-Z0-9_][a-zA-Z0-9-_]*$/;
@@ -528,6 +537,23 @@ interface OrchestratedRunRow {
   created_at: string | null;
 }
 
+interface FirstScanReconciliationRow extends OrchestratedRunRow {
+  error_code: string | null;
+  retry_after: string | null;
+}
+
+const RETRYABLE_FIRST_SCAN_ERROR_CODES = new Set([
+  "browser_launch_failed",
+  "concurrency_limited",
+  "dispatch_rate_limited",
+  "first_scan_dispatch_failed",
+  "first_scan_setup_failed",
+  "rate_limited",
+  "retryable_scan_failure",
+  "workflow_binding_missing",
+]);
+export const FIRST_SCAN_MAX_ATTEMPTS = 4;
+
 export async function ensureOrchestratedWatchlistRun(
   env: AppEnv,
   input: {
@@ -537,6 +563,8 @@ export async function ensureOrchestratedWatchlistRun(
     pageBudget: number;
     scheduledTime: number;
     queuePriority?: number;
+    allowConcurrentActiveRun?: boolean;
+    allowActiveRunFallback?: boolean;
   },
 ) {
   const scheduledSlot = new Date(input.scheduledTime).toISOString();
@@ -567,7 +595,9 @@ export async function ensureOrchestratedWatchlistRun(
           queue_priority
         )
         SELECT ?, ?, ?, 'pending', ?, 0, NULL, '{}', ?, NULL, NULL, NULL, ?, ?, ?, ?, 0, ?
-        WHERE NOT EXISTS (
+        WHERE (
+          ? = 1
+          OR NOT EXISTS (
           SELECT 1
           FROM watchlist_run
           WHERE watchlist_id = ?
@@ -575,6 +605,7 @@ export async function ensureOrchestratedWatchlistRun(
             AND idempotency_key IS NOT NULL
             AND status IN ('pending', 'running')
           LIMIT 1
+          )
         )
       `,
       id,
@@ -587,6 +618,7 @@ export async function ensureOrchestratedWatchlistRun(
       input.executionKey,
       timestamp,
       input.queuePriority ?? 2,
+      input.allowConcurrentActiveRun ? 1 : 0,
       input.watchlistId,
       input.triggerType,
     );
@@ -630,9 +662,11 @@ export async function ensureOrchestratedWatchlistRun(
     return { runId: existing.id, created: false as const };
   }
 
-  const active = await findActiveRun();
-  if (active?.id) {
-    return { runId: active.id, created: false as const };
+  if (input.allowActiveRunFallback !== false) {
+    const active = await findActiveRun();
+    if (active?.id) {
+      return { runId: active.id, created: false as const };
+    }
   }
 
   const retriedRunId = await insertPendingRun();
@@ -645,9 +679,11 @@ export async function ensureOrchestratedWatchlistRun(
     return { runId: retryExisting.id, created: false as const };
   }
 
-  const retryActive = await findActiveRun();
-  if (retryActive?.id) {
-    return { runId: retryActive.id, created: false as const };
+  if (input.allowActiveRunFallback !== false) {
+    const retryActive = await findActiveRun();
+    if (retryActive?.id) {
+      return { runId: retryActive.id, created: false as const };
+    }
   }
 
   throw new Error("Failed to create or locate orchestrated watchlist run.");
@@ -661,7 +697,7 @@ export async function markOrchestratedRunDispatched(
   },
 ) {
   const timestamp = nowIso();
-  await runStatement(
+  const result = await runStatement(
     env,
     `
       UPDATE watchlist_run
@@ -676,6 +712,7 @@ export async function markOrchestratedRunDispatched(
     timestamp,
     input.runId,
   );
+  return Number(result.meta?.changes ?? 0) === 1;
 }
 
 export async function markOrchestratedDispatchFailure(
@@ -697,6 +734,8 @@ export async function markOrchestratedDispatchFailure(
           error_message = ?,
           retry_after = ?,
           attempt_count = attempt_count + 1,
+          processing_token = NULL,
+          processing_started_at = NULL,
           updated_at = ?
       WHERE id = ?
         AND status IN ('pending', 'running')
@@ -714,18 +753,43 @@ export async function claimMonitoringConcurrencySlot(
   input: {
     runId: string;
     leaseMs?: number;
+    /**
+     * Scheduled claims participate in the durable queue ranking. Interactive
+     * claims (first scans and manual refreshes) use the same bounded slot
+     * table but intentionally do not enter that scheduled queue.
+     */
+    mode?: "scheduled" | "interactive";
   },
 ) {
-  const eligible = await isRunEligibleForConcurrencyClaim(env, input.runId);
-  if (!eligible) {
-    return { claimed: false as const, reason: "queue_not_ready" as const };
-  }
-
   const maxSlots = resolveEffectiveMonitoringFanoutMaxInflight(env);
   const leaseMs = input.leaseMs ?? resolveMonitoringConcurrencySlotLeaseMs(env);
   const token = createProcessingToken();
   const timestamp = nowIso();
   const staleBefore = new Date(Date.now() - leaseMs).toISOString();
+
+  if (input.mode !== "interactive") {
+    const eligible = await isRunEligibleForConcurrencyClaim(env, input.runId);
+    if (!eligible) {
+      return { claimed: false as const, reason: "queue_not_ready" as const };
+    }
+  } else {
+    // A retry of a crashed first scan reuses its durable run id. Allow that
+    // same run to reclaim an expired lease, but never let two live attempts
+    // for the same run consume multiple fleet slots.
+    const existing = await one<{ leased_at: string | null }>(
+      env,
+      `
+        SELECT leased_at
+        FROM monitoring_concurrency_slot
+        WHERE holder_run_id = ?
+        LIMIT 1
+      `,
+      input.runId,
+    );
+    if (existing?.leased_at && existing.leased_at >= staleBefore) {
+      return { claimed: false as const, reason: "already_held" as const };
+    }
+  }
 
   const result = await runStatement(
     env,
@@ -839,6 +903,7 @@ export async function claimOrchestratedWatchlistRun(
   input: {
     runId: string;
     leaseMs: number;
+    maxAttempts?: number;
   },
 ) {
   const token = createProcessingToken();
@@ -858,6 +923,7 @@ export async function claimOrchestratedWatchlistRun(
           updated_at = ?
       WHERE id = ?
         AND status IN ('pending', 'running')
+        AND (? IS NULL OR attempt_count < ?)
         AND (
           status = 'pending'
           OR processing_started_at IS NULL
@@ -868,6 +934,8 @@ export async function claimOrchestratedWatchlistRun(
     timestamp,
     timestamp,
     input.runId,
+    input.maxAttempts ?? null,
+    input.maxAttempts ?? null,
     timestamp,
     leaseDays,
   );
@@ -914,16 +982,98 @@ export async function finishOrchestratedWatchlistRun(
     summary: Record<string, unknown>;
     errorCode?: string | null;
     errorMessage?: string | null;
+    touchWatchlistId?: string;
   },
 ) {
   const timestamp = nowIso();
+  const summaryJson = JSON.stringify(input.summary);
+  if (input.status === "succeeded" && input.touchWatchlistId) {
+    const db = ensureDb(env);
+    if (typeof db.batch !== "function") {
+      throw new Error(
+        "D1 batch is required to atomically finalize an orchestrated scan and its watchlist.",
+      );
+    }
+    const touchWatchlist = db
+      .prepare(
+        `
+          UPDATE watchlist
+          SET last_scanned_at = ?, updated_at = ?
+          WHERE id = ?
+            AND EXISTS (
+              SELECT 1
+              FROM watchlist_run
+              WHERE watchlist_run.id = ?
+                AND watchlist_run.watchlist_id = watchlist.id
+                AND watchlist_run.processing_token = ?
+                AND watchlist_run.status = 'running'
+            )
+        `,
+      )
+      .bind(
+        timestamp,
+        timestamp,
+        input.touchWatchlistId,
+        input.runId,
+        input.processingToken,
+      );
+    const finishRun = db
+      .prepare(
+        `
+          UPDATE watchlist_run
+          SET status = 'succeeded',
+              pages_scanned = ?,
+              summary_json = CASE
+                WHEN COALESCE(json_extract(summary_json, '$.firstScanQuotaReserved'), 0) = 1
+                THEN json_set(?, '$.firstScanQuotaReserved', 1)
+                ELSE ?
+              END,
+              finished_at = ?,
+              error_code = NULL,
+              error_message = NULL,
+              processing_token = NULL,
+              processing_started_at = NULL,
+              updated_at = ?
+          WHERE id = ?
+            AND watchlist_id = ?
+            AND processing_token = ?
+            AND status = 'running'
+            AND EXISTS (
+              SELECT 1
+              FROM watchlist
+              WHERE watchlist.id = watchlist_run.watchlist_id
+                AND watchlist.last_scanned_at = ?
+            )
+        `,
+      )
+      .bind(
+        input.pagesScanned,
+        summaryJson,
+        summaryJson,
+        timestamp,
+        timestamp,
+        input.runId,
+        input.touchWatchlistId,
+        input.processingToken,
+        timestamp,
+      );
+    const results = await db.batch([touchWatchlist, finishRun]);
+    return results.length === 2 && results.every(
+      (result) => Number(result.meta?.changes ?? 0) === 1,
+    );
+  }
+
   const result = await runStatement(
     env,
     `
       UPDATE watchlist_run
       SET status = ?,
           pages_scanned = ?,
-          summary_json = ?,
+          summary_json = CASE
+            WHEN COALESCE(json_extract(summary_json, '$.firstScanQuotaReserved'), 0) = 1
+            THEN json_set(?, '$.firstScanQuotaReserved', 1)
+            ELSE ?
+          END,
           finished_at = ?,
           error_code = ?,
           error_message = ?,
@@ -935,7 +1085,8 @@ export async function finishOrchestratedWatchlistRun(
     `,
     input.status,
     input.pagesScanned,
-    JSON.stringify(input.summary),
+    summaryJson,
+    summaryJson,
     timestamp,
     input.errorCode ?? null,
     input.errorMessage ?? null,
@@ -1021,6 +1172,34 @@ export async function hasOrchestratedRunBlockingInlineScan(
   return Boolean(row?.id);
 }
 
+/**
+ * A manual refresh must not race a durable scheduled run that is still queued
+ * or owned by another Workflow attempt. Unlike the legacy in-flight helper,
+ * this intentionally has no age cutoff: a queued run can be older than the
+ * ten-minute manual guard while still being a live durable claim.
+ */
+export async function hasActiveScheduledWatchlistRun(
+  env: AppEnv,
+  watchlistId: string,
+) {
+  if (!env.DB || typeof env.DB.prepare !== "function") {
+    return false;
+  }
+  const row = await one<{ id: string }>(
+    env,
+    `
+      SELECT id
+      FROM watchlist_run
+      WHERE watchlist_id = ?
+        AND trigger_type = 'scheduled'
+        AND status IN ('pending', 'running')
+      LIMIT 1
+    `,
+    watchlistId,
+  );
+  return Boolean(row?.id);
+}
+
 export async function listOrchestratedRunsForReconciliation(
   env: AppEnv,
   input: {
@@ -1080,8 +1259,343 @@ type WorkflowBinding = Workflow<MonitoringWorkflowParams> & {
   ) => Promise<Array<{ id: string }>>;
 };
 
+export type MonitoringWorkflowDispatchStatus =
+  | "accepted"
+  | "active"
+  | "restarted"
+  | "failed";
+
+export interface MonitoringWorkflowDispatchOutcome {
+  runId: string;
+  status: MonitoringWorkflowDispatchStatus;
+  error?: string;
+}
+
 function getMonitoringWorkflowBinding(env: AppEnv) {
   return env.MONITORING_WORKFLOW as WorkflowBinding | undefined;
+}
+
+function firstScanDispatchErrorCode(error: unknown) {
+  return isRateLimitWorkflowError(error)
+    ? "dispatch_rate_limited"
+    : "first_scan_dispatch_failed";
+}
+
+async function readFirstScanDispatchState(
+  env: AppEnv,
+  descriptor: FirstWatchlistScanRunDescriptor,
+) {
+  return one<{
+    status: WatchlistRunRecord["status"];
+    watchlist_id: string;
+    idempotency_key: string | null;
+    workflow_instance_id: string | null;
+    error_code: string | null;
+    attempt_count: number;
+  }>(
+    env,
+    `
+      SELECT status, watchlist_id, idempotency_key, workflow_instance_id, error_code, attempt_count
+      FROM watchlist_run
+      WHERE id = ?
+      LIMIT 1
+    `,
+    descriptor.runId,
+  );
+}
+
+/**
+ * Hands a persisted activation scan to the existing Workflow binding and only
+ * reports queued after Cloudflare accepts (or already owns) the deterministic
+ * instance ID. A failed handoff leaves the D1 row pending for reconciliation.
+ */
+export async function dispatchFirstWatchlistScanWorkflow(
+  env: AppEnv,
+  descriptor: FirstWatchlistScanRunDescriptor,
+) {
+  const expectedWorkflowInstanceId = await buildMonitoringWorkflowInstanceId(
+    descriptor.executionKey,
+  );
+  if (descriptor.workflowInstanceId !== expectedWorkflowInstanceId) {
+    throw new Error("The activation scan Workflow ID does not match its execution key.");
+  }
+  let state = await readFirstScanDispatchState(env, descriptor);
+  if (
+    !state ||
+    state.watchlist_id !== descriptor.watchlistId ||
+    state.idempotency_key !== descriptor.executionKey
+  ) {
+    throw new Error("The persisted activation scan no longer matches its dispatch descriptor.");
+  }
+  if (
+    state.workflow_instance_id &&
+    state.workflow_instance_id !== expectedWorkflowInstanceId
+  ) {
+    throw new Error("The persisted activation scan is bound to a different Workflow instance.");
+  }
+
+  if (
+    state.attempt_count >= FIRST_SCAN_MAX_ATTEMPTS &&
+    state.status !== "running"
+  ) {
+    const timestamp = nowIso();
+    await runStatement(
+      env,
+      `
+        UPDATE watchlist_run
+        SET status = 'failed',
+            finished_at = COALESCE(finished_at, ?),
+            error_code = 'first_scan_retry_exhausted',
+            error_message = 'The activation scan exhausted its bounded retry budget.',
+            retry_after = NULL,
+            processing_token = NULL,
+            processing_started_at = NULL,
+            updated_at = ?
+        WHERE id = ?
+          AND status IN ('pending', 'failed')
+          AND attempt_count >= ?
+      `,
+      timestamp,
+      timestamp,
+      descriptor.runId,
+      FIRST_SCAN_MAX_ATTEMPTS,
+    );
+    return { status: "terminal" as const, runId: descriptor.runId };
+  }
+
+  if (
+    state.status === "failed" &&
+    state.error_code &&
+    RETRYABLE_FIRST_SCAN_ERROR_CODES.has(state.error_code) &&
+    state.attempt_count < FIRST_SCAN_MAX_ATTEMPTS
+  ) {
+    const timestamp = nowIso();
+    await runStatement(
+      env,
+      `
+        UPDATE watchlist_run
+        SET status = 'pending',
+            finished_at = NULL,
+            processing_token = NULL,
+            processing_started_at = NULL,
+            retry_after = NULL,
+            updated_at = ?
+        WHERE id = ?
+          AND status = 'failed'
+          AND error_code = ?
+      `,
+      timestamp,
+      descriptor.runId,
+      state.error_code,
+    );
+    state = await readFirstScanDispatchState(env, descriptor);
+  }
+
+  if (!state || !["pending", "running"].includes(state.status)) {
+    return { status: "terminal" as const, runId: descriptor.runId };
+  }
+
+  const workflow = getMonitoringWorkflowBinding(env);
+  if (
+    !workflow ||
+    typeof workflow.create !== "function" ||
+    typeof workflow.get !== "function"
+  ) {
+    const error = new Error("MONITORING_WORKFLOW binding is not configured.");
+    await markOrchestratedDispatchFailure(env, {
+      runId: descriptor.runId,
+      errorCode: "workflow_binding_missing",
+      errorMessage: error.message,
+      retryAfterIso: new Date(Date.now() + 60_000).toISOString(),
+    });
+    throw error;
+  }
+
+  const params: FirstWatchlistScanWorkflowParams = {
+    kind: "first_scan",
+    ...descriptor,
+  };
+
+  // Bind the deterministic Workflow identity before Cloudflare can begin the
+  // accepted instance. A Workflow payload therefore never outruns the D1
+  // identity check at the start of execution. Failed creates keep this stable
+  // identity for reconciliation and replay.
+  const dispatched = await markOrchestratedRunDispatched(env, {
+    runId: descriptor.runId,
+    workflowInstanceId: descriptor.workflowInstanceId,
+  });
+  if (!dispatched) {
+    throw new Error("The activation scan durable Workflow binding was lost before dispatch.");
+  }
+
+  let accepted: "created" | "existing" | "restarted" = "created";
+  try {
+    await workflow.create({ id: descriptor.workflowInstanceId, params });
+  } catch (createError) {
+    try {
+      const existing = await workflow.get(descriptor.workflowInstanceId);
+      const current = await existing.status();
+      if (current.status === "errored" || current.status === "terminated") {
+        await existing.restart();
+        accepted = "restarted";
+      } else if (current.status !== "unknown") {
+        accepted = "existing";
+      } else {
+        throw createError;
+      }
+    } catch {
+      await markOrchestratedDispatchFailure(env, {
+        runId: descriptor.runId,
+        errorCode: firstScanDispatchErrorCode(createError),
+        errorMessage:
+          createError instanceof Error ? createError.message : "Activation scan dispatch failed.",
+        retryAfterIso: new Date(Date.now() + 60_000).toISOString(),
+      });
+      throw createError;
+    }
+  }
+
+  return { status: accepted, runId: descriptor.runId };
+}
+
+export async function reconcileFirstWatchlistScanRuns(
+  env: AppEnv,
+  input: { leaseMs?: number; limit?: number } = {},
+) {
+  const leaseMs = input.leaseMs ?? resolveMonitoringOrchestrationLeaseMs(env);
+  const staleBefore = new Date(Date.now() - leaseMs).toISOString();
+  const limit = input.limit ?? MONITORING_RECONCILIATION_LIMIT;
+  const exhaustedAt = nowIso();
+  await runStatement(
+    env,
+    `
+      UPDATE watchlist_run
+      SET status = 'failed',
+          finished_at = COALESCE(finished_at, ?),
+          error_code = 'first_scan_retry_exhausted',
+          error_message = 'The activation scan exhausted its bounded retry budget.',
+          retry_after = NULL,
+          processing_token = NULL,
+          processing_started_at = NULL,
+          updated_at = ?
+      WHERE trigger_type = 'manual'
+        AND idempotency_key LIKE 'watchlist-run:first-scan:%'
+        AND attempt_count >= ?
+        AND (
+          status = 'pending'
+          OR status = 'failed'
+          OR (status = 'running' AND processing_started_at < ?)
+        )
+    `,
+    exhaustedAt,
+    exhaustedAt,
+    FIRST_SCAN_MAX_ATTEMPTS,
+    staleBefore,
+  );
+  const result = await ensureDb(env)
+    .prepare(
+      `
+        SELECT
+          id,
+          watchlist_id,
+          status,
+          idempotency_key,
+          workflow_instance_id,
+          processing_token,
+          attempt_count,
+          queued_at,
+          started_at,
+          created_at,
+          error_code,
+          retry_after
+        FROM watchlist_run
+        WHERE trigger_type = 'manual'
+          AND idempotency_key LIKE 'watchlist-run:first-scan:%'
+          AND attempt_count < ?
+          AND (
+            (status = 'pending' AND (retry_after IS NULL OR retry_after <= ?))
+            OR (status = 'running' AND processing_started_at IS NOT NULL AND processing_started_at < ?)
+            OR (status = 'failed' AND error_code IN (
+              'browser_launch_failed',
+              'concurrency_limited',
+              'dispatch_rate_limited',
+              'first_scan_dispatch_failed',
+              'first_scan_setup_failed',
+              'rate_limited',
+              'retryable_scan_failure',
+              'workflow_binding_missing'
+            ))
+          )
+        ORDER BY queue_priority ASC, queued_at ASC, started_at ASC, id ASC
+        LIMIT ?
+      `,
+    )
+    .bind(FIRST_SCAN_MAX_ATTEMPTS, nowIso(), staleBefore, limit)
+    .all<FirstScanReconciliationRow>();
+
+  let redispatched = 0;
+  let cancelled = 0;
+  let failures = 0;
+  for (const row of result.results ?? []) {
+    if (!row.idempotency_key) {
+      continue;
+    }
+    const watchlist = await getWatchlist(env, row.watchlist_id);
+    if (!watchlist || !watchlist.isActive) {
+      const timestamp = nowIso();
+      const cancellation = await runStatement(
+        env,
+        `
+          UPDATE watchlist_run
+          SET status = 'skipped',
+              finished_at = ?,
+              error_code = 'watchlist_unavailable',
+              error_message = 'This competitor is no longer being tracked.',
+              processing_token = NULL,
+              processing_started_at = NULL,
+              updated_at = ?
+          WHERE id = ?
+            AND idempotency_key = ?
+            AND (
+              status IN ('pending', 'failed')
+              OR (status = 'running' AND processing_started_at < ?)
+            )
+        `,
+        timestamp,
+        timestamp,
+        row.id,
+        row.idempotency_key,
+        staleBefore,
+      );
+      cancelled += Number(cancellation.meta?.changes ?? 0);
+      continue;
+    }
+
+    const descriptor: FirstWatchlistScanRunDescriptor = {
+      runId: row.id,
+      watchlistId: row.watchlist_id,
+      executionKey: row.idempotency_key,
+      workflowInstanceId:
+        await buildMonitoringWorkflowInstanceId(row.idempotency_key),
+      queuedAt: row.queued_at ?? row.started_at ?? row.created_at ?? nowIso(),
+    };
+    try {
+      const dispatch = await dispatchFirstWatchlistScanWorkflow(env, descriptor);
+      if (dispatch.status !== "terminal") {
+        redispatched += 1;
+      }
+    } catch (error) {
+      failures += 1;
+      logAppEvent("error", "first_scan_reconcile_failed", "Activation scan reconciliation failed", {
+        details: {
+          runId: row.id,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
+  }
+
+  return { redispatched, cancelled, failures };
 }
 
 function isRateLimitWorkflowError(error: unknown) {
@@ -1099,9 +1613,10 @@ function buildWorkflowParams(input: {
   triggerType: WatchlistRunRecord["triggerType"];
   scheduledTime: number;
   cron?: string | null;
-}): MonitoringWorkflowParams {
+}): ScheduledMonitoringWorkflowParams {
   const queuedAt = new Date(input.scheduledTime).toISOString();
   return {
+    kind: "scheduled_scan",
     watchlistId: input.watchlist.id,
     triggerType: input.triggerType,
     executionKey: input.executionKey,
@@ -1134,6 +1649,7 @@ export async function dispatchOrchestratedWatchlistJobsBatch(
       dispatched: 0,
       duplicates: 0,
       failures: [] as Array<{ runId: string; error: string }>,
+      outcomes: [] as MonitoringWorkflowDispatchOutcome[],
     };
   }
 
@@ -1147,6 +1663,11 @@ export async function dispatchOrchestratedWatchlistJobsBatch(
       duplicates: 0,
       failures: input.jobs.map((job) => ({
         runId: job.runId,
+        error: "MONITORING_WORKFLOW binding is not configured.",
+      })),
+      outcomes: input.jobs.map((job) => ({
+        runId: job.runId,
+        status: "failed" as const,
         error: "MONITORING_WORKFLOW binding is not configured.",
       })),
       bindingMissing: true as const,
@@ -1164,11 +1685,48 @@ export async function dispatchOrchestratedWatchlistJobsBatch(
         runId: job.runId,
         error: "MONITORING_WORKFLOW.createBatch is not available.",
       })),
+      outcomes: input.jobs.map((job) => ({
+        runId: job.runId,
+        status: "failed" as const,
+        error: "MONITORING_WORKFLOW.createBatch is not available.",
+      })),
       createBatchMissing: true as const,
     };
   }
 
-  const batch = input.jobs.map((job) => ({
+  // Bind the durable identity before Cloudflare can accept an instance. This
+  // mirrors the first-scan handoff and prevents a terminal/out-of-order D1
+  // row from leaving an orphan Workflow running against no owner.
+  const dispatchableJobs: typeof input.jobs = [];
+  const failures: Array<{ runId: string; error: string }> = [];
+  const outcomes: MonitoringWorkflowDispatchOutcome[] = [];
+  for (const job of input.jobs) {
+    const bound = await markOrchestratedRunDispatched(env, {
+      runId: job.runId,
+      workflowInstanceId: job.workflowInstanceId,
+    });
+    if (bound) {
+      dispatchableJobs.push(job);
+    } else {
+      const error = "The scheduled scan durable Workflow binding was lost before dispatch.";
+      failures.push({
+        runId: job.runId,
+        error,
+      });
+      outcomes.push({ runId: job.runId, status: "failed", error });
+    }
+  }
+
+  if (dispatchableJobs.length === 0) {
+    return {
+      dispatched: 0,
+      duplicates: 0,
+      failures,
+      outcomes,
+    };
+  }
+
+  const batch = dispatchableJobs.map((job) => ({
     id: job.workflowInstanceId,
     params: buildWorkflowParams(job),
   }));
@@ -1182,10 +1740,21 @@ export async function dispatchOrchestratedWatchlistJobsBatch(
       return {
         dispatched: 0,
         duplicates: 0,
-        failures: input.jobs.map((job) => ({
-          runId: job.runId,
-          error: error instanceof Error ? error.message : "Workflow rate limited.",
-        })),
+        failures: [
+          ...failures,
+          ...dispatchableJobs.map((job) => ({
+            runId: job.runId,
+            error: error instanceof Error ? error.message : "Workflow rate limited.",
+          })),
+        ],
+        outcomes: [
+          ...outcomes,
+          ...dispatchableJobs.map((job) => ({
+            runId: job.runId,
+            status: "failed" as const,
+            error: error instanceof Error ? error.message : "Workflow rate limited.",
+          })),
+        ],
         rateLimited: true as const,
       };
     }
@@ -1194,26 +1763,43 @@ export async function dispatchOrchestratedWatchlistJobsBatch(
 
   let dispatched = 0;
   let duplicates = 0;
-  const failures: Array<{ runId: string; error: string }> = [];
-
-  for (const job of input.jobs) {
+  for (const job of dispatchableJobs) {
     if (createdIds.has(job.workflowInstanceId)) {
-      await markOrchestratedRunDispatched(env, {
-        runId: job.runId,
-        workflowInstanceId: job.workflowInstanceId,
-      });
       dispatched += 1;
+      outcomes.push({ runId: job.runId, status: "accepted" });
       continue;
     }
 
-    duplicates += 1;
-    await markOrchestratedRunDispatched(env, {
-      runId: job.runId,
-      workflowInstanceId: job.workflowInstanceId,
-    });
+    if (typeof workflow.get !== "function") {
+      const error = "MONITORING_WORKFLOW.get is not available.";
+      failures.push({ runId: job.runId, error });
+      outcomes.push({ runId: job.runId, status: "failed", error });
+      continue;
+    }
+
+    try {
+      const existing = await workflow.get(job.workflowInstanceId);
+      const current = await existing.status();
+      if (current.status === "errored" || current.status === "terminated") {
+        await existing.restart();
+        dispatched += 1;
+        outcomes.push({ runId: job.runId, status: "restarted" });
+      } else if (current.status === "unknown") {
+        const error = "Workflow instance status is unknown.";
+        failures.push({ runId: job.runId, error });
+        outcomes.push({ runId: job.runId, status: "failed", error });
+      } else {
+        duplicates += 1;
+        outcomes.push({ runId: job.runId, status: "active" });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Workflow instance lookup failed.";
+      failures.push({ runId: job.runId, error: message });
+      outcomes.push({ runId: job.runId, status: "failed", error: message });
+    }
   }
 
-  return { dispatched, duplicates, failures };
+  return { dispatched, duplicates, failures, outcomes };
 }
 
 export async function dispatchOrchestratedWatchlistJob(
@@ -1233,13 +1819,14 @@ export async function dispatchOrchestratedWatchlistJob(
     jobs: [input],
     shadowOnly: input.shadowOnly,
   });
-  if (result.failures.length > 0) {
-    throw new Error(result.failures[0]!.error);
-  }
   if (input.shadowOnly) {
     return { status: "shadow" as const };
   }
-  return { status: "dispatched" as const };
+  return result.outcomes[0] ?? {
+    runId: input.runId,
+    status: "failed" as const,
+    error: result.failures[0]?.error ?? "Workflow dispatch failed.",
+  };
 }
 
 export async function scheduleWatchlistFanout(
@@ -1389,9 +1976,12 @@ export async function reconcileOrchestratedWatchlistRuns(
     leaseMs?: number;
   },
 ) {
+  const firstScans = await reconcileFirstWatchlistScanRuns(env, {
+    leaseMs: input.leaseMs,
+  });
   if (input.mode === "inline") {
     const cancelled = await cancelOrchestratedRunsForInlineRollback(env);
-    return { recovered: 0, cancelled, redispatched: 0 };
+    return { recovered: 0, cancelled, redispatched: 0, firstScans };
   }
 
   const leaseMs = input.leaseMs ?? resolveMonitoringOrchestrationLeaseMs(env);
@@ -1468,7 +2058,7 @@ export async function reconcileOrchestratedWatchlistRuns(
       (await buildMonitoringWorkflowInstanceId(row.idempotency_key));
 
     try {
-      await dispatchOrchestratedWatchlistJob(env, {
+      const dispatch = await dispatchOrchestratedWatchlistJob(env, {
         watchlist: watchlistRecord,
         runId: row.id,
         executionKey: row.idempotency_key,
@@ -1478,7 +2068,15 @@ export async function reconcileOrchestratedWatchlistRuns(
         cron: input.cron,
         shadowOnly,
       });
-      redispatched += 1;
+      if (dispatch.status === "accepted" || dispatch.status === "restarted") {
+        redispatched += 1;
+      } else if (dispatch.status === "failed") {
+        await markOrchestratedDispatchFailure(env, {
+          runId: row.id,
+          errorCode: "reconcile_dispatch_failed",
+          errorMessage: dispatch.error ?? "Re-dispatch failed.",
+        });
+      }
     } catch (error) {
       await markOrchestratedDispatchFailure(env, {
         runId: row.id,
@@ -1488,7 +2086,7 @@ export async function reconcileOrchestratedWatchlistRuns(
     }
   }
 
-  return { recovered, cancelled, redispatched };
+  return { recovered, cancelled, redispatched, firstScans };
 }
 
 export async function collectMonitoringOrchestrationMetrics(

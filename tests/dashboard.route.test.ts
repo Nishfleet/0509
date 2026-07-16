@@ -3,7 +3,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
-type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
+type MockLinkProps = { children?: ReactNode; to?: string } & Record<
+  string,
+  unknown
+>;
 
 const session = {
   user: {
@@ -36,7 +39,8 @@ function createCounterMoveAudit(options: {
   expiresAt?: string | null;
   updatedAt: string;
 }) {
-  const expiresAt = "expiresAt" in options ? options.expiresAt : "2026-06-24T02:00:00.000Z";
+  const expiresAt =
+    "expiresAt" in options ? options.expiresAt : "2026-06-24T02:00:00.000Z";
   return {
     id: options.id,
     userId: "user-1",
@@ -55,17 +59,18 @@ function createCounterMoveAudit(options: {
           status: options.workflowStatus,
           openCount: options.openCount,
           expiresAt,
-          followUps: options.openCount > 0
-            ? [
-                {
-                  title: options.title ?? "Review counter-move",
-                  status: "open",
-                  ownerLabel: "Growth lead",
-                  channel: "client_room",
-                  expiresAt,
-                },
-              ]
-            : [],
+          followUps:
+            options.openCount > 0
+              ? [
+                  {
+                    title: options.title ?? "Review counter-move",
+                    status: "open",
+                    ownerLabel: "Growth lead",
+                    channel: "client_room",
+                    expiresAt,
+                  },
+                ]
+              : [],
         },
       },
     },
@@ -79,7 +84,8 @@ function createCounterMoveAudit(options: {
 
 async function mockRouter(loaderData: unknown) {
   vi.doMock("react-router", async () => {
-    const actual = await vi.importActual<typeof import("react-router")>("react-router");
+    const actual =
+      await vi.importActual<typeof import("react-router")>("react-router");
     const React = await import("react");
 
     return {
@@ -87,7 +93,11 @@ async function mockRouter(loaderData: unknown) {
       Form: ({ children, ...props }: MockFormProps) =>
         React.createElement("form", props, children),
       Link: ({ children, to, ...props }: MockLinkProps) =>
-        React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+        React.createElement(
+          "a",
+          { ...props, href: typeof to === "string" ? to : "" },
+          children,
+        ),
       useActionData: vi.fn().mockReturnValue(undefined),
       useLoaderData: vi.fn().mockReturnValue(loaderData),
       useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
@@ -96,19 +106,30 @@ async function mockRouter(loaderData: unknown) {
   });
 }
 
-function mockDashboardLoaderDependencies(options: {
-  counterMoveAudits?: unknown[];
-  watchlists?: unknown[];
-  workspace?: {
-    workspaceUserId?: string;
-    isMember?: boolean;
-    ownerName?: string | null;
-  };
-} = {}) {
+function mockDashboardLoaderDependencies(
+  options: {
+    counterMoveAudits?: unknown[];
+    watchlists?: unknown[];
+    metaStatus?: Record<string, unknown>;
+    recentWorkspaceEvents?: unknown[];
+    failedSection?: "collections" | "recentProofCaptures";
+    workspace?: {
+      workspaceUserId?: string;
+      isMember?: boolean;
+      ownerName?: string | null;
+    };
+  } = {},
+) {
   const liveKey = ["f9", "live", "dashboard"].join("_");
   const counterMoveAudits = options.counterMoveAudits ?? [];
   const listWatchlists = vi.fn().mockResolvedValue(options.watchlists ?? []);
   const listWatchEvents = vi.fn().mockResolvedValue([]);
+  const listRecentWorkspaceWatchEvents = vi
+    .fn()
+    .mockResolvedValue(options.recentWorkspaceEvents ?? []);
+  const getWorkspaceDeliveryConfig = vi
+    .fn()
+    .mockResolvedValue({ timezone: "Asia/Kolkata" });
   const workspace = {
     workspaceUserId: options.workspace?.workspaceUserId ?? session.user.id,
     isMember: options.workspace?.isMember ?? false,
@@ -134,23 +155,38 @@ function mockDashboardLoaderDependencies(options: {
   }));
   vi.doMock("~/lib/ad-source.server", () => ({
     resolveCommercialAdSourceStatus: vi.fn().mockResolvedValue({
-      status: "healthy",
-      summary: "Healthy",
+      status: options.metaStatus?.status ?? "healthy",
+      summary: options.metaStatus?.summary ?? "Healthy",
       lastCheckedAt: null,
+      ...options.metaStatus,
     }),
   }));
   vi.doMock("~/lib/context.server", () => ({
     getEnv: vi.fn((context) => context.cloudflare.env),
   }));
   vi.doMock("~/lib/data.server", () => ({
-    getCustomerMetaConnection: vi.fn().mockResolvedValue(null),
-    getSuccessfulProofCaptureStatsForUser: vi.fn().mockResolvedValue({ count: 0, latestAt: null }),
-    getSuccessfulRunStatsForUserBetween: vi.fn().mockResolvedValue({ runs: 0, watchlistsChecked: 0, adsSeen: 0 }),
-    getUserPlanBillingInfo: vi.fn().mockResolvedValue({ plan: "free", dodoStatus: null }),
-    listRecentAgentActionAudits: vi.fn(async (_env, _userId, query: { limit?: number; offset?: number } = {}) => {
-      const offset = query.offset ?? 0;
-      return counterMoveAudits.slice(offset, offset + (query.limit ?? counterMoveAudits.length));
-    }),
+    getSuccessfulProofCaptureStatsForUser: vi
+      .fn()
+      .mockResolvedValue({ count: 0, latestAt: null }),
+    getSuccessfulRunStatsForUserBetween: vi
+      .fn()
+      .mockResolvedValue({ runs: 0, watchlistsChecked: 0, adsSeen: 0 }),
+    getUserPlanBillingInfo: vi
+      .fn()
+      .mockResolvedValue({ plan: "free", dodoStatus: null }),
+    listRecentAgentActionAudits: vi.fn(
+      async (
+        _env,
+        _userId,
+        query: { limit?: number; offset?: number } = {},
+      ) => {
+        const offset = query.offset ?? 0;
+        return counterMoveAudits.slice(
+          offset,
+          offset + (query.limit ?? counterMoveAudits.length),
+        );
+      },
+    ),
     listAgentMemory: vi.fn().mockResolvedValue([
       {
         id: "memory-1",
@@ -165,10 +201,18 @@ function mockDashboardLoaderDependencies(options: {
         updatedAt: "2026-06-20T00:00:00.000Z",
       },
     ]),
-    listCollections: vi.fn().mockResolvedValue([]),
+    listCollections:
+      options.failedSection === "collections"
+        ? vi.fn().mockRejectedValue(new Error("private database detail"))
+        : vi.fn().mockResolvedValue([]),
     listDeliveryTargets: vi.fn().mockResolvedValue([]),
     listDigests: vi.fn().mockResolvedValue([]),
-    listRecentWorkspaceProofCaptures: vi.fn().mockResolvedValue([]),
+    listRecentWorkspaceProofCaptures:
+      options.failedSection === "recentProofCaptures"
+        ? vi.fn().mockRejectedValue(new Error("private provider detail"))
+        : vi.fn().mockResolvedValue([]),
+    listRecentWorkspaceWatchEvents,
+    getWorkspaceDeliveryConfig,
     listSavedQueries: vi.fn().mockResolvedValue([]),
     listWatchEvents,
     listWatchlists,
@@ -192,6 +236,7 @@ function mockDashboardLoaderDependencies(options: {
   return {
     getWorkspaceReadiness,
     listWatchEvents,
+    listRecentWorkspaceWatchEvents,
     listWatchlists,
   };
 }
@@ -207,6 +252,29 @@ afterEach(() => {
 });
 
 describe("dashboard route agent memory", () => {
+  it("provides a complete fail-closed readiness fallback shape", async () => {
+    const { unavailableWorkspaceReadiness } = await import("~/routes/app.dashboard");
+
+    expect(
+      unavailableWorkspaceReadiness({
+        workspaceUserId: "owner-1",
+        isMember: false,
+        billingOwnerName: null,
+      }),
+    ).toMatchObject({
+      status: "attention",
+      value: {
+        hasFirstValue: false,
+        hasRecurringPaidCadence: false,
+        hasRetainedReadiness: false,
+      },
+      counts: {
+        completedScans: 0,
+        noChangeBaselines: 0,
+      },
+    });
+  });
+
   it("does not expose agent memory on the customer overview", async () => {
     const deps = mockDashboardLoaderDependencies();
 
@@ -216,19 +284,24 @@ describe("dashboard route agent memory", () => {
       request: new Request("http://localhost/app"),
     } as never);
 
-    expect(deps.listWatchlists).toHaveBeenCalledWith(expect.anything(), session.user.id, { includeInactive: true });
+    expect(deps.listWatchlists).toHaveBeenCalledWith(
+      expect.anything(),
+      session.user.id,
+      { includeInactive: true },
+    );
     expect(loaderData).not.toHaveProperty("agentMemories");
     expect(JSON.stringify(loaderData)).not.toContain("hunter2");
 
     vi.resetModules();
     await mockRouter(loaderData);
-    const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
+    const { default: AppDashboardRoute } =
+      await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
     expect(markup).toContain("Market Desk Brief");
     expect(markup).toContain("Build your Market Desk");
     expect(markup).toContain("Add competitors");
-    expect(markup).toContain("href=\"/app/onboard?resume=1\"");
+    expect(markup).toContain('href="/app/onboard?resume=1"');
     expect(markup).not.toContain("Account context saved");
     expect(markup).not.toContain("[redacted]: [redacted]");
     expect(markup).not.toContain("hunter2");
@@ -260,6 +333,151 @@ describe("dashboard route agent memory", () => {
     expect(loaderData.recentEvents).toEqual([]);
   });
 
+  it("loads recent events once across every active watchlist", async () => {
+    const recentWorkspaceEvents = Array.from({ length: 8 }, (_, index) => ({
+      id: `event-${index}`,
+      watchlistId: `watch-${index}`,
+      title: `Move ${index}`,
+      summary: "A source-backed change.",
+      eventType: "ad_new",
+      status: "confirmed",
+      createdAt: `2026-06-20T00:0${index}:00.000Z`,
+    }));
+    const deps = mockDashboardLoaderDependencies({
+      watchlists: Array.from({ length: 8 }, (_, index) => ({
+        id: `watch-${index}`,
+        name: `Watch ${index}`,
+        targetType: "advertiser",
+        targetLabel: `Brand ${index}`,
+        isActive: true,
+        lastScannedAt: "2026-06-20T08:00:00.000Z",
+      })),
+      recentWorkspaceEvents,
+    });
+
+    const { loader } = await import("~/routes/app.dashboard");
+    const loaderData = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app"),
+    } as never);
+
+    expect(deps.listRecentWorkspaceWatchEvents).toHaveBeenCalledTimes(1);
+    expect(loaderData.recentEvents).toEqual(recentWorkspaceEvents);
+  });
+
+  it("keeps the dashboard usable when a non-critical section fails", async () => {
+    mockDashboardLoaderDependencies({ failedSection: "collections" });
+
+    const { loader } = await import("~/routes/app.dashboard");
+    const loaderData = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app"),
+    } as never);
+
+    expect(loaderData.collections).toEqual([]);
+    expect(loaderData.watchlists).toEqual([]);
+    expect(loaderData.sectionWarnings).toEqual([
+      {
+        section: "collections",
+        message: "This dashboard section could not be loaded.",
+      },
+    ]);
+    expect(JSON.stringify(loaderData)).not.toContain("private database detail");
+  });
+
+  it.each([
+    [
+      "degraded",
+      "Live ad checks are temporarily delayed. We'll retry automatically — results refresh as soon as checks recover.",
+    ],
+    [
+      "disabled",
+      "Live ad checks are unavailable right now. Review source access before relying on fresh results.",
+    ],
+  ])(
+    "surfaces %s source status with a recovery link",
+    async (status, summary) => {
+      const data = {
+        savedQueries: [],
+        collections: [],
+        watchlists: [],
+        digests: [],
+        recentEvents: [],
+        recentProofCaptures: [],
+        deliveryTargets: [],
+        metaStatus: { status, summary, lastCheckedAt: null },
+        proofUsage: {
+          warningLevel: "ok",
+          used: 0,
+          limit: 0,
+          remaining: 0,
+          plan: "free",
+        },
+        overnightStats: { runs: 0, watchlistsChecked: 0, adsSeen: 0 },
+        successfulProofStats: { count: 0, latestAt: null },
+        workspaceReadiness: {
+          readyCount: 0,
+          totalCount: 0,
+          items: [],
+          nudges: [],
+        },
+        counterMoveFollowUps: [],
+        plan: "free",
+        teamMemberCount: 1,
+        nextScanLabel:
+          "Activation scan only — paid plans include recurring monitoring.",
+        hasPaymentIssue: false,
+        checkoutReturn: false,
+      };
+      await mockRouter(data);
+      const { default: AppDashboardRoute } =
+        await import("~/routes/app.dashboard");
+      const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+      expect(markup).toContain(
+        status === "disabled"
+          ? "Live ad checks are unavailable right now"
+          : "Live ad checks are temporarily delayed",
+      );
+      expect(markup).toContain(
+        status === "disabled"
+          ? "Source unavailable"
+          : "Source access needs attention",
+      );
+      expect(markup).toContain('href="/app/source-access"');
+      expect(markup).not.toContain("Live source ready");
+    },
+  );
+
+  it("describes payment interruption without inventing provider retry behavior", async () => {
+    await mockRouter({
+      savedQueries: [],
+      collections: [],
+      watchlists: [],
+      digests: [],
+      recentEvents: [],
+      recentProofCaptures: [],
+      deliveryTargets: [],
+      metaStatus: { status: "healthy", summary: "Healthy", lastCheckedAt: null },
+      proofUsage: { warningLevel: "ok", used: 0, limit: 100, remaining: 100, plan: "starter" },
+      overnightStats: { runs: 0, watchlistsChecked: 0, adsSeen: 0 },
+      successfulProofStats: { count: 0, latestAt: null },
+      workspaceReadiness: { readyCount: 0, totalCount: 0, items: [], nudges: [] },
+      counterMoveFollowUps: [],
+      plan: "starter",
+      teamMemberCount: 0,
+      nextScanLabel: "Next weekly check",
+      hasPaymentIssue: true,
+      checkoutReturn: false,
+    });
+    const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).toContain("Billing reported a payment issue");
+    expect(markup).not.toContain("provider retries");
+    expect(markup).not.toContain("Dodo is retrying");
+  });
+
   it("passes workspace member billing context into readiness", async () => {
     const deps = mockDashboardLoaderDependencies({
       workspace: {
@@ -275,11 +493,15 @@ describe("dashboard route agent memory", () => {
       request: new Request("http://localhost/app"),
     } as never);
 
-    expect(deps.getWorkspaceReadiness).toHaveBeenCalledWith(expect.anything(), "owner-1", {
-      isMember: true,
-      billingOwnerName: "Agency Owner",
-      canManageBilling: false,
-    });
+    expect(deps.getWorkspaceReadiness).toHaveBeenCalledWith(
+      expect.anything(),
+      "owner-1",
+      {
+        isMember: true,
+        billingOwnerName: "Agency Owner",
+        canManageBilling: false,
+      },
+    );
   });
 
   it("renders the queued Market Desk Brief when an active competitor has no scan yet", async () => {
@@ -304,11 +526,12 @@ describe("dashboard route agent memory", () => {
 
     vi.resetModules();
     await mockRouter(loaderData);
-    const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
+    const { default: AppDashboardRoute } =
+      await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
     expect(markup).toContain("Market Desk Brief");
-    expect(markup).toContain("First sweep is queued");
+    expect(markup).toContain("Activation scan is queued");
     expect(markup).toContain("Boat Lifestyle");
     expect(markup).toContain("Open watchlists");
     expect(markup).toContain("First scan pending");
@@ -494,7 +717,8 @@ describe("dashboard route agent memory", () => {
 
     vi.resetModules();
     await mockRouter(loaderData);
-    const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
+    const { default: AppDashboardRoute } =
+      await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
     expect(markup).toContain("Responses waiting on you");
@@ -571,7 +795,8 @@ describe("dashboard route agent memory", () => {
 
     vi.resetModules();
     await mockRouter(loaderData);
-    const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
+    const { default: AppDashboardRoute } =
+      await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
     expect(markup).toContain("Account owner");
@@ -587,13 +812,15 @@ describe("dashboard route agent memory", () => {
 
     mockDashboardLoaderDependencies({
       counterMoveAudits: [
-        ...Array.from({ length: 30 }, (_, index) => createCounterMoveAudit({
-          id: `audit-quiet-${index}`,
-          targetLabel: `Quiet ${index}`,
-          workflowStatus: "quiet",
-          openCount: 0,
-          updatedAt: `2026-06-20T00:${String(index).padStart(2, "0")}:00.000Z`,
-        })),
+        ...Array.from({ length: 30 }, (_, index) =>
+          createCounterMoveAudit({
+            id: `audit-quiet-${index}`,
+            targetLabel: `Quiet ${index}`,
+            workflowStatus: "quiet",
+            openCount: 0,
+            updatedAt: `2026-06-20T00:${String(index).padStart(2, "0")}:00.000Z`,
+          }),
+        ),
         createCounterMoveAudit({
           id: "audit-open-older",
           targetLabel: "Nykaa",

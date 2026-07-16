@@ -40,10 +40,21 @@ import {
   formatWhyAlertedLabel,
 } from "~/lib/landing-page-display";
 import { toPublicDeliveryTarget, type PublicDeliveryTargetRecord } from "~/lib/delivery-target-public";
-import { customerDiscoverySummary } from "~/lib/discovery-customer-copy";
+import {
+  toPublicDeliveryAttemptSummary,
+  type PublicDeliveryAttemptSummary,
+} from "~/lib/delivery-attempt-public";
+import { buildChangeIntelligenceSummary } from "~/lib/change-intelligence";
+import {
+  customerDiscoverySummary,
+  toCustomerDiscoveryStatus,
+  type CustomerDiscoveryStatus,
+} from "~/lib/discovery-customer-copy";
 import { buildWatchlistInsightDepth } from "~/lib/insight-depth";
 import { normalizeSavedQuery } from "~/lib/normalize";
+import { canUsePlanFeature } from "~/lib/plan-entitlements";
 import { formatNextScanLabel } from "~/lib/schedule-display";
+import { normalizeTimeZone, safeTimeZone } from "~/lib/safe-timezone";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import {
   isSlackDeliveryCustomerFacing,
@@ -58,7 +69,6 @@ import {
   normalizeWatchlistTrackingRole,
 } from "~/lib/watchlist-role";
 import type {
-  DeliveryAttemptRecord,
   DiscoveryFailureClass,
   EventCandidateRecord,
   MetaIntegrationStatus,
@@ -68,12 +78,19 @@ import type {
   WatchlistRunSummaryCounts,
   WorkspaceDeliveryConfigRecord,
   DeliveryChannel,
+  WatchlistRunRecord,
 } from "~/lib/types";
 
 export const meta = () => [{ title: "Watchlists | Five to Nine" }];
 const WATCHLIST_DELIVERY_TARGET_DISPLAY_LIMIT = 12;
 const WORKSPACE_DELIVERY_TARGET_DISPLAY_LIMIT = 8;
 const RECENT_DELIVERY_ATTEMPT_DISPLAY_LIMIT = 16;
+const DELIVERY_MANAGEMENT_INTENTS = new Set([
+  "save-delivery-config",
+  "add-delivery-target",
+  "send-test-email",
+  "toggle-delivery-target",
+]);
 
 export function HydrateFallback() {
   return <DashboardRouteLoading title="Watchlists" />;
@@ -86,6 +103,7 @@ export function ErrorBoundary({ error }: { error: unknown }) {
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { resolveCommercialAdSourceStatus } = await import("~/lib/ad-source.server");
+  const { toCustomerDiscoveryStatus } = await import("~/lib/discovery-customer-copy");
   const { getEnv } = await import("~/lib/context.server");
   const {
     getWatchlist,
@@ -103,18 +121,22 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { listCreativeWallAds } = await import("~/lib/watchlist-ads.server");
   const { listWatchlistDailyActivity } = await import("~/lib/watchlist-trends.server");
   const env = getEnv(context);
-  const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
+  const { session, workspaceUserId, isMember } = await requireWorkspaceSession(env, request);
   const { getUserPlan } = await import("~/lib/plan.server");
+  const { isUserEmailVerified } = await import("~/lib/email-verification.server");
   const { isWhatsAppProviderConfigured } = await import("~/lib/env.server");
   const { presenceNavVisible } = await import("~/lib/presence-internal-access.server");
   const showSlackDelivery = isSlackDeliveryCustomerFacing();
   const whatsappAvailable = isWhatsAppDeliveryCustomerFacing() && isWhatsAppProviderConfigured(env);
   const [watchlists, discoveryStatus, plan, showPresenceNav] = await Promise.all([
     listWatchlists(env, workspaceUserId, { includeInactive: true }),
-    resolveCommercialAdSourceStatus(env),
+    resolveCommercialAdSourceStatus(env).then(toCustomerDiscoveryStatus),
     getUserPlan(env, workspaceUserId),
     presenceNavVisible(env, workspaceUserId),
   ]);
+  const verifiedAccountEmail = (await isUserEmailVerified(env, session.user.id))
+    ? session.user.email
+    : null;
   const url = new URL(request.url);
   const selectedWatchlistId = url.searchParams.get("watchlist") ?? watchlists[0]?.id ?? null;
   const selectedWatchlist = selectedWatchlistId
@@ -133,7 +155,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       effectiveDeliveryConfig: buildLegacyWorkspaceConfig(workspaceUserId, Boolean(session.user.email)),
       deliveryTargets: [] as PublicDeliveryTargetRecord[],
       workspaceDeliveryTargets: [] as PublicDeliveryTargetRecord[],
-      recentDeliveryAttempts: [] as DeliveryAttemptRecord[],
+      recentDeliveryAttempts: [] as PublicDeliveryAttemptSummary[],
       recentProofCaptures: [] as ProofCaptureRecord[],
       proofSummary: emptyProofSummary(),
       discoveryStatus,
@@ -142,6 +164,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       showPresenceNav,
       creativeWall: [] as Awaited<ReturnType<typeof listCreativeWallAds>>,
       trendDailyActivity: [] as Awaited<ReturnType<typeof listWatchlistDailyActivity>>,
+      canManageDelivery: !isMember,
+      verifiedAccountEmail,
+      deliveryTestRequestTokens: {} as Record<string, string>,
     };
   }
 
@@ -205,27 +230,35 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     .slice(0, WORKSPACE_DELIVERY_TARGET_DISPLAY_LIMIT);
   const recentDeliveryAttempts = sortByCreatedAtDesc(recentDeliveryAttemptsByChannel.flat())
     .slice(0, RECENT_DELIVERY_ATTEMPT_DISPLAY_LIMIT);
+  const publicWatchlistDeliveryTargets = isMember
+    ? []
+    : watchlistDeliveryTargets
+        .filter((target) => isVisibleDeliveryChannel(target.channel, visibleDelivery))
+        .map((target) => toPublicDeliveryTarget(target, { verifiedAccountEmail }));
 
   return {
     watchlists,
     selectedWatchlist,
     eventCandidates,
     events,
-    runs,
+    runs: runs.map((run) => ({
+      ...run,
+      errorMessage: resolveWatchlistRunCustomerError(run, plan),
+    })),
     workspaceDeliveryConfig: maskDormantDeliveryConfig(workspaceDeliveryConfig, visibleDelivery),
     watchlistDeliveryConfig: watchlistDeliveryConfig
       ? maskDormantDeliveryConfig(watchlistDeliveryConfig, visibleDelivery)
       : null,
     effectiveDeliveryConfig: maskDormantDeliveryConfig(effectiveDeliveryConfig, visibleDelivery),
-    deliveryTargets: watchlistDeliveryTargets
-      .filter((target) => isVisibleDeliveryChannel(target.channel, visibleDelivery))
-      .map(toPublicDeliveryTarget),
-    workspaceDeliveryTargets: workspaceDeliveryTargets
-      .filter((target) => isVisibleDeliveryChannel(target.channel, visibleDelivery))
-      .map(toPublicDeliveryTarget),
-    recentDeliveryAttempts: recentDeliveryAttempts.filter((attempt) =>
-      isVisibleDeliveryChannel(attempt.channel, visibleDelivery),
-    ),
+    deliveryTargets: publicWatchlistDeliveryTargets,
+    workspaceDeliveryTargets: isMember
+      ? []
+      : workspaceDeliveryTargets
+          .filter((target) => isVisibleDeliveryChannel(target.channel, visibleDelivery))
+          .map((target) => toPublicDeliveryTarget(target, { verifiedAccountEmail })),
+    recentDeliveryAttempts: recentDeliveryAttempts
+      .filter((attempt) => isVisibleDeliveryChannel(attempt.channel, visibleDelivery))
+      .map(toPublicDeliveryAttemptSummary),
     recentProofCaptures,
     proofSummary: buildProofSummary(recentProofCaptures),
     discoveryStatus,
@@ -234,6 +267,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     showPresenceNav,
     creativeWall,
     trendDailyActivity,
+    canManageDelivery: !isMember,
+    verifiedAccountEmail,
+    deliveryTestRequestTokens: Object.fromEntries(
+      publicWatchlistDeliveryTargets
+        .filter((target) => target.channel === "email")
+        .map((target) => [target.id, crypto.randomUUID()]),
+    ),
   };
 }
 
@@ -241,9 +281,16 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const env = getEnv(context);
-  const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
+  const { session, workspaceUserId, isMember } = await requireWorkspaceSession(env, request);
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
+
+  if (isMember && DELIVERY_MANAGEMENT_INTENTS.has(intent)) {
+    return {
+      ok: false,
+      message: "Only the account owner can manage delivery settings and targets for this workspace.",
+    };
+  }
 
   if (intent === "refresh-watchlist") {
     const { CommercialDiscoveryError } = await import("~/lib/ad-source.server");
@@ -303,7 +350,13 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
     const shareGate = await requireWorkspacePlanFeature(env, workspaceUserId, "share_links");
     if (!shareGate.ok) {
-      return { ok: false, message: "Share links are included in the Agency plan." };
+      return {
+        ok: false,
+        error: "plan_gated" as const,
+        feature: "share_links" as const,
+        plan: shareGate.plan,
+        message: "Share links are included in the Agency plan.",
+      };
     }
     const { createShareLink, getWatchlist } = await import("~/lib/data.server");
     const watchlistId = String(formData.get("watchlistId") ?? "");
@@ -452,6 +505,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
     if (!deliveryGate.ok) {
       return planFeatureDeniedActionResult(deliveryGate.feature, deliveryGate.plan);
     }
+    if (formData.has("digestEnabled") && !canUsePlanFeature(deliveryGate.plan, "weekly_digest")) {
+      return planFeatureDeniedActionResult("weekly_digest", deliveryGate.plan);
+    }
 
     if (!slackDeliveryEditable && formData.has("slackEnabled")) {
       return { ok: false, message: slackDeliveryUnavailableMessage() };
@@ -466,6 +522,15 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const existingWatchlistConfig = await getWatchlistDeliveryConfig(env, watchlist.id);
     const baseConfig = existingWatchlistConfig ?? workspaceConfig;
     const sensitivityMode = normalizeSensitivityMode(String(formData.get("sensitivityMode") ?? ""));
+    const requestedTimezone = readOptionalString(formData.get("timezone"));
+    const normalizedRequestedTimezone = normalizeTimeZone(requestedTimezone);
+    if (requestedTimezone && !normalizedRequestedTimezone) {
+      return {
+        ok: false,
+        message: "Enter a valid IANA timezone, such as Asia/Kolkata or UTC.",
+      };
+    }
+    const timezone = normalizedRequestedTimezone ?? safeTimeZone(workspaceConfig.timezone);
 
     await upsertWatchlistDeliveryConfig(env, {
       watchlistId: watchlist.id,
@@ -477,7 +542,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       whatsappEnabled: whatsappDeliveryEditable ? formData.has("whatsappEnabled") : baseConfig.whatsappEnabled,
       slackEnabled: slackDeliveryEditable ? formData.has("slackEnabled") : baseConfig.slackEnabled,
       quietHours: parseQuietHours(formData),
-      timezone: readOptionalString(formData.get("timezone")) ?? workspaceConfig.timezone ?? null,
+      timezone,
     });
 
     return {
@@ -563,6 +628,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   if (intent === "resume-watchlist") {
     const { setWatchlistActive } = await import("~/lib/data.server");
     const { requireWorkspacePlanLimit } = await import("~/lib/with-workspace.server");
+    const { getUserPlan } = await import("~/lib/plan.server");
     const watchlistId = String(formData.get("watchlistId") ?? "");
 
     const limitGate = await requireWorkspacePlanLimit(env, workspaceUserId, "watchlists", {
@@ -575,8 +641,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     const resumed = await setWatchlistActive(env, workspaceUserId, watchlistId, true);
 
+    const plan = await getUserPlan(env, workspaceUserId);
     return resumed
-      ? { ok: true, message: "Watchlist resumed. It rejoins the next scheduled scan." }
+      ? {
+          ok: true,
+          message: plan === "free"
+            ? "Watchlist resumed. Free includes an activation-only scan; paid plans include recurring monitoring."
+            : "Watchlist resumed. It rejoins the next scheduled scan.",
+        }
       : { ok: false, message: "Watchlist not found." };
   }
 
@@ -588,6 +660,13 @@ export async function action({ context, request }: ActionFunctionArgs) {
       requireDeliveryConfigSave,
     } = await import("~/lib/plan-feature-gate.server");
     const targetId = String(formData.get("targetId") ?? "");
+    const requestToken = String(formData.get("requestToken") ?? "").trim();
+    if (!isDeliveryTestRequestToken(requestToken)) {
+      return {
+        ok: false,
+        message: "This test request expired. Refresh the page and try again.",
+      };
+    }
     const target = await getDeliveryTargetById(env, {
       userId: workspaceUserId,
       targetId,
@@ -606,42 +685,44 @@ export async function action({ context, request }: ActionFunctionArgs) {
       userId: workspaceUserId,
       email: target.targetValue,
       name: session.user.name ?? null,
+      targetId,
+      idempotencyKey: `delivery-test:${workspaceUserId}:${targetId}:${requestToken}`,
     });
 
     return sent
       ? {
           ok: true,
-          message: `Test email sent to ${target.targetValue} — if it doesn't arrive within a few minutes, check the address and spam folder.`,
+          message: "Test email sent — if it doesn't arrive within a few minutes, check your inbox and spam folder.",
         }
       : {
           ok: false,
-          message: `The test email to ${target.targetValue} failed to send. Check the address or email ${SUPPORT_EMAIL}.`,
+        message: `The test email failed to send. Check your delivery settings or email ${SUPPORT_EMAIL}.`,
         };
   }
 
   if (intent === "toggle-delivery-target") {
-    const { getWatchlist, upsertDeliveryTarget } = await import("~/lib/data.server");
-    const watchlist = await getOwnedWatchlist(env, workspaceUserId, formData, getWatchlist);
+    const { getDeliveryTargetById, getWatchlist, upsertDeliveryTarget } = await import("~/lib/data.server");
+    const targetId = String(formData.get("targetId") ?? "").trim();
+    const target = await getDeliveryTargetById(env, {
+      userId: workspaceUserId,
+      targetId,
+    });
+    const watchlist = target?.watchlistId
+      ? await getWatchlist(env, target.watchlistId, workspaceUserId)
+      : null;
 
-    if (!watchlist) {
-      return { ok: false, message: "Watchlist not found." };
+    if (!target || target.userId !== workspaceUserId || !target.watchlistId || !watchlist?.isActive) {
+      return { ok: false, message: "Delivery target not found." };
     }
 
-    const requestedChannel = String(formData.get("channel") ?? "");
+    const requestedChannel = target.channel;
     if (requestedChannel === "slack" && !isSlackDeliveryCustomerFacing()) {
       return { ok: false, message: slackDeliveryUnavailableMessage() };
     }
 
-    const channel = readDeliveryChannel(formData.get("channel"));
-    const targetValue = readOptionalString(formData.get("targetValue"));
-    const isPaused = String(formData.get("isPaused") ?? "") === "true";
-
-    if (!channel || !targetValue) {
-      return {
-        ok: false,
-        message: "Delivery target not found.",
-      };
-    }
+    const channel = target.channel;
+    const targetValue = target.targetValue;
+    const isPaused = !target.isPaused;
     if (channel === "whatsapp" && !isWhatsAppDeliveryCustomerFacing()) {
       return { ok: false, message: whatsappDeliveryUnavailableMessage() };
     }
@@ -677,10 +758,25 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
 export default function WatchlistsRoute() {
   const data = useLoaderData<typeof loader>();
+  const discoveryStatus = toCustomerDiscoveryStatus(data.discoveryStatus);
   const actionData = useActionData<typeof action>();
   const showSlackDelivery = isSlackDeliveryCustomerFacing();
+  const canExport = canUsePlanFeature(data.plan, "export_csv") && canUsePlanFeature(data.plan, "export_json");
+  const canReport = canUsePlanFeature(data.plan, "client_reports");
+  const canShare = canUsePlanFeature(data.plan, "share_links");
+  const canRefresh = data.plan !== "free";
+  const canConfigureDelivery = (data.canManageDelivery ?? true) && data.plan !== "free";
+  const canInstantAlert = canUsePlanFeature(data.plan, "high_priority_alerts");
+  const canEmailDelivery = canUsePlanFeature(data.plan, "email_delivery");
   const [searchParams] = useSearchParams();
   const navigation = useNavigation();
+  const trackingPresentation = resolveWatchlistTrackingPresentation(
+    discoveryStatus,
+    data.runs,
+    data.proofSummary,
+  );
+  const sourceCanSchedule = discoveryStatus.status !== "demo" && discoveryStatus.status !== "disabled";
+  const hasExplicitWatchlistSelection = searchParams.has("watchlist");
   const pendingWatchlistId =
     navigation.location?.pathname === "/app/watchlists"
       ? new URLSearchParams(navigation.location.search).get("watchlist")
@@ -712,7 +808,11 @@ export default function WatchlistsRoute() {
         />
 
       {actionData?.message ? (
-        <p className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
+        <p
+          aria-live="polite"
+          className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}
+          role="status"
+        >
           {actionData.ok && actionData.message.startsWith("http") ? (
             <>
               <a href={actionData.message} rel="noreferrer" target="_blank">
@@ -723,6 +823,12 @@ export default function WatchlistsRoute() {
             ) : (
               actionData.message
             )}
+          {!actionData.ok && (actionData.error === "plan_limit_exceeded" || actionData.error === "plan_gated") ? (
+            <>
+              {" "}
+              <Link to="/app/billing?source=watchlists#plans">View plans</Link> to unlock this control.
+            </>
+          ) : null}
         </p>
       ) : null}
 
@@ -743,6 +849,14 @@ export default function WatchlistsRoute() {
                 searchParams.get("watchlist") === watchlist.id ||
                 (!searchParams.get("watchlist") && data.selectedWatchlist?.id === watchlist.id);
               const isPending = pendingWatchlistId === watchlist.id;
+              const scanPresentation = resolveWatchlistListScanPresentation({
+                isActive: watchlist.isActive,
+                lastScannedAt: watchlist.lastScannedAt,
+                latestRun: isActive
+                  ? ((data.runs[0] as WatchlistRunRecord | undefined) ?? null)
+                  : null,
+                plan: data.plan,
+              });
 
               return (
                 <Link
@@ -758,14 +872,12 @@ export default function WatchlistsRoute() {
                       {watchlist.isActive ? "" : " · Paused"}
                     </p>
                     <p className="f9-muted-copy">
-                      {watchlist.lastScannedAt ? (
+                      {scanPresentation.timestamp ? (
                         <>
-                          Last scanned <LocalTime iso={watchlist.lastScannedAt} />
+                          {scanPresentation.label} <LocalTime iso={scanPresentation.timestamp} />
                         </>
-                      ) : watchlist.isActive ? (
-                        "First scan in progress — results land in a few minutes"
                       ) : (
-                        "Paused before its first scan"
+                        scanPresentation.label
                       )}
                     </p>
                   </div>
@@ -783,7 +895,7 @@ export default function WatchlistsRoute() {
           </div>
         </article>
 
-        <article className="f9-app-panel">
+        <article className={`f9-app-panel${hasExplicitWatchlistSelection ? " f9-selected-detail-priority" : ""}`}>
           {data.selectedWatchlist ? (
             <>
               <div className="f9-panel-toolbar">
@@ -798,37 +910,61 @@ export default function WatchlistsRoute() {
                       "never"
                     )}
                     {data.selectedWatchlist.isActive
-                      ? ` · next scan ${formatNextScanLabel(data.plan, new Date(), data.effectiveDeliveryConfig.timezone)}`
+                      ? data.plan === "free"
+                        ? " · activation-only scan; paid plans include recurring monitoring"
+                        : sourceCanSchedule
+                          ? ` · next scan ${formatNextScanLabel(data.plan, new Date(), data.effectiveDeliveryConfig.timezone)}`
+                          : " · next scan after source access is ready"
                       : null}
                     {` · ${formatWatchlistTrackingRole(data.selectedWatchlist.trackingRole)}`}
                   </p>
                 </div>
                 <div className="f9-action-row">
-                  <Link
-                    className="f9-secondary-button"
-                    to={`/app/reports/${createReportId("watchlist", data.selectedWatchlist.id)}`}
-                  >
-                    Open report
-                  </Link>
-                  <a
-                    className="f9-secondary-button"
-                    href={`/export/watchlist/${data.selectedWatchlist.id}`}
-                  >
-                    Export CSV
-                  </a>
-                    <a
+                  {canReport ? (
+                    <Link
                       className="f9-secondary-button"
-                      href={`/export/watchlist/${data.selectedWatchlist.id}?format=json`}
+                      to={`/app/reports/${createReportId("watchlist", data.selectedWatchlist.id)}`}
                     >
-                      JSON export
-                    </a>
-                  <Form method="post">
-                    <input name="intent" type="hidden" value="share-watchlist" />
-                    <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
-                    <SubmitButton className="f9-secondary-button" intent="share-watchlist" pendingLabel="Sharing…">
-                      Share summary
-                    </SubmitButton>
-                  </Form>
+                      Open report
+                    </Link>
+                  ) : (
+                    <Link className="f9-secondary-button" to="/app/billing?source=watchlists#plans">
+                      Upgrade for reports
+                    </Link>
+                  )}
+                  {canExport ? (
+                    <>
+                      <a
+                        className="f9-secondary-button"
+                        href={`/export/watchlist/${data.selectedWatchlist.id}`}
+                      >
+                        Export CSV
+                      </a>
+                      <a
+                        className="f9-secondary-button"
+                        href={`/export/watchlist/${data.selectedWatchlist.id}?format=json`}
+                      >
+                        JSON export
+                      </a>
+                    </>
+                  ) : (
+                    <Link className="f9-secondary-button" to="/app/billing?source=watchlists#plans">
+                      Upgrade for exports
+                    </Link>
+                  )}
+                  {canShare ? (
+                    <Form method="post">
+                      <input name="intent" type="hidden" value="share-watchlist" />
+                      <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
+                      <SubmitButton className="f9-secondary-button" intent="share-watchlist" pendingLabel="Sharing…">
+                        Share summary
+                      </SubmitButton>
+                    </Form>
+                  ) : (
+                    <Link className="f9-secondary-button" to="/app/billing?source=watchlists#plans">
+                      Upgrade to share
+                    </Link>
+                  )}
                   <Form method="post">
                     <input
                       name="intent"
@@ -844,7 +980,7 @@ export default function WatchlistsRoute() {
                       {data.selectedWatchlist.isActive ? "Pause tracking" : "Resume tracking"}
                     </SubmitButton>
                   </Form>
-                  {data.selectedWatchlist.isActive ? (
+                  {data.selectedWatchlist.isActive && canRefresh ? (
                     <Form method="post">
                       <input name="intent" type="hidden" value="refresh-watchlist" />
                       <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
@@ -852,12 +988,20 @@ export default function WatchlistsRoute() {
                         Refresh now
                       </SubmitButton>
                     </Form>
+                  ) : data.selectedWatchlist.isActive ? (
+                    <Link className="f9-primary-button" to="/app/billing?source=watchlists#plans">
+                      Upgrade to refresh
+                    </Link>
                   ) : null}
                 </div>
               </div>
 
               {data.selectedWatchlist.isActive && !data.selectedWatchlist.lastScannedAt ? (
-                <FirstScanBanner watchlistId={data.selectedWatchlist.id} />
+                <FirstScanBanner
+                  plan={data.plan}
+                  run={(data.runs[0] as WatchlistRunRecord | undefined) ?? null}
+                  watchlistId={data.selectedWatchlist.id}
+                />
               ) : null}
 
               {consecutiveFailedRuns >= 3 ? (
@@ -945,44 +1089,49 @@ export default function WatchlistsRoute() {
 
                 <section className="f9-detail-cell">
                   <p className="f9-app-kicker">Tracking status</p>
-                  <h3>{formatDiscoveryHeadline(data.discoveryStatus)}</h3>
+                  <h3>{trackingPresentation.headline}</h3>
                   <p className="f9-muted-copy">
-                    {customerDiscoverySummary(data.discoveryStatus.summary) ??
-                      "Tracking status will appear after the first check."}
+                    {trackingPresentation.summary}
                   </p>
-                  {data.discoveryStatus.lastErrorCode ? (
-                    <p className="f9-muted-copy">
-                      What happened: {formatDiscoveryIssue(data.discoveryStatus.lastErrorCode)}
-                    </p>
-                  ) : null}
-
                   <div className="f9-work-list is-compact">
                     <div className="f9-work-row">
                       <p className="f9-app-kicker">How ads are checked</p>
                       <p className="f9-muted-copy">
-                        {formatDiscoveryProviderLabel(
-                          data.discoveryStatus.provider,
-                          data.discoveryStatus.mode,
-                        )}
+                        Five to Nine checks public ad signals and shows Recent results when live checks are delayed.
                       </p>
                     </div>
                     <div className="f9-work-row">
                       <p className="f9-app-kicker">Status</p>
                       <p className="f9-muted-copy">
-                        {formatDiscoveryStatusLabel(data.discoveryStatus.status)}
+                        {trackingPresentation.statusLabel}
                       </p>
                     </div>
                     <div className="f9-work-row">
                       <p className="f9-app-kicker">Last check</p>
                       <p className="f9-muted-copy">
-                        {data.discoveryStatus.lastCheckedAt ? (
-                          <LocalTime iso={data.discoveryStatus.lastCheckedAt} />
+                        {trackingPresentation.lastCheckedAt ? (
+                          <LocalTime iso={trackingPresentation.lastCheckedAt} />
                         ) : (
                           "No recent check yet"
                         )}
                       </p>
                     </div>
+                    <div className="f9-work-row">
+                      <p className="f9-app-kicker">Next check</p>
+                      <p className="f9-muted-copy">
+                        {!data.selectedWatchlist.isActive
+                          ? "Paused"
+                          : data.plan === "free"
+                            ? "Activation only — no recurring schedule on Free"
+                            : sourceCanSchedule
+                              ? formatNextScanLabel(data.plan, new Date(), data.effectiveDeliveryConfig.timezone)
+                              : "After source access is ready"}
+                      </p>
+                    </div>
                   </div>
+                  {discoveryStatus.recovery ? (
+                    <p className="f9-muted-copy">{discoveryStatus.recovery}</p>
+                  ) : null}
                   <Link className="f9-secondary-button" to="/app/source-access">
                     Review tracking access
                   </Link>
@@ -1005,9 +1154,18 @@ export default function WatchlistsRoute() {
                   <p className="f9-app-kicker">See what changed</p>
                   {data.events.length === 0 ? (
                     <p className="f9-muted-copy">
-                      {data.selectedWatchlist.lastScannedAt
-                        ? `No confirmed changes yet — we'll flag the next one. Next scheduled scan: ${formatNextScanLabel(data.plan, new Date(), data.effectiveDeliveryConfig.timezone)}.`
-                        : "Your first scan is running now. Results appear here in a couple of minutes — refresh to check."}
+                      {resolveEmptyWatchlistEventCopy({
+                        lastScannedAt: data.selectedWatchlist.lastScannedAt,
+                        latestRun: (data.runs[0] as WatchlistRunRecord | undefined) ?? null,
+                        nextScanLabel: sourceCanSchedule
+                          ? formatNextScanLabel(
+                              data.plan,
+                              new Date(),
+                              data.effectiveDeliveryConfig.timezone,
+                            )
+                          : null,
+                        plan: data.plan,
+                      })}
                     </p>
                   ) : (
                     <ul className="event-list">
@@ -1016,6 +1174,10 @@ export default function WatchlistsRoute() {
                           ? proofCapturesById.get(event.proofCaptureId) ?? null
                           : null;
                         const lastAttempt = lastAttemptByEventId.get(event.id) ?? null;
+                        const intelligence = buildChangeIntelligenceSummary(
+                          event,
+                          data.effectiveDeliveryConfig.timezone,
+                        );
 
                         return (
                           <li className="f9-event-card" key={event.id}>
@@ -1034,10 +1196,8 @@ export default function WatchlistsRoute() {
                                 <p className="f9-app-kicker">Evidence summary</p>
                                 <p className="f9-muted-copy">
                                   {proofCapture
-                                    ? `${formatConfidenceBandLabel(proofCapture.fieldConfidence)} · evidence age ${formatProofAgeLabel(
-                                        proofCapture.succeededAt ?? proofCapture.attemptedAt,
-                                      )}`
-                                    : "No separate landing-page evidence check was needed for this event."}
+                                    ? `${formatConfidenceBandLabel(proofCapture.fieldConfidence)} · ${intelligence.proofTrail}`
+                                    : intelligence.proofTrail}
                                 </p>
                               </div>
                               <div className="f9-work-row">
@@ -1049,6 +1209,10 @@ export default function WatchlistsRoute() {
                                     metadata: event.metadata,
                                   })}
                                 </p>
+                              </div>
+                              <div className="f9-work-row">
+                                <p className="f9-app-kicker">Next review</p>
+                                <p className="f9-muted-copy">{intelligence.recommendedAction}</p>
                               </div>
                               <div className="f9-work-row">
                                 <p className="f9-app-kicker">Last send state</p>
@@ -1119,7 +1283,7 @@ export default function WatchlistsRoute() {
                           Using the default alert settings for this account.
                         </p>
                       ) : null}
-                      <Form method="post" className="f9-work-list is-compact">
+                      {canConfigureDelivery ? <Form method="post" className="f9-work-list is-compact">
                         <input name="intent" type="hidden" value="save-delivery-config" />
                         <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
                         <label className="f9-field">
@@ -1135,9 +1299,13 @@ export default function WatchlistsRoute() {
                           <span>Timezone</span>
                           <input
                             defaultValue={data.effectiveDeliveryConfig.timezone ?? "UTC"}
+                            aria-describedby="delivery-timezone-help"
                             name="timezone"
                             type="text"
                           />
+                          <small className="f9-muted-copy" id="delivery-timezone-help">
+                            Use an IANA timezone such as Asia/Kolkata or UTC.
+                          </small>
                         </label>
                         <div className="f9-field-pair">
                           <label className="f9-field">
@@ -1157,18 +1325,40 @@ export default function WatchlistsRoute() {
                             />
                           </label>
                         </div>
-                        <label className="f9-field f9-field-inline">
-                          <input defaultChecked={data.effectiveDeliveryConfig.instantEnabled} name="instantEnabled" type="checkbox" />
-                          <span>High-priority alerts (sent as soon as a scan confirms a major change)</span>
-                        </label>
+                        {canInstantAlert ? (
+                          <label className="f9-field f9-field-inline">
+                            <input defaultChecked={data.effectiveDeliveryConfig.instantEnabled} name="instantEnabled" type="checkbox" />
+                            <span>High-priority alerts (sent as soon as a scan confirms a major change)</span>
+                          </label>
+                        ) : (
+                          <div className="f9-field f9-action-row">
+                            <label className="f9-field-inline">
+                              <input disabled type="checkbox" />
+                              <span>High-priority alerts require Starter.</span>
+                            </label>
+                            <Link className="f9-secondary-button" to="/app/billing?source=watchlists#plans">
+                              View plans
+                            </Link>
+                          </div>
+                        )}
                         <label className="f9-field f9-field-inline">
                           <input defaultChecked={data.effectiveDeliveryConfig.digestEnabled} name="digestEnabled" type="checkbox" />
-                          <span>Digest alerts</span>
+                          <span>{data.plan === "free" ? "Digest alerts (paid recurring monitoring)" : "Digest alerts"}</span>
                         </label>
-                        <label className="f9-field f9-field-inline">
-                          <input defaultChecked={data.effectiveDeliveryConfig.emailEnabled} name="emailEnabled" type="checkbox" />
-                          <span>Email enabled</span>
-                        </label>
+                        {canEmailDelivery ? (
+                          <label className="f9-field f9-field-inline">
+                            <input defaultChecked={data.effectiveDeliveryConfig.emailEnabled} name="emailEnabled" type="checkbox" />
+                            <span>Email enabled</span>
+                          </label>
+                        ) : (
+                          <label className="f9-field f9-field-inline">
+                            <input disabled type="checkbox" />
+                            <span>
+                              Email delivery requires Scout. {" "}
+                              <Link to="/app/billing?source=watchlists#plans">View plans</Link>
+                            </span>
+                          </label>
+                        )}
                         {data.whatsappAvailable ? (
                           <label className="f9-field f9-field-inline">
                             <input defaultChecked={data.effectiveDeliveryConfig.whatsappEnabled} name="whatsappEnabled" type="checkbox" />
@@ -1184,7 +1374,16 @@ export default function WatchlistsRoute() {
                         <SubmitButton className="f9-primary-button" intent="save-delivery-config" pendingLabel="Saving…">
                           Save delivery settings
                         </SubmitButton>
-                      </Form>
+                      </Form> : (
+                        <div className="f9-work-list is-compact">
+                          <p className="f9-muted-copy">
+                            Free includes one activation scan only. Recurring monitoring and digest alerts start on a paid plan.
+                          </p>
+                          <Link className="f9-primary-button" to="/app/billing?source=watchlists#plans">
+                            Upgrade for delivery alerts
+                          </Link>
+                        </div>
+                      )}
                     </article>
                   </div>
                 </section>
@@ -1199,14 +1398,18 @@ export default function WatchlistsRoute() {
                   <div className="f9-detail-split">
                   <div className="f9-detail-cell">
                   <p className="f9-app-kicker">Watchlist targets</p>
-                  <div className="f9-work-list is-compact">
+                  {data.canManageDelivery ? <div className="f9-work-list is-compact">
                     {data.deliveryTargets.map((target) => (
                       <div className="f9-work-row" key={target.id}>
                         <div>
                           <h4 style={{ marginBottom: "0.25rem" }}>
                             {target.channel === "email" ? "Email" : "WhatsApp"}
                           </h4>
-                          <p className="f9-muted-copy">{target.targetValue}</p>
+                          <p className="f9-muted-copy">
+                            {toPublicDeliveryTarget(target, {
+                              verifiedAccountEmail: data.verifiedAccountEmail,
+                            }).targetValue}
+                          </p>
                           <p className="f9-muted-copy">
                             {target.isPaused
                               ? "Paused"
@@ -1218,10 +1421,15 @@ export default function WatchlistsRoute() {
                           </p>
                         </div>
                         <div style={{ display: "flex", gap: "0.5rem" }}>
-                          {target.channel === "email" ? (
+                          {target.channel === "email" && canEmailDelivery ? (
                             <Form method="post">
                               <input name="intent" type="hidden" value="send-test-email" />
                               <input name="targetId" type="hidden" value={target.id} />
+                              <input
+                                name="requestToken"
+                                type="hidden"
+                                value={data.deliveryTestRequestTokens[target.id] ?? ""}
+                              />
                               <SubmitButton
                                 className="f9-secondary-button"
                                 intent="send-test-email"
@@ -1231,17 +1439,18 @@ export default function WatchlistsRoute() {
                                 Send test
                               </SubmitButton>
                             </Form>
+                          ) : target.channel === "email" ? (
+                            <Link className="f9-secondary-button" to="/app/billing?source=watchlists#plans">
+                              Upgrade for email
+                            </Link>
                           ) : null}
                           <Form method="post">
                             <input name="intent" type="hidden" value="toggle-delivery-target" />
-                            <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
-                            <input name="channel" type="hidden" value={target.channel} />
-                            <input name="targetValue" type="hidden" value={target.targetValue} />
-                            <input name="isPaused" type="hidden" value={target.isPaused ? "false" : "true"} />
+                            <input name="targetId" type="hidden" value={target.id} />
                             <SubmitButton
                               className="f9-secondary-button"
                               intent="toggle-delivery-target"
-                              match={{ targetValue: target.targetValue }}
+                              match={{ targetId: target.id }}
                               pendingLabel={target.isPaused ? "Resuming…" : "Pausing…"}
                             >
                               {target.isPaused ? "Resume" : "Pause"}
@@ -1255,18 +1464,33 @@ export default function WatchlistsRoute() {
                         Using the default delivery target until you add one for this competitor.
                       </p>
                     ) : null}
-                  </div>
+                  </div> : (
+                    <div className="f9-work-list is-compact">
+                      <p className="f9-muted-copy">
+                        Delivery settings and recipient targets are managed by the workspace owner.
+                      </p>
+                      {data.verifiedAccountEmail ? (
+                        <p className="f9-muted-copy">Your verified account email: {data.verifiedAccountEmail}</p>
+                      ) : null}
+                    </div>
+                  )}
                   {data.workspaceDeliveryTargets.length > 0 ? (
                     <div>
                       <p className="f9-app-kicker">Default delivery</p>
                       <p className="f9-muted-copy">
-                        {data.workspaceDeliveryTargets.map((target) => target.targetValue).join(" · ")}
+                        {data.workspaceDeliveryTargets
+                          .map((target) =>
+                            toPublicDeliveryTarget(target, {
+                              verifiedAccountEmail: data.verifiedAccountEmail,
+                            }).targetValue,
+                          )
+                          .join(" · ")}
                       </p>
                     </div>
                   ) : null}
                   </div>
 
-                  <Form method="post" className="f9-detail-cell">
+                  {canConfigureDelivery ? <Form method="post" className="f9-detail-cell">
                     <p className="f9-app-kicker">Add delivery target</p>
                     <input name="intent" type="hidden" value="add-delivery-target" />
                     <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
@@ -1294,7 +1518,25 @@ export default function WatchlistsRoute() {
                     <SubmitButton className="f9-secondary-button" intent="add-delivery-target" pendingLabel="Adding…">
                       Add delivery target
                     </SubmitButton>
-                  </Form>
+                  </Form> : (
+                    <div className="f9-detail-cell">
+                      <p className="f9-app-kicker">Add delivery target</p>
+                      {data.canManageDelivery ? (
+                        <>
+                          <p className="f9-muted-copy">
+                            Paid plans can send proof-backed alerts to email. Upgrade to add a delivery target.
+                          </p>
+                          <Link className="f9-secondary-button" to="/app/billing?source=watchlists#plans">
+                            Upgrade for delivery
+                          </Link>
+                        </>
+                      ) : (
+                        <p className="f9-muted-copy">
+                          Ask the workspace owner to add or change delivery targets.
+                        </p>
+                      )}
+                    </div>
+                  )}
                   </div>
                 </section>
 
@@ -1304,7 +1546,9 @@ export default function WatchlistsRoute() {
                     <p className="f9-muted-copy">No checks recorded yet.</p>
                   ) : (
                     <ul className="event-list f9-detail-split">
-                      {data.runs.map((run) => (
+                      {data.runs.map((run) => {
+                        const timing = resolveWatchlistRunTiming(run);
+                        return (
                         <li className="f9-event-card" key={run.id}>
                           <div className="f9-panel-toolbar">
                             <div>
@@ -1318,12 +1562,12 @@ export default function WatchlistsRoute() {
                             <span className="f9-status-pill">{run.pagesScanned} pages</span>
                           </div>
                           <p className="f9-muted-copy">
-                            {run.finishedAt ? (
+                            {timing.timestamp ? (
                               <>
-                                Finished <LocalTime iso={run.finishedAt} />
+                                {timing.label} <LocalTime iso={timing.timestamp} />
                               </>
                             ) : (
-                              "Still running"
+                              timing.label
                             )}
                             {run.baselineFromRunId ? ` · baseline ${run.baselineFromRunId.slice(0, 8)}` : ""}
                           </p>
@@ -1335,7 +1579,8 @@ export default function WatchlistsRoute() {
                           ) : null}
                           {run.errorMessage ? <p>{run.errorMessage}</p> : null}
                         </li>
-                      ))}
+                        );
+                      })}
                     </ul>
                   )}
                 </section>
@@ -1373,6 +1618,10 @@ export default function WatchlistsRoute() {
       </section>
     </DashboardPage>
   );
+}
+
+function isDeliveryTestRequestToken(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 function buildLegacyWorkspaceConfig(
@@ -1554,7 +1803,7 @@ function normalizeSensitivityMode(value: string) {
   return "balanced";
 }
 
-function buildLastAttemptByEventId(attempts: DeliveryAttemptRecord[]) {
+function buildLastAttemptByEventId(attempts: PublicDeliveryAttemptSummary[]) {
   return attempts.reduce((map, attempt) => {
     for (const eventId of attempt.eventIds) {
       if (!map.has(eventId)) {
@@ -1562,7 +1811,7 @@ function buildLastAttemptByEventId(attempts: DeliveryAttemptRecord[]) {
       }
     }
     return map;
-  }, new Map<string, DeliveryAttemptRecord>());
+  }, new Map<string, PublicDeliveryAttemptSummary>());
 }
 
 function formatRunSummary(summary: Record<string, unknown>) {
@@ -1593,7 +1842,7 @@ function formatRunEventTypes(summary: Record<string, unknown>) {
   return parts.join(" · ");
 }
 
-function formatDiscoveryHeadline(status: MetaIntegrationStatus) {
+function formatDiscoveryHeadline(status: Pick<MetaIntegrationStatus, "status">) {
   if (status.status === "healthy") {
     return "Live competitor tracking is ready";
   }
@@ -1607,22 +1856,6 @@ function formatDiscoveryHeadline(status: MetaIntegrationStatus) {
     return "Competitor tracking is unavailable";
   }
   return "Live ad checks are temporarily delayed";
-}
-
-function formatDiscoveryProviderLabel(
-  provider?: MetaIntegrationStatus["provider"],
-  mode?: MetaIntegrationStatus["mode"],
-) {
-  if (provider === "meta_library_browser") {
-    return mode === "cache" ? "Recent results" : "Live ad check";
-  }
-  if (provider === "meta_api") {
-    return mode === "diagnostic" ? "Backup Meta check" : "Your Meta backup";
-  }
-  if (provider === "demo") {
-    return "Sample data";
-  }
-  return "Not configured";
 }
 
 function formatDiscoveryStatusLabel(status: MetaIntegrationStatus["status"]) {
@@ -1644,18 +1877,184 @@ function formatDiscoveryStatusLabel(status: MetaIntegrationStatus["status"]) {
   return "Needs attention";
 }
 
-function formatDiscoveryIssue(issue: string) {
-  const labels: Record<string, string> = {
-    browser_unavailable: "The visual ad check is temporarily unavailable.",
-    browser_launch_failed: "The visual ad check is temporarily delayed. We'll retry automatically.",
-    timeout: "The ad check took too long.",
-    login_wall: "Meta asked for login before showing ads.",
-    rate_limited: "Meta is rate limiting checks right now.",
-    selector_drift: "The ad page layout changed.",
-    empty_result: "No ad cards were found for this check.",
-  };
+export function resolveWatchlistTrackingPresentation(
+  status: CustomerDiscoveryStatus,
+  runs: WatchlistRunRecord[],
+  proofSummary: WatchlistProofSummary,
+) {
+  const latestSuccessfulRunAt = runs.reduce<string | null>((latest, run) => {
+    if (run.status !== "succeeded" || !run.finishedAt) return latest;
+    return !latest || Date.parse(run.finishedAt) > Date.parse(latest) ? run.finishedAt : latest;
+  }, null);
+  const hasStoredEvidence = proofSummary.successfulAttempts > 0 || Boolean(latestSuccessfulRunAt);
+  const lastCheckedAt = status.lastCheckedAt ?? latestSuccessfulRunAt ?? proofSummary.lastSuccessfulProofAt;
 
-  return labels[issue] ?? formatMachineTokenLabel(issue);
+  if (status.status === "demo" && hasStoredEvidence) {
+    return {
+      headline: "Monitoring history is saved; new checks need source access",
+      summary:
+        "Your last successful evidence remains available. Review source access before relying on new competitor changes.",
+      statusLabel: "Needs source access",
+      lastCheckedAt,
+    };
+  }
+
+  return {
+    headline: formatDiscoveryHeadline(status),
+    summary:
+      customerDiscoverySummary(status.summary) ??
+      "Tracking status will appear after the first check.",
+    statusLabel: formatDiscoveryStatusLabel(status.status),
+    lastCheckedAt,
+  };
+}
+
+export function resolveWatchlistListScanPresentation(input: {
+  isActive: boolean;
+  lastScannedAt: string | null;
+  latestRun: WatchlistRunRecord | null;
+  plan: string;
+}) {
+  if (!input.isActive) {
+    return input.lastScannedAt
+      ? { label: "Paused · last successful check", timestamp: input.lastScannedAt }
+      : { label: "Paused before its first check", timestamp: null };
+  }
+
+  const run = input.latestRun;
+  if (!run) {
+    return input.lastScannedAt
+      ? { label: "Last successful check", timestamp: input.lastScannedAt }
+      : { label: "No completed scan yet — open to review status", timestamp: null };
+  }
+  if (run.status === "running") {
+    return {
+      label: input.lastScannedAt ? "Checking for changes now" : input.plan === "free" ? "Activation scan running" : "First scan running",
+      timestamp: null,
+    };
+  }
+  if (run.status === "pending") {
+    const delayed = [
+      "dispatch_rate_limited",
+      "first_scan_dispatch_failed",
+      "first_scan_setup_failed",
+      "workflow_binding_missing",
+    ].includes(run.errorCode ?? "");
+    return {
+      label: delayed
+        ? "Scan delayed — open to review recovery"
+        : input.lastScannedAt
+          ? "Next check queued"
+          : input.plan === "free"
+            ? "Activation scan queued"
+            : "First scan queued",
+      timestamp: null,
+    };
+  }
+  if (run.status === "failed") {
+    return { label: "Latest check failed — open to recover", timestamp: null };
+  }
+  if (run.status === "skipped") {
+    if (run.errorCode === "e2e_provider_network_denied") {
+      return { label: "New checks paused — source access needed", timestamp: null };
+    }
+    if (run.errorCode === "capacity_budget") {
+      return { label: "Latest check delayed — next monitoring window", timestamp: null };
+    }
+    return { label: "Latest check did not run — open to review", timestamp: null };
+  }
+
+  return {
+    label: "Last successful check",
+    timestamp: run.finishedAt ?? input.lastScannedAt,
+  };
+}
+
+export function resolveEmptyWatchlistEventCopy(input: {
+  lastScannedAt: string | null;
+  latestRun: WatchlistRunRecord | null;
+  nextScanLabel: string | null;
+  plan: string;
+}) {
+  const activationOnly = input.plan === "free";
+  const scanName = activationOnly ? "activation scan" : "first scan";
+  if ((!input.latestRun && input.lastScannedAt) || input.latestRun?.status === "succeeded") {
+    if (activationOnly) {
+      return "No confirmed changes yet — your activation-only scan is complete. Paid plans include recurring monitoring for the next change.";
+    }
+    return input.nextScanLabel
+      ? `No confirmed changes yet — we'll flag the next one. Next scheduled scan: ${input.nextScanLabel}.`
+      : "No confirmed changes in the last completed check. New checks resume after source access is ready.";
+  }
+
+  if (!input.latestRun) {
+    return activationOnly
+      ? "Your activation scan has not started yet. Review tracking access; contact support if it does not resume."
+      : "Your first scan has not started yet. Review tracking access or retry when the source is ready.";
+  }
+  if (input.latestRun.status === "running") {
+    return activationOnly
+      ? "Your activation scan is running now. Results appear here in a couple of minutes. Paid plans add recurring monitoring."
+      : "Your first scan is running now. Results appear here in a couple of minutes.";
+  }
+  if (input.latestRun.status === "pending") {
+    const delayed = [
+      "dispatch_rate_limited",
+      "first_scan_dispatch_failed",
+      "first_scan_setup_failed",
+      "workflow_binding_missing",
+    ].includes(input.latestRun.errorCode ?? "");
+    return delayed
+      ? `Your ${scanName} is delayed and queued for recovery. Review tracking access if it does not resume.`
+      : `Your ${scanName} is queued and waiting for a monitoring worker.`;
+  }
+  if (input.latestRun.status === "failed") {
+    return activationOnly
+      ? "Your activation scan could not finish. Review tracking access, then contact support if it remains unavailable."
+      : "Your first scan could not finish. Review tracking access, then retry or contact support.";
+  }
+  if (input.latestRun.errorCode === "e2e_provider_network_denied") {
+    return activationOnly
+      ? "Your activation scan paused safely before an external check. Review tracking access; contact support if it does not resume."
+      : "Your first scan paused safely before an external check. Review tracking access before retrying.";
+  }
+  return `Your ${scanName} stopped before evidence was created. Review Recent checks for the recovery path.`;
+}
+
+export function resolveWatchlistRunTiming(run: WatchlistRunRecord) {
+  if (run.finishedAt) return { label: "Finished", timestamp: run.finishedAt };
+  if (run.status === "running") return { label: "Still running", timestamp: null };
+  if (run.status === "pending") {
+    const retrying = [
+      "dispatch_failed",
+      "reconcile_dispatch_failed",
+      "dispatch_rate_limited",
+      "first_scan_dispatch_failed",
+      "first_scan_setup_failed",
+      "workflow_binding_missing",
+    ].includes(run.errorCode ?? "");
+    return {
+      label: retrying ? "Queued for retry" : "Queued — waiting for a monitoring worker",
+      timestamp: null,
+    };
+  }
+  if (run.status === "failed") return { label: "Stopped after a failed check", timestamp: null };
+  if (run.status === "skipped") return { label: "Stopped before evidence was created", timestamp: null };
+  return { label: "Completed", timestamp: null };
+}
+
+export function resolveWatchlistRunCustomerError(run: WatchlistRunRecord, plan: string) {
+  if (!run.errorMessage) return null;
+  return plan === "free"
+    ? "This activation scan failed. Check Source access, then contact support if it does not resume."
+    : "This scan failed. Check Source access, then retry or contact support.";
+}
+
+export function firstScanPollingKey(input: {
+  watchlistId: string;
+  run: WatchlistRunRecord | null;
+}) {
+  return `${input.watchlistId}:${input.run?.id ?? "none"}:${input.run?.status ?? "missing"}`;
 }
 
 function formatNumericSummaryPart(
@@ -1669,19 +2068,24 @@ function formatNumericSummaryPart(
 
 const FIRST_SCAN_POLL_LIMIT = 30;
 
-// The first scan runs in a background waitUntil right after creation; without
-// this the page just says "never scanned" and the customer's first minutes
-// look broken. Polls until lastScannedAt flips (loader revalidation), capped.
-function FirstScanBanner(props: { watchlistId: string }) {
+// The activation banner is driven by the durable run, never inferred from a
+// missing last-scanned timestamp. Poll only while the queue can still change.
+function FirstScanBanner(props: {
+  watchlistId: string;
+  plan: string;
+  run: WatchlistRunRecord | null;
+}) {
   const revalidator = useRevalidator();
   const [pollCount, setPollCount] = useState(0);
+  const shouldPoll = !props.run || props.run.status === "pending" || props.run.status === "running";
+  const pollingKey = firstScanPollingKey(props);
 
   useEffect(() => {
     setPollCount(0);
-  }, [props.watchlistId]);
+  }, [pollingKey]);
 
   useEffect(() => {
-    if (pollCount >= FIRST_SCAN_POLL_LIMIT) {
+    if (!shouldPoll || pollCount >= FIRST_SCAN_POLL_LIMIT) {
       return;
     }
 
@@ -1692,21 +2096,71 @@ function FirstScanBanner(props: { watchlistId: string }) {
       }
     }, 4000);
     return () => clearTimeout(timer);
-  }, [pollCount, revalidator]);
+  }, [pollCount, revalidator, shouldPoll]);
+
+  const delayed =
+    props.run?.status === "pending" &&
+    [
+      "dispatch_rate_limited",
+      "first_scan_dispatch_failed",
+      "first_scan_setup_failed",
+      "workflow_binding_missing",
+    ].includes(props.run.errorCode ?? "");
+  const safelyPaused =
+    props.run?.status === "skipped" && props.run.errorCode === "e2e_provider_network_denied";
+  const completed = props.run?.status === "succeeded";
+  const failed = props.run?.status === "failed";
+  const skipped = props.run?.status === "skipped" && !safelyPaused;
+  const timedOut = shouldPoll && pollCount >= FIRST_SCAN_POLL_LIMIT;
+  const scanLabel = props.plan === "free" ? "Activation scan" : "First scan";
+
+  const heading = safelyPaused
+    ? `${scanLabel} safely paused`
+    : completed
+      ? `${scanLabel} complete`
+    : failed
+      ? `${scanLabel} needs attention`
+      : skipped
+        ? `${scanLabel} did not run`
+        : delayed || timedOut || !props.run
+          ? `${scanLabel} delayed`
+          : props.run.status === "running"
+            ? "Scanning this competitor now…"
+            : `${scanLabel} queued`;
+
+  const message = safelyPaused
+    ? "Provider access is disabled in this local release proof. No external check was attempted."
+    : completed
+      ? "The first evidence is ready. Review the proof below before deciding what to monitor next."
+    : failed
+      ? "We could not finish this check. Review Source access, then contact support if the next attempt also fails."
+      : skipped
+        ? "This check stopped safely before evidence was created. Review Recent checks for the reason and recovery path."
+        : delayed || timedOut || !props.run
+          ? props.plan === "free"
+            ? "The activation scan is queued for recovery. Paid plans add recurring monitoring after activation."
+            : "The first scan is queued for recovery, and the next scheduled scan remains available."
+          : props.run.status === "running"
+            ? props.plan === "free"
+              ? "Activation results usually land within a couple of minutes. This page updates by itself. Paid plans add recurring monitoring after activation."
+              : "First results usually land within a couple of minutes. This page updates by itself."
+            : "The activation scan is waiting for an available monitoring worker. This page updates by itself.";
 
   return (
-    <article className="f9-checkout-banner is-pending" aria-live="polite">
+    <article
+      className={`f9-checkout-banner ${failed || skipped ? "is-error" : completed ? "is-success" : "is-pending"}`}
+      aria-live="polite"
+    >
       <div>
-        <span className="f9-app-kicker">First scan</span>
+        <span className="f9-app-kicker">{props.plan === "free" ? "Activation scan" : "First scan"}</span>
         <h2>
-          <span className="f9-checkout-pulse" aria-hidden="true" />
-          Scanning this competitor now…
+          {props.run?.status === "running" ? (
+            <span className="f9-checkout-pulse" aria-hidden="true" />
+          ) : null}
+          {heading}
         </h2>
-        <p>
-          {pollCount >= FIRST_SCAN_POLL_LIMIT
-            ? "The first scan is taking longer than usual — it's still queued, and the next scheduled scan covers it either way. Check back in a bit."
-            : "First results usually land within a couple of minutes. This page updates by itself — no need to refresh."}
-        </p>
+        <p>{message}</p>
+        {failed ? <Link to="/app/source-access">Review Source access</Link> : null}
       </div>
     </article>
   );

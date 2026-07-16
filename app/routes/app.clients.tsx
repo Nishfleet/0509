@@ -12,11 +12,27 @@ import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboa
 import { EmptyState } from "~/components/empty-state";
 import { SubmitButton } from "~/components/submit-button";
 import { isSecretishMemoryField, isSecretishMemoryString } from "~/lib/agent-redaction";
+import { ClientRoomWriteConflictError } from "~/lib/data/customer-api-rooms.server";
 import type { AppEnv } from "~/lib/env.server";
-import { createReportId } from "~/lib/report";
+import { canUsePlanFeature } from "~/lib/plan-entitlements";
+import type { PlanFamily } from "~/lib/plan-entitlements";
+import { createReportId, parseReportId } from "~/lib/report";
+import {
+  evaluateReportReadiness,
+  reportEvidenceFingerprint,
+  REPORT_APPROVAL_MAX_AGE_MS,
+} from "~/lib/report-approval";
 import type { AgentMemoryRecord, ClientRoomRecord, ClientRoomResourceRef } from "~/lib/types";
 
 export const meta = () => [{ title: "Clients | Five to Nine" }];
+
+const CLIENT_ROOM_BILLING_URL = "/app/billing?source=clients#plans";
+const CLIENT_ROOM_MUTATION_INTENTS = new Set([
+  "upsert-client-room",
+  "upsert-agent-memory",
+  "set-client-room-status",
+  "approve-client-room",
+]);
 
 export function HydrateFallback() {
   return <DashboardRouteLoading title="Client rooms" />;
@@ -29,6 +45,7 @@ export function ErrorBoundary({ error }: { error: unknown }) {
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
+  const { getUserPlan } = await import("~/lib/plan.server");
   const {
     listAgentMemory,
     listAgentMemoryForClientRooms,
@@ -39,11 +56,12 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { safeAgentMemoryRecord, summarizeAgentMemoryValue } = await import("~/lib/agent-memory.server");
   const env = getEnv(context);
   const { workspaceUserId } = await requireWorkspaceSession(env, request);
-  const [rooms, watchlists, collections, recentMemories] = await Promise.all([
+  const [rooms, watchlists, collections, recentMemories, plan] = await Promise.all([
     listClientRooms(env, workspaceUserId, { status: "all", limit: 50 }),
     listWatchlists(env, workspaceUserId, { includeInactive: true }),
     listCollections(env, workspaceUserId),
     listAgentMemory(env, workspaceUserId, { limit: 20 }),
+    getUserPlan(env, workspaceUserId),
   ]);
   let roomMemories: AgentMemoryRecord[] = [];
   try {
@@ -58,8 +76,19 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   }
   const memories = uniqueAgentMemories([...recentMemories, ...roomMemories]);
 
+  const currentRoomStates = await Promise.all(rooms.map(async (room) => {
+    const notes = await revalidateRoomApprovals(env, workspaceUserId, room);
+    return {
+      ...room,
+      notes,
+      resourceRefs: filterCurrentRoomResourceRefs(room.resourceRefs, watchlists, collections, notes),
+    };
+  }));
+
   return {
-    rooms: rooms.map(safeClientRoomForUi),
+    plan,
+    canManageClientRooms: canUsePlanFeature(plan, "client_reports"),
+    rooms: currentRoomStates.map(safeClientRoomForUi),
     watchlists,
     collections,
     memories: memories.map((memory) => toMemorySummary(safeAgentMemoryRecord(memory), summarizeAgentMemoryValue)),
@@ -69,6 +98,19 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 export async function action({ context, request }: ActionFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
+  const { getUserPlan } = await import("~/lib/plan.server");
+  const env = getEnv(context);
+  const { workspaceUserId } = await requireWorkspaceSession(env, request);
+  const formData = await request.formData();
+  const intent = String(formData.get("intent") ?? "");
+
+  if (CLIENT_ROOM_MUTATION_INTENTS.has(intent)) {
+    const plan = await getUserPlan(env, workspaceUserId);
+    if (!canUsePlanFeature(plan, "client_reports")) {
+      return clientRoomPlanDeniedResult(plan);
+    }
+  }
+
   const {
     getClientRoom,
     getCollection,
@@ -76,10 +118,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
     upsertAgentMemory,
     upsertClientRoom,
   } = await import("~/lib/data.server");
-  const env = getEnv(context);
-  const { workspaceUserId } = await requireWorkspaceSession(env, request);
-  const formData = await request.formData();
-  const intent = String(formData.get("intent") ?? "");
 
   if (intent === "upsert-client-room") {
     const { AgentMemoryInputError, rejectSecretishMemoryValue } = await import("~/lib/agent-memory.server");
@@ -111,14 +149,75 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }
 
     const resourceRefs = await readOwnedResourceRefs(env, workspaceUserId, formData, getWatchlist, getCollection);
-    const room = await upsertClientRoom(env, workspaceUserId, {
-      roomId: readOptionalString(formData.get("roomId")),
-      name,
-      clientLabel,
-      status: readClientRoomStatus(formData.get("status")),
-      resourceRefs,
-      notes,
-    });
+    const approvedReportRefs = resourceRefs.filter((ref) => ref.resourceType === "report");
+    if (approvedReportRefs.length > 0) {
+      const {
+        getLatestDigestRunSummaryForWatchlist,
+        listAdsByIds,
+        listCollectionItems,
+        listWatchEvents,
+      } = await import("~/lib/data.server");
+      if (
+        typeof getLatestDigestRunSummaryForWatchlist !== "function" ||
+        typeof listAdsByIds !== "function" ||
+        typeof listCollectionItems !== "function" ||
+        typeof listWatchEvents !== "function" ||
+        typeof getCollection !== "function" ||
+        typeof getWatchlist !== "function"
+      ) {
+        return {
+          ok: false,
+          intent,
+          error: "evidence_not_ready" as const,
+          message: "Current evidence could not be verified. Rebuild the report before adding it to a client room.",
+          recoveryPath: "/app/watchlists",
+        };
+      }
+      for (const ref of approvedReportRefs) {
+        let report: Awaited<ReturnType<typeof loadOwnedRoomReport>> = null;
+        try {
+          report = await loadOwnedRoomReport(env, workspaceUserId, ref.resourceId, {
+            getCollection,
+            getLatestDigestRunSummaryForWatchlist,
+            getWatchlist,
+            listAdsByIds,
+            listCollectionItems,
+            listWatchEvents,
+          });
+        } catch {
+          report = null;
+        }
+        const readiness = report ? evaluateReportReadiness(report) : { ok: false as const, reason: "The linked report is unavailable. Rebuild it before adding it to a client room." };
+        if (!readiness.ok) {
+          return {
+            ok: false,
+            intent,
+            error: "evidence_not_ready" as const,
+            message: readiness.reason,
+            recoveryPath: `/app/reports/${ref.resourceId}`,
+          };
+        }
+      }
+    }
+    let room: Awaited<ReturnType<typeof upsertClientRoom>>;
+    try {
+      room = await upsertClientRoom(env, workspaceUserId, {
+        roomId: readOptionalString(formData.get("roomId")),
+        ...(readOptionalString(formData.get("expectedUpdatedAt"))
+          ? { expectedUpdatedAt: readOptionalString(formData.get("expectedUpdatedAt")) }
+          : {}),
+        name,
+        clientLabel,
+        status: readClientRoomStatus(formData.get("status")),
+        resourceRefs,
+        notes,
+      });
+    } catch (error) {
+      if (error instanceof ClientRoomWriteConflictError) {
+        return staleClientRoomResult("upsert-client-room");
+      }
+      throw error;
+    }
 
     return room
       ? { ok: true, message: "Client room saved." }
@@ -172,17 +271,144 @@ export async function action({ context, request }: ActionFunctionArgs) {
       return { ok: false, message: "Client room not found." };
     }
     const nextStatus = readClientRoomStatus(formData.get("status"));
-    await upsertClientRoom(env, workspaceUserId, {
-      roomId: room.id,
-      name: room.name,
-      clientLabel: room.clientLabel,
-      status: nextStatus,
-    });
+    try {
+      await upsertClientRoom(env, workspaceUserId, {
+        roomId: room.id,
+        ...(readOptionalString(formData.get("expectedUpdatedAt"))
+          ? { expectedUpdatedAt: readOptionalString(formData.get("expectedUpdatedAt")) }
+          : {}),
+        name: room.name,
+        clientLabel: room.clientLabel,
+        status: nextStatus,
+      });
+    } catch (error) {
+      if (error instanceof ClientRoomWriteConflictError) {
+        return staleClientRoomResult(intent);
+      }
+      throw error;
+    }
 
     return {
       ok: true,
       message: nextStatus === "active" ? "Client room restored." : "Client room archived.",
     };
+  }
+
+  if (intent === "approve-client-room") {
+    const {
+      getLatestDigestRunSummaryForWatchlist,
+      listAdsByIds,
+      listCollectionItems,
+      listWatchEvents,
+    } = await import("~/lib/data.server");
+    const roomId = readOptionalString(formData.get("roomId"));
+    if (!roomId) {
+      return { ok: false, intent, message: "Client room not found." };
+    }
+    const room = await getClientRoom(env, workspaceUserId, roomId);
+    if (!room) {
+      return { ok: false, intent, message: "Client room not found." };
+    }
+    if (room.status !== "active") {
+      return {
+        ok: false,
+        intent,
+        error: "evidence_not_ready" as const,
+        message: "Restore this client room before approving current evidence.",
+        recoveryPath: "/app/clients",
+      };
+    }
+
+    const reportRefs = room.resourceRefs.filter((ref) => ref.resourceType === "report");
+    if (reportRefs.length === 0) {
+      return {
+        ok: false,
+        intent,
+        error: "evidence_not_ready" as const,
+        message: "Link a report before approving this client room.",
+        recoveryPath: "/app/watchlists",
+      };
+    }
+    if (
+      typeof getLatestDigestRunSummaryForWatchlist !== "function" ||
+      typeof listAdsByIds !== "function" ||
+      typeof listCollectionItems !== "function" ||
+      typeof listWatchEvents !== "function" ||
+      typeof getCollection !== "function" ||
+      typeof getWatchlist !== "function"
+    ) {
+      return {
+        ok: false,
+        intent,
+        error: "evidence_not_ready" as const,
+        message: "Current evidence could not be verified. Rebuild the report before approving this room.",
+        recoveryPath: "/app/watchlists",
+      };
+    }
+
+    const approvals = readRoomApprovals(room.notes);
+    for (const ref of reportRefs) {
+      let report: Awaited<ReturnType<typeof loadOwnedRoomReport>> = null;
+      try {
+        report = await loadOwnedRoomReport(env, workspaceUserId, ref.resourceId, {
+          getCollection,
+          getLatestDigestRunSummaryForWatchlist,
+          getWatchlist,
+          listAdsByIds,
+          listCollectionItems,
+          listWatchEvents,
+        });
+      } catch {
+        report = null;
+      }
+      if (!report) {
+        return {
+          ok: false,
+          intent,
+          error: "evidence_not_ready" as const,
+          message: "The linked report is unavailable. Rebuild the report before approving this room.",
+          recoveryPath: `/app/reports/${ref.resourceId}`,
+        };
+      }
+      const readiness = evaluateReportReadiness(report);
+      if (!readiness.ok) {
+        return {
+          ok: false,
+          intent,
+          error: "evidence_not_ready" as const,
+          message: readiness.reason,
+          recoveryPath: `/app/reports/${ref.resourceId}`,
+        };
+      }
+      approvals[ref.resourceId] = {
+        evidenceFingerprint: reportEvidenceFingerprint(report),
+        reviewedAt: new Date().toISOString(),
+        approvalExpiresAt: new Date(Date.now() + REPORT_APPROVAL_MAX_AGE_MS).toISOString(),
+      };
+    }
+
+    let updatedRoom: Awaited<ReturnType<typeof upsertClientRoom>>;
+    try {
+      updatedRoom = await upsertClientRoom(env, workspaceUserId, {
+        roomId: room.id,
+        ...(readOptionalString(formData.get("expectedUpdatedAt"))
+          ? { expectedUpdatedAt: readOptionalString(formData.get("expectedUpdatedAt")) }
+          : {}),
+        name: room.name,
+        clientLabel: room.clientLabel,
+        status: room.status,
+        resourceRefs: room.resourceRefs,
+        notes: { ...room.notes, reportApprovals: approvals },
+      });
+    } catch (error) {
+      if (error instanceof ClientRoomWriteConflictError) {
+        return staleClientRoomResult(intent);
+      }
+      throw error;
+    }
+    return updatedRoom
+      ? { ok: true, intent, roomId: room.id, message: "Current report evidence approved for client review." }
+      : { ok: false, intent, message: "Client room could not be updated." };
   }
 
   return {
@@ -194,6 +420,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 export default function ClientsRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const canManageClientRooms = data.canManageClientRooms;
   const activeRooms = data.rooms.filter((room) => room.status === "active");
   const archivedRooms = data.rooms.filter((room) => room.status === "archived");
   const memoriesByClientRoomId = new Map<string, Array<(typeof data.memories)[number]>>();
@@ -217,13 +444,28 @@ export default function ClientsRoute() {
         />
 
       {actionData?.message ? (
-        <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
-          <p>{actionData.message}</p>
+        <div
+          aria-atomic="true"
+          aria-live={actionData.ok ? "polite" : "assertive"}
+          className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}
+          role={actionData.ok ? "status" : "alert"}
+        >
+          <p>
+            {actionData.message}
+            {actionData.error === "plan_gated" ? <Link to={CLIENT_ROOM_BILLING_URL}> Review Agency plans</Link> : null}
+            {"recoveryPath" in actionData && typeof actionData.recoveryPath === "string" ? (
+              <Link to={actionData.recoveryPath}> Review evidence</Link>
+            ) : null}
+          </p>
         </div>
       ) : null}
 
+      {!canManageClientRooms ? <AgencyPlanNotice /> : null}
+
       <div className="f9-dashboard-grid">
         <article className="f9-app-panel f9-side-panel">
+          {canManageClientRooms ? (
+            <>
           <div className="f9-panel-toolbar">
             <div>
               <span className="f9-app-kicker">Create room</span>
@@ -260,10 +502,16 @@ export default function ClientsRoute() {
             <div className="f9-work-list is-compact">
               <p className="f9-app-kicker">Watchlists</p>
               {data.watchlists.map((watchlist) => (
-                <label className="f9-work-row" key={watchlist.id}>
-                  <input name="watchlistIds" type="checkbox" value={watchlist.id} />
-                  <span>{watchlist.name}</span>
-                </label>
+                <div className="f9-work-row" key={watchlist.id}>
+                  <label>
+                    <input name="watchlistIds" type="checkbox" value={watchlist.id} />
+                    <span>{watchlist.name}</span>
+                  </label>
+                  <label className="f9-muted-copy">
+                    <input name="approvedReportIds" type="checkbox" value={createReportId("watchlist", watchlist.id)} />
+                    <span>Include reviewed report</span>
+                  </label>
+                </div>
               ))}
               {data.watchlists.length === 0 ? (
                 <p className="f9-muted-copy">Add a watchlist before linking tracked evidence.</p>
@@ -273,10 +521,16 @@ export default function ClientsRoute() {
             <div className="f9-work-list is-compact">
               <p className="f9-app-kicker">Collections</p>
               {data.collections.map((collection) => (
-                <label className="f9-work-row" key={collection.id}>
-                  <input name="collectionIds" type="checkbox" value={collection.id} />
-                  <span>{collection.name}</span>
-                </label>
+                <div className="f9-work-row" key={collection.id}>
+                  <label>
+                    <input name="collectionIds" type="checkbox" value={collection.id} />
+                    <span>{collection.name}</span>
+                  </label>
+                  <label className="f9-muted-copy">
+                    <input name="approvedReportIds" type="checkbox" value={createReportId("collection", collection.id)} />
+                    <span>Include reviewed report</span>
+                  </label>
+                </div>
               ))}
               {data.collections.length === 0 ? (
                 <p className="f9-muted-copy">Create a collection before linking saved evidence.</p>
@@ -287,6 +541,12 @@ export default function ClientsRoute() {
               Save client room
             </SubmitButton>
           </Form>
+            </>
+          ) : (
+            <ReadOnlyFeatureCopy>
+              Create and manage client rooms on the Agency plan. Existing rooms remain available below.
+            </ReadOnlyFeatureCopy>
+          )}
         </article>
 
         <article className="f9-app-panel">
@@ -300,19 +560,27 @@ export default function ClientsRoute() {
             </Link>
           </div>
 
-          <div className="f9-work-list">
+          <div className="f9-work-list f9-client-room-list">
             {activeRooms.map((room) => (
               <ClientRoomCard
                 key={room.id}
+                canManage={canManageClientRooms}
                 memories={memoriesByClientRoomId.get(room.id) ?? []}
                 room={room}
               />
             ))}
             {activeRooms.length === 0 ? (
-              <EmptyState
-                description="Use rooms to keep watchlists, collections, reports, and client context together for agency delivery."
-                title="Create the first client room"
-              />
+              canManageClientRooms ? (
+                <EmptyState
+                  description="Use rooms to keep watchlists, collections, reports, and client context together for agency delivery."
+                  title="Create the first client room"
+                />
+              ) : (
+                <EmptyState
+                  description="There are no existing client rooms to show on this account."
+                  title="No existing client rooms"
+                />
+              )
             ) : null}
           </div>
         </article>
@@ -322,7 +590,7 @@ export default function ClientsRoute() {
         <article className="f9-app-panel">
           <span className="f9-app-kicker">Saved context</span>
           <h2>Report preferences and notes</h2>
-          <Form className="f9-auth-form" method="post">
+          {canManageClientRooms ? <Form className="f9-auth-form" method="post">
             <input name="intent" type="hidden" value="upsert-agent-memory" />
             <label className="f9-field">
               <span>Label</span>
@@ -360,7 +628,9 @@ export default function ClientsRoute() {
             <SubmitButton className="f9-primary-button" intent="upsert-agent-memory" pendingLabel="Saving...">
               Save context
             </SubmitButton>
-          </Form>
+          </Form> : <ReadOnlyFeatureCopy>
+            Saved context is read-only on your current plan. Existing context remains visible below.
+          </ReadOnlyFeatureCopy>}
           <div className="f9-work-list is-compact">
             {data.memories.slice(0, 8).map((memory) => (
               <div className="f9-work-row" key={memory.id}>
@@ -376,7 +646,11 @@ export default function ClientsRoute() {
               </div>
             ))}
             {data.memories.length === 0 ? (
-              <p className="f9-muted-copy">Save goals, tone, and review context so future reports stay consistent.</p>
+              <p className="f9-muted-copy">
+                {canManageClientRooms
+                  ? "Save goals, tone, and review context so future reports stay consistent."
+                  : "Upgrade to the Agency plan to save client-room context."}
+              </p>
             ) : null}
           </div>
         </article>
@@ -391,9 +665,10 @@ export default function ClientsRoute() {
                   <h3>{room.name}</h3>
                   <p className="f9-muted-copy">{room.clientLabel ?? "No client label yet."}</p>
                 </div>
-                <Form method="post">
+                {canManageClientRooms ? <Form method="post">
                   <input name="intent" type="hidden" value="set-client-room-status" />
                   <input name="roomId" type="hidden" value={room.id} />
+                  <input name="expectedUpdatedAt" type="hidden" value={room.updatedAt} />
                   <input name="status" type="hidden" value="active" />
                   <SubmitButton
                     className="f9-secondary-button"
@@ -403,7 +678,7 @@ export default function ClientsRoute() {
                   >
                     Restore
                   </SubmitButton>
-                </Form>
+                </Form> : null}
               </div>
             ))}
             {archivedRooms.length === 0 ? (
@@ -428,14 +703,57 @@ function uniqueAgentMemories<T extends { id: string }>(memories: T[]) {
   });
 }
 
+function clientRoomPlanDeniedResult(plan: PlanFamily) {
+  return {
+    ok: false as const,
+    error: "plan_gated" as const,
+    feature: "client_reports" as const,
+    plan,
+    message: "This capability is not included in your current plan.",
+    upgradePath: CLIENT_ROOM_BILLING_URL,
+  };
+}
+
+function staleClientRoomResult(intent: string) {
+  return {
+    ok: false as const,
+    intent,
+    status: 409 as const,
+    error: "stale_write" as const,
+    message: "This client room changed in another tab. Reload the page before saving again.",
+    recoveryPath: "/app/clients",
+  };
+}
+
+function AgencyPlanNotice() {
+  return (
+    <aside aria-labelledby="client-room-plan-notice" className="f9-message is-error">
+      <span className="f9-app-kicker">Agency feature</span>
+      <h2 id="client-room-plan-notice">Client rooms are an Agency feature.</h2>
+      <p>Existing rooms and saved context stay readable. Upgrade to create or manage client-room delivery.</p>
+      <Link className="f9-primary-button" to={CLIENT_ROOM_BILLING_URL}>Review Agency plans</Link>
+    </aside>
+  );
+}
+
+function ReadOnlyFeatureCopy({ children }: { children: string }) {
+  return (
+    <p className="f9-muted-copy">
+      {children}
+    </p>
+  );
+}
+
 function ClientRoomCard({
+  canManage,
   memories,
   room,
 }: {
+  canManage: boolean;
   memories: Array<{ key: string }>;
   room: ClientRoomRecord;
 }) {
-  const handoff = summarizeClientRoomHandoff(room, memories);
+  const handoff = summarizeClientRoomHandoff(room, memories, canManage);
 
   return (
     <article className="f9-work-row f9-client-room-card">
@@ -444,9 +762,10 @@ function ClientRoomCard({
           <h3>{room.name}</h3>
           <p className="f9-muted-copy">{room.clientLabel ?? "No client label yet."}</p>
         </div>
-        <Form method="post">
+        {canManage ? <Form method="post">
           <input name="intent" type="hidden" value="set-client-room-status" />
           <input name="roomId" type="hidden" value={room.id} />
+          <input name="expectedUpdatedAt" type="hidden" value={room.updatedAt} />
           <input name="status" type="hidden" value="archived" />
           <SubmitButton
             className="f9-secondary-button"
@@ -456,7 +775,7 @@ function ClientRoomCard({
           >
             Archive
           </SubmitButton>
-        </Form>
+        </Form> : null}
       </div>
       <p>{formatRoomNotes(room.notes)}</p>
 
@@ -485,8 +804,26 @@ function ClientRoomCard({
             {ref.label ?? resourceLabel(ref)}
           </Link>
         ))}
+        {canManage && room.resourceRefs.some((ref) => ref.resourceType === "report") ? (
+          <Form method="post">
+            <input name="intent" type="hidden" value="approve-client-room" />
+            <input name="roomId" type="hidden" value={room.id} />
+            <input name="expectedUpdatedAt" type="hidden" value={room.updatedAt} />
+            <SubmitButton
+              className="f9-primary-button"
+              intent="approve-client-room"
+              match={{ roomId: room.id }}
+              pendingLabel="Reviewing…"
+            >
+              Review and approve evidence
+            </SubmitButton>
+          </Form>
+        ) : null}
         {room.resourceRefs.length === 0 ? (
-          <span className="f9-status-pill">No linked resources</span>
+          <>
+            <span className="f9-status-pill">No linked resources</span>
+            {canManage ? <Link className="f9-secondary-button" to="/app/watchlists">Choose evidence</Link> : null}
+          </>
         ) : null}
       </div>
     </article>
@@ -496,11 +833,15 @@ function ClientRoomCard({
 function summarizeClientRoomHandoff(
   room: ClientRoomRecord,
   memories: Array<{ key: string }>,
+  canManage = true,
 ) {
   const watchlistCount = countRoomRefs(room.resourceRefs, "watchlist");
   const collectionCount = countRoomRefs(room.resourceRefs, "collection");
   const reportCount = countRoomRefs(room.resourceRefs, "report");
   const digestCount = countRoomRefs(room.resourceRefs, "digest");
+  const approvedReportCount = room.resourceRefs.filter(
+    (ref) => ref.resourceType === "report" && Boolean(readRoomApprovals(room.notes)[ref.resourceId]),
+  ).length;
   const linkedProofCount = watchlistCount + collectionCount;
   const hasRoomNotes = formatRoomNotes(room.notes) !== "No room notes yet.";
   const hasContext = hasRoomNotes || memories.length > 0;
@@ -516,13 +857,17 @@ function summarizeClientRoomHandoff(
         ? "Room notes saved"
         : "No client context saved";
   const status =
-    linkedProofCount > 0 && reportCount > 0 && hasContext
+    linkedProofCount > 0 && reportCount > 0 && approvedReportCount === reportCount && hasContext
       ? "Ready for client review"
       : "Needs setup before client review";
-  const next = linkedProofCount === 0
+  const next = !canManage
+    ? "Upgrade to the Agency plan to manage this client room."
+    : linkedProofCount === 0
     ? "Link a watchlist or collection to this room."
     : reportCount === 0
       ? "Add a report link for the client packet."
+      : approvedReportCount < reportCount
+        ? "Review and approve the current report evidence before sending."
       : !hasContext
         ? "Save room notes or client-scoped memory."
         : digestCount > 0
@@ -543,23 +888,23 @@ async function readOwnedResourceRefs(
   env: AppEnv,
   userId: string,
   formData: FormData,
-  getWatchlist: (env: AppEnv, watchlistId: string, userId?: string) => Promise<{ id: string; name: string } | null>,
+  getWatchlist: (env: AppEnv, watchlistId: string, userId?: string) => Promise<{ id: string; name: string; isActive?: boolean } | null>,
   getCollection: (env: AppEnv, collectionId: string, userId?: string) => Promise<{ id: string; name: string } | null>,
 ) {
   const refs: ClientRoomResourceRef[] = [];
+  const approvedReportIds = new Set(formData.getAll("approvedReportIds").map(String).filter(Boolean));
   for (const watchlistId of formData.getAll("watchlistIds").map(String).filter(Boolean)) {
     const watchlist = await getWatchlist(env, watchlistId, userId);
-    if (watchlist) {
+    if (watchlist && watchlist.isActive !== false) {
       refs.push({
         resourceType: "watchlist",
         resourceId: watchlist.id,
         label: watchlist.name,
       });
-      refs.push({
-        resourceType: "report",
-        resourceId: createReportId("watchlist", watchlist.id),
-        label: `${watchlist.name} report`,
-      });
+      const reportId = createReportId("watchlist", watchlist.id);
+      if (approvedReportIds.has(reportId)) {
+        refs.push({ resourceType: "report", resourceId: reportId, label: `${watchlist.name} report` });
+      }
     }
   }
   for (const collectionId of formData.getAll("collectionIds").map(String).filter(Boolean)) {
@@ -570,11 +915,10 @@ async function readOwnedResourceRefs(
         resourceId: collection.id,
         label: collection.name,
       });
-      refs.push({
-        resourceType: "report",
-        resourceId: createReportId("collection", collection.id),
-        label: `${collection.name} report`,
-      });
+      const reportId = createReportId("collection", collection.id);
+      if (approvedReportIds.has(reportId)) {
+        refs.push({ resourceType: "report", resourceId: reportId, label: `${collection.name} report` });
+      }
     }
   }
 
@@ -583,6 +927,10 @@ async function readOwnedResourceRefs(
 
 function readOptionalString(value: FormDataEntryValue | null) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function isCanonicalIsoDate(value: unknown): value is string {
+  return typeof value === "string" && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 }
 
 function readClientRoomStatus(value: FormDataEntryValue | null) {
@@ -606,6 +954,40 @@ function safeClientRoomForUi(room: ClientRoomRecord): ClientRoomRecord {
     })),
     notes: sanitizeRoomNotesForUi(room.notes),
   };
+}
+
+function filterCurrentRoomResourceRefs(
+  refs: ClientRoomResourceRef[],
+  watchlists: Array<{ id: string; isActive?: boolean; updatedAt?: string }>,
+  collections: Array<{ id: string; updatedAt?: string }>,
+  notes: Record<string, unknown>,
+) {
+  const activeWatchlists = new Set(
+    watchlists.filter((watchlist) => watchlist.isActive !== false).map((watchlist) => watchlist.id),
+  );
+  const ownedCollections = new Set(collections.map((collection) => collection.id));
+  const approvals = readRoomApprovals(notes);
+  return refs.filter((ref) => {
+    if (ref.resourceType === "watchlist") return activeWatchlists.has(ref.resourceId);
+    if (ref.resourceType === "collection") return ownedCollections.has(ref.resourceId);
+    if (ref.resourceType === "report") {
+      const parsed = parseReportId(ref.resourceId);
+      // A report link is only meaningful when it is one of our canonical
+      // resource ids. Never surface legacy/synthetic ids as client evidence.
+      if (!parsed) return false;
+      const source = parsed.resourceType === "watchlist"
+        ? watchlists.find((watchlist) => watchlist.id === parsed.resourceId)
+        : collections.find((collection) => collection.id === parsed.resourceId);
+      const approval = approvals[ref.resourceId];
+      if (source?.updatedAt && approval && Date.parse(source.updatedAt) > Date.parse(approval.reviewedAt)) {
+        return false;
+      }
+      return parsed.resourceType === "watchlist"
+        ? activeWatchlists.has(parsed.resourceId)
+        : ownedCollections.has(parsed.resourceId);
+    }
+    return false;
+  });
 }
 
 function sanitizeRoomNotesForUi(notes: Record<string, unknown>) {
@@ -677,6 +1059,142 @@ function resourceLabel(ref: ClientRoomResourceRef) {
     return "Digest";
   }
   return "Report";
+}
+
+function readRoomApprovals(notes: Record<string, unknown>) {
+  const raw = notes.reportApprovals;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return {} as Record<string, { evidenceFingerprint: string; reviewedAt: string; approvalExpiresAt: string }>;
+  }
+  const approvals: Record<string, { evidenceFingerprint: string; reviewedAt: string; approvalExpiresAt: string }> = {};
+  for (const [reportId, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const candidate = value as Record<string, unknown>;
+    if (
+      typeof candidate.evidenceFingerprint === "string" &&
+      candidate.evidenceFingerprint.length > 0 &&
+      isCanonicalIsoDate(candidate.reviewedAt) &&
+      isCanonicalIsoDate(candidate.approvalExpiresAt)
+    ) {
+      const reviewedAt = Date.parse(candidate.reviewedAt as string);
+      const approvalExpiresAt = Date.parse(candidate.approvalExpiresAt as string);
+      if (
+        reviewedAt > Date.now() ||
+        approvalExpiresAt <= Date.now() ||
+        approvalExpiresAt <= reviewedAt ||
+        approvalExpiresAt > reviewedAt + REPORT_APPROVAL_MAX_AGE_MS
+      ) {
+        continue;
+      }
+      approvals[reportId] = {
+        evidenceFingerprint: candidate.evidenceFingerprint,
+        reviewedAt: candidate.reviewedAt as string,
+        approvalExpiresAt: candidate.approvalExpiresAt as string,
+      };
+    }
+  }
+  return approvals;
+}
+
+async function revalidateRoomApprovals(
+  env: AppEnv,
+  userId: string,
+  room: ClientRoomRecord,
+) {
+  const approvals = readRoomApprovals(room.notes);
+  const reportRefs = room.resourceRefs.filter((ref) => ref.resourceType === "report");
+  if (reportRefs.length === 0) {
+    return Object.prototype.hasOwnProperty.call(room.notes, "reportApprovals")
+      ? { ...room.notes, reportApprovals: approvals }
+      : room.notes;
+  }
+
+  const data = await import("~/lib/data.server");
+  if (
+    typeof data.getLatestDigestRunSummaryForWatchlist !== "function" ||
+    typeof data.listAdsByIds !== "function" ||
+    typeof data.listCollectionItems !== "function" ||
+    typeof data.listWatchEvents !== "function" ||
+    typeof data.getCollection !== "function" ||
+    typeof data.getWatchlist !== "function"
+  ) {
+    return { ...room.notes, reportApprovals: {} };
+  }
+
+  const currentApprovals = { ...approvals };
+  for (const ref of reportRefs) {
+    const approval = currentApprovals[ref.resourceId];
+    if (!approval) continue;
+    let report: Awaited<ReturnType<typeof loadOwnedRoomReport>> = null;
+    try {
+      report = await loadOwnedRoomReport(env, userId, ref.resourceId, {
+        getCollection: data.getCollection,
+        getWatchlist: data.getWatchlist,
+        getLatestDigestRunSummaryForWatchlist: data.getLatestDigestRunSummaryForWatchlist,
+        listAdsByIds: data.listAdsByIds,
+        listCollectionItems: data.listCollectionItems,
+        listWatchEvents: data.listWatchEvents,
+      });
+    } catch {
+      report = null;
+    }
+    if (!report || !evaluateReportReadiness(report).ok || reportEvidenceFingerprint(report) !== approval.evidenceFingerprint) {
+      delete currentApprovals[ref.resourceId];
+    }
+  }
+  return { ...room.notes, reportApprovals: currentApprovals };
+}
+
+async function loadOwnedRoomReport(
+  env: AppEnv,
+  userId: string,
+  reportId: string,
+  data: {
+    getCollection: (env: AppEnv, id: string, userId?: string) => Promise<any>;
+    getLatestDigestRunSummaryForWatchlist: (env: AppEnv, userId: string, watchlistId: string) => Promise<any>;
+    getWatchlist: (env: AppEnv, id: string, userId?: string) => Promise<any>;
+    listAdsByIds: (env: AppEnv, ids: string[]) => Promise<any[]>;
+    listCollectionItems: (env: AppEnv, id: string) => Promise<any[]>;
+    listWatchEvents: (env: AppEnv, id: string, limit?: number) => Promise<any[]>;
+  },
+) {
+  const parsed = parseReportId(reportId);
+  if (!parsed) return null;
+  const { buildCollectionReport, buildWatchlistReport } = await import("~/lib/report-builder.server");
+
+  if (parsed.resourceType === "collection") {
+    const collection = await data.getCollection(env, parsed.resourceId, userId);
+    if (!collection) return null;
+    const report = buildCollectionReport({
+      collection,
+      items: await data.listCollectionItems(env, collection.id),
+    });
+    return report.reportId === reportId &&
+      report.resourceType === parsed.resourceType &&
+      report.resourceId === parsed.resourceId
+      ? report
+      : null;
+  }
+
+  const watchlist = await data.getWatchlist(env, parsed.resourceId, userId);
+  if (!watchlist || watchlist.isActive === false) return null;
+  const events = await data.listWatchEvents(env, watchlist.id, 60);
+  const ads = await data.listAdsByIds(
+    env,
+    events.map((event) => event.adId).filter((id: unknown): id is string => typeof id === "string" && id.length > 0),
+  );
+  const aiWeeklySummary = await data.getLatestDigestRunSummaryForWatchlist(env, userId, watchlist.id);
+  const report = buildWatchlistReport({
+    watchlist,
+    events,
+    adsById: new Map(ads.map((ad) => [ad.metaAdId, ad])),
+    aiWeeklySummary,
+  });
+  return report.reportId === reportId &&
+    report.resourceType === parsed.resourceType &&
+    report.resourceId === parsed.resourceId
+    ? report
+    : null;
 }
 
 function toMemorySummary(

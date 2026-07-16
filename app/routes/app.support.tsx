@@ -26,6 +26,7 @@ import {
   SUPPORT_MAILTO,
   normalizeSupportCaseInput,
   readSupportCaseCategory,
+  requiresWorkspaceOwnerAuthority,
 } from "~/lib/support";
 import type {
   SupportCaseCategory,
@@ -33,15 +34,6 @@ import type {
   SupportCasePriority,
   SupportCaseStatus,
 } from "~/lib/types";
-
-const OWNER_ONLY_SUPPORT_CATEGORIES = new Set<SupportCaseCategory>(["team"]);
-const BILLING_CHANGE_TEXT_PATTERN =
-  /\b(?:cancel(?:led|lation|ling)?|renewal|change\s+plan|switch\s+plan|upgrade|downgrade|plan\s+(?:change|switch|upgrade|downgrade)|subscription\s+(?:change|switch|upgrade|downgrade|cancel(?:led|lation|ling)?))\b/i;
-const WORKSPACE_AUTHORITY_TEXT_PATTERN = /\b(?:workspace|agency|team|seat|teammate|team\s+member|workspace\s+user)\b/i;
-const TEAM_AUTHORITY_TEXT_PATTERNS = [
-  /\b(?:add|remove|invite|deactivate)\s+(?:a\s+)?(?:teammate|team\s+member|seat|workspace\s+user)\b/i,
-  /\bteam\s+seat\b/i,
-];
 
 export const meta = () => [{ title: "Support | Five to Nine" }];
 
@@ -161,16 +153,22 @@ export async function action({ context, request }: ActionFunctionArgs) {
     isWorkspaceMember,
   });
 
-  if (operatorNotification !== "already_sent") {
+  if (
+    operatorNotification === "sent" ||
+    operatorNotification === "already_sent" ||
+    operatorNotification === "failed"
+  ) {
+    const notificationSucceeded = operatorNotification !== "failed";
     try {
       await createSupportCaseEvent(env, {
         caseId: supportCase.id,
         userId: session.user.id,
-        eventType: operatorNotification === "sent" ? "support_notified" : "support_notification_failed",
-        message: operatorNotification === "sent"
+        eventType: notificationSucceeded ? "support_notified" : "support_notification_failed",
+        message: notificationSucceeded
           ? "Support was notified by email."
           : `Automatic support notification failed. Email ${SUPPORT_EMAIL} now so we can reply.`,
         visibleToCustomer: true,
+        idempotencyKey: `support-notification:${supportCase.id}:${notificationSucceeded ? "sent" : "failed"}`,
         metadata: {
           channel: "email",
           createdFrom: "signed_in_support",
@@ -185,6 +183,22 @@ export async function action({ context, request }: ActionFunctionArgs) {
     return {
       ok: false,
       message: `Support case saved, but we could not notify support. Email ${SUPPORT_EMAIL} now so we can reply.`,
+      caseId: supportCase.id,
+    };
+  }
+
+  if (operatorNotification === "provider_unknown") {
+    return {
+      ok: false,
+      message: `Support case saved, but the email provider outcome is not confirmed. Email ${SUPPORT_EMAIL} now if the request is urgent.`,
+      caseId: supportCase.id,
+    };
+  }
+
+  if (operatorNotification === "pending") {
+    return {
+      ok: false,
+      message: `Support case saved and notification is still being confirmed. Email ${SUPPORT_EMAIL} now if the request is urgent.`,
       caseId: supportCase.id,
     };
   }
@@ -209,7 +223,12 @@ export default function SupportRoute() {
         />
 
       {actionData?.message ? (
-        <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
+        <div
+          aria-atomic="true"
+          aria-live={actionData.ok ? "polite" : "assertive"}
+          className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}
+          role={actionData.ok ? "status" : "alert"}
+        >
           <p>{actionData.message}</p>
         </div>
       ) : null}
@@ -340,7 +359,8 @@ export default function SupportRoute() {
             <div className="f9-work-row">
               <strong>Docs</strong>
               <span>
-                <Link to="/help">Help center</Link> and <Link to="/docs">docs</Link> remain public.
+                <Link to="/help">Help center</Link> and{" "}
+                <Link className="f9-inline-touch-link" to="/docs">docs</Link> remain public.
               </span>
             </div>
           </div>
@@ -437,22 +457,6 @@ function SupportCaseDetail({
   );
 }
 
-function requiresWorkspaceOwnerAuthority(input: {
-  category: SupportCaseCategory;
-  subject: string;
-  detail: string;
-}) {
-  if (OWNER_ONLY_SUPPORT_CATEGORIES.has(input.category)) {
-    return true;
-  }
-  const requestText = `${input.subject} ${input.detail}`;
-  if (TEAM_AUTHORITY_TEXT_PATTERNS.some((pattern) => pattern.test(requestText))) {
-    return true;
-  }
-
-  return BILLING_CHANGE_TEXT_PATTERN.test(requestText) && WORKSPACE_AUTHORITY_TEXT_PATTERN.test(requestText);
-}
-
 function toSupportCaseSummary(supportCase: {
   id: string;
   category: SupportCaseCategory;
@@ -511,7 +515,12 @@ function readSelectedCaseId(value: unknown) {
   return trimmed && trimmed.length <= 120 ? trimmed : null;
 }
 
-type SupportOperatorNotificationResult = "sent" | "already_sent" | "failed";
+type SupportOperatorNotificationResult =
+  | "sent"
+  | "already_sent"
+  | "pending"
+  | "provider_unknown"
+  | "failed";
 
 async function notifySupportCaseOperator(
   env: AppEnv,
@@ -531,9 +540,8 @@ async function notifySupportCaseOperator(
   try {
     const { getDeliveryAttemptByIdempotencyKey } = await import("~/lib/data.server");
     const existingAttempt = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
-    if (existingAttempt?.status === "sent") {
-      return "already_sent";
-    }
+    const existingResult = classifySupportNotificationAttempt(existingAttempt, true);
+    if (existingResult) return existingResult;
 
     const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
     const notified = await sendOperatorAlertEmail(env, {
@@ -549,9 +557,26 @@ async function notifySupportCaseOperator(
       ],
       idempotencyKey,
     });
-    return notified ? "sent" : "failed";
+    if (notified) return "sent";
+    const finalAttempt = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
+    return classifySupportNotificationAttempt(finalAttempt, false) ?? "failed";
   } catch (error) {
     console.error("[support] operator alert failed", error);
-    return "failed";
+    try {
+      const { getDeliveryAttemptByIdempotencyKey } = await import("~/lib/data.server");
+      const finalAttempt = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
+      return classifySupportNotificationAttempt(finalAttempt, false) ?? "failed";
+    } catch {
+      return "failed";
+    }
   }
+}
+
+function classifySupportNotificationAttempt(
+  attempt: { status?: string | null; webhookStatus?: string | null } | null | undefined,
+  sentIsAlreadySent: boolean,
+): SupportOperatorNotificationResult | null {
+  if (attempt?.status === "sent") return sentIsAlreadySent ? "already_sent" : "sent";
+  if (attempt?.status !== "pending") return null;
+  return attempt.webhookStatus === "provider_unknown" ? "provider_unknown" : "pending";
 }

@@ -17,6 +17,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { getUserPlanBillingInfo } = await import("~/lib/data.server");
   const { createDodoCustomerPortalSession } = await import("~/lib/dodo-billing.server");
+  const { enforceBillingProviderRateLimit } = await import("~/lib/rate-limit.server");
   const env = getEnv(context);
   const { session, workspaceUserId, isMember } = await requireWorkspaceSession(env, request);
   if (isMember && workspaceUserId !== session.user.id) {
@@ -28,6 +29,15 @@ export async function action({ context, request }: ActionFunctionArgs) {
     // No linked Dodo customer yet (e.g. plan granted before linkage existed).
     throw redirect("/app/billing?portal=unavailable", { status: 303 });
   }
+
+  const mutationLimitResponse = await enforceBillingProviderRateLimit(
+    request,
+    env,
+    workspaceUserId,
+    "mutation",
+    context.cloudflare?.ctx,
+  );
+  if (mutationLimitResponse) throw mutationLimitResponse;
 
   const portalUrl = await createDodoCustomerPortalSession(env, billing.dodoCustomerId, {
     request,

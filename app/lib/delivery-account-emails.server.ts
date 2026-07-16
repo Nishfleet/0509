@@ -1,11 +1,13 @@
 import {
+  claimInstantDeliveryAttempt,
   createDeliveryAttempt,
-  getDeliveryAttemptByIdempotencyKey,
   getOldestUserId,
   getUserDeliveryProfile,
   getUserIdByEmail,
+  markInstantDeliveryDispatchStarted,
   updateDeliveryAttemptResult,
 } from "~/lib/data.server";
+import * as deliveryData from "~/lib/data.server";
 import {
   EMAIL_PROVIDER,
   appBaseUrl,
@@ -43,8 +45,42 @@ export async function sendOperatorAlertEmail(
 
   const dayKey = new Date().toISOString().slice(0, 10);
   const idempotencyKey = input.idempotencyKey ?? `operator-alert:${dayKey}`;
-  const duplicate = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
-  if (duplicate?.status === "sent") {
+  // delivery_attempt.user_id carries a foreign key to user(id), so the
+  // attempt must be attributed to a REAL user row: the operator's own account
+  // when it exists, else the oldest account (the founder's). Without this the
+  // operator-alert insert violated the FK — the email sent but the dedupe row never
+  // persisted and the logs claimed failure.
+  const attemptUserId =
+    (await getUserIdByEmail(env, recipient)) ?? (await getOldestUserId(env));
+  if (!attemptUserId) {
+    // Never call the provider when the alert cannot first be durably owned.
+    return false;
+  }
+
+  const payloadSnapshot = operatorAlertPayloadSnapshot(idempotencyKey, input.lines);
+  const claim = await claimInstantDeliveryAttempt(env, {
+    userId: attemptUserId,
+    watchlistId: null,
+    deliveryTargetId: null,
+    lane: "internal",
+    channel: "email",
+    provider: EMAIL_PROVIDER,
+    targetValue: recipient,
+    templateName: "operator_alert",
+    eventIds: [],
+    payloadSnapshot,
+    idempotencyKey,
+  });
+  if (!claim.attemptId || !claim.claimUpdatedAt) {
+    return false;
+  }
+
+  const dispatchStartedAt = await markInstantDeliveryDispatchStarted(
+    env,
+    claim.attemptId,
+    claim.claimUpdatedAt,
+  );
+  if (!dispatchStartedAt) {
     return false;
   }
 
@@ -66,56 +102,23 @@ export async function sendOperatorAlertEmail(
     unsubscribeUrl: null,
   });
 
-  if (duplicate) {
-    await updateDeliveryAttemptResult(env, duplicate.id, {
-      provider: providerResult.provider,
-      status: providerResult.status,
-      webhookStatus: providerResult.webhookStatus,
-      providerMessageId: providerResult.providerMessageId,
-      providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
-      errorMessage: providerResult.errorMessage,
-      sentAt: providerAcceptedAt(providerResult),
-      failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
-    });
-    return providerResult.status === "sent";
-  }
-
-  // delivery_attempt.user_id carries a foreign key to user(id), so the
-  // attempt must be attributed to a REAL user row: the operator's own account
-  // when it exists, else the oldest account (the founder's). Without this the
-  // operator-alert insert violated the FK — the email sent but the dedupe row never
-  // persisted and the logs claimed failure.
-  const attemptUserId =
-    (await getUserIdByEmail(env, recipient)) ?? (await getOldestUserId(env));
-  if (!attemptUserId) {
-    // Empty user table (fresh environment): nothing to attribute to — the
-    // email went out, skip the ledger row.
-    return providerResult.status === "sent";
-  }
-
-  await createDeliveryAttempt(env, {
-    userId: attemptUserId,
-    watchlistId: null,
-    digestRunId: null,
-    deliveryTargetId: null,
-    lane: "internal",
-    channel: "email",
+  const finalized = await updateDeliveryAttemptResult(env, claim.attemptId, {
     provider: providerResult.provider,
     status: providerResult.status,
     webhookStatus: providerResult.webhookStatus,
-    targetValue: recipient,
     providerMessageId: providerResult.providerMessageId,
     providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
-    templateName: "operator_alert",
-    eventIds: [],
-    payloadSnapshot: operatorAlertPayloadSnapshot(idempotencyKey, input.lines),
-    idempotencyKey,
     errorMessage: providerResult.errorMessage,
     sentAt: providerAcceptedAt(providerResult),
     failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+    payloadSnapshot,
+    targetValue: recipient,
+    expectedStatus: "pending",
+    expectedWebhookStatus: "provider_unknown",
+    expectedUpdatedAt: dispatchStartedAt,
   });
 
-  return providerResult.status === "sent";
+  return finalized && providerResult.status === "sent";
 }
 
 function operatorAlertPayloadSnapshot(idempotencyKey: string, lines: string[]) {
@@ -142,6 +145,8 @@ export async function sendDeliveryTestEmail(
     userId: string;
     email: string;
     name: string | null;
+    targetId?: string | null;
+    idempotencyKey: string;
   },
 ) {
   const { requireDeliveryConfigSave } = await import("~/lib/plan-feature-gate.server");
@@ -150,12 +155,112 @@ export async function sendDeliveryTestEmail(
     return false;
   }
 
+  // A test send is a customer dispatch. It must be tied to a durable,
+  // account-owned target; accepting an arbitrary form email would bypass
+  // verification and unsubscribe state.
+  const targetId = input.targetId?.trim();
+  if (!targetId) {
+    return false;
+  }
+
+  const claimTarget = ("claimEmailTargetForDispatch" in deliveryData
+    ? deliveryData.claimEmailTargetForDispatch
+    : undefined) as unknown as
+    | ((claimEnv: AppEnv, claimInput: { userId: string; targetId: string }) => Promise<{
+        id: string;
+        targetValue: string;
+      } | null>)
+    | undefined;
+  if (typeof claimTarget !== "function") {
+    return false;
+  }
+
+  const target = await claimTarget(env, {
+    userId: input.userId,
+    targetId,
+  });
+  if (!target || !target.id) {
+    return false;
+  }
+  const recipient = normalizeDeliveryEmail(target.targetValue);
+  if (!recipient) {
+    return false;
+  }
+
+  const claimAttempt = ("claimInstantDeliveryAttempt" in deliveryData
+    ? deliveryData.claimInstantDeliveryAttempt
+    : undefined) as typeof claimInstantDeliveryAttempt | undefined;
+  const startDispatch = ("markInstantDeliveryDispatchStarted" in deliveryData
+    ? deliveryData.markInstantDeliveryDispatchStarted
+    : undefined) as typeof markInstantDeliveryDispatchStarted | undefined;
+  const finalizeAttempt = ("updateDeliveryAttemptResult" in deliveryData
+    ? deliveryData.updateDeliveryAttemptResult
+    : undefined) as typeof updateDeliveryAttemptResult | undefined;
+  if (
+    typeof claimAttempt !== "function" ||
+    typeof startDispatch !== "function" ||
+    typeof finalizeAttempt !== "function"
+  ) {
+    return false;
+  }
+
+  const idempotencyKey = input.idempotencyKey.trim();
+  if (!idempotencyKey) {
+    return false;
+  }
+  const claim = await claimAttempt(env, {
+    userId: input.userId,
+    watchlistId: null,
+    deliveryTargetId: target.id,
+    lane: "customer",
+    channel: "email",
+    provider: EMAIL_PROVIDER,
+    targetValue: recipient,
+    templateName: "delivery_test",
+    eventIds: [],
+    payloadSnapshot: { kind: "delivery_test" },
+    idempotencyKey,
+  });
+  if (!claim.attemptId || !claim.claimUpdatedAt) {
+    return false;
+  }
+
+  // Re-run the target CAS after the durable attempt claim. Unsubscribe uses a
+  // transaction that marks pending attempts failed; this closes the gap where
+  // unsubscribe commits between the first target read and the attempt insert.
+  const revalidatedTarget = await claimTarget(env, {
+    userId: input.userId,
+    targetId: target.id,
+  });
+  if (!revalidatedTarget || normalizeDeliveryEmail(revalidatedTarget.targetValue) !== recipient) {
+    await finalizeAttempt(env, claim.attemptId, {
+      provider: EMAIL_PROVIDER,
+      status: "failed",
+      webhookStatus: "failed",
+      errorMessage: "Email delivery target was no longer active before dispatch.",
+      failedAt: new Date().toISOString(),
+      expectedStatus: "pending",
+      expectedWebhookStatus: "pending",
+      expectedUpdatedAt: claim.claimUpdatedAt,
+    });
+    return false;
+  }
+
+  const dispatchStartedAt = await startDispatch(
+    env,
+    claim.attemptId,
+    claim.claimUpdatedAt,
+  );
+  if (!dispatchStartedAt) {
+    return false;
+  }
+
   // Cloudflare Email has no bounce webhooks, so a typo'd address shows
   // "sent" forever while the customer receives nothing. This send gives
   // them a way to prove the address works end-to-end.
   const greeting = input.name?.trim() ? `Hi ${escapeHtml(input.name.trim())},` : "Hi,";
   const providerResult = await sendCloudflareEmail(env, {
-    to: input.email,
+    to: recipient,
     subject: "Test email from Five to Nine",
     html: `
       <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
@@ -173,29 +278,28 @@ export async function sendDeliveryTestEmail(
     unsubscribeUrl: null,
   });
 
-  await createDeliveryAttempt(env, {
-    userId: input.userId,
-    watchlistId: null,
-    digestRunId: null,
-    deliveryTargetId: null,
-    lane: "customer",
-    channel: "email",
+  const finalized = await finalizeAttempt(env, claim.attemptId, {
     provider: providerResult.provider,
     status: providerResult.status,
     webhookStatus: providerResult.webhookStatus,
-    targetValue: input.email,
     providerMessageId: providerResult.providerMessageId,
     providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
-    templateName: "delivery_test",
-    eventIds: [],
-    payloadSnapshot: { kind: "delivery_test" },
-    idempotencyKey: `delivery-test:${input.userId}:${crypto.randomUUID()}`,
     errorMessage: providerResult.errorMessage,
     sentAt: providerAcceptedAt(providerResult),
     failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+    payloadSnapshot: { kind: "delivery_test" },
+    targetValue: recipient,
+    expectedStatus: "pending",
+    expectedWebhookStatus: "provider_unknown",
+    expectedUpdatedAt: dispatchStartedAt,
   });
 
-  return providerResult.status === "sent";
+  return finalized && providerResult.status === "sent";
+}
+
+function normalizeDeliveryEmail(value: string | null | undefined) {
+  const normalized = value?.trim().toLowerCase() ?? "";
+  return normalized.length > 0 ? normalized : null;
 }
 
 // Account-action verification emails (change email, delete account).

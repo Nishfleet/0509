@@ -1,0 +1,781 @@
+import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { requireExactReleaseBaseURL } from "./helpers/release-origin";
+import { attachReleaseStateArtifacts } from "./helpers/release-artifacts";
+import {
+  expectNoHorizontalOverflow,
+  expectPhoneTouchTargets,
+  expectVisibleKeyboardFocus,
+} from "./helpers/release-experience";
+
+const fixtureCookie = "f9_e2e_fixture";
+const fixtureModeHeader = "x-0509-e2e-test-mode";
+
+async function signInAs(
+  context: BrowserContext,
+  baseURL: string,
+  userId: string,
+) {
+  const url = requireExactReleaseBaseURL(baseURL);
+  await context.setExtraHTTPHeaders({ [fixtureModeHeader]: "1" });
+  await context.addCookies([
+    { name: fixtureCookie, value: userId, url, sameSite: "Lax" },
+  ]);
+}
+
+type J4ReplayAction =
+  | "report-share"
+  | "client-room"
+  | "batch-failure"
+  | "approval-stale";
+
+async function runJ4Replay(
+  page: Page,
+  viewport: { width: number; height: number },
+  action: J4ReplayAction,
+) {
+  const viewportKey = `${viewport.width}x${viewport.height}`;
+  const idempotencyKey = `e2e-j4-${action}-${viewportKey}`;
+  const runId = `e2e-run-j4-${action}-${viewportKey}`;
+  const requestBody = {
+    userId: "e2e-agency",
+    runId,
+    idempotencyKey,
+    scenario: "j4",
+    clock: new Date().toISOString(),
+  };
+  const first = await page.request.post("/api/e2e/j4/replay", {
+    headers: { [fixtureModeHeader]: "1" },
+    data: requestBody,
+  });
+  expect(first.status(), `${action} replay must complete`).toBe(200);
+  const firstBody = await first.json() as Record<string, unknown>;
+  expect(firstBody).toMatchObject({ ok: true, replayed: false });
+
+  const repeated = await page.request.post("/api/e2e/j4/replay", {
+    headers: { [fixtureModeHeader]: "1" },
+    data: requestBody,
+  });
+  expect(repeated.status(), `${action} replay retry must complete`).toBe(200);
+  const repeatedBody = await repeated.json() as Record<string, unknown>;
+  expect(repeatedBody).toMatchObject({ ok: true, replayed: true });
+  expect({ ...repeatedBody, replayed: false }).toEqual(firstBody);
+
+  const stateResponse = await page.request.get(
+    `/api/e2e/j4/replay?idempotencyKey=${idempotencyKey}&runId=${runId}`,
+    { headers: { [fixtureModeHeader]: "1" } },
+  );
+  expect(stateResponse.status(), `${action} durable state must be readable`).toBe(200);
+  const state = await stateResponse.json() as Record<string, unknown>;
+  expect(Object.keys(state).sort()).toEqual([
+    "action",
+    "effects",
+    "idempotencyKey",
+    "ok",
+    "provider",
+    "replayStatus",
+    "runId",
+  ]);
+  expect(state).toMatchObject({
+    ok: true,
+    action: action.replaceAll("-", "_"),
+    idempotencyKey,
+    runId,
+    replayStatus: "succeeded",
+    provider: { called: false, reason: "e2e_network_denied" },
+  });
+  const serialized = JSON.stringify(state);
+  expect(serialized).not.toContain("processingToken");
+  expect(serialized).not.toContain("processing_token");
+  expect(serialized).not.toContain("result_json");
+  expect(serialized).not.toContain("shareUrl");
+  expect(serialized).not.toContain('"token"');
+
+  const effects = state.effects as Record<string, unknown>;
+  expect(Object.keys(effects).sort()).toEqual([
+    "activeShareCount",
+    ...(action === "approval-stale" ? ["approvalInvalidated"] : []),
+    "auditAction",
+    "auditCount",
+    "auditResourceId",
+    "auditResourceType",
+    "auditStatus",
+    "requestFingerprintPresent",
+    "resultPresent",
+    "roomCount",
+    "roomResourceCount",
+    "shareCount",
+  ].sort());
+  return { firstBody, state, effects };
+}
+
+async function expectNoOverflow(page: Page) {
+  await expectNoHorizontalOverflow(page);
+}
+
+async function expectTouchTargets(page: Page) {
+  await expectPhoneTouchTargets(page);
+  const undersized = await page
+    .locator("button, a.f9-primary-button, a.f9-secondary-button")
+    .evaluateAll((elements) =>
+      elements.flatMap((element) => {
+        const rect = element.getBoundingClientRect();
+        if (!element.checkVisibility() || rect.width === 0 || rect.height === 0) {
+          return [];
+        }
+        return rect.width >= 44 && rect.height >= 44
+          ? []
+          : [
+              {
+                text: (element.textContent ?? "").trim(),
+                width: rect.width,
+                height: rect.height,
+              },
+            ];
+      }),
+    );
+  expect(
+    undersized,
+    "interactive controls should retain a 44px touch target",
+  ).toEqual([]);
+}
+
+async function expectLiveRegion(page: Page, message: string) {
+  const region = page
+    .locator('[role="status"], [role="alert"]')
+    .filter({ hasText: message })
+    .last();
+  await expect(region).toBeVisible();
+  await expect(region).toHaveAttribute("aria-live", /^(polite|assertive)$/);
+}
+
+async function expectKeyboardFocus(page: Page) {
+  await page.keyboard.press("Tab");
+  const control = page.locator(":focus");
+  await expect(control).toBeVisible();
+  await expectVisibleKeyboardFocus(control);
+}
+
+async function expectCurrentEvidenceArtifactIndex(page: Page) {
+  const coverage = page.locator('section[aria-label="Report source coverage"]');
+  await expect(coverage).toBeVisible();
+  const verifiedEvidence = coverage
+    .locator("dl > div")
+    .filter({ hasText: "Verified evidence" })
+    .locator("dd");
+  await expect(verifiedEvidence).toHaveText(/^\d+$/u);
+  expect(
+    Number(await verifiedEvidence.textContent()),
+    "the current report must index at least one verified evidence artifact",
+  ).toBeGreaterThan(0);
+  const reportRows = page.locator(
+    'section[aria-label="Report rows"] .report-card',
+  );
+  expect(
+    await reportRows.count(),
+    "the report artifact index must contain a current evidence row",
+  ).toBeGreaterThan(0);
+  await expect(reportRows.first()).toBeVisible();
+}
+
+async function expectReportAtViewport(
+  page: Page,
+  viewport: { width: number; height: number },
+) {
+  await page.setViewportSize(viewport);
+  await page.goto("/app/reports/watchlist:e2e-watchlist-agency-1");
+  await expect(
+    page.getByText("Approved evidence report", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole("heading", { name: "Okara launched a new workflow offer" })
+      .first(),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Verified evidence", { exact: true }).first(),
+  ).toBeVisible();
+  await expectCurrentEvidenceArtifactIndex(page);
+  await expect(
+    page.getByRole("button", { name: "Share snapshot" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Download PDF" }),
+  ).toBeVisible();
+  await expectKeyboardFocus(page);
+  await expectTouchTargets(page);
+  await expectNoOverflow(page);
+}
+
+function annotateScenario(
+  testInfo: { annotations: Array<{ type: string; description?: string }> },
+  scenario: string,
+) {
+  testInfo.annotations.push({ type: "scenario", description: scenario });
+}
+
+function annotateFinalUrl(
+  testInfo: { annotations: Array<{ type: string; description?: string }> },
+  page: Page,
+) {
+  const url = new URL(page.url());
+  testInfo.annotations.push({
+    type: "finalUrl",
+    description: `${url.pathname}${url.search}`,
+  });
+}
+
+const reportViewports = [
+  { width: 375, height: 812 },
+  { width: 768, height: 900 },
+  { width: 1440, height: 900 },
+] as const;
+
+test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and client delivery", () => {
+  for (const viewport of reportViewports) {
+    test(`agency evidence report is client-readable and keyboard reachable at ${viewport.width}px`, async ({
+      page,
+      context,
+      baseURL,
+    }, testInfo) => {
+      annotateScenario(testInfo, "report-proof-freshness-client-readable");
+      testInfo.annotations.push({ type: "persona", description: "e2e-agency" });
+      testInfo.annotations.push({
+        type: "viewport",
+        description: `${viewport.width}x${viewport.height}`,
+      });
+      await signInAs(context, baseURL!, "e2e-agency");
+      const shareReplay = await runJ4Replay(page, viewport, "report-share");
+      expect(shareReplay.effects).toMatchObject({
+        auditCount: 1,
+        auditStatus: "succeeded",
+        auditAction: "report.share",
+        auditResourceType: "report",
+        auditResourceId: "watchlist:e2e-watchlist-agency-1",
+        requestFingerprintPresent: true,
+        resultPresent: true,
+        shareCount: 1,
+        activeShareCount: 1,
+        roomCount: 0,
+        roomResourceCount: 0,
+      });
+      const batchFailure = await runJ4Replay(page, viewport, "batch-failure");
+      expect(batchFailure.effects).toMatchObject({
+        auditCount: 1,
+        auditStatus: "failed",
+        auditAction: "share.create",
+        auditResourceType: null,
+        auditResourceId: null,
+        requestFingerprintPresent: true,
+        resultPresent: false,
+        shareCount: 0,
+        activeShareCount: 0,
+        roomCount: 0,
+        roomResourceCount: 0,
+      });
+      await expectReportAtViewport(page, viewport);
+      await expect(
+        page.getByText("Evidence and source coverage", { exact: false }),
+      ).toBeVisible();
+      await expect(
+        page.getByText("Verified evidence filter", { exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByText("Check-spotted", { exact: true }).first(),
+      ).toBeVisible();
+      await attachReleaseStateArtifacts({ page, testInfo, prefix: "j4-report", state: "report-proof" });
+      annotateFinalUrl(testInfo, page);
+    });
+  }
+
+  for (const viewport of reportViewports) {
+    test(`exports and share controls expose plan truth before click and do not claim provider delivery at ${viewport.width}px`, async ({
+      page,
+      context,
+      browser,
+      baseURL,
+    }, testInfo) => {
+    annotateScenario(testInfo, "export-share-plan-truth");
+    testInfo.annotations.push({
+      type: "persona",
+      description: "e2e-agency;e2e-starter",
+    });
+    testInfo.annotations.push({ type: "viewport", description: `${viewport.width}x${viewport.height}` });
+    await signInAs(context, baseURL!, "e2e-agency");
+    await page.setViewportSize(viewport);
+    await page.goto("/app/watchlists?watchlist=e2e-watchlist-agency-1");
+    await expect(
+      page.getByRole("link", { name: "Export CSV" }),
+    ).toHaveAttribute("href", "/export/watchlist/e2e-watchlist-agency-1");
+    await expect(
+      page.getByRole("link", { name: "JSON export" }),
+    ).toHaveAttribute(
+      "href",
+      "/export/watchlist/e2e-watchlist-agency-1?format=json",
+    );
+    const csvResponse = await page.request.get(
+      "/export/watchlist/e2e-watchlist-agency-1",
+      { headers: { [fixtureModeHeader]: "1" } },
+    );
+    expect(
+      csvResponse.status(),
+      "CSV export should be an executable local surface",
+    ).toBe(200);
+    expect(csvResponse.headers()["content-disposition"] ?? "").toMatch(
+      /attachment/i,
+    );
+    const jsonResponse = await page.request.get(
+      "/export/watchlist/e2e-watchlist-agency-1?format=json",
+      { headers: { [fixtureModeHeader]: "1" } },
+    );
+    expect(
+      jsonResponse.status(),
+      "JSON export should be an executable local surface",
+    ).toBe(200);
+    expect(jsonResponse.headers()["content-type"] ?? "").toMatch(/json/i);
+    await expect(page.getByRole("link", { name: "Open report" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Share summary" }),
+    ).toBeVisible();
+    const reportPage = await page.request.get(
+      "/app/reports/watchlist:e2e-watchlist-agency-1",
+      { headers: { [fixtureModeHeader]: "1" } },
+    );
+    expect(
+      reportPage.status(),
+      "the agency report route should be readable",
+    ).toBe(200);
+    await page.goto("/app/reports/watchlist:e2e-watchlist-agency-1");
+    const shareForm = page.locator("form").filter({
+      has: page.locator('input[name="intent"][value="share-report"]'),
+    });
+    const pdfForm = page.locator("form").filter({
+      has: page.locator('input[name="intent"][value="download-pdf"]'),
+    });
+    await expect(pdfForm).toHaveCount(1);
+    const shareReview = shareForm.locator('input[name="reviewed"]');
+    const pdfReview = pdfForm.locator('input[name="reviewed"]');
+    await expect(shareReview).toHaveAttribute("required", "");
+    await expect(shareReview).toHaveAttribute("value", "true");
+    await expect(shareReview).not.toBeChecked();
+    await expect(pdfReview).toHaveAttribute("required", "");
+    await expect(pdfReview).toHaveAttribute("value", "true");
+    await expect(pdfReview).not.toBeChecked();
+    await shareReview.evaluate((control) => control.removeAttribute("required"));
+    await shareForm.getByRole("button", { name: "Share snapshot" }).click();
+    await expectLiveRegion(
+      page,
+      "Review the current evidence before sharing or downloading this report.",
+    );
+
+    await pdfReview.evaluate((control) => control.removeAttribute("required"));
+    await pdfForm.getByRole("button", { name: "Download PDF" }).click();
+    await expectLiveRegion(
+      page,
+      "Review the current evidence before sharing or downloading this report.",
+    );
+
+    const staleShareForm = page.locator("form").filter({
+      has: page.locator('input[name="intent"][value="share-report"]'),
+    });
+    await staleShareForm.locator('input[name="reviewed"]').check();
+    await staleShareForm
+      .locator('input[name="reviewFingerprint"]')
+      .evaluate((control) => {
+        (control as HTMLInputElement).value = "stale";
+      });
+    await staleShareForm.getByRole("button", { name: "Share snapshot" }).click();
+    await expectLiveRegion(
+      page,
+      "The report changed after you opened it. Review the current evidence before sharing or downloading.",
+    );
+
+    await page.reload();
+    const currentPdfForm = page.locator("form").filter({
+      has: page.locator('input[name="intent"][value="download-pdf"]'),
+    });
+    const reviewFingerprint = await currentPdfForm
+      .locator('input[name="reviewFingerprint"]')
+      .inputValue();
+    const reviewNonce = await currentPdfForm
+      .locator('input[name="reviewNonce"]')
+      .inputValue();
+
+    const pdfPublication = await page.request.post(page.url(), {
+      headers: { [fixtureModeHeader]: "1" },
+      form: {
+        intent: "download-pdf",
+        reviewed: "true",
+        reviewFingerprint,
+        reviewNonce,
+      },
+      maxRedirects: 0,
+    });
+    expect(pdfPublication.status()).toBe(303);
+    const pdfLocation = pdfPublication.headers().location ?? "";
+    expect(pdfLocation).toMatch(/^\/share\/[a-z0-9]+\/pdf$/u);
+    const pdfProviderProof = await page.request.get(pdfLocation, {
+      headers: { [fixtureModeHeader]: "1" },
+    });
+    expect(pdfProviderProof.status()).toBe(503);
+    expect(await pdfProviderProof.json()).toMatchObject({
+      error: "pdf_unconfigured",
+    });
+    await expectNoOverflow(page);
+
+    const starterContext = await browser.newContext({ baseURL });
+    try {
+      await signInAs(starterContext, baseURL!, "e2e-starter");
+      const starterPage = await starterContext.newPage();
+      await starterPage.setViewportSize(viewport);
+      await starterPage.goto("/app/reports/watchlist:e2e-watchlist-starter-1");
+      await expect(
+        starterPage.getByRole("heading", {
+          name: "Reports are included in the Agency plan.",
+        }),
+      ).toBeVisible();
+      await expect(
+        starterPage.getByRole("link", { name: "Upgrade to Agency" }),
+      ).toBeVisible();
+      await expect(
+        starterPage.getByRole("button", { name: "Share snapshot" }),
+      ).toHaveCount(0);
+      await expect(
+        starterPage.getByRole("button", { name: "Download PDF" }),
+      ).toHaveCount(0);
+      await expect(
+        starterPage.getByText("PDF export is unavailable for this workspace.", {
+          exact: false,
+        }),
+      ).toHaveCount(0);
+      await expectTouchTargets(starterPage);
+      await expectNoOverflow(starterPage);
+    } finally {
+      await starterContext.close();
+    }
+    await attachReleaseStateArtifacts({ page, testInfo, prefix: "j4-export", state: "export-share-gate" });
+    annotateFinalUrl(testInfo, page);
+    });
+  }
+
+  for (const viewport of reportViewports) {
+    test(`client rooms make empty and gated delivery states explicit before room creation at ${viewport.width}px`, async ({
+      page,
+      context,
+      browser,
+      baseURL,
+    }, testInfo) => {
+    annotateScenario(testInfo, "client-room-empty-gated-delivery");
+    testInfo.annotations.push({
+      type: "persona",
+      description: "e2e-agency;e2e-starter",
+    });
+    testInfo.annotations.push({ type: "viewport", description: `${viewport.width}x${viewport.height}` });
+    await signInAs(context, baseURL!, "e2e-agency");
+    await page.setViewportSize(viewport);
+    await page.goto("/app/clients");
+    await expect(
+      page.getByRole("heading", { name: "Client rooms", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Bundle evidence and notes." }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Create the first client room" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Save client room" }),
+    ).toBeVisible();
+    await expectTouchTargets(page);
+    await expectNoOverflow(page);
+
+    const starterContext = await browser.newContext({ baseURL });
+    try {
+      await signInAs(starterContext, baseURL!, "e2e-starter");
+      const starterPage = await starterContext.newPage();
+      await starterPage.setViewportSize(viewport);
+      await starterPage.goto("/app/clients");
+      await expect(
+        starterPage.getByRole("heading", {
+          name: "Client rooms are an Agency feature.",
+        }),
+      ).toBeVisible();
+      await expect(
+        starterPage.getByText("Existing rooms remain available below.", {
+          exact: false,
+        }),
+      ).toBeVisible();
+      await expect(
+        starterPage.getByRole("button", { name: "Save client room" }),
+      ).toHaveCount(0);
+      await expect(
+        starterPage.getByRole("heading", { name: "No existing client rooms" }),
+      ).toBeVisible();
+      await expectTouchTargets(starterPage);
+      await expectNoOverflow(starterPage);
+    } finally {
+      await starterContext.close();
+    }
+    await attachReleaseStateArtifacts({ page, testInfo, prefix: "j4-clients", state: "empty-gated-room" });
+    annotateFinalUrl(testInfo, page);
+    });
+  }
+
+  for (const viewport of reportViewports) {
+    test(`reviewed report share opens anonymously, revokes immediately, and can be re-reviewed into a new link at ${viewport.width}px`, async ({
+      page,
+      context,
+      browser,
+      baseURL,
+    }, testInfo) => {
+    annotateScenario(testInfo, "review-share-anonymous-open-revoke-re-review");
+    testInfo.annotations.push({
+      type: "persona",
+      description: "e2e-agency;anonymous-client",
+    });
+    testInfo.annotations.push({ type: "viewport", description: `${viewport.width}x${viewport.height}` });
+    await signInAs(context, baseURL!, "e2e-agency");
+    await page.setViewportSize(viewport);
+
+    const shareReviewedReport = async () => {
+      await page.goto("/app/reports/watchlist:e2e-watchlist-agency-1");
+      const shareForm = page.locator("form").filter({
+        has: page.locator('input[name="intent"][value="share-report"]'),
+      });
+      const reviewedControl = shareForm.locator('input[name="reviewed"]');
+      await expect(reviewedControl).toHaveAttribute("required", "");
+      await expect(reviewedControl).toHaveAttribute("value", "true");
+      await expect(reviewedControl).not.toBeChecked();
+      await reviewedControl.check();
+      await shareForm.getByRole("button", { name: "Share snapshot" }).click();
+      await expectLiveRegion(page, "Snapshot link created.");
+      const shareAnchor = page.locator('a[href*="/share/"]').last();
+      await expect(shareAnchor).toBeVisible();
+      const href = await shareAnchor.getAttribute("href");
+      expect(
+        href,
+        "the reviewed share action should expose a public URL",
+      ).toMatch(/^https?:\/\/[^/]+\/share\//);
+      return href as string;
+    };
+
+    const anonymousContext = await browser.newContext({
+      baseURL,
+      extraHTTPHeaders: { [fixtureModeHeader]: "1" },
+    });
+    const anonymousPage = await anonymousContext.newPage();
+    try {
+      await anonymousPage.setViewportSize(viewport);
+      const firstShareUrl = await shareReviewedReport();
+      const firstOpenResponse = await anonymousPage.goto(firstShareUrl);
+      expect(
+        firstOpenResponse?.status(),
+        "an anonymous client should be able to open the approved snapshot",
+      ).toBe(200);
+      await expect(
+        anonymousPage.getByText("Shared report snapshot", { exact: true }),
+      ).toBeVisible();
+      await expect(
+        anonymousPage.getByRole("heading", {
+          name: "Okara launched a new workflow offer",
+          level: 2,
+        }),
+      ).toBeVisible();
+      await expectTouchTargets(anonymousPage);
+      await expectNoOverflow(anonymousPage);
+      await expectKeyboardFocus(anonymousPage);
+
+      const concurrentOwnerPage = await context.newPage();
+      await concurrentOwnerPage.setViewportSize(viewport);
+      await Promise.all([
+        page.goto("/app/shares"),
+        concurrentOwnerPage.goto("/app/shares"),
+      ]);
+      const shareRowFor = (ownerPage: Page) => ownerPage
+        .locator(".f9-work-row")
+        .filter({ hasText: firstShareUrl });
+      const firstShareRow = shareRowFor(page);
+      const concurrentShareRow = shareRowFor(concurrentOwnerPage);
+      await Promise.all([
+        expect(firstShareRow).toContainText("Report · Approved current evidence"),
+        expect(concurrentShareRow).toContainText("Report · Approved current evidence"),
+      ]);
+      const armRevoke = async (ownerPage: Page) => {
+        const revokeButton = shareRowFor(ownerPage).getByRole("button", {
+          name: "Revoke",
+        });
+        await revokeButton.click();
+        const confirmButton = shareRowFor(ownerPage).getByRole("button", {
+          name: "Confirm — revoke link?",
+        });
+        await expect(confirmButton).toBeVisible();
+        return confirmButton;
+      };
+      const [firstConfirm, concurrentConfirm] = await Promise.all([
+        armRevoke(page),
+        armRevoke(concurrentOwnerPage),
+      ]);
+      await Promise.all([firstConfirm.click(), concurrentConfirm.click()]);
+      const feedbackText = async (ownerPage: Page) => {
+        const feedback = ownerPage.locator(".f9-action-feedback");
+        await expect(feedback).toBeVisible();
+        return (await feedback.innerText()).trim();
+      };
+      const revokeMessages = await Promise.all([
+        feedbackText(page),
+        feedbackText(concurrentOwnerPage),
+      ]);
+      expect(revokeMessages.sort()).toEqual([
+        "Share link not found — it may already be revoked.",
+        "Share link revoked. The URL stops working immediately.",
+      ].sort());
+      await Promise.all([page.reload(), concurrentOwnerPage.reload()]);
+      await expect(
+        page.locator(".f9-work-row").filter({ hasText: firstShareUrl }),
+      ).toHaveCount(0);
+      await expect(
+        concurrentOwnerPage.locator(".f9-work-row").filter({ hasText: firstShareUrl }),
+      ).toHaveCount(0);
+      await concurrentOwnerPage.close();
+      const revokedResponse = await anonymousPage.goto(firstShareUrl);
+      expect(
+        revokedResponse?.status(),
+        "revocation should deny the old public URL",
+      ).toBe(404);
+
+      const secondShareUrl = await shareReviewedReport();
+      expect(secondShareUrl, "re-review should mint a new bearer URL").not.toBe(
+        firstShareUrl,
+      );
+      const secondOpenResponse = await anonymousPage.goto(secondShareUrl);
+      expect(
+        secondOpenResponse?.status(),
+        "the replacement approved snapshot should open anonymously",
+      ).toBe(200);
+      await expect(
+        anonymousPage.getByText("Shared report snapshot", { exact: true }),
+      ).toBeVisible();
+      await expectTouchTargets(anonymousPage);
+      await expectNoOverflow(anonymousPage);
+      await expectKeyboardFocus(anonymousPage);
+      await page.goto("/app/shares");
+      await expect(
+        page.locator(".f9-work-row").filter({ hasText: secondShareUrl }),
+      ).toContainText("Report · Approved current evidence");
+      await attachReleaseStateArtifacts({ page, testInfo, prefix: "j4-share", state: "share-revoke-rereview" });
+      annotateFinalUrl(testInfo, page);
+    } finally {
+      await anonymousContext.close();
+    }
+    });
+  }
+
+  for (const viewport of reportViewports) {
+    test(`client-room delivery stays gated until current evidence is approved, then recovers to ready at ${viewport.width}px`, async ({
+      page,
+      context,
+      baseURL,
+    }, testInfo) => {
+    annotateScenario(testInfo, "client-room-approval-recovery");
+    testInfo.annotations.push({ type: "persona", description: "e2e-agency" });
+    testInfo.annotations.push({ type: "viewport", description: `${viewport.width}x${viewport.height}` });
+    await signInAs(context, baseURL!, "e2e-agency");
+    await page.setViewportSize(viewport);
+    const roomReplay = await runJ4Replay(page, viewport, "client-room");
+    const roomId = String(
+      (roomReplay.firstBody.room as { id?: unknown } | undefined)?.id ?? "",
+    );
+    expect(roomId).toMatch(/^[a-zA-Z0-9_-]{8,128}$/u);
+    expect(roomReplay.effects).toMatchObject({
+      auditCount: 1,
+      auditStatus: "succeeded",
+      auditAction: "client_room.upsert",
+      auditResourceType: "client_room",
+      auditResourceId: roomId,
+      requestFingerprintPresent: true,
+      resultPresent: true,
+      shareCount: 0,
+      activeShareCount: 0,
+      roomCount: 1,
+      roomResourceCount: 2,
+    });
+    await page.goto("/app/clients");
+
+    const roomName = `E2E approval recovery room ${viewport.width}x${viewport.height}`;
+    const roomCard = page
+      .locator(".f9-client-room-card")
+      .filter({ hasText: roomName });
+    await expect(roomCard).toContainText("Needs setup before client review");
+    await expect(roomCard).toContainText(
+      "Review and approve the current report evidence before sending.",
+    );
+    const approveButton = roomCard.getByRole("button", {
+      name: "Review and approve evidence",
+    });
+    await approveButton.click();
+    await expectLiveRegion(
+      page,
+      "Current report evidence approved for client review.",
+    );
+    await expect(roomCard).toContainText("Ready for client review");
+    await page.reload();
+    await expect(roomCard).toContainText("Ready for client review");
+
+    const staleApproval = await runJ4Replay(page, viewport, "approval-stale");
+    expect(staleApproval.effects).toMatchObject({
+      auditCount: 0,
+      auditStatus: null,
+      auditAction: null,
+      auditResourceType: null,
+      auditResourceId: null,
+      requestFingerprintPresent: false,
+      resultPresent: true,
+      shareCount: 0,
+      activeShareCount: 0,
+      roomCount: 1,
+      roomResourceCount: 2,
+      approvalInvalidated: true,
+    });
+    await page.reload();
+    await expect(roomCard).toContainText("Needs setup before client review");
+    await expect(roomCard).toContainText(
+      "Review and approve the current report evidence before sending.",
+    );
+    await expectTouchTargets(page);
+    await expectNoOverflow(page);
+    await attachReleaseStateArtifacts({ page, testInfo, prefix: "j4-room", state: "approval-recovery" });
+    annotateFinalUrl(testInfo, page);
+    });
+  }
+
+  for (const viewport of reportViewports) {
+    test(`missing report recovers to the verified report without pretending that PDF/provider delivery passed at ${viewport.width}px`, async ({
+      page,
+      context,
+      baseURL,
+    }, testInfo) => {
+    annotateScenario(testInfo, "missing-report-recovery");
+    testInfo.annotations.push({ type: "persona", description: "e2e-agency" });
+    testInfo.annotations.push({ type: "viewport", description: `${viewport.width}x${viewport.height}` });
+    await signInAs(context, baseURL!, "e2e-agency");
+    await page.setViewportSize(viewport);
+    await page.goto("/app/reports/watchlist:missing-fixture");
+    await expect(page.getByRole("alert")).toContainText("Something went wrong");
+    await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Contact support" }),
+    ).toBeVisible();
+    await expectNoOverflow(page);
+
+    await page.goto("/app/reports/watchlist:e2e-watchlist-agency-1");
+    await expect(
+      page.getByText("Approved evidence report", { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Verified evidence", { exact: true }).first(),
+    ).toBeVisible();
+    await expectNoOverflow(page);
+    await attachReleaseStateArtifacts({ page, testInfo, prefix: "j4-missing", state: "missing-recovery" });
+    annotateFinalUrl(testInfo, page);
+    });
+  }
+});

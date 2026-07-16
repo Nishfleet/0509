@@ -156,6 +156,24 @@ describe("resolveCommercialAdSourceStatus", () => {
     });
   });
 
+  it("does not rehydrate provider bindings for deterministic local release proof", async () => {
+    (globalThis as { __APP_REQUEST_ENV__?: unknown }).__APP_REQUEST_ENV__ = {
+      BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+      BROWSER_RUN_API_TOKEN: "live-token-that-must-not-be-used",
+    };
+
+    const { resolveCommercialAdSourceStatus } = await import("~/lib/ad-source.server");
+    const status = await resolveCommercialAdSourceStatus({
+      E2E_PROVIDER_NETWORK_DENY: "1",
+    } as never);
+
+    expect(status).toMatchObject({
+      status: "demo",
+      provider: "demo",
+      mode: "demo",
+    });
+  });
+
   it("treats Quick Actions config as a live Browser Run provider even without the browser binding", async () => {
     vi.doMock(
       "cloudflare:workers",
@@ -203,6 +221,175 @@ describe("resolveCommercialAdSourceStatus", () => {
 });
 
 describe("searchAdsViaSourceResolver", () => {
+  it("serves an explicitly marked local fixture cache without touching browser, API, or demo providers", async () => {
+    const browserSearch = vi.fn();
+    const metaApiSearch = vi.fn();
+    const demoSearch = vi.fn();
+    const payload = {
+      ads: [{ metaAdId: "e2e-nykaa-live-1" }],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "hit",
+      discoveryStatus: "healthy",
+      discoverySummary: "Live ad checks are ready.",
+      discoveryFailureClass: null,
+    };
+    const db = {
+      prepare: vi.fn(() => ({
+        bind: vi.fn(() => ({
+          first: vi.fn().mockResolvedValue({
+            provider: "meta_library_browser",
+            payload_json: JSON.stringify(payload),
+            expires_at: new Date(Date.now() + 60_000).toISOString(),
+          }),
+        })),
+      })),
+    } as never;
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
+      searchAds: metaApiSearch,
+      demoSearch,
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+    const result = await searchAdsViaSourceResolver(
+      {
+        DB: db,
+        E2E_PROVIDER_NETWORK_DENY: "1",
+        E2E_FIXTURE_PROVIDER: "meta_library_browser",
+      } as never,
+      {
+        mode: "advertiser",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      { purpose: "public_search", cacheKeyOverride: "e2e-cache-key" },
+    );
+
+    expect(result).toMatchObject({
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "hit",
+    });
+    expect(browserSearch).not.toHaveBeenCalled();
+    expect(metaApiSearch).not.toHaveBeenCalled();
+    expect(demoSearch).not.toHaveBeenCalled();
+  });
+
+  it("does not treat a mislabeled fixture cache row as a warm selection cache", async () => {
+    const db = {
+      prepare: vi.fn(() => ({
+        bind: vi.fn(() => ({
+          first: vi.fn().mockResolvedValue({
+            provider: "meta_library_browser",
+            payload_json: JSON.stringify({
+              ads: [{ metaAdId: "wrong-source" }],
+              source: "demo",
+              provider: "demo",
+              cacheStatus: "hit",
+            }),
+            expires_at: new Date(Date.now() + 60_000).toISOString(),
+          }),
+        })),
+      })),
+    } as never;
+
+    const { hasFreshDiscoveryCacheEntry } = await import("~/lib/ad-source.server");
+    await expect(hasFreshDiscoveryCacheEntry(
+      {
+        DB: db,
+        E2E_PROVIDER_NETWORK_DENY: "1",
+        E2E_FIXTURE_PROVIDER: "meta_library_browser",
+      } as never,
+      {
+        mode: "advertiser",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      { cacheKeyOverride: "e2e-cache-key" },
+    )).resolves.toBe(false);
+  });
+
+  it("fails closed on a missing marked fixture cache row without falling through to a provider", async () => {
+    const browserSearch = vi.fn();
+    const metaApiSearch = vi.fn();
+    const demoSearch = vi.fn();
+    const db = {
+      prepare: vi.fn(() => ({
+        bind: vi.fn(() => ({ first: vi.fn().mockResolvedValue(null) })),
+      })),
+    } as never;
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
+      searchAds: metaApiSearch,
+      demoSearch,
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+    const result = await searchAdsViaSourceResolver(
+      {
+        DB: db,
+        E2E_PROVIDER_NETWORK_DENY: "1",
+        E2E_FIXTURE_PROVIDER: "meta_library_browser",
+      } as never,
+      {
+        mode: "advertiser",
+        filters: {
+          query: "missing",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      { purpose: "public_search", cacheKeyOverride: "missing-cache-key" },
+    );
+
+    expect(result).toMatchObject({
+      ads: [],
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "degraded",
+      discoveryFailureClass: "browser_unavailable",
+    });
+    expect(browserSearch).not.toHaveBeenCalled();
+    expect(metaApiSearch).not.toHaveBeenCalled();
+    expect(demoSearch).not.toHaveBeenCalled();
+  });
+
   it("does not use the platform Meta token for customer-facing discovery by default", async () => {
     const metaApiSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>().mockResolvedValue({
       ads: [],

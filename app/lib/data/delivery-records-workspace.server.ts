@@ -33,6 +33,45 @@ export async function migrateAutoProvisionedEmailTargets(
 ) {
   const db = ensureDb(env);
   const timestamp = nowIso();
+  const normalizedEmail = newEmail.trim().toLowerCase();
+
+  // A suppressed current address must never be resurrected by an account
+  // email migration. Suppress stale auto-provisioned rows instead.
+  const suppressedCurrentAddress = await one<{ present: number }>(
+    env,
+    `
+        SELECT 1 AS present
+        FROM delivery_target
+        WHERE user_id = ?
+          AND channel = 'email'
+          AND lower(trim(target_value)) = ?
+          AND opted_out_at IS NOT NULL
+        LIMIT 1
+      `,
+    userId,
+    normalizedEmail,
+  );
+
+  if (suppressedCurrentAddress) {
+    const result = await db
+      .prepare(
+        `
+          UPDATE delivery_target
+          SET is_opted_in = 0,
+              is_paused = 1,
+              paused_at = COALESCE(paused_at, ?),
+              opted_out_at = COALESCE(opted_out_at, ?),
+              updated_at = ?
+          WHERE user_id = ?
+            AND channel = 'email'
+            AND opt_in_source = 'account_email'
+            AND opted_out_at IS NULL
+        `,
+      )
+      .bind(timestamp, timestamp, timestamp, userId)
+      .run();
+    return Number(result.meta?.changes ?? 0);
+  }
 
   // UPDATE OR IGNORE skips rows whose new-address twin already exists
   // (unique indexes on user/watchlist/channel/value)…
@@ -48,10 +87,10 @@ export async function migrateAutoProvisionedEmailTargets(
           AND channel = 'email'
           AND opt_in_source = 'account_email'
           AND opted_out_at IS NULL
-          AND target_value != ?
+          AND lower(trim(target_value)) != ?
       `,
     )
-    .bind(newEmail, timestamp, userId, newEmail)
+    .bind(normalizedEmail, timestamp, userId, normalizedEmail)
     .run();
 
   // …and any stale row that couldn't be updated (twin existed) is removed.
@@ -63,10 +102,10 @@ export async function migrateAutoProvisionedEmailTargets(
           AND channel = 'email'
           AND opt_in_source = 'account_email'
           AND opted_out_at IS NULL
-          AND target_value != ?
+          AND lower(trim(target_value)) != ?
       `,
     )
-    .bind(userId, newEmail)
+    .bind(userId, normalizedEmail)
     .run();
 
   return Number(updated.meta?.changes ?? 0);
@@ -150,10 +189,15 @@ export async function upsertWorkspaceDeliveryConfig(
 }
 
 export async function getUserDeliveryProfile(env: AppEnv, userId: string) {
-  const row = await one<{ id: string; email: string | null; name: string | null }>(
+  const row = await one<{
+    id: string;
+    email: string | null;
+    name: string | null;
+    email_verified: number | boolean | null;
+  }>(
     env,
     `
-      SELECT id, email, name
+      SELECT id, email, name, emailVerified AS email_verified
       FROM user
       WHERE id = ?
       LIMIT 1
@@ -169,5 +213,6 @@ export async function getUserDeliveryProfile(env: AppEnv, userId: string) {
     id: row.id,
     email: row.email,
     name: row.name ?? "",
+    emailVerified: row.email_verified === 1 || row.email_verified === true,
   };
 }

@@ -17,7 +17,7 @@ describe("demo proof API", () => {
     expect(body.status).toBe("sample_only");
     expect(body.competitor.name).toBe("Nykaa");
     expect(body.trackedPreview.watchlistName).toContain("Nykaa");
-    expect(body.trackedPreview.loop).toContain("Run a public live search");
+    expect(body.trackedPreview.loop).toContain("Run the public search preview");
     expect(body.proofTrail.length).toBeGreaterThanOrEqual(3);
     expect(body.digestPreview.recommendedMove).toContain("counter-test");
     expect(body.digestPreview.confidence).toBe("Verified evidence with source and freshness attached.");
@@ -38,7 +38,7 @@ describe("demo proof API", () => {
     expect(response.headers.get("content-type")).toContain("text/markdown");
     expect(response.headers.get("vary")).toBe("Accept");
     expect(body).toContain("Status: sample only");
-    expect(body).toContain("Public live search is read-only; retained monitoring requires an account");
+    expect(body).toContain("The public search preview is read-only and provider coverage varies; retained monitoring requires an account");
     expect(body).toContain("Tracked preview: Nykaa weekly competitor watch");
     expect(body).toContain("Cadence: Weekly digest");
     expect(body).toContain("## Source Trail");

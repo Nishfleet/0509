@@ -8,7 +8,6 @@ import {
   createDeliveryAttempt,
   getDeliveryAttemptByIdempotencyKey,
   getOldestUserId,
-  getUserDeliveryProfile,
   getUserIdByEmail,
   getDeliveryTargetById,
   getDeliveryTargetByProviderIdentifier,
@@ -22,6 +21,7 @@ import {
   upsertDeliveryTarget,
   upsertDigestDelivery,
 } from "~/lib/data.server";
+import * as deliveryData from "~/lib/data.server";
 import {
   claimInstantDeliveryAttempt,
   markInstantDeliveryDispatchStarted,
@@ -162,6 +162,17 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
     }
   }
 
+  const accountEmail = lane === "customer"
+    ? await resolveVerifiedAccountEmail(env, input.userId, input.accountEmail)
+    : input.accountEmail;
+  if (lane === "customer" && !accountEmail) {
+    return {
+      attempts: 0,
+      channels: [] as DeliveryChannel[],
+      details: [] as DigestAttemptSummary[],
+    };
+  }
+
   const workspaceConfigRecord =
     (await getWorkspaceDeliveryConfig(env, input.userId)) ??
     buildLegacyWorkspaceConfig(input.userId, Boolean(input.accountEmail));
@@ -185,7 +196,7 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
   }
   const isHeartbeat = input.items.length === 0 && Boolean(input.heartbeat);
   const emailTargets = config.emailEnabled
-    ? await resolveDigestEmailTargets(env, input.userId, input.accountEmail)
+    ? await resolveDigestEmailTargets(env, input.userId, accountEmail)
     : [];
   // "All quiet" heartbeats stay email-only: a WhatsApp template or Slack
   // ping saying nothing happened reads as noise on those channels.
@@ -251,6 +262,16 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
     }
   }
 
+  const accountEmail = lane === "customer"
+    ? await resolveVerifiedAccountEmail(env, input.userId, input.accountEmail)
+    : input.accountEmail;
+  if (lane === "customer" && !accountEmail) {
+    return {
+      attempts: 0,
+      channels: [] as DeliveryChannel[],
+    };
+  }
+
   const workspaceConfigRecord =
     (await getWorkspaceDeliveryConfig(env, input.userId)) ??
     buildLegacyWorkspaceConfig(input.userId, Boolean(input.accountEmail));
@@ -276,7 +297,7 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
   }
 
   const emailTargets = batches.some((batch) => batch.allowedChannels.includes("email"))
-    ? await resolveAlertEmailTargets(env, input.userId, input.watchlist.id, input.accountEmail)
+    ? await resolveAlertEmailTargets(env, input.userId, input.watchlist.id, accountEmail)
     : [];
   const whatsappTargets = isWhatsAppDeliveryCustomerFacing() && batches.some((batch) => batch.allowedChannels.includes("whatsapp"))
     ? await resolveAlertWhatsAppTargets(env, input.userId, input.watchlist.id)
@@ -567,6 +588,7 @@ async function claimDigestDeliveryAttempt(
       sentAt: null,
       failedAt: null,
       payloadSnapshot: input.payloadSnapshot,
+      targetValue: input.targetValue,
       updatedAt: claimUpdatedAt,
       expectedStatus: stalePreDispatch ? "pending" : "failed",
       expectedWebhookStatus: stalePreDispatch ? "pending" : undefined,
@@ -654,6 +676,35 @@ async function readFinalizedDigestAttempt(
   return durable ? summarizeDigestDeliveryAttempt(input.channel, durable) : input.fallback;
 }
 
+async function cancelPendingEmailAttemptAfterDispatchLoss(
+  env: AppEnv,
+  input: { attemptId: string; idempotencyKey: string; expectedUpdatedAt: string },
+) {
+  const current = await getDeliveryAttemptByIdempotencyKey(env, input.idempotencyKey);
+  if (!current) {
+    throw new Error("Email delivery attempt disappeared before dispatch.");
+  }
+  if (current.status === "pending" && current.webhookStatus === "pending") {
+    await updateDeliveryAttemptResult(env, input.attemptId, {
+      provider: EMAIL_PROVIDER,
+      status: "failed",
+      webhookStatus: "failed",
+      providerMessageId: null,
+      providerStatusLastSeenAt: null,
+      errorMessage: "Email delivery target was no longer active before dispatch.",
+      failedAt: new Date().toISOString(),
+      expectedStatus: "pending",
+      expectedWebhookStatus: "pending",
+      expectedUpdatedAt: input.expectedUpdatedAt,
+    });
+  }
+  const finalized = await getDeliveryAttemptByIdempotencyKey(env, input.idempotencyKey);
+  if (!finalized) {
+    throw new Error("Email delivery attempt disappeared after dispatch loss.");
+  }
+  return finalized;
+}
+
 async function deliverDigestToEmailTarget(
   env: AppEnv,
   input: DeliverWeeklyDigestInput,
@@ -661,11 +712,22 @@ async function deliverDigestToEmailTarget(
   target: DeliveryTargetRecord,
   timeZone: string | null,
 ): Promise<DigestAttemptSummary> {
+  const targetValue = normalizeDeliveryEmailValue(target.targetValue);
+  if (!targetValue) {
+    return {
+      channel: "email",
+      status: "failed",
+      targetValue: target.targetValue,
+      providerMessageId: null,
+      errorMessage: "Email delivery target is empty.",
+      deliveredAt: null,
+    };
+  }
   const idempotencyKey = buildDeliveryAttemptIdempotencyKey({
     digestRunId: input.digestRunId,
     lane,
     channel: "email",
-    targetValue: target.targetValue,
+    targetValue,
   });
   const unsubscribeUrl = await buildUnsubscribeUrl(env, {
     userId: target.userId,
@@ -690,7 +752,7 @@ async function deliverDigestToEmailTarget(
     lane,
     channel: "email",
     provider: EMAIL_PROVIDER,
-    targetValue: target.targetValue,
+    targetValue,
     eventIds: input.items.map((item) => item.eventId),
     payloadSnapshot: {
       kind: "weekly_digest",
@@ -712,8 +774,23 @@ async function deliverDigestToEmailTarget(
     throw new Error("Digest email delivery claim did not return an owned attempt.");
   }
 
+  // Customer email dispatch must cross the same at-most-once boundary as an
+  // instant alert. If unsubscribe commits after the durable claim, the CAS
+  // loses and no provider call is allowed.
+  const dispatchStartedAt = env.DB
+    ? await markInstantDeliveryDispatchStarted(env, attemptId, claimUpdatedAt)
+    : null;
+  if (env.DB && !dispatchStartedAt) {
+    const current = await cancelPendingEmailAttemptAfterDispatchLoss(env, {
+      attemptId,
+      idempotencyKey,
+      expectedUpdatedAt: claimUpdatedAt,
+    });
+    return summarizeDigestDeliveryAttempt("email", current);
+  }
+
   const providerResult = await sendRenderedDigestEmail(env, {
-    to: target.targetValue,
+    to: targetValue,
     email,
     unsubscribeUrl,
   });
@@ -727,13 +804,13 @@ async function deliverDigestToEmailTarget(
     sentAt: providerResult.status === "sent" ? providerResult.providerStatusLastSeenAt : null,
     failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
     expectedStatus: "pending",
-    expectedWebhookStatus: "pending",
-    expectedUpdatedAt: claimUpdatedAt,
+    expectedWebhookStatus: dispatchStartedAt ? "provider_unknown" : "pending",
+    expectedUpdatedAt: dispatchStartedAt ?? claimUpdatedAt,
   });
   const providerSummary: DigestAttemptSummary = {
     channel: "email",
     status: providerResult.status,
-    targetValue: target.targetValue,
+    targetValue,
     providerMessageId: providerResult.providerMessageId,
     errorMessage: providerResult.errorMessage,
     deliveredAt: null,
@@ -1430,12 +1507,16 @@ async function resolveDigestEmailTargets(
   userId: string,
   accountEmail: string | null,
 ) {
+  if ("migrateAutoProvisionedEmailTargets" in deliveryData && accountEmail) {
+    const migrate = deliveryData.migrateAutoProvisionedEmailTargets;
+    if (typeof migrate === "function") await migrate(env, userId, accountEmail);
+  }
   const allTargets = await listDeliveryTargets(env, userId, {
     watchlistId: null,
     channel: "email",
     limit: 10,
   });
-  const configuredTargets = allTargets.filter(isUsableEmailTarget);
+  const configuredTargets = allTargets.filter((target) => isUsableEmailTarget(target, accountEmail));
 
   if (configuredTargets.length > 0) {
     return configuredTargets;
@@ -1471,6 +1552,10 @@ async function resolveAlertEmailTargets(
   watchlistId: string,
   accountEmail: string | null,
 ) {
+  if ("migrateAutoProvisionedEmailTargets" in deliveryData && accountEmail) {
+    const migrate = deliveryData.migrateAutoProvisionedEmailTargets;
+    if (typeof migrate === "function") await migrate(env, userId, accountEmail);
+  }
   const allTargets = dedupeTargetsByValue([
     ...(await listDeliveryTargets(env, userId, {
       watchlistId,
@@ -1483,7 +1568,7 @@ async function resolveAlertEmailTargets(
       limit: 10,
     })),
   ]);
-  const combinedTargets = allTargets.filter(isUsableEmailTarget);
+  const combinedTargets = allTargets.filter((target) => isUsableEmailTarget(target, accountEmail));
 
   if (combinedTargets.length > 0) {
     return combinedTargets;
@@ -1563,8 +1648,56 @@ async function resolveAlertSlackTargets(env: AppEnv, userId: string, watchlistId
   ]).filter(isUsableSlackTarget);
 }
 
-function isUsableEmailTarget(target: DeliveryTargetRecord) {
-  return !target.isPaused && !target.optedOutAt && target.validationStatus !== "invalid";
+function isUsableEmailTarget(target: DeliveryTargetRecord, currentAccountEmail?: string | null) {
+  const normalizedAccountEmail = normalizeDeliveryEmailValue(currentAccountEmail);
+  if (
+    !normalizedAccountEmail ||
+    target.isPaused ||
+    !target.isOptedIn ||
+    target.optedOutAt ||
+    !target.isValidated ||
+    target.validationStatus !== "validated"
+  ) {
+    return false;
+  }
+
+  return normalizeDeliveryEmailValue(target.targetValue) === normalizedAccountEmail;
+}
+
+function isAutoProvisionedEmailTarget(target: DeliveryTargetRecord) {
+  return target.optInSource === AUTO_PROVISIONED_EMAIL_SOURCE || target.metadata.autoProvisioned === true;
+}
+
+async function resolveVerifiedAccountEmail(
+  env: AppEnv,
+  userId: string,
+  fallbackEmail: string | null,
+) {
+  const profileLoader = ("getUserDeliveryProfile" in deliveryData
+    ? deliveryData.getUserDeliveryProfile
+    : undefined) as unknown as
+    | ((loaderEnv: AppEnv, loaderUserId: string) => Promise<{
+        email: string | null;
+        emailVerified?: boolean;
+      } | null>)
+    | undefined;
+  const profile = typeof profileLoader === "function"
+    ? await profileLoader(env, userId)
+    : null;
+  if (profile) {
+    if (profile.emailVerified !== true) return null;
+    return normalizeDeliveryEmailValue(profile.email);
+  }
+
+  // Isolated adapters without D1 may provide a verified account email through
+  // their caller context. Production has the profile helper and fails closed
+  // when the durable current email cannot be read.
+  return env.DB ? null : normalizeDeliveryEmailValue(fallbackEmail);
+}
+
+function normalizeDeliveryEmailValue(value: string | null | undefined) {
+  const normalized = value?.trim().toLowerCase() ?? "";
+  return normalized.length > 0 ? normalized : null;
 }
 
 function hasEmailTargetForAddress(targets: DeliveryTargetRecord[], address: string) {
@@ -1939,6 +2072,14 @@ async function beginInstantDeliveryDispatch(
   const current = await getDeliveryAttemptByIdempotencyKey(env, attempt.idempotencyKey);
   if (!current) {
     throw new Error("Instant delivery dispatch claim disappeared.");
+  }
+  if (current.channel === "email" && current.status === "pending" && current.webhookStatus === "pending") {
+    const cancelled = await cancelPendingEmailAttemptAfterDispatchLoss(env, {
+      attemptId: attempt.attemptId,
+      idempotencyKey: attempt.idempotencyKey,
+      expectedUpdatedAt: attempt.claimUpdatedAt,
+    });
+    return { dispatchStartedAt: null, duplicate: cancelled };
   }
   return { dispatchStartedAt: null, duplicate: current };
 }

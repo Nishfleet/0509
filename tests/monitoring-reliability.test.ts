@@ -180,6 +180,7 @@ function mockReliabilityDependencies(input: {
     ),
     listSuccessfulProofCapturesForAd: vi.fn().mockResolvedValue([]),
     listWatchEvents: vi.fn().mockResolvedValue([]),
+    listWatchEventsForRun: vi.fn().mockResolvedValue([]),
     listAdsByIds: vi.fn().mockResolvedValue([]),
     listWatchEventsBetween,
     listWatchlists,

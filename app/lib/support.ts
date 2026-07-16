@@ -15,6 +15,15 @@ export const SUPPORT_MAILTO = `mailto:${SUPPORT_EMAIL}`;
 export const SUPPORT_CASE_SUBJECT_MAX_LENGTH = 160;
 export const SUPPORT_CASE_DETAIL_MAX_LENGTH = 4000;
 
+const OWNER_ONLY_SUPPORT_CATEGORIES = new Set<SupportCaseCategory>(["team"]);
+const BILLING_CHANGE_TEXT_PATTERN =
+  /\b(?:cancel(?:led|lation|ling)?|renewal|change\s+plan|switch\s+plan|upgrade|downgrade|plan\s+(?:change|switch|upgrade|downgrade)|subscription\s+(?:change|switch|upgrade|downgrade|cancel(?:led|lation|ling)?))\b/i;
+const WORKSPACE_AUTHORITY_TEXT_PATTERN = /\b(?:workspace|agency|team|seat|teammate|team\s+member|workspace\s+user)\b/i;
+const TEAM_AUTHORITY_TEXT_PATTERNS = [
+  /\b(?:add|remove|invite|deactivate)\s+(?:a\s+)?(?:teammate|team\s+member|seat|workspace\s+user)\b/i,
+  /\bteam\s+seat\b/i,
+];
+
 export {
   SUPPORT_CASE_CATEGORIES,
   SUPPORT_CASE_EVENT_TYPES,
@@ -102,6 +111,22 @@ export function normalizeSupportCaseInput(input: {
     subject,
     detail,
   };
+}
+
+export function requiresWorkspaceOwnerAuthority(input: {
+  category: SupportCaseCategory;
+  subject: string;
+  detail: string;
+}) {
+  if (OWNER_ONLY_SUPPORT_CATEGORIES.has(input.category)) {
+    return true;
+  }
+  const requestText = `${input.subject} ${input.detail}`;
+  if (TEAM_AUTHORITY_TEXT_PATTERNS.some((pattern) => pattern.test(requestText))) {
+    return true;
+  }
+
+  return BILLING_CHANGE_TEXT_PATTERN.test(requestText) && WORKSPACE_AUTHORITY_TEXT_PATTERN.test(requestText);
 }
 
 function normalizeSupportCaseText(value: unknown, fieldName: "subject" | "details", maxLength: number) {

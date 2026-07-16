@@ -6,6 +6,9 @@ import {
   runProductionCanary,
 } from "../scripts/prod-canary.lib.mjs";
 
+const EXPECTED_WORKER_VERSION_ID = "worker-version-123";
+const EXPECTED_SEARCH_ROLLOUT_MODE = "shadow";
+
 function current0509Result(status: "ok" | "empty", overrides = {}) {
   return {
     provider: "current_0509" as const,
@@ -49,6 +52,12 @@ function createHealthyCanaryFetchImpl() {
     return Response.json({
       status: "ok",
       app: "0509",
+      releaseIdentity: {
+        workerVersionId: "worker-version-123",
+        tag: "release-2026-07-15",
+        timestamp: "2026-07-15T10:00:00.000Z",
+        searchRolloutMode: "shadow",
+      },
     });
   });
 }
@@ -61,11 +70,17 @@ describe("production canary", () => {
       json: async () => ({
         status: "ok",
         app: "0509",
+        releaseIdentity: {
+          workerVersionId: EXPECTED_WORKER_VERSION_ID,
+          searchRolloutMode: "shadow",
+        },
       }),
     });
 
     const health = await checkHealthEndpoint({
       baseUrl: "https://0509.io",
+      expectedWorkerVersionId: EXPECTED_WORKER_VERSION_ID,
+      expectedSearchRolloutMode: EXPECTED_SEARCH_ROLLOUT_MODE,
       fetchImpl,
     });
 
@@ -98,6 +113,7 @@ describe("production canary", () => {
 
     const health = await checkHealthEndpoint({
       baseUrl: "https://0509.io",
+      expectedWorkerVersionId: EXPECTED_WORKER_VERSION_ID,
       fetchImpl,
     });
 
@@ -110,9 +126,174 @@ describe("production canary", () => {
     expect(health.message).toContain("app mismatch");
   });
 
+  it("fails closed when the expected Worker version is absent", async () => {
+    const health = await checkHealthEndpoint({
+      baseUrl: "https://0509.io",
+      fetchImpl: vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          status: "ok",
+          app: "0509",
+          releaseIdentity: {
+            workerVersionId: EXPECTED_WORKER_VERSION_ID,
+            searchRolloutMode: EXPECTED_SEARCH_ROLLOUT_MODE,
+          },
+        }),
+      }),
+    });
+
+    expect(health.ok).toBe(false);
+    expect(health.message).toContain("Missing expected Worker version ID");
+  });
+
+  it.each([
+    [
+      "wrong version",
+      { workerVersionId: "other-worker", searchRolloutMode: "shadow" },
+      "Worker version mismatch",
+    ],
+    [
+      "missing version",
+      { workerVersionId: null, searchRolloutMode: "shadow" },
+      "missing the Worker version ID",
+    ],
+    [
+      "wrong mode",
+      { workerVersionId: EXPECTED_WORKER_VERSION_ID, searchRolloutMode: "v2" },
+      "rollout mode mismatch",
+    ],
+    [
+      "missing mode",
+      { workerVersionId: EXPECTED_WORKER_VERSION_ID, searchRolloutMode: null },
+      "missing the search rollout mode",
+    ],
+  ])(
+    "fails closed for %s release evidence",
+    async (_label, releaseIdentity, message) => {
+      const health = await checkHealthEndpoint({
+        baseUrl: "https://0509.io",
+        expectedWorkerVersionId: EXPECTED_WORKER_VERSION_ID,
+        expectedSearchRolloutMode: EXPECTED_SEARCH_ROLLOUT_MODE,
+        fetchImpl: vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: async () => ({ status: "ok", app: "0509", releaseIdentity }),
+        }),
+      });
+
+      expect(health.ok).toBe(false);
+      expect(health.message).toContain(message);
+    },
+  );
+
+  it("fails a production canary when any health hostname has different release evidence", async () => {
+    let requestCount = 0;
+    const fetchImpl = vi.fn(async (input: Parameters<typeof fetch>[0]) => {
+      const url = String(input);
+      if (url.includes("/api/launch-readiness")) {
+        return Response.json({
+          ok: true,
+          blockers: [],
+          signals: {},
+          metaAdsBeta: {
+            ok: true,
+            samples: 24,
+            sampleTarget: 20,
+            successRate: 1,
+            blockers: [],
+          },
+        });
+      }
+      requestCount += 1;
+      return Response.json({
+        status: "ok",
+        app: "0509",
+        releaseIdentity: {
+          workerVersionId:
+            requestCount === 2 ? "other-worker" : EXPECTED_WORKER_VERSION_ID,
+          searchRolloutMode: EXPECTED_SEARCH_ROLLOUT_MODE,
+        },
+      });
+    });
+
+    const report = await runProductionCanary({
+      queries: ["nykaa"],
+      expectedWorkerVersionId: EXPECTED_WORKER_VERSION_ID,
+      expectedSearchRolloutMode: EXPECTED_SEARCH_ROLLOUT_MODE,
+      fetchImpl,
+      benchmarkImpl: vi.fn().mockResolvedValue([current0509Result("ok")]),
+      canaryBypassToken: "secret-token",
+    });
+
+    expect(report.passed).toBe(false);
+    expect(report.healthChecks).toHaveLength(3);
+    expect(report.healthChecks[1].message).toContain("Worker version mismatch");
+  });
+
+  it("does not expose canary secrets in release evidence or formatted output", async () => {
+    const secret = "SUPER_SECRET_CANARY_TOKEN";
+    const report = await runProductionCanary({
+      baseUrl: "https://0509.io",
+      expectedWorkerVersionId: EXPECTED_WORKER_VERSION_ID,
+      expectedSearchRolloutMode: EXPECTED_SEARCH_ROLLOUT_MODE,
+      queries: ["nykaa"],
+      fetchImpl: createHealthyCanaryFetchImpl(),
+      benchmarkImpl: vi.fn().mockResolvedValue([current0509Result("ok")]),
+      canaryBypassToken: secret,
+    });
+
+    expect(JSON.stringify(report)).not.toContain(secret);
+    expect(formatProductionCanaryReport(report)).not.toContain(secret);
+  });
+
+  it("does not echo invalid expected or actual release scalars", async () => {
+    const invalidExpected = "expected\n" + "x".repeat(140);
+    const invalidActual = "actual\nSECRET_RELEASE_ID";
+    const health = await checkHealthEndpoint({
+      baseUrl: "https://0509.io",
+      expectedWorkerVersionId: invalidExpected,
+      expectedSearchRolloutMode: "shadow\nSECRET_MODE",
+      fetchImpl: vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          status: "ok",
+          app: "0509",
+          releaseIdentity: {
+            workerVersionId: invalidActual,
+            tag: "tag\nSECRET_TAG",
+            timestamp: "2026-07-15T10:00:00Z\nSECRET_TIME",
+            searchRolloutMode: "shadow\nSECRET_MODE",
+          },
+        }),
+      }),
+    });
+
+    expect(health.ok).toBe(false);
+    expect(health.message).toContain("Missing expected Worker version ID");
+    expect(JSON.stringify(health)).not.toContain("SECRET");
+    expect(
+      formatProductionCanaryReport({
+        ...{
+          health,
+          healthChecks: [health],
+          expectedWorkerVersionId: null,
+          expectedSearchRolloutMode: null,
+        },
+        freshLiveBypass: { required: false },
+        launchReadiness: null,
+        metaAdsBeta: { beta: false },
+        blockingFailures: [],
+      } as unknown as Awaited<ReturnType<typeof runProductionCanary>>),
+    ).not.toContain("SECRET");
+  });
+
   it("classifies current 0509 search failures as Meta ads beta needing proof", async () => {
     const fetchImpl = createHealthyCanaryFetchImpl();
-    const benchmarkImpl = vi.fn().mockResolvedValue([current0509Result("empty")]);
+    const benchmarkImpl = vi
+      .fn()
+      .mockResolvedValue([current0509Result("empty")]);
 
     const report = await runProductionCanary({
       baseUrl: "https://0509.io",
@@ -126,7 +307,8 @@ describe("production canary", () => {
     expect(report.freshLiveBypass).toMatchObject({
       configured: true,
       proved: false,
-      message: "Private current_0509 fresh-live probe did not return live ad proof.",
+      message:
+        "Private current_0509 fresh-live probe did not return live ad proof.",
     });
     expect(report.blockingFailures).toHaveLength(1);
     expect(report.metaAdsBeta).toMatchObject({
@@ -134,7 +316,9 @@ describe("production canary", () => {
       strict: false,
       status: "needs_proof",
     });
-    expect(formatProductionCanaryReport(report)).toContain("meta ads beta: needs proof");
+    expect(formatProductionCanaryReport(report)).toContain(
+      "meta ads beta: needs proof",
+    );
     expect(formatProductionCanaryReport(report)).toContain(
       "fresh-live bypass: failed (Private current_0509 fresh-live probe did not return live ad proof.)",
     );
@@ -142,7 +326,9 @@ describe("production canary", () => {
 
   it("can still run Meta ads as a strict provider gate when explicitly requested", async () => {
     const fetchImpl = createHealthyCanaryFetchImpl();
-    const benchmarkImpl = vi.fn().mockResolvedValue([current0509Result("empty")]);
+    const benchmarkImpl = vi
+      .fn()
+      .mockResolvedValue([current0509Result("empty")]);
 
     const report = await runProductionCanary({
       baseUrl: "https://0509.io",
@@ -154,7 +340,9 @@ describe("production canary", () => {
     });
 
     expect(report.passed).toBe(false);
-    expect(formatProductionCanaryReport(report)).toContain("meta ads strict gate: failed");
+    expect(formatProductionCanaryReport(report)).toContain(
+      "meta ads strict gate: failed",
+    );
   });
 
   it("checks every production health hostname by default", async () => {
@@ -163,6 +351,8 @@ describe("production canary", () => {
 
     const report = await runProductionCanary({
       queries: ["nykaa"],
+      expectedWorkerVersionId: EXPECTED_WORKER_VERSION_ID,
+      expectedSearchRolloutMode: EXPECTED_SEARCH_ROLLOUT_MODE,
       fetchImpl,
       benchmarkImpl,
       canaryBypassToken: "secret-token",
@@ -174,8 +364,12 @@ describe("production canary", () => {
       "https://www.0509.io/api/health",
       "https://api.0509.io/api/health",
     ]);
-    expect(formatProductionCanaryReport(report)).toContain("https://www.0509.io/api/health");
-    expect(formatProductionCanaryReport(report)).toContain("https://api.0509.io/api/health");
+    expect(formatProductionCanaryReport(report)).toContain(
+      "https://www.0509.io/api/health",
+    );
+    expect(formatProductionCanaryReport(report)).toContain(
+      "https://api.0509.io/api/health",
+    );
     expect(benchmarkImpl).toHaveBeenCalledWith(
       expect.objectContaining({
         forceLive: true,
@@ -190,6 +384,8 @@ describe("production canary", () => {
 
     const report = await runProductionCanary({
       baseUrl: "https://preview.example.com",
+      expectedWorkerVersionId: EXPECTED_WORKER_VERSION_ID,
+      expectedSearchRolloutMode: EXPECTED_SEARCH_ROLLOUT_MODE,
       queries: ["nykaa"],
       fetchImpl,
       benchmarkImpl,
@@ -208,6 +404,8 @@ describe("production canary", () => {
 
     const report = await runProductionCanary({
       baseUrl: "https://0509.io",
+      expectedWorkerVersionId: EXPECTED_WORKER_VERSION_ID,
+      expectedSearchRolloutMode: EXPECTED_SEARCH_ROLLOUT_MODE,
       queries: ["nykaa"],
       fetchImpl,
       benchmarkImpl,
@@ -216,7 +414,9 @@ describe("production canary", () => {
 
     expect(report.passed).toBe(true);
     expect(formatProductionCanaryReport(report)).toContain("meta ads beta: ok");
-    expect(formatProductionCanaryReport(report)).toContain("fresh-live bypass: ok");
+    expect(formatProductionCanaryReport(report)).toContain(
+      "fresh-live bypass: ok",
+    );
   });
 
   it("fails when the readiness endpoint says Meta ads beta is below the bar", async () => {
@@ -255,7 +455,9 @@ describe("production canary", () => {
     expect(report.passed).toBe(false);
     expect(report.metaAdsBeta?.status).toBe("needs_proof");
     const formatted = formatProductionCanaryReport(report);
-    expect(formatted).toContain("meta ads beta: needs proof (633/20 samples, 94% success)");
+    expect(formatted).toContain(
+      "meta ads beta: needs proof (633/20 samples, 94% success)",
+    );
     expect(formatted).not.toContain("meta ads probe:");
   });
 
@@ -266,6 +468,10 @@ describe("production canary", () => {
       json: async () => ({
         status: "ok",
         app: "0509",
+        releaseIdentity: {
+          workerVersionId: "worker-version-123",
+          searchRolloutMode: "shadow",
+        },
       }),
     });
     const benchmarkImpl = vi.fn().mockResolvedValue([current0509Result("ok")]);
@@ -284,7 +490,9 @@ describe("production canary", () => {
       configured: false,
       proved: false,
     });
-    expect(formatProductionCanaryReport(report)).toContain("fresh-live bypass: failed");
+    expect(formatProductionCanaryReport(report)).toContain(
+      "fresh-live bypass: failed",
+    );
   });
 
   it("fails the fresh-live bypass when the private probe is redirected to sign in", async () => {
@@ -395,9 +603,12 @@ describe("production canary", () => {
     expect(report.freshLiveBypass).toMatchObject({
       configured: true,
       proved: false,
-      message: "Private current_0509 fresh-live probe did not return live ad proof.",
+      message:
+        "Private current_0509 fresh-live probe did not return live ad proof.",
     });
     expect(report.metaAdsBeta?.status).toBe("needs_proof");
-    expect(formatProductionCanaryReport(report)).toContain("Cached live results");
+    expect(formatProductionCanaryReport(report)).toContain(
+      "Cached live results",
+    );
   });
 });

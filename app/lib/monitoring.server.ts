@@ -38,6 +38,7 @@ import {
   listLastSuccessfulProofCapturesForAds,
   listObservationsForRun,
   listWatchEvents,
+  listWatchEventsForRun,
   listAdsByIds,
   listWatchEventsBetween,
   listWatchEventsByIds,
@@ -61,9 +62,11 @@ import {
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { getUserPlan, PLAN_LIMITS } from "~/lib/plan.server";
 import { planAllowsDigestCadence, shouldSchedulePlanInRegularScan } from "~/lib/plan-entitlements";
+import { ensureDb } from "~/lib/data/d1.server";
 import {
   getEvidenceUsageSummary,
   isEvidenceUsageStorageUnavailableError,
+  reconcileStaleEvidenceReservations,
   tryFinalizeEvidenceForProofCapture,
   tryReserveEvidenceForProofCapture,
 } from "~/lib/evidence-usage.server";
@@ -76,6 +79,7 @@ import {
 import { normalizePublicHttpUrl } from "~/lib/public-url.server";
 import type {
   AdRecord,
+  LandingPageSnapshotData,
   NormalizedSavedQuery,
   ProofCaptureRecord,
   WatchEventType,
@@ -98,6 +102,21 @@ const DIGEST_RETRY_WINDOW_DAYS = 7;
 const DIGEST_RETRY_SWEEP_LIMIT = 25;
 const DISCOVERY_WARMUP_QUERY_LIMIT = 5;
 const DIRECT_WEBSITE_PROOF_INTERVAL_MS = 20 * 60 * 60 * 1000;
+
+async function reconcileStaleEvidenceBeforeScan(env: AppEnv) {
+  if (!env.DB || typeof env.DB.prepare !== "function") return;
+  try {
+    // Run the bounded recovery sweep once per scan, before this worker owns
+    // any new reservation. Running it per candidate could release a live
+    // long-running capture whose 15-minute reservation TTL has elapsed.
+    await reconcileStaleEvidenceReservations(env);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!isEvidenceUsageStorageUnavailableError(message)) {
+      throw error;
+    }
+  }
+}
 
 type ObservationRecord = Awaited<ReturnType<typeof listObservationsForRun>>[number];
 
@@ -124,29 +143,46 @@ interface ScanOptions {
   forceLive?: boolean;
 }
 
+export class MonitoringConcurrencyLimitError extends Error {
+  constructor() {
+    super("Monitoring capacity is full; another scan is already running. Try again shortly.");
+    this.name = "MonitoringConcurrencyLimitError";
+  }
+}
+
 export type {
   MonitoringWorkflowParams,
+  ScheduledMonitoringWorkflowParams,
 } from "~/lib/monitoring-fanout.server";
 export {
   buildWatchlistExecutionIdempotencyKey,
+  buildMonitoringWorkflowInstanceId,
 } from "~/lib/monitoring-fanout.server";
-import type { MonitoringWorkflowParams } from "~/lib/monitoring-fanout.server";
+import type { ScheduledMonitoringWorkflowParams } from "~/lib/monitoring-fanout.server";
 import {
   buildWatchlistExecutionIdempotencyKey,
+  buildMonitoringWorkflowInstanceId,
+  claimMonitoringConcurrencySlot,
   claimOrchestratedWatchlistRun,
   collectMonitoringOrchestrationMetrics,
+  dispatchFirstWatchlistScanWorkflow,
   finishOrchestratedWatchlistRun,
+  FIRST_SCAN_MAX_ATTEMPTS,
+  hasActiveScheduledWatchlistRun,
   hasOrchestratedRunBlockingInlineScan,
   isFanoutEnabledForWorkspace,
   isWatchlistEligibleForScheduledScan,
   markOrchestratedRunCancelled,
+  markOrchestratedRunDispatched,
   markOrchestratedDispatchFailure,
   reconcileOrchestratedWatchlistRuns,
+  releaseMonitoringConcurrencySlot,
   renewMonitoringConcurrencySlot,
   renewOrchestratedWatchlistRunLease,
   resolveMonitoringFanoutMode,
   resolveMonitoringOrchestrationLeaseMs,
   scheduleWatchlistFanout,
+  ensureOrchestratedWatchlistRun,
 } from "~/lib/monitoring-fanout.server";
 
 interface RunScheduledMonitoringOptions {
@@ -600,17 +636,473 @@ export async function runScheduledDiscoveryWarmup(env: AppEnv) {
 // unmetered Browser Rendering usage. Paid plans are uncapped here.
 const FREE_FIRST_SCAN_DAILY_CAP = 3;
 
+const FIRST_SCAN_IDEMPOTENCY_PREFIX = "watchlist-run:first-scan:";
+
+export function firstWatchlistScanExecutionKey(watchlistId: string) {
+  return `${FIRST_SCAN_IDEMPOTENCY_PREFIX}${watchlistId}`;
+}
+
+/**
+ * Atomically reserves one of the free workspace's rolling activation-scan
+ * slots. The reservation lives on the durable run so Workflow retries reuse
+ * it, while SQLite's write serialization prevents concurrent watchlist adds
+ * from either all passing or all being rejected by a read-then-check race.
+ */
+export async function reserveFirstWatchlistScanDailyQuota(
+  env: AppEnv,
+  input: {
+    runId: string;
+    userId: string;
+    now?: Date;
+    limit?: number;
+  },
+) {
+  const limit = input.limit ?? FREE_FIRST_SCAN_DAILY_CAP;
+  const now = input.now ?? new Date();
+  const since = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+  const timestamp = now.toISOString();
+  const result = await ensureDb(env)
+    .prepare(
+      `
+        UPDATE watchlist_run
+        SET summary_json = json_set(
+              CASE WHEN json_valid(summary_json) THEN summary_json ELSE '{}' END,
+              '$.firstScanQuotaReserved',
+              1
+            ),
+            updated_at = ?
+        WHERE id = ?
+          AND idempotency_key LIKE 'watchlist-run:first-scan:%'
+          AND EXISTS (
+            SELECT 1
+            FROM watchlist
+            WHERE watchlist.id = watchlist_run.watchlist_id
+              AND watchlist.user_id = ?
+          )
+          AND COALESCE(json_extract(summary_json, '$.firstScanQuotaReserved'), 0) <> 1
+          AND (
+            SELECT COUNT(*)
+            FROM watchlist_run AS reserved_run
+            INNER JOIN watchlist AS reserved_watchlist
+              ON reserved_watchlist.id = reserved_run.watchlist_id
+            WHERE reserved_watchlist.user_id = ?
+              AND reserved_run.idempotency_key LIKE 'watchlist-run:first-scan:%'
+              AND reserved_run.created_at >= ?
+              AND COALESCE(
+                json_extract(reserved_run.summary_json, '$.firstScanQuotaReserved'),
+                0
+              ) = 1
+          ) < ?
+      `,
+    )
+    .bind(timestamp, input.runId, input.userId, input.userId, since, limit)
+    .run();
+  if (Number(result.meta?.changes ?? 0) > 0) {
+    return true;
+  }
+
+  const existing = await ensureDb(env)
+    .prepare(
+      `
+        SELECT COALESCE(json_extract(summary_json, '$.firstScanQuotaReserved'), 0) AS reserved
+        FROM watchlist_run
+        INNER JOIN watchlist ON watchlist.id = watchlist_run.watchlist_id
+        WHERE watchlist_run.id = ?
+          AND watchlist.user_id = ?
+        LIMIT 1
+      `,
+    )
+    .bind(input.runId, input.userId)
+    .first<{ reserved: number }>();
+  return Number(existing?.reserved ?? 0) === 1;
+}
+
+export interface FirstWatchlistScanRunDescriptor {
+  runId: string;
+  watchlistId: string;
+  executionKey: string;
+  workflowInstanceId: string;
+  queuedAt: string;
+}
+
+export interface FirstWatchlistScanWorkflowParams {
+  kind: "first_scan";
+  runId: string;
+  watchlistId: string;
+  executionKey: string;
+  workflowInstanceId: string;
+  queuedAt: string;
+}
+
+async function requeueClaimedFirstWatchlistScan(
+  env: AppEnv,
+  input: {
+    runId: string;
+    processingToken: string;
+    error: unknown;
+  },
+) {
+  const errorMessage = input.error instanceof Error ? input.error.message : "First scan setup failed.";
+  const timestamp = new Date().toISOString();
+  const result = await ensureDb(env)
+    .prepare(
+      `
+        UPDATE watchlist_run
+        SET status = 'pending',
+            error_code = 'first_scan_setup_failed',
+            error_message = ?,
+            retry_after = ?,
+            processing_token = NULL,
+            processing_started_at = NULL,
+            updated_at = ?
+        WHERE id = ?
+          AND status = 'running'
+          AND processing_token = ?
+      `,
+    )
+    .bind(errorMessage, timestamp, timestamp, input.runId, input.processingToken)
+    .run();
+  return Number(result.meta?.changes ?? 0) > 0;
+}
+
+const RETRYABLE_FIRST_SCAN_PROVIDER_CODES = new Set([
+  "browser_launch_failed",
+  "concurrency_limited",
+  "rate_limited",
+]);
+async function readFirstWatchlistScanState(env: AppEnv, runId: string) {
+  return ensureDb(env)
+    .prepare(
+      `
+        SELECT status, error_code, attempt_count
+        FROM watchlist_run
+        WHERE id = ?
+        LIMIT 1
+      `,
+    )
+    .bind(runId)
+    .first<{
+      status: WatchlistRunRecord["status"];
+      error_code: string | null;
+      attempt_count: number;
+    }>();
+}
+
+async function requeueRetryableFirstWatchlistScanFailure(env: AppEnv, runId: string) {
+  const state = await readFirstWatchlistScanState(env, runId);
+  if (
+    state?.status !== "failed" ||
+    !state.error_code ||
+    !RETRYABLE_FIRST_SCAN_PROVIDER_CODES.has(state.error_code) ||
+    state.attempt_count >= FIRST_SCAN_MAX_ATTEMPTS
+  ) {
+    return false;
+  }
+
+  const timestamp = new Date().toISOString();
+  const result = await ensureDb(env)
+    .prepare(
+      `
+        UPDATE watchlist_run
+        SET status = 'pending',
+            finished_at = NULL,
+            retry_after = ?,
+            processing_token = NULL,
+            processing_started_at = NULL,
+            updated_at = ?
+        WHERE id = ?
+          AND status = 'failed'
+          AND error_code = ?
+          AND attempt_count = ?
+      `,
+    )
+    .bind(timestamp, timestamp, runId, state.error_code, state.attempt_count)
+    .run();
+  return Number(result.meta?.changes ?? 0) > 0;
+}
+
+async function assertFirstWatchlistScanWorkflowPayload(
+  env: AppEnv,
+  params: FirstWatchlistScanWorkflowParams,
+) {
+  const expectedExecutionKey = firstWatchlistScanExecutionKey(params.watchlistId);
+  const expectedWorkflowInstanceId = await buildMonitoringWorkflowInstanceId(
+    params.executionKey,
+  );
+  if (
+    params.executionKey !== expectedExecutionKey ||
+    params.workflowInstanceId !== expectedWorkflowInstanceId
+  ) {
+    throw new Error("The activation scan Workflow payload identity is invalid.");
+  }
+
+  const row = await ensureDb(env)
+    .prepare(
+      `
+        SELECT watchlist_id, idempotency_key, workflow_instance_id
+        FROM watchlist_run
+        WHERE id = ?
+        LIMIT 1
+      `,
+    )
+    .bind(params.runId)
+    .first<{
+      watchlist_id: string;
+      idempotency_key: string | null;
+      workflow_instance_id: string | null;
+    }>();
+  if (
+    !row ||
+    row.watchlist_id !== params.watchlistId ||
+    row.idempotency_key !== params.executionKey ||
+    row.workflow_instance_id !== params.workflowInstanceId
+  ) {
+    throw new Error("The activation scan Workflow payload no longer matches its durable run.");
+  }
+}
+
+async function finishDeniedFirstWatchlistScan(
+  env: AppEnv,
+  input: { runId: string; processingToken: string },
+) {
+  const finalized = await finishOrchestratedWatchlistRun(env, {
+    runId: input.runId,
+    processingToken: input.processingToken,
+    status: "skipped",
+    pagesScanned: 0,
+    summary: {
+      adsSeen: 0,
+      events: 0,
+      scanStatus: "e2e_provider_network_denied",
+      scanErrorCode: "e2e_provider_network_denied",
+      scanErrorMessage:
+        "The local release proof denied provider network access before the first scan could run.",
+    },
+    errorCode: "e2e_provider_network_denied",
+    errorMessage:
+      "The local release proof denied provider network access before the first scan could run.",
+  });
+  if (!finalized) {
+    throw new Error("Stale first-scan claim while recording the provider-network denial.");
+  }
+}
+
+/**
+ * Persist, claim, and execute a first scan from the existing watchlist_run
+ * queue. A manual first scan uses the same lease/token fencing as scheduled
+ * orchestration, but remains a one-time activation path (not a cadence).
+ */
+export async function prepareFirstWatchlistScanRun(
+  env: AppEnv,
+  watchlist: WatchlistRecord,
+) {
+  const executionKey = firstWatchlistScanExecutionKey(watchlist.id);
+  const activeRun = await ensureDb(env)
+    .prepare(
+      `
+        SELECT id
+        FROM watchlist_run
+        WHERE watchlist_id = ?
+          AND status IN ('pending', 'running')
+          AND (
+            idempotency_key IS NULL
+            OR idempotency_key NOT LIKE 'watchlist-run:first-scan:%'
+          )
+        LIMIT 1
+      `,
+    )
+    .bind(watchlist.id)
+    .first<{ id: string }>();
+  if (activeRun) {
+    throw new Error("A scan for this watchlist is already running; activation will retry later.");
+  }
+
+  const ensured = await ensureOrchestratedWatchlistRun(env, {
+    watchlistId: watchlist.id,
+    triggerType: "manual",
+    executionKey,
+    pageBudget: DEFAULT_PAGE_BUDGET,
+    scheduledTime: Date.now(),
+    queuePriority: 0,
+    allowConcurrentActiveRun: false,
+    allowActiveRunFallback: false,
+  });
+
+  const row = await ensureDb(env)
+    .prepare("SELECT queued_at FROM watchlist_run WHERE id = ? LIMIT 1")
+    .bind(ensured.runId)
+    .first<{ queued_at: string | null }>();
+  return {
+    runId: ensured.runId,
+    watchlistId: watchlist.id,
+    executionKey,
+    workflowInstanceId: await buildMonitoringWorkflowInstanceId(executionKey),
+    queuedAt: row?.queued_at ?? new Date().toISOString(),
+  } satisfies FirstWatchlistScanRunDescriptor;
+}
+
+export async function runFirstWatchlistScanWorkflowJob(
+  env: AppEnv,
+  params: FirstWatchlistScanWorkflowParams,
+) {
+  await assertFirstWatchlistScanWorkflowPayload(env, params);
+  const claim = await claimOrchestratedWatchlistRun(env, {
+    runId: params.runId,
+    leaseMs: resolveMonitoringOrchestrationLeaseMs(env),
+    maxAttempts: FIRST_SCAN_MAX_ATTEMPTS,
+  });
+  if (!claim.claimed) {
+    const state = await readFirstWatchlistScanState(env, params.runId);
+    if (state?.status === "pending" || state?.status === "running") {
+      throw new Error("The activation scan claim is still owned or exhausted; retry later.");
+    }
+    return { status: "duplicate" as const, runId: params.runId };
+  }
+
+  try {
+    const watchlist = await getWatchlist(env, params.watchlistId);
+    if (!watchlist || !watchlist.isActive) {
+      const finalized = await finishOrchestratedWatchlistRun(env, {
+        runId: params.runId,
+        processingToken: claim.processingToken,
+        status: "skipped",
+        pagesScanned: 0,
+        summary: { adsSeen: 0, events: 0, scanStatus: "watchlist_unavailable" },
+        errorCode: "watchlist_unavailable",
+        errorMessage: "This competitor is no longer being tracked.",
+      });
+      if (!finalized) {
+        throw new Error("Stale first-scan claim while recording an unavailable watchlist.");
+      }
+      return { status: "skipped" as const, runId: params.runId };
+    }
+
+    if (watchlist.lastScannedAt) {
+      const finalized = await finishOrchestratedWatchlistRun(env, {
+        runId: params.runId,
+        processingToken: claim.processingToken,
+        status: "skipped",
+        pagesScanned: 0,
+        summary: { adsSeen: 0, events: 0, scanStatus: "already_scanned" },
+        errorCode: "already_scanned",
+        errorMessage: "The activation scan was already completed for this watchlist.",
+      });
+      if (!finalized) {
+        throw new Error("Stale first-scan claim while recording the completed activation scan.");
+      }
+      return { status: "skipped" as const, runId: params.runId };
+    }
+
+    if (env.E2E_PROVIDER_NETWORK_DENY === "1") {
+      await finishDeniedFirstWatchlistScan(env, {
+        runId: params.runId,
+        processingToken: claim.processingToken,
+      });
+      return { status: "skipped" as const, runId: params.runId };
+    }
+
+    const { getUserPlan: readUserPlan } = await import("~/lib/plan.server");
+    const plan = await readUserPlan(env, watchlist.userId);
+    if (plan === "free") {
+      const reserved = await reserveFirstWatchlistScanDailyQuota(env, {
+        runId: params.runId,
+        userId: watchlist.userId,
+      });
+      if (!reserved) {
+        const finalized = await finishOrchestratedWatchlistRun(env, {
+          runId: params.runId,
+          processingToken: claim.processingToken,
+          status: "skipped",
+          pagesScanned: 0,
+          summary: {
+            adsSeen: 0,
+            events: 0,
+            scanStatus: "free_first_scan_daily_cap",
+          },
+          errorCode: "free_first_scan_daily_cap",
+          errorMessage: "The free activation scan limit was reached for this workspace today.",
+        });
+        if (!finalized) {
+          throw new Error("Stale first-scan claim while recording the free-plan cap.");
+        }
+        return { status: "skipped" as const, runId: params.runId };
+      }
+    }
+
+    await runWatchlistManual(env, watchlist, {
+      existingRunId: params.runId,
+      orchestrationToken: claim.processingToken,
+    });
+    const state = await readFirstWatchlistScanState(env, params.runId);
+    if (await requeueRetryableFirstWatchlistScanFailure(env, params.runId)) {
+      throw new Error("The activation scan hit a retryable provider failure.");
+    }
+    return {
+      status: state?.status === "failed" ? "failed" as const : "completed" as const,
+      runId: params.runId,
+    };
+  } catch (error) {
+    if (await requeueRetryableFirstWatchlistScanFailure(env, params.runId)) {
+      throw error;
+    }
+    // runWatchlist normally finalizes provider failures as terminal `failed`.
+    // This guarded update only requeues a still-running claim, covering every
+    // setup failure before that terminal path while fencing stale workers.
+    const requeued = await requeueClaimedFirstWatchlistScan(env, {
+      runId: params.runId,
+      processingToken: claim.processingToken,
+      error,
+    });
+    if (!requeued) {
+      const state = await readFirstWatchlistScanState(env, params.runId);
+      if (state && ["failed", "skipped", "succeeded"].includes(state.status)) {
+        return { status: state.status, runId: params.runId };
+      }
+    }
+    throw error;
+  }
+}
+
+/** Compatibility helper for callers/tests that execute without a Workflow binding. */
+export async function processFirstWatchlistScanQueue(
+  env: AppEnv,
+  watchlist: WatchlistRecord,
+) {
+  const descriptor = await prepareFirstWatchlistScanRun(env, watchlist);
+  await markOrchestratedRunDispatched(env, {
+    runId: descriptor.runId,
+    workflowInstanceId: descriptor.workflowInstanceId,
+  });
+  return runFirstWatchlistScanWorkflowJob(env, {
+    kind: "first_scan",
+    ...descriptor,
+  });
+}
+
 export function queueFirstWatchlistScan(
   env: AppEnv,
   ctx: ExecutionContext | undefined,
   watchlist: WatchlistRecord | null | undefined,
 ) {
-  if (!ctx || !watchlist || watchlist.lastScannedAt) {
-    return false;
+  if (!watchlist || watchlist.lastScannedAt) {
+    return Promise.resolve(false);
   }
 
+  if (env.DB) {
+    return prepareFirstWatchlistScanRun(env, watchlist).then(async (descriptor) => {
+      const dispatch = await dispatchFirstWatchlistScanWorkflow(env, descriptor);
+      return dispatch.status !== "terminal";
+    });
+  }
+
+  if (!ctx) {
+    return Promise.resolve(false);
+  }
+  // Non-D1 test/demo environments retain the request-lifetime compatibility
+  // path. Production and release-proof environments must use the durable path.
+  const work = runFirstWatchlistScanWithPlanCap(env, watchlist);
   ctx.waitUntil(
-    runFirstWatchlistScanWithPlanCap(env, watchlist).catch((error) => {
+    work.catch((error) => {
       console.error(
         `First scan failed for watchlist ${watchlist.id}; the scheduled scan will retry.`,
         error,
@@ -618,7 +1110,7 @@ export function queueFirstWatchlistScan(
     }),
   );
 
-  return true;
+  return Promise.resolve(true);
 }
 
 async function runFirstWatchlistScanWithPlanCap(env: AppEnv, watchlist: WatchlistRecord) {
@@ -637,7 +1129,14 @@ async function runFirstWatchlistScanWithPlanCap(env: AppEnv, watchlist: Watchlis
   await runWatchlistManual(env, watchlist);
 }
 
-export async function runWatchlistManual(env: AppEnv, watchlist: WatchlistRecord) {
+export async function runWatchlistManual(
+  env: AppEnv,
+  watchlist: WatchlistRecord,
+  options: Pick<
+    ScanOptions,
+    "existingRunId" | "orchestrationToken" | "concurrencyPermitToken"
+  > = {},
+) {
   if (
     watchlist.lastScannedAt &&
     Date.now() - new Date(watchlist.lastScannedAt).getTime() < MANUAL_REFRESH_COOLDOWN_MS
@@ -647,28 +1146,67 @@ export async function runWatchlistManual(env: AppEnv, watchlist: WatchlistRecord
 
   const customerMetaAdLibraryToken = await resolveWatchlistCustomerMetaAdLibraryToken(env, watchlist);
 
-  return runWatchlist(
-    env,
-    watchlist,
-    "manual",
-    async () => {
-      const query = await resolveWatchlistQuery(env, watchlist);
-      if (!query) {
-        throw new Error("The watchlist target could not be resolved.");
-      }
-      return performBoundedScan(env, query, DEFAULT_PAGE_BUDGET, {
+  // First scans and manual/API refreshes do not enter the scheduled queue, but
+  // their provider work must still share the same fleet-wide cap. A durable
+  // first-scan run supplies its id; ad-hoc refreshes use a unique holder id.
+  // The no-D1 compatibility path intentionally keeps its existing behavior.
+  let concurrencyPermitToken = options.concurrencyPermitToken;
+  let ownsConcurrencyPermit = false;
+  const runOptions: ScanOptions = {
+    ...options,
+    concurrencyPermitToken,
+  };
+
+  try {
+    return await runWatchlist(
+      env,
+      watchlist,
+      "manual",
+      async () => {
+        const query = await resolveWatchlistQuery(env, watchlist);
+        if (!query) {
+          throw new Error("The watchlist target could not be resolved.");
+        }
+
+        // Claim only after runWatchlist's per-watchlist in-flight guard and
+        // target resolution have passed. This preserves duplicate behavior and
+        // keeps an HTTP refresh responsive when its watchlist is already busy.
+        if (!concurrencyPermitToken && env.DB && typeof env.DB.prepare === "function") {
+          const capacityRunId = options.existingRunId ?? `manual-refresh:${crypto.randomUUID()}`;
+          const claim = await claimMonitoringConcurrencySlot(env, {
+            runId: capacityRunId,
+            mode: "interactive",
+          });
+          if (!claim.claimed) {
+            throw new MonitoringConcurrencyLimitError();
+          }
+          concurrencyPermitToken = claim.token;
+          runOptions.concurrencyPermitToken = concurrencyPermitToken;
+          ownsConcurrencyPermit = true;
+        }
+
+        return performBoundedScan(env, query, DEFAULT_PAGE_BUDGET, {
+          customerMetaAdLibraryToken,
+          orchestrationRunId: options.existingRunId,
+          orchestrationToken: options.orchestrationToken,
+          concurrencyPermitToken,
+        });
+      },
+      {
         customerMetaAdLibraryToken,
-      });
-    },
-    {
-      customerMetaAdLibraryToken,
-    },
-  );
+        ...runOptions,
+      },
+    );
+  } finally {
+    if (ownsConcurrencyPermit && concurrencyPermitToken) {
+      await releaseMonitoringConcurrencySlot(env, { token: concurrencyPermitToken });
+    }
+  }
 }
 
 export async function runWatchlistWorkflowJob(
   env: AppEnv,
-  params: MonitoringWorkflowParams,
+  params: ScheduledMonitoringWorkflowParams,
   options: {
     concurrencyPermitToken?: string;
   } = {},
@@ -828,7 +1366,7 @@ export async function runWatchlistWorkflowJob(
   }
 }
 
-export async function preflightWatchlistWorkflowJob(env: AppEnv, params: MonitoringWorkflowParams) {
+export async function preflightWatchlistWorkflowJob(env: AppEnv, params: ScheduledMonitoringWorkflowParams) {
   const fanoutMode = resolveMonitoringFanoutMode(env);
   if (fanoutMode === "inline") {
     await markOrchestratedRunCancelled(env, {
@@ -908,6 +1446,7 @@ export async function preflightWatchlistWorkflowJob(env: AppEnv, params: Monitor
 async function completeWatchlistRun(
   env: AppEnv,
   runId: string,
+  watchlistId: string,
   input: {
     status: WatchlistRunRecord["status"];
     pagesScanned: number;
@@ -926,9 +1465,10 @@ async function completeWatchlistRun(
       summary: input.summary,
       errorCode: input.errorCode,
       errorMessage: input.errorMessage,
+      touchWatchlistId: input.status === "succeeded" ? watchlistId : undefined,
     });
     if (!finalized) {
-      throw new Error("Stale orchestrated watchlist run token; refusing to finalize.");
+      throw new StaleOrchestratedWatchlistRunError();
     }
     return;
   }
@@ -936,7 +1476,34 @@ async function completeWatchlistRun(
   await finishWatchlistRun(env, runId, input);
 }
 
+class StaleOrchestratedWatchlistRunError extends Error {
+  constructor() {
+    super("Stale orchestrated watchlist run token; refusing side effects or finalization.");
+    this.name = "StaleOrchestratedWatchlistRunError";
+  }
+}
+
+async function assertOrchestratedWatchlistRunLease(
+  env: AppEnv,
+  runId: string,
+  options: ScanOptions,
+) {
+  if (!options.orchestrationToken) {
+    return;
+  }
+  const renewed = await renewOrchestratedWatchlistRunLease(env, {
+    runId,
+    processingToken: options.orchestrationToken,
+  });
+  if (!renewed) {
+    throw new StaleOrchestratedWatchlistRunError();
+  }
+}
+
 function isRetryableMonitoringFailure(error: unknown) {
+  if (error instanceof MonitoringConcurrencyLimitError) {
+    return true;
+  }
   if (error instanceof CommercialDiscoveryError) {
     return error.failureClass === "rate_limited" || error.failureClass === "browser_launch_failed";
   }
@@ -965,6 +1532,16 @@ export async function runWatchlist(
         "A scan for this watchlist is already running. Fresh results land in a couple of minutes.",
       );
     }
+    // In fan-out mode a queued scheduled run is a live durable claim even if
+    // its scheduled slot is older than the short manual-refresh window.
+    if (
+      resolveMonitoringFanoutMode(env) === "fanout" &&
+      (await hasActiveScheduledWatchlistRun(env, watchlist.id))
+    ) {
+      throw new Error(
+        "A scheduled scan for this watchlist is already queued. Fresh results land in a couple of minutes.",
+      );
+    }
   }
 
   const recentRuns = await getRecentSuccessfulRuns(env, watchlist.id, 3);
@@ -983,6 +1560,11 @@ export async function runWatchlist(
   try {
     const { ads, pagesScanned, degraded } = await scan();
 
+    // Provider work can outlive a reclaimed lease. Revalidate before the first
+    // durable/customer-facing effect, then heartbeat between each effect
+    // phase so an expired worker cannot persist, notify, or finalize.
+    await assertOrchestratedWatchlistRunLease(env, runId, options);
+
     if (degraded) {
       // Stale-cache honesty: nothing live was fetched, so no diff runs, the
       // run is recorded as failed (cache_only), lastScannedAt stays put, and
@@ -994,7 +1576,10 @@ export async function runWatchlist(
       );
     }
 
-    await persistCheapScanObservations(env, runId, ads);
+    const effectLease = options.orchestrationToken
+      ? { runId, processingToken: options.orchestrationToken }
+      : undefined;
+    await persistCheapScanObservations(env, runId, ads, effectLease);
 
     const [currentObservations, baselineObservations, priorObservations] = await Promise.all([
       listObservationsForRun(env, runId),
@@ -1017,27 +1602,40 @@ export async function runWatchlist(
       runId,
       baselineRun?.id ?? null,
       eventDrafts,
+      effectLease,
     );
+    await assertOrchestratedWatchlistRunLease(env, runId, options);
+    await reconcileStaleEvidenceBeforeScan(env);
     const proofEvaluation = await evaluateSelectiveProofCandidates(env, {
       watchlist,
       runId,
       currentObservations,
       scanNativeDrafts: eventDrafts,
       recentWatchEvents,
+      lease: effectLease,
     });
     const directWebsiteProofEvaluation = await evaluateDirectWebsiteProofCandidate(env, {
       watchlist,
       runId,
       recentWatchEvents: [...recentWatchEvents, ...proofEvaluation.events],
       watchlistRunAttemptCount: proofEvaluation.proofAttemptCount,
+      lease: effectLease,
     });
-    const allEvents = [
+    await assertOrchestratedWatchlistRunLease(env, runId, options);
+    const newlyEvaluatedEvents = [
       ...scanNativeEvents,
       ...proofEvaluation.events,
       ...directWebsiteProofEvaluation.events,
     ];
+    // A Workflow retry may resume after events were persisted but before
+    // delivery/finalization. Reload the durable run-owned set so the retry
+    // completes the same logical effect instead of silently dropping proof
+    // events that now look like recent duplicates.
+    const persistedRunEvents = await listWatchEventsForRun(env, watchlist.id, runId);
+    const allEvents = persistedRunEvents.length > 0 ? persistedRunEvents : newlyEvaluatedEvents;
     const userDeliveryProfile = await getUserDeliveryProfile(env, watchlist.userId);
     const { deliverWatchlistAlerts } = await import("~/lib/delivery.server");
+    await assertOrchestratedWatchlistRunLease(env, runId, options);
     const alertDelivery =
       allEvents.length > 0
         ? await deliverWatchlistAlerts(env, {
@@ -1053,6 +1651,7 @@ export async function runWatchlist(
     await completeWatchlistRun(
       env,
       runId,
+      watchlist.id,
       {
         status: "succeeded",
         pagesScanned,
@@ -1073,7 +1672,9 @@ export async function runWatchlist(
       },
       options,
     );
-    await touchWatchlistScanned(env, watchlist.id);
+    if (!options.orchestrationToken) {
+      await touchWatchlistScanned(env, watchlist.id);
+    }
     const commercialProvider = resolveCommercialDiscoveryProvider(env, {
       customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
     });
@@ -1098,24 +1699,41 @@ export async function runWatchlist(
 
     return { runId, events: allEvents.length };
   } catch (error) {
+    if (error instanceof StaleOrchestratedWatchlistRunError) {
+      throw error;
+    }
+    await assertOrchestratedWatchlistRunLease(env, runId, options);
     const details = error instanceof Error ? error.message : "Unknown monitoring error.";
     const errorCode =
       error instanceof CommercialDiscoveryError
         ? error.failureClass
-        : "monitoring_failed";
+        : error instanceof MonitoringConcurrencyLimitError
+          ? "concurrency_limited"
+          : "monitoring_failed";
     const directWebsiteUrl = directWebsiteUrlForWatchlist(watchlist);
+    const evidenceUsagePendingReconciliation =
+      error instanceof Error && error.message === "evidence_usage_pending_reconciliation";
 
-    if (directWebsiteUrl) {
+    if (
+      directWebsiteUrl &&
+      !evidenceUsagePendingReconciliation &&
+      !(error instanceof MonitoringConcurrencyLimitError)
+    ) {
       const directWebsiteProofEvaluation = await evaluateDirectWebsiteProofCandidate(env, {
         watchlist,
         runId,
         recentWatchEvents: await listWatchEvents(env, watchlist.id, 80),
         watchlistRunAttemptCount: 0,
+        lease: options.orchestrationToken
+          ? { runId, processingToken: options.orchestrationToken }
+          : undefined,
       });
+      await assertOrchestratedWatchlistRunLease(env, runId, options);
       if (!directWebsiteProofEvaluation.proofCaptureSucceeded) {
         await completeWatchlistRun(
           env,
           runId,
+          watchlist.id,
           {
             status: "failed",
             pagesScanned: 0,
@@ -1155,6 +1773,7 @@ export async function runWatchlist(
 
       const userDeliveryProfile = await getUserDeliveryProfile(env, watchlist.userId);
       const { deliverWatchlistAlerts } = await import("~/lib/delivery.server");
+      await assertOrchestratedWatchlistRunLease(env, runId, options);
       const alertDelivery =
         directWebsiteProofEvaluation.events.length > 0
           ? await deliverWatchlistAlerts(env, {
@@ -1170,6 +1789,7 @@ export async function runWatchlist(
       await completeWatchlistRun(
         env,
         runId,
+        watchlist.id,
         {
           status: "succeeded",
           pagesScanned: 0,
@@ -1189,7 +1809,9 @@ export async function runWatchlist(
         },
         options,
       );
-      await touchWatchlistScanned(env, watchlist.id);
+      if (!options.orchestrationToken) {
+        await touchWatchlistScanned(env, watchlist.id);
+      }
       await logMetaIntegrationStatus(env, {
         status: "degraded",
         summary: "Commercial discovery failed, but direct website evidence still completed.",
@@ -1208,6 +1830,7 @@ export async function runWatchlist(
     await completeWatchlistRun(
       env,
       runId,
+      watchlist.id,
       {
         status: "failed",
         pagesScanned: 0,
@@ -1848,10 +2471,13 @@ async function performBoundedScan(
     pagesScanned += 1;
 
     if (options.orchestrationRunId && options.orchestrationToken) {
-      await renewOrchestratedWatchlistRunLease(env, {
+      const renewed = await renewOrchestratedWatchlistRunLease(env, {
         runId: options.orchestrationRunId,
         processingToken: options.orchestrationToken,
       });
+      if (!renewed) {
+        throw new StaleOrchestratedWatchlistRunError();
+      }
     }
     if (options.concurrencyPermitToken) {
       await renewMonitoringConcurrencySlot(env, { token: options.concurrencyPermitToken });
@@ -1919,11 +2545,21 @@ async function persistCheapScanObservations(
   env: AppEnv,
   runId: string,
   ads: AdRecord[],
+  lease?: { runId: string; processingToken: string },
 ) {
   for (const ad of ads) {
+    await assertOrchestratedWatchlistRunLease(env, runId, {
+      orchestrationToken: lease?.processingToken,
+    });
     const enrichedAd = await enrichAdForCheapScan(env, ad);
+    await assertOrchestratedWatchlistRunLease(env, runId, {
+      orchestrationToken: lease?.processingToken,
+    });
     await upsertAd(env, enrichedAd);
 
+    await assertOrchestratedWatchlistRunLease(env, runId, {
+      orchestrationToken: lease?.processingToken,
+    });
     await createAdObservation(env, {
       adId: enrichedAd.metaAdId,
       watchlistRunId: runId,
@@ -1946,10 +2582,14 @@ async function persistScanNativeEvents(
   runId: string,
   baselineFromRunId: string | null,
   drafts: WatchEventDraft[],
+  lease?: { runId: string; processingToken: string },
 ) {
   const createdEvents: WatchEventRecord[] = [];
 
   for (const draft of drafts) {
+    await assertOrchestratedWatchlistRunLease(env, runId, {
+      orchestrationToken: lease?.processingToken,
+    });
     const importanceScore = getScanNativeImportanceScore(draft.eventType);
     const candidateId = await createEventCandidate(env, {
       watchlistId,
@@ -1965,6 +2605,9 @@ async function persistScanNativeEvents(
       lastEvaluatedAt: new Date().toISOString(),
     });
 
+    await assertOrchestratedWatchlistRunLease(env, runId, {
+      orchestrationToken: lease?.processingToken,
+    });
     const eventId = await createWatchEvent(env, {
       watchlistId,
       runId,
@@ -2069,6 +2712,7 @@ async function evaluateSelectiveProofCandidates(
     currentObservations: ObservationRecord[];
     scanNativeDrafts: WatchEventDraft[];
     recentWatchEvents: WatchEventRecord[];
+    lease?: { runId: string; processingToken: string };
   },
 ) {
   const proofEvents: WatchEventRecord[] = [];
@@ -2124,6 +2768,9 @@ async function evaluateSelectiveProofCandidates(
       adId: observation.ad_id,
       canonicalPageIdentity,
     });
+    await assertOrchestratedWatchlistRunLease(env, input.runId, {
+      orchestrationToken: input.lease?.processingToken,
+    });
     const proofTarget = await upsertProofTarget(env, {
       watchlistId: input.watchlist.id,
       adId: observation.ad_id,
@@ -2162,11 +2809,6 @@ async function evaluateSelectiveProofCandidates(
     const { observation, canonicalPageIdentity, proofTargetIdentity, proofTarget } = candidate;
 
     const targetCaptures = capturesByTargetId.get(proofTarget.id) ?? [];
-    const lastSuccessfulProof =
-      selectLastSuccessfulProofCapture(targetCaptures) ??
-      selectLastSuccessfulProofCapture(
-        successfulCapturesByAdId.get(observation.ad_id) ?? [],
-      );
     const primaryTriggerEventType =
       eventTypesByAd.get(observation.ad_id)?.[0] ?? "landing_page_headline_changed";
     const proofRequestKeyBase = buildProofCaptureRequestIdempotencyKey({
@@ -2176,7 +2818,24 @@ async function evaluateSelectiveProofCandidates(
       eventType: primaryTriggerEventType,
     });
     const proofRequestKey = [proofRequestKeyBase, input.runId].join(":");
+    const replayedProofCapture = targetCaptures.find(
+      (capture) =>
+        capture.idempotencyKey === proofRequestKey &&
+        capture.status === "succeeded",
+    );
+    const lastSuccessfulProof =
+      selectLastSuccessfulProofCapture(
+        targetCaptures.filter((capture) => capture.idempotencyKey !== proofRequestKey),
+      ) ??
+      selectLastSuccessfulProofCapture(
+        (successfulCapturesByAdId.get(observation.ad_id) ?? []).filter(
+          (capture) => capture.idempotencyKey !== proofRequestKey,
+        ),
+      );
     const proofRequestDuplicate = targetCaptures.some((capture) => {
+      if (capture.idempotencyKey === proofRequestKey) {
+        return false;
+      }
       if (!matchesProofRequestKey(capture.idempotencyKey, proofRequestKeyBase)) {
         return false;
       }
@@ -2209,12 +2868,16 @@ async function evaluateSelectiveProofCandidates(
 
     if (!proofDecision.shouldCapture) {
       if (proofDecision.skipReason) {
+        await assertOrchestratedWatchlistRunLease(env, input.runId, {
+          orchestrationToken: input.lease?.processingToken,
+        });
         await createProofCapture(env, {
           proofTargetId: proofTarget.id,
           status: proofDecision.skipReason,
           skipReason: proofDecision.skipReason,
           failureReason: "Evidence policy skipped the attempt.",
           extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+          idempotencyKey: `${proofRequestKey}:skip:${proofDecision.skipReason}`,
         });
       }
       continue;
@@ -2230,9 +2893,13 @@ async function evaluateSelectiveProofCandidates(
       proofTargetId: proofTarget.id,
       idempotencyKey: proofRequestKey,
       source: "monitoring.scan",
+      lease: input.lease,
     });
 
     if (evidenceReservation && !evidenceReservation.result.ok) {
+      await assertOrchestratedWatchlistRunLease(env, input.runId, {
+        orchestrationToken: input.lease?.processingToken,
+      });
       await createProofCapture(env, {
         proofTargetId: proofTarget.id,
         status: "skipped_due_to_budget",
@@ -2242,6 +2909,7 @@ async function evaluateSelectiveProofCandidates(
             ? "Purchased checks require an active paid plan."
             : "Evidence check allowance exhausted.",
         extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+        idempotencyKey: `${proofRequestKey}:skip:budget`,
       });
       continue;
     }
@@ -2251,32 +2919,62 @@ async function evaluateSelectiveProofCandidates(
     }
 
     const evidenceOperationKey = evidenceReservation?.logicalOperationKey ?? null;
-    const snapshot = await captureLandingPageSnapshot(env, observation.landing_page_url!);
+    let evidenceFinalized = false;
+    let preservePendingEvidenceReservation = false;
+    const finalizeEvidence = async (outcome: "succeeded" | "failed") => {
+      if (!evidenceOperationKey || evidenceFinalized) return true;
+      await assertOrchestratedWatchlistRunLease(env, input.runId, {
+        orchestrationToken: input.lease?.processingToken,
+      });
+      const finalized = await tryFinalizeEvidenceForProofCapture(
+        env,
+        evidenceOperationKey,
+        outcome,
+        input.lease,
+      );
+      evidenceFinalized = finalized;
+      return finalized;
+    };
 
-    if (!snapshot) {
-      if (evidenceOperationKey) {
-        await tryFinalizeEvidenceForProofCapture(env, evidenceOperationKey, "failed");
+    try {
+      const snapshot =
+        proofCaptureToLandingPageSnapshot(
+          replayedProofCapture,
+          observation.landing_page_url!,
+        ) ??
+        await captureLandingPageSnapshot(env, observation.landing_page_url!);
+
+      if (!snapshot) {
+        if (!await finalizeEvidence("failed")) {
+          preservePendingEvidenceReservation = true;
+          throw new Error("evidence_usage_pending_reconciliation");
+        }
+        await assertOrchestratedWatchlistRunLease(env, input.runId, {
+          orchestrationToken: input.lease?.processingToken,
+        });
+        await createProofCapture(env, {
+          proofTargetId: proofTarget.id,
+          status: "failed",
+          failureCode: "proof_capture_failed",
+          failureReason: "Landing-page evidence check failed.",
+          extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+          idempotencyKey: proofRequestKey,
+        });
+        await assertOrchestratedWatchlistRunLease(env, input.runId, {
+          orchestrationToken: input.lease?.processingToken,
+        });
+        await upsertProofTarget(env, {
+          watchlistId: input.watchlist.id,
+          adId: observation.ad_id,
+          landingPageUrl: observation.landing_page_url!,
+          canonicalPageIdentity,
+          proofTargetIdentity,
+          lastCaptureAttemptAt: new Date().toISOString(),
+          lastSuccessfulProofAt: proofTarget.lastSuccessfulProofAt,
+          lastSuccessfulCaptureId: proofTarget.lastSuccessfulCaptureId,
+        });
+        continue;
       }
-      await createProofCapture(env, {
-        proofTargetId: proofTarget.id,
-        status: "failed",
-        failureCode: "proof_capture_failed",
-        failureReason: "Landing-page evidence check failed.",
-        extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
-        idempotencyKey: proofRequestKey,
-      });
-      await upsertProofTarget(env, {
-        watchlistId: input.watchlist.id,
-        adId: observation.ad_id,
-        landingPageUrl: observation.landing_page_url!,
-        canonicalPageIdentity,
-        proofTargetIdentity,
-        lastCaptureAttemptAt: new Date().toISOString(),
-        lastSuccessfulProofAt: proofTarget.lastSuccessfulProofAt,
-        lastSuccessfulCaptureId: proofTarget.lastSuccessfulCaptureId,
-      });
-      continue;
-    }
 
     const extractedFields = snapshotToExtractedFields(snapshot);
     const fieldConfidence = readSnapshotConfidence(snapshot);
@@ -2288,6 +2986,9 @@ async function evaluateSelectiveProofCandidates(
       adId: observation.ad_id,
       canonicalPageIdentity: finalCanonicalPageIdentity,
     });
+    await assertOrchestratedWatchlistRunLease(env, input.runId, {
+      orchestrationToken: input.lease?.processingToken,
+    });
     const persistedProofTarget =
       (await upsertProofTarget(env, {
         watchlistId: input.watchlist.id,
@@ -2296,6 +2997,9 @@ async function evaluateSelectiveProofCandidates(
         canonicalPageIdentity: finalCanonicalPageIdentity,
         proofTargetIdentity: finalProofTargetIdentity,
       })) ?? proofTarget;
+    await assertOrchestratedWatchlistRunLease(env, input.runId, {
+      orchestrationToken: input.lease?.processingToken,
+    });
     const proofCaptureId = await createProofCapture(env, {
       proofTargetId: persistedProofTarget.id,
       status: "succeeded",
@@ -2315,9 +3019,13 @@ async function evaluateSelectiveProofCandidates(
       attemptedAt: snapshot.capturedAt,
       succeededAt: snapshot.capturedAt,
     });
-    if (evidenceOperationKey) {
-      await tryFinalizeEvidenceForProofCapture(env, evidenceOperationKey, "succeeded");
+    if (!await finalizeEvidence("succeeded")) {
+      preservePendingEvidenceReservation = true;
+      throw new Error("evidence_usage_pending_reconciliation");
     }
+    await assertOrchestratedWatchlistRunLease(env, input.runId, {
+      orchestrationToken: input.lease?.processingToken,
+    });
     await upsertProofTarget(env, {
       watchlistId: input.watchlist.id,
       adId: observation.ad_id,
@@ -2346,6 +3054,9 @@ async function evaluateSelectiveProofCandidates(
     });
 
     for (const event of evaluated.events) {
+      await assertOrchestratedWatchlistRunLease(env, input.runId, {
+        orchestrationToken: input.lease?.processingToken,
+      });
       const candidateId = await createEventCandidate(env, {
         watchlistId: input.watchlist.id,
         runId: input.runId,
@@ -2367,6 +3078,9 @@ async function evaluateSelectiveProofCandidates(
         continue;
       }
 
+      await assertOrchestratedWatchlistRunLease(env, input.runId, {
+        orchestrationToken: input.lease?.processingToken,
+      });
       const eventId = await createWatchEvent(env, {
         watchlistId: input.watchlist.id,
         runId: input.runId,
@@ -2408,6 +3122,15 @@ async function evaluateSelectiveProofCandidates(
       proofAwareRecentEvents.push(createdEvent);
       proofEvents.push(createdEvent);
     }
+    } catch (error) {
+      if (!preservePendingEvidenceReservation) {
+        await assertOrchestratedWatchlistRunLease(env, input.runId, {
+          orchestrationToken: input.lease?.processingToken,
+        });
+        await finalizeEvidence("failed");
+      }
+      throw error;
+    }
   }
 
   return {
@@ -2425,6 +3148,7 @@ async function evaluateDirectWebsiteProofCandidate(
     runId: string;
     recentWatchEvents: WatchEventRecord[];
     watchlistRunAttemptCount: number;
+    lease?: { runId: string; processingToken: string };
   },
 ) {
   const websiteUrl = directWebsiteUrlForWatchlist(input.watchlist);
@@ -2467,6 +3191,9 @@ async function evaluateDirectWebsiteProofCandidate(
     adId: null,
     canonicalPageIdentity,
   });
+  await assertOrchestratedWatchlistRunLease(env, input.runId, {
+    orchestrationToken: input.lease?.processingToken,
+  });
   const proofTarget = await upsertProofTarget(env, {
     watchlistId: input.watchlist.id,
     adId: null,
@@ -2480,7 +3207,6 @@ async function evaluateDirectWebsiteProofCandidate(
   }
 
   const targetCaptures = await listProofCapturesForTarget(env, proofTarget.id, 20);
-  const lastSuccessfulProof = selectLastSuccessfulProofCapture(targetCaptures);
   const proofRequestKeyBase = buildProofCaptureRequestIdempotencyKey({
     watchlistId: input.watchlist.id,
     adId: null,
@@ -2488,7 +3214,18 @@ async function evaluateDirectWebsiteProofCandidate(
     eventType: "landing_page_offer_changed",
   });
   const proofRequestKey = [proofRequestKeyBase, input.runId].join(":");
+  const replayedProofCapture = targetCaptures.find(
+    (capture) =>
+      capture.idempotencyKey === proofRequestKey &&
+      capture.status === "succeeded",
+  );
+  const lastSuccessfulProof = selectLastSuccessfulProofCapture(
+    targetCaptures.filter((capture) => capture.idempotencyKey !== proofRequestKey),
+  );
   const proofRequestDuplicate = targetCaptures.some((capture) => {
+    if (capture.idempotencyKey === proofRequestKey) {
+      return false;
+    }
     if (!matchesProofRequestKey(capture.idempotencyKey, proofRequestKeyBase)) {
       return false;
     }
@@ -2511,12 +3248,16 @@ async function evaluateDirectWebsiteProofCandidate(
   }
 
   if (proofRequestDuplicate) {
+    await assertOrchestratedWatchlistRunLease(env, input.runId, {
+      orchestrationToken: input.lease?.processingToken,
+    });
     await createProofCapture(env, {
       proofTargetId: proofTarget.id,
       status: "skipped_due_to_dedupe",
       skipReason: "skipped_due_to_dedupe",
       failureReason: "Direct website evidence was already requested recently.",
       extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+      idempotencyKey: `${proofRequestKey}:skip:dedupe`,
     });
     return emptyProofEvaluation(websiteUrl);
   }
@@ -2525,12 +3266,16 @@ async function evaluateDirectWebsiteProofCandidate(
     input.watchlistRunAttemptCount >= V1_PROOF_BUDGETS.perWatchlistRun ||
     recentFailureCountForTarget >= 2
   ) {
+    await assertOrchestratedWatchlistRunLease(env, input.runId, {
+      orchestrationToken: input.lease?.processingToken,
+    });
     await createProofCapture(env, {
       proofTargetId: proofTarget.id,
       status: "skipped_due_to_rate_limit",
       skipReason: "skipped_due_to_rate_limit",
       failureReason: "Direct website evidence policy skipped the attempt.",
       extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+      idempotencyKey: `${proofRequestKey}:skip:rate-limit`,
     });
     return emptyProofEvaluation(websiteUrl);
   }
@@ -2540,9 +3285,13 @@ async function evaluateDirectWebsiteProofCandidate(
     proofTargetId: proofTarget.id,
     idempotencyKey: proofRequestKey,
     source: "monitoring.direct_website",
+    lease: input.lease,
   });
 
   if (evidenceReservation && !evidenceReservation.result.ok) {
+    await assertOrchestratedWatchlistRunLease(env, input.runId, {
+      orchestrationToken: input.lease?.processingToken,
+    });
     await createProofCapture(env, {
       proofTargetId: proofTarget.id,
       status: "skipped_due_to_budget",
@@ -2552,6 +3301,7 @@ async function evaluateDirectWebsiteProofCandidate(
           ? "Purchased checks require an active paid plan."
           : "Evidence check allowance exhausted.",
       extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+      idempotencyKey: `${proofRequestKey}:skip:budget`,
     });
     return emptyProofEvaluation(websiteUrl);
   }
@@ -2560,38 +3310,66 @@ async function evaluateDirectWebsiteProofCandidate(
     capacity.workspaceMonthlyRemaining <= 0 &&
     !evidenceReservation
   ) {
+    await assertOrchestratedWatchlistRunLease(env, input.runId, {
+      orchestrationToken: input.lease?.processingToken,
+    });
     await createProofCapture(env, {
       proofTargetId: proofTarget.id,
       status: "skipped_due_to_budget",
       skipReason: "skipped_due_to_budget",
       failureReason: "Evidence check allowance exhausted.",
       extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+      idempotencyKey: `${proofRequestKey}:skip:budget`,
     });
     return emptyProofEvaluation(websiteUrl);
   }
 
   const evidenceOperationKey = evidenceReservation?.logicalOperationKey ?? null;
-  const snapshot = await captureLandingPageSnapshot(env, websiteUrl, {
-    preferRendered: true,
-  });
-
-  if (!snapshot) {
-    if (evidenceOperationKey) {
-      await tryFinalizeEvidenceForProofCapture(env, evidenceOperationKey, "failed");
-    }
-    await createProofCapture(env, {
-      proofTargetId: proofTarget.id,
-      status: "failed",
-      failureCode: "direct_website_proof_capture_failed",
-      failureReason: "Competitor website evidence check failed.",
-      extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
-      idempotencyKey: proofRequestKey,
+  let evidenceFinalized = false;
+  let preservePendingEvidenceReservation = false;
+  const finalizeEvidence = async (outcome: "succeeded" | "failed") => {
+    if (!evidenceOperationKey || evidenceFinalized) return true;
+    await assertOrchestratedWatchlistRunLease(env, input.runId, {
+      orchestrationToken: input.lease?.processingToken,
     });
-    return {
-      ...emptyProofEvaluation(websiteUrl),
-      proofAttemptCount: 1,
-    };
-  }
+    const finalized = await tryFinalizeEvidenceForProofCapture(
+      env,
+      evidenceOperationKey,
+      outcome,
+      input.lease,
+    );
+    evidenceFinalized = finalized;
+    return finalized;
+  };
+
+  try {
+    const snapshot =
+      proofCaptureToLandingPageSnapshot(replayedProofCapture, websiteUrl) ??
+      await captureLandingPageSnapshot(env, websiteUrl, {
+        preferRendered: true,
+      });
+
+    if (!snapshot) {
+      if (!await finalizeEvidence("failed")) {
+        preservePendingEvidenceReservation = true;
+        throw new Error("evidence_usage_pending_reconciliation");
+      }
+      await assertOrchestratedWatchlistRunLease(env, input.runId, {
+        orchestrationToken: input.lease?.processingToken,
+      });
+      await createProofCapture(env, {
+        proofTargetId: proofTarget.id,
+        status: "failed",
+        failureCode: "direct_website_proof_capture_failed",
+        failureReason: "Competitor website evidence check failed.",
+        extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+        idempotencyKey: proofRequestKey,
+      });
+      return {
+        ...emptyProofEvaluation(websiteUrl),
+        proofAttemptCount: 1,
+      };
+    }
 
   const extractedFields = snapshotToExtractedFields(snapshot);
   const finalCanonicalPageIdentity =
@@ -2600,6 +3378,9 @@ async function evaluateDirectWebsiteProofCandidate(
     watchlistId: input.watchlist.id,
     adId: null,
     canonicalPageIdentity: finalCanonicalPageIdentity,
+  });
+  await assertOrchestratedWatchlistRunLease(env, input.runId, {
+    orchestrationToken: input.lease?.processingToken,
   });
   const persistedProofTarget =
     (await upsertProofTarget(env, {
@@ -2612,8 +3393,6 @@ async function evaluateDirectWebsiteProofCandidate(
       lastSuccessfulProofAt: snapshot.capturedAt,
     })) ?? proofTarget;
   const finalTargetCaptures = await listProofCapturesForTarget(env, persistedProofTarget.id, 20);
-  const finalLastSuccessfulProof =
-    selectLastSuccessfulProofCapture(finalTargetCaptures) ?? lastSuccessfulProof;
   const finalProofRequestKey = [
     buildProofCaptureRequestIdempotencyKey({
       watchlistId: input.watchlist.id,
@@ -2623,6 +3402,12 @@ async function evaluateDirectWebsiteProofCandidate(
     }),
     input.runId,
   ].join(":");
+  const finalLastSuccessfulProof =
+    selectLastSuccessfulProofCapture(
+      finalTargetCaptures.filter(
+        (capture) => capture.idempotencyKey !== finalProofRequestKey,
+      ),
+    ) ?? lastSuccessfulProof;
   const proofCaptureId = await createProofCapture(env, {
     proofTargetId: persistedProofTarget.id,
     status: "succeeded",
@@ -2646,9 +3431,13 @@ async function evaluateDirectWebsiteProofCandidate(
     attemptedAt: snapshot.capturedAt,
     succeededAt: snapshot.capturedAt,
   });
-  if (evidenceOperationKey) {
-    await tryFinalizeEvidenceForProofCapture(env, evidenceOperationKey, "succeeded");
+  if (!await finalizeEvidence("succeeded")) {
+    preservePendingEvidenceReservation = true;
+    throw new Error("evidence_usage_pending_reconciliation");
   }
+  await assertOrchestratedWatchlistRunLease(env, input.runId, {
+    orchestrationToken: input.lease?.processingToken,
+  });
   await upsertProofTarget(env, {
     watchlistId: input.watchlist.id,
     adId: null,
@@ -2658,8 +3447,11 @@ async function evaluateDirectWebsiteProofCandidate(
     lastCaptureAttemptAt: snapshot.capturedAt,
       lastSuccessfulProofAt: snapshot.capturedAt,
       lastSuccessfulCaptureId: proofCaptureId,
-    });
+  });
   if (finalProofTargetIdentity !== proofTargetIdentity) {
+    await assertOrchestratedWatchlistRunLease(env, input.runId, {
+      orchestrationToken: input.lease?.processingToken,
+    });
     await upsertProofTarget(env, {
       watchlistId: input.watchlist.id,
       adId: null,
@@ -2692,6 +3484,9 @@ async function evaluateDirectWebsiteProofCandidate(
   let confirmedEventCount = 0;
 
   for (const event of evaluated.events) {
+    await assertOrchestratedWatchlistRunLease(env, input.runId, {
+      orchestrationToken: input.lease?.processingToken,
+    });
     const candidateId = await createEventCandidate(env, {
       watchlistId: input.watchlist.id,
       runId: input.runId,
@@ -2717,6 +3512,9 @@ async function evaluateDirectWebsiteProofCandidate(
       continue;
     }
 
+    await assertOrchestratedWatchlistRunLease(env, input.runId, {
+      orchestrationToken: input.lease?.processingToken,
+    });
     const eventId = await createWatchEvent(env, {
       watchlistId: input.watchlist.id,
       runId: input.runId,
@@ -2765,15 +3563,24 @@ async function evaluateDirectWebsiteProofCandidate(
     });
   }
 
-	  return {
-	    events: proofEvents,
-	    candidateCount,
-	    proofAttemptCount: 1,
-	    confirmedEventCount,
-	    websiteUrl: snapshot.canonicalUrl,
-	    proofCaptureSucceeded: true,
-	  };
-	}
+    return {
+      events: proofEvents,
+      candidateCount,
+      proofAttemptCount: 1,
+      confirmedEventCount,
+      websiteUrl: snapshot.canonicalUrl,
+      proofCaptureSucceeded: true,
+    };
+  } catch (error) {
+    if (!preservePendingEvidenceReservation) {
+      await assertOrchestratedWatchlistRunLease(env, input.runId, {
+        orchestrationToken: input.lease?.processingToken,
+      });
+      await finalizeEvidence("failed");
+    }
+    throw error;
+  }
+}
 
 	function emptyProofEvaluation(websiteUrl: string | null) {
 	  return {
@@ -3024,6 +3831,47 @@ function snapshotToExtractedFields(snapshot: {
     priceText: snapshot.priceText ?? null,
     formPresent: snapshot.formPresent ?? null,
     canonicalUrl: snapshot.canonicalUrl,
+  };
+}
+
+function proofCaptureToLandingPageSnapshot(
+  capture: ProofCaptureRecord | undefined,
+  fallbackUrl: string,
+): LandingPageSnapshotData | null {
+  if (!capture || capture.status !== "succeeded") {
+    return null;
+  }
+  const readString = (key: string) => {
+    const value = capture.extractedFields[key];
+    return typeof value === "string" && value.length > 0 ? value : null;
+  };
+  const rawHeadline = readString("rawHeadline");
+  const normalizedHeadline = readString("normalizedHeadline");
+  const normalizedHeadlineHash = readString("normalizedHeadlineHash");
+  if (!rawHeadline || !normalizedHeadline || !normalizedHeadlineHash) {
+    return null;
+  }
+  const canonicalUrl = readString("canonicalUrl") ?? fallbackUrl;
+  const formPresent = capture.extractedFields.formPresent;
+  return {
+    rawUrl: fallbackUrl,
+    canonicalUrl,
+    rawHeadline,
+    normalizedHeadline,
+    normalizedHeadlineHash,
+    ctaText: readString("ctaText"),
+    priceText: readString("priceText"),
+    formPresent: typeof formPresent === "boolean" ? formPresent : null,
+    captureMethod: "manual",
+    capturedAt: capture.succeededAt ?? capture.attemptedAt,
+    artifactKey: capture.htmlArtifactKey,
+    metadata: {
+      ...capture.captureMetadata,
+      screenshotArtifactKey: capture.screenshotArtifactKey,
+      htmlArtifactKey: capture.htmlArtifactKey,
+      extractorVersion: capture.extractorVersion,
+      replayedFromDurableCapture: true,
+    },
   };
 }
 

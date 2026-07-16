@@ -1,8 +1,13 @@
 #!/usr/bin/env node
-import { existsSync, readdirSync, renameSync, statSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { existsSync, mkdirSync, readdirSync, renameSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
+import {
+  buildProductionDeployPlan,
+  executeProductionDeployPlan,
+} from "./deploy-production-plan.mjs";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const localEnvFilePattern = /^(?:\.dev\.vars(?:\..+)?|\.env(?:\..+)?)$/;
@@ -38,7 +43,7 @@ function commandEnv({ includeCloudflareCredentials = false } = {}) {
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: root,
-    env: commandEnv(options),
+    env: { ...commandEnv(options), ...(options.env ?? {}) },
     stdio: "inherit",
   });
 
@@ -54,6 +59,8 @@ function run(command, args, options = {}) {
 }
 
 try {
+  const holdDirectory = join(root, "tmp");
+  mkdirSync(holdDirectory, { recursive: true });
   for (const name of readdirSync(root)) {
     if (!localEnvFilePattern.test(name)) {
       continue;
@@ -64,18 +71,14 @@ try {
       continue;
     }
 
-    const held = join(root, `.deploy-hold-${process.pid}-${movedLocalEnvFiles.length}-${name.slice(1)}`);
+    const held = join(holdDirectory, `.deploy-hold-${process.pid}-${movedLocalEnvFiles.length}-${name.slice(1)}`);
     renameSync(source, held);
     movedLocalEnvFiles.push({ source, held });
   }
 
-  run("node", ["scripts/check-public-home-current.mjs", "--source-only"]);
-  run("node", ["scripts/check-d1-migrations-synced.mjs"], { includeCloudflareCredentials: true });
-  run("npm", ["run", "build"]);
-  run("node", ["scripts/check-public-home-current.mjs"]);
-  run("wrangler", ["deploy"], { includeCloudflareCredentials: true });
-  run("node", ["scripts/check-live-public-home.mjs"]);
-  run("node", ["scripts/check-google-oauth-branding.mjs"]);
+  const manifestPath = `test-results/deploy-readiness-${process.pid}-${randomBytes(8).toString("hex")}.json`;
+  const plan = buildProductionDeployPlan({ manifestPath });
+  executeProductionDeployPlan(plan, (step) => run(step.command, step.args, step));
 } catch (error) {
   exitCode = error && typeof error.exitCode === "number" ? error.exitCode : 1;
   console.error(error instanceof Error ? error.message : error);

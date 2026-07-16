@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 export function CopyButton(props: { value: string; label?: string }) {
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
+  const copyErrorId = `copy-button-error-${useId().replace(/:/g, "")}`;
 
   useEffect(() => {
     if (!copied) return;
@@ -9,21 +11,31 @@ export function CopyButton(props: { value: string; label?: string }) {
     return () => clearTimeout(timer);
   }, [copied]);
 
+  async function copyToClipboard() {
+    setCopied(false);
+    setCopyError(null);
+    try {
+      await navigator.clipboard.writeText(props.value);
+      setCopied(true);
+    } catch {
+      setCopyError("Could not copy. Try again.");
+    }
+  }
+
   return (
-    <button
-      className="f9-secondary-button f9-copy-button"
-      type="button"
-      onClick={() => {
-        navigator.clipboard
-          .writeText(props.value)
-          .then(() => setCopied(true))
-          .catch(() => {
-            // Clipboard can be blocked (permissions, non-secure context) —
-            // fall back to selecting nothing rather than throwing.
-          });
-      }}
-    >
-      {copied ? "Copied!" : (props.label ?? "Copy link")}
-    </button>
+    <span>
+      <button
+        aria-describedby={copyError ? copyErrorId : undefined}
+        className="f9-secondary-button f9-copy-button"
+        type="button"
+        onClick={() => void copyToClipboard()}
+      >
+        {copyError ? "Try again" : copied ? "Copied!" : (props.label ?? "Copy link")}
+      </button>
+      <span aria-live="polite" className="f9-sr-only" id={copyErrorId} role="status">
+        {copyError ?? (copied ? "Copied." : "")}
+      </span>
+      {copyError ? <span className="f9-message is-error">{copyError}</span> : null}
+    </span>
   );
 }

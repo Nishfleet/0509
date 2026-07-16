@@ -21,6 +21,7 @@ export {
 
 export {
   getClientRoom,
+  getClientRoomByName,
   upsertClientRoom,
   listClientRooms,
 } from "~/lib/data/customer-api-rooms.server";
@@ -29,6 +30,7 @@ export {
   listCustomerApiKeys,
   insertCustomerApiKey,
   getActiveCustomerApiKeyByHash,
+  isActiveCustomerApiKey,
   recordCustomerApiKeyUsed,
   revokeCustomerApiKey,
   getCustomerMetaConnection,

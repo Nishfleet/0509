@@ -7,6 +7,7 @@ import { DashboardShell } from "~/components/dashboard-shell";
 import {
   DASHBOARD_PRIMARY_NAV,
   DASHBOARD_SETTINGS_NAV,
+  buildDashboardMobileNav,
   filterDashboardNav,
 } from "~/lib/dashboard-navigation";
 import { mapCustomerRouteError } from "~/lib/customer-route-error";
@@ -27,7 +28,22 @@ const PRIMARY_APP_ROUTE_FILES = readdirSync("app/routes").filter(
     name !== "app.onboard.tsx",
 );
 
+const CUSTOMER_NAV_CASES = [
+  { label: "Competitors", path: "/app/watchlists", section: "Monitor" },
+  { label: "Briefs", path: "/app/digests", section: "Review" },
+  { label: "Reports", path: "/app/reports", section: "Review" },
+  { label: "Shared links", path: "/app/shares", section: "Review" },
+  { label: "Client rooms", path: "/app/clients", section: "Delivery" },
+] as const;
+
 describe("dashboard v2 navigation", () => {
+  it.each(CUSTOMER_NAV_CASES)("maps $label to $path in $section", ({ label, path, section }) => {
+    const navSection = [...DASHBOARD_PRIMARY_NAV, ...DASHBOARD_SETTINGS_NAV].find(
+      (candidate) => candidate.title === section,
+    );
+    expect(navSection?.items).toContainEqual(expect.objectContaining({ label, to: path }));
+  });
+
   it("exposes the unified customer IA", () => {
     const labels = [
       ...DASHBOARD_PRIMARY_NAV.flatMap((section) => section.items.map((item) => item.label)),
@@ -36,14 +52,29 @@ describe("dashboard v2 navigation", () => {
 
     expect(labels).toContain("Overview");
     expect(labels).toContain("Search");
+    expect(labels).toContain("Competitors");
     expect(labels).toContain("Collections");
-    expect(labels).toContain("Digests");
+    expect(labels).toContain("Briefs");
     expect(labels).toContain("Reports");
+    expect(labels).toContain("Shared links");
+    expect(labels).toContain("Client rooms");
     expect(labels).toContain("Notifications");
     expect(labels).toContain("Source access");
     expect(labels).toContain("Developer access");
     expect(labels).not.toContain("Boards");
-    expect(labels).not.toContain("Briefs");
+    expect(labels).not.toContain("Watchlists");
+    expect(labels).not.toContain("Digests");
+  });
+
+  it.each([
+    { label: "Competitors", path: "/app/watchlists" },
+    { label: "Briefs", path: "/app/digests" },
+    { label: "Reports", path: "/app/reports" },
+    { label: "Shared links", path: "/app/shares" },
+  ] as const)("keeps $label reachable on mobile at $path", ({ label, path }) => {
+    expect(buildDashboardMobileNav({ showPresence: false })).toContainEqual(
+      expect.objectContaining({ label, to: path }),
+    );
   });
 
   it("hides presence nav unless entitled", () => {
@@ -70,7 +101,12 @@ describe("dashboard v2 shell", () => {
   it("keeps narrow authenticated navigation in page flow", () => {
     expect(appCss).not.toMatch(/\.f9-cursor-main\s*\{[^}]*order:\s*1/s);
     expect(shellSource).toContain("f9-dash-mobile-nav");
+    expect(shellSource).toContain("f9-dash-mobile-context");
+    expect(shellSource).toContain("Swipe for more");
+    expect(shellSource).toContain('aria-label="Workspace and account"');
+    expect(shellSource).toContain('a[aria-current="page"]');
     expect(appCss).toContain(".f9-dash-page-app .f9-dash-mobile-nav");
+    expect(appCss).toContain(".f9-dash-page-app .f9-dash-mobile-utility a.is-active");
     expect(appCss).toContain(".f9-dash-page-app .f9-dash-nav-group");
     expect(appCss).not.toContain(".f9-cursor-rail > div:not(");
     expect(appCss).not.toMatch(/\.f9-dash(?:-page-app)?\s+\.f9-dash-mobile-nav\s*\{[^}]*position:\s*fixed/s);
@@ -146,5 +182,11 @@ describe("dashboard shell render", () => {
     expect(DashboardShell).toBeTypeOf("function");
     expect(shellSource).toContain('aria-label="Application"');
     expect(shellSource).toContain("f9-cursor-main");
+  });
+
+  it("keeps signed-in mobile utility support in-app", () => {
+    expect(shellSource).toContain('to: "/app/support"');
+    expect(shellSource).toContain('to: "/app/billing"');
+    expect(shellSource).not.toMatch(/className="f9-dash-mobile-utility"[\s\S]*?to="\/help"/);
   });
 });

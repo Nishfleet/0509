@@ -49,6 +49,22 @@ export default function PrivacyRoute() {
             </p>
           </LegalBlock>
 
+          <LegalBlock title="Public assistant">
+            <p>
+              Public pages include a Site Rep assistant. When you use it, the page address, your
+              question and feedback, and any name, email, or follow-up details you choose to submit
+              are sent to Site Rep to provide answers and requested follow-up. See Site Rep's{" "}
+              <a href="https://siterep.net/privacy" rel="noreferrer" target="_blank">
+                Privacy
+              </a>{" "}
+              and{" "}
+              <a href="https://siterep.net/trust" rel="noreferrer" target="_blank">
+                Trust
+              </a>{" "}
+              notes.
+            </p>
+          </LegalBlock>
+
           <LegalBlock title="Security and compliance claims">
             <p>
               We do not claim SOC 2, HIPAA, GDPR compliance, zero retention, no training, or similar guarantees until

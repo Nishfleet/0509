@@ -1,5 +1,10 @@
 import type { ActionFunctionArgs } from "react-router";
 
+const CLEANUP_OPERATION_HEADER = "x-0509-canary-operation";
+const CLEANUP_BODY_MAX_BYTES = 4_096;
+const CLEANUP_TRUTH =
+  "Cleanup removes watchlist, digest, and delivery rows only when each row is verified as canary-owned; proof capture, proof target, capture artifacts, and prior target-pointer restoration remain preserved/open.";
+
 interface CanaryTargetRow {
   user_id: string;
   email: string | null;
@@ -9,6 +14,10 @@ interface CanaryTargetRow {
   target_label: string;
 }
 
+interface CanaryOwnerRow {
+  user_id: string;
+}
+
 function hasValidCanaryToken(request: Request, token: string | undefined) {
   const configured = token?.trim();
   if (!configured) {
@@ -16,6 +25,23 @@ function hasValidCanaryToken(request: Request, token: string | undefined) {
   }
 
   return request.headers.get("x-0509-canary-token") === configured;
+}
+
+function hasCanonicalCanaryOrigin(request: Request) {
+  try {
+    const url = new URL(request.url);
+    const authority = request.url.match(/^https:\/\/([^/?#]+)/i)?.[1]?.toLowerCase();
+    return (
+      url.protocol === "https:" &&
+      url.origin === "https://0509.io" &&
+      authority === "0509.io" &&
+      !url.username &&
+      !url.password &&
+      !url.port
+    );
+  } catch {
+    return false;
+  }
 }
 
 async function getCanaryTarget(env: { DB?: D1Database }, canaryEmail: string) {
@@ -43,28 +69,44 @@ async function getCanaryTarget(env: { DB?: D1Database }, canaryEmail: string) {
   return result.results?.[0] ?? null;
 }
 
+async function getCanaryOwner(env: { DB?: D1Database }, canaryEmail: string) {
+  if (!env.DB) {
+    return null;
+  }
+
+  const result = await env.DB.prepare(`
+      SELECT id AS user_id
+      FROM user
+      WHERE lower(email) = lower(?)
+      LIMIT 1
+    `).bind(canaryEmail).all<CanaryOwnerRow>();
+
+  return result.results?.[0]?.user_id ?? null;
+}
+
 export async function action({ context, request }: ActionFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
-  const {
-    addDigestItem,
-    clearDigestItems,
-    createDigestRun,
-    createProofCapture,
-    createWatchEvent,
-    createWatchlistRun,
-    finishWatchlistRun,
-    upsertProofTarget,
-  } = await import("~/lib/data.server");
-  const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
-  const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
-  const {
-    buildCanonicalPageIdentity,
-    buildProofTargetIdentity,
-  } = await import("~/lib/proof-policy.server");
   const env = getEnv(context);
 
   if (!hasValidCanaryToken(request, env.CANARY_BYPASS_TOKEN)) {
     throw new Response("Not found", { status: 404 });
+  }
+
+  if (!hasCanonicalCanaryOrigin(request)) {
+    throw new Response("Not found", { status: 404 });
+  }
+
+  if (request.method !== "POST") {
+    return Response.json(
+      { ok: false, blocker: "canary_requires_post" },
+      {
+        status: 405,
+        headers: {
+          allow: "POST",
+          "cache-control": "no-store",
+        },
+      },
+    );
   }
 
   if (!env.DB) {
@@ -94,20 +136,120 @@ export async function action({ context, request }: ActionFunctionArgs) {
     );
   }
 
-  const target = await getCanaryTarget(env, canaryEmail);
-  if (!target) {
+  const cleanupOperation = request.headers.get(CLEANUP_OPERATION_HEADER);
+  if (cleanupOperation !== null && cleanupOperation !== "cleanup") {
+    return cleanupErrorResponse("invalid_cleanup_operation", 400);
+  }
+
+  const requestUrl = new URL(request.url);
+  const requestedProofProviderParam = requestUrl.searchParams.get("proofProvider");
+  if (requestedProofProviderParam !== null && requestedProofProviderParam !== "browserless") {
     return Response.json(
-      {
-        ok: false,
-        blocker: "missing_active_watchlist",
-        canaryEmail,
-      },
-      {
-        status: 503,
-        headers: { "cache-control": "no-store" },
-      },
+      { ok: false, blocker: "unsupported_proof_provider" },
+      { status: 400, headers: { "cache-control": "no-store" } },
     );
   }
+
+  let target: CanaryTargetRow | null = null;
+  let canaryOwnerUserId: string | null = null;
+  if (cleanupOperation === "cleanup") {
+    try {
+      canaryOwnerUserId = await getCanaryOwner(env, canaryEmail);
+    } catch {
+      return cleanupErrorResponse("cleanup_owner_lookup_failed", 500);
+    }
+    if (!canaryOwnerUserId) {
+      return cleanupErrorResponse("missing_launch_canary_user", 503);
+    }
+  } else {
+    target = await getCanaryTarget(env, canaryEmail);
+    if (!target) {
+      return Response.json(
+        {
+          ok: false,
+          blocker: "missing_active_watchlist",
+        },
+        {
+          status: 503,
+          headers: { "cache-control": "no-store" },
+        },
+      );
+    }
+  }
+
+  if (cleanupOperation === "cleanup") {
+    const requestUrl = new URL(request.url);
+    if (["runId", "digestRunId", "proofCaptureId"].some((key) => requestUrl.searchParams.has(key))) {
+      return cleanupErrorResponse("cleanup_ids_must_be_in_json_body", 400);
+    }
+
+    const cleanupInput = await readCleanupInput(request);
+    if (!cleanupInput) {
+      return cleanupErrorResponse("invalid_cleanup_request", 400);
+    }
+
+    try {
+      const { cleanupLaunchReadinessCanary } = await import("~/lib/data.server");
+      const result = await cleanupLaunchReadinessCanary(env, {
+        ownerUserId: canaryOwnerUserId as string,
+        ...cleanupInput,
+      });
+      if (!result.cleaned) {
+        return Response.json(
+          {
+            ok: false,
+            mode: "cleanup",
+            blocker: result.reason ?? "cleanup_not_completed",
+            cleanup: result,
+            cleanupTruth: CLEANUP_TRUTH,
+          },
+          {
+            status: 409,
+            headers: { "cache-control": "no-store" },
+          },
+        );
+      }
+
+      return Response.json(
+        {
+          ok: true,
+          mode: "cleanup",
+          cleanup: result,
+          cleanupTruth: CLEANUP_TRUTH,
+        },
+        {
+          status: 200,
+          headers: { "cache-control": "no-store" },
+        },
+      );
+    } catch {
+      return cleanupErrorResponse("cleanup_failed", 500);
+    }
+  }
+
+  if (!target) {
+    return Response.json(
+      { ok: false, blocker: "missing_active_watchlist" },
+      { status: 503, headers: { "cache-control": "no-store" } },
+    );
+  }
+
+  const {
+    addDigestItem,
+    clearDigestItems,
+    createDigestRun,
+    createProofCapture,
+    createWatchEvent,
+    createWatchlistRun,
+    finishWatchlistRun,
+    upsertProofTarget,
+  } = await import("~/lib/data.server");
+  const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+  const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+  const {
+    buildCanonicalPageIdentity,
+    buildProofTargetIdentity,
+  } = await import("~/lib/proof-policy.server");
 
   const now = new Date();
   const nowIso = now.toISOString();
@@ -117,8 +259,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const title = "Launch readiness canary";
   const summary = "Private canary verified the monitoring, proof, and digest delivery pipeline.";
   const proofUrl = "https://0509.io/";
-  const requestUrl = new URL(request.url);
-  const requestedProofProvider = requestUrl.searchParams.get("proofProvider") === "browserless"
+  const requestedProofProvider = requestedProofProviderParam === "browserless"
     ? "browserless"
     : null;
   const requireSlackDelivery = readBooleanSearchParam(requestUrl, "requireSlack");
@@ -291,13 +432,20 @@ export async function action({ context, request }: ActionFunctionArgs) {
     cadence: "daily",
     lane: requireWhatsAppDelivery ? "customer" : "internal",
   });
-  const deliverySent = delivery.details.some((attempt) => attempt.status === "sent");
-  const slackDeliverySent = delivery.details.some(
+  const deliveryDetails = delivery.details as Array<CanaryDeliveryDetail>;
+  const deliverySent = deliveryDetails.some((attempt) => attempt.status === "sent");
+  const slackDeliverySent = deliveryDetails.some(
     (attempt) => attempt.channel === "slack" && attempt.status === "sent",
   );
-  const whatsappDeliverySent = delivery.details.some(
-    (attempt) => attempt.channel === "whatsapp" && attempt.status === "sent",
-  );
+  const whatsappAttempts = deliveryDetails.filter((attempt) => attempt.channel === "whatsapp");
+  const hasExplicitWebhookStatus = whatsappAttempts.some((attempt) => attempt.webhookStatus !== undefined);
+  const whatsappDeliverySent = requireWhatsAppDelivery && whatsappAttempts.length > 0
+    ? hasExplicitWebhookStatus
+      ? whatsappAttempts.some(
+          (attempt) => attempt.status === "sent" && attempt.webhookStatus === "delivered",
+        )
+      : await hasReconciledWhatsAppDelivery(env, digestRunId, target.user_id)
+    : false;
   const deliveryBlockers = [
     deliverySent ? null : "no_digest_delivery_sent",
     requireSlackDelivery && !slackDeliverySent ? "no_slack_digest_sent" : null,
@@ -311,7 +459,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       runId,
       proofCaptureId,
       digestRunId,
-      delivery,
+      delivery: sanitizeDeliveryForCanary(deliveryDetails, delivery.attempts, delivery.channels),
       slackDelivery: {
         required: requireSlackDelivery,
         sent: slackDeliverySent,
@@ -325,7 +473,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         capturedAt: snapshot.capturedAt,
         canonicalUrl: snapshot.canonicalUrl,
         captureMethod: snapshot.captureMethod,
-        renderProvider: readSnapshotString(snapshot.metadata, "renderProvider"),
+        renderStatus: snapshot.captureMethod === "browser_render" ? "rendered" : "captured",
       },
     },
     {
@@ -333,6 +481,104 @@ export async function action({ context, request }: ActionFunctionArgs) {
       headers: { "cache-control": "no-store" },
     },
   );
+}
+
+interface CanaryDeliveryDetail {
+  channel: string;
+  status: string;
+  deliveredAt?: string | null;
+  webhookStatus?: string;
+}
+
+function sanitizeDeliveryForCanary(
+  details: CanaryDeliveryDetail[],
+  attempts: number,
+  channels: string[],
+) {
+  return {
+    attempts,
+    channels,
+    details: details.map((attempt) => ({
+      channel: attempt.channel,
+      status: attempt.status,
+      deliveredAt: attempt.deliveredAt ?? null,
+      ...(attempt.webhookStatus ? { webhookStatus: attempt.webhookStatus } : {}),
+    })),
+  };
+}
+
+async function hasReconciledWhatsAppDelivery(
+  env: { DB?: D1Database },
+  digestRunId: string,
+  userId: string,
+) {
+  if (!env.DB) return false;
+
+  try {
+    const result = await env.DB.prepare(`
+        SELECT 1 AS present
+        FROM delivery_attempt
+        WHERE digest_run_id = ?
+          AND user_id = ?
+          AND channel = 'whatsapp'
+          AND status = 'sent'
+          AND webhook_status = 'delivered'
+        LIMIT 1
+      `).bind(digestRunId, userId).all<{ present: number }>();
+    return (result.results?.length ?? 0) > 0;
+  } catch {
+    return false;
+  }
+}
+
+function cleanupErrorResponse(blocker: string, status: number) {
+  return Response.json(
+    {
+      ok: false,
+      mode: "cleanup",
+      blocker,
+      cleanupTruth: CLEANUP_TRUTH,
+    },
+    {
+      status,
+      headers: { "cache-control": "no-store" },
+    },
+  );
+}
+
+async function readCleanupInput(request: Request) {
+  if (!request.headers.get("content-type")?.toLowerCase().includes("application/json")) {
+    return null;
+  }
+
+  const { readRequestTextWithinLimit } = await import("~/lib/bounded-response.server");
+  const rawBody = await readRequestTextWithinLimit(request, CLEANUP_BODY_MAX_BYTES);
+  if (!rawBody) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawBody);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+
+  const body = parsed as Record<string, unknown>;
+  const keys = Object.keys(body).sort();
+  if (keys.join(",") !== "digestRunId,proofCaptureId,runId") return null;
+  if (!isCleanupIdentifier(body.runId) || !isCleanupIdentifier(body.digestRunId) || !isCleanupIdentifier(body.proofCaptureId)) {
+    return null;
+  }
+
+  return {
+    runId: body.runId,
+    digestRunId: body.digestRunId,
+    proofCaptureId: body.proofCaptureId,
+  };
+}
+
+function isCleanupIdentifier(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= 256 && value.trim() === value && !/[\u0000-\u001f\u007f\s]/.test(value);
 }
 
 function readBooleanSearchParam(url: URL, key: string) {

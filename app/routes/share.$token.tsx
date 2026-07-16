@@ -18,6 +18,7 @@ import {
   summarizePriorityMix,
 } from "~/lib/proof-classification";
 import { isReportDocument, type ReportDocument } from "~/lib/report";
+import { isApprovedReportSnapshot } from "~/lib/report-approval";
 import type { ShareResourceType } from "~/lib/types";
 
 export const meta = () => [
@@ -357,7 +358,7 @@ function sanitizeSnapshotPayload(
 }
 
 function sanitizeReportSnapshotPayload(payload: Record<string, unknown>): ReportDocument | null {
-  if (!isReportDocument(payload)) {
+  if (!isReportDocument(payload) || !isApprovedReportSnapshot(payload)) {
     return null;
   }
 

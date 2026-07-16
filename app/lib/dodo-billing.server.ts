@@ -653,6 +653,7 @@ export function extractDodoPlanGrant(env: AppEnv, payload: unknown) {
 const DODO_SUBSCRIPTION_GRANT_EVENT_TYPES = new Set([
   "subscription.active",
   "subscription.plan_changed",
+  "subscription.updated",
   "subscription.renewed",
 ]);
 
@@ -677,6 +678,17 @@ export function extractDodoSubscriptionGrant(env: AppEnv, payload: unknown) {
   const subscriptionId = readString(root, "subscription_id");
   if (!userId || !subscriptionId) return null;
 
+  // Dodo emits `subscription.updated` for every field change, including an
+  // immediate cancellation. A terminal status must flow through the
+  // revocation path below rather than being mistaken for a fresh active grant.
+  const providerStatus = readString(root, "status").toLowerCase();
+  if (
+    eventType === "subscription.updated" &&
+    (providerStatus === "cancelled" || providerStatus === "canceled" || providerStatus === "expired")
+  ) {
+    return null;
+  }
+
   const metadataPlan = planFromTrustedMetadata(metadata);
   const rawProductId = readString(root, "product_id");
   const productId =
@@ -698,9 +710,15 @@ export function extractDodoSubscriptionGrant(env: AppEnv, payload: unknown) {
 
   const providerGrantedAt =
     readString(root, "updated_at") ||
-    (eventType === "subscription.plan_changed"
+    (eventType === "subscription.plan_changed" || eventType === "subscription.updated"
       ? ""
       : readString(root, "previous_billing_date") || readString(root, "created_at"));
+
+  // Preserve the provider's cancellation flag as a tri-state value. Missing
+  // and null are deliberately distinct from an explicit false: only the
+  // latter is authoritative evidence that a scheduled cancellation was
+  // reversed.
+  const cancellationFlag = readDodoBoolean(root, "cancel_at_next_billing_date");
 
   return {
     eventType,
@@ -712,8 +730,9 @@ export function extractDodoSubscriptionGrant(env: AppEnv, payload: unknown) {
     cycle,
     status: "active",
     cancellationScheduled:
-      eventType === "subscription.plan_changed" &&
-      readDodoBoolean(root, "cancel_at_next_billing_date") === true,
+      eventType === "subscription.plan_changed" || eventType === "subscription.updated"
+        ? cancellationFlag
+        : null,
     grantedAt: providerGrantedAt || null,
     hasProviderGrantTimestamp: Boolean(providerGrantedAt),
     nextBillingAt: readString(root, "next_billing_date") || null,
@@ -782,12 +801,11 @@ export type DodoLifecycleAction = "revoke" | "payment_issue";
 export function extractDodoPlanRevocation(env: AppEnv, payload: unknown) {
   const envelope = objectOrEmpty(payload);
   const eventType = readString(envelope, "type") || readString(envelope, "event");
-  const action: DodoLifecycleAction | null = DODO_REVOCATION_EVENT_TYPES.has(eventType)
+  const eventAction: DodoLifecycleAction | null = DODO_REVOCATION_EVENT_TYPES.has(eventType)
     ? "revoke"
     : DODO_PAYMENT_ISSUE_EVENT_TYPES.has(eventType)
       ? "payment_issue"
       : null;
-  if (!action) return null;
 
   const root = paymentPayloadFromWebhookPayload(payload);
   const brandId = readString(root, "brand_id");
@@ -800,6 +818,14 @@ export function extractDodoPlanRevocation(env: AppEnv, payload: unknown) {
   const customerId = readString(customer, "customer_id") || null;
   const customerEmail = readString(customer, "email") || null;
   const productId = readString(root, "product_id");
+  const providerStatus = readString(root, "status").toLowerCase();
+  const immediateCancellationUpdate =
+    eventType === "subscription.updated" &&
+    (providerStatus === "cancelled" || providerStatus === "canceled" || providerStatus === "expired");
+  if (eventType === "subscription.updated" && !immediateCancellationUpdate) return null;
+  const action: DodoLifecycleAction | null = eventAction ??
+    (immediateCancellationUpdate ? "revoke" : null);
+  if (!action) return null;
   const skuMatch = productId ? resolveBillingSkuFromProviderProductId(env, productId) : null;
   const planMatch = skuMatch?.planFamily
     ? {
@@ -822,6 +848,7 @@ export function extractDodoPlanRevocation(env: AppEnv, payload: unknown) {
 
   const subscriptionId = rawSubscriptionId || eventType;
   const revokedAt =
+    (immediateCancellationUpdate ? readString(root, "cancelled_at") : "") ||
     readString(root, "updated_at") ||
     readString(root, "cancelled_at") ||
     readString(root, "created_at") ||
@@ -834,6 +861,7 @@ export function extractDodoPlanRevocation(env: AppEnv, payload: unknown) {
     userId,
     customerId,
     customerEmail: hasPlanProof ? customerEmail : null,
+    paymentId: readString(root, "payment_id") || null,
     subscriptionId,
     status: action === "payment_issue" ? eventType : readString(root, "status") || eventType,
     revokedAt,
@@ -923,9 +951,16 @@ export function extractDodoRefund(env: AppEnv, payload: unknown) {
   const paymentId = readString(root, "payment_id");
   if (!paymentId) return null;
 
-  // Partial refunds keep access; only a full refund revokes what was paid for.
-  const isPartial = readValue(root, "is_partial") === true;
-  if (isPartial) return null;
+  // `refund.succeeded` is the terminal event, but Dodo also includes the
+  // refund's current status in the payload. Never revoke access when a
+  // malformed, reordered, or provider-retried payload still says pending,
+  // failed, or review.
+  const refundStatus = readString(root, "status").toLowerCase();
+  if (refundStatus && refundStatus !== "succeeded") return null;
+
+  const isPartialValue = readValue(root, "is_partial");
+  if (typeof isPartialValue !== "boolean") return null;
+  const isPartial = isPartialValue;
 
   const refundedAt =
     readString(root, "created_at") ||
@@ -936,6 +971,7 @@ export function extractDodoRefund(env: AppEnv, payload: unknown) {
     eventType,
     paymentId,
     refundId: readString(root, "refund_id") || readString(root, "id") || null,
+    refundType: isPartial ? ("partial" as const) : ("full" as const),
     refundedAt,
     metadata: root,
   };

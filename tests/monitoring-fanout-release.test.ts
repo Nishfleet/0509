@@ -9,12 +9,14 @@ import {
   buildMonitoringWorkflowInstanceId,
   buildWatchlistExecutionIdempotencyKey,
   claimMonitoringConcurrencySlot,
+  countHeldMonitoringConcurrencySlots,
   dispatchOrchestratedWatchlistJobsBatch,
   ensureOrchestratedWatchlistRun,
   isFanoutEnabledForWorkspace,
   isMonitoringWorkflowBindingAvailable,
   renewMonitoringConcurrencySlot,
   renewOrchestratedWatchlistRunLease,
+  releaseMonitoringConcurrencySlot,
   resolveEffectiveMonitoringFanoutMaxInflight,
   resolveMonitoringConcurrencySlotLeaseMs,
   resolveMonitoringFanoutMode,
@@ -195,6 +197,71 @@ describe("monitoring fan-out release safeguards", () => {
         processingToken: token,
       }),
     ).toBe(true);
+  });
+
+  it("shares the configured cap with interactive first/manual runs", async () => {
+    const { db, sqlite } = createSqliteD1();
+    await seedSlotSchema(sqlite);
+    const env = {
+      DB: db,
+      MONITORING_FANOUT_MAX_INFLIGHT: "1",
+      MONITORING_SCHEDULED_BROWSER_MODE: "all",
+    } as never;
+
+    const first = await claimMonitoringConcurrencySlot(env, {
+      runId: "first-scan-run",
+      mode: "interactive",
+      leaseMs: 60_000,
+    });
+    expect(first.claimed).toBe(true);
+
+    const manualWhileHeld = await claimMonitoringConcurrencySlot(env, {
+      runId: "manual-refresh-run",
+      mode: "interactive",
+      leaseMs: 60_000,
+    });
+    expect(manualWhileHeld.claimed).toBe(false);
+
+    await expect(countHeldMonitoringConcurrencySlots(env)).resolves.toBe(1);
+
+    expect(await releaseMonitoringConcurrencySlot(env, { token: first.token! })).toBe(true);
+    const manualAfterRelease = await claimMonitoringConcurrencySlot(env, {
+      runId: "manual-refresh-run",
+      mode: "interactive",
+      leaseMs: 60_000,
+    });
+    expect(manualAfterRelease.claimed).toBe(true);
+    expect(await releaseMonitoringConcurrencySlot(env, { token: manualAfterRelease.token! })).toBe(true);
+    await expect(countHeldMonitoringConcurrencySlots(env)).resolves.toBe(0);
+  });
+
+  it("lets a crashed interactive run reclaim its expired lease without duplicating a live holder", async () => {
+    const { db, sqlite } = createSqliteD1();
+    await seedSlotSchema(sqlite);
+    const env = {
+      DB: db,
+      MONITORING_FANOUT_MAX_INFLIGHT: "1",
+      MONITORING_SCHEDULED_BROWSER_MODE: "all",
+    } as never;
+
+    const first = await claimMonitoringConcurrencySlot(env, {
+      runId: "crashed-interactive-run",
+      mode: "interactive",
+      leaseMs: 60_000,
+    });
+    expect(first.claimed).toBe(true);
+    sqlite
+      .prepare("UPDATE monitoring_concurrency_slot SET leased_at = ? WHERE holder_token = ?")
+      .run("2020-01-01T00:00:00.000Z", first.token!);
+
+    const reclaimed = await claimMonitoringConcurrencySlot(env, {
+      runId: "crashed-interactive-run",
+      mode: "interactive",
+      leaseMs: 60_000,
+    });
+    expect(reclaimed.claimed).toBe(true);
+    expect(reclaimed.token).not.toBe(first.token);
+    expect(await releaseMonitoringConcurrencySlot(env, { token: reclaimed.token! })).toBe(true);
   });
 
   it("fails loudly for explicit fan-out when the workflow binding is missing", async () => {

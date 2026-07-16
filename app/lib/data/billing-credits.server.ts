@@ -95,7 +95,14 @@ export async function applyDodoProofCreditGrantWithLedger(
         catalog_version,
         metadata_json
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', 'v1', ?)
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, 'active', 'v1', ?
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM dodo_webhook_event
+        WHERE event_type = 'refund.succeeded'
+          AND outcome = 'processed'
+          AND json_extract(metadata_json, '$.paymentId') = ?
+      )
       ON CONFLICT(provider_payment_id) DO NOTHING
     `).bind(
       createId(),
@@ -107,6 +114,7 @@ export async function applyDodoProofCreditGrantWithLedger(
       credits,
       input.grantedAt ?? nowIso(),
       jsonValue(input.metadata ?? {}),
+      input.providerPaymentId,
     ),
     buildDodoWebhookLedgerFinalizeStatement(db, ledger, processedAt),
   ]);

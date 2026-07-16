@@ -16,6 +16,9 @@ const session = {
 
 beforeEach(() => {
   vi.resetModules();
+  vi.doMock("~/lib/rate-limit.server", () => ({
+    enforceBillingProviderRateLimit: vi.fn().mockResolvedValue(null),
+  }));
 });
 
 afterEach(() => {
@@ -25,6 +28,7 @@ afterEach(() => {
   vi.doUnmock("~/lib/context.server");
   vi.doUnmock("~/lib/data.server");
   vi.doUnmock("~/lib/dodo-billing.server");
+  vi.doUnmock("~/lib/rate-limit.server");
 });
 
 describe("Dodo customer portal route", () => {
@@ -206,5 +210,35 @@ describe("Dodo customer portal route", () => {
       );
     }
     expect(createDodoCustomerPortalSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not open a provider portal when the mutation budget is exhausted", async () => {
+    const createDodoCustomerPortalSession = vi.fn();
+    vi.doMock("~/lib/auth.server", () => ({
+      requireWorkspaceSession: vi.fn().mockResolvedValue({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      }),
+    }));
+    vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => ({})) }));
+    vi.doMock("~/lib/data.server", () => ({
+      getUserPlanBillingInfo: vi.fn().mockResolvedValue({ plan: "starter", dodoCustomerId: "cus_123" }),
+    }));
+    vi.doMock("~/lib/dodo-billing.server", () => ({ createDodoCustomerPortalSession }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforceBillingProviderRateLimit: vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: "rate_limited" }), { status: 429 }),
+      ),
+    }));
+    const { action } = await import("~/routes/api.billing.dodo.portal");
+    const response = (await action({
+      context: {},
+      request: new Request("https://0509.io/api/billing/dodo/portal", { method: "POST" }),
+      params: {},
+    } as never).catch((error) => error)) as Response;
+    expect(response.status).toBe(429);
+    expect(createDodoCustomerPortalSession).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,15 @@
 import type { AppEnv } from "~/lib/env.server";
 import { isSecretishMemoryField, isSecretishMemoryString } from "~/lib/agent-redaction";
 import type { AgentActionAuditRecord } from "~/lib/types";
+import {
+  AtomicCustomerAgentActionBatchUnavailableError,
+  AtomicCustomerAgentActionConflictError,
+  AtomicCustomerAgentActionReplayUnavailableError,
+  AtomicCustomerAgentActionStaleWriteError,
+  runAtomicCustomerAgentAction,
+  type AtomicCustomerAgentActionName,
+  type PreparedAtomicCustomerAgentEffect,
+} from "~/lib/data/customer-api-agent.server";
 
 type JsonRecord = Record<string, unknown>;
 type SanitizeOptions = {
@@ -21,6 +30,13 @@ export class AgentActionReplayUnavailableError extends Error {
   constructor(message = "Previous agent action has not completed successfully.") {
     super(message);
     this.name = "AgentActionReplayUnavailableError";
+  }
+}
+
+export class AgentActionStaleWriteError extends Error {
+  constructor(message = "This resource changed since it was read. Reload it and retry with a new idempotency key.") {
+    super(message);
+    this.name = "AgentActionStaleWriteError";
   }
 }
 
@@ -49,6 +65,61 @@ export interface AuditedAgentActionResult<T extends JsonRecord> {
 
 export interface AuditedAgentActionOptions<T extends JsonRecord> {
   replayCompleted?: (audit: AgentActionAuditRecord) => Promise<T | null> | T | null;
+}
+
+export interface AtomicAgentActionOptions<T extends JsonRecord> {
+  requestFingerprint: string;
+  prepare: (
+    db: D1Database,
+    auditId: string,
+  ) => PreparedAtomicCustomerAgentEffect<T> | Promise<PreparedAtomicCustomerAgentEffect<T>>;
+}
+
+/**
+ * Journey 4's resource effects use the D1 batch primitive. This wrapper
+ * keeps the public error types and result redaction conventions alongside the
+ * existing audited-action helper while leaving resource SQL in its owning
+ * data module.
+ */
+export async function runAtomicAgentAction<T extends JsonRecord>(
+  env: AppEnv,
+  context: AgentActionContext & { actionName: AtomicCustomerAgentActionName },
+  options: AtomicAgentActionOptions<T>,
+): Promise<AuditedAgentActionResult<T>> {
+  try {
+    return await runAtomicCustomerAgentAction(env, {
+      userId: context.userId,
+      apiKeyId: normalizeOptionalString(context.apiKeyId),
+      actionName: context.actionName,
+      idempotencyKey: normalizeOptionalString(context.idempotencyKey) ?? "",
+      requestFingerprint: options.requestFingerprint,
+      metadata: sanitizeAgentActionMetadata(context.metadata ?? {}),
+      prepare: async (db, auditId) => {
+        const prepared = await options.prepare(db, auditId);
+        return {
+          ...prepared,
+          // The share token is part of the customer-visible result and must be
+          // retained verbatim so a retry can replay the original link.
+          result: prepared.result,
+          metadata: sanitizeAgentActionMetadata(prepared.metadata ?? {}),
+        };
+      },
+    });
+  } catch (error) {
+    if (error instanceof AtomicCustomerAgentActionConflictError) {
+      throw new AgentActionIdempotencyConflictError(error.message);
+    }
+    if (error instanceof AtomicCustomerAgentActionReplayUnavailableError) {
+      throw new AgentActionReplayUnavailableError(error.message);
+    }
+    if (error instanceof AtomicCustomerAgentActionStaleWriteError) {
+      throw new AgentActionStaleWriteError(error.message);
+    }
+    if (error instanceof AtomicCustomerAgentActionBatchUnavailableError) {
+      throw error;
+    }
+    throw error;
+  }
 }
 
 export async function runAuditedAgentAction<T extends JsonRecord>(

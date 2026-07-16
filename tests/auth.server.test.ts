@@ -368,6 +368,76 @@ describe("auth session boundary", () => {
     });
   });
 
+  it("redirects an absent or invalid session instead of treating it as an outage", async () => {
+    vi.doMock("~/lib/better-auth.server", () => ({
+      getBetterAuthSession: vi.fn().mockResolvedValue(null),
+    }));
+
+    const { requireSession } = await import("~/lib/auth.server");
+    await expect(
+      requireSession(
+        env(),
+        new Request("https://0509.io/app/billing", {
+          headers: { cookie: "better-auth.session_token=invalid" },
+        }),
+      ),
+    ).rejects.toMatchObject({ status: 302 });
+  });
+
+  it("returns a customer-safe 503 when Better Auth is unavailable", async () => {
+    const getBetterAuthSession = vi.fn().mockRejectedValue(new Error("D1 connection leaked"));
+    vi.doMock("~/lib/better-auth.server", () => ({
+      getBetterAuthSession,
+    }));
+
+    const { requireSession } = await import("~/lib/auth.server");
+    let response: Response | null = null;
+    try {
+      await requireSession(
+        env(),
+        new Request("https://0509.io/app", {
+          headers: { cookie: "__Secure-better-auth.session_token=invalid" },
+        }),
+      );
+    } catch (error) {
+      response = error as Response;
+    }
+
+    expect(getBetterAuthSession).toHaveBeenCalledTimes(1);
+    expect(response?.status).toBe(503);
+    expect(response?.statusText).toBe("Authentication temporarily unavailable");
+    expect(response?.headers.get("cache-control")).toBe("no-store");
+    expect(response?.headers.get("retry-after")).toBe("5");
+    const body = await response?.text();
+    expect(body).toContain("Authentication is temporarily unavailable");
+    expect(body).not.toContain("D1 connection leaked");
+  });
+
+  it("caches an auth outage per Request without turning it into a redirect", async () => {
+    const getBetterAuthSession = vi.fn().mockRejectedValue(new Error("backend down"));
+    vi.doMock("~/lib/better-auth.server", () => ({
+      getBetterAuthSession,
+    }));
+
+    const { getCachedOptionalSession, requireSession } = await import("~/lib/auth.server");
+    const request = new Request("https://0509.io/app", {
+      headers: { cookie: "__Secure-better-auth.session_token=invalid" },
+    });
+
+    await expect(getCachedOptionalSession(env(), request)).rejects.toThrow(
+      "Authentication is temporarily unavailable",
+    );
+    let response: Response | null = null;
+    try {
+      await requireSession(env(), request);
+    } catch (error) {
+      response = error as Response;
+    }
+
+    expect(getBetterAuthSession).toHaveBeenCalledTimes(1);
+    expect(response?.status).toBe(503);
+  });
+
   it("runs the session lookup once per Request across parallel loaders", async () => {
     const getBetterAuthSession = vi.fn().mockResolvedValue({
       session: {
@@ -1537,6 +1607,7 @@ describe("Better Auth routes", () => {
       );
       return {
         ...actual,
+        getBetterAuthSession: vi.fn().mockResolvedValue(null),
         sendBetterAuthMagicLink: vi
           .fn()
           .mockRejectedValue(new actual.BetterAuthUnknownUserError()),

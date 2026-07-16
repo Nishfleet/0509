@@ -34,12 +34,44 @@ describe("toPublicDeliveryTarget", () => {
 
     expect(toPublicDeliveryTarget(target)).toMatchObject({
       channel: "slack",
-      targetValue: "slack:abc",
+      targetValue: "Connected Slack workspace",
+      providerIdentifier: null,
       metadata: {
         displayName: "Growth alerts",
       },
     });
     expect(JSON.stringify(toPublicDeliveryTarget(target))).not.toContain("encryptedWebhookUrl");
     expect(JSON.stringify(toPublicDeliveryTarget(target))).not.toContain("ciphertext");
+  });
+
+  it("uses only the currently verified account email for email targets", () => {
+    const target = {
+      id: "email-target-1",
+      userId: "user-1",
+      watchlistId: "watchlist-1",
+      channel: "email" as const,
+      targetValue: "owner@example.com",
+      validationStatus: "validated" as const,
+      isValidated: true,
+      isOptedIn: true,
+      optInSource: "watchlist_settings",
+      optedInAt: null,
+      isPaused: false,
+      pausedAt: null,
+      optedOutAt: null,
+      templateEligible: true,
+      lastSuccessfulDeliveryAt: null,
+      lastSuccessfulAttemptId: null,
+      providerIdentifier: "provider-secret",
+      metadata: {},
+      createdAt: "2026-06-06T00:00:00.000Z",
+      updatedAt: "2026-06-06T00:00:00.000Z",
+    } satisfies DeliveryTargetRecord;
+
+    expect(toPublicDeliveryTarget(target, { verifiedAccountEmail: "member@example.com" })).toMatchObject({
+      targetValue: "member@example.com",
+      providerIdentifier: null,
+    });
+    expect(JSON.stringify(toPublicDeliveryTarget(target))).not.toContain("owner@example.com");
   });
 });

@@ -15,7 +15,7 @@
 Branch: `codex/final-self-serve-ga-hardening-20260625`
 Base: `ed109a9`
 
-Release status:
+Historical release status (2026-06-27; not current Gate A–C truth; current release-ready count 0/6, all six journeys active, four frozen candidates blocked):
 
 - PR #251 merged to `main` as `629fb14`; local `main` and `origin/main` were synced after merge.
 - Compatible Worker was deployed to the primary `.io` domains and `.in` redirect compatibility domains; exact provider deployment id omitted.

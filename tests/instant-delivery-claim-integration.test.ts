@@ -48,8 +48,35 @@ const event = {
 
 function createAttemptTable(harness: ReturnType<typeof createSqliteD1>) {
   harness.sqlite.exec(`
-    CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL, emailVerified INTEGER NOT NULL);
-    INSERT INTO user (id, emailVerified) VALUES ('user-1', 1);
+    CREATE TABLE user (
+      id TEXT PRIMARY KEY NOT NULL,
+      email TEXT NOT NULL,
+      name TEXT,
+      emailVerified INTEGER NOT NULL
+    );
+    INSERT INTO user (id, email, name, emailVerified)
+    VALUES ('user-1', 'owner@example.com', 'Owner', 1);
+    CREATE TABLE delivery_target (
+      id TEXT PRIMARY KEY NOT NULL,
+      user_id TEXT NOT NULL,
+      channel TEXT NOT NULL,
+      target_value TEXT NOT NULL,
+      opt_in_source TEXT,
+      validation_status TEXT NOT NULL,
+      is_validated INTEGER NOT NULL,
+      is_opted_in INTEGER NOT NULL,
+      is_paused INTEGER NOT NULL,
+      paused_at TEXT,
+      opted_out_at TEXT,
+      updated_at TEXT NOT NULL
+    );
+    INSERT INTO delivery_target (
+      id, user_id, channel, target_value, opt_in_source, validation_status,
+      is_validated, is_opted_in, is_paused, paused_at, opted_out_at, updated_at
+    ) VALUES (
+      'email-target-1', 'user-1', 'email', 'owner@example.com', 'account_email',
+      'validated', 1, 1, 0, NULL, NULL, '2026-07-15T00:00:00.000Z'
+    );
     CREATE TABLE delivery_attempt (
       id TEXT PRIMARY KEY NOT NULL,
       user_id TEXT NOT NULL,

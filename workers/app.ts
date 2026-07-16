@@ -151,7 +151,14 @@ export default {
           }),
         ).then(
           (result) => {
-            if (result.redispatched > 0 || result.recovered > 0 || result.cancelled > 0) {
+            if (
+              result.redispatched > 0 ||
+              result.recovered > 0 ||
+              result.cancelled > 0 ||
+              result.firstScans.redispatched > 0 ||
+              result.firstScans.cancelled > 0 ||
+              result.firstScans.failures > 0
+            ) {
               console.log("monitoring fanout reconciliation completed", result);
             }
           },
@@ -175,10 +182,17 @@ export default {
       // growing forever.
       ctx.waitUntil(
         runRetentionSweep(env).then(
-          (result) => {
+          async (result) => {
             const total = Object.values(result.deleted).reduce((sum, count) => sum + count, 0);
             if (total > 0) {
               console.log("retention sweep completed", result.deleted);
+            }
+            if (result.failedSteps.length > 0) {
+              await reportScheduledTaskFailure(
+                env,
+                "retention_sweep",
+                new Error(`Retention sweep failed for steps: ${result.failedSteps.join(", ")}`),
+              );
             }
           },
           (error) => reportScheduledTaskFailure(env, "retention_sweep", error),

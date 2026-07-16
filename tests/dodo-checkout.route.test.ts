@@ -16,6 +16,9 @@ const session = {
 
 beforeEach(() => {
   vi.resetModules();
+  vi.doMock("~/lib/rate-limit.server", () => ({
+    enforceBillingProviderRateLimit: vi.fn().mockResolvedValue(null),
+  }));
 });
 
 afterEach(() => {
@@ -27,6 +30,7 @@ afterEach(() => {
   vi.doUnmock("~/lib/dodo-billing.server");
   vi.doUnmock("~/lib/dodo-pricing.server");
   vi.doUnmock("~/lib/plan.server");
+  vi.doUnmock("~/lib/rate-limit.server");
   vi.doUnmock("~/lib/workspace.server");
 });
 
@@ -645,5 +649,24 @@ describe("Dodo checkout route", () => {
         }),
       }),
     );
+  });
+
+  it("fails closed before any Dodo call when the provider budget is unavailable", async () => {
+    const { createDodo0509CheckoutSession, validateDodo0509PlanCheckout } =
+      mockCheckoutDependencies("free");
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforceBillingProviderRateLimit: vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: "rate_limit_unavailable" }), { status: 503 }),
+      ),
+    }));
+    const { action } = await import("~/routes/api.billing.dodo.checkout");
+    const response = (await action({
+      context: {},
+      request: checkoutRequest({ plan: "starter", cycle: "monthly" }),
+      params: {},
+    } as never).catch((error) => error)) as Response;
+    expect(response.status).toBe(503);
+    expect(validateDodo0509PlanCheckout).not.toHaveBeenCalled();
+    expect(createDodo0509CheckoutSession).not.toHaveBeenCalled();
   });
 });

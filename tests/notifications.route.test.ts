@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createElement, type ReactNode } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
 vi.mock("~/lib/plan.server", () => ({
   getUserPlan: vi.fn().mockResolvedValue("agency"),
@@ -42,6 +44,26 @@ function createContext(env = {}) {
 
 function fakeSlackWebhookUrl() {
   return new URL(["services", "TSTUB", "BSTUB", "short"].join("/"), "https://hooks.slack.com/").toString();
+}
+
+type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
+type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
+
+async function mockRouter(loaderData: unknown, actionData?: unknown) {
+  vi.doMock("react-router", async () => {
+    const actual = await vi.importActual<typeof import("react-router")>("react-router");
+    const React = await import("react");
+
+    return {
+      ...actual,
+      Form: ({ children, ...props }: MockFormProps) => React.createElement("form", props, children),
+      Link: ({ children, to, ...props }: MockLinkProps) =>
+        React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+      useActionData: vi.fn().mockReturnValue(actionData),
+      useLoaderData: vi.fn().mockReturnValue(loaderData),
+      useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
+    };
+  });
 }
 
 beforeEach(async () => {
@@ -171,6 +193,10 @@ describe("notifications route", () => {
     expect(result).toEqual({
       emailDeliveryReady: true,
       showSlackDelivery: true,
+      slackDelivery: {
+        plan: "agency",
+        entitled: true,
+      },
       canManageWhatsAppDelivery: true,
       slackTargets: [
         {
@@ -205,6 +231,77 @@ describe("notifications route", () => {
     expect(JSON.stringify(result)).not.toContain("+919999999999");
     expect(JSON.stringify(result)).not.toContain("whatsapp-secret");
   });
+
+  it.each(["free", "scout"] as const)(
+    "returns effective non-entitled Slack access while retaining legacy target metadata for %s",
+    async (plan) => {
+      vi.resetModules();
+      vi.doMock("~/lib/auth.server", () => ({
+        requireWorkspaceSession: vi.fn().mockResolvedValue({
+          session,
+          workspaceUserId: session.user.id,
+          isMember: false,
+          ownerName: null,
+        }),
+      }));
+      vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => ({ DB: {} })) }));
+      vi.doMock("~/lib/plan.server", () => ({
+        getUserPlan: vi.fn().mockResolvedValue("agency"),
+        getEffectiveWorkspacePlan: vi.fn().mockResolvedValue(plan),
+      }));
+      vi.doMock("~/lib/ga-customer-surface", () => ({
+        isSlackDeliveryCustomerFacing: vi.fn(() => true),
+        isWhatsAppDeliveryCustomerFacing: vi.fn(() => false),
+        slackDeliveryUnavailableMessage: vi.fn(
+          () => "Slack delivery is not available at general availability yet. Use email delivery.",
+        ),
+        whatsappDeliveryUnavailableMessage: vi.fn(
+          () => "WhatsApp delivery is not available at general availability yet. Use email delivery.",
+        ),
+      }));
+      vi.doMock("~/lib/data.server", () => ({
+        listDeliveryTargets: vi.fn().mockResolvedValue([
+          {
+            id: "legacy-slack-1",
+            channel: "slack",
+            targetValue: "https://hooks.slack.com/services/SECRET",
+            validationStatus: "validated",
+            isValidated: true,
+            isOptedIn: true,
+            isPaused: true,
+            optedOutAt: null,
+            templateEligible: true,
+            lastSuccessfulDeliveryAt: null,
+            metadata: { displayName: "Legacy growth alerts" },
+            createdAt: "2026-06-01T00:00:00.000Z",
+          },
+        ]),
+      }));
+      vi.doMock("~/lib/env.server", () => ({
+        isCustomerWhatsAppReady: vi.fn(() => false),
+        isWhatsAppProviderConfigured: vi.fn(() => false),
+        isWhatsAppWebhookConfigured: vi.fn(() => false),
+      }));
+      vi.doMock("~/lib/slack.server", () => ({
+        slackTargetDisplayName: vi.fn((target) => target.metadata.displayName),
+      }));
+      vi.doMock("~/lib/whatsapp.server", () => ({
+        whatsappTargetDisplayName: vi.fn(() => "Legacy WhatsApp target"),
+      }));
+
+      const { loader } = await import("~/routes/app.notifications");
+      const result = await loader({
+        context: createContext({ DB: {} }),
+        request: new Request("http://localhost/app/notifications"),
+      } as never);
+
+      expect(result.slackDelivery).toEqual({ plan, entitled: false });
+      expect(result.slackTargets).toEqual([
+        expect.objectContaining({ id: "legacy-slack-1", displayName: "Legacy growth alerts", isPaused: true }),
+      ]);
+      expect(JSON.stringify(result)).not.toContain("hooks.slack.com");
+    },
+  );
 
   it.each([
     "save-slack-webhook",
@@ -692,4 +789,154 @@ describe("notifications route", () => {
       message: "Slack delivery resumed.",
     });
   });
+
+  it.each(["free", "scout"] as const)(
+    "keeps %s Slack setup read-only while preserving legacy target metadata",
+    async (plan) => {
+      await mockRouter({
+        emailDeliveryReady: true,
+        showSlackDelivery: true,
+        slackDelivery: { plan, entitled: false },
+        canManageWhatsAppDelivery: false,
+        slackTargets: [
+          {
+            id: "legacy-slack-1",
+            displayName: "Legacy growth alerts",
+            isPaused: true,
+            lastSuccessfulDeliveryAt: "2026-06-07T00:00:00.000Z",
+            createdAt: "2026-06-01T00:00:00.000Z",
+          },
+        ],
+        whatsappTargets: [],
+        whatsappDelivery: {
+          providerConfigured: false,
+          customerReady: false,
+          webhookConfigured: false,
+          configuredTargets: 0,
+          usableTargets: 0,
+          lastSuccessfulDeliveryAt: null,
+        },
+      });
+
+      const { default: NotificationsRoute } = await import("~/routes/app.notifications");
+      const markup = renderToStaticMarkup(createElement(NotificationsRoute));
+
+      expect(markup).toContain("Slack delivery is included in Starter and Agency plans.");
+      expect(markup).toContain("View plans");
+      expect(markup.match(/View plans/g)).toHaveLength(1);
+      expect(markup).toContain("Legacy growth alerts");
+      expect(markup).toContain("Paused");
+      expect(markup).not.toContain("slackWebhookUrl");
+      expect(markup).not.toContain("Save Slack delivery");
+      expect(markup).not.toContain("value=\"pause-slack-webhook\"");
+      expect(markup).not.toContain("value=\"resume-slack-webhook\"");
+    },
+  );
+
+  it("keeps the entitled Slack setup flow unchanged", async () => {
+    await mockRouter({
+      emailDeliveryReady: true,
+      showSlackDelivery: true,
+      slackDelivery: { plan: "starter", entitled: true },
+      canManageWhatsAppDelivery: false,
+      slackTargets: [
+        {
+          id: "slack-target-1",
+          displayName: "Growth alerts",
+          isPaused: false,
+          lastSuccessfulDeliveryAt: null,
+          createdAt: "2026-06-01T00:00:00.000Z",
+        },
+      ],
+      whatsappTargets: [],
+      whatsappDelivery: {
+        providerConfigured: false,
+        customerReady: false,
+        webhookConfigured: false,
+        configuredTargets: 0,
+        usableTargets: 0,
+        lastSuccessfulDeliveryAt: null,
+      },
+    });
+
+    const { default: NotificationsRoute } = await import("~/routes/app.notifications");
+    const markup = renderToStaticMarkup(createElement(NotificationsRoute));
+
+    expect(markup).toContain("name=\"slackWebhookUrl\"");
+    expect(markup).toContain("Save Slack delivery");
+    expect(markup).toContain("value=\"pause-slack-webhook\"");
+  });
+
+  it.each(["free", "scout"] as const)(
+    "rejects every Slack mutation intent for %s before provider or persistence calls",
+    async (plan) => {
+      vi.resetModules();
+      const saveSlackWebhookTarget = vi.fn();
+      const pauseSlackWebhookTarget = vi.fn();
+      const resumeSlackWebhookTarget = vi.fn();
+      const getWorkspaceDeliveryConfig = vi.fn();
+      const upsertWorkspaceDeliveryConfig = vi.fn();
+
+      vi.doMock("~/lib/auth.server", () => ({
+        requireSession: vi.fn().mockResolvedValue(session),
+        requireWorkspaceSession: vi.fn().mockResolvedValue({
+          session,
+          workspaceUserId: session.user.id,
+          isMember: false,
+          ownerName: null,
+        }),
+      }));
+      vi.doMock("~/lib/context.server", () => ({
+        getEnv: vi.fn(() => ({ DB: {} })),
+      }));
+      vi.doMock("~/lib/ga-customer-surface", () => ({
+        isSlackDeliveryCustomerFacing: vi.fn(() => true),
+        isWhatsAppDeliveryCustomerFacing: vi.fn(() => false),
+        slackDeliveryUnavailableMessage: vi.fn(() => "Slack unavailable."),
+        whatsappDeliveryUnavailableMessage: vi.fn(() => "WhatsApp unavailable."),
+      }));
+      vi.doMock("~/lib/plan.server", () => ({
+        getUserPlan: vi.fn().mockResolvedValue(plan),
+        getEffectiveWorkspacePlan: vi.fn().mockResolvedValue(plan),
+      }));
+      vi.doMock("~/lib/slack.server", () => ({
+        saveSlackWebhookTarget,
+        pauseSlackWebhookTarget,
+        resumeSlackWebhookTarget,
+      }));
+      vi.doMock("~/lib/data.server", () => ({
+        getWorkspaceDeliveryConfig,
+        legacyWorkspaceDeliveryDefaults: vi.fn(),
+        upsertWorkspaceDeliveryConfig,
+      }));
+
+      const { action } = await import("~/routes/app.notifications");
+      for (const intent of ["save-slack-webhook", "pause-slack-webhook", "resume-slack-webhook"]) {
+        const formData = new FormData();
+        formData.set("intent", intent);
+        formData.set("slackWebhookUrl", fakeSlackWebhookUrl());
+        formData.set("slackDestinationName", "Sales");
+        formData.set("slackTargetId", "slack-target-1");
+
+        const result = await action({
+          context: createContext({ DB: {} }),
+          request: new Request("http://localhost/app/notifications", {
+            method: "POST",
+            body: formData,
+          }),
+        } as never);
+
+        expect(result).toEqual({
+          ok: false,
+          message: "Slack delivery is included in Starter and Agency plans.",
+        });
+      }
+
+      expect(saveSlackWebhookTarget).not.toHaveBeenCalled();
+      expect(pauseSlackWebhookTarget).not.toHaveBeenCalled();
+      expect(resumeSlackWebhookTarget).not.toHaveBeenCalled();
+      expect(getWorkspaceDeliveryConfig).not.toHaveBeenCalled();
+      expect(upsertWorkspaceDeliveryConfig).not.toHaveBeenCalled();
+    },
+  );
 });

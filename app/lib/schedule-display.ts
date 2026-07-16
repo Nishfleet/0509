@@ -1,14 +1,20 @@
 import { safeTimeZone } from "~/lib/safe-timezone";
 
-// Customer-facing scan-schedule expectations. Regular scans run every three
-// hours; Scout joins the six-hour slots. Labels default to UTC (the product is
-// global-first) and accept a workspace timezone so "when will this update?"
-// always has an answer in the customer's terms.
+// Customer-facing scan-schedule expectations. Paid plans run regular scans;
+// free only has a one-time activation scan and therefore has no recurring slot.
+// Labels default to UTC and accept a workspace timezone so "when will this
+// update?" always has an answer in the customer's terms.
 
 const THREE_HOUR_SCAN_UTC_HOURS = [0, 3, 6, 9, 12, 15, 18, 21] as const;
 const SIX_HOUR_SCAN_UTC_HOURS = [0, 6, 12, 18] as const;
 
-export function nextScheduledScanAt(plan: string, now: Date = new Date()): Date {
+export function nextScheduledScanAt(plan: "free", now?: Date): null;
+export function nextScheduledScanAt(plan: string, now?: Date): Date;
+export function nextScheduledScanAt(plan: string, now: Date = new Date()): Date | null {
+  if (plan === "free") {
+    return null;
+  }
+
   const scanHours = plan === "scout" ? SIX_HOUR_SCAN_UTC_HOURS : THREE_HOUR_SCAN_UTC_HOURS;
 
   for (let dayOffset = 0; dayOffset <= 1; dayOffset += 1) {
@@ -47,6 +53,9 @@ export function formatNextScanLabel(
   timeZone?: string | null,
 ): string {
   const next = nextScheduledScanAt(plan, now);
+  if (!next) {
+    return "No recurring schedule — activation-only scan; paid plans include recurring monitoring.";
+  }
 
   return new Intl.DateTimeFormat("en-GB", {
     weekday: "short",

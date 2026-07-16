@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { buildCanaryUrl, parseArgs } from "../scripts/launch-readiness-canary.mjs";
 
 function createContext(env = {}) {
   return {
@@ -28,6 +29,27 @@ function createDbWithTarget() {
                           target_label: "Nykaa",
                         },
                       ] as T[])
+                    : ([] as T[]),
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+}
+
+function createDbWithUserOnly() {
+  return {
+    prepare() {
+      return {
+        bind(email: string) {
+          return {
+            async all<T>() {
+              return {
+                results:
+                  email === "owner@example.com"
+                    ? ([{ user_id: "user-1" }] as T[])
                     : ([] as T[]),
               };
             },
@@ -104,6 +126,92 @@ describe("launch readiness canary route", () => {
     });
   }, 10_000);
 
+  it.each([
+    "http://0509.io/api/launch-readiness/canary",
+    "https://preview.0509.io/api/launch-readiness/canary",
+    "https://www.0509.io/api/launch-readiness/canary",
+    "https://0509.io.evil.example/api/launch-readiness/canary",
+  ])("rejects a valid token on non-canonical origin %s before reading the database", async (url) => {
+    const prepare = vi.fn();
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: { prepare },
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+
+    await expect(
+      action({
+        context: createContext(),
+        request: new Request(url, {
+          method: "POST",
+          headers: { "x-0509-canary-token": "secret-token" },
+        }),
+      } as never),
+    ).rejects.toMatchObject({ status: 404 });
+    expect(prepare).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "https://0509.io:443/api/launch-readiness/canary",
+    "https://user:pass@0509.io/api/launch-readiness/canary",
+  ])("rejects non-canonical raw request authority %s before reading the database", async (url) => {
+    const prepare = vi.fn();
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: { prepare },
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+
+    await expect(
+      action({
+        context: createContext(),
+        request: {
+          url,
+          method: "POST",
+          headers: new Headers({ "x-0509-canary-token": "secret-token" }),
+        },
+      } as never),
+    ).rejects.toMatchObject({ status: 404 });
+    expect(prepare).not.toHaveBeenCalled();
+  });
+
+  it("rejects non-POST canary requests before reading the target", async () => {
+    const prepare = vi.fn();
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: { prepare },
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "GET",
+        headers: { "x-0509-canary-token": "secret-token" },
+      }),
+    } as never);
+
+    expect(response.status).toBe(405);
+    expect(response.headers.get("allow")).toBe("POST");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      blocker: "canary_requires_post",
+    });
+    expect(prepare).not.toHaveBeenCalled();
+  });
+
   it("creates fresh monitoring, proof, digest, and delivery signals", async () => {
     const createWatchlistRun = vi.fn().mockResolvedValue("run-1");
     const finishWatchlistRun = vi.fn().mockResolvedValue(undefined);
@@ -122,7 +230,7 @@ describe("launch readiness canary route", () => {
           status: "sent",
           targetValue: "owner@example.com",
           providerMessageId: "email-1",
-          errorMessage: null,
+          errorMessage: "raw provider failure detail",
           deliveredAt: new Date().toISOString(),
         },
       ],
@@ -161,6 +269,10 @@ describe("launch readiness canary route", () => {
       }),
     } as never);
 
+    const responseBody = await response.clone().json();
+    expect(JSON.stringify(responseBody)).not.toContain("owner@example.com");
+    expect(JSON.stringify(responseBody)).not.toContain("email-1");
+    expect(JSON.stringify(responseBody)).not.toContain("raw provider failure detail");
     await expect(response.json()).resolves.toMatchObject({
       ok: true,
       blockers: [],
@@ -212,6 +324,250 @@ describe("launch readiness canary route", () => {
         status: "succeeded",
       }),
     );
+  });
+
+  it("rejects unsupported proof providers before creating canary evidence", async () => {
+    const createWatchlistRun = vi.fn();
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: createDbWithTarget(),
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({ createWatchlistRun }));
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/api/launch-readiness/canary?proofProvider=unknown", {
+        method: "POST",
+        headers: { "x-0509-canary-token": "secret-token" },
+      }),
+    } as never);
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      blocker: "unsupported_proof_provider",
+    });
+    expect(createWatchlistRun).not.toHaveBeenCalled();
+  });
+
+  it("rejects unsupported proof providers in the CLI before sending a request", () => {
+    expect(() => parseArgs(["--proof-provider", "unknown"])).toThrow(
+      "Unsupported launch proof provider",
+    );
+    expect(() => buildCanaryUrl({
+      baseUrl: "https://0509.io",
+      proofProvider: "unknown",
+      requireSlack: false,
+      requireWhatsApp: false,
+    })).toThrow("Unsupported launch proof provider");
+  });
+
+  it("runs cleanup only for an explicit bounded post-evidence request", async () => {
+    const cleanupLaunchReadinessCanary = vi.fn().mockResolvedValue({
+      cleaned: true,
+      preservedProofCaptureId: "proof-1",
+      deleted: {
+        deliveryAttempts: 1,
+        digestDeliveries: 1,
+        digestItems: 1,
+        watchEvents: 1,
+        digestRuns: 1,
+        watchlistRuns: 1,
+      },
+    });
+
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: createDbWithTarget(),
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({ cleanupLaunchReadinessCanary }));
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-0509-canary-operation": "cleanup",
+          "x-0509-canary-token": "secret-token",
+        },
+        body: JSON.stringify({ runId: "run-1", digestRunId: "digest-1", proofCaptureId: "proof-1" }),
+      }),
+    } as never);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      mode: "cleanup",
+      cleanupTruth: expect.stringContaining("proof capture, proof target, capture artifacts"),
+      cleanup: {
+        cleaned: true,
+        preservedProofCaptureId: "proof-1",
+      },
+    });
+    expect(cleanupLaunchReadinessCanary).toHaveBeenCalledWith(expect.anything(), {
+      ownerUserId: "user-1",
+      runId: "run-1",
+      digestRunId: "digest-1",
+      proofCaptureId: "proof-1",
+    });
+  });
+
+  it("derives cleanup ownership from the configured user without an active watchlist", async () => {
+    const cleanupLaunchReadinessCanary = vi.fn().mockResolvedValue({
+      cleaned: true,
+      preservedProofCaptureId: "proof-1",
+      deleted: {
+        deliveryAttempts: 1,
+        digestDeliveries: 1,
+        digestItems: 1,
+        watchEvents: 1,
+        digestRuns: 1,
+        watchlistRuns: 1,
+      },
+    });
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: createDbWithUserOnly(),
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({ cleanupLaunchReadinessCanary }));
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-0509-canary-operation": "cleanup",
+          "x-0509-canary-token": "secret-token",
+        },
+        body: JSON.stringify({ runId: "run-1", digestRunId: "digest-1", proofCaptureId: "proof-1" }),
+      }),
+    } as never);
+
+    expect(response.status).toBe(200);
+    expect(cleanupLaunchReadinessCanary).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      ownerUserId: "user-1",
+    }));
+  });
+
+  it("rejects malformed cleanup input without calling the cleanup leaf", async () => {
+    const cleanupLaunchReadinessCanary = vi.fn();
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: createDbWithTarget(),
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({ cleanupLaunchReadinessCanary }));
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const requests = [
+      new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "POST",
+        headers: { "x-0509-canary-operation": "cleanup", "x-0509-canary-token": "secret-token" },
+        body: JSON.stringify({ runId: "run-1", digestRunId: "digest-1", proofCaptureId: "proof-1" }),
+      }),
+      new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-0509-canary-operation": "cleanup",
+          "x-0509-canary-token": "secret-token",
+        },
+        body: JSON.stringify({ runId: "run-1", digestRunId: "digest-1", proofCaptureId: "proof-1", ownerUserId: "user-1" }),
+      }),
+      new Request("https://0509.io/api/launch-readiness/canary?runId=run-1", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-0509-canary-operation": "cleanup",
+          "x-0509-canary-token": "secret-token",
+        },
+        body: JSON.stringify({ runId: "run-1", digestRunId: "digest-1", proofCaptureId: "proof-1" }),
+      }),
+      new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-0509-canary-operation": "cleanup",
+          "x-0509-canary-token": "secret-token",
+        },
+        body: JSON.stringify({ runId: "x".repeat(5_000), digestRunId: "digest-1", proofCaptureId: "proof-1" }),
+      }),
+    ];
+
+    for (const request of requests) {
+      const response = await action({ context: createContext(), request } as never);
+      expect(response.status).toBe(400);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+    }
+    expect(cleanupLaunchReadinessCanary).not.toHaveBeenCalled();
+  });
+
+  it("reports cleanup no-ops and failures without raw errors or recipient data", async () => {
+    const cleanupLaunchReadinessCanary = vi.fn().mockResolvedValue({
+      cleaned: false,
+      reason: "shared_rows_present",
+      preservedProofCaptureId: null,
+      deleted: {
+        deliveryAttempts: 0,
+        digestDeliveries: 0,
+        digestItems: 0,
+        watchEvents: 0,
+        digestRuns: 0,
+        watchlistRuns: 0,
+      },
+    });
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: createDbWithTarget(),
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({ cleanupLaunchReadinessCanary }));
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const request = () =>
+      new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-0509-canary-operation": "cleanup",
+          "x-0509-canary-token": "secret-token",
+        },
+        body: JSON.stringify({ runId: "run-1", digestRunId: "digest-1", proofCaptureId: "proof-1" }),
+      });
+
+    const noOp = await action({ context: createContext(), request: request() } as never);
+    expect(noOp.status).toBe(409);
+    const noOpBody = await noOp.text();
+    expect(noOpBody).toContain("shared_rows_present");
+    expect(noOpBody).toContain("proof capture, proof target, capture artifacts");
+    expect(noOpBody).not.toContain("owner@example.com");
+
+    cleanupLaunchReadinessCanary.mockRejectedValueOnce(new Error("raw cleanup sentinel"));
+    const failure = await action({ context: createContext(), request: request() } as never);
+    expect(failure.status).toBe(500);
+    const failureBody = await failure.text();
+    expect(failureBody).toContain("cleanup_failed");
+    expect(failureBody).not.toContain("raw cleanup sentinel");
+    expect(failureBody).not.toContain("owner@example.com");
   });
 
   it("fails when WhatsApp proof is required but no WhatsApp delivery is sent", async () => {
@@ -281,7 +637,7 @@ describe("launch readiness canary route", () => {
     );
   });
 
-  it("passes WhatsApp-required canary when a customer WhatsApp delivery is sent", async () => {
+  it("requires reconciled WhatsApp delivery before the required canary passes", async () => {
     const deliverWeeklyDigest = vi.fn().mockResolvedValue({
       attempts: 2,
       channels: ["email", "whatsapp"],
@@ -297,6 +653,7 @@ describe("launch readiness canary route", () => {
         {
           channel: "whatsapp",
           status: "sent",
+          webhookStatus: "pending",
           targetValue: "+919999999999",
           providerMessageId: "wamid.123",
           errorMessage: null,
@@ -338,15 +695,52 @@ describe("launch readiness canary route", () => {
       }),
     } as never);
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(503);
     await expect(response.json()).resolves.toMatchObject({
-      ok: true,
-      blockers: [],
+      ok: false,
+      blockers: ["no_whatsapp_digest_sent"],
       whatsappDelivery: {
         required: true,
-        sent: true,
+        sent: false,
         lane: "customer",
       },
+    });
+
+    deliverWeeklyDigest.mockResolvedValueOnce({
+      attempts: 2,
+      channels: ["email", "whatsapp"],
+      details: [
+        {
+          channel: "email",
+          status: "sent",
+          targetValue: "owner@example.com",
+          providerMessageId: "email-1",
+          errorMessage: null,
+          deliveredAt: new Date().toISOString(),
+        },
+        {
+          channel: "whatsapp",
+          status: "sent",
+          webhookStatus: "delivered",
+          targetValue: "+919999999999",
+          providerMessageId: "wamid.123",
+          errorMessage: null,
+          deliveredAt: new Date().toISOString(),
+        },
+      ],
+    });
+    const reconciledResponse = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/api/launch-readiness.canary?requireWhatsApp=true", {
+        method: "POST",
+        headers: { "x-0509-canary-token": "secret-token" },
+      }),
+    } as never);
+    expect(reconciledResponse.status).toBe(200);
+    await expect(reconciledResponse.json()).resolves.toMatchObject({
+      ok: true,
+      blockers: [],
+      whatsappDelivery: { required: true, sent: true, lane: "customer" },
     });
     expect(deliverWeeklyDigest).toHaveBeenCalledWith(
       expect.anything(),
@@ -552,7 +946,7 @@ describe("launch readiness canary route", () => {
       proofCaptureId: "proof-browserless",
       proof: {
         captureMethod: "browser_render",
-        renderProvider: "browserless_bql",
+        renderStatus: "rendered",
       },
     });
     expect(createProofCapture).toHaveBeenCalledWith(

@@ -5,6 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 const requiredSupportFiles = [
   "scripts/d1-backup-to-r2.mjs",
   "scripts/d1-backup.mjs",
+  "scripts/d1-restore-transform.mjs",
   "wrangler.jsonc",
 ];
 const migrationsDir = resolve("migrations");

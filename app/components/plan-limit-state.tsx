@@ -14,7 +14,7 @@ export function PlanLimitState({
   limit,
 }: PlanLimitStateProps) {
   return (
-    <div className="f9-dash-state f9-dash-state-limit" role="status">
+    <div aria-live="polite" className="f9-dash-state f9-dash-state-limit" role="status">
       <h2>{title}</h2>
       <p>
         {message}

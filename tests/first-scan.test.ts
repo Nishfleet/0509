@@ -65,7 +65,7 @@ describe("queueFirstWatchlistScan", () => {
     const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
     const waitUntil = vi.fn();
 
-    const queued = queueFirstWatchlistScan(
+    const queued = await queueFirstWatchlistScan(
       {} as never,
       { waitUntil } as never,
       watchlist as never,
@@ -121,7 +121,7 @@ describe("queueFirstWatchlistScan", () => {
       const harness = await setupCapHarness({ plan: "free", recentRuns: 3 });
       const waitUntil = vi.fn();
 
-      const queued = harness.queueFirstWatchlistScan(
+      const queued = await harness.queueFirstWatchlistScan(
         {} as never,
         { waitUntil } as never,
         watchlist as never,
@@ -147,7 +147,7 @@ describe("queueFirstWatchlistScan", () => {
       const harness = await setupCapHarness({ plan: "free", recentRuns: 0 });
       const waitUntil = vi.fn();
 
-      const queued = harness.queueFirstWatchlistScan(
+      const queued = await harness.queueFirstWatchlistScan(
         {} as never,
         { waitUntil } as never,
         watchlist as never,
@@ -167,7 +167,7 @@ describe("queueFirstWatchlistScan", () => {
         const harness = await setupCapHarness({ plan, recentRuns: 50 });
         const waitUntil = vi.fn();
 
-        const queued = harness.queueFirstWatchlistScan(
+        const queued = await harness.queueFirstWatchlistScan(
           {} as never,
           { waitUntil } as never,
           watchlist as never,
@@ -189,14 +189,14 @@ describe("queueFirstWatchlistScan", () => {
     const waitUntil = vi.fn();
 
     expect(
-      queueFirstWatchlistScan(
+      await queueFirstWatchlistScan(
         {} as never,
         { waitUntil } as never,
         { ...watchlist, lastScannedAt: "2026-06-09T04:00:00.000Z" } as never,
       ),
     ).toBe(false);
-    expect(queueFirstWatchlistScan({} as never, undefined, watchlist as never)).toBe(false);
-    expect(queueFirstWatchlistScan({} as never, { waitUntil } as never, null)).toBe(false);
+    await expect(queueFirstWatchlistScan({} as never, undefined, watchlist as never)).resolves.toBe(false);
+    await expect(queueFirstWatchlistScan({} as never, { waitUntil } as never, null)).resolves.toBe(false);
     expect(waitUntil).not.toHaveBeenCalled();
   });
 });

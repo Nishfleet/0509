@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   enforceAuthenticatedSearchRateLimit,
+  enforceBillingProviderRateLimit,
   enforcePublicSearchRateLimit,
   enforceRequestRateLimit,
   enforceSearchSelectionRateLimit,
@@ -320,6 +321,86 @@ describe("enforceSearchSelectionRateLimit", () => {
   });
 });
 
+describe("enforceBillingProviderRateLimit", () => {
+  it("keys the shared budget by workspace owner across rotating IPs and user agents", async () => {
+    const env = { DB: createFakeD1() } as unknown as AppEnv;
+    for (let index = 0; index < 5; index += 1) {
+      await expect(
+        enforceBillingProviderRateLimit(
+          new Request("https://0509.io/api/billing/dodo/checkout", {
+            headers: {
+              "cf-connecting-ip": `203.0.113.${index}`,
+              "user-agent": `rotating-${index}`,
+            },
+          }),
+          env,
+          "owner-1",
+          "mutation",
+        ),
+      ).resolves.toBeNull();
+    }
+    await expect(
+      enforceBillingProviderRateLimit(
+        new Request("https://0509.io/api/billing/dodo/portal", {
+          headers: { "cf-connecting-ip": "198.51.100.20", "user-agent": "fresh" },
+        }),
+        env,
+        "owner-1",
+        "mutation",
+      ),
+    ).resolves.toMatchObject({ status: 429 });
+    await expect(
+      enforceBillingProviderRateLimit(
+        new Request("https://0509.io/api/billing/dodo/portal", {
+          headers: { "cf-connecting-ip": "198.51.100.20", "user-agent": "fresh" },
+        }),
+        env,
+        "owner-2",
+        "mutation",
+      ),
+    ).resolves.toBeNull();
+  });
+
+  it("uses one atomic claim per request under concurrency", async () => {
+    const env = { DB: createFakeD1() } as unknown as AppEnv;
+    const results = await Promise.all(
+      Array.from({ length: 8 }, (_, index) =>
+        enforceBillingProviderRateLimit(
+          new Request("https://0509.io/api/billing/dodo/checkout", {
+            headers: { "cf-connecting-ip": `203.0.113.${index}` },
+          }),
+          env,
+          "owner-concurrent",
+          "mutation",
+        ),
+      ),
+    );
+    expect(results.filter((result) => result === null)).toHaveLength(5);
+    expect(results.filter((result) => result?.status === 429)).toHaveLength(3);
+  });
+
+  it("fails closed before a provider call when D1 or its table is unavailable", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await expect(
+      enforceBillingProviderRateLimit(
+        new Request("https://0509.io/api/billing/dodo/checkout"),
+        {} as AppEnv,
+        "owner-1",
+        "mutation",
+      ),
+    ).resolves.toMatchObject({ status: 503 });
+    await expect(
+      enforceBillingProviderRateLimit(
+        new Request("https://0509.io/api/billing/dodo/checkout"),
+        { DB: createMissingTableD1() } as unknown as AppEnv,
+        "owner-1",
+        "mutation",
+      ),
+    ).resolves.toMatchObject({ status: 503 });
+    consoleError.mockRestore();
+  });
+});
+
 function createFakeD1() {
   const rows: { scope: string; keyHash: string; route: string; createdAt: string }[] = [];
 
@@ -330,6 +411,26 @@ function createFakeD1() {
           return {
             async run() {
               if (sql.includes("INSERT INTO rate_limit_events")) {
+                if (sql.includes("SELECT COUNT(*)")) {
+                  const [id, scope, keyHash, route, createdAt, _scope, _keyHash, _route, since, limit] = args;
+                  const count = rows.filter(
+                    (row) =>
+                      row.scope === String(scope) &&
+                      row.keyHash === String(keyHash) &&
+                      row.route === String(route) &&
+                      row.createdAt >= String(since),
+                  ).length;
+                  if (count < Number(limit)) {
+                    rows.push({
+                      scope: String(scope),
+                      keyHash: String(keyHash),
+                      route: String(route),
+                      createdAt: String(createdAt),
+                    });
+                    return { meta: { changes: 1 } };
+                  }
+                  return { meta: { changes: 0 } };
+                }
                 rows.push({
                   scope: String(args[1]),
                   keyHash: String(args[2]),
@@ -338,7 +439,14 @@ function createFakeD1() {
                 });
               }
               if (sql.includes("DELETE FROM rate_limit_events")) {
-                rows.splice(0, rows.length);
+                const [longScope, cutoff, _repeatedLongScope, longWindowCutoff] = args.map(String);
+                for (let index = rows.length - 1; index >= 0; index -= 1) {
+                  const row = rows[index]!;
+                  const expired = row.scope === longScope
+                    ? row.createdAt < longWindowCutoff
+                    : row.createdAt < cutoff;
+                  if (expired) rows.splice(index, 1);
+                }
               }
               return {};
             },

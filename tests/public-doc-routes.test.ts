@@ -24,6 +24,24 @@ afterEach(() => {
 });
 
 describe("public documentation routes", () => {
+  it("renders task-oriented docs with honest source and plan boundaries", async () => {
+    const { default: DocsRoute } = await import("~/routes/docs");
+    const markup = renderToStaticMarkup(createElement(DocsRoute));
+
+    expect(markup).toContain("Run a trustworthy first search");
+    expect(markup).toContain("No evidence is not proof that a competitor has no active ads");
+    expect(markup).toContain("Free is an activation path, not recurring monitoring");
+    expect(markup).toContain("Starter plan scope: daily briefs, urgent alerts, evidence capture, and exports");
+    expect(markup).toContain("Agency plan scope: client reports, share links, PDF delivery, branding, API/MCP access, and team seats");
+    expect(markup).toContain("This documentation does not measure live provider availability");
+    expect(markup).toContain("Provider availability can vary");
+    expect(markup).toContain("documented plan entitlements, not a live availability guarantee");
+    expect(markup).not.toContain("live-search example");
+    expect(markup).not.toMatch(/(?:search|watchlists?|digests?|reports?|share links?|exports?|checkout|email) (?:is|are) available/i);
+    expect(markup).not.toContain("Available today");
+    expect(markup).not.toContain("Public competitor ad search from a website");
+  });
+
   it("renders API docs with customer-facing boundaries and write-key requirements", async () => {
     const { default: ApiDocsRoute } = await import("~/routes/api.docs");
     const markup = renderToStaticMarkup(createElement(ApiDocsRoute));
@@ -54,9 +72,11 @@ describe("public documentation routes", () => {
 
   it("renders help and trust support paths without unsupported claims", async () => {
     const { default: HelpRoute } = await import("~/routes/help");
+    const { default: PrivacyRoute } = await import("~/routes/privacy");
     const { default: TrustRoute } = await import("~/routes/trust");
     const { default: PresenceBotInfoRoute } = await import("~/routes/bots.presence");
     const helpMarkup = renderToStaticMarkup(createElement(HelpRoute));
+    const privacyMarkup = renderToStaticMarkup(createElement(PrivacyRoute));
     const trustMarkup = renderToStaticMarkup(createElement(TrustRoute));
     const presenceBotMarkup = renderToStaticMarkup(createElement(PresenceBotInfoRoute));
 
@@ -68,6 +88,19 @@ describe("public documentation routes", () => {
     expect(trustMarkup).toContain("customer API key creation, rotation, and revocation");
     expect(trustMarkup).toContain("broad public write APIs");
     expect(trustMarkup).toContain("Cloudflare-managed storage");
+    expect(trustMarkup).toContain("configured for hosting");
+    expect(trustMarkup).toContain("configured for checkout");
+    expect(trustMarkup).toContain("provider-dependent");
+    expect(trustMarkup).toContain("External services and providers");
+    expect(trustMarkup).toContain("Site Rep provides the assistant on anonymous public pages");
+    expect(trustMarkup).toContain('href="https://siterep.net/privacy"');
+    expect(trustMarkup).toContain('href="https://siterep.net/trust"');
+    expect(trustMarkup).not.toContain("Subprocessors and providers");
+    expect(privacyMarkup).toContain("Public pages include a Site Rep assistant");
+    expect(privacyMarkup).toContain("any name, email, or follow-up details you choose to submit");
+    expect(privacyMarkup).toContain('href="https://siterep.net/privacy"');
+    expect(privacyMarkup).toContain('href="https://siterep.net/trust"');
+    expect(trustMarkup).not.toMatch(/Dodo Payments: checkout/);
     expect(trustMarkup).toContain("Backup validation and restore drills");
     expect(trustMarkup).toContain("remain owner-operated until recorded as verified");
     expect(trustMarkup).not.toContain("validates the D1 backup scripts");
@@ -77,6 +110,7 @@ describe("public documentation routes", () => {
     expect(trustMarkup).not.toContain("Weekly D1 exports upload to R2");
     expect(helpMarkup).not.toContain("hooks.slack.com/services/");
     expect(trustMarkup).not.toContain("DODO_API_KEY");
+    expect(privacyMarkup).not.toMatch(/processor|subprocessor|retention window|DPA|consent/i);
     expect(presenceBotMarkup).toContain("support@0509.io");
     expect(presenceBotMarkup).not.toContain("support@0509.in");
   });

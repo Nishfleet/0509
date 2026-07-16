@@ -13,7 +13,12 @@ import {
   formatSourceCoverageStatus,
   formatTrackingMode,
 } from "~/lib/presence-display";
-import { sanitizeCustomerFacingMessage } from "~/lib/customer-route-error";
+import {
+  presenceCustomerErrorCopy,
+  sanitizePresenceCoverageEntry,
+  sanitizePresenceEntityBrief,
+  sanitizePresencePollCursor,
+} from "~/lib/presence-customer-copy";
 import type { PresenceConnectorId } from "~/lib/presence-types";
 
 export const meta = ({ data }: { data: Awaited<ReturnType<typeof loader>> | undefined }) => [
@@ -78,7 +83,7 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
   const pollCursors = await Promise.all(
     sources.map(async (source) => ({
       sourceTargetId: source.id,
-      cursor: await getPollCursor(env, source.id),
+      cursor: sanitizePresencePollCursor(await getPollCursor(env, source.id)),
     })),
   );
 
@@ -95,18 +100,18 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
           sourceTargetId: target.id,
           cursor: pollCursors.find((entry) => entry.sourceTargetId === target.id)?.cursor ?? null,
         }));
-        return applyEntitySourceTargetsCoverage(policy, targets, targetCursors);
+        return sanitizePresenceCoverageEntry(applyEntitySourceTargetsCoverage(policy, targets, targetCursors));
       },
     ),
   );
 
-  const brief = buildPresenceEntityBrief({
+  const brief = sanitizePresenceEntityBrief(buildPresenceEntityBrief({
     entity,
     sources,
     items,
     sourceCoverage,
     pollCursors,
-  });
+  }));
 
   return { entity, sources, pollableSources, items, compareEntities, sourceCoverage, brief };
 }
@@ -139,11 +144,12 @@ export async function action({ context, request, params }: ActionFunctionArgs) {
       const targetId = String(form.get("targetId") ?? "");
       const result = await pollPresenceSourceTarget(env, workspaceUserId, targetId);
       if (!result.pollResult.ok) {
+        const copy = presenceCustomerErrorCopy(result.pollResult.errorCode);
         return {
           ok: false,
           intent,
           targetId,
-          message: sanitizeCustomerFacingMessage(result.pollResult.errorMessage ?? "Source check failed."),
+          message: copy.message,
         };
       }
       return {
@@ -159,7 +165,11 @@ export async function action({ context, request, params }: ActionFunctionArgs) {
     }
   } catch (error) {
     if (error instanceof PresenceServiceError) {
-      return { ok: false, intent, message: sanitizeCustomerFacingMessage(error.message) };
+      return {
+        ok: false,
+        intent,
+        message: presenceCustomerErrorCopy(error.code).message,
+      };
     }
     throw error;
   }
@@ -170,13 +180,15 @@ export async function action({ context, request, params }: ActionFunctionArgs) {
 export default function PresenceEntityRoute() {
   const { entity, pollableSources, items, compareEntities, sourceCoverage, brief } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const safeSourceCoverage = sourceCoverage.map(sanitizePresenceCoverageEntry);
+  const safeBrief = sanitizePresenceEntityBrief(brief);
 
   return (
     <DashboardPage>
       <section className="f9-app-stack">
         <DashboardPageHeader
           kicker={`Presence Desk · ${formatTrackingMode(entity.trackingMode)}`}
-          lead={brief.summary}
+          lead={safeBrief.summary}
           title={entity.label}
         />
         {entity.canonicalUrl ? (
@@ -191,36 +203,36 @@ export default function PresenceEntityRoute() {
 
         <article className="f9-app-panel">
           <span className="f9-app-kicker">Entity brief</span>
-          <h2>{brief.headline}</h2>
-          <p>{brief.summary}</p>
+          <h2>{safeBrief.headline}</h2>
+          <p>{safeBrief.summary}</p>
           <div className="f9-dashboard-grid">
             <div>
               <p className="f9-muted-copy">Proof strength</p>
-              <p>{brief.proofStrength}</p>
+              <p>{safeBrief.proofStrength}</p>
             </div>
             <div>
               <p className="f9-muted-copy">Source confidence</p>
-              <p>{brief.sourceConfidence}</p>
+              <p>{safeBrief.sourceConfidence}</p>
             </div>
             <div>
               <p className="f9-muted-copy">Next action</p>
-              <p>{brief.nextAction.label}</p>
+              <p>{safeBrief.nextAction.label}</p>
             </div>
           </div>
-          {brief.lastPollAt ? (
+          {safeBrief.lastPollAt ? (
             <p className="f9-muted-copy">
-              Last check <LocalTime iso={brief.lastPollAt} />
-              {brief.lastChangeAt ? (
+              Last check <LocalTime iso={safeBrief.lastPollAt} />
+              {safeBrief.lastChangeAt ? (
                 <>
                   {" "}
-                  · Last change <LocalTime iso={brief.lastChangeAt} />
+                  · Last change <LocalTime iso={safeBrief.lastChangeAt} />
                 </>
               ) : null}
             </p>
           ) : null}
-          {brief.recentChanges.length > 0 ? (
+          {safeBrief.recentChanges.length > 0 ? (
             <div className="f9-work-list is-compact">
-              {brief.recentChanges.map((change) => (
+              {safeBrief.recentChanges.map((change) => (
                 <div className="f9-work-row" key={change.id}>
                   <div>
                     <h3>
@@ -296,7 +308,7 @@ export default function PresenceEntityRoute() {
             <span className="f9-app-kicker">Source coverage</span>
             <h2>All declared sources</h2>
             <div className="f9-work-list is-compact">
-              {sourceCoverage.map((entry) => (
+              {safeSourceCoverage.map((entry) => (
                 <div className="f9-work-row" key={entry.sourceId}>
                   <div>
                     <strong>{entry.label}</strong>

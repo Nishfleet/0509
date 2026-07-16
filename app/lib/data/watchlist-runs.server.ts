@@ -4,7 +4,7 @@ import {
   queryAll as many,
   queryOne as one,
 } from "~/lib/data/d1.server";
-import { createId, jsonValue, nowIso, type JsonRecord } from "~/lib/data/helpers.server";
+import { createId, createStableId, jsonValue, nowIso, type JsonRecord } from "~/lib/data/helpers.server";
 import {
   toWatchlistRunRecord,
   type ObservationRow,
@@ -298,13 +298,22 @@ export async function getSuccessfulRunStatsForUserBetween(
     runs: number;
     watchlists_checked: number;
     ads_seen: number | null;
+    no_change_runs: number | null;
   }>(
     env,
     `
       SELECT
         COUNT(*) AS runs,
         COUNT(DISTINCT watchlist_run.watchlist_id) AS watchlists_checked,
-        SUM(COALESCE(json_extract(watchlist_run.summary_json, '$.adsSeen'), 0)) AS ads_seen
+        SUM(COALESCE(json_extract(watchlist_run.summary_json, '$.adsSeen'), 0)) AS ads_seen,
+        SUM(
+          CASE
+            WHEN json_type(watchlist_run.summary_json, '$.adsSeen') IN ('integer', 'real')
+              AND json_extract(watchlist_run.summary_json, '$.adsSeen') = 0
+            THEN 1
+            ELSE 0
+          END
+        ) AS no_change_runs
       FROM watchlist_run
       INNER JOIN watchlist ON watchlist.id = watchlist_run.watchlist_id
       WHERE watchlist.user_id = ?
@@ -322,6 +331,7 @@ export async function getSuccessfulRunStatsForUserBetween(
     runs: Number(row?.runs ?? 0),
     watchlistsChecked: Number(row?.watchlists_checked ?? 0),
     adsSeen: Number(row?.ads_seen ?? 0),
+    noChangeRuns: Number(row?.no_change_runs ?? 0),
   };
 }
 export async function createAdObservation(
@@ -336,7 +346,7 @@ export async function createAdObservation(
     metadata?: JsonRecord;
   },
 ) {
-  const id = createId();
+  const id = await createStableId("ad_observation", [input.watchlistRunId, input.adId]);
   await run(
     env,
     `
@@ -352,6 +362,15 @@ export async function createAdObservation(
         created_at
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        landing_page_snapshot_id = COALESCE(excluded.landing_page_snapshot_id, ad_observation.landing_page_snapshot_id),
+        seen_at = CASE
+          WHEN excluded.seen_at > ad_observation.seen_at THEN excluded.seen_at
+          ELSE ad_observation.seen_at
+        END,
+        is_active = excluded.is_active,
+        landing_page_url = COALESCE(excluded.landing_page_url, ad_observation.landing_page_url),
+        metadata_json = excluded.metadata_json
     `,
     id,
     input.adId,

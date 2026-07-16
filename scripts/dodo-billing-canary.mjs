@@ -1,11 +1,123 @@
 #!/usr/bin/env node
 
-const DEFAULT_BASE_URL = "https://0509.io";
+import { pathToFileURL } from "node:url";
+
+export const DEFAULT_BASE_URL = "https://0509.io";
+const CANONICAL_ORIGIN = "https://0509.io";
+const MAX_REDIRECTS = 5;
+
+/**
+ * @param {unknown} value
+ * @returns {URL}
+ */
+export function validateCanonicalBaseUrl(value) {
+  if (typeof value !== "string" || !/^https:\/\/0509\.io\/?$/u.test(value)) {
+    throw new Error("Canary base URL must be exactly https://0509.io.");
+  }
+
+  return new URL(value);
+}
+
+/**
+ * @param {string | URL} value
+ * @returns {URL}
+ */
+function validateCanonicalRequestUrl(value) {
+  // URL normalizes default ports away (for example, `https://0509.io:443`),
+  // so reject explicit authority credentials/ports from the original string
+  // before parsing it. Redirect locations are checked by validateRedirect too.
+  if (typeof value === "string") {
+    rejectExplicitAuthorityCredentialsOrPort(value);
+  }
+  const url = new URL(value);
+  if (
+    url.protocol !== "https:" ||
+    url.origin !== CANONICAL_ORIGIN ||
+    url.username ||
+    url.password ||
+    url.port
+  ) {
+    throw new Error("Canary request URL must remain on the exact https://0509.io origin.");
+  }
+  return url;
+}
+
+/**
+ * @param {string} location
+ */
+function rejectExplicitAuthorityCredentialsOrPort(location) {
+  if (/^(?:https?:)?\/\/[^/?#]*[@:]/iu.test(location)) {
+    throw new Error("Canary redirect must not contain credentials or an explicit port.");
+  }
+}
+
+/**
+ * @param {string | null} location
+ * @param {URL} currentUrl
+ * @returns {URL}
+ */
+function validateRedirect(location, currentUrl) {
+  if (!location) {
+    throw new Error("Canary redirect is missing a Location header.");
+  }
+  rejectExplicitAuthorityCredentialsOrPort(location);
+  return validateCanonicalRequestUrl(new URL(location, currentUrl));
+}
+
+/**
+ * Fetch a canary endpoint without ever sending the bypass token to an
+ * unapproved origin, including a redirect target.
+ *
+ * @param {{ url: string | URL, token: string, body?: string, userAgent?: string, extraHeaders?: Record<string, string>, fetchImpl?: typeof fetch }} input
+ */
+export async function fetchCanary({ url, token, body, userAgent = "0509-dodo-billing-canary/1.0", extraHeaders = {}, fetchImpl = fetch }) {
+  if (!token?.trim()) {
+    throw new Error("Missing CANARY_BYPASS_TOKEN; refusing to construct credential-bearing headers.");
+  }
+
+  let currentUrl = validateCanonicalRequestUrl(url);
+  let method = "POST";
+  let currentBody = body;
+
+  for (let redirectCount = 0; ; redirectCount += 1) {
+    if (redirectCount > MAX_REDIRECTS) {
+      throw new Error("Canary redirect chain exceeded the maximum allowed redirects.");
+    }
+
+    // Validate the URL before constructing the credential-bearing headers.
+    const headers = new Headers({
+      "user-agent": userAgent,
+      "x-0509-canary-token": token,
+      ...extraHeaders,
+    });
+    if (currentBody) {
+      headers.set("content-type", "application/json");
+    }
+
+    const response = await fetchImpl(currentUrl, {
+      method,
+      headers,
+      body: currentBody,
+      redirect: "manual",
+      signal: AbortSignal.timeout(60_000),
+    });
+
+    if (response.status < 300 || response.status > 399) {
+      return response;
+    }
+
+    currentUrl = validateRedirect(response.headers.get("location"), currentUrl);
+    if (response.status === 303 || ((response.status === 301 || response.status === 302) && method === "POST")) {
+      method = "GET";
+      currentBody = undefined;
+    }
+  }
+}
 
 /**
  * @param {string[]} args
  */
-function parseArgs(args) {
+export function parseArgs(args) {
   /** @type {{ baseUrl: string, json: boolean, email: string | null }} */
   const parsed = {
     baseUrl: process.env.CANARY_BASE_URL || DEFAULT_BASE_URL,
@@ -74,38 +186,85 @@ function formatReport(payload) {
   return lines.join("\n");
 }
 
-const config = parseArgs(process.argv.slice(2));
-const token = process.env.CANARY_BYPASS_TOKEN?.trim();
+/**
+ * Validate the server's billing canary proof before treating the run as a
+ * success. The endpoint currently owns snapshot/restore and does not expose
+ * the exact pre-run state or affected-row counts, so those stronger checks
+ * remain a server-contract dependency rather than being inferred here.
+ *
+ * @param {unknown} payload
+ * @param {Response} response
+ * @returns {{ ok: true } | { ok: false, blocker: string }}
+ */
+export function validateBillingCanaryResult(payload, response) {
+  if (!response.ok) return { ok: false, blocker: "billing_canary_http_failure" };
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return { ok: false, blocker: "billing_canary_invalid_response" };
+  }
 
-if (!token) {
-  console.error("Missing CANARY_BYPASS_TOKEN; source .dev.vars or set the secret before running this canary.");
-  process.exit(1);
+  const body = /** @type {{ ok?: unknown, user?: { email?: unknown }, webhook?: { plan?: { status?: unknown }, proofCredits?: { status?: unknown } }, grants?: { paidPlanUnlocked?: unknown, planCleanupOk?: unknown, watchlistCleanupOk?: unknown, proofCreditsGranted?: unknown, proofCreditCleanupOk?: unknown, credits?: unknown } }} */ (payload);
+  const grants = body.grants;
+  const planWebhookStatus = body.webhook?.plan?.status;
+  const creditWebhookStatus = body.webhook?.proofCredits?.status;
+  const webhookStatusesValid = [planWebhookStatus, creditWebhookStatus].every(
+    (status) => typeof status === "number" && status >= 200 && status < 300,
+  );
+  const credits = grants?.credits;
+  const grantsValid =
+    grants?.paidPlanUnlocked === true &&
+    grants.planCleanupOk === true &&
+    grants.watchlistCleanupOk === true &&
+    grants.proofCreditsGranted === true &&
+    grants.proofCreditCleanupOk === true &&
+    typeof credits === "number" &&
+    credits === 500;
+  if (body.ok !== true || !webhookStatusesValid || !grantsValid) {
+    return { ok: false, blocker: "billing_canary_proof_incomplete" };
+  }
+
+  return { ok: true };
 }
 
-const url = new URL("/api/billing/dodo/canary", config.baseUrl);
-const headers = {
-  "user-agent": "0509-dodo-billing-canary/1.0",
-  "x-0509-canary-token": token,
-};
-const body = config.email ? JSON.stringify({ email: config.email }) : undefined;
-if (body) {
-  headers["content-type"] = "application/json";
+/**
+ * @param {{ config?: ReturnType<typeof parseArgs>, token?: string, fetchImpl?: typeof fetch }} [input]
+ */
+export async function runCanary({ config = parseArgs([]), token = process.env.CANARY_BYPASS_TOKEN?.trim(), fetchImpl = fetch } = {}) {
+  if (!token) {
+    throw new Error("Missing CANARY_BYPASS_TOKEN; source .dev.vars or set the secret before running this canary.");
+  }
+
+  const baseUrl = validateCanonicalBaseUrl(config.baseUrl);
+  const body = config.email ? JSON.stringify({ email: config.email }) : undefined;
+  const response = await fetchCanary({
+    url: new URL("/api/billing/dodo/canary", baseUrl),
+    token,
+    body,
+    fetchImpl,
+  });
+  const payload = await response.json().catch(() => null);
+
+  return { payload, response };
 }
 
-const response = await fetch(url, {
-  method: "POST",
-  headers,
-  body,
-  signal: AbortSignal.timeout(60_000),
-});
-const payload = await response.json().catch(() => null);
-
-if (config.json) {
-  console.log(JSON.stringify(payload, null, 2));
-} else {
-  console.log(formatReport(payload));
+async function main() {
+  const config = parseArgs(process.argv.slice(2));
+  try {
+    const { payload, response } = await runCanary({ config });
+    const validation = validateBillingCanaryResult(payload, response);
+    if (config.json) {
+      console.log(JSON.stringify(payload, null, 2));
+    } else {
+      console.log(formatReport(payload));
+    }
+    if (!validation.ok) {
+      process.exitCode = 1;
+    }
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
 }
 
-if (!response.ok || !payload?.ok) {
-  process.exitCode = 1;
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await main();
 }

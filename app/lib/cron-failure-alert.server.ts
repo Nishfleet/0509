@@ -12,6 +12,18 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
+function safeTaskKey(taskKey: string) {
+  const normalized = typeof taskKey === "string" ? taskKey.trim() : "";
+  return /^[a-z0-9_-]{1,80}$/i.test(normalized) ? normalized : "unknown_task";
+}
+
+function safeFailureCategory(error: unknown) {
+  if (error instanceof Error && (error.name === "TimeoutError" || error.name === "PromiseTimeoutError")) {
+    return "timeout";
+  }
+  return error instanceof Error ? "runtime_error" : "non_error_throw";
+}
+
 function throttleWindowKey(nowMs: number) {
   return Math.floor(nowMs / CRON_FAILURE_ALERT_THROTTLE_MS);
 }
@@ -32,12 +44,13 @@ export async function alertScheduledTaskFailure(
 
   const now = options.now ?? new Date();
   const nowIso = now.toISOString();
-  const message = errorMessage(error).slice(0, 500);
+  const normalizedTaskKey = safeTaskKey(taskKey);
+  const failureCategory = safeFailureCategory(error);
 
   const existing = await env.DB.prepare(
     `SELECT last_alerted_at FROM cron_failure_alert_throttle WHERE task_key = ?`,
   )
-    .bind(taskKey)
+    .bind(normalizedTaskKey)
     .first<{ last_alerted_at: string }>();
 
   if (existing?.last_alerted_at) {
@@ -48,13 +61,14 @@ export async function alertScheduledTaskFailure(
   }
 
   const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
-  const idempotencyKey = `cron-failure:${taskKey}:${throttleWindowKey(now.getTime())}`;
+  const idempotencyKey = `cron-failure:${normalizedTaskKey}:${throttleWindowKey(now.getTime())}`;
   const sent = await sendOperatorAlertEmail(env, {
-    subject: `0509 cron failure: ${taskKey}`,
+    subject: `0509 cron failure: ${normalizedTaskKey}`,
     intro: "Scheduled task failure detected:",
     lines: [
-      `Scheduled task "${taskKey}" failed.`,
-      `Error: ${message}`,
+      `Scheduled task "${normalizedTaskKey}" failed.`,
+      `Failure category: ${failureCategory}.`,
+      "Details: Review Worker logs for the internal failure details.",
       `Time (UTC): ${nowIso}`,
       "Repeating failures for this task are throttled to one operator email per 6 hours.",
     ],
@@ -62,10 +76,17 @@ export async function alertScheduledTaskFailure(
   });
 
   if (!sent) {
+    await recordThrottleAttempt(env, normalizedTaskKey, nowIso, "operator_alert_not_sent");
     return { sent: false, reason: "email_skipped" };
   }
 
-  await env.DB.prepare(
+  await recordThrottleAttempt(env, normalizedTaskKey, nowIso, "operator_alert_sent");
+
+  return { sent: true, reason: "sent" };
+}
+
+async function recordThrottleAttempt(env: AppEnv, taskKey: string, at: string, detail: string) {
+  await env.DB!.prepare(
     `INSERT INTO cron_failure_alert_throttle (task_key, last_alerted_at, last_error, alert_count)
      VALUES (?, ?, ?, 1)
      ON CONFLICT(task_key) DO UPDATE SET
@@ -73,10 +94,8 @@ export async function alertScheduledTaskFailure(
        last_error = excluded.last_error,
        alert_count = cron_failure_alert_throttle.alert_count + 1`,
   )
-    .bind(taskKey, nowIso, message)
+    .bind(taskKey, at, detail)
     .run();
-
-  return { sent: true, reason: "sent" };
 }
 
 /** Best-effort wrapper for scheduled catch blocks: never throws into the cron. */

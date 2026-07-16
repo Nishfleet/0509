@@ -48,8 +48,12 @@ describe("DigestDecisionSummary", () => {
     expect(markup).toContain("Nykaa needs review");
     expect(markup).toContain("What changed");
     expect(markup).toContain("Offer changed");
-    expect(markup).toContain("Why it matters");
+    expect(markup).toContain("Signal summary");
+    expect(markup).toContain("Evidence summary");
+    expect(markup).not.toContain("Why it matters");
     expect(markup).toContain("The competitor lowered the anchor price.");
+    expect(markup.match(/The competitor lowered the anchor price\./g)).toHaveLength(1);
+    expect(markup).toContain("Verified evidence attached. Review before sharing.");
     expect(markup).toContain("High priority");
     expect(markup).toContain("Verified evidence");
     expect(markup).toContain("Saved evidence");
@@ -119,7 +123,8 @@ describe("DigestProofPacket", () => {
 
     expect(markup).toContain("Evidence and source details");
     expect(markup).toContain("2 changes packaged for handoff");
-    expect(markup).toContain("Offer changed: ready to send as a client or teammate digest");
+    expect(markup).toContain("Offer changed: Verified evidence attached. Review before sharing.");
+    expect(markup).not.toContain("ready to send");
     expect(markup).toContain("Today: brief one counter-test.");
     expect(markup).toContain("1 verified evidence");
     expect(markup).toContain("1 check-spotted");
@@ -147,7 +152,7 @@ describe("DigestProofPacket", () => {
       }),
     );
 
-    expect(markup).toContain("Headline changed: ready to review");
+    expect(markup).toContain("Headline changed: Evidence needs review");
     expect(markup).toContain("add page evidence before sharing");
     expect(markup).toContain("1 check-spotted");
     expect(markup).not.toContain("verified evidence");
@@ -184,7 +189,7 @@ describe("DigestProofPacket", () => {
       }),
     );
 
-    expect(markup).toContain("Breaking offer changed: ready to review");
+    expect(markup).toContain("Breaking offer changed: Evidence needs review");
     expect(markup).toContain("add page evidence before sharing");
     expect(markup).toContain("1 verified evidence");
     expect(markup).toContain("1 check-spotted");
@@ -236,7 +241,7 @@ describe("DigestProofPacket", () => {
       }),
     );
 
-    expect(markup).toContain("Customer offer changed: ready to send");
+    expect(markup).toContain("Customer offer changed: Verified evidence attached. Review before sharing.");
     expect(markup).toContain("Next review: brief the customer offer change.");
     expect(markup).not.toContain("Do not put this in the customer decision.");
   });
@@ -274,7 +279,7 @@ describe("DigestProofPacket", () => {
       }),
     );
 
-    expect(markup).toContain("Customer page changed: ready to send");
+    expect(markup).toContain("Customer page changed: Verified evidence attached. Review before sharing.");
     expect(markup).toContain("Next review: use the customer page change.");
     expect(markup).not.toContain("Do not feature this shared snapshot row.");
   });

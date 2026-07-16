@@ -4,9 +4,19 @@ export type PublicDeliveryTargetRecord = Omit<DeliveryTargetRecord, "metadata"> 
   metadata: Record<string, string>;
 };
 
-export function toPublicDeliveryTarget(target: DeliveryTargetRecord): PublicDeliveryTargetRecord {
+export function toPublicDeliveryTarget(
+  target: DeliveryTargetRecord,
+  options?: { verifiedAccountEmail?: string | null },
+): PublicDeliveryTargetRecord {
   return {
     ...target,
+    targetValue:
+      target.channel === "email"
+        ? options?.verifiedAccountEmail ?? "Verified account email"
+        : target.channel === "whatsapp"
+          ? "Verified WhatsApp destination"
+          : "Connected Slack workspace",
+    providerIdentifier: null,
     metadata: target.channel === "slack" ? safeSlackMetadata(target.metadata) : {},
   };
 }

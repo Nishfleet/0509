@@ -24,6 +24,8 @@ import type {
   DiscoveryRouteContext,
   MetaIntegrationStatus,
   ProofStatus,
+  SupportCaseCategory,
+  SupportCasePriority,
   WebhookReconciliationStatus,
 } from "~/lib/types";
 
@@ -280,6 +282,15 @@ export async function getOperatorRiskSummary(env: AppEnv): Promise<OperatorRiskS
 export async function getOperatorSnapshot(env: AppEnv) {
   const stuckThresholdIso = new Date(Date.now() - 30 * 60 * 1000).toISOString();
   const recentWindowIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const warnings: Array<{ section: string; message: string }> = [];
+  const isolate = async <T,>(section: string, promise: Promise<T>, fallback: T) => {
+    try {
+      return await promise;
+    } catch {
+      warnings.push({ section, message: "This section could not be loaded." });
+      return fallback;
+    }
+  };
 
   const [
     failingRuns,
@@ -291,14 +302,14 @@ export async function getOperatorSnapshot(env: AppEnv) {
     degradedWatchlists,
     discoveryFailures,
     discoveryProviders,
+    supportCases,
   ] = await Promise.all([
-    many<{
+    isolate("failingRuns", many<{
       run_id: string;
       watchlist_id: string;
       watchlist_name: string;
       started_at: string;
       error_code: string | null;
-      error_message: string | null;
     }>(
       env,
       `
@@ -307,8 +318,7 @@ export async function getOperatorSnapshot(env: AppEnv) {
           watchlist.id AS watchlist_id,
           watchlist.name AS watchlist_name,
           watchlist_run.started_at,
-          watchlist_run.error_code,
-          watchlist_run.error_message
+          watchlist_run.error_code
         FROM watchlist_run
         INNER JOIN watchlist ON watchlist.id = watchlist_run.watchlist_id
         WHERE watchlist_run.status = 'failed'
@@ -317,8 +327,8 @@ export async function getOperatorSnapshot(env: AppEnv) {
         LIMIT 8
       `,
       recentWindowIso,
-    ),
-    many<{
+    ), []),
+    isolate("stuckRuns", many<{
       run_id: string;
       watchlist_id: string;
       watchlist_name: string;
@@ -341,14 +351,13 @@ export async function getOperatorSnapshot(env: AppEnv) {
         LIMIT 8
       `,
       stuckThresholdIso,
-    ),
-    many<{
+    ), []),
+    isolate("failedProofs", many<{
       proof_capture_id: string;
       watchlist_id: string;
       watchlist_name: string;
       attempted_at: string;
       failure_code: string | null;
-      failure_reason: string | null;
     }>(
       env,
       `
@@ -357,8 +366,7 @@ export async function getOperatorSnapshot(env: AppEnv) {
           watchlist.id AS watchlist_id,
           watchlist.name AS watchlist_name,
           proof_capture.attempted_at,
-          proof_capture.failure_code,
-          proof_capture.failure_reason
+          proof_capture.failure_code
         FROM proof_capture
         INNER JOIN proof_target ON proof_target.id = proof_capture.proof_target_id
         INNER JOIN watchlist ON watchlist.id = proof_target.watchlist_id
@@ -368,8 +376,8 @@ export async function getOperatorSnapshot(env: AppEnv) {
         LIMIT 8
       `,
       recentWindowIso,
-    ),
-    many<{
+    ), []),
+    isolate("budgetBlockedProofs", many<{
       proof_capture_id: string;
       watchlist_id: string;
       watchlist_name: string;
@@ -393,13 +401,12 @@ export async function getOperatorSnapshot(env: AppEnv) {
         LIMIT 8
       `,
       recentWindowIso,
-    ),
-    many<{
+    ), []),
+    isolate("blockedTargets", many<{
       delivery_target_id: string;
       watchlist_id: string | null;
       watchlist_name: string | null;
       channel: DeliveryChannel;
-      target_value: string;
       is_opted_in: number;
       is_validated: number;
       is_paused: number;
@@ -413,7 +420,6 @@ export async function getOperatorSnapshot(env: AppEnv) {
           delivery_target.watchlist_id,
           watchlist.name AS watchlist_name,
           delivery_target.channel,
-          delivery_target.target_value,
           delivery_target.is_opted_in,
           delivery_target.is_validated,
           delivery_target.is_paused,
@@ -432,17 +438,15 @@ export async function getOperatorSnapshot(env: AppEnv) {
         ORDER BY delivery_target.updated_at DESC
         LIMIT 8
       `,
-    ),
-    many<{
+    ), []),
+    isolate("deliveryAttention", many<{
       attempt_id: string;
       watchlist_id: string | null;
       watchlist_name: string | null;
       channel: DeliveryChannel;
-      target_value: string;
       status: DeliveryAttemptStatus;
       webhook_status: WebhookReconciliationStatus;
       provider_status_last_seen_at: string | null;
-      error_message: string | null;
       created_at: string;
     }>(
       env,
@@ -452,11 +456,9 @@ export async function getOperatorSnapshot(env: AppEnv) {
           delivery_attempt.watchlist_id,
           watchlist.name AS watchlist_name,
           delivery_attempt.channel,
-          delivery_attempt.target_value,
           delivery_attempt.status,
           delivery_attempt.webhook_status,
           delivery_attempt.provider_status_last_seen_at,
-          delivery_attempt.error_message,
           delivery_attempt.created_at
         FROM delivery_attempt
         LEFT JOIN watchlist ON watchlist.id = delivery_attempt.watchlist_id
@@ -472,8 +474,8 @@ export async function getOperatorSnapshot(env: AppEnv) {
         LIMIT 8
       `,
       recentWindowIso,
-    ),
-    many<{
+    ), []),
+    isolate("degradedWatchlists", many<{
       watchlist_id: string;
       watchlist_name: string;
       failed_runs: number;
@@ -534,8 +536,8 @@ export async function getOperatorSnapshot(env: AppEnv) {
       recentWindowIso,
       recentWindowIso,
       recentWindowIso,
-    ),
-    many<{
+    ), []),
+    isolate("discoveryFailures", many<{
       fetchId: string;
       provider: AdDiscoveryProvider;
       routeContext: DiscoveryRouteContext;
@@ -563,12 +565,11 @@ export async function getOperatorSnapshot(env: AppEnv) {
         LIMIT 8
       `,
       recentWindowIso,
-    ),
-    many<{
+    ), []),
+    isolate("discoveryProviders", many<{
       provider: AdDiscoveryProvider;
       status: MetaIntegrationStatus["status"];
       failureClass: DiscoveryFailureClass | null;
-      summary: string;
       lastSuccessAt: string | null;
       lastFailureAt: string | null;
       updatedAt: string;
@@ -579,7 +580,6 @@ export async function getOperatorSnapshot(env: AppEnv) {
           provider,
           status,
           failure_class AS failureClass,
-          summary,
           last_success_at AS lastSuccessAt,
           last_failure_at AS lastFailureAt,
           updated_at AS updatedAt
@@ -587,7 +587,43 @@ export async function getOperatorSnapshot(env: AppEnv) {
         ORDER BY updated_at DESC
         LIMIT 4
       `,
-    ),
+    ), []),
+    isolate("supportCases", many<{
+      case_id: string;
+      category: SupportCaseCategory;
+      priority: SupportCasePriority;
+      subject: string;
+      updated_at: string;
+      alert_status: DeliveryAttemptStatus | null;
+      alert_webhook_status: WebhookReconciliationStatus | null;
+    }>(
+      env,
+      `
+        SELECT
+          support_case.id AS case_id,
+          support_case.category,
+          support_case.priority,
+          support_case.subject,
+          support_case.updated_at,
+          alert.status AS alert_status,
+          alert.webhook_status AS alert_webhook_status
+        FROM support_case
+        LEFT JOIN delivery_attempt AS alert
+          ON alert.id = (
+            SELECT candidate.id
+            FROM delivery_attempt AS candidate
+            WHERE json_extract(candidate.payload_snapshot_json, '$.kind') = 'support_case_operator_alert'
+              AND json_extract(candidate.payload_snapshot_json, '$.caseId') = support_case.id
+            ORDER BY candidate.updated_at DESC
+            LIMIT 1
+          )
+        WHERE support_case.status = 'open'
+        ORDER BY
+          CASE support_case.priority WHEN 'urgent' THEN 0 ELSE 1 END,
+          support_case.updated_at DESC
+        LIMIT 20
+      `,
+    ), []),
   ]);
 
   return {
@@ -604,6 +640,10 @@ export async function getOperatorSnapshot(env: AppEnv) {
       discoveryProvidersNeedingAttention: discoveryProviders.filter(
         (provider) => provider.status !== "healthy",
       ).length,
+      openSupportCases: supportCases.length,
+      supportAlertsNeedRetry: supportCases.filter(
+        (supportCase) => supportCase.alert_status === "failed",
+      ).length,
     },
     failingRuns,
     stuckRuns,
@@ -617,5 +657,35 @@ export async function getOperatorSnapshot(env: AppEnv) {
     degradedWatchlists,
     discoveryFailures,
     discoveryProviders,
+    supportCases,
+    warnings,
   };
+}
+
+export async function getOperatorSupportCase(env: AppEnv, caseId: string) {
+  return one<{
+    id: string;
+    userEmail: string;
+    category: SupportCaseCategory;
+    priority: SupportCasePriority;
+    subject: string;
+    detail: string;
+  }>(
+    env,
+    `
+      SELECT
+        support_case.id,
+        user.email AS userEmail,
+        support_case.category,
+        support_case.priority,
+        support_case.subject,
+        support_case.detail
+      FROM support_case
+      INNER JOIN user ON user.id = support_case.user_id
+      WHERE support_case.id = ?
+        AND support_case.status = 'open'
+      LIMIT 1
+    `,
+    caseId,
+  );
 }

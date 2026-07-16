@@ -4,6 +4,7 @@ import type { MetaFunction } from "react-router";
 import { LocalTime } from "~/components/local-time";
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { SubmitButton } from "~/components/submit-button";
+import type { PlanFamily } from "~/lib/plan-entitlements";
 import type { NullableString, RouteActionData } from "~/routes/workspace-settings.shared";
 
 export const notificationsMeta: MetaFunction = () => [
@@ -30,6 +31,10 @@ type WhatsAppTargetView = DeliveryTargetView & {
 export type NotificationsLoaderData = {
   emailDeliveryReady: boolean;
   showSlackDelivery: boolean;
+  slackDelivery: {
+    plan: PlanFamily;
+    entitled: boolean;
+  };
   canManageWhatsAppDelivery: boolean;
   slackTargets: DeliveryTargetView[];
   whatsappTargets: WhatsAppTargetView[];
@@ -135,35 +140,45 @@ export function NotificationsRoute() {
               digests and high-priority change alerts to that channel.
             </p>
 
+            {!data.slackDelivery.entitled ? (
+              <div className="f9-message" role="status">
+                <p>
+                  Slack delivery is included in Starter and Agency plans. <Link to="/app/billing?source=notifications#plans">View plans</Link> to restore channel controls.
+                </p>
+              </div>
+            ) : null}
+
             <div className="f9-dashboard-grid">
-              <section className="f9-app-panel f9-source-guide">
-                <span className="f9-app-kicker">Connect channel</span>
-                <h3>Incoming webhook</h3>
-                <Form className="f9-auth-form" method="post">
-                  <input name="intent" type="hidden" value="save-slack-webhook" />
-                  <label className="f9-field">
-                    <span>Channel label</span>
-                    <input
-                      autoComplete="off"
-                      name="slackDestinationName"
-                      placeholder="Growth team, competitor alerts..."
-                      type="text"
-                    />
-                  </label>
-                  <label className="f9-field">
-                    <span>Slack webhook URL</span>
-                    <input
-                      autoComplete="off"
-                      name="slackWebhookUrl"
-                      placeholder="Paste the incoming webhook URL"
-                      type="password"
-                    />
-                  </label>
-                  <SubmitButton className="f9-primary-button" intent="save-slack-webhook" pendingLabel="Saving…">
-                    Save Slack delivery
-                  </SubmitButton>
-                </Form>
-              </section>
+              {data.slackDelivery.entitled ? (
+                <section className="f9-app-panel f9-source-guide">
+                  <span className="f9-app-kicker">Connect channel</span>
+                  <h3>Incoming webhook</h3>
+                  <Form className="f9-auth-form" method="post">
+                    <input name="intent" type="hidden" value="save-slack-webhook" />
+                    <label className="f9-field">
+                      <span>Channel label</span>
+                      <input
+                        autoComplete="off"
+                        name="slackDestinationName"
+                        placeholder="Growth team, competitor alerts..."
+                        type="text"
+                      />
+                    </label>
+                    <label className="f9-field">
+                      <span>Slack webhook URL</span>
+                      <input
+                        autoComplete="off"
+                        name="slackWebhookUrl"
+                        placeholder="Paste the incoming webhook URL"
+                        type="password"
+                      />
+                    </label>
+                    <SubmitButton className="f9-primary-button" intent="save-slack-webhook" pendingLabel="Saving…">
+                      Save Slack delivery
+                    </SubmitButton>
+                  </Form>
+                </section>
+              ) : null}
 
               <section className="f9-app-panel f9-source-guide">
                 <span className="f9-app-kicker">Delivery behavior</span>
@@ -200,22 +215,24 @@ export function NotificationsRoute() {
                         )}
                       </p>
                     </div>
-                    <Form method="post">
-                      <input
-                        name="intent"
-                        type="hidden"
-                        value={target.isPaused ? "resume-slack-webhook" : "pause-slack-webhook"}
-                      />
-                      <input name="slackTargetId" type="hidden" value={target.id} />
-                      <SubmitButton
-                        className="f9-secondary-button"
-                        intent={target.isPaused ? "resume-slack-webhook" : "pause-slack-webhook"}
-                        match={{ slackTargetId: target.id }}
-                        pendingLabel="Updating…"
-                      >
-                        {target.isPaused ? "Resume" : "Pause"}
-                      </SubmitButton>
-                    </Form>
+                    {data.slackDelivery.entitled ? (
+                      <Form method="post">
+                        <input
+                          name="intent"
+                          type="hidden"
+                          value={target.isPaused ? "resume-slack-webhook" : "pause-slack-webhook"}
+                        />
+                        <input name="slackTargetId" type="hidden" value={target.id} />
+                        <SubmitButton
+                          className="f9-secondary-button"
+                          intent={target.isPaused ? "resume-slack-webhook" : "pause-slack-webhook"}
+                          match={{ slackTargetId: target.id }}
+                          pendingLabel="Updating…"
+                        >
+                          {target.isPaused ? "Resume" : "Pause"}
+                        </SubmitButton>
+                      </Form>
+                    ) : null}
                   </article>
                 ))
               ) : (

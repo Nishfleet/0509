@@ -53,15 +53,17 @@ describe("marketing rebuild", () => {
     expect(appCss).toContain(".f9-home .f9-annual-status strong");
   });
 
-  it("labels live search and keeps preview read-only before account", () => {
-    expect(marketingRoute).toContain("Live search");
+  it("labels public search as a coverage-qualified preview before account", () => {
+    expect(marketingRoute).toContain("Search preview");
+    expect(marketingRoute).toContain("Provider coverage and freshness vary");
     expect(marketingRoute).not.toContain("Early access");
     expect(marketingRoute).toContain("No account needed.");
     expect(marketingRoute).not.toContain("provider canaries");
     expect(marketingRoute).not.toContain("Readiness-gated");
-    expect(marketingRoute).toContain("See what changed before you sign up");
-    expect(marketingRoute).toContain("Try live search");
-    expect(marketingRoute).toContain("/search?website=https%3A%2F%2Fnykaa.com");
+    expect(marketingRoute).toContain("Try the search preview");
+    expect(marketingRoute).toContain(
+      "/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com",
+    );
     expect(marketingRoute).toContain('id="demo"');
     expect(marketingRoute).toContain('aria-label="Sample brief before signup"');
     expect(marketingRoute).toContain("Review sample brief");
@@ -102,7 +104,7 @@ describe("marketing rebuild", () => {
 
   it("keeps README route truth aligned with public read-only search", () => {
     expect(readme).toContain("/api/demo-proof");
-    expect(readme).toContain("/search` public read-only live search trial");
+    expect(readme).toContain("/search` public read-only search preview with variable provider coverage");
     expect(readme).toContain("save, track, collections, and deeper evidence enrichment require an account");
     expect(readme).not.toContain("/search` account-gated analysis flow");
   });
@@ -250,11 +252,21 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("Sample proof-backed brief");
     expect(marketingRoute).toContain("A rival page changed while your team was offline");
     expect(marketingRoute).toContain('action="/search"');
-    expect(marketingRoute).toContain("See their live ads");
+    expect(marketingRoute).toContain("Preview available ads");
     expect(appCss).toContain('--ld-display: "Bricolage Grotesque"');
     expect(appCss).toContain("@keyframes ld-roll");
     expect(appCss).toContain("@keyframes ld-blink");
     expect(appCss).toContain("@media (prefers-reduced-motion: reduce)");
+  });
+
+  it("keeps the primary marketing destinations reachable on narrow screens", () => {
+    expect(marketingRoute).toContain('aria-label="Primary"');
+    expect(marketingRoute).toContain("Search preview");
+    expect(marketingRoute).toContain("Sample brief");
+    expect(marketingRoute).toContain("Pricing");
+    expect(appCss).not.toContain(".ld-nav-links { display: none; }");
+    expect(appCss).toContain("grid-column: 1 / -1");
+    expect(appCss).toContain(".f9-home .ld-nav-links a");
   });
 });
 

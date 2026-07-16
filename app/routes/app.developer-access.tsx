@@ -25,7 +25,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const env = getEnv(context);
   const { workspaceUserId, isMember, ownerName } = await requireWorkspaceSession(env, request);
   const [apiKeys, apiGate] = await Promise.all([
-    listCustomerApiKeys(env, workspaceUserId),
+    isMember ? Promise.resolve([]) : listCustomerApiKeys(env, workspaceUserId),
     requireWorkspacePlanFeature(env, workspaceUserId, "api_access"),
   ]);
   const createDisabledReason = developerAccessDisabledReason({

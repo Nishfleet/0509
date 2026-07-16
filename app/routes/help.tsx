@@ -32,23 +32,43 @@ export default function HelpRoute() {
           <li>Open the watchlist and refresh tracking to save the first evidence trail.</li>
           <li>Review the digest page after the first monitored change or quiet check.</li>
         </ol>
+        <p>
+          Free is an activation path, not recurring monitoring: it gives you one retained watchlist and one first
+          scan. Paid plans add scheduled monitoring and digests, subject to the plan and account configuration.
+        </p>
       </PublicDocBlock>
 
       <PublicDocBlock title="Delivery setup">
         <p>
-          Email delivery is available for paid plans. Run a watchlist refresh or wait for the
-          first digest after a monitored change to confirm delivery. Open{" "}
-          <Link to="/app/notifications">Notifications</Link> when you want digests and high-priority
-          alerts in the inbox.
+          Email delivery is in product scope, but this page does not measure live email-provider availability. Paid
+          plans add scheduled monitoring and digest features when configured for the account. Open{" "}
+          <Link to="/app/notifications">Notifications</Link> to review delivery settings. A manual refresh confirms a
+          fresh check only; it does not confirm recurring delivery. If a scheduled digest does not arrive, open a{" "}
+          <Link to="/app/support?category=delivery">delivery support case</Link>.
         </p>
       </PublicDocBlock>
 
       <PublicDocBlock title="Billing help">
         <p>
-          Plans and extra check packs use Dodo Payments. Signed-in customers can open the
-          billing portal from <Link to="/app/billing">Plan &amp; billing</Link> when their account has
-          a linked Dodo customer id. Plan changes and cancellation stay backed by{" "}
-          <Link to="/app/support?category=billing">signed-in support cases</Link>.
+          Paid access follows the confirmed payment path connected to the account. Card and invoice tasks can use the
+          hosted billing portal on <Link to="/app/billing">Plan &amp; billing</Link> when it is available. Plan changes
+          and cancellation stay backed by{" "}
+          <Link to="/app/support?category=billing">signed-in support cases</Link> until portal subscription updates
+          are confirmed.
+        </p>
+      </PublicDocBlock>
+
+      <PublicDocBlock title="Cancellation and deletion">
+        <p>
+          Cancellation stops future renewals, and access continues until the end of the period you have paid for.
+          Use the hosted billing portal when it is available; otherwise, open a signed-in support case for cancellation
+          help.
+        </p>
+        <p>
+          Account deletion is a support request, not an automatic or in-app deletion. Signed-in customers can open a{" "}
+          <Link to="/app/support?category=security">deletion support case</Link>; email{" "}
+          <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> if you cannot sign in. Nothing is deleted automatically or
+          in-app.
         </p>
       </PublicDocBlock>
 

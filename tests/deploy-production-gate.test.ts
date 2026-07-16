@@ -1,0 +1,170 @@
+import { createHash } from "node:crypto";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+
+const { buildProductionDeployPlan, executeProductionDeployPlan } = await import(
+  "../scripts/deploy-production-plan.mjs"
+);
+const { validateDeployReadiness } = await import("../scripts/verify-deploy-readiness.mjs");
+const { RELEASE_COVERAGE_MATRIX, expectedReleaseArtifacts } = await import(
+  "../scripts/playwright-release-manifest-reporter.mjs"
+);
+
+const fingerprint = "a".repeat(64);
+const wranglerHash = "b".repeat(64);
+const serverIdentity = "local-0123456789abcdef0123456789abcdef";
+const roots: string[] = [];
+const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01]);
+const aria = Buffer.from('- main "0509":\n  - heading "Proof"\n', "utf8");
+
+afterEach(() => {
+  while (roots.length > 0) rmSync(roots.pop()!, { recursive: true, force: true });
+});
+
+function finalUrl(expected: any, viewport: string) {
+  if (expected.exact) return expected.exact;
+  const query = expected.search
+    ? new URLSearchParams(expected.search).toString()
+    : expected.searchKeys.map((key: string) => `${key}=e2e-${viewport}`).join("&");
+  return `${expected.pathname}?${query}`;
+}
+
+function passingEvidence() {
+  const root = mkdtempSync(join(tmpdir(), "0509-deploy-readiness-"));
+  roots.push(root);
+  const artifactRoot = resolve(root, "test-results/gate-b-artifacts", fingerprint, serverIdentity);
+  mkdirSync(artifactRoot, { recursive: true });
+  const entries = Object.values(RELEASE_COVERAGE_MATRIX as Record<number, readonly any[]>)
+    .flat()
+    .map((expected: any) => {
+      const entry: any = {
+        sourceFile: expected.sourceFile,
+        browser: "chromium",
+        project: "local-release",
+        persona: expected.persona,
+        scenario: expected.scenario,
+        viewport: expected.viewport,
+        finalUrl: finalUrl(expected.finalUrl, expected.viewport),
+        status: "passed",
+        retry: 0,
+        firstAttempt: { status: "passed", passed: true, retry: 0 },
+      };
+      entry.artifacts = expectedReleaseArtifacts(entry).map((artifact: any) => {
+        const body = artifact.kind === "screenshot" ? png : aria;
+        const path = join(artifactRoot, artifact.attachmentName);
+        writeFileSync(path, body);
+        return {
+          kind: artifact.kind,
+          state: artifact.state,
+          name: `gate-b-artifacts/${fingerprint}/${serverIdentity}/${artifact.attachmentName}`,
+          contentType: artifact.contentType,
+          bytes: body.byteLength,
+          sha256: createHash("sha256").update(body).digest("hex"),
+        };
+      });
+      return entry;
+    });
+  const manifest = {
+    schemaVersion: 3,
+    candidateFingerprint: fingerprint,
+    environment: "local",
+    runOrigin: "http://127.0.0.1:43127",
+    serverIdentity,
+    status: "passed",
+    strict: true,
+    entries,
+    postflight: {
+      journeys: [1, 2, 3, 4, 5, 6],
+      releaseState: { count: 1 },
+      fixtureState: { count: 1 },
+      launchConfig: {
+        identity: "c".repeat(64),
+        wranglerWorktreeSha256: wranglerHash,
+        productionSearchRolloutMode: "shadow",
+        providerNetworkDeny: true,
+        retries: 0,
+        workers: 1,
+      },
+      scratchRestore: {
+        sourceDumpSha256: "d".repeat(64),
+        transformedSqlSha256: "e".repeat(64),
+        integrity: "ok",
+        foreignKeyViolations: 0,
+        exactRowCounts: true,
+        dodoLinkagePreserved: true,
+        scratchDatabaseRemoved: true,
+      },
+      isolatedPersistenceRemoved: true,
+    },
+  };
+  const candidate = {
+    ok: true,
+    fingerprint,
+    branch: "main",
+    baseCommit: "1".repeat(40),
+    headCommit: "1".repeat(40),
+    status: { hasChanges: false },
+    wrangler: { worktreeSha256: wranglerHash },
+  };
+  return { root, manifest, candidate };
+}
+
+describe("production deployment readiness gate", () => {
+  it("places the exact launch and evidence gates before the deploy mutation", () => {
+    const plan = buildProductionDeployPlan({
+      manifestPath: "test-results/deploy-readiness-test.json",
+    });
+    expect(plan.findIndex((step: any) => step.id === "launch_readiness")).toBeLessThan(
+      plan.findIndex((step: any) => step.id === "readiness_evidence"),
+    );
+    expect(plan.findIndex((step: any) => step.id === "readiness_evidence")).toBeLessThan(
+      plan.findIndex((step: any) => step.id === "deploy"),
+    );
+  });
+
+  it("proves an intentional readiness failure prevents every deploy mutation", () => {
+    const plan = buildProductionDeployPlan({
+      manifestPath: "test-results/deploy-readiness-test.json",
+    });
+    const executed: string[] = [];
+    expect(() => executeProductionDeployPlan(plan, (step: any) => {
+      executed.push(step.id);
+      if (step.id === "launch_readiness") throw new Error("intentional_gate_failure");
+    })).toThrow("intentional_gate_failure");
+    expect(executed).not.toContain("deploy");
+  });
+
+  it("accepts only a clean, exact, all-six first-attempt manifest with intact artifacts", () => {
+    const evidence = passingEvidence();
+    expect(validateDeployReadiness(evidence)).toEqual({ ok: true, issues: [] });
+
+    evidence.manifest.postflight.launchConfig.productionSearchRolloutMode = "v2";
+    expect(validateDeployReadiness(evidence)).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining(["postflight_config_identity"]),
+    });
+  });
+
+  it("fails closed on candidate drift and artifact tampering", () => {
+    const evidence = passingEvidence();
+    evidence.candidate.status.hasChanges = true;
+    const firstArtifact = evidence.manifest.entries[0].artifacts[0];
+    writeFileSync(resolve(evidence.root, "test-results", firstArtifact.name), Buffer.from("tampered"));
+    expect(validateDeployReadiness(evidence)).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining(["candidate_not_clean", "artifact_file_integrity"]),
+    });
+  });
+
+  it("refuses to deploy a clean candidate before it reaches protected main", () => {
+    const evidence = passingEvidence();
+    evidence.candidate.branch = "codex/customer-ready-finalization";
+
+    expect(validateDeployReadiness(evidence)).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining(["candidate_not_protected_main"]),
+    });
+  });
+});

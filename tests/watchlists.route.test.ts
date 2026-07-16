@@ -15,7 +15,10 @@ import type {
 } from "~/lib/types";
 
 type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
-type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
+type MockLinkProps = { children?: ReactNode; to?: string } & Record<
+  string,
+  unknown
+>;
 
 const session = {
   user: {
@@ -271,7 +274,8 @@ async function mockRouter(overrides: {
   searchParams?: URLSearchParams;
 }) {
   vi.doMock("react-router", async () => {
-    const actual = await vi.importActual<typeof import("react-router")>("react-router");
+    const actual =
+      await vi.importActual<typeof import("react-router")>("react-router");
     const React = await import("react");
 
     return {
@@ -279,15 +283,23 @@ async function mockRouter(overrides: {
       Form: ({ children, ...props }: MockFormProps) =>
         React.createElement("form", props, children),
       Link: ({ children, to, ...props }: MockLinkProps) =>
-        React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+        React.createElement(
+          "a",
+          { ...props, href: typeof to === "string" ? to : "" },
+          children,
+        ),
       useActionData: vi.fn().mockReturnValue(overrides.actionData),
       useLoaderData: vi.fn().mockReturnValue(overrides.loaderData),
       useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
-      useRevalidator: vi.fn().mockReturnValue({ state: "idle", revalidate: vi.fn() }),
-      useSearchParams: vi.fn().mockReturnValue([
-        overrides.searchParams ?? new URLSearchParams("watchlist=watch-1"),
-        vi.fn(),
-      ]),
+      useRevalidator: vi
+        .fn()
+        .mockReturnValue({ state: "idle", revalidate: vi.fn() }),
+      useSearchParams: vi
+        .fn()
+        .mockReturnValue([
+          overrides.searchParams ?? new URLSearchParams("watchlist=watch-1"),
+          vi.fn(),
+        ]),
     };
   });
 }
@@ -303,7 +315,9 @@ afterEach(() => {
 
 describe("watchlists route loader", () => {
   it("returns bounded proof, delivery, and candidate state for the selected watchlist", async () => {
-    const listDeliveryAttempts = vi.fn().mockResolvedValue(recentDeliveryAttempts);
+    const listDeliveryAttempts = vi
+      .fn()
+      .mockResolvedValue(recentDeliveryAttempts);
     const listDeliveryTargets = vi
       .fn()
       .mockResolvedValueOnce(deliveryTargets)
@@ -311,28 +325,39 @@ describe("watchlists route loader", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
-    })),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn().mockResolvedValue("starter"),
       checkPlanLimit: vi.fn(),
     }));
+    vi.doMock("~/lib/email-verification.server", () => ({
+      isUserEmailVerified: vi.fn().mockResolvedValue(true),
+    }));
     vi.doMock("~/lib/ad-source.server", () => ({
-      resolveCommercialAdSourceStatus: vi.fn().mockResolvedValue(discoveryStatus),
+      resolveCommercialAdSourceStatus: vi
+        .fn()
+        .mockResolvedValue(discoveryStatus),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
-      getWatchlistDeliveryConfig: vi.fn().mockResolvedValue(watchlistDeliveryConfig),
-      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue(workspaceDeliveryConfig),
+      getWatchlistDeliveryConfig: vi
+        .fn()
+        .mockResolvedValue(watchlistDeliveryConfig),
+      getWorkspaceDeliveryConfig: vi
+        .fn()
+        .mockResolvedValue(workspaceDeliveryConfig),
       listDeliveryAttempts,
       listDeliveryTargets,
       listEventCandidates: vi.fn().mockResolvedValue(recentCandidates),
-      listRecentProofCapturesForWatchlist: vi.fn().mockResolvedValue(recentProofCaptures),
+      listRecentProofCapturesForWatchlist: vi
+        .fn()
+        .mockResolvedValue(recentProofCaptures),
       listWatchEvents: vi.fn().mockResolvedValue(recentEvents),
       listWatchlistRuns: vi.fn().mockResolvedValue(recentRuns),
       listWatchlists: vi.fn().mockResolvedValue([watchlist]),
@@ -348,9 +373,25 @@ describe("watchlists route loader", () => {
       selectedWatchlist: watchlist,
       eventCandidates: recentCandidates,
       events: recentEvents,
-      runs: recentRuns,
-      deliveryTargets,
-      recentDeliveryAttempts,
+      runs: recentRuns.map((run) => ({ ...run, errorMessage: null })),
+      deliveryTargets: deliveryTargets.map((target) => ({
+        ...target,
+        targetValue: session.user.email,
+      })),
+      recentDeliveryAttempts: [
+        {
+          digestRunId: null,
+          channel: "email",
+          status: "sent",
+          webhookStatus: "delivered",
+          targetValue: "Configured email recipient",
+          eventIds: ["event-1"],
+          providerStatusLastSeenAt: "2026-04-18T10:05:10.000Z",
+          sentAt: "2026-04-18T10:05:00.000Z",
+          createdAt: "2026-04-18T10:05:00.000Z",
+          errorMessage: null,
+        },
+      ],
       effectiveDeliveryConfig: {
         sensitivityMode: "quiet",
         instantEnabled: true,
@@ -359,7 +400,12 @@ describe("watchlists route loader", () => {
         whatsappEnabled: false,
         slackEnabled: false,
       },
-      discoveryStatus,
+      discoveryStatus: {
+        status: "healthy",
+        summary: "Live ad checks are ready.",
+        lastCheckedAt: discoveryStatus.lastCheckedAt,
+        recovery: null,
+      },
       proofSummary: {
         totalAttempts: 1,
         successfulAttempts: 1,
@@ -367,26 +413,200 @@ describe("watchlists route loader", () => {
         lastSuccessfulProofAt: "2026-04-18T09:59:50.000Z",
       },
     });
-    expect(listDeliveryTargets).toHaveBeenNthCalledWith(1, expect.anything(), "user-1", {
-      watchlistId: "watch-1",
-      channel: "email",
-      limit: 12,
-    });
-    expect(listDeliveryTargets).toHaveBeenNthCalledWith(2, expect.anything(), "user-1", {
-      watchlistId: null,
-      channel: "email",
-      limit: 8,
-    });
+    expect(listDeliveryTargets).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      "user-1",
+      {
+        watchlistId: "watch-1",
+        channel: "email",
+        limit: 12,
+      },
+    );
+    expect(listDeliveryTargets).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      "user-1",
+      {
+        watchlistId: null,
+        channel: "email",
+        limit: 8,
+      },
+    );
     expect(listDeliveryAttempts).toHaveBeenCalledWith(expect.anything(), {
       userId: "user-1",
       watchlistId: "watch-1",
       channel: "email",
       limit: 16,
     });
+    expect(result).toMatchObject({
+      canManageDelivery: true,
+      verifiedAccountEmail: session.user.email,
+    });
+  });
+
+  it("does not return owner delivery targets to workspace members", async () => {
+    const memberSession = {
+      ...session,
+      user: { ...session.user, id: "member-1", email: "member@example.com" },
+    };
+    const listDeliveryTargets = vi.fn().mockResolvedValue(deliveryTargets);
+    vi.doMock("~/lib/auth.server", () => ({
+      requireWorkspaceSession: vi.fn().mockResolvedValue({
+        session: memberSession,
+        workspaceUserId: session.user.id,
+        isMember: true,
+        ownerName: "Owner",
+      }),
+    }));
+    vi.doMock("~/lib/email-verification.server", () => ({
+      isUserEmailVerified: vi.fn().mockResolvedValue(true),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({ getUserPlan: vi.fn().mockResolvedValue("starter") }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      resolveCommercialAdSourceStatus: vi.fn().mockResolvedValue(discoveryStatus),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWatchlist: vi.fn().mockResolvedValue(watchlist),
+      getWatchlistDeliveryConfig: vi.fn().mockResolvedValue(watchlistDeliveryConfig),
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue(workspaceDeliveryConfig),
+      listDeliveryAttempts: vi.fn().mockResolvedValue([]),
+      listDeliveryTargets,
+      listEventCandidates: vi.fn().mockResolvedValue([]),
+      listRecentProofCapturesForWatchlist: vi.fn().mockResolvedValue([]),
+      listWatchEvents: vi.fn().mockResolvedValue([]),
+      listWatchlistRuns: vi.fn().mockResolvedValue([]),
+      listWatchlists: vi.fn().mockResolvedValue([watchlist]),
+    }));
+
+    const { loader } = await import("~/routes/app.watchlists");
+    const result = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app/watchlists?watchlist=watch-1"),
+    } as never);
+
+    expect(result).toMatchObject({
+      canManageDelivery: false,
+      verifiedAccountEmail: "member@example.com",
+      deliveryTargets: [],
+      workspaceDeliveryTargets: [],
+    });
+    expect(JSON.stringify(result)).not.toContain("owner@example.com");
+    expect(JSON.stringify(result)).not.toContain("providerIdentifier");
+    expect(listDeliveryTargets).toHaveBeenCalled();
   });
 });
 
 describe("watchlists route actions", () => {
+  it("blocks every delivery management intent for workspace members before loading target data", async () => {
+    const requireWorkspaceSession = vi.fn().mockResolvedValue({
+      session,
+      workspaceUserId: session.user.id,
+      isMember: true,
+      ownerName: "Owner",
+    });
+
+    vi.doMock("~/lib/auth.server", () => ({ requireWorkspaceSession }));
+    const { action } = await import("~/routes/app.watchlists");
+
+    for (const intent of [
+      "save-delivery-config",
+      "add-delivery-target",
+      "send-test-email",
+      "toggle-delivery-target",
+    ]) {
+      const formData = new FormData();
+      formData.set("intent", intent);
+      formData.set("targetId", "owner-target");
+      const result = await action({
+        context: createContext(),
+        request: new Request("http://localhost/app/watchlists", { method: "POST", body: formData }),
+      } as never);
+
+      expect(result).toEqual({
+        ok: false,
+        message: "Only the account owner can manage delivery settings and targets for this workspace.",
+      });
+    }
+    expect(requireWorkspaceSession).toHaveBeenCalledTimes(4);
+  });
+
+  it("keeps send-test-email responses free of recipient addresses", async () => {
+    const target = deliveryTargets[0];
+    const sendDeliveryTestEmail = vi.fn().mockResolvedValue(true);
+    vi.doMock("~/lib/auth.server", () => ({
+      requireWorkspaceSession: vi.fn().mockResolvedValue({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      }),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDeliveryTargetById: vi.fn().mockResolvedValue(target),
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({ sendDeliveryTestEmail }));
+    vi.doMock("~/lib/plan-feature-gate.server", () => ({
+      requireDeliveryConfigSave: vi.fn().mockResolvedValue({ ok: true, plan: "starter" }),
+      planFeatureDeniedActionResult: vi.fn(),
+    }));
+
+    const { action } = await import("~/routes/app.watchlists");
+    const formData = new FormData();
+    formData.set("intent", "send-test-email");
+    formData.set("targetId", target.id);
+    formData.set("requestToken", "00000000-0000-4000-8000-000000000000");
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/watchlists", { method: "POST", body: formData }),
+    } as never);
+
+    expect(result).toEqual({
+      ok: true,
+      message: "Test email sent — if it doesn't arrive within a few minutes, check your inbox and spam folder.",
+    });
+    expect(JSON.stringify(result)).not.toContain(target.targetValue);
+    expect(sendDeliveryTestEmail).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      email: target.targetValue,
+      targetId: target.id,
+      idempotencyKey: `delivery-test:user-1:${target.id}:00000000-0000-4000-8000-000000000000`,
+    }));
+  });
+
+  it("rejects missing or malformed test-email request tokens before reading targets", async () => {
+    const getDeliveryTargetById = vi.fn();
+    const sendDeliveryTestEmail = vi.fn();
+    vi.doMock("~/lib/auth.server", () => ({
+      requireWorkspaceSession: vi.fn().mockResolvedValue({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      }),
+    }));
+    vi.doMock("~/lib/data.server", () => ({ getDeliveryTargetById }));
+    vi.doMock("~/lib/delivery.server", () => ({ sendDeliveryTestEmail }));
+
+    const { action } = await import("~/routes/app.watchlists");
+    for (const requestToken of ["", "not-a-route-token"]) {
+      const formData = new FormData();
+      formData.set("intent", "send-test-email");
+      formData.set("targetId", "target-1");
+      formData.set("requestToken", requestToken);
+
+      await expect(action({
+        context: createContext(),
+        request: new Request("http://localhost/app/watchlists", { method: "POST", body: formData }),
+      } as never)).resolves.toEqual({
+        ok: false,
+        message: "This test request expired. Refresh the page and try again.",
+      });
+    }
+
+    expect(getDeliveryTargetById).not.toHaveBeenCalled();
+    expect(sendDeliveryTestEmail).not.toHaveBeenCalled();
+  });
+
   it("blocks manual refresh on the free plan and points at plans", async () => {
     const runWatchlistManual = vi.fn();
     vi.doMock("~/lib/ad-source.server", () => ({
@@ -394,12 +614,12 @@ describe("watchlists route actions", () => {
     }));
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
-    })),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
@@ -430,6 +650,108 @@ describe("watchlists route actions", () => {
     expect(runWatchlistManual).not.toHaveBeenCalled();
   });
 
+  it("returns a structured agency-share gate before creating a share link", async () => {
+    vi.doMock("~/lib/auth.server", () => ({
+      requireWorkspaceSession: vi.fn().mockResolvedValue({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      }),
+    }));
+    vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => ({})) }));
+    vi.doMock("~/lib/plan-feature-gate.server", () => ({
+      requireWorkspacePlanFeature: vi
+        .fn()
+        .mockResolvedValue({ ok: false, plan: "starter" }),
+    }));
+
+    const { action } = await import("~/routes/app.watchlists");
+    const formData = new FormData();
+    formData.set("intent", "share-watchlist");
+    formData.set("watchlistId", "watch-1");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/watchlists", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      ok: false,
+      error: "plan_gated",
+      feature: "share_links",
+      plan: "starter",
+      message: "Share links are included in the Agency plan.",
+    });
+    vi.doUnmock("~/lib/plan-feature-gate.server");
+  });
+
+  it("blocks free digest alerts instead of saving a silent no-op", async () => {
+    const upsertWatchlistDeliveryConfig = vi.fn();
+    vi.doMock("~/lib/auth.server", () => ({
+      requireWorkspaceSession: vi.fn().mockResolvedValue({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      }),
+    }));
+    vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => ({})) }));
+    vi.doMock("~/lib/env.server", () => ({
+      isWhatsAppProviderConfigured: vi.fn(() => false),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWatchlist: vi.fn().mockResolvedValue(watchlist),
+      getWatchlistDeliveryConfig: vi.fn().mockResolvedValue(null),
+      getWorkspaceDeliveryConfig: vi
+        .fn()
+        .mockResolvedValue(workspaceDeliveryConfig),
+      upsertWatchlistDeliveryConfig,
+    }));
+    vi.doMock("~/lib/plan-feature-gate.server", () => ({
+      planFeatureDeniedActionResult: (feature: string, plan: string) => ({
+        ok: false,
+        error: "plan_gated",
+        feature,
+        plan,
+        message: "This capability is not included in your current plan.",
+      }),
+      requireDeliveryConfigSave: vi
+        .fn()
+        .mockResolvedValue({ ok: true, plan: "free" }),
+    }));
+
+    const { action } = await import("~/routes/app.watchlists");
+    const formData = new FormData();
+    formData.set("intent", "save-delivery-config");
+    formData.set("watchlistId", "watch-1");
+    formData.set("digestEnabled", "on");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/watchlists", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: "plan_gated",
+      feature: "weekly_digest",
+      plan: "free",
+    });
+    expect(upsertWatchlistDeliveryConfig).not.toHaveBeenCalled();
+    vi.doUnmock("~/lib/plan-feature-gate.server");
+    vi.doUnmock("~/lib/env.server");
+    vi.doUnmock("~/lib/data.server");
+    vi.doUnmock("~/lib/auth.server");
+    vi.doUnmock("~/lib/context.server");
+  });
+
   it("returns a friendly message when manual refresh is rate limited", async () => {
     class MockCommercialDiscoveryError extends Error {
       failureClass = "rate_limited" as const;
@@ -446,12 +768,12 @@ describe("watchlists route actions", () => {
     }));
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
-    })),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
@@ -463,7 +785,9 @@ describe("watchlists route actions", () => {
     vi.doMock("~/lib/monitoring.server", () => ({
       runWatchlistManual: vi
         .fn()
-        .mockRejectedValue(new MockCommercialDiscoveryError("Rate limit exceeded")),
+        .mockRejectedValue(
+          new MockCommercialDiscoveryError("Rate limit exceeded"),
+        ),
     }));
 
     const { action } = await import("~/routes/app.watchlists");
@@ -503,12 +827,12 @@ describe("watchlists route actions", () => {
     }));
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
-    })),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
@@ -520,7 +844,9 @@ describe("watchlists route actions", () => {
     vi.doMock("~/lib/monitoring.server", () => ({
       runWatchlistManual: vi
         .fn()
-        .mockRejectedValue(new MockCommercialDiscoveryError("Rate limit exceeded", 7200)),
+        .mockRejectedValue(
+          new MockCommercialDiscoveryError("Rate limit exceeded", 7200),
+        ),
     }));
 
     const { action } = await import("~/routes/app.watchlists");
@@ -550,12 +876,12 @@ describe("watchlists route actions", () => {
     }));
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
-    })),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue({
@@ -592,21 +918,25 @@ describe("watchlists route actions", () => {
   });
 
   it("saves watchlist delivery settings with parsed quiet hours and timezone", async () => {
-    const upsertWatchlistDeliveryConfig = vi.fn().mockResolvedValue(watchlistDeliveryConfig);
+    const upsertWatchlistDeliveryConfig = vi
+      .fn()
+      .mockResolvedValue(watchlistDeliveryConfig);
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
-    })),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
       getWatchlistDeliveryConfig: vi.fn().mockResolvedValue(null),
-      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue(workspaceDeliveryConfig),
+      getWorkspaceDeliveryConfig: vi
+        .fn()
+        .mockResolvedValue(workspaceDeliveryConfig),
       upsertWatchlistDeliveryConfig,
     }));
     vi.doMock("~/lib/plan.server", () => ({
@@ -658,17 +988,60 @@ describe("watchlists route actions", () => {
     );
   });
 
+  it("rejects an invalid delivery timezone before persistence", async () => {
+    const upsertWatchlistDeliveryConfig = vi.fn();
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+      requireWorkspaceSession: vi.fn().mockResolvedValue({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      }),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWatchlist: vi.fn().mockResolvedValue(watchlist),
+      getWatchlistDeliveryConfig: vi.fn().mockResolvedValue(null),
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue(workspaceDeliveryConfig),
+      upsertWatchlistDeliveryConfig,
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("starter"),
+      checkPlanLimit: vi.fn(),
+    }));
+
+    const { action } = await import("~/routes/app.watchlists");
+    const formData = new FormData();
+    formData.set("intent", "save-delivery-config");
+    formData.set("watchlistId", "watch-1");
+    formData.set("emailEnabled", "on");
+    formData.set("timezone", "Not/AZone");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/watchlists", { method: "POST", body: formData }),
+    } as never);
+
+    expect(result).toEqual({
+      ok: false,
+      message: "Enter a valid IANA timezone, such as Asia/Kolkata or UTC.",
+    });
+    expect(upsertWatchlistDeliveryConfig).not.toHaveBeenCalled();
+  });
+
   it("preserves hidden delivery channel settings on visible delivery saves", async () => {
-    const upsertWatchlistDeliveryConfig = vi.fn().mockResolvedValue(watchlistDeliveryConfig);
+    const upsertWatchlistDeliveryConfig = vi
+      .fn()
+      .mockResolvedValue(watchlistDeliveryConfig);
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
-    })),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
@@ -677,7 +1050,9 @@ describe("watchlists route actions", () => {
         whatsappEnabled: true,
         slackEnabled: true,
       }),
-      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue(workspaceDeliveryConfig),
+      getWorkspaceDeliveryConfig: vi
+        .fn()
+        .mockResolvedValue(workspaceDeliveryConfig),
       upsertWatchlistDeliveryConfig,
     }));
     vi.doMock("~/lib/plan.server", () => ({
@@ -728,12 +1103,12 @@ describe("watchlists route actions", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
-    })),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
@@ -771,7 +1146,9 @@ describe("watchlists route actions", () => {
         targetCountry: null,
       }),
     );
-    expect(updateWatchlist.mock.calls[0][3].targetFingerprint).toMatch(/^fnv1a-/);
+    expect(updateWatchlist.mock.calls[0][3].targetFingerprint).toMatch(
+      /^fnv1a-/,
+    );
   });
 
   it("redirects to the replacement watchlist when retargeting creates a new baseline", async () => {
@@ -786,12 +1163,12 @@ describe("watchlists route actions", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
-    })),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
@@ -819,7 +1196,9 @@ describe("watchlists route actions", () => {
     }
 
     expect(redirectResponse?.status).toBe(302);
-    expect(redirectResponse?.headers.get("Location")).toBe("/app/watchlists?watchlist=watch-2");
+    expect(redirectResponse?.headers.get("Location")).toBe(
+      "/app/watchlists?watchlist=watch-2",
+    );
   });
 
   it("preserves direct competitor website proof tracking when editing a watchlist", async () => {
@@ -833,12 +1212,12 @@ describe("watchlists route actions", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
-    })),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue({
@@ -890,12 +1269,12 @@ describe("watchlists route actions", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
-    })),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
@@ -919,7 +1298,8 @@ describe("watchlists route actions", () => {
     } as never);
 
     expect(result).toEqual({
-      message: "That website looks incomplete. Add the full domain, like brand.com.",
+      message:
+        "That website looks incomplete. Add the full domain, like brand.com.",
       ok: false,
     });
     expect(updateWatchlist).not.toHaveBeenCalled();
@@ -937,12 +1317,12 @@ describe("watchlists route actions", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
-    })),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
@@ -998,12 +1378,12 @@ describe("watchlists route actions", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
-    })),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(countryWatchlist),
@@ -1059,12 +1439,12 @@ describe("watchlists route actions", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
-    })),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(savedQueryWatchlist),
@@ -1106,16 +1486,18 @@ describe("watchlists route actions", () => {
   });
 
   it("returns a friendly message when a watchlist edit duplicates another target", async () => {
-    const updateWatchlist = vi.fn().mockRejectedValue(new Error("watchlist_duplicate_target"));
+    const updateWatchlist = vi
+      .fn()
+      .mockRejectedValue(new Error("watchlist_duplicate_target"));
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
-    })),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
@@ -1148,12 +1530,12 @@ describe("watchlists route actions", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
-    })),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
@@ -1177,7 +1559,8 @@ describe("watchlists route actions", () => {
     } as never);
 
     expect(result).toEqual({
-      message: "WhatsApp delivery is not available at general availability yet. Use email delivery.",
+      message:
+        "WhatsApp delivery is not available at general availability yet. Use email delivery.",
       ok: false,
     });
     expect(upsertDeliveryTarget).not.toHaveBeenCalled();
@@ -1188,12 +1571,12 @@ describe("watchlists route actions", () => {
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
-    })),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
@@ -1217,7 +1600,8 @@ describe("watchlists route actions", () => {
     } as never);
 
     expect(result).toEqual({
-      message: "Slack delivery is not available at general availability yet. Use email delivery.",
+      message:
+        "Slack delivery is not available at general availability yet. Use email delivery.",
       ok: false,
     });
     expect(upsertDeliveryTarget).not.toHaveBeenCalled();
@@ -1225,28 +1609,31 @@ describe("watchlists route actions", () => {
 
   it("pauses an existing watchlist delivery target", async () => {
     const upsertDeliveryTarget = vi.fn();
+    const getDeliveryTargetById = vi.fn().mockResolvedValue(deliveryTargets[0]);
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
-    })),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
+      getDeliveryTargetById,
       upsertDeliveryTarget,
     }));
 
     const { action } = await import("~/routes/app.watchlists");
     const formData = new FormData();
     formData.set("intent", "toggle-delivery-target");
-    formData.set("watchlistId", "watch-1");
-    formData.set("channel", "email");
-    formData.set("targetValue", "owner@example.com");
-    formData.set("isPaused", "true");
+    formData.set("targetId", "target-email-1");
+    formData.set("watchlistId", "forged-watchlist");
+    formData.set("channel", "whatsapp");
+    formData.set("targetValue", "forged@example.com");
+    formData.set("isPaused", "false");
 
     const result = await action({
       context: createContext(),
@@ -1270,22 +1657,33 @@ describe("watchlists route actions", () => {
         isPaused: true,
       }),
     );
+    expect(getDeliveryTargetById).toHaveBeenCalledWith(expect.anything(), {
+      userId: "user-1",
+      targetId: "target-email-1",
+    });
   });
 
   it("blocks toggling WhatsApp delivery targets while WhatsApp is not customer-facing", async () => {
     const upsertDeliveryTarget = vi.fn();
+    const getDeliveryTargetById = vi.fn().mockResolvedValue({
+      ...deliveryTargets[0],
+      id: "target-whatsapp-1",
+      channel: "whatsapp",
+      targetValue: "+919999999999",
+    });
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
-    })),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
+      getDeliveryTargetById,
       upsertDeliveryTarget,
     }));
 
@@ -1306,7 +1704,8 @@ describe("watchlists route actions", () => {
     } as never);
 
     expect(result).toEqual({
-      message: "WhatsApp delivery is not available at general availability yet. Use email delivery.",
+      message:
+        "WhatsApp delivery is not available at general availability yet. Use email delivery.",
       ok: false,
     });
     expect(upsertDeliveryTarget).not.toHaveBeenCalled();
@@ -1314,18 +1713,25 @@ describe("watchlists route actions", () => {
 
   it("blocks toggling Slack delivery targets while Slack is not customer-facing", async () => {
     const upsertDeliveryTarget = vi.fn();
+    const getDeliveryTargetById = vi.fn().mockResolvedValue({
+      ...deliveryTargets[0],
+      id: "target-slack-1",
+      channel: "slack",
+      targetValue: "slack-target",
+    });
 
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
-    })),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist: vi.fn().mockResolvedValue(watchlist),
+      getDeliveryTargetById,
       upsertDeliveryTarget,
     }));
 
@@ -1346,7 +1752,8 @@ describe("watchlists route actions", () => {
     } as never);
 
     expect(result).toEqual({
-      message: "Slack delivery is not available at general availability yet. Use email delivery.",
+      message:
+        "Slack delivery is not available at general availability yet. Use email delivery.",
       ok: false,
     });
     expect(upsertDeliveryTarget).not.toHaveBeenCalled();
@@ -1354,10 +1761,184 @@ describe("watchlists route actions", () => {
 });
 
 describe("watchlists route rendering", () => {
+  it("derives list-card scan truth from the durable run instead of a missing completion timestamp", async () => {
+    const { resolveWatchlistListScanPresentation } = await import("~/routes/app.watchlists");
+    const run = (status: WatchlistRunRecord["status"], errorCode: string | null = null) => ({
+      ...recentRuns[0],
+      errorCode,
+      finishedAt: status === "succeeded" ? "2026-04-18T10:01:00.000Z" : null,
+      status,
+    });
+
+    expect(resolveWatchlistListScanPresentation({
+      isActive: true,
+      lastScannedAt: null,
+      latestRun: null,
+      plan: "starter",
+    }).label).toBe("No completed scan yet — open to review status");
+    expect(resolveWatchlistListScanPresentation({
+      isActive: true,
+      lastScannedAt: null,
+      latestRun: run("pending", "workflow_binding_missing"),
+      plan: "starter",
+    }).label).toBe("Scan delayed — open to review recovery");
+    expect(resolveWatchlistListScanPresentation({
+      isActive: true,
+      lastScannedAt: null,
+      latestRun: run("running"),
+      plan: "free",
+    }).label).toBe("Activation scan running");
+    expect(resolveWatchlistListScanPresentation({
+      isActive: true,
+      lastScannedAt: null,
+      latestRun: run("failed", "provider_unavailable"),
+      plan: "starter",
+    }).label).toBe("Latest check failed — open to recover");
+    expect(resolveWatchlistListScanPresentation({
+      isActive: true,
+      lastScannedAt: null,
+      latestRun: run("skipped", "e2e_provider_network_denied"),
+      plan: "starter",
+    }).label).toBe("New checks paused — source access needed");
+    expect(resolveWatchlistListScanPresentation({
+      isActive: true,
+      lastScannedAt: null,
+      latestRun: run("succeeded"),
+      plan: "starter",
+    })).toEqual({
+      label: "Last successful check",
+      timestamp: "2026-04-18T10:01:00.000Z",
+    });
+  });
+
+  it("keeps empty evidence, recent-check timing, and polling identity bound to the durable run", async () => {
+    const {
+      firstScanPollingKey,
+      resolveEmptyWatchlistEventCopy,
+      resolveWatchlistRunCustomerError,
+      resolveWatchlistRunTiming,
+    } = await import("~/routes/app.watchlists");
+    const run = (status: WatchlistRunRecord["status"], errorCode: string | null = null) => ({
+      ...recentRuns[0],
+      errorCode,
+      finishedAt: null,
+      id: `run-${status}-${errorCode ?? "none"}`,
+      status,
+    });
+    const copy = (latestRun: WatchlistRunRecord | null) => resolveEmptyWatchlistEventCopy({
+      lastScannedAt: null,
+      latestRun,
+      nextScanLabel: null,
+      plan: "free",
+    });
+
+    expect(copy(run("running"))).toContain("activation scan is running now");
+    expect(copy(run("pending"))).toContain("activation scan is queued");
+    expect(copy(run("pending", "workflow_binding_missing"))).toContain("delayed and queued for recovery");
+    expect(copy(run("failed", "provider_unavailable"))).toContain("could not finish");
+    expect(copy(run("skipped", "e2e_provider_network_denied"))).toContain("paused safely");
+    expect(copy(run("succeeded"))).toContain("activation-only scan is complete");
+    for (const state of [
+      null,
+      run("pending"),
+      run("pending", "workflow_binding_missing"),
+      run("failed"),
+      run("skipped"),
+      run("succeeded"),
+    ]) {
+      expect(copy(state)).not.toContain("running now");
+    }
+    for (const state of [
+      run("pending"),
+      run("running"),
+      run("failed"),
+      run("skipped"),
+    ]) {
+      expect(resolveEmptyWatchlistEventCopy({
+        lastScannedAt: "2026-04-17T10:00:00.000Z",
+        latestRun: state,
+        nextScanLabel: "tomorrow",
+        plan: "free",
+      })).not.toContain("activation-only scan is complete");
+    }
+    for (const state of [
+      null,
+      run("failed"),
+      run("skipped", "e2e_provider_network_denied"),
+    ]) {
+      const recoveryCopy = copy(state);
+      expect(recoveryCopy).not.toMatch(/\bretry\b/i);
+      expect(recoveryCopy).toContain("contact support");
+    }
+
+    expect(resolveWatchlistRunTiming(run("pending"))).toEqual({
+      label: "Queued — waiting for a monitoring worker",
+      timestamp: null,
+    });
+    expect(resolveWatchlistRunTiming(run("pending", "dispatch_failed")).label).toBe("Queued for retry");
+    expect(resolveWatchlistRunTiming(run("running")).label).toBe("Still running");
+    expect(resolveWatchlistRunTiming(run("failed")).label).toBe("Stopped after a failed check");
+    expect(resolveWatchlistRunTiming(run("skipped")).label).toBe("Stopped before evidence was created");
+
+    const failedWithPrivateError = {
+      ...run("failed"),
+      errorMessage: "provider token leaked",
+    };
+    expect(resolveWatchlistRunCustomerError(failedWithPrivateError, "free")).toBe(
+      "This activation scan failed. Check Source access, then contact support if it does not resume.",
+    );
+    expect(resolveWatchlistRunCustomerError(failedWithPrivateError, "free")).not.toMatch(/\bretry\b/i);
+    expect(resolveWatchlistRunCustomerError(failedWithPrivateError, "starter")).toBe(
+      "This scan failed. Check Source access, then retry or contact support.",
+    );
+    expect(resolveWatchlistRunCustomerError(failedWithPrivateError, "free")).not.toContain(
+      "provider token leaked",
+    );
+
+    const pending = run("pending");
+    expect(firstScanPollingKey({ watchlistId: "watch-1", run: pending })).not.toBe(
+      firstScanPollingKey({ watchlistId: "watch-1", run: { ...pending, id: "retry-run" } }),
+    );
+    expect(firstScanPollingKey({ watchlistId: "watch-1", run: pending })).not.toBe(
+      firstScanPollingKey({ watchlistId: "watch-1", run: { ...pending, status: "running" } }),
+    );
+  });
+
+  it("keeps saved evidence visible without promising a recurring check when source access is unavailable", async () => {
+    const { resolveWatchlistTrackingPresentation } = await import("~/routes/app.watchlists");
+    const presentation = resolveWatchlistTrackingPresentation(
+      {
+        status: "demo",
+        summary: "Live ad checks aren't configured yet, so searches show labeled sample data.",
+        lastCheckedAt: null,
+        recovery: null,
+      },
+      recentRuns,
+      {
+        totalAttempts: 1,
+        successfulAttempts: 1,
+        failedAttempts: 0,
+        skippedAttempts: 0,
+        lastAttemptAt: "2026-04-18T09:59:50.000Z",
+        lastSuccessfulProofAt: "2026-04-18T09:59:50.000Z",
+      },
+    );
+
+    expect(presentation).toEqual({
+      headline: "Monitoring history is saved; new checks need source access",
+      summary: "Your last successful evidence remains available. Review source access before relying on new competitor changes.",
+      statusLabel: "Needs source access",
+      lastCheckedAt: "2026-04-18T10:01:00.000Z",
+    });
+  });
+
   it("renders the selected watchlist as a proof-first control panel", async () => {
     await mockRouter({
       actionData: undefined,
       loaderData: {
+        plan: "starter",
+        canManageDelivery: false,
+        verifiedAccountEmail: "member@example.com",
         watchlists: [watchlist],
         selectedWatchlist: watchlist,
         eventCandidates: recentCandidates,
@@ -1396,7 +1977,8 @@ describe("watchlists route rendering", () => {
       },
     });
 
-    const { default: WatchlistsRoute } = await import("~/routes/app.watchlists");
+    const { default: WatchlistsRoute } =
+      await import("~/routes/app.watchlists");
     const markup = renderToStaticMarkup(createElement(WatchlistsRoute));
 
     expect(markup).toContain("See what changed");
@@ -1408,6 +1990,11 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain("Evidence and delivery");
     expect(markup).toContain("High confidence");
     expect(markup).toContain("Why this alerted");
+    expect(markup).toContain("Verified from a page snapshot");
+    expect(markup).toContain("Next review");
+    expect(markup).toContain("review pricing, discount, COD, and bundle pressure");
+    expect(markup.match(/Delivery settings and recipient targets are managed by the workspace owner\./g)).toHaveLength(1);
+    expect(markup).toContain("Ask the workspace owner to add or change delivery targets.");
     expect(markup).toContain("Recent evidence checks");
     expect(markup).toContain("Delivery settings");
     expect(markup).not.toContain("Slack enabled");
@@ -1429,6 +2016,7 @@ describe("watchlists route rendering", () => {
     await mockRouter({
       actionData: undefined,
       loaderData: {
+        plan: "starter",
         watchlists: [watchlist],
         selectedWatchlist: watchlist,
         eventCandidates: recentCandidates,
@@ -1467,7 +2055,8 @@ describe("watchlists route rendering", () => {
       },
     });
 
-    const { default: WatchlistsRoute } = await import("~/routes/app.watchlists");
+    const { default: WatchlistsRoute } =
+      await import("~/routes/app.watchlists");
     const markup = renderToStaticMarkup(createElement(WatchlistsRoute));
 
     expect(markup).toContain("Using recent competitor results");
@@ -1481,7 +2070,8 @@ describe("watchlists route rendering", () => {
       status: "degraded",
       provider: "meta_library_browser",
       mode: "live",
-      summary: "Commercial discovery degraded and no cached results are available.",
+      summary:
+        "Commercial discovery degraded and no cached results are available.",
       lastCheckedAt: "2026-04-18T10:06:00.000Z",
       lastErrorCode: "browser_launch_failed",
       lastErrorMessage: "Browser process exited before startup.",
@@ -1490,6 +2080,7 @@ describe("watchlists route rendering", () => {
     await mockRouter({
       actionData: undefined,
       loaderData: {
+        plan: "starter",
         watchlists: [watchlist],
         selectedWatchlist: watchlist,
         eventCandidates: recentCandidates,
@@ -1528,7 +2119,8 @@ describe("watchlists route rendering", () => {
       },
     });
 
-    const { default: WatchlistsRoute } = await import("~/routes/app.watchlists");
+    const { default: WatchlistsRoute } =
+      await import("~/routes/app.watchlists");
     const markup = renderToStaticMarkup(createElement(WatchlistsRoute));
 
     expect(markup).toContain("Live ad checks are temporarily delayed");

@@ -16,9 +16,11 @@ import { ActionFeedback } from "~/components/action-feedback";
 import { ConfirmSubmitButton } from "~/components/confirm-button";
 import { CopyButton } from "~/components/copy-button";
 import { EmptyState } from "~/components/empty-state";
+import { PlanLimitState } from "~/components/plan-limit-state";
 import { SubmitButton } from "~/components/submit-button";
 import { formatAdvertiserLabel } from "~/lib/landing-page-display";
 import { buildCollectionInsightDepth } from "~/lib/insight-depth";
+import { canUsePlanFeature, getPlanLimit } from "~/lib/plan-entitlements";
 import { proofLinkForAd } from "~/lib/proof-link";
 import { createReportId } from "~/lib/report";
 
@@ -46,9 +48,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { requireWorkspaceSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { getCollection, listCollectionItems, listCollections } = await import("~/lib/data.server");
+  const { getUserPlan } = await import("~/lib/plan.server");
   const env = getEnv(context);
   const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
-  const collections = await listCollections(env, workspaceUserId);
+  const [collections, plan] = await Promise.all([
+    listCollections(env, workspaceUserId),
+    getUserPlan(env, workspaceUserId),
+  ]);
   const url = new URL(request.url);
   const selectedCollectionId = url.searchParams.get("collection") ?? collections[0]?.id ?? null;
   const selectedCollection = selectedCollectionId
@@ -58,6 +64,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
   return {
     collections,
+    plan,
     selectedCollection,
     items,
   };
@@ -69,7 +76,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { requireWorkspacePlanLimit } = await import("~/lib/with-workspace.server");
   const {
     addExternalProofToCollection,
-    createCollection,
+    createCollectionWithinLimit,
     createShareLink,
     getCollection,
     updateCollectionItem,
@@ -94,15 +101,26 @@ export async function action({ context, request }: ActionFunctionArgs) {
       return { ...limitGate.result, intent };
     }
 
-    const collection = await createCollection(env, workspaceUserId, {
+    const collectionResult = await createCollectionWithinLimit(env, workspaceUserId, {
       name,
       description,
-    });
+    }, limitGate.planLimit.limit);
+
+    if (collectionResult.status === "over_cap") {
+      return {
+        ok: false,
+        intent,
+        error: "plan_limit_exceeded" as const,
+        limit: collectionResult.limit,
+        current: collectionResult.current,
+        message: "You have reached your collection limit.",
+      };
+    }
 
     return {
       ok: true,
       intent,
-      message: `Created ${collection?.name ?? name}.`,
+      message: `Created ${collectionResult.collection.name}.`,
     };
   }
 
@@ -207,10 +225,15 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (intent === "share-collection") {
-    const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
+    const { planFeatureDeniedActionResult, requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");
     const shareGate = await requireWorkspacePlanFeature(env, workspaceUserId, "share_links");
     if (!shareGate.ok) {
-      return { ok: false, intent, message: "Share links are included in the Agency plan." };
+      return {
+        ...planFeatureDeniedActionResult("share_links", shareGate.plan),
+        intent,
+        message: "Share links are included in the Agency plan.",
+        upgradePath: "/app/billing?source=collections#plans",
+      };
     }
     const collectionId = String(formData.get("collectionId") ?? "");
     const collection = await getCollection(env, collectionId, workspaceUserId);
@@ -244,7 +267,14 @@ export default function CollectionsRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const [searchParams] = useSearchParams();
+  const plan = data.plan ?? "free";
+  const collectionLimit = getPlanLimit(plan, "collections");
+  const canCreateCollection = data.collections.length < collectionLimit;
   const insightDepth = data.selectedCollection ? buildCollectionInsightDepth(data.items) : null;
+  const canOpenReport = canUsePlanFeature(plan, "client_reports");
+  const canExport =
+    canUsePlanFeature(plan, "export_csv") && canUsePlanFeature(plan, "export_json");
+  const canShare = canUsePlanFeature(plan, "share_links");
   const shareUrl =
     actionData && "shareUrl" in actionData && typeof actionData.shareUrl === "string"
       ? actionData.shareUrl
@@ -279,20 +309,33 @@ export default function CollectionsRoute() {
             intent="create-collection"
             planLimitTo="/app/billing?source=collections#plans"
           />
-          <Form className="f9-auth-form" method="post">
-            <input name="intent" type="hidden" value="create-collection" />
-            <label className="f9-field">
-              <span>Name</span>
-              <input name="name" placeholder="Nykaa competitors" required />
-            </label>
-            <label className="f9-field">
-              <span>Description</span>
-              <textarea name="description" placeholder="Optional context for the team" rows={3} />
-            </label>
-            <SubmitButton className="f9-primary-button" intent="create-collection" pendingLabel="Creating…">
-              Create collection
-            </SubmitButton>
-          </Form>
+          {canCreateCollection ? (
+            <Form className="f9-auth-form" method="post">
+              <input name="intent" type="hidden" value="create-collection" />
+              <label className="f9-field">
+                <span>Name</span>
+                <input name="name" placeholder="Nykaa competitors" required />
+              </label>
+              <label className="f9-field">
+                <span>Description</span>
+                <textarea name="description" placeholder="Optional context for the team" rows={3} />
+              </label>
+              <SubmitButton className="f9-primary-button" intent="create-collection" pendingLabel="Creating…">
+                Create collection
+              </SubmitButton>
+            </Form>
+          ) : (
+            <PlanLimitState
+              current={collectionLimit > 0 ? data.collections.length : undefined}
+              limit={collectionLimit > 0 ? collectionLimit : undefined}
+              message={
+                collectionLimit === 0
+                  ? "Collections start on the Scout plan. Upgrade to save reusable competitor evidence."
+                  : "You have reached your collection limit. Upgrade to save another collection."
+              }
+              title={collectionLimit === 0 ? "Collections are not included on this plan" : "Collection limit reached"}
+            />
+          )}
 
           <div className="f9-work-list is-compact">
             {data.collections.map((collection) => (
@@ -326,31 +369,61 @@ export default function CollectionsRoute() {
                   <h2>{data.selectedCollection.name}</h2>
                 </div>
                 <div className="f9-action-row">
-                  <Link
-                    className="f9-secondary-button"
-                    to={`/app/reports/${createReportId("collection", data.selectedCollection.id)}`}
-                  >
-                    Open report
-                  </Link>
-                  <a
-                    className="f9-secondary-button"
-                    href={`/export/collection/${data.selectedCollection.id}`}
-                  >
-                    Export CSV
-                  </a>
-                    <a
+                  {canOpenReport ? (
+                    <Link
                       className="f9-secondary-button"
-                      href={`/export/collection/${data.selectedCollection.id}?format=json`}
+                      to={`/app/reports/${createReportId("collection", data.selectedCollection.id)}`}
                     >
-                      JSON export
-                    </a>
-                  <Form method="post">
-                    <input name="intent" type="hidden" value="share-collection" />
-                    <input name="collectionId" type="hidden" value={data.selectedCollection.id} />
-                    <SubmitButton className="f9-primary-button" intent="share-collection" pendingLabel="Creating…">
-                      Create share link
-                    </SubmitButton>
-                  </Form>
+                      Open report
+                    </Link>
+                  ) : (
+                    <div>
+                      <button
+                        aria-disabled="true"
+                        className="f9-secondary-button"
+                        disabled
+                        type="button"
+                      >
+                        Open report (Agency only)
+                      </button>{" "}
+                      <Link className="f9-text-link" to="/app/billing?source=collections#plans">
+                        Upgrade to Agency
+                      </Link>
+                    </div>
+                  )}
+                  {canExport ? (
+                    <>
+                      <a
+                        className="f9-secondary-button"
+                        href={`/export/collection/${data.selectedCollection.id}`}
+                      >
+                        Export CSV
+                      </a>
+                      <a
+                        className="f9-secondary-button"
+                        href={`/export/collection/${data.selectedCollection.id}?format=json`}
+                      >
+                        JSON export
+                      </a>
+                    </>
+                  ) : (
+                    <Link className="f9-secondary-button" to="/app/billing?source=collections#plans">
+                      Upgrade to Starter for exports
+                    </Link>
+                  )}
+                  {canShare ? (
+                    <Form method="post">
+                      <input name="intent" type="hidden" value="share-collection" />
+                      <input name="collectionId" type="hidden" value={data.selectedCollection.id} />
+                      <SubmitButton className="f9-primary-button" intent="share-collection" pendingLabel="Creating…">
+                        Create share link
+                      </SubmitButton>
+                    </Form>
+                  ) : (
+                    <Link className="f9-primary-button" to="/app/billing?source=collections#plans">
+                      Upgrade to Agency to share
+                    </Link>
+                  )}
                   <Form method="post">
                     <input name="intent" type="hidden" value="delete-collection" />
                     <input name="collectionId" type="hidden" value={data.selectedCollection.id} />
@@ -374,6 +447,14 @@ export default function CollectionsRoute() {
                       {shareUrl}
                     </a>{" "}
                     <CopyButton value={shareUrl} />
+                  </>
+                ) : null}
+                {actionData?.intent === "share-collection" &&
+                "error" in actionData &&
+                actionData.error === "plan_gated" ? (
+                  <>
+                    {" "}
+                    <Link to="/app/billing?source=collections#plans">Upgrade to Agency</Link>
                   </>
                 ) : null}
               </ActionFeedback>

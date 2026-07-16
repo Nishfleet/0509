@@ -16,6 +16,9 @@ const session = {
 
 beforeEach(() => {
   vi.resetModules();
+  vi.doMock("~/lib/rate-limit.server", () => ({
+    enforceBillingProviderRateLimit: vi.fn().mockResolvedValue(null),
+  }));
 });
 
 afterEach(() => {
@@ -27,6 +30,7 @@ afterEach(() => {
   vi.doUnmock("~/lib/data.server");
   vi.doUnmock("~/lib/dodo-billing.server");
   vi.doUnmock("~/lib/dodo-pricing.server");
+  vi.doUnmock("~/lib/rate-limit.server");
 });
 
 describe("Dodo plan change route", () => {
@@ -394,6 +398,50 @@ describe("Dodo plan change route", () => {
     );
     expect(mocks.claimDodoSubscriptionPlanChange).not.toHaveBeenCalled();
     expect(mocks.changeDodo0509SubscriptionPlan).not.toHaveBeenCalled();
+  });
+
+  it("blocks both preview provider calls when the pricing budget is exhausted", async () => {
+    const mocks = mockPlanChangeRoute({
+      billing: {
+        plan: "scout",
+        billingInterval: "monthly",
+        dodoStatus: "subscription.active",
+        dodoSubscriptionId: "sub_123",
+      },
+    });
+    const enforceBillingProviderRateLimit = vi
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: "rate_limited" }), { status: 429 }));
+    vi.doMock("~/lib/rate-limit.server", () => ({ enforceBillingProviderRateLimit }));
+
+    const response = await postPlanChange("starter_monthly_v1");
+    expect(response.status).toBe(429);
+    expect(mocks.getDodo0509SubscriptionCurrency).not.toHaveBeenCalled();
+    expect(mocks.previewDodo0509SubscriptionPlanChange).not.toHaveBeenCalled();
+  });
+
+  it("blocks the provider mutation when confirmation spend is capped", async () => {
+    const mocks = mockPlanChangeRoute({
+      billing: {
+        plan: "scout",
+        billingInterval: "monthly",
+        dodoStatus: "subscription.active",
+        dodoSubscriptionId: "sub_123",
+      },
+    });
+    const enforceBillingProviderRateLimit = vi
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: "rate_limited" }), { status: 429 }));
+    vi.doMock("~/lib/rate-limit.server", () => ({ enforceBillingProviderRateLimit }));
+
+    const response = await postPlanChange("starter_monthly_v1", confirmFields());
+    expect(response.status).toBe(429);
+    expect(mocks.changeDodo0509SubscriptionPlan).not.toHaveBeenCalled();
+    expect(mocks.claimDodoSubscriptionPlanChange).not.toHaveBeenCalled();
   });
 });
 

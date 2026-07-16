@@ -10,6 +10,8 @@ import type { AppEnv } from "~/lib/env.server";
 import {
   AgentActionIdempotencyConflictError,
   AgentActionReplayUnavailableError,
+  AgentActionStaleWriteError,
+  runAtomicAgentAction,
   runAuditedAgentAction,
   sanitizeAgentActionMetadata,
 } from "~/lib/agent-actions.server";
@@ -39,14 +41,30 @@ import {
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { isClientReportEligibleWatchEvent } from "~/lib/proof-classification";
 import { parseReportId } from "~/lib/report";
-import { SupportCaseInputError } from "~/lib/support";
+import { normalizeTimeZone, safeTimeZone } from "~/lib/safe-timezone";
+import { createApprovedReportSnapshot, evaluateReportReadiness } from "~/lib/report-approval";
+import {
+  normalizeSupportCaseInput,
+  requiresWorkspaceOwnerAuthority,
+  SupportCaseInputError,
+} from "~/lib/support";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
+import { createId, nowIso } from "~/lib/data/helpers.server";
+import {
+  prepareAtomicShareLinkInsert,
+  SHARE_LINK_DEFAULT_TTL_DAYS,
+} from "~/lib/data/shares.server";
+import {
+  prepareAtomicClientRoomUpsert,
+  preserveClientRoomReportApprovals,
+  sameClientRoomResourceRefs,
+  strictlyNewerClientRoomTimestamp,
+} from "~/lib/data/customer-api-rooms.server";
 import type { CounterMoveFollowUpChannel } from "~/lib/counter-move-brief.server";
 import type {
   AgentActionAuditRecord,
   AgentMemoryRecord,
   AgentMemoryScope,
-  AppSession,
   ClientRoomRecord,
   ClientRoomResourceRef,
   DeliveryChannel,
@@ -93,6 +111,13 @@ const IDEMPOTENCY_IGNORED_ACTIONS = new Set<CustomerAgentActionName>([
   "support_case.list",
 ]);
 
+const WORKSPACE_OWNER_ONLY_ACTIONS = new Set<CustomerAgentActionName>([
+  "source.meta.retest",
+  "delivery_targets.list",
+  "delivery_settings.update",
+  "delivery_target.update",
+]);
+
 export interface CustomerAgentActionContext {
   userId: string;
   apiKeyId: string | null;
@@ -100,6 +125,7 @@ export interface CustomerAgentActionContext {
   source: "mcp" | "api_v1";
   executionContext?: ExecutionContext | null;
   origin?: string | null;
+  authorizeExternalEffect?: () => void | Promise<void>;
 }
 
 export class CustomerAgentActionError extends Error {
@@ -212,6 +238,50 @@ export async function runCustomerAgentAction(
     );
   }
 
+  if (actionName === "share.create" || actionName === "report.share" || actionName === "client_room.upsert") {
+    const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
+    const { requireCustomerAgentActionFeature } = await import("~/lib/plan-feature-gate.server");
+    const workspaceUserId = await resolveWorkspaceDataUserId(env, context.userId);
+    const actionGate = await requireCustomerAgentActionFeature(env, workspaceUserId, actionName, input);
+    if (!actionGate.ok) {
+      throw new CustomerAgentActionError("plan_gated", "This capability is not included in your current plan.");
+    }
+    if (actionName === "report.share" && readOptionalBoolean(input, "reviewed") !== true) {
+      throw new CustomerAgentActionError(
+        "review_required",
+        "Set reviewed to true before sharing the current report.",
+      );
+    }
+
+    try {
+      return await runAtomicAgentAction<Record<string, unknown>>(
+        env,
+        {
+          userId: context.userId,
+          apiKeyId: context.apiKeyId,
+          actionName,
+          idempotencyKey,
+          metadata: { source: context.source },
+        },
+        {
+          requestFingerprint,
+          prepare: (db, auditId) => actionName === "client_room.upsert"
+            ? prepareAtomicClientRoomAction(env, context, workspaceUserId, input, auditId, requestFingerprint, db)
+            : prepareAtomicShareAction(env, context, workspaceUserId, actionName, input, auditId, requestFingerprint, db),
+        },
+      );
+    } catch (error) {
+      if (error instanceof AgentActionStaleWriteError) {
+        throw new CustomerAgentActionError(
+          "stale_write",
+          "This client room changed since it was read. Reload it and retry with a new idempotency key.",
+          { status: 409 },
+        );
+      }
+      throw error;
+    }
+  }
+
   return runAuditedAgentAction<Record<string, unknown>>(env, {
     userId: context.userId,
     apiKeyId: context.apiKeyId,
@@ -222,9 +292,17 @@ export async function runCustomerAgentAction(
       requestFingerprint,
     },
   }, async () => {
-    const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
+    const { resolveWorkspace } = await import("~/lib/workspace.server");
     const { requireCustomerAgentActionFeature } = await import("~/lib/plan-feature-gate.server");
-    const workspaceUserId = await resolveWorkspaceDataUserId(env, context.userId);
+    const workspace = await resolveWorkspace(env, context.userId);
+    const { workspaceUserId } = workspace;
+    if (workspace.isMember && WORKSPACE_OWNER_ONLY_ACTIONS.has(actionName)) {
+      throw new CustomerAgentActionError(
+        "workspace_owner_required",
+        "Only the workspace owner can manage source access and delivery settings.",
+        { status: 403 },
+      );
+    }
     const actionGate = await requireCustomerAgentActionFeature(
       env,
       workspaceUserId,
@@ -236,7 +314,25 @@ export async function runCustomerAgentAction(
     }
 
     try {
+      let normalizedSupportInput: ReturnType<typeof normalizeSupportCaseInput> | null = null;
+      if (actionName === "support_case.create") {
+        normalizedSupportInput = normalizeSupportCaseInput({
+          category: input.category,
+          priority: input.priority ?? "normal",
+          subject: input.subject,
+          detail: input.detail,
+        });
+        if (workspace.isMember && requiresWorkspaceOwnerAuthority(normalizedSupportInput)) {
+          throw new CustomerAgentActionError(
+            "workspace_owner_required",
+            "Ask the workspace owner to open cancellation, plan-change, or team-seat requests.",
+            { status: 403 },
+          );
+        }
+      }
+
       if (actionName === "source.meta.retest") {
+        await context.authorizeExternalEffect?.();
         const result = await retestMetaSourceFromAgent(env, workspaceUserId);
         return {
           resourceType: "source_connection",
@@ -277,7 +373,7 @@ export async function runCustomerAgentAction(
       }
 
       if (actionName === "watchlist.refresh") {
-        const result = await refreshWatchlistFromAgent(env, workspaceUserId, context.userId, input);
+        const result = await refreshWatchlistFromAgent(env, workspaceUserId, context, input);
         return {
           resourceType: "watchlist",
           resourceId: result.watchlist.id,
@@ -378,20 +474,6 @@ export async function runCustomerAgentAction(
         };
       }
 
-      if (actionName === "share.create") {
-        const result = await createShareFromAgent(env, context, input);
-        return {
-          resourceType: result.resourceType,
-          resourceId: result.resourceId,
-          result,
-          metadata: {
-            shareLinkId: result.share.id,
-            resourceType: result.resourceType,
-            resourceId: result.resourceId,
-          },
-        };
-      }
-
       if (actionName === "report.create") {
         const result = await buildReportFromAgent(env, workspaceUserId, input);
         return {
@@ -400,19 +482,6 @@ export async function runCustomerAgentAction(
           result,
           metadata: {
             reportId: result.report.reportId,
-          },
-        };
-      }
-
-      if (actionName === "report.share") {
-        const result = await shareReportFromAgent(env, context, input);
-        return {
-          resourceType: "report",
-          resourceId: result.report.reportId,
-          result,
-          metadata: {
-            reportId: result.report.reportId,
-            shareLinkId: result.share.id,
           },
         };
       }
@@ -435,7 +504,7 @@ export async function runCustomerAgentAction(
       }
 
       if (actionName === "memory.upsert") {
-        const result = await upsertMemoryFromAgent(env, context, input);
+        const result = await upsertMemoryFromAgent(env, workspaceUserId, context, input);
         return {
           resourceType: "agent_memory",
           resourceId: result.memory.id,
@@ -461,19 +530,6 @@ export async function runCustomerAgentAction(
         };
       }
 
-      if (actionName === "client_room.upsert") {
-        const result = await upsertClientRoomFromAgent(env, context, input);
-        return {
-          resourceType: "client_room",
-          resourceId: result.room.id,
-          result,
-          metadata: {
-            roomId: result.room.id,
-            resourceCount: result.room.resourceRefs.length,
-          },
-        };
-      }
-
       if (actionName === "client_room.list") {
         const result = await listClientRoomsFromAgent(env, workspaceUserId, input);
         return {
@@ -488,7 +544,12 @@ export async function runCustomerAgentAction(
       }
 
       if (actionName === "support_case.create") {
-        const result = await createSupportCaseFromAgent(env, context, input);
+        const result = await createSupportCaseFromAgent(
+          env,
+          workspaceUserId,
+          context,
+          normalizedSupportInput ?? input,
+        );
         return {
           resourceType: "support_case",
           resourceId: result.supportCase.id,
@@ -502,7 +563,7 @@ export async function runCustomerAgentAction(
       }
 
       if (actionName === "support_case.list") {
-        const result = await listSupportCasesFromAgent(env, workspaceUserId, input);
+        const result = await listSupportCasesFromAgent(env, context.userId, input);
         return {
           resourceType: "support_case",
           resourceId: result.status ?? "all",
@@ -518,6 +579,9 @@ export async function runCustomerAgentAction(
     } catch (error) {
       if (error instanceof Response) {
         throw await customerErrorFromResponse(error);
+      }
+      if (error instanceof SupportCaseInputError) {
+        throw new CustomerAgentActionError(error.code, error.message, { status: error.status });
       }
       throw error;
     }
@@ -616,7 +680,10 @@ async function createWatchlistFromAgent(
   input: Record<string, unknown>,
 ) {
   const { checkPlanLimit } = await import("~/lib/plan.server");
-  const { createWatchlistWithinLimit } = await import("~/lib/data.server");
+  const {
+    createWatchlistWithinLimit,
+    deleteUnscannedWatchlistCreatedByFailedAgentAction,
+  } = await import("~/lib/data.server");
   const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
   const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
 
@@ -657,6 +724,10 @@ async function createWatchlistFromAgent(
   const inferredName = competitorWebsite.displayName ?? normalizedQuery.filters.query;
   const name = readString(input, "name") ?? `${inferredName} watch`;
   const trackingRole = normalizeWatchlistTrackingRole(readString(input, "trackingRole"));
+  const shouldQueueFirstScan = readBoolean(input, "queueFirstScan", true);
+  if (shouldQueueFirstScan) {
+    await context.authorizeExternalEffect?.();
+  }
   const result = await createWatchlistWithinLimit(env, workspaceUserId, {
     name,
     targetType: "advertiser",
@@ -685,9 +756,26 @@ async function createWatchlistFromAgent(
     });
   }
 
-  const shouldQueueFirstScan = readBoolean(input, "queueFirstScan", true);
+  if (shouldQueueFirstScan) {
+    try {
+      await context.authorizeExternalEffect?.();
+    } catch (error) {
+      if (result.status === "created") {
+        try {
+          await deleteUnscannedWatchlistCreatedByFailedAgentAction(env, workspaceUserId, watchlist.id);
+        } catch {
+          throw new CustomerAgentActionError(
+            "watchlist_create_recovery_failed",
+            "The API-key check failed after saving the competitor, and automatic recovery could not be confirmed. Contact support before retrying.",
+            { status: 503 },
+          );
+        }
+      }
+      throw error;
+    }
+  }
   const firstScanQueued = shouldQueueFirstScan
-    ? queueFirstWatchlistScan(env, context.executionContext ?? undefined, watchlist)
+    ? await queueFirstWatchlistScan(env, context.executionContext ?? undefined, watchlist)
     : false;
 
   return {
@@ -825,7 +913,7 @@ async function createCollectionFromAgent(
   input: Record<string, unknown>,
 ) {
   const { checkPlanLimit } = await import("~/lib/plan.server");
-  const { createCollection } = await import("~/lib/data.server");
+  const { createCollectionWithinLimit } = await import("~/lib/data.server");
   const name = requireString(input, "name");
   const limit = await checkPlanLimit(env, workspaceUserId, "collections");
   if (!limit.allowed) {
@@ -838,10 +926,25 @@ async function createCollectionFromAgent(
     });
   }
 
-  const collection = await createCollection(env, workspaceUserId, {
+  const collectionResult = await createCollectionWithinLimit(env, workspaceUserId, {
     name,
     description: readString(input, "description"),
-  });
+  }, limit.limit);
+  if (collectionResult.status === "over_cap") {
+    throw new CustomerAgentActionError(
+      "plan_limit_exceeded",
+      "You have reached your workspace collection limit.",
+      {
+        status: 402,
+        details: {
+          limit: collectionResult.limit,
+          current: collectionResult.current,
+        },
+      },
+    );
+  }
+
+  const collection = collectionResult.collection;
   if (!collection) {
     throw new CustomerAgentActionError("collection_create_failed", "Could not create this collection.", {
       status: 500,
@@ -893,35 +996,238 @@ async function addExternalProofFromAgent(
   };
 }
 
-async function createShareFromAgent(
+async function prepareAtomicShareAction(
   env: AppEnv,
   context: CustomerAgentActionContext,
+  workspaceUserId: string,
+  actionName: "share.create" | "report.share",
   input: Record<string, unknown>,
+  auditId: string,
+  requestFingerprint: string,
+  db: D1Database,
 ) {
-  const { createShareLink } = await import("~/lib/data.server");
-  const resourceType = readShareResourceType(input);
-  if (resourceType === "report") {
+  const shareId = createId();
+  const token = crypto.randomUUID().replaceAll("-", "");
+  const createdAt = nowIso();
+  const expiresAt = new Date(
+    Date.now() + SHARE_LINK_DEFAULT_TTL_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
+
+  if (actionName === "share.create") {
+    const resourceType = readShareResourceType(input);
+    if (resourceType === "report") {
+      throw new CustomerAgentActionError(
+        "unsupported_share_resource",
+        "Use report.share to create a report snapshot link.",
+      );
+    }
+    const resourceId = requireString(input, "resourceId");
+    await assertShareResourceOwned(env, workspaceUserId, resourceType, resourceId);
+    const result = {
+      ok: true,
+      action: "share.create",
+      resourceType,
+      resourceId,
+      share: { id: shareId, token, expiresAt },
+      shareUrl: shareUrl(context, token),
+    };
+    return {
+      statement: prepareAtomicShareLinkInsert(db, {
+        auditId,
+        auditUserId: context.userId,
+        userId: workspaceUserId,
+        actionName,
+        idempotencyKey: context.idempotencyKey?.trim() ?? "",
+        requestFingerprint,
+        resourceType,
+        resourceId,
+        ownerResourceType: resourceType,
+        isSnapshot: false,
+        shareId,
+        token,
+        createdAt,
+        expiresAt,
+      }),
+      resourceType,
+      resourceId,
+      result,
+    };
+  }
+
+  const { report, memoryContext } = await loadReportDocumentForAgent(env, workspaceUserId, input);
+  const parsedReport = parseReportId(report.reportId);
+  if (!parsedReport) {
     throw new CustomerAgentActionError(
-      "unsupported_share_resource",
-      "Use report.share to create a report snapshot link.",
+      "invalid_report_id",
+      "reports must use a collection or watchlist report id.",
+    );
+  }
+  const snapshotPayload = createApprovedReportSnapshot(
+    sanitizeAgentReportShareSnapshot(report),
+  );
+  if (!snapshotPayload) {
+    throw new CustomerAgentActionError(
+      "evidence_not_ready",
+      "Current report evidence must be saved and verified before sharing.",
+    );
+  }
+  const result = {
+    ok: true,
+    action: "report.share",
+    report,
+    memoryContext,
+    share: { id: shareId, token, expiresAt },
+    shareUrl: shareUrl(context, token),
+  };
+  return {
+      statement: prepareAtomicShareLinkInsert(db, {
+        auditId,
+        auditUserId: context.userId,
+        userId: workspaceUserId,
+      actionName,
+      idempotencyKey: context.idempotencyKey?.trim() ?? "",
+      requestFingerprint,
+      resourceType: "report",
+      resourceId: report.reportId,
+      ownerResourceType: parsedReport.resourceType,
+      isSnapshot: true,
+      snapshotPayload: snapshotPayload as unknown as Record<string, unknown>,
+      shareId,
+      token,
+      createdAt,
+      expiresAt,
+    }),
+    resourceType: "report",
+    resourceId: report.reportId,
+    result,
+  };
+}
+
+async function prepareAtomicClientRoomAction(
+  env: AppEnv,
+  context: CustomerAgentActionContext,
+  workspaceUserId: string,
+  input: Record<string, unknown>,
+  auditId: string,
+  requestFingerprint: string,
+  db: D1Database,
+) {
+  const { getClientRoom, getClientRoomByName } = await import("~/lib/data.server");
+  const resourceRefs = readClientRoomResourceRefs(input);
+  const hasNotes = Object.prototype.hasOwnProperty.call(input, "notes");
+  const notes = hasNotes ? readClientRoomNotes(input) : null;
+  const requestedRoomId = readString(input, "roomId");
+  const name = readClientRoomDisplayName(input, "name", "Client room name");
+  const existing = requestedRoomId
+    ? await getClientRoom(env, workspaceUserId, requestedRoomId)
+    : await getClientRoomByName(env, workspaceUserId, name);
+  if (requestedRoomId && !existing) {
+    throw new CustomerAgentActionError("client_room_not_found", "Client room not found.", { status: 404 });
+  }
+  const expectedUpdatedAt = readString(input, "expectedUpdatedAt");
+  if (requestedRoomId && !expectedUpdatedAt) {
+    throw new CustomerAgentActionError(
+      "missing_expected_updated_at",
+      "Reload this client room and include its expectedUpdatedAt value before updating it.",
+      { status: 409 },
+    );
+  }
+  if (requestedRoomId && existing && expectedUpdatedAt !== existing.updatedAt) {
+    throw new CustomerAgentActionError(
+      "stale_write",
+      "This client room changed since it was read. Reload it and retry with a new idempotency key.",
+      { status: 409 },
     );
   }
 
-  const resourceId = requireString(input, "resourceId");
-  await assertShareResourceOwned(env, context.userId, resourceType, resourceId);
-  const share = await createShareLink(env, agentSession(context.userId, context.apiKeyId), {
-    resourceType,
-    resourceId,
-    isSnapshot: false,
+  const roomId = requestedRoomId ?? existing?.id ?? createId();
+  const status = readClientRoomStatus(input);
+  const clientLabel = readOptionalClientRoomDisplayName(input, "clientLabel", "Client label");
+  const finalRefs = resourceRefs ?? existing?.resourceRefs ?? [];
+  await assertClientRoomResourceRefsOwned(env, workspaceUserId, finalRefs);
+  await assertClientRoomReportRefsReady(env, workspaceUserId, finalRefs);
+  const refsChanged = typeof resourceRefs !== "undefined" && !sameClientRoomResourceRefs(
+    existing?.resourceRefs ?? [],
+    finalRefs,
+  );
+  const retainedNotes = hasNotes
+    ? preserveClientRoomReportApprovals(notes ?? {}, existing?.notes ?? {})
+    : existing?.notes ?? {};
+  const finalNotes = refsChanged ? withoutClientRoomReportApprovals(retainedNotes) : retainedNotes;
+  const timestamp = strictlyNewerClientRoomTimestamp(existing?.updatedAt, nowIso());
+  const prepared = prepareAtomicClientRoomUpsert(db, {
+    auditId,
+    auditUserId: context.userId,
+    userId: workspaceUserId,
+    idempotencyKey: context.idempotencyKey?.trim() ?? "",
+    requestFingerprint,
+    roomId,
+    name,
+    clientLabel,
+    status,
+    notesJson: JSON.stringify(finalNotes),
+    hasNotes,
+    createdAt: existing?.createdAt ?? timestamp,
+    updatedAt: timestamp,
+    expectedUpdatedAt,
+    invalidateApprovals: refsChanged,
+    isUpdate: Boolean(existing),
+    resourceRefs: typeof resourceRefs === "undefined"
+      ? null
+      : resourceRefs.map((ref) => {
+          if (ref.resourceType === "report") {
+            const parsedReport = parseReportId(ref.resourceId);
+            if (!parsedReport) {
+              throw new CustomerAgentActionError(
+                "invalid_report_id",
+                "report resources must use a report id such as collection:<id> or watchlist:<id>.",
+              );
+            }
+            return {
+              resourceType: ref.resourceType,
+              resourceId: ref.resourceId,
+              label: ref.label,
+              ownerResourceType: parsedReport.resourceType,
+              ownerResourceId: parsedReport.resourceId,
+            };
+          }
+          return {
+            resourceType: ref.resourceType,
+            resourceId: ref.resourceId,
+            label: ref.label,
+            ownerResourceType: ref.resourceType,
+            ownerResourceId: ref.resourceId,
+          };
+        }),
   });
+  const result = {
+    ok: true,
+    action: "client_room.upsert",
+    room: safeClientRoomRecord({
+      id: roomId,
+      userId: workspaceUserId,
+      name,
+      clientLabel,
+      status,
+      resourceRefs: finalRefs,
+      notes: finalNotes,
+      createdAt: existing?.createdAt ?? timestamp,
+      updatedAt: timestamp,
+    }),
+  };
 
   return {
-    ok: true,
-    action: "share.create",
-    resourceType,
-    resourceId,
-    share,
-    shareUrl: shareUrl(context, share.token),
+    statement: prepared.statements,
+    effectExpectations: prepared.effectExpectations,
+    classifyBatchFailure: expectedUpdatedAt
+      ? async () => {
+          const current = await getClientRoom(env, workspaceUserId, roomId);
+          return current?.updatedAt === expectedUpdatedAt ? null : "stale_write" as const;
+        }
+      : undefined,
+    resourceType: "client_room",
+    resourceId: roomId,
+    result,
   };
 }
 
@@ -939,36 +1245,12 @@ async function buildReportFromAgent(
   };
 }
 
-async function shareReportFromAgent(
-  env: AppEnv,
-  context: CustomerAgentActionContext,
-  input: Record<string, unknown>,
-) {
-  const { createShareLink } = await import("~/lib/data.server");
-  const { report, memoryContext } = await loadReportDocumentForAgent(env, context.userId, input);
-  const share = await createShareLink(env, agentSession(context.userId, context.apiKeyId), {
-    resourceType: "report",
-    resourceId: report.reportId,
-    isSnapshot: true,
-    snapshotPayload: sanitizeAgentReportShareSnapshot(report) as unknown as Record<string, unknown>,
-  });
-
-  return {
-    ok: true,
-    action: "report.share",
-    report,
-    memoryContext,
-    share,
-    shareUrl: shareUrl(context, share.token),
-  };
-}
-
 function sanitizeAgentReportShareSnapshot<T extends { reportId: string; resourceId: string }>(report: T) {
-  return {
+  return JSON.parse(JSON.stringify({
     ...report,
     reportId: "shared-report",
     resourceId: "shared",
-  };
+  })) as T;
 }
 
 async function loadReportDocumentForAgent(
@@ -1008,7 +1290,7 @@ async function loadReportDocumentForAgent(
   }
 
   const watchlist = await getWatchlist(env, resourceId, userId);
-  if (!watchlist) {
+  if (!watchlist || watchlist.isActive === false) {
     throw new CustomerAgentActionError("watchlist_not_found", "Watchlist not found.", { status: 404 });
   }
 
@@ -1075,14 +1357,15 @@ async function buildCounterMoveBriefFromAgent(
 
 async function upsertMemoryFromAgent(
   env: AppEnv,
+  workspaceUserId: string,
   context: CustomerAgentActionContext,
   input: Record<string, unknown>,
 ) {
   const { upsertAgentMemory } = await import("~/lib/data.server");
   const watchlistId = readString(input, "watchlistId");
   const clientRoomId = readString(input, "clientRoomId");
-  await assertMemoryScopeOwned(env, context.userId, { watchlistId, clientRoomId });
-  const memory = await upsertAgentMemory(env, context.userId, {
+  await assertMemoryScopeOwned(env, workspaceUserId, { watchlistId, clientRoomId });
+  const memory = await upsertAgentMemory(env, workspaceUserId, {
     scope: readAgentMemoryScope(input),
     key: readMemoryKey(input),
     watchlistId,
@@ -1153,47 +1436,6 @@ async function loadMemoryContextForAgent(
   );
 }
 
-async function upsertClientRoomFromAgent(
-  env: AppEnv,
-  context: CustomerAgentActionContext,
-  input: Record<string, unknown>,
-) {
-  const { getClientRoom, upsertClientRoom } = await import("~/lib/data.server");
-  const resourceRefs = readClientRoomResourceRefs(input);
-  const hasNotes = Object.prototype.hasOwnProperty.call(input, "notes");
-  const notes = hasNotes ? readClientRoomNotes(input) : null;
-  const roomId = readString(input, "roomId");
-  const name = readClientRoomDisplayName(input, "name", "Client room name");
-  if (typeof resourceRefs !== "undefined") {
-    await assertClientRoomResourceRefsOwned(env, context.userId, resourceRefs);
-  }
-  const room = await upsertClientRoom(env, context.userId, {
-    roomId,
-    name,
-    clientLabel: readOptionalClientRoomDisplayName(input, "clientLabel", "Client label"),
-    status: readClientRoomStatus(input),
-    resourceRefs,
-    ...(hasNotes ? { notes } : {}),
-  });
-
-  if (!room) {
-    if (roomId && await getClientRoom(env, context.userId, roomId)) {
-      throw new CustomerAgentActionError(
-        "client_room_name_conflict",
-        "Another client room already uses this name.",
-        { status: 409 },
-      );
-    }
-    throw new CustomerAgentActionError("client_room_upsert_failed", "Could not save client room.", { status: 500 });
-  }
-
-  return {
-    ok: true,
-    action: "client_room.upsert",
-    room: safeClientRoomRecord(room),
-  };
-}
-
 async function listClientRoomsFromAgent(
   env: AppEnv,
   userId: string,
@@ -1216,10 +1458,12 @@ async function listClientRoomsFromAgent(
 
 async function createSupportCaseFromAgent(
   env: AppEnv,
+  workspaceUserId: string,
   context: CustomerAgentActionContext,
   input: Record<string, unknown>,
 ) {
   const { createSupportCase } = await import("~/lib/data.server");
+  const requestKey = context.idempotencyKey;
   let supportCase;
   try {
     supportCase = await createSupportCase(env, {
@@ -1228,11 +1472,13 @@ async function createSupportCaseFromAgent(
       priority: input.priority ?? "normal",
       subject: input.subject,
       detail: input.detail,
-      requestKey: context.idempotencyKey,
+      requestKey,
       context: {
         createdFrom: "agent_action",
         source: context.source,
         apiKeyId: context.apiKeyId,
+        requesterUserId: context.userId,
+        workspaceUserId,
       },
     });
   } catch (error) {
@@ -1253,6 +1499,7 @@ async function createSupportCaseFromAgent(
     requesterEmail: requester?.email ?? "unknown",
     input,
     source: context.source,
+    authorizeExternalEffect: context.authorizeExternalEffect,
   });
 
   return {
@@ -1269,8 +1516,8 @@ async function getSupportRequesterProfile(env: AppEnv, userId: string) {
   try {
     const { getUserDeliveryProfile } = await import("~/lib/data.server");
     return await getUserDeliveryProfile(env, userId);
-  } catch (error) {
-    console.error("[support] requester profile lookup failed", error);
+  } catch {
+    console.error("[support]", { event: "requester_profile_lookup_failed" });
     return null;
   }
 }
@@ -1282,6 +1529,7 @@ async function notifySupportCaseOperatorFromAgent(
     requesterEmail: string;
     input: Record<string, unknown>;
     source: CustomerAgentActionContext["source"];
+    authorizeExternalEffect?: CustomerAgentActionContext["authorizeExternalEffect"];
   },
 ) {
   const idempotencyKey = `support-case:${input.caseId}`;
@@ -1301,6 +1549,8 @@ async function notifySupportCaseOperatorFromAgent(
       detail: input.input.detail,
     });
 
+    await input.authorizeExternalEffect?.();
+
     return await sendOperatorAlertEmail(env, {
       subject: `0509 support case: ${normalized.subject}`,
       lines: [
@@ -1314,8 +1564,8 @@ async function notifySupportCaseOperatorFromAgent(
       ],
       idempotencyKey,
     });
-  } catch (error) {
-    console.error("[support] agent operator alert failed", error);
+  } catch {
+    console.error("[support]", { event: "agent_operator_alert_failed" });
     return false;
   }
 }
@@ -1412,6 +1662,15 @@ async function updateDeliverySettingsFromAgent(
     quietHours: workspaceConfig?.quietHours ?? null,
     timezone: workspaceConfig?.timezone ?? null,
   };
+  const timezoneInputProvided = Object.prototype.hasOwnProperty.call(input, "timezone");
+  const requestedTimezone = readNullableString(input, "timezone", base.timezone);
+  const normalizedTimezone = normalizeTimeZone(requestedTimezone);
+  if (timezoneInputProvided && requestedTimezone !== null && !normalizedTimezone) {
+    throw new CustomerAgentActionError(
+      "invalid_timezone",
+      "timezone must be a valid IANA timezone such as Asia/Kolkata or UTC.",
+    );
+  }
 
   const config = await upsertWatchlistDeliveryConfig(env, {
     watchlistId: watchlist.id,
@@ -1427,7 +1686,7 @@ async function updateDeliverySettingsFromAgent(
       ? readOptionalBoolean(input, "slackEnabled") ?? base.slackEnabled
       : base.slackEnabled,
     quietHours: readQuietHours(input, "quietHours", base.quietHours),
-    timezone: readNullableString(input, "timezone", base.timezone),
+    timezone: requestedTimezone === null ? null : normalizedTimezone ?? safeTimeZone(base.timezone),
   });
 
   if (!config) {
@@ -1634,7 +1893,7 @@ async function listWebMentionsFromAgent(
 async function refreshWatchlistFromAgent(
   env: AppEnv,
   workspaceUserId: string,
-  actorUserId: string,
+  context: CustomerAgentActionContext,
   input: Record<string, unknown>,
 ) {
   const { CommercialDiscoveryError } = await import("~/lib/ad-source.server");
@@ -1658,6 +1917,7 @@ async function refreshWatchlistFromAgent(
   }
 
   try {
+    await context.authorizeExternalEffect?.();
     await runWatchlistManual(env, watchlist);
   } catch (error) {
     if (error instanceof CommercialDiscoveryError) {
@@ -2127,6 +2387,13 @@ function readClientRoomNotes(input: Record<string, unknown>) {
   if (typeof value !== "object" || Array.isArray(value)) {
     throw new CustomerAgentActionError("invalid_room_notes", "notes must be an object.", { status: 400 });
   }
+  if (Object.prototype.hasOwnProperty.call(value, "reportApprovals")) {
+    throw new CustomerAgentActionError(
+      "reserved_room_notes",
+      "reportApprovals is owner-managed; use the browser approval action to approve current report evidence.",
+      { status: 400 },
+    );
+  }
   mapAgentMemoryInputError(() => rejectSecretishMemoryValue(value, "Client room notes cannot contain secrets or credentials."));
   return sanitizeAgentActionMetadata(value);
 }
@@ -2298,6 +2565,12 @@ function sanitizeClientRoomNotesForResponse(notes: Record<string, unknown>) {
     : {};
 }
 
+function withoutClientRoomReportApprovals(notes: Record<string, unknown>) {
+  const next = { ...notes };
+  delete next.reportApprovals;
+  return next;
+}
+
 function readClientRoomDisplayName(input: Record<string, unknown>, field: string, label: string) {
   const value = requireString(input, field);
   rejectSecretishClientRoomDisplayText(value, `${label} cannot contain secrets or credentials.`);
@@ -2412,6 +2685,21 @@ async function assertClientRoomResourceRefsOwned(
   }
 }
 
+async function assertClientRoomReportRefsReady(
+  env: AppEnv,
+  userId: string,
+  refs: ClientRoomResourceRef[],
+) {
+  for (const ref of refs) {
+    if (ref.resourceType !== "report") continue;
+    const { report } = await loadReportDocumentForAgent(env, userId, { reportId: ref.resourceId });
+    const readiness = evaluateReportReadiness(report);
+    if (!readiness.ok) {
+      throw new CustomerAgentActionError("evidence_not_ready", readiness.reason, { status: 409 });
+    }
+  }
+}
+
 async function assertReportResourceOwned(env: AppEnv, userId: string, reportId: string) {
   const parsedReport = parseReportId(reportId);
   if (!parsedReport) {
@@ -2461,29 +2749,23 @@ async function assertMemoryScopeOwned(
   }
 }
 
-function agentSession(userId: string, apiKeyId: string | null): AppSession {
-  return {
-    user: {
-      id: userId,
-      email: "",
-      name: "API key",
-    },
-    session: {
-      id: apiKeyId ? `api-key:${apiKeyId}` : "api-key",
-      userId,
-      expiresAt: "",
-    },
-  };
-}
-
 function shareUrl(context: CustomerAgentActionContext, token: string) {
   return context.origin ? new URL(`/share/${token}`, context.origin).toString() : `/share/${token}`;
 }
 
 async function customerErrorFromResponse(response: Response) {
-  const message = await response.text().catch(() => "") || response.statusText || "Agent action failed.";
-  return new CustomerAgentActionError("invalid_action_input", message, {
+  const payload = await response.json().catch(() => null) as Record<string, unknown> | null;
+  const code = typeof payload?.error === "string" ? payload.error : null;
+  const knownCode = code === "invalid_api_key" || code === "rate_limited" || code === "rate_limit_unavailable";
+  const message = knownCode && typeof payload?.message === "string"
+    ? payload.message
+    : "Agent action could not be completed.";
+  const retryAfterSeconds = Number(response.headers.get("retry-after"));
+  return new CustomerAgentActionError(knownCode ? code : "invalid_action_input", message, {
     status: response.status >= 400 ? response.status : 400,
+    details: Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+      ? { retryAfterSeconds }
+      : {},
   });
 }
 
@@ -2522,7 +2804,7 @@ function formatRetryAfterLabel(retryAfterSeconds: number) {
   return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
 }
 
-function buildAgentActionRequestFingerprint(actionName: CustomerAgentActionName, input: Record<string, unknown>) {
+export function buildAgentActionRequestFingerprint(actionName: CustomerAgentActionName, input: Record<string, unknown>) {
   return fnv1a32(`${actionName}:${stableStringify(sanitizeAgentActionInputForFingerprint(actionName, input))}`);
 }
 

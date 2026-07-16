@@ -35,6 +35,10 @@ function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
 }
 
+function mutationChanges(result: { meta?: { changes?: number } }) {
+  return Number(result.meta?.changes ?? 0);
+}
+
 async function sha256Hex(value: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -46,7 +50,8 @@ export async function resolveWorkspace(env: AppEnv, userId: string): Promise<Wor
   }
 
   const membership = await ensureDb(env).prepare(
-    `SELECT wm.owner_user_id AS ownerUserId, u.name AS ownerName
+    `SELECT wm.owner_user_id AS ownerUserId, u.name AS ownerName,
+            COUNT(*) OVER () AS membershipCount
        FROM workspace_member wm
        JOIN user u ON u.id = wm.owner_user_id
       WHERE wm.member_user_id = ?1 AND wm.status = 'active'
@@ -54,9 +59,9 @@ export async function resolveWorkspace(env: AppEnv, userId: string): Promise<Wor
       LIMIT 1`,
   )
     .bind(userId)
-    .first<{ ownerUserId: string; ownerName: string | null }>();
+    .first<{ ownerUserId: string; ownerName: string | null; membershipCount?: number }>();
 
-  if (!membership) {
+  if (!membership || Number(membership.membershipCount ?? 1) !== 1) {
     return { workspaceUserId: userId, isMember: false, ownerName: null };
   }
 
@@ -116,7 +121,6 @@ export async function createWorkspaceInvite(
   if (existing.some((row) => row.invitedEmail === inviteeEmail)) {
     return { ok: false, reason: "That teammate is already invited." };
   }
-
   if (existing.length >= AGENCY_SEAT_LIMIT - 1) {
     return { ok: false, reason: `Agency includes ${AGENCY_SEAT_LIMIT} seats — all are in use.` };
   }
@@ -139,12 +143,60 @@ export async function createWorkspaceInvite(
   const tokenHash = await sha256Hex(token);
   const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-  await ensureDb(env).prepare(
-    `INSERT INTO workspace_member (id, owner_user_id, invited_email, status, token_hash, token_expires_at)
-     VALUES (?1, ?2, ?3, 'invited', ?4, ?5)`,
-  )
-    .bind(crypto.randomUUID(), input.ownerUserId, inviteeEmail, tokenHash, expiresAt)
-    .run();
+  let result: { meta?: { changes?: number } };
+  try {
+    result = await ensureDb(env)
+      .prepare(
+        `INSERT INTO workspace_member
+           (id, owner_user_id, invited_email, status, token_hash, token_expires_at)
+         SELECT ?1, ?2, ?3, 'invited', ?4, ?5
+           FROM user_plan owner_plan
+          WHERE owner_plan.user_id = ?2
+            AND owner_plan.plan = 'agency'
+            AND NOT (
+              owner_plan.dodo_status = 'cancellation_scheduled'
+              AND owner_plan.dodo_next_billing_at IS NOT NULL
+              AND julianday(owner_plan.dodo_next_billing_at) <= julianday('now')
+            )
+            AND (
+              SELECT COUNT(*)
+                FROM workspace_member used_seat
+               WHERE used_seat.owner_user_id = ?2
+                 AND used_seat.status IN ('invited', 'active')
+            ) < ?6
+            AND NOT EXISTS (
+              SELECT 1
+                FROM workspace_member existing_email
+               WHERE lower(existing_email.invited_email) = ?3
+                 AND existing_email.status IN ('invited', 'active')
+            )
+            AND NOT EXISTS (
+              SELECT 1
+                FROM workspace_member active_member
+                JOIN user active_user ON active_user.id = active_member.member_user_id
+               WHERE lower(active_user.email) = ?3
+                 AND active_member.status = 'active'
+            )`,
+      )
+      .bind(
+        crypto.randomUUID(),
+        input.ownerUserId,
+        inviteeEmail,
+        tokenHash,
+        expiresAt,
+        AGENCY_SEAT_LIMIT - 1,
+      )
+      .run();
+  } catch {
+    return { ok: false, reason: "That invite could not be created — refresh and try again." };
+  }
+
+  if (mutationChanges(result) !== 1) {
+    return {
+      ok: false,
+      reason: "That invite could not be created because the seat or teammate state changed.",
+    };
+  }
 
   return { ok: true, token };
 }
@@ -175,13 +227,17 @@ export async function resendWorkspaceInvite(
   const tokenHash = await sha256Hex(token);
   const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-  await ensureDb(env).prepare(
+  const result = await ensureDb(env).prepare(
     `UPDATE workspace_member
         SET token_hash = ?1, token_expires_at = ?2
       WHERE id = ?3 AND owner_user_id = ?4 AND status = 'invited'`,
   )
     .bind(tokenHash, expiresAt, input.memberRowId, input.ownerUserId)
     .run();
+
+  if (mutationChanges(result) !== 1) {
+    return { ok: false, reason: "That invite is no longer pending — refresh the team page." };
+  }
 
   return { ok: true, token, inviteeEmail: member.invitedEmail };
 }
@@ -259,14 +315,79 @@ export async function acceptWorkspaceInvite(
     return { ok: false, reason: "You already belong to a workspace — leave it before joining another." };
   }
 
-  await ensureDb(env).prepare(
-    `UPDATE workspace_member
+  const ownerPlan = await getUserPlan(env, invite.ownerUserId);
+  if (ownerPlan !== "agency") {
+    return { ok: false, reason: "This team's Agency plan is no longer active." };
+  }
+
+  const ownedWorkspace = await ensureDb(env).prepare(
+    `SELECT id
+       FROM workspace_member
+      WHERE owner_user_id = ?1 AND status IN ('invited', 'active')
+      LIMIT 1`,
+  )
+    .bind(input.userId)
+    .first<{ id: string }>();
+  if (ownedWorkspace) {
+    return { ok: false, reason: "You already own a workspace — leave it before joining another." };
+  }
+
+  let result: { meta?: { changes?: number } };
+  try {
+    result = await ensureDb(env).prepare(
+      `UPDATE workspace_member
         SET member_user_id = ?1, status = 'active', token_hash = NULL,
             accepted_at = datetime('now')
-      WHERE id = ?2 AND status = 'invited'`,
-  )
-    .bind(input.userId, invite.id)
-    .run();
+      WHERE id = ?2
+        AND token_hash = ?3
+        AND status = 'invited'
+        AND lower(invited_email) = ?4
+        AND (token_expires_at IS NULL OR julianday(token_expires_at) > julianday('now'))
+        AND EXISTS (
+          SELECT 1
+            FROM user_plan owner_plan
+           WHERE owner_plan.user_id = workspace_member.owner_user_id
+             AND owner_plan.plan = 'agency'
+             AND NOT (
+               owner_plan.dodo_status = 'cancellation_scheduled'
+               AND owner_plan.dodo_next_billing_at IS NOT NULL
+               AND julianday(owner_plan.dodo_next_billing_at) <= julianday('now')
+             )
+        )
+        AND NOT EXISTS (
+          SELECT 1
+            FROM workspace_member active_membership
+           WHERE active_membership.member_user_id = ?1
+             AND active_membership.status = 'active'
+        )
+        AND NOT EXISTS (
+          SELECT 1
+            FROM workspace_member owned_workspace
+           WHERE owned_workspace.owner_user_id = ?1
+             AND owned_workspace.status IN ('invited', 'active')
+        )
+        AND NOT EXISTS (
+          SELECT 1
+            FROM user_plan invitee_plan
+           WHERE invitee_plan.user_id = ?1
+             AND invitee_plan.plan = 'agency'
+        )`,
+    )
+      .bind(input.userId, invite.id, tokenHash, invite.invitedEmail)
+      .run();
+  } catch {
+    return {
+      ok: false,
+      reason: "This invite is no longer available — the workspace changed while you were joining.",
+    };
+  }
+
+  if (mutationChanges(result) !== 1) {
+    return {
+      ok: false,
+      reason: "This invite is no longer available — the workspace changed while you were joining.",
+    };
+  }
 
   return { ok: true, ownerName: invite.ownerName };
 }
@@ -274,12 +395,16 @@ export async function acceptWorkspaceInvite(
 export async function revokeWorkspaceMember(
   env: AppEnv,
   input: { ownerUserId: string; memberRowId: string },
-) {
-  await ensureDb(env).prepare(
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const result = await ensureDb(env).prepare(
     `UPDATE workspace_member
         SET status = 'revoked', token_hash = NULL, revoked_at = datetime('now')
       WHERE id = ?1 AND owner_user_id = ?2 AND status IN ('invited', 'active')`,
   )
     .bind(input.memberRowId, input.ownerUserId)
     .run();
+
+  return mutationChanges(result) === 1
+    ? { ok: true }
+    : { ok: false, reason: "That seat is already revoked or no longer belongs to this workspace." };
 }

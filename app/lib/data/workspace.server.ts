@@ -29,6 +29,7 @@ export {
   getWeeklyBusinessSummary,
   getOperatorRiskSummary,
   getOperatorSnapshot,
+  getOperatorSupportCase,
 } from "~/lib/data/workspace-ops.server";
 
 export {

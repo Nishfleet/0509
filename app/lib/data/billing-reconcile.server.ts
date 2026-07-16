@@ -1,5 +1,5 @@
 import { ensureDb } from "~/lib/data/d1.server";
-import { nowIso } from "~/lib/data/helpers.server";
+import { createId, jsonValue, nowIso } from "~/lib/data/helpers.server";
 import { validIsoTimestamp } from "~/lib/data/billing-helpers.server";
 import {
   buildDodoWebhookLedgerFinalizeAfterChangedStatement,
@@ -65,7 +65,26 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
         dodo_status,
         plan_updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM dodo_webhook_event
+        WHERE event_type = 'refund.succeeded'
+          AND outcome = 'processed'
+          AND json_extract(metadata_json, '$.paymentId') = ?
+          AND COALESCE(json_extract(metadata_json, '$.refundType'), 'full') = 'full'
+      )
+        AND (
+          ? = 0
+          OR EXISTS (
+            SELECT 1
+            FROM user_plan
+            WHERE user_id = ?
+              AND dodo_product_id = ?
+              AND dodo_subscription_id = ?
+              AND dodo_customer_id = ?
+          )
+        )
       ON CONFLICT(user_id)
       DO UPDATE SET
         plan = excluded.plan,
@@ -105,6 +124,15 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
       WHERE
         (
           ? = 0
+          OR (
+            user_plan.dodo_product_id = excluded.dodo_product_id
+            AND user_plan.dodo_subscription_id = excluded.dodo_subscription_id
+            AND user_plan.dodo_customer_id = excluded.dodo_customer_id
+          )
+        )
+        AND (
+        (
+          ? = 0
           AND julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)
         )
         OR (
@@ -134,6 +162,7 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
             OR user_plan.dodo_customer_id = excluded.dodo_customer_id
           )
         )
+        )
     `).bind(
     input.userId,
     input.plan,
@@ -145,6 +174,13 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
     null,
     input.status,
     planUpdatedAt,
+    input.providerPaymentId ?? null,
+    input.requireProviderIdentityMatch ? 1 : 0,
+    input.userId,
+    input.providerProductId ?? null,
+    input.providerSubscriptionId ?? null,
+    input.providerCustomerId ?? null,
+    input.requireProviderIdentityMatch ? 1 : 0,
     input.requirePlanChangePending ? 1 : 0,
     input.forcePlanChangePending ? 1 : 0,
   );
@@ -294,7 +330,15 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
     statements.push(
       buildBillingLifecycleOutboxStatement(
         db,
-        options.lifecycleEmailOutbox,
+        {
+          ...options.lifecycleEmailOutbox,
+          payloadSnapshot: {
+            ...options.lifecycleEmailOutbox.payloadSnapshot,
+            billingMutationStatus: input.status,
+            billingMutationSubscriptionId: input.providerSubscriptionId,
+            billingMutationStateUpdatedAt: planUpdatedAt,
+          },
+        },
         { kind: "prior-statement-changed" },
         timestamp,
       ),
@@ -336,6 +380,98 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
   return { changed: grantChanged };
 }
 
+/**
+ * Restore a paid subscription after Dodo explicitly clears its scheduled
+ * cancellation flag. This is intentionally a narrow CAS: it only touches
+ * the billing status for the matching subscription, never reconciles
+ * watchlists/entitlements, and uses the provider (or signature-verified
+ * webhook) timestamp as the monotonic watermark.
+ */
+export async function applyDodoCancellationReversalWithLedger(
+  env: AppEnv,
+  input: GrantDodoPlanAccessInput,
+  ledger: DodoWebhookLedgerFinalize,
+) {
+  const db = ensureDb(env);
+  const planUpdatedAt = validIsoTimestamp(input.grantedAt);
+  const subscriptionId = input.providerSubscriptionId?.trim() ?? "";
+  const processedAt = nowIso();
+  const ignoredMetadata = {
+    ...ledger.metadata,
+    ignoredReason: "cancellation_reversal_cas_mismatch",
+  };
+  const finalizeIgnored = () =>
+    buildDodoWebhookLedgerFinalizeStatement(
+      db,
+      { ...ledger, outcome: "ignored", metadata: ignoredMetadata },
+      processedAt,
+    );
+
+  // Reversal is authoritative only with all three provider identities and a
+  // provider/signature timestamp. Missing values are not wildcards: record the
+  // event as safely ignored so a retry cannot re-enter the normal grant path.
+  const productId = input.providerProductId?.trim() ?? "";
+  const customerId = input.providerCustomerId?.trim() ?? "";
+  if (!planUpdatedAt) {
+    throw new Error("Cancellation reversal requires a verified webhook timestamp.");
+  }
+  if (!subscriptionId || !productId || !customerId) {
+    await db.batch([finalizeIgnored()]);
+    return { changed: false, handled: true };
+  }
+
+  const reversal = db.prepare(`
+    UPDATE user_plan
+    SET dodo_status = CASE
+          WHEN dodo_status = 'cancellation_scheduled' THEN 'active'
+          ELSE dodo_status
+        END,
+        dodo_next_billing_at = COALESCE(?, dodo_next_billing_at),
+        dodo_plan_change_product_id = CASE
+          WHEN dodo_status = 'cancellation_scheduled' THEN NULL
+          ELSE dodo_plan_change_product_id
+        END,
+        plan_updated_at = ?
+    WHERE user_id = ?
+      AND dodo_status IN (
+        'cancellation_scheduled',
+        'active',
+        'succeeded',
+        'payment.succeeded'
+      )
+      AND dodo_subscription_id = ?
+      AND dodo_product_id = ?
+      AND dodo_customer_id = ?
+      AND julianday(?) >= julianday(plan_updated_at)
+  `).bind(
+    input.nextBillingAt ?? null,
+    planUpdatedAt,
+    input.userId,
+    subscriptionId,
+    productId,
+    customerId,
+    planUpdatedAt,
+  );
+  const results = await db.batch([
+    reversal,
+    buildDodoWebhookLedgerFinalizeAfterChangedStatement(db, ledger, processedAt),
+    db.prepare(`
+      UPDATE dodo_webhook_event
+      SET outcome = 'ignored',
+          processed_at = ?,
+          processing_started_at = NULL,
+          metadata_json = ?
+      WHERE event_id = ?
+        AND outcome = 'processing'
+        AND changes() = 0
+    `).bind(processedAt, jsonValue(ignoredMetadata), ledger.eventId),
+  ]);
+  return {
+    changed: Number(results[0]?.meta?.changes ?? 0) > 0,
+    handled: true,
+  };
+}
+
 
 export async function applyDodoPlanRevokeWithWatchlistReconcile(
   env: AppEnv,
@@ -352,21 +488,21 @@ export async function applyDodoPlanRevokeWithWatchlistReconcile(
 
   const statements = [
     db.prepare(`
-      INSERT INTO user_plan (
-        user_id,
-        plan,
-        dodo_status,
-        plan_updated_at
-      )
-      VALUES (?, 'free', ?, ?)
-      ON CONFLICT(user_id)
-      DO UPDATE SET
-        plan = 'free',
-        dodo_status = excluded.dodo_status,
-        plan_updated_at = excluded.plan_updated_at
-      WHERE user_plan.plan != 'free'
-        AND julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)
-    `).bind(input.userId, input.status, planUpdatedAt),
+      UPDATE user_plan
+      SET plan = 'free',
+          dodo_status = ?,
+          plan_updated_at = ?
+      WHERE user_id = ?
+        AND plan != 'free'
+        AND dodo_subscription_id = ?
+        AND julianday(?) >= julianday(plan_updated_at)
+    `).bind(
+      input.status,
+      planUpdatedAt,
+      input.userId,
+      input.providerSubscriptionId,
+      planUpdatedAt,
+    ),
   ];
   if (options.lifecycleEmailOutbox) {
     // Gate on the revoke's changes(): the ledger finalize below is
@@ -375,12 +511,38 @@ export async function applyDodoPlanRevokeWithWatchlistReconcile(
     statements.push(
       buildBillingLifecycleOutboxStatement(
         db,
-        options.lifecycleEmailOutbox,
+        {
+          ...options.lifecycleEmailOutbox,
+          payloadSnapshot: {
+            ...options.lifecycleEmailOutbox.payloadSnapshot,
+            billingMutationStatus: input.status,
+            billingMutationSubscriptionId: input.providerSubscriptionId,
+            billingMutationStateUpdatedAt: planUpdatedAt,
+          },
+        },
         { kind: "prior-statement-changed" },
         timestamp,
       ),
     );
   }
+  // Advance the lifecycle watermark even when another terminal event already
+  // made the plan free. Keep the earlier terminal status, and keep this after
+  // the outbox rider so a watermark-only update never sends another email.
+  statements.push(
+    db.prepare(`
+      UPDATE user_plan
+      SET plan_updated_at = ?
+      WHERE user_id = ?
+        AND plan = 'free'
+        AND (dodo_subscription_id IS NULL OR dodo_subscription_id = ?)
+        AND julianday(?) >= julianday(plan_updated_at)
+    `).bind(
+      planUpdatedAt,
+      input.userId,
+      input.providerSubscriptionId,
+      planUpdatedAt,
+    ),
+  );
   const watchlistIndex = statements.length;
   statements.push(
     buildWatchlistRevokeReconcileStatement(db, input.userId, keepActive, timestamp, {
@@ -400,7 +562,10 @@ export async function applyDodoPlanRevokeWithWatchlistReconcile(
   // even when values are identical, so a second terminal event — e.g.
   // subscription.cancelled after refund.succeeded already revoked — would
   // otherwise re-trigger the "plan has ended" email).
-  return { changed: Number(results[0]?.meta?.changes ?? 0) > 0 };
+  return {
+    changed: Number(results[0]?.meta?.changes ?? 0) > 0,
+    stateUpdatedAt: planUpdatedAt,
+  };
 }
 
 
@@ -410,6 +575,7 @@ export async function applyDodoRefundWithWatchlistReconcile(
     paymentId: string;
     refundedAt?: string;
     userId: string | null;
+    refundType?: "full" | "partial";
   },
   watchlistLimit: number,
   ledger: DodoWebhookLedgerFinalize,
@@ -420,6 +586,10 @@ export async function applyDodoRefundWithWatchlistReconcile(
   const timestamp = nowIso();
   const processedAt = nowIso();
   const keepActive = Math.max(0, Math.floor(watchlistLimit));
+  const refundType = input.refundType ?? "full";
+  const isFullRefund = refundType === "full";
+  const topUpRefundAllowed = refundType === "full" || refundType === "partial";
+  const topUpRefundKey = `dodo-refund:${ledger.eventId}:${input.paymentId}`;
 
   const statements = [
     db.prepare(`
@@ -429,8 +599,14 @@ export async function applyDodoRefundWithWatchlistReconcile(
           plan_updated_at = ?
       WHERE dodo_payment_id = ?
         AND plan != 'free'
+        AND ? = 1
+        AND NOT EXISTS (
+          SELECT 1
+          FROM evidence_top_up_grant
+          WHERE provider_payment_id = ?
+        )
         AND julianday(?) >= julianday(plan_updated_at)
-    `).bind(refundedAt, input.paymentId, refundedAt),
+    `).bind(refundedAt, input.paymentId, isFullRefund ? 1 : 0, input.paymentId, refundedAt),
   ];
   if (options.lifecycleEmailOutbox) {
     // Gate on the plan transition's changes() (results[0] is the caller's
@@ -439,7 +615,14 @@ export async function applyDodoRefundWithWatchlistReconcile(
     statements.push(
       buildBillingLifecycleOutboxStatement(
         db,
-        options.lifecycleEmailOutbox,
+        {
+          ...options.lifecycleEmailOutbox,
+          payloadSnapshot: {
+            ...options.lifecycleEmailOutbox.payloadSnapshot,
+            refundPaymentId: input.paymentId,
+            refundStateUpdatedAt: refundedAt,
+          },
+        },
         { kind: "prior-statement-changed" },
         timestamp,
       ),
@@ -457,14 +640,87 @@ export async function applyDodoRefundWithWatchlistReconcile(
       WHERE dodo_payment_id = ?
         AND plan = 'free'
         AND dodo_status != 'refunded'
+        AND ? = 1
+        AND NOT EXISTS (
+          SELECT 1
+          FROM evidence_top_up_grant
+          WHERE provider_payment_id = ?
+        )
         AND julianday(?) >= julianday(plan_updated_at)
-    `).bind(refundedAt, input.paymentId, refundedAt),
+    `).bind(refundedAt, input.paymentId, isFullRefund ? 1 : 0, input.paymentId, refundedAt),
     db.prepare(`
       UPDATE proof_usage_credit
       SET expires_at = ?
       WHERE provider_payment_id = ?
+        AND ? = 1
         AND julianday(expires_at) > julianday(?)
-    `).bind(refundedAt, input.paymentId, refundedAt),
+    `).bind(refundedAt, input.paymentId, topUpRefundAllowed ? 1 : 0, refundedAt),
+  );
+
+  const topUpLedgerIndex = statements.length;
+  statements.push(
+    db.prepare(`
+      INSERT INTO evidence_top_up_ledger_entry (
+        id, grant_id, workspace_user_id, quantity_delta, entry_type,
+        reservation_id, idempotency_key, metadata_json, created_at
+      )
+      SELECT ?, grant.id, grant.workspace_user_id,
+             -MAX(
+               0,
+               grant.quantity_granted + COALESCE(
+                 (SELECT SUM(entry.quantity_delta)
+                  FROM evidence_top_up_ledger_entry AS entry
+                  WHERE entry.grant_id = grant.id),
+                 0
+               )
+             ),
+             'refund', NULL, ?, ?, ?
+      FROM evidence_top_up_grant AS grant
+      WHERE grant.provider_payment_id = ?
+        AND ? = 1
+      ON CONFLICT(idempotency_key) DO NOTHING
+    `).bind(
+      createId(),
+      topUpRefundKey,
+      jsonValue({
+        reason: `${refundType}_provider_refund`,
+        providerEventId: ledger.eventId,
+      }),
+      timestamp,
+      input.paymentId,
+      topUpRefundAllowed ? 1 : 0,
+    ),
+    db.prepare(`
+      UPDATE evidence_top_up_grant
+      SET quantity_remaining = MAX(
+            0,
+            quantity_granted + COALESCE(
+              (SELECT SUM(entry.quantity_delta)
+               FROM evidence_top_up_ledger_entry AS entry
+               WHERE entry.grant_id = evidence_top_up_grant.id),
+              0
+            )
+          ),
+          status = CASE
+            WHEN MAX(
+              0,
+              quantity_granted + COALESCE(
+                (SELECT SUM(entry.quantity_delta)
+                 FROM evidence_top_up_ledger_entry AS entry
+                 WHERE entry.grant_id = evidence_top_up_grant.id),
+                0
+              )
+            ) <= 0 THEN 'depleted'
+            ELSE 'active'
+          END
+      WHERE provider_payment_id = ?
+        AND EXISTS (
+          SELECT 1
+          FROM evidence_top_up_ledger_entry
+          WHERE grant_id = evidence_top_up_grant.id
+            AND idempotency_key = ?
+        )
+    `).bind(input.paymentId, topUpRefundKey),
   );
 
   let watchlistIndex: number | null = null;
@@ -488,7 +744,10 @@ export async function applyDodoRefundWithWatchlistReconcile(
   // no-oped the plan update (e.g. an out-of-order refund webhook after a
   // later plan change) — the email asserts "your workspace has moved to the
   // Free plan", so it must only send when that transition really applied.
-  return { changed: Number(results[0]?.meta?.changes ?? 0) > 0 };
+  const changed = Number(results[0]?.meta?.changes ?? 0) > 0;
+  const topUpChanged = Number(results[topUpLedgerIndex]?.meta?.changes ?? 0) > 0;
+  const result = { changed, stateUpdatedAt: refundedAt };
+  return topUpChanged ? { ...result, topUpChanged: true as const } : result;
 }
 
 
@@ -515,6 +774,8 @@ export async function applyDodoPlanPaymentIssueWithLedger(
           plan_updated_at = ?
       WHERE user_id = ?
         AND plan != 'free'
+        AND (? IS NULL OR dodo_payment_id = ?)
+        AND (? IS NULL OR dodo_subscription_id = ?)
         AND julianday(?) >= julianday(plan_updated_at)
     `).bind(
       input.status,
@@ -522,6 +783,10 @@ export async function applyDodoPlanPaymentIssueWithLedger(
       cancellationEffectiveAt,
       planUpdatedAt,
       input.userId,
+      input.providerPaymentId ?? null,
+      input.providerPaymentId ?? null,
+      input.providerSubscriptionId ?? null,
+      input.providerSubscriptionId ?? null,
       planUpdatedAt,
     ),
   ];
@@ -531,7 +796,16 @@ export async function applyDodoPlanPaymentIssueWithLedger(
     statements.push(
       buildBillingLifecycleOutboxStatement(
         db,
-        options.lifecycleEmailOutbox,
+        {
+          ...options.lifecycleEmailOutbox,
+          payloadSnapshot: {
+            ...options.lifecycleEmailOutbox.payloadSnapshot,
+            billingMutationStatus: input.status,
+            billingMutationSubscriptionId: input.providerSubscriptionId ?? null,
+            billingMutationPaymentId: input.providerPaymentId ?? null,
+            billingMutationStateUpdatedAt: planUpdatedAt,
+          },
+        },
         { kind: "prior-statement-changed" },
         timestamp,
       ),
@@ -542,5 +816,8 @@ export async function applyDodoPlanPaymentIssueWithLedger(
 
   // Lets callers skip side effects (e.g. lifecycle emails) when the
   // monotonic-timestamp guard or the plan != 'free' filter made this a no-op.
-  return { changed: Number(results[0]?.meta?.changes ?? 0) > 0 };
+  return {
+    changed: Number(results[0]?.meta?.changes ?? 0) > 0,
+    stateUpdatedAt: planUpdatedAt,
+  };
 }

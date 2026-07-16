@@ -84,6 +84,7 @@ afterEach(() => {
   vi.doUnmock("~/lib/data.server");
   vi.doUnmock("~/lib/email-verification.server");
   vi.doUnmock("~/lib/landing-pages.server");
+  vi.doUnmock("~/lib/monitoring.server");
   vi.doUnmock("~/lib/plan.server");
   vi.doUnmock("~/lib/rate-limit.server");
   vi.doUnmock("~/lib/search-execution.server");
@@ -1318,6 +1319,9 @@ describe("search actions", () => {
       createSavedQuery,
       createWatchlistWithinLimit,
     }));
+    vi.doMock("~/lib/monitoring.server", () => ({
+      queueFirstWatchlistScan: vi.fn().mockResolvedValue(true),
+    }));
 
     const { action } = await import("~/routes/search");
     const formData = new FormData();
@@ -1454,6 +1458,9 @@ describe("search actions", () => {
       completeUserOnboarding,
       createSavedQuery: vi.fn(),
       createWatchlistWithinLimit,
+    }));
+    vi.doMock("~/lib/monitoring.server", () => ({
+      queueFirstWatchlistScan: vi.fn().mockResolvedValue(true),
     }));
 
     const { action } = await import("~/routes/search");

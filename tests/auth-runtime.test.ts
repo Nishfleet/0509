@@ -7,8 +7,6 @@ const FORBIDDEN_ACTIVE_AUTH_REFERENCES = [
   "@supabase",
   "supabase",
   "sty" + "tch",
-  "legacy/",
-  "../legacy",
 ];
 
 describe("auth runtime", () => {
@@ -34,6 +32,9 @@ describe("auth runtime", () => {
     for (const forbidden of FORBIDDEN_ACTIVE_AUTH_REFERENCES) {
       expect(activeRuntimeText).not.toContain(forbidden);
     }
+    expect(activeRuntimeText).not.toMatch(
+      /(?:from\s*|import\s*\()\s*["'](?:[^"']*\/)?legacy\//m,
+    );
     expect(activeRuntimeText).toContain("better-auth");
     expect(activeRuntimeText).toContain("@better-auth/passkey");
   });

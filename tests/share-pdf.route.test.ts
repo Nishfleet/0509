@@ -2,6 +2,39 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PromiseTimeoutError } from "~/lib/fetch-timeout.server";
+import { createApprovedReportSnapshot } from "~/lib/report-approval";
+
+const PDF_TEST_REPORT = {
+  kind: "report" as const,
+  reportId: "watchlist:watch-1",
+  resourceType: "watchlist" as const,
+  resourceId: "watch-1",
+  title: "Competitor Report — Q3!",
+  subtitle: "Current evidence",
+  summary: "One verified event.",
+  generatedAt: "2026-07-15T00:00:00.000Z",
+  stats: [],
+  insightDepth: {
+    topHooks: [], mediaMix: [], campaignDurations: [], metricProof: [],
+    creativeTimeline: [], landingPageHistory: [],
+  },
+  sourceCoverage: {
+    totalInput: 1, included: 1, excluded: 0, note: "Verified.",
+    proofMix: { verifiedProof: 1, scanSpotted: 0, needsReview: 0, proofPending: 0, proofFailed: 0, excluded: 0, unknown: 0 },
+    excludedCounts: {},
+  },
+  rows: [{
+    id: "row-1", advertiser: "Competitor", previewHeadline: "Offer", offer: null, cta: null,
+    formatLabel: "Image", languageLabel: null, previewImageUrl: null, creativeText: null,
+    translatedText: null, landingPage: { url: null, headline: null, captureLabel: null, capturedAt: null, signals: [] },
+    analysisFields: [], tags: [], note: null,
+    event: {
+      typeLabel: "Offer", title: "Offer changed", summary: "Verified event.", createdAt: "2026-07-15T00:00:00.000Z",
+      priorityScore: 50, priorityBand: "medium", recommendedAction: "Review", proofTrail: "Saved evidence",
+      proofStatusLabel: "Verified evidence", sourceTypeLabel: "Saved evidence", sourceUrl: null, metaAdId: null,
+    },
+  }],
+};
 
 const AGENCY_SHARE = {
   id: "share-1",
@@ -10,7 +43,7 @@ const AGENCY_SHARE = {
   resourceType: "report" as const,
   resourceId: "watchlist:watch-1",
   isSnapshot: true,
-  snapshotPayload: { kind: "report", title: "Competitor Report — Q3!" },
+  snapshotPayload: createApprovedReportSnapshot(PDF_TEST_REPORT),
   createdAt: "2026-07-01T00:00:00.000Z",
   expiresAt: null,
   revokedAt: null,
@@ -356,7 +389,7 @@ describe("GET /share/:token/pdf", () => {
     expect(browser.close).toHaveBeenCalled();
   });
 
-  it("route module delegates to the renderer with the validated token", async () => {
+	it("route module delegates to the renderer with the validated token", async () => {
     mockCollaborators({});
     makePuppeteerMocks();
     vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => makeEnv()) }));
@@ -369,10 +402,32 @@ describe("GET /share/:token/pdf", () => {
     } as never);
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("content-type")).toBe("application/pdf");
-  });
+		expect(response.headers.get("content-type")).toBe("application/pdf");
+	});
 
-  it("falls back to a safe filename when the snapshot title is unusable", async () => {
+	it.each(["HEAD", "POST"])(
+		"rejects %s before resolving the environment or spending render capacity",
+		async (method) => {
+			const getEnv = vi.fn(() => makeEnv());
+			const renderShareReportPdfResponse = vi.fn();
+			vi.doMock("~/lib/context.server", () => ({ getEnv }));
+			vi.doMock("~/lib/report-pdf.server", () => ({ renderShareReportPdfResponse }));
+
+			const { loader } = await import("~/routes/share.$token.pdf");
+			const response = await loader({
+				context: { cloudflare: { env: {}, ctx: undefined } },
+				params: { token: "token-1" },
+				request: new Request("https://0509.io/share/token-1/pdf", { method }),
+			} as never);
+
+			expect(response.status).toBe(405);
+			expect(response.headers.get("allow")).toBe("GET");
+			expect(getEnv).not.toHaveBeenCalled();
+			expect(renderShareReportPdfResponse).not.toHaveBeenCalled();
+		},
+	);
+
+	it("falls back to a safe filename when the snapshot title is unusable", async () => {
     const { reportPdfFilename } = await import("~/lib/report-pdf.server");
     expect(reportPdfFilename(null)).toBe("shared-report.pdf");
     expect(reportPdfFilename({ title: "   " })).toBe("shared-report.pdf");

@@ -274,6 +274,7 @@ function installSharedMocks(input: {
       return map;
     }),
     listWatchEvents: vi.fn().mockResolvedValue(input.recentEvents ?? []),
+    listWatchEventsForRun: vi.fn().mockImplementation(async () => input.createdEvents),
     listAdsByIds: vi.fn().mockResolvedValue([]),
     listWatchEventsBetween: vi.fn().mockImplementation(async () => input.createdEvents),
     listWatchlists: vi.fn().mockResolvedValue([watchlist]),

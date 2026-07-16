@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const now = "2026-06-18T00:00:00.000Z";
 
-function createWatchlist(input: { id?: string; isActive?: boolean } = {}) {
+function createWatchlist(input: { id?: string; isActive?: boolean; lastScannedAt?: string | null } = {}) {
   return {
     id: input.id ?? "watchlist-1",
     userId: "user-1",
@@ -13,7 +13,7 @@ function createWatchlist(input: { id?: string; isActive?: boolean } = {}) {
     targetLabel: "Nykaa",
     targetCountry: "IN",
     isActive: input.isActive ?? true,
-    lastScannedAt: now,
+    lastScannedAt: input.lastScannedAt === undefined ? now : input.lastScannedAt,
     createdAt: now,
     updatedAt: now,
   };
@@ -68,6 +68,12 @@ function setupMocks(overrides: Record<string, unknown> = {}) {
     getSuccessfulProofCaptureStatsForUser: vi.fn().mockResolvedValue({
       count: 1,
       latestAt: now,
+    }),
+    getSuccessfulRunStatsForUserBetween: vi.fn().mockResolvedValue({
+      runs: 1,
+      watchlistsChecked: 1,
+      adsSeen: 1,
+      noChangeRuns: 0,
     }),
     listAgentMemory: vi.fn().mockResolvedValue([
       {
@@ -191,9 +197,16 @@ describe("getWorkspaceReadiness", () => {
     const serialized = JSON.stringify(readiness);
 
     expect(readiness.status).toBe("ready");
+    expect(readiness.value).toEqual({
+      hasFirstValue: true,
+      hasRecurringPaidCadence: true,
+      hasRetainedReadiness: true,
+    });
     expect(readiness.counts).toMatchObject({
       competitors: 1,
       activeWatchlists: 1,
+      completedScans: 1,
+      noChangeBaselines: 0,
       successfulProofs: 1,
       sentDigests: 1,
       deliveryTargets: 1,
@@ -294,6 +307,7 @@ describe("getWorkspaceReadiness", () => {
       dodoStatus: "subscription.on_hold",
       hasPaymentIssue: true,
     });
+    expect(readiness.value.hasRetainedReadiness).toBe(false);
   });
 
   it("does not mark delivery ready from old sent digests without an active target", async () => {
@@ -376,6 +390,106 @@ describe("getWorkspaceReadiness", () => {
     expect(readiness.counts.successfulProofs).toBe(1);
   });
 
+  it("counts a completed no-change baseline as first value without requiring a proof or digest", async () => {
+    setupMocks({
+      listWatchlists: vi.fn().mockResolvedValue([createWatchlist({ lastScannedAt: now })]),
+      listRecentWorkspaceProofCaptures: vi.fn().mockResolvedValue([]),
+      getSuccessfulProofCaptureStatsForUser: vi.fn().mockResolvedValue({ count: 0, latestAt: null }),
+      getSuccessfulRunStatsForUserBetween: vi.fn().mockResolvedValue({
+        runs: 1,
+        watchlistsChecked: 1,
+        adsSeen: 0,
+        noChangeRuns: 1,
+      }),
+      listDigests: vi.fn().mockResolvedValue([]),
+      getDeliveryTargetReadinessStats: vi.fn().mockResolvedValue({ activeCount: 0, provenCount: 0 }),
+      listCustomerApiKeys: vi.fn().mockResolvedValue([]),
+      listClientRooms: vi.fn().mockResolvedValue([]),
+      listAgentMemory: vi.fn().mockResolvedValue([]),
+      getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+        plan: "starter",
+        dodoStatus: "active",
+        dodoProductId: "prod-1",
+        billingInterval: "monthly",
+        dodoSubscriptionId: "sub-1",
+        dodoCustomerId: "cus-1",
+        dodoNextBillingAt: now,
+        planUpdatedAt: now,
+      }),
+    });
+
+    const readiness = await loadReadiness();
+    const firstProof = readiness.items.find((item) => item.id === "first_proof");
+
+    expect(readiness.counts).toMatchObject({
+      completedScans: 1,
+      noChangeBaselines: 1,
+      successfulProofs: 0,
+      sentDigests: 0,
+    });
+    expect(readiness.value).toEqual({
+      hasFirstValue: true,
+      hasRecurringPaidCadence: true,
+      hasRetainedReadiness: false,
+    });
+    expect(firstProof).toMatchObject({
+      status: "ready",
+      detail: "1 successful no-change baseline recorded.",
+      action: null,
+    });
+    expect(readiness.nudges.map((nudge) => nudge.id)).toEqual(["first_digest", "billing_support"]);
+  });
+
+  it("does not turn lastScannedAt into first value without an explicit successful run result", async () => {
+    setupMocks({
+      listWatchlists: vi.fn().mockResolvedValue([createWatchlist({ lastScannedAt: now })]),
+      listRecentWorkspaceProofCaptures: vi.fn().mockResolvedValue([]),
+      getSuccessfulProofCaptureStatsForUser: vi.fn().mockResolvedValue({ count: 0, latestAt: null }),
+      getSuccessfulRunStatsForUserBetween: vi.fn().mockResolvedValue({
+        runs: 0,
+        watchlistsChecked: 0,
+        adsSeen: 0,
+        noChangeRuns: 0,
+      }),
+      listDigests: vi.fn().mockResolvedValue([]),
+      getDeliveryTargetReadinessStats: vi.fn().mockResolvedValue({ activeCount: 1, provenCount: 0 }),
+    });
+
+    const readiness = await loadReadiness();
+
+    expect(readiness.counts).toMatchObject({ completedScans: 0, noChangeBaselines: 0 });
+    expect(readiness.value).toMatchObject({ hasFirstValue: false, hasRetainedReadiness: false });
+    expect(readiness.items.find((item) => item.id === "first_proof")).toMatchObject({
+      status: "needs_proof",
+      action: { href: "/app/watchlists" },
+    });
+  });
+
+  it.each(["scout", "starter"] as const)("marks Developer access not applicable for %s", async (plan) => {
+    setupMocks({
+      listCustomerApiKeys: vi.fn().mockResolvedValue([]),
+      getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+        plan,
+        dodoStatus: "subscription.active",
+        dodoProductId: "prod-1",
+        billingInterval: "monthly",
+        dodoSubscriptionId: "sub-1",
+        dodoCustomerId: "cus-1",
+        dodoNextBillingAt: now,
+        planUpdatedAt: now,
+      }),
+    });
+
+    const readiness = await loadReadiness();
+
+    expect(readiness.items.find((item) => item.id === "api")).toMatchObject({
+      status: "not_applicable",
+      detail: "Developer access is available on Agency.",
+      action: null,
+    });
+    expect(readiness.nudges.map((nudge) => nudge.id)).not.toContain("agent_setup");
+  });
+
   it("returns safe setup actions for an empty workspace", async () => {
     setupMocks({
       listSavedQueries: vi.fn().mockResolvedValue([]),
@@ -392,6 +506,12 @@ describe("getWorkspaceReadiness", () => {
       getSuccessfulProofCaptureStatsForUser: vi.fn().mockResolvedValue({
         count: 0,
         latestAt: null,
+      }),
+      getSuccessfulRunStatsForUserBetween: vi.fn().mockResolvedValue({
+        runs: 0,
+        watchlistsChecked: 0,
+        adsSeen: 0,
+        noChangeRuns: 0,
       }),
       getUserPlanBillingInfo: vi.fn().mockResolvedValue({
         plan: "free",
@@ -450,8 +570,8 @@ describe("getWorkspaceReadiness", () => {
       action: null,
     });
     expect(items.api).toMatchObject({
-      status: "needs_setup",
-      action: { href: "/app/developer-access" },
+      status: "not_applicable",
+      action: null,
     });
     expect(readiness.nudges[0]).toMatchObject({
       id: "first_competitor",

@@ -5,10 +5,11 @@ import {
   useActionData,
   useLoaderData,
   useLocation,
+  useNavigation,
   useRouteLoaderData,
 } from "react-router";
 import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { AdLongevityPill } from "~/components/ad-longevity-pill";
 import { AdThumb } from "~/components/ad-thumb";
@@ -45,7 +46,9 @@ import type { RootLoaderData } from "~/root";
 import type { AdRecord, SearchFilters, SearchResponse, WatchlistTrackingRole } from "~/lib/types";
 
 const searchDescription =
-  "Preview live competitor Meta ads before creating an account; sign in only when you want to save examples and track offer changes over time.";
+  "Preview public competitor ad results before creating an account; sign in to save examples and track offer changes over time. Provider coverage and freshness vary.";
+const SEARCH_DELAY_SESSION_KEY = "f9.search.recent-delay.v1";
+const SEARCH_DELAY_RECOVERY_WINDOW_MS = 5 * 60 * 1000;
 
 export const links: LinksFunction = () => canonicalLinks("/search");
 
@@ -60,7 +63,18 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getOptionalSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { listCollections } = await import("~/lib/data.server");
-  const env = getEnv(context);
+  const runtimeEnv = getEnv(context);
+  const { resolveE2EProviderDeny, sanitizeE2EProviderEnv } = await import("~/lib/e2e-provider.server");
+  const providerDeny = await resolveE2EProviderDeny(runtimeEnv, request);
+  if (providerDeny.failClosed && !providerDeny.enabled) {
+    throw new Response("The local release-proof environment is unavailable.", { status: 503 });
+  }
+  const requestEnv = providerDeny.enabled ? sanitizeE2EProviderEnv(runtimeEnv) : runtimeEnv;
+  const e2eSearch = await (await import("~/lib/e2e-search.server")).resolveE2ELocalSearchContext(
+    requestEnv,
+    request,
+  );
+  const env = e2eSearch.env;
   const session = await getOptionalSession(env, request);
   const workspaceUserId = session
     ? (await (await import("~/lib/workspace.server")).resolveWorkspace(env, session.user.id)).workspaceUserId
@@ -125,7 +139,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     };
   }
 
-  const customerMetaAdLibraryToken = session && parsed.filters.query
+  const customerMetaAdLibraryToken = session && parsed.filters.query && !providerDeny.enabled
     ? await (await import("~/lib/customer-meta.server")).getCustomerMetaAdLibraryToken(env, workspaceUserId!)
     : null;
 
@@ -226,7 +240,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     searchExecution.result,
     url.searchParams.get("selected"),
     {
-      enrichSelected: Boolean(session),
+      enrichSelected: Boolean(session) && !providerDeny.enabled,
       hydratePersisted: Boolean(session),
     },
   );
@@ -385,7 +399,16 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     const watchlist = watchlistResult.watchlist;
     const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
-    queueFirstWatchlistScan(env, context.cloudflare?.ctx, watchlist);
+    try {
+      await queueFirstWatchlistScan(env, context.cloudflare?.ctx, watchlist);
+    } catch {
+      return {
+        ok: false,
+        error: "first_scan_dispatch_delayed",
+        message:
+          "Competitor saved, but the activation scan is delayed. Try tracking it again to resume the same safe scan.",
+      };
+    }
 
     if (!watchlist) {
       return { ok: false, message: "Could not create this watchlist." };
@@ -444,9 +467,42 @@ export default function SearchRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const location = useLocation();
+  const navigation = useNavigation();
   const selectedProofRef = useRef<HTMLElement>(null);
+  const previousDiscoveryStatusRef = useRef(data.result.discoveryStatus);
+  const [recoveredSearchKey, setRecoveredSearchKey] = useState<string | null>(null);
+  const requestedCursor = new URLSearchParams(location.search).get("after");
+  const selectedFromUrl = new URLSearchParams(location.search).get("selected");
+  const searchKey = buildSearchAccumulationKey(data);
+  const [accumulated, setAccumulated] = useState<SearchAccumulationState>(() =>
+    createSearchAccumulationState(searchKey, data.result, data.selectedAd),
+  );
+  const visibleAccumulated = accumulated.searchKey === searchKey
+    ? accumulated
+    : createSearchAccumulationState(searchKey, data.result, data.selectedAd);
+  const visibleResult = visibleAccumulated.result;
+  const visibleAds = visibleResult.ads;
+  const selectedAd = selectedFromUrl
+    ? data.selectedAd ?? visibleAds.find((ad) => ad.metaAdId === selectedFromUrl) ?? null
+    : data.selectedAd ?? visibleAccumulated.selectedAd;
+
+  useEffect(() => {
+    setAccumulated((previous) => {
+      const sameSearch = previous.searchKey === searchKey;
+      const shouldMerge = sameSearch && (Boolean(requestedCursor) || Boolean(selectedFromUrl));
+      if (!shouldMerge) {
+        return createSearchAccumulationState(searchKey, data.result, data.selectedAd);
+      }
+
+      return mergeSearchAccumulationState(previous, data.result, {
+        requestedCursor,
+        selectedAd: data.selectedAd,
+      });
+    });
+  }, [data.result, data.selectedAd, requestedCursor, searchKey, selectedFromUrl]);
+
   const rootData = useRouteLoaderData("root") as RootLoaderData;
-  const creativeTextField = data.selectedAd?.analysisFields.find((field) => field.fieldKey === "ocr_text");
+  const creativeTextField = selectedAd?.analysisFields.find((field) => field.fieldKey === "ocr_text");
   const competitorWebsite = data.competitorWebsite ?? emptyCompetitorWebsite();
   const trackingRole: WatchlistTrackingRole = "competitor";
   const targetNoun = "competitor";
@@ -464,13 +520,33 @@ export default function SearchRoute() {
   const signupTrackingPath = `/auth/signup?redirectTo=${encodeURIComponent(postSignupPath)}`;
   const inferredWatchlistName = (competitorWebsite.displayName ?? data.filters.query) || "Competitor";
   const canTrackCurrentCompetitor = Boolean(data.filters.query || competitorWebsite.normalizedUrl) && !data.inputError;
-  const discoverySummary = formatDiscoverySummary(data.result);
+  const discoverySummary = formatDiscoverySummary(visibleResult);
   const hasSearchQuery = Boolean(data.filters.query || competitorWebsite.raw);
-  const landingPageCount = data.result.ads.filter((ad) => ad.landingPage || ad.landingPageUrl).length;
+  const landingPageCount = visibleAds.filter((ad) => ad.landingPage || ad.landingPageUrl).length;
   const displayDomain = data.displayDomain ?? competitorWebsite.host ?? competitorWebsite.raw;
   const isDomainSearch = Boolean(displayDomain && competitorWebsite.normalizedUrl);
   const isBroaderScope = data.searchScope === "broader";
   const scopedSearchParams = withSearchScope(currentSearchParams, isBroaderScope ? "broader" : "exact");
+  const nextCursor = visibleResult.nextCursor;
+  const retryingCursor = visibleAccumulated.retryCursor;
+  const loadMoreParams = nextCursor
+    ? appendCursor(scopedSearchParams, nextCursor, selectedAd?.metaAdId ?? null)
+    : null;
+  const isLoadingMore = Boolean(
+    loadMoreParams &&
+      navigation.state !== "idle" &&
+      navigation.location?.pathname === "/search" &&
+      new URLSearchParams(navigation.location.search).get("after") === nextCursor,
+  );
+  const recoveredFromDiscoveryFailure =
+    isDelayedDiscoveryStatus(previousDiscoveryStatusRef.current) &&
+    !isDelayedDiscoveryStatus(visibleResult.discoveryStatus);
+  const resultsAnnouncement = formatSearchResultsAnnouncement(visibleResult, {
+    isLoading: isLoadingMore,
+    addedCount: visibleAccumulated.addedCount,
+    retryCursor: visibleAccumulated.retryCursor,
+    recovered: recoveredFromDiscoveryFailure || recoveredSearchKey === searchKey,
+  });
   const broaderSearchParams = withTrackingContext(
     buildSearchParams({
       mode: data.mode,
@@ -482,7 +558,7 @@ export default function SearchRoute() {
   broaderSearchParams.set("broader", "1");
   const searchAnswer = hasSearchQuery && !data.inputError
     ? buildSearchAnswer({
-      result: data.result,
+      result: visibleResult,
       displayDomain,
       isDomainSearch: isDomainSearch && data.relevanceApplied,
       isBroaderScope,
@@ -495,6 +571,45 @@ export default function SearchRoute() {
     }
   }, [location.search]);
 
+  useEffect(() => {
+    const now = Date.now();
+    let recentDelay = false;
+    if (typeof window !== "undefined") {
+      try {
+        recentDelay = hasRecentSearchDelay(
+          window.sessionStorage.getItem(SEARCH_DELAY_SESSION_KEY),
+          now,
+        );
+      } catch {
+        recentDelay = false;
+      }
+    }
+    setRecoveredSearchKey((currentRecoveryKey) =>
+      resolveRecoveredSearchKey({
+        currentDiscoveryStatus: visibleResult.discoveryStatus,
+        currentRecoveryKey,
+        previousDiscoveryStatus: recentDelay
+          ? "degraded"
+          : previousDiscoveryStatusRef.current,
+        searchKey,
+      }),
+    );
+    previousDiscoveryStatusRef.current = visibleResult.discoveryStatus;
+    if (typeof window !== "undefined") {
+      try {
+        window.sessionStorage.setItem(
+          SEARCH_DELAY_SESSION_KEY,
+          JSON.stringify({
+            delayed: isDelayedDiscoveryStatus(visibleResult.discoveryStatus),
+            observedAt: now,
+          }),
+        );
+      } catch {
+        // Search and retry remain available when browser storage is blocked.
+      }
+    }
+  }, [searchKey, visibleResult.discoveryStatus]);
+
   return (
     <DashboardShell
       accountDetail={rootData.session ? "Saved searches and watches" : "Find competitor ads"}
@@ -503,11 +618,11 @@ export default function SearchRoute() {
       isPublic={!rootData.session}
       pageClassName="f9-search-page"
       railNote={
-        data.result.ads.length > 0 ? (
+        visibleAds.length > 0 ? (
           <div className="f9-cursor-rail-note">
             <span>Saved evidence</span>
             <strong>
-              {landingPageCount}/{data.result.ads.length}
+              {landingPageCount}/{visibleAds.length}
             </strong>
             <small>From this search</small>
           </div>
@@ -590,13 +705,9 @@ export default function SearchRoute() {
               </div>
             </Form>
             <p className="f9-search-command-hint" id="search-command-hint">
-              {data.inputError ?? "Paste one competitor website."}
-              {!rootData.session ? (
-                <>
-                  {" "}
-                  <Link to={signupTrackingPath}>Create account</Link> to save searches.
-                </>
-              ) : null}
+              {data.inputError ?? (rootData.session
+                ? "Paste one competitor website."
+                : "Paste one competitor website. No account needed.")}
             </p>
             {canTrackCurrentCompetitor && rootData.session ? (
               <div className="f9-search-retention">
@@ -668,7 +779,7 @@ export default function SearchRoute() {
           {hasSearchQuery ? (
             <>
           <div className="f9-search-grid">
-            {data.selectedAd ? (
+            {selectedAd ? (
               <section
                 aria-labelledby="selected-proof-title"
                 className="f9-proof-summary"
@@ -679,28 +790,28 @@ export default function SearchRoute() {
                 <div className="f9-panel-head">
                   <div>
                     <span>Selected proof</span>
-                    <h2 id="selected-proof-title">{formatAdvertiserLabel(data.selectedAd.advertiser)}</h2>
-                    <AdLongevityPill ad={data.selectedAd} />
+                    <h2 id="selected-proof-title">{formatAdvertiserLabel(selectedAd.advertiser)}</h2>
+                    <AdLongevityPill ad={selectedAd} />
                   </div>
-                  <em className={data.selectedAd.active ? "is-active" : ""}>
-                    {data.selectedAd.active ? "Active" : "Inactive"}
+                  <em className={selectedAd.active ? "is-active" : ""}>
+                    {selectedAd.active ? "Active" : "Inactive"}
                   </em>
                 </div>
                 <p className="f9-proof-provenance">
-                  <strong>{formatSearchSourceLabel(data.result)}</strong>
-                  <span>{formatSearchFreshnessLabel(data.result)}</span>
-                  <span>{formatProofCaptureLabel(data.selectedAd)}</span>
+                  <strong>{formatSearchSourceLabel(visibleResult)}</strong>
+                  <span>{formatSearchFreshnessLabel(visibleResult)}</span>
+                  <span>{formatProofCaptureLabel(selectedAd)}</span>
                 </p>
                 <div className="f9-detail-hero">
                   <div className="f9-ad-thumb-row">
-                    <AdThumb ad={data.selectedAd} />
+                    <AdThumb ad={selectedAd} />
                     <div>
-                      <h3>{data.selectedAd.previewHeadline}</h3>
-                      <p>{formatAdDetailBody(data.selectedAd)}</p>
+                      <h3>{selectedAd.previewHeadline}</h3>
+                      <p>{formatAdDetailBody(selectedAd)}</p>
                     </div>
                   </div>
                 </div>
-                {data.selectedAd.domainMatch?.reason ? <p>{data.selectedAd.domainMatch.reason}</p> : null}
+                {selectedAd.domainMatch?.reason ? <p>{selectedAd.domainMatch.reason}</p> : null}
                 <Link className="f9-secondary-button" to="#selected-proof-detail">
                   Review full evidence
                 </Link>
@@ -708,15 +819,15 @@ export default function SearchRoute() {
             ) : null}
             <section
               className="f9-results-panel"
-              data-f9-result-cache-status={data.result.cacheStatus ?? undefined}
-              data-f9-result-empty-reason={data.result.discoveryEmptyReason ?? undefined}
-              data-f9-result-source={data.result.provider ?? data.result.source}
+              data-f9-result-cache-status={visibleResult.cacheStatus ?? undefined}
+              data-f9-result-empty-reason={visibleResult.discoveryEmptyReason ?? undefined}
+              data-f9-result-source={visibleResult.provider ?? visibleResult.source}
             >
               <div className="f9-panel-head">
                 <div>
                   <span>Results</span>
                   <h2>
-                    {formatResultsPanelTitle(data.result, {
+                    {formatResultsPanelTitle(visibleResult, {
                       displayDomain,
                       isDomainSearch,
                       isBroaderScope,
@@ -732,18 +843,28 @@ export default function SearchRoute() {
                     <small>{`Broader matches related to ${displayDomain}`}</small>
                   ) : null}
                 </div>
-                {data.result.nextCursor ? (
-                  <Link
-                    className="f9-secondary-button"
-                    to={`/search?${appendCursor(
-                      scopedSearchParams,
-                      data.result.nextCursor,
-                      data.selectedAd?.metaAdId ?? null,
-                    ).toString()}`}
+                {loadMoreParams ? (
+                  <Form
+                    aria-label={retryingCursor ? "Retry search results" : "Load more search results"}
+                    className="f9-load-more-form"
+                    method="get"
+                    action="/search"
                   >
-                    Load more
-                  </Link>
+                    <SearchQueryFields params={loadMoreParams} />
+                    <SubmitButton
+                      className="f9-secondary-button"
+                      getAction="/search"
+                      match={{ after: loadMoreParams.get("after") ?? "" }}
+                      pendingLabel="Loading…"
+                    >
+                      {retryingCursor ? "Retry" : "Load more"}
+                    </SubmitButton>
+                  </Form>
                 ) : null}
+              </div>
+
+              <div aria-live="polite" className="f9-sr-only" role="status">
+                {resultsAnnouncement}
               </div>
 
               {searchAnswer ? <SearchAnswerPanel answer={searchAnswer} /> : null}
@@ -752,7 +873,7 @@ export default function SearchRoute() {
                 <div className="f9-search-signup-cta">
                   <div>
                     <strong>
-                      {data.result.ads.length > 0
+                      {visibleAds.length > 0
                         ? "Keep this competitor under watch"
                         : "Keep checking this competitor"}
                     </strong>
@@ -766,21 +887,21 @@ export default function SearchRoute() {
                 </div>
               ) : null}
 
-              {discoverySummary && data.result.ads.length > 0 ? (
+              {discoverySummary && visibleAds.length > 0 ? (
                 <div className="f9-discovery-banner">
                   <p>{discoverySummary}</p>
                 </div>
               ) : null}
 
               <div className="f9-results-list">
-                {data.result.ads.length > 0 ? (
-                  data.result.ads.map((ad) => (
+                {visibleAds.length > 0 ? (
+                  visibleAds.map((ad) => (
                     <Link
-                      className={`f9-result-card ${data.selectedAd?.metaAdId === ad.metaAdId ? "is-active" : ""}`}
+                      className={`f9-result-card ${selectedAd?.metaAdId === ad.metaAdId ? "is-active" : ""}`}
                       key={ad.metaAdId}
-                      to={`/search?${withSelected(
-                        scopedSearchParams,
-                        ad.metaAdId,
+                      to={`/search?${(requestedCursor
+                        ? appendCursor(scopedSearchParams, requestedCursor, ad.metaAdId)
+                        : withSelected(scopedSearchParams, ad.metaAdId)
                       ).toString()}#selected-proof`}
                     >
                       <AdThumb ad={ad} />
@@ -801,19 +922,25 @@ export default function SearchRoute() {
                   ))
                 ) : (
                   <div className="f9-empty-state">
-                    <h3>
-                      {formatEmptyResultHeadline(data.result, {
-                        displayDomain,
-                        isDomainSearch,
-                        isBroaderScope,
-                        relevanceApplied: data.relevanceApplied,
-                      })}
-                    </h3>
-                    <p>
-                      {isDomainSearch && data.relevanceApplied && !isBroaderScope
-                        ? "We couldn't confirm any ads whose advertiser or landing page is connected to this website."
-                        : discoverySummary ?? "Try another competitor website."}
-                    </p>
+                    {!searchAnswer ? (
+                      <>
+                        <h3>
+                          {formatEmptyResultHeadline(visibleResult, {
+                            displayDomain,
+                            isDomainSearch,
+                            isBroaderScope,
+                            relevanceApplied: data.relevanceApplied,
+                          })}
+                        </h3>
+                        <p>
+                          {isDelayedDiscoveryStatus(visibleResult.discoveryStatus)
+                            ? discoverySummary ?? "Fresh checks are delayed, so coverage may be incomplete."
+                            : isDomainSearch && data.relevanceApplied && !isBroaderScope
+                            ? "We couldn't confirm any ads whose advertiser or landing page is connected to this website."
+                            : discoverySummary ?? "Try another competitor website."}
+                        </p>
+                      </>
+                    ) : null}
                     {isDomainSearch && !isBroaderScope ? (
                       <div className="f9-search-empty-actions">
                         {rootData.session ? (
@@ -848,42 +975,42 @@ export default function SearchRoute() {
             </section>
 
             <aside className="f9-proof-detail" id="selected-proof-detail" tabIndex={-1}>
-              {data.selectedAd ? (
+              {selectedAd ? (
                 <>
                   <div className="f9-panel-head">
                     <div>
                       <span>Ad details</span>
-                      <h2>{formatAdvertiserLabel(data.selectedAd.advertiser)}</h2>
-                      <AdLongevityPill ad={data.selectedAd} />
+                      <h2>{formatAdvertiserLabel(selectedAd.advertiser)}</h2>
+                      <AdLongevityPill ad={selectedAd} />
                     </div>
-                    <em className={data.selectedAd.active ? "is-active" : ""}>
-                      {data.selectedAd.active ? "Active" : "Inactive"}
+                    <em className={selectedAd.active ? "is-active" : ""}>
+                      {selectedAd.active ? "Active" : "Inactive"}
                     </em>
                   </div>
 
                   <p className="f9-proof-provenance">
-                    <strong>{formatSearchSourceLabel(data.result)}</strong>
-                    <span>{formatSearchFreshnessLabel(data.result)}</span>
-                    <span>{formatProofCaptureLabel(data.selectedAd)}</span>
+                    <strong>{formatSearchSourceLabel(visibleResult)}</strong>
+                    <span>{formatSearchFreshnessLabel(visibleResult)}</span>
+                    <span>{formatProofCaptureLabel(selectedAd)}</span>
                   </p>
 
                   <div className="f9-detail-hero">
                     <div className="f9-ad-thumb-row">
-                      <AdThumb ad={data.selectedAd} />
+                      <AdThumb ad={selectedAd} />
                       <div>
-                        <h3>{data.selectedAd.previewHeadline}</h3>
-                        <p>{formatAdDetailBody(data.selectedAd)}</p>
+                        <h3>{selectedAd.previewHeadline}</h3>
+                        <p>{formatAdDetailBody(selectedAd)}</p>
                       </div>
                     </div>
                   </div>
 
                   <dl className="f9-detail-grid">
-                    <DetailRow label="Hook" value={data.selectedAd.hook} />
-                    <DetailRow label="Offer" value={data.selectedAd.offer} />
-                    <DetailRow label="CTA" value={data.selectedAd.cta} />
-                    <DetailRow label="Format" value={data.selectedAd.format} />
-                    <DetailRow label="Language" value={data.selectedAd.languageLabel} />
-                    <DetailRow label="Destination" value={data.selectedAd.destinationType} />
+                    <DetailRow label="Hook" value={selectedAd.hook} />
+                    <DetailRow label="Offer" value={selectedAd.offer} />
+                    <DetailRow label="CTA" value={selectedAd.cta} />
+                    <DetailRow label="Format" value={selectedAd.format} />
+                    <DetailRow label="Language" value={selectedAd.languageLabel} />
+                    <DetailRow label="Destination" value={selectedAd.destinationType} />
                   </dl>
 
                   <div className="f9-proof-block">
@@ -898,28 +1025,28 @@ export default function SearchRoute() {
 
                   <div className="f9-proof-block">
                     <span>Landing page</span>
-                    <h3>{data.selectedAd.landingPage?.rawHeadline ?? "Headline not captured yet"}</h3>
+                    <h3>{selectedAd.landingPage?.rawHeadline ?? "Headline not captured yet"}</h3>
                     <dl className="f9-detail-grid">
                       <DetailRow
                         label="Primary CTA"
-                        value={formatLandingPageSignalValue(data.selectedAd.landingPage?.ctaText)}
+                        value={formatLandingPageSignalValue(selectedAd.landingPage?.ctaText)}
                       />
                       <DetailRow
                         label="Visible price/offer"
-                        value={formatLandingPageSignalValue(data.selectedAd.landingPage?.priceText)}
+                        value={formatLandingPageSignalValue(selectedAd.landingPage?.priceText)}
                       />
                       <DetailRow
                         label="Form present"
-                        value={formatLandingPageFormValue(data.selectedAd.landingPage?.formPresent)}
+                        value={formatLandingPageFormValue(selectedAd.landingPage?.formPresent)}
                       />
                       <DetailRow
                         label="Page check"
-                        value={formatCaptureMethodLabel(data.selectedAd.landingPage?.captureMethod)}
+                        value={formatCaptureMethodLabel(selectedAd.landingPage?.captureMethod)}
                       />
                     </dl>
-                    {data.selectedAd.landingPageUrl ? (
-                      <a href={data.selectedAd.landingPageUrl} rel="noreferrer" target="_blank">
-                        {data.selectedAd.landingPageUrl}
+                    {selectedAd.landingPageUrl ? (
+                      <a href={selectedAd.landingPageUrl} rel="noreferrer" target="_blank">
+                        {selectedAd.landingPageUrl}
                       </a>
                     ) : (
                       <small>No landing page URL detected.</small>
@@ -928,13 +1055,13 @@ export default function SearchRoute() {
 
                   <div className="f9-proof-block">
                     <span>Why this may matter</span>
-                    <p>{data.selectedAd.researchSummary}</p>
+                    <p>{selectedAd.researchSummary}</p>
                   </div>
 
                   {data.session && data.collections.length > 0 ? (
                     <Form className="f9-save-stack" method="post">
                       <input name="intent" type="hidden" value="save-to-collection" />
-                      <input name="adId" type="hidden" value={data.selectedAd.metaAdId} />
+                      <input name="adId" type="hidden" value={selectedAd.metaAdId} />
                       <label className="f9-field">
                         <span>Collection</span>
                         <select name="collectionId" required>
@@ -1004,6 +1131,76 @@ function buildIdleSearchResult(): SearchResponse {
   };
 }
 
+export interface SearchAccumulationState {
+  searchKey: string;
+  result: SearchResponse;
+  selectedAd: AdRecord | null;
+  addedCount: number;
+  retryCursor: string | null;
+}
+
+export function buildSearchAccumulationKey(data: {
+  fingerprint: string;
+  mode: string;
+  searchScope: string;
+  competitorWebsite?: { normalizedUrl?: string | null; raw?: string | null } | null;
+}) {
+  return JSON.stringify({
+    fingerprint: data.fingerprint,
+    mode: data.mode,
+    searchScope: data.searchScope,
+    website: data.competitorWebsite?.normalizedUrl ?? data.competitorWebsite?.raw ?? null,
+  });
+}
+
+export function createSearchAccumulationState(
+  searchKey: string,
+  result: SearchResponse,
+  selectedAd: AdRecord | null,
+): SearchAccumulationState {
+  return {
+    searchKey,
+    result,
+    selectedAd,
+    addedCount: 0,
+    retryCursor: null,
+  };
+}
+
+export function mergeSearchAccumulationState(
+  previous: SearchAccumulationState,
+  incoming: SearchResponse,
+  input: { requestedCursor: string | null; selectedAd: AdRecord | null },
+): SearchAccumulationState {
+  if (input.requestedCursor && isDelayedDiscoveryStatus(incoming.discoveryStatus) && incoming.ads.length === 0) {
+    return {
+      ...previous,
+      result: {
+        ...incoming,
+        ads: previous.result.ads,
+        nextCursor: input.requestedCursor,
+      },
+      selectedAd: input.selectedAd ?? previous.selectedAd,
+      addedCount: 0,
+      retryCursor: input.requestedCursor,
+    };
+  }
+
+  const priorIds = new Set(previous.result.ads.map((ad) => ad.metaAdId));
+  const mergedAds = new Map(previous.result.ads.map((ad) => [ad.metaAdId, ad]));
+  for (const ad of incoming.ads) {
+    mergedAds.set(ad.metaAdId, ad);
+  }
+
+  return {
+    searchKey: previous.searchKey,
+    result: { ...incoming, ads: Array.from(mergedAds.values()) },
+    selectedAd: input.selectedAd ?? previous.selectedAd,
+    addedCount: incoming.ads.filter((ad) => !priorIds.has(ad.metaAdId)).length,
+    retryCursor: null,
+  };
+}
+
 function formatSearchSourceLabel(result: SearchResponse) {
   if (result.provider === "meta_library_browser" || result.source === "meta_library_browser") {
     return "Source: Meta Ad Library visual check";
@@ -1018,7 +1215,7 @@ function formatSearchSourceLabel(result: SearchResponse) {
 }
 
 function formatSearchFreshnessLabel(result: SearchResponse) {
-  if (result.discoveryStatus === "degraded") return "Fresh check delayed";
+  if (isDelayedDiscoveryStatus(result.discoveryStatus)) return "Fresh check delayed";
   if (result.cacheStatus === "hit") return "Recent cached result";
   if (result.cacheStatus === "stale") return "Older cached result";
   if (result.cacheStatus === "miss") return "Fresh result";
@@ -1065,6 +1262,12 @@ function SearchStateFields({
       <input name="lastSeenFrom" type="hidden" value={filters.lastSeenFrom} />
     </>
   );
+}
+
+function SearchQueryFields({ params }: { params: URLSearchParams }) {
+  return Array.from(params.entries()).map(([name, value], index) => (
+    <input key={`${name}-${value}-${index}`} name={name} type="hidden" value={value} />
+  ));
 }
 
 function canUseCanaryFreshLiveBypass(env: { CANARY_BYPASS_TOKEN?: string }, request: Request, url: URL) {
@@ -1166,7 +1369,7 @@ export function formatDiscoverySummary(result: SearchResponse) {
 
   if (/API fallback/i.test(result.discoverySummary)) {
     const fallbackUnavailable =
-      result.discoveryStatus === "degraded" ||
+      isDelayedDiscoveryStatus(result.discoveryStatus) ||
       Boolean(result.discoveryFailureClass) ||
       /failed/i.test(result.discoverySummary);
 
@@ -1194,6 +1397,79 @@ export function formatDiscoverySummary(result: SearchResponse) {
     .replace(/(^|[.!?]\s+)([a-z])/g, (match) => match.toUpperCase());
 }
 
+export function formatSearchResultsAnnouncement(
+  result: SearchResponse,
+  options: {
+    isLoading?: boolean;
+    recovered?: boolean;
+    addedCount?: number;
+    retryCursor?: string | null;
+  } = {},
+) {
+  if (options.isLoading) {
+    return "Loading more search results…";
+  }
+
+  const resultCount = result.ads.length;
+  const resultLabel = resultCount === 1 ? "result" : "results";
+  const completion = result.nextCursor ? " More results are available." : " No more results.";
+  const recovery = options.recovered ? " Search checks have recovered." : "";
+
+  if (options.retryCursor) {
+    const availabilityVerb = resultCount === 1 ? "remains" : "remain";
+    return `${resultCount} search ${resultLabel} ${availabilityVerb} available. Fresh checks for more results are delayed. Retry when ready.`;
+  }
+
+  if (isDelayedDiscoveryStatus(result.discoveryStatus)) {
+    if (resultCount === 0) {
+      return "No results loaded. Fresh checks are delayed, so coverage may be incomplete.";
+    }
+    return `${resultCount} ${resultLabel} loaded. Fresh checks are delayed; showing recent results.${
+      result.nextCursor ? " More results are available." : ""
+    }`;
+  }
+
+  if (resultCount === 0) {
+    return `No search results found. Search complete.${recovery}`;
+  }
+
+  if (options.addedCount && options.addedCount > 0) {
+    const addedLabel = options.addedCount === 1 ? "result" : "results";
+    return `${options.addedCount} more ${addedLabel} loaded. ${resultCount} total search ${resultLabel}.${completion}${recovery}`;
+  }
+
+  return `${resultCount} search ${resultLabel} loaded.${completion}${recovery}`;
+}
+
+export function resolveRecoveredSearchKey(input: {
+  currentDiscoveryStatus: SearchResponse["discoveryStatus"];
+  currentRecoveryKey: string | null;
+  previousDiscoveryStatus: SearchResponse["discoveryStatus"];
+  searchKey: string;
+}) {
+  if (isDelayedDiscoveryStatus(input.currentDiscoveryStatus)) {
+    return null;
+  }
+  if (isDelayedDiscoveryStatus(input.previousDiscoveryStatus)) {
+    return input.searchKey;
+  }
+  return input.currentRecoveryKey === input.searchKey ? input.currentRecoveryKey : null;
+}
+
+export function hasRecentSearchDelay(raw: string | null, now = Date.now()) {
+  if (!raw) return false;
+  try {
+    const parsed = JSON.parse(raw) as { delayed?: unknown; observedAt?: unknown };
+    return parsed.delayed === true &&
+      typeof parsed.observedAt === "number" &&
+      Number.isFinite(parsed.observedAt) &&
+      parsed.observedAt <= now &&
+      now - parsed.observedAt <= SEARCH_DELAY_RECOVERY_WINDOW_MS;
+  } catch {
+    return false;
+  }
+}
+
 function formatEmptyResultHeadline(
   result: SearchResponse,
   context: {
@@ -1211,8 +1487,8 @@ function formatEmptyResultHeadline(
     return "Checking this competitor";
   }
 
-  if (result.discoveryStatus === "degraded") {
-    return "Live search is temporarily unavailable";
+  if (isDelayedDiscoveryStatus(result.discoveryStatus)) {
+    return "Search preview is temporarily unavailable";
   }
 
   if (
@@ -1225,6 +1501,10 @@ function formatEmptyResultHeadline(
   }
 
   return "No ads found for this competitor";
+}
+
+function isDelayedDiscoveryStatus(status: SearchResponse["discoveryStatus"]) {
+  return status === "degraded" || status === "cache_only";
 }
 
 export function formatResultsPanelTitle(

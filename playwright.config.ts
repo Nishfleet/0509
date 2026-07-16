@@ -1,18 +1,41 @@
 import { defineConfig, devices } from "@playwright/test";
+// @ts-ignore JavaScript helper is shared with the Node release-proof wrapper.
+import {
+  buildLocalReleaseServerCommand,
+  isLocalReleaseServerIdentity,
+  parseExactLoopbackOrigin,
+} from "./scripts/local-release-server.mjs";
 
+const shouldStartLocalServer = process.env.E2E_START_LOCAL_SERVER === "1";
+const strictReleaseProof = process.env.E2E_RELEASE_STRICT === "1";
+if (strictReleaseProof && !process.env.E2E_BASE_URL) {
+  throw new Error("E2E_BASE_URL is required for an isolated local release run.");
+}
 const localBaseURL = process.env.E2E_BASE_URL ?? "http://127.0.0.1:4179";
+const parsedLocalBaseURL = parseExactLoopbackOrigin(localBaseURL);
 const previewBaseURL = process.env.E2E_PREVIEW_BASE_URL ?? localBaseURL;
 const productionBaseURL = process.env.E2E_PROD_BASE_URL ?? "https://0509.io";
 const authState = process.env.AUTH_STATE ?? ".auth/0509-internal.json";
-const shouldStartLocalServer = process.env.E2E_START_LOCAL_SERVER === "1";
+const journeyReleaseMatch = /journey-[1-6]-release\.spec\.ts/;
+const releaseServerIdentity = process.env.PLAYWRIGHT_RELEASE_SERVER_ID;
+if (strictReleaseProof && !isLocalReleaseServerIdentity(releaseServerIdentity)) {
+  throw new Error("PLAYWRIGHT_RELEASE_SERVER_ID is required for an isolated local release run.");
+}
+const outputDir = strictReleaseProof
+  ? `test-results/e2e/${releaseServerIdentity}`
+  : "test-results/e2e";
 
 export default defineConfig({
   testDir: "./e2e",
-  outputDir: "test-results/e2e",
+  outputDir,
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? [["dot"], ["html", { open: "never" }]] : "list",
+  reporter: strictReleaseProof
+    ? [["list"], ["./scripts/playwright-release-manifest-reporter.mjs", { strict: true }]]
+    : process.env.CI
+      ? [["dot"], ["html", { open: "never" }]]
+      : "list",
   timeout: 30_000,
   use: {
     actionTimeout: 10_000,
@@ -22,8 +45,8 @@ export default defineConfig({
     video: "retain-on-failure",
   },
   webServer: shouldStartLocalServer
-    ? {
-        command: "npm run e2e:serve:local",
+      ? {
+        command: buildLocalReleaseServerCommand(parsedLocalBaseURL.origin),
         reuseExistingServer: false,
         timeout: 120_000,
         url: localBaseURL,
@@ -33,6 +56,16 @@ export default defineConfig({
     {
       name: "local-auth",
       testMatch: /local-authenticated\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: localBaseURL,
+      },
+    },
+    {
+      name: "local-release",
+      testMatch: journeyReleaseMatch,
+      retries: 0,
+      workers: 1,
       use: {
         ...devices["Desktop Chrome"],
         baseURL: localBaseURL,

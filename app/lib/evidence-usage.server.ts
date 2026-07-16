@@ -12,6 +12,7 @@ import {
   ensureWorkspaceEntitlementAnchor,
 } from "~/lib/evidence-usage-period.server";
 import { getUserPlan } from "~/lib/plan.server";
+import { resolveMonitoringOrchestrationLeaseMs } from "~/lib/monitoring-fanout.server";
 
 const RESERVATION_TTL_MS = 15 * 60 * 1000;
 
@@ -45,6 +46,16 @@ interface ReservationRow {
   logical_operation_key: string;
   quantity: number;
   status: string;
+  expires_at: string;
+  source: string;
+  owner_run_id: string | null;
+  owner_processing_token: string | null;
+  owner_lease_seen_at: string | null;
+}
+
+export interface EvidenceFinalizationLease {
+  runId: string;
+  processingToken: string;
 }
 
 function createId() {
@@ -53,6 +64,75 @@ function createId() {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function reservationExpiry(now: string) {
+  return new Date(Date.parse(now) + RESERVATION_TTL_MS).toISOString();
+}
+
+function activeWorkflowLeaseCutoff(env: AppEnv, now: string) {
+  return new Date(Date.parse(now) - resolveMonitoringOrchestrationLeaseMs(env)).toISOString();
+}
+
+async function claimPendingReservationOwner(
+  env: AppEnv,
+  row: Pick<ReservationRow, "id" | "owner_run_id" | "owner_processing_token">,
+  lease: EvidenceFinalizationLease | undefined,
+  now: string,
+) {
+  if (!lease) {
+    const result = await ensureDb(env)
+      .prepare(
+        `
+          UPDATE evidence_usage_reservation
+          SET expires_at = ?
+          WHERE id = ?
+            AND status = 'pending'
+            AND source LIKE '%:atomic'
+            AND owner_run_id IS NULL
+            AND owner_processing_token IS NULL
+            AND expires_at > ?
+        `,
+      )
+      .bind(reservationExpiry(now), row.id, now)
+      .run();
+    return Number(result.meta?.changes ?? 0) === 1;
+  }
+
+  const result = await ensureDb(env)
+    .prepare(
+      `
+        UPDATE evidence_usage_reservation
+        SET owner_run_id = ?,
+            owner_processing_token = ?,
+            owner_lease_seen_at = ?,
+            expires_at = ?
+        WHERE id = ?
+          AND status = 'pending'
+          AND source LIKE '%:atomic'
+          AND (owner_run_id IS NULL OR owner_run_id = ?)
+          AND EXISTS (
+            SELECT 1
+            FROM watchlist_run
+            WHERE id = ?
+              AND status = 'running'
+              AND processing_token = ?
+          )
+      `,
+    )
+    .bind(
+      lease.runId,
+      lease.processingToken,
+      now,
+      reservationExpiry(now),
+      row.id,
+      lease.runId,
+      lease.runId,
+      lease.processingToken,
+    )
+    .run();
+
+  return Number(result.meta?.changes ?? 0) === 1;
 }
 
 export function isEvidenceUsageStorageUnavailableError(message: string) {
@@ -269,50 +349,77 @@ async function appendTopUpLedgerEntry(
   const entryId = createId();
   const createdAt = nowIso();
 
-  const insert = await db
-    .prepare(
-      `
-        INSERT INTO evidence_top_up_ledger_entry (
-          id, grant_id, workspace_user_id, quantity_delta, entry_type,
-          reservation_id, idempotency_key, metadata_json, created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(idempotency_key) DO NOTHING
-      `,
-    )
-    .bind(
-      entryId,
-      input.grantId,
-      input.workspaceUserId,
-      input.quantityDelta,
-      input.entryType,
-      input.reservationId ?? null,
-      input.idempotencyKey,
-      JSON.stringify(input.metadata ?? {}),
-      createdAt,
-    )
-    .run();
+  const results = await db.batch([
+    db
+      .prepare(
+        `
+          INSERT INTO evidence_top_up_ledger_entry (
+            id, grant_id, workspace_user_id, quantity_delta, entry_type,
+            reservation_id, idempotency_key, metadata_json, created_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(idempotency_key) DO NOTHING
+        `,
+      )
+      .bind(
+        entryId,
+        input.grantId,
+        input.workspaceUserId,
+        input.quantityDelta,
+        input.entryType,
+        input.reservationId ?? null,
+        input.idempotencyKey,
+        JSON.stringify(input.metadata ?? {}),
+        createdAt,
+      ),
+    db
+      .prepare(
+        `
+          UPDATE evidence_top_up_grant
+          SET quantity_remaining = MAX(
+                0,
+                quantity_granted + COALESCE(
+                  (SELECT SUM(quantity_delta)
+                   FROM evidence_top_up_ledger_entry
+                   WHERE grant_id = ?),
+                  0
+                )
+              ),
+              status = CASE
+                WHEN MAX(
+                  0,
+                  quantity_granted + COALESCE(
+                    (SELECT SUM(quantity_delta)
+                     FROM evidence_top_up_ledger_entry
+                     WHERE grant_id = ?),
+                    0
+                  )
+                ) <= 0 THEN 'depleted'
+                ELSE 'active'
+              END
+          WHERE id = ?
+            AND workspace_user_id = ?
+            AND EXISTS (
+              SELECT 1
+              FROM evidence_top_up_ledger_entry
+              WHERE grant_id = ?
+                AND idempotency_key = ?
+            )
+        `,
+      )
+      .bind(
+        input.grantId,
+        input.grantId,
+        input.grantId,
+        input.workspaceUserId,
+        input.grantId,
+        input.idempotencyKey,
+      ),
+  ]);
 
-  if ((insert.meta?.changes ?? 0) === 0) {
-    return { applied: false as const };
-  }
-
-  await db
-    .prepare(
-      `
-        UPDATE evidence_top_up_grant
-        SET quantity_remaining = MAX(0, quantity_remaining + ?),
-            status = CASE
-              WHEN MAX(0, quantity_remaining + ?) <= 0 THEN 'depleted'
-              ELSE 'active'
-            END
-        WHERE id = ?
-      `,
-    )
-    .bind(input.quantityDelta, input.quantityDelta, input.grantId)
-    .run();
-
-  return { applied: true as const, entryId };
+  return (Number(results[0]?.meta?.changes ?? 0) === 1
+    ? { applied: true as const, entryId }
+    : { applied: false as const });
 }
 
 export async function getEvidenceUsageSummary(env: AppEnv, workspaceUserId: string) {
@@ -441,17 +548,20 @@ export async function reserveEvidenceCheck(
     logicalOperationKey: string;
     source: string;
     now?: string;
+    lease?: EvidenceFinalizationLease;
   },
 ): Promise<EvidenceReservationResult> {
   const now = input.now ?? nowIso();
   const plan = await readWorkspacePlanFamily(env, input.workspaceUserId);
   const period = await ensureCurrentEvidenceUsagePeriod(env, input.workspaceUserId, plan);
   const db = ensureDb(env);
+  const reservationSource = `${input.source}:atomic`;
 
   const existing = await db
     .prepare(
       `
-        SELECT id, status, usage_period_id, top_up_grant_id
+        SELECT id, status, usage_period_id, top_up_grant_id, source, expires_at,
+               owner_run_id, owner_processing_token, owner_lease_seen_at
         FROM evidence_usage_reservation
         WHERE logical_operation_key = ?
         LIMIT 1
@@ -465,40 +575,61 @@ export async function reserveEvidenceCheck(
       return { ok: false, reason: "duplicate" };
     }
     if (existing.status === "pending") {
+      if (!existing.source?.endsWith(":atomic")) {
+        return { ok: false, reason: "unavailable" };
+      }
+      if (!(await claimPendingReservationOwner(env, existing, input.lease, now))) {
+        return { ok: false, reason: "unavailable" };
+      }
       return {
         ok: true,
         reservationId: existing.id,
         pool: existing.top_up_grant_id ? "top_up" : "included",
       };
     }
+    if (existing.status === "released") {
+      // A release marker is terminal. Replacing it outside the same claim
+      // transaction would let the old releaser return the replacement's
+      // allowance. The caller must use a fresh logical key or surface this
+      // operation for operator recovery.
+      return { ok: false, reason: "unavailable" };
+    }
   }
 
-  const includedRemaining = Number(period.included_allowance) - Number(period.included_consumed);
-  const expiresAt = new Date(Date.parse(now) + RESERVATION_TTL_MS).toISOString();
+  const expiresAt = reservationExpiry(now);
+  const ownerPredicate = input.lease
+    ? `
+              AND EXISTS (
+                SELECT 1
+                FROM watchlist_run
+                WHERE id = ?
+                  AND status = 'running'
+                  AND processing_token = ?
+              )`
+    : "";
+  const ownerPredicateBindings = input.lease
+    ? [input.lease.runId, input.lease.processingToken]
+    : [];
 
-  if (includedRemaining > 0) {
-    const update = await db
-      .prepare(
-        `
-          UPDATE evidence_usage_period
-          SET included_consumed = included_consumed + 1
-          WHERE id = ?
-            AND included_consumed < included_allowance
-        `,
-      )
-      .bind(period.id)
-      .run();
-
-    if ((update.meta?.changes ?? 0) === 1) {
-      const reservationId = createId();
-      await db
+  // The reservation claim and included increment are one D1 transaction. A
+  // same-key conflict has no row owned by this caller, so the guarded
+  // increment is a no-op and the conflict winner is returned below.
+  {
+    const reservationId = createId();
+    const results = await db.batch([
+      db
         .prepare(
           `
             INSERT INTO evidence_usage_reservation (
               id, workspace_user_id, usage_period_id, top_up_grant_id,
-              logical_operation_key, quantity, status, reserved_at, expires_at, source
+              logical_operation_key, quantity, status, reserved_at, expires_at, source,
+              owner_run_id, owner_processing_token, owner_lease_seen_at
             )
-            VALUES (?, ?, ?, NULL, ?, 1, 'pending', ?, ?, ?)
+            SELECT ?, ?, ?, NULL, ?, 1, 'pending', ?, ?, ?, ?, ?, ?
+            FROM evidence_usage_period
+            WHERE id = ?
+              AND included_consumed < included_allowance
+              ${ownerPredicate}
             ON CONFLICT(logical_operation_key) DO NOTHING
           `,
         )
@@ -509,10 +640,64 @@ export async function reserveEvidenceCheck(
           input.logicalOperationKey,
           now,
           expiresAt,
-          input.source,
+          reservationSource,
+          input.lease?.runId ?? null,
+          input.lease?.processingToken ?? null,
+          input.lease ? now : null,
+          period.id,
+          ...ownerPredicateBindings,
+        ),
+      db
+        .prepare(
+          `
+            UPDATE evidence_usage_period
+            SET included_consumed = included_consumed + 1
+            WHERE id = ?
+              AND included_consumed < included_allowance
+              AND EXISTS (
+                SELECT 1
+                FROM evidence_usage_reservation
+                WHERE id = ?
+                  AND logical_operation_key = ?
+                  AND usage_period_id = ?
+                  AND status = 'pending'
+              )
+          `,
         )
-        .run();
+        .bind(period.id, reservationId, input.logicalOperationKey, period.id),
+    ]);
+
+    if (Number(results[1]?.meta?.changes ?? 0) === 1) {
       return { ok: true, reservationId, pool: "included" };
+    }
+
+    const concurrent = await db
+      .prepare(
+        `
+          SELECT id, status, usage_period_id, top_up_grant_id, source, expires_at,
+                 owner_run_id, owner_processing_token, owner_lease_seen_at
+          FROM evidence_usage_reservation
+          WHERE logical_operation_key = ?
+          LIMIT 1
+        `,
+      )
+      .bind(input.logicalOperationKey)
+      .first<ReservationRow & { status: string }>();
+    if (concurrent?.status === "settled") {
+      return { ok: false, reason: "duplicate" };
+    }
+    if (concurrent?.status === "pending") {
+      if (!concurrent.source?.endsWith(":atomic")) {
+        return { ok: false, reason: "unavailable" };
+      }
+      if (!(await claimPendingReservationOwner(env, concurrent, input.lease, now))) {
+        return { ok: false, reason: "unavailable" };
+      }
+      return {
+        ok: true,
+        reservationId: concurrent.id,
+        pool: concurrent.top_up_grant_id ? "top_up" : "included",
+      };
     }
   }
 
@@ -529,40 +714,152 @@ export async function reserveEvidenceCheck(
     if (remaining <= 0) continue;
 
     const reservationId = createId();
-    const ledger = await appendTopUpLedgerEntry(env, {
-      grantId: grant.id,
-      workspaceUserId: input.workspaceUserId,
-      quantityDelta: -1,
-      entryType: "consumption",
-      reservationId,
-      idempotencyKey: `reserve:${input.logicalOperationKey}:${grant.id}`,
-    });
+    const consumptionKey = `reserve:${input.logicalOperationKey}:${grant.id}:${reservationId}`;
+    const results = await db.batch([
+      db
+        .prepare(
+          `
+            INSERT INTO evidence_usage_reservation (
+              id, workspace_user_id, usage_period_id, top_up_grant_id,
+              logical_operation_key, quantity, status, reserved_at, expires_at, source,
+              owner_run_id, owner_processing_token, owner_lease_seen_at
+            )
+            SELECT ?, ?, NULL, ?, ?, 1, 'pending', ?, ?, ?, ?, ?, ?
+            FROM evidence_top_up_grant
+            WHERE id = ?
+              AND workspace_user_id = ?
+              AND quantity_granted + COALESCE(
+                (SELECT SUM(quantity_delta)
+                 FROM evidence_top_up_ledger_entry
+                 WHERE grant_id = evidence_top_up_grant.id),
+                0
+              ) > 0
+              ${ownerPredicate}
+            ON CONFLICT(logical_operation_key) DO NOTHING
+          `,
+        )
+        .bind(
+          reservationId,
+          input.workspaceUserId,
+          grant.id,
+          input.logicalOperationKey,
+          now,
+          expiresAt,
+          reservationSource,
+          input.lease?.runId ?? null,
+          input.lease?.processingToken ?? null,
+          input.lease ? now : null,
+          grant.id,
+          input.workspaceUserId,
+          ...ownerPredicateBindings,
+        ),
+      db
+        .prepare(
+          `
+            INSERT INTO evidence_top_up_ledger_entry (
+              id, grant_id, workspace_user_id, quantity_delta, entry_type,
+              reservation_id, idempotency_key, metadata_json, created_at
+            )
+            SELECT ?, ?, ?, -1, 'consumption', ?, ?, '{}', ?
+            WHERE EXISTS (
+              SELECT 1
+              FROM evidence_usage_reservation
+              WHERE id = ?
+                AND logical_operation_key = ?
+                AND top_up_grant_id = ?
+                AND status = 'pending'
+            )
+            ON CONFLICT(idempotency_key) DO NOTHING
+          `,
+        )
+        .bind(
+          createId(),
+          grant.id,
+          input.workspaceUserId,
+          reservationId,
+          consumptionKey,
+          now,
+          reservationId,
+          input.logicalOperationKey,
+          grant.id,
+        ),
+      db
+        .prepare(
+          `
+            UPDATE evidence_top_up_grant
+            SET quantity_remaining = MAX(
+                  0,
+                  quantity_granted + COALESCE(
+                    (SELECT SUM(quantity_delta)
+                     FROM evidence_top_up_ledger_entry
+                     WHERE grant_id = ?),
+                    0
+                  )
+                ),
+                status = CASE
+                  WHEN MAX(
+                    0,
+                    quantity_granted + COALESCE(
+                      (SELECT SUM(quantity_delta)
+                       FROM evidence_top_up_ledger_entry
+                       WHERE grant_id = ?),
+                      0
+                    )
+                  ) <= 0 THEN 'depleted'
+                  ELSE 'active'
+                END
+            WHERE id = ?
+              AND workspace_user_id = ?
+              AND EXISTS (
+                SELECT 1
+                FROM evidence_top_up_ledger_entry
+                WHERE reservation_id = ?
+                  AND idempotency_key = ?
+              )
+          `,
+        )
+        .bind(
+          grant.id,
+          grant.id,
+          grant.id,
+          input.workspaceUserId,
+          reservationId,
+          consumptionKey,
+        ),
+    ]);
 
-    if (!ledger.applied) continue;
+    if (Number(results[1]?.meta?.changes ?? 0) === 1) {
+      return { ok: true, reservationId, pool: "top_up" };
+    }
 
-    await db
+    const concurrent = await db
       .prepare(
         `
-          INSERT INTO evidence_usage_reservation (
-            id, workspace_user_id, usage_period_id, top_up_grant_id,
-            logical_operation_key, quantity, status, reserved_at, expires_at, source
-          )
-          VALUES (?, ?, NULL, ?, ?, 1, 'pending', ?, ?, ?)
-          ON CONFLICT(logical_operation_key) DO NOTHING
+          SELECT id, status, usage_period_id, top_up_grant_id, source, expires_at,
+                 owner_run_id, owner_processing_token, owner_lease_seen_at
+          FROM evidence_usage_reservation
+          WHERE logical_operation_key = ?
+          LIMIT 1
         `,
       )
-      .bind(
-        reservationId,
-        input.workspaceUserId,
-        grant.id,
-        input.logicalOperationKey,
-        now,
-        expiresAt,
-        input.source,
-      )
-      .run();
-
-    return { ok: true, reservationId, pool: "top_up" };
+      .bind(input.logicalOperationKey)
+      .first<ReservationRow & { status: string }>();
+    if (concurrent?.status === "settled") {
+      return { ok: false, reason: "duplicate" };
+    }
+    if (concurrent?.status === "pending") {
+      if (!concurrent.source?.endsWith(":atomic")) {
+        return { ok: false, reason: "unavailable" };
+      }
+      if (!(await claimPendingReservationOwner(env, concurrent, input.lease, now))) {
+        return { ok: false, reason: "unavailable" };
+      }
+      return {
+        ok: true,
+        reservationId: concurrent.id,
+        pool: concurrent.top_up_grant_id ? "top_up" : "included",
+      };
+    }
   }
 
   return { ok: false, reason: "exhausted" };
@@ -572,8 +869,27 @@ export async function settleEvidenceReservation(
   env: AppEnv,
   logicalOperationKey: string,
   settledAt?: string,
+  lease?: EvidenceFinalizationLease,
 ) {
-  await ensureDb(env)
+  const db = ensureDb(env);
+  const ownershipPredicate = lease
+    ? `
+          AND owner_run_id = ?
+          AND owner_processing_token = ?
+          AND EXISTS (
+            SELECT 1
+            FROM watchlist_run
+            WHERE id = ?
+              AND status = 'running'
+              AND processing_token = ?
+          )`
+    : `
+          AND owner_run_id IS NULL
+          AND owner_processing_token IS NULL`;
+  const ownershipBindings = lease
+    ? [lease.runId, lease.processingToken, lease.runId, lease.processingToken]
+    : [];
+  const result = await db
     .prepare(
       `
         UPDATE evidence_usage_reservation
@@ -581,18 +897,70 @@ export async function settleEvidenceReservation(
             settled_at = ?
         WHERE logical_operation_key = ?
           AND status = 'pending'
+          AND source LIKE '%:atomic'
+          ${ownershipPredicate}
       `,
     )
-    .bind(settledAt ?? nowIso(), logicalOperationKey)
+    .bind(
+      settledAt ?? nowIso(),
+      logicalOperationKey,
+      ...ownershipBindings,
+    )
     .run();
+
+  if (Number(result.meta?.changes ?? 0) > 0) {
+    return true;
+  }
+
+  // A replay of the same successful proof is idempotent only when the
+  // original atomic reservation is already settled. A released, missing, or
+  // legacy reservation means quota ownership was lost, so callers must not
+  // publish downstream customer effects.
+  const current = await db
+    .prepare(
+      `
+        SELECT status, source
+        FROM evidence_usage_reservation
+        WHERE logical_operation_key = ?
+          ${ownershipPredicate}
+        LIMIT 1
+      `,
+    )
+    .bind(
+      logicalOperationKey,
+      ...ownershipBindings,
+    )
+    .first<{ status: string; source: string | null }>();
+
+  return current?.status === "settled" && current.source?.endsWith(":atomic") === true;
 }
 
-export async function releaseEvidenceReservation(env: AppEnv, logicalOperationKey: string) {
+export async function releaseEvidenceReservation(
+  env: AppEnv,
+  logicalOperationKey: string,
+  lease?: EvidenceFinalizationLease,
+) {
+  return releaseEvidenceReservationWithGuard(env, logicalOperationKey, { lease });
+}
+
+async function releaseEvidenceReservationWithGuard(
+  env: AppEnv,
+  logicalOperationKey: string,
+  options: {
+    lease?: EvidenceFinalizationLease;
+    staleAt?: string;
+  },
+) {
   const db = ensureDb(env);
+  const lease = options.lease;
+  const activeOwnerCutoff = options.staleAt
+    ? activeWorkflowLeaseCutoff(env, options.staleAt)
+    : null;
   const row = await db
     .prepare(
       `
-        SELECT id, usage_period_id, top_up_grant_id, workspace_user_id, status
+        SELECT id, usage_period_id, top_up_grant_id, workspace_user_id, status, expires_at,
+               source, owner_run_id, owner_processing_token, owner_lease_seen_at
         FROM evidence_usage_reservation
         WHERE logical_operation_key = ?
         LIMIT 1
@@ -601,52 +969,202 @@ export async function releaseEvidenceReservation(env: AppEnv, logicalOperationKe
     .bind(logicalOperationKey)
     .first<ReservationRow & { workspace_user_id: string }>();
 
-  if (!row || row.status !== "pending") return;
-
-  const releasedAt = nowIso();
-  await db
-    .prepare(
-      `
-        UPDATE evidence_usage_reservation
-        SET status = 'released',
-            released_at = ?
-        WHERE id = ?
-          AND status = 'pending'
-      `,
-    )
-    .bind(releasedAt, row.id)
-    .run();
-
-  if (row.usage_period_id) {
-    await db
+  if (!row) return false;
+  if (row.status !== "pending") {
+    if (row.status !== "released") return false;
+    if (options.staleAt) return false;
+    if (!lease) {
+      return row.owner_run_id === null && row.owner_processing_token === null;
+    }
+    if (
+      row.owner_run_id !== lease.runId ||
+      row.owner_processing_token !== lease.processingToken
+    ) {
+      return false;
+    }
+    const activeLease = await db
       .prepare(
         `
-          UPDATE evidence_usage_period
-          SET included_consumed = CASE
-            WHEN included_consumed > 0 THEN included_consumed - 1
-            ELSE 0
-          END
+          SELECT id
+          FROM watchlist_run
           WHERE id = ?
+            AND status = 'running'
+            AND processing_token = ?
+          LIMIT 1
         `,
       )
-      .bind(row.usage_period_id)
-      .run();
+      .bind(lease.runId, lease.processingToken)
+      .first<{ id: string }>();
+    return activeLease?.id === lease.runId;
+  }
+
+  // The unique marker makes the compensating statement belong only to the
+  // CAS winner. Legacy rows without the atomic source marker are released
+  // without guessing at quota ownership and remain operator-recoverable.
+  const releasedAt = `${nowIso()}:${createId()}`;
+  const guardPredicate = lease
+    ? `
+            AND owner_run_id = ?
+            AND owner_processing_token = ?
+            AND EXISTS (
+              SELECT 1
+              FROM watchlist_run
+              WHERE id = ?
+                AND status = 'running'
+                AND processing_token = ?
+            )`
+    : options.staleAt
+      ? `
+            AND expires_at <= ?
+            AND (
+              (owner_run_id IS NULL AND owner_processing_token IS NULL)
+              OR NOT EXISTS (
+                SELECT 1
+                FROM watchlist_run
+                WHERE id = evidence_usage_reservation.owner_run_id
+                  AND status = 'running'
+                  AND processing_token = evidence_usage_reservation.owner_processing_token
+                  AND processing_started_at IS NOT NULL
+                  AND processing_started_at >= ?
+              )
+            )`
+      : `
+            AND owner_run_id IS NULL
+            AND owner_processing_token IS NULL`;
+  const guardBindings = lease
+    ? [lease.runId, lease.processingToken, lease.runId, lease.processingToken]
+    : options.staleAt
+      ? [options.staleAt, activeOwnerCutoff]
+      : [];
+  const statements = [
+    db
+      .prepare(
+        `
+          UPDATE evidence_usage_reservation
+            SET status = 'released',
+              released_at = ?
+          WHERE id = ?
+            AND status = 'pending'
+            ${guardPredicate}
+        `,
+      )
+      .bind(
+        releasedAt,
+        row.id,
+        ...guardBindings,
+      ),
+  ];
+
+  if (row.usage_period_id) {
+    statements.push(
+      db
+        .prepare(
+          `
+            UPDATE evidence_usage_period
+            SET included_consumed = included_consumed - 1
+            WHERE id = ?
+              AND included_consumed > 0
+              AND EXISTS (
+                SELECT 1
+                FROM evidence_usage_reservation
+                WHERE id = ?
+                  AND status = 'released'
+                  AND released_at = ?
+                  AND source LIKE '%:atomic'
+              )
+          `,
+        )
+        .bind(row.usage_period_id, row.id, releasedAt),
+    );
   }
 
   if (row.top_up_grant_id) {
-    await appendTopUpLedgerEntry(env, {
-      grantId: row.top_up_grant_id,
-      workspaceUserId: row.workspace_user_id,
-      quantityDelta: 1,
-      entryType: "release",
-      reservationId: row.id,
-      idempotencyKey: `release:${logicalOperationKey}`,
-    });
+    const releaseKey = `release:${logicalOperationKey}`;
+    statements.push(
+      db
+        .prepare(
+          `
+            INSERT INTO evidence_top_up_ledger_entry (
+              id, grant_id, workspace_user_id, quantity_delta, entry_type,
+              reservation_id, idempotency_key, metadata_json, created_at
+            )
+            SELECT ?, ?, ?, 1, 'release', ?, ?, '{}', ?
+            WHERE EXISTS (
+              SELECT 1
+              FROM evidence_usage_reservation
+              WHERE id = ?
+                AND status = 'released'
+                AND released_at = ?
+                AND source LIKE '%:atomic'
+            )
+            ON CONFLICT(idempotency_key) DO NOTHING
+          `,
+        )
+        .bind(
+          createId(),
+          row.top_up_grant_id,
+          row.workspace_user_id,
+          row.id,
+          releaseKey,
+          nowIso(),
+          row.id,
+          releasedAt,
+        ),
+      db
+        .prepare(
+          `
+            UPDATE evidence_top_up_grant
+            SET quantity_remaining = MAX(
+                  0,
+                  quantity_granted + COALESCE(
+                    (SELECT SUM(quantity_delta)
+                     FROM evidence_top_up_ledger_entry
+                     WHERE grant_id = ?),
+                    0
+                  )
+                ),
+                status = CASE
+                  WHEN MAX(
+                    0,
+                    quantity_granted + COALESCE(
+                      (SELECT SUM(quantity_delta)
+                       FROM evidence_top_up_ledger_entry
+                       WHERE grant_id = ?),
+                      0
+                    )
+                  ) <= 0 THEN 'depleted'
+                  ELSE 'active'
+                END
+            WHERE id = ?
+              AND workspace_user_id = ?
+              AND EXISTS (
+                SELECT 1
+                FROM evidence_top_up_ledger_entry
+                WHERE grant_id = ?
+                  AND reservation_id = ?
+                  AND idempotency_key = ?
+              )
+          `,
+        )
+        .bind(
+          row.top_up_grant_id,
+          row.top_up_grant_id,
+          row.top_up_grant_id,
+          row.workspace_user_id,
+          row.top_up_grant_id,
+          row.id,
+          releaseKey,
+        ),
+    );
   }
+
+  const results = await db.batch(statements);
+  return Number(results[0]?.meta?.changes ?? 0) > 0;
 }
 
 export async function reconcileStaleEvidenceReservations(env: AppEnv, now = nowIso()) {
   const db = ensureDb(env);
+  const activeOwnerCutoff = activeWorkflowLeaseCutoff(env, now);
   const stale = await db
     .prepare(
       `
@@ -654,17 +1172,47 @@ export async function reconcileStaleEvidenceReservations(env: AppEnv, now = nowI
         FROM evidence_usage_reservation
         WHERE status = 'pending'
           AND expires_at <= ?
+          AND (
+            (owner_run_id IS NULL AND owner_processing_token IS NULL)
+            OR NOT EXISTS (
+              SELECT 1
+              FROM watchlist_run
+              WHERE id = evidence_usage_reservation.owner_run_id
+                AND status = 'running'
+                AND processing_token = evidence_usage_reservation.owner_processing_token
+                AND processing_started_at IS NOT NULL
+                AND processing_started_at >= ?
+            )
+          )
         LIMIT 100
       `,
     )
-    .bind(now)
+    .bind(now, activeOwnerCutoff)
     .all<{ logical_operation_key: string }>();
 
+  let released = 0;
   for (const row of stale.results ?? []) {
-    await releaseEvidenceReservation(env, row.logical_operation_key);
+    try {
+      if (
+        await releaseEvidenceReservationWithGuard(env, row.logical_operation_key, {
+          staleAt: now,
+        })
+      ) {
+        released += 1;
+      }
+    } catch (error) {
+      // One poisoned compensation must not strand every later reservation in
+      // the bounded sweep. D1 batch keeps this row pending for a later retry;
+      // the stable key makes the failure observable without logging customer
+      // or provider payloads.
+      console.error("Evidence reservation reconciliation failed", {
+        logicalOperationKey: row.logical_operation_key,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
-  return (stale.results ?? []).length;
+  return released;
 }
 
 export function buildEvidenceLogicalOperationKey(input: {
@@ -682,6 +1230,7 @@ export async function reserveEvidenceForProofCapture(
     proofTargetId: string;
     idempotencyKey: string;
     source: string;
+    lease?: EvidenceFinalizationLease;
   },
 ) {
   const logicalOperationKey = buildEvidenceLogicalOperationKey({
@@ -693,6 +1242,7 @@ export async function reserveEvidenceForProofCapture(
     workspaceUserId: input.workspaceUserId,
     logicalOperationKey,
     source: input.source,
+    lease: input.lease,
   });
   return { result, logicalOperationKey };
 }
@@ -704,6 +1254,7 @@ export async function tryReserveEvidenceForProofCapture(
     proofTargetId: string;
     idempotencyKey: string;
     source: string;
+    lease?: EvidenceFinalizationLease;
   },
 ) {
   if (!env.DB || typeof env.DB.prepare !== "function") {
@@ -725,25 +1276,27 @@ export async function finalizeEvidenceForProofCapture(
   env: AppEnv,
   logicalOperationKey: string,
   outcome: "succeeded" | "failed",
+  lease?: EvidenceFinalizationLease,
 ) {
   if (outcome === "succeeded") {
-    await settleEvidenceReservation(env, logicalOperationKey);
-    return;
+    return settleEvidenceReservation(env, logicalOperationKey, undefined, lease);
   }
-  await tryReleaseEvidenceForProofCapture(env, logicalOperationKey);
+  return tryReleaseEvidenceForProofCapture(env, logicalOperationKey, lease);
 }
 
 export async function tryReleaseEvidenceForProofCapture(
   env: AppEnv,
   logicalOperationKey: string,
+  lease?: EvidenceFinalizationLease,
 ) {
   try {
-    await releaseEvidenceReservation(env, logicalOperationKey);
+    return await releaseEvidenceReservation(env, logicalOperationKey, lease);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (!isEvidenceUsageStorageUnavailableError(message)) {
       throw error;
     }
+    return false;
   }
 }
 
@@ -751,14 +1304,16 @@ export async function tryFinalizeEvidenceForProofCapture(
   env: AppEnv,
   logicalOperationKey: string,
   outcome: "succeeded" | "failed",
+  lease?: EvidenceFinalizationLease,
 ) {
   try {
-    await finalizeEvidenceForProofCapture(env, logicalOperationKey, outcome);
+    return await finalizeEvidenceForProofCapture(env, logicalOperationKey, outcome, lease);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (!isEvidenceUsageStorageUnavailableError(message)) {
       throw error;
     }
+    return false;
   }
 }
 

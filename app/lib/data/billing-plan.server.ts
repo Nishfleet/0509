@@ -26,6 +26,7 @@ export async function grantDodoPlanAccess(
     metadata?: JsonRecord;
     forcePlanChangePending?: boolean;
     requirePlanChangePending?: boolean;
+    requireProviderIdentityMatch?: boolean;
   },
 ) {
   const planUpdatedAt = validIsoTimestamp(input.grantedAt) ?? nowIso();
@@ -87,6 +88,15 @@ export async function grantDodoPlanAccess(
       WHERE
         (
           ? = 0
+          OR (
+            user_plan.dodo_product_id = excluded.dodo_product_id
+            AND user_plan.dodo_subscription_id = excluded.dodo_subscription_id
+            AND user_plan.dodo_customer_id = excluded.dodo_customer_id
+          )
+        )
+        AND (
+        (
+          ? = 0
           AND julianday(excluded.plan_updated_at) >= julianday(user_plan.plan_updated_at)
         )
         OR (
@@ -116,6 +126,7 @@ export async function grantDodoPlanAccess(
             OR user_plan.dodo_customer_id = excluded.dodo_customer_id
           )
         )
+        )
     `,
     input.userId,
     input.plan,
@@ -127,6 +138,7 @@ export async function grantDodoPlanAccess(
     null,
     input.status,
     planUpdatedAt,
+    input.requireProviderIdentityMatch ? 1 : 0,
     input.requirePlanChangePending ? 1 : 0,
     input.forcePlanChangePending ? 1 : 0,
   );
@@ -179,6 +191,8 @@ export async function markDodoPlanPaymentIssue(
     status: string;
     occurredAt?: string;
     cancellationEffectiveAt?: string | null;
+    providerPaymentId?: string | null;
+    providerSubscriptionId?: string | null;
   },
 ) {
   const planUpdatedAt = validIsoTimestamp(input.occurredAt) ?? nowIso();
@@ -200,6 +214,8 @@ export async function markDodoPlanPaymentIssue(
           plan_updated_at = ?
       WHERE user_id = ?
         AND plan != 'free'
+        AND (? IS NULL OR dodo_payment_id = ?)
+        AND (? IS NULL OR dodo_subscription_id = ?)
         AND julianday(?) >= julianday(plan_updated_at)
     `,
     input.status,
@@ -207,6 +223,10 @@ export async function markDodoPlanPaymentIssue(
     cancellationEffectiveAt,
     planUpdatedAt,
     input.userId,
+    input.providerPaymentId ?? null,
+    input.providerPaymentId ?? null,
+    input.providerSubscriptionId ?? null,
+    input.providerSubscriptionId ?? null,
     planUpdatedAt,
   );
 }
@@ -257,7 +277,21 @@ export async function revokeDodoAccessForRefundedPayment(
 export async function getUserIdForDodoPayment(env: AppEnv, paymentId: string) {
   const row = await one<{ user_id: string }>(
     env,
-    "SELECT user_id FROM user_plan WHERE dodo_payment_id = ? LIMIT 1",
+    `
+      SELECT user_id
+      FROM (
+        SELECT user_id, 0 AS priority
+        FROM user_plan
+        WHERE dodo_payment_id = ?
+        UNION ALL
+        SELECT workspace_user_id AS user_id, 1 AS priority
+        FROM evidence_top_up_grant
+        WHERE provider_payment_id = ?
+      )
+      ORDER BY priority ASC
+      LIMIT 1
+    `,
+    paymentId,
     paymentId,
   );
   return row?.user_id ?? null;

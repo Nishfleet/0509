@@ -48,10 +48,10 @@ export function buildSearchAnswer(input: {
         : "Not captured yet; use the ad cards as creative signals only",
   };
 
-  if (result.discoveryStatus === "degraded" && adCount === 0) {
+  if (isDelayedSearchStatus(result.discoveryStatus) && adCount === 0) {
     return {
       state: "degraded",
-      title: "Live search is temporarily unavailable",
+      title: "Search preview is temporarily unavailable",
       summary: "Fresh competitor checks are delayed and no recent results are available for this search.",
       facts: [
         { label: "Fresh ads", value: "Delayed", detail: sourceLabel },
@@ -90,7 +90,7 @@ export function buildSearchAnswer(input: {
       state: result.discoveryStatus === "disabled" ? "idle" : "empty",
       title: result.discoveryStatus === "disabled" ? "Enter a competitor website" : "No ads found for this competitor",
       summary: result.discoveryStatus === "disabled"
-        ? "Paste one competitor site to see whether Five to Nine can verify live ads."
+        ? "Paste one competitor site to see whether Five to Nine can verify currently available ads."
         : "The search completed without returning visible ads.",
       facts: [
         { label: "Ads found", value: "0", detail: sourceLabel },
@@ -176,7 +176,7 @@ function isVerifiedDomainMatchLevel(level: string | null | undefined) {
 }
 
 function formatSearchSource(result: SearchResponse) {
-  if (result.discoveryStatus === "degraded") {
+  if (isDelayedSearchStatus(result.discoveryStatus)) {
     return "Delayed";
   }
   if (result.provider === "meta_library_browser" || result.source === "meta_library_browser") {
@@ -189,6 +189,10 @@ function formatSearchSource(result: SearchResponse) {
     return "Sample data";
   }
   return "Search result";
+}
+
+function isDelayedSearchStatus(status: SearchResponse["discoveryStatus"]) {
+  return status === "degraded" || status === "cache_only";
 }
 
 function formatCacheDetail(cacheStatus: SearchResponse["cacheStatus"]) {
