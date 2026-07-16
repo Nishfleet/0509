@@ -120,7 +120,7 @@ describe("team action result contract", () => {
 			token: "fresh-token",
 			inviteeEmail: "member@example.com",
 		});
-		const revokeWorkspaceMember = vi.fn().mockResolvedValue(undefined);
+		const revokeWorkspaceMember = vi.fn().mockResolvedValue({ ok: true });
 		mockActionDeps({ createWorkspaceInvite, resendWorkspaceInvite, revokeWorkspaceMember });
 		const { action } = await import("~/routes/app.team");
 

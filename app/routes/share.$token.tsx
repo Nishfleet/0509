@@ -1,5 +1,6 @@
 import { Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
+import { useEffect, useState } from "react";
 
 import { AdLongevityPill } from "~/components/ad-longevity-pill";
 import { AdThumb } from "~/components/ad-thumb";
@@ -152,6 +153,12 @@ export default function ShareRoute() {
   );
   const pdfVariant = Boolean("pdfVariant" in data && data.pdfVariant);
   const pdfPath = "pdfPath" in data && typeof data.pdfPath === "string" ? data.pdfPath : null;
+  const [pdfPreparing, setPdfPreparing] = useState(false);
+  useEffect(() => {
+    if (!pdfPreparing) return;
+    const timeout = setTimeout(() => setPdfPreparing(false), 75_000);
+    return () => clearTimeout(timeout);
+  }, [pdfPreparing]);
 
   return (
     <main className={`f9-share-page${pdfVariant ? " f9-share-pdf" : ""}`}>
@@ -183,8 +190,21 @@ export default function ShareRoute() {
                 <p className="f9-panel-toolbar-heading">{reportSnapshot.title}</p>
               </div>
               {pdfVariant ? null : pdfPath ? (
-                <a className="f9-secondary-button" href={pdfPath}>
-                  Download PDF
+                <a
+                  aria-busy={pdfPreparing}
+                  aria-disabled={pdfPreparing}
+                  className="f9-secondary-button"
+                  data-pdf-preparing={pdfPreparing ? "true" : "false"}
+                  href={pdfPath}
+                  onClick={(event) => {
+                    if (pdfPreparing) {
+                      event.preventDefault();
+                      return;
+                    }
+                    setPdfPreparing(true);
+                  }}
+                >
+                  {pdfPreparing ? "Preparing…" : "Download PDF"}
                 </a>
               ) : (
                 <button

@@ -1,5 +1,6 @@
 import { Form, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import { useEffect, useRef } from "react";
 
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
@@ -134,6 +135,20 @@ export async function action({ context, request }: ActionFunctionArgs) {
 export default function TeamRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const revokeFeedbackRef = useRef<HTMLDivElement>(null);
+  const revokedMemberStillPresent =
+    actionData?.intent === "revoke" &&
+    typeof actionData.memberId === "string" &&
+    data.members.some((member) => member.id === actionData.memberId);
+  const showRevocationCompletion = Boolean(
+    actionData?.ok && actionData.intent === "revoke" && !revokedMemberStillPresent,
+  );
+
+  useEffect(() => {
+    if (showRevocationCompletion) {
+      revokeFeedbackRef.current?.focus();
+    }
+  }, [showRevocationCompletion, actionData?.memberId]);
 
   if (data.isMember) {
     return (
@@ -166,7 +181,13 @@ export default function TeamRoute() {
           title="Team"
         />
 
-      <ActionFeedback data={actionData} fallback />
+      <div id="team-action-feedback" ref={revokeFeedbackRef} tabIndex={-1}>
+        {showRevocationCompletion ? (
+          <ActionFeedback data={actionData} />
+        ) : (
+          <ActionFeedback data={actionData} fallback />
+        )}
+      </div>
 
       <article className="f9-app-panel">
         <div className="f9-panel-toolbar">
@@ -202,7 +223,6 @@ export default function TeamRoute() {
           </Form>
         ) : null}
 
-        <ActionFeedback data={actionData} intent="revoke" />
         {data.members.length > 0 ? (
           <div className="f9-work-list is-compact">
             {data.members.map((member) => {
@@ -232,6 +252,11 @@ export default function TeamRoute() {
                   <ActionFeedback
                     data={actionData}
                     intent="resend-invite"
+                    match={{ memberId: member.id }}
+                  />
+                  <ActionFeedback
+                    data={actionData}
+                    intent="revoke"
                     match={{ memberId: member.id }}
                   />
                   <div className="f9-action-row">

@@ -11,7 +11,7 @@ const now = new Date("2026-07-15T12:00:00.000Z");
 const body = {
   userId: "e2e-starter",
   runId: "e2e-run-starter-1",
-  idempotencyKey: "test-key",
+  idempotencyKey: "e2e-test-key",
   scenario: "j3",
   clock: now.toISOString(),
 } as const;

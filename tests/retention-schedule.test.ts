@@ -6,6 +6,7 @@ const runScheduledDiscoveryWarmupMock = vi.hoisted(() => vi.fn());
 const reconcileOrchestratedWatchlistRunsMock = vi.hoisted(() => vi.fn());
 const flushDeferredInstantAlertsMock = vi.hoisted(() => vi.fn());
 const runPresencePollingBatchMock = vi.hoisted(() => vi.fn());
+const resumePendingDigestScheduleJobsMock = vi.hoisted(() => vi.fn());
 
 vi.mock("react-router", () => ({
   createRequestHandler: vi.fn(() => vi.fn()),
@@ -15,6 +16,9 @@ vi.mock("~/lib/cron-failure-alert.server", () => ({
 }));
 vi.mock("~/lib/retention.server", () => ({
   runRetentionSweep: runRetentionSweepMock,
+}));
+vi.mock("~/lib/digest-orchestration.server", () => ({
+  resumePendingDigestScheduleJobs: resumePendingDigestScheduleJobsMock,
 }));
 vi.mock("~/lib/monitoring.server", () => ({
   flushDeferredInstantAlerts: flushDeferredInstantAlertsMock,
@@ -42,6 +46,9 @@ vi.mock("~/lib/rate-limit.server", () => ({ enforceRequestRateLimit: vi.fn() }))
 vi.mock("../workers/delivery-recovery", () => ({
   scheduleBillingLifecycleEmailRecovery: vi.fn(),
 }));
+vi.mock("../workers/digest-schedule-recovery", () => ({
+  scheduleDigestScheduleExhaustionRecovery: vi.fn(),
+}));
 vi.mock("../workers/monitoring-workflow", () => ({ MonitoringWorkflow: class {} }));
 vi.mock("../workers/primary-domain", () => ({ primaryDomainRedirect: vi.fn(() => null) }));
 vi.mock("../workers/security-headers", () => ({
@@ -66,6 +73,7 @@ describe("retention scheduled failure reporting", () => {
     });
     flushDeferredInstantAlertsMock.mockReset().mockResolvedValue({ groups: 0 });
     runPresencePollingBatchMock.mockReset().mockResolvedValue({ results: [] });
+    resumePendingDigestScheduleJobsMock.mockReset().mockResolvedValue(0);
   });
 
   it("reports a failed-step summary exactly once after all retention steps finish", async () => {

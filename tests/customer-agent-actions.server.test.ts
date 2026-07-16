@@ -1382,6 +1382,8 @@ describe("runCustomerAgentAction", () => {
 
   it("keeps stored weekly strategy evidence in agent-created and shared watchlist reports", async () => {
     const mocks = setupMocks();
+    mocks.listWatchEvents.mockResolvedValue([watchEvent]);
+    mocks.listAdsByIds.mockResolvedValue([externalAd]);
     const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
 
     const created = await runCustomerAgentAction(
@@ -1405,7 +1407,7 @@ describe("runCustomerAgentAction", () => {
         origin: "https://0509.io",
       },
       "report.share",
-      { resourceType: "watchlist", resourceId: "watchlist-1" },
+      { resourceType: "watchlist", resourceId: "watchlist-1", reviewed: true },
     );
 
     const createdResult = created.result as {
@@ -1416,15 +1418,7 @@ describe("runCustomerAgentAction", () => {
     };
     expect(createdResult.report.aiWeeklySummary?.paragraph).toContain("Glossier raised");
     expect(sharedResult.report.aiWeeklySummary).toEqual(createdResult.report.aiWeeklySummary);
-    expect(mocks.createShareLink).toHaveBeenLastCalledWith(
-      expect.anything(),
-      expect.anything(),
-      expect.objectContaining({
-        snapshotPayload: expect.objectContaining({
-          aiWeeklySummary: createdResult.report.aiWeeklySummary,
-        }),
-      }),
-    );
+    expect(mocks.createShareLink).not.toHaveBeenCalled();
     expect(mocks.getLatestDigestRunSummaryForWatchlist).toHaveBeenCalledWith(
       expect.anything(),
       "user-1",

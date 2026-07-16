@@ -102,7 +102,34 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { isE2ETestSessionId } = await import("~/lib/e2e-auth.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
-  const formData = await request.formData();
+  const contentType = request.headers.get("content-type") ?? "";
+  let formData: FormData;
+  if (contentType.toLowerCase().includes("multipart/form-data")) {
+    const [{ readRequestBytesWithinLimit }, { WORKSPACE_BRAND_LOGO_MAX_MULTIPART_BYTES }] =
+      await Promise.all([
+        import("~/lib/bounded-response.server"),
+        import("~/lib/workspace-brand-logo.server"),
+      ]);
+    const requestBytes = await readRequestBytesWithinLimit(
+      request,
+      WORKSPACE_BRAND_LOGO_MAX_MULTIPART_BYTES,
+    );
+    if (!requestBytes) {
+      return {
+        ok: false,
+        intent: "save-report-branding",
+        error: "invalid_brand_logo" as const,
+        message: "Logo must be 48 KB or smaller.",
+      };
+    }
+    formData = await new Request(request.url, {
+      method: request.method,
+      headers: { "content-type": contentType },
+      body: new Uint8Array(requestBytes),
+    }).formData();
+  } else {
+    formData = await request.formData();
+  }
   const intent = String(formData.get("intent") ?? "");
   const isE2EFixtureSession = isE2ETestSessionId(session.session.id);
 
@@ -148,13 +175,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
     return {
       ok: true,
       intent,
-      message: removeBrandLogo
-        ? "Logo removed. Shared reports still use your saved agency name when present."
-        : brandingInput.brandLogo
+      message:
+        result.brandName && result.brandLogo
           ? "Agency name and logo saved for shared reports."
           : result.brandName
             ? `Saved. Shared reports now open with "Prepared by ${result.brandName}".`
-            : "Branding cleared. Shared reports show Five to Nine only.",
+            : result.brandLogo
+              ? "Saved. Shared reports use your agency logo."
+              : "Branding cleared. Shared reports show Five to Nine only.",
     };
   }
 

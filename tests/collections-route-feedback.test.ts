@@ -40,7 +40,7 @@ function mockRoute(addExternalProofToCollection: ReturnType<typeof vi.fn>) {
 	vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn((value) => value.cloudflare.env) }));
 	vi.doMock("~/lib/data.server", () => ({
 		addExternalProofToCollection,
-		createCollection: vi.fn(),
+		createCollectionWithinLimit: vi.fn(),
 		createShareLink: vi.fn(),
 		getCollection: vi.fn(),
 		listCollectionItems: vi.fn(),
