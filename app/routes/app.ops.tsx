@@ -20,6 +20,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listOutstandingDigestProviderUnknownAttempts,
     listOutstandingInstantProviderUnknownAttempts,
 		listExhaustedDigestScheduleJobs,
+    listStaleDodoSubscriptionPlanChangeClaims,
   } = await import("~/lib/data.server");
   const [
     rawSnapshot,
@@ -27,12 +28,14 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     outstandingDigestAttempts,
     outstandingInstantAttempts,
 		exhaustedDigestScheduleJobs,
+    stalePlanChangeClaims,
   ] = await Promise.all([
     getOperatorSnapshot(env),
     listOutstandingBillingLifecycleProviderUnknownAttempts(env, { limit: 50 }),
     listOutstandingDigestProviderUnknownAttempts(env, { limit: 50 }),
     listOutstandingInstantProviderUnknownAttempts(env, { limit: 50 }),
 		listExhaustedDigestScheduleJobs(env, { limit: 50 }),
+    listStaleDodoSubscriptionPlanChangeClaims(env, { limit: 50 }),
   ]);
   const snapshot = maskOperatorSnapshot(rawSnapshot);
 
@@ -76,6 +79,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 			updatedAt: job.updatedAt,
 			requeueKey: createDigestScheduleJobRequeueKey(),
 		})),
+    stalePlanChangeClaims,
   };
 }
 
@@ -110,6 +114,43 @@ export async function action({ context, request }: ActionFunctionArgs) {
 		} as const;
 		return { ok: false, intent, jobId, message: messages[result.reason] };
 	}
+  if (intent === "reconcile-dodo-plan-change") {
+    const subjectUserId = String(formData.get("subjectUserId") ?? "").trim();
+    if (!subjectUserId) {
+      return { ok: false, intent, message: "This recovery request is incomplete. Refresh the operator desk." };
+    }
+    const { reconcileDodo0509SubscriptionPlanChange } = await import(
+      "~/lib/dodo-plan-change-reconciliation.server"
+    );
+    const result = await reconcileDodo0509SubscriptionPlanChange({
+      env,
+      subjectUserId,
+      actorUserId: session.user.id,
+    });
+    if (result.ok) {
+      const outcomeMessage = result.outcome === "accepted"
+        ? "Dodo confirms the new plan; local entitlements were reconciled."
+        : result.outcome === "scheduled"
+          ? "Dodo confirms a scheduled plan change; current entitlements remain active until then."
+          : result.outcome === "unchanged"
+            ? "Dodo confirms the old plan is still active; the stale hold was cleared."
+            : "Dodo truth is still unavailable; the claim remains safely blocked for follow-up.";
+      return {
+        ok: true,
+        intent,
+        subjectUserId,
+        message: `${outcomeMessage} No second plan change was sent.`,
+      };
+    }
+    return {
+      ok: false,
+      intent,
+      subjectUserId,
+      message: result.reason === "not_due"
+        ? "This plan change is not yet eligible for provider reconciliation. Refresh and retry later."
+        : "The billing row changed during recovery. Refresh before checking again.",
+    };
+  }
   const isBillingReconciliation = intent === "reconcile-billing-email";
   const isDigestReconciliation = intent === "reconcile-digest-email";
   const instantChannel = intent === "reconcile-instant-email"
@@ -217,6 +258,7 @@ export default function OpsRoute() {
     outstandingDigestAttempts,
     outstandingInstantAttempts,
 		exhaustedDigestScheduleJobs,
+    stalePlanChangeClaims,
   } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
 
@@ -284,6 +326,42 @@ export default function OpsRoute() {
 					</>
 				)}
 			/>
+
+			<OpsSection
+        empty="No stale plan changes are awaiting provider reconciliation."
+        items={stalePlanChangeClaims}
+        title="Plan changes awaiting provider reconciliation"
+        renderItem={(item) => (
+          <>
+            <p className="f9-app-kicker">{item.plan} plan · provider outcome unknown</p>
+            <h3>Subscription plan change needs a current-state check</h3>
+            <p>
+              Read Dodo's current subscription state and reconcile it atomically. This action never
+              sends another plan-change request.
+            </p>
+            <p className="f9-muted-copy">
+              Account {maskIdentifier(item.userId)} · waiting since <LocalTime iso={item.claimedAt} />
+            </p>
+            <Form method="post">
+              <input name="intent" type="hidden" value="reconcile-dodo-plan-change" />
+              <input name="subjectUserId" type="hidden" value={item.userId} />
+              <SubmitButton
+                className="f9-secondary-button"
+                intent="reconcile-dodo-plan-change"
+                match={{ subjectUserId: item.userId }}
+                pendingLabel="Checking…"
+              >
+                Check current Dodo state
+              </SubmitButton>
+            </Form>
+            <ActionFeedback
+              data={actionData}
+              intent="reconcile-dodo-plan-change"
+              match={{ subjectUserId: item.userId }}
+            />
+          </>
+        )}
+      />
 
 			<OpsSection
             empty="No failed watchlist runs in the recent window."
@@ -695,6 +773,12 @@ function maskDeliveryTarget(value: string) {
   }
   const digits = normalized.replace(/\D/g, "");
   return digits.length >= 4 ? `••••${digits.slice(-4)}` : "••••";
+}
+
+function maskIdentifier(value: string) {
+  const normalized = value.trim();
+  if (normalized.length <= 8) return "••••";
+  return `${normalized.slice(0, 4)}••••${normalized.slice(-4)}`;
 }
 
 type InstantOpsChannel = "email" | "whatsapp" | "slack";

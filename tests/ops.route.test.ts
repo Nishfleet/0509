@@ -100,6 +100,7 @@ describe("ops route", () => {
       listOutstandingDigestProviderUnknownAttempts: vi.fn().mockResolvedValue([]),
       listOutstandingInstantProviderUnknownAttempts: vi.fn().mockResolvedValue([]),
 			listExhaustedDigestScheduleJobs: vi.fn().mockResolvedValue([]),
+      listStaleDodoSubscriptionPlanChangeClaims: vi.fn().mockResolvedValue([]),
     }));
 
     const { loader } = await import("~/routes/app.ops");
@@ -120,6 +121,7 @@ describe("ops route", () => {
       outstandingDigestAttempts: [],
       outstandingInstantAttempts: [],
 		exhaustedDigestScheduleJobs: [],
+      stalePlanChangeClaims: [],
     });
     expect(getOperatorSnapshot).toHaveBeenCalledTimes(1);
   });
@@ -294,6 +296,14 @@ describe("ops route", () => {
           reconciliationKey: "ops-instant-slack-reconcile:33333333-3333-4333-8333-333333333333",
         },
       ],
+		stalePlanChangeClaims: [
+		  {
+		    userId: "owner-ambiguous",
+		    plan: "scout",
+		    status: "plan_change_pending",
+		    claimedAt: "2026-07-02T00:00:00.000Z",
+		  },
+		],
 		exhaustedDigestScheduleJobs: [
 		{
 			jobId: "digest-schedule:weekly:owner-1",
@@ -328,6 +338,9 @@ describe("ops route", () => {
     expect(markup).toContain('value="controlled_channel_observation"');
 		expect(markup).toContain("Digest periods awaiting operator recovery");
 		expect(markup).toContain("Requeue after repair");
+		expect(markup).toContain("Plan changes awaiting provider reconciliation");
+		expect(markup).toContain("Check current Dodo state");
+		expect(markup).toContain('value="reconcile-dodo-plan-change"');
 		expect(markup).toContain('value="requeue-digest-schedule-job"');
     expect(markup).not.toContain("ops@example.com");
     expect(markup).not.toContain("provider timeout");
@@ -397,6 +410,7 @@ describe("ops route", () => {
         },
       ]),
 			listExhaustedDigestScheduleJobs: vi.fn().mockResolvedValue([]),
+      listStaleDodoSubscriptionPlanChangeClaims: vi.fn().mockResolvedValue([]),
     }));
 
     const { loader } = await import("~/routes/app.ops");
@@ -471,6 +485,39 @@ describe("ops route", () => {
         outcome: "sent",
       }),
     );
+  });
+
+  it("checks a stale plan change from current Dodo state without sending another mutation", async () => {
+    const reconcileDodo0509SubscriptionPlanChange = vi.fn().mockResolvedValue({
+      ok: true,
+      replayed: false,
+      outcome: "accepted",
+    });
+    vi.doMock("~/lib/auth.server", () => ({ requireSession: vi.fn().mockResolvedValue(session) }));
+    vi.doMock("~/lib/dodo-plan-change-reconciliation.server", () => ({
+      reconcileDodo0509SubscriptionPlanChange,
+    }));
+    const formData = new FormData();
+    formData.set("intent", "reconcile-dodo-plan-change");
+    formData.set("subjectUserId", "owner-ambiguous");
+
+    const { action } = await import("~/routes/app.ops");
+    const result = await action({
+      context: createContext({ OPS_ALLOWLIST_EMAILS: "owner@example.com" }),
+      request: new Request("http://localhost/app/ops", { method: "POST", body: formData }),
+    } as never);
+
+    expect(result).toMatchObject({
+      ok: true,
+      intent: "reconcile-dodo-plan-change",
+      subjectUserId: "owner-ambiguous",
+      message: expect.stringContaining("No second plan change was sent"),
+    });
+    expect(reconcileDodo0509SubscriptionPlanChange).toHaveBeenCalledWith({
+      env: expect.anything(),
+      subjectUserId: "owner-ambiguous",
+      actorUserId: "user-1",
+    });
   });
 
   it("records digest provider evidence through the explicit no-resend recovery action", async () => {

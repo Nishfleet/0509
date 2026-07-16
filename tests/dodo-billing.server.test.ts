@@ -10,6 +10,7 @@ import {
   extractDodoProofCreditGrant,
   extractDodoSubscriptionGrant,
   getDodo0509SubscriptionCurrency,
+  getDodo0509SubscriptionPlanState,
   isDodoHostedCheckoutUrl,
   isDodoHostedCustomerPortalUrl,
   summarizeDodoSubscriptionPlanChangePreview,
@@ -181,6 +182,68 @@ describe("Dodo billing", () => {
         }),
       }),
     );
+  });
+
+  it("reads the authoritative current and scheduled plan state without mutating Dodo", async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      jsonResponse({
+        subscription_id: "sub_123",
+        product_id: "prod_scout_monthly",
+        status: "active",
+        next_billing_date: "2026-08-04T12:00:00.000Z",
+        scheduled_change: { product_id: "prod_starter_monthly" },
+      }),
+    );
+
+    await expect(
+      getDodo0509SubscriptionPlanState({
+        env: { DODO_0509_API_KEY: "secret" },
+        subscriptionId: "sub_123",
+        fetcher: fetcher as never,
+        observedAt: "2026-07-16T14:50:00.000Z",
+      }),
+    ).resolves.toEqual({
+      subscriptionId: "sub_123",
+      productId: "prod_scout_monthly",
+      status: "active",
+      nextBillingAt: "2026-08-04T12:00:00.000Z",
+      scheduledChangeProductId: "prod_starter_monthly",
+      observedAt: "2026-07-16T14:50:00.000Z",
+    });
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://live.dodopayments.com/subscriptions/sub_123",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("fails closed when Dodo subscription identity or required state is unreadable", async () => {
+    const wrongIdentity = vi.fn().mockResolvedValue(
+      jsonResponse({
+        subscription_id: "sub_other",
+        product_id: "prod_scout_monthly",
+        status: "active",
+      }),
+    );
+    const missingProduct = vi.fn().mockResolvedValue(
+      jsonResponse({ subscription_id: "sub_123", status: "active" }),
+    );
+
+    await expect(
+      getDodo0509SubscriptionPlanState({
+        env: { DODO_0509_API_KEY: "secret" },
+        subscriptionId: "sub_123",
+        fetcher: wrongIdentity as never,
+      }),
+    ).rejects.toMatchObject({ status: 502 });
+    await expect(
+      getDodo0509SubscriptionPlanState({
+        env: { DODO_0509_API_KEY: "secret" },
+        subscriptionId: "sub_123",
+        fetcher: missingProduct as never,
+      }),
+    ).rejects.toMatchObject({ status: 502 });
   });
 
   it("releases timed responses when Dodo rejects a subscription plan change", async () => {

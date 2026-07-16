@@ -48,6 +48,14 @@ export {
 } from "~/lib/data/billing-checkout.server";
 
 export {
+  isDodoSubscriptionPlanChangeReconciliationDue,
+  listStaleDodoSubscriptionPlanChangeClaims,
+  reconcileDodoSubscriptionPlanChangeWithAudit,
+  type DodoPlanChangeReconciliationInput,
+  type DodoPlanChangeReconciliationOutcome,
+} from "~/lib/data/billing-plan-change-reconciliation.server";
+
+export {
 	applyDodoCancellationReversalWithLedger,
   applyDodoPlanGrantWithWatchlistReconcile,
   applyDodoPlanRevokeWithWatchlistReconcile,
