@@ -93,7 +93,13 @@ export async function reconcileBillingEmailAttemptWithAudit(
           AND delivery_attempt.updated_at = ?
           AND delivery_attempt.lane = 'customer'
           AND delivery_attempt.channel = 'email'
-          AND delivery_attempt.status = 'pending'
+          AND (
+            delivery_attempt.status = 'pending'
+            OR (
+              delivery_attempt.status = 'failed'
+              AND delivery_attempt.provider_status_last_seen_at IS NOT NULL
+            )
+          )
           AND delivery_attempt.webhook_status = 'provider_unknown'
           AND (
             delivery_attempt.idempotency_key LIKE 'billing-payment-issue:%'
@@ -136,7 +142,13 @@ export async function reconcileBillingEmailAttemptWithAudit(
           AND updated_at = ?
           AND lane = 'customer'
           AND channel = 'email'
-          AND status = 'pending'
+          AND (
+            status = 'pending'
+            OR (
+              status = 'failed'
+              AND provider_status_last_seen_at IS NOT NULL
+            )
+          )
           AND webhook_status = 'provider_unknown'
           AND EXISTS (
             SELECT 1

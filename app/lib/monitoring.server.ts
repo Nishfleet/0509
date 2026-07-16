@@ -1,15 +1,11 @@
 import { buildAnalysisFields } from "~/lib/analysis.server";
 import { isAdLibraryBackedAd, mapAdSourceToAnalysisSource } from "~/lib/ad-source-kind";
-import {
-  type DigestCadence,
-  digestMetadataForEvent,
-} from "~/lib/change-intelligence";
+import { type DigestCadence } from "~/lib/change-intelligence";
 import { captureCreativeText } from "~/lib/creative-text.server";
-import { isCustomerDigestEligibleEvent } from "~/lib/delivery-policy.server";
+import { runDigestDeliveryCycle } from "~/lib/digest-orchestration.server";
 import {
   createAdObservation,
   createEventCandidate,
-  createDigestRun,
   createProofCapture,
   createWatchEvent,
   createWatchlistRun,
@@ -17,12 +13,9 @@ import {
   countProofCapturesForWorkspaceSince,
   finishWatchlistRun,
   recordWatchlistCapacitySkip,
-  getDigest,
-  getDigestByPeriod,
   getRecentSuccessfulRuns,
   getOperatorRiskSummary,
   getSavedQuery,
-  getSuccessfulRunStatsForUserBetween,
   countWatchlistRunsForUserSince,
   getWeeklyBusinessSummary,
   hasInFlightWatchlistRun,
@@ -33,37 +26,16 @@ import {
   listProofCapturesForTarget,
   listProofCapturesForTargets,
   listRecentWorkspaceProofCaptures,
-  listRetryableDigestRuns,
   listRetryableInstantAttempts,
   listLastSuccessfulProofCapturesForAds,
   listObservationsForRun,
   listWatchEvents,
-  listAdsByIds,
-  listWatchEventsBetween,
   listWatchEventsByIds,
-  listWatchlists,
   logMetaIntegrationStatus,
   touchWatchlistScanned,
   upsertProofTarget,
   upsertAd,
 } from "~/lib/data.server";
-import {
-	DIGEST_STRATEGY_GENERATION_PENDING,
-	readDigestStrategyNote,
-	readPendingDigestStrategyGeneration,
-} from "~/lib/digest-strategy";
-import {
-	createDigestStrategyGenerationDeadline,
-	createDigestStrategyGenerationLease,
-	recoverDigestStrategyGeneration,
-	settleDigestStrategyGeneration,
-} from "~/lib/digest-strategy-generation.server";
-import {
-  DIGEST_ITEM_SET_PROVENANCE,
-  readDigestSourceEventId,
-  selectDigestCohort,
-} from "~/lib/digest-provenance";
-import { deliveryPreDispatchStaleBefore } from "~/lib/delivery-attempt-lease";
 import type { AppEnv } from "~/lib/env.server";
 import { captureLandingPageSnapshot } from "~/lib/landing-pages.server";
 import { LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION } from "~/lib/landing-page-signals.server";
@@ -74,7 +46,7 @@ import {
 } from "~/lib/ad-source.server";
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { getUserPlan, PLAN_LIMITS } from "~/lib/plan.server";
-import { planAllowsDigestCadence, shouldSchedulePlanInRegularScan } from "~/lib/plan-entitlements";
+import { shouldSchedulePlanInRegularScan } from "~/lib/plan-entitlements";
 import {
   getEvidenceUsageSummary,
   isEvidenceUsageStorageUnavailableError,
@@ -108,8 +80,6 @@ const MANUAL_REFRESH_COOLDOWN_MS = 10 * 60 * 1000;
 const INACTIVE_MISS_THRESHOLD = 2;
 const DAILY_DIGEST_LOOKBACK_DAYS = 1;
 const WEEKLY_DIGEST_LOOKBACK_DAYS = 7;
-const DIGEST_RETRY_WINDOW_DAYS = 7;
-const DIGEST_RETRY_SWEEP_LIMIT = 25;
 const DISCOVERY_WARMUP_QUERY_LIMIT = 5;
 const DIRECT_WEBSITE_PROOF_INTERVAL_MS = 20 * 60 * 60 * 1000;
 
@@ -208,7 +178,7 @@ export async function runScheduledMonitoring(
   // runtime kill mid-scan can no longer wipe out the day's digests for every
   // user (a digest run that is never created is invisible to the retry sweep).
   const digests = options.includeDigests
-    ? await runDigests(env, {
+    ? await runDigestDeliveryCycle(env, {
         cadence: options.digestCadence ?? "weekly",
         lookbackDays: options.digestLookbackDays,
         periodEnd: options.scheduledTime,
@@ -1328,7 +1298,7 @@ export async function runWeeklyDigests(
   env: AppEnv,
   options: RunWeeklyDigestsOptions = {},
 ) {
-  return runDigests(env, {
+  return runDigestDeliveryCycle(env, {
     ...options,
     cadence: "weekly",
     lookbackDays: options.lookbackDays ?? WEEKLY_DIGEST_LOOKBACK_DAYS,
@@ -1339,497 +1309,11 @@ export async function runDailyDigests(
   env: AppEnv,
   options: Omit<RunWeeklyDigestsOptions, "cadence"> = {},
 ) {
-  return runDigests(env, {
+  return runDigestDeliveryCycle(env, {
     ...options,
     cadence: "daily",
     lookbackDays: options.lookbackDays ?? DAILY_DIGEST_LOOKBACK_DAYS,
   });
-}
-
-async function runDigests(
-  env: AppEnv,
-  options: RunWeeklyDigestsOptions = {},
-) {
-  if (!env.DB) {
-    return 0;
-  }
-
-  const db = env.DB;
-  const cadence = options.cadence ?? "weekly";
-  const lookbackDays = options.lookbackDays ?? (
-    cadence === "daily" ? DAILY_DIGEST_LOOKBACK_DAYS : WEEKLY_DIGEST_LOOKBACK_DAYS
-  );
-  const periodEnd =
-    options.periodEnd === undefined ? new Date() : new Date(options.periodEnd);
-  const periodStart = new Date(periodEnd.getTime() - lookbackDays * 24 * 60 * 60 * 1000);
-  const periodStartIso = periodStart.toISOString();
-  const periodEndIso = periodEnd.toISOString();
-	const strategyGenerationDeadlineAt = createDigestStrategyGenerationDeadline(
-		options.deadlineAt,
-	);
-
-  // Collect retry candidates BEFORE creating this tick's digest runs so the
-  // sweep can never race the current period's deliveries.
-  const retryCandidates = await listRetryableDigestRuns(env, {
-    since: new Date(
-      periodEnd.getTime() - DIGEST_RETRY_WINDOW_DAYS * 24 * 60 * 60 * 1000,
-    ).toISOString(),
-		stalePreDispatchBefore: deliveryPreDispatchStaleBefore(periodEnd.getTime()),
-    limit: DIGEST_RETRY_SWEEP_LIMIT,
-  });
-
-  const usersResult = await db
-    .prepare(
-      `
-        SELECT DISTINCT user.id, user.email, user.name
-        FROM user
-        INNER JOIN watchlist ON watchlist.user_id = user.id
-        WHERE watchlist.is_active = 1
-      `,
-    )
-    .all<{ id: string; email: string; name: string }>();
-
-  const users = usersResult.results ?? [];
-  let digestsSent = 0;
-  const handledDigestRunIds = new Set<string>();
-
-  for (const user of users) {
-    try {
-      const plan = await getUserPlan(env, user.id);
-      if (!PLAN_LIMITS[plan].digests || !planAllowsDigestCadence(plan, cadence)) {
-        continue;
-      }
-
-      const watchlists = await listWatchlists(env, user.id);
-      const digestItems: Array<{
-        eventId: string;
-        watchlistId: string;
-        watchlistName: string;
-        eventType: WatchEventType;
-        title: string;
-        summary: string;
-        metadata: Record<string, unknown>;
-      }> = [];
-
-      const eligibleByWatchlist: Array<{
-        watchlist: WatchlistRecord;
-        events: WatchEventRecord[];
-      }> = [];
-
-      for (const watchlist of watchlists) {
-        const events = await listWatchEventsBetween(
-          env,
-          watchlist.id,
-          periodStartIso,
-          periodEndIso,
-        );
-        eligibleByWatchlist.push({
-          watchlist,
-          events: events.filter(isCustomerDigestEligibleEvent),
-        });
-      }
-
-      const adIds = eligibleByWatchlist.flatMap(({ events }) =>
-        events.map((event) => event.adId).filter((adId): adId is string => Boolean(adId)),
-      );
-      const adsById = new Map(
-        (await listAdsByIds(env, adIds)).map((ad) => [ad.metaAdId, ad]),
-      );
-
-      for (const { watchlist, events } of eligibleByWatchlist) {
-        for (const event of events) {
-          const ad = event.adId ? adsById.get(event.adId) ?? null : null;
-          digestItems.push({
-            eventId: event.id,
-            watchlistId: watchlist.id,
-            watchlistName: watchlist.name,
-            eventType: event.eventType,
-            title: event.title,
-            summary: event.summary,
-            metadata: {
-              ...digestMetadataForEvent(event, undefined, ad),
-              eventId: event.id,
-            },
-          });
-        }
-      }
-
-      const digestCohort = selectDigestCohort(digestItems);
-      const selectedDigestItems = digestCohort.items;
-
-			const existingDigest = await getDigestByPeriod(
-				env,
-				user.id,
-				periodStartIso,
-				periodEndIso,
-			);
-			if (existingDigest?.delivery?.status === "sent") {
-				continue;
-			}
-
-      // Zero changes is still a result the customer pays for. If we scanned
-      // successfully this period, send an "all quiet" heartbeat instead of
-      // going silent — silence is indistinguishable from a dead product.
-      let heartbeat: { runs: number; watchlistsChecked: number; adsSeen: number } | null = null;
-			if (!existingDigest && digestItems.length === 0) {
-        const runStats = await getSuccessfulRunStatsForUserBetween(
-          env,
-          user.id,
-          periodStartIso,
-          periodEndIso,
-        );
-        if (runStats.runs === 0) {
-          // Nothing scanned either — there is nothing honest to report.
-          continue;
-        }
-        heartbeat = runStats;
-      }
-
-			let strategyParagraph: string | null = null;
-			const strategyGenerationRequired =
-				cadence === "weekly" &&
-				selectedDigestItems.length > 0 &&
-				(plan === "starter" || plan === "agency");
-			const initialStrategyLease = strategyGenerationRequired
-				? createDigestStrategyGenerationLease()
-				: null;
-			const digestSummary: Record<string, unknown> = {
-				totalEvents: digestCohort.totalEligibleEvents,
-				totalEligibleEvents: digestCohort.totalEligibleEvents,
-				includedEvents: digestCohort.includedEvents,
-				omittedEvents: digestCohort.omittedEvents,
-				watchlists: watchlists.length,
-				...(initialStrategyLease
-					? {
-							strategyGenerationStatus: DIGEST_STRATEGY_GENERATION_PENDING,
-							strategyGenerationLeaseId: initialStrategyLease.leaseId,
-							strategyGenerationLeaseExpiresAt: initialStrategyLease.leaseExpiresAt,
-						}
-					: {}),
-			};
-			const candidateItems = selectedDigestItems.map((item) => ({
-				watchlistId: item.watchlistId,
-				watchlistName: item.watchlistName,
-				eventType: item.eventType,
-				title: item.title,
-				summary: item.summary,
-				metadata: item.metadata,
-			}));
-
-			let digestRunId: string;
-			let canonicalDigest = existingDigest;
-			if (existingDigest) {
-				digestRunId = existingDigest.id;
-				if (!hasCompleteDigestItemSet(existingDigest)) {
-					// Legacy rows created before digest items were persisted atomically
-					// carry no event IDs or candidate fingerprint. A count match cannot
-					// prove that today's eligible events are the original snapshot, so
-					// never rewrite or deliver an identity-unprovable digest.
-					throw new Error(
-						"Digest run is incomplete and its original candidate identity cannot be proven.",
-					);
-				}
-				const pendingGeneration = readPendingDigestStrategyGeneration(
-					existingDigest.summary,
-				);
-				if (pendingGeneration) {
-					handledDigestRunIds.add(digestRunId);
-					const recovery = await recoverDigestStrategyGeneration(env, {
-						digest: existingDigest,
-						periodStart: periodStartIso,
-						periodEnd: periodEndIso,
-						plan,
-						strategyGenerationDeadlineAt,
-					});
-					if (recovery.outcome === "active" || recovery.outcome === "claim_lost" || recovery.outcome === "settlement_lost") {
-						continue;
-					}
-					if (recovery.outcome === "settled") {
-						strategyParagraph = recovery.strategyParagraph;
-						canonicalDigest = recovery.digest;
-					}
-				}
-			} else {
-				const claim = await createDigestRun(
-					env,
-					user.id,
-					periodStartIso,
-					periodEndIso,
-					digestSummary,
-					{
-						returnClaim: true,
-						items: candidateItems,
-					},
-				);
-				digestRunId = claim.digestRunId;
-
-				if (!claim.created) {
-					// Another execution owns both this period's persisted candidate and
-					// its first dispatch. The losing execution must not call providers;
-					// a later retry sweep can safely replay the stored winner if needed.
-					handledDigestRunIds.add(digestRunId);
-					continue;
-				}
-
-				// The deterministic run and its complete item snapshot must win the
-				// period claim before any optional AI work starts. Its durable lease
-				// keeps overlapping executions from delivering before generation is
-				// settled; an expired lease is recoverable by compare-and-set.
-				if (initialStrategyLease) {
-					const settled = await settleDigestStrategyGeneration(env, {
-						digestRunId,
-						leaseId: initialStrategyLease.leaseId,
-						summary: digestSummary,
-						items: selectedDigestItems,
-						periodStart: periodStartIso,
-						periodEnd: periodEndIso,
-						plan,
-						strategyGenerationDeadlineAt,
-					});
-					if (!settled) {
-						handledDigestRunIds.add(digestRunId);
-						continue;
-					}
-					strategyParagraph = settled.strategyParagraph;
-				}
-      }
-			handledDigestRunIds.add(digestRunId);
-
-			// Creators persist the complete candidate atomically with the period
-			// claim. Every non-creator delivers only the stored winner; it never
-			// clears, re-adds, or substitutes locally recomputed run-owned data.
-			const deliveryItems = canonicalDigest
-				? canonicalDigest.items.map((item) => ({
-						eventId: requireDigestSourceEventId(item.metadata),
-						watchlistId: item.watchlistId,
-						watchlistName: item.watchlistName,
-						eventType: item.eventType,
-						title: item.title,
-						summary: item.summary,
-						metadata: item.metadata,
-					}))
-				: selectedDigestItems;
-			const deliveryStrategyParagraph = canonicalDigest
-				? readDigestStrategyNote(canonicalDigest.summary)?.paragraph ?? null
-				: strategyParagraph;
-			const deliveryCohortCounts = readDigestDeliveryCohortCounts(
-				canonicalDigest?.summary ?? digestSummary,
-				deliveryItems.length,
-			);
-
-			if (deliveryItems.length > 0) {
-				heartbeat = null;
-			} else if (!heartbeat) {
-				const runStats = await getSuccessfulRunStatsForUserBetween(
-					env,
-					user.id,
-					periodStartIso,
-					periodEndIso,
-				);
-				if (runStats.runs === 0) {
-					continue;
-				}
-				heartbeat = runStats;
-      }
-
-      const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
-      const delivery = await deliverWeeklyDigest(env, {
-        heartbeat,
-        userId: user.id,
-        userName: user.name,
-        accountEmail: user.email,
-        digestRunId,
-        periodStart: periodStartIso,
-        periodEnd: periodEndIso,
-				items: deliveryItems,
-				...deliveryCohortCounts,
-				strategyParagraph: deliveryStrategyParagraph,
-        cadence,
-        lane: "customer",
-      });
-      if (delivery.attempts > 0) {
-        digestsSent += 1;
-      }
-    } catch (error) {
-      // One user's digest failure must never abort the remaining users.
-      console.error(
-        `Digest run failed for user ${user.id}; continuing with remaining users.`,
-        error,
-      );
-    }
-  }
-
-  digestsSent += await retryFailedDigests(env, {
-		retryCandidates,
-		handledDigestRunIds,
-		strategyGenerationDeadlineAt,
-	});
-
-  return digestsSent;
-}
-
-async function retryFailedDigests(
-  env: AppEnv,
-  input: {
-    retryCandidates: Awaited<ReturnType<typeof listRetryableDigestRuns>>;
-    handledDigestRunIds: Set<string>;
-		strategyGenerationDeadlineAt: number;
-  },
-) {
-  let retried = 0;
-
-  for (const candidate of input.retryCandidates) {
-    if (input.handledDigestRunIds.has(candidate.id)) {
-      continue;
-    }
-
-    try {
-      const plan = await getUserPlan(env, candidate.userId);
-      const cadence = digestCadenceForPeriod(candidate.periodStart, candidate.periodEnd);
-      if (!PLAN_LIMITS[plan].digests || !planAllowsDigestCadence(plan, cadence)) {
-        continue;
-      }
-
-			const digest = await getDigest(env, candidate.id);
-			if (!digest || !hasCompleteDigestItemSet(digest)) {
-				continue;
-			}
-			let deliveryDigest = digest;
-			const recovery = await recoverDigestStrategyGeneration(env, {
-				digest,
-				periodStart: candidate.periodStart,
-				periodEnd: candidate.periodEnd,
-				plan,
-				strategyGenerationDeadlineAt: input.strategyGenerationDeadlineAt,
-			});
-			if (recovery.outcome === "active" || recovery.outcome === "claim_lost" || recovery.outcome === "settlement_lost") {
-				continue;
-			}
-			if (recovery.outcome === "settled") {
-				deliveryDigest = recovery.digest;
-				}
-			let heartbeat: { runs: number; watchlistsChecked: number; adsSeen: number } | null = null;
-			if (deliveryDigest.items.length === 0) {
-				const runStats = await getSuccessfulRunStatsForUserBetween(
-					env,
-					candidate.userId,
-					candidate.periodStart,
-					candidate.periodEnd,
-				);
-				if (runStats.runs === 0) {
-					continue;
-				}
-				heartbeat = runStats;
-			}
-
-			const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
-			const deliveryCohortCounts = readDigestDeliveryCohortCounts(
-				deliveryDigest.summary,
-				deliveryDigest.items.length,
-			);
-			const delivery = await deliverWeeklyDigest(env, {
-				heartbeat,
-				userId: candidate.userId,
-				userName: candidate.userName,
-				accountEmail: candidate.userEmail,
-        digestRunId: candidate.id,
-        periodStart: candidate.periodStart,
-        periodEnd: candidate.periodEnd,
-				items: deliveryDigest.items.map((item) => ({
-					eventId: requireDigestSourceEventId(item.metadata),
-          watchlistId: item.watchlistId,
-          watchlistName: item.watchlistName,
-          eventType: item.eventType,
-          title: item.title,
-          summary: item.summary,
-          metadata: item.metadata,
-        })),
-				...deliveryCohortCounts,
-				// Retries only ever replay the persisted paragraph — never regenerate.
-				strategyParagraph: readDigestStrategyNote(deliveryDigest.summary)?.paragraph ?? null,
-        cadence,
-        lane: "customer",
-      });
-      if (delivery.attempts > 0) {
-        retried += 1;
-      }
-    } catch (error) {
-      console.error(
-        `Digest retry failed for digest run ${candidate.id}; continuing with remaining retries.`,
-        error,
-      );
-    }
-  }
-
-	return retried;
-}
-
-function readDigestDeliveryCohortCounts(
-	summary: Record<string, unknown> | undefined,
-	includedItemCount: number,
-) {
-	const total = readNonNegativeInteger(summary?.totalEligibleEvents);
-	const included = readNonNegativeInteger(summary?.includedEvents);
-	const omitted = readNonNegativeInteger(summary?.omittedEvents);
-	if (
-		total === null ||
-		included === null ||
-		omitted === null ||
-		included !== includedItemCount ||
-		total !== included + omitted
-	) {
-		return {
-			totalEligibleEvents: includedItemCount,
-			includedEvents: includedItemCount,
-			omittedEvents: 0,
-		};
-	}
-	return {
-		totalEligibleEvents: total,
-		includedEvents: included,
-		omittedEvents: omitted,
-	};
-}
-
-function readNonNegativeInteger(value: unknown) {
-	return typeof value === "number" && Number.isInteger(value) && value >= 0
-		? value
-		: null;
-}
-
-function digestCadenceForPeriod(periodStart: string, periodEnd: string): DigestCadence {
-  const spanMs = new Date(periodEnd).getTime() - new Date(periodStart).getTime();
-  return spanMs <= 36 * 60 * 60 * 1000 ? "daily" : "weekly";
-}
-
-function hasCompleteDigestItemSet(digest: {
-	summary?: Record<string, unknown>;
-	items: ReadonlyArray<{ metadata?: Record<string, unknown> }>;
-}) {
-	if (
-		digest.summary?.digestItemSetProvenance !== DIGEST_ITEM_SET_PROVENANCE
-	) {
-		return false;
-	}
-	const expectedItemCount = readDigestExpectedItemCount(digest.summary);
-	return expectedItemCount !== null &&
-		digest.items.length === expectedItemCount &&
-		digest.items.every((item) => readDigestSourceEventId(item.metadata) !== null);
-}
-
-function requireDigestSourceEventId(metadata: Record<string, unknown> | undefined) {
-	const eventId = readDigestSourceEventId(metadata);
-	if (!eventId) {
-		throw new Error("Digest item is missing its original watch_event ID; retry is unsafe.");
-	}
-	return eventId;
-}
-
-function readDigestExpectedItemCount(summary?: Record<string, unknown>) {
-	const expectedItemCount = summary?.totalEvents;
-	return Number.isSafeInteger(expectedItemCount) && Number(expectedItemCount) >= 0
-		? Number(expectedItemCount)
-		: null;
 }
 
 function shouldIncludeScoutInScheduledMonitoring(options: RunScheduledMonitoringOptions) {
