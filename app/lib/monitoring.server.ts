@@ -10,8 +10,6 @@ import {
   createAdObservation,
   createEventCandidate,
   createDigestRun,
-	claimDigestStrategyGenerationLease,
-	completeDigestStrategyGeneration,
   createProofCapture,
   createWatchEvent,
   createWatchlistRun,
@@ -50,19 +48,21 @@ import {
   upsertAd,
 } from "~/lib/data.server";
 import {
-	DIGEST_STRATEGY_GENERATION_LEASE_MS,
 	DIGEST_STRATEGY_GENERATION_PENDING,
-	DIGEST_STRATEGY_GENERATION_READY,
-	DIGEST_STRATEGY_MODEL,
 	readDigestStrategyNote,
 	readPendingDigestStrategyGeneration,
 } from "~/lib/digest-strategy";
+import {
+	createDigestStrategyGenerationDeadline,
+	createDigestStrategyGenerationLease,
+	recoverDigestStrategyGeneration,
+	settleDigestStrategyGeneration,
+} from "~/lib/digest-strategy-generation.server";
 import {
   DIGEST_ITEM_SET_PROVENANCE,
   readDigestSourceEventId,
   selectDigestCohort,
 } from "~/lib/digest-provenance";
-import { buildWeeklyStrategyParagraph } from "~/lib/digest-strategy.server";
 import { deliveryPreDispatchStaleBefore } from "~/lib/delivery-attempt-lease";
 import type { AppEnv } from "~/lib/env.server";
 import { captureLandingPageSnapshot } from "~/lib/landing-pages.server";
@@ -181,6 +181,7 @@ interface RunWeeklyDigestsOptions {
   cadence?: DigestCadence;
   lookbackDays?: number;
   periodEnd?: number | string | Date;
+	deadlineAt?: number;
 }
 
 export async function runScheduledMonitoring(
@@ -211,6 +212,7 @@ export async function runScheduledMonitoring(
         cadence: options.digestCadence ?? "weekly",
         lookbackDays: options.digestLookbackDays,
         periodEnd: options.scheduledTime,
+				deadlineAt,
       })
     : 0;
 
@@ -1362,6 +1364,9 @@ async function runDigests(
   const periodStart = new Date(periodEnd.getTime() - lookbackDays * 24 * 60 * 60 * 1000);
   const periodStartIso = periodStart.toISOString();
   const periodEndIso = periodEnd.toISOString();
+	const strategyGenerationDeadlineAt = createDigestStrategyGenerationDeadline(
+		options.deadlineAt,
+	);
 
   // Collect retry candidates BEFORE creating this tick's digest runs so the
   // sweep can never race the current period's deliveries.
@@ -1534,6 +1539,7 @@ async function runDigests(
 						periodStart: periodStartIso,
 						periodEnd: periodEndIso,
 						plan,
+						strategyGenerationDeadlineAt,
 					});
 					if (recovery.outcome === "active" || recovery.outcome === "claim_lost" || recovery.outcome === "settlement_lost") {
 						continue;
@@ -1578,6 +1584,7 @@ async function runDigests(
 						periodStart: periodStartIso,
 						periodEnd: periodEndIso,
 						plan,
+						strategyGenerationDeadlineAt,
 					});
 					if (!settled) {
 						handledDigestRunIds.add(digestRunId);
@@ -1652,125 +1659,13 @@ async function runDigests(
     }
   }
 
-  digestsSent += await retryFailedDigests(env, { retryCandidates, handledDigestRunIds });
+  digestsSent += await retryFailedDigests(env, {
+		retryCandidates,
+		handledDigestRunIds,
+		strategyGenerationDeadlineAt,
+	});
 
   return digestsSent;
-}
-
-type DigestStrategyGenerationItem = {
-	watchlistId: string;
-	watchlistName: string;
-	title: string;
-	summary: string;
-	metadata?: Record<string, unknown>;
-	proofStatus?: string;
-};
-
-function createDigestStrategyGenerationLease(now = Date.now()) {
-	return {
-		leaseId: crypto.randomUUID(),
-		leaseExpiresAt: new Date(
-			now + DIGEST_STRATEGY_GENERATION_LEASE_MS,
-		).toISOString(),
-	};
-}
-
-function digestStrategyGenerationLeaseExpired(leaseExpiresAt: string, now = Date.now()) {
-	const expiresAt = Date.parse(leaseExpiresAt);
-	return !Number.isFinite(expiresAt) || expiresAt <= now;
-}
-
-async function recoverDigestStrategyGeneration(
-	env: AppEnv,
-	input: {
-		digest: NonNullable<Awaited<ReturnType<typeof getDigest>>>;
-		periodStart: string;
-		periodEnd: string;
-		plan: Awaited<ReturnType<typeof getUserPlan>>;
-	},
-) {
-	const pending = readPendingDigestStrategyGeneration(input.digest.summary);
-	if (!pending) return { outcome: "not_pending" as const, digest: input.digest };
-	if (!digestStrategyGenerationLeaseExpired(pending.leaseExpiresAt)) {
-		return { outcome: "active" as const };
-	}
-	const lease = createDigestStrategyGenerationLease();
-	const claimed = await claimDigestStrategyGenerationLease(env, input.digest.id, {
-		expectedLeaseId: pending.leaseId,
-		expectedLeaseExpiresAt: pending.leaseExpiresAt,
-		leaseId: lease.leaseId,
-		leaseExpiresAt: lease.leaseExpiresAt,
-	});
-	if (!claimed) return { outcome: "claim_lost" as const };
-	const settled = await settleDigestStrategyGeneration(env, {
-		digestRunId: input.digest.id,
-		leaseId: lease.leaseId,
-		summary: input.digest.summary,
-		items: input.digest.items,
-		periodStart: input.periodStart,
-		periodEnd: input.periodEnd,
-		plan: input.plan,
-	});
-	if (!settled) return { outcome: "settlement_lost" as const };
-	return {
-		outcome: "settled" as const,
-		digest: { ...input.digest, summary: settled.summary },
-		strategyParagraph: settled.strategyParagraph,
-	};
-}
-
-async function settleDigestStrategyGeneration(
-	env: AppEnv,
-	input: {
-		digestRunId: string;
-		leaseId: string;
-		summary: Record<string, unknown>;
-		items: DigestStrategyGenerationItem[];
-		periodStart: string;
-		periodEnd: string;
-		plan: Awaited<ReturnType<typeof getUserPlan>>;
-	},
-) {
-	const generatedStrategy =
-		input.plan === "starter" || input.plan === "agency"
-			? await buildWeeklyStrategyParagraph(env, {
-					items: input.items,
-					periodStart: input.periodStart,
-					periodEnd: input.periodEnd,
-				})
-			: null;
-	const readySummary: Record<string, unknown> = {
-		...input.summary,
-		strategyGenerationStatus: DIGEST_STRATEGY_GENERATION_READY,
-	};
-	delete readySummary.strategyGenerationLeaseId;
-	delete readySummary.strategyGenerationLeaseExpiresAt;
-	delete readySummary.strategyParagraph;
-	delete readySummary.strategyModel;
-	delete readySummary.strategyGeneratedAt;
-	delete readySummary.strategyWatchlistIds;
-
-	if (generatedStrategy) {
-		readySummary.strategyParagraph = generatedStrategy.paragraph;
-		readySummary.strategyModel = DIGEST_STRATEGY_MODEL;
-		readySummary.strategyGeneratedAt = new Date().toISOString();
-		readySummary.strategyWatchlistIds = generatedStrategy.watchlistIds;
-	}
-
-	const completed = await completeDigestStrategyGeneration(
-		env,
-		input.digestRunId,
-		{
-			leaseId: input.leaseId,
-			summary: readySummary,
-		},
-	);
-	return completed
-		? {
-				summary: readySummary,
-				strategyParagraph: generatedStrategy?.paragraph ?? null,
-			}
-		: null;
 }
 
 async function retryFailedDigests(
@@ -1778,6 +1673,7 @@ async function retryFailedDigests(
   input: {
     retryCandidates: Awaited<ReturnType<typeof listRetryableDigestRuns>>;
     handledDigestRunIds: Set<string>;
+		strategyGenerationDeadlineAt: number;
   },
 ) {
   let retried = 0;
@@ -1804,6 +1700,7 @@ async function retryFailedDigests(
 				periodStart: candidate.periodStart,
 				periodEnd: candidate.periodEnd,
 				plan,
+				strategyGenerationDeadlineAt: input.strategyGenerationDeadlineAt,
 			});
 			if (recovery.outcome === "active" || recovery.outcome === "claim_lost" || recovery.outcome === "settlement_lost") {
 				continue;

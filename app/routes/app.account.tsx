@@ -4,8 +4,7 @@ import { useState } from "react";
 
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
-import { ActionFeedback } from "~/components/action-feedback";
-import { AccountBrandingForm } from "~/components/account-branding-form";
+import { AccountBrandingSection } from "~/components/account-branding-section";
 import { ConfirmSubmitButton } from "~/components/confirm-button";
 import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
@@ -478,79 +477,23 @@ export default function AccountRoute() {
         </article>
       ) : null}
 
-      <article className="f9-app-panel">
-        <div className="f9-panel-toolbar">
-          <div>
-            <span className="f9-app-kicker">My brand</span>
-            <h2>Set your own website once</h2>
-          </div>
-        </div>
-        {brandProfileAction?.message ? (
-          <div className={`f9-message ${brandProfileAction.ok ? "is-success" : "is-error"}`}>
-            <p>{brandProfileAction.message}</p>
-          </div>
-        ) : null}
-        <Form className="f9-auth-form" method="post">
-          <input name="intent" type="hidden" value="save-brand-profile" />
-          <label className="f9-field">
-            <span>My brand website</span>
-            <input
-              autoComplete="url"
-              defaultValue={data.brandWebsite ?? ""}
-              inputMode="url"
-              name="brandWebsite"
-              placeholder="https://yourbrand.com"
-              spellCheck={false}
-              type="text"
-            />
-          </label>
-          <SubmitButton
-            className="f9-secondary-button"
-            intent="save-brand-profile"
-            pendingLabel="Saving…"
-          >
-            Save my brand
-          </SubmitButton>
-          <p className="f9-muted-copy">
-            Optional. Set it once; competitor search stays separate.
-          </p>
-        </Form>
-      </article>
-
-      <article className="f9-app-panel">
-        <div className="f9-panel-toolbar">
-          <div>
-            <span className="f9-app-kicker">Agency reports</span>
-            <h2>Put your agency name on shared reports</h2>
-          </div>
-        </div>
-				<ActionFeedback
-					data={
-						reportBrandingAction
-							? {
-									ok: reportBrandingAction.ok,
-									intent: reportBrandingAction.intent,
-									message: reportBrandingAction.message ?? undefined,
-								}
-							: null
-					}
-					intent="save-report-branding"
-				/>
-        {data.plan === "agency" ? (
-					<AccountBrandingForm
-						brandLogo={data.brandLogo}
-						brandLogoInvalid={reportBrandLogoInvalid}
-						brandName={data.brandName}
-					/>
-        ) : (
-          <p className="f9-muted-copy">
-            Branded reports are part of Agency.{" "}
-            <Link prefetch="intent" to="/app/billing?source=branding#plans">
-              See plans
-            </Link>
-          </p>
-        )}
-      </article>
+      <AccountBrandingSection
+        brandLogo={data.brandLogo}
+        brandLogoInvalid={reportBrandLogoInvalid}
+        brandName={data.brandName}
+        brandProfileAction={
+          brandProfileAction
+            ? { ...brandProfileAction, message: brandProfileAction.message ?? undefined }
+            : null
+        }
+        brandWebsite={data.brandWebsite}
+        plan={data.plan}
+        reportBrandingAction={
+          reportBrandingAction
+            ? { ...reportBrandingAction, message: reportBrandingAction.message ?? undefined }
+            : null
+        }
+      />
 
       <article className="f9-app-panel">
         <div className="f9-panel-toolbar">
