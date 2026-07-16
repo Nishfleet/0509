@@ -64,6 +64,9 @@ type PlanChangeNoticeKind =
   | "unavailable"
   | "pending-checkout"
   | "pending-change"
+  | "reconciled"
+  | "recovered"
+  | "status-refreshed"
   | "cancellation-scheduled"
   | "payment-issue"
   | "current"
@@ -363,6 +366,9 @@ export default function BillingRoute() {
           preview={data.planChangePreview}
           selectedCycle={selectedCycle}
         />
+      ) : null}
+      {hasPlanChangePending && data.planChangeNotice !== "pending-change" ? (
+        <PlanChangeNotice notice="pending-change" preview={null} selectedCycle={selectedCycle} />
       ) : null}
 
       {data.checkoutReturned ? (
@@ -981,7 +987,49 @@ function PlanChangeNotice({
   if (notice === "pending-change") {
     return (
       <div className="f9-message" role="status">
-        <p>Dodo is already processing a plan change for this subscription.</p>
+        <p>
+          This plan change is still awaiting a confirmed Dodo result. No second plan change will be
+          sent while the provider outcome is unknown.
+        </p>
+        <div className="f9-inline-actions">
+          <Form action="/api/billing/dodo/plan-change" method="post">
+            <input name="intent" type="hidden" value="reconcile" />
+            <SubmitButton
+              className="f9-secondary-button"
+              intent="reconcile"
+              pendingLabel="Checking…"
+            >
+              Check Dodo status
+            </SubmitButton>
+          </Form>
+          <Link className="f9-text-link" to="/app/support?category=billing">
+            Get billing help
+          </Link>
+        </div>
+      </div>
+    );
+  }
+  if (notice === "reconciled") {
+    return (
+      <div className="f9-message" role="status">
+        <p>Dodo confirms the plan change. Your current plan and limits now match its latest state.</p>
+      </div>
+    );
+  }
+  if (notice === "recovered") {
+    return (
+      <div className="f9-message" role="status">
+        <p>
+          Dodo confirms no plan change was applied. The stale hold is cleared; review the price and
+          confirm again if you still want to switch.
+        </p>
+      </div>
+    );
+  }
+  if (notice === "status-refreshed") {
+    return (
+      <div className="f9-message" role="status">
+        <p>Billing changed while we checked. The current provider-backed state is shown below.</p>
       </div>
     );
   }
@@ -1088,6 +1136,9 @@ function cleanPlanChangeNotice(value: string | null): PlanChangeNoticeKind | nul
     case "unavailable":
     case "pending-checkout":
     case "pending-change":
+    case "reconciled":
+    case "recovered":
+    case "status-refreshed":
     case "cancellation-scheduled":
     case "payment-issue":
     case "current":
