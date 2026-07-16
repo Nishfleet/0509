@@ -444,6 +444,28 @@ describe("GET /share/:token/pdf", () => {
 		expect(response.headers.get("content-type")).toBe("application/pdf");
 	});
 
+	it.each(["HEAD", "POST"])(
+		"rejects %s before loading environment or renderer collaborators",
+		async (method) => {
+			const getEnv = vi.fn(() => makeEnv());
+			const renderShareReportPdfResponse = vi.fn();
+			vi.doMock("~/lib/context.server", () => ({ getEnv }));
+			vi.doMock("~/lib/report-pdf.server", () => ({ renderShareReportPdfResponse }));
+
+			const { loader } = await import("~/routes/share.$token.pdf");
+			const response = await loader({
+				context: { cloudflare: { env: {}, ctx: undefined } },
+				params: { token: "token-1" },
+				request: new Request("https://0509.io/share/token-1/pdf", { method }),
+			} as never);
+
+			expect(response.status).toBe(405);
+			expect(response.headers.get("allow")).toBe("GET");
+			expect(getEnv).not.toHaveBeenCalled();
+			expect(renderShareReportPdfResponse).not.toHaveBeenCalled();
+		},
+	);
+
 	it("falls back to a safe filename when the snapshot title is unusable", async () => {
 		const { reportPdfFilename } = await import("~/lib/report-pdf.server");
 		expect(reportPdfFilename(null)).toBe("shared-report.pdf");
