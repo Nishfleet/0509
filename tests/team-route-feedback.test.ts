@@ -1,4 +1,7 @@
+// @vitest-environment happy-dom
 import { createElement, type ReactNode } from "react";
+import { act } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -37,7 +40,10 @@ function component(tag: string) {
 	return ({ children, ...props }: Props) => createElement(tag, props, children);
 }
 
-async function mockTeamPresentation(actionData: unknown) {
+async function mockTeamPresentation(
+	actionData: unknown | (() => unknown),
+	options: { members?: Array<Record<string, unknown>> } = {},
+) {
 	const confirmButtonProps: Props[] = [];
 
 	vi.doMock("react-router", async () => {
@@ -47,13 +53,13 @@ async function mockTeamPresentation(actionData: unknown) {
 			Form: component("form"),
 			Link: ({ children, to, ...props }: Props & { to?: string }) =>
 				createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
-			useActionData: () => actionData,
+			useActionData: () => (typeof actionData === "function" ? actionData() : actionData),
 			useLoaderData: () => ({
 				isMember: false,
 				ownerName: null,
 				plan: "agency",
 				seatLimit: 10,
-				members: [
+			members: options.members ?? [
 					{
 						id: "member-1",
 						email: "first@example.com",
@@ -96,10 +102,14 @@ async function mockTeamPresentation(actionData: unknown) {
 	return { confirmButtonProps };
 }
 
-beforeEach(() => vi.resetModules());
+beforeEach(() => {
+	vi.resetModules();
+	(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+});
 afterEach(() => {
 	vi.restoreAllMocks();
 	vi.resetModules();
+	document.body.replaceChildren();
 });
 
 describe("team action result contract", () => {
@@ -215,5 +225,122 @@ describe("team feedback placement", () => {
 			expect.objectContaining({ intent: "revoke", match: { memberId: "member-1" } }),
 			expect.objectContaining({ intent: "revoke", match: { memberId: "member-2" } }),
 		]);
+	});
+
+	it("keeps a successful revoke visible when revalidation removes that member", async () => {
+		await mockTeamPresentation(
+			{
+				ok: true,
+				intent: "revoke",
+				memberId: "member-2",
+				message: "Seat revoked. Their access ends immediately.",
+			},
+			{
+				members: [
+					{
+						id: "member-1",
+						email: "first@example.com",
+						status: "invited",
+						createdAt: "2026-07-15T00:00:00.000Z",
+						acceptedAt: null,
+						tokenExpiresAt: "2026-07-22T00:00:00.000Z",
+					},
+				],
+			},
+		);
+		const { default: TeamRoute } = await import("~/routes/app.team");
+		const markup = renderToStaticMarkup(createElement(TeamRoute));
+
+		expect(markup.match(/Seat revoked\. Their access ends immediately\./g)).toHaveLength(1);
+		expect(markup.match(/role="status"/g)).toHaveLength(1);
+		expect(markup).toContain('id="team-action-feedback"');
+		expect(markup).toContain('tabindex="-1"');
+	});
+
+	it("moves focus to the stable completion target after a removed-member revoke", async () => {
+		await mockTeamPresentation(
+			{
+				ok: true,
+				intent: "revoke",
+				memberId: "member-2",
+				message: "Seat revoked. Their access ends immediately.",
+			},
+			{
+				members: [
+					{
+						id: "member-1",
+						email: "first@example.com",
+						status: "invited",
+						createdAt: "2026-07-15T00:00:00.000Z",
+						acceptedAt: null,
+						tokenExpiresAt: "2026-07-22T00:00:00.000Z",
+					},
+				],
+			},
+		);
+		const container = document.createElement("div");
+		document.body.appendChild(container);
+
+		try {
+			const { default: TeamRoute } = await import("~/routes/app.team");
+			const root = createRoot(container);
+			await act(async () => {
+				root.render(createElement(TeamRoute));
+			});
+
+			expect(document.querySelectorAll('[role="status"]')).toHaveLength(1);
+			expect(document.activeElement?.id).toBe("team-action-feedback");
+			await act(async () => {
+				root.unmount();
+			});
+		} finally {
+			container.remove();
+		}
+	});
+
+	it("refocuses the stable completion target after consecutive removed-member revokes", async () => {
+		let actionData = {
+			ok: true,
+			intent: "revoke",
+			memberId: "member-2",
+			message: "Seat revoked. Their access ends immediately.",
+		};
+		await mockTeamPresentation(
+			() => actionData,
+			{
+				members: [
+					{
+						id: "member-1",
+						email: "first@example.com",
+						status: "invited",
+						createdAt: "2026-07-15T00:00:00.000Z",
+						acceptedAt: null,
+						tokenExpiresAt: "2026-07-22T00:00:00.000Z",
+					},
+				],
+			},
+		);
+		const container = document.createElement("div");
+		const interruptionTarget = document.createElement("button");
+		document.body.appendChild(container);
+		document.body.appendChild(interruptionTarget);
+		const { default: TeamRoute } = await import("~/routes/app.team");
+		const root = createRoot(container);
+
+		try {
+			await act(async () => root.render(createElement(TeamRoute)));
+			expect(document.activeElement?.id).toBe("team-action-feedback");
+
+			interruptionTarget.focus();
+			expect(document.activeElement).toBe(interruptionTarget);
+			actionData = { ...actionData, memberId: "member-3" };
+			await act(async () => root.render(createElement(TeamRoute)));
+
+			expect(document.activeElement?.id).toBe("team-action-feedback");
+		} finally {
+			await act(async () => root.unmount());
+			container.remove();
+			interruptionTarget.remove();
+		}
 	});
 });

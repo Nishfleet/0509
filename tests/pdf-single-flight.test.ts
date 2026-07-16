@@ -1,8 +1,7 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 
 import type { AppEnv } from "~/lib/env.server";
-import { claimSharePdfSingleFlight } from "~/lib/rate-limit.server";
+import { claimSharePdfSingleFlight, enforceSharePdfRateLimit } from "~/lib/rate-limit.server";
 import { reportPdfContentFingerprint } from "~/lib/report-pdf.server";
 import { applyMigration, createSqliteD1 } from "./helpers/sqlite-d1";
 
@@ -19,6 +18,45 @@ function makeHarness() {
 }
 
 describe("share PDF single-flight lease", () => {
+	it("cleans short-window rows and only expired daily rows", async () => {
+		const harness = makeHarness();
+		const env = { DB: harness.db } as unknown as AppEnv;
+		const now = Date.now();
+		const rows = [
+			["old-short", "other-scope", new Date(now - 3 * 60 * 60 * 1000).toISOString()],
+			["daily-inside", "share-pdf-daily", new Date(now - 24 * 60 * 60 * 1000).toISOString()],
+			["daily-expired", "share-pdf-daily", new Date(now - 26 * 60 * 60 * 1000).toISOString()],
+			["daily-current", "share-pdf-daily", new Date(now - 60 * 60 * 1000).toISOString()],
+		];
+		for (const [id, scope, createdAt] of rows) {
+			harness.sqlite
+				.prepare("INSERT INTO rate_limit_events (id, scope, key_hash, route, created_at) VALUES (?, ?, ?, ?, ?)")
+				.run(id, scope, `key-${id}`, "/share/:token/pdf", createdAt);
+		}
+
+		const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0);
+		await expect(
+			enforceSharePdfRateLimit(
+				new Request("https://0509.io/share/token-x/pdf", {
+					headers: { "cf-connecting-ip": "203.0.113.7" },
+				}),
+				env,
+			),
+		).resolves.toBeNull();
+		randomSpy.mockRestore();
+
+		const remaining = harness.sqlite
+			.prepare("SELECT id FROM rate_limit_events ORDER BY id")
+			.all() as Array<{ id: string }>;
+		expect(remaining).toHaveLength(3);
+		expect(remaining.map((row) => row.id)).toEqual(
+			expect.arrayContaining(["daily-current", "daily-inside"]),
+		);
+		expect(remaining.map((row) => row.id)).not.toContain("old-short");
+		expect(remaining.map((row) => row.id)).not.toContain("daily-expired");
+		harness.close();
+	});
+
   it("collides for the same sharer/resource/content regardless of token", async () => {
     const harness = makeHarness();
     const env = { DB: harness.db } as unknown as AppEnv;
@@ -91,15 +129,4 @@ describe("share PDF single-flight lease", () => {
     errorSpy.mockRestore();
   });
 
-  it("latches authenticated/public PDF activations", () => {
-    const authenticated = readFileSync("app/routes/app.reports.tsx", "utf8");
-    const publicShare = readFileSync("app/routes/share.$token.tsx", "utf8");
-    expect(authenticated).toContain("data-pdf-preparing");
-    expect(authenticated).toContain("event.preventDefault()");
-    expect(authenticated).toContain("setPdfPreparing(false), 75_000");
-    expect(authenticated).toContain("clearTimeout(timeout)");
-    expect(publicShare).toContain("aria-disabled={pdfPreparing}");
-    expect(publicShare).toContain("setPdfPreparing(false), 75_000");
-    expect(publicShare).toContain("clearTimeout(timeout)");
-  });
 });

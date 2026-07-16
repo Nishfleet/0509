@@ -62,6 +62,11 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
 	const preparedBy = brandIdentity?.brandName ?? null;
 
   if (share.isSnapshot) {
+		const pdfPath = await resolveShareReportPdfPath(env, share, token);
+		if (pdfVariant && share.resourceType === "report" && !pdfPath) {
+			throw new Response("PDF unavailable for this share", { status: 403 });
+		}
+
     return {
       mode: "snapshot" as const,
       resourceType: share.resourceType,
@@ -69,7 +74,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
       preparedBy,
 			brandIdentity,
 			pdfVariant,
-			pdfPath: await resolveShareReportPdfPath(env, share, token),
+			pdfPath,
     };
   }
 

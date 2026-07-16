@@ -1,9 +1,11 @@
+import { existsSync, readFileSync } from "node:fs";
+
 import { afterEach, describe, expect, it } from "vitest";
 import {
 	listOutstandingBillingLifecycleProviderUnknownAttempts,
 	listStaleBillingLifecycleEmailAttempts,
 } from "~/lib/data/delivery-records-attempts.server";
-import { createSqliteD1 } from "./helpers/sqlite-d1";
+import { applyMigration, createSqliteD1 } from "./helpers/sqlite-d1";
 
 describe("billing lifecycle attempt selection", () => {
 	const fixtures: Array<ReturnType<typeof createSqliteD1>> = [];
@@ -67,6 +69,54 @@ describe("billing lifecycle attempt selection", () => {
 			typeof (attemptsModule as Record<string, unknown>)
 				.listOutstandingBillingLifecycleProviderUnknownAttempts,
 		).toBe("function");
+	});
+
+	it("uses only static prepared SQL for both lifecycle outbox gates", () => {
+		const source = readFileSync(
+			"app/lib/data/delivery-records-attempts.server.ts",
+			"utf8",
+		);
+		expect(source).not.toContain("WHERE ${gateSql}");
+		expect(source).toContain("WHERE changes() > 0");
+		expect(source).toContain("WHERE EXISTS (");
+	});
+
+	it("uses the dedicated billing recovery index for the every-cron selector", async () => {
+		const migrationPath = "migrations/0069_billing_lifecycle_recovery_index.sql";
+		expect(existsSync(migrationPath)).toBe(true);
+
+		const harness = setup();
+		applyMigration(harness.sqlite, migrationPath);
+		let capturedQuery = "";
+		const recordingDb = {
+			prepare(sql: string) {
+				if (sql.includes("ORDER BY updated_at ASC")) {
+					capturedQuery = sql;
+				}
+				return harness.db.prepare(sql);
+			},
+		};
+
+		await listStaleBillingLifecycleEmailAttempts(
+			{ DB: recordingDb } as never,
+			{
+				staleBefore: "2026-07-13T09:05:00.000Z",
+				limit: 10,
+				maxRecoveryAttempts: 3,
+			},
+		);
+
+		expect(capturedQuery).not.toBe("");
+		const plan = harness.sqlite
+			.prepare(`EXPLAIN QUERY PLAN ${capturedQuery}`)
+			.all("2026-07-13T09:05:00.000Z", 3, 10) as Array<{
+				detail: string;
+			}>;
+		const details = plan.map((row) => row.detail);
+		expect(details.some((detail) =>
+			detail.includes("idx_delivery_attempt_billing_lifecycle_status_updated"),
+		)).toBe(true);
+		expect(details).not.toContain("SCAN delivery_attempt");
 	});
 
 	it("selects failed rows only when provider evidence explicitly reconciled the failure", async () => {

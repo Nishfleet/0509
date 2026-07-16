@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createDigestRun, getDigest } from "~/lib/data/digests.server";
+import { hasCompleteDigestItemSet } from "~/lib/digest-orchestration.server";
 import { DIGEST_ITEM_COHORT_CAP, selectDigestCohort } from "~/lib/digest-provenance";
 import { applyMigration, createSqliteD1 } from "./helpers/sqlite-d1";
 
@@ -16,6 +17,37 @@ function item(index: number, watchlistIndex = index % 75) {
 }
 
 describe("digest cohort cap", () => {
+	it("treats a provenance-marked capped item set as complete", () => {
+		const items = Array.from({ length: DIGEST_ITEM_COHORT_CAP }, (_, index) => ({
+			metadata: { eventId: `event-${index}` },
+		}));
+
+		expect(
+			hasCompleteDigestItemSet({
+				summary: {
+					totalEvents: 4_200,
+					totalEligibleEvents: 4_200,
+					includedEvents: DIGEST_ITEM_COHORT_CAP,
+					omittedEvents: 4_200 - DIGEST_ITEM_COHORT_CAP,
+					digestItemSetProvenance: "atomic-v2",
+				},
+				items,
+			}),
+		).toBe(true);
+		expect(
+			hasCompleteDigestItemSet({
+				summary: {
+					totalEvents: 4_200,
+					totalEligibleEvents: 4_200,
+					includedEvents: DIGEST_ITEM_COHORT_CAP,
+					omittedEvents: 1,
+					digestItemSetProvenance: "atomic-v2",
+				},
+				items,
+			}),
+		).toBe(false);
+	});
+
   it("covers every Agency-sized watchlist before filling the ranked remainder", () => {
     const input = Array.from({ length: 4_200 }, (_, index) => item(index));
     const first = selectDigestCohort(input);

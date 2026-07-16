@@ -371,11 +371,13 @@ export async function action({ context, request }: ActionFunctionArgs) {
 				lifecycleEmailRetry?.kind === revocationRetryKind
 					? lifecycleEmailRetry.userId
 					: null;
+			const lifecycleSubscriptionId =
+				revocation.subscriptionId !== revocation.eventType ? revocation.subscriptionId : null;
       const userId =
         revocation.userId ??
 				retryResolvedUserId ??
         (await getUserIdForDodoLifecycle(env, {
-          subscriptionId: revocation.subscriptionId,
+				subscriptionId: lifecycleSubscriptionId,
           customerId: revocation.customerId,
           customerEmail: revocation.customerEmail,
         }));
@@ -391,8 +393,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
           body: { ok: true, ignored: true, reason: "no_user_match" },
         };
       }
-			const lifecycleSubscriptionId =
-				revocation.subscriptionId !== revocation.eventType ? revocation.subscriptionId : null;
 			const lifecyclePaymentId = lifecycleSubscriptionId ? null : revocation.paymentId;
 
       if (revocation.action === "payment_issue") {
@@ -496,6 +496,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
         };
       }
 
+			if (!lifecycleSubscriptionId) {
+				throw new Error(
+					`Dodo ${revocation.eventType} webhook is missing required subscription_id.`,
+				);
+			}
+
 			const revokeOutbox = await prepareLifecycleEmailOutbox(userId, (profile) => ({
 				kind: "revoke",
 				userId,
@@ -505,9 +511,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
 			}));
 			const revokeApplied = await applyDodoPlanRevokeWithWatchlistReconcile(
         env,
-        {
-          userId,
-          providerSubscriptionId: revocation.subscriptionId,
+	        {
+	          userId,
+	          providerSubscriptionId: lifecycleSubscriptionId,
           status: revocation.eventType,
           revokedAt: revocation.revokedAt,
         },

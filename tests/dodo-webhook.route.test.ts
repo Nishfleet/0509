@@ -770,7 +770,58 @@ describe("Dodo webhook route", () => {
 			status: "payment.failed", subscriptionId: null, paymentId: "pay_failed",
 			stateUpdatedAt: "2026-07-01T08:00:00.000Z",
 		}));
-  });
+	});
+
+	it("resolves a subscription-less payment failure through customer linkage", async () => {
+		const { data } = mockWebhookDependencies({
+			billing: {
+				extractDodoPlanRevocation: vi.fn(() => ({
+					eventType: "payment.failed",
+					action: "payment_issue",
+					userId: null,
+					customerId: "cus_123",
+					customerEmail: "owner@example.com",
+					subscriptionId: "payment.failed",
+					paymentId: "pay_failed",
+					status: "failed",
+					revokedAt: "2026-07-01T08:00:00.000Z",
+					metadata: {},
+				})),
+			},
+			data: {
+				getUserIdForDodoLifecycle: vi.fn().mockResolvedValue("user-linked"),
+			},
+		});
+
+		const { action } = await import("~/routes/api.webhooks.dodo");
+		const response = await action({
+			context: {},
+			request: webhookRequest("evt-payment-failed-customer-link", {
+				type: "payment.failed",
+			}),
+			params: {},
+		} as never);
+
+		expect(await response.json()).toMatchObject({ ok: true, paymentIssue: true });
+		expect(data.getUserIdForDodoLifecycle).toHaveBeenCalledWith(
+			expect.anything(),
+			{
+				subscriptionId: null,
+				customerId: "cus_123",
+				customerEmail: "owner@example.com",
+			},
+		);
+		expect(data.applyDodoPlanPaymentIssueWithLedger).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({
+				userId: "user-linked",
+				providerSubscriptionId: null,
+				providerPaymentId: "pay_failed",
+			}),
+			expect.objectContaining({ eventId: "evt-payment-failed-customer-link" }),
+			expect.anything(),
+		);
+	});
 
   it("deactivates over-limit watchlists when a plan switch is a downgrade", async () => {
     const { data } = mockWebhookDependencies({
@@ -970,7 +1021,7 @@ describe("Dodo webhook route", () => {
     );
   });
 
-  it("resolves lifecycle events without metadata user id by stored Dodo subscription linkage", async () => {
+	it("resolves lifecycle events without metadata user id by stored Dodo subscription linkage", async () => {
     const { data } = mockWebhookDependencies({
       billing: {
         extractDodoPlanRevocation: vi.fn(() => ({
@@ -1017,9 +1068,46 @@ describe("Dodo webhook route", () => {
       expect.objectContaining({ eventId: "evt-expire", outcome: "processed" }),
 			expect.anything(),
     );
-  });
+	});
 
-  it("acknowledges but does not revoke when no user can be matched", async () => {
+	it("fails retriably when a terminal subscription event omits its required subscription id", async () => {
+		const { data } = mockWebhookDependencies({
+			billing: {
+				extractDodoPlanRevocation: vi.fn(() => ({
+					eventType: "subscription.cancelled",
+					action: "revoke",
+					userId: "user-1",
+					customerEmail: "owner@example.com",
+					customerId: "cus_123",
+					subscriptionId: "subscription.cancelled",
+					status: "cancelled",
+					revokedAt: "2026-07-02T00:00:00.000Z",
+					metadata: {},
+				})),
+			},
+		});
+
+		const { action } = await import("~/routes/api.webhooks.dodo");
+		await expect(
+			action({
+				context: {},
+				request: webhookRequest("evt-cancel-missing-subscription", {
+					type: "subscription.cancelled",
+				}),
+				params: {},
+			} as never),
+		).rejects.toThrow("missing required subscription_id");
+
+		expect(data.applyDodoPlanRevokeWithWatchlistReconcile).not.toHaveBeenCalled();
+		expect(data.finalizeDodoWebhookLedgerOnly).not.toHaveBeenCalled();
+		expect(data.failDodoWebhookEventProcessing).toHaveBeenCalledWith(
+			expect.anything(),
+			"evt-cancel-missing-subscription",
+			expect.objectContaining({ error: expect.stringContaining("missing required subscription_id") }),
+		);
+	});
+
+	it("acknowledges but does not revoke when no user can be matched", async () => {
     const { data } = mockWebhookDependencies({
       billing: {
         extractDodoPlanRevocation: vi.fn(() => ({
