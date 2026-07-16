@@ -26,6 +26,7 @@ async function loadWorker() {
   const sendWeeklyBusinessNumbers = vi.fn().mockResolvedValue({ sent: false });
   const sendCustomerAtRiskAlert = vi.fn().mockResolvedValue({ sent: false });
   const scheduleBillingLifecycleEmailRecovery = vi.fn();
+  const scheduleDigestScheduleExhaustionRecovery = vi.fn();
   const reportScheduledTaskFailure = vi.fn();
 
   vi.doMock("../app/lib/monitoring.server", () => ({
@@ -52,6 +53,9 @@ async function loadWorker() {
     runRetentionSweep: vi.fn().mockResolvedValue({ deleted: {} }),
   }));
   vi.doMock("../workers/delivery-recovery", () => ({ scheduleBillingLifecycleEmailRecovery }));
+  vi.doMock("../workers/digest-schedule-recovery", () => ({
+    scheduleDigestScheduleExhaustionRecovery,
+  }));
   vi.doMock("../workers/schedule", async (importOriginal) => ({
     ...(await importOriginal<typeof import("../workers/schedule")>()),
     resolveScheduledTask: vi.fn((cron: string) =>
@@ -79,6 +83,7 @@ async function loadWorker() {
     runScheduledDiscoveryWarmup,
     flushDeferredInstantAlerts,
     scheduleBillingLifecycleEmailRecovery,
+    scheduleDigestScheduleExhaustionRecovery,
   };
 }
 
@@ -117,6 +122,7 @@ describe("Worker scheduled handler", () => {
     );
     expect(loaded.runScheduledDiscoveryWarmup).not.toHaveBeenCalled();
     expect(loaded.scheduleBillingLifecycleEmailRecovery).toHaveBeenCalledTimes(1);
+    expect(loaded.scheduleDigestScheduleExhaustionRecovery).not.toHaveBeenCalled();
   });
 
   it("delegates DISCOVERY_WARMUP_CRON to discovery warmup", async () => {
@@ -134,5 +140,6 @@ describe("Worker scheduled handler", () => {
     expect(loaded.runScheduledMonitoring).not.toHaveBeenCalled();
     expect(loaded.flushDeferredInstantAlerts).toHaveBeenCalledTimes(1);
     expect(loaded.scheduleBillingLifecycleEmailRecovery).toHaveBeenCalledTimes(1);
+    expect(loaded.scheduleDigestScheduleExhaustionRecovery).toHaveBeenCalledTimes(1);
   });
 });

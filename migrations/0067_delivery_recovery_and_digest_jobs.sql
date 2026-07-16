@@ -7,12 +7,16 @@ CREATE TABLE IF NOT EXISTS digest_schedule_job (
   cadence TEXT NOT NULL CHECK (cadence IN ('daily', 'weekly')),
   period_start TEXT NOT NULL,
   period_end TEXT NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('pending', 'running', 'completed', 'failed')),
+  status TEXT NOT NULL CHECK (status IN ('pending', 'running', 'completed', 'failed', 'exhausted')),
   attempt_count INTEGER NOT NULL DEFAULT 0,
   processing_token TEXT,
   processing_started_at TEXT,
   completed_at TEXT,
   last_error_code TEXT,
+  exhausted_at TEXT,
+  exhaustion_alert_token TEXT,
+  exhaustion_alert_started_at TEXT,
+  exhaustion_alerted_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE,
@@ -25,6 +29,10 @@ CREATE INDEX IF NOT EXISTS idx_digest_schedule_job_recovery
 CREATE INDEX IF NOT EXISTS idx_digest_schedule_job_running
   ON digest_schedule_job(processing_started_at)
   WHERE status = 'running';
+
+CREATE INDEX IF NOT EXISTS idx_digest_schedule_job_exhaustion_alert
+  ON digest_schedule_job(exhaustion_alerted_at, exhaustion_alert_started_at)
+  WHERE status = 'exhausted';
 
 -- Billing lifecycle recovery runs on every cron. Keep the bounded selector on
 -- its small email-outbox subset instead of scanning unrelated 180-day delivery

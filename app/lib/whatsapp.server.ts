@@ -10,6 +10,7 @@ import {
   createDeliveryAttempt,
   getDeliveryAttemptByIdempotencyKey,
   listDeliveryTargets,
+  reconcileWhatsAppSetupTargetFromAttempt,
   updateDeliveryAttemptResult,
   upsertDeliveryTarget,
 } from "~/lib/data.server";
@@ -212,7 +213,30 @@ export async function saveWhatsAppDeliveryTarget(
         { status: 503 },
       );
     }
-    if (attempt.status === "sent") return pendingTarget;
+    if (attempt.status === "sent") {
+      if (!attempt.providerMessageId) {
+        throw new Response(
+          "WhatsApp setup is awaiting provider confirmation. Contact support before trying again.",
+          { status: 503 },
+        );
+      }
+      return (
+        (await reconcileWhatsAppSetupTargetFromAttempt(env, {
+          userId: input.userId,
+          targetId: pendingTarget.id,
+          attemptId: attempt.id,
+          providerMessageId: attempt.providerMessageId,
+          validationGeneration,
+          webhookStatus:
+            attempt.webhookStatus === "delivered" || attempt.webhookStatus === "failed"
+              ? attempt.webhookStatus
+              : "pending",
+          providerStatusLastSeenAt:
+            attempt.providerStatusLastSeenAt ?? attempt.sentAt ?? attempt.updatedAt,
+          errorMessage: attempt.errorMessage,
+        })) ?? pendingTarget
+      );
+    }
     const retryable =
       (attempt.status === "failed" && attempt.webhookStatus === "failed") ||
       isStalePreDispatchAttempt(attempt);
@@ -315,18 +339,16 @@ export async function saveWhatsAppDeliveryTarget(
     });
   }
 
-  const validationProviderMessageId = testResult.providerMessageId;
-  const target = await upsertDeliveryTarget(env, {
-    ...pendingTarget,
-    providerIdentifier: validationProviderMessageId,
-    metadata: {
-      ...pendingTarget.metadata,
-      validationTemplateName: templateName,
-      validationGeneration,
-      validationProviderMessageId,
-      validationAcceptedAt: testResult.providerStatusLastSeenAt,
-      validationWebhookStatus: "pending",
-    },
+  const target = await reconcileWhatsAppSetupTargetFromAttempt(env, {
+    userId: input.userId,
+    targetId: pendingTarget.id,
+    attemptId,
+    providerMessageId: testResult.providerMessageId,
+    validationGeneration,
+    webhookStatus: "pending",
+    providerStatusLastSeenAt:
+      testResult.providerStatusLastSeenAt ?? new Date().toISOString(),
+    errorMessage: null,
   });
   if (!target) {
     throw new Response("WhatsApp target could not be saved.", { status: 500 });

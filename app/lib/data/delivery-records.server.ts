@@ -19,6 +19,7 @@ export {
   upsertDeliveryTarget,
   getDeliveryTargetById,
   getDeliveryTargetByProviderIdentifier,
+  reconcileWhatsAppSetupTargetFromAttempt,
 reconcileWhatsAppSetupTargetByProviderMessageId,
 } from "~/lib/data/delivery-records-targets.server";
 

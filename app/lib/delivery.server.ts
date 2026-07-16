@@ -17,6 +17,7 @@ getUserDeliveryProfile,
   listAdsByIds,
   listDeliveryTargets,
   reconcileDeliveryAttemptByProviderMessageId,
+  reconcileWhatsAppSetupTargetFromAttempt,
 reconcileWhatsAppSetupTargetByProviderMessageId,
   updateDeliveryAttemptResult,
   upsertDeliveryTarget,
@@ -412,44 +413,22 @@ async function reconcileWhatsAppSetupValidationTargetFromAttempt(
     return;
   }
 
-  const target = await getDeliveryTargetById(env, {
-    userId: attempt.userId,
-    targetId: attempt.deliveryTargetId,
-  });
-  if (!target || target.channel !== "whatsapp") {
-    return;
-  }
-  if (readString(target.metadata.validationProviderMessageId) !== attempt.providerMessageId) {
+  if (!attempt.providerMessageId) {
     return;
   }
 
   const statusSeenAt =
     attempt.providerStatusLastSeenAt ?? attempt.sentAt ?? attempt.failedAt ?? new Date().toISOString();
-
-  await upsertDeliveryTarget(env, {
-    userId: target.userId,
-    watchlistId: target.watchlistId,
-    channel: target.channel,
-    targetValue: target.targetValue,
-    validationStatus: delivered ? "validated" : "invalid",
-    isValidated: delivered,
-    isOptedIn: target.isOptedIn,
-    optInSource: target.optInSource,
-    optedInAt: target.optedInAt,
-    isPaused: target.isPaused,
-    pausedAt: target.pausedAt,
-    optedOutAt: target.optedOutAt,
-    templateEligible: delivered,
-    lastSuccessfulDeliveryAt: delivered ? statusSeenAt : target.lastSuccessfulDeliveryAt,
-    lastSuccessfulAttemptId: delivered ? attempt.id : target.lastSuccessfulAttemptId,
-    providerIdentifier: attempt.providerMessageId ?? target.providerIdentifier,
-    metadata: {
-      ...target.metadata,
-      validationAttemptId: attempt.id,
-      validationWebhookStatus: attempt.webhookStatus,
-      validationStatusLastSeenAt: statusSeenAt,
-      validationErrorMessage: failed ? attempt.errorMessage ?? "WhatsApp setup delivery failed." : null,
-    },
+  const validationGeneration = readString(attempt.payloadSnapshot.validationGeneration) || null;
+  await reconcileWhatsAppSetupTargetFromAttempt(env, {
+    userId: attempt.userId,
+    targetId: attempt.deliveryTargetId,
+    attemptId: attempt.id,
+    providerMessageId: attempt.providerMessageId,
+    validationGeneration,
+    webhookStatus: delivered ? "delivered" : "failed",
+    providerStatusLastSeenAt: statusSeenAt,
+    errorMessage: failed ? attempt.errorMessage : null,
   });
 }
 
