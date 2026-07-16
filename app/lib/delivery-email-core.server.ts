@@ -42,7 +42,7 @@ export async function sendCloudflareEmail(
 		return {
 			provider: EMAIL_PROVIDER,
 			status: "failed",
-			webhookStatus: "provider_unknown",
+			webhookStatus: "failed",
 			providerMessageId: null,
 			providerStatusLastSeenAt: null,
 			errorMessage: "Email sending is not configured for this environment.",

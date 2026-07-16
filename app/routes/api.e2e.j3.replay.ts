@@ -443,7 +443,7 @@ async function runProviderDeniedDelivery(env: AppEnv, userId: string, clock: str
   const attempt = attempts[0]!;
   if (
     attempt.status !== "failed" ||
-    attempt.webhook_status !== "provider_unknown" ||
+    attempt.webhook_status !== "failed" ||
     attempt.target_value.trim().toLowerCase() !== account.email.trim().toLowerCase()
   ) {
     throw new Error("provider_denial_not_preserved");

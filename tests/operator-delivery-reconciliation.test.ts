@@ -1,13 +1,15 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import {
-  reconcileBillingEmailAttemptWithAudit,
-  reconcileDigestEmailAttemptWithAudit,
-} from "~/lib/data/operator-delivery-reconciliation.server";
+import * as operatorReconciliation from "~/lib/data/operator-delivery-reconciliation.server";
 import {
   listOutstandingDigestProviderUnknownAttempts,
 } from "~/lib/data/delivery-records-attempts.server";
 import { createSqliteD1 } from "./helpers/sqlite-d1";
+
+const {
+  reconcileBillingEmailAttemptWithAudit,
+  reconcileDigestEmailAttemptWithAudit,
+} = operatorReconciliation;
 
 describe("operator billing email reconciliation", () => {
   const fixtures: Array<ReturnType<typeof createSqliteD1>> = [];
@@ -513,5 +515,166 @@ describe("operator digest email reconciliation", () => {
         SELECT status FROM digest_delivery WHERE digest_run_id = 'digest-1'
       `).get(),
     ).toMatchObject({ status: attempt.status });
+  });
+});
+
+describe("operator support-alert reconciliation", () => {
+  const fixtures: Array<ReturnType<typeof createSqliteD1>> = [];
+
+  afterEach(() => {
+    while (fixtures.length > 0) fixtures.pop()?.close();
+  });
+
+  function setup() {
+    const harness = createSqliteD1();
+    fixtures.push(harness);
+    harness.sqlite.exec(`
+      CREATE TABLE delivery_attempt (
+        id TEXT PRIMARY KEY NOT NULL,
+        user_id TEXT NOT NULL,
+        watchlist_id TEXT,
+        digest_run_id TEXT,
+        delivery_target_id TEXT,
+        lane TEXT NOT NULL,
+        channel TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        status TEXT NOT NULL,
+        webhook_status TEXT NOT NULL,
+        target_value TEXT NOT NULL,
+        provider_message_id TEXT,
+        provider_status_last_seen_at TEXT,
+        template_name TEXT,
+        event_ids_json TEXT NOT NULL DEFAULT '[]',
+        payload_snapshot_json TEXT NOT NULL DEFAULT '{}',
+        idempotency_key TEXT,
+        error_message TEXT,
+        sent_at TEXT,
+        failed_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE agent_action_audit (
+        id TEXT PRIMARY KEY NOT NULL,
+        user_id TEXT NOT NULL,
+        api_key_id TEXT,
+        action_name TEXT NOT NULL,
+        resource_type TEXT,
+        resource_id TEXT,
+        idempotency_key TEXT,
+        status TEXT NOT NULL,
+        result_json TEXT,
+        error_code TEXT,
+        error_message TEXT,
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE UNIQUE INDEX idx_test_support_alert_audit_idempotency
+        ON agent_action_audit(user_id, idempotency_key)
+        WHERE idempotency_key IS NOT NULL;
+    `);
+    harness.sqlite.prepare(`
+      INSERT INTO delivery_attempt (
+        id, user_id, lane, channel, provider, status, webhook_status,
+        target_value, provider_status_last_seen_at, payload_snapshot_json,
+        idempotency_key, error_message, failed_at, created_at, updated_at
+      ) VALUES (
+        'support-attempt-1', 'operator-owner-1', 'internal', 'email',
+        'cloudflare_email', 'failed', 'provider_unknown', 'operator@example.test',
+        '2026-07-15T18:00:30.000Z',
+        '{"kind":"support_case_operator_alert","caseId":"case-1"}',
+        'support-case:case-1',
+        'Cloudflare Email send outcome is unknown after provider exception.',
+        '2026-07-15T18:00:30.000Z',
+        '2026-07-15T18:00:00.000Z', '2026-07-15T18:00:30.000Z'
+      )
+    `).run();
+    return harness;
+  }
+
+  function input(overrides: Record<string, unknown> = {}) {
+    return {
+      operatorUserId: "operator-1",
+      attemptId: "support-attempt-1",
+      idempotencyKey: "ops-support-alert-reconcile:11111111-1111-4111-8111-111111111111",
+      expectedUpdatedAt: "2026-07-15T18:00:30.000Z",
+      outcome: "failed" as const,
+      classification: "provider_rejection_log" as const,
+      evidenceReference: "support_provider_reject_12345",
+      observedAt: "2026-07-15T18:01:00.000Z",
+      ...overrides,
+    };
+  }
+
+  it("records a confirmed rejection as safely retryable without sending", async () => {
+    const reconcileSupportAlertAttemptWithAudit = (
+      operatorReconciliation as Record<string, unknown>
+    ).reconcileSupportAlertAttemptWithAudit;
+    expect(typeof reconcileSupportAlertAttemptWithAudit).toBe("function");
+    if (typeof reconcileSupportAlertAttemptWithAudit !== "function") return;
+    const harness = setup();
+
+    await expect(
+      reconcileSupportAlertAttemptWithAudit({ DB: harness.db }, input()),
+    ).resolves.toMatchObject({ ok: true, replayed: false, outcome: "failed" });
+
+    expect(
+      harness.sqlite.prepare(`
+        SELECT status, webhook_status, payload_snapshot_json
+        FROM delivery_attempt WHERE id = 'support-attempt-1'
+      `).get(),
+    ).toMatchObject({ status: "failed", webhook_status: "failed" });
+    const payload = harness.sqlite.prepare(`
+      SELECT payload_snapshot_json FROM delivery_attempt WHERE id = 'support-attempt-1'
+    `).get() as { payload_snapshot_json: string };
+    expect(JSON.parse(payload.payload_snapshot_json)).toMatchObject({
+      supportAlertProviderEvidence: {
+        outcome: "failed",
+        classification: "provider_rejection_log",
+        reference: "support_provider_reject_12345",
+      },
+    });
+    expect(
+      harness.sqlite.prepare("SELECT action_name FROM agent_action_audit").get(),
+    ).toMatchObject({ action_name: "ops.support_alert.reconcile" });
+  });
+
+  it("records confirmed provider acceptance as sent and replays exactly once", async () => {
+    const reconcileSupportAlertAttemptWithAudit = (
+      operatorReconciliation as Record<string, unknown>
+    ).reconcileSupportAlertAttemptWithAudit;
+    expect(typeof reconcileSupportAlertAttemptWithAudit).toBe("function");
+    if (typeof reconcileSupportAlertAttemptWithAudit !== "function") return;
+    const harness = setup();
+    const reconciliation = input({
+      outcome: "sent",
+      classification: "controlled_inbox_receipt",
+      evidenceReference: "support_inbox_receipt_12345",
+    });
+
+    const first = await reconcileSupportAlertAttemptWithAudit(
+      { DB: harness.db },
+      reconciliation,
+    );
+    const replay = await reconcileSupportAlertAttemptWithAudit(
+      { DB: harness.db },
+      reconciliation,
+    );
+
+    expect(first).toMatchObject({ ok: true, replayed: false, outcome: "sent" });
+    expect(replay).toMatchObject({ ok: true, replayed: true, outcome: "sent" });
+    expect(
+      harness.sqlite.prepare(`
+        SELECT status, webhook_status, sent_at
+        FROM delivery_attempt WHERE id = 'support-attempt-1'
+      `).get(),
+    ).toMatchObject({
+      status: "sent",
+      webhook_status: "delivered",
+      sent_at: "2026-07-15T18:01:00.000Z",
+    });
+    expect(
+      harness.sqlite.prepare("SELECT COUNT(*) AS count FROM agent_action_audit").get(),
+    ).toMatchObject({ count: 1 });
   });
 });

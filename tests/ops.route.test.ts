@@ -351,6 +351,140 @@ describe("ops route", () => {
     expect(markup).not.toContain("ops@example.com");
   });
 
+  it("shows provider-unknown support alerts as evidence-only reconciliation, never retry", async () => {
+    await mockRouter(() => ({
+      snapshot: {
+        summary: {
+          failingRuns: 0,
+          stuckRuns: 0,
+          failedProofs: 0,
+          budgetBlockedProofs: 0,
+          blockedTargets: 0,
+          deliveryFailures: 0,
+          deliveryAttention: 0,
+          degradedWatchlists: 0,
+          discoveryFailures: 0,
+          discoveryProvidersNeedingAttention: 0,
+          openSupportCases: 1,
+          supportAlertsNeedRetry: 0,
+        },
+        warnings: [],
+        supportCases: [{
+          case_id: "case-1",
+          category: "delivery",
+          priority: "urgent",
+          subject: "Digest missing",
+          updated_at: "2026-07-15T04:00:00.000Z",
+          alert_attempt_id: "support-attempt-1",
+          alert_status: "failed",
+          alert_webhook_status: "provider_unknown",
+          alert_updated_at: "2026-07-15T04:01:00.000Z",
+        }],
+        failingRuns: [],
+        stuckRuns: [],
+        failedProofs: [],
+        budgetBlockedProofs: [],
+        blockedTargets: [],
+        deliveryFailures: [],
+        deliveryAttention: [],
+        degradedWatchlists: [],
+        discoveryFailures: [],
+        discoveryProviders: [],
+      },
+    }));
+
+    const { default: OpsRoute } = await import("~/routes/app.ops");
+    const markup = renderToStaticMarkup(createElement(OpsRoute));
+
+    expect(markup).toContain("Record provider evidence");
+    expect(markup).toContain("Confirmed provider outcome");
+    expect(markup).not.toContain("Retry operator alert");
+    expect(markup).not.toContain("operator@example.test");
+  });
+
+  it("reconciles a provider-unknown support alert without calling the sender", async () => {
+    const reconcileSupportAlertAttemptWithAudit = vi.fn().mockResolvedValue({
+      ok: true,
+      replayed: false,
+      outcome: "failed",
+    });
+    const sendOperatorAlertEmail = vi.fn();
+    vi.doMock("~/lib/auth.server", () => ({ requireSession: vi.fn().mockResolvedValue(session) }));
+    vi.doMock("~/lib/data/operator-delivery-reconciliation.server", () => ({
+      createSupportAlertReconciliationKey: vi.fn(() =>
+        "ops-support-alert-reconcile:11111111-1111-4111-8111-111111111111"
+      ),
+      reconcileSupportAlertAttemptWithAudit,
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({ sendOperatorAlertEmail }));
+
+    const { action } = await import("~/routes/app.ops");
+    const form = new FormData();
+    form.set("intent", "reconcile-support-alert");
+    form.set("attemptId", "support-attempt-1");
+    form.set("expectedUpdatedAt", "2026-07-15T04:01:00.000Z");
+    form.set("outcome", "failed");
+    form.set("classification", "provider_rejection_log");
+    form.set("evidenceReference", "support_provider_reject_12345");
+    form.set("observedAt", "2026-07-15T04:02:00.000Z");
+    const result = await action({
+      context: createContext({ OPS_ALLOWLIST_EMAILS: "owner@example.com" }),
+      request: new Request("http://localhost/app/ops", { method: "POST", body: form }),
+    } as never);
+
+    expect(result).toMatchObject({
+      ok: true,
+      intent: "reconcile-support-alert",
+      message: expect.stringContaining("No email was resent"),
+    });
+    expect(reconcileSupportAlertAttemptWithAudit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        attemptId: "support-attempt-1",
+        outcome: "failed",
+        classification: "provider_rejection_log",
+      }),
+    );
+    expect(sendOperatorAlertEmail).not.toHaveBeenCalled();
+  });
+
+  it("never retries a failed support alert while its provider outcome is unknown", async () => {
+    const getOperatorSupportCase = vi.fn().mockResolvedValue({
+      id: "case-1",
+      userEmail: "requester@example.com",
+      category: "delivery",
+      priority: "urgent",
+      subject: "Digest missing",
+      detail: "Private case detail.",
+    });
+    const getDeliveryAttemptByIdempotencyKey = vi.fn().mockResolvedValue({
+      status: "failed",
+      webhookStatus: "provider_unknown",
+    });
+    const sendOperatorAlertEmail = vi.fn();
+    vi.doMock("~/lib/auth.server", () => ({ requireSession: vi.fn().mockResolvedValue(session) }));
+    vi.doMock("~/lib/data.server", () => ({
+      getOperatorSupportCase,
+      getDeliveryAttemptByIdempotencyKey,
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({ sendOperatorAlertEmail }));
+
+    const { action } = await import("~/routes/app.ops");
+    const form = new FormData();
+    form.set("intent", "retry-support-alert");
+    form.set("caseId", "case-1");
+    const result = await action({
+      context: createContext({ OPS_ALLOWLIST_EMAILS: "owner@example.com" }),
+      request: new Request("http://localhost/app/ops", { method: "POST", body: form }),
+    } as never);
+
+    expect(result).toMatchObject({
+      ok: false,
+      message: expect.stringContaining("Provider outcome is unknown"),
+    });
+    expect(sendOperatorAlertEmail).not.toHaveBeenCalled();
+  });
+
   it("retries a failed support alert only for an allowlisted operator", async () => {
     const getOperatorSupportCase = vi.fn().mockResolvedValue({
       id: "case-1",

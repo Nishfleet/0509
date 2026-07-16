@@ -1,12 +1,11 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-const { buildProductionDeployPlan, executeProductionDeployPlan } = await import(
-  "../scripts/deploy-production-plan.mjs"
-);
+const deployPlanModule = await import("../scripts/deploy-production-plan.mjs");
+const { buildProductionDeployPlan, executeProductionDeployPlan } = deployPlanModule;
 const { validateDeployReadiness } = await import("../scripts/verify-deploy-readiness.mjs");
 const { RELEASE_COVERAGE_MATRIX, expectedReleaseArtifacts } = await import(
   "../scripts/playwright-release-manifest-reporter.mjs"
@@ -18,6 +17,8 @@ const serverIdentity = "local-0123456789abcdef0123456789abcdef";
 const roots: string[] = [];
 const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01]);
 const aria = Buffer.from('- main "0509":\n  - heading "Proof"\n', "utf8");
+const remoteRestoreEvidencePath = "test-results/d1-remote-restore-evidence.json";
+const wranglerOutputPath = "test-results/wrangler-deploy-output.jsonl";
 
 afterEach(() => {
   while (roots.length > 0) rmSync(roots.pop()!, { recursive: true, force: true });
@@ -111,10 +112,38 @@ function passingEvidence() {
   return { root, manifest, candidate };
 }
 
+function passingRemoteRestoreEvidence() {
+  return {
+    schemaVersion: 1,
+    candidateFingerprint: fingerprint,
+    generatedAt: "2026-07-16T10:00:00.000Z",
+    databaseIdentitySha256: "1".repeat(64),
+    databaseBookmark: "bookmark-2026-07-16",
+    scratchDatabaseIdentitySha256: "2".repeat(64),
+    sourceDumpSha256: "3".repeat(64),
+    transformedSqlSha256: "4".repeat(64),
+    rowCountDigestSha256: "5".repeat(64),
+    migrationLedgerSha256: "6".repeat(64),
+    wranglerWorktreeSha256: wranglerHash,
+    latestMigration: "0067_workspace_membership_invariants.sql",
+    migrationCount: 67,
+    planRowCount: 5,
+    dodoLinkedPlanRowCount: 5,
+    productionSearchRolloutMode: "shadow",
+    integrity: "ok",
+    foreignKeyViolations: 0,
+    exactRowCounts: true,
+    dodoLinkagePreserved: true,
+    scratchDatabaseRemoved: true,
+  };
+}
+
 describe("production deployment readiness gate", () => {
   it("places the exact launch and evidence gates before the deploy mutation", () => {
     const plan = buildProductionDeployPlan({
       manifestPath: "test-results/deploy-readiness-test.json",
+      remoteRestoreEvidencePath,
+      wranglerOutputPath,
     });
     expect(plan.findIndex((step: any) => step.id === "launch_readiness")).toBeLessThan(
       plan.findIndex((step: any) => step.id === "readiness_evidence"),
@@ -122,11 +151,22 @@ describe("production deployment readiness gate", () => {
     expect(plan.findIndex((step: any) => step.id === "readiness_evidence")).toBeLessThan(
       plan.findIndex((step: any) => step.id === "deploy"),
     );
+    expect(plan.findIndex((step: any) => step.id === "remote_restore_evidence")).toBeLessThan(
+      plan.findIndex((step: any) => step.id === "deploy"),
+    );
+    expect(plan.find((step: any) => step.id === "deploy")?.env).toMatchObject({
+      WRANGLER_OUTPUT_FILE_PATH: wranglerOutputPath,
+    });
+    expect(plan.findIndex((step: any) => step.id === "deploy")).toBeLessThan(
+      plan.findIndex((step: any) => step.id === "post_deploy_release_canary"),
+    );
   });
 
   it("proves an intentional readiness failure prevents every deploy mutation", () => {
     const plan = buildProductionDeployPlan({
       manifestPath: "test-results/deploy-readiness-test.json",
+      remoteRestoreEvidencePath,
+      wranglerOutputPath,
     });
     const executed: string[] = [];
     expect(() => executeProductionDeployPlan(plan, (step: any) => {
@@ -134,6 +174,81 @@ describe("production deployment readiness gate", () => {
       if (step.id === "launch_readiness") throw new Error("intentional_gate_failure");
     })).toThrow("intentional_gate_failure");
     expect(executed).not.toContain("deploy");
+  });
+
+  it("fails remote restore evidence closed on absence, staleness, drift, or incomplete cleanup", () => {
+    const validateRemoteRestoreEvidence = (
+      deployPlanModule as Record<string, unknown>
+    ).validateRemoteRestoreEvidence;
+    expect(typeof validateRemoteRestoreEvidence).toBe("function");
+    if (typeof validateRemoteRestoreEvidence !== "function") return;
+    const expected = {
+      candidateFingerprint: fingerprint,
+      wranglerWorktreeSha256: wranglerHash,
+      now: new Date("2026-07-16T12:00:00.000Z"),
+    };
+
+    expect(validateRemoteRestoreEvidence(null, expected)).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining(["remote_restore_evidence_missing"]),
+    });
+    expect(validateRemoteRestoreEvidence({
+      ...passingRemoteRestoreEvidence(),
+      generatedAt: "2026-07-14T10:00:00.000Z",
+    }, expected)).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining(["remote_restore_evidence_stale"]),
+    });
+    expect(validateRemoteRestoreEvidence({
+      ...passingRemoteRestoreEvidence(),
+      candidateFingerprint: "9".repeat(64),
+      scratchDatabaseRemoved: false,
+    }, expected)).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining([
+        "remote_restore_candidate_mismatch",
+        "remote_restore_scratch_cleanup",
+      ]),
+    });
+    expect(validateRemoteRestoreEvidence({
+      ...passingRemoteRestoreEvidence(),
+      migrationLedgerSha256: null,
+      planRowCount: -1,
+      dodoLinkedPlanRowCount: 6,
+    }, expected)).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining([
+        "remote_restore_migrationLedgerSha256",
+        "remote_restore_plan_rows",
+        "remote_restore_dodo_rows",
+      ]),
+    });
+    expect(
+      validateRemoteRestoreEvidence(passingRemoteRestoreEvidence(), expected),
+    ).toEqual({ ok: true, issues: [] });
+  });
+
+  it("extracts the exact newly deployed Worker version from Wrangler's official output envelope", () => {
+    const readDeployedWorkerVersionId = (
+      deployPlanModule as Record<string, unknown>
+    ).readDeployedWorkerVersionId;
+    expect(typeof readDeployedWorkerVersionId).toBe("function");
+    if (typeof readDeployedWorkerVersionId !== "function") return;
+
+    expect(readDeployedWorkerVersionId(
+      `${JSON.stringify({ type: "deploy", version: 1, version_id: "worker-version-new" })}\n`,
+    )).toBe("worker-version-new");
+    expect(() => readDeployedWorkerVersionId("{}")).toThrow(
+      "deployed_worker_version_missing",
+    );
+  });
+
+  it("wires private restore evidence and the post-deploy canary token into protected-main CI", () => {
+    const workflow = readFileSync(resolve(".github/workflows/deploy-production.yml"), "utf8");
+
+    expect(workflow).toContain("D1_REMOTE_RESTORE_EVIDENCE_JSON");
+    expect(workflow).toContain("D1_REMOTE_RESTORE_EVIDENCE_PATH");
+    expect(workflow).toContain("CANARY_BYPASS_TOKEN");
   });
 
   it("accepts only a clean, exact, all-six first-attempt manifest with intact artifacts", () => {
