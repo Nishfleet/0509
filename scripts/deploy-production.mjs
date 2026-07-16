@@ -76,8 +76,15 @@ try {
     movedLocalEnvFiles.push({ source, held });
   }
 
-  const manifestPath = `test-results/deploy-readiness-${process.pid}-${randomBytes(8).toString("hex")}.json`;
-  const plan = buildProductionDeployPlan({ manifestPath });
+  const nonce = `${process.pid}-${randomBytes(8).toString("hex")}`;
+  const manifestPath = `test-results/deploy-readiness-${nonce}.json`;
+  const remoteRestoreEvidencePath = process.env.D1_REMOTE_RESTORE_EVIDENCE_PATH;
+  const wranglerOutputPath = `test-results/wrangler-deploy-output-${nonce}.jsonl`;
+  const plan = buildProductionDeployPlan({
+    manifestPath,
+    remoteRestoreEvidencePath,
+    wranglerOutputPath,
+  });
   executeProductionDeployPlan(plan, (step) => run(step.command, step.args, step));
 } catch (error) {
   exitCode = error && typeof error.exitCode === "number" ? error.exitCode : 1;

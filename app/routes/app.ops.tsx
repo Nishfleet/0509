@@ -134,6 +134,50 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }
   }
 
+  if (intent === "reconcile-support-alert") {
+    const {
+      createSupportAlertReconciliationKey,
+      reconcileSupportAlertAttemptWithAudit,
+    } = await import("~/lib/data/operator-delivery-reconciliation.server");
+    try {
+      const result = await reconcileSupportAlertAttemptWithAudit(env, {
+        operatorUserId: session.user.id,
+        attemptId: String(formData.get("attemptId") ?? ""),
+        idempotencyKey: createSupportAlertReconciliationKey(),
+        expectedUpdatedAt: String(formData.get("expectedUpdatedAt") ?? ""),
+        outcome: String(formData.get("outcome") ?? "") as "sent" | "failed",
+        classification: String(formData.get("classification") ?? "") as
+          | "cloudflare_email_log"
+          | "controlled_inbox_receipt"
+          | "provider_rejection_log",
+        evidenceReference: String(formData.get("evidenceReference") ?? ""),
+        observedAt: String(formData.get("observedAt") ?? ""),
+      });
+      return result.ok
+        ? {
+            ok: true,
+            intent,
+            message: result.outcome === "sent"
+              ? "Provider acceptance was recorded. No email was resent."
+              : "Provider rejection was recorded. No email was resent; one safe retry is now available.",
+          }
+        : {
+            ok: false,
+            intent,
+            message: "That alert changed or the evidence is incomplete. Refresh and verify the provider record.",
+          };
+    } catch (error) {
+      if (error instanceof TypeError || error instanceof RangeError) {
+        return {
+          ok: false,
+          intent,
+          message: "Add a valid private evidence reference, observation time, and confirmed outcome.",
+        };
+      }
+      throw error;
+    }
+  }
+
   if (intent !== "retry-support-alert") {
     return { ok: false, intent, message: "Unknown operator action." };
   }
@@ -164,7 +208,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   if (existing?.status === "sent") {
     return { ok: true, intent, message: "The operator alert was already sent." };
   }
-  if (existing?.status === "pending" && existing.webhookStatus === "provider_unknown") {
+  if (existing?.webhookStatus === "provider_unknown") {
     return {
       ok: false,
       intent,
@@ -202,7 +246,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     if (finalAttempt?.status === "sent") {
       return { ok: true, intent, message: "The operator alert was already sent." };
     }
-    if (finalAttempt?.status === "pending" && finalAttempt.webhookStatus === "provider_unknown") {
+    if (finalAttempt?.webhookStatus === "provider_unknown") {
       return {
         ok: false,
         intent,
@@ -321,7 +365,43 @@ export default function OpsRoute() {
                 <p className="f9-app-kicker">{readableCode(item.priority)} priority</p>
                 <h3>{item.subject}</h3>
                 <p>{describeSupportAlert(item)}</p>
-                {item.alert_status === "failed" || item.alert_status === null ? (
+                {item.alert_webhook_status === "provider_unknown" &&
+                item.alert_attempt_id &&
+                item.alert_updated_at ? (
+                  <Form className="f9-auth-form" method="post">
+                    <input name="intent" type="hidden" value="reconcile-support-alert" />
+                    <input name="attemptId" type="hidden" value={item.alert_attempt_id} />
+                    <input name="expectedUpdatedAt" type="hidden" value={item.alert_updated_at} />
+                    <label className="f9-field">
+                      <span>Confirmed provider outcome</span>
+                      <select defaultValue="" name="outcome" required>
+                        <option disabled value="">Choose an outcome</option>
+                        <option value="sent">Accepted or delivered</option>
+                        <option value="failed">Not accepted</option>
+                      </select>
+                    </label>
+                    <label className="f9-field">
+                      <span>Evidence classification</span>
+                      <select defaultValue="" name="classification" required>
+                        <option disabled value="">Choose evidence</option>
+                        <option value="controlled_inbox_receipt">Controlled inbox receipt</option>
+                        <option value="cloudflare_email_log">Cloudflare Email log</option>
+                        <option value="provider_rejection_log">Provider rejection log</option>
+                      </select>
+                    </label>
+                    <label className="f9-field">
+                      <span>Private evidence reference</span>
+                      <input maxLength={160} name="evidenceReference" required />
+                    </label>
+                    <label className="f9-field">
+                      <span>Provider observation time</span>
+                      <input name="observedAt" required type="datetime-local" />
+                    </label>
+                    <button className="f9-secondary-button" type="submit">
+                      Record provider evidence
+                    </button>
+                  </Form>
+                ) : item.alert_status === "failed" || item.alert_status === null ? (
                   <Form method="post">
                     <input name="intent" type="hidden" value="retry-support-alert" />
                     <input name="caseId" type="hidden" value={item.case_id} />
@@ -625,11 +705,11 @@ function describeSupportAlert(item: {
   if (item.alert_status === "sent") {
     return "Operator alert sent.";
   }
+  if (item.alert_webhook_status === "provider_unknown") {
+    return "Provider outcome is unknown; inspect the provider console before any resend.";
+  }
   if (item.alert_status === "failed") {
     return "Operator alert failed before acceptance and can be retried safely.";
-  }
-  if (item.alert_status === "pending" && item.alert_webhook_status === "provider_unknown") {
-    return "Provider outcome is unknown; inspect the provider console before any resend.";
   }
   if (item.alert_status === "pending") {
     return "Operator alert dispatch is in progress.";

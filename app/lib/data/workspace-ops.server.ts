@@ -594,8 +594,10 @@ export async function getOperatorSnapshot(env: AppEnv) {
       priority: SupportCasePriority;
       subject: string;
       updated_at: string;
+      alert_attempt_id: string | null;
       alert_status: DeliveryAttemptStatus | null;
       alert_webhook_status: WebhookReconciliationStatus | null;
+      alert_updated_at: string | null;
     }>(
       env,
       `
@@ -605,8 +607,10 @@ export async function getOperatorSnapshot(env: AppEnv) {
           support_case.priority,
           support_case.subject,
           support_case.updated_at,
+          alert.id AS alert_attempt_id,
           alert.status AS alert_status,
-          alert.webhook_status AS alert_webhook_status
+          alert.webhook_status AS alert_webhook_status,
+          alert.updated_at AS alert_updated_at
         FROM support_case
         LEFT JOIN delivery_attempt AS alert
           ON alert.id = (
@@ -642,7 +646,9 @@ export async function getOperatorSnapshot(env: AppEnv) {
       ).length,
       openSupportCases: supportCases.length,
       supportAlertsNeedRetry: supportCases.filter(
-        (supportCase) => supportCase.alert_status === "failed",
+        (supportCase) =>
+          supportCase.alert_status === "failed" &&
+          supportCase.alert_webhook_status === "failed",
       ).length,
     },
     failingRuns,

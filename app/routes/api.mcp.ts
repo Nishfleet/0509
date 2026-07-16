@@ -1007,7 +1007,7 @@ async function buildAgentActionToolResult(
   const { verifyAuthenticatedApiIdentity } = await import("~/lib/authenticated-api-limits.server");
 
   try {
-    return structuredToolResult(await runCustomerAgentAction(env, {
+    const result = await runCustomerAgentAction(env, {
       userId: apiKey.userId,
       apiKeyId: apiKey.id,
       idempotencyKey: stringField(args, "idempotencyKey"),
@@ -1022,7 +1022,12 @@ async function buildAgentActionToolResult(
         });
         if (response) throw response;
       },
-    }, actionName, args as Record<string, unknown>));
+    }, actionName, args as Record<string, unknown>);
+    if (actionName === "report.create" || actionName === "report.share") {
+      const { adaptLegacyReportTransportResult } = await import("~/lib/report");
+      return structuredToolResult(adaptLegacyReportTransportResult(result));
+    }
+    return structuredToolResult(result);
   } catch (error) {
     const payload = customerAgentActionErrorPayload(error).body;
     return errorToolResult(payload);

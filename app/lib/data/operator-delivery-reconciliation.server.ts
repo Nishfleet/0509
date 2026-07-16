@@ -48,23 +48,28 @@ type DeliveryReconciliationScope = {
     | "ops.digest_email.reconcile"
     | "ops.instant_email.reconcile"
     | "ops.instant_whatsapp.reconcile"
-    | "ops.instant_slack.reconcile";
+    | "ops.instant_slack.reconcile"
+    | "ops.support_alert.reconcile";
   evidencePath:
     | "$.billingLifecycleProviderEvidence"
     | "$.digestProviderEvidence"
-    | "$.instantAlertProviderEvidence";
+    | "$.instantAlertProviderEvidence"
+    | "$.supportAlertProviderEvidence";
   idempotencyPrefix:
     | "ops-billing-email-reconcile"
     | "ops-digest-email-reconcile"
     | "ops-instant-email-reconcile"
     | "ops-instant-whatsapp-reconcile"
-    | "ops-instant-slack-reconcile";
+    | "ops-instant-slack-reconcile"
+    | "ops-support-alert-reconcile";
   label:
     | "Billing email"
     | "Digest email"
     | "Instant alert email"
     | "Instant alert WhatsApp"
-    | "Instant alert Slack";
+    | "Instant alert Slack"
+    | "Support alert";
+  lane: "customer" | "internal";
   classifications: readonly InstantDeliveryEvidenceClassification[];
   sentClassifications: readonly InstantDeliveryEvidenceClassification[];
   failedClassifications: readonly InstantDeliveryEvidenceClassification[];
@@ -79,6 +84,7 @@ const BILLING_RECONCILIATION_SCOPE: DeliveryReconciliationScope = {
   evidencePath: "$.billingLifecycleProviderEvidence",
   idempotencyPrefix: "ops-billing-email-reconcile",
   label: "Billing email",
+  lane: "customer",
   classifications: BILLING_EMAIL_EVIDENCE_CLASSIFICATIONS,
   sentClassifications: ["cloudflare_email_log", "controlled_inbox_receipt"],
   failedClassifications: ["cloudflare_email_log", "provider_rejection_log"],
@@ -101,6 +107,7 @@ const DIGEST_RECONCILIATION_SCOPE: DeliveryReconciliationScope = {
   evidencePath: "$.digestProviderEvidence",
   idempotencyPrefix: "ops-digest-email-reconcile",
   label: "Digest email",
+  lane: "customer",
   classifications: BILLING_EMAIL_EVIDENCE_CLASSIFICATIONS,
   sentClassifications: ["cloudflare_email_log", "controlled_inbox_receipt"],
   failedClassifications: ["cloudflare_email_log", "provider_rejection_log"],
@@ -120,6 +127,7 @@ const INSTANT_RECONCILIATION_SCOPE: DeliveryReconciliationScope = {
   evidencePath: "$.instantAlertProviderEvidence",
   idempotencyPrefix: "ops-instant-email-reconcile",
   label: "Instant alert email",
+  lane: "customer",
   classifications: BILLING_EMAIL_EVIDENCE_CLASSIFICATIONS,
   sentClassifications: ["cloudflare_email_log", "controlled_inbox_receipt"],
   failedClassifications: ["cloudflare_email_log", "provider_rejection_log"],
@@ -140,6 +148,7 @@ const INSTANT_WHATSAPP_RECONCILIATION_SCOPE: DeliveryReconciliationScope = {
   evidencePath: "$.instantAlertProviderEvidence",
   idempotencyPrefix: "ops-instant-whatsapp-reconcile",
   label: "Instant alert WhatsApp",
+  lane: "customer",
   classifications: INSTANT_WHATSAPP_EVIDENCE_CLASSIFICATIONS,
   sentClassifications: ["meta_whatsapp_message_log", "controlled_recipient_receipt"],
   failedClassifications: ["meta_whatsapp_message_log", "provider_rejection_log"],
@@ -161,6 +170,7 @@ const INSTANT_SLACK_RECONCILIATION_SCOPE: DeliveryReconciliationScope = {
   evidencePath: "$.instantAlertProviderEvidence",
   idempotencyPrefix: "ops-instant-slack-reconcile",
   label: "Instant alert Slack",
+  lane: "customer",
   classifications: INSTANT_SLACK_EVIDENCE_CLASSIFICATIONS,
   sentClassifications: ["slack_webhook_response", "controlled_channel_observation"],
   failedClassifications: ["slack_webhook_response", "provider_rejection_log"],
@@ -174,6 +184,29 @@ const INSTANT_SLACK_RECONCILIATION_SCOPE: DeliveryReconciliationScope = {
   `,
   allowsUnclassifiedFailure: true,
   requiresSettledProviderWindow: true,
+  updatesDigestDelivery: false,
+};
+
+const SUPPORT_ALERT_RECONCILIATION_SCOPE: DeliveryReconciliationScope = {
+  actionName: "ops.support_alert.reconcile",
+  evidencePath: "$.supportAlertProviderEvidence",
+  idempotencyPrefix: "ops-support-alert-reconcile",
+  label: "Support alert",
+  lane: "internal",
+  classifications: BILLING_EMAIL_EVIDENCE_CLASSIFICATIONS,
+  sentClassifications: ["cloudflare_email_log", "controlled_inbox_receipt"],
+  failedClassifications: ["cloudflare_email_log", "provider_rejection_log"],
+  attemptPredicate: `
+    AND delivery_attempt.channel = 'email'
+    AND delivery_attempt.provider = 'cloudflare_email'
+    AND (
+      delivery_attempt.idempotency_key LIKE 'support-case:%'
+      OR delivery_attempt.idempotency_key LIKE 'support-case-reopen:%'
+    )
+    AND json_extract(delivery_attempt.payload_snapshot_json, '$.kind') = 'support_case_operator_alert'
+  `,
+  allowsUnclassifiedFailure: false,
+  requiresSettledProviderWindow: false,
   updatesDigestDelivery: false,
 };
 
@@ -202,6 +235,10 @@ export function createInstantEmailReconciliationKey() {
 export function createInstantChannelReconciliationKey(channel: InstantDeliveryChannel) {
   if (channel === "email") return createInstantEmailReconciliationKey();
   return `ops-instant-${channel}-reconcile:${crypto.randomUUID()}`;
+}
+
+export function createSupportAlertReconciliationKey() {
+  return `ops-support-alert-reconcile:${crypto.randomUUID()}`;
 }
 
 export async function reconcileBillingEmailAttemptWithAudit(
@@ -235,6 +272,13 @@ export async function reconcileInstantChannelAttemptWithAudit(
       ? INSTANT_WHATSAPP_RECONCILIATION_SCOPE
       : INSTANT_SLACK_RECONCILIATION_SCOPE;
   return reconcileDeliveryAttemptWithAudit(env, input, scope);
+}
+
+export async function reconcileSupportAlertAttemptWithAudit(
+  env: AppEnv,
+  input: DeliveryReconciliationInput,
+) {
+  return reconcileDeliveryAttemptWithAudit(env, input, SUPPORT_ALERT_RECONCILIATION_SCOPE);
 }
 
 async function reconcileDeliveryAttemptWithAudit(
@@ -294,7 +338,7 @@ async function reconcileDeliveryAttemptWithAudit(
         FROM delivery_attempt
         WHERE delivery_attempt.id = ?
           AND delivery_attempt.updated_at = ?
-          AND delivery_attempt.lane = 'customer'
+          AND delivery_attempt.lane = '${scope.lane}'
           ${reconciliationStatePredicate(scope, "delivery_attempt.")}
           ${scope.attemptPredicate}
       `,
@@ -332,7 +376,7 @@ async function reconcileDeliveryAttemptWithAudit(
             updated_at = ?
         WHERE id = ?
           AND updated_at = ?
-          AND lane = 'customer'
+          AND lane = '${scope.lane}'
           ${reconciliationStatePredicate(scope, "")}
           ${scope.attemptPredicate}
           AND EXISTS (

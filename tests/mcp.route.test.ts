@@ -1127,6 +1127,97 @@ describe("MCP route", () => {
     }
   });
 
+  it.each([
+    ["create_report", "report.create", false],
+    ["share_report", "report.share", false],
+    ["share_report", "report.share", true],
+  ] as const)(
+    "keeps sparse %s transport fields compatible for MCP clients",
+    async (toolName, actionName, replayed) => {
+      setupMocks();
+      const runCustomerAgentAction = vi.fn().mockResolvedValue({
+        audit: { id: "audit-report-1", status: "succeeded" },
+        replayed,
+        result: {
+          report: {
+            kind: "report",
+            reportId: "collection:collection-1",
+            resourceId: "collection-1",
+            title: "Sparse client report",
+            rows: [
+              {
+                advertiser: null,
+                previewHeadline: null,
+                offer: null,
+                cta: null,
+                languageLabel: null,
+                creativeText: null,
+                translatedText: null,
+                landingPage: {
+                  url: null,
+                  headline: null,
+                  captureLabel: null,
+                  capturedAt: null,
+                  signals: [],
+                },
+              },
+            ],
+          },
+        },
+      });
+      vi.doMock("~/lib/customer-agent-actions.server", () => ({
+        customerAgentActionErrorPayload: vi.fn(),
+        runCustomerAgentAction,
+      }));
+
+      const response = await postMcp({
+        jsonrpc: "2.0",
+        id: `${toolName}-${replayed ? "replay" : "fresh"}`,
+        method: "tools/call",
+        params: {
+          name: toolName,
+          arguments: toolName === "share_report"
+            ? {
+                reportId: "collection:collection-1",
+                reviewed: true,
+                idempotencyKey: "report-share-1",
+              }
+            : { resourceType: "collection", resourceId: "collection-1" },
+        },
+      });
+      const body = await response.json() as {
+        result: {
+          structuredContent: {
+            result: {
+              report: {
+                rows: Array<Record<string, unknown>>;
+              };
+            };
+          };
+          content: Array<{ text: string }>;
+        };
+      };
+      const row = body.result.structuredContent.result.report.rows[0];
+
+      expect(runCustomerAgentAction).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        actionName,
+        expect.anything(),
+      );
+      expect(row).toMatchObject({
+        advertiser: "Ad context unavailable",
+        previewHeadline: "Preview unavailable",
+        offer: "Offer unavailable",
+        cta: "CTA unavailable",
+        languageLabel: "Language unavailable",
+        creativeText: "Creative text unavailable",
+        translatedText: "Translation unavailable",
+      });
+      expect(body.result.content[0]?.text).not.toContain('"advertiser":null');
+    },
+  );
+
   it("rejects MCP write calls from read-only API keys", async () => {
     setupMocks(true, false);
     const response = await postMcp({

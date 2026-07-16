@@ -194,7 +194,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
         verifiedRecipientBound: true,
         attemptCount: 1,
         status: "failed",
-        webhookStatus: "provider_unknown",
+        webhookStatus: "failed",
       });
       await signInAs(context, baseURL!, "e2e-free");
       await expect(runJ3Replay(page, {
