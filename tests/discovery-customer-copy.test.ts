@@ -61,7 +61,7 @@ describe("customerDiscoverySummary", () => {
 				"Commercial discovery Browser Run query is in demo mode; API fallback has cached results.",
 			),
 		).toBe(
-			"Competitor ad checks visual checks competitor is in sample mode; the backup Meta check has recent results.",
+			"Live ad checks are temporarily delayed. We'll retry automatically — results refresh as soon as checks recover.",
 		);
 	});
 });

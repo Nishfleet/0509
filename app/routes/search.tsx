@@ -526,6 +526,8 @@ export default function SearchRoute() {
   const displayDomain = data.displayDomain ?? competitorWebsite.host ?? competitorWebsite.raw;
   const isDomainSearch = Boolean(displayDomain && competitorWebsite.normalizedUrl);
   const isBroaderScope = data.searchScope === "broader";
+  const isSearchWarming = visibleResult.discoveryProgress === "warming";
+  const retrySearchPath = `${location.pathname}${location.search}${location.hash}`;
   const scopedSearchParams = withSearchScope(currentSearchParams, isBroaderScope ? "broader" : "exact");
   const nextCursor = visibleResult.nextCursor;
   const retryingCursor = visibleAccumulated.retryCursor;
@@ -556,7 +558,7 @@ export default function SearchRoute() {
     trackingRole,
   );
   broaderSearchParams.set("broader", "1");
-  const searchAnswer = hasSearchQuery && !data.inputError
+  const searchAnswer = hasSearchQuery && !data.inputError && !isSearchWarming
     ? buildSearchAnswer({
       result: visibleResult,
       displayDomain,
@@ -922,7 +924,12 @@ export default function SearchRoute() {
                   ))
                 ) : (
                   <div className="f9-empty-state">
-                    {!searchAnswer ? (
+                    {isSearchWarming ? (
+                      <div aria-live="polite" role="status">
+                        <h3>Checking this competitor</h3>
+                        <p>A check is already running. Retry shortly to check for the finished result.</p>
+                      </div>
+                    ) : !searchAnswer ? (
                       <>
                         <h3>
                           {formatEmptyResultHeadline(visibleResult, {
@@ -941,7 +948,16 @@ export default function SearchRoute() {
                         </p>
                       </>
                     ) : null}
-                    {isDomainSearch && !isBroaderScope ? (
+                    {isSearchWarming ? (
+                      <div className="f9-search-empty-actions">
+                        <Link className="f9-secondary-button" to={retrySearchPath}>
+                          Retry this search
+                        </Link>
+                        <Link className="f9-secondary-button" to="/search">
+                          Try another domain
+                        </Link>
+                      </div>
+                    ) : isDomainSearch && !isBroaderScope ? (
                       <div className="f9-search-empty-actions">
                         {rootData.session ? (
                           <Form className="f9-quick-track-form" method="post">

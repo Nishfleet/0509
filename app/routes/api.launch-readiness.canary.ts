@@ -235,8 +235,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   const {
-    addDigestItem,
-    clearDigestItems,
     createDigestRun,
     createProofCapture,
     createWatchEvent,
@@ -392,24 +390,48 @@ export async function action({ context, request }: ActionFunctionArgs) {
     },
   });
 
-  const digestRunId = await createDigestRun(env, target.user_id, periodStart, periodEnd, {
-    ...metadata,
-    totalEvents: 1,
-    watchlists: 1,
-  });
-  await clearDigestItems(env, digestRunId);
-  await addDigestItem(env, digestRunId, {
-    watchlistId: target.watchlist_id,
-    watchlistName: target.watchlist_name,
-    eventType: "ad_new",
-    title,
-    summary,
-    metadata: {
+  const digestClaim = await createDigestRun(
+    env,
+    target.user_id,
+    periodStart,
+    periodEnd,
+    {
       ...metadata,
-      eventId,
-      proofCaptureId,
+      totalEvents: 1,
+      watchlists: 1,
     },
-  });
+    {
+      returnClaim: true,
+      items: [{
+        watchlistId: target.watchlist_id,
+        watchlistName: target.watchlist_name,
+        eventType: "ad_new",
+        title,
+        summary,
+        metadata: {
+          ...metadata,
+          eventId,
+          proofCaptureId,
+        },
+      }],
+    },
+  );
+  if (!digestClaim.created) {
+    return Response.json(
+      {
+        ok: false,
+        blockers: ["digest_period_claim_conflict"],
+        runId,
+        proofCaptureId,
+        digestRunId: digestClaim.digestRunId,
+      },
+      {
+        status: 409,
+        headers: { "cache-control": "no-store" },
+      },
+    );
+  }
+  const digestRunId = digestClaim.digestRunId;
 
   const delivery = await deliverWeeklyDigest(env, {
     userId: target.user_id,
