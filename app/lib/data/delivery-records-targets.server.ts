@@ -498,80 +498,54 @@ async function getDeliveryTargetByUniqueFields(
   return row ? toDeliveryTargetRecord(row) : null;
 }
 export async function reconcileWhatsAppSetupTargetByProviderMessageId(
-  env: AppEnv,
-  input: {
-    providerMessageId: string;
-    webhookStatus: "delivered" | "failed";
-    providerStatusLastSeenAt: string;
-    errorMessage: string | null;
-  },
+env: AppEnv,
+input: {
+providerMessageId: string;
+webhookStatus: "delivered" | "failed";
+providerStatusLastSeenAt: string;
+errorMessage: string | null;
+},
 ) {
-  const existing = await one<DeliveryTargetRow>(
-    env,
-    `
+const existing = await one<DeliveryTargetRow>(env, `
 		SELECT * FROM delivery_target
 		WHERE channel = 'whatsapp' AND provider_identifier = ?
 		ORDER BY updated_at DESC LIMIT 1
-	`,
-    input.providerMessageId,
-  );
-  if (!existing) return null;
-  const metadata = parseJson<JsonRecord>(existing.metadata_json, {});
-  if (metadata.validationProviderMessageId !== input.providerMessageId) {
-    return toDeliveryTargetRecord(existing);
-  }
-  const incomingSeenAt = Date.parse(input.providerStatusLastSeenAt);
-  const currentSeenAt =
-    typeof metadata.validationStatusLastSeenAt === "string"
-      ? Date.parse(metadata.validationStatusLastSeenAt)
-      : Number.NEGATIVE_INFINITY;
-  const currentStatus = metadata.validationWebhookStatus;
-  const currentTerminal =
-    currentStatus === "delivered" || currentStatus === "failed";
-  if (
-    !Number.isFinite(incomingSeenAt) ||
-    incomingSeenAt < currentSeenAt ||
-    (currentTerminal && currentStatus !== input.webhookStatus)
-  ) {
-    return toDeliveryTargetRecord(existing);
-  }
-  const delivered = input.webhookStatus === "delivered";
-  const nextMetadata = {
-    ...metadata,
-    validationWebhookStatus: input.webhookStatus,
-    validationStatusLastSeenAt: input.providerStatusLastSeenAt,
-    validationErrorMessage: delivered
-      ? null
-      : (input.errorMessage ?? "WhatsApp setup delivery failed."),
-    validationReconciledWithoutAttempt: true,
-  };
-  await run(
-    env,
-    `
+	`, input.providerMessageId);
+if (!existing) return null;
+const metadata = parseJson<JsonRecord>(existing.metadata_json, {});
+if (metadata.validationProviderMessageId !== input.providerMessageId) {
+return toDeliveryTargetRecord(existing);
+}
+const incomingSeenAt = Date.parse(input.providerStatusLastSeenAt);
+const currentSeenAt = typeof metadata.validationStatusLastSeenAt === "string"
+? Date.parse(metadata.validationStatusLastSeenAt) : Number.NEGATIVE_INFINITY;
+const currentStatus = metadata.validationWebhookStatus;
+const currentTerminal = currentStatus === "delivered" || currentStatus === "failed";
+if (!Number.isFinite(incomingSeenAt) || incomingSeenAt < currentSeenAt
+|| (currentTerminal && currentStatus !== input.webhookStatus)) {
+return toDeliveryTargetRecord(existing);
+}
+const delivered = input.webhookStatus === "delivered";
+const nextMetadata = {
+...metadata,
+validationWebhookStatus: input.webhookStatus,
+validationStatusLastSeenAt: input.providerStatusLastSeenAt,
+validationErrorMessage: delivered ? null : input.errorMessage ?? "WhatsApp setup delivery failed.",
+validationReconciledWithoutAttempt: true,
+};
+await run(env, `
 		UPDATE delivery_target
 		SET validation_status = ?, is_validated = ?, template_eligible = ?,
 			last_successful_delivery_at = ?, metadata_json = ?, updated_at = ?
 		WHERE id = ? AND provider_identifier = ? AND updated_at = ? AND metadata_json = ?
-	`,
-    delivered ? "validated" : "invalid",
-    boolToInt(delivered),
-    boolToInt(delivered),
-    delivered
-      ? input.providerStatusLastSeenAt
-      : existing.last_successful_delivery_at,
-    jsonValue(nextMetadata),
-    nowIso(),
-    existing.id,
-    input.providerMessageId,
-    existing.updated_at,
-    existing.metadata_json,
-  );
-  const durable = await one<DeliveryTargetRow>(
-    env,
-    "SELECT * FROM delivery_target WHERE id = ?",
-    existing.id,
-  );
-  return durable ? toDeliveryTargetRecord(durable) : null;
+	`, delivered ? "validated" : "invalid", boolToInt(delivered), boolToInt(delivered),
+delivered ? input.providerStatusLastSeenAt : existing.last_successful_delivery_at,
+jsonValue(nextMetadata), nowIso(), existing.id, input.providerMessageId,
+existing.updated_at, existing.metadata_json);
+const durable = await one<DeliveryTargetRow>(
+env, "SELECT * FROM delivery_target WHERE id = ?", existing.id,
+);
+return durable ? toDeliveryTargetRecord(durable) : null;
 }
 
 export async function getDeliveryTargetById(
