@@ -4,6 +4,7 @@ import {
   claimDigestScheduleJob,
   claimDigestScheduleJobExhaustionAlert,
   enqueueDigestScheduleJobs,
+  exhaustStaleMaxAttemptDigestScheduleJobs,
   failDigestScheduleJob,
   listDigestScheduleJobsAwaitingAlert,
   listExhaustedDigestScheduleJobs,
@@ -50,7 +51,10 @@ function setupHarness() {
     INSERT INTO watchlist VALUES ('watch-1', 'owner-1', 1);
   `);
   applyMigration(harness.sqlite, "migrations/0035_agent_action_audit.sql");
-  applyMigration(harness.sqlite, "migrations/0067_delivery_recovery_and_digest_jobs.sql");
+  applyMigration(
+    harness.sqlite,
+    "migrations/0067_delivery_recovery_and_digest_jobs.sql",
+  );
   return harness;
 }
 
@@ -59,6 +63,84 @@ afterEach(() => {
 });
 
 describe("digest schedule exhaustion recovery", () => {
+  it("makes a killed fifth claim visible instead of stranding a running job", async () => {
+    const harness = setupHarness();
+    const env = { DB: harness.db } as never;
+    await enqueueDigestScheduleJobs(env, {
+      cadence: "weekly",
+      periodStart: "2026-07-06T05:00:00.000Z",
+      periodEnd: "2026-07-13T05:00:00.000Z",
+    });
+
+    let jobId = "";
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      const [candidate] = await listRetryableDigestScheduleJobs(env, {
+        staleRunningBefore: "2026-07-13T04:45:00.000Z",
+        maxAttempts: 5,
+        limit: 1,
+      });
+      expect(candidate).toBeDefined();
+      jobId = candidate!.id;
+      const claimed = await claimDigestScheduleJob(env, {
+        jobId,
+        processingToken: `killed-token-${attempt}`,
+        now: `2026-07-13T05:0${attempt}:00.000Z`,
+        staleRunningBefore: "2026-07-13T04:45:00.000Z",
+        maxAttempts: 5,
+      });
+      expect(claimed?.attemptCount).toBe(attempt);
+      if (attempt < 5) {
+        await failDigestScheduleJob(env, {
+          jobId,
+          processingToken: `killed-token-${attempt}`,
+          now: `2026-07-13T05:0${attempt}:30.000Z`,
+          errorCode: "injected_failure",
+        });
+      }
+    }
+
+    await expect(
+      exhaustStaleMaxAttemptDigestScheduleJobs(env, {
+        staleRunningBefore: "2026-07-13T05:20:00.000Z",
+        maxAttempts: 5,
+        now: "2026-07-13T05:21:00.000Z",
+      }),
+    ).resolves.toBe(1);
+
+    const [awaitingAlert] = await listDigestScheduleJobsAwaitingAlert(env, {
+      staleAlertBefore: "2026-07-13T05:20:00.000Z",
+      limit: 10,
+    });
+    expect(awaitingAlert).toMatchObject({
+      id: jobId,
+      status: "exhausted",
+      attemptCount: 5,
+      lastErrorCode: "digest_schedule_job_lease_exhausted",
+    });
+    const [alertA, alertB] = await Promise.all([
+      claimDigestScheduleJobExhaustionAlert(env, {
+        jobId,
+        alertToken: "killed-alert-a",
+        now: "2026-07-13T05:22:00.000Z",
+        staleAlertBefore: "2026-07-13T05:20:00.000Z",
+      }),
+      claimDigestScheduleJobExhaustionAlert(env, {
+        jobId,
+        alertToken: "killed-alert-b",
+        now: "2026-07-13T05:22:00.000Z",
+        staleAlertBefore: "2026-07-13T05:20:00.000Z",
+      }),
+    ]);
+    expect([alertA, alertB].filter(Boolean)).toHaveLength(1);
+    await expect(
+      listRetryableDigestScheduleJobs(env, {
+        staleRunningBefore: "2026-07-13T06:00:00.000Z",
+        maxAttempts: 5,
+        limit: 10,
+      }),
+    ).resolves.toEqual([]);
+  });
+
   it("makes the fifth failure visible, alerts once, and safely requeues with one audit", async () => {
     const harness = setupHarness();
     const env = { DB: harness.db } as never;
@@ -145,7 +227,9 @@ describe("digest schedule exhaustion recovery", () => {
       }),
     ).resolves.toEqual([]);
 
-    const [exhausted] = await listExhaustedDigestScheduleJobs(env, { limit: 10 });
+    const [exhausted] = await listExhaustedDigestScheduleJobs(env, {
+      limit: 10,
+    });
     const idempotencyKey = createDigestScheduleJobRequeueKey();
     const requeueInput = {
       operatorUserId: "operator-1",
@@ -167,7 +251,9 @@ describe("digest schedule exhaustion recovery", () => {
     ).toMatchObject({ count: 1 });
     expect(
       harness.sqlite
-        .prepare("SELECT status, attempt_count FROM digest_schedule_job WHERE id = ?")
+        .prepare(
+          "SELECT status, attempt_count FROM digest_schedule_job WHERE id = ?",
+        )
         .get(jobId),
     ).toMatchObject({ status: "pending", attempt_count: 0 });
 

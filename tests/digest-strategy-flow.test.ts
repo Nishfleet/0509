@@ -88,6 +88,7 @@ periodEnd: input.periodEnd,
 return 1;
 },
 ),
+exhaustStaleMaxAttemptDigestScheduleJobs: vi.fn().mockResolvedValue(0),
 failDigestScheduleJob: vi.fn().mockResolvedValue(true),
 getDigestByPeriod: vi.fn().mockResolvedValue(null),
 getDigest: vi.fn().mockResolvedValue(null),

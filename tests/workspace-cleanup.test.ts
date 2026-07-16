@@ -64,9 +64,18 @@ describe("workspace cleanup persistence", () => {
   it("pauses and resumes watchlists scoped to the owner", async () => {
     const mock = createCapturingDb();
 
-    expect(await setWatchlistActive({ DB: mock.db } as never, "user-1", "watch-1", false)).toBe(true);
+    expect(
+      await setWatchlistActive(
+        { DB: mock.db } as never,
+        "user-1",
+        "watch-1",
+        false,
+      ),
+    ).toBe(true);
 
-    const update = mock.statements.find((statement) => statement.sql.includes("UPDATE watchlist"));
+    const update = mock.statements.find((statement) =>
+      statement.sql.includes("UPDATE watchlist"),
+    );
     expect(update?.sql).toContain("AND user_id = ?");
     expect(update?.bindings[0]).toBe(0);
     // a deliberate user pause is stamped so renewals never force-resume it
@@ -79,14 +88,29 @@ describe("workspace cleanup persistence", () => {
     expect(mentionSync?.bindings.slice(1)).toEqual(["user-1", "user-1"]);
 
     const noMatch = createCapturingDb(0);
-    expect(await setWatchlistActive({ DB: noMatch.db } as never, "user-2", "watch-1", true)).toBe(false);
+    expect(
+      await setWatchlistActive(
+        { DB: noMatch.db } as never,
+        "user-2",
+        "watch-1",
+        true,
+      ),
+    ).toBe(false);
   });
 
   it("deletes collections and items only for the owning user", async () => {
     const mock = createCapturingDb();
 
-    expect(await deleteCollection({ DB: mock.db } as never, "user-1", "collection-1")).toBe(true);
-    expect(await deleteCollectionItem({ DB: mock.db } as never, "user-1", "item-1")).toBe(true);
+    expect(
+      await deleteCollection(
+        { DB: mock.db } as never,
+        "user-1",
+        "collection-1",
+      ),
+    ).toBe(true);
+    expect(
+      await deleteCollectionItem({ DB: mock.db } as never, "user-1", "item-1"),
+    ).toBe(true);
 
     const collectionDelete = mock.statements.find((statement) =>
       statement.sql.includes("DELETE FROM collection "),
@@ -96,7 +120,9 @@ describe("workspace cleanup persistence", () => {
     const itemDelete = mock.statements.find((statement) =>
       statement.sql.includes("DELETE FROM collection_item"),
     );
-    expect(itemDelete?.sql).toContain("SELECT id FROM collection WHERE user_id = ?");
+    expect(itemDelete?.sql).toContain(
+      "SELECT id FROM collection WHERE user_id = ?",
+    );
   });
 });
 
@@ -124,11 +150,18 @@ describe("reactivateWatchlistsUpToPlanLimit", () => {
       },
     };
 
-    const { reactivateWatchlistsUpToPlanLimit } = await import("~/lib/data.server");
-    const resumed = await reactivateWatchlistsUpToPlanLimit({ DB: db } as never, "user-1", 3);
+    const { reactivateWatchlistsUpToPlanLimit } =
+      await import("~/lib/data.server");
+    const resumed = await reactivateWatchlistsUpToPlanLimit(
+      { DB: db } as never,
+      "user-1",
+      3,
+    );
 
     expect(resumed).toBe(2);
-    const update = statements.find((statement) => statement.sql.includes("SET is_active = 1"));
+    const update = statements.find((statement) =>
+      statement.sql.includes("SET is_active = 1"),
+    );
     // 1 already active of 3 allowed → 2 slots
     expect(update?.bindings.slice(1)).toEqual(["user-1", "user-1", 2]);
     expect(update?.sql).toContain("ORDER BY updated_at DESC");
@@ -158,11 +191,18 @@ describe("reactivateWatchlistsUpToPlanLimit", () => {
       },
     };
 
-    const { reactivateWatchlistsUpToPlanLimit } = await import("~/lib/data.server");
-    const resumed = await reactivateWatchlistsUpToPlanLimit({ DB: db } as never, "user-1", 3);
+    const { reactivateWatchlistsUpToPlanLimit } =
+      await import("~/lib/data.server");
+    const resumed = await reactivateWatchlistsUpToPlanLimit(
+      { DB: db } as never,
+      "user-1",
+      3,
+    );
 
     expect(resumed).toBe(0);
-    expect(statements.some((sql) => sql.includes("SET is_active = 1"))).toBe(false);
+    expect(statements.some((sql) => sql.includes("SET is_active = 1"))).toBe(
+      false,
+    );
   });
 });
 
@@ -190,19 +230,21 @@ describe("watchlist pause/resume action", () => {
     const setWatchlistActiveMock = vi.fn();
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
-    })),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/data.server", () => ({
       setWatchlistActive: setWatchlistActiveMock,
     }));
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn().mockResolvedValue("scout"),
-      checkPlanLimit: vi.fn().mockResolvedValue({ allowed: false, limit: 3, current: 3 }),
+      checkPlanLimit: vi
+        .fn()
+        .mockResolvedValue({ allowed: false, limit: 3, current: 3 }),
     }));
 
     const { action } = await import("~/routes/app.watchlists");
@@ -212,7 +254,10 @@ describe("watchlist pause/resume action", () => {
 
     const result = await action({
       context: { cloudflare: { env: {} } },
-      request: new Request("http://localhost/app/watchlists", { method: "POST", body: formData }),
+      request: new Request("http://localhost/app/watchlists", {
+        method: "POST",
+        body: formData,
+      }),
     } as never);
 
     expect(result).toMatchObject({ ok: false, error: "plan_limit_exceeded" });
@@ -223,12 +268,12 @@ describe("watchlist pause/resume action", () => {
     const sendDeliveryTestEmail = vi.fn();
     vi.doMock("~/lib/auth.server", () => ({
       requireSession: vi.fn().mockResolvedValue(session),
-    requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
-      session,
-      workspaceUserId: session.user.id,
-      isMember: false,
-      ownerName: null,
-    })),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
     }));
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn().mockResolvedValue("scout"),
@@ -253,7 +298,10 @@ describe("watchlist pause/resume action", () => {
 
     const result = await action({
       context: { cloudflare: { env: {} } },
-      request: new Request("http://localhost/app/watchlists", { method: "POST", body: formData }),
+      request: new Request("http://localhost/app/watchlists", {
+        method: "POST",
+        body: formData,
+      }),
     } as never);
 
     expect(result).toMatchObject({ ok: false });
@@ -285,7 +333,10 @@ describe("sendDeliveryTestEmail", () => {
 
     const { sendDeliveryTestEmail } = await import("~/lib/delivery.server");
     const sent = await sendDeliveryTestEmail(
-      { EMAIL: { send: emailSend }, EMAIL_FROM_EMAIL: "alerts@0509.io" } as never,
+      {
+        EMAIL: { send: emailSend },
+        EMAIL_FROM_EMAIL: "alerts@0509.io",
+      } as never,
       { userId: "user-1", email: "owner@example.com", name: "Owner" },
     );
 
@@ -326,10 +377,20 @@ describe("customer-at-risk operator alert", () => {
     vi.doMock("~/lib/data.server", () => ({
       getOperatorRiskSummary: vi.fn().mockResolvedValue({
         troubleWatchlists: [
-          { id: "w1", name: "Nykaa watch", userEmail: "owner@example.com", consecutiveFailures: 4 },
+          {
+            id: "w1",
+            name: "Nykaa watch",
+            userEmail: "owner@example.com",
+            consecutiveFailures: 4,
+          },
         ],
         staleWatchlists: [
-          { id: "w2", name: "Mamaearth watch", userEmail: "owner@example.com", lastScannedAt: null },
+          {
+            id: "w2",
+            name: "Mamaearth watch",
+            userEmail: "owner@example.com",
+            lastScannedAt: null,
+          },
         ],
         deliveryFailures24h: 2,
         stuckRuns: 0,
@@ -394,7 +455,9 @@ describe("customer-at-risk operator alert", () => {
       lines: string[];
       idempotencyKey?: string;
     };
-    expect(call.idempotencyKey).toBe("operator-alert:fanout-dispatch:2026-07-03");
+    expect(call.idempotencyKey).toBe(
+      "operator-alert:fanout-dispatch:2026-07-03",
+    );
     expect(call.lines).toHaveLength(1);
     expect(call.lines[0]).toContain("fan-out job(s) failed to dispatch");
     expect(call.lines[0]).not.toContain("check window filled");
@@ -406,17 +469,27 @@ describe("account deletion billing guard", () => {
     const { assertAccountDeletable } = await import("~/lib/auth.server");
 
     for (const plan of ["scout", "starter", "agency"]) {
-      expect(() => assertAccountDeletable({ plan, dodoStatus: "active" })).toThrow(
-        /subscription is still active/i,
-      );
+      expect(() =>
+        assertAccountDeletable({ plan, dodoStatus: "active" }),
+      ).toThrow(/subscription is still active/i);
     }
     expect(() =>
-      assertAccountDeletable({ plan: "starter", dodoStatus: "subscription.on_hold" }),
+      assertAccountDeletable({
+        plan: "starter",
+        dodoStatus: "subscription.on_hold",
+      }),
     ).toThrow();
-    expect(() => assertAccountDeletable({ plan: "free", dodoStatus: null })).not.toThrow();
-    expect(() => assertAccountDeletable({ plan: "free", dodoStatus: "refunded" })).not.toThrow();
     expect(() =>
-      assertAccountDeletable({ plan: "free", dodoStatus: "subscription.cancelled" }),
+      assertAccountDeletable({ plan: "free", dodoStatus: null }),
+    ).not.toThrow();
+    expect(() =>
+      assertAccountDeletable({ plan: "free", dodoStatus: "refunded" }),
+    ).not.toThrow();
+    expect(() =>
+      assertAccountDeletable({
+        plan: "free",
+        dodoStatus: "subscription.cancelled",
+      }),
     ).not.toThrow();
   });
 });
@@ -491,12 +564,18 @@ describe("operator alert FK attribution", () => {
       kind: "support_case_operator_alert",
       caseId: "case-1",
     });
-    expect(JSON.stringify(attempt.payloadSnapshot)).not.toContain("Private support detail");
-    expect(JSON.stringify(attempt.payloadSnapshot)).not.toContain("owner@example.com");
+    expect(JSON.stringify(attempt.payloadSnapshot)).not.toContain(
+      "Private support detail",
+    );
+    expect(JSON.stringify(attempt.payloadSnapshot)).not.toContain(
+      "owner@example.com",
+    );
   });
 
   it("stores only the case id for reopened support-case operator alert snapshots", async () => {
-    const emailSend = vi.fn().mockResolvedValue({ messageId: "msg_support_reopen_1" });
+    const emailSend = vi
+      .fn()
+      .mockResolvedValue({ messageId: "msg_support_reopen_1" });
     const createDeliveryAttempt = deliveryDataMock(null, "founder-user-id");
 
     const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
@@ -523,11 +602,15 @@ describe("operator alert FK attribution", () => {
       kind: "support_case_operator_alert",
       caseId: "case-1",
     });
-    expect(JSON.stringify(attempt.payloadSnapshot)).not.toContain("Private support detail");
-    expect(JSON.stringify(attempt.payloadSnapshot)).not.toContain("owner@example.com");
+    expect(JSON.stringify(attempt.payloadSnapshot)).not.toContain(
+      "Private support detail",
+    );
+    expect(JSON.stringify(attempt.payloadSnapshot)).not.toContain(
+      "owner@example.com",
+    );
   });
 
-  it("still sends (without a ledger row) when no user exists, and honors a custom idempotency key", async () => {
+  it("fails closed before the provider when no durable operator-attempt owner exists", async () => {
     const emailSend = vi.fn().mockResolvedValue({ messageId: "msg_op_2" });
     const createDeliveryAttempt = deliveryDataMock(null, null);
 
@@ -538,11 +621,15 @@ describe("operator alert FK attribution", () => {
         EMAIL_FROM_EMAIL: "alerts@0509.io",
         LAUNCH_CANARY_EMAIL: "me@inish.in",
       } as never,
-      { subject: "test", lines: ["signal"], idempotencyKey: "operator-deletion:user-9" },
+      {
+        subject: "test",
+        lines: ["signal"],
+        idempotencyKey: "operator-deletion:user-9",
+      },
     );
 
-    expect(sent).toBe(true);
-    expect(emailSend).toHaveBeenCalledTimes(1);
+    expect(sent).toBe(false);
+    expect(emailSend).not.toHaveBeenCalled();
     expect(createDeliveryAttempt).not.toHaveBeenCalled();
   });
 
@@ -555,6 +642,8 @@ describe("operator alert FK attribution", () => {
       getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue({
         id: "attempt-failed-1",
         status: "failed",
+        webhookStatus: "failed",
+        updatedAt: "2026-07-16T08:59:00.000Z",
       }),
       getOldestUserId: vi.fn().mockResolvedValue("founder-user-id"),
       getUserIdByEmail: vi.fn().mockResolvedValue(null),
@@ -577,7 +666,11 @@ describe("operator alert FK attribution", () => {
         EMAIL_FROM_EMAIL: "alerts@0509.io",
         LAUNCH_CANARY_EMAIL: "me@inish.in",
       } as never,
-      { subject: "test", lines: ["signal"], idempotencyKey: "support-case:case-1" },
+      {
+        subject: "test",
+        lines: ["signal"],
+        idempotencyKey: "support-case:case-1",
+      },
     );
 
     expect(sent).toBe(true);
@@ -590,6 +683,78 @@ describe("operator alert FK attribution", () => {
         provider: "cloudflare_email",
         status: "sent",
         providerMessageId: "msg_op_retry",
+      }),
+    );
+  });
+
+  it("does not resend an operator alert after provider acceptance becomes locally ambiguous", async () => {
+    const emailSend = vi
+      .fn()
+      .mockResolvedValue({ messageId: "msg_op_ambiguous" });
+    const createDeliveryAttempt = vi
+      .fn()
+      .mockResolvedValue("attempt-ambiguous-1");
+    const durableAttempt = {
+      id: "attempt-ambiguous-1",
+      status: "pending",
+      webhookStatus: "provider_unknown",
+      updatedAt: "2026-07-16T09:00:01.000Z",
+    };
+    const getDeliveryAttemptByIdempotencyKey = vi
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue(durableAttempt);
+    const updateDeliveryAttemptResult = vi
+      .fn()
+      .mockResolvedValueOnce(true)
+      .mockRejectedValueOnce(
+        new Error("injected post-provider persistence failure"),
+      );
+    vi.doMock("~/lib/data.server", () => ({
+      createDeliveryAttempt,
+      getDeliveryAttemptByIdempotencyKey,
+      getOldestUserId: vi.fn().mockResolvedValue("founder-user-id"),
+      getUserIdByEmail: vi.fn().mockResolvedValue(null),
+      getDeliveryTargetById: vi.fn(),
+      getDeliveryTargetByProviderIdentifier: vi.fn(),
+      getWatchlistDeliveryConfig: vi.fn(),
+      getWorkspaceDeliveryConfig: vi.fn(),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn().mockResolvedValue([]),
+      reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
+      updateDeliveryAttemptResult,
+      upsertDeliveryTarget: vi.fn(),
+      upsertDigestDelivery: vi.fn(),
+    }));
+
+    const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
+    const env = {
+      EMAIL: { send: emailSend },
+      EMAIL_FROM_EMAIL: "alerts@0509.io",
+      LAUNCH_CANARY_EMAIL: "me@inish.in",
+    } as never;
+    const alert = {
+      subject: "test",
+      lines: ["signal"],
+      idempotencyKey: "cron-failure:digest_schedule_job_exhausted:job-1:1",
+    };
+
+    await expect(sendOperatorAlertEmail(env, alert)).rejects.toThrow(
+      "injected post-provider persistence failure",
+    );
+    await expect(sendOperatorAlertEmail(env, alert)).resolves.toBe(false);
+
+    expect(createDeliveryAttempt).toHaveBeenCalledTimes(1);
+    expect(emailSend).toHaveBeenCalledTimes(1);
+    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      "attempt-ambiguous-1",
+      expect.objectContaining({
+        status: "pending",
+        webhookStatus: "provider_unknown",
+        expectedStatus: "pending",
+        expectedWebhookStatus: "pending",
       }),
     );
   });
@@ -608,7 +773,8 @@ describe("paused_reason semantics", () => {
                 return { success: true, meta: { changes: 1 } };
               },
               async all<T>() {
-                if (sql.includes("COUNT(*)")) return { results: [{ count: 0 }] as T[] };
+                if (sql.includes("COUNT(*)"))
+                  return { results: [{ count: 0 }] as T[] };
                 return { results: [] as T[] };
               },
             };
@@ -617,11 +783,16 @@ describe("paused_reason semantics", () => {
       },
     };
 
-    const { reactivateWatchlistsUpToPlanLimit } = await import("~/lib/data.server");
+    const { reactivateWatchlistsUpToPlanLimit } =
+      await import("~/lib/data.server");
     await reactivateWatchlistsUpToPlanLimit({ DB: db } as never, "user-1", 3);
 
-    const update = statements.find((statement) => statement.sql.includes("SET is_active = 1"));
-    expect(update?.sql).toContain("paused_reason = 'plan_limit' OR paused_reason IS NULL");
+    const update = statements.find((statement) =>
+      statement.sql.includes("SET is_active = 1"),
+    );
+    expect(update?.sql).toContain(
+      "paused_reason = 'plan_limit' OR paused_reason IS NULL",
+    );
     expect(update?.sql).toContain("paused_reason = NULL");
   });
 });
@@ -647,7 +818,8 @@ describe("migrateAutoProvisionedEmailTargets", () => {
       },
     };
 
-    const { migrateAutoProvisionedEmailTargets } = await import("~/lib/data.server");
+    const { migrateAutoProvisionedEmailTargets } =
+      await import("~/lib/data.server");
     const changed = await migrateAutoProvisionedEmailTargets(
       { DB: db } as never,
       "user-1",
@@ -655,11 +827,15 @@ describe("migrateAutoProvisionedEmailTargets", () => {
     );
 
     expect(changed).toBe(1);
-    const update = statements.find((statement) => statement.sql.includes("UPDATE OR IGNORE delivery_target"));
+    const update = statements.find((statement) =>
+      statement.sql.includes("UPDATE OR IGNORE delivery_target"),
+    );
     expect(update?.sql).toContain("opt_in_source = 'account_email'");
     expect(update?.sql).toContain("opted_out_at IS NULL");
     expect(update?.bindings[0]).toBe("new@example.com");
-    const cleanup = statements.find((statement) => statement.sql.includes("DELETE FROM delivery_target"));
+    const cleanup = statements.find((statement) =>
+      statement.sql.includes("DELETE FROM delivery_target"),
+    );
     expect(cleanup?.sql).toContain("opt_in_source = 'account_email'");
   });
 });
@@ -684,7 +860,8 @@ describe("weekly business numbers", () => {
       }),
     }));
 
-    const { sendWeeklyBusinessNumbers } = await import("~/lib/monitoring.server");
+    const { sendWeeklyBusinessNumbers } =
+      await import("~/lib/monitoring.server");
     const result = await sendWeeklyBusinessNumbers({ DB: {} } as never);
 
     expect(result.sent).toBe(true);
@@ -703,7 +880,8 @@ describe("weekly business numbers", () => {
   });
 
   it("reports honest empties when there is no traffic yet", async () => {
-    const { buildWeeklyBusinessLines } = await import("~/lib/monitoring.server");
+    const { buildWeeklyBusinessLines } =
+      await import("~/lib/monitoring.server");
     const lines = buildWeeklyBusinessLines({
       signups7d: 0,
       activated7d: 0,

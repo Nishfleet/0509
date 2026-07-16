@@ -1,18 +1,22 @@
 import {
-createDeliveryAttempt,
-getDeliveryAttemptByIdempotencyKey,
-getOldestUserId,
-getUserDeliveryProfile,
-getUserIdByEmail,
-updateDeliveryAttemptResult,
+  createDeliveryAttempt,
+  getDeliveryAttemptByIdempotencyKey,
+  getOldestUserId,
+  getUserDeliveryProfile,
+  getUserIdByEmail,
+  updateDeliveryAttemptResult,
 } from "~/lib/data.server";
 import {
-EMAIL_PROVIDER,
-appBaseUrl,
-escapeHtml,
-providerAcceptedAt,
-sendCloudflareEmail,
+  EMAIL_PROVIDER,
+  appBaseUrl,
+  escapeHtml,
+  providerAcceptedAt,
+  sendCloudflareEmail,
 } from "~/lib/delivery-email-core.server";
+import {
+  isStalePreDispatchAttempt,
+  markDeliveryAttemptProviderDispatch,
+} from "~/lib/delivery-attempt-lease";
 import type { AppEnv } from "~/lib/env.server";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
@@ -28,30 +32,110 @@ const SUPPORT_CASE_REOPEN_IDEMPOTENCY_PREFIX = "support-case-reopen:";
 // delivery is degrading for paying customers — the ops dashboard is
 // pull-only and nobody is paged to it. Day-keyed idempotency: max one/day.
 export async function sendOperatorAlertEmail(
-env: AppEnv,
-input: {
-subject: string;
-lines: string[];
-idempotencyKey?: string;
-intro?: string;
-},
+  env: AppEnv,
+  input: {
+    subject: string;
+    lines: string[];
+    idempotencyKey?: string;
+    intro?: string;
+  },
 ) {
-const recipient = env.LAUNCH_CANARY_EMAIL?.trim();
-if (!recipient) {
-return false;
-}
+  const recipient = env.LAUNCH_CANARY_EMAIL?.trim();
+  if (!recipient) {
+    return false;
+  }
 
-const dayKey = new Date().toISOString().slice(0, 10);
-const idempotencyKey = input.idempotencyKey ?? `operator-alert:${dayKey}`;
-const duplicate = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
-if (duplicate?.status === "sent") {
-return false;
-}
+  const dayKey = new Date().toISOString().slice(0, 10);
+  const idempotencyKey = input.idempotencyKey ?? `operator-alert:${dayKey}`;
+  const duplicate = await getDeliveryAttemptByIdempotencyKey(
+    env,
+    idempotencyKey,
+  );
+  const payloadSnapshot = operatorAlertPayloadSnapshot(
+    idempotencyKey,
+    input.lines,
+  );
+  let attemptId: string;
+  let claimUpdatedAt: string;
 
-const providerResult = await sendCloudflareEmail(env, {
-to: recipient,
-subject: input.subject,
-html: `
+  if (duplicate) {
+    const stalePreDispatch = isStalePreDispatchAttempt(duplicate);
+    const definiteFailure =
+      duplicate.status === "failed" && duplicate.webhookStatus === "failed";
+    if (!stalePreDispatch && !definiteFailure) return false;
+
+    claimUpdatedAt = new Date().toISOString();
+    const reclaimed = await updateDeliveryAttemptResult(env, duplicate.id, {
+      provider: EMAIL_PROVIDER,
+      status: "pending",
+      webhookStatus: "pending",
+      providerMessageId: null,
+      providerStatusLastSeenAt: null,
+      templateName: "operator_alert",
+      errorMessage: null,
+      sentAt: null,
+      failedAt: null,
+      payloadSnapshot,
+      updatedAt: claimUpdatedAt,
+      expectedStatus: duplicate.status,
+      expectedWebhookStatus: duplicate.webhookStatus,
+      expectedUpdatedAt: duplicate.updatedAt,
+    });
+    if (reclaimed === false) return false;
+    attemptId = duplicate.id;
+  } else {
+    // delivery_attempt.user_id carries a foreign key to user(id). An alert that
+    // cannot be durably claimed must not cross the provider boundary.
+    const attemptUserId =
+      (await getUserIdByEmail(env, recipient)) ?? (await getOldestUserId(env));
+    if (!attemptUserId) return false;
+
+    claimUpdatedAt = new Date().toISOString();
+    try {
+      attemptId = await createDeliveryAttempt(env, {
+        userId: attemptUserId,
+        watchlistId: null,
+        digestRunId: null,
+        deliveryTargetId: null,
+        lane: "internal",
+        channel: "email",
+        provider: EMAIL_PROVIDER,
+        status: "pending",
+        webhookStatus: "pending",
+        targetValue: recipient,
+        providerMessageId: null,
+        providerStatusLastSeenAt: null,
+        templateName: "operator_alert",
+        eventIds: [],
+        payloadSnapshot,
+        idempotencyKey,
+        errorMessage: null,
+        sentAt: null,
+        failedAt: null,
+        timestamp: claimUpdatedAt,
+      });
+    } catch (error) {
+      const concurrent = await getDeliveryAttemptByIdempotencyKey(
+        env,
+        idempotencyKey,
+      );
+      if (concurrent) return false;
+      throw error;
+    }
+  }
+
+  const dispatchStartedAt = await markDeliveryAttemptProviderDispatch({
+    attemptId,
+    provider: EMAIL_PROVIDER,
+    claimUpdatedAt,
+    update: (id, update) => updateDeliveryAttemptResult(env, id, update),
+  });
+  if (!dispatchStartedAt) return false;
+
+  const providerResult = await sendCloudflareEmail(env, {
+    to: recipient,
+    subject: input.subject,
+    html: `
       <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 14px; line-height: 1.6;">
         <p style="margin: 0 0 12px;"><strong>${escapeHtml(input.intro ?? "Customer-at-risk signals from recent monitoring:")}</strong></p>
         <ul style="margin: 0 0 12px; padding-left: 18px;">
@@ -62,102 +146,74 @@ html: `
         </p>
       </div>
     `,
-tag: "operator-alert",
-unsubscribeUrl: null,
-});
+    tag: "operator-alert",
+    unsubscribeUrl: null,
+  });
 
-if (duplicate) {
-await updateDeliveryAttemptResult(env, duplicate.id, {
-provider: providerResult.provider,
-status: providerResult.status,
-webhookStatus: providerResult.webhookStatus,
-providerMessageId: providerResult.providerMessageId,
-providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
-errorMessage: providerResult.errorMessage,
-sentAt: providerAcceptedAt(providerResult),
-failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
-});
-return providerResult.status === "sent";
-}
-
-// delivery_attempt.user_id carries a foreign key to user(id), so the
-// attempt must be attributed to a REAL user row: the operator's own account
-// when it exists, else the oldest account (the founder's). Without this the
-// operator-alert insert violated the FK — the email sent but the dedupe row never
-// persisted and the logs claimed failure.
-const attemptUserId =
-(await getUserIdByEmail(env, recipient)) ?? (await getOldestUserId(env));
-if (!attemptUserId) {
-// Empty user table (fresh environment): nothing to attribute to — the
-// email went out, skip the ledger row.
-return providerResult.status === "sent";
-}
-
-await createDeliveryAttempt(env, {
-userId: attemptUserId,
-watchlistId: null,
-digestRunId: null,
-deliveryTargetId: null,
-lane: "internal",
-channel: "email",
-provider: providerResult.provider,
-status: providerResult.status,
-webhookStatus: providerResult.webhookStatus,
-targetValue: recipient,
-providerMessageId: providerResult.providerMessageId,
-providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
-templateName: "operator_alert",
-eventIds: [],
-payloadSnapshot: operatorAlertPayloadSnapshot(idempotencyKey, input.lines),
-idempotencyKey,
-errorMessage: providerResult.errorMessage,
-sentAt: providerAcceptedAt(providerResult),
-failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
-});
-
-return providerResult.status === "sent";
+  await updateDeliveryAttemptResult(env, attemptId, {
+    provider: providerResult.provider,
+    status: providerResult.status,
+    webhookStatus: providerResult.webhookStatus,
+    providerMessageId: providerResult.providerMessageId,
+    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+    errorMessage: providerResult.errorMessage,
+    sentAt: providerAcceptedAt(providerResult),
+    failedAt:
+      providerResult.status === "failed" ? new Date().toISOString() : null,
+    expectedStatus: "pending",
+    expectedWebhookStatus: "provider_unknown",
+    expectedUpdatedAt: dispatchStartedAt,
+  });
+  return providerResult.status === "sent";
 }
 
 function operatorAlertPayloadSnapshot(idempotencyKey: string, lines: string[]) {
-if (idempotencyKey.startsWith(SUPPORT_CASE_IDEMPOTENCY_PREFIX)) {
-return {
-kind: "support_case_operator_alert",
-caseId: idempotencyKey.slice(SUPPORT_CASE_IDEMPOTENCY_PREFIX.length),
-};
-}
-if (idempotencyKey.startsWith(SUPPORT_CASE_REOPEN_IDEMPOTENCY_PREFIX)) {
-const caseId = idempotencyKey.slice(SUPPORT_CASE_REOPEN_IDEMPOTENCY_PREFIX.length).split(":")[0];
-return {
-kind: "support_case_operator_alert",
-caseId,
-};
-}
+  if (idempotencyKey.startsWith(SUPPORT_CASE_IDEMPOTENCY_PREFIX)) {
+    return {
+      kind: "support_case_operator_alert",
+      caseId: idempotencyKey.slice(SUPPORT_CASE_IDEMPOTENCY_PREFIX.length),
+    };
+  }
+  if (idempotencyKey.startsWith(SUPPORT_CASE_REOPEN_IDEMPOTENCY_PREFIX)) {
+    const caseId = idempotencyKey
+      .slice(SUPPORT_CASE_REOPEN_IDEMPOTENCY_PREFIX.length)
+      .split(":")[0];
+    return {
+      kind: "support_case_operator_alert",
+      caseId,
+    };
+  }
 
-return { kind: "operator_alert", lines };
+  return { kind: "operator_alert", lines };
 }
 
 export async function sendDeliveryTestEmail(
-env: AppEnv,
-input: {
-userId: string;
-email: string;
-name: string | null;
-},
+  env: AppEnv,
+  input: {
+    userId: string;
+    email: string;
+    name: string | null;
+  },
 ) {
-const { requireDeliveryConfigSave } = await import("~/lib/plan-feature-gate.server");
-const deliveryGate = await requireDeliveryConfigSave(env, input.userId, { emailEnabled: true });
-if (!deliveryGate.ok) {
-return false;
-}
+  const { requireDeliveryConfigSave } =
+    await import("~/lib/plan-feature-gate.server");
+  const deliveryGate = await requireDeliveryConfigSave(env, input.userId, {
+    emailEnabled: true,
+  });
+  if (!deliveryGate.ok) {
+    return false;
+  }
 
-// Cloudflare Email has no bounce webhooks, so a typo'd address shows
-// "sent" forever while the customer receives nothing. This send gives
-// them a way to prove the address works end-to-end.
-const greeting = input.name?.trim() ? `Hi ${escapeHtml(input.name.trim())},` : "Hi,";
-const providerResult = await sendCloudflareEmail(env, {
-to: input.email,
-subject: "Test email from Five to Nine",
-html: `
+  // Cloudflare Email has no bounce webhooks, so a typo'd address shows
+  // "sent" forever while the customer receives nothing. This send gives
+  // them a way to prove the address works end-to-end.
+  const greeting = input.name?.trim()
+    ? `Hi ${escapeHtml(input.name.trim())},`
+    : "Hi,";
+  const providerResult = await sendCloudflareEmail(env, {
+    to: input.email,
+    subject: "Test email from Five to Nine",
+    html: `
       <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
         <p style="margin: 0 0 12px;">${greeting}</p>
         <p style="margin: 0 0 12px;">
@@ -169,66 +225,69 @@ html: `
         </p>
       </div>
     `,
-tag: "delivery-test",
-unsubscribeUrl: null,
-});
+    tag: "delivery-test",
+    unsubscribeUrl: null,
+  });
 
-await createDeliveryAttempt(env, {
-userId: input.userId,
-watchlistId: null,
-digestRunId: null,
-deliveryTargetId: null,
-lane: "customer",
-channel: "email",
-provider: providerResult.provider,
-status: providerResult.status,
-webhookStatus: providerResult.webhookStatus,
-targetValue: input.email,
-providerMessageId: providerResult.providerMessageId,
-providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
-templateName: "delivery_test",
-eventIds: [],
-payloadSnapshot: { kind: "delivery_test" },
-idempotencyKey: `delivery-test:${input.userId}:${crypto.randomUUID()}`,
-errorMessage: providerResult.errorMessage,
-sentAt: providerAcceptedAt(providerResult),
-failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
-});
+  await createDeliveryAttempt(env, {
+    userId: input.userId,
+    watchlistId: null,
+    digestRunId: null,
+    deliveryTargetId: null,
+    lane: "customer",
+    channel: "email",
+    provider: providerResult.provider,
+    status: providerResult.status,
+    webhookStatus: providerResult.webhookStatus,
+    targetValue: input.email,
+    providerMessageId: providerResult.providerMessageId,
+    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+    templateName: "delivery_test",
+    eventIds: [],
+    payloadSnapshot: { kind: "delivery_test" },
+    idempotencyKey: `delivery-test:${input.userId}:${crypto.randomUUID()}`,
+    errorMessage: providerResult.errorMessage,
+    sentAt: providerAcceptedAt(providerResult),
+    failedAt:
+      providerResult.status === "failed" ? new Date().toISOString() : null,
+  });
 
-return providerResult.status === "sent";
+  return providerResult.status === "sent";
 }
 
 // Account-action verification emails (change email, delete account).
 // Transactional: no unsubscribe header, still recorded as delivery attempts;
 // action URLs carry secrets and are never persisted in payload snapshots.
 export async function sendAccountActionEmail(
-env: AppEnv,
-input: {
-userId: string;
-email: string;
-name: string | null;
-kind: "change_email" | "delete_account";
-actionUrl: string;
-},
+  env: AppEnv,
+  input: {
+    userId: string;
+    email: string;
+    name: string | null;
+    kind: "change_email" | "delete_account";
+    actionUrl: string;
+  },
 ) {
-const greeting = input.name?.trim() ? `Hi ${escapeHtml(input.name.trim())},` : "Hi,";
-const copy =
-input.kind === "change_email"
-? {
-subject: "Confirm your new email for Five to Nine",
-body: "Someone asked to change the email on this Five to Nine account. If that was you, confirm with the button below.",
-action: "Confirm email change",
-}
-: {
-subject: "Confirm account deletion — Five to Nine",
-body: "Someone asked to permanently delete this Five to Nine account, including watchlists, history, and evidence. If that was you, confirm below. This cannot be undone.",
-action: "Delete my account",
-};
+  const greeting = input.name?.trim()
+    ? `Hi ${escapeHtml(input.name.trim())},`
+    : "Hi,";
+  const copy =
+    input.kind === "change_email"
+      ? {
+          subject: "Confirm your new email for Five to Nine",
+          body: "Someone asked to change the email on this Five to Nine account. If that was you, confirm with the button below.",
+          action: "Confirm email change",
+        }
+      : {
+          subject: "Confirm account deletion — Five to Nine",
+          body: "Someone asked to permanently delete this Five to Nine account, including watchlists, history, and evidence. If that was you, confirm below. This cannot be undone.",
+          action: "Delete my account",
+        };
 
-const providerResult = await sendCloudflareEmail(env, {
-to: input.email,
-subject: copy.subject,
-html: `
+  const providerResult = await sendCloudflareEmail(env, {
+    to: input.email,
+    subject: copy.subject,
+    html: `
       <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
         <p style="margin: 0 0 12px;">${greeting}</p>
         <p style="margin: 0 0 16px;">${copy.body}</p>
@@ -242,51 +301,53 @@ html: `
         </p>
       </div>
     `,
-tag: `account-${input.kind.replace("_", "-")}`,
-unsubscribeUrl: null,
-});
+    tag: `account-${input.kind.replace("_", "-")}`,
+    unsubscribeUrl: null,
+  });
 
-await createDeliveryAttempt(env, {
-userId: input.userId,
-watchlistId: null,
-digestRunId: null,
-deliveryTargetId: null,
-lane: "customer",
-channel: "email",
-provider: providerResult.provider,
-status: providerResult.status,
-webhookStatus: providerResult.webhookStatus,
-targetValue: input.email,
-providerMessageId: providerResult.providerMessageId,
-providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
-templateName: `account_${input.kind}`,
-eventIds: [],
-payloadSnapshot: { kind: `account_${input.kind}` },
-idempotencyKey: `account-${input.kind}:${input.userId}:${crypto.randomUUID()}`,
-errorMessage: providerResult.errorMessage,
-sentAt: providerAcceptedAt(providerResult),
-failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
-});
+  await createDeliveryAttempt(env, {
+    userId: input.userId,
+    watchlistId: null,
+    digestRunId: null,
+    deliveryTargetId: null,
+    lane: "customer",
+    channel: "email",
+    provider: providerResult.provider,
+    status: providerResult.status,
+    webhookStatus: providerResult.webhookStatus,
+    targetValue: input.email,
+    providerMessageId: providerResult.providerMessageId,
+    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+    templateName: `account_${input.kind}`,
+    eventIds: [],
+    payloadSnapshot: { kind: `account_${input.kind}` },
+    idempotencyKey: `account-${input.kind}:${input.userId}:${crypto.randomUUID()}`,
+    errorMessage: providerResult.errorMessage,
+    sentAt: providerAcceptedAt(providerResult),
+    failedAt:
+      providerResult.status === "failed" ? new Date().toISOString() : null,
+  });
 
-return providerResult.status === "sent";
+  return providerResult.status === "sent";
 }
 
-
 export async function sendTeamInviteEmail(
-env: AppEnv,
-input: {
-ownerUserId: string;
-ownerName: string | null;
-inviteeEmail: string;
-acceptUrl: string;
-},
+  env: AppEnv,
+  input: {
+    ownerUserId: string;
+    ownerName: string | null;
+    inviteeEmail: string;
+    acceptUrl: string;
+  },
 ) {
-const inviter = input.ownerName?.trim() ? escapeHtml(input.ownerName.trim()) : "A teammate";
+  const inviter = input.ownerName?.trim()
+    ? escapeHtml(input.ownerName.trim())
+    : "A teammate";
 
-const providerResult = await sendCloudflareEmail(env, {
-to: input.inviteeEmail,
-subject: `${input.ownerName?.trim() || "Your team"} invited you to Five to Nine`,
-html: `
+  const providerResult = await sendCloudflareEmail(env, {
+    to: input.inviteeEmail,
+    subject: `${input.ownerName?.trim() || "Your team"} invited you to Five to Nine`,
+    html: `
       <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
         <p style="margin: 0 0 12px;">Hi,</p>
         <p style="margin: 0 0 16px;">${inviter} invited you to their Five to Nine workspace — shared watchlists, collections, and the morning digest on competitor changes.</p>
@@ -300,82 +361,86 @@ html: `
         </p>
       </div>
     `,
-tag: "team-invite",
-unsubscribeUrl: null,
-});
+    tag: "team-invite",
+    unsubscribeUrl: null,
+  });
 
-await createDeliveryAttempt(env, {
-userId: input.ownerUserId,
-watchlistId: null,
-digestRunId: null,
-deliveryTargetId: null,
-lane: "customer",
-channel: "email",
-provider: providerResult.provider,
-status: providerResult.status,
-webhookStatus: providerResult.webhookStatus,
-targetValue: input.inviteeEmail,
-providerMessageId: providerResult.providerMessageId,
-providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
-templateName: "team_invite",
-eventIds: [],
-payloadSnapshot: { kind: "team_invite" },
-idempotencyKey: `team-invite:${input.ownerUserId}:${crypto.randomUUID()}`,
-errorMessage: providerResult.errorMessage,
-sentAt: providerAcceptedAt(providerResult),
-failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
-});
+  await createDeliveryAttempt(env, {
+    userId: input.ownerUserId,
+    watchlistId: null,
+    digestRunId: null,
+    deliveryTargetId: null,
+    lane: "customer",
+    channel: "email",
+    provider: providerResult.provider,
+    status: providerResult.status,
+    webhookStatus: providerResult.webhookStatus,
+    targetValue: input.inviteeEmail,
+    providerMessageId: providerResult.providerMessageId,
+    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+    templateName: "team_invite",
+    eventIds: [],
+    payloadSnapshot: { kind: "team_invite" },
+    idempotencyKey: `team-invite:${input.ownerUserId}:${crypto.randomUUID()}`,
+    errorMessage: providerResult.errorMessage,
+    sentAt: providerAcceptedAt(providerResult),
+    failedAt:
+      providerResult.status === "failed" ? new Date().toISOString() : null,
+  });
 
-return providerResult.status === "sent";
+  return providerResult.status === "sent";
 }
 
 export async function sendPasswordResetEmail(
-env: AppEnv,
-input: {
-userId: string;
-email: string;
-name: string | null;
-resetUrl: string;
-},
+  env: AppEnv,
+  input: {
+    userId: string;
+    email: string;
+    name: string | null;
+    resetUrl: string;
+  },
 ) {
-// Transactional and user-initiated: this must reach unsubscribed addresses
-// too, so it carries no List-Unsubscribe header — but it still goes through
-// the shared Cloudflare Email path and records a delivery_attempt like
-// every other send. The reset URL contains a secret token and is therefore
-// never written to the payload snapshot.
-const providerResult = await sendCloudflareEmail(env, {
-to: input.email,
-subject: "Reset your Five to Nine password",
-html: renderPasswordResetHtml(input),
-tag: "password-reset",
-unsubscribeUrl: null,
-});
+  // Transactional and user-initiated: this must reach unsubscribed addresses
+  // too, so it carries no List-Unsubscribe header — but it still goes through
+  // the shared Cloudflare Email path and records a delivery_attempt like
+  // every other send. The reset URL contains a secret token and is therefore
+  // never written to the payload snapshot.
+  const providerResult = await sendCloudflareEmail(env, {
+    to: input.email,
+    subject: "Reset your Five to Nine password",
+    html: renderPasswordResetHtml(input),
+    tag: "password-reset",
+    unsubscribeUrl: null,
+  });
 
-await createDeliveryAttempt(env, {
-userId: input.userId,
-watchlistId: null,
-digestRunId: null,
-deliveryTargetId: null,
-lane: "customer",
-channel: "email",
-provider: providerResult.provider,
-status: providerResult.status,
-webhookStatus: providerResult.webhookStatus,
-targetValue: input.email,
-providerMessageId: providerResult.providerMessageId,
-providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
-templateName: "password_reset",
-eventIds: [],
-payloadSnapshot: { kind: "password_reset" },
-idempotencyKey: `password-reset:${input.userId}:${crypto.randomUUID()}`,
-errorMessage: providerResult.errorMessage,
-sentAt: providerAcceptedAt(providerResult),
-failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
-});
+  await createDeliveryAttempt(env, {
+    userId: input.userId,
+    watchlistId: null,
+    digestRunId: null,
+    deliveryTargetId: null,
+    lane: "customer",
+    channel: "email",
+    provider: providerResult.provider,
+    status: providerResult.status,
+    webhookStatus: providerResult.webhookStatus,
+    targetValue: input.email,
+    providerMessageId: providerResult.providerMessageId,
+    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+    templateName: "password_reset",
+    eventIds: [],
+    payloadSnapshot: { kind: "password_reset" },
+    idempotencyKey: `password-reset:${input.userId}:${crypto.randomUUID()}`,
+    errorMessage: providerResult.errorMessage,
+    sentAt: providerAcceptedAt(providerResult),
+    failedAt:
+      providerResult.status === "failed" ? new Date().toISOString() : null,
+  });
 
-if (providerResult.status === "failed") {
-throw new Error(providerResult.errorMessage ?? "Password reset email failed to send.");
-}
+  if (providerResult.status === "failed") {
+    throw new Error(
+      providerResult.errorMessage ?? "Password reset email failed to send.",
+    );
+  }
 }
 
 /**
@@ -385,53 +450,61 @@ throw new Error(providerResult.errorMessage ?? "Password reset email failed to s
  * Token URLs are never persisted in delivery_attempt payloads.
  */
 export async function sendEmailVerificationEmail(
-env: AppEnv,
-input: {
-userId: string;
-email: string;
-name: string | null;
-verifyUrl: string;
-},
+  env: AppEnv,
+  input: {
+    userId: string;
+    email: string;
+    name: string | null;
+    verifyUrl: string;
+  },
 ) {
-const providerResult = await sendCloudflareEmail(env, {
-to: input.email,
-subject: "Verify your email for Five to Nine",
-html: renderEmailVerificationHtml(input),
-tag: "email-verification",
-unsubscribeUrl: null,
-});
+  const providerResult = await sendCloudflareEmail(env, {
+    to: input.email,
+    subject: "Verify your email for Five to Nine",
+    html: renderEmailVerificationHtml(input),
+    tag: "email-verification",
+    unsubscribeUrl: null,
+  });
 
-await createDeliveryAttempt(env, {
-userId: input.userId,
-watchlistId: null,
-digestRunId: null,
-deliveryTargetId: null,
-lane: "customer",
-channel: "email",
-provider: providerResult.provider,
-status: providerResult.status,
-webhookStatus: providerResult.webhookStatus,
-targetValue: input.email,
-providerMessageId: providerResult.providerMessageId,
-providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
-templateName: "email_verification",
-eventIds: [],
-payloadSnapshot: { kind: "email_verification" },
-idempotencyKey: `email-verification:${input.userId}:${crypto.randomUUID()}`,
-errorMessage: providerResult.errorMessage,
-sentAt: providerAcceptedAt(providerResult),
-failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
-});
+  await createDeliveryAttempt(env, {
+    userId: input.userId,
+    watchlistId: null,
+    digestRunId: null,
+    deliveryTargetId: null,
+    lane: "customer",
+    channel: "email",
+    provider: providerResult.provider,
+    status: providerResult.status,
+    webhookStatus: providerResult.webhookStatus,
+    targetValue: input.email,
+    providerMessageId: providerResult.providerMessageId,
+    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+    templateName: "email_verification",
+    eventIds: [],
+    payloadSnapshot: { kind: "email_verification" },
+    idempotencyKey: `email-verification:${input.userId}:${crypto.randomUUID()}`,
+    errorMessage: providerResult.errorMessage,
+    sentAt: providerAcceptedAt(providerResult),
+    failedAt:
+      providerResult.status === "failed" ? new Date().toISOString() : null,
+  });
 
-if (providerResult.status === "failed") {
-throw new Error(providerResult.errorMessage ?? "Email verification send failed.");
+  if (providerResult.status === "failed") {
+    throw new Error(
+      providerResult.errorMessage ?? "Email verification send failed.",
+    );
+  }
 }
-}
 
-function renderPasswordResetHtml(input: { name: string | null; resetUrl: string }) {
-const greeting = input.name?.trim() ? `Hi ${escapeHtml(input.name.trim())},` : "Hi,";
+function renderPasswordResetHtml(input: {
+  name: string | null;
+  resetUrl: string;
+}) {
+  const greeting = input.name?.trim()
+    ? `Hi ${escapeHtml(input.name.trim())},`
+    : "Hi,";
 
-return `
+  return `
     <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
       <p style="margin: 0 0 12px;">${greeting}</p>
       <p style="margin: 0 0 16px;">
@@ -450,10 +523,15 @@ return `
   `;
 }
 
-function renderEmailVerificationHtml(input: { name: string | null; verifyUrl: string }) {
-const greeting = input.name?.trim() ? `Hi ${escapeHtml(input.name.trim())},` : "Hi,";
+function renderEmailVerificationHtml(input: {
+  name: string | null;
+  verifyUrl: string;
+}) {
+  const greeting = input.name?.trim()
+    ? `Hi ${escapeHtml(input.name.trim())},`
+    : "Hi,";
 
-return `
+  return `
     <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
       <p style="margin: 0 0 12px;">${greeting}</p>
       <p style="margin: 0 0 16px;">

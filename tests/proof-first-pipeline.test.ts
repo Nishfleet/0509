@@ -234,6 +234,7 @@ function installSharedMocks(input: {
     getDigest: vi.fn().mockResolvedValue(null),
     listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
     enqueueDigestScheduleJobs: vi.fn().mockResolvedValue(1),
+    exhaustStaleMaxAttemptDigestScheduleJobs: vi.fn().mockResolvedValue(0),
     listRetryableDigestScheduleJobs: vi.fn().mockResolvedValue([{
       id: "digest-job-user-1",
       userId: "user-1",

@@ -27,6 +27,7 @@ getSuccessfulRunStatsForUserBetween: vi.fn(),
 listAdsByIds: vi.fn(),
 listRetryableDigestRuns: vi.fn(),
 enqueueDigestScheduleJobs: vi.fn(),
+exhaustStaleMaxAttemptDigestScheduleJobs: vi.fn(),
 listRetryableDigestScheduleJobs: vi.fn(),
 claimDigestScheduleJob: vi.fn(),
 completeDigestScheduleJob: vi.fn(),
@@ -188,6 +189,7 @@ periodEnd: "2026-07-13T05:00:00.000Z",
 attemptCount: 0,
 };
 data.enqueueDigestScheduleJobs.mockReset().mockResolvedValue(1);
+data.exhaustStaleMaxAttemptDigestScheduleJobs.mockReset().mockResolvedValue(0);
 data.listRetryableDigestScheduleJobs.mockReset().mockResolvedValue([digestScheduleJob]);
 data.claimDigestScheduleJob.mockReset().mockResolvedValue(digestScheduleJob);
 data.completeDigestScheduleJob.mockReset().mockResolvedValue(true);

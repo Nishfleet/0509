@@ -18,6 +18,7 @@ function planServerMock() {
 function retryDataMock(digest: Record<string, unknown>) {
   return {
     enqueueDigestScheduleJobs: vi.fn().mockResolvedValue(0),
+    exhaustStaleMaxAttemptDigestScheduleJobs: vi.fn().mockResolvedValue(0),
     listRetryableDigestScheduleJobs: vi.fn().mockResolvedValue([]),
     claimDigestScheduleJob: vi.fn(),
     completeDigestScheduleJob: vi.fn(),

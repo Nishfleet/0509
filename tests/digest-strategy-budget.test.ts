@@ -61,6 +61,7 @@ function dataServerMock() {
 		),
 		completeDigestScheduleJob: vi.fn().mockResolvedValue(true),
 		enqueueDigestScheduleJobs: vi.fn().mockResolvedValue(digestJobs.length),
+		exhaustStaleMaxAttemptDigestScheduleJobs: vi.fn().mockResolvedValue(0),
 		failDigestScheduleJob: vi.fn().mockResolvedValue(true),
 		getDigest: vi.fn().mockResolvedValue(null),
 		getDigestByPeriod: vi.fn().mockResolvedValue(null),

@@ -7,7 +7,14 @@ import {
   toDeliveryTargetRecord,
   type DeliveryTargetRow,
 } from "~/lib/data/delivery-records-rows.server";
-import { boolToInt, createId, jsonValue, nowIso, parseJson, type JsonRecord } from "~/lib/data/helpers.server";
+import {
+  boolToInt,
+  createId,
+  jsonValue,
+  nowIso,
+  parseJson,
+  type JsonRecord,
+} from "~/lib/data/helpers.server";
 import type { AppEnv } from "~/lib/env.server";
 import {
   isSlackDeliveryCustomerFacing,
@@ -21,13 +28,21 @@ import type {
 export async function listDeliveryTargets(
   env: AppEnv,
   userId: string,
-  options: { watchlistId?: string | null; channel?: DeliveryChannel; limit?: number } = {},
+  options: {
+    watchlistId?: string | null;
+    channel?: DeliveryChannel;
+    limit?: number;
+  } = {},
 ) {
   const limit = Math.max(1, Math.min(100, Math.floor(options.limit ?? 20)));
   const clauses = ["user_id = ?"];
   const bindings: unknown[] = [userId];
   if (options.watchlistId !== undefined) {
-    clauses.push(options.watchlistId === null ? "watchlist_id IS NULL" : "watchlist_id = ?");
+    clauses.push(
+      options.watchlistId === null
+        ? "watchlist_id IS NULL"
+        : "watchlist_id = ?",
+    );
     if (options.watchlistId !== null) {
       bindings.push(options.watchlistId);
     }
@@ -53,7 +68,10 @@ export async function listDeliveryTargets(
   return rows.map(toDeliveryTargetRecord);
 }
 
-export async function getDeliveryTargetReadinessStats(env: AppEnv, userId: string) {
+export async function getDeliveryTargetReadinessStats(
+  env: AppEnv,
+  userId: string,
+) {
   const channelPredicates = [
     `
       (
@@ -151,7 +169,10 @@ export async function upsertDeliveryTarget(
   });
   const timestamp = nowIso();
   if (existingTarget) {
-    const inputGeneration = readMetadataString(input.metadata, "validationGeneration");
+    const inputGeneration = readMetadataString(
+      input.metadata,
+      "validationGeneration",
+    );
     const existingGeneration = readMetadataString(
       existingTarget.metadata,
       "validationGeneration",
@@ -312,29 +333,62 @@ export async function reconcileWhatsAppSetupTargetFromAttempt(
     if (!existing) return null;
 
     const metadata = parseJson<JsonRecord>(existing.metadata_json, {});
-    const currentGeneration = readMetadataString(metadata, "validationGeneration");
-    const currentMessageId = readMetadataString(metadata, "validationProviderMessageId");
+    const currentGeneration = readMetadataString(
+      metadata,
+      "validationGeneration",
+    );
+    const currentAttemptId = readMetadataString(
+      metadata,
+      "validationAttemptId",
+    );
+    const currentMessageId = readMetadataString(
+      metadata,
+      "validationProviderMessageId",
+    );
+    const currentStatus = readMetadataString(
+      metadata,
+      "validationWebhookStatus",
+    );
+    const replacingFailedAttempt =
+      currentStatus === "failed" &&
+      currentGeneration !== null &&
+      currentGeneration === input.validationGeneration &&
+      currentAttemptId === input.attemptId &&
+      currentMessageId !== null &&
+      currentMessageId !== input.providerMessageId &&
+      (existing.provider_identifier === null ||
+        existing.provider_identifier === currentMessageId);
     if (
-      (input.validationGeneration !== null && currentGeneration !== input.validationGeneration) ||
-      (input.validationGeneration === null && currentMessageId !== input.providerMessageId) ||
-      (currentMessageId !== null && currentMessageId !== input.providerMessageId) ||
+      (input.validationGeneration !== null &&
+        currentGeneration !== input.validationGeneration) ||
+      (input.validationGeneration === null &&
+        currentMessageId !== input.providerMessageId) ||
+      (currentMessageId !== null &&
+        currentMessageId !== input.providerMessageId &&
+        !replacingFailedAttempt) ||
       (existing.provider_identifier !== null &&
-        existing.provider_identifier !== input.providerMessageId)
+        existing.provider_identifier !== input.providerMessageId &&
+        !replacingFailedAttempt)
     ) {
       return toDeliveryTargetRecord(existing);
     }
 
-    const currentStatus = readMetadataString(metadata, "validationWebhookStatus");
-    const currentSeenAtValue = readMetadataString(metadata, "validationStatusLastSeenAt");
+    const currentSeenAtValue = readMetadataString(
+      metadata,
+      "validationStatusLastSeenAt",
+    );
     const currentSeenAt = currentSeenAtValue
       ? Date.parse(currentSeenAtValue)
       : Number.NEGATIVE_INFINITY;
-    const currentTerminal = currentStatus === "delivered" || currentStatus === "failed";
+    const currentTerminal =
+      currentStatus === "delivered" || currentStatus === "failed";
     const incomingTerminal = input.webhookStatus !== "pending";
     if (
       incomingSeenAt < currentSeenAt ||
-      (currentTerminal && currentStatus !== input.webhookStatus) ||
-      (currentTerminal && !incomingTerminal)
+      (currentTerminal &&
+        currentStatus !== input.webhookStatus &&
+        !replacingFailedAttempt) ||
+      (currentTerminal && !incomingTerminal && !replacingFailedAttempt)
     ) {
       return toDeliveryTargetRecord(existing);
     }
@@ -349,7 +403,7 @@ export async function reconcileWhatsAppSetupTargetFromAttempt(
       validationWebhookStatus: input.webhookStatus,
       validationStatusLastSeenAt: input.providerStatusLastSeenAt,
       validationErrorMessage: failed
-        ? input.errorMessage ?? "WhatsApp setup delivery failed."
+        ? (input.errorMessage ?? "WhatsApp setup delivery failed.")
         : null,
     };
     const updated = await run(
@@ -368,11 +422,23 @@ export async function reconcileWhatsAppSetupTargetFromAttempt(
          AND channel = 'whatsapp'
          AND updated_at = ?
          AND metadata_json = ?
-         AND (provider_identifier IS NULL OR provider_identifier = ?)`,
-      delivered ? "validated" : failed ? "invalid" : existing.validation_status,
+         AND (
+           provider_identifier IS NULL
+           OR provider_identifier = ?
+           OR (? = 1 AND provider_identifier = ?)
+         )`,
+      delivered
+        ? "validated"
+        : failed
+          ? "invalid"
+          : replacingFailedAttempt
+            ? "pending"
+            : existing.validation_status,
       delivered ? 1 : failed ? 0 : existing.is_validated,
       delivered ? 1 : failed ? 0 : existing.template_eligible,
-      delivered ? input.providerStatusLastSeenAt : existing.last_successful_delivery_at,
+      delivered
+        ? input.providerStatusLastSeenAt
+        : existing.last_successful_delivery_at,
       delivered ? input.attemptId : existing.last_successful_attempt_id,
       input.providerMessageId,
       jsonValue(nextMetadata),
@@ -382,6 +448,8 @@ export async function reconcileWhatsAppSetupTargetFromAttempt(
       existing.updated_at,
       existing.metadata_json,
       input.providerMessageId,
+      replacingFailedAttempt ? 1 : 0,
+      currentMessageId,
     );
     if (Number(updated.meta?.changes ?? 0) === 1) {
       const durable = await one<DeliveryTargetRow>(
@@ -430,54 +498,80 @@ async function getDeliveryTargetByUniqueFields(
   return row ? toDeliveryTargetRecord(row) : null;
 }
 export async function reconcileWhatsAppSetupTargetByProviderMessageId(
-env: AppEnv,
-input: {
-providerMessageId: string;
-webhookStatus: "delivered" | "failed";
-providerStatusLastSeenAt: string;
-errorMessage: string | null;
-},
+  env: AppEnv,
+  input: {
+    providerMessageId: string;
+    webhookStatus: "delivered" | "failed";
+    providerStatusLastSeenAt: string;
+    errorMessage: string | null;
+  },
 ) {
-const existing = await one<DeliveryTargetRow>(env, `
+  const existing = await one<DeliveryTargetRow>(
+    env,
+    `
 		SELECT * FROM delivery_target
 		WHERE channel = 'whatsapp' AND provider_identifier = ?
 		ORDER BY updated_at DESC LIMIT 1
-	`, input.providerMessageId);
-if (!existing) return null;
-const metadata = parseJson<JsonRecord>(existing.metadata_json, {});
-if (metadata.validationProviderMessageId !== input.providerMessageId) {
-return toDeliveryTargetRecord(existing);
-}
-const incomingSeenAt = Date.parse(input.providerStatusLastSeenAt);
-const currentSeenAt = typeof metadata.validationStatusLastSeenAt === "string"
-? Date.parse(metadata.validationStatusLastSeenAt) : Number.NEGATIVE_INFINITY;
-const currentStatus = metadata.validationWebhookStatus;
-const currentTerminal = currentStatus === "delivered" || currentStatus === "failed";
-if (!Number.isFinite(incomingSeenAt) || incomingSeenAt < currentSeenAt
-|| (currentTerminal && currentStatus !== input.webhookStatus)) {
-return toDeliveryTargetRecord(existing);
-}
-const delivered = input.webhookStatus === "delivered";
-const nextMetadata = {
-...metadata,
-validationWebhookStatus: input.webhookStatus,
-validationStatusLastSeenAt: input.providerStatusLastSeenAt,
-validationErrorMessage: delivered ? null : input.errorMessage ?? "WhatsApp setup delivery failed.",
-validationReconciledWithoutAttempt: true,
-};
-await run(env, `
+	`,
+    input.providerMessageId,
+  );
+  if (!existing) return null;
+  const metadata = parseJson<JsonRecord>(existing.metadata_json, {});
+  if (metadata.validationProviderMessageId !== input.providerMessageId) {
+    return toDeliveryTargetRecord(existing);
+  }
+  const incomingSeenAt = Date.parse(input.providerStatusLastSeenAt);
+  const currentSeenAt =
+    typeof metadata.validationStatusLastSeenAt === "string"
+      ? Date.parse(metadata.validationStatusLastSeenAt)
+      : Number.NEGATIVE_INFINITY;
+  const currentStatus = metadata.validationWebhookStatus;
+  const currentTerminal =
+    currentStatus === "delivered" || currentStatus === "failed";
+  if (
+    !Number.isFinite(incomingSeenAt) ||
+    incomingSeenAt < currentSeenAt ||
+    (currentTerminal && currentStatus !== input.webhookStatus)
+  ) {
+    return toDeliveryTargetRecord(existing);
+  }
+  const delivered = input.webhookStatus === "delivered";
+  const nextMetadata = {
+    ...metadata,
+    validationWebhookStatus: input.webhookStatus,
+    validationStatusLastSeenAt: input.providerStatusLastSeenAt,
+    validationErrorMessage: delivered
+      ? null
+      : (input.errorMessage ?? "WhatsApp setup delivery failed."),
+    validationReconciledWithoutAttempt: true,
+  };
+  await run(
+    env,
+    `
 		UPDATE delivery_target
 		SET validation_status = ?, is_validated = ?, template_eligible = ?,
 			last_successful_delivery_at = ?, metadata_json = ?, updated_at = ?
 		WHERE id = ? AND provider_identifier = ? AND updated_at = ? AND metadata_json = ?
-	`, delivered ? "validated" : "invalid", boolToInt(delivered), boolToInt(delivered),
-delivered ? input.providerStatusLastSeenAt : existing.last_successful_delivery_at,
-jsonValue(nextMetadata), nowIso(), existing.id, input.providerMessageId,
-existing.updated_at, existing.metadata_json);
-const durable = await one<DeliveryTargetRow>(
-env, "SELECT * FROM delivery_target WHERE id = ?", existing.id,
-);
-return durable ? toDeliveryTargetRecord(durable) : null;
+	`,
+    delivered ? "validated" : "invalid",
+    boolToInt(delivered),
+    boolToInt(delivered),
+    delivered
+      ? input.providerStatusLastSeenAt
+      : existing.last_successful_delivery_at,
+    jsonValue(nextMetadata),
+    nowIso(),
+    existing.id,
+    input.providerMessageId,
+    existing.updated_at,
+    existing.metadata_json,
+  );
+  const durable = await one<DeliveryTargetRow>(
+    env,
+    "SELECT * FROM delivery_target WHERE id = ?",
+    existing.id,
+  );
+  return durable ? toDeliveryTargetRecord(durable) : null;
 }
 
 export async function getDeliveryTargetById(
