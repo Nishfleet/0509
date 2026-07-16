@@ -676,6 +676,7 @@ export async function getOperatorSupportCase(env: AppEnv, caseId: string) {
     priority: SupportCasePriority;
     subject: string;
     detail: string;
+    alertIdempotencyKey: string | null;
   }>(
     env,
     `
@@ -685,9 +686,19 @@ export async function getOperatorSupportCase(env: AppEnv, caseId: string) {
         support_case.category,
         support_case.priority,
         support_case.subject,
-        support_case.detail
+        support_case.detail,
+        alert.idempotency_key AS alertIdempotencyKey
       FROM support_case
       INNER JOIN user ON user.id = support_case.user_id
+      LEFT JOIN delivery_attempt AS alert
+        ON alert.id = (
+          SELECT candidate.id
+          FROM delivery_attempt AS candidate
+          WHERE json_extract(candidate.payload_snapshot_json, '$.kind') = 'support_case_operator_alert'
+            AND json_extract(candidate.payload_snapshot_json, '$.caseId') = support_case.id
+          ORDER BY candidate.updated_at DESC
+          LIMIT 1
+        )
       WHERE support_case.id = ?
         AND support_case.status = 'open'
       LIMIT 1
