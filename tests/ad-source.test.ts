@@ -1972,6 +1972,137 @@ describe("searchAdsViaSourceResolver", () => {
     expect(upsertDiscoveryProviderState).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps the cross-isolate lease alive beyond the two-call browser fallback path", async () => {
+    const browserSearch = vi.fn().mockResolvedValue(buildLiveBrowserResult());
+    let insertedLeaseValues: unknown[] = [];
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((...values: unknown[]) => {
+          if (sql.includes("INSERT OR IGNORE INTO discovery_query_lease")) {
+            insertedLeaseValues = values;
+          }
+
+          return {
+            run: vi.fn().mockResolvedValue({ success: true }),
+            first: vi.fn().mockImplementation(async () =>
+              sql.includes("SELECT holder_id, lease_expires_at")
+                ? {
+                    holder_id: insertedLeaseValues[3],
+                    lease_expires_at: insertedLeaseValues[4],
+                  }
+                : null,
+            ),
+          };
+        }),
+      })),
+    } as unknown as D1Database;
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+    const startedAt = Date.now();
+    await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: db,
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "lease-duration",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      { purpose: "public_search" },
+    );
+
+    const leaseExpiresAt = Date.parse(String(insertedLeaseValues[4]));
+    expect(browserSearch).toHaveBeenCalledTimes(1);
+    expect(leaseExpiresAt - startedAt).toBeGreaterThanOrEqual(179_000);
+  });
+
+  it("returns a typed warming state while another isolate owns the live search", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-16T04:00:00.000Z"));
+
+    try {
+      const browserSearch = vi.fn();
+      const future = new Date(Date.now() + 180_000).toISOString();
+      const db = {
+        prepare: vi.fn(() => ({
+          bind: vi.fn(() => ({
+            run: vi.fn().mockResolvedValue({ success: true }),
+            first: vi.fn().mockResolvedValue({
+              holder_id: "other-isolate",
+              lease_expires_at: future,
+            }),
+          })),
+        })),
+      } as unknown as D1Database;
+
+      vi.doMock("~/lib/meta-library-browser.server", () => ({
+        searchMetaLibraryByBrowser: browserSearch,
+        CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+      }));
+      vi.doMock("~/lib/data.server", () => ({
+        getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+        getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+        upsertDiscoveryCacheEntry: vi.fn(),
+        createDiscoveryFetchLog: vi.fn(),
+        upsertDiscoveryProviderState: vi.fn(),
+      }));
+
+      const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+      const resultPromise = searchAdsViaSourceResolver(
+        {
+          BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+          DB: db,
+        } as never,
+        {
+          mode: "keyword",
+          filters: {
+            query: "warming-state",
+            country: "India",
+            platform: "all",
+            creativeType: "all",
+            status: "all",
+            firstSeenFrom: "",
+            lastSeenFrom: "",
+          },
+        },
+        null,
+        { purpose: "public_search" },
+      );
+
+      await vi.advanceTimersByTimeAsync(12_500);
+      await expect(resultPromise).resolves.toMatchObject({
+        ads: [],
+        discoveryStatus: "degraded",
+        discoveryProgress: "warming",
+        discoveryFailureClass: null,
+      });
+      expect(browserSearch).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("runs live discovery when the distributed lease table is missing", async () => {
     const browserSearch = vi.fn().mockResolvedValue(buildLiveBrowserResult());
     const upsertDiscoveryCacheEntry = vi.fn();

@@ -29,6 +29,7 @@ const warmingLoaderData = {
 		provider: "meta_library_browser" as const,
 		cacheStatus: "miss" as const,
 		discoveryStatus: "degraded" as const,
+		discoveryProgress: "warming" as const,
 		discoverySummary:
 			"Commercial discovery is already warming this query. Cached results should appear shortly.",
 		discoveryFailureClass: null,
@@ -95,6 +96,7 @@ describe("public search warming recovery", () => {
 		expect(markup).toContain("Checking this competitor");
 		expect(markup).toContain('role="status"');
 		expect(markup).toContain('aria-live="polite"');
+		expect(markup).not.toContain('aria-busy="true"');
 		expect(markup).toContain("Retry this search");
 		expect(markup).not.toContain("Live search is temporarily unavailable");
 		expect(markup).not.toContain("We couldn&#x27;t confirm any ads");

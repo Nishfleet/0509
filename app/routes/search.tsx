@@ -625,7 +625,6 @@ export default function SearchRoute() {
             <>
           <div className="f9-search-grid">
             <section
-              aria-busy={isSearchWarming ? true : undefined}
               className="f9-results-panel"
               data-f9-result-cache-status={data.result.cacheStatus ?? undefined}
               data-f9-result-empty-reason={data.result.discoveryEmptyReason ?? undefined}
@@ -718,7 +717,7 @@ export default function SearchRoute() {
                     {isSearchWarming ? (
                       <div aria-live="polite" role="status">
                         <h3>Checking this competitor</h3>
-                        <p>A check is already running. Retry in a few seconds to see the finished result.</p>
+                        <p>A check is already running. Retry shortly to check for the finished result.</p>
                       </div>
                     ) : (
                       <>
@@ -1074,7 +1073,7 @@ export function formatDiscoverySummary(result: SearchResponse) {
 }
 
 function isWarmingSearchResult(result: SearchResponse) {
-  return /warming this query|already warming/i.test(result.discoverySummary ?? "");
+  return result.discoveryProgress === "warming";
 }
 
 function formatEmptyResultHeadline(
@@ -1085,7 +1084,7 @@ function formatEmptyResultHeadline(
     return "Enter a competitor website";
   }
 
-  if (/warming this query|already warming/i.test(result.discoverySummary ?? "")) {
+  if (isWarmingSearchResult(result)) {
     return "Checking this competitor";
   }
 
@@ -1116,7 +1115,7 @@ function formatResultsPanelTitle(
     return `${result.ads.length} ads found`;
   }
 
-  if (/warming this query|already warming/i.test(result.discoverySummary ?? "")) {
+  if (isWarmingSearchResult(result)) {
     return "Search in progress";
   }
 
