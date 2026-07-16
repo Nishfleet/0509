@@ -115,6 +115,11 @@ function toDigestItemRecord(row: DigestItemRow): DigestItemRecord {
   };
 }
 
+function orderDigestItemRecords(rows: readonly DigestItemRow[]) {
+  const records = rows.map(toDigestItemRecord);
+  return selectDigestCohort(records, records.length).items;
+}
+
 function toDigestDeliveryRecord(row: DigestDeliveryRow): DigestDeliveryRecord {
   return {
     id: row.id,
@@ -648,7 +653,7 @@ export async function listDigests(
       periodEnd: run.period_end,
 			summary: toDigestRunSummary(run),
       createdAt: run.created_at,
-      items: (itemsByDigestId.get(run.id) ?? []).map(toDigestItemRecord),
+      items: orderDigestItemRecords(itemsByDigestId.get(run.id) ?? []),
       delivery: delivery ? toDigestDeliveryRecord(delivery) : null,
     };
   });
@@ -675,7 +680,7 @@ export async function getDigest(env: AppEnv, digestRunId: string) {
     periodEnd: run.period_end,
 		summary: toDigestRunSummary(run),
     createdAt: run.created_at,
-    items: items.map(toDigestItemRecord),
+    items: orderDigestItemRecords(items),
     delivery: delivery ? toDigestDeliveryRecord(delivery) : null,
   } satisfies DigestRecord;
 }

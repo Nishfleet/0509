@@ -92,9 +92,11 @@ describe("ops route", () => {
     vi.doMock("~/lib/data.server", () => ({
       createBillingEmailReconciliationKey: vi.fn(() => "ops-billing-email-reconcile:11111111-1111-4111-8111-111111111111"),
       createDigestEmailReconciliationKey: vi.fn(() => "ops-digest-email-reconcile:11111111-1111-4111-8111-111111111111"),
+      createInstantEmailReconciliationKey: vi.fn(() => "ops-instant-email-reconcile:11111111-1111-4111-8111-111111111111"),
       getOperatorSnapshot,
       listOutstandingBillingLifecycleProviderUnknownAttempts: vi.fn().mockResolvedValue([]),
       listOutstandingDigestProviderUnknownAttempts: vi.fn().mockResolvedValue([]),
+      listOutstandingInstantProviderUnknownAttempts: vi.fn().mockResolvedValue([]),
     }));
 
     const { loader } = await import("~/routes/app.ops");
@@ -113,6 +115,7 @@ describe("ops route", () => {
       }),
       outstandingBillingAttempts: [],
       outstandingDigestAttempts: [],
+      outstandingInstantAttempts: [],
     });
     expect(getOperatorSnapshot).toHaveBeenCalledTimes(1);
   });
@@ -258,6 +261,16 @@ describe("ops route", () => {
           reconciliationKey: "ops-digest-email-reconcile:11111111-1111-4111-8111-111111111111",
         },
       ],
+      outstandingInstantAttempts: [
+        {
+          attemptId: "instant-attempt-1",
+          recipient: "i•••@e•••.com",
+          provider: "cloudflare_email",
+          createdAt: "2026-07-02T00:00:00.000Z",
+          updatedAt: "2026-07-02T00:01:00.000Z",
+          reconciliationKey: "ops-instant-email-reconcile:11111111-1111-4111-8111-111111111111",
+        },
+      ],
     }));
 
     const { default: OpsRoute } = await import("~/routes/app.ops");
@@ -270,6 +283,8 @@ describe("ops route", () => {
     expect(markup).toContain("Digest email provider reconciliation");
     expect(markup).toContain("Recording evidence never resends it");
     expect(markup).toContain('value="reconcile-digest-email"');
+    expect(markup).toContain("Instant-alert email provider reconciliation");
+    expect(markup).toContain('value="reconcile-instant-email"');
     expect(markup).not.toContain("ops@example.com");
     expect(markup).not.toContain("provider timeout");
     expect(markup).not.toContain("No recent delivery failures.");
@@ -304,6 +319,7 @@ describe("ops route", () => {
     vi.doMock("~/lib/data.server", () => ({
       createBillingEmailReconciliationKey: vi.fn(() => "ops-billing-email-reconcile:11111111-1111-4111-8111-111111111111"),
       createDigestEmailReconciliationKey: vi.fn(() => "ops-digest-email-reconcile:11111111-1111-4111-8111-111111111111"),
+      createInstantEmailReconciliationKey: vi.fn(() => "ops-instant-email-reconcile:11111111-1111-4111-8111-111111111111"),
       getOperatorSnapshot,
       listOutstandingBillingLifecycleProviderUnknownAttempts: vi.fn().mockResolvedValue([
         {
@@ -325,6 +341,15 @@ describe("ops route", () => {
           updatedAt: "2026-07-15T18:00:00.000Z",
         },
       ]),
+      listOutstandingInstantProviderUnknownAttempts: vi.fn().mockResolvedValue([
+        {
+          id: "instant-attempt-1",
+          targetValue: "instant@example.com",
+          provider: "cloudflare_email",
+          createdAt: "2026-07-15T18:00:00.000Z",
+          updatedAt: "2026-07-15T18:00:00.000Z",
+        },
+      ]),
     }));
 
     const { loader } = await import("~/routes/app.ops");
@@ -337,10 +362,12 @@ describe("ops route", () => {
     expect(serialized).toContain("o•••@e•••.com");
     expect(serialized).toContain("b•••@e•••.com");
     expect(serialized).toContain("d•••@e•••.com");
+    expect(serialized).toContain("i•••@e•••.com");
     expect(serialized).toContain("••••3210");
     expect(serialized).not.toContain("owner@example.com");
     expect(serialized).not.toContain("billing@example.com");
     expect(serialized).not.toContain("digest@example.com");
+    expect(serialized).not.toContain("instant@example.com");
     expect(serialized).not.toContain("+919876543210");
   });
 
@@ -363,6 +390,7 @@ describe("ops route", () => {
       ],
       reconcileBillingEmailAttemptWithAudit,
       reconcileDigestEmailAttemptWithAudit: vi.fn(),
+      reconcileInstantEmailAttemptWithAudit: vi.fn(),
     }));
     const formData = new FormData();
     formData.set("intent", "reconcile-billing-email");
@@ -414,6 +442,7 @@ describe("ops route", () => {
       ],
       reconcileBillingEmailAttemptWithAudit: vi.fn(),
       reconcileDigestEmailAttemptWithAudit,
+      reconcileInstantEmailAttemptWithAudit: vi.fn(),
     }));
     const formData = new FormData();
     formData.set("intent", "reconcile-digest-email");
@@ -442,6 +471,58 @@ describe("ops route", () => {
         operatorUserId: "user-1",
         attemptId: "digest-attempt-1",
         outcome: "sent",
+      }),
+    );
+  });
+
+  it("records instant-alert provider evidence through the explicit no-resend recovery action", async () => {
+    const reconcileInstantEmailAttemptWithAudit = vi.fn().mockResolvedValue({
+      ok: true,
+      replayed: false,
+      attemptId: "instant-attempt-1",
+      outcome: "failed",
+      classification: "provider_rejection_log",
+      observedAt: "2026-07-15T18:01:00.000Z",
+      reconciledAt: "2026-07-15T18:02:00.000Z",
+    });
+    vi.doMock("~/lib/auth.server", () => ({ requireSession: vi.fn().mockResolvedValue(session) }));
+    vi.doMock("~/lib/data.server", () => ({
+      BILLING_EMAIL_EVIDENCE_CLASSIFICATIONS: [
+        "cloudflare_email_log",
+        "controlled_inbox_receipt",
+        "provider_rejection_log",
+      ],
+      reconcileBillingEmailAttemptWithAudit: vi.fn(),
+      reconcileDigestEmailAttemptWithAudit: vi.fn(),
+      reconcileInstantEmailAttemptWithAudit,
+    }));
+    const formData = new FormData();
+    formData.set("intent", "reconcile-instant-email");
+    formData.set("attemptId", "instant-attempt-1");
+    formData.set("reconciliationKey", "ops-instant-email-reconcile:11111111-1111-4111-8111-111111111111");
+    formData.set("expectedUpdatedAt", "2026-07-15T18:00:30.000Z");
+    formData.set("outcome", "failed");
+    formData.set("classification", "provider_rejection_log");
+    formData.set("evidenceReference", "instant_provider_reject_12345");
+    formData.set("observedAt", "2026-07-15T18:01:00Z");
+
+    const { action } = await import("~/routes/app.ops");
+    const result = await action({
+      context: createContext({ OPS_ALLOWLIST_EMAILS: "owner@example.com" }),
+      request: new Request("http://localhost/app/ops", { method: "POST", body: formData }),
+    } as never);
+
+    expect(result).toMatchObject({
+      ok: true,
+      attemptId: "instant-attempt-1",
+      message: expect.stringContaining("did not resend email"),
+    });
+    expect(reconcileInstantEmailAttemptWithAudit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        operatorUserId: "user-1",
+        attemptId: "instant-attempt-1",
+        outcome: "failed",
       }),
     );
   });

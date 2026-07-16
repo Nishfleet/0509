@@ -37,6 +37,7 @@ import {
   upsertAd,
 } from "~/lib/data.server";
 import type { AppEnv } from "~/lib/env.server";
+import { deliveryPreDispatchStaleBefore } from "~/lib/delivery-attempt-lease";
 import { captureLandingPageSnapshot } from "~/lib/landing-pages.server";
 import { LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION } from "~/lib/landing-page-signals.server";
 import {
@@ -339,6 +340,7 @@ export async function flushDeferredInstantAlerts(env: AppEnv) {
   ).toISOString();
   const pending = await listRetryableInstantAttempts(env, {
     since,
+    stalePreDispatchBefore: deliveryPreDispatchStaleBefore(),
     limit: INSTANT_ALERT_FLUSH_LIMIT,
   });
 

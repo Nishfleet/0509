@@ -25,10 +25,19 @@ type EmailReconciliationInput = {
 };
 
 type EmailReconciliationScope = {
-  actionName: "ops.billing_email.reconcile" | "ops.digest_email.reconcile";
-  evidencePath: "$.billingLifecycleProviderEvidence" | "$.digestProviderEvidence";
-  idempotencyPrefix: "ops-billing-email-reconcile" | "ops-digest-email-reconcile";
-  label: "Billing email" | "Digest email";
+  actionName:
+    | "ops.billing_email.reconcile"
+    | "ops.digest_email.reconcile"
+    | "ops.instant_email.reconcile";
+  evidencePath:
+    | "$.billingLifecycleProviderEvidence"
+    | "$.digestProviderEvidence"
+    | "$.instantAlertProviderEvidence";
+  idempotencyPrefix:
+    | "ops-billing-email-reconcile"
+    | "ops-digest-email-reconcile"
+    | "ops-instant-email-reconcile";
+  label: "Billing email" | "Digest email" | "Instant alert email";
   attemptPredicate: string;
   updatesDigestDelivery: boolean;
 };
@@ -62,6 +71,20 @@ const DIGEST_RECONCILIATION_SCOPE: EmailReconciliationScope = {
   updatesDigestDelivery: true,
 };
 
+const INSTANT_RECONCILIATION_SCOPE: EmailReconciliationScope = {
+  actionName: "ops.instant_email.reconcile",
+  evidencePath: "$.instantAlertProviderEvidence",
+  idempotencyPrefix: "ops-instant-email-reconcile",
+  label: "Instant alert email",
+  attemptPredicate: `
+    AND delivery_attempt.watchlist_id IS NOT NULL
+    AND delivery_attempt.digest_run_id IS NULL
+    AND delivery_attempt.delivery_target_id IS NOT NULL
+    AND delivery_attempt.idempotency_key LIKE 'instant:%:customer:email:%'
+  `,
+  updatesDigestDelivery: false,
+};
+
 interface AuditRow {
   id: string;
   status: "started" | "succeeded" | "failed";
@@ -80,6 +103,10 @@ export function createDigestEmailReconciliationKey() {
   return `ops-digest-email-reconcile:${crypto.randomUUID()}`;
 }
 
+export function createInstantEmailReconciliationKey() {
+  return `ops-instant-email-reconcile:${crypto.randomUUID()}`;
+}
+
 export async function reconcileBillingEmailAttemptWithAudit(
   env: AppEnv,
   input: EmailReconciliationInput,
@@ -92,6 +119,13 @@ export async function reconcileDigestEmailAttemptWithAudit(
   input: EmailReconciliationInput,
 ) {
   return reconcileEmailAttemptWithAudit(env, input, DIGEST_RECONCILIATION_SCOPE);
+}
+
+export async function reconcileInstantEmailAttemptWithAudit(
+  env: AppEnv,
+  input: EmailReconciliationInput,
+) {
+  return reconcileEmailAttemptWithAudit(env, input, INSTANT_RECONCILIATION_SCOPE);
 }
 
 async function reconcileEmailAttemptWithAudit(
@@ -115,6 +149,7 @@ async function reconcileEmailAttemptWithAudit(
     attemptId: normalized.attemptId,
     outcome: normalized.outcome,
     classification: normalized.classification,
+    evidenceReference: normalized.evidenceReference,
     observedAt: normalized.observedAt,
     reconciledAt,
   };
@@ -329,6 +364,7 @@ async function reconcileEmailAttemptWithAudit(
     prior?.attemptId === normalized.attemptId &&
     prior?.outcome === normalized.outcome &&
     prior?.classification === normalized.classification &&
+    prior?.evidenceReference === normalized.evidenceReference &&
     prior?.observedAt === normalized.observedAt
   ) {
     return {
