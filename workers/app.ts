@@ -3,6 +3,7 @@
 import { createRequestHandler } from "react-router";
 
 import { reportScheduledTaskFailure } from "../app/lib/cron-failure-alert.server";
+import { resumePendingDigestScheduleJobs } from "../app/lib/digest-orchestration.server";
 import {
   flushDeferredInstantAlerts,
   runScheduledDiscoveryWarmup,
@@ -47,6 +48,8 @@ const requestHandler = createRequestHandler(
   () => import("virtual:react-router/server-build"),
   process.env.NODE_ENV === "development" ? "development" : "production"
 );
+
+const DIGEST_RECOVERY_TIME_BUDGET_MS = 10 * 60 * 1000;
 
 function markdownResponse(request: Request, body: string): Response {
   return withSecurityHeaders(
@@ -137,6 +140,18 @@ export default {
     }
 
     if (scheduledTask.kind === "discovery_warmup") {
+		ctx.waitUntil(
+			resumePendingDigestScheduleJobs(env, {
+				deadlineAt: Date.now() + DIGEST_RECOVERY_TIME_BUDGET_MS,
+			}).then(
+				(digests) => {
+					if (digests > 0) {
+						console.log("pending digest schedule jobs recovered", { digests });
+					}
+				},
+				(error) => reportScheduledTaskFailure(env, "digest_schedule_recovery", error),
+			),
+		);
       ctx.waitUntil(
         runScheduledDiscoveryWarmup(env).then(
           undefined,

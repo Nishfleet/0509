@@ -3233,7 +3233,7 @@ describe("getSuccessfulRunStatsForUserBetween", () => {
 });
 
 describe("listRetryableDigestRuns", () => {
-  it("only retries failed or missing digest delivery rows", async () => {
+  it("only retries missing, definite-failure, or stale pre-dispatch attempts", async () => {
     const mock = createMockDb();
 
     await listRetryableDigestRuns(
@@ -3246,8 +3246,9 @@ describe("listRetryableDigestRuns", () => {
     );
 
     const query = findStatement(mock.statements, "FROM digest_run");
-    expect(query?.sql).toContain("digest_delivery.status = 'failed'");
-    expect(query?.sql).toContain("digest_delivery.id IS NULL");
+		expect(query?.sql).toContain("NOT EXISTS");
+		expect(query?.sql).toContain("delivery_attempt.status = 'failed'");
+		expect(query?.sql).toContain("delivery_attempt.webhook_status = 'failed'");
 		expect(query?.sql).toContain("delivery_attempt.status = 'pending'");
 		expect(query?.sql).toContain("delivery_attempt.webhook_status = 'pending'");
 		expect(query?.sql).toContain("delivery_attempt.updated_at <= ?");
@@ -3267,7 +3268,23 @@ describe("listRetryableDigestRuns", () => {
 				CREATE TABLE user (
 					id TEXT PRIMARY KEY NOT NULL,
 					email TEXT NOT NULL,
-					name TEXT NOT NULL
+					name TEXT NOT NULL,
+					emailVerified INTEGER NOT NULL DEFAULT 1
+				);
+				CREATE TABLE workspace_delivery_config (
+					user_id TEXT PRIMARY KEY NOT NULL,
+					digest_enabled INTEGER NOT NULL DEFAULT 1,
+					email_enabled INTEGER NOT NULL DEFAULT 1
+				);
+				CREATE TABLE delivery_target (
+					id TEXT PRIMARY KEY NOT NULL,
+					user_id TEXT NOT NULL,
+					watchlist_id TEXT,
+					channel TEXT NOT NULL,
+					target_value TEXT NOT NULL,
+					validation_status TEXT NOT NULL,
+					is_paused INTEGER NOT NULL DEFAULT 0,
+					opted_out_at TEXT
 				);
 				CREATE TABLE digest_run (
 					id TEXT PRIMARY KEY NOT NULL,
@@ -3285,6 +3302,9 @@ describe("listRetryableDigestRuns", () => {
 				CREATE TABLE delivery_attempt (
 					id TEXT PRIMARY KEY NOT NULL,
 					digest_run_id TEXT,
+					lane TEXT NOT NULL DEFAULT 'customer',
+					channel TEXT NOT NULL DEFAULT 'email',
+					target_value TEXT NOT NULL DEFAULT 'owner@example.com',
 					status TEXT NOT NULL,
 					webhook_status TEXT NOT NULL,
 					updated_at TEXT NOT NULL
@@ -3330,6 +3350,235 @@ describe("listRetryableDigestRuns", () => {
 
 			expect(rows).toEqual([
 				expect.objectContaining({ id: "atomic-valid", userId: "user-1" }),
+			]);
+		} finally {
+			sqlite.close();
+		}
+	});
+
+	it("does not let provider-unknown-only digests starve a safe retry", async () => {
+		const sqlite = createSqliteD1();
+		try {
+			sqlite.sqlite.exec(`
+				CREATE TABLE user (
+					id TEXT PRIMARY KEY NOT NULL,
+					email TEXT NOT NULL,
+					name TEXT NOT NULL,
+					emailVerified INTEGER NOT NULL DEFAULT 1
+				);
+				CREATE TABLE workspace_delivery_config (
+					user_id TEXT PRIMARY KEY NOT NULL,
+					digest_enabled INTEGER NOT NULL DEFAULT 1,
+					email_enabled INTEGER NOT NULL DEFAULT 1
+				);
+				CREATE TABLE delivery_target (
+					id TEXT PRIMARY KEY NOT NULL,
+					user_id TEXT NOT NULL,
+					watchlist_id TEXT,
+					channel TEXT NOT NULL,
+					target_value TEXT NOT NULL,
+					validation_status TEXT NOT NULL,
+					is_paused INTEGER NOT NULL DEFAULT 0,
+					opted_out_at TEXT
+				);
+				CREATE TABLE digest_run (
+					id TEXT PRIMARY KEY NOT NULL,
+					user_id TEXT NOT NULL,
+					period_start TEXT NOT NULL,
+					period_end TEXT NOT NULL,
+					summary_json TEXT NOT NULL,
+					created_at TEXT NOT NULL
+				);
+				CREATE TABLE digest_delivery (
+					id TEXT PRIMARY KEY NOT NULL,
+					digest_run_id TEXT NOT NULL,
+					status TEXT NOT NULL
+				);
+				CREATE TABLE delivery_attempt (
+					id TEXT PRIMARY KEY NOT NULL,
+					digest_run_id TEXT,
+					lane TEXT NOT NULL DEFAULT 'customer',
+					channel TEXT NOT NULL DEFAULT 'email',
+					target_value TEXT NOT NULL DEFAULT 'owner@example.com',
+					status TEXT NOT NULL,
+					webhook_status TEXT NOT NULL,
+					updated_at TEXT NOT NULL
+				);
+				INSERT INTO user (id, email, name)
+				VALUES ('user-1', 'owner@example.com', 'Owner');
+			`);
+			const insertRun = sqlite.sqlite.prepare(`
+				INSERT INTO digest_run (
+					id, user_id, period_start, period_end, summary_json, created_at
+				) VALUES (?, 'user-1', '2026-07-01T00:00:00.000Z', ?, ?, ?)
+			`);
+			const insertDelivery = sqlite.sqlite.prepare(`
+				INSERT INTO digest_delivery (id, digest_run_id, status)
+				VALUES (?, ?, 'failed')
+			`);
+			const insertAttempt = sqlite.sqlite.prepare(`
+				INSERT INTO delivery_attempt (
+					id, digest_run_id, status, webhook_status, updated_at
+				) VALUES (?, ?, ?, ?, '2026-07-10T00:00:00.000Z')
+			`);
+			const summary = JSON.stringify({
+				digestItemSetProvenance: "atomic-v2",
+				digestItemCount: 1,
+			});
+			for (let index = 0; index < 25; index += 1) {
+				const runId = `unknown-${index}`;
+				const periodEnd = `2026-07-${String(index + 1).padStart(2, "0")}T00:00:00.000Z`;
+				insertRun.run(runId, periodEnd, summary, periodEnd);
+				insertDelivery.run(`delivery-${runId}`, runId);
+				insertAttempt.run(`attempt-${runId}`, runId, "failed", "provider_unknown");
+			}
+			insertRun.run(
+				"safe-retry",
+				"2026-07-26T00:00:00.000Z",
+				summary,
+				"2026-07-26T00:00:00.000Z",
+			);
+			insertDelivery.run("delivery-safe", "safe-retry");
+			insertAttempt.run("attempt-safe", "safe-retry", "failed", "failed");
+
+			const rows = await listRetryableDigestRuns(
+				{ DB: sqlite.db } as never,
+				{
+					since: "2026-07-01T00:00:00.000Z",
+					stalePreDispatchBefore: "2026-07-15T00:00:00.000Z",
+					limit: 1,
+				},
+			);
+
+			expect(rows).toEqual([
+				expect.objectContaining({ id: "safe-retry", userId: "user-1" }),
+			]);
+		} finally {
+			sqlite.close();
+		}
+	});
+
+	it("keeps mixed unknown digests eligible when another configured target is safely missing", async () => {
+		const sqlite = createSqliteD1();
+		try {
+			sqlite.sqlite.exec(`
+				CREATE TABLE user (
+					id TEXT PRIMARY KEY NOT NULL,
+					email TEXT NOT NULL,
+					name TEXT NOT NULL,
+					emailVerified INTEGER NOT NULL DEFAULT 1
+				);
+				CREATE TABLE workspace_delivery_config (
+					user_id TEXT PRIMARY KEY NOT NULL,
+					digest_enabled INTEGER NOT NULL DEFAULT 1,
+					email_enabled INTEGER NOT NULL DEFAULT 1
+				);
+				CREATE TABLE delivery_target (
+					id TEXT PRIMARY KEY NOT NULL,
+					user_id TEXT NOT NULL,
+					watchlist_id TEXT,
+					channel TEXT NOT NULL,
+					target_value TEXT NOT NULL,
+					validation_status TEXT NOT NULL,
+					is_paused INTEGER NOT NULL DEFAULT 0,
+					opted_out_at TEXT
+				);
+				CREATE TABLE digest_run (
+					id TEXT PRIMARY KEY NOT NULL,
+					user_id TEXT NOT NULL,
+					period_start TEXT NOT NULL,
+					period_end TEXT NOT NULL,
+					summary_json TEXT NOT NULL,
+					created_at TEXT NOT NULL
+				);
+				CREATE TABLE delivery_attempt (
+					id TEXT PRIMARY KEY NOT NULL,
+					digest_run_id TEXT,
+					lane TEXT NOT NULL,
+					channel TEXT NOT NULL,
+					target_value TEXT NOT NULL,
+					status TEXT NOT NULL,
+					webhook_status TEXT NOT NULL,
+					updated_at TEXT NOT NULL
+				);
+				INSERT INTO user (id, email, name)
+				VALUES ('user-1', 'owner@example.com', 'Owner');
+				INSERT INTO workspace_delivery_config (user_id)
+				VALUES ('user-1');
+				INSERT INTO delivery_target (
+					id, user_id, watchlist_id, channel, target_value, validation_status
+				) VALUES (
+					'email-target', 'user-1', NULL, 'email', 'briefs@example.com', 'validated'
+				);
+				INSERT INTO digest_run (
+					id, user_id, period_start, period_end, summary_json, created_at
+				) VALUES (
+					'mixed-missing',
+					'user-1',
+					'2026-07-06T00:00:00.000Z',
+					'2026-07-13T00:00:00.000Z',
+					'{"digestItemSetProvenance":"atomic-v2","digestItemCount":1}',
+					'2026-07-13T00:00:00.000Z'
+				);
+				INSERT INTO delivery_attempt (
+					id, digest_run_id, lane, channel, target_value, status, webhook_status, updated_at
+				) VALUES (
+					'unknown-slack',
+					'mixed-missing',
+					'customer',
+					'slack',
+					'slack:workspace',
+					'failed',
+					'provider_unknown',
+					'2026-07-13T00:01:00.000Z'
+				);
+				INSERT INTO digest_run (
+					id, user_id, period_start, period_end, summary_json, created_at
+				) VALUES (
+					'mixed-failed',
+					'user-1',
+					'2026-07-07T00:00:00.000Z',
+					'2026-07-14T00:00:00.000Z',
+					'{"digestItemSetProvenance":"atomic-v2","digestItemCount":1}',
+					'2026-07-14T00:00:00.000Z'
+				);
+				INSERT INTO delivery_attempt (
+					id, digest_run_id, lane, channel, target_value, status, webhook_status, updated_at
+				) VALUES
+					(
+						'unknown-whatsapp',
+						'mixed-failed',
+						'customer',
+						'whatsapp',
+						'+919999999999',
+						'failed',
+						'provider_unknown',
+						'2026-07-14T00:01:00.000Z'
+					),
+					(
+						'failed-email',
+						'mixed-failed',
+						'customer',
+						'email',
+						'briefs@example.com',
+						'failed',
+						'failed',
+						'2026-07-14T00:01:00.000Z'
+					);
+			`);
+
+			const rows = await listRetryableDigestRuns(
+				{ DB: sqlite.db } as never,
+				{
+					since: "2026-07-01T00:00:00.000Z",
+					stalePreDispatchBefore: "2026-07-15T00:00:00.000Z",
+					limit: 2,
+				},
+			);
+
+			expect(rows).toEqual([
+				expect.objectContaining({ id: "mixed-missing", userId: "user-1" }),
+				expect.objectContaining({ id: "mixed-failed", userId: "user-1" }),
 			]);
 		} finally {
 			sqlite.close();

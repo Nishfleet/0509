@@ -57,6 +57,50 @@ function observation(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function digestScheduleDataMocks() {
+  let jobs: Array<{
+    id: string;
+    userId: string;
+    userEmail: string;
+    userName: string;
+    cadence: "daily" | "weekly";
+    periodStart: string;
+    periodEnd: string;
+    attemptCount: number;
+  }> = [];
+
+  return {
+    enqueueDigestScheduleJobs: vi.fn().mockImplementation(
+      async (
+        _env: unknown,
+        input: { cadence: "daily" | "weekly"; periodStart: string; periodEnd: string },
+      ) => {
+        jobs = [{
+          id: `digest-job-user-1:${input.cadence}:${input.periodEnd}`,
+          userId: "user-1",
+          userEmail: "owner@example.com",
+          userName: "Owner",
+          cadence: input.cadence,
+          periodStart: input.periodStart,
+          periodEnd: input.periodEnd,
+          attemptCount: 0,
+        }];
+        return 1;
+      },
+    ),
+    listRetryableDigestScheduleJobs: vi.fn().mockImplementation(async () => jobs),
+    claimDigestScheduleJob: vi.fn().mockImplementation(
+      async (_env: unknown, input: { jobId: string }) =>
+        jobs.find((job) => job.id === input.jobId) ?? null,
+    ),
+    completeDigestScheduleJob: vi.fn().mockImplementation(async () => {
+      jobs = [];
+      return true;
+    }),
+    failDigestScheduleJob: vi.fn().mockResolvedValue(true),
+  };
+}
+
 beforeEach(() => {
   vi.resetModules();
 });
@@ -92,6 +136,7 @@ describe("runWeeklyDigests", () => {
       getDigestByPeriod: vi.fn(),
       getDigest: vi.fn().mockResolvedValue(null),
       listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
+      ...digestScheduleDataMocks(),
       getUserDeliveryProfile: vi.fn().mockResolvedValue({
         id: "user-1",
         email: "owner@example.com",
@@ -194,6 +239,7 @@ describe("runWeeklyDigests", () => {
       getDigestByPeriod: vi.fn().mockResolvedValue(null),
       getDigest: vi.fn().mockResolvedValue(null),
       listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
+      ...digestScheduleDataMocks(),
       getUserDeliveryProfile: vi.fn().mockResolvedValue({
         id: "user-1",
         email: "owner@example.com",
@@ -338,6 +384,7 @@ describe("runWeeklyDigests", () => {
       getDigestByPeriod: vi.fn(),
       getDigest: vi.fn().mockResolvedValue(null),
       listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
+      ...digestScheduleDataMocks(),
       getUserDeliveryProfile: vi.fn(),
       hasInFlightWatchlistRun: vi.fn().mockResolvedValue(false),
       getRecentSuccessfulRuns: vi.fn(),
@@ -435,6 +482,7 @@ describe("runWeeklyDigests", () => {
       getDigestByPeriod,
       getDigest: vi.fn().mockResolvedValue(null),
       listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
+      ...digestScheduleDataMocks(),
       getUserDeliveryProfile: vi.fn(),
       hasInFlightWatchlistRun: vi.fn().mockResolvedValue(false),
       getRecentSuccessfulRuns: vi.fn(),
@@ -558,6 +606,7 @@ describe("runWeeklyDigests", () => {
       getDigestByPeriod: vi.fn().mockResolvedValue(null),
       getDigest: vi.fn().mockResolvedValue(null),
       listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
+      ...digestScheduleDataMocks(),
       getUserDeliveryProfile: vi.fn(),
       hasInFlightWatchlistRun: vi.fn().mockResolvedValue(false),
       getRecentSuccessfulRuns: vi.fn(),
@@ -769,6 +818,7 @@ describe("runWatchlistManual cheap scan path", () => {
       getDigestByPeriod: vi.fn(),
       getDigest: vi.fn().mockResolvedValue(null),
       listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
+      ...digestScheduleDataMocks(),
       getUserDeliveryProfile: vi.fn().mockResolvedValue({
         id: "user-1",
         email: "owner@example.com",
@@ -921,6 +971,7 @@ describe("runWatchlistManual cheap scan path", () => {
       getDigestByPeriod: vi.fn(),
       getDigest: vi.fn().mockResolvedValue(null),
       listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
+      ...digestScheduleDataMocks(),
       getUserDeliveryProfile: vi.fn().mockResolvedValue({
         id: "user-1",
         email: "owner@example.com",
@@ -1235,6 +1286,7 @@ describe("runWatchlistManual cheap scan path", () => {
       getDigestByPeriod: vi.fn(),
       getDigest: vi.fn().mockResolvedValue(null),
       listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
+      ...digestScheduleDataMocks(),
       getUserDeliveryProfile: vi.fn().mockResolvedValue({
         id: "user-1",
         email: "owner@example.com",
@@ -1516,6 +1568,7 @@ describe("runWatchlistManual cheap scan path", () => {
       getDigestByPeriod: vi.fn(),
       getDigest: vi.fn().mockResolvedValue(null),
       listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
+      ...digestScheduleDataMocks(),
       getUserDeliveryProfile: vi.fn().mockResolvedValue({
         id: "user-1",
         email: "owner@example.com",
@@ -1679,6 +1732,7 @@ describe("runWatchlistManual cheap scan path", () => {
 	    getDigestByPeriod: vi.fn(),
 	    getDigest: vi.fn().mockResolvedValue(null),
 	    listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
+	    ...digestScheduleDataMocks(),
 	    getUserDeliveryProfile: vi.fn().mockResolvedValue({
 	      id: "user-1",
 	      email: "owner@example.com",
@@ -1841,6 +1895,7 @@ describe("runWatchlistManual cheap scan path", () => {
       getDigestByPeriod: vi.fn(),
       getDigest: vi.fn().mockResolvedValue(null),
       listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
+      ...digestScheduleDataMocks(),
       getUserDeliveryProfile: vi.fn().mockResolvedValue({
         id: "user-1",
         email: "owner@example.com",
@@ -2045,6 +2100,7 @@ describe("runWatchlistManual cheap scan path", () => {
       getDigestByPeriod: vi.fn(),
       getDigest: vi.fn().mockResolvedValue(null),
       listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
+      ...digestScheduleDataMocks(),
       getUserDeliveryProfile: vi.fn().mockResolvedValue({
         id: "user-1",
         email: "owner@example.com",
@@ -2145,6 +2201,7 @@ describe("runWatchlistManual cheap scan path", () => {
       getDigestByPeriod: vi.fn(),
       getDigest: vi.fn().mockResolvedValue(null),
       listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
+      ...digestScheduleDataMocks(),
       getUserDeliveryProfile: vi.fn().mockResolvedValue({
         id: "user-1",
         email: "owner@example.com",

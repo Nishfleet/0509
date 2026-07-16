@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
@@ -16,7 +16,7 @@ describe("legacy billing provider removal", () => {
   it("keeps old-provider references out of app, docs, tests, and fresh migrations", () => {
     const needle = "razor" + "pay";
     const offenders = listRepoFiles().filter((filePath) => {
-      if (allowedFiles.has(filePath)) {
+      if (allowedFiles.has(filePath) || !existsSync(filePath)) {
         return false;
       }
 

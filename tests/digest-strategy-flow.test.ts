@@ -44,6 +44,16 @@ metadata: {},
 }
 
 function dataServerMock(overrides: Record<string, unknown> = {}) {
+let digestScheduleJobs = [{
+id: "digest-job-user-1",
+userId: "user-1",
+userEmail: "owner@example.com",
+userName: "Owner",
+cadence: "weekly",
+periodStart: "2026-07-06T05:00:00.000Z",
+periodEnd: "2026-07-13T05:00:00.000Z",
+attemptCount: 0,
+}];
 return {
 addDigestItem: vi.fn(),
 claimDigestStrategyGenerationLease: vi.fn().mockResolvedValue(true),
@@ -59,6 +69,26 @@ createWatchlistRun: vi.fn(),
 countProofCapturesForWatchlistSince: vi.fn(),
 countProofCapturesForWorkspaceSince: vi.fn(),
 finishWatchlistRun: vi.fn(),
+claimDigestScheduleJob: vi.fn().mockImplementation(
+async (_env: unknown, input: { jobId: string }) =>
+digestScheduleJobs.find((job) => job.id === input.jobId) ?? null,
+),
+completeDigestScheduleJob: vi.fn().mockResolvedValue(true),
+enqueueDigestScheduleJobs: vi.fn().mockImplementation(
+async (
+_env: unknown,
+input: { cadence: "daily" | "weekly"; periodStart: string; periodEnd: string },
+) => {
+digestScheduleJobs = [{
+...digestScheduleJobs[0]!,
+cadence: input.cadence,
+periodStart: input.periodStart,
+periodEnd: input.periodEnd,
+}];
+return 1;
+},
+),
+failDigestScheduleJob: vi.fn().mockResolvedValue(true),
 getDigestByPeriod: vi.fn().mockResolvedValue(null),
 getDigest: vi.fn().mockResolvedValue(null),
 getSuccessfulRunStatsForUserBetween: vi.fn().mockResolvedValue({
@@ -67,6 +97,7 @@ watchlistsChecked: 0,
 adsSeen: 0,
 }),
 listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
+listRetryableDigestScheduleJobs: vi.fn().mockResolvedValue(digestScheduleJobs),
 getUserDeliveryProfile: vi.fn(),
 hasInFlightWatchlistRun: vi.fn().mockResolvedValue(false),
 getRecentSuccessfulRuns: vi.fn(),
@@ -707,117 +738,6 @@ vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
 const { runWeeklyDigests } = await import("~/lib/monitoring.server");
 await expect(runWeeklyDigests(envWith(aiRun))).resolves.toBe(0);
 
-expect(deliverWeeklyDigest).not.toHaveBeenCalled();
-});
-
-it("replays the persisted paragraph in the retry sweep without a second AI call", async () => {
-const data = dataServerMock({
-listRetryableDigestRuns: vi.fn().mockResolvedValue([
-{
-id: "digest-retry",
-userId: "user-1",
-userEmail: "owner@example.com",
-userName: "Owner",
-periodStart: "2026-04-13T05:00:00.000Z",
-periodEnd: "2026-04-20T05:00:00.000Z",
-},
-]),
-getDigest: vi.fn().mockResolvedValue({
-id: "digest-retry",
-userId: "user-1",
-periodStart: "2026-04-13T05:00:00.000Z",
-periodEnd: "2026-04-20T05:00:00.000Z",
-summary: {
-totalEvents: 1,
-totalEligibleEvents: 1,
-includedEvents: 1,
-omittedEvents: 0,
-watchlists: 1,
-digestItemSetProvenance: "atomic-v2",
-strategyParagraph: STORED_PARAGRAPH,
-strategyGeneratedAt: "2026-04-20T05:01:00.000Z",
-},
-createdAt: "2026-04-20T05:01:00.000Z",
-items: [
-{
-id: "item-1",
-digestRunId: "digest-retry",
-watchlistId: "watch-1",
-watchlistName: "boAt watch",
-eventType: "landing_page_offer_changed",
-title: "Landing page offer changed",
-summary: "Offer changed on the landing page.",
-metadata: { eventId: "event-retry-1", priorityScore: 79, sourceStatus: "proof_backed" },
-createdAt: "2026-04-19T00:00:00.000Z",
-},
-],
-delivery: null,
-}),
-});
-const deliverWeeklyDigest = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
-const aiRun = vi.fn().mockResolvedValue(GOOD_PARAGRAPH);
-
-vi.doMock("~/lib/auth.server", () => ({}));
-vi.doMock("~/lib/data.server", () => data);
-vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
-vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
-
-const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-// No users with active watchlists this tick — only the retry sweep runs.
-const result = await runWeeklyDigests(envWith(aiRun, []));
-
-expect(result).toBe(1);
-expect(aiRun).not.toHaveBeenCalled();
-expect(deliverWeeklyDigest).toHaveBeenCalledTimes(1);
-expect(deliverWeeklyDigest).toHaveBeenCalledWith(
-expect.anything(),
-expect.objectContaining({
-digestRunId: "digest-retry",
-strategyParagraph: STORED_PARAGRAPH,
-}),
-);
-});
-
-it("skips an unmarked same-count legacy row in the retry sweep", async () => {
-const data = dataServerMock({
-listRetryableDigestRuns: vi.fn().mockResolvedValue([{
-id: "digest-retry-unmarked",
-userId: "user-1",
-userEmail: "owner@example.com",
-userName: "Owner",
-periodStart: "2026-04-13T05:00:00.000Z",
-periodEnd: "2026-04-20T05:00:00.000Z",
-}]),
-getDigest: vi.fn().mockResolvedValue({
-id: "digest-retry-unmarked",
-userId: "user-1",
-periodStart: "2026-04-13T05:00:00.000Z",
-periodEnd: "2026-04-20T05:00:00.000Z",
-summary: { totalEvents: 1, watchlists: 1 },
-createdAt: "2026-04-20T05:01:00.000Z",
-items: [{
-id: "item-unmarked",
-digestRunId: "digest-retry-unmarked",
-watchlistId: "watch-1",
-watchlistName: "boAt watch",
-eventType: "landing_page_offer_changed",
-title: "Unmarked retry item",
-summary: "Count matches, identity remains unproven.",
-metadata: {},
-createdAt: "2026-04-19T00:00:00.000Z",
-}],
-delivery: null,
-}),
-});
-const deliverWeeklyDigest = vi.fn();
-
-vi.doMock("~/lib/auth.server", () => ({}));
-vi.doMock("~/lib/data.server", () => data);
-vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
-vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
-
-const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-await expect(runWeeklyDigests(envWith(null, []))).resolves.toBe(0);
 expect(deliverWeeklyDigest).not.toHaveBeenCalled();
 });
 

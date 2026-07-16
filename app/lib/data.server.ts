@@ -158,6 +158,12 @@ updateDigestRunSummary,
   getDigestByPeriod,
 getLatestDigestRunSummaryForWatchlist,
   listRetryableDigestRuns,
+	enqueueDigestScheduleJobs,
+	listRetryableDigestScheduleJobs,
+	claimDigestScheduleJob,
+	completeDigestScheduleJob,
+	failDigestScheduleJob,
+	type DigestScheduleJob,
 } from "~/lib/data/digests.server";
 
 export {

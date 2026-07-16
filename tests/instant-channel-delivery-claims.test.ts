@@ -109,6 +109,7 @@ function installMocks(
     failDispatchMarkOnce?: boolean;
     failFinalizeOnce?: boolean;
     providerResults?: Array<Record<string, unknown>>;
+    slackPreparationFailure?: boolean;
   } = {},
 ) {
   let attempt = options.initialAttempt ?? null;
@@ -123,6 +124,21 @@ function installMocks(
     providerSend.mockResolvedValueOnce(result);
   }
   providerSend.mockResolvedValue(providerSuccess(channel));
+  const prepareSlackWebhookTarget = vi.fn().mockResolvedValue(
+    options.slackPreparationFailure
+      ? {
+          ok: false,
+          result: {
+            ...providerSuccess("slack"),
+            status: "failed",
+            webhookStatus: "failed",
+            providerStatusLastSeenAt: null,
+            errorMessage: "Slack webhook could not be decrypted.",
+            deliveredAt: null,
+          },
+        }
+      : { ok: true, webhookUrl: "https://hooks.slack.test/services/redacted" },
+  );
 
   const getDeliveryAttemptByIdempotencyKey = vi.fn(async (_env: unknown, key: string) => {
     reads += 1;
@@ -213,6 +229,8 @@ function installMocks(
   }));
   vi.doMock("~/lib/slack-webhook.server", () => ({
     SLACK_PROVIDER: "slack_incoming_webhook",
+    prepareSlackWebhookTarget,
+    sendSlackWebhookUrl: channel === "slack" ? providerSend : vi.fn(),
     sendSlackWebhookMessage: channel === "slack" ? providerSend : vi.fn(),
   }));
 
@@ -222,6 +240,7 @@ function installMocks(
       return attempt;
     },
     providerSend,
+    prepareSlackWebhookTarget,
     setAttemptUpdatedAt(value: string) {
       if (attempt) attempt = { ...attempt, updatedAt: value };
     },
@@ -349,3 +368,19 @@ describe.each<InstantChannel>(["whatsapp", "slack"])(
     });
   },
 );
+
+it("fails Slack local preparation before crossing the provider boundary", async () => {
+  const state = installMocks("slack", { slackPreparationFailure: true });
+  const { deliverWatchlistAlerts } = await import("~/lib/delivery.server");
+
+  await deliverWatchlistAlerts({} as never, alertInput as never);
+
+  expect(state.prepareSlackWebhookTarget).toHaveBeenCalledTimes(1);
+  expect(state.providerSend).not.toHaveBeenCalled();
+  expect(state.attempt).toMatchObject({
+    status: "failed",
+    webhookStatus: "failed",
+    providerStatusLastSeenAt: null,
+    errorMessage: "Slack webhook could not be decrypted.",
+  });
+});

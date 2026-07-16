@@ -26,7 +26,7 @@ import {
 	readString,
 	sendCloudflareEmail,
 } from "~/lib/delivery-email-core.server";
-import type { AppEnv } from "~/lib/env.server";
+import { type AppEnv, isEmailSendingConfigured } from "~/lib/env.server";
 
 const BILLING_LIFECYCLE_RECOVERY_LIMIT = 10;
 export const BILLING_LIFECYCLE_RECOVERY_MAX_ATTEMPTS = 3;
@@ -42,6 +42,7 @@ export async function recoverAbandonedBillingLifecycleEmails(env: AppEnv) {
 		conflicts: 0,
 	};
 	if (!env.DB) return emptyResult;
+	if (!isEmailSendingConfigured(env)) return emptyResult;
 
 	const attempts = await listStaleBillingLifecycleEmailAttempts(env, {
 		staleBefore: deliveryPreDispatchStaleBefore(),

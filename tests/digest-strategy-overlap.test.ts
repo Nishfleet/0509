@@ -26,6 +26,11 @@ getDigestByPeriod: vi.fn(),
 getSuccessfulRunStatsForUserBetween: vi.fn(),
 listAdsByIds: vi.fn(),
 listRetryableDigestRuns: vi.fn(),
+enqueueDigestScheduleJobs: vi.fn(),
+listRetryableDigestScheduleJobs: vi.fn(),
+claimDigestScheduleJob: vi.fn(),
+completeDigestScheduleJob: vi.fn(),
+failDigestScheduleJob: vi.fn(),
 listWatchEventsBetween: vi.fn(),
 listWatchlists: vi.fn(),
 updateDigestRunSummary: vi.fn(),
@@ -59,9 +64,27 @@ applyMigration(harness.sqlite, "migrations/0000_auth.sql");
 applyMigration(harness.sqlite, "migrations/0001_app.sql");
 applyMigration(harness.sqlite, "migrations/0002_monitoring_trust.sql");
 harness.sqlite.exec(`
+    CREATE TABLE workspace_delivery_config (
+      user_id TEXT PRIMARY KEY NOT NULL,
+      digest_enabled INTEGER NOT NULL DEFAULT 1,
+      email_enabled INTEGER NOT NULL DEFAULT 1
+    );
+    CREATE TABLE delivery_target (
+      id TEXT PRIMARY KEY NOT NULL,
+      user_id TEXT NOT NULL,
+      watchlist_id TEXT,
+      channel TEXT NOT NULL,
+      target_value TEXT NOT NULL,
+      validation_status TEXT NOT NULL,
+      is_paused INTEGER NOT NULL DEFAULT 0,
+      opted_out_at TEXT
+    );
     CREATE TABLE delivery_attempt (
       id TEXT PRIMARY KEY NOT NULL,
       digest_run_id TEXT,
+      lane TEXT NOT NULL DEFAULT 'customer',
+      channel TEXT NOT NULL DEFAULT 'email',
+      target_value TEXT NOT NULL DEFAULT 'owner@example.com',
       status TEXT NOT NULL,
       webhook_status TEXT NOT NULL,
       updated_at TEXT NOT NULL
@@ -154,6 +177,21 @@ adsSeen: 0,
 });
 data.listAdsByIds.mockReset().mockResolvedValue([]);
 data.listRetryableDigestRuns.mockReset().mockImplementation(listRetryableDigestRuns);
+const digestScheduleJob = {
+id: "digest-job-user-1",
+userId: "user-1",
+userEmail: "owner@example.com",
+userName: "Owner",
+cadence: "weekly",
+periodStart: "2026-07-06T05:00:00.000Z",
+periodEnd: "2026-07-13T05:00:00.000Z",
+attemptCount: 0,
+};
+data.enqueueDigestScheduleJobs.mockReset().mockResolvedValue(1);
+data.listRetryableDigestScheduleJobs.mockReset().mockResolvedValue([digestScheduleJob]);
+data.claimDigestScheduleJob.mockReset().mockResolvedValue(digestScheduleJob);
+data.completeDigestScheduleJob.mockReset().mockResolvedValue(true);
+data.failDigestScheduleJob.mockReset().mockResolvedValue(true);
 data.listWatchEventsBetween.mockReset().mockImplementation(events);
 data.listWatchlists.mockReset().mockResolvedValue([{ id: "watch-1", name: "boAt watch" }]);
 data.updateDigestRunSummary.mockReset().mockImplementation(updateDigestRunSummary);

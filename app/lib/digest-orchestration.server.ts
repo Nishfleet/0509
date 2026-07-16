@@ -3,12 +3,17 @@ import {
   digestMetadataForEvent,
 } from "~/lib/change-intelligence";
 import {
+	claimDigestScheduleJob,
+	completeDigestScheduleJob,
   createDigestRun,
+	enqueueDigestScheduleJobs,
+	failDigestScheduleJob,
   getDigest,
   getDigestByPeriod,
   getSuccessfulRunStatsForUserBetween,
   listAdsByIds,
   listRetryableDigestRuns,
+	listRetryableDigestScheduleJobs,
   listWatchEventsBetween,
   listWatchlists,
 } from "~/lib/data.server";
@@ -44,6 +49,9 @@ const DAILY_DIGEST_LOOKBACK_DAYS = 1;
 const WEEKLY_DIGEST_LOOKBACK_DAYS = 7;
 const DIGEST_RETRY_WINDOW_DAYS = 7;
 const DIGEST_RETRY_SWEEP_LIMIT = 25;
+const DIGEST_SCHEDULE_JOB_SWEEP_LIMIT = 50;
+const DIGEST_SCHEDULE_JOB_MAX_ATTEMPTS = 5;
+const DIGEST_SCHEDULE_JOB_LEASE_MS = 15 * 60 * 1000;
 
 export interface DigestOrchestrationOptions {
   cadence?: DigestCadence;
@@ -98,42 +106,113 @@ export async function runDigestDeliveryCycle(
     stalePreDispatchBefore: deliveryPreDispatchStaleBefore(periodEnd.getTime()),
     limit: DIGEST_RETRY_SWEEP_LIMIT,
   });
-  const usersResult = await env.DB.prepare(
-    `
-      SELECT DISTINCT user.id, user.email, user.name
-      FROM user
-      INNER JOIN watchlist ON watchlist.user_id = user.id
-      WHERE watchlist.is_active = 1
-    `,
-  ).all<DigestUser>();
+  await enqueueDigestScheduleJobs(env, {
+		cadence,
+		periodStart: periodStartIso,
+		periodEnd: periodEndIso,
+	});
 
   const handledDigestRunIds = new Set<string>();
-  let digestsSent = 0;
-  for (const user of usersResult.results ?? []) {
-    try {
-      digestsSent += await runDigestForUser(env, {
-        user,
-        cadence,
-        periodStart: periodStartIso,
-        periodEnd: periodEndIso,
-        strategyGenerationDeadlineAt,
-        handledDigestRunIds,
-      });
-    } catch (error) {
-      // A single workspace must never abort other customers' scheduled work.
-      console.error(
-        `Digest run failed for user ${user.id}; continuing with remaining users.`,
-        error,
-      );
-    }
-  }
+  let digestsSent = await drainDigestScheduleJobs(env, {
+		deadlineAt: options.deadlineAt,
+		strategyGenerationDeadlineAt,
+		handledDigestRunIds,
+	});
 
   digestsSent += await retryFailedDigests(env, {
     retryCandidates,
     handledDigestRunIds,
     strategyGenerationDeadlineAt,
+		deadlineAt: options.deadlineAt,
   });
   return digestsSent;
+}
+
+export async function resumePendingDigestScheduleJobs(
+	env: AppEnv,
+	options: { deadlineAt?: number } = {},
+) {
+	if (!env.DB) return 0;
+	const handledDigestRunIds = new Set<string>();
+	const strategyGenerationDeadlineAt = createDigestStrategyGenerationDeadline(
+		options.deadlineAt,
+	);
+	return drainDigestScheduleJobs(env, {
+		deadlineAt: options.deadlineAt,
+		strategyGenerationDeadlineAt,
+		handledDigestRunIds,
+	});
+}
+
+async function drainDigestScheduleJobs(
+	env: AppEnv,
+	input: {
+		deadlineAt?: number;
+		strategyGenerationDeadlineAt: number;
+		handledDigestRunIds: Set<string>;
+	},
+) {
+	const now = Date.now();
+	const candidates = await listRetryableDigestScheduleJobs(env, {
+		staleRunningBefore: new Date(now - DIGEST_SCHEDULE_JOB_LEASE_MS).toISOString(),
+		maxAttempts: DIGEST_SCHEDULE_JOB_MAX_ATTEMPTS,
+		limit: DIGEST_SCHEDULE_JOB_SWEEP_LIMIT,
+	});
+	let digestsSent = 0;
+
+	for (const candidate of candidates) {
+		if (input.deadlineAt !== undefined && Date.now() >= input.deadlineAt) break;
+		const processingToken = crypto.randomUUID();
+		const claimNow = new Date().toISOString();
+		const claimed = await claimDigestScheduleJob(env, {
+			jobId: candidate.id,
+			processingToken,
+			now: claimNow,
+			staleRunningBefore: new Date(
+				Date.now() - DIGEST_SCHEDULE_JOB_LEASE_MS,
+			).toISOString(),
+			maxAttempts: DIGEST_SCHEDULE_JOB_MAX_ATTEMPTS,
+		});
+		if (!claimed) continue;
+
+		try {
+			digestsSent += await runDigestForUser(env, {
+				user: {
+					id: claimed.userId,
+					email: claimed.userEmail,
+					name: claimed.userName,
+				},
+				cadence: claimed.cadence,
+				periodStart: claimed.periodStart,
+				periodEnd: claimed.periodEnd,
+				strategyGenerationDeadlineAt: input.strategyGenerationDeadlineAt,
+				handledDigestRunIds: input.handledDigestRunIds,
+			});
+			const completed = await completeDigestScheduleJob(env, {
+				jobId: claimed.id,
+				processingToken,
+				now: new Date().toISOString(),
+			});
+			if (!completed) {
+				throw new Error("Digest schedule job completion ownership was lost.");
+			}
+		} catch (error) {
+			await failDigestScheduleJob(env, {
+				jobId: claimed.id,
+				processingToken,
+				now: new Date().toISOString(),
+				errorCode: "digest_schedule_job_failed",
+			});
+			// The durable failed row remains reclaimable. Continue so one workspace
+			// cannot prevent later customers from receiving their digest.
+			console.error(
+				`Digest schedule job ${claimed.id} failed; continuing with remaining jobs.`,
+				error,
+			);
+		}
+	}
+
+	return digestsSent;
 }
 
 async function runDigestForUser(
@@ -362,10 +441,12 @@ async function retryFailedDigests(
     retryCandidates: Awaited<ReturnType<typeof listRetryableDigestRuns>>;
     handledDigestRunIds: Set<string>;
     strategyGenerationDeadlineAt: number;
+		deadlineAt?: number;
   },
 ) {
   let retried = 0;
   for (const candidate of input.retryCandidates) {
+		if (input.deadlineAt !== undefined && Date.now() >= input.deadlineAt) break;
     if (input.handledDigestRunIds.has(candidate.id)) continue;
     try {
       const plan = await getUserPlan(env, candidate.userId);

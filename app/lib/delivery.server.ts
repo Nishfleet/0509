@@ -58,7 +58,8 @@ import type {
 } from "~/lib/types";
 import { sendDigestWhatsApp, sendInstantWhatsApp } from "~/lib/whatsapp.server";
 import {
-  sendSlackWebhookMessage,
+  prepareSlackWebhookTarget,
+  sendSlackWebhookUrl,
   SLACK_PROVIDER,
 } from "~/lib/slack-webhook.server";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
@@ -976,147 +977,28 @@ async function claimInstantEmailDeliveryAttempt(
   idempotencyKey: string;
   duplicate: DeliveryAttemptRecord | null;
 }> {
-  const keyInput = {
-    watchlistId: input.watchlistId,
-    lane: input.lane,
-    channel: "email" as const,
-    targetValue: input.targetValue,
-    batchKey: input.batchKey,
-  };
-  const idempotencyKey = buildInstantDeliveryAttemptIdempotencyKey({
-    ...keyInput,
-    attemptKind: "send",
+  return claimInstantDeliveryAttempt(env, {
+    ...input,
+    channel: "email",
+    provider: EMAIL_PROVIDER,
+    requireTrustedRetryEvidence: false,
   });
-  const duplicate = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
-  if (duplicate) {
-    const stalePreDispatch = isStalePreDispatchAttempt(duplicate);
-    const definiteFailure =
-      duplicate.status === "failed" && duplicate.webhookStatus === "failed";
-    if (!stalePreDispatch && !definiteFailure) {
-      return { attemptId: null, claimUpdatedAt: null, idempotencyKey, duplicate };
-    }
-    const claimUpdatedAt = new Date().toISOString();
-    const retryClaimed = await updateDeliveryAttemptResult(env, duplicate.id, {
-      provider: EMAIL_PROVIDER,
-      status: "pending",
-      webhookStatus: "pending",
-      providerMessageId: null,
-      providerStatusLastSeenAt: null,
-      errorMessage: null,
-      sentAt: null,
-      failedAt: null,
-      payloadSnapshot: input.payloadSnapshot,
-      updatedAt: claimUpdatedAt,
-      expectedStatus: stalePreDispatch ? "pending" : "failed",
-      expectedWebhookStatus: stalePreDispatch ? "pending" : "failed",
-      expectedUpdatedAt: duplicate.updatedAt,
-    });
-    if (retryClaimed !== false) {
-      return { attemptId: duplicate.id, claimUpdatedAt, idempotencyKey, duplicate: null };
-    }
-    const concurrent = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
-    if (!concurrent) throw new Error("Instant email delivery retry claim disappeared.");
-    return { attemptId: null, claimUpdatedAt: null, idempotencyKey, duplicate: concurrent };
-  }
-
-  const legacyIdempotencyKey = buildLegacyInstantDeliveryAttemptIdempotencyKey(keyInput);
-  const legacyDuplicate = await getDeliveryAttemptByIdempotencyKey(env, legacyIdempotencyKey);
-  if (
-    legacyDuplicate?.status === "failed" &&
-    legacyDuplicate.webhookStatus === "failed"
-  ) {
-    const claimUpdatedAt = new Date().toISOString();
-    const retryClaimed = await updateDeliveryAttemptResult(env, legacyDuplicate.id, {
-      provider: EMAIL_PROVIDER,
-      status: "pending",
-      webhookStatus: "pending",
-      providerMessageId: null,
-      providerStatusLastSeenAt: null,
-      errorMessage: null,
-      sentAt: null,
-      failedAt: null,
-      payloadSnapshot: input.payloadSnapshot,
-      updatedAt: claimUpdatedAt,
-      expectedStatus: "failed",
-      expectedWebhookStatus: "failed",
-      expectedUpdatedAt: legacyDuplicate.updatedAt,
-    });
-    if (retryClaimed !== false) {
-      return {
-        attemptId: legacyDuplicate.id,
-        claimUpdatedAt,
-        idempotencyKey: legacyIdempotencyKey,
-        duplicate: null,
-      };
-    }
-    const concurrent = await getDeliveryAttemptByIdempotencyKey(env, legacyIdempotencyKey);
-    if (!concurrent) throw new Error("Legacy instant email retry claim disappeared.");
-    return {
-      attemptId: null,
-      claimUpdatedAt: null,
-      idempotencyKey: legacyIdempotencyKey,
-      duplicate: concurrent,
-    };
-  }
-  if (
-    legacyDuplicate &&
-    legacyDuplicate.status !== "skipped_due_to_quiet_hours"
-  ) {
-    return {
-      attemptId: null,
-      claimUpdatedAt: null,
-      idempotencyKey,
-      duplicate: legacyDuplicate,
-    };
-  }
-
-  const claimUpdatedAt = new Date().toISOString();
-  try {
-    const attemptId = await createDeliveryAttempt(env, {
-      userId: input.userId,
-      watchlistId: input.watchlistId,
-      digestRunId: null,
-      deliveryTargetId: input.deliveryTargetId,
-      lane: input.lane,
-      channel: "email",
-      provider: EMAIL_PROVIDER,
-      status: "pending",
-      webhookStatus: "pending",
-      targetValue: input.targetValue,
-      providerMessageId: null,
-      providerStatusLastSeenAt: null,
-      templateName: null,
-      eventIds: input.eventIds,
-      payloadSnapshot: input.payloadSnapshot,
-      idempotencyKey,
-      errorMessage: null,
-      sentAt: null,
-      failedAt: null,
-      timestamp: claimUpdatedAt,
-    });
-    return { attemptId, claimUpdatedAt, idempotencyKey, duplicate: null };
-  } catch (error) {
-    const concurrent = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
-    if (concurrent) {
-      return { attemptId: null, claimUpdatedAt: null, idempotencyKey, duplicate: concurrent };
-    }
-    throw error;
-  }
 }
 
-async function claimInstantProviderDeliveryAttempt(
+async function claimInstantDeliveryAttempt(
   env: AppEnv,
   input: {
     userId: string;
     watchlistId: string;
     deliveryTargetId: string;
     lane: DeliveryLane;
-    channel: "whatsapp" | "slack";
+    channel: "email" | "whatsapp" | "slack";
     provider: string;
     targetValue: string;
     batchKey: string;
     eventIds: string[];
     payloadSnapshot: Record<string, unknown>;
+    requireTrustedRetryEvidence: boolean;
   },
 ): Promise<{
   attemptId: string | null;
@@ -1137,7 +1019,9 @@ async function claimInstantProviderDeliveryAttempt(
   });
   const duplicate = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
   if (duplicate) {
-    const protocolProven = hasTrustedInstantProviderRetryEvidence(duplicate);
+    const protocolProven =
+      !input.requireTrustedRetryEvidence ||
+      hasTrustedInstantProviderRetryEvidence(duplicate);
     const stalePreDispatch = protocolProven && isStalePreDispatchAttempt(duplicate);
     const definiteFailure =
       protocolProven && duplicate.status === "failed" && duplicate.webhookStatus === "failed";
@@ -1173,7 +1057,8 @@ async function claimInstantProviderDeliveryAttempt(
   if (
     legacyDuplicate?.status === "failed" &&
     legacyDuplicate.webhookStatus === "failed" &&
-    hasTrustedInstantProviderRetryEvidence(legacyDuplicate)
+    (!input.requireTrustedRetryEvidence ||
+      hasTrustedInstantProviderRetryEvidence(legacyDuplicate))
   ) {
     const claimUpdatedAt = new Date().toISOString();
     const retryClaimed = await updateDeliveryAttemptResult(env, legacyDuplicate.id, {
@@ -1244,6 +1129,27 @@ async function claimInstantProviderDeliveryAttempt(
     }
     throw error;
   }
+}
+
+async function claimInstantProviderDeliveryAttempt(
+  env: AppEnv,
+  input: {
+    userId: string;
+    watchlistId: string;
+    deliveryTargetId: string;
+    lane: DeliveryLane;
+    channel: "whatsapp" | "slack";
+    provider: string;
+    targetValue: string;
+    batchKey: string;
+    eventIds: string[];
+    payloadSnapshot: Record<string, unknown>;
+  },
+) {
+  return claimInstantDeliveryAttempt(env, {
+    ...input,
+    requireTrustedRetryEvidence: true,
+  });
 }
 
 async function deliverInstantWhatsAppBatch(
@@ -1478,6 +1384,36 @@ async function deliverInstantSlackBatch(
     throw new Error("Instant Slack delivery claim did not return an owned attempt.");
   }
   const { attemptId, claimUpdatedAt, idempotencyKey } = attemptClaim;
+  const preparation = await prepareSlackWebhookTarget(env, input.deliveryTarget);
+  if (!preparation.ok) {
+    const localResult = preparation.result;
+    const finalized = await updateDeliveryAttemptResult(env, attemptId, {
+      provider: localResult.provider,
+      status: localResult.status,
+      webhookStatus: localResult.webhookStatus,
+      providerMessageId: null,
+      providerStatusLastSeenAt: null,
+      errorMessage: localResult.errorMessage,
+      sentAt: null,
+      failedAt: new Date().toISOString(),
+      expectedStatus: "pending",
+      expectedWebhookStatus: "pending",
+      expectedUpdatedAt: claimUpdatedAt,
+    });
+    if (finalized === false) {
+      const durable = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
+      if (durable) return summarizeDeliveryAttempt(durable);
+      throw new Error("Instant Slack local preparation claim disappeared.");
+    }
+    return {
+      channel: "slack",
+      status: localResult.status,
+      targetValue: input.deliveryTarget.targetValue,
+      providerMessageId: null,
+      errorMessage: localResult.errorMessage,
+      deliveredAt: null,
+    };
+  }
   const dispatchStartedAt = await markProviderDispatch(
     env,
     attemptId,
@@ -1490,7 +1426,7 @@ async function deliverInstantSlackBatch(
     return summarizeDeliveryAttempt(durable);
   }
 
-  const providerResult = await sendSlackWebhookMessage(env, input.deliveryTarget, {
+  const providerResult = await sendSlackWebhookUrl(preparation.webhookUrl, {
     text: renderInstantSlackText(input.content, input.batch.events),
   });
 
@@ -1664,9 +1600,43 @@ const claimUpdatedAt = attemptClaim.claimUpdatedAt;
 if (!attemptId || !claimUpdatedAt) {
 throw new Error("Digest Slack claim did not return an owned attempt.");
 }
+const preparation = await prepareSlackWebhookTarget(env, target);
+if (!preparation.ok) {
+const localResult = preparation.result;
+const finalized = await updateDeliveryAttemptResult(env, attemptId, {
+provider: localResult.provider,
+status: localResult.status,
+webhookStatus: localResult.webhookStatus,
+providerMessageId: null,
+providerStatusLastSeenAt: null,
+errorMessage: localResult.errorMessage,
+sentAt: null,
+failedAt: new Date().toISOString(),
+expectedStatus: "pending",
+expectedWebhookStatus: "pending",
+expectedUpdatedAt: claimUpdatedAt,
+});
+const localSummary: DigestAttemptSummary = {
+channel: "slack",
+status: localResult.status,
+targetValue: target.targetValue,
+providerMessageId: null,
+errorMessage: localResult.errorMessage,
+deliveredAt: null,
+claimedByThisRun: true,
+};
+if (finalized === false) {
+return readFinalizedDigestAttempt(env, {
+channel: "slack",
+idempotencyKey,
+fallback: localSummary,
+});
+}
+return localSummary;
+}
 const dispatchStartedAt = await markProviderDispatch(env, attemptId, SLACK_PROVIDER, claimUpdatedAt);
 if (!dispatchStartedAt) return readLostDigestDispatchClaim(env, "slack", idempotencyKey);
-const providerResult = await sendSlackWebhookMessage(env, target, {
+const providerResult = await sendSlackWebhookUrl(preparation.webhookUrl, {
 text: slackText,
 });
 const finalized = await updateDeliveryAttemptResult(env, attemptId, {

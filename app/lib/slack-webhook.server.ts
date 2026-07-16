@@ -25,26 +25,44 @@ export interface SlackWebhookPayload {
   blocks?: Array<Record<string, unknown>>;
 }
 
+export type SlackWebhookTargetPreparation =
+  | { ok: true; webhookUrl: string }
+  | { ok: false; result: SlackWebhookSendResult };
+
+export async function prepareSlackWebhookTarget(
+  env: AppEnv,
+  target: DeliveryTargetRecord,
+): Promise<SlackWebhookTargetPreparation> {
+  const encryptedWebhookUrl = readString(target.metadata.encryptedWebhookUrl);
+  if (!encryptedWebhookUrl) {
+    return {
+      ok: false,
+      result: slackLocalFailure("Slack webhook is not connected for this destination."),
+    };
+  }
+
+  try {
+    return {
+      ok: true,
+      webhookUrl: await decryptCredential(env, encryptedWebhookUrl),
+    };
+  } catch {
+    return {
+      ok: false,
+      result: slackLocalFailure("Slack webhook could not be decrypted."),
+    };
+  }
+}
+
 export async function sendSlackWebhookMessage(
   env: AppEnv,
   target: DeliveryTargetRecord,
   payload: SlackWebhookPayload,
   options: { fetchImpl?: FetchImpl } = {},
 ): Promise<SlackWebhookSendResult> {
-  const statusSeenAt = new Date().toISOString();
-  const encryptedWebhookUrl = readString(target.metadata.encryptedWebhookUrl);
-  if (!encryptedWebhookUrl) {
-    return slackFailure(statusSeenAt, "Slack webhook is not connected for this destination.");
-  }
-
-  let webhookUrl: string;
-  try {
-    webhookUrl = await decryptCredential(env, encryptedWebhookUrl);
-  } catch {
-    return slackFailure(statusSeenAt, "Slack webhook could not be decrypted.");
-  }
-
-  return sendSlackWebhookUrl(webhookUrl, payload, options, statusSeenAt);
+  const preparation = await prepareSlackWebhookTarget(env, target);
+  if (!preparation.ok) return preparation.result;
+  return sendSlackWebhookUrl(preparation.webhookUrl, payload, options);
 }
 
 export async function sendSlackWebhookUrl(
@@ -130,6 +148,18 @@ function slackAmbiguousFailure(
     webhookStatus: "provider_unknown",
     providerMessageId: null,
     providerStatusLastSeenAt: statusSeenAt,
+    errorMessage,
+    deliveredAt: null,
+  };
+}
+
+function slackLocalFailure(errorMessage: string): SlackWebhookSendResult {
+  return {
+    provider: SLACK_PROVIDER,
+    status: "failed",
+    webhookStatus: "failed",
+    providerMessageId: null,
+    providerStatusLastSeenAt: null,
     errorMessage,
     deliveredAt: null,
   };
