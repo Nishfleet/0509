@@ -12,6 +12,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const {
     createBillingEmailReconciliationKey,
     createDigestEmailReconciliationKey,
+    createInstantChannelReconciliationKey,
     createInstantEmailReconciliationKey,
     getOperatorSnapshot,
     listOutstandingBillingLifecycleProviderUnknownAttempts,
@@ -52,11 +53,14 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     })),
     outstandingInstantAttempts: outstandingInstantAttempts.map((attempt) => ({
       attemptId: attempt.id,
+      channel: attempt.channel,
       recipient: maskDeliveryTarget(attempt.targetValue),
       provider: attempt.provider,
       createdAt: attempt.createdAt,
       updatedAt: attempt.updatedAt,
-      reconciliationKey: createInstantEmailReconciliationKey(),
+      reconciliationKey: attempt.channel === "email"
+        ? createInstantEmailReconciliationKey()
+        : createInstantChannelReconciliationKey(attempt.channel),
     })),
   };
 }
@@ -67,19 +71,34 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const intent = String(formData.get("intent") ?? "");
   const isBillingReconciliation = intent === "reconcile-billing-email";
   const isDigestReconciliation = intent === "reconcile-digest-email";
-  const isInstantReconciliation = intent === "reconcile-instant-email";
+  const instantChannel = intent === "reconcile-instant-email"
+    ? "email" as const
+    : intent === "reconcile-instant-whatsapp"
+      ? "whatsapp" as const
+      : intent === "reconcile-instant-slack"
+        ? "slack" as const
+        : null;
+  const isInstantReconciliation = instantChannel !== null;
   if (!isBillingReconciliation && !isDigestReconciliation && !isInstantReconciliation) {
     return { ok: false, intent, message: "Unknown operator action." };
   }
 
   const {
     BILLING_EMAIL_EVIDENCE_CLASSIFICATIONS,
+    INSTANT_SLACK_EVIDENCE_CLASSIFICATIONS,
+    INSTANT_WHATSAPP_EVIDENCE_CLASSIFICATIONS,
     reconcileBillingEmailAttemptWithAudit,
     reconcileDigestEmailAttemptWithAudit,
+    reconcileInstantChannelAttemptWithAudit,
     reconcileInstantEmailAttemptWithAudit,
   } = await import("~/lib/data.server");
   const classificationValue = String(formData.get("classification") ?? "");
-  const classification = BILLING_EMAIL_EVIDENCE_CLASSIFICATIONS.find(
+  const evidenceClassifications = instantChannel === "whatsapp"
+    ? INSTANT_WHATSAPP_EVIDENCE_CLASSIFICATIONS
+    : instantChannel === "slack"
+      ? INSTANT_SLACK_EVIDENCE_CLASSIFICATIONS
+      : BILLING_EMAIL_EVIDENCE_CLASSIFICATIONS;
+  const classification = evidenceClassifications.find(
     (value) => value === classificationValue,
   );
   if (!classification) {
@@ -101,21 +120,26 @@ export async function action({ context, request }: ActionFunctionArgs) {
     };
   }
 
-  const reconcile = isBillingReconciliation
-    ? reconcileBillingEmailAttemptWithAudit
-    : isDigestReconciliation
-      ? reconcileDigestEmailAttemptWithAudit
-      : reconcileInstantEmailAttemptWithAudit;
-  const result = await reconcile(env, {
+  const reconciliationInput = {
     operatorUserId: session.user.id,
     attemptId: String(formData.get("attemptId") ?? ""),
     idempotencyKey: String(formData.get("reconciliationKey") ?? ""),
     expectedUpdatedAt: String(formData.get("expectedUpdatedAt") ?? ""),
-    outcome,
+    outcome: outcome as "sent" | "failed",
     classification,
     evidenceReference: String(formData.get("evidenceReference") ?? ""),
     observedAt: String(formData.get("observedAt") ?? ""),
-  });
+  };
+  const result = instantChannel && instantChannel !== "email"
+    ? await reconcileInstantChannelAttemptWithAudit(env, {
+        ...reconciliationInput,
+        channel: instantChannel,
+      })
+    : isBillingReconciliation
+      ? await reconcileBillingEmailAttemptWithAudit(env, reconciliationInput)
+      : isDigestReconciliation
+        ? await reconcileDigestEmailAttemptWithAudit(env, reconciliationInput)
+        : await reconcileInstantEmailAttemptWithAudit(env, reconciliationInput);
   if (result.ok) {
     return {
       ok: true,
@@ -123,11 +147,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
       attemptId: result.attemptId,
       message:
         result.outcome === "sent"
-          ? "Marked sent from verified provider evidence. No email was resent."
+          ? `Marked sent from verified provider evidence. No ${instantChannel === "whatsapp" ? "WhatsApp" : instantChannel === "slack" ? "Slack message" : "email"} was resent.`
           : isDigestReconciliation
             ? "Marked failed from verified provider evidence. A later digest run may retry it safely; this action did not resend email."
             : isInstantReconciliation
-              ? "Marked failed from verified provider evidence. A later alert recovery pass may retry it safely; this action did not resend email."
+              ? `Marked failed from verified provider evidence. A later alert recovery pass may retry it safely; this action did not resend ${instantChannel === "whatsapp" ? "WhatsApp" : instantChannel === "slack" ? "Slack" : "email"}.`
             : "Marked failed from verified provider evidence. This action did not resend email.",
     };
   }
@@ -345,21 +369,21 @@ export default function OpsRoute() {
           />
 
           <OpsSection
-            empty="No instant-alert emails are awaiting provider reconciliation."
+            empty="No instant alerts are awaiting provider reconciliation."
             items={outstandingInstantAttempts}
-            title="Instant-alert email provider reconciliation"
+            title="Instant-alert provider reconciliation"
             renderItem={(item) => (
               <>
                 <p className="f9-app-kicker">{item.provider} · Instant alert</p>
-                <h3>Email to {item.recipient}</h3>
+                <h3>{instantDeliveryDestinationLabel(item.channel, item.recipient)}</h3>
                 <p>
-                  Confirm whether Cloudflare accepted this alert. Recording evidence never resends it; only a confirmed rejection makes an automatic retry safe.
+                  Confirm the outcome in {instantProviderEvidenceLabel(item.channel)}. Recording evidence never resends it; only a confirmed rejection makes an automatic retry safe.
                 </p>
                 <p className="f9-muted-copy">
                   Unknown since <LocalTime iso={item.updatedAt} />
                 </p>
                 <Form className="f9-app-stack" method="post">
-                  <input name="intent" type="hidden" value="reconcile-instant-email" />
+                  <input name="intent" type="hidden" value={instantReconciliationIntent(item.channel)} />
                   <input name="attemptId" type="hidden" value={item.attemptId} />
                   <input name="expectedUpdatedAt" type="hidden" value={item.updatedAt} />
                   <input name="reconciliationKey" type="hidden" value={item.reconciliationKey} />
@@ -375,9 +399,9 @@ export default function OpsRoute() {
                     Evidence source
                     <select name="classification" required>
                       <option value="">Choose evidence source</option>
-                      <option value="cloudflare_email_log">Cloudflare Email log</option>
-                      <option value="controlled_inbox_receipt">Controlled inbox receipt</option>
-                      <option value="provider_rejection_log">Provider rejection log</option>
+                      {instantEvidenceOptions(item.channel).map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
                     </select>
                   </label>
                   <label>
@@ -402,7 +426,7 @@ export default function OpsRoute() {
                   </label>
                   <SubmitButton
                     className="f9-secondary-button"
-                    intent="reconcile-instant-email"
+                    intent={instantReconciliationIntent(item.channel)}
                     match={{ attemptId: item.attemptId }}
                     pendingLabel="Recording…"
                   >
@@ -411,7 +435,7 @@ export default function OpsRoute() {
                 </Form>
                 <ActionFeedback
                   data={actionData}
-                  intent="reconcile-instant-email"
+                  intent={instantReconciliationIntent(item.channel)}
                   match={{ attemptId: item.attemptId }}
                 />
               </>
@@ -592,6 +616,46 @@ function maskDeliveryTarget(value: string) {
   }
   const digits = normalized.replace(/\D/g, "");
   return digits.length >= 4 ? `••••${digits.slice(-4)}` : "••••";
+}
+
+type InstantOpsChannel = "email" | "whatsapp" | "slack";
+
+function instantReconciliationIntent(channel: InstantOpsChannel) {
+  return `reconcile-instant-${channel}` as const;
+}
+
+function instantDeliveryDestinationLabel(channel: InstantOpsChannel, recipient: string) {
+  if (channel === "whatsapp") return `WhatsApp to ${recipient}`;
+  if (channel === "slack") return `Slack destination ${recipient}`;
+  return `Email to ${recipient}`;
+}
+
+function instantProviderEvidenceLabel(channel: InstantOpsChannel) {
+  if (channel === "whatsapp") return "Meta message logs or the controlled recipient";
+  if (channel === "slack") return "the Slack webhook response or controlled channel";
+  return "Cloudflare Email logs or the controlled inbox";
+}
+
+function instantEvidenceOptions(channel: InstantOpsChannel) {
+  if (channel === "whatsapp") {
+    return [
+      { value: "meta_whatsapp_message_log", label: "Meta WhatsApp message log" },
+      { value: "controlled_recipient_receipt", label: "Controlled recipient receipt" },
+      { value: "provider_rejection_log", label: "Provider rejection log" },
+    ] as const;
+  }
+  if (channel === "slack") {
+    return [
+      { value: "slack_webhook_response", label: "Slack webhook response" },
+      { value: "controlled_channel_observation", label: "Controlled channel observation" },
+      { value: "provider_rejection_log", label: "Provider rejection log" },
+    ] as const;
+  }
+  return [
+    { value: "cloudflare_email_log", label: "Cloudflare Email log" },
+    { value: "controlled_inbox_receipt", label: "Controlled inbox receipt" },
+    { value: "provider_rejection_log", label: "Provider rejection log" },
+  ] as const;
 }
 
 function maskSegment(value: string) {

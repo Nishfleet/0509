@@ -217,13 +217,19 @@ export {
 
 export {
   BILLING_EMAIL_EVIDENCE_CLASSIFICATIONS,
+  INSTANT_SLACK_EVIDENCE_CLASSIFICATIONS,
+  INSTANT_WHATSAPP_EVIDENCE_CLASSIFICATIONS,
   createBillingEmailReconciliationKey,
   createDigestEmailReconciliationKey,
+  createInstantChannelReconciliationKey,
   createInstantEmailReconciliationKey,
   reconcileBillingEmailAttemptWithAudit,
   reconcileDigestEmailAttemptWithAudit,
+  reconcileInstantChannelAttemptWithAudit,
   reconcileInstantEmailAttemptWithAudit,
   type BillingEmailEvidenceClassification,
+  type InstantDeliveryChannel,
+  type InstantDeliveryEvidenceClassification,
 } from "~/lib/data/operator-delivery-reconciliation.server";
 
 export {
