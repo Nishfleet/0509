@@ -1,8 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import {
-  reconcileWhatsAppSetupTargetFromAttempt,
-} from "~/lib/data/delivery-records-targets.server";
+import { reconcileWhatsAppSetupTargetFromAttempt } from "~/lib/data/delivery-records-targets.server";
 import { createSqliteD1 } from "./helpers/sqlite-d1";
 
 const harnesses: Array<ReturnType<typeof createSqliteD1>> = [];
@@ -86,13 +84,17 @@ describe("WhatsApp setup target reconciliation", () => {
 
     // Simulate an overlapping stale pending writer dropping the local link after
     // the provider accepted the message but before the signed webhook arrives.
-    harness.sqlite.prepare(`
+    harness.sqlite
+      .prepare(
+        `
       UPDATE delivery_target
       SET provider_identifier = NULL,
           metadata_json = '{"validationGeneration":"initial","validationWebhookStatus":"pending"}',
           updated_at = '2026-07-16T09:01:30.000Z'
       WHERE id = 'target-1'
-    `).run();
+    `,
+      )
+      .run();
 
     await expect(
       reconcileWhatsAppSetupTargetFromAttempt(env, {
@@ -124,12 +126,16 @@ describe("WhatsApp setup target reconciliation", () => {
   it("refuses an older validation generation and an incompatible provider id", async () => {
     const harness = openHarness();
     const env = { DB: harness.db } as never;
-    harness.sqlite.prepare(`
+    harness.sqlite
+      .prepare(
+        `
       UPDATE delivery_target
       SET provider_identifier = 'wamid.current',
           metadata_json = '{"validationGeneration":"reconnect:2026-07-16","validationProviderMessageId":"wamid.current","validationWebhookStatus":"pending"}'
       WHERE id = 'target-1'
-    `).run();
+    `,
+      )
+      .run();
 
     await reconcileWhatsAppSetupTargetFromAttempt(env, {
       userId: "user-1",
@@ -150,6 +156,63 @@ describe("WhatsApp setup target reconciliation", () => {
         validationProviderMessageId: "wamid.current",
         validationWebhookStatus: "pending",
       },
+    });
+  });
+
+  it("binds a provider-accepted retry after the prior setup message failed", async () => {
+    const harness = openHarness();
+    const env = { DB: harness.db } as never;
+    harness.sqlite
+      .prepare(
+        `
+      UPDATE delivery_target
+      SET validation_status = 'invalid',
+          is_validated = 0,
+          template_eligible = 0,
+          provider_identifier = 'wamid.failed-1',
+          metadata_json = '{"validationGeneration":"initial","validationAttemptId":"attempt-1","validationProviderMessageId":"wamid.failed-1","validationWebhookStatus":"failed","validationStatusLastSeenAt":"2026-07-16T09:02:00.000Z"}',
+          updated_at = '2026-07-16T09:02:00.000Z'
+      WHERE id = 'target-1'
+    `,
+      )
+      .run();
+
+    await expect(
+      reconcileWhatsAppSetupTargetFromAttempt(env, {
+        userId: "user-1",
+        targetId: "target-1",
+        attemptId: "attempt-1",
+        providerMessageId: "wamid.retry-2",
+        validationGeneration: "initial",
+        webhookStatus: "pending",
+        providerStatusLastSeenAt: "2026-07-16T09:03:00.000Z",
+        errorMessage: null,
+      }),
+    ).resolves.toMatchObject({
+      validationStatus: "pending",
+      providerIdentifier: "wamid.retry-2",
+      metadata: expect.objectContaining({
+        validationAttemptId: "attempt-1",
+        validationProviderMessageId: "wamid.retry-2",
+        validationWebhookStatus: "pending",
+      }),
+    });
+
+    await expect(
+      reconcileWhatsAppSetupTargetFromAttempt(env, {
+        userId: "user-1",
+        targetId: "target-1",
+        attemptId: "attempt-1",
+        providerMessageId: "wamid.retry-2",
+        validationGeneration: "initial",
+        webhookStatus: "delivered",
+        providerStatusLastSeenAt: "2026-07-16T09:04:00.000Z",
+        errorMessage: null,
+      }),
+    ).resolves.toMatchObject({
+      validationStatus: "validated",
+      isValidated: true,
+      providerIdentifier: "wamid.retry-2",
     });
   });
 });

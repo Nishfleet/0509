@@ -204,6 +204,7 @@ function mockReliabilityDependencies(input: {
         return digestScheduleJobs.length;
       },
     ),
+    exhaustStaleMaxAttemptDigestScheduleJobs: vi.fn().mockResolvedValue(0),
     listRetryableDigestScheduleJobs: vi.fn().mockImplementation(async () => digestScheduleJobs),
     claimDigestScheduleJob: vi.fn().mockImplementation(
       async (_env: unknown, claim: { jobId: string }) =>

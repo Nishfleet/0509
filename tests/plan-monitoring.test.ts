@@ -88,6 +88,7 @@ function digestScheduleDataMocks() {
         return 1;
       },
     ),
+    exhaustStaleMaxAttemptDigestScheduleJobs: vi.fn().mockResolvedValue(0),
     listRetryableDigestScheduleJobs: vi.fn().mockImplementation(async () => jobs),
     claimDigestScheduleJob: vi.fn().mockImplementation(
       async (_env: unknown, input: { jobId: string }) =>
