@@ -16,7 +16,7 @@ interface WorkspaceBrandingRow {
   user_id: string;
   brand_name: string | null;
   brand_website: string | null;
-  brand_logo: string | null;
+	brand_logo: string | null;
   updated_at: string;
 }
 
@@ -30,9 +30,9 @@ export const WORKSPACE_BRAND_LOGO_MAX_LENGTH = 65536;
 // XSS vector the moment it is reused outside an <img> tag (emails, exported
 // HTML), so it is rejected at the storage boundary, not just at render time.
 const WORKSPACE_BRAND_LOGO_ALLOWED_PREFIXES = [
-  "data:image/png;base64,",
-  "data:image/jpeg;base64,",
-  "data:image/webp;base64,",
+	"data:image/png;base64,",
+	"data:image/jpeg;base64,",
+	"data:image/webp;base64,",
 ] as const;
 
 const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/;
@@ -48,24 +48,24 @@ function normalizeWorkspaceBrandWebsite(value: string | null | undefined): strin
 }
 
 export function normalizeWorkspaceBrandLogo(value: string | null | undefined): string | null {
-  const trimmed = (value ?? "").trim();
-  if (trimmed.length === 0 || trimmed.length > WORKSPACE_BRAND_LOGO_MAX_LENGTH) {
-    return null;
-  }
+	const trimmed = (value ?? "").trim();
+	if (trimmed.length === 0 || trimmed.length > WORKSPACE_BRAND_LOGO_MAX_LENGTH) {
+		return null;
+	}
 
-  const prefix = WORKSPACE_BRAND_LOGO_ALLOWED_PREFIXES.find((allowed) =>
-    trimmed.startsWith(allowed),
-  );
-  if (!prefix) {
-    return null;
-  }
+	const prefix = WORKSPACE_BRAND_LOGO_ALLOWED_PREFIXES.find((allowed) =>
+		trimmed.startsWith(allowed),
+	);
+	if (!prefix) {
+		return null;
+	}
 
-  const payload = trimmed.slice(prefix.length);
-  if (payload.length === 0 || !BASE64_PAYLOAD_PATTERN.test(payload)) {
-    return null;
-  }
+	const payload = trimmed.slice(prefix.length);
+	if (payload.length === 0 || !BASE64_PAYLOAD_PATTERN.test(payload)) {
+		return null;
+	}
 
-  return trimmed;
+	return trimmed;
 }
 
 export async function getWorkspaceBranding(env: AppEnv, userId: string) {
@@ -79,31 +79,30 @@ export async function getWorkspaceBranding(env: AppEnv, userId: string) {
     userId,
   );
 
-  return {
-    brandName: row?.brand_name ?? null,
-    brandWebsite: row?.brand_website ?? null,
-    brandLogo: row?.brand_logo ?? null,
-  };
+	return {
+		brandName: row?.brand_name ?? null,
+		brandWebsite: row?.brand_website ?? null,
+		brandLogo: row?.brand_logo ?? null,
+	};
 }
 
 export async function upsertWorkspaceBranding(
   env: AppEnv,
   userId: string,
-  input: {
-    brandName?: string | null | undefined;
-    brandWebsite?: string | null | undefined;
-    brandLogo?: string | null | undefined;
-  },
+	input: {
+		brandName?: string | null | undefined;
+		brandWebsite?: string | null | undefined;
+		brandLogo?: string | null | undefined;
+	},
 ) {
-  const current = await getWorkspaceBranding(env, userId);
   const hasBrandName = Object.prototype.hasOwnProperty.call(input, "brandName");
   const hasBrandWebsite = Object.prototype.hasOwnProperty.call(input, "brandWebsite");
-  const hasBrandLogo = Object.prototype.hasOwnProperty.call(input, "brandLogo");
-  const brandName = hasBrandName ? normalizeWorkspaceBrandName(input.brandName) : current.brandName;
-  const brandWebsite = hasBrandWebsite
-    ? normalizeWorkspaceBrandWebsite(input.brandWebsite)
-    : current.brandWebsite;
-  const brandLogo = hasBrandLogo ? normalizeWorkspaceBrandLogo(input.brandLogo) : current.brandLogo;
+	const hasBrandLogo = Object.prototype.hasOwnProperty.call(input, "brandLogo");
+	const brandName = hasBrandName ? normalizeWorkspaceBrandName(input.brandName) : null;
+	const brandWebsite = hasBrandWebsite
+		? normalizeWorkspaceBrandWebsite(input.brandWebsite)
+		: null;
+	const brandLogo = hasBrandLogo ? normalizeWorkspaceBrandLogo(input.brandLogo) : null;
 
   await run(
     env,
@@ -111,17 +110,32 @@ export async function upsertWorkspaceBranding(
       INSERT INTO workspace_branding (user_id, brand_name, brand_website, brand_logo, updated_at)
       VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(user_id) DO UPDATE SET
-        brand_name = excluded.brand_name,
-        brand_website = excluded.brand_website,
-        brand_logo = excluded.brand_logo,
+				brand_name = CASE
+					WHEN ? = 1 THEN excluded.brand_name
+					ELSE workspace_branding.brand_name
+				END,
+				brand_website = CASE
+					WHEN ? = 1 THEN excluded.brand_website
+					ELSE workspace_branding.brand_website
+				END,
+				brand_logo = CASE
+					WHEN ? = 1 THEN excluded.brand_logo
+					ELSE workspace_branding.brand_logo
+				END,
         updated_at = excluded.updated_at
     `,
     userId,
     brandName,
     brandWebsite,
-    brandLogo,
+		brandLogo,
     nowIso(),
+		hasBrandName ? 1 : 0,
+		hasBrandWebsite ? 1 : 0,
+		hasBrandLogo ? 1 : 0,
   );
 
-  return { brandName, brandWebsite, brandLogo };
+	// Return the durable row rather than the caller's partial input. Omitted
+	// fields are preserved by the atomic upsert above, even when another tab
+	// updates a different field between requests.
+	return getWorkspaceBranding(env, userId);
 }

@@ -6,6 +6,7 @@ import {
   useLoaderData,
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import { useEffect, useState } from "react";
 
 import { DashboardPage } from "~/components/dashboard-page";
 import {
@@ -471,6 +472,13 @@ function isValidSnapshotGeneratedAt(value: unknown) {
 
 export default function ReportsRoute() {
   const data = useLoaderData<typeof loader>();
+  const [pdfPreparing, setPdfPreparing] = useState(false);
+  useEffect(() => {
+    if (!pdfPreparing) return;
+    const timeout = setTimeout(() => setPdfPreparing(false), 75_000);
+    return () => clearTimeout(timeout);
+  }, [pdfPreparing]);
+
   if (data.accessDenied) {
     return (
       <DashboardPage>
@@ -611,7 +619,19 @@ export default function ReportsRoute() {
                 // reloadDocument: a browser-native POST follows the 303 into
                 // the attachment download without routing PDF bytes through
                 // the SPA navigation.
-                <Form method="post" reloadDocument>
+                <Form
+                  method="post"
+                  onSubmit={(event) => {
+                    if (pdfPreparing) {
+                      event.preventDefault();
+                      return;
+                    }
+                    setPdfPreparing(true);
+                  }}
+                  reloadDocument
+                  aria-busy={pdfPreparing}
+                  data-pdf-preparing={pdfPreparing ? "true" : "false"}
+                >
                   <input name="intent" type="hidden" value="download-pdf" />
                   <input
                     name="reviewFingerprint"
@@ -631,11 +651,11 @@ export default function ReportsRoute() {
                   </label>
                   <SubmitButton
                     className="f9-primary-button"
-                    disabled={!reportReadiness.ok}
+                    disabled={!reportReadiness.ok || pdfPreparing}
                     intent="download-pdf"
                     pendingLabel="Preparing…"
                   >
-                    Download PDF
+                    {pdfPreparing ? "Preparing…" : "Download PDF"}
                   </SubmitButton>
                 </Form>
               ) : (

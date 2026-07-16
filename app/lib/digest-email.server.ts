@@ -39,10 +39,13 @@ export interface DigestEmailInput {
   periodStart: string;
   periodEnd: string;
   items: DigestTrustItem[];
+  totalEligibleEvents?: number;
+  includedEvents?: number;
+  omittedEvents?: number;
   heartbeat?: DigestEmailHeartbeat | null;
-  // Optional AI weekly summary persisted on the digest run. Absent or empty
-  // renders nothing at all — the email is byte-identical without it.
-  strategyParagraph?: string | null;
+	// Optional AI weekly summary persisted on the digest run. Absent or empty
+	// renders nothing at all — the email is byte-identical without it.
+	strategyParagraph?: string | null;
   cadence?: DigestCadence;
   timeZone?: string | null;
   fullDigestUrl: string;
@@ -64,23 +67,26 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
   const priorityMix = summarizePriorityMix(input.items);
   const cadenceLabel = digestCadenceLabel(input.cadence);
   const subject = subjectForDigest(input.items.length, actionCount, topItems);
+  const totalEligibleEvents = input.totalEligibleEvents ?? input.items.length;
+  const includedEvents = input.includedEvents ?? input.items.length;
+  const omittedEvents = input.omittedEvents ?? Math.max(totalEligibleEvents - includedEvents, 0);
   const answer =
-    input.items.length === actionCount
-      ? `${input.items.length} change${input.items.length === 1 ? "" : "s"} found, ${actionCount} worth action.`
-      : `${input.items.length} changes found, ${actionCount} worth action.`;
+    omittedEvents > 0
+      ? `${totalEligibleEvents} changes found; showing ${includedEvents}, with ${omittedEvents} lower-priority change${omittedEvents === 1 ? "" : "s"} omitted. ${actionCount} worth action.`
+      : `${totalEligibleEvents} change${totalEligibleEvents === 1 ? "" : "s"} found, ${actionCount} worth action.`;
   const preheader = `${answer} ${proofMixLabel(proofMix)}.`;
   const dateRange = `${formatDate(input.periodStart, input.timeZone)} to ${formatDate(input.periodEnd, input.timeZone)}`;
   const omittedCount = Math.max(input.items.length - topItems.length, 0);
   const trendLines =
     input.cadence === "weekly" ? buildDigestTrendRollups(input.items) : [];
-  const strategyParagraph = input.strategyParagraph?.trim() || null;
+	const strategyParagraph = input.strategyParagraph?.trim() || null;
 
   const html = `
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
     ${renderEmailContentSurface(`
       <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">Five to Nine ${escapeHtml(cadenceLabel)}</p>
       <h1 style="margin: 0 0 12px;">${escapeHtml(answer)}</h1>
-      <p style="margin: 0 0 18px; color: #475467;">${escapeHtml(dateRange)}</p>${renderStrategySectionHtml(strategyParagraph)}
+			<p style="margin: 0 0 18px; color: #475467;">${escapeHtml(dateRange)}</p>${renderStrategySectionHtml(strategyParagraph)}
       <div style="margin: 0 0 20px; padding: 14px; border: 1px solid #d7dce5; border-radius: 12px;">
         <p style="margin: 0 0 6px;"><strong>Priority mix:</strong> ${escapeHtml(priorityMixLabel(priorityMix))}</p>
         <p style="margin: 0;"><strong>Evidence mix:</strong> ${escapeHtml(proofMixLabel(proofMix))}</p>
@@ -106,7 +112,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
     "",
     answer,
     dateRange,
-    ...(strategyParagraph ? ["", "AI summary of the week:", strategyParagraph] : []),
+		...(strategyParagraph ? ["", "AI summary of the week:", strategyParagraph] : []),
     "",
     `Priority mix: ${priorityMixLabel(priorityMix)}`,
     `Evidence mix: ${proofMixLabel(proofMix)}`,
@@ -274,9 +280,9 @@ function renderTopMoveText(
 }
 
 function renderStrategySectionHtml(strategyParagraph: string | null) {
-  if (!strategyParagraph) {
-    return "";
-  }
+	if (!strategyParagraph) {
+		return "";
+	}
 
   return `
       <div style="margin: 0 0 20px; padding: 14px; border: 1px solid #d7dce5; border-radius: 12px; background-color: ${EMAIL_SURFACE_BG}; color: ${EMAIL_TEXT_PRIMARY};">

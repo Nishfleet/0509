@@ -357,6 +357,9 @@ export default function DigestsRoute() {
                     <p className="f9-muted-copy">
                       {priorityMixLabel(priorityMix)} · {proofMixLabel(proofMix)}
                     </p>
+                    {digestCohortNote(data.selectedDigest.summary) ? (
+                      <p className="f9-muted-copy">{digestCohortNote(data.selectedDigest.summary)}</p>
+                    ) : null}
                   </div>
                   <Form method="get" className="f9-filter-row">
                     <input name="digest" type="hidden" value={data.selectedDigest.id} />
@@ -506,6 +509,14 @@ export default function DigestsRoute() {
       </section>
     </DashboardPage>
   );
+}
+
+function digestCohortNote(summary: Record<string, unknown> | undefined) {
+  const total = typeof summary?.totalEligibleEvents === "number" ? summary.totalEligibleEvents : null;
+  const included = typeof summary?.includedEvents === "number" ? summary.includedEvents : null;
+  const omitted = typeof summary?.omittedEvents === "number" ? summary.omittedEvents : null;
+  if (total === null || included === null || omitted === null || omitted <= 0) return null;
+  return `Showing ${included} of ${total} eligible changes; ${omitted} lower-priority change${omitted === 1 ? "" : "s"} omitted from this digest.`;
 }
 
 function summarizeDigestAttempts<T extends {

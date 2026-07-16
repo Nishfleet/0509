@@ -202,6 +202,11 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
       id: "digest-1",
       userId: "user-1",
     }),
+    getLatestDigestRunSummaryForWatchlist: vi.fn().mockResolvedValue({
+      paragraph: "Glossier raised the offer threshold while the rest of the watch stayed quiet.",
+      generatedAt: "2026-06-19T05:05:00.000Z",
+      periodEnd: "2026-06-19T05:00:00.000Z",
+    }),
     listAdsByIds: vi.fn().mockResolvedValue([]),
     listCollectionItems: vi.fn().mockResolvedValue([]),
     listWatchEvents: vi.fn().mockResolvedValue([]),
@@ -458,6 +463,7 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
     getClientRoomByName: mocks.getClientRoomByName,
     getCollection: mocks.getCollection,
     getDigest: mocks.getDigest,
+    getLatestDigestRunSummaryForWatchlist: mocks.getLatestDigestRunSummaryForWatchlist,
     getShareLinkById: mocks.getShareLinkById,
     getWatchlist: mocks.getWatchlist,
     getWatchlistDeliveryConfig: mocks.getWatchlistDeliveryConfig,
@@ -1372,6 +1378,58 @@ describe("runCustomerAgentAction", () => {
     );
     expect(mocks.getCollection).toHaveBeenCalledWith(expect.anything(), "collection-1", "owner-1");
     expect((roomOutcome.result as { room: { userId: string } }).room.userId).toBe("owner-1");
+  });
+
+  it("keeps stored weekly strategy evidence in agent-created and shared watchlist reports", async () => {
+    const mocks = setupMocks();
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    const created = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "report-create-watchlist-1",
+        source: "api_v1",
+      },
+      "report.create",
+      { resourceType: "watchlist", resourceId: "watchlist-1" },
+    );
+    const shared = await runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: "report-share-watchlist-1",
+        source: "api_v1",
+        origin: "https://0509.io",
+      },
+      "report.share",
+      { resourceType: "watchlist", resourceId: "watchlist-1" },
+    );
+
+    const createdResult = created.result as {
+      report: { aiWeeklySummary?: { paragraph: string } };
+    };
+    const sharedResult = shared.result as {
+      report: { aiWeeklySummary?: { paragraph: string } };
+    };
+    expect(createdResult.report.aiWeeklySummary?.paragraph).toContain("Glossier raised");
+    expect(sharedResult.report.aiWeeklySummary).toEqual(createdResult.report.aiWeeklySummary);
+    expect(mocks.createShareLink).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        snapshotPayload: expect.objectContaining({
+          aiWeeklySummary: createdResult.report.aiWeeklySummary,
+        }),
+      }),
+    );
+    expect(mocks.getLatestDigestRunSummaryForWatchlist).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      "watchlist-1",
+    );
   });
 
   it("replays report share actions with a reconstructed share URL", async () => {

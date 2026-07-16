@@ -32,6 +32,12 @@ function webhookEventOccurrenceIso(value: unknown) {
   return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : undefined;
 }
 
+function sameBillingInstant(left: string | null | undefined, right: string | null | undefined) {
+  const leftMs = Date.parse(left ?? "");
+  const rightMs = Date.parse(right ?? "");
+  return Number.isFinite(leftMs) && Number.isFinite(rightMs) && leftMs === rightMs;
+}
+
 export async function action({ context, request }: ActionFunctionArgs) {
   const { readRequestTextWithinLimit } = await import("~/lib/bounded-response.server");
   const { getEnv } = await import("~/lib/context.server");
@@ -45,6 +51,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     verifyDodoWebhookRequest,
   } = await import("~/lib/dodo-billing.server");
   const {
+    applyDodoCancellationReversalWithLedger,
     applyDodoPlanGrantWithWatchlistReconcile,
     applyDodoPlanPaymentIssueWithLedger,
     applyDodoPlanRevokeWithWatchlistReconcile,
@@ -60,9 +67,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
     getUserIdForDodoLifecycle,
     getUserPlanBillingInfo,
   } = await import("~/lib/data.server");
-  const { applyDodoCancellationReversalWithLedger } = await import(
-    "~/lib/data/billing-reconcile.server"
-  );
   const { getPlanLimit } = await import("~/lib/plan.server");
   const env = getEnv(context);
   const rawBody = await readRequestTextWithinLimit(request, DODO_WEBHOOK_MAX_BODY_BYTES);
@@ -242,6 +246,72 @@ export async function action({ context, request }: ActionFunctionArgs) {
       const acceptedGrantAt = subscriptionGrant.grantedAt ?? fallbackGrantAt;
       const ordinarySubscriptionUpdate =
         subscriptionGrant.eventType === "subscription.updated" && !cancellationScheduled;
+      const grantLedger = {
+        ...ledgerBase,
+        outcome: "processed" as const,
+        metadata: {
+          action: "subscription_grant",
+          userId: subscriptionGrant.userId,
+          plan: subscriptionGrant.plan,
+          eventType: subscriptionGrant.eventType,
+        },
+      };
+      const sendScheduledCancellationEmail = (stateUpdatedAt: string | null) =>
+        sendBillingLifecycleEmailSafely(
+          "cancellation_scheduled",
+          subscriptionGrant.userId,
+          (delivery, profile) =>
+            delivery.sendBillingCancellationEmail(env, {
+              userId: subscriptionGrant.userId,
+              email: profile.email,
+              name: profile.name,
+              kind: "scheduled",
+              effectiveAt: subscriptionGrant.nextBillingAt,
+              eventId,
+              subscriptionId: subscriptionGrant.subscriptionId,
+              stateUpdatedAt,
+              retryWebhookOnExplicitFailure: true,
+            }),
+        );
+      if (lifecycleEmailRetry?.kind === "cancellation_scheduled") {
+        const retryEnvelopeMatches =
+          cancellationScheduled &&
+          lifecycleEmailRetry.userId === subscriptionGrant.userId &&
+          lifecycleEmailRetry.idempotencyKey ===
+            `billing-cancellation:${subscriptionGrant.userId}:${eventId}`;
+        const currentState = retryEnvelopeMatches
+          ? await getUserPlanBillingInfo(env, subscriptionGrant.userId)
+          : null;
+        const retryIdentityMatches =
+          currentState?.dodoStatus === "cancellation_scheduled" &&
+          currentState.dodoSubscriptionId === subscriptionGrant.subscriptionId &&
+          sameBillingInstant(currentState.dodoNextBillingAt, subscriptionGrant.nextBillingAt) &&
+          Number.isFinite(Date.parse(currentState.planUpdatedAt ?? ""));
+        await finalizeDodoWebhookLedgerOnly(
+          env,
+          retryIdentityMatches
+            ? grantLedger
+            : {
+                ...ledgerBase,
+                outcome: "ignored",
+                metadata: {
+                  action: "lifecycle_email_retry_identity_mismatch",
+                  userId: lifecycleEmailRetry.userId,
+                  eventType: subscriptionGrant.eventType,
+                },
+              },
+        );
+        if (retryIdentityMatches) {
+          await sendScheduledCancellationEmail(currentState.planUpdatedAt);
+        }
+        return {
+          outcome: retryIdentityMatches ? "processed" : "ignored",
+          metadata: retryIdentityMatches
+            ? grantLedger.metadata
+            : { action: "lifecycle_email_retry_identity_mismatch" },
+          body: { ok: true, cancellationScheduled: true },
+        };
+      }
       // Only an explicit false from a signed subscription.updated or
       // subscription.plan_changed payload may reverse a scheduled
       // cancellation. Missing/null flags stay on the ordinary pending-claim
@@ -308,6 +378,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
             name: profile.name,
             effectiveAt: subscriptionGrant.nextBillingAt,
             eventId,
+            subscriptionId: subscriptionGrant.subscriptionId,
+            stateUpdatedAt: acceptedGrantAt ?? null,
           }))
         : undefined;
       const grantApplied = await applyDodoPlanGrantWithWatchlistReconcile(
@@ -328,46 +400,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
           requireProviderIdentityMatch: cancellationScheduled,
         },
         getPlanLimit(subscriptionGrant.plan, "watchlists"),
-        {
-          ...ledgerBase,
-          outcome: "processed",
-          metadata: {
-            action: "subscription_grant",
-            userId: subscriptionGrant.userId,
-            plan: subscriptionGrant.plan,
-            eventType: subscriptionGrant.eventType,
-          },
-        },
+        grantLedger,
         { lifecycleEmailOutbox: cancellationOutbox },
       );
-      const matchesScheduledCancellationRetry =
-        lifecycleEmailRetry?.kind === "cancellation_scheduled" &&
-        lifecycleEmailRetry.userId === subscriptionGrant.userId;
-      const currentScheduledCancellationState =
-        matchesScheduledCancellationRetry &&
-        cancellationScheduled &&
-        grantApplied?.changed === false
-          ? await getUserPlanBillingInfo(env, subscriptionGrant.userId)
-          : null;
-      const shouldRetryScheduledCancellationEmail =
-        currentScheduledCancellationState?.dodoStatus === "cancellation_scheduled" &&
-        currentScheduledCancellationState.dodoSubscriptionId ===
-          subscriptionGrant.subscriptionId;
-      if (
-        cancellationScheduled &&
-        (grantApplied?.changed !== false || shouldRetryScheduledCancellationEmail)
-      ) {
-        await sendBillingLifecycleEmailSafely("cancellation_scheduled", subscriptionGrant.userId, (delivery, profile) =>
-          delivery.sendBillingCancellationEmail(env, {
-            userId: subscriptionGrant.userId,
-            email: profile.email,
-            name: profile.name,
-            kind: "scheduled",
-            effectiveAt: subscriptionGrant.nextBillingAt,
-            eventId,
-            retryWebhookOnExplicitFailure: true,
-          }),
-        );
+      if (cancellationScheduled && grantApplied?.changed !== false) {
+        await sendScheduledCancellationEmail(acceptedGrantAt ?? null);
       }
       return {
         outcome: "processed",
@@ -389,11 +426,13 @@ export async function action({ context, request }: ActionFunctionArgs) {
         lifecycleEmailRetry?.kind === revocationRetryKind
           ? lifecycleEmailRetry.userId
           : null;
+      const lifecycleSubscriptionId =
+        revocation.subscriptionId !== revocation.eventType ? revocation.subscriptionId : null;
       const userId =
         revocation.userId ??
         retryResolvedUserId ??
         (await getUserIdForDodoLifecycle(env, {
-          subscriptionId: revocation.subscriptionId,
+          subscriptionId: lifecycleSubscriptionId,
           customerId: revocation.customerId,
           customerEmail: revocation.customerEmail,
         }));
@@ -409,6 +448,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           body: { ok: true, ignored: true, reason: "no_user_match" },
         };
       }
+      const lifecyclePaymentId = lifecycleSubscriptionId ? null : revocation.paymentId;
 
       if (revocation.action === "payment_issue") {
         if (
@@ -458,8 +498,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
             userId,
             status: revocation.eventType,
             occurredAt: revocation.revokedAt,
-            providerPaymentId: revocation.paymentId,
-            providerSubscriptionId: revocation.subscriptionId,
+            providerPaymentId: lifecyclePaymentId,
+            providerSubscriptionId: lifecycleSubscriptionId,
           },
           {
             ...ledgerBase,
@@ -473,21 +513,37 @@ export async function action({ context, request }: ActionFunctionArgs) {
         const matchesPaymentIssueRetry =
           lifecycleEmailRetry?.kind === "payment_issue" &&
           lifecycleEmailRetry.userId === userId;
+        const expectedPaymentIssueStateUpdatedAt =
+          paymentIssueApplied?.stateUpdatedAt ?? revocation.revokedAt;
         const currentPaymentIssueState =
-          matchesPaymentIssueRetry && paymentIssueApplied?.changed === false
+          matchesPaymentIssueRetry && expectedPaymentIssueStateUpdatedAt
             ? await getUserPlanBillingInfo(env, userId)
             : null;
         const shouldRetryPaymentIssueEmail =
+          currentPaymentIssueState?.plan !== "free" &&
           currentPaymentIssueState?.dodoStatus === revocation.eventType &&
-          (revocation.subscriptionId === revocation.eventType ||
-            currentPaymentIssueState.dodoSubscriptionId === revocation.subscriptionId);
-        if (paymentIssueApplied?.changed !== false || shouldRetryPaymentIssueEmail) {
+          sameBillingInstant(
+            currentPaymentIssueState.planUpdatedAt,
+            expectedPaymentIssueStateUpdatedAt,
+          ) &&
+          (lifecycleSubscriptionId
+            ? currentPaymentIssueState.dodoSubscriptionId === lifecycleSubscriptionId
+            : Boolean(lifecyclePaymentId) &&
+              currentPaymentIssueState.dodoPaymentId === lifecyclePaymentId);
+        if (
+          expectedPaymentIssueStateUpdatedAt &&
+          (paymentIssueApplied?.changed === true || shouldRetryPaymentIssueEmail)
+        ) {
           await sendBillingLifecycleEmailSafely("payment_issue", userId, (delivery, profile) =>
             delivery.sendBillingPaymentIssueEmail(env, {
               userId,
               email: profile.email,
               name: profile.name,
               occurredAt: revocation.revokedAt,
+              status: revocation.eventType,
+              subscriptionId: lifecycleSubscriptionId,
+              paymentId: lifecyclePaymentId,
+              stateUpdatedAt: expectedPaymentIssueStateUpdatedAt,
               retryWebhookOnExplicitFailure: true,
             }),
           );
@@ -497,6 +553,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
           metadata: { action: "payment_issue", userId, eventType: revocation.eventType },
           body: { ok: true, paymentIssue: true },
         };
+      }
+
+      if (!lifecycleSubscriptionId) {
+        throw new Error(`Dodo ${revocation.eventType} webhook is missing required subscription_id.`);
       }
 
       const revokeOutbox = await prepareLifecycleEmailOutbox(userId, (profile) => ({
@@ -510,7 +570,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         env,
         {
           userId,
-          providerSubscriptionId: revocation.subscriptionId,
+          providerSubscriptionId: lifecycleSubscriptionId,
           status: revocation.eventType,
           revokedAt: revocation.revokedAt,
         },
@@ -524,24 +584,32 @@ export async function action({ context, request }: ActionFunctionArgs) {
       );
       const matchesRevokeRetry =
         lifecycleEmailRetry?.kind === "revoke" && lifecycleEmailRetry.userId === userId;
+      const expectedRevokeStateUpdatedAt =
+        revokeApplied?.stateUpdatedAt ?? revocation.revokedAt;
       const currentRevokeState =
-        matchesRevokeRetry && revokeApplied?.changed === false
+        matchesRevokeRetry && expectedRevokeStateUpdatedAt
           ? await getUserPlanBillingInfo(env, userId)
           : null;
       const shouldRetryRevokeEmail =
         currentRevokeState?.plan === "free" &&
         currentRevokeState.dodoStatus === revocation.eventType &&
-        (revocation.subscriptionId === revocation.eventType ||
-          currentRevokeState.dodoSubscriptionId === revocation.subscriptionId);
-      if (revokeApplied?.changed !== false || shouldRetryRevokeEmail) {
+        currentRevokeState.dodoSubscriptionId === lifecycleSubscriptionId &&
+        sameBillingInstant(currentRevokeState.planUpdatedAt, expectedRevokeStateUpdatedAt);
+      if (
+        expectedRevokeStateUpdatedAt &&
+        (revokeApplied?.changed === true || shouldRetryRevokeEmail)
+      ) {
         await sendBillingLifecycleEmailSafely("revoke", userId, (delivery, profile) =>
           delivery.sendBillingCancellationEmail(env, {
             userId,
             email: profile.email,
             name: profile.name,
-            kind: "ended",
-            eventId,
-            retryWebhookOnExplicitFailure: true,
+              kind: "ended",
+              eventId,
+              status: revocation.eventType,
+              subscriptionId: lifecycleSubscriptionId,
+              stateUpdatedAt: expectedRevokeStateUpdatedAt,
+              retryWebhookOnExplicitFailure: true,
           }),
         );
       }
@@ -590,24 +658,34 @@ export async function action({ context, request }: ActionFunctionArgs) {
       const matchesRefundRetry =
         lifecycleEmailRetry?.kind === "refund" &&
         lifecycleEmailRetry.userId === refundedUserId;
+      const expectedRefundStateUpdatedAt =
+        refundApplied?.stateUpdatedAt ?? refund.refundedAt;
       const currentRefundState =
-        matchesRefundRetry && refundedUserId && refundApplied?.changed !== true
+        refundedUserId &&
+        expectedRefundStateUpdatedAt &&
+        (refundApplied?.changed === true || matchesRefundRetry)
           ? await getUserPlanBillingInfo(env, refundedUserId)
           : null;
-      const shouldRetryRefundEmail =
-        currentRefundState?.plan === "free" && currentRefundState.dodoStatus === "refunded";
+      const refundStateMatches =
+        currentRefundState?.plan === "free" &&
+        currentRefundState.dodoStatus === "refunded" &&
+        currentRefundState.dodoPaymentId === refund.paymentId &&
+        sameBillingInstant(currentRefundState.planUpdatedAt, expectedRefundStateUpdatedAt);
       if (
         refundedUserId &&
         (!("topUpChanged" in refundApplied) || refundApplied.topUpChanged !== true) &&
-        (refundApplied?.changed === true || shouldRetryRefundEmail)
+        refundStateMatches &&
+        (refundApplied?.changed === true || matchesRefundRetry)
       ) {
         await sendBillingLifecycleEmailSafely("refund", refundedUserId, (delivery, profile) =>
           delivery.sendBillingRefundEmail(env, {
             userId: refundedUserId,
             email: profile.email,
-            name: profile.name,
-            eventId,
-            retryWebhookOnExplicitFailure: true,
+              name: profile.name,
+              eventId,
+              paymentId: refund.paymentId,
+              stateUpdatedAt: expectedRefundStateUpdatedAt,
+              retryWebhookOnExplicitFailure: true,
           }),
         );
       }
@@ -663,26 +741,21 @@ export async function action({ context, request }: ActionFunctionArgs) {
   // outbox row rides the same D1 transaction as the plan mutation + ledger
   // finalize — a worker crash after the batch can no longer lose the email
   // (the recovery sweep replays pending outbox rows; Dodo redelivery is
-  // already deduped by the finalized ledger). Best-effort: a failure here
-  // must never block the billing mutation itself — the post-batch send path
-  // simply falls back to creating its own attempt row.
+  // already deduped by the finalized ledger). If preparation fails, fail the
+  // webhook before billing state mutates so Dodo can retry the whole event.
   async function prepareLifecycleEmailOutbox(
     lifecycleUserId: string,
     build: (profile: { email: string; name: string | null }) => BillingLifecycleEmailOutboxInput,
   ) {
-    try {
-      const profile = await getUserDeliveryProfile(env, lifecycleUserId);
-      if (!profile?.email) {
-        return undefined;
-      }
-      const delivery = await import("~/lib/delivery.server");
-      return delivery.prepareBillingLifecycleEmailOutbox(
-        env,
-        build({ email: profile.email, name: profile.name }),
-      );
-    } catch {
+    const profile = await getUserDeliveryProfile(env, lifecycleUserId);
+    if (!profile?.email) {
       return undefined;
     }
+    const delivery = await import("~/lib/delivery.server");
+    return delivery.prepareBillingLifecycleEmailOutbox(
+      env,
+      build({ email: profile.email, name: profile.name }),
+    );
   }
 
   // Lifecycle emails remain best-effort for unexpected application errors.
@@ -701,7 +774,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     let delivery: typeof import("~/lib/delivery.server") | null = null;
     try {
       const profile = await getUserDeliveryProfile(env, lifecycleUserId);
-      if (!profile?.email) {
+      if (!profile?.email || profile.emailVerified !== true) {
         return;
       }
       delivery = await import("~/lib/delivery.server");

@@ -199,7 +199,7 @@ describe("Slack delivery helpers", () => {
 });
 
 describe("sendSlackWebhookMessage", () => {
-  it("keeps transport-ambiguous Slack failures pending instead of retrying them", async () => {
+  it("keeps transport-ambiguous Slack failures terminal instead of retrying them", async () => {
     const { sendSlackWebhookUrl } = await import("~/lib/slack-webhook.server");
     const result = await sendSlackWebhookUrl(
       fakeSlackWebhookUrl(),
@@ -208,13 +208,13 @@ describe("sendSlackWebhookMessage", () => {
     );
 
     expect(result).toMatchObject({
-      status: "pending",
+      status: "failed",
       webhookStatus: "provider_unknown",
       providerMessageId: null,
     });
   });
 
-  it("keeps a successful Slack response pending when its body cannot be read", async () => {
+  it("keeps a successful Slack response terminal when its body cannot be read", async () => {
     const { sendSlackWebhookUrl } = await import("~/lib/slack-webhook.server");
     const result = await sendSlackWebhookUrl(
       fakeSlackWebhookUrl(),
@@ -234,7 +234,7 @@ describe("sendSlackWebhookMessage", () => {
     );
 
     expect(result).toMatchObject({
-      status: "pending",
+      status: "failed",
       webhookStatus: "provider_unknown",
       providerMessageId: null,
     });

@@ -21,11 +21,16 @@ export {
   getDeliveryTargetByProviderIdentifier,
   claimEmailTargetForDispatch,
   suppressEmailTargetsForUserAndAddress,
+  reconcileWhatsAppSetupTargetFromAttempt,
+  reconcileWhatsAppSetupTargetByProviderMessageId,
 } from "~/lib/data/delivery-records-targets.server";
 
 export {
   listRetryableInstantAttempts,
   listStaleBillingLifecycleEmailAttempts,
+  listOutstandingBillingLifecycleProviderUnknownAttempts,
+  listOutstandingDigestProviderUnknownAttempts,
+  listOutstandingInstantProviderUnknownAttempts,
   listDeliveryAttempts,
   getDeliveryAttemptByIdempotencyKey,
   claimInstantDeliveryAttempt,

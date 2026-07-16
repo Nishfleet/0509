@@ -173,6 +173,7 @@ describe("MCP route discovery", () => {
     expect(body.agentActivation.supportPaths.map((path) => path.label)).toContain("Security and deletion requests");
     expect(body.agentActivation.blockedCapabilities).toContain("secret-bearing integration setup");
     expect(body.agentActivation.blockedCapabilities).toContain("customer API key creation, rotation, and revocation");
+		expect(body.agentActivation.blockedCapabilities).toContain("report branding configuration and logo uploads");
     expect(body.notLiveYet).toContain("TikTok ingestion");
     expect(body.notLiveYet).toContain("Reddit, LinkedIn, or Pinterest ingestion");
     expect(body.notLiveYet).toContain(BROAD_WRITE_API_NON_GOAL);

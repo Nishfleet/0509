@@ -257,6 +257,7 @@ export interface SearchResponse {
   cacheStatus?: DiscoveryCacheStatus;
   discoveryEmptyReason?: "no_results";
   discoveryStatus?: CommercialDiscoveryStatus;
+  discoveryProgress?: "warming";
   discoverySummary?: string | null;
   discoveryFailureClass?: DiscoveryFailureClass | null;
   searchIntent?: "domain" | "text";
@@ -634,9 +635,9 @@ export interface DigestRecord {
   userId: string;
   periodStart: string;
   periodEnd: string;
-  // Free-form digest_run.summary_json (counts plus the optional AI strategy
-  // paragraph). Optional so snapshot/export fixtures predating it stay valid.
-  summary?: Record<string, unknown>;
+	// Free-form digest_run.summary_json (counts plus the optional AI strategy
+	// paragraph). Optional so snapshot/export fixtures predating it stay valid.
+	summary?: Record<string, unknown>;
   createdAt: string;
   items: DigestItemRecord[];
   delivery: DigestDeliveryRecord | null;

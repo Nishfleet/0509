@@ -3537,14 +3537,18 @@ describe("listRetryableDigestRuns", () => {
     );
 
     const query = findStatement(mock.statements, "FROM digest_run");
-    expect(query?.sql).toContain("digest_delivery.status = 'failed'");
-    expect(query?.sql).toContain("digest_delivery.id IS NULL");
+    expect(query?.sql).toMatch(
+      /NOT EXISTS\s*\(\s*SELECT 1\s*FROM delivery_attempt\s*WHERE delivery_attempt\.digest_run_id/,
+    );
+    expect(query?.sql).toContain("delivery_attempt.status = 'failed'");
+    expect(query?.sql).toContain("delivery_attempt.webhook_status = 'failed'");
     expect(query?.sql).toContain("delivery_attempt.status = 'pending'");
     expect(query?.sql).toContain("delivery_attempt.webhook_status = 'pending'");
     expect(query?.sql).toContain("delivery_attempt.updated_at <= ?");
     expect(query?.bindings).toEqual([
       "2026-06-01T00:00:00.000Z",
       "2026-07-13T08:59:00.000Z",
+      "atomic-v2",
       25,
     ]);
   });
@@ -3559,6 +3563,7 @@ describe("listStaleBillingLifecycleEmailAttempts", () => {
       {
         staleBefore: "2026-07-13T08:59:00.000Z",
         limit: 10,
+        maxRecoveryAttempts: 4,
       },
     );
 
@@ -3573,9 +3578,14 @@ describe("listStaleBillingLifecycleEmailAttempts", () => {
     expect(query?.sql).toContain("idempotency_key LIKE 'billing-refund:%'");
     expect(query?.sql).toContain("status = 'pending'");
     expect(query?.sql).toContain("webhook_status = 'pending'");
+    expect(query?.sql).toContain("recoveryAttemptCount");
+    expect(query?.bindings).toEqual([
+      "2026-07-13T08:59:00.000Z",
+      4,
+      10,
+    ]);
     expect(query?.sql).toContain("updated_at <= ?");
     expect(query?.sql).toContain("ORDER BY updated_at ASC");
-    expect(query?.bindings).toEqual(["2026-07-13T08:59:00.000Z", 10]);
   });
 });
 

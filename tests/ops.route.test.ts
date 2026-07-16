@@ -55,6 +55,7 @@ afterEach(() => {
 describe("ops route", () => {
   it("allows an allowlisted operator to load the snapshot", async () => {
     const listBillingLifecycleReconciliationCandidates = vi.fn().mockResolvedValue([]);
+    const listStaleDodoSubscriptionPlanChangeClaims = vi.fn().mockResolvedValue([]);
     const getOperatorSnapshot = vi.fn().mockResolvedValue({
       summary: {
         failingRuns: 1,
@@ -92,6 +93,7 @@ describe("ops route", () => {
     vi.doMock("~/lib/data.server", () => ({
       getOperatorSnapshot,
       listBillingLifecycleReconciliationCandidates,
+      listStaleDodoSubscriptionPlanChangeClaims,
     }));
 
     const { loader } = await import("~/routes/app.ops");
@@ -110,9 +112,12 @@ describe("ops route", () => {
       }),
       billingLifecycleCandidates: [],
       billingLifecycleWarning: null,
+      stalePlanChangeClaims: [],
+      planChangeWarning: null,
     });
     expect(getOperatorSnapshot).toHaveBeenCalledTimes(1);
     expect(listBillingLifecycleReconciliationCandidates).toHaveBeenCalledTimes(1);
+    expect(listStaleDodoSubscriptionPlanChangeClaims).toHaveBeenCalledTimes(1);
   });
 
   it("denies authenticated users who are not on the allowlist", async () => {
@@ -571,6 +576,82 @@ describe("ops route", () => {
     );
   });
 
+  it("renders and checks stale plan changes without exposing account identity or resending", async () => {
+    await mockRouter(() => ({
+      billingLifecycleCandidates: [],
+      billingLifecycleWarning: null,
+      stalePlanChangeClaims: [{
+        userId: "owner-ambiguous-1234",
+        plan: "scout",
+        status: "plan_change_pending",
+        claimedAt: "2026-07-02T00:00:00.000Z",
+      }],
+      planChangeWarning: null,
+      snapshot: {
+        summary: {
+          failingRuns: 0,
+          stuckRuns: 0,
+          failedProofs: 0,
+          budgetBlockedProofs: 0,
+          blockedTargets: 0,
+          deliveryFailures: 0,
+          deliveryAttention: 0,
+          degradedWatchlists: 0,
+          discoveryFailures: 0,
+          discoveryProvidersNeedingAttention: 0,
+        },
+        warnings: [],
+        supportCases: [],
+        failingRuns: [],
+        stuckRuns: [],
+        failedProofs: [],
+        budgetBlockedProofs: [],
+        blockedTargets: [],
+        deliveryFailures: [],
+        deliveryAttention: [],
+        degradedWatchlists: [],
+        discoveryFailures: [],
+        discoveryProviders: [],
+      },
+    }));
+
+    const { default: OpsRoute } = await import("~/routes/app.ops");
+    const markup = renderToStaticMarkup(createElement(OpsRoute));
+    expect(markup).toContain("Plan changes awaiting provider reconciliation");
+    expect(markup).toContain("Check current Dodo state");
+    expect(markup).toContain('value="reconcile-dodo-plan-change"');
+    expect(markup).not.toContain(">owner-ambiguous-1234<");
+
+    vi.resetModules();
+    const reconcileDodo0509SubscriptionPlanChange = vi.fn().mockResolvedValue({
+      ok: true,
+      replayed: false,
+      outcome: "accepted",
+    });
+    vi.doMock("~/lib/auth.server", () => ({ requireSession: vi.fn().mockResolvedValue(session) }));
+    vi.doMock("~/lib/dodo-plan-change-reconciliation.server", () => ({
+      reconcileDodo0509SubscriptionPlanChange,
+    }));
+    const form = new FormData();
+    form.set("intent", "reconcile-dodo-plan-change");
+    form.set("subjectUserId", "owner-ambiguous-1234");
+    const { action } = await import("~/routes/app.ops");
+    const result = await action({
+      context: createContext({ OPS_ALLOWLIST_EMAILS: "owner@example.com" }),
+      request: new Request("http://localhost/app/ops", { method: "POST", body: form }),
+    } as never);
+    expect(result).toMatchObject({
+      ok: true,
+      intent: "reconcile-dodo-plan-change",
+      message: expect.stringContaining("No second plan change was sent"),
+    });
+    expect(reconcileDodo0509SubscriptionPlanChange).toHaveBeenCalledWith({
+      env: expect.anything(),
+      subjectUserId: "owner-ambiguous-1234",
+      actorUserId: "user-1",
+    });
+  });
+
   it("keeps billing reconciliation query failure isolated from the operator snapshot", async () => {
     const getOperatorSnapshot = vi.fn().mockResolvedValue({
       summary: { failingRuns: 0 },
@@ -578,10 +659,12 @@ describe("ops route", () => {
     const listBillingLifecycleReconciliationCandidates = vi.fn().mockRejectedValue(
       new Error("raw database failure"),
     );
+    const listStaleDodoSubscriptionPlanChangeClaims = vi.fn().mockResolvedValue([]);
     vi.doMock("~/lib/auth.server", () => ({ requireSession: vi.fn().mockResolvedValue(session) }));
     vi.doMock("~/lib/data.server", () => ({
       getOperatorSnapshot,
       listBillingLifecycleReconciliationCandidates,
+      listStaleDodoSubscriptionPlanChangeClaims,
     }));
 
     const { loader } = await import("~/routes/app.ops");
@@ -594,6 +677,8 @@ describe("ops route", () => {
       snapshot: { summary: { failingRuns: 0 } },
       billingLifecycleCandidates: [],
       billingLifecycleWarning: "Billing lifecycle reconciliation could not be loaded.",
+      stalePlanChangeClaims: [],
+      planChangeWarning: null,
     });
     expect(JSON.stringify(result)).not.toContain("raw database failure");
   });

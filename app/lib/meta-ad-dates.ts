@@ -12,30 +12,30 @@ const STARTED_RUNNING_LINE_PATTERN = /^started running on\b/i;
 const STARTED_RUNNING_PREFIX = /^started running on\s+/i;
 
 const MONTHS_BY_NAME: Record<string, number> = {
-  jan: 0,
-  january: 0,
-  feb: 1,
-  february: 1,
-  mar: 2,
-  march: 2,
-  apr: 3,
-  april: 3,
-  may: 4,
-  jun: 5,
-  june: 5,
-  jul: 6,
-  july: 6,
-  aug: 7,
-  august: 7,
-  sep: 8,
-  sept: 8,
-  september: 8,
-  oct: 9,
-  october: 9,
-  nov: 10,
-  november: 10,
-  dec: 11,
-  december: 11,
+	jan: 0,
+	january: 0,
+	feb: 1,
+	february: 1,
+	mar: 2,
+	march: 2,
+	apr: 3,
+	april: 3,
+	may: 4,
+	jun: 5,
+	june: 5,
+	jul: 6,
+	july: 6,
+	aug: 7,
+	august: 7,
+	sep: 8,
+	sept: 8,
+	september: 8,
+	oct: 9,
+	october: 9,
+	nov: 10,
+	november: 10,
+	dec: 11,
+	december: 11,
 };
 
 // "Jul 12, 2026" / "July 12, 2026" (comma optional in some renderings).
@@ -44,17 +44,17 @@ const MONTH_FIRST_DATE = /^([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{4})$/;
 const DAY_FIRST_DATE = /^(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})$/;
 
 function toIsoDate(year: number, monthIndex: number, day: number): string | null {
-  const candidate = new Date(Date.UTC(year, monthIndex, day));
-  const isRealCalendarDate =
-    candidate.getUTCFullYear() === year &&
-    candidate.getUTCMonth() === monthIndex &&
-    candidate.getUTCDate() === day;
+	const candidate = new Date(Date.UTC(year, monthIndex, day));
+	const isRealCalendarDate =
+		candidate.getUTCFullYear() === year &&
+		candidate.getUTCMonth() === monthIndex &&
+		candidate.getUTCDate() === day;
 
-  if (!isRealCalendarDate) {
-    return null;
-  }
+	if (!isRealCalendarDate) {
+		return null;
+	}
 
-  return candidate.toISOString().slice(0, 10);
+	return candidate.toISOString().slice(0, 10);
 }
 
 /**
@@ -62,18 +62,18 @@ function toIsoDate(year: number, monthIndex: number, day: number): string | null
  * text. Returns the untouched line so parsing stays in one server-side place.
  */
 export function findStartedRunningLine(text: string | null | undefined): string | null {
-  if (!text) {
-    return null;
-  }
+	if (!text) {
+		return null;
+	}
 
-  for (const rawLine of text.split("\n")) {
-    const line = rawLine.trim();
-    if (STARTED_RUNNING_LINE_PATTERN.test(line)) {
-      return line;
-    }
-  }
+	for (const rawLine of text.split("\n")) {
+		const line = rawLine.trim();
+		if (STARTED_RUNNING_LINE_PATTERN.test(line)) {
+			return line;
+		}
+	}
 
-  return null;
+	return null;
 }
 
 /**
@@ -84,34 +84,34 @@ export function findStartedRunningLine(text: string | null | undefined): string 
  * Unparseable input returns null.
  */
 export function parseStartedRunningDate(line: string | null | undefined): string | null {
-  if (!line) {
-    return null;
-  }
+	if (!line) {
+		return null;
+	}
 
-  const withoutPrefix = line.trim().replace(STARTED_RUNNING_PREFIX, "");
-  // Cards can append "· Total active time …" after the date.
-  const dateText = withoutPrefix.split(/[·•]/)[0]?.trim().replace(/\.$/, "") ?? "";
-  if (!dateText) {
-    return null;
-  }
+	const withoutPrefix = line.trim().replace(STARTED_RUNNING_PREFIX, "");
+	// Cards can append "· Total active time …" after the date.
+	const dateText = withoutPrefix.split(/[·•]/)[0]?.trim().replace(/\.$/, "") ?? "";
+	if (!dateText) {
+		return null;
+	}
 
-  const monthFirst = dateText.match(MONTH_FIRST_DATE);
-  if (monthFirst) {
-    const monthIndex = MONTHS_BY_NAME[monthFirst[1].toLowerCase()];
-    if (monthIndex === undefined) {
-      return null;
-    }
-    return toIsoDate(Number(monthFirst[3]), monthIndex, Number(monthFirst[2]));
-  }
+	const monthFirst = dateText.match(MONTH_FIRST_DATE);
+	if (monthFirst) {
+		const monthIndex = MONTHS_BY_NAME[monthFirst[1].toLowerCase()];
+		if (monthIndex === undefined) {
+			return null;
+		}
+		return toIsoDate(Number(monthFirst[3]), monthIndex, Number(monthFirst[2]));
+	}
 
-  const dayFirst = dateText.match(DAY_FIRST_DATE);
-  if (dayFirst) {
-    const monthIndex = MONTHS_BY_NAME[dayFirst[2].toLowerCase()];
-    if (monthIndex === undefined) {
-      return null;
-    }
-    return toIsoDate(Number(dayFirst[3]), monthIndex, Number(dayFirst[1]));
-  }
+	const dayFirst = dateText.match(DAY_FIRST_DATE);
+	if (dayFirst) {
+		const monthIndex = MONTHS_BY_NAME[dayFirst[2].toLowerCase()];
+		if (monthIndex === undefined) {
+			return null;
+		}
+		return toIsoDate(Number(dayFirst[3]), monthIndex, Number(dayFirst[1]));
+	}
 
-  return null;
+	return null;
 }

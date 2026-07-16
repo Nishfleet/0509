@@ -13,33 +13,33 @@ import type { CreativeWallItem } from "~/lib/trend-chart-data";
  */
 
 interface LatestRunRow {
-  id: string;
+	id: string;
 }
 
 interface LatestObservationRow {
-  ad_id: string;
-  is_active: number;
+	ad_id: string;
+	is_active: number;
 }
 
 interface TrackingWindowRow {
-  ad_id: string;
-  first_tracked_at: string;
-  last_tracked_at: string;
-  observed_run_count: number;
+	ad_id: string;
+	first_tracked_at: string;
+	last_tracked_at: string;
+	observed_run_count: number;
 }
 
 export async function listCreativeWallAds(
-  env: AppEnv,
-  watchlistId: string,
-  limit?: number,
+	env: AppEnv,
+	watchlistId: string,
+	limit?: number,
 ): Promise<CreativeWallItem[]> {
-  if (!env.DB) {
-    return [];
-  }
+	if (!env.DB) {
+		return [];
+	}
 
-  const latestRun = await queryOne<LatestRunRow>(
-    env,
-    `
+	const latestRun = await queryOne<LatestRunRow>(
+		env,
+		`
       SELECT id
       FROM watchlist_run
       WHERE watchlist_id = ?
@@ -48,40 +48,40 @@ export async function listCreativeWallAds(
       ORDER BY started_at DESC
       LIMIT 1
     `,
-    watchlistId,
-  );
+		watchlistId,
+	);
 
-  if (!latestRun) {
-    return [];
-  }
+	if (!latestRun) {
+		return [];
+	}
 
-  const observations = await queryAll<LatestObservationRow>(
-    env,
-    `
+	const observations = await queryAll<LatestObservationRow>(
+		env,
+		`
       SELECT ad_id, is_active
       FROM ad_observation
       WHERE watchlist_run_id = ?
       ORDER BY seen_at DESC
     `,
-    latestRun.id,
-  );
+		latestRun.id,
+	);
 
-  const activeByAdId = new Map<string, boolean>();
-  for (const observation of observations) {
-    if (!activeByAdId.has(observation.ad_id)) {
-      activeByAdId.set(observation.ad_id, Boolean(observation.is_active));
-    }
-  }
+	const activeByAdId = new Map<string, boolean>();
+	for (const observation of observations) {
+		if (!activeByAdId.has(observation.ad_id)) {
+			activeByAdId.set(observation.ad_id, Boolean(observation.is_active));
+		}
+	}
 
-  const adIds = [...activeByAdId.keys()];
-  if (adIds.length === 0) {
-    return [];
-  }
+	const adIds = [...activeByAdId.keys()];
+	if (adIds.length === 0) {
+		return [];
+	}
 
-  // One GROUP BY across every retained scan of this watchlist gives each ad
-  // its observation window; queryIn keeps the IN list under D1's param cap.
-  const trackingRows = await queryIn<TrackingWindowRow>(env, {
-    buildSql: (placeholders) => `
+	// One GROUP BY across every retained scan of this watchlist gives each ad
+	// its observation window; queryIn keeps the IN list under D1's param cap.
+	const trackingRows = await queryIn<TrackingWindowRow>(env, {
+		buildSql: (placeholders) => `
       SELECT o.ad_id AS ad_id,
              MIN(o.seen_at) AS first_tracked_at,
              MAX(o.seen_at) AS last_tracked_at,
@@ -94,47 +94,47 @@ export async function listCreativeWallAds(
         AND o.ad_id IN (${placeholders})
       GROUP BY o.ad_id
     `,
-    prefix: [watchlistId],
-    values: adIds,
-  });
-  const trackingByAdId = new Map(trackingRows.map((row) => [row.ad_id, row]));
+		prefix: [watchlistId],
+		values: adIds,
+	});
+	const trackingByAdId = new Map(trackingRows.map((row) => [row.ad_id, row]));
 
-  const ads = await listAdsByIds(env, adIds);
+	const ads = await listAdsByIds(env, adIds);
 
-  const items: CreativeWallItem[] = [];
-  for (const ad of ads) {
-    const tracking = trackingByAdId.get(ad.metaAdId);
-    if (!tracking) {
-      continue;
-    }
+	const items: CreativeWallItem[] = [];
+	for (const ad of ads) {
+		const tracking = trackingByAdId.get(ad.metaAdId);
+		if (!tracking) {
+			continue;
+		}
 
-    items.push({
-      ad,
-      firstTrackedAt: tracking.first_tracked_at,
-      lastTrackedAt: tracking.last_tracked_at,
-      observedRunCount: Number(tracking.observed_run_count) || 0,
-      isActive: activeByAdId.get(ad.metaAdId) ?? false,
-    });
-  }
+		items.push({
+			ad,
+			firstTrackedAt: tracking.first_tracked_at,
+			lastTrackedAt: tracking.last_tracked_at,
+			observedRunCount: Number(tracking.observed_run_count) || 0,
+			isActive: activeByAdId.get(ad.metaAdId) ?? false,
+		});
+	}
 
-  // Newest additions first: ads this watchlist started tracking most recently.
-  const sortedItems = [...items].sort(
-    (left, right) =>
-      compareIsoDesc(left.firstTrackedAt, right.firstTrackedAt) ||
-      left.ad.metaAdId.localeCompare(right.ad.metaAdId),
-  );
+	// Newest additions first: ads this watchlist started tracking most recently.
+	const sortedItems = [...items].sort(
+		(left, right) =>
+			compareIsoDesc(left.firstTrackedAt, right.firstTrackedAt) ||
+			left.ad.metaAdId.localeCompare(right.ad.metaAdId),
+	);
 
-  return limit === undefined
-    ? sortedItems
-    : sortedItems.slice(0, Math.max(0, Math.floor(limit)));
+	return limit === undefined
+		? sortedItems
+		: sortedItems.slice(0, Math.max(0, Math.floor(limit)));
 }
 
 function compareIsoDesc(left: string, right: string): number {
-  const leftTime = Date.parse(left);
-  const rightTime = Date.parse(right);
-  if (Number.isNaN(leftTime) || Number.isNaN(rightTime)) {
-    return 0;
-  }
+	const leftTime = Date.parse(left);
+	const rightTime = Date.parse(right);
+	if (Number.isNaN(leftTime) || Number.isNaN(rightTime)) {
+		return 0;
+	}
 
-  return rightTime - leftTime;
+	return rightTime - leftTime;
 }

@@ -6,9 +6,11 @@ import {
   createDodo0509CheckoutSession,
   createDodoCustomerPortalSession,
   extractDodoPlanGrant,
+	extractDodoPlanRevocation,
   extractDodoProofCreditGrant,
   extractDodoSubscriptionGrant,
   getDodo0509SubscriptionCurrency,
+  getDodo0509SubscriptionPlanState,
   isDodoHostedCheckoutUrl,
   isDodoHostedCustomerPortalUrl,
   DODO_WEBHOOK_TOLERANCE_SECONDS,
@@ -285,6 +287,68 @@ describe("Dodo billing", () => {
         }),
       }),
     );
+  });
+
+  it("reads the authoritative current and scheduled plan state without mutating Dodo", async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      jsonResponse({
+        subscription_id: "sub_123",
+        product_id: "prod_scout_monthly",
+        status: "active",
+        next_billing_date: "2026-08-04T12:00:00.000Z",
+        scheduled_change: { product_id: "prod_starter_monthly" },
+      }),
+    );
+
+    await expect(
+      getDodo0509SubscriptionPlanState({
+        env: { DODO_0509_API_KEY: "secret" },
+        subscriptionId: "sub_123",
+        fetcher: fetcher as never,
+        observedAt: "2026-07-16T14:50:00.000Z",
+      }),
+    ).resolves.toEqual({
+      subscriptionId: "sub_123",
+      productId: "prod_scout_monthly",
+      status: "active",
+      nextBillingAt: "2026-08-04T12:00:00.000Z",
+      scheduledChangeProductId: "prod_starter_monthly",
+      observedAt: "2026-07-16T14:50:00.000Z",
+    });
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://live.dodopayments.com/subscriptions/sub_123",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("fails closed when Dodo subscription identity or required state is unreadable", async () => {
+    const wrongIdentity = vi.fn().mockResolvedValue(
+      jsonResponse({
+        subscription_id: "sub_other",
+        product_id: "prod_scout_monthly",
+        status: "active",
+      }),
+    );
+    const missingProduct = vi.fn().mockResolvedValue(
+      jsonResponse({ subscription_id: "sub_123", status: "active" }),
+    );
+
+    await expect(
+      getDodo0509SubscriptionPlanState({
+        env: { DODO_0509_API_KEY: "secret" },
+        subscriptionId: "sub_123",
+        fetcher: wrongIdentity as never,
+      }),
+    ).rejects.toMatchObject({ status: 502 });
+    await expect(
+      getDodo0509SubscriptionPlanState({
+        env: { DODO_0509_API_KEY: "secret" },
+        subscriptionId: "sub_123",
+        fetcher: missingProduct as never,
+      }),
+    ).rejects.toMatchObject({ status: 502 });
   });
 
   it("releases timed responses when Dodo rejects a subscription plan change", async () => {
@@ -971,6 +1035,22 @@ describe("Dodo billing", () => {
     expect(extractDodoPlanGrant(env, failedPlanPayment)).toBeNull();
     expect(extractDodoProofCreditGrant(env, processingCreditPayment)).toBeNull();
   });
+
+	it("uses the payment identity when payment.failed has no subscription_id", () => {
+		expect(extractDodoPlanRevocation({ DODO_0509_BRAND_ID: "brand_0509" }, {
+			type: "payment.failed",
+			data: {
+				payment_id: "pay_fallback",
+				brand_id: "brand_0509",
+				updated_at: "2026-07-01T08:00:00.000Z",
+				metadata: { app: "0509", target_kind: "plan", plan: "starter", user_id: "user-1" },
+			},
+		})).toMatchObject({
+			eventType: "payment.failed", action: "payment_issue", userId: "user-1",
+			subscriptionId: "payment.failed", paymentId: "pay_fallback",
+			revokedAt: "2026-07-01T08:00:00.000Z",
+		});
+	});
 
   it("does not let a one-time Dodo product grant paid plan access through metadata", () => {
     const grant = extractDodoPlanGrant(

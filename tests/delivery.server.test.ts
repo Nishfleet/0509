@@ -120,6 +120,9 @@ describe("deliverWeeklyDigest", () => {
         digestRunId: "digest-1",
         periodStart: "2026-04-12T00:00:00.000Z",
         periodEnd: "2026-04-19T00:00:00.000Z",
+        totalEligibleEvents: 3,
+        includedEvents: 1,
+        omittedEvents: 2,
         items: [
           {
             eventId: "event-1",
@@ -155,7 +158,7 @@ describe("deliverWeeklyDigest", () => {
     });
     expect(sendMock).toHaveBeenCalledTimes(1);
     expect(emailSendPayload(sendMock)).toMatchObject({
-      from: { email: "alerts@0509.io", name: "Five to Nine" },
+from:{email:"alerts@0509.io",name:"Five to Nine"},
       to: "owner@example.com",
       subject: "1 competitor move worth seeing: boAt watch",
       html: expect.stringContaining("Five to Nine weekly digest"),
@@ -175,6 +178,9 @@ describe("deliverWeeklyDigest", () => {
     );
     expect(emailSendPayload(sendMock).text).toContain("Manage frequency: https://app.0509.test/app/notifications");
     expect(emailSendPayload(sendMock).text).toContain("Unsubscribe: https://app.0509.test/unsubscribe");
+    expect(emailSendPayload(sendMock).text).toContain(
+      "3 changes found; showing 1, with 2 lower-priority changes omitted.",
+    );
     expect(createDeliveryAttempt).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -190,11 +196,22 @@ describe("deliverWeeklyDigest", () => {
         }),
       }),
     );
-    expect(updateDeliveryAttemptResult).toHaveBeenCalledWith(
+expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+1,
+expect.anything(),
+"attempt-1",
+expect.objectContaining({
+status:"pending",webhookStatus:"provider_unknown",
+expectedStatus:"pending",expectedWebhookStatus:"pending",
+}),
+);
+expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+2,
       expect.anything(),
       "attempt-1",
       expect.objectContaining({
         status: "sent",
+expectedWebhookStatus:"provider_unknown",
         providerMessageId: "msg_1",
         sentAt: expect.any(String),
         errorMessage: null,
@@ -222,7 +239,7 @@ describe("deliverWeeklyDigest", () => {
     );
   });
 
-  it("records a failed email attempt when the email send rejects", async () => {
+  it("records an untyped email rejection as failed while provider outcome stays unknown", async () => {
     emailSend = vi.fn().mockRejectedValue(new Error("network timeout"));
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
     const updateDeliveryAttemptResult = vi.fn();
@@ -311,7 +328,7 @@ describe("deliverWeeklyDigest", () => {
           channel: "email",
           status: "failed",
           targetValue: "owner@example.com",
-          errorMessage: "Cloudflare Email send failed: network timeout.",
+          errorMessage: "Cloudflare Email send outcome is unknown after provider exception: network timeout.",
         },
       ],
     });
@@ -328,7 +345,8 @@ describe("deliverWeeklyDigest", () => {
       "attempt-1",
       expect.objectContaining({
         status: "failed",
-        errorMessage: "Cloudflare Email send failed: network timeout.",
+        webhookStatus: "provider_unknown",
+        errorMessage: "Cloudflare Email send outcome is unknown after provider exception: network timeout.",
       }),
     );
     expect(upsertDigestDelivery).toHaveBeenCalledWith(
@@ -337,7 +355,7 @@ describe("deliverWeeklyDigest", () => {
       expect.objectContaining({
         status: "failed",
         recipientEmail: "owner@example.com",
-        errorMessage: "Cloudflare Email send failed: network timeout.",
+        errorMessage: "Cloudflare Email send outcome is unknown after provider exception: network timeout.",
       }),
     );
   });
@@ -444,7 +462,7 @@ describe("deliverWeeklyDigest", () => {
       expect.objectContaining({
         channel: "email",
         status: "pending",
-        webhookStatus: "pending",
+webhookStatus:"pending",
         errorMessage: null,
         failedAt: null,
       }),
@@ -1196,7 +1214,7 @@ describe("deliverWeeklyDigest", () => {
 
   it("skips opted-out email targets and never re-provisions the account email", async () => {
     const sendMock = mockEmailSend("msg_1");
-    const upsertDeliveryTarget = vi.fn();
+		const upsertDeliveryTarget = vi.fn();
 
     vi.doMock("~/lib/data.server", () => ({
       listAdsByIds: vi.fn().mockResolvedValue([]),
@@ -1393,6 +1411,7 @@ describe("deliverWatchlistAlerts", () => {
   it("sends instant alerts for confirmed watch events that clear delivery policy", async () => {
     const sendMock = mockEmailSend("msg_instant_1");
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-instant-1");
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
     const upsertDeliveryTarget = vi.fn().mockResolvedValue({
       id: "email-target-1",
       userId: "user-1",
@@ -1438,6 +1457,7 @@ describe("deliverWatchlistAlerts", () => {
       legacyWorkspaceDeliveryDefaults: vi.fn(),
       listDeliveryTargets: vi.fn().mockResolvedValue([]),
       reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
+      updateDeliveryAttemptResult,
       upsertDeliveryTarget,
       upsertDigestDelivery: vi.fn(),
     }));
@@ -1496,7 +1516,7 @@ describe("deliverWatchlistAlerts", () => {
     });
     expect(sendMock).toHaveBeenCalledTimes(1);
     expect(emailSendPayload(sendMock)).toMatchObject({
-      from: { email: "alerts@0509.io", name: "Five to Nine" },
+from:{email:"alerts@0509.io",name:"Five to Nine"},
       to: "owner@example.com",
       subject: "Landing page URL changed: Nykaa",
       html: expect.stringContaining("Five to Nine alert"),
@@ -1513,8 +1533,29 @@ describe("deliverWatchlistAlerts", () => {
         watchlistId: "watch-1",
         targetValue: "owner@example.com",
         eventIds: ["event-1"],
-        providerStatusLastSeenAt: expect.any(String),
-        sentAt: expect.any(String),
+        status: "pending",
+        webhookStatus: "pending",
+        providerStatusLastSeenAt: null,
+        sentAt: null,
+      }),
+    );
+    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      "attempt-instant-1",
+      expect.objectContaining({
+        status: "pending",
+        webhookStatus: "provider_unknown",
+        expectedWebhookStatus: "pending",
+      }),
+    );
+    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      "attempt-instant-1",
+      expect.objectContaining({
+        status: "sent",
+        expectedWebhookStatus: "provider_unknown",
       }),
     );
     // The referenced ad had no captured creative, so no image is embedded.
@@ -1688,6 +1729,7 @@ describe("deliverWatchlistAlerts", () => {
       legacyWorkspaceDeliveryDefaults: vi.fn(),
       listDeliveryTargets: vi.fn().mockResolvedValue([]),
       reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
+      updateDeliveryAttemptResult: vi.fn().mockResolvedValue(true),
       upsertDeliveryTarget: vi.fn().mockResolvedValue({
         id: "email-target-1",
         userId: "user-1",
@@ -1868,6 +1910,7 @@ describe("deliverWatchlistAlerts", () => {
       legacyWorkspaceDeliveryDefaults: vi.fn(),
       listDeliveryTargets: vi.fn().mockResolvedValue([]),
       reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
+      updateDeliveryAttemptResult: vi.fn().mockResolvedValue(true),
       upsertDeliveryTarget,
       upsertDigestDelivery: vi.fn(),
     }));
@@ -1944,7 +1987,8 @@ describe("deliverWatchlistAlerts", () => {
     expect(createDeliveryAttempt).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        status: "sent",
+        status: "pending",
+        webhookStatus: "pending",
         idempotencyKey: expect.stringMatching(/:send$/),
       }),
     );
@@ -1979,7 +2023,7 @@ describe("reconcileDeliveryStatus", () => {
       createdAt: "2026-06-07T00:00:00.000Z",
       updatedAt: "2026-06-07T00:00:00.000Z",
     };
-    const upsertDeliveryTarget = vi.fn();
+		const reconcileWhatsAppSetupTargetFromAttempt = vi.fn();
 
     vi.doMock("~/lib/data.server", () => ({
       listAdsByIds: vi.fn().mockResolvedValue([]),
@@ -1991,7 +2035,8 @@ describe("reconcileDeliveryStatus", () => {
       legacyWorkspaceDeliveryDefaults: vi.fn(),
       listDeliveryTargets: vi.fn(),
       reconcileDeliveryAttemptByProviderMessageId: vi.fn().mockResolvedValue(attempt),
-      upsertDeliveryTarget,
+			reconcileWhatsAppSetupTargetFromAttempt,
+			upsertDeliveryTarget: vi.fn(),
       upsertDigestDelivery: vi.fn(),
     }));
     vi.doMock("~/lib/whatsapp.server", () => ({
@@ -2010,23 +2055,18 @@ describe("reconcileDeliveryStatus", () => {
     });
 
     expect(result).toEqual(attempt);
-    expect(upsertDeliveryTarget).toHaveBeenCalledWith(
+		expect(reconcileWhatsAppSetupTargetFromAttempt).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({
+			{
         userId: "user-1",
-        channel: "whatsapp",
-        targetValue: "919876543210",
-        validationStatus: "validated",
-        isValidated: true,
-        templateEligible: true,
-        lastSuccessfulDeliveryAt: "2026-06-07T00:00:00.000Z",
-        lastSuccessfulAttemptId: "attempt-setup-1",
-        providerIdentifier: "wamid.setup-1",
-        metadata: expect.objectContaining({
-          validationAttemptId: "attempt-setup-1",
-          validationWebhookStatus: "delivered",
-        }),
-      }),
+				targetId: "whatsapp-target-1",
+				attemptId: "attempt-setup-1",
+				providerMessageId: "wamid.setup-1",
+				validationGeneration: null,
+				webhookStatus: "delivered",
+				providerStatusLastSeenAt: "2026-06-07T00:00:00.000Z",
+				errorMessage: null,
+			},
     );
   });
 
@@ -2057,7 +2097,7 @@ describe("reconcileDeliveryStatus", () => {
       createdAt: "2026-06-07T01:00:00.000Z",
       updatedAt: "2026-06-07T01:00:00.000Z",
     };
-    const upsertDeliveryTarget = vi.fn();
+		const reconcileWhatsAppSetupTargetFromAttempt = vi.fn();
 
     vi.doMock("~/lib/data.server", () => ({
       listAdsByIds: vi.fn().mockResolvedValue([]),
@@ -2081,7 +2121,8 @@ describe("reconcileDeliveryStatus", () => {
       legacyWorkspaceDeliveryDefaults: vi.fn(),
       listDeliveryTargets: vi.fn(),
       reconcileDeliveryAttemptByProviderMessageId: vi.fn().mockResolvedValue(attempt),
-      upsertDeliveryTarget,
+			reconcileWhatsAppSetupTargetFromAttempt,
+			upsertDeliveryTarget: vi.fn(),
       upsertDigestDelivery: vi.fn(),
     }));
     vi.doMock("~/lib/whatsapp.server", () => ({
@@ -2100,19 +2141,18 @@ describe("reconcileDeliveryStatus", () => {
       errorMessage: "Recipient blocked delivery.",
     });
 
-    expect(upsertDeliveryTarget).toHaveBeenCalledWith(
+		expect(reconcileWhatsAppSetupTargetFromAttempt).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({
-        validationStatus: "invalid",
-        isValidated: false,
-        templateEligible: false,
-        lastSuccessfulDeliveryAt: "2026-06-06T01:00:00.000Z",
-        lastSuccessfulAttemptId: "attempt-existing",
-        metadata: expect.objectContaining({
-          validationWebhookStatus: "failed",
-          validationErrorMessage: "Recipient blocked delivery.",
-        }),
-      }),
+			{
+				userId: "user-1",
+				targetId: "whatsapp-target-1",
+				attemptId: "attempt-setup-2",
+				providerMessageId: "wamid.setup-2",
+				validationGeneration: null,
+				webhookStatus: "failed",
+				providerStatusLastSeenAt: "2026-06-07T01:00:00.000Z",
+				errorMessage: "Recipient blocked delivery.",
+			},
     );
   });
 
@@ -2175,8 +2215,8 @@ describe("reconcileDeliveryStatus", () => {
     expect(upsertDeliveryTarget).not.toHaveBeenCalled();
   });
 
-  it("ignores stale WhatsApp setup webhooks from older validation attempts", async () => {
-    const upsertDeliveryTarget = vi.fn();
+	it("delegates stale WhatsApp setup webhooks to generation-aware reconciliation", async () => {
+		const reconcileWhatsAppSetupTargetFromAttempt = vi.fn();
 
     vi.doMock("~/lib/data.server", () => ({
       listAdsByIds: vi.fn().mockResolvedValue([]),
@@ -2220,7 +2260,8 @@ describe("reconcileDeliveryStatus", () => {
         createdAt: "2026-06-07T03:00:00.000Z",
         updatedAt: "2026-06-07T03:00:00.000Z",
       }),
-      upsertDeliveryTarget,
+			reconcileWhatsAppSetupTargetFromAttempt,
+			upsertDeliveryTarget: vi.fn(),
       upsertDigestDelivery: vi.fn(),
     }));
     vi.doMock("~/lib/whatsapp.server", () => ({
@@ -2239,11 +2280,20 @@ describe("reconcileDeliveryStatus", () => {
       errorMessage: "Old setup failed.",
     });
 
-    expect(upsertDeliveryTarget).not.toHaveBeenCalled();
+		expect(reconcileWhatsAppSetupTargetFromAttempt).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({
+				targetId: "whatsapp-target-1",
+				attemptId: "attempt-setup-old",
+				providerMessageId: "wamid.setup-old",
+				webhookStatus: "failed",
+			}),
+		);
   });
 
   it("validates WhatsApp setup targets by provider id when the attempt is not found yet", async () => {
     const upsertDeliveryTarget = vi.fn();
+const reconcileWhatsAppSetupTargetByProviderMessageId=vi.fn();
 
     vi.doMock("~/lib/data.server", () => ({
       listAdsByIds: vi.fn().mockResolvedValue([]),
@@ -2256,6 +2306,7 @@ describe("reconcileDeliveryStatus", () => {
       legacyWorkspaceDeliveryDefaults: vi.fn(),
       listDeliveryTargets: vi.fn(),
       reconcileDeliveryAttemptByProviderMessageId: vi.fn().mockResolvedValue(null),
+reconcileWhatsAppSetupTargetByProviderMessageId,
       upsertDeliveryTarget,
       upsertDigestDelivery: vi.fn(),
     }));
@@ -2275,20 +2326,14 @@ describe("reconcileDeliveryStatus", () => {
     });
 
     expect(result).toBeNull();
-    expect(upsertDeliveryTarget).toHaveBeenCalledWith(
+expect(reconcileWhatsAppSetupTargetByProviderMessageId).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        validationStatus: "validated",
-        isValidated: true,
-        templateEligible: true,
-        lastSuccessfulDeliveryAt: "2026-06-07T04:00:00.000Z",
-        providerIdentifier: "wamid.setup-1",
-        metadata: expect.objectContaining({
-          validationWebhookStatus: "delivered",
-          validationReconciledWithoutAttempt: true,
-        }),
+providerMessageId:"wamid.setup-1",webhookStatus:"delivered",
+providerStatusLastSeenAt:"2026-06-07T04:00:00.000Z",
       }),
     );
+expect(upsertDeliveryTarget).not.toHaveBeenCalled();
   });
 });
 
@@ -2560,1232 +2605,5 @@ describe("alert email content quality", () => {
     expect(payload.html).toContain("Glow Serum Sale");
     expect(payload.html).toContain("Glow Serum Weekend Sale");
     expect(payload.html).toContain("See the evidence");
-  });
-});
-
-describe("billing lifecycle emails", () => {
-  const currentBillingInfo = {
-    plan: "starter" as const,
-    dodoStatus: "active",
-    dodoPaymentId: "payment-current",
-    dodoProductId: "product-current",
-    dodoPlanChangeProductId: null,
-    billingInterval: "monthly" as const,
-    dodoSubscriptionId: "subscription-current",
-    dodoCustomerId: "customer-current",
-    dodoNextBillingAt: "2026-08-13T09:00:00.000Z",
-    planUpdatedAt: "2026-07-13T09:00:00.000Z",
-  };
-  const currentBillingStateFingerprint = JSON.stringify(currentBillingInfo);
-
-  function mockBillingDataServer(overrides: Record<string, unknown> = {}) {
-    const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
-    const getDeliveryAttemptByIdempotencyKey = vi.fn().mockResolvedValue(null);
-    const listStaleBillingLifecycleEmailAttempts = vi.fn().mockResolvedValue([]);
-    const updateDeliveryAttemptResult = vi.fn();
-    vi.doMock("~/lib/data.server", () => ({
-      createDeliveryAttempt,
-      getDeliveryAttemptByIdempotencyKey,
-      listStaleBillingLifecycleEmailAttempts,
-      updateDeliveryAttemptResult,
-      getUserDeliveryProfile: vi.fn().mockResolvedValue({
-        email: "owner@example.com",
-        name: "Owner",
-      }),
-      getUserPlanBillingInfo: vi.fn().mockResolvedValue(currentBillingInfo),
-      getDeliveryTargetById: vi.fn(),
-      getDeliveryTargetByProviderIdentifier: vi.fn(),
-      getOldestUserId: vi.fn(),
-      getUserIdByEmail: vi.fn(),
-      getWatchlistDeliveryConfig: vi.fn(),
-      getWorkspaceDeliveryConfig: vi.fn(),
-      legacyWorkspaceDeliveryDefaults: vi.fn(),
-      listAdsByIds: vi.fn().mockResolvedValue([]),
-      listDeliveryTargets: vi.fn().mockResolvedValue([]),
-      reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
-      upsertDeliveryTarget: vi.fn(),
-      upsertDigestDelivery: vi.fn(),
-      ...overrides,
-    }));
-    return {
-      createDeliveryAttempt,
-      getDeliveryAttemptByIdempotencyKey,
-      listStaleBillingLifecycleEmailAttempts,
-      updateDeliveryAttemptResult,
-    };
-  }
-
-  afterEach(() => {
-    vi.doUnmock("~/lib/data.server");
-  });
-
-  it("sends the dunning email with a day-coarse deterministic idempotency key and no unsubscribe header", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:00:00.000Z"));
-    const sendMock = mockEmailSend("msg_billing_1");
-    const mocks = mockBillingDataServer();
-
-    const { sendBillingPaymentIssueEmail } = await import("~/lib/delivery.server");
-    const sent = await sendBillingPaymentIssueEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: "Owner <script>",
-    });
-
-    expect(sent).toBe(true);
-    const payload = emailSendPayload(sendMock);
-    expect(payload.to).toBe("owner@example.com");
-    expect(payload.subject).toBe("Action needed: a Five to Nine payment didn't go through");
-    expect(payload.html).toContain("your plan stays active while the payment processor retries");
-    expect(payload.html).toContain("https://0509.io/app/billing");
-    expect(payload.html).toContain("Hi Owner &lt;script&gt;,");
-    expect(payload.html).not.toContain("<script>");
-    // transactional: must reach unsubscribed addresses — no unsubscribe header
-    expect(payload.headers["List-Unsubscribe"]).toBeUndefined();
-    expect(payload.html).not.toContain("Unsubscribe");
-
-    const attempt = mocks.createDeliveryAttempt.mock.calls[0]?.[1];
-    expect(attempt.lane).toBe("customer");
-    expect(attempt.channel).toBe("email");
-    expect(attempt.templateName).toBe("billing_payment_issue");
-    expect(attempt.idempotencyKey).toBe("billing-payment-issue:user-1:2026-07-13");
-    expect(attempt.status).toBe("pending");
-    expect(attempt.webhookStatus).toBe("pending");
-    expect(attempt.timestamp).toBe("2026-07-13T09:00:00.000Z");
-    expect(attempt.payloadSnapshot).toEqual(
-      expect.objectContaining({
-        kind: "billing_payment_issue",
-        subject: "Action needed: a Five to Nine payment didn't go through",
-        bodyHtml: expect.stringContaining("your plan stays active"),
-        tag: "billing-payment-issue",
-        billingStateFingerprint: currentBillingStateFingerprint,
-      }),
-    );
-  });
-
-  it("short-circuits a duplicate dunning send on the same day", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T18:00:00.000Z"));
-    const sendMock = mockEmailSend();
-    const mocks = mockBillingDataServer({
-      getDeliveryAttemptByIdempotencyKey: vi
-        .fn()
-        .mockResolvedValue({ id: "attempt-existing", status: "sent" }),
-    });
-
-    const { sendBillingPaymentIssueEmail } = await import("~/lib/delivery.server");
-    const sent = await sendBillingPaymentIssueEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: "Owner",
-    });
-
-    expect(sent).toBe(false);
-    expect(sendMock).not.toHaveBeenCalled();
-    expect(mocks.createDeliveryAttempt).not.toHaveBeenCalled();
-  });
-
-  it("retries in place when a prior dunning attempt exists but did not send", async () => {
-    const sendMock = mockEmailSend("msg_retry_1");
-    const mocks = mockBillingDataServer({
-      getDeliveryAttemptByIdempotencyKey: vi
-        .fn()
-        .mockResolvedValue({ id: "attempt-failed", status: "failed" }),
-    });
-
-    const { sendBillingPaymentIssueEmail } = await import("~/lib/delivery.server");
-    const sent = await sendBillingPaymentIssueEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: null,
-    });
-
-    expect(sent).toBe(true);
-    expect(sendMock).toHaveBeenCalledTimes(1);
-    expect(mocks.createDeliveryAttempt).not.toHaveBeenCalled();
-    expect(mocks.updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
-      1,
-      expect.anything(),
-      "attempt-failed",
-      expect.objectContaining({ expectedStatus: "failed", status: "pending" }),
-    );
-    expect(mocks.updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
-      2,
-      expect.anything(),
-      "attempt-failed",
-      expect.objectContaining({ status: "sent" }),
-    );
-  });
-
-  it("atomically reclaims a failed dunning attempt so concurrent retries emit once", async () => {
-    const sendMock = mockEmailSend("msg_failed_retry_once");
-    const updateDeliveryAttemptResult = vi
-      .fn()
-      .mockResolvedValueOnce(true)
-      .mockResolvedValueOnce(false)
-      .mockResolvedValueOnce(true);
-    mockBillingDataServer({
-      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue({
-        id: "attempt-failed",
-        provider: "cloudflare_email",
-        status: "failed",
-        webhookStatus: "failed",
-        providerMessageId: null,
-      }),
-      updateDeliveryAttemptResult,
-    });
-
-    const { sendBillingPaymentIssueEmail } = await import("~/lib/delivery.server");
-    const input = {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: null,
-    };
-    const results = await Promise.all([
-      sendBillingPaymentIssueEmail(emailEnv as never, input),
-      sendBillingPaymentIssueEmail(emailEnv as never, input),
-    ]);
-
-    expect(results.filter(Boolean)).toHaveLength(1);
-    expect(sendMock).toHaveBeenCalledTimes(1);
-    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
-      1,
-      expect.anything(),
-      "attempt-failed",
-      expect.objectContaining({ expectedStatus: "failed", status: "pending" }),
-    );
-    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
-      2,
-      expect.anything(),
-      "attempt-failed",
-      expect.objectContaining({ expectedStatus: "failed", status: "pending" }),
-    );
-  });
-
-  it("claims the dunning idempotency key before sending so concurrent handlers emit once", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:00:00.000Z"));
-    const sendMock = mockEmailSend("msg_concurrent_1");
-    const getDeliveryAttemptByIdempotencyKey = vi
-      .fn()
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(null)
-      .mockResolvedValue({ id: "attempt-claimed", status: "pending" });
-    const createDeliveryAttempt = vi
-      .fn()
-      .mockResolvedValueOnce("attempt-claimed")
-      .mockRejectedValueOnce(new Error("UNIQUE constraint failed: delivery_attempt.idempotency_key"));
-    mockBillingDataServer({ createDeliveryAttempt, getDeliveryAttemptByIdempotencyKey });
-
-    const { sendBillingPaymentIssueEmail } = await import("~/lib/delivery.server");
-    const results = await Promise.all([
-      sendBillingPaymentIssueEmail(emailEnv as never, {
-        userId: "user-1",
-        email: "owner@example.com",
-        name: "Owner",
-      }),
-      sendBillingPaymentIssueEmail(emailEnv as never, {
-        userId: "user-1",
-        email: "owner@example.com",
-        name: "Owner",
-      }),
-    ]);
-
-    expect(results.filter(Boolean)).toHaveLength(1);
-    expect(sendMock).toHaveBeenCalledTimes(1);
-    expect(createDeliveryAttempt).toHaveBeenCalledTimes(2);
-  });
-
-  it("does not resend a billing email while a provider-timeout outcome is unknown", async () => {
-    const sendMock = mockEmailSend("msg_should_not_send");
-    const mocks = mockBillingDataServer({
-      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue({
-        id: "attempt-pending",
-        provider: "cloudflare_email",
-        status: "pending",
-        webhookStatus: "provider_unknown",
-      }),
-    });
-
-    const { sendBillingRefundEmail } = await import("~/lib/delivery.server");
-    const sent = await sendBillingRefundEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: null,
-      eventId: "evt-refund-pending",
-    });
-
-    expect(sent).toBe(false);
-    expect(sendMock).not.toHaveBeenCalled();
-    expect(mocks.createDeliveryAttempt).not.toHaveBeenCalled();
-    expect(mocks.updateDeliveryAttemptResult).not.toHaveBeenCalled();
-  });
-
-  it("reclaims a stale billing pre-dispatch lease and sends once", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
-    const sendMock = mockEmailSend("msg_stale_billing");
-    const staleAttempt = {
-      id: "attempt-stale",
-      provider: "cloudflare_email",
-      status: "pending",
-      webhookStatus: "pending",
-      providerMessageId: null,
-      updatedAt: "2026-07-13T09:03:00.000Z",
-    };
-    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
-    const mocks = mockBillingDataServer({
-      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(staleAttempt),
-      updateDeliveryAttemptResult,
-    });
-
-    const { sendBillingRefundEmail } = await import("~/lib/delivery.server");
-    const sent = await sendBillingRefundEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: null,
-      eventId: "evt-stale-refund",
-    });
-
-    expect(sent).toBe(true);
-    expect(sendMock).toHaveBeenCalledTimes(1);
-    expect(mocks.createDeliveryAttempt).not.toHaveBeenCalled();
-    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
-      1,
-      expect.anything(),
-      staleAttempt.id,
-      expect.objectContaining({
-        status: "pending",
-        webhookStatus: "pending",
-        expectedStatus: "pending",
-        expectedWebhookStatus: "pending",
-        expectedUpdatedAt: staleAttempt.updatedAt,
-        updatedAt: "2026-07-13T09:05:00.000Z",
-      }),
-    );
-    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
-      2,
-      expect.anything(),
-      staleAttempt.id,
-      expect.objectContaining({
-        status: "sent",
-        expectedStatus: "pending",
-        expectedWebhookStatus: "pending",
-        expectedUpdatedAt: "2026-07-13T09:05:00.000Z",
-      }),
-    );
-  });
-
-  it("claims a freshly-enqueued outbox row and dispatches it immediately", async () => {
-    // The webhook batch inserted this pending row atomically with the ledger
-    // finalize moments ago (NOT stale). The live send path must claim it via
-    // compare-and-set instead of backing off — otherwise every lifecycle
-    // email would wait for the next recovery cron.
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
-    const sendMock = mockEmailSend("msg_outbox_dispatch");
-    const outboxAttempt = {
-      id: "attempt-outbox",
-      provider: "cloudflare_email",
-      status: "pending",
-      webhookStatus: "pending",
-      providerMessageId: null,
-      payloadSnapshot: { outboxPendingDispatch: true },
-      updatedAt: "2026-07-13T09:04:59.000Z",
-    };
-    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
-    const mocks = mockBillingDataServer({
-      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(outboxAttempt),
-      updateDeliveryAttemptResult,
-    });
-
-    const { sendBillingRefundEmail } = await import("~/lib/delivery.server");
-    const sent = await sendBillingRefundEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: null,
-      eventId: "evt-outbox-refund",
-    });
-
-    expect(sent).toBe(true);
-    expect(sendMock).toHaveBeenCalledTimes(1);
-    expect(mocks.createDeliveryAttempt).not.toHaveBeenCalled();
-    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
-      1,
-      expect.anything(),
-      outboxAttempt.id,
-      expect.objectContaining({
-        status: "pending",
-        expectedStatus: "pending",
-        expectedWebhookStatus: "pending",
-        expectedUpdatedAt: outboxAttempt.updatedAt,
-        targetValue: "owner@example.com",
-        // The claim rewrites the payload: marker cleared, post-mutation
-        // fingerprint recorded for any later fingerprint-based recovery.
-        payloadSnapshot: expect.objectContaining({
-          billingStateFingerprint: currentBillingStateFingerprint,
-        }),
-      }),
-    );
-  });
-
-  it("records the current recipient when retrying a failed attempt in place", async () => {
-    // The account email changed between the failed attempt and this retry.
-    // The claim must move target_value to the address actually being sent
-    // to, or the ledger and recovery payload keep the stale recipient.
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
-    mockEmailSend("msg_retry_new_target");
-    const failedAttempt = {
-      id: "attempt-failed-old-target",
-      provider: "cloudflare_email",
-      status: "failed",
-      webhookStatus: "failed",
-      providerMessageId: null,
-      targetValue: "old@example.com",
-      updatedAt: "2026-07-13T08:00:00.000Z",
-    };
-    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
-    mockBillingDataServer({
-      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(failedAttempt),
-      updateDeliveryAttemptResult,
-    });
-
-    const { sendBillingRefundEmail } = await import("~/lib/delivery.server");
-    const sent = await sendBillingRefundEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "new@example.com",
-      name: null,
-      eventId: "evt-retry-new-target",
-    });
-
-    expect(sent).toBe(true);
-    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
-      1,
-      expect.anything(),
-      failedAttempt.id,
-      expect.objectContaining({
-        status: "pending",
-        expectedStatus: "failed",
-        targetValue: "new@example.com",
-      }),
-    );
-  });
-
-  it("recovers a marker outbox row when the billing state still matches its kind", async () => {
-    // Crash after the webhook batch, before dispatch: the row has no
-    // post-mutation fingerprint (marker instead). Recovery validates by kind
-    // against the CURRENT billing state and replays.
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
-    const sendMock = mockEmailSend("msg_marker_recovered");
-    const markerAttempt = {
-      id: "attempt-marker",
-      userId: "user-1",
-      targetValue: "owner@example.com",
-      templateName: "billing_payment_issue",
-      payloadSnapshot: {
-        kind: "billing_payment_issue",
-        subject: "Action needed: payment failed",
-        bodyHtml: "<p>Please update your payment method.</p>",
-        tag: "billing-payment-issue",
-        billingStateFingerprint: null,
-        outboxPendingDispatch: true,
-      },
-      updatedAt: "2026-07-13T09:03:00.000Z",
-    };
-    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
-    mockBillingDataServer({
-      listStaleBillingLifecycleEmailAttempts: vi.fn().mockResolvedValue([markerAttempt]),
-      getUserPlanBillingInfo: vi.fn().mockResolvedValue({
-        ...currentBillingInfo,
-        dodoStatus: "payment.failed",
-      }),
-      updateDeliveryAttemptResult,
-    });
-
-    const { recoverAbandonedBillingLifecycleEmails } = await import("~/lib/delivery.server");
-    const result = await recoverAbandonedBillingLifecycleEmails({
-      ...emailEnv,
-      DB: {},
-    } as never);
-
-    expect(result).toMatchObject({ scanned: 1, claimed: 1, sent: 1, superseded: 0 });
-    expect(sendMock).toHaveBeenCalledTimes(1);
-    // The recovery claim must clear the outbox marker and record a current
-    // fingerprint — a recovery-claimed row that still looks never-dispatched
-    // could be seized by a live sibling webhook mid-provider-call (double
-    // send).
-    const claimCall = updateDeliveryAttemptResult.mock.calls[0]!;
-    expect(claimCall[1]).toBe(markerAttempt.id);
-    expect(claimCall[2].payloadSnapshot).toBeDefined();
-    expect(claimCall[2].payloadSnapshot.outboxPendingDispatch).toBeUndefined();
-    expect(typeof claimCall[2].payloadSnapshot.billingStateFingerprint).toBe("string");
-  });
-
-  it("supersedes a marker outbox row when the billing state moved past its kind", async () => {
-    // Same crash shape, but the customer's payment recovered before the
-    // sweep ran — dodoStatus is healthy again, so the dunning email must not
-    // send. It finalizes as retryable 'failed', keeping the day slot open.
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
-    const sendMock = mockEmailSend("msg_marker_superseded");
-    const markerAttempt = {
-      id: "attempt-marker-superseded",
-      userId: "user-1",
-      targetValue: "owner@example.com",
-      templateName: "billing_payment_issue",
-      payloadSnapshot: {
-        kind: "billing_payment_issue",
-        subject: "Action needed: payment failed",
-        bodyHtml: "<p>Please update your payment method.</p>",
-        tag: "billing-payment-issue",
-        billingStateFingerprint: null,
-        outboxPendingDispatch: true,
-      },
-      updatedAt: "2026-07-13T09:03:00.000Z",
-    };
-    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
-    mockBillingDataServer({
-      listStaleBillingLifecycleEmailAttempts: vi.fn().mockResolvedValue([markerAttempt]),
-      getUserPlanBillingInfo: vi.fn().mockResolvedValue({
-        ...currentBillingInfo,
-        dodoStatus: "active",
-      }),
-      updateDeliveryAttemptResult,
-    });
-
-    const { recoverAbandonedBillingLifecycleEmails } = await import("~/lib/delivery.server");
-    const result = await recoverAbandonedBillingLifecycleEmails({
-      ...emailEnv,
-      DB: {},
-    } as never);
-
-    expect(result).toMatchObject({ scanned: 1, claimed: 1, sent: 0, superseded: 1 });
-    expect(sendMock).not.toHaveBeenCalled();
-    expect(updateDeliveryAttemptResult).toHaveBeenLastCalledWith(
-      expect.anything(),
-      markerAttempt.id,
-      expect.objectContaining({
-        status: "skipped_due_to_dedupe",
-        webhookStatus: "provider_unknown",
-      }),
-    );
-  });
-
-  it("recovers a stale billing outbox row from its durable payload", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
-    const sendMock = mockEmailSend("msg_recovered_billing");
-    const staleAttempt = {
-      id: "attempt-recovery",
-      userId: "user-1",
-      targetValue: "owner@example.com",
-      templateName: "billing_refund",
-      payloadSnapshot: {
-        kind: "billing_refund",
-        subject: "Your refund has been processed",
-        bodyHtml: "<p>Your refund is complete.</p>",
-        tag: "billing-refund",
-        billingStateFingerprint: currentBillingStateFingerprint,
-      },
-      updatedAt: "2026-07-13T09:03:00.000Z",
-    };
-    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
-    const listStaleBillingLifecycleEmailAttempts = vi.fn().mockResolvedValue([staleAttempt]);
-    mockBillingDataServer({
-      listStaleBillingLifecycleEmailAttempts,
-      updateDeliveryAttemptResult,
-    });
-
-    const { recoverAbandonedBillingLifecycleEmails } = await import("~/lib/delivery.server");
-    const result = await recoverAbandonedBillingLifecycleEmails({
-      ...emailEnv,
-      DB: {},
-    } as never);
-
-    expect(result).toEqual({
-      scanned: 1,
-      claimed: 1,
-      sent: 1,
-      failed: 0,
-      providerUnknown: 0,
-      superseded: 0,
-      conflicts: 0,
-    });
-    expect(sendMock).toHaveBeenCalledTimes(1);
-    expect(emailSendPayload(sendMock)).toEqual(
-      expect.objectContaining({
-        to: "owner@example.com",
-        subject: "Your refund has been processed",
-      }),
-    );
-    expect(listStaleBillingLifecycleEmailAttempts).toHaveBeenCalledWith(
-      expect.anything(),
-      { staleBefore: "2026-07-13T09:04:00.000Z", limit: 10 },
-    );
-    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
-      1,
-      expect.anything(),
-      staleAttempt.id,
-      expect.objectContaining({
-        expectedStatus: "pending",
-        expectedWebhookStatus: "pending",
-        expectedUpdatedAt: staleAttempt.updatedAt,
-        updatedAt: "2026-07-13T09:05:00.000Z",
-      }),
-    );
-    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
-      2,
-      expect.anything(),
-      staleAttempt.id,
-      expect.objectContaining({
-        status: "sent",
-        expectedUpdatedAt: "2026-07-13T09:05:00.000Z",
-      }),
-    );
-  });
-
-  it("suppresses a recovered billing email after newer account state wins", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
-    const sendMock = mockEmailSend("msg_superseded_must_not_send");
-    const staleAttempt = {
-      id: "attempt-superseded",
-      userId: "user-1",
-      targetValue: "owner@example.com",
-      templateName: "billing_payment_issue",
-      payloadSnapshot: {
-        kind: "billing_payment_issue",
-        subject: "Action needed: payment failed",
-        bodyHtml: "<p>Please update your payment method.</p>",
-        tag: "billing-payment-issue",
-        billingStateFingerprint: currentBillingStateFingerprint,
-      },
-      updatedAt: "2026-07-13T09:03:00.000Z",
-    };
-    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
-    mockBillingDataServer({
-      listStaleBillingLifecycleEmailAttempts: vi.fn().mockResolvedValue([staleAttempt]),
-      getUserPlanBillingInfo: vi.fn().mockResolvedValue({
-        ...currentBillingInfo,
-        dodoStatus: "active_after_recovery",
-        planUpdatedAt: "2026-07-13T09:04:00.000Z",
-      }),
-      updateDeliveryAttemptResult,
-    });
-
-    const { recoverAbandonedBillingLifecycleEmails } = await import("~/lib/delivery.server");
-    const result = await recoverAbandonedBillingLifecycleEmails({
-      ...emailEnv,
-      DB: {},
-    } as never);
-
-    expect(result).toEqual({
-      scanned: 1,
-      claimed: 1,
-      sent: 0,
-      failed: 0,
-      providerUnknown: 0,
-      superseded: 1,
-      conflicts: 0,
-    });
-    expect(sendMock).not.toHaveBeenCalled();
-    // Superseded rows finalize as skipped (an intentional non-send that must
-    // not inflate operator failure counts) — but the slot stays claimable:
-    // sendBillingLifecycleEmail retries skipped+provider_unknown rows in
-    // place, so a later same-day payment.failed webhook can still send.
-    expect(updateDeliveryAttemptResult).toHaveBeenLastCalledWith(
-      expect.anything(),
-      staleAttempt.id,
-      expect.objectContaining({
-        status: "skipped_due_to_dedupe",
-        webhookStatus: "provider_unknown",
-        errorMessage:
-          "Billing lifecycle recovery was superseded by newer account state.",
-      }),
-    );
-  });
-
-  it("claims a recovery-superseded slot in place and sends fresh content", async () => {
-    // The recovery sweep refused to replay stale content and skipped the
-    // row; a NEW same-day payment event must still be able to take the
-    // day-keyed slot and email content built from the current event.
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
-    const sendMock = mockEmailSend("msg_superseded_reclaim");
-    const supersededAttempt = {
-      id: "attempt-superseded-slot",
-      provider: "cloudflare_email",
-      status: "skipped_due_to_dedupe",
-      webhookStatus: "provider_unknown",
-      providerMessageId: null,
-      targetValue: "owner@example.com",
-      updatedAt: "2026-07-13T08:30:00.000Z",
-    };
-    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
-    const mocks = mockBillingDataServer({
-      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(supersededAttempt),
-      updateDeliveryAttemptResult,
-    });
-
-    const { sendBillingPaymentIssueEmail } = await import("~/lib/delivery.server");
-    const sent = await sendBillingPaymentIssueEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: null,
-      occurredAt: "2026-07-13T09:00:00.000Z",
-    });
-
-    expect(sent).toBe(true);
-    expect(sendMock).toHaveBeenCalledTimes(1);
-    expect(mocks.createDeliveryAttempt).not.toHaveBeenCalled();
-    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
-      1,
-      expect.anything(),
-      supersededAttempt.id,
-      expect.objectContaining({
-        status: "pending",
-        expectedStatus: "skipped_due_to_dedupe",
-        expectedWebhookStatus: "provider_unknown",
-      }),
-    );
-  });
-
-  it("persists a recovered provider timeout as unknown and does not retry it", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
-    emailSend = vi.fn(() => new Promise(() => undefined));
-    const staleAttempt = {
-      id: "attempt-recovery-timeout",
-      userId: "user-1",
-      targetValue: "owner@example.com",
-      templateName: "billing_refund",
-      payloadSnapshot: {
-        kind: "billing_refund",
-        subject: "Your refund has been processed",
-        bodyHtml: "<p>Your refund is complete.</p>",
-        tag: "billing-refund",
-        billingStateFingerprint: currentBillingStateFingerprint,
-      },
-      updatedAt: "2026-07-13T09:03:00.000Z",
-    };
-    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
-    mockBillingDataServer({
-      listStaleBillingLifecycleEmailAttempts: vi.fn().mockResolvedValue([staleAttempt]),
-      updateDeliveryAttemptResult,
-    });
-
-    const { recoverAbandonedBillingLifecycleEmails } = await import("~/lib/delivery.server");
-    const resultPromise = recoverAbandonedBillingLifecycleEmails({
-      ...emailEnv,
-      DB: {},
-    } as never);
-    await Promise.resolve();
-    await Promise.resolve();
-    await vi.advanceTimersByTimeAsync(10_000);
-
-    await expect(resultPromise).resolves.toEqual({
-      scanned: 1,
-      claimed: 1,
-      sent: 0,
-      failed: 0,
-      providerUnknown: 1,
-      superseded: 0,
-      conflicts: 0,
-    });
-    expect(updateDeliveryAttemptResult).toHaveBeenLastCalledWith(
-      expect.anything(),
-      staleAttempt.id,
-      expect.objectContaining({
-        status: "pending",
-        webhookStatus: "provider_unknown",
-        errorMessage: "Cloudflare Email send outcome is unknown after provider timeout.",
-      }),
-    );
-  });
-
-  it("fails a malformed billing outbox row without calling the provider", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:05:00.000Z"));
-    const sendMock = mockEmailSend("msg_should_not_send");
-    const staleAttempt = {
-      id: "attempt-malformed",
-      userId: "user-1",
-      targetValue: "owner@example.com",
-      templateName: "billing_refund",
-      payloadSnapshot: { kind: "billing_refund" },
-      updatedAt: "2026-07-13T09:03:00.000Z",
-    };
-    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
-    mockBillingDataServer({
-      listStaleBillingLifecycleEmailAttempts: vi.fn().mockResolvedValue([staleAttempt]),
-      updateDeliveryAttemptResult,
-    });
-
-    const { recoverAbandonedBillingLifecycleEmails } = await import("~/lib/delivery.server");
-    const result = await recoverAbandonedBillingLifecycleEmails({
-      ...emailEnv,
-      DB: {},
-    } as never);
-
-    expect(result).toEqual(
-      expect.objectContaining({ scanned: 1, claimed: 1, sent: 0, failed: 1 }),
-    );
-    expect(sendMock).not.toHaveBeenCalled();
-    expect(updateDeliveryAttemptResult).toHaveBeenLastCalledWith(
-      expect.anything(),
-      staleAttempt.id,
-      expect.objectContaining({
-        status: "failed",
-        webhookStatus: "failed",
-        errorMessage: "Billing lifecycle recovery payload is incomplete.",
-      }),
-    );
-  });
-
-  it("reconciles an unknown billing attempt to failed so the same idempotent send can retry", async () => {
-    const sendMock = mockEmailSend("msg_reconciled_retry");
-    const pendingAttempt = {
-      id: "attempt-pending",
-      provider: "cloudflare_email",
-      status: "pending",
-      webhookStatus: "provider_unknown",
-    };
-    const failedAttempt = { ...pendingAttempt, status: "failed", webhookStatus: "failed" };
-    const getDeliveryAttemptByIdempotencyKey = vi
-      .fn()
-      .mockResolvedValueOnce(pendingAttempt)
-      .mockResolvedValueOnce(failedAttempt);
-    const updateDeliveryAttemptResult = vi.fn();
-    mockBillingDataServer({ getDeliveryAttemptByIdempotencyKey, updateDeliveryAttemptResult });
-
-    const { reconcileBillingLifecycleEmailDelivery, sendBillingRefundEmail } = await import(
-      "~/lib/delivery.server"
-    );
-    await expect(
-      reconcileBillingLifecycleEmailDelivery(emailEnv as never, {
-        idempotencyKey: "billing-refund:user-1:evt-refund-retry",
-        outcome: "failed",
-        reconciledAt: "2026-07-13T09:05:00.000Z",
-        errorMessage: "Provider confirmed the timed-out send was not accepted.",
-      }),
-    ).resolves.toBe(true);
-
-    const sent = await sendBillingRefundEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: null,
-      eventId: "evt-refund-retry",
-    });
-
-    expect(sent).toBe(true);
-    expect(sendMock).toHaveBeenCalledTimes(1);
-    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
-      1,
-      expect.anything(),
-      "attempt-pending",
-      expect.objectContaining({
-        expectedStatus: "pending",
-        status: "failed",
-        webhookStatus: "failed",
-      }),
-    );
-    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
-      2,
-      expect.anything(),
-      "attempt-pending",
-      expect.objectContaining({ expectedStatus: "failed", status: "pending" }),
-    );
-    expect(updateDeliveryAttemptResult).toHaveBeenNthCalledWith(
-      3,
-      expect.anything(),
-      "attempt-pending",
-      expect.objectContaining({ expectedStatus: "pending", status: "sent" }),
-    );
-  });
-
-  it("allows only the first of two conflicting billing reconciliations to win", async () => {
-    let durableStatus = "pending";
-    const pendingAttempt = {
-      id: "attempt-pending",
-      provider: "cloudflare_email",
-      status: "pending",
-      webhookStatus: "provider_unknown",
-      providerMessageId: null,
-    };
-    const updateDeliveryAttemptResult = vi.fn(
-      async (_env: unknown, _id: string, input: { expectedStatus?: string; status: string }) => {
-        if (input.expectedStatus && durableStatus !== input.expectedStatus) {
-          return false;
-        }
-        durableStatus = input.status;
-        return true;
-      },
-    );
-    mockBillingDataServer({
-      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(pendingAttempt),
-      updateDeliveryAttemptResult,
-    });
-
-    const { reconcileBillingLifecycleEmailDelivery } = await import("~/lib/delivery.server");
-    const [sentResult, failedResult] = await Promise.all([
-      reconcileBillingLifecycleEmailDelivery(emailEnv as never, {
-        idempotencyKey: "billing-refund:user-1:evt-reconcile-race",
-        outcome: "sent",
-        reconciledAt: "2026-07-13T09:05:00.000Z",
-      }),
-      reconcileBillingLifecycleEmailDelivery(emailEnv as never, {
-        idempotencyKey: "billing-refund:user-1:evt-reconcile-race",
-        outcome: "failed",
-        reconciledAt: "2026-07-13T09:05:01.000Z",
-      }),
-    ]);
-
-    expect([sentResult, failedResult].filter(Boolean)).toHaveLength(1);
-    expect(durableStatus).toBe("sent");
-    expect(updateDeliveryAttemptResult).toHaveBeenCalledTimes(2);
-    for (const call of updateDeliveryAttemptResult.mock.calls) {
-      expect(call[2]).toEqual(expect.objectContaining({ expectedStatus: "pending" }));
-    }
-  });
-
-  it("keeps an in-flight pre-dispatch claim separate from provider-unknown reconciliation", async () => {
-    let releaseProvider: ((value: { messageId: string }) => void) | undefined;
-    let signalProviderStarted: (() => void) | undefined;
-    const providerStarted = new Promise<void>((resolve) => {
-      signalProviderStarted = resolve;
-    });
-    emailSend = vi.fn().mockImplementation(
-      () =>
-        new Promise<{ messageId: string }>((resolve) => {
-          releaseProvider = resolve;
-          signalProviderStarted?.();
-        }),
-    );
-
-    let durableStatus: string | null = null;
-    let durableWebhookStatus: string | null = null;
-    let durableUpdatedAt: string | null = null;
-    const createDeliveryAttempt = vi.fn().mockImplementation(async (
-      _env: unknown,
-      input: { status: string; webhookStatus: string; timestamp?: string },
-    ) => {
-      durableStatus = input.status;
-      durableWebhookStatus = input.webhookStatus;
-      durableUpdatedAt = input.timestamp ?? null;
-      return "attempt-in-flight";
-    });
-    const getDeliveryAttemptByIdempotencyKey = vi.fn().mockImplementation(async () => {
-      if (!durableStatus) {
-        return null;
-      }
-      return {
-        id: "attempt-in-flight",
-        provider: "cloudflare_email",
-        status: durableStatus,
-        webhookStatus: durableWebhookStatus,
-        providerMessageId: null,
-        updatedAt: durableUpdatedAt,
-      };
-    });
-    const updateDeliveryAttemptResult = vi.fn(
-      async (
-        _env: unknown,
-        _id: string,
-        input: {
-          expectedStatus?: string;
-          expectedWebhookStatus?: string;
-          expectedUpdatedAt?: string;
-          status: string;
-          webhookStatus: string;
-          updatedAt?: string;
-        },
-      ) => {
-        if (input.expectedStatus && durableStatus !== input.expectedStatus) {
-          return false;
-        }
-        if (
-          input.expectedWebhookStatus &&
-          durableWebhookStatus !== input.expectedWebhookStatus
-        ) {
-          return false;
-        }
-        if (input.expectedUpdatedAt && durableUpdatedAt !== input.expectedUpdatedAt) {
-          return false;
-        }
-        durableStatus = input.status;
-        durableWebhookStatus = input.webhookStatus;
-        durableUpdatedAt = input.updatedAt ?? durableUpdatedAt;
-        return true;
-      },
-    );
-    mockBillingDataServer({
-      createDeliveryAttempt,
-      getDeliveryAttemptByIdempotencyKey,
-      updateDeliveryAttemptResult,
-    });
-
-    const { reconcileBillingLifecycleEmailDelivery, sendBillingRefundEmail } = await import(
-      "~/lib/delivery.server"
-    );
-    const sendResult = sendBillingRefundEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: null,
-      eventId: "evt-in-flight-reconcile",
-    });
-    await providerStarted;
-
-    await expect(
-      reconcileBillingLifecycleEmailDelivery(emailEnv as never, {
-        idempotencyKey: "billing-refund:user-1:evt-in-flight-reconcile",
-        outcome: "failed",
-        reconciledAt: "2026-07-13T09:05:00.000Z",
-        errorMessage: "Provider evidence confirmed no acceptance.",
-      }),
-    ).resolves.toBe(false);
-    releaseProvider?.({ messageId: "msg_arrived_after_reconcile" });
-
-    await expect(sendResult).resolves.toBe(true);
-    expect(durableStatus).toBe("sent");
-    expect(durableWebhookStatus).toBe("provider_unknown");
-    expect(updateDeliveryAttemptResult).toHaveBeenLastCalledWith(
-      expect.anything(),
-      "attempt-in-flight",
-      expect.objectContaining({
-        expectedStatus: "pending",
-        expectedWebhookStatus: "pending",
-        expectedUpdatedAt: durableUpdatedAt,
-        status: "sent",
-      }),
-    );
-  });
-
-  it("sends the scheduled-cancellation email with the active-until date and event-keyed idempotency", async () => {
-    const sendMock = mockEmailSend();
-    const mocks = mockBillingDataServer();
-
-    const { sendBillingCancellationEmail } = await import("~/lib/delivery.server");
-    const sent = await sendBillingCancellationEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: "Owner",
-      kind: "scheduled",
-      effectiveAt: "2026-08-01T00:00:00.000Z",
-      eventId: "evt-cancel-1",
-    });
-
-    expect(sent).toBe(true);
-    const payload = emailSendPayload(sendMock);
-    expect(payload.subject).toBe("Your Five to Nine cancellation is confirmed");
-    expect(payload.html).toContain("August 1, 2026 (UTC)");
-    expect(payload.html).toContain("won't renew");
-    expect(payload.html).toContain("paused automatically");
-    expect(payload.headers["List-Unsubscribe"]).toBeUndefined();
-
-    const attempt = mocks.createDeliveryAttempt.mock.calls[0]?.[1];
-    expect(attempt.templateName).toBe("billing_cancellation_scheduled");
-    expect(attempt.idempotencyKey).toBe("billing-cancellation:user-1:evt-cancel-1");
-  });
-
-  it("falls back to period-end copy when the scheduled cancellation has no parseable date", async () => {
-    const sendMock = mockEmailSend();
-    mockBillingDataServer();
-
-    const { sendBillingCancellationEmail } = await import("~/lib/delivery.server");
-    await sendBillingCancellationEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: null,
-      kind: "scheduled",
-      effectiveAt: null,
-      eventId: "evt-cancel-2",
-    });
-
-    const payload = emailSendPayload(sendMock);
-    expect(payload.html).toContain("until the end of the period you already paid for");
-  });
-
-  it("sends the access-ended email describing the real Free-plan downgrade behavior", async () => {
-    const sendMock = mockEmailSend();
-    const mocks = mockBillingDataServer();
-
-    const { sendBillingCancellationEmail } = await import("~/lib/delivery.server");
-    const sent = await sendBillingCancellationEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: "Owner",
-      kind: "ended",
-      eventId: "evt-expired-1",
-    });
-
-    expect(sent).toBe(true);
-    const payload = emailSendPayload(sendMock);
-    expect(payload.subject).toBe("Your Five to Nine plan has ended");
-    expect(payload.html).toContain("now on the Free plan");
-    expect(payload.html).toContain("the newest one stays active");
-    expect(payload.headers["List-Unsubscribe"]).toBeUndefined();
-
-    const attempt = mocks.createDeliveryAttempt.mock.calls[0]?.[1];
-    expect(attempt.templateName).toBe("billing_access_ended");
-    expect(attempt.idempotencyKey).toBe("billing-cancellation:user-1:evt-expired-1");
-  });
-
-  it("sends the refund email with plan and credit consequences and event-keyed idempotency", async () => {
-    const sendMock = mockEmailSend();
-    const mocks = mockBillingDataServer();
-
-    const { sendBillingRefundEmail } = await import("~/lib/delivery.server");
-    const sent = await sendBillingRefundEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: "Owner",
-      eventId: "evt-refund-1",
-    });
-
-    expect(sent).toBe(true);
-    const payload = emailSendPayload(sendMock);
-    expect(payload.subject).toBe("Your Five to Nine refund has been processed");
-    expect(payload.html).toContain("moved to the Free plan");
-    expect(payload.html).toContain("credits from that purchase have expired");
-    expect(payload.headers["List-Unsubscribe"]).toBeUndefined();
-
-    const attempt = mocks.createDeliveryAttempt.mock.calls[0]?.[1];
-    expect(attempt.lane).toBe("customer");
-    expect(attempt.templateName).toBe("billing_refund_revoked");
-    expect(attempt.idempotencyKey).toBe("billing-refund:user-1:evt-refund-1");
-  });
-
-  it("turns an explicit rejection into one durable retry without duplicate successful mail", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-13T09:00:00.000Z"));
-    emailSend = vi
-      .fn()
-      .mockRejectedValueOnce(new Error("smtp down"))
-      .mockResolvedValueOnce({ messageId: "msg_retry_succeeded" });
-
-    let attemptStatus: "missing" | "pending" | "failed" | "sent" = "missing";
-    const createDeliveryAttempt = vi.fn().mockImplementation(async () => {
-      attemptStatus = "pending";
-      return "attempt-retry";
-    });
-    const getDeliveryAttemptByIdempotencyKey = vi.fn().mockImplementation(async () => {
-      if (attemptStatus === "missing") {
-        return null;
-      }
-      return {
-        id: "attempt-retry",
-        provider: "cloudflare_email",
-        status: attemptStatus,
-        webhookStatus: attemptStatus === "failed" ? "failed" : "provider_unknown",
-        providerMessageId: null,
-      };
-    });
-    const updateDeliveryAttemptResult = vi.fn(
-      async (
-        _env: unknown,
-        _attemptId: string,
-        input: { expectedStatus?: string; status: "pending" | "failed" | "sent" },
-      ) => {
-        if (input.expectedStatus && attemptStatus !== input.expectedStatus) {
-          return false;
-        }
-        attemptStatus = input.status;
-        return true;
-      },
-    );
-    mockBillingDataServer({
-      createDeliveryAttempt,
-      getDeliveryAttemptByIdempotencyKey,
-      updateDeliveryAttemptResult,
-    });
-
-    const { sendBillingPaymentIssueEmail } = await import("~/lib/delivery.server");
-    const input = {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: null,
-      occurredAt: "2026-07-01T08:00:00.000Z",
-      retryWebhookOnExplicitFailure: true,
-    };
-
-    await expect(sendBillingPaymentIssueEmail(emailEnv as never, input)).rejects.toMatchObject({
-      code: "BILLING_LIFECYCLE_EMAIL_EXPLICIT_FAILURE",
-      idempotencyKey: "billing-payment-issue:user-1:2026-07-01",
-    });
-    expect(attemptStatus).toBe("failed");
-
-    // Dodo can redeliver on a later date; the provider event time keeps the
-    // retry on the same durable attempt instead of creating a second key.
-    vi.setSystemTime(new Date("2026-07-14T09:00:00.000Z"));
-    await expect(sendBillingPaymentIssueEmail(emailEnv as never, input)).resolves.toBe(true);
-    await expect(sendBillingPaymentIssueEmail(emailEnv as never, input)).resolves.toBe(false);
-
-    expect(attemptStatus).toBe("sent");
-    expect(emailSend).toHaveBeenCalledTimes(2);
-    expect(createDeliveryAttempt).toHaveBeenCalledTimes(1);
-    expect(createDeliveryAttempt.mock.calls[0]?.[1]).toEqual(
-      expect.objectContaining({
-        idempotencyKey: "billing-payment-issue:user-1:2026-07-01",
-      }),
-    );
-  });
-
-  it.each([
-    ["sent", "delivered"],
-    ["pending", "provider_unknown"],
-  ] as const)(
-    "never auto-resends a durable %s/%s lifecycle attempt",
-    async (status, webhookStatus) => {
-      const sendMock = mockEmailSend("msg_must_not_send");
-      const mocks = mockBillingDataServer({
-        getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue({
-          id: "attempt-terminal-or-unknown",
-          provider: "cloudflare_email",
-          status,
-          webhookStatus,
-          providerMessageId: status === "sent" ? "msg_existing" : null,
-        }),
-      });
-
-      const { sendBillingRefundEmail } = await import("~/lib/delivery.server");
-      await expect(
-        sendBillingRefundEmail(emailEnv as never, {
-          userId: "user-1",
-          email: "owner@example.com",
-          name: null,
-          eventId: "evt-suppressed-redelivery",
-          retryWebhookOnExplicitFailure: true,
-        }),
-      ).resolves.toBe(false);
-
-      expect(sendMock).not.toHaveBeenCalled();
-      expect(mocks.createDeliveryAttempt).not.toHaveBeenCalled();
-      expect(mocks.updateDeliveryAttemptResult).not.toHaveBeenCalled();
-    },
-  );
-
-  it("records a failed attempt without throwing when the provider rejects a billing send", async () => {
-    emailSend = vi.fn().mockRejectedValue(new Error("smtp down"));
-    const mocks = mockBillingDataServer();
-
-    const { sendBillingRefundEmail } = await import("~/lib/delivery.server");
-    const sent = await sendBillingRefundEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      name: null,
-      eventId: "evt-refund-2",
-    });
-
-    expect(sent).toBe(false);
-    const attempt = mocks.createDeliveryAttempt.mock.calls[0]?.[1];
-    expect(attempt.status).toBe("pending");
-    expect(attempt.idempotencyKey).toBe("billing-refund:user-1:evt-refund-2");
-    expect(mocks.updateDeliveryAttemptResult).toHaveBeenCalledWith(
-      expect.anything(),
-      "attempt-1",
-      expect.objectContaining({ status: "failed", webhookStatus: "failed" }),
-    );
   });
 });

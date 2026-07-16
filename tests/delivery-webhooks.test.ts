@@ -40,7 +40,7 @@ describe("delivery webhooks", () => {
     await expect((response as Response).text()).resolves.toBe("12345");
   });
 
-  it("dedupes repeated WhatsApp status entries before reconciling delivery attempts", async () => {
+it("drops malformed timestamps and dedupes valid statuses after signature verification", async () => {
     const reconcileDeliveryStatus = vi.fn().mockResolvedValue({
       id: "attempt-1",
     });
@@ -57,8 +57,9 @@ describe("delivery webhooks", () => {
           changes: [
             {
               value: {
-                statuses: [
-                  {
+statuses: [
+{ id: "wamid-1", status: "failed", timestamp: "not-a-time" },
+{
                     id: "wamid-1",
                     status: "delivered",
                     timestamp: "1713490000",

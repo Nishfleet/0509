@@ -42,8 +42,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "preview").trim();
-  const target = parsePlanChangeTarget(formData, checkoutTargetFromSkuSlug);
-  if (!target) throw new Response("Invalid plan change target.", { status: 400 });
 
   const billing = await getUserPlanBillingInfo(env, workspaceUserId);
   if (billing.plan === "free") {
@@ -65,7 +63,40 @@ export async function action({ context, request }: ActionFunctionArgs) {
       billing.dodoPlanChangeProductId,
     )
   ) {
+    const { isDodoSubscriptionPlanChangeReconciliationDue } = await import("~/lib/data.server");
+    if (
+      isDodoSubscriptionPlanChangeReconciliationDue(
+        billing.dodoStatus,
+        billing.planUpdatedAt,
+        billing.dodoPlanChangeProductId,
+      )
+    ) {
+      const { reconcileDodo0509SubscriptionPlanChange } = await import(
+        "~/lib/dodo-plan-change-reconciliation.server"
+      );
+      const reconciliation = await reconcileDodo0509SubscriptionPlanChange({
+        env,
+        subjectUserId: workspaceUserId,
+        actorUserId: session.user.id,
+      });
+      if (reconciliation.ok) {
+        const notice = reconciliation.outcome === "accepted"
+          ? "reconciled"
+          : reconciliation.outcome === "scheduled"
+            ? "scheduled"
+            : reconciliation.outcome === "unchanged"
+              ? "recovered"
+              : "pending-change";
+        throw redirect(`/app/billing?plan-change=${notice}#plans`, { status: 303 });
+      }
+      if (reconciliation.reason === "stale") {
+        throw redirect("/app/billing?plan-change=status-refreshed#plans", { status: 303 });
+      }
+    }
     throw redirect("/app/billing?plan-change=pending-change#plans", { status: 303 });
+  }
+  if (intent === "reconcile") {
+    throw redirect("/app/billing?plan-change=status-refreshed#plans", { status: 303 });
   }
   if (
     billing.dodoStatus === "payment.failed" ||
@@ -74,6 +105,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
   ) {
     throw redirect("/app/billing?plan-change=payment-issue#plans", { status: 303 });
   }
+
+  const target = parsePlanChangeTarget(formData, checkoutTargetFromSkuSlug);
+  if (!target) throw new Response("Invalid plan change target.", { status: 400 });
   if (isCurrentBillingChoice(billing.plan, billing.billingInterval, target)) {
     throw redirect("/app/billing?plan-change=current#plans", { status: 303 });
   }

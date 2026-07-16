@@ -50,6 +50,7 @@ import {
 } from "~/lib/data.server";
 import { DIGEST_STRATEGY_MODEL, readDigestStrategyNote } from "~/lib/digest-strategy";
 import { buildWeeklyStrategyParagraph } from "~/lib/digest-strategy.server";
+import { runDigestDeliveryCycle } from "~/lib/digest-orchestration.server";
 import { deliveryPreDispatchStaleBefore } from "~/lib/delivery-attempt-lease";
 import type { AppEnv } from "~/lib/env.server";
 import { captureLandingPageSnapshot } from "~/lib/landing-pages.server";
@@ -203,6 +204,7 @@ interface RunWeeklyDigestsOptions {
   cadence?: DigestCadence;
   lookbackDays?: number;
   periodEnd?: number | string | Date;
+  deadlineAt?: number;
 }
 
 export async function runScheduledMonitoring(
@@ -229,10 +231,11 @@ export async function runScheduledMonitoring(
   // runtime kill mid-scan can no longer wipe out the day's digests for every
   // user (a digest run that is never created is invisible to the retry sweep).
   const digests = options.includeDigests
-    ? await runDigests(env, {
+    ? await runDigestDeliveryCycle(env, {
         cadence: options.digestCadence ?? "weekly",
         lookbackDays: options.digestLookbackDays,
         periodEnd: options.scheduledTime,
+        deadlineAt,
       })
     : 0;
 
@@ -389,6 +392,7 @@ export async function flushDeferredInstantAlerts(env: AppEnv) {
   ).toISOString();
   const pending = await listRetryableInstantAttempts(env, {
     since,
+    stalePreDispatchBefore: deliveryPreDispatchStaleBefore(),
     limit: INSTANT_ALERT_FLUSH_LIMIT,
   });
 
@@ -1935,7 +1939,7 @@ export async function runWeeklyDigests(
   env: AppEnv,
   options: RunWeeklyDigestsOptions = {},
 ) {
-  return runDigests(env, {
+  return runDigestDeliveryCycle(env, {
     ...options,
     cadence: "weekly",
     lookbackDays: options.lookbackDays ?? WEEKLY_DIGEST_LOOKBACK_DAYS,
@@ -1946,7 +1950,7 @@ export async function runDailyDigests(
   env: AppEnv,
   options: Omit<RunWeeklyDigestsOptions, "cadence"> = {},
 ) {
-  return runDigests(env, {
+  return runDigestDeliveryCycle(env, {
     ...options,
     cadence: "daily",
     lookbackDays: options.lookbackDays ?? DAILY_DIGEST_LOOKBACK_DAYS,

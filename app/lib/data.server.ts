@@ -105,6 +105,11 @@ export {
   claimDodoSubscriptionPlanChange,
   clearDodoSubscriptionPlanChangeClaim,
   markDodoSubscriptionPlanChangeScheduled,
+  isDodoSubscriptionPlanChangeReconciliationDue,
+  listStaleDodoSubscriptionPlanChangeClaims,
+  reconcileDodoSubscriptionPlanChangeWithAudit,
+  type DodoPlanChangeReconciliationInput,
+  type DodoPlanChangeReconciliationOutcome,
   claimDodoPlanCheckout,
   clearDodoPlanCheckout,
   revokeDodoPlanAccess,
@@ -129,6 +134,9 @@ export {
   migrateAutoProvisionedEmailTargets,
   listRetryableInstantAttempts,
   listStaleBillingLifecycleEmailAttempts,
+  listOutstandingBillingLifecycleProviderUnknownAttempts,
+  listOutstandingDigestProviderUnknownAttempts,
+  listOutstandingInstantProviderUnknownAttempts,
   getWorkspaceDeliveryConfig,
   upsertWorkspaceDeliveryConfig,
   listDeliveryTargets,
@@ -138,6 +146,8 @@ export {
   getDeliveryTargetByProviderIdentifier,
   claimEmailTargetForDispatch,
   suppressEmailTargetsForUserAndAddress,
+  reconcileWhatsAppSetupTargetFromAttempt,
+  reconcileWhatsAppSetupTargetByProviderMessageId,
   getUserDeliveryProfile,
   listDeliveryAttempts,
   getDeliveryAttemptByIdempotencyKey,
@@ -168,6 +178,9 @@ export {
 } from "~/lib/data/launch-canary-cleanup.server";
 
 export {
+  DIGEST_ITEM_SET_PROVENANCE,
+  claimDigestStrategyGenerationLease,
+  completeDigestStrategyGeneration,
   createDigestRun,
   clearDigestItems,
   addDigestItem,
@@ -178,7 +191,23 @@ export {
   getDigestByPeriod,
   getLatestDigestRunSummaryForWatchlist,
   listRetryableDigestRuns,
+  enqueueDigestScheduleJobs,
+  listRetryableDigestScheduleJobs,
+  exhaustStaleMaxAttemptDigestScheduleJobs,
+  claimDigestScheduleJob,
+  completeDigestScheduleJob,
+  failDigestScheduleJob,
+  listExhaustedDigestScheduleJobs,
+  listDigestScheduleJobsAwaitingAlert,
+  claimDigestScheduleJobExhaustionAlert,
+  settleDigestScheduleJobExhaustionAlert,
+  type DigestScheduleJob,
 } from "~/lib/data/digests.server";
+
+export {
+  createDigestScheduleJobRequeueKey,
+  requeueExhaustedDigestScheduleJobWithAudit,
+} from "~/lib/data/digest-schedule-recovery.server";
 
 export {
   listCollectionsPage,
@@ -238,6 +267,23 @@ export {
   createSupportCaseEvent,
   listSupportCaseEvents,
 } from "~/lib/data/support.server";
+
+export {
+  BILLING_EMAIL_EVIDENCE_CLASSIFICATIONS,
+  INSTANT_SLACK_EVIDENCE_CLASSIFICATIONS,
+  INSTANT_WHATSAPP_EVIDENCE_CLASSIFICATIONS,
+  createBillingEmailReconciliationKey,
+  createDigestEmailReconciliationKey,
+  createInstantChannelReconciliationKey,
+  createInstantEmailReconciliationKey,
+  reconcileBillingEmailAttemptWithAudit,
+  reconcileDigestEmailAttemptWithAudit,
+  reconcileInstantChannelAttemptWithAudit,
+  reconcileInstantEmailAttemptWithAudit,
+  type BillingEmailEvidenceClassification,
+  type InstantDeliveryChannel,
+  type InstantDeliveryEvidenceClassification,
+} from "~/lib/data/operator-delivery-reconciliation.server";
 
 export {
   getOldestUserId,
