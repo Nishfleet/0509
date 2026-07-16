@@ -211,6 +211,56 @@ omittedEvents: 0,
 );
 });
 
+it("persists the full eligible cohort while delivering only the capped digest", async () => {
+const events = Array.from({ length: 4_200 }, (_, index) => ({
+...weeklyEvent(),
+id: `event-${index}`,
+title: `Change ${index}`,
+summary: `Summary ${index}`,
+importanceScore: index % 101,
+}));
+const data = dataServerMock({
+listWatchEventsBetween: vi.fn().mockResolvedValue(events),
+});
+const deliverWeeklyDigest = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
+const aiRun = vi.fn().mockResolvedValue(GOOD_PARAGRAPH);
+
+vi.doMock("~/lib/auth.server", () => ({}));
+vi.doMock("~/lib/data.server", () => data);
+vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
+
+const { runWeeklyDigests } = await import("~/lib/monitoring.server");
+await expect(runWeeklyDigests(envWith(aiRun))).resolves.toBe(1);
+
+expect(data.createDigestRun).toHaveBeenCalledWith(
+expect.anything(),
+"user-1",
+expect.any(String),
+expect.any(String),
+expect.objectContaining({
+totalEligibleEvents: 4_200,
+includedEvents: 150,
+omittedEvents: 4_050,
+}),
+expect.objectContaining({
+returnClaim: true,
+items: expect.any(Array),
+}),
+);
+expect(data.createDigestRun.mock.calls[0]?.[5].items).toHaveLength(4_200);
+expect(deliverWeeklyDigest).toHaveBeenCalledWith(
+expect.anything(),
+expect.objectContaining({
+items: expect.any(Array),
+totalEligibleEvents: 4_200,
+includedEvents: 150,
+omittedEvents: 4_050,
+}),
+);
+expect(deliverWeeklyDigest.mock.calls[0]?.[1].items).toHaveLength(150);
+});
+
 it("keeps provisional items in the digest but excludes them from mixed AI strategy input", async () => {
 const data = dataServerMock({
 listWatchEventsBetween: vi.fn().mockResolvedValue([weeklyEvent(), provisionalEvent()]),

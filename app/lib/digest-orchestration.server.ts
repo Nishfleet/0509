@@ -245,7 +245,7 @@ async function runDigestForUser(
         }
       : {}),
   };
-  const candidateItems = selectedDigestItems.map((item) => ({
+  const candidateItems = digestItems.map((item) => ({
     watchlistId: item.watchlistId,
     watchlistName: item.watchlistName,
     eventType: item.eventType,
