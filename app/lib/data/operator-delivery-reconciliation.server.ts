@@ -535,6 +535,7 @@ function normalizeInput(
   const operatorUserId = input.operatorUserId.trim();
   const attemptId = input.attemptId.trim();
   const expectedUpdatedAt = normalizeTimestamp(input.expectedUpdatedAt);
+  const observedAtHasExplicitOffset = hasExplicitTimezoneOffset(input.observedAt);
   const observedAt = normalizeTimestamp(input.observedAt);
   const evidenceReference = input.evidenceReference.trim();
   const classification = scope.classifications.includes(input.classification)
@@ -549,6 +550,7 @@ function normalizeInput(
     !operatorUserId ||
     !attemptId ||
     !expectedUpdatedAt ||
+    !observedAtHasExplicitOffset ||
     !observedAt ||
     observedTime > Date.now() + 5 * 60 * 1000 ||
     !allowedForOutcome ||
@@ -617,4 +619,8 @@ function reconciliationStatePredicate(
 function normalizeTimestamp(value: string) {
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+}
+
+function hasExplicitTimezoneOffset(value: string) {
+  return /(?:Z|[+-]\d{2}:\d{2})$/i.test(value.trim());
 }

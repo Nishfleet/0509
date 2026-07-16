@@ -606,6 +606,26 @@ describe("operator support-alert reconciliation", () => {
     };
   }
 
+  it("rejects timezone-less provider evidence instead of shifting the audit instant", async () => {
+    const reconcileSupportAlertAttemptWithAudit = (
+      operatorReconciliation as Record<string, unknown>
+    ).reconcileSupportAlertAttemptWithAudit;
+    expect(typeof reconcileSupportAlertAttemptWithAudit).toBe("function");
+    if (typeof reconcileSupportAlertAttemptWithAudit !== "function") return;
+    const harness = setup();
+
+    await expect(
+      reconcileSupportAlertAttemptWithAudit(
+        { DB: harness.db },
+        input({ observedAt: "2026-07-15T23:31:00" }),
+      ),
+    ).resolves.toEqual({ ok: false, reason: "invalid_evidence" });
+
+    expect(
+      harness.sqlite.prepare("SELECT COUNT(*) AS count FROM agent_action_audit").get(),
+    ).toMatchObject({ count: 0 });
+  });
+
   it("records a confirmed rejection as safely retryable without sending", async () => {
     const reconcileSupportAlertAttemptWithAudit = (
       operatorReconciliation as Record<string, unknown>

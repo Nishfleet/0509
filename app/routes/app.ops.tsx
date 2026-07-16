@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Form, useActionData, useLoaderData } from "react-router";
 import { LocalTime } from "~/components/local-time";
+import { ProviderObservationTimeField } from "~/components/provider-observation-time";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 export const meta = () => [{ title: "Ops | Five to Nine" }];
@@ -397,10 +398,7 @@ export default function OpsRoute() {
                       <span>Private evidence reference</span>
                       <input maxLength={160} name="evidenceReference" required />
                     </label>
-                    <label className="f9-field">
-                      <span>Provider observation time</span>
-                      <input name="observedAt" required type="datetime-local" />
-                    </label>
+                    <ProviderObservationTimeField />
                     <button className="f9-secondary-button" type="submit">
                       Record provider evidence
                     </button>
