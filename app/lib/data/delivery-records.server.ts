@@ -26,6 +26,7 @@ export {
   listRetryableInstantAttempts,
   listStaleBillingLifecycleEmailAttempts,
   listOutstandingBillingLifecycleProviderUnknownAttempts,
+  listOutstandingDigestProviderUnknownAttempts,
   listDeliveryAttempts,
   getDeliveryAttemptByIdempotencyKey,
   reconcileDeliveryAttemptByProviderMessageId,

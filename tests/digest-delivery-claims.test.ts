@@ -24,18 +24,19 @@ summary: "Offer changed on the landing page.",
 };
 }
 
-function deliveryTarget(channel: "slack" | "whatsapp") {
+function deliveryTarget(channel: "email" | "slack" | "whatsapp") {
 const isWhatsApp = channel === "whatsapp";
+const isEmail = channel === "email";
 return {
 id: `${channel}-target-1`,
 userId: "user-1",
 watchlistId: null,
 channel,
-targetValue: isWhatsApp ? "+919999999999" : "slack:abc123",
+targetValue: isWhatsApp ? "+919999999999" : isEmail ? "owner@example.com" : "slack:abc123",
 validationStatus: "validated",
 isValidated: true,
 isOptedIn: true,
-optInSource: isWhatsApp ? "manual_whatsapp_setup" : "manual_slack_webhook",
+optInSource: isWhatsApp ? "manual_whatsapp_setup" : isEmail ? "account_email" : "manual_slack_webhook",
 optedInAt: "2026-07-01T00:00:00.000Z",
 isPaused: false,
 pausedAt: null,
@@ -43,7 +44,7 @@ optedOutAt: null,
 templateEligible: true,
 lastSuccessfulDeliveryAt: null,
 lastSuccessfulAttemptId: null,
-providerIdentifier: isWhatsApp ? "wa-1" : "abc123",
+providerIdentifier: isWhatsApp ? "wa-1" : isEmail ? null : "abc123",
 metadata: {},
 createdAt: "2026-07-01T00:00:00.000Z",
 updatedAt: "2026-07-01T00:00:00.000Z",
@@ -51,7 +52,7 @@ updatedAt: "2026-07-01T00:00:00.000Z",
 }
 
 function deliveryAttempt(
-channel: "slack" | "whatsapp",
+channel: "email" | "slack" | "whatsapp",
 status: "failed" | "pending" | "sent",
 ) {
 const target = deliveryTarget(channel);
@@ -63,7 +64,7 @@ digestRunId: "digest-1",
 deliveryTargetId: target.id,
 lane: "customer",
 channel,
-provider: channel === "slack" ? "slack_incoming_webhook" : "whatsapp_cloud_api",
+provider: channel === "slack" ? "slack_incoming_webhook" : channel === "email" ? "cloudflare_email" : "whatsapp_cloud_api",
 status,
 webhookStatus: status === "failed" ? "failed" : status === "pending" ? "pending" : "provider_unknown",
 targetValue: target.targetValue,
@@ -82,7 +83,7 @@ updatedAt: "2026-07-13T05:01:00.000Z",
 }
 
 function mockDataServer(input: {
-channel: "slack" | "whatsapp";
+channel: "email" | "slack" | "whatsapp";
 getDeliveryAttemptByIdempotencyKey: ReturnType<typeof vi.fn>;
 createDeliveryAttempt?: ReturnType<typeof vi.fn>;
 updateDeliveryAttemptResult: ReturnType<typeof vi.fn>;
@@ -103,7 +104,7 @@ userId: "user-1",
 sensitivityMode: "balanced",
 instantEnabled: false,
 digestEnabled: true,
-emailEnabled: false,
+emailEnabled: input.channel === "email",
 whatsappEnabled: input.channel === "whatsapp",
 slackEnabled: input.channel === "slack",
 quietHours: null,
@@ -122,6 +123,66 @@ upsertDigestDelivery,
 }));
 
 return { createDeliveryAttempt, upsertDeliveryTarget, upsertDigestDelivery };
+}
+
+function mockStatefulEmailDataServer() {
+let currentAttempt: ReturnType<typeof deliveryAttempt> | null = null;
+const createDeliveryAttempt = vi.fn(async (_env: unknown, input: Record<string, unknown>) => {
+currentAttempt = {
+...deliveryAttempt("email", "pending"),
+id: "attempt-email-1",
+status: input.status as "pending",
+webhookStatus: input.webhookStatus as "pending",
+providerStatusLastSeenAt: null,
+errorMessage: null,
+failedAt: null,
+updatedAt: String(input.timestamp),
+createdAt: String(input.timestamp),
+};
+return currentAttempt.id;
+});
+const getDeliveryAttemptByIdempotencyKey = vi.fn(async () => currentAttempt);
+const updateDeliveryAttemptResult = vi.fn(async (
+_env: unknown,
+attemptId: string,
+update: Record<string, unknown>,
+) => {
+if (!currentAttempt || currentAttempt.id !== attemptId) return false;
+if (update.expectedStatus && currentAttempt.status !== update.expectedStatus) return false;
+if (update.expectedWebhookStatus && currentAttempt.webhookStatus !== update.expectedWebhookStatus) return false;
+if (update.expectedUpdatedAt && currentAttempt.updatedAt !== update.expectedUpdatedAt) return false;
+currentAttempt = {
+...currentAttempt,
+provider: typeof update.provider === "string" ? update.provider : currentAttempt.provider,
+status: (update.status ?? currentAttempt.status) as typeof currentAttempt.status,
+webhookStatus: (update.webhookStatus ?? currentAttempt.webhookStatus) as typeof currentAttempt.webhookStatus,
+providerMessageId: update.providerMessageId === undefined
+? currentAttempt.providerMessageId
+: update.providerMessageId as string | null,
+providerStatusLastSeenAt: update.providerStatusLastSeenAt === undefined
+? currentAttempt.providerStatusLastSeenAt
+: update.providerStatusLastSeenAt as string | null,
+errorMessage: update.errorMessage === undefined
+? currentAttempt.errorMessage
+: update.errorMessage as string | null,
+sentAt: update.sentAt === undefined ? currentAttempt.sentAt : update.sentAt as string | null,
+failedAt: update.failedAt === undefined ? currentAttempt.failedAt : update.failedAt as string | null,
+updatedAt: typeof update.updatedAt === "string" ? update.updatedAt : currentAttempt.updatedAt,
+};
+return true;
+});
+mockDataServer({
+channel: "email",
+getDeliveryAttemptByIdempotencyKey,
+createDeliveryAttempt,
+updateDeliveryAttemptResult,
+});
+return {
+createDeliveryAttempt,
+getAttempt: () => currentAttempt,
+getDeliveryAttemptByIdempotencyKey,
+updateDeliveryAttemptResult,
+};
 }
 
 beforeEach(() => {
@@ -392,5 +453,77 @@ await deliverWeeklyDigest({} as never, digestInput());
 expect(createDeliveryAttempt).not.toHaveBeenCalled();
 expect(updateDeliveryAttemptResult).not.toHaveBeenCalled();
 expect(sendSlackWebhookMessage).not.toHaveBeenCalled();
+});
+
+it("does not resend when Cloudflare may have accepted before a local exception", async () => {
+const state = mockStatefulEmailDataServer();
+vi.doMock("~/lib/slack-webhook.server", () => ({
+SLACK_PROVIDER: "slack_incoming_webhook",
+sendSlackWebhookMessage: vi.fn(),
+}));
+vi.doMock("~/lib/whatsapp.server", () => ({ sendDigestWhatsApp: vi.fn() }));
+const send = vi.fn().mockRejectedValue(
+new Error("provider accepted the message before the response stream failed"),
+);
+const env = {
+EMAIL: { send },
+EMAIL_FROM_EMAIL: "notify@0509.io",
+APP_ORIGIN: "https://0509.io",
+} as never;
+
+const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+await deliverWeeklyDigest(env, digestInput());
+expect(state.getAttempt()).toMatchObject({
+status: "failed",
+webhookStatus: "provider_unknown",
+providerStatusLastSeenAt: expect.any(String),
+});
+
+await deliverWeeklyDigest(env, digestInput());
+
+expect(send).toHaveBeenCalledTimes(1);
+expect(state.getAttempt()).toMatchObject({
+status: "failed",
+webhookStatus: "provider_unknown",
+});
+expect(state.updateDeliveryAttemptResult).not.toHaveBeenCalledWith(
+expect.anything(),
+"attempt-email-1",
+expect.objectContaining({ expectedStatus: "failed", status: "pending" }),
+);
+});
+
+it("retries a known pre-dispatch email configuration failure exactly once after recovery", async () => {
+const state = mockStatefulEmailDataServer();
+vi.doMock("~/lib/slack-webhook.server", () => ({
+SLACK_PROVIDER: "slack_incoming_webhook",
+sendSlackWebhookMessage: vi.fn(),
+}));
+vi.doMock("~/lib/whatsapp.server", () => ({ sendDigestWhatsApp: vi.fn() }));
+const send = vi.fn().mockResolvedValue({ messageId: "message-1" });
+
+const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+await deliverWeeklyDigest({ APP_ORIGIN: "https://0509.io" } as never, digestInput());
+
+expect(send).not.toHaveBeenCalled();
+expect(state.getAttempt()).toMatchObject({
+status: "failed",
+webhookStatus: "failed",
+providerStatusLastSeenAt: null,
+errorMessage: "Email sending is not configured for this environment.",
+});
+
+await deliverWeeklyDigest({
+EMAIL: { send },
+EMAIL_FROM_EMAIL: "notify@0509.io",
+APP_ORIGIN: "https://0509.io",
+} as never, digestInput());
+
+expect(send).toHaveBeenCalledTimes(1);
+expect(state.getAttempt()).toMatchObject({
+status: "sent",
+webhookStatus: "provider_unknown",
+providerMessageId: "message-1",
+});
 });
 });

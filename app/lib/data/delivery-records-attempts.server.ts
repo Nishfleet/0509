@@ -149,6 +149,37 @@ export async function listOutstandingBillingLifecycleProviderUnknownAttempts(
 	return rows.map(toDeliveryAttemptRecord);
 }
 
+export async function listOutstandingDigestProviderUnknownAttempts(
+	env: AppEnv,
+	options: { limit?: number } = {},
+) {
+	const limit = Math.max(1, Math.min(200, Math.trunc(options.limit ?? 100)));
+	const rows = await many<DeliveryAttemptRow>(
+		env,
+		`
+			SELECT *
+			FROM delivery_attempt
+			WHERE lane = 'customer'
+				AND channel = 'email'
+				AND digest_run_id IS NOT NULL
+				AND delivery_target_id IS NOT NULL
+				AND webhook_status = 'provider_unknown'
+				AND (
+					status = 'pending'
+					OR (
+						status = 'failed'
+						AND provider_status_last_seen_at IS NOT NULL
+					)
+				)
+				AND idempotency_key LIKE 'digest:%:customer:email:%'
+			ORDER BY created_at ASC
+			LIMIT ?
+		`,
+		limit,
+	);
+	return rows.map(toDeliveryAttemptRecord);
+}
+
 export async function listDeliveryAttempts(
   env: AppEnv,
   options: {

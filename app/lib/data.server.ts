@@ -123,6 +123,7 @@ export {
   listRetryableInstantAttempts,
   listStaleBillingLifecycleEmailAttempts,
   listOutstandingBillingLifecycleProviderUnknownAttempts,
+  listOutstandingDigestProviderUnknownAttempts,
   getWorkspaceDeliveryConfig,
   upsertWorkspaceDeliveryConfig,
   listDeliveryTargets,
@@ -216,7 +217,9 @@ export {
 export {
   BILLING_EMAIL_EVIDENCE_CLASSIFICATIONS,
   createBillingEmailReconciliationKey,
+  createDigestEmailReconciliationKey,
   reconcileBillingEmailAttemptWithAudit,
+  reconcileDigestEmailAttemptWithAudit,
   type BillingEmailEvidenceClassification,
 } from "~/lib/data/operator-delivery-reconciliation.server";
 
