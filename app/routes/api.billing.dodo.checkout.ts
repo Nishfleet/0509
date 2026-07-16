@@ -20,7 +20,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const env = getEnv(context);
   const session = await requireSession(env, request);
   const formData = await request.formData();
-  const target = parseCheckoutTarget(formData, checkoutTargetFromSkuSlug);
+  const target = parseCheckoutTarget(request, formData, checkoutTargetFromSkuSlug);
   const source = cleanSourceParam(formData.get("source"));
   let planCheckoutClaimed = false;
   let pricingContext: DodoCheckoutPricingContext | null = null;
@@ -36,9 +36,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   if (target.kind === "plan") {
     if (!isCheckoutPlanSlug(target.planFamily)) {
-      // Only reachable with tampered form values — land on the billing page's
-      // notice system instead of a raw full-page error.
-      throw redirect("/app/billing?checkout=invalid-target", { status: 303 });
+      throw invalidCheckoutTargetResponse(request);
     }
 
     if (currentPlan !== "free") {
@@ -148,6 +146,7 @@ function cleanSourceParam(value: FormDataEntryValue | null) {
 }
 
 function parseCheckoutTarget(
+  request: Request,
   formData: FormData,
   resolveSku: (slug: string) => ReturnType<typeof import("~/lib/dodo-billing.server").checkoutTargetFromSkuSlug>,
 ) {
@@ -155,7 +154,7 @@ function parseCheckoutTarget(
   if (sku) {
     const target = resolveSku(sku);
     if (!target) {
-      throw redirect("/app/billing?checkout=invalid-target", { status: 303 });
+      throw invalidCheckoutTargetResponse(request);
     }
     return target;
   }
@@ -189,7 +188,18 @@ function parseCheckoutTarget(
     return target;
   }
 
-  throw redirect("/app/billing?checkout=invalid-target", { status: 303 });
+  throw invalidCheckoutTargetResponse(request);
+}
+
+function invalidCheckoutTargetResponse(request: Request): Response {
+  const fetchMode = request.headers.get("Sec-Fetch-Mode")?.trim().toLowerCase();
+  const acceptedTypes = request.headers.get("Accept")?.toLowerCase() ?? "";
+
+  if (fetchMode === "navigate" && acceptedTypes.includes("text/html")) {
+    return redirect("/app/billing?checkout=invalid-target", { status: 303 });
+  }
+
+  return new Response("Invalid Dodo checkout target.", { status: 400 });
 }
 
 function isCheckoutPlanSlug(value: string): value is "scout" | "starter" | "agency" {

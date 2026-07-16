@@ -47,7 +47,7 @@ describe("plan feature enforcement matrix", () => {
 
     expect(watchlists).toContain("requireDeliveryConfigSave");
     expect(delivery).toContain("resolveEntitledDeliveryConfigs");
-    expect(share).toContain("resolveWorkspaceBrandIdentity");
+		expect(share).toContain("resolveWorkspaceBrandIdentity");
   });
 
   it("keeps agency-only surfaces off scout and starter", () => {

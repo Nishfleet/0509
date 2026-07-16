@@ -61,7 +61,7 @@ export default [
   route("app/onboard", "routes/app.onboard.tsx"),
   route("compare/magicbrief", "routes/compare.magicbrief.tsx"),
   route("team/accept", "routes/team.accept.tsx"),
-  route("share/:token/pdf", "routes/share.$token.pdf.ts"),
+	route("share/:token/pdf", "routes/share.$token.pdf.ts"),
   route("share/:token", "routes/share.$token.tsx"),
   route("export/:resourceType/:resourceId", "routes/export.$resourceType.$resourceId.tsx"),
   route("app", "routes/app-layout.tsx", [

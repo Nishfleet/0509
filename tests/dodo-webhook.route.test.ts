@@ -33,11 +33,17 @@ function mockWebhookDependencies(overrides: {
     finalizeDodoWebhookLedgerOnly: vi.fn().mockResolvedValue(undefined),
     getUserDeliveryProfile: vi
       .fn()
-      .mockResolvedValue({ id: "user-1", email: "owner@example.com", name: "Owner" }),
+      .mockResolvedValue({
+        id: "user-1",
+        email: "owner@example.com",
+        emailVerified: true,
+        name: "Owner",
+      }),
     getUserPlanBillingInfo: vi.fn().mockResolvedValue({
       plan: "starter",
       dodoStatus: "subscription.on_hold",
       dodoSubscriptionId: "sub_123",
+      planUpdatedAt: "2026-07-01T08:00:00.000Z",
     }),
     getUserIdForDodoPayment: vi.fn().mockResolvedValue(null),
     getUserIdForDodoLifecycle: vi.fn().mockResolvedValue(null),
@@ -1324,6 +1330,10 @@ describe("customer lifecycle billing emails", () => {
         email: "owner@example.com",
         name: "Owner",
         occurredAt: "2026-07-01T08:00:00.000Z",
+        status: "subscription.on_hold",
+        subscriptionId: "sub_123",
+        paymentId: null,
+        stateUpdatedAt: "2026-07-01T08:00:00.000Z",
         retryWebhookOnExplicitFailure: true,
       },
     );
@@ -1615,6 +1625,7 @@ describe("customer lifecycle billing emails", () => {
           plan: "free",
           dodoStatus: "subscription.expired",
           dodoSubscriptionId: "sub_linked",
+          planUpdatedAt: "2026-07-01T00:00:00.000Z",
         }),
       },
       delivery: { sendBillingCancellationEmail },
@@ -1694,6 +1705,8 @@ describe("customer lifecycle billing emails", () => {
         kind: "scheduled",
         effectiveAt: futureIso,
         eventId: "evt-cancel-scheduled-email",
+        subscriptionId: "sub_123",
+        stateUpdatedAt: "2026-07-13T08:00:00.000Z",
         retryWebhookOnExplicitFailure: true,
       },
     );
@@ -2191,6 +2204,8 @@ describe("customer lifecycle billing emails", () => {
           plan: "starter",
           dodoStatus: "cancellation_scheduled",
           dodoSubscriptionId: "sub_123",
+          dodoNextBillingAt: "2026-08-01T08:00:00.000Z",
+          planUpdatedAt: "2026-07-01T08:00:00.000Z",
         }),
       },
     });
@@ -2240,6 +2255,9 @@ describe("customer lifecycle billing emails", () => {
         name: "Owner",
         kind: "ended",
         eventId: "evt-expired-email",
+        status: "subscription.expired",
+        subscriptionId: "sub_123",
+        stateUpdatedAt: "2026-07-01T00:00:00.000Z",
         retryWebhookOnExplicitFailure: true,
       },
     );
@@ -2333,7 +2351,18 @@ describe("customer lifecycle billing emails", () => {
         getUserIdForDodoPayment: vi.fn().mockResolvedValue("user-refund"),
         getUserDeliveryProfile: vi
           .fn()
-          .mockResolvedValue({ id: "user-refund", email: "refunded@example.com", name: null }),
+          .mockResolvedValue({
+            id: "user-refund",
+            email: "refunded@example.com",
+            emailVerified: true,
+            name: null,
+          }),
+        getUserPlanBillingInfo: vi.fn().mockResolvedValue({
+          plan: "free",
+          dodoStatus: "refunded",
+          dodoPaymentId: "pay-refunded",
+          planUpdatedAt: "2026-07-05T00:00:00.000Z",
+        }),
       },
     });
 
@@ -2353,6 +2382,8 @@ describe("customer lifecycle billing emails", () => {
         email: "refunded@example.com",
         name: null,
         eventId: "evt-refund-email",
+        paymentId: "pay-refunded",
+        stateUpdatedAt: "2026-07-05T00:00:00.000Z",
         retryWebhookOnExplicitFailure: true,
       },
     );
@@ -2489,6 +2520,8 @@ describe("customer lifecycle billing emails", () => {
         getUserPlanBillingInfo: vi.fn().mockResolvedValue({
           plan: "free",
           dodoStatus: "refunded",
+          dodoPaymentId: "pay_linked",
+          planUpdatedAt: "2026-07-05T00:00:00.000Z",
         }),
       },
       delivery: { sendBillingRefundEmail },

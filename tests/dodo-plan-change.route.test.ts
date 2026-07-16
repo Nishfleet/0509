@@ -29,6 +29,7 @@ afterEach(() => {
   vi.doUnmock("~/lib/context.server");
   vi.doUnmock("~/lib/data.server");
   vi.doUnmock("~/lib/dodo-billing.server");
+  vi.doUnmock("~/lib/dodo-plan-change-reconciliation.server");
   vi.doUnmock("~/lib/dodo-pricing.server");
   vi.doUnmock("~/lib/rate-limit.server");
 });
@@ -235,6 +236,80 @@ describe("Dodo plan change route", () => {
     expect(response.headers.get("Location")).toBe("/app/billing?plan-change=pending-change#plans");
     expect(mocks.previewDodo0509SubscriptionPlanChange).not.toHaveBeenCalled();
     expect(mocks.claimDodoSubscriptionPlanChange).not.toHaveBeenCalled();
+    expect(mocks.changeDodo0509SubscriptionPlan).not.toHaveBeenCalled();
+  });
+
+  it("reconciles an expired ambiguous claim from current Dodo state without a second mutation", async () => {
+    const mocks = mockPlanChangeRoute({
+      billing: {
+        plan: "scout",
+        billingInterval: "monthly",
+        dodoStatus: "plan_change_pending",
+        dodoSubscriptionId: "sub_123",
+        dodoPlanChangeProductId: "prod_starter_monthly",
+        planUpdatedAt: "2026-01-04T12:00:00.000Z",
+      },
+      reconciliationDue: true,
+      reconciliationResult: { ok: true, outcome: "unchanged" },
+    });
+
+    const response = await postPlanChange("", { intent: "reconcile" });
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("Location")).toBe(
+      "/app/billing?plan-change=recovered#plans",
+    );
+    expect(mocks.reconcileDodo0509SubscriptionPlanChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subjectUserId: "user-1",
+        actorUserId: "user-1",
+      }),
+    );
+    expect(mocks.changeDodo0509SubscriptionPlan).not.toHaveBeenCalled();
+  });
+
+  it("keeps provider-unknown claims fail-closed and does not issue a second mutation", async () => {
+    const mocks = mockPlanChangeRoute({
+      billing: {
+        plan: "scout",
+        billingInterval: "monthly",
+        dodoStatus: "plan_change_pending",
+        dodoSubscriptionId: "sub_123",
+        dodoPlanChangeProductId: "prod_starter_monthly",
+        planUpdatedAt: "2026-01-04T12:00:00.000Z",
+      },
+      reconciliationDue: true,
+      reconciliationResult: { ok: true, outcome: "unknown" },
+    });
+
+    const response = await postPlanChange("", { intent: "reconcile" });
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("Location")).toBe(
+      "/app/billing?plan-change=pending-change#plans",
+    );
+    expect(mocks.reconcileDodo0509SubscriptionPlanChange).toHaveBeenCalledTimes(1);
+    expect(mocks.changeDodo0509SubscriptionPlan).not.toHaveBeenCalled();
+  });
+
+  it("does not query Dodo before the ambiguity recovery window expires", async () => {
+    const mocks = mockPlanChangeRoute({
+      billing: {
+        plan: "scout",
+        billingInterval: "monthly",
+        dodoStatus: "plan_change_pending",
+        dodoSubscriptionId: "sub_123",
+        dodoPlanChangeProductId: "prod_starter_monthly",
+      },
+      reconciliationDue: false,
+    });
+
+    const response = await postPlanChange("", { intent: "reconcile" });
+
+    expect(response.headers.get("Location")).toBe(
+      "/app/billing?plan-change=pending-change#plans",
+    );
+    expect(mocks.reconcileDodo0509SubscriptionPlanChange).not.toHaveBeenCalled();
     expect(mocks.changeDodo0509SubscriptionPlan).not.toHaveBeenCalled();
   });
 
@@ -458,6 +533,8 @@ function mockPlanChangeRoute({
   changeRejects = false,
   claimSucceeds = true,
   tokenMatches = true,
+  reconciliationDue = false,
+  reconciliationResult = { ok: true, outcome: "unknown" },
 }: {
   billing?: {
     plan: "free" | "scout" | "starter" | "agency";
@@ -465,6 +542,7 @@ function mockPlanChangeRoute({
     dodoStatus: string | null;
     dodoSubscriptionId: string | null;
     dodoPlanChangeProductId?: string | null;
+    planUpdatedAt?: string | null;
   };
   isMember?: boolean;
   workspaceUserId?: string;
@@ -472,6 +550,8 @@ function mockPlanChangeRoute({
   changeRejects?: false | "ambiguous" | "definite";
   claimSucceeds?: boolean;
   tokenMatches?: boolean;
+  reconciliationDue?: boolean;
+  reconciliationResult?: { ok: boolean; outcome?: "accepted" | "scheduled" | "unchanged" | "unknown"; reason?: string };
 } = {}) {
   vi.doMock("~/lib/auth.server", () => ({
     requireWorkspaceSession: vi.fn().mockResolvedValue({
@@ -502,6 +582,7 @@ function mockPlanChangeRoute({
       .mockResolvedValue(claimSucceeds ? { claimedAt: "2026-06-04T12:01:00.000Z" } : null);
   const clearDodoSubscriptionPlanChangeClaim = vi.fn().mockResolvedValue(true);
   const markDodoSubscriptionPlanChangeScheduled = vi.fn().mockResolvedValue(true);
+  const isDodoSubscriptionPlanChangeReconciliationDue = vi.fn(() => reconciliationDue);
   vi.doMock("~/lib/data.server", () => ({
     DODO_SUBSCRIPTION_PLAN_CHANGE_PENDING_STATUS: "plan_change_pending",
     DODO_SUBSCRIPTION_PLAN_CHANGE_SCHEDULED_STATUS: "plan_change_scheduled",
@@ -510,13 +591,14 @@ function mockPlanChangeRoute({
     getUserPlanBillingInfo,
     isBlockingDodoSubscriptionPlanChangeStatus: vi.fn((
       status: string | null,
-      planUpdatedAt: string | null,
+      _planUpdatedAt: string | null,
       planChangeProductId?: string | null,
     ) =>
       Boolean(planChangeProductId) ||
       status === "plan_change_scheduled" ||
-      (status === "plan_change_pending" && !String(planUpdatedAt ?? "").startsWith("2026-01-"))
+      status === "plan_change_pending"
     ),
+    isDodoSubscriptionPlanChangeReconciliationDue,
     markDodoSubscriptionPlanChangeScheduled,
   }));
   vi.doMock("~/lib/commercial-launch-gate.server", () => ({
@@ -565,6 +647,10 @@ function mockPlanChangeRoute({
     verifyDodoSubscriptionPlanChangePreviewToken,
     changeDodo0509SubscriptionPlan,
   }));
+  const reconcileDodo0509SubscriptionPlanChange = vi.fn().mockResolvedValue(reconciliationResult);
+  vi.doMock("~/lib/dodo-plan-change-reconciliation.server", () => ({
+    reconcileDodo0509SubscriptionPlanChange,
+  }));
 
   return {
     getUserPlanBillingInfo,
@@ -577,6 +663,8 @@ function mockPlanChangeRoute({
     summarizeDodoSubscriptionPlanChangePreview,
     verifyDodoSubscriptionPlanChangePreviewToken,
     changeDodo0509SubscriptionPlan,
+    isDodoSubscriptionPlanChangeReconciliationDue,
+    reconcileDodo0509SubscriptionPlanChange,
   };
 }
 

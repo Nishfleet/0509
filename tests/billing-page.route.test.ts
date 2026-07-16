@@ -972,7 +972,7 @@ describe("billing page", () => {
     expect(markup).not.toContain("Price loading");
   });
 
-  it("keeps old pending Dodo plan changes blocked until webhook or support resolution", async () => {
+  it("keeps old pending Dodo plan changes blocked while offering one no-resend status check", async () => {
     mockReactRouterRender(
       billingRenderData({
         billing: {
@@ -998,7 +998,24 @@ describe("billing page", () => {
     expect(markup).toContain("Active — plan change pending");
     expect(markup).toContain("Change pending");
     expect(markup).not.toContain("Preview switch");
-    expect(markup).not.toContain('action="/api/billing/dodo/plan-change"');
+    expect(markup).toContain("No second plan change will be sent");
+    expect(markup).toContain("Check Dodo status");
+    expect(markup).toContain('action="/api/billing/dodo/plan-change"');
+    expect(markup).toMatch(/<input[^>]*name="intent"[^>]*value="reconcile"/);
+    expect(markup).toContain('href="/app/support?category=billing"');
+  });
+
+  it("renders honest terminal notices after provider-state reconciliation", async () => {
+    for (const [notice, expected] of [
+      ["recovered", "Dodo confirms no plan change was applied"],
+      ["reconciled", "Dodo confirms the plan change"],
+      ["status-refreshed", "Billing changed while we checked"],
+    ] as const) {
+      mockReactRouterRender(billingRenderData({ planChangeNotice: notice }));
+      const { default: BillingRoute } = await import("~/routes/app.billing");
+      expect(renderToStaticMarkup(createElement(BillingRoute))).toContain(expected);
+      vi.resetModules();
+    }
   });
 
   it("labels accepted next-cycle Dodo plan changes as scheduled", async () => {

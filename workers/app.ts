@@ -3,6 +3,7 @@
 import { createRequestHandler } from "react-router";
 
 import { reportScheduledTaskFailure } from "../app/lib/cron-failure-alert.server";
+import { resumePendingDigestScheduleJobs } from "../app/lib/digest-orchestration.server";
 import {
   flushDeferredInstantAlerts,
   runScheduledDiscoveryWarmup,
@@ -20,6 +21,7 @@ import { publicSeoFileForPathname } from "../app/lib/seo";
 import { enforceRequestRateLimit } from "../app/lib/rate-limit.server";
 import { runRetentionSweep } from "../app/lib/retention.server";
 import { scheduleBillingLifecycleEmailRecovery } from "./delivery-recovery";
+import { scheduleDigestScheduleExhaustionRecovery } from "./digest-schedule-recovery";
 import { primaryDomainRedirect } from "./primary-domain";
 import {
   resolveOperationalRiskAlertIdempotencyKey,
@@ -47,6 +49,8 @@ const requestHandler = createRequestHandler(
   () => import("virtual:react-router/server-build"),
   process.env.NODE_ENV === "development" ? "development" : "production"
 );
+
+const DIGEST_RECOVERY_TIME_BUDGET_MS = 10 * 60 * 1000;
 
 function markdownResponse(request: Request, body: string): Response {
   return withSecurityHeaders(
@@ -115,10 +119,10 @@ export default {
   async scheduled(controller, env, ctx) {
     const scheduledTask = resolveScheduledTask(controller.cron);
 
-    // Every cron also drains a bounded customer-email outbox. Keeping this
-    // before the warmup early return ensures a worker that stopped after the
-    // durable pre-dispatch claim cannot strand a finalized billing event.
-    scheduleBillingLifecycleEmailRecovery(env, ctx);
+		// Every cron also drains a bounded customer-email outbox. Keeping this
+		// before the warmup early return ensures a worker that stopped after the
+		// durable pre-dispatch claim cannot strand a finalized billing event.
+		scheduleBillingLifecycleEmailRecovery(env, ctx);
 
     if (controller.cron === WEEKLY_DIGEST_CRON) {
       // Monday morning: the operator gets last week's business numbers
@@ -137,6 +141,19 @@ export default {
     }
 
     if (scheduledTask.kind === "discovery_warmup") {
+		scheduleDigestScheduleExhaustionRecovery(env, ctx);
+		ctx.waitUntil(
+			resumePendingDigestScheduleJobs(env, {
+				deadlineAt: Date.now() + DIGEST_RECOVERY_TIME_BUDGET_MS,
+			}).then(
+				(digests) => {
+					if (digests > 0) {
+						console.log("pending digest schedule jobs recovered", { digests });
+					}
+				},
+				(error) => reportScheduledTaskFailure(env, "digest_schedule_recovery", error),
+			),
+		);
       ctx.waitUntil(
         runScheduledDiscoveryWarmup(env).then(
           undefined,
@@ -151,13 +168,18 @@ export default {
           }),
         ).then(
           (result) => {
+            const firstScans = result.firstScans ?? {
+              redispatched: 0,
+              cancelled: 0,
+              failures: 0,
+            };
             if (
               result.redispatched > 0 ||
               result.recovered > 0 ||
               result.cancelled > 0 ||
-              result.firstScans.redispatched > 0 ||
-              result.firstScans.cancelled > 0 ||
-              result.firstScans.failures > 0
+              firstScans.redispatched > 0 ||
+              firstScans.cancelled > 0 ||
+              firstScans.failures > 0
             ) {
               console.log("monitoring fanout reconciliation completed", result);
             }
@@ -184,14 +206,15 @@ export default {
         runRetentionSweep(env).then(
           async (result) => {
             const total = Object.values(result.deleted).reduce((sum, count) => sum + count, 0);
+            const failedSteps = result.failedSteps ?? [];
             if (total > 0) {
               console.log("retention sweep completed", result.deleted);
             }
-            if (result.failedSteps.length > 0) {
+            if (failedSteps.length > 0) {
               await reportScheduledTaskFailure(
                 env,
                 "retention_sweep",
-                new Error(`Retention sweep failed for steps: ${result.failedSteps.join(", ")}`),
+                new Error(`Retention sweep failed for steps: ${failedSteps.join(", ")}`),
               );
             }
           },

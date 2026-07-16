@@ -404,8 +404,12 @@ export function extractWhatsAppWebhookStatusUpdates(payload: unknown): WhatsAppW
         }
 
         const mapped = mapWhatsAppStatus(status.status, status.errors?.[0]?.message ?? null);
+        const timestampSeconds = Number(status.timestamp);
+        if (status.timestamp && (!Number.isFinite(timestampSeconds) || timestampSeconds <= 0)) {
+          continue;
+        }
         const providerStatusLastSeenAt = status.timestamp
-          ? new Date(Number(status.timestamp) * 1000).toISOString()
+          ? new Date(timestampSeconds * 1000).toISOString()
           : new Date().toISOString();
         const candidate: WhatsAppWebhookStatusUpdate = {
           provider: "whatsapp_cloud_api",

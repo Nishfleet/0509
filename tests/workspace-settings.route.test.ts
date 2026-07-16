@@ -133,9 +133,9 @@ describe("workspace settings route components", () => {
     expect(markup).not.toContain("Recent tracking health");
     expect(markup).not.toContain("Create API key");
     expect(markup).not.toContain("Slack delivery");
-    expect(markup).toContain("showing your most recent results");
+		expect(markup).toContain("showing your most recent results");
     expect(markup).not.toContain("Cached live results");
-    expect(markup).not.toContain("degraded");
+		expect(markup).not.toContain("degraded");
   });
 
   it("locks source access controls and hides token metadata for workspace members", async () => {

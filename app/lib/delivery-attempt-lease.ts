@@ -1,26 +1,65 @@
 import type { DeliveryAttemptRecord } from "~/lib/types";
 
-// Every provider used by the durable digest/lifecycle claim path has a
-// ten-second request timeout. Keep the lease comfortably longer so a normal
-// in-flight call is never reclaimed, while a worker that stopped before the
-// provider call can be recovered by a later sweep.
+// pending/pending is exclusively a pre-provider lease. Immediately before a
+// provider call, durable senders must atomically move the row to
+// pending/provider_unknown. The timeout only recovers work proven not to have
+// crossed that boundary; it is never used to guess whether a send completed.
 export const DELIVERY_PRE_DISPATCH_LEASE_MS = 60_000;
+export const DELIVERY_DISPATCH_UNKNOWN_MESSAGE =
+	"Provider dispatch started; outcome requires reconciliation if interrupted.";
 
 export function deliveryPreDispatchStaleBefore(referenceTimeMs = Date.now()) {
-  return new Date(referenceTimeMs - DELIVERY_PRE_DISPATCH_LEASE_MS).toISOString();
+	return new Date(referenceTimeMs - DELIVERY_PRE_DISPATCH_LEASE_MS).toISOString();
 }
 
 export function isStalePreDispatchAttempt(
-  attempt: Pick<DeliveryAttemptRecord, "status" | "webhookStatus" | "updatedAt">,
-  referenceTimeMs = Date.now(),
+	attempt: Pick<DeliveryAttemptRecord, "status" | "webhookStatus" | "updatedAt">,
+	referenceTimeMs = Date.now(),
 ) {
-  if (attempt.status !== "pending" || attempt.webhookStatus !== "pending") {
-    return false;
-  }
+	if (attempt.status !== "pending" || attempt.webhookStatus !== "pending") {
+		return false;
+	}
 
-  const updatedAtMs = Date.parse(attempt.updatedAt);
-  return (
-    Number.isFinite(updatedAtMs) &&
-    updatedAtMs <= referenceTimeMs - DELIVERY_PRE_DISPATCH_LEASE_MS
-  );
+	const updatedAtMs = Date.parse(attempt.updatedAt);
+	return (
+		Number.isFinite(updatedAtMs) &&
+		updatedAtMs <= referenceTimeMs - DELIVERY_PRE_DISPATCH_LEASE_MS
+	);
+}
+
+export async function markDeliveryAttemptProviderDispatch(input: {
+	attemptId: string;
+	provider: string;
+	claimUpdatedAt: string;
+	update: (attemptId: string, update: {
+		provider: string;
+		status: "pending";
+		webhookStatus: "provider_unknown";
+		providerMessageId: null;
+		providerStatusLastSeenAt: null;
+		errorMessage: string;
+		sentAt: null;
+		failedAt: null;
+		expectedStatus: "pending";
+		expectedWebhookStatus: "pending";
+		expectedUpdatedAt: string;
+		updatedAt: string;
+	}) => Promise<boolean | void>;
+}) {
+	const dispatchStartedAt = new Date().toISOString();
+	const marked = await input.update(input.attemptId, {
+		provider: input.provider,
+		status: "pending",
+		webhookStatus: "provider_unknown",
+		providerMessageId: null,
+		providerStatusLastSeenAt: null,
+		errorMessage: DELIVERY_DISPATCH_UNKNOWN_MESSAGE,
+		sentAt: null,
+		failedAt: null,
+		expectedStatus: "pending",
+		expectedWebhookStatus: "pending",
+		expectedUpdatedAt: input.claimUpdatedAt,
+		updatedAt: dispatchStartedAt,
+	});
+	return marked === false ? null : dispatchStartedAt;
 }

@@ -36,7 +36,11 @@ const TIMEOUT_PROVIDER_COOLDOWN_MS = 5 * 60 * 1000;
 const BROWSER_FAILURE_PROVIDER_COOLDOWN_MS = 5 * 60 * 1000;
 const LOGIN_WALL_PROVIDER_COOLDOWN_MS = 10 * 60 * 1000;
 const EXTRACTION_FAILURE_PROVIDER_COOLDOWN_MS = 10 * 60 * 1000;
-const DISCOVERY_QUERY_LEASE_TTL_MS = 30 * 1000;
+// Browser discovery can move from a session attempt through two sequential
+// 30-second Quick Actions requests and then a 30-second Browserless fallback.
+// Keep the distributed single-flight lease beyond that complete fallback chain
+// so a public retry cannot start duplicate work in another isolate.
+const DISCOVERY_QUERY_LEASE_TTL_MS = 180 * 1000;
 const PUBLIC_SEARCH_LEASE_WAIT_MS = 12 * 1000;
 const BACKGROUND_LEASE_WAIT_MS = 25 * 1000;
 const DISCOVERY_QUERY_LEASE_POLL_MS = 250;
@@ -573,6 +577,7 @@ export async function searchAdsViaSourceResolver(
         provider,
         cacheStatus: "miss",
         discoveryStatus: "degraded",
+        discoveryProgress: "warming",
         discoverySummary:
           "Commercial discovery is already warming this query. Cached results should appear shortly.",
         discoveryFailureClass: null,

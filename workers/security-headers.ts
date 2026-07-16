@@ -53,21 +53,21 @@ const NOINDEX_PATH_PREFIXES = ["/share/"] as const;
 // Over-matching is safe here (a noindex header on a 404 is harmless); missing
 // the header on a live alias is the bug.
 function normalizePathnameForNoindex(pathname: string): string {
-  let decoded = pathname;
-  try {
-    decoded = decodeURIComponent(pathname);
-  } catch {
-    // Malformed percent-encoding: keep the raw pathname.
-  }
-  return decoded.toLowerCase();
+	let decoded = pathname;
+	try {
+		decoded = decodeURIComponent(pathname);
+	} catch {
+		// Malformed percent-encoding: keep the raw pathname.
+	}
+	return decoded.toLowerCase();
 }
 
 function isNoindexRequestPath(request?: Request): boolean {
-  if (!request) {
-    return false;
-  }
-  const pathname = normalizePathnameForNoindex(new URL(request.url).pathname);
-  return NOINDEX_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+	if (!request) {
+		return false;
+	}
+	const pathname = normalizePathnameForNoindex(new URL(request.url).pathname);
+	return NOINDEX_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
 }
 
 function securityHeadersForRequest(responseHeaders: Headers, request?: Request): Record<string, string> {
@@ -101,9 +101,9 @@ export function withSecurityHeaders(response: Response, request?: Request): Resp
       headers.set(name, value);
     }
   }
-  if (isNoindexRequestPath(request)) {
-    headers.set("x-robots-tag", "noindex, nofollow");
-  }
+	if (isNoindexRequestPath(request)) {
+		headers.set("x-robots-tag", "noindex, nofollow");
+	}
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,

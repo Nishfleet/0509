@@ -19,8 +19,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const {
     getOperatorSnapshot,
     listBillingLifecycleReconciliationCandidates,
+    listStaleDodoSubscriptionPlanChangeClaims,
   } = await import("~/lib/data.server");
-  const [snapshot, billingLifecycleResult] = await Promise.all([
+  const [snapshot, billingLifecycleResult, planChangeResult] = await Promise.all([
     getOperatorSnapshot(env),
     listBillingLifecycleReconciliationCandidates(env)
       .then((items) => ({ items, warning: null }))
@@ -28,12 +29,20 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         items: [],
         warning: "Billing lifecycle reconciliation could not be loaded.",
       })),
+    listStaleDodoSubscriptionPlanChangeClaims(env, { limit: 50 })
+      .then((items) => ({ items, warning: null }))
+      .catch(() => ({
+        items: [],
+        warning: "Plan-change reconciliation could not be loaded.",
+      })),
   ]);
 
   return {
     snapshot,
     billingLifecycleCandidates: billingLifecycleResult.items,
     billingLifecycleWarning: billingLifecycleResult.warning,
+    stalePlanChangeClaims: planChangeResult.items,
+    planChangeWarning: planChangeResult.warning,
   };
 }
 
@@ -49,6 +58,47 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
+  if (intent === "reconcile-dodo-plan-change") {
+    const subjectUserId = String(formData.get("subjectUserId") ?? "").trim();
+    if (!subjectUserId) {
+      return {
+        ok: false,
+        intent,
+        message: "This recovery request is incomplete. Refresh the operator desk.",
+      };
+    }
+    const { reconcileDodo0509SubscriptionPlanChange } = await import(
+      "~/lib/dodo-plan-change-reconciliation.server"
+    );
+    const result = await reconcileDodo0509SubscriptionPlanChange({
+      env,
+      subjectUserId,
+      actorUserId: session.user.id,
+    });
+    if (result.ok) {
+      const outcomeMessage = result.outcome === "accepted"
+        ? "Dodo confirms the new plan; local entitlements were reconciled."
+        : result.outcome === "scheduled"
+          ? "Dodo confirms a scheduled plan change; current entitlements remain active until then."
+          : result.outcome === "unchanged"
+            ? "Dodo confirms the old plan is still active; the stale hold was cleared."
+            : "Dodo truth is still unavailable; the claim remains safely blocked for follow-up.";
+      return {
+        ok: true,
+        intent,
+        subjectUserId,
+        message: `${outcomeMessage} No second plan change was sent.`,
+      };
+    }
+    return {
+      ok: false,
+      intent,
+      subjectUserId,
+      message: result.reason === "not_due"
+        ? "This plan change is not yet eligible for provider reconciliation. Refresh and retry later."
+        : "The billing row changed during recovery. Refresh before checking again.",
+    };
+  }
   if (intent === "reconcile-billing-lifecycle-email") {
     const { reconcileBillingLifecycleEmailAttempt } = await import("~/lib/data.server");
     try {
@@ -190,11 +240,16 @@ export default function OpsRoute() {
   const { snapshot } = loaderData;
   const billingLifecycleCandidates = loaderData.billingLifecycleCandidates ?? [];
   const billingLifecycleWarning = loaderData.billingLifecycleWarning ?? null;
+  const stalePlanChangeClaims = loaderData.stalePlanChangeClaims ?? [];
+  const planChangeWarning = loaderData.planChangeWarning ?? null;
   const actionData = useActionData<typeof action>();
   const warnings = [
     ...(snapshot.warnings ?? []),
     ...(billingLifecycleWarning
       ? [{ section: "billingLifecycle", message: billingLifecycleWarning }]
+      : []),
+    ...(planChangeWarning
+      ? [{ section: "planChange", message: planChangeWarning }]
       : []),
   ];
 
@@ -248,6 +303,10 @@ export default function OpsRoute() {
             <MetricCard
               label="Billing emails needing evidence"
               value={billingLifecycleCandidates.length}
+            />
+            <MetricCard
+              label="Plan changes needing provider check"
+              value={stalePlanChangeClaims.length}
             />
           </div>
         </article>
@@ -318,6 +377,32 @@ export default function OpsRoute() {
                     ? <> · Provider last checked {formatTimestamp(item.providerStatusLastSeenAt)}</>
                     : null}
                 </p>
+              </>
+            )}
+          />
+
+          <OpsSection
+            empty="No stale plan changes are awaiting provider reconciliation."
+            items={stalePlanChangeClaims}
+            title="Plan changes awaiting provider reconciliation"
+            renderItem={(item) => (
+              <>
+                <p className="f9-app-kicker">{item.plan} plan · provider outcome unknown</p>
+                <h3>Subscription plan change needs a current-state check</h3>
+                <p>
+                  Read Dodo's current subscription state and reconcile it atomically. This action
+                  never sends another plan-change request.
+                </p>
+                <p className="f9-muted-copy">
+                  Account {maskIdentifier(item.userId)} · waiting since {formatTimestamp(item.claimedAt)}
+                </p>
+                <Form method="post">
+                  <input name="intent" type="hidden" value="reconcile-dodo-plan-change" />
+                  <input name="subjectUserId" type="hidden" value={item.userId} />
+                  <button className="f9-secondary-button" type="submit">
+                    Check current Dodo state
+                  </button>
+                </Form>
               </>
             )}
           />
@@ -587,6 +672,12 @@ function readableCode(value: string) {
 
 function formatTimestamp(value: string) {
   return <LocalTime iso={value} />;
+}
+
+function maskIdentifier(value: string) {
+  const normalized = value.trim();
+  if (normalized.length <= 8) return "••••";
+  return `${normalized.slice(0, 4)}••••${normalized.slice(-4)}`;
 }
 
 function formatDiscoveryProvider(provider: string) {

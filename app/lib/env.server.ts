@@ -175,7 +175,7 @@ export function emailFromAddress(env: AppEnv) {
 export const EMAIL_FROM_NAME = "Five to Nine";
 
 export function emailFromSender(env: AppEnv): EmailAddress {
-  return { email: emailFromAddress(env), name: EMAIL_FROM_NAME };
+	return { email: emailFromAddress(env), name: EMAIL_FROM_NAME };
 }
 
 export function isEmailSendingConfigured(env: AppEnv) {

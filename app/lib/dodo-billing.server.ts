@@ -55,6 +55,15 @@ export interface DodoSubscriptionPlanChangeOptions {
   fetcher?: typeof fetch;
 }
 
+export interface DodoSubscriptionPlanState {
+  subscriptionId: string;
+  productId: string;
+  status: string;
+  scheduledChangeProductId: string | null;
+  nextBillingAt: string | null;
+  observedAt: string;
+}
+
 export interface DodoSubscriptionPlanChangePreviewTokenInput {
   subscriptionId: string;
   userId: string;
@@ -406,6 +415,78 @@ export async function getDodo0509SubscriptionCurrency({
   return currency;
 }
 
+export async function getDodo0509SubscriptionPlanState({
+  env,
+  subscriptionId,
+  fetcher = fetch,
+  observedAt = new Date().toISOString(),
+}: {
+  env: AppEnv;
+  subscriptionId: string;
+  fetcher?: typeof fetch;
+  observedAt?: string;
+}): Promise<DodoSubscriptionPlanState> {
+  const apiKey = dodo0509ApiKey(env);
+  if (!apiKey) throw new Response("Dodo API key is not configured.", { status: 503 });
+  const cleanSubscriptionId = subscriptionId.trim();
+  if (!cleanSubscriptionId) throw new Response("Dodo subscription is not linked.", { status: 400 });
+
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(
+      `${dodo0509BaseUrl(env)}/subscriptions/${encodeURIComponent(cleanSubscriptionId)}`,
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${apiKey}` },
+      },
+      { fetcher, timeoutMs: DODO_PLAN_CHANGE_TIMEOUT_MS },
+    );
+  } catch {
+    throw new Response("Dodo subscription is temporarily unavailable. Please try again.", {
+      status: 502,
+    });
+  }
+
+  let payload: Record<string, unknown>;
+  try {
+    payload = objectOrEmpty(
+      (await readResponseJsonWithinLimit(response, DODO_PLAN_CHANGE_JSON_MAX_BYTES)) ?? {},
+    );
+  } catch {
+    throw new Response("Dodo subscription is temporarily unavailable. Please try again.", {
+      status: 502,
+    });
+  }
+  if (!response.ok) {
+    throw new Response("Dodo subscription is temporarily unavailable. Please try again.", {
+      status: 502,
+    });
+  }
+
+  const providerSubscriptionId = readString(payload, "subscription_id");
+  const productId = readString(payload, "product_id");
+  const status = readString(payload, "status");
+  const cleanObservedAt = cleanIsoTimestamp(observedAt);
+  if (
+    providerSubscriptionId !== cleanSubscriptionId ||
+    !productId ||
+    !status ||
+    !cleanObservedAt
+  ) {
+    throw new Response("Dodo subscription state is unavailable.", { status: 502 });
+  }
+
+  const scheduledChange = objectOrEmpty(payload.scheduled_change);
+  return {
+    subscriptionId: providerSubscriptionId,
+    productId,
+    status,
+    scheduledChangeProductId: readString(scheduledChange, "product_id") || null,
+    nextBillingAt: cleanIsoTimestamp(readString(payload, "next_billing_date")),
+    observedAt: cleanObservedAt,
+  };
+}
+
 export function isDodoHostedCheckoutUrl(value: string) {
   try {
     const url = new URL(value);
@@ -508,6 +589,12 @@ async function requestDodo0509SubscriptionPlanChange({
 
 function isDefiniteDodoPlanChangeHttpStatus(status: number) {
   return status >= 400 && status < 500 && status !== 408 && status !== 409 && status !== 425 && status !== 429;
+}
+
+function cleanIsoTimestamp(value: unknown) {
+  if (typeof value !== "string") return null;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
 }
 
 // Standard Svix/Dodo replay tolerance: signed events older (or newer) than

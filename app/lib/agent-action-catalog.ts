@@ -145,6 +145,7 @@ export const AGENT_BLOCKED_CAPABILITIES = [
   "team invites",
   "secret-bearing integration setup",
   "customer API key creation, rotation, and revocation",
+	"report branding configuration and logo uploads",
   "external delivery sends",
   "unsupported-channel ingestion",
   "automated spend, reach, or impression benchmarks",

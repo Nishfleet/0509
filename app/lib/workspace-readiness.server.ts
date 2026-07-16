@@ -305,7 +305,7 @@ export async function getWorkspaceReadiness(
           : sourceStatus.status === "cache_only" || sourceStatus.status === "degraded"
             ? "attention"
             : "needs_setup",
-      detail: customerDiscoverySummary(sourceStatus.summary) ?? sourceStatus.summary,
+			detail: customerDiscoverySummary(sourceStatus.summary) ?? sourceStatus.summary,
       action: sourceStatus.status === "healthy" ? null : { label: "Open source access", href: "/app/source-access" },
     },
     {

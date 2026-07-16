@@ -41,6 +41,7 @@ function mockCheckoutDependencies(
     checkoutFails?: boolean;
     checkoutValid?: boolean;
     cleanupFails?: boolean;
+    checkoutTargetFromSkuSlug?: (slug: string) => unknown;
     topUpValid?: boolean;
     workspace?: {
       workspaceUserId?: string;
@@ -107,6 +108,9 @@ function mockCheckoutDependencies(
     const actual = await importOriginal<typeof import("~/lib/dodo-billing.server")>();
     return {
       ...actual,
+      ...(options.checkoutTargetFromSkuSlug
+        ? { checkoutTargetFromSkuSlug: options.checkoutTargetFromSkuSlug }
+        : {}),
       createDodo0509CheckoutSession,
     };
   });
@@ -127,10 +131,13 @@ function mockCheckoutDependencies(
   };
 }
 
-function checkoutRequest(body: Record<string, string>) {
+function checkoutRequest(body: Record<string, string>, headers: HeadersInit = {}) {
   return new Request("https://0509.io/api/billing/dodo/checkout", {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      ...Object.fromEntries(new Headers(headers)),
+    },
     body: new URLSearchParams(body).toString(),
   });
 }
@@ -139,14 +146,83 @@ describe("Dodo checkout route", () => {
   it.each([
     ["an unknown SKU", { sku: "tampered_sku" }],
     ["a missing target", {}],
-  ])("redirects %s back to billing with an inline-safe notice", async (_label, body) => {
+  ])("keeps %s as HTTP 400 for programmatic callers", async (_label, body) => {
     const { createDodo0509CheckoutSession, claimDodoPlanCheckout } =
       mockCheckoutDependencies("free");
     const { action } = await import("~/routes/api.billing.dodo.checkout");
 
     const response = (await action({
       context: {},
-      request: checkoutRequest(body),
+      request: checkoutRequest(body, {
+        Accept: "application/json",
+        "Sec-Fetch-Mode": "cors",
+      }),
+      params: {},
+    } as never).catch((error) => error)) as Response;
+
+    expect(response).toBeInstanceOf(Response);
+    expect(response.status).toBe(400);
+    expect(response.headers.get("Location")).toBeNull();
+    await expect(response.text()).resolves.toBe("Invalid Dodo checkout target.");
+    expect(claimDodoPlanCheckout).not.toHaveBeenCalled();
+    expect(createDodo0509CheckoutSession).not.toHaveBeenCalled();
+  });
+
+  it("does not let an HTML-accepting fetch follow an invalid target into a success page", async () => {
+    mockCheckoutDependencies("free");
+    const { action } = await import("~/routes/api.billing.dodo.checkout");
+
+    const response = (await action({
+      context: {},
+      request: checkoutRequest({ sku: "tampered_sku" }, {
+        Accept: "text/html",
+        "Sec-Fetch-Mode": "cors",
+      }),
+      params: {},
+    } as never).catch((error) => error)) as Response;
+
+    expect(response.status).toBe(400);
+    expect(response.headers.get("Location")).toBeNull();
+  });
+
+  it("rejects a resolver result with an unknown plan family as an invalid API target", async () => {
+    mockCheckoutDependencies("free", {
+      checkoutTargetFromSkuSlug: () => ({
+        kind: "plan",
+        sku: "starter_monthly_v1",
+        planFamily: "enterprise",
+        cycle: "monthly",
+      }),
+    });
+    const { action } = await import("~/routes/api.billing.dodo.checkout");
+
+    const response = (await action({
+      context: {},
+      request: checkoutRequest({ sku: "tampered_plan" }, {
+        Accept: "application/json",
+        "Sec-Fetch-Mode": "cors",
+      }),
+      params: {},
+    } as never).catch((error) => error)) as Response;
+
+    expect(response.status).toBe(400);
+    expect(response.headers.get("Location")).toBeNull();
+  });
+
+  it.each([
+    ["an unknown SKU", { sku: "tampered_sku" }],
+    ["a missing target", {}],
+  ])("redirects %s only for a full-document browser navigation", async (_label, body) => {
+    const { createDodo0509CheckoutSession, claimDodoPlanCheckout } =
+      mockCheckoutDependencies("free");
+    const { action } = await import("~/routes/api.billing.dodo.checkout");
+
+    const response = (await action({
+      context: {},
+      request: checkoutRequest(body, {
+        Accept: "text/html,application/xhtml+xml",
+        "Sec-Fetch-Mode": "navigate",
+      }),
       params: {},
     } as never).catch((error) => error)) as Response;
 

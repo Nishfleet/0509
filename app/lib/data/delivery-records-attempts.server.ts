@@ -23,12 +23,13 @@ export async function listRetryableInstantAttempts(
   env: AppEnv,
   input: {
     since: string;
+    stalePreDispatchBefore: string;
     limit: number;
   },
 ) {
-  // Instant alerts that were deferred by quiet hours (and never flushed) or
-  // failed at the provider. Successful re-sends update or supersede these
-  // rows, so they naturally drop out of this query.
+  // Instant retries are fail-closed around every provider boundary: only
+  // quiet hours, definite failed/failed outcomes, and expired pending/pending
+  // pre-dispatch leases are eligible. provider_unknown is never auto-sent.
   const rows = await many<DeliveryAttemptRow>(
     env,
     `
@@ -37,12 +38,67 @@ export async function listRetryableInstantAttempts(
       WHERE lane = 'customer'
         AND watchlist_id IS NOT NULL
         AND digest_run_id IS NULL
+        AND idempotency_key LIKE 'instant:%'
         AND created_at >= ?
-        AND status IN ('skipped_due_to_quiet_hours', 'failed')
+        AND (
+          (
+            status = 'skipped_due_to_quiet_hours'
+            AND NOT EXISTS (
+              SELECT 1
+              FROM delivery_attempt AS dispatched_attempt
+              WHERE dispatched_attempt.idempotency_key = CASE
+                WHEN delivery_attempt.idempotency_key LIKE '%:quiet-hours'
+                  THEN substr(
+                    delivery_attempt.idempotency_key,
+                    1,
+                    length(delivery_attempt.idempotency_key) - length('quiet-hours')
+                  ) || 'send'
+                ELSE delivery_attempt.idempotency_key || ':send'
+              END
+            )
+          )
+          OR (
+            channel = 'email'
+            AND (
+              (status = 'failed' AND webhook_status = 'failed')
+              OR (
+                status = 'pending'
+                AND webhook_status = 'pending'
+                AND updated_at <= ?
+              )
+            )
+          )
+          OR (
+            channel IN ('whatsapp', 'slack')
+            AND (
+              (
+                status = 'failed'
+                AND webhook_status = 'failed'
+                AND (
+                  json_extract(payload_snapshot_json, '$.deliveryClaimProtocol') = 'instant_preclaim_v1'
+                  OR (
+                    json_extract(payload_snapshot_json, '$.instantAlertProviderEvidence.outcome') = 'failed'
+                    AND NULLIF(TRIM(json_extract(payload_snapshot_json, '$.instantAlertProviderEvidence.reference')), '') IS NOT NULL
+                    AND NULLIF(TRIM(json_extract(payload_snapshot_json, '$.instantAlertProviderEvidence.classification')), '') IS NOT NULL
+                    AND NULLIF(TRIM(json_extract(payload_snapshot_json, '$.instantAlertProviderEvidence.observedAt')), '') IS NOT NULL
+                  )
+                )
+              )
+              OR (
+                status = 'pending'
+                AND webhook_status = 'pending'
+                AND updated_at <= ?
+                AND json_extract(payload_snapshot_json, '$.deliveryClaimProtocol') = 'instant_preclaim_v1'
+              )
+            )
+          )
+        )
       ORDER BY created_at ASC
       LIMIT ?
     `,
     input.since,
+    input.stalePreDispatchBefore,
+    input.stalePreDispatchBefore,
     input.limit,
   );
 
@@ -54,6 +110,7 @@ export async function listStaleBillingLifecycleEmailAttempts(
   input: {
     staleBefore: string;
     limit: number;
+    maxRecoveryAttempts: number;
   },
 ) {
   const rows = await many<DeliveryAttemptRow>(
@@ -71,16 +128,166 @@ export async function listStaleBillingLifecycleEmailAttempts(
           OR idempotency_key LIKE 'billing-cancellation:%'
           OR idempotency_key LIKE 'billing-refund:%'
         )
-        AND status = 'pending'
-        AND webhook_status = 'pending'
-        AND updated_at <= ?
+        AND (
+          (
+            status = 'pending'
+            AND webhook_status = 'pending'
+            AND updated_at <= ?
+          )
+          OR (
+            status = 'failed'
+            AND webhook_status = 'failed'
+            AND provider_status_last_seen_at IS NOT NULL
+            AND json_extract(
+              payload_snapshot_json,
+              '$.billingLifecycleProviderEvidence.outcome'
+            ) = 'failed'
+            AND NULLIF(TRIM(json_extract(
+              payload_snapshot_json,
+              '$.billingLifecycleProviderEvidence.reference'
+            )), '') IS NOT NULL
+            AND NULLIF(TRIM(json_extract(
+              payload_snapshot_json,
+              '$.billingLifecycleProviderEvidence.classification'
+            )), '') IS NOT NULL
+            AND NULLIF(TRIM(json_extract(
+              payload_snapshot_json,
+              '$.billingLifecycleProviderEvidence.observedAt'
+            )), '') IS NOT NULL
+            AND COALESCE(
+              CAST(json_extract(payload_snapshot_json, '$.recoveryAttemptCount') AS INTEGER),
+              0
+            ) < ?
+          )
+        )
       ORDER BY updated_at ASC
       LIMIT ?
     `,
     input.staleBefore,
+    input.maxRecoveryAttempts,
     input.limit,
   );
 
+  return rows.map(toDeliveryAttemptRecord);
+}
+
+export async function listOutstandingBillingLifecycleProviderUnknownAttempts(
+  env: AppEnv,
+  options: { limit?: number } = {},
+) {
+  const limit = Math.max(1, Math.min(200, Math.trunc(options.limit ?? 100)));
+  const rows = await many<DeliveryAttemptRow>(
+    env,
+    `
+      SELECT *
+      FROM delivery_attempt
+      WHERE lane = 'customer'
+        AND channel = 'email'
+        AND watchlist_id IS NULL
+        AND digest_run_id IS NULL
+        AND delivery_target_id IS NULL
+        AND webhook_status = 'provider_unknown'
+        AND (
+          status = 'pending'
+          OR (status = 'failed' AND provider_status_last_seen_at IS NOT NULL)
+        )
+        AND (
+          idempotency_key LIKE 'billing-payment-issue:%'
+          OR idempotency_key LIKE 'billing-cancellation:%'
+          OR idempotency_key LIKE 'billing-refund:%'
+        )
+      ORDER BY created_at ASC
+      LIMIT ?
+    `,
+    limit,
+  );
+  return rows.map(toDeliveryAttemptRecord);
+}
+
+export async function listOutstandingDigestProviderUnknownAttempts(
+  env: AppEnv,
+  options: { limit?: number } = {},
+) {
+  const limit = Math.max(1, Math.min(200, Math.trunc(options.limit ?? 100)));
+  const rows = await many<DeliveryAttemptRow>(
+    env,
+    `
+      SELECT *
+      FROM delivery_attempt
+      WHERE lane = 'customer'
+        AND channel = 'email'
+        AND digest_run_id IS NOT NULL
+        AND delivery_target_id IS NOT NULL
+        AND webhook_status = 'provider_unknown'
+        AND (
+          status = 'pending'
+          OR (status = 'failed' AND provider_status_last_seen_at IS NOT NULL)
+        )
+        AND idempotency_key LIKE 'digest:%:customer:email:%'
+      ORDER BY created_at ASC
+      LIMIT ?
+    `,
+    limit,
+  );
+  return rows.map(toDeliveryAttemptRecord);
+}
+
+export async function listOutstandingInstantProviderUnknownAttempts(
+  env: AppEnv,
+  options: { limit?: number } = {},
+) {
+  const limit = Math.max(1, Math.min(200, Math.trunc(options.limit ?? 100)));
+  const rows = await many<DeliveryAttemptRow>(
+    env,
+    `
+      SELECT *
+      FROM delivery_attempt
+      WHERE lane = 'customer'
+        AND channel IN ('email', 'whatsapp', 'slack')
+        AND watchlist_id IS NOT NULL
+        AND digest_run_id IS NULL
+        AND delivery_target_id IS NOT NULL
+        AND (
+          (
+            webhook_status = 'provider_unknown'
+            AND (
+              status = 'failed'
+              OR (
+                status = 'pending'
+                AND (channel = 'email' OR julianday(updated_at) <= julianday('now', '-60 seconds'))
+              )
+            )
+          )
+          OR (
+            channel IN ('whatsapp', 'slack')
+            AND status = 'failed'
+            AND webhook_status = 'failed'
+            AND COALESCE(
+              json_extract(payload_snapshot_json, '$.deliveryClaimProtocol'),
+              ''
+            ) != 'instant_preclaim_v1'
+            AND COALESCE(
+              json_extract(payload_snapshot_json, '$.instantAlertProviderEvidence.outcome'),
+              ''
+            ) != 'failed'
+          )
+        )
+        AND (
+          (channel = 'email'
+            AND provider = 'cloudflare_email'
+            AND idempotency_key LIKE 'instant:%:customer:email:%')
+          OR (channel = 'whatsapp'
+            AND provider = 'whatsapp_cloud_api'
+            AND idempotency_key LIKE 'instant:%:customer:whatsapp:%')
+          OR (channel = 'slack'
+            AND provider = 'slack_incoming_webhook'
+            AND idempotency_key LIKE 'instant:%:customer:slack:%')
+        )
+      ORDER BY created_at ASC
+      LIMIT ?
+    `,
+    limit,
+  );
   return rows.map(toDeliveryAttemptRecord);
 }
 
@@ -157,6 +364,35 @@ export interface InstantDeliveryAttemptClaimInput {
   deferredByQuietHours?: boolean;
 }
 
+const INSTANT_PROVIDER_CLAIM_PROTOCOL = "instant_preclaim_v1";
+
+function hasTrustedInstantProviderRetryEvidence(
+  attempt: DeliveryAttemptRecord,
+) {
+  if (
+    attempt.payloadSnapshot.deliveryClaimProtocol ===
+    INSTANT_PROVIDER_CLAIM_PROTOCOL
+  ) {
+    return true;
+  }
+
+  const evidence = attempt.payloadSnapshot.instantAlertProviderEvidence;
+  if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) {
+    return false;
+  }
+
+  const record = evidence as Record<string, unknown>;
+  return (
+    record.outcome === "failed" &&
+    typeof record.reference === "string" &&
+    record.reference.trim().length > 0 &&
+    typeof record.classification === "string" &&
+    record.classification.trim().length > 0 &&
+    typeof record.observedAt === "string" &&
+    Number.isFinite(Date.parse(record.observedAt))
+  );
+}
+
 /**
  * Atomically claims an instant delivery attempt before provider I/O. The
  * idempotency unique index arbitrates initial races; failed and stale pending
@@ -187,8 +423,16 @@ export async function claimInstantDeliveryAttempt(
       };
     }
 
-    const stalePreDispatch = isStalePreDispatchAttempt(existing);
-    if (existing.status !== "failed" && !stalePreDispatch) {
+    const retryEvidenceIsTrusted =
+      input.channel === "email" ||
+      hasTrustedInstantProviderRetryEvidence(existing);
+    const stalePreDispatch =
+      retryEvidenceIsTrusted && isStalePreDispatchAttempt(existing);
+    const definiteFailure =
+      retryEvidenceIsTrusted &&
+      existing.status === "failed" &&
+      existing.webhookStatus === "failed";
+    if (!definiteFailure && !stalePreDispatch) {
       return {
         attemptId: null,
         claimUpdatedAt: null,
@@ -199,9 +443,7 @@ export async function claimInstantDeliveryAttempt(
 
     const claimUpdatedAt = nowIso();
     const expectedStatus = stalePreDispatch ? "pending" : "failed";
-    const expectedWebhookStatus = stalePreDispatch
-      ? "pending"
-      : existing.webhookStatus;
+    const expectedWebhookStatus = stalePreDispatch ? "pending" : "failed";
     const reclaimed = await updateDeliveryAttemptResult(env, existing.id, {
       provider: input.provider,
       status: "pending",
@@ -365,6 +607,21 @@ export async function reconcileDeliveryAttemptByProviderMessageId(
     return null;
   }
 
+  const incomingSeenAt = Date.parse(input.providerStatusLastSeenAt);
+  const existingSeenAt = existing.provider_status_last_seen_at
+    ? Date.parse(existing.provider_status_last_seen_at)
+    : Number.NEGATIVE_INFINITY;
+  const existingTerminal =
+    existing.webhook_status === "delivered" || existing.webhook_status === "failed";
+
+  if (
+    !Number.isFinite(incomingSeenAt) ||
+    incomingSeenAt < existingSeenAt ||
+    (existingTerminal && input.webhookStatus !== existing.webhook_status)
+  ) {
+    return toDeliveryAttemptRecord(existing);
+  }
+
   const nextStatus = input.status ?? existing.status;
   const nextFailedAt =
     nextStatus === "failed" && !existing.failed_at
@@ -387,6 +644,13 @@ export async function reconcileDeliveryAttemptByProviderMessageId(
           failed_at = ?,
           updated_at = ?
       WHERE id = ?
+        AND status = ?
+        AND webhook_status = ?
+        AND (
+          (provider_status_last_seen_at IS NULL AND ? IS NULL)
+          OR provider_status_last_seen_at = ?
+        )
+        AND updated_at = ?
     `,
     nextStatus,
     input.webhookStatus,
@@ -396,6 +660,11 @@ export async function reconcileDeliveryAttemptByProviderMessageId(
     nextFailedAt,
     nowIso(),
     existing.id,
+    existing.status,
+    existing.webhook_status,
+    existing.provider_status_last_seen_at,
+    existing.provider_status_last_seen_at,
+    existing.updated_at,
   );
 
   const updated = await one<DeliveryAttemptRow>(
@@ -522,19 +791,80 @@ export type BillingLifecycleOutboxGate =
    */
   | { kind: "ledger-processed"; eventId: string; processedAt: string };
 
+const BILLING_LIFECYCLE_OUTBOX_AFTER_MUTATION_SQL = `
+  INSERT OR IGNORE INTO delivery_attempt (
+    id,
+    user_id,
+    watchlist_id,
+    digest_run_id,
+    delivery_target_id,
+    lane,
+    channel,
+    provider,
+    status,
+    webhook_status,
+    target_value,
+    provider_message_id,
+    provider_status_last_seen_at,
+    template_name,
+    event_ids_json,
+    payload_snapshot_json,
+    idempotency_key,
+    error_message,
+    sent_at,
+    failed_at,
+    created_at,
+    updated_at
+  )
+  SELECT ?, ?, NULL, NULL, NULL, 'customer', 'email', ?, 'pending', 'pending', ?,
+         NULL, NULL, ?, '[]', ?, ?, NULL, NULL, NULL, ?, ?
+  WHERE changes() > 0
+`;
+
+const BILLING_LIFECYCLE_OUTBOX_AFTER_LEDGER_SQL = `
+  INSERT OR IGNORE INTO delivery_attempt (
+    id,
+    user_id,
+    watchlist_id,
+    digest_run_id,
+    delivery_target_id,
+    lane,
+    channel,
+    provider,
+    status,
+    webhook_status,
+    target_value,
+    provider_message_id,
+    provider_status_last_seen_at,
+    template_name,
+    event_ids_json,
+    payload_snapshot_json,
+    idempotency_key,
+    error_message,
+    sent_at,
+    failed_at,
+    created_at,
+    updated_at
+  )
+  SELECT ?, ?, NULL, NULL, NULL, 'customer', 'email', ?, 'pending', 'pending', ?,
+         NULL, NULL, ?, '[]', ?, ?, NULL, NULL, NULL, ?, ?
+  WHERE EXISTS (
+    SELECT 1 FROM dodo_webhook_event
+    WHERE event_id = ? AND outcome = 'processed' AND processed_at = ?
+  )
+`;
+
 export function buildBillingLifecycleOutboxStatement(
   db: ReturnType<typeof ensureDb>,
   spec: BillingLifecycleEmailOutboxSpec,
   gate: BillingLifecycleOutboxGate,
   timestamp: string,
 ) {
-  const gateSql =
+  const statement = db.prepare(
     gate.kind === "prior-statement-changed"
-      ? "changes() > 0"
-      : `EXISTS (
-          SELECT 1 FROM dodo_webhook_event
-          WHERE event_id = ? AND outcome = 'processed' AND processed_at = ?
-        )`;
+      ? BILLING_LIFECYCLE_OUTBOX_AFTER_MUTATION_SQL
+      : BILLING_LIFECYCLE_OUTBOX_AFTER_LEDGER_SQL,
+  );
   const gateBindings =
     gate.kind === "prior-statement-changed" ? [] : [gate.eventId, gate.processedAt];
 
@@ -542,35 +872,7 @@ export function buildBillingLifecycleOutboxStatement(
   // (redeliveries, racing sibling events, an existing failed/sent row). A
   // plain INSERT conflict would abort the whole batch and roll back the plan
   // mutation itself.
-  return db.prepare(`
-      INSERT OR IGNORE INTO delivery_attempt (
-        id,
-        user_id,
-        watchlist_id,
-        digest_run_id,
-        delivery_target_id,
-        lane,
-        channel,
-        provider,
-        status,
-        webhook_status,
-        target_value,
-        provider_message_id,
-        provider_status_last_seen_at,
-        template_name,
-        event_ids_json,
-        payload_snapshot_json,
-        idempotency_key,
-        error_message,
-        sent_at,
-        failed_at,
-        created_at,
-        updated_at
-      )
-      SELECT ?, ?, NULL, NULL, NULL, 'customer', 'email', ?, 'pending', 'pending', ?,
-             NULL, NULL, ?, '[]', ?, ?, NULL, NULL, NULL, ?, ?
-      WHERE ${gateSql}
-    `).bind(
+  return statement.bind(
     createId(),
     spec.userId,
     "cloudflare_email",
