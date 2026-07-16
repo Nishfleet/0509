@@ -8,9 +8,15 @@ import {
 } from "~/lib/env.server";
 import {
   createDeliveryAttempt,
+  getDeliveryAttemptByIdempotencyKey,
   listDeliveryTargets,
+  updateDeliveryAttemptResult,
   upsertDeliveryTarget,
 } from "~/lib/data.server";
+import {
+  isStalePreDispatchAttempt,
+  markDeliveryAttemptProviderDispatch,
+} from "~/lib/delivery-attempt-lease";
 import { readResponseJsonWithinLimit } from "~/lib/bounded-response.server";
 import { fetchWithTimeout } from "~/lib/fetch-timeout.server";
 import type {
@@ -121,83 +127,210 @@ export async function saveWhatsAppDeliveryTarget(
   const existingTarget = await findExistingWhatsAppTarget(env, input.userId, targetValue);
   const timestamp = new Date().toISOString();
   const templateName = WHATSAPP_DIGEST_TEMPLATE_NAMES.customer;
-  const testResult = await sendWhatsAppTemplate(env, {
-    targetValue,
-    templateName,
-    bodyParameters: [formatPeriodRange(timestamp, timestamp), "1"],
-  });
-
-  if (testResult.status !== "sent") {
-    throw new Response(testResult.errorMessage ?? "WhatsApp did not accept the setup template.", {
-      status: 400,
-    });
-  }
-  if (!testResult.providerMessageId) {
-    throw new Response("WhatsApp accepted the setup template without a message id.", {
-      status: 400,
-    });
-  }
-
   const requiresFreshValidation = Boolean(existingTarget?.optedOutAt);
-  const validationProviderMessageId = testResult.providerMessageId;
-  const target = await upsertDeliveryTarget(env, {
+  const existingGeneration = readString(existingTarget?.metadata.validationGeneration);
+  const validationGeneration = requiresFreshValidation
+    ? `reconnect:${existingTarget?.optedOutAt}`
+    : existingGeneration ?? "initial";
+
+  // A currently validated, opted-in destination already has provider proof.
+  // Updating its display details must not emit another setup template.
+  if (
+    existingTarget?.isValidated &&
+    existingTarget.validationStatus === "validated" &&
+    !requiresFreshValidation
+  ) {
+    const preserved = await upsertDeliveryTarget(env, {
+      userId: input.userId,
+      watchlistId: null,
+      channel: "whatsapp",
+      targetValue,
+      validationStatus: "validated",
+      isValidated: true,
+      isOptedIn: true,
+      optInSource: WHATSAPP_OPT_IN_SOURCE,
+      optedInAt: existingTarget.optedInAt ?? timestamp,
+      isPaused: existingTarget.isPaused,
+      pausedAt: existingTarget.pausedAt,
+      optedOutAt: null,
+      templateEligible: existingTarget.templateEligible,
+      lastSuccessfulDeliveryAt: existingTarget.lastSuccessfulDeliveryAt,
+      lastSuccessfulAttemptId: existingTarget.lastSuccessfulAttemptId,
+      providerIdentifier: existingTarget.providerIdentifier,
+      metadata: {
+        ...existingTarget.metadata,
+        displayName: normalizeWhatsAppDestinationName(input.name),
+      },
+    });
+    if (!preserved) {
+      throw new Response("WhatsApp target could not be saved.", { status: 500 });
+    }
+    return preserved;
+  }
+
+  const pendingTarget = await upsertDeliveryTarget(env, {
     userId: input.userId,
     watchlistId: null,
     channel: "whatsapp",
     targetValue,
-    validationStatus:
-      !requiresFreshValidation && existingTarget?.validationStatus === "validated"
-        ? "validated"
-        : "pending",
-    isValidated: !requiresFreshValidation && (existingTarget?.isValidated ?? false),
+    validationStatus: "pending",
+    isValidated: false,
     isOptedIn: true,
     optInSource: WHATSAPP_OPT_IN_SOURCE,
     optedInAt: timestamp,
     isPaused: existingTarget?.isPaused ?? false,
     pausedAt: existingTarget?.pausedAt ?? null,
     optedOutAt: null,
-    templateEligible: !requiresFreshValidation && (existingTarget?.templateEligible ?? false),
+    templateEligible: false,
     lastSuccessfulDeliveryAt: existingTarget?.lastSuccessfulDeliveryAt ?? null,
     lastSuccessfulAttemptId: existingTarget?.lastSuccessfulAttemptId ?? null,
-    providerIdentifier: validationProviderMessageId,
+    providerIdentifier: existingTarget?.providerIdentifier ?? null,
     metadata: {
       ...(existingTarget?.metadata ?? {}),
       displayName: normalizeWhatsAppDestinationName(input.name),
       validationTemplateName: templateName,
+      validationGeneration,
+    },
+  });
+
+  if (!pendingTarget) {
+    throw new Response("WhatsApp target could not be saved.", { status: 500 });
+  }
+
+  const idempotencyKey = `whatsapp_setup_validation:${input.userId}:${targetValue}:${validationGeneration}`;
+  let attempt = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
+  let attemptId = attempt?.id ?? null;
+  let claimUpdatedAt: string | null = null;
+
+  if (attempt) {
+    if (
+      attempt.webhookStatus === "provider_unknown" ||
+      (attempt.status === "failed" && attempt.webhookStatus !== "failed")
+    ) {
+      throw new Response(
+        "WhatsApp setup is awaiting provider confirmation. Contact support before trying again.",
+        { status: 503 },
+      );
+    }
+    if (attempt.status === "sent") return pendingTarget;
+    const retryable =
+      (attempt.status === "failed" && attempt.webhookStatus === "failed") ||
+      isStalePreDispatchAttempt(attempt);
+    if (!retryable) return pendingTarget;
+    claimUpdatedAt = new Date().toISOString();
+    const reclaimed = await updateDeliveryAttemptResult(env, attempt.id, {
+      provider: "whatsapp_cloud_api",
+      status: "pending",
+      webhookStatus: "pending",
+      providerMessageId: null,
+      providerStatusLastSeenAt: null,
+      templateName,
+      errorMessage: null,
+      sentAt: null,
+      failedAt: null,
+      payloadSnapshot: {
+        kind: "whatsapp_setup_validation",
+        templateName,
+        validationGeneration,
+      },
+      updatedAt: claimUpdatedAt,
+      expectedStatus: attempt.status,
+      expectedWebhookStatus: attempt.webhookStatus,
+      expectedUpdatedAt: isStalePreDispatchAttempt(attempt)
+        ? attempt.updatedAt
+        : undefined,
+    });
+    if (reclaimed !== true) return pendingTarget;
+  } else {
+    claimUpdatedAt = new Date().toISOString();
+    try {
+      attemptId = await createDeliveryAttempt(env, {
+        userId: input.userId,
+        watchlistId: null,
+        digestRunId: null,
+        deliveryTargetId: pendingTarget.id,
+        lane: "customer",
+        channel: "whatsapp",
+        provider: "whatsapp_cloud_api",
+        status: "pending",
+        webhookStatus: "pending",
+        targetValue,
+        providerMessageId: null,
+        providerStatusLastSeenAt: null,
+        templateName,
+        eventIds: [],
+        payloadSnapshot: {
+          kind: "whatsapp_setup_validation",
+          templateName,
+          validationGeneration,
+        },
+        idempotencyKey,
+        errorMessage: null,
+        sentAt: null,
+        failedAt: null,
+        timestamp: claimUpdatedAt,
+      });
+    } catch (error) {
+      const concurrentClaim = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
+      if (concurrentClaim) return pendingTarget;
+      throw error;
+    }
+  }
+
+  if (!attemptId || !claimUpdatedAt) {
+    throw new Error("WhatsApp setup claim did not return an owner token.");
+  }
+  const dispatchStartedAt = await markDeliveryAttemptProviderDispatch({
+    attemptId,
+    provider: "whatsapp_cloud_api",
+    claimUpdatedAt,
+    update: (id, update) => updateDeliveryAttemptResult(env, id, update),
+  });
+  if (!dispatchStartedAt) return pendingTarget;
+
+  const testResult = await sendWhatsAppTemplate(env, {
+    targetValue,
+    templateName,
+    bodyParameters: [formatPeriodRange(timestamp, timestamp), "1"],
+  });
+  const finalized = await updateDeliveryAttemptResult(env, attemptId, {
+    provider: testResult.provider,
+    status: testResult.status,
+    webhookStatus: testResult.webhookStatus,
+    providerMessageId: testResult.providerMessageId,
+    providerStatusLastSeenAt: testResult.providerStatusLastSeenAt,
+    templateName,
+    errorMessage: testResult.errorMessage,
+    sentAt: testResult.status === "sent" ? testResult.providerStatusLastSeenAt : null,
+    failedAt: testResult.status === "failed" ? new Date().toISOString() : null,
+    expectedStatus: "pending",
+    expectedWebhookStatus: "provider_unknown",
+    expectedUpdatedAt: dispatchStartedAt,
+  });
+  if (finalized === false) return pendingTarget;
+
+  if (testResult.status !== "sent" || !testResult.providerMessageId) {
+    throw new Response(testResult.errorMessage ?? "WhatsApp did not accept the setup template.", {
+      status: testResult.webhookStatus === "provider_unknown" ? 503 : 400,
+    });
+  }
+
+  const validationProviderMessageId = testResult.providerMessageId;
+  const target = await upsertDeliveryTarget(env, {
+    ...pendingTarget,
+    providerIdentifier: validationProviderMessageId,
+    metadata: {
+      ...pendingTarget.metadata,
+      validationTemplateName: templateName,
+      validationGeneration,
       validationProviderMessageId,
       validationAcceptedAt: testResult.providerStatusLastSeenAt,
       validationWebhookStatus: "pending",
     },
   });
-
   if (!target) {
     throw new Response("WhatsApp target could not be saved.", { status: 500 });
   }
-
-  await createDeliveryAttempt(env, {
-    userId: input.userId,
-    watchlistId: null,
-    digestRunId: null,
-    deliveryTargetId: target.id,
-    lane: "customer",
-    channel: "whatsapp",
-    provider: testResult.provider,
-    status: "pending",
-    webhookStatus: "pending",
-    targetValue,
-    providerMessageId: validationProviderMessageId,
-    providerStatusLastSeenAt: testResult.providerStatusLastSeenAt,
-    templateName,
-    eventIds: [],
-    payloadSnapshot: {
-      kind: "whatsapp_setup_validation",
-      templateName,
-    },
-    idempotencyKey: `whatsapp_setup_validation:${input.userId}:${targetValue}:${validationProviderMessageId}`,
-    errorMessage: null,
-    sentAt: null,
-    failedAt: null,
-  });
 
   return target;
 }

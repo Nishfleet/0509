@@ -978,6 +978,7 @@ async function loadReportDocumentForAgent(
 ) {
   const {
     getCollection,
+		getLatestDigestRunSummaryForWatchlist,
     getWatchlist,
     listAdsByIds,
     listCollectionItems,
@@ -1013,12 +1014,18 @@ async function loadReportDocumentForAgent(
   }
 
   const events = await listWatchEvents(env, watchlist.id, 60);
-  const ads = await listAdsByIds(
-    env,
-    events
-      .map((event) => event.adId)
-      .filter((adId): adId is string => Boolean(adId)),
-  );
+  const [ads, aiWeeklySummary] = await Promise.all([
+		listAdsByIds(
+			env,
+			events
+				.map((event) => event.adId)
+				.filter((adId): adId is string => Boolean(adId)),
+		),
+		// Match the signed-in report route: reuse only the latest stored,
+		// watchlist-exclusive digest paragraph. Agent actions never generate a
+		// fresh summary at report time.
+		getLatestDigestRunSummaryForWatchlist(env, userId, watchlist.id),
+	]);
 
   return {
     ok: true,
@@ -1026,6 +1033,7 @@ async function loadReportDocumentForAgent(
       watchlist,
       events,
       adsById: new Map(ads.map((ad) => [ad.metaAdId, ad])),
+		aiWeeklySummary,
     }),
     memoryContext: await loadMemoryContextForAgent(env, userId, { watchlistId: watchlist.id }),
   };

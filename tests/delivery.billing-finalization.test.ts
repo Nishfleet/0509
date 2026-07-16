@@ -432,10 +432,19 @@ retryWebhookOnExplicitFailure: true,
 await expect(send()).resolves.toBe(false);
 await expect(send()).resolves.toBe(false);
 expect(createDeliveryAttempt).toHaveBeenCalledTimes(1);
+expect(emailState.emailSend).not.toHaveBeenCalled();
+expect(attempt.status).toBe("pending");
+expect(attempt.webhookStatus).toBe("pending");
+expect(attempt.providerStatusLastSeenAt).toBeNull();
 expect(updateDeliveryAttemptResult).toHaveBeenLastCalledWith(
 expect.anything(),
 attempt.id,
-expect.objectContaining({ status: "failed", webhookStatus: "provider_unknown" }),
+expect.objectContaining({
+status: "pending",
+webhookStatus: "pending",
+expectedStatus: "pending",
+expectedWebhookStatus: "pending",
+}),
 );
 });
 });

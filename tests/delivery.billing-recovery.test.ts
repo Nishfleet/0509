@@ -12,6 +12,31 @@ const {
 } = setupBillingLifecycleDelivery();
 
 describe("billing lifecycle emails",()=>{
+it("does not claim stale billing email work while email is unconfigured",async()=>{
+useRecoveryClock();
+const sendMock=mockEmailSend("msg_must_not_send");
+const staleAttempt=recoveryAttempt("attempt-unconfigured","billing_refund",{
+billingStateFingerprint:currentBillingStateFingerprint,
+});
+const listStaleBillingLifecycleEmailAttempts=vi.fn().mockResolvedValue([staleAttempt]);
+const updateDeliveryAttemptResult=vi.fn().mockResolvedValue(true);
+mockBillingDataServer({listStaleBillingLifecycleEmailAttempts,updateDeliveryAttemptResult});
+
+const result=await recoverBilling({DB:{}} as never);
+
+expect(result).toEqual({
+scanned:0,
+claimed:0,
+sent:0,
+failed:0,
+providerUnknown:0,
+superseded:0,
+conflicts:0,
+});
+expect(sendMock).not.toHaveBeenCalled();
+expect(listStaleBillingLifecycleEmailAttempts).not.toHaveBeenCalled();
+expect(updateDeliveryAttemptResult).not.toHaveBeenCalled();
+});
 it("records the current recipient when retrying a failed attempt in place",async()=>{
 useRecoveryClock();
 mockEmailSend("msg_retry_new_target");

@@ -11,6 +11,78 @@ const readyEnv = {
 function statusPayload(statuses: Array<{ id: string; status: string; timestamp: unknown }>) {
 return { entry: [{ changes: [{ value: { statuses } }] }] };
 }
+
+function installSetupClaimHarness(options: {
+  fetchMock: ReturnType<typeof vi.fn>;
+  failFinalizeOnce?: boolean;
+}) {
+  let target: Record<string, unknown> | null = null;
+  let attempt: Record<string, unknown> | null = null;
+  let failFinalizeOnce = options.failFinalizeOnce === true;
+  const listDeliveryTargets = vi.fn(async () => (target ? [target] : []));
+  const upsertDeliveryTarget = vi.fn(async (_env: unknown, input: Record<string, unknown>) => {
+    target = {
+      id: "whatsapp-target-1",
+      createdAt: "2026-07-15T00:00:00.000Z",
+      updatedAt: "2026-07-15T00:00:00.000Z",
+      ...input,
+    };
+    return target;
+  });
+  const getDeliveryAttemptByIdempotencyKey = vi.fn(async (_env: unknown, key: string) =>
+    attempt?.idempotencyKey === key ? { ...attempt } : null,
+  );
+  const createDeliveryAttempt = vi.fn(async (_env: unknown, input: Record<string, unknown>) => {
+    if (attempt) throw new Error("UNIQUE constraint failed: delivery_attempt.idempotency_key");
+    const timestamp = String(input.timestamp ?? new Date().toISOString());
+    attempt = {
+      id: "whatsapp-setup-attempt-1",
+      ...input,
+      updatedAt: timestamp,
+      createdAt: timestamp,
+    };
+    return attempt.id;
+  });
+  const updateDeliveryAttemptResult = vi.fn(
+    async (_env: unknown, id: string, update: Record<string, unknown>) => {
+      if (!attempt || attempt.id !== id) return false;
+      if (update.expectedStatus && attempt.status !== update.expectedStatus) return false;
+      if (update.expectedWebhookStatus && attempt.webhookStatus !== update.expectedWebhookStatus) {
+        return false;
+      }
+      if (update.expectedUpdatedAt && attempt.updatedAt !== update.expectedUpdatedAt) return false;
+      const isFinalization = update.expectedWebhookStatus === "provider_unknown";
+      if (isFinalization && failFinalizeOnce) {
+        failFinalizeOnce = false;
+        throw new Error("injected setup finalization failure");
+      }
+      attempt = {
+        ...attempt,
+        ...update,
+        updatedAt: String(update.updatedAt ?? new Date().toISOString()),
+      };
+      return true;
+    },
+  );
+  vi.stubGlobal("fetch", options.fetchMock);
+  vi.doMock("~/lib/data.server", () => ({
+    createDeliveryAttempt,
+    getDeliveryAttemptByIdempotencyKey,
+    listDeliveryTargets,
+    updateDeliveryAttemptResult,
+    upsertDeliveryTarget,
+  }));
+  return {
+    createDeliveryAttempt,
+    get attempt() {
+      return attempt;
+    },
+    get target() {
+      return target;
+    },
+    updateDeliveryAttemptResult,
+  };
+}
 beforeEach(() => {
   vi.resetModules();
 });
@@ -192,6 +264,75 @@ expect(updates.map(({ providerMessageId, rawProviderStatus }) =>
 expect(updates[0]?.providerStatusLastSeenAt).toBe("2026-05-28T20:26:41.000Z");
 });
 
+it("persists an ambiguous setup claim and never resends it automatically", async () => {
+  const fetchMock = vi.fn().mockRejectedValue(new Error("accepted then connection reset"));
+  const state = installSetupClaimHarness({ fetchMock });
+  const { saveWhatsAppDeliveryTarget } = await import("~/lib/whatsapp.server");
+  const input = {
+    userId: "user-1",
+    targetValue: "+91 98765 43210",
+    explicitOptIn: true,
+  };
+
+  await expect(saveWhatsAppDeliveryTarget(readyEnv as never, input)).rejects.toThrow(Response);
+  await expect(saveWhatsAppDeliveryTarget(readyEnv as never, input)).rejects.toThrow(Response);
+
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(state.createDeliveryAttempt).toHaveBeenCalledTimes(1);
+  expect(state.attempt).toMatchObject({
+    status: "failed",
+    webhookStatus: "provider_unknown",
+    providerMessageId: null,
+    idempotencyKey: "whatsapp_setup_validation:user-1:919876543210:initial",
+  });
+});
+
+it("lets concurrent setup requests cross the Meta boundary at most once", async () => {
+  const fetchMock = vi.fn().mockResolvedValue(
+    Response.json({ messages: [{ id: "wamid.setup-concurrent" }] }),
+  );
+  const state = installSetupClaimHarness({ fetchMock });
+  const { saveWhatsAppDeliveryTarget } = await import("~/lib/whatsapp.server");
+  const input = {
+    userId: "user-1",
+    targetValue: "+91 98765 43210",
+    explicitOptIn: true,
+  };
+
+  await expect(Promise.all([
+    saveWhatsAppDeliveryTarget(readyEnv as never, input),
+    saveWhatsAppDeliveryTarget(readyEnv as never, input),
+  ])).resolves.toHaveLength(2);
+
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(state.attempt).toMatchObject({
+    status: "sent",
+    webhookStatus: "pending",
+    providerMessageId: "wamid.setup-concurrent",
+  });
+});
+
+it("does not resend when setup acceptance is followed by local finalization failure", async () => {
+  const fetchMock = vi.fn().mockResolvedValue(
+    Response.json({ messages: [{ id: "wamid.setup-finalize" }] }),
+  );
+  const state = installSetupClaimHarness({ fetchMock, failFinalizeOnce: true });
+  const { saveWhatsAppDeliveryTarget } = await import("~/lib/whatsapp.server");
+  const input = {
+    userId: "user-1",
+    targetValue: "+91 98765 43210",
+    explicitOptIn: true,
+  };
+
+  await expect(saveWhatsAppDeliveryTarget(readyEnv as never, input)).rejects.toThrow(
+    "injected setup finalization failure",
+  );
+  await expect(saveWhatsAppDeliveryTarget(readyEnv as never, input)).rejects.toThrow(Response);
+
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(state.attempt).toMatchObject({ status: "pending", webhookStatus: "provider_unknown" });
+});
+
   it("saves a pending WhatsApp target and records the setup validation attempt", async () => {
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
     const listDeliveryTargets = vi.fn().mockResolvedValue([]);
@@ -209,7 +350,9 @@ expect(updates[0]?.providerStatusLastSeenAt).toBe("2026-05-28T20:26:41.000Z");
     vi.stubGlobal("fetch", fetchMock);
     vi.doMock("~/lib/data.server", () => ({
       createDeliveryAttempt,
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
       listDeliveryTargets,
+      updateDeliveryAttemptResult: vi.fn().mockResolvedValue(true),
       upsertDeliveryTarget,
     }));
 
@@ -261,11 +404,14 @@ expect(updates[0]?.providerStatusLastSeenAt).toBe("2026-05-28T20:26:41.000Z");
         status: "pending",
         webhookStatus: "pending",
         targetValue: "919876543210",
-        providerMessageId: "wamid.setup-1",
+        providerMessageId: null,
+        providerStatusLastSeenAt: null,
         templateName: "proof_digest_customer_v1",
         payloadSnapshot: expect.objectContaining({
           kind: "whatsapp_setup_validation",
+          validationGeneration: "initial",
         }),
+        idempotencyKey: "whatsapp_setup_validation:user-1:919876543210:initial",
       }),
     );
     expect(target?.targetValue).toBe("919876543210");
@@ -315,7 +461,9 @@ expect(updates[0]?.providerStatusLastSeenAt).toBe("2026-05-28T20:26:41.000Z");
     );
     vi.doMock("~/lib/data.server", () => ({
       createDeliveryAttempt,
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
       listDeliveryTargets,
+      updateDeliveryAttemptResult: vi.fn().mockResolvedValue(true),
       upsertDeliveryTarget,
     }));
 
@@ -385,7 +533,9 @@ expect(updates[0]?.providerStatusLastSeenAt).toBe("2026-05-28T20:26:41.000Z");
     );
     vi.doMock("~/lib/data.server", () => ({
       createDeliveryAttempt,
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
       listDeliveryTargets,
+      updateDeliveryAttemptResult: vi.fn().mockResolvedValue(true),
       upsertDeliveryTarget,
     }));
 
@@ -433,12 +583,8 @@ expect(updates[0]?.providerStatusLastSeenAt).toBe("2026-05-28T20:26:41.000Z");
   });
 
   it("does not save a WhatsApp target when the setup template is rejected", async () => {
-    const createDeliveryAttempt = vi.fn();
-    const listDeliveryTargets = vi.fn().mockResolvedValue([]);
-    const upsertDeliveryTarget = vi.fn();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
+    const state = installSetupClaimHarness({
+      fetchMock: vi.fn().mockResolvedValue(
         Response.json(
           {
             error: {
@@ -448,12 +594,7 @@ expect(updates[0]?.providerStatusLastSeenAt).toBe("2026-05-28T20:26:41.000Z");
           { status: 400 },
         ),
       ),
-    );
-    vi.doMock("~/lib/data.server", () => ({
-      createDeliveryAttempt,
-      listDeliveryTargets,
-      upsertDeliveryTarget,
-    }));
+    });
 
     const { saveWhatsAppDeliveryTarget } = await import("~/lib/whatsapp.server");
 
@@ -464,27 +605,19 @@ expect(updates[0]?.providerStatusLastSeenAt).toBe("2026-05-28T20:26:41.000Z");
         explicitOptIn: true,
       }),
     ).rejects.toThrow(Response);
-    expect(createDeliveryAttempt).not.toHaveBeenCalled();
-    expect(upsertDeliveryTarget).not.toHaveBeenCalled();
+    expect(state.createDeliveryAttempt).toHaveBeenCalledTimes(1);
+    expect(state.target).toMatchObject({ validationStatus: "pending", isValidated: false });
+    expect(state.attempt).toMatchObject({ status: "failed", webhookStatus: "failed" });
   });
 
   it("does not save a WhatsApp target when Meta omits the setup message id", async () => {
-    const createDeliveryAttempt = vi.fn();
-    const listDeliveryTargets = vi.fn().mockResolvedValue([]);
-    const upsertDeliveryTarget = vi.fn();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
+    const state = installSetupClaimHarness({
+      fetchMock: vi.fn().mockResolvedValue(
         Response.json({
           messages: [],
         }),
       ),
-    );
-    vi.doMock("~/lib/data.server", () => ({
-      createDeliveryAttempt,
-      listDeliveryTargets,
-      upsertDeliveryTarget,
-    }));
+    });
 
     const { saveWhatsAppDeliveryTarget } = await import("~/lib/whatsapp.server");
 
@@ -495,7 +628,12 @@ expect(updates[0]?.providerStatusLastSeenAt).toBe("2026-05-28T20:26:41.000Z");
         explicitOptIn: true,
       }),
     ).rejects.toThrow(Response);
-    expect(createDeliveryAttempt).not.toHaveBeenCalled();
-    expect(upsertDeliveryTarget).not.toHaveBeenCalled();
+    expect(state.createDeliveryAttempt).toHaveBeenCalledTimes(1);
+    expect(state.target).toMatchObject({ validationStatus: "pending", isValidated: false });
+    expect(state.attempt).toMatchObject({
+      status: "failed",
+      webhookStatus: "provider_unknown",
+      providerMessageId: null,
+    });
   });
 });

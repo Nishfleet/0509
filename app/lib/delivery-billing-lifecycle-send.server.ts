@@ -37,7 +37,7 @@ import {
 	readString,
 	sendCloudflareEmail,
 } from "~/lib/delivery-email-core.server";
-import type { AppEnv } from "~/lib/env.server";
+import { type AppEnv, isEmailSendingConfigured } from "~/lib/env.server";
 
 const BILLING_LIFECYCLE_EMAIL_EXPLICIT_FAILURE =
 	"BILLING_LIFECYCLE_EMAIL_EXPLICIT_FAILURE" as const;
@@ -260,6 +260,10 @@ async function sendBillingLifecycleEmail(
 			"Billing lifecycle delivery claim did not return an owner token.",
 		);
 	}
+	// Configuration is a definite local boundary. Keep the durable claim in
+	// pending/pending so a repaired environment can safely reclaim it without
+	// inventing an ambiguous provider outcome.
+	if (!isEmailSendingConfigured(env)) return false;
 	const dispatchStartedAt = await markDeliveryAttemptProviderDispatch({
 		attemptId,
 		provider: EMAIL_PROVIDER,

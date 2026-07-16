@@ -110,6 +110,16 @@ function mockReliabilityDependencies(input: {
 		digestRunId: "digest-run-current",
 		created: true,
 	});
+  let digestScheduleJobs: Array<{
+    id: string;
+    userId: string;
+    userEmail: string;
+    userName: string;
+    cadence: "daily" | "weekly";
+    periodStart: string;
+    periodEnd: string;
+    attemptCount: number;
+  }> = [];
 
   vi.doMock("~/lib/analysis.server", () => ({
     buildAnalysisFields: vi.fn(() => []),
@@ -176,6 +186,36 @@ function mockReliabilityDependencies(input: {
     listLastSuccessfulProofCapturesForAds: vi.fn().mockResolvedValue(new Map()),
     listRecentWorkspaceProofCaptures: vi.fn().mockResolvedValue([]),
     listRetryableDigestRuns,
+    enqueueDigestScheduleJobs: vi.fn().mockImplementation(
+      async (
+        _env: unknown,
+        schedule: { cadence: "daily" | "weekly"; periodStart: string; periodEnd: string },
+      ) => {
+        digestScheduleJobs = (input.digestUsers ?? []).map((user) => ({
+          id: `digest-job:${schedule.cadence}:${schedule.periodEnd}:${user.id}`,
+          userId: user.id,
+          userEmail: user.email,
+          userName: user.name,
+          cadence: schedule.cadence,
+          periodStart: schedule.periodStart,
+          periodEnd: schedule.periodEnd,
+          attemptCount: 0,
+        }));
+        return digestScheduleJobs.length;
+      },
+    ),
+    listRetryableDigestScheduleJobs: vi.fn().mockImplementation(async () => digestScheduleJobs),
+    claimDigestScheduleJob: vi.fn().mockImplementation(
+      async (_env: unknown, claim: { jobId: string }) =>
+        digestScheduleJobs.find((job) => job.id === claim.jobId) ?? null,
+    ),
+    completeDigestScheduleJob: vi.fn().mockImplementation(
+      async (_env: unknown, completion: { jobId: string }) => {
+        digestScheduleJobs = digestScheduleJobs.filter((job) => job.id !== completion.jobId);
+        return true;
+      },
+    ),
+    failDigestScheduleJob: vi.fn().mockResolvedValue(true),
     listRetryableInstantAttempts: vi.fn().mockResolvedValue(input.retryableInstantAttempts ?? []),
     listWatchEventsByIds: vi.fn(async (_env: unknown, watchlistId: string, eventIds: string[]) =>
       eventIds.map(() => buildConfirmedEvent(watchlistId)),

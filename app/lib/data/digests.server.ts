@@ -75,6 +75,28 @@ export interface DigestRunClaim {
 	created: boolean;
 }
 
+export interface DigestScheduleJob {
+	id: string;
+	userId: string;
+	userEmail: string;
+	userName: string;
+	cadence: "daily" | "weekly";
+	periodStart: string;
+	periodEnd: string;
+	attemptCount: number;
+}
+
+interface DigestScheduleJobRow {
+	id: string;
+	user_id: string;
+	user_email: string;
+	user_name: string;
+	cadence: DigestScheduleJob["cadence"];
+	period_start: string;
+	period_end: string;
+	attempt_count: number;
+}
+
 export interface DigestRunItemInput {
 	watchlistId: string;
 	watchlistName: string;
@@ -82,6 +104,217 @@ export interface DigestRunItemInput {
 	title: string;
 	summary: string;
 	metadata?: JsonRecord;
+}
+
+function toDigestScheduleJob(row: DigestScheduleJobRow): DigestScheduleJob {
+	return {
+		id: row.id,
+		userId: row.user_id,
+		userEmail: row.user_email,
+		userName: row.user_name,
+		cadence: row.cadence,
+		periodStart: row.period_start,
+		periodEnd: row.period_end,
+		attemptCount: Number(row.attempt_count),
+	};
+}
+
+export async function enqueueDigestScheduleJobs(
+	env: AppEnv,
+	input: {
+		cadence: DigestScheduleJob["cadence"];
+		periodStart: string;
+		periodEnd: string;
+	},
+) {
+	const createdAt = nowIso();
+	const result = await run(
+		env,
+		`
+			INSERT OR IGNORE INTO digest_schedule_job (
+				id, user_id, cadence, period_start, period_end, status,
+				attempt_count, created_at, updated_at
+			)
+			SELECT
+				'digest-schedule:' || ? || ':' || ? || ':' || user.id,
+				user.id,
+				?,
+				?,
+				?,
+				'pending',
+				0,
+				?,
+				?
+			FROM user
+			INNER JOIN watchlist ON watchlist.user_id = user.id
+			WHERE watchlist.is_active = 1
+			GROUP BY user.id
+		`,
+		input.cadence,
+		input.periodEnd,
+		input.cadence,
+		input.periodStart,
+		input.periodEnd,
+		createdAt,
+		createdAt,
+	);
+	return Number(result.meta?.changes ?? 0);
+}
+
+export async function listRetryableDigestScheduleJobs(
+	env: AppEnv,
+	input: {
+		staleRunningBefore: string;
+		maxAttempts: number;
+		limit: number;
+	},
+) {
+	const rows = await many<DigestScheduleJobRow>(
+		env,
+		`
+			SELECT
+				digest_schedule_job.id,
+				digest_schedule_job.user_id,
+				user.email AS user_email,
+				user.name AS user_name,
+				digest_schedule_job.cadence,
+				digest_schedule_job.period_start,
+				digest_schedule_job.period_end,
+				digest_schedule_job.attempt_count
+			FROM digest_schedule_job
+			INNER JOIN user ON user.id = digest_schedule_job.user_id
+			WHERE digest_schedule_job.attempt_count < ?
+				AND (
+					digest_schedule_job.status IN ('pending', 'failed')
+					OR (
+						digest_schedule_job.status = 'running'
+						AND digest_schedule_job.processing_started_at <= ?
+					)
+				)
+			ORDER BY digest_schedule_job.period_end ASC, digest_schedule_job.user_id ASC
+			LIMIT ?
+		`,
+		input.maxAttempts,
+		input.staleRunningBefore,
+		input.limit,
+	);
+	return rows.map(toDigestScheduleJob);
+}
+
+export async function claimDigestScheduleJob(
+	env: AppEnv,
+	input: {
+		jobId: string;
+		processingToken: string;
+		now: string;
+		staleRunningBefore: string;
+		maxAttempts: number;
+	},
+) {
+	const claim = await run(
+		env,
+		`
+			UPDATE digest_schedule_job
+			SET status = 'running',
+				processing_token = ?,
+				processing_started_at = ?,
+				attempt_count = attempt_count + 1,
+				last_error_code = NULL,
+				updated_at = ?
+			WHERE id = ?
+				AND attempt_count < ?
+				AND (
+					status IN ('pending', 'failed')
+					OR (status = 'running' AND processing_started_at <= ?)
+				)
+		`,
+		input.processingToken,
+		input.now,
+		input.now,
+		input.jobId,
+		input.maxAttempts,
+		input.staleRunningBefore,
+	);
+	if (Number(claim.meta?.changes ?? 0) !== 1) return null;
+
+	const row = await one<DigestScheduleJobRow>(
+		env,
+		`
+			SELECT
+				digest_schedule_job.id,
+				digest_schedule_job.user_id,
+				user.email AS user_email,
+				user.name AS user_name,
+				digest_schedule_job.cadence,
+				digest_schedule_job.period_start,
+				digest_schedule_job.period_end,
+				digest_schedule_job.attempt_count
+			FROM digest_schedule_job
+			INNER JOIN user ON user.id = digest_schedule_job.user_id
+			WHERE digest_schedule_job.id = ?
+				AND digest_schedule_job.status = 'running'
+				AND digest_schedule_job.processing_token = ?
+			LIMIT 1
+		`,
+		input.jobId,
+		input.processingToken,
+	);
+	return row ? toDigestScheduleJob(row) : null;
+}
+
+export async function completeDigestScheduleJob(
+	env: AppEnv,
+	input: { jobId: string; processingToken: string; now: string },
+) {
+	const result = await run(
+		env,
+		`
+			UPDATE digest_schedule_job
+			SET status = 'completed',
+				processing_token = NULL,
+				processing_started_at = NULL,
+				completed_at = ?,
+				updated_at = ?
+			WHERE id = ?
+				AND status = 'running'
+				AND processing_token = ?
+		`,
+		input.now,
+		input.now,
+		input.jobId,
+		input.processingToken,
+	);
+	return Number(result.meta?.changes ?? 0) === 1;
+}
+
+export async function failDigestScheduleJob(
+	env: AppEnv,
+	input: {
+		jobId: string;
+		processingToken: string;
+		now: string;
+		errorCode: string;
+	},
+) {
+	const result = await run(
+		env,
+		`
+			UPDATE digest_schedule_job
+			SET status = 'failed',
+				processing_token = NULL,
+				processing_started_at = NULL,
+				last_error_code = ?,
+				updated_at = ?
+			WHERE id = ?
+				AND status = 'running'
+				AND processing_token = ?
+		`,
+		input.errorCode,
+		input.now,
+		input.jobId,
+		input.processingToken,
+	);
+	return Number(result.meta?.changes ?? 0) === 1;
 }
 
 interface DigestRunClaimOptions {
@@ -729,11 +962,20 @@ export async function listRetryableDigestRuns(
       SELECT digest_run.*, user.email AS user_email, user.name AS user_name
       FROM digest_run
       INNER JOIN user ON user.id = digest_run.user_id
-      LEFT JOIN digest_delivery ON digest_delivery.digest_run_id = digest_run.id
       WHERE digest_run.period_end >= ?
         AND (
-          digest_delivery.status = 'failed'
-          OR digest_delivery.id IS NULL
+          NOT EXISTS (
+            SELECT 1
+            FROM delivery_attempt
+            WHERE delivery_attempt.digest_run_id = digest_run.id
+          )
+          OR EXISTS (
+            SELECT 1
+            FROM delivery_attempt
+            WHERE delivery_attempt.digest_run_id = digest_run.id
+              AND delivery_attempt.status = 'failed'
+              AND delivery_attempt.webhook_status = 'failed'
+          )
           OR EXISTS (
             SELECT 1
             FROM delivery_attempt
@@ -741,6 +983,71 @@ export async function listRetryableDigestRuns(
               AND delivery_attempt.status = 'pending'
               AND delivery_attempt.webhook_status = 'pending'
               AND delivery_attempt.updated_at <= ?
+          )
+          OR (
+            user.emailVerified = 1
+            AND COALESCE((
+              SELECT workspace_delivery_config.digest_enabled
+              FROM workspace_delivery_config
+              WHERE workspace_delivery_config.user_id = digest_run.user_id
+              LIMIT 1
+            ), 1) = 1
+            AND COALESCE((
+              SELECT workspace_delivery_config.email_enabled
+              FROM workspace_delivery_config
+              WHERE workspace_delivery_config.user_id = digest_run.user_id
+              LIMIT 1
+            ), 1) = 1
+            AND (
+              EXISTS (
+                SELECT 1
+                FROM delivery_target
+                WHERE delivery_target.user_id = digest_run.user_id
+                  AND delivery_target.watchlist_id IS NULL
+                  AND delivery_target.channel = 'email'
+                  AND delivery_target.is_paused = 0
+                  AND delivery_target.opted_out_at IS NULL
+                  AND delivery_target.validation_status != 'invalid'
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM delivery_attempt AS expected_attempt
+                    WHERE expected_attempt.digest_run_id = digest_run.id
+                      AND expected_attempt.lane = 'customer'
+                      AND expected_attempt.channel = 'email'
+                      AND LOWER(TRIM(expected_attempt.target_value)) =
+                        LOWER(TRIM(delivery_target.target_value))
+                  )
+              )
+              OR (
+                TRIM(user.email) != ''
+                AND NOT EXISTS (
+                  SELECT 1
+                  FROM delivery_target
+                  WHERE delivery_target.user_id = digest_run.user_id
+                    AND delivery_target.watchlist_id IS NULL
+                    AND delivery_target.channel = 'email'
+                    AND delivery_target.is_paused = 0
+                    AND delivery_target.opted_out_at IS NULL
+                    AND delivery_target.validation_status != 'invalid'
+                )
+                AND NOT EXISTS (
+                  SELECT 1
+                  FROM delivery_target
+                  WHERE delivery_target.user_id = digest_run.user_id
+                    AND delivery_target.watchlist_id IS NULL
+                    AND delivery_target.channel = 'email'
+                    AND LOWER(TRIM(delivery_target.target_value)) = LOWER(TRIM(user.email))
+                )
+                AND NOT EXISTS (
+                  SELECT 1
+                  FROM delivery_attempt AS expected_attempt
+                  WHERE expected_attempt.digest_run_id = digest_run.id
+                    AND expected_attempt.lane = 'customer'
+                    AND expected_attempt.channel = 'email'
+                    AND LOWER(TRIM(expected_attempt.target_value)) = LOWER(TRIM(user.email))
+                )
+              )
+            )
           )
         )
         AND json_extract(

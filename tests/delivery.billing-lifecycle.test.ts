@@ -11,6 +11,26 @@ const {
 } = setupBillingLifecycleDelivery();
 
 describe("billing lifecycle emails",()=>{
+it("keeps a missing-email-config attempt before the provider boundary",async()=>{
+const sendMock=mockEmailSend("msg_must_not_send");
+const mocks=mockBillingDataServer({
+getUserPlanBillingInfo:vi.fn().mockResolvedValue(paymentIssueBillingInfo),
+});
+const{sendBillingPaymentIssueEmail}=await import("~/lib/delivery.server");
+
+await expect(sendBillingPaymentIssueEmail({} as never,{
+userId:"user-1",
+email:"owner@example.com",
+name:"Owner",
+status:"payment.failed",
+subscriptionId:"subscription-current",
+stateUpdatedAt:scheduledWatermark,
+})).resolves.toBe(false);
+
+expect(sendMock).not.toHaveBeenCalled();
+expect(mocks.createDeliveryAttempt).toHaveBeenCalledTimes(1);
+expect(mocks.updateDeliveryAttemptResult).not.toHaveBeenCalled();
+});
 it("persists scheduled-cancellation cutoff and event watermark in the outbox payload",async()=>{
 mockBillingDataServer();
 const{prepareBillingLifecycleEmailOutbox}=await import("~/lib/delivery.server");

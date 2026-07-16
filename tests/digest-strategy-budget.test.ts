@@ -28,6 +28,16 @@ function confirmedEvent(watchlistId: string) {
 }
 
 function dataServerMock() {
+	const digestJobs = users.map((user) => ({
+		id: `digest-job-${user.id}`,
+		userId: user.id,
+		userEmail: user.email,
+		userName: user.name,
+		cadence: "weekly" as const,
+		periodStart: "2026-07-06T05:00:00.000Z",
+		periodEnd: "2026-07-13T05:00:00.000Z",
+		attemptCount: 0,
+	}));
 	return {
 		claimDigestStrategyGenerationLease: vi.fn().mockResolvedValue(true),
 		completeDigestStrategyGeneration: vi.fn().mockResolvedValue(true),
@@ -45,6 +55,13 @@ function dataServerMock() {
 		countProofCapturesForWatchlistSince: vi.fn(),
 		countProofCapturesForWorkspaceSince: vi.fn(),
 		finishWatchlistRun: vi.fn(),
+		claimDigestScheduleJob: vi.fn().mockImplementation(
+			async (_env: unknown, input: { jobId: string }) =>
+				digestJobs.find((job) => job.id === input.jobId) ?? null,
+		),
+		completeDigestScheduleJob: vi.fn().mockResolvedValue(true),
+		enqueueDigestScheduleJobs: vi.fn().mockResolvedValue(digestJobs.length),
+		failDigestScheduleJob: vi.fn().mockResolvedValue(true),
 		getDigest: vi.fn().mockResolvedValue(null),
 		getDigestByPeriod: vi.fn().mockResolvedValue(null),
 		getSuccessfulRunStatsForUserBetween: vi.fn().mockResolvedValue({
@@ -66,6 +83,7 @@ function dataServerMock() {
 		listProofCapturesForTargets: vi.fn().mockResolvedValue(new Map()),
 		listRecentWorkspaceProofCaptures: vi.fn(),
 		listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
+		listRetryableDigestScheduleJobs: vi.fn().mockResolvedValue(digestJobs),
 		listRetryableInstantAttempts: vi.fn().mockResolvedValue([]),
 		listWatchEvents: vi.fn(),
 		listWatchEventsBetween: vi.fn().mockImplementation(
@@ -161,5 +179,34 @@ describe("scheduled digest strategy budget", () => {
 				summary: expect.not.objectContaining({ strategyParagraph: expect.anything() }),
 			}),
 		]);
+	});
+
+	it("persists the user queue and stops starting jobs after the outer deadline", async () => {
+		let now = Date.parse("2026-07-13T05:00:00.000Z");
+		vi.spyOn(Date, "now").mockImplementation(() => now);
+		const data = dataServerMock();
+		const deliverWeeklyDigest = vi.fn().mockImplementation(async () => {
+			now += 13 * 60 * 1000;
+			return { attempts: 1, channels: ["email"] };
+		});
+
+		vi.doMock("~/lib/auth.server", () => ({}));
+		vi.doMock("~/lib/data.server", () => data);
+		vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+		vi.doMock("~/lib/plan.server", () => planServerMock());
+
+		const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+		const result = await runScheduledMonitoring(envWith(vi.fn()), {
+			includeScans: false,
+			includeDigests: true,
+			digestCadence: "weekly",
+			scheduledTime: Date.parse("2026-07-13T05:00:00.000Z"),
+		});
+
+		expect(result.digests).toBe(1);
+		expect(data.enqueueDigestScheduleJobs).toHaveBeenCalledTimes(1);
+		expect(data.completeDigestScheduleJob).toHaveBeenCalledTimes(1);
+		expect(data.claimDigestScheduleJob).toHaveBeenCalledTimes(1);
+		expect(deliverWeeklyDigest).toHaveBeenCalledTimes(1);
 	});
 });

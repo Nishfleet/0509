@@ -82,7 +82,7 @@ describe("billing lifecycle attempt selection", () => {
 	});
 
 	it("uses the dedicated billing recovery index for the every-cron selector", async () => {
-		const migrationPath = "migrations/0069_billing_lifecycle_recovery_index.sql";
+		const migrationPath = "migrations/0067_delivery_recovery_and_digest_jobs.sql";
 		expect(existsSync(migrationPath)).toBe(true);
 
 		const harness = setup();

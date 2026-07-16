@@ -212,6 +212,62 @@ vi.doUnmock("~/lib/whatsapp.server");
 });
 
 describe("weekly digest per-target delivery claims", () => {
+it("fails Slack local preparation before claiming provider dispatch", async () => {
+const pendingAttempt = deliveryAttempt("slack", "pending");
+const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+mockDataServer({
+channel: "slack",
+getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
+createDeliveryAttempt: vi.fn().mockResolvedValue(pendingAttempt.id),
+updateDeliveryAttemptResult,
+});
+const prepareSlackWebhookTarget = vi.fn().mockResolvedValue({
+ok: false,
+result: {
+provider: "slack_incoming_webhook",
+status: "failed",
+webhookStatus: "failed",
+providerMessageId: null,
+providerStatusLastSeenAt: null,
+errorMessage: "Slack webhook could not be decrypted.",
+deliveredAt: null,
+},
+});
+const sendSlackWebhookUrl = vi.fn();
+const sendSlackWebhookMessage = vi.fn().mockResolvedValue({
+provider: "slack_incoming_webhook",
+status: "sent",
+webhookStatus: "delivered",
+providerMessageId: null,
+providerStatusLastSeenAt: "2026-07-13T05:02:00.000Z",
+errorMessage: null,
+deliveredAt: "2026-07-13T05:02:00.000Z",
+});
+vi.doMock("~/lib/slack-webhook.server", () => ({
+SLACK_PROVIDER: "slack_incoming_webhook",
+prepareSlackWebhookTarget,
+sendSlackWebhookUrl,
+sendSlackWebhookMessage,
+}));
+vi.doMock("~/lib/whatsapp.server", () => ({ sendDigestWhatsApp: vi.fn() }));
+
+const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+await deliverWeeklyDigest({} as never, digestInput());
+
+expect(prepareSlackWebhookTarget).toHaveBeenCalledTimes(1);
+expect(sendSlackWebhookUrl).not.toHaveBeenCalled();
+expect(updateDeliveryAttemptResult).toHaveBeenCalledTimes(1);
+expect(updateDeliveryAttemptResult).toHaveBeenCalledWith(
+expect.anything(),
+pendingAttempt.id,
+expect.objectContaining({
+status: "failed",
+webhookStatus: "failed",
+expectedStatus: "pending",
+expectedWebhookStatus: "pending",
+}),
+);
+});
 it("claims a fresh Slack attempt before the provider so overlapping workers emit once", async () => {
 const pendingAttempt = deliveryAttempt("slack", "pending");
 const getDeliveryAttemptByIdempotencyKey = vi
@@ -245,6 +301,11 @@ deliveredAt: "2026-07-13T05:02:00.000Z",
 });
 vi.doMock("~/lib/slack-webhook.server", () => ({
 SLACK_PROVIDER: "slack_incoming_webhook",
+prepareSlackWebhookTarget: vi.fn().mockResolvedValue({
+ok: true,
+webhookUrl: "https://hooks.slack.test/services/redacted",
+}),
+sendSlackWebhookUrl: sendSlackWebhookMessage,
 sendSlackWebhookMessage,
 }));
 vi.doMock("~/lib/whatsapp.server", () => ({ sendDigestWhatsApp: vi.fn() }));
@@ -363,6 +424,11 @@ deliveredAt: "2026-07-13T05:05:00.000Z",
 });
 vi.doMock("~/lib/slack-webhook.server", () => ({
 SLACK_PROVIDER: "slack_incoming_webhook",
+prepareSlackWebhookTarget: vi.fn().mockResolvedValue({
+ok: true,
+webhookUrl: "https://hooks.slack.test/services/redacted",
+}),
+sendSlackWebhookUrl: sendSlackWebhookMessage,
 sendSlackWebhookMessage,
 }));
 vi.doMock("~/lib/whatsapp.server", () => ({ sendDigestWhatsApp: vi.fn() }));
@@ -414,7 +480,15 @@ createDeliveryAttempt: vi.fn().mockResolvedValue(providerUnknown.id),
 updateDeliveryAttemptResult,
 });
 const sendSlackWebhookMessage = vi.fn().mockRejectedValue(new Error("worker crashed after dispatch"));
-vi.doMock("~/lib/slack-webhook.server", () => ({ SLACK_PROVIDER: "slack_incoming_webhook", sendSlackWebhookMessage }));
+vi.doMock("~/lib/slack-webhook.server", () => ({
+SLACK_PROVIDER: "slack_incoming_webhook",
+prepareSlackWebhookTarget: vi.fn().mockResolvedValue({
+ok: true,
+webhookUrl: "https://hooks.slack.test/services/redacted",
+}),
+sendSlackWebhookUrl: sendSlackWebhookMessage,
+sendSlackWebhookMessage,
+}));
 vi.doMock("~/lib/whatsapp.server", () => ({ sendDigestWhatsApp: vi.fn() }));
 
 const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
