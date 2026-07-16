@@ -4,6 +4,7 @@ import {
   redirect,
   useActionData,
   useLoaderData,
+  useLocation,
   useRouteLoaderData,
 } from "react-router";
 import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
@@ -414,6 +415,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 export default function SearchRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const location = useLocation();
   const rootData = useRouteLoaderData("root") as RootLoaderData;
   const creativeTextField = data.selectedAd?.analysisFields.find((field) => field.fieldKey === "ocr_text");
   const competitorWebsite = data.competitorWebsite ?? emptyCompetitorWebsite();
@@ -436,6 +438,8 @@ export default function SearchRoute() {
   const displayDomain = data.displayDomain ?? competitorWebsite.host ?? competitorWebsite.raw;
   const isDomainSearch = Boolean(displayDomain && competitorWebsite.normalizedUrl);
   const isBroaderScope = data.searchScope === "broader";
+  const isSearchWarming = isWarmingSearchResult(data.result);
+  const retrySearchPath = `${location.pathname}${location.search}${location.hash}`;
   const broaderSearchParams = withTrackingContext(
     buildSearchParams({
       mode: data.mode,
@@ -445,7 +449,7 @@ export default function SearchRoute() {
     trackingRole,
   );
   broaderSearchParams.set("broader", "1");
-  const searchAnswer = hasSearchQuery && !data.inputError
+  const searchAnswer = hasSearchQuery && !data.inputError && !isSearchWarming
     ? buildSearchAnswer({
       result: data.result,
       displayDomain,
@@ -621,6 +625,7 @@ export default function SearchRoute() {
             <>
           <div className="f9-search-grid">
             <section
+              aria-busy={isSearchWarming ? true : undefined}
               className="f9-results-panel"
               data-f9-result-cache-status={data.result.cacheStatus ?? undefined}
               data-f9-result-empty-reason={data.result.discoveryEmptyReason ?? undefined}
@@ -636,10 +641,12 @@ export default function SearchRoute() {
                       isBroaderScope,
                     })}
                   </h2>
-                  {isDomainSearch && !isBroaderScope ? (
+                  {isSearchWarming ? (
+                    <small>The current check is still running</small>
+                  ) : isDomainSearch && !isBroaderScope ? (
                     <small>{`Verified ads linked to ${displayDomain}`}</small>
                   ) : null}
-                  {isDomainSearch && isBroaderScope ? (
+                  {!isSearchWarming && isDomainSearch && isBroaderScope ? (
                     <small>{`Broader matches related to ${displayDomain}`}</small>
                   ) : null}
                 </div>
@@ -708,19 +715,37 @@ export default function SearchRoute() {
                   ))
                 ) : (
                   <div className="f9-empty-state">
-                    <h3>
-                      {formatEmptyResultHeadline(data.result, {
-                        displayDomain,
-                        isDomainSearch,
-                        isBroaderScope,
-                      })}
-                    </h3>
-                    <p>
-                      {isDomainSearch && !isBroaderScope
-                        ? "We couldn't confirm any ads whose advertiser or landing page is connected to this website."
-                        : discoverySummary ?? "Try another competitor website."}
-                    </p>
-                    {isDomainSearch && !isBroaderScope ? (
+                    {isSearchWarming ? (
+                      <div aria-live="polite" role="status">
+                        <h3>Checking this competitor</h3>
+                        <p>A check is already running. Retry in a few seconds to see the finished result.</p>
+                      </div>
+                    ) : (
+                      <>
+                        <h3>
+                          {formatEmptyResultHeadline(data.result, {
+                            displayDomain,
+                            isDomainSearch,
+                            isBroaderScope,
+                          })}
+                        </h3>
+                        <p>
+                          {isDomainSearch && !isBroaderScope
+                            ? "We couldn't confirm any ads whose advertiser or landing page is connected to this website."
+                            : discoverySummary ?? "Try another competitor website."}
+                        </p>
+                      </>
+                    )}
+                    {isSearchWarming ? (
+                      <div className="f9-search-empty-actions">
+                        <Link className="f9-secondary-button" to={retrySearchPath}>
+                          Retry this search
+                        </Link>
+                        <Link className="f9-secondary-button" to="/search">
+                          Try another domain
+                        </Link>
+                      </div>
+                    ) : isDomainSearch && !isBroaderScope ? (
                       <div className="f9-search-empty-actions">
                         {rootData.session ? (
                           <Form className="f9-quick-track-form" method="post">
@@ -1046,6 +1071,10 @@ export function formatDiscoverySummary(result: SearchResponse) {
     .replace(/cached results/gi, "recent results")
     .replace(/recent results should appear shortly/gi, "Results should appear shortly")
     .replace(/(^|[.!?]\s+)([a-z])/g, (match) => match.toUpperCase());
+}
+
+function isWarmingSearchResult(result: SearchResponse) {
+  return /warming this query|already warming/i.test(result.discoverySummary ?? "");
 }
 
 function formatEmptyResultHeadline(
