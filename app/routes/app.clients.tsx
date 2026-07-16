@@ -18,6 +18,7 @@ import { canUsePlanFeature } from "~/lib/plan-entitlements";
 import type { PlanFamily } from "~/lib/plan-entitlements";
 import { createReportId, parseReportId } from "~/lib/report";
 import {
+  createApprovedReportSnapshot,
   evaluateReportReadiness,
   reportEvidenceFingerprint,
   REPORT_APPROVAL_MAX_AGE_MS,
@@ -380,10 +381,20 @@ export async function action({ context, request }: ActionFunctionArgs) {
           recoveryPath: `/app/reports/${ref.resourceId}`,
         };
       }
+      const approvedReport = createApprovedReportSnapshot(report);
+      if (!approvedReport) {
+        return {
+          ok: false,
+          intent,
+          error: "evidence_not_ready" as const,
+          message: "Current evidence could not be approved. Rebuild the report and try again.",
+          recoveryPath: `/app/reports/${ref.resourceId}`,
+        };
+      }
       approvals[ref.resourceId] = {
-        evidenceFingerprint: reportEvidenceFingerprint(report),
-        reviewedAt: new Date().toISOString(),
-        approvalExpiresAt: new Date(Date.now() + REPORT_APPROVAL_MAX_AGE_MS).toISOString(),
+        evidenceFingerprint: approvedReport.evidenceFingerprint,
+        reviewedAt: approvedReport.reviewedAt,
+        approvalExpiresAt: approvedReport.approvalExpiresAt,
       };
     }
 
