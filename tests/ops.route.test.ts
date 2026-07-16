@@ -91,8 +91,10 @@ describe("ops route", () => {
     }));
     vi.doMock("~/lib/data.server", () => ({
       createBillingEmailReconciliationKey: vi.fn(() => "ops-billing-email-reconcile:11111111-1111-4111-8111-111111111111"),
+      createDigestEmailReconciliationKey: vi.fn(() => "ops-digest-email-reconcile:11111111-1111-4111-8111-111111111111"),
       getOperatorSnapshot,
       listOutstandingBillingLifecycleProviderUnknownAttempts: vi.fn().mockResolvedValue([]),
+      listOutstandingDigestProviderUnknownAttempts: vi.fn().mockResolvedValue([]),
     }));
 
     const { loader } = await import("~/routes/app.ops");
@@ -110,6 +112,7 @@ describe("ops route", () => {
         }),
       }),
       outstandingBillingAttempts: [],
+      outstandingDigestAttempts: [],
     });
     expect(getOperatorSnapshot).toHaveBeenCalledTimes(1);
   });
@@ -245,6 +248,16 @@ describe("ops route", () => {
         discoveryProviders: [],
       },
       outstandingBillingAttempts: [],
+      outstandingDigestAttempts: [
+        {
+          attemptId: "digest-attempt-1",
+          recipient: "o•••@e•••.com",
+          provider: "cloudflare_email",
+          createdAt: "2026-07-02T00:00:00.000Z",
+          updatedAt: "2026-07-02T00:01:00.000Z",
+          reconciliationKey: "ops-digest-email-reconcile:11111111-1111-4111-8111-111111111111",
+        },
+      ],
     }));
 
     const { default: OpsRoute } = await import("~/routes/app.ops");
@@ -254,6 +267,9 @@ describe("ops route", () => {
     expect(markup).toContain("Recent delivery attention");
     expect(markup).toContain("Email to o•••@e•••.com");
     expect(markup).toContain("Provider outcome is unknown.");
+    expect(markup).toContain("Digest email provider reconciliation");
+    expect(markup).toContain("Recording evidence never resends it");
+    expect(markup).toContain('value="reconcile-digest-email"');
     expect(markup).not.toContain("ops@example.com");
     expect(markup).not.toContain("provider timeout");
     expect(markup).not.toContain("No recent delivery failures.");
@@ -287,12 +303,23 @@ describe("ops route", () => {
     vi.doMock("~/lib/auth.server", () => ({ requireSession: vi.fn().mockResolvedValue(session) }));
     vi.doMock("~/lib/data.server", () => ({
       createBillingEmailReconciliationKey: vi.fn(() => "ops-billing-email-reconcile:11111111-1111-4111-8111-111111111111"),
+      createDigestEmailReconciliationKey: vi.fn(() => "ops-digest-email-reconcile:11111111-1111-4111-8111-111111111111"),
       getOperatorSnapshot,
       listOutstandingBillingLifecycleProviderUnknownAttempts: vi.fn().mockResolvedValue([
         {
           id: "attempt-1",
           targetValue: "billing@example.com",
           templateName: "billing_refund_revoked",
+          provider: "cloudflare_email",
+          createdAt: "2026-07-15T18:00:00.000Z",
+          updatedAt: "2026-07-15T18:00:00.000Z",
+        },
+      ]),
+      listOutstandingDigestProviderUnknownAttempts: vi.fn().mockResolvedValue([
+        {
+          id: "digest-attempt-1",
+          targetValue: "digest@example.com",
+          templateName: null,
           provider: "cloudflare_email",
           createdAt: "2026-07-15T18:00:00.000Z",
           updatedAt: "2026-07-15T18:00:00.000Z",
@@ -309,9 +336,11 @@ describe("ops route", () => {
 
     expect(serialized).toContain("o•••@e•••.com");
     expect(serialized).toContain("b•••@e•••.com");
+    expect(serialized).toContain("d•••@e•••.com");
     expect(serialized).toContain("••••3210");
     expect(serialized).not.toContain("owner@example.com");
     expect(serialized).not.toContain("billing@example.com");
+    expect(serialized).not.toContain("digest@example.com");
     expect(serialized).not.toContain("+919876543210");
   });
 
@@ -333,6 +362,7 @@ describe("ops route", () => {
         "provider_rejection_log",
       ],
       reconcileBillingEmailAttemptWithAudit,
+      reconcileDigestEmailAttemptWithAudit: vi.fn(),
     }));
     const formData = new FormData();
     formData.set("intent", "reconcile-billing-email");
@@ -360,6 +390,57 @@ describe("ops route", () => {
       expect.objectContaining({
         operatorUserId: "user-1",
         attemptId: "attempt-1",
+        outcome: "sent",
+      }),
+    );
+  });
+
+  it("records digest provider evidence through the explicit no-resend recovery action", async () => {
+    const reconcileDigestEmailAttemptWithAudit = vi.fn().mockResolvedValue({
+      ok: true,
+      replayed: false,
+      attemptId: "digest-attempt-1",
+      outcome: "sent",
+      classification: "cloudflare_email_log",
+      observedAt: "2026-07-15T18:01:00.000Z",
+      reconciledAt: "2026-07-15T18:02:00.000Z",
+    });
+    vi.doMock("~/lib/auth.server", () => ({ requireSession: vi.fn().mockResolvedValue(session) }));
+    vi.doMock("~/lib/data.server", () => ({
+      BILLING_EMAIL_EVIDENCE_CLASSIFICATIONS: [
+        "cloudflare_email_log",
+        "controlled_inbox_receipt",
+        "provider_rejection_log",
+      ],
+      reconcileBillingEmailAttemptWithAudit: vi.fn(),
+      reconcileDigestEmailAttemptWithAudit,
+    }));
+    const formData = new FormData();
+    formData.set("intent", "reconcile-digest-email");
+    formData.set("attemptId", "digest-attempt-1");
+    formData.set("reconciliationKey", "ops-digest-email-reconcile:11111111-1111-4111-8111-111111111111");
+    formData.set("expectedUpdatedAt", "2026-07-15T18:00:30.000Z");
+    formData.set("outcome", "sent");
+    formData.set("classification", "cloudflare_email_log");
+    formData.set("evidenceReference", "digest_provider_log_12345");
+    formData.set("observedAt", "2026-07-15T18:01:00Z");
+
+    const { action } = await import("~/routes/app.ops");
+    const result = await action({
+      context: createContext({ OPS_ALLOWLIST_EMAILS: "owner@example.com" }),
+      request: new Request("http://localhost/app/ops", { method: "POST", body: formData }),
+    } as never);
+
+    expect(result).toMatchObject({
+      ok: true,
+      attemptId: "digest-attempt-1",
+      message: expect.stringContaining("No email was resent"),
+    });
+    expect(reconcileDigestEmailAttemptWithAudit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        operatorUserId: "user-1",
+        attemptId: "digest-attempt-1",
         outcome: "sent",
       }),
     );

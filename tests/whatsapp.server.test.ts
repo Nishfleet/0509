@@ -22,6 +22,33 @@ afterEach(() => {
 });
 
 describe("WhatsApp delivery helpers", () => {
+  it("classifies missing digest configuration as a definite pre-dispatch failure", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    vi.doMock("~/lib/data.server", () => ({
+      createDeliveryAttempt: vi.fn(),
+      listDeliveryTargets: vi.fn(),
+      upsertDeliveryTarget: vi.fn(),
+    }));
+    const { sendDigestWhatsApp } = await import("~/lib/whatsapp.server");
+
+    await expect(
+      sendDigestWhatsApp({} as never, {
+        lane: "customer",
+        target: {} as never,
+        itemCount: 1,
+        periodStart: "2026-07-01T00:00:00.000Z",
+        periodEnd: "2026-07-08T00:00:00.000Z",
+      }),
+    ).resolves.toMatchObject({
+      status: "failed",
+      webhookStatus: "failed",
+      providerStatusLastSeenAt: null,
+      errorMessage: "WhatsApp provider is not configured for this environment.",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("normalizes WhatsApp recipients to international digits", async () => {
     const { normalizeWhatsAppRecipient } = await import("~/lib/whatsapp.server");
 

@@ -39,7 +39,7 @@ sendCloudflareEmail,
 stripHtml,
 } from "~/lib/delivery-email-core.server";
 import { evaluateDeliveryPolicy, resolveDeliveryConfig } from "~/lib/delivery-policy.server";
-import type { AppEnv } from "~/lib/env.server";
+import { isEmailSendingConfigured, type AppEnv } from "~/lib/env.server";
 import {
   isSlackDeliveryCustomerFacing,
   isWhatsAppDeliveryCustomerFacing,
@@ -522,7 +522,8 @@ duplicate: DeliveryAttemptRecord | null;
 const duplicate = await getDeliveryAttemptByIdempotencyKey(env, input.idempotencyKey);
 if (duplicate) {
 const stalePreDispatch = isStalePreDispatchAttempt(duplicate);
-if (duplicate.status !== "failed" && !stalePreDispatch) {
+const definiteFailure = duplicate.status === "failed" && duplicate.webhookStatus === "failed";
+if (!definiteFailure && !stalePreDispatch) {
 return { attemptId: null, claimUpdatedAt: null, duplicate };
 }
 const claimUpdatedAt = new Date().toISOString();
@@ -539,8 +540,8 @@ failedAt: null,
 payloadSnapshot: input.payloadSnapshot,
 updatedAt: claimUpdatedAt,
 expectedStatus: stalePreDispatch ? "pending" : "failed",
-expectedWebhookStatus: stalePreDispatch ? "pending" : undefined,
-expectedUpdatedAt: stalePreDispatch ? duplicate.updatedAt : undefined,
+expectedWebhookStatus: stalePreDispatch ? "pending" : "failed",
+expectedUpdatedAt: duplicate.updatedAt,
 });
 // Some unit-test adapters predate the boolean return. Only an explicit
 // false is a lost durable claim.
@@ -700,6 +701,40 @@ const attemptId = attemptClaim.attemptId;
 const claimUpdatedAt = attemptClaim.claimUpdatedAt;
 if (!attemptId || !claimUpdatedAt) {
 throw new Error("Digest email delivery claim did not return an owned attempt.");
+}
+if (!isEmailSendingConfigured(env)) {
+const failedAt = new Date().toISOString();
+const configurationFailure: DigestAttemptSummary = {
+channel: "email",
+status: "failed",
+targetValue: target.targetValue,
+providerMessageId: null,
+errorMessage: "Email sending is not configured for this environment.",
+deliveredAt: null,
+claimedByThisRun: true,
+};
+const finalized = await updateDeliveryAttemptResult(env, attemptId, {
+provider: EMAIL_PROVIDER,
+status: "failed",
+webhookStatus: "failed",
+providerMessageId: null,
+providerStatusLastSeenAt: null,
+errorMessage: configurationFailure.errorMessage,
+sentAt: null,
+failedAt,
+updatedAt: failedAt,
+expectedStatus: "pending",
+expectedWebhookStatus: "pending",
+expectedUpdatedAt: claimUpdatedAt,
+});
+if (finalized === false) {
+return readFinalizedDigestAttempt(env, {
+channel: "email",
+idempotencyKey,
+fallback: configurationFailure,
+});
+}
+return configurationFailure;
 }
 const dispatchStartedAt = await markProviderDispatch(env, attemptId, EMAIL_PROVIDER, claimUpdatedAt);
 if (!dispatchStartedAt) return readLostDigestDispatchClaim(env, "email", idempotencyKey);

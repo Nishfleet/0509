@@ -217,7 +217,10 @@ export async function sendDigestWhatsApp(
     return {
       provider: "whatsapp_cloud_api",
       status: "failed",
-      webhookStatus: "provider_unknown",
+      // Readiness validation runs before any provider request. This is a
+      // definite local failure, so the digest claim may be retried after the
+      // configuration is repaired without risking a duplicate send.
+      webhookStatus: "failed",
       providerMessageId: null,
       providerStatusLastSeenAt: null,
       templateName,
