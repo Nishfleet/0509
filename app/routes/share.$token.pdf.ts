@@ -4,6 +4,13 @@ import type { LoaderFunctionArgs } from "react-router";
 // snapshot. All validation, gating, caps, and rendering live in
 // `~/lib/report-pdf.server`; this route stays a thin adapter.
 export async function loader({ context, params, request }: LoaderFunctionArgs) {
+	if (request.method.toUpperCase() !== "GET") {
+		return new Response(null, {
+			status: 405,
+			headers: { Allow: "GET" },
+		});
+	}
+
 	const { getEnv } = await import("~/lib/context.server");
 	const { renderShareReportPdfResponse } = await import("~/lib/report-pdf.server");
 	const env = getEnv(context);
