@@ -195,7 +195,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
   try {
     supportCase = await getOperatorSupportCase(env, caseId);
     if (supportCase) {
-      existing = await getDeliveryAttemptByIdempotencyKey(env, `support-case:${supportCase.id}`);
+      existing = await getDeliveryAttemptByIdempotencyKey(
+        env,
+        supportCase.alertIdempotencyKey ?? `support-case:${supportCase.id}`,
+      );
     }
   } catch {
     return supportAlertRecoveryUnavailable(intent);
@@ -204,7 +207,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
     return { ok: false, intent, message: "That open support case could not be found." };
   }
 
-  const idempotencyKey = `support-case:${supportCase.id}`;
+  const idempotencyKey =
+    supportCase.alertIdempotencyKey ?? `support-case:${supportCase.id}`;
   if (existing?.status === "sent") {
     return { ok: true, intent, message: "The operator alert was already sent." };
   }

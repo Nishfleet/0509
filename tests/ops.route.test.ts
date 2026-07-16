@@ -521,6 +521,52 @@ describe("ops route", () => {
     }));
   });
 
+  it("retries the latest rejected reopened support alert instead of the original sent alert", async () => {
+    const getOperatorSupportCase = vi.fn().mockResolvedValue({
+      id: "case-1",
+      userEmail: "requester@example.com",
+      category: "security",
+      priority: "urgent",
+      subject: "Delete my Five to Nine account",
+      detail: "Private case detail.",
+      alertIdempotencyKey: "support-case-reopen:case-1:2026-07-16T10:00:00.000Z",
+    });
+    const getDeliveryAttemptByIdempotencyKey = vi.fn().mockImplementation(
+      async (_env, idempotencyKey: string) => {
+        if (idempotencyKey === "support-case-reopen:case-1:2026-07-16T10:00:00.000Z") {
+          return { status: "failed", webhookStatus: "failed" };
+        }
+        return { status: "sent", webhookStatus: "delivered" };
+      },
+    );
+    const sendOperatorAlertEmail = vi.fn().mockResolvedValue(true);
+    vi.doMock("~/lib/auth.server", () => ({ requireSession: vi.fn().mockResolvedValue(session) }));
+    vi.doMock("~/lib/data.server", () => ({
+      getOperatorSupportCase,
+      getDeliveryAttemptByIdempotencyKey,
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({ sendOperatorAlertEmail }));
+
+    const { action } = await import("~/routes/app.ops");
+    const form = new FormData();
+    form.set("intent", "retry-support-alert");
+    form.set("caseId", "case-1");
+    const result = await action({
+      context: createContext({ OPS_ALLOWLIST_EMAILS: "owner@example.com" }),
+      request: new Request("http://localhost/app/ops", { method: "POST", body: form }),
+    } as never);
+
+    expect(result).toMatchObject({ ok: true, intent: "retry-support-alert" });
+    expect(getDeliveryAttemptByIdempotencyKey).toHaveBeenCalledWith(
+      expect.anything(),
+      "support-case-reopen:case-1:2026-07-16T10:00:00.000Z",
+    );
+    expect(sendOperatorAlertEmail).toHaveBeenCalledTimes(1);
+    expect(sendOperatorAlertEmail).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      idempotencyKey: "support-case-reopen:case-1:2026-07-16T10:00:00.000Z",
+    }));
+  });
+
   it("returns a safe recovery message when support lookup fails", async () => {
     const getOperatorSupportCase = vi.fn().mockRejectedValue(new Error("raw database failure for requester@example.com"));
     vi.doMock("~/lib/auth.server", () => ({ requireSession: vi.fn().mockResolvedValue(session) }));
