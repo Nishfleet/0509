@@ -25,10 +25,9 @@ export async function listRetryableInstantAttempts(
     limit: number;
   },
 ) {
-  // Email retries are fail-closed around the provider boundary: only quiet
-  // hours, definite failed/failed outcomes, and expired pending/pending
+  // Instant retries are fail-closed around every provider boundary: only
+  // quiet hours, definite failed/failed outcomes, and expired pending/pending
   // pre-dispatch leases are eligible. provider_unknown is never auto-sent.
-  // Other channels retain their established failed-attempt behavior.
   const rows = await many<DeliveryAttemptRow>(
     env,
     `
@@ -67,12 +66,36 @@ export async function listRetryableInstantAttempts(
               )
             )
           )
-          OR (channel != 'email' AND status = 'failed')
+          OR (
+            channel IN ('whatsapp', 'slack')
+            AND (
+              (
+                status = 'failed'
+                AND webhook_status = 'failed'
+                AND (
+                  json_extract(payload_snapshot_json, '$.deliveryClaimProtocol') = 'instant_preclaim_v1'
+                  OR (
+                    json_extract(payload_snapshot_json, '$.instantAlertProviderEvidence.outcome') = 'failed'
+                    AND NULLIF(TRIM(json_extract(payload_snapshot_json, '$.instantAlertProviderEvidence.reference')), '') IS NOT NULL
+                    AND NULLIF(TRIM(json_extract(payload_snapshot_json, '$.instantAlertProviderEvidence.classification')), '') IS NOT NULL
+                    AND NULLIF(TRIM(json_extract(payload_snapshot_json, '$.instantAlertProviderEvidence.observedAt')), '') IS NOT NULL
+                  )
+                )
+              )
+              OR (
+                status = 'pending'
+                AND webhook_status = 'pending'
+                AND updated_at <= ?
+                AND json_extract(payload_snapshot_json, '$.deliveryClaimProtocol') = 'instant_preclaim_v1'
+              )
+            )
+          )
         )
       ORDER BY created_at ASC
       LIMIT ?
     `,
     input.since,
+    input.stalePreDispatchBefore,
     input.stalePreDispatchBefore,
     input.limit,
   );
@@ -224,13 +247,49 @@ export async function listOutstandingInstantProviderUnknownAttempts(
 			SELECT *
 			FROM delivery_attempt
 			WHERE lane = 'customer'
-				AND channel = 'email'
+				AND channel IN ('email', 'whatsapp', 'slack')
 				AND watchlist_id IS NOT NULL
 				AND digest_run_id IS NULL
 				AND delivery_target_id IS NOT NULL
-				AND webhook_status = 'provider_unknown'
-				AND status IN ('pending', 'failed')
-				AND idempotency_key LIKE 'instant:%:customer:email:%'
+				AND (
+					(
+						webhook_status = 'provider_unknown'
+						AND (
+							status = 'failed'
+							OR (
+								status = 'pending'
+								AND (
+									channel = 'email'
+									OR julianday(updated_at) <= julianday('now', '-60 seconds')
+								)
+							)
+						)
+					)
+					OR (
+						channel IN ('whatsapp', 'slack')
+						AND status = 'failed'
+						AND webhook_status = 'failed'
+						AND COALESCE(
+							json_extract(payload_snapshot_json, '$.deliveryClaimProtocol'),
+							''
+						) != 'instant_preclaim_v1'
+						AND COALESCE(
+							json_extract(payload_snapshot_json, '$.instantAlertProviderEvidence.outcome'),
+							''
+						) != 'failed'
+					)
+				)
+				AND (
+					(channel = 'email'
+						AND provider = 'cloudflare_email'
+						AND idempotency_key LIKE 'instant:%:customer:email:%')
+					OR (channel = 'whatsapp'
+						AND provider = 'whatsapp_cloud_api'
+						AND idempotency_key LIKE 'instant:%:customer:whatsapp:%')
+					OR (channel = 'slack'
+						AND provider = 'slack_incoming_webhook'
+						AND idempotency_key LIKE 'instant:%:customer:slack:%')
+				)
 			ORDER BY created_at ASC
 			LIMIT ?
 		`,

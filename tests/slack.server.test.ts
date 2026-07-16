@@ -199,6 +199,47 @@ describe("Slack delivery helpers", () => {
 });
 
 describe("sendSlackWebhookMessage", () => {
+  it("keeps a Slack transport exception provider-unknown", async () => {
+    const { encryptCredential } = await import("~/lib/credential-crypto.server");
+    const { sendSlackWebhookMessage } = await import("~/lib/slack-webhook.server");
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("accepted then connection reset")));
+
+    const result = await sendSlackWebhookMessage(
+      env as never,
+      {
+        id: "slack-target-1",
+        userId: "user-1",
+        watchlistId: null,
+        channel: "slack",
+        targetValue: "slack:abc",
+        validationStatus: "validated",
+        isValidated: true,
+        isOptedIn: true,
+        optInSource: "manual_slack_webhook",
+        optedInAt: "2026-06-06T00:00:00.000Z",
+        isPaused: false,
+        pausedAt: null,
+        optedOutAt: null,
+        templateEligible: true,
+        lastSuccessfulDeliveryAt: null,
+        lastSuccessfulAttemptId: null,
+        providerIdentifier: "abc",
+        metadata: {
+          encryptedWebhookUrl: await encryptCredential(env as never, fakeSlackWebhookUrl()),
+        },
+        createdAt: "2026-06-06T00:00:00.000Z",
+        updatedAt: "2026-06-06T00:00:00.000Z",
+      },
+      { text: "Five to Nine instant alert" },
+    );
+
+    expect(result).toMatchObject({
+      status: "failed",
+      webhookStatus: "provider_unknown",
+      errorMessage: "Slack send outcome is unknown after a transport error.",
+    });
+  });
+
   it("posts JSON to the decrypted webhook URL and marks the send delivered", async () => {
     const { encryptCredential } = await import("~/lib/credential-crypto.server");
     const { sendSlackWebhookMessage } = await import("~/lib/slack-webhook.server");

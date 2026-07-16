@@ -251,7 +251,10 @@ export async function sendInstantWhatsApp(
     return {
       provider: "whatsapp_cloud_api",
       status: "failed",
-      webhookStatus: "provider_unknown",
+      // Validation completed before any request to Meta. This is therefore a
+      // definite local failure and can be retried once the target/config is
+      // repaired without risking a duplicate message.
+      webhookStatus: "failed",
       providerMessageId: null,
       providerStatusLastSeenAt: null,
       templateName,
@@ -517,7 +520,9 @@ async function sendWhatsAppTemplate(
     return {
       provider: "whatsapp_cloud_api",
       status: "failed",
-      webhookStatus: "failed",
+      // Fetch errors can occur after Meta accepted the request. Without a
+      // response or message id, fail closed until operator reconciliation.
+      webhookStatus: "provider_unknown",
       providerMessageId: null,
       providerStatusLastSeenAt: new Date().toISOString(),
       templateName: input.templateName,
@@ -551,11 +556,24 @@ async function sendWhatsAppTemplate(
     };
   }
 
+  const providerMessageId = payload?.messages?.[0]?.id ?? null;
+  if (!providerMessageId) {
+    return {
+      provider: "whatsapp_cloud_api",
+      status: "failed",
+      webhookStatus: "provider_unknown",
+      providerMessageId: null,
+      providerStatusLastSeenAt: new Date().toISOString(),
+      templateName: input.templateName,
+      errorMessage: "WhatsApp returned success without a message id; acceptance is unverified.",
+    };
+  }
+
   return {
     provider: "whatsapp_cloud_api",
     status: "sent",
     webhookStatus: "pending",
-    providerMessageId: payload?.messages?.[0]?.id ?? null,
+    providerMessageId,
     providerStatusLastSeenAt: new Date().toISOString(),
     templateName: input.templateName,
     errorMessage: null,

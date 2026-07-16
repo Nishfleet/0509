@@ -11,24 +11,44 @@ export const BILLING_EMAIL_EVIDENCE_CLASSIFICATIONS = [
 export type BillingEmailEvidenceClassification =
   (typeof BILLING_EMAIL_EVIDENCE_CLASSIFICATIONS)[number];
 
+export const INSTANT_WHATSAPP_EVIDENCE_CLASSIFICATIONS = [
+  "meta_whatsapp_message_log",
+  "controlled_recipient_receipt",
+  "provider_rejection_log",
+] as const;
+
+export const INSTANT_SLACK_EVIDENCE_CLASSIFICATIONS = [
+  "slack_webhook_response",
+  "controlled_channel_observation",
+  "provider_rejection_log",
+] as const;
+
+export type InstantDeliveryChannel = "email" | "whatsapp" | "slack";
+export type InstantDeliveryEvidenceClassification =
+  | BillingEmailEvidenceClassification
+  | (typeof INSTANT_WHATSAPP_EVIDENCE_CLASSIFICATIONS)[number]
+  | (typeof INSTANT_SLACK_EVIDENCE_CLASSIFICATIONS)[number];
+
 type ReconciliationOutcome = "sent" | "failed";
 
-type EmailReconciliationInput = {
+type DeliveryReconciliationInput = {
   operatorUserId: string;
   attemptId: string;
   idempotencyKey: string;
   expectedUpdatedAt: string;
   outcome: ReconciliationOutcome;
-  classification: BillingEmailEvidenceClassification;
+  classification: InstantDeliveryEvidenceClassification;
   evidenceReference: string;
   observedAt: string;
 };
 
-type EmailReconciliationScope = {
+type DeliveryReconciliationScope = {
   actionName:
     | "ops.billing_email.reconcile"
     | "ops.digest_email.reconcile"
-    | "ops.instant_email.reconcile";
+    | "ops.instant_email.reconcile"
+    | "ops.instant_whatsapp.reconcile"
+    | "ops.instant_slack.reconcile";
   evidencePath:
     | "$.billingLifecycleProviderEvidence"
     | "$.digestProviderEvidence"
@@ -36,18 +56,34 @@ type EmailReconciliationScope = {
   idempotencyPrefix:
     | "ops-billing-email-reconcile"
     | "ops-digest-email-reconcile"
-    | "ops-instant-email-reconcile";
-  label: "Billing email" | "Digest email" | "Instant alert email";
+    | "ops-instant-email-reconcile"
+    | "ops-instant-whatsapp-reconcile"
+    | "ops-instant-slack-reconcile";
+  label:
+    | "Billing email"
+    | "Digest email"
+    | "Instant alert email"
+    | "Instant alert WhatsApp"
+    | "Instant alert Slack";
+  classifications: readonly InstantDeliveryEvidenceClassification[];
+  sentClassifications: readonly InstantDeliveryEvidenceClassification[];
+  failedClassifications: readonly InstantDeliveryEvidenceClassification[];
   attemptPredicate: string;
+  allowsUnclassifiedFailure: boolean;
+  requiresSettledProviderWindow: boolean;
   updatesDigestDelivery: boolean;
 };
 
-const BILLING_RECONCILIATION_SCOPE: EmailReconciliationScope = {
+const BILLING_RECONCILIATION_SCOPE: DeliveryReconciliationScope = {
   actionName: "ops.billing_email.reconcile",
   evidencePath: "$.billingLifecycleProviderEvidence",
   idempotencyPrefix: "ops-billing-email-reconcile",
   label: "Billing email",
+  classifications: BILLING_EMAIL_EVIDENCE_CLASSIFICATIONS,
+  sentClassifications: ["cloudflare_email_log", "controlled_inbox_receipt"],
+  failedClassifications: ["cloudflare_email_log", "provider_rejection_log"],
   attemptPredicate: `
+    AND delivery_attempt.channel = 'email'
     AND delivery_attempt.digest_run_id IS NULL
     AND (
       delivery_attempt.idempotency_key LIKE 'billing-payment-issue:%'
@@ -55,33 +91,89 @@ const BILLING_RECONCILIATION_SCOPE: EmailReconciliationScope = {
       OR delivery_attempt.idempotency_key LIKE 'billing-refund:%'
     )
   `,
+  allowsUnclassifiedFailure: false,
+  requiresSettledProviderWindow: false,
   updatesDigestDelivery: false,
 };
 
-const DIGEST_RECONCILIATION_SCOPE: EmailReconciliationScope = {
+const DIGEST_RECONCILIATION_SCOPE: DeliveryReconciliationScope = {
   actionName: "ops.digest_email.reconcile",
   evidencePath: "$.digestProviderEvidence",
   idempotencyPrefix: "ops-digest-email-reconcile",
   label: "Digest email",
+  classifications: BILLING_EMAIL_EVIDENCE_CLASSIFICATIONS,
+  sentClassifications: ["cloudflare_email_log", "controlled_inbox_receipt"],
+  failedClassifications: ["cloudflare_email_log", "provider_rejection_log"],
   attemptPredicate: `
+    AND delivery_attempt.channel = 'email'
     AND delivery_attempt.digest_run_id IS NOT NULL
     AND delivery_attempt.delivery_target_id IS NOT NULL
     AND delivery_attempt.idempotency_key LIKE 'digest:%:customer:email:%'
   `,
+  allowsUnclassifiedFailure: false,
+  requiresSettledProviderWindow: false,
   updatesDigestDelivery: true,
 };
 
-const INSTANT_RECONCILIATION_SCOPE: EmailReconciliationScope = {
+const INSTANT_RECONCILIATION_SCOPE: DeliveryReconciliationScope = {
   actionName: "ops.instant_email.reconcile",
   evidencePath: "$.instantAlertProviderEvidence",
   idempotencyPrefix: "ops-instant-email-reconcile",
   label: "Instant alert email",
+  classifications: BILLING_EMAIL_EVIDENCE_CLASSIFICATIONS,
+  sentClassifications: ["cloudflare_email_log", "controlled_inbox_receipt"],
+  failedClassifications: ["cloudflare_email_log", "provider_rejection_log"],
   attemptPredicate: `
+    AND delivery_attempt.channel = 'email'
     AND delivery_attempt.watchlist_id IS NOT NULL
     AND delivery_attempt.digest_run_id IS NULL
     AND delivery_attempt.delivery_target_id IS NOT NULL
     AND delivery_attempt.idempotency_key LIKE 'instant:%:customer:email:%'
   `,
+  allowsUnclassifiedFailure: false,
+  requiresSettledProviderWindow: false,
+  updatesDigestDelivery: false,
+};
+
+const INSTANT_WHATSAPP_RECONCILIATION_SCOPE: DeliveryReconciliationScope = {
+  actionName: "ops.instant_whatsapp.reconcile",
+  evidencePath: "$.instantAlertProviderEvidence",
+  idempotencyPrefix: "ops-instant-whatsapp-reconcile",
+  label: "Instant alert WhatsApp",
+  classifications: INSTANT_WHATSAPP_EVIDENCE_CLASSIFICATIONS,
+  sentClassifications: ["meta_whatsapp_message_log", "controlled_recipient_receipt"],
+  failedClassifications: ["meta_whatsapp_message_log", "provider_rejection_log"],
+  attemptPredicate: `
+    AND delivery_attempt.channel = 'whatsapp'
+    AND delivery_attempt.provider = 'whatsapp_cloud_api'
+    AND delivery_attempt.watchlist_id IS NOT NULL
+    AND delivery_attempt.digest_run_id IS NULL
+    AND delivery_attempt.delivery_target_id IS NOT NULL
+    AND delivery_attempt.idempotency_key LIKE 'instant:%:customer:whatsapp:%'
+  `,
+  allowsUnclassifiedFailure: true,
+  requiresSettledProviderWindow: true,
+  updatesDigestDelivery: false,
+};
+
+const INSTANT_SLACK_RECONCILIATION_SCOPE: DeliveryReconciliationScope = {
+  actionName: "ops.instant_slack.reconcile",
+  evidencePath: "$.instantAlertProviderEvidence",
+  idempotencyPrefix: "ops-instant-slack-reconcile",
+  label: "Instant alert Slack",
+  classifications: INSTANT_SLACK_EVIDENCE_CLASSIFICATIONS,
+  sentClassifications: ["slack_webhook_response", "controlled_channel_observation"],
+  failedClassifications: ["slack_webhook_response", "provider_rejection_log"],
+  attemptPredicate: `
+    AND delivery_attempt.channel = 'slack'
+    AND delivery_attempt.provider = 'slack_incoming_webhook'
+    AND delivery_attempt.watchlist_id IS NOT NULL
+    AND delivery_attempt.digest_run_id IS NULL
+    AND delivery_attempt.delivery_target_id IS NOT NULL
+    AND delivery_attempt.idempotency_key LIKE 'instant:%:customer:slack:%'
+  `,
+  allowsUnclassifiedFailure: true,
+  requiresSettledProviderWindow: true,
   updatesDigestDelivery: false,
 };
 
@@ -107,31 +199,48 @@ export function createInstantEmailReconciliationKey() {
   return `ops-instant-email-reconcile:${crypto.randomUUID()}`;
 }
 
+export function createInstantChannelReconciliationKey(channel: InstantDeliveryChannel) {
+  if (channel === "email") return createInstantEmailReconciliationKey();
+  return `ops-instant-${channel}-reconcile:${crypto.randomUUID()}`;
+}
+
 export async function reconcileBillingEmailAttemptWithAudit(
   env: AppEnv,
-  input: EmailReconciliationInput,
+  input: DeliveryReconciliationInput,
 ) {
-  return reconcileEmailAttemptWithAudit(env, input, BILLING_RECONCILIATION_SCOPE);
+  return reconcileDeliveryAttemptWithAudit(env, input, BILLING_RECONCILIATION_SCOPE);
 }
 
 export async function reconcileDigestEmailAttemptWithAudit(
   env: AppEnv,
-  input: EmailReconciliationInput,
+  input: DeliveryReconciliationInput,
 ) {
-  return reconcileEmailAttemptWithAudit(env, input, DIGEST_RECONCILIATION_SCOPE);
+  return reconcileDeliveryAttemptWithAudit(env, input, DIGEST_RECONCILIATION_SCOPE);
 }
 
 export async function reconcileInstantEmailAttemptWithAudit(
   env: AppEnv,
-  input: EmailReconciliationInput,
+  input: DeliveryReconciliationInput,
 ) {
-  return reconcileEmailAttemptWithAudit(env, input, INSTANT_RECONCILIATION_SCOPE);
+  return reconcileDeliveryAttemptWithAudit(env, input, INSTANT_RECONCILIATION_SCOPE);
 }
 
-async function reconcileEmailAttemptWithAudit(
+export async function reconcileInstantChannelAttemptWithAudit(
   env: AppEnv,
-  input: EmailReconciliationInput,
-  scope: EmailReconciliationScope,
+  input: DeliveryReconciliationInput & { channel: InstantDeliveryChannel },
+) {
+  const scope = input.channel === "email"
+    ? INSTANT_RECONCILIATION_SCOPE
+    : input.channel === "whatsapp"
+      ? INSTANT_WHATSAPP_RECONCILIATION_SCOPE
+      : INSTANT_SLACK_RECONCILIATION_SCOPE;
+  return reconcileDeliveryAttemptWithAudit(env, input, scope);
+}
+
+async function reconcileDeliveryAttemptWithAudit(
+  env: AppEnv,
+  input: DeliveryReconciliationInput,
+  scope: DeliveryReconciliationScope,
 ) {
   const normalized = normalizeInput(input, scope);
   if (!normalized) {
@@ -169,7 +278,7 @@ async function reconcileEmailAttemptWithAudit(
   const webhookStatus = normalized.outcome === "sent" ? "delivered" : "failed";
   const errorMessage =
     normalized.outcome === "failed"
-      ? "Provider reconciliation confirmed this email was not accepted."
+      ? "Provider reconciliation confirmed this delivery was not accepted."
       : null;
 
   const insertAudit = db
@@ -186,15 +295,7 @@ async function reconcileEmailAttemptWithAudit(
         WHERE delivery_attempt.id = ?
           AND delivery_attempt.updated_at = ?
           AND delivery_attempt.lane = 'customer'
-          AND delivery_attempt.channel = 'email'
-          AND (
-            delivery_attempt.status = 'pending'
-            OR (
-              delivery_attempt.status = 'failed'
-              AND delivery_attempt.provider_status_last_seen_at IS NOT NULL
-            )
-          )
-          AND delivery_attempt.webhook_status = 'provider_unknown'
+          ${reconciliationStatePredicate(scope, "delivery_attempt.")}
           ${scope.attemptPredicate}
       `,
     )
@@ -232,15 +333,7 @@ async function reconcileEmailAttemptWithAudit(
         WHERE id = ?
           AND updated_at = ?
           AND lane = 'customer'
-          AND channel = 'email'
-          AND (
-            status = 'pending'
-            OR (
-              status = 'failed'
-              AND provider_status_last_seen_at IS NOT NULL
-            )
-          )
-          AND webhook_status = 'provider_unknown'
+          ${reconciliationStatePredicate(scope, "")}
           ${scope.attemptPredicate}
           AND EXISTS (
             SELECT 1
@@ -391,19 +484,22 @@ async function reconcileEmailAttemptWithAudit(
     : { ok: false as const, reason: "not_found" as const };
 }
 
-function normalizeInput(input: EmailReconciliationInput, scope: EmailReconciliationScope) {
+function normalizeInput(
+  input: DeliveryReconciliationInput,
+  scope: DeliveryReconciliationScope,
+) {
   const operatorUserId = input.operatorUserId.trim();
   const attemptId = input.attemptId.trim();
   const expectedUpdatedAt = normalizeTimestamp(input.expectedUpdatedAt);
   const observedAt = normalizeTimestamp(input.observedAt);
   const evidenceReference = input.evidenceReference.trim();
-  const classification = BILLING_EMAIL_EVIDENCE_CLASSIFICATIONS.includes(input.classification)
+  const classification = scope.classifications.includes(input.classification)
     ? input.classification
     : null;
   const allowedForOutcome =
     input.outcome === "sent"
-      ? classification === "cloudflare_email_log" || classification === "controlled_inbox_receipt"
-      : classification === "cloudflare_email_log" || classification === "provider_rejection_log";
+      ? Boolean(classification && scope.sentClassifications.includes(classification))
+      : Boolean(classification && scope.failedClassifications.includes(classification));
   const observedTime = observedAt ? Date.parse(observedAt) : Number.NaN;
   if (
     !operatorUserId ||
@@ -427,6 +523,51 @@ function normalizeInput(input: EmailReconciliationInput, scope: EmailReconciliat
     evidenceReference,
     observedAt,
   };
+}
+
+function reconciliationStatePredicate(
+  scope: DeliveryReconciliationScope,
+  qualifier: "" | "delivery_attempt.",
+) {
+  const providerUnknown = `
+    (
+      ${qualifier}webhook_status = 'provider_unknown'
+      AND (
+        (
+          ${qualifier}status = 'pending'
+          ${scope.requiresSettledProviderWindow
+            ? `AND julianday(${qualifier}updated_at) <= julianday('now', '-60 seconds')`
+            : ""}
+        )
+        OR (
+          ${qualifier}status = 'failed'
+          ${scope.allowsUnclassifiedFailure
+            ? ""
+            : `AND ${qualifier}provider_status_last_seen_at IS NOT NULL`}
+        )
+      )
+    )
+  `;
+  if (!scope.allowsUnclassifiedFailure) {
+    return `AND ${providerUnknown}`;
+  }
+  return `
+    AND (
+      ${providerUnknown}
+      OR (
+        ${qualifier}status = 'failed'
+        AND ${qualifier}webhook_status = 'failed'
+        AND COALESCE(
+          json_extract(${qualifier}payload_snapshot_json, '$.deliveryClaimProtocol'),
+          ''
+        ) != 'instant_preclaim_v1'
+        AND COALESCE(
+          json_extract(${qualifier}payload_snapshot_json, '$.instantAlertProviderEvidence.outcome'),
+          ''
+        ) != 'failed'
+      )
+    )
+  `;
 }
 
 function normalizeTimestamp(value: string) {

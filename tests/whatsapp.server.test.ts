@@ -22,6 +22,101 @@ afterEach(() => {
 });
 
 describe("WhatsApp delivery helpers", () => {
+  it("classifies missing instant configuration as a definite pre-provider failure", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    vi.doMock("~/lib/data.server", () => ({
+      createDeliveryAttempt: vi.fn(),
+      listDeliveryTargets: vi.fn(),
+      upsertDeliveryTarget: vi.fn(),
+    }));
+    const { sendInstantWhatsApp } = await import("~/lib/whatsapp.server");
+
+    await expect(
+      sendInstantWhatsApp({} as never, {
+        lane: "customer",
+        target: {} as never,
+        competitor: "Nykaa",
+        shortChange: "Landing page changed.",
+        watchlistUrl: "https://0509.io/app/watchlists?watchlist=watch-1",
+        provisional: false,
+      }),
+    ).resolves.toMatchObject({
+      status: "failed",
+      webhookStatus: "failed",
+      providerStatusLastSeenAt: null,
+      errorMessage: "WhatsApp provider is not configured for this environment.",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps an instant WhatsApp transport exception provider-unknown", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("accepted then connection reset")));
+    vi.doMock("~/lib/data.server", () => ({
+      createDeliveryAttempt: vi.fn(),
+      listDeliveryTargets: vi.fn(),
+      upsertDeliveryTarget: vi.fn(),
+    }));
+    const { sendInstantWhatsApp } = await import("~/lib/whatsapp.server");
+
+    await expect(
+      sendInstantWhatsApp(readyEnv as never, {
+        lane: "customer",
+        target: {
+          isOptedIn: true,
+          isPaused: false,
+          optedOutAt: null,
+          isValidated: true,
+          validationStatus: "validated",
+          templateEligible: true,
+          targetValue: "919876543210",
+        } as never,
+        competitor: "Nykaa",
+        shortChange: "Landing page changed.",
+        watchlistUrl: "https://0509.io/app/watchlists?watchlist=watch-1",
+        provisional: false,
+      }),
+    ).resolves.toMatchObject({
+      status: "failed",
+      webhookStatus: "provider_unknown",
+      providerMessageId: null,
+    });
+  });
+
+  it("does not claim Meta accepted an instant message without a message id", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ messages: [] })));
+    vi.doMock("~/lib/data.server", () => ({
+      createDeliveryAttempt: vi.fn(),
+      listDeliveryTargets: vi.fn(),
+      upsertDeliveryTarget: vi.fn(),
+    }));
+    const { sendInstantWhatsApp } = await import("~/lib/whatsapp.server");
+
+    await expect(
+      sendInstantWhatsApp(readyEnv as never, {
+        lane: "customer",
+        target: {
+          isOptedIn: true,
+          isPaused: false,
+          optedOutAt: null,
+          isValidated: true,
+          validationStatus: "validated",
+          templateEligible: true,
+          targetValue: "919876543210",
+        } as never,
+        competitor: "Nykaa",
+        shortChange: "Landing page changed.",
+        watchlistUrl: "https://0509.io/app/watchlists?watchlist=watch-1",
+        provisional: false,
+      }),
+    ).resolves.toMatchObject({
+      status: "failed",
+      webhookStatus: "provider_unknown",
+      providerMessageId: null,
+      errorMessage: "WhatsApp returned success without a message id; acceptance is unverified.",
+    });
+  });
+
   it("classifies missing digest configuration as a definite pre-dispatch failure", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

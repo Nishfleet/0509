@@ -67,14 +67,31 @@ export async function sendSlackWebhookUrl(
       { fetcher: options.fetchImpl, timeoutMs: SLACK_WEBHOOK_TIMEOUT_MS },
     );
   } catch (error) {
-    return slackFailure(
+    return slackAmbiguousFailure(
       statusSeenAt,
-      `Slack send failed: ${error instanceof Error ? error.message : "network error"}.`,
+      "Slack send outcome is unknown after a transport error.",
     );
   }
 
-  const responseText = await readResponseTextWithinLimit(response, SLACK_WEBHOOK_RESPONSE_MAX_BYTES)
-    .catch(() => null) ?? "";
+  let responseText: string | null;
+  try {
+    responseText = await readResponseTextWithinLimit(response, SLACK_WEBHOOK_RESPONSE_MAX_BYTES);
+  } catch {
+    return response.ok
+      ? slackAmbiguousFailure(
+          statusSeenAt,
+          "Slack send outcome is unknown because its success response could not be read.",
+        )
+      : slackFailure(statusSeenAt, `Slack send failed with HTTP ${response.status}.`);
+  }
+  if (responseText === null) {
+    return response.ok
+      ? slackAmbiguousFailure(
+          statusSeenAt,
+          "Slack send outcome is unknown because its success response was invalid.",
+        )
+      : slackFailure(statusSeenAt, `Slack send failed: Slack returned HTTP ${response.status}.`);
+  }
   if (!response.ok || responseText.trim().toLowerCase() !== "ok") {
     const error = (responseText.trim() || `Slack returned HTTP ${response.status}`).replace(/\.+$/, "");
     return slackFailure(statusSeenAt, `Slack send failed: ${error}.`);
@@ -96,6 +113,21 @@ function slackFailure(statusSeenAt: string, errorMessage: string): SlackWebhookS
     provider: SLACK_PROVIDER,
     status: "failed",
     webhookStatus: "failed",
+    providerMessageId: null,
+    providerStatusLastSeenAt: statusSeenAt,
+    errorMessage,
+    deliveredAt: null,
+  };
+}
+
+function slackAmbiguousFailure(
+  statusSeenAt: string,
+  errorMessage: string,
+): SlackWebhookSendResult {
+  return {
+    provider: SLACK_PROVIDER,
+    status: "failed",
+    webhookStatus: "provider_unknown",
     providerMessageId: null,
     providerStatusLastSeenAt: statusSeenAt,
     errorMessage,

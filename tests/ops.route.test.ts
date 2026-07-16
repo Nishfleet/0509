@@ -92,6 +92,7 @@ describe("ops route", () => {
     vi.doMock("~/lib/data.server", () => ({
       createBillingEmailReconciliationKey: vi.fn(() => "ops-billing-email-reconcile:11111111-1111-4111-8111-111111111111"),
       createDigestEmailReconciliationKey: vi.fn(() => "ops-digest-email-reconcile:11111111-1111-4111-8111-111111111111"),
+      createInstantChannelReconciliationKey: vi.fn((channel: string) => `ops-instant-${channel}-reconcile:11111111-1111-4111-8111-111111111111`),
       createInstantEmailReconciliationKey: vi.fn(() => "ops-instant-email-reconcile:11111111-1111-4111-8111-111111111111"),
       getOperatorSnapshot,
       listOutstandingBillingLifecycleProviderUnknownAttempts: vi.fn().mockResolvedValue([]),
@@ -264,11 +265,30 @@ describe("ops route", () => {
       outstandingInstantAttempts: [
         {
           attemptId: "instant-attempt-1",
+          channel: "email",
           recipient: "i•••@e•••.com",
           provider: "cloudflare_email",
           createdAt: "2026-07-02T00:00:00.000Z",
           updatedAt: "2026-07-02T00:01:00.000Z",
           reconciliationKey: "ops-instant-email-reconcile:11111111-1111-4111-8111-111111111111",
+        },
+        {
+          attemptId: "instant-whatsapp-attempt-1",
+          channel: "whatsapp",
+          recipient: "••••3210",
+          provider: "whatsapp_cloud_api",
+          createdAt: "2026-07-02T00:00:00.000Z",
+          updatedAt: "2026-07-02T00:01:00.000Z",
+          reconciliationKey: "ops-instant-whatsapp-reconcile:22222222-2222-4222-8222-222222222222",
+        },
+        {
+          attemptId: "instant-slack-attempt-1",
+          channel: "slack",
+          recipient: "••••",
+          provider: "slack_incoming_webhook",
+          createdAt: "2026-07-02T00:00:00.000Z",
+          updatedAt: "2026-07-02T00:01:00.000Z",
+          reconciliationKey: "ops-instant-slack-reconcile:33333333-3333-4333-8333-333333333333",
         },
       ],
     }));
@@ -283,8 +303,14 @@ describe("ops route", () => {
     expect(markup).toContain("Digest email provider reconciliation");
     expect(markup).toContain("Recording evidence never resends it");
     expect(markup).toContain('value="reconcile-digest-email"');
-    expect(markup).toContain("Instant-alert email provider reconciliation");
+    expect(markup).toContain("Instant-alert provider reconciliation");
     expect(markup).toContain('value="reconcile-instant-email"');
+    expect(markup).toContain("WhatsApp to ••••3210");
+    expect(markup).toContain('value="reconcile-instant-whatsapp"');
+    expect(markup).toContain("Slack destination ••••");
+    expect(markup).toContain('value="reconcile-instant-slack"');
+    expect(markup).toContain('value="meta_whatsapp_message_log"');
+    expect(markup).toContain('value="controlled_channel_observation"');
     expect(markup).not.toContain("ops@example.com");
     expect(markup).not.toContain("provider timeout");
     expect(markup).not.toContain("No recent delivery failures.");
@@ -319,6 +345,7 @@ describe("ops route", () => {
     vi.doMock("~/lib/data.server", () => ({
       createBillingEmailReconciliationKey: vi.fn(() => "ops-billing-email-reconcile:11111111-1111-4111-8111-111111111111"),
       createDigestEmailReconciliationKey: vi.fn(() => "ops-digest-email-reconcile:11111111-1111-4111-8111-111111111111"),
+      createInstantChannelReconciliationKey: vi.fn((channel: string) => `ops-instant-${channel}-reconcile:11111111-1111-4111-8111-111111111111`),
       createInstantEmailReconciliationKey: vi.fn(() => "ops-instant-email-reconcile:11111111-1111-4111-8111-111111111111"),
       getOperatorSnapshot,
       listOutstandingBillingLifecycleProviderUnknownAttempts: vi.fn().mockResolvedValue([
@@ -388,8 +415,11 @@ describe("ops route", () => {
         "controlled_inbox_receipt",
         "provider_rejection_log",
       ],
+      INSTANT_SLACK_EVIDENCE_CLASSIFICATIONS: ["slack_webhook_response", "controlled_channel_observation", "provider_rejection_log"],
+      INSTANT_WHATSAPP_EVIDENCE_CLASSIFICATIONS: ["meta_whatsapp_message_log", "controlled_recipient_receipt", "provider_rejection_log"],
       reconcileBillingEmailAttemptWithAudit,
       reconcileDigestEmailAttemptWithAudit: vi.fn(),
+      reconcileInstantChannelAttemptWithAudit: vi.fn(),
       reconcileInstantEmailAttemptWithAudit: vi.fn(),
     }));
     const formData = new FormData();
@@ -440,8 +470,11 @@ describe("ops route", () => {
         "controlled_inbox_receipt",
         "provider_rejection_log",
       ],
+      INSTANT_SLACK_EVIDENCE_CLASSIFICATIONS: ["slack_webhook_response", "controlled_channel_observation", "provider_rejection_log"],
+      INSTANT_WHATSAPP_EVIDENCE_CLASSIFICATIONS: ["meta_whatsapp_message_log", "controlled_recipient_receipt", "provider_rejection_log"],
       reconcileBillingEmailAttemptWithAudit: vi.fn(),
       reconcileDigestEmailAttemptWithAudit,
+      reconcileInstantChannelAttemptWithAudit: vi.fn(),
       reconcileInstantEmailAttemptWithAudit: vi.fn(),
     }));
     const formData = new FormData();
@@ -492,8 +525,11 @@ describe("ops route", () => {
         "controlled_inbox_receipt",
         "provider_rejection_log",
       ],
+      INSTANT_SLACK_EVIDENCE_CLASSIFICATIONS: ["slack_webhook_response", "controlled_channel_observation", "provider_rejection_log"],
+      INSTANT_WHATSAPP_EVIDENCE_CLASSIFICATIONS: ["meta_whatsapp_message_log", "controlled_recipient_receipt", "provider_rejection_log"],
       reconcileBillingEmailAttemptWithAudit: vi.fn(),
       reconcileDigestEmailAttemptWithAudit: vi.fn(),
+      reconcileInstantChannelAttemptWithAudit: vi.fn(),
       reconcileInstantEmailAttemptWithAudit,
     }));
     const formData = new FormData();
@@ -523,6 +559,70 @@ describe("ops route", () => {
         operatorUserId: "user-1",
         attemptId: "instant-attempt-1",
         outcome: "failed",
+      }),
+    );
+  });
+
+  it("records WhatsApp ambiguity evidence without invoking delivery", async () => {
+    const reconcileInstantChannelAttemptWithAudit = vi.fn().mockResolvedValue({
+      ok: true,
+      replayed: false,
+      attemptId: "instant-whatsapp-attempt-1",
+      outcome: "sent",
+      classification: "meta_whatsapp_message_log",
+      observedAt: "2026-07-15T18:01:00.000Z",
+      reconciledAt: "2026-07-15T18:02:00.000Z",
+    });
+    vi.doMock("~/lib/auth.server", () => ({ requireSession: vi.fn().mockResolvedValue(session) }));
+    vi.doMock("~/lib/data.server", () => ({
+      BILLING_EMAIL_EVIDENCE_CLASSIFICATIONS: [
+        "cloudflare_email_log",
+        "controlled_inbox_receipt",
+        "provider_rejection_log",
+      ],
+      INSTANT_SLACK_EVIDENCE_CLASSIFICATIONS: [
+        "slack_webhook_response",
+        "controlled_channel_observation",
+        "provider_rejection_log",
+      ],
+      INSTANT_WHATSAPP_EVIDENCE_CLASSIFICATIONS: [
+        "meta_whatsapp_message_log",
+        "controlled_recipient_receipt",
+        "provider_rejection_log",
+      ],
+      reconcileBillingEmailAttemptWithAudit: vi.fn(),
+      reconcileDigestEmailAttemptWithAudit: vi.fn(),
+      reconcileInstantChannelAttemptWithAudit,
+      reconcileInstantEmailAttemptWithAudit: vi.fn(),
+    }));
+    const formData = new FormData();
+    formData.set("intent", "reconcile-instant-whatsapp");
+    formData.set("attemptId", "instant-whatsapp-attempt-1");
+    formData.set("reconciliationKey", "ops-instant-whatsapp-reconcile:22222222-2222-4222-8222-222222222222");
+    formData.set("expectedUpdatedAt", "2026-07-15T18:00:30.000Z");
+    formData.set("outcome", "sent");
+    formData.set("classification", "meta_whatsapp_message_log");
+    formData.set("evidenceReference", "meta_message_log_12345");
+    formData.set("observedAt", "2026-07-15T18:01:00Z");
+
+    const { action } = await import("~/routes/app.ops");
+    const result = await action({
+      context: createContext({ OPS_ALLOWLIST_EMAILS: "owner@example.com" }),
+      request: new Request("http://localhost/app/ops", { method: "POST", body: formData }),
+    } as never);
+
+    expect(result).toMatchObject({
+      ok: true,
+      attemptId: "instant-whatsapp-attempt-1",
+      message: expect.stringContaining("No WhatsApp was resent"),
+    });
+    expect(reconcileInstantChannelAttemptWithAudit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        operatorUserId: "user-1",
+        attemptId: "instant-whatsapp-attempt-1",
+        channel: "whatsapp",
+        outcome: "sent",
       }),
     );
   });
