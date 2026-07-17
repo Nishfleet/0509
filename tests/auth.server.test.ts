@@ -419,7 +419,7 @@ describe("auth session boundary", () => {
       getBetterAuthSession,
     }));
 
-    const { getCachedOptionalSession, requireSession } = await import("~/lib/auth.server");
+    const { getCachedOptionalSession, getOptionalSession, requireSession } = await import("~/lib/auth.server");
     const request = new Request("https://0509.io/app", {
       headers: { cookie: "__Secure-better-auth.session_token=invalid" },
     });
@@ -427,6 +427,7 @@ describe("auth session boundary", () => {
     await expect(getCachedOptionalSession(env(), request)).rejects.toThrow(
       "Authentication is temporarily unavailable",
     );
+    await expect(getOptionalSession(env(), request)).resolves.toBeNull();
     let response: Response | null = null;
     try {
       await requireSession(env(), request);

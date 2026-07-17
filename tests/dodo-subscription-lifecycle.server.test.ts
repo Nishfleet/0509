@@ -173,7 +173,11 @@ describe("Dodo subscription lifecycle", () => {
         refund_id: "ref_1",
         payment_id: "pay_1",
         brand_id: "brand_0509",
+        status: "succeeded",
         is_partial: false,
+        amount: 1299,
+        currency: "usd",
+        reason: "requested_by_customer",
         created_at: "2026-07-05T00:00:00.000Z",
         ...overrides,
       },
@@ -183,6 +187,9 @@ describe("Dodo subscription lifecycle", () => {
       eventType: "refund.succeeded",
       paymentId: "pay_1",
       refundId: "ref_1",
+      refundAmount: 1299,
+      refundCurrency: "USD",
+      refundReason: "requested_by_customer",
       refundType: "full",
       refundedAt: "2026-07-05T00:00:00.000Z",
     });
@@ -191,6 +198,20 @@ describe("Dodo subscription lifecycle", () => {
       refundType: "partial",
     });
     expect(extractDodoRefund(lifecycleEnv, refundEnvelope({ is_partial: undefined }))).toBeNull();
+    expect(extractDodoRefund(lifecycleEnv, refundEnvelope({ status: undefined }))).toBeNull();
+    expect(
+      extractDodoRefund(lifecycleEnv, {
+        type: "refund.succeeded",
+        ...refundEnvelope().data,
+      }),
+    ).toBeNull();
+    expect(extractDodoRefund(lifecycleEnv, refundEnvelope({ brand_id: undefined }))).toBeNull();
+    expect(extractDodoRefund(lifecycleEnv, refundEnvelope({ refund_id: undefined }))).toBeNull();
+    expect(extractDodoRefund(lifecycleEnv, refundEnvelope({ created_at: undefined }))).toBeNull();
+    expect(extractDodoRefund(lifecycleEnv, refundEnvelope({ created_at: "not-a-date" }))).toBeNull();
+    expect(extractDodoRefund(lifecycleEnv, refundEnvelope({ amount: -1 }))).toMatchObject({
+      refundAmount: null,
+    });
     expect(extractDodoRefund(lifecycleEnv, refundEnvelope({ is_partial: "false" }))).toBeNull();
     expect(extractDodoRefund(lifecycleEnv, refundEnvelope({ status: "pending" }))).toBeNull();
     expect(extractDodoRefund(lifecycleEnv, refundEnvelope({ status: "failed" }))).toBeNull();

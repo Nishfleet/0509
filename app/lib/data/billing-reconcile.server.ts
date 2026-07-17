@@ -588,7 +588,10 @@ export async function applyDodoRefundWithWatchlistReconcile(
   const keepActive = Math.max(0, Math.floor(watchlistLimit));
   const refundType = input.refundType ?? "full";
   const isFullRefund = refundType === "full";
-  const topUpRefundAllowed = refundType === "full" || refundType === "partial";
+  // A partial refund does not carry a trustworthy money-to-credit allocation.
+  // Record it in the webhook ledger, but leave purchased credits unchanged for
+  // explicit reconciliation instead of revoking the whole remaining grant.
+  const topUpRefundAllowed = isFullRefund;
   const topUpRefundKey = `dodo-refund:${ledger.eventId}:${input.paymentId}`;
 
   const statements = [

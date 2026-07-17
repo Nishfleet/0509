@@ -5,6 +5,7 @@ import {
   ensureWorkspaceEntitlementAnchor,
   getEvidenceUsageSummary,
   grantEvidenceTopUp,
+  applyTopUpRefundAdjustment,
   isEvidenceUsageStorageUnavailableError,
   migrateLegacyTopUpCreditsIfNeeded,
   reconcileStaleEvidenceReservations,
@@ -831,6 +832,124 @@ describe("evidence usage periods", () => {
       env.sqlite
         .prepare("SELECT COUNT(*) AS count FROM evidence_top_up_ledger_entry WHERE entry_type = 'release'")
         .get(),
+    ).toEqual({ count: 1 });
+  });
+
+  it.each([
+    ["explicit full-refund metadata", false],
+    ["legacy missing refund reason metadata", true],
+  ])("does not restore a top-up reservation after %s", async (_label, removeReason) => {
+    env = createTestEnv("scout");
+    const period = await ensureCurrentEvidenceUsagePeriod(env, "user-1", "scout");
+    await env.DB.prepare(
+      `UPDATE evidence_usage_period SET included_allowance = 0, included_consumed = 0 WHERE id = ?`,
+    )
+      .bind(period.id)
+      .run();
+    await grantEvidenceTopUp(env, {
+      workspaceUserId: "user-1",
+      skuSlug: "burst_500_v1",
+      providerPaymentId: "pay-refund-pending",
+      providerProductId: "prod-burst",
+      quantityGranted: 2,
+    });
+
+    await expect(
+      reserveEvidenceCheck(env, {
+        workspaceUserId: "user-1",
+        logicalOperationKey: "refund-pending-release",
+        source: "test",
+      }),
+    ).resolves.toMatchObject({ ok: true, pool: "top_up" });
+
+    const grant = env.sqlite.prepare(
+      `SELECT id FROM evidence_top_up_grant WHERE provider_payment_id = 'pay-refund-pending'`,
+    ).get() as { id: string };
+    await expect(
+      applyTopUpRefundAdjustment(env, {
+        grantId: grant.id,
+        workspaceUserId: "user-1",
+        quantityDelta: -1,
+        reason: "full_provider_refund",
+        idempotencyKey: "dodo-refund:evt-pending:pay-refund-pending",
+        providerEventId: "evt-pending",
+      }),
+    ).resolves.toMatchObject({ applied: true });
+    if (removeReason) {
+      await env.DB.prepare(
+        `UPDATE evidence_top_up_ledger_entry SET metadata_json = '{}' WHERE idempotency_key = ?`,
+      )
+        .bind("dodo-refund:evt-pending:pay-refund-pending")
+        .run();
+    }
+
+    await expect(
+      tryReleaseEvidenceForProofCapture(env, "refund-pending-release"),
+    ).resolves.toBe(true);
+    await expect(
+      tryReleaseEvidenceForProofCapture(env, "refund-pending-release"),
+    ).resolves.toBe(true);
+    expect(
+      env.sqlite.prepare(
+        `SELECT quantity_remaining, status FROM evidence_top_up_grant WHERE provider_payment_id = 'pay-refund-pending'`,
+      ).get(),
+    ).toEqual({ quantity_remaining: 0, status: "depleted" });
+    expect(
+      env.sqlite.prepare(
+        `SELECT COUNT(*) AS count FROM evidence_top_up_ledger_entry WHERE entry_type = 'release'`,
+      ).get(),
+    ).toEqual({ count: 0 });
+    expect(
+      env.sqlite.prepare(
+        `SELECT status FROM evidence_usage_reservation WHERE logical_operation_key = 'refund-pending-release'`,
+      ).get(),
+    ).toEqual({ status: "released" });
+  });
+
+  it("restores a failed reservation after a nonterminal partial refund adjustment", async () => {
+    env = createTestEnv("scout");
+    const period = await ensureCurrentEvidenceUsagePeriod(env, "user-1", "scout");
+    await env.DB.prepare(
+      `UPDATE evidence_usage_period SET included_allowance = 0, included_consumed = 0 WHERE id = ?`,
+    )
+      .bind(period.id)
+      .run();
+    await grantEvidenceTopUp(env, {
+      workspaceUserId: "user-1",
+      skuSlug: "burst_500_v1",
+      providerPaymentId: "pay-partial-pending",
+      providerProductId: "prod-burst",
+      quantityGranted: 2,
+    });
+    await reserveEvidenceCheck(env, {
+      workspaceUserId: "user-1",
+      logicalOperationKey: "partial-pending-release",
+      source: "test",
+    });
+    const grant = env.sqlite.prepare(
+      `SELECT id FROM evidence_top_up_grant WHERE provider_payment_id = 'pay-partial-pending'`,
+    ).get() as { id: string };
+    await applyTopUpRefundAdjustment(env, {
+      grantId: grant.id,
+      workspaceUserId: "user-1",
+      quantityDelta: -1,
+      reason: "partial_provider_refund",
+      idempotencyKey: "operator-refund:evt-partial:pay-partial-pending",
+      providerEventId: "evt-partial",
+    });
+
+    await expect(
+      tryReleaseEvidenceForProofCapture(env, "partial-pending-release"),
+    ).resolves.toBe(true);
+    expect(
+      env.sqlite.prepare(
+        `SELECT quantity_remaining, status FROM evidence_top_up_grant WHERE provider_payment_id = 'pay-partial-pending'`,
+      ).get(),
+    ).toEqual({ quantity_remaining: 1, status: "active" });
+    expect(
+      env.sqlite.prepare(
+        `SELECT COUNT(*) AS count FROM evidence_top_up_ledger_entry WHERE entry_type = 'release'`,
+      ).get(),
     ).toEqual({ count: 1 });
   });
 

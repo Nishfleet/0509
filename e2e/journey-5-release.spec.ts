@@ -1,4 +1,4 @@
-import { expect, test, type BrowserContext, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type BrowserContext, type Page, type TestInfo } from "./helpers/release-test";
 import { billingSkuForPlanCheckout } from "../app/lib/billing-sku-catalog";
 import { attachReleaseStateArtifacts } from "./helpers/release-artifacts";
 import {
@@ -241,7 +241,7 @@ test.describe("Journey 5 release: plan, checkout, entitlements, billing", () => 
         planChangeApplied: true,
         cancelledExpiredRevoked: true,
         fullRefundRevoked: true,
-        partialPendingFailedNoMutation: true,
+        partialAndFailedNoMutation: true,
       });
       const paymentState = await readBillingState(page, paymentUser);
       expect(paymentState.entitlement).toMatchObject({ plan: "starter", status: "active" });

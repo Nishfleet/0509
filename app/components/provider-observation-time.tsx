@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 export function toUtcObservationTime(localValue: string) {
   if (!localValue) return "";
@@ -8,7 +8,19 @@ export function toUtcObservationTime(localValue: string) {
 
 export function ProviderObservationTimeField() {
   const helpId = useId();
+  const localInputRef = useRef<HTMLInputElement>(null);
   const [observedAt, setObservedAt] = useState("");
+  const updateObservedAt = (localValue: string) => {
+    setObservedAt(toUtcObservationTime(localValue));
+  };
+
+  useEffect(() => {
+    const input = localInputRef.current;
+    if (!input) return;
+    const handleChange = () => setObservedAt(toUtcObservationTime(input.value));
+    input.addEventListener("change", handleChange);
+    return () => input.removeEventListener("change", handleChange);
+  }, []);
 
   return (
     <label className="f9-field">
@@ -16,9 +28,8 @@ export function ProviderObservationTimeField() {
       <input
         aria-describedby={helpId}
         name="observedAtLocal"
-        onInput={(event) => {
-          setObservedAt(toUtcObservationTime(event.currentTarget.value));
-        }}
+        onInput={(event) => updateObservedAt(event.currentTarget.value)}
+        ref={localInputRef}
         required
         type="datetime-local"
       />

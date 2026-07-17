@@ -24,8 +24,9 @@ export function topUpSpendRequiresActivePaidPlan(planFamily: PlanFamily): boolea
 }
 
 /**
- * Full and partial top-up refunds claw back only the unspent purchased checks.
- * Unknown provider refund shapes stay manual-review only.
+ * Full top-up refunds claw back only the unspent purchased checks. Partial and
+ * unknown refund shapes stay manual-review only because money cannot be mapped
+ * to a credit quantity without an explicit allocation contract.
  */
 export function topUpRefundQuantityAdjustment(input: {
   grantedQuantity: number;
@@ -35,10 +36,7 @@ export function topUpRefundQuantityAdjustment(input: {
   if (input.refundType === "full") {
     return -input.remainingQuantity;
   }
-  if (input.refundType === "unknown") {
-    return null;
-  }
-  return -input.remainingQuantity;
+  return null;
 }
 
 /** Top-up grants remain on the original workspace owner after ownership changes. */

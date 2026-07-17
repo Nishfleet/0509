@@ -129,7 +129,14 @@ export async function getOptionalSession(
   env: AppEnv,
   request: Request,
 ): Promise<AppSession | null> {
-  return getCachedOptionalSession(env, request);
+  try {
+    return await getCachedOptionalSession(env, request);
+  } catch (error) {
+    if (isAuthSessionUnavailableError(error)) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 export async function getCachedOptionalSession(
@@ -221,7 +228,7 @@ export async function requireWorkspaceSession(
 export async function requireSession(env: AppEnv, request: Request) {
   let session: AppSession | null;
   try {
-    session = await getOptionalSession(env, request);
+    session = await getCachedOptionalSession(env, request);
   } catch (error) {
     if (isAuthSessionUnavailableError(error)) {
       throw authSessionUnavailableResponse();

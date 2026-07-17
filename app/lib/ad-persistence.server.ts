@@ -469,7 +469,7 @@ export async function upsertAd(env: AppEnv, ad: AdRecord) {
     timestamp,
   );
 
-  const [persistedAd] = evidenceCapturedAt ? await listAdsByIds(env, [ad.metaAdId]) : [null];
+  const [persistedAd] = await listAdsByIds(env, [ad.metaAdId]);
   const analysisAd = persistedAd ?? ad;
   await replaceAnalysisFields(
     env,

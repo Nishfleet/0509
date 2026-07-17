@@ -650,7 +650,15 @@ export async function action({ context, request }: ActionFunctionArgs) {
           metadata: {
             action: "refund",
             paymentId: refund.paymentId,
+            refundId: refund.refundId,
+            refundAmount: refund.refundAmount ?? null,
+            refundCurrency: refund.refundCurrency ?? null,
+            refundReason: refund.refundReason ?? null,
             refundType: refund.refundType,
+            creditMutationPolicy:
+              refund.refundType === "partial" ? "audit_only_v2" : "full_revoke_v1",
+            refundReconciliationStatus:
+              refund.refundType === "partial" ? "pending" : "not_required",
           },
         },
         { lifecycleEmailOutbox: refundOutbox },
@@ -694,6 +702,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
         metadata: { action: "refund", paymentId: refund.paymentId },
         body: { ok: true, refunded: true },
       };
+    }
+
+    if (eventType === "refund.succeeded") {
+      throw new Error("dodo_refund_payload_unresolvable");
     }
 
     const grant = extractDodoProofCreditGrant(env, payload);

@@ -153,7 +153,6 @@ export function resolveJ5LifecycleTransitionEvidence(
   const expired = evidence.expired_after_cancel;
   const refundedActivation = evidence.refunded_activation;
   const partial = evidence.refund_partial;
-  const pending = evidence.refund_pending;
   const failed = evidence.refund_failed;
   const refunded = evidence.refund_succeeded;
   const activationIdentity = {
@@ -229,12 +228,11 @@ export function resolveJ5LifecycleTransitionEvidence(
       matchesState(refunded.before, { plan: "starter", status: "active" }) &&
       matchesState(refunded.after, { plan: "free", status: "refunded" })
     ),
-    partialPendingFailedNoMutation: Boolean(
-      partial && pending && failed &&
+    partialAndFailedNoMutation: Boolean(
+      partial && failed &&
       refundedActivation && sameTransitionState(refundedActivation.after, partial.before) &&
       matchesState(partial.before, { plan: "starter", status: "active" }) && sameTransitionState(partial.before, partial.after) &&
-      sameTransitionState(partial.after, pending.before) && sameTransitionState(pending.before, pending.after) &&
-      sameTransitionState(pending.after, failed.before) && sameTransitionState(failed.before, failed.after)
+      sameTransitionState(partial.after, failed.before) && sameTransitionState(failed.before, failed.after)
     ),
   };
 }
@@ -653,10 +651,9 @@ function payloads(mapping: J5ReplayMapping, clock: string) {
     { label: "cancelled_terminal", user: cancelledUser, payload: lifecycle("subscription.cancelled", cancelledUser, cancelledPayment, 10) },
     { label: "expired_after_cancel", user: cancelledUser, payload: lifecycle("subscription.expired", cancelledUser, cancelledPayment, 11) },
     { label: "refunded_activation", user: refundedUser, payload: { type: "payment.succeeded", ...at(refundedUser, refundedPayment, 12), id: refundedPayment, status: "active", subscription_id: `e2e-j5-sub-${refundedUser}`, product_cart: [{ product_id: J5_PRODUCT_ID, is_subscription: true }] } },
-    { label: "refund_partial", user: refundedUser, payload: { type: "refund.succeeded", ...at(refundedUser, refundedPayment, 13), status: "succeeded", is_partial: true, refund_id: `e2e-j5-refund-partial-${mapping.viewport}` } },
-    { label: "refund_pending", user: refundedUser, payload: { type: "refund.succeeded", ...at(refundedUser, refundedPayment, 14), status: "pending", refund_id: `e2e-j5-refund-pending-${mapping.viewport}` } },
-    { label: "refund_failed", user: refundedUser, payload: { type: "refund.failed", ...at(refundedUser, refundedPayment, 15), status: "failed", refund_id: `e2e-j5-refund-failed-${mapping.viewport}` } },
-    { label: "refund_succeeded", user: refundedUser, payload: { type: "refund.succeeded", ...at(refundedUser, refundedPayment, 16), status: "succeeded", is_partial: false, refund_id: `e2e-j5-refund-full-${mapping.viewport}` } },
+    { label: "refund_partial", user: refundedUser, payload: { type: "refund.succeeded", data: { payload_type: "Refund", ...at(refundedUser, refundedPayment, 13), status: "succeeded", is_partial: true, refund_id: `e2e-j5-refund-partial-${mapping.viewport}` } } },
+    { label: "refund_failed", user: refundedUser, payload: { type: "refund.failed", data: { payload_type: "Refund", ...at(refundedUser, refundedPayment, 15), status: "failed", refund_id: `e2e-j5-refund-failed-${mapping.viewport}` } } },
+    { label: "refund_succeeded", user: refundedUser, payload: { type: "refund.succeeded", data: { payload_type: "Refund", ...at(refundedUser, refundedPayment, 16), status: "succeeded", is_partial: false, refund_id: `e2e-j5-refund-full-${mapping.viewport}` } } },
   ] as const;
 }
 

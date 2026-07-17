@@ -1,4 +1,4 @@
-import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { expect, test, type BrowserContext, type Page } from "./helpers/release-test";
 import { requireExactReleaseBaseURL } from "./helpers/release-origin";
 import { attachReleaseStateArtifacts } from "./helpers/release-artifacts";
 import {

@@ -3,10 +3,13 @@ import { existsSync, readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
+import { isolatedGitEnv } from "./helpers/git-env";
+
 const allowedFiles = new Set(["migrations/0060_remove_legacy_billing_provider.sql"]);
 function listRepoFiles(): string[] {
   return execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard"], {
     encoding: "utf8",
+    env: isolatedGitEnv(),
   })
     .split("\n")
     .filter(Boolean);

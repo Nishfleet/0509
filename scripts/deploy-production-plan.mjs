@@ -49,6 +49,12 @@ export function buildProductionDeployPlan({
       includeCloudflareCredentials: true,
     },
     {
+      id: "partial_refund_invariants_preflight",
+      command: "node",
+      args: ["scripts/check-partial-refund-invariants.mjs"],
+      includeCloudflareCredentials: true,
+    },
+    {
       id: "migration_sync",
       command: "node",
       args: ["scripts/check-d1-migrations-synced.mjs"],
@@ -91,12 +97,24 @@ export function buildProductionDeployPlan({
       args: ["scripts/check-public-home-current.mjs"],
     },
     {
+      id: "partial_refund_invariants_predeploy",
+      command: "node",
+      args: ["scripts/check-partial-refund-invariants.mjs"],
+      includeCloudflareCredentials: true,
+    },
+    {
       id: "deploy",
       command: "wrangler",
       args: ["deploy"],
       env: {
         WRANGLER_OUTPUT_FILE_PATH: wranglerOutputPath,
       },
+      includeCloudflareCredentials: true,
+    },
+    {
+      id: "partial_refund_invariants_postdeploy",
+      command: "node",
+      args: ["scripts/check-partial-refund-invariants.mjs"],
       includeCloudflareCredentials: true,
     },
     {
@@ -107,6 +125,12 @@ export function buildProductionDeployPlan({
         "--wrangler-output",
         wranglerOutputPath,
       ],
+    },
+    {
+      id: "partial_refund_invariants_postcanary",
+      command: "node",
+      args: ["scripts/check-partial-refund-invariants.mjs"],
+      includeCloudflareCredentials: true,
     },
     {
       id: "live_public_truth",
@@ -211,5 +235,29 @@ export function executeProductionDeployPlan(plan, execute) {
   if (!Array.isArray(plan) || typeof execute !== "function") {
     throw new Error("invalid_production_deploy_plan");
   }
-  for (const step of plan) execute(step);
+  let canaryFailed = false;
+  let canaryFailure;
+  for (const step of plan) {
+    if (canaryFailed) {
+      if (step.id !== "partial_refund_invariants_postcanary") throw canaryFailure;
+      try {
+        execute(step);
+      } catch (invariantFailure) {
+        throw new AggregateError(
+          [canaryFailure, invariantFailure],
+          "post_deploy_canary_and_refund_invariant_failed",
+          { cause: canaryFailure },
+        );
+      }
+      throw canaryFailure;
+    }
+    try {
+      execute(step);
+    } catch (error) {
+      if (step.id !== "post_deploy_release_canary") throw error;
+      canaryFailed = true;
+      canaryFailure = error;
+    }
+  }
+  if (canaryFailed) throw canaryFailure;
 }

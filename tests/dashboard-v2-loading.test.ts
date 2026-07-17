@@ -4,13 +4,29 @@ import { createElement } from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
+import { createMemoryRouter, RouterProvider } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DashboardRouteLoading } from "~/components/dashboard-route-loading";
+import { ErrorState } from "~/components/error-state";
 import { RouteSkeleton } from "~/components/route-skeleton";
 import { mapCustomerRouteError } from "~/lib/customer-route-error";
 
 describe("mapCustomerRouteError infra sanitization", () => {
+  it("preserves the safe auth outage recovery message after route serialization", () => {
+    expect(mapCustomerRouteError({
+      data: "Authentication is temporarily unavailable. Please try again in a moment.",
+      internal: false,
+      status: 503,
+      statusText: "Authentication temporarily unavailable",
+    })).toMatchObject({
+      title: "Temporarily unavailable",
+      message: "Authentication is temporarily unavailable. Please try again in a moment.",
+      retryable: true,
+      category: "unavailable",
+    });
+  });
+
   it.each([
     "D1 database is not configured",
     "Missing D1 binding in worker",
@@ -70,5 +86,21 @@ describe("DashboardRouteLoading accessibility", () => {
     expect(markup).toContain('aria-busy="true"');
     expect(markup).toContain('aria-live="polite"');
     expect(markup).toContain("Loading watchlists…");
+  });
+});
+
+describe("ErrorState accessibility", () => {
+  it("makes the announced recovery state programmatically focusable", () => {
+    const router = createMemoryRouter([{
+      path: "/",
+      element: createElement(ErrorState, {
+        message: "Authentication is temporarily unavailable. Please try again in a moment.",
+        title: "Temporarily unavailable",
+      }),
+    }]);
+    const html = renderToStaticMarkup(createElement(RouterProvider, { router }));
+
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('tabindex="-1"');
   });
 });

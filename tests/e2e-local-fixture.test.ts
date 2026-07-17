@@ -1,3 +1,4 @@
+import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 
 // @ts-ignore JavaScript fixture helper is intentionally imported as a runtime module.
@@ -7,6 +8,7 @@ import {
   fixtureInvariantQuery,
   fixtureReleaseStateQuery,
   isolatedReleasePersistPath,
+  journey5EventInvariantQuery,
   parseWranglerQueryOutput,
   postflightFixtureExpectations,
   remainingE2ePostflightQueryTimeout,
@@ -15,6 +17,45 @@ import {
   resolveE2ePostflightTimeout,
   resolveE2ePersistPath,
 } from "../scripts/e2e-local-fixture.mjs";
+
+const journey5EventShapes = [
+  [0, "payment.succeeded", "processed"],
+  [2, "payment.failed", "processed"],
+  [3, "subscription.renewed", "processed"],
+  [4, "subscription.plan_changed", "processed"],
+  [5, "subscription.plan_changed", "ignored"],
+  [6, "subscription.plan_changed", "ignored"],
+  [7, "subscription.plan_changed", "processed"],
+  [8, "subscription.plan_changed", "processed"],
+  [9, "subscription.plan_changed", "processed"],
+  [10, "payment.succeeded", "processed"],
+  [11, "subscription.cancelled", "processed"],
+  [12, "subscription.expired", "processed"],
+  [13, "payment.succeeded", "processed"],
+  [14, "refund.succeeded", "processed"],
+  [15, "refund.failed", "ignored"],
+  [16, "refund.succeeded", "processed"],
+] as const;
+
+function journey5EventDatabase() {
+  const database = new DatabaseSync(":memory:");
+  database.exec(`
+    CREATE TABLE dodo_webhook_event (
+      event_id TEXT PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      outcome TEXT NOT NULL
+    );
+  `);
+  const insert = database.prepare(
+    "INSERT INTO dodo_webhook_event (event_id, event_type, outcome) VALUES (?, ?, ?)",
+  );
+  for (const viewport of ["375x812", "768x900", "1440x900"]) {
+    for (const [eventIndex, eventType, outcome] of journey5EventShapes) {
+      insert.run(`e2e-j5-event:${viewport}:${eventIndex}`, eventType, outcome);
+    }
+  }
+  return database;
+}
 
 const validRow = {
   active_membership_count: 1,
@@ -277,14 +318,14 @@ describe("isolated local E2E fixture", () => {
       activation_owner_mismatch_count: 3,
       activation_run_count: 0,
       activation_watchlist_count: 0,
-      j5_event_count: 51,
+      j5_event_count: 48,
       j5_entitlement_mismatch_count: 0,
       j5_replay_count: 3,
     };
     expect(releaseStateReadyForAssertion(journey5Row, [5])).toBe(true);
     expect(assertReleaseState(journey5Row, [5])).toBe(true);
-    expect(() => assertReleaseState({ ...journey5Row, j5_event_count: 50 }, [5])).toThrow(
-      /j5_event_count:50/,
+    expect(() => assertReleaseState({ ...journey5Row, j5_event_count: 47 }, [5])).toThrow(
+      /j5_event_count:47/,
     );
     expect(() => assertReleaseState({ ...journey5Row, j5_replay_mismatch_count: 1 }, [5])).toThrow(
       /j5_replay_mismatch_count:1/,
@@ -295,6 +336,46 @@ describe("isolated local E2E fixture", () => {
     expect(() => assertReleaseState({ ...journey5Row, j5_entitlement_mismatch_count: 3 }, [5])).toThrow(
       /j5_entitlement_mismatch_count:3/,
     );
+  });
+
+  it("rejects a substituted Journey 5 webhook even when the prefix count stays exact", () => {
+    const database = journey5EventDatabase();
+    try {
+      expect(database.prepare(journey5EventInvariantQuery()).get()).toEqual({
+        j5_event_count: 48,
+        j5_event_mismatch_count: 0,
+      });
+
+      database.prepare("DELETE FROM dodo_webhook_event WHERE event_id = ?").run(
+        "e2e-j5-event:375x812:2",
+      );
+      database.prepare(
+        "INSERT INTO dodo_webhook_event (event_id, event_type, outcome) VALUES (?, ?, ?)",
+      ).run("e2e-j5-event:375x812:99", "payment.failed", "ignored");
+
+      const contaminated = database.prepare(journey5EventInvariantQuery()).get() as {
+        j5_event_count: number;
+        j5_event_mismatch_count: number;
+      };
+      expect(contaminated).toEqual({ j5_event_count: 48, j5_event_mismatch_count: 2 });
+      expect(() =>
+        assertReleaseState(
+          {
+            ...validReleaseRow,
+            activation_owner_mismatch_count: 3,
+            activation_run_count: 0,
+            activation_watchlist_count: 0,
+            j5_entitlement_mismatch_count: 0,
+            j5_event_count: contaminated.j5_event_count,
+            j5_event_mismatch_count: contaminated.j5_event_mismatch_count,
+            j5_replay_count: 3,
+          },
+          [5],
+        ),
+      ).toThrow(/j5_event_mismatch_count:2/);
+    } finally {
+      database.close();
+    }
   });
 
   it("requires exact Journey 6 support, retention, auth, and team recovery effects", () => {

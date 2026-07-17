@@ -256,6 +256,10 @@ const ANNOTATION_PATTERN = /^[\p{L}\p{N}._:;,+@%#?&=~!$'()*;\-/→× ]{1,128}$/u
 const URL_TOKEN_PATTERN = /^[A-Za-z0-9._~!?$&'()*+,;=:@%\-/]+$/u;
 const SENSITIVE_QUERY_KEY = /(?:token|secret|password|cookie|authorization|auth|email|key)/iu;
 const SECRET_LIKE_VALUE = /(?:sk_(?:live|test)_|bearer\s+|api[_-]?key|password\s*=|secret\s*=|token\s*=)/iu;
+const ANSI_ESCAPE_PATTERN = /\u001b\[[0-?]*[ -/]*[@-~]/gu;
+const WEB_SERVER_PREFIX_PATTERN = /\[WebServer(?:[^\]]*)\]\s?/gu;
+const HYDRATION_ERROR_PATTERN = /(?:hydration failed because (?:the server rendered|the initial ui does not match)|text content did not match|a tree hydrated but some attributes of the server rendered|this will cause a hydration error|minified react error #418\b)/iu;
+const STDERR_TAIL_LENGTH = 512;
 
 function firstDefined(...values) {
   return values.find((value) => value !== undefined && value !== null && value !== "") ?? null;
@@ -566,6 +570,14 @@ export function readAnnotations(test, result) {
   }
   for (const type of BLOCKING_ANNOTATIONS) {
     if (annotations.some((annotation) => annotation?.type === type)) issues.push(`annotation:${type}`);
+  }
+  for (const annotation of annotations.filter((value) => value?.type === "reactHydrationError")) {
+    const source = annotation?.description;
+    issues.push(
+      source === "console" || source === "pageerror"
+        ? `browser_hydration_error:${source}`
+        : "browser_hydration_error",
+    );
   }
   return { values, issues };
 }
@@ -942,6 +954,8 @@ export class GateBManifestReporter {
     this.tests = [];
     this.results = new Map();
     this.globalIssues = [];
+    this.stderrTail = "";
+    this.hydrationErrorDetected = false;
     this.artifactRootPath = null;
     this.artifactsRequired = Boolean(
       this.strict &&
@@ -976,8 +990,22 @@ export class GateBManifestReporter {
     this.results.set(test.id, existing);
   }
 
+  onStdErr(chunk, test) {
+    if (!this.strict || this.hydrationErrorDetected || test !== undefined) return;
+    const rawText = `${this.stderrTail}${String(chunk ?? "")}`;
+    const text = rawText
+      .replace(ANSI_ESCAPE_PATTERN, "")
+      .replace(WEB_SERVER_PREFIX_PATTERN, "");
+    if (HYDRATION_ERROR_PATTERN.test(text)) {
+      this.hydrationErrorDetected = true;
+      return;
+    }
+    this.stderrTail = rawText.slice(-STDERR_TAIL_LENGTH);
+  }
+
   onEnd(fullResult = { status: "failed" }) {
     const entries = [];
+    if (this.hydrationErrorDetected) this.globalIssues.push("server_hydration_error");
     if (this.tests.length === 0) this.globalIssues.push("no_tests");
     for (const test of this.tests) {
       const results = this.results.get(test.id) ?? [];

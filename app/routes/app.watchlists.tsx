@@ -142,9 +142,11 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const selectedWatchlist = selectedWatchlistId
     ? await getWatchlist(env, selectedWatchlistId, workspaceUserId)
     : null;
+  const renderedAt = new Date().toISOString();
 
   if (!selectedWatchlist) {
     return {
+      renderedAt,
       watchlists,
       selectedWatchlist: null,
       eventCandidates: [] as EventCandidateRecord[],
@@ -237,6 +239,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         .map((target) => toPublicDeliveryTarget(target, { verifiedAccountEmail }));
 
   return {
+    renderedAt,
     watchlists,
     selectedWatchlist,
     eventCandidates,
@@ -756,8 +759,13 @@ export async function action({ context, request }: ActionFunctionArgs) {
   };
 }
 
+export function WatchlistProofAge({ capturedAt, renderedAt }: { capturedAt: string; renderedAt: string }) {
+  return formatProofAgeLabel(capturedAt, { now: renderedAt });
+}
+
 export default function WatchlistsRoute() {
   const data = useLoaderData<typeof loader>();
+  const renderedAt = new Date(data.renderedAt);
   const discoveryStatus = toCustomerDiscoveryStatus(data.discoveryStatus);
   const actionData = useActionData<typeof action>();
   const showSlackDelivery = isSlackDeliveryCustomerFacing();
@@ -913,7 +921,7 @@ export default function WatchlistsRoute() {
                       ? data.plan === "free"
                         ? " · activation-only scan; paid plans include recurring monitoring"
                         : sourceCanSchedule
-                          ? ` · next scan ${formatNextScanLabel(data.plan, new Date(), data.effectiveDeliveryConfig.timezone)}`
+                          ? ` · next scan ${formatNextScanLabel(data.plan, renderedAt, data.effectiveDeliveryConfig.timezone)}`
                           : " · next scan after source access is ready"
                       : null}
                     {` · ${formatWatchlistTrackingRole(data.selectedWatchlist.trackingRole)}`}
@@ -1124,7 +1132,7 @@ export default function WatchlistsRoute() {
                           : data.plan === "free"
                             ? "Activation only — no recurring schedule on Free"
                             : sourceCanSchedule
-                              ? formatNextScanLabel(data.plan, new Date(), data.effectiveDeliveryConfig.timezone)
+                              ? formatNextScanLabel(data.plan, renderedAt, data.effectiveDeliveryConfig.timezone)
                               : "After source access is ready"}
                       </p>
                     </div>
@@ -1160,7 +1168,7 @@ export default function WatchlistsRoute() {
                         nextScanLabel: sourceCanSchedule
                           ? formatNextScanLabel(
                               data.plan,
-                              new Date(),
+                              renderedAt,
                               data.effectiveDeliveryConfig.timezone,
                             )
                           : null,
@@ -1251,9 +1259,17 @@ export default function WatchlistsRoute() {
                           : ""}
                       </p>
                       <p className="f9-muted-copy">
-                        {data.proofSummary.lastSuccessfulProofAt
-                          ? `Last good evidence check ${formatProofAgeLabel(data.proofSummary.lastSuccessfulProofAt)}`
-                          : "No successful evidence check yet."}
+                        {data.proofSummary.lastSuccessfulProofAt ? (
+                          <>
+                            Last good evidence check{" "}
+                            <WatchlistProofAge
+                              capturedAt={data.proofSummary.lastSuccessfulProofAt}
+                              renderedAt={data.renderedAt}
+                            />
+                          </>
+                        ) : (
+                          "No successful evidence check yet."
+                        )}
                       </p>
                       <div className="f9-work-list is-compact">
                         {data.recentProofCaptures.slice(0, 4).map((capture) => (
@@ -1264,7 +1280,10 @@ export default function WatchlistsRoute() {
                               </h4>
                               <p className="f9-muted-copy">
                                 {formatConfidenceBandLabel(capture.fieldConfidence)} ·{" "}
-                                {formatProofAgeLabel(capture.succeededAt ?? capture.attemptedAt)}
+                                <WatchlistProofAge
+                                  capturedAt={capture.succeededAt ?? capture.attemptedAt}
+                                  renderedAt={data.renderedAt}
+                                />
                               </p>
                             </div>
                           </div>

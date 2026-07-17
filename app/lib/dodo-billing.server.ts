@@ -1030,34 +1030,45 @@ export function extractDodoRefund(env: AppEnv, payload: unknown) {
   const eventType = readString(envelope, "type") || readString(envelope, "event");
   if (eventType !== "refund.succeeded") return null;
 
-  const root = paymentPayloadFromWebhookPayload(payload);
+  // Dodo refund webhooks carry the refund object in `data`. Do not reuse the
+  // payment fallback here: accepting a flat signed envelope would let an
+  // outer `status` stand in for the required terminal refund status.
+  const root = objectOrEmpty(envelope.data);
   const brandId = readString(root, "brand_id");
   const configuredBrandId = dodo0509BrandId(env);
-  if (configuredBrandId && brandId && brandId !== configuredBrandId) return null;
+  if (!brandId || (configuredBrandId && brandId !== configuredBrandId)) return null;
 
   const paymentId = readString(root, "payment_id");
   if (!paymentId) return null;
+  const refundId = readString(root, "refund_id");
+  if (!refundId) return null;
 
   // `refund.succeeded` is the terminal event, but Dodo also includes the
   // refund's current status in the payload. Never revoke access when a
   // malformed, reordered, or provider-retried payload still says pending,
   // failed, or review.
   const refundStatus = readString(root, "status").toLowerCase();
-  if (refundStatus && refundStatus !== "succeeded") return null;
+  if (refundStatus !== "succeeded") return null;
 
   const isPartialValue = readValue(root, "is_partial");
   if (typeof isPartialValue !== "boolean") return null;
   const isPartial = isPartialValue;
 
-  const refundedAt =
-    readString(root, "created_at") ||
-    readString(root, "updated_at") ||
-    new Date().toISOString();
+  const refundedAt = readString(root, "created_at");
+  if (!Number.isFinite(Date.parse(refundedAt))) return null;
+  const amount = numberOrNull(readValue(root, "amount"));
+  const refundAmount =
+    amount !== null && Number.isSafeInteger(amount) && amount >= 0 ? amount : null;
+  const refundCurrency = cleanCurrency(readValue(root, "currency")) || null;
+  const refundReason = readString(root, "reason") || null;
 
   return {
     eventType,
     paymentId,
-    refundId: readString(root, "refund_id") || readString(root, "id") || null,
+    refundId,
+    refundAmount,
+    refundCurrency,
+    refundReason,
     refundType: isPartial ? ("partial" as const) : ("full" as const),
     refundedAt,
     metadata: root,

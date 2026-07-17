@@ -176,6 +176,54 @@ describe("upsertAd seen-window ratchet", () => {
     expect(incoming.lastSeenAt).toBeNull();
   });
 
+  it("preserves canonical analysis fields when a later scan has no captured evidence", async () => {
+    await upsertAd(env, buildAd({
+      analysisFields: [
+        {
+          scopeType: "ad",
+          fieldKey: "translated_text",
+          fieldValue: "Earlier translated text",
+          provenanceSource: "ai_summary",
+          extractorVersion: "translation-v1",
+          confidence: 0.8,
+        },
+      ],
+    }));
+
+    await upsertAd(env, buildAd({
+      analysisFields: [
+        {
+          scopeType: "ad",
+          fieldKey: "hook",
+          fieldValue: "Latest scan hook",
+          provenanceSource: "meta_library_browser",
+          extractorVersion: "structured-v1",
+          confidence: 1,
+        },
+      ],
+    }));
+
+    const [persisted] = await listAdsByIds(env, ["1280520150312258"]);
+    expect(persisted.analysisFields).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        fieldKey: "translated_text",
+        fieldValue: "Earlier translated text",
+      }),
+      expect.objectContaining({
+        fieldKey: "hook",
+        fieldValue: "Latest scan hook",
+      }),
+    ]));
+
+    const analysisRows = harness.sqlite.prepare(
+      "SELECT field_key, field_value FROM analysis_field WHERE scope_type = 'ad' AND scope_id = ?",
+    ).all("1280520150312258") as Array<{ field_key: string; field_value: string }>;
+    expect(analysisRows).toEqual(expect.arrayContaining([
+      { field_key: "translated_text", field_value: "Earlier translated text" },
+      { field_key: "hook", field_value: "Latest scan hook" },
+    ]));
+  });
+
   it("does not let a late older capture overwrite newer canonical evidence", async () => {
     const evidence = (label: string, capturedAt: string) => buildAd({
       landingPage: {

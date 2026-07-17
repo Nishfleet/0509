@@ -1,4 +1,4 @@
-import { expect, test, type BrowserContext, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type BrowserContext, type Page, type TestInfo } from "./helpers/release-test";
 import {
   expectMinimumTouchTarget,
   expectNoHorizontalOverflow,
@@ -289,6 +289,9 @@ test.describe("Journey 6 release: recovery across account, support, retention, a
       await expect(page.getByRole("alert")).toContainText("Authentication is temporarily unavailable. Please try again in a moment.");
       await expectVisibleKeyboardFocus(page.getByRole("alert"));
       await expectExperience(page);
+      await page.goto("/");
+      await expect(page.getByRole("heading", { name: /They cut.*price/i })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Temporarily unavailable" })).toHaveCount(0);
       await context.setExtraHTTPHeaders({ [fixtureModeHeader]: "1" });
       const recovery = await replay(page, "/api/e2e/auth/replay", "e2e-starter", recoveryKey, recoveryRun, "j6");
       expect(recovery).toMatchObject({ action: "auth_recovery", outcome: "recovery", auth: { status: "recovered" } });

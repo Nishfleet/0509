@@ -21,6 +21,7 @@
     "check:public-home": "node scripts/check-public-home-current.mjs",
     "check:google-oauth-branding": "node scripts/check-google-oauth-branding.mjs",
     "check:d1:workspace-memberships": "node scripts/check-workspace-member-invariants.mjs",
+    "check:d1:partial-refunds": "node scripts/check-partial-refund-invariants.mjs",
     "deploy": "node scripts/deploy-production.mjs",
     "dev": "react-router dev",
     "e2e": "npm run e2e:local && npm run e2e:prod:public",

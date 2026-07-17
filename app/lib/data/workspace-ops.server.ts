@@ -624,10 +624,10 @@ export async function getOperatorSnapshot(env: AppEnv) {
               )
             ORDER BY
               CASE
-                WHEN candidate.idempotency_key LIKE 'support-case-reopen:' || support_case.id || ':%'
+                WHEN candidate.idempotency_key LIKE 'support-case-reopen:%'
                   THEN substr(
                     candidate.idempotency_key,
-                    length('support-case-reopen:' || support_case.id || ':') + 1
+                    length('support-case-reopen:') + 1
                   )
                 ELSE ''
               END DESC,
@@ -716,10 +716,10 @@ export async function getOperatorSupportCase(env: AppEnv, caseId: string) {
             )
           ORDER BY
             CASE
-              WHEN candidate.idempotency_key LIKE 'support-case-reopen:' || support_case.id || ':%'
+              WHEN candidate.idempotency_key LIKE 'support-case-reopen:%'
                 THEN substr(
                   candidate.idempotency_key,
-                  length('support-case-reopen:' || support_case.id || ':') + 1
+                  length('support-case-reopen:') + 1
                 )
               ELSE ''
             END DESC,
