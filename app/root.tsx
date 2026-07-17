@@ -48,25 +48,13 @@ export interface RootLoaderData {
 }
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
-  const {
-    authSessionUnavailableResponse,
-    getCachedOptionalSession,
-    isAuthSessionUnavailableError,
-  } = await import("~/lib/auth.server");
+  const { getOptionalSession } = await import("~/lib/auth.server");
   const cloudflare = context.cloudflare as {
     country?: string | null;
     env: AppEnv;
   };
   const env = cloudflare.env;
-  let session: AppSession | null;
-  try {
-    session = await getCachedOptionalSession(env, request);
-  } catch (error) {
-    if (isAuthSessionUnavailableError(error)) {
-      throw authSessionUnavailableResponse();
-    }
-    throw error;
-  }
+  const session = await getOptionalSession(env, request);
   const hasAuthCookie = hasSiteRepAuthCookie(request);
   const countryCode = cloudflare.country ?? request.headers.get("cf-ipcountry");
 

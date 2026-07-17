@@ -1,4 +1,10 @@
-import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import {
+  expect,
+  installReleaseHydrationBridge,
+  test,
+  type BrowserContext,
+  type Page,
+} from "./helpers/release-test";
 import { requireExactReleaseBaseURL } from "./helpers/release-origin";
 import { attachReleaseStateArtifacts } from "./helpers/release-artifacts";
 import {
@@ -426,6 +432,7 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
     try {
       await signInAs(starterContext, baseURL!, "e2e-starter");
       const starterPage = await starterContext.newPage();
+      installReleaseHydrationBridge(starterPage, testInfo);
       await starterPage.setViewportSize(viewport);
       await starterPage.goto("/app/reports/watchlist:e2e-watchlist-starter-1");
       await expect(
@@ -492,6 +499,7 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
     try {
       await signInAs(starterContext, baseURL!, "e2e-starter");
       const starterPage = await starterContext.newPage();
+      installReleaseHydrationBridge(starterPage, testInfo);
       await starterPage.setViewportSize(viewport);
       await starterPage.goto("/app/clients");
       await expect(
@@ -563,6 +571,7 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
       extraHTTPHeaders: { [fixtureModeHeader]: "1" },
     });
     const anonymousPage = await anonymousContext.newPage();
+    installReleaseHydrationBridge(anonymousPage, testInfo);
     try {
       await anonymousPage.setViewportSize(viewport);
       const firstShareUrl = await shareReviewedReport();
@@ -585,6 +594,7 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
       await expectKeyboardFocus(anonymousPage);
 
       const concurrentOwnerPage = await context.newPage();
+      installReleaseHydrationBridge(concurrentOwnerPage, testInfo);
       await concurrentOwnerPage.setViewportSize(viewport);
       await Promise.all([
         page.goto("/app/shares"),
@@ -759,8 +769,9 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
     await signInAs(context, baseURL!, "e2e-agency");
     await page.setViewportSize(viewport);
     await page.goto("/app/reports/watchlist:missing-fixture");
-    await expect(page.getByRole("alert")).toContainText("Something went wrong");
-    await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+    await expect(page.getByRole("alert")).toContainText("Not found");
+    await expect(page.getByRole("alert")).toContainText("This page or item is no longer available.");
+    await expect(page.getByRole("button", { name: "Try again" })).toHaveCount(0);
     await expect(
       page.getByRole("link", { name: "Contact support" }),
     ).toBeVisible();

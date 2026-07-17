@@ -18,7 +18,7 @@ export function ErrorState({ error, title, message, retryable }: ErrorStateProps
   const canRetry = retryable ?? mapped?.retryable ?? true;
 
   return (
-    <div className="f9-dash-state f9-dash-state-error" role="alert">
+    <div className="f9-dash-state f9-dash-state-error" role="alert" tabIndex={-1}>
       <h2>{resolvedTitle}</h2>
       <p>{resolvedMessage}</p>
       <div className="f9-inline-actions">

@@ -18,22 +18,28 @@ afterEach(() => {
 });
 
 describe("ProviderObservationTimeField", () => {
-  it("submits an unambiguous UTC instant from a non-UTC browser local time", async () => {
+  async function renderField() {
     const container = document.createElement("div");
     document.body.appendChild(container);
     const root = createRoot(container);
 
-    try {
-      await act(async () => {
-        root.render(
-          createElement(
-            "form",
-            null,
-            createElement(ProviderObservationTimeField),
-          ),
-        );
-      });
+    await act(async () => {
+      root.render(
+        createElement(
+          "form",
+          null,
+          createElement(ProviderObservationTimeField),
+        ),
+      );
+    });
 
+    return { container, root };
+  }
+
+  it("submits an unambiguous UTC instant from a non-UTC browser local time", async () => {
+    const { container, root } = await renderField();
+
+    try {
       const localInput = container.querySelector<HTMLInputElement>(
         'input[type="datetime-local"]',
       );
@@ -51,6 +57,28 @@ describe("ProviderObservationTimeField", () => {
       const submitted = new FormData(form ?? undefined);
       expect(submitted.get("observedAt")).toBe("2026-07-16T19:30:00.000Z");
       expect(submitted.get("observedAtLocal")).toBe("2026-07-17T01:00");
+    } finally {
+      await act(async () => root.unmount());
+    }
+  });
+
+  it("keeps the UTC value in sync when the browser emits only change", async () => {
+    const { container, root } = await renderField();
+
+    try {
+      const localInput = container.querySelector<HTMLInputElement>(
+        'input[type="datetime-local"]',
+      );
+      expect(localInput).not.toBeNull();
+
+      await act(async () => {
+        if (!localInput) return;
+        localInput.value = "2026-07-17T01:00";
+        localInput.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+
+      const submitted = new FormData(container.querySelector("form") ?? undefined);
+      expect(submitted.get("observedAt")).toBe("2026-07-16T19:30:00.000Z");
     } finally {
       await act(async () => root.unmount());
     }

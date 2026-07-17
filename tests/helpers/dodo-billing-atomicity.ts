@@ -96,17 +96,15 @@ function seedBillingSchema(sqlite: ReturnType<typeof createSqliteD1>["sqlite"]) 
     CREATE TABLE evidence_top_up_grant (
       id TEXT PRIMARY KEY NOT NULL,
       workspace_user_id TEXT NOT NULL,
-      provider TEXT NOT NULL,
+      sku_slug TEXT NOT NULL,
       provider_payment_id TEXT NOT NULL UNIQUE,
       provider_product_id TEXT NOT NULL,
-      sku_slug TEXT NOT NULL,
       quantity_granted INTEGER NOT NULL,
       quantity_remaining INTEGER NOT NULL,
-      status TEXT NOT NULL,
       granted_at TEXT NOT NULL,
-      expires_at TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      status TEXT NOT NULL DEFAULT 'active',
+      catalog_version TEXT,
+      metadata_json TEXT NOT NULL DEFAULT '{}'
     );
 
     CREATE TABLE evidence_top_up_ledger_entry (

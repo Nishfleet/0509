@@ -376,6 +376,102 @@ describe("Gate-B Playwright release manifest reporter", () => {
     rmSync(directory, { recursive: true, force: true });
   });
 
+  it("fails strict release proof when React hydration errors cross stderr chunk boundaries", () => {
+    const directory = makeTestDirectory();
+    const outputPath = join(directory, "manifest.json");
+    const test = fakeTest("hydration-test", annotations(), "/private/worktree/e2e/hydration.spec.ts");
+    const reporter = new GateBManifestReporter({
+      outputPath,
+      candidateFingerprint: fingerprint,
+      environment: "local",
+      runOrigin,
+      serverIdentity,
+      strict: true,
+    });
+    reporter.onBegin({}, suite([test]));
+    reporter.onTestEnd(test, result("passed", 0, annotations()));
+    reporter.onStdErr(Buffer.from("[WebServer] Error: Hydration failed because the server ren"));
+    reporter.onStdErr(Buffer.from("[WebServer] dered text didn't match the client."));
+
+    expect(reporter.onEnd(fullResult("passed"))).toEqual({ status: "failed" });
+    expect(readManifest(outputPath).strictIssues).toContain("server_hydration_error");
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  it("fails strict release proof on React production hydration error 418", () => {
+    const directory = makeTestDirectory();
+    const outputPath = join(directory, "manifest.json");
+    const test = fakeTest("production-hydration-test", annotations());
+    const reporter = new GateBManifestReporter({
+      outputPath,
+      candidateFingerprint: fingerprint,
+      environment: "local",
+      runOrigin,
+      serverIdentity,
+      strict: true,
+    });
+    reporter.onBegin({}, suite([test]));
+    reporter.onTestEnd(test, result("passed", 0, annotations()));
+    reporter.onStdErr(Buffer.from(
+      "Minified React error #418; visit https://react.dev/errors/418?args[]=HTML",
+    ));
+
+    expect(reporter.onEnd(fullResult("passed"))).toEqual({ status: "failed" });
+    expect(readManifest(outputPath).strictIssues).toContain("server_hydration_error");
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  it("fails strict release proof when a browser hydration annotation is present", () => {
+    const directory = makeTestDirectory();
+    const outputPath = join(directory, "manifest.json");
+    const releaseAnnotations = [
+      ...annotations(),
+      { type: "reactHydrationError", description: "console" },
+    ];
+    const test = fakeTest("browser-hydration-test", releaseAnnotations);
+    const reporter = new GateBManifestReporter({
+      outputPath,
+      candidateFingerprint: fingerprint,
+      environment: "local",
+      runOrigin,
+      serverIdentity,
+      strict: true,
+    });
+    reporter.onBegin({}, suite([test]));
+    reporter.onTestEnd(test, result("passed", 0, annotations()));
+
+    expect(reporter.onEnd(fullResult("passed"))).toEqual({ status: "failed" });
+    const manifest = readManifest(outputPath);
+    expect(manifest.strictIssues).toContain("browser_hydration_error:console");
+    expect(JSON.stringify(manifest)).not.toContain("Hydration failed");
+    rmSync(directory, { recursive: true, force: true });
+  });
+
+  it("ignores unrelated expected fixture stderr", () => {
+    const directory = makeTestDirectory();
+    const outputPath = join(directory, "manifest.json");
+    const test = fakeTest("fixture-stderr", annotations(), "/private/worktree/e2e/fixture.spec.ts");
+    const reporter = new GateBManifestReporter({
+      outputPath,
+      candidateFingerprint: fingerprint,
+      environment: "local",
+      runOrigin,
+      serverIdentity,
+      strict: true,
+    });
+    reporter.onBegin({}, suite([test]));
+    reporter.onTestEnd(test, result("passed", 0, annotations()));
+    reporter.onStdErr(Buffer.from("[WebServer] Expected provider denial in retention fixture."));
+    reporter.onStdErr(
+      Buffer.from("Hydration failed because the server rendered text didn't match the client."),
+      test,
+    );
+
+    expect(reporter.onEnd(fullResult("passed"))).toEqual({ status: "passed" });
+    expect(readManifest(outputPath).strictIssues).toBeUndefined();
+    rmSync(directory, { recursive: true, force: true });
+  });
+
   it("records the configured browser and a safe nested relative signup return path", () => {
     const directory = makeTestDirectory();
     const outputPath = join(directory, "manifest.json");

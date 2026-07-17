@@ -1936,6 +1936,7 @@ describe("watchlists route rendering", () => {
     await mockRouter({
       actionData: undefined,
       loaderData: {
+        renderedAt: "2026-04-18T10:59:50.000Z",
         plan: "starter",
         canManageDelivery: false,
         verifiedAccountEmail: "member@example.com",
@@ -1996,6 +1997,7 @@ describe("watchlists route rendering", () => {
     expect(markup.match(/Delivery settings and recipient targets are managed by the workspace owner\./g)).toHaveLength(1);
     expect(markup).toContain("Ask the workspace owner to add or change delivery targets.");
     expect(markup).toContain("Recent evidence checks");
+    expect(markup).toContain("Last good evidence check 1h ago");
     expect(markup).toContain("Delivery settings");
     expect(markup).not.toContain("Slack enabled");
     expect(markup).not.toContain("WhatsApp — not yet available");
@@ -2016,6 +2018,7 @@ describe("watchlists route rendering", () => {
     await mockRouter({
       actionData: undefined,
       loaderData: {
+        renderedAt: "2026-04-18T10:59:50.000Z",
         plan: "starter",
         watchlists: [watchlist],
         selectedWatchlist: watchlist,
@@ -2080,6 +2083,7 @@ describe("watchlists route rendering", () => {
     await mockRouter({
       actionData: undefined,
       loaderData: {
+        renderedAt: "2026-04-18T10:59:50.000Z",
         plan: "starter",
         watchlists: [watchlist],
         selectedWatchlist: watchlist,

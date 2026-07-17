@@ -200,10 +200,83 @@ function exactIsoTimestamp(value) {
   return value;
 }
 
+function journey5ExpectedEventCtes() {
+  return `
+  expected_j5_viewport(viewport) AS (
+    VALUES ('375x812'), ('768x900'), ('1440x900')
+  ),
+  expected_j5_event_shape(event_index, event_type, outcome) AS (
+    VALUES
+      (0, 'payment.succeeded', 'processed'),
+      (2, 'payment.failed', 'processed'),
+      (3, 'subscription.renewed', 'processed'),
+      (4, 'subscription.plan_changed', 'processed'),
+      (5, 'subscription.plan_changed', 'ignored'),
+      (6, 'subscription.plan_changed', 'ignored'),
+      (7, 'subscription.plan_changed', 'processed'),
+      (8, 'subscription.plan_changed', 'processed'),
+      (9, 'subscription.plan_changed', 'processed'),
+      (10, 'payment.succeeded', 'processed'),
+      (11, 'subscription.cancelled', 'processed'),
+      (12, 'subscription.expired', 'processed'),
+      (13, 'payment.succeeded', 'processed'),
+      (14, 'refund.succeeded', 'processed'),
+      (15, 'refund.failed', 'ignored'),
+      (16, 'refund.succeeded', 'processed')
+  ),
+  expected_j5_event(event_id, event_type, outcome) AS (
+    SELECT
+      'e2e-j5-event:' || viewport || ':' || event_index,
+      event_type,
+      outcome
+    FROM expected_j5_viewport
+    CROSS JOIN expected_j5_event_shape
+  )`;
+}
+
+function journey5EventCountExpression() {
+  return `(SELECT COUNT(*) FROM dodo_webhook_event
+    WHERE event_id LIKE 'e2e-j5-event:%')`;
+}
+
+function journey5EventMismatchExpression() {
+  return `CASE
+    WHEN ${journey5EventCountExpression()} = 0 THEN 0
+    ELSE
+      (SELECT COUNT(*)
+       FROM expected_j5_event expected
+       LEFT JOIN dodo_webhook_event actual
+         ON actual.event_id = expected.event_id
+        AND actual.event_type = expected.event_type
+        AND actual.outcome = expected.outcome
+       WHERE actual.event_id IS NULL)
+      +
+      (SELECT COUNT(*)
+       FROM dodo_webhook_event actual
+       LEFT JOIN expected_j5_event expected
+         ON expected.event_id = actual.event_id
+        AND expected.event_type = actual.event_type
+        AND expected.outcome = actual.outcome
+       WHERE actual.event_id LIKE 'e2e-j5-event:%'
+         AND expected.event_id IS NULL)
+  END`;
+}
+
+export function journey5EventInvariantQuery() {
+  return `
+WITH
+${journey5ExpectedEventCtes()}
+SELECT
+  ${journey5EventCountExpression()} AS j5_event_count,
+  ${journey5EventMismatchExpression()} AS j5_event_mismatch_count;
+`;
+}
+
 export function fixtureReleaseStateQuery(releaseStartedAt) {
   const startedAt = exactIsoTimestamp(releaseStartedAt);
   return `
 WITH
+${journey5ExpectedEventCtes()},
   expected_users(user_id) AS (
     VALUES ('e2e-activation'), ('e2e-activation-tablet'), ('e2e-activation-desktop')
   ),
@@ -516,13 +589,8 @@ SELECT
     WHERE event_id GLOB 'e2e-j5-replay:e2e-j5-billing-lifecycle-???x???'
        OR event_id GLOB 'e2e-j5-replay:e2e-j5-billing-lifecycle-????x???'
   ) AS j5_replay_count,
-  (SELECT COUNT(*) FROM dodo_webhook_event
-    WHERE event_id LIKE 'e2e-j5-event:%'
-  ) AS j5_event_count,
-  (SELECT COUNT(*) FROM dodo_webhook_event
-    WHERE event_id LIKE 'e2e-j5-event:%'
-      AND outcome NOT IN ('processed', 'ignored')
-  ) AS j5_event_mismatch_count,
+  ${journey5EventCountExpression()} AS j5_event_count,
+  ${journey5EventMismatchExpression()} AS j5_event_mismatch_count,
   (SELECT COUNT(*) FROM dodo_webhook_event replay
     WHERE (replay.event_id GLOB 'e2e-j5-replay:e2e-j5-billing-lifecycle-???x???'
         OR replay.event_id GLOB 'e2e-j5-replay:e2e-j5-billing-lifecycle-????x???')
@@ -549,7 +617,7 @@ SELECT
         OR json_extract(replay.metadata_json, '$.result.lifecycle.planChangeApplied') IS NOT 1
         OR json_extract(replay.metadata_json, '$.result.lifecycle.cancelledExpiredRevoked') IS NOT 1
         OR json_extract(replay.metadata_json, '$.result.lifecycle.fullRefundRevoked') IS NOT 1
-        OR json_extract(replay.metadata_json, '$.result.lifecycle.partialPendingFailedNoMutation') IS NOT 1
+        OR json_extract(replay.metadata_json, '$.result.lifecycle.partialAndFailedNoMutation') IS NOT 1
         OR json_extract(replay.metadata_json, '$.result.controlledInbox.accepted') IS NOT 4
         OR json_extract(replay.metadata_json, '$.result.controlledInbox.externalProviderCalled') IS NOT 0
         OR json_extract(replay.metadata_json, '$.result.controlledInbox.tags[0]') IS NOT 'billing-cancellation'
@@ -805,7 +873,7 @@ function releaseExactCounts(journeyScope = [2]) {
     j4_ui_active_share_count: journeyScope.includes(4) ? 3 : 0,
     j4_ui_revoked_share_count: journeyScope.includes(4) ? 3 : 0,
     j4_ui_share_count: journeyScope.includes(4) ? 6 : 0,
-    j5_event_count: journeyScope.includes(5) ? 51 : 0,
+    j5_event_count: journeyScope.includes(5) ? 48 : 0,
     // The three activation personas are pristine Free fixtures unless J5
     // runs its signed activation lifecycle. Keep that expected seed delta
     // explicit so independently runnable journeys do not inherit J5 state.

@@ -55,6 +55,7 @@ afterEach(() => {
 describe("ops route", () => {
   it("allows an allowlisted operator to load the snapshot", async () => {
     const listBillingLifecycleReconciliationCandidates = vi.fn().mockResolvedValue([]);
+    const listPendingPartialRefundReconciliations = vi.fn().mockResolvedValue([]);
     const listStaleDodoSubscriptionPlanChangeClaims = vi.fn().mockResolvedValue([]);
     const getOperatorSnapshot = vi.fn().mockResolvedValue({
       summary: {
@@ -93,6 +94,7 @@ describe("ops route", () => {
     vi.doMock("~/lib/data.server", () => ({
       getOperatorSnapshot,
       listBillingLifecycleReconciliationCandidates,
+      listPendingPartialRefundReconciliations,
       listStaleDodoSubscriptionPlanChangeClaims,
     }));
 
@@ -114,9 +116,12 @@ describe("ops route", () => {
       billingLifecycleWarning: null,
       stalePlanChangeClaims: [],
       planChangeWarning: null,
+      pendingPartialRefundReconciliations: [],
+      partialRefundWarning: null,
     });
     expect(getOperatorSnapshot).toHaveBeenCalledTimes(1);
     expect(listBillingLifecycleReconciliationCandidates).toHaveBeenCalledTimes(1);
+    expect(listPendingPartialRefundReconciliations).toHaveBeenCalledTimes(1);
     expect(listStaleDodoSubscriptionPlanChangeClaims).toHaveBeenCalledTimes(1);
   });
 
@@ -756,6 +761,105 @@ describe("ops route", () => {
     );
   });
 
+  it("renders pending partial-refund recovery without exposing customer identity", async () => {
+    await mockRouter(() => ({
+      billingLifecycleCandidates: [],
+      billingLifecycleWarning: null,
+      stalePlanChangeClaims: [],
+      planChangeWarning: null,
+      pendingPartialRefundReconciliations: [{
+        eventId: "evt-partial-provider-1234",
+        paymentId: "pay-private-1234",
+        refundId: "ref-private-1234",
+        refundAmount: 1299,
+        refundCurrency: "USD",
+        refundReason: "private provider reason",
+        processedAt: "2026-07-17T01:00:00.000Z",
+        availableCredits: 8,
+      }],
+      partialRefundWarning: null,
+      snapshot: {
+        summary: {
+          failingRuns: 0,
+          stuckRuns: 0,
+          failedProofs: 0,
+          budgetBlockedProofs: 0,
+          blockedTargets: 0,
+          deliveryFailures: 0,
+          deliveryAttention: 0,
+          degradedWatchlists: 0,
+          discoveryFailures: 0,
+          discoveryProvidersNeedingAttention: 0,
+        },
+        warnings: [],
+        supportCases: [],
+        failingRuns: [],
+        stuckRuns: [],
+        failedProofs: [],
+        budgetBlockedProofs: [],
+        blockedTargets: [],
+        deliveryFailures: [],
+        deliveryAttention: [],
+        degradedWatchlists: [],
+        discoveryFailures: [],
+        discoveryProviders: [],
+      },
+    }));
+
+    const { default: OpsRoute } = await import("~/routes/app.ops");
+    const markup = renderToStaticMarkup(createElement(OpsRoute));
+    expect(markup).toContain("Partial refunds awaiting operator reconciliation");
+    expect(markup).toContain("Record refund reconciliation");
+    expect(markup).toContain('value="reconcile-partial-refund"');
+    expect(markup).toContain("Proof credits to revoke");
+    expect(markup).toContain("Private evidence reference");
+    expect(markup).not.toContain("pay-private-1234");
+    expect(markup).not.toContain("ref-private-1234");
+    expect(markup).not.toContain("private provider reason");
+    expect(markup).not.toContain("owner@example.com");
+  });
+
+  it("records an allowlisted operator's partial-refund decision without contacting the provider", async () => {
+    const reconcilePartialRefundWithAudit = vi.fn().mockResolvedValue({
+      reconciled: true,
+      replayed: false,
+      decision: "revoke",
+      appliedQuantity: 5,
+    });
+    vi.doMock("~/lib/auth.server", () => ({ requireSession: vi.fn().mockResolvedValue(session) }));
+    vi.doMock("~/lib/data.server", () => ({ reconcilePartialRefundWithAudit }));
+
+    const form = new FormData();
+    form.set("intent", "reconcile-partial-refund");
+    form.set("eventId", "evt-partial-1");
+    form.set("expectedProcessedAt", "2026-07-17T01:00:00.000Z");
+    form.set("decision", "revoke");
+    form.set("creditQuantityToRevoke", "5");
+    form.set("evidenceReference", "dodo-refund-observation-123");
+    form.set("observedAt", "2026-07-17T02:00:00.000Z");
+
+    const { action } = await import("~/routes/app.ops");
+    const result = await action({
+      context: createContext({ OPS_ALLOWLIST_EMAILS: "owner@example.com" }),
+      request: new Request("http://localhost/app/ops", { method: "POST", body: form }),
+    } as never);
+
+    expect(result).toMatchObject({
+      ok: true,
+      intent: "reconcile-partial-refund",
+      message: expect.stringContaining("No provider refund request was sent"),
+    });
+    expect(reconcilePartialRefundWithAudit).toHaveBeenCalledWith(expect.anything(), {
+      operatorUserId: "user-1",
+      eventId: "evt-partial-1",
+      expectedProcessedAt: "2026-07-17T01:00:00.000Z",
+      decision: "revoke",
+      creditQuantityToRevoke: 5,
+      evidenceReference: "dodo-refund-observation-123",
+      observedAt: "2026-07-17T02:00:00.000Z",
+    });
+  });
+
   it("renders and checks stale plan changes without exposing account identity or resending", async () => {
     await mockRouter(() => ({
       billingLifecycleCandidates: [],
@@ -840,10 +944,12 @@ describe("ops route", () => {
       new Error("raw database failure"),
     );
     const listStaleDodoSubscriptionPlanChangeClaims = vi.fn().mockResolvedValue([]);
+    const listPendingPartialRefundReconciliations = vi.fn().mockResolvedValue([]);
     vi.doMock("~/lib/auth.server", () => ({ requireSession: vi.fn().mockResolvedValue(session) }));
     vi.doMock("~/lib/data.server", () => ({
       getOperatorSnapshot,
       listBillingLifecycleReconciliationCandidates,
+      listPendingPartialRefundReconciliations,
       listStaleDodoSubscriptionPlanChangeClaims,
     }));
 
@@ -859,6 +965,8 @@ describe("ops route", () => {
       billingLifecycleWarning: "Billing lifecycle reconciliation could not be loaded.",
       stalePlanChangeClaims: [],
       planChangeWarning: null,
+      pendingPartialRefundReconciliations: [],
+      partialRefundWarning: null,
     });
     expect(JSON.stringify(result)).not.toContain("raw database failure");
   });
