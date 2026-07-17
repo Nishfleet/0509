@@ -1769,7 +1769,7 @@ button[aria-busy="true"] {
 }
 
 .f9-auth-story h1 {
-  max-width: 10.6ch;
+  max-width: min(100%, 32rem);
   margin: 10px 0 0;
   color: #fff;
   font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
