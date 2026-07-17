@@ -33,4 +33,10 @@ describe("public accessibility source contract", () => {
   .f9-search-page .f9-cursor-rail nav a {
     min-height: 44px;`);
   });
+
+  it("keeps the auth story headline inside its box when the display font falls back", () => {
+    expect(css).toContain(`.f9-auth-story h1 {
+  max-width: min(100%, 32rem);`);
+    expect(css).not.toContain("max-width: 10.6ch;");
+  });
 });
