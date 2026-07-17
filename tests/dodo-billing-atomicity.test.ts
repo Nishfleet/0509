@@ -16,7 +16,11 @@ import {
 import { effectivePlanFromRow } from "~/lib/plan-effective.server";
 import { createSqliteD1 } from "./helpers/sqlite-d1";
 
-function seedBillingSchema(sqlite: ReturnType<typeof createSqliteD1>["sqlite"]) {
+function seedBillingSchema(
+  sqlite: ReturnType<typeof createSqliteD1>["sqlite"],
+  options: { omitPayloadTimestamp?: boolean } = {},
+) {
+  const payloadTimestampColumn = options.omitPayloadTimestamp ? "" : "payload_timestamp TEXT,";
   sqlite.exec(`
     CREATE TABLE user (
       id TEXT PRIMARY KEY NOT NULL
@@ -77,7 +81,7 @@ function seedBillingSchema(sqlite: ReturnType<typeof createSqliteD1>["sqlite"]) 
       event_type TEXT NOT NULL,
       user_id TEXT,
       received_at TEXT NOT NULL DEFAULT (datetime('now')),
-      payload_timestamp TEXT,
+      ${payloadTimestampColumn}
       processed_at TEXT,
       outcome TEXT NOT NULL DEFAULT 'received',
       processing_started_at TEXT,
@@ -152,10 +156,10 @@ describe("Dodo billing atomicity (sqlite)", () => {
     }
   });
 
-  function openEnv() {
+  function openEnv(options: { omitPayloadTimestamp?: boolean } = {}) {
     const harness = createSqliteD1();
     fixtures.push(harness);
-    seedBillingSchema(harness.sqlite);
+    seedBillingSchema(harness.sqlite, options);
     return { DB: harness.db } as never;
   }
 
@@ -211,6 +215,64 @@ describe("Dodo billing atomicity (sqlite)", () => {
 			env, starterGrant(overrides), processedLedger(eventId, "cancellation_reversal"),
 		);
 	}
+
+  it("keeps lease-aware lifecycle transitions when payload timestamps are absent", async () => {
+    const env = openEnv({ omitPayloadTimestamp: true });
+    const harness = fixtures.at(-1)!;
+
+    await expect(
+      beginDodoWebhookEventProcessing(env, {
+        eventId: "evt-legacy-payload",
+        eventType: "payment.succeeded",
+        userId: "user-1",
+        payloadTimestamp: "1765459200",
+      }),
+    ).resolves.toEqual({ status: "claimed" });
+    expect(
+      harness.sqlite
+        .prepare("SELECT outcome, processing_started_at FROM dodo_webhook_event WHERE event_id = ?")
+        .get("evt-legacy-payload"),
+    ).toEqual({ outcome: "processing", processing_started_at: expect.any(String) });
+
+    await failDodoWebhookEventProcessing(env, "evt-legacy-payload", {
+      action: "lifecycle_email_retry",
+      kind: "refund",
+      userId: "user-1",
+      idempotencyKey: "billing-refund:user-1:evt-legacy-payload",
+      error: "retry",
+    });
+    expect(
+      harness.sqlite
+        .prepare("SELECT outcome, processing_started_at FROM dodo_webhook_event WHERE event_id = ?")
+        .get("evt-legacy-payload"),
+    ).toEqual({ outcome: "failed", processing_started_at: null });
+
+    await expect(
+      beginDodoWebhookEventProcessing(env, {
+        eventId: "evt-legacy-payload",
+        eventType: "payment.succeeded",
+        userId: "user-1",
+        payloadTimestamp: "1765459200",
+      }),
+    ).resolves.toEqual({
+      status: "claimed",
+      lifecycleEmailRetry: {
+        kind: "refund",
+        userId: "user-1",
+        idempotencyKey: "billing-refund:user-1:evt-legacy-payload",
+      },
+    });
+    await finalizeDodoWebhookLedgerOnly(env, {
+      eventId: "evt-legacy-payload",
+      outcome: "processed",
+      metadata: { action: "legacy_payload_compatibility" },
+    });
+    expect(
+      harness.sqlite
+        .prepare("SELECT outcome, processing_started_at FROM dodo_webhook_event WHERE event_id = ?")
+        .get("evt-legacy-payload"),
+    ).toEqual({ outcome: "processed", processing_started_at: null });
+  });
 
   it("commits grant, watchlist reconcile, and processed ledger in one batch", async () => {
     const env = openEnv();

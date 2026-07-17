@@ -209,35 +209,50 @@ export async function beginDodoWebhookEventProcessing(
       throw error;
     }
 
-    result = await db.prepare(`
-        INSERT INTO dodo_webhook_event (
-          event_id,
-          event_type,
-          user_id,
-          received_at,
-          outcome,
-          metadata_json
-        )
-        VALUES (?, ?, ?, ?, 'received', '{}')
-        ON CONFLICT(event_id)
-        DO UPDATE SET
-          event_type = excluded.event_type,
-          user_id = excluded.user_id,
-          received_at = excluded.received_at,
-          processed_at = NULL,
-          outcome = 'received',
-          metadata_json = CASE
-            WHEN dodo_webhook_event.outcome = 'failed'
-              THEN dodo_webhook_event.metadata_json
-            ELSE '{}'
-          END
-        WHERE dodo_webhook_event.outcome = 'failed'
-      `).bind(
-        eventId,
-        input.eventType,
-        input.userId,
-        receivedAt,
-      ).run();
+    if (isMissingDodoPayloadTimestampColumnError(error)) {
+      try {
+        result = await db.prepare(`
+          INSERT INTO dodo_webhook_event (
+            event_id,
+            event_type,
+            user_id,
+            received_at,
+            outcome,
+            processing_started_at,
+            metadata_json
+          )
+          VALUES (?, ?, ?, ?, 'processing', ?, '{}')
+          ON CONFLICT(event_id)
+          DO UPDATE SET
+            event_type = excluded.event_type,
+            user_id = excluded.user_id,
+            received_at = excluded.received_at,
+            outcome = 'processing',
+            processing_started_at = excluded.processing_started_at,
+            processed_at = NULL,
+            metadata_json = CASE
+              WHEN dodo_webhook_event.outcome = 'failed'
+                THEN dodo_webhook_event.metadata_json
+              WHEN json_extract(dodo_webhook_event.metadata_json, '$.action') = 'lifecycle_email_retry'
+                THEN dodo_webhook_event.metadata_json
+              ELSE '{}'
+            END
+          WHERE ${reclaimWhere}
+        `).bind(
+          eventId,
+          input.eventType,
+          input.userId,
+          receivedAt,
+          receivedAt,
+          receivedAt,
+          leaseDays,
+        ).run();
+      } catch (fallbackError) {
+        throw fallbackError;
+      }
+    } else {
+      throw error;
+    }
   }
 
   if (Number(result.meta?.changes ?? 0) > 0) {
