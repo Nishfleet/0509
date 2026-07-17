@@ -118,7 +118,7 @@ describe("Journey 6 localhost auth outage replay contract", () => {
     }));
     vi.doMock("~/lib/better-auth.server", () => ({ getBetterAuthSession }));
 
-    const { getOptionalSession, requireSession } = await import("~/lib/auth.server");
+    const { getCachedOptionalSession, requireSession } = await import("~/lib/auth.server");
     const outageRequest = new Request("http://127.0.0.1:43127/app", {
       headers: {
         cookie: "f9_e2e_fixture=e2e-starter",
@@ -127,7 +127,7 @@ describe("Journey 6 localhost auth outage replay contract", () => {
       },
     });
     const testEnv = { DB: {} as D1Database };
-    await expect(getOptionalSession(testEnv, outageRequest)).rejects.toMatchObject({
+    await expect(getCachedOptionalSession(testEnv, outageRequest)).rejects.toMatchObject({
       name: "AuthSessionUnavailableError",
     });
     let outageResponse: Response | null = null;

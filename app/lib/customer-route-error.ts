@@ -1,3 +1,5 @@
+import { isRouteErrorResponse } from "react-router";
+
 export interface CustomerRouteError {
   title: string;
   message: string;
@@ -63,8 +65,11 @@ function messageFromUnknown(error: unknown): string | null {
 }
 
 export function mapCustomerRouteError(error: unknown): CustomerRouteError {
-  if (error instanceof Response) {
-    if (error.status === 401) {
+  if (error instanceof Response || isRouteErrorResponse(error)) {
+    const status = error.status;
+    const statusText = error.statusText;
+
+    if (status === 401) {
       return {
         title: "Sign in required",
         message: "Sign in again to continue.",
@@ -73,7 +78,7 @@ export function mapCustomerRouteError(error: unknown): CustomerRouteError {
         recoveryAction: "sign_in",
       };
     }
-    if (error.status === 404) {
+    if (status === 404) {
       return {
         title: "Not found",
         message: "This page or item is no longer available.",
@@ -81,7 +86,7 @@ export function mapCustomerRouteError(error: unknown): CustomerRouteError {
         category: "not_found",
       };
     }
-    if (error.status === 403) {
+    if (status === 403) {
       return {
         title: "Access denied",
         message: "You do not have permission to view this.",
@@ -89,7 +94,7 @@ export function mapCustomerRouteError(error: unknown): CustomerRouteError {
         category: "permission",
       };
     }
-    if (error.status === 402 || error.status === 409) {
+    if (status === 402 || status === 409) {
       return {
         title: "Plan limit reached",
         message: "This action is not available on your current plan or usage level.",
@@ -98,7 +103,16 @@ export function mapCustomerRouteError(error: unknown): CustomerRouteError {
         recoveryAction: "upgrade",
       };
     }
-    if (error.status >= 500) {
+    if (status === 503 && statusText === "Authentication temporarily unavailable") {
+      return {
+        title: "Temporarily unavailable",
+        message: "Authentication is temporarily unavailable. Please try again in a moment.",
+        retryable: true,
+        category: "unavailable",
+        recoveryAction: "retry",
+      };
+    }
+    if (status >= 500) {
       return {
         title: "Something went wrong",
         message: "Five to Nine hit a server error. Try again in a moment.",

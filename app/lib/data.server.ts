@@ -130,6 +130,15 @@ export {
 } from "~/lib/data/billing.server";
 
 export {
+  listPendingPartialRefundReconciliations,
+  partialRefundLedgerKey,
+  partialRefundReconciliationKey,
+  reconcilePartialRefundWithAudit,
+  type PartialRefundReconciliationDecision,
+  type PendingPartialRefundReconciliation,
+} from "~/lib/data/billing-refund-reconciliation.server";
+
+export {
   legacyWorkspaceDeliveryDefaults,
   migrateAutoProvisionedEmailTargets,
   listRetryableInstantAttempts,

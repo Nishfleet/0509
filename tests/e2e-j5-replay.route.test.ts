@@ -177,7 +177,6 @@ describe("Journey 5 localhost billing replay route contract", () => {
       expired_after_cancel: transitionEvidence(cancelled, expiredAfterCancel, { revoked: true }),
       refunded_activation: transitionEvidence(free, refundActive),
       refund_partial: transitionEvidence(refundActive, refundActive, { ignored: true }),
-      refund_pending: transitionEvidence(refundActive, refundActive, { ignored: true }),
       refund_failed: transitionEvidence(refundActive, refundActive, { ignored: true }),
       refund_succeeded: transitionEvidence(refundActive, refunded, { refunded: true }),
     };
@@ -195,7 +194,7 @@ describe("Journey 5 localhost billing replay route contract", () => {
       planChangeApplied: true,
       cancelledExpiredRevoked: true,
       fullRefundRevoked: true,
-      partialPendingFailedNoMutation: true,
+      partialAndFailedNoMutation: true,
     });
     const falseGreen = {
       ...evidence,

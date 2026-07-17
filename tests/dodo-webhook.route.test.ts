@@ -960,6 +960,113 @@ describe("Dodo webhook route", () => {
     );
   });
 
+  it("marks partial refunds as audit-only in the durable billing ledger", async () => {
+    const { data } = mockWebhookDependencies({
+      billing: {
+        extractDodoRefund: vi.fn(() => ({
+          eventType: "refund.succeeded",
+          paymentId: "pay-partial-audit",
+          refundId: "ref-partial-audit",
+          refundAmount: 499,
+          refundCurrency: "USD",
+          refundReason: "requested_by_customer",
+          refundType: "partial",
+          refundedAt: "2026-07-05T00:00:00.000Z",
+          metadata: {},
+        })),
+      },
+      data: {
+        getUserIdForDodoPayment: vi.fn().mockResolvedValue("user-refund"),
+      },
+    });
+
+    const { action } = await import("~/routes/api.webhooks.dodo");
+    await action({
+      context: {},
+      request: webhookRequest("evt-partial-audit", { type: "refund.succeeded" }),
+      params: {},
+    } as never);
+
+    expect(data.applyDodoRefundWithWatchlistReconcile).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ refundType: "partial" }),
+      1,
+      expect.objectContaining({
+        eventId: "evt-partial-audit",
+        metadata: expect.objectContaining({
+          refundType: "partial",
+          creditMutationPolicy: "audit_only_v2",
+          refundId: "ref-partial-audit",
+          refundAmount: 499,
+          refundCurrency: "USD",
+          refundReason: "requested_by_customer",
+          refundReconciliationStatus: "pending",
+        }),
+      }),
+      expect.anything(),
+    );
+  });
+
+  it("fails malformed signed refunds for retry instead of ignoring them", async () => {
+    const { data } = mockWebhookDependencies();
+    const { action } = await import("~/routes/api.webhooks.dodo");
+
+    await expectBoundedWebhookFailure(
+      () =>
+        action({
+          context: {},
+          request: webhookRequest("evt-malformed-refund", { type: "refund.succeeded" }),
+          params: {},
+        } as never),
+      ["dodo_refund_payload_unresolvable"],
+    );
+
+    expect(data.failDodoWebhookEventProcessing).toHaveBeenCalledWith(
+      expect.anything(),
+      "evt-malformed-refund",
+      { error: "dodo_refund_payload_unresolvable" },
+    );
+    expect(data.finalizeDodoWebhookLedgerOnly).not.toHaveBeenCalled();
+    expect(data.applyDodoRefundWithWatchlistReconcile).not.toHaveBeenCalled();
+    expect(data.applyDodoProofCreditGrantWithLedger).not.toHaveBeenCalled();
+  });
+
+  it("rejects a complete flat refund even when its outer status says succeeded", async () => {
+    const { extractDodoRefund } = await import("~/lib/dodo-billing.server");
+    const { data } = mockWebhookDependencies({
+      billing: { extractDodoRefund },
+      data: { getUserIdForDodoPayment: vi.fn().mockResolvedValue("user-refund") },
+    });
+    const { action } = await import("~/routes/api.webhooks.dodo");
+
+    await expectBoundedWebhookFailure(
+      () =>
+        action({
+          context: {},
+          request: webhookRequest("evt-refund-missing-status", {
+            type: "refund.succeeded",
+            payload_type: "Refund",
+            refund_id: "ref-missing-status",
+            payment_id: "pay-refunded",
+            brand_id: "brand_0509",
+            status: "succeeded",
+            is_partial: false,
+            created_at: "2026-07-05T00:00:00.000Z",
+          }),
+          params: {},
+        } as never),
+      ["dodo_refund_payload_unresolvable", "pay-refunded", "ref-missing-status"],
+    );
+
+    expect(data.failDodoWebhookEventProcessing).toHaveBeenCalledWith(
+      expect.anything(),
+      "evt-refund-missing-status",
+      { error: "dodo_refund_payload_unresolvable" },
+    );
+    expect(data.applyDodoRefundWithWatchlistReconcile).not.toHaveBeenCalled();
+    expect(data.finalizeDodoWebhookLedgerOnly).not.toHaveBeenCalled();
+  });
+
   it("resolves lifecycle events without metadata user id by stored Dodo subscription linkage", async () => {
     const { data } = mockWebhookDependencies({
       billing: {

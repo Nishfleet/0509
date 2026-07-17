@@ -23,7 +23,7 @@ describe("evidence usage policy hooks", () => {
     expect(topUpSpendRequiresActivePaidPlan("agency")).toBe(true);
   });
 
-  it("claws back only unspent top-up checks for full and partial refunds", () => {
+  it("claws back unspent top-up checks only for full refunds", () => {
     expect(
       topUpRefundQuantityAdjustment({
         grantedQuantity: 500,
@@ -31,23 +31,14 @@ describe("evidence usage policy hooks", () => {
         refundType: "full",
       }),
     ).toBe(-120);
-    expect(
-      topUpRefundQuantityAdjustment({
-        grantedQuantity: 500,
-        remainingQuantity: 120,
-        refundType: "partial",
-      }),
-    ).toBe(-120);
   });
 
-  it("keeps unknown refund shapes in operator review", () => {
-    expect(
-      topUpRefundQuantityAdjustment({
-        grantedQuantity: 500,
-        remainingQuantity: 120,
-        refundType: "unknown",
-      }),
-    ).toBeNull();
+  it.each(["partial", "unknown"] as const)("keeps %s refunds in operator review", (refundType) => {
+    expect(topUpRefundQuantityAdjustment({
+      grantedQuantity: 500,
+      remainingQuantity: 120,
+      refundType,
+    })).toBeNull();
   });
 
   it("does not transfer top-up grants across workspace ownership or merge changes", () => {

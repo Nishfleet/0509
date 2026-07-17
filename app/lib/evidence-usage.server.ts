@@ -1097,6 +1097,16 @@ async function releaseEvidenceReservationWithGuard(
                 AND released_at = ?
                 AND source LIKE '%:atomic'
             )
+              AND NOT EXISTS (
+                SELECT 1
+                FROM evidence_top_up_ledger_entry
+                WHERE grant_id = ?
+                  AND entry_type = 'refund'
+                  AND COALESCE(
+                    json_extract(metadata_json, '$.reason'),
+                    'full_provider_refund'
+                  ) = 'full_provider_refund'
+              )
             ON CONFLICT(idempotency_key) DO NOTHING
           `,
         )
@@ -1109,6 +1119,7 @@ async function releaseEvidenceReservationWithGuard(
           nowIso(),
           row.id,
           releasedAt,
+          row.top_up_grant_id,
         ),
       db
         .prepare(

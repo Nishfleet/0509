@@ -145,6 +145,15 @@ describe("production deployment readiness gate", () => {
       remoteRestoreEvidencePath,
       wranglerOutputPath,
     });
+    const earlyRefundPreflight = plan.find((step: any) => step.id === "partial_refund_invariants_preflight");
+    expect(earlyRefundPreflight).toMatchObject({
+      command: "node",
+      args: ["scripts/check-partial-refund-invariants.mjs"],
+      includeCloudflareCredentials: true,
+    });
+    expect(plan.indexOf(earlyRefundPreflight!)).toBeLessThan(
+      plan.findIndex((step: any) => step.id === "migration_sync"),
+    );
     expect(plan.findIndex((step: any) => step.id === "launch_readiness")).toBeLessThan(
       plan.findIndex((step: any) => step.id === "readiness_evidence"),
     );
@@ -160,6 +169,114 @@ describe("production deployment readiness gate", () => {
     expect(plan.findIndex((step: any) => step.id === "deploy")).toBeLessThan(
       plan.findIndex((step: any) => step.id === "post_deploy_release_canary"),
     );
+    const deployIndex = plan.findIndex((step: any) => step.id === "deploy");
+    expect(plan[deployIndex - 1]).toMatchObject({
+      id: "partial_refund_invariants_predeploy",
+      command: "node",
+      args: ["scripts/check-partial-refund-invariants.mjs"],
+      includeCloudflareCredentials: true,
+    });
+    expect(plan[deployIndex + 1]).toMatchObject({
+      id: "partial_refund_invariants_postdeploy",
+      command: "node",
+      args: ["scripts/check-partial-refund-invariants.mjs"],
+      includeCloudflareCredentials: true,
+    });
+    const canaryIndex = plan.findIndex((step: any) => step.id === "post_deploy_release_canary");
+    expect(plan[canaryIndex + 1]).toMatchObject({
+      id: "partial_refund_invariants_postcanary",
+      command: "node",
+      args: ["scripts/check-partial-refund-invariants.mjs"],
+      includeCloudflareCredentials: true,
+    });
+    expect(plan[canaryIndex + 2]).toMatchObject({ id: "live_public_truth" });
+  });
+
+  it("stops at the executable refund preflight before migration or deploy", () => {
+    const plan = buildProductionDeployPlan({
+      manifestPath: "test-results/deploy-readiness-test.json",
+      remoteRestoreEvidencePath,
+      wranglerOutputPath,
+    });
+    const executed: string[] = [];
+    expect(() => executeProductionDeployPlan(plan, (step: any) => {
+      executed.push(step.id);
+      if (step.id === "partial_refund_invariants_preflight") {
+        throw new Error("refund_preflight_failed");
+      }
+    })).toThrow("refund_preflight_failed");
+    expect(executed).toEqual([
+      "public_source_truth",
+      "workspace_membership_preflight",
+      "partial_refund_invariants_preflight",
+    ]);
+    expect(executed).not.toContain("migration_sync");
+    expect(executed).not.toContain("deploy");
+  });
+
+  it.each([
+    ["partial_refund_invariants_predeploy", "deploy"],
+    ["partial_refund_invariants_postdeploy", "post_deploy_release_canary"],
+    ["partial_refund_invariants_postcanary", "live_public_truth"],
+  ])("stops at %s before %s", (failureStep, blockedStep) => {
+    const plan = buildProductionDeployPlan({
+      manifestPath: "test-results/deploy-readiness-test.json",
+      remoteRestoreEvidencePath,
+      wranglerOutputPath,
+    });
+    const executed: string[] = [];
+    expect(() => executeProductionDeployPlan(plan, (step: any) => {
+      executed.push(step.id);
+      if (step.id === failureStep) throw new Error(`${failureStep}_failed`);
+    })).toThrow(`${failureStep}_failed`);
+    expect(executed).toContain(failureStep);
+    expect(executed).not.toContain(blockedStep);
+  });
+
+  it("runs the post-canary refund invariant before rethrowing a canary failure", () => {
+    const plan = buildProductionDeployPlan({
+      manifestPath: "test-results/deploy-readiness-test.json",
+      remoteRestoreEvidencePath,
+      wranglerOutputPath,
+    });
+    const executed: string[] = [];
+    const canaryFailure = new Error("post_deploy_release_canary_failed");
+    let caught: unknown;
+    try {
+      executeProductionDeployPlan(plan, (step: any) => {
+        executed.push(step.id);
+        if (step.id === "post_deploy_release_canary") throw canaryFailure;
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBe(canaryFailure);
+    expect(executed).toContain("partial_refund_invariants_postcanary");
+    expect(executed).not.toContain("live_public_truth");
+  });
+
+  it("preserves both failures when the canary and post-canary invariant fail", () => {
+    const plan = buildProductionDeployPlan({
+      manifestPath: "test-results/deploy-readiness-test.json",
+      remoteRestoreEvidencePath,
+      wranglerOutputPath,
+    });
+    const canaryFailure = new Error("post_deploy_release_canary_failed");
+    const invariantFailure = new Error("partial_refund_invariants_postcanary_failed");
+    let caught: unknown;
+    try {
+      executeProductionDeployPlan(plan, (step: any) => {
+        if (step.id === "post_deploy_release_canary") throw canaryFailure;
+        if (step.id === "partial_refund_invariants_postcanary") throw invariantFailure;
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(AggregateError);
+    expect((caught as AggregateError).errors).toEqual([canaryFailure, invariantFailure]);
+    expect((caught as Error & { cause?: unknown }).cause).toBe(canaryFailure);
   });
 
   it("proves an intentional readiness failure prevents every deploy mutation", () => {

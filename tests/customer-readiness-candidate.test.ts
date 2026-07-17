@@ -5,11 +5,17 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { isolatedGitEnv } from "./helpers/git-env";
+
 const SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), "../scripts/customer-readiness-candidate.mjs");
 const repos: string[] = [];
-
 function git(repo: string, args: string[]) {
-  return execFileSync("git", args, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  return execFileSync("git", args, {
+    cwd: repo,
+    encoding: "utf8",
+    env: isolatedGitEnv(),
+    stdio: ["ignore", "pipe", "ignore"],
+  }).trim();
 }
 
 function createRepo(mode = "shadow") {
@@ -38,10 +44,15 @@ function writeWrangler(repo: string, mode: string) {
   );
 }
 
-function runCandidate(repo: string, args: string[] = ["--base", "HEAD"]) {
+function runCandidate(
+  repo: string,
+  args: string[] = ["--base", "HEAD"],
+  extraEnv: Record<string, string | undefined> = {},
+) {
   const result = spawnSync(process.execPath, [SCRIPT, ...args], {
     cwd: repo,
     encoding: "utf8",
+    env: isolatedGitEnv({ ...process.env, ...extraEnv }),
     maxBuffer: 16 * 1024 * 1024,
   });
   const output = result.stdout.trim();
@@ -59,6 +70,23 @@ afterEach(() => {
 });
 
 describe("customer readiness candidate identity", () => {
+  it("stays inside the temporary repository under a contaminated Git environment", () => {
+    const repo = createRepo();
+    const result = runCandidate(repo, ["--base", "HEAD"], {
+      GIT_DIR: "/tmp/not-the-candidate.git",
+      GIT_WORK_TREE: "/tmp/not-the-candidate-worktree",
+      GIT_CONFIG_COUNT: "1",
+      GIT_CONFIG_KEY_0: "core.bare",
+      GIT_CONFIG_VALUE_0: "true",
+      GIT_SHALLOW_FILE: "/tmp/not-the-candidate-shallow",
+      GIT_REPLACE_REF_BASE: "refs/replace/hostile",
+    });
+
+    expect(result.code).toBe(0);
+    expect(result.report).toMatchObject({ ok: true, branch: "main" });
+    expect(git(repo, ["config", "--bool", "core.bare"])).toBe("false");
+  });
+
   it("binds the effective source tree rather than branch, base, or commit metadata", () => {
     const repo = createRepo();
     writeFileSync(join(repo, "tracked.txt"), "candidate body\n");

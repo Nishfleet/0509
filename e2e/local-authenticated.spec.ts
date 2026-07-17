@@ -601,10 +601,12 @@ test.describe("local authenticated E2E harness", () => {
   });
 
   test("error and permission states are customer-safe", async ({ page, context, baseURL }) => {
-    await signInAs(context, baseURL!, "e2e-starter");
+    await signInAs(context, baseURL!, "e2e-agency");
 
     await page.goto("/app/reports/watchlist:missing-fixture");
-    await expect(page.getByRole("heading", { name: "Something went wrong" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Not found" })).toBeVisible();
+    await expect(page.getByText("This page or item is no longer available.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Try again" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Contact support" })).toBeVisible();
     await expect(page.getByText("stack", { exact: false })).toHaveCount(0);
     await expect(page.getByText("D1", { exact: false })).toHaveCount(0);

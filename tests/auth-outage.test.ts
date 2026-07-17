@@ -6,37 +6,18 @@ afterEach(() => {
 });
 
 describe("auth outage recovery", () => {
-  it("turns an auth lookup outage into an HTTP 503 at the root loader", async () => {
+  it("keeps public pages available when optional auth lookup is unavailable", async () => {
     vi.doMock("~/lib/auth.server", () => ({
-      authSessionUnavailableResponse: () =>
-        new Response("Authentication is temporarily unavailable. Please try again in a moment.", {
-          headers: {
-            "cache-control": "no-store",
-            "retry-after": "5",
-          },
-          status: 503,
-          statusText: "Authentication temporarily unavailable",
-        }),
-      getCachedOptionalSession: vi.fn().mockRejectedValue(new Error("raw D1 failure")),
-      isAuthSessionUnavailableError: vi.fn().mockReturnValue(true),
+      getOptionalSession: vi.fn().mockResolvedValue(null),
     }));
 
     const { loader } = await import("~/root");
-    let response: Response | null = null;
-    try {
-      await loader({
-        context: { cloudflare: { env: {}, country: null } },
-        params: {},
-        request: new Request("https://0509.io/app"),
-        url: "https://0509.io/app",
-      } as never);
-    } catch (error) {
-      response = error as Response;
-    }
-
-    expect(response?.status).toBe(503);
-    expect(response?.headers.get("cache-control")).toBe("no-store");
-    expect(await response?.text()).not.toContain("raw D1 failure");
+    await expect(loader({
+      context: { cloudflare: { env: {}, country: null } },
+      params: {},
+      request: new Request("https://0509.io/"),
+      url: "https://0509.io/",
+    } as never)).resolves.toMatchObject({ session: null });
   });
 
   it("renders safe recovery wording without the backend error", async () => {

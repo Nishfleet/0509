@@ -102,6 +102,7 @@ export async function applyDodoProofCreditGrantWithLedger(
         WHERE event_type = 'refund.succeeded'
           AND outcome = 'processed'
           AND json_extract(metadata_json, '$.paymentId') = ?
+          AND COALESCE(json_extract(metadata_json, '$.refundType'), 'full') = 'full'
       )
       ON CONFLICT(provider_payment_id) DO NOTHING
     `).bind(

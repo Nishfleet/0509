@@ -20,9 +20,10 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const {
     getOperatorSnapshot,
     listBillingLifecycleReconciliationCandidates,
+    listPendingPartialRefundReconciliations,
     listStaleDodoSubscriptionPlanChangeClaims,
   } = await import("~/lib/data.server");
-  const [snapshot, billingLifecycleResult, planChangeResult] = await Promise.all([
+  const [snapshot, billingLifecycleResult, planChangeResult, partialRefundResult] = await Promise.all([
     getOperatorSnapshot(env),
     listBillingLifecycleReconciliationCandidates(env)
       .then((items) => ({ items, warning: null }))
@@ -36,6 +37,12 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         items: [],
         warning: "Plan-change reconciliation could not be loaded.",
       })),
+    listPendingPartialRefundReconciliations(env)
+      .then((items) => ({ items, warning: null }))
+      .catch(() => ({
+        items: [],
+        warning: "Partial refund reconciliation could not be loaded.",
+      })),
   ]);
 
   return {
@@ -44,6 +51,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     billingLifecycleWarning: billingLifecycleResult.warning,
     stalePlanChangeClaims: planChangeResult.items,
     planChangeWarning: planChangeResult.warning,
+    pendingPartialRefundReconciliations: partialRefundResult.items,
+    partialRefundWarning: partialRefundResult.warning,
   };
 }
 
@@ -59,6 +68,47 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
+  if (intent === "reconcile-partial-refund") {
+    const { reconcilePartialRefundWithAudit } = await import("~/lib/data.server");
+    try {
+      const result = await reconcilePartialRefundWithAudit(env, {
+        operatorUserId: session.user.id,
+        eventId: String(formData.get("eventId") ?? ""),
+        expectedProcessedAt: String(formData.get("expectedProcessedAt") ?? ""),
+        decision: String(formData.get("decision") ?? "") as "retain" | "revoke",
+        creditQuantityToRevoke: Number(String(formData.get("creditQuantityToRevoke") ?? "")),
+        evidenceReference: String(formData.get("evidenceReference") ?? ""),
+        observedAt: String(formData.get("observedAt") ?? ""),
+      });
+      if (result.reconciled) {
+        return {
+          ok: true,
+          intent,
+          message: result.decision === "revoke"
+            ? `${result.appliedQuantity} proof credits were revoked with provider evidence. No provider refund request was sent.`
+            : "The partial refund was reviewed and existing proof credits were retained. No provider refund request was sent.",
+        };
+      }
+      return {
+        ok: false,
+        intent,
+        message: result.reason === "grant_unavailable"
+          ? "No matching proof-credit grant is available. Refresh and verify the payment before retrying."
+          : result.reason === "idempotency_conflict"
+            ? "This refund already has different reconciliation evidence. Refresh before making another decision."
+            : "That refund changed or is not eligible. Refresh and verify the provider evidence.",
+      };
+    } catch (error) {
+      if (error instanceof TypeError || error instanceof RangeError) {
+        return {
+          ok: false,
+          intent,
+          message: "Choose a valid decision, credit quantity, provider observation time, and private evidence reference.",
+        };
+      }
+      throw error;
+    }
+  }
   if (intent === "reconcile-dodo-plan-change") {
     const subjectUserId = String(formData.get("subjectUserId") ?? "").trim();
     if (!subjectUserId) {
@@ -291,6 +341,9 @@ export default function OpsRoute() {
   const billingLifecycleWarning = loaderData.billingLifecycleWarning ?? null;
   const stalePlanChangeClaims = loaderData.stalePlanChangeClaims ?? [];
   const planChangeWarning = loaderData.planChangeWarning ?? null;
+  const pendingPartialRefundReconciliations =
+    loaderData.pendingPartialRefundReconciliations ?? [];
+  const partialRefundWarning = loaderData.partialRefundWarning ?? null;
   const actionData = useActionData<typeof action>();
   const warnings = [
     ...(snapshot.warnings ?? []),
@@ -299,6 +352,9 @@ export default function OpsRoute() {
       : []),
     ...(planChangeWarning
       ? [{ section: "planChange", message: planChangeWarning }]
+      : []),
+    ...(partialRefundWarning
+      ? [{ section: "partialRefundReconciliation", message: partialRefundWarning }]
       : []),
   ];
 
@@ -356,6 +412,10 @@ export default function OpsRoute() {
             <MetricCard
               label="Plan changes needing provider check"
               value={stalePlanChangeClaims.length}
+            />
+            <MetricCard
+              label="Partial refunds needing review"
+              value={pendingPartialRefundReconciliations.length}
             />
           </div>
         </article>
@@ -483,6 +543,58 @@ export default function OpsRoute() {
                   <input name="subjectUserId" type="hidden" value={item.userId} />
                   <button className="f9-secondary-button" type="submit">
                     Check current Dodo state
+                  </button>
+                </Form>
+              </>
+            )}
+          />
+
+          <OpsSection
+            empty="No partial refunds are awaiting operator reconciliation."
+            items={pendingPartialRefundReconciliations}
+            title="Partial refunds awaiting operator reconciliation"
+            renderItem={(item) => (
+              <>
+                <p className="f9-app-kicker">Partial provider refund · {maskIdentifier(item.eventId)}</p>
+                <h3>Proof-credit decision needs provider evidence</h3>
+                <p>
+                  Record whether existing proof credits should be retained or revoked. This action
+                  never sends another refund request to the provider.
+                </p>
+                <p className="f9-muted-copy">
+                  {item.availableCredits} proof credits currently available · processed {formatTimestamp(item.processedAt)}
+                </p>
+                <Form className="f9-auth-form" method="post">
+                  <input name="intent" type="hidden" value="reconcile-partial-refund" />
+                  <input name="eventId" type="hidden" value={item.eventId} />
+                  <input name="expectedProcessedAt" type="hidden" value={item.processedAt} />
+                  <label className="f9-field">
+                    <span>Credit decision</span>
+                    <select defaultValue="" name="decision" required>
+                      <option disabled value="">Choose a decision</option>
+                      <option value="retain">Retain existing proof credits</option>
+                      <option value="revoke">Revoke confirmed proof credits</option>
+                    </select>
+                  </label>
+                  <label className="f9-field">
+                    <span>Proof credits to revoke (0 when retaining)</span>
+                    <input
+                      defaultValue={0}
+                      max={Math.max(0, item.availableCredits)}
+                      min={0}
+                      name="creditQuantityToRevoke"
+                      required
+                      step={1}
+                      type="number"
+                    />
+                  </label>
+                  <label className="f9-field">
+                    <span>Private evidence reference</span>
+                    <input maxLength={512} name="evidenceReference" required />
+                  </label>
+                  <ProviderObservationTimeField />
+                  <button className="f9-secondary-button" type="submit">
+                    Record refund reconciliation
                   </button>
                 </Form>
               </>
