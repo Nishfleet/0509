@@ -448,7 +448,31 @@ describe("searchAdsViaSourceResolver", () => {
 
   it("uses a customer-owned Meta token when the caller provides one", async () => {
     const metaApiSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>().mockResolvedValue({
-      ads: [],
+      ads: [
+        {
+          metaAdId: "customer-owned-1",
+          advertiser: "Nykaa",
+          body: "Sale",
+          previewHeadline: "Sale",
+          previewSubhead: "Sale",
+          hook: "Sale",
+          offer: "Sale",
+          cta: "Shop",
+          format: "image",
+          languageLabel: "English",
+          destinationType: "website",
+          landingPageUrl: null,
+          adSnapshotUrl: null,
+          countries: ["IN"],
+          platforms: ["Facebook"],
+          firstSeenAt: null,
+          lastSeenAt: null,
+          active: true,
+          researchSummary: "ok",
+          source: "meta_api",
+          analysisFields: [],
+        },
+      ],
       nextCursor: null,
       source: "meta_api",
       provider: "meta_api",
@@ -465,6 +489,7 @@ describe("searchAdsViaSourceResolver", () => {
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
       demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
     }));
 
     const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");

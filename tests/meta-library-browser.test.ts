@@ -1657,6 +1657,173 @@ describe("searchMetaLibraryByBrowser", () => {
     });
   });
 
+  it("dedupes extracted cards by libraryId across scroll passes", async () => {
+    const { dedupeExtractedCardsByLibraryId } = await import(
+      "~/lib/meta-library-browser.server"
+    );
+
+    const deduped = dedupeExtractedCardsByLibraryId([
+      {
+        libraryId: "111",
+        advertiser: "A",
+        body: "first",
+        previewHeadline: "first",
+        previewSubhead: null,
+        cta: null,
+        adSnapshotUrl: null,
+        landingPageUrl: null,
+        platforms: [],
+        active: true,
+      },
+      {
+        libraryId: "222",
+        advertiser: "B",
+        body: "second",
+        previewHeadline: "second",
+        previewSubhead: null,
+        cta: null,
+        adSnapshotUrl: null,
+        landingPageUrl: null,
+        platforms: [],
+        active: true,
+      },
+      {
+        libraryId: "111",
+        advertiser: "A-dup",
+        body: "duplicate from later scroll",
+        previewHeadline: "dup",
+        previewSubhead: null,
+        cta: null,
+        adSnapshotUrl: null,
+        landingPageUrl: null,
+        platforms: [],
+        active: true,
+      },
+    ]);
+
+    expect(deduped).toHaveLength(2);
+    expect(deduped.map((card) => card.libraryId)).toEqual(["111", "222"]);
+    expect(deduped[0]?.body).toBe("first");
+  });
+
+  it("defaults browser discovery to shallow mode (no interactive scroll)", async () => {
+    const { browser, page } = createBrowserHarness();
+    const evaluate = page.evaluate as ReturnType<typeof vi.fn>;
+    evaluate.mockResolvedValue({
+      cards: [
+        {
+          libraryId: "1234567890",
+          advertiser: "Nykaa",
+          body: "Flat 30% off on serums",
+          previewHeadline: "Glow sale",
+          previewSubhead: "Weekend only",
+          cta: "Shop now",
+          adSnapshotUrl: "https://www.facebook.com/ads/library/?id=1234567890",
+          landingPageUrl: "https://www.nykaa.com/glow-sale",
+          platforms: ["Instagram", "Facebook"],
+          active: true,
+        },
+      ],
+      pageText: "results",
+      loginWall: false,
+      noResults: false,
+      rateLimited: false,
+    });
+    const launch = vi.fn().mockResolvedValue(browser);
+    const sessions = vi.fn().mockResolvedValue([]);
+    const limits = vi.fn().mockResolvedValue({
+      activeSessions: [],
+      maxConcurrentSessions: 2,
+      allowedBrowserAcquisitions: 1,
+      timeUntilNextAllowedBrowserAcquisition: 0,
+    });
+    const connect = vi.fn();
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch, sessions, limits, connect },
+    }));
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+    await searchMetaLibraryByBrowser({ BROWSER: {} as Fetcher }, buildQuery());
+
+    // Shallow default: one extraction evaluate, no scroll evaluate.
+    expect(evaluate).toHaveBeenCalledTimes(1);
+  });
+
+  it("interactive mode scrolls and re-extracts, deduping repeated library ids", async () => {
+    const { browser, page } = createBrowserHarness();
+    const evaluate = page.evaluate as ReturnType<typeof vi.fn>;
+    const card = (id: string, body: string) => ({
+      libraryId: id,
+      advertiser: "Nike",
+      body,
+      previewHeadline: body,
+      previewSubhead: null,
+      cta: "Shop",
+      adSnapshotUrl: `https://www.facebook.com/ads/library/?id=${id}`,
+      landingPageUrl: null,
+      platforms: ["Facebook"],
+      active: true,
+    });
+    evaluate.mockImplementation(async (fn: unknown) => {
+      // scrollTo path is a short function whose string form includes scrollTo
+      if (typeof fn === "function" && String(fn).includes("scrollTo")) {
+        return undefined;
+      }
+      // first real extraction has only one card; later re-extracts add a second
+      if (evaluate.mock.calls.filter((call) => {
+        const arg = call[0];
+        return typeof arg === "function" && !String(arg).includes("scrollTo");
+      }).length <= 1) {
+        return {
+          cards: [card("100", "Run")],
+          pageText: "results",
+          loginWall: false,
+          noResults: false,
+          rateLimited: false,
+        };
+      }
+      return {
+        cards: [card("100", "Run"), card("200", "Jump")],
+        pageText: "results",
+        loginWall: false,
+        noResults: false,
+        rateLimited: false,
+      };
+    });
+    const launch = vi.fn().mockResolvedValue(browser);
+    const sessions = vi.fn().mockResolvedValue([]);
+    const limits = vi.fn().mockResolvedValue({
+      activeSessions: [],
+      maxConcurrentSessions: 2,
+      allowedBrowserAcquisitions: 1,
+      timeUntilNextAllowedBrowserAcquisition: 0,
+    });
+    const connect = vi.fn();
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch, sessions, limits, connect },
+    }));
+
+    vi.useFakeTimers();
+    try {
+      const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+      const resultPromise = searchMetaLibraryByBrowser(
+        { BROWSER: {} as Fetcher },
+        buildQuery(),
+        { mode: "interactive" },
+      );
+      await vi.runAllTimersAsync();
+      const result = await resultPromise;
+
+      expect(result.ads.map((ad) => ad.metaAdId)).toEqual(["100", "200"]);
+      // first extract + scroll/re-extract cycles
+      expect(evaluate.mock.calls.length).toBeGreaterThan(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("maps extracted card imageUrl onto AdRecord.creativeImageUrl", async () => {
     const { normalizeExtractedCard } = await import("~/lib/meta-library-browser.server");
 

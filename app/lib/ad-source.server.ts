@@ -9,7 +9,11 @@ import { hasBrowserRunQuickActions } from "~/lib/browser-run.server";
 import { buildDiscoveryCacheKey, resolveDiscoveryCacheTtlMs } from "~/lib/discovery-cache.server";
 import { resolveE2EFixtureProviderFromEnv } from "~/lib/e2e-provider.server";
 import type { AppEnv, BrowserBinding } from "~/lib/env.server";
-import { searchMetaLibraryByBrowser, CommercialDiscoveryError } from "~/lib/meta-library-browser.server";
+import {
+  searchMetaLibraryByBrowser,
+  CommercialDiscoveryError,
+  getInteractiveMetaApiExtraPages,
+} from "~/lib/meta-library-browser.server";
 import { demoSearch, MetaApiError, filterAdsBySearchFilters, searchAds as searchMetaApiAds } from "~/lib/meta-api.server";
 import { fingerprintSavedQuery, hashString } from "~/lib/normalize";
 import type {
@@ -28,6 +32,51 @@ export interface SearchAdsViaSourceOptions {
   forceLive?: boolean;
   customerMetaAdLibraryToken?: string | null;
   cacheKeyOverride?: string | null;
+}
+
+/**
+ * Meta API interactive public search: follow the real after-cursor for a bounded
+ * number of extra pages on the first request. Cursor-based "Load more" stays
+ * single-page. Watchlist scans never set interactive=true.
+ */
+async function searchMetaApiAdsWithInteractiveDepth(
+  env: AppEnv,
+  query: NormalizedSavedQuery,
+  cursor: string | null | undefined,
+  options: { allowDemoFallback?: boolean; interactive?: boolean },
+): Promise<SearchResponse> {
+  const first = await searchMetaApiAds(env, query, cursor, {
+    allowDemoFallback: options.allowDemoFallback,
+  });
+
+  if (!options.interactive || cursor) {
+    return first;
+  }
+
+  const ads = [...first.ads];
+  const seen = new Set(ads.map((ad) => ad.metaAdId));
+  let nextCursor = first.nextCursor;
+  const extraPages = getInteractiveMetaApiExtraPages();
+
+  for (let page = 0; page < extraPages && nextCursor; page += 1) {
+    const more = await searchMetaApiAds(env, query, nextCursor, {
+      allowDemoFallback: options.allowDemoFallback,
+    });
+    for (const ad of more.ads) {
+      if (seen.has(ad.metaAdId)) {
+        continue;
+      }
+      seen.add(ad.metaAdId);
+      ads.push(ad);
+    }
+    nextCursor = more.nextCursor;
+  }
+
+  return {
+    ...first,
+    ads,
+    nextCursor,
+  };
 }
 
 const PUBLIC_SEARCH_PROVIDER_COOLDOWN_MS = 2 * 60 * 1000;
@@ -595,9 +644,14 @@ export async function searchAdsViaSourceResolver(
       const startedAt = Date.now();
       const liveResultRaw =
         provider === "meta_library_browser"
-          ? await searchMetaLibraryByBrowser(effectiveEnv, query)
+          ? await searchMetaLibraryByBrowser(effectiveEnv, query, {
+              // Deep scroll only for interactive public search. Watchlist and
+              // scheduled warmup keep the shallow default so DEFAULT_PAGE_BUDGET
+              // remains the scan-cost guard.
+              mode: routeContext === "public_search" ? "interactive" : "shallow",
+            })
           : normalizeSearchResponse(
-              await searchMetaApiAds(
+              await searchMetaApiAdsWithInteractiveDepth(
                 {
                   ...effectiveEnv,
                   META_AD_LIBRARY_TOKEN: metaApiToken ?? effectiveEnv.META_AD_LIBRARY_TOKEN,
@@ -606,6 +660,7 @@ export async function searchAdsViaSourceResolver(
                 cursor,
                 {
                   allowDemoFallback: false,
+                  interactive: routeContext === "public_search" && !cursor,
                 },
               ),
               provider,
