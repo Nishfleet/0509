@@ -65,9 +65,12 @@ import { getUserPlan, PLAN_LIMITS } from "~/lib/plan.server";
 import { resolveScheduledScanCacheMaxAgeMs } from "~/lib/discovery-cache.server";
 import {
   getScheduledMonitoringPolicy,
+  parsePlanFamily,
   planAllowsDigestCadence,
   shouldSchedulePlanInRegularScan,
+  shouldScheduleWatchlistInRegularScan,
 } from "~/lib/plan-entitlements";
+import type { PlanFamily } from "~/lib/plan-entitlements";
 import { ensureDb } from "~/lib/data/d1.server";
 import {
   getEvidenceUsageSummary,
@@ -259,11 +262,16 @@ export async function runScheduledMonitoring(
       includeScout: shouldIncludeScoutInScheduledMonitoring(options),
     });
     const browserAccess = await filterScheduledBrowserWatchlists(env, listedWatchlists);
-    const watchlists = browserAccess.watchlists;
+    const scheduledTime = options.scheduledTime ?? Date.now();
+    // WP-37: agency overflow watchlists only on 6h-aligned slots.
+    const watchlists = await filterWatchlistsByPriorityScanSlots(
+      env,
+      browserAccess.watchlists,
+      scheduledTime,
+    );
     skippedForBilling = browserAccess.skipped;
 
     const fanoutMode = resolveMonitoringFanoutMode(env);
-    const scheduledTime = options.scheduledTime ?? Date.now();
 
     if (fanoutMode === "inline") {
       const inlineResult = await runScheduledMonitoringInline(env, watchlists, deadlineAt, {
@@ -379,6 +387,76 @@ async function filterScheduledBrowserWatchlists(env: AppEnv, watchlists: Watchli
   }
 
   return { watchlists: eligible, skipped };
+}
+
+/**
+ * WP-37: among each workspace's active watchlists (oldest first), only the
+ * first priorityScanSlots run on every plan cadence tick; overflow wait for
+ * 6h-aligned runs. Stable ranks use created_at ASC, id ASC.
+ */
+export async function filterWatchlistsByPriorityScanSlots(
+  env: AppEnv,
+  watchlists: WatchlistRecord[],
+  scheduledTime: number,
+): Promise<WatchlistRecord[]> {
+  if (watchlists.length === 0) {
+    return watchlists;
+  }
+
+  const scheduledAt = new Date(scheduledTime);
+  const byUser = new Map<string, WatchlistRecord[]>();
+  for (const watchlist of watchlists) {
+    const list = byUser.get(watchlist.userId) ?? [];
+    list.push(watchlist);
+    byUser.set(watchlist.userId, list);
+  }
+
+  const planByUser = new Map<string, PlanFamily>();
+  const eligibleIds = new Set<string>();
+
+  for (const [userId, userWatchlists] of byUser) {
+    let plan = planByUser.get(userId);
+    if (!plan) {
+      try {
+        // Runtime mocks may omit a plan; keep billing-eligible watchlists rather
+        // than inventing free (starve) or agency (wrong priority slots).
+        const raw = (await getUserPlan(env, userId)) as PlanFamily | null | undefined;
+        if (raw == null) {
+          for (const watchlist of userWatchlists) {
+            eligibleIds.add(watchlist.id);
+          }
+          continue;
+        }
+        plan = parsePlanFamily(raw);
+      } catch {
+        for (const watchlist of userWatchlists) {
+          eligibleIds.add(watchlist.id);
+        }
+        continue;
+      }
+      planByUser.set(userId, plan);
+    }
+
+    const ranked = [...userWatchlists].sort((a, b) => {
+      const created = (a.createdAt ?? "").localeCompare(b.createdAt ?? "");
+      if (created !== 0) return created;
+      return a.id.localeCompare(b.id);
+    });
+
+    ranked.forEach((watchlist, rank) => {
+      if (
+        shouldScheduleWatchlistInRegularScan({
+          planFamily: plan!,
+          scheduledAt,
+          watchlistRank: rank,
+        })
+      ) {
+        eligibleIds.add(watchlist.id);
+      }
+    });
+  }
+
+  return watchlists.filter((watchlist) => eligibleIds.has(watchlist.id));
 }
 
 const INSTANT_ALERT_FLUSH_LOOKBACK_HOURS = 48;

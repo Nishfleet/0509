@@ -12,6 +12,7 @@ import {
   PLAN_FAMILIES,
   planAllowsDigestCadence,
   shouldSchedulePlanInRegularScan,
+  shouldScheduleWatchlistInRegularScan,
 } from "~/lib/plan-entitlements";
 
 describe("plan entitlements catalog", () => {
@@ -56,6 +57,53 @@ describe("plan entitlements catalog", () => {
     expect(shouldSchedulePlanInRegularScan("scout", new Date("2026-07-03T03:00:00.000Z"))).toBe(false);
     expect(shouldSchedulePlanInRegularScan("starter", new Date("2026-07-03T03:00:00.000Z"))).toBe(true);
     expect(shouldSchedulePlanInRegularScan("agency", new Date("2026-07-03T03:00:00.000Z"))).toBe(true);
+  });
+
+  it("gives Agency 25 priority scan slots; overflow only on 6h-aligned runs (WP-37)", () => {
+    expect(getPlanEntitlements("agency").priorityScanSlots).toBe(25);
+    expect(getScheduledMonitoringPolicy("agency").priorityScanSlots).toBe(25);
+    expect(getPlanEntitlements("starter").priorityScanSlots).toBeNull();
+    expect(getPlanEntitlements("scout").priorityScanSlots).toBeNull();
+
+    const threeHourSlot = new Date("2026-07-03T03:00:00.000Z");
+    const sixHourSlot = new Date("2026-07-03T06:00:00.000Z");
+
+    expect(
+      shouldScheduleWatchlistInRegularScan({
+        planFamily: "agency",
+        scheduledAt: threeHourSlot,
+        watchlistRank: 0,
+      }),
+    ).toBe(true);
+    expect(
+      shouldScheduleWatchlistInRegularScan({
+        planFamily: "agency",
+        scheduledAt: threeHourSlot,
+        watchlistRank: 24,
+      }),
+    ).toBe(true);
+    expect(
+      shouldScheduleWatchlistInRegularScan({
+        planFamily: "agency",
+        scheduledAt: threeHourSlot,
+        watchlistRank: 25,
+      }),
+    ).toBe(false);
+    expect(
+      shouldScheduleWatchlistInRegularScan({
+        planFamily: "agency",
+        scheduledAt: sixHourSlot,
+        watchlistRank: 74,
+      }),
+    ).toBe(true);
+    // Starter has no overflow tier — all slots at full cadence.
+    expect(
+      shouldScheduleWatchlistInRegularScan({
+        planFamily: "starter",
+        scheduledAt: threeHourSlot,
+        watchlistRank: 9,
+      }),
+    ).toBe(true);
   });
 
   it("gates agency-only capabilities", () => {
