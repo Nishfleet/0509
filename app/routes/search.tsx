@@ -6,10 +6,11 @@ import {
   useLoaderData,
   useLocation,
   useNavigation,
+  useRevalidator,
   useRouteLoaderData,
 } from "react-router";
 import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AdLongevityPill } from "~/components/ad-longevity-pill";
 import { AdThumb } from "~/components/ad-thumb";
@@ -32,6 +33,7 @@ import {
   parseSearchParams,
 } from "~/lib/normalize";
 import { defaultCountryForVisitor, ALL_COUNTRIES_VALUE, SUPPORTED_COUNTRIES } from "~/lib/countries";
+import { formatAdsFoundLabel, formatOfferDisplay } from "~/lib/analysis-display";
 import {
   formatAdvertiserLabel,
   formatCaptureMethodLabel,
@@ -40,10 +42,19 @@ import {
 } from "~/lib/landing-page-display";
 import { customerDiscoverySummary } from "~/lib/discovery-customer-copy";
 import { buildSearchAnswer } from "~/lib/search-answer";
+import {
+  DEFAULT_SEARCH_RESULT_SORT,
+  parseSearchResultSort,
+  sortAdsForSearchDisplay,
+  type SearchResultSort,
+} from "~/lib/search-sort";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
 import type { RootLoaderData } from "~/root";
 import type { AdRecord, SearchFilters, SearchResponse, WatchlistTrackingRole } from "~/lib/types";
+
+const SEARCH_WARMING_POLL_MS = 5_000;
+const SEARCH_WARMING_POLL_LIMIT = 12; // 60s cap
 
 const searchDescription =
   "Preview public competitor ad results before creating an account; sign in to save examples and track offer changes over time. Provider coverage and freshness vary.";
@@ -468,9 +479,14 @@ export default function SearchRoute() {
   const actionData = useActionData<typeof action>();
   const location = useLocation();
   const navigation = useNavigation();
+  const revalidator = useRevalidator();
   const selectedProofRef = useRef<HTMLElement>(null);
   const previousDiscoveryStatusRef = useRef(data.result.discoveryStatus);
   const [recoveredSearchKey, setRecoveredSearchKey] = useState<string | null>(null);
+  const [resultSort, setResultSort] = useState<SearchResultSort>(() =>
+    parseSearchResultSort(new URLSearchParams(location.search).get("sort")) || DEFAULT_SEARCH_RESULT_SORT,
+  );
+  const [warmingPollCount, setWarmingPollCount] = useState(0);
   const requestedCursor = new URLSearchParams(location.search).get("after");
   const selectedFromUrl = new URLSearchParams(location.search).get("selected");
   const searchKey = buildSearchAccumulationKey(data);
@@ -481,7 +497,10 @@ export default function SearchRoute() {
     ? accumulated
     : createSearchAccumulationState(searchKey, data.result, data.selectedAd);
   const visibleResult = visibleAccumulated.result;
-  const visibleAds = visibleResult.ads;
+  const visibleAds = useMemo(
+    () => sortAdsForSearchDisplay(visibleResult.ads, resultSort),
+    [visibleResult.ads, resultSort],
+  );
   const selectedAd = selectedFromUrl
     ? data.selectedAd ?? visibleAds.find((ad) => ad.metaAdId === selectedFromUrl) ?? null
     : data.selectedAd ?? visibleAccumulated.selectedAd;
@@ -527,8 +546,36 @@ export default function SearchRoute() {
   const isDomainSearch = Boolean(displayDomain && competitorWebsite.normalizedUrl);
   const isBroaderScope = data.searchScope === "broader";
   const isSearchWarming = visibleResult.discoveryProgress === "warming";
+  const formatFilterApproximate =
+    (data.filters.creativeType === "video" || data.filters.creativeType === "carousel") &&
+    (visibleResult.provider === "meta_library_browser" || visibleResult.source === "meta_library_browser");
+  const competitorWatchLabel = displayDomain || "this competitor";
+  const signupCtaBody = `Create a free account and we'll keep watching ${competitorWatchLabel} — first scan runs immediately, and you'll get an email when their ads, offer, or landing page changes.`;
   const retrySearchPath = `${location.pathname}${location.search}${location.hash}`;
   const scopedSearchParams = withSearchScope(currentSearchParams, isBroaderScope ? "broader" : "exact");
+
+  // Auto-revalidate while commercial discovery is warming (5s × 12 = 60s cap).
+  useEffect(() => {
+    if (!isSearchWarming) {
+      setWarmingPollCount(0);
+      return;
+    }
+    if (warmingPollCount >= SEARCH_WARMING_POLL_LIMIT) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      setWarmingPollCount((count) => count + 1);
+      if (revalidator.state === "idle") {
+        revalidator.revalidate();
+      }
+    }, SEARCH_WARMING_POLL_MS);
+    return () => clearTimeout(timer);
+  }, [isSearchWarming, warmingPollCount, revalidator]);
+
+  useEffect(() => {
+    // Reset warming poll budget when the query identity changes.
+    setWarmingPollCount(0);
+  }, [searchKey]);
   const nextCursor = visibleResult.nextCursor;
   const retryingCursor = visibleAccumulated.retryCursor;
   const loadMoreParams = nextCursor
@@ -838,13 +885,25 @@ export default function SearchRoute() {
                   </h2>
                   {isDomainSearch && data.relevanceApplied && !isBroaderScope ? (
                     <small>{`Verified ads linked to ${displayDomain}`}</small>
-                  ) : isDomainSearch && !isBroaderScope ? (
-                    <small>Legacy source results; website connection is not yet verified.</small>
                   ) : null}
                   {isDomainSearch && isBroaderScope ? (
                     <small>{`Broader matches related to ${displayDomain}`}</small>
                   ) : null}
                 </div>
+                {visibleAds.length > 1 ? (
+                  <label className="f9-search-field f9-result-sort">
+                    <span className="f9-sr-only">Sort results</span>
+                    <select
+                      aria-label="Sort results"
+                      value={resultSort}
+                      onChange={(event) => setResultSort(parseSearchResultSort(event.target.value))}
+                    >
+                      <option value="active_first">Active first</option>
+                      <option value="longest_running">Longest running</option>
+                      <option value="newest">Newest</option>
+                    </select>
+                  </label>
+                ) : null}
                 {loadMoreParams ? (
                   <Form
                     aria-label={retryingCursor ? "Retry search results" : "Load more search results"}
@@ -879,13 +938,17 @@ export default function SearchRoute() {
                         ? "Keep this competitor under watch"
                         : "Keep checking this competitor"}
                     </strong>
-                    <p>
-                      Create an account to confirm this website and queue its first evidence scan.
-                    </p>
+                    <p>{signupCtaBody}</p>
                   </div>
                   <Link className="f9-primary-button" to={signupTrackingPath}>
                     Create account
                   </Link>
+                </div>
+              ) : null}
+
+              {formatFilterApproximate ? (
+                <div className="f9-discovery-banner" role="status">
+                  <p>Format filters are approximate for this source</p>
                 </div>
               ) : null}
 
@@ -911,12 +974,17 @@ export default function SearchRoute() {
                         <div>
                           <span>{formatAdvertiserLabel(ad.advertiser)}</span>
                           <h3>{ad.previewHeadline}</h3>
-                          <AdLongevityPill ad={ad} />
+                          <div className="f9-result-card-pills">
+                            <AdLongevityPill ad={ad} />
+                            {ad.variantCount && ad.variantCount > 1 ? (
+                              <span className="f9-longevity-pill">{`×${ad.variantCount} variants`}</span>
+                            ) : null}
+                          </div>
                         </div>
                         <p>{formatResultCardSummary(ad)}</p>
                         {ad.domainMatch?.reason ? <strong>{ad.domainMatch.reason}</strong> : null}
                         <small>
-                          {ad.offer} · {ad.destinationType} · {ad.languageLabel}
+                          {formatOfferDisplay(ad.offer)} · {ad.destinationType} · {ad.languageLabel}
                         </small>
                         <em>{ad.format}</em>
                       </div>
@@ -926,8 +994,8 @@ export default function SearchRoute() {
                   <div className="f9-empty-state">
                     {isSearchWarming ? (
                       <div aria-live="polite" role="status">
-                        <h3>Checking this competitor</h3>
-                        <p>A check is already running. Retry shortly to check for the finished result.</p>
+                        <h3>Checking the Ad Library now</h3>
+                        <p>Usually under a minute — we will refresh automatically.</p>
                       </div>
                     ) : !searchAnswer ? (
                       <>
@@ -1022,7 +1090,7 @@ export default function SearchRoute() {
 
                   <dl className="f9-detail-grid">
                     <DetailRow label="Hook" value={selectedAd.hook} />
-                    <DetailRow label="Offer" value={selectedAd.offer} />
+                    <DetailRow label="Offer" value={formatOfferDisplay(selectedAd.offer)} />
                     <DetailRow label="CTA" value={selectedAd.cta} />
                     <DetailRow label="Format" value={selectedAd.format} />
                     <DetailRow label="Language" value={selectedAd.languageLabel} />
@@ -1109,10 +1177,7 @@ export default function SearchRoute() {
                     </div>
                   ) : (
                     <div className="f9-side-note">
-                      <p>
-                        Public preview shows source evidence only. Create an account to confirm this website and
-                        queue its first evidence scan.
-                      </p>
+                      <p>{signupCtaBody}</p>
                       <Link className="f9-primary-button" to={signupTrackingPath}>
                         Create account to track this competitor
                       </Link>
@@ -1550,7 +1615,7 @@ export function formatResultsPanelTitle(
         : `${result.ads.length} broader matches for ${context.displayDomain}`;
     }
 
-    return `${result.ads.length} ads found`;
+    return formatAdsFoundLabel(result.ads.length);
   }
 
   if (/warming this query|already warming/i.test(result.discoverySummary ?? "")) {
@@ -1566,7 +1631,7 @@ export function formatResultsPanelTitle(
     return `No verified ads for ${context.displayDomain}`;
   }
 
-  return "0 ads found";
+  return formatAdsFoundLabel(0);
 }
 
 function canCreateAdvertiserWatchlist(query: ReturnType<typeof normalizeSavedQuery>) {

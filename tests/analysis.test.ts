@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { buildAnalysisFields, withStructuredAnalysis } from "~/lib/analysis.server";
+import {
+  buildAnalysisFields,
+  composeResearchSummary,
+  deriveHook,
+  deriveOffer,
+  resolveHookAndOffer,
+  withStructuredAnalysis,
+} from "~/lib/analysis.server";
+import { formatOfferDisplay, NO_EXPLICIT_OFFER_LABEL } from "~/lib/analysis-display";
 import { CREATIVE_TEXT_EXTRACTOR_VERSION } from "~/lib/creative-text.server";
 import type { AdRecord } from "~/lib/types";
 
@@ -80,6 +88,82 @@ describe("buildAnalysisFields", () => {
         fetchStatus: 200,
       },
     });
+  });
+});
+
+describe("deriveHook / deriveOffer", () => {
+  it("extracts USD EUR and GBP promo offers without falling back to the body", () => {
+    expect(deriveOffer("Get $20 off sitewide this weekend only")).toMatch(/\$20\s*off/i);
+    expect(deriveOffer("Save €15 on your first order")).toMatch(/€15/);
+    expect(deriveOffer("From £9.99 with free delivery")).toMatch(/£9\.99|free delivery/i);
+    expect(deriveOffer("Flat 30% off serums + free shipping")).toMatch(/30\s*%\s*off/i);
+  });
+
+  it("returns null when no explicit offer phrase exists", () => {
+    expect(deriveOffer("Meet our new daily moisturizer for busy mornings.")).toBeNull();
+    expect(formatOfferDisplay(null)).toBe(NO_EXPLICIT_OFFER_LABEL);
+    expect(formatOfferDisplay("")).toBe(NO_EXPLICIT_OFFER_LABEL);
+  });
+
+  it("never returns identical hook and offer strings", () => {
+    const body = "Shop now at nike.com for the latest drops.";
+    const resolved = resolveHookAndOffer({
+      body,
+      previewHeadline: body,
+      cta: "Shop now",
+    });
+    expect(resolved.hook).toBeTruthy();
+    // No promo phrase → empty offer, not a body/CTA copy.
+    expect(resolved.offer).toBe("");
+    expect(resolved.hook).not.toBe(resolved.offer);
+
+    const promo = resolveHookAndOffer({
+      body: "30% off everything. Limited time.",
+      previewHeadline: "30% off everything",
+      cta: "Shop",
+    });
+    expect(promo.hook.toLowerCase()).not.toBe(promo.offer.toLowerCase());
+  });
+
+  it("caps hooks and strips heavy emoji runs", () => {
+    const long = `${"Amazing deal today ".repeat(20)}ends soon!`;
+    const hook = deriveHook(long, "fallback");
+    expect(hook.length).toBeLessThanOrEqual(120);
+  });
+});
+
+describe("composeResearchSummary", () => {
+  it("builds distinct signal lines from real fields only", () => {
+    const a = composeResearchSummary({
+      active: true,
+      firstSeenAt: new Date(Date.now() - 62 * 24 * 60 * 60 * 1000).toISOString(),
+      landingPageUrl: "https://www.nykaa.com/sale",
+      offer: "30% off",
+      format: "image",
+      platforms: ["Instagram", "Facebook"],
+      countries: ["US"],
+      source: "meta_library_browser",
+      variantCount: 3,
+    });
+    const b = composeResearchSummary({
+      active: false,
+      firstSeenAt: null,
+      landingPageUrl: null,
+      offer: "",
+      format: "video",
+      platforms: ["Facebook"],
+      countries: ["US"],
+      source: "meta_library_browser",
+    });
+
+    expect(a).toMatch(/Active/);
+    expect(a).toMatch(/Running 62 days/);
+    expect(a).toMatch(/3 variants/);
+    expect(a).toMatch(/discount offer/);
+    expect(a).toMatch(/links to nykaa\.com/);
+    expect(b).toMatch(/Inactive/);
+    expect(b).toMatch(/video creative/);
+    expect(a).not.toBe(b);
   });
 });
 

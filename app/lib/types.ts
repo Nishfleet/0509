@@ -223,6 +223,8 @@ export interface AdRecord {
   creativeImageUrl?: string | null;
   /** Soft hint from discovery scrape; not a verified format classification. */
   creativeFormatHint?: "image" | "video" | undefined;
+  /** "N ads use this creative" count from Ad Library cards when present. */
+  variantCount?: number | null;
   creativeTextCaptureMethod?: CreativeTextCaptureMethod | null;
   creativeTextMetadata?: Record<string, unknown> | null;
   landingPage?: LandingPageSnapshotData | null;

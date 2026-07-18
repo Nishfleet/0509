@@ -1097,7 +1097,7 @@ describe("search loader", () => {
       isDomainSearch: true,
       isBroaderScope: false,
       relevanceApplied: false,
-    })).toBe("1 ads found");
+    })).toBe("1 ad found");
   });
 
   it("allows only tokened canary probes to force fresh live discovery", async () => {

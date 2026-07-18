@@ -1,6 +1,12 @@
 import puppeteer from "@cloudflare/puppeteer";
 
-import { inferDestinationType, inferLanguageLabel, withStructuredAnalysis } from "~/lib/analysis.server";
+import {
+  composeResearchSummary,
+  inferDestinationType,
+  inferLanguageLabel,
+  resolveHookAndOffer,
+  withStructuredAnalysis,
+} from "~/lib/analysis.server";
 import { readResponseJsonWithinLimit } from "~/lib/bounded-response.server";
 import {
   type BrowserRunQuickActionScrapeElement,
@@ -1345,46 +1351,69 @@ export function normalizeExtractedCard(card: ExtractedAdCard, query: NormalizedS
       ? ("image" as const)
       : undefined;
 
+  const { hook, offer } = resolveHookAndOffer({
+    body,
+    previewHeadline,
+    cta: card.cta || "",
+  });
+  const firstSeenAt = parseStartedRunningDate(card.startedRunning ?? null);
+  const format = hasVideo ? ("video" as const) : ("image" as const);
+  const destinationType = inferDestinationType(card.landingPageUrl);
+  const landingPageUrl = card.landingPageUrl;
+  const platforms = card.platforms;
+  const active = card.active;
+
   return withStructuredAnalysis({
     metaAdId: card.libraryId,
     advertiser,
     body,
     previewHeadline,
     previewSubhead,
-    hook: previewHeadline,
-    offer: body,
+    hook,
+    offer,
     cta: card.cta || "",
     // Prefer video when the card surface showed a video element; otherwise keep
     // the historical image default until stronger format detection lands.
-    format: hasVideo ? "video" : "image",
+    format,
     languageLabel: inferLanguageLabel(`${previewHeadline} ${body}`),
-    destinationType: inferDestinationType(card.landingPageUrl),
-    landingPageUrl: card.landingPageUrl,
+    destinationType,
+    landingPageUrl,
     adSnapshotUrl:
       card.adSnapshotUrl || `https://www.facebook.com/ads/library/?id=${card.libraryId}`,
     countries: [query.filters.country || "all"],
-    platforms: card.platforms,
+    platforms,
     // Meta publishes the ad's start date on every Ad Library card ("Started
     // running on <date>"). Treat it as firstSeenAt exactly like the Meta API
     // path treats ad_delivery_start_time; unparseable stays an honest null.
-    firstSeenAt: parseStartedRunningDate(card.startedRunning ?? null),
+    firstSeenAt,
     lastSeenAt: null,
-    active: card.active,
-    researchSummary:
-      "Captured from the public Meta Ad Library via Browser Run and normalized into Five to Nine’s analysis schema.",
+    active,
+    researchSummary: composeResearchSummary({
+      active,
+      firstSeenAt,
+      landingPageUrl,
+      offer,
+      format,
+      platforms,
+      countries: [query.filters.country || "all"],
+      source: "meta_library_browser",
+      variantCount: card.variantCount ?? null,
+    }),
     source: "meta_library_browser",
     creativeImageUrl,
     creativeFormatHint,
+    variantCount: card.variantCount ?? null,
   });
 }
 
-function buildSearchUrl(query: NormalizedSavedQuery) {
+/** Exported for unit tests that assert Ad Library URL filter params. */
+export function buildSearchUrl(query: NormalizedSavedQuery) {
   const params = new URLSearchParams();
-  params.set("active_status", "all");
+  params.set("active_status", mapActiveStatusParam(query.filters.status));
   params.set("ad_type", "all");
   params.set("country", countryCode(query.filters.country));
   params.set("is_targeted_country", "false");
-  params.set("media_type", "all");
+  params.set("media_type", mapMediaTypeParam(query.filters.creativeType));
   params.set(
     "search_type",
     query.mode === "advertiser" ? "keyword_exact_phrase" : "keyword_unordered",
@@ -1392,6 +1421,31 @@ function buildSearchUrl(query: NormalizedSavedQuery) {
   params.set("q", query.filters.query || "");
 
   return `https://www.facebook.com/ads/library/?${params.toString()}`;
+}
+
+function mapActiveStatusParam(status: NormalizedSavedQuery["filters"]["status"] | undefined) {
+  if (status === "active") {
+    return "active";
+  }
+  if (status === "inactive") {
+    return "inactive";
+  }
+  return "all";
+}
+
+function mapMediaTypeParam(creativeType: NormalizedSavedQuery["filters"]["creativeType"] | undefined) {
+  if (creativeType === "image") {
+    return "image";
+  }
+  if (creativeType === "video") {
+    return "video";
+  }
+  if (creativeType === "carousel") {
+    // Meta Ad Library uses "meme" historically for multi-image; "carousel" is
+    // accepted on newer surfaces — pass the plain filter name.
+    return "carousel";
+  }
+  return "all";
 }
 
 function countryCode(country: string | undefined) {

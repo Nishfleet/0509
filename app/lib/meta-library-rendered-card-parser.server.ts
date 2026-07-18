@@ -17,6 +17,8 @@ export interface ExtractedAdCard {
   imageUrl?: string | null;
   /** True when a <video> element (or poster) was present on the card. */
   hasVideo?: boolean;
+  /** Parsed from "N ads use this creative and text" when present. */
+  variantCount?: number | null;
 }
 
 export interface RenderedHtmlPayload {
@@ -59,6 +61,7 @@ export function parseRenderedMetaLibraryHtml(content: string): RenderedHtmlPaylo
     const body = stripHtml(contextHtml) || stripHtml(match[3] ?? "");
     const landingPageUrl = extractExternalLink(contextHtml);
     const media = extractCreativeMediaFromHtml(contextHtml);
+    const variantCount = extractVariantCountFromText(contextLineText);
 
     cards.push({
       libraryId,
@@ -74,6 +77,7 @@ export function parseRenderedMetaLibraryHtml(content: string): RenderedHtmlPaylo
       startedRunning: findStartedRunningLine(contextLineText),
       imageUrl: media.imageUrl,
       hasVideo: media.hasVideo,
+      variantCount,
     });
   }
 
@@ -330,10 +334,24 @@ export function extractTextCardsFromVisibleText(value: string): ExtractedAdCard[
       // isTextCardUiLine keeps this line out of the ad body; the block still
       // carries it, so capture Meta's published start date before it drops.
       startedRunning: findStartedRunningLine(blockText),
+      variantCount: extractVariantCountFromText(blockText),
     });
   }
 
   return cards;
+}
+
+/** Parse "N ads use this creative and text" into a variant count. */
+export function extractVariantCountFromText(value: string | null | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+  const match = value.match(/(\d+)\s+ads?\s+use this creative and text/i);
+  if (!match?.[1]) {
+    return null;
+  }
+  const count = Number.parseInt(match[1], 10);
+  return Number.isFinite(count) && count > 0 ? count : null;
 }
 
 export function hasNoResultsSignal(value: string) {

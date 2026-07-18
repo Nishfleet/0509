@@ -13,6 +13,7 @@ import {
   translateAdText,
   withTranslatedAnalysisField,
 } from "~/lib/translation.server";
+import { pickFeaturedProofAd, sortAdsForSearchDisplay } from "~/lib/search-sort";
 import type { AdRecord, SearchResponse } from "~/lib/types";
 
 export async function prepareSearchResultSelection(
@@ -21,11 +22,15 @@ export async function prepareSearchResultSelection(
   selectedId: string | null,
   options: { enrichSelected?: boolean; hydratePersisted?: boolean } = {},
 ) {
-  const hydratedAds = options.hydratePersisted === false
+  const rawHydratedAds = options.hydratePersisted === false
     ? result.ads
     : await hydrateAdsWithPersistedCreatives(env, result.ads);
-  const resolvedSelectedId = selectedId ?? hydratedAds[0]?.metaAdId ?? null;
-  const selectedAdBase = hydratedAds.find((ad) => ad.metaAdId === resolvedSelectedId) ?? hydratedAds[0] ?? null;
+  // Active-first, longest-running for display + featured proof default.
+  const hydratedAds = sortAdsForSearchDisplay(rawHydratedAds, "active_first");
+  const featured = pickFeaturedProofAd(hydratedAds);
+  const resolvedSelectedId = selectedId ?? featured?.metaAdId ?? null;
+  const selectedAdBase =
+    hydratedAds.find((ad) => ad.metaAdId === resolvedSelectedId) ?? featured ?? null;
 
   let selectedAd: AdRecord | null = selectedAdBase;
   if (selectedAdBase && options.enrichSelected !== false) {

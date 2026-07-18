@@ -1657,6 +1657,40 @@ describe("searchMetaLibraryByBrowser", () => {
     });
   });
 
+  it("maps creativeType and status into Ad Library URL params", async () => {
+    const { buildSearchUrl } = await import("~/lib/meta-library-browser.server");
+    const url = buildSearchUrl({
+      mode: "advertiser",
+      filters: {
+        query: "nike.com",
+        country: "United States",
+        platform: "all",
+        creativeType: "video",
+        status: "active",
+        firstSeenFrom: "",
+        lastSeenFrom: "",
+      },
+    });
+    expect(url).toContain("media_type=video");
+    expect(url).toContain("active_status=active");
+    expect(url).toContain("country=US");
+  });
+
+  it("extracts variant counts from creative reuse copy", async () => {
+    const { extractVariantCountFromText, parseRenderedMetaLibraryHtml } = await import(
+      "~/lib/meta-library-rendered-card-parser.server"
+    );
+    expect(extractVariantCountFromText("12 ads use this creative and text")).toBe(12);
+    const result = parseRenderedMetaLibraryHtml(`
+      <article role="article">
+        <a href="/ads/library/?id=7778889990">See ad details</a>
+        <p>12 ads use this creative and text</p>
+        <p>Sale ends soon</p>
+      </article>
+    `);
+    expect(result.cards[0]?.variantCount).toBe(12);
+  });
+
   it("dedupes extracted cards by libraryId across scroll passes", async () => {
     const { dedupeExtractedCardsByLibraryId } = await import(
       "~/lib/meta-library-browser.server"

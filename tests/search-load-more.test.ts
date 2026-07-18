@@ -224,6 +224,7 @@ describe("search load-more accessibility", () => {
           location: { pathname: "/search", search: "?after=cursor-2" },
           formData: new FormData(),
         }),
+        useRevalidator: vi.fn().mockReturnValue({ state: "idle", revalidate: vi.fn() }),
         useRouteLoaderData: vi.fn().mockReturnValue({ session: null }),
       };
     });
