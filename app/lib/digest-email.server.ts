@@ -285,6 +285,8 @@ function renderTopMoveHtml(
     : `${intelligence.priorityBand} · ${intelligence.priorityScore}/100`;
   const metricLines = readMetricBandLines(item.metadata);
   const creativeHtml = renderCreativeThumbnailHtml(item.metadata);
+  // WP-24: top-move links land on the watchlist event row when ids exist.
+  const reviewUrl = digestItemDeepLink(item) ?? fullDigestUrl;
 
   return `
     <li style="margin-bottom: 18px;">
@@ -301,7 +303,7 @@ function renderTopMoveHtml(
         ${escapeHtml(priority)} · ${escapeHtml(classification.label)} · ${escapeHtml(classification.sourceTypeLabel)} · ${escapeHtml(when)}
       </p>
       <p style="margin: 0 0 8px;"><strong>Suggested next action:</strong> ${escapeHtml(intelligence.recommendedAction)}</p>
-      <p style="margin: 0;"><a href="${escapeHtml(fullDigestUrl)}" style="color:#101828; font-weight:700;">Review in Five to Nine</a></p>
+      <p style="margin: 0;"><a href="${escapeHtml(reviewUrl)}" style="color:#101828; font-weight:700;">Review in Five to Nine</a></p>
     </li>
   `;
 }
@@ -323,6 +325,7 @@ function renderTopMoveText(
     : `${intelligence.priorityBand} (${intelligence.priorityScore}/100)`;
   const metricLines = readMetricBandLines(item.metadata);
   const creativeNote = creativeThumbnailTextNote(item.metadata);
+  const reviewUrl = digestItemDeepLink(item) ?? fullDigestUrl;
   return [
     `${index}. ${watchlistName}: ${title}`,
     `   What changed: ${truncate(summary, 220)}`,
@@ -333,9 +336,23 @@ function renderTopMoveText(
     `   Source type: ${classification.sourceTypeLabel}`,
     `   Timestamp: ${safeTimestamp(item, fallbackTimestamp, timeZone)}`,
     `   Suggested next action: ${intelligence.recommendedAction}`,
-    `   Review in Five to Nine: ${fullDigestUrl}`,
+    `   Review in Five to Nine: ${reviewUrl}`,
     "",
   ].filter((line): line is string => typeof line === "string");
+}
+
+/** Absolute deep-link to a watchlist event row when both ids are present. */
+export function digestItemDeepLink(
+  item: Pick<DigestTrustItem, "eventId" | "watchlistId">,
+  origin = "https://0509.io",
+): string | null {
+  const watchlistId = item.watchlistId?.trim();
+  const eventId = item.eventId?.trim();
+  if (!watchlistId || !eventId) {
+    return null;
+  }
+  const base = origin.replace(/\/+$/, "");
+  return `${base}/app/watchlists?watchlist=${encodeURIComponent(watchlistId)}&event=${encodeURIComponent(eventId)}`;
 }
 
 function renderStrategySectionHtml(strategyParagraph: string | null) {

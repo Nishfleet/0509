@@ -2491,9 +2491,13 @@ function deliveryAttemptSummaryStatus(status: DeliveryAttemptRecord["status"]) {
 }
 
 function watchlistUrlFor(item: DigestDeliveryItem | undefined) {
-  return item?.watchlistId
-    ? `https://0509.io/app/watchlists?watchlist=${encodeURIComponent(item.watchlistId)}`
-    : null;
+  if (!item?.watchlistId) {
+    return null;
+  }
+  const base = `https://0509.io/app/watchlists?watchlist=${encodeURIComponent(item.watchlistId)}`;
+  return item.eventId
+    ? `${base}&event=${encodeURIComponent(item.eventId)}`
+    : base;
 }
 
 function renderDigestHtml(input: {
@@ -2747,7 +2751,8 @@ function buildInstantAlertContent(
 ): InstantAlertContent {
   const primaryEvent = events[0];
   const competitor = readCompetitorLabel(primaryEvent) ?? watchlist.name;
-  const watchlistUrl = buildWatchlistUrl(env, watchlist.id);
+  // WP-24: deep-link the primary change so "See the evidence" lands on the row.
+  const watchlistUrl = buildWatchlistUrl(env, watchlist.id, primaryEvent?.id ?? null);
   const creativeImageHtml = renderCreativeImageHtml(primaryEvent, adsById);
 
   if (events.length === 1) {
@@ -2868,13 +2873,21 @@ function readCompetitorLabel(event: WatchEventRecord) {
   return typeof advertiser === "string" && advertiser.trim().length > 0 ? advertiser : null;
 }
 
-function buildWatchlistUrl(env: AppEnv, watchlistId: string) {
+function buildWatchlistUrl(
+  env: AppEnv,
+  watchlistId: string,
+  eventId?: string | null,
+) {
   const baseUrl = env.APP_ORIGIN?.trim() || env.BETTER_AUTH_URL?.trim();
   if (!baseUrl) {
     return null;
   }
 
-  return `${baseUrl.replace(/\/+$/, "")}/app/watchlists?watchlist=${encodeURIComponent(watchlistId)}`;
+  const url = `${baseUrl.replace(/\/+$/, "")}/app/watchlists?watchlist=${encodeURIComponent(watchlistId)}`;
+  const trimmedEventId = eventId?.trim();
+  return trimmedEventId
+    ? `${url}&event=${encodeURIComponent(trimmedEventId)}`
+    : url;
 }
 
 function dedupeTargetsByValue(targets: DeliveryTargetRecord[]) {

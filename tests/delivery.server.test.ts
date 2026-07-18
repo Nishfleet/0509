@@ -2622,5 +2622,7 @@ describe("alert email content quality", () => {
     expect(payload.html).toContain("Glow Serum Sale");
     expect(payload.html).toContain("Glow Serum Weekend Sale");
     expect(payload.html).toContain("See the evidence");
+    // WP-24: evidence link deep-links to the event row.
+    expect(payload.html).toContain("/app/watchlists?watchlist=watch-1&event=event-1");
   });
 });

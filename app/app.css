@@ -3097,6 +3097,17 @@ button[aria-busy="true"] {
   background: #fff;
 }
 
+/* WP-24: email deep-link highlight for ?event= */
+.f9-event-card.is-highlighted {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+  outline: none;
+}
+
+.f9-event-card.is-highlighted:focus {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.28);
+}
+
 .f9-legal-page,
 .f9-error-page,
 .f9-share-page {

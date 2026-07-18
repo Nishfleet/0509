@@ -139,6 +139,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     : null;
   const url = new URL(request.url);
   const selectedWatchlistId = url.searchParams.get("watchlist") ?? watchlists[0]?.id ?? null;
+  // WP-24: deep-link target from alert/digest emails (`?event=<id>`).
+  const highlightedEventId = url.searchParams.get("event")?.trim() || null;
   const selectedWatchlist = selectedWatchlistId
     ? await getWatchlist(env, selectedWatchlistId, workspaceUserId)
     : null;
@@ -149,6 +151,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       renderedAt,
       watchlists,
       selectedWatchlist: null,
+      highlightedEventId: null as string | null,
       eventCandidates: [] as EventCandidateRecord[],
       events: [] as WatchEventRecord[],
       runs: [],
@@ -242,6 +245,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     renderedAt,
     watchlists,
     selectedWatchlist,
+    highlightedEventId,
     eventCandidates,
     events,
     runs: runs.map((run) => ({
@@ -765,6 +769,22 @@ export function WatchlistProofAge({ capturedAt, renderedAt }: { capturedAt: stri
 
 export default function WatchlistsRoute() {
   const data = useLoaderData<typeof loader>();
+
+  // WP-24: email deep-links land on ?event= — scroll/focus that row once.
+  useEffect(() => {
+    const eventId = data.highlightedEventId?.trim();
+    if (!eventId) {
+      return;
+    }
+    const node = document.getElementById(`event-${eventId}`);
+    if (!node) {
+      return;
+    }
+    node.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (node instanceof HTMLElement) {
+      node.focus({ preventScroll: true });
+    }
+  }, [data.highlightedEventId, data.selectedWatchlist?.id]);
   const renderedAt = new Date(data.renderedAt);
   const discoveryStatus = toCustomerDiscoveryStatus(data.discoveryStatus);
   const actionData = useActionData<typeof action>();
@@ -1187,8 +1207,14 @@ export default function WatchlistsRoute() {
                           data.effectiveDeliveryConfig.timezone,
                         );
 
+                        const isHighlighted = data.highlightedEventId === event.id;
                         return (
-                          <li className="f9-event-card" key={event.id}>
+                          <li
+                            className={`f9-event-card${isHighlighted ? " is-highlighted" : ""}`}
+                            id={`event-${event.id}`}
+                            key={event.id}
+                            tabIndex={isHighlighted ? -1 : undefined}
+                          >
                             <div className="f9-panel-toolbar">
                               <div>
                                 <p className="f9-app-kicker">

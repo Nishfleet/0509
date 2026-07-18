@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { buildDigestEmail, buildScanTroubleEmail } from "~/lib/digest-email.server";
+import {
+  buildDigestEmail,
+  buildScanTroubleEmail,
+  digestItemDeepLink,
+} from "~/lib/digest-email.server";
 
 describe("buildScanTroubleEmail", () => {
   it("names affected watchlists and points to retries + watchlists", () => {
@@ -52,9 +56,23 @@ describe("buildDigestEmail", () => {
     expect(email.html).not.toContain("Plum: Headline changed");
     expect(email.html).toContain("Verified evidence");
     expect(email.html).toContain("Check-spotted");
+    // WP-24: each top-move deep-links to the watchlist event row (HTML-escaped &).
+    expect(email.html).toContain("/app/watchlists?watchlist=wl-nykaa&amp;event=ev-nykaa");
+    expect(email.html).toContain("/app/watchlists?watchlist=wl-boat&amp;event=ev-boat");
+    expect(email.text).toContain(
+      "Review in Five to Nine: https://0509.io/app/watchlists?watchlist=wl-nykaa&event=ev-nykaa",
+    );
     expect(email.text).toContain("View full digest: https://0509.io/app/digests");
     expect(email.text).toContain("Manage frequency: https://0509.io/app/notifications");
     expect(email.text).toContain("Unsubscribe: https://0509.io/unsubscribe?sig=test");
+  });
+
+  it("builds digestItemDeepLink only when both ids exist", () => {
+    expect(
+      digestItemDeepLink({ eventId: "e1", watchlistId: "w1" }),
+    ).toBe("https://0509.io/app/watchlists?watchlist=w1&event=e1");
+    expect(digestItemDeepLink({ eventId: "e1", watchlistId: null as never })).toBeNull();
+    expect(digestItemDeepLink({ eventId: "", watchlistId: "w1" })).toBeNull();
   });
 
   it("renders an all-quiet digest without claiming proof movement", () => {
@@ -461,8 +479,11 @@ function digestItem(
   priorityScore: number,
   sourceStatus: "proof_backed" | "scan_backed",
 ) {
+  const slug = watchlistName.toLowerCase().replace(/[^a-z0-9]+/g, "");
   return {
     watchlistName,
+    watchlistId: `wl-${slug}`,
+    eventId: `ev-${slug}`,
     eventType: title.includes("offer")
       ? "landing_page_offer_changed"
       : title.includes("CTA")
