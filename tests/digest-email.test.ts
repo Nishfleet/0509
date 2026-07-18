@@ -27,7 +27,7 @@ describe("buildScanTroubleEmail", () => {
 });
 
 describe("buildDigestEmail", () => {
-  it("renders a top-three decision brief with authored plain text", () => {
+  it("renders up to five top moves grouped by watchlist", () => {
     const email = buildDigestEmail({
       name: "Owner",
       periodStart: "2026-06-01T00:00:00.000Z",
@@ -41,19 +41,29 @@ describe("buildDigestEmail", () => {
       unsubscribeUrl: "https://0509.io/unsubscribe?sig=test",
       items: [
         digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed"),
+        digestItem("Nykaa", "New ad detected", 90, "scan_backed", "ev-nykaa-2"),
         digestItem("boAt", "New ad detected", 85, "scan_backed"),
         digestItem("Mamaearth", "CTA changed", 70, "scan_backed"),
-        digestItem("Plum", "Headline changed", 30, "scan_backed"),
+        digestItem("Plum", "Headline changed", 65, "scan_backed"),
+        digestItem("Sugar", "Form changed", 60, "scan_backed"),
+        digestItem("Dot", "Offer changed", 55, "scan_backed"),
+        digestItem("Wow", "CTA changed", 50, "scan_backed"),
       ],
     });
 
-    expect(email.subject).toBe("4 changes found, 4 worth action");
-    expect(email.text).toContain("4 changes found, 4 worth action.");
+    expect(email.subject).toBe("8 changes found, 8 worth action");
+    expect(email.text).toContain("8 changes found, 8 worth action.");
     expect(email.html).toContain("Top moves");
-    expect(email.html).toContain("Nykaa: Landing page offer changed");
-    expect(email.html).toContain("boAt: New ad detected");
-    expect(email.html).toContain("Mamaearth: CTA changed");
-    expect(email.html).not.toContain("Plum: Headline changed");
+    // Group headers with per-group counts (Nykaa has 2 of the top 5).
+    expect(email.html).toContain("Nykaa");
+    expect(email.html).toContain(" · 2 changes");
+    expect(email.html).toContain("Landing page offer changed");
+    expect(email.html).toContain("boAt");
+    expect(email.html).toContain("Mamaearth");
+    expect(email.html).toContain("Plum");
+    // Cap at 5 — lower-priority Sugar/Dot/Wow omitted from top moves.
+    expect(email.html).not.toContain("Sugar");
+    expect(email.html).toContain("3 more changes are in the full digest");
     expect(email.html).toContain("Verified evidence");
     expect(email.html).toContain("Check-spotted");
     // WP-24: each top-move deep-links to the watchlist event row (HTML-escaped &).
@@ -200,7 +210,9 @@ describe("buildDigestEmail", () => {
       ],
     });
 
-    expect(email.html).toContain("&lt;Nykaa&gt;: &lt;script&gt;alert(1)&lt;/script&gt;");
+    // Group header + item title are escaped separately (no "Name: Title" join).
+    expect(email.html).toContain("&lt;Nykaa&gt;");
+    expect(email.html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
     expect(email.html).toContain("Safe &lt;b&gt;summary&lt;/b&gt;");
     expect(email.html).not.toContain("<script>alert(1)</script>");
     expect(email.html).not.toContain("Proof failed item");
@@ -478,12 +490,13 @@ function digestItem(
   title: string,
   priorityScore: number,
   sourceStatus: "proof_backed" | "scan_backed",
+  eventIdOverride?: string,
 ) {
   const slug = watchlistName.toLowerCase().replace(/[^a-z0-9]+/g, "");
   return {
     watchlistName,
     watchlistId: `wl-${slug}`,
-    eventId: `ev-${slug}`,
+    eventId: eventIdOverride ?? `ev-${slug}`,
     eventType: title.includes("offer")
       ? "landing_page_offer_changed"
       : title.includes("CTA")

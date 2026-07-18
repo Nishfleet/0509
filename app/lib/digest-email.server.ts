@@ -61,7 +61,9 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
   }
 
   const ranked = rankDigestItems(input.items);
-  const topItems = ranked.slice(0, 3);
+  // WP-27: up to 5 top moves, rendered grouped by watchlist.
+  const topItems = ranked.slice(0, 5);
+  const topMoveGroups = groupTopMovesByWatchlist(topItems);
   const actionCount = ranked.length;
   const proofMix = summarizeDigestProofMix(input.items);
   const priorityMix = summarizePriorityMix(input.items);
@@ -93,9 +95,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
       </div>
       ${renderTrendSectionHtml(trendLines)}
       <h2 style="font-size: 18px; margin: 0 0 12px;">Top moves</h2>
-      <ol style="margin: 0 0 20px; padding-left: 20px;">
-        ${topItems.map((item) => renderTopMoveHtml(item, input.periodEnd, input.timeZone, input.fullDigestUrl)).join("")}
-      </ol>
+      ${renderTopMoveGroupsHtml(topMoveGroups, input.periodEnd, input.timeZone, input.fullDigestUrl)}
       ${omittedCount > 0 ? `<p style="margin: 0 0 18px; color: #475467;">${omittedCount} more change${omittedCount === 1 ? "" : "s"} are in the full digest.</p>` : ""}
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">View full digest</a>
@@ -119,7 +119,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
     ...renderTrendSectionText(trendLines),
     "",
     "Top moves:",
-    ...topItems.flatMap((item, index) => renderTopMoveText(item, index + 1, input.periodEnd, input.timeZone, input.fullDigestUrl)),
+    ...renderTopMoveGroupsText(topMoveGroups, input.periodEnd, input.timeZone, input.fullDigestUrl),
     omittedCount > 0 ? `${omittedCount} more change${omittedCount === 1 ? "" : "s"} are in the full digest.` : null,
     "",
     `View full digest: ${input.fullDigestUrl}`,
@@ -244,6 +244,86 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
   };
 }
 
+type TopMoveGroup = {
+  watchlistName: string;
+  items: DigestTrustItem[];
+};
+
+/** Preserve ranked order; group consecutive top moves under the same watchlist label. */
+export function groupTopMovesByWatchlist(items: DigestTrustItem[]): TopMoveGroup[] {
+  const groups: TopMoveGroup[] = [];
+  for (const item of items) {
+    const name = item.watchlistName?.trim() || "Competitor";
+    const last = groups[groups.length - 1];
+    if (last && last.watchlistName === name) {
+      last.items.push(item);
+    } else {
+      groups.push({ watchlistName: name, items: [item] });
+    }
+  }
+  return groups;
+}
+
+function renderTopMoveGroupsHtml(
+  groups: TopMoveGroup[],
+  fallbackTimestamp: string,
+  timeZone: string | null | undefined,
+  fullDigestUrl: string,
+) {
+  if (groups.length === 0) {
+    return `<ol style="margin: 0 0 20px; padding-left: 20px;"></ol>`;
+  }
+
+  return groups
+    .map((group) => {
+      const countLabel =
+        group.items.length === 1
+          ? "1 change"
+          : `${group.items.length} changes`;
+      return `
+      <div style="margin: 0 0 18px;">
+        <p style="margin: 0 0 8px; font-size: 14px; color: #101828;">
+          <strong>${escapeHtml(group.watchlistName)}</strong>
+          <span style="color: #98a2b3; font-weight: 400;"> · ${escapeHtml(countLabel)}</span>
+        </p>
+        <ol style="margin: 0; padding-left: 20px;">
+          ${group.items
+            .map((item) =>
+              renderTopMoveHtml(item, fallbackTimestamp, timeZone, fullDigestUrl, {
+                omitWatchlistPrefix: true,
+              }),
+            )
+            .join("")}
+        </ol>
+      </div>`;
+    })
+    .join("");
+}
+
+function renderTopMoveGroupsText(
+  groups: TopMoveGroup[],
+  fallbackTimestamp: string,
+  timeZone: string | null | undefined,
+  fullDigestUrl: string,
+) {
+  const lines: string[] = [];
+  let index = 1;
+  for (const group of groups) {
+    const countLabel =
+      group.items.length === 1 ? "1 change" : `${group.items.length} changes`;
+    lines.push(`${group.watchlistName} (${countLabel})`);
+    for (const item of group.items) {
+      lines.push(
+        ...renderTopMoveText(item, index, fallbackTimestamp, timeZone, fullDigestUrl, {
+          omitWatchlistPrefix: true,
+        }),
+      );
+      index += 1;
+    }
+  }
+  return lines;
+}
+
 function rankDigestItems(items: DigestTrustItem[]) {
   return items
     .map((item, index) => ({ item, index, intelligence: readDigestIntelligence(item.metadata) }))
@@ -273,6 +353,7 @@ function renderTopMoveHtml(
   fallbackTimestamp: string,
   timeZone: string | null | undefined,
   fullDigestUrl: string,
+  options: { omitWatchlistPrefix?: boolean } = {},
 ) {
   const intelligence = readDigestIntelligence(item.metadata);
   const classification = classifyDigestItemSource(item);
@@ -287,10 +368,13 @@ function renderTopMoveHtml(
   const creativeHtml = renderCreativeThumbnailHtml(item.metadata);
   // WP-24: top-move links land on the watchlist event row when ids exist.
   const reviewUrl = digestItemDeepLink(item) ?? fullDigestUrl;
+  const heading = options.omitWatchlistPrefix
+    ? escapeHtml(title)
+    : `${escapeHtml(watchlistName)}: ${escapeHtml(title)}`;
 
   return `
     <li style="margin-bottom: 18px;">
-      <p style="margin: 0 0 4px;"><strong>${escapeHtml(watchlistName)}: ${escapeHtml(title)}</strong></p>
+      <p style="margin: 0 0 4px;"><strong>${heading}</strong></p>
       <p style="margin: 0 0 8px; color: #475467;">${escapeHtml(truncate(summary, 220))}</p>
       ${creativeHtml}
       ${metricLines
@@ -314,6 +398,7 @@ function renderTopMoveText(
   fallbackTimestamp: string,
   timeZone: string | null | undefined,
   fullDigestUrl: string,
+  options: { omitWatchlistPrefix?: boolean } = {},
 ) {
   const intelligence = readDigestIntelligence(item.metadata);
   const classification = classifyDigestItemSource(item);
@@ -326,8 +411,9 @@ function renderTopMoveText(
   const metricLines = readMetricBandLines(item.metadata);
   const creativeNote = creativeThumbnailTextNote(item.metadata);
   const reviewUrl = digestItemDeepLink(item) ?? fullDigestUrl;
+  const heading = options.omitWatchlistPrefix ? title : `${watchlistName}: ${title}`;
   return [
-    `${index}. ${watchlistName}: ${title}`,
+    `${index}. ${heading}`,
     `   What changed: ${truncate(summary, 220)}`,
     creativeNote ? `   ${creativeNote}` : null,
     ...metricLines.map((line) => `   ${line}`),
