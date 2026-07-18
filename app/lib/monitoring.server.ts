@@ -62,7 +62,12 @@ import {
 } from "~/lib/ad-source.server";
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { getUserPlan, PLAN_LIMITS } from "~/lib/plan.server";
-import { planAllowsDigestCadence, shouldSchedulePlanInRegularScan } from "~/lib/plan-entitlements";
+import { resolveScheduledScanCacheMaxAgeMs } from "~/lib/discovery-cache.server";
+import {
+  getScheduledMonitoringPolicy,
+  planAllowsDigestCadence,
+  shouldSchedulePlanInRegularScan,
+} from "~/lib/plan-entitlements";
 import { ensureDb } from "~/lib/data/d1.server";
 import {
   getEvidenceUsageSummary,
@@ -142,6 +147,8 @@ interface ScanOptions {
   concurrencyPermitToken?: string;
   orchestrationRunId?: string;
   forceLive?: boolean;
+  /** WP-36: reuse shared discovery cache younger than plan cadence. */
+  acceptCacheYoungerThanMs?: number;
 }
 
 export class MonitoringConcurrencyLimitError extends Error {
@@ -1323,6 +1330,10 @@ export async function runWatchlistWorkflowJob(
   }
 
   const customerMetaAdLibraryToken = await resolveWatchlistCustomerMetaAdLibraryToken(env, watchlist);
+  const acceptCacheYoungerThanMs = await resolveScheduledScanSharedCacheMaxAgeMs(
+    env,
+    watchlist.userId,
+  );
   if (options.concurrencyPermitToken) {
     await renewMonitoringConcurrencySlot(env, { token: options.concurrencyPermitToken });
   }
@@ -1342,6 +1353,7 @@ export async function runWatchlistWorkflowJob(
           orchestrationToken: claim.processingToken,
           concurrencyPermitToken: options.concurrencyPermitToken,
           forceLive: true,
+          acceptCacheYoungerThanMs,
         }),
       {
         customerMetaAdLibraryToken,
@@ -2273,6 +2285,12 @@ async function runScheduledWatchlistInline(
   }
 
   const customerMetaAdLibraryToken = await resolveWatchlistCustomerMetaAdLibraryToken(env, watchlist);
+  const acceptCacheYoungerThanMs = await resolveScheduledScanSharedCacheMaxAgeMs(
+    env,
+    watchlist.userId,
+  );
+  // In-process dedupe is still per user; cross-workspace reuse is the shared
+  // discovery_cache_entry path (acceptCacheYoungerThanMs / WP-36).
   const scanCacheKey = `${watchlist.userId}:${watchlist.targetFingerprint}`;
 
   await runWatchlist(
@@ -2286,6 +2304,7 @@ async function runScheduledWatchlistInline(
           performBoundedScan(env, query, DEFAULT_PAGE_BUDGET, {
             customerMetaAdLibraryToken,
             forceLive: true,
+            acceptCacheYoungerThanMs,
           }),
         );
       }
@@ -2296,6 +2315,20 @@ async function runScheduledWatchlistInline(
     },
   );
   return true;
+}
+
+async function resolveScheduledScanSharedCacheMaxAgeMs(
+  env: AppEnv,
+  userId: string,
+): Promise<number | undefined> {
+  try {
+    const plan = await getUserPlan(env, userId);
+    const cadence = getScheduledMonitoringPolicy(plan).scheduledScanCadence;
+    return resolveScheduledScanCacheMaxAgeMs(cadence) ?? undefined;
+  } catch {
+    // Fail open to live scrape rather than reuse with an unknown plan window.
+    return undefined;
+  }
 }
 
 async function performBoundedScan(
@@ -2318,6 +2351,7 @@ async function performBoundedScan(
         purpose: "watchlist_scan",
         customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
         forceLive: options.forceLive === true,
+        acceptCacheYoungerThanMs: options.acceptCacheYoungerThanMs,
       },
     );
     ads.push(...response.ads);

@@ -622,6 +622,8 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
     expect(mocks.searchAdsViaSourceResolver.mock.calls[0]?.[3]).toMatchObject({
       purpose: "watchlist_scan",
       forceLive: true,
+      // agency plan → every_3h cadence window (WP-36 shared cache reuse)
+      acceptCacheYoungerThanMs: 3 * 60 * 60 * 1000,
     });
     expect(mocks.createWatchlistRun).toHaveBeenCalledTimes(2);
     expect(mocks.finishWatchlistRun).toHaveBeenCalledTimes(2);

@@ -6,7 +6,11 @@ import {
   upsertDiscoveryProviderState,
 } from "~/lib/data.server";
 import { hasBrowserRunQuickActions } from "~/lib/browser-run.server";
-import { buildDiscoveryCacheKey, resolveDiscoveryCacheTtlMs } from "~/lib/discovery-cache.server";
+import {
+  buildDiscoveryCacheKey,
+  isDiscoveryCacheWithinMaxAge,
+  resolveDiscoveryCacheTtlMs,
+} from "~/lib/discovery-cache.server";
 import { resolveE2EFixtureProviderFromEnv } from "~/lib/e2e-provider.server";
 import type { AppEnv, BrowserBinding } from "~/lib/env.server";
 import {
@@ -30,6 +34,12 @@ export { CommercialDiscoveryError } from "~/lib/meta-library-browser.server";
 export interface SearchAdsViaSourceOptions {
   purpose?: DiscoveryRouteContext;
   forceLive?: boolean;
+  /**
+   * When forceLive is set, still serve a shared discovery_cache_entry whose
+   * fetched_at is within this window (cross-workspace scheduled-scan reuse).
+   * Interactive search should leave this unset.
+   */
+  acceptCacheYoungerThanMs?: number;
   customerMetaAdLibraryToken?: string | null;
   cacheKeyOverride?: string | null;
 }
@@ -413,6 +423,12 @@ export async function searchAdsViaSourceResolver(
   });
   const routeContext = options.purpose ?? "public_search";
   const forceLive = options.forceLive === true && provider !== "demo";
+  const acceptCacheYoungerThanMs =
+    typeof options.acceptCacheYoungerThanMs === "number" &&
+    Number.isFinite(options.acceptCacheYoungerThanMs) &&
+    options.acceptCacheYoungerThanMs > 0
+      ? options.acceptCacheYoungerThanMs
+      : null;
   const fixtureProvider = resolveE2EFixtureProviderFromEnv(effectiveEnv);
   const providerState =
     !fixtureProvider &&
@@ -470,9 +486,24 @@ export async function searchAdsViaSourceResolver(
 
   const cached = effectiveEnv.DB ? await getDiscoveryCacheEntry(effectiveEnv, cacheKey) : null;
   const usableCached = isUsableDiscoveryCache(provider, cached) ? cached : null;
-  if (!forceLive && usableCached && new Date(usableCached.expiresAt).getTime() > Date.now()) {
+  const unexpiredCache =
+    usableCached && new Date(usableCached.expiresAt).getTime() > Date.now()
+      ? usableCached
+      : null;
+  // Normal path: warm unexpired cache. forceLive path (WP-36): shared cache
+  // younger than the caller's cadence window — still a healthy hit so scheduled
+  // scans do not fabricate diffs or pay 10× for the same competitor.
+  const forceLiveSharedHit =
+    forceLive &&
+    acceptCacheYoungerThanMs != null &&
+    usableCached &&
+    isDiscoveryCacheWithinMaxAge(usableCached.fetchedAt, acceptCacheYoungerThanMs)
+      ? usableCached
+      : null;
+  const freshCacheHit = !forceLive ? unexpiredCache : forceLiveSharedHit;
+  if (freshCacheHit) {
     return {
-      ...usableCached.payload,
+      ...freshCacheHit.payload,
       source: provider,
       provider,
       cacheStatus: "hit",
