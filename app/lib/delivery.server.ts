@@ -86,9 +86,11 @@ export {
   sendAccountActionEmail,
   sendDeliveryTestEmail,
   sendEmailVerificationEmail,
+  sendFreeActivationResultEmail,
   sendOperatorAlertEmail,
   sendPasswordResetEmail,
   sendTeamInviteEmail,
+  sendWelcomeEmail,
 } from "~/lib/delivery-account-emails.server";
 
 const AUTO_PROVISIONED_EMAIL_SOURCE = "account_email";

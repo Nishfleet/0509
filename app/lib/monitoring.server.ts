@@ -1652,6 +1652,18 @@ export async function runWatchlist(
           })
         : { attempts: 0, channels: [] };
 
+    // WP-25: free users get no digests/instant alerts — send one activation-result
+    // email when this run established the baseline (first successful scan).
+    await maybeSendFreeActivationResultEmail(env, {
+      watchlist,
+      runId,
+      baselineRunId: baselineRun?.id ?? null,
+      events: allEvents,
+      adsSeen: currentObservations.length,
+      observations: currentObservations,
+      userDeliveryProfile,
+    });
+
     await completeWatchlistRun(
       env,
       runId,
@@ -3919,5 +3931,84 @@ function safeMetadata(observation: ObservationRecord) {
     return JSON.parse(observation.metadata_json) as Record<string, unknown>;
   } catch {
     return {};
+  }
+}
+
+/**
+ * WP-25 free activation-result email. Only on the first successful scan
+ * (no prior baseline run) for free-plan workspaces. Paid plans already get
+ * digests/instant alerts; free has neither. Failures never fail the scan.
+ */
+async function maybeSendFreeActivationResultEmail(
+  env: AppEnv,
+  input: {
+    watchlist: WatchlistRecord;
+    runId: string;
+    baselineRunId: string | null;
+    events: WatchEventRecord[];
+    adsSeen: number;
+    observations: ObservationRecord[];
+    userDeliveryProfile: Awaited<ReturnType<typeof getUserDeliveryProfile>>;
+  },
+) {
+  // First successful scan only — a baseline run already means activation ran.
+  if (input.baselineRunId) {
+    return;
+  }
+
+  const profile = input.userDeliveryProfile;
+  if (!profile?.email || profile.emailVerified !== true) {
+    return;
+  }
+
+  try {
+    const plan = await getUserPlan(env, input.watchlist.userId);
+    if (plan !== "free") {
+      return;
+    }
+
+    // Prefer an honest baseline event when present; still email if the scan
+    // succeeded with zero ads (honest empty baseline — useful signal).
+    const hasBaselineEvent = input.events.some(
+      (event) => ((event.metadata ?? {}) as Record<string, unknown>).kind === "baseline",
+    );
+    if (!hasBaselineEvent && input.adsSeen > 0) {
+      return;
+    }
+
+    const adIds = input.observations
+      .map((observation) => observation.ad_id)
+      .filter((adId): adId is string => Boolean(adId))
+      .slice(0, 8);
+    const adsById =
+      adIds.length > 0
+        ? new Map((await listAdsByIds(env, adIds)).map((ad) => [ad.metaAdId, ad]))
+        : new Map<string, AdRecord>();
+
+    const topAds = input.observations.slice(0, 3).map((observation) => {
+      const meta = safeMetadata(observation);
+      const ad = observation.ad_id ? adsById.get(observation.ad_id) : null;
+      const hook = typeof meta.hook === "string" ? meta.hook : ad?.hook ?? null;
+      const offer = typeof meta.offer === "string" ? meta.offer : ad?.offer ?? null;
+      const body = ad?.body ?? offer ?? null;
+      return {
+        headline: hook,
+        body,
+        creativeImageUrl: ad?.creativeImageUrl ?? null,
+      };
+    });
+
+    const { sendFreeActivationResultEmail } = await import("~/lib/delivery.server");
+    await sendFreeActivationResultEmail(env, {
+      userId: input.watchlist.userId,
+      email: profile.email,
+      name: profile.name ?? null,
+      watchlistId: input.watchlist.id,
+      competitorName: input.watchlist.name,
+      adsFound: input.adsSeen,
+      topAds,
+    });
+  } catch {
+    // Activation email must never roll back a successful scan.
   }
 }

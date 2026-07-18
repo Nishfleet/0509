@@ -157,6 +157,33 @@ export function getBetterAuth(env: AppEnv, request: Request) {
           "Better Auth verification email timed out.",
         );
       },
+      // WP-25: one welcome after verification completes (OAuth/email verify path).
+      // Magic-link signup creates users already verified — covered by databaseHooks.
+      afterEmailVerification: async (user) => {
+        await maybeSendWelcomeEmail(env, user);
+      },
+    },
+    databaseHooks: {
+      user: {
+        create: {
+          // Magic-link signup inserts emailVerified=true without firing
+          // afterEmailVerification. Idempotent welcome covers both paths.
+          after: async (user) => {
+            if (user.emailVerified) {
+              await maybeSendWelcomeEmail(env, user);
+            }
+          },
+        },
+        update: {
+          // Existing unverified users who verify via magic link update
+          // emailVerified in place (no afterEmailVerification either).
+          after: async (user) => {
+            if (user.emailVerified) {
+              await maybeSendWelcomeEmail(env, user);
+            }
+          },
+        },
+      },
     },
     account: {
       encryptOAuthTokens: true,
@@ -1575,4 +1602,37 @@ function escapeHtml(value: string) {
 
 function toIsoString(value: Date | string) {
   return value instanceof Date ? value.toISOString() : value;
+}
+
+/**
+ * WP-25 welcome: fire-and-forget from verification/signup hooks.
+ * Never throws into Better Auth auth flows — claim idempotency owns exactly-once.
+ */
+async function maybeSendWelcomeEmail(
+  env: AppEnv,
+  user: { id: string; email: string; name?: string | null },
+) {
+  if (!isEmailSendingConfigured(env)) {
+    return;
+  }
+  const email = user.email?.trim();
+  if (!user.id || !email) {
+    return;
+  }
+
+  try {
+    const { sendWelcomeEmail } = await import("~/lib/delivery.server");
+    await promiseWithTimeout(
+      sendWelcomeEmail(env, {
+        userId: user.id,
+        email,
+        name: user.name ?? null,
+      }),
+      BETTER_AUTH_EMAIL_SEND_TIMEOUT_MS,
+      "Welcome email timed out.",
+    );
+  } catch {
+    // Auth success must not depend on welcome delivery; failed sends leave a
+    // reclaimable delivery_attempt (or none) for later ops review.
+  }
 }
