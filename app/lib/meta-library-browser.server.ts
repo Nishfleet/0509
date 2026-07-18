@@ -14,6 +14,7 @@ import { findStartedRunningLine, parseStartedRunningDate } from "~/lib/meta-ad-d
 import {
   absolutizeMetaAdUrl,
   decodeHtmlEntity,
+  extractCreativeMediaFromHtml,
   extractExternalLink,
   extractTextCardsFromVisibleText,
   hasNoResultsSignal,
@@ -245,6 +246,8 @@ async function searchMetaLibraryViaSessions(
               .map((line) => line.trim())
               .find((line) => /^started running on\b/i.test(line)) ?? null;
 
+          const media = pickCreativeMediaFromCard(card);
+
           return {
             libraryId,
             advertiser: normalizeText(advertiser),
@@ -259,9 +262,79 @@ async function searchMetaLibraryViaSessions(
             // word anywhere flags ads whose creative copy merely contains it.
             active: !text.split("\n").some((line) => /^inactive$/i.test(line.trim())),
             startedRunning,
+            imageUrl: media.imageUrl,
+            hasVideo: media.hasVideo,
           };
         })
         .filter(Boolean);
+
+      function isCreativeCdnHost(host: string) {
+        const lower = host.toLowerCase();
+        return lower.includes("fbcdn") || lower.includes("scontent");
+      }
+
+      function pickCreativeMediaFromCard(cardRoot: HTMLElement | null | undefined) {
+        if (!cardRoot) {
+          return { imageUrl: null as string | null, hasVideo: false };
+        }
+
+        const videos = Array.from(cardRoot.querySelectorAll("video"));
+        const hasVideo = videos.length > 0;
+        for (const video of videos) {
+          const poster = video.getAttribute("poster") || "";
+          if (!poster) {
+            continue;
+          }
+          try {
+            const url = new URL(poster, location.origin);
+            if (isCreativeCdnHost(url.hostname)) {
+              return { imageUrl: url.toString(), hasVideo: true };
+            }
+          } catch {
+            // skip invalid poster URLs
+          }
+        }
+
+        const images = Array.from(cardRoot.querySelectorAll("img"));
+        let bestUrl: string | null = null;
+        let bestArea = -1;
+        let firstCdnUrl: string | null = null;
+
+        for (const img of images) {
+          const raw = img.currentSrc || img.src || img.getAttribute("src") || "";
+          if (!raw || raw.startsWith("data:")) {
+            continue;
+          }
+          let absolute: string | null = null;
+          try {
+            const url = new URL(raw, location.origin);
+            if (!isCreativeCdnHost(url.hostname)) {
+              continue;
+            }
+            absolute = url.toString();
+          } catch {
+            continue;
+          }
+          if (!firstCdnUrl) {
+            firstCdnUrl = absolute;
+          }
+          const width = img.naturalWidth || img.width || 0;
+          const height = img.naturalHeight || img.height || 0;
+          if (width > 0 && height > 0 && width <= 64 && height <= 64) {
+            continue;
+          }
+          const area = (width || 1) * (height || 1);
+          if (area > bestArea) {
+            bestArea = area;
+            bestUrl = absolute;
+          }
+        }
+
+        return {
+          imageUrl: bestUrl || firstCdnUrl,
+          hasVideo,
+        };
+      }
 
       const pageText = document.body?.innerText ?? "";
       const lowerPageText = pageText.toLowerCase();
@@ -863,6 +936,8 @@ function buildQuickActionExtractionScript() {
           .map((line) => line.trim())
           .find((line) => /^started running on\\b/i.test(line)) ?? null;
 
+      const media = pickCreativeMediaFromCard(card);
+
       return {
         libraryId,
         advertiser: normalizeText(advertiser),
@@ -875,9 +950,72 @@ function buildQuickActionExtractionScript() {
         platforms,
         active: !text.split("\\n").some((line) => /^inactive$/i.test(line.trim())),
         startedRunning,
+        imageUrl: media.imageUrl,
+        hasVideo: media.hasVideo,
       };
     })
     .filter(Boolean);
+
+  function isCreativeCdnHost(host) {
+    const lower = String(host || "").toLowerCase();
+    return lower.includes("fbcdn") || lower.includes("scontent");
+  }
+
+  function pickCreativeMediaFromCard(cardRoot) {
+    if (!cardRoot) {
+      return { imageUrl: null, hasVideo: false };
+    }
+    const videos = Array.from(cardRoot.querySelectorAll("video"));
+    const hasVideo = videos.length > 0;
+    for (const video of videos) {
+      const poster = video.getAttribute("poster") || "";
+      if (!poster) {
+        continue;
+      }
+      try {
+        const url = new URL(poster, location.origin);
+        if (isCreativeCdnHost(url.hostname)) {
+          return { imageUrl: url.toString(), hasVideo: true };
+        }
+      } catch {
+        // skip invalid poster URLs
+      }
+    }
+    const images = Array.from(cardRoot.querySelectorAll("img"));
+    let bestUrl = null;
+    let bestArea = -1;
+    let firstCdnUrl = null;
+    for (const img of images) {
+      const raw = img.currentSrc || img.src || img.getAttribute("src") || "";
+      if (!raw || String(raw).startsWith("data:")) {
+        continue;
+      }
+      let absolute = null;
+      try {
+        const url = new URL(raw, location.origin);
+        if (!isCreativeCdnHost(url.hostname)) {
+          continue;
+        }
+        absolute = url.toString();
+      } catch {
+        continue;
+      }
+      if (!firstCdnUrl) {
+        firstCdnUrl = absolute;
+      }
+      const width = img.naturalWidth || img.width || 0;
+      const height = img.naturalHeight || img.height || 0;
+      if (width > 0 && height > 0 && width <= 64 && height <= 64) {
+        continue;
+      }
+      const area = (width || 1) * (height || 1);
+      if (area > bestArea) {
+        bestArea = area;
+        bestUrl = absolute;
+      }
+    }
+    return { imageUrl: bestUrl || firstCdnUrl, hasVideo };
+  }
   const pageText = (document.body?.innerText ?? "").toLowerCase();
   const payload = {
     cards,
@@ -1025,6 +1163,7 @@ function extractQuickActionPayloadFromScrape(
     const html = element.html ?? "";
     const text = stripHtml(html) || element.text?.trim() || "Meta Ad Library result";
     const lineText = stripHtmlPreservingLines(html);
+    const media = extractCreativeMediaFromHtml(html);
 
     cards.push({
       libraryId,
@@ -1038,6 +1177,8 @@ function extractQuickActionPayloadFromScrape(
       platforms: inferPlatforms(text),
       active: !hasStandaloneInactiveLine(lineText),
       startedRunning: findStartedRunningLine(lineText),
+      imageUrl: media.imageUrl,
+      hasVideo: media.hasVideo,
     });
   }
 
@@ -1092,7 +1233,8 @@ function normalizeRetryAfterSeconds(value: number | null | undefined) {
   return Math.max(1, Math.ceil(value / 1000));
 }
 
-function normalizeExtractedCard(card: ExtractedAdCard, query: NormalizedSavedQuery): AdRecord {
+/** Exported for unit tests that assert image/media field mapping. */
+export function normalizeExtractedCard(card: ExtractedAdCard, query: NormalizedSavedQuery): AdRecord {
   // Never back-fill the advertiser with the customer's search term or the CTA
   // with a guessed default: presenting extraction gaps as scraped facts can
   // attribute ads to brands that never ran them. Empty means "unconfirmed"
@@ -1101,6 +1243,13 @@ function normalizeExtractedCard(card: ExtractedAdCard, query: NormalizedSavedQue
   const body = card.body || advertiser;
   const previewHeadline = card.previewHeadline || advertiser;
   const previewSubhead = card.previewSubhead || body.slice(0, 120);
+  const creativeImageUrl = card.imageUrl?.trim() || null;
+  const hasVideo = Boolean(card.hasVideo);
+  const creativeFormatHint = hasVideo
+    ? ("video" as const)
+    : creativeImageUrl
+      ? ("image" as const)
+      : undefined;
 
   return withStructuredAnalysis({
     metaAdId: card.libraryId,
@@ -1111,7 +1260,9 @@ function normalizeExtractedCard(card: ExtractedAdCard, query: NormalizedSavedQue
     hook: previewHeadline,
     offer: body,
     cta: card.cta || "",
-    format: "image",
+    // Prefer video when the card surface showed a video element; otherwise keep
+    // the historical image default until stronger format detection lands.
+    format: hasVideo ? "video" : "image",
     languageLabel: inferLanguageLabel(`${previewHeadline} ${body}`),
     destinationType: inferDestinationType(card.landingPageUrl),
     landingPageUrl: card.landingPageUrl,
@@ -1128,6 +1279,8 @@ function normalizeExtractedCard(card: ExtractedAdCard, query: NormalizedSavedQue
     researchSummary:
       "Captured from the public Meta Ad Library via Browser Run and normalized into Five to Nine’s analysis schema.",
     source: "meta_library_browser",
+    creativeImageUrl,
+    creativeFormatHint,
   });
 }
 

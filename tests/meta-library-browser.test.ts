@@ -1656,4 +1656,116 @@ describe("searchMetaLibraryByBrowser", () => {
       retryAfterSeconds: 10,
     });
   });
+
+  it("maps extracted card imageUrl onto AdRecord.creativeImageUrl", async () => {
+    const { normalizeExtractedCard } = await import("~/lib/meta-library-browser.server");
+
+    const ad = normalizeExtractedCard(
+      {
+        libraryId: "9990001111",
+        advertiser: "Glossier",
+        body: "New Balm Dotcom shades",
+        previewHeadline: "Shop the drop",
+        previewSubhead: null,
+        cta: "Shop now",
+        adSnapshotUrl: "https://www.facebook.com/ads/library/?id=9990001111",
+        landingPageUrl: "https://www.glossier.com",
+        platforms: ["Instagram"],
+        active: true,
+        imageUrl: "https://scontent.xx.fbcdn.net/v/t39.35426-6/creative.jpg",
+        hasVideo: false,
+      },
+      buildQuery(),
+    );
+
+    expect(ad.creativeImageUrl).toBe(
+      "https://scontent.xx.fbcdn.net/v/t39.35426-6/creative.jpg",
+    );
+    expect(ad.creativeFormatHint).toBe("image");
+    expect(ad.format).toBe("image");
+  });
+
+  it("sets video format hint when the extracted card has a video surface", async () => {
+    const { normalizeExtractedCard } = await import("~/lib/meta-library-browser.server");
+
+    const ad = normalizeExtractedCard(
+      {
+        libraryId: "9990002222",
+        advertiser: "Nike",
+        body: "Run free",
+        previewHeadline: "Just Do It",
+        previewSubhead: null,
+        cta: "Shop now",
+        adSnapshotUrl: "https://www.facebook.com/ads/library/?id=9990002222",
+        landingPageUrl: "https://www.nike.com",
+        platforms: ["Facebook"],
+        active: true,
+        imageUrl: "https://scontent.xx.fbcdn.net/v/t39.35426-6/poster.jpg",
+        hasVideo: true,
+      },
+      buildQuery(),
+    );
+
+    expect(ad.creativeImageUrl).toContain("poster.jpg");
+    expect(ad.creativeFormatHint).toBe("video");
+    expect(ad.format).toBe("video");
+  });
+
+  it("extracts creative CDN images from rendered card HTML", async () => {
+    const { parseRenderedMetaLibraryHtml, extractCreativeMediaFromHtml } = await import(
+      "~/lib/meta-library-rendered-card-parser.server"
+    );
+
+    const media = extractCreativeMediaFromHtml(`
+      <div>
+        <img src="https://static.xx.fbcdn.net/rsrc.php/profile-40.png" width="40" height="40" />
+        <img src="https://scontent.xx.fbcdn.net/v/t39.35426-6/ad-creative.jpg" width="320" height="400" />
+      </div>
+    `);
+    expect(media.imageUrl).toContain("ad-creative.jpg");
+    expect(media.hasVideo).toBe(false);
+
+    const videoMedia = extractCreativeMediaFromHtml(`
+      <video poster="https://scontent.xx.fbcdn.net/v/t39.35426-6/poster.jpg"></video>
+    `);
+    expect(videoMedia.imageUrl).toContain("poster.jpg");
+    expect(videoMedia.hasVideo).toBe(true);
+
+    const result = parseRenderedMetaLibraryHtml(`
+      <article role="article">
+        <img src="https://scontent.xx.fbcdn.net/v/t39.35426-6/library-card.jpg" width="300" height="300" />
+        <a href="/ads/library/?id=5551002003">See ad details</a>
+        <p>Flat 20% off serums</p>
+      </article>
+    `);
+
+    expect(result.cards[0]).toMatchObject({
+      libraryId: "5551002003",
+      imageUrl: expect.stringContaining("library-card.jpg"),
+      hasVideo: false,
+    });
+  });
+
+  it("leaves creativeImageUrl empty when no CDN image is present", async () => {
+    const { normalizeExtractedCard } = await import("~/lib/meta-library-browser.server");
+
+    const ad = normalizeExtractedCard(
+      {
+        libraryId: "9990003333",
+        advertiser: "Unknown",
+        body: "No creative on this card",
+        previewHeadline: "Text only",
+        previewSubhead: null,
+        cta: null,
+        adSnapshotUrl: "https://www.facebook.com/ads/library/?id=9990003333",
+        landingPageUrl: null,
+        platforms: [],
+        active: true,
+      },
+      buildQuery(),
+    );
+
+    expect(ad.creativeImageUrl).toBeNull();
+    expect(ad.creativeFormatHint).toBeUndefined();
+  });
 });

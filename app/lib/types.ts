@@ -221,6 +221,8 @@ export interface AdRecord {
   analysisFields: AnalysisFieldInput[];
   creativeText?: string | null;
   creativeImageUrl?: string | null;
+  /** Soft hint from discovery scrape; not a verified format classification. */
+  creativeFormatHint?: "image" | "video" | undefined;
   creativeTextCaptureMethod?: CreativeTextCaptureMethod | null;
   creativeTextMetadata?: Record<string, unknown> | null;
   landingPage?: LandingPageSnapshotData | null;

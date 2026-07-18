@@ -13,6 +13,10 @@ export interface ExtractedAdCard {
   active: boolean;
   /** Raw "Started running on <date>" card line; parsed server-side into firstSeenAt. */
   startedRunning?: string | null;
+  /** First creative CDN image (fbcdn/scontent) found on the card, if any. */
+  imageUrl?: string | null;
+  /** True when a <video> element (or poster) was present on the card. */
+  hasVideo?: boolean;
 }
 
 export interface RenderedHtmlPayload {
@@ -54,6 +58,7 @@ export function parseRenderedMetaLibraryHtml(content: string): RenderedHtmlPaylo
     const contextLineText = stripHtmlPreservingLines(contextHtml);
     const body = stripHtml(contextHtml) || stripHtml(match[3] ?? "");
     const landingPageUrl = extractExternalLink(contextHtml);
+    const media = extractCreativeMediaFromHtml(contextHtml);
 
     cards.push({
       libraryId,
@@ -67,6 +72,8 @@ export function parseRenderedMetaLibraryHtml(content: string): RenderedHtmlPaylo
       platforms: inferPlatforms(body),
       active: !hasStandaloneInactiveLine(contextLineText),
       startedRunning: findStartedRunningLine(contextLineText),
+      imageUrl: media.imageUrl,
+      hasVideo: media.hasVideo,
     });
   }
 
@@ -483,6 +490,94 @@ export function extractExternalLink(html: string) {
   }
 
   return null;
+}
+
+/**
+ * Pull a creative thumbnail URL from card HTML (Browserless / Quick Action scrape).
+ * Prefers video posters, then the largest measurable fbcdn/scontent image, skipping
+ * tiny square profile-like assets when width/height attributes are present.
+ */
+export function extractCreativeMediaFromHtml(html: string): {
+  imageUrl: string | null;
+  hasVideo: boolean;
+} {
+  const hasVideo = /<video\b/i.test(html);
+  const posterMatch = html.match(/<video\b[^>]*\bposter=(['"])(.*?)\1/i);
+  const posterUrl = posterMatch?.[2] ? normalizeCreativeCdnUrl(decodeHtmlEntity(posterMatch[2])) : null;
+  if (posterUrl) {
+    return { imageUrl: posterUrl, hasVideo: true };
+  }
+
+  const imgRegex = /<img\b([^>]*)>/gi;
+  let bestUrl: string | null = null;
+  let bestArea = -1;
+  let firstCdnUrl: string | null = null;
+
+  for (const match of html.matchAll(imgRegex)) {
+    const attrs = match[1] ?? "";
+    const src = readHtmlAttribute(attrs, "src");
+    if (!src) {
+      continue;
+    }
+    const normalized = normalizeCreativeCdnUrl(decodeHtmlEntity(src));
+    if (!normalized) {
+      continue;
+    }
+    if (!firstCdnUrl) {
+      firstCdnUrl = normalized;
+    }
+
+    const width = readPositiveDimension(attrs, "width");
+    const height = readPositiveDimension(attrs, "height");
+    if (width !== null && height !== null && width <= 64 && height <= 64) {
+      continue;
+    }
+    const area = (width ?? 1) * (height ?? 1);
+    if (area > bestArea) {
+      bestArea = area;
+      bestUrl = normalized;
+    }
+  }
+
+  return {
+    imageUrl: bestUrl ?? firstCdnUrl,
+    hasVideo,
+  };
+}
+
+function readHtmlAttribute(attrs: string, name: string) {
+  const match = attrs.match(new RegExp(`\\b${name}\\s*=\\s*(['"])(.*?)\\1`, "i"));
+  return match?.[2]?.trim() || null;
+}
+
+function readPositiveDimension(attrs: string, name: string) {
+  const raw = readHtmlAttribute(attrs, name);
+  if (!raw) {
+    return null;
+  }
+  const parsed = Number.parseInt(raw.replace(/px$/i, ""), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function normalizeCreativeCdnUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.startsWith("data:")) {
+    return null;
+  }
+
+  try {
+    const url = new URL(trimmed, "https://www.facebook.com");
+    if (url.protocol !== "https:" && url.protocol !== "http:") {
+      return null;
+    }
+    const host = url.hostname.toLowerCase();
+    if (!host.includes("fbcdn") && !host.includes("scontent")) {
+      return null;
+    }
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
 
 export function absolutizeMetaAdUrl(href: string) {
