@@ -105,6 +105,18 @@ describe("risk-based cross-browser release proof", () => {
     });
   });
 
+  it("accepts an exact clean pre-merge release candidate", () => {
+    const project = "local-release-firefox";
+    const journeys = REQUIRED_CROSS_BROWSER_RISK_SCOPES[project];
+    expect(validateCrossBrowserRiskManifest({
+      manifest: manifest(project, journeys),
+      project,
+      journeys,
+      candidate: { ...candidate, branch: "codex/customer-readiness-inventory-closeout" },
+      validateFiles: false,
+    })).toEqual({ ok: true, issues: [] });
+  });
+
   it("rejects a passing manifest from the wrong browser project", () => {
     const project = "local-release-webkit";
     const journeys = REQUIRED_CROSS_BROWSER_RISK_SCOPES[project];

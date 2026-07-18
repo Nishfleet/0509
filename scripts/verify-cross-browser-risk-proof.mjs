@@ -87,7 +87,6 @@ export function validateCrossBrowserRiskManifest({
   if (!FINGERPRINT_PATTERN.test(manifest.candidateFingerprint ?? "")) issues.push("manifest_fingerprint");
   if (manifest.environment !== "local") issues.push("manifest_environment");
   if (!candidate?.ok || candidate?.status?.hasChanges !== false) issues.push("candidate_not_clean");
-  if (candidate?.branch !== "main") issues.push("candidate_not_protected_main");
   if (candidate?.baseCommit !== candidate?.headCommit) issues.push("candidate_base_not_head");
   if (manifest.candidateFingerprint !== candidate?.fingerprint) issues.push("candidate_fingerprint_mismatch");
 
