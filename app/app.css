@@ -1887,10 +1887,43 @@ button[aria-busy="true"] {
 
 .f9-app-kicker {
   color: #0a8f78;
+  font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-weight: 600;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
+}
+
+/* WP-17: display face on paid workspace page titles + panel headings */
+.f9-dash-page-app .f9-dash-page-header h1,
+.f9-dash-page-app .f9-app-panel > h2,
+.f9-dash-page-app .f9-dash-state h2 {
+  font-family: "Bricolage Grotesque", var(--f9-font, Inter, system-ui, sans-serif);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.f9-icon {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  vertical-align: -0.125em;
+}
+
+.f9-dash-nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.f9-dash-nav-link .f9-icon {
+  opacity: 0.72;
+}
+
+.f9-cursor-rail a.is-active .f9-icon,
+.f9-dash-nav-link.is-active .f9-icon {
+  opacity: 1;
 }
 
 .f9-app-stack,
