@@ -411,7 +411,20 @@ async function runDigestForUser(
       periodStart,
       periodEnd,
     );
-    if (runStats.runs === 0) return 0;
+    if (runStats.runs === 0) {
+      // Paid digests with active watchlists but zero successful scans: tell the
+      // customer instead of going silent (operator already has at-risk mail).
+      if (watchlists.length > 0) {
+        const { deliverScanTroubleNotice } = await import("~/lib/delivery.server");
+        await deliverScanTroubleNotice(env, {
+          userId: user.id,
+          accountEmail: user.email,
+          watchlistNames: watchlists.map((watchlist) => watchlist.name),
+          periodKey: `${periodStart.slice(0, 10)}_${periodEnd.slice(0, 10)}`,
+        });
+      }
+      return 0;
+    }
     heartbeat = runStats;
   }
 
@@ -530,7 +543,18 @@ async function runDigestForUser(
       periodStart,
       periodEnd,
     );
-    if (runStats.runs === 0) return 0;
+    if (runStats.runs === 0) {
+      if (watchlists.length > 0) {
+        const { deliverScanTroubleNotice } = await import("~/lib/delivery.server");
+        await deliverScanTroubleNotice(env, {
+          userId: user.id,
+          accountEmail: user.email,
+          watchlistNames: watchlists.map((watchlist) => watchlist.name),
+          periodKey: `${periodStart.slice(0, 10)}_${periodEnd.slice(0, 10)}`,
+        });
+      }
+      return 0;
+    }
     heartbeat = runStats;
   }
 
@@ -603,7 +627,19 @@ async function retryFailedDigests(
           candidate.periodStart,
           candidate.periodEnd,
         );
-        if (runStats.runs === 0) continue;
+        if (runStats.runs === 0) {
+          const userWatchlists = await listWatchlists(env, candidate.userId);
+          if (userWatchlists.length > 0) {
+            const { deliverScanTroubleNotice } = await import("~/lib/delivery.server");
+            await deliverScanTroubleNotice(env, {
+              userId: candidate.userId,
+              accountEmail: candidate.userEmail,
+              watchlistNames: userWatchlists.map((watchlist) => watchlist.name),
+              periodKey: `${candidate.periodStart.slice(0, 10)}_${candidate.periodEnd.slice(0, 10)}`,
+            });
+          }
+          continue;
+        }
         heartbeat = runStats;
       }
 

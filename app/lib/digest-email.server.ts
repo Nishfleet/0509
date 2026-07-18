@@ -138,6 +138,63 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
   };
 }
 
+/** Customer email when a paid digest period had active watchlists but zero successful scans. */
+export function buildScanTroubleEmail(input: {
+  watchlistNames: string[];
+  watchlistsUrl: string;
+  manageFrequencyUrl: string;
+  supportEmail: string;
+  supportMailto: string;
+  unsubscribeUrl: string | null;
+}): DigestEmailModel {
+  const names = input.watchlistNames.filter(Boolean);
+  const listed =
+    names.length === 0
+      ? "your tracked competitors"
+      : names.length <= 5
+        ? names.join(", ")
+        : `${names.slice(0, 5).join(", ")} and ${names.length - 5} more`;
+  const subject = "We hit a problem checking your competitors";
+  const preheader = "Retries are running automatically — open watchlists for status.";
+  const html = `
+    <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
+    ${renderEmailContentSurface(`
+      <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">Five to Nine</p>
+      <h1 style="margin: 0 0 12px;">We hit a problem checking your competitors.</h1>
+      <p style="margin: 0 0 16px; color: #475467;">
+        We could not complete checks for <strong>${escapeHtml(listed)}</strong> in this period.
+        Retries are already running automatically — you do not need to do anything.
+      </p>
+      <p style="margin: 0 0 20px;">
+        <a href="${escapeHtml(input.watchlistsUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">Open watchlists</a>
+      </p>
+      <p style="margin: 0; color: #98a2b3; font-size: 13px;">
+        Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color:#344054;">Notifications</a>${
+          input.unsubscribeUrl
+            ? `, <a href="${escapeHtml(input.unsubscribeUrl)}" style="color:#344054;">unsubscribe</a>`
+            : ""
+        }, or contact <a href="${escapeHtml(input.supportMailto)}" style="color:#344054;">${escapeHtml(input.supportEmail)}</a>.
+      </p>
+    `)}
+  `;
+  const text = [
+    "Five to Nine",
+    "",
+    "We hit a problem checking your competitors.",
+    "",
+    `We could not complete checks for ${listed} in this period. Retries are already running automatically.`,
+    "",
+    `Open watchlists: ${input.watchlistsUrl}`,
+    `Manage frequency: ${input.manageFrequencyUrl}`,
+    input.unsubscribeUrl ? `Unsubscribe: ${input.unsubscribeUrl}` : null,
+    `Support: ${input.supportEmail}`,
+  ]
+    .filter((line): line is string => typeof line === "string")
+    .join("\n");
+
+  return { subject, preheader, html, text };
+}
+
 function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
   const heartbeat = input.heartbeat!;
   const cadenceLabel = digestCadenceLabel(input.cadence);

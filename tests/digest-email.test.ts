@@ -1,6 +1,26 @@
 import { describe, expect, it } from "vitest";
 
-import { buildDigestEmail } from "~/lib/digest-email.server";
+import { buildDigestEmail, buildScanTroubleEmail } from "~/lib/digest-email.server";
+
+describe("buildScanTroubleEmail", () => {
+  it("names affected watchlists and points to retries + watchlists", () => {
+    const email = buildScanTroubleEmail({
+      watchlistNames: ["Nykaa", "boAt"],
+      watchlistsUrl: "https://0509.io/app/watchlists",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: "https://0509.io/unsubscribe?sig=test",
+    });
+
+    expect(email.subject).toBe("We hit a problem checking your competitors");
+    expect(email.html).toContain("Nykaa");
+    expect(email.html).toContain("boAt");
+    expect(email.html).toContain("Retries are already running automatically");
+    expect(email.html).toContain("/app/watchlists");
+    expect(email.text).toContain("Open watchlists: https://0509.io/app/watchlists");
+  });
+});
 
 describe("buildDigestEmail", () => {
   it("renders a top-three decision brief with authored plain text", () => {

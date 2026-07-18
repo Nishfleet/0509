@@ -3,7 +3,7 @@ import {
   digestCadenceLabel,
   readDigestIntelligence,
 } from "~/lib/change-intelligence";
-import { buildDigestEmail } from "~/lib/digest-email.server";
+import { buildDigestEmail, buildScanTroubleEmail } from "~/lib/digest-email.server";
 import {
   createDeliveryAttempt,
   getDeliveryAttemptByIdempotencyKey,
@@ -248,6 +248,137 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
     attempts: attempts.length,
     channels: [...new Set(attempts.map((attempt) => attempt.channel))],
     details: attempts,
+  };
+}
+
+/**
+ * Paid-plan notice when a digest period had active watchlists but zero successful
+ * scan runs — the product went silent and the customer must hear about it.
+ * Idempotent per user/period via delivery_attempt key `scan_trouble:…`.
+ */
+export async function deliverScanTroubleNotice(
+  env: AppEnv,
+  input: {
+    userId: string;
+    accountEmail: string | null | undefined;
+    watchlistNames: string[];
+    periodKey: string;
+  },
+) {
+  const { isUserEmailVerified } = await import("~/lib/email-verification.server");
+  if (!(await isUserEmailVerified(env, input.userId))) {
+    return { sent: false as const, reason: "unverified" as const };
+  }
+
+  const accountEmail = await resolveVerifiedAccountEmail(
+    env,
+    input.userId,
+    input.accountEmail ?? null,
+  );
+  if (!accountEmail) {
+    return { sent: false as const, reason: "no_email" as const };
+  }
+
+  const workspaceConfigRecord =
+    (await getWorkspaceDeliveryConfig(env, input.userId)) ??
+    buildLegacyWorkspaceConfig(input.userId, true);
+  const entitledConfigs = await resolveEntitledDeliveryConfigs(
+    env,
+    input.userId,
+    workspaceConfigRecord,
+    null,
+  );
+  const config = resolveDeliveryConfig({
+    workspaceConfig: entitledConfigs.workspaceConfig,
+    watchlistConfig: null,
+  });
+  if (!config.digestEnabled || !config.emailEnabled) {
+    return { sent: false as const, reason: "disabled" as const };
+  }
+
+  const emailTargets = await resolveDigestEmailTargets(env, input.userId, accountEmail);
+  const primaryTarget = emailTargets[0] ?? null;
+  const recipient = primaryTarget?.targetValue?.trim() || accountEmail;
+  const unsubscribeUrl = primaryTarget
+    ? await buildUnsubscribeUrl(env, {
+        userId: input.userId,
+        targetId: primaryTarget.id,
+      })
+    : null;
+
+  const idempotencyKey = `scan_trouble:${input.userId}:${input.periodKey}`;
+  const base = appBaseUrl(env);
+  const model = buildScanTroubleEmail({
+    watchlistNames: input.watchlistNames,
+    watchlistsUrl: `${base}/app/watchlists`,
+    manageFrequencyUrl: `${base}/app/notifications`,
+    supportEmail: SUPPORT_EMAIL,
+    supportMailto: SUPPORT_MAILTO,
+    unsubscribeUrl,
+  });
+
+  const claim = await claimInstantDeliveryAttempt(env, {
+    userId: input.userId,
+    watchlistId: null,
+    deliveryTargetId: primaryTarget?.id ?? null,
+    lane: "customer",
+    channel: "email",
+    provider: EMAIL_PROVIDER,
+    targetValue: recipient,
+    templateName: "scan_trouble",
+    eventIds: [],
+    payloadSnapshot: {
+      kind: "scan_trouble",
+      periodKey: input.periodKey,
+      watchlistNames: input.watchlistNames,
+    },
+    idempotencyKey,
+  });
+  if (!claim.attemptId || !claim.claimUpdatedAt) {
+    return { sent: false as const, reason: "duplicate" as const };
+  }
+
+  const dispatchStartedAt = await markInstantDeliveryDispatchStarted(
+    env,
+    claim.attemptId,
+    claim.claimUpdatedAt,
+  );
+  if (!dispatchStartedAt) {
+    return { sent: false as const, reason: "claim_lost" as const };
+  }
+
+  const providerResult = await sendCloudflareEmail(env, {
+    to: recipient,
+    subject: model.subject,
+    html: model.html,
+    text: model.text,
+    tag: "scan-trouble",
+    unsubscribeUrl,
+  });
+
+  const finalized = await updateDeliveryAttemptResult(env, claim.attemptId, {
+    provider: providerResult.provider,
+    status: providerResult.status,
+    webhookStatus: providerResult.webhookStatus,
+    providerMessageId: providerResult.providerMessageId,
+    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+    errorMessage: providerResult.errorMessage,
+    sentAt: providerAcceptedAt(providerResult),
+    failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+    payloadSnapshot: {
+      kind: "scan_trouble",
+      periodKey: input.periodKey,
+      watchlistNames: input.watchlistNames,
+    },
+    targetValue: recipient,
+    expectedStatus: "pending",
+    expectedWebhookStatus: "provider_unknown",
+    expectedUpdatedAt: dispatchStartedAt,
+  });
+
+  return {
+    sent: Boolean(finalized && providerResult.status === "sent"),
+    reason: providerResult.status === "sent" ? ("sent" as const) : ("failed" as const),
   };
 }
 
