@@ -245,20 +245,20 @@ async function defaultProof({ workerVersionId, runId, token }) {
 }
 
 /** @param {{ ticket: CleanupTicket | null, gateRunId: string, token: string }} input */
-async function defaultCleanup({ ticket, gateRunId: cleanupGateRunId, token }) {
+async function defaultCleanup({ ticket: _ticket, gateRunId: cleanupGateRunId, token }) {
   const { payload, response } = await runProofCanary({
     config: {
       baseUrl: "https://0509.io",
       json: true,
       cleanup: true,
-      runId: ticket?.runId ?? null,
-      digestRunId: ticket?.digestRunId ?? null,
-      proofCaptureId: ticket?.proofCaptureId ?? null,
+      runId: null,
+      digestRunId: null,
+      proofCaptureId: null,
       proofProvider: null,
       requireSlack: false,
       requireWhatsApp: false,
       expectedWorkerVersionId: null,
-      gateRunId: ticket ? null : cleanupGateRunId,
+      gateRunId: cleanupGateRunId,
     },
     token,
   });
@@ -355,20 +355,22 @@ export async function runVersionBoundGateC({
     persist();
     const proofResult = await proof({ workerVersionId, runId, token });
     const payload = proofResult.payload;
-    if (
+    const cleanupTicketMissing =
       typeof payload?.runId !== "string" || payload.runId.length === 0 ||
       typeof payload.digestRunId !== "string" || payload.digestRunId.length === 0 ||
-      typeof payload.proofCaptureId !== "string" || payload.proofCaptureId.length === 0
-    ) {
+      typeof payload.proofCaptureId !== "string" || payload.proofCaptureId.length === 0;
+    if (proofResult.ok && cleanupTicketMissing) {
       throw new Error("proof_cleanup_ticket_missing");
     }
-    cleanupTicket = {
-      runId: payload.runId,
-      digestRunId: payload.digestRunId,
-      proofCaptureId: payload.proofCaptureId,
-    };
-    journal.cleanupTicket = cleanupTicket;
-    persist();
+    if (!cleanupTicketMissing) {
+      cleanupTicket = {
+        runId: payload.runId,
+        digestRunId: payload.digestRunId,
+        proofCaptureId: payload.proofCaptureId,
+      };
+      journal.cleanupTicket = cleanupTicket;
+      persist();
+    }
     if (!proofResult.ok) throw new Error("proof_email_failed");
     journal.steps.proof_email = { status: "passed", at: now().toISOString() };
     persist();

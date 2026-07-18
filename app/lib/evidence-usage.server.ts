@@ -1,5 +1,6 @@
 import type { AppEnv } from "~/lib/env.server";
 import { ensureDb } from "~/lib/data/d1.server";
+import { billingCanaryMutationGuardSql } from "~/lib/data/billing-canary-lock.server";
 import {
   getIncludedEvidenceAllowance,
   isPaidPlanFamily,
@@ -555,6 +556,7 @@ export async function reserveEvidenceCheck(
   const plan = await readWorkspacePlanFamily(env, input.workspaceUserId);
   const period = await ensureCurrentEvidenceUsagePeriod(env, input.workspaceUserId, plan);
   const db = ensureDb(env);
+  const billingCanaryGuard = await billingCanaryMutationGuardSql(env, "?");
   const reservationSource = `${input.source}:atomic`;
 
   const existing = await db
@@ -630,6 +632,7 @@ export async function reserveEvidenceCheck(
             WHERE id = ?
               AND included_consumed < included_allowance
               ${ownerPredicate}
+              ${billingCanaryGuard}
             ON CONFLICT(logical_operation_key) DO NOTHING
           `,
         )
@@ -646,6 +649,7 @@ export async function reserveEvidenceCheck(
           input.lease ? now : null,
           period.id,
           ...ownerPredicateBindings,
+          ...(billingCanaryGuard ? [input.workspaceUserId] : []),
         ),
       db
         .prepare(
@@ -735,6 +739,7 @@ export async function reserveEvidenceCheck(
                 0
               ) > 0
               ${ownerPredicate}
+              ${billingCanaryGuard}
             ON CONFLICT(logical_operation_key) DO NOTHING
           `,
         )
@@ -752,6 +757,7 @@ export async function reserveEvidenceCheck(
           grant.id,
           input.workspaceUserId,
           ...ownerPredicateBindings,
+          ...(billingCanaryGuard ? [input.workspaceUserId] : []),
         ),
       db
         .prepare(

@@ -44,12 +44,16 @@ function createCanaryDb(options: {
   canaryLockOutcome?: "processing" | "failed";
   canaryLockReleaseChanges?: number;
   canaryLockReleaseThrows?: boolean;
+  concurrentPlanUpdateBeforeCleanup?: boolean;
   watchlistRowsAfterCleanup?: CanaryWatchlistRow[];
 } = {}) {
   const cleanedPlanPaymentIds = new Set<string>();
   const cleanedCreditPaymentIds = new Set<string>();
   const restoredWatchlistIds = new Set<string>();
   let canaryLockOutcome = options.canaryLockOutcome ?? null;
+  let currentLockEventId: string | null = null;
+  let currentLockMetadata = "{}";
+  const recoverableLockRows: Array<{ event_id: string; metadata_json: string }> = [];
   let watchlistQueryCount = 0;
   const initialWatchlistRows: CanaryWatchlistRow[] = [
     {
@@ -65,7 +69,7 @@ function createCanaryDb(options: {
     plan_updated_at: "2026-06-01T00:00:00.000Z",
     dodo_payment_id: "real-payment-1",
     dodo_product_id: "real-product-1",
-    dodo_plan_change_product_id: "real-pending-product",
+    dodo_plan_change_product_id: null,
     dodo_status: "payment.succeeded",
     dodo_subscription_id: "real-subscription-1",
     dodo_customer_id: "real-customer-1",
@@ -90,6 +94,17 @@ function createCanaryDb(options: {
     get canaryLockOutcome() {
       return canaryLockOutcome;
     },
+    expireCanaryLockForRecovery() {
+      if (currentLockEventId && currentLockMetadata.includes("billing_canary_active")) {
+        recoverableLockRows.push({
+          event_id: currentLockEventId,
+          metadata_json: currentLockMetadata,
+        });
+      }
+      canaryLockOutcome = null;
+      currentLockEventId = null;
+      currentLockMetadata = "{}";
+    },
     get userPlanState() {
       return { ...userPlan };
     },
@@ -102,28 +117,28 @@ function createCanaryDb(options: {
     get mutationKinds() {
       return [...mutationKinds];
     },
-    applyCanaryMutation(payload: { payment_id?: string; metadata?: { target_kind?: string } }) {
+    applyCanaryMutation(payload: {
+      payment_id?: string;
+      updated_at?: string;
+      metadata?: { target_kind?: string };
+      product_cart?: Array<{ product_id?: string }>;
+    }) {
       const paymentId = String(payload.payment_id ?? "");
+      const updatedAt = String(payload.updated_at ?? "2026-07-15T00:00:00.000Z");
       if (payload.metadata?.target_kind === "plan") {
         mutationKinds.push("plan");
         userPlan = {
           ...userPlan,
-          plan_updated_at: "2026-07-15T00:00:00.000Z",
+          plan_updated_at: updatedAt,
           dodo_payment_id: paymentId,
-          dodo_product_id: "canary-product",
-          dodo_plan_change_product_id: null,
+          dodo_product_id: String(payload.product_cart?.[0]?.product_id ?? ""),
           dodo_status: "payment.succeeded",
-          dodo_subscription_id: "canary-subscription",
-          dodo_customer_id: "canary-customer",
-          dodo_next_billing_at: "2026-08-01T00:00:00.000Z",
-          evidence_entitlement_anchor: "2026-07-15T00:00:00.000Z",
-          evidence_entitlement_anchor_source: "plan_activation",
         };
         watchlistRows = watchlistRows.map((row) => ({
           ...row,
           is_active: 1,
           paused_reason: null,
-          updated_at: "2026-07-15T00:00:00.000Z",
+          updated_at: updatedAt,
         }));
       }
       if (payload.metadata?.target_kind === "usage_bundle") {
@@ -164,7 +179,24 @@ function createCanaryDb(options: {
                   return { success: true, meta: { changes: 0 } };
                 }
                 canaryLockOutcome = "processing";
+                currentLockEventId = String(bindings[0]);
                 return { success: true, meta: { changes: 1 } };
+              }
+              if (
+                sql.includes("UPDATE dodo_webhook_event") &&
+                sql.includes("SET metadata_json = ?")
+              ) {
+                currentLockMetadata = String(bindings[0]);
+                return { success: true, meta: { changes: canaryLockOutcome === "processing" ? 1 : 0 } };
+              }
+              if (
+                sql.includes("json_extract(metadata_json, '$.action') = 'billing_canary_active'") &&
+                sql.includes("SET outcome = 'failed'")
+              ) {
+                const eventId = String(bindings[1]);
+                const index = recoverableLockRows.findIndex((row) => row.event_id === eventId);
+                if (index >= 0) recoverableLockRows.splice(index, 1);
+                return { success: true, meta: { changes: index >= 0 ? 1 : 0 } };
               }
               if (sql.includes("SET outcome = 'failed'")) {
                 if (options.canaryLockReleaseThrows) {
@@ -174,9 +206,17 @@ function createCanaryDb(options: {
                 if (changes > 0) canaryLockOutcome = "failed";
                 return { success: true, meta: { changes } };
               }
-              if (sql.includes("UPDATE user_plan") && sql.includes("dodo_payment_id = ?")) {
-                const paymentId = String(bindings.at(-1));
-                changes = userPlan.dodo_payment_id === paymentId
+              if (sql.includes("UPDATE user_plan") && sql.includes("SET plan = ?")) {
+                const paymentId = String(bindings[14]);
+                const markerMatches =
+                  userPlan.user_id === String(bindings[11]) &&
+                  userPlan.dodo_payment_id === paymentId &&
+                  userPlan.plan_updated_at === String(bindings[13]) &&
+                  userPlan.plan === String(bindings[12]) &&
+                  userPlan.dodo_product_id === String(bindings[15]) &&
+                  userPlan.dodo_plan_change_product_id === (bindings[16] as string | null) &&
+                  userPlan.dodo_status === "payment.succeeded";
+                changes = markerMatches
                   ? options.planUpdateChanges ?? 1
                   : 0;
                 if (changes > 0) {
@@ -197,6 +237,28 @@ function createCanaryDb(options: {
                   };
                 }
               }
+              if (sql.includes("UPDATE user_plan") && sql.includes("SET dodo_payment_id = CASE")) {
+                const canaryPaymentId = String(bindings[0]);
+                const ownsCanaryStatus =
+                  userPlan.dodo_payment_id === canaryPaymentId &&
+                  userPlan.plan_updated_at === String(bindings[6]) &&
+                  userPlan.dodo_status === "payment.succeeded";
+                changes = userPlan.dodo_payment_id === canaryPaymentId ? 1 : 0;
+                if (changes > 0) {
+                  cleanedPlanPaymentIds.add(canaryPaymentId);
+                  userPlan = {
+                    ...userPlan,
+                    dodo_payment_id: bindings[1] as string | null,
+                    dodo_product_id: bindings[4] as string | null,
+                    dodo_status: ownsCanaryStatus
+                      ? bindings[7] as string | null
+                      : userPlan.dodo_status,
+                    plan_updated_at: ownsCanaryStatus
+                      ? String(bindings[10])
+                      : userPlan.plan_updated_at,
+                  };
+                }
+              }
               if (sql.includes("DELETE FROM evidence_top_up_grant")) {
                 const paymentId = String(bindings[1]);
                 changes = creditGrant?.provider_payment_id === paymentId
@@ -209,7 +271,11 @@ function createCanaryDb(options: {
               }
               if (sql.includes("UPDATE watchlist") && sql.includes("paused_reason = ?")) {
                 const watchlist = watchlistRows.find((row) => row.id === String(bindings[4]));
-                changes = watchlist ? options.watchlistUpdateChanges ?? 1 : 0;
+                const markerMatches =
+                  watchlist?.is_active === Number(bindings[5]) &&
+                  watchlist?.paused_reason === (bindings[6] as string | null) &&
+                  watchlist?.updated_at === String(bindings[7]);
+                changes = markerMatches ? options.watchlistUpdateChanges ?? 1 : 0;
                 if (changes > 0 && watchlist) {
                   restoredWatchlistIds.add(String(bindings[4]));
                   watchlist.is_active = Number(bindings[0]);
@@ -229,6 +295,9 @@ function createCanaryDb(options: {
                 throw new Error("snapshot database secret owner@example.com");
               }
               if (sql.includes("FROM dodo_webhook_event")) {
+                if (sql.includes("SELECT event_id, metadata_json")) {
+                  return { results: recoverableLockRows as T[] };
+                }
                 return {
                   results: canaryLockOutcome
                     ? [{
@@ -283,6 +352,21 @@ function createCanaryDb(options: {
           };
         },
       };
+    },
+    async batch(statements: Array<{ run: () => Promise<unknown> }>) {
+      if (options.planCleanupThrows || options.watchlistCleanupThrows) {
+        throw new Error("cleanup batch failed");
+      }
+      if (options.concurrentPlanUpdateBeforeCleanup) {
+        options.concurrentPlanUpdateBeforeCleanup = false;
+        userPlan = {
+          ...userPlan,
+          plan_updated_at: "2026-07-16T00:00:00.000Z",
+          dodo_status: "cancellation_scheduled",
+          dodo_next_billing_at: "2026-09-01T00:00:00.000Z",
+        };
+      }
+      return Promise.all(statements.map((statement) => statement.run()));
     },
   };
 }
@@ -411,6 +495,11 @@ describe("Dodo billing canary route", () => {
       const body = JSON.parse(await request.text());
       webhookPayloads.push(body);
       expect(body.metadata.user_id).toBe("user-1");
+      expect(body.metadata.billing_canary_lock_id).toMatch(
+        /^billing-canary-lock:user-1:[a-z0-9-]+$/u,
+      );
+      expect(request.headers.get("x-0509-billing-canary-lock-id"))
+        .toBe(body.metadata.billing_canary_lock_id);
       env.DB.applyCanaryMutation(body);
 
       return Response.json({ ok: true });
@@ -461,7 +550,7 @@ describe("Dodo billing canary route", () => {
       plan_updated_at: "2026-06-01T00:00:00.000Z",
       dodo_payment_id: "real-payment-1",
       dodo_product_id: "real-product-1",
-      dodo_plan_change_product_id: "real-pending-product",
+      dodo_plan_change_product_id: null,
       dodo_status: "payment.succeeded",
       dodo_subscription_id: "real-subscription-1",
       dodo_customer_id: "real-customer-1",
@@ -518,19 +607,42 @@ describe("Dodo billing canary route", () => {
     expect(env.DB.canaryLockOutcome).toBe("failed");
   });
 
-  it("fails closed when the conditional plan restore changes zero rows", async () => {
+  it("removes only synthetic residue when the exact plan restore changes zero rows", async () => {
     const env = createEnv({ planUpdateChanges: 0 });
     const response = await invokeCanary({ env });
     const body = await response.json();
 
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(200);
     expect(body).toMatchObject({
-      ok: false,
+      ok: true,
       grants: {
-        planCleanupOk: false,
+        planCleanupOk: true,
         watchlistCleanupOk: true,
       },
     });
+    expect(env.DB.userPlanState.dodo_payment_id).toBe("real-payment-1");
+  });
+
+  it("preserves a newer provider lifecycle update instead of restoring a stale canary snapshot", async () => {
+    const env = createEnv({ concurrentPlanUpdateBeforeCleanup: true });
+    const response = await invokeCanary({ env });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      ok: true,
+      grants: {
+        planCleanupOk: true,
+        watchlistCleanupOk: true,
+      },
+    });
+    expect(env.DB.userPlanState).toMatchObject({
+      dodo_status: "cancellation_scheduled",
+      plan_updated_at: "2026-07-16T00:00:00.000Z",
+      dodo_next_billing_at: "2026-09-01T00:00:00.000Z",
+      dodo_payment_id: "real-payment-1",
+    });
+    expect(env.DB.restoredWatchlistIds.size).toBe(1);
   });
 
   it("fails closed when proof-credit cleanup changes zero rows", async () => {
@@ -554,6 +666,34 @@ describe("Dodo billing canary route", () => {
       quantity_granted: 500,
       status: "active",
     });
+    expect(env.DB.canaryLockOutcome).toBe("processing");
+  });
+
+  it("recovers a stale synthetic credit residue before starting the next fenced canary", async () => {
+    const options = { creditDeleteChanges: 0 };
+    const env = createEnv(options);
+    const headers = { "content-type": "application/json" };
+    const first = await invokeCanary({
+      env,
+      headers,
+      body: JSON.stringify({ gateRunId: "recovery-first" }),
+    });
+    expect(first.status).toBe(503);
+    expect(env.DB.creditGrantState).not.toBeNull();
+    expect(env.DB.canaryLockOutcome).toBe("processing");
+
+    env.DB.expireCanaryLockForRecovery();
+    options.creditDeleteChanges = 1;
+    const second = await invokeCanary({
+      env,
+      headers,
+      body: JSON.stringify({ gateRunId: "recovery-second" }),
+    });
+
+    expect(second.status).toBe(200);
+    expect(env.DB.creditGrantState).toBeNull();
+    expect(env.DB.cleanedCreditPaymentIds.size).toBe(2);
+    expect(env.DB.canaryLockOutcome).toBe("failed");
   });
 
   it("fails closed when watchlist restoration changes zero rows", async () => {
@@ -576,12 +716,12 @@ describe("Dodo billing canary route", () => {
     [
       "plan",
       { planCleanupThrows: true },
-      { planCleanupOk: false, watchlistCleanupOk: true, proofCreditCleanupOk: true },
+      { planCleanupOk: false, watchlistCleanupOk: false, proofCreditCleanupOk: true },
     ],
     [
       "watchlist",
       { watchlistCleanupThrows: true },
-      { planCleanupOk: true, watchlistCleanupOk: false, proofCreditCleanupOk: true },
+      { planCleanupOk: false, watchlistCleanupOk: false, proofCreditCleanupOk: true },
     ],
     [
       "credit",
@@ -602,10 +742,14 @@ describe("Dodo billing canary route", () => {
     expect(body).not.toHaveProperty("restored");
     expect(JSON.stringify(body)).not.toContain("owner@example.com");
     expect(JSON.stringify(body)).not.toContain("database secret");
-    expect(env.DB.canaryLockOutcome).toBe("failed");
+    expect(env.DB.canaryLockOutcome).toBe("processing");
     expect([...env.DB.mutationKinds].sort()).toEqual(["plan", "usage_bundle"]);
-    expect(env.DB.cleanedPlanPaymentIds.size).toBe(_kind === "plan" ? 0 : 1);
-    expect(env.DB.restoredWatchlistIds.size).toBe(_kind === "watchlist" ? 0 : 1);
+    expect(env.DB.cleanedPlanPaymentIds.size).toBe(
+      _kind === "plan" || _kind === "watchlist" ? 0 : 1,
+    );
+    expect(env.DB.restoredWatchlistIds.size).toBe(
+      _kind === "plan" || _kind === "watchlist" ? 0 : 1,
+    );
     expect(env.DB.cleanedCreditPaymentIds.size).toBe(_kind === "credit" ? 0 : 1);
     if (_kind === "credit") {
       expect(env.DB.creditGrantState).toMatchObject({ status: "active" });

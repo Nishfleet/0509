@@ -35,7 +35,13 @@ export interface DodoLifecycleEmailRetryClaim {
 export type DodoWebhookProcessingClaim =
 	| { status: "claimed"; lifecycleEmailRetry?: DodoLifecycleEmailRetryClaim }
   | { status: "duplicate"; outcome: "processed" | "ignored" }
-  | { status: "in_progress" };
+  | { status: "in_progress" }
+  | { status: "deferred" };
+
+export type DodoBillingCanaryClaimGuard =
+  | "acquire_lock"
+  | "defer_while_locked"
+  | "require_lock";
 
 function dodoWebhookProcessingLeaseDays() {
   return DODO_WEBHOOK_PROCESSING_LEASE_MS / (24 * 60 * 60 * 1000);
@@ -137,6 +143,8 @@ export async function beginDodoWebhookEventProcessing(
     eventType: string;
     userId: string | null;
     payloadTimestamp: string | null;
+    billingCanaryGuard?: DodoBillingCanaryClaimGuard;
+    billingCanaryLockId?: string;
   },
 ): Promise<DodoWebhookProcessingClaim> {
   const eventId = input.eventId.trim();
@@ -147,6 +155,50 @@ export async function beginDodoWebhookEventProcessing(
   const db = ensureDb(env);
   const receivedAt = nowIso();
   const leaseDays = dodoWebhookProcessingLeaseDays();
+  if (input.billingCanaryGuard && !input.userId) {
+    throw new Error("Billing canary ledger guards require a user id.");
+  }
+  if (input.billingCanaryGuard === "require_lock" && !input.billingCanaryLockId?.trim()) {
+    throw new Error("Internal billing canary claims require an exact lock id.");
+  }
+  const activeLeaseSql = `
+    outcome = 'processing'
+    AND processing_started_at IS NOT NULL
+    AND julianday(?) <= julianday(processing_started_at) + ?
+  `;
+  const guardSql = input.billingCanaryGuard === "acquire_lock"
+    ? `NOT EXISTS (
+        SELECT 1 FROM dodo_webhook_event AS active_event
+        WHERE active_event.user_id = ?
+          AND active_event.event_id <> ?
+          AND active_event.${activeLeaseSql}
+      )`
+    : input.billingCanaryGuard === "defer_while_locked"
+      ? `NOT EXISTS (
+          SELECT 1 FROM dodo_webhook_event AS canary_lock
+          WHERE canary_lock.user_id = ?
+            AND canary_lock.event_type = 'billing.canary.lock'
+            AND (
+              json_extract(canary_lock.metadata_json, '$.action') = 'billing_canary_active'
+              OR canary_lock.${activeLeaseSql}
+            )
+        )`
+      : input.billingCanaryGuard === "require_lock"
+        ? `EXISTS (
+            SELECT 1 FROM dodo_webhook_event AS canary_lock
+            WHERE canary_lock.user_id = ?
+              AND canary_lock.event_id = ?
+              AND canary_lock.event_type = 'billing.canary.lock'
+              AND canary_lock.${activeLeaseSql}
+          )`
+        : "1 = 1";
+  const guardBindings = input.billingCanaryGuard === "acquire_lock"
+    ? [input.userId, eventId, receivedAt, leaseDays]
+    : input.billingCanaryGuard === "require_lock"
+      ? [input.userId, input.billingCanaryLockId!.trim(), receivedAt, leaseDays]
+      : input.billingCanaryGuard
+      ? [input.userId, receivedAt, leaseDays]
+      : [];
   const reclaimWhere = `
     dodo_webhook_event.outcome = 'failed'
     OR (
@@ -171,7 +223,8 @@ export async function beginDodoWebhookEventProcessing(
         processing_started_at,
         metadata_json
       )
-      VALUES (?, ?, ?, ?, ?, 'processing', ?, '{}')
+      SELECT ?, ?, ?, ?, ?, 'processing', ?, '{}'
+      WHERE ${guardSql}
       ON CONFLICT(event_id)
       DO UPDATE SET
         event_type = excluded.event_type,
@@ -193,7 +246,8 @@ export async function beginDodoWebhookEventProcessing(
             THEN dodo_webhook_event.metadata_json
           ELSE '{}'
         END
-      WHERE ${reclaimWhere}
+      WHERE (${reclaimWhere})
+        AND ${guardSql}
     `).bind(
       eventId,
       input.eventType,
@@ -201,8 +255,10 @@ export async function beginDodoWebhookEventProcessing(
       receivedAt,
       input.payloadTimestamp,
       receivedAt,
+      ...guardBindings,
       receivedAt,
       leaseDays,
+      ...guardBindings,
     ).run();
   } catch (error) {
     if (!isMissingDodoPayloadTimestampColumnError(error) && !isMissingDodoProcessingLeaseColumnError(error)) {
@@ -221,7 +277,8 @@ export async function beginDodoWebhookEventProcessing(
             processing_started_at,
             metadata_json
           )
-          VALUES (?, ?, ?, ?, 'processing', ?, '{}')
+          SELECT ?, ?, ?, ?, 'processing', ?, '{}'
+          WHERE ${guardSql}
           ON CONFLICT(event_id)
           DO UPDATE SET
             event_type = excluded.event_type,
@@ -237,15 +294,18 @@ export async function beginDodoWebhookEventProcessing(
                 THEN dodo_webhook_event.metadata_json
               ELSE '{}'
             END
-          WHERE ${reclaimWhere}
+          WHERE (${reclaimWhere})
+            AND ${guardSql}
         `).bind(
           eventId,
           input.eventType,
           input.userId,
           receivedAt,
           receivedAt,
+          ...guardBindings,
           receivedAt,
           leaseDays,
+          ...guardBindings,
         ).run();
       } catch (fallbackError) {
         throw fallbackError;
@@ -277,6 +337,12 @@ export async function beginDodoWebhookEventProcessing(
   );
   if (row?.outcome === "processed" || row?.outcome === "ignored") {
     return { status: "duplicate", outcome: row.outcome };
+  }
+  if (!row && input.billingCanaryGuard) {
+    return { status: "deferred" };
+  }
+  if (row?.outcome === "failed" && input.billingCanaryGuard) {
+    return { status: "deferred" };
   }
   return { status: "in_progress" };
 }

@@ -114,6 +114,42 @@ describe("version-bound Gate C orchestrator", () => {
     });
   });
 
+  it("cleans a partial proof failure by gate ID when no digest ticket exists", async () => {
+    const cleanup = vi.fn(async () => ({ ok: true }));
+    const result = await runVersionBoundGateC({
+      workerVersionId: "worker-v1",
+      token: "token",
+      evidencePath: evidencePath(),
+      dependencies: {
+        healthAnchor: vi.fn(async () => ({ ok: true })),
+        backupLifecycle: vi.fn(async () => ({ ok: true, report: backupReport() })),
+        pricing: vi.fn(async () => ({ ok: true })),
+        billing: vi.fn(async () => ({ ok: true })),
+        proof: vi.fn(async () => ({
+          ok: false,
+          payload: {
+            ok: false,
+            gateRunId: "gate-c-worker-v1",
+            runId: "run-loser",
+            proofCaptureId: "proof-loser",
+            blockers: ["digest_period_claim_conflict"],
+          },
+        })),
+        productionCanary: vi.fn(),
+        cleanup,
+      },
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.journal.errors).toContain("proof_email_failed");
+    expect(result.journal.errors).not.toContain("proof_cleanup_ticket_missing");
+    expect(cleanup).toHaveBeenCalledWith({
+      ticket: null,
+      gateRunId: "gate-c-worker-v1",
+      token: "token",
+    });
+  });
+
   it("recovers an interrupted proof by stable gate ID without repeating provider work", async () => {
     const path = evidencePath();
     const existing = {

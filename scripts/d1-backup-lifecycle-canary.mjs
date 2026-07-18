@@ -89,8 +89,22 @@ export async function fetchLiveLifecycleRules({
 export function assertExpectedLifecyclePolicy(policy, liveRules) {
   if (!policy || typeof policy !== "object" || Array.isArray(policy)) throw new Error("r2_lifecycle_policy_invalid");
   const record = /** @type {Record<string, any>} */ (policy);
-  if (record.schemaVersion !== 1 || record.bucket !== BACKUP_BUCKET_NAME || !Array.isArray(record.rules)) {
+  if (
+    record.schemaVersion !== 1 ||
+    record.bucket !== BACKUP_BUCKET_NAME ||
+    !Array.isArray(record.applicationManagedPrefixes) ||
+    !record.applicationManagedPrefixes.every((prefix) => typeof prefix === "string" && prefix.length > 0) ||
+    !Array.isArray(record.rules)
+  ) {
     throw new Error("r2_lifecycle_policy_invalid");
+  }
+  for (const protectedPrefix of record.applicationManagedPrefixes) {
+    const unsafeDeletionRule = liveRules.find((rule) =>
+      rule.enabled &&
+      (rule.prefix.startsWith(protectedPrefix) || protectedPrefix.startsWith(rule.prefix)) &&
+      (rule.deleteConditionType === "Age" || rule.deleteConditionType === "Date"),
+    );
+    if (unsafeDeletionRule) throw new Error("r2_lifecycle_unsafe_overlap");
   }
   for (const expected of record.rules) {
     const maxAge = expected?.expireDays * 86_400;

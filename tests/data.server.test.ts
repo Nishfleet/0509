@@ -1574,6 +1574,7 @@ describe("Dodo billing persistence", () => {
         0,
         0,
         0,
+        0,
       ]);
     });
 
@@ -2344,7 +2345,8 @@ describe("Dodo billing persistence", () => {
     expect(statements[0]?.sql).toContain("payload_timestamp");
     expect(statements[1]?.sql).not.toContain("payload_timestamp");
     expect(statements[1]?.sql).toContain("processing_started_at");
-    expect(statements[1]?.sql).toContain("VALUES (?, ?, ?, ?, 'processing', ?, '{}')");
+    expect(statements[1]?.sql).toContain("SELECT ?, ?, ?, ?, 'processing', ?, '{}'");
+    expect(statements[1]?.sql).toContain("WHERE 1 = 1");
     expect(statements[1]?.sql).toContain("outcome = 'processing'");
     expect(statements[1]?.sql).not.toContain("outcome = 'received'");
     expect(statements[1]?.sql).toContain("dodo_webhook_event.outcome = 'failed'");

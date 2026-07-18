@@ -65,6 +65,10 @@ applyMigration(harness.sqlite, "migrations/0000_auth.sql");
 applyMigration(harness.sqlite, "migrations/0001_app.sql");
 applyMigration(harness.sqlite, "migrations/0002_monitoring_trust.sql");
 harness.sqlite.exec(`
+    CREATE TABLE proof_capture (
+      id TEXT PRIMARY KEY NOT NULL,
+      capture_metadata_json TEXT NOT NULL DEFAULT '{}'
+    );
     CREATE TABLE workspace_delivery_config (
       user_id TEXT PRIMARY KEY NOT NULL,
       digest_enabled INTEGER NOT NULL DEFAULT 1,

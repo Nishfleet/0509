@@ -39,8 +39,8 @@ const retentionPolicy = JSON.parse(readFileSync(resolve("config/r2-retention-pol
 const expectedRetentionPolicy = {
   schemaVersion: 1,
   bucket: "0509-landing-page-artifacts",
+  applicationManagedPrefixes: ["landing-pages/"],
   rules: [
-    { id: "0509-proof-artifacts-90d", prefix: "landing-pages/", expireDays: 90 },
     { id: "0509-d1-backups-90d", prefix: "backups/d1/", expireDays: 90 },
   ],
 };

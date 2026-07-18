@@ -286,6 +286,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const requireWhatsAppDelivery = readBooleanSearchParam(requestUrl, "requireWhatsApp");
   const metadata = {
     kind: "launch_readiness_canary",
+    gateRunId,
     generatedAt: nowIso,
     targetLabel: target.target_label,
     requestedProofProvider,
@@ -293,7 +294,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
     requireWhatsAppDelivery,
   };
 
-  const runId = await createWatchlistRun(env, target.watchlist_id, "manual", null, 1);
+  const runId = await createWatchlistRun(env, target.watchlist_id, "manual", null, 1, {
+    ...metadata,
+    blocker: "launch_readiness_canary_incomplete",
+    proofUrl,
+  });
   const snapshot =
     requestedProofProvider === "browserless"
       ? await (await import("~/lib/browser-run.server")).captureBrowserlessProofSnapshot(env, proofUrl)
@@ -456,9 +461,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
       {
         ok: false,
         blockers: ["digest_period_claim_conflict"],
+        gateRunId,
         runId,
         proofCaptureId,
-        digestRunId: digestClaim.digestRunId,
       },
       {
         status: 409,

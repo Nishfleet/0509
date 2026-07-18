@@ -292,7 +292,14 @@ describe("launch readiness canary route", () => {
         lane: "internal",
       },
     });
-    expect(createWatchlistRun).toHaveBeenCalledWith(expect.anything(), "watch-1", "manual", null, 1);
+    expect(createWatchlistRun).toHaveBeenCalledWith(
+      expect.anything(),
+      "watch-1",
+      "manual",
+      null,
+      1,
+      expect.objectContaining({ kind: "launch_readiness_canary" }),
+    );
     expect(createProofCapture).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -368,18 +375,24 @@ describe("launch readiness canary route", () => {
 			context: createContext(),
 			request: new Request("https://0509.io/api/launch-readiness/canary", {
 				method: "POST",
-				headers: { "x-0509-canary-token": "secret-token" },
+				headers: {
+					"content-type": "application/json",
+					"x-0509-canary-token": "secret-token",
+				},
+				body: JSON.stringify({ gateRunId: "gate-loser" }),
 			}),
 		} as never);
 
 		expect(response.status).toBe(409);
-		await expect(response.json()).resolves.toMatchObject({
-			ok: false,
-			blockers: ["digest_period_claim_conflict"],
+		const payload = await response.json();
+			expect(payload).toMatchObject({
+				ok: false,
+				blockers: ["digest_period_claim_conflict"],
+				gateRunId: "gate-loser",
 			runId: "run-loser",
 			proofCaptureId: "proof-loser",
-			digestRunId: "digest-winning-canary",
 		});
+		expect(payload).not.toHaveProperty("digestRunId");
 		expect(deliverWeeklyDigest).not.toHaveBeenCalled();
   });
 

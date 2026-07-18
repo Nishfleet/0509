@@ -13,12 +13,6 @@ import {
 
 const liveRules = [
   {
-    id: "0509-proof-artifacts-90d",
-    enabled: true,
-    conditions: { prefix: "landing-pages/" },
-    deleteObjectsTransition: { condition: { type: "Age", maxAge: 90 * 86_400 } },
-  },
-  {
     id: "0509-d1-backups-90d",
     enabled: true,
     conditions: { prefix: "backups/d1/" },
@@ -41,6 +35,20 @@ describe("D1 backup lifecycle Gate C canary", () => {
       prefix: "",
       deleteConditionType: "Age",
       deleteMaxAge: 30 * 86_400,
+    }))).toThrow("r2_lifecycle_unsafe_overlap");
+    expect(() => assertExpectedLifecyclePolicy(policy, canonical.concat({
+      id: "unsafe-proof-artifacts-180d",
+      enabled: true,
+      prefix: "landing-pages/2026/",
+      deleteConditionType: "Age",
+      deleteMaxAge: 180 * 86_400,
+    }))).toThrow("r2_lifecycle_unsafe_overlap");
+    expect(() => assertExpectedLifecyclePolicy(policy, canonical.concat({
+      id: "unsafe-proof-artifacts-date",
+      enabled: true,
+      prefix: "landing-pages/",
+      deleteConditionType: "Date",
+      deleteMaxAge: null,
     }))).toThrow("r2_lifecycle_unsafe_overlap");
     expect(() => assertExpectedLifecyclePolicy(policy, canonical.concat({
       id: "unsafe-canary-date",
