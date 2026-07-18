@@ -878,7 +878,7 @@ describe("runWatchlistManual cheap scan path", () => {
       }),
     }));
     vi.doMock("~/lib/plan.server", () => ({
-      getUserPlan: vi.fn(),
+      getUserPlan: vi.fn().mockResolvedValue("starter"),
       PLAN_LIMITS: {
         free: { digests: false, digestCadence: "none" },
         starter: { digests: true, digestCadence: "weekly" },
@@ -1160,7 +1160,7 @@ describe("runWatchlistManual cheap scan path", () => {
       }),
     }));
     vi.doMock("~/lib/plan.server", () => ({
-      getUserPlan: vi.fn(),
+      getUserPlan: vi.fn().mockResolvedValue("starter"),
       PLAN_LIMITS: {
         free: { digests: false, digestCadence: "none" },
         starter: { digests: true, digestCadence: "weekly" },
@@ -1650,7 +1650,7 @@ describe("runWatchlistManual cheap scan path", () => {
       deliverWatchlistAlerts,
     }));
     vi.doMock("~/lib/plan.server", () => ({
-      getUserPlan: vi.fn(),
+      getUserPlan: vi.fn().mockResolvedValue("starter"),
       PLAN_LIMITS: {
         free: { digests: false, digestCadence: "none" },
         starter: { digests: true, digestCadence: "weekly" },
@@ -1814,7 +1814,7 @@ describe("runWatchlistManual cheap scan path", () => {
 	    deliverWatchlistAlerts,
 	  }));
 	  vi.doMock("~/lib/plan.server", () => ({
-	    getUserPlan: vi.fn(),
+	    getUserPlan: vi.fn().mockResolvedValue("starter"),
 	    PLAN_LIMITS: {
 	      free: { digests: false, digestCadence: "none" },
 	      starter: { digests: true, digestCadence: "weekly" },
@@ -1947,7 +1947,7 @@ describe("runWatchlistManual cheap scan path", () => {
       deliverWatchlistAlerts: vi.fn(),
     }));
     vi.doMock("~/lib/plan.server", () => ({
-      getUserPlan: vi.fn(),
+      getUserPlan: vi.fn().mockResolvedValue("starter"),
       PLAN_LIMITS: {
         free: { digests: false, digestCadence: "none" },
         starter: { digests: true, digestCadence: "weekly" },
@@ -2143,7 +2143,7 @@ describe("runWatchlistManual cheap scan path", () => {
       }),
     }));
     vi.doMock("~/lib/plan.server", () => ({
-      getUserPlan: vi.fn(),
+      getUserPlan: vi.fn().mockResolvedValue("starter"),
       PLAN_LIMITS: {
         free: { digests: false, digestCadence: "none" },
         starter: { digests: true, digestCadence: "weekly" },
@@ -2280,7 +2280,7 @@ describe("runWatchlistManual cheap scan path", () => {
       }),
     }));
     vi.doMock("~/lib/plan.server", () => ({
-      getUserPlan: vi.fn(),
+      getUserPlan: vi.fn().mockResolvedValue("starter"),
       PLAN_LIMITS: {
         free: { digests: false, digestCadence: "none" },
         starter: { digests: true, digestCadence: "weekly" },

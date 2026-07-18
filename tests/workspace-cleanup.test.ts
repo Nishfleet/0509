@@ -1005,4 +1005,44 @@ describe("weekly business numbers", () => {
     expect(lines[4]).toContain("no digests sent");
     expect(lines[5]).toContain("n/a");
   });
+
+  it("includes annual validation drift lines for operators (WP-38)", async () => {
+    const {
+      buildWeeklyBusinessLines,
+      formatAnnualValidationDriftLines,
+    } = await import("~/lib/monitoring.server");
+
+    expect(
+      formatAnnualValidationDriftLines({
+        scout: { valid: true, reason: "valid_4_months_free" },
+        starter: { valid: false, reason: "amount_mismatch" },
+        agency: { valid: true, reason: "valid_4_months_free" },
+      }),
+    ).toEqual(["Annual validation drift: starter: amount_mismatch"]);
+
+    expect(
+      formatAnnualValidationDriftLines({
+        scout: { valid: true, reason: "valid_4_months_free" },
+        starter: { valid: true, reason: "valid_4_months_free" },
+        agency: { valid: true, reason: "valid_4_months_free" },
+      }),
+    ).toEqual(["Annual validation: ok (pay-8 months)"]);
+
+    const lines = buildWeeklyBusinessLines(
+      {
+        signups7d: 0,
+        activated7d: 0,
+        payingByPlan: [],
+        dunningCount: 0,
+        revokedToFree7d: 0,
+        digestAttempts7d: 0,
+        digestSent7d: 0,
+        oldestActivePaidScanAt: null,
+      },
+      {
+        annualValidationDriftLines: ["Annual validation drift: scout: amount_mismatch"],
+      },
+    );
+    expect(lines.at(-1)).toContain("Annual validation drift");
+  });
 });

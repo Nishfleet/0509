@@ -24,17 +24,38 @@ export function topUpSpendRequiresActivePaidPlan(planFamily: PlanFamily): boolea
 }
 
 /**
- * Full top-up refunds claw back only the unspent purchased checks. Partial and
- * unknown refund shapes stay manual-review only because money cannot be mapped
- * to a credit quantity without an explicit allocation contract.
+ * Full top-up refunds claw back only the unspent purchased checks.
+ * Partial refunds with money amounts claw back a prorated share of remaining
+ * credits: min(remaining, round(remaining × refundAmount/paymentAmount)).
+ * Partial without amounts (and unknown shapes) stay manual-review only.
  */
 export function topUpRefundQuantityAdjustment(input: {
   grantedQuantity: number;
   remainingQuantity: number;
   refundType: "full" | "partial" | "unknown";
+  refundAmount?: number | null;
+  paymentAmount?: number | null;
 }): number | null {
+  const remaining = Math.max(0, Math.floor(input.remainingQuantity));
   if (input.refundType === "full") {
-    return -input.remainingQuantity;
+    return -remaining;
+  }
+  if (input.refundType === "partial") {
+    const refundAmount = input.refundAmount;
+    const paymentAmount = input.paymentAmount;
+    if (
+      typeof refundAmount !== "number" ||
+      typeof paymentAmount !== "number" ||
+      !Number.isFinite(refundAmount) ||
+      !Number.isFinite(paymentAmount) ||
+      refundAmount <= 0 ||
+      paymentAmount <= 0
+    ) {
+      return null;
+    }
+    const ratio = Math.min(1, refundAmount / paymentAmount);
+    const clawback = Math.min(remaining, Math.round(remaining * ratio));
+    return -clawback;
   }
   return null;
 }

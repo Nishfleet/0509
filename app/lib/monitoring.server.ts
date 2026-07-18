@@ -537,6 +537,7 @@ export async function flushDeferredInstantAlerts(env: AppEnv) {
 // out from a churn email.
 export function buildWeeklyBusinessLines(
   summary: Awaited<ReturnType<typeof getWeeklyBusinessSummary>>,
+  options: { annualValidationDriftLines?: string[] } = {},
 ) {
   const paying =
     summary.payingByPlan.length > 0
@@ -547,7 +548,7 @@ export function buildWeeklyBusinessLines(
       ? `${Math.round((summary.digestSent7d / summary.digestAttempts7d) * 100)}% (${summary.digestSent7d}/${summary.digestAttempts7d})`
       : "no digests sent";
 
-  return [
+  const lines = [
     `Signups (7d): ${summary.signups7d} — activated onboarding: ${summary.activated7d}`,
     `Paying customers: ${paying}`,
     `Dunning (payment trouble, plan kept): ${summary.dunningCount}`,
@@ -555,6 +556,42 @@ export function buildWeeklyBusinessLines(
     `Digest delivery success (7d): ${digestRate}`,
     `Oldest active paid-watchlist scan: ${summary.oldestActivePaidScanAt ?? "n/a"}`,
   ];
+  if (options.annualValidationDriftLines?.length) {
+    lines.push(...options.annualValidationDriftLines);
+  }
+  return lines;
+}
+
+/** WP-38: surface annual price drift (not 8× monthly) in the operator email. */
+export function formatAnnualValidationDriftLines(
+  annualValidation:
+    | Partial<
+        Record<
+          "scout" | "starter" | "agency",
+          { valid: boolean; reason: string }
+        >
+      >
+    | null
+    | undefined,
+): string[] {
+  if (!annualValidation) {
+    return ["Annual validation: unavailable"];
+  }
+  const drifts: string[] = [];
+  for (const plan of ["scout", "starter", "agency"] as const) {
+    const entry = annualValidation[plan];
+    if (!entry) {
+      drifts.push(`${plan}: missing`);
+      continue;
+    }
+    if (!entry.valid) {
+      drifts.push(`${plan}: ${entry.reason}`);
+    }
+  }
+  if (drifts.length === 0) {
+    return ["Annual validation: ok (pay-8 months)"];
+  }
+  return [`Annual validation drift: ${drifts.join("; ")}`];
 }
 
 export async function sendWeeklyBusinessNumbers(env: AppEnv) {
@@ -564,10 +601,23 @@ export async function sendWeeklyBusinessNumbers(env: AppEnv) {
 
   const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
   const summary = await getWeeklyBusinessSummary(env);
+  let annualValidationDriftLines: string[] = ["Annual validation: unavailable"];
+  try {
+    const { previewDodo0509PlanPrices } = await import("~/lib/dodo-pricing.server");
+    // Operator email is not browser-country scoped; use a stable India request
+    // so annual 8× monthly validation still surfaces product/config drift.
+    const pricingRequest = new Request("https://0509.io/ops/weekly-business", {
+      headers: { "cf-ipcountry": "IN" },
+    });
+    const preview = await previewDodo0509PlanPrices({ env, request: pricingRequest });
+    annualValidationDriftLines = formatAnnualValidationDriftLines(preview.annualValidation);
+  } catch {
+    annualValidationDriftLines = ["Annual validation: preview_failed"];
+  }
   const weekStamp = new Date().toISOString().slice(0, 10);
   const sent = await sendOperatorAlertEmail(env, {
     subject: "Five to Nine — weekly business numbers",
-    lines: buildWeeklyBusinessLines(summary),
+    lines: buildWeeklyBusinessLines(summary, { annualValidationDriftLines }),
     idempotencyKey: `business-weekly:${weekStamp}`,
   });
 
@@ -3753,11 +3803,23 @@ function monthlyProofCapForPlan(plan: string) {
 }
 
 async function getProofCapturePlan(env: AppEnv, userId: string) {
-  if (!env.DB || typeof env.DB.prepare !== "function") {
-    return "starter";
+  // Prefer the real plan row when D1 is bound.
+  if (env.DB && typeof env.DB.prepare === "function") {
+    return getUserPlan(env, userId);
   }
 
-  return getUserPlan(env, userId);
+  // No D1: never invent Starter capacity (WP-38 fail-closed). If a plan
+  // lookup still resolves to an explicit paid family (unit-test mocks), honor
+  // it; otherwise free (0 daily proof budget).
+  try {
+    const plan = await getUserPlan(env, userId);
+    if (plan === "scout" || plan === "starter" || plan === "agency") {
+      return plan;
+    }
+  } catch {
+    // fall through
+  }
+  return "free";
 }
 
 async function sumActiveProofUsageCredits(
