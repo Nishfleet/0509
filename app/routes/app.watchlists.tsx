@@ -1655,6 +1655,7 @@ function buildLegacyWorkspaceConfig(
     // paid-plan feature gates still control actual delivery.
     instantEnabled: true,
     digestEnabled: true,
+    digestCadencePreference: "plan_default",
     emailEnabled: hasEmail,
     whatsappEnabled: false,
     slackEnabled: false,

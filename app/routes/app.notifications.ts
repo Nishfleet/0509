@@ -20,6 +20,7 @@ const notificationActionIntents = new Set([
   "save-whatsapp-target",
   "pause-slack-webhook",
   "resume-slack-webhook",
+  "save-digest-cadence",
 ]);
 
 const slackNotificationIntents = new Set([
@@ -45,9 +46,17 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { whatsappTargetDisplayName } = await import("~/lib/whatsapp.server");
   const { getEffectiveWorkspacePlan } = await import("~/lib/plan.server");
   const { canUsePlanFeature } = await import("~/lib/plan-entitlements");
+  const { getWorkspaceDeliveryConfig, legacyWorkspaceDeliveryDefaults } = await import(
+    "~/lib/data.server"
+  );
   const env = getEnv(context);
   const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
   const plan = await getEffectiveWorkspacePlan(env, workspaceUserId);
+  const workspaceDeliveryConfig = await getWorkspaceDeliveryConfig(env, workspaceUserId);
+  const digestCadencePreference =
+    workspaceDeliveryConfig?.digestCadencePreference === "weekly_only"
+      ? "weekly_only"
+      : "plan_default";
   const showSlackDelivery = isSlackDeliveryCustomerFacing();
   const slackDeliveryEntitled = canUsePlanFeature(plan, "slack_delivery");
   const showWhatsAppDelivery = isWhatsAppDeliveryCustomerFacing();
@@ -86,6 +95,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
   return {
     emailDeliveryReady: Boolean(session.user.email),
+    digestCadencePreference,
     showSlackDelivery,
     slackDelivery: {
       plan,
@@ -184,6 +194,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
       sensitivityMode: existingConfig?.sensitivityMode ?? defaults.sensitivityMode,
       instantEnabled: existingConfig?.instantEnabled ?? defaults.instantEnabled,
       digestEnabled: existingConfig?.digestEnabled ?? defaults.digestEnabled,
+      digestCadencePreference:
+        existingConfig?.digestCadencePreference ?? defaults.digestCadencePreference,
       emailEnabled: existingConfig?.emailEnabled ?? defaults.emailEnabled,
       whatsappEnabled: existingConfig?.whatsappEnabled ?? defaults.whatsappEnabled,
       slackEnabled: true,
@@ -195,6 +207,40 @@ export async function action({ context, request }: ActionFunctionArgs) {
       ok: true,
       message:
         "Slack delivery connected. Slack accepted the setup test, and future eligible digests can post to that channel.",
+    };
+  }
+
+  if (intent === "save-digest-cadence") {
+    const {
+      getWorkspaceDeliveryConfig,
+      legacyWorkspaceDeliveryDefaults,
+      upsertWorkspaceDeliveryConfig,
+    } = await import("~/lib/data.server");
+    const preferenceRaw = String(formData.get("digestCadencePreference") ?? "plan_default");
+    const digestCadencePreference =
+      preferenceRaw === "weekly_only" ? "weekly_only" : "plan_default";
+    const existingConfig = await getWorkspaceDeliveryConfig(env, workspaceUserId);
+    const defaults = legacyWorkspaceDeliveryDefaults({
+      hasEmail: Boolean(session.user.email),
+    });
+    await upsertWorkspaceDeliveryConfig(env, {
+      userId: workspaceUserId,
+      sensitivityMode: existingConfig?.sensitivityMode ?? defaults.sensitivityMode,
+      instantEnabled: existingConfig?.instantEnabled ?? defaults.instantEnabled,
+      digestEnabled: existingConfig?.digestEnabled ?? defaults.digestEnabled,
+      digestCadencePreference,
+      emailEnabled: existingConfig?.emailEnabled ?? defaults.emailEnabled,
+      whatsappEnabled: existingConfig?.whatsappEnabled ?? defaults.whatsappEnabled,
+      slackEnabled: existingConfig?.slackEnabled ?? defaults.slackEnabled,
+      quietHours: existingConfig?.quietHours ?? null,
+      timezone: existingConfig?.timezone ?? null,
+    });
+    return {
+      ok: true,
+      message:
+        digestCadencePreference === "weekly_only"
+          ? "Digest frequency saved: weekly only."
+          : "Digest frequency saved: plan default.",
     };
   }
 
@@ -237,6 +283,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
       sensitivityMode: existingConfig?.sensitivityMode ?? defaults.sensitivityMode,
       instantEnabled: existingConfig?.instantEnabled ?? defaults.instantEnabled,
       digestEnabled: existingConfig?.digestEnabled ?? defaults.digestEnabled,
+      digestCadencePreference:
+        existingConfig?.digestCadencePreference ?? defaults.digestCadencePreference,
       emailEnabled: existingConfig?.emailEnabled ?? defaults.emailEnabled,
       whatsappEnabled: true,
       slackEnabled: existingConfig?.slackEnabled ?? defaults.slackEnabled,

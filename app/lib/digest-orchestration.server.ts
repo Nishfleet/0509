@@ -13,6 +13,7 @@ import {
   getDigest,
   getDigestByPeriod,
   getSuccessfulRunStatsForUserBetween,
+  getWorkspaceDeliveryConfig,
   listAdsByIds,
 	listDigestScheduleJobsAwaitingAlert,
   listRetryableDigestRuns,
@@ -337,6 +338,14 @@ async function runDigestForUser(
     planAllowsDigestCadence(plan, "weekly")
   ) {
     return 0;
+  }
+
+  // Customer preference: weekly_only skips daily jobs (Starter/Agency opt-down).
+  if (cadence === "daily") {
+    const workspaceConfig = await getWorkspaceDeliveryConfig(env, user.id);
+    if (workspaceConfig?.digestCadencePreference === "weekly_only") {
+      return 0;
+    }
   }
 
   const watchlists = await listWatchlists(env, user.id);

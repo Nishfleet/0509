@@ -9,7 +9,7 @@ import {
 } from "~/lib/data/delivery-records-rows.server";
 import { boolToInt, createId, jsonValue, nowIso } from "~/lib/data/helpers.server";
 import type { AppEnv } from "~/lib/env.server";
-import type { DeliveryQuietHours, SensitivityMode } from "~/lib/types";
+import type { DeliveryQuietHours, DigestCadencePreference, SensitivityMode } from "~/lib/types";
 
 export function legacyWorkspaceDeliveryDefaults(input: { hasEmail: boolean }) {
   return {
@@ -18,6 +18,7 @@ export function legacyWorkspaceDeliveryDefaults(input: { hasEmail: boolean }) {
     // preference true so upgrade immediately starts delivering headline events.
     instantEnabled: true,
     digestEnabled: true,
+    digestCadencePreference: "plan_default" as DigestCadencePreference,
     emailEnabled: input.hasEmail,
     whatsappEnabled: false,
     slackEnabled: false,
@@ -135,6 +136,7 @@ export async function upsertWorkspaceDeliveryConfig(
     sensitivityMode: SensitivityMode;
     instantEnabled: boolean;
     digestEnabled: boolean;
+    digestCadencePreference?: DigestCadencePreference;
     emailEnabled: boolean;
     whatsappEnabled: boolean;
     slackEnabled?: boolean;
@@ -144,6 +146,8 @@ export async function upsertWorkspaceDeliveryConfig(
 ) {
   const id = createId();
   const timestamp = nowIso();
+  const digestCadencePreference =
+    input.digestCadencePreference === "weekly_only" ? "weekly_only" : "plan_default";
   await run(
     env,
     `
@@ -153,6 +157,7 @@ export async function upsertWorkspaceDeliveryConfig(
         sensitivity_mode,
         instant_enabled,
         digest_enabled,
+        digest_cadence_preference,
         email_enabled,
         whatsapp_enabled,
         slack_enabled,
@@ -161,11 +166,12 @@ export async function upsertWorkspaceDeliveryConfig(
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id)
       DO UPDATE SET sensitivity_mode = excluded.sensitivity_mode,
                     instant_enabled = excluded.instant_enabled,
                     digest_enabled = excluded.digest_enabled,
+                    digest_cadence_preference = excluded.digest_cadence_preference,
                     email_enabled = excluded.email_enabled,
                     whatsapp_enabled = excluded.whatsapp_enabled,
                     slack_enabled = excluded.slack_enabled,
@@ -178,6 +184,7 @@ export async function upsertWorkspaceDeliveryConfig(
     input.sensitivityMode,
     boolToInt(input.instantEnabled),
     boolToInt(input.digestEnabled),
+    digestCadencePreference,
     boolToInt(input.emailEnabled),
     boolToInt(input.whatsappEnabled),
     boolToInt(input.slackEnabled ?? false),

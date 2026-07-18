@@ -2046,6 +2046,7 @@ function buildLegacyWorkspaceConfig(
     sensitivityMode: defaults.sensitivityMode,
     instantEnabled: defaults.instantEnabled,
     digestEnabled: defaults.digestEnabled,
+    digestCadencePreference: defaults.digestCadencePreference,
     emailEnabled: defaults.emailEnabled,
     whatsappEnabled: defaults.whatsappEnabled,
     slackEnabled: defaults.slackEnabled,

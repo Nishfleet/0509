@@ -439,12 +439,16 @@ export interface DeliveryQuietHours {
   endHour: number;
 }
 
+export type DigestCadencePreference = "plan_default" | "weekly_only";
+
 export interface WorkspaceDeliveryConfigRecord {
   id: string;
   userId: string;
   sensitivityMode: SensitivityMode;
   instantEnabled: boolean;
   digestEnabled: boolean;
+  /** plan_default = current plan cadence; weekly_only = skip daily digests. */
+  digestCadencePreference: DigestCadencePreference;
   emailEnabled: boolean;
   whatsappEnabled: boolean;
   slackEnabled: boolean;
