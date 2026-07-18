@@ -185,18 +185,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     }
   }
 
-  if (session && parsed.filters.query && !forceLive) {
-    const { enforceAuthenticatedSearchRateLimit, enforceSearchSelectionRateLimit } = await import(
-      "~/lib/rate-limit.server"
-    );
-    const rateLimitResponse = selectionServedFromCache
-      ? await enforceSearchSelectionRateLimit(request, env, session.user.id, context.cloudflare?.ctx)
-      : await enforceAuthenticatedSearchRateLimit(request, env, session.user.id, context.cloudflare?.ctx);
-    if (rateLimitResponse) {
-      throw rateLimitResponse;
-    }
-  }
-
   const collections = session ? await listCollections(env, workspaceUserId!) : [];
   let plan: "free" | "scout" | "starter" | "agency" | null = null;
   if (session) {
@@ -206,6 +194,53 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     } catch {
       // Isolated tests may omit D1; treat as free for honest collection gates.
       plan = "free";
+    }
+  }
+
+  if (session && parsed.filters.query && !forceLive) {
+    const { enforceAuthenticatedSearchRateLimit, enforceSearchSelectionRateLimit } = await import(
+      "~/lib/rate-limit.server"
+    );
+    if (selectionServedFromCache) {
+      const selectionLimit = await enforceSearchSelectionRateLimit(
+        request,
+        env,
+        session.user.id,
+        context.cloudflare?.ctx,
+      );
+      if (selectionLimit) {
+        throw selectionLimit;
+      }
+    } else {
+      const searchLimit = await enforceAuthenticatedSearchRateLimit(
+        request,
+        env,
+        session.user.id,
+        context.cloudflare?.ctx,
+        plan,
+      );
+      if (searchLimit) {
+        // Prefer an in-product labeled daily/burst limit over a bare JSON 429.
+        return {
+          mode: parsed.mode,
+          filters: parsed.filters,
+          fingerprint: parsed.fingerprint,
+          result: buildIdleSearchResult(),
+          selectedAd: null,
+          selectionEnrichmentPending: false,
+          collections,
+          plan,
+          session,
+          competitorWebsite,
+          trackingRole,
+          inputError:
+            "You've hit today's live-search limit for your plan. Resets at midnight UTC. Cached results still work — upgrade for more live checks.",
+          searchScope: "exact" as const,
+          displayDomain: null,
+          relevanceApplied: false,
+          ...navFlags,
+        };
+      }
     }
   }
 

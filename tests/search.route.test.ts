@@ -691,6 +691,7 @@ describe("search loader", () => {
       env,
       "user-1",
       undefined,
+      "free",
     );
   });
 
