@@ -21,6 +21,11 @@ import {
   renderEmailContentSurface,
 } from "~/lib/email-template.server";
 
+// WP-26: monthly customer recap template (implementation lives with the
+// orchestration module; re-exported here so the digest email surface stays the
+// documented home for customer email layouts).
+export { buildMonthlyRecapEmail } from "~/lib/monthly-recap.server";
+
 export interface DigestEmailHeartbeat {
   runs: number;
   watchlistsChecked: number;

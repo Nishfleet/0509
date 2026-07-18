@@ -11,6 +11,7 @@ import {
   sendCustomerAtRiskAlert,
   sendWeeklyBusinessNumbers,
 } from "../app/lib/monitoring.server";
+import { sendMonthlyCustomerRecaps } from "../app/lib/monthly-recap.server";
 import {
   isPublicMarkdownPage,
   LLMS_TEXT,
@@ -150,6 +151,17 @@ export default {
             }
           },
           (error) => reportScheduledTaskFailure(env, "weekly_business_numbers", error),
+        ),
+      );
+      // WP-26: first Monday of the month → prior-month customer recap.
+      ctx.waitUntil(
+        sendMonthlyCustomerRecaps(env, { scheduledTime: controller.scheduledTime }).then(
+          (result) => {
+            if (result.sent > 0) {
+              console.log("monthly customer recaps sent", result);
+            }
+          },
+          (error) => reportScheduledTaskFailure(env, "monthly_customer_recaps", error),
         ),
       );
     }
