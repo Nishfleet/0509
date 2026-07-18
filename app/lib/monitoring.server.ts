@@ -1925,6 +1925,19 @@ export function diffWatchlistObservations(
         },
       });
     }
+
+    // WP-28: creative copy refresh — hook/offer are stored on observations but
+    // were never diffed. Ride landing_page_headline_changed / offer_changed
+    // CHECK types with metadata.kind = "creative_copy".
+    const creativeDraft = buildCreativeCopyDraft(
+      watchlist,
+      adId,
+      observation,
+      baselineObservation,
+    );
+    if (creativeDraft) {
+      drafts.push(creativeDraft);
+    }
   }
 
   for (const [adId] of priorByAd) {
@@ -1944,7 +1957,109 @@ export function diffWatchlistObservations(
     }
   }
 
-  return dedupeEventDrafts(drafts);
+  return collapseNewAdFlood(dedupeEventDrafts(drafts), watchlist);
+}
+
+/** Normalize observation creative fields for equality checks. */
+function readObservationCreativeCopy(observation: ObservationRecord) {
+  const meta = safeMetadata(observation);
+  const hook = typeof meta.hook === "string" ? meta.hook.trim() : "";
+  const offer = typeof meta.offer === "string" ? meta.offer.trim() : "";
+  return { hook, offer };
+}
+
+function buildCreativeCopyDraft(
+  watchlist: WatchlistRecord,
+  adId: string,
+  current: ObservationRecord,
+  baseline: ObservationRecord,
+): WatchEventDraft | null {
+  const from = readObservationCreativeCopy(baseline);
+  const to = readObservationCreativeCopy(current);
+  // No signal when both sides lack creative text — avoid false diffs from empty↔empty.
+  if (!from.hook && !from.offer && !to.hook && !to.offer) {
+    return null;
+  }
+  const hookChanged = from.hook !== to.hook && (from.hook.length > 0 || to.hook.length > 0);
+  const offerChanged = from.offer !== to.offer && (from.offer.length > 0 || to.offer.length > 0);
+  if (!hookChanged && !offerChanged) {
+    return null;
+  }
+
+  // Prefer offer_changed (higher importance) when offer moved; else headline type.
+  const eventType = offerChanged
+    ? ("landing_page_offer_changed" as const)
+    : ("landing_page_headline_changed" as const);
+  const advertiser = safeMetadata(current).advertiser;
+  const fromLabel = formatCreativeCopyLabel(from);
+  const toLabel = formatCreativeCopyLabel(to);
+
+  return {
+    eventType,
+    adId,
+    title: "Ad creative copy changed",
+    summary: `The ad creative on ${watchlist.name} was rewritten between scans.`,
+    metadata: {
+      kind: "creative_copy",
+      from: fromLabel,
+      to: toLabel,
+      hookFrom: from.hook || null,
+      hookTo: to.hook || null,
+      offerFrom: from.offer || null,
+      offerTo: to.offer || null,
+      advertiser: typeof advertiser === "string" ? advertiser : null,
+    },
+  };
+}
+
+function formatCreativeCopyLabel(copy: { hook: string; offer: string }) {
+  const parts: string[] = [];
+  if (copy.hook) parts.push(`Hook: ${copy.hook}`);
+  if (copy.offer) parts.push(`Offer: ${copy.offer}`);
+  return parts.join(" · ") || "(empty)";
+}
+
+/**
+ * WP-28: collapse ≥5 raw ad_new drafts into one aggregate event so a big
+ * creative launch does not wall the customer with N identical alerts.
+ */
+function collapseNewAdFlood(
+  drafts: WatchEventDraft[],
+  watchlist: WatchlistRecord,
+): WatchEventDraft[] {
+  const newAds = drafts.filter(
+    (draft) =>
+      draft.eventType === "ad_new" &&
+      (draft.metadata as Record<string, unknown> | undefined)?.kind !== "baseline" &&
+      (draft.metadata as Record<string, unknown> | undefined)?.kind !== "ad_new_aggregate" &&
+      (draft.metadata as Record<string, unknown> | undefined)?.kind !== "creative_copy",
+  );
+  if (newAds.length < 5) {
+    return drafts;
+  }
+
+  const other = drafts.filter((draft) => !newAds.includes(draft));
+  const adIds = newAds
+    .map((draft) => draft.adId)
+    .filter((id): id is string => Boolean(id));
+  const count = newAds.length;
+  return [
+    ...other,
+    {
+      eventType: "ad_new",
+      adId: null,
+      title: `${count} new ads launched`,
+      summary: `${count} new ads entered ${watchlist.name} in this scan.`,
+      metadata: {
+        kind: "ad_new_aggregate",
+        count,
+        adIds: adIds.slice(0, 25),
+        advertiser: newAds
+          .map((draft) => draft.metadata?.advertiser)
+          .find((value) => typeof value === "string" && value.trim()) ?? null,
+      },
+    },
+  ];
 }
 
 export async function runWeeklyDigests(

@@ -31,17 +31,33 @@ export function buildChangeIntelligenceSummary(
 
   // Baseline-capture events (first scan) ride the ad_new type because the
   // watch_event CHECK constraint pins the type list; metadata.kind marks them.
-  const isBaseline =
-    (event.metadata as Record<string, unknown> | undefined)?.kind === "baseline";
+  const kind = (event.metadata as Record<string, unknown> | undefined)?.kind;
+  const isBaseline = kind === "baseline";
+  const isCreativeCopy = kind === "creative_copy";
+  const isNewAdAggregate = kind === "ad_new_aggregate";
 
   return {
     priorityScore,
     priorityBand: isBaseline ? "Baseline" : formatPriorityBand(priorityScore),
     recommendedAction: isBaseline
       ? "No action needed — this is your starting snapshot. Future alerts only cover real changes."
-      : recommendAction(event.eventType, priorityScore),
+      : isCreativeCopy
+        ? recommendCreativeCopyAction(priorityScore)
+        : isNewAdAggregate
+          ? recommendAction("ad_new", priorityScore)
+          : recommendAction(event.eventType, priorityScore),
     proofTrail: buildProofTrail(event, timeZone),
   };
+}
+
+function recommendCreativeCopyAction(priorityScore: number | null) {
+  const urgency =
+    priorityScore !== null && priorityScore >= 85
+      ? "Today: "
+      : priorityScore !== null && priorityScore >= 65
+        ? "Next review: "
+        : "";
+  return `${urgency}compare the rewritten hook and offer to your live creatives before matching their angle.`;
 }
 
 export function digestMetadataForEvent(
