@@ -101,6 +101,20 @@ export default {
       return markdownResponse(request, PUBLIC_MARKDOWN);
     }
 
+    // WP-10: durable creative thumbnails for saved collection ads (R2).
+    if (request.method === "GET" || request.method === "HEAD") {
+      const { parseCreativeArtifactPathname, serveCreativeArtifact } = await import(
+        "../app/lib/creative-thumbnail.server"
+      );
+      const creativeId = parseCreativeArtifactPathname(url.pathname);
+      if (creativeId) {
+        const artifactResponse = await serveCreativeArtifact(env, request, creativeId);
+        if (artifactResponse) {
+          return withSecurityHeaders(artifactResponse, request);
+        }
+      }
+    }
+
     const rateLimitResponse = await enforceRequestRateLimit(request, env, ctx);
     if (rateLimitResponse) {
       return withSecurityHeaders(rateLimitResponse, request);
