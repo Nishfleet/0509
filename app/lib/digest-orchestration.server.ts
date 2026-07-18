@@ -329,6 +329,16 @@ async function runDigestForUser(
     return 0;
   }
 
+  // Monday double-digest firewall: users who also receive the weekly (05:00 UTC
+  // Monday) skip the daily brief so they do not get two overlapping emails.
+  if (
+    cadence === "daily" &&
+    new Date(periodEnd).getUTCDay() === 1 &&
+    planAllowsDigestCadence(plan, "weekly")
+  ) {
+    return 0;
+  }
+
   const watchlists = await listWatchlists(env, user.id);
   const eligibleByWatchlist: Array<{
     watchlist: WatchlistRecord;

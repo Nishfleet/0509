@@ -102,7 +102,9 @@ describe("buildDigestEmail", () => {
       unsubscribeUrl: null,
     });
 
-    expect(email.subject).toBe("All quiet: no competitor moves worth action this period");
+    expect(email.subject).toBe(
+      "All quiet: no competitor moves worth action this period (including your Monday brief)",
+    );
     expect(email.html).toContain("All quiet: no competitor moves worth action this period.");
     expect(email.text).toContain("All quiet: no competitor moves worth action this period.");
     expect(email.subject).not.toContain("today");

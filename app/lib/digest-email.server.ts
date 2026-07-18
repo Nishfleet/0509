@@ -142,7 +142,9 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
   const heartbeat = input.heartbeat!;
   const cadenceLabel = digestCadenceLabel(input.cadence);
   const quietPeriodLabel = input.cadence === "daily" ? "today" : "this period";
-  const subject = `All quiet: no competitor moves worth action ${quietPeriodLabel}`;
+  const mondayBriefNote =
+    input.cadence === "weekly" ? " (including your Monday brief)" : "";
+  const subject = `All quiet: no competitor moves worth action ${quietPeriodLabel}${mondayBriefNote}`;
   const dateRange = `${formatDate(input.periodStart, input.timeZone)} to ${formatDate(input.periodEnd, input.timeZone)}`;
   const preheader = `${heartbeat.runs} checks across ${heartbeat.watchlistsChecked} competitors found no action-worthy movement.`;
   const html = `

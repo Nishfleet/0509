@@ -151,7 +151,7 @@ img {
 .report-field dt {
   color: #0a8f78;
   font-size: 0.76rem;
-  font-weight: 950;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -161,7 +161,7 @@ img {
   min-width: 0;
   margin: 0;
   color: var(--f9-search-ink, var(--f9-global-ink));
-  font-weight: 850;
+  font-weight: 700;
   overflow-wrap: anywhere;
 }
 
@@ -192,7 +192,7 @@ img {
   margin: 0;
   max-width: 14ch;
   font-size: clamp(2.2rem, 4vw, 4rem);
-  font-weight: 950;
+  font-weight: 700;
   line-height: 1.02;
   letter-spacing: 0;
 }
@@ -265,7 +265,7 @@ img {
   color: var(--f9-search-muted, var(--f9-global-muted));
   padding: 6px 10px;
   font-size: 0.8rem;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .report-field {
@@ -382,7 +382,7 @@ img {
 .f9-legal-page .f9-app-brand small {
   color: var(--ld-ink, #0e0d0a);
   font-size: 0.72rem;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .f9-legal-page .f9-app-brand:focus-visible {
@@ -395,7 +395,7 @@ img {
   gap: 0.12em;
   color: #fff;
   font-size: 1.62rem;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 0.88;
   letter-spacing: 0;
   text-transform: lowercase;
@@ -502,7 +502,7 @@ img {
   flex: 1;
   padding-left: 16px;
   color: var(--f9-muted);
-  font-weight: 850;
+  font-weight: 700;
 }
 
 .f9-email-cta button {
@@ -516,7 +516,7 @@ img {
   color: #fff;
   cursor: pointer;
   font: inherit;
-  font-weight: 900;
+  font-weight: 700;
   padding: 12px 24px;
   white-space: nowrap;
   box-shadow: 0 18px 38px rgba(6, 22, 41, 0.18);
@@ -540,7 +540,7 @@ img {
   background: rgba(255, 255, 255, 0.72);
   color: var(--f9-ink);
   font-size: 0.92rem;
-  font-weight: 850;
+  font-weight: 700;
   box-shadow: 0 12px 30px rgba(6, 22, 41, 0.08);
 }
 
@@ -667,7 +667,7 @@ img {
   color: #8df0d1;
   font-size: 0.74rem;
   font-style: normal;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.08em;
   padding: 6px 10px;
   text-transform: uppercase;
@@ -918,7 +918,7 @@ img {
   border-radius: 999px;
   color: rgba(255, 255, 255, 0.82);
   font-size: 0.94rem;
-  font-weight: 850;
+  font-weight: 700;
 }
 
 .f9-search-nav-links a:hover {
@@ -978,7 +978,7 @@ img {
 .f9-proof-block > span {
   color: #65d5bb;
   font-size: 0.78rem;
-  font-weight: 950;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -989,7 +989,7 @@ img {
   color: #fff;
   font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: clamp(3.1rem, 5.4vw, 4.25rem);
-  font-weight: 900;
+  font-weight: 700;
   line-height: 1.02;
   letter-spacing: 0;
 }
@@ -1209,7 +1209,7 @@ button[aria-busy="true"] {
 
 .f9-discovery-banner small {
   color: var(--f9-search-soft);
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .f9-search-grid {
@@ -1256,7 +1256,7 @@ button[aria-busy="true"] {
 .f9-controls-head span {
   color: #0a8f73;
   font-size: 0.78rem;
-  font-weight: 950;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -1293,7 +1293,7 @@ button[aria-busy="true"] {
   border-radius: 14px;
   color: var(--f9-search-muted);
   cursor: pointer;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .f9-mode-toggle label.is-active {
@@ -1316,7 +1316,7 @@ button[aria-busy="true"] {
 .f9-field span {
   color: var(--f9-search-soft);
   font-size: 0.82rem;
-  font-weight: 850;
+  font-weight: 700;
 }
 
 .f9-field input,
@@ -1337,7 +1337,7 @@ button[aria-busy="true"] {
   min-height: 54px;
   border-color: rgba(10, 169, 130, 0.34);
   font-size: 1rem;
-  font-weight: 850;
+  font-weight: 700;
 }
 
 .f9-field textarea {
@@ -1374,7 +1374,7 @@ button[aria-busy="true"] {
   border-radius: 999px;
   cursor: pointer;
   font: inherit;
-  font-weight: 900;
+  font-weight: 700;
   padding: 10px 16px;
   white-space: nowrap;
   transition:
@@ -1432,7 +1432,7 @@ button[aria-busy="true"] {
   background: #f7fafc;
   color: var(--f9-search-muted);
   font-size: 0.86rem;
-  font-weight: 850;
+  font-weight: 700;
 }
 
 .f9-side-note {
@@ -1482,7 +1482,7 @@ button[aria-busy="true"] {
 .f9-public-digest-preview dt {
   color: var(--f9-search-ink);
   font-size: 0.72rem;
-  font-weight: 900;
+  font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
@@ -1494,7 +1494,7 @@ button[aria-busy="true"] {
 .f9-public-digest-preview a {
   color: var(--f9-search-ink);
   font-size: 0.88rem;
-  font-weight: 900;
+  font-weight: 700;
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -1526,7 +1526,7 @@ button[aria-busy="true"] {
   color: var(--f9-search-muted);
   font-style: normal;
   font-size: 0.82rem;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .f9-panel-head em.is-active {
@@ -1580,7 +1580,7 @@ button[aria-busy="true"] {
   overflow: hidden;
   color: var(--f9-search-soft, #64788d);
   font-size: 0.7rem;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.02em;
   text-align: center;
   text-transform: capitalize;
@@ -1682,7 +1682,7 @@ button[aria-busy="true"] {
 .f9-detail-row dt {
   color: var(--f9-search-soft);
   font-size: 0.75rem;
-  font-weight: 950;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -1690,7 +1690,7 @@ button[aria-busy="true"] {
 .f9-detail-row dd {
   margin: 0;
   color: var(--f9-search-ink);
-  font-weight: 800;
+  font-weight: 700;
 }
 
 @media (max-width: 1180px) {
@@ -1815,7 +1815,7 @@ button[aria-busy="true"] {
 .f9-auth-card > span {
   color: #65d5bb;
   font-size: 0.8rem;
-  font-weight: 950;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -1826,7 +1826,7 @@ button[aria-busy="true"] {
   color: #fff;
   font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: clamp(3.2rem, 5.7vw, 4.35rem);
-  font-weight: 900;
+  font-weight: 700;
   line-height: 1.02;
   letter-spacing: 0;
 }
@@ -1979,7 +1979,7 @@ button[aria-busy="true"] {
   border-color: rgba(6, 22, 41, 0.16);
   color: var(--f9-search-ink);
   font-family: inherit;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .f9-oauth-icon {
@@ -1994,7 +1994,7 @@ button[aria-busy="true"] {
 
 .f9-auth-switch a {
   color: #07725f;
-  font-weight: 900;
+  font-weight: 700;
 }
 
 /* Five to Nine app rebuild — content tokens (layout in DashboardShell / .f9-cursor-shell) */
@@ -2009,7 +2009,7 @@ button[aria-busy="true"] {
 .f9-app-kicker {
   color: #0a8f78;
   font-size: 0.78rem;
-  font-weight: 950;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -2060,7 +2060,7 @@ button[aria-busy="true"] {
 .f9-first-fifteen-step span {
   color: #087764;
   font-size: 0.72rem;
-  font-weight: 950;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -2147,7 +2147,7 @@ button[aria-busy="true"] {
 .f9-market-desk-top > strong {
   color: #334051;
   font-size: clamp(1.22rem, 2vw, 1.68rem);
-  font-weight: 950;
+  font-weight: 700;
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
@@ -2183,7 +2183,7 @@ button[aria-busy="true"] {
   color: var(--f9-search-ink);
   font: inherit;
   font-size: 1.06rem;
-  font-weight: 900;
+  font-weight: 700;
   outline: 0;
 }
 
@@ -2202,7 +2202,7 @@ button[aria-busy="true"] {
   color: #fff;
   cursor: pointer;
   font: inherit;
-  font-weight: 950;
+  font-weight: 700;
 }
 
 .f9-market-desk-body {
@@ -2232,12 +2232,12 @@ button[aria-busy="true"] {
   background: linear-gradient(135deg, #0aa982, #f5b84b 48%, #8b5cf6);
   color: #fff;
   font-size: 1.24rem;
-  font-weight: 950;
+  font-weight: 700;
 }
 
 .f9-revenue-brief-card > span {
   color: #087764;
-  font-weight: 950;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -2266,7 +2266,7 @@ button[aria-busy="true"] {
 
 .f9-revenue-brief-card small {
   color: var(--f9-search-muted);
-  font-weight: 900;
+  font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
 }
@@ -2274,7 +2274,7 @@ button[aria-busy="true"] {
 .f9-revenue-brief-card em {
   color: var(--f9-search-ink);
   font-style: normal;
-  font-weight: 950;
+  font-weight: 700;
   text-align: right;
 }
 
@@ -2316,7 +2316,7 @@ button[aria-busy="true"] {
   background: rgba(10, 169, 130, 0.1);
   color: #087764;
   font-size: clamp(1.26rem, 2.2vw, 1.75rem);
-  font-weight: 950;
+  font-weight: 700;
 }
 
 .f9-market-board-metrics {
@@ -2339,7 +2339,7 @@ button[aria-busy="true"] {
 
 .f9-market-board-metrics span {
   color: #087764;
-  font-weight: 950;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -2352,7 +2352,7 @@ button[aria-busy="true"] {
 
 .f9-market-board-metrics small {
   color: var(--f9-search-muted);
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .f9-market-lines {
@@ -2428,7 +2428,7 @@ button[aria-busy="true"] {
   background: rgba(10, 169, 130, 0.1);
   color: #087764;
   font-style: normal;
-  font-weight: 950;
+  font-weight: 700;
   text-transform: capitalize;
 }
 
@@ -2474,7 +2474,7 @@ button[aria-busy="true"] {
   border-radius: 999px;
   background: #fff;
   color: var(--f9-search-muted);
-  font-weight: 900;
+  font-weight: 700;
   box-shadow: 0 14px 34px rgba(6, 22, 41, 0.06);
 }
 
@@ -2538,14 +2538,14 @@ button[aria-busy="true"] {
 .f9-setup-list > div > a {
   width: max-content;
   color: var(--ld-green-ink);
-  font-weight: 800;
+  font-weight: 700;
   text-decoration: none;
 }
 
 .f9-setup-list span {
   color: #b13c30;
   font-size: 0.72rem;
-  font-weight: 950;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -2609,7 +2609,7 @@ button[aria-busy="true"] {
   background: rgba(6, 22, 41, 0.08);
   color: var(--f9-search-muted);
   font-size: 0.72rem;
-  font-weight: 950;
+  font-weight: 700;
   letter-spacing: 0.08em;
 }
 
@@ -2627,7 +2627,7 @@ button[aria-busy="true"] {
   color: #087764;
   font-size: 0.88rem;
   font-style: normal;
-  font-weight: 900;
+  font-weight: 700;
   line-height: 1.3;
 }
 
@@ -2724,7 +2724,7 @@ button[aria-busy="true"] {
   background: #edf3f8;
   color: var(--f9-search-muted);
   font-size: 0.84rem;
-  font-weight: 900;
+  font-weight: 700;
   text-transform: capitalize;
 }
 
@@ -2762,7 +2762,7 @@ button[aria-busy="true"] {
 .f9-longevity-pill.f9-longevity-pill.is-strong {
   background: rgba(10, 169, 130, 0.16);
   box-shadow: inset 0 0 0 1px rgba(8, 119, 100, 0.26);
-  font-weight: 900;
+  font-weight: 700;
 }
 
 .f9-muted-copy {
@@ -2935,7 +2935,7 @@ button[aria-busy="true"] {
   gap: 7px;
   color: var(--f9-search-soft);
   font-size: 0.82rem;
-  font-weight: 850;
+  font-weight: 700;
 }
 
 .f9-filter-row select {
@@ -3071,7 +3071,7 @@ button[aria-busy="true"] {
 
 .f9-work-row small {
   color: var(--f9-search-soft);
-  font-weight: 850;
+  font-weight: 700;
 }
 
 .f9-work-row .f9-action-row {
@@ -3115,7 +3115,7 @@ button[aria-busy="true"] {
   color: var(--f9-search-muted);
   cursor: pointer;
   font-size: 0.86rem;
-  font-weight: 850;
+  font-weight: 700;
   font-family: inherit;
   text-decoration: none;
 }
@@ -3201,7 +3201,7 @@ button[aria-busy="true"] {
   background: #edf3f8;
   color: var(--f9-search-muted);
   font-size: 0.78rem;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .f9-annual-note {
@@ -3210,7 +3210,7 @@ button[aria-busy="true"] {
   background: #f6f9fc;
   color: var(--f9-search-muted);
   font-size: 0.88rem;
-  font-weight: 760;
+  font-weight: 600;
 }
 
 .f9-annual-note.is-valid {
@@ -3312,7 +3312,7 @@ button[aria-busy="true"] {
   max-width: 12ch;
   margin: 0;
   font-size: clamp(2.4rem, 5vw, 4.6rem);
-  font-weight: 950;
+  font-weight: 700;
   line-height: 1.02;
   letter-spacing: 0;
 }
@@ -3373,7 +3373,7 @@ button[aria-busy="true"] {
 .f9-onboard-touchpoints span {
   color: #087764;
   font-size: 0.72rem;
-  font-weight: 950;
+  font-weight: 700;
   letter-spacing: 0.08em;
 }
 
@@ -3627,7 +3627,7 @@ button[aria-busy="true"] {
 .f9-share-brand-copy small {
   color: var(--f9-search-soft);
   font-size: 0.72rem;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -3646,7 +3646,7 @@ button[aria-busy="true"] {
   min-height: 44px;
   color: var(--f9-search-muted);
   font-size: 0.88rem;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .f9-share-header .f9-wordmark,
@@ -3693,7 +3693,7 @@ button[aria-busy="true"] {
 
 .f9-share-footer a {
   color: var(--f9-search-muted, #40546a);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .f9-legal-nav {
@@ -3741,7 +3741,7 @@ button[aria-busy="true"] {
   max-width: 12ch;
   margin: 0;
   font-size: clamp(2.6rem, 5vw, 4.8rem);
-  font-weight: 950;
+  font-weight: 700;
   line-height: 1.02;
   letter-spacing: 0;
 }
@@ -4023,7 +4023,7 @@ button[aria-busy="true"] {
 .f9-pdf-brand-name {
   margin: 0;
   font-size: 1.5rem;
-  font-weight: 750;
+  font-weight: 600;
   letter-spacing: -0.02em;
   color: var(--f9-search-ink, #061629);
 }
@@ -4297,7 +4297,7 @@ one signal-green accent.
 
 .ld-wall {
   font-family: var(--ld-display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: clamp(2.7rem, 8.4vw, 7.4rem);
   line-height: 0.95;
   letter-spacing: -0.04em;
@@ -4384,7 +4384,7 @@ one signal-green accent.
   background: var(--ld-ink);
   color: var(--ld-bone);
   font-family: var(--ld-display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: clamp(0.95rem, 1.5vw, 1.15rem);
   text-transform: uppercase;
   letter-spacing: 0.02em;
@@ -4453,7 +4453,7 @@ one signal-green accent.
 .f9-home .f9-growth-pricing h2,
 .ld-final h2 {
   font-family: var(--ld-display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: clamp(1.9rem, 4.2vw, 3.4rem);
   line-height: 1.02;
   letter-spacing: -0.03em;
@@ -4488,7 +4488,7 @@ one signal-green accent.
 
 .ld-how-grid h3 {
   font-family: var(--ld-display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: 1.25rem;
   text-transform: uppercase;
   letter-spacing: -0.01em;
@@ -4562,7 +4562,7 @@ one signal-green accent.
 
 .ld-case-lead h3 {
   font-family: var(--ld-display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: 1.6rem;
   text-transform: uppercase;
   margin: 6px 0 8px;
@@ -4735,7 +4735,7 @@ one signal-green accent.
 
 .ld-stats-belt strong {
   font-family: var(--ld-display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: 2rem;
   letter-spacing: -0.02em;
   color: var(--ld-green);
@@ -4786,7 +4786,7 @@ one signal-green accent.
 .ld-plan-summary strong {
   display: block;
   font-family: var(--ld-display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: 1.3rem;
   text-transform: uppercase;
   margin: 4px 0;
@@ -4920,7 +4920,7 @@ one signal-green accent.
 
 .f9-home .f9-commerce-card h3 {
   font-family: var(--ld-display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: 2rem;
   letter-spacing: -0.02em;
   margin: 4px 0 0;
@@ -5095,7 +5095,7 @@ one signal-green accent.
 .ld-bundles-head h3 {
   font-family: var(--ld-display);
   font-size: 1.35rem;
-  font-weight: 800;
+  font-weight: 700;
   margin: 6px 0 0;
   text-transform: uppercase;
   color: var(--ld-ink);
@@ -5118,7 +5118,7 @@ one signal-green accent.
 
 .ld-bundle-card h3 {
   font-family: var(--ld-display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: 1.1rem;
   text-transform: uppercase;
   margin: 0;
@@ -5509,7 +5509,7 @@ one signal-green accent.
 .f9-legal-page h1,
 .f9-error-page h1 {
   font-family: var(--ld-display);
-  font-weight: 800;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: -0.03em;
   line-height: 1.02;
@@ -5744,7 +5744,7 @@ one signal-green accent.
   min-width: 44px;
   min-height: 44px;
   color: var(--ld-green-ink);
-  font-weight: 800;
+  font-weight: 700;
   text-decoration: none;
 }
 
@@ -5961,7 +5961,7 @@ one signal-green accent.
   padding: 10px 12px;
   color: #343127;
   font-size: 0.84rem;
-  font-weight: 850;
+  font-weight: 700;
   cursor: pointer;
 }
 
@@ -6015,7 +6015,7 @@ one signal-green accent.
   color: var(--ld-green-ink);
   font-family: var(--ld-mono);
   font-size: 0.66rem;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.13em;
   text-transform: uppercase;
 }
@@ -6028,7 +6028,7 @@ one signal-green accent.
 
 .f9-search-dashboard-status small {
   color: var(--ld-ink-soft);
-  font-weight: 750;
+  font-weight: 600;
 }
 
 .f9-search-dashboard-actions {
@@ -6047,7 +6047,7 @@ one signal-green accent.
   border-radius: 999px;
   background: #fff;
   color: var(--ld-ink-soft);
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .f9-search-dashboard-actions a:hover {
@@ -6082,7 +6082,7 @@ one signal-green accent.
   color: var(--ld-green-ink);
   font-family: var(--ld-mono);
   font-size: 0.68rem;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -6109,7 +6109,7 @@ one signal-green accent.
   color: var(--ld-ink-soft);
   font-size: 0.72rem;
   font-style: normal;
-  font-weight: 850;
+  font-weight: 700;
 }
 
 .f9-search-velocity,
@@ -6152,7 +6152,7 @@ one signal-green accent.
   color: var(--ld-ink-soft);
   font-family: var(--ld-mono);
   font-size: 0.72rem;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -6217,7 +6217,7 @@ one signal-green accent.
   content: counter(search-action);
   font-family: var(--ld-mono);
   font-size: 0.78rem;
-  font-weight: 850;
+  font-weight: 700;
 }
 
 .f9-search-next-actions li strong {
@@ -6664,7 +6664,7 @@ one signal-green accent.
   color: var(--ld-green-ink);
   font-family: var(--ld-mono);
   font-size: 0.66rem;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -6694,7 +6694,7 @@ one signal-green accent.
   padding: 7px 10px;
   border-radius: 8px;
   color: #4f4b43;
-  font-weight: 800;
+  font-weight: 700;
   text-decoration: none;
 }
 
@@ -6722,7 +6722,7 @@ one signal-green accent.
   color: #8a857a;
   font-family: var(--ld-mono);
   font-size: 0.62rem;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
@@ -6812,7 +6812,7 @@ one signal-green accent.
 .f9-dash-page-header h1 {
   margin: 6px 0 0;
   font-size: clamp(1.35rem, 2vw, 1.75rem);
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.12;
 }
 
@@ -6828,7 +6828,7 @@ one signal-green accent.
 .f9-dash-state h2 {
   margin: 0;
   font-size: 1.05rem;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .f9-dash-state p {
@@ -6970,7 +6970,7 @@ one signal-green accent.
   color: var(--ld-green-ink);
   font-family: var(--ld-mono);
   font-size: 0.62rem;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -7124,7 +7124,7 @@ one signal-green accent.
   color: var(--ld-green-ink);
   font-family: var(--ld-mono);
   font-size: 0.66rem;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.13em;
   text-transform: uppercase;
 }
@@ -7178,7 +7178,7 @@ one signal-green accent.
   overflow: hidden;
   color: #706b61;
   font-size: 0.74rem;
-  font-weight: 750;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -7231,7 +7231,7 @@ one signal-green accent.
 .f9-search-page .f9-search-answer span {
   color: #0a7b62;
   font-size: 0.72rem;
-  font-weight: 850;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -7274,14 +7274,14 @@ one signal-green accent.
 .f9-search-page .f9-search-answer small {
   color: #706b61;
   font-size: 0.72rem;
-  font-weight: 750;
+  font-weight: 600;
 }
 
 .f9-search-page .f9-search-answer dd {
   margin: 0;
   color: #171611;
   font-size: 0.94rem;
-  font-weight: 850;
+  font-weight: 700;
 }
 
 .f9-search-page .f9-search-answer-note {
@@ -7534,7 +7534,7 @@ one signal-green accent.
     border-radius: 8px;
     color: #5f5a52;
     font-size: 0.72rem;
-    font-weight: 800;
+    font-weight: 700;
     line-height: 1.1;
     text-align: center;
     text-decoration: none;
@@ -7772,7 +7772,7 @@ one signal-green accent.
 
 .ld-shot-price {
   font-family: var(--ld-display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: 1.55rem;
   margin: 10px 0 4px;
   color: var(--ld-ink);
@@ -8147,7 +8147,7 @@ one signal-green accent.
   min-height: 34px;
   font-family: var(--f9-font);
   font-size: 0.9rem;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .f9-search-page .f9-search-intake-card .f9-action-row {
@@ -8442,7 +8442,7 @@ one signal-green accent.
   color: #171611;
   font-family: var(--f9-font);
   font-size: clamp(1.05rem, 1.4vw, 1.24rem);
-  font-weight: 750;
+  font-weight: 600;
   letter-spacing: 0;
   line-height: 1.12;
   text-transform: none;
@@ -8483,7 +8483,7 @@ one signal-green accent.
   color: #6f6a60;
   font-family: var(--f9-font);
   font-size: 0.84rem;
-  font-weight: 650;
+  font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
 }
@@ -8500,7 +8500,7 @@ one signal-green accent.
   color: #171611;
   font: inherit;
   font-size: 0.92rem;
-  font-weight: 650;
+  font-weight: 600;
   outline: 0;
 }
 
@@ -8663,7 +8663,7 @@ one signal-green accent.
   margin: 0;
   color: #171611;
   font-size: clamp(1.45rem, 2.2vw, 2rem);
-  font-weight: 760;
+  font-weight: 600;
   letter-spacing: 0;
   line-height: 1.08;
 }
@@ -8727,7 +8727,7 @@ one signal-green accent.
   min-height: 40px;
   border-radius: 8px;
   font-size: 0.92rem;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .f9-dashboard-search .f9-primary-button {
@@ -8751,14 +8751,14 @@ one signal-green accent.
 .f9-dashboard-metrics strong {
   color: #171611;
   font-size: 1.35rem;
-  font-weight: 760;
+  font-weight: 600;
   line-height: 1;
 }
 
 .f9-dashboard-metrics small {
   color: #6f6a60;
   font-size: 0.82rem;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.35;
 }
 
@@ -8776,7 +8776,7 @@ one signal-green accent.
   cursor: pointer;
   color: #171611;
   font-size: 0.95rem;
-  font-weight: 740;
+  font-weight: 600;
   list-style: none;
 }
 
@@ -8788,7 +8788,7 @@ one signal-green accent.
   content: "+";
   margin-left: auto;
   color: #6f6a60;
-  font-weight: 760;
+  font-weight: 600;
 }
 
 .f9-settings-details[open] > summary {
@@ -8849,7 +8849,7 @@ one signal-green accent.
   border-radius: 999px;
   cursor: pointer;
   font: inherit;
-  font-weight: 900;
+  font-weight: 700;
   padding: 10px 16px;
   white-space: nowrap;
   background: #fff;
@@ -8932,7 +8932,7 @@ one signal-green accent.
 .f9-dash-state h3 {
   margin: 0;
   font-size: 1.05rem;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .f9-empty-inline {
@@ -8957,7 +8957,7 @@ one signal-green accent.
   color: var(--f9-search-ink, var(--f9-global-ink));
   cursor: pointer;
   font: inherit;
-  font-weight: 900;
+  font-weight: 700;
   padding: 10px 16px;
   transition:
     transform 160ms ease,
@@ -9049,7 +9049,7 @@ one signal-green accent.
   overflow: hidden;
   color: var(--f9-search-ink, #061629);
   font-size: 0.86rem;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -9087,7 +9087,7 @@ one signal-green accent.
   background: rgba(6, 22, 41, 0.06);
   color: var(--f9-search-soft, #64788d);
   font-size: 0.72rem;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -9129,7 +9129,7 @@ one signal-green accent.
   margin: 0;
   color: var(--f9-search-ink, #061629);
   font-size: 1.7rem;
-  font-weight: 900;
+  font-weight: 700;
   line-height: 1.05;
 }
 
