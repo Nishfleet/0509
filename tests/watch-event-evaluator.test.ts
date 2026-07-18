@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   evaluateProofBackedEvents,
+  hasPurchaseSignal,
   selectLastSuccessfulProofCapture,
   scoreWatchEventImportance,
 } from "~/lib/watch-event-evaluator.server";
@@ -338,7 +339,7 @@ describe("signal-quality hardening (2026-06-12)", () => {
         proofPresent: true,
         sensitivityMode: "balanced",
         burstCount: 1,
-        indiaSignals: false,
+        purchaseSignals: false,
       }),
     ).toBe(75);
     expect(
@@ -347,7 +348,7 @@ describe("signal-quality hardening (2026-06-12)", () => {
         proofPresent: true,
         sensitivityMode: "balanced",
         burstCount: 1,
-        indiaSignals: false,
+        purchaseSignals: false,
       }),
     ).toBe(80);
     expect(
@@ -356,7 +357,7 @@ describe("signal-quality hardening (2026-06-12)", () => {
         proofPresent: true,
         sensitivityMode: "balanced",
         burstCount: 1,
-        indiaSignals: false,
+        purchaseSignals: false,
       }),
     ).toBe(76);
     expect(
@@ -365,8 +366,26 @@ describe("signal-quality hardening (2026-06-12)", () => {
         proofPresent: true,
         sensitivityMode: "balanced",
         burstCount: 1,
-        indiaSignals: false,
+        purchaseSignals: false,
       }),
     ).toBe(72);
+  });
+
+  it("applies the same purchase-signal score bump for ₹ and € offers", () => {
+    expect(hasPurchaseSignal("Starting at ₹499")).toBe(true);
+    expect(hasPurchaseSignal("From €49")).toBe(true);
+    expect(hasPurchaseSignal("Just a great product")).toBe(false);
+
+    const base = {
+      eventType: "landing_page_offer_changed" as const,
+      proofPresent: true,
+      sensitivityMode: "balanced" as const,
+      burstCount: 1,
+    };
+    const withInr = scoreWatchEventImportance({ ...base, purchaseSignals: true });
+    const withEur = scoreWatchEventImportance({ ...base, purchaseSignals: true });
+    const without = scoreWatchEventImportance({ ...base, purchaseSignals: false });
+    expect(withInr).toBe(withEur);
+    expect(withInr).toBe(without + 10);
   });
 });

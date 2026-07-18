@@ -89,6 +89,9 @@ const STARTER_FEATURES: PlanFeature[] = [
   "export_csv",
   "export_json",
   "export_slack_ready",
+  // WP-29: watermarked share links for free acquisition (agency_branding stays
+  // Agency-only so Starter shares keep "Made with Five to Nine").
+  "share_links",
   "presence_self_tracking",
   "presence_social_connect",
 ];
@@ -96,7 +99,6 @@ const STARTER_FEATURES: PlanFeature[] = [
 const AGENCY_FEATURES: PlanFeature[] = [
   ...STARTER_FEATURES,
   "client_reports",
-  "share_links",
   "pdf_reports",
   "agency_branding",
   "api_access",
