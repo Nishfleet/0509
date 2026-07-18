@@ -1,5 +1,6 @@
 import { ensureDb, queryAll, queryOne } from "~/lib/data/d1.server";
 import type { AppEnv } from "~/lib/env.server";
+import { deleteProofArtifactsForCapture } from "~/lib/proof-artifact-retention.server";
 
 const CANARY_KIND = "launch_readiness_canary";
 const CANARY_CAPTURE_KIND = "launch_readiness_real_capture";
@@ -9,16 +10,20 @@ const CANARY_EVENT_SUMMARY =
   "Private canary verified the monitoring, proof, and digest delivery pipeline.";
 const cleanupLocks = new WeakMap<object, Promise<void>>();
 
-export interface LaunchCanaryCleanupInput {
+interface LaunchCanaryCleanupIdentifiers {
   ownerUserId: string;
   runId: string;
   proofCaptureId: string;
   digestRunId: string;
 }
 
+export type LaunchCanaryCleanupInput =
+  | LaunchCanaryCleanupIdentifiers
+  | { ownerUserId: string; gateRunId: string };
+
 export interface LaunchCanaryCleanupResult {
   cleaned: boolean;
-  reason?: "not_found_or_not_canary" | "shared_rows_present";
+  reason?: "not_found_or_not_canary" | "shared_rows_present" | "artifact_cleanup_incomplete";
   preservedProofCaptureId: string | null;
   deleted: {
     deliveryAttempts: number;
@@ -37,6 +42,14 @@ interface CanaryRunRow {
 
 interface CanaryProofRow {
   id: string;
+  html_artifact_key: string | null;
+  screenshot_artifact_key: string | null;
+}
+
+interface CanaryCleanupIdentityRow {
+  run_id: string;
+  proof_capture_id: string;
+  digest_run_id: string;
 }
 
 interface CanaryEventRow {
@@ -115,6 +128,60 @@ function isCanaryDeliveryAttempt(row: CanaryDeliveryAttemptRow, ownerUserId: str
   return row.user_id === ownerUserId && row.lane === "internal" && payload?.kind === "weekly_digest";
 }
 
+async function resolveCleanupIdentifiers(
+  env: AppEnv,
+  input: LaunchCanaryCleanupInput,
+): Promise<LaunchCanaryCleanupIdentifiers | null> {
+  if ("runId" in input) return input;
+  if (!/^[a-z0-9._-]{1,128}$/u.test(input.gateRunId)) return null;
+
+  const rows = await queryAll<CanaryCleanupIdentityRow>(
+    env,
+    `
+      SELECT DISTINCT
+        watch_event.run_id,
+        proof_capture.id AS proof_capture_id,
+        digest_item.digest_run_id
+      FROM proof_capture
+      INNER JOIN proof_target ON proof_target.id = proof_capture.proof_target_id
+      INNER JOIN watchlist ON watchlist.id = proof_target.watchlist_id
+      INNER JOIN watch_event
+        ON watch_event.proof_capture_id = proof_capture.id
+       AND watch_event.watchlist_id = watchlist.id
+      INNER JOIN digest_item
+        ON digest_item.watchlist_id = watchlist.id
+       AND json_extract(digest_item.metadata_json, '$.eventId') = watch_event.id
+       AND json_extract(digest_item.metadata_json, '$.proofCaptureId') = proof_capture.id
+      INNER JOIN digest_run ON digest_run.id = digest_item.digest_run_id
+      WHERE watchlist.user_id = ?
+        AND proof_capture.idempotency_key = ?
+        AND proof_capture.status = 'succeeded'
+        AND json_extract(proof_capture.capture_metadata_json, '$.kind') = ?
+        AND json_extract(proof_capture.capture_metadata_json, '$.proofUrl') = ?
+        AND json_extract(watch_event.metadata_json, '$.kind') = ?
+        AND json_extract(digest_item.metadata_json, '$.kind') = ?
+        AND digest_run.user_id = ?
+        AND json_extract(digest_run.summary_json, '$.kind') = ?
+      LIMIT 2
+    `,
+    input.ownerUserId,
+    `launch-readiness:${input.gateRunId}:proof`,
+    CANARY_CAPTURE_KIND,
+    CANARY_PROOF_URL,
+    CANARY_KIND,
+    CANARY_KIND,
+    input.ownerUserId,
+    CANARY_KIND,
+  );
+  if (rows.length !== 1) return null;
+  return {
+    ownerUserId: input.ownerUserId,
+    runId: rows[0].run_id,
+    proofCaptureId: rows[0].proof_capture_id,
+    digestRunId: rows[0].digest_run_id,
+  };
+}
+
 /**
  * Removes only the non-proof rows created by a completed launch-readiness
  * canary. The proof capture is deliberately preserved because its target may
@@ -126,6 +193,8 @@ export async function cleanupLaunchReadinessCanary(
   input: LaunchCanaryCleanupInput,
 ): Promise<LaunchCanaryCleanupResult> {
   const db = ensureDb(env);
+  const identifiers = await resolveCleanupIdentifiers(env, input);
+  if (!identifiers) return emptyResult("not_found_or_not_canary");
   const run = await queryOne<CanaryRunRow>(
     env,
     `
@@ -139,8 +208,8 @@ export async function cleanupLaunchReadinessCanary(
         AND json_extract(watchlist_run.summary_json, '$.kind') = ?
       LIMIT 1
     `,
-    input.runId,
-    input.ownerUserId,
+    identifiers.runId,
+    identifiers.ownerUserId,
     CANARY_KIND,
   );
   if (!run) return emptyResult("not_found_or_not_canary");
@@ -155,8 +224,8 @@ export async function cleanupLaunchReadinessCanary(
         AND json_extract(summary_json, '$.kind') = ?
       LIMIT 1
     `,
-    input.digestRunId,
-    input.ownerUserId,
+    identifiers.digestRunId,
+    identifiers.ownerUserId,
     CANARY_KIND,
   );
   if (!digest) return emptyResult("not_found_or_not_canary");
@@ -164,7 +233,10 @@ export async function cleanupLaunchReadinessCanary(
   const proof = await queryOne<CanaryProofRow>(
     env,
     `
-      SELECT proof_capture.id
+      SELECT
+        proof_capture.id,
+        proof_capture.html_artifact_key,
+        proof_capture.screenshot_artifact_key
       FROM proof_capture
       INNER JOIN proof_target ON proof_target.id = proof_capture.proof_target_id
       WHERE proof_capture.id = ?
@@ -175,12 +247,26 @@ export async function cleanupLaunchReadinessCanary(
         AND json_extract(proof_capture.capture_metadata_json, '$.proofUrl') = ?
       LIMIT 1
     `,
-    input.proofCaptureId,
+    identifiers.proofCaptureId,
     run.watchlist_id,
     CANARY_CAPTURE_KIND,
     CANARY_PROOF_URL,
   );
   if (!proof) return emptyResult("not_found_or_not_canary");
+
+  const artifactKeys = [proof.html_artifact_key, proof.screenshot_artifact_key]
+    .filter((key): key is string => typeof key === "string");
+  if (artifactKeys.length > 0) {
+    const artifactResults = await deleteProofArtifactsForCapture(
+      env,
+      identifiers.ownerUserId,
+      proof.id,
+      artifactKeys,
+    );
+    if (artifactResults.some((result) => !result.ok)) {
+      return emptyResult("artifact_cleanup_incomplete");
+    }
+  }
 
   const events = await queryAll<CanaryEventRow>(
     env,
@@ -222,7 +308,7 @@ export async function cleanupLaunchReadinessCanary(
     `,
     digest.id,
   );
-  if (attempts.length === 0 || attempts.some((attempt) => !isCanaryDeliveryAttempt(attempt, input.ownerUserId))) {
+  if (attempts.length === 0 || attempts.some((attempt) => !isCanaryDeliveryAttempt(attempt, identifiers.ownerUserId))) {
     return emptyResult("shared_rows_present");
   }
 
@@ -253,7 +339,7 @@ export async function cleanupLaunchReadinessCanary(
             AND json_extract(payload_snapshot_json, '$.kind') = 'weekly_digest'
         `,
       )
-      .bind(digest.id, input.ownerUserId),
+      .bind(digest.id, identifiers.ownerUserId),
     db.prepare("DELETE FROM digest_delivery WHERE digest_run_id = ?").bind(digest.id),
     db.prepare("DELETE FROM digest_item WHERE digest_run_id = ?").bind(digest.id),
     db
@@ -267,7 +353,7 @@ export async function cleanupLaunchReadinessCanary(
             AND json_extract(summary_json, '$.kind') = ?
         `,
       )
-      .bind(digest.id, input.ownerUserId, CANARY_KIND),
+      .bind(digest.id, identifiers.ownerUserId, CANARY_KIND),
     db
       .prepare(
         `

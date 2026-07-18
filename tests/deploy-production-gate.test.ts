@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 const deployPlanModule = await import("../scripts/deploy-production-plan.mjs");
 const { buildProductionDeployPlan, executeProductionDeployPlan } = deployPlanModule;
+const rollbackTargetModule = await import("../scripts/worker-rollback-target.mjs");
 const { validateDeployReadiness } = await import("../scripts/verify-deploy-readiness.mjs");
 const { RELEASE_COVERAGE_MATRIX, expectedReleaseArtifacts } = await import(
   "../scripts/playwright-release-manifest-reporter.mjs"
@@ -84,7 +85,10 @@ function passingEvidence() {
         identity: "c".repeat(64),
         wranglerWorktreeSha256: wranglerHash,
         productionSearchRolloutMode: "shadow",
+        localProofSearchRolloutMode: "v2",
         providerNetworkDeny: true,
+        authProvider: "better-auth",
+        browserProject: "local-release",
         retries: 0,
         workers: 1,
       },
@@ -158,6 +162,9 @@ describe("production deployment readiness gate", () => {
       plan.findIndex((step: any) => step.id === "readiness_evidence"),
     );
     expect(plan.findIndex((step: any) => step.id === "readiness_evidence")).toBeLessThan(
+      plan.findIndex((step: any) => step.id === "cross_browser_risk_proof"),
+    );
+    expect(plan.findIndex((step: any) => step.id === "cross_browser_risk_proof")).toBeLessThan(
       plan.findIndex((step: any) => step.id === "deploy"),
     );
     expect(plan.findIndex((step: any) => step.id === "remote_restore_evidence")).toBeLessThan(
@@ -170,13 +177,22 @@ describe("production deployment readiness gate", () => {
       plan.findIndex((step: any) => step.id === "post_deploy_release_canary"),
     );
     const deployIndex = plan.findIndex((step: any) => step.id === "deploy");
-    expect(plan[deployIndex - 1]).toMatchObject({
+    expect(plan[deployIndex - 2]).toMatchObject({
       id: "partial_refund_invariants_predeploy",
       command: "node",
       args: ["scripts/check-partial-refund-invariants.mjs"],
       includeCloudflareCredentials: true,
     });
+    expect(plan[deployIndex - 1]).toMatchObject({
+      id: "capture_worker_rollback_target",
+      command: "node",
+      includeCloudflareCredentials: true,
+    });
     expect(plan[deployIndex + 1]).toMatchObject({
+      id: "verify_worker_rollback_target",
+      command: "node",
+    });
+    expect(plan[deployIndex + 2]).toMatchObject({
       id: "partial_refund_invariants_postdeploy",
       command: "node",
       args: ["scripts/check-partial-refund-invariants.mjs"],
@@ -188,13 +204,67 @@ describe("production deployment readiness gate", () => {
       args: ["scripts/launch-readiness-canary-cycle.mjs"],
     });
     const canaryIndex = plan.findIndex((step: any) => step.id === "post_deploy_release_canary");
+    expect(plan[canaryIndex]).toMatchObject({
+      id: "post_deploy_release_canary",
+      includeCloudflareCredentials: true,
+    });
     expect(plan[canaryIndex + 1]).toMatchObject({
       id: "partial_refund_invariants_postcanary",
       command: "node",
       args: ["scripts/check-partial-refund-invariants.mjs"],
       includeCloudflareCredentials: true,
     });
-    expect(plan[canaryIndex + 2]).toMatchObject({ id: "live_public_truth" });
+    expect(plan[canaryIndex + 2]).toMatchObject({
+      id: "rollback_failed_release",
+      command: "node",
+      includeCloudflareCredentials: true,
+      runOnCanaryFailure: true,
+    });
+    expect(plan[canaryIndex + 3]).toMatchObject({ id: "live_public_truth" });
+  });
+
+  it("captures one stable prior Worker version and emits an exact guarded rollback command", () => {
+    const target = rollbackTargetModule.parseWorkerDeploymentStatus({
+      id: "deployment-stable",
+      versions: [{ version_id: "worker-version-prior", percentage: 100 }],
+    });
+    expect(target).toEqual({
+      deploymentId: "deployment-stable",
+      versionId: "worker-version-prior",
+      percentage: 100,
+    });
+    expect(() => rollbackTargetModule.parseWorkerDeploymentStatus({
+      id: "deployment-split",
+      versions: [
+        { version_id: "worker-version-a", percentage: 90 },
+        { version_id: "worker-version-b", percentage: 10 },
+      ],
+    })).toThrow("worker_rollback_target_ambiguous");
+
+    const evidence = {
+      schemaVersion: 1,
+      capturedAt: "2026-07-18T12:00:00.000Z",
+      source: "wrangler deployments status --json",
+      ...target,
+    };
+    expect(rollbackTargetModule.validateWorkerRollbackEvidence(evidence, {
+      deployedVersionId: "worker-version-new",
+    })).toEqual({ ok: true, issues: [] });
+    expect(rollbackTargetModule.buildWorkerRollbackCommand(
+      "worker-version-prior",
+      "worker-version-new",
+    )).toEqual({
+      command: "wrangler",
+      args: [
+        "rollback",
+        "worker-version-prior",
+        "--name",
+        "0509",
+        "--message",
+        "rollback failed release worker-version-new",
+        "--yes",
+      ],
+    });
   });
 
   it("stops at the executable refund preflight before migration or deploy", () => {
@@ -259,6 +329,7 @@ describe("production deployment readiness gate", () => {
 
     expect(caught).toBe(canaryFailure);
     expect(executed).toContain("partial_refund_invariants_postcanary");
+    expect(executed).toContain("rollback_failed_release");
     expect(executed).not.toContain("live_public_truth");
   });
 
@@ -283,6 +354,43 @@ describe("production deployment readiness gate", () => {
     expect(caught).toBeInstanceOf(AggregateError);
     expect((caught as AggregateError).errors).toEqual([canaryFailure, invariantFailure]);
     expect((caught as Error & { cause?: unknown }).cause).toBe(canaryFailure);
+  });
+
+  it("skips the failure-only rollback on a green release", () => {
+    const plan = buildProductionDeployPlan({
+      manifestPath: "test-results/deploy-readiness-test.json",
+      remoteRestoreEvidencePath,
+      wranglerOutputPath,
+    });
+    const executed: string[] = [];
+    executeProductionDeployPlan(plan, (step: any) => executed.push(step.id));
+    expect(executed).not.toContain("rollback_failed_release");
+    expect(executed).toContain("live_public_truth");
+  });
+
+  it("preserves canary and rollback failures and blocks later truth checks", () => {
+    const plan = buildProductionDeployPlan({
+      manifestPath: "test-results/deploy-readiness-test.json",
+      remoteRestoreEvidencePath,
+      wranglerOutputPath,
+    });
+    const canaryFailure = new Error("post_deploy_release_canary_failed");
+    const rollbackFailure = new Error("worker_rollback_failed");
+    const executed: string[] = [];
+    let caught: unknown;
+    try {
+      executeProductionDeployPlan(plan, (step: any) => {
+        executed.push(step.id);
+        if (step.id === "post_deploy_release_canary") throw canaryFailure;
+        if (step.id === "rollback_failed_release") throw rollbackFailure;
+      });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(AggregateError);
+    expect((caught as AggregateError).errors).toEqual([canaryFailure, rollbackFailure]);
+    expect(executed).toContain("partial_refund_invariants_postcanary");
+    expect(executed).not.toContain("live_public_truth");
   });
 
   it("proves an intentional readiness failure prevents every deploy mutation", () => {

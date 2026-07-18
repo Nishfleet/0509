@@ -13,12 +13,12 @@ const registry = JSON.parse(
 };
 
 describe("G11 claim-surface registry", () => {
-  it("fails closed while any required inventory category remains incomplete", () => {
-    expect(registry.schemaVersion).toBe(1);
-    expect(registry.registryStatus).toBe("incomplete_fail");
-    expect(registry.canonicalReleaseVerdict).toBe("0_of_6_release_ready");
+  it("stays assessed and fail-closed while the closeout candidate is unfrozen", () => {
+    expect(registry.schemaVersion).toBe(2);
+    expect(registry.registryStatus).toBe("assessed_open");
+    expect(registry.canonicalReleaseVerdict).toBe("closeout_candidate_unfrozen");
     expect(registry.coverage).toHaveLength(9);
-    expect(registry.coverage.every((entry) => entry.status === "incomplete_fail")).toBe(true);
+    expect(registry.coverage.every((entry) => entry.status.startsWith("assessed_"))).toBe(true);
   });
 
   it("keeps claim ids unique and requires an evidence gate, status and drift trigger", () => {
@@ -35,7 +35,8 @@ describe("G11 claim-surface registry", () => {
         source: expect.any(Array),
         requiredGate: expect.any(String),
         requiredEvidence: expect.any(String),
-        status: "fail_not_assessed",
+        status: expect.stringMatching(/^(assessed_|removed_from_product_contract)/u),
+        assessment: expect.any(String),
         classification: expect.stringMatching(/^(known|discovered|duplicate|rejected|out_of_scope)$/u),
         expiry: expect.any(String),
       });
@@ -51,6 +52,7 @@ describe("G11 claim-surface registry", () => {
         reason: expect.any(String),
       });
     }
+    expect(JSON.stringify(registry.claims)).not.toContain("fail_not_assessed");
     expect(JSON.stringify(registry.claims)).not.toContain('"status":"pass"');
   });
 });

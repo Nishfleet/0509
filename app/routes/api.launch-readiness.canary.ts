@@ -3,7 +3,7 @@ import type { ActionFunctionArgs } from "react-router";
 const CLEANUP_OPERATION_HEADER = "x-0509-canary-operation";
 const CLEANUP_BODY_MAX_BYTES = 4_096;
 const CLEANUP_TRUTH =
-  "Cleanup removes watchlist, digest, and delivery rows only when each row is verified as canary-owned; proof capture, proof target, capture artifacts, and prior target-pointer restoration remain preserved/open.";
+  "Cleanup removes verified canary-owned R2 artifacts and reconciles their D1 references before removing watchlist, digest, and delivery rows; the proof capture and proof target remain as owner-scoped audit evidence with null artifact keys.";
 
 interface CanaryTargetRow {
   user_id: string;
@@ -109,6 +109,17 @@ export async function action({ context, request }: ActionFunctionArgs) {
     );
   }
 
+  const isCleanupRequest = request.headers.get(CLEANUP_OPERATION_HEADER) === "cleanup";
+  const { verifyExpectedCanaryWorkerVersion } = await import(
+    "~/lib/canary-release-identity.server"
+  );
+  if (!isCleanupRequest && !verifyExpectedCanaryWorkerVersion(request, env).ok) {
+    return Response.json(
+      { ok: false, blocker: "worker_version_mismatch" },
+      { status: 409, headers: { "cache-control": "no-store" } },
+    );
+  }
+
   if (!env.DB) {
     return Response.json(
       {
@@ -139,6 +150,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const cleanupOperation = request.headers.get(CLEANUP_OPERATION_HEADER);
   if (cleanupOperation !== null && cleanupOperation !== "cleanup") {
     return cleanupErrorResponse("invalid_cleanup_operation", 400);
+  }
+
+  const gateRunId = cleanupOperation === "cleanup" ? null : await readGateRunId(request);
+  if (gateRunId === false) {
+    return Response.json(
+      { ok: false, blocker: "invalid_gate_run_id" },
+      { status: 400, headers: { "cache-control": "no-store" } },
+    );
   }
 
   const requestUrl = new URL(request.url);
@@ -244,6 +263,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
   } = await import("~/lib/data.server");
   const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
   const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+  const { compensateUncommittedProofArtifacts } = await import(
+    "~/lib/proof-artifact-retention.server"
+  );
   const {
     buildCanonicalPageIdentity,
     buildProofTargetIdentity,
@@ -253,7 +275,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const nowIso = now.toISOString();
   const periodEnd = nowIso;
   const periodStart = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
-  const canaryKey = `launch-readiness:${nowIso}`;
+  const canaryKey = `launch-readiness:${gateRunId ?? nowIso}`;
   const title = "Launch readiness canary";
   const summary = "Private canary verified the monitoring, proof, and digest delivery pipeline.";
   const proofUrl = "https://0509.io/";
@@ -312,44 +334,57 @@ export async function action({ context, request }: ActionFunctionArgs) {
     adId: null,
     canonicalPageIdentity,
   });
-  let proofTarget = await upsertProofTarget(env, {
-    watchlistId: target.watchlist_id,
-    adId: null,
-    landingPageUrl: snapshot.canonicalUrl,
-    canonicalPageIdentity,
-    proofTargetIdentity,
-    lastCaptureAttemptAt: snapshot.capturedAt,
-    lastSuccessfulProofAt: snapshot.capturedAt,
-  });
+  let proofTarget;
+  let proofCaptureId: string;
+  let proofCaptureCommitted = false;
+  try {
+    proofTarget = await upsertProofTarget(env, {
+      watchlistId: target.watchlist_id,
+      adId: null,
+      landingPageUrl: snapshot.canonicalUrl,
+      canonicalPageIdentity,
+      proofTargetIdentity,
+      lastCaptureAttemptAt: snapshot.capturedAt,
+    });
 
-  if (!proofTarget) {
-    throw new Response("Launch readiness proof target could not be created.", { status: 500 });
+    if (!proofTarget) {
+      throw new Response("Launch readiness proof target could not be created.", { status: 500 });
+    }
+
+    proofCaptureId = await createProofCapture(env, {
+      proofTargetId: proofTarget.id,
+      status: "succeeded",
+      screenshotArtifactKey: readSnapshotString(snapshot.metadata, "screenshotArtifactKey"),
+      htmlArtifactKey:
+        readSnapshotString(snapshot.metadata, "htmlArtifactKey") ?? snapshot.artifactKey ?? null,
+      extractedFields: snapshotToExtractedFields(snapshot),
+      fieldConfidence: readSnapshotConfidence(snapshot),
+      extractionWarnings: readSnapshotWarnings(snapshot),
+      captureMetadata: {
+        ...snapshot.metadata,
+        ...metadata,
+        kind: "launch_readiness_real_capture",
+        proofUrl,
+        canonicalUrl: snapshot.canonicalUrl,
+        captureMethod: snapshot.captureMethod,
+      },
+      renderMode: readSnapshotRenderMode(snapshot),
+      deviceProfile: readSnapshotDeviceProfile(snapshot),
+      extractorVersion: readSnapshotString(snapshot.metadata, "extractorVersion") ?? "launch-readiness-canary-v2",
+      idempotencyKey: `${canaryKey}:proof`,
+      attemptedAt: snapshot.capturedAt,
+      succeededAt: snapshot.capturedAt,
+    });
+    proofCaptureCommitted = true;
+  } catch (error) {
+    if (!proofCaptureCommitted) {
+      const compensated = await compensateUncommittedProofArtifacts(env, snapshot);
+      if (!compensated.ok) {
+        throw new Response("Launch readiness proof cleanup could not be completed.", { status: 500 });
+      }
+    }
+    throw error;
   }
-
-  const proofCaptureId = await createProofCapture(env, {
-    proofTargetId: proofTarget.id,
-    status: "succeeded",
-    screenshotArtifactKey: readSnapshotString(snapshot.metadata, "screenshotArtifactKey"),
-    htmlArtifactKey:
-      readSnapshotString(snapshot.metadata, "htmlArtifactKey") ?? snapshot.artifactKey ?? null,
-    extractedFields: snapshotToExtractedFields(snapshot),
-    fieldConfidence: readSnapshotConfidence(snapshot),
-    extractionWarnings: readSnapshotWarnings(snapshot),
-    captureMetadata: {
-      ...snapshot.metadata,
-      ...metadata,
-      kind: "launch_readiness_real_capture",
-      proofUrl,
-      canonicalUrl: snapshot.canonicalUrl,
-      captureMethod: snapshot.captureMethod,
-    },
-    renderMode: readSnapshotRenderMode(snapshot),
-    deviceProfile: readSnapshotDeviceProfile(snapshot),
-    extractorVersion: readSnapshotString(snapshot.metadata, "extractorVersion") ?? "launch-readiness-canary-v2",
-    idempotencyKey: `${canaryKey}:proof`,
-    attemptedAt: snapshot.capturedAt,
-    succeededAt: snapshot.capturedAt,
-  });
 
   proofTarget = await upsertProofTarget(env, {
     watchlistId: target.watchlist_id,
@@ -477,6 +512,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
   return Response.json(
     {
       ok: deliveryBlockers.length === 0,
+      gateRunId,
+      workerVersionId: env.CF_VERSION_METADATA?.id ?? null,
       blockers: deliveryBlockers,
       runId,
       proofCaptureId,
@@ -587,6 +624,10 @@ async function readCleanupInput(request: Request) {
 
   const body = parsed as Record<string, unknown>;
   const keys = Object.keys(body).sort();
+  if (keys.join(",") === "gateRunId") {
+    const gateRunId = typeof body.gateRunId === "string" ? body.gateRunId.trim() : "";
+    return /^[a-z0-9._-]{1,128}$/u.test(gateRunId) ? { gateRunId } : null;
+  }
   if (keys.join(",") !== "digestRunId,proofCaptureId,runId") return null;
   if (!isCleanupIdentifier(body.runId) || !isCleanupIdentifier(body.digestRunId) || !isCleanupIdentifier(body.proofCaptureId)) {
     return null;
@@ -597,6 +638,26 @@ async function readCleanupInput(request: Request) {
     digestRunId: body.digestRunId,
     proofCaptureId: body.proofCaptureId,
   };
+}
+
+async function readGateRunId(request: Request): Promise<string | null | false> {
+  if (!request.headers.get("content-type")?.toLowerCase().includes("application/json")) {
+    return null;
+  }
+  const { readRequestTextWithinLimit } = await import("~/lib/bounded-response.server");
+  const rawBody = await readRequestTextWithinLimit(request, CLEANUP_BODY_MAX_BYTES);
+  if (!rawBody) return false;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawBody);
+  } catch {
+    return false;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return false;
+  const body = parsed as Record<string, unknown>;
+  if (Object.keys(body).sort().join(",") !== "gateRunId") return false;
+  const gateRunId = typeof body.gateRunId === "string" ? body.gateRunId.trim() : "";
+  return /^[a-z0-9._-]{1,128}$/u.test(gateRunId) ? gateRunId : false;
 }
 
 function isCleanupIdentifier(value: unknown): value is string {

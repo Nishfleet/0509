@@ -54,6 +54,7 @@ import { runDigestDeliveryCycle } from "~/lib/digest-orchestration.server";
 import { deliveryPreDispatchStaleBefore } from "~/lib/delivery-attempt-lease";
 import type { AppEnv } from "~/lib/env.server";
 import { captureLandingPageSnapshot } from "~/lib/landing-pages.server";
+import { compensateUncommittedProofArtifacts } from "~/lib/proof-artifact-retention.server";
 import { LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION } from "~/lib/landing-page-signals.server";
 import {
   CommercialDiscoveryError,
@@ -1673,7 +1674,7 @@ export async function runWatchlist(
     const inFlightCutoff = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     if (await hasInFlightWatchlistRun(env, watchlist.id, inFlightCutoff)) {
       throw new Error(
-        "A scan for this watchlist is already running. Fresh results land in a couple of minutes.",
+        "A scan for this watchlist is already running. Fresh results appear when it completes.",
       );
     }
     // In fan-out mode a queued scheduled run is a live durable claim even if
@@ -1683,7 +1684,7 @@ export async function runWatchlist(
       (await hasActiveScheduledWatchlistRun(env, watchlist.id))
     ) {
       throw new Error(
-        "A scheduled scan for this watchlist is already queued. Fresh results land in a couple of minutes.",
+        "A scheduled scan for this watchlist is already queued. Fresh results appear when it completes.",
       );
     }
   }
@@ -2948,6 +2949,8 @@ async function evaluateSelectiveProofCandidates(
     const evidenceOperationKey = evidenceReservation?.logicalOperationKey ?? null;
     let evidenceFinalized = false;
     let preservePendingEvidenceReservation = false;
+    let freshSnapshotForCompensation: Awaited<ReturnType<typeof captureLandingPageSnapshot>> = null;
+    let proofCaptureCommitted = false;
     const finalizeEvidence = async (outcome: "succeeded" | "failed") => {
       if (!evidenceOperationKey || evidenceFinalized) return true;
       await assertOrchestratedWatchlistRunLease(env, input.runId, {
@@ -2964,12 +2967,15 @@ async function evaluateSelectiveProofCandidates(
     };
 
     try {
-      const snapshot =
-        proofCaptureToLandingPageSnapshot(
-          replayedProofCapture,
-          observation.landing_page_url!,
-        ) ??
-        await captureLandingPageSnapshot(env, observation.landing_page_url!);
+      const replayedSnapshot = proofCaptureToLandingPageSnapshot(
+        replayedProofCapture,
+        observation.landing_page_url!,
+      );
+      const freshSnapshot = replayedSnapshot
+        ? null
+        : await captureLandingPageSnapshot(env, observation.landing_page_url!);
+      const snapshot = replayedSnapshot ?? freshSnapshot;
+      freshSnapshotForCompensation = freshSnapshot;
 
       if (!snapshot) {
         if (!await finalizeEvidence("failed")) {
@@ -3046,6 +3052,7 @@ async function evaluateSelectiveProofCandidates(
       attemptedAt: snapshot.capturedAt,
       succeededAt: snapshot.capturedAt,
     });
+    proofCaptureCommitted = true;
     if (!await finalizeEvidence("succeeded")) {
       preservePendingEvidenceReservation = true;
       throw new Error("evidence_usage_pending_reconciliation");
@@ -3150,6 +3157,10 @@ async function evaluateSelectiveProofCandidates(
       proofEvents.push(createdEvent);
     }
     } catch (error) {
+      if (freshSnapshotForCompensation && !proofCaptureCommitted) {
+        const compensated = await compensateUncommittedProofArtifacts(env, freshSnapshotForCompensation);
+        if (!compensated.ok) throw new Error("proof_artifact_compensation_incomplete", { cause: error });
+      }
       if (!preservePendingEvidenceReservation) {
         await assertOrchestratedWatchlistRunLease(env, input.runId, {
           orchestrationToken: input.lease?.processingToken,
@@ -3354,6 +3365,8 @@ async function evaluateDirectWebsiteProofCandidate(
   const evidenceOperationKey = evidenceReservation?.logicalOperationKey ?? null;
   let evidenceFinalized = false;
   let preservePendingEvidenceReservation = false;
+  let freshSnapshotForCompensation: Awaited<ReturnType<typeof captureLandingPageSnapshot>> = null;
+  let proofCaptureCommitted = false;
   const finalizeEvidence = async (outcome: "succeeded" | "failed") => {
     if (!evidenceOperationKey || evidenceFinalized) return true;
     await assertOrchestratedWatchlistRunLease(env, input.runId, {
@@ -3370,11 +3383,14 @@ async function evaluateDirectWebsiteProofCandidate(
   };
 
   try {
-    const snapshot =
-      proofCaptureToLandingPageSnapshot(replayedProofCapture, websiteUrl) ??
-      await captureLandingPageSnapshot(env, websiteUrl, {
-        preferRendered: true,
-      });
+    const replayedSnapshot = proofCaptureToLandingPageSnapshot(replayedProofCapture, websiteUrl);
+    const freshSnapshot = replayedSnapshot
+      ? null
+      : await captureLandingPageSnapshot(env, websiteUrl, {
+          preferRendered: true,
+        });
+    const snapshot = replayedSnapshot ?? freshSnapshot;
+    freshSnapshotForCompensation = freshSnapshot;
 
     if (!snapshot) {
       if (!await finalizeEvidence("failed")) {
@@ -3417,7 +3433,6 @@ async function evaluateDirectWebsiteProofCandidate(
       canonicalPageIdentity: finalCanonicalPageIdentity,
       proofTargetIdentity: finalProofTargetIdentity,
       lastCaptureAttemptAt: snapshot.capturedAt,
-      lastSuccessfulProofAt: snapshot.capturedAt,
     })) ?? proofTarget;
   const finalTargetCaptures = await listProofCapturesForTarget(env, persistedProofTarget.id, 20);
   const finalProofRequestKey = [
@@ -3458,6 +3473,7 @@ async function evaluateDirectWebsiteProofCandidate(
     attemptedAt: snapshot.capturedAt,
     succeededAt: snapshot.capturedAt,
   });
+  proofCaptureCommitted = true;
   if (!await finalizeEvidence("succeeded")) {
     preservePendingEvidenceReservation = true;
     throw new Error("evidence_usage_pending_reconciliation");
@@ -3599,6 +3615,10 @@ async function evaluateDirectWebsiteProofCandidate(
       proofCaptureSucceeded: true,
     };
   } catch (error) {
+    if (freshSnapshotForCompensation && !proofCaptureCommitted) {
+      const compensated = await compensateUncommittedProofArtifacts(env, freshSnapshotForCompensation);
+      if (!compensated.ok) throw new Error("proof_artifact_compensation_incomplete", { cause: error });
+    }
     if (!preservePendingEvidenceReservation) {
       await assertOrchestratedWatchlistRunLease(env, input.runId, {
         orchestrationToken: input.lease?.processingToken,

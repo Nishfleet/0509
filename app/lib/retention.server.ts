@@ -1,4 +1,9 @@
 import type { AppEnv } from "~/lib/env.server";
+import { execute, queryAll } from "~/lib/data/d1.server";
+import {
+  deleteProofArtifacts,
+  parseProofArtifactKey,
+} from "~/lib/proof-artifact-retention.server";
 
 // Bounded retention deletes, run from the six-hourly warmup cron. Before
 // this, thirteen tables grew forever (the only deletes in the codebase were
@@ -22,6 +27,24 @@ const DELIVERY_ATTEMPT_RETENTION_DAYS = 180;
 const SNAPSHOT_RETENTION_DAYS = 90;
 
 const PRESENCE_ITEM_RETENTION_DAYS = 180;
+const SNAPSHOT_RETENTION_LIMIT = 20;
+
+interface SnapshotRetentionCandidate {
+  id: string;
+  artifact_key: string | null;
+  metadata_json: string | null;
+}
+
+interface ArtifactReferenceCount {
+  external_references: number | string | null;
+}
+
+interface ProofCaptureRetentionCandidate {
+  id: string;
+  owner_user_id: string;
+  html_artifact_key: string | null;
+  screenshot_artifact_key: string | null;
+}
 
 export type RetentionSweepResult = {
   deleted: Record<string, number>;
@@ -137,22 +160,6 @@ export async function runRetentionSweep(
       bindings: [cutoff(DELIVERY_ATTEMPT_RETENTION_DAYS)],
     },
     {
-      name: "landing_page_snapshot",
-      sql: `
-        DELETE FROM landing_page_snapshot
-        WHERE id IN (
-          SELECT snapshot.id FROM landing_page_snapshot AS snapshot
-          WHERE snapshot.created_at < ?
-            AND NOT EXISTS (
-              SELECT 1 FROM ad_observation
-              WHERE ad_observation.landing_page_snapshot_id = snapshot.id
-            )
-          LIMIT 200
-        )
-      `,
-      bindings: [cutoff(SNAPSHOT_RETENTION_DAYS)],
-    },
-    {
       name: "presence_item",
       sql: `
         DELETE FROM presence_item
@@ -182,5 +189,293 @@ export async function runRetentionSweep(
     }
   }
 
+  try {
+    const snapshotResult = await deleteExpiredLandingPageSnapshots(env, {
+      cutoff: cutoff(SNAPSHOT_RETENTION_DAYS),
+    });
+    deleted.landing_page_snapshot = snapshotResult.deleted;
+    if (snapshotResult.failed > 0) {
+      failedSteps.push("landing_page_snapshot");
+    }
+  } catch {
+    console.error("[retention] delete failed for landing_page_snapshot");
+    failedSteps.push("landing_page_snapshot");
+  }
+
+  try {
+    const proofResult = await deleteExpiredProofCaptureArtifacts(env, {
+      cutoff: cutoff(SNAPSHOT_RETENTION_DAYS),
+    });
+    deleted.proof_capture_artifact = proofResult.cleared;
+    if (proofResult.failed > 0) failedSteps.push("proof_capture_artifact");
+  } catch {
+    console.error("[retention] delete failed for proof_capture_artifact");
+    failedSteps.push("proof_capture_artifact");
+  }
+
   return { deleted, failedSteps };
 }
+
+export async function deleteExpiredProofCaptureArtifacts(
+  env: AppEnv,
+  options: { cutoff: string; limit?: number },
+) {
+  if (!env.DB) return { cleared: 0, failed: 0 };
+  const limit = Math.max(1, Math.min(SNAPSHOT_RETENTION_LIMIT, options.limit ?? SNAPSHOT_RETENTION_LIMIT));
+  const candidates = await queryAll<ProofCaptureRetentionCandidate>(
+    env,
+    `
+      SELECT
+        proof_capture.id,
+        watchlist.user_id AS owner_user_id,
+        proof_capture.html_artifact_key,
+        proof_capture.screenshot_artifact_key
+      FROM proof_capture
+      INNER JOIN proof_target ON proof_target.id = proof_capture.proof_target_id
+      INNER JOIN watchlist ON watchlist.id = proof_target.watchlist_id
+      WHERE proof_capture.created_at < ?
+        AND (
+          proof_capture.html_artifact_key IS NOT NULL
+          OR proof_capture.screenshot_artifact_key IS NOT NULL
+        )
+        AND (
+          proof_target.last_successful_capture_id IS NULL
+          OR proof_target.last_successful_capture_id <> proof_capture.id
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM watch_event
+          WHERE watch_event.proof_capture_id = proof_capture.id
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM digest_item
+          WHERE json_valid(digest_item.metadata_json)
+            AND json_extract(digest_item.metadata_json, '$.proofCaptureId') = proof_capture.id
+        )
+      ORDER BY proof_capture.created_at ASC, proof_capture.id ASC
+      LIMIT ?
+    `,
+    options.cutoff,
+    limit,
+  );
+
+  let cleared = 0;
+  let failed = 0;
+  for (const candidate of candidates) {
+    const values = [candidate.html_artifact_key, candidate.screenshot_artifact_key]
+      .filter((key): key is string => typeof key === "string");
+    for (const value of new Set(values)) {
+      const parsed = parseProofArtifactKey(value);
+      if (!parsed) {
+        failed += 1;
+        continue;
+      }
+      try {
+        if (await artifactReferencedOutsideProofCapture(env, candidate.id, parsed.key)) {
+          const column = parsed.kind === "html" ? "html_artifact_key" : "screenshot_artifact_key";
+          const metadataPath = parsed.kind === "html" ? "$.htmlArtifactKey" : "$.screenshotArtifactKey";
+          const result = await execute(
+            env,
+            `
+              UPDATE proof_capture
+              SET ${column} = NULL,
+                  capture_metadata_json = CASE
+                    WHEN json_valid(capture_metadata_json)
+                    THEN json_remove(capture_metadata_json, '${metadataPath}')
+                    ELSE capture_metadata_json
+                  END,
+                  updated_at = ?
+              WHERE id = ? AND ${column} = ? AND created_at < ?
+            `,
+            new Date().toISOString(),
+            candidate.id,
+            parsed.key,
+            options.cutoff,
+          );
+          if (Number(result.meta?.changes ?? 0) !== 1) throw new Error("proof_capture_reference_not_cleared");
+          cleared += 1;
+          continue;
+        }
+        const [result] = await deleteProofArtifacts(env, candidate.owner_user_id, [parsed.key]);
+        if (!result?.ok) throw new Error("proof_capture_artifact_not_deleted");
+        cleared += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+  }
+  return { cleared, failed };
+}
+
+export async function deleteExpiredLandingPageSnapshots(
+  env: AppEnv,
+  options: { cutoff: string; limit?: number },
+) {
+  if (!env.DB) return { deleted: 0, failed: 0 };
+  const limit = Math.max(1, Math.min(SNAPSHOT_RETENTION_LIMIT, options.limit ?? SNAPSHOT_RETENTION_LIMIT));
+  const candidates = await queryAll<SnapshotRetentionCandidate>(
+    env,
+    `
+      SELECT snapshot.id, snapshot.artifact_key, snapshot.metadata_json
+      FROM landing_page_snapshot AS snapshot
+      WHERE snapshot.created_at < ?
+        AND NOT EXISTS (
+          SELECT 1 FROM ad_observation
+          WHERE ad_observation.landing_page_snapshot_id = snapshot.id
+        )
+      ORDER BY snapshot.created_at ASC, snapshot.id ASC
+      LIMIT ?
+    `,
+    options.cutoff,
+    limit,
+  );
+
+  let deleted = 0;
+  let failed = 0;
+  for (const candidate of candidates) {
+    const keys = retentionArtifactKeys(candidate);
+    if (!keys) {
+      failed += 1;
+      continue;
+    }
+
+    let rowFailed = false;
+    for (const key of keys) {
+      try {
+        const referencedElsewhere = await artifactReferencedOutsideSnapshot(env, candidate.id, key);
+        if (referencedElsewhere) continue;
+        if (!env.LANDING_PAGE_ARTIFACTS) {
+          rowFailed = true;
+          break;
+        }
+        const existing = await env.LANDING_PAGE_ARTIFACTS.head(key);
+        if (existing) await env.LANDING_PAGE_ARTIFACTS.delete(key);
+      } catch {
+        rowFailed = true;
+        break;
+      }
+    }
+    if (rowFailed) {
+      failed += 1;
+      continue;
+    }
+
+    try {
+      const result = await execute(
+        env,
+        `
+          DELETE FROM landing_page_snapshot
+          WHERE id = ?
+            AND created_at < ?
+            AND NOT EXISTS (
+              SELECT 1 FROM ad_observation
+              WHERE ad_observation.landing_page_snapshot_id = landing_page_snapshot.id
+            )
+        `,
+        candidate.id,
+        options.cutoff,
+      );
+      deleted += Number(result.meta?.changes ?? 0);
+    } catch {
+      failed += 1;
+    }
+  }
+  return { deleted, failed };
+}
+
+function retentionArtifactKeys(candidate: SnapshotRetentionCandidate): string[] | null {
+  let metadata: Record<string, unknown> = {};
+  if (candidate.metadata_json) {
+    try {
+      const parsed = JSON.parse(candidate.metadata_json) as unknown;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+      metadata = parsed as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }
+  const values = [
+    candidate.artifact_key,
+    metadata.htmlArtifactKey,
+    metadata.screenshotArtifactKey,
+  ].filter((value): value is string => typeof value === "string" && value.length > 0);
+  const keys = new Set<string>();
+  for (const value of values) {
+    const parsed = parseProofArtifactKey(value);
+    if (!parsed) return null;
+    keys.add(parsed.key);
+  }
+  return [...keys];
+}
+
+async function artifactReferencedOutsideSnapshot(env: AppEnv, snapshotId: string, key: string) {
+  const [row] = await queryAll<ArtifactReferenceCount>(
+    env,
+    `
+      SELECT (
+        SELECT COUNT(*) FROM landing_page_snapshot AS other
+        WHERE other.id <> ? AND (
+          other.artifact_key = ?
+          OR (json_valid(other.metadata_json) AND json_extract(other.metadata_json, '$.htmlArtifactKey') = ?)
+          OR (json_valid(other.metadata_json) AND json_extract(other.metadata_json, '$.screenshotArtifactKey') = ?)
+        )
+      ) + (
+        SELECT COUNT(*) FROM proof_capture
+        WHERE html_artifact_key = ? OR screenshot_artifact_key = ?
+      ) + (
+        SELECT COUNT(*) FROM ad
+        WHERE json_valid(raw_json) AND (
+          json_extract(raw_json, '$.landingPage.artifactKey') = ?
+          OR json_extract(raw_json, '$.landingPage.metadata.htmlArtifactKey') = ?
+          OR json_extract(raw_json, '$.landingPage.metadata.screenshotArtifactKey') = ?
+        )
+      ) AS external_references
+    `,
+    snapshotId,
+    key,
+    key,
+    key,
+    key,
+    key,
+    key,
+    key,
+    key,
+  );
+  return Number(row?.external_references ?? 0) > 0;
+}
+
+async function artifactReferencedOutsideProofCapture(env: AppEnv, proofCaptureId: string, key: string) {
+  const [row] = await queryAll<ArtifactReferenceCount>(
+    env,
+    `
+      SELECT (
+        SELECT COUNT(*) FROM proof_capture AS other
+        WHERE other.id <> ?
+          AND (other.html_artifact_key = ? OR other.screenshot_artifact_key = ?)
+      ) + (
+        SELECT COUNT(*) FROM landing_page_snapshot
+        WHERE artifact_key = ?
+          OR (json_valid(metadata_json) AND json_extract(metadata_json, '$.htmlArtifactKey') = ?)
+          OR (json_valid(metadata_json) AND json_extract(metadata_json, '$.screenshotArtifactKey') = ?)
+      ) + (
+        SELECT COUNT(*) FROM ad
+        WHERE json_valid(raw_json) AND (
+          json_extract(raw_json, '$.landingPage.artifactKey') = ?
+          OR json_extract(raw_json, '$.landingPage.metadata.htmlArtifactKey') = ?
+          OR json_extract(raw_json, '$.landingPage.metadata.screenshotArtifactKey') = ?
+        )
+      ) AS external_references
+    `,
+    proofCaptureId,
+    key,
+    key,
+    key,
+    key,
+    key,
+    key,
+    key,
+    key,
+  );
+  return Number(row?.external_references ?? 0) > 0;
+}
+
+export const MAX_SNAPSHOT_RETENTION_ROWS = SNAPSHOT_RETENTION_LIMIT;

@@ -40,8 +40,11 @@ function createHarness() {
       proof_target_id TEXT NOT NULL REFERENCES proof_target(id) ON DELETE CASCADE,
       status TEXT NOT NULL,
       idempotency_key TEXT,
+      screenshot_artifact_key TEXT,
+      html_artifact_key TEXT,
       capture_metadata_json TEXT NOT NULL,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     );
     CREATE TABLE watch_event (
       id TEXT PRIMARY KEY NOT NULL,
@@ -102,10 +105,13 @@ function seedCanary(harness: ReturnType<typeof createSqliteD1>) {
     INSERT INTO proof_target (id, watchlist_id, last_successful_capture_id)
       VALUES ('target-1', 'watch-1', 'proof-1');
     INSERT INTO proof_capture (
-      id, proof_target_id, status, idempotency_key, capture_metadata_json, created_at
+      id, proof_target_id, status, idempotency_key,
+      screenshot_artifact_key, html_artifact_key,
+      capture_metadata_json, created_at, updated_at
     ) VALUES (
       'proof-1', 'target-1', 'succeeded', 'launch-readiness:2026-07-15:proof',
-      '{"kind":"launch_readiness_real_capture","proofUrl":"https://0509.io/"}', '2026-07-15'
+      NULL, NULL,
+      '{"kind":"launch_readiness_real_capture","proofUrl":"https://0509.io/"}', '2026-07-15', '2026-07-15'
     );
     INSERT INTO watch_event (
       id, watchlist_id, run_id, baseline_from_run_id, proof_capture_id,
@@ -137,6 +143,20 @@ afterEach(() => {
 });
 
 describe("cleanupLaunchReadinessCanary", () => {
+  it("resolves exact cleanup identifiers from the stable gate run ID", async () => {
+    const harness = createHarness();
+    seedCanary(harness);
+
+    await expect(
+      cleanupLaunchReadinessCanary(
+        { DB: harness.db } as never,
+        { ownerUserId: "owner-1", gateRunId: "2026-07-15" },
+      ),
+    ).resolves.toMatchObject({ cleaned: true, preservedProofCaptureId: "proof-1" });
+    expect(harness.sqlite.prepare("SELECT COUNT(*) AS count FROM watchlist_run").get()).toEqual({ count: 0 });
+    expect(harness.sqlite.prepare("SELECT COUNT(*) AS count FROM digest_run").get()).toEqual({ count: 0 });
+  });
+
   it("cleans the route-shaped event and preserves its proof capture", async () => {
     const harness = createHarness();
     seedCanary(harness);

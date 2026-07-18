@@ -8,7 +8,7 @@ type RouteEntry = { path?: string; children?: RouteEntry[] };
 type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
 type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
 
-function createContext(env: Record<string, string> = {}) {
+function createContext(env: Record<string, unknown> = {}) {
   return {
     cloudflare: {
       env,
@@ -30,6 +30,9 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.resetModules();
+  vi.doUnmock("~/lib/commercial-launch-gate.server");
+  vi.doUnmock("~/lib/context.server");
+  vi.doUnmock("~/lib/dodo-pricing.server");
 });
 
 const session = {
@@ -452,6 +455,83 @@ describe("marketing route", () => {
 });
 
 describe("pricing preview route", () => {
+  it("keeps public pricing cacheable without exposing Worker identity", async () => {
+    const previewDodo0509PlanPrices = vi.fn().mockResolvedValue({
+      available: true,
+      provider: "dodo",
+      source: "dodo_checkout_preview",
+      country: "US",
+      prices: {},
+      usageBundles: {},
+    });
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({ CF_VERSION_METADATA: { id: "worker-v1" } })),
+    }));
+    vi.doMock("~/lib/dodo-pricing.server", () => ({ previewDodo0509PlanPrices }));
+    vi.doMock("~/lib/commercial-launch-gate.server", () => ({
+      publicCommercialLaunchSummary: vi.fn(() => ({})),
+    }));
+
+    const { loader } = await import("~/routes/api.pricing-preview");
+    const response = await loader({
+      context: createContext(),
+      request: new Request("https://0509.io/api/pricing-preview"),
+    } as never);
+    const payload = await response.json() as Record<string, unknown>;
+
+    expect(response.headers.get("cache-control")).toBe("private, max-age=300");
+    expect(payload.workerVersionId).toBeUndefined();
+    expect(previewDodo0509PlanPrices).toHaveBeenCalledTimes(1);
+  });
+
+  it("binds authenticated pricing proof to one Worker and rejects drift before Dodo", async () => {
+    const previewDodo0509PlanPrices = vi.fn().mockResolvedValue({
+      available: true,
+      provider: "dodo",
+      source: "dodo_checkout_preview",
+      country: "US",
+      prices: {},
+      usageBundles: {},
+    });
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        CF_VERSION_METADATA: { id: "worker-v1" },
+      })),
+    }));
+    vi.doMock("~/lib/dodo-pricing.server", () => ({ previewDodo0509PlanPrices }));
+    vi.doMock("~/lib/commercial-launch-gate.server", () => ({
+      publicCommercialLaunchSummary: vi.fn(() => ({})),
+    }));
+
+    const { loader } = await import("~/routes/api.pricing-preview");
+    const matching = await loader({
+      context: createContext(),
+      request: new Request("https://0509.io/api/pricing-preview", {
+        headers: {
+          "x-0509-canary-token": "secret-token",
+          "x-0509-expected-worker-version": "worker-v1",
+        },
+      }),
+    } as never);
+    expect(matching.status).toBe(200);
+    expect(matching.headers.get("cache-control")).toBe("no-store");
+    await expect(matching.json()).resolves.toMatchObject({ workerVersionId: "worker-v1" });
+
+    const drifted = await loader({
+      context: createContext(),
+      request: new Request("https://0509.io/api/pricing-preview", {
+        headers: {
+          "x-0509-canary-token": "secret-token",
+          "x-0509-expected-worker-version": "worker-v2",
+        },
+      }),
+    } as never);
+    expect(drifted.status).toBe(409);
+    expect(drifted.headers.get("cache-control")).toBe("no-store");
+    expect(previewDodo0509PlanPrices).toHaveBeenCalledTimes(1);
+  });
+
   it("returns an unavailable Dodo preview until 0509 brand secrets and product ids are configured", async () => {
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => ({})),

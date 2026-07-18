@@ -6,7 +6,7 @@ import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 const pageDescription =
-  "Moving from MagicBrief? What transfers to Five to Nine, what's different, and how to migrate your collections and watchlists in an afternoon.";
+  "Moving from MagicBrief? What transfers to Five to Nine, what's different, and how we can help migrate your collections and watchlists.";
 
 export const links: LinksFunction = () => canonicalLinks("/compare/magicbrief");
 
@@ -79,8 +79,7 @@ export default function CompareMagicBriefRoute() {
           Moving from MagicBrief? Bring your saved work. Gain the receipts.
         </h1>
         <p className="ld-deck-copy">
-          If your current tool is winding down or just winding you up, your collections and
-          watchlists set up here in an afternoon — email{" "}
+          If your current tool is winding down or just winding you up, email{" "}
           <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we&rsquo;ll help you move, person to
           person.
         </p>
@@ -131,7 +130,7 @@ export default function CompareMagicBriefRoute() {
 
       <section className="ld-final">
         <h2>
-          Migrate in an afternoon <span aria-hidden="true">→</span>
+          Plan your migration <span aria-hidden="true">→</span>
         </h2>
         <p className="ld-pricing-note">
           Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> with your MagicBrief export (or just

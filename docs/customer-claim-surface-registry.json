@@ -1,9 +1,15 @@
 {
-  "schemaVersion": 1,
-  "registryId": "G11-V2-2026-07-16",
-  "generatedAt": "2026-07-16T00:14:29+05:30",
-  "registryStatus": "incomplete_fail",
-  "canonicalReleaseVerdict": "0_of_6_release_ready",
+  "schemaVersion": 2,
+  "registryId": "G11-V4-2026-07-18",
+  "generatedAt": "2026-07-18T17:23:42Z",
+  "registryStatus": "assessed_open",
+  "canonicalReleaseVerdict": "closeout_candidate_unfrozen",
+  "assessmentBasis": {
+    "historicalExactFingerprint": "1f736de4137eeeca0a117b2e7e9a09df705c8e00682eb7e7e0a0e087a069b173",
+    "historicalExactWorkerVersion": "3592690d-8ca8-4787-be2c-e43324a8dc00",
+    "closeoutBranch": "codex/customer-readiness-inventory-closeout",
+    "rule": "Historical exact-candidate evidence identifies the shortest closeout path. Behavior, browser, review and deployed evidence remains exact-candidate only; byte-identical independently hash-bound lockfile/config evidence may transfer under the G11-V4 risk-based closeout contract. Every non-removed customer claim must be proven on the frozen closeout fingerprint or explicitly classified N/A."
+  },
   "rules": {
     "notAssessed": "fail",
     "nARequiresEvidence": true,
@@ -11,15 +17,15 @@
     "driftReopensEvidence": true
   },
   "coverage": [
-    { "surface": "public_routes_and_copy", "status": "incomplete_fail" },
-    { "surface": "authenticated_routes_and_navigation", "status": "incomplete_fail" },
-    { "surface": "roles_plans_and_entitlements", "status": "incomplete_fail" },
-    { "surface": "email_templates_and_delivery", "status": "incomplete_fail" },
-    { "surface": "cron_workflows_and_operator_recovery", "status": "incomplete_fail" },
-    { "surface": "providers_and_integrations", "status": "incomplete_fail" },
-    { "surface": "api_mcp_and_agent_actions", "status": "incomplete_fail" },
-    { "surface": "browser_device_geography_locale", "status": "incomplete_fail" },
-    { "surface": "data_lifecycle_and_rights", "status": "incomplete_fail" }
+    { "surface": "public_routes_and_copy", "status": "assessed_pending_reproof" },
+    { "surface": "authenticated_routes_and_navigation", "status": "assessed_pending_reproof" },
+    { "surface": "roles_plans_and_entitlements", "status": "assessed_pending_reproof" },
+    { "surface": "email_templates_and_delivery", "status": "assessed_open_missing_external_email_proof" },
+    { "surface": "cron_workflows_and_operator_recovery", "status": "assessed_gate_c_pending" },
+    { "surface": "providers_and_integrations", "status": "assessed_gate_c_pending" },
+    { "surface": "api_mcp_and_agent_actions", "status": "assessed_pending_reproof" },
+    { "surface": "browser_device_geography_locale", "status": "assessed_open_missing_cross_browser_at" },
+    { "surface": "data_lifecycle_and_rights", "status": "assessed_open_missing_lifecycle_proof" }
   ],
   "claims": [
     {
@@ -31,7 +37,8 @@
       "source": ["app/lib/plan-entitlements.ts", "docs/plan-catalog.md"],
       "requiredGate": "G360-P1-WORKFLOW,G11-CAPACITY-SLO",
       "requiredEvidence": "same-fingerprint schedule, dispatch, completion, retry and deployed scan-health evidence",
-      "status": "fail_not_assessed",
+      "status": "assessed_gate_c_pending",
+      "assessment": "Historical exact candidate passed strict all-six local proof; the closeout candidate still needs scheduled cadence dispatch/completion/recovery evidence on its exact deployed version.",
       "classification": "discovered",
       "expiry": "any plan, cron, workflow or cadence-copy change"
     },
@@ -44,7 +51,8 @@
       "source": ["app/lib/pricing.ts", "app/routes/app.billing.tsx", "docs/plan-catalog.md"],
       "requiredGate": "G360-P1-BILLING",
       "requiredEvidence": "current Dodo lifecycle, usage-ledger, cancellation retention and top-up spend canaries",
-      "status": "fail_not_assessed",
+      "status": "assessed_pending_reproof",
+      "assessment": "Historical exact candidate has billing lifecycle, ledger and cleanup evidence; the closeout candidate must repeat the exact Gate B/C billing proof after source freeze.",
       "classification": "known",
       "expiry": "any entitlement, SKU, billing-policy or provider change"
     },
@@ -57,7 +65,8 @@
       "source": ["app/lib/pricing.ts", "app/lib/translation.server.ts"],
       "requiredGate": "G11-LOCALE-TIME,G11-RUNTIME-IDENTITY",
       "requiredEvidence": "bounded language corpus plus deployed Workers AI model/binding and fallback evidence",
-      "status": "fail_not_assessed",
+      "status": "removed_from_product_contract",
+      "assessment": "The unbounded 30+ language promise is removed from plan copy in the closeout candidate; translation runtime remains non-promoted until a bounded corpus and deployed binding proof exist.",
       "classification": "discovered",
       "expiry": "translation copy, model, binding or provider change"
     },
@@ -70,7 +79,8 @@
       "source": ["app/routes/app.dashboard.tsx", "app/routes/app.watchlists.tsx", "app/lib/public-markdown.ts"],
       "requiredGate": "J2-A-C,J3-A-C",
       "requiredEvidence": "authoritative first-scan completion/recovery, cap and pre-click plan-boundary proof",
-      "status": "fail_not_assessed",
+      "status": "assessed_pending_reproof",
+      "assessment": "Historical strict Journey 2 proof covers activation-only entitlement and recovery; the closeout candidate must repeat it at all three widths and deployed identity.",
       "classification": "known",
       "expiry": "free-plan, first-scan, copy or entitlement change"
     },
@@ -83,7 +93,8 @@
       "source": ["app/routes/app.watchlists.tsx"],
       "requiredGate": "G360-P1-WORKFLOW,G11-CAPACITY-SLO",
       "requiredEvidence": "predeclared p75/p95 configuration-to-proof soak with delayed/failure/recovery truth",
-      "status": "fail_not_assessed",
+      "status": "removed_from_product_contract",
+      "assessment": "The unsupported couple-of-minutes promise is removed from customer and recovery copy; completion remains truthful and state-based until a predeclared latency SLO is proven.",
       "classification": "discovered",
       "expiry": "workflow, provider, queue, copy or SLO change"
     },
@@ -96,7 +107,8 @@
       "source": ["app/routes/app.watchlists.tsx", "app/lib/delivery-policy.server.ts", "app/lib/customer-agent-actions.server.ts"],
       "requiredGate": "G11-LOCALE-TIME",
       "requiredEvidence": "invalid-input rejection, legacy UTC fallback, DST-boundary exactly-once delivery and deployed internal receipt",
-      "status": "fail_not_assessed",
+      "status": "assessed_pending_reproof",
+      "assessment": "Deterministic policy tests exist for timezone validation, UTC fallback and DST behavior; exact closeout browser and deployed internal receipt proof remains required.",
       "classification": "discovered",
       "expiry": "timezone, quiet-hours, API schema, cron or delivery-policy change"
     },
@@ -109,7 +121,8 @@
       "source": ["app/routes/app.dashboard.tsx", "app/routes/app.source-access.ui.tsx"],
       "requiredGate": "G360-P1-STATES,G360-P1-PROOF-PARITY",
       "requiredEvidence": "current provider health/retest, encrypted owner-only token and degraded recovery on exact deployed version",
-      "status": "fail_not_assessed",
+      "status": "assessed_pending_reproof",
+      "assessment": "Historical all-six browser proof and provider canary cover source-state truth; the closeout candidate must repeat degraded recovery and exact deployed provider identity.",
       "classification": "known",
       "expiry": "provider, token, health or copy change"
     },
@@ -121,8 +134,9 @@
       "owner": "delivery",
       "source": ["app/routes/app.notifications.ui.tsx", "app/lib/ga-customer-surface.ts", "app/lib/delivery.server.ts"],
       "requiredGate": "G11-EMAIL,G11-SELF-SERVE-PARITY",
-      "requiredEvidence": "no dormant-channel leak plus current email delivery, suppression, retry and recipient privacy proof",
-      "status": "fail_not_assessed",
+      "requiredEvidence": "no dormant-channel leak plus exact-version controlled inbox delivery/open/link, suppression where provider-supported, retry/dedupe/unsubscribe and recipient privacy proof",
+      "status": "assessed_open_missing_external_email_proof",
+      "assessment": "Unsupported channels are fail-closed in source. Final configured-sender authentication, controlled inbox, suppression/retry/dedupe/unsubscribe and safe HTML/plain-text evidence remains open; undeclared client/dark-mode permutations are not required.",
       "classification": "known",
       "expiry": "channel flag, provider, UI, API/MCP or delivery change"
     },
@@ -135,7 +149,8 @@
       "source": ["app/routes/app.team.tsx", "app/lib/plan-entitlements.ts"],
       "requiredGate": "J6-A-C,G360-P1-BACKBONE",
       "requiredEvidence": "seat-cap, invite/revoke/resend, owner/member concurrency and recovery on exact deployment",
-      "status": "fail_not_assessed",
+      "status": "assessed_pending_reproof",
+      "assessment": "Historical Journey 6 proof covers seat caps, membership and recovery; closeout exact-browser and deployed reconciliation must repeat after freeze.",
       "classification": "known",
       "expiry": "role, seat, membership or entitlement change"
     },
@@ -148,7 +163,8 @@
       "source": ["app/routes/app.clients.tsx"],
       "requiredGate": "J4-A-C,G360-P1-PROOF-PARITY",
       "requiredEvidence": "current evidence, review approval, downgrade read-only, revoke/re-review and cleanup proof",
-      "status": "fail_not_assessed",
+      "status": "assessed_pending_reproof",
+      "assessment": "Historical Journey 4 proof covers client-room state and delivery; closeout exact-browser, approval/revoke and deployed cleanup must repeat.",
       "classification": "known",
       "expiry": "plan, approval, report, room or share change"
     },
@@ -161,7 +177,8 @@
       "source": ["app/routes/api.v1.ts", "app/routes/app.developer-access.ui.tsx"],
       "requiredGate": "G11-SELF-SERVE-PARITY,G360-P1-API-LIMITS",
       "requiredEvidence": "deployed auth, workspace ownership, post-auth limits, revocation, payload bounds, versioning, idempotency and audit parity",
-      "status": "fail_not_assessed",
+      "status": "assessed_pending_reproof",
+      "assessment": "Historical API limit/auth tests are exact for the prior source; closeout auth, ownership, revocation, bounds and deployed parity must repeat.",
       "classification": "discovered",
       "expiry": "API catalog, route, auth, limit or action change"
     },
@@ -174,7 +191,8 @@
       "source": ["app/routes/api.v1.ts", "app/routes/api.mcp.ts", "app/lib/public-markdown.ts"],
       "requiredGate": "G11-SELF-SERVE-PARITY,G360-P1-BACKBONE",
       "requiredEvidence": "owner/member reads, action replay, redaction, rate/output bounds, revoked-key fence and deployed parity",
-      "status": "fail_not_assessed",
+      "status": "assessed_pending_reproof",
+      "assessment": "Historical API/MCP account-scope tests cover replay, redaction and revoked-key fences; closeout exact deployed parity must repeat.",
       "classification": "known",
       "expiry": "tool, action, export, auth or scope change"
     },
@@ -187,7 +205,8 @@
       "source": ["app/routes/app.account.tsx", "app/routes/help.tsx"],
       "requiredGate": "G11-DATA-RIGHTS",
       "requiredEvidence": "approved export/settlement/deletion/retention/backup/provider cleanup runbook and audited execution",
-      "status": "fail_not_assessed",
+      "status": "assessed_open_missing_lifecycle_proof",
+      "assessment": "The product truthfully declares support-only deletion, but an approved and audited export, deletion, retention, backup and provider-cleanup execution is still missing.",
       "classification": "known",
       "expiry": "deletion, policy, backup, provider or support-process change"
     },
@@ -200,7 +219,8 @@
       "source": ["app/routes/app.billing.tsx", "docs/launch-owner-actions.md"],
       "requiredGate": "J5-A-C,G360-P1-BILLING",
       "requiredEvidence": "provider retrieval plus checkout, change, failed payment, cancel/reversal, refund, receipt and exact cleanup canaries",
-      "status": "fail_not_assessed",
+      "status": "assessed_pending_reproof",
+      "assessment": "Historical exact candidate passed Dodo lifecycle and current-run reconciliation; the closeout candidate must repeat provider retrieval, cancellation/refund and cleanup proof.",
       "classification": "known",
       "expiry": "Dodo contract, SKU, portal, policy or billing-state change"
     },
@@ -213,7 +233,8 @@
       "source": ["app/routes/app.billing.tsx", "app/lib/pricing.ts"],
       "requiredGate": "G360-P1-BILLING,G360-P1-BACKBONE",
       "requiredEvidence": "atomic usage ledger, replay, top-up spend and cancellation-retention proof",
-      "status": "fail_not_assessed",
+      "status": "assessed_pending_reproof",
+      "assessment": "Historical billing proof covers atomic usage and replay behavior; closeout top-up spend and cancellation-retention proof must repeat on one exact identity.",
       "classification": "known",
       "expiry": "usage, pack, plan or billing policy change"
     },
@@ -226,7 +247,8 @@
       "source": ["app/routes/app.presence.tsx", "app/lib/public-markdown.ts"],
       "requiredGate": "G11-INVENTORY,G11-SELF-SERVE-PARITY",
       "requiredEvidence": "deployed connector rollout, plan caps, failure/recovery and explicit unsupported-source truth",
-      "status": "fail_not_assessed",
+      "status": "assessed_pending_reproof",
+      "assessment": "Historical provider bakeoff covers active open-web monitoring and unsupported-source truth; closeout rollout, caps and degraded recovery must repeat.",
       "classification": "known",
       "expiry": "connector, rollout, plan or public-copy change"
     },
@@ -239,7 +261,8 @@
       "source": ["app/routes/compare.magicbrief.tsx"],
       "requiredGate": "G11-SELF-SERVE-PARITY,G11-SUPPORT-COMMS",
       "requiredEvidence": "documented bounded migration procedure and internal completion timing; otherwise remove the time promise",
-      "status": "fail_not_assessed",
+      "status": "removed_from_product_contract",
+      "assessment": "The unsupported migrate-in-an-afternoon promise is removed from the comparison and marketing surfaces; bounded human migration help remains without a time guarantee.",
       "classification": "discovered",
       "expiry": "comparison copy or migration workflow change"
     },
@@ -252,7 +275,8 @@
       "source": ["app/lib/seo.ts", "workers/security-headers.ts"],
       "requiredGate": "G11-SEO",
       "requiredEvidence": "queryful search policy, private/token noindex, structured data, redirects and deployed social/crawl checks",
-      "status": "fail_not_assessed",
+      "status": "assessed_gate_c_pending",
+      "assessment": "Current production proves canonical host, redirects, robots, sitemap and public status basics; closeout structured-data, queryful-search and private/token noindex proof must bind to the new deployment.",
       "classification": "discovered",
       "expiry": "route, metadata, host, robots, sitemap or header change"
     },
@@ -265,7 +289,8 @@
       "source": ["app/lib/delivery-email-core.server.ts", "app/lib/better-auth.server.ts"],
       "requiredGate": "G11-EMAIL",
       "requiredEvidence": "durable magic-link attempt, SPF/DKIM/DMARC, inbox receipt, bounce/complaint suppression, rendering, retry/dedupe/unsubscribe and privacy proof",
-      "status": "fail_not_assessed",
+      "status": "assessed_open_missing_external_email_proof",
+      "assessment": "Controlled delivery canaries passed historically, but SPF/DKIM/DMARC, bounce/complaint suppression and dark-mode client rendering are not yet complete on one exact deployment.",
       "classification": "discovered",
       "expiry": "template, provider, DNS, recipient, suppression or delivery change"
     },
@@ -278,20 +303,22 @@
       "source": ["docs/ops-backup-uptime.md", "docs/ga-support-runbook.md"],
       "requiredGate": "G11-CAPACITY-SLO,G11-SUPPORT-COMMS",
       "requiredEvidence": "intentional failure notification, deployed identity, recovery and truthful status incident proof",
-      "status": "fail_not_assessed",
+      "status": "assessed_open_missing_failure_notification",
+      "assessment": "The historical deployed version passed a 24/24 live health soak; an intentional failure notification and recovery incident proof is still missing for closeout.",
       "classification": "known",
       "expiry": "health route, workflow, alert routing or status change"
     },
     {
       "claimId": "OP-BACKUP-RESTORE",
-      "text": "D1 backups are retained in R2 and can be restored with migration, integrity, row-count and billing linkage intact.",
+      "text": "Scheduled D1 exports are retained in R2 and can be restored with migration, integrity, row-count and billing linkage intact.",
       "surface": "backup workflow and operator runbook",
       "audience": "operators",
       "owner": "data operations",
       "source": ["docs/ops-backup-uptime.md", "scripts/validate-d1-backup.mjs"],
       "requiredGate": "G360-P1-OPS,G11-DATA-RIGHTS",
-      "requiredEvidence": "current scheduled backup plus remote-scratch restore, R2 retention/deletion and rollback proof",
-      "status": "fail_not_assessed",
+      "requiredEvidence": "current scheduled export plus remote-scratch restore, actual-path R2 lifecycle/deletion and rollback proof; Time Travel bookmark only before a database-changing release",
+      "status": "assessed_open_missing_r2_lifecycle",
+      "assessment": "A fresh exact-fingerprint remote D1 export/import scratch restore passed integrity, rows and billing linkage. This product has not proved a Time Travel runbook and does not claim it for this source-only closeout; actual-path R2 lifecycle/deletion and closeout-version rollback proof remain open.",
       "classification": "known",
       "expiry": "migration, backup, R2, restore or billing-schema change"
     },
@@ -304,20 +331,22 @@
       "source": ["docs/monitoring-fanout-rollout.md", "app/routes/app.ops.tsx"],
       "requiredGate": "G11-CAPACITY-SLO,G360-P1-OPS",
       "requiredEvidence": "plan-limit load, completed scans, quota reconciliation, failure/compensation and deployed soak",
-      "status": "fail_not_assessed",
+      "status": "assessed_gate_c_pending",
+      "assessment": "Deterministic queue and compensation proof exists historically; plan-load admission, completed scheduled work, quota reconciliation and deployed soak remain open for closeout.",
       "classification": "known",
       "expiry": "plan limit, queue, workflow, provider or operator-path change"
     },
     {
       "claimId": "COMPAT-MOBILE-A11Y",
-      "text": "Declared current Chrome, Edge, Firefox, Safari, iOS Safari and Android Chrome journeys work with responsive, keyboard, screen-reader and reduced-motion parity.",
+      "text": "All six journeys work in primary Chromium, with risk-based representative Firefox, WebKit, iOS Safari and Android Chrome coverage plus keyboard, screen-reader semantics and reduced-motion parity.",
       "surface": "all customer journeys",
       "audience": "all supported customers",
       "owner": "experience",
       "source": ["playwright.config.ts", "e2e/helpers/release-experience.ts"],
       "requiredGate": "G11-COMPATIBILITY,G360-P1-A11Y",
-      "requiredEvidence": "same-fingerprint browser/device matrix including zoom, orientation, real AT, no overflow and exact artifacts",
-      "status": "fail_not_assessed",
+      "requiredEvidence": "same-fingerprint all-six primary matrix plus representative cross-engine/mobile critical paths, reflow/no-overflow exact artifacts and one manual VoiceOver/Safari complete-process check",
+      "status": "assessed_open_missing_cross_browser_at",
+      "assessment": "Historical exact browser proof covered all six in Chromium at three widths. The closeout harness now passes representative Journey 1 checks in Firefox, WebKit, iOS Safari and Android Chrome; final exact-candidate cross-engine risk samples and one manual VoiceOver/Safari complete-process check remain open. Edge inherits Chromium because no Edge-specific contract is declared.",
       "classification": "discovered",
       "expiry": "browser support, CSS/layout, shared interaction or release-matrix change"
     },
@@ -330,7 +359,8 @@
       "source": ["docs/final-self-serve-ga-scorecard.md", "docs/launch-readiness.md"],
       "requiredGate": "G360-P0-IMMUTABLE",
       "requiredEvidence": "one current all-six production evidence envelope superseding every dated snapshot",
-      "status": "fail_not_assessed",
+      "status": "assessed_release_pending",
+      "assessment": "The historical exact deployment has strong A/B and immediate C evidence, but closeout source drift requires one new immutable full ladder and all remaining inventory gaps to close.",
       "classification": "discovered",
       "expiry": "any readiness wording, fingerprint, review or deployed-version change"
     }

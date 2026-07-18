@@ -32,6 +32,35 @@ afterEach(() => {
 });
 
 describe("search selection without D1", () => {
+  it("never asks a public search selection to create ownerless R2 artifacts", async () => {
+    const captureLandingPageSnapshot = vi.fn().mockResolvedValue(null);
+    vi.doMock("~/lib/analysis.server", () => ({
+      buildLandingPageAnalysisFields: vi.fn(() => []),
+      withStructuredAnalysis: vi.fn((ad: AdRecord) => ad),
+    }));
+    vi.doMock("~/lib/creative-text.server", () => ({
+      captureCreativeText: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/landing-pages.server", () => ({ captureLandingPageSnapshot }));
+
+    const { prepareSearchResultSelection } = await import("~/lib/search-selection.server");
+    await prepareSearchResultSelection(
+      { LANDING_PAGE_ARTIFACTS: {} as R2Bucket } as never,
+      {
+        ads: [{ ...baseAd, landingPageUrl: "https://example.com/offer" }],
+        nextCursor: null,
+        source: "meta",
+      },
+      "meta-boat-1",
+    );
+
+    expect(captureLandingPageSnapshot).toHaveBeenCalledWith(
+      expect.anything(),
+      "https://example.com/offer",
+      { persistArtifacts: false },
+    );
+  });
+
   it("returns public search results without touching D1-backed persistence", async () => {
     const captureCreativeText = vi.fn().mockResolvedValue({
       text: "Fresh OCR",

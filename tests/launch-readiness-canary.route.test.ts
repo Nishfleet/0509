@@ -465,7 +465,7 @@ describe("launch readiness canary route", () => {
     await expect(response.json()).resolves.toMatchObject({
       ok: true,
       mode: "cleanup",
-      cleanupTruth: expect.stringContaining("proof capture, proof target, capture artifacts"),
+      cleanupTruth: expect.stringContaining("R2 artifacts"),
       cleanup: {
         cleaned: true,
         preservedProofCaptureId: "proof-1",
@@ -476,6 +476,49 @@ describe("launch readiness canary route", () => {
       runId: "run-1",
       digestRunId: "digest-1",
       proofCaptureId: "proof-1",
+    });
+  });
+
+  it("accepts cleanup recovery by one stable gate run ID", async () => {
+    const cleanupLaunchReadinessCanary = vi.fn().mockResolvedValue({
+      cleaned: true,
+      preservedProofCaptureId: "proof-1",
+      deleted: {
+        deliveryAttempts: 1,
+        digestDeliveries: 1,
+        digestItems: 1,
+        watchEvents: 1,
+        digestRuns: 1,
+        watchlistRuns: 1,
+      },
+    });
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: createDbWithTarget(),
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({ cleanupLaunchReadinessCanary }));
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-0509-canary-operation": "cleanup",
+          "x-0509-canary-token": "secret-token",
+        },
+        body: JSON.stringify({ gateRunId: "gate-c-worker-v1" }),
+      }),
+    } as never);
+
+    expect(response.status).toBe(200);
+    expect(cleanupLaunchReadinessCanary).toHaveBeenCalledWith(expect.anything(), {
+      ownerUserId: "user-1",
+      gateRunId: "gate-c-worker-v1",
     });
   });
 
@@ -615,7 +658,7 @@ describe("launch readiness canary route", () => {
     expect(noOp.status).toBe(409);
     const noOpBody = await noOp.text();
     expect(noOpBody).toContain("shared_rows_present");
-    expect(noOpBody).toContain("proof capture, proof target, capture artifacts");
+    expect(noOpBody).toContain("R2 artifacts");
     expect(noOpBody).not.toContain("owner@example.com");
 
     cleanupLaunchReadinessCanary.mockRejectedValueOnce(new Error("raw cleanup sentinel"));

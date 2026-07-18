@@ -9,6 +9,7 @@ import {
   assertBackupAutomationApproval,
   assertManualBackupApproval,
   buildD1ExportArgs,
+  buildBackupObjectKey,
   buildR2PutArgs,
 } from "./d1-backup-command-args.mjs";
 import { runCommandRedacted } from "./safe-command-output.mjs";
@@ -19,7 +20,7 @@ const localDir = resolve("backups/d1");
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 const fileName = `${databaseName}-${stamp}.sql`;
 const localPath = join(localDir, fileName);
-const remoteKey = `backups/d1/${fileName}`;
+const remoteKey = buildBackupObjectKey(databaseName, stamp);
 const KEEP_LOCAL = 8;
 
 const automationApproved = assertBackupAutomationApproval({ databaseName, bucketName });

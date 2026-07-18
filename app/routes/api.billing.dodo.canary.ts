@@ -104,16 +104,23 @@ export async function action({ context, request }: ActionFunctionArgs) {
     );
   }
 
+  const { verifyExpectedCanaryWorkerVersion } = await import(
+    "~/lib/canary-release-identity.server"
+  );
+  if (!verifyExpectedCanaryWorkerVersion(request, env).ok) {
+    return canaryConflict("worker_version_mismatch");
+  }
+
   if (!env.DB) {
     return canaryFailure("missing_db");
   }
 
-  const emailOverride = await readTestEmailOverride(request);
-  if (emailOverride.invalid) {
+  const canaryInput = await readCanaryInput(request);
+  if (canaryInput.invalid) {
     return canaryFailure("invalid_canary_email_override");
   }
 
-  const canaryEmail = emailOverride.email ?? env.LAUNCH_CANARY_EMAIL?.trim();
+  const canaryEmail = canaryInput.email ?? env.LAUNCH_CANARY_EMAIL?.trim();
   if (!canaryEmail) {
     return canaryFailure("missing_launch_canary_email");
   }
@@ -176,7 +183,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const watchlistStateSnapshot = await getWatchlistStateSnapshot(env, user.id);
 
     const nowIso = new Date().toISOString();
-    const runKey = `billing-canary-${normalizeIdempotencySegment(user.id)}-${plan}-monthly-proof-500-${normalizeIdempotencySegment(nowIso)}`;
+    const gateRunId = canaryInput.gateRunId ?? normalizeIdempotencySegment(nowIso);
+    const runKey = `billing-canary-${normalizeIdempotencySegment(user.id)}-${plan}-monthly-proof-500-${gateRunId}`;
     const brandId = dodo0509BrandId(env) || undefined;
     const creditCount = usageBundleCreditCount("proof_500");
     const planPaymentId = `${runKey}-plan`;
@@ -318,6 +326,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
     return Response.json(
       {
         ok,
+        gateRunId,
+        workerVersionId: env.CF_VERSION_METADATA?.id ?? null,
         ...(mutationFailed
           ? { blocker: durationExceeded ? "billing_canary_duration_exceeded" : "billing_canary_failed" }
           : {}),
@@ -711,25 +721,26 @@ function planForCanary(value: string | null): PricingPlanSlug | null {
   return null;
 }
 
-async function readTestEmailOverride(request: Request) {
+async function readCanaryInput(request: Request) {
   if (!request.headers.get("content-type")?.toLowerCase().includes("application/json")) {
-    return { email: null, invalid: false };
+    return { email: null, gateRunId: null, invalid: false };
   }
 
   const payload = await request.clone().json().catch(() => null);
+  const value = payload && typeof payload === "object" && !Array.isArray(payload)
+    ? payload as Record<string, unknown>
+    : null;
   const email =
-    payload && typeof payload === "object" && !Array.isArray(payload)
-      ? String((payload as Record<string, unknown>).email ?? "").trim().toLowerCase()
+    value
+      ? String(value.email ?? "").trim().toLowerCase()
       : "";
-  if (!email) {
-    return { email: null, invalid: false };
-  }
-
-  if (!email.endsWith("@example.com")) {
-    return { email: null, invalid: true };
-  }
-
-  return { email, invalid: false };
+  const rawGateRunId = value ? String(value.gateRunId ?? "").trim() : "";
+  const gateRunId = rawGateRunId ? normalizeIdempotencySegment(rawGateRunId) : null;
+  const invalid = Boolean(
+    (email && !email.endsWith("@example.com")) ||
+    (rawGateRunId && (!/^[A-Za-z0-9._-]{1,128}$/u.test(rawGateRunId) || gateRunId !== rawGateRunId.toLowerCase()))
+  );
+  return { email: email || null, gateRunId, invalid };
 }
 
 function canaryFailure(blocker: string) {

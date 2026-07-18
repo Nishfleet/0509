@@ -1,6 +1,7 @@
 const MANIFEST_PATH_PATTERN = /^test-results\/deploy-readiness-[a-z0-9-]{1,96}\.json$/u;
 const REMOTE_RESTORE_PATH_PATTERN = /^test-results\/d1-remote-restore-evidence(?:-[a-z0-9-]{1,64})?\.json$/u;
 const WRANGLER_OUTPUT_PATH_PATTERN = /^test-results\/wrangler-deploy-output(?:-[a-z0-9-]{1,64})?\.jsonl$/u;
+const ROLLBACK_TARGET_PATH_PATTERN = /^test-results\/worker-rollback-target(?:-[a-z0-9-]{1,64})?\.json$/u;
 const FINGERPRINT_PATTERN = /^[a-f0-9]{64}$/u;
 const SAFE_IDENTIFIER_PATTERN = /^[A-Za-z0-9._-]{1,128}$/u;
 
@@ -11,17 +12,19 @@ const SAFE_IDENTIFIER_PATTERN = /^[A-Za-z0-9._-]{1,128}$/u;
  *   args: string[];
  *   env?: Record<string, string>;
  *   includeCloudflareCredentials?: boolean;
+ *   runOnCanaryFailure?: boolean;
  * }} ProductionDeployStep
  */
 
 /**
- * @param {{ manifestPath: string, remoteRestoreEvidencePath: string, wranglerOutputPath: string }} input
+ * @param {{ manifestPath: string, remoteRestoreEvidencePath: string, wranglerOutputPath: string, rollbackTargetPath?: string }} input
  * @returns {ProductionDeployStep[]}
  */
 export function buildProductionDeployPlan({
   manifestPath,
   remoteRestoreEvidencePath,
   wranglerOutputPath,
+  rollbackTargetPath = "test-results/worker-rollback-target.json",
 }) {
   if (typeof manifestPath !== "string" || !MANIFEST_PATH_PATTERN.test(manifestPath)) {
     throw new Error("invalid_deploy_readiness_manifest_path");
@@ -34,6 +37,9 @@ export function buildProductionDeployPlan({
   }
   if (typeof wranglerOutputPath !== "string" || !WRANGLER_OUTPUT_PATH_PATTERN.test(wranglerOutputPath)) {
     throw new Error("invalid_wrangler_output_path");
+  }
+  if (typeof rollbackTargetPath !== "string" || !ROLLBACK_TARGET_PATH_PATTERN.test(rollbackTargetPath)) {
+    throw new Error("invalid_rollback_target_path");
   }
 
   return [
@@ -81,6 +87,11 @@ export function buildProductionDeployPlan({
       ],
     },
     {
+      id: "cross_browser_risk_proof",
+      command: "node",
+      args: ["scripts/run-cross-browser-risk-proof.mjs"],
+    },
+    {
       id: "remote_restore_evidence",
       command: "node",
       args: [
@@ -103,6 +114,12 @@ export function buildProductionDeployPlan({
       includeCloudflareCredentials: true,
     },
     {
+      id: "capture_worker_rollback_target",
+      command: "node",
+      args: ["scripts/capture-worker-rollback-target.mjs", "--output", rollbackTargetPath],
+      includeCloudflareCredentials: true,
+    },
+    {
       id: "deploy",
       command: "wrangler",
       args: ["deploy"],
@@ -110,6 +127,17 @@ export function buildProductionDeployPlan({
         WRANGLER_OUTPUT_FILE_PATH: wranglerOutputPath,
       },
       includeCloudflareCredentials: true,
+    },
+    {
+      id: "verify_worker_rollback_target",
+      command: "node",
+      args: [
+        "scripts/verify-worker-rollback-target.mjs",
+        "--target",
+        rollbackTargetPath,
+        "--wrangler-output",
+        wranglerOutputPath,
+      ],
     },
     {
       id: "partial_refund_invariants_postdeploy",
@@ -130,12 +158,26 @@ export function buildProductionDeployPlan({
         "--wrangler-output",
         wranglerOutputPath,
       ],
+      includeCloudflareCredentials: true,
     },
     {
       id: "partial_refund_invariants_postcanary",
       command: "node",
       args: ["scripts/check-partial-refund-invariants.mjs"],
       includeCloudflareCredentials: true,
+    },
+    {
+      id: "rollback_failed_release",
+      command: "node",
+      args: [
+        "scripts/rollback-production.mjs",
+        "--target",
+        rollbackTargetPath,
+        "--wrangler-output",
+        wranglerOutputPath,
+      ],
+      includeCloudflareCredentials: true,
+      runOnCanaryFailure: true,
     },
     {
       id: "live_public_truth",
@@ -242,17 +284,25 @@ export function executeProductionDeployPlan(plan, execute) {
   }
   let canaryFailed = false;
   let canaryFailure;
+  const recoveryFailures = [];
   for (const step of plan) {
+    if (!canaryFailed && step.runOnCanaryFailure) continue;
     if (canaryFailed) {
-      if (step.id !== "partial_refund_invariants_postcanary") throw canaryFailure;
-      try {
-        execute(step);
-      } catch (invariantFailure) {
-        throw new AggregateError(
-          [canaryFailure, invariantFailure],
-          "post_deploy_canary_and_refund_invariant_failed",
-          { cause: canaryFailure },
-        );
+      if (step.id === "partial_refund_invariants_postcanary" || step.runOnCanaryFailure) {
+        try {
+          execute(step);
+        } catch (recoveryFailure) {
+          recoveryFailures.push(recoveryFailure);
+        }
+        if (step.runOnCanaryFailure) {
+          if (recoveryFailures.length === 0) throw canaryFailure;
+          throw new AggregateError(
+            [canaryFailure, ...recoveryFailures],
+            "post_deploy_canary_recovery_failed",
+            { cause: canaryFailure },
+          );
+        }
+        continue;
       }
       throw canaryFailure;
     }

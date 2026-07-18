@@ -80,10 +80,12 @@ try {
   const manifestPath = `test-results/deploy-readiness-${nonce}.json`;
   const remoteRestoreEvidencePath = process.env.D1_REMOTE_RESTORE_EVIDENCE_PATH;
   const wranglerOutputPath = `test-results/wrangler-deploy-output-${nonce}.jsonl`;
+  const rollbackTargetPath = `test-results/worker-rollback-target-${nonce}.json`;
   const plan = buildProductionDeployPlan({
     manifestPath,
     remoteRestoreEvidencePath,
     wranglerOutputPath,
+    rollbackTargetPath,
   });
   executeProductionDeployPlan(plan, (step) => run(step.command, step.args, step));
 } catch (error) {
