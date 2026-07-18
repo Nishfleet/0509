@@ -302,7 +302,8 @@ function createCanaryDb(options: {
                   results: canaryLockOutcome
                     ? [{
                         outcome: canaryLockOutcome,
-                        processing_started_at: canaryLockOutcome === "processing" ? "2026-07-15T00:00:00.000Z" : null,
+                        processing_started_at: canaryLockOutcome === "processing" ? new Date().toISOString() : null,
+                        active_lease: canaryLockOutcome === "processing" ? 1 : 0,
                       }]
                     : [],
                 } as { results: T[] };

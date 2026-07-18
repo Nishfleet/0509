@@ -1036,6 +1036,90 @@ describe("Dodo billing atomicity (sqlite)", () => {
     ).toEqual({ count: 0 });
   });
 
+  it("keeps a stale provider lease retryable while the billing canary blocks reclaim", async () => {
+    const env = openEnv();
+    const harness = fixtures[0]!;
+    const staleStartedAt = "2000-01-01T00:00:00.000Z";
+    harness.sqlite.prepare(`
+      INSERT INTO dodo_webhook_event (
+        event_id, event_type, user_id, received_at, outcome,
+        processing_started_at, metadata_json
+      ) VALUES (?, 'refund.succeeded', ?, ?, 'processing', ?, '{}')
+    `).run(
+      "evt-provider-stale-under-canary",
+      "user-1",
+      staleStartedAt,
+      staleStartedAt,
+    );
+
+    const lockId = "billing-canary-lock:user-1:stale-provider";
+    expect(await beginDodoWebhookEventProcessing(env, {
+      eventId: lockId,
+      eventType: "billing.canary.lock",
+      userId: "user-1",
+      payloadTimestamp: null,
+      billingCanaryGuard: "acquire_lock",
+    })).toEqual({ status: "claimed" });
+
+    expect(await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-provider-stale-under-canary",
+      eventType: "refund.succeeded",
+      userId: "user-1",
+      payloadTimestamp: null,
+      billingCanaryGuard: "defer_while_locked",
+    })).toEqual({ status: "deferred" });
+    expect(harness.sqlite.prepare(`
+      SELECT outcome, processing_started_at
+      FROM dodo_webhook_event
+      WHERE event_id = ?
+    `).get("evt-provider-stale-under-canary")).toEqual({
+      outcome: "processing",
+      processing_started_at: staleStartedAt,
+    });
+
+    harness.sqlite.prepare(`
+      INSERT INTO dodo_webhook_event (
+        event_id, event_type, user_id, received_at, outcome,
+        processing_started_at, metadata_json
+      ) VALUES (?, 'refund.succeeded', ?, ?, 'received', NULL, '{}')
+    `).run(
+      "evt-provider-unowned-under-canary",
+      "user-1",
+      staleStartedAt,
+    );
+    expect(await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-provider-unowned-under-canary",
+      eventType: "refund.succeeded",
+      userId: "user-1",
+      payloadTimestamp: null,
+      billingCanaryGuard: "defer_while_locked",
+    })).toEqual({ status: "deferred" });
+    expect(harness.sqlite.prepare(`
+      SELECT outcome, processing_started_at
+      FROM dodo_webhook_event
+      WHERE event_id = ?
+    `).get("evt-provider-unowned-under-canary")).toEqual({
+      outcome: "received",
+      processing_started_at: null,
+    });
+
+    await failDodoWebhookEventProcessing(env, lockId, { released: true });
+    expect(await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-provider-stale-under-canary",
+      eventType: "refund.succeeded",
+      userId: "user-1",
+      payloadTimestamp: null,
+      billingCanaryGuard: "defer_while_locked",
+    })).toEqual({ status: "claimed" });
+    expect(await beginDodoWebhookEventProcessing(env, {
+      eventId: "evt-provider-unowned-under-canary",
+      eventType: "refund.succeeded",
+      userId: "user-1",
+      payloadTimestamp: null,
+      billingCanaryGuard: "defer_while_locked",
+    })).toEqual({ status: "claimed" });
+  });
+
   it("defers provider processing until stale billing canary residue is recovered", async () => {
     const env = openEnv();
     const harness = fixtures[0]!;

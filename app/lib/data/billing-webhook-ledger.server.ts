@@ -330,9 +330,24 @@ export async function beginDodoWebhookEventProcessing(
 			: { status: "claimed" };
   }
 
-  const row = await one<{ outcome: string }>(
+  const row = await one<{
+    outcome: string;
+    active_lease: number;
+  }>(
     env,
-    "SELECT outcome FROM dodo_webhook_event WHERE event_id = ?",
+    `SELECT
+       outcome,
+       CASE
+         WHEN outcome = 'processing'
+           AND processing_started_at IS NOT NULL
+           AND julianday(?) <= julianday(processing_started_at) + ?
+         THEN 1
+         ELSE 0
+       END AS active_lease
+     FROM dodo_webhook_event
+     WHERE event_id = ?`,
+    receivedAt,
+    leaseDays,
     eventId,
   );
   if (row?.outcome === "processed" || row?.outcome === "ignored") {
@@ -342,6 +357,16 @@ export async function beginDodoWebhookEventProcessing(
     return { status: "deferred" };
   }
   if (row?.outcome === "failed" && input.billingCanaryGuard) {
+    return { status: "deferred" };
+  }
+  if (
+    input.billingCanaryGuard &&
+    (row?.outcome === "received" || row?.outcome === "processing") &&
+    Number(row.active_lease) !== 1
+  ) {
+    // A canary guard can block the reclaim UPSERT for an abandoned provider
+    // row. Only a genuinely live lease is safe to acknowledge as in-progress;
+    // stale/unowned work must return 503 so Dodo retries after the canary.
     return { status: "deferred" };
   }
   return { status: "in_progress" };
