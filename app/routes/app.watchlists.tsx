@@ -362,7 +362,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         error: "plan_gated" as const,
         feature: "share_links" as const,
         plan: shareGate.plan,
-        message: "Share links are included in the Agency plan.",
+        message: "Share links are included on Starter and Agency plans.",
       };
     }
     const { createShareLink, getWatchlist } = await import("~/lib/data.server");
@@ -2114,7 +2114,9 @@ function formatNumericSummaryPart(
   return typeof value === "number" ? `${value} ${label}` : null;
 }
 
-const FIRST_SCAN_POLL_LIMIT = 30;
+const FIRST_SCAN_FAST_POLL_LIMIT = 30; // 4s × 30 ≈ 2 minutes
+const FIRST_SCAN_SLOW_POLL_LIMIT = 10; // then 30s × 10 ≈ 5 more minutes
+const FIRST_SCAN_POLL_LIMIT = FIRST_SCAN_FAST_POLL_LIMIT + FIRST_SCAN_SLOW_POLL_LIMIT;
 
 // The activation banner is driven by the durable run, never inferred from a
 // missing last-scanned timestamp. Poll only while the queue can still change.
@@ -2137,12 +2139,15 @@ function FirstScanBanner(props: {
       return;
     }
 
+    // WP-40: fast poll first, then back off to 30s so a scan finishing at
+    // minute 3–4 still surfaces without a manual refresh.
+    const intervalMs = pollCount < FIRST_SCAN_FAST_POLL_LIMIT ? 4000 : 30_000;
     const timer = setTimeout(() => {
       setPollCount((count) => count + 1);
       if (revalidator.state === "idle") {
         revalidator.revalidate();
       }
-    }, 4000);
+    }, intervalMs);
     return () => clearTimeout(timer);
   }, [pollCount, revalidator, shouldPoll]);
 
@@ -2160,6 +2165,7 @@ function FirstScanBanner(props: {
   const failed = props.run?.status === "failed";
   const skipped = props.run?.status === "skipped" && !safelyPaused;
   const timedOut = shouldPoll && pollCount >= FIRST_SCAN_POLL_LIMIT;
+  const pastFastPoll = shouldPoll && pollCount >= FIRST_SCAN_FAST_POLL_LIMIT && !timedOut;
   const scanLabel = props.plan === "free" ? "Activation scan" : "First scan";
 
   const heading = safelyPaused
@@ -2179,11 +2185,11 @@ function FirstScanBanner(props: {
   const message = safelyPaused
     ? "Provider access is disabled in this local release proof. No external check was attempted."
     : completed
-      ? "The first evidence is ready. Review the proof below before deciding what to monitor next."
+      ? "The first scan is ready. Review the proof below before deciding what to monitor next."
     : failed
       ? "We could not finish this check. Review Source access, then contact support if the next attempt also fails."
       : skipped
-        ? "This check stopped safely before evidence was created. Review Recent checks for the reason and recovery path."
+        ? "This check stopped safely before results were created. Review Recent checks for the reason and recovery path."
         : delayed || timedOut || !props.run
           ? props.plan === "free"
             ? "The activation scan is queued for recovery. Paid plans add recurring monitoring after activation."
@@ -2209,6 +2215,26 @@ function FirstScanBanner(props: {
         </h2>
         <p>{message}</p>
         {failed ? <Link to="/app/source-access">Review Source access</Link> : null}
+        {(pastFastPoll || timedOut) && shouldPoll ? (
+          <p style={{ marginTop: "0.75rem" }}>
+            <button
+              className="f9-secondary-button"
+              type="button"
+              onClick={() => {
+                if (revalidator.state === "idle") {
+                  revalidator.revalidate();
+                }
+              }}
+            >
+              Check now
+            </button>
+            {pastFastPoll && !timedOut ? (
+              <span className="f9-muted-copy" style={{ marginLeft: "0.75rem" }}>
+                Still waiting — checking every 30 seconds.
+              </span>
+            ) : null}
+          </p>
+        ) : null}
       </div>
     </article>
   );

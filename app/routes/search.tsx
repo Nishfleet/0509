@@ -121,6 +121,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       selectedAd: null,
       selectionEnrichmentPending: false,
       collections: [],
+      plan: null,
       session,
       competitorWebsite,
       trackingRole,
@@ -141,6 +142,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       selectedAd: null,
       selectionEnrichmentPending: false,
       collections: [],
+      plan: null,
       session,
       competitorWebsite,
       trackingRole,
@@ -196,6 +198,16 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   }
 
   const collections = session ? await listCollections(env, workspaceUserId!) : [];
+  let plan: "free" | "scout" | "starter" | "agency" | null = null;
+  if (session) {
+    try {
+      const { getUserPlan } = await import("~/lib/plan.server");
+      plan = await getUserPlan(env, workspaceUserId!);
+    } catch {
+      // Isolated tests may omit D1; treat as free for honest collection gates.
+      plan = "free";
+    }
+  }
 
   if (!parsed.filters.query) {
     return {
@@ -206,6 +218,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       selectedAd: null,
       selectionEnrichmentPending: false,
       collections,
+      plan,
       session,
       competitorWebsite,
       trackingRole,
@@ -271,6 +284,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     selectedAd,
     selectionEnrichmentPending: Boolean(selectionEnrichmentPending),
     collections,
+    plan,
     session,
     competitorWebsite,
     trackingRole,
@@ -1194,7 +1208,14 @@ export default function SearchRoute() {
                     <p>{selectedAd.researchSummary}</p>
                   </div>
 
-                  {data.session && data.collections.length > 0 ? (
+                  {data.session && data.plan === "free" ? (
+                    <div className="f9-side-note">
+                      <p>Saving ads to a collection starts on Scout.</p>
+                      <Link className="f9-primary-button" to="/app/billing?source=search#plans">
+                        View plans
+                      </Link>
+                    </div>
+                  ) : data.session && data.collections.length > 0 ? (
                     <Form className="f9-save-stack" method="post">
                       <input name="intent" type="hidden" value="save-to-collection" />
                       <input name="adId" type="hidden" value={selectedAd.metaAdId} />

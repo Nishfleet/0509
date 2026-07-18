@@ -686,7 +686,7 @@ describe("watchlists route actions", () => {
       error: "plan_gated",
       feature: "share_links",
       plan: "starter",
-      message: "Share links are included in the Agency plan.",
+      message: "Share links are included on Starter and Agency plans.",
     });
     vi.doUnmock("~/lib/plan-feature-gate.server");
   });

@@ -121,7 +121,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         error: "plan_gated" as const,
         feature: "share_links" as const,
         plan: shareGate.plan,
-        message: "Share links are included in the Agency plan.",
+        message: "Share links are included on Starter and Agency plans.",
       };
     }
     const digestId = String(formData.get("digestId") ?? "");
