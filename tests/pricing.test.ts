@@ -19,12 +19,16 @@ describe("pricingPlans", () => {
   it("keeps visible fallback pricing neutral until live prices return", () => {
     const [scout, starter, agency] = pricingPlans();
 
-    expect(scout.monthlyLabel).toBe("Monthly price loading");
-    expect(scout.yearlyLabel).toBe("Annual price loading");
-    expect(starter.monthlyLabel).toBe("Monthly price loading");
-    expect(starter.yearlyLabel).toBe("Annual price loading");
-    expect(agency.monthlyLabel).toBe("Monthly price loading");
-    expect(agency.yearlyLabel).toBe("Annual price loading");
+    expect(scout.monthlyLabel).toBe("Localized at checkout");
+    expect(scout.yearlyLabel).toBe("Billed annually — 4 months free");
+    expect(starter.monthlyLabel).toBe("Localized at checkout");
+    expect(starter.yearlyLabel).toBe("Billed annually — 4 months free");
+    expect(agency.monthlyLabel).toBe("Localized at checkout");
+    expect(agency.yearlyLabel).toBe("Billed annually — 4 months free");
+    for (const plan of [scout, starter, agency]) {
+      expect(plan.monthlyLabel.toLowerCase()).not.toContain("price loading");
+      expect(plan.yearlyLabel.toLowerCase()).not.toContain("price loading");
+    }
   });
 
   it("keeps plan caps generous but finite", () => {
@@ -65,17 +69,17 @@ describe("pricingPlans", () => {
     expect(usageBundles()).toEqual([
       expect.objectContaining({
         slug: "proof_500",
-        priceLabel: "Pack price loading",
+        priceLabel: "Localized at checkout",
         creditLabel: "500 extra checks",
       }),
       expect.objectContaining({
         slug: "proof_2000",
-        priceLabel: "Pack price loading",
+        priceLabel: "Localized at checkout",
         creditLabel: "2,000 extra checks",
       }),
       expect.objectContaining({
         slug: "proof_7500",
-        priceLabel: "Pack price loading",
+        priceLabel: "Localized at checkout",
         creditLabel: "7,500 extra checks",
       }),
     ]);

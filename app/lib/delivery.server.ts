@@ -1,4 +1,5 @@
 import {
+  buildChangeIntelligenceSummary,
   type DigestCadence,
   digestCadenceLabel,
   readDigestIntelligence,
@@ -2757,6 +2758,10 @@ function buildInstantAlertContent(
     const shortChange = provisional
       ? "Possible change detected"
       : primaryEvent.title;
+    const intelligence = buildChangeIntelligenceSummary(primaryEvent);
+    const advertiserNote = readCompetitorLabel(primaryEvent)
+      ? `<p style="margin: 0 0 10px; color: #5b6577; font-size: 13px;">Advertiser: ${escapeHtml(competitor)}</p>`
+      : "";
 
     return {
       competitor,
@@ -2767,7 +2772,10 @@ function buildInstantAlertContent(
         <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #0b1220; line-height: 1.5;">
           <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine alert</p>
           <h1 style="margin: 0 0 12px;">${escapeHtml(subject)}</h1>
-          <p style="margin: 0 0 16px; color: #475467;">${escapeHtml(primaryEvent.summary)}</p>
+          ${advertiserNote}
+          <p style="margin: 0 0 8px; color: #475467;">${escapeHtml(primaryEvent.summary)}</p>
+          <p style="margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: #5b6577;">${escapeHtml(intelligence.priorityBand)}</p>
+          <p style="margin: 0 0 16px;"><strong>Suggested next action:</strong> ${escapeHtml(intelligence.recommendedAction)}</p>
           ${renderEventDiffHtml(primaryEvent)}
           ${creativeImageHtml}
           ${watchlistUrl ? `<p style="margin: 0;"><a href="${watchlistUrl}" style="color: #2563eb; text-decoration: underline;">See the evidence</a></p>` : ""}
@@ -2789,17 +2797,21 @@ function buildInstantAlertContent(
       <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #0b1220; line-height: 1.5;">
         <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine alert</p>
         <h1 style="margin: 0 0 12px;">${escapeHtml(subject)}</h1>
+        <p style="margin: 0 0 12px; color: #5b6577; font-size: 13px;">Advertiser: ${escapeHtml(competitor)}</p>
         ${creativeImageHtml}
         <ul style="padding-left: 18px;">
           ${events
-            .map(
-              (event) => `
-                <li style="margin-bottom: 10px;">
-                  <strong>${escapeHtml(event.title)}</strong><br />
+            .map((event) => {
+              const intelligence = buildChangeIntelligenceSummary(event);
+              return `
+                <li style="margin-bottom: 12px;">
+                  <strong>${escapeHtml(event.title)}</strong>
+                  <span style="display:block; font-size: 12px; color: #5b6577; margin: 2px 0 4px;">${escapeHtml(intelligence.priorityBand)}</span>
                   <span style="color: #475467;">${escapeHtml(event.summary)}${escapeHtml(renderEventDiffText(event))}</span>
+                  <span style="display:block; margin-top: 4px;"><strong>Suggested next action:</strong> ${escapeHtml(intelligence.recommendedAction)}</span>
                 </li>
-              `,
-            )
+              `;
+            })
             .join("")}
         </ul>
         ${watchlistUrl ? `<p style="margin: 16px 0 0;"><a href="${watchlistUrl}" style="color: #2563eb; text-decoration: underline;">View watchlist</a></p>` : ""}

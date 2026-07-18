@@ -63,8 +63,8 @@ const PLANS: PricingPlan[] = PLAN_FAMILIES.filter((plan) => plan !== "free").map
   return {
     slug,
     name: slug.charAt(0).toUpperCase() + slug.slice(1),
-    monthlyLabel: "Monthly price loading",
-    yearlyLabel: "Annual price loading",
+    monthlyLabel: "Localized at checkout",
+    yearlyLabel: "Billed annually — 4 months free",
     detail:
       slug === "scout"
         ? "6-hour competitor monitoring for a small watchlist."
@@ -85,7 +85,7 @@ const USAGE_BUNDLES: UsageBundle[] = [
     slug: "proof_500",
     sku: "burst_500_v1",
     name: TOP_UP_PACK_DISPLAY.burst_500_v1.name,
-    priceLabel: "Pack price loading",
+    priceLabel: "Localized at checkout",
     creditLabel: TOP_UP_PACK_DISPLAY.burst_500_v1.creditLabel,
     detail: TOP_UP_PACK_DISPLAY.burst_500_v1.detail,
     creditQuantity: 500,
@@ -94,7 +94,7 @@ const USAGE_BUNDLES: UsageBundle[] = [
     slug: "proof_2000",
     sku: "campaign_2000_v1",
     name: TOP_UP_PACK_DISPLAY.campaign_2000_v1.name,
-    priceLabel: "Pack price loading",
+    priceLabel: "Localized at checkout",
     creditLabel: TOP_UP_PACK_DISPLAY.campaign_2000_v1.creditLabel,
     detail: TOP_UP_PACK_DISPLAY.campaign_2000_v1.detail,
     creditQuantity: 2000,
@@ -103,7 +103,7 @@ const USAGE_BUNDLES: UsageBundle[] = [
     slug: "proof_7500",
     sku: "scale_7500_v1",
     name: TOP_UP_PACK_DISPLAY.scale_7500_v1.name,
-    priceLabel: "Pack price loading",
+    priceLabel: "Localized at checkout",
     creditLabel: TOP_UP_PACK_DISPLAY.scale_7500_v1.creditLabel,
     detail: TOP_UP_PACK_DISPLAY.scale_7500_v1.detail,
     creditQuantity: 7500,
