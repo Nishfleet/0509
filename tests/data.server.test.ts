@@ -2343,8 +2343,50 @@ describe("Dodo billing persistence", () => {
     expect(statements).toHaveLength(3);
     expect(statements[0]?.sql).toContain("payload_timestamp");
     expect(statements[1]?.sql).not.toContain("payload_timestamp");
-    expect(statements[1]?.sql).toContain("WHERE dodo_webhook_event.outcome = 'failed'");
+    expect(statements[1]?.sql).toContain("processing_started_at");
+    expect(statements[1]?.sql).toContain("VALUES (?, ?, ?, ?, 'processing', ?, '{}')");
+    expect(statements[1]?.sql).toContain("outcome = 'processing'");
+    expect(statements[1]?.sql).not.toContain("outcome = 'received'");
+    expect(statements[1]?.sql).toContain("dodo_webhook_event.outcome = 'failed'");
     expect(statements[2]?.sql).toContain("SELECT metadata_json");
+  });
+
+  it("fails closed when the Dodo webhook ledger lacks processing leases", async () => {
+    const statements: string[] = [];
+    const mock = {
+      db: {
+        prepare(sql: string) {
+          statements.push(sql);
+          return {
+            bind() {
+              return {
+                async run() {
+                  throw new Error(
+                    "D1_ERROR: table dodo_webhook_event has no column named processing_started_at: SQLITE_ERROR",
+                  );
+                },
+                async all<T>() {
+                  return { results: [] as T[] };
+                },
+              };
+            },
+          };
+        },
+      },
+    };
+
+    await expect(
+      beginDodoWebhookEventProcessing(
+        { DB: mock.db } as never,
+        {
+          eventId: "evt-missing-lease",
+          eventType: "payment.succeeded",
+          userId: null,
+          payloadTimestamp: "1765459200",
+        },
+      ),
+    ).rejects.toThrow("processing_started_at");
+    expect(statements).toHaveLength(1);
   });
 
   it("rejects blank Dodo webhook event ids", async () => {
