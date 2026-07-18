@@ -1,8 +1,60 @@
 :root {
-  --f9-global-ink: #061629;
-  --f9-global-muted: #40546a;
-  --f9-global-line: rgba(6, 22, 41, 0.1);
+  /* Canonical workspace tokens (bone / Vercel aesthetic). */
+  --ink: #171611;
+  --ink-soft: #55524a;
+  --ink-faint: #6e6a5e;
+  --line: #e0ddd4;
+  --card: #fffdf8;
+  --bone: #f4f1e8;
+  --green: #16c47f;
+  --green-ink: #064d31;
+  --green-wash: #d9f6e8;
+  --red: #b42318;
+  --red-wash: #fff8f7;
+  --amber-wash: #fffaf2;
+
+  /* Legacy aliases so bare var(--f9-search-*) / var(--ld-*) resolve everywhere. */
+  --f9-search-ink: var(--ink);
+  --f9-search-muted: var(--ink-soft);
+  --f9-search-soft: var(--ink-faint);
+  --f9-search-accent: var(--green-ink);
+  --f9-global-ink: var(--ink);
+  --f9-global-muted: var(--ink-soft);
+  --f9-global-line: var(--line);
+  --ld-ink: var(--ink);
+  --ld-ink-soft: var(--ink-soft);
+  --ld-ink-faint: var(--ink-faint);
+  --ld-line: var(--line);
+  --ld-card: var(--card);
+  --ld-bone: var(--bone);
+  --ld-green: var(--green);
+  --ld-green-ink: var(--green-ink);
+  --ld-green-wash: var(--green-wash);
   --f9-font: "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/* Missing utility classes used across dashboard/error/billing surfaces. */
+.f9-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.f9-status-strip.is-warning {
+  border-color: #e8c4c0;
+  background: var(--red-wash);
+}
+
+.f9-empty-row {
+  display: grid;
+  gap: 8px;
+}
+
+.f9-result-card-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
 }
 
 * {
