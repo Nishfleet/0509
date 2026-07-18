@@ -10,12 +10,14 @@ import type {
 // variants of the same change (A/B tests, countdown headlines) re-alert forever.
 const SUPPRESSION_WINDOW_MS = 48 * 60 * 60 * 1000;
 
+// Instant "balanced" threshold is 75. Headline product events (new ad, offer
+// change) must clear that bar or the product's core promise never fires.
 const BASE_IMPORTANCE_BY_EVENT: Record<WatchEventType, number> = {
-  ad_new: 65,
+  ad_new: 76,
   ad_inactive: 60,
   landing_page_url_changed: 85,
   landing_page_headline_changed: 75,
-  landing_page_offer_changed: 74,
+  landing_page_offer_changed: 80,
   landing_page_cta_changed: 72,
   landing_page_form_changed: 70,
 };

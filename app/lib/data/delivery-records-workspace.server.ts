@@ -14,7 +14,9 @@ import type { DeliveryQuietHours, SensitivityMode } from "~/lib/types";
 export function legacyWorkspaceDeliveryDefaults(input: { hasEmail: boolean }) {
   return {
     sensitivityMode: "balanced" as const,
-    instantEnabled: false,
+    // Paid high-priority alerts remain plan-gated; free workspaces keep the
+    // preference true so upgrade immediately starts delivering headline events.
+    instantEnabled: true,
     digestEnabled: true,
     emailEnabled: input.hasEmail,
     whatsappEnabled: false,

@@ -331,7 +331,7 @@ describe("signal-quality hardening (2026-06-12)", () => {
     expect(result.status).toBe("suppressed");
   });
 
-  it("scores without a proof-presence bump so only headline changes clear the balanced instant bar", () => {
+  it("scores headline events so new ads and offer changes clear the balanced instant bar", () => {
     expect(
       scoreWatchEventImportance({
         eventType: "landing_page_headline_changed",
@@ -349,7 +349,16 @@ describe("signal-quality hardening (2026-06-12)", () => {
         burstCount: 1,
         indiaSignals: false,
       }),
-    ).toBe(74);
+    ).toBe(80);
+    expect(
+      scoreWatchEventImportance({
+        eventType: "ad_new",
+        proofPresent: true,
+        sensitivityMode: "balanced",
+        burstCount: 1,
+        indiaSignals: false,
+      }),
+    ).toBe(76);
     expect(
       scoreWatchEventImportance({
         eventType: "landing_page_cta_changed",
