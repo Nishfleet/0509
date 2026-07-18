@@ -1,0 +1,192 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import type { AdRecord } from "~/lib/types";
+
+const baseAd: AdRecord = {
+  metaAdId: "meta-fast-1",
+  advertiser: "Glossier",
+  body: "Soft skin kit",
+  previewHeadline: "Soft skin kit",
+  previewSubhead: "",
+  hook: "Soft skin kit",
+  offer: "",
+  cta: "Shop now",
+  format: "image",
+  languageLabel: "English",
+  destinationType: "website",
+  landingPageUrl: "https://www.glossier.com/products/kit",
+  adSnapshotUrl: "https://www.facebook.com/ads/library/?id=1",
+  countries: ["US"],
+  platforms: ["Instagram"],
+  firstSeenAt: null,
+  lastSeenAt: null,
+  active: true,
+  researchSummary: "Summary",
+  source: "meta_library_browser",
+  analysisFields: [],
+  creativeText: null,
+  landingPage: null,
+};
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.resetModules();
+});
+
+describe("WP-11 paint-fast selection enrichment", () => {
+  it("returns the base ad immediately and defers OCR/landing via waitUntil", async () => {
+    let resolveCreative: (value: unknown) => void = () => undefined;
+    const captureCreativeText = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveCreative = resolve;
+        }),
+    );
+    const captureLandingPageSnapshot = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(
+            () =>
+              resolve({
+                rawHeadline: "Glossier kit",
+                ctaText: "Shop",
+                priceText: null,
+                formPresent: false,
+                captureMethod: "fetch",
+                capturedAt: "2026-07-18T00:00:00.000Z",
+              }),
+            5,
+          );
+        }),
+    );
+
+    vi.doMock("~/lib/analysis.server", () => ({
+      withStructuredAnalysis: vi.fn((ad: AdRecord) => ad),
+    }));
+    vi.doMock("~/lib/creative-text.server", () => ({
+      captureCreativeText,
+    }));
+    vi.doMock("~/lib/landing-pages.server", () => ({
+      captureLandingPageSnapshot,
+    }));
+    vi.doMock("~/lib/translation.server", () => ({
+      translateAdText: vi.fn().mockResolvedValue(null),
+      buildTranslatedAnalysisField: vi.fn(),
+      withTranslatedAnalysisField: vi.fn((fields: unknown) => fields),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      hydrateAdsWithPersistedCreatives: vi.fn(async (_env: unknown, ads: AdRecord[]) => ads),
+      listAdsByIds: vi.fn().mockResolvedValue([]),
+      upsertAd: vi.fn(),
+    }));
+
+    const waitUntil = vi.fn((promise: Promise<unknown>) => {
+      void promise;
+    });
+
+    const { prepareSearchResultSelection, selectionNeedsEnrichment } = await import(
+      "~/lib/search-selection.server"
+    );
+
+    expect(selectionNeedsEnrichment(baseAd)).toBe(true);
+
+    const result = await prepareSearchResultSelection(
+      { DB: {} } as never,
+      {
+        ads: [baseAd],
+        nextCursor: null,
+        source: "meta_library_browser",
+        cacheStatus: "hit",
+      },
+      "meta-fast-1",
+      {
+        enrichSelected: true,
+        hydratePersisted: true,
+        waitUntil,
+      },
+    );
+
+    // Paint-fast: selected ad is the base (no creative/landing yet).
+    expect(result.selectionEnrichmentPending).toBe(true);
+    expect(result.selectedAd?.creativeText).toBeNull();
+    expect(result.selectedAd?.landingPage).toBeNull();
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+    // Enrichment was scheduled, not awaited before return.
+    expect(captureCreativeText).toHaveBeenCalled();
+
+    resolveCreative({
+      text: "Soft skin kit OCR",
+      captureMethod: "ad_snapshot_fetch",
+      imageUrl: null,
+      metadata: { source: "test" },
+    });
+    await waitUntil.mock.calls[0]?.[0];
+    expect(captureLandingPageSnapshot).toHaveBeenCalled();
+  });
+
+  it("skips enrichment work when persisted creatives already fill the slots", async () => {
+    const captureCreativeText = vi.fn();
+    const captureLandingPageSnapshot = vi.fn();
+    const richAd: AdRecord = {
+      ...baseAd,
+      creativeText: "Already captured",
+      landingPage: {
+        rawUrl: "https://www.glossier.com/products/kit",
+        canonicalUrl: "https://www.glossier.com/products/kit",
+        rawHeadline: "Done",
+        normalizedHeadline: "done",
+        normalizedHeadlineHash: "done",
+        ctaText: null,
+        priceText: null,
+        formPresent: false,
+        captureMethod: "landing_page_fetch",
+        capturedAt: "2026-07-18T00:00:00.000Z",
+      },
+    };
+
+    vi.doMock("~/lib/analysis.server", () => ({
+      withStructuredAnalysis: vi.fn((ad: AdRecord) => ad),
+    }));
+    vi.doMock("~/lib/creative-text.server", () => ({
+      captureCreativeText,
+    }));
+    vi.doMock("~/lib/landing-pages.server", () => ({
+      captureLandingPageSnapshot,
+    }));
+    vi.doMock("~/lib/translation.server", () => ({
+      translateAdText: vi.fn().mockResolvedValue(null),
+      buildTranslatedAnalysisField: vi.fn(),
+      withTranslatedAnalysisField: vi.fn((fields: unknown) => fields),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      hydrateAdsWithPersistedCreatives: vi.fn(async (_env: unknown, ads: AdRecord[]) => ads),
+      listAdsByIds: vi.fn().mockResolvedValue([]),
+      upsertAd: vi.fn(),
+    }));
+
+    const waitUntil = vi.fn();
+    const { prepareSearchResultSelection, selectionNeedsEnrichment } = await import(
+      "~/lib/search-selection.server"
+    );
+
+    expect(selectionNeedsEnrichment(richAd)).toBe(false);
+
+    const result = await prepareSearchResultSelection(
+      {} as never,
+      {
+        ads: [richAd],
+        nextCursor: null,
+        source: "meta_library_browser",
+        cacheStatus: "hit",
+      },
+      "meta-fast-1",
+      { enrichSelected: true, waitUntil },
+    );
+
+    expect(result.selectionEnrichmentPending).toBe(false);
+    expect(waitUntil).not.toHaveBeenCalled();
+    expect(captureCreativeText).not.toHaveBeenCalled();
+    expect(captureLandingPageSnapshot).not.toHaveBeenCalled();
+    expect(result.selectedAd?.creativeText).toBe("Already captured");
+  });
+});

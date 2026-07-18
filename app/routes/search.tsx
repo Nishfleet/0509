@@ -119,6 +119,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       fingerprint: parsed.fingerprint,
       result: buildIdleSearchResult(),
       selectedAd: null,
+      selectionEnrichmentPending: false,
       collections: [],
       session,
       competitorWebsite,
@@ -138,6 +139,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       fingerprint: parsed.fingerprint,
       result: buildIdleSearchResult(),
       selectedAd: null,
+      selectionEnrichmentPending: false,
       collections: [],
       session,
       competitorWebsite,
@@ -202,6 +204,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       fingerprint: parsed.fingerprint,
       result: buildIdleSearchResult(),
       selectedAd: null,
+      selectionEnrichmentPending: false,
       collections,
       session,
       competitorWebsite,
@@ -246,15 +249,19 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         relevanceApplied: false,
       };
 
-  const { result: hydratedResult, selectedAd } = await prepareSearchResultSelection(
-    env,
-    searchExecution.result,
-    url.searchParams.get("selected"),
-    {
-      enrichSelected: Boolean(session) && !providerDeny.enabled,
-      hydratePersisted: Boolean(session),
-    },
-  );
+  const waitUntil = context.cloudflare?.ctx?.waitUntil?.bind(context.cloudflare.ctx);
+  const { result: hydratedResult, selectedAd, selectionEnrichmentPending } =
+    await prepareSearchResultSelection(
+      env,
+      searchExecution.result,
+      url.searchParams.get("selected"),
+      {
+        enrichSelected: Boolean(session) && !providerDeny.enabled,
+        hydratePersisted: Boolean(session),
+        // WP-11: paint base ad immediately; OCR/landing/translation finish via waitUntil.
+        ...(typeof waitUntil === "function" ? { waitUntil } : {}),
+      },
+    );
 
   return {
     mode: parsed.mode,
@@ -262,6 +269,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     fingerprint: parsed.fingerprint,
     result: hydratedResult,
     selectedAd,
+    selectionEnrichmentPending: Boolean(selectionEnrichmentPending),
     collections,
     session,
     competitorWebsite,
@@ -487,9 +495,17 @@ export default function SearchRoute() {
     parseSearchResultSort(new URLSearchParams(location.search).get("sort")) || DEFAULT_SEARCH_RESULT_SORT,
   );
   const [warmingPollCount, setWarmingPollCount] = useState(0);
+  const [selectionEnrichmentRevalidatedFor, setSelectionEnrichmentRevalidatedFor] = useState<
+    string | null
+  >(null);
   const requestedCursor = new URLSearchParams(location.search).get("after");
   const selectedFromUrl = new URLSearchParams(location.search).get("selected");
   const searchKey = buildSearchAccumulationKey(data);
+  const selectionEnrichmentKey = selectedFromUrl
+    ? `${searchKey}::${selectedFromUrl}`
+    : data.selectedAd?.metaAdId
+      ? `${searchKey}::${data.selectedAd.metaAdId}`
+      : null;
   const [accumulated, setAccumulated] = useState<SearchAccumulationState>(() =>
     createSearchAccumulationState(searchKey, data.result, data.selectedAd),
   );
@@ -576,6 +592,29 @@ export default function SearchRoute() {
     // Reset warming poll budget when the query identity changes.
     setWarmingPollCount(0);
   }, [searchKey]);
+
+  // WP-11: single revalidation ~4s after deferred selection enrichment starts.
+  // Not a poll — one shot per selected ad so OCR/landing slots can fill from D1.
+  useEffect(() => {
+    if (!data.selectionEnrichmentPending || !selectionEnrichmentKey) {
+      return;
+    }
+    if (selectionEnrichmentRevalidatedFor === selectionEnrichmentKey) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      setSelectionEnrichmentRevalidatedFor(selectionEnrichmentKey);
+      if (revalidator.state === "idle") {
+        revalidator.revalidate();
+      }
+    }, 4_000);
+    return () => clearTimeout(timer);
+  }, [
+    data.selectionEnrichmentPending,
+    selectionEnrichmentKey,
+    selectionEnrichmentRevalidatedFor,
+    revalidator,
+  ]);
   const nextCursor = visibleResult.nextCursor;
   const retryingCursor = visibleAccumulated.retryCursor;
   const loadMoreParams = nextCursor
@@ -1099,17 +1138,30 @@ export default function SearchRoute() {
 
                   <div className="f9-proof-block">
                     <span>Text in the ad</span>
-                    <p>{formatLandingPageSignalValue(creativeTextField?.fieldValue)}</p>
+                    <p>
+                      {creativeTextField
+                        ? formatLandingPageSignalValue(creativeTextField.fieldValue)
+                        : data.selectionEnrichmentPending
+                          ? "Analyzing creative…"
+                          : formatLandingPageSignalValue(null)}
+                    </p>
                     <small>
                       {creativeTextField
                         ? "Read from the ad creative when available."
-                        : "Not detected from the ad snapshot yet."}
+                        : data.selectionEnrichmentPending
+                          ? "Reading the ad creative now — this updates in a few seconds."
+                          : "Not detected from the ad snapshot yet."}
                     </small>
                   </div>
 
                   <div className="f9-proof-block">
                     <span>Landing page</span>
-                    <h3>{selectedAd.landingPage?.rawHeadline ?? "Headline not captured yet"}</h3>
+                    <h3>
+                      {selectedAd.landingPage?.rawHeadline ??
+                        (data.selectionEnrichmentPending
+                          ? "Analyzing creative…"
+                          : "Headline not captured yet")}
+                    </h3>
                     <dl className="f9-detail-grid">
                       <DetailRow
                         label="Primary CTA"
