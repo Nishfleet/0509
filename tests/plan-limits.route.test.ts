@@ -495,7 +495,7 @@ describe("pricing CTA rendering", () => {
     const { default: DigestsRoute } = await import("~/routes/app.digests");
     const markup = renderToStaticMarkup(createElement(DigestsRoute));
 
-    expect(markup).toContain("Digests are included in paid plans.");
+    expect(markup).toContain("Briefs are included in paid plans.");
     expect(markup).toContain("View plans");
     expect(markup).toContain("/app/billing?source=limit#plans");
   });

@@ -604,7 +604,7 @@ export default function AppOnboardRoute() {
       <section className="f9-container f9-onboard-layout">
         <article className="f9-onboard-card">
           <DashboardPageHeader
-            lead="Start with one competitor. We will validate the website, create its watchlist, and queue the first evidence scan."
+            lead="Start with one competitor. We will validate the website, create its watchlist, and start the first scan."
             title={data.resumeSetup ? "Resume setup" : "Get started"}
           />
 
@@ -766,7 +766,7 @@ export default function AppOnboardRoute() {
               <p className="f9-muted-copy">
                 {atWatchlistCap
                   ? "Free includes 1 watchlist. Upgrade for more competitors, scheduled scans, and digests."
-                  : "Starter is the recommended plan for retained competitor tracking with 3-hour scans and daily/weekly digests."}
+                  : "Plans start with Scout. Starter is recommended for retained tracking with 3-hour scans and daily/weekly briefs."}
               </p>
               <div className="f9-action-row">
                 <Link className="f9-primary-button" to="/app/billing?source=onboarding#plans">

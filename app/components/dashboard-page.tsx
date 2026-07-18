@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Link } from "react-router";
 
 export interface DashboardPageProps {
@@ -14,8 +15,8 @@ export function DashboardPage({ children, className }: DashboardPageProps) {
 }
 
 export interface DashboardPageHeaderProps {
-  kicker?: string;
-  title: string;
+  kicker?: ReactNode;
+  title: ReactNode;
   lead?: string;
   action?: { label: string; to: string };
 }

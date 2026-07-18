@@ -126,7 +126,7 @@ describe("digest plan-aware controls", () => {
   it("keeps free activation honest with an upgrade state and no recurring controls", async () => {
     const markup = await renderDigest("free");
 
-    expect(markup).toContain("Digests are included in paid plans");
+    expect(markup).toContain("Briefs are included in paid plans");
     expect(markup).toContain("View plans");
     expect(markup).not.toContain("Export CSV");
     expect(markup).not.toContain("Share snapshot");

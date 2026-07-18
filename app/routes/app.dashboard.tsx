@@ -522,7 +522,8 @@ export default function AppDashboardRoute() {
     <DashboardPage>
       <section className="f9-app-stack f9-dashboard-clean">
         <DashboardPageHeader
-          lead="Your Market Desk Brief, competitor watchlists, and what needs attention next."
+          kicker={<WakeGreeting />}
+          lead="Your brief, competitor watchlists, and what needs attention next."
           title="Overview"
         />
 
