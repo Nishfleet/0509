@@ -214,7 +214,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
         scenario: "digest",
       })).resolves.toMatchObject({ cleanupVerified: true, includedUsed: 0 });
       await expectResponsiveSurface(page, viewport, "/app/digests", "Briefs", [
-        /Digest history/,
+        /Brief history/,
         /Okara launched a new workflow offer/,
         /sent/i,
       ]);

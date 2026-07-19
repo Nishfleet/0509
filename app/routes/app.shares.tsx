@@ -106,6 +106,7 @@ export default function SharesRoute() {
 				<ActionFeedback data={actionData} intent="revoke-share" />
         {data.shares.length === 0 ? (
 					<EmptyState
+						action={{ label: "Open reports", to: "/app/reports" }}
 						description="Share a watchlist, collection, digest, or report and it will appear here so you can revoke it any time."
 						title="No active share links"
 					/>

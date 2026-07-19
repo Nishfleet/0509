@@ -130,7 +130,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     if (!digest || digest.userId !== workspaceUserId) {
       return {
         ok: false,
-        message: "Digest not found.",
+        message: "Brief not found.",
       };
     }
 
@@ -248,7 +248,7 @@ export default function DigestsRoute() {
           <article className="f9-app-panel f9-side-panel">
             <div className="f9-panel-toolbar">
               <div>
-                <h2>Digest history</h2>
+                <h2>Brief history</h2>
               </div>
             </div>
 
@@ -283,9 +283,9 @@ export default function DigestsRoute() {
               })}
               {data.digests.length === 0 ? (
                 <EmptyState
-                  description="Start a competitor watchlist and digest history will show both movement and all-quiet periods."
+                  description="Start a competitor watchlist and brief history will show both movement and all-quiet periods."
                   headingLevel="h3"
-                  title="Your first digest appears after monitoring runs"
+                  title="Your first brief appears after monitoring runs"
                 />
               ) : null}
             </div>
@@ -499,8 +499,8 @@ export default function DigestsRoute() {
             ) : (
               <EmptyState
                 action={{ label: "Open watchlists", to: "/app/watchlists" }}
-                description="Digest history will show both competitor movement and all-quiet periods."
-                title="Your first digest appears after monitoring runs"
+                description="Brief history will show both competitor movement and all-quiet periods."
+                title="Your first brief appears after monitoring runs"
               />
             )}
           </article>
