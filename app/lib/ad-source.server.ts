@@ -70,17 +70,23 @@ async function searchMetaApiAdsWithInteractiveDepth(
   const extraPages = getInteractiveMetaApiExtraPages();
 
   for (let page = 0; page < extraPages && nextCursor; page += 1) {
-    const more = await searchMetaApiAds(env, query, nextCursor, {
-      allowDemoFallback: options.allowDemoFallback,
-    });
-    for (const ad of more.ads) {
-      if (seen.has(ad.metaAdId)) {
-        continue;
+    try {
+      const more = await searchMetaApiAds(env, query, nextCursor, {
+        allowDemoFallback: options.allowDemoFallback,
+      });
+      for (const ad of more.ads) {
+        if (seen.has(ad.metaAdId)) {
+          continue;
+        }
+        seen.add(ad.metaAdId);
+        ads.push(ad);
       }
-      seen.add(ad.metaAdId);
-      ads.push(ad);
+      nextCursor = more.nextCursor;
+    } catch {
+      // MINOR: a page-2/3 failure must not discard page 1 results already
+      // collected for the interactive public search.
+      break;
     }
-    nextCursor = more.nextCursor;
   }
 
   return {

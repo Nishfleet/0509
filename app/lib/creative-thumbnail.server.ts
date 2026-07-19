@@ -123,11 +123,23 @@ export async function serveCreativeArtifact(
     return new Response("Not Found", { status: 404 });
   }
 
+  // MINOR: only serve raster image types — never SVG (scriptable).
+  const rawType = (object.httpMetadata?.contentType ?? "image/jpeg").toLowerCase();
+  const mediaType = rawType.split(";")[0]?.trim() ?? "";
+  const allowedRaster = new Set([
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    "image/avif",
+  ]);
+  if (!allowedRaster.has(mediaType)) {
+    return new Response("Unsupported Media Type", { status: 415 });
+  }
+
   const headers = new Headers();
-  headers.set(
-    "content-type",
-    object.httpMetadata?.contentType ?? "image/jpeg",
-  );
+  headers.set("content-type", mediaType === "image/jpg" ? "image/jpeg" : mediaType);
   headers.set(
     "cache-control",
     object.httpMetadata?.cacheControl ?? "public, max-age=31536000, immutable",

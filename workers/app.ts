@@ -102,7 +102,13 @@ export default {
       return markdownResponse(request, PUBLIC_MARKDOWN);
     }
 
+    const rateLimitResponse = await enforceRequestRateLimit(request, env, ctx);
+    if (rateLimitResponse) {
+      return withSecurityHeaders(rateLimitResponse, request);
+    }
+
     // WP-10: durable creative thumbnails for saved collection ads (R2).
+    // MINOR: serve only after the request rate-limit gate; raster types only.
     if (request.method === "GET" || request.method === "HEAD") {
       const { parseCreativeArtifactPathname, serveCreativeArtifact } = await import(
         "../app/lib/creative-thumbnail.server"
@@ -114,11 +120,6 @@ export default {
           return withSecurityHeaders(artifactResponse, request);
         }
       }
-    }
-
-    const rateLimitResponse = await enforceRequestRateLimit(request, env, ctx);
-    if (rateLimitResponse) {
-      return withSecurityHeaders(rateLimitResponse, request);
     }
 
     (globalThis as GlobalEnvCarrier).__APP_REQUEST_ENV__ = env;
