@@ -27,9 +27,14 @@ export function EmptyState({
 	children,
 }: EmptyStateProps) {
 	if (variant === "inline") {
+		// Title and description share one muted line; without terminal
+		// punctuation they read as a run-on ("Nothing saved yet Collections
+		// you create..."). Add a period only when a description follows and
+		// the title doesn't already end a sentence.
+		const leadNeedsStop = Boolean(description) && !/[.!?…]$/.test(title.trim());
 		return (
 			<p className="f9-muted-copy f9-empty-inline" role="status">
-				{title}
+				{leadNeedsStop ? `${title}.` : title}
 				{description ? <> {description}</> : null}
 			</p>
 		);

@@ -1865,7 +1865,7 @@ export default function WatchlistsRoute() {
                                 Started <LocalTime iso={run.startedAt} />
                               </h3>
                             </div>
-                            <span className="f9-status-pill">{run.pagesScanned} pages</span>
+                            <span className="f9-status-pill">{run.pagesScanned} {run.pagesScanned === 1 ? "page" : "pages"}</span>
                           </div>
                           <p className="f9-muted-copy">
                             {timing.timestamp ? (
