@@ -3841,6 +3841,12 @@ one signal-green accent.
   margin-bottom: 22px;
 }
 
+@media (max-width: 600px) {
+  .f9-home .ld-hero .f9-announcement {
+    margin-bottom: 12px;
+  }
+}
+
 .ld-case {
   display: flex;
   flex-wrap: wrap;
