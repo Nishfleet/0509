@@ -13,6 +13,7 @@ import {
   getDigest,
   getDigestByPeriod,
   getSuccessfulRunStatsForUserBetween,
+  getWorkspaceDeliveryConfig,
   listAdsByIds,
 	listDigestScheduleJobsAwaitingAlert,
   listRetryableDigestRuns,
@@ -329,6 +330,24 @@ async function runDigestForUser(
     return 0;
   }
 
+  // Monday double-digest firewall: users who also receive the weekly (05:00 UTC
+  // Monday) skip the daily brief so they do not get two overlapping emails.
+  if (
+    cadence === "daily" &&
+    new Date(periodEnd).getUTCDay() === 1 &&
+    planAllowsDigestCadence(plan, "weekly")
+  ) {
+    return 0;
+  }
+
+  // Customer preference: weekly_only skips daily jobs (Starter/Agency opt-down).
+  if (cadence === "daily") {
+    const workspaceConfig = await getWorkspaceDeliveryConfig(env, user.id);
+    if (workspaceConfig?.digestCadencePreference === "weekly_only") {
+      return 0;
+    }
+  }
+
   const watchlists = await listWatchlists(env, user.id);
   const eligibleByWatchlist: Array<{
     watchlist: WatchlistRecord;
@@ -401,7 +420,20 @@ async function runDigestForUser(
       periodStart,
       periodEnd,
     );
-    if (runStats.runs === 0) return 0;
+    if (runStats.runs === 0) {
+      // Paid digests with active watchlists but zero successful scans: tell the
+      // customer instead of going silent (operator already has at-risk mail).
+      if (watchlists.length > 0) {
+        const { deliverScanTroubleNotice } = await import("~/lib/delivery.server");
+        await deliverScanTroubleNotice(env, {
+          userId: user.id,
+          accountEmail: user.email,
+          watchlistNames: watchlists.map((watchlist) => watchlist.name),
+          periodKey: `${periodStart.slice(0, 10)}_${periodEnd.slice(0, 10)}`,
+        });
+      }
+      return 0;
+    }
     heartbeat = runStats;
   }
 
@@ -520,7 +552,18 @@ async function runDigestForUser(
       periodStart,
       periodEnd,
     );
-    if (runStats.runs === 0) return 0;
+    if (runStats.runs === 0) {
+      if (watchlists.length > 0) {
+        const { deliverScanTroubleNotice } = await import("~/lib/delivery.server");
+        await deliverScanTroubleNotice(env, {
+          userId: user.id,
+          accountEmail: user.email,
+          watchlistNames: watchlists.map((watchlist) => watchlist.name),
+          periodKey: `${periodStart.slice(0, 10)}_${periodEnd.slice(0, 10)}`,
+        });
+      }
+      return 0;
+    }
     heartbeat = runStats;
   }
 
@@ -593,7 +636,19 @@ async function retryFailedDigests(
           candidate.periodStart,
           candidate.periodEnd,
         );
-        if (runStats.runs === 0) continue;
+        if (runStats.runs === 0) {
+          const userWatchlists = await listWatchlists(env, candidate.userId);
+          if (userWatchlists.length > 0) {
+            const { deliverScanTroubleNotice } = await import("~/lib/delivery.server");
+            await deliverScanTroubleNotice(env, {
+              userId: candidate.userId,
+              accountEmail: candidate.userEmail,
+              watchlistNames: userWatchlists.map((watchlist) => watchlist.name),
+              periodKey: `${candidate.periodStart.slice(0, 10)}_${candidate.periodEnd.slice(0, 10)}`,
+            });
+          }
+          continue;
+        }
         heartbeat = runStats;
       }
 

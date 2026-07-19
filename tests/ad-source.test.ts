@@ -448,7 +448,31 @@ describe("searchAdsViaSourceResolver", () => {
 
   it("uses a customer-owned Meta token when the caller provides one", async () => {
     const metaApiSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>().mockResolvedValue({
-      ads: [],
+      ads: [
+        {
+          metaAdId: "customer-owned-1",
+          advertiser: "Nykaa",
+          body: "Sale",
+          previewHeadline: "Sale",
+          previewSubhead: "Sale",
+          hook: "Sale",
+          offer: "Sale",
+          cta: "Shop",
+          format: "image",
+          languageLabel: "English",
+          destinationType: "website",
+          landingPageUrl: null,
+          adSnapshotUrl: null,
+          countries: ["IN"],
+          platforms: ["Facebook"],
+          firstSeenAt: null,
+          lastSeenAt: null,
+          active: true,
+          researchSummary: "ok",
+          source: "meta_api",
+          analysisFields: [],
+        },
+      ],
       nextCursor: null,
       source: "meta_api",
       provider: "meta_api",
@@ -465,6 +489,7 @@ describe("searchAdsViaSourceResolver", () => {
       filterAdsBySearchFilters: (ads: unknown[]) => ads,
       searchAds: metaApiSearch,
       demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
     }));
 
     const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
@@ -598,6 +623,280 @@ describe("searchAdsViaSourceResolver", () => {
     );
 
     expect(getDiscoveryCacheEntry).toHaveBeenCalledTimes(1);
+    expect(metaApiSearch).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      provider: "meta_api",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+    });
+  });
+
+  it("reuses a forceLive shared cache entry younger than acceptCacheYoungerThanMs (WP-36)", async () => {
+    const metaApiSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>();
+    const fetchedAt = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    const getDiscoveryCacheEntry = vi.fn().mockResolvedValue({
+      cacheKey: "meta_api:fp-nykaa:india:page-1",
+      provider: "meta_api",
+      routeContext: "watchlist_scan",
+      queryFingerprint: "fp-nykaa",
+      country: "India",
+      cursor: null,
+      payload: {
+        ads: [
+          {
+            metaAdId: "shared-cache-1",
+            advertiser: "Nykaa",
+            body: "Shared cache offer",
+            previewHeadline: "Shared cache offer",
+            previewSubhead: "",
+            hook: "Shared cache offer",
+            offer: "Fresh enough",
+            cta: "Shop now",
+            format: "image",
+            languageLabel: "English",
+            destinationType: "website",
+            landingPageUrl: "https://www.nykaa.com/shared",
+            adSnapshotUrl: "https://www.facebook.com/ads/library/?id=shared-cache-1",
+            countries: ["India"],
+            platforms: ["Facebook"],
+            firstSeenAt: null,
+            lastSeenAt: null,
+            active: true,
+            researchSummary: "Shared cache fixture",
+            source: "meta_api",
+            analysisFields: [],
+            tags: [],
+          },
+        ],
+        nextCursor: null,
+        source: "meta_api",
+        provider: "meta_api",
+        cacheStatus: "miss",
+      },
+      fetchedAt,
+      expiresAt: new Date(Date.now() + 20 * 60 * 60 * 1000).toISOString(),
+      browserMsUsed: null,
+      createdAt: fetchedAt,
+      updatedAt: fetchedAt,
+    });
+
+    vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
+      searchAds: metaApiSearch,
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState: vi.fn(),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      { DB: {} as D1Database } as never,
+      {
+        mode: "advertiser",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "watchlist_scan",
+        customerMetaAdLibraryToken: "customer-token",
+        forceLive: true,
+        acceptCacheYoungerThanMs: 3 * 60 * 60 * 1000,
+      },
+    );
+
+    expect(getDiscoveryCacheEntry).toHaveBeenCalledTimes(1);
+    expect(metaApiSearch).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      provider: "meta_api",
+      cacheStatus: "hit",
+      discoveryStatus: "healthy",
+      ads: [expect.objectContaining({ metaAdId: "shared-cache-1" })],
+    });
+  });
+
+  it("rejects forceLive shared hits from public_search cache (FIX-1)", async () => {
+    const metaApiSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>().mockResolvedValue({
+      ads: [],
+      nextCursor: null,
+      source: "meta_api",
+      provider: "meta_api",
+      cacheStatus: "miss",
+    });
+    const fetchedAt = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const getDiscoveryCacheEntry = vi.fn().mockResolvedValue({
+      cacheKey: "meta_api:fp-nykaa:india:page-1",
+      provider: "meta_api",
+      routeContext: "public_search",
+      queryFingerprint: "fp-nykaa",
+      country: "India",
+      cursor: null,
+      payload: {
+        ads: [
+          {
+            metaAdId: "deep-public-only",
+            advertiser: "Nykaa",
+            body: "Deep scroll only",
+            previewHeadline: "Deep",
+            previewSubhead: "",
+            hook: "Deep",
+            offer: null,
+            cta: "Shop now",
+            format: "image",
+            languageLabel: "English",
+            destinationType: "website",
+            landingPageUrl: "https://www.nykaa.com/deep",
+            adSnapshotUrl: "https://www.facebook.com/ads/library/?id=deep-public-only",
+            countries: ["India"],
+            platforms: ["Facebook"],
+            firstSeenAt: null,
+            lastSeenAt: null,
+            active: true,
+            researchSummary: "Deep public fixture",
+            source: "meta_api",
+            analysisFields: [],
+            tags: [],
+          },
+        ],
+        nextCursor: null,
+        source: "meta_api",
+        provider: "meta_api",
+        cacheStatus: "miss",
+      },
+      fetchedAt,
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      browserMsUsed: null,
+      createdAt: fetchedAt,
+      updatedAt: fetchedAt,
+    });
+
+    vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
+      searchAds: metaApiSearch,
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState: vi.fn(),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      { DB: {} as D1Database } as never,
+      {
+        mode: "advertiser",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "watchlist_scan",
+        customerMetaAdLibraryToken: "customer-token",
+        forceLive: true,
+        acceptCacheYoungerThanMs: 3 * 60 * 60 * 1000,
+      },
+    );
+
+    expect(metaApiSearch).toHaveBeenCalledTimes(1);
+    expect(result.ads.find((ad) => ad.metaAdId === "deep-public-only")).toBeUndefined();
+    expect(result.cacheStatus).not.toBe("hit");
+  });
+
+  it("still forceLive scrapes when the shared cache is older than acceptCacheYoungerThanMs", async () => {
+    const metaApiSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>().mockResolvedValue({
+      ads: [],
+      nextCursor: null,
+      source: "meta_api",
+      provider: "meta_api",
+      cacheStatus: "miss",
+    });
+    const fetchedAt = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString();
+    const getDiscoveryCacheEntry = vi.fn().mockResolvedValue({
+      cacheKey: "meta_api:fp-nykaa:india:page-1",
+      provider: "meta_api",
+      routeContext: "watchlist_scan",
+      queryFingerprint: "fp-nykaa",
+      country: "India",
+      cursor: null,
+      payload: {
+        ads: [],
+        nextCursor: null,
+        source: "meta_api",
+        provider: "meta_api",
+        cacheStatus: "miss",
+      },
+      fetchedAt,
+      expiresAt: new Date(Date.now() + 18 * 60 * 60 * 1000).toISOString(),
+      browserMsUsed: null,
+      createdAt: fetchedAt,
+      updatedAt: fetchedAt,
+    });
+
+    vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
+      searchAds: metaApiSearch,
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState: vi.fn(),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      { DB: {} as D1Database } as never,
+      {
+        mode: "advertiser",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "watchlist_scan",
+        customerMetaAdLibraryToken: "customer-token",
+        forceLive: true,
+        acceptCacheYoungerThanMs: 3 * 60 * 60 * 1000,
+      },
+    );
+
     expect(metaApiSearch).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({
       provider: "meta_api",

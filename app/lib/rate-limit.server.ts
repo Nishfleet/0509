@@ -36,7 +36,7 @@ const BILLING_PROVIDER_RATE_LIMITS: Record<
 const CLEANUP_WINDOW_SECONDS = 2 * 60 * 60;
 // Scopes whose counting window exceeds the short cleanup horizon. Their
 // events must survive a full day plus slack or the daily caps silently reset.
-const LONG_WINDOW_SCOPE = "share-pdf-daily";
+const LONG_WINDOW_SCOPES = new Set(["share-pdf-daily", "account-search-daily"]);
 const LONG_WINDOW_CLEANUP_SECONDS = 25 * 60 * 60;
 const PDF_SINGLE_FLIGHT_SCOPE = "share-pdf-single-flight";
 const PDF_SINGLE_FLIGHT_ROUTE = "/share/:token/pdf";
@@ -66,6 +66,15 @@ export async function enforcePublicSearchRateLimit(
   );
 }
 
+// Plan-keyed daily live-search ceilings (UTC day). Stacked on the short
+// 10-minute burst bucket so free/Scout cannot burn Browser Rendering all day.
+const ACCOUNT_SEARCH_DAILY_LIMITS: Record<string, number> = {
+  free: 25,
+  scout: 100,
+  starter: 300,
+  agency: 1_000,
+};
+
 // Signed-in live search drives usage-billed Browser Rendering scrapes, and
 // signup is free — without a per-account ceiling a scripted free account
 // could fire unlimited distinct live queries. Keyed by user id so rotating
@@ -75,16 +84,37 @@ export async function enforceAuthenticatedSearchRateLimit(
   env: AppEnv,
   userId: string,
   ctx?: ExecutionContext,
+  planFamily?: string | null,
 ): Promise<Response | null> {
-  return enforceRateLimitPolicy(
+  const burst = await enforceRateLimitPolicy(
     request,
     env,
     {
       scope: "account-search",
       limit: 60,
       windowSeconds: 10 * 60,
-      failClosed: false,
+      failClosed: true,
       keySeed: userId,
+      atomicClaim: true,
+    },
+    ctx,
+  );
+  if (burst) return burst;
+
+  // WP-35: daily plan budget on top of the 10-minute burst.
+  const plan = (planFamily ?? "free").trim().toLowerCase() || "free";
+  const dailyLimit = ACCOUNT_SEARCH_DAILY_LIMITS[plan] ?? ACCOUNT_SEARCH_DAILY_LIMITS.free;
+  return enforceRateLimitPolicy(
+    request,
+    env,
+    {
+      scope: "account-search-daily",
+      limit: dailyLimit,
+      windowSeconds: 24 * 60 * 60,
+      failClosed: true,
+      keySeed: `${userId}:${plan}`,
+      routeOverride: "account-search-daily",
+      atomicClaim: true,
     },
     ctx,
   );
@@ -187,7 +217,7 @@ export async function enforceSharePdfDailyCap(
 		request,
 		env,
 		{
-			scope: LONG_WINDOW_SCOPE,
+			scope: "share-pdf-daily",
 			limit: 40,
 			windowSeconds: 24 * 60 * 60,
 			failClosed: true,
@@ -428,16 +458,16 @@ async function sha256Hex(input: string | Uint8Array) {
 async function cleanupRateLimitEvents(env: AppEnv) {
   if (!env.DB) return;
   const cutoff = new Date(Date.now() - CLEANUP_WINDOW_SECONDS * 1000).toISOString();
-	const longWindowCutoff = new Date(
-		Date.now() - LONG_WINDOW_CLEANUP_SECONDS * 1000,
-	).toISOString();
-	await env.DB.prepare(
+  const longWindowCutoff = new Date(
+    Date.now() - LONG_WINDOW_CLEANUP_SECONDS * 1000,
+  ).toISOString();
+  await env.DB.prepare(
     `DELETE FROM rate_limit_events
-      WHERE (scope != ? AND created_at < ?)
-         OR (scope = ? AND created_at < ?)`,
-	)
-		.bind(LONG_WINDOW_SCOPE, cutoff, LONG_WINDOW_SCOPE, longWindowCutoff)
-		.run();
+      WHERE (scope NOT IN ('share-pdf-daily', 'account-search-daily') AND created_at < ?)
+         OR (scope IN ('share-pdf-daily', 'account-search-daily') AND created_at < ?)`,
+  )
+    .bind(cutoff, longWindowCutoff)
+    .run();
 }
 
 function isMissingRateLimitTableError(error: unknown) {

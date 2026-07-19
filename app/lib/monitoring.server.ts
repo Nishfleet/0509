@@ -62,7 +62,15 @@ import {
 } from "~/lib/ad-source.server";
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { getUserPlan, PLAN_LIMITS } from "~/lib/plan.server";
-import { planAllowsDigestCadence, shouldSchedulePlanInRegularScan } from "~/lib/plan-entitlements";
+import { resolveScheduledScanCacheMaxAgeMs } from "~/lib/discovery-cache.server";
+import {
+  getScheduledMonitoringPolicy,
+  parsePlanFamily,
+  planAllowsDigestCadence,
+  shouldSchedulePlanInRegularScan,
+  shouldScheduleWatchlistInRegularScan,
+} from "~/lib/plan-entitlements";
+import type { PlanFamily } from "~/lib/plan-entitlements";
 import { ensureDb } from "~/lib/data/d1.server";
 import {
   getEvidenceUsageSummary,
@@ -142,6 +150,8 @@ interface ScanOptions {
   concurrencyPermitToken?: string;
   orchestrationRunId?: string;
   forceLive?: boolean;
+  /** WP-36: reuse shared discovery cache younger than plan cadence. */
+  acceptCacheYoungerThanMs?: number;
 }
 
 export class MonitoringConcurrencyLimitError extends Error {
@@ -252,11 +262,16 @@ export async function runScheduledMonitoring(
       includeScout: shouldIncludeScoutInScheduledMonitoring(options),
     });
     const browserAccess = await filterScheduledBrowserWatchlists(env, listedWatchlists);
-    const watchlists = browserAccess.watchlists;
+    const scheduledTime = options.scheduledTime ?? Date.now();
+    // WP-37: agency overflow watchlists only on 6h-aligned slots.
+    const watchlists = await filterWatchlistsByPriorityScanSlots(
+      env,
+      browserAccess.watchlists,
+      scheduledTime,
+    );
     skippedForBilling = browserAccess.skipped;
 
     const fanoutMode = resolveMonitoringFanoutMode(env);
-    const scheduledTime = options.scheduledTime ?? Date.now();
 
     if (fanoutMode === "inline") {
       const inlineResult = await runScheduledMonitoringInline(env, watchlists, deadlineAt, {
@@ -374,6 +389,76 @@ async function filterScheduledBrowserWatchlists(env: AppEnv, watchlists: Watchli
   return { watchlists: eligible, skipped };
 }
 
+/**
+ * WP-37: among each workspace's active watchlists (oldest first), only the
+ * first priorityScanSlots run on every plan cadence tick; overflow wait for
+ * 6h-aligned runs. Stable ranks use created_at ASC, id ASC.
+ */
+export async function filterWatchlistsByPriorityScanSlots(
+  env: AppEnv,
+  watchlists: WatchlistRecord[],
+  scheduledTime: number,
+): Promise<WatchlistRecord[]> {
+  if (watchlists.length === 0) {
+    return watchlists;
+  }
+
+  const scheduledAt = new Date(scheduledTime);
+  const byUser = new Map<string, WatchlistRecord[]>();
+  for (const watchlist of watchlists) {
+    const list = byUser.get(watchlist.userId) ?? [];
+    list.push(watchlist);
+    byUser.set(watchlist.userId, list);
+  }
+
+  const planByUser = new Map<string, PlanFamily>();
+  const eligibleIds = new Set<string>();
+
+  for (const [userId, userWatchlists] of byUser) {
+    let plan = planByUser.get(userId);
+    if (!plan) {
+      try {
+        // Runtime mocks may omit a plan; keep billing-eligible watchlists rather
+        // than inventing free (starve) or agency (wrong priority slots).
+        const raw = (await getUserPlan(env, userId)) as PlanFamily | null | undefined;
+        if (raw == null) {
+          for (const watchlist of userWatchlists) {
+            eligibleIds.add(watchlist.id);
+          }
+          continue;
+        }
+        plan = parsePlanFamily(raw);
+      } catch {
+        for (const watchlist of userWatchlists) {
+          eligibleIds.add(watchlist.id);
+        }
+        continue;
+      }
+      planByUser.set(userId, plan);
+    }
+
+    const ranked = [...userWatchlists].sort((a, b) => {
+      const created = (a.createdAt ?? "").localeCompare(b.createdAt ?? "");
+      if (created !== 0) return created;
+      return a.id.localeCompare(b.id);
+    });
+
+    ranked.forEach((watchlist, rank) => {
+      if (
+        shouldScheduleWatchlistInRegularScan({
+          planFamily: plan!,
+          scheduledAt,
+          watchlistRank: rank,
+        })
+      ) {
+        eligibleIds.add(watchlist.id);
+      }
+    });
+  }
+
+  return watchlists.filter((watchlist) => eligibleIds.has(watchlist.id));
+}
+
 const INSTANT_ALERT_FLUSH_LOOKBACK_HOURS = 48;
 const INSTANT_ALERT_FLUSH_LIMIT = 50;
 
@@ -452,6 +537,7 @@ export async function flushDeferredInstantAlerts(env: AppEnv) {
 // out from a churn email.
 export function buildWeeklyBusinessLines(
   summary: Awaited<ReturnType<typeof getWeeklyBusinessSummary>>,
+  options: { annualValidationDriftLines?: string[] } = {},
 ) {
   const paying =
     summary.payingByPlan.length > 0
@@ -462,7 +548,7 @@ export function buildWeeklyBusinessLines(
       ? `${Math.round((summary.digestSent7d / summary.digestAttempts7d) * 100)}% (${summary.digestSent7d}/${summary.digestAttempts7d})`
       : "no digests sent";
 
-  return [
+  const lines = [
     `Signups (7d): ${summary.signups7d} — activated onboarding: ${summary.activated7d}`,
     `Paying customers: ${paying}`,
     `Dunning (payment trouble, plan kept): ${summary.dunningCount}`,
@@ -470,6 +556,42 @@ export function buildWeeklyBusinessLines(
     `Digest delivery success (7d): ${digestRate}`,
     `Oldest active paid-watchlist scan: ${summary.oldestActivePaidScanAt ?? "n/a"}`,
   ];
+  if (options.annualValidationDriftLines?.length) {
+    lines.push(...options.annualValidationDriftLines);
+  }
+  return lines;
+}
+
+/** WP-38: surface annual price drift (not 8× monthly) in the operator email. */
+export function formatAnnualValidationDriftLines(
+  annualValidation:
+    | Partial<
+        Record<
+          "scout" | "starter" | "agency",
+          { valid: boolean; reason: string }
+        >
+      >
+    | null
+    | undefined,
+): string[] {
+  if (!annualValidation) {
+    return ["Annual validation: unavailable"];
+  }
+  const drifts: string[] = [];
+  for (const plan of ["scout", "starter", "agency"] as const) {
+    const entry = annualValidation[plan];
+    if (!entry) {
+      drifts.push(`${plan}: missing`);
+      continue;
+    }
+    if (!entry.valid) {
+      drifts.push(`${plan}: ${entry.reason}`);
+    }
+  }
+  if (drifts.length === 0) {
+    return ["Annual validation: ok (pay-8 months)"];
+  }
+  return [`Annual validation drift: ${drifts.join("; ")}`];
 }
 
 export async function sendWeeklyBusinessNumbers(env: AppEnv) {
@@ -479,10 +601,23 @@ export async function sendWeeklyBusinessNumbers(env: AppEnv) {
 
   const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
   const summary = await getWeeklyBusinessSummary(env);
+  let annualValidationDriftLines: string[] = ["Annual validation: unavailable"];
+  try {
+    const { previewDodo0509PlanPrices } = await import("~/lib/dodo-pricing.server");
+    // Operator email is not browser-country scoped; use a stable India request
+    // so annual 8× monthly validation still surfaces product/config drift.
+    const pricingRequest = new Request("https://0509.io/ops/weekly-business", {
+      headers: { "cf-ipcountry": "IN" },
+    });
+    const preview = await previewDodo0509PlanPrices({ env, request: pricingRequest });
+    annualValidationDriftLines = formatAnnualValidationDriftLines(preview.annualValidation);
+  } catch {
+    annualValidationDriftLines = ["Annual validation: preview_failed"];
+  }
   const weekStamp = new Date().toISOString().slice(0, 10);
   const sent = await sendOperatorAlertEmail(env, {
     subject: "Five to Nine — weekly business numbers",
-    lines: buildWeeklyBusinessLines(summary),
+    lines: buildWeeklyBusinessLines(summary, { annualValidationDriftLines }),
     idempotencyKey: `business-weekly:${weekStamp}`,
   });
 
@@ -1323,6 +1458,10 @@ export async function runWatchlistWorkflowJob(
   }
 
   const customerMetaAdLibraryToken = await resolveWatchlistCustomerMetaAdLibraryToken(env, watchlist);
+  const acceptCacheYoungerThanMs = await resolveScheduledScanSharedCacheMaxAgeMs(
+    env,
+    watchlist.userId,
+  );
   if (options.concurrencyPermitToken) {
     await renewMonitoringConcurrencySlot(env, { token: options.concurrencyPermitToken });
   }
@@ -1342,6 +1481,7 @@ export async function runWatchlistWorkflowJob(
           orchestrationToken: claim.processingToken,
           concurrencyPermitToken: options.concurrencyPermitToken,
           forceLive: true,
+          acceptCacheYoungerThanMs,
         }),
       {
         customerMetaAdLibraryToken,
@@ -1607,6 +1747,7 @@ export async function runWatchlist(
       baselineRun?.id ?? null,
       eventDrafts,
       effectLease,
+      recentWatchEvents,
     );
     await assertOrchestratedWatchlistRunLease(env, runId, options);
     await reconcileStaleEvidenceBeforeScan(env);
@@ -1651,6 +1792,18 @@ export async function runWatchlist(
             lane: "customer",
           })
         : { attempts: 0, channels: [] };
+
+    // WP-25: free users get no digests/instant alerts — send one activation-result
+    // email when this run established the baseline (first successful scan).
+    await maybeSendFreeActivationResultEmail(env, {
+      watchlist,
+      runId,
+      baselineRunId: baselineRun?.id ?? null,
+      events: allEvents,
+      adsSeen: currentObservations.length,
+      observations: currentObservations,
+      userDeliveryProfile,
+    });
 
     await completeWatchlistRun(
       env,
@@ -1913,6 +2066,19 @@ export function diffWatchlistObservations(
         },
       });
     }
+
+    // WP-28: creative copy refresh — hook/offer are stored on observations but
+    // were never diffed. Ride landing_page_headline_changed / offer_changed
+    // CHECK types with metadata.kind = "creative_copy".
+    const creativeDraft = buildCreativeCopyDraft(
+      watchlist,
+      adId,
+      observation,
+      baselineObservation,
+    );
+    if (creativeDraft) {
+      drafts.push(creativeDraft);
+    }
   }
 
   for (const [adId] of priorByAd) {
@@ -1932,7 +2098,109 @@ export function diffWatchlistObservations(
     }
   }
 
-  return dedupeEventDrafts(drafts);
+  return collapseNewAdFlood(dedupeEventDrafts(drafts), watchlist);
+}
+
+/** Normalize observation creative fields for equality checks. */
+function readObservationCreativeCopy(observation: ObservationRecord) {
+  const meta = safeMetadata(observation);
+  const hook = typeof meta.hook === "string" ? meta.hook.trim() : "";
+  const offer = typeof meta.offer === "string" ? meta.offer.trim() : "";
+  return { hook, offer };
+}
+
+function buildCreativeCopyDraft(
+  watchlist: WatchlistRecord,
+  adId: string,
+  current: ObservationRecord,
+  baseline: ObservationRecord,
+): WatchEventDraft | null {
+  const from = readObservationCreativeCopy(baseline);
+  const to = readObservationCreativeCopy(current);
+  // No signal when both sides lack creative text — avoid false diffs from empty↔empty.
+  if (!from.hook && !from.offer && !to.hook && !to.offer) {
+    return null;
+  }
+  const hookChanged = from.hook !== to.hook && (from.hook.length > 0 || to.hook.length > 0);
+  const offerChanged = from.offer !== to.offer && (from.offer.length > 0 || to.offer.length > 0);
+  if (!hookChanged && !offerChanged) {
+    return null;
+  }
+
+  // Prefer offer_changed (higher importance) when offer moved; else headline type.
+  const eventType = offerChanged
+    ? ("landing_page_offer_changed" as const)
+    : ("landing_page_headline_changed" as const);
+  const advertiser = safeMetadata(current).advertiser;
+  const fromLabel = formatCreativeCopyLabel(from);
+  const toLabel = formatCreativeCopyLabel(to);
+
+  return {
+    eventType,
+    adId,
+    title: "Ad creative copy changed",
+    summary: `The ad creative on ${watchlist.name} was rewritten between scans.`,
+    metadata: {
+      kind: "creative_copy",
+      from: fromLabel,
+      to: toLabel,
+      hookFrom: from.hook || null,
+      hookTo: to.hook || null,
+      offerFrom: from.offer || null,
+      offerTo: to.offer || null,
+      advertiser: typeof advertiser === "string" ? advertiser : null,
+    },
+  };
+}
+
+function formatCreativeCopyLabel(copy: { hook: string; offer: string }) {
+  const parts: string[] = [];
+  if (copy.hook) parts.push(`Hook: ${copy.hook}`);
+  if (copy.offer) parts.push(`Offer: ${copy.offer}`);
+  return parts.join(" · ") || "(empty)";
+}
+
+/**
+ * WP-28: collapse ≥5 raw ad_new drafts into one aggregate event so a big
+ * creative launch does not wall the customer with N identical alerts.
+ */
+function collapseNewAdFlood(
+  drafts: WatchEventDraft[],
+  watchlist: WatchlistRecord,
+): WatchEventDraft[] {
+  const newAds = drafts.filter(
+    (draft) =>
+      draft.eventType === "ad_new" &&
+      (draft.metadata as Record<string, unknown> | undefined)?.kind !== "baseline" &&
+      (draft.metadata as Record<string, unknown> | undefined)?.kind !== "ad_new_aggregate" &&
+      (draft.metadata as Record<string, unknown> | undefined)?.kind !== "creative_copy",
+  );
+  if (newAds.length < 5) {
+    return drafts;
+  }
+
+  const other = drafts.filter((draft) => !newAds.includes(draft));
+  const adIds = newAds
+    .map((draft) => draft.adId)
+    .filter((id): id is string => Boolean(id));
+  const count = newAds.length;
+  return [
+    ...other,
+    {
+      eventType: "ad_new",
+      adId: null,
+      title: `${count} new ads launched`,
+      summary: `${count} new ads entered ${watchlist.name} in this scan.`,
+      metadata: {
+        kind: "ad_new_aggregate",
+        count,
+        adIds: adIds.slice(0, 25),
+        advertiser: newAds
+          .map((draft) => draft.metadata?.advertiser)
+          .find((value) => typeof value === "string" && value.trim()) ?? null,
+      },
+    },
+  ];
 }
 
 export async function runWeeklyDigests(
@@ -1955,278 +2223,6 @@ export async function runDailyDigests(
     cadence: "daily",
     lookbackDays: options.lookbackDays ?? DAILY_DIGEST_LOOKBACK_DAYS,
   });
-}
-
-async function runDigests(
-  env: AppEnv,
-  options: RunWeeklyDigestsOptions = {},
-) {
-  if (!env.DB) {
-    return 0;
-  }
-
-  const db = env.DB;
-  const cadence = options.cadence ?? "weekly";
-  const lookbackDays = options.lookbackDays ?? (
-    cadence === "daily" ? DAILY_DIGEST_LOOKBACK_DAYS : WEEKLY_DIGEST_LOOKBACK_DAYS
-  );
-  const periodEnd =
-    options.periodEnd === undefined ? new Date() : new Date(options.periodEnd);
-  const periodStart = new Date(periodEnd.getTime() - lookbackDays * 24 * 60 * 60 * 1000);
-  const periodStartIso = periodStart.toISOString();
-  const periodEndIso = periodEnd.toISOString();
-
-  // Collect retry candidates BEFORE creating this tick's digest runs so the
-  // sweep can never race the current period's deliveries.
-  const retryCandidates = await listRetryableDigestRuns(env, {
-    since: new Date(
-      periodEnd.getTime() - DIGEST_RETRY_WINDOW_DAYS * 24 * 60 * 60 * 1000,
-    ).toISOString(),
-    stalePreDispatchBefore: deliveryPreDispatchStaleBefore(periodEnd.getTime()),
-    limit: DIGEST_RETRY_SWEEP_LIMIT,
-  });
-
-  const usersResult = await db
-    .prepare(
-      `
-        SELECT DISTINCT user.id, user.email, user.name
-        FROM user
-        INNER JOIN watchlist ON watchlist.user_id = user.id
-        WHERE watchlist.is_active = 1
-      `,
-    )
-    .all<{ id: string; email: string; name: string }>();
-
-  const users = usersResult.results ?? [];
-  let digestsSent = 0;
-  const handledDigestRunIds = new Set<string>();
-
-  for (const user of users) {
-    try {
-      const plan = await getUserPlan(env, user.id);
-      if (!PLAN_LIMITS[plan].digests || !planAllowsDigestCadence(plan, cadence)) {
-        continue;
-      }
-
-      const watchlists = await listWatchlists(env, user.id);
-      const digestItems: Array<{
-        eventId: string;
-        watchlistId: string;
-        watchlistName: string;
-        eventType: WatchEventType;
-        title: string;
-        summary: string;
-        metadata: Record<string, unknown>;
-      }> = [];
-
-      const eligibleByWatchlist: Array<{
-        watchlist: WatchlistRecord;
-        events: WatchEventRecord[];
-      }> = [];
-
-      for (const watchlist of watchlists) {
-        const events = await listWatchEventsBetween(
-          env,
-          watchlist.id,
-          periodStartIso,
-          periodEndIso,
-        );
-        eligibleByWatchlist.push({
-          watchlist,
-          events: events.filter(isCustomerDigestEligibleEvent),
-        });
-      }
-
-      const adIds = eligibleByWatchlist.flatMap(({ events }) =>
-        events.map((event) => event.adId).filter((adId): adId is string => Boolean(adId)),
-      );
-      const adsById = new Map(
-        (await listAdsByIds(env, adIds)).map((ad) => [ad.metaAdId, ad]),
-      );
-
-      for (const { watchlist, events } of eligibleByWatchlist) {
-        for (const event of events) {
-          const ad = event.adId ? adsById.get(event.adId) ?? null : null;
-          digestItems.push({
-            eventId: event.id,
-            watchlistId: watchlist.id,
-            watchlistName: watchlist.name,
-            eventType: event.eventType,
-            title: event.title,
-            summary: event.summary,
-            metadata: digestMetadataForEvent(event, undefined, ad),
-          });
-        }
-      }
-
-      const existingDigest = await getDigestByPeriod(
-        env,
-        user.id,
-        periodStartIso,
-        periodEndIso,
-      );
-      if (existingDigest?.delivery?.status === "sent") {
-        continue;
-      }
-
-      // Zero changes is still a result the customer pays for. If we scanned
-      // successfully this period, send an "all quiet" heartbeat instead of
-      // going silent — silence is indistinguishable from a dead product.
-      let heartbeat: { runs: number; watchlistsChecked: number; adsSeen: number } | null = null;
-      if (!existingDigest && digestItems.length === 0) {
-        const runStats = await getSuccessfulRunStatsForUserBetween(
-          env,
-          user.id,
-          periodStartIso,
-          periodEndIso,
-        );
-        if (runStats.runs === 0) {
-          // Nothing scanned either — there is nothing honest to report.
-          continue;
-        }
-        heartbeat = runStats;
-      }
-
-      // AI weekly strategy paragraph: paid weekly digests with movement only.
-      // Existing runs reuse the stored paragraph verbatim — regenerating would
-      // put nondeterministic content in front of the customer. A null result
-      // changes nothing downstream; absence is always silent.
-      let strategyParagraph: string | null = null;
-      let strategyWatchlistIds: string[] | null = null;
-      if (
-        !existingDigest &&
-        cadence === "weekly" &&
-        digestItems.length > 0 &&
-        (plan === "starter" || plan === "agency")
-      ) {
-        const generatedStrategy = await buildWeeklyStrategyParagraph(env, {
-          items: digestItems,
-          periodStart: periodStartIso,
-          periodEnd: periodEndIso,
-        });
-        strategyParagraph = generatedStrategy?.paragraph ?? null;
-        strategyWatchlistIds = generatedStrategy?.watchlistIds ?? null;
-      }
-      const digestSummary: Record<string, unknown> = {
-        totalEvents: digestItems.length,
-        watchlists: watchlists.length,
-        ...(strategyParagraph
-          ? {
-              strategyParagraph,
-              strategyModel: DIGEST_STRATEGY_MODEL,
-              strategyGeneratedAt: new Date().toISOString(),
-              strategyWatchlistIds,
-            }
-          : {}),
-      };
-      const candidateItems = digestItems.map((item) => ({
-        watchlistId: item.watchlistId,
-        watchlistName: item.watchlistName,
-        eventType: item.eventType,
-        title: item.title,
-        summary: item.summary,
-        metadata: item.metadata,
-      }));
-
-      let digestRunId: string;
-      let canonicalDigest = existingDigest;
-      if (existingDigest) {
-        digestRunId = existingDigest.id;
-        if (!hasCompleteDigestItemSet(existingDigest)) {
-          // Legacy rows created before digest items were persisted atomically
-          // carry no event IDs or candidate fingerprint. A count match cannot
-          // prove that today's eligible events are the original snapshot, so
-          // never rewrite or deliver an identity-unprovable digest.
-          throw new Error(
-            "Digest run is incomplete and its original candidate identity cannot be proven.",
-          );
-        }
-      } else {
-        const claim = await createDigestRun(
-          env,
-          user.id,
-          periodStartIso,
-          periodEndIso,
-          digestSummary,
-          {
-            returnClaim: true,
-            items: candidateItems,
-          },
-        );
-        digestRunId = claim.digestRunId;
-
-        if (!claim.created) {
-          // Another execution owns both this period's persisted candidate and
-          // its first dispatch. The losing execution must not call providers;
-          // a later retry sweep can safely replay the stored winner if needed.
-          handledDigestRunIds.add(digestRunId);
-          continue;
-        }
-      }
-      handledDigestRunIds.add(digestRunId);
-
-      // Creators persist the complete candidate atomically with the period
-      // claim. Every non-creator delivers only the stored winner; it never
-      // clears, re-adds, or substitutes locally recomputed run-owned data.
-      const deliveryItems = canonicalDigest
-        ? canonicalDigest.items.map((item) => ({
-            eventId: item.id,
-            watchlistId: item.watchlistId,
-            watchlistName: item.watchlistName,
-            eventType: item.eventType,
-            title: item.title,
-            summary: item.summary,
-            metadata: item.metadata,
-          }))
-        : digestItems;
-      const deliveryStrategyParagraph = canonicalDigest
-        ? readDigestStrategyNote(canonicalDigest.summary)?.paragraph ?? null
-        : strategyParagraph;
-
-      if (deliveryItems.length > 0) {
-        heartbeat = null;
-      } else if (!heartbeat) {
-        const runStats = await getSuccessfulRunStatsForUserBetween(
-          env,
-          user.id,
-          periodStartIso,
-          periodEndIso,
-        );
-        if (runStats.runs === 0) {
-          continue;
-        }
-        heartbeat = runStats;
-      }
-
-      const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
-      const delivery = await deliverWeeklyDigest(env, {
-        heartbeat,
-        userId: user.id,
-        userName: user.name,
-        accountEmail: user.email,
-        digestRunId,
-        periodStart: periodStartIso,
-        periodEnd: periodEndIso,
-        items: deliveryItems,
-        strategyParagraph: deliveryStrategyParagraph,
-        cadence,
-        lane: "customer",
-      });
-      if (delivery.attempts > 0) {
-        digestsSent += 1;
-      }
-    } catch (error) {
-      // One user's digest failure must never abort the remaining users.
-      console.error(
-        `Digest run failed for user ${user.id}; continuing with remaining users.`,
-        error,
-      );
-    }
-  }
-
-  digestsSent += await retryFailedDigests(env, { retryCandidates, handledDigestRunIds });
-
-  return digestsSent;
 }
 
 async function retryFailedDigests(
@@ -2418,6 +2414,12 @@ async function runScheduledWatchlistInline(
   }
 
   const customerMetaAdLibraryToken = await resolveWatchlistCustomerMetaAdLibraryToken(env, watchlist);
+  const acceptCacheYoungerThanMs = await resolveScheduledScanSharedCacheMaxAgeMs(
+    env,
+    watchlist.userId,
+  );
+  // In-process dedupe is still per user; cross-workspace reuse is the shared
+  // discovery_cache_entry path (acceptCacheYoungerThanMs / WP-36).
   const scanCacheKey = `${watchlist.userId}:${watchlist.targetFingerprint}`;
 
   await runWatchlist(
@@ -2431,6 +2433,7 @@ async function runScheduledWatchlistInline(
           performBoundedScan(env, query, DEFAULT_PAGE_BUDGET, {
             customerMetaAdLibraryToken,
             forceLive: true,
+            acceptCacheYoungerThanMs,
           }),
         );
       }
@@ -2441,6 +2444,20 @@ async function runScheduledWatchlistInline(
     },
   );
   return true;
+}
+
+async function resolveScheduledScanSharedCacheMaxAgeMs(
+  env: AppEnv,
+  userId: string,
+): Promise<number | undefined> {
+  try {
+    const plan = await getUserPlan(env, userId);
+    const cadence = getScheduledMonitoringPolicy(plan).scheduledScanCadence;
+    return resolveScheduledScanCacheMaxAgeMs(cadence) ?? undefined;
+  } catch {
+    // Fail open to live scrape rather than reuse with an unknown plan window.
+    return undefined;
+  }
 }
 
 async function performBoundedScan(
@@ -2463,6 +2480,7 @@ async function performBoundedScan(
         purpose: "watchlist_scan",
         customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
         forceLive: options.forceLive === true,
+        acceptCacheYoungerThanMs: options.acceptCacheYoungerThanMs,
       },
     );
     ads.push(...response.ads);
@@ -2587,10 +2605,15 @@ async function persistScanNativeEvents(
   baselineFromRunId: string | null,
   drafts: WatchEventDraft[],
   lease?: { runId: string; processingToken: string },
+  recentWatchEvents: WatchEventRecord[] = [],
 ) {
   const createdEvents: WatchEventRecord[] = [];
+  // FIX-2: creative_copy rides high-score types (≥ instant threshold) but
+  // dynamic/A-B copy would otherwise re-fire every scan. Suppress identical
+  // (adId, from↔to) pairs for 48h either direction.
+  const draftsToPersist = filterSuppressedCreativeCopyDrafts(drafts, recentWatchEvents);
 
-  for (const draft of drafts) {
+  for (const draft of draftsToPersist) {
     await assertOrchestratedWatchlistRunLease(env, runId, {
       orchestrationToken: lease?.processingToken,
     });
@@ -3704,6 +3727,51 @@ function dedupeEventDrafts(drafts: WatchEventDraft[]) {
   });
 }
 
+const CREATIVE_COPY_SUPPRESSION_MS = 48 * 60 * 60 * 1000;
+
+function creativeCopyPairKey(from: string, to: string): string {
+  const a = from.trim().toLowerCase();
+  const b = to.trim().toLowerCase();
+  return a <= b ? `${a}↔${b}` : `${b}↔${a}`;
+}
+
+function isCreativeCopyDraft(draft: WatchEventDraft): boolean {
+  return draft.metadata?.kind === "creative_copy";
+}
+
+/** FIX-2: drop creative_copy drafts seen (either direction) within 48h for the ad. */
+export function filterSuppressedCreativeCopyDrafts(
+  drafts: WatchEventDraft[],
+  recentEvents: Array<{
+    adId: string | null;
+    createdAt: string;
+    metadata: Record<string, unknown> | null;
+  }>,
+  nowMs: number = Date.now(),
+): WatchEventDraft[] {
+  const cutoff = nowMs - CREATIVE_COPY_SUPPRESSION_MS;
+  const recentKeys = new Set<string>();
+
+  for (const event of recentEvents) {
+    if (new Date(event.createdAt).getTime() < cutoff) continue;
+    const metadata = event.metadata ?? {};
+    if (metadata.kind !== "creative_copy") continue;
+    const from = typeof metadata.from === "string" ? metadata.from : "";
+    const to = typeof metadata.to === "string" ? metadata.to : "";
+    recentKeys.add(`${event.adId ?? "none"}:${creativeCopyPairKey(from, to)}`);
+  }
+
+  return drafts.filter((draft) => {
+    if (!isCreativeCopyDraft(draft)) return true;
+    const from = typeof draft.metadata.from === "string" ? draft.metadata.from : "";
+    const to = typeof draft.metadata.to === "string" ? draft.metadata.to : "";
+    const key = `${draft.adId ?? "none"}:${creativeCopyPairKey(from, to)}`;
+    if (recentKeys.has(key)) return false;
+    recentKeys.add(key);
+    return true;
+  });
+}
+
 function summarizeEventTypes(drafts: WatchEventDraft[]) {
   return drafts.reduce<Record<string, number>>((accumulator, draft) => {
     accumulator[draft.eventType] = (accumulator[draft.eventType] ?? 0) + 1;
@@ -3725,23 +3793,13 @@ function mapEventTypesByAdId(drafts: WatchEventDraft[]) {
 }
 
 function getScanNativeImportanceScore(eventType: WatchEventType) {
+  // FIX-6(b): route through the evaluator map so WP-20 ad_new:76 is live.
   switch (eventType) {
     case "landing_page_url_changed":
-      return 85;
     case "landing_page_headline_changed":
-      return 75;
     case "ad_new":
-      return 65;
     case "ad_inactive":
-      return 60;
     case "landing_page_offer_changed":
-      return scoreWatchEventImportance({
-        eventType,
-        proofPresent: true,
-        sensitivityMode: "balanced",
-        burstCount: 1,
-        indiaSignals: false,
-      });
     case "landing_page_cta_changed":
     case "landing_page_form_changed":
       return scoreWatchEventImportance({
@@ -3749,7 +3807,7 @@ function getScanNativeImportanceScore(eventType: WatchEventType) {
         proofPresent: true,
         sensitivityMode: "balanced",
         burstCount: 1,
-        indiaSignals: false,
+        purchaseSignals: false,
       });
     default:
       return 50;
@@ -3786,11 +3844,23 @@ function monthlyProofCapForPlan(plan: string) {
 }
 
 async function getProofCapturePlan(env: AppEnv, userId: string) {
-  if (!env.DB || typeof env.DB.prepare !== "function") {
-    return "starter";
+  // Prefer the real plan row when D1 is bound.
+  if (env.DB && typeof env.DB.prepare === "function") {
+    return getUserPlan(env, userId);
   }
 
-  return getUserPlan(env, userId);
+  // No D1: never invent Starter capacity (WP-38 fail-closed). If a plan
+  // lookup still resolves to an explicit paid family (unit-test mocks), honor
+  // it; otherwise free (0 daily proof budget).
+  try {
+    const plan = await getUserPlan(env, userId);
+    if (plan === "scout" || plan === "starter" || plan === "agency") {
+      return plan;
+    }
+  } catch {
+    // fall through
+  }
+  return "free";
 }
 
 async function sumActiveProofUsageCredits(
@@ -3919,5 +3989,84 @@ function safeMetadata(observation: ObservationRecord) {
     return JSON.parse(observation.metadata_json) as Record<string, unknown>;
   } catch {
     return {};
+  }
+}
+
+/**
+ * WP-25 free activation-result email. Only on the first successful scan
+ * (no prior baseline run) for free-plan workspaces. Paid plans already get
+ * digests/instant alerts; free has neither. Failures never fail the scan.
+ */
+async function maybeSendFreeActivationResultEmail(
+  env: AppEnv,
+  input: {
+    watchlist: WatchlistRecord;
+    runId: string;
+    baselineRunId: string | null;
+    events: WatchEventRecord[];
+    adsSeen: number;
+    observations: ObservationRecord[];
+    userDeliveryProfile: Awaited<ReturnType<typeof getUserDeliveryProfile>>;
+  },
+) {
+  // First successful scan only — a baseline run already means activation ran.
+  if (input.baselineRunId) {
+    return;
+  }
+
+  const profile = input.userDeliveryProfile;
+  if (!profile?.email || profile.emailVerified !== true) {
+    return;
+  }
+
+  try {
+    const plan = await getUserPlan(env, input.watchlist.userId);
+    if (plan !== "free") {
+      return;
+    }
+
+    // Prefer an honest baseline event when present; still email if the scan
+    // succeeded with zero ads (honest empty baseline — useful signal).
+    const hasBaselineEvent = input.events.some(
+      (event) => ((event.metadata ?? {}) as Record<string, unknown>).kind === "baseline",
+    );
+    if (!hasBaselineEvent && input.adsSeen > 0) {
+      return;
+    }
+
+    const adIds = input.observations
+      .map((observation) => observation.ad_id)
+      .filter((adId): adId is string => Boolean(adId))
+      .slice(0, 8);
+    const adsById =
+      adIds.length > 0
+        ? new Map((await listAdsByIds(env, adIds)).map((ad) => [ad.metaAdId, ad]))
+        : new Map<string, AdRecord>();
+
+    const topAds = input.observations.slice(0, 3).map((observation) => {
+      const meta = safeMetadata(observation);
+      const ad = observation.ad_id ? adsById.get(observation.ad_id) : null;
+      const hook = typeof meta.hook === "string" ? meta.hook : ad?.hook ?? null;
+      const offer = typeof meta.offer === "string" ? meta.offer : ad?.offer ?? null;
+      const body = ad?.body ?? offer ?? null;
+      return {
+        headline: hook,
+        body,
+        creativeImageUrl: ad?.creativeImageUrl ?? null,
+      };
+    });
+
+    const { sendFreeActivationResultEmail } = await import("~/lib/delivery.server");
+    await sendFreeActivationResultEmail(env, {
+      userId: input.watchlist.userId,
+      email: profile.email,
+      name: profile.name ?? null,
+      watchlistId: input.watchlist.id,
+      competitorName: input.watchlist.name,
+      adsFound: input.adsSeen,
+      topAds,
+    });
+  } catch {
+    // Activation email must never roll back a successful scan.
   }
 }

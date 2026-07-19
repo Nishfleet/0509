@@ -9,17 +9,48 @@ import {
 } from "~/lib/data/delivery-records-rows.server";
 import { boolToInt, createId, jsonValue, nowIso } from "~/lib/data/helpers.server";
 import type { AppEnv } from "~/lib/env.server";
-import type { DeliveryQuietHours, SensitivityMode } from "~/lib/types";
+import type { DeliveryQuietHours, DigestCadencePreference, SensitivityMode } from "~/lib/types";
 
 export function legacyWorkspaceDeliveryDefaults(input: { hasEmail: boolean }) {
   return {
     sensitivityMode: "balanced" as const,
+    // FIX-6: existing workspaces with no saved row must not silently gain
+    // instant alerts. New workspaces write an explicit snapshot via
+    // ensureNewWorkspaceDeliveryDefaults (instantEnabled: true).
     instantEnabled: false,
     digestEnabled: true,
+    digestCadencePreference: "plan_default" as DigestCadencePreference,
     emailEnabled: input.hasEmail,
     whatsappEnabled: false,
     slackEnabled: false,
   };
+}
+
+/**
+ * FIX-6: first-time workspace delivery snapshot for newly onboarded accounts.
+ * No-op when a config row already exists (never override customer settings).
+ */
+export async function ensureNewWorkspaceDeliveryDefaults(
+  env: AppEnv,
+  userId: string,
+  options: { hasEmail?: boolean } = {},
+) {
+  const existing = await getWorkspaceDeliveryConfig(env, userId);
+  if (existing) {
+    return { created: false as const, config: existing };
+  }
+  await upsertWorkspaceDeliveryConfig(env, {
+    userId,
+    sensitivityMode: "balanced",
+    instantEnabled: true,
+    digestEnabled: true,
+    digestCadencePreference: "plan_default",
+    emailEnabled: options.hasEmail !== false,
+    whatsappEnabled: false,
+    slackEnabled: false,
+  });
+  const config = await getWorkspaceDeliveryConfig(env, userId);
+  return { created: true as const, config };
 }
 
 // After a verified email change, the auto-provisioned delivery target still
@@ -133,6 +164,7 @@ export async function upsertWorkspaceDeliveryConfig(
     sensitivityMode: SensitivityMode;
     instantEnabled: boolean;
     digestEnabled: boolean;
+    digestCadencePreference?: DigestCadencePreference;
     emailEnabled: boolean;
     whatsappEnabled: boolean;
     slackEnabled?: boolean;
@@ -142,6 +174,8 @@ export async function upsertWorkspaceDeliveryConfig(
 ) {
   const id = createId();
   const timestamp = nowIso();
+  const digestCadencePreference =
+    input.digestCadencePreference === "weekly_only" ? "weekly_only" : "plan_default";
   await run(
     env,
     `
@@ -151,6 +185,7 @@ export async function upsertWorkspaceDeliveryConfig(
         sensitivity_mode,
         instant_enabled,
         digest_enabled,
+        digest_cadence_preference,
         email_enabled,
         whatsapp_enabled,
         slack_enabled,
@@ -159,11 +194,12 @@ export async function upsertWorkspaceDeliveryConfig(
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id)
       DO UPDATE SET sensitivity_mode = excluded.sensitivity_mode,
                     instant_enabled = excluded.instant_enabled,
                     digest_enabled = excluded.digest_enabled,
+                    digest_cadence_preference = excluded.digest_cadence_preference,
                     email_enabled = excluded.email_enabled,
                     whatsapp_enabled = excluded.whatsapp_enabled,
                     slack_enabled = excluded.slack_enabled,
@@ -176,6 +212,7 @@ export async function upsertWorkspaceDeliveryConfig(
     input.sensitivityMode,
     boolToInt(input.instantEnabled),
     boolToInt(input.digestEnabled),
+    digestCadencePreference,
     boolToInt(input.emailEnabled),
     boolToInt(input.whatsappEnabled),
     boolToInt(input.slackEnabled ?? false),

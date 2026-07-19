@@ -10,12 +10,14 @@ import type {
 // variants of the same change (A/B tests, countdown headlines) re-alert forever.
 const SUPPRESSION_WINDOW_MS = 48 * 60 * 60 * 1000;
 
+// Instant "balanced" threshold is 75. Headline product events (new ad, offer
+// change) must clear that bar or the product's core promise never fires.
 const BASE_IMPORTANCE_BY_EVENT: Record<WatchEventType, number> = {
-  ad_new: 65,
+  ad_new: 76,
   ad_inactive: 60,
   landing_page_url_changed: 85,
   landing_page_headline_changed: 75,
-  landing_page_offer_changed: 74,
+  landing_page_offer_changed: 80,
   landing_page_cta_changed: 72,
   landing_page_form_changed: 70,
 };
@@ -105,7 +107,7 @@ export function evaluateProofBackedEvents(input: {
         // "the watchlist observes many ads" — the latter permanently
         // inflated every event on any busy watchlist.
         burstCount: candidateDrafts.length,
-        indiaSignals: [draft.to].some((value) => hasIndiaSignal(value)),
+        purchaseSignals: [draft.to].some((value) => hasPurchaseSignal(value)),
       }),
       title: buildEventTitle(draft.eventType),
       summary: buildEventSummary(draft.eventType),
@@ -130,7 +132,8 @@ export function scoreWatchEventImportance(input: {
   proofPresent: boolean;
   sensitivityMode: SensitivityMode;
   burstCount: number;
-  indiaSignals: boolean;
+  /** Purchase/currency pressure signals (any market — not India-only). */
+  purchaseSignals: boolean;
 }) {
   let score = BASE_IMPORTANCE_BY_EVENT[input.eventType] ?? 50;
 
@@ -147,7 +150,7 @@ export function scoreWatchEventImportance(input: {
   if (input.sensitivityMode === "quiet") {
     score -= 10;
   }
-  if (input.indiaSignals) {
+  if (input.purchaseSignals) {
     score += 10;
   }
 
@@ -267,13 +270,29 @@ function normalizeFieldValue(value: string | null) {
   return value?.trim().toLowerCase().replace(/\s+/g, " ") ?? null;
 }
 
-function hasIndiaSignal(value: string) {
+/**
+ * Global-first purchase pressure cues: major currency markers plus common
+ * checkout incentives. Not market-specific (₹ and € score the same).
+ */
+export function hasPurchaseSignal(value: string) {
   const normalized = value.toLowerCase();
+  // FIX-7: do not put multi-char `zł` inside a character class (bare `z` match).
+  if (
+    /[₹$€£¥₺]|zł/.test(value) ||
+    /\b(?:usd|eur|gbp|inr|jpy|cad|aud|sgd|aed|sar)\b/.test(normalized)
+  ) {
+    return true;
+  }
   return (
-    normalized.includes("₹") ||
     normalized.includes("cod") ||
     normalized.includes("emi") ||
-    normalized.includes("cash on delivery")
+    normalized.includes("cash on delivery") ||
+    normalized.includes("free shipping") ||
+    normalized.includes("free delivery") ||
+    normalized.includes("% off") ||
+    normalized.includes("percent off") ||
+    /\bbogo\b/.test(normalized) ||
+    /\bbuy\s+\d+\s+get\b/.test(normalized)
   );
 }
 

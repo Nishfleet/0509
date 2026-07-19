@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   evaluateProofBackedEvents,
+  hasPurchaseSignal,
   selectLastSuccessfulProofCapture,
   scoreWatchEventImportance,
 } from "~/lib/watch-event-evaluator.server";
@@ -331,14 +332,14 @@ describe("signal-quality hardening (2026-06-12)", () => {
     expect(result.status).toBe("suppressed");
   });
 
-  it("scores without a proof-presence bump so only headline changes clear the balanced instant bar", () => {
+  it("scores headline events so new ads and offer changes clear the balanced instant bar", () => {
     expect(
       scoreWatchEventImportance({
         eventType: "landing_page_headline_changed",
         proofPresent: true,
         sensitivityMode: "balanced",
         burstCount: 1,
-        indiaSignals: false,
+        purchaseSignals: false,
       }),
     ).toBe(75);
     expect(
@@ -347,17 +348,47 @@ describe("signal-quality hardening (2026-06-12)", () => {
         proofPresent: true,
         sensitivityMode: "balanced",
         burstCount: 1,
-        indiaSignals: false,
+        purchaseSignals: false,
       }),
-    ).toBe(74);
+    ).toBe(80);
+    expect(
+      scoreWatchEventImportance({
+        eventType: "ad_new",
+        proofPresent: true,
+        sensitivityMode: "balanced",
+        burstCount: 1,
+        purchaseSignals: false,
+      }),
+    ).toBe(76);
     expect(
       scoreWatchEventImportance({
         eventType: "landing_page_cta_changed",
         proofPresent: true,
         sensitivityMode: "balanced",
         burstCount: 1,
-        indiaSignals: false,
+        purchaseSignals: false,
       }),
     ).toBe(72);
+  });
+
+  it("applies the same purchase-signal score bump for ₹ and € offers", () => {
+    expect(hasPurchaseSignal("Starting at ₹499")).toBe(true);
+    expect(hasPurchaseSignal("From €49")).toBe(true);
+    expect(hasPurchaseSignal("Just a great product")).toBe(false);
+    // FIX-7: bare letter z must not count as a purchase signal.
+    expect(hasPurchaseSignal("Amazing new sizes")).toBe(false);
+    expect(hasPurchaseSignal("From zł 49")).toBe(true);
+
+    const base = {
+      eventType: "landing_page_offer_changed" as const,
+      proofPresent: true,
+      sensitivityMode: "balanced" as const,
+      burstCount: 1,
+    };
+    const withInr = scoreWatchEventImportance({ ...base, purchaseSignals: true });
+    const withEur = scoreWatchEventImportance({ ...base, purchaseSignals: true });
+    const without = scoreWatchEventImportance({ ...base, purchaseSignals: false });
+    expect(withInr).toBe(withEur);
+    expect(withInr).toBe(without + 10);
   });
 });

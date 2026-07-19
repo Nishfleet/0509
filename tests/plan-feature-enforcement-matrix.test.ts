@@ -60,7 +60,9 @@ describe("plan feature enforcement matrix", () => {
   it("keeps starter exports available only from starter upward", () => {
     expect(canUsePlanFeature("scout", "export_csv")).toBe(false);
     expect(canUsePlanFeature("starter", "export_csv")).toBe(true);
-    expect(canUsePlanFeature("starter", "share_links")).toBe(false);
+    // WP-29: watermarked share links from Starter; Scout still blocked.
+    expect(canUsePlanFeature("scout", "share_links")).toBe(false);
+    expect(canUsePlanFeature("starter", "share_links")).toBe(true);
   });
 
   it("keeps scout off slack delivery and instant alerts", () => {
@@ -68,5 +70,6 @@ describe("plan feature enforcement matrix", () => {
     expect(canUsePlanFeature("scout", "high_priority_alerts")).toBe(false);
     expect(canUsePlanFeature("starter", "slack_delivery")).toBe(true);
     expect(canUsePlanFeature("starter", "agency_branding")).toBe(false);
+    expect(canUsePlanFeature("agency", "agency_branding")).toBe(true);
   });
 });

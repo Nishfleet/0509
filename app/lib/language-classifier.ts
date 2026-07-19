@@ -102,7 +102,48 @@ interface LatinLanguageProfile {
 const LATIN_LANGUAGE_PROFILES: readonly LatinLanguageProfile[] = [
   {
     label: "Spanish",
-    cues: ["que", "para", "con", "por", "ahora", "hoy", "descuento", "envio", "gratis", "oferta", "tienda", "nuevo", "mejor", "precio", "compra"],
+    cues: [
+      "que",
+      "para",
+      "con",
+      "por",
+      "ahora",
+      "hoy",
+      "descuento",
+      "envio",
+      "envío",
+      "gratis",
+      "oferta",
+      "tienda",
+      "nuevo",
+      "mejor",
+      "precio",
+      "compra",
+      "entra",
+      "encuentra",
+      "actualizaciones",
+      "semanales",
+      "producto",
+      "productos",
+      "y",
+      "de",
+      "el",
+      "la",
+      "los",
+      "las",
+      "una",
+      "del",
+      "al",
+      "tu",
+      "tus",
+      "nuestro",
+      "nuestra",
+      "descubra",
+      "descubre",
+      "compra",
+      "comprar",
+      "envio",
+    ],
     chars: /[ñ¿¡]/g,
   },
   {
@@ -265,9 +306,12 @@ export function classifyLanguage(input: {
   return buildResult("Unknown", 0.35, sampleLength, scriptSignals, cueMatches, "conflicting_or_weak_signal");
 }
 
+/** Minimum score gap between top two Latin-script profiles before claiming a winner. */
+const LATIN_PROFILE_MARGIN = 2;
+
 function bestLatinProfile(sample: string): { label: LatinLanguageLabel; confidence: number } | null {
   const lower = sample.toLowerCase();
-  let winner: { label: LatinLanguageLabel; score: number } | null = null;
+  const ranked: Array<{ label: LatinLanguageLabel; score: number }> = [];
 
   for (const profile of LATIN_LANGUAGE_PROFILES) {
     const cueHits = profile.cues.reduce((total, word) => {
@@ -277,12 +321,21 @@ function bestLatinProfile(sample: string): { label: LatinLanguageLabel; confiden
     const charHits = Math.min(6, profile.chars ? (sample.match(profile.chars)?.length ?? 0) : 0);
     const score = cueHits + charHits * 2;
 
-    if (score >= 3 && (!winner || score > winner.score)) {
-      winner = { label: profile.label, score };
+    if (score >= 3) {
+      ranked.push({ label: profile.label, score });
     }
   }
 
+  ranked.sort((left, right) => right.score - left.score);
+  const winner = ranked[0];
   if (!winner) {
+    return null;
+  }
+
+  const runnerUp = ranked[1];
+  if (runnerUp && winner.score - runnerUp.score < LATIN_PROFILE_MARGIN) {
+    // Ambiguous Latin-script competition (e.g. Spanish vs Vietnamese cue overlap).
+    // Fall through to English so Workers-AI can correct at selection time.
     return null;
   }
 

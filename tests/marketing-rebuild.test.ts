@@ -55,7 +55,8 @@ describe("marketing rebuild", () => {
 
   it("labels public search as a coverage-qualified preview before account", () => {
     expect(marketingRoute).toContain("Search preview");
-    expect(marketingRoute).toContain("Provider coverage and freshness vary");
+    expect(marketingRoute).toContain("Paste a competitor site — no account needed.");
+    expect(marketingRoute).not.toContain("Provider coverage and freshness vary");
     expect(marketingRoute).not.toContain("Early access");
     expect(marketingRoute).toContain("No account needed.");
     expect(marketingRoute).not.toContain("provider canaries");
@@ -90,15 +91,15 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("night.");
     expect(marketingRoute).toContain("Sample proof-backed brief");
     expect(marketingRoute).toContain("A rival page changed while your team was offline");
-    expect(marketingRoute).toContain("Your sales team would&rsquo;ve walked in blind.");
+    expect(marketingRoute).toContain("Your team would&rsquo;ve found out from a client.");
+    expect(marketingRoute).toContain("Meta ads and landing pages");
     expect(marketingRoute).toContain("before your alarm goes off");
     expect(marketingRoute).not.toContain("Paste your competitors. Wake up to the proof-backed counter-move brief.");
-    expect(marketingRoute).toContain("start from the brands you already track");
-    expect(marketingRoute).toContain("scheduled monitoring is included with your plan");
-    expect(marketingRoute).toContain("no proof, no claim");
-    expect(marketingRoute).toContain("what changed, why it matters, what to do next");
-    expect(marketingRoute).not.toContain("turns into a watchlist");
-    expect(marketingRoute).not.toContain("daily on Starter & Agency plans");
+    expect(marketingRoute).not.toContain("when monitoring is active");
+    expect(marketingRoute).not.toContain("When scheduled monitoring is active");
+    expect(marketingRoute).toContain("every 3–6 hours on paid plans");
+    expect(marketingRoute).toContain("daily on Starter and Agency, weekly on Scout");
+    expect(marketingRoute).not.toMatch(/["'`][^"'`]*price loading/);
     expect(marketingRoute).not.toContain("Diff: −₹401");
   });
 
@@ -167,7 +168,9 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("3-hour competitor monitoring");
     expect(marketingRoute).toContain("3 competitors checked every 6 hours");
     expect(marketingRoute).toContain("10 competitors checked every 3 hours");
-    expect(marketingRoute).toContain("75 competitors checked every 3 hours");
+    expect(marketingRoute).toContain(
+      "75 competitors — top 25 checked every 3 hours, the rest every 6 hours",
+    );
     expect(marketingRoute).toContain("valueMathLabel");
     expect(marketingRoute).toContain("Check packs");
     expect(marketingRoute).toContain('className={`f9-commerce-card${plan.slug === "starter" ? " is-recommended" : ""}`}');

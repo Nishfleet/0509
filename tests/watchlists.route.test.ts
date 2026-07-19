@@ -55,6 +55,7 @@ const workspaceDeliveryConfig: WorkspaceDeliveryConfigRecord = {
   sensitivityMode: "auto",
   instantEnabled: false,
   digestEnabled: true,
+  digestCadencePreference: "plan_default",
   emailEnabled: true,
   whatsappEnabled: false,
   slackEnabled: false,
@@ -366,11 +367,12 @@ describe("watchlists route loader", () => {
     const { loader } = await import("~/routes/app.watchlists");
     const result = await loader({
       context: createContext(),
-      request: new Request("http://localhost/app/watchlists?watchlist=watch-1"),
+      request: new Request("http://localhost/app/watchlists?watchlist=watch-1&event=event-1"),
     } as never);
 
     expect(result).toMatchObject({
       selectedWatchlist: watchlist,
+      highlightedEventId: "event-1",
       eventCandidates: recentCandidates,
       events: recentEvents,
       runs: recentRuns.map((run) => ({ ...run, errorMessage: null })),
@@ -684,7 +686,7 @@ describe("watchlists route actions", () => {
       error: "plan_gated",
       feature: "share_links",
       plan: "starter",
-      message: "Share links are included in the Agency plan.",
+      message: "Share links are included on Starter and Agency plans.",
     });
     vi.doUnmock("~/lib/plan-feature-gate.server");
   });
@@ -1952,6 +1954,7 @@ describe("watchlists route rendering", () => {
           sensitivityMode: "quiet",
           instantEnabled: true,
           digestEnabled: true,
+  digestCadencePreference: "plan_default",
           emailEnabled: true,
           whatsappEnabled: true,
           slackEnabled: false,
@@ -2032,6 +2035,7 @@ describe("watchlists route rendering", () => {
           sensitivityMode: "quiet",
           instantEnabled: true,
           digestEnabled: true,
+  digestCadencePreference: "plan_default",
           emailEnabled: true,
           whatsappEnabled: true,
           slackEnabled: false,
@@ -2097,6 +2101,7 @@ describe("watchlists route rendering", () => {
           sensitivityMode: "quiet",
           instantEnabled: true,
           digestEnabled: true,
+  digestCadencePreference: "plan_default",
           emailEnabled: true,
           whatsappEnabled: true,
           slackEnabled: false,

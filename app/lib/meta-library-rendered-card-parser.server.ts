@@ -13,6 +13,12 @@ export interface ExtractedAdCard {
   active: boolean;
   /** Raw "Started running on <date>" card line; parsed server-side into firstSeenAt. */
   startedRunning?: string | null;
+  /** First creative CDN image (fbcdn/scontent) found on the card, if any. */
+  imageUrl?: string | null;
+  /** True when a <video> element (or poster) was present on the card. */
+  hasVideo?: boolean;
+  /** Parsed from "N ads use this creative and text" when present. */
+  variantCount?: number | null;
 }
 
 export interface RenderedHtmlPayload {
@@ -54,6 +60,8 @@ export function parseRenderedMetaLibraryHtml(content: string): RenderedHtmlPaylo
     const contextLineText = stripHtmlPreservingLines(contextHtml);
     const body = stripHtml(contextHtml) || stripHtml(match[3] ?? "");
     const landingPageUrl = extractExternalLink(contextHtml);
+    const media = extractCreativeMediaFromHtml(contextHtml);
+    const variantCount = extractVariantCountFromText(contextLineText);
 
     cards.push({
       libraryId,
@@ -67,6 +75,9 @@ export function parseRenderedMetaLibraryHtml(content: string): RenderedHtmlPaylo
       platforms: inferPlatforms(body),
       active: !hasStandaloneInactiveLine(contextLineText),
       startedRunning: findStartedRunningLine(contextLineText),
+      imageUrl: media.imageUrl,
+      hasVideo: media.hasVideo,
+      variantCount,
     });
   }
 
@@ -323,10 +334,24 @@ export function extractTextCardsFromVisibleText(value: string): ExtractedAdCard[
       // isTextCardUiLine keeps this line out of the ad body; the block still
       // carries it, so capture Meta's published start date before it drops.
       startedRunning: findStartedRunningLine(blockText),
+      variantCount: extractVariantCountFromText(blockText),
     });
   }
 
   return cards;
+}
+
+/** Parse "N ads use this creative and text" into a variant count. */
+export function extractVariantCountFromText(value: string | null | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+  const match = value.match(/(\d+)\s+ads?\s+use this creative and text/i);
+  if (!match?.[1]) {
+    return null;
+  }
+  const count = Number.parseInt(match[1], 10);
+  return Number.isFinite(count) && count > 0 ? count : null;
 }
 
 export function hasNoResultsSignal(value: string) {
@@ -371,7 +396,7 @@ function inferAdvertiserFromTextBlock(block: string[]) {
   return null;
 }
 
-function extractAdBodyLines(block: string[]) {
+export function extractAdBodyLines(block: string[]) {
   const sponsoredIndex = block.findIndex((line) => /^Sponsored$/i.test(line));
   const afterSponsored = sponsoredIndex >= 0 ? block.slice(sponsoredIndex + 1) : block;
   const bodyLines: string[] = [];
@@ -392,6 +417,19 @@ function extractAdBodyLines(block: string[]) {
   return bodyLines;
 }
 
+/**
+ * FIX-13: strip Ad Library chrome lines from a free-form body string before
+ * hook/offer derivation (DOM/session paths that skip extractAdBodyLines).
+ */
+export function stripAdLibraryUiChromeFromBody(body: string): string {
+  const lines = body
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\u00a0/g, " ").trim())
+    .filter(Boolean);
+  const cleaned = extractAdBodyLines(lines);
+  return cleaned.join("\n").trim();
+}
+
 function normalizeExtractedBodyLine(line: string) {
   return line
     .replace(/\u00a0/g, " ")
@@ -400,7 +438,7 @@ function normalizeExtractedBodyLine(line: string) {
     .toLowerCase();
 }
 
-function isTextCardUiLine(line: string) {
+export function isTextCardUiLine(line: string) {
   return (
     /^Active$/i.test(line) ||
     /^Inactive$/i.test(line) ||
@@ -483,6 +521,94 @@ export function extractExternalLink(html: string) {
   }
 
   return null;
+}
+
+/**
+ * Pull a creative thumbnail URL from card HTML (Browserless / Quick Action scrape).
+ * Prefers video posters, then the largest measurable fbcdn/scontent image, skipping
+ * tiny square profile-like assets when width/height attributes are present.
+ */
+export function extractCreativeMediaFromHtml(html: string): {
+  imageUrl: string | null;
+  hasVideo: boolean;
+} {
+  const hasVideo = /<video\b/i.test(html);
+  const posterMatch = html.match(/<video\b[^>]*\bposter=(['"])(.*?)\1/i);
+  const posterUrl = posterMatch?.[2] ? normalizeCreativeCdnUrl(decodeHtmlEntity(posterMatch[2])) : null;
+  if (posterUrl) {
+    return { imageUrl: posterUrl, hasVideo: true };
+  }
+
+  const imgRegex = /<img\b([^>]*)>/gi;
+  let bestUrl: string | null = null;
+  let bestArea = -1;
+  let firstCdnUrl: string | null = null;
+
+  for (const match of html.matchAll(imgRegex)) {
+    const attrs = match[1] ?? "";
+    const src = readHtmlAttribute(attrs, "src");
+    if (!src) {
+      continue;
+    }
+    const normalized = normalizeCreativeCdnUrl(decodeHtmlEntity(src));
+    if (!normalized) {
+      continue;
+    }
+    if (!firstCdnUrl) {
+      firstCdnUrl = normalized;
+    }
+
+    const width = readPositiveDimension(attrs, "width");
+    const height = readPositiveDimension(attrs, "height");
+    if (width !== null && height !== null && width <= 64 && height <= 64) {
+      continue;
+    }
+    const area = (width ?? 1) * (height ?? 1);
+    if (area > bestArea) {
+      bestArea = area;
+      bestUrl = normalized;
+    }
+  }
+
+  return {
+    imageUrl: bestUrl ?? firstCdnUrl,
+    hasVideo,
+  };
+}
+
+function readHtmlAttribute(attrs: string, name: string) {
+  const match = attrs.match(new RegExp(`\\b${name}\\s*=\\s*(['"])(.*?)\\1`, "i"));
+  return match?.[2]?.trim() || null;
+}
+
+function readPositiveDimension(attrs: string, name: string) {
+  const raw = readHtmlAttribute(attrs, name);
+  if (!raw) {
+    return null;
+  }
+  const parsed = Number.parseInt(raw.replace(/px$/i, ""), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function normalizeCreativeCdnUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.startsWith("data:")) {
+    return null;
+  }
+
+  try {
+    const url = new URL(trimmed, "https://www.facebook.com");
+    if (url.protocol !== "https:" && url.protocol !== "http:") {
+      return null;
+    }
+    const host = url.hostname.toLowerCase();
+    if (!host.includes("fbcdn") && !host.includes("scontent")) {
+      return null;
+    }
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
 
 export function absolutizeMetaAdUrl(href: string) {

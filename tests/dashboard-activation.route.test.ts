@@ -101,8 +101,8 @@ describe("dashboard first 15 minutes activation", () => {
       await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Market Desk Brief");
-    expect(markup).toContain("Build your Market Desk");
+    expect(markup).toContain("Brief");
+    expect(markup).toContain("Build your brief");
     expect(markup).toContain("Add your first competitor");
     expect(markup).toContain("Add competitors");
     expect(markup).toContain("Competitor website");
@@ -250,7 +250,7 @@ describe("dashboard first 15 minutes activation", () => {
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
     expect(markup).toContain("Overview");
-    expect(markup).toContain("Market Desk Brief");
+    expect(markup).toContain("Brief");
     expect(markup).toContain("Quiet check completed");
     expect(markup).toContain("0 ads checked across 1 competitor");
     expect(markup).toContain(
@@ -548,7 +548,7 @@ describe("dashboard first 15 minutes activation", () => {
 
     expect(markup).toContain("Watching for the next change");
     expect(markup).toContain("Your watchlist is ready.");
-    expect(markup).toContain("Digests sent");
+    expect(markup).toContain("Briefs sent");
     expect(markup).toContain("Email trail active");
     expect(markup).not.toContain("Set delivery");
     expect(markup).not.toContain("A successful delivery trail exists");

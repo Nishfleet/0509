@@ -2,6 +2,7 @@ import { Link, NavLink, useLocation, useNavigation } from "react-router";
 import { useEffect, useRef, useState } from "react";
 
 import { SignOutButton } from "~/components/sign-out-button";
+import { navIconFor } from "~/components/icons";
 import {
   DASHBOARD_PRIMARY_NAV,
   DASHBOARD_SETTINGS_NAV,
@@ -54,17 +55,24 @@ function NavSections({ sections }: { sections: DashboardNavSection[] }) {
         <div className="f9-dash-nav-group" key={section.title ?? section.items[0]?.to ?? "nav"}>
           {section.title ? <p className="f9-dash-nav-section">{section.title}</p> : null}
           <nav aria-label={section.title ?? "Application"}>
-            {section.items.map((item) => (
-              <NavLink
-                className={navLinkClassName}
-                end={item.end}
-                key={item.to}
-                prefetch="intent"
-                to={item.to}
-              >
-                {item.label}
-              </NavLink>
-            ))}
+            {section.items.map((item) => {
+              const Icon = navIconFor(item);
+              return (
+                <NavLink
+                  className={(state) => {
+                    const base = navLinkClassName(state);
+                    return ["f9-dash-nav-link", base].filter(Boolean).join(" ");
+                  }}
+                  end={item.end}
+                  key={item.to}
+                  prefetch="intent"
+                  to={item.to}
+                >
+                  <Icon />
+                  <span>{item.label}</span>
+                </NavLink>
+              );
+            })}
           </nav>
         </div>
       ))}
@@ -154,17 +162,24 @@ export function DashboardShell({
 
           {isPublic ? (
             <nav aria-label="Search">
-              {PUBLIC_SEARCH_NAV.map((item) => (
-                <NavLink
-                  className={navLinkClassName}
-                  end={item.end}
-                  key={item.to}
-                  prefetch="intent"
-                  to={item.to}
-                >
-                  {item.label}
-                </NavLink>
-              ))}
+              {PUBLIC_SEARCH_NAV.map((item) => {
+                const Icon = navIconFor(item);
+                return (
+                  <NavLink
+                    className={(state) => {
+                      const base = navLinkClassName(state);
+                      return ["f9-dash-nav-link", base].filter(Boolean).join(" ");
+                    }}
+                    end={item.end}
+                    key={item.to}
+                    prefetch="intent"
+                    to={item.to}
+                  >
+                    <Icon />
+                    <span>{item.label}</span>
+                  </NavLink>
+                );
+              })}
             </nav>
           ) : (
             <>
@@ -173,17 +188,24 @@ export function DashboardShell({
 
               {staff.length > 0 ? (
                 <nav aria-label="Staff">
-                  {staff.map((item) => (
-                    <NavLink
-                      className={navLinkClassName}
-                      end={item.end}
-                      key={item.to}
-                      prefetch="intent"
-                      to={item.to}
-                    >
-                      {item.label}
-                    </NavLink>
-                  ))}
+                  {staff.map((item) => {
+                    const Icon = navIconFor(item);
+                    return (
+                      <NavLink
+                        className={(state) => {
+                          const base = navLinkClassName(state);
+                          return ["f9-dash-nav-link", base].filter(Boolean).join(" ");
+                        }}
+                        end={item.end}
+                        key={item.to}
+                        prefetch="intent"
+                        to={item.to}
+                      >
+                        <Icon />
+                        <span>{item.label}</span>
+                      </NavLink>
+                    );
+                  })}
                 </nav>
               ) : null}
             </>

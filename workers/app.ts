@@ -11,6 +11,7 @@ import {
   sendCustomerAtRiskAlert,
   sendWeeklyBusinessNumbers,
 } from "../app/lib/monitoring.server";
+import { sendMonthlyCustomerRecaps } from "../app/lib/monthly-recap.server";
 import {
   isPublicMarkdownPage,
   LLMS_TEXT,
@@ -106,6 +107,21 @@ export default {
       return withSecurityHeaders(rateLimitResponse, request);
     }
 
+    // WP-10: durable creative thumbnails for saved collection ads (R2).
+    // MINOR: serve only after the request rate-limit gate; raster types only.
+    if (request.method === "GET" || request.method === "HEAD") {
+      const { parseCreativeArtifactPathname, serveCreativeArtifact } = await import(
+        "../app/lib/creative-thumbnail.server"
+      );
+      const creativeId = parseCreativeArtifactPathname(url.pathname);
+      if (creativeId) {
+        const artifactResponse = await serveCreativeArtifact(env, request, creativeId);
+        if (artifactResponse) {
+          return withSecurityHeaders(artifactResponse, request);
+        }
+      }
+    }
+
     (globalThis as GlobalEnvCarrier).__APP_REQUEST_ENV__ = env;
     const response = await requestHandler(request, {
       cloudflare: {
@@ -136,6 +152,17 @@ export default {
             }
           },
           (error) => reportScheduledTaskFailure(env, "weekly_business_numbers", error),
+        ),
+      );
+      // WP-26: first Monday of the month → prior-month customer recap.
+      ctx.waitUntil(
+        sendMonthlyCustomerRecaps(env, { scheduledTime: controller.scheduledTime }).then(
+          (result) => {
+            if (result.sent > 0) {
+              console.log("monthly customer recaps sent", result);
+            }
+          },
+          (error) => reportScheduledTaskFailure(env, "monthly_customer_recaps", error),
         ),
       );
     }

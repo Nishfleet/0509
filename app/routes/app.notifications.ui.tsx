@@ -30,6 +30,7 @@ type WhatsAppTargetView = DeliveryTargetView & {
 
 export type NotificationsLoaderData = {
   emailDeliveryReady: boolean;
+  digestCadencePreference: "plan_default" | "weekly_only";
   showSlackDelivery: boolean;
   slackDelivery: {
     plan: PlanFamily;
@@ -106,8 +107,24 @@ export function NotificationsRoute() {
               <span className="f9-app-kicker">Email notifications</span>
               <h3>Tune what gets sent</h3>
               <p className="f9-muted-copy">
-                Watchlists control digest cadence, instant alerts, quiet hours, and which channels receive updates.
+                Choose how often digests arrive. Instant alerts and quiet hours stay on each watchlist.
               </p>
+              <Form className="f9-auth-form" method="post">
+                <input name="intent" type="hidden" value="save-digest-cadence" />
+                <label className="f9-field">
+                  <span>Digest frequency</span>
+                  <select
+                    defaultValue={data.digestCadencePreference ?? "plan_default"}
+                    name="digestCadencePreference"
+                  >
+                    <option value="plan_default">Plan default (daily when your plan includes it)</option>
+                    <option value="weekly_only">Weekly only</option>
+                  </select>
+                </label>
+                <SubmitButton className="f9-primary-button" intent="save-digest-cadence" pendingLabel="Saving…">
+                  Save frequency
+                </SubmitButton>
+              </Form>
               <Link className="f9-secondary-button" to="/app/watchlists">
                 Open watchlists
               </Link>

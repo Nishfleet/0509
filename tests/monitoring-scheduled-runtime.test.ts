@@ -622,6 +622,8 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
     expect(mocks.searchAdsViaSourceResolver.mock.calls[0]?.[3]).toMatchObject({
       purpose: "watchlist_scan",
       forceLive: true,
+      // agency plan → every_3h cadence window (WP-36 shared cache reuse)
+      acceptCacheYoungerThanMs: 3 * 60 * 60 * 1000,
     });
     expect(mocks.createWatchlistRun).toHaveBeenCalledTimes(2);
     expect(mocks.finishWatchlistRun).toHaveBeenCalledTimes(2);
@@ -677,5 +679,46 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
     expect(scheduleWatchlistFanoutMock).toHaveBeenCalledTimes(1);
     expect(mocks.searchAdsViaSourceResolver).not.toHaveBeenCalled();
     expect(mocks.createWatchlistRun).not.toHaveBeenCalled();
+  });
+
+  it("keeps agency priority slots on 3h ticks and defers overflow to 6h (WP-37)", async () => {
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("agency"),
+      PLAN_LIMITS: {},
+    }));
+
+    const watchlists: WatchlistRecord[] = Array.from({ length: 27 }, (_, index) => ({
+      id: `watch-${String(index + 1).padStart(2, "0")}`,
+      userId: "agency-user",
+      name: `Competitor ${index + 1}`,
+      targetType: "advertiser" as const,
+      targetId: `target-${index + 1}`,
+      targetFingerprint: `fp-${index + 1}`,
+      targetLabel: `target-${index + 1}`,
+      targetCountry: null,
+      isActive: true,
+      lastScannedAt: null,
+      createdAt: `2026-03-01T00:${String(index).padStart(2, "0")}:00.000Z`,
+      updatedAt: `2026-03-01T00:${String(index).padStart(2, "0")}:00.000Z`,
+    }));
+
+    const { filterWatchlistsByPriorityScanSlots } = await import("~/lib/monitoring.server");
+
+    const threeHour = await filterWatchlistsByPriorityScanSlots(
+      {} as never,
+      watchlists,
+      Date.parse("2026-07-03T03:00:00.000Z"),
+    );
+    expect(threeHour).toHaveLength(25);
+    expect(threeHour.map((w) => w.id)).toEqual(
+      watchlists.slice(0, 25).map((w) => w.id),
+    );
+
+    const sixHour = await filterWatchlistsByPriorityScanSlots(
+      {} as never,
+      watchlists,
+      Date.parse("2026-07-03T06:00:00.000Z"),
+    );
+    expect(sixHour).toHaveLength(27);
   });
 });

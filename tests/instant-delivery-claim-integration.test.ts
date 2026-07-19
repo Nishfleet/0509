@@ -136,6 +136,7 @@ async function loadDelivery(
         sensitivityMode: "balanced",
         instantEnabled: true,
         digestEnabled: true,
+  digestCadencePreference: "plan_default",
         emailEnabled: true,
         whatsappEnabled: false,
         slackEnabled: false,

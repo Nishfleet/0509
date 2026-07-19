@@ -1,9 +1,10 @@
 import {
+  buildChangeIntelligenceSummary,
   type DigestCadence,
   digestCadenceLabel,
   readDigestIntelligence,
 } from "~/lib/change-intelligence";
-import { buildDigestEmail } from "~/lib/digest-email.server";
+import { buildDigestEmail, buildScanTroubleEmail } from "~/lib/digest-email.server";
 import {
   createDeliveryAttempt,
   getDeliveryAttemptByIdempotencyKey,
@@ -85,9 +86,11 @@ export {
   sendAccountActionEmail,
   sendDeliveryTestEmail,
   sendEmailVerificationEmail,
+  sendFreeActivationResultEmail,
   sendOperatorAlertEmail,
   sendPasswordResetEmail,
   sendTeamInviteEmail,
+  sendWelcomeEmail,
 } from "~/lib/delivery-account-emails.server";
 
 const AUTO_PROVISIONED_EMAIL_SOURCE = "account_email";
@@ -248,6 +251,137 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
     attempts: attempts.length,
     channels: [...new Set(attempts.map((attempt) => attempt.channel))],
     details: attempts,
+  };
+}
+
+/**
+ * Paid-plan notice when a digest period had active watchlists but zero successful
+ * scan runs — the product went silent and the customer must hear about it.
+ * Idempotent per user/period via delivery_attempt key `scan_trouble:…`.
+ */
+export async function deliverScanTroubleNotice(
+  env: AppEnv,
+  input: {
+    userId: string;
+    accountEmail: string | null | undefined;
+    watchlistNames: string[];
+    periodKey: string;
+  },
+) {
+  const { isUserEmailVerified } = await import("~/lib/email-verification.server");
+  if (!(await isUserEmailVerified(env, input.userId))) {
+    return { sent: false as const, reason: "unverified" as const };
+  }
+
+  const accountEmail = await resolveVerifiedAccountEmail(
+    env,
+    input.userId,
+    input.accountEmail ?? null,
+  );
+  if (!accountEmail) {
+    return { sent: false as const, reason: "no_email" as const };
+  }
+
+  const workspaceConfigRecord =
+    (await getWorkspaceDeliveryConfig(env, input.userId)) ??
+    buildLegacyWorkspaceConfig(input.userId, true);
+  const entitledConfigs = await resolveEntitledDeliveryConfigs(
+    env,
+    input.userId,
+    workspaceConfigRecord,
+    null,
+  );
+  const config = resolveDeliveryConfig({
+    workspaceConfig: entitledConfigs.workspaceConfig,
+    watchlistConfig: null,
+  });
+  if (!config.digestEnabled || !config.emailEnabled) {
+    return { sent: false as const, reason: "disabled" as const };
+  }
+
+  const emailTargets = await resolveDigestEmailTargets(env, input.userId, accountEmail);
+  const primaryTarget = emailTargets[0] ?? null;
+  const recipient = primaryTarget?.targetValue?.trim() || accountEmail;
+  const unsubscribeUrl = primaryTarget
+    ? await buildUnsubscribeUrl(env, {
+        userId: input.userId,
+        targetId: primaryTarget.id,
+      })
+    : null;
+
+  const idempotencyKey = `scan_trouble:${input.userId}:${input.periodKey}`;
+  const base = appBaseUrl(env);
+  const model = buildScanTroubleEmail({
+    watchlistNames: input.watchlistNames,
+    watchlistsUrl: `${base}/app/watchlists`,
+    manageFrequencyUrl: `${base}/app/notifications`,
+    supportEmail: SUPPORT_EMAIL,
+    supportMailto: SUPPORT_MAILTO,
+    unsubscribeUrl,
+  });
+
+  const claim = await claimInstantDeliveryAttempt(env, {
+    userId: input.userId,
+    watchlistId: null,
+    deliveryTargetId: primaryTarget?.id ?? null,
+    lane: "customer",
+    channel: "email",
+    provider: EMAIL_PROVIDER,
+    targetValue: recipient,
+    templateName: "scan_trouble",
+    eventIds: [],
+    payloadSnapshot: {
+      kind: "scan_trouble",
+      periodKey: input.periodKey,
+      watchlistNames: input.watchlistNames,
+    },
+    idempotencyKey,
+  });
+  if (!claim.attemptId || !claim.claimUpdatedAt) {
+    return { sent: false as const, reason: "duplicate" as const };
+  }
+
+  const dispatchStartedAt = await markInstantDeliveryDispatchStarted(
+    env,
+    claim.attemptId,
+    claim.claimUpdatedAt,
+  );
+  if (!dispatchStartedAt) {
+    return { sent: false as const, reason: "claim_lost" as const };
+  }
+
+  const providerResult = await sendCloudflareEmail(env, {
+    to: recipient,
+    subject: model.subject,
+    html: model.html,
+    text: model.text,
+    tag: "scan-trouble",
+    unsubscribeUrl,
+  });
+
+  const finalized = await updateDeliveryAttemptResult(env, claim.attemptId, {
+    provider: providerResult.provider,
+    status: providerResult.status,
+    webhookStatus: providerResult.webhookStatus,
+    providerMessageId: providerResult.providerMessageId,
+    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+    errorMessage: providerResult.errorMessage,
+    sentAt: providerAcceptedAt(providerResult),
+    failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+    payloadSnapshot: {
+      kind: "scan_trouble",
+      periodKey: input.periodKey,
+      watchlistNames: input.watchlistNames,
+    },
+    targetValue: recipient,
+    expectedStatus: "pending",
+    expectedWebhookStatus: "provider_unknown",
+    expectedUpdatedAt: dispatchStartedAt,
+  });
+
+  return {
+    sent: Boolean(finalized && providerResult.status === "sent"),
+    reason: providerResult.status === "sent" ? ("sent" as const) : ("failed" as const),
   };
 }
 
@@ -1914,6 +2048,7 @@ function buildLegacyWorkspaceConfig(
     sensitivityMode: defaults.sensitivityMode,
     instantEnabled: defaults.instantEnabled,
     digestEnabled: defaults.digestEnabled,
+    digestCadencePreference: defaults.digestCadencePreference,
     emailEnabled: defaults.emailEnabled,
     whatsappEnabled: defaults.whatsappEnabled,
     slackEnabled: defaults.slackEnabled,
@@ -2355,98 +2490,6 @@ function deliveryAttemptSummaryStatus(status: DeliveryAttemptRecord["status"]) {
   return "failed";
 }
 
-function watchlistUrlFor(item: DigestDeliveryItem | undefined) {
-  return item?.watchlistId
-    ? `https://0509.io/app/watchlists?watchlist=${encodeURIComponent(item.watchlistId)}`
-    : null;
-}
-
-function renderDigestHtml(input: {
-  name: string;
-  periodStart: string;
-  periodEnd: string;
-  items: DigestDeliveryItem[];
-  heartbeat?: DigestHeartbeat | null;
-  cadence?: DigestCadence;
-  timeZone?: string | null;
-}) {
-  if (input.items.length === 0 && input.heartbeat) {
-    const cadenceLabel = digestCadenceLabel(input.cadence);
-    return `
-    <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #0b1220; line-height: 1.5;">
-      <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine ${escapeHtml(cadenceLabel)}</p>
-      <h1 style="margin: 0 0 12px;">${escapeHtml(input.name || "Team")}, all quiet on your competitors.</h1>
-      <p style="margin: 0 0 16px; color: #475467;">
-        ${formatDate(input.periodStart, input.timeZone)} to ${formatDate(input.periodEnd, input.timeZone)}
-      </p>
-      <p style="margin: 0 0 16px;">
-        We ran ${input.heartbeat.runs} check${input.heartbeat.runs === 1 ? "" : "s"} across
-        ${input.heartbeat.watchlistsChecked} competitor${input.heartbeat.watchlistsChecked === 1 ? "" : "s"}
-        and reviewed ${input.heartbeat.adsSeen} ad${input.heartbeat.adsSeen === 1 ? "" : "s"} —
-        no visible changes to offers, headlines, CTAs, forms, or destinations.
-      </p>
-      <p style="margin: 0; color: #475467;">
-        No news is a result too: your competitors held position this period. We keep watching —
-        the moment something moves, you'll hear about it.
-      </p>
-    </div>
-  `;
-  }
-
-  const groups = input.items.reduce<Record<string, DigestDeliveryItem[]>>((accumulator, item) => {
-    accumulator[item.watchlistName] = accumulator[item.watchlistName] ?? [];
-    accumulator[item.watchlistName].push(item);
-    return accumulator;
-  }, {});
-  const cadenceLabel = digestCadenceLabel(input.cadence);
-
-  return `
-    <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #0b1220; line-height: 1.5;">
-      <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine ${escapeHtml(cadenceLabel)}</p>
-      <h1 style="margin: 0 0 12px;">${escapeHtml(input.name || "Team")}, here’s what changed on Meta.</h1>
-      <p style="margin: 0 0 24px; color: #475467;">
-        ${formatDate(input.periodStart, input.timeZone)} to ${formatDate(input.periodEnd, input.timeZone)} · ${input.items.length} tracked changes
-      </p>
-      ${Object.entries(groups)
-        .map(
-          ([watchlistName, items]) => `
-            <section style="margin-bottom: 24px; padding: 18px; border: 1px solid #d7dce5; border-radius: 18px;">
-              <h2 style="margin: 0 0 12px; font-size: 18px;">${
-                watchlistUrlFor(items[0])
-                  ? `<a href="${watchlistUrlFor(items[0])}" style="color: #0b1220; text-decoration: underline;">${escapeHtml(watchlistName)}</a>`
-                  : escapeHtml(watchlistName)
-              }</h2>
-              <ul style="margin: 0; padding-left: 18px;">
-                ${items
-                  .map(
-                    (item) => {
-                      const intelligence = readDigestIntelligence(item.metadata);
-                      const scoreLabel = intelligence.priorityScore === null
-                        ? intelligence.priorityBand
-                        : `${intelligence.priorityBand} · ${intelligence.priorityScore}/100`;
-                      return `
-                      <li style="margin-bottom: 10px;">
-                        <strong>${escapeHtml(item.title)}</strong><br />
-                        <span style="color: #475467;">${escapeHtml(item.summary)}</span>
-                        <div style="margin-top: 6px; color: #5b6577; font-size: 13px;">
-                          ${escapeHtml(scoreLabel)}<br />
-                          Next: ${escapeHtml(intelligence.recommendedAction)}<br />
-                          Evidence: ${escapeHtml(intelligence.proofTrail)}
-                        </div>
-                      </li>
-                    `;
-                    },
-                  )
-                  .join("")}
-              </ul>
-            </section>
-          `,
-        )
-        .join("")}
-    </div>
-  `;
-}
-
 function renderDigestSlackText(input: {
   cadenceLabel: string;
   periodStart: string;
@@ -2612,7 +2655,8 @@ function buildInstantAlertContent(
 ): InstantAlertContent {
   const primaryEvent = events[0];
   const competitor = readCompetitorLabel(primaryEvent) ?? watchlist.name;
-  const watchlistUrl = buildWatchlistUrl(env, watchlist.id);
+  // WP-24: deep-link the primary change so "See the evidence" lands on the row.
+  const watchlistUrl = buildWatchlistUrl(env, watchlist.id, primaryEvent?.id ?? null);
   const creativeImageHtml = renderCreativeImageHtml(primaryEvent, adsById);
 
   if (events.length === 1) {
@@ -2626,6 +2670,10 @@ function buildInstantAlertContent(
     const shortChange = provisional
       ? "Possible change detected"
       : primaryEvent.title;
+    const intelligence = buildChangeIntelligenceSummary(primaryEvent);
+    const advertiserNote = readCompetitorLabel(primaryEvent)
+      ? `<p style="margin: 0 0 10px; color: #5b6577; font-size: 13px;">Advertiser: ${escapeHtml(competitor)}</p>`
+      : "";
 
     return {
       competitor,
@@ -2636,7 +2684,10 @@ function buildInstantAlertContent(
         <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #0b1220; line-height: 1.5;">
           <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine alert</p>
           <h1 style="margin: 0 0 12px;">${escapeHtml(subject)}</h1>
-          <p style="margin: 0 0 16px; color: #475467;">${escapeHtml(primaryEvent.summary)}</p>
+          ${advertiserNote}
+          <p style="margin: 0 0 8px; color: #475467;">${escapeHtml(primaryEvent.summary)}</p>
+          <p style="margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: #5b6577;">${escapeHtml(intelligence.priorityBand)}</p>
+          <p style="margin: 0 0 16px;"><strong>Suggested next action:</strong> ${escapeHtml(intelligence.recommendedAction)}</p>
           ${renderEventDiffHtml(primaryEvent)}
           ${creativeImageHtml}
           ${watchlistUrl ? `<p style="margin: 0;"><a href="${watchlistUrl}" style="color: #2563eb; text-decoration: underline;">See the evidence</a></p>` : ""}
@@ -2658,17 +2709,21 @@ function buildInstantAlertContent(
       <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #0b1220; line-height: 1.5;">
         <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine alert</p>
         <h1 style="margin: 0 0 12px;">${escapeHtml(subject)}</h1>
+        <p style="margin: 0 0 12px; color: #5b6577; font-size: 13px;">Advertiser: ${escapeHtml(competitor)}</p>
         ${creativeImageHtml}
         <ul style="padding-left: 18px;">
           ${events
-            .map(
-              (event) => `
-                <li style="margin-bottom: 10px;">
-                  <strong>${escapeHtml(event.title)}</strong><br />
+            .map((event) => {
+              const intelligence = buildChangeIntelligenceSummary(event);
+              return `
+                <li style="margin-bottom: 12px;">
+                  <strong>${escapeHtml(event.title)}</strong>
+                  <span style="display:block; font-size: 12px; color: #5b6577; margin: 2px 0 4px;">${escapeHtml(intelligence.priorityBand)}</span>
                   <span style="color: #475467;">${escapeHtml(event.summary)}${escapeHtml(renderEventDiffText(event))}</span>
+                  <span style="display:block; margin-top: 4px;"><strong>Suggested next action:</strong> ${escapeHtml(intelligence.recommendedAction)}</span>
                 </li>
-              `,
-            )
+              `;
+            })
             .join("")}
         </ul>
         ${watchlistUrl ? `<p style="margin: 16px 0 0;"><a href="${watchlistUrl}" style="color: #2563eb; text-decoration: underline;">View watchlist</a></p>` : ""}
@@ -2722,13 +2777,21 @@ function readCompetitorLabel(event: WatchEventRecord) {
   return typeof advertiser === "string" && advertiser.trim().length > 0 ? advertiser : null;
 }
 
-function buildWatchlistUrl(env: AppEnv, watchlistId: string) {
+function buildWatchlistUrl(
+  env: AppEnv,
+  watchlistId: string,
+  eventId?: string | null,
+) {
   const baseUrl = env.APP_ORIGIN?.trim() || env.BETTER_AUTH_URL?.trim();
   if (!baseUrl) {
     return null;
   }
 
-  return `${baseUrl.replace(/\/+$/, "")}/app/watchlists?watchlist=${encodeURIComponent(watchlistId)}`;
+  const url = `${baseUrl.replace(/\/+$/, "")}/app/watchlists?watchlist=${encodeURIComponent(watchlistId)}`;
+  const trimmedEventId = eventId?.trim();
+  return trimmedEventId
+    ? `${url}&event=${encodeURIComponent(trimmedEventId)}`
+    : url;
 }
 
 function dedupeTargetsByValue(targets: DeliveryTargetRecord[]) {
@@ -2750,26 +2813,84 @@ export async function sendPresenceDigestEmail(
     idempotencyKey: string;
   },
 ) {
+  const { renderEmailShell } = await import("~/lib/email-template.server");
+  const { buildUnsubscribeUrl } = await import("~/lib/unsubscribe.server");
+
+  // Prefer an opted-in account email target so List-Unsubscribe works; never
+  // re-provision a paused/unsubscribed address.
+  let deliveryTargetId: string | null = null;
+  let unsubscribeUrl: string | null = null;
+  try {
+    const targets = await listDeliveryTargets(env, input.userId, {
+      watchlistId: null,
+      channel: "email",
+      limit: 10,
+    });
+    const normalized = input.email.trim().toLowerCase();
+    const usable = targets.find(
+      (target) =>
+        target.targetValue.trim().toLowerCase() === normalized &&
+        target.isOptedIn &&
+        !target.optedOutAt &&
+        !target.isPaused &&
+        target.isValidated,
+    );
+    if (usable) {
+      deliveryTargetId = usable.id;
+      unsubscribeUrl = await buildUnsubscribeUrl(env, {
+        userId: input.userId,
+        targetId: usable.id,
+      });
+    } else if (!targets.some((t) => t.targetValue.trim().toLowerCase() === normalized)) {
+      const provisioned = await upsertDeliveryTarget(env, {
+        userId: input.userId,
+        watchlistId: null,
+        channel: "email",
+        targetValue: input.email.trim().toLowerCase(),
+        validationStatus: "validated",
+        isValidated: true,
+        isOptedIn: true,
+        optInSource: AUTO_PROVISIONED_EMAIL_SOURCE,
+        optedInAt: new Date().toISOString(),
+        metadata: { autoProvisioned: true, purpose: "presence_digest" },
+      });
+      if (provisioned?.id) {
+        deliveryTargetId = provisioned.id;
+        unsubscribeUrl = await buildUnsubscribeUrl(env, {
+          userId: input.userId,
+          targetId: provisioned.id,
+        });
+      }
+    }
+  } catch {
+    unsubscribeUrl = null;
+  }
+
   const htmlLines = input.lines.map((line) => `<li>${escapeHtml(line)}</li>`).join("");
-  const providerResult = await sendCloudflareEmail(env, {
-    to: input.email,
-    subject: input.subject,
-    html: `
+  const bodyHtml = `
       <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
         <p style="margin: 0 0 12px;">Presence tracking updates</p>
         <ul style="margin: 0 0 16px; padding-left: 20px;">${htmlLines}</ul>
         <p style="margin: 0;"><a href="${escapeHtml(buildPresenceAppUrl(env))}">Open presence tracking</a></p>
       </div>
-    `,
+    `;
+  const providerResult = await sendCloudflareEmail(env, {
+    to: input.email,
+    subject: input.subject,
+    html: renderEmailShell({
+      bodyHtml,
+      unsubscribeUrl,
+      preheader: "Presence tracking updates from Five to Nine",
+    }),
     tag: "presence-digest",
-    unsubscribeUrl: null,
+    unsubscribeUrl,
   });
 
   await createDeliveryAttempt(env, {
     userId: input.userId,
     watchlistId: null,
     digestRunId: null,
-    deliveryTargetId: null,
+    deliveryTargetId,
     lane: "customer",
     channel: "email",
     provider: providerResult.provider,

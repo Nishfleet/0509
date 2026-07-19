@@ -17,7 +17,7 @@ import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import type { RootLoaderData } from "~/root";
 
 const marketingDescription =
-  "Five to Nine tracks competitor ads, offers, and landing pages so revenue teams can react before deals move.";
+  "Five to Nine watches competitors' Meta ads and landing pages for marketing teams and agencies — screenshot evidence, change alerts, and briefs before the next meeting.";
 const publicSearchTrialPath =
   "/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com";
 
@@ -63,13 +63,13 @@ const howSteps = [
     step: "02",
     title: "Paid monitoring keeps checking",
     detail:
-      "When scheduled monitoring is active on your paid plan, Five to Nine checks ads, offers, CTAs, and forms and saves source-linked evidence for each confirmed change.",
+      "Five to Nine checks their ads, offers, CTAs, and forms every 3–6 hours on paid plans and saves source-linked evidence for each confirmed change.",
   },
   {
     step: "03",
-    title: "The weekly brief stays focused",
+    title: "The brief stays focused",
     detail:
-      "When digest delivery is active, the brief groups meaningful changes with freshness, uncertainty, screenshots, links, and one next review.",
+      "Your brief groups meaningful changes with screenshots, links, and one next review — daily on Starter and Agency, weekly on Scout.",
   },
 ] as const;
 
@@ -217,7 +217,8 @@ export function valueMathLabel(
 function planValueSummary(planId: PricingPlanSlug) {
   if (planId === "scout") return "3 competitors checked every 6 hours";
   if (planId === "starter") return "10 competitors checked every 3 hours";
-  if (planId === "agency") return "75 competitors checked every 3 hours";
+  if (planId === "agency")
+    return "75 competitors — top 25 checked every 3 hours, the rest every 6 hours";
   return "Scheduled competitor monitoring";
 }
 
@@ -370,7 +371,10 @@ export default function MarketingRoute() {
         const preview = value as LocalPricingPreview | null;
         if (active && preview?.available) setLocalPricing(preview);
       })
-      .catch(() => {});
+      .catch(() => {
+        // Keep honest checkout-localized fallbacks on fetch failure.
+        if (active) setLocalPricing(null);
+      });
 
     return () => {
       active = false;
@@ -425,7 +429,7 @@ export default function MarketingRoute() {
       <section className="ld-hero">
         <Link className="f9-announcement" to={publicSearchTrialPath}>
           <strong>Free search preview</strong>
-          <span>Provider coverage and freshness vary</span>
+          <span>Paste a competitor site — no account needed.</span>
         </Link>
 
         <p className="ld-case">
@@ -450,8 +454,9 @@ export default function MarketingRoute() {
             </h1>
 
             <p className="ld-deck-copy">
-              Your sales team would&rsquo;ve walked in blind. Five to Nine catches the change,
-              saves the screenshots, and files the brief — <b>before your alarm goes off.</b>
+              Your team would&rsquo;ve found out from a client. Five to Nine watches competitors&rsquo;
+              Meta ads and landing pages, saves the screenshots, and files the brief —{" "}
+              <b>before your alarm goes off.</b>
             </p>
 
             <Form className="ld-command" method="get" action="/search" aria-label="Public search preview">
@@ -782,7 +787,7 @@ export default function MarketingRoute() {
                 ? null
                 : yearlyReady
                   ? "Annual checkout unavailable. Monthly still works."
-                  : "Annual price loading";
+                  : "Prices load in your local currency at checkout";
 
             return (
               <article
@@ -812,7 +817,9 @@ export default function MarketingRoute() {
                         </span>
                       )
                       : annualStatusCopy
-                      : `${priceLabel(localPricing, plan.slug, "yearly", plan.yearlyLabel)} annual`}
+                      : hasPrice(localPricing, plan.slug, "yearly")
+                        ? `${priceLabel(localPricing, plan.slug, "yearly", plan.yearlyLabel)} annual`
+                        : plan.yearlyLabel}
                 </small>
                 <div className="f9-plan-value" aria-label={`${plan.name} value summary`}>
                   <strong>{planValueSummary(plan.slug)}</strong>
@@ -978,7 +985,7 @@ export default function MarketingRoute() {
           )}
           <SubmitButton getAction={primaryCta} pendingLabel="Redirecting…">{primaryLabel}</SubmitButton>
         </Form>
-        <p>Public search preview is free — no account. Paid plans can run scheduled checks when monitoring is active.</p>
+        <p>Public search preview is free — no account. Paid plans run scheduled checks every 3–6 hours and email you the proof.</p>
       </section>
 
       <footer className="ld-footer">

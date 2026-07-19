@@ -33,12 +33,44 @@ describe("evidence usage policy hooks", () => {
     ).toBe(-120);
   });
 
-  it.each(["partial", "unknown"] as const)("keeps %s refunds in operator review", (refundType) => {
-    expect(topUpRefundQuantityAdjustment({
-      grantedQuantity: 500,
-      remainingQuantity: 120,
-      refundType,
-    })).toBeNull();
+  it("prorates partial refunds when money amounts are present (WP-38)", () => {
+    // Half-refund leaves half the unspent credits (claw back 60 of 120).
+    expect(
+      topUpRefundQuantityAdjustment({
+        grantedQuantity: 500,
+        remainingQuantity: 120,
+        refundType: "partial",
+        refundAmount: 50,
+        paymentAmount: 100,
+      }),
+    ).toBe(-60);
+    // Full money partial still caps at remaining.
+    expect(
+      topUpRefundQuantityAdjustment({
+        grantedQuantity: 500,
+        remainingQuantity: 40,
+        refundType: "partial",
+        refundAmount: 100,
+        paymentAmount: 100,
+      }),
+    ).toBe(-40);
+  });
+
+  it("keeps partial refunds without amounts (and unknown) in operator review", () => {
+    expect(
+      topUpRefundQuantityAdjustment({
+        grantedQuantity: 500,
+        remainingQuantity: 120,
+        refundType: "partial",
+      }),
+    ).toBeNull();
+    expect(
+      topUpRefundQuantityAdjustment({
+        grantedQuantity: 500,
+        remainingQuantity: 120,
+        refundType: "unknown",
+      }),
+    ).toBeNull();
   });
 
   it("does not transfer top-up grants across workspace ownership or merge changes", () => {

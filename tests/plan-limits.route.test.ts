@@ -475,6 +475,7 @@ describe("pricing CTA rendering", () => {
         useLoaderData: vi.fn().mockReturnValue(overrides.loaderData),
         useLocation: vi.fn().mockReturnValue({ pathname: "/search", search: "", hash: "", state: null, key: "test" }),
         useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
+        useRevalidator: vi.fn().mockReturnValue({ state: "idle", revalidate: vi.fn() }),
         useRouteLoaderData: vi.fn().mockReturnValue(overrides.rootData),
         useSearchParams: vi.fn().mockReturnValue([new URLSearchParams(), vi.fn()]),
       };
@@ -494,7 +495,7 @@ describe("pricing CTA rendering", () => {
     const { default: DigestsRoute } = await import("~/routes/app.digests");
     const markup = renderToStaticMarkup(createElement(DigestsRoute));
 
-    expect(markup).toContain("Digests are included in paid plans.");
+    expect(markup).toContain("Briefs are included in paid plans.");
     expect(markup).toContain("View plans");
     expect(markup).toContain("/app/billing?source=limit#plans");
   });

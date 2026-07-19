@@ -35,6 +35,69 @@ afterEach(() => {
   vi.resetModules();
 });
 
+describe("search selection enrichment lease (FIX-13)", () => {
+  it("does not schedule a second waitUntil enrichment while one is in flight", async () => {
+    const captureCreativeText = vi.fn().mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(
+            () =>
+              resolve({
+                text: "OCR text",
+                captureMethod: "ad_snapshot_fetch",
+                metadata: { source: "fresh" },
+              }),
+            50,
+          );
+        }),
+    );
+    vi.doMock("~/lib/data.server", () => ({
+      hydrateAdsWithPersistedCreatives: vi.fn().mockResolvedValue([baseAd]),
+      listAdsByIds: vi.fn().mockResolvedValue([]),
+      upsertAd: vi.fn().mockResolvedValue(undefined),
+    }));
+    vi.doMock("~/lib/creative-text.server", () => ({
+      captureCreativeText,
+    }));
+    vi.doMock("~/lib/landing-pages.server", () => ({
+      captureLandingPageSnapshot: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/translation.server", () => ({
+      translateAdText: vi.fn().mockResolvedValue(null),
+      buildTranslatedAnalysisField: vi.fn(),
+      withTranslatedAnalysisField: (fields: unknown) => fields,
+    }));
+
+    const {
+      prepareSearchResultSelection,
+      resetSelectionEnrichmentInFlightForTests,
+    } = await import("~/lib/search-selection.server");
+    resetSelectionEnrichmentInFlightForTests();
+
+    const waitUntil = vi.fn((promise: Promise<unknown>) => {
+      void promise;
+    });
+    const result = {
+      ads: [baseAd],
+      nextCursor: null,
+      source: "meta" as const,
+      cacheStatus: "miss" as const,
+    };
+
+    const first = await prepareSearchResultSelection({ DB: {} } as never, result, "meta-boat-1", {
+      waitUntil,
+    });
+    const second = await prepareSearchResultSelection({ DB: {} } as never, result, "meta-boat-1", {
+      waitUntil,
+    });
+
+    expect(first.selectionEnrichmentPending).toBe(true);
+    expect(second.selectionEnrichmentPending).toBe(true);
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+    expect(captureCreativeText).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("search selection persisted OCR reuse", () => {
   it("can skip persisted hydration and enrichment for logged-out public search", async () => {
     const hydratedAd: AdRecord = {

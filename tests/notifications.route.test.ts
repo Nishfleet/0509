@@ -170,6 +170,17 @@ describe("notifications route", () => {
       getEnv: vi.fn(() => ({ DB: {} })),
     }));
     vi.doMock("~/lib/data.server", () => ({
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue(null),
+      legacyWorkspaceDeliveryDefaults: vi.fn(() => ({
+        sensitivityMode: "balanced",
+        instantEnabled: true,
+        digestEnabled: true,
+        digestCadencePreference: "plan_default",
+        emailEnabled: true,
+        whatsappEnabled: false,
+        slackEnabled: false,
+      })),
+      upsertWorkspaceDeliveryConfig: vi.fn().mockResolvedValue(null),
       listDeliveryTargets,
     }));
     vi.doMock("~/lib/env.server", () => ({
@@ -192,6 +203,7 @@ describe("notifications route", () => {
 
     expect(result).toEqual({
       emailDeliveryReady: true,
+      digestCadencePreference: "plan_default",
       showSlackDelivery: true,
       slackDelivery: {
         plan: "agency",
@@ -260,6 +272,17 @@ describe("notifications route", () => {
         ),
       }));
       vi.doMock("~/lib/data.server", () => ({
+        getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue(null),
+        legacyWorkspaceDeliveryDefaults: vi.fn(() => ({
+          sensitivityMode: "balanced",
+          instantEnabled: true,
+          digestEnabled: true,
+          digestCadencePreference: "plan_default",
+          emailEnabled: true,
+          whatsappEnabled: false,
+          slackEnabled: false,
+        })),
+        upsertWorkspaceDeliveryConfig: vi.fn().mockResolvedValue(null),
         listDeliveryTargets: vi.fn().mockResolvedValue([
           {
             id: "legacy-slack-1",
@@ -836,6 +859,7 @@ describe("notifications route", () => {
   it("keeps the entitled Slack setup flow unchanged", async () => {
     await mockRouter({
       emailDeliveryReady: true,
+      digestCadencePreference: "plan_default",
       showSlackDelivery: true,
       slackDelivery: { plan: "starter", entitled: true },
       canManageWhatsAppDelivery: false,

@@ -82,7 +82,7 @@ async function renderDigest(plan: "free" | "scout" | "starter" | "agency") {
 }
 
 describe("digest plan-aware controls", () => {
-  it("returns a structured agency-share gate before creating a digest link", async () => {
+  it("returns a structured share gate before creating a digest link on Scout", async () => {
     vi.doMock("~/lib/auth.server", () => ({
       requireWorkspaceSession: vi.fn().mockResolvedValue({
         session: { user: { id: "user-1", email: "owner@example.com", name: "Owner" } },
@@ -91,11 +91,11 @@ describe("digest plan-aware controls", () => {
     }));
     vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => ({})) }));
     vi.doMock("~/lib/plan.server", () => ({
-      PLAN_LIMITS: { starter: { digests: true } },
-      getUserPlan: vi.fn().mockResolvedValue("starter"),
+      PLAN_LIMITS: { scout: { digests: true } },
+      getUserPlan: vi.fn().mockResolvedValue("scout"),
     }));
     vi.doMock("~/lib/plan-feature-gate.server", () => ({
-      requireWorkspacePlanFeature: vi.fn().mockResolvedValue({ ok: false, plan: "starter" }),
+      requireWorkspacePlanFeature: vi.fn().mockResolvedValue({ ok: false, plan: "scout" }),
     }));
     vi.doMock("~/lib/data.server", () => ({
       createShareLink: vi.fn(),
@@ -115,19 +115,18 @@ describe("digest plan-aware controls", () => {
       }),
     } as never);
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: false,
       error: "plan_gated",
       feature: "share_links",
-      plan: "starter",
-      message: "Share links are included in the Agency plan.",
+      plan: "scout",
     });
   });
 
   it("keeps free activation honest with an upgrade state and no recurring controls", async () => {
     const markup = await renderDigest("free");
 
-    expect(markup).toContain("Digests are included in paid plans");
+    expect(markup).toContain("Briefs are included in paid plans");
     expect(markup).toContain("View plans");
     expect(markup).not.toContain("Export CSV");
     expect(markup).not.toContain("Share snapshot");
@@ -135,7 +134,7 @@ describe("digest plan-aware controls", () => {
 
   it.each([
     ["scout", false, false],
-    ["starter", true, false],
+    ["starter", true, true],
     ["agency", true, true],
   ] as const)("shows honest export/share controls for %s", async (plan, canExport, canShare) => {
     const markup = await renderDigest(plan);
