@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 // The Chrome extension is intentionally decoupled from the app build; this
 // test only exercises its one pure module (no browser APIs, no app imports).
-// @ts-expect-error -- plain .mjs module outside the app's tsconfig projects
+// extension/lib is included in tsconfig.node.json so checkJs covers it here.
 import {
   buildDestinations,
   domainFromInput,
