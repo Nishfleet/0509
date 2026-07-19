@@ -21,6 +21,7 @@
     "scripts/e2e-local-state-query.mjs",
     "scripts/e2e-validate-auth-state.mjs",
     "scripts/launch-readiness-canary.mjs",
+    "scripts/launch-readiness-canary-cycle.mjs",
     "scripts/playwright-release-manifest-reporter.mjs",
     "scripts/deploy-production-plan.mjs",
     "scripts/verify-deploy-readiness.mjs",
