@@ -66,6 +66,7 @@ import {
   whatsappDeliveryUnavailableMessage,
 } from "~/lib/ga-customer-surface";
 import { createReportId } from "~/lib/report";
+import { watchlistLiveSearchHref, watchlistSavedAdsHref } from "~/lib/watchlist-links";
 import {
   formatWatchlistTargetNoun,
   formatWatchlistTrackingRole,
@@ -1088,6 +1089,15 @@ export default function WatchlistsRoute() {
                   ) : null}
                 </div>
               </div>
+
+              <p className="f9-crosslink-row">
+                <Link className="f9-text-link" to={watchlistLiveSearchHref(data.selectedWatchlist)}>
+                  Search their ads live
+                </Link>
+                <Link className="f9-text-link" to={watchlistSavedAdsHref(data.selectedWatchlist)}>
+                  Saved ads from this competitor
+                </Link>
+              </p>
 
               {data.selectedWatchlist.isActive && !data.selectedWatchlist.lastScannedAt ? (
                 <FirstScanBanner

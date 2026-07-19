@@ -9600,3 +9600,11 @@ one signal-green accent.
   color: var(--red);
   background: var(--red-wash);
 }
+
+/* Cross-links between dossier, boards, and live search (workflow-friction). */
+.f9-crosslink-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 0 0 4px;
+}

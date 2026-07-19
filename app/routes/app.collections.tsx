@@ -19,6 +19,7 @@ import { EmptyState } from "~/components/empty-state";
 import { PlanLimitState } from "~/components/plan-limit-state";
 import { SubmitButton } from "~/components/submit-button";
 import { formatAdvertiserLabel } from "~/lib/landing-page-display";
+import { matchesAdvertiserFilter } from "~/lib/watchlist-links";
 import { buildCollectionInsightDepth } from "~/lib/insight-depth";
 import { canUsePlanFeature, getPlanLimit } from "~/lib/plan-entitlements";
 import { proofLinkForAd } from "~/lib/proof-link";
@@ -57,16 +58,24 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   ]);
   const url = new URL(request.url);
   const selectedCollectionId = url.searchParams.get("collection") ?? collections[0]?.id ?? null;
+  // Cross-link filter (workflow-friction pass): watchlists deep-link here
+  // with ?advertiser= to show only that competitor's saved ads.
+  const advertiserFilter = url.searchParams.get("advertiser")?.trim() || null;
   const selectedCollection = selectedCollectionId
     ? await getCollection(env, selectedCollectionId, workspaceUserId)
     : null;
-  const items = selectedCollection ? await listCollectionItems(env, selectedCollection.id) : [];
+  const allItems = selectedCollection ? await listCollectionItems(env, selectedCollection.id) : [];
+  const items = advertiserFilter
+    ? allItems.filter((item) => matchesAdvertiserFilter(item.ad.advertiser, advertiserFilter))
+    : allItems;
 
   return {
     collections,
     plan,
     selectedCollection,
     items,
+    advertiserFilter,
+    hiddenByAdvertiserFilter: allItems.length - items.length,
   };
 }
 
@@ -342,7 +351,9 @@ export default function CollectionsRoute() {
               <Link
                 className={`f9-work-row ${searchParams.get("collection") === collection.id || (!searchParams.get("collection") && data.selectedCollection?.id === collection.id) ? "is-active" : ""}`}
                 key={collection.id}
-                to={`/app/collections?collection=${collection.id}`}
+                to={`/app/collections?collection=${collection.id}${
+                  data.advertiserFilter ? `&advertiser=${encodeURIComponent(data.advertiserFilter)}` : ""
+                }`}
               >
                 <div>
                   <h3>{collection.name}</h3>
@@ -540,7 +551,27 @@ export default function CollectionsRoute() {
 
               <ActionFeedback data={actionData} intent="remove-item" />
 
-              {data.items.length === 0 ? (
+              {data.advertiserFilter ? (
+                <p className="f9-message is-success" role="status">
+                  Showing saved ads matching “{data.advertiserFilter}”
+                  {data.hiddenByAdvertiserFilter > 0
+                    ? ` — ${data.hiddenByAdvertiserFilter} other saved ${
+                        data.hiddenByAdvertiserFilter === 1 ? "ad is" : "ads are"
+                      } hidden.`
+                    : "."}{" "}
+                  <Link to={`/app/collections?collection=${data.selectedCollection.id}`}>
+                    Clear filter
+                  </Link>
+                </p>
+              ) : null}
+
+              {data.items.length === 0 && data.advertiserFilter ? (
+                <EmptyState
+                  description="No saved ads in this board match that competitor. Check another board on the left, or clear the filter to see everything saved here."
+                  title="No saved ads match this filter"
+                  variant="inline"
+                />
+              ) : data.items.length === 0 ? (
                 <EmptyState
                   action={{ label: "Open search", to: "/search" }}
                   description="Save an evidence link here, or run a competitor search and save the examples your team needs to reuse."

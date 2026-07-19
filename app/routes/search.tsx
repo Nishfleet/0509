@@ -134,6 +134,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       searchScope: "exact" as const,
       displayDomain: null,
       relevanceApplied: false,
+      watchedWatchlist: null,
       ...navFlags,
     };
   }
@@ -156,6 +157,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       searchScope: "exact" as const,
       displayDomain: null,
       relevanceApplied: false,
+      watchedWatchlist: null,
       ...navFlags,
     };
   }
@@ -264,6 +266,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
           searchScope: "exact" as const,
           displayDomain: null,
           relevanceApplied: false,
+          watchedWatchlist: null,
           ...navFlags,
         };
       }
@@ -288,6 +291,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       searchScope: "exact" as const,
       displayDomain: null,
       relevanceApplied: false,
+      watchedWatchlist: null,
       ...navFlags,
     };
   }
@@ -295,6 +299,25 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { executeSearchWithRelevance } = await import("~/lib/search-execution.server");
   const { shouldApplySearchV2, shouldRunSearchV2Shadow } = await import("~/lib/search-rollout.server");
   const { prepareSearchResultSelection } = await import("~/lib/search-selection.server");
+
+  // Cross-link (workflow-friction pass): if the signed-in user already
+  // watches this competitor, the results page links straight to its dossier.
+  // One indexed D1 list per searched query — never blocks the search itself.
+  const watchedWatchlist = session
+    ? await (async () => {
+        try {
+          const { listWatchlists } = await import("~/lib/data.server");
+          const { findWatchedCompetitor } = await import("~/lib/watchlist-links");
+          const watchlists = await listWatchlists(env, workspaceUserId!);
+          return findWatchedCompetitor(watchlists, {
+            host: competitorWebsite.host,
+            query: parsed.filters.query,
+          });
+        } catch {
+          return null;
+        }
+      })()
+    : null;
 
   const useSearchV2 =
     Boolean(competitorWebsite.raw) &&
@@ -371,6 +394,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     displayDomain: searchExecution.displayDomain,
     relevanceApplied: searchExecution.relevanceApplied,
     inputError: null,
+    watchedWatchlist,
     ...navFlags,
   };
 }
@@ -1083,6 +1107,17 @@ export default function SearchRoute() {
 
               {searchAnswer ? (
                 <SearchAnswerPanel answer={searchAnswer} steal={stealSummary} />
+              ) : null}
+
+              {data.watchedWatchlist ? (
+                <div className="f9-discovery-banner">
+                  <p>
+                    You watch this competitor —{" "}
+                    <Link to={`/app/watchlists?watchlist=${data.watchedWatchlist.id}`}>
+                      open its dossier
+                    </Link>
+                  </p>
+                </div>
               ) : null}
 
               {!data.session ? (
