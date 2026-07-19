@@ -9533,3 +9533,70 @@ one signal-green accent.
   background: var(--dk-input);
   color: var(--ink);
 }
+
+/* Inline quick-save on search result cards (workflow-friction pass). */
+.f9-result-card-wrap {
+  position: relative;
+}
+
+.f9-quick-save {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+}
+
+.f9-quick-save-button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 5px 10px;
+  opacity: 0;
+  transition: opacity 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+
+.f9-result-card-wrap:hover .f9-quick-save-button,
+.f9-result-card-wrap:focus-within .f9-quick-save-button,
+.f9-quick-save-button:disabled[aria-busy="true"],
+.f9-quick-save-button:focus-visible {
+  opacity: 1;
+}
+
+.f9-quick-save-button:disabled {
+  cursor: default;
+  opacity: 1;
+  color: var(--green-ink);
+  border-color: var(--green-wash);
+  background: var(--green-wash);
+}
+
+@media (hover: none) {
+  .f9-quick-save-button {
+    opacity: 1;
+  }
+}
+
+.f9-quick-save-note {
+  max-width: 240px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  text-align: right;
+}
+
+.f9-quick-save-note.is-error {
+  border-color: var(--red);
+  color: var(--red);
+  background: var(--red-wash);
+}

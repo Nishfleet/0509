@@ -17,6 +17,7 @@ import { AdLongevityPill } from "~/components/ad-longevity-pill";
 import { AdThumb } from "~/components/ad-thumb";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { DashboardShell } from "~/components/dashboard-shell";
+import { ResultQuickSave } from "~/components/result-quick-save";
 import { SearchAnswerPanel } from "~/components/search-answer-panel";
 import { SubmitButton } from "~/components/submit-button";
 import { classifyAdRecordAngle } from "~/lib/ad-display";
@@ -1115,9 +1116,9 @@ export default function SearchRoute() {
               <div className="f9-results-list">
                 {visibleAds.length > 0 ? (
                   visibleAds.map((ad) => (
+                    <div className="f9-result-card-wrap" key={ad.metaAdId}>
                     <Link
                       className={`f9-result-card ${selectedAd?.metaAdId === ad.metaAdId ? "is-active" : ""}`}
-                      key={ad.metaAdId}
                       to={`/search?${(requestedCursor
                         ? appendCursor(scopedSearchParams, requestedCursor, ad.metaAdId)
                         : withSelected(scopedSearchParams, ad.metaAdId)
@@ -1147,6 +1148,15 @@ export default function SearchRoute() {
                         <em>{ad.format}</em>
                       </div>
                     </Link>
+                    {data.session && ad.source !== "demo" ? (
+                      <ResultQuickSave
+                        adId={ad.metaAdId}
+                        advertiser={ad.advertiser}
+                        collections={data.collections}
+                        plan={data.plan}
+                      />
+                    ) : null}
+                    </div>
                   ))
                 ) : (
                   <div className="f9-empty-state">
