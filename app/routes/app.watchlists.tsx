@@ -2118,8 +2118,8 @@ export function resolveEmptyWatchlistEventCopy(input: {
   }
   if (input.latestRun.status === "running") {
     return activationOnly
-      ? "Your activation scan is running now. Results appear here in a couple of minutes. After this, free checks weekly; paid plans check every 3–6 hours."
-      : "Your first scan is running now. Results appear here in a couple of minutes.";
+      ? "Your activation scan is running now. Results appear here when the scan completes. After this, free checks weekly; paid plans check every 3–6 hours."
+      : "Your first scan is running now. Results appear here when the scan completes.";
   }
   if (input.latestRun.status === "pending") {
     const delayed = [
@@ -2272,8 +2272,8 @@ function FirstScanBanner(props: {
             : "The first scan is queued for recovery, and the next scheduled scan remains available."
           : props.run.status === "running"
             ? props.plan === "free"
-              ? "Activation results usually land within a couple of minutes. This page updates by itself. After this, free checks weekly; paid plans check every 3–6 hours."
-              : "First results usually land within a couple of minutes. This page updates by itself."
+              ? "Your activation scan is running. This page updates by itself when results are ready. After this, free checks weekly; paid plans check every 3–6 hours."
+              : "Your first scan is running. This page updates by itself when results are ready."
             : "The activation scan is waiting for an available monitoring worker. This page updates by itself.";
 
   return (
