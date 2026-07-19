@@ -10,6 +10,7 @@ import { ConfirmSubmitButton } from "~/components/confirm-button";
 import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
+import { ThemeToggle } from "~/components/theme-toggle";
 import {
   hasInvalidCompetitorWebsite,
   normalizeCompetitorWebsiteInput,
@@ -373,6 +374,20 @@ export default function AccountRoute() {
           Signed in as {data.email}. Sign-in security is managed on this page — use it for brand setup,
           sign-in options, and sensitive account requests.
         </p>
+      </article>
+
+      <article className="f9-app-panel">
+        <div className="f9-panel-toolbar">
+          <div>
+            <span className="f9-app-kicker">Appearance</span>
+            <h2>Workspace theme</h2>
+          </div>
+        </div>
+        <p className="f9-muted-copy">
+          Choose how the workspace looks on this device. "System" follows your operating system
+          setting. Saved in this browser only — public pages and shared reports stay light.
+        </p>
+        <ThemeToggle />
       </article>
 
       {!data.emailVerified ? (

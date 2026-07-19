@@ -1140,7 +1140,7 @@ button[aria-busy="true"] {
 }
 
 .f9-message.is-error {
-  color: #b42318;
+  color: var(--red);
 }
 
 .f9-discovery-banner {
@@ -2715,7 +2715,7 @@ button[aria-busy="true"] {
 
 .f9-cycle-toggle a.is-active,
 .f9-cycle-toggle button.is-active {
-  background: #171611;
+  background: var(--ink);
   color: #fff;
   box-shadow: 0 8px 22px rgba(6, 22, 41, 0.12);
 }
@@ -2767,7 +2767,7 @@ button[aria-busy="true"] {
 .f9-topup-card strong {
   display: block;
   margin-top: 4px;
-  color: #171611;
+  color: var(--ink);
   font-size: 1.35rem;
   line-height: 1.1;
 }
@@ -2827,7 +2827,7 @@ button[aria-busy="true"] {
 .f9-app-plan-card .f9-plan-feature-list li::before {
   width: 6px;
   height: 6px;
-  background: #171611;
+  background: var(--ink);
   box-shadow: none;
 }
 
@@ -3185,7 +3185,7 @@ button[aria-busy="true"] {
   padding: 14px;
   border: 1px solid var(--f9-search-line, rgba(6, 22, 41, 0.1));
   border-radius: 14px;
-  background: #fffdf8;
+  background: var(--card);
 }
 
 .f9-brand-logo-preview img {
@@ -6089,9 +6089,9 @@ one signal-green accent.
   gap: 16px;
   min-height: calc(100vh - 104px);
   padding: 14px;
-  border: 1px solid #e0ddd4;
+  border: 1px solid var(--line);
   border-radius: 12px;
-  background: #fffdf8;
+  background: var(--card);
 }
 
 .f9-cursor-account,
@@ -6116,7 +6116,7 @@ one signal-green accent.
 
 .f9-cursor-account strong,
 .f9-cursor-rail-note strong {
-  color: #171611;
+  color: var(--ink);
   font-size: 0.96rem;
   line-height: 1.2;
 }
@@ -6158,7 +6158,7 @@ one signal-green accent.
 
 .f9-dash-page {
   min-height: 100vh;
-  background: #f4f1e8;
+  background: var(--bone);
 }
 
 .f9-dash-nav-section {
@@ -6221,7 +6221,7 @@ one signal-green accent.
 
 .f9-dash-topbar .f9-secondary-button {
   border-color: #ded8cb;
-  background: #fffdf8;
+  background: var(--card);
 }
 
 .f9-dash-page .f9-field input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]),
@@ -6265,9 +6265,9 @@ one signal-green accent.
   display: grid;
   gap: 10px;
   padding: 20px 22px;
-  border: 1px solid #e0ddd4;
+  border: 1px solid var(--line);
   border-radius: 14px;
-  background: #fffdf8;
+  background: var(--card);
 }
 
 .f9-dash-state h2 {
@@ -6291,12 +6291,12 @@ one signal-green accent.
 
 .f9-dash-state-error {
   border-color: #e8c4c0;
-  background: #fff8f7;
+  background: var(--red-wash);
 }
 
 .f9-dash-state-limit {
   border-color: #e8dcc0;
-  background: #fffaf2;
+  background: var(--amber-wash);
 }
 
 .f9-dash-state-permission {
@@ -6405,7 +6405,7 @@ one signal-green accent.
 
 .f9-search-hero-summary strong {
   overflow: hidden;
-  color: #171611;
+  color: var(--ink);
   font-size: 0.9rem;
   line-height: 1.2;
   text-overflow: ellipsis;
@@ -6426,9 +6426,9 @@ one signal-green accent.
 .f9-search-page .f9-search-controls,
 .f9-search-page .f9-results-panel,
 .f9-search-page .f9-proof-detail {
-  border: 1px solid #e0ddd4;
+  border: 1px solid var(--line);
   border-radius: 12px;
-  background: #fffdf8;
+  background: var(--card);
 }
 
 .f9-search-pulse {
@@ -6490,13 +6490,13 @@ one signal-green accent.
 
 .f9-search-usage-head h3 {
   margin: 4px 0 0;
-  color: #171611;
+  color: var(--ink);
   font-size: 1.05rem;
   line-height: 1.16;
 }
 
 .f9-search-usage-head strong {
-  color: #171611;
+  color: var(--ink);
   font-size: 1.2rem;
   line-height: 1.1;
 }
@@ -6544,7 +6544,7 @@ one signal-green accent.
 
 .f9-search-usage-stats strong {
   overflow: hidden;
-  color: #171611;
+  color: var(--ink);
   font-size: 0.98rem;
   line-height: 1.16;
   text-overflow: ellipsis;
@@ -6572,7 +6572,7 @@ one signal-green accent.
   gap: 10px;
   padding: 14px;
   border-bottom: 1px solid #e7e2d7;
-  background: #fffdf8;
+  background: var(--card);
 }
 
 .f9-search-page .f9-search-answer > div {
@@ -6594,7 +6594,7 @@ one signal-green accent.
 }
 
 .f9-search-page .f9-search-answer h3 {
-  color: #171611;
+  color: var(--ink);
   font-size: 1.05rem;
   line-height: 1.2;
 }
@@ -6631,7 +6631,7 @@ one signal-green accent.
 
 .f9-search-page .f9-search-answer dd {
   margin: 0;
-  color: #171611;
+  color: var(--ink);
   font-size: 0.94rem;
   font-weight: 700;
 }
@@ -6643,7 +6643,7 @@ one signal-green accent.
 }
 
 .f9-search-page .f9-mode-toggle {
-  border: 1px solid #e0ddd4;
+  border: 1px solid var(--line);
   border-radius: 10px;
   background: #eceff0;
 }
@@ -6833,9 +6833,9 @@ one signal-green accent.
     overflow-x: auto;
     overscroll-behavior-x: contain;
     padding: 6px;
-    border: 1px solid #e0ddd4;
+    border: 1px solid var(--line);
     border-radius: 10px;
-    background: #fffdf8;
+    background: var(--card);
     scrollbar-width: none;
   }
 
@@ -6867,9 +6867,9 @@ one signal-green accent.
     overflow-x: auto;
     overscroll-behavior-x: contain;
     padding: 8px;
-    border: 1px solid #e0ddd4;
+    border: 1px solid var(--line);
     border-radius: 10px;
-    background: #fffdf8;
+    background: var(--card);
     scroll-padding-inline: 8px;
     scroll-snap-type: x proximity;
     scrollbar-width: none;
@@ -7633,7 +7633,7 @@ one signal-green accent.
 
 .f9-search-page .f9-search-command-head h1 {
   margin: 0;
-  color: #171611;
+  color: var(--ink);
   font-family: var(--f9-font);
   font-size: clamp(1.05rem, 1.4vw, 1.24rem);
   font-weight: 600;
@@ -7691,7 +7691,7 @@ one signal-green accent.
   border: 1px solid #ddd8cd;
   border-radius: 8px;
   background: #fffdfa;
-  color: #171611;
+  color: var(--ink);
   font: inherit;
   font-size: 0.92rem;
   font-weight: 600;
@@ -7749,7 +7749,7 @@ one signal-green accent.
   padding-inline: 14px;
   border-color: #ddd8cd;
   background: #fffdfa;
-  color: #171611;
+  color: var(--ink);
   box-shadow: none;
 }
 
@@ -7761,7 +7761,7 @@ one signal-green accent.
 }
 
 .f9-search-page .f9-search-command-hint a {
-  color: #171611;
+  color: var(--ink);
   font-weight: 700;
   text-decoration: underline;
   text-decoration-color: #cfc9bd;
@@ -7769,7 +7769,7 @@ one signal-green accent.
 }
 
 .f9-search-page .f9-search-command-hint a:hover {
-  text-decoration-color: #171611;
+  text-decoration-color: var(--ink);
 }
 
 .f9-search-page .f9-search-command .f9-quick-track-form {
@@ -7855,7 +7855,7 @@ one signal-green accent.
 .f9-dashboard-hero h1 {
   max-width: 760px;
   margin: 0;
-  color: #171611;
+  color: var(--ink);
   font-size: clamp(1.45rem, 2.2vw, 2rem);
   font-weight: 600;
   letter-spacing: 0;
@@ -7893,7 +7893,7 @@ one signal-green accent.
 }
 
 .f9-brief-snapshot strong {
-  color: #171611;
+  color: var(--ink);
   font-size: 0.96rem;
   line-height: 1.2;
 }
@@ -7943,7 +7943,7 @@ one signal-green accent.
 }
 
 .f9-dashboard-metrics strong {
-  color: #171611;
+  color: var(--ink);
   font-size: 1.35rem;
   font-weight: 600;
   line-height: 1;
@@ -7968,7 +7968,7 @@ one signal-green accent.
   min-height: 48px;
   padding: 0 18px;
   cursor: pointer;
-  color: #171611;
+  color: var(--ink);
   font-size: 0.95rem;
   font-weight: 600;
   list-style: none;
@@ -8047,7 +8047,7 @@ one signal-green accent.
   padding: 10px 16px;
   white-space: nowrap;
   background: #fff;
-  color: #b42318;
+  color: var(--red);
   transition:
     transform 160ms ease,
     border-color 160ms ease,
@@ -8057,12 +8057,12 @@ one signal-green accent.
 
 .f9-danger-button:hover {
   transform: translateY(-1px);
-  border-color: #b42318;
+  border-color: var(--red);
 }
 
 .f9-danger-button.is-filled {
-  background: #b42318;
-  border-color: #b42318;
+  background: var(--red);
+  border-color: var(--red);
   color: #fff;
 }
 
@@ -8111,9 +8111,9 @@ one signal-green accent.
 /* Feedback inside the workspace stays flat and warm: hairline border,
    card surface, no floating shadow (matches the customer-grade cleanup). */
 .f9-dash-page .f9-message {
-  border: 1px solid #e0ddd4;
+  border: 1px solid var(--line);
   border-radius: 12px;
-  background: #fffdf8;
+  background: var(--card);
   box-shadow: none;
   margin-bottom: 0;
 }
@@ -8459,4 +8459,592 @@ one signal-green accent.
   .f9-search-page .f9-cursor-rail nav a {
     min-height: 44px;
   }
+}
+
+/* ============================================================
+   WP-43: skip link + aria-current nav state (app shell)
+   ============================================================ */
+
+.f9-skip-link {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 300;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--bone);
+  font-weight: 600;
+  transform: translateY(-200%);
+}
+
+.f9-skip-link:focus,
+.f9-skip-link:focus-visible {
+  transform: none;
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+/* Active nav state keyed off aria-current (NavLink sets it); .is-active
+   keeps working during the class-based transition. Values mirror the
+   existing .is-active rules so light mode is unchanged. */
+.f9-cursor-rail nav a[aria-current="page"] {
+  background: #efede6;
+  color: #11100d;
+}
+
+.f9-cursor-rail a[aria-current="page"] .f9-icon,
+.f9-dash-nav-link[aria-current="page"] .f9-icon {
+  opacity: 1;
+}
+
+@media (max-width: 640px) {
+  .f9-dash-page-app .f9-dash-mobile-nav a[aria-current="page"],
+  .f9-dash-page-app .f9-dash-mobile-utility a[aria-current="page"] {
+    background: #efede6;
+    color: #11100d;
+  }
+}
+
+/* ============================================================
+   WP-45: sample-data pill on search result cards
+   ============================================================ */
+
+.f9-longevity-pill.f9-longevity-pill.is-sample {
+  background: rgba(23, 22, 17, 0.08);
+  color: var(--ink-soft);
+}
+
+/* ============================================================
+   WP-46: keep the lightweight sample-brief artifact visible in the
+   mobile hero (the heavy .ld-stack is hidden at this width).
+   ============================================================ */
+
+@media (max-width: 760px) {
+  .ld-brief-strip {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
+/* ============================================================
+   Workspace dark mode (2026-07-19) — /app routes + /search shell only.
+   THEME_BOOT_SCRIPT (root.tsx) sets data-f9-theme="dark" on <html>
+   before paint, and only on themed paths, so marketing, auth, legal,
+   share, and email surfaces never receive these overrides. Everything
+   below is strictly additive: without the attribute, light mode renders
+   bit-identically.
+   ============================================================ */
+
+[data-f9-theme="dark"] {
+  --ink: #ece9e2;
+  --ink-soft: #b5b1a6;
+  --ink-faint: #8a867c;
+  --line: #33312c;
+  --card: #21201c;
+  --bone: #171611;
+  --green: #16c47f;
+  --green-ink: #7ee2b8;
+  --green-wash: #103326;
+  --red: #ff8577;
+  --red-wash: #2a1512;
+  --amber-wash: #2a2312;
+
+  /* Dark-only helper tones (undefined in light; referenced only inside
+     this dark scope). */
+  --dk-well: #262420;
+  --dk-chip: #33302a;
+  --dk-input: #1c1b17;
+  --dk-hover: #33312c;
+  --dk-red-line: #5c2b24;
+  --dk-red-soft: #ffa294;
+  --dk-amber-line: #4d3f20;
+
+  color-scheme: dark;
+}
+
+[data-f9-theme="dark"] body {
+  background: var(--bone);
+}
+
+/* --- Search shell: neutralize the container-level light palettes that
+       the public funnel reskin pins onto .f9-search-page. --- */
+
+[data-f9-theme="dark"] .f9-search-page {
+  --f9-search-ink: var(--ink);
+  --f9-search-muted: var(--ink-soft);
+  --f9-search-soft: var(--ink-faint);
+  --ld-bone: var(--bone);
+  --ld-card: var(--card);
+  --ld-ink: var(--ink);
+  --ld-ink-soft: var(--ink-soft);
+  --ld-ink-faint: var(--ink-faint);
+  --ld-line: var(--line);
+  --ld-green-ink: var(--green-ink);
+  --ld-green-wash: var(--green-wash);
+  background: var(--bone);
+}
+
+/* --- Shell chrome: rail, nav, footer, topbar, mobile nav --- */
+
+[data-f9-theme="dark"] .f9-cursor-account,
+[data-f9-theme="dark"] .f9-cursor-rail-note {
+  border-color: var(--line);
+  background: var(--dk-well);
+}
+
+[data-f9-theme="dark"] .f9-search-page .f9-cursor-account,
+[data-f9-theme="dark"] .f9-search-page .f9-cursor-rail-note {
+  background: transparent;
+}
+
+[data-f9-theme="dark"] .f9-cursor-rail nav a {
+  color: var(--ink-soft);
+}
+
+[data-f9-theme="dark"] .f9-cursor-rail nav a:hover,
+[data-f9-theme="dark"] .f9-cursor-rail nav a.is-active,
+[data-f9-theme="dark"] .f9-cursor-rail nav a.active,
+[data-f9-theme="dark"] .f9-cursor-rail nav a[aria-current="page"] {
+  background: var(--dk-hover);
+  color: var(--ink);
+}
+
+[data-f9-theme="dark"] .f9-dash-nav-section {
+  color: var(--ink-faint);
+}
+
+[data-f9-theme="dark"] .f9-dash-rail-footer {
+  border-top-color: var(--line);
+}
+
+[data-f9-theme="dark"] .f9-dash-rail-footer a,
+[data-f9-theme="dark"] .f9-dash-rail-footer button {
+  color: var(--ink-soft);
+}
+
+[data-f9-theme="dark"] .f9-dash-rail-footer a:hover,
+[data-f9-theme="dark"] .f9-dash-rail-footer button:hover {
+  background: var(--dk-hover);
+  color: var(--ink);
+}
+
+[data-f9-theme="dark"] .f9-dash-topbar .f9-secondary-button {
+  border-color: var(--line);
+}
+
+[data-f9-theme="dark"] .f9-dash-page-app .f9-dash-mobile-context {
+  color: var(--ink-soft);
+}
+
+[data-f9-theme="dark"] .f9-dash-page-app .f9-dash-mobile-context strong {
+  color: var(--ink);
+}
+
+[data-f9-theme="dark"] .f9-dash-page-app .f9-dash-mobile-nav a,
+[data-f9-theme="dark"] .f9-dash-page-app .f9-dash-mobile-utility a,
+[data-f9-theme="dark"] .f9-dash-page-app .f9-dash-mobile-utility button {
+  color: var(--ink-soft);
+}
+
+[data-f9-theme="dark"] .f9-dash-page-app .f9-dash-mobile-nav a.is-active,
+[data-f9-theme="dark"] .f9-dash-page-app .f9-dash-mobile-nav a[aria-current="page"],
+[data-f9-theme="dark"] .f9-dash-page-app .f9-dash-mobile-utility a.is-active,
+[data-f9-theme="dark"] .f9-dash-page-app .f9-dash-mobile-utility a[aria-current="page"] {
+  background: var(--dk-hover);
+  color: var(--ink);
+}
+
+[data-f9-theme="dark"] .f9-dash-page-app .f9-dash-mobile-nav a:focus-visible {
+  outline-color: var(--green-ink);
+}
+
+[data-f9-theme="dark"] .f9-search-page :is(a, button, input, select, textarea):focus-visible {
+  outline-color: var(--green-ink);
+}
+
+/* --- Panels, cards, wells --- */
+
+[data-f9-theme="dark"] .f9-app-panel,
+[data-f9-theme="dark"] .f9-work-row {
+  background: var(--card);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.28);
+}
+
+[data-f9-theme="dark"] .f9-search-controls,
+[data-f9-theme="dark"] .f9-results-panel,
+[data-f9-theme="dark"] .f9-proof-detail {
+  background: var(--card);
+  box-shadow: none;
+}
+
+[data-f9-theme="dark"] .f9-message,
+[data-f9-theme="dark"] .f9-discovery-banner,
+[data-f9-theme="dark"] .f9-public-digest-preview,
+[data-f9-theme="dark"] .f9-dashboard-quick-links a,
+[data-f9-theme="dark"] .f9-import-row,
+[data-f9-theme="dark"] .f9-event-card,
+[data-f9-theme="dark"] .f9-app-plan-card,
+[data-f9-theme="dark"] .f9-topup-card,
+[data-f9-theme="dark"] .f9-result-card,
+[data-f9-theme="dark"] .f9-detail-hero,
+[data-f9-theme="dark"] .f9-proof-block,
+[data-f9-theme="dark"] .f9-creative-tile,
+[data-f9-theme="dark"] .f9-trend-card,
+[data-f9-theme="dark"] .f9-search-next-actions li,
+[data-f9-theme="dark"] .f9-search-page .f9-result-card,
+[data-f9-theme="dark"] .f9-search-page .f9-detail-hero,
+[data-f9-theme="dark"] .f9-search-page .f9-proof-block,
+[data-f9-theme="dark"] .f9-search-usage-stats span,
+[data-f9-theme="dark"] .f9-search-page .f9-search-refine-disclosure,
+[data-f9-theme="dark"] .f9-brief-snapshot article,
+[data-f9-theme="dark"] .f9-inline-details,
+[data-f9-theme="dark"] .f9-search-page .f9-search-command .f9-secondary-button {
+  background: var(--card);
+}
+
+[data-f9-theme="dark"] .f9-search-page .f9-result-card,
+[data-f9-theme="dark"] .f9-search-usage-stats span,
+[data-f9-theme="dark"] .f9-search-page .f9-search-refine-disclosure,
+[data-f9-theme="dark"] .f9-inline-details,
+[data-f9-theme="dark"] .f9-search-page .f9-search-command .f9-secondary-button {
+  border-color: var(--line);
+}
+
+[data-f9-theme="dark"] .f9-app-plan-card,
+[data-f9-theme="dark"] .f9-topup-card {
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+[data-f9-theme="dark"] .f9-app-plan-card.is-selected {
+  box-shadow: 0 0 0 1px var(--ink-faint);
+}
+
+[data-f9-theme="dark"] .f9-app-plan-card.is-recommended {
+  box-shadow: 0 0 0 1px var(--ink-faint), 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+[data-f9-theme="dark"] .f9-brief-snapshot article {
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+[data-f9-theme="dark"] .f9-status-strip > div,
+[data-f9-theme="dark"] .f9-source-readiness-panel,
+[data-f9-theme="dark"] .f9-readiness-list > div,
+[data-f9-theme="dark"] .f9-passkey-row,
+[data-f9-theme="dark"] .f9-detail-cell,
+[data-f9-theme="dark"] .f9-master-detail .f9-proof-packet,
+[data-f9-theme="dark"] .f9-annual-note,
+[data-f9-theme="dark"] .f9-import-summary span,
+[data-f9-theme="dark"] .f9-empty-panel,
+[data-f9-theme="dark"] .f9-side-note,
+[data-f9-theme="dark"] .f9-search-page .f9-side-note,
+[data-f9-theme="dark"] .f9-empty-state,
+[data-f9-theme="dark"] .f9-search-page .f9-empty-state,
+[data-f9-theme="dark"] .f9-search-page .f9-results-panel .f9-empty-state,
+[data-f9-theme="dark"] .f9-detail-row,
+[data-f9-theme="dark"] .f9-search-page .f9-detail-row,
+[data-f9-theme="dark"] .f9-trend-sparse,
+[data-f9-theme="dark"] .f9-search-overview em,
+[data-f9-theme="dark"] .f9-search-hero-summary span,
+[data-f9-theme="dark"] .f9-search-page .f9-search-answer dl div,
+[data-f9-theme="dark"] .f9-search-page .f9-search-answer-note,
+[data-f9-theme="dark"] .f9-search-page .f9-panel-head,
+[data-f9-theme="dark"] .f9-search-page .f9-search-signup-cta,
+[data-f9-theme="dark"] .f9-cycle-toggle {
+  background: var(--dk-well);
+}
+
+[data-f9-theme="dark"] .f9-search-hero-summary span,
+[data-f9-theme="dark"] .f9-search-page .f9-search-answer dl div,
+[data-f9-theme="dark"] .f9-search-page .f9-panel-head,
+[data-f9-theme="dark"] .f9-search-page .f9-search-answer,
+[data-f9-theme="dark"] .f9-search-page .f9-search-signup-cta,
+[data-f9-theme="dark"] .f9-search-page .f9-proof-provenance,
+[data-f9-theme="dark"] .f9-search-page .f9-search-refine-disclosure[open] > summary,
+[data-f9-theme="dark"] .f9-settings-details[open] > summary,
+[data-f9-theme="dark"] .f9-search-page .f9-results-panel .f9-empty-state {
+  border-color: var(--line);
+}
+
+[data-f9-theme="dark"] .f9-dashboard-empty {
+  border-color: var(--line);
+  background: var(--card);
+}
+
+[data-f9-theme="dark"] .f9-checkout-banner {
+  background: var(--card);
+}
+
+[data-f9-theme="dark"] .f9-checkout-banner.is-active {
+  background: linear-gradient(135deg, var(--green-wash) 0%, var(--card) 55%);
+}
+
+[data-f9-theme="dark"] .f9-checkout-banner.is-pending {
+  background: linear-gradient(135deg, #17202e 0%, var(--card) 55%);
+}
+
+[data-f9-theme="dark"] .f9-checkout-banner p {
+  color: var(--ink-soft);
+}
+
+/* --- Buttons, inputs, toggles --- */
+
+[data-f9-theme="dark"] .f9-primary-button,
+[data-f9-theme="dark"] .f9-search-page a.f9-primary-button,
+[data-f9-theme="dark"] .f9-market-search button {
+  color: var(--bone);
+}
+
+[data-f9-theme="dark"] .f9-market-search button {
+  background: var(--ink);
+}
+
+[data-f9-theme="dark"] .f9-secondary-button,
+[data-f9-theme="dark"] .f9-sign-out-button {
+  border-color: var(--line);
+  background: var(--card);
+}
+
+[data-f9-theme="dark"] .f9-danger-button {
+  background: var(--card);
+}
+
+[data-f9-theme="dark"] .f9-danger-button.is-filled {
+  color: #2a0f0a;
+}
+
+[data-f9-theme="dark"] .f9-danger-button.is-filled:hover {
+  background: var(--dk-red-soft);
+  border-color: var(--dk-red-soft);
+}
+
+[data-f9-theme="dark"] .f9-cycle-toggle a.is-active,
+[data-f9-theme="dark"] .f9-cycle-toggle button.is-active {
+  color: var(--bone);
+  box-shadow: none;
+}
+
+[data-f9-theme="dark"] .f9-field input,
+[data-f9-theme="dark"] .f9-field select,
+[data-f9-theme="dark"] .f9-field textarea,
+[data-f9-theme="dark"] .f9-search-page .f9-field input,
+[data-f9-theme="dark"] .f9-search-page .f9-field select,
+[data-f9-theme="dark"] .f9-search-page .f9-field textarea,
+[data-f9-theme="dark"] .f9-filter-row select,
+[data-f9-theme="dark"] .f9-field input[type="file"],
+[data-f9-theme="dark"] .f9-search-page .f9-search-field input,
+[data-f9-theme="dark"] .f9-search-page .f9-search-field select {
+  border-color: var(--line);
+  background: var(--dk-input);
+  color: var(--ink);
+}
+
+[data-f9-theme="dark"] .f9-field input[type="file"]::file-selector-button {
+  background: var(--card);
+}
+
+[data-f9-theme="dark"] .f9-search-page .f9-search-field input::placeholder,
+[data-f9-theme="dark"] .f9-market-search input::placeholder {
+  color: var(--ink-faint);
+}
+
+[data-f9-theme="dark"] .f9-search-page .f9-search-field input:focus,
+[data-f9-theme="dark"] .f9-search-page .f9-search-field input:focus-visible,
+[data-f9-theme="dark"] .f9-search-page .f9-search-field select:focus,
+[data-f9-theme="dark"] .f9-search-page .f9-search-field select:focus-visible {
+  border-color: var(--ink-faint);
+  background: var(--dk-well);
+}
+
+[data-f9-theme="dark"] .f9-market-search {
+  border-color: var(--line);
+  background: var(--card);
+  box-shadow: none;
+}
+
+[data-f9-theme="dark"] .f9-mode-toggle,
+[data-f9-theme="dark"] .f9-search-page .f9-mode-toggle {
+  background: var(--dk-well);
+}
+
+[data-f9-theme="dark"] .f9-search-page .f9-mode-toggle label {
+  color: var(--ink-soft);
+}
+
+[data-f9-theme="dark"] .f9-mode-toggle label.is-active,
+[data-f9-theme="dark"] .f9-search-page .f9-mode-toggle label.is-active {
+  background: var(--dk-chip);
+  color: var(--ink);
+}
+
+/* --- Pills, chips, status --- */
+
+[data-f9-theme="dark"] .f9-status-pill,
+[data-f9-theme="dark"] .f9-plan-limit-strip span {
+  background: var(--dk-chip);
+}
+
+[data-f9-theme="dark"] .f9-status-pill.is-healthy {
+  color: var(--green-ink);
+}
+
+[data-f9-theme="dark"] .f9-status-pill.is-needs_setup,
+[data-f9-theme="dark"] .f9-status-pill.is-cache_only,
+[data-f9-theme="dark"] .f9-status-pill.is-degraded,
+[data-f9-theme="dark"] .f9-status-pill.is-demo,
+[data-f9-theme="dark"] .f9-status-pill.is-disabled {
+  color: var(--dk-red-soft);
+}
+
+[data-f9-theme="dark"] .f9-longevity-pill.f9-longevity-pill {
+  color: var(--green-ink);
+}
+
+[data-f9-theme="dark"] .f9-longevity-pill.f9-longevity-pill.is-sample {
+  background: rgba(236, 233, 226, 0.12);
+  color: var(--ink-soft);
+}
+
+[data-f9-theme="dark"] .f9-status-strip.is-warning,
+[data-f9-theme="dark"] .f9-status-strip.is-warning > div,
+[data-f9-theme="dark"] .f9-dash-state-error {
+  border-color: var(--dk-red-line);
+}
+
+[data-f9-theme="dark"] .f9-dash-state-limit {
+  border-color: var(--dk-amber-line);
+}
+
+[data-f9-theme="dark"] .f9-dash-state-permission {
+  border-color: var(--line);
+  background: var(--dk-well);
+}
+
+[data-f9-theme="dark"] .f9-dash-state p {
+  color: var(--ink-soft);
+}
+
+[data-f9-theme="dark"] .f9-dash-state-partial,
+[data-f9-theme="dark"] .f9-dash-skeleton-pulse {
+  color: var(--ink-faint);
+}
+
+/* --- Accent text: greens brighten, reds soften --- */
+
+[data-f9-theme="dark"] .f9-app-kicker,
+[data-f9-theme="dark"] .f9-board-time,
+[data-f9-theme="dark"] .f9-market-board-metrics span,
+[data-f9-theme="dark"] .f9-market-table em,
+[data-f9-theme="dark"] .f9-import-row.is-valid em,
+[data-f9-theme="dark"] .f9-text-link,
+[data-f9-theme="dark"] .f9-annual-note.is-valid,
+[data-f9-theme="dark"] .f9-message.is-success,
+[data-f9-theme="dark"] .f9-panel-head em.is-active,
+[data-f9-theme="dark"] .f9-controls-head span,
+[data-f9-theme="dark"] .f9-brief-snapshot span,
+[data-f9-theme="dark"] .f9-search-page .f9-search-answer span,
+[data-f9-theme="dark"] .proof-trail-list dt,
+[data-f9-theme="dark"] .report-field dt {
+  color: var(--green-ink);
+}
+
+[data-f9-theme="dark"] .f9-search-usage-meter {
+  background: var(--dk-chip);
+}
+
+[data-f9-theme="dark"] .f9-search-usage-meter i {
+  background: var(--green);
+}
+
+[data-f9-theme="dark"] .f9-import-row.is-invalid em,
+[data-f9-theme="dark"] .f9-import-row.is-over_cap em,
+[data-f9-theme="dark"] .f9-annual-note.is-unavailable {
+  color: var(--dk-red-soft);
+}
+
+[data-f9-theme="dark"] .f9-search-page .f9-proof-summary:focus {
+  outline-color: var(--green);
+}
+
+/* --- Muted copy on legacy hardcoded grays --- */
+
+[data-f9-theme="dark"] .f9-numbered-guide,
+[data-f9-theme="dark"] .f9-app-plan-card .f9-plan-feature-list,
+[data-f9-theme="dark"] .f9-search-page .f9-mode-toggle label,
+[data-f9-theme="dark"] .f9-inline-details > summary,
+[data-f9-theme="dark"] .f9-search-page .f9-search-answer p {
+  color: var(--ink-soft);
+}
+
+[data-f9-theme="dark"] .f9-search-page .f9-search-signup-cta p,
+[data-f9-theme="dark"] .f9-search-page .f9-proof-provenance,
+[data-f9-theme="dark"] .f9-search-page .f9-search-kicker,
+[data-f9-theme="dark"] .f9-search-page .f9-cursor-account span,
+[data-f9-theme="dark"] .f9-search-page .f9-cursor-rail-note span,
+[data-f9-theme="dark"] .f9-search-page .f9-search-command-head p,
+[data-f9-theme="dark"] .f9-search-page .f9-search-field span,
+[data-f9-theme="dark"] .f9-search-page .f9-search-command-hint,
+[data-f9-theme="dark"] .f9-search-page .f9-search-hero-summary small,
+[data-f9-theme="dark"] .f9-search-usage-stats small,
+[data-f9-theme="dark"] .f9-search-page .f9-search-answer dt,
+[data-f9-theme="dark"] .f9-search-page .f9-search-answer small,
+[data-f9-theme="dark"] .f9-search-page .f9-results-panel .f9-empty-state p,
+[data-f9-theme="dark"] .f9-brief-snapshot p,
+[data-f9-theme="dark"] .f9-dashboard-metrics small,
+[data-f9-theme="dark"] .f9-settings-details > summary::after {
+  color: var(--ink-faint);
+}
+
+[data-f9-theme="dark"] .f9-search-page .f9-proof-provenance strong,
+[data-f9-theme="dark"] .f9-search-page .f9-search-refine-disclosure > summary {
+  color: var(--ink);
+}
+
+[data-f9-theme="dark"] .f9-search-page .f9-search-command-hint a {
+  text-decoration-color: var(--ink-faint);
+}
+
+/* --- Skeletons / loading shimmer --- */
+
+[data-f9-theme="dark"] .f9-skeleton-line {
+  background: linear-gradient(90deg, var(--dk-well) 25%, var(--dk-hover) 50%, var(--dk-well) 75%);
+  background-size: 200% 100%;
+}
+
+[data-f9-theme="dark"] .f9-dash-skeleton-bars span {
+  background: linear-gradient(90deg, var(--dk-well) 0%, var(--dk-hover) 50%, var(--dk-well) 100%);
+  background-size: 200% 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-f9-theme="dark"] .f9-skeleton-line {
+    background: var(--dk-well);
+  }
+}
+
+/* --- Misc legacy chrome --- */
+
+[data-f9-theme="dark"] .f9-ad-thumb {
+  border-color: var(--line);
+  background: var(--dk-well);
+}
+
+[data-f9-theme="dark"] .f9-search-bar-track {
+  background: var(--dk-chip);
+}
+
+[data-f9-theme="dark"] .f9-market-lines span:nth-child(3) {
+  background: #4a473f;
+}
+
+[data-f9-theme="dark"] .f9-skip-link {
+  background: var(--ink);
+  color: var(--bone);
+}
+
+/* Appearance select on /app/account (theme preference is client-side). */
+.f9-theme-field {
+  max-width: 260px;
 }

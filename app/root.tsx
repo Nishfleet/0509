@@ -10,7 +10,7 @@ import {
   useLocation,
   useRouteLoaderData,
 } from "react-router";
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 
 import type { LoaderFunctionArgs } from "react-router";
 import "./app.css";
@@ -25,6 +25,7 @@ import {
   siteRepWidgetForRequestState,
 } from "~/lib/siterep-widget";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+import { applyTheme, THEME_BOOT_SCRIPT, THEME_COLOR_LIGHT } from "~/lib/theme-client";
 import type { AppSession, PricingPlan, UsageBundle } from "~/lib/types";
 export {
   hasSiteRepAuthCookie,
@@ -162,6 +163,33 @@ function SiteRepWidgetEmbed({ widget }: { widget: typeof SITE_REP_WIDGET | null 
   return null;
 }
 
+/**
+ * Keeps the workspace dark-mode attribute correct across client-side
+ * navigations (marketing must stay light even when the workspace is dark)
+ * and reacts to OS theme / other-tab preference changes. The pre-paint
+ * state is set by THEME_BOOT_SCRIPT in <head>.
+ */
+function ThemeSync() {
+  const location = useLocation();
+
+  useLayoutEffect(() => {
+    applyTheme(location.pathname);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const reapply = () => applyTheme(window.location.pathname);
+    const media = window.matchMedia?.("(prefers-color-scheme: dark)");
+    media?.addEventListener?.("change", reapply);
+    window.addEventListener("storage", reapply);
+    return () => {
+      media?.removeEventListener?.("change", reapply);
+      window.removeEventListener("storage", reapply);
+    };
+  }, []);
+
+  return null;
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const rootData = useRouteLoaderData("root") as RootLoaderData | undefined;
@@ -198,16 +226,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <html lang="en">
+    // suppressHydrationWarning: THEME_BOOT_SCRIPT sets data-f9-theme on
+    // <html> and rewrites the theme-color meta before React hydrates.
+    <html lang="en" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#f4f1e8" />
+        <meta name="theme-color" content={THEME_COLOR_LIGHT} suppressHydrationWarning />
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
         <Meta />
         <Links />
       </head>
       <body data-pricing="dodo-local">
         {children}
+        <ThemeSync />
         <SiteRepWidgetEmbed widget={siteRepWidget} />
         <ScrollRestoration />
         <Scripts />
