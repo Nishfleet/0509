@@ -201,12 +201,30 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     };
   }
 
-  const customerMetaAdLibraryToken =
+  // One parallel wave for the independent per-account lookups (customer Meta
+  // token, collections, plan) instead of three serial awaits. Anonymous
+  // visitors resolve constants here — no extra queries on that path.
+  const [customerMetaAdLibraryToken, collections, plan] = await Promise.all([
     session && parsed.filters.query && !providerDeny.enabled
-      ? await (
-          await import("~/lib/customer-meta.server")
-        ).getCustomerMetaAdLibraryToken(env, workspaceUserId!)
-      : null;
+      ? import("~/lib/customer-meta.server").then(({ getCustomerMetaAdLibraryToken }) =>
+          getCustomerMetaAdLibraryToken(env, workspaceUserId!),
+        )
+      : null,
+    session ? listCollections(env, workspaceUserId!) : [],
+    session
+      ? import("~/lib/plan.server")
+          .then(({ getUserPlan }) => getUserPlan(env, workspaceUserId!))
+          .catch((): "free" | "scout" | "starter" | "agency" => {
+            // Fail OPEN on a transient plan-lookup blip (D1 hiccup or isolated
+            // test env without D1): a paying customer must not be degraded to
+            // free limits. "starter" is the most permissive non-agency plan —
+            // it is used for rate-limit sizing only and, unlike "free",
+            // renders no free-plan upsell UI. Real plan gates (saves,
+            // watchlists) re-check server-side.
+            return "starter";
+          })
+      : (null as "free" | "scout" | "starter" | "agency" | null),
+  ]);
 
   // Selecting an ad from already-rendered results reruns this loader with the
   // same query; when the discovery cache can serve that query, the click must
@@ -246,24 +264,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     );
     if (rateLimitResponse) {
       throw rateLimitResponse;
-    }
-  }
-
-  const collections = session
-    ? await listCollections(env, workspaceUserId!)
-    : [];
-  let plan: "free" | "scout" | "starter" | "agency" | null = null;
-  if (session) {
-    try {
-      const { getUserPlan } = await import("~/lib/plan.server");
-      plan = await getUserPlan(env, workspaceUserId!);
-    } catch {
-      // Fail OPEN on a transient plan-lookup blip (D1 hiccup or isolated test
-      // env without D1): a paying customer must not be degraded to free
-      // limits. "starter" is the most permissive non-agency plan — it is used
-      // for rate-limit sizing only and, unlike "free", renders no free-plan
-      // upsell UI. Real plan gates (saves, watchlists) re-check server-side.
-      plan = "starter";
     }
   }
 

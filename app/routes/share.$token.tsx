@@ -54,31 +54,45 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
   // It exposes only the same public snapshot and entitled identity as the
   // normal share page.
   const pdfVariant = new URL(request.url).searchParams.get("pdf") === "1";
-  const brandIdentity = await resolveWorkspaceBrandIdentity(env, share.userId);
-  const preparedBy = brandIdentity?.brandName ?? null;
+  // Brand identity and the shared resource are independent reads keyed off the
+  // share row — each branch resolves them as one parallel wave. Item/event
+  // reads are keyed by the same resource id the resource read verifies, and
+  // are discarded when the resource itself no longer resolves.
+  const brandIdentityPromise = resolveWorkspaceBrandIdentity(env, share.userId);
+  // The report branch below throws before awaiting this promise; observe the
+  // rejection on a side branch so a brand-identity failure there cannot become
+  // an unhandled rejection. Every awaiting branch still surfaces the error.
+  brandIdentityPromise.catch(() => {});
 
   if (share.isSnapshot) {
+    const [brandIdentity, pdfPath] = await Promise.all([
+      brandIdentityPromise,
+      resolveShareReportPdfPath(env, share, token),
+    ]);
     return {
       mode: "snapshot" as const,
       resourceType: share.resourceType,
       payload: sanitizeSnapshotPayload(share.resourceType, share.snapshotPayload),
-      preparedBy,
+      preparedBy: brandIdentity?.brandName ?? null,
       brandIdentity,
       pdfVariant,
-      pdfPath: await resolveShareReportPdfPath(env, share, token),
+      pdfPath,
     };
   }
 
   if (share.resourceType === "collection") {
-    const collection = await getCollection(env, share.resourceId);
-    const items = collection ? await listCollectionItems(env, collection.id) : [];
+    const [brandIdentity, collection, itemsRaw] = await Promise.all([
+      brandIdentityPromise,
+      getCollection(env, share.resourceId),
+      listCollectionItems(env, share.resourceId),
+    ]);
 
     return {
       mode: "live" as const,
       resourceType: "collection" as const,
       collection,
-      items,
-      preparedBy,
+      items: collection ? itemsRaw : [],
+      preparedBy: brandIdentity?.brandName ?? null,
       brandIdentity,
       pdfVariant,
       pdfPath: null,
@@ -86,8 +100,13 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
   }
 
   if (share.resourceType === "watchlist") {
-    const watchlist = await getWatchlist(env, share.resourceId);
-    const rawEvents = watchlist ? await listWatchEvents(env, watchlist.id, 60) : [];
+    const [brandIdentity, watchlist, rawEventsUnverified] = await Promise.all([
+      brandIdentityPromise,
+      getWatchlist(env, share.resourceId),
+      listWatchEvents(env, share.resourceId, 60),
+    ]);
+    const preparedBy = brandIdentity?.brandName ?? null;
+    const rawEvents = watchlist ? rawEventsUnverified : [];
     const { eligibleEvents, sourceCoverage } = filterClientReportWatchEvents(rawEvents);
 
     return {
@@ -107,13 +126,16 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
     throw new Response("Not found", { status: 404 });
   }
 
-  const digest = await getDigest(env, share.resourceId);
+  const [brandIdentity, digest] = await Promise.all([
+    brandIdentityPromise,
+    getDigest(env, share.resourceId),
+  ]);
 
   return {
     mode: "live" as const,
     resourceType: "digest" as const,
     digest,
-    preparedBy,
+    preparedBy: brandIdentity?.brandName ?? null,
     brandIdentity,
     pdfVariant,
     pdfPath: null,

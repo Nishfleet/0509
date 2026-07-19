@@ -42,42 +42,41 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const session = await requireSession(env, request);
   const isE2EFixtureSession = isE2ETestSessionId(session.session.id);
 
-  const plan = await getUserPlan(env, session.user.id);
-  const reportBrandIdentity = await resolveWorkspaceBrandIdentity(env, session.user.id);
-  const branding = await getWorkspaceBranding(env, session.user.id);
   const passkeysEnabled = !isE2EFixtureSession && isBetterAuthPasskeyEnabled(env);
-  let passkeys: Awaited<ReturnType<typeof listBetterAuthPasskeys>> = [];
+  // Every lookup below is independent — run them as one parallel wave. Each
+  // keeps its original per-section failure fallback.
   let passkeyControlsMessage: string | null = null;
-  if (passkeysEnabled) {
-    try {
-      passkeys = await listBetterAuthPasskeys(env, request);
-    } catch (error) {
-      console.warn("[account] passkey controls unavailable", error);
-      passkeyControlsMessage = "Sign in again to manage passkeys.";
-    }
-  }
-  let activeSessions: Awaited<ReturnType<typeof listBetterAuthSessions>> = [];
   let sessionControlsMessage: string | null = isE2EFixtureSession
     ? "Sign in with email to manage active sessions."
     : null;
-  if (!isE2EFixtureSession) {
-    try {
-      activeSessions = await listBetterAuthSessions(env, request, session.session.id);
-    } catch (error) {
-      console.warn("[account] session controls unavailable", error);
-      sessionControlsMessage = "Sign in again to manage active sessions.";
-    }
-  }
-
-  // Default to verified on a transient DB error so the banner never nags a
-  // verified user; the retention gates re-check on every action anyway.
-  let emailVerified = true;
-  try {
-    const { isUserEmailVerified } = await import("~/lib/email-verification.server");
-    emailVerified = await isUserEmailVerified(env, session.user.id);
-  } catch (error) {
-    console.warn("[account] email verification status unavailable", error);
-  }
+  const [plan, reportBrandIdentity, branding, passkeys, activeSessions, emailVerified] =
+    await Promise.all([
+      getUserPlan(env, session.user.id),
+      resolveWorkspaceBrandIdentity(env, session.user.id),
+      getWorkspaceBranding(env, session.user.id),
+      passkeysEnabled
+        ? listBetterAuthPasskeys(env, request).catch((error) => {
+            console.warn("[account] passkey controls unavailable", error);
+            passkeyControlsMessage = "Sign in again to manage passkeys.";
+            return [] as Awaited<ReturnType<typeof listBetterAuthPasskeys>>;
+          })
+        : ([] as Awaited<ReturnType<typeof listBetterAuthPasskeys>>),
+      isE2EFixtureSession
+        ? ([] as Awaited<ReturnType<typeof listBetterAuthSessions>>)
+        : listBetterAuthSessions(env, request, session.session.id).catch((error) => {
+            console.warn("[account] session controls unavailable", error);
+            sessionControlsMessage = "Sign in again to manage active sessions.";
+            return [] as Awaited<ReturnType<typeof listBetterAuthSessions>>;
+          }),
+      // Default to verified on a transient DB error so the banner never nags a
+      // verified user; the retention gates re-check on every action anyway.
+      import("~/lib/email-verification.server")
+        .then(({ isUserEmailVerified }) => isUserEmailVerified(env, session.user.id))
+        .catch((error) => {
+          console.warn("[account] email verification status unavailable", error);
+          return true;
+        }),
+    ]);
 
   return {
     email: session.user.email,

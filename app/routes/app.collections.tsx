@@ -51,16 +51,30 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getUserPlan } = await import("~/lib/plan.server");
   const env = getEnv(context);
   const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
-  const [collections, plan] = await Promise.all([
-    listCollections(env, workspaceUserId),
-    getUserPlan(env, workspaceUserId),
-  ]);
   const url = new URL(request.url);
-  const selectedCollectionId = url.searchParams.get("collection") ?? collections[0]?.id ?? null;
-  const selectedCollection = selectedCollectionId
-    ? await getCollection(env, selectedCollectionId, workspaceUserId)
-    : null;
-  const items = selectedCollection ? await listCollectionItems(env, selectedCollection.id) : [];
+  const requestedCollectionId = url.searchParams.get("collection");
+  // Deep links (`?collection=<id>`) resolve the selected collection and its
+  // items concurrently with the list; the default view chains off the same
+  // in-flight list promise to pick the first collection. Items are fetched
+  // alongside the ownership-scoped getCollection and discarded unless that
+  // check passes, trading one speculative read for one less serial wave.
+  const collectionsPromise = listCollections(env, workspaceUserId);
+  const selectionPromise = (async () => {
+    const id = requestedCollectionId ?? (await collectionsPromise)[0]?.id ?? null;
+    if (!id) {
+      return { collection: null, items: [] as Awaited<ReturnType<typeof listCollectionItems>> };
+    }
+    const [collection, items] = await Promise.all([
+      getCollection(env, id, workspaceUserId),
+      listCollectionItems(env, id),
+    ]);
+    return { collection, items: collection ? items : [] };
+  })();
+  const [collections, plan, { collection: selectedCollection, items }] = await Promise.all([
+    collectionsPromise,
+    getUserPlan(env, workspaceUserId),
+    selectionPromise,
+  ]);
 
   return {
     collections,
