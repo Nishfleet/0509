@@ -1,7 +1,11 @@
-const MANIFEST_PATH_PATTERN = /^test-results\/deploy-readiness-[a-z0-9-]{1,96}\.json$/u;
-const REMOTE_RESTORE_PATH_PATTERN = /^test-results\/d1-remote-restore-evidence(?:-[a-z0-9-]{1,64})?\.json$/u;
-const WRANGLER_OUTPUT_PATH_PATTERN = /^test-results\/wrangler-deploy-output(?:-[a-z0-9-]{1,64})?\.jsonl$/u;
-const ROLLBACK_TARGET_PATH_PATTERN = /^test-results\/worker-rollback-target(?:-[a-z0-9-]{1,64})?\.json$/u;
+const MANIFEST_PATH_PATTERN =
+  /^test-results\/deploy-readiness-[a-z0-9-]{1,96}\.json$/u;
+const REMOTE_RESTORE_PATH_PATTERN =
+  /^test-results\/d1-remote-restore-evidence(?:-[a-z0-9-]{1,64})?\.json$/u;
+const WRANGLER_OUTPUT_PATH_PATTERN =
+  /^test-results\/wrangler-deploy-output(?:-[a-z0-9-]{1,64})?\.jsonl$/u;
+const ROLLBACK_TARGET_PATH_PATTERN =
+  /^test-results\/worker-rollback-target(?:-[a-z0-9-]{1,64})?\.json$/u;
 const FINGERPRINT_PATTERN = /^[a-f0-9]{64}$/u;
 const SAFE_IDENTIFIER_PATTERN = /^[A-Za-z0-9._-]{1,128}$/u;
 
@@ -26,7 +30,10 @@ export function buildProductionDeployPlan({
   wranglerOutputPath,
   rollbackTargetPath = "test-results/worker-rollback-target.json",
 }) {
-  if (typeof manifestPath !== "string" || !MANIFEST_PATH_PATTERN.test(manifestPath)) {
+  if (
+    typeof manifestPath !== "string" ||
+    !MANIFEST_PATH_PATTERN.test(manifestPath)
+  ) {
     throw new Error("invalid_deploy_readiness_manifest_path");
   }
   if (
@@ -35,10 +42,16 @@ export function buildProductionDeployPlan({
   ) {
     throw new Error("invalid_remote_restore_evidence_path");
   }
-  if (typeof wranglerOutputPath !== "string" || !WRANGLER_OUTPUT_PATH_PATTERN.test(wranglerOutputPath)) {
+  if (
+    typeof wranglerOutputPath !== "string" ||
+    !WRANGLER_OUTPUT_PATH_PATTERN.test(wranglerOutputPath)
+  ) {
     throw new Error("invalid_wrangler_output_path");
   }
-  if (typeof rollbackTargetPath !== "string" || !ROLLBACK_TARGET_PATH_PATTERN.test(rollbackTargetPath)) {
+  if (
+    typeof rollbackTargetPath !== "string" ||
+    !ROLLBACK_TARGET_PATH_PATTERN.test(rollbackTargetPath)
+  ) {
     throw new Error("invalid_rollback_target_path");
   }
 
@@ -116,7 +129,11 @@ export function buildProductionDeployPlan({
     {
       id: "capture_worker_rollback_target",
       command: "node",
-      args: ["scripts/capture-worker-rollback-target.mjs", "--output", rollbackTargetPath],
+      args: [
+        "scripts/capture-worker-rollback-target.mjs",
+        "--output",
+        rollbackTargetPath,
+      ],
       includeCloudflareCredentials: true,
     },
     {
@@ -211,7 +228,7 @@ export function buildProductionDeployPlan({
 
 /**
  * @param {unknown} evidence
- * @param {{ candidateFingerprint: string, wranglerWorktreeSha256: string, latestMigration?: string, migrationCount?: number, now?: Date }} expected
+ * @param {{ candidateFingerprint: string, wranglerWorktreeSha256: string, latestMigration?: string, migrationCount?: number, migrationBearing?: boolean, now?: Date }} expected
  */
 export function validateRemoteRestoreEvidence(evidence, expected) {
   const issues = [];
@@ -219,17 +236,64 @@ export function validateRemoteRestoreEvidence(evidence, expected) {
     return { ok: false, issues: ["remote_restore_evidence_missing"] };
   }
   const value = /** @type {Record<string, unknown>} */ (evidence);
-  const generatedAt = typeof value.generatedAt === "string" ? Date.parse(value.generatedAt) : Number.NaN;
-  const now = expected.now instanceof Date ? expected.now.getTime() : Date.now();
-  if (!Number.isFinite(generatedAt) || generatedAt > now + 5 * 60 * 1000 || now - generatedAt > 24 * 60 * 60 * 1000) {
+  const generatedAt =
+    typeof value.generatedAt === "string"
+      ? Date.parse(value.generatedAt)
+      : Number.NaN;
+  const now =
+    expected.now instanceof Date ? expected.now.getTime() : Date.now();
+  const migrationBearing = expected.migrationBearing !== false;
+  const maxAgeMs = (migrationBearing ? 24 : 7 * 24) * 60 * 60 * 1000;
+  if (
+    !Number.isFinite(generatedAt) ||
+    generatedAt > now + 5 * 60 * 1000 ||
+    now - generatedAt > maxAgeMs
+  ) {
     issues.push("remote_restore_evidence_stale");
   }
   if (value.schemaVersion !== 1) issues.push("remote_restore_schema");
-  if (value.candidateFingerprint !== expected.candidateFingerprint) issues.push("remote_restore_candidate_mismatch");
-  if (value.wranglerWorktreeSha256 !== expected.wranglerWorktreeSha256) issues.push("remote_restore_config_mismatch");
-  if (value.productionSearchRolloutMode !== "shadow") issues.push("remote_restore_rollout_mode");
-  if (expected.latestMigration && value.latestMigration !== expected.latestMigration) issues.push("remote_restore_migration_mismatch");
-  if (expected.migrationCount && value.migrationCount !== expected.migrationCount) issues.push("remote_restore_migration_count");
+  if (
+    !FINGERPRINT_PATTERN.test(
+      typeof value.candidateFingerprint === "string"
+        ? value.candidateFingerprint
+        : "",
+    )
+  ) {
+    issues.push("remote_restore_candidate_fingerprint");
+  }
+  if (
+    !FINGERPRINT_PATTERN.test(
+      typeof value.wranglerWorktreeSha256 === "string"
+        ? value.wranglerWorktreeSha256
+        : "",
+    )
+  ) {
+    issues.push("remote_restore_config_fingerprint");
+  }
+  if (
+    migrationBearing &&
+    value.candidateFingerprint !== expected.candidateFingerprint
+  ) {
+    issues.push("remote_restore_candidate_mismatch");
+  }
+  if (
+    migrationBearing &&
+    value.wranglerWorktreeSha256 !== expected.wranglerWorktreeSha256
+  ) {
+    issues.push("remote_restore_config_mismatch");
+  }
+  if (value.productionSearchRolloutMode !== "shadow")
+    issues.push("remote_restore_rollout_mode");
+  if (
+    expected.latestMigration &&
+    value.latestMigration !== expected.latestMigration
+  )
+    issues.push("remote_restore_migration_mismatch");
+  if (
+    expected.migrationCount &&
+    value.migrationCount !== expected.migrationCount
+  )
+    issues.push("remote_restore_migration_count");
   for (const field of [
     "databaseIdentitySha256",
     "scratchDatabaseIdentitySha256",
@@ -238,15 +302,23 @@ export function validateRemoteRestoreEvidence(evidence, expected) {
     "rowCountDigestSha256",
     "migrationLedgerSha256",
   ]) {
-    if (!FINGERPRINT_PATTERN.test(typeof value[field] === "string" ? value[field] : "")) {
+    if (
+      !FINGERPRINT_PATTERN.test(
+        typeof value[field] === "string" ? value[field] : "",
+      )
+    ) {
       issues.push(`remote_restore_${field}`);
     }
   }
-  if (typeof value.databaseBookmark !== "string" || value.databaseBookmark.trim().length < 6) {
+  if (
+    typeof value.databaseBookmark !== "string" ||
+    value.databaseBookmark.trim().length < 6
+  ) {
     issues.push("remote_restore_bookmark");
   }
   if (value.integrity !== "ok") issues.push("remote_restore_integrity");
-  if (value.foreignKeyViolations !== 0) issues.push("remote_restore_foreign_keys");
+  if (value.foreignKeyViolations !== 0)
+    issues.push("remote_restore_foreign_keys");
   if (value.exactRowCounts !== true) issues.push("remote_restore_row_counts");
   if (!Number.isInteger(value.planRowCount) || Number(value.planRowCount) < 0) {
     issues.push("remote_restore_plan_rows");
@@ -258,8 +330,10 @@ export function validateRemoteRestoreEvidence(evidence, expected) {
   ) {
     issues.push("remote_restore_dodo_rows");
   }
-  if (value.dodoLinkagePreserved !== true) issues.push("remote_restore_dodo_linkage");
-  if (value.scratchDatabaseRemoved !== true) issues.push("remote_restore_scratch_cleanup");
+  if (value.dodoLinkagePreserved !== true)
+    issues.push("remote_restore_dodo_linkage");
+  if (value.scratchDatabaseRemoved !== true)
+    issues.push("remote_restore_scratch_cleanup");
   return { ok: issues.length === 0, issues };
 }
 
@@ -279,12 +353,13 @@ export function readDeployedWorkerVersionId(output) {
       // machine-readable output entries are eligible release evidence.
     }
   }
-  const deployEntry = [...entries].reverse().find(
-    (entry) => entry?.type === "deploy" && entry?.version === 1,
-  );
-  const versionId = typeof deployEntry?.version_id === "string"
-    ? deployEntry.version_id.trim()
-    : "";
+  const deployEntry = [...entries]
+    .reverse()
+    .find((entry) => entry?.type === "deploy" && entry?.version === 1);
+  const versionId =
+    typeof deployEntry?.version_id === "string"
+      ? deployEntry.version_id.trim()
+      : "";
   if (!SAFE_IDENTIFIER_PATTERN.test(versionId)) {
     throw new Error("deployed_worker_version_missing");
   }
@@ -322,10 +397,7 @@ export function executeProductionDeployPlan(plan, execute) {
       if (!deploymentAttempted) throw releaseFailure;
 
       const recoveryFailures = [];
-      if (
-        step.id === "post_deploy_release_canary" &&
-        postCanaryInvariantStep
-      ) {
+      if (step.id === "post_deploy_release_canary" && postCanaryInvariantStep) {
         try {
           execute(postCanaryInvariantStep);
         } catch (recoveryFailure) {

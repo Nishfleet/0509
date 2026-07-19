@@ -162,7 +162,7 @@ const expectedPlanFeaturesByPlan: Record<string, readonly string[]> = {
     "presence_competitor_tracking", "presence_website_sources", "presence_digest_alerts",
     "daily_digest", "high_priority_alerts", "landing_page_evidence", "slack_delivery",
     "ad_text_multilingual", "english_translation", "export_csv", "export_json",
-    "export_slack_ready", "presence_self_tracking", "presence_social_connect",
+    "export_slack_ready", "share_links", "presence_self_tracking", "presence_social_connect",
   ],
   agency: [
     "competitor_research", "weekly_digest", "email_delivery",

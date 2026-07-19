@@ -28,6 +28,7 @@
     "scripts/playwright-release-manifest-reporter.mjs",
     "scripts/deploy-production-plan.mjs",
     "scripts/verify-deploy-readiness.mjs",
+    "scripts/verify-remote-restore-evidence.mjs",
     "scripts/verify-cross-browser-risk-proof.mjs",
     "scripts/verify-post-deploy-release.mjs",
     "scripts/worker-rollback-target.mjs",

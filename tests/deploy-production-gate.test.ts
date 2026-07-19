@@ -1,17 +1,28 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 const deployPlanModule = await import("../scripts/deploy-production-plan.mjs");
-const { buildProductionDeployPlan, executeProductionDeployPlan } = deployPlanModule;
-const rollbackTargetModule = await import("../scripts/worker-rollback-target.mjs");
-const { validateDeployReadiness } = await import("../scripts/verify-deploy-readiness.mjs");
-const { RELEASE_COVERAGE_MATRIX, expectedReleaseArtifacts } = await import(
-  "../scripts/playwright-release-manifest-reporter.mjs"
-);
+const { buildProductionDeployPlan, executeProductionDeployPlan } =
+  deployPlanModule;
+const { hasMigrationChanges } =
+  await import("../scripts/verify-remote-restore-evidence.mjs");
+const rollbackTargetModule =
+  await import("../scripts/worker-rollback-target.mjs");
+const { validateDeployReadiness } =
+  await import("../scripts/verify-deploy-readiness.mjs");
+const { RELEASE_COVERAGE_MATRIX, expectedReleaseArtifacts } =
+  await import("../scripts/playwright-release-manifest-reporter.mjs");
 
 const fingerprint = "a".repeat(64);
 const wranglerHash = "b".repeat(64);
@@ -19,27 +30,38 @@ const serverIdentity = "local-0123456789abcdef0123456789abcdef";
 const roots: string[] = [];
 const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01]);
 const aria = Buffer.from('- main "0509":\n  - heading "Proof"\n', "utf8");
-const remoteRestoreEvidencePath = "test-results/d1-remote-restore-evidence.json";
+const remoteRestoreEvidencePath =
+  "test-results/d1-remote-restore-evidence.json";
 const wranglerOutputPath = "test-results/wrangler-deploy-output.jsonl";
 
 afterEach(() => {
-  while (roots.length > 0) rmSync(roots.pop()!, { recursive: true, force: true });
+  while (roots.length > 0)
+    rmSync(roots.pop()!, { recursive: true, force: true });
 });
 
 function finalUrl(expected: any, viewport: string) {
   if (expected.exact) return expected.exact;
   const query = expected.search
     ? new URLSearchParams(expected.search).toString()
-    : expected.searchKeys.map((key: string) => `${key}=e2e-${viewport}`).join("&");
+    : expected.searchKeys
+        .map((key: string) => `${key}=e2e-${viewport}`)
+        .join("&");
   return `${expected.pathname}?${query}`;
 }
 
 function passingEvidence() {
   const root = mkdtempSync(join(tmpdir(), "0509-deploy-readiness-"));
   roots.push(root);
-  const artifactRoot = resolve(root, "test-results/gate-b-artifacts", fingerprint, serverIdentity);
+  const artifactRoot = resolve(
+    root,
+    "test-results/gate-b-artifacts",
+    fingerprint,
+    serverIdentity,
+  );
   mkdirSync(artifactRoot, { recursive: true });
-  const entries = Object.values(RELEASE_COVERAGE_MATRIX as Record<number, readonly any[]>)
+  const entries = Object.values(
+    RELEASE_COVERAGE_MATRIX as Record<number, readonly any[]>,
+  )
     .flat()
     .map((expected: any) => {
       const entry: any = {
@@ -150,7 +172,9 @@ describe("production deployment readiness gate", () => {
       remoteRestoreEvidencePath,
       wranglerOutputPath,
     });
-    const earlyRefundPreflight = plan.find((step: any) => step.id === "partial_refund_invariants_preflight");
+    const earlyRefundPreflight = plan.find(
+      (step: any) => step.id === "partial_refund_invariants_preflight",
+    );
     expect(earlyRefundPreflight).toMatchObject({
       command: "node",
       args: ["scripts/check-partial-refund-invariants.mjs"],
@@ -159,18 +183,22 @@ describe("production deployment readiness gate", () => {
     expect(plan.indexOf(earlyRefundPreflight!)).toBeLessThan(
       plan.findIndex((step: any) => step.id === "migration_sync"),
     );
-    expect(plan.findIndex((step: any) => step.id === "launch_readiness")).toBeLessThan(
+    expect(
+      plan.findIndex((step: any) => step.id === "launch_readiness"),
+    ).toBeLessThan(
       plan.findIndex((step: any) => step.id === "readiness_evidence"),
     );
-    expect(plan.findIndex((step: any) => step.id === "readiness_evidence")).toBeLessThan(
+    expect(
+      plan.findIndex((step: any) => step.id === "readiness_evidence"),
+    ).toBeLessThan(
       plan.findIndex((step: any) => step.id === "cross_browser_risk_proof"),
     );
-    expect(plan.findIndex((step: any) => step.id === "cross_browser_risk_proof")).toBeLessThan(
-      plan.findIndex((step: any) => step.id === "deploy"),
-    );
-    expect(plan.findIndex((step: any) => step.id === "remote_restore_evidence")).toBeLessThan(
-      plan.findIndex((step: any) => step.id === "deploy"),
-    );
+    expect(
+      plan.findIndex((step: any) => step.id === "cross_browser_risk_proof"),
+    ).toBeLessThan(plan.findIndex((step: any) => step.id === "deploy"));
+    expect(
+      plan.findIndex((step: any) => step.id === "remote_restore_evidence"),
+    ).toBeLessThan(plan.findIndex((step: any) => step.id === "deploy"));
     expect(plan.find((step: any) => step.id === "deploy")?.env).toMatchObject({
       WRANGLER_OUTPUT_FILE_PATH: wranglerOutputPath,
     });
@@ -199,12 +227,14 @@ describe("production deployment readiness gate", () => {
       args: ["scripts/check-partial-refund-invariants.mjs"],
       includeCloudflareCredentials: true,
     });
-    expect(plan[deployIndex + 2]).toMatchObject({
+    expect(plan[deployIndex + 3]).toMatchObject({
       id: "launch_readiness_proof_canary_cycle",
       command: "node",
       args: ["scripts/launch-readiness-canary-cycle.mjs"],
     });
-    const canaryIndex = plan.findIndex((step: any) => step.id === "post_deploy_release_canary");
+    const canaryIndex = plan.findIndex(
+      (step: any) => step.id === "post_deploy_release_canary",
+    );
     expect(plan[canaryIndex]).toMatchObject({
       id: "post_deploy_release_canary",
       includeCloudflareCredentials: true,
@@ -252,13 +282,15 @@ describe("production deployment readiness gate", () => {
       versionId: "worker-version-prior",
       percentage: 100,
     });
-    expect(() => rollbackTargetModule.parseWorkerDeploymentStatus({
-      id: "deployment-split",
-      versions: [
-        { version_id: "worker-version-a", percentage: 90 },
-        { version_id: "worker-version-b", percentage: 10 },
-      ],
-    })).toThrow("worker_rollback_target_ambiguous");
+    expect(() =>
+      rollbackTargetModule.parseWorkerDeploymentStatus({
+        id: "deployment-split",
+        versions: [
+          { version_id: "worker-version-a", percentage: 90 },
+          { version_id: "worker-version-b", percentage: 10 },
+        ],
+      }),
+    ).toThrow("worker_rollback_target_ambiguous");
 
     const evidence = {
       schemaVersion: 1,
@@ -266,13 +298,17 @@ describe("production deployment readiness gate", () => {
       source: "wrangler deployments status --json",
       ...target,
     };
-    expect(rollbackTargetModule.validateWorkerRollbackEvidence(evidence, {
-      deployedVersionId: "worker-version-new",
-    })).toEqual({ ok: true, issues: [] });
-    expect(rollbackTargetModule.buildWorkerRollbackCommand(
-      "worker-version-prior",
-      "worker-version-new",
-    )).toEqual({
+    expect(
+      rollbackTargetModule.validateWorkerRollbackEvidence(evidence, {
+        deployedVersionId: "worker-version-new",
+      }),
+    ).toEqual({ ok: true, issues: [] });
+    expect(
+      rollbackTargetModule.buildWorkerRollbackCommand(
+        "worker-version-prior",
+        "worker-version-new",
+      ),
+    ).toEqual({
       command: "wrangler",
       args: [
         "rollback",
@@ -284,7 +320,9 @@ describe("production deployment readiness gate", () => {
         "--yes",
       ],
     });
-    expect(rollbackTargetModule.buildWorkerRollbackCommand("worker-version-prior")).toEqual({
+    expect(
+      rollbackTargetModule.buildWorkerRollbackCommand("worker-version-prior"),
+    ).toEqual({
       command: "wrangler",
       args: [
         "rollback",
@@ -296,10 +334,12 @@ describe("production deployment readiness gate", () => {
         "--yes",
       ],
     });
-    expect(() => rollbackTargetModule.buildWorkerRollbackCommand(
-      "worker-version-prior",
-      "worker-version-prior",
-    )).toThrow("worker_rollback_target_matches_new_version");
+    expect(() =>
+      rollbackTargetModule.buildWorkerRollbackCommand(
+        "worker-version-prior",
+        "worker-version-prior",
+      ),
+    ).toThrow("worker_rollback_target_matches_new_version");
   });
 
   it("executes the captured rollback target when deploy output is missing", () => {
@@ -309,36 +349,46 @@ describe("production deployment readiness gate", () => {
     const wranglerOutputPath = join(root, "missing-wrangler-output.jsonl");
     const fakeWranglerPath = join(root, "fake-wrangler.mjs");
     const invocationPath = join(root, "wrangler-invocation.json");
-    writeFileSync(targetPath, JSON.stringify({
-      schemaVersion: 1,
-      capturedAt: "2026-07-18T12:00:00.000Z",
-      source: "wrangler deployments status --json",
-      deploymentId: "deployment-stable",
-      versionId: "worker-version-prior",
-      percentage: 100,
-    }));
-    writeFileSync(fakeWranglerPath, `#!/usr/bin/env node
+    writeFileSync(
+      targetPath,
+      JSON.stringify({
+        schemaVersion: 1,
+        capturedAt: "2026-07-18T12:00:00.000Z",
+        source: "wrangler deployments status --json",
+        deploymentId: "deployment-stable",
+        versionId: "worker-version-prior",
+        percentage: 100,
+      }),
+    );
+    writeFileSync(
+      fakeWranglerPath,
+      `#!/usr/bin/env node
 import { writeFileSync } from "node:fs";
 writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.slice(2)));
 process.exit(Number(process.env.FAKE_WRANGLER_EXIT || 0));
-`);
+`,
+    );
     chmodSync(fakeWranglerPath, 0o755);
 
-    const result = spawnSync(process.execPath, [
-      resolve("scripts/rollback-production.mjs"),
-      "--target",
-      targetPath,
-      "--wrangler-output",
-      wranglerOutputPath,
-    ], {
-      cwd: process.cwd(),
-      env: {
-        ...process.env,
-        WRANGLER_BIN: fakeWranglerPath,
-        FAKE_WRANGLER_INVOCATION: invocationPath,
+    const result = spawnSync(
+      process.execPath,
+      [
+        resolve("scripts/rollback-production.mjs"),
+        "--target",
+        targetPath,
+        "--wrangler-output",
+        wranglerOutputPath,
+      ],
+      {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          WRANGLER_BIN: fakeWranglerPath,
+          FAKE_WRANGLER_INVOCATION: invocationPath,
+        },
+        encoding: "utf8",
       },
-      encoding: "utf8",
-    });
+    );
 
     expect(result.status).toBe(0);
     expect(JSON.parse(readFileSync(invocationPath, "utf8"))).toEqual([
@@ -357,32 +407,42 @@ process.exit(Number(process.env.FAKE_WRANGLER_EXIT || 0));
     roots.push(root);
     const fakeWranglerPath = join(root, "fake-wrangler.mjs");
     const invocationPath = join(root, "wrangler-invocation.json");
-    writeFileSync(fakeWranglerPath, `#!/usr/bin/env node
+    writeFileSync(
+      fakeWranglerPath,
+      `#!/usr/bin/env node
 import { writeFileSync } from "node:fs";
 writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.slice(2)));
-`);
+`,
+    );
     chmodSync(fakeWranglerPath, 0o755);
 
     const runRollback = (evidence: Record<string, unknown>, output: string) => {
       const targetPath = join(root, `rollback-target-${Math.random()}.json`);
-      const wranglerOutputPath = join(root, `wrangler-output-${Math.random()}.jsonl`);
+      const wranglerOutputPath = join(
+        root,
+        `wrangler-output-${Math.random()}.jsonl`,
+      );
       writeFileSync(targetPath, JSON.stringify(evidence));
       writeFileSync(wranglerOutputPath, output);
-      return spawnSync(process.execPath, [
-        resolve("scripts/rollback-production.mjs"),
-        "--target",
-        targetPath,
-        "--wrangler-output",
-        wranglerOutputPath,
-      ], {
-        cwd: process.cwd(),
-        env: {
-          ...process.env,
-          WRANGLER_BIN: fakeWranglerPath,
-          FAKE_WRANGLER_INVOCATION: invocationPath,
+      return spawnSync(
+        process.execPath,
+        [
+          resolve("scripts/rollback-production.mjs"),
+          "--target",
+          targetPath,
+          "--wrangler-output",
+          wranglerOutputPath,
+        ],
+        {
+          cwd: process.cwd(),
+          env: {
+            ...process.env,
+            WRANGLER_BIN: fakeWranglerPath,
+            FAKE_WRANGLER_INVOCATION: invocationPath,
+          },
+          encoding: "utf8",
         },
-        encoding: "utf8",
-      });
+      );
     };
     const validEvidence = {
       schemaVersion: 1,
@@ -393,15 +453,24 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       percentage: 100,
     };
 
-    expect(runRollback({ ...validEvidence, percentage: 50 }, "").status).not.toBe(0);
+    expect(
+      runRollback({ ...validEvidence, percentage: 50 }, "").status,
+    ).not.toBe(0);
     for (const versionId of ["--help", "--version", "-y"]) {
-      expect(runRollback({ ...validEvidence, versionId }, "").status).not.toBe(0);
+      expect(runRollback({ ...validEvidence, versionId }, "").status).not.toBe(
+        0,
+      );
     }
-    expect(runRollback(validEvidence, JSON.stringify({
-      type: "deploy",
-      version: 1,
-      version_id: "worker-version-prior",
-    })).status).not.toBe(0);
+    expect(
+      runRollback(
+        validEvidence,
+        JSON.stringify({
+          type: "deploy",
+          version: 1,
+          version_id: "worker-version-prior",
+        }),
+      ).status,
+    ).not.toBe(0);
     expect(() => readFileSync(invocationPath, "utf8")).toThrow();
   });
 
@@ -412,12 +481,14 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       wranglerOutputPath,
     });
     const executed: string[] = [];
-    expect(() => executeProductionDeployPlan(plan, (step: any) => {
-      executed.push(step.id);
-      if (step.id === "partial_refund_invariants_preflight") {
-        throw new Error("refund_preflight_failed");
-      }
-    })).toThrow("refund_preflight_failed");
+    expect(() =>
+      executeProductionDeployPlan(plan, (step: any) => {
+        executed.push(step.id);
+        if (step.id === "partial_refund_invariants_preflight") {
+          throw new Error("refund_preflight_failed");
+        }
+      }),
+    ).toThrow("refund_preflight_failed");
     expect(executed).toEqual([
       "public_source_truth",
       "workspace_membership_preflight",
@@ -434,12 +505,14 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       wranglerOutputPath,
     });
     const executed: string[] = [];
-    expect(() => executeProductionDeployPlan(plan, (step: any) => {
-      executed.push(step.id);
-      if (step.id === "partial_refund_invariants_predeploy") {
-        throw new Error("partial_refund_invariants_predeploy_failed");
-      }
-    })).toThrow("partial_refund_invariants_predeploy_failed");
+    expect(() =>
+      executeProductionDeployPlan(plan, (step: any) => {
+        executed.push(step.id);
+        if (step.id === "partial_refund_invariants_predeploy") {
+          throw new Error("partial_refund_invariants_predeploy_failed");
+        }
+      }),
+    ).toThrow("partial_refund_invariants_predeploy_failed");
     expect(executed).not.toContain("deploy");
     expect(executed).not.toContain("rollback_failed_release");
   });
@@ -447,35 +520,43 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
   it.each([
     ["deploy", "verify_worker_rollback_target"],
     ["verify_worker_rollback_target", "partial_refund_invariants_postdeploy"],
-    ["partial_refund_invariants_postdeploy", "launch_readiness_proof_canary_cycle"],
+    [
+      "partial_refund_invariants_postdeploy",
+      "launch_readiness_proof_canary_cycle",
+    ],
     ["launch_readiness_proof_canary_cycle", "post_deploy_release_canary"],
     ["partial_refund_invariants_postcanary", "live_public_truth"],
     ["live_public_truth", "production_public_smoke"],
     ["production_public_smoke", "oauth_branding"],
     ["oauth_branding", null],
-  ])("rolls back after %s fails and skips later release checks", (failureStep, blockedStep) => {
-    const plan = buildProductionDeployPlan({
-      manifestPath: "test-results/deploy-readiness-test.json",
-      remoteRestoreEvidencePath,
-      wranglerOutputPath,
-    });
-    const executed: string[] = [];
-    const failure = new Error(`${failureStep}_failed`);
-    let caught: unknown;
-    try {
-      executeProductionDeployPlan(plan, (step: any) => {
-        executed.push(step.id);
-        if (step.id === failureStep) throw failure;
+  ])(
+    "rolls back after %s fails and skips later release checks",
+    (failureStep, blockedStep) => {
+      const plan = buildProductionDeployPlan({
+        manifestPath: "test-results/deploy-readiness-test.json",
+        remoteRestoreEvidencePath,
+        wranglerOutputPath,
       });
-    } catch (error) {
-      caught = error;
-    }
+      const executed: string[] = [];
+      const failure = new Error(`${failureStep}_failed`);
+      let caught: unknown;
+      try {
+        executeProductionDeployPlan(plan, (step: any) => {
+          executed.push(step.id);
+          if (step.id === failureStep) throw failure;
+        });
+      } catch (error) {
+        caught = error;
+      }
 
-    expect(caught).toBe(failure);
-    expect(executed.filter((id) => id === failureStep)).toHaveLength(1);
-    expect(executed.filter((id) => id === "rollback_failed_release")).toHaveLength(1);
-    if (blockedStep) expect(executed).not.toContain(blockedStep);
-  });
+      expect(caught).toBe(failure);
+      expect(executed.filter((id) => id === failureStep)).toHaveLength(1);
+      expect(
+        executed.filter((id) => id === "rollback_failed_release"),
+      ).toHaveLength(1);
+      if (blockedStep) expect(executed).not.toContain(blockedStep);
+    },
+  );
 
   it("runs the post-canary refund invariant before rethrowing a canary failure", () => {
     const plan = buildProductionDeployPlan({
@@ -496,7 +577,9 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     }
 
     expect(caught).toBe(canaryFailure);
-    expect(executed.slice(executed.indexOf("post_deploy_release_canary"))).toEqual([
+    expect(
+      executed.slice(executed.indexOf("post_deploy_release_canary")),
+    ).toEqual([
       "post_deploy_release_canary",
       "partial_refund_invariants_postcanary",
       "rollback_failed_release",
@@ -511,19 +594,25 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       wranglerOutputPath,
     });
     const canaryFailure = new Error("post_deploy_release_canary_failed");
-    const invariantFailure = new Error("partial_refund_invariants_postcanary_failed");
+    const invariantFailure = new Error(
+      "partial_refund_invariants_postcanary_failed",
+    );
     let caught: unknown;
     try {
       executeProductionDeployPlan(plan, (step: any) => {
         if (step.id === "post_deploy_release_canary") throw canaryFailure;
-        if (step.id === "partial_refund_invariants_postcanary") throw invariantFailure;
+        if (step.id === "partial_refund_invariants_postcanary")
+          throw invariantFailure;
       });
     } catch (error) {
       caught = error;
     }
 
     expect(caught).toBeInstanceOf(AggregateError);
-    expect((caught as AggregateError).errors).toEqual([canaryFailure, invariantFailure]);
+    expect((caught as AggregateError).errors).toEqual([
+      canaryFailure,
+      invariantFailure,
+    ]);
     expect((caught as Error & { cause?: unknown }).cause).toBe(canaryFailure);
   });
 
@@ -559,7 +648,10 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       caught = error;
     }
     expect(caught).toBeInstanceOf(AggregateError);
-    expect((caught as AggregateError).errors).toEqual([canaryFailure, rollbackFailure]);
+    expect((caught as AggregateError).errors).toEqual([
+      canaryFailure,
+      rollbackFailure,
+    ]);
     expect(executed).toContain("partial_refund_invariants_postcanary");
     expect(executed).not.toContain("live_public_truth");
   });
@@ -570,14 +662,17 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       remoteRestoreEvidencePath,
       wranglerOutputPath,
     });
-    const releaseFailure = new Error("partial_refund_invariants_postdeploy_failed");
+    const releaseFailure = new Error(
+      "partial_refund_invariants_postdeploy_failed",
+    );
     const targetFailure = new Error("worker_rollback_target_ambiguous");
     const executed: string[] = [];
     let caught: unknown;
     try {
       executeProductionDeployPlan(plan, (step: any) => {
         executed.push(step.id);
-        if (step.id === "partial_refund_invariants_postdeploy") throw releaseFailure;
+        if (step.id === "partial_refund_invariants_postdeploy")
+          throw releaseFailure;
         if (step.id === "rollback_failed_release") throw targetFailure;
       });
     } catch (error) {
@@ -585,9 +680,14 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     }
 
     expect(caught).toBeInstanceOf(AggregateError);
-    expect((caught as AggregateError).errors).toEqual([releaseFailure, targetFailure]);
+    expect((caught as AggregateError).errors).toEqual([
+      releaseFailure,
+      targetFailure,
+    ]);
     expect((caught as Error & { cause?: unknown }).cause).toBe(releaseFailure);
-    expect(executed.filter((id) => id === "rollback_failed_release")).toHaveLength(1);
+    expect(
+      executed.filter((id) => id === "rollback_failed_release"),
+    ).toHaveLength(1);
     expect(executed).not.toContain("post_deploy_release_canary");
   });
 
@@ -597,11 +697,14 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       remoteRestoreEvidencePath,
       wranglerOutputPath,
     }).filter((step: any) => !step.runOnPostDeployFailure);
-    const releaseFailure = new Error("partial_refund_invariants_postdeploy_failed");
+    const releaseFailure = new Error(
+      "partial_refund_invariants_postdeploy_failed",
+    );
     let caught: unknown;
     try {
       executeProductionDeployPlan(plan, (step: any) => {
-        if (step.id === "partial_refund_invariants_postdeploy") throw releaseFailure;
+        if (step.id === "partial_refund_invariants_postdeploy")
+          throw releaseFailure;
       });
     } catch (error) {
       caught = error;
@@ -622,10 +725,13 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       wranglerOutputPath,
     });
     const executed: string[] = [];
-    expect(() => executeProductionDeployPlan(plan, (step: any) => {
-      executed.push(step.id);
-      if (step.id === "launch_readiness") throw new Error("intentional_gate_failure");
-    })).toThrow("intentional_gate_failure");
+    expect(() =>
+      executeProductionDeployPlan(plan, (step: any) => {
+        executed.push(step.id);
+        if (step.id === "launch_readiness")
+          throw new Error("intentional_gate_failure");
+      }),
+    ).toThrow("intentional_gate_failure");
     expect(executed).not.toContain("deploy");
   });
 
@@ -645,30 +751,45 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       ok: false,
       issues: expect.arrayContaining(["remote_restore_evidence_missing"]),
     });
-    expect(validateRemoteRestoreEvidence({
-      ...passingRemoteRestoreEvidence(),
-      generatedAt: "2026-07-14T10:00:00.000Z",
-    }, expected)).toMatchObject({
+    expect(
+      validateRemoteRestoreEvidence(
+        {
+          ...passingRemoteRestoreEvidence(),
+          generatedAt: "2026-07-14T10:00:00.000Z",
+        },
+        expected,
+      ),
+    ).toMatchObject({
       ok: false,
       issues: expect.arrayContaining(["remote_restore_evidence_stale"]),
     });
-    expect(validateRemoteRestoreEvidence({
-      ...passingRemoteRestoreEvidence(),
-      candidateFingerprint: "9".repeat(64),
-      scratchDatabaseRemoved: false,
-    }, expected)).toMatchObject({
+    expect(
+      validateRemoteRestoreEvidence(
+        {
+          ...passingRemoteRestoreEvidence(),
+          candidateFingerprint: "9".repeat(64),
+          scratchDatabaseRemoved: false,
+        },
+        expected,
+      ),
+    ).toMatchObject({
       ok: false,
       issues: expect.arrayContaining([
         "remote_restore_candidate_mismatch",
         "remote_restore_scratch_cleanup",
       ]),
     });
-    expect(validateRemoteRestoreEvidence({
-      ...passingRemoteRestoreEvidence(),
-      migrationLedgerSha256: null,
-      planRowCount: -1,
-      dodoLinkedPlanRowCount: 6,
-    }, expected)).toMatchObject({
+    expect(
+      validateRemoteRestoreEvidence(
+        {
+          ...passingRemoteRestoreEvidence(),
+          migrationLedgerSha256: null,
+          planRowCount: -1,
+          dodoLinkedPlanRowCount: 6,
+        },
+        expected,
+      ),
+    ).toMatchObject({
       ok: false,
       issues: expect.arrayContaining([
         "remote_restore_migrationLedgerSha256",
@@ -681,6 +802,65 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     ).toEqual({ ok: true, issues: [] });
   });
 
+  it("requires fresh exact restore evidence for migration deploys but permits a seven-day drill for code-only deploys", () => {
+    const validateRemoteRestoreEvidence = (
+      deployPlanModule as Record<string, unknown>
+    ).validateRemoteRestoreEvidence;
+    expect(typeof validateRemoteRestoreEvidence).toBe("function");
+    if (typeof validateRemoteRestoreEvidence !== "function") return;
+
+    const codeOnlyEvidence = {
+      ...passingRemoteRestoreEvidence(),
+      generatedAt: "2026-07-10T13:00:00.000Z",
+      candidateFingerprint: "7".repeat(64),
+      wranglerWorktreeSha256: "8".repeat(64),
+    };
+    const expected = {
+      candidateFingerprint: fingerprint,
+      wranglerWorktreeSha256: wranglerHash,
+      latestMigration: "0067_workspace_membership_invariants.sql",
+      migrationCount: 67,
+      migrationBearing: false,
+      now: new Date("2026-07-16T12:00:00.000Z"),
+    };
+
+    expect(validateRemoteRestoreEvidence(codeOnlyEvidence, expected)).toEqual({
+      ok: true,
+      issues: [],
+    });
+    expect(
+      validateRemoteRestoreEvidence(
+        { ...codeOnlyEvidence, generatedAt: "2026-07-08T10:00:00.000Z" },
+        expected,
+      ),
+    ).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining(["remote_restore_evidence_stale"]),
+    });
+    expect(
+      validateRemoteRestoreEvidence(codeOnlyEvidence, {
+        ...expected,
+        latestMigration: "0070_release_scheduled_observations.sql",
+        migrationCount: 64,
+      }),
+    ).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining([
+        "remote_restore_migration_mismatch",
+        "remote_restore_migration_count",
+      ]),
+    });
+  });
+
+  it("classifies migration-bearing deploys from the migration ledger diff only", () => {
+    expect(hasMigrationChanges("app/routes/search.tsx\n")).toBe(false);
+    expect(
+      hasMigrationChanges(
+        "migrations/0070_release_scheduled_observations.sql\n",
+      ),
+    ).toBe(true);
+  });
+
   it("extracts the exact newly deployed Worker version from Wrangler's official output envelope", () => {
     const readDeployedWorkerVersionId = (
       deployPlanModule as Record<string, unknown>
@@ -688,68 +868,103 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(typeof readDeployedWorkerVersionId).toBe("function");
     if (typeof readDeployedWorkerVersionId !== "function") return;
 
-    expect(readDeployedWorkerVersionId(
-      `${JSON.stringify({ type: "deploy", version: 1, version_id: "worker-version-new" })}\n`,
-    )).toBe("worker-version-new");
+    expect(
+      readDeployedWorkerVersionId(
+        `${JSON.stringify({ type: "deploy", version: 1, version_id: "worker-version-new" })}\n`,
+      ),
+    ).toBe("worker-version-new");
     expect(() => readDeployedWorkerVersionId("{}")).toThrow(
       "deployed_worker_version_missing",
     );
   });
 
   it("wires private restore evidence and the post-deploy canary token into protected-main CI", () => {
-    const workflow = readFileSync(resolve(".github/workflows/deploy-production.yml"), "utf8");
+    const workflow = readFileSync(
+      resolve(".github/workflows/deploy-production.yml"),
+      "utf8",
+    );
 
     expect(workflow).toContain("D1_REMOTE_RESTORE_EVIDENCE_JSON");
     expect(workflow).toContain("D1_REMOTE_RESTORE_EVIDENCE_PATH");
     expect(workflow).toContain("CANARY_BYPASS_TOKEN");
+    expect(workflow).toContain("actions: read");
+    expect(workflow).toContain("fetch-depth: 0");
+    expect(workflow).toContain("GITHUB_TOKEN: ${{ github.token }}");
     expect(workflow).not.toContain("- name: Production public smoke");
   });
 
   it("preserves only the explicit non-secret release evidence after every deploy attempt", () => {
-    const workflow = readFileSync(resolve(".github/workflows/deploy-production.yml"), "utf8");
+    const workflow = readFileSync(
+      resolve(".github/workflows/deploy-production.yml"),
+      "utf8",
+    );
     const verifyStep = workflow.slice(
       workflow.indexOf("- name: Verify complete release evidence set"),
       workflow.indexOf("- name: Preserve release evidence"),
     );
     const archiveStep = workflow.slice(
-      workflow.indexOf("- name: Archive permission-preserving release evidence"),
+      workflow.indexOf(
+        "- name: Archive permission-preserving release evidence",
+      ),
       workflow.indexOf("- name: Preserve release evidence"),
     );
     const uploadStep = workflow.slice(
       workflow.indexOf("- name: Preserve release evidence"),
       workflow.indexOf("- name: Preserve failed release diagnostics"),
     );
-    const diagnosticStep = workflow.slice(workflow.indexOf("- name: Preserve failed release diagnostics"));
+    const diagnosticStep = workflow.slice(
+      workflow.indexOf("- name: Preserve failed release diagnostics"),
+    );
 
     expect(verifyStep).toContain("if: success()");
-    expect(verifyStep).toContain("readiness=(test-results/deploy-readiness-*.json)");
-    expect(verifyStep).toContain("wrangler=(test-results/wrangler-deploy-output-*.jsonl)");
-    expect(verifyStep).toContain("rollback=(test-results/worker-rollback-target-*.json)");
+    expect(verifyStep).toContain(
+      "readiness=(test-results/deploy-readiness-*.json)",
+    );
+    expect(verifyStep).toContain(
+      "wrangler=(test-results/wrangler-deploy-output-*.jsonl)",
+    );
+    expect(verifyStep).toContain(
+      "rollback=(test-results/worker-rollback-target-*.json)",
+    );
     expect(verifyStep).toContain("gate_c=(test-results/gate-c-*.json)");
-    expect(verifyStep).toContain("production_soak=(test-results/production-soak-*.json)");
-    expect(verifyStep).toContain("node scripts/gate-c-soak.mjs verify-start --journal");
+    expect(verifyStep).toContain(
+      "production_soak=(test-results/production-soak-*.json)",
+    );
+    expect(verifyStep).toContain(
+      "node scripts/gate-c-soak.mjs verify-start --journal",
+    );
     expect(archiveStep).toContain("if: success()");
-    expect(archiveStep).toContain("node scripts/release-evidence-archive.mjs create");
-    expect(archiveStep).toContain("production-release-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz");
+    expect(archiveStep).toContain(
+      "node scripts/release-evidence-archive.mjs create",
+    );
+    expect(archiveStep).toContain(
+      "production-release-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz",
+    );
     expect(verifyStep).toContain('[ "${#readiness[@]}" -ge 5 ]');
     expect(verifyStep).toContain('[ "${#wrangler[@]}" -eq 1 ]');
     expect(verifyStep).toContain('[ "${#rollback[@]}" -eq 1 ]');
     expect(verifyStep).toContain('[ "${#gate_c[@]}" -eq 1 ]');
     expect(verifyStep).toContain('[ "${#production_soak[@]}" -eq 1 ]');
-    expect(verifyStep).toContain("find test-results/gate-b-artifacts -type f -print -quit");
+    expect(verifyStep).toContain(
+      "find test-results/gate-b-artifacts -type f -print -quit",
+    );
     expect(uploadStep).toContain("if: success()");
     expect(uploadStep).toContain("uses: actions/upload-artifact@v7");
     expect(uploadStep).toContain(
       "production-release-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}",
     );
-    expect(uploadStep).toContain("test-results/production-release-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}.tar.gz");
+    expect(uploadStep).toContain(
+      "test-results/production-release-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}.tar.gz",
+    );
     expect(uploadStep).toContain("if-no-files-found: error");
     expect(uploadStep).toContain("retention-days: 90");
     expect(uploadStep).not.toContain("d1-remote-restore-evidence");
     expect(uploadStep).not.toContain("test-results/**");
     expect(diagnosticStep).toContain("if: failure()");
     expect(diagnosticStep).toContain("production-release-diagnostics-");
-    expect(diagnosticStep).toContain("test-results/wrangler-deploy-output-*.jsonl");
+    expect(diagnosticStep).toContain(
+      "test-results/wrangler-deploy-output-*.jsonl",
+    );
     expect(diagnosticStep).toContain("if-no-files-found: warn");
     expect(diagnosticStep).not.toContain("d1-remote-restore-evidence");
   });
@@ -758,7 +973,8 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     const evidence = passingEvidence();
     expect(validateDeployReadiness(evidence)).toEqual({ ok: true, issues: [] });
 
-    evidence.manifest.postflight.launchConfig.productionSearchRolloutMode = "v2";
+    evidence.manifest.postflight.launchConfig.productionSearchRolloutMode =
+      "v2";
     expect(validateDeployReadiness(evidence)).toMatchObject({
       ok: false,
       issues: expect.arrayContaining(["postflight_config_identity"]),
@@ -769,10 +985,16 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     const evidence = passingEvidence();
     evidence.candidate.status.hasChanges = true;
     const firstArtifact = evidence.manifest.entries[0].artifacts[0];
-    writeFileSync(resolve(evidence.root, "test-results", firstArtifact.name), Buffer.from("tampered"));
+    writeFileSync(
+      resolve(evidence.root, "test-results", firstArtifact.name),
+      Buffer.from("tampered"),
+    );
     expect(validateDeployReadiness(evidence)).toMatchObject({
       ok: false,
-      issues: expect.arrayContaining(["candidate_not_clean", "artifact_file_integrity"]),
+      issues: expect.arrayContaining([
+        "candidate_not_clean",
+        "artifact_file_integrity",
+      ]),
     });
   });
 

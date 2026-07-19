@@ -9,7 +9,7 @@ const databases: DatabaseSync[] = [];
 function database() {
   const db = new DatabaseSync(":memory:");
   databases.push(db);
-  applyMigration(db, "migrations/0069_release_scheduled_observations.sql");
+  applyMigration(db, "migrations/0070_release_scheduled_observations.sql");
   return db;
 }
 
@@ -29,25 +29,27 @@ function insert(db: DatabaseSync, overrides: Record<string, unknown> = {}) {
     created: "2026-07-19T06:00:01.100Z",
     ...overrides,
   };
-  db.prepare(`
+  db.prepare(
+    `
       INSERT INTO release_scheduled_observation (
         id, worker_version_id, cron, task_name, scheduled_at, started_at,
         completed_at, duration_ms, outcome, failure_category, metrics_json, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      value.id as string,
-      value.worker as string,
-      value.cron as string,
-      value.task as string,
-      value.scheduled as string,
-      value.started as string,
-      value.completed as string,
-      value.duration as number,
-      value.outcome as string,
-      value.category as string | null,
-      value.metrics as string,
-      value.created as string,
-    );
+    `,
+  ).run(
+    value.id as string,
+    value.worker as string,
+    value.cron as string,
+    value.task as string,
+    value.scheduled as string,
+    value.started as string,
+    value.completed as string,
+    value.duration as number,
+    value.outcome as string,
+    value.category as string | null,
+    value.metrics as string,
+    value.created as string,
+  );
 }
 
 afterEach(() => {
@@ -59,7 +61,9 @@ describe("release scheduled observation migration", () => {
     const db = database();
     insert(db);
     insert(db, { id: "observation-2" });
-    const row = db.prepare("SELECT COUNT(*) AS count FROM release_scheduled_observation").get() as { count: number };
+    const row = db
+      .prepare("SELECT COUNT(*) AS count FROM release_scheduled_observation")
+      .get() as { count: number };
     expect(row.count).toBe(2);
   });
 
@@ -67,26 +71,54 @@ describe("release scheduled observation migration", () => {
     const db = database();
     expect(() => insert(db, { outcome: "success" })).toThrow();
     expect(() => insert(db, { outcome: "threw", category: null })).toThrow();
-    expect(() => insert(db, { outcome: "completed", category: "runtime_error" })).toThrow();
+    expect(() =>
+      insert(db, { outcome: "completed", category: "runtime_error" }),
+    ).toThrow();
     expect(() => insert(db, { duration: 900001 })).toThrow();
     expect(() => insert(db, { task: "customer_private_task" })).toThrow();
-    expect(() => insert(db, { metrics: JSON.stringify({ value: "customer@example.com" }) })).toThrow();
-    expect(() => insert(db, { metrics: JSON.stringify({ queued: "customer@example.com" }) })).toThrow();
+    expect(() =>
+      insert(db, {
+        metrics: JSON.stringify({ value: "customer@example.com" }),
+      }),
+    ).toThrow();
+    expect(() =>
+      insert(db, {
+        metrics: JSON.stringify({ queued: "customer@example.com" }),
+      }),
+    ).toThrow();
     expect(() => insert(db, { cron: "* * * * *" })).toThrow();
-    expect(() => insert(db, { cron: "0 5 * * MON", task: "weekly_business_numbers" })).not.toThrow();
+    expect(() =>
+      insert(db, { cron: "0 5 * * MON", task: "weekly_business_numbers" }),
+    ).not.toThrow();
   });
 
   it("has no customer or provider identifier columns and creates both evidence indexes", () => {
     const db = database();
-    const columns = db.prepare("PRAGMA table_info(release_scheduled_observation)").all() as Array<{ name: string }>;
+    const columns = db
+      .prepare("PRAGMA table_info(release_scheduled_observation)")
+      .all() as Array<{ name: string }>;
     const names = columns.map((column) => column.name);
-    for (const forbidden of ["user_id", "workspace_id", "customer_id", "email", "provider_id", "message_id", "url", "payload", "error_message"]) {
+    for (const forbidden of [
+      "user_id",
+      "workspace_id",
+      "customer_id",
+      "email",
+      "provider_id",
+      "message_id",
+      "url",
+      "payload",
+      "error_message",
+    ]) {
       expect(names).not.toContain(forbidden);
     }
-    const indexes = db.prepare("PRAGMA index_list(release_scheduled_observation)").all() as Array<{ name: string }>;
-    expect(indexes.map((index) => index.name)).toEqual(expect.arrayContaining([
-      "idx_release_scheduled_observation_version_window",
-      "idx_release_scheduled_observation_retention",
-    ]));
+    const indexes = db
+      .prepare("PRAGMA index_list(release_scheduled_observation)")
+      .all() as Array<{ name: string }>;
+    expect(indexes.map((index) => index.name)).toEqual(
+      expect.arrayContaining([
+        "idx_release_scheduled_observation_version_window",
+        "idx_release_scheduled_observation_retention",
+      ]),
+    );
   });
 });

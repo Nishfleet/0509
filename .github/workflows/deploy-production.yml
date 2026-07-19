@@ -12,6 +12,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
   deployments: write
 
 jobs:
@@ -25,6 +26,8 @@ jobs:
       url: https://0509.io
     steps:
       - uses: actions/checkout@v6.0.3
+        with:
+          fetch-depth: 0
 
       - name: Verify Cloudflare deploy secrets
         shell: bash
@@ -89,6 +92,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}
           D1_REMOTE_RESTORE_EVIDENCE_PATH: test-results/d1-remote-restore-evidence.json
+          GITHUB_TOKEN: ${{ github.token }}
           CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: "false"
         run: npm run deploy
 

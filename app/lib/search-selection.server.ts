@@ -83,9 +83,9 @@ export async function prepareSearchResultSelection(
   // Active-first, longest-running for display + featured proof default.
   const hydratedAds = sortAdsForSearchDisplay(rawHydratedAds, "active_first");
   const featured = pickFeaturedProofAd(hydratedAds);
-  const resolvedSelectedId = selectedId ?? featured?.metaAdId ?? null;
-  const selectedAdBase =
-    hydratedAds.find((ad) => ad.metaAdId === resolvedSelectedId) ?? featured ?? null;
+  const selectedAdBase = selectedId
+    ? hydratedAds.find((ad) => ad.metaAdId === selectedId) ?? null
+    : featured ?? null;
 
   let selectedAd: AdRecord | null = selectedAdBase;
   let selectionEnrichmentPending = false;
@@ -148,7 +148,9 @@ async function enrichAndPersistSelectedAd(
       : Promise.resolve({ value: null, capturedAt: null });
   const [snapshot, creativeCapture] = await Promise.all([
     selectedAdBase.landingPageUrl && !selectedAdBase.landingPage
-      ? captureLandingPageSnapshot(env, selectedAdBase.landingPageUrl)
+      ? captureLandingPageSnapshot(env, selectedAdBase.landingPageUrl, {
+          persistArtifacts: Boolean(env.DB),
+        })
       : Promise.resolve(selectedAdBase.landingPage ?? null),
     creativeCapturePromise,
   ]);
