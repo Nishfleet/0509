@@ -2358,6 +2358,20 @@ button[aria-busy="true"] {
   font-weight: 700;
 }
 
+/* Marketing-angle chip: muted neutral so it reads as metadata, not proof. */
+.f9-longevity-pill.f9-angle-pill {
+  background: rgba(6, 22, 41, 0.06);
+  color: #40546a;
+}
+
+/* Lower-confidence fallback read (brand_lifestyle): quieter outline-only look. */
+.f9-longevity-pill.f9-angle-pill.is-tentative {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px rgba(6, 22, 41, 0.16);
+  color: #64788d;
+  font-weight: 600;
+}
+
 .f9-muted-copy {
   color: var(--f9-search-muted);
   line-height: 1.58;
