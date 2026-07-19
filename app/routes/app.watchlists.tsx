@@ -1677,9 +1677,9 @@ function buildLegacyWorkspaceConfig(
     id: `legacy-workspace-${userId}`,
     userId,
     sensitivityMode: "balanced",
-    // Align with workspace delivery defaults — instant is on by default;
-    // paid-plan feature gates still control actual delivery.
-    instantEnabled: true,
+    // FIX-6: legacy UI fallback matches stored defaults (instant off until a
+    // real config row exists; new workspaces get an explicit true snapshot).
+    instantEnabled: false,
     digestEnabled: true,
     digestCadencePreference: "plan_default",
     emailEnabled: hasEmail,

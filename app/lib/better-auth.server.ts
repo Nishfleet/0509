@@ -175,12 +175,22 @@ export function getBetterAuth(env: AppEnv, request: Request) {
           },
         },
         update: {
-          // Existing unverified users who verify via magic link update
-          // emailVerified in place (no afterEmailVerification either).
+          // Magic-link verify can flip emailVerified in place without
+          // afterEmailVerification. FIX-4: never welcome on arbitrary profile
+          // edits (name/image) for long-standing customers — only young
+          // accounts (created within 7 days) may receive welcome here.
           after: async (user) => {
-            if (user.emailVerified) {
-              await maybeSendWelcomeEmail(env, user);
+            if (!user.emailVerified) {
+              return;
             }
+            const createdMs = Date.parse(String(user.createdAt ?? ""));
+            if (
+              !Number.isFinite(createdMs) ||
+              Date.now() - createdMs > 7 * 24 * 60 * 60 * 1000
+            ) {
+              return;
+            }
+            await maybeSendWelcomeEmail(env, user);
           },
         },
       },

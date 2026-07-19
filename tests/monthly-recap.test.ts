@@ -98,6 +98,12 @@ describe("sendMonthlyCustomerRecaps", () => {
       deliveredAt: null,
     });
 
+    vi.doMock("~/lib/email-verification.server", () => ({
+      isUserEmailVerified: vi.fn().mockResolvedValue(true),
+    }));
+    vi.doMock("~/lib/unsubscribe.server", () => ({
+      buildUnsubscribeUrl: vi.fn().mockResolvedValue("https://0509.io/unsubscribe/token"),
+    }));
     vi.doMock("~/lib/data.server", () => ({
       claimInstantDeliveryAttempt,
       markInstantDeliveryDispatchStarted,
@@ -106,6 +112,19 @@ describe("sendMonthlyCustomerRecaps", () => {
         email: "owner@example.com",
         name: "Owner",
       }),
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
+        emailEnabled: true,
+      }),
+      listDeliveryTargets: vi.fn().mockResolvedValue([
+        {
+          id: "target-1",
+          channel: "email",
+          targetValue: "owner@example.com",
+          isOptedIn: true,
+          isPaused: false,
+          optedOutAt: null,
+        },
+      ]),
     }));
     vi.doMock("~/lib/delivery-email-core.server", () => ({
       EMAIL_PROVIDER: "cloudflare",
@@ -148,9 +167,13 @@ describe("sendMonthlyCustomerRecaps", () => {
     );
     expect(first.sent).toBe(1);
     expect(sendCloudflareEmail).toHaveBeenCalledTimes(1);
+    expect(sendCloudflareEmail.mock.calls[0]?.[1]).toMatchObject({
+      unsubscribeUrl: "https://0509.io/unsubscribe/token",
+    });
     expect(claimInstantDeliveryAttempt.mock.calls[0]?.[1]).toMatchObject({
       idempotencyKey: "recap:user-1:2026-06",
       templateName: "monthly_recap",
+      deliveryTargetId: "target-1",
     });
 
     const second = await sendMonthlyCustomerRecaps(

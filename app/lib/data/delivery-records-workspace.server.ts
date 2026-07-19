@@ -14,15 +14,43 @@ import type { DeliveryQuietHours, DigestCadencePreference, SensitivityMode } fro
 export function legacyWorkspaceDeliveryDefaults(input: { hasEmail: boolean }) {
   return {
     sensitivityMode: "balanced" as const,
-    // Paid high-priority alerts remain plan-gated; free workspaces keep the
-    // preference true so upgrade immediately starts delivering headline events.
-    instantEnabled: true,
+    // FIX-6: existing workspaces with no saved row must not silently gain
+    // instant alerts. New workspaces write an explicit snapshot via
+    // ensureNewWorkspaceDeliveryDefaults (instantEnabled: true).
+    instantEnabled: false,
     digestEnabled: true,
     digestCadencePreference: "plan_default" as DigestCadencePreference,
     emailEnabled: input.hasEmail,
     whatsappEnabled: false,
     slackEnabled: false,
   };
+}
+
+/**
+ * FIX-6: first-time workspace delivery snapshot for newly onboarded accounts.
+ * No-op when a config row already exists (never override customer settings).
+ */
+export async function ensureNewWorkspaceDeliveryDefaults(
+  env: AppEnv,
+  userId: string,
+  options: { hasEmail?: boolean } = {},
+) {
+  const existing = await getWorkspaceDeliveryConfig(env, userId);
+  if (existing) {
+    return { created: false as const, config: existing };
+  }
+  await upsertWorkspaceDeliveryConfig(env, {
+    userId,
+    sensitivityMode: "balanced",
+    instantEnabled: true,
+    digestEnabled: true,
+    digestCadencePreference: "plan_default",
+    emailEnabled: options.hasEmail !== false,
+    whatsappEnabled: false,
+    slackEnabled: false,
+  });
+  const config = await getWorkspaceDeliveryConfig(env, userId);
+  return { created: true as const, config };
 }
 
 // After a verified email change, the auto-provisioned delivery target still

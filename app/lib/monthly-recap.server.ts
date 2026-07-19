@@ -90,7 +90,8 @@ export function buildMonthlyRecapEmail(input: MonthlyRecapStats & { billingUrl: 
         </a>
       </p>
       <p style="margin: 0; color: #5b6577; font-size: 13px;">
-        Numbers match the usage shown on your Billing page for the same period.
+        Counts are for this calendar month (UTC). Billing shows a rolling 30-day
+        window, so the two views can differ slightly.
       </p>
     </div>
   `;
@@ -317,16 +318,56 @@ async function sendOneMonthlyRecap(
   env: AppEnv,
   stats: MonthlyRecapStats & { billingUrl: string },
 ) {
-  const recipient = stats.email.trim().toLowerCase();
+  // FIX-5: mirror scan-trouble gates — verified email, opt-out, List-Unsubscribe.
+  const { isUserEmailVerified } = await import("~/lib/email-verification.server");
+  if (!(await isUserEmailVerified(env, stats.userId))) {
+    return { sent: false as const, reason: "unverified" as const };
+  }
+
+  const {
+    listDeliveryTargets,
+    getWorkspaceDeliveryConfig,
+  } = await import("~/lib/data.server");
+  const workspaceConfig = await getWorkspaceDeliveryConfig(env, stats.userId);
+  if (workspaceConfig && !workspaceConfig.emailEnabled) {
+    return { sent: false as const, reason: "disabled" as const };
+  }
+
+  const targets = await listDeliveryTargets(env, stats.userId);
+  const emailTargets = targets.filter(
+    (target) =>
+      target.channel === "email" &&
+      target.isOptedIn &&
+      !target.isPaused &&
+      !target.optedOutAt,
+  );
+  const primaryTarget = emailTargets[0] ?? null;
+  const recipient = (
+    primaryTarget?.targetValue?.trim() ||
+    stats.email.trim()
+  ).toLowerCase();
   if (!recipient) {
     return { sent: false as const, reason: "missing_email" as const };
+  }
+
+  let unsubscribeUrl: string | null = null;
+  if (primaryTarget?.id) {
+    try {
+      const { buildUnsubscribeUrl } = await import("~/lib/unsubscribe.server");
+      unsubscribeUrl = await buildUnsubscribeUrl(env, {
+        userId: stats.userId,
+        targetId: primaryTarget.id,
+      });
+    } catch {
+      unsubscribeUrl = null;
+    }
   }
 
   const idempotencyKey = `recap:${stats.userId}:${stats.monthKey}`;
   const claim = await claimInstantDeliveryAttempt(env, {
     userId: stats.userId,
     watchlistId: null,
-    deliveryTargetId: null,
+    deliveryTargetId: primaryTarget?.id ?? null,
     lane: "customer",
     channel: "email",
     provider: EMAIL_PROVIDER,
@@ -361,7 +402,7 @@ async function sendOneMonthlyRecap(
     html: model.html,
     text: model.text,
     tag: "monthly_recap",
-    unsubscribeUrl: null,
+    unsubscribeUrl,
   });
 
   const finalized = await updateDeliveryAttemptResult(env, claim.attemptId, {

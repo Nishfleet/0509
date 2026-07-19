@@ -3793,23 +3793,13 @@ function mapEventTypesByAdId(drafts: WatchEventDraft[]) {
 }
 
 function getScanNativeImportanceScore(eventType: WatchEventType) {
+  // FIX-6(b): route through the evaluator map so WP-20 ad_new:76 is live.
   switch (eventType) {
     case "landing_page_url_changed":
-      return 85;
     case "landing_page_headline_changed":
-      return 75;
     case "ad_new":
-      return 65;
     case "ad_inactive":
-      return 60;
     case "landing_page_offer_changed":
-      return scoreWatchEventImportance({
-        eventType,
-        proofPresent: true,
-        sensitivityMode: "balanced",
-        burstCount: 1,
-        purchaseSignals: false,
-      });
     case "landing_page_cta_changed":
     case "landing_page_form_changed":
       return scoreWatchEventImportance({

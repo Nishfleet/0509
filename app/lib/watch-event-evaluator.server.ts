@@ -276,8 +276,9 @@ function normalizeFieldValue(value: string | null) {
  */
 export function hasPurchaseSignal(value: string) {
   const normalized = value.toLowerCase();
+  // FIX-7: do not put multi-char `zł` inside a character class (bare `z` match).
   if (
-    /[₹$€£¥₺zł]/.test(value) ||
+    /[₹$€£¥₺]|zł/.test(value) ||
     /\b(?:usd|eur|gbp|inr|jpy|cad|aud|sgd|aed|sar)\b/.test(normalized)
   ) {
     return true;

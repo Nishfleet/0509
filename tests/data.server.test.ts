@@ -4509,9 +4509,9 @@ describe("legacy proof-first defaults", () => {
       }),
     ).toEqual({
       sensitivityMode: "balanced",
-      instantEnabled: true,
+      instantEnabled: false,
       digestEnabled: true,
-  digestCadencePreference: "plan_default",
+      digestCadencePreference: "plan_default",
       emailEnabled: true,
       whatsappEnabled: false,
       slackEnabled: false,

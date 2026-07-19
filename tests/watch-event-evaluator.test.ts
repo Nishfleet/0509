@@ -375,6 +375,9 @@ describe("signal-quality hardening (2026-06-12)", () => {
     expect(hasPurchaseSignal("Starting at ₹499")).toBe(true);
     expect(hasPurchaseSignal("From €49")).toBe(true);
     expect(hasPurchaseSignal("Just a great product")).toBe(false);
+    // FIX-7: bare letter z must not count as a purchase signal.
+    expect(hasPurchaseSignal("Amazing new sizes")).toBe(false);
+    expect(hasPurchaseSignal("From zł 49")).toBe(true);
 
     const base = {
       eventType: "landing_page_offer_changed" as const,
