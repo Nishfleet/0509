@@ -213,7 +213,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
         userId: "e2e-starter",
         scenario: "digest",
       })).resolves.toMatchObject({ cleanupVerified: true, includedUsed: 0 });
-      await expectResponsiveSurface(page, viewport, "/app/digests", "Digests", [
+      await expectResponsiveSurface(page, viewport, "/app/digests", "Briefs", [
         /Digest history/,
         /Okara launched a new workflow offer/,
         /sent/i,
@@ -249,8 +249,8 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
       await page.setViewportSize(viewport);
       await page.goto("/app/digests");
       await expectStatusAnnouncement(
-        page.getByRole("status").filter({ hasText: "Digests are included in paid plans" }),
-        "Digests are included in paid plans",
+        page.getByRole("status").filter({ hasText: "Briefs are included in paid plans" }),
+        "Briefs are included in paid plans",
       );
       await expect(page.getByRole("link", { name: "View plans" })).toBeVisible();
       await expectNoHorizontalOverflow(page);
