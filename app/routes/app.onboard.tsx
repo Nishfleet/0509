@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Form, Link, redirect, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 
-import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { SubmitButton } from "~/components/submit-button";
 import { sanitizeCustomerFacingMessage } from "~/lib/customer-route-error";
@@ -598,8 +598,11 @@ export default function AppOnboardRoute() {
     : "/search";
 
   return (
-    <DashboardPage>
-      <main className="f9-onboard-page">
+    // Full-bleed dark hero: must NOT sit inside the max-width dashboard
+    // content wrapper, or the dark background clips to 1120px and leaks the
+    // light page background on wide viewports. Centering is handled by
+    // .f9-onboard-layout / .f9-container.
+    <main className="f9-onboard-page">
       <section className="f9-container f9-onboard-layout">
         <article className="f9-onboard-card">
           <DashboardPageHeader
@@ -790,8 +793,7 @@ export default function AppOnboardRoute() {
           </div>
         </article>
       </section>
-      </main>
-    </DashboardPage>
+    </main>
   );
 }
 
