@@ -68,7 +68,7 @@ export const links: LinksFunction = () => canonicalLinks("/search");
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({
-    title: "Search | Five to Nine",
+    title: "Search competitor Meta ads free | Five to Nine",
     description: searchDescription,
     pathname: "/search",
   });

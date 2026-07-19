@@ -48,9 +48,82 @@ export function publicSeoMeta(input: {
   ];
 }
 
+export interface FaqJsonLdEntry {
+  question: string;
+  answer: string;
+}
+
+/**
+ * schema.org Organization for the landing page. Deliberately minimal — no
+ * price amounts anywhere in structured data (prices are live-loaded from
+ * Dodo in the buyer's currency and must never be hardcoded).
+ */
+export function organizationJsonLd() {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: SITE_NAME,
+    url: SITE_ORIGIN,
+  } as const;
+}
+
+/** schema.org WebSite with the public search preview as the site search action. */
+export function webSiteJsonLd() {
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: SITE_NAME,
+    url: SITE_ORIGIN,
+    potentialAction: {
+      "@type": "SearchAction",
+      target: {
+        "@type": "EntryPoint",
+        urlTemplate: `${SITE_ORIGIN}/search?website={website}`,
+      },
+      "query-input": "required name=website",
+    },
+  } as const;
+}
+
+/**
+ * schema.org FAQPage. Pass every FAQ block on the page in one call — Google
+ * expects a single FAQPage entity per page, so the landing page combines the
+ * product and billing FAQ entries into one mainEntity list.
+ */
+export function faqPageJsonLd(entries: ReadonlyArray<FaqJsonLdEntry>) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: entries.map((entry) => ({
+      "@type": "Question",
+      name: entry.question,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: entry.answer,
+      },
+    })),
+  } as const;
+}
+
+/**
+ * Props for a JSON-LD <script> tag. Escapes `<` so page data can never break
+ * out of the script element.
+ */
+export function jsonLdScriptProps(data: unknown) {
+  return {
+    type: "application/ld+json",
+    dangerouslySetInnerHTML: {
+      __html: JSON.stringify(data).replace(/</g, "\\u003c"),
+    },
+  } as const;
+}
+
 const SITEMAP_PATHS = [
   "/",
+  "/search",
+  "/auth/signup",
   "/compare/magicbrief",
+  "/compare/meta-ad-library",
   "/help",
   "/docs",
   "/api/docs",

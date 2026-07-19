@@ -60,6 +60,7 @@ export default [
   route("api/e2e/team/state", "routes/api.e2e.j6.team.state.ts"),
   route("app/onboard", "routes/app.onboard.tsx"),
   route("compare/magicbrief", "routes/compare.magicbrief.tsx"),
+  route("compare/meta-ad-library", "routes/compare.meta-ad-library.tsx"),
   route("team/accept", "routes/team.accept.tsx"),
 	route("share/:token/pdf", "routes/share.$token.pdf.ts"),
   route("share/:token", "routes/share.$token.tsx"),

@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { publicSeoFileForPathname } from "~/lib/seo";
 
 describe("public SEO files", () => {
-  it("does not publish dynamic search in the public sitemap", () => {
+  it("publishes the public funnel surfaces in the sitemap", () => {
     const sitemap = publicSeoFileForPathname("/sitemap.xml");
 
     expect(sitemap?.body).toContain("https://0509.io/");
@@ -17,7 +17,14 @@ describe("public SEO files", () => {
     expect(sitemap?.body).toContain("https://0509.io/trust");
     expect(sitemap?.body).toContain("https://0509.io/privacy");
     expect(sitemap?.body).toContain("https://0509.io/terms");
-    expect(sitemap?.body).not.toContain("https://0509.io/search");
+    // Funnel entry points (feat/funnel-seo): the public search preview,
+    // signup, and both compare pages are deliberately crawlable.
+    expect(sitemap?.body).toContain("<url><loc>https://0509.io/search</loc></url>");
+    expect(sitemap?.body).toContain("<url><loc>https://0509.io/auth/signup</loc></url>");
+    expect(sitemap?.body).toContain("<url><loc>https://0509.io/compare/magicbrief</loc></url>");
+    expect(sitemap?.body).toContain(
+      "<url><loc>https://0509.io/compare/meta-ad-library</loc></url>",
+    );
   });
 
 	it("disallows auth-only surfaces in robots.txt but keeps /share crawlable", () => {
