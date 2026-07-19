@@ -118,8 +118,6 @@ export function jsonLdScriptProps(data: unknown) {
   } as const;
 }
 
-const SITEMAP_PATHS = [
-
 export const SITEMAP_PATHS = [
   "/",
   "/search",

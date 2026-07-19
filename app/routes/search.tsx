@@ -1223,81 +1223,36 @@ export default function SearchRoute() {
                     ref={selectedProofRef}
                     tabIndex={-1}
                   >
-                    <SearchQueryFields params={loadMoreParams} />
-                    <SubmitButton
-                      className="f9-secondary-button"
-                      getAction="/search"
-                      match={{ after: loadMoreParams.get("after") ?? "" }}
-                      pendingLabel="Loading…"
-                    >
-                      {retryingCursor ? "Retry" : "Load more"}
-                    </SubmitButton>
-                  </Form>
-                ) : null}
-              </div>
-
-              <div aria-live="polite" className="f9-sr-only" role="status">
-                {resultsAnnouncement}
-              </div>
-
-              {searchAnswer ? (
-                <SearchAnswerPanel answer={searchAnswer} steal={stealSummary} />
-              ) : null}
-
-              {!data.session ? (
-                <div className="f9-search-signup-cta">
-                  <div>
-                    <strong>
-                      {visibleAds.length > 0
-                        ? "Keep this competitor under watch"
-                        : "Keep checking this competitor"}
-                    </strong>
-                    <p>{signupCtaBody}</p>
-                  </div>
-                  <Link className="f9-primary-button" to={signupTrackingPath}>
-                    Create account
-                  </Link>
-                </div>
-              ) : null}
-
-              {formatFilterApproximate ? (
-                <div className="f9-discovery-banner" role="status">
-                  <p>Format filters are approximate for this source</p>
-                </div>
-              ) : null}
-
-              {discoverySummary && visibleAds.length > 0 ? (
-                <div className="f9-discovery-banner">
-                  <p>{discoverySummary}</p>
-                </div>
-              ) : null}
-
-              <div className="f9-results-list">
-                {visibleAds.length > 0 ? (
-                  visibleAds.map((ad) => (
-                    <Link
-                      className={`f9-result-card ${selectedAd?.metaAdId === ad.metaAdId ? "is-active" : ""}`}
-                      key={ad.metaAdId}
-                      to={`/search?${(requestedCursor
-                        ? appendCursor(scopedSearchParams, requestedCursor, ad.metaAdId)
-                        : withSelected(scopedSearchParams, ad.metaAdId)
-                      ).toString()}#selected-proof`}
-                    >
-                      <AdThumb ad={ad} />
-                      <div className="f9-result-card-body">
+                    <div className="f9-panel-head">
+                      <div>
+                        <span>Selected proof</span>
+                        <h2 id="selected-proof-title">
+                          {formatAdvertiserLabel(selectedAd.advertiser)}
+                        </h2>
+                        <AdLongevityPill ad={selectedAd} />
+                      </div>
+                      <em
+                        className={
+                          selectedAd.activeStatusObserved !== false &&
+                          selectedAd.active
+                            ? "is-active"
+                            : ""
+                        }
+                      >
+                        {formatAdActiveStatus(selectedAd)}
+                      </em>
+                    </div>
+                    <p className="f9-proof-provenance">
+                      <strong>{formatSearchSourceLabel(visibleResult)}</strong>
+                      <span>{formatSearchFreshnessLabel(visibleResult)}</span>
+                      <span>{formatProofCaptureLabel(selectedAd)}</span>
+                    </p>
+                    <div className="f9-detail-hero">
+                      <div className="f9-ad-thumb-row">
+                        <AdThumb ad={selectedAd} />
                         <div>
-                          <span>{formatAdvertiserLabel(ad.advertiser)}</span>
-                          <h3>{ad.previewHeadline}</h3>
-                          <div className="f9-result-card-pills">
-                            {ad.source === "demo" ? (
-                              <span className="f9-longevity-pill is-sample">Sample</span>
-                            ) : null}
-                            <AdLongevityPill ad={ad} />
-                            {ad.variantCount && ad.variantCount > 1 ? (
-                              <span className="f9-longevity-pill">{`×${ad.variantCount} variants`}</span>
-                            ) : null}
-                            <AdAnglePill ad={ad} />
-                          </div>
+                          <h3>{selectedAd.previewHeadline}</h3>
+                          <p>{formatAdDetailBody(selectedAd)}</p>
                         </div>
                       </div>
                     </div>
@@ -1344,123 +1299,23 @@ export default function SearchRoute() {
                         <small>{`Broader matches related to ${displayDomain}`}</small>
                       ) : null}
                     </div>
-                    <em
-                      className={
-                        selectedAd.activeStatusObserved !== false &&
-                        selectedAd.active
-                          ? "is-active"
-                          : ""
-                      }
-                    >
-                      {formatAdActiveStatus(selectedAd)}
-                    </em>
-                  </div>
-
-                  <p className="f9-proof-provenance">
-                    <strong>{formatSearchSourceLabel(visibleResult)}</strong>
-                    <span>{formatSearchFreshnessLabel(visibleResult)}</span>
-                    <span>{formatProofCaptureLabel(selectedAd)}</span>
-                  </p>
-
-                  <div className="f9-detail-hero">
-                    <div className="f9-ad-thumb-row">
-                      <AdThumb ad={selectedAd} />
-                      <div>
-                        <h3>{selectedAd.previewHeadline}</h3>
-                        <p>{formatAdDetailBody(selectedAd)}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <dl className="f9-detail-grid">
-                    <DetailRow label="Hook" value={selectedAd.hook} />
-                    {selectedAdAngle ? (
-                      <DetailRow label="Angle" value={formatAngleDetail(selectedAdAngle)} />
-                    ) : null}
-                    <DetailRow label="Offer" value={formatOfferDisplay(selectedAd.offer)} />
-                    <DetailRow label="CTA" value={selectedAd.cta} />
-                    <DetailRow label="Format" value={selectedAd.format} />
-                    <DetailRow label="Language" value={selectedAd.languageLabel} />
-                    <DetailRow label="Destination" value={selectedAd.destinationType} />
-                  </dl>
-
-                  <div className="f9-proof-block">
-                    <span>Text in the ad</span>
-                    <p>
-                      {creativeTextField
-                        ? formatLandingPageSignalValue(creativeTextField.fieldValue)
-                        : selectionEnrichmentUiPending
-                          ? "Analyzing creative…"
-                          : formatLandingPageSignalValue(null)}
-                    </p>
-                    <small>
-                      {creativeTextField
-                        ? "Read from the ad creative when available."
-                        : selectionEnrichmentUiPending
-                          ? "Reading the ad creative now — this updates in a few seconds."
-                          : "Not detected from the ad snapshot yet."}
-                    </small>
-                  </div>
-
-                  <div className="f9-proof-block">
-                    <span>Landing page</span>
-                    <h3>
-                      {selectedAd.landingPage?.rawHeadline ??
-                        (selectionEnrichmentUiPending
-                          ? "Analyzing creative…"
-                          : "Headline not captured yet")}
-                    </h3>
-                    <dl className="f9-detail-grid">
-                      <DetailRow
-                        label="Primary CTA"
-                        value={formatLandingPageSignalValue(selectedAd.landingPage?.ctaText)}
-                      />
-                      <DetailRow
-                        label="Visible price/offer"
-                        value={formatLandingPageSignalValue(selectedAd.landingPage?.priceText)}
-                      />
-                      <DetailRow
-                        label="Form present"
-                        value={formatLandingPageFormValue(selectedAd.landingPage?.formPresent)}
-                      />
-                      <DetailRow
-                        label="Page check"
-                        value={formatCaptureMethodLabel(selectedAd.landingPage?.captureMethod)}
-                      />
-                    </dl>
-                    {selectedAd.landingPageUrl ? (
-                      <a href={selectedAd.landingPageUrl} rel="noreferrer" target="_blank">
-                        {selectedAd.landingPageUrl}
-                      </a>
-                    ) : (
-                      <small>No landing page URL detected.</small>
-                    )}
-                  </div>
-
-                  <div className="f9-proof-block">
-                    <span>Why this may matter</span>
-                    <p>{selectedAd.researchSummary}</p>
-                  </div>
-
-                  {data.session && data.plan === "free" ? (
-                    <div className="f9-side-note">
-                      <p>Saving ads to a collection starts on Scout.</p>
-                      <Link className="f9-primary-button" to="/app/billing?source=search#plans">
-                        View plans
-                      </Link>
-                    </div>
-                  ) : data.session && data.collections.length > 0 ? (
-                    <Form className="f9-save-stack" method="post">
-                      <input name="intent" type="hidden" value="save-to-collection" />
-                      <input name="adId" type="hidden" value={selectedAd.metaAdId} />
-                      <label className="f9-field">
-                        <span>Collection</span>
-                        <select name="collectionId" required>
-                          {data.collections.map((collection) => (
-                            <option key={collection.id} value={collection.id}>
-                              {collection.name}
-                            </option>
-                          ))}
+                    {visibleAds.length > 1 ? (
+                      <label className="f9-search-field f9-result-sort">
+                        <span className="f9-sr-only">Sort results</span>
+                        <select
+                          aria-label="Sort results"
+                          value={resultSort}
+                          onChange={(event) =>
+                            setResultSort(
+                              parseSearchResultSort(event.target.value),
+                            )
+                          }
+                        >
+                          <option value="active_first">Active first</option>
+                          <option value="longest_running">
+                            Longest running
+                          </option>
+                          <option value="newest">Newest</option>
                         </select>
                       </label>
                     ) : null}
@@ -1493,7 +1348,7 @@ export default function SearchRoute() {
                   </div>
 
                   {searchAnswer ? (
-                    <SearchAnswerPanel answer={searchAnswer} />
+                    <SearchAnswerPanel answer={searchAnswer} steal={stealSummary} />
                   ) : null}
 
                   {!data.session ? (
@@ -1551,10 +1406,16 @@ export default function SearchRoute() {
                                 </span>
                                 <h3>{ad.previewHeadline}</h3>
                                 <div className="f9-result-card-pills">
+                                  {ad.source === "demo" ? (
+                                    <span className="f9-longevity-pill is-sample">
+                                      Sample
+                                    </span>
+                                  ) : null}
                                   <AdLongevityPill ad={ad} />
                                   {ad.variantCount && ad.variantCount > 1 ? (
                                     <span className="f9-longevity-pill">{`×${ad.variantCount} variants`}</span>
                                   ) : null}
+                                  <AdAnglePill ad={ad} />
                                 </div>
                               </div>
                               <p>{formatResultCardSummary(ad)}</p>
@@ -1719,6 +1580,12 @@ export default function SearchRoute() {
 
                       <dl className="f9-detail-grid">
                         <DetailRow label="Hook" value={selectedAd.hook} />
+                        {selectedAdAngle ? (
+                          <DetailRow
+                            label="Angle"
+                            value={formatAngleDetail(selectedAdAngle)}
+                          />
+                        ) : null}
                         <DetailRow
                           label="Offer"
                           value={formatOfferDisplay(selectedAd.offer)}
