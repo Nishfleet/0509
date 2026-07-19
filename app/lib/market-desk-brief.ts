@@ -226,7 +226,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
           state: "queued",
           kicker: "Brief",
           title: "Activation check complete",
-          summary: "Your one-time activation scan is complete. Paid plans include recurring monitoring for future changes.",
+          summary: "Your activation scan is complete. Free checks this competitor weekly and emails a weekly brief; paid plans check every 3–6 hours.",
           action: { href: "/app/billing?source=dashboard#plans", label: "View paid plans" },
           metrics,
           items: activeWatchlists.slice(0, 3).map((watchlist) => ({
@@ -259,7 +259,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
       kicker: "Brief",
       title: isFreePlan ? "Activation scan is queued" : "First sweep is queued",
       summary: isFreePlan
-        ? `${activeCount} competitor${activeCount === 1 ? "" : "s"} ${activeCount === 1 ? "is" : "are"} ready for one activation-only scan. Paid plans include recurring monitoring.`
+        ? `${activeCount} competitor${activeCount === 1 ? "" : "s"} ${activeCount === 1 ? "is" : "are"} ready for the activation scan, then a weekly check. Paid plans check every 3–6 hours.`
         : `${activeCount} competitor${activeCount === 1 ? "" : "s"} ${activeCount === 1 ? "is" : "are"} ready. Scheduled checks run ${input.nextScanLabel}.`,
       action: { href: "/app/watchlists", label: "Open watchlists" },
       metrics,
@@ -277,7 +277,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
     kicker: "Brief",
     title: "Build your brief",
     summary: isFreePlan
-      ? "Add your first competitor for one activation-only scan. Paid plans include recurring monitoring and digests."
+      ? "Add your first competitor — free watches it with a weekly check and a weekly email brief. Paid plans check every 3–6 hours."
       : "Add your first competitor or paste several at once, then Five to Nine turns daily checks into a source-backed brief.",
     action: { href: "/app/onboard?resume=1", label: "Add competitors" },
     metrics,

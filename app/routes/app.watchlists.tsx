@@ -653,7 +653,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       ? {
           ok: true,
           message: plan === "free"
-            ? "Watchlist resumed. Free includes an activation-only scan; paid plans include recurring monitoring."
+            ? "Watchlist resumed. It rejoins the next weekly check; paid plans check every 3–6 hours."
             : "Watchlist resumed. It rejoins the next scheduled scan.",
         }
       : { ok: false, message: "Watchlist not found." };
@@ -793,7 +793,12 @@ export default function WatchlistsRoute() {
   const canReport = canUsePlanFeature(data.plan, "client_reports");
   const canShare = canUsePlanFeature(data.plan, "share_links");
   const canRefresh = data.plan !== "free";
-  const canConfigureDelivery = (data.canManageDelivery ?? true) && data.plan !== "free";
+  const canManageWorkspaceDelivery = data.canManageDelivery ?? true;
+  // Full delivery config (extra targets, channels) stays paid-only; free
+  // owners still manage their weekly digest email settings below.
+  const canConfigureDelivery = canManageWorkspaceDelivery && data.plan !== "free";
+  const canConfigureDigestSettings =
+    canManageWorkspaceDelivery && canUsePlanFeature(data.plan, "weekly_digest");
   const canInstantAlert = canUsePlanFeature(data.plan, "high_priority_alerts");
   const canEmailDelivery = canUsePlanFeature(data.plan, "email_delivery");
   const [searchParams] = useSearchParams();
@@ -939,7 +944,7 @@ export default function WatchlistsRoute() {
                     )}
                     {data.selectedWatchlist.isActive
                       ? data.plan === "free"
-                        ? " · activation-only scan; paid plans include recurring monitoring"
+                        ? ` · next weekly check ${formatNextScanLabel(data.plan, renderedAt, data.effectiveDeliveryConfig.timezone)}; paid plans check every 3–6 hours`
                         : sourceCanSchedule
                           ? ` · next scan ${formatNextScanLabel(data.plan, renderedAt, data.effectiveDeliveryConfig.timezone)}`
                           : " · next scan after source access is ready"
@@ -1328,7 +1333,7 @@ export default function WatchlistsRoute() {
                           Using the default alert settings for this account.
                         </p>
                       ) : null}
-                      {canConfigureDelivery ? <Form method="post" className="f9-work-list is-compact">
+                      {canConfigureDigestSettings ? <Form method="post" className="f9-work-list is-compact">
                         <input name="intent" type="hidden" value="save-delivery-config" />
                         <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
                         <label className="f9-field">
@@ -1388,7 +1393,7 @@ export default function WatchlistsRoute() {
                         )}
                         <label className="f9-field f9-field-inline">
                           <input defaultChecked={data.effectiveDeliveryConfig.digestEnabled} name="digestEnabled" type="checkbox" />
-                          <span>{data.plan === "free" ? "Digest alerts (paid recurring monitoring)" : "Digest alerts"}</span>
+                          <span>{data.plan === "free" ? "Weekly digest email" : "Digest alerts"}</span>
                         </label>
                         {canEmailDelivery ? (
                           <label className="f9-field f9-field-inline">
@@ -1422,11 +1427,8 @@ export default function WatchlistsRoute() {
                       </Form> : (
                         <div className="f9-work-list is-compact">
                           <p className="f9-muted-copy">
-                            Free includes one activation scan only. Recurring monitoring and digest alerts start on a paid plan.
+                            Delivery settings are managed by the workspace owner.
                           </p>
-                          <Link className="f9-primary-button" to="/app/billing?source=watchlists#plans">
-                            Upgrade for delivery alerts
-                          </Link>
                         </div>
                       )}
                     </article>
@@ -2028,7 +2030,9 @@ export function resolveEmptyWatchlistEventCopy(input: {
   const scanName = activationOnly ? "activation scan" : "first scan";
   if ((!input.latestRun && input.lastScannedAt) || input.latestRun?.status === "succeeded") {
     if (activationOnly) {
-      return "No confirmed changes yet — your activation-only scan is complete. Paid plans include recurring monitoring for the next change.";
+      return input.nextScanLabel
+        ? `No confirmed changes yet — your activation scan is complete. Your next weekly check runs ${input.nextScanLabel}; paid plans check every 3–6 hours.`
+        : "No confirmed changes yet — your activation scan is complete. Your watchlist is checked weekly; paid plans check every 3–6 hours.";
     }
     return input.nextScanLabel
       ? `No confirmed changes yet — we'll flag the next one. Next scheduled scan: ${input.nextScanLabel}.`
@@ -2042,7 +2046,7 @@ export function resolveEmptyWatchlistEventCopy(input: {
   }
   if (input.latestRun.status === "running") {
     return activationOnly
-      ? "Your activation scan is running now. Results appear here in a couple of minutes. Paid plans add recurring monitoring."
+      ? "Your activation scan is running now. Results appear here in a couple of minutes. After this, free checks weekly; paid plans check every 3–6 hours."
       : "Your first scan is running now. Results appear here in a couple of minutes.";
   }
   if (input.latestRun.status === "pending") {
@@ -2192,11 +2196,11 @@ function FirstScanBanner(props: {
         ? "This check stopped safely before results were created. Review Recent checks for the reason and recovery path."
         : delayed || timedOut || !props.run
           ? props.plan === "free"
-            ? "The activation scan is queued for recovery. Paid plans add recurring monitoring after activation."
+            ? "The activation scan is queued for recovery. After activation, free checks weekly; paid plans check every 3–6 hours."
             : "The first scan is queued for recovery, and the next scheduled scan remains available."
           : props.run.status === "running"
             ? props.plan === "free"
-              ? "Activation results usually land within a couple of minutes. This page updates by itself. Paid plans add recurring monitoring after activation."
+              ? "Activation results usually land within a couple of minutes. This page updates by itself. After this, free checks weekly; paid plans check every 3–6 hours."
               : "First results usually land within a couple of minutes. This page updates by itself."
             : "The activation scan is waiting for an available monitoring worker. This page updates by itself.";
 

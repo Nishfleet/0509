@@ -399,7 +399,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           current: result.current,
           message:
             result.limit <= 1
-              ? "Free includes 1 activation watchlist and one first scan. Upgrade for recurring monitoring and digests."
+              ? "Free includes 1 watchlist with a weekly check and weekly email brief. Upgrade for 3–6 hour checks and more competitors."
               : "You have reached your competitor tracking limit.",
         }),
         intent,
@@ -423,7 +423,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       ok: true,
       intent,
       message: firstScanQueued
-        ? `Now tracking ${savedQuery.name}. One activation scan is queued now; paid plans include recurring monitoring.`
+        ? `Now tracking ${savedQuery.name}. The activation scan is queued now, then free checks weekly; paid plans check every 3–6 hours.`
         : `Now tracking ${savedQuery.name}. Open Competitors for the latest activation scan status.`,
     };
   }
@@ -563,13 +563,13 @@ export default function AppDashboardRoute() {
           <article className="f9-checkout-banner is-pending" aria-live="polite">
             <div>
               <span className="f9-app-kicker">
-                Plan required for monitoring
+                Free weekly watch
               </span>
-              <h2>Search is free. Retained tracking starts on a paid plan.</h2>
+              <h2>Watch your first competitor free — one weekly email brief.</h2>
               <p>
-                Free includes one activation watchlist and one first scan.
-                Upgrade to Starter or above for recurring monitoring, change
-                digests, and saved evidence on a watchlist.
+                Free includes one watchlist with an activation scan, a weekly
+                check, and a weekly email brief. Upgrade for 3–6 hour checks,
+                daily briefs, and saved evidence.
               </p>
             </div>
             <div className="f9-checkout-banner-actions">
@@ -888,7 +888,7 @@ export default function AppDashboardRoute() {
                   <h2>Being watched</h2>
                   <p className="f9-muted-copy">
                     {plan === "free"
-                      ? "Activation-only scan; paid plans include recurring monitoring."
+                      ? `Next weekly check: ${formatNextScanLabel(plan, new Date(), data.workspaceDeliveryTimezone)}. Paid plans check every 3–6 hours.`
                       : `Next scheduled scan: ${formatNextScanLabel(plan, new Date(), data.workspaceDeliveryTimezone)}`}
                   </p>
                 </div>
