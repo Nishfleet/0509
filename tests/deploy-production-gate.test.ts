@@ -573,6 +573,41 @@ describe("production deployment readiness gate", () => {
     expect(workflow).not.toContain("- name: Production public smoke");
   });
 
+  it("preserves only the explicit non-secret release evidence after every deploy attempt", () => {
+    const workflow = readFileSync(resolve(".github/workflows/deploy-production.yml"), "utf8");
+    const verifyStep = workflow.slice(
+      workflow.indexOf("- name: Verify complete release evidence set"),
+      workflow.indexOf("- name: Preserve release evidence"),
+    );
+    const uploadStep = workflow.slice(workflow.indexOf("- name: Preserve release evidence"));
+
+    expect(verifyStep).toContain("if: success()");
+    expect(verifyStep).toContain("readiness=(test-results/deploy-readiness-*.json)");
+    expect(verifyStep).toContain("wrangler=(test-results/wrangler-deploy-output-*.jsonl)");
+    expect(verifyStep).toContain("rollback=(test-results/worker-rollback-target-*.json)");
+    expect(verifyStep).toContain("gate_c=(test-results/gate-c-*.json)");
+    expect(verifyStep).toContain('[ "${#readiness[@]}" -ge 5 ]');
+    expect(verifyStep).toContain('[ "${#wrangler[@]}" -eq 1 ]');
+    expect(verifyStep).toContain('[ "${#rollback[@]}" -eq 1 ]');
+    expect(verifyStep).toContain('[ "${#gate_c[@]}" -eq 1 ]');
+    expect(verifyStep).toContain("find test-results/gate-b-artifacts -type f -print -quit");
+    expect(uploadStep).toContain("if: always()");
+    expect(uploadStep).toContain("uses: actions/upload-artifact@v7");
+    expect(uploadStep).toContain(
+      "production-release-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}",
+    );
+    expect(uploadStep).toContain("test-results/deploy-readiness-*.json");
+    expect(uploadStep).toContain("test-results/gate-b-manifest-*.json");
+    expect(uploadStep).toContain("test-results/gate-b-artifacts/**");
+    expect(uploadStep).toContain("test-results/wrangler-deploy-output-*.jsonl");
+    expect(uploadStep).toContain("test-results/worker-rollback-target-*.json");
+    expect(uploadStep).toContain("test-results/gate-c-*.json");
+    expect(uploadStep).toContain("if-no-files-found: error");
+    expect(uploadStep).toContain("retention-days: 30");
+    expect(uploadStep).not.toContain("d1-remote-restore-evidence");
+    expect(uploadStep).not.toContain("test-results/**");
+  });
+
   it("accepts only a clean, exact, all-six first-attempt manifest with intact artifacts", () => {
     const evidence = passingEvidence();
     expect(validateDeployReadiness(evidence)).toEqual({ ok: true, issues: [] });

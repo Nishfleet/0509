@@ -91,3 +91,36 @@ jobs:
           D1_REMOTE_RESTORE_EVIDENCE_PATH: test-results/d1-remote-restore-evidence.json
           CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: "false"
         run: npm run deploy
+
+      - name: Verify complete release evidence set
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          readiness=(test-results/deploy-readiness-*.json)
+          wrangler=(test-results/wrangler-deploy-output-*.jsonl)
+          rollback=(test-results/worker-rollback-target-*.json)
+          gate_c=(test-results/gate-c-*.json)
+
+          [ "${#readiness[@]}" -ge 5 ]
+          [ "${#wrangler[@]}" -eq 1 ]
+          [ "${#rollback[@]}" -eq 1 ]
+          [ "${#gate_c[@]}" -eq 1 ]
+          [ -n "$(find test-results/gate-b-artifacts -type f -print -quit)" ]
+
+      - name: Preserve release evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: production-release-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            test-results/deploy-readiness-*.json
+            test-results/gate-b-manifest-*.json
+            test-results/gate-b-artifacts/**
+            test-results/wrangler-deploy-output-*.jsonl
+            test-results/worker-rollback-target-*.json
+            test-results/gate-c-*.json
+          if-no-files-found: error
+          retention-days: 30
