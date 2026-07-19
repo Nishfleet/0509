@@ -9482,3 +9482,54 @@ one signal-green accent.
 .f9-theme-field {
   max-width: 260px;
 }
+
+/* Quick-add palette (workflow-friction pass): first modal in the app.
+   Token-driven so [data-f9-theme="dark"] adapts without overrides. */
+.f9-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  align-items: start;
+  justify-items: center;
+  padding: clamp(16px, 12vh, 120px) 16px 16px;
+  background: rgba(6, 22, 41, 0.42);
+}
+
+.f9-modal {
+  width: min(560px, 100%);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 0 24px 64px rgba(6, 22, 41, 0.28);
+  outline: none;
+}
+
+.f9-quick-add-form {
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+}
+
+.f9-quick-add-hint {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 0.82rem;
+}
+
+.f9-quick-add-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+[data-f9-theme="dark"] .f9-modal-backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+[data-f9-theme="dark"] .f9-quick-add-dialog .f9-field input {
+  border-color: var(--line);
+  background: var(--dk-input);
+  color: var(--ink);
+}
