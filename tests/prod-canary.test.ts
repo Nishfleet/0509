@@ -187,7 +187,7 @@ describe("production canary", () => {
     },
   );
 
-  it("fails a production canary when any health hostname has different release evidence", async () => {
+  it("waits for every production hostname to converge on the deployed release", async () => {
     let requestCount = 0;
     const fetchImpl = vi.fn(async (input: Parameters<typeof fetch>[0]) => {
       const url = String(input);
@@ -217,6 +217,7 @@ describe("production canary", () => {
       });
     });
 
+    const sleepImpl = vi.fn().mockResolvedValue(undefined);
     const report = await runProductionCanary({
       queries: ["nykaa"],
       expectedWorkerVersionId: EXPECTED_WORKER_VERSION_ID,
@@ -224,11 +225,52 @@ describe("production canary", () => {
       fetchImpl,
       benchmarkImpl: vi.fn().mockResolvedValue([current0509Result("ok")]),
       canaryBypassToken: "secret-token",
+      healthConvergenceTimeoutMs: 1,
+      healthConvergenceIntervalMs: 0,
+      sleepImpl,
+    });
+
+    expect(report.passed).toBe(true);
+    expect(report.healthChecks).toHaveLength(3);
+    expect(report.healthChecks.every((check) => check.ok)).toBe(true);
+    expect(sleepImpl).toHaveBeenCalledOnce();
+  });
+
+  it("fails closed when a production hostname never converges", async () => {
+    const fetchImpl = vi.fn(async (input: Parameters<typeof fetch>[0]) => {
+      const url = String(input);
+      if (url.includes("/api/launch-readiness")) {
+        return Response.json({
+          ok: true,
+          blockers: [],
+          signals: {},
+          metaAdsBeta: { ok: true, samples: 24, sampleTarget: 20, successRate: 1, blockers: [] },
+        });
+      }
+      return Response.json({
+        status: "ok",
+        app: "0509",
+        releaseIdentity: {
+          workerVersionId: url.includes("api.0509.io") ? "other-worker" : EXPECTED_WORKER_VERSION_ID,
+          searchRolloutMode: EXPECTED_SEARCH_ROLLOUT_MODE,
+        },
+      });
+    });
+
+    const report = await runProductionCanary({
+      queries: ["nykaa"],
+      expectedWorkerVersionId: EXPECTED_WORKER_VERSION_ID,
+      expectedSearchRolloutMode: EXPECTED_SEARCH_ROLLOUT_MODE,
+      fetchImpl,
+      benchmarkImpl: vi.fn().mockResolvedValue([current0509Result("ok")]),
+      canaryBypassToken: "secret-token",
+      healthConvergenceTimeoutMs: 1,
+      healthConvergenceIntervalMs: 0,
+      sleepImpl: vi.fn().mockResolvedValue(undefined),
     });
 
     expect(report.passed).toBe(false);
-    expect(report.healthChecks).toHaveLength(3);
-    expect(report.healthChecks[1].message).toContain("Worker version mismatch");
+    expect(report.healthChecks[2].message).toContain("Worker version mismatch");
   });
 
   it("does not expose canary secrets in release evidence or formatted output", async () => {

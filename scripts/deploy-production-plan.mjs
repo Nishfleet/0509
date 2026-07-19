@@ -118,6 +118,11 @@ export function buildProductionDeployPlan({
       includeCloudflareCredentials: true,
     },
     {
+      id: "launch_readiness_proof_canary_cycle",
+      command: "node",
+      args: ["scripts/launch-readiness-canary-cycle.mjs"],
+    },
+    {
       id: "post_deploy_release_canary",
       command: "node",
       args: [

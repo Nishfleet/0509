@@ -182,6 +182,11 @@ describe("production deployment readiness gate", () => {
       args: ["scripts/check-partial-refund-invariants.mjs"],
       includeCloudflareCredentials: true,
     });
+    expect(plan[deployIndex + 2]).toMatchObject({
+      id: "launch_readiness_proof_canary_cycle",
+      command: "node",
+      args: ["scripts/launch-readiness-canary-cycle.mjs"],
+    });
     const canaryIndex = plan.findIndex((step: any) => step.id === "post_deploy_release_canary");
     expect(plan[canaryIndex + 1]).toMatchObject({
       id: "partial_refund_invariants_postcanary",
@@ -216,7 +221,8 @@ describe("production deployment readiness gate", () => {
 
   it.each([
     ["partial_refund_invariants_predeploy", "deploy"],
-    ["partial_refund_invariants_postdeploy", "post_deploy_release_canary"],
+    ["partial_refund_invariants_postdeploy", "launch_readiness_proof_canary_cycle"],
+    ["launch_readiness_proof_canary_cycle", "post_deploy_release_canary"],
     ["partial_refund_invariants_postcanary", "live_public_truth"],
   ])("stops at %s before %s", (failureStep, blockedStep) => {
     const plan = buildProductionDeployPlan({
