@@ -81,13 +81,13 @@ export const links: LinksFunction = () => [
     href: "https://fonts.gstatic.com",
     crossOrigin: "anonymous",
   },
+  // PERF: one combined css2 request (one fewer render-blocking stylesheet
+  // fetch) covering exactly the weights app.css uses — Inter 400/500/600/700,
+  // Bricolage Grotesque 600/700 (800 is loaded nowhere in app/), IBM Plex
+  // Mono 400/500/600 — all with display=swap.
   {
     rel: "stylesheet",
-    href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap",
-  },
-  {
-    rel: "stylesheet",
-    href: "https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&display=swap",
+    href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500;600&display=swap",
   },
 ];
 
