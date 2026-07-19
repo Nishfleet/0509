@@ -33,6 +33,10 @@ import type {
   WatchEventStatus,
   WatchEventType,
 } from "~/lib/types";
+
+const PROOF_CAPTURE_CLEANUP_CLAIM_PATH = "$.launchCanaryCleanupClaim";
+const PROOF_CAPTURE_CLEANUP_CLAIMED_ERROR = "proof_capture_cleanup_claimed";
+
 export function legacyWatchEventImportanceScore(eventType: WatchEventType) {
   switch (eventType) {
     case "landing_page_url_changed":
@@ -304,8 +308,9 @@ export async function createWatchEvent(
   ]);
   const timestamp = nowIso();
   const status = input.status ?? "confirmed";
+  const proofCaptureId = input.proofCaptureId ?? null;
   try {
-    await run(
+    const result = await run(
       env,
       `
         INSERT INTO watch_event (
@@ -328,7 +333,16 @@ export async function createWatchEvent(
           last_evaluated_at,
           created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ${proofCaptureId
+          ? `SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+             WHERE NOT EXISTS (
+               SELECT 1
+               FROM proof_capture
+               WHERE id = ?
+                 AND json_valid(capture_metadata_json)
+                 AND json_type(capture_metadata_json, '${PROOF_CAPTURE_CLEANUP_CLAIM_PATH}') IS NOT NULL
+             )`
+          : "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"}
       `,
       id,
       input.watchlistId,
@@ -339,7 +353,7 @@ export async function createWatchEvent(
       input.adId,
       input.baselineFromRunId,
       input.candidateId ?? null,
-      input.proofCaptureId ?? null,
+      proofCaptureId,
       input.title,
       input.summary,
       jsonValue(input.metadata),
@@ -348,7 +362,11 @@ export async function createWatchEvent(
       input.invalidatedAt ?? null,
       input.lastEvaluatedAt ?? timestamp,
       timestamp,
+      ...(proofCaptureId ? [proofCaptureId] : []),
     );
+    if (proofCaptureId && Number(result.meta?.changes ?? 0) !== 1) {
+      throw new Error(PROOF_CAPTURE_CLEANUP_CLAIMED_ERROR);
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (!isUniqueConstraintError(message)) {

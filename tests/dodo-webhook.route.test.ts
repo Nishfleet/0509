@@ -214,6 +214,46 @@ describe("Dodo webhook route", () => {
     );
   });
 
+  it("treats provider-delivered canary metadata as an ordinary guarded webhook without the internal lock header", async () => {
+    const { data } = mockWebhookDependencies({
+      billing: {
+        extractDodoPlanGrant: vi.fn(() => ({
+          userId: "user-1",
+          plan: "starter",
+          paymentId: "pay-provider",
+          productId: "prod_starter_monthly",
+          status: "succeeded",
+          grantedAt: "2026-06-04T12:00:00.000Z",
+          metadata: { canary: "billing" },
+          isBillingCanary: true,
+          billingCanaryLockId: "billing-canary-lock:user-1",
+          billingCanaryExpectedPlanSnapshot: {
+            plan: "starter",
+            planUpdatedAt: "2026-06-04T11:00:00.000Z",
+          },
+        })),
+      },
+    });
+    const { action } = await import("~/routes/api.webhooks.dodo");
+
+    const response = await action({
+      context: {},
+      request: webhookRequest("evt-provider-canary-metadata", { type: "payment.succeeded" }),
+      params: {},
+    } as never);
+
+    expect(response.status).toBe(200);
+    expect(data.beginDodoWebhookEventProcessing).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        eventId: "evt-provider-canary-metadata",
+        userId: "user-1",
+        billingCanaryGuard: "defer_while_locked",
+      }),
+    );
+    expect(data.applyDodoPlanGrantWithWatchlistReconcile.mock.calls[0]).toHaveLength(4);
+  });
+
   it("revokes plan access when a subscription lifecycle event arrives", async () => {
     const { data } = mockWebhookDependencies({
       billing: {
@@ -1757,7 +1797,7 @@ describe("customer lifecycle billing emails", () => {
 
     expect(await redelivery.json()).toMatchObject({ ok: true, revoked: true });
     expect(delivery.sendBillingCancellationEmail).toHaveBeenCalledTimes(2);
-    expect(data.getUserIdForDodoLifecycle).toHaveBeenCalledTimes(1);
+    expect(data.getUserIdForDodoLifecycle).toHaveBeenCalledTimes(2);
   });
 
   it("retains the paid grant and sends one scheduled-cancellation email for plan_changed with the cancel flag", async () => {
@@ -2653,7 +2693,7 @@ describe("customer lifecycle billing emails", () => {
 
     expect(await redelivery.json()).toMatchObject({ ok: true, refunded: true });
     expect(delivery.sendBillingRefundEmail).toHaveBeenCalledTimes(2);
-    expect(data.getUserIdForDodoPayment).toHaveBeenCalledTimes(1);
+    expect(data.getUserIdForDodoPayment).toHaveBeenCalledTimes(2);
   });
 
   it("does not send a merchant receipt for payment grants because Dodo is merchant of record", async () => {

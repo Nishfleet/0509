@@ -149,6 +149,10 @@ interface BrowserRequestLike {
   url(): string;
 }
 
+interface RenderedCaptureOptions {
+  persistArtifacts?: boolean;
+}
+
 export class BrowserRunQuickActionError extends Error {
   constructor(
     message: string,
@@ -174,6 +178,7 @@ export function hasBrowserRunQuickActions<
 export async function captureBrowserRunSnapshot(
   env: AppEnv,
   url: string,
+  options: RenderedCaptureOptions = {},
 ): Promise<LandingPageSnapshotData | null> {
   const publicUrl = await resolvePublicHttpUrl(url);
   if (!env.BROWSER || !publicUrl) {
@@ -213,12 +218,13 @@ export async function captureBrowserRunSnapshot(
       return null;
     }
 
-    return buildBrowserRenderedSnapshot(env, {
+    return await buildBrowserRenderedSnapshot(env, {
       url: targetUrl,
       canonicalUrl,
       html,
       screenshot,
       provider: "cloudflare_browser_run",
+      persistArtifacts: options.persistArtifacts,
     });
   } catch {
     return null;
@@ -274,16 +280,18 @@ function isBrowserlessProofOriginAllowed(env: AppEnv, url: URL) {
 export async function captureRenderedLandingPageSnapshot(
   env: AppEnv,
   url: string,
+  options: RenderedCaptureOptions = {},
 ): Promise<LandingPageSnapshotData | null> {
   return (
-    (await captureBrowserRunSnapshot(env, url)) ??
-    (await captureBrowserlessProofSnapshot(env, url))
+    (await captureBrowserRunSnapshot(env, url, options)) ??
+    (await captureBrowserlessProofSnapshot(env, url, options))
   );
 }
 
 export async function captureBrowserlessProofSnapshot(
   env: AppEnv,
   url: string,
+  options: RenderedCaptureOptions = {},
 ): Promise<LandingPageSnapshotData | null> {
   const publicUrl = await resolvePublicHttpUrl(url);
   if (!env.BROWSERLESS_TOKEN?.trim() || !publicUrl || !isBrowserlessProofOriginAllowed(env, publicUrl)) {
@@ -353,12 +361,13 @@ export async function captureBrowserlessProofSnapshot(
       return null;
     }
 
-    return buildBrowserRenderedSnapshot(env, {
+    return await buildBrowserRenderedSnapshot(env, {
       url: targetUrl,
       canonicalUrl,
       html,
       screenshot: decodeBase64ToUint8Array(screenshotBase64),
       provider: "browserless_bql",
+      persistArtifacts: options.persistArtifacts,
     });
   } catch {
     return null;
@@ -471,6 +480,7 @@ function buildBrowserRenderedSnapshot(
     canonicalUrl: string;
     html: string;
     provider: string;
+    persistArtifacts?: boolean;
     screenshot: Uint8Array | ArrayBuffer | Buffer;
   },
 ): Promise<LandingPageSnapshotData | null> {
@@ -487,7 +497,13 @@ function buildBrowserRenderedSnapshot(
   const headline = resolveHeadline(html);
   const normalized = normalizeHeadline(headline);
 
-  return persistBrowserArtifacts(env, input.canonicalUrl, html, screenshotBytes).then(
+  return persistBrowserArtifacts(
+    env,
+    input.canonicalUrl,
+    html,
+    screenshotBytes,
+    input.persistArtifacts !== false,
+  ).then(
     ({ htmlArtifactKey, screenshotArtifactKey }) => ({
       rawUrl: input.url,
       canonicalUrl: input.canonicalUrl,
@@ -546,8 +562,9 @@ async function persistBrowserArtifacts(
   canonicalUrl: string,
   html: string,
   screenshot: Uint8Array,
+  persistArtifacts: boolean,
 ) {
-  if (!env.LANDING_PAGE_ARTIFACTS) {
+  if (!persistArtifacts || !env.LANDING_PAGE_ARTIFACTS) {
     return {
       htmlArtifactKey: null,
       screenshotArtifactKey: null,
@@ -560,15 +577,6 @@ async function persistBrowserArtifacts(
   const htmlArtifactKey = `${baseKey}.html`;
   const screenshotArtifactKey = `${baseKey}.jpeg`;
 
-  await env.LANDING_PAGE_ARTIFACTS.put(htmlArtifactKey, html, {
-    httpMetadata: {
-      contentType: "text/html; charset=utf-8",
-    },
-    customMetadata: {
-      sourceUrl: canonicalUrl,
-      renderMode: MOBILE_RENDER_MODE,
-    },
-  });
   await env.LANDING_PAGE_ARTIFACTS.put(screenshotArtifactKey, toUint8Array(screenshot), {
     httpMetadata: {
       contentType: "image/jpeg",
@@ -579,6 +587,20 @@ async function persistBrowserArtifacts(
       deviceProfile: MOBILE_DEVICE_PROFILE,
     },
   });
+  try {
+    await env.LANDING_PAGE_ARTIFACTS.put(htmlArtifactKey, html, {
+      httpMetadata: {
+        contentType: "text/html; charset=utf-8",
+      },
+      customMetadata: {
+        sourceUrl: canonicalUrl,
+        renderMode: MOBILE_RENDER_MODE,
+      },
+    });
+  } catch (error) {
+    await env.LANDING_PAGE_ARTIFACTS.delete(screenshotArtifactKey).catch(() => undefined);
+    throw error;
+  }
 
   return {
     htmlArtifactKey,

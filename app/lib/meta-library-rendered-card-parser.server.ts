@@ -10,7 +10,7 @@ export interface ExtractedAdCard {
   adSnapshotUrl: string | null;
   landingPageUrl: string | null;
   platforms: string[];
-  active: boolean;
+  active: boolean | null;
   /** Raw "Started running on <date>" card line; parsed server-side into firstSeenAt. */
   startedRunning?: string | null;
   /** First creative CDN image (fbcdn/scontent) found on the card, if any. */
@@ -29,18 +29,28 @@ export interface RenderedHtmlPayload {
 }
 
 /** Parse Browserless/Quick Actions rendered HTML without depending on a DOM runtime. */
-export function parseRenderedMetaLibraryHtml(content: string): RenderedHtmlPayload {
+export function parseRenderedMetaLibraryHtml(
+  content: string,
+): RenderedHtmlPayload {
   const visibleText = stripHtmlPreservingLines(content);
   const text = visibleText.toLowerCase();
   const cards: ExtractedAdCard[] = [];
   const seen = new Set<string>();
   const anchorRegex = /<a\b[^>]*href=(['"])(.*?)\1[^>]*>([\s\S]*?)<\/a>/gi;
 
-  const adAnchorMatches = Array.from(content.matchAll(anchorRegex)).filter((match) => {
-    const href = decodeHtmlEntity(match[2] ?? "");
-    return /\/ads\/library\/\?/.test(href) || /facebook\.com\/ads\/library\/\?/.test(href);
-  });
-  const cardBlockStarts = buildRenderedCardBlockStarts(content, adAnchorMatches);
+  const adAnchorMatches = Array.from(content.matchAll(anchorRegex)).filter(
+    (match) => {
+      const href = decodeHtmlEntity(match[2] ?? "");
+      return (
+        /\/ads\/library\/\?/.test(href) ||
+        /facebook\.com\/ads\/library\/\?/.test(href)
+      );
+    },
+  );
+  const cardBlockStarts = buildRenderedCardBlockStarts(
+    content,
+    adAnchorMatches,
+  );
   const renderedCardBoundaries = buildRenderedCardBoundaries(content);
 
   for (const match of adAnchorMatches) {
@@ -53,27 +63,48 @@ export function parseRenderedMetaLibraryHtml(content: string): RenderedHtmlPaylo
     seen.add(libraryId);
 
     const anchorStart = match.index ?? 0;
-    const renderedCardBoundary = findRenderedCardBoundary(renderedCardBoundaries, anchorStart);
+    const renderedCardBoundary = findRenderedCardBoundary(
+      renderedCardBoundaries,
+      anchorStart,
+    );
     const contextHtml = renderedCardBoundary
       ? content.slice(renderedCardBoundary.start, renderedCardBoundary.end)
-      : sliceRenderedCardBlock(content, anchorStart, libraryId, cardBlockStarts);
+      : sliceRenderedCardBlock(
+          content,
+          anchorStart,
+          libraryId,
+          cardBlockStarts,
+        );
     const contextLineText = stripHtmlPreservingLines(contextHtml);
-    const body = stripHtml(contextHtml) || stripHtml(match[3] ?? "");
-    const landingPageUrl = extractExternalLink(contextHtml);
+    const localAnchorIndex = contextHtml.indexOf(match[0]);
+    const advertiser = extractRenderedAdvertiser(contextHtml, localAnchorIndex);
+    const body = /(^|\n)Sponsored($|\n)/i.test(contextLineText)
+      ? extractAdCopyFromCardText(contextLineText)
+      : extractRenderedParagraphCopy(contextHtml) ||
+        extractRenderedTrailingEmphasisCopy(contextHtml, localAnchorIndex);
+    const cta = inferCta(contextLineText);
+    const landingPageUrl =
+      extractExternalLink(contextHtml) ??
+      inferLandingPageFromTextBlock(
+        contextLineText
+          .split(/\n+/)
+          .map((line) => line.trim())
+          .filter(Boolean),
+      );
     const media = extractCreativeMediaFromHtml(contextHtml);
     const variantCount = extractVariantCountFromText(contextLineText);
 
     cards.push({
       libraryId,
-      advertiser: null,
-      body,
+      advertiser,
+      body: body || null,
       previewHeadline: stripHtml(match[3] ?? "") || null,
       previewSubhead: null,
-      cta: inferCta(body),
+      cta,
       adSnapshotUrl: absolutizeMetaAdUrl(href),
       landingPageUrl,
-      platforms: inferPlatforms(body),
-      active: !hasStandaloneInactiveLine(contextLineText),
+      platforms: inferPlatforms(contextLineText),
+      active: readStandaloneActiveStatus(contextLineText),
       startedRunning: findStartedRunningLine(contextLineText),
       imageUrl: media.imageUrl,
       hasVideo: media.hasVideo,
@@ -82,7 +113,8 @@ export function parseRenderedMetaLibraryHtml(content: string): RenderedHtmlPaylo
   }
 
   return {
-    cards: cards.length > 0 ? cards : extractTextCardsFromVisibleText(visibleText),
+    cards:
+      cards.length > 0 ? cards : extractTextCardsFromVisibleText(visibleText),
     loginWall:
       /log in|login|sign in|sign into/.test(text) && text.includes("facebook"),
     noResults: hasNoResultsSignal(visibleText),
@@ -91,6 +123,66 @@ export function parseRenderedMetaLibraryHtml(content: string): RenderedHtmlPaylo
       text.includes("too many requests") ||
       text.includes("try again later"),
   };
+}
+
+function extractRenderedAdvertiser(contextHtml: string, anchorIndex: number) {
+  const prefix = anchorIndex >= 0 ? contextHtml.slice(0, anchorIndex) : "";
+  const sponsoredIndex = prefix.search(/(?:^|>)\s*Sponsored\s*(?:<|$)/i);
+  if (sponsoredIndex < 0) {
+    return null;
+  }
+  const advertiserRegion = prefix.slice(0, sponsoredIndex);
+  const matches = Array.from(
+    advertiserRegion.matchAll(
+      /<(?:strong|h3|h4)\b[^>]*>([\s\S]*?)<\/(?:strong|h3|h4)>/gi,
+    ),
+  );
+  const candidates = [
+    ...new Set(
+      matches
+        .map((match) => stripHtml(match[1] ?? ""))
+        .filter((value) => value && !isTextCardUiLine(value)),
+    ),
+  ];
+  return candidates.length === 1 ? candidates[0] : null;
+}
+
+function extractRenderedParagraphCopy(contextHtml: string) {
+  return Array.from(contextHtml.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi))
+    .map((match) => stripHtml(match[1] ?? ""))
+    .map(stripTrailingRenderedUi)
+    .filter((value) => value && !isTextCardUiLine(value))
+    .join("\n")
+    .trim();
+}
+
+function stripTrailingRenderedUi(value: string) {
+  return value
+    .replace(
+      /\s+(?:(?:Instagram|Facebook|Messenger|WhatsApp|Audience Network|Threads)\s*)+(?:(?:Shop now|Learn more|Sign up|Apply now|Book now|Contact us))?\s*$/i,
+      "",
+    )
+    .replace(
+      /([.!?])\s+(?:Shop now|Learn more|Sign up|Apply now|Book now|Contact us)\s*$/i,
+      "$1",
+    )
+    .trim();
+}
+
+function extractRenderedTrailingEmphasisCopy(
+  contextHtml: string,
+  anchorIndex: number,
+) {
+  const suffix = anchorIndex >= 0 ? contextHtml.slice(anchorIndex) : "";
+  return Array.from(
+    suffix.matchAll(
+      /<(?:strong|h3|h4)\b[^>]*>([\s\S]*?)<\/(?:strong|h3|h4)>/gi,
+    ),
+  )
+    .map((match) => stripHtml(match[1] ?? ""))
+    .filter((value) => value && !isTextCardUiLine(value))
+    .join("\n")
+    .trim();
 }
 
 type RenderedCardBlockStart = { libraryId: string; start: number };
@@ -121,9 +213,14 @@ function buildRenderedCardBlockStarts(
     // Meta can place the card status on its own line immediately before the
     // Library ID. Keep that status with this card so the preceding card does
     // not inherit it when slicing at the next Library ID.
-    const start = findStandaloneStatusImmediatelyBefore(content, libraryIdStart) ?? libraryIdStart;
+    const start =
+      findStandaloneStatusImmediatelyBefore(content, libraryIdStart) ??
+      libraryIdStart;
     const current = starts.get(libraryId);
-    starts.set(libraryId, current === undefined ? start : Math.min(current, start));
+    starts.set(
+      libraryId,
+      current === undefined ? start : Math.min(current, start),
+    );
   }
 
   return [...starts]
@@ -131,7 +228,10 @@ function buildRenderedCardBlockStarts(
     .sort((a, b) => a.start - b.start);
 }
 
-function findStandaloneStatusImmediatelyBefore(content: string, beforeIndex: number) {
+function findStandaloneStatusImmediatelyBefore(
+  content: string,
+  beforeIndex: number,
+) {
   const prefix = content.slice(0, beforeIndex);
   const statusRegex =
     /(?:^|>|\r?\n)(?:\s|&nbsp;)*(Active|Inactive)(?:\s|&nbsp;)*(?=<|$|\r?\n)/gi;
@@ -144,7 +244,9 @@ function findStandaloneStatusImmediatelyBefore(content: string, beforeIndex: num
       continue;
     }
 
-    const statusOffset = matched.toLowerCase().lastIndexOf(status.toLowerCase());
+    const statusOffset = matched
+      .toLowerCase()
+      .lastIndexOf(status.toLowerCase());
     if (statusOffset < 0) {
       continue;
     }
@@ -166,14 +268,20 @@ function sliceRenderedCardBlock(
   libraryId: string,
   cardBlockStarts: RenderedCardBlockStart[],
 ) {
-  const current = cardBlockStarts.find((entry) => entry.libraryId === libraryId);
+  const current = cardBlockStarts.find(
+    (entry) => entry.libraryId === libraryId,
+  );
   const blockStart = current?.start ?? anchorStart;
   const next = cardBlockStarts.find((entry) => entry.start > blockStart);
   const blockEnd = next?.start ?? content.length;
   return content.slice(blockStart, Math.max(blockStart, blockEnd));
 }
 
-type RenderedCardBoundary = { start: number; end: number; libraryIds: Set<string> };
+type RenderedCardBoundary = {
+  start: number;
+  end: number;
+  libraryIds: Set<string>;
+};
 type RenderedCardStackEntry = {
   name: string;
   start: number;
@@ -230,7 +338,8 @@ function buildRenderedCardBoundaries(content: string): RenderedCardBoundary[] {
       boundary: isRenderedCardBoundary(rawTag, name),
       libraryIds: new Set<string>(),
     };
-    const libraryId = name === "a" ? extractLibraryIdFromAnchorTag(rawTag) : null;
+    const libraryId =
+      name === "a" ? extractLibraryIdFromAnchorTag(rawTag) : null;
     if (libraryId) {
       for (const ancestor of stack) {
         if (ancestor.boundary) {
@@ -246,11 +355,16 @@ function buildRenderedCardBoundaries(content: string): RenderedCardBoundary[] {
 
 function extractLibraryIdFromAnchorTag(rawTag: string) {
   const href = rawTag.match(/\bhref=(['"])(.*?)\1/i)?.[2];
-  return decodeHtmlEntity(href ?? "").match(/[?&](?:amp;)?id=(\d+)/)?.[1] ?? null;
+  return (
+    decodeHtmlEntity(href ?? "").match(/[?&](?:amp;)?id=(\d+)/)?.[1] ?? null
+  );
 }
 
 /** Prefer the smallest real card boundary with exactly one Library ID. */
-function findRenderedCardBoundary(boundaries: RenderedCardBoundary[], anchorStart: number) {
+function findRenderedCardBoundary(
+  boundaries: RenderedCardBoundary[],
+  anchorStart: number,
+) {
   return (
     boundaries
       .filter(
@@ -259,7 +373,9 @@ function findRenderedCardBoundary(boundaries: RenderedCardBoundary[], anchorStar
           anchorStart < candidate.end &&
           candidate.libraryIds.size === 1,
       )
-      .sort((left, right) => left.end - left.start - (right.end - right.start))[0] ?? null
+      .sort(
+        (left, right) => left.end - left.start - (right.end - right.start),
+      )[0] ?? null
   );
 }
 
@@ -282,7 +398,9 @@ function isRenderedCardBoundary(rawTag: string, name: string) {
   );
 }
 
-export function extractTextCardsFromVisibleText(value: string): ExtractedAdCard[] {
+export function extractTextCardsFromVisibleText(
+  value: string,
+): ExtractedAdCard[] {
   const lines = value
     .replace(/\u200b/g, "\n")
     .replace(/\u00a0/g, " ")
@@ -294,7 +412,9 @@ export function extractTextCardsFromVisibleText(value: string): ExtractedAdCard[
       index,
       match: line.match(/^Library ID:\s*(\d+)/i),
     }))
-    .filter((entry): entry is { index: number; match: RegExpMatchArray } => Boolean(entry.match));
+    .filter((entry): entry is { index: number; match: RegExpMatchArray } =>
+      Boolean(entry.match),
+    );
   const cards: ExtractedAdCard[] = [];
   const seen = new Set<string>();
 
@@ -307,7 +427,9 @@ export function extractTextCardsFromVisibleText(value: string): ExtractedAdCard[
 
     const previousLine = lines[entry.index - 1]?.toLowerCase();
     const blockStart =
-      previousLine === "active" || previousLine === "inactive" ? entry.index - 1 : entry.index;
+      previousLine === "active" || previousLine === "inactive"
+        ? entry.index - 1
+        : entry.index;
     const blockEnd = idIndexes[entryIndex + 1]?.index ?? lines.length;
     const block = lines.slice(blockStart, blockEnd);
     if (!block.some((line) => /^Sponsored$/i.test(line))) {
@@ -330,7 +452,7 @@ export function extractTextCardsFromVisibleText(value: string): ExtractedAdCard[
       adSnapshotUrl: `https://www.facebook.com/ads/library/?id=${libraryId}`,
       landingPageUrl: inferLandingPageFromTextBlock(block),
       platforms: inferPlatforms(blockText),
-      active: !block.some((line) => /^Inactive$/i.test(line)),
+      active: readStandaloneActiveStatus(blockText),
       // isTextCardUiLine keeps this line out of the ad body; the block still
       // carries it, so capture Meta's published start date before it drops.
       startedRunning: findStartedRunningLine(blockText),
@@ -342,7 +464,9 @@ export function extractTextCardsFromVisibleText(value: string): ExtractedAdCard[
 }
 
 /** Parse "N ads use this creative and text" into a variant count. */
-export function extractVariantCountFromText(value: string | null | undefined): number | null {
+export function extractVariantCountFromText(
+  value: string | null | undefined,
+): number | null {
   if (!value) {
     return null;
   }
@@ -366,7 +490,9 @@ export function hasNoResultsSignal(value: string) {
     normalized.includes("no ads match") ||
     normalized.includes("no results") ||
     /\b0\s+results?\b/.test(normalized) ||
-    /\bno\s+(ads?|results?)\s+(match|matched|found|available)\b/.test(normalized) ||
+    /\bno\s+(ads?|results?)\s+(match|matched|found|available)\b/.test(
+      normalized,
+    ) ||
     /\bcouldn.?t find any ads\b/.test(normalized) ||
     /\bcould not find any ads\b/.test(normalized) ||
     /\bwe (didn't|did not) find any results\b/.test(normalized) ||
@@ -375,7 +501,9 @@ export function hasNoResultsSignal(value: string) {
 }
 
 function inferAdvertiserFromTextBlock(block: string[]) {
-  const detailIndex = block.findIndex((line) => /^See (ad|summary) details$/i.test(line));
+  const detailIndex = block.findIndex((line) =>
+    /^See (ad|summary) details$/i.test(line),
+  );
   if (detailIndex >= 0) {
     const advertiser = block
       .slice(detailIndex + 1)
@@ -398,12 +526,17 @@ function inferAdvertiserFromTextBlock(block: string[]) {
 
 export function extractAdBodyLines(block: string[]) {
   const sponsoredIndex = block.findIndex((line) => /^Sponsored$/i.test(line));
-  const afterSponsored = sponsoredIndex >= 0 ? block.slice(sponsoredIndex + 1) : block;
+  const afterSponsored =
+    sponsoredIndex >= 0 ? block.slice(sponsoredIndex + 1) : block;
   const bodyLines: string[] = [];
   const seen = new Set<string>();
 
   for (const line of afterSponsored) {
-    if (isTextCardUiLine(line) || /^Sponsored$/i.test(line)) {
+    if (
+      isTextCardUiLine(line) ||
+      isLandingPageEvidenceLine(line) ||
+      /^Sponsored$/i.test(line)
+    ) {
       continue;
     }
     const normalized = normalizeExtractedBodyLine(line);
@@ -453,6 +586,26 @@ export function truncateAtAdLibraryPageChrome(text: string): string {
     }
   }
   return cutAt >= 0 ? text.slice(0, cutAt).trimEnd() : text;
+
+/** Remove Meta Ad Library controls and metadata before analyzing ad copy. */
+export function extractAdCopyFromCardText(value: string) {
+  const lines = value
+    .replace(/\u200b/g, "\n")
+    .replace(/\u00a0/g, " ")
+    .split(/\n+/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .map(stripTrailingRenderedUi)
+    .filter(Boolean);
+
+  return extractAdBodyLines(lines).join("\n").trim();
+}
+
+export function readStandaloneActiveStatus(value: string) {
+  const status = value
+    .split(/\n+/)
+    .map((line) => line.trim().toLowerCase())
+    .find((line) => line === "active" || line === "inactive");
+  return status === "active" ? true : status === "inactive" ? false : null;
 }
 
 function normalizeExtractedBodyLine(line: string) {
@@ -474,18 +627,37 @@ export function isTextCardUiLine(line: string) {
     /^\d+\s+ads?\s+use this creative and text$/i.test(line) ||
     /^Menu$/i.test(line) ||
     /^See (ad|summary) details$/i.test(line) ||
+    /^View ad details$/i.test(line) ||
+    /^Meta Ad Library result$/i.test(line) ||
+    /^(?:Instagram|Facebook|Messenger|WhatsApp|Audience Network|Threads)$/i.test(
+      line,
+    ) ||
+    /^(?:Shop now|Learn more|Sign up|Apply now|Book now|Contact us)$/i.test(
+      line,
+    ) ||
     /^\d+:\d+\s*\/\s*\d+:\d+/.test(line)
   );
 }
 
+function isLandingPageEvidenceLine(line: string) {
+  const value = line.trim();
+  return (
+    /^[A-Z0-9.-]+\.[A-Z]{2,}(?:\/\S*)?$/i.test(value) ||
+    /^https?:\/\/[^\s]+$/i.test(value)
+  );
+}
+
 function inferLandingPageFromTextBlock(block: string[]) {
-  const domainLine = block.find((line) => /^[A-Z0-9.-]+\.[A-Z]{2,}(?:\/\S*)?$/i.test(line));
+  const domainLine = block.find(isLandingPageEvidenceLine);
   if (!domainLine) {
     return null;
   }
 
   try {
-    return new URL(`https://${domainLine.toLowerCase()}`).toString();
+    const normalized = /^https?:\/\//i.test(domainLine)
+      ? domainLine
+      : `https://${domainLine.toLowerCase()}`;
+    return new URL(normalized).toString();
   } catch {
     return null;
   }
@@ -513,7 +685,10 @@ export function stripHtmlPreservingLines(value: string) {
       .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
       .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
       .replace(/<\s*br\s*\/?>/gi, "\n")
-      .replace(/<\/?(?:article|aside|button|div|h[1-6]|li|main|p|section|strong)\b[^>]*>/gi, "\n")
+      .replace(
+        /<\/?(?:article|aside|button|div|h[1-6]|li|main|p|section|strong)\b[^>]*>/gi,
+        "\n",
+      )
       .replace(/<[^>]+>/g, " ")
       .split(/\n+/)
       .map((line) => line.replace(/\s+/g, " ").trim())
@@ -559,7 +734,9 @@ export function extractCreativeMediaFromHtml(html: string): {
 } {
   const hasVideo = /<video\b/i.test(html);
   const posterMatch = html.match(/<video\b[^>]*\bposter=(['"])(.*?)\1/i);
-  const posterUrl = posterMatch?.[2] ? normalizeCreativeCdnUrl(decodeHtmlEntity(posterMatch[2])) : null;
+  const posterUrl = posterMatch?.[2]
+    ? normalizeCreativeCdnUrl(decodeHtmlEntity(posterMatch[2]))
+    : null;
   if (posterUrl) {
     return { imageUrl: posterUrl, hasVideo: true };
   }
@@ -602,7 +779,9 @@ export function extractCreativeMediaFromHtml(html: string): {
 }
 
 function readHtmlAttribute(attrs: string, name: string) {
-  const match = attrs.match(new RegExp(`\\b${name}\\s*=\\s*(['"])(.*?)\\1`, "i"));
+  const match = attrs.match(
+    new RegExp(`\\b${name}\\s*=\\s*(['"])(.*?)\\1`, "i"),
+  );
   return match?.[2]?.trim() || null;
 }
 
@@ -649,13 +828,20 @@ export function inferCta(text: string | null) {
     return null;
   }
 
-  const match = text.match(/\b(Shop now|Learn more|Sign up|Apply now|Book now|Contact us)\b/i);
+  const match = text.match(
+    /\b(Shop now|Learn more|Sign up|Apply now|Book now|Contact us)\b/i,
+  );
   return match?.[1] ?? null;
 }
 
 export function inferPlatforms(text: string | null) {
   const value = text ?? "";
-  return ["Instagram", "Facebook", "Messenger", "WhatsApp", "Audience Network", "Threads"].filter(
-    (token) => value.includes(token),
-  );
+  return [
+    "Instagram",
+    "Facebook",
+    "Messenger",
+    "WhatsApp",
+    "Audience Network",
+    "Threads",
+  ].filter((token) => value.includes(token));
 }

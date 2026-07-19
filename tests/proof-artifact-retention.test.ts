@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  compensateUncommittedProofArtifacts,
   deleteProofArtifacts,
   getProofArtifactInventory,
   getProofArtifactForOwner,
@@ -25,7 +26,10 @@ type InventoryRow = {
 
 function fakeEnv(row: InventoryRow, r2?: Record<string, unknown>) {
   const prepare = vi.fn(() => ({
-    bind: vi.fn(() => ({ all: vi.fn(async () => ({ results: [row] })) })),
+    bind: vi.fn(() => ({
+      all: vi.fn(async () => ({ results: [row] })),
+      run: vi.fn(async () => ({ meta: { changes: 1 } })),
+    })),
   }));
   return {
     DB: { prepare } as unknown as D1Database,
@@ -39,6 +43,26 @@ function objectHead(key: string): R2Object {
 }
 
 describe("proof artifact retention contract", () => {
+  it("compensates every fresh artifact when D1 ownership was not committed", async () => {
+    const del = vi.fn(async (_key: string) => undefined);
+    const result = await compensateUncommittedProofArtifacts(
+      { LANDING_PAGE_ARTIFACTS: { delete: del } as unknown as R2Bucket } as never,
+      {
+        rawUrl: "https://0509.io/",
+        canonicalUrl: "https://0509.io/",
+        rawHeadline: "0509",
+        normalizedHeadline: "0509",
+        normalizedHeadlineHash: "hash",
+        captureMethod: "browser_render",
+        capturedAt: "2026-07-18T00:00:00.000Z",
+        artifactKey: HTML_KEY,
+        metadata: { screenshotArtifactKey: SCREENSHOT_KEY },
+      },
+    );
+    expect(result).toEqual({ ok: true, deleted: 2, failed: 0 });
+    expect(del.mock.calls.map(([key]) => key)).toEqual([HTML_KEY, SCREENSHOT_KEY]);
+  });
+
   it("accepts only producer-owned HTML and screenshot key shapes", () => {
     expect(parseProofArtifactKey(HTML_KEY)).toEqual({ key: HTML_KEY, kind: "html" });
     expect(parseProofArtifactKey(SCREENSHOT_KEY)).toEqual({ key: SCREENSHOT_KEY, kind: "screenshot" });
@@ -98,7 +122,7 @@ describe("proof artifact retention contract", () => {
     expect(JSON.stringify(inventory)).not.toContain(OTHER_OWNER);
   });
 
-  it("guards shared references and never claims D1 success", async () => {
+  it("revokes only the requesting owner's shared reference without touching R2", async () => {
     const head = vi.fn();
     const del = vi.fn();
     const env = fakeEnv(
@@ -115,10 +139,10 @@ describe("proof artifact retention contract", () => {
     const [result] = await deleteProofArtifacts(env, OWNER, [SCREENSHOT_KEY]);
     expect(result).toEqual({
       key: SCREENSHOT_KEY,
-      ok: false,
-      outcome: "shared_reference",
+      ok: true,
+      outcome: "revoked_shared",
       r2: "not_attempted",
-      d1: "not_updated",
+      d1: "updated",
     });
     expect(head).not.toHaveBeenCalled();
     expect(del).not.toHaveBeenCalled();
@@ -152,7 +176,7 @@ describe("proof artifact retention contract", () => {
       throw new Error("r2 unavailable");
     });
     const htmlEnv = fakeEnv(
-      { reference_count: 1, owner_count: 1, owner_match_count: 1, landing_page_snapshot_references: 1, proof_capture_references: 0 },
+      { reference_count: 1, owner_count: 1, owner_match_count: 1, landing_page_snapshot_references: 0, proof_capture_references: 1 },
       { head: htmlHead, delete: htmlDelete },
     );
     const screenshotEnv = fakeEnv(
@@ -173,14 +197,14 @@ describe("proof artifact retention contract", () => {
       present = false;
     });
     const env = fakeEnv(
-      { reference_count: 1, owner_count: 1, owner_match_count: 1, landing_page_snapshot_references: 1, proof_capture_references: 0 },
+      { reference_count: 1, owner_count: 1, owner_match_count: 1, landing_page_snapshot_references: 0, proof_capture_references: 1 },
       { head, delete: del },
     );
 
     const first = await deleteProofArtifacts(env, OWNER, [HTML_KEY]);
     const second = await deleteProofArtifacts(env, OWNER, [HTML_KEY]);
-    expect(first[0]).toMatchObject({ ok: true, outcome: "deleted", r2: "deleted", d1: "not_updated" });
-    expect(second[0]).toMatchObject({ ok: true, outcome: "missing", r2: "missing", d1: "not_updated" });
+    expect(first[0]).toMatchObject({ ok: true, outcome: "deleted", r2: "deleted", d1: "updated" });
+    expect(second[0]).toMatchObject({ ok: true, outcome: "missing", r2: "missing", d1: "updated" });
     expect(del).toHaveBeenCalledTimes(1);
   });
 

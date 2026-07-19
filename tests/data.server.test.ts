@@ -1574,6 +1574,7 @@ describe("Dodo billing persistence", () => {
         0,
         0,
         0,
+        0,
       ]);
     });
 
@@ -2344,7 +2345,8 @@ describe("Dodo billing persistence", () => {
     expect(statements[0]?.sql).toContain("payload_timestamp");
     expect(statements[1]?.sql).not.toContain("payload_timestamp");
     expect(statements[1]?.sql).toContain("processing_started_at");
-    expect(statements[1]?.sql).toContain("VALUES (?, ?, ?, ?, 'processing', ?, '{}')");
+    expect(statements[1]?.sql).toContain("SELECT ?, ?, ?, ?, 'processing', ?, '{}'");
+    expect(statements[1]?.sql).toContain("WHERE 1 = 1");
     expect(statements[1]?.sql).toContain("outcome = 'processing'");
     expect(statements[1]?.sql).not.toContain("outcome = 'received'");
     expect(statements[1]?.sql).toContain("dodo_webhook_event.outcome = 'failed'");
@@ -3598,9 +3600,11 @@ describe("listRetryableDigestRuns", () => {
     expect(query?.sql).toContain("delivery_attempt.status = 'pending'");
     expect(query?.sql).toContain("delivery_attempt.webhook_status = 'pending'");
     expect(query?.sql).toContain("delivery_attempt.updated_at <= ?");
+    expect(query?.sql).toContain("'$.deliveryClaimProtocol'");
     expect(query?.bindings).toEqual([
       "2026-06-01T00:00:00.000Z",
       "2026-07-13T08:59:00.000Z",
+      "digest_preclaim_v1",
       "atomic-v2",
       25,
     ]);

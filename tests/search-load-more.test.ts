@@ -55,6 +55,7 @@ afterEach(() => {
 describe("search load-more accessibility", () => {
   it("appends unique pages, preserves selection, and resets only when the search identity changes", async () => {
     const {
+      buildSearchResultHref,
       buildSearchAccumulationKey,
       createSearchAccumulationState,
       mergeSearchAccumulationState,
@@ -74,6 +75,7 @@ describe("search load-more accessibility", () => {
     expect(secondKey).not.toBe(firstKey);
 
     const first = createSearchAccumulationState(firstKey, result(), ad);
+    expect(first.adCursorById.get("ad-1")).toBeNull();
     const secondAd = { ...ad, metaAdId: "ad-2", previewHeadline: "Second" };
     const duplicateUpdate = { ...ad, previewHeadline: "Updated first" };
     const merged = mergeSearchAccumulationState(
@@ -85,12 +87,29 @@ describe("search load-more accessibility", () => {
     expect(merged.result.ads.map((item) => item.metaAdId)).toEqual(["ad-1", "ad-2"]);
     expect(merged.result.ads[0]?.previewHeadline).toBe("Updated first");
     expect(merged.selectedAd?.metaAdId).toBe("ad-1");
+    expect(merged.adCursorById.get("ad-1")).toBeNull();
+    expect(merged.adCursorById.get("ad-2")).toBe("cursor-2");
     expect(merged.addedCount).toBe(1);
     expect(merged.result.nextCursor).toBe("cursor-3");
     expect(merged.retryCursor).toBeNull();
 
+    const pageOneHref = new URL(
+      buildSearchResultHref(new URLSearchParams("query=example.com"), "ad-1", merged.adCursorById.get("ad-1") ?? null),
+      "https://0509.io",
+    );
+    expect(pageOneHref.searchParams.get("selected")).toBe("ad-1");
+    expect(pageOneHref.searchParams.has("after")).toBe(false);
+
+    const pageTwoHref = new URL(
+      buildSearchResultHref(new URLSearchParams("query=example.com"), "ad-2", merged.adCursorById.get("ad-2") ?? null),
+      "https://0509.io",
+    );
+    expect(pageTwoHref.searchParams.get("selected")).toBe("ad-2");
+    expect(pageTwoHref.searchParams.get("after")).toBe("cursor-2");
+
     const reset = createSearchAccumulationState(secondKey, result({ ads: [secondAd] }), secondAd);
     expect(reset.result.ads.map((item) => item.metaAdId)).toEqual(["ad-2"]);
+    expect(reset.adCursorById).toEqual(new Map([["ad-2", null]]));
   });
 
   it("keeps earlier cards and the same cursor when a later page is delayed", async () => {
@@ -111,6 +130,98 @@ describe("search load-more accessibility", () => {
     expect(delayed.result.nextCursor).toBe("cursor-2");
     expect(delayed.retryCursor).toBe("cursor-2");
     expect(delayed.selectedAd).toEqual(ad);
+    expect(delayed.adCursorById).toEqual(first.adCursorById);
+  });
+
+  it("preserves the furthest cursor across a selection-only reload", async () => {
+    const { createSearchAccumulationState, mergeSearchAccumulationState } = await import(
+      "~/routes/search"
+    );
+    const first = createSearchAccumulationState("search-1", result(), ad);
+    const secondAd = { ...ad, metaAdId: "ad-2", previewHeadline: "Second" };
+    const accumulated = mergeSearchAccumulationState(
+      first,
+      result({ ads: [secondAd], nextCursor: "cursor-3" }),
+      { requestedCursor: "cursor-2", selectedAd: null },
+    );
+    const reloaded = mergeSearchAccumulationState(
+      accumulated,
+      result({ ads: [ad], nextCursor: "cursor-2" }),
+      { requestedCursor: null, selectedAd: secondAd },
+    );
+
+    expect(reloaded.result.ads.map((item) => item.metaAdId)).toEqual(["ad-1", "ad-2"]);
+    expect(reloaded.result.nextCursor).toBe("cursor-3");
+    expect(reloaded.selectedAd?.metaAdId).toBe("ad-2");
+  });
+
+  it("does not resurrect pagination after a terminal selection-only reload", async () => {
+    const { createSearchAccumulationState, mergeSearchAccumulationState } = await import(
+      "~/routes/search"
+    );
+    const terminal = createSearchAccumulationState(
+      "search-1",
+      result({ nextCursor: null }),
+      ad,
+    );
+    const reloaded = mergeSearchAccumulationState(
+      terminal,
+      result({ nextCursor: "cursor-2" }),
+      { requestedCursor: null, selectedAd: ad },
+    );
+
+    expect(reloaded.result.nextCursor).toBeNull();
+  });
+
+  it("does not resurrect terminal pagination when selecting a later-page ad", async () => {
+    const { createSearchAccumulationState, mergeSearchAccumulationState } = await import(
+      "~/routes/search"
+    );
+    const laterAd = { ...ad, metaAdId: "ad-2", previewHeadline: "Later" };
+    const terminal = createSearchAccumulationState(
+      "search-1",
+      result({ ads: [ad, laterAd], nextCursor: null }),
+      ad,
+      "cursor-2",
+    );
+    const reloaded = mergeSearchAccumulationState(
+      terminal,
+      result({ ads: [laterAd], nextCursor: "cursor-3" }),
+      {
+        requestedCursor: "cursor-2",
+        selectedAd: laterAd,
+        selectionNavigation: true,
+      },
+    );
+
+    expect(reloaded.result.ads.map((item) => item.metaAdId)).toEqual(["ad-1", "ad-2"]);
+    expect(reloaded.result.nextCursor).toBeNull();
+    expect(reloaded.selectedAd?.metaAdId).toBe("ad-2");
+  });
+
+  it("keeps terminal pagination when a selected later-page ad is temporarily absent", async () => {
+    const { createSearchAccumulationState, mergeSearchAccumulationState } = await import(
+      "~/routes/search"
+    );
+    const terminal = createSearchAccumulationState(
+      "search-1",
+      result({ nextCursor: null }),
+      ad,
+      "cursor-2",
+    );
+    const reloaded = mergeSearchAccumulationState(
+      terminal,
+      result({ ads: [], nextCursor: "cursor-3", discoveryStatus: "degraded" }),
+      {
+        requestedCursor: "cursor-2",
+        selectedAd: null,
+        selectionNavigation: true,
+      },
+    );
+
+    expect(reloaded.result.nextCursor).toBeNull();
+    expect(reloaded.selectedAd).toEqual(ad);
+    expect(reloaded.retryCursor).toBeNull();
   });
 
   it("announces loading, result counts, completion, and delayed checks without raw errors", async () => {

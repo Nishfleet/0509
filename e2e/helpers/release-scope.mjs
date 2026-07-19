@@ -1,6 +1,25 @@
 const JOURNEY_TOKEN_PATTERN = /^[1-6]$/u;
 
 export const ALL_RELEASE_JOURNEYS = Object.freeze([1, 2, 3, 4, 5, 6]);
+export const RELEASE_PROOF_PROJECTS = Object.freeze([
+  "local-release",
+  "local-release-firefox",
+  "local-release-webkit",
+  "local-release-mobile-safari",
+  "local-release-mobile-chrome",
+]);
+
+/**
+ * @param {Record<string, string | undefined>} [env]
+ * @returns {string}
+ */
+export function resolveReleaseProofProject(env = process.env) {
+  const project = env.E2E_RELEASE_PROJECT ?? "local-release";
+  if (!RELEASE_PROOF_PROJECTS.includes(project)) {
+    throw new Error("invalid_release_browser_project");
+  }
+  return project;
+}
 
 /** @param {unknown} value @returns {number[]} */
 export function parseJourneyScope(value) {

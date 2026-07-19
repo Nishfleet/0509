@@ -26,6 +26,7 @@ import {
 	DIGEST_ITEM_SET_PROVENANCE,
 	selectDigestCohort,
 } from "~/lib/digest-provenance";
+import { DIGEST_PROVIDER_CLAIM_PROTOCOL } from "~/lib/delivery-attempt-lease";
 import type { AppEnv } from "~/lib/env.server";
 import type {
   DigestDeliveryRecord,
@@ -33,6 +34,9 @@ import type {
   DigestRecord,
   WatchEventType,
 } from "~/lib/types";
+
+const PROOF_CAPTURE_CLEANUP_CLAIM_PATH = "$.launchCanaryCleanupClaim";
+const PROOF_CAPTURE_CLEANUP_CLAIMED_ERROR = "proof_capture_cleanup_claimed";
 
 interface DigestRunRow {
   id: string;
@@ -558,6 +562,21 @@ export async function createDigestRun(
 	const itemInputs = options?.items;
   const cohort =
     itemInputs === undefined ? null : selectDigestCohort(itemInputs);
+	const persistedItems = cohort === null
+		? null
+		: cohort.items.map((input) => ({
+				id: createId(),
+				watchlistId: input.watchlistId,
+				watchlistName: input.watchlistName,
+				eventType: input.eventType,
+				title: input.title,
+				summary: input.summary,
+				metadata: input.metadata ?? {},
+			}));
+	const persistedItemsJson = persistedItems === null ? null : JSON.stringify(persistedItems);
+	const hasProofCaptureReferences = persistedItems?.some(
+		(item) => typeof item.metadata.proofCaptureId === "string" && item.metadata.proofCaptureId.length > 0,
+	) === true;
   const persistedSummary =
     itemInputs === undefined
 		? summary
@@ -571,27 +590,41 @@ export async function createDigestRun(
 			};
 	const insertStatement = db
 		.prepare(
-      `
-      INSERT INTO digest_run (
+	      `
+	      INSERT INTO digest_run (
         id,
         user_id,
         period_start,
         period_end,
-        summary_json,
-        created_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(user_id, period_start, period_end) DO NOTHING
-    `,
+	        summary_json,
+	        created_at
+	      )
+	      ${hasProofCaptureReferences
+				? `SELECT ?, ?, ?, ?, ?, ?
+				   WHERE NOT EXISTS (
+				     SELECT 1
+				     FROM json_each(?) AS candidate
+				     INNER JOIN proof_capture
+				       ON proof_capture.id = json_extract(candidate.value, '$.metadata.proofCaptureId')
+				     WHERE json_valid(proof_capture.capture_metadata_json)
+				       AND json_type(
+				         proof_capture.capture_metadata_json,
+				         '${PROOF_CAPTURE_CLEANUP_CLAIM_PATH}'
+				       ) IS NOT NULL
+				   )`
+				: "VALUES (?, ?, ?, ?, ?, ?)"}
+	      ON CONFLICT(user_id, period_start, period_end) DO NOTHING
+	    `,
 		)
 		.bind(
 			id,
 			userId,
 			periodStart,
 			periodEnd,
-			jsonValue(persistedSummary),
-			createdAt,
-		);
+				jsonValue(persistedSummary),
+				createdAt,
+				...(hasProofCaptureReferences ? [persistedItemsJson] : []),
+			);
 
   const itemInsert =
     cohort === null
@@ -615,22 +648,12 @@ export async function createDigestRun(
 					  INNER JOIN digest_run ON digest_run.id = ?
 					`,
 				)
-				.bind(
-					id,
-					createdAt,
-					JSON.stringify(
-						cohort.items.map((input) => ({
-							id: createId(),
-							watchlistId: input.watchlistId,
-							watchlistName: input.watchlistName,
-							eventType: input.eventType,
-							title: input.title,
-							summary: input.summary,
-							metadata: input.metadata ?? {},
-						})),
-					),
-					id,
-				);
+					.bind(
+						id,
+						createdAt,
+						persistedItemsJson,
+						id,
+					);
   const results =
     itemInsert === null
 		? [await insertStatement.run()]
@@ -657,7 +680,10 @@ export async function createDigestRun(
   );
 
 	if (!row) {
-    throw new Error(
+		if (hasProofCaptureReferences) {
+			throw new Error(PROOF_CAPTURE_CLEANUP_CLAIMED_ERROR);
+		}
+	    throw new Error(
       "Digest period claim was not created and no existing run was found.",
     );
 	}
@@ -859,7 +885,10 @@ export async function addDigestItem(
   digestRunId: string,
 	input: DigestRunItemInput,
 ) {
-  await run(
+  const proofCaptureId = typeof input.metadata?.proofCaptureId === "string" && input.metadata.proofCaptureId.length > 0
+    ? input.metadata.proofCaptureId
+    : null;
+  const result = await run(
     env,
     `
       INSERT INTO digest_item (
@@ -873,7 +902,16 @@ export async function addDigestItem(
         metadata_json,
         created_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ${proofCaptureId
+        ? `SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+           WHERE NOT EXISTS (
+             SELECT 1
+             FROM proof_capture
+             WHERE id = ?
+               AND json_valid(capture_metadata_json)
+               AND json_type(capture_metadata_json, '${PROOF_CAPTURE_CLEANUP_CLAIM_PATH}') IS NOT NULL
+           )`
+        : "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"}
     `,
     createId(),
     digestRunId,
@@ -884,7 +922,11 @@ export async function addDigestItem(
     input.summary,
     jsonValue(input.metadata ?? {}),
     nowIso(),
+    ...(proofCaptureId ? [proofCaptureId] : []),
   );
+  if (proofCaptureId && Number(result.meta?.changes ?? 0) !== 1) {
+    throw new Error(PROOF_CAPTURE_CLEANUP_CLAIMED_ERROR);
+  }
 }
 
 export async function upsertDigestDelivery(
@@ -1161,6 +1203,10 @@ export async function listRetryableDigestRuns(
               AND delivery_attempt.status = 'pending'
               AND delivery_attempt.webhook_status = 'pending'
               AND delivery_attempt.updated_at <= ?
+              AND json_extract(
+                delivery_attempt.payload_snapshot_json,
+                '$.deliveryClaimProtocol'
+              ) = ?
           )
           OR (
             user.emailVerified = 1
@@ -1237,6 +1283,7 @@ export async function listRetryableDigestRuns(
     `,
     input.since,
 		input.stalePreDispatchBefore,
+		DIGEST_PROVIDER_CLAIM_PROTOCOL,
 		DIGEST_ITEM_SET_PROVENANCE,
     input.limit,
   );

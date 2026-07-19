@@ -8,6 +8,7 @@ const scopeModule = await import("../e2e/helpers/release-scope.mjs");
 const {
   hasMinimumTouchTarget,
   hasVisibleFocusTreatment,
+  focusAdvanceKey,
   horizontalOverflowPx,
   reducedMotionIssues,
 } = evaluatorModule;
@@ -16,6 +17,7 @@ const {
   parseJourneyScope,
   resolveJourneyScope,
   resolveReleaseProofInvocation,
+  resolveReleaseProofProject,
 } = scopeModule;
 
 describe("release experience pure contract evaluators", () => {
@@ -53,6 +55,25 @@ describe("release experience pure contract evaluators", () => {
     });
   });
 
+  it("accepts only declared release browser projects and defaults to Chromium", () => {
+    expect(resolveReleaseProofProject({})).toBe("local-release");
+    expect(resolveReleaseProofProject({ E2E_RELEASE_PROJECT: "local-release-firefox" })).toBe(
+      "local-release-firefox",
+    );
+    expect(resolveReleaseProofProject({ E2E_RELEASE_PROJECT: "local-release-webkit" })).toBe(
+      "local-release-webkit",
+    );
+    expect(resolveReleaseProofProject({ E2E_RELEASE_PROJECT: "local-release-mobile-safari" })).toBe(
+      "local-release-mobile-safari",
+    );
+    expect(resolveReleaseProofProject({ E2E_RELEASE_PROJECT: "local-release-mobile-chrome" })).toBe(
+      "local-release-mobile-chrome",
+    );
+    expect(() => resolveReleaseProofProject({ E2E_RELEASE_PROJECT: "prod-auth" })).toThrow(
+      "invalid_release_browser_project",
+    );
+  });
+
   it("calculates document and nested horizontal overflow", () => {
     expect(horizontalOverflowPx({ scrollWidth: 375, clientWidth: 375 })).toBe(0);
     expect(horizontalOverflowPx({ scrollWidth: 376, clientWidth: 375 })).toBe(1);
@@ -61,8 +82,15 @@ describe("release experience pure contract evaluators", () => {
 
   it("requires actionable controls to meet the 44px touch target", () => {
     expect(hasMinimumTouchTarget({ width: 44, height: 44 })).toBe(true);
+    expect(hasMinimumTouchTarget({ width: 43.9999, height: 44 })).toBe(true);
     expect(hasMinimumTouchTarget({ width: 43.99, height: 44 })).toBe(false);
     expect(hasMinimumTouchTarget({ width: 48, height: 40 })).toBe(false);
+  });
+
+  it("uses Safari's real link-focus gesture without changing other keyboard transitions", () => {
+    expect(focusAdvanceKey("webkit")).toBe("Alt+Tab");
+    expect(focusAdvanceKey("firefox")).toBe("Tab");
+    expect(focusAdvanceKey("webkit", "Shift+Tab")).toBe("Shift+Tab");
   });
 
   it("recognizes visible keyboard focus treatments", () => {

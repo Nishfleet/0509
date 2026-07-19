@@ -28,7 +28,9 @@ function seedBillingSchema(sqlite: ReturnType<typeof createSqliteD1>["sqlite"]) 
       dodo_next_billing_at TEXT,
       dodo_plan_change_product_id TEXT,
       dodo_status TEXT,
-      plan_updated_at TEXT
+      plan_updated_at TEXT,
+      evidence_entitlement_anchor TEXT,
+      evidence_entitlement_anchor_source TEXT
     );
 
     CREATE TABLE watchlist (

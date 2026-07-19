@@ -1,5 +1,6 @@
 import type { AppEnv } from "~/lib/env.server";
 import { ensureDb, execute as runStatement, queryOne as one } from "~/lib/data/d1.server";
+import { billingCanaryMutationGuardSql } from "~/lib/data/billing-canary-lock.server";
 import { logAppEvent } from "~/lib/log.server";
 import { getWatchlist } from "~/lib/data.server";
 import { getScheduledMonitoringPolicy } from "~/lib/plan-entitlements";
@@ -994,6 +995,7 @@ export async function finishOrchestratedWatchlistRun(
   const summaryJson = JSON.stringify(input.summary);
   if (input.status === "succeeded" && input.touchWatchlistId) {
     const db = ensureDb(env);
+    const billingCanaryGuard = await billingCanaryMutationGuardSql(env, "watchlist.user_id");
     if (typeof db.batch !== "function") {
       throw new Error(
         "D1 batch is required to atomically finalize an orchestrated scan and its watchlist.",
@@ -1005,6 +1007,7 @@ export async function finishOrchestratedWatchlistRun(
           UPDATE watchlist
           SET last_scanned_at = ?, updated_at = ?
           WHERE id = ?
+            ${billingCanaryGuard}
             AND EXISTS (
               SELECT 1
               FROM watchlist_run

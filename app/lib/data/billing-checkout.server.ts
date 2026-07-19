@@ -1,4 +1,5 @@
 import { ensureDb } from "~/lib/data/d1.server";
+import { billingCanaryMutationGuardSql } from "~/lib/data/billing-canary-lock.server";
 import { nowIso } from "~/lib/data/helpers.server";
 import { validIsoTimestamp } from "~/lib/data/billing-helpers.server";
 import type { AppEnv } from "~/lib/env.server";
@@ -43,6 +44,7 @@ export async function claimDodoSubscriptionPlanChange(
   ) {
     const db = ensureDb(env);
     const claimedAt = nowIso();
+    const billingCanaryGuard = await billingCanaryMutationGuardSql(env, "user_plan.user_id");
     const result = await db.prepare(`
         UPDATE user_plan
       SET dodo_status = ?,
@@ -75,6 +77,7 @@ export async function claimDodoSubscriptionPlanChange(
               'cancellation_scheduled'
             )
           )
+          ${billingCanaryGuard}
       `)
     .bind(
       input.status,

@@ -44,4 +44,27 @@ describe("scheduled billing lifecycle email recovery", () => {
 			error,
 		);
 	});
+
+	it("observes the exact original recovery promise without changing the existing work chain", async () => {
+		const pending: Promise<unknown>[] = [];
+		const recoveryPromise = Promise.resolve({ claimed: 0 });
+		const recover = vi.fn().mockReturnValue(recoveryPromise);
+		const observe = vi.fn((_env, _ctx, _input, promise) => promise);
+		const observationContext = { cron: "0 */3 * * *", scheduledTime: 1_768_521_600_000 };
+
+		scheduleBillingLifecycleEmailRecovery(
+			{} as never,
+			{ waitUntil: (promise) => pending.push(promise) },
+			{ recover, observe: observe as never, observationContext },
+		);
+
+		expect(observe).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.anything(),
+			{ ...observationContext, taskName: "billing_lifecycle_email_recovery" },
+			recoveryPromise,
+		);
+		expect(pending).toHaveLength(1);
+		await pending[0];
+	});
 });

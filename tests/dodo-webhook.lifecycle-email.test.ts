@@ -311,7 +311,7 @@ describe("customer lifecycle billing emails", () => {
 				stateUpdatedAt: "2026-07-01T00:00:00.000Z",
 			}),
 		);
-		expect(data.getUserIdForDodoLifecycle).toHaveBeenCalledTimes(1);
+  expect(data.getUserIdForDodoLifecycle).toHaveBeenCalledTimes(2);
 	});
 
 	it("retains the paid grant and sends one scheduled-cancellation email for plan_changed with the cancel flag", async () => {

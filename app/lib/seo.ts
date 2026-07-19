@@ -119,6 +119,8 @@ export function jsonLdScriptProps(data: unknown) {
 }
 
 const SITEMAP_PATHS = [
+
+export const SITEMAP_PATHS = [
   "/",
   "/search",
   "/auth/signup",

@@ -328,6 +328,85 @@ describe("search execution cache probing", () => {
     expect(execution.result.ads).toHaveLength(1);
     expect(execution.result.ads[0]?.domainMatch?.matchedDomain).toBe("nykaa.com");
   });
+
+  it("does not merge persisted account evidence into anonymous V2 results", async () => {
+    const publicAd = {
+      metaAdId: "meta-nykaa-public",
+      advertiser: "Nykaa",
+      body: "Sale",
+      previewHeadline: "Sale",
+      previewSubhead: "",
+      hook: "Sale",
+      offer: "Sale",
+      cta: "Shop now",
+      format: "image" as const,
+      languageLabel: "English",
+      destinationType: "website" as const,
+      landingPageUrl: "https://nykaa.com/sale",
+      adSnapshotUrl: null,
+      countries: ["India"],
+      platforms: ["Instagram"],
+      firstSeenAt: null,
+      lastSeenAt: null,
+      active: true,
+      researchSummary: "Summary",
+      source: "meta_library_browser" as const,
+      analysisFields: [],
+    };
+    searchAdsViaSourceResolver.mockResolvedValue({
+      ads: [publicAd],
+      nextCursor: null,
+      source: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+    });
+    hydrateAdsWithPersistedCreatives.mockResolvedValue([{
+      ...publicAd,
+      translatedText: "Private account translation",
+      landingPage: {
+        rawUrl: "https://nykaa.com/private",
+        canonicalUrl: "https://nykaa.com/private",
+        rawHeadline: "Private saved headline",
+        normalizedHeadline: "private saved headline",
+        normalizedHeadlineHash: "private",
+        captureMethod: "browser_render",
+        capturedAt: "2026-07-19T00:00:00.000Z",
+      },
+    }]);
+    const { executeSearchWithRelevance } = await import("~/lib/search-execution.server");
+
+    const execution = await executeSearchWithRelevance({
+      env: { DB: {}, SEARCH_ROLLOUT_MODE: "v2" } as never,
+      competitorWebsite: {
+        raw: "https://www.nykaa.com",
+        normalizedUrl: "https://nykaa.com",
+        host: "nykaa.com",
+        displayName: "Nykaa",
+        searchTerm: "nykaa.com",
+        error: null,
+      },
+      parsed: {
+        mode: "advertiser",
+        filters: {
+          query: "nykaa.com",
+          country: "all",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+        fingerprint: "legacy-fingerprint",
+      },
+      scope: "exact",
+      hydratePersisted: false,
+    });
+
+    expect(hydrateAdsWithPersistedCreatives).not.toHaveBeenCalled();
+    expect(execution.result.ads).toHaveLength(1);
+    expect(execution.result.ads[0]).not.toHaveProperty("translatedText");
+    expect(execution.result.ads[0]).not.toHaveProperty("landingPage");
+  });
 });
 
 describe("search observability privacy", () => {

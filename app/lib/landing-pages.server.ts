@@ -21,6 +21,8 @@ const LANDING_PAGE_FETCH_TIMEOUT_MS = 12_000;
 
 interface CaptureLandingPageSnapshotOptions {
   allowRenderedFallback?: boolean;
+  /** Persist only when the caller will create an owner-addressable D1 reference. */
+  persistArtifacts?: boolean;
   preferRendered?: boolean;
 }
 
@@ -82,14 +84,14 @@ async function captureLandingPageSnapshotAt(
       releaseFetchTimeout(response);
       return options.allowRenderedFallback === false
         ? null
-        : captureRenderedLandingPageSnapshot(env, finalUrl.toString());
+        : captureRenderedSnapshot(env, finalUrl.toString(), options);
     }
 
     const html = await readResponseTextWithinLimit(response, MAX_LANDING_PAGE_HTML_BYTES);
     if (!html) {
       return options.allowRenderedFallback === false
         ? null
-        : captureRenderedLandingPageSnapshot(env, finalUrl.toString());
+        : captureRenderedSnapshot(env, finalUrl.toString(), options);
     }
     const signals = extractLandingPageSignals(html);
     const headline =
@@ -100,15 +102,15 @@ async function captureLandingPageSnapshotAt(
 
     const normalized = normalizeHeadline(headline);
     const canonicalUrl = finalUrl.toString();
-    const artifactKey = env.LANDING_PAGE_ARTIFACTS
-      ? await persistArtifact(env.LANDING_PAGE_ARTIFACTS, canonicalUrl, html)
-      : null;
     if (options.preferRendered) {
-      const renderedSnapshot = await captureRenderedLandingPageSnapshot(env, canonicalUrl);
+      const renderedSnapshot = await captureRenderedSnapshot(env, canonicalUrl, options);
       if (renderedSnapshot) {
         return renderedSnapshot;
       }
     }
+    const artifactKey = options.persistArtifacts !== false && env.LANDING_PAGE_ARTIFACTS
+      ? await persistArtifact(env.LANDING_PAGE_ARTIFACTS, canonicalUrl, html)
+      : null;
 
     return {
       rawUrl: url.toString(),
@@ -129,8 +131,18 @@ async function captureLandingPageSnapshotAt(
   } catch {
     return options.allowRenderedFallback === false
       ? null
-      : captureRenderedLandingPageSnapshot(env, url.toString());
+      : captureRenderedSnapshot(env, url.toString(), options);
   }
+}
+
+function captureRenderedSnapshot(
+  env: AppEnv,
+  url: string,
+  options: CaptureLandingPageSnapshotOptions,
+) {
+  return options.persistArtifacts === false
+    ? captureRenderedLandingPageSnapshot(env, url, { persistArtifacts: false })
+    : captureRenderedLandingPageSnapshot(env, url);
 }
 
 function isRedirectStatus(status: number) {

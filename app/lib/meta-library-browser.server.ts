@@ -1,7 +1,6 @@
 import puppeteer from "@cloudflare/puppeteer";
 
 import {
-  composeResearchSummary,
   inferDestinationType,
   inferLanguageLabel,
   resolveHookAndOffer,
@@ -16,25 +15,31 @@ import {
   hasBrowserRunQuickActions,
 } from "~/lib/browser-run.server";
 import { isoFromCountryName } from "~/lib/countries";
-import { findStartedRunningLine, parseStartedRunningDate } from "~/lib/meta-ad-dates";
+import {
+  findStartedRunningLine,
+  parseStartedRunningDate,
+} from "~/lib/meta-ad-dates";
 import {
   absolutizeMetaAdUrl,
   decodeHtmlEntity,
   extractCreativeMediaFromHtml,
+  extractAdCopyFromCardText,
   extractExternalLink,
   extractTextCardsFromVisibleText,
   hasNoResultsSignal,
-  hasStandaloneInactiveLine,
   inferCta,
   inferPlatforms,
   parseRenderedMetaLibraryHtml,
-  stripAdLibraryUiChromeFromBody,
+  readStandaloneActiveStatus,
   stripHtml,
   stripHtmlPreservingLines,
   type ExtractedAdCard,
 } from "~/lib/meta-library-rendered-card-parser.server";
 import type { AppEnv, BrowserBinding } from "~/lib/env.server";
-import { fetchWithTimeout, promiseWithTimeout } from "~/lib/fetch-timeout.server";
+import {
+  fetchWithTimeout,
+  promiseWithTimeout,
+} from "~/lib/fetch-timeout.server";
 import type {
   AdRecord,
   DiscoveryFailureClass,
@@ -121,7 +126,9 @@ interface QuickActionExtractionPayload {
 }
 
 type BrowserInstance = Awaited<ReturnType<typeof puppeteer.launch>>;
-type BrowserContext = Awaited<ReturnType<BrowserInstance["createBrowserContext"]>>;
+type BrowserContext = Awaited<
+  ReturnType<BrowserInstance["createBrowserContext"]>
+>;
 type BrowserPage = Awaited<ReturnType<BrowserContext["newPage"]>>;
 
 export class CommercialDiscoveryError extends Error {
@@ -148,7 +155,11 @@ export async function searchMetaLibraryByBrowser(
   const browserBinding = env.BROWSER;
   const mode: MetaLibraryBrowserMode = options.mode ?? "shallow";
 
-  if (!browserBinding && !hasBrowserRunQuickActions(env) && !hasBrowserlessBql(env)) {
+  if (
+    !browserBinding &&
+    !hasBrowserRunQuickActions(env) &&
+    !hasBrowserlessBql(env)
+  ) {
     throw new CommercialDiscoveryError(
       "Browser Run is not configured for commercial discovery.",
       "browser_unavailable",
@@ -161,7 +172,12 @@ export async function searchMetaLibraryByBrowser(
     }
 
     try {
-      return await searchMetaLibraryViaSessions(env, browserBinding, query, mode);
+      return await searchMetaLibraryViaSessions(
+        env,
+        browserBinding,
+        query,
+        mode,
+      );
     } catch (error) {
       const normalizedError = normalizeCommercialDiscoveryError(error);
       if (!shouldUseQuickActionsFallback(env, normalizedError)) {
@@ -181,7 +197,9 @@ export async function searchMetaLibraryByBrowser(
 }
 
 /** Keep first occurrence per library id (stable order across scroll passes). */
-export function dedupeExtractedCardsByLibraryId(cards: ExtractedAdCard[]): ExtractedAdCard[] {
+export function dedupeExtractedCardsByLibraryId(
+  cards: ExtractedAdCard[],
+): ExtractedAdCard[] {
   const seen = new Set<string>();
   const result: ExtractedAdCard[] = [];
   for (const card of cards) {
@@ -231,16 +249,17 @@ async function searchMetaLibraryViaSessions(
           noResults: false,
           rateLimited: false,
         }
-      : extraction as {
+      : (extraction as {
           cards: ExtractedAdCard[];
           pageText: string;
           loginWall: boolean;
           noResults: boolean;
           rateLimited: boolean;
-        };
-    let extractedCards = normalizedExtraction.cards.length > 0
-      ? normalizedExtraction.cards
-      : extractTextCardsFromVisibleText(normalizedExtraction.pageText);
+        });
+    let extractedCards =
+      normalizedExtraction.cards.length > 0
+        ? normalizedExtraction.cards
+        : extractTextCardsFromVisibleText(normalizedExtraction.pageText);
     const noResults =
       normalizedExtraction.noResults ||
       hasNoResultsSignal(normalizedExtraction.pageText);
@@ -273,14 +292,15 @@ async function searchMetaLibraryViaSessions(
     // Deep scroll only for interactive public search — watchlist/scheduled
     // scans stay shallow and keep DEFAULT_PAGE_BUDGET cost bounds.
     if (mode === "interactive" && page) {
-      extractedCards = await collectCardsWithInteractiveScroll(page, extractedCards);
+      extractedCards = await collectCardsWithInteractiveScroll(
+        page,
+        extractedCards,
+      );
     } else {
       extractedCards = dedupeExtractedCardsByLibraryId(extractedCards);
     }
 
-    const ads = extractedCards.map((card) =>
-      normalizeExtractedCard(card, query),
-    );
+    const ads = normalizeAndFilterExtractedCards(extractedCards, query);
 
     return {
       ads,
@@ -320,13 +340,16 @@ async function collectCardsWithInteractiveScroll(
       window.scrollTo(0, document.body.scrollHeight);
     });
 
-    const remainingBudget = INTERACTIVE_SCROLL_BUDGET_MS - (Date.now() - startedAt);
+    const remainingBudget =
+      INTERACTIVE_SCROLL_BUDGET_MS - (Date.now() - startedAt);
     if (remainingBudget <= 0) {
       break;
     }
     await delayMs(Math.min(INTERACTIVE_SCROLL_WAIT_MS, remainingBudget));
 
-    const passExtraction = await page.evaluate(createSessionCardExtractionScript());
+    const passExtraction = await page.evaluate(
+      createSessionCardExtractionScript(),
+    );
     const passCards = Array.isArray(passExtraction)
       ? (passExtraction as ExtractedAdCard[])
       : ((passExtraction as { cards?: ExtractedAdCard[] }).cards ?? []);
@@ -362,7 +385,9 @@ function createSessionCardExtractionScript() {
       return lower.includes("fbcdn") || lower.includes("scontent");
     }
 
-    function pickCreativeMediaFromCard(cardRoot: HTMLElement | null | undefined) {
+    function pickCreativeMediaFromCard(
+      cardRoot: HTMLElement | null | undefined,
+    ) {
       if (!cardRoot) {
         return { imageUrl: null as string | null, hasVideo: false };
       }
@@ -548,18 +573,49 @@ function createSessionCardExtractionScript() {
     const cards = Array.from(roots.entries())
       .map(([libraryId, card]) => {
         const externalLink = resolveExternalLink(card);
-        const advertiser =
-          card.querySelector<HTMLElement>("strong, h3, h4, [data-advertiser-name]")?.innerText ??
-          null;
-        const headline =
-          card.querySelector<HTMLElement>("h1, h2, h3, [data-headline]")?.innerText ?? null;
         const text = normalizeText(card.innerText);
-        const cta =
-          card
-            .querySelector<HTMLElement>(
-              'button, [role="button"], [data-cta], a[aria-label*="Shop"], a[aria-label*="Learn"]',
-            )
+        // Advertiser honesty (#353): accept only a single unambiguous candidate
+        // that appears before the "Sponsored" marker and is not UI chrome.
+        const advertiser = (() => {
+          const isUiLine = (value: string) =>
+            /^(?:Active|Inactive|Library ID:\s*\d+|Started running on\b.*|Platforms|This ad has multiple versions|\d+\s+ads?\s+use this creative and text|Menu|See (?:ad|summary) details|View ad details|Meta Ad Library result|Instagram|Facebook|Messenger|WhatsApp|Audience Network|Threads|Shop now|Learn more|Sign up|Apply now|Book now|Contact us)$/i.test(
+              value,
+            ) || /^\d+:\d+\s*\/\s*\d+/.test(value);
+          const lines = text.split("\n");
+          const sponsoredIndex = lines.findIndex((line) =>
+            /^Sponsored$/i.test(line),
+          );
+          if (sponsoredIndex < 0) return null;
+          const beforeSponsored = new Set(
+            lines
+              .slice(0, sponsoredIndex)
+              .map((line) => line.replace(/\s+/g, " ").trim()),
+          );
+          const candidates = [
+            ...new Set(
+              Array.from(
+                card.querySelectorAll<HTMLElement>(
+                  "strong, h3, h4, [data-advertiser-name]",
+                ),
+              )
+                .map((element) =>
+                  normalizeText(element.innerText).replace(/\s+/g, " ").trim(),
+                )
+                .filter(
+                  (value) =>
+                    value && beforeSponsored.has(value) && !isUiLine(value),
+                ),
+            ),
+          ];
+          return candidates.length === 1 ? candidates[0] : null;
+        })();
+        const headline =
+          card.querySelector<HTMLElement>("h1, h2, h3, [data-headline]")
             ?.innerText ?? null;
+        const cta =
+          card?.querySelector<HTMLElement>(
+            'button, [role="button"], [data-cta], a[aria-label*="Shop"], a[aria-label*="Learn"]',
+          )?.innerText ?? null;
         const platformTokens = [
           "Instagram",
           "Facebook",
@@ -568,7 +624,9 @@ function createSessionCardExtractionScript() {
           "Audience Network",
           "Threads",
         ];
-        const platforms = platformTokens.filter((token) => text.includes(token));
+        const platforms = platformTokens.filter((token) =>
+          text.includes(token),
+        );
         const startedRunning =
           text
             .split("\n")
@@ -588,7 +646,17 @@ function createSessionCardExtractionScript() {
           adSnapshotUrl: `https://www.facebook.com/ads/library/?id=${libraryId}`,
           landingPageUrl: externalLink,
           platforms,
-          active: !text.split("\n").some((line) => /^inactive$/i.test(line.trim())),
+          active: (() => {
+            const status = text
+              .split("\n")
+              .map((line) => line.trim().toLowerCase())
+              .find((line) => line === "active" || line === "inactive");
+            return status === "active"
+              ? true
+              : status === "inactive"
+                ? false
+                : null;
+          })(),
           startedRunning,
           imageUrl: media.imageUrl,
           hasVideo: media.hasVideo,
@@ -647,7 +715,7 @@ async function searchMetaLibraryByQuickActions(
     }
 
     return {
-      ads: extracted.cards.map((card) => normalizeExtractedCard(card, query)),
+      ads: normalizeAndFilterExtractedCards(extracted.cards, query),
       nextCursor: null,
       source: "meta_library_browser",
       provider: "meta_library_browser",
@@ -696,9 +764,15 @@ async function extractMetaLibraryByQuickActions(
       );
     }
 
-    const extracted = parseQuickActionExtractionPayload(quickActionContent.content);
+    const extracted = parseQuickActionExtractionPayload(
+      quickActionContent.content,
+    );
     if (extracted.cards.length === 0) {
-      if (!extracted.loginWall && !extracted.rateLimited && !extracted.noResults) {
+      if (
+        !extracted.loginWall &&
+        !extracted.rateLimited &&
+        !extracted.noResults
+      ) {
         return scrapeMetaLibraryByQuickActions(env, url);
       }
     }
@@ -814,7 +888,8 @@ async function waitForLibrarySurface(page: BrowserPage) {
           bodyText.includes("no results") ||
           bodyText.includes("couldn't find any ads");
         const hasLoginWall =
-          /log in|login|sign in|sign into/.test(bodyText) && bodyText.includes("facebook");
+          /log in|login|sign in|sign into/.test(bodyText) &&
+          bodyText.includes("facebook");
         const hasRateLimit =
           bodyText.includes("rate limit") ||
           bodyText.includes("too many requests") ||
@@ -858,10 +933,19 @@ function shouldUseQuickActionScrapeFallback(error: CommercialDiscoveryError) {
   return ["selector_drift", "empty_result"].includes(error.failureClass);
 }
 
-function shouldUseBrowserlessFallback(env: AppEnv, error: CommercialDiscoveryError) {
+function shouldUseBrowserlessFallback(
+  env: AppEnv,
+  error: CommercialDiscoveryError,
+) {
   return (
     hasBrowserlessBql(env) &&
-    ["browser_unavailable", "selector_drift", "empty_result", "timeout", "login_wall"].includes(error.failureClass)
+    [
+      "browser_unavailable",
+      "selector_drift",
+      "empty_result",
+      "timeout",
+      "login_wall",
+    ].includes(error.failureClass)
   );
 }
 
@@ -891,14 +975,17 @@ function normalizeCommercialDiscoveryError(error: unknown) {
     }
   }
 
-  const message = error instanceof Error ? error.message : "Browser discovery failed.";
+  const message =
+    error instanceof Error ? error.message : "Browser discovery failed.";
   const normalizedMessage = message.toLowerCase();
-  const failureClass: DiscoveryFailureClass = normalizedMessage.includes("rate limit") ||
+  const failureClass: DiscoveryFailureClass =
+    normalizedMessage.includes("rate limit") ||
     normalizedMessage.includes("429")
-    ? "rate_limited"
-    : normalizedMessage.includes("timeout") || normalizedMessage.includes("timed out")
-      ? "timeout"
-      : "browser_launch_failed";
+      ? "rate_limited"
+      : normalizedMessage.includes("timeout") ||
+          normalizedMessage.includes("timed out")
+        ? "timeout"
+        : "browser_launch_failed";
   return new CommercialDiscoveryError(message, failureClass);
 }
 
@@ -908,7 +995,11 @@ async function searchMetaLibraryByBrowserless(
 ): Promise<SearchResponse> {
   let lastEmptyResult: CommercialDiscoveryError | null = null;
 
-  for (let attempt = 1; attempt <= BROWSERLESS_EMPTY_RESULT_MAX_ATTEMPTS; attempt += 1) {
+  for (
+    let attempt = 1;
+    attempt <= BROWSERLESS_EMPTY_RESULT_MAX_ATTEMPTS;
+    attempt += 1
+  ) {
     try {
       return await searchMetaLibraryByBrowserlessOnce(env, query);
     } catch (error) {
@@ -925,9 +1016,12 @@ async function searchMetaLibraryByBrowserless(
     }
   }
 
-  throw lastEmptyResult ?? new CommercialDiscoveryError(
-    "Browserless returned no extractable Meta Ad Library cards.",
-    "empty_result",
+  throw (
+    lastEmptyResult ??
+    new CommercialDiscoveryError(
+      "Browserless returned no extractable Meta Ad Library cards.",
+      "empty_result",
+    )
   );
 }
 
@@ -964,42 +1058,55 @@ async function searchMetaLibraryByBrowserlessOnce(
   const payload = (await readResponseJsonWithinLimit(
     response,
     BROWSERLESS_META_JSON_MAX_BYTES,
-  )) as
-    | {
-        data?: {
-          html?: {
-            html?: string;
-          };
-        };
-        errors?: Array<{
-          message?: string;
-        }>;
-        message?: string;
-      }
-    | null;
+  )) as {
+    data?: {
+      html?: {
+        html?: string;
+      };
+    };
+    errors?: Array<{
+      message?: string;
+    }>;
+    message?: string;
+  } | null;
 
   if (!response.ok) {
     throw normalizeBrowserlessError(response.status, payload?.message ?? null);
   }
 
   if (!payload) {
-    throw normalizeBrowserlessError(408, "Browserless timed out before returning a readable response.");
+    throw normalizeBrowserlessError(
+      408,
+      "Browserless timed out before returning a readable response.",
+    );
   }
 
   if (Array.isArray(payload?.errors) && payload.errors.length > 0) {
-    const message = payload.errors.map((error) => error.message).filter(Boolean).join(" | ");
-    throw normalizeBrowserlessError(response.status, message || "Browserless returned a GraphQL error.");
+    const message = payload.errors
+      .map((error) => error.message)
+      .filter(Boolean)
+      .join(" | ");
+    throw normalizeBrowserlessError(
+      response.status,
+      message || "Browserless returned a GraphQL error.",
+    );
   }
 
   const html = payload?.data?.html?.html ?? "";
   const extracted = extractQuickActionPayloadFromRenderedHtml(html);
   if (extracted.cards.length === 0) {
     if (extracted.loginWall) {
-      throw new CommercialDiscoveryError("Meta Ad Library returned a login wall.", "login_wall");
+      throw new CommercialDiscoveryError(
+        "Meta Ad Library returned a login wall.",
+        "login_wall",
+      );
     }
 
     if (extracted.rateLimited) {
-      throw new CommercialDiscoveryError("Meta Ad Library is temporarily rate limited.", "rate_limited");
+      throw new CommercialDiscoveryError(
+        "Meta Ad Library is temporarily rate limited.",
+        "rate_limited",
+      );
     }
 
     if (extracted.noResults) {
@@ -1013,7 +1120,7 @@ async function searchMetaLibraryByBrowserlessOnce(
   }
 
   return {
-    ads: extracted.cards.map((card) => normalizeExtractedCard(card, query)),
+    ads: normalizeAndFilterExtractedCards(extracted.cards, query),
     nextCursor: null,
     source: "meta_library_browser",
     provider: "meta_library_browser",
@@ -1026,7 +1133,10 @@ function buildBrowserlessBqlEndpoint(env: AppEnv) {
     env.BROWSERLESS_BQL_URL ||
     "https://production-sfo.browserless.io/stealth/bql";
   const url = new URL(rawBase);
-  if (!url.pathname.endsWith("/stealth/bql") && !url.pathname.endsWith("/chromium/bql")) {
+  if (
+    !url.pathname.endsWith("/stealth/bql") &&
+    !url.pathname.endsWith("/chromium/bql")
+  ) {
     url.pathname = `${url.pathname.replace(/\/$/, "")}/stealth/bql`;
   }
   url.searchParams.set("token", env.BROWSERLESS_TOKEN?.trim() ?? "");
@@ -1039,7 +1149,11 @@ function isAbortError(error: unknown) {
 
 function normalizeBrowserlessError(status: number, message: string | null) {
   const lower = (message ?? "").toLowerCase();
-  if (status === 429 || lower.includes("rate limit") || lower.includes("too many requests")) {
+  if (
+    status === 429 ||
+    lower.includes("rate limit") ||
+    lower.includes("too many requests")
+  ) {
     return new CommercialDiscoveryError(
       message || "Browserless rate limited this request.",
       "rate_limited",
@@ -1047,7 +1161,10 @@ function normalizeBrowserlessError(status: number, message: string | null) {
   }
 
   if (lower.includes("timeout") || lower.includes("timed out")) {
-    return new CommercialDiscoveryError(message || "Browserless timed out.", "timeout");
+    return new CommercialDiscoveryError(
+      message || "Browserless timed out.",
+      "timeout",
+    );
   }
 
   return new CommercialDiscoveryError(
@@ -1117,9 +1234,28 @@ function buildQuickActionExtractionScript() {
   const cards = Array.from(roots.entries())
     .map(([libraryId, card]) => {
       const externalLink = resolveExternalLink(card);
-      const advertiser = card?.querySelector("strong, h3, h4, [data-advertiser-name]")?.textContent ?? null;
-      const headline = card?.querySelector("h1, h2, h3, [data-headline]")?.textContent ?? null;
       const text = normalizeText(renderedText(card));
+      const advertiser = (() => {
+        const isUiLine = (value) =>
+          /^(?:Active|Inactive|Library ID:\\s*\\d+|Started running on\\b.*|Platforms|This ad has multiple versions|\\d+\\s+ads?\\s+use this creative and text|Menu|See (?:ad|summary) details|View ad details|Meta Ad Library result|Instagram|Facebook|Messenger|WhatsApp|Audience Network|Threads|Shop now|Learn more|Sign up|Apply now|Book now|Contact us)$/i.test(
+            value,
+          ) || /^\\d+:\\d+\\s*\\/\\s*\\d+/.test(value);
+        const lines = text.split("\\n");
+        const sponsoredIndex = lines.findIndex((line) => /^Sponsored$/i.test(line));
+        if (sponsoredIndex < 0) return null;
+        const beforeSponsored = new Set(
+          lines.slice(0, sponsoredIndex).map((line) => line.replace(/\\s+/g, " ").trim()),
+        );
+        const candidates = [
+          ...new Set(
+            Array.from(card?.querySelectorAll("strong, h3, h4, [data-advertiser-name]") ?? [])
+              .map((element) => normalizeText(renderedText(element)).replace(/\\s+/g, " ").trim())
+              .filter((value) => value && beforeSponsored.has(value) && !isUiLine(value)),
+          ),
+        ];
+        return candidates.length === 1 ? candidates[0] : null;
+      })();
+      const headline = card?.querySelector("h1, h2, h3, [data-headline]")?.textContent ?? null;
       const cta =
         card
           ?.querySelector(
@@ -1154,7 +1290,13 @@ function buildQuickActionExtractionScript() {
         adSnapshotUrl: "https://www.facebook.com/ads/library/?id=" + libraryId,
         landingPageUrl: externalLink,
         platforms,
-        active: !text.split("\\n").some((line) => /^inactive$/i.test(line.trim())),
+        active: (() => {
+          const status = text
+            .split("\\n")
+            .map((line) => line.trim().toLowerCase())
+            .find((line) => line === "active" || line === "inactive");
+          return status === "active" ? true : status === "inactive" ? false : null;
+        })(),
         startedRunning,
         imageUrl: media.imageUrl,
         hasVideo: media.hasVideo,
@@ -1320,21 +1462,26 @@ function buildQuickActionExtractionScript() {
 `;
 }
 
-function parseQuickActionExtractionPayload(content: string): QuickActionExtractionPayload {
+function parseQuickActionExtractionPayload(
+  content: string,
+): QuickActionExtractionPayload {
   const markerIndex = [
     `id="${QUICK_ACTION_EXTRACTION_SCRIPT_ID}"`,
     `id='${QUICK_ACTION_EXTRACTION_SCRIPT_ID}'`,
   ]
     .map((marker) => content.indexOf(marker))
     .find((index) => index >= 0);
-  const scriptStart = markerIndex !== undefined ? content.indexOf(">", markerIndex) : -1;
-  const scriptEnd = scriptStart >= 0 ? content.indexOf("</script>", scriptStart) : -1;
+  const scriptStart =
+    markerIndex !== undefined ? content.indexOf(">", markerIndex) : -1;
+  const scriptEnd =
+    scriptStart >= 0 ? content.indexOf("</script>", scriptStart) : -1;
   const payloadText =
     scriptStart >= 0 && scriptEnd > scriptStart
       ? content.slice(scriptStart + 1, scriptEnd).trim()
       : null;
 
-  const renderedHtmlPayload = extractQuickActionPayloadFromRenderedHtml(content);
+  const renderedHtmlPayload =
+    extractQuickActionPayloadFromRenderedHtml(content);
   if (!payloadText) {
     if (
       renderedHtmlPayload.cards.length > 0 ||
@@ -1352,7 +1499,9 @@ function parseQuickActionExtractionPayload(content: string): QuickActionExtracti
   }
 
   try {
-    const parsed = JSON.parse(payloadText.replace(/<\\\//g, "</")) as QuickActionExtractionPayload;
+    const parsed = JSON.parse(
+      payloadText.replace(/<\\\//g, "</"),
+    ) as QuickActionExtractionPayload;
     if (
       (!Array.isArray(parsed.cards) || parsed.cards.length === 0) &&
       renderedHtmlPayload.cards.length > 0
@@ -1434,7 +1583,8 @@ function extractQuickActionPayloadFromScrape(
     seen.add(libraryId);
 
     const html = element.html ?? "";
-    const text = stripHtml(html) || element.text?.trim() || "Meta Ad Library result";
+    const text =
+      stripHtml(html) || element.text?.trim() || "Meta Ad Library result";
     const lineText = stripHtmlPreservingLines(html);
     const media = extractCreativeMediaFromHtml(html);
 
@@ -1448,7 +1598,7 @@ function extractQuickActionPayloadFromScrape(
       adSnapshotUrl: absolutizeMetaAdUrl(href),
       landingPageUrl: extractExternalLink(html),
       platforms: inferPlatforms(text),
-      active: !hasStandaloneInactiveLine(lineText),
+      active: readStandaloneActiveStatus(lineText),
       startedRunning: findStartedRunningLine(lineText),
       imageUrl: media.imageUrl,
       hasVideo: media.hasVideo,
@@ -1463,9 +1613,12 @@ function extractQuickActionPayloadFromScrape(
   };
 }
 
-function extractHrefFromScrapeElement(element: BrowserRunQuickActionScrapeElement) {
-  const attrHref = element.attributes?.find((attribute) => attribute.name?.toLowerCase() === "href")
-    ?.value;
+function extractHrefFromScrapeElement(
+  element: BrowserRunQuickActionScrapeElement,
+) {
+  const attrHref = element.attributes?.find(
+    (attribute) => attribute.name?.toLowerCase() === "href",
+  )?.value;
   if (attrHref) {
     return decodeHtmlEntity(attrHref);
   }
@@ -1474,7 +1627,9 @@ function extractHrefFromScrapeElement(element: BrowserRunQuickActionScrapeElemen
   return htmlHref ? decodeHtmlEntity(htmlHref) : null;
 }
 
-function extractQuickActionPayloadFromRenderedHtml(content: string): QuickActionExtractionPayload {
+function extractQuickActionPayloadFromRenderedHtml(
+  content: string,
+): QuickActionExtractionPayload {
   return parseRenderedMetaLibraryHtml(content);
 }
 
@@ -1490,7 +1645,9 @@ function emptyMetaLibraryResponse(): SearchResponse {
 }
 
 function buildRateLimitMessage(timeUntilNextAllowedBrowserAcquisition: number) {
-  const retryAfterSeconds = normalizeRetryAfterSeconds(timeUntilNextAllowedBrowserAcquisition);
+  const retryAfterSeconds = normalizeRetryAfterSeconds(
+    timeUntilNextAllowedBrowserAcquisition,
+  );
   if (retryAfterSeconds) {
     return `Browser Run rate limited this request. Retry after about ${retryAfterSeconds}s.`;
   }
@@ -1507,21 +1664,35 @@ function normalizeRetryAfterSeconds(value: number | null | undefined) {
 }
 
 /** Exported for unit tests that assert image/media field mapping. */
-export function normalizeExtractedCard(card: ExtractedAdCard, query: NormalizedSavedQuery): AdRecord {
+export function normalizeExtractedCard(
+  card: ExtractedAdCard,
+  query: NormalizedSavedQuery,
+): AdRecord {
   // Never back-fill the advertiser with the customer's search term or the CTA
   // with a guessed default: presenting extraction gaps as scraped facts can
   // attribute ads to brands that never ran them. Empty means "unconfirmed"
   // and the display layer labels it that way.
   const advertiser = card.advertiser || "";
-  const rawBody = card.body || advertiser;
-  // FIX-13: DOM/session/quick-action bodies often include Active / Library ID
-  // chrome as the first lines — strip before hook/offer derivation.
-  const body = stripAdLibraryUiChromeFromBody(rawBody) || rawBody;
-  const previewHeadline =
-    stripAdLibraryUiChromeFromBody(card.previewHeadline || "") ||
-    card.previewHeadline ||
-    advertiser;
+  const extractedBody = extractAdCopyFromCardText(card.body ?? "");
+  const body =
+    normalizeComparableText(extractedBody) ===
+    normalizeComparableText(advertiser)
+      ? ""
+      : extractedBody;
+  const rawPreviewHeadline = card.previewHeadline || "";
+  const headlineIsUsable = isUsableAnalysisHeadline(
+    rawPreviewHeadline,
+    advertiser,
+  );
+  const previewHeadline = headlineIsUsable
+    ? rawPreviewHeadline
+    : deriveDisplayHeadline(body) || advertiser;
   const previewSubhead = card.previewSubhead || body.slice(0, 120);
+  const analysisHeadline = headlineIsUsable ? rawPreviewHeadline : "";
+  const { hook, offer } = resolveHookAndOffer({
+    body,
+    previewHeadline: analysisHeadline,
+  });
   const creativeImageUrl = card.imageUrl?.trim() || null;
   const hasVideo = Boolean(card.hasVideo);
   const creativeFormatHint = hasVideo
@@ -1529,18 +1700,16 @@ export function normalizeExtractedCard(card: ExtractedAdCard, query: NormalizedS
     : creativeImageUrl
       ? ("image" as const)
       : undefined;
-
-  const { hook, offer } = resolveHookAndOffer({
-    body,
-    previewHeadline,
-    cta: card.cta || "",
-  });
   const firstSeenAt = parseStartedRunningDate(card.startedRunning ?? null);
-  const format = hasVideo ? ("video" as const) : ("image" as const);
+  const format = hasVideo
+    ? ("video" as const)
+    : creativeImageUrl
+      ? ("image" as const)
+      : ("unknown" as const);
   const destinationType = inferDestinationType(card.landingPageUrl);
   const landingPageUrl = card.landingPageUrl;
   const platforms = card.platforms;
-  const active = card.active;
+  const active = card.active ?? query.filters.status !== "inactive";
 
   return withStructuredAnalysis({
     metaAdId: card.libraryId,
@@ -1551,14 +1720,13 @@ export function normalizeExtractedCard(card: ExtractedAdCard, query: NormalizedS
     hook,
     offer,
     cta: card.cta || "",
-    // Prefer video when the card surface showed a video element; otherwise keep
-    // the historical image default until stronger format detection lands.
     format,
     languageLabel: inferLanguageLabel(`${previewHeadline} ${body}`),
     destinationType,
     landingPageUrl,
     adSnapshotUrl:
-      card.adSnapshotUrl || `https://www.facebook.com/ads/library/?id=${card.libraryId}`,
+      card.adSnapshotUrl ||
+      `https://www.facebook.com/ads/library/?id=${card.libraryId}`,
     countries: [query.filters.country || "all"],
     platforms,
     // Meta publishes the ad's start date on every Ad Library card ("Started
@@ -1567,17 +1735,9 @@ export function normalizeExtractedCard(card: ExtractedAdCard, query: NormalizedS
     firstSeenAt,
     lastSeenAt: null,
     active,
-    researchSummary: composeResearchSummary({
-      active,
-      firstSeenAt,
-      landingPageUrl,
-      offer,
-      format,
-      platforms,
-      countries: [query.filters.country || "all"],
-      source: "meta_library_browser",
-      variantCount: card.variantCount ?? null,
-    }),
+    activeStatusObserved: card.active !== null,
+    researchSummary:
+      "Captured from the public Meta Ad Library via Browser Run and normalized into Five to Nine’s analysis schema.",
     source: "meta_library_browser",
     creativeImageUrl,
     creativeFormatHint,
@@ -1586,6 +1746,59 @@ export function normalizeExtractedCard(card: ExtractedAdCard, query: NormalizedS
 }
 
 /** Exported for unit tests that assert Ad Library URL filter params. */
+export function normalizeAndFilterExtractedCards(
+  cards: ExtractedAdCard[],
+  query: NormalizedSavedQuery,
+) {
+  return cards
+    .filter((card) => {
+      if (query.filters.status === "active") {
+        return card.active !== false;
+      }
+      if (query.filters.status === "inactive") {
+        return card.active !== true;
+      }
+      return true;
+    })
+    .map((card) => normalizeExtractedCard(card, query))
+    .filter((ad) => {
+      if (query.filters.status === "active") {
+        return ad.active;
+      }
+      if (query.filters.status === "inactive") {
+        return !ad.active;
+      }
+      return true;
+    });
+}
+
+function normalizeComparableText(value: string) {
+  return value.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function deriveDisplayHeadline(body: string) {
+  return (
+    body
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find(Boolean) ?? ""
+  );
+}
+
+function isUsableAnalysisHeadline(headline: string, advertiser: string) {
+  const normalized = headline.replace(/\s+/g, " ").trim().toLowerCase();
+  const normalizedAdvertiser = advertiser
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+  return Boolean(
+    normalized &&
+    normalized !== normalizedAdvertiser &&
+    !/^(?:view|see) (?:ad|summary) details$/.test(normalized) &&
+    normalized !== "meta ad library result",
+  );
+}
+
 export function buildSearchUrl(query: NormalizedSavedQuery) {
   const params = new URLSearchParams();
   params.set("active_status", mapActiveStatusParam(query.filters.status));
@@ -1602,7 +1815,9 @@ export function buildSearchUrl(query: NormalizedSavedQuery) {
   return `https://www.facebook.com/ads/library/?${params.toString()}`;
 }
 
-function mapActiveStatusParam(status: NormalizedSavedQuery["filters"]["status"] | undefined) {
+function mapActiveStatusParam(
+  status: NormalizedSavedQuery["filters"]["status"] | undefined,
+) {
   if (status === "active") {
     return "active";
   }
@@ -1612,7 +1827,9 @@ function mapActiveStatusParam(status: NormalizedSavedQuery["filters"]["status"] 
   return "all";
 }
 
-function mapMediaTypeParam(creativeType: NormalizedSavedQuery["filters"]["creativeType"] | undefined) {
+function mapMediaTypeParam(
+  creativeType: NormalizedSavedQuery["filters"]["creativeType"] | undefined,
+) {
   if (creativeType === "image") {
     return "image";
   }
@@ -1620,9 +1837,7 @@ function mapMediaTypeParam(creativeType: NormalizedSavedQuery["filters"]["creati
     return "video";
   }
   if (creativeType === "carousel") {
-    // Meta Ad Library uses "meme" historically for multi-image; "carousel" is
-    // accepted on newer surfaces — pass the plain filter name.
-    return "carousel";
+    return "all";
   }
   return "all";
 }

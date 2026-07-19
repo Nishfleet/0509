@@ -8,7 +8,10 @@ import {
   resolveHookAndOffer,
   withStructuredAnalysis,
 } from "~/lib/analysis.server";
-import { formatOfferDisplay, NO_EXPLICIT_OFFER_LABEL } from "~/lib/analysis-display";
+import {
+  formatOfferDisplay,
+  NO_EXPLICIT_OFFER_LABEL,
+} from "~/lib/analysis-display";
 import { CREATIVE_TEXT_EXTRACTOR_VERSION } from "~/lib/creative-text.server";
 import type { AdRecord } from "~/lib/types";
 
@@ -52,14 +55,18 @@ const baseAd: AdRecord = {
 describe("buildAnalysisFields", () => {
   it("uses the landing page capture method as provenance for headline summary", () => {
     const fields = buildAnalysisFields(baseAd, "user");
-    const headlineField = fields.find((field) => field.fieldKey === "landing_page_headline_summary");
+    const headlineField = fields.find(
+      (field) => field.fieldKey === "landing_page_headline_summary",
+    );
 
     expect(headlineField?.provenanceSource).toBe("browser_render");
   });
 
   it("stores confidence and metadata on the language_label field", () => {
     const fields = buildAnalysisFields(baseAd, "user");
-    const languageField = fields.find((field) => field.fieldKey === "language_label");
+    const languageField = fields.find(
+      (field) => field.fieldKey === "language_label",
+    );
 
     expect(languageField?.fieldValue).toBe("Hinglish");
     expect(languageField?.confidence).toBeGreaterThan(0.65);
@@ -70,14 +77,17 @@ describe("buildAnalysisFields", () => {
   });
 
   it("adds creative OCR text as ad analysis with explicit snapshot provenance", () => {
-    const fields = buildAnalysisFields({
-      ...baseAd,
-      creativeText: "60 Hours Playback\nOnly ₹999",
-      creativeTextCaptureMethod: "ad_snapshot_fetch",
-      creativeTextMetadata: {
-        fetchStatus: 200,
+    const fields = buildAnalysisFields(
+      {
+        ...baseAd,
+        creativeText: "60 Hours Playback\nOnly ₹999",
+        creativeTextCaptureMethod: "ad_snapshot_fetch",
+        creativeTextMetadata: {
+          fetchStatus: 200,
+        },
       },
-    }, "user");
+      "user",
+    );
     const ocrField = fields.find((field) => field.fieldKey === "ocr_text");
 
     expect(ocrField).toMatchObject({
@@ -89,18 +99,36 @@ describe("buildAnalysisFields", () => {
       },
     });
   });
+
+  it("omits empty hook and offer fields instead of assigning them confidence", () => {
+    const fields = buildAnalysisFields(
+      { ...baseAd, hook: "", offer: "" },
+      "user",
+    );
+
+    expect(fields.find((field) => field.fieldKey === "hook")).toBeUndefined();
+    expect(fields.find((field) => field.fieldKey === "offer")).toBeUndefined();
+  });
 });
 
 describe("deriveHook / deriveOffer", () => {
   it("extracts USD EUR and GBP promo offers without falling back to the body", () => {
-    expect(deriveOffer("Get $20 off sitewide this weekend only")).toMatch(/\$20\s*off/i);
+    expect(deriveOffer("Get $20 off sitewide this weekend only")).toMatch(
+      /\$20\s*off/i,
+    );
     expect(deriveOffer("Save €15 on your first order")).toMatch(/€15/);
-    expect(deriveOffer("From £9.99 with free delivery")).toMatch(/£9\.99|free delivery/i);
-    expect(deriveOffer("Flat 30% off serums + free shipping")).toMatch(/30\s*%\s*off/i);
+    expect(deriveOffer("From £9.99 with free delivery")).toMatch(
+      /£9\.99|free delivery/i,
+    );
+    expect(deriveOffer("Flat 30% off serums + free shipping")).toMatch(
+      /30\s*%\s*off/i,
+    );
   });
 
   it("returns null when no explicit offer phrase exists", () => {
-    expect(deriveOffer("Meet our new daily moisturizer for busy mornings.")).toBeNull();
+    expect(
+      deriveOffer("Meet our new daily moisturizer for busy mornings."),
+    ).toBeNull();
     expect(formatOfferDisplay(null)).toBe(NO_EXPLICIT_OFFER_LABEL);
     expect(formatOfferDisplay("")).toBe(NO_EXPLICIT_OFFER_LABEL);
   });
@@ -145,7 +173,9 @@ describe("composeResearchSummary", () => {
   it("builds distinct signal lines from real fields only", () => {
     const a = composeResearchSummary({
       active: true,
-      firstSeenAt: new Date(Date.now() - 62 * 24 * 60 * 60 * 1000).toISOString(),
+      firstSeenAt: new Date(
+        Date.now() - 62 * 24 * 60 * 60 * 1000,
+      ).toISOString(),
       landingPageUrl: "https://www.nykaa.com/sale",
       offer: "30% off",
       format: "image",
@@ -199,8 +229,48 @@ describe("withStructuredAnalysis", () => {
       ...inputAd,
       source: "meta_library_browser",
     });
-    const hookField = nextAd.analysisFields.find((field) => field.fieldKey === "hook");
+    const hookField = nextAd.analysisFields.find(
+      (field) => field.fieldKey === "hook",
+    );
 
     expect(hookField?.provenanceSource).toBe("meta_library_browser");
+  });
+});
+
+describe("honest extracted analysis", () => {
+  it("returns no offer when the body contains no explicit promotion", () => {
+    expect(deriveOffer("Fresh skincare for summer.")).toBeNull();
+    expect(deriveOffer("Discover Bogotá this weekend.")).toBeNull();
+    expect(deriveOffer("Use code R2D2 at checkout.")).toBeNull();
+    expect(deriveOffer("Over 200 styles available.")).toBeNull();
+    expect(deriveOffer("The wholesale ends at the market.")).toBeNull();
+    expect(deriveOffer("Choose $,. as separators.")).toBeNull();
+  });
+
+  it("recognizes explicit BOGO and currency offers without copying the whole body", () => {
+    expect(deriveOffer("BOGO weekend is here.")).toBe("BOGO");
+    expect(deriveOffer("Flat 30% off today.")).toBe("Flat 30% off");
+    expect(deriveOffer("Starting at $ 19 today.")).toBe("Starting at $ 19");
+    expect(deriveOffer("From € 20 today.")).toBe("From € 20");
+    expect(deriveOffer("Starting at £ 15 today.")).toBe("Starting at £ 15");
+    expect(deriveOffer("Starting at R$ 199 today.")).toBe("Starting at R$ 199");
+    expect(deriveOffer("From zł 99 today.")).toBe("From zł 99");
+
+    const body = "Meet your new serum. BOGO weekend is here.";
+    const analysis = resolveHookAndOffer({
+      body,
+      previewHeadline: "Serum launch",
+    });
+
+    expect(analysis.hook).toBe("Meet your new serum.");
+    expect(analysis.offer).toBe("BOGO");
+    expect(analysis.offer).not.toBe(body);
+
+    expect(
+      resolveHookAndOffer({ body: "BOGO", previewHeadline: "BOGO" }),
+    ).toEqual({ hook: "BOGO", offer: "BOGO" });
+    expect(
+      resolveHookAndOffer({ body: "Launch pricing", previewHeadline: "Launch pricing" }),
+    ).toEqual({ hook: "Launch pricing", offer: "Launch pricing" });
   });
 });

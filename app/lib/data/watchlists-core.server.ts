@@ -4,6 +4,7 @@ import {
   queryAll as many,
   queryOne as one,
 } from "~/lib/data/d1.server";
+import { billingCanaryMutationGuardSql } from "~/lib/data/billing-canary-lock.server";
 import { createId, jsonValue, nowIso } from "~/lib/data/helpers.server";
 import {
   toWatchlistRecord,
@@ -201,11 +202,14 @@ export async function deleteUnscannedWatchlistCreatedByFailedAgentAction(
   watchlistId: string,
 ) {
   const db = ensureDb(env);
+  const targetGuard = await billingCanaryMutationGuardSql(env, "web_mention_target.user_id");
+  const watchlistGuard = await billingCanaryMutationGuardSql(env, "watchlist.user_id");
   const results = await db.batch([
     db.prepare(`
       DELETE FROM web_mention_target
       WHERE watchlist_id = ?
         AND user_id = ?
+        ${targetGuard}
         AND NOT EXISTS (
           SELECT 1
           FROM watchlist_run
@@ -216,6 +220,7 @@ export async function deleteUnscannedWatchlistCreatedByFailedAgentAction(
       DELETE FROM watchlist
       WHERE id = ?
         AND user_id = ?
+        ${watchlistGuard}
         AND NOT EXISTS (
           SELECT 1
           FROM watchlist_run
@@ -397,6 +402,7 @@ export async function createWatchlist(
   userId: string,
   input: CreateWatchlistInput,
 ) {
+  const billingCanaryGuard = await billingCanaryMutationGuardSql(env, "?");
   const trackingRole = normalizeWatchlistTrackingRole(input.trackingRole);
   const existing = await one<WatchlistRow>(
     env,
@@ -439,7 +445,8 @@ export async function createWatchlist(
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?
+      WHERE 1 = 1 ${billingCanaryGuard}
     `,
     id,
     userId,
@@ -452,6 +459,7 @@ export async function createWatchlist(
     input.targetCountry ?? null,
     timestamp,
     timestamp,
+    ...(billingCanaryGuard ? [userId] : []),
   );
 
   const created = await getWatchlist(env, id, userId);
@@ -513,6 +521,7 @@ export async function updateWatchlist(
     trackingRole?: WatchlistTrackingRole | null;
   },
 ) {
+  const billingCanaryGuard = await billingCanaryMutationGuardSql(env, "?");
   const existing = await getWatchlist(env, watchlistId, userId);
   if (!existing) {
     return null;
@@ -551,7 +560,7 @@ export async function updateWatchlist(
       return null;
     }
 
-    await run(
+    const deactivated = await run(
       env,
       `
         UPDATE watchlist
@@ -561,11 +570,16 @@ export async function updateWatchlist(
         WHERE id = ?
           AND user_id = ?
           AND is_active = 1
+          ${billingCanaryGuard}
       `,
       timestamp,
       watchlistId,
       userId,
+      ...(billingCanaryGuard ? [userId] : []),
     );
+    if (Number(deactivated.meta?.changes ?? 0) !== 1) {
+      return null;
+    }
 
     // Retargeting silently reset alert preferences: carry the per-watchlist
     // delivery config and targets over to the replacement so the customer's
@@ -576,7 +590,7 @@ export async function updateWatchlist(
     return replacement;
   }
 
-  await run(
+  const updatedResult = await run(
     env,
     `
       UPDATE watchlist
@@ -591,6 +605,7 @@ export async function updateWatchlist(
       WHERE id = ?
         AND user_id = ?
         AND is_active = 1
+        ${billingCanaryGuard}
     `,
     input.name.trim(),
     input.targetType,
@@ -602,7 +617,11 @@ export async function updateWatchlist(
     timestamp,
     watchlistId,
     userId,
+    ...(billingCanaryGuard ? [userId] : []),
   );
+  if (Number(updatedResult.meta?.changes ?? 0) !== 1) {
+    return null;
+  }
 
   const updated = await getWatchlist(env, watchlistId, userId);
   if (updated) {
@@ -676,6 +695,7 @@ export async function setWatchlistActive(
   // scheduled scans; nothing is deleted, so resuming brings the history back.
   const db = ensureDb(env);
   const timestamp = nowIso();
+  const billingCanaryGuard = await billingCanaryMutationGuardSql(env, "?");
   const result = await db
     .prepare(
       `
@@ -685,9 +705,17 @@ export async function setWatchlistActive(
             updated_at = ?
         WHERE id = ?
           AND user_id = ?
+          ${billingCanaryGuard}
       `,
     )
-    .bind(isActive ? 1 : 0, isActive ? null : "user", timestamp, watchlistId, userId)
+    .bind(
+      isActive ? 1 : 0,
+      isActive ? null : "user",
+      timestamp,
+      watchlistId,
+      userId,
+      ...(billingCanaryGuard ? [userId] : []),
+    )
     .run();
 
   const changed = Number(result.meta?.changes ?? 0) > 0;
