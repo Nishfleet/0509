@@ -586,6 +586,7 @@ export function truncateAtAdLibraryPageChrome(text: string): string {
     }
   }
   return cutAt >= 0 ? text.slice(0, cutAt).trimEnd() : text;
+}
 
 /** Remove Meta Ad Library controls and metadata before analyzing ad copy. */
 export function extractAdCopyFromCardText(value: string) {

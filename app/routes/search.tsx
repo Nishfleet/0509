@@ -1407,9 +1407,7 @@ export default function SearchRoute() {
                                 <h3>{ad.previewHeadline}</h3>
                                 <div className="f9-result-card-pills">
                                   {ad.source === "demo" ? (
-                                    <span className="f9-longevity-pill is-sample">
-                                      Sample
-                                    </span>
+                                    <span className="f9-longevity-pill is-sample">Sample</span>
                                   ) : null}
                                   <AdLongevityPill ad={ad} />
                                   {ad.variantCount && ad.variantCount > 1 ? (
