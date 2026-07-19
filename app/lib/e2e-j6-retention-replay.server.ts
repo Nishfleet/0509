@@ -257,6 +257,9 @@ export function createRetentionDbProxy(db: D1Database, failDiscoveryDelete: bool
               }
               return bound.run(...args as []);
             },
+            async all<T>(...args: unknown[]) {
+              return bound.all<T>(...args as []);
+            },
           };
         },
       };

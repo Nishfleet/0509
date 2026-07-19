@@ -31,16 +31,21 @@ import {
   resolveLocalReleaseRunTimeout,
 } from "./local-release-server.mjs";
 import { runLocalD1ScratchRestore } from "./e2e-local-restore-drill.mjs";
-import { resolveReleaseProofInvocation } from "../e2e/helpers/release-scope.mjs";
+import {
+  resolveReleaseProofInvocation,
+  resolveReleaseProofProject,
+} from "../e2e/helpers/release-scope.mjs";
 
 const root = process.cwd();
 let journeyScope;
 let diagnosticSubset;
+let releaseProject;
 try {
   ({ journeys: journeyScope, diagnosticSubset } = resolveReleaseProofInvocation(
     process.argv.slice(2),
     process.env,
   ));
+  releaseProject = resolveReleaseProofProject(process.env);
 } catch (error) {
   process.stderr.write(
     `release proof refused: ${error instanceof Error ? error.message : "invalid_release_journey_scope"}\n`,
@@ -48,7 +53,7 @@ try {
   process.exit(1);
 }
 process.stdout.write(
-  `${diagnosticSubset ? "diagnostic subset" : "canonical release"} proof journey scope: ${journeyScope.join(",")}\n`,
+  `${diagnosticSubset ? "diagnostic subset" : "canonical release"} proof journey scope: ${journeyScope.join(",")} (${releaseProject})\n`,
 );
 if (!supportsReleaseCoverage(journeyScope)) {
   process.stderr.write("release proof refused: coverage_scope_unsupported\n");
@@ -154,6 +159,7 @@ function launchConfigEvidence(candidateState) {
     authProvider: "better-auth",
     retries: 0,
     workers: 1,
+    browserProject: releaseProject,
   };
   if (
     typeof config.wranglerWorktreeSha256 !== "string" ||
@@ -186,7 +192,7 @@ function candidate(extraArgs = []) {
 }
 
 let manifestPath;
-const manifestRelativePath = process.env.E2E_RELEASE_MANIFEST_PATH || `test-results/gate-b-manifest-${serverIdentity}.json`;
+const manifestRelativePath = process.env.E2E_RELEASE_MANIFEST_PATH || `test-results/gate-b-manifest-${releaseProject}-${serverIdentity}.json`;
 try {
   manifestPath = resolveOutputPath({ outputPath: manifestRelativePath });
   rmSync(manifestPath, { force: true });
@@ -249,7 +255,7 @@ const run = spawnSync(
     "test",
     ...journeyScope.map((journey) => `e2e/journey-${journey}-release.spec.ts`),
     "--config=playwright.config.ts",
-    "--project=local-release",
+    `--project=${releaseProject}`,
     "--retries=0",
     "--workers=1",
   ],

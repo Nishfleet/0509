@@ -5,6 +5,7 @@ import {
   evaluateApprovedReportSnapshot,
   evaluateReportReadiness,
   isApprovedReportSnapshot,
+  reportEvidenceFingerprint,
   REPORT_APPROVAL_REASON_CODES,
   REPORT_APPROVAL_MAX_AGE_MS,
 } from "~/lib/report-approval";
@@ -81,7 +82,128 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+function reverseObjectKeyOrder(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(reverseObjectKeyOrder);
+  }
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .reverse()
+      .map(([key, nested]) => [key, reverseObjectKeyOrder(nested)]),
+  );
+}
+
+function legacyFingerprint(value: typeof report) {
+  const { generatedAt: _generatedAt, ...content } = value;
+  return stableJsonForTest(stripLegacyApprovalFieldsForTest(content));
+}
+
+function stripLegacyApprovalFieldsForTest(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(stripLegacyApprovalFieldsForTest);
+  }
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).flatMap(([key, nested]) => {
+      if (
+        [
+          "reviewState",
+          "evidenceState",
+          "reviewedAt",
+          "approvalExpiresAt",
+          "evidenceFingerprint",
+          "sharePurpose",
+        ].includes(key)
+      ) {
+        return [];
+      }
+      const stripped = stripLegacyApprovalFieldsForTest(nested);
+      return stripped === undefined ? [] : [[key, stripped]];
+    }),
+  );
+}
+
+function stableJsonForTest(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableJsonForTest).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJsonForTest(record[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
 describe("report approval persistence", () => {
+  it("keeps fingerprints fixed-size for large reports", () => {
+    const largeReport = {
+      ...report,
+      rows: Array.from({ length: 256 }, (_, index) => ({
+        ...report.rows[0],
+        id: `row-${index}`,
+        creativeText: `${index}:${"large-evidence-payload".repeat(256)}`,
+      })),
+    };
+
+    const fingerprint = reportEvidenceFingerprint(largeReport);
+
+    expect(JSON.stringify(largeReport).length).toBeGreaterThan(1_000_000);
+    expect(fingerprint).toMatch(/^sha256:[a-f0-9]{64}$/u);
+    expect(fingerprint).toHaveLength(71);
+  });
+
+  it("is deterministic across key order and regenerated timestamps", () => {
+    const reordered = reverseObjectKeyOrder({
+      ...report,
+      generatedAt: "2026-07-15T09:00:00.000Z",
+    }) as typeof report;
+
+    expect(reportEvidenceFingerprint(reordered)).toBe(
+      reportEvidenceFingerprint(report),
+    );
+  });
+
+  it("changes when stable report evidence changes", () => {
+    expect(
+      reportEvidenceFingerprint({
+        ...report,
+        rows: [{ ...report.rows[0], creativeText: "Changed evidence" }],
+      }),
+    ).not.toBe(reportEvidenceFingerprint(report));
+  });
+
+  it("honors unchanged legacy approvals only for their existing review window", () => {
+    vi.useFakeTimers();
+    const reviewedAt = "2026-07-15T09:00:00.000Z";
+    vi.setSystemTime(new Date(reviewedAt));
+    const approved = createApprovedReportSnapshot(report, reviewedAt)!;
+    const legacyApproved = {
+      ...approved,
+      evidenceFingerprint: legacyFingerprint(report),
+    };
+
+    expect(isApprovedReportSnapshot(legacyApproved)).toBe(true);
+    expect(
+      isApprovedReportSnapshot({
+        ...legacyApproved,
+        rows: [{ ...legacyApproved.rows[0], creativeText: "Changed evidence" }],
+      }),
+    ).toBe(false);
+
+    vi.setSystemTime(
+      new Date(Date.parse(reviewedAt) + REPORT_APPROVAL_MAX_AGE_MS),
+    );
+    expect(isApprovedReportSnapshot(legacyApproved)).toBe(false);
+  });
+
   it("survives the same JSON round trip used by D1 snapshots", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-15T09:00:00.000Z"));

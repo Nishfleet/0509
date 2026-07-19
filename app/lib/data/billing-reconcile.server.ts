@@ -37,6 +37,22 @@ type MarkDodoPlanPaymentIssueInput = Parameters<
  */
 export interface ApplyDodoPlanOptions {
   lifecycleEmailOutbox?: BillingLifecycleEmailOutboxSpec;
+  billingCanaryPrecondition?: BillingCanaryPlanSnapshot;
+  returnMutationTimestamps?: boolean;
+}
+
+export interface BillingCanaryPlanSnapshot {
+  plan: string | null;
+  planUpdatedAt: string | null;
+  dodoPaymentId: string | null;
+  dodoProductId: string | null;
+  dodoPlanChangeProductId: string | null;
+  dodoStatus: string | null;
+  dodoSubscriptionId: string | null;
+  dodoCustomerId: string | null;
+  dodoNextBillingAt: string | null;
+  evidenceEntitlementAnchor: string | null;
+  evidenceEntitlementAnchorSource: string | null;
 }
 
 export async function applyDodoPlanGrantWithWatchlistReconcile(
@@ -48,9 +64,44 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
 ) {
   const db = ensureDb(env);
   const planUpdatedAt = validIsoTimestamp(input.grantedAt) ?? nowIso();
-  const timestamp = nowIso();
+  const timestamp = options.billingCanaryPrecondition ? planUpdatedAt : nowIso();
   const processedAt = nowIso();
   const keepActive = Math.max(0, Math.floor(watchlistLimit));
+  const hasBillingCanaryPrecondition = options.billingCanaryPrecondition ? 1 : 0;
+  const expected = options.billingCanaryPrecondition;
+  const billingCanaryPreconditionSql = expected
+    ? `EXISTS (
+        SELECT 1 FROM user_plan
+        WHERE user_id = ?
+          AND plan IS ?
+          AND plan_updated_at IS ?
+          AND dodo_payment_id IS ?
+          AND dodo_product_id IS ?
+          AND dodo_plan_change_product_id IS ?
+          AND dodo_status IS ?
+          AND dodo_subscription_id IS ?
+          AND dodo_customer_id IS ?
+          AND dodo_next_billing_at IS ?
+          AND evidence_entitlement_anchor IS ?
+          AND evidence_entitlement_anchor_source IS ?
+      )`
+    : "1 = 1";
+  const billingCanaryPreconditionBindings = expected
+    ? [
+        input.userId,
+        expected.plan,
+        expected.planUpdatedAt,
+        expected.dodoPaymentId,
+        expected.dodoProductId,
+        expected.dodoPlanChangeProductId,
+        expected.dodoStatus,
+        expected.dodoSubscriptionId,
+        expected.dodoCustomerId,
+        expected.dodoNextBillingAt,
+        expected.evidenceEntitlementAnchor,
+        expected.evidenceEntitlementAnchorSource,
+      ]
+    : [];
 
   const grantStatement = db.prepare(`
       INSERT INTO user_plan (
@@ -74,6 +125,7 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
           AND json_extract(metadata_json, '$.paymentId') = ?
           AND COALESCE(json_extract(metadata_json, '$.refundType'), 'full') = 'full'
       )
+        AND (${billingCanaryPreconditionSql})
         AND (
           ? = 0
           OR EXISTS (
@@ -98,6 +150,7 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
         dodo_customer_id = COALESCE(excluded.dodo_customer_id, user_plan.dodo_customer_id),
         dodo_next_billing_at = COALESCE(excluded.dodo_next_billing_at, user_plan.dodo_next_billing_at),
         dodo_plan_change_product_id = CASE
+          WHEN ? = 1 THEN user_plan.dodo_plan_change_product_id
           WHEN user_plan.dodo_status IN (
               'plan_change_pending',
               'plan_change_scheduled',
@@ -175,11 +228,13 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
     input.status,
     planUpdatedAt,
     input.providerPaymentId ?? null,
+    ...billingCanaryPreconditionBindings,
     input.requireProviderIdentityMatch ? 1 : 0,
     input.userId,
     input.providerProductId ?? null,
     input.providerSubscriptionId ?? null,
     input.providerCustomerId ?? null,
+    hasBillingCanaryPrecondition,
     input.requireProviderIdentityMatch ? 1 : 0,
     input.requirePlanChangePending ? 1 : 0,
     input.forcePlanChangePending ? 1 : 0,
@@ -310,15 +365,23 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
     const grantChanged = Number(results[0]?.meta?.changes ?? 0) > 0;
     await syncWatchlistMentionTargetsIfChanged(env, input.userId, timestamp, results, [2, 3]);
 
-    if (!grantChanged) return { changed: false };
+    if (!grantChanged) {
+      return options.returnMutationTimestamps
+        ? { changed: false, watchlistUpdatedAt: timestamp }
+        : { changed: false };
+    }
 
     try {
       const { persistWorkspaceEntitlementAnchor } = await import("~/lib/evidence-usage-period.server");
-      await persistWorkspaceEntitlementAnchor(env, input.userId, planUpdatedAt, "plan_activation");
+      if (!options.billingCanaryPrecondition) {
+        await persistWorkspaceEntitlementAnchor(env, input.userId, planUpdatedAt, "plan_activation");
+      }
     } catch {
       // Anchor columns may be absent on pre-migration databases during local dev.
     }
-    return { changed: true };
+    return options.returnMutationTimestamps
+      ? { changed: true, watchlistUpdatedAt: timestamp }
+      : { changed: true };
   }
 
   // The outbox rider must sit DIRECTLY after the grant so its changes() gate
@@ -371,13 +434,17 @@ export async function applyDodoPlanGrantWithWatchlistReconcile(
   );
   const grantChanged = Number(results[0]?.meta?.changes ?? 0) > 0;
 
-  try {
-    const { persistWorkspaceEntitlementAnchor } = await import("~/lib/evidence-usage-period.server");
-    await persistWorkspaceEntitlementAnchor(env, input.userId, planUpdatedAt, "plan_activation");
-  } catch {
-    // Anchor columns may be absent on pre-migration databases during local dev.
+  if (grantChanged && !options.billingCanaryPrecondition) {
+    try {
+      const { persistWorkspaceEntitlementAnchor } = await import("~/lib/evidence-usage-period.server");
+      await persistWorkspaceEntitlementAnchor(env, input.userId, planUpdatedAt, "plan_activation");
+    } catch {
+      // Anchor columns may be absent on pre-migration databases during local dev.
+    }
   }
-  return { changed: grantChanged };
+  return options.returnMutationTimestamps
+    ? { changed: grantChanged, watchlistUpdatedAt: timestamp }
+    : { changed: grantChanged };
 }
 
 /**

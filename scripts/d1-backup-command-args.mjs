@@ -3,6 +3,14 @@ export const MANUAL_BACKUP_APPROVAL = "0509-manual-d1-export";
 export const BACKUP_DATABASE_NAME = "0509";
 export const BACKUP_BUCKET_NAME = "0509-landing-page-artifacts";
 
+/** @param {string} databaseName @param {string} stamp */
+export function buildBackupObjectKey(databaseName, stamp) {
+  if (!/^[a-z0-9._-]{1,64}$/u.test(databaseName) || !/^[0-9TZ._-]{1,96}$/u.test(stamp)) {
+    throw new Error("backup_object_key_input_invalid");
+  }
+  return `backups/d1/${databaseName}-${stamp}.sql`;
+}
+
 /**
  * @param {string} databaseName
  * @param {string} localPath
@@ -33,6 +41,16 @@ export function buildD1ExportArgs(databaseName, localPath, { skipConfirmation = 
  */
 export function buildR2PutArgs(bucketName, remoteKey, localPath) {
   return ["wrangler", "r2", "object", "put", `${bucketName}/${remoteKey}`, "--file", localPath, "--remote"];
+}
+
+/** @param {string} bucketName @param {string} remoteKey @param {string} localPath */
+export function buildR2GetArgs(bucketName, remoteKey, localPath) {
+  return ["wrangler", "r2", "object", "get", `${bucketName}/${remoteKey}`, "--file", localPath, "--remote"];
+}
+
+/** @param {string} bucketName @param {string} remoteKey */
+export function buildR2DeleteArgs(bucketName, remoteKey) {
+  return ["wrangler", "r2", "object", "delete", `${bucketName}/${remoteKey}`, "--remote", "--force"];
 }
 
 /**

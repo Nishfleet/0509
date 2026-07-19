@@ -44,6 +44,8 @@ export interface AtomicShareLinkInsertInput {
   auditId: string;
   /** The actor owns the audit record; userId remains the workspace owner. */
   auditUserId?: string;
+  /** Null is reserved for trusted in-process actions without an API key. */
+  apiKeyId?: string | null;
   userId: string;
   actionName: "share.create" | "report.share";
   idempotencyKey: string;
@@ -69,6 +71,7 @@ export function prepareAtomicShareLinkInsert(
   input: AtomicShareLinkInsertInput,
 ) {
   const auditUserId = input.auditUserId ?? input.userId;
+  const apiKeyId = input.apiKeyId ?? null;
   const ownerTable =
     input.ownerResourceType === "collection"
       ? "collection"
@@ -99,7 +102,28 @@ export function prepareAtomicShareLinkInsert(
           AND idempotency_key = ?
           AND status = 'started'
           AND json_extract(metadata_json, '$.requestFingerprint') = ?
+          AND (
+            (? IS NULL AND api_key_id IS NULL)
+            OR EXISTS (
+              SELECT 1
+              FROM customer_api_key live_api_key
+              WHERE live_api_key.id = ?
+                AND live_api_key.id = agent_action_audit.api_key_id
+                AND live_api_key.user_id = agent_action_audit.user_id
+                AND live_api_key.revoked_at IS NULL
+            )
+          )
       )
+        AND (
+          ? = ?
+          OR EXISTS (
+            SELECT 1
+            FROM workspace_member live_membership
+            WHERE live_membership.owner_user_id = ?
+              AND live_membership.member_user_id = ?
+              AND live_membership.status = 'active'
+          )
+        )
         AND EXISTS (
           SELECT 1
           FROM ${ownerTable}
@@ -123,6 +147,12 @@ export function prepareAtomicShareLinkInsert(
       input.actionName,
       input.idempotencyKey,
       input.requestFingerprint,
+      apiKeyId,
+      apiKeyId,
+      auditUserId,
+      input.userId,
+      input.userId,
+      auditUserId,
       input.resourceType === "report"
         ? input.resourceId.slice(input.resourceId.indexOf(":") + 1)
         : input.resourceId,

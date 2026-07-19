@@ -1,11 +1,14 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { isDeepStrictEqual } from "node:util";
 
 const requiredSupportFiles = [
   "scripts/d1-backup-to-r2.mjs",
   "scripts/d1-backup.mjs",
+  "scripts/d1-backup-lifecycle-canary.mjs",
   "scripts/d1-restore-transform.mjs",
+  "config/r2-retention-policy.json",
   "wrangler.jsonc",
 ];
 const migrationsDir = resolve("migrations");
@@ -30,6 +33,19 @@ for (const relativePath of requiredFiles) {
 const wrangler = readFileSync(resolve("wrangler.jsonc"), "utf8");
 if (!wrangler.includes('"d1_databases"') || !wrangler.includes('"database_name": "0509"')) {
   throw new Error("wrangler.jsonc is missing the 0509 D1 database binding.");
+}
+
+const retentionPolicy = JSON.parse(readFileSync(resolve("config/r2-retention-policy.json"), "utf8"));
+const expectedRetentionPolicy = {
+  schemaVersion: 1,
+  bucket: "0509-landing-page-artifacts",
+  applicationManagedPrefixes: ["landing-pages/"],
+  rules: [
+    { id: "0509-d1-backups-90d", prefix: "backups/d1/", expireDays: 90 },
+  ],
+};
+if (!isDeepStrictEqual(retentionPolicy, expectedRetentionPolicy)) {
+  throw new Error("config/r2-retention-policy.json does not match the approved R2 retention policy.");
 }
 
 function applyMigrationsToScratchDatabase() {
@@ -167,6 +183,7 @@ console.log(
     ok: true,
     mode: "dry-run",
     checkedFiles: requiredFiles,
+    retentionPolicy,
     latestMigration: migrationFiles.at(-1),
     migrationReplay,
     message: "Backup scripts and D1 binding are present. Remote export/upload was not executed.",

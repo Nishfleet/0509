@@ -16,6 +16,7 @@ const DODO_PRICING_CANARY_TIMEOUT_MS = 20_000;
  *
  * @typedef {{
  *   available?: boolean,
+ *   workerVersionId?: string | null,
  *   country?: string,
  *   reason?: string,
  *   prices?: Record<string, Record<string, PricingDisplay | null | undefined> | null | undefined>,
@@ -65,25 +66,32 @@ const DODO_PRICING_CANARY_TIMEOUT_MS = 20_000;
  *   billingCountry: string,
  *   reason: string,
  *   planValidations: PlanPricingValidation[],
- *   topUpValidations: UsageBundlePricingValidation[]
+ *   topUpValidations: UsageBundlePricingValidation[],
+ *   workerVersionId: string | null
  * }} PricingCanaryResult
  */
 
 /**
  * @param {string[]} args
- * @returns {{ baseUrl: string, countries: string[], json: boolean }}
+ * @returns {{ baseUrl: string, countries: string[], json: boolean, expectedWorkerVersionId: string | null }}
  */
 export function parseArgs(args) {
   const parsed = {
     baseUrl: process.env.CANARY_BASE_URL || DEFAULT_BASE_URL,
     countries: REQUIRED_COUNTRIES,
     json: false,
+    expectedWorkerVersionId: process.env.CANARY_EXPECTED_WORKER_VERSION_ID || null,
   };
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === "--base-url" && args[index + 1]) {
       parsed.baseUrl = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (arg === "--expected-worker-version" && args[index + 1]) {
+      parsed.expectedWorkerVersionId = args[index + 1];
       index += 1;
       continue;
     }
@@ -101,10 +109,14 @@ export function parseArgs(args) {
 }
 
 /**
- * @param {{ baseUrl: string, country: string, token: string }} input
+ * @param {{ baseUrl: string, country: string, token: string, expectedWorkerVersionId: string }} input
  * @returns {Promise<PricingCanaryResult>}
  */
-export async function fetchPreview({ baseUrl, country, token }) {
+export async function fetchPreview({ baseUrl, country, token, expectedWorkerVersionId }) {
+  const expectedVersion = expectedWorkerVersionId?.trim();
+  if (!expectedVersion) {
+    throw new Error("pricing_canary_worker_version_missing");
+  }
   const url = new URL("/api/pricing-preview", baseUrl);
   url.searchParams.set("country", country);
   url.searchParams.set("pricing-canary", String(Date.now()));
@@ -112,6 +124,7 @@ export async function fetchPreview({ baseUrl, country, token }) {
     headers: {
       "user-agent": "0509-dodo-pricing-canary/1.0",
       "x-0509-canary-token": token,
+      "x-0509-expected-worker-version": expectedVersion,
     },
     signal: AbortSignal.timeout(DODO_PRICING_CANARY_TIMEOUT_MS),
   });
@@ -121,6 +134,7 @@ export async function fetchPreview({ baseUrl, country, token }) {
     requestedCountry: country,
     status: response.status,
     responseOk: response.ok,
+    expectedWorkerVersionId: expectedVersion,
   });
 }
 
@@ -130,6 +144,7 @@ export async function fetchPreview({ baseUrl, country, token }) {
  *   requestedCountry: string,
  *   status: number,
  *   responseOk: boolean
+ *   expectedWorkerVersionId?: string | null
  * }} input
  * @returns {PricingCanaryResult}
  */
@@ -138,6 +153,7 @@ export function validatePricingPreviewBody({
   requestedCountry,
   status,
   responseOk,
+  expectedWorkerVersionId = null,
 }) {
   const saleOpenPlans = saleOpenPlansForPreview(preview);
   const planValidations = saleOpenPlans.map((plan) =>
@@ -154,6 +170,7 @@ export function validatePricingPreviewBody({
     ok:
       responseOk &&
       preview.available === true &&
+      (!expectedWorkerVersionId || preview.workerVersionId === expectedWorkerVersionId) &&
       preview.country === requestedCountry &&
       planValidations.every((plan) => plan.ok) &&
       topUpValidations.every((bundle) => bundle.ok),
@@ -165,6 +182,7 @@ export function validatePricingPreviewBody({
     reason: preview.reason || "",
     planValidations,
     topUpValidations,
+    workerVersionId: preview.workerVersionId ?? null,
   };
 }
 
@@ -339,9 +357,20 @@ export async function main(args = process.argv.slice(2), env = process.env) {
     process.exitCode = 1;
     return;
   }
+  if (!config.expectedWorkerVersionId) {
+    console.error("Missing expected Worker version ID; refusing an unbound pricing canary.");
+    process.exitCode = 1;
+    return;
+  }
+  const expectedWorkerVersionId = config.expectedWorkerVersionId;
 
   const results = await Promise.all(
-    config.countries.map((country) => fetchPreview({ baseUrl: config.baseUrl, country, token })),
+    config.countries.map((country) => fetchPreview({
+      baseUrl: config.baseUrl,
+      country,
+      token,
+      expectedWorkerVersionId,
+    })),
   );
 
   if (config.json) {

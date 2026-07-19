@@ -80,7 +80,13 @@ describe("canary canonical origin guards", () => {
 
     await expect(
       runBillingCanary({
-        config: { baseUrl, json: false, email: null },
+        config: {
+          baseUrl,
+          json: false,
+          email: null,
+          expectedWorkerVersionId: "worker-v1",
+          gateRunId: "gate-run-1",
+        },
         token: "secret-token",
         fetchImpl,
       }),
@@ -182,6 +188,8 @@ describe("canary canonical origin guards", () => {
           "digest-1",
           "--proof-capture-id",
           "proof-1",
+          "--expected-worker-version",
+          "worker-version-1",
         ]),
         token: "secret-token",
         fetchImpl,
@@ -203,6 +211,8 @@ describe("canary canonical origin guards", () => {
           "digest-1",
           "--proof-capture-id",
           "proof-1",
+          "--expected-worker-version",
+          "worker-version-1",
         ]),
         token: "secret-token",
         fetchImpl,
@@ -213,10 +223,26 @@ describe("canary canonical origin guards", () => {
     expect(String(requestUrl)).toBe("https://0509.io/api/launch-readiness/canary");
     expect(new Headers(requestInit?.headers).get("x-0509-canary-token")).toBe("secret-token");
     expect(new Headers(requestInit?.headers).get("x-0509-canary-operation")).toBe("cleanup");
+    expect(new Headers(requestInit?.headers).get("x-0509-expected-worker-version")).toBe("worker-version-1");
     expect(JSON.parse(String(requestInit?.body))).toEqual({
       runId: "run-1",
       digestRunId: "digest-1",
       proofCaptureId: "proof-1",
     });
+  });
+
+  it("supports interruption-safe cleanup by stable gate run ID", async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(successResponse());
+
+    await expect(
+      runLaunchCanary({
+        config: parseLaunchArgs(["--cleanup", "--gate-run-id", "gate-c-worker-v1"]),
+        token: "secret-token",
+        fetchImpl,
+      }),
+    ).resolves.toMatchObject({ response: { status: 200 } });
+
+    const [, requestInit] = fetchImpl.mock.calls[0] ?? [];
+    expect(JSON.parse(String(requestInit?.body))).toEqual({ gateRunId: "gate-c-worker-v1" });
   });
 });

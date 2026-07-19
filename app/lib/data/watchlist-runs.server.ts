@@ -4,6 +4,7 @@ import {
   queryAll as many,
   queryOne as one,
 } from "~/lib/data/d1.server";
+import { billingCanaryMutationGuardSql } from "~/lib/data/billing-canary-lock.server";
 import { createId, createStableId, jsonValue, nowIso, type JsonRecord } from "~/lib/data/helpers.server";
 import {
   toWatchlistRunRecord,
@@ -65,6 +66,7 @@ export async function createWatchlistRun(
   triggerType: WatchlistRunRecord["triggerType"],
   baselineFromRunId: string | null,
   pageBudget: number,
+  initialSummary: JsonRecord = {},
 ) {
   const id = createId();
   const timestamp = nowIso();
@@ -87,13 +89,14 @@ export async function createWatchlistRun(
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, 'running', ?, 0, ?, '{}', ?, NULL, NULL, NULL, ?, ?)
+      VALUES (?, ?, ?, 'running', ?, 0, ?, ?, ?, NULL, NULL, NULL, ?, ?)
     `,
     id,
     watchlistId,
     triggerType,
     pageBudget,
     baselineFromRunId,
+    jsonValue(initialSummary),
     timestamp,
     timestamp,
     timestamp,
@@ -265,12 +268,14 @@ export async function listWatchlistRuns(
 }
 export async function touchWatchlistScanned(env: AppEnv, watchlistId: string) {
   const timestamp = nowIso();
+  const billingCanaryGuard = await billingCanaryMutationGuardSql(env, "watchlist.user_id");
   await run(
     env,
     `
       UPDATE watchlist
       SET last_scanned_at = ?, updated_at = ?
       WHERE id = ?
+        ${billingCanaryGuard}
     `,
     timestamp,
     timestamp,

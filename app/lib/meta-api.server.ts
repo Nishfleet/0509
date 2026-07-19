@@ -10,7 +10,12 @@ import { countryNameFromIso, isoFromCountryName } from "~/lib/countries";
 import { readResponseJsonWithinLimit } from "~/lib/bounded-response.server";
 import type { AppEnv } from "~/lib/env.server";
 import { fetchWithTimeout } from "~/lib/fetch-timeout.server";
-import type { AdRecord, NormalizedSavedQuery, SearchMode, SearchResponse } from "~/lib/types";
+import type {
+  AdRecord,
+  NormalizedSavedQuery,
+  SearchMode,
+  SearchResponse,
+} from "~/lib/types";
 
 const DEFAULT_PAGE_LIMIT = 24;
 const META_FETCH_TIMEOUT_MS = 15_000;
@@ -87,9 +92,14 @@ export function demoSearch(
   query: NormalizedSavedQuery,
   cursor?: string | null,
 ): SearchResponse {
-  const matchingAds = demoAds.filter((ad) => matchesAd(ad, query.mode, query.filters));
+  const matchingAds = demoAds.filter((ad) =>
+    matchesAd(ad, query.mode, query.filters),
+  );
   const startIndex = cursor ? Number.parseInt(cursor, 10) : 0;
-  const nextSlice = matchingAds.slice(startIndex, startIndex + DEFAULT_PAGE_LIMIT);
+  const nextSlice = matchingAds.slice(
+    startIndex,
+    startIndex + DEFAULT_PAGE_LIMIT,
+  );
   const nextCursor =
     startIndex + DEFAULT_PAGE_LIMIT < matchingAds.length
       ? String(startIndex + DEFAULT_PAGE_LIMIT)
@@ -179,7 +189,8 @@ async function liveSearch(
   if (!response.ok || payload.error) {
     const code = payload.error?.code ?? response.status;
     throw new MetaApiError(
-      payload.error?.message ?? `Meta Ad Library request failed with status ${response.status}.`,
+      payload.error?.message ??
+        `Meta Ad Library request failed with status ${response.status}.`,
       code,
       code === 190 || code === 102,
       code === 613 || response.status === 429,
@@ -269,7 +280,11 @@ function detectCreativeType(
   return "image";
 }
 
-function matchesAd(ad: AdRecord, mode: SearchMode, filters: NormalizedSavedQuery["filters"]) {
+function matchesAd(
+  ad: AdRecord,
+  mode: SearchMode,
+  filters: NormalizedSavedQuery["filters"],
+) {
   const query = filters.query.toLowerCase();
   const searchable =
     `${ad.advertiser} ${ad.body} ${ad.previewHeadline} ${ad.previewSubhead} ${ad.hook} ${ad.offer} ${ad.cta}`.toLowerCase();
@@ -286,7 +301,8 @@ function matchesAd(ad: AdRecord, mode: SearchMode, filters: NormalizedSavedQuery
     filters.country === "all" ||
     ad.source === "demo" ||
     ad.countries.includes(filters.country);
-  const platformMatch = filters.platform === "all" || ad.platforms.includes(filters.platform);
+  const platformMatch =
+    filters.platform === "all" || ad.platforms.includes(filters.platform);
   const creativeMatch =
     filters.creativeType === "all" ||
     ad.format === filters.creativeType ||
@@ -296,9 +312,13 @@ function matchesAd(ad: AdRecord, mode: SearchMode, filters: NormalizedSavedQuery
     filters.status === "all" ||
     (filters.status === "active" ? ad.active : !ad.active);
   const firstSeenMatch =
-    !filters.firstSeenFrom || !ad.firstSeenAt || ad.firstSeenAt >= filters.firstSeenFrom;
+    !filters.firstSeenFrom ||
+    !ad.firstSeenAt ||
+    ad.firstSeenAt >= filters.firstSeenFrom;
   const lastSeenMatch =
-    !filters.lastSeenFrom || !ad.lastSeenAt || ad.lastSeenAt >= filters.lastSeenFrom;
+    !filters.lastSeenFrom ||
+    !ad.lastSeenAt ||
+    ad.lastSeenAt >= filters.lastSeenFrom;
 
   return (
     queryMatch &&

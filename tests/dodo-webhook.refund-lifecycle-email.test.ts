@@ -227,7 +227,7 @@ describe("customer lifecycle billing emails", () => {
 			expect.anything(),
 			expect.objectContaining({ paymentId: "pay_linked", stateUpdatedAt: "2026-07-05T00:00:00.000Z" }),
 		);
-		expect(data.getUserIdForDodoPayment).toHaveBeenCalledTimes(1);
+  expect(data.getUserIdForDodoPayment).toHaveBeenCalledTimes(2);
 	});
 
 	it("does not send a merchant receipt for payment grants because Dodo is merchant of record", async () => {

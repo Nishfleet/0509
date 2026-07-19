@@ -49,6 +49,12 @@ describe("scheduled D1 backup workflow", () => {
     expect(workflow).not.toMatch(/api[_-]?token:\s*['\"]/i);
   });
 
+  it("revalidates when the lifecycle canary or committed retention policy changes", () => {
+    const validationWorkflow = readFileSync(".github/workflows/d1-backup-validate.yml", "utf8");
+    expect(validationWorkflow).toContain('"scripts/d1-backup*.mjs"');
+    expect(validationWorkflow).toContain('"config/r2-retention-policy.json"');
+  });
+
   it("documents that Actions backups are proven end-to-end since 2026-07-13", () => {
     const opsDoc = readFileSync("docs/ops-backup-uptime.md", "utf8");
     expect(opsDoc).toContain("CLOUDFLARE_ACCOUNT_ID");

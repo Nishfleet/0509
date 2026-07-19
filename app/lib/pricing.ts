@@ -51,9 +51,6 @@ function planMarketingFeatures(plan: PlanFamily): string[] {
     features.push("Email Notifications");
     features.push("Exports");
     features.push("Landing-page change history with screenshots");
-    features.push(
-      "Reads ad text in 30+ languages and scripts — auto-translated into English",
-    );
   }
   if (plan === "agency") {
     features.push("Team workspace");

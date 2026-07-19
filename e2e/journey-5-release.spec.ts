@@ -7,6 +7,7 @@ import {
   expectPrimaryActionAboveFold,
   expectReducedMotionSafe,
   expectVisibleKeyboardFocus,
+  focusAdvanceKey,
 } from "./helpers/release-experience";
 import { requireExactReleaseBaseURL } from "./helpers/release-origin";
 
@@ -70,7 +71,8 @@ async function expectTouchTargets(page: Page) {
 }
 
 async function expectKeyboardFocus(page: Page) {
-  await page.keyboard.press("Tab");
+  const browserName = page.context().browser()?.browserType().name();
+  await page.keyboard.press(focusAdvanceKey(browserName));
   const control = page.locator(":focus");
   await expect(control).toBeVisible();
   const focusStyle = await control.evaluate((element) => {

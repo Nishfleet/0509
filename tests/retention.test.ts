@@ -2,7 +2,15 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it, vi } from "vitest";
 
-import { runRetentionSweep } from "~/lib/retention.server";
+import {
+  deleteExpiredProofCaptureArtifacts,
+  deleteExpiredLandingPageSnapshots,
+  MAX_SNAPSHOT_RETENTION_ROWS,
+  runRetentionSweep,
+} from "~/lib/retention.server";
+
+const HTML_KEY = "landing-pages/2026-01-01/0123456789abcdef0123456789abcdef.html";
+const SCREENSHOT_KEY = "landing-pages/2026-01-01/fedcba9876543210fedcba9876543210.jpeg";
 
 function createCapturingDb() {
   const statements: Array<{ sql: string; bindings: unknown[] }> = [];
@@ -14,6 +22,9 @@ function createCapturingDb() {
           bind(...bindings: unknown[]) {
             statements.push({ sql, bindings });
             return {
+              async all() {
+                return { success: true, results: [] };
+              },
               async run() {
                 return { success: true, meta: { changes: 2 } };
               },
@@ -31,9 +42,10 @@ describe("runRetentionSweep", () => {
 
     const result = await runRetentionSweep({ DB: mock.db } as never);
 
-    const tables = mock.statements.map((statement) =>
-      statement.sql.match(/DELETE FROM (\w+)/)?.[1],
-    );
+    const tables = mock.statements.flatMap((statement) => {
+      const table = statement.sql.match(/DELETE FROM (\w+)/)?.[1];
+      return table ? [table] : [];
+    });
     expect(tables).toEqual([
       "discovery_fetch_log",
       "discovery_cache_entry",
@@ -41,8 +53,8 @@ describe("runRetentionSweep", () => {
       "meta_integration_log",
       "watchlist_run",
       "delivery_attempt",
-      "landing_page_snapshot",
       "presence_item",
+      "release_scheduled_observation",
     ]);
 
     // every delete is batched — an unbounded DELETE could blow the cron budget
@@ -55,7 +67,9 @@ describe("runRetentionSweep", () => {
       discovery_fetch_log: 2,
       watchlist_run: 2,
       delivery_attempt: 2,
+      landing_page_snapshot: 0,
     });
+    expect(mock.statements.some((statement) => statement.sql.includes("FROM landing_page_snapshot AS snapshot"))).toBe(true);
   });
 
   it("never touches billing history or customer-facing digest history", async () => {
@@ -101,6 +115,9 @@ describe("runRetentionSweep", () => {
         return {
           bind() {
             return {
+              async all() {
+                return { success: true, results: [] };
+              },
               async run() {
                 statements.push(sql);
                 if (sql.includes("discovery_cache_entry")) {
@@ -130,6 +147,9 @@ describe("runRetentionSweep", () => {
         return {
           bind() {
             return {
+              async all() {
+                return { success: true, results: [] };
+              },
               async run() {
                 if (sql.includes("meta_integration_log")) {
                   throw new Error("D1 token=super-secret SQL=SELECT * FROM private_data");
@@ -148,6 +168,187 @@ describe("runRetentionSweep", () => {
     expect(JSON.stringify(result)).not.toContain("super-secret");
     expect(JSON.stringify(result)).not.toContain("private_data");
     consoleError.mockRestore();
+  });
+
+  it("deletes R2 first and converges after a partial provider failure", async () => {
+    let rowPresent = true;
+    let screenshotDeleteFails = true;
+    const objects = new Set([HTML_KEY, SCREENSHOT_KEY]);
+    const events: string[] = [];
+    const db = {
+      prepare(sql: string) {
+        return {
+          bind(...bindings: unknown[]) {
+            return {
+              async all() {
+                if (sql.includes("FROM landing_page_snapshot AS snapshot")) {
+                  return {
+                    results: rowPresent
+                      ? [{
+                          id: "snapshot-1",
+                          artifact_key: HTML_KEY,
+                          metadata_json: JSON.stringify({
+                            htmlArtifactKey: HTML_KEY,
+                            screenshotArtifactKey: SCREENSHOT_KEY,
+                          }),
+                        }]
+                      : [],
+                  };
+                }
+                if (sql.includes("AS external_references")) {
+                  return { results: [{ external_references: 0 }] };
+                }
+                throw new Error(`unexpected all: ${sql}`);
+              },
+              async run() {
+                if (!sql.includes("DELETE FROM landing_page_snapshot")) {
+                  throw new Error(`unexpected run: ${sql}`);
+                }
+                events.push("d1:delete");
+                expect(bindings[0]).toBe("snapshot-1");
+                rowPresent = false;
+                return { meta: { changes: 1 } };
+              },
+            };
+          },
+        };
+      },
+    };
+    const bucket = {
+      async head(key: string) {
+        events.push(`r2:head:${key}`);
+        return objects.has(key) ? ({ key } as R2Object) : null;
+      },
+      async delete(key: string) {
+        events.push(`r2:delete:${key}`);
+        if (key === SCREENSHOT_KEY && screenshotDeleteFails) {
+          screenshotDeleteFails = false;
+          throw new Error("temporary R2 failure");
+        }
+        objects.delete(key);
+      },
+    };
+    const env = { DB: db as D1Database, LANDING_PAGE_ARTIFACTS: bucket as unknown as R2Bucket } as never;
+
+    const first = await deleteExpiredLandingPageSnapshots(env, { cutoff: "2026-04-01T00:00:00.000Z" });
+    expect(first).toEqual({ deleted: 0, failed: 1 });
+    expect(rowPresent).toBe(true);
+    expect(objects.has(HTML_KEY)).toBe(false);
+    expect(events).not.toContain("d1:delete");
+
+    const second = await deleteExpiredLandingPageSnapshots(env, { cutoff: "2026-04-01T00:00:00.000Z" });
+    expect(second).toEqual({ deleted: 1, failed: 0 });
+    expect(objects.size).toBe(0);
+    expect(events.at(-1)).toBe("d1:delete");
+  });
+
+  it("keeps externally referenced objects while deleting only the expired snapshot row", async () => {
+    const r2Head = vi.fn();
+    const r2Delete = vi.fn();
+    const sqlBindings: unknown[][] = [];
+    const db = {
+      prepare(sql: string) {
+        return {
+          bind(...bindings: unknown[]) {
+            sqlBindings.push(bindings);
+            return {
+              async all() {
+                if (sql.includes("FROM landing_page_snapshot AS snapshot")) {
+                  return { results: [{ id: "snapshot-1", artifact_key: HTML_KEY, metadata_json: "{}" }] };
+                }
+                return { results: [{ external_references: 1 }] };
+              },
+              async run() {
+                return { meta: { changes: 1 } };
+              },
+            };
+          },
+        };
+      },
+    };
+
+    const result = await deleteExpiredLandingPageSnapshots(
+      { DB: db as D1Database, LANDING_PAGE_ARTIFACTS: { head: r2Head, delete: r2Delete } as unknown as R2Bucket } as never,
+      { cutoff: "2026-04-01T00:00:00.000Z", limit: 999 },
+    );
+
+    expect(result).toEqual({ deleted: 1, failed: 0 });
+    expect(r2Head).not.toHaveBeenCalled();
+    expect(r2Delete).not.toHaveBeenCalled();
+    expect(sqlBindings[0]?.at(-1)).toBe(MAX_SNAPSHOT_RETENTION_ROWS);
+  });
+});
+
+describe("active proof artifact retention", () => {
+  it("cleans an expired unreferenced proof artifact R2-first and keeps the proof row", async () => {
+    const events: string[] = [];
+    let objectPresent = true;
+    const db = {
+      prepare(sql: string) {
+        return {
+          bind(...bindings: unknown[]) {
+            return {
+              async all() {
+                if (sql.includes("ORDER BY proof_capture.created_at")) {
+                  return { results: [{
+                    id: "proof-old",
+                    owner_user_id: "owner-1",
+                    html_artifact_key: HTML_KEY,
+                    screenshot_artifact_key: null,
+                  }] };
+                }
+                if (sql.includes("other.id <>")) return { results: [{ external_references: 0 }] };
+                if (sql.includes("references_for_key")) {
+                  return { results: [{
+                    reference_count: 1,
+                    owner_count: 1,
+                    owner_match_count: 1,
+                    landing_page_snapshot_references: 0,
+                    proof_capture_references: 1,
+                  }] };
+                }
+                throw new Error(`unexpected all: ${sql}`);
+              },
+              async run() {
+                expect(sql).toContain("UPDATE proof_capture");
+                events.push("d1:clear");
+                expect(bindings).toContain(HTML_KEY);
+                return { meta: { changes: 1 } };
+              },
+            };
+          },
+        };
+      },
+    };
+    const bucket = {
+      async head(key: string) {
+        events.push("r2:head");
+        return objectPresent ? ({ key } as R2Object) : null;
+      },
+      async delete() {
+        events.push("r2:delete");
+        objectPresent = false;
+      },
+    };
+
+    await expect(deleteExpiredProofCaptureArtifacts(
+      { DB: db as D1Database, LANDING_PAGE_ARTIFACTS: bucket as unknown as R2Bucket } as never,
+      { cutoff: "2026-04-01T00:00:00.000Z" },
+    )).resolves.toEqual({ cleared: 1, failed: 0 });
+    expect(events).toEqual(["r2:head", "r2:delete", "d1:clear"]);
+  });
+
+  it("source-selects only bounded captures outside active pointers, events, and digests", async () => {
+    const mock = createCapturingDb();
+    await deleteExpiredProofCaptureArtifacts(
+      { DB: mock.db } as never,
+      { cutoff: "2026-04-01T00:00:00.000Z", limit: 999 },
+    );
+    const sql = mock.statements[0]?.sql ?? "";
+    expect(sql).toContain("last_successful_capture_id");
+    expect(sql).toContain("watch_event.proof_capture_id");
+    expect(sql).toContain("$.proofCaptureId");
+    expect(mock.statements[0]?.bindings.at(-1)).toBe(MAX_SNAPSHOT_RETENTION_ROWS);
   });
 });
 

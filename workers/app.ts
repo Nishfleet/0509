@@ -3,7 +3,7 @@
 import { createRequestHandler } from "react-router";
 
 import { reportScheduledTaskFailure } from "../app/lib/cron-failure-alert.server";
-import { resumePendingDigestScheduleJobs } from "../app/lib/digest-orchestration.server";
+import { resumePendingDigestScheduleJobsDetailed } from "../app/lib/digest-orchestration.server";
 import {
   flushDeferredInstantAlerts,
   runScheduledDiscoveryWarmup,
@@ -20,6 +20,10 @@ import {
 } from "../app/lib/public-markdown";
 import { publicSeoFileForPathname } from "../app/lib/seo";
 import { enforceRequestRateLimit } from "../app/lib/rate-limit.server";
+import {
+  observeScheduledTask,
+  type ReleaseScheduledTaskName,
+} from "../app/lib/release-scheduled-observation.server";
 import { runRetentionSweep } from "../app/lib/retention.server";
 import { scheduleBillingLifecycleEmailRecovery } from "./delivery-recovery";
 import { scheduleDigestScheduleExhaustionRecovery } from "./digest-schedule-recovery";
@@ -134,18 +138,24 @@ export default {
   },
   async scheduled(controller, env, ctx) {
     const scheduledTask = resolveScheduledTask(controller.cron);
+		const observationContext = Object.freeze({
+			cron: controller.cron,
+			scheduledTime: controller.scheduledTime,
+		});
+		const observe = <T>(taskName: ReleaseScheduledTaskName, taskPromise: Promise<T>) =>
+			observeScheduledTask(env, ctx, { ...observationContext, taskName }, taskPromise);
 
 		// Every cron also drains a bounded customer-email outbox. Keeping this
 		// before the warmup early return ensures a worker that stopped after the
 		// durable pre-dispatch claim cannot strand a finalized billing event.
-		scheduleBillingLifecycleEmailRecovery(env, ctx);
+		scheduleBillingLifecycleEmailRecovery(env, ctx, { observationContext });
 
     if (controller.cron === WEEKLY_DIGEST_CRON) {
       // Monday morning: the operator gets last week's business numbers
       // alongside the weekly digests. Idempotency-keyed per day, so a cron
       // retry cannot double-send.
       ctx.waitUntil(
-        sendWeeklyBusinessNumbers(env).then(
+        observe("weekly_business_numbers", sendWeeklyBusinessNumbers(env)).then(
           (result) => {
             if (result.sent) {
               console.log("weekly business numbers sent");
@@ -168,32 +178,32 @@ export default {
     }
 
     if (scheduledTask.kind === "discovery_warmup") {
-		scheduleDigestScheduleExhaustionRecovery(env, ctx);
+		scheduleDigestScheduleExhaustionRecovery(env, ctx, { observationContext });
 		ctx.waitUntil(
-			resumePendingDigestScheduleJobs(env, {
+			observe("digest_schedule_recovery", resumePendingDigestScheduleJobsDetailed(env, {
 				deadlineAt: Date.now() + DIGEST_RECOVERY_TIME_BUDGET_MS,
-			}).then(
-				(digests) => {
-					if (digests > 0) {
-						console.log("pending digest schedule jobs recovered", { digests });
+			})).then(
+				(result) => {
+					if (result.sent > 0) {
+						console.log("pending digest schedule jobs recovered", { digests: result.sent });
 					}
 				},
 				(error) => reportScheduledTaskFailure(env, "digest_schedule_recovery", error),
 			),
 		);
       ctx.waitUntil(
-        runScheduledDiscoveryWarmup(env).then(
+        observe("discovery_warmup", runScheduledDiscoveryWarmup(env)).then(
           undefined,
           (error) => reportScheduledTaskFailure(env, "discovery_warmup", error),
         ),
       );
       ctx.waitUntil(
-        import("../app/lib/monitoring-fanout.server").then(({ reconcileOrchestratedWatchlistRuns, resolveMonitoringFanoutMode, resolveMonitoringOrchestrationLeaseMs }) =>
+        observe("monitoring_fanout_reconciliation", import("../app/lib/monitoring-fanout.server").then(({ reconcileOrchestratedWatchlistRuns, resolveMonitoringFanoutMode, resolveMonitoringOrchestrationLeaseMs }) =>
           reconcileOrchestratedWatchlistRuns(env, {
             mode: resolveMonitoringFanoutMode(env),
             leaseMs: resolveMonitoringOrchestrationLeaseMs(env),
           }),
-        ).then(
+        )).then(
           (result) => {
             const firstScans = result.firstScans ?? {
               redispatched: 0,
@@ -218,7 +228,7 @@ export default {
       // deferred by quiet hours get sent once the window ends, and failed
       // instant sends get retried.
       ctx.waitUntil(
-        flushDeferredInstantAlerts(env).then(
+        observe("instant_alert_flush", flushDeferredInstantAlerts(env)).then(
           (result) => {
             if (result.groups > 0) {
               console.log("instant alert flush completed", result);
@@ -230,7 +240,7 @@ export default {
       // ...and the bounded retention sweep that keeps D1 tables from
       // growing forever.
       ctx.waitUntil(
-        runRetentionSweep(env).then(
+        observe("retention_sweep", runRetentionSweep(env)).then(
           async (result) => {
             const total = Object.values(result.deleted).reduce((sum, count) => sum + count, 0);
             const failedSteps = result.failedSteps ?? [];
@@ -249,9 +259,9 @@ export default {
         ),
       );
       ctx.waitUntil(
-        import("../app/lib/presence-service.server").then(({ runPresencePollingBatch }) =>
+        observe("presence_polling_batch", import("../app/lib/presence-service.server").then(({ runPresencePollingBatch }) =>
           runPresencePollingBatch(env, { limit: 20 }),
-        ).then(
+        )).then(
           (result) => {
             if (result.results.length > 0) {
               console.log("presence polling batch completed", result);
@@ -264,14 +274,14 @@ export default {
     }
 
     ctx.waitUntil(
-      runScheduledMonitoring(env, {
+      observe("scheduled_monitoring", runScheduledMonitoring(env, {
         includeScans: scheduledTask.includeScans,
         includeDigests: scheduledTask.includeDigests,
         digestCadence: scheduledTask.digestCadence,
         digestLookbackDays: scheduledTask.digestLookbackDays,
         cron: controller.cron,
         scheduledTime: controller.scheduledTime,
-      }).then(
+      })).then(
         async (result) => {
           console.log("scheduled monitoring completed", {
             cron: controller.cron,
@@ -291,13 +301,13 @@ export default {
               },
             );
             try {
-              const alert = await sendCustomerAtRiskAlert(env, {
+              const alert = await observe("customer_at_risk_alert", sendCustomerAtRiskAlert(env, {
                 skippedForBudget: result.skippedForBudget,
                 dispatchFailures: result.dispatchFailures,
                 idempotencyKey: scheduledTask.includeRiskAlert
                   ? undefined
                   : operationalIdempotencyKey ?? undefined,
-              });
+              }));
               if (alert.sent) {
                 console.log("customer-at-risk alert sent", alert);
               }

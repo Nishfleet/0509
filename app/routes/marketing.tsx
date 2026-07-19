@@ -878,9 +878,9 @@ export default function MarketingRoute() {
 
         <p className="ld-pricing-note">
           Coming from MagicBrief or another tool that&rsquo;s winding down? See the{" "}
-          <Link to="/compare/magicbrief">migration guide</Link>. Your collections and
-          watchlists set up in an afternoon — email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>{" "}
-          and we&rsquo;ll help you move.
+          <Link to="/compare/magicbrief">migration guide</Link>. Email{" "}
+          <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we&rsquo;ll help you move your
+          collections and watchlists.
         </p>
 
         <div className="ld-bundles" aria-label="Check packs">

@@ -118,11 +118,13 @@ export async function fetchCanary({ url, token, body, userAgent = "0509-dodo-bil
  * @param {string[]} args
  */
 export function parseArgs(args) {
-  /** @type {{ baseUrl: string, json: boolean, email: string | null }} */
+  /** @type {{ baseUrl: string, json: boolean, email: string | null, expectedWorkerVersionId: string | null, gateRunId: string | null }} */
   const parsed = {
     baseUrl: process.env.CANARY_BASE_URL || DEFAULT_BASE_URL,
     json: false,
     email: process.env.CANARY_BILLING_EMAIL || null,
+    expectedWorkerVersionId: process.env.CANARY_EXPECTED_WORKER_VERSION_ID || null,
+    gateRunId: process.env.CANARY_GATE_RUN_ID || null,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -134,6 +136,16 @@ export function parseArgs(args) {
     }
     if (arg === "--email" && args[index + 1]) {
       parsed.email = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (arg === "--expected-worker-version" && args[index + 1]) {
+      parsed.expectedWorkerVersionId = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (arg === "--gate-run-id" && args[index + 1]) {
+      parsed.gateRunId = args[index + 1];
       index += 1;
       continue;
     }
@@ -194,15 +206,16 @@ function formatReport(payload) {
  *
  * @param {unknown} payload
  * @param {Response} response
+ * @param {{ workerVersionId?: string | null, gateRunId?: string | null }} [expected]
  * @returns {{ ok: true } | { ok: false, blocker: string }}
  */
-export function validateBillingCanaryResult(payload, response) {
+export function validateBillingCanaryResult(payload, response, expected = {}) {
   if (!response.ok) return { ok: false, blocker: "billing_canary_http_failure" };
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return { ok: false, blocker: "billing_canary_invalid_response" };
   }
 
-  const body = /** @type {{ ok?: unknown, user?: { email?: unknown }, webhook?: { plan?: { status?: unknown }, proofCredits?: { status?: unknown } }, grants?: { paidPlanUnlocked?: unknown, planCleanupOk?: unknown, watchlistCleanupOk?: unknown, proofCreditsGranted?: unknown, proofCreditCleanupOk?: unknown, credits?: unknown } }} */ (payload);
+  const body = /** @type {{ ok?: unknown, workerVersionId?: unknown, gateRunId?: unknown, user?: { email?: unknown }, webhook?: { plan?: { status?: unknown }, proofCredits?: { status?: unknown } }, grants?: { paidPlanUnlocked?: unknown, planCleanupOk?: unknown, watchlistCleanupOk?: unknown, proofCreditsGranted?: unknown, proofCreditCleanupOk?: unknown, credits?: unknown } }} */ (payload);
   const grants = body.grants;
   const planWebhookStatus = body.webhook?.plan?.status;
   const creditWebhookStatus = body.webhook?.proofCredits?.status;
@@ -221,6 +234,12 @@ export function validateBillingCanaryResult(payload, response) {
   if (body.ok !== true || !webhookStatusesValid || !grantsValid) {
     return { ok: false, blocker: "billing_canary_proof_incomplete" };
   }
+  if (
+    (expected.workerVersionId && body.workerVersionId !== expected.workerVersionId) ||
+    (expected.gateRunId && body.gateRunId !== expected.gateRunId)
+  ) {
+    return { ok: false, blocker: "billing_canary_identity_mismatch" };
+  }
 
   return { ok: true };
 }
@@ -232,13 +251,23 @@ export async function runCanary({ config = parseArgs([]), token = process.env.CA
   if (!token) {
     throw new Error("Missing CANARY_BYPASS_TOKEN; source .dev.vars or set the secret before running this canary.");
   }
+  if (!config.expectedWorkerVersionId) {
+    throw new Error("Missing expected Worker version ID; refusing an unbound billing canary.");
+  }
+  if (!config.gateRunId || !/^[a-z0-9._-]{1,128}$/u.test(config.gateRunId)) {
+    throw new Error("Missing or invalid gate run ID; refusing a non-resumable billing canary.");
+  }
 
   const baseUrl = validateCanonicalBaseUrl(config.baseUrl);
-  const body = config.email ? JSON.stringify({ email: config.email }) : undefined;
+  const body = JSON.stringify({
+    ...(config.email ? { email: config.email } : {}),
+    gateRunId: config.gateRunId,
+  });
   const response = await fetchCanary({
     url: new URL("/api/billing/dodo/canary", baseUrl),
     token,
     body,
+    extraHeaders: { "x-0509-expected-worker-version": config.expectedWorkerVersionId },
     fetchImpl,
   });
   const payload = await response.json().catch(() => null);
@@ -250,7 +279,10 @@ async function main() {
   const config = parseArgs(process.argv.slice(2));
   try {
     const { payload, response } = await runCanary({ config });
-    const validation = validateBillingCanaryResult(payload, response);
+    const validation = validateBillingCanaryResult(payload, response, {
+      workerVersionId: config.expectedWorkerVersionId,
+      gateRunId: config.gateRunId,
+    });
     if (config.json) {
       console.log(JSON.stringify(payload, null, 2));
     } else {

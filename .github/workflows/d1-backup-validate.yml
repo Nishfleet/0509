@@ -6,6 +6,7 @@ on:
     paths:
       - "scripts/d1-backup*.mjs"
       - "scripts/validate-d1-backup.mjs"
+      - "config/r2-retention-policy.json"
       - "wrangler.jsonc"
       - "migrations/**"
       - ".github/workflows/d1-backup-validate.yml"

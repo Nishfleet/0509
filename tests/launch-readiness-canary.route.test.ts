@@ -212,6 +212,75 @@ describe("launch readiness canary route", () => {
     expect(prepare).not.toHaveBeenCalled();
   });
 
+  it("rejects a mismatched Worker version before any canary side effects", async () => {
+    const prepare = vi.fn();
+    const captureLandingPageSnapshot = vi.fn();
+    const createWatchlistRun = vi.fn();
+    const createProofCapture = vi.fn();
+    const deliverWeeklyDigest = vi.fn();
+
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        CF_VERSION_METADATA: { id: "worker-v2" },
+        DB: { prepare },
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({ createProofCapture, createWatchlistRun }));
+    vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+    vi.doMock("~/lib/landing-pages.server", () => ({ captureLandingPageSnapshot }));
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "POST",
+        headers: {
+          "x-0509-canary-token": "secret-token",
+          "x-0509-expected-worker-version": "worker-v1",
+        },
+      }),
+    } as never);
+
+    expect(response.status).toBe(409);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      blocker: "worker_version_mismatch",
+    });
+    expect(prepare).not.toHaveBeenCalled();
+    expect(captureLandingPageSnapshot).not.toHaveBeenCalled();
+    expect(createWatchlistRun).not.toHaveBeenCalled();
+    expect(createProofCapture).not.toHaveBeenCalled();
+    expect(deliverWeeklyDigest).not.toHaveBeenCalled();
+  });
+
+  it("continues past a matching Worker version", async () => {
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        CF_VERSION_METADATA: { id: "worker-v1" },
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "POST",
+        headers: {
+          "x-0509-canary-token": "secret-token",
+          "x-0509-expected-worker-version": "worker-v1",
+        },
+      }),
+    } as never);
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({ ok: false, blocker: "missing_db" });
+  });
+
   it("creates fresh monitoring, proof, digest, and delivery signals", async () => {
     const createWatchlistRun = vi.fn().mockResolvedValue("run-1");
     const finishWatchlistRun = vi.fn().mockResolvedValue(undefined);
@@ -292,7 +361,14 @@ describe("launch readiness canary route", () => {
         lane: "internal",
       },
     });
-    expect(createWatchlistRun).toHaveBeenCalledWith(expect.anything(), "watch-1", "manual", null, 1);
+    expect(createWatchlistRun).toHaveBeenCalledWith(
+      expect.anything(),
+      "watch-1",
+      "manual",
+      null,
+      1,
+      expect.objectContaining({ kind: "launch_readiness_canary" }),
+    );
     expect(createProofCapture).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -368,18 +444,24 @@ describe("launch readiness canary route", () => {
 			context: createContext(),
 			request: new Request("https://0509.io/api/launch-readiness/canary", {
 				method: "POST",
-				headers: { "x-0509-canary-token": "secret-token" },
+				headers: {
+					"content-type": "application/json",
+					"x-0509-canary-token": "secret-token",
+				},
+				body: JSON.stringify({ gateRunId: "gate-loser" }),
 			}),
 		} as never);
 
 		expect(response.status).toBe(409);
-		await expect(response.json()).resolves.toMatchObject({
-			ok: false,
-			blockers: ["digest_period_claim_conflict"],
+		const payload = await response.json();
+			expect(payload).toMatchObject({
+				ok: false,
+				blockers: ["digest_period_claim_conflict"],
+				gateRunId: "gate-loser",
 			runId: "run-loser",
 			proofCaptureId: "proof-loser",
-			digestRunId: "digest-winning-canary",
 		});
+		expect(payload).not.toHaveProperty("digestRunId");
 		expect(deliverWeeklyDigest).not.toHaveBeenCalled();
   });
 
@@ -440,6 +522,63 @@ describe("launch readiness canary route", () => {
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => ({
         CANARY_BYPASS_TOKEN: "secret-token",
+        CF_VERSION_METADATA: { id: "worker-v2" },
+        DB: createDbWithTarget(),
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({ cleanupLaunchReadinessCanary }));
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-0509-canary-operation": "cleanup",
+          "x-0509-canary-token": "secret-token",
+          "x-0509-expected-worker-version": "worker-v1",
+        },
+        body: JSON.stringify({ runId: "run-1", digestRunId: "digest-1", proofCaptureId: "proof-1" }),
+      }),
+    } as never);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      mode: "cleanup",
+      cleanupTruth: expect.stringContaining("R2 artifacts"),
+      cleanup: {
+        cleaned: true,
+        preservedProofCaptureId: "proof-1",
+      },
+    });
+    expect(cleanupLaunchReadinessCanary).toHaveBeenCalledWith(expect.anything(), {
+      ownerUserId: "user-1",
+      runId: "run-1",
+      digestRunId: "digest-1",
+      proofCaptureId: "proof-1",
+    });
+  });
+
+  it("accepts cleanup recovery by one stable gate run ID", async () => {
+    const cleanupLaunchReadinessCanary = vi.fn().mockResolvedValue({
+      cleaned: true,
+      preservedProofCaptureId: "proof-1",
+      deleted: {
+        deliveryAttempts: 1,
+        digestDeliveries: 1,
+        digestItems: 1,
+        watchEvents: 1,
+        digestRuns: 1,
+        watchlistRuns: 1,
+      },
+    });
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
         DB: createDbWithTarget(),
         LAUNCH_CANARY_EMAIL: "owner@example.com",
       })),
@@ -456,26 +595,14 @@ describe("launch readiness canary route", () => {
           "x-0509-canary-operation": "cleanup",
           "x-0509-canary-token": "secret-token",
         },
-        body: JSON.stringify({ runId: "run-1", digestRunId: "digest-1", proofCaptureId: "proof-1" }),
+        body: JSON.stringify({ gateRunId: "gate-c-worker-v1" }),
       }),
     } as never);
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("cache-control")).toBe("no-store");
-    await expect(response.json()).resolves.toMatchObject({
-      ok: true,
-      mode: "cleanup",
-      cleanupTruth: expect.stringContaining("proof capture, proof target, capture artifacts"),
-      cleanup: {
-        cleaned: true,
-        preservedProofCaptureId: "proof-1",
-      },
-    });
     expect(cleanupLaunchReadinessCanary).toHaveBeenCalledWith(expect.anything(), {
       ownerUserId: "user-1",
-      runId: "run-1",
-      digestRunId: "digest-1",
-      proofCaptureId: "proof-1",
+      gateRunId: "gate-c-worker-v1",
     });
   });
 
@@ -615,7 +742,7 @@ describe("launch readiness canary route", () => {
     expect(noOp.status).toBe(409);
     const noOpBody = await noOp.text();
     expect(noOpBody).toContain("shared_rows_present");
-    expect(noOpBody).toContain("proof capture, proof target, capture artifacts");
+    expect(noOpBody).toContain("R2 artifacts");
     expect(noOpBody).not.toContain("owner@example.com");
 
     cleanupLaunchReadinessCanary.mockRejectedValueOnce(new Error("raw cleanup sentinel"));

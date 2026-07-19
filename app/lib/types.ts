@@ -216,6 +216,7 @@ export interface AdRecord {
   firstSeenAt: string | null;
   lastSeenAt: string | null;
   active: boolean;
+  activeStatusObserved?: boolean;
   researchSummary: string;
   source: AdDiscoverySource;
   analysisFields: AnalysisFieldInput[];

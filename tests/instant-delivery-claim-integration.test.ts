@@ -66,6 +66,7 @@ function createAttemptTable(harness: ReturnType<typeof createSqliteD1>) {
       is_validated INTEGER NOT NULL,
       is_opted_in INTEGER NOT NULL,
       is_paused INTEGER NOT NULL,
+      template_eligible INTEGER NOT NULL DEFAULT 0,
       paused_at TEXT,
       opted_out_at TEXT,
       updated_at TEXT NOT NULL

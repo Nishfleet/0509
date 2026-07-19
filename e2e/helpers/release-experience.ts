@@ -2,6 +2,7 @@ import { expect, type Locator, type Page } from "@playwright/test";
 
 export const PHONE_MAX_WIDTH = 600;
 export const MIN_TOUCH_TARGET_PX = 44;
+const RENDERED_BOX_EPSILON_PX = 0.001;
 const MAX_REPORTED_FAILURES = 20;
 
 export type BoxSize = {
@@ -34,7 +35,17 @@ export function horizontalOverflowPx({ scrollWidth, clientWidth }: OverflowSnaps
 }
 
 export function hasMinimumTouchTarget(box: BoxSize, minimum = MIN_TOUCH_TARGET_PX): boolean {
-  return box.width >= minimum && box.height >= minimum;
+  return (
+    box.width >= minimum - RENDERED_BOX_EPSILON_PX &&
+    box.height >= minimum - RENDERED_BOX_EPSILON_PX
+  );
+}
+
+export function focusAdvanceKey(browserName: string | undefined, key = "Tab"): string {
+  // Safari/WebKit on macOS uses Option+Tab to include links in sequential
+  // keyboard navigation when the platform's full-keyboard-access setting is
+  // not enabled. This remains the real browser gesture, not a direct focus().
+  return browserName === "webkit" && key === "Tab" ? "Alt+Tab" : key;
 }
 
 function cssLengthInPixels(value: string | undefined): number {
@@ -97,7 +108,13 @@ export async function expectNoHorizontalOverflow(page: Page, tolerance = 1): Pro
         if (element instanceof HTMLSelectElement) {
           return false;
         }
-        const overflowX = getComputedStyle(element).overflowX;
+        const style = getComputedStyle(element);
+        // Inline boxes do not establish a scroll container. Firefox reports
+        // their text width as scrollWidth while clientWidth remains zero,
+        // which is not page overflow. Document-level overflow below still
+        // catches inline content that genuinely escapes the viewport.
+        if (style.display === "inline" || style.display === "contents") return false;
+        const overflowX = style.overflowX;
         return !["auto", "scroll", "hidden", "clip"].includes(overflowX);
       })
       .map(({ element, overflow }) => ({
@@ -164,8 +181,10 @@ export async function expectVisibleKeyboardFocus(control: Locator): Promise<void
 export async function expectFocusTransition(from: Locator, to: Locator, key = "Tab"): Promise<void> {
   await from.focus();
   await expect(from, "focus transition should start on the source control").toBeFocused();
-  await from.page().keyboard.press(key);
-  await expect(to, `focus transition should land on ${key}`).toBeFocused();
+  const browserName = from.page().context().browser()?.browserType().name();
+  const advanceKey = focusAdvanceKey(browserName, key);
+  await from.page().keyboard.press(advanceKey);
+  await expect(to, `focus transition should land on ${advanceKey}`).toBeFocused();
 }
 
 export async function expectStatusAnnouncement(
