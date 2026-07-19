@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { BrandWordmark } from "~/components/brand-wordmark";
+import { MarketingFooter } from "~/components/marketing-footer";
 import { SubmitButton } from "~/components/submit-button";
 import { demoProof } from "~/lib/demo-proof";
 import {
@@ -12,7 +13,15 @@ import {
 } from "~/lib/dodo-pricing-display";
 import type { PricingBillingCycle, PricingPlanSlug, UsageBundleSlug } from "~/lib/pricing";
 import { EVIDENCE_USAGE_CUSTOMER_COPY } from "~/lib/pricing";
-import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
+import {
+  canonicalLinks,
+  faqPageJsonLd,
+  jsonLdScriptProps,
+  organizationJsonLd,
+  publicSeoMeta,
+  webSiteJsonLd,
+  type FaqJsonLdEntry,
+} from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import type { RootLoaderData } from "~/root";
 
@@ -97,6 +106,73 @@ const backboneStats = [
   { value: "Prove", label: "screenshots and source links", detail: "no proof, no claim" },
   { value: "Brief", label: "the counter-move", detail: "what changed, why it matters, what to do next" },
 ] as const;
+
+// Product FAQ. Every answer here is verified against shipped behavior
+// (plan-entitlements.ts cadences, ad-source/browser-run public-page reads) —
+// keep it that way: weaker honest phrasing beats a stronger claim.
+export const productFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
+  {
+    question: "Where does the data come from?",
+    answer:
+      "Public surfaces only: the Meta Ad Library — the same public archive anyone can open in a browser — plus the public landing pages those ads link to. Five to Nine never logs in to anything and never reads anything behind a login.",
+  },
+  {
+    question: "Is this allowed?",
+    answer:
+      "Five to Nine only reads public data. The Meta Ad Library exists so anyone can inspect the ads a page is running, and landing pages are the pages competitors publish for every visitor. Every capture keeps its source link so you can open the same page yourself.",
+  },
+  {
+    question: "Will competitors know I'm watching?",
+    answer:
+      "Their accounts are never touched — no follows, no logins, no interaction with their pages or profiles. Checks read the same public surfaces any visitor's browser loads, and nothing in Five to Nine notifies the advertiser.",
+  },
+  {
+    question: "How is this different from ad-spy tools?",
+    answer:
+      "Ad-spy tools are built for browsing creatives. Five to Nine is built around what changed: offers, prices, CTAs, and landing-page copy — each confirmed change saved with screenshots, page text, and links, then summarized in a brief. If you mainly want a large creative library, ours is narrower; the change evidence is deeper.",
+  },
+  {
+    question: "How fast will I hear about changes?",
+    answer:
+      "Paid plans run scheduled checks every 3–6 hours: Scout every 6 hours, Starter every 3 hours, and Agency every 3 hours for its first 25 watchlists with the rest every 6 hours. Starter and Agency can also turn on instant alerts, so a confirmed change emails you as soon as a check finds it instead of waiting for the digest.",
+  },
+];
+
+// Plain-text mirror of the rendered billing FAQ block for FAQPage JSON-LD.
+// Keep in sync with the "Common billing questions" markup below.
+export function billingFaqJsonLdEntries(agencySaleOpen: boolean): FaqJsonLdEntry[] {
+  return [
+    {
+      question: "What uses checks?",
+      answer:
+        "Scheduled scans are included with your plan. A check is used when Five to Nine saves a proof-backed capture with screenshots, page text, and the original link.",
+    },
+    {
+      question: "Do unused checks roll over?",
+      answer:
+        "Included checks reset every month and do not roll over. Purchased checks never expire.",
+    },
+    {
+      question: "What changes on Agency?",
+      answer:
+        "Agency includes 75 watchlists, 250 Collections, 2,500 checks/month, team seats, API/MCP access, client reports, and shared report branding.",
+    },
+    agencySaleOpen
+      ? {
+          question: "How does Agency checkout work?",
+          answer: `Agency checkout is available when pricing loads in your region. Email ${SUPPORT_EMAIL} if you want an account review before buying.`,
+        }
+      : {
+          question: "Why is Agency held?",
+          answer: `Agency is available by account review. Email ${SUPPORT_EMAIL} and we will confirm fit directly.`,
+        },
+    {
+      question: "Where do prices come from?",
+      answer:
+        "Display prices load from Dodo Payments in your local currency at preview time. We never hardcode checkout amounts in the app.",
+    },
+  ];
+}
 
 type LocalDisplayPrice = {
   amount?: number | null;
@@ -392,8 +468,16 @@ export default function MarketingRoute() {
     </span>
   );
 
+  const structuredFaq = faqPageJsonLd([
+    ...productFaqEntries,
+    ...billingFaqJsonLdEntries(commercialLaunch.agencySaleOpen),
+  ]);
+
   return (
     <main className="f9-home">
+      <script {...jsonLdScriptProps(organizationJsonLd())} />
+      <script {...jsonLdScriptProps(webSiteJsonLd())} />
+      <script {...jsonLdScriptProps(structuredFaq)} />
       <div className="ld-ticker" aria-hidden="true">
         <div className="ld-ticker-belt">
           {tickerRun}
@@ -966,6 +1050,21 @@ export default function MarketingRoute() {
         </div>
       </section>
 
+      <section className="ld-quiet" id="faq">
+        <div className="ld-pricing-faq ld-reveal" aria-label="Product FAQ">
+          <span className="ld-kicker">FAQ</span>
+          <h3>Common product questions</h3>
+          <dl className="proof-trail-list">
+            {productFaqEntries.map((entry) => (
+              <div key={entry.question}>
+                <dt>{entry.question}</dt>
+                <dd>{entry.answer}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </section>
+
       <section className="ld-final">
         <h2>
           Start the watch <span aria-hidden="true">→</span>
@@ -988,23 +1087,7 @@ export default function MarketingRoute() {
         <p>Public search preview is free — no account. Paid plans run scheduled checks every 3–6 hours and email you the proof.</p>
       </section>
 
-      <footer className="ld-footer">
-        <Link className="ld-footer-brand" to="/" aria-label="Five to Nine home">
-          <BrandWordmark meta="Market intelligence" />
-        </Link>
-        <p>Five to Nine helps teams see competitor offer and landing-page changes before the next sales call.</p>
-        <nav aria-label="Footer">
-          <Link to="/help">Help</Link>
-          <Link to="/docs">Docs</Link>
-          <Link to="/api/docs">API docs</Link>
-          <Link to="/status">Status</Link>
-          <Link to="/changelog">Changelog</Link>
-          <Link to="/trust">Trust</Link>
-          <Link to="/privacy">Privacy</Link>
-          <Link to="/terms">Terms</Link>
-          <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>
-        </nav>
-      </footer>
+      <MarketingFooter />
     </main>
   );
 }
