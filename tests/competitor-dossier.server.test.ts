@@ -4,6 +4,7 @@ import { upsertAd } from "~/lib/ad-persistence.server";
 import {
 	buildCompetitorDossier,
 	computeAdVelocity,
+	computeAngleMix,
 	computeHookPatterns,
 	insufficientCompetitorDossier,
 } from "~/lib/competitor-dossier.server";
@@ -435,23 +436,137 @@ describe("buildCompetitorDossier", () => {
 		expect(dossier.adHistory[0].observedRunCount).toBe(2);
 	});
 
-	it("keeps the angleMix extension point undefined until the classifier ships", async () => {
-		await upsertAd(env, buildAd("ad-a"));
+	it("classifies each ad's copy into the angle mix with honest tentative/unclassified buckets", async () => {
 		await seedTwoScanBaseline();
-		seedObservation("obs-1", "ad-a", "run-1", "2026-07-10T04:00:00.000Z", 1);
-		seedObservation("obs-2", "ad-a", "run-2", "2026-07-15T04:00:00.000Z", 1);
+		const copies: Array<Partial<AdRecord>> = [
+			// Confident discount_urgency: dense price/urgency cues.
+			{ hook: "Flash sale ends today", offer: "50% off everything", cta: "Use code SAVE50" },
+			// Low-confidence brand_lifestyle fallback: substantive copy, zero pressure.
+			{
+				hook: "Crafted for slow mornings and long conversations",
+				offer: "Made in small batches by people who love the craft",
+				cta: "",
+			},
+			// Too short + cue-free to classify: honest unclassified bucket.
+			{ hook: "Hello there", offer: "", cta: "" },
+		];
+		for (const [index, copy] of copies.entries()) {
+			const adId = `ad-${index}`;
+			await upsertAd(env, buildAd(adId, copy));
+			seedObservation(`obs-${index}`, adId, "run-1", "2026-07-10T04:00:00.000Z", 1);
+			seedObservation(`obs-b-${index}`, adId, "run-2", "2026-07-15T04:00:00.000Z", 1);
+		}
 
 		const dossier = await buildCompetitorDossier(env, "watch-1", "user-1", NOW);
 
 		expect(dossier.status).toBe("ready");
 		if (dossier.status !== "ready") return;
-		expect(dossier.angleMix).toBeUndefined();
+		expect(dossier.angleMix).toEqual({
+			shares: [{ angle: "discount_urgency", count: 1 }],
+			tentativeCount: 1,
+			unclassifiedCount: 1,
+		});
+		// Offer presence counts only non-empty persisted offer lines.
+		expect(dossier.offerCount).toBe(2);
+	});
+
+	it("carries the persisted variant count per history entry and null when unknown", async () => {
+		await upsertAd(env, buildAd("ad-a", { variantCount: 4 }));
+		await upsertAd(env, buildAd("ad-b"));
+		await seedTwoScanBaseline();
+		seedObservation("obs-1", "ad-a", "run-1", "2026-07-10T04:00:00.000Z", 1);
+		seedObservation("obs-2", "ad-a", "run-2", "2026-07-15T04:00:00.000Z", 1);
+		seedObservation("obs-3", "ad-b", "run-2", "2026-07-15T04:05:00.000Z", 1);
+
+		const dossier = await buildCompetitorDossier(env, "watch-1", "user-1", NOW);
+
+		expect(dossier.status).toBe("ready");
+		if (dossier.status !== "ready") return;
+		expect(dossier.adHistory.find((entry) => entry.metaAdId === "ad-a")?.variantCount).toBe(4);
+		expect(dossier.adHistory.find((entry) => entry.metaAdId === "ad-b")?.variantCount).toBeNull();
 	});
 
 	it("returns not_enough_history when no D1 binding is configured", async () => {
 		const dossier = await buildCompetitorDossier({} as never, "watch-1", "user-1", NOW);
 
 		expect(dossier).toEqual({ status: "not_enough_history", scanCount: 0, adCount: 0 });
+	});
+});
+
+describe("computeAngleMix", () => {
+	it("aggregates confident classifications sorted by count desc, angle id asc on ties", () => {
+		const discount = {
+			hook: "Flash sale ends today",
+			offer_text: "50% off everything",
+			cta: "Use code SAVE50",
+		};
+		const socialProof = {
+			hook: "Rated 4.8 stars by 12,000 customers",
+			offer_text: "Join thousands of happy customers",
+			cta: "See the reviews",
+		};
+
+		const mix = computeAngleMix([discount, discount, socialProof]);
+
+		expect(mix.shares).toEqual([
+			{ angle: "discount_urgency", count: 2 },
+			{ angle: "social_proof", count: 1 },
+		]);
+		expect(mix.tentativeCount).toBe(0);
+		expect(mix.unclassifiedCount).toBe(0);
+
+		const tied = computeAngleMix([discount, socialProof]);
+		expect(tied.shares.map((share) => share.angle)).toEqual([
+			"discount_urgency",
+			"social_proof",
+		]);
+	});
+
+	it("keeps low-confidence fallback reads out of the counts as tentativeCount", () => {
+		const mix = computeAngleMix([
+			{
+				hook: "Crafted for slow mornings and long conversations",
+				offer_text: "Made in small batches by people who love the craft",
+				cta: null,
+			},
+		]);
+
+		expect(mix.shares).toEqual([]);
+		expect(mix.tentativeCount).toBe(1);
+		expect(mix.unclassifiedCount).toBe(0);
+	});
+
+	it("reports declined classifications honestly as unclassified", () => {
+		const mix = computeAngleMix([
+			// Too short to classify.
+			{ hook: "Hello there", offer_text: null, cta: null },
+			// Ambiguous mix of new_launch and discount cues — too close to call.
+			{
+				hook: "Introducing our brand new collection",
+				offer_text: "flash sale ends today",
+				cta: null,
+			},
+		]);
+
+		expect(mix.shares).toEqual([]);
+		expect(mix.tentativeCount).toBe(0);
+		expect(mix.unclassifiedCount).toBe(2);
+	});
+
+	it("skips null and empty copy fields but still counts the ad", () => {
+		const mix = computeAngleMix([
+			{ hook: null, offer_text: "50% off everything today only, use code SAVE50", cta: "" },
+			{ hook: "", offer_text: null, cta: null },
+		]);
+
+		expect(mix.shares).toEqual([{ angle: "discount_urgency", count: 1 }]);
+		expect(mix.unclassifiedCount).toBe(1);
+		// Buckets always sum to the ad count — coverage is never overstated.
+		const total =
+			mix.shares.reduce((sum, share) => sum + share.count, 0) +
+			mix.tentativeCount +
+			mix.unclassifiedCount;
+		expect(total).toBe(2);
 	});
 });
 

@@ -1,9 +1,11 @@
 import { Link } from "react-router";
 
 import { LocalTime } from "~/components/local-time";
+import { ANGLE_DISPLAY } from "~/lib/angle-display";
 import type {
 	CompetitorDossier,
 	DossierAdHistoryEntry,
+	DossierAngleMix,
 	DossierVelocity,
 } from "~/lib/competitor-dossier.server";
 
@@ -61,6 +63,11 @@ export function CompetitorDossierPanel({
 							</dd>
 						</div>
 					</dl>
+
+					<div>
+						<p className="f9-dossier-subhead">Angles</p>
+						<AngleMixRow angleMix={dossier.angleMix} />
+					</div>
 
 					<div>
 						<p className="f9-dossier-subhead">Proven runners</p>
@@ -129,6 +136,41 @@ export function CompetitorDossierPanel({
 				</div>
 			)}
 		</section>
+	);
+}
+
+/**
+ * Compact angle-mix row: confident angles as count chips, low-confidence
+ * fallback reads as a quieter tentative chip, and an honest "N unclassified"
+ * note for ads the classifier declined — coverage is never overstated.
+ */
+function AngleMixRow({ angleMix }: { angleMix: DossierAngleMix }) {
+	const hasSignal = angleMix.shares.length > 0 || angleMix.tentativeCount > 0;
+
+	return (
+		<div className="f9-dossier-angles">
+			{hasSignal ? (
+				<>
+					{angleMix.shares.map((share) => (
+						<span className="f9-longevity-pill f9-angle-pill" key={share.angle}>
+							{ANGLE_DISPLAY[share.angle].label} ×{share.count}
+						</span>
+					))}
+					{angleMix.tentativeCount > 0 ? (
+						<span className="f9-longevity-pill f9-angle-pill is-tentative">
+							{angleMix.tentativeCount} tentative
+						</span>
+					) : null}
+				</>
+			) : (
+				<span className="f9-muted-copy">No confident angle reads yet.</span>
+			)}
+			{angleMix.unclassifiedCount > 0 ? (
+				<span className="f9-dossier-angle-note">
+					{angleMix.unclassifiedCount} unclassified
+				</span>
+			) : null}
+		</div>
 	);
 }
 

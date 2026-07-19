@@ -34,12 +34,16 @@ const LANDING_PAGE_EVENT_PLACEHOLDERS = LANDING_PAGE_CHANGE_EVENT_TYPES.map(() =
 export interface DossierObservationRow {
   ad_id: string;
   hook: string;
+  offer_text: string | null;
+  cta: string | null;
   creative_format: string;
   meta_first_seen_at: string | null;
   first_observed_at: string;
   last_observed_at: string;
   observed_run_count: number;
   latest_is_active: number;
+  /** Meta-published variant count from persisted raw_json; null when unknown. */
+  variant_count: number | null;
 }
 
 /**
@@ -59,8 +63,11 @@ export async function listDossierObservationHistory(
       SELECT
         o.ad_id AS ad_id,
         ad.hook AS hook,
+        ad.offer_text AS offer_text,
+        ad.cta AS cta,
         ad.creative_format AS creative_format,
         ad.first_seen_at AS meta_first_seen_at,
+        json_extract(ad.raw_json, '$.variantCount') AS variant_count,
         MIN(o.seen_at) AS first_observed_at,
         MAX(o.seen_at) AS last_observed_at,
         COUNT(DISTINCT o.watchlist_run_id) AS observed_run_count,

@@ -1,4 +1,5 @@
 import { adLongevityDays } from "~/lib/ad-display";
+import { classifyAdAngle, type AngleId } from "~/lib/angle-classifier";
 import {
 	countDossierLandingPageChanges,
 	getDossierHealthyScanStats,
@@ -44,6 +45,8 @@ export interface DossierAdHistoryEntry {
 	observedRunCount: number;
 	active: boolean;
 	format: string;
+	/** Meta-published creative variant count; null when the source omitted it. */
+	variantCount: number | null;
 	longevityDays: number;
 	/** "running" = Meta's published start date; "tracked" = our own window. */
 	longevityBasis: "running" | "tracked";
@@ -90,15 +93,26 @@ export interface DossierLandingPageChanges {
 	} | null;
 }
 
-/**
- * TODO(angle-mix): once `app/lib/angle-classifier.ts` lands with
- * `classifyAdAngle(text)`, classify each history entry's hook and aggregate
- * shares here. Deliberately optional and undefined until that module exists —
- * do not fake angle data.
- */
+/** One confidently classified marketing angle and how many ads landed on it. */
 export interface DossierAngleShare {
-	angle: string;
+	angle: AngleId;
 	count: number;
+}
+
+/**
+ * Angle read across every distinct ad in retained history, classified from
+ * the ad's own copy (hook + offer + CTA). Honesty split mirrors the
+ * classifier's own confidence tiers:
+ * - `shares` counts only confident classifications, sorted by count desc.
+ * - `tentativeCount` is low-confidence fallback reads (brand_lifestyle) —
+ *   reported separately, never mixed into the confident counts.
+ * - `unclassifiedCount` is ads the classifier honestly declined — shown, not
+ *   hidden, so the mix never implies coverage it does not have.
+ */
+export interface DossierAngleMix {
+	shares: DossierAngleShare[];
+	tentativeCount: number;
+	unclassifiedCount: number;
 }
 
 export interface CompetitorDossierReady {
@@ -115,8 +129,10 @@ export interface CompetitorDossierReady {
 	hookPatterns: DossierHookPattern[];
 	adVelocity: DossierVelocity;
 	landingPageChanges: DossierLandingPageChanges;
-	/** See DossierAngleShare — stays undefined until the classifier ships. */
-	angleMix?: DossierAngleShare[];
+	/** See DossierAngleMix — always present on a ready dossier. */
+	angleMix: DossierAngleMix;
+	/** Ads whose persisted copy carries a non-empty offer line. */
+	offerCount: number;
 }
 
 export interface CompetitorDossierInsufficient {
@@ -193,7 +209,52 @@ export async function buildCompetitorDossier(
 					}
 				: null,
 		},
+		angleMix: computeAngleMix(history),
+		offerCount: history.filter((row) => Boolean(row.offer_text?.trim())).length,
 	};
+}
+
+/** The copy fields angle classification reads per ad. */
+export interface AngleMixInput {
+	hook: string | null;
+	offer_text: string | null;
+	cta: string | null;
+}
+
+/**
+ * Classify each distinct ad's persisted copy (hook + offer + CTA, null/empty
+ * parts skipped) and aggregate. Confident classifications become sorted
+ * shares; low-confidence fallback reads are counted as tentative only; ads
+ * the classifier declines (too short, ambiguous) are reported as
+ * unclassified — the three buckets always sum to the ad count.
+ */
+export function computeAngleMix(entries: readonly AngleMixInput[]): DossierAngleMix {
+	const counts = new Map<AngleId, number>();
+	let tentativeCount = 0;
+	let unclassifiedCount = 0;
+
+	for (const entry of entries) {
+		const text = [entry.hook, entry.offer_text, entry.cta]
+			.map((part) => part?.trim())
+			.filter(Boolean)
+			.join(" \n ");
+		const classification = classifyAdAngle(text);
+		if (!classification) {
+			unclassifiedCount += 1;
+			continue;
+		}
+		if (classification.lowConfidence) {
+			tentativeCount += 1;
+			continue;
+		}
+		counts.set(classification.angle, (counts.get(classification.angle) ?? 0) + 1);
+	}
+
+	const shares = [...counts.entries()]
+		.map(([angle, count]) => ({ angle, count }))
+		.sort((left, right) => right.count - left.count || left.angle.localeCompare(right.angle));
+
+	return { shares, tentativeCount, unclassifiedCount };
 }
 
 function toHistoryEntry(row: DossierObservationRow, now: Date): DossierAdHistoryEntry {
@@ -209,10 +270,20 @@ function toHistoryEntry(row: DossierObservationRow, now: Date): DossierAdHistory
 		observedRunCount: Number(row.observed_run_count) || 0,
 		active,
 		format: row.creative_format,
+		variantCount: normalizeVariantCount(row.variant_count),
 		longevityDays: longevity.days,
 		longevityBasis: longevity.basis,
 		longevityLabel: formatLongevityLabel(longevity.days, longevity.basis),
 	};
+}
+
+/** Positive integer variant counts only; anything else is honestly unknown. */
+function normalizeVariantCount(value: unknown): number | null {
+	const parsed = Number(value);
+	if (!Number.isFinite(parsed) || parsed < 1) {
+		return null;
+	}
+	return Math.floor(parsed);
 }
 
 /**
