@@ -474,6 +474,7 @@ describe("pricing CTA rendering", () => {
         useActionData: vi.fn().mockReturnValue(overrides.actionData),
         useLoaderData: vi.fn().mockReturnValue(overrides.loaderData),
         useLocation: vi.fn().mockReturnValue({ pathname: "/search", search: "", hash: "", state: null, key: "test" }),
+        useNavigate: vi.fn().mockReturnValue(vi.fn()),
         useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
         useRevalidator: vi.fn().mockReturnValue({ state: "idle", revalidate: vi.fn() }),
         useRouteLoaderData: vi.fn().mockReturnValue(overrides.rootData),
