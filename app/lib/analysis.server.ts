@@ -105,20 +105,7 @@ export function resolveHookAndOffer(input: {
   cta?: string;
 }): { hook: string; offer: string } {
   const hook = deriveHook(input.body, input.previewHeadline);
-  let offer = deriveOffer(input.body, input.cta) ?? "";
-  if (
-    offer &&
-    normalizeComparableCopy(hook) === normalizeComparableCopy(offer)
-  ) {
-    offer = "";
-  }
-  // If offer somehow equals the whole body, drop it — that is the old failure mode.
-  if (
-    offer &&
-    normalizeComparableCopy(offer) === normalizeComparableCopy(input.body)
-  ) {
-    offer = "";
-  }
+  const offer = deriveOffer(input.body, input.cta) ?? "";
   return { hook, offer };
 }
 
@@ -202,14 +189,6 @@ function stripHeavyEmojiRuns(value: string) {
     /(\p{Extended_Pictographic}\uFE0F?\u200D?){3,}/gu,
     (match) => match.slice(0, 2),
   );
-}
-
-function normalizeComparableCopy(value: string) {
-  return value
-    .replace(/\u00a0/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase();
 }
 
 function daysRunningSince(firstSeenAt: string | null | undefined) {

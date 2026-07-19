@@ -173,6 +173,57 @@ describe("search load-more accessibility", () => {
     expect(reloaded.result.nextCursor).toBeNull();
   });
 
+  it("does not resurrect terminal pagination when selecting a later-page ad", async () => {
+    const { createSearchAccumulationState, mergeSearchAccumulationState } = await import(
+      "~/routes/search"
+    );
+    const laterAd = { ...ad, metaAdId: "ad-2", previewHeadline: "Later" };
+    const terminal = createSearchAccumulationState(
+      "search-1",
+      result({ ads: [ad, laterAd], nextCursor: null }),
+      ad,
+      "cursor-2",
+    );
+    const reloaded = mergeSearchAccumulationState(
+      terminal,
+      result({ ads: [laterAd], nextCursor: "cursor-3" }),
+      {
+        requestedCursor: "cursor-2",
+        selectedAd: laterAd,
+        selectionNavigation: true,
+      },
+    );
+
+    expect(reloaded.result.ads.map((item) => item.metaAdId)).toEqual(["ad-1", "ad-2"]);
+    expect(reloaded.result.nextCursor).toBeNull();
+    expect(reloaded.selectedAd?.metaAdId).toBe("ad-2");
+  });
+
+  it("keeps terminal pagination when a selected later-page ad is temporarily absent", async () => {
+    const { createSearchAccumulationState, mergeSearchAccumulationState } = await import(
+      "~/routes/search"
+    );
+    const terminal = createSearchAccumulationState(
+      "search-1",
+      result({ nextCursor: null }),
+      ad,
+      "cursor-2",
+    );
+    const reloaded = mergeSearchAccumulationState(
+      terminal,
+      result({ ads: [], nextCursor: "cursor-3", discoveryStatus: "degraded" }),
+      {
+        requestedCursor: "cursor-2",
+        selectedAd: null,
+        selectionNavigation: true,
+      },
+    );
+
+    expect(reloaded.result.nextCursor).toBeNull();
+    expect(reloaded.selectedAd).toEqual(ad);
+    expect(reloaded.retryCursor).toBeNull();
+  });
+
   it("announces loading, result counts, completion, and delayed checks without raw errors", async () => {
     const {
       formatSearchResultsAnnouncement,

@@ -265,5 +265,12 @@ describe("honest extracted analysis", () => {
     expect(analysis.hook).toBe("Meet your new serum.");
     expect(analysis.offer).toBe("BOGO");
     expect(analysis.offer).not.toBe(body);
+
+    expect(
+      resolveHookAndOffer({ body: "BOGO", previewHeadline: "BOGO" }),
+    ).toEqual({ hook: "BOGO", offer: "BOGO" });
+    expect(
+      resolveHookAndOffer({ body: "Launch pricing", previewHeadline: "Launch pricing" }),
+    ).toEqual({ hook: "Launch pricing", offer: "Launch pricing" });
   });
 });

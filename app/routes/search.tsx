@@ -765,6 +765,7 @@ export default function SearchRoute() {
       return mergeSearchAccumulationState(previous, data.result, {
         requestedCursor,
         selectedAd: data.selectedAd,
+        selectionNavigation: hasSelectedFromUrl,
       });
     });
   }, [
@@ -1783,10 +1784,15 @@ export function createSearchAccumulationState(
 export function mergeSearchAccumulationState(
   previous: SearchAccumulationState,
   incoming: SearchResponse,
-  input: { requestedCursor: string | null; selectedAd: AdRecord | null },
+  input: {
+    requestedCursor: string | null;
+    selectedAd: AdRecord | null;
+    selectionNavigation?: boolean;
+  },
 ): SearchAccumulationState {
   if (
     input.requestedCursor &&
+    !input.selectionNavigation &&
     isDelayedDiscoveryStatus(incoming.discoveryStatus) &&
     incoming.ads.length === 0
   ) {
@@ -1818,9 +1824,11 @@ export function mergeSearchAccumulationState(
     result: {
       ...incoming,
       ads: Array.from(mergedAds.values()),
-      nextCursor: input.requestedCursor
-        ? incoming.nextCursor
-        : previous.result.nextCursor,
+      nextCursor: input.selectionNavigation
+        ? previous.result.nextCursor
+        : input.requestedCursor
+          ? incoming.nextCursor
+          : previous.result.nextCursor,
     },
     selectedAd: input.selectedAd ?? previous.selectedAd,
     adCursorById,

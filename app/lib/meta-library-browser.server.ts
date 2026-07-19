@@ -485,14 +485,43 @@ function createSessionCardExtractionScript() {
                 !/l\.facebook\.com/i.test(candidate),
             ) ?? null;
 
-        const advertiser =
-          card?.querySelector<HTMLElement>(
-            "strong, h3, h4, [data-advertiser-name]",
-          )?.innerText ?? null;
+        const text = normalizeText(card?.innerText ?? anchor.innerText);
+        const advertiser = (() => {
+          const isUiLine = (value: string) =>
+            /^(?:Active|Inactive|Library ID:\s*\d+|Started running on\b.*|Platforms|This ad has multiple versions|\d+\s+ads?\s+use this creative and text|Menu|See (?:ad|summary) details|View ad details|Meta Ad Library result|Instagram|Facebook|Messenger|WhatsApp|Audience Network|Threads|Shop now|Learn more|Sign up|Apply now|Book now|Contact us)$/i.test(
+              value,
+            ) || /^\d+:\d+\s*\/\s*\d+/.test(value);
+          const lines = text.split("\n");
+          const sponsoredIndex = lines.findIndex((line) =>
+            /^Sponsored$/i.test(line),
+          );
+          if (sponsoredIndex < 0) return null;
+          const beforeSponsored = new Set(
+            lines
+              .slice(0, sponsoredIndex)
+              .map((line) => line.replace(/\s+/g, " ").trim()),
+          );
+          const candidates = [
+            ...new Set(
+              Array.from(
+                card?.querySelectorAll<HTMLElement>(
+                  "strong, h3, h4, [data-advertiser-name]",
+                ) ?? [],
+              )
+                .map((element) =>
+                  normalizeText(element.innerText).replace(/\s+/g, " ").trim(),
+                )
+                .filter(
+                  (value) =>
+                    value && beforeSponsored.has(value) && !isUiLine(value),
+                ),
+            ),
+          ];
+          return candidates.length === 1 ? candidates[0] : null;
+        })();
         const headline =
           card?.querySelector<HTMLElement>("h1, h2, h3, [data-headline]")
             ?.innerText ?? null;
-        const text = normalizeText(card?.innerText ?? anchor.innerText);
         const cta =
           card?.querySelector<HTMLElement>(
             'button, [role="button"], [data-cta], a[aria-label*="Shop"], a[aria-label*="Learn"]',
@@ -1101,9 +1130,28 @@ function buildQuickActionExtractionScript() {
               !/facebook\\.com/i.test(candidate) &&
               !/l\\.facebook\\.com/i.test(candidate),
           ) ?? null;
-      const advertiser = card?.querySelector("strong, h3, h4, [data-advertiser-name]")?.textContent ?? null;
-      const headline = card?.querySelector("h1, h2, h3, [data-headline]")?.textContent ?? null;
       const text = normalizeText(renderedText(card) || renderedText(anchor));
+      const advertiser = (() => {
+        const isUiLine = (value) =>
+          /^(?:Active|Inactive|Library ID:\\s*\\d+|Started running on\\b.*|Platforms|This ad has multiple versions|\\d+\\s+ads?\\s+use this creative and text|Menu|See (?:ad|summary) details|View ad details|Meta Ad Library result|Instagram|Facebook|Messenger|WhatsApp|Audience Network|Threads|Shop now|Learn more|Sign up|Apply now|Book now|Contact us)$/i.test(
+            value,
+          ) || /^\\d+:\\d+\\s*\\/\\s*\\d+/.test(value);
+        const lines = text.split("\\n");
+        const sponsoredIndex = lines.findIndex((line) => /^Sponsored$/i.test(line));
+        if (sponsoredIndex < 0) return null;
+        const beforeSponsored = new Set(
+          lines.slice(0, sponsoredIndex).map((line) => line.replace(/\\s+/g, " ").trim()),
+        );
+        const candidates = [
+          ...new Set(
+            Array.from(card?.querySelectorAll("strong, h3, h4, [data-advertiser-name]") ?? [])
+              .map((element) => normalizeText(renderedText(element)).replace(/\\s+/g, " ").trim())
+              .filter((value) => value && beforeSponsored.has(value) && !isUiLine(value)),
+          ),
+        ];
+        return candidates.length === 1 ? candidates[0] : null;
+      })();
+      const headline = card?.querySelector("h1, h2, h3, [data-headline]")?.textContent ?? null;
       const cta =
         card
           ?.querySelector(

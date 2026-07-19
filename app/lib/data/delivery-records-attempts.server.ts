@@ -528,21 +528,31 @@ export async function markInstantDeliveryDispatchStarted(
         AND updated_at = ?
         AND (
           lane <> 'customer'
-          OR channel <> 'email'
           OR EXISTS (
             SELECT 1
             FROM delivery_target AS target
-            JOIN user AS account ON account.id = target.user_id
             WHERE target.id = delivery_attempt.delivery_target_id
               AND target.user_id = delivery_attempt.user_id
-              AND target.channel = 'email'
+              AND target.channel = delivery_attempt.channel
               AND target.is_opted_in = 1
               AND target.is_paused = 0
               AND target.opted_out_at IS NULL
               AND target.is_validated = 1
               AND target.validation_status = 'validated'
-              AND account.emailVerified = 1
-              AND lower(trim(account.email)) = lower(trim(target.target_value))
+              AND (
+                delivery_attempt.channel <> 'whatsapp'
+                OR target.template_eligible = 1
+              )
+              AND (
+                delivery_attempt.channel <> 'email'
+                OR EXISTS (
+                  SELECT 1
+                  FROM user AS account
+                  WHERE account.id = target.user_id
+                    AND account.emailVerified = 1
+                    AND lower(trim(account.email)) = lower(trim(target.target_value))
+                )
+              )
           )
         )
     `,
