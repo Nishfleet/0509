@@ -176,7 +176,7 @@ test.describe("public production-safe E2E smoke", () => {
   test("public pages and machine-readable surfaces render without auth", async ({ page, baseURL, request }) => {
     await gotoPublicPage(page, "/");
     await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
-    await expect(page.getByText("Five to Nine catches the change")).toBeVisible();
+    await expect(page.getByText("Know when competitors change the offer.")).toBeVisible();
     await expect(page.getByText("WhatsApp", { exact: false })).toHaveCount(0);
 
     await gotoPublicPage(page, "/search");

@@ -16,6 +16,8 @@ export const DEFAULT_CANARY_HEALTH_BASE_URLS = Object.freeze([
 ]);
 export const DEFAULT_CANARY_EXPECTED_APP = "0509";
 export const DEFAULT_CANARY_FRESH_LIVE_SEARCH_TIMEOUT_MS = 60_000;
+export const DEFAULT_CANARY_HEALTH_CONVERGENCE_TIMEOUT_MS = 90_000;
+export const DEFAULT_CANARY_HEALTH_CONVERGENCE_INTERVAL_MS = 5_000;
 
 /**
  * @param {string | undefined | null} value
@@ -65,6 +67,9 @@ function isConfiguredSecret(value) {
  *   benchmarkImpl?: typeof benchmarkProviders,
  *   canaryBypassToken?: string,
  *   searchTimeoutMs?: number,
+ *   healthConvergenceTimeoutMs?: number,
+ *   healthConvergenceIntervalMs?: number,
+ *   sleepImpl?: (milliseconds: number) => Promise<void>,
  *   metaAdsStrict?: boolean
  * }} ProductionCanaryOptions
  */
@@ -350,17 +355,37 @@ export async function runProductionCanary(options = {}) {
   };
   const searchTimeoutMs = options.searchTimeoutMs ?? DEFAULT_CANARY_FRESH_LIVE_SEARCH_TIMEOUT_MS;
   const metaAdsStrict = options.metaAdsStrict === true;
-  const healthChecks = [];
-  for (const healthBaseUrl of resolveHealthBaseUrls(options, baseUrl)) {
-    healthChecks.push(
-      await checkHealthEndpoint({
-        baseUrl: healthBaseUrl,
-        expectedApp,
-        expectedWorkerVersionId,
-        expectedSearchRolloutMode,
-        fetchImpl: options.fetchImpl,
-      }),
+  const healthBaseUrls = resolveHealthBaseUrls(options, baseUrl);
+  const healthConvergenceTimeoutMs = Math.max(
+    0,
+    options.healthConvergenceTimeoutMs ?? DEFAULT_CANARY_HEALTH_CONVERGENCE_TIMEOUT_MS,
+  );
+  const healthConvergenceIntervalMs = Math.max(
+    0,
+    options.healthConvergenceIntervalMs ?? DEFAULT_CANARY_HEALTH_CONVERGENCE_INTERVAL_MS,
+  );
+  const maxHealthAttempts = expectedWorkerVersionId
+    ? Math.max(1, Math.ceil(healthConvergenceTimeoutMs / Math.max(healthConvergenceIntervalMs, 1)) + 1)
+    : 1;
+  const sleepImpl = options.sleepImpl ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
+  /** @type {HealthCheckResult[]} */
+  let healthChecks = [];
+  for (let attempt = 1; attempt <= maxHealthAttempts; attempt += 1) {
+    healthChecks = await Promise.all(
+      healthBaseUrls.map((healthBaseUrl) =>
+        checkHealthEndpoint({
+          baseUrl: healthBaseUrl,
+          expectedApp,
+          expectedWorkerVersionId,
+          expectedSearchRolloutMode,
+          fetchImpl: options.fetchImpl,
+        }),
+      ),
     );
+    if (healthChecks.every((check) => check.ok) || attempt === maxHealthAttempts) {
+      break;
+    }
+    await sleepImpl(healthConvergenceIntervalMs);
   }
   const health = healthChecks[0] ?? {
     ok: false,
