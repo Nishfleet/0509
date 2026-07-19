@@ -570,7 +570,7 @@ function renderEmailVerificationHtml(input: { name: string | null; verifyUrl: st
         </a>
       </p>
       <p style="margin: 0; color: #5b6577; font-size: 13px;">
-        If you did not create a Five to Nine account, you can ignore this email.
+        If you didn't create a Five to Nine account, you can ignore this email.
       </p>
     </div>
   `;

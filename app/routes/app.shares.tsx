@@ -13,7 +13,7 @@ import { isApprovedReportSnapshot } from "~/lib/report-approval";
 const RESOURCE_LABELS: Record<string, string> = {
   collection: "Collection",
   watchlist: "Watchlist",
-  digest: "Digest",
+  digest: "Brief",
   report: "Report",
 };
 

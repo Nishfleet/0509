@@ -1069,7 +1069,7 @@ function resourceLabel(ref: ClientRoomResourceRef) {
     return "Watchlist";
   }
   if (ref.resourceType === "digest") {
-    return "Digest";
+    return "Brief";
   }
   return "Report";
 }

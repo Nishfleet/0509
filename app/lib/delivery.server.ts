@@ -2807,7 +2807,7 @@ function buildInstantAlertContent(
     const isBaseline =
       ((primaryEvent.metadata ?? {}) as Record<string, unknown>).kind === "baseline";
     const subject = provisional
-      ? `Possible change detected: ${competitor}`
+      ? `Possible change at ${competitor}`
       : isBaseline
         ? primaryEvent.title
         : buildInstantSubject(primaryEvent.eventType, competitor, primaryEvent.title);
@@ -2841,8 +2841,8 @@ function buildInstantAlertContent(
   }
 
   const subject = provisional
-    ? `Possible changes detected: ${competitor}`
-    : `${competitor}: ${events.length} changes detected`;
+    ? `Possible changes at ${competitor}`
+    : `${competitor} made ${events.length} changes`;
 
   // Mirror the single-event gate: only claim an advertiser when real advertiser
   // metadata exists — never present the watchlist name as an advertiser.
@@ -2909,16 +2909,16 @@ function buildInstantSubject(eventType: WatchEventRecord["eventType"], competito
     case "ad_new":
       return `New ad from ${competitor}`;
     case "ad_inactive":
-      return `Ad went inactive: ${competitor}`;
+      return `${competitor} stopped running an ad`;
     case "landing_page_url_changed":
-      return `Landing page URL changed: ${competitor}`;
+      return `${competitor} changed a landing page URL`;
     case "landing_page_headline_changed":
     case "landing_page_offer_changed":
     case "landing_page_cta_changed":
     case "landing_page_form_changed":
-      return `${fallbackTitle}: ${competitor}`;
+      return `${competitor}: ${fallbackTitle}`;
     default:
-      return `${fallbackTitle}: ${competitor}`;
+      return `${competitor}: ${fallbackTitle}`;
   }
 }
 

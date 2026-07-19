@@ -390,7 +390,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     return {
       ok: true,
-      message: `${watchlist.name} refreshed successfully.`,
+      message: `Fresh check complete — ${watchlist.name} is up to date.`,
     };
   }
 
@@ -681,7 +681,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     const limitGate = await requireWorkspacePlanLimit(env, workspaceUserId, "watchlists", {
       limitMessage:
-        "You have reached your competitor tracking limit — pause another watchlist first.",
+        "You've reached your competitor tracking limit — pause another watchlist first.",
     });
     if (!limitGate.ok) {
       return limitGate.result;
@@ -805,7 +805,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         }
       : {
           ok: false,
-        message: `The test email failed to send. Check your delivery settings or email ${SUPPORT_EMAIL}.`,
+        message: `We couldn't send the test email. Check your delivery settings, or email ${SUPPORT_EMAIL} and we'll dig in.`,
         };
   }
 
@@ -1175,7 +1175,7 @@ export default function WatchlistsRoute() {
                         className="f9-secondary-button"
                         href={`/export/watchlist/${data.selectedWatchlist.id}?format=json`}
                       >
-                        JSON export
+                        Export JSON
                       </a>
                     </>
                   ) : (
@@ -1383,7 +1383,7 @@ export default function WatchlistsRoute() {
                     <p className="f9-muted-copy">{discoveryStatus.recovery}</p>
                   ) : null}
                   <Link className="f9-secondary-button" to="/app/source-access">
-                    Review tracking access
+                    Check source access
                   </Link>
                   {data.showPresenceNav ? (
                     <>
@@ -1489,7 +1489,7 @@ export default function WatchlistsRoute() {
                                     ? `${formatDeliveryAttemptStatusLabel(lastAttempt.status, lastAttempt.channel)} · ${
                                         lastAttempt.targetValue
                                       }`
-                                    : "No watchlist send recorded yet."}
+                                    : "No alert sent for this change yet."}
                                 </p>
                               </div>
                             </div>
@@ -1819,7 +1819,7 @@ export default function WatchlistsRoute() {
                 <section>
                   <p className="f9-app-kicker">Recent checks</p>
                   {data.runs.length === 0 ? (
-                    <p className="f9-muted-copy">No checks recorded yet.</p>
+                    <p className="f9-muted-copy">No checks yet — the first one shows up here automatically.</p>
                   ) : (
                     <ul className="event-list f9-detail-split">
                       {data.runs.map((run) => {
@@ -1865,7 +1865,7 @@ export default function WatchlistsRoute() {
                   <summary>Candidate history</summary>
                   <div className="f9-work-list is-compact" style={{ marginTop: "1rem" }}>
                     {data.eventCandidates.length === 0 ? (
-                      <p className="f9-muted-copy">No candidate history yet.</p>
+                      <p className="f9-muted-copy">No candidates yet — possible changes appear here before we confirm them.</p>
                     ) : (
                       data.eventCandidates.map((candidate) => (
                         <div className="f9-work-row" key={candidate.id}>
@@ -2204,7 +2204,7 @@ export function resolveWatchlistListScanPresentation(input: {
   if (!run) {
     return input.lastScannedAt
       ? { label: "Last successful check", timestamp: input.lastScannedAt }
-      : { label: "No completed scan yet — open to review status", timestamp: null };
+      : { label: "No completed check yet — open for status", timestamp: null };
   }
   if (run.status === "running") {
     return {
@@ -2221,26 +2221,26 @@ export function resolveWatchlistListScanPresentation(input: {
     ].includes(run.errorCode ?? "");
     return {
       label: delayed
-        ? "Scan delayed — open to review recovery"
+        ? "Check delayed — we're retrying"
         : input.lastScannedAt
-          ? "Next check queued"
+          ? "Next check starts shortly"
           : input.plan === "free"
-            ? "Activation scan queued"
-            : "First scan queued",
+            ? "Activation scan starts shortly"
+            : "First scan starts shortly",
       timestamp: null,
     };
   }
   if (run.status === "failed") {
-    return { label: "Latest check failed — open to recover", timestamp: null };
+    return { label: "Latest check failed — open for next steps", timestamp: null };
   }
   if (run.status === "skipped") {
     if (run.errorCode === "e2e_provider_network_denied") {
       return { label: "New checks paused — source access needed", timestamp: null };
     }
     if (run.errorCode === "capacity_budget") {
-      return { label: "Latest check delayed — next monitoring window", timestamp: null };
+      return { label: "Latest check delayed — runs in the next window", timestamp: null };
     }
-    return { label: "Latest check did not run — open to review", timestamp: null };
+    return { label: "Latest check didn't run — open for details", timestamp: null };
   }
 
   return {
@@ -2270,8 +2270,8 @@ export function resolveEmptyWatchlistEventCopy(input: {
 
   if (!input.latestRun) {
     return activationOnly
-      ? "Your activation scan has not started yet. Review tracking access; contact support if it does not resume."
-      : "Your first scan has not started yet. Review tracking access or retry when the source is ready.";
+      ? "Your activation scan hasn't started yet. Check Source access; if it stays stuck, email support and we'll dig in."
+      : "Your first scan hasn't started yet. Check Source access, then retry once the source is ready.";
   }
   if (input.latestRun.status === "running") {
     return activationOnly
@@ -2286,20 +2286,20 @@ export function resolveEmptyWatchlistEventCopy(input: {
       "workflow_binding_missing",
     ].includes(input.latestRun.errorCode ?? "");
     return delayed
-      ? `Your ${scanName} is delayed and queued for recovery. Review tracking access if it does not resume.`
-      : `Your ${scanName} is queued and waiting for a monitoring worker.`;
+      ? `Your ${scanName} hit a delay, so we're retrying it automatically. If it doesn't start soon, check Source access.`
+      : `Your ${scanName} is in line and starts automatically.`;
   }
   if (input.latestRun.status === "failed") {
     return activationOnly
-      ? "Your activation scan could not finish. Review tracking access, then contact support if it remains unavailable."
-      : "Your first scan could not finish. Review tracking access, then retry or contact support.";
+      ? "Your activation scan couldn't finish. Check Source access, and email support if the next attempt fails too."
+      : "Your first scan couldn't finish. Check Source access, then retry — or email support and we'll dig in.";
   }
   if (input.latestRun.errorCode === "e2e_provider_network_denied") {
     return activationOnly
-      ? "Your activation scan paused safely before an external check. Review tracking access; contact support if it does not resume."
-      : "Your first scan paused safely before an external check. Review tracking access before retrying.";
+      ? "Your activation scan paused safely before an external check. Check Source access; email support if it doesn't resume."
+      : "Your first scan paused safely before an external check. Check Source access before retrying.";
   }
-  return `Your ${scanName} stopped before evidence was created. Review Recent checks for the recovery path.`;
+  return `Your ${scanName} stopped before it could save results. Recent checks shows what happened and what runs next.`;
 }
 
 export function resolveWatchlistRunTiming(run: WatchlistRunRecord) {
@@ -2315,20 +2315,20 @@ export function resolveWatchlistRunTiming(run: WatchlistRunRecord) {
       "workflow_binding_missing",
     ].includes(run.errorCode ?? "");
     return {
-      label: retrying ? "Queued for retry" : "Queued — waiting for a monitoring worker",
+      label: retrying ? "Retrying automatically" : "In line — starts automatically",
       timestamp: null,
     };
   }
   if (run.status === "failed") return { label: "Stopped after a failed check", timestamp: null };
-  if (run.status === "skipped") return { label: "Stopped before evidence was created", timestamp: null };
+  if (run.status === "skipped") return { label: "Stopped before results were saved", timestamp: null };
   return { label: "Completed", timestamp: null };
 }
 
 export function resolveWatchlistRunCustomerError(run: WatchlistRunRecord, plan: string) {
   if (!run.errorMessage) return null;
   return plan === "free"
-    ? "This activation scan failed. Check Source access, then contact support if it does not resume."
-    : "This scan failed. Check Source access, then retry or contact support.";
+    ? "This activation scan failed. Check Source access, and email support if the next attempt fails too."
+    : "This scan failed. Check Source access, then retry — or email support and we'll dig in.";
 }
 
 export function firstScanPollingKey(input: {
@@ -2413,25 +2413,25 @@ function FirstScanBanner(props: {
           ? `${scanLabel} delayed`
           : props.run.status === "running"
             ? "Scanning this competitor now…"
-            : `${scanLabel} queued`;
+            : `${scanLabel} starts shortly`;
 
   const message = safelyPaused
     ? "Provider access is disabled in this local release proof. No external check was attempted."
     : completed
       ? "The first scan is ready. Review the proof below before deciding what to monitor next."
     : failed
-      ? "We could not finish this check. Review Source access, then contact support if the next attempt also fails."
+      ? "We couldn't finish this check. Check Source access, and email support if the next attempt fails too."
       : skipped
-        ? "This check stopped safely before results were created. Review Recent checks for the reason and recovery path."
+        ? "This check stopped safely before results were saved. Recent checks shows what happened and what runs next."
         : delayed || timedOut || !props.run
           ? props.plan === "free"
-            ? "The activation scan is queued for recovery. After activation, free checks weekly; paid plans check every 3–6 hours."
-            : "The first scan is queued for recovery, and the next scheduled scan remains available."
+            ? "The activation scan hit a delay, so we're retrying it automatically. After activation, free checks weekly; paid plans check every 3–6 hours."
+            : "The first scan hit a delay, so we're retrying it automatically. Your next scheduled scan is unaffected."
           : props.run.status === "running"
             ? props.plan === "free"
               ? "Your activation scan is running. This page updates by itself when results are ready. After this, free checks weekly; paid plans check every 3–6 hours."
               : "Your first scan is running. This page updates by itself when results are ready."
-            : "The activation scan is waiting for an available monitoring worker. This page updates by itself.";
+            : "The activation scan is in line and starts automatically. This page updates by itself.";
 
   return (
     <article
@@ -2447,7 +2447,7 @@ function FirstScanBanner(props: {
           {heading}
         </h2>
         <p>{message}</p>
-        {failed ? <Link to="/app/source-access">Review Source access</Link> : null}
+        {failed ? <Link to="/app/source-access">Check source access</Link> : null}
         {(pastFastPoll || timedOut) && shouldPoll ? (
           <p style={{ marginTop: "0.75rem" }}>
             <button
@@ -2494,7 +2494,7 @@ function formatRunStatusLabel(status: string, errorCode?: string | null) {
     if (errorCode === "dispatch_failed" || errorCode === "reconcile_dispatch_failed") {
       return "Retrying";
     }
-    return "Queued";
+    return "In line";
   }
   if (status === "running") return "Running";
   return status;

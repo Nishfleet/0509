@@ -182,8 +182,8 @@ export function buildScanTroubleEmail(input: {
       <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">Five to Nine</p>
       <h1 style="margin: 0 0 12px;">We hit a problem checking your competitors.</h1>
       <p style="margin: 0 0 16px; color: #475467;">
-        We could not complete checks for <strong>${escapeHtml(listed)}</strong> in this period.
-        Retries are already running automatically — you do not need to do anything.
+        We couldn't complete checks for <strong>${escapeHtml(listed)}</strong> in this period.
+        Retries are already running automatically — you don't need to do anything.
       </p>
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.watchlistsUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">Open watchlists</a>
@@ -202,7 +202,7 @@ export function buildScanTroubleEmail(input: {
     "",
     "We hit a problem checking your competitors.",
     "",
-    `We could not complete checks for ${listed} in this period. Retries are already running automatically.`,
+    `We couldn't complete checks for ${listed} in this period. Retries are already running automatically.`,
     "",
     `Open watchlists: ${input.watchlistsUrl}`,
     `Manage frequency: ${input.manageFrequencyUrl}`,

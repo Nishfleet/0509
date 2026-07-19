@@ -379,7 +379,7 @@ describe("dashboard route agent memory", () => {
     expect(loaderData.sectionWarnings).toEqual([
       {
         section: "collections",
-        message: "This dashboard section could not be loaded.",
+        message: "We couldn't load this section.",
       },
     ]);
     expect(JSON.stringify(loaderData)).not.toContain("private database detail");

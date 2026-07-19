@@ -182,7 +182,7 @@ const sent = await sendRefund({ name: "Owner",
 eventId: "evt-refund-1", });
 expect(sent).toBe(true);
 const payload = emailSendPayload(sendMock);
-expect(payload.subject).toBe("Your Five to Nine refund has been processed");
+expect(payload.subject).toBe("We've processed your Five to Nine refund");
 expect(payload.html).toContain("moved to the Free plan");
 expect(payload.html).toContain("credits from that purchase have expired");
 expect(payload.headers["List-Unsubscribe"]).toBeUndefined();
