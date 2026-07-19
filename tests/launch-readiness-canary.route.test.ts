@@ -212,6 +212,75 @@ describe("launch readiness canary route", () => {
     expect(prepare).not.toHaveBeenCalled();
   });
 
+  it("rejects a mismatched Worker version before any canary side effects", async () => {
+    const prepare = vi.fn();
+    const captureLandingPageSnapshot = vi.fn();
+    const createWatchlistRun = vi.fn();
+    const createProofCapture = vi.fn();
+    const deliverWeeklyDigest = vi.fn();
+
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        CF_VERSION_METADATA: { id: "worker-v2" },
+        DB: { prepare },
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({ createProofCapture, createWatchlistRun }));
+    vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+    vi.doMock("~/lib/landing-pages.server", () => ({ captureLandingPageSnapshot }));
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "POST",
+        headers: {
+          "x-0509-canary-token": "secret-token",
+          "x-0509-expected-worker-version": "worker-v1",
+        },
+      }),
+    } as never);
+
+    expect(response.status).toBe(409);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      blocker: "worker_version_mismatch",
+    });
+    expect(prepare).not.toHaveBeenCalled();
+    expect(captureLandingPageSnapshot).not.toHaveBeenCalled();
+    expect(createWatchlistRun).not.toHaveBeenCalled();
+    expect(createProofCapture).not.toHaveBeenCalled();
+    expect(deliverWeeklyDigest).not.toHaveBeenCalled();
+  });
+
+  it("continues past a matching Worker version", async () => {
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        CF_VERSION_METADATA: { id: "worker-v1" },
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "POST",
+        headers: {
+          "x-0509-canary-token": "secret-token",
+          "x-0509-expected-worker-version": "worker-v1",
+        },
+      }),
+    } as never);
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({ ok: false, blocker: "missing_db" });
+  });
+
   it("creates fresh monitoring, proof, digest, and delivery signals", async () => {
     const createWatchlistRun = vi.fn().mockResolvedValue("run-1");
     const finishWatchlistRun = vi.fn().mockResolvedValue(undefined);
@@ -453,6 +522,7 @@ describe("launch readiness canary route", () => {
     vi.doMock("~/lib/context.server", () => ({
       getEnv: vi.fn(() => ({
         CANARY_BYPASS_TOKEN: "secret-token",
+        CF_VERSION_METADATA: { id: "worker-v2" },
         DB: createDbWithTarget(),
         LAUNCH_CANARY_EMAIL: "owner@example.com",
       })),
@@ -468,6 +538,7 @@ describe("launch readiness canary route", () => {
           "content-type": "application/json",
           "x-0509-canary-operation": "cleanup",
           "x-0509-canary-token": "secret-token",
+          "x-0509-expected-worker-version": "worker-v1",
         },
         body: JSON.stringify({ runId: "run-1", digestRunId: "digest-1", proofCaptureId: "proof-1" }),
       }),

@@ -1,5 +1,4 @@
 import { defineConfig, devices } from "@playwright/test";
-// @ts-ignore JavaScript helper is shared with the Node release-proof wrapper.
 import {
   buildLocalReleaseServerCommand,
   isLocalReleaseServerIdentity,

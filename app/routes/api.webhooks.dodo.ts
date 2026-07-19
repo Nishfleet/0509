@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { billingCanaryLockBelongsToUser } from "~/lib/billing-canary-lock";
 import type { BillingLifecycleEmailOutboxInput } from "~/lib/delivery.server";
 import type { AppEnv } from "~/lib/env.server";
 
@@ -37,12 +38,6 @@ function sameBillingInstant(left: string | null | undefined, right: string | nul
   const leftMs = Date.parse(left ?? "");
   const rightMs = Date.parse(right ?? "");
   return Number.isFinite(leftMs) && Number.isFinite(rightMs) && leftMs === rightMs;
-}
-
-const BILLING_CANARY_LOCK_PREFIX = "billing-canary-lock:";
-
-function normalizeBillingLockSegment(value: string) {
-  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "unknown";
 }
 
 async function getUserIdFromActiveBillingCanaryOriginalPayment(
@@ -159,13 +154,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
     : preflightProofCreditGrant?.isBillingCanary
       ? preflightProofCreditGrant.billingCanaryLockId
       : null;
-  const expectedCanaryLockPrefix = declaredCanaryUserId
-    ? `${BILLING_CANARY_LOCK_PREFIX}${normalizeBillingLockSegment(declaredCanaryUserId)}:`
-    : null;
   const internalCanaryLockHeader = request.headers.get("x-0509-billing-canary-lock-id");
   const isInternalBillingCanary = Boolean(
-    expectedCanaryLockPrefix &&
-    declaredCanaryLockId?.startsWith(expectedCanaryLockPrefix) &&
+    declaredCanaryUserId &&
+    billingCanaryLockBelongsToUser(declaredCanaryLockId, declaredCanaryUserId) &&
     internalCanaryLockHeader === declaredCanaryLockId,
   );
 

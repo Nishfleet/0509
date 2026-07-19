@@ -555,15 +555,17 @@ export default function SearchRoute() {
   const selectedProofRef = useRef<HTMLElement>(null);
   const previousDiscoveryStatusRef = useRef(data.result.discoveryStatus);
   const [recoveredSearchKey, setRecoveredSearchKey] = useState<string | null>(null);
+  const locationSearchParams = new URLSearchParams(location.search);
   const [resultSort, setResultSort] = useState<SearchResultSort>(() =>
-    parseSearchResultSort(new URLSearchParams(location.search).get("sort")) || DEFAULT_SEARCH_RESULT_SORT,
+    parseSearchResultSort(locationSearchParams.get("sort")) || DEFAULT_SEARCH_RESULT_SORT,
   );
   const [warmingPollCount, setWarmingPollCount] = useState(0);
   const [selectionEnrichmentRevalidatedFor, setSelectionEnrichmentRevalidatedFor] = useState<
     string | null
   >(null);
-  const requestedCursor = new URLSearchParams(location.search).get("after");
-  const selectedFromUrl = new URLSearchParams(location.search).get("selected");
+  const requestedCursor = locationSearchParams.get("after");
+  const selectedFromUrl = locationSearchParams.get("selected");
+  const hasSelectedFromUrl = locationSearchParams.has("selected");
   const searchKey = buildSearchAccumulationKey(data);
   const selectionEnrichmentKey = selectedFromUrl
     ? `${searchKey}::${selectedFromUrl}`
@@ -571,26 +573,26 @@ export default function SearchRoute() {
       ? `${searchKey}::${data.selectedAd.metaAdId}`
       : null;
   const [accumulated, setAccumulated] = useState<SearchAccumulationState>(() =>
-    createSearchAccumulationState(searchKey, data.result, data.selectedAd),
+    createSearchAccumulationState(searchKey, data.result, data.selectedAd, requestedCursor),
   );
   const visibleAccumulated = accumulated.searchKey === searchKey
     ? accumulated
-    : createSearchAccumulationState(searchKey, data.result, data.selectedAd);
+    : createSearchAccumulationState(searchKey, data.result, data.selectedAd, requestedCursor);
   const visibleResult = visibleAccumulated.result;
   const visibleAds = useMemo(
     () => sortAdsForSearchDisplay(visibleResult.ads, resultSort),
     [visibleResult.ads, resultSort],
   );
-  const selectedAd = selectedFromUrl
+  const selectedAd = hasSelectedFromUrl
     ? data.selectedAd ?? visibleAds.find((ad) => ad.metaAdId === selectedFromUrl) ?? null
     : data.selectedAd ?? visibleAccumulated.selectedAd;
 
   useEffect(() => {
     setAccumulated((previous) => {
       const sameSearch = previous.searchKey === searchKey;
-      const shouldMerge = sameSearch && (Boolean(requestedCursor) || Boolean(selectedFromUrl));
+      const shouldMerge = sameSearch && (Boolean(requestedCursor) || hasSelectedFromUrl);
       if (!shouldMerge) {
-        return createSearchAccumulationState(searchKey, data.result, data.selectedAd);
+        return createSearchAccumulationState(searchKey, data.result, data.selectedAd, requestedCursor);
       }
 
       return mergeSearchAccumulationState(previous, data.result, {
@@ -598,7 +600,7 @@ export default function SearchRoute() {
         selectedAd: data.selectedAd,
       });
     });
-  }, [data.result, data.selectedAd, requestedCursor, searchKey, selectedFromUrl]);
+  }, [data.result, data.selectedAd, hasSelectedFromUrl, requestedCursor, searchKey, selectedFromUrl]);
 
   const rootData = useRouteLoaderData("root") as RootLoaderData;
   const creativeTextField = selectedAd?.analysisFields.find((field) => field.fieldKey === "ocr_text");
@@ -1068,14 +1070,13 @@ export default function SearchRoute() {
 
               <div className="f9-results-list">
                 {visibleAds.length > 0 ? (
-                  visibleAds.map((ad) => (
+                  visibleAds.map((ad) => {
+                    const sourceCursor = visibleAccumulated.adCursorById.get(ad.metaAdId) ?? null;
+                    return (
                     <Link
                       className={`f9-result-card ${selectedAd?.metaAdId === ad.metaAdId ? "is-active" : ""}`}
                       key={ad.metaAdId}
-                      to={`/search?${(requestedCursor
-                        ? appendCursor(scopedSearchParams, requestedCursor, ad.metaAdId)
-                        : withSelected(scopedSearchParams, ad.metaAdId)
-                      ).toString()}#selected-proof`}
+                      to={buildSearchResultHref(scopedSearchParams, ad.metaAdId, sourceCursor)}
                     >
                       <AdThumb ad={ad} />
                       <div className="f9-result-card-body">
@@ -1097,7 +1098,8 @@ export default function SearchRoute() {
                         <em>{ad.format}</em>
                       </div>
                     </Link>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="f9-empty-state">
                     {isSearchWarming ? (
@@ -1344,6 +1346,7 @@ export interface SearchAccumulationState {
   searchKey: string;
   result: SearchResponse;
   selectedAd: AdRecord | null;
+  adCursorById: ReadonlyMap<string, string | null>;
   addedCount: number;
   retryCursor: string | null;
 }
@@ -1366,11 +1369,13 @@ export function createSearchAccumulationState(
   searchKey: string,
   result: SearchResponse,
   selectedAd: AdRecord | null,
+  requestedCursor: string | null = null,
 ): SearchAccumulationState {
   return {
     searchKey,
     result,
     selectedAd,
+    adCursorById: new Map(result.ads.map((ad) => [ad.metaAdId, requestedCursor])),
     addedCount: 0,
     retryCursor: null,
   };
@@ -1397,14 +1402,19 @@ export function mergeSearchAccumulationState(
 
   const priorIds = new Set(previous.result.ads.map((ad) => ad.metaAdId));
   const mergedAds = new Map(previous.result.ads.map((ad) => [ad.metaAdId, ad]));
+  const adCursorById = new Map(previous.adCursorById);
   for (const ad of incoming.ads) {
     mergedAds.set(ad.metaAdId, ad);
+    if (!adCursorById.has(ad.metaAdId)) {
+      adCursorById.set(ad.metaAdId, input.requestedCursor);
+    }
   }
 
   return {
     searchKey: previous.searchKey,
     result: { ...incoming, ads: Array.from(mergedAds.values()) },
     selectedAd: input.selectedAd ?? previous.selectedAd,
+    adCursorById,
     addedCount: incoming.ads.filter((ad) => !priorIds.has(ad.metaAdId)).length,
     retryCursor: null,
   };
@@ -1793,6 +1803,17 @@ function appendCursor(params: URLSearchParams, after: string, selected: string |
   const next = withSelected(params, selected);
   next.set("after", after);
   return next;
+}
+
+export function buildSearchResultHref(
+  params: URLSearchParams,
+  selected: string,
+  sourceCursor: string | null,
+) {
+  const next = sourceCursor
+    ? appendCursor(params, sourceCursor, selected)
+    : withSelected(params, selected);
+  return `/search?${next.toString()}#selected-proof`;
 }
 
 function withCompetitorWebsite(params: URLSearchParams, website: string) {

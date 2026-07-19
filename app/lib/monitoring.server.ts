@@ -1,15 +1,10 @@
 import { buildAnalysisFields } from "~/lib/analysis.server";
 import { isAdLibraryBackedAd, mapAdSourceToAnalysisSource } from "~/lib/ad-source-kind";
-import {
-  type DigestCadence,
-  digestMetadataForEvent,
-} from "~/lib/change-intelligence";
+import { type DigestCadence } from "~/lib/change-intelligence";
 import { captureCreativeText } from "~/lib/creative-text.server";
-import { isCustomerDigestEligibleEvent } from "~/lib/delivery-policy.server";
 import {
   createAdObservation,
   createEventCandidate,
-  createDigestRun,
   createProofCapture,
   createWatchEvent,
   createWatchlistRun,
@@ -17,12 +12,9 @@ import {
   countProofCapturesForWorkspaceSince,
   finishWatchlistRun,
   recordWatchlistCapacitySkip,
-  getDigest,
-  getDigestByPeriod,
   getRecentSuccessfulRuns,
   getOperatorRiskSummary,
   getSavedQuery,
-  getSuccessfulRunStatsForUserBetween,
   countWatchlistRunsForUserSince,
   getWeeklyBusinessSummary,
   hasInFlightWatchlistRun,
@@ -33,14 +25,11 @@ import {
   listProofCapturesForTarget,
   listProofCapturesForTargets,
   listRecentWorkspaceProofCaptures,
-  listRetryableDigestRuns,
   listRetryableInstantAttempts,
   listLastSuccessfulProofCapturesForAds,
   listObservationsForRun,
   listWatchEvents,
   listWatchEventsForRun,
-  listAdsByIds,
-  listWatchEventsBetween,
   listWatchEventsByIds,
   listWatchlists,
   logMetaIntegrationStatus,
@@ -48,8 +37,6 @@ import {
   upsertProofTarget,
   upsertAd,
 } from "~/lib/data.server";
-import { DIGEST_STRATEGY_MODEL, readDigestStrategyNote } from "~/lib/digest-strategy";
-import { buildWeeklyStrategyParagraph } from "~/lib/digest-strategy.server";
 import { runDigestDeliveryCycle } from "~/lib/digest-orchestration.server";
 import { deliveryPreDispatchStaleBefore } from "~/lib/delivery-attempt-lease";
 import type { AppEnv } from "~/lib/env.server";
@@ -108,8 +95,6 @@ const MANUAL_REFRESH_COOLDOWN_MS = 10 * 60 * 1000;
 const INACTIVE_MISS_THRESHOLD = 2;
 const DAILY_DIGEST_LOOKBACK_DAYS = 1;
 const WEEKLY_DIGEST_LOOKBACK_DAYS = 7;
-const DIGEST_RETRY_WINDOW_DAYS = 7;
-const DIGEST_RETRY_SWEEP_LIMIT = 25;
 const DISCOVERY_WARMUP_QUERY_LIMIT = 5;
 const DIRECT_WEBSITE_PROOF_INTERVAL_MS = 20 * 60 * 60 * 1000;
 
@@ -1292,10 +1277,6 @@ export async function runWatchlistManual(
   // The no-D1 compatibility path intentionally keeps its existing behavior.
   let concurrencyPermitToken = options.concurrencyPermitToken;
   let ownsConcurrencyPermit = false;
-  const runOptions: ScanOptions = {
-    ...options,
-    concurrencyPermitToken,
-  };
 
   try {
     return await runWatchlist(
@@ -1321,7 +1302,6 @@ export async function runWatchlistManual(
             throw new MonitoringConcurrencyLimitError();
           }
           concurrencyPermitToken = claim.token;
-          runOptions.concurrencyPermitToken = concurrencyPermitToken;
           ownsConcurrencyPermit = true;
         }
 
@@ -1334,7 +1314,7 @@ export async function runWatchlistManual(
       },
       {
         customerMetaAdLibraryToken,
-        ...runOptions,
+        ...options,
       },
     );
   } finally {
@@ -2321,7 +2301,6 @@ function readDigestExpectedItemCount(summary?: Record<string, unknown>) {
     ? Number(expectedItemCount)
     : null;
 }
-
 function shouldIncludeScoutInScheduledMonitoring(options: RunScheduledMonitoringOptions) {
   const scheduledAt = options.scheduledTime === undefined
     ? new Date()

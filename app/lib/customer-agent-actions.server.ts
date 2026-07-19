@@ -40,7 +40,8 @@ import {
 } from "~/lib/ga-customer-surface";
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { isClientReportEligibleWatchEvent } from "~/lib/proof-classification";
-import { parseReportId } from "~/lib/report";
+import { createReportId, parseReportId } from "~/lib/report";
+import { loadOwnedReportDocument } from "~/lib/report-loader.server";
 import { normalizeTimeZone, safeTimeZone } from "~/lib/safe-timezone";
 import { createApprovedReportSnapshot, evaluateReportReadiness } from "~/lib/report-approval";
 import {
@@ -1266,58 +1267,40 @@ async function loadReportDocumentForAgent(
     listCollectionItems,
     listWatchEvents,
   } = await import("~/lib/data.server");
-  const {
-    buildCollectionReport,
-    buildWatchlistReport,
-  } = await import("~/lib/report-builder.server");
   const parsedReport = parseReportId(readString(input, "reportId") ?? "");
   const resourceType = parsedReport?.resourceType ?? readReportResourceType(input);
   const resourceId = parsedReport?.resourceId ?? requireString(input, "resourceId");
-
-  if (resourceType === "collection") {
-    const collection = await getCollection(env, resourceId, userId);
-    if (!collection) {
+  const report = await loadOwnedReportDocument(
+    env,
+    userId,
+    createReportId(resourceType, resourceId),
+    {
+      getCollection,
+      getLatestDigestRunSummaryForWatchlist,
+      getWatchlist,
+      listAdsByIds,
+      listCollectionItems,
+      listWatchEvents,
+    },
+    {
+      parallelWatchlistLookups: true,
+      requireActiveWatchlist: true,
+    },
+  );
+  if (!report) {
+    if (resourceType === "collection") {
       throw new CustomerAgentActionError("collection_not_found", "Board not found.", { status: 404 });
     }
-
-    return {
-      ok: true,
-      report: buildCollectionReport({
-        collection,
-        items: await listCollectionItems(env, collection.id),
-      }),
-      memoryContext: await loadMemoryContextForAgent(env, userId),
-    };
-  }
-
-  const watchlist = await getWatchlist(env, resourceId, userId);
-  if (!watchlist || watchlist.isActive === false) {
     throw new CustomerAgentActionError("watchlist_not_found", "Watchlist not found.", { status: 404 });
   }
-
-  const events = await listWatchEvents(env, watchlist.id, 60);
-  const [ads, aiWeeklySummary] = await Promise.all([
-		listAdsByIds(
-			env,
-			events
-				.map((event) => event.adId)
-				.filter((adId): adId is string => Boolean(adId)),
-		),
-		// Match the signed-in report route: reuse only the latest stored,
-		// watchlist-exclusive digest paragraph. Agent actions never generate a
-		// fresh summary at report time.
-		getLatestDigestRunSummaryForWatchlist(env, userId, watchlist.id),
-	]);
-
   return {
     ok: true,
-    report: buildWatchlistReport({
-      watchlist,
-      events,
-      adsById: new Map(ads.map((ad) => [ad.metaAdId, ad])),
-		aiWeeklySummary,
-    }),
-    memoryContext: await loadMemoryContextForAgent(env, userId, { watchlistId: watchlist.id }),
+    report,
+    memoryContext: await loadMemoryContextForAgent(
+      env,
+      userId,
+      report.resourceType === "watchlist" ? { watchlistId: report.resourceId } : undefined,
+    ),
   };
 }
 

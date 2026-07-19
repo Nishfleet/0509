@@ -9,7 +9,10 @@ import {
   type DeliveryAttemptRow,
 } from "~/lib/data/delivery-records-rows.server";
 import { createId, jsonValue, nowIso, type JsonRecord } from "~/lib/data/helpers.server";
-import { isStalePreDispatchAttempt } from "~/lib/delivery-attempt-lease";
+import {
+  hasTrustedInstantProviderRetryEvidence,
+  isStalePreDispatchAttempt,
+} from "~/lib/delivery-attempt-lease";
 import type { AppEnv } from "~/lib/env.server";
 import type {
   DeliveryAttemptRecord,
@@ -362,35 +365,6 @@ export interface InstantDeliveryAttemptClaimInput {
   idempotencyKey: string;
   templateName?: string | null;
   deferredByQuietHours?: boolean;
-}
-
-const INSTANT_PROVIDER_CLAIM_PROTOCOL = "instant_preclaim_v1";
-
-function hasTrustedInstantProviderRetryEvidence(
-  attempt: DeliveryAttemptRecord,
-) {
-  if (
-    attempt.payloadSnapshot.deliveryClaimProtocol ===
-    INSTANT_PROVIDER_CLAIM_PROTOCOL
-  ) {
-    return true;
-  }
-
-  const evidence = attempt.payloadSnapshot.instantAlertProviderEvidence;
-  if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) {
-    return false;
-  }
-
-  const record = evidence as Record<string, unknown>;
-  return (
-    record.outcome === "failed" &&
-    typeof record.reference === "string" &&
-    record.reference.trim().length > 0 &&
-    typeof record.classification === "string" &&
-    record.classification.trim().length > 0 &&
-    typeof record.observedAt === "string" &&
-    Number.isFinite(Date.parse(record.observedAt))
-  );
 }
 
 /**

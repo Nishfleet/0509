@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const {
@@ -92,6 +94,13 @@ const candidate = {
 };
 
 describe("risk-based cross-browser release proof", () => {
+  it("installs every browser engine required by the protected-main deploy gate", () => {
+    const workflow = readFileSync(resolve(".github/workflows/deploy-production.yml"), "utf8");
+    expect(workflow).toContain(
+      "npx playwright install --with-deps chromium firefox webkit",
+    );
+  });
+
   it("accepts the frozen representative browser and journey matrix", () => {
     const manifests = Object.fromEntries(
       Object.entries(REQUIRED_CROSS_BROWSER_RISK_SCOPES).map(([project, journeys]) => [

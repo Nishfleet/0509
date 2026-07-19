@@ -218,9 +218,15 @@ describe("production deployment readiness gate", () => {
       id: "rollback_failed_release",
       command: "node",
       includeCloudflareCredentials: true,
-      runOnCanaryFailure: true,
+      runOnPostDeployFailure: true,
     });
     expect(plan[canaryIndex + 3]).toMatchObject({ id: "live_public_truth" });
+    expect(plan[canaryIndex + 4]).toMatchObject({
+      id: "production_public_smoke",
+      command: "npm",
+      args: ["run", "e2e:prod:public"],
+    });
+    expect(plan[canaryIndex + 5]).toMatchObject({ id: "oauth_branding" });
   });
 
   it("captures one stable prior Worker version and emits an exact guarded rollback command", () => {
@@ -289,12 +295,7 @@ describe("production deployment readiness gate", () => {
     expect(executed).not.toContain("deploy");
   });
 
-  it.each([
-    ["partial_refund_invariants_predeploy", "deploy"],
-    ["partial_refund_invariants_postdeploy", "launch_readiness_proof_canary_cycle"],
-    ["launch_readiness_proof_canary_cycle", "post_deploy_release_canary"],
-    ["partial_refund_invariants_postcanary", "live_public_truth"],
-  ])("stops at %s before %s", (failureStep, blockedStep) => {
+  it("stops at the final refund predeploy gate without attempting rollback", () => {
     const plan = buildProductionDeployPlan({
       manifestPath: "test-results/deploy-readiness-test.json",
       remoteRestoreEvidencePath,
@@ -303,10 +304,45 @@ describe("production deployment readiness gate", () => {
     const executed: string[] = [];
     expect(() => executeProductionDeployPlan(plan, (step: any) => {
       executed.push(step.id);
-      if (step.id === failureStep) throw new Error(`${failureStep}_failed`);
-    })).toThrow(`${failureStep}_failed`);
-    expect(executed).toContain(failureStep);
-    expect(executed).not.toContain(blockedStep);
+      if (step.id === "partial_refund_invariants_predeploy") {
+        throw new Error("partial_refund_invariants_predeploy_failed");
+      }
+    })).toThrow("partial_refund_invariants_predeploy_failed");
+    expect(executed).not.toContain("deploy");
+    expect(executed).not.toContain("rollback_failed_release");
+  });
+
+  it.each([
+    ["deploy", "verify_worker_rollback_target"],
+    ["verify_worker_rollback_target", "partial_refund_invariants_postdeploy"],
+    ["partial_refund_invariants_postdeploy", "launch_readiness_proof_canary_cycle"],
+    ["launch_readiness_proof_canary_cycle", "post_deploy_release_canary"],
+    ["partial_refund_invariants_postcanary", "live_public_truth"],
+    ["live_public_truth", "production_public_smoke"],
+    ["production_public_smoke", "oauth_branding"],
+    ["oauth_branding", null],
+  ])("rolls back after %s fails and skips later release checks", (failureStep, blockedStep) => {
+    const plan = buildProductionDeployPlan({
+      manifestPath: "test-results/deploy-readiness-test.json",
+      remoteRestoreEvidencePath,
+      wranglerOutputPath,
+    });
+    const executed: string[] = [];
+    const failure = new Error(`${failureStep}_failed`);
+    let caught: unknown;
+    try {
+      executeProductionDeployPlan(plan, (step: any) => {
+        executed.push(step.id);
+        if (step.id === failureStep) throw failure;
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBe(failure);
+    expect(executed.filter((id) => id === failureStep)).toHaveLength(1);
+    expect(executed.filter((id) => id === "rollback_failed_release")).toHaveLength(1);
+    if (blockedStep) expect(executed).not.toContain(blockedStep);
   });
 
   it("runs the post-canary refund invariant before rethrowing a canary failure", () => {
@@ -328,8 +364,11 @@ describe("production deployment readiness gate", () => {
     }
 
     expect(caught).toBe(canaryFailure);
-    expect(executed).toContain("partial_refund_invariants_postcanary");
-    expect(executed).toContain("rollback_failed_release");
+    expect(executed.slice(executed.indexOf("post_deploy_release_canary"))).toEqual([
+      "post_deploy_release_canary",
+      "partial_refund_invariants_postcanary",
+      "rollback_failed_release",
+    ]);
     expect(executed).not.toContain("live_public_truth");
   });
 
@@ -391,6 +430,57 @@ describe("production deployment readiness gate", () => {
     expect((caught as AggregateError).errors).toEqual([canaryFailure, rollbackFailure]);
     expect(executed).toContain("partial_refund_invariants_postcanary");
     expect(executed).not.toContain("live_public_truth");
+  });
+
+  it("preserves a post-deploy gate failure with a refused rollback target", () => {
+    const plan = buildProductionDeployPlan({
+      manifestPath: "test-results/deploy-readiness-test.json",
+      remoteRestoreEvidencePath,
+      wranglerOutputPath,
+    });
+    const releaseFailure = new Error("partial_refund_invariants_postdeploy_failed");
+    const targetFailure = new Error("worker_rollback_target_ambiguous");
+    const executed: string[] = [];
+    let caught: unknown;
+    try {
+      executeProductionDeployPlan(plan, (step: any) => {
+        executed.push(step.id);
+        if (step.id === "partial_refund_invariants_postdeploy") throw releaseFailure;
+        if (step.id === "rollback_failed_release") throw targetFailure;
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(AggregateError);
+    expect((caught as AggregateError).errors).toEqual([releaseFailure, targetFailure]);
+    expect((caught as Error & { cause?: unknown }).cause).toBe(releaseFailure);
+    expect(executed.filter((id) => id === "rollback_failed_release")).toHaveLength(1);
+    expect(executed).not.toContain("post_deploy_release_canary");
+  });
+
+  it("fails closed when a mutated release has no rollback step", () => {
+    const plan = buildProductionDeployPlan({
+      manifestPath: "test-results/deploy-readiness-test.json",
+      remoteRestoreEvidencePath,
+      wranglerOutputPath,
+    }).filter((step: any) => !step.runOnPostDeployFailure);
+    const releaseFailure = new Error("partial_refund_invariants_postdeploy_failed");
+    let caught: unknown;
+    try {
+      executeProductionDeployPlan(plan, (step: any) => {
+        if (step.id === "partial_refund_invariants_postdeploy") throw releaseFailure;
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(AggregateError);
+    expect((caught as AggregateError).errors[0]).toBe(releaseFailure);
+    expect((caught as AggregateError).errors[1]).toMatchObject({
+      message: "post_deploy_rollback_step_missing",
+    });
+    expect((caught as Error & { cause?: unknown }).cause).toBe(releaseFailure);
   });
 
   it("proves an intentional readiness failure prevents every deploy mutation", () => {
@@ -480,6 +570,7 @@ describe("production deployment readiness gate", () => {
     expect(workflow).toContain("D1_REMOTE_RESTORE_EVIDENCE_JSON");
     expect(workflow).toContain("D1_REMOTE_RESTORE_EVIDENCE_PATH");
     expect(workflow).toContain("CANARY_BYPASS_TOKEN");
+    expect(workflow).not.toContain("- name: Production public smoke");
   });
 
   it("accepts only a clean, exact, all-six first-attempt manifest with intact artifacts", () => {

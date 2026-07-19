@@ -12,7 +12,7 @@ const SAFE_IDENTIFIER_PATTERN = /^[A-Za-z0-9._-]{1,128}$/u;
  *   args: string[];
  *   env?: Record<string, string>;
  *   includeCloudflareCredentials?: boolean;
- *   runOnCanaryFailure?: boolean;
+ *   runOnPostDeployFailure?: boolean;
  * }} ProductionDeployStep
  */
 
@@ -177,12 +177,17 @@ export function buildProductionDeployPlan({
         wranglerOutputPath,
       ],
       includeCloudflareCredentials: true,
-      runOnCanaryFailure: true,
+      runOnPostDeployFailure: true,
     },
     {
       id: "live_public_truth",
       command: "node",
       args: ["scripts/check-live-public-home.mjs"],
+    },
+    {
+      id: "production_public_smoke",
+      command: "npm",
+      args: ["run", "e2e:prod:public"],
     },
     {
       id: "oauth_branding",
@@ -282,37 +287,56 @@ export function executeProductionDeployPlan(plan, execute) {
   if (!Array.isArray(plan) || typeof execute !== "function") {
     throw new Error("invalid_production_deploy_plan");
   }
-  let canaryFailed = false;
-  let canaryFailure;
-  const recoveryFailures = [];
+
+  const rollbackStep = plan.find((step) => step.runOnPostDeployFailure);
+  const postCanaryInvariantStep = plan.find(
+    (step) => step.id === "partial_refund_invariants_postcanary",
+  );
+  let deploymentAttempted = false;
+
   for (const step of plan) {
-    if (!canaryFailed && step.runOnCanaryFailure) continue;
-    if (canaryFailed) {
-      if (step.id === "partial_refund_invariants_postcanary" || step.runOnCanaryFailure) {
+    if (step.runOnPostDeployFailure) continue;
+
+    if (step.id === "deploy") {
+      // Wrangler can publish the new version before returning a non-zero
+      // status, so every failure from this boundary onward must enter the
+      // validated rollback path rather than assuming no mutation occurred.
+      deploymentAttempted = true;
+    }
+
+    try {
+      execute(step);
+    } catch (releaseFailure) {
+      if (!deploymentAttempted) throw releaseFailure;
+
+      const recoveryFailures = [];
+      if (
+        step.id === "post_deploy_release_canary" &&
+        postCanaryInvariantStep
+      ) {
         try {
-          execute(step);
+          execute(postCanaryInvariantStep);
         } catch (recoveryFailure) {
           recoveryFailures.push(recoveryFailure);
         }
-        if (step.runOnCanaryFailure) {
-          if (recoveryFailures.length === 0) throw canaryFailure;
-          throw new AggregateError(
-            [canaryFailure, ...recoveryFailures],
-            "post_deploy_canary_recovery_failed",
-            { cause: canaryFailure },
-          );
-        }
-        continue;
       }
-      throw canaryFailure;
-    }
-    try {
-      execute(step);
-    } catch (error) {
-      if (step.id !== "post_deploy_release_canary") throw error;
-      canaryFailed = true;
-      canaryFailure = error;
+
+      if (!rollbackStep) {
+        recoveryFailures.push(new Error("post_deploy_rollback_step_missing"));
+      } else {
+        try {
+          execute(rollbackStep);
+        } catch (recoveryFailure) {
+          recoveryFailures.push(recoveryFailure);
+        }
+      }
+
+      if (recoveryFailures.length === 0) throw releaseFailure;
+      throw new AggregateError(
+        [releaseFailure, ...recoveryFailures],
+        "post_deploy_recovery_failed",
+        { cause: releaseFailure },
+      );
     }
   }
-  if (canaryFailed) throw canaryFailure;
 }

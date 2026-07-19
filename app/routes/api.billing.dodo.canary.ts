@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { buildBillingCanaryLockId } from "~/lib/billing-canary-lock";
 import type { AppEnv } from "~/lib/env.server";
 import type { PricingPlanSlug } from "~/lib/pricing";
 
@@ -61,7 +62,6 @@ interface RecoverableBillingCanaryRow {
   metadata_json: string;
 }
 
-const BILLING_CANARY_LOCK_PREFIX = "billing-canary-lock:";
 const BILLING_CANARY_RECOVERY_STALE_DAYS = 5 / (24 * 60);
 // Keep the lock-held work below the shared 5-minute webhook lease and the
 // script's 60-second request timeout; observed overruns fail closed.
@@ -184,7 +184,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   // Each invocation owns a unique ledger row. The row id is also the fencing
   // token carried by its internal webhooks, so an expired worker can never
   // release or borrow a newer invocation's lease.
-  const lockEventId = `${BILLING_CANARY_LOCK_PREFIX}${normalizeIdempotencySegment(user.id)}:${normalizeIdempotencySegment(crypto.randomUUID())}`;
+  const lockEventId = buildBillingCanaryLockId(user.id, crypto.randomUUID());
   const lockStartedAt = Date.now();
   const maxRuntimeMs = Math.min(
     BILLING_CANARY_MAX_RUNTIME_MS,

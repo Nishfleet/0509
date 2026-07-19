@@ -57,6 +57,20 @@
       "expiry": "any entitlement, SKU, billing-policy or provider change"
     },
     {
+      "claimId": "PLAN-FEATURE-CATALOG",
+      "text": "Customer-visible plan features come from the authoritative entitlement catalog; undeclared features remain unavailable.",
+      "surface": "pricing, billing and plan-gated customer navigation",
+      "audience": "buyers and signed-in customers",
+      "owner": "product and entitlements",
+      "source": ["app/lib/plan-entitlements.ts", "app/lib/pricing.ts"],
+      "requiredGate": "G11-INVENTORY,G360-P1-BACKBONE",
+      "requiredEvidence": "executable catalog parity plus same-fingerprint plan-boundary and pre-click denial proof",
+      "status": "assessed_pending_reproof",
+      "assessment": "The closeout registry now binds every authoritative plan feature to one executable inventory; exact browser and deployed entitlement proof remains required.",
+      "classification": "discovered",
+      "expiry": "any plan feature, entitlement, pricing or navigation change"
+    },
+    {
       "claimId": "MULTILINGUAL-TRANSLATION",
       "text": "Reads ad text in 30+ languages and scripts and auto-translates it into English.",
       "surface": "pricing feature copy",
@@ -125,6 +139,20 @@
       "assessment": "Historical all-six browser proof and provider canary cover source-state truth; the closeout candidate must repeat degraded recovery and exact deployed provider identity.",
       "classification": "known",
       "expiry": "provider, token, health or copy change"
+    },
+    {
+      "claimId": "CUSTOMER-ROUTE-CATALOG",
+      "text": "Exported customer navigation, public Markdown and sitemap paths remain explicitly inventoried; rendered access-boundary proof stays a separate release gate.",
+      "surface": "dashboard navigation, public markdown and sitemap",
+      "audience": "public visitors and signed-in customers",
+      "owner": "product navigation and public web",
+      "source": ["app/lib/dashboard-navigation.ts", "app/lib/public-markdown.ts", "app/lib/seo.ts"],
+      "requiredGate": "G11-INVENTORY,G11-SELF-SERVE-PARITY",
+      "requiredEvidence": "executable exported-catalog parity plus same-fingerprint public/authenticated route and access-boundary proof",
+      "status": "assessed_pending_reproof",
+      "assessment": "The closeout registry now binds the exported customer navigation, public markdown and sitemap catalogs; rendered and deployed route proof remains required.",
+      "classification": "discovered",
+      "expiry": "any customer navigation, public path, sitemap or access-boundary change"
     },
     {
       "claimId": "DELIVERY-CHANNEL-GATES",
@@ -369,16 +397,19 @@
     {
       "claimId": "E2E-CANARY-ROUTES",
       "classification": "rejected",
+      "source": ["app/routes.ts", "app/lib/e2e-harness-guard.server.ts", "tests/e2e-harness-guard.test.ts"],
       "reason": "Local fixture and token-guarded canary routes are operator/test surfaces, not supported customer capabilities; their exclusion still requires route-guard and no-public-nav proof."
     },
     {
       "claimId": "DAILY-MONITORING-ALIAS",
       "classification": "duplicate",
+      "source": ["workers/schedule.ts"],
       "reason": "Deprecated schedule alias maps to the canonical digest job and is not a separate customer promise."
     },
     {
       "claimId": "NATIVE-APP-EDITING",
       "classification": "rejected",
+      "source": ["docs/customer-readiness-remediation.md"],
       "reason": "No native app is declared; native editing remains out of scope until Gate D buyer evidence changes the product contract."
     }
   ]

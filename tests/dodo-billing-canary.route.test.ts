@@ -372,9 +372,13 @@ function createCanaryDb(options: {
   };
 }
 
-function createEnv(options: Parameters<typeof createCanaryDb>[0] = {}) {
+function createEnv(
+  options: Parameters<typeof createCanaryDb>[0] = {},
+  workerVersionId?: string,
+) {
   return {
     CANARY_BYPASS_TOKEN: "secret-token",
+    ...(workerVersionId ? { CF_VERSION_METADATA: { id: workerVersionId } } : {}),
     DB: createCanaryDb(options),
     DODO_0509_BRAND_ID: "brand_0509",
     DODO_0509_PRODUCT_PROOF_PACK_500_ID: "prod_pack_500",
@@ -481,6 +485,56 @@ describe("Dodo billing canary route", () => {
       ok: false,
       blocker: "invalid_canary_email_override",
     });
+  });
+
+  it("rejects a mismatched Worker version before database or webhook mutations", async () => {
+    const env = createEnv({}, "worker-v2");
+    const webhookAction = vi.fn(async () => Response.json({ ok: true }));
+    const response = await invokeCanary({
+      env,
+      webhookAction,
+      headers: { "x-0509-expected-worker-version": "worker-v1" },
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      blocker: "worker_version_mismatch",
+    });
+    expect(env.DB.mutationKinds).toEqual([]);
+    expect(webhookAction).not.toHaveBeenCalled();
+  });
+
+  it("runs and cleans up the canary when the Worker version matches", async () => {
+    const env = createEnv({}, "worker-v1");
+    const webhookAction = vi.fn(async () => Response.json({ ok: true }));
+    const response = await invokeCanary({
+      env,
+      webhookAction,
+      headers: { "x-0509-expected-worker-version": "worker-v1" },
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      workerVersionId: "worker-v1",
+      grants: {
+        planCleanupOk: true,
+        watchlistCleanupOk: true,
+        proofCreditCleanupOk: true,
+      },
+    });
+    expect(webhookAction).toHaveBeenCalledTimes(2);
+    expect([...env.DB.mutationKinds].sort()).toEqual(["plan", "usage_bundle"]);
+    expect(env.DB.userPlanState.dodo_payment_id).toBe("real-payment-1");
+    expect(env.DB.watchlistState).toEqual([
+      expect.objectContaining({
+        id: "watchlist-1",
+        is_active: 0,
+        paused_reason: "plan_limit",
+      }),
+    ]);
   });
 
   it("posts signed plan and proof-credit events through the real webhook route", async () => {

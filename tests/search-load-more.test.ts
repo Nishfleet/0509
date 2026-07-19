@@ -55,6 +55,7 @@ afterEach(() => {
 describe("search load-more accessibility", () => {
   it("appends unique pages, preserves selection, and resets only when the search identity changes", async () => {
     const {
+      buildSearchResultHref,
       buildSearchAccumulationKey,
       createSearchAccumulationState,
       mergeSearchAccumulationState,
@@ -74,6 +75,7 @@ describe("search load-more accessibility", () => {
     expect(secondKey).not.toBe(firstKey);
 
     const first = createSearchAccumulationState(firstKey, result(), ad);
+    expect(first.adCursorById.get("ad-1")).toBeNull();
     const secondAd = { ...ad, metaAdId: "ad-2", previewHeadline: "Second" };
     const duplicateUpdate = { ...ad, previewHeadline: "Updated first" };
     const merged = mergeSearchAccumulationState(
@@ -85,12 +87,29 @@ describe("search load-more accessibility", () => {
     expect(merged.result.ads.map((item) => item.metaAdId)).toEqual(["ad-1", "ad-2"]);
     expect(merged.result.ads[0]?.previewHeadline).toBe("Updated first");
     expect(merged.selectedAd?.metaAdId).toBe("ad-1");
+    expect(merged.adCursorById.get("ad-1")).toBeNull();
+    expect(merged.adCursorById.get("ad-2")).toBe("cursor-2");
     expect(merged.addedCount).toBe(1);
     expect(merged.result.nextCursor).toBe("cursor-3");
     expect(merged.retryCursor).toBeNull();
 
+    const pageOneHref = new URL(
+      buildSearchResultHref(new URLSearchParams("query=example.com"), "ad-1", merged.adCursorById.get("ad-1") ?? null),
+      "https://0509.io",
+    );
+    expect(pageOneHref.searchParams.get("selected")).toBe("ad-1");
+    expect(pageOneHref.searchParams.has("after")).toBe(false);
+
+    const pageTwoHref = new URL(
+      buildSearchResultHref(new URLSearchParams("query=example.com"), "ad-2", merged.adCursorById.get("ad-2") ?? null),
+      "https://0509.io",
+    );
+    expect(pageTwoHref.searchParams.get("selected")).toBe("ad-2");
+    expect(pageTwoHref.searchParams.get("after")).toBe("cursor-2");
+
     const reset = createSearchAccumulationState(secondKey, result({ ads: [secondAd] }), secondAd);
     expect(reset.result.ads.map((item) => item.metaAdId)).toEqual(["ad-2"]);
+    expect(reset.adCursorById).toEqual(new Map([["ad-2", null]]));
   });
 
   it("keeps earlier cards and the same cursor when a later page is delayed", async () => {
@@ -111,6 +130,7 @@ describe("search load-more accessibility", () => {
     expect(delayed.result.nextCursor).toBe("cursor-2");
     expect(delayed.retryCursor).toBe("cursor-2");
     expect(delayed.selectedAd).toEqual(ad);
+    expect(delayed.adCursorById).toEqual(first.adCursorById);
   });
 
   it("announces loading, result counts, completion, and delayed checks without raw errors", async () => {

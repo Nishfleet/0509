@@ -14,6 +14,7 @@ import { SubmitButton } from "~/components/submit-button";
 import { isSecretishMemoryField, isSecretishMemoryString } from "~/lib/agent-redaction";
 import { ClientRoomWriteConflictError } from "~/lib/data/customer-api-rooms.server";
 import type { AppEnv } from "~/lib/env.server";
+import type { OwnedReportDataSource } from "~/lib/report-loader.server";
 import { canUsePlanFeature } from "~/lib/plan-entitlements";
 import type { PlanFamily } from "~/lib/plan-entitlements";
 import { createReportId, parseReportId } from "~/lib/report";
@@ -1160,52 +1161,13 @@ async function loadOwnedRoomReport(
   env: AppEnv,
   userId: string,
   reportId: string,
-  data: {
-    getCollection: (env: AppEnv, id: string, userId?: string) => Promise<any>;
-    getLatestDigestRunSummaryForWatchlist: (env: AppEnv, userId: string, watchlistId: string) => Promise<any>;
-    getWatchlist: (env: AppEnv, id: string, userId?: string) => Promise<any>;
-    listAdsByIds: (env: AppEnv, ids: string[]) => Promise<any[]>;
-    listCollectionItems: (env: AppEnv, id: string) => Promise<any[]>;
-    listWatchEvents: (env: AppEnv, id: string, limit?: number) => Promise<any[]>;
-  },
+  data: OwnedReportDataSource,
 ) {
-  const parsed = parseReportId(reportId);
-  if (!parsed) return null;
-  const { buildCollectionReport, buildWatchlistReport } = await import("~/lib/report-builder.server");
-
-  if (parsed.resourceType === "collection") {
-    const collection = await data.getCollection(env, parsed.resourceId, userId);
-    if (!collection) return null;
-    const report = buildCollectionReport({
-      collection,
-      items: await data.listCollectionItems(env, collection.id),
-    });
-    return report.reportId === reportId &&
-      report.resourceType === parsed.resourceType &&
-      report.resourceId === parsed.resourceId
-      ? report
-      : null;
-  }
-
-  const watchlist = await data.getWatchlist(env, parsed.resourceId, userId);
-  if (!watchlist || watchlist.isActive === false) return null;
-  const events = await data.listWatchEvents(env, watchlist.id, 60);
-  const ads = await data.listAdsByIds(
-    env,
-    events.map((event) => event.adId).filter((id: unknown): id is string => typeof id === "string" && id.length > 0),
-  );
-  const aiWeeklySummary = await data.getLatestDigestRunSummaryForWatchlist(env, userId, watchlist.id);
-  const report = buildWatchlistReport({
-    watchlist,
-    events,
-    adsById: new Map(ads.map((ad) => [ad.metaAdId, ad])),
-    aiWeeklySummary,
+  const { loadOwnedReportDocument } = await import("~/lib/report-loader.server");
+  return loadOwnedReportDocument(env, userId, reportId, data, {
+    requireActiveWatchlist: true,
+    verifyReportIdentity: true,
   });
-  return report.reportId === reportId &&
-    report.resourceType === parsed.resourceType &&
-    report.resourceId === parsed.resourceId
-    ? report
-    : null;
 }
 
 function toMemorySummary(

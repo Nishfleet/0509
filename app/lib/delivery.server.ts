@@ -26,6 +26,8 @@ import {
   markInstantDeliveryDispatchStarted,
 } from "~/lib/data/delivery-records-attempts.server";
 import {
+  hasTrustedInstantProviderRetryEvidence,
+  INSTANT_PROVIDER_CLAIM_PROTOCOL,
   isStalePreDispatchAttempt,
   markDeliveryAttemptProviderDispatch,
 } from "~/lib/delivery-attempt-lease";
@@ -94,7 +96,6 @@ export {
 } from "~/lib/delivery-account-emails.server";
 
 const AUTO_PROVISIONED_EMAIL_SOURCE = "account_email";
-const INSTANT_PROVIDER_CLAIM_PROTOCOL = "instant_preclaim_v1";
 
 interface DigestAttemptSummary {
   channel: DeliveryChannel;
@@ -2347,33 +2348,6 @@ async function claimInstantDeliveryAttemptWithoutDb(
     }
     throw error;
   }
-}
-
-function hasTrustedInstantProviderRetryEvidence(
-  attempt: DeliveryAttemptRecord,
-) {
-  if (
-    attempt.payloadSnapshot.deliveryClaimProtocol ===
-    INSTANT_PROVIDER_CLAIM_PROTOCOL
-  ) {
-    return true;
-  }
-
-  const evidence = attempt.payloadSnapshot.instantAlertProviderEvidence;
-  if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) {
-    return false;
-  }
-
-  const record = evidence as Record<string, unknown>;
-  return (
-    record.outcome === "failed" &&
-    typeof record.reference === "string" &&
-    record.reference.trim().length > 0 &&
-    typeof record.classification === "string" &&
-    record.classification.trim().length > 0 &&
-    typeof record.observedAt === "string" &&
-    Number.isFinite(Date.parse(record.observedAt))
-  );
 }
 
 function summarizeDeliveryAttempt(attempt: DeliveryAttemptRecord): DigestAttemptSummary {
