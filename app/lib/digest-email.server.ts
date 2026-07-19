@@ -58,6 +58,10 @@ export interface DigestEmailInput {
   supportEmail: string;
   supportMailto: string;
   unsubscribeUrl: string | null;
+  // Free-plan digests carry one tasteful upgrade line in the footer area.
+  // Absent or empty renders nothing — paid digests are byte-identical.
+  upgradeNote?: string | null;
+  upgradeUrl?: string | null;
 }
 
 export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
@@ -105,7 +109,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">View full digest</a>
       </p>
-      <p style="margin: 0; color: #98a2b3; font-size: 13px;">
+      ${renderUpgradeNoteHtml(input)}<p style="margin: 0; color: #98a2b3; font-size: 13px;">
         Source coverage: verified evidence means a stored screenshot, page record, or source link is attached. Check-spotted and needs-review items are signals from scheduled monitoring and should be checked before sharing externally.
         Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color:#344054;">Notifications</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color:#344054;">${escapeHtml(input.supportEmail)}</a>.
       </p>
@@ -128,6 +132,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
     omittedCount > 0 ? `${omittedCount} more change${omittedCount === 1 ? "" : "s"} are in the full digest.` : null,
     "",
     `View full digest: ${input.fullDigestUrl}`,
+    ...renderUpgradeNoteText(input),
     `Manage frequency: ${input.manageFrequencyUrl}`,
     input.unsubscribeUrl ? `Unsubscribe: ${input.unsubscribeUrl}` : null,
     `Support: ${input.supportEmail}`,
@@ -222,7 +227,7 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">Review digest history</a>
       </p>
-      <p style="margin: 0; color: #98a2b3; font-size: 13px;">
+      ${renderUpgradeNoteHtml(input)}<p style="margin: 0; color: #98a2b3; font-size: 13px;">
         Source coverage: no action-worthy movement was detected in this period. Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color:#344054;">Notifications</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color:#344054;">${escapeHtml(input.supportEmail)}</a>.
       </p>
     `)}
@@ -236,6 +241,7 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
     `${heartbeat.runs} checks across ${heartbeat.watchlistsChecked} competitors reviewed ${heartbeat.adsSeen} ads. Completed checks found no action-worthy movement across the sources that ran.`,
     "",
     `Review digest history: ${input.fullDigestUrl}`,
+    ...renderUpgradeNoteText(input),
     `Manage frequency: ${input.manageFrequencyUrl}`,
     input.unsubscribeUrl ? `Unsubscribe: ${input.unsubscribeUrl}` : null,
     `Support: ${input.supportEmail}`,
@@ -444,6 +450,31 @@ export function digestItemDeepLink(
   }
   const base = origin.replace(/\/+$/, "");
   return `${base}/app/watchlists?watchlist=${encodeURIComponent(watchlistId)}&event=${encodeURIComponent(eventId)}`;
+}
+
+function renderUpgradeNoteHtml(
+  input: Pick<DigestEmailInput, "upgradeNote" | "upgradeUrl">,
+) {
+  const note = input.upgradeNote?.trim();
+  if (!note) {
+    return "";
+  }
+  const link = input.upgradeUrl?.trim();
+  return `<p style="margin: 0 0 16px; color: #475467; font-size: 13px;">
+        ${escapeHtml(note)}${link ? ` <a href="${escapeHtml(link)}" style="color:#344054; font-weight:700;">See plans</a>` : ""}
+      </p>
+      `;
+}
+
+function renderUpgradeNoteText(
+  input: Pick<DigestEmailInput, "upgradeNote" | "upgradeUrl">,
+): string[] {
+  const note = input.upgradeNote?.trim();
+  if (!note) {
+    return [];
+  }
+  const link = input.upgradeUrl?.trim();
+  return ["", link ? `${note} See plans: ${link}` : note];
 }
 
 function renderStrategySectionHtml(strategyParagraph: string | null) {

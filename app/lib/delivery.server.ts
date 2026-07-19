@@ -222,8 +222,17 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
 
   const digestTimeZone = config.timezone ?? null;
 
+  // Free weekly watch: the digest is the whole product demo, so it stays the
+  // full template with exactly one tasteful upgrade line in the footer area.
+  const upgradeNote =
+    lane === "customer" && entitledConfigs.plan === "free"
+      ? (await import("~/lib/pricing")).freeWeeklyDigestUpgradeNote()
+      : null;
+
   for (const target of emailTargets) {
-    attempts.push(await deliverDigestToEmailTarget(env, input, lane, target, digestTimeZone));
+    attempts.push(
+      await deliverDigestToEmailTarget(env, input, lane, target, digestTimeZone, upgradeNote),
+    );
   }
 
   for (const target of whatsappTargets) {
@@ -806,6 +815,7 @@ async function deliverDigestToEmailTarget(
   lane: DeliveryLane,
   target: DeliveryTargetRecord,
   timeZone: string | null,
+  upgradeNote: string | null = null,
 ): Promise<DigestAttemptSummary> {
   const targetValue = normalizeDeliveryEmailValue(target.targetValue);
   if (!targetValue) {
@@ -842,6 +852,7 @@ async function deliverDigestToEmailTarget(
     cadence: input.cadence,
     timeZone,
     unsubscribeUrl,
+    upgradeNote,
   });
   const attemptClaim = await claimDigestDeliveryAttempt(env, {
     userId: input.userId,
@@ -1934,6 +1945,7 @@ function renderDigestEmail(
     cadence?: DigestCadence;
     timeZone?: string | null;
     unsubscribeUrl: string | null;
+    upgradeNote?: string | null;
   },
 ): ReturnType<typeof buildDigestEmail> {
   const baseUrl = appBaseUrl(env);
@@ -1954,6 +1966,8 @@ function renderDigestEmail(
     supportEmail: SUPPORT_EMAIL,
     supportMailto: SUPPORT_MAILTO,
     unsubscribeUrl: input.unsubscribeUrl,
+    upgradeNote: input.upgradeNote ?? null,
+    upgradeUrl: input.upgradeNote ? `${baseUrl}/#pricing` : null,
   });
 }
 
@@ -2032,6 +2046,7 @@ async function resolveEntitledDeliveryConfigs(
   const { applyDeliveryEntitlements } = await import("~/lib/plan-feature-gate.server");
   const plan = await getUserPlan(env, userId);
   return {
+    plan,
     workspaceConfig: applyDeliveryEntitlements(plan, workspaceConfig),
     watchlistConfig: watchlistConfig ? applyDeliveryEntitlements(plan, watchlistConfig) : null,
   };
