@@ -32,6 +32,16 @@ export interface DigestEmailHeartbeat {
   adsSeen: number;
 }
 
+/*
+ * Extension note (2026-07-19, counter-brief branch): the Ad Aggression Score
+ * (`app/lib/aggression-score.ts`) is deliberately NOT rendered in digest
+ * emails yet. Digest assembly works from digest items and never builds
+ * competitor dossiers, so the score is not cheaply available here — adding it
+ * would cost a full dossier query chain per watchlist per digest run. If that
+ * cost is ever accepted, compute `computeAggressionScore(await
+ * buildCompetitorDossier(...))` in digest orchestration and pass a precomputed
+ * score line into `DigestEmailInput`; do not query dossiers from this module.
+ */
 export interface DigestEmailModel {
   subject: string;
   preheader: string;

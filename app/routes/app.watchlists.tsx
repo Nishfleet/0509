@@ -11,6 +11,7 @@ import {
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { CompetitorDossierPanel } from "~/components/competitor-dossier";
 import { CreativeWall } from "~/components/creative-wall";
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
@@ -121,6 +122,12 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { resolveDeliveryConfig } = await import("~/lib/delivery-policy.server");
   const { listCreativeWallAds } = await import("~/lib/watchlist-ads.server");
   const { listWatchlistDailyActivity } = await import("~/lib/watchlist-trends.server");
+  const { buildCompetitorDossier, insufficientCompetitorDossier } = await import(
+    "~/lib/competitor-dossier.server"
+  );
+  const { computeAggressionScore } = await import("~/lib/aggression-score");
+  const { buildCounterBrief } = await import("~/lib/counter-brief.server");
+  const { isPaidPlanFamily } = await import("~/lib/plan-entitlements");
   const env = getEnv(context);
   const { session, workspaceUserId, isMember } = await requireWorkspaceSession(env, request);
   const { getUserPlan } = await import("~/lib/plan.server");
@@ -170,6 +177,10 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       showPresenceNav,
       creativeWall: [] as Awaited<ReturnType<typeof listCreativeWallAds>>,
       trendDailyActivity: [] as Awaited<ReturnType<typeof listWatchlistDailyActivity>>,
+      dossier: null as Awaited<ReturnType<typeof buildCompetitorDossier>> | null,
+      aggression: null as ReturnType<typeof computeAggressionScore>,
+      counterBrief: null as Awaited<ReturnType<typeof buildCounterBrief>>,
+      counterBriefLocked: !isPaidPlanFamily(plan),
       canManageDelivery: !isMember,
       verifiedAccountEmail,
       deliveryTestRequestTokens: {} as Record<string, string>,
@@ -190,6 +201,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     recentProofCaptures,
     creativeWall,
     trendDailyActivity,
+    dossier,
   ] = await Promise.all([
     listEventCandidates(env, selectedWatchlist.id, 12),
     listWatchEvents(env, selectedWatchlist.id, 24),
@@ -221,7 +233,21 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listRecentProofCapturesForWatchlist(env, selectedWatchlist.id, 12),
     listCreativeWallAds(env, selectedWatchlist.id),
     listWatchlistDailyActivity(env, selectedWatchlist.id),
+    // Dossier failure degrades to the honest not-enough-history state — it
+    // must never take the watchlist page down with it.
+    buildCompetitorDossier(env, selectedWatchlist.id, workspaceUserId).catch(() =>
+      insufficientCompetitorDossier(),
+    ),
   ]);
+
+  // Counter-Brief plan gate: paid plans only. Computed per page load with no
+  // persistence — the module's own 10s cap and never-throw contract bound the
+  // cost (~1-2s on the small shared model); tradeoff documented in
+  // counter-brief.server.ts. Free plans get the upgrade line instead.
+  const counterBriefEligible = isPaidPlanFamily(plan);
+  const counterBrief = counterBriefEligible
+    ? await buildCounterBrief(env, dossier).catch(() => null)
+    : null;
 
   const workspaceDeliveryConfig =
     workspaceDeliveryConfigRecord ??
@@ -275,6 +301,12 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     showPresenceNav,
     creativeWall,
     trendDailyActivity,
+    dossier,
+    // Deterministic, public-formula score — computed server-side so SSR and
+    // hydration share one "now".
+    aggression: computeAggressionScore(dossier),
+    counterBrief,
+    counterBriefLocked: !counterBriefEligible,
     canManageDelivery: !isMember,
     verifiedAccountEmail,
     deliveryTestRequestTokens: Object.fromEntries(
@@ -1180,6 +1212,16 @@ export default function WatchlistsRoute() {
                 </div>
 
                 <ProofGlossary />
+
+                {data.dossier ? (
+                  <CompetitorDossierPanel
+                    aggression={data.aggression}
+                    counterBrief={data.counterBrief}
+                    counterBriefLocked={data.counterBriefLocked}
+                    dossier={data.dossier}
+                    watchlistId={data.selectedWatchlist.id}
+                  />
+                ) : null}
 
                 <section>
                   <p className="f9-app-kicker">See what changed</p>

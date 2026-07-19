@@ -12,13 +12,16 @@ import {
 import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { AdAnglePill } from "~/components/ad-angle-pill";
 import { AdLongevityPill } from "~/components/ad-longevity-pill";
 import { AdThumb } from "~/components/ad-thumb";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { DashboardShell } from "~/components/dashboard-shell";
 import { SearchAnswerPanel } from "~/components/search-answer-panel";
 import { SubmitButton } from "~/components/submit-button";
+import { classifyAdRecordAngle } from "~/lib/ad-display";
 import { isAdLibraryBackedAd } from "~/lib/ad-source-kind";
+import { formatAngleDetail } from "~/lib/angle-display";
 import {
   applyWebsiteSearchFallback,
   competitorTrackingLabel,
@@ -642,6 +645,7 @@ export default function SearchRoute() {
 
   const rootData = useRouteLoaderData("root") as RootLoaderData;
   const creativeTextField = selectedAd?.analysisFields.find((field) => field.fieldKey === "ocr_text");
+  const selectedAdAngle = selectedAd ? classifyAdRecordAngle(selectedAd) : null;
   const competitorWebsite = data.competitorWebsite ?? emptyCompetitorWebsite();
   const trackingRole: WatchlistTrackingRole = "competitor";
   const targetNoun = "competitor";
@@ -1129,6 +1133,7 @@ export default function SearchRoute() {
                             {ad.variantCount && ad.variantCount > 1 ? (
                               <span className="f9-longevity-pill">{`×${ad.variantCount} variants`}</span>
                             ) : null}
+                            <AdAnglePill ad={ad} />
                           </div>
                         </div>
                         <p>{formatResultCardSummary(ad)}</p>
@@ -1240,6 +1245,9 @@ export default function SearchRoute() {
 
                   <dl className="f9-detail-grid">
                     <DetailRow label="Hook" value={selectedAd.hook} />
+                    {selectedAdAngle ? (
+                      <DetailRow label="Angle" value={formatAngleDetail(selectedAdAngle)} />
+                    ) : null}
                     <DetailRow label="Offer" value={formatOfferDisplay(selectedAd.offer)} />
                     <DetailRow label="CTA" value={selectedAd.cta} />
                     <DetailRow label="Format" value={selectedAd.format} />
