@@ -15,13 +15,24 @@ function requiredPath(name) {
 }
 
 const evidence = JSON.parse(readFileSync(requiredPath("--target"), "utf8"));
-const deployedVersionId = readDeployedWorkerVersionId(
-  readFileSync(requiredPath("--wrangler-output"), "utf8"),
-);
-const verdict = validateWorkerRollbackEvidence(evidence, { deployedVersionId });
+const verdict = validateWorkerRollbackEvidence(evidence);
 if (!verdict.ok) throw new Error(verdict.issues.join(","));
+
+let deployedVersionId;
+const wranglerOutputIndex = process.argv.indexOf("--wrangler-output");
+if (wranglerOutputIndex >= 0 && wranglerOutputIndex + 1 < process.argv.length) {
+  try {
+    deployedVersionId = readDeployedWorkerVersionId(
+      readFileSync(resolve(process.cwd(), process.argv[wranglerOutputIndex + 1]), "utf8"),
+    );
+  } catch {
+    // A deploy can publish successfully and then exit before its machine output
+    // is complete. Recovery must still use the exact predeploy version captured
+    // for this release attempt rather than leaving the ambiguous release live.
+  }
+}
 const rollback = buildWorkerRollbackCommand(evidence.versionId, deployedVersionId);
-const result = spawnSync(rollback.command, rollback.args, {
+const result = spawnSync(process.env.WRANGLER_BIN || rollback.command, rollback.args, {
   cwd: process.cwd(),
   env: process.env,
   stdio: "inherit",

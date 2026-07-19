@@ -1,4 +1,4 @@
-const SAFE_IDENTIFIER_PATTERN = /^[A-Za-z0-9._-]{1,128}$/u;
+const SAFE_IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 
 /** @param {unknown} input */
 export function parseWorkerDeploymentStatus(input) {
@@ -57,12 +57,18 @@ export function validateWorkerRollbackEvidence(evidence, expected = {}) {
   return { ok: issues.length === 0, issues };
 }
 
-/** @param {string} versionId @param {string} deployedVersionId */
+/** @param {string} versionId @param {string | null | undefined} [deployedVersionId] */
 export function buildWorkerRollbackCommand(versionId, deployedVersionId) {
-  if (!SAFE_IDENTIFIER_PATTERN.test(versionId) || !SAFE_IDENTIFIER_PATTERN.test(deployedVersionId)) {
+  if (!SAFE_IDENTIFIER_PATTERN.test(versionId)) {
     throw new Error("worker_rollback_version_invalid");
   }
-  if (versionId === deployedVersionId) throw new Error("worker_rollback_target_matches_new_version");
+  const deployedVersionKnown = deployedVersionId !== null && deployedVersionId !== undefined;
+  if (deployedVersionKnown && !SAFE_IDENTIFIER_PATTERN.test(deployedVersionId)) {
+    throw new Error("worker_rollback_version_invalid");
+  }
+  if (deployedVersionKnown && versionId === deployedVersionId) {
+    throw new Error("worker_rollback_target_matches_new_version");
+  }
   return {
     command: "wrangler",
     args: [
@@ -71,7 +77,9 @@ export function buildWorkerRollbackCommand(versionId, deployedVersionId) {
       "--name",
       "0509",
       "--message",
-      `rollback failed release ${deployedVersionId}`,
+      deployedVersionKnown
+        ? `rollback failed release ${deployedVersionId}`
+        : "rollback ambiguous deploy attempt",
       "--yes",
     ],
   };

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -271,6 +272,125 @@ describe("production deployment readiness gate", () => {
         "--yes",
       ],
     });
+    expect(rollbackTargetModule.buildWorkerRollbackCommand("worker-version-prior")).toEqual({
+      command: "wrangler",
+      args: [
+        "rollback",
+        "worker-version-prior",
+        "--name",
+        "0509",
+        "--message",
+        "rollback ambiguous deploy attempt",
+        "--yes",
+      ],
+    });
+    expect(() => rollbackTargetModule.buildWorkerRollbackCommand(
+      "worker-version-prior",
+      "worker-version-prior",
+    )).toThrow("worker_rollback_target_matches_new_version");
+  });
+
+  it("executes the captured rollback target when deploy output is missing", () => {
+    const root = mkdtempSync(join(tmpdir(), "0509-worker-rollback-"));
+    roots.push(root);
+    const targetPath = join(root, "rollback-target.json");
+    const wranglerOutputPath = join(root, "missing-wrangler-output.jsonl");
+    const fakeWranglerPath = join(root, "fake-wrangler.mjs");
+    const invocationPath = join(root, "wrangler-invocation.json");
+    writeFileSync(targetPath, JSON.stringify({
+      schemaVersion: 1,
+      capturedAt: "2026-07-18T12:00:00.000Z",
+      source: "wrangler deployments status --json",
+      deploymentId: "deployment-stable",
+      versionId: "worker-version-prior",
+      percentage: 100,
+    }));
+    writeFileSync(fakeWranglerPath, `#!/usr/bin/env node
+import { writeFileSync } from "node:fs";
+writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.slice(2)));
+process.exit(Number(process.env.FAKE_WRANGLER_EXIT || 0));
+`);
+    chmodSync(fakeWranglerPath, 0o755);
+
+    const result = spawnSync(process.execPath, [
+      resolve("scripts/rollback-production.mjs"),
+      "--target",
+      targetPath,
+      "--wrangler-output",
+      wranglerOutputPath,
+    ], {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        WRANGLER_BIN: fakeWranglerPath,
+        FAKE_WRANGLER_INVOCATION: invocationPath,
+      },
+      encoding: "utf8",
+    });
+
+    expect(result.status).toBe(0);
+    expect(JSON.parse(readFileSync(invocationPath, "utf8"))).toEqual([
+      "rollback",
+      "worker-version-prior",
+      "--name",
+      "0509",
+      "--message",
+      "rollback ambiguous deploy attempt",
+      "--yes",
+    ]);
+  });
+
+  it("refuses malformed rollback evidence and a known same-version target before spawning", () => {
+    const root = mkdtempSync(join(tmpdir(), "0509-worker-rollback-refusal-"));
+    roots.push(root);
+    const fakeWranglerPath = join(root, "fake-wrangler.mjs");
+    const invocationPath = join(root, "wrangler-invocation.json");
+    writeFileSync(fakeWranglerPath, `#!/usr/bin/env node
+import { writeFileSync } from "node:fs";
+writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.slice(2)));
+`);
+    chmodSync(fakeWranglerPath, 0o755);
+
+    const runRollback = (evidence: Record<string, unknown>, output: string) => {
+      const targetPath = join(root, `rollback-target-${Math.random()}.json`);
+      const wranglerOutputPath = join(root, `wrangler-output-${Math.random()}.jsonl`);
+      writeFileSync(targetPath, JSON.stringify(evidence));
+      writeFileSync(wranglerOutputPath, output);
+      return spawnSync(process.execPath, [
+        resolve("scripts/rollback-production.mjs"),
+        "--target",
+        targetPath,
+        "--wrangler-output",
+        wranglerOutputPath,
+      ], {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          WRANGLER_BIN: fakeWranglerPath,
+          FAKE_WRANGLER_INVOCATION: invocationPath,
+        },
+        encoding: "utf8",
+      });
+    };
+    const validEvidence = {
+      schemaVersion: 1,
+      capturedAt: "2026-07-18T12:00:00.000Z",
+      source: "wrangler deployments status --json",
+      deploymentId: "deployment-stable",
+      versionId: "worker-version-prior",
+      percentage: 100,
+    };
+
+    expect(runRollback({ ...validEvidence, percentage: 50 }, "").status).not.toBe(0);
+    for (const versionId of ["--help", "--version", "-y"]) {
+      expect(runRollback({ ...validEvidence, versionId }, "").status).not.toBe(0);
+    }
+    expect(runRollback(validEvidence, JSON.stringify({
+      type: "deploy",
+      version: 1,
+      version_id: "worker-version-prior",
+    })).status).not.toBe(0);
+    expect(() => readFileSync(invocationPath, "utf8")).toThrow();
   });
 
   it("stops at the executable refund preflight before migration or deploy", () => {
