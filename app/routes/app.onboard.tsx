@@ -159,7 +159,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         error: "plan_limit_exceeded",
         limit: watchlistLimit.limit,
         current: watchlistLimit.current,
-        message: "Competitor monitoring is not available on this plan. Upgrade to create watchlists.",
+        message: "Competitor monitoring isn't included on this plan. Upgrade to create watchlists.",
         upgradePath: "/app/billing?source=onboarding#plans",
         rawText,
         brandWebsiteInput,
@@ -270,7 +270,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           id: row.id,
           rowNumber: row.rowNumber,
           status: "over_cap",
-          reason: "Your plan limit was reached before this row could be created.",
+          reason: "You hit your plan limit before we could create this row.",
         });
         continue;
       }
@@ -395,7 +395,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         intent,
         error: "first_scan_dispatch_delayed",
         message:
-          "Competitor saved, but the activation scan is delayed. Submit again to retry the same safe scan.",
+          "Competitor saved, but the activation scan hit a delay. Try again to retry the same safe scan.",
       };
     }
 
@@ -457,7 +457,7 @@ function selectedImportRejection(preview: CompetitorImportPreview, selectedRowId
         id: row.id,
         rowNumber: row.rowNumber,
         status: row.status,
-        reason: row.reason ?? "This row is not ready to create.",
+        reason: row.reason ?? "This row isn't ready to create yet.",
       };
     })
     .filter((row): row is {
@@ -603,7 +603,7 @@ export default function AppOnboardRoute() {
       <section className="f9-container f9-onboard-layout">
         <article className="f9-onboard-card">
           <DashboardPageHeader
-            lead="Start with one competitor. We will validate the website, create its watchlist, and start the first scan."
+            lead="Start with one competitor. We'll check the website, create its watchlist, and kick off the first scan."
             title={data.resumeSetup ? "Resume setup" : "Get started"}
           />
 
@@ -669,7 +669,7 @@ export default function AppOnboardRoute() {
                   className="f9-primary-button"
                   disabled={!trimmedWebsite || Boolean(competitorWebsite.error)}
                   intent="create-watchlist"
-                  pendingLabel="Creating and queuing first scan…"
+                  pendingLabel="Creating and starting first scan…"
                 >
                   Start tracking {competitorWebsite.displayName ?? (competitorQuery || "this competitor")}
                 </SubmitButton>
@@ -696,7 +696,7 @@ export default function AppOnboardRoute() {
               <label className="f9-field">
                 <span>CSV or text file</span>
                 <input accept=".csv,.txt,text/csv,text/plain" name="competitorFile" type="file" />
-                <small>Use a small file when copy-paste is not practical.</small>
+                <small>Use a small file when copy-paste isn't practical.</small>
               </label>
 
               <details className="f9-inline-details">
