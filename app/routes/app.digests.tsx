@@ -32,10 +32,10 @@ import {
   summarizePriorityMix,
 } from "~/lib/proof-classification";
 
-export const meta = () => [{ title: "Digests | Five to Nine" }];
+export const meta = () => [{ title: "Briefs | Five to Nine" }];
 
 export function HydrateFallback() {
-  return <DashboardRouteLoading title="Digests" />;
+  return <DashboardRouteLoading title="Briefs" />;
 }
 
 export function ErrorBoundary({ error }: { error: unknown }) {
@@ -108,7 +108,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     return {
       ok: false,
       error: "plan_limit_exceeded",
-      message: "Digests are included in paid plans — upgrade to turn them on.",
+      message: "Briefs are included in paid plans — upgrade to turn them on.",
     };
   }
 
@@ -121,7 +121,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         error: "plan_gated" as const,
         feature: "share_links" as const,
         plan: shareGate.plan,
-        message: "Share links are included in the Agency plan.",
+        message: "Share links are included on Starter and Agency plans.",
       };
     }
     const digestId = String(formData.get("digestId") ?? "");
@@ -212,7 +212,7 @@ export default function DigestsRoute() {
       <section className="f9-app-stack">
         <DashboardPageHeader
           lead="Review competitor changes with evidence, check labels, history, and delivery health."
-          title="Digests"
+          title="Briefs"
         />
 
       {actionData?.message ? (
@@ -240,8 +240,8 @@ export default function DigestsRoute() {
 
       {!data.canAccessDigests ? (
         <PlanLimitState
-          message="Digests are included in paid plans. Upgrade to get daily or weekly competitor change briefs with evidence and check labels in your inbox. Until then, watchlists and collections keep your research organized."
-          title="Digests are included in paid plans"
+          message="Briefs are included in paid plans. Upgrade to get daily or weekly competitor change briefs with evidence and check labels in your inbox. Until then, watchlists and collections keep your research organized."
+          title="Briefs are included in paid plans"
         />
       ) : (
         <div className="f9-master-detail">

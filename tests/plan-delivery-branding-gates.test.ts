@@ -46,6 +46,7 @@ const workspaceDeliveryConfig: WorkspaceDeliveryConfigRecord = {
   sensitivityMode: "balanced",
   instantEnabled: false,
   digestEnabled: true,
+  digestCadencePreference: "plan_default",
   emailEnabled: true,
   whatsappEnabled: false,
   slackEnabled: true,

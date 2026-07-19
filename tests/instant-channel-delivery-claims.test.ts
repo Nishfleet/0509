@@ -202,6 +202,7 @@ function installMocks(
       sensitivityMode: "balanced",
       instantEnabled: true,
       digestEnabled: true,
+  digestCadencePreference: "plan_default",
       emailEnabled: false,
       whatsappEnabled: channel === "whatsapp",
       slackEnabled: channel === "slack",

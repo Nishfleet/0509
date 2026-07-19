@@ -1656,4 +1656,349 @@ describe("searchMetaLibraryByBrowser", () => {
       retryAfterSeconds: 10,
     });
   });
+
+  it("maps creativeType and status into Ad Library URL params", async () => {
+    const { buildSearchUrl } = await import("~/lib/meta-library-browser.server");
+    const url = buildSearchUrl({
+      mode: "advertiser",
+      filters: {
+        query: "nike.com",
+        country: "United States",
+        platform: "all",
+        creativeType: "video",
+        status: "active",
+        firstSeenFrom: "",
+        lastSeenFrom: "",
+      },
+    });
+    expect(url).toContain("media_type=video");
+    expect(url).toContain("active_status=active");
+    expect(url).toContain("country=US");
+  });
+
+  it("extracts variant counts from creative reuse copy", async () => {
+    const { extractVariantCountFromText, parseRenderedMetaLibraryHtml } = await import(
+      "~/lib/meta-library-rendered-card-parser.server"
+    );
+    expect(extractVariantCountFromText("12 ads use this creative and text")).toBe(12);
+    const result = parseRenderedMetaLibraryHtml(`
+      <article role="article">
+        <a href="/ads/library/?id=7778889990">See ad details</a>
+        <p>12 ads use this creative and text</p>
+        <p>Sale ends soon</p>
+      </article>
+    `);
+    expect(result.cards[0]?.variantCount).toBe(12);
+  });
+
+  it("dedupes extracted cards by libraryId across scroll passes", async () => {
+    const { dedupeExtractedCardsByLibraryId } = await import(
+      "~/lib/meta-library-browser.server"
+    );
+
+    const deduped = dedupeExtractedCardsByLibraryId([
+      {
+        libraryId: "111",
+        advertiser: "A",
+        body: "first",
+        previewHeadline: "first",
+        previewSubhead: null,
+        cta: null,
+        adSnapshotUrl: null,
+        landingPageUrl: null,
+        platforms: [],
+        active: true,
+      },
+      {
+        libraryId: "222",
+        advertiser: "B",
+        body: "second",
+        previewHeadline: "second",
+        previewSubhead: null,
+        cta: null,
+        adSnapshotUrl: null,
+        landingPageUrl: null,
+        platforms: [],
+        active: true,
+      },
+      {
+        libraryId: "111",
+        advertiser: "A-dup",
+        body: "duplicate from later scroll",
+        previewHeadline: "dup",
+        previewSubhead: null,
+        cta: null,
+        adSnapshotUrl: null,
+        landingPageUrl: null,
+        platforms: [],
+        active: true,
+      },
+    ]);
+
+    expect(deduped).toHaveLength(2);
+    expect(deduped.map((card) => card.libraryId)).toEqual(["111", "222"]);
+    expect(deduped[0]?.body).toBe("first");
+  });
+
+  it("defaults browser discovery to shallow mode (no interactive scroll)", async () => {
+    const { browser, page } = createBrowserHarness();
+    const evaluate = page.evaluate as ReturnType<typeof vi.fn>;
+    evaluate.mockResolvedValue({
+      cards: [
+        {
+          libraryId: "1234567890",
+          advertiser: "Nykaa",
+          body: "Flat 30% off on serums",
+          previewHeadline: "Glow sale",
+          previewSubhead: "Weekend only",
+          cta: "Shop now",
+          adSnapshotUrl: "https://www.facebook.com/ads/library/?id=1234567890",
+          landingPageUrl: "https://www.nykaa.com/glow-sale",
+          platforms: ["Instagram", "Facebook"],
+          active: true,
+        },
+      ],
+      pageText: "results",
+      loginWall: false,
+      noResults: false,
+      rateLimited: false,
+    });
+    const launch = vi.fn().mockResolvedValue(browser);
+    const sessions = vi.fn().mockResolvedValue([]);
+    const limits = vi.fn().mockResolvedValue({
+      activeSessions: [],
+      maxConcurrentSessions: 2,
+      allowedBrowserAcquisitions: 1,
+      timeUntilNextAllowedBrowserAcquisition: 0,
+    });
+    const connect = vi.fn();
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch, sessions, limits, connect },
+    }));
+
+    const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+    await searchMetaLibraryByBrowser({ BROWSER: {} as Fetcher }, buildQuery());
+
+    // Shallow default: one extraction evaluate, no scroll evaluate.
+    expect(evaluate).toHaveBeenCalledTimes(1);
+  });
+
+  it("interactive mode scrolls and re-extracts, deduping repeated library ids", async () => {
+    const { browser, page } = createBrowserHarness();
+    const evaluate = page.evaluate as ReturnType<typeof vi.fn>;
+    const card = (id: string, body: string) => ({
+      libraryId: id,
+      advertiser: "Nike",
+      body,
+      previewHeadline: body,
+      previewSubhead: null,
+      cta: "Shop",
+      adSnapshotUrl: `https://www.facebook.com/ads/library/?id=${id}`,
+      landingPageUrl: null,
+      platforms: ["Facebook"],
+      active: true,
+    });
+    evaluate.mockImplementation(async (fn: unknown) => {
+      // scrollTo path is a short function whose string form includes scrollTo
+      if (typeof fn === "function" && String(fn).includes("scrollTo")) {
+        return undefined;
+      }
+      // first real extraction has only one card; later re-extracts add a second
+      if (evaluate.mock.calls.filter((call) => {
+        const arg = call[0];
+        return typeof arg === "function" && !String(arg).includes("scrollTo");
+      }).length <= 1) {
+        return {
+          cards: [card("100", "Run")],
+          pageText: "results",
+          loginWall: false,
+          noResults: false,
+          rateLimited: false,
+        };
+      }
+      return {
+        cards: [card("100", "Run"), card("200", "Jump")],
+        pageText: "results",
+        loginWall: false,
+        noResults: false,
+        rateLimited: false,
+      };
+    });
+    const launch = vi.fn().mockResolvedValue(browser);
+    const sessions = vi.fn().mockResolvedValue([]);
+    const limits = vi.fn().mockResolvedValue({
+      activeSessions: [],
+      maxConcurrentSessions: 2,
+      allowedBrowserAcquisitions: 1,
+      timeUntilNextAllowedBrowserAcquisition: 0,
+    });
+    const connect = vi.fn();
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch, sessions, limits, connect },
+    }));
+
+    vi.useFakeTimers();
+    try {
+      const { searchMetaLibraryByBrowser } = await import("~/lib/meta-library-browser.server");
+      const resultPromise = searchMetaLibraryByBrowser(
+        { BROWSER: {} as Fetcher },
+        buildQuery(),
+        { mode: "interactive" },
+      );
+      await vi.runAllTimersAsync();
+      const result = await resultPromise;
+
+      expect(result.ads.map((ad) => ad.metaAdId)).toEqual(["100", "200"]);
+      // first extract + scroll/re-extract cycles
+      expect(evaluate.mock.calls.length).toBeGreaterThan(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("maps extracted card imageUrl onto AdRecord.creativeImageUrl", async () => {
+    const { normalizeExtractedCard } = await import("~/lib/meta-library-browser.server");
+
+    const ad = normalizeExtractedCard(
+      {
+        libraryId: "9990001111",
+        advertiser: "Glossier",
+        body: "New Balm Dotcom shades",
+        previewHeadline: "Shop the drop",
+        previewSubhead: null,
+        cta: "Shop now",
+        adSnapshotUrl: "https://www.facebook.com/ads/library/?id=9990001111",
+        landingPageUrl: "https://www.glossier.com",
+        platforms: ["Instagram"],
+        active: true,
+        imageUrl: "https://scontent.xx.fbcdn.net/v/t39.35426-6/creative.jpg",
+        hasVideo: false,
+      },
+      buildQuery(),
+    );
+
+    expect(ad.creativeImageUrl).toBe(
+      "https://scontent.xx.fbcdn.net/v/t39.35426-6/creative.jpg",
+    );
+    expect(ad.creativeFormatHint).toBe("image");
+    expect(ad.format).toBe("image");
+  });
+
+  it("strips Ad Library chrome lines before hook derivation (FIX-13)", async () => {
+    const { normalizeExtractedCard } = await import("~/lib/meta-library-browser.server");
+    const chromeBody = [
+      "Active",
+      "Library ID: 123",
+      "Started running on Jul 1, 2026",
+      "Real ad copy here",
+    ].join("\n");
+
+    const ad = normalizeExtractedCard(
+      {
+        libraryId: "123",
+        advertiser: "Nykaa",
+        body: chromeBody,
+        previewHeadline: "Active",
+        previewSubhead: null,
+        cta: "Shop now",
+        adSnapshotUrl: "https://www.facebook.com/ads/library/?id=123",
+        landingPageUrl: "https://www.nykaa.com",
+        platforms: ["Facebook"],
+        active: true,
+        imageUrl: null,
+        hasVideo: false,
+      },
+      buildQuery(),
+    );
+
+    expect(ad.hook.toLowerCase()).toContain("real ad copy");
+    expect(ad.hook.toLowerCase()).not.toContain("active");
+    expect(ad.hook.toLowerCase()).not.toContain("library id");
+  });
+
+  it("sets video format hint when the extracted card has a video surface", async () => {
+    const { normalizeExtractedCard } = await import("~/lib/meta-library-browser.server");
+
+    const ad = normalizeExtractedCard(
+      {
+        libraryId: "9990002222",
+        advertiser: "Nike",
+        body: "Run free",
+        previewHeadline: "Just Do It",
+        previewSubhead: null,
+        cta: "Shop now",
+        adSnapshotUrl: "https://www.facebook.com/ads/library/?id=9990002222",
+        landingPageUrl: "https://www.nike.com",
+        platforms: ["Facebook"],
+        active: true,
+        imageUrl: "https://scontent.xx.fbcdn.net/v/t39.35426-6/poster.jpg",
+        hasVideo: true,
+      },
+      buildQuery(),
+    );
+
+    expect(ad.creativeImageUrl).toContain("poster.jpg");
+    expect(ad.creativeFormatHint).toBe("video");
+    expect(ad.format).toBe("video");
+  });
+
+  it("extracts creative CDN images from rendered card HTML", async () => {
+    const { parseRenderedMetaLibraryHtml, extractCreativeMediaFromHtml } = await import(
+      "~/lib/meta-library-rendered-card-parser.server"
+    );
+
+    const media = extractCreativeMediaFromHtml(`
+      <div>
+        <img src="https://static.xx.fbcdn.net/rsrc.php/profile-40.png" width="40" height="40" />
+        <img src="https://scontent.xx.fbcdn.net/v/t39.35426-6/ad-creative.jpg" width="320" height="400" />
+      </div>
+    `);
+    expect(media.imageUrl).toContain("ad-creative.jpg");
+    expect(media.hasVideo).toBe(false);
+
+    const videoMedia = extractCreativeMediaFromHtml(`
+      <video poster="https://scontent.xx.fbcdn.net/v/t39.35426-6/poster.jpg"></video>
+    `);
+    expect(videoMedia.imageUrl).toContain("poster.jpg");
+    expect(videoMedia.hasVideo).toBe(true);
+
+    const result = parseRenderedMetaLibraryHtml(`
+      <article role="article">
+        <img src="https://scontent.xx.fbcdn.net/v/t39.35426-6/library-card.jpg" width="300" height="300" />
+        <a href="/ads/library/?id=5551002003">See ad details</a>
+        <p>Flat 20% off serums</p>
+      </article>
+    `);
+
+    expect(result.cards[0]).toMatchObject({
+      libraryId: "5551002003",
+      imageUrl: expect.stringContaining("library-card.jpg"),
+      hasVideo: false,
+    });
+  });
+
+  it("leaves creativeImageUrl empty when no CDN image is present", async () => {
+    const { normalizeExtractedCard } = await import("~/lib/meta-library-browser.server");
+
+    const ad = normalizeExtractedCard(
+      {
+        libraryId: "9990003333",
+        advertiser: "Unknown",
+        body: "No creative on this card",
+        previewHeadline: "Text only",
+        previewSubhead: null,
+        cta: null,
+        adSnapshotUrl: "https://www.facebook.com/ads/library/?id=9990003333",
+        landingPageUrl: null,
+        platforms: [],
+        active: true,
+      },
+      buildQuery(),
+    );
+
+    expect(ad.creativeImageUrl).toBeNull();
+    expect(ad.creativeFormatHint).toBeUndefined();
+  });
 });

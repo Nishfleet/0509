@@ -1216,6 +1216,8 @@ describe("share-pdf rate limit policies", () => {
     const source = readFileSync("app/lib/rate-limit.server.ts", "utf8");
     // The 24h cap only works if cleanup keeps its scope for >= 24h.
     expect(source).toContain("LONG_WINDOW_CLEANUP_SECONDS = 25 * 60 * 60");
-    expect(source).toMatch(/scope != \? AND created_at < \?/);
+    expect(source).toMatch(/share-pdf-daily/);
+    expect(source).toMatch(/account-search-daily/);
+    expect(source).toMatch(/scope NOT IN \('share-pdf-daily', 'account-search-daily'\)/);
   });
 });

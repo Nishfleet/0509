@@ -64,6 +64,12 @@ export interface PlanEntitlements {
   workspaceSeats: number;
   digestCadence: DigestCadencePolicy;
   scheduledScanCadence: ScheduledScanCadence;
+  /**
+   * WP-37: agency margin backstop. First N active watchlists (by created_at)
+   * scan at the plan's full cadence; overflow slots only on 6h-aligned runs.
+   * null = every watchlist uses full cadence (Scout/Starter/Free).
+   */
+  priorityScanSlots: number | null;
   monitoringQueuePriority: MonitoringQueuePriority;
   metaSourceStatus: "unavailable" | "beta_limited" | "beta_priority";
   features: ReadonlySet<PlanFeature>;
@@ -89,6 +95,9 @@ const STARTER_FEATURES: PlanFeature[] = [
   "export_csv",
   "export_json",
   "export_slack_ready",
+  // WP-29: watermarked share links for free acquisition (agency_branding stays
+  // Agency-only so Starter shares keep "Made with Five to Nine").
+  "share_links",
   "presence_self_tracking",
   "presence_social_connect",
 ];
@@ -96,7 +105,6 @@ const STARTER_FEATURES: PlanFeature[] = [
 const AGENCY_FEATURES: PlanFeature[] = [
   ...STARTER_FEATURES,
   "client_reports",
-  "share_links",
   "pdf_reports",
   "agency_branding",
   "api_access",
@@ -117,6 +125,7 @@ const ENTITLEMENTS: Record<PlanFamily, PlanEntitlements> = {
     workspaceSeats: 1,
     digestCadence: "none",
     scheduledScanCadence: "none",
+    priorityScanSlots: null,
     monitoringQueuePriority: 2,
     metaSourceStatus: "unavailable",
     features: new Set(),
@@ -129,6 +138,7 @@ const ENTITLEMENTS: Record<PlanFamily, PlanEntitlements> = {
     workspaceSeats: 1,
     digestCadence: "weekly",
     scheduledScanCadence: "every_6h",
+    priorityScanSlots: null,
     monitoringQueuePriority: 2,
     metaSourceStatus: "beta_limited",
     features: new Set(SCOUT_FEATURES),
@@ -141,6 +151,7 @@ const ENTITLEMENTS: Record<PlanFamily, PlanEntitlements> = {
     workspaceSeats: 1,
     digestCadence: "daily_and_weekly",
     scheduledScanCadence: "every_3h",
+    priorityScanSlots: null,
     monitoringQueuePriority: 1,
     metaSourceStatus: "beta_limited",
     features: new Set(STARTER_FEATURES),
@@ -153,6 +164,8 @@ const ENTITLEMENTS: Record<PlanFamily, PlanEntitlements> = {
     workspaceSeats: 3,
     digestCadence: "daily_and_weekly",
     scheduledScanCadence: "every_3h",
+    // First 25 at 3h; watchlists 26–75 only on 6h-aligned cron slots.
+    priorityScanSlots: 25,
     monitoringQueuePriority: 0,
     metaSourceStatus: "beta_priority",
     features: new Set(AGENCY_FEATURES),
@@ -193,6 +206,7 @@ export function getScheduledMonitoringPolicy(planFamily: PlanFamily) {
     scheduledScanCadence: entitlements.scheduledScanCadence,
     monitoringQueuePriority: entitlements.monitoringQueuePriority,
     watchlistLimit: entitlements.watchlists,
+    priorityScanSlots: entitlements.priorityScanSlots,
   };
 }
 
@@ -203,11 +217,41 @@ export function planAllowsDigestCadence(planFamily: PlanFamily, cadence: "daily"
   return policy === "weekly" || policy === "daily_and_weekly";
 }
 
+export function isSixHourAlignedScan(scheduledAt: Date): boolean {
+  return scheduledAt.getUTCHours() % 6 === 0;
+}
+
 export function shouldSchedulePlanInRegularScan(planFamily: PlanFamily, scheduledAt: Date): boolean {
   const cadence = getPlanEntitlements(planFamily).scheduledScanCadence;
   if (cadence === "none") return false;
-  if (cadence === "every_6h") return scheduledAt.getUTCHours() % 6 === 0;
+  if (cadence === "every_6h") return isSixHourAlignedScan(scheduledAt);
   return true;
+}
+
+/**
+ * Per-watchlist schedule gate for WP-37 priority slots.
+ * `watchlistRank` is 0-based among the workspace's active watchlists ordered by
+ * created_at ASC, id ASC.
+ */
+export function shouldScheduleWatchlistInRegularScan(input: {
+  planFamily: PlanFamily;
+  scheduledAt: Date;
+  watchlistRank: number;
+}): boolean {
+  if (!shouldSchedulePlanInRegularScan(input.planFamily, input.scheduledAt)) {
+    return false;
+  }
+  const slots = getPlanEntitlements(input.planFamily).priorityScanSlots;
+  if (slots == null) {
+    return true;
+  }
+  if (!Number.isFinite(input.watchlistRank) || input.watchlistRank < 0) {
+    return isSixHourAlignedScan(input.scheduledAt);
+  }
+  if (input.watchlistRank < slots) {
+    return true;
+  }
+  return isSixHourAlignedScan(input.scheduledAt);
 }
 
 /** @deprecated Use shouldSchedulePlanInRegularScan for all plan families. */

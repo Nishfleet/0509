@@ -187,6 +187,21 @@ export function formatWhyAlertedLabel(input: {
 
   const from = typeof input.metadata?.from === "string" ? input.metadata.from : null;
   const to = typeof input.metadata?.to === "string" ? input.metadata.to : null;
+  const kind = typeof input.metadata?.kind === "string" ? input.metadata.kind : null;
+
+  // WP-28: creative_copy rides headline/offer event types with structured before/after.
+  if (kind === "creative_copy" && from && to) {
+    return `Ad creative copy moved from ${from} to ${to}.`;
+  }
+  if (kind === "ad_new_aggregate") {
+    const count =
+      typeof input.metadata?.count === "number" && Number.isFinite(input.metadata.count)
+        ? input.metadata.count
+        : null;
+    return count && count > 1
+      ? `${count} new ads entered this watchlist in one scan.`
+      : "Several new ads entered this watchlist in one scan.";
+  }
 
   if (from && to) {
     switch (input.eventType) {

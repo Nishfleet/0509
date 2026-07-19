@@ -732,7 +732,8 @@ describe("Dodo billing atomicity (sqlite)", () => {
 			userId: "user-1",
 			payloadTimestamp: null,
 		});
-		const partial = await applyDodoRefundWithWatchlistReconcile(
+		// Partial without money amounts: no automatic top-up clawback.
+		const partialNoAmounts = await applyDodoRefundWithWatchlistReconcile(
 			env,
 			{
 				paymentId: "pay-topup",
@@ -748,37 +749,56 @@ describe("Dodo billing atomicity (sqlite)", () => {
 			},
 		);
 
-		expect(partial).toEqual({ changed: false, stateUpdatedAt: "2026-07-01T00:00:00.000Z" });
+		expect(partialNoAmounts).toEqual({ changed: false, stateUpdatedAt: "2026-07-01T00:00:00.000Z" });
 		expect(
 			harness.sqlite.prepare("SELECT quantity_remaining, status FROM evidence_top_up_grant WHERE id = ?").get("grant-topup"),
 		).toEqual({ quantity_remaining: 120, status: "active" });
 		expect(
-			harness.sqlite.prepare("SELECT expires_at FROM proof_usage_credit WHERE id = ?").get("legacy-credit"),
-		).toEqual({ expires_at: "9999-12-31T23:59:59.999Z" });
-		expect(
 			harness.sqlite.prepare("SELECT COUNT(*) AS count FROM evidence_top_up_ledger_entry WHERE entry_type = 'refund'").get(),
 		).toEqual({ count: 0 });
+
+		// FIX-9: partial with amounts prorates remaining (half of 120 → claw 60).
+		await beginDodoWebhookEventProcessing(env, {
+			eventId: "evt-partial-topup-prorated",
+			eventType: "refund.succeeded",
+			userId: "user-1",
+			payloadTimestamp: null,
+		});
+		const partialProrated = await applyDodoRefundWithWatchlistReconcile(
+			env,
+			{
+				paymentId: "pay-topup",
+				refundedAt: "2026-07-01T12:00:00.000Z",
+				userId: "user-1",
+				refundType: "partial",
+				refundAmount: 50,
+				paymentAmount: 100,
+			},
+			0,
+			{
+				eventId: "evt-partial-topup-prorated",
+				outcome: "processed",
+				metadata: {
+					action: "refund",
+					paymentId: "pay-topup",
+					refundType: "partial",
+					creditMutationPolicy: "prorated_topup_v1",
+				},
+			},
+		);
+		expect(partialProrated).toMatchObject({ topUpChanged: true });
+		expect(
+			harness.sqlite.prepare("SELECT quantity_remaining, status FROM evidence_top_up_grant WHERE id = ?").get("grant-topup"),
+		).toEqual({ quantity_remaining: 60, status: "active" });
+		expect(
+			harness.sqlite.prepare("SELECT expires_at FROM proof_usage_credit WHERE id = ?").get("legacy-credit"),
+		).toEqual({ expires_at: "9999-12-31T23:59:59.999Z" });
 		expect(
 			harness.sqlite.prepare("SELECT plan, dodo_status FROM user_plan WHERE user_id = ?").get("user-1"),
 		).toEqual({ plan: "starter", dodo_status: "active" });
 		expect(
 			harness.sqlite.prepare("SELECT COUNT(*) AS count FROM watchlist WHERE is_active = 1").get(),
 		).toEqual({ count: 2 });
-		expect(
-			harness.sqlite.prepare(`
-				SELECT outcome,
-				       json_extract(metadata_json, '$.paymentId') AS payment_id,
-				       json_extract(metadata_json, '$.refundType') AS refund_type,
-				       json_extract(metadata_json, '$.creditMutationPolicy') AS credit_mutation_policy
-				FROM dodo_webhook_event
-				WHERE event_id = ?
-			`).get("evt-partial-topup-refund"),
-		).toEqual({
-			outcome: "processed",
-			payment_id: "pay-topup",
-			refund_type: "partial",
-			credit_mutation_policy: null,
-		});
 
 		await beginDodoWebhookEventProcessing(env, {
 			eventId: "evt-full-topup-refund",
@@ -814,7 +834,7 @@ describe("Dodo billing atomicity (sqlite)", () => {
 			harness.sqlite.prepare("SELECT quantity_delta FROM evidence_top_up_ledger_entry WHERE idempotency_key = ?").get(
 				"dodo-refund:evt-full-topup-refund:pay-topup",
 			),
-		).toEqual({ quantity_delta: -120 });
+		).toEqual({ quantity_delta: -60 });
 		expect(
 			harness.sqlite.prepare("SELECT expires_at FROM proof_usage_credit WHERE id = ?").get("legacy-credit"),
 		).toEqual({ expires_at: "2026-07-02T00:00:00.000Z" });

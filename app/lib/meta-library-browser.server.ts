@@ -1,6 +1,12 @@
 import puppeteer from "@cloudflare/puppeteer";
 
-import { inferDestinationType, inferLanguageLabel, withStructuredAnalysis } from "~/lib/analysis.server";
+import {
+  composeResearchSummary,
+  inferDestinationType,
+  inferLanguageLabel,
+  resolveHookAndOffer,
+  withStructuredAnalysis,
+} from "~/lib/analysis.server";
 import { readResponseJsonWithinLimit } from "~/lib/bounded-response.server";
 import {
   type BrowserRunQuickActionScrapeElement,
@@ -14,6 +20,7 @@ import { findStartedRunningLine, parseStartedRunningDate } from "~/lib/meta-ad-d
 import {
   absolutizeMetaAdUrl,
   decodeHtmlEntity,
+  extractCreativeMediaFromHtml,
   extractExternalLink,
   extractTextCardsFromVisibleText,
   hasNoResultsSignal,
@@ -21,6 +28,7 @@ import {
   inferCta,
   inferPlatforms,
   parseRenderedMetaLibraryHtml,
+  stripAdLibraryUiChromeFromBody,
   stripHtml,
   stripHtmlPreservingLines,
   type ExtractedAdCard,
@@ -57,6 +65,23 @@ const BROWSERLESS_EMPTY_RESULT_MAX_ATTEMPTS = 2;
 const BROWSERLESS_META_FETCH_TIMEOUT_MS = 30_000;
 const BROWSERLESS_META_JSON_MAX_BYTES = 6_000_000;
 const BROWSER_RUN_ACQUIRE_TIMEOUT_MS = 10_000;
+/** Interactive public search only: scroll-and-collect depth (not watchlist scans). */
+const INTERACTIVE_SCROLL_PASSES = 3;
+const INTERACTIVE_SCROLL_WAIT_MS = 2_000;
+const INTERACTIVE_SCROLL_BUDGET_MS = 10_000;
+const INTERACTIVE_TARGET_CARD_COUNT = 50;
+/** Meta API interactive first-page depth: follow real after-cursor this many extra times. */
+const INTERACTIVE_META_API_EXTRA_PAGES = 2;
+
+export type MetaLibraryBrowserMode = "interactive" | "shallow";
+
+export interface SearchMetaLibraryByBrowserOptions {
+  /**
+   * `interactive` enables scroll-and-collect depth for public search.
+   * Default `shallow` keeps scheduled/watchlist scans on their existing page budget.
+   */
+  mode?: MetaLibraryBrowserMode;
+}
 const BROWSERLESS_BQL_MUTATION = `
 mutation MetaLibraryLiveFallback($url: String!, $userAgent: String!) {
   userAgent(userAgent: $userAgent) {
@@ -118,8 +143,10 @@ export class CommercialDiscoveryError extends Error {
 export async function searchMetaLibraryByBrowser(
   env: AppEnv,
   query: NormalizedSavedQuery,
+  options: SearchMetaLibraryByBrowserOptions = {},
 ): Promise<SearchResponse> {
   const browserBinding = env.BROWSER;
+  const mode: MetaLibraryBrowserMode = options.mode ?? "shallow";
 
   if (!browserBinding && !hasBrowserRunQuickActions(env) && !hasBrowserlessBql(env)) {
     throw new CommercialDiscoveryError(
@@ -134,7 +161,7 @@ export async function searchMetaLibraryByBrowser(
     }
 
     try {
-      return await searchMetaLibraryViaSessions(env, browserBinding, query);
+      return await searchMetaLibraryViaSessions(env, browserBinding, query, mode);
     } catch (error) {
       const normalizedError = normalizeCommercialDiscoveryError(error);
       if (!shouldUseQuickActionsFallback(env, normalizedError)) {
@@ -153,10 +180,29 @@ export async function searchMetaLibraryByBrowser(
   }
 }
 
+/** Keep first occurrence per library id (stable order across scroll passes). */
+export function dedupeExtractedCardsByLibraryId(cards: ExtractedAdCard[]): ExtractedAdCard[] {
+  const seen = new Set<string>();
+  const result: ExtractedAdCard[] = [];
+  for (const card of cards) {
+    if (!card.libraryId || seen.has(card.libraryId)) {
+      continue;
+    }
+    seen.add(card.libraryId);
+    result.push(card);
+  }
+  return result;
+}
+
+export function getInteractiveMetaApiExtraPages() {
+  return INTERACTIVE_META_API_EXTRA_PAGES;
+}
+
 async function searchMetaLibraryViaSessions(
   env: AppEnv,
   browserBinding: BrowserBinding,
   query: NormalizedSavedQuery,
+  mode: MetaLibraryBrowserMode,
 ): Promise<SearchResponse> {
   let browser: BrowserInstance | null = null;
   let browserContext: BrowserContext | null = null;
@@ -175,110 +221,7 @@ async function searchMetaLibraryViaSessions(
     });
     await waitForLibrarySurface(page);
 
-    const extraction = await page.evaluate(() => {
-      const normalizeText = (value: string | null | undefined) =>
-        (value ?? "")
-          .replace(/\u00a0/g, " ")
-          .split("\n")
-          .map((part) => part.trim())
-          .filter(Boolean)
-          .join("\n")
-          .trim();
-
-      const seen = new Set<string>();
-      const anchors = Array.from(
-        document.querySelectorAll<HTMLAnchorElement>(
-          'a[href*="/ads/library/?id="], a[href*="facebook.com/ads/library/?id="]',
-        ),
-      );
-
-      const cards = anchors
-        .map((anchor) => {
-          const href = anchor.href || anchor.getAttribute("href") || "";
-          const idMatch = href.match(/[?&]id=(\d+)/);
-          const libraryId = idMatch?.[1];
-          if (!libraryId || seen.has(libraryId)) {
-            return null;
-          }
-          seen.add(libraryId);
-
-          const card =
-            anchor.closest<HTMLElement>('[role="article"]') ||
-            anchor.closest<HTMLElement>("article") ||
-            anchor.closest<HTMLElement>("[data-ad-preview]") ||
-            anchor.parentElement;
-          const links = Array.from(card?.querySelectorAll<HTMLAnchorElement>("a[href]") ?? []);
-          const externalLink =
-            links
-              .map((link) => link.href)
-              .find(
-                (candidate) =>
-                  /^https?:/i.test(candidate) &&
-                  !/facebook\.com/i.test(candidate) &&
-                  !/l\.facebook\.com/i.test(candidate),
-              ) ?? null;
-
-          const advertiser =
-            card?.querySelector<HTMLElement>("strong, h3, h4, [data-advertiser-name]")?.innerText ??
-            null;
-          const headline =
-            card?.querySelector<HTMLElement>("h1, h2, h3, [data-headline]")?.innerText ?? null;
-          const text = normalizeText(card?.innerText ?? anchor.innerText);
-          const cta =
-            card
-              ?.querySelector<HTMLElement>(
-                'button, [role="button"], [data-cta], a[aria-label*="Shop"], a[aria-label*="Learn"]',
-              )
-              ?.innerText ?? null;
-          const platformTokens = [
-            "Instagram",
-            "Facebook",
-            "Messenger",
-            "WhatsApp",
-            "Audience Network",
-            "Threads",
-          ];
-          const platforms = platformTokens.filter((token) => text.includes(token));
-          const startedRunning =
-            text
-              .split("\n")
-              .map((line) => line.trim())
-              .find((line) => /^started running on\b/i.test(line)) ?? null;
-
-          return {
-            libraryId,
-            advertiser: normalizeText(advertiser),
-            body: text,
-            previewHeadline: normalizeText(headline),
-            previewSubhead: null,
-            cta: normalizeText(cta),
-            adSnapshotUrl: new URL(href, location.origin).toString(),
-            landingPageUrl: externalLink,
-            platforms,
-            // Status is a standalone "Inactive" line on the card; matching the
-            // word anywhere flags ads whose creative copy merely contains it.
-            active: !text.split("\n").some((line) => /^inactive$/i.test(line.trim())),
-            startedRunning,
-          };
-        })
-        .filter(Boolean);
-
-      const pageText = document.body?.innerText ?? "";
-      const lowerPageText = pageText.toLowerCase();
-
-      return {
-        cards,
-        pageText,
-        loginWall:
-          /log in|login|sign in|sign into/.test(lowerPageText) &&
-          lowerPageText.includes("facebook"),
-        noResults: false,
-        rateLimited:
-          lowerPageText.includes("rate limit") ||
-          lowerPageText.includes("too many requests") ||
-          lowerPageText.includes("try again later"),
-      };
-    });
+    const extraction = await page.evaluate(createSessionCardExtractionScript());
 
     const normalizedExtraction = Array.isArray(extraction)
       ? {
@@ -295,7 +238,7 @@ async function searchMetaLibraryViaSessions(
           noResults: boolean;
           rateLimited: boolean;
         };
-    const extractedCards = normalizedExtraction.cards.length > 0
+    let extractedCards = normalizedExtraction.cards.length > 0
       ? normalizedExtraction.cards
       : extractTextCardsFromVisibleText(normalizedExtraction.pageText);
     const noResults =
@@ -327,6 +270,14 @@ async function searchMetaLibraryViaSessions(
       );
     }
 
+    // Deep scroll only for interactive public search — watchlist/scheduled
+    // scans stay shallow and keep DEFAULT_PAGE_BUDGET cost bounds.
+    if (mode === "interactive" && page) {
+      extractedCards = await collectCardsWithInteractiveScroll(page, extractedCards);
+    } else {
+      extractedCards = dedupeExtractedCardsByLibraryId(extractedCards);
+    }
+
     const ads = extractedCards.map((card) =>
       normalizeExtractedCard(card, query),
     );
@@ -347,6 +298,229 @@ async function searchMetaLibraryViaSessions(
       await browser?.close().catch(() => undefined);
     }
   }
+}
+
+async function collectCardsWithInteractiveScroll(
+  page: BrowserPage,
+  initialCards: ExtractedAdCard[],
+): Promise<ExtractedAdCard[]> {
+  let cards = dedupeExtractedCardsByLibraryId(initialCards);
+  const startedAt = Date.now();
+
+  for (let pass = 0; pass < INTERACTIVE_SCROLL_PASSES; pass += 1) {
+    if (cards.length >= INTERACTIVE_TARGET_CARD_COUNT) {
+      break;
+    }
+    const elapsed = Date.now() - startedAt;
+    if (elapsed >= INTERACTIVE_SCROLL_BUDGET_MS) {
+      break;
+    }
+
+    await page.evaluate(() => {
+      window.scrollTo(0, document.body.scrollHeight);
+    });
+
+    const remainingBudget = INTERACTIVE_SCROLL_BUDGET_MS - (Date.now() - startedAt);
+    if (remainingBudget <= 0) {
+      break;
+    }
+    await delayMs(Math.min(INTERACTIVE_SCROLL_WAIT_MS, remainingBudget));
+
+    const passExtraction = await page.evaluate(createSessionCardExtractionScript());
+    const passCards = Array.isArray(passExtraction)
+      ? (passExtraction as ExtractedAdCard[])
+      : ((passExtraction as { cards?: ExtractedAdCard[] }).cards ?? []);
+    cards = dedupeExtractedCardsByLibraryId([...cards, ...passCards]);
+  }
+
+  return cards;
+}
+
+function delayMs(ms: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, Math.max(0, ms));
+  });
+}
+
+/**
+ * DOM extraction script for session-based Ad Library scrapes.
+ * Must stay a pure function (no outer closures) so page.evaluate can serialize it.
+ */
+function createSessionCardExtractionScript() {
+  return () => {
+    const normalizeText = (value: string | null | undefined) =>
+      (value ?? "")
+        .replace(/\u00a0/g, " ")
+        .split("\n")
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .join("\n")
+        .trim();
+
+    const seen = new Set<string>();
+    const anchors = Array.from(
+      document.querySelectorAll<HTMLAnchorElement>(
+        'a[href*="/ads/library/?id="], a[href*="facebook.com/ads/library/?id="]',
+      ),
+    );
+
+    function isCreativeCdnHost(host: string) {
+      const lower = host.toLowerCase();
+      return lower.includes("fbcdn") || lower.includes("scontent");
+    }
+
+    function pickCreativeMediaFromCard(cardRoot: HTMLElement | null | undefined) {
+      if (!cardRoot) {
+        return { imageUrl: null as string | null, hasVideo: false };
+      }
+
+      const videos = Array.from(cardRoot.querySelectorAll("video"));
+      const hasVideo = videos.length > 0;
+      for (const video of videos) {
+        const poster = video.getAttribute("poster") || "";
+        if (!poster) {
+          continue;
+        }
+        try {
+          const url = new URL(poster, location.origin);
+          if (isCreativeCdnHost(url.hostname)) {
+            return { imageUrl: url.toString(), hasVideo: true };
+          }
+        } catch {
+          // skip invalid poster URLs
+        }
+      }
+
+      const images = Array.from(cardRoot.querySelectorAll("img"));
+      let bestUrl: string | null = null;
+      let bestArea = -1;
+      let firstCdnUrl: string | null = null;
+
+      for (const img of images) {
+        const raw = img.currentSrc || img.src || img.getAttribute("src") || "";
+        if (!raw || raw.startsWith("data:")) {
+          continue;
+        }
+        let absolute: string | null = null;
+        try {
+          const url = new URL(raw, location.origin);
+          if (!isCreativeCdnHost(url.hostname)) {
+            continue;
+          }
+          absolute = url.toString();
+        } catch {
+          continue;
+        }
+        if (!firstCdnUrl) {
+          firstCdnUrl = absolute;
+        }
+        const width = img.naturalWidth || img.width || 0;
+        const height = img.naturalHeight || img.height || 0;
+        if (width > 0 && height > 0 && width <= 64 && height <= 64) {
+          continue;
+        }
+        const area = (width || 1) * (height || 1);
+        if (area > bestArea) {
+          bestArea = area;
+          bestUrl = absolute;
+        }
+      }
+
+      return {
+        imageUrl: bestUrl || firstCdnUrl,
+        hasVideo,
+      };
+    }
+
+    const cards = anchors
+      .map((anchor) => {
+        const href = anchor.href || anchor.getAttribute("href") || "";
+        const idMatch = href.match(/[?&]id=(\d+)/);
+        const libraryId = idMatch?.[1];
+        if (!libraryId || seen.has(libraryId)) {
+          return null;
+        }
+        seen.add(libraryId);
+
+        const card =
+          anchor.closest<HTMLElement>('[role="article"]') ||
+          anchor.closest<HTMLElement>("article") ||
+          anchor.closest<HTMLElement>("[data-ad-preview]") ||
+          anchor.parentElement;
+        const links = Array.from(card?.querySelectorAll<HTMLAnchorElement>("a[href]") ?? []);
+        const externalLink =
+          links
+            .map((link) => link.href)
+            .find(
+              (candidate) =>
+                /^https?:/i.test(candidate) &&
+                !/facebook\.com/i.test(candidate) &&
+                !/l\.facebook\.com/i.test(candidate),
+            ) ?? null;
+
+        const advertiser =
+          card?.querySelector<HTMLElement>("strong, h3, h4, [data-advertiser-name]")?.innerText ??
+          null;
+        const headline =
+          card?.querySelector<HTMLElement>("h1, h2, h3, [data-headline]")?.innerText ?? null;
+        const text = normalizeText(card?.innerText ?? anchor.innerText);
+        const cta =
+          card
+            ?.querySelector<HTMLElement>(
+              'button, [role="button"], [data-cta], a[aria-label*="Shop"], a[aria-label*="Learn"]',
+            )
+            ?.innerText ?? null;
+        const platformTokens = [
+          "Instagram",
+          "Facebook",
+          "Messenger",
+          "WhatsApp",
+          "Audience Network",
+          "Threads",
+        ];
+        const platforms = platformTokens.filter((token) => text.includes(token));
+        const startedRunning =
+          text
+            .split("\n")
+            .map((line) => line.trim())
+            .find((line) => /^started running on\b/i.test(line)) ?? null;
+
+        const media = pickCreativeMediaFromCard(card);
+
+        return {
+          libraryId,
+          advertiser: normalizeText(advertiser),
+          body: text,
+          previewHeadline: normalizeText(headline),
+          previewSubhead: null,
+          cta: normalizeText(cta),
+          adSnapshotUrl: new URL(href, location.origin).toString(),
+          landingPageUrl: externalLink,
+          platforms,
+          active: !text.split("\n").some((line) => /^inactive$/i.test(line.trim())),
+          startedRunning,
+          imageUrl: media.imageUrl,
+          hasVideo: media.hasVideo,
+        };
+      })
+      .filter(Boolean);
+
+    const pageText = document.body?.innerText ?? "";
+    const lowerPageText = pageText.toLowerCase();
+
+    return {
+      cards,
+      pageText,
+      loginWall:
+        /log in|login|sign in|sign into/.test(lowerPageText) &&
+        lowerPageText.includes("facebook"),
+      noResults: false,
+      rateLimited:
+        lowerPageText.includes("rate limit") ||
+        lowerPageText.includes("too many requests") ||
+        lowerPageText.includes("try again later"),
+    };
+  };
 }
 
 async function searchMetaLibraryByQuickActions(
@@ -863,6 +1037,8 @@ function buildQuickActionExtractionScript() {
           .map((line) => line.trim())
           .find((line) => /^started running on\\b/i.test(line)) ?? null;
 
+      const media = pickCreativeMediaFromCard(card);
+
       return {
         libraryId,
         advertiser: normalizeText(advertiser),
@@ -875,9 +1051,72 @@ function buildQuickActionExtractionScript() {
         platforms,
         active: !text.split("\\n").some((line) => /^inactive$/i.test(line.trim())),
         startedRunning,
+        imageUrl: media.imageUrl,
+        hasVideo: media.hasVideo,
       };
     })
     .filter(Boolean);
+
+  function isCreativeCdnHost(host) {
+    const lower = String(host || "").toLowerCase();
+    return lower.includes("fbcdn") || lower.includes("scontent");
+  }
+
+  function pickCreativeMediaFromCard(cardRoot) {
+    if (!cardRoot) {
+      return { imageUrl: null, hasVideo: false };
+    }
+    const videos = Array.from(cardRoot.querySelectorAll("video"));
+    const hasVideo = videos.length > 0;
+    for (const video of videos) {
+      const poster = video.getAttribute("poster") || "";
+      if (!poster) {
+        continue;
+      }
+      try {
+        const url = new URL(poster, location.origin);
+        if (isCreativeCdnHost(url.hostname)) {
+          return { imageUrl: url.toString(), hasVideo: true };
+        }
+      } catch {
+        // skip invalid poster URLs
+      }
+    }
+    const images = Array.from(cardRoot.querySelectorAll("img"));
+    let bestUrl = null;
+    let bestArea = -1;
+    let firstCdnUrl = null;
+    for (const img of images) {
+      const raw = img.currentSrc || img.src || img.getAttribute("src") || "";
+      if (!raw || String(raw).startsWith("data:")) {
+        continue;
+      }
+      let absolute = null;
+      try {
+        const url = new URL(raw, location.origin);
+        if (!isCreativeCdnHost(url.hostname)) {
+          continue;
+        }
+        absolute = url.toString();
+      } catch {
+        continue;
+      }
+      if (!firstCdnUrl) {
+        firstCdnUrl = absolute;
+      }
+      const width = img.naturalWidth || img.width || 0;
+      const height = img.naturalHeight || img.height || 0;
+      if (width > 0 && height > 0 && width <= 64 && height <= 64) {
+        continue;
+      }
+      const area = (width || 1) * (height || 1);
+      if (area > bestArea) {
+        bestArea = area;
+        bestUrl = absolute;
+      }
+    }
+    return { imageUrl: bestUrl || firstCdnUrl, hasVideo };
+  }
   const pageText = (document.body?.innerText ?? "").toLowerCase();
   const payload = {
     cards,
@@ -1025,6 +1264,7 @@ function extractQuickActionPayloadFromScrape(
     const html = element.html ?? "";
     const text = stripHtml(html) || element.text?.trim() || "Meta Ad Library result";
     const lineText = stripHtmlPreservingLines(html);
+    const media = extractCreativeMediaFromHtml(html);
 
     cards.push({
       libraryId,
@@ -1038,6 +1278,8 @@ function extractQuickActionPayloadFromScrape(
       platforms: inferPlatforms(text),
       active: !hasStandaloneInactiveLine(lineText),
       startedRunning: findStartedRunningLine(lineText),
+      imageUrl: media.imageUrl,
+      hasVideo: media.hasVideo,
     });
   }
 
@@ -1092,15 +1334,41 @@ function normalizeRetryAfterSeconds(value: number | null | undefined) {
   return Math.max(1, Math.ceil(value / 1000));
 }
 
-function normalizeExtractedCard(card: ExtractedAdCard, query: NormalizedSavedQuery): AdRecord {
+/** Exported for unit tests that assert image/media field mapping. */
+export function normalizeExtractedCard(card: ExtractedAdCard, query: NormalizedSavedQuery): AdRecord {
   // Never back-fill the advertiser with the customer's search term or the CTA
   // with a guessed default: presenting extraction gaps as scraped facts can
   // attribute ads to brands that never ran them. Empty means "unconfirmed"
   // and the display layer labels it that way.
   const advertiser = card.advertiser || "";
-  const body = card.body || advertiser;
-  const previewHeadline = card.previewHeadline || advertiser;
+  const rawBody = card.body || advertiser;
+  // FIX-13: DOM/session/quick-action bodies often include Active / Library ID
+  // chrome as the first lines — strip before hook/offer derivation.
+  const body = stripAdLibraryUiChromeFromBody(rawBody) || rawBody;
+  const previewHeadline =
+    stripAdLibraryUiChromeFromBody(card.previewHeadline || "") ||
+    card.previewHeadline ||
+    advertiser;
   const previewSubhead = card.previewSubhead || body.slice(0, 120);
+  const creativeImageUrl = card.imageUrl?.trim() || null;
+  const hasVideo = Boolean(card.hasVideo);
+  const creativeFormatHint = hasVideo
+    ? ("video" as const)
+    : creativeImageUrl
+      ? ("image" as const)
+      : undefined;
+
+  const { hook, offer } = resolveHookAndOffer({
+    body,
+    previewHeadline,
+    cta: card.cta || "",
+  });
+  const firstSeenAt = parseStartedRunningDate(card.startedRunning ?? null);
+  const format = hasVideo ? ("video" as const) : ("image" as const);
+  const destinationType = inferDestinationType(card.landingPageUrl);
+  const landingPageUrl = card.landingPageUrl;
+  const platforms = card.platforms;
+  const active = card.active;
 
   return withStructuredAnalysis({
     metaAdId: card.libraryId,
@@ -1108,36 +1376,51 @@ function normalizeExtractedCard(card: ExtractedAdCard, query: NormalizedSavedQue
     body,
     previewHeadline,
     previewSubhead,
-    hook: previewHeadline,
-    offer: body,
+    hook,
+    offer,
     cta: card.cta || "",
-    format: "image",
+    // Prefer video when the card surface showed a video element; otherwise keep
+    // the historical image default until stronger format detection lands.
+    format,
     languageLabel: inferLanguageLabel(`${previewHeadline} ${body}`),
-    destinationType: inferDestinationType(card.landingPageUrl),
-    landingPageUrl: card.landingPageUrl,
+    destinationType,
+    landingPageUrl,
     adSnapshotUrl:
       card.adSnapshotUrl || `https://www.facebook.com/ads/library/?id=${card.libraryId}`,
     countries: [query.filters.country || "all"],
-    platforms: card.platforms,
+    platforms,
     // Meta publishes the ad's start date on every Ad Library card ("Started
     // running on <date>"). Treat it as firstSeenAt exactly like the Meta API
     // path treats ad_delivery_start_time; unparseable stays an honest null.
-    firstSeenAt: parseStartedRunningDate(card.startedRunning ?? null),
+    firstSeenAt,
     lastSeenAt: null,
-    active: card.active,
-    researchSummary:
-      "Captured from the public Meta Ad Library via Browser Run and normalized into Five to Nine’s analysis schema.",
+    active,
+    researchSummary: composeResearchSummary({
+      active,
+      firstSeenAt,
+      landingPageUrl,
+      offer,
+      format,
+      platforms,
+      countries: [query.filters.country || "all"],
+      source: "meta_library_browser",
+      variantCount: card.variantCount ?? null,
+    }),
     source: "meta_library_browser",
+    creativeImageUrl,
+    creativeFormatHint,
+    variantCount: card.variantCount ?? null,
   });
 }
 
-function buildSearchUrl(query: NormalizedSavedQuery) {
+/** Exported for unit tests that assert Ad Library URL filter params. */
+export function buildSearchUrl(query: NormalizedSavedQuery) {
   const params = new URLSearchParams();
-  params.set("active_status", "all");
+  params.set("active_status", mapActiveStatusParam(query.filters.status));
   params.set("ad_type", "all");
   params.set("country", countryCode(query.filters.country));
   params.set("is_targeted_country", "false");
-  params.set("media_type", "all");
+  params.set("media_type", mapMediaTypeParam(query.filters.creativeType));
   params.set(
     "search_type",
     query.mode === "advertiser" ? "keyword_exact_phrase" : "keyword_unordered",
@@ -1145,6 +1428,31 @@ function buildSearchUrl(query: NormalizedSavedQuery) {
   params.set("q", query.filters.query || "");
 
   return `https://www.facebook.com/ads/library/?${params.toString()}`;
+}
+
+function mapActiveStatusParam(status: NormalizedSavedQuery["filters"]["status"] | undefined) {
+  if (status === "active") {
+    return "active";
+  }
+  if (status === "inactive") {
+    return "inactive";
+  }
+  return "all";
+}
+
+function mapMediaTypeParam(creativeType: NormalizedSavedQuery["filters"]["creativeType"] | undefined) {
+  if (creativeType === "image") {
+    return "image";
+  }
+  if (creativeType === "video") {
+    return "video";
+  }
+  if (creativeType === "carousel") {
+    // Meta Ad Library uses "meme" historically for multi-image; "carousel" is
+    // accepted on newer surfaces — pass the plain filter name.
+    return "carousel";
+  }
+  return "all";
 }
 
 function countryCode(country: string | undefined) {

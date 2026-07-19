@@ -104,7 +104,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
       detail: proofDetail,
     },
     {
-      label: "Digests sent",
+      label: "Briefs sent",
       value: sentDigests,
       detail: sentDigests > 0
         ? "Email trail active"
@@ -123,7 +123,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
     const count = input.counterMoveFollowUps.length;
     return {
       state: "follow_up",
-      kicker: "Market Desk Brief",
+      kicker: "Brief",
       title: `${count} follow-up${count === 1 ? "" : "s"} to decide`,
       summary: "Source-backed response work is waiting. Review the open follow-ups before the response window closes.",
       action: { href: "/app/watchlists", label: "Review follow-ups" },
@@ -141,7 +141,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
     const count = confirmedChanges.length;
     return {
       state: "changes",
-      kicker: "Market Desk Brief",
+      kicker: "Brief",
       title: `${count} competitor move${count === 1 ? "" : "s"} to review`,
       summary: "A watched competitor changed. Open the source trail and decide whether to respond, ignore, or package it.",
       action: { href: "/app/watchlists", label: "Review moves" },
@@ -159,7 +159,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
     if (!sourceHealthy) {
       return {
         state: "queued",
-        kicker: "Market Desk Brief",
+        kicker: "Brief",
         title: "Source access needs attention",
         summary: "The latest check cannot be treated as a quiet result while commercial source access is degraded or unavailable. Review Source access before relying on this brief.",
         action: { href: "/app/source-access", label: "Open Source access" },
@@ -172,7 +172,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
     if (isFreePlan) {
       return {
         state: "quiet",
-        kicker: "Market Desk Brief",
+        kicker: "Brief",
         title: "Activation check completed",
         summary: `One-time activation check completed across ${overnightScope}. Paid plans include recurring monitoring for future changes.`,
         action: { href: "/app/watchlists", label: "Review watchlists" },
@@ -188,7 +188,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
 
     return {
       state: "quiet",
-      kicker: "Market Desk Brief",
+      kicker: "Brief",
       title: "Quiet check completed",
       summary: `All quiet - ${overnightAdsSeen} ad${overnightAdsSeen === 1 ? "" : "s"} checked across ${overnightScope}. Completed checks found no action-worthy movement.`,
       action: { href: "/app/watchlists", label: "Review watchlists" },
@@ -205,7 +205,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
   if (hasOnlyPausedWatchlists) {
     return {
       state: "paused",
-      kicker: "Market Desk Brief",
+      kicker: "Brief",
       title: "Tracking is paused",
       summary: "Resume a competitor watch when you want Five to Nine checking changes again.",
       action: { href: "/app/watchlists", label: "Resume watch" },
@@ -224,7 +224,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
       if (isFreePlan) {
         return {
           state: "queued",
-          kicker: "Market Desk Brief",
+          kicker: "Brief",
           title: "Activation check complete",
           summary: "Your one-time activation scan is complete. Paid plans include recurring monitoring for future changes.",
           action: { href: "/app/billing?source=dashboard#plans", label: "View paid plans" },
@@ -240,7 +240,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
 
       return {
         state: "queued",
-        kicker: "Market Desk Brief",
+        kicker: "Brief",
         title: "Watching for the next change",
         summary: "Your watchlist is ready. Refresh tracking to save evidence when the landing page or offer changes.",
         action: { href: "/app/watchlists", label: "Open watchlists" },
@@ -256,7 +256,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
 
     return {
       state: "queued",
-      kicker: "Market Desk Brief",
+      kicker: "Brief",
       title: isFreePlan ? "Activation scan is queued" : "First sweep is queued",
       summary: isFreePlan
         ? `${activeCount} competitor${activeCount === 1 ? "" : "s"} ${activeCount === 1 ? "is" : "are"} ready for one activation-only scan. Paid plans include recurring monitoring.`
@@ -274,8 +274,8 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
 
   return {
     state: "empty",
-    kicker: "Market Desk Brief",
-    title: "Build your Market Desk",
+    kicker: "Brief",
+    title: "Build your brief",
     summary: isFreePlan
       ? "Add your first competitor for one activation-only scan. Paid plans include recurring monitoring and digests."
       : "Add your first competitor or paste several at once, then Five to Nine turns daily checks into a source-backed brief.",

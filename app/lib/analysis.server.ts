@@ -14,8 +14,15 @@ import type {
 const EXTRACTOR_VERSION = "v1-structured-analysis";
 
 const devnagariPattern = /[\u0900-\u097F]/;
+/**
+ * Promo/price phrases across major currencies — return null when none match.
+ * FIX-3: do not put multi-char tokens (R$, zł) inside a character class — that
+ * decomposes them so bare "r"/"z" before digits and "Bogotá"/"code" match.
+ */
 const offerPattern =
-  /((?:up ?to )?\d+% ?off|buy ?\d+ get ?\d+|free shipping|cod|launch pricing|rs ?\d+[^\s,.]* off|free minis?)/i;
+  /(?:(?:up\s*to|upto)\s*)?\d+\s*%\s*off|(?:flat\s*)?\d+\s*%\s*off|buy\s*\d+\s*get\s*\d+|\bbogo\b|free\s+(?:shipping|delivery)|(?:from|starting\s+at)\s*(?:R\$|zł|[₹$€£¥])\s*[\d,.]+|(?:R\$|zł|[₹$€£¥])\s*[\d,.]+(?:\s*off)?|(?:rs\.?|inr)\s*[\d,.]+(?:\s*off)?|sale\s+ends?|deal\s+ends?|launch\s+pricing|free\s+minis?|\bcod\b/i;
+
+const HOOK_MAX_CHARS = 120;
 
 export function inferLanguageLabel(value: string) {
   return classifyLanguage({
@@ -42,19 +49,182 @@ export function inferDestinationType(url: string | null): DestinationType {
   return "website";
 }
 
+/** First sentence or first line of body, capped, emoji-run stripped. */
 export function deriveHook(body: string, fallbackHeadline: string) {
-  const firstSentence = body
-    .split(/[.!?]/)
+  const source = (body || fallbackHeadline || "").trim();
+  if (!source) {
+    return "";
+  }
+
+  const firstLine = source
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
+  const firstSentence = source
+    .split(/(?<=[.!?])\s+/)
     .map((part) => part.trim())
     .find(Boolean);
 
-  return firstSentence ?? fallbackHeadline;
+  // Prefer a short first line when the body is multi-line card chrome + copy.
+  const candidate =
+    firstLine && firstLine.length <= HOOK_MAX_CHARS
+      ? firstLine
+      : firstSentence || firstLine || fallbackHeadline;
+
+  return clampHook(stripHeavyEmojiRuns(candidate || fallbackHeadline || ""));
 }
 
-export function deriveOffer(body: string, fallbackCta: string) {
-  const match = body.match(offerPattern);
-  return match?.[0] ?? fallbackCta;
+/**
+ * Extract an explicit promo/price phrase. Returns null when none is found —
+ * callers must not fall back to repeating the full body or CTA.
+ */
+export function deriveOffer(body: string, _fallbackCta?: string): string | null {
+  const source = (body || "").trim();
+  if (!source) {
+    return null;
+  }
+
+  const match = source.match(offerPattern);
+  if (!match?.[0]) {
+    return null;
+  }
+
+  return match[0].replace(/\s+/g, " ").trim();
 }
+
+/** Ensure hook and offer never display as identical copy-paste strings. */
+export function resolveHookAndOffer(input: {
+  body: string;
+  previewHeadline: string;
+  cta?: string;
+}): { hook: string; offer: string } {
+  const hook = deriveHook(input.body, input.previewHeadline);
+  let offer = deriveOffer(input.body, input.cta) ?? "";
+  if (offer && normalizeComparableCopy(hook) === normalizeComparableCopy(offer)) {
+    offer = "";
+  }
+  // If offer somehow equals the whole body, drop it — that is the old failure mode.
+  if (offer && normalizeComparableCopy(offer) === normalizeComparableCopy(input.body)) {
+    offer = "";
+  }
+  return { hook, offer };
+}
+
+/**
+ * Compose a research line from real signals only. Missing fields are omitted
+ * so two ads never share identical boilerplate when their signals differ.
+ */
+export function composeResearchSummary(
+  ad: Pick<
+    AdRecord,
+    | "active"
+    | "firstSeenAt"
+    | "landingPageUrl"
+    | "offer"
+    | "format"
+    | "platforms"
+    | "countries"
+    | "source"
+  > & {
+    variantCount?: number | null;
+  },
+): string {
+  const parts: string[] = [];
+
+  if (ad.active) {
+    parts.push("Active");
+  } else {
+    parts.push("Inactive");
+  }
+
+  const runningDays = daysRunningSince(ad.firstSeenAt);
+  if (runningDays !== null) {
+    parts.push(runningDays === 1 ? "Running 1 day" : `Running ${runningDays} days`);
+  }
+
+  if (ad.variantCount && ad.variantCount > 1) {
+    parts.push(`${ad.variantCount} variants`);
+  }
+
+  if (ad.offer?.trim()) {
+    parts.push(hasDiscountSignal(ad.offer) ? "discount offer" : "promo offer");
+  }
+
+  if (ad.format === "video") {
+    parts.push("video creative");
+  } else if (ad.format === "carousel") {
+    parts.push("carousel creative");
+  }
+
+  const host = hostFromUrl(ad.landingPageUrl);
+  if (host) {
+    parts.push(`links to ${host}`);
+  }
+
+  if (ad.platforms.length > 0) {
+    parts.push(ad.platforms.slice(0, 3).join("/"));
+  }
+
+  if (parts.length === 0) {
+    return ad.source === "meta_library_browser"
+      ? "Captured from the public Meta Ad Library."
+      : "Normalized from live ad discovery.";
+  }
+
+  return parts.join(" · ");
+}
+
+function clampHook(value: string) {
+  const trimmed = value.trim();
+  if (trimmed.length <= HOOK_MAX_CHARS) {
+    return trimmed;
+  }
+  return `${trimmed.slice(0, HOOK_MAX_CHARS - 1).trimEnd()}…`;
+}
+
+function stripHeavyEmojiRuns(value: string) {
+  // Collapse runs of 3+ emoji-ish symbols to two so hooks stay readable.
+  return value.replace(/(\p{Extended_Pictographic}\uFE0F?\u200D?){3,}/gu, (match) =>
+    match.slice(0, 2),
+  );
+}
+
+function normalizeComparableCopy(value: string) {
+  return value
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function daysRunningSince(firstSeenAt: string | null | undefined) {
+  if (!firstSeenAt) {
+    return null;
+  }
+  const started = Date.parse(firstSeenAt);
+  if (!Number.isFinite(started)) {
+    return null;
+  }
+  const days = Math.max(0, Math.floor((Date.now() - started) / (24 * 60 * 60 * 1000)));
+  return days;
+}
+
+function hasDiscountSignal(offer: string) {
+  return /%|off|discount|sale|deal|free\s+(?:shipping|delivery)|bogo|buy\s*\d+/i.test(offer);
+}
+
+function hostFromUrl(url: string | null | undefined) {
+  if (!url) {
+    return null;
+  }
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
+export { formatOfferDisplay, NO_EXPLICIT_OFFER_LABEL } from "~/lib/analysis-display";
 
 export function buildAnalysisFields(ad: AdRecord, source: AnalysisSource): AnalysisFieldInput[] {
   const landingPageSource = ad.landingPage ? mapCaptureMethodToSource(ad.landingPage.captureMethod) : source;

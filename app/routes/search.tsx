@@ -6,10 +6,11 @@ import {
   useLoaderData,
   useLocation,
   useNavigation,
+  useRevalidator,
   useRouteLoaderData,
 } from "react-router";
 import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AdLongevityPill } from "~/components/ad-longevity-pill";
 import { AdThumb } from "~/components/ad-thumb";
@@ -32,6 +33,7 @@ import {
   parseSearchParams,
 } from "~/lib/normalize";
 import { defaultCountryForVisitor, ALL_COUNTRIES_VALUE, SUPPORTED_COUNTRIES } from "~/lib/countries";
+import { formatAdsFoundLabel, formatOfferDisplay } from "~/lib/analysis-display";
 import {
   formatAdvertiserLabel,
   formatCaptureMethodLabel,
@@ -40,10 +42,19 @@ import {
 } from "~/lib/landing-page-display";
 import { customerDiscoverySummary } from "~/lib/discovery-customer-copy";
 import { buildSearchAnswer } from "~/lib/search-answer";
+import {
+  DEFAULT_SEARCH_RESULT_SORT,
+  parseSearchResultSort,
+  sortAdsForSearchDisplay,
+  type SearchResultSort,
+} from "~/lib/search-sort";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
 import type { RootLoaderData } from "~/root";
 import type { AdRecord, SearchFilters, SearchResponse, WatchlistTrackingRole } from "~/lib/types";
+
+const SEARCH_WARMING_POLL_MS = 5_000;
+const SEARCH_WARMING_POLL_LIMIT = 12; // 60s cap
 
 const searchDescription =
   "Preview public competitor ad results before creating an account; sign in to save examples and track offer changes over time. Provider coverage and freshness vary.";
@@ -108,7 +119,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       fingerprint: parsed.fingerprint,
       result: buildIdleSearchResult(),
       selectedAd: null,
+      selectionEnrichmentPending: false,
       collections: [],
+      plan: null,
       session,
       competitorWebsite,
       trackingRole,
@@ -127,7 +140,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       fingerprint: parsed.fingerprint,
       result: buildIdleSearchResult(),
       selectedAd: null,
+      selectionEnrichmentPending: false,
       collections: [],
+      plan: null,
       session,
       competitorWebsite,
       trackingRole,
@@ -170,19 +185,79 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     }
   }
 
+  const collections = session ? await listCollections(env, workspaceUserId!) : [];
+  let plan: "free" | "scout" | "starter" | "agency" | null = null;
+  if (session) {
+    try {
+      const { getUserPlan } = await import("~/lib/plan.server");
+      plan = await getUserPlan(env, workspaceUserId!);
+    } catch {
+      // Isolated tests may omit D1; treat as free for honest collection gates.
+      plan = "free";
+    }
+  }
+
   if (session && parsed.filters.query && !forceLive) {
     const { enforceAuthenticatedSearchRateLimit, enforceSearchSelectionRateLimit } = await import(
       "~/lib/rate-limit.server"
     );
-    const rateLimitResponse = selectionServedFromCache
-      ? await enforceSearchSelectionRateLimit(request, env, session.user.id, context.cloudflare?.ctx)
-      : await enforceAuthenticatedSearchRateLimit(request, env, session.user.id, context.cloudflare?.ctx);
-    if (rateLimitResponse) {
-      throw rateLimitResponse;
+    // FIX-10: warm discovery cache hits must not burn the daily live-search budget.
+    // Selection URLs already probed above (do not probe twice). Plain reloads probe once.
+    let warmQueryForBudget = selectionServedFromCache;
+    if (!selectionServedFromCache && !url.searchParams.get("selected")) {
+      warmQueryForBudget = await (
+        await import("~/lib/search-execution.server")
+      ).hasWarmSearchCacheEntry({
+        env,
+        competitorWebsite,
+        parsed,
+        scope: searchScope,
+        cursor: url.searchParams.get("after"),
+        customerMetaAdLibraryToken,
+      });
+    }
+    if (selectionServedFromCache) {
+      const selectionLimit = await enforceSearchSelectionRateLimit(
+        request,
+        env,
+        session.user.id,
+        context.cloudflare?.ctx,
+      );
+      if (selectionLimit) {
+        throw selectionLimit;
+      }
+    } else if (!warmQueryForBudget) {
+      const searchLimit = await enforceAuthenticatedSearchRateLimit(
+        request,
+        env,
+        session.user.id,
+        context.cloudflare?.ctx,
+        plan,
+      );
+      if (searchLimit) {
+        // Prefer an in-product labeled daily/burst limit over a bare JSON 429.
+        return {
+          mode: parsed.mode,
+          filters: parsed.filters,
+          fingerprint: parsed.fingerprint,
+          result: buildIdleSearchResult(),
+          selectedAd: null,
+          selectionEnrichmentPending: false,
+          collections,
+          plan,
+          session,
+          competitorWebsite,
+          trackingRole,
+          inputError:
+            "You've hit your live-search limit for your plan. The window refreshes about 24 hours after your earlier searches. Cached results still work — upgrade for more live checks.",
+          searchScope: "exact" as const,
+          displayDomain: null,
+          relevanceApplied: false,
+          ...navFlags,
+        };
+      }
     }
   }
-
-  const collections = session ? await listCollections(env, workspaceUserId!) : [];
 
   if (!parsed.filters.query) {
     return {
@@ -191,7 +266,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       fingerprint: parsed.fingerprint,
       result: buildIdleSearchResult(),
       selectedAd: null,
+      selectionEnrichmentPending: false,
       collections,
+      plan,
       session,
       competitorWebsite,
       trackingRole,
@@ -235,15 +312,19 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         relevanceApplied: false,
       };
 
-  const { result: hydratedResult, selectedAd } = await prepareSearchResultSelection(
-    env,
-    searchExecution.result,
-    url.searchParams.get("selected"),
-    {
-      enrichSelected: Boolean(session) && !providerDeny.enabled,
-      hydratePersisted: Boolean(session),
-    },
-  );
+  const waitUntil = context.cloudflare?.ctx?.waitUntil?.bind(context.cloudflare.ctx);
+  const { result: hydratedResult, selectedAd, selectionEnrichmentPending } =
+    await prepareSearchResultSelection(
+      env,
+      searchExecution.result,
+      url.searchParams.get("selected"),
+      {
+        enrichSelected: Boolean(session) && !providerDeny.enabled,
+        hydratePersisted: Boolean(session),
+        // WP-11: paint base ad immediately; OCR/landing/translation finish via waitUntil.
+        ...(typeof waitUntil === "function" ? { waitUntil } : {}),
+      },
+    );
 
   return {
     mode: parsed.mode,
@@ -251,7 +332,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     fingerprint: parsed.fingerprint,
     result: hydratedResult,
     selectedAd,
+    selectionEnrichmentPending: Boolean(selectionEnrichmentPending),
     collections,
+    plan,
     session,
     competitorWebsite,
     trackingRole,
@@ -468,12 +551,25 @@ export default function SearchRoute() {
   const actionData = useActionData<typeof action>();
   const location = useLocation();
   const navigation = useNavigation();
+  const revalidator = useRevalidator();
   const selectedProofRef = useRef<HTMLElement>(null);
   const previousDiscoveryStatusRef = useRef(data.result.discoveryStatus);
   const [recoveredSearchKey, setRecoveredSearchKey] = useState<string | null>(null);
+  const [resultSort, setResultSort] = useState<SearchResultSort>(() =>
+    parseSearchResultSort(new URLSearchParams(location.search).get("sort")) || DEFAULT_SEARCH_RESULT_SORT,
+  );
+  const [warmingPollCount, setWarmingPollCount] = useState(0);
+  const [selectionEnrichmentRevalidatedFor, setSelectionEnrichmentRevalidatedFor] = useState<
+    string | null
+  >(null);
   const requestedCursor = new URLSearchParams(location.search).get("after");
   const selectedFromUrl = new URLSearchParams(location.search).get("selected");
   const searchKey = buildSearchAccumulationKey(data);
+  const selectionEnrichmentKey = selectedFromUrl
+    ? `${searchKey}::${selectedFromUrl}`
+    : data.selectedAd?.metaAdId
+      ? `${searchKey}::${data.selectedAd.metaAdId}`
+      : null;
   const [accumulated, setAccumulated] = useState<SearchAccumulationState>(() =>
     createSearchAccumulationState(searchKey, data.result, data.selectedAd),
   );
@@ -481,7 +577,10 @@ export default function SearchRoute() {
     ? accumulated
     : createSearchAccumulationState(searchKey, data.result, data.selectedAd);
   const visibleResult = visibleAccumulated.result;
-  const visibleAds = visibleResult.ads;
+  const visibleAds = useMemo(
+    () => sortAdsForSearchDisplay(visibleResult.ads, resultSort),
+    [visibleResult.ads, resultSort],
+  );
   const selectedAd = selectedFromUrl
     ? data.selectedAd ?? visibleAds.find((ad) => ad.metaAdId === selectedFromUrl) ?? null
     : data.selectedAd ?? visibleAccumulated.selectedAd;
@@ -527,8 +626,64 @@ export default function SearchRoute() {
   const isDomainSearch = Boolean(displayDomain && competitorWebsite.normalizedUrl);
   const isBroaderScope = data.searchScope === "broader";
   const isSearchWarming = visibleResult.discoveryProgress === "warming";
+  const formatFilterApproximate =
+    (data.filters.creativeType === "video" || data.filters.creativeType === "carousel") &&
+    (visibleResult.provider === "meta_library_browser" || visibleResult.source === "meta_library_browser");
+  const competitorWatchLabel = displayDomain || "this competitor";
+  const signupCtaBody = `Create a free account and we'll keep watching ${competitorWatchLabel} — first scan runs immediately, and you'll get an email when their ads, offer, or landing page changes.`;
   const retrySearchPath = `${location.pathname}${location.search}${location.hash}`;
   const scopedSearchParams = withSearchScope(currentSearchParams, isBroaderScope ? "broader" : "exact");
+
+  // Auto-revalidate while commercial discovery is warming (5s × 12 = 60s cap).
+  useEffect(() => {
+    if (!isSearchWarming) {
+      setWarmingPollCount(0);
+      return;
+    }
+    if (warmingPollCount >= SEARCH_WARMING_POLL_LIMIT) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      setWarmingPollCount((count) => count + 1);
+      if (revalidator.state === "idle") {
+        revalidator.revalidate();
+      }
+    }, SEARCH_WARMING_POLL_MS);
+    return () => clearTimeout(timer);
+  }, [isSearchWarming, warmingPollCount, revalidator]);
+
+  useEffect(() => {
+    // Reset warming poll budget when the query identity changes.
+    setWarmingPollCount(0);
+  }, [searchKey]);
+
+  // WP-11: single revalidation ~4s after deferred selection enrichment starts.
+  // FIX-13: only one shot per selection key — if still pending after that,
+  // UI falls back to "Not detected…" instead of endless "Analyzing creative…".
+  useEffect(() => {
+    if (!data.selectionEnrichmentPending || !selectionEnrichmentKey) {
+      return;
+    }
+    if (selectionEnrichmentRevalidatedFor === selectionEnrichmentKey) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      setSelectionEnrichmentRevalidatedFor(selectionEnrichmentKey);
+      if (revalidator.state === "idle") {
+        revalidator.revalidate();
+      }
+    }, 4_000);
+    return () => clearTimeout(timer);
+  }, [
+    data.selectionEnrichmentPending,
+    selectionEnrichmentKey,
+    selectionEnrichmentRevalidatedFor,
+    revalidator,
+  ]);
+  // After the one-shot revalidation, do not keep advertising in-flight analysis.
+  const selectionEnrichmentUiPending =
+    Boolean(data.selectionEnrichmentPending) &&
+    selectionEnrichmentRevalidatedFor !== selectionEnrichmentKey;
   const nextCursor = visibleResult.nextCursor;
   const retryingCursor = visibleAccumulated.retryCursor;
   const loadMoreParams = nextCursor
@@ -838,13 +993,25 @@ export default function SearchRoute() {
                   </h2>
                   {isDomainSearch && data.relevanceApplied && !isBroaderScope ? (
                     <small>{`Verified ads linked to ${displayDomain}`}</small>
-                  ) : isDomainSearch && !isBroaderScope ? (
-                    <small>Legacy source results; website connection is not yet verified.</small>
                   ) : null}
                   {isDomainSearch && isBroaderScope ? (
                     <small>{`Broader matches related to ${displayDomain}`}</small>
                   ) : null}
                 </div>
+                {visibleAds.length > 1 ? (
+                  <label className="f9-search-field f9-result-sort">
+                    <span className="f9-sr-only">Sort results</span>
+                    <select
+                      aria-label="Sort results"
+                      value={resultSort}
+                      onChange={(event) => setResultSort(parseSearchResultSort(event.target.value))}
+                    >
+                      <option value="active_first">Active first</option>
+                      <option value="longest_running">Longest running</option>
+                      <option value="newest">Newest</option>
+                    </select>
+                  </label>
+                ) : null}
                 {loadMoreParams ? (
                   <Form
                     aria-label={retryingCursor ? "Retry search results" : "Load more search results"}
@@ -879,13 +1046,17 @@ export default function SearchRoute() {
                         ? "Keep this competitor under watch"
                         : "Keep checking this competitor"}
                     </strong>
-                    <p>
-                      Create an account to confirm this website and queue its first evidence scan.
-                    </p>
+                    <p>{signupCtaBody}</p>
                   </div>
                   <Link className="f9-primary-button" to={signupTrackingPath}>
                     Create account
                   </Link>
+                </div>
+              ) : null}
+
+              {formatFilterApproximate ? (
+                <div className="f9-discovery-banner" role="status">
+                  <p>Format filters are approximate for this source</p>
                 </div>
               ) : null}
 
@@ -911,12 +1082,17 @@ export default function SearchRoute() {
                         <div>
                           <span>{formatAdvertiserLabel(ad.advertiser)}</span>
                           <h3>{ad.previewHeadline}</h3>
-                          <AdLongevityPill ad={ad} />
+                          <div className="f9-result-card-pills">
+                            <AdLongevityPill ad={ad} />
+                            {ad.variantCount && ad.variantCount > 1 ? (
+                              <span className="f9-longevity-pill">{`×${ad.variantCount} variants`}</span>
+                            ) : null}
+                          </div>
                         </div>
                         <p>{formatResultCardSummary(ad)}</p>
                         {ad.domainMatch?.reason ? <strong>{ad.domainMatch.reason}</strong> : null}
                         <small>
-                          {ad.offer} · {ad.destinationType} · {ad.languageLabel}
+                          {formatOfferDisplay(ad.offer)} · {ad.destinationType} · {ad.languageLabel}
                         </small>
                         <em>{ad.format}</em>
                       </div>
@@ -926,8 +1102,8 @@ export default function SearchRoute() {
                   <div className="f9-empty-state">
                     {isSearchWarming ? (
                       <div aria-live="polite" role="status">
-                        <h3>Checking this competitor</h3>
-                        <p>A check is already running. Retry shortly to check for the finished result.</p>
+                        <h3>Checking the Ad Library now</h3>
+                        <p>Usually under a minute — we will refresh automatically.</p>
                       </div>
                     ) : !searchAnswer ? (
                       <>
@@ -1022,7 +1198,7 @@ export default function SearchRoute() {
 
                   <dl className="f9-detail-grid">
                     <DetailRow label="Hook" value={selectedAd.hook} />
-                    <DetailRow label="Offer" value={selectedAd.offer} />
+                    <DetailRow label="Offer" value={formatOfferDisplay(selectedAd.offer)} />
                     <DetailRow label="CTA" value={selectedAd.cta} />
                     <DetailRow label="Format" value={selectedAd.format} />
                     <DetailRow label="Language" value={selectedAd.languageLabel} />
@@ -1031,17 +1207,30 @@ export default function SearchRoute() {
 
                   <div className="f9-proof-block">
                     <span>Text in the ad</span>
-                    <p>{formatLandingPageSignalValue(creativeTextField?.fieldValue)}</p>
+                    <p>
+                      {creativeTextField
+                        ? formatLandingPageSignalValue(creativeTextField.fieldValue)
+                        : selectionEnrichmentUiPending
+                          ? "Analyzing creative…"
+                          : formatLandingPageSignalValue(null)}
+                    </p>
                     <small>
                       {creativeTextField
                         ? "Read from the ad creative when available."
-                        : "Not detected from the ad snapshot yet."}
+                        : selectionEnrichmentUiPending
+                          ? "Reading the ad creative now — this updates in a few seconds."
+                          : "Not detected from the ad snapshot yet."}
                     </small>
                   </div>
 
                   <div className="f9-proof-block">
                     <span>Landing page</span>
-                    <h3>{selectedAd.landingPage?.rawHeadline ?? "Headline not captured yet"}</h3>
+                    <h3>
+                      {selectedAd.landingPage?.rawHeadline ??
+                        (selectionEnrichmentUiPending
+                          ? "Analyzing creative…"
+                          : "Headline not captured yet")}
+                    </h3>
                     <dl className="f9-detail-grid">
                       <DetailRow
                         label="Primary CTA"
@@ -1074,7 +1263,14 @@ export default function SearchRoute() {
                     <p>{selectedAd.researchSummary}</p>
                   </div>
 
-                  {data.session && data.collections.length > 0 ? (
+                  {data.session && data.plan === "free" ? (
+                    <div className="f9-side-note">
+                      <p>Saving ads to a collection starts on Scout.</p>
+                      <Link className="f9-primary-button" to="/app/billing?source=search#plans">
+                        View plans
+                      </Link>
+                    </div>
+                  ) : data.session && data.collections.length > 0 ? (
                     <Form className="f9-save-stack" method="post">
                       <input name="intent" type="hidden" value="save-to-collection" />
                       <input name="adId" type="hidden" value={selectedAd.metaAdId} />
@@ -1109,10 +1305,7 @@ export default function SearchRoute() {
                     </div>
                   ) : (
                     <div className="f9-side-note">
-                      <p>
-                        Public preview shows source evidence only. Create an account to confirm this website and
-                        queue its first evidence scan.
-                      </p>
+                      <p>{signupCtaBody}</p>
                       <Link className="f9-primary-button" to={signupTrackingPath}>
                         Create account to track this competitor
                       </Link>
@@ -1550,7 +1743,7 @@ export function formatResultsPanelTitle(
         : `${result.ads.length} broader matches for ${context.displayDomain}`;
     }
 
-    return `${result.ads.length} ads found`;
+    return formatAdsFoundLabel(result.ads.length);
   }
 
   if (/warming this query|already warming/i.test(result.discoverySummary ?? "")) {
@@ -1566,7 +1759,7 @@ export function formatResultsPanelTitle(
     return `No verified ads for ${context.displayDomain}`;
   }
 
-  return "0 ads found";
+  return formatAdsFoundLabel(0);
 }
 
 function canCreateAdvertiserWatchlist(query: ReturnType<typeof normalizeSavedQuery>) {

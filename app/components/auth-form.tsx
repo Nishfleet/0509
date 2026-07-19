@@ -8,6 +8,8 @@ interface AuthFormProps {
   initialName?: string;
   message?: string | null;
   error?: string | null;
+  /** WP-39: magic-link already sent — show recovery (resend / change email). */
+  linkSent?: boolean;
   oauthProviders?: AuthOAuthProvider[];
   passkeysEnabled?: boolean;
 }
@@ -26,6 +28,7 @@ export function AuthForm({
   initialName,
   message,
   error,
+  linkSent = false,
   oauthProviders = [],
   passkeysEnabled = false,
 }: AuthFormProps) {
@@ -38,24 +41,58 @@ export function AuthForm({
   const availableOAuthProviders = oauthProviders.filter((provider) => provider in OAUTH_PROVIDER_LABELS);
   const showPasskeyLogin = !isSignup && passkeysEnabled;
   const showSecondaryAuth = availableOAuthProviders.length > 0 || showPasskeyLogin;
+  const sentEmail = (initialEmail ?? "").trim();
+  const showSentRecovery = linkSent && Boolean(sentEmail);
   const switchHref = isSignup
     ? `/auth/login?redirectTo=${encodeURIComponent(redirectTo)}`
     : `/auth/signup?redirectTo=${encodeURIComponent(redirectTo)}`;
+  const changeEmailHref = isSignup
+    ? `/auth/signup?redirectTo=${encodeURIComponent(redirectTo)}`
+    : `/auth/login?redirectTo=${encodeURIComponent(redirectTo)}`;
 
   return (
     <div className="f9-auth-card">
       <span>{isSignup ? "Create account" : "Welcome back"}</span>
       <h2>
-        {isSignup
-          ? "Verify your work email to start."
-          : "Get a secure sign-in link."}
+        {showSentRecovery
+          ? "Check your email"
+          : isSignup
+            ? "Verify your work email to start."
+            : "Get a secure sign-in link."}
       </h2>
       <p>
-        {isSignup
-          ? "Use a work email. After verification, you can add a competitor and start tracking."
-          : "Enter your work email and we'll send a one-time link to your inbox."}
+        {showSentRecovery
+          ? isSignup
+            ? "We sent a setup link. Open it to verify and create the account."
+            : "If an account exists for that address, the sign-in link is on the way."
+          : isSignup
+            ? "Use a work email. After verification, you can add a competitor and start tracking."
+            : "Enter your work email and we'll send a one-time link to your inbox."}
       </p>
 
+      {showSentRecovery ? (
+        <div className="f9-auth-form" aria-live="polite">
+          <p className="f9-message is-success" role="status">
+            Link sent to <strong>{sentEmail}</strong>
+          </p>
+          {error ? <p aria-live="assertive" className="f9-message is-error" role="alert">{error}</p> : null}
+          <Form method="post">
+            <input name="mode" type="hidden" value={mode} />
+            <input name="redirectTo" type="hidden" value={redirectTo} />
+            <input name="email" type="hidden" value={sentEmail} />
+            {isSignup ? (
+              <input name="name" type="hidden" value={(initialName ?? "").trim() || "Account"} />
+            ) : null}
+            <button className="f9-primary-button" disabled={pending} type="submit">
+              {emailPending ? "Sending..." : "Resend link"}
+            </button>
+          </Form>
+          <p className="f9-auth-switch" style={{ marginTop: "1rem" }}>
+            Wrong address?{" "}
+            <Link to={changeEmailHref}>Use a different email</Link>
+          </p>
+        </div>
+      ) : (
       <Form className="f9-auth-form" method="post">
         <input name="mode" type="hidden" value={mode} />
         <input name="redirectTo" type="hidden" value={redirectTo} />
@@ -131,13 +168,16 @@ export function AuthForm({
           </div>
         ) : null}
       </Form>
+      )}
 
+      {!showSentRecovery ? (
       <p className="f9-auth-switch">
         {isSignup ? "Already have an account?" : "Need an account?"}{" "}
         <Link to={switchHref}>
           {isSignup ? "Sign in" : "Create one"}
         </Link>
       </p>
+      ) : null}
     </div>
   );
 }

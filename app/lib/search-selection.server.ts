@@ -13,86 +13,113 @@ import {
   translateAdText,
   withTranslatedAnalysisField,
 } from "~/lib/translation.server";
+import { pickFeaturedProofAd, sortAdsForSearchDisplay } from "~/lib/search-sort";
 import type { AdRecord, SearchResponse } from "~/lib/types";
+
+export type PrepareSearchResultSelectionOptions = {
+  enrichSelected?: boolean;
+  hydratePersisted?: boolean;
+  /**
+   * WP-11: when set, expensive OCR / landing / translation run in the
+   * background via waitUntil and the loader returns the base ad immediately.
+   * Tests and non-Worker callers omit this and keep the synchronous path.
+   */
+  waitUntil?: (promise: Promise<unknown>) => void;
+};
+
+/** FIX-13: prevent a revalidation from scheduling a second enrichment while one runs. */
+const ENRICHMENT_IN_FLIGHT_MS = 90_000;
+const enrichmentInFlightStartedAt = new Map<string, number>();
+
+function tryClaimSelectionEnrichment(metaAdId: string, nowMs: number = Date.now()): boolean {
+  const started = enrichmentInFlightStartedAt.get(metaAdId);
+  if (started != null && nowMs - started < ENRICHMENT_IN_FLIGHT_MS) {
+    return false;
+  }
+  enrichmentInFlightStartedAt.set(metaAdId, nowMs);
+  return true;
+}
+
+function releaseSelectionEnrichment(metaAdId: string) {
+  enrichmentInFlightStartedAt.delete(metaAdId);
+}
+
+/** Test helper — clear in-flight enrichment claims between cases. */
+export function resetSelectionEnrichmentInFlightForTests() {
+  enrichmentInFlightStartedAt.clear();
+}
+
+export function selectionNeedsEnrichment(ad: AdRecord): boolean {
+  const needsLanding = Boolean(ad.landingPageUrl?.trim()) && !ad.landingPage;
+  const needsCreative =
+    isAdLibraryBackedAd(ad) &&
+    Boolean(ad.adSnapshotUrl?.trim()) &&
+    !ad.creativeText?.trim();
+  const hasTranslatedField = ad.analysisFields.some(
+    (field) => field.fieldKey === "translated_text" && Boolean(field.fieldValue?.trim()),
+  );
+  // Translation only matters when language is non-English-looking and we lack a field.
+  const language = (ad.languageLabel ?? "").trim().toLowerCase();
+  const looksEnglish =
+    !language ||
+    language === "english" ||
+    language === "en" ||
+    language.startsWith("en-") ||
+    language === "unknown" ||
+    language === "ambiguous";
+  const needsTranslation = !looksEnglish && !hasTranslatedField;
+  return needsLanding || needsCreative || needsTranslation;
+}
 
 export async function prepareSearchResultSelection(
   env: AppEnv,
   result: SearchResponse,
   selectedId: string | null,
-  options: { enrichSelected?: boolean; hydratePersisted?: boolean } = {},
+  options: PrepareSearchResultSelectionOptions = {},
 ) {
-  const hydratedAds = options.hydratePersisted === false
+  const rawHydratedAds = options.hydratePersisted === false
     ? result.ads
     : await hydrateAdsWithPersistedCreatives(env, result.ads);
-  const resolvedSelectedId = selectedId ?? hydratedAds[0]?.metaAdId ?? null;
-  const selectedAdBase = hydratedAds.find((ad) => ad.metaAdId === resolvedSelectedId) ?? hydratedAds[0] ?? null;
+  // Active-first, longest-running for display + featured proof default.
+  const hydratedAds = sortAdsForSearchDisplay(rawHydratedAds, "active_first");
+  const featured = pickFeaturedProofAd(hydratedAds);
+  const resolvedSelectedId = selectedId ?? featured?.metaAdId ?? null;
+  const selectedAdBase =
+    hydratedAds.find((ad) => ad.metaAdId === resolvedSelectedId) ?? featured ?? null;
 
   let selectedAd: AdRecord | null = selectedAdBase;
+  let selectionEnrichmentPending = false;
+  const providerResultIsFresh = result.cacheStatus === "miss";
+
   if (selectedAdBase && options.enrichSelected !== false) {
-    const creativeCapturePromise =
-      isAdLibraryBackedAd(selectedAdBase) && selectedAdBase.adSnapshotUrl && !selectedAdBase.creativeText
-        ? captureCreativeText(env, selectedAdBase.adSnapshotUrl, selectedAdBase).then((value) => ({
-            value,
-            capturedAt: value ? new Date().toISOString() : null,
-          }))
-        : Promise.resolve({ value: null, capturedAt: null });
-    const [snapshot, creativeCapture] = await Promise.all([
-      selectedAdBase.landingPageUrl
-        ? captureLandingPageSnapshot(env, selectedAdBase.landingPageUrl)
-        : Promise.resolve(null),
-      creativeCapturePromise,
-    ]);
-    const creativeText = creativeCapture.value;
-    const creativeCapturedAt = creativeCapture.capturedAt;
-
-    const nextSelectedAdBase = {
-      ...selectedAdBase,
-      landingPage: snapshot ?? selectedAdBase.landingPage ?? null,
-      creativeText: creativeText?.text ?? selectedAdBase.creativeText ?? null,
-      creativeImageUrl: creativeText?.imageUrl ?? selectedAdBase.creativeImageUrl ?? null,
-      creativeTextCaptureMethod:
-        creativeText?.captureMethod ?? selectedAdBase.creativeTextCaptureMethod ?? null,
-      creativeTextMetadata:
-        creativeText?.metadata ?? selectedAdBase.creativeTextMetadata ?? null,
-    };
-    const rebuiltSelectedAd = withStructuredAnalysis(nextSelectedAdBase);
-    const rebuiltFieldKeys = new Set(
-      rebuiltSelectedAd.analysisFields.map((field) => `${field.scopeType}:${field.fieldKey}`),
-    );
-
-    selectedAd = {
-      ...rebuiltSelectedAd,
-      analysisFields: [
-        ...rebuiltSelectedAd.analysisFields,
-        ...selectedAdBase.analysisFields.filter(
-          (field) => !rebuiltFieldKeys.has(`${field.scopeType}:${field.fieldKey}`),
-        ),
-      ],
-    };
-
-    const translationResult = await translateAdText(env, selectedAd);
-    if (translationResult) {
-      const translatedField = buildTranslatedAnalysisField(translationResult);
-      selectedAd = {
-        ...selectedAd,
-        analysisFields: withTranslatedAnalysisField(selectedAd.analysisFields, translatedField),
-      };
-    }
-
-    // The collection action accepts only this server-persisted canonical ad
-    // id. Query-scoped matching metadata must never become shared canonical
-    // state, and a cached/capture-failed selection must not erase richer
-    // evidence written by an earlier selection.
-    if (env.DB) {
-      const selectedForPersistence = creativeCapturedAt
-        ? withCreativeCaptureTimestamp(selectedAd, creativeCapturedAt)
-        : selectedAd;
-      const [storedAd] = await listAdsByIds(env, [selectedAd.metaAdId]);
-      await upsertAd(
+    const needsWork = selectionNeedsEnrichment(selectedAdBase);
+    if (needsWork && options.waitUntil) {
+      // WP-11 paint-fast path: return base ad now; finish enrichment async.
+      // FIX-13: revalidations must not schedule a second enrichment while one
+      // is already in flight for this ad.
+      const claimed = tryClaimSelectionEnrichment(selectedAdBase.metaAdId);
+      selectionEnrichmentPending = true;
+      if (claimed) {
+        options.waitUntil(
+          enrichAndPersistSelectedAd(env, selectedAdBase, providerResultIsFresh)
+            .catch(() => {
+              // Background enrichment must never throw into the Worker isolate.
+            })
+            .finally(() => {
+              releaseSelectionEnrichment(selectedAdBase.metaAdId);
+            }),
+        );
+      }
+    } else if (needsWork) {
+      // Synchronous path (tests / no ExecutionContext): keep prior behavior.
+      selectedAd = await enrichAndPersistSelectedAd(
         env,
-        canonicalSelectionAd(selectedForPersistence, storedAd ?? null, result.cacheStatus === "miss"),
+        selectedAdBase,
+        providerResultIsFresh,
       );
     }
+    // When needsWork is false, hydrated/persisted evidence already filled the
+    // slots — return base (with persisted creatives) and skip duplicate work.
   }
 
   return {
@@ -101,7 +128,83 @@ export async function prepareSearchResultSelection(
       ads: hydratedAds,
     },
     selectedAd,
+    selectionEnrichmentPending,
   };
+}
+
+async function enrichAndPersistSelectedAd(
+  env: AppEnv,
+  selectedAdBase: AdRecord,
+  providerResultIsFresh: boolean,
+): Promise<AdRecord> {
+  const creativeCapturePromise =
+    isAdLibraryBackedAd(selectedAdBase) &&
+    selectedAdBase.adSnapshotUrl &&
+    !selectedAdBase.creativeText
+      ? captureCreativeText(env, selectedAdBase.adSnapshotUrl, selectedAdBase).then((value) => ({
+          value,
+          capturedAt: value ? new Date().toISOString() : null,
+        }))
+      : Promise.resolve({ value: null, capturedAt: null });
+  const [snapshot, creativeCapture] = await Promise.all([
+    selectedAdBase.landingPageUrl && !selectedAdBase.landingPage
+      ? captureLandingPageSnapshot(env, selectedAdBase.landingPageUrl)
+      : Promise.resolve(selectedAdBase.landingPage ?? null),
+    creativeCapturePromise,
+  ]);
+  const creativeText = creativeCapture.value;
+  const creativeCapturedAt = creativeCapture.capturedAt;
+
+  const nextSelectedAdBase = {
+    ...selectedAdBase,
+    landingPage: snapshot ?? selectedAdBase.landingPage ?? null,
+    creativeText: creativeText?.text ?? selectedAdBase.creativeText ?? null,
+    creativeImageUrl: creativeText?.imageUrl ?? selectedAdBase.creativeImageUrl ?? null,
+    creativeTextCaptureMethod:
+      creativeText?.captureMethod ?? selectedAdBase.creativeTextCaptureMethod ?? null,
+    creativeTextMetadata:
+      creativeText?.metadata ?? selectedAdBase.creativeTextMetadata ?? null,
+  };
+  const rebuiltSelectedAd = withStructuredAnalysis(nextSelectedAdBase);
+  const rebuiltFieldKeys = new Set(
+    rebuiltSelectedAd.analysisFields.map((field) => `${field.scopeType}:${field.fieldKey}`),
+  );
+
+  let selectedAd: AdRecord = {
+    ...rebuiltSelectedAd,
+    analysisFields: [
+      ...rebuiltSelectedAd.analysisFields,
+      ...selectedAdBase.analysisFields.filter(
+        (field) => !rebuiltFieldKeys.has(`${field.scopeType}:${field.fieldKey}`),
+      ),
+    ],
+  };
+
+  const translationResult = await translateAdText(env, selectedAd);
+  if (translationResult) {
+    const translatedField = buildTranslatedAnalysisField(translationResult);
+    selectedAd = {
+      ...selectedAd,
+      analysisFields: withTranslatedAnalysisField(selectedAd.analysisFields, translatedField),
+    };
+  }
+
+  // The collection action accepts only this server-persisted canonical ad
+  // id. Query-scoped matching metadata must never become shared canonical
+  // state, and a cached/capture-failed selection must not erase richer
+  // evidence written by an earlier selection.
+  if (env.DB) {
+    const selectedForPersistence = creativeCapturedAt
+      ? withCreativeCaptureTimestamp(selectedAd, creativeCapturedAt)
+      : selectedAd;
+    const [storedAd] = await listAdsByIds(env, [selectedAd.metaAdId]);
+    await upsertAd(
+      env,
+      canonicalSelectionAd(selectedForPersistence, storedAd ?? null, providerResultIsFresh),
+    );
+  }
+
+  return selectedAd;
 }
 
 function canonicalSelectionAd(

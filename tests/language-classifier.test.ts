@@ -47,6 +47,33 @@ describe("classifyLanguage", () => {
     expect(result.metadata.decisionReason).toBe("latin_language_cues");
   });
 
+  it("classifies the Nike Spanish Ad Library miss as Spanish not Vietnamese", () => {
+    const result = classifyLanguage({
+      body: "Entra a Nike.com y encuentra actualizaciones semanales de producto con envío gratis.",
+    });
+    expect(result.label).toBe("Spanish");
+  });
+
+  it("classifies additional Romance ad sentences without Spanish/Portuguese/Italian mixups", () => {
+    expect(
+      classifyLanguage({
+        body: "Descubre nuestra nueva colección y compra con envío gratis a todo el país.",
+      }).label,
+    ).toBe("Spanish");
+
+    expect(
+      classifyLanguage({
+        body: "Compre agora com frete grátis e não perca a oferta da loja esta semana.",
+      }).label,
+    ).toBe("Portuguese");
+
+    expect(
+      classifyLanguage({
+        body: "Acquista ora con spedizione gratuita e scopri la nuova offerta della settimana.",
+      }).label,
+    ).toBe("Italian");
+  });
+
   it("classifies Portuguese ad copy as Portuguese", () => {
     const result = classifyLanguage({
       previewHeadline: "Frete grátis só hoje",

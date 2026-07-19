@@ -36,8 +36,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     throw redirect(redirectTo);
   }
 
-  const message =
-    url.searchParams.get("sent") === "1"
+  const linkSent = url.searchParams.get("sent") === "1";
+  const message = linkSent
       ? "If an account exists for that address, you'll receive a secure sign-in link shortly."
       : null;
   const error = authErrorMessage(url.searchParams.get("error"));
@@ -50,6 +50,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   return {
     redirectTo,
     prefillEmail,
+    linkSent,
     ...(oauthProviders.length > 0 ? { oauthProviders } : {}),
     ...(passkeysEnabled ? { passkeysEnabled } : {}),
     ...(message ? { message } : {}),
@@ -145,6 +146,7 @@ export default function LoginRoute() {
         <AuthForm
           error={loaderData.error}
           initialEmail={loaderData.prefillEmail}
+          linkSent={loaderData.linkSent}
           message={loaderData.message}
           mode="login"
           oauthProviders={loaderData.oauthProviders}

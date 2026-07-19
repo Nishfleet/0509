@@ -298,8 +298,8 @@ describe("dashboard route agent memory", () => {
       await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Market Desk Brief");
-    expect(markup).toContain("Build your Market Desk");
+    expect(markup).toContain("Brief");
+    expect(markup).toContain("Build your brief");
     expect(markup).toContain("Add competitors");
     expect(markup).toContain('href="/app/onboard?resume=1"');
     expect(markup).not.toContain("Account context saved");
@@ -504,7 +504,7 @@ describe("dashboard route agent memory", () => {
     );
   });
 
-  it("renders the queued Market Desk Brief when an active competitor has no scan yet", async () => {
+  it("renders the queued Brief when an active competitor has no scan yet", async () => {
     mockDashboardLoaderDependencies({
       watchlists: [
         {
@@ -530,7 +530,7 @@ describe("dashboard route agent memory", () => {
       await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Market Desk Brief");
+    expect(markup).toContain("Brief");
     expect(markup).toContain("Activation scan is queued");
     expect(markup).toContain("Boat Lifestyle");
     expect(markup).toContain("Open watchlists");

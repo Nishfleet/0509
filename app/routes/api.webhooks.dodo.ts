@@ -642,6 +642,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
           refundedAt: refund.refundedAt,
           userId: refundedUserId,
           refundType: refund.refundType,
+          refundAmount: refund.refundAmount ?? null,
+          paymentAmount: refund.paymentAmount ?? null,
         },
         getPlanLimit("free", "watchlists"),
         {
@@ -652,11 +654,19 @@ export async function action({ context, request }: ActionFunctionArgs) {
             paymentId: refund.paymentId,
             refundId: refund.refundId,
             refundAmount: refund.refundAmount ?? null,
+            paymentAmount: refund.paymentAmount ?? null,
             refundCurrency: refund.refundCurrency ?? null,
             refundReason: refund.refundReason ?? null,
             refundType: refund.refundType,
             creditMutationPolicy:
-              refund.refundType === "partial" ? "audit_only_v2" : "full_revoke_v1",
+              refund.refundType === "partial" &&
+              refund.refundAmount != null &&
+              refund.paymentAmount != null &&
+              refund.paymentAmount > 0
+                ? "prorated_topup_v1"
+                : refund.refundType === "partial"
+                  ? "audit_only_v2"
+                  : "full_revoke_v1",
             refundReconciliationStatus:
               refund.refundType === "partial" ? "pending" : "not_required",
           },

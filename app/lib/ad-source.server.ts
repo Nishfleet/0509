@@ -6,10 +6,19 @@ import {
   upsertDiscoveryProviderState,
 } from "~/lib/data.server";
 import { hasBrowserRunQuickActions } from "~/lib/browser-run.server";
-import { buildDiscoveryCacheKey, resolveDiscoveryCacheTtlMs } from "~/lib/discovery-cache.server";
+import {
+  buildDiscoveryCacheKey,
+  isDiscoveryCacheRouteCompatible,
+  isDiscoveryCacheWithinMaxAge,
+  resolveDiscoveryCacheTtlMs,
+} from "~/lib/discovery-cache.server";
 import { resolveE2EFixtureProviderFromEnv } from "~/lib/e2e-provider.server";
 import type { AppEnv, BrowserBinding } from "~/lib/env.server";
-import { searchMetaLibraryByBrowser, CommercialDiscoveryError } from "~/lib/meta-library-browser.server";
+import {
+  searchMetaLibraryByBrowser,
+  CommercialDiscoveryError,
+  getInteractiveMetaApiExtraPages,
+} from "~/lib/meta-library-browser.server";
 import { demoSearch, MetaApiError, filterAdsBySearchFilters, searchAds as searchMetaApiAds } from "~/lib/meta-api.server";
 import { fingerprintSavedQuery, hashString } from "~/lib/normalize";
 import type {
@@ -26,8 +35,65 @@ export { CommercialDiscoveryError } from "~/lib/meta-library-browser.server";
 export interface SearchAdsViaSourceOptions {
   purpose?: DiscoveryRouteContext;
   forceLive?: boolean;
+  /**
+   * When forceLive is set, still serve a shared discovery_cache_entry whose
+   * fetched_at is within this window (cross-workspace scheduled-scan reuse).
+   * Interactive search should leave this unset.
+   */
+  acceptCacheYoungerThanMs?: number;
   customerMetaAdLibraryToken?: string | null;
   cacheKeyOverride?: string | null;
+}
+
+/**
+ * Meta API interactive public search: follow the real after-cursor for a bounded
+ * number of extra pages on the first request. Cursor-based "Load more" stays
+ * single-page. Watchlist scans never set interactive=true.
+ */
+async function searchMetaApiAdsWithInteractiveDepth(
+  env: AppEnv,
+  query: NormalizedSavedQuery,
+  cursor: string | null | undefined,
+  options: { allowDemoFallback?: boolean; interactive?: boolean },
+): Promise<SearchResponse> {
+  const first = await searchMetaApiAds(env, query, cursor, {
+    allowDemoFallback: options.allowDemoFallback,
+  });
+
+  if (!options.interactive || cursor) {
+    return first;
+  }
+
+  const ads = [...first.ads];
+  const seen = new Set(ads.map((ad) => ad.metaAdId));
+  let nextCursor = first.nextCursor;
+  const extraPages = getInteractiveMetaApiExtraPages();
+
+  for (let page = 0; page < extraPages && nextCursor; page += 1) {
+    try {
+      const more = await searchMetaApiAds(env, query, nextCursor, {
+        allowDemoFallback: options.allowDemoFallback,
+      });
+      for (const ad of more.ads) {
+        if (seen.has(ad.metaAdId)) {
+          continue;
+        }
+        seen.add(ad.metaAdId);
+        ads.push(ad);
+      }
+      nextCursor = more.nextCursor;
+    } catch {
+      // MINOR: a page-2/3 failure must not discard page 1 results already
+      // collected for the interactive public search.
+      break;
+    }
+  }
+
+  return {
+    ...first,
+    ads,
+    nextCursor,
+  };
 }
 
 const PUBLIC_SEARCH_PROVIDER_COOLDOWN_MS = 2 * 60 * 1000;
@@ -364,6 +430,12 @@ export async function searchAdsViaSourceResolver(
   });
   const routeContext = options.purpose ?? "public_search";
   const forceLive = options.forceLive === true && provider !== "demo";
+  const acceptCacheYoungerThanMs =
+    typeof options.acceptCacheYoungerThanMs === "number" &&
+    Number.isFinite(options.acceptCacheYoungerThanMs) &&
+    options.acceptCacheYoungerThanMs > 0
+      ? options.acceptCacheYoungerThanMs
+      : null;
   const fixtureProvider = resolveE2EFixtureProviderFromEnv(effectiveEnv);
   const providerState =
     !fixtureProvider &&
@@ -421,9 +493,30 @@ export async function searchAdsViaSourceResolver(
 
   const cached = effectiveEnv.DB ? await getDiscoveryCacheEntry(effectiveEnv, cacheKey) : null;
   const usableCached = isUsableDiscoveryCache(provider, cached) ? cached : null;
-  if (!forceLive && usableCached && new Date(usableCached.expiresAt).getTime() > Date.now()) {
+  // FIX-1: never mix interactive (deep) public_search cache with scheduled
+  // (shallow) scan/warmup cache — same key would otherwise fabricate ad_new /
+  // inactive flips, and shallow hits would defeat interactive depth.
+  const routeCompatibleCached =
+    usableCached && isDiscoveryCacheRouteCompatible(routeContext, usableCached.routeContext)
+      ? usableCached
+      : null;
+  const unexpiredCache =
+    routeCompatibleCached && new Date(routeCompatibleCached.expiresAt).getTime() > Date.now()
+      ? routeCompatibleCached
+      : null;
+  // forceLive path (WP-36): shared scan/warmup cache younger than the caller's
+  // cadence window — still a healthy hit so N workspaces pay one scrape.
+  const forceLiveSharedHit =
+    forceLive &&
+    acceptCacheYoungerThanMs != null &&
+    routeCompatibleCached &&
+    isDiscoveryCacheWithinMaxAge(routeCompatibleCached.fetchedAt, acceptCacheYoungerThanMs)
+      ? routeCompatibleCached
+      : null;
+  const freshCacheHit = !forceLive ? unexpiredCache : forceLiveSharedHit;
+  if (freshCacheHit) {
     return {
-      ...usableCached.payload,
+      ...freshCacheHit.payload,
       source: provider,
       provider,
       cacheStatus: "hit",
@@ -595,9 +688,14 @@ export async function searchAdsViaSourceResolver(
       const startedAt = Date.now();
       const liveResultRaw =
         provider === "meta_library_browser"
-          ? await searchMetaLibraryByBrowser(effectiveEnv, query)
+          ? await searchMetaLibraryByBrowser(effectiveEnv, query, {
+              // Deep scroll only for interactive public search. Watchlist and
+              // scheduled warmup keep the shallow default so DEFAULT_PAGE_BUDGET
+              // remains the scan-cost guard.
+              mode: routeContext === "public_search" ? "interactive" : "shallow",
+            })
           : normalizeSearchResponse(
-              await searchMetaApiAds(
+              await searchMetaApiAdsWithInteractiveDepth(
                 {
                   ...effectiveEnv,
                   META_AD_LIBRARY_TOKEN: metaApiToken ?? effectiveEnv.META_AD_LIBRARY_TOKEN,
@@ -606,6 +704,7 @@ export async function searchAdsViaSourceResolver(
                 cursor,
                 {
                   allowDemoFallback: false,
+                  interactive: routeContext === "public_search" && !cursor,
                 },
               ),
               provider,

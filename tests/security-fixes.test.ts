@@ -90,7 +90,7 @@ describe("auth open-redirect protection", () => {
       params: {},
     } as never);
 
-    expect(result).toEqual({ redirectTo: "/app/onboard", prefillEmail: "" });
+    expect(result).toEqual({ redirectTo: "/app/onboard", prefillEmail: "", linkSent: false });
   });
 });
 

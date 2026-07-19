@@ -395,7 +395,22 @@ export async function addAdToCollection(
     throw new Error("Collection not found.");
   }
 
-  await upsertAd(env, ad);
+  // WP-10: on explicit save only — copy the creative into R2 so board
+  // thumbnails outlive expiring fbcdn signatures. Failures keep the original URL.
+  let adToStore: AdRecord = ad;
+  try {
+    const { persistCreativeThumbnailForSavedAd } = await import(
+      "~/lib/creative-thumbnail.server"
+    );
+    const durableUrl = await persistCreativeThumbnailForSavedAd(env, ad);
+    if (durableUrl && durableUrl !== ad.creativeImageUrl) {
+      adToStore = { ...ad, creativeImageUrl: durableUrl };
+    }
+  } catch {
+    adToStore = ad;
+  }
+
+  await upsertAd(env, adToStore);
 
   const itemId = createId();
   const timestamp = nowIso();
@@ -419,9 +434,9 @@ export async function addAdToCollection(
     `,
     itemId,
     collectionId,
-    ad.metaAdId,
+    adToStore.metaAdId,
     note?.trim() || null,
-    jsonValue(ad),
+    jsonValue(adToStore),
     timestamp,
     timestamp,
   );
@@ -430,7 +445,7 @@ export async function addAdToCollection(
     env,
     "SELECT id FROM collection_item WHERE collection_id = ? AND ad_id = ?",
     collectionId,
-    ad.metaAdId,
+    adToStore.metaAdId,
   );
 
   if (row) {

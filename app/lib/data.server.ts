@@ -140,6 +140,7 @@ export {
 
 export {
   legacyWorkspaceDeliveryDefaults,
+  ensureNewWorkspaceDeliveryDefaults,
   migrateAutoProvisionedEmailTargets,
   listRetryableInstantAttempts,
   listStaleBillingLifecycleEmailAttempts,

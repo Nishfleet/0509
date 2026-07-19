@@ -7,6 +7,7 @@
 
 export {
   legacyWorkspaceDeliveryDefaults,
+  ensureNewWorkspaceDeliveryDefaults,
   migrateAutoProvisionedEmailTargets,
   getWorkspaceDeliveryConfig,
   upsertWorkspaceDeliveryConfig,

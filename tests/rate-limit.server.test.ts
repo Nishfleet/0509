@@ -223,7 +223,8 @@ describe("enforceAuthenticatedSearchRateLimit", () => {
   it("blocks a signed-in account after the limit even when it rotates IPs", async () => {
     const env = { DB: createFakeD1() } as unknown as AppEnv;
 
-    // 60 searches from 60 different IPs: same account, same bucket.
+    // 60 searches from 60 different IPs: same account, same 10-min burst bucket.
+    // Use agency so the daily plan budget (1000) does not trip first.
     for (let index = 0; index < 60; index += 1) {
       const request = new Request("https://0509.io/search?query=nykaa", {
         headers: {
@@ -232,7 +233,7 @@ describe("enforceAuthenticatedSearchRateLimit", () => {
         },
       });
       await expect(
-        enforceAuthenticatedSearchRateLimit(request, env, "user-1"),
+        enforceAuthenticatedSearchRateLimit(request, env, "user-1", undefined, "agency"),
       ).resolves.toBeNull();
     }
 
@@ -242,6 +243,8 @@ describe("enforceAuthenticatedSearchRateLimit", () => {
       }),
       env,
       "user-1",
+      undefined,
+      "agency",
     );
     expect(blocked?.status).toBe(429);
 

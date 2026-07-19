@@ -80,6 +80,16 @@ export async function completeUserOnboarding(env: AppEnv, userId: string) {
     `,
     userId,
   );
+  // FIX-6: new workspaces get an explicit instant-alert preference; existing
+  // rows are never overwritten.
+  try {
+    const { ensureNewWorkspaceDeliveryDefaults } = await import(
+      "~/lib/data/delivery-records-workspace.server"
+    );
+    await ensureNewWorkspaceDeliveryDefaults(env, userId, { hasEmail: true });
+  } catch {
+    // Onboarding success must not depend on delivery config write.
+  }
 }
 
 export async function listSavedQueries(env: AppEnv, userId: string) {

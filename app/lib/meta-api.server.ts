@@ -1,5 +1,11 @@
 import { demoAds } from "~/lib/demo-data";
-import { deriveHook, deriveOffer, inferDestinationType, inferLanguageLabel, withStructuredAnalysis } from "~/lib/analysis.server";
+import {
+  composeResearchSummary,
+  inferDestinationType,
+  inferLanguageLabel,
+  resolveHookAndOffer,
+  withStructuredAnalysis,
+} from "~/lib/analysis.server";
 import { countryNameFromIso, isoFromCountryName } from "~/lib/countries";
 import { readResponseJsonWithinLimit } from "~/lib/bounded-response.server";
 import type { AppEnv } from "~/lib/env.server";
@@ -204,6 +210,11 @@ function parseMetaAd(raw: MetaRawAd): AdRecord {
   const format = detectCreativeType(raw, bodies, titles);
   const landingPageUrl = extractDestinationUrl(raw.ad_snapshot_url);
   const cta = captions[0] ?? "Learn more";
+  const { hook, offer } = resolveHookAndOffer({ body, previewHeadline, cta });
+  const firstSeenAt = raw.ad_delivery_start_time ?? null;
+  const platforms = (raw.publisher_platforms ?? []).map(displayPlatform);
+  const countries = (raw.ad_reached_countries ?? []).map(countryNameFromCode);
+  const active = raw.ad_active_status === "ACTIVE";
 
   return {
     metaAdId: raw.id,
@@ -212,20 +223,29 @@ function parseMetaAd(raw: MetaRawAd): AdRecord {
     bodySecondary: bodies[1],
     previewHeadline,
     previewSubhead,
-    hook: deriveHook(body, previewHeadline),
-    offer: deriveOffer(body, cta),
+    hook,
+    offer,
     cta,
     format,
     languageLabel: inferLanguageLabel(`${previewHeadline} ${body}`),
     destinationType: inferDestinationType(landingPageUrl),
     landingPageUrl,
     adSnapshotUrl: raw.ad_snapshot_url ?? null,
-    countries: (raw.ad_reached_countries ?? []).map(countryNameFromCode),
-    platforms: (raw.publisher_platforms ?? []).map(displayPlatform),
-    firstSeenAt: raw.ad_delivery_start_time ?? null,
+    countries,
+    platforms,
+    firstSeenAt,
     lastSeenAt: raw.ad_delivery_stop_time ?? raw.ad_delivery_start_time ?? null,
-    active: raw.ad_active_status === "ACTIVE",
-    researchSummary: "Pulled from the Meta Ad Library API and normalized into Five to Nine’s analysis schema.",
+    active,
+    researchSummary: composeResearchSummary({
+      active,
+      firstSeenAt,
+      landingPageUrl,
+      offer,
+      format,
+      platforms,
+      countries,
+      source: "meta",
+    }),
     source: "meta",
     tags: [],
     landingPage: null,
@@ -267,7 +287,11 @@ function matchesAd(ad: AdRecord, mode: SearchMode, filters: NormalizedSavedQuery
     ad.source === "demo" ||
     ad.countries.includes(filters.country);
   const platformMatch = filters.platform === "all" || ad.platforms.includes(filters.platform);
-  const creativeMatch = filters.creativeType === "all" || ad.format === filters.creativeType;
+  const creativeMatch =
+    filters.creativeType === "all" ||
+    ad.format === filters.creativeType ||
+    // Soft hint from browser scrape (hasVideo → video) until format detection is complete.
+    ad.creativeFormatHint === filters.creativeType;
   const statusMatch =
     filters.status === "all" ||
     (filters.status === "active" ? ad.active : !ad.active);

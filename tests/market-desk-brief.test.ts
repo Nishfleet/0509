@@ -85,8 +85,8 @@ describe("buildMarketDeskBrief", () => {
 
     expect(brief).toMatchObject({
       state: "empty",
-      kicker: "Market Desk Brief",
-      title: "Build your Market Desk",
+      kicker: "Brief",
+      title: "Build your brief",
       action: {
         href: "/app/onboard?resume=1",
         label: "Add competitors",
@@ -194,7 +194,7 @@ describe("buildMarketDeskBrief", () => {
     }));
 
     expect(brief.metrics).toContainEqual({
-      label: "Digests sent",
+      label: "Briefs sent",
       value: 1,
       detail: "Email trail active",
     });

@@ -19,12 +19,16 @@ describe("pricingPlans", () => {
   it("keeps visible fallback pricing neutral until live prices return", () => {
     const [scout, starter, agency] = pricingPlans();
 
-    expect(scout.monthlyLabel).toBe("Monthly price loading");
-    expect(scout.yearlyLabel).toBe("Annual price loading");
-    expect(starter.monthlyLabel).toBe("Monthly price loading");
-    expect(starter.yearlyLabel).toBe("Annual price loading");
-    expect(agency.monthlyLabel).toBe("Monthly price loading");
-    expect(agency.yearlyLabel).toBe("Annual price loading");
+    expect(scout.monthlyLabel).toBe("Localized at checkout");
+    expect(scout.yearlyLabel).toBe("Billed annually — 4 months free");
+    expect(starter.monthlyLabel).toBe("Localized at checkout");
+    expect(starter.yearlyLabel).toBe("Billed annually — 4 months free");
+    expect(agency.monthlyLabel).toBe("Localized at checkout");
+    expect(agency.yearlyLabel).toBe("Billed annually — 4 months free");
+    for (const plan of [scout, starter, agency]) {
+      expect(plan.monthlyLabel.toLowerCase()).not.toContain("price loading");
+      expect(plan.yearlyLabel.toLowerCase()).not.toContain("price loading");
+    }
   });
 
   it("keeps plan caps generous but finite", () => {
@@ -48,8 +52,12 @@ describe("pricingPlans", () => {
     expect(starter.features).toContain("250 checks/month");
     expect(agency.features).toContain("75 active watchlists");
     expect(agency.features).toContain("250 Collections");
-    expect(agency.features).toContain("3-hour scans");
-    expect(agency.detail).toContain("3-hour competitor monitoring");
+    expect(agency.features).toContain(
+      "Top 25 competitors every 3 hours; rest every 6 hours",
+    );
+    expect(agency.detail).toContain(
+      "75 competitors — top 25 checked every 3 hours, the rest every 6 hours",
+    );
     expect(agency.features).not.toContain("Slack");
     expect(agency.features).toContain("2,500 checks/month");
     expect(agency.features).toContain("Team workspace");
@@ -65,17 +73,17 @@ describe("pricingPlans", () => {
     expect(usageBundles()).toEqual([
       expect.objectContaining({
         slug: "proof_500",
-        priceLabel: "Pack price loading",
+        priceLabel: "Localized at checkout",
         creditLabel: "500 extra checks",
       }),
       expect.objectContaining({
         slug: "proof_2000",
-        priceLabel: "Pack price loading",
+        priceLabel: "Localized at checkout",
         creditLabel: "2,000 extra checks",
       }),
       expect.objectContaining({
         slug: "proof_7500",
-        priceLabel: "Pack price loading",
+        priceLabel: "Localized at checkout",
         creditLabel: "7,500 extra checks",
       }),
     ]);

@@ -217,6 +217,7 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
       sensitivityMode: "balanced",
       instantEnabled: false,
       digestEnabled: true,
+  digestCadencePreference: "plan_default",
       emailEnabled: true,
       whatsappEnabled: false,
       slackEnabled: false,

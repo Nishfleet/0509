@@ -231,7 +231,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       return {
         ...planFeatureDeniedActionResult("share_links", shareGate.plan),
         intent,
-        message: "Share links are included in the Agency plan.",
+        message: "Share links are included on Starter and Agency plans.",
         upgradePath: "/app/billing?source=collections#plans",
       };
     }

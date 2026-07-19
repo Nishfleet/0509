@@ -109,6 +109,7 @@ function mockDataServer(input: {
       sensitivityMode: "balanced",
       instantEnabled: false,
       digestEnabled: true,
+  digestCadencePreference: "plan_default",
       emailEnabled: false,
       whatsappEnabled: input.channel === "whatsapp",
       slackEnabled: input.channel === "slack",

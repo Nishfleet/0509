@@ -31,8 +31,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     throw redirect(redirectTo);
   }
 
-  const message =
-    url.searchParams.get("sent") === "1"
+  const linkSent = url.searchParams.get("sent") === "1";
+  const message = linkSent
       ? "Check your email. The setup link will verify you and create the account."
       : null;
   const error = signupErrorMessage(url.searchParams.get("error"));
@@ -42,6 +42,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     redirectTo,
     // The marketing hero's email-capture form lands here with ?email=…
     prefillEmail: url.searchParams.get("email")?.trim() || "",
+    linkSent,
     ...(oauthProviders.length > 0 ? { oauthProviders } : {}),
     ...(message ? { message } : {}),
     ...(error ? { error } : {}),
@@ -139,6 +140,7 @@ export default function SignupRoute() {
           error={actionData?.error ?? loaderData.error}
           initialEmail={actionData?.email ?? loaderData.prefillEmail}
           initialName={actionData?.name ?? ""}
+          linkSent={loaderData.linkSent && !actionData?.error}
           message={loaderData.message}
           mode="signup"
           oauthProviders={loaderData.oauthProviders}

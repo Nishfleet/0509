@@ -28,6 +28,7 @@ describe("final launch documentation", () => {
     expect(planCatalog).toContain("prices load from Dodo at runtime");
     expect(planCatalog).toContain("Every 6 hours");
     expect(planCatalog).toContain("Every 3 hours");
+    expect(planCatalog).toContain("Top 25 every 3 hours, rest every 6 hours");
     expect(ownerActions).toContain("owner-only in-app switching");
     expect(ownerActions).toContain("Dodo's documented plan-change preview/change endpoints");
     expect(launchReadiness).toContain("Five to Nine Product Collection");

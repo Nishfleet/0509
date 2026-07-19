@@ -8,7 +8,7 @@ Authoritative entitlements live in `app/lib/plan-entitlements.ts`. Prices are lo
 |------|------------|--------|----------------------------------|------------|---------|-------|
 | Scout | 3 | 10 | 50 | Every 6 hours | Weekly | 1 |
 | Starter | 10 | 25 | 250 | Every 3 hours | Daily + weekly | 1 |
-| Agency | 75 | 250 | 2,500 | Every 3 hours, highest queue priority | Daily + weekly | 3 (owner included) |
+| Agency | 75 | 250 | 2,500 | Top 25 every 3 hours, rest every 6 hours (highest queue priority) | Daily + weekly | 3 (owner included) |
 
 ## Monthly included allowance
 

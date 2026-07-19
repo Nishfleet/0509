@@ -112,16 +112,18 @@ describe("collection plan controls", () => {
     expect(markup).not.toContain("name=\"intent\" value=\"share-collection\"");
   });
 
-  it("keeps Starter export links working while locking Agency-only report and share", async () => {
+  it("keeps Starter export + watermarked share while locking Agency-only report", async () => {
     const markup = await renderCollections("starter");
 
     expect(markup).toContain('href="/export/collection/collection-1"');
     expect(markup).toContain('href="/export/collection/collection-1?format=json"');
     expect(markup).toContain("Upgrade to Agency");
-    expect(markup).toContain("Upgrade to Agency to share");
+    // WP-29: Starter gets watermarked share links; reports stay Agency-only.
+    expect(markup).toContain('name="intent" value="share-collection"');
+    expect(markup).toContain("Create share link");
+    expect(markup).not.toContain("Upgrade to Agency to share");
     expect(markup).not.toContain("Upgrade to Starter for exports");
     expect(markup).not.toContain('href="/app/reports/collection:collection-1"');
-    expect(markup).not.toContain("name=\"intent\" value=\"share-collection\"");
   });
 
   it("keeps all collection controls working for Agency", async () => {
@@ -163,14 +165,15 @@ describe("collection share action", () => {
         plan: deniedPlan,
         message: "This capability is not included in your current plan.",
       }),
+      // WP-29: share_links from Starter up; only Scout stays gated.
       requireWorkspacePlanFeature: vi.fn().mockResolvedValue(
-        plan === "agency"
-          ? { ok: true, plan }
-          : {
+        plan === "scout"
+          ? {
               ok: false,
               plan,
               response: new Response("plan gated", { status: 403 }),
-            },
+            }
+          : { ok: true, plan },
       ),
     }));
 
@@ -190,22 +193,21 @@ describe("collection share action", () => {
     return { createShareLink, result };
   }
 
-  it.each(["scout", "starter"] as const)("returns structured Agency recovery for %s", async (plan) => {
-    const { createShareLink, result } = await runShareAction(plan);
+  it("returns structured recovery when Scout tries to share", async () => {
+    const { createShareLink, result } = await runShareAction("scout");
 
     expect(result).toMatchObject({
       error: "plan_gated",
       feature: "share_links",
       intent: "share-collection",
-      message: "Share links are included in the Agency plan.",
-      plan,
+      plan: "scout",
       upgradePath: "/app/billing?source=collections#plans",
     });
     expect(createShareLink).not.toHaveBeenCalled();
   });
 
-  it("keeps the Agency share action successful", async () => {
-    const { createShareLink, result } = await runShareAction("agency");
+  it.each(["starter", "agency"] as const)("keeps the %s share action successful", async (plan) => {
+    const { createShareLink, result } = await runShareAction(plan);
 
     expect(result).toMatchObject({
       ok: true,

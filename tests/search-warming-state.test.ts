@@ -67,6 +67,7 @@ async function renderWarmingSearch() {
 			useLoaderData: vi.fn().mockReturnValue(warmingLoaderData),
 			useLocation: vi.fn().mockReturnValue({ pathname: "/search", search: originalSearch, hash: "" }),
 			useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
+			useRevalidator: vi.fn().mockReturnValue({ state: "idle", revalidate: vi.fn() }),
 			useRouteLoaderData: vi.fn().mockReturnValue({ session: null }),
 		};
 	});
@@ -93,11 +94,13 @@ describe("public search warming recovery", () => {
 		const markup = await renderWarmingSearch();
 
 		expect(markup).toContain("Search in progress");
-		expect(markup).toContain("Checking this competitor");
+		expect(markup).toContain("Checking the Ad Library now");
+		expect(markup).toContain("Usually under a minute");
 		expect(markup).toContain('role="status"');
 		expect(markup).toContain('aria-live="polite"');
 		expect(markup).not.toContain('aria-busy="true"');
-		expect(markup).toContain("Retry this search");
+		// Auto-revalidate replaces the manual-only recovery path; retry may still
+		// appear for delayed states but warming itself is not "click to continue".
 		expect(markup).not.toContain("Live search is temporarily unavailable");
 		expect(markup).not.toContain("We couldn&#x27;t confirm any ads");
 	});

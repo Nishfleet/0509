@@ -691,17 +691,18 @@ describe("search loader", () => {
       env,
       "user-1",
       undefined,
+      "free",
     );
   });
 
-  it("charges a fresh signed-in search without probing the cache", async () => {
+  it("skips the daily live-search budget when the discovery cache is warm (FIX-10)", async () => {
     const env = { DB: {} };
     const sourceResult = {
       ads: [baseAd],
       nextCursor: null,
       source: "meta_library_browser",
       provider: "meta_library_browser",
-      cacheStatus: "miss",
+      cacheStatus: "hit",
       discoveryStatus: "healthy",
       discoverySummary: null,
       discoveryFailureClass: null,
@@ -738,7 +739,12 @@ describe("search loader", () => {
       searchAdsViaSourceResolver: vi.fn().mockResolvedValue(sourceResult),
     }));
     vi.doMock("~/lib/search-execution.server", () => ({
-      executeSearchWithRelevance: vi.fn(),
+      executeSearchWithRelevance: vi.fn().mockResolvedValue({
+        result: sourceResult,
+        searchScope: "exact",
+        displayDomain: null,
+        relevanceApplied: false,
+      }),
       hasWarmSearchCacheEntry,
     }));
     vi.doMock("~/lib/search-selection.server", () => ({
@@ -754,7 +760,77 @@ describe("search loader", () => {
       request: new Request("http://localhost/search?query=nykaa"),
     } as never);
 
-    expect(hasWarmSearchCacheEntry).not.toHaveBeenCalled();
+    expect(hasWarmSearchCacheEntry).toHaveBeenCalledTimes(1);
+    expect(enforceSearchSelectionRateLimit).not.toHaveBeenCalled();
+    expect(enforceAuthenticatedSearchRateLimit).not.toHaveBeenCalled();
+  });
+
+  it("charges the daily live-search budget on a cold signed-in search", async () => {
+    const env = { DB: {} };
+    const sourceResult = {
+      ads: [baseAd],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+      discoverySummary: null,
+      discoveryFailureClass: null,
+    };
+    const enforceAuthenticatedSearchRateLimit = vi.fn().mockResolvedValue(null);
+    const enforceSearchSelectionRateLimit = vi.fn().mockResolvedValue(null);
+    const hasWarmSearchCacheEntry = vi.fn().mockResolvedValue(false);
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(appSession),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections: vi.fn().mockResolvedValue([]),
+    }));
+    vi.doMock("~/lib/customer-meta.server", () => ({
+      getCustomerMetaAdLibraryToken: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/rate-limit.server", () => ({
+      enforcePublicSearchRateLimit: vi.fn().mockResolvedValue(null),
+      enforceAuthenticatedSearchRateLimit,
+      enforceSearchSelectionRateLimit,
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      searchAdsViaSourceResolver: vi.fn().mockResolvedValue(sourceResult),
+    }));
+    vi.doMock("~/lib/search-execution.server", () => ({
+      executeSearchWithRelevance: vi.fn().mockResolvedValue({
+        result: sourceResult,
+        searchScope: "exact",
+        displayDomain: null,
+        relevanceApplied: false,
+      }),
+      hasWarmSearchCacheEntry,
+    }));
+    vi.doMock("~/lib/search-selection.server", () => ({
+      prepareSearchResultSelection: vi.fn().mockResolvedValue({
+        result: sourceResult,
+        selectedAd: null,
+      }),
+    }));
+
+    const { loader } = await import("~/routes/search");
+    await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search?query=nykaa"),
+    } as never);
+
+    expect(hasWarmSearchCacheEntry).toHaveBeenCalledTimes(1);
     expect(enforceSearchSelectionRateLimit).not.toHaveBeenCalled();
     expect(enforceAuthenticatedSearchRateLimit).toHaveBeenCalledTimes(1);
   });
@@ -1097,7 +1173,7 @@ describe("search loader", () => {
       isDomainSearch: true,
       isBroaderScope: false,
       relevanceApplied: false,
-    })).toBe("1 ads found");
+    })).toBe("1 ad found");
   });
 
   it("allows only tokened canary probes to force fresh live discovery", async () => {

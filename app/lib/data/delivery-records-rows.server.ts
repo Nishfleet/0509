@@ -18,6 +18,7 @@ export interface WorkspaceDeliveryConfigRow {
   sensitivity_mode: SensitivityMode;
   instant_enabled: number;
   digest_enabled: number;
+  digest_cadence_preference?: string | null;
   email_enabled: number;
   whatsapp_enabled: number;
   slack_enabled: number;
@@ -84,6 +85,8 @@ export function toWorkspaceDeliveryConfigRecord(
     sensitivityMode: row.sensitivity_mode,
     instantEnabled: row.instant_enabled === 1,
     digestEnabled: row.digest_enabled === 1,
+    digestCadencePreference:
+      row.digest_cadence_preference === "weekly_only" ? "weekly_only" : "plan_default",
     emailEnabled: row.email_enabled === 1,
     whatsappEnabled: row.whatsapp_enabled === 1,
     slackEnabled: row.slack_enabled === 1,

@@ -575,3 +575,365 @@ function renderEmailVerificationHtml(input: { name: string | null; verifyUrl: st
     </div>
   `;
 }
+
+/**
+ * WP-25: one welcome after the account email is verified (or magic-link signup,
+ * which creates the user already verified). Idempotent via delivery_attempt key
+ * `welcome:<userId>` — never a second welcome, never recurring free mail.
+ */
+export async function sendWelcomeEmail(
+  env: AppEnv,
+  input: {
+    userId: string;
+    email: string;
+    name: string | null;
+  },
+) {
+  const recipient = normalizeDeliveryEmail(input.email);
+  if (!recipient) {
+    return { sent: false as const, reason: "missing_email" as const };
+  }
+
+  const idempotencyKey = `welcome:${input.userId}`;
+  const claim = await claimInstantDeliveryAttempt(env, {
+    userId: input.userId,
+    watchlistId: null,
+    deliveryTargetId: null,
+    lane: "customer",
+    channel: "email",
+    provider: EMAIL_PROVIDER,
+    targetValue: recipient,
+    templateName: "welcome",
+    eventIds: [],
+    payloadSnapshot: { kind: "welcome" },
+    idempotencyKey,
+  });
+  if (!claim.attemptId || !claim.claimUpdatedAt) {
+    return { sent: false as const, reason: "duplicate" as const };
+  }
+
+  const dispatchStartedAt = await markInstantDeliveryDispatchStarted(
+    env,
+    claim.attemptId,
+    claim.claimUpdatedAt,
+  );
+  if (!dispatchStartedAt) {
+    return { sent: false as const, reason: "claim_lost" as const };
+  }
+
+  const base = appBaseUrl(env);
+  const watchlistsUrl = `${base}/app/watchlists`;
+  const greeting = input.name?.trim() ? `Hi ${escapeHtml(input.name.trim())},` : "Hi,";
+  const { buildUnsubscribeUrl } = await import("~/lib/unsubscribe.server");
+  // Welcome is product onboarding (not a secret-token transactional). Prefer a
+  // List-Unsubscribe when a delivery target exists; otherwise send without —
+  // free users can still opt out from account settings once targets exist.
+  let unsubscribeUrl: string | null = null;
+  try {
+    const targets = await listAccountEmailTargetsForWelcome(env, input.userId, recipient);
+    const primary = targets[0];
+    if (primary?.id) {
+      unsubscribeUrl = await buildUnsubscribeUrl(env, {
+        userId: input.userId,
+        targetId: primary.id,
+      });
+    }
+  } catch {
+    unsubscribeUrl = null;
+  }
+
+  const providerResult = await sendCloudflareEmail(env, {
+    to: recipient,
+    subject: "Welcome to Five to Nine — here's what happens next",
+    html: `
+      <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
+        <p style="margin: 0 0 12px;">${greeting}</p>
+        <p style="margin: 0 0 12px;">
+          You're in. Add a competitor and we'll run one activation scan right away —
+          a baseline of the ads they're running so you have a starting point.
+        </p>
+        <p style="margin: 0 0 12px;">
+          When that first scan finishes, we'll email you what we found. Paid plans
+          keep watching and email you when ads, offers, or landing pages change.
+        </p>
+        <p style="margin: 0 0 20px;">
+          <a href="${escapeHtml(watchlistsUrl)}" style="display: inline-block; background-color: #101828; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-weight: 600;">
+            Open your competitors
+          </a>
+        </p>
+        <p style="margin: 0; color: #5b6577; font-size: 13px;">
+          Need a hand? Reply to this email or write ${escapeHtml(SUPPORT_EMAIL)}.
+        </p>
+      </div>
+    `,
+    tag: "welcome",
+    unsubscribeUrl,
+  });
+
+  const finalized = await updateDeliveryAttemptResult(env, claim.attemptId, {
+    provider: providerResult.provider,
+    status: providerResult.status,
+    webhookStatus: providerResult.webhookStatus,
+    providerMessageId: providerResult.providerMessageId,
+    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+    errorMessage: providerResult.errorMessage,
+    sentAt: providerAcceptedAt(providerResult),
+    failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+    payloadSnapshot: { kind: "welcome" },
+    targetValue: recipient,
+    expectedStatus: "pending",
+    expectedWebhookStatus: "provider_unknown",
+    expectedUpdatedAt: dispatchStartedAt,
+  });
+
+  return {
+    sent: Boolean(finalized && providerResult.status === "sent"),
+    reason: providerResult.status === "sent" ? ("sent" as const) : ("failed" as const),
+  };
+}
+
+/**
+ * WP-25: free plan only — one email when the first successful activation scan
+ * records a baseline. Idempotent `activation-result:<userId>:<watchlistId>`.
+ * Paid users already get digests/instant alerts; free has neither.
+ */
+export async function sendFreeActivationResultEmail(
+  env: AppEnv,
+  input: {
+    userId: string;
+    email: string;
+    name: string | null;
+    watchlistId: string;
+    competitorName: string;
+    adsFound: number;
+    topAds: Array<{
+      headline: string | null;
+      body: string | null;
+      creativeImageUrl: string | null;
+    }>;
+  },
+) {
+  const recipient = normalizeDeliveryEmail(input.email);
+  if (!recipient) {
+    return { sent: false as const, reason: "missing_email" as const };
+  }
+
+  const idempotencyKey = `activation-result:${input.userId}:${input.watchlistId}`;
+  const claim = await claimInstantDeliveryAttempt(env, {
+    userId: input.userId,
+    watchlistId: input.watchlistId,
+    deliveryTargetId: null,
+    lane: "customer",
+    channel: "email",
+    provider: EMAIL_PROVIDER,
+    targetValue: recipient,
+    templateName: "activation_result",
+    eventIds: [],
+    payloadSnapshot: {
+      kind: "activation_result",
+      watchlistId: input.watchlistId,
+      adsFound: input.adsFound,
+    },
+    idempotencyKey,
+  });
+  if (!claim.attemptId || !claim.claimUpdatedAt) {
+    return { sent: false as const, reason: "duplicate" as const };
+  }
+
+  const dispatchStartedAt = await markInstantDeliveryDispatchStarted(
+    env,
+    claim.attemptId,
+    claim.claimUpdatedAt,
+  );
+  if (!dispatchStartedAt) {
+    return { sent: false as const, reason: "claim_lost" as const };
+  }
+
+  // Honor unsubscribe: if the only account-email target is opted out, skip send.
+  try {
+    const targets = await listAccountEmailTargetsForWelcome(env, input.userId, recipient);
+    const optedOut =
+      targets.length === 0 &&
+      (await hasOptedOutAccountEmail(env, input.userId, recipient));
+    if (optedOut) {
+      await updateDeliveryAttemptResult(env, claim.attemptId, {
+        provider: EMAIL_PROVIDER,
+        status: "failed",
+        webhookStatus: "failed",
+        errorMessage: "Recipient unsubscribed before activation-result dispatch.",
+        failedAt: new Date().toISOString(),
+        expectedStatus: "pending",
+        expectedWebhookStatus: "pending",
+        expectedUpdatedAt: dispatchStartedAt,
+      });
+      return { sent: false as const, reason: "unsubscribed" as const };
+    }
+  } catch {
+    // Proceed without unsubscribe gate if target lookup is unavailable.
+  }
+
+  const base = appBaseUrl(env);
+  const watchlistUrl = `${base}/app/watchlists?watchlist=${encodeURIComponent(input.watchlistId)}`;
+  const billingUrl = `${base}/app/billing`;
+  const competitor = input.competitorName.trim() || "your competitor";
+  const count = Math.max(0, Math.floor(input.adsFound));
+  const greeting = input.name?.trim() ? `Hi ${escapeHtml(input.name.trim())},` : "Hi,";
+  const subject =
+    count === 0
+      ? `Your activation scan for ${competitor} found no live ads`
+      : `Your activation scan found ${count} ad${count === 1 ? "" : "s"} for ${competitor}`;
+
+  const topAdsHtml = input.topAds
+    .slice(0, 3)
+    .map((ad) => {
+      const title = escapeHtml((ad.headline || ad.body || "Ad creative").slice(0, 160));
+      const body =
+        ad.body && ad.headline
+          ? `<p style="margin: 4px 0 0; color: #5b6577; font-size: 13px;">${escapeHtml(ad.body.slice(0, 220))}</p>`
+          : "";
+      const image =
+        ad.creativeImageUrl && /^https:\/\//i.test(ad.creativeImageUrl)
+          ? `<img src="${escapeHtml(ad.creativeImageUrl)}" alt="" width="240" style="display:block; max-width:240px; border-radius:8px; border:1px solid #e4e7ec; margin: 8px 0 0;">`
+          : "";
+      return `<li style="margin: 0 0 14px;"><strong>${title}</strong>${body}${image}</li>`;
+    })
+    .join("");
+
+  let unsubscribeUrl: string | null = null;
+  try {
+    const { buildUnsubscribeUrl } = await import("~/lib/unsubscribe.server");
+    const targets = await listAccountEmailTargetsForWelcome(env, input.userId, recipient);
+    const primary = targets[0];
+    if (primary?.id) {
+      unsubscribeUrl = await buildUnsubscribeUrl(env, {
+        userId: input.userId,
+        targetId: primary.id,
+      });
+    }
+  } catch {
+    unsubscribeUrl = null;
+  }
+
+  const providerResult = await sendCloudflareEmail(env, {
+    to: recipient,
+    subject,
+    html: `
+      <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
+        <p style="margin: 0 0 12px;">${greeting}</p>
+        <p style="margin: 0 0 12px;">
+          Your activation scan for <strong>${escapeHtml(competitor)}</strong> finished.
+          ${
+            count === 0
+              ? "We did not find live ads in the Ad Library for this competitor right now — that can still be useful signal."
+              : `We recorded <strong>${count}</strong> active ad${count === 1 ? "" : "s"} as your baseline.`
+          }
+        </p>
+        ${
+          topAdsHtml
+            ? `<p style="margin: 0 0 8px; color: #5b6577; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em;">Top ads</p>
+               <ul style="margin: 0 0 16px; padding-left: 18px;">${topAdsHtml}</ul>`
+            : ""
+        }
+        <p style="margin: 0 0 12px;">
+          Free includes this one activation scan. Paid plans keep watching and email you when things change.
+        </p>
+        <p style="margin: 0 0 12px;">
+          <a href="${escapeHtml(watchlistUrl)}" style="display: inline-block; background-color: #101828; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-weight: 600; margin-right: 10px;">
+            View results
+          </a>
+          <a href="${escapeHtml(billingUrl)}" style="color: #2563eb; text-decoration: underline;">
+            See paid plans
+          </a>
+        </p>
+        <p style="margin: 0; color: #5b6577; font-size: 13px;">
+          Questions? ${escapeHtml(SUPPORT_EMAIL)}
+        </p>
+      </div>
+    `,
+    tag: "activation-result",
+    unsubscribeUrl,
+  });
+
+  const finalized = await updateDeliveryAttemptResult(env, claim.attemptId, {
+    provider: providerResult.provider,
+    status: providerResult.status,
+    webhookStatus: providerResult.webhookStatus,
+    providerMessageId: providerResult.providerMessageId,
+    providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+    errorMessage: providerResult.errorMessage,
+    sentAt: providerAcceptedAt(providerResult),
+    failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+    payloadSnapshot: {
+      kind: "activation_result",
+      watchlistId: input.watchlistId,
+      adsFound: input.adsFound,
+    },
+    targetValue: recipient,
+    expectedStatus: "pending",
+    expectedWebhookStatus: "provider_unknown",
+    expectedUpdatedAt: dispatchStartedAt,
+  });
+
+  return {
+    sent: Boolean(finalized && providerResult.status === "sent"),
+    reason: providerResult.status === "sent" ? ("sent" as const) : ("failed" as const),
+  };
+}
+
+async function listAccountEmailTargetsForWelcome(
+  env: AppEnv,
+  userId: string,
+  accountEmail: string,
+) {
+  const listTargets = ("listDeliveryTargets" in deliveryData
+    ? deliveryData.listDeliveryTargets
+    : undefined) as
+    | ((
+        listEnv: AppEnv,
+        listUserId: string,
+        opts: { watchlistId: null; channel: "email"; limit: number },
+      ) => Promise<Array<{ id: string; targetValue: string; isOptedIn: boolean; optedOutAt: string | null; isPaused: boolean }>>)
+    | undefined;
+  if (typeof listTargets !== "function") {
+    return [];
+  }
+
+  const targets = await listTargets(env, userId, {
+    watchlistId: null,
+    channel: "email",
+    limit: 10,
+  });
+  const normalized = normalizeDeliveryEmail(accountEmail);
+  return targets.filter((target) => {
+    if (target.isPaused || !target.isOptedIn || target.optedOutAt) {
+      return false;
+    }
+    return normalizeDeliveryEmail(target.targetValue) === normalized;
+  });
+}
+
+async function hasOptedOutAccountEmail(env: AppEnv, userId: string, accountEmail: string) {
+  const listTargets = ("listDeliveryTargets" in deliveryData
+    ? deliveryData.listDeliveryTargets
+    : undefined) as
+    | ((
+        listEnv: AppEnv,
+        listUserId: string,
+        opts: { watchlistId: null; channel: "email"; limit: number },
+      ) => Promise<Array<{ targetValue: string; isOptedIn: boolean; optedOutAt: string | null }>>)
+    | undefined;
+  if (typeof listTargets !== "function") {
+    return false;
+  }
+  const targets = await listTargets(env, userId, {
+    watchlistId: null,
+    channel: "email",
+    limit: 10,
+  });
+  const normalized = normalizeDeliveryEmail(accountEmail);
+  return targets.some(
+    (target) =>
+      normalizeDeliveryEmail(target.targetValue) === normalized &&
+      (!target.isOptedIn || Boolean(target.optedOutAt)),
+  );
+}
