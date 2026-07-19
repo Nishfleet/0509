@@ -135,6 +135,39 @@ describe("buildMarketDeskBrief", () => {
     expect(brief.summary).toBe("All quiet - 18 ads checked across 1 competitor. Completed checks found no action-worthy movement.");
   });
 
+  it("describes the free quiet state as a weekly check, never a one-time activation", () => {
+    const brief = buildMarketDeskBrief(baseInput({
+      plan: "free",
+      watchlists: [watchlist({ lastScannedAt: "2026-06-20T02:00:00.000Z" })],
+      overnightStats: { runs: 1, watchlistsChecked: 1, adsSeen: 6 },
+    }));
+
+    expect(brief.state).toBe("quiet");
+    expect(brief.title).toBe("Weekly check complete");
+    expect(brief.summary).toBe(
+      "We checked 1 competitor — nothing moved. The next weekly check runs Monday. Paid plans check every 3–6 hours and add instant alerts.",
+    );
+    expect(brief.items[0]).toMatchObject({
+      label: "Watched",
+      title: "Boat Lifestyle",
+      detail: "Checked this week",
+    });
+    expect(JSON.stringify(brief)).not.toContain("activation");
+  });
+
+  it("frames the free Briefs sent metric around the weekly brief, not a paid pitch", () => {
+    const brief = buildMarketDeskBrief(baseInput({
+      plan: "free",
+      watchlists: [watchlist()],
+    }));
+
+    expect(brief.metrics).toContainEqual({
+      label: "Briefs sent",
+      value: 0,
+      detail: "Weekly brief lands Monday",
+    });
+  });
+
   it("prioritizes confirmed competitor changes over quiet run stats", () => {
     const brief = buildMarketDeskBrief(baseInput({
       watchlists: [watchlist()],

@@ -109,7 +109,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
       detail: sentDigests > 0
         ? "Email trail active"
         : isFreePlan
-          ? "Paid plans include recurring monitoring"
+          ? "Weekly brief lands Monday"
           : "No digest sent yet",
     },
   ];
@@ -173,14 +173,14 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
       return {
         state: "quiet",
         kicker: "Brief",
-        title: "Activation check completed",
-        summary: `One-time activation check completed across ${overnightScope}. Paid plans include recurring monitoring for future changes.`,
+        title: "Weekly check complete",
+        summary: `We checked ${overnightScope} — nothing moved. The next weekly check runs Monday. Paid plans check every 3–6 hours and add instant alerts.`,
         action: { href: "/app/watchlists", label: "Review watchlists" },
         metrics,
         items: activeWatchlists.slice(0, 3).map((watchlist) => ({
-          label: "Activated",
+          label: "Watched",
           title: watchlist.targetLabel,
-          detail: watchlist.lastScannedAt ? "Activation scan complete" : "Activation scan pending",
+          detail: watchlist.lastScannedAt ? "Checked this week" : "Waiting for its first weekly check",
         })),
         hasMetrics,
       };

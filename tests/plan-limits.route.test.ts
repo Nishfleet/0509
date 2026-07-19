@@ -533,7 +533,7 @@ describe("pricing CTA rendering", () => {
     expect(markup).toContain("/app/billing?source=dashboard-limit#plans");
   });
 
-  it("credits the free activation check without implying recurring quiet monitoring", async () => {
+  it("reports the free weekly check honestly, with the paid cadence upsell", async () => {
     await mockRouter({
       loaderData: {
         savedQueries: [],
@@ -568,9 +568,10 @@ describe("pricing CTA rendering", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Activation check completed");
-    expect(markup).toContain("One-time activation check completed across 1 competitor");
-    expect(markup).toContain("Paid plans include recurring monitoring");
+    expect(markup).toContain("Weekly check complete");
+    expect(markup).toContain("We checked 1 competitor — nothing moved. The next weekly check runs Monday.");
+    expect(markup).toContain("Paid plans check every 3–6 hours and add instant alerts.");
+    expect(markup).not.toContain("One-time activation check");
     expect(markup).not.toContain("All quiet");
     expect(markup).not.toContain("Next sweep: tomorrow morning");
   });
