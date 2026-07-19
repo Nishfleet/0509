@@ -304,7 +304,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     workspaceReadiness,
     counterMoveFollowUps,
     plan,
-    teamMemberCount: workspaceMembers.length,
+    teamMemberCount: workspaceMembers.filter((member) => {
+      if (member.status === "active" || !member.tokenExpiresAt) {
+        return true;
+      }
+      const expiresAt = Date.parse(member.tokenExpiresAt);
+      return !Number.isFinite(expiresAt) || expiresAt > Date.now();
+    }).length,
     nextScanLabel: (await import("~/lib/schedule-display")).formatNextScanLabel(
       plan,
       new Date(),

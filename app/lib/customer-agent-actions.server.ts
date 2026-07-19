@@ -1036,6 +1036,7 @@ async function prepareAtomicShareAction(
       statement: prepareAtomicShareLinkInsert(db, {
         auditId,
         auditUserId: context.userId,
+        apiKeyId: context.apiKeyId,
         userId: workspaceUserId,
         actionName,
         idempotencyKey: context.idempotencyKey?.trim() ?? "",
@@ -1081,10 +1082,11 @@ async function prepareAtomicShareAction(
     shareUrl: shareUrl(context, token),
   };
   return {
-      statement: prepareAtomicShareLinkInsert(db, {
-        auditId,
-        auditUserId: context.userId,
-        userId: workspaceUserId,
+    statement: prepareAtomicShareLinkInsert(db, {
+      auditId,
+      auditUserId: context.userId,
+      apiKeyId: context.apiKeyId,
+      userId: workspaceUserId,
       actionName,
       idempotencyKey: context.idempotencyKey?.trim() ?? "",
       requestFingerprint,
