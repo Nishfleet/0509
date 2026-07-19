@@ -1,6 +1,12 @@
-import type { SearchAnswer } from "~/lib/search-answer";
+import type { SearchAnswer, SearchStealSummary } from "~/lib/search-answer";
 
-export function SearchAnswerPanel({ answer }: { answer: SearchAnswer }) {
+export function SearchAnswerPanel({
+  answer,
+  steal = null,
+}: {
+  answer: SearchAnswer;
+  steal?: SearchStealSummary | null;
+}) {
   return (
     <section
       aria-label="Search answer"
@@ -22,6 +28,17 @@ export function SearchAnswerPanel({ answer }: { answer: SearchAnswer }) {
           </div>
         ))}
       </dl>
+      {steal && steal.bullets.length > 0 ? (
+        <div className="f9-search-answer-steal">
+          <span>What to steal</span>
+          <ul>
+            {steal.bullets.map((bullet) => (
+              <li key={bullet}>{bullet}</li>
+            ))}
+          </ul>
+          <small>AI summary of the ads above — verify before acting.</small>
+        </div>
+      ) : null}
       {answer.note ? <p className="f9-search-answer-note">{answer.note}</p> : null}
     </section>
   );

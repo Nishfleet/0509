@@ -41,7 +41,7 @@ import {
   formatLandingPageSignalValue,
 } from "~/lib/landing-page-display";
 import { customerDiscoverySummary } from "~/lib/discovery-customer-copy";
-import { buildSearchAnswer } from "~/lib/search-answer";
+import { buildSearchAnswer, type SearchStealSummary } from "~/lib/search-answer";
 import {
   DEFAULT_SEARCH_RESULT_SORT,
   parseSearchResultSort,
@@ -119,6 +119,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       fingerprint: parsed.fingerprint,
       result: buildIdleSearchResult(),
       selectedAd: null,
+      stealSummary: null,
       selectionEnrichmentPending: false,
       collections: [],
       plan: null,
@@ -140,6 +141,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       fingerprint: parsed.fingerprint,
       result: buildIdleSearchResult(),
       selectedAd: null,
+      stealSummary: null,
       selectionEnrichmentPending: false,
       collections: [],
       plan: null,
@@ -242,6 +244,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
           fingerprint: parsed.fingerprint,
           result: buildIdleSearchResult(),
           selectedAd: null,
+          stealSummary: null,
           selectionEnrichmentPending: false,
           collections,
           plan,
@@ -266,6 +269,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       fingerprint: parsed.fingerprint,
       result: buildIdleSearchResult(),
       selectedAd: null,
+      stealSummary: null,
       selectionEnrichmentPending: false,
       collections,
       plan,
@@ -326,12 +330,29 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       },
     );
 
+  // WHAT-TO-STEAL cost design: computed synchronously (small model, ~1-2s) and
+  // only for signed-in users on fresh (cache-miss), non-demo searches with >=3
+  // ads — a fresh live scrape already costs seconds of Browser Rendering.
+  // Cache-hit reloads and ad-selection reruns never call the model: there is no
+  // per-search persistence slot without a new migration, so the client keeps
+  // the last computed summary for the same search key instead.
+  const { buildSearchStealSummary, shouldGenerateStealSummary } = await import(
+    "~/lib/search-steal-summary.server"
+  );
+  const stealSummary = shouldGenerateStealSummary({
+    isSignedIn: Boolean(session),
+    result: hydratedResult,
+  })
+    ? await buildSearchStealSummary(env, hydratedResult.ads)
+    : null;
+
   return {
     mode: parsed.mode,
     filters: parsed.filters,
     fingerprint: parsed.fingerprint,
     result: hydratedResult,
     selectedAd,
+    stealSummary,
     selectionEnrichmentPending: Boolean(selectionEnrichmentPending),
     collections,
     plan,
@@ -573,6 +594,21 @@ export default function SearchRoute() {
   const [accumulated, setAccumulated] = useState<SearchAccumulationState>(() =>
     createSearchAccumulationState(searchKey, data.result, data.selectedAd),
   );
+  // The loader only computes the steal summary on fresh (cache-miss) searches;
+  // keep the last computed one client-side so selecting an ad (a cache-served
+  // loader rerun) does not drop it from the panel.
+  const [retainedSteal, setRetainedSteal] = useState<{
+    searchKey: string;
+    summary: SearchStealSummary;
+  } | null>(null);
+  useEffect(() => {
+    if (data.stealSummary) {
+      setRetainedSteal({ searchKey, summary: data.stealSummary });
+    }
+  }, [data.stealSummary, searchKey]);
+  const stealSummary =
+    data.stealSummary ??
+    (retainedSteal?.searchKey === searchKey ? retainedSteal.summary : null);
   const visibleAccumulated = accumulated.searchKey === searchKey
     ? accumulated
     : createSearchAccumulationState(searchKey, data.result, data.selectedAd);
@@ -1036,7 +1072,9 @@ export default function SearchRoute() {
                 {resultsAnnouncement}
               </div>
 
-              {searchAnswer ? <SearchAnswerPanel answer={searchAnswer} /> : null}
+              {searchAnswer ? (
+                <SearchAnswerPanel answer={searchAnswer} steal={stealSummary} />
+              ) : null}
 
               {!data.session ? (
                 <div className="f9-search-signup-cta">
