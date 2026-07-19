@@ -296,7 +296,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     });
 
     if (!supportCase) {
-      return { ok: false, intent, message: "Could not open the support deletion request. Email support so we can review it." };
+      return { ok: false, intent, message: "We couldn't open the support deletion request. Email support and we'll take care of it." };
     }
 
     const notificationResult = await notifyAccountDeletionOperator(env, {
@@ -741,7 +741,7 @@ async function registerPasskey(input: {
     } else if (error instanceof Error && error.name === "NotAllowedError") {
       input.setError("Passkey setup was cancelled.");
     } else {
-      input.setError("That passkey could not be added. Try again or use email sign-in.");
+      input.setError("We couldn't add that passkey. Try again, or use email sign-in.");
     }
     input.setPending(false);
   }
@@ -771,7 +771,7 @@ async function removePasskey(input: {
     window.setTimeout(() => window.location.reload(), 400);
   } catch {
     input.setPendingId(null);
-    input.setError("That passkey could not be removed. Try again or use email sign-in.");
+    input.setError("We couldn't remove that passkey. Try again, or use email sign-in.");
   }
 }
 

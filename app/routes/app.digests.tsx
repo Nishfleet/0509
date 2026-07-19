@@ -283,7 +283,7 @@ export default function DigestsRoute() {
               })}
               {data.digests.length === 0 ? (
                 <EmptyState
-                  description="Start a competitor watchlist and brief history will show both movement and all-quiet periods."
+                  description="Track a competitor and briefs land here after each monitoring run — movement and all-quiet periods alike."
                   headingLevel="h3"
                   title="Your first brief appears after monitoring runs"
                 />
@@ -296,7 +296,7 @@ export default function DigestsRoute() {
               <>
                 <div className="f9-panel-toolbar">
                   <div>
-                    <span className="f9-app-kicker">Selected digest</span>
+                    <span className="f9-app-kicker">Selected brief</span>
                     <h2>
                       <LocalTime iso={data.selectedDigest.periodStart} mode="date" /> to{" "}
                       <LocalTime iso={data.selectedDigest.periodEnd} mode="date" />
@@ -315,7 +315,7 @@ export default function DigestsRoute() {
                           className="f9-secondary-button"
                           href={`/export/digest/${data.selectedDigest.id}?format=json`}
                         >
-                          JSON export
+                          Export JSON
                         </a>
                       </>
                     ) : (
@@ -353,7 +353,7 @@ export default function DigestsRoute() {
                 <section className="f9-detail-cell">
                   <div>
                     <span className="f9-app-kicker">Filters</span>
-                    <h3 style={{ marginTop: 0 }}>Full digest detail</h3>
+                    <h3 style={{ marginTop: 0 }}>Full brief detail</h3>
                     <p className="f9-muted-copy">
                       {priorityMixLabel(priorityMix)} · {proofMixLabel(proofMix)}
                     </p>
@@ -400,7 +400,7 @@ export default function DigestsRoute() {
                       </select>
                     </label>
                     <SubmitButton className="f9-secondary-button" getAction="/app/digests" pendingLabel="Filtering…">
-                      Apply
+                      Apply filters
                     </SubmitButton>
                   </Form>
                 </section>
@@ -429,7 +429,7 @@ export default function DigestsRoute() {
                         </div>
                         <div>
                           <dt>Captured</dt>
-                          <dd>{readDigestTimestamp(item.metadata) ? <LocalTime iso={readDigestTimestamp(item.metadata)!} /> : "Timestamp unavailable"}</dd>
+                          <dd>{readDigestTimestamp(item.metadata) ? <LocalTime iso={readDigestTimestamp(item.metadata)!} /> : "No timestamp captured"}</dd>
                         </div>
                         {sourceUrl ? (
                           <div>
@@ -449,8 +449,8 @@ export default function DigestsRoute() {
                   <EmptyState
                     description={
                       allItems.length === 0
-                        ? "This digest was generated after monitoring completed without action-worthy competitor movement."
-                        : "Adjust the filters to see more digest items."
+                        ? "We ran every check for this period and found nothing worth acting on."
+                        : "Adjust the filters to see more of this brief."
                     }
                     headingLevel="h3"
                     title={allItems.length === 0 ? "All quiet for this period" : "No changes match these filters"}
@@ -488,8 +488,8 @@ export default function DigestsRoute() {
                   ) : (
                     <p className="f9-muted-copy">
                       {data.selectedDigest.delivery?.status === "sent"
-                        ? "Older delivery record found. Recipient delivery is unknown."
-                        : "No channel-level delivery attempts recorded yet."}
+                        ? "This brief predates per-recipient tracking, so we can't confirm who received it."
+                        : "No sends recorded for this brief yet."}
                     </p>
                   )}
                 </section>
@@ -547,12 +547,12 @@ function formatDigestSidebarStatus(
 ) {
   if (attempts.length === 0) {
     if (legacyStatus === "sent") {
-      return "Older delivery record found";
+      return "Sent — predates per-recipient tracking";
     }
     if (legacyStatus === "failed") {
       return "Delivery failed";
     }
-    return "Waiting for delivery activity";
+    return "No sends recorded yet";
   }
 
   return attempts
@@ -562,7 +562,7 @@ function formatDigestSidebarStatus(
 
 function formatDigestSidebarMovement(items: Array<{ metadata?: Record<string, unknown> }>) {
   if (items.length === 0) {
-    return "All quiet period";
+    return "All quiet";
   }
   const proofMix = summarizeDigestProofMix(
     items.map((item) => ({

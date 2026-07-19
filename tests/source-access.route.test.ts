@@ -203,7 +203,7 @@ describe("source access route loader", () => {
       discoveryStatus: {
         status: "cache_only",
         summary: expect.stringContaining("showing your most recent results"),
-        recovery: "Review tracking access and retry when ready.",
+        recovery: "Check source access, then retry once it's ready.",
       },
       canManageSourceAccess: true,
     });

@@ -739,7 +739,7 @@ async function createWatchlistFromAgent(
   }, limit.limit);
 
   if (result.status === "over_cap") {
-    throw new CustomerAgentActionError("plan_limit_exceeded", "You have reached your competitor tracking limit.", {
+    throw new CustomerAgentActionError("plan_limit_exceeded", "You've reached your competitor tracking limit.", {
       status: 402,
       details: {
         limit: result.limit,
@@ -917,7 +917,7 @@ async function createCollectionFromAgent(
   const name = requireString(input, "name");
   const limit = await checkPlanLimit(env, workspaceUserId, "collections");
   if (!limit.allowed) {
-    throw new CustomerAgentActionError("plan_limit_exceeded", "You have reached your workspace collection limit.", {
+    throw new CustomerAgentActionError("plan_limit_exceeded", "You've reached your workspace collection limit.", {
       status: 402,
       details: {
         limit: limit.limit,
@@ -933,7 +933,7 @@ async function createCollectionFromAgent(
   if (collectionResult.status === "over_cap") {
     throw new CustomerAgentActionError(
       "plan_limit_exceeded",
-      "You have reached your workspace collection limit.",
+      "You've reached your workspace collection limit.",
       {
         status: 402,
         details: {
@@ -2012,7 +2012,7 @@ async function setWatchlistActiveFromAgent(
     if (!limit.allowed) {
       throw new CustomerAgentActionError(
         "plan_limit_exceeded",
-        "You have reached your competitor tracking limit - pause another watchlist first.",
+        "You've reached your competitor tracking limit - pause another watchlist first.",
         {
           status: 402,
           details: {

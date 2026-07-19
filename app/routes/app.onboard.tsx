@@ -380,7 +380,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         message:
           watchlistResult.limit <= 1
             ? "Free includes 1 watchlist. Upgrade for more competitors, scheduled scans, and digests."
-            : "You have reached your competitor monitoring limit.",
+            : "You've reached your competitor monitoring limit.",
         upgradePath: "/app/billing?source=onboarding#plans",
       };
     }

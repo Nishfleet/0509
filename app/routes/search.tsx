@@ -454,7 +454,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       limitMessage: ({ limit }) =>
         limit <= 1
           ? "Free includes 1 watchlist. Upgrade to track more competitors with scheduled scans and digests."
-          : "You have reached your competitor tracking limit.",
+          : "You've reached your competitor tracking limit.",
       upgradePath: "/app/billing?source=search#plans",
     });
     if (!limitGate.ok) {
@@ -482,7 +482,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       });
 
       if (!savedQuery) {
-        return { ok: false, message: "Could not prepare this competitor for tracking." };
+        return { ok: false, message: "We couldn't set up tracking for this competitor. Try again, or email support if it keeps failing." };
       }
 
       watchlistResult = await createWatchlistWithinLimit(env, workspaceUserId, {
@@ -503,7 +503,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         message:
           watchlistResult.limit <= 1
             ? "Free includes 1 watchlist. Upgrade to track more competitors with scheduled scans and digests."
-            : "You have reached your competitor tracking limit.",
+            : "You've reached your competitor tracking limit.",
         upgradePath: "/app/billing?source=search#plans",
       });
     }
@@ -522,7 +522,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }
 
     if (!watchlist) {
-      return { ok: false, message: "Could not create this watchlist." };
+      return { ok: false, message: "We couldn't create this watchlist. Try again in a moment." };
     }
 
     if (!workspace.isMember && !workspace.session.user.onboardedAt) {
@@ -1153,7 +1153,7 @@ export default function SearchRoute() {
                     {isSearchWarming ? (
                       <div aria-live="polite" role="status">
                         <h3>Checking the Ad Library now</h3>
-                        <p>Usually under a minute — we will refresh automatically.</p>
+                        <p>Usually under a minute — we'll refresh automatically.</p>
                       </div>
                     ) : !searchAnswer ? (
                       <>
@@ -1269,10 +1269,10 @@ export default function SearchRoute() {
                     </p>
                     <small>
                       {creativeTextField
-                        ? "Read from the ad creative when available."
+                        ? "Read straight from the ad creative."
                         : selectionEnrichmentUiPending
                           ? "Reading the ad creative now — this updates in a few seconds."
-                          : "Not detected from the ad snapshot yet."}
+                          : "We couldn't read text off this creative."}
                     </small>
                   </div>
 
@@ -1307,7 +1307,7 @@ export default function SearchRoute() {
                         {selectedAd.landingPageUrl}
                       </a>
                     ) : (
-                      <small>No landing page URL detected.</small>
+                      <small>No landing-page link found on this ad.</small>
                     )}
                   </div>
 

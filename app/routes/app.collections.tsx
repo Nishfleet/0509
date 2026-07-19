@@ -91,11 +91,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const description = String(formData.get("description") ?? "").trim();
 
     if (!name) {
-      return { ok: false, intent, message: "Collection name is required." };
+      return { ok: false, intent, message: "Give the collection a name first." };
     }
 
     const limitGate = await requireWorkspacePlanLimit(env, workspaceUserId, "collections", {
-      limitMessage: "You have reached your collection limit.",
+      limitMessage: "You've reached your collection limit.",
     });
     if (!limitGate.ok) {
       return { ...limitGate.result, intent };
@@ -113,7 +113,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         error: "plan_limit_exceeded" as const,
         limit: collectionResult.limit,
         current: collectionResult.current,
-        message: "You have reached your collection limit.",
+        message: "You've reached your collection limit.",
       };
     }
 
@@ -189,7 +189,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           ok: false,
           intent,
           message: sanitizeCustomerFacingMessage(
-            (await error.text()) || "That evidence link could not be saved. Check the URL and date.",
+            (await error.text()) || "We couldn't save that evidence link. Check the URL and date, then try again.",
           ),
         };
       }
@@ -331,7 +331,7 @@ export default function CollectionsRoute() {
               message={
                 collectionLimit === 0
                   ? "Collections start on the Scout plan. Upgrade to save reusable competitor evidence."
-                  : "You have reached your collection limit. Upgrade to save another collection."
+                  : "You've reached your collection limit. Upgrade to save another collection."
               }
               title={collectionLimit === 0 ? "Collections are not included on this plan" : "Collection limit reached"}
             />
@@ -403,7 +403,7 @@ export default function CollectionsRoute() {
                         className="f9-secondary-button"
                         href={`/export/collection/${data.selectedCollection.id}?format=json`}
                       >
-                        JSON export
+                        Export JSON
                       </a>
                     </>
                   ) : (
@@ -592,9 +592,9 @@ export default function CollectionsRoute() {
                           className="f9-secondary-button"
                           intent="update-item"
                           match={{ itemId: item.id }}
-                          pendingLabel="Updating…"
+                          pendingLabel="Saving…"
                         >
-                          Update item
+                          Save note and tags
                         </SubmitButton>
                       </Form>
                       <Form method="post">

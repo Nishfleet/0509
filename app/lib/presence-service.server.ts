@@ -108,13 +108,13 @@ export async function createPresenceEntity(
   const { limits } = await requirePresencePlanAccess(env, userId, input.trackingMode);
   const total = await countTrackedEntities(env, userId);
   if (total >= limits.maxTrackedEntities) {
-    throw new PresenceServiceError("entity_limit", "You have reached your tracked entity limit.");
+    throw new PresenceServiceError("entity_limit", "You've reached your tracked entity limit.");
   }
   const modeCount = await countTrackedEntities(env, userId, { trackingMode: input.trackingMode });
   const modeLimit =
     input.trackingMode === "self" ? limits.maxSelfEntities : limits.maxCompetitorEntities;
   if (modeCount >= modeLimit) {
-    throw new PresenceServiceError("mode_limit", `You have reached your ${input.trackingMode} entity limit.`);
+    throw new PresenceServiceError("mode_limit", `You've reached your ${input.trackingMode} entity limit.`);
   }
 
   return createTrackedEntity(env, {
@@ -156,7 +156,7 @@ export async function addPresenceSourceTarget(
     connectorId === "website" ? limits.maxWebsiteSourcesPerEntity : limits.maxSocialSourcesPerEntity;
   const current = await countSourceTargetsForEntity(env, entityId, connectorId);
   if (current >= perEntityLimit) {
-    throw new PresenceServiceError("source_limit", `You have reached the ${connectorId} source limit for this entity.`);
+    throw new PresenceServiceError("source_limit", `You've reached the ${connectorId} source limit for this entity.`);
   }
 
   const connection =

@@ -167,7 +167,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     } catch {
       sectionWarnings.push({
         section,
-        message: "This dashboard section could not be loaded.",
+        message: "We couldn't load this section.",
       });
       return fallback;
     }
@@ -195,7 +195,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       toCustomerDiscoveryStatus({
         status: "disabled",
         summary:
-          "Source status could not be loaded. Open Source access before relying on fresh results.",
+          "We couldn't load the source status. Open Source access before relying on fresh results.",
         lastCheckedAt: null,
       }),
     ),
@@ -400,7 +400,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           message:
             result.limit <= 1
               ? "Free includes 1 watchlist with a weekly check and weekly email brief. Upgrade for 3–6 hour checks and more competitors."
-              : "You have reached your competitor tracking limit.",
+              : "You've reached your competitor tracking limit.",
         }),
         intent,
       };
@@ -415,7 +415,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       return {
         ok: true,
         intent,
-        message: `Now tracking ${savedQuery.name}. The activation scan is delayed, and recovery is queued. Open Competitors to check its status.`,
+        message: `Now tracking ${savedQuery.name}. The activation scan hit a delay, so we're retrying it automatically — open Competitors to follow along.`,
       };
     }
 
@@ -423,7 +423,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       ok: true,
       intent,
       message: firstScanQueued
-        ? `Now tracking ${savedQuery.name}. The activation scan is queued now, then free checks weekly; paid plans check every 3–6 hours.`
+        ? `Now tracking ${savedQuery.name}. The activation scan starts now, then free checks weekly; paid plans check every 3–6 hours.`
         : `Now tracking ${savedQuery.name}. Open Competitors for the latest activation scan status.`,
     };
   }
@@ -436,7 +436,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       return {
         ok: false,
         intent,
-        message: "Could not mark that follow-up done.",
+        message: "We couldn't mark that follow-up done. Refresh and try again.",
       };
     }
 
@@ -530,10 +530,9 @@ export default function AppDashboardRoute() {
         {data.sectionWarnings?.length ? (
           <article aria-live="polite" className="f9-app-panel" role="status">
             <p className="f9-app-kicker">Partial overview</p>
-            <h2>Some overview sections could not be loaded</h2>
+            <h2>We couldn't load part of this overview</h2>
             <p className="f9-muted-copy">
-              The available sections are current. Refresh to retry the missing
-              sections.
+              Everything shown here is current. Refresh to load the rest.
             </p>
           </article>
         ) : null}
@@ -799,8 +798,8 @@ export default function AppDashboardRoute() {
               <span className="f9-app-kicker">Evidence usage</span>
               <h2>
                 {proofUsage.warningLevel === "exhausted"
-                  ? "Evidence check limit reached."
-                  : "Evidence check usage is above 80%."}
+                  ? "You've used all your evidence checks"
+                  : "You've used over 80% of your evidence checks"}
               </h2>
             </div>
             <p>
