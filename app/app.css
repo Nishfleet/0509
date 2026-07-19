@@ -9641,3 +9641,63 @@ one signal-green accent.
   accent-color: var(--green);
   cursor: pointer;
 }
+
+/* Keyboard navigation on search results (workflow-friction pass). */
+.f9-result-card-wrap.is-key-focus > .f9-result-card {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px var(--green-wash);
+}
+
+.f9-keyboard-hints {
+  position: relative;
+}
+
+.f9-keyboard-hints-trigger {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--ink-soft);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.f9-keyboard-hints-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  gap: 8px;
+  min-width: 240px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: 0 14px 36px rgba(6, 22, 41, 0.16);
+}
+
+.f9-keyboard-hints-popover > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.f9-keyboard-hints-popover dt {
+  font-family: var(--ld-mono);
+  font-size: 0.75rem;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.f9-keyboard-hints-popover dd {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  text-align: right;
+}
