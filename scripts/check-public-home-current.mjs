@@ -35,6 +35,8 @@ const staleSignals = [
   "Loading local monthly price",
   "Loading local annual price",
   "Loading local pack price",
+  "Monthly price loading",
+  "Annual price loading",
   "market lanes watched",
   "source states separated",
   "source trail per move",
@@ -46,7 +48,7 @@ const requiredSourceSignals = [
   "Stop finding out after the sales call.",
   "Recommended launch plan",
   "Start with Starter",
-  "Monthly price loading",
+  "Localized at checkout",
   "DODO_0509_ADAPTIVE_CURRENCY",
 ];
 const requiredBuildSignals = [
