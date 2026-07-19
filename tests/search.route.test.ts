@@ -145,6 +145,42 @@ describe("search loader", () => {
     });
   });
 
+  it("fails open to starter (never free) when the plan lookup blips for a signed-in user", async () => {
+    const env = { DB: {} };
+    const getUserPlan = vi.fn().mockRejectedValue(new Error("D1 blip"));
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(appSession),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections: vi.fn().mockResolvedValue([]),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const result = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search"),
+    } as never);
+
+    expect(getUserPlan).toHaveBeenCalled();
+    // A paying customer must not see free limits or free-plan upsell UI on a
+    // transient lookup failure — rate limiting uses starter sizing instead.
+    expect(result).toMatchObject({ plan: "starter" });
+  });
+
   it("does not call live discovery before a signed-in user submits a query", async () => {
     const env = { DB: {} };
     const getOptionalSession = vi.fn().mockResolvedValue(appSession);
@@ -691,7 +727,9 @@ describe("search loader", () => {
       env,
       "user-1",
       undefined,
-      "free",
+      // Plan lookup fails open to "starter" here: this harness env has no real
+      // D1, and a transient lookup blip must never impose free limits.
+      "starter",
     );
   });
 

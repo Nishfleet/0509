@@ -461,12 +461,16 @@ async function cleanupRateLimitEvents(env: AppEnv) {
   const longWindowCutoff = new Date(
     Date.now() - LONG_WINDOW_CLEANUP_SECONDS * 1000,
   ).toISOString();
+  // Derive the scope list from LONG_WINDOW_SCOPES (parameterized) so adding a
+  // long-window scope cannot drift from the cleanup SQL.
+  const longWindowScopes = [...LONG_WINDOW_SCOPES];
+  const scopePlaceholders = longWindowScopes.map(() => "?").join(", ");
   await env.DB.prepare(
     `DELETE FROM rate_limit_events
-      WHERE (scope NOT IN ('share-pdf-daily', 'account-search-daily') AND created_at < ?)
-         OR (scope IN ('share-pdf-daily', 'account-search-daily') AND created_at < ?)`,
+      WHERE (scope NOT IN (${scopePlaceholders}) AND created_at < ?)
+         OR (scope IN (${scopePlaceholders}) AND created_at < ?)`,
   )
-    .bind(cutoff, longWindowCutoff)
+    .bind(...longWindowScopes, cutoff, ...longWindowScopes, longWindowCutoff)
     .run();
 }
 
