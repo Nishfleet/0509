@@ -19,6 +19,7 @@ import { WatchlistTrends } from "~/components/watchlist-trends";
 import { CopyButton } from "~/components/copy-button";
 import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
+import { ProofGlossary } from "~/components/proof-glossary";
 import { SubmitButton } from "~/components/submit-button";
 import type { AppEnv } from "~/lib/env.server";
 import {
@@ -1177,6 +1178,8 @@ export default function WatchlistsRoute() {
                   ) : null}
                 </section>
                 </div>
+
+                <ProofGlossary />
 
                 <section>
                   <p className="f9-app-kicker">See what changed</p>

@@ -600,7 +600,6 @@ export default function AppOnboardRoute() {
   return (
     <DashboardPage>
       <main className="f9-onboard-page">
-      <div className="f9-auth-gradient" aria-hidden="true" />
       <section className="f9-container f9-onboard-layout">
         <article className="f9-onboard-card">
           <DashboardPageHeader
@@ -750,7 +749,7 @@ export default function AppOnboardRoute() {
               </div>
 
               <p className="f9-muted-copy">
-                First scans start right after setup, then the dashboard turns them into a Market Desk Brief.
+                First scans start right after setup, then the dashboard turns them into your first brief.
               </p>
                 </Form>
               </details>
@@ -785,7 +784,7 @@ export default function AppOnboardRoute() {
                 {data.resumeSetup ? "Back to dashboard" : "Skip for now"}
               </SubmitButton>
             </Form>
-            <Link className="f9-text-link" to={searchFirstPath}>
+            <Link className="f9-secondary-button" to={searchFirstPath}>
               Search first instead
             </Link>
           </div>

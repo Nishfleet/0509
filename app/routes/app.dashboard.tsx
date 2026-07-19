@@ -606,7 +606,7 @@ export default function AppDashboardRoute() {
           {marketDeskBrief.items.length > 0 ? (
             <div
               className="f9-brief-snapshot"
-              aria-label="Market Desk Brief details"
+              aria-label="Brief details"
             >
               {marketDeskBrief.items.map((item) => (
                 <article key={`${item.label}:${item.title}`}>
@@ -1267,25 +1267,6 @@ function CheckoutReturnBanner(props: { plan: string }) {
       </div>
     </article>
   );
-}
-
-function formatTrackingStatusSummary(summary: string | null | undefined) {
-  if (!summary) {
-    return "Tracking status will appear after the first check.";
-  }
-
-  return summary
-    .replace(/Live commercial discovery/gi, "Fresh ad checks")
-    .replace(/commercial discovery/gi, "competitor ad checks")
-    .replace(/Commercial discovery/gi, "Competitor ad checks")
-    .replace(/Browser Run/gi, "visual checks")
-    .replace(/Official Meta API/gi, "alternate Meta ad access")
-    .replace(/API fallback/gi, "alternate Meta ad results")
-    .replace(/workspace Meta access/gi, "alternate Meta ad access")
-    .replace(/fresh discovery/gi, "fresh checks")
-    .replace(/cached live results/gi, "recent results")
-    .replace(/cached results/gi, "recent results")
-    .replace(/demo mode/gi, "sample mode");
 }
 
 // Viewer-local greeting: SSR renders a neutral fallback, the browser swaps in

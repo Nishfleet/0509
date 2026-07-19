@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 
+import { IconEmpty } from "~/components/icons";
+
 export interface EmptyStateProps {
   title: string;
   description?: string;
@@ -49,6 +51,7 @@ export function EmptyState({
 
   return (
     <div className="f9-dash-state f9-dash-state-empty" role="status">
+			<IconEmpty className="f9-empty-state-icon" />
 			<Heading>{title}</Heading>
       {description ? <p>{description}</p> : null}
       {action ? (

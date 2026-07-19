@@ -95,7 +95,7 @@ describe("app rebuild", () => {
     expect(routeConfig).toContain('route("clients", "routes/app.clients.tsx"');
     expect(dashboardRoute).toContain("getWorkspaceReadiness");
     expect(dashboardRoute).toContain("buildMarketDeskBrief");
-    expect(dashboardRoute).toContain("Market Desk Brief");
+    expect(dashboardRoute).toContain("Brief details");
     expect(dashboardRoute).toContain("Competitor website");
     expect(dashboardRoute).toContain("f9-dashboard-search");
     expect(dashboardRoute).toContain("f9-dashboard-metrics");

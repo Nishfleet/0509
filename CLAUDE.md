@@ -1,5 +1,15 @@
 # 0509.io — Five to Nine
 
+## Agent operating model (Nish, 2026-07-19)
+
+Three roles, kept separate — this split shipped the 2026-07-19 product-readiness stack and Nish endorsed it as the standing model:
+
+- **Builders** (fast models: Grok, Cursor Composer): implement from meticulous work-package specs (`docs/PRODUCT-READINESS-SPEC-*` pattern — anchor strings, acceptance criteria, guardrails). Builders never merge or deploy their own work.
+- **Prod-touchers** (Codex or any TTY session that can pass safe-deploy admin auth, or Nish): merges that trigger deploys, remote D1 migrations, secrets, restore drills, provider mutations. Headless agent sessions are fail-closed by the safe-deploy wrapper — by design; do not route around it.
+- **Reviewer/coordinator** (Claude): audits, spec authoring, independent multi-domain review of every builder stack BEFORE merge (`docs/REVIEW-FIXES-*` pattern), landing-order coordination across agents, live prod verification after deploy.
+
+Every substantial builder stack gets an independent review pass before merge — the 2026-07-19 stack had 3 blockers and 6 customer-facing email bugs caught this way. Deploy-gate e2e (Gate-B journeys, restore-evidence) is Codex-owned; product changes that alter public copy/states require the gate specs to be updated in the same landing sequence.
+
 ## Build
 ```bash
 npm run build

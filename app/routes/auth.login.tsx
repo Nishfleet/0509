@@ -112,7 +112,6 @@ export default function LoginRoute() {
 
   return (
     <main className="f9-auth-page">
-      <div className="f9-auth-gradient" aria-hidden="true" />
       <div className="f9-container f9-auth-layout">
         <section className="f9-auth-story">
           <Link className="f9-brand f9-auth-brand" to="/" aria-label="Five to Nine home">

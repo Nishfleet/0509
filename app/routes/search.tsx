@@ -192,8 +192,12 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       const { getUserPlan } = await import("~/lib/plan.server");
       plan = await getUserPlan(env, workspaceUserId!);
     } catch {
-      // Isolated tests may omit D1; treat as free for honest collection gates.
-      plan = "free";
+      // Fail OPEN on a transient plan-lookup blip (D1 hiccup or isolated test
+      // env without D1): a paying customer must not be degraded to free
+      // limits. "starter" is the most permissive non-agency plan — it is used
+      // for rate-limit sizing only and, unlike "free", renders no free-plan
+      // upsell UI. Real plan gates (saves, watchlists) re-check server-side.
+      plan = "starter";
     }
   }
 
@@ -1732,15 +1736,18 @@ export function formatResultsPanelTitle(
       context.displayDomain &&
       !context.isBroaderScope
     ) {
-      return `${result.ads.length} verified ads linked to ${context.displayDomain}`;
+      const verifiedNoun = result.ads.length === 1 ? "ad" : "ads";
+      return `${result.ads.length} verified ${verifiedNoun} linked to ${context.displayDomain}`;
     }
 
     if (context.isBroaderScope && context.displayDomain) {
       const verifiedCount = Math.max(0, Math.floor(result.verifiedCount ?? 0));
       const relatedCount = Math.max(0, result.ads.length - verifiedCount);
+      const relatedNoun = relatedCount === 1 ? "match" : "matches";
+      const broaderNoun = result.ads.length === 1 ? "match" : "matches";
       return verifiedCount > 0
-        ? `${verifiedCount} verified and ${relatedCount} related matches for ${context.displayDomain}`
-        : `${result.ads.length} broader matches for ${context.displayDomain}`;
+        ? `${verifiedCount} verified and ${relatedCount} related ${relatedNoun} for ${context.displayDomain}`
+        : `${result.ads.length} broader ${broaderNoun} for ${context.displayDomain}`;
     }
 
     return formatAdsFoundLabel(result.ads.length);
