@@ -362,6 +362,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         forceLive,
         customerMetaAdLibraryToken,
         executionContext: context.cloudflare?.ctx,
+        hydratePersisted: Boolean(session),
       })
     : {
         result: await (

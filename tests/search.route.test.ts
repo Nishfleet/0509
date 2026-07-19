@@ -1157,6 +1157,7 @@ describe("search loader", () => {
       expect.objectContaining({
         env,
         scope: "exact",
+        hydratePersisted: false,
         competitorWebsite: expect.objectContaining({ host: "nykaa.com" }),
       }),
     );
