@@ -694,6 +694,67 @@ export async function action({ context, request }: ActionFunctionArgs) {
       : { ok: false, message: "Watchlist not found." };
   }
 
+  if (intent === "bulk-watchlists") {
+    const { setWatchlistActive } = await import("~/lib/data.server");
+    const bulkAction = String(formData.get("bulkAction") ?? "");
+    const watchlistIds = [...new Set(formData.getAll("watchlistIds").map(String))].filter(Boolean);
+
+    if ((bulkAction !== "pause" && bulkAction !== "resume") || watchlistIds.length === 0) {
+      return { ok: false, message: "Select at least one watchlist first." };
+    }
+
+    if (bulkAction === "pause") {
+      let paused = 0;
+      for (const watchlistId of watchlistIds) {
+        if (await setWatchlistActive(env, workspaceUserId, watchlistId, false)) {
+          paused += 1;
+        }
+      }
+
+      return paused > 0
+        ? {
+            ok: true,
+            message: `Paused ${paused} of ${watchlistIds.length} selected. Scans and alerts stop, the history stays, and the plan slots are free.`,
+          }
+        : { ok: false, message: "Watchlist not found." };
+    }
+
+    // Resume re-checks the plan limit before each watchlist — the count of
+    // active watchlists changes with every resume, so a single upfront check
+    // could overshoot the plan cap.
+    const { requireWorkspacePlanLimit } = await import("~/lib/with-workspace.server");
+    let resumed = 0;
+    let hitPlanLimit = false;
+    for (const watchlistId of watchlistIds) {
+      const limitGate = await requireWorkspacePlanLimit(env, workspaceUserId, "watchlists", {
+        limitMessage:
+          "You have reached your competitor tracking limit — pause another watchlist first.",
+      });
+      if (!limitGate.ok) {
+        hitPlanLimit = true;
+        break;
+      }
+      if (await setWatchlistActive(env, workspaceUserId, watchlistId, true)) {
+        resumed += 1;
+      }
+    }
+
+    if (hitPlanLimit) {
+      return {
+        ok: false,
+        error: "plan_limit_exceeded" as const,
+        message: `Resumed ${resumed} of ${watchlistIds.length} selected. You have reached your competitor tracking limit — pause another watchlist first.`,
+      };
+    }
+
+    return resumed > 0
+      ? {
+          ok: true,
+          message: `Resumed ${resumed} of ${watchlistIds.length} selected. They rejoin the next scheduled scan.`,
+        }
+      : { ok: false, message: "Watchlist not found." };
+  }
+
   if (intent === "send-test-email") {
     const { getDeliveryTargetById } = await import("~/lib/data.server");
     const { sendDeliveryTestEmail } = await import("~/lib/delivery.server");
@@ -826,15 +887,50 @@ export default function WatchlistsRoute() {
   // WP-42: pause/resume runs through a fetcher so the row shows its own
   // pending state instead of lighting up the global route progress bar.
   const pauseResumeFetcher = useFetcher<typeof action>();
-  const [latestFeedbackSource, setLatestFeedbackSource] = useState<"route" | "fetcher" | null>(null);
+  // Workflow-friction pass: bulk pause/resume from the tracking desk.
+  const bulkFetcher = useFetcher<typeof action>();
+  const [selectedBulkIds, setSelectedBulkIds] = useState<string[]>([]);
+  const [latestFeedbackSource, setLatestFeedbackSource] = useState<
+    "route" | "fetcher" | "bulk" | null
+  >(null);
   useEffect(() => {
     if (routeActionData) setLatestFeedbackSource("route");
   }, [routeActionData]);
   useEffect(() => {
     if (pauseResumeFetcher.data) setLatestFeedbackSource("fetcher");
   }, [pauseResumeFetcher.data]);
+  useEffect(() => {
+    if (bulkFetcher.data) setLatestFeedbackSource("bulk");
+    if (bulkFetcher.state === "idle" && bulkFetcher.data?.ok) {
+      setSelectedBulkIds([]);
+    }
+  }, [bulkFetcher.data, bulkFetcher.state]);
   const actionData =
-    latestFeedbackSource === "fetcher" ? pauseResumeFetcher.data : routeActionData;
+    latestFeedbackSource === "bulk"
+      ? bulkFetcher.data
+      : latestFeedbackSource === "fetcher"
+        ? pauseResumeFetcher.data
+        : routeActionData;
+  const bulkPending = bulkFetcher.state !== "idle";
+  const toggleBulkSelection = (watchlistId: string) => {
+    setSelectedBulkIds((previous) =>
+      previous.includes(watchlistId)
+        ? previous.filter((id) => id !== watchlistId)
+        : [...previous, watchlistId],
+    );
+  };
+  const submitBulk = (bulkAction: "pause" | "resume") => {
+    if (selectedBulkIds.length === 0 || bulkPending) {
+      return;
+    }
+    const formData = new FormData();
+    formData.set("intent", "bulk-watchlists");
+    formData.set("bulkAction", bulkAction);
+    for (const watchlistId of selectedBulkIds) {
+      formData.append("watchlistIds", watchlistId);
+    }
+    bulkFetcher.submit(formData, { method: "post" });
+  };
   const pauseResumePending = pauseResumeFetcher.state !== "idle";
   const pauseResumePendingIntent = pauseResumePending
     ? pauseResumeFetcher.formData?.get("intent")
@@ -927,6 +1023,40 @@ export default function WatchlistsRoute() {
             Pick a tracked brand to review changes, evidence freshness, and alert delivery.
           </p>
 
+          {data.watchlists.length > 1 ? (
+            <div className="f9-bulk-bar">
+              <span className="f9-muted-copy">
+                {selectedBulkIds.length > 0
+                  ? `${selectedBulkIds.length} selected`
+                  : "Select watchlists for bulk actions"}
+              </span>
+              <div className="f9-inline-actions">
+                <button
+                  aria-busy={bulkPending || undefined}
+                  className="f9-secondary-button"
+                  disabled={selectedBulkIds.length === 0 || bulkPending}
+                  onClick={() => submitBulk("pause")}
+                  type="button"
+                >
+                  {bulkPending && bulkFetcher.formData?.get("bulkAction") === "pause"
+                    ? "Pausing…"
+                    : "Pause selected"}
+                </button>
+                <button
+                  aria-busy={bulkPending || undefined}
+                  className="f9-secondary-button"
+                  disabled={selectedBulkIds.length === 0 || bulkPending}
+                  onClick={() => submitBulk("resume")}
+                  type="button"
+                >
+                  {bulkPending && bulkFetcher.formData?.get("bulkAction") === "resume"
+                    ? "Resuming…"
+                    : "Resume selected"}
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           <div className="f9-work-list is-compact">
             {data.watchlists.map((watchlist) => {
               const isActive =
@@ -943,29 +1073,40 @@ export default function WatchlistsRoute() {
               });
 
               return (
-                <Link
-                  className={`f9-work-row ${isActive ? "is-active" : ""} ${isPending ? "is-pending" : ""}`}
-                  key={watchlist.id}
-                  preventScrollReset
-                  to={`/app/watchlists?watchlist=${watchlist.id}`}
-                >
-                  <div>
-                    <h3>{watchlist.name}</h3>
-                    <p className="f9-muted-copy">
-                      {formatWatchlistTrackingRole(watchlist.trackingRole)} · {watchlist.targetLabel}
-                      {watchlist.isActive ? "" : " · Paused"}
-                    </p>
-                    <p className="f9-muted-copy">
-                      {scanPresentation.timestamp ? (
-                        <>
-                          {scanPresentation.label} <LocalTime iso={scanPresentation.timestamp} />
-                        </>
-                      ) : (
-                        scanPresentation.label
-                      )}
-                    </p>
-                  </div>
-                </Link>
+                <div className="f9-work-row-select" key={watchlist.id}>
+                  {data.watchlists.length > 1 ? (
+                    <input
+                      aria-label={`Select ${watchlist.name} for bulk actions`}
+                      checked={selectedBulkIds.includes(watchlist.id)}
+                      className="f9-bulk-checkbox"
+                      disabled={bulkPending}
+                      onChange={() => toggleBulkSelection(watchlist.id)}
+                      type="checkbox"
+                    />
+                  ) : null}
+                  <Link
+                    className={`f9-work-row ${isActive ? "is-active" : ""} ${isPending ? "is-pending" : ""}`}
+                    preventScrollReset
+                    to={`/app/watchlists?watchlist=${watchlist.id}`}
+                  >
+                    <div>
+                      <h3>{watchlist.name}</h3>
+                      <p className="f9-muted-copy">
+                        {formatWatchlistTrackingRole(watchlist.trackingRole)} · {watchlist.targetLabel}
+                        {watchlist.isActive ? "" : " · Paused"}
+                      </p>
+                      <p className="f9-muted-copy">
+                        {scanPresentation.timestamp ? (
+                          <>
+                            {scanPresentation.label} <LocalTime iso={scanPresentation.timestamp} />
+                          </>
+                        ) : (
+                          scanPresentation.label
+                        )}
+                      </p>
+                    </div>
+                  </Link>
+                </div>
               );
             })}
             {data.watchlists.length === 0 ? (
