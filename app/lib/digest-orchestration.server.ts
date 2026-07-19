@@ -67,6 +67,29 @@ export interface DigestOrchestrationOptions {
   deadlineAt?: number;
 }
 
+export interface DigestDeliveryCycleResult {
+  attempted: number;
+  sent: number;
+  failed: number;
+}
+
+const EMPTY_DIGEST_DELIVERY_CYCLE_RESULT: DigestDeliveryCycleResult = {
+  attempted: 0,
+  sent: 0,
+  failed: 0,
+};
+
+function combineDigestDeliveryCycleResults(
+  left: DigestDeliveryCycleResult,
+  right: DigestDeliveryCycleResult,
+): DigestDeliveryCycleResult {
+  return {
+    attempted: left.attempted + right.attempted,
+    sent: left.sent + right.sent,
+    failed: left.failed + right.failed,
+  };
+}
+
 interface DigestUser {
   id: string;
   email: string;
@@ -83,11 +106,31 @@ interface DigestSourceItem {
   metadata: Record<string, unknown>;
 }
 
+function countAcceptedDigestDelivery(delivery: {
+  attempts: number;
+  details?: Array<{ status?: string }>;
+}) {
+  // Production delivery always returns detail rows. The fallback preserves the
+  // long-standing numeric contract for narrow unit-test doubles only.
+  if (!Array.isArray(delivery.details)) return delivery.attempts > 0 ? 1 : 0;
+  if (delivery.details.some((attempt) => attempt.status !== "sent")) {
+    throw new Error("Digest delivery was not accepted by every selected provider.");
+  }
+  return delivery.details.some((attempt) => attempt.status === "sent") ? 1 : 0;
+}
+
 export async function runDigestDeliveryCycle(
   env: AppEnv,
   options: DigestOrchestrationOptions = {},
 ) {
-  if (!env.DB) return 0;
+  return (await runDigestDeliveryCycleDetailed(env, options)).sent;
+}
+
+export async function runDigestDeliveryCycleDetailed(
+  env: AppEnv,
+  options: DigestOrchestrationOptions = {},
+): Promise<DigestDeliveryCycleResult> {
+  if (!env.DB) return { ...EMPTY_DIGEST_DELIVERY_CYCLE_RESULT };
 
   const cadence = options.cadence ?? "weekly";
   const lookbackDays =
@@ -122,26 +165,33 @@ export async function runDigestDeliveryCycle(
 	});
 
   const handledDigestRunIds = new Set<string>();
-  let digestsSent = await drainDigestScheduleJobs(env, {
+  const scheduled = await drainDigestScheduleJobs(env, {
 		deadlineAt: options.deadlineAt,
 		strategyGenerationDeadlineAt,
 		handledDigestRunIds,
 	});
 
-  digestsSent += await retryFailedDigests(env, {
+  const retried = await retryFailedDigests(env, {
     retryCandidates,
     handledDigestRunIds,
     strategyGenerationDeadlineAt,
 		deadlineAt: options.deadlineAt,
   });
-  return digestsSent;
+  return combineDigestDeliveryCycleResults(scheduled, retried);
 }
 
 export async function resumePendingDigestScheduleJobs(
 	env: AppEnv,
 	options: { deadlineAt?: number } = {},
 ) {
-	if (!env.DB) return 0;
+	return (await resumePendingDigestScheduleJobsDetailed(env, options)).sent;
+}
+
+export async function resumePendingDigestScheduleJobsDetailed(
+	env: AppEnv,
+	options: { deadlineAt?: number } = {},
+): Promise<DigestDeliveryCycleResult> {
+	if (!env.DB) return { ...EMPTY_DIGEST_DELIVERY_CYCLE_RESULT };
 	const handledDigestRunIds = new Set<string>();
 	const strategyGenerationDeadlineAt = createDigestStrategyGenerationDeadline(
 		options.deadlineAt,
@@ -175,7 +225,7 @@ async function drainDigestScheduleJobs(
 		maxAttempts: DIGEST_SCHEDULE_JOB_MAX_ATTEMPTS,
 		limit: DIGEST_SCHEDULE_JOB_SWEEP_LIMIT,
 	});
-	let digestsSent = 0;
+	const result = { ...EMPTY_DIGEST_DELIVERY_CYCLE_RESULT };
 
 	for (const candidate of candidates) {
 		if (input.deadlineAt !== undefined && Date.now() >= input.deadlineAt) break;
@@ -191,9 +241,10 @@ async function drainDigestScheduleJobs(
 			maxAttempts: DIGEST_SCHEDULE_JOB_MAX_ATTEMPTS,
 		});
 		if (!claimed) continue;
+		result.attempted += 1;
 
 		try {
-			digestsSent += await runDigestForUser(env, {
+			result.sent += await runDigestForUser(env, {
 				user: {
 					id: claimed.userId,
 					email: claimed.userEmail,
@@ -214,6 +265,7 @@ async function drainDigestScheduleJobs(
 				throw new Error("Digest schedule job completion ownership was lost.");
 			}
 		} catch (error) {
+			result.failed += 1;
       const exhausted =
         claimed.attemptCount >= DIGEST_SCHEDULE_JOB_MAX_ATTEMPTS;
 			const failed = await failDigestScheduleJob(env, {
@@ -255,14 +307,21 @@ async function drainDigestScheduleJobs(
 		}
 	}
 
-	return digestsSent;
+	return result;
 }
 
 export async function reportExhaustedDigestScheduleJobs(
 	env: AppEnv,
 	options: { limit?: number; jobId?: string } = {},
 ) {
-	if (!env.DB) return 0;
+	return (await reportExhaustedDigestScheduleJobsDetailed(env, options)).alerted;
+}
+
+export async function reportExhaustedDigestScheduleJobsDetailed(
+	env: AppEnv,
+	options: { limit?: number; jobId?: string } = {},
+) {
+	if (!env.DB) return { attempted: 0, alerted: 0, failed: 0 };
 	const now = Date.now();
   const staleRunningBefore = new Date(
     now - DIGEST_SCHEDULE_JOB_LEASE_MS,
@@ -279,6 +338,8 @@ export async function reportExhaustedDigestScheduleJobs(
 		limit: options.limit ?? 25,
 	});
 	let alerted = 0;
+	let attempted = 0;
+	let failed = 0;
 	for (const candidate of candidates) {
 		if (options.jobId && candidate.id !== options.jobId) continue;
 		const alertToken = crypto.randomUUID();
@@ -291,6 +352,7 @@ export async function reportExhaustedDigestScheduleJobs(
 			).toISOString(),
 		});
 		if (!claimed) continue;
+		attempted += 1;
 
 		const result = await reportScheduledTaskFailure(
 			env,
@@ -302,6 +364,7 @@ export async function reportExhaustedDigestScheduleJobs(
 		);
     const alertRecorded =
       result.reason === "sent" || result.reason === "throttled";
+		if (!alertRecorded) failed += 1;
 		await settleDigestScheduleJobExhaustionAlert(env, {
 			jobId: claimed.id,
 			alertToken,
@@ -310,7 +373,7 @@ export async function reportExhaustedDigestScheduleJobs(
 		});
 		if (alertRecorded) alerted += 1;
 	}
-	return alerted;
+	return { attempted, alerted, failed };
 }
 
 async function runDigestForUser(
@@ -491,7 +554,7 @@ async function runDigestForUser(
         recovery.outcome === "claim_lost" ||
         recovery.outcome === "settlement_lost"
       ) {
-        return 0;
+        throw new Error("Digest strategy recovery did not reach a terminal state.");
       }
       if (recovery.outcome === "settled") {
         strategyParagraph = recovery.strategyParagraph;
@@ -510,7 +573,7 @@ async function runDigestForUser(
     digestRunId = claim.digestRunId;
     if (!claim.created) {
       input.handledDigestRunIds.add(digestRunId);
-      return 0;
+      throw new Error("Digest run identity was claimed by another writer.");
     }
 
     if (initialStrategyLease) {
@@ -526,7 +589,7 @@ async function runDigestForUser(
       });
       if (!settled) {
         input.handledDigestRunIds.add(digestRunId);
-        return 0;
+        throw new Error("Digest strategy generation did not settle.");
       }
       strategyParagraph = settled.strategyParagraph;
     }
@@ -580,7 +643,7 @@ async function runDigestForUser(
     cadence,
     lane: "customer",
   });
-  return delivery.attempts > 0 ? 1 : 0;
+  return countAcceptedDigestDelivery(delivery);
 }
 
 async function retryFailedDigests(
@@ -592,10 +655,11 @@ async function retryFailedDigests(
 		deadlineAt?: number;
   },
 ) {
-  let retried = 0;
+  const result = { ...EMPTY_DIGEST_DELIVERY_CYCLE_RESULT };
   for (const candidate of input.retryCandidates) {
 		if (input.deadlineAt !== undefined && Date.now() >= input.deadlineAt) break;
     if (input.handledDigestRunIds.has(candidate.id)) continue;
+    result.attempted += 1;
     try {
       const plan = await getUserPlan(env, candidate.userId);
       const cadence = digestCadenceForPeriod(
@@ -620,7 +684,7 @@ async function retryFailedDigests(
         recovery.outcome === "claim_lost" ||
         recovery.outcome === "settlement_lost"
       ) {
-        continue;
+        throw new Error("Digest strategy recovery did not reach a terminal state.");
       }
       if (recovery.outcome === "settled") deliveryDigest = recovery.digest;
 
@@ -665,15 +729,16 @@ async function retryFailedDigests(
         cadence,
         lane: "customer",
       });
-      if (delivery.attempts > 0) retried += 1;
+      result.sent += countAcceptedDigestDelivery(delivery);
     } catch (error) {
+      result.failed += 1;
       console.error(
         `Digest retry failed for digest run ${candidate.id}; continuing with remaining retries.`,
         error,
       );
     }
   }
-  return retried;
+  return result;
 }
 
 export function buildPersistedDigestDeliverySnapshot(digest: DigestRecord) {

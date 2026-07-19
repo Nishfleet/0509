@@ -171,7 +171,9 @@ export default function TeamRoute() {
     );
   }
 
-  const seatsUsed = data.members.length + 1;
+  const seatsUsed = data.members.filter(
+    (member) => member.status === "active" || !isInviteExpired(member.tokenExpiresAt),
+  ).length + 1;
 
   return (
     <DashboardPage>

@@ -63,10 +63,18 @@ function findTranslatedAnalysisField(fields: AnalysisFieldInput[]) {
 function mergePersistedAnalysisFields(
   fields: AnalysisFieldInput[],
   storedFields: AnalysisFieldInput[],
+  ad: Pick<AdRecord, "hook" | "offer" | "source">,
 ) {
   const merged = new Map(
     storedFields.map((field) => [`${field.scopeType}:${field.fieldKey}`, field]),
   );
+  const incomingSource = mapAdSourceToAnalysisSource(ad.source);
+  if (!ad.hook.trim() && merged.get("ad:hook")?.provenanceSource === incomingSource) {
+    merged.delete("ad:hook");
+  }
+  if (!ad.offer.trim() && merged.get("ad:offer")?.provenanceSource === incomingSource) {
+    merged.delete("ad:offer");
+  }
   for (const field of fields) {
     merged.set(`${field.scopeType}:${field.fieldKey}`, field);
   }
@@ -152,7 +160,11 @@ export async function hydrateAdsWithPersistedCreatives(env: AppEnv, ads: AdRecor
         ad.creativeTextCaptureMethod ?? storedAd.creativeTextCaptureMethod ?? null,
       creativeTextMetadata:
         ad.creativeTextMetadata ?? storedAd.creativeTextMetadata ?? null,
-      analysisFields: mergePersistedAnalysisFields(ad.analysisFields, storedAd.analysisFields),
+      analysisFields: mergePersistedAnalysisFields(
+        ad.analysisFields,
+        storedAd.analysisFields,
+        ad,
+      ),
     };
   });
 }
@@ -426,7 +438,33 @@ export async function upsertAd(env: AppEnv, ad: AdRecord) {
                           LEFT JOIN json_each(excluded.raw_json, '$.analysisFields') AS incoming
                             ON json_extract(incoming.value, '$.scopeType') = json_extract(existing.value, '$.scopeType')
                             AND json_extract(incoming.value, '$.fieldKey') = json_extract(existing.value, '$.fieldKey')
-                          WHERE incoming.value IS NULL
+                          WHERE (
+                              incoming.value IS NULL
+                              AND NOT (
+                                json_extract(existing.value, '$.scopeType') = 'ad'
+                                AND json_extract(existing.value, '$.fieldKey') = 'hook'
+                                AND json_extract(existing.value, '$.provenanceSource') = CASE
+                                  WHEN json_extract(excluded.raw_json, '$.source') = 'meta_library_browser'
+                                    THEN 'meta_library_browser'
+                                  WHEN json_extract(excluded.raw_json, '$.source') IN ('meta', 'meta_api')
+                                    THEN 'meta_api'
+                                  ELSE 'user'
+                                END
+                                AND TRIM(COALESCE(json_extract(excluded.raw_json, '$.hook'), '')) = ''
+                              )
+                              AND NOT (
+                                json_extract(existing.value, '$.scopeType') = 'ad'
+                                AND json_extract(existing.value, '$.fieldKey') = 'offer'
+                                AND json_extract(existing.value, '$.provenanceSource') = CASE
+                                  WHEN json_extract(excluded.raw_json, '$.source') = 'meta_library_browser'
+                                    THEN 'meta_library_browser'
+                                  WHEN json_extract(excluded.raw_json, '$.source') IN ('meta', 'meta_api')
+                                    THEN 'meta_api'
+                                  ELSE 'user'
+                                END
+                                AND TRIM(COALESCE(json_extract(excluded.raw_json, '$.offer'), '')) = ''
+                              )
+                            )
                             OR (
                               julianday(json_extract(existing.value, '$.metadata.capturedAt')) IS NOT NULL
                               AND (

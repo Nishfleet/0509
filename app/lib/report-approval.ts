@@ -1,3 +1,5 @@
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import { isReportDocument, type ReportDocument } from "~/lib/report";
 
 export const REPORT_REVIEW_STATE = "approved" as const;
@@ -209,7 +211,9 @@ export function evaluateApprovedReportSnapshot(
   if (!readiness.ok) {
     return readiness;
   }
-  const fingerprint = reportEvidenceFingerprint(report);
+  const fingerprint = candidate.evidenceFingerprint.startsWith("{")
+    ? legacyReportEvidenceFingerprint(report)
+    : reportEvidenceFingerprint(report);
   if (fingerprint !== candidate.evidenceFingerprint) {
     return invalidApproval(
       REPORT_APPROVAL_REASON_CODES.fingerprintMismatch,
@@ -227,6 +231,12 @@ function invalidApproval(
 }
 
 export function reportEvidenceFingerprint(value: ReportDocument) {
+  const { generatedAt: _generatedAt, ...content } = value;
+  const canonical = stableJson(stripApprovalFields(content));
+  return `sha256:${bytesToHex(sha256(utf8ToBytes(canonical)))}`;
+}
+
+function legacyReportEvidenceFingerprint(value: ReportDocument) {
   const { generatedAt: _generatedAt, ...content } = value;
   return stableJson(stripApprovalFields(content));
 }

@@ -6,7 +6,7 @@ const runScheduledDiscoveryWarmupMock = vi.hoisted(() => vi.fn());
 const reconcileOrchestratedWatchlistRunsMock = vi.hoisted(() => vi.fn());
 const flushDeferredInstantAlertsMock = vi.hoisted(() => vi.fn());
 const runPresencePollingBatchMock = vi.hoisted(() => vi.fn());
-const resumePendingDigestScheduleJobsMock = vi.hoisted(() => vi.fn());
+const resumePendingDigestScheduleJobsDetailedMock = vi.hoisted(() => vi.fn());
 
 vi.mock("react-router", () => ({
   createRequestHandler: vi.fn(() => vi.fn()),
@@ -18,7 +18,7 @@ vi.mock("~/lib/retention.server", () => ({
   runRetentionSweep: runRetentionSweepMock,
 }));
 vi.mock("~/lib/digest-orchestration.server", () => ({
-  resumePendingDigestScheduleJobs: resumePendingDigestScheduleJobsMock,
+  resumePendingDigestScheduleJobsDetailed: resumePendingDigestScheduleJobsDetailedMock,
 }));
 vi.mock("~/lib/monitoring.server", () => ({
   flushDeferredInstantAlerts: flushDeferredInstantAlertsMock,
@@ -73,7 +73,7 @@ describe("retention scheduled failure reporting", () => {
     });
     flushDeferredInstantAlertsMock.mockReset().mockResolvedValue({ groups: 0 });
     runPresencePollingBatchMock.mockReset().mockResolvedValue({ results: [] });
-    resumePendingDigestScheduleJobsMock.mockReset().mockResolvedValue(0);
+    resumePendingDigestScheduleJobsDetailedMock.mockReset().mockResolvedValue({ attempted: 0, sent: 0, failed: 0 });
   });
 
   it("reports a failed-step summary exactly once after all retention steps finish", async () => {

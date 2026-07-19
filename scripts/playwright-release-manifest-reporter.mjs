@@ -251,6 +251,7 @@ export const RELEASE_COVERAGE_MATRIX = Object.freeze({
 
 const DEFAULT_OUTPUT_PATH = "test-results/gate-b-manifest.json";
 const DEFAULT_ENVIRONMENT = "local";
+const RELEASE_PROOF_PROJECT_PATTERN = /^local-release(?:-(?:firefox|webkit|mobile-safari|mobile-chrome))?$/u;
 const TOKEN_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/u;
 const ANNOTATION_PATTERN = /^[\p{L}\p{N}._:;,+@%#?&=~!$'()*;\-/→× ]{1,128}$/u;
 const URL_TOKEN_PATTERN = /^[A-Za-z0-9._~!?$&'()*+,;=:@%\-/]+$/u;
@@ -793,6 +794,7 @@ export function recordManifestPostflight(path, evidence) {
     config.localProofSearchRolloutMode !== "v2" ||
     config.providerNetworkDeny !== true ||
     config.authProvider !== "better-auth" ||
+    !RELEASE_PROOF_PROJECT_PATTERN.test(config.browserProject ?? "") ||
     config.retries !== 0 ||
     config.workers !== 1 ||
     !restore ||
@@ -821,6 +823,7 @@ export function recordManifestPostflight(path, evidence) {
       localProofSearchRolloutMode: config.localProofSearchRolloutMode,
       providerNetworkDeny: true,
       authProvider: "better-auth",
+      browserProject: config.browserProject,
       retries: 0,
       workers: 1,
     },

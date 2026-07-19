@@ -11,6 +11,7 @@ import {
   expectNoHorizontalOverflow,
   expectPhoneTouchTargets,
   expectVisibleKeyboardFocus,
+  focusAdvanceKey,
 } from "./helpers/release-experience";
 
 const fixtureCookie = "f9_e2e_fixture";
@@ -155,7 +156,8 @@ async function expectLiveRegion(page: Page, message: string) {
 }
 
 async function expectKeyboardFocus(page: Page) {
-  await page.keyboard.press("Tab");
+  const browserName = page.context().browser()?.browserType().name();
+  await page.keyboard.press(focusAdvanceKey(browserName));
   const control = page.locator(":focus");
   await expect(control).toBeVisible();
   await expectVisibleKeyboardFocus(control);

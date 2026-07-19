@@ -39,6 +39,20 @@ function mutationChanges(result: { meta?: { changes?: number } }) {
   return Number(result.meta?.changes ?? 0);
 }
 
+export function workspaceMemberOccupiesSeat(
+  member: Pick<WorkspaceMemberRow, "status" | "tokenExpiresAt">,
+  now = Date.now(),
+) {
+  if (member.status === "active") {
+    return true;
+  }
+  if (member.status !== "invited" || !member.tokenExpiresAt) {
+    return member.status === "invited";
+  }
+  const expiresAt = Date.parse(member.tokenExpiresAt);
+  return !Number.isFinite(expiresAt) || expiresAt > now;
+}
+
 async function sha256Hex(value: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -121,7 +135,7 @@ export async function createWorkspaceInvite(
   if (existing.some((row) => row.invitedEmail === inviteeEmail)) {
     return { ok: false, reason: "That teammate is already invited." };
   }
-  if (existing.length >= AGENCY_SEAT_LIMIT - 1) {
+  if (existing.filter((row) => workspaceMemberOccupiesSeat(row)).length >= AGENCY_SEAT_LIMIT - 1) {
     return { ok: false, reason: `Agency includes ${AGENCY_SEAT_LIMIT} seats — all are in use.` };
   }
 
@@ -162,13 +176,34 @@ export async function createWorkspaceInvite(
               SELECT COUNT(*)
                 FROM workspace_member used_seat
                WHERE used_seat.owner_user_id = ?2
-                 AND used_seat.status IN ('invited', 'active')
+                 AND (
+                   used_seat.status = 'active'
+                   OR (
+                     used_seat.status = 'invited'
+                     AND (
+                       used_seat.token_expires_at IS NULL
+                       OR julianday(used_seat.token_expires_at) IS NULL
+                       OR julianday(used_seat.token_expires_at) > julianday('now')
+                     )
+                   )
+                 )
             ) < ?6
             AND NOT EXISTS (
               SELECT 1
                 FROM workspace_member existing_email
                WHERE lower(existing_email.invited_email) = ?3
-                 AND existing_email.status IN ('invited', 'active')
+                 AND (
+                   existing_email.status = 'active'
+                   OR (
+                     existing_email.status = 'invited'
+                     AND (
+                       existing_email.owner_user_id = ?2
+                       OR existing_email.token_expires_at IS NULL
+                       OR julianday(existing_email.token_expires_at) IS NULL
+                       OR julianday(existing_email.token_expires_at) > julianday('now')
+                     )
+                   )
+                 )
             )
             AND NOT EXISTS (
               SELECT 1
@@ -230,9 +265,56 @@ export async function resendWorkspaceInvite(
   const result = await ensureDb(env).prepare(
     `UPDATE workspace_member
         SET token_hash = ?1, token_expires_at = ?2
-      WHERE id = ?3 AND owner_user_id = ?4 AND status = 'invited'`,
+      WHERE id = ?3 AND owner_user_id = ?4 AND status = 'invited'
+        AND (
+          SELECT COUNT(*)
+            FROM workspace_member used_seat
+           WHERE used_seat.owner_user_id = ?4
+             AND used_seat.id <> workspace_member.id
+             AND (
+               used_seat.status = 'active'
+               OR (
+                 used_seat.status = 'invited'
+                 AND (
+                   used_seat.token_expires_at IS NULL
+                   OR julianday(used_seat.token_expires_at) IS NULL
+                   OR julianday(used_seat.token_expires_at) > julianday('now')
+                 )
+               )
+             )
+        ) < ?5
+        AND NOT EXISTS (
+          SELECT 1
+            FROM workspace_member live_email
+           WHERE live_email.id <> workspace_member.id
+             AND lower(live_email.invited_email) = lower(workspace_member.invited_email)
+             AND (
+               live_email.status = 'active'
+               OR (
+                 live_email.status = 'invited'
+                 AND (
+                   live_email.token_expires_at IS NULL
+                   OR julianday(live_email.token_expires_at) IS NULL
+                   OR julianday(live_email.token_expires_at) > julianday('now')
+                 )
+               )
+             )
+        )
+        AND NOT EXISTS (
+          SELECT 1
+            FROM workspace_member active_member
+            JOIN user active_user ON active_user.id = active_member.member_user_id
+           WHERE lower(active_user.email) = lower(workspace_member.invited_email)
+             AND active_member.status = 'active'
+        )`,
   )
-    .bind(tokenHash, expiresAt, input.memberRowId, input.ownerUserId)
+    .bind(
+      tokenHash,
+      expiresAt,
+      input.memberRowId,
+      input.ownerUserId,
+      AGENCY_SEAT_LIMIT - 1,
+    )
     .run();
 
   if (mutationChanges(result) !== 1) {

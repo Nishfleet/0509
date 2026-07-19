@@ -8,6 +8,9 @@ import {
   assertBackupAutomationApproval,
   assertManualBackupApproval,
   buildD1ExportArgs,
+  buildBackupObjectKey,
+  buildR2DeleteArgs,
+  buildR2GetArgs,
   buildR2PutArgs,
 } from "../scripts/d1-backup-command-args.mjs";
 
@@ -47,6 +50,18 @@ describe("D1 backup command arguments", () => {
       "--file",
       "/tmp/file.sql",
       "--remote",
+    ]);
+  });
+
+  it("builds one canonical backup key plus remote get/delete commands", () => {
+    expect(buildBackupObjectKey("0509", "2026-07-18T00-00-00-000Z")).toBe(
+      "backups/d1/0509-2026-07-18T00-00-00-000Z.sql",
+    );
+    expect(buildR2GetArgs("bucket", "backups/d1/file.sql", "/tmp/file.sql")).toEqual([
+      "wrangler", "r2", "object", "get", "bucket/backups/d1/file.sql", "--file", "/tmp/file.sql", "--remote",
+    ]);
+    expect(buildR2DeleteArgs("bucket", "backups/d1/file.sql")).toEqual([
+      "wrangler", "r2", "object", "delete", "bucket/backups/d1/file.sql", "--remote", "--force",
     ]);
   });
 

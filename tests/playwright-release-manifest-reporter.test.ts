@@ -751,6 +751,7 @@ describe("Gate-B Playwright release manifest reporter", () => {
         localProofSearchRolloutMode: "v2",
         providerNetworkDeny: true,
         authProvider: "better-auth",
+        browserProject: "local-release",
         retries: 0,
         workers: 1,
       },

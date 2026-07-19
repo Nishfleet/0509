@@ -45,6 +45,16 @@ function createTestEnv(plan = "starter") {
       processing_token TEXT,
       processing_started_at TEXT
     );
+    CREATE TABLE dodo_webhook_event (
+      event_id TEXT PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      user_id TEXT,
+      received_at TEXT NOT NULL,
+      processed_at TEXT,
+      outcome TEXT NOT NULL,
+      processing_started_at TEXT,
+      metadata_json TEXT NOT NULL DEFAULT '{}'
+    );
     CREATE TABLE evidence_usage_period (
       id TEXT PRIMARY KEY,
       workspace_user_id TEXT NOT NULL,
@@ -198,6 +208,68 @@ describe("evidence usage periods", () => {
     expect(first).toMatchObject({ ok: true, pool: "included" });
     expect(second).toMatchObject({ ok: true, pool: "top_up" });
     await settleEvidenceReservation(env, "op-1");
+  });
+
+  it("defers new evidence reservations while the billing canary lease is active", async () => {
+    const period = await ensureCurrentEvidenceUsagePeriod(env, "user-1", "starter");
+    await env.DB.prepare(
+      "UPDATE evidence_usage_period SET included_consumed = included_allowance WHERE id = ?",
+    ).bind(period.id).run();
+    await grantEvidenceTopUp(env, {
+      workspaceUserId: "user-1",
+      skuSlug: "burst_500_v1",
+      providerPaymentId: "billing-canary-credit",
+      providerProductId: "prod-burst",
+      quantityGranted: 500,
+    });
+    const now = new Date().toISOString();
+    await env.DB.prepare(`
+      INSERT INTO dodo_webhook_event (
+        event_id, event_type, user_id, received_at, outcome,
+        processing_started_at, metadata_json
+      ) VALUES (?, 'billing.canary.lock', ?, ?, 'processing', ?, ?)
+    `).bind(
+      "billing-canary-lock:user-1:lease-a",
+      "user-1",
+      now,
+      now,
+      JSON.stringify({ action: "billing_canary_active" }),
+    ).run();
+
+    await expect(reserveEvidenceCheck(env, {
+      workspaceUserId: "user-1",
+      logicalOperationKey: "op-blocked-by-canary",
+      source: "test",
+    })).resolves.toEqual({ ok: false, reason: "exhausted" });
+    expect(env.sqlite.prepare(
+      "SELECT COUNT(*) AS count FROM evidence_usage_reservation WHERE logical_operation_key = ?",
+    ).get("op-blocked-by-canary")).toEqual({ count: 0 });
+    expect(env.sqlite.prepare(
+      "SELECT COUNT(*) AS count FROM evidence_top_up_ledger_entry WHERE entry_type = 'consumption'",
+    ).get()).toEqual({ count: 0 });
+
+    await env.DB.prepare(
+      "UPDATE dodo_webhook_event SET processing_started_at = ? WHERE event_id = ?",
+    ).bind("2000-01-01T00:00:00.000Z", "billing-canary-lock:user-1:lease-a").run();
+    await expect(reserveEvidenceCheck(env, {
+      workspaceUserId: "user-1",
+      logicalOperationKey: "op-stale-canary-residue",
+      source: "test",
+    })).resolves.toEqual({ ok: false, reason: "exhausted" });
+
+    await env.DB.prepare(
+      `
+        UPDATE dodo_webhook_event
+        SET outcome = 'failed', processing_started_at = NULL,
+            metadata_json = '{"action":"billing_canary_recovered"}'
+        WHERE event_id = ?
+      `,
+    ).bind("billing-canary-lock:user-1:lease-a").run();
+    await expect(reserveEvidenceCheck(env, {
+      workspaceUserId: "user-1",
+      logicalOperationKey: "op-after-canary",
+      source: "test",
+    })).resolves.toMatchObject({ ok: true, pool: "top_up" });
   });
 
   it("settles only an owned atomic reservation and keeps success replay idempotent", async () => {

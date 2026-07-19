@@ -426,7 +426,20 @@ async function terminalizeStartedAtomicActionAudit(
           updated_at = ?
       WHERE id = ?
         AND user_id = ?
-        AND ((api_key_id = ?) OR (api_key_id IS NULL AND ? IS NULL))
+        AND (
+          api_key_id = ?
+          OR (api_key_id IS NULL AND ? IS NULL)
+          OR (
+            -- customer_api_key deletion sets the audit FK to NULL. Permit
+            -- only that missing-key caller to close its own stranded audit;
+            -- an active or mismatched key still cannot claim a NULL-key row.
+            api_key_id IS NULL
+            AND ? IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM customer_api_key deleted_api_key WHERE deleted_api_key.id = ?
+            )
+          )
+        )
         AND action_name = ?
         AND idempotency_key = ?
         AND status = 'started'
@@ -436,6 +449,8 @@ async function terminalizeStartedAtomicActionAudit(
     nowIso(),
     input.auditId,
     input.userId,
+    input.apiKeyId,
+    input.apiKeyId,
     input.apiKeyId,
     input.apiKeyId,
     input.actionName,

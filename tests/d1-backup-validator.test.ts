@@ -17,6 +17,8 @@ describe("D1 backup validator", () => {
       ok: boolean;
       latestMigration: string;
       checkedFiles: string[];
+      mode: string;
+      retentionPolicy: unknown;
       migrationReplay: {
         migrationsApplied: number;
         userPlanColumns: string[];
@@ -25,8 +27,21 @@ describe("D1 backup validator", () => {
     };
 
     expect(payload.ok).toBe(true);
+    expect(payload.mode).toBe("dry-run");
     expect(payload.latestMigration).toBe(latestMigration);
     expect(payload.checkedFiles).toContain(`migrations/${latestMigration}`);
+    expect(payload.checkedFiles).toEqual(expect.arrayContaining([
+      "scripts/d1-backup-lifecycle-canary.mjs",
+      "config/r2-retention-policy.json",
+    ]));
+    expect(payload.retentionPolicy).toEqual({
+      schemaVersion: 1,
+      bucket: "0509-landing-page-artifacts",
+      applicationManagedPrefixes: ["landing-pages/"],
+      rules: [
+        { id: "0509-d1-backups-90d", prefix: "backups/d1/", expireDays: 90 },
+      ],
+    });
     expect(payload.migrationReplay).toMatchObject({
       migrationsApplied: migrationFiles.length,
       dodoLinkagePreserved: true,

@@ -24,7 +24,7 @@ function normalizeProofProvider(value) {
  * @param {string[]} args
  */
 export function parseArgs(args) {
-  /** @type {{ baseUrl: string, json: boolean, cleanup: boolean, runId: string | null, digestRunId: string | null, proofCaptureId: string | null, proofProvider: string | null, requireSlack: boolean, requireWhatsApp: boolean }} */
+  /** @type {{ baseUrl: string, json: boolean, cleanup: boolean, runId: string | null, digestRunId: string | null, proofCaptureId: string | null, proofProvider: string | null, requireSlack: boolean, requireWhatsApp: boolean, expectedWorkerVersionId: string | null, gateRunId: string | null }} */
   const parsed = {
     baseUrl: process.env.CANARY_BASE_URL || DEFAULT_BASE_URL,
     json: false,
@@ -35,12 +35,24 @@ export function parseArgs(args) {
     proofProvider: null,
     requireSlack: false,
     requireWhatsApp: false,
+    expectedWorkerVersionId: process.env.CANARY_EXPECTED_WORKER_VERSION_ID || null,
+    gateRunId: process.env.CANARY_GATE_RUN_ID || null,
   };
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === "--base-url" && args[index + 1]) {
       parsed.baseUrl = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (arg === "--expected-worker-version" && args[index + 1]) {
+      parsed.expectedWorkerVersionId = args[index + 1];
+      index += 1;
+      continue;
+    }
+    if (arg === "--gate-run-id" && args[index + 1]) {
+      parsed.gateRunId = args[index + 1];
       index += 1;
       continue;
     }
@@ -185,8 +197,10 @@ function formatCleanupReport(payload) {
  */
 export async function runCanary({ config = parseArgs([]), token = process.env.CANARY_BYPASS_TOKEN?.trim(), fetchImpl = fetch } = {}) {
   if (config.cleanup) {
-    if (![config.runId, config.digestRunId, config.proofCaptureId].every(isCleanupIdentifier)) {
-      throw new Error("Cleanup requires --run-id, --digest-run-id, and --proof-capture-id with bounded non-empty values.");
+    const hasTicket = [config.runId, config.digestRunId, config.proofCaptureId].every(isCleanupIdentifier);
+    const hasGateRunId = typeof config.gateRunId === "string" && isCleanupIdentifier(config.gateRunId) && /^[a-z0-9._-]{1,128}$/u.test(config.gateRunId);
+    if (hasTicket === hasGateRunId) {
+      throw new Error("Cleanup requires either the three cleanup IDs or one bounded --gate-run-id, but not both.");
     }
     if (config.proofProvider || config.requireSlack || config.requireWhatsApp) {
       throw new Error("Cleanup cannot be combined with provider or delivery proof flags.");
@@ -198,6 +212,12 @@ export async function runCanary({ config = parseArgs([]), token = process.env.CA
   if (!token) {
     throw new Error("Missing CANARY_BYPASS_TOKEN; source .dev.vars or set the secret before running this canary.");
   }
+  if (!config.cleanup && !config.expectedWorkerVersionId) {
+    throw new Error("Missing expected Worker version ID; refusing an unbound proof canary.");
+  }
+  if (!config.cleanup && (!config.gateRunId || !/^[a-z0-9._-]{1,128}$/u.test(config.gateRunId))) {
+    throw new Error("Missing or invalid gate run ID; refusing a non-resumable proof canary.");
+  }
 
   // buildCanaryUrl validates the exact canonical origin before fetchCanary can construct token headers.
   const url = buildCanaryUrl(config);
@@ -205,14 +225,23 @@ export async function runCanary({ config = parseArgs([]), token = process.env.CA
     url,
     token,
     userAgent: "0509-launch-readiness-proof-canary/1.0",
-    extraHeaders: config.cleanup ? { "x-0509-canary-operation": "cleanup" } : {},
+    extraHeaders: {
+      ...(config.expectedWorkerVersionId
+        ? { "x-0509-expected-worker-version": config.expectedWorkerVersionId }
+        : {}),
+      ...(config.cleanup ? { "x-0509-canary-operation": "cleanup" } : {}),
+    },
     body: config.cleanup
-      ? JSON.stringify({
-          runId: config.runId,
-          digestRunId: config.digestRunId,
-          proofCaptureId: config.proofCaptureId,
-        })
-      : undefined,
+      ? JSON.stringify(
+          config.gateRunId
+            ? { gateRunId: config.gateRunId }
+            : {
+                runId: config.runId,
+                digestRunId: config.digestRunId,
+                proofCaptureId: config.proofCaptureId,
+              },
+        )
+      : JSON.stringify({ gateRunId: config.gateRunId }),
     fetchImpl,
   });
   const payload = await response.json().catch(() => null);

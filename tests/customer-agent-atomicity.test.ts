@@ -17,7 +17,19 @@ function env(harness: Harness) {
 function migrate(harness: Harness) {
   harness.sqlite.exec(`
     CREATE TABLE user (id TEXT PRIMARY KEY NOT NULL);
-    CREATE TABLE customer_api_key (id TEXT PRIMARY KEY NOT NULL);
+    CREATE TABLE customer_api_key (
+      id TEXT PRIMARY KEY NOT NULL,
+      user_id TEXT NOT NULL,
+      revoked_at TEXT,
+      actions_write_enabled INTEGER NOT NULL DEFAULT 0,
+      FOREIGN KEY (user_id) REFERENCES user(id) ON DELETE CASCADE
+    );
+    CREATE TABLE workspace_member (
+      id TEXT PRIMARY KEY NOT NULL,
+      owner_user_id TEXT NOT NULL,
+      member_user_id TEXT,
+      status TEXT NOT NULL
+    );
   `);
   applyMigration(harness.sqlite, "migrations/0035_agent_action_audit.sql");
   applyMigration(harness.sqlite, "migrations/0037_client_rooms.sql");
@@ -42,7 +54,10 @@ function migrate(harness: Harness) {
     CREATE TABLE collection (id TEXT PRIMARY KEY NOT NULL, user_id TEXT NOT NULL);
     CREATE TABLE watchlist (id TEXT PRIMARY KEY NOT NULL, user_id TEXT NOT NULL);
     INSERT INTO user (id) VALUES ('owner-1'), ('member-2');
-    INSERT INTO customer_api_key (id) VALUES ('key-1'), ('key-2');
+    INSERT INTO customer_api_key (id, user_id, actions_write_enabled)
+    VALUES ('key-1', 'owner-1', 1), ('key-2', 'member-2', 1);
+    INSERT INTO workspace_member (id, owner_user_id, member_user_id, status)
+    VALUES ('membership-1', 'owner-1', 'member-2', 'active');
     INSERT INTO collection (id, user_id) VALUES ('collection-1', 'owner-1'), ('collection-2', 'member-2');
     INSERT INTO watchlist (id, user_id) VALUES ('watchlist-1', 'owner-1');
   `);
@@ -143,6 +158,7 @@ describe("Journey 4 atomic customer-agent effects", () => {
     const prepare = vi.fn((db: D1Database, auditId: string) => ({
       statement: prepareAtomicShareLinkInsert(db, {
         auditId,
+        apiKeyId: "key-1",
         userId: "owner-1",
         actionName: "report.share",
         idempotencyKey: "journey4-approved-report",
@@ -166,7 +182,7 @@ describe("Journey 4 atomic customer-agent effects", () => {
 
     const first = await runAtomicAgentAction(
       env(harness),
-      { userId: "owner-1", actionName: "report.share", idempotencyKey: "journey4-approved-report" },
+      { userId: "owner-1", apiKeyId: "key-1", actionName: "report.share", idempotencyKey: "journey4-approved-report" },
       { requestFingerprint: "fp-approved-report", prepare },
     );
     const stored = harness.sqlite.prepare("SELECT snapshot_payload_json FROM share_link").get() as {
@@ -176,7 +192,7 @@ describe("Journey 4 atomic customer-agent effects", () => {
 
     const retry = await runAtomicAgentAction(
       env(harness),
-      { userId: "owner-1", actionName: "report.share", idempotencyKey: "journey4-approved-report" },
+      { userId: "owner-1", apiKeyId: "key-1", actionName: "report.share", idempotencyKey: "journey4-approved-report" },
       { requestFingerprint: "fp-approved-report", prepare: vi.fn() },
     );
     expect(retry.replayed).toBe(true);
@@ -186,7 +202,7 @@ describe("Journey 4 atomic customer-agent effects", () => {
     await expect(
       runAtomicAgentAction(
         env(harness),
-        { userId: "owner-1", actionName: "report.share", idempotencyKey: "journey4-approved-report" },
+        { userId: "owner-1", apiKeyId: "key-1", actionName: "report.share", idempotencyKey: "journey4-approved-report" },
         { requestFingerprint: "fp-altered-report", prepare: vi.fn() },
       ),
     ).rejects.toMatchObject({ name: "AgentActionIdempotencyConflictError" });
@@ -205,14 +221,21 @@ describe("Journey 4 atomic customer-agent effects", () => {
         share: { id: "share-1", token: "token-original" },
       };
       return {
-        statement: shareEffect(db, {
+        statement: prepareAtomicShareLinkInsert(db, {
           auditId,
+          apiKeyId: null,
           userId: "owner-1",
           actionName: "share.create",
           idempotencyKey: "journey4-share-1",
           requestFingerprint: "fp-share-1",
+          resourceType: "collection",
+          resourceId: "collection-1",
+          ownerResourceType: "collection",
+          isSnapshot: false,
           shareId: "share-1",
           token: "token-original",
+          createdAt: "2026-07-15T10:00:00.000Z",
+          expiresAt: "2026-10-13T10:00:00.000Z",
         }),
         resourceType: "collection",
         resourceId: "collection-1",
@@ -269,6 +292,7 @@ describe("Journey 4 atomic customer-agent effects", () => {
       statement: prepareAtomicShareLinkInsert(db, {
         auditId,
         auditUserId: "member-2",
+        apiKeyId: "key-2",
         userId: "owner-1",
         actionName: "share.create",
         idempotencyKey: "member-owner-share",
@@ -287,12 +311,12 @@ describe("Journey 4 atomic customer-agent effects", () => {
 
     const first = await runAtomicAgentAction(
       env(harness),
-      { userId: "member-2", actionName: "share.create", idempotencyKey: "member-owner-share" },
+      { userId: "member-2", apiKeyId: "key-2", actionName: "share.create", idempotencyKey: "member-owner-share" },
       { requestFingerprint: "fp-member-owner-share", prepare },
     );
     const retry = await runAtomicAgentAction(
       env(harness),
-      { userId: "member-2", actionName: "share.create", idempotencyKey: "member-owner-share" },
+      { userId: "member-2", apiKeyId: "key-2", actionName: "share.create", idempotencyKey: "member-owner-share" },
       { requestFingerprint: "fp-member-owner-share", prepare: vi.fn() },
     );
 
@@ -301,6 +325,141 @@ describe("Journey 4 atomic customer-agent effects", () => {
     expect(prepare).toHaveBeenCalledTimes(1);
     expect(harness.sqlite.prepare("SELECT user_id FROM share_link").get()).toEqual({ user_id: "owner-1" });
     expect(harness.sqlite.prepare("SELECT user_id FROM agent_action_audit").get()).toEqual({ user_id: "member-2" });
+  });
+
+  it("requires the API key to remain active when the share commits", async () => {
+    const harness = createSqliteD1();
+    fixtures.push(harness);
+    migrate(harness);
+
+    await expect(
+      runAtomicAgentAction(
+        env(harness),
+        { userId: "owner-1", apiKeyId: "key-1", actionName: "share.create", idempotencyKey: "revoked-key-share" },
+        {
+          requestFingerprint: "fp-revoked-key-share",
+          prepare: (db, auditId) => {
+            harness.sqlite.prepare("UPDATE customer_api_key SET revoked_at = datetime('now') WHERE id = 'key-1'").run();
+            return {
+              statement: prepareAtomicShareLinkInsert(db, {
+                auditId,
+                auditUserId: "owner-1",
+                apiKeyId: "key-1",
+                userId: "owner-1",
+                actionName: "share.create",
+                idempotencyKey: "revoked-key-share",
+                requestFingerprint: "fp-revoked-key-share",
+                resourceType: "collection",
+                resourceId: "collection-1",
+                ownerResourceType: "collection",
+                isSnapshot: false,
+                shareId: "revoked-key-share-id",
+                token: "revoked-key-token",
+                createdAt: "2026-07-15T10:00:00.000Z",
+                expiresAt: "2026-10-13T10:00:00.000Z",
+              }),
+              result: { ok: true, action: "share.create", share: { id: "revoked-key-share-id", token: "revoked-key-token" } },
+            };
+          },
+        },
+      ),
+    ).rejects.toThrow();
+    expect(harness.sqlite.prepare("SELECT COUNT(*) AS count FROM share_link").get()).toEqual({ count: 0 });
+    expect(harness.sqlite.prepare("SELECT status, error_code, api_key_id FROM agent_action_audit").get()).toEqual({
+      status: "failed",
+      error_code: "atomic_batch_failed",
+      api_key_id: "key-1",
+    });
+  });
+
+  it("does not treat a deleted API key as an internal share action", async () => {
+    const harness = createSqliteD1();
+    fixtures.push(harness);
+    migrate(harness);
+
+    await expect(
+      runAtomicAgentAction(
+        env(harness),
+        { userId: "owner-1", apiKeyId: "key-1", actionName: "share.create", idempotencyKey: "deleted-key-share" },
+        {
+          requestFingerprint: "fp-deleted-key-share",
+          prepare: (db, auditId) => {
+            harness.sqlite.prepare("DELETE FROM customer_api_key WHERE id = 'key-1'").run();
+            return {
+              statement: prepareAtomicShareLinkInsert(db, {
+                auditId,
+                auditUserId: "owner-1",
+                apiKeyId: "key-1",
+                userId: "owner-1",
+                actionName: "share.create",
+                idempotencyKey: "deleted-key-share",
+                requestFingerprint: "fp-deleted-key-share",
+                resourceType: "collection",
+                resourceId: "collection-1",
+                ownerResourceType: "collection",
+                isSnapshot: false,
+                shareId: "deleted-key-share-id",
+                token: "deleted-key-token",
+                createdAt: "2026-07-15T10:00:00.000Z",
+                expiresAt: "2026-10-13T10:00:00.000Z",
+              }),
+              result: { ok: true, action: "share.create", share: { id: "deleted-key-share-id", token: "deleted-key-token" } },
+            };
+          },
+        },
+      ),
+    ).rejects.toThrow();
+    expect(harness.sqlite.prepare("SELECT COUNT(*) AS count FROM share_link").get()).toEqual({ count: 0 });
+    expect(harness.sqlite.prepare("SELECT status, error_code, api_key_id FROM agent_action_audit").get()).toEqual({
+      status: "failed",
+      error_code: "atomic_batch_failed",
+      api_key_id: null,
+    });
+  });
+
+  it("requires a member to remain active when the owner's share commits", async () => {
+    const harness = createSqliteD1();
+    fixtures.push(harness);
+    migrate(harness);
+
+    await expect(
+      runAtomicAgentAction(
+        env(harness),
+        { userId: "member-2", apiKeyId: "key-2", actionName: "share.create", idempotencyKey: "removed-member-share" },
+        {
+          requestFingerprint: "fp-removed-member-share",
+          prepare: (db, auditId) => {
+            harness.sqlite.prepare("UPDATE workspace_member SET status = 'revoked' WHERE id = 'membership-1'").run();
+            return {
+              statement: prepareAtomicShareLinkInsert(db, {
+                auditId,
+                auditUserId: "member-2",
+                apiKeyId: "key-2",
+                userId: "owner-1",
+                actionName: "share.create",
+                idempotencyKey: "removed-member-share",
+                requestFingerprint: "fp-removed-member-share",
+                resourceType: "collection",
+                resourceId: "collection-1",
+                ownerResourceType: "collection",
+                isSnapshot: false,
+                shareId: "removed-member-share-id",
+                token: "removed-member-token",
+                createdAt: "2026-07-15T10:00:00.000Z",
+                expiresAt: "2026-10-13T10:00:00.000Z",
+              }),
+              result: { ok: true, action: "share.create", share: { id: "removed-member-share-id", token: "removed-member-token" } },
+            };
+          },
+        },
+      ),
+    ).rejects.toThrow();
+    expect(harness.sqlite.prepare("SELECT COUNT(*) AS count FROM share_link").get()).toEqual({ count: 0 });
+    expect(harness.sqlite.prepare("SELECT status, error_code, api_key_id FROM agent_action_audit").get()).toEqual({
+      status: "failed",
+      error_code: "atomic_batch_failed",
+      api_key_id: "key-2",
+    });
   });
 
   it("aborts when an early required effect changes zero even if a later effect changes one", async () => {

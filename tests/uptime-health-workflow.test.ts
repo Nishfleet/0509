@@ -14,7 +14,13 @@ describe("uptime health workflow", () => {
     jobs: {
       health?: {
         "timeout-minutes"?: number;
-        steps?: Array<{ name?: string; run?: string; env?: Record<string, string> }>;
+        steps?: Array<{
+          name?: string;
+          run?: string;
+          env?: Record<string, string>;
+          uses?: string;
+          with?: Record<string, unknown>;
+        }>;
       };
     };
   };
@@ -31,6 +37,8 @@ describe("uptime health workflow", () => {
     expect(healthStep?.run).toContain("curl --fail --show-error --silent --max-time 20 --retry 2");
     expect(healthStep?.run).toContain('payload.get("status") != "ok"');
     expect(healthStep?.run).toContain('payload.get("app") != "0509"');
+    expect(healthStep?.run).toContain('identity.get("searchRolloutMode") != "shadow"');
+    expect(healthStep?.run).toContain("worker_version=");
   });
 
   it("fails the run when the deep D1 health check is not ok", () => {
@@ -38,8 +46,25 @@ describe("uptime health workflow", () => {
       (step) => step.name === "Check production deep health endpoint (D1)",
     );
     expect(deepStep?.env?.DEEP_HEALTH_URL).toBe("https://0509.io/api/health/deep");
+    expect(deepStep?.env?.EXPECTED_WORKER_VERSION).toContain("steps.shallow.outputs.worker_version");
     expect(deepStep?.run).toContain("curl --fail --show-error --silent --max-time 20 --retry 2");
     expect(deepStep?.run).toContain('checks.get("d1") != "ok"');
+    expect(deepStep?.run).toContain('identity.get("workerVersionId") != os.environ["EXPECTED_WORKER_VERSION"]');
+  });
+
+  it("persists exact Worker-version evidence for every health sample", () => {
+    const persistStep = parsed.jobs.health?.steps?.find(
+      (step) => step.name === "Persist exact Worker-version evidence",
+    );
+    const uploadStep = parsed.jobs.health?.steps?.find(
+      (step) => step.name === "Upload exact Worker-version evidence",
+    );
+    expect(persistStep?.env?.WORKER_VERSION).toContain("steps.shallow.outputs.worker_version");
+    expect(persistStep?.run).toContain('"workerVersionId"');
+    expect(persistStep?.run).toContain('"runId"');
+    expect(uploadStep?.uses).toBe("actions/upload-artifact@v7");
+    expect(uploadStep?.with?.name).toContain("uptime-worker-");
+    expect(uploadStep?.with?.["retention-days"]).toBe(2);
   });
 
   it("does not require secrets or private canary tokens", () => {

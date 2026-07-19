@@ -5,6 +5,7 @@
     "app/**/*",
     "app/**/.server/**/*",
     "app/**/.client/**/*",
+    "scripts/release-scheduled-observation-contract.mjs",
     "workers/**/*",
     "worker-configuration.d.ts"
   ],

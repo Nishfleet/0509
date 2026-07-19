@@ -1,5 +1,4 @@
 import { defineConfig, devices } from "@playwright/test";
-// @ts-ignore JavaScript helper is shared with the Node release-proof wrapper.
 import {
   buildLocalReleaseServerCommand,
   isLocalReleaseServerIdentity,
@@ -68,6 +67,46 @@ export default defineConfig({
       workers: 1,
       use: {
         ...devices["Desktop Chrome"],
+        baseURL: localBaseURL,
+      },
+    },
+    {
+      name: "local-release-firefox",
+      testMatch: journeyReleaseMatch,
+      retries: 0,
+      workers: 1,
+      use: {
+        ...devices["Desktop Firefox"],
+        baseURL: localBaseURL,
+      },
+    },
+    {
+      name: "local-release-webkit",
+      testMatch: journeyReleaseMatch,
+      retries: 0,
+      workers: 1,
+      use: {
+        ...devices["Desktop Safari"],
+        baseURL: localBaseURL,
+      },
+    },
+    {
+      name: "local-release-mobile-safari",
+      testMatch: journeyReleaseMatch,
+      retries: 0,
+      workers: 1,
+      use: {
+        ...devices["iPhone 15"],
+        baseURL: localBaseURL,
+      },
+    },
+    {
+      name: "local-release-mobile-chrome",
+      testMatch: journeyReleaseMatch,
+      retries: 0,
+      workers: 1,
+      use: {
+        ...devices["Pixel 7"],
         baseURL: localBaseURL,
       },
     },

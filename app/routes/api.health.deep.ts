@@ -1,5 +1,6 @@
 import type { LoaderFunctionArgs } from "react-router";
 
+import { readReleaseIdentity } from "~/lib/canary-release-identity.server";
 import type { AppEnv } from "~/lib/env.server";
 
 type DependencyStatus = "ok" | "error" | "missing";
@@ -12,6 +13,7 @@ type DeepHealthBody = {
     edge: "ok";
     d1: DependencyStatus;
   };
+  releaseIdentity: ReturnType<typeof readReleaseIdentity>;
 };
 
 async function probeD1(env: AppEnv): Promise<DependencyStatus> {
@@ -44,6 +46,7 @@ export async function loader({ context }: LoaderFunctionArgs) {
       edge: "ok",
       d1,
     },
+    releaseIdentity: readReleaseIdentity(env),
   };
 
   return new Response(JSON.stringify(body), {

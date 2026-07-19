@@ -64,20 +64,29 @@ describe("safe command output", () => {
       return true;
     });
 
+    let failure: unknown;
     try {
-      await expect(
-        runCommandRedacted(process.execPath, [
+      try {
+        await runCommandRedacted(process.execPath, [
           "-e",
           [
             "console.error('failed https://example.r2.cloudflarestorage.com/dump.sql?X-Amz-Signature=abc123')",
             "process.exit(7)",
           ].join(";"),
-        ]),
-      ).rejects.toThrow(`${process.execPath} exited with code 7`);
+        ]);
+      } catch (error) {
+        failure = error;
+      }
     } finally {
       stderrSpy.mockRestore();
     }
 
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toBe(`${process.execPath} exited with code 7`);
+    expect((failure as Error & { safeStderr?: string }).safeStderr).toContain(
+      "https://example.r2.cloudflarestorage.com/dump.sql?[redacted]",
+    );
+    expect((failure as Error & { safeStderr?: string }).safeStderr).not.toContain("X-Amz-Signature");
     expect(stderr).toContain("failed https://example.r2.cloudflarestorage.com/dump.sql?[redacted]");
     expect(stderr).not.toContain("X-Amz-Signature");
   });

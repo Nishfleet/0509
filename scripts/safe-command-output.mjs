@@ -43,8 +43,12 @@ export function runCommandRedacted(command, args) {
       env: process.env,
       stdio: ["inherit", "pipe", "pipe"],
     });
+    let safeStderr = "";
     const stdout = createRedactedLineWriter((chunk) => process.stdout.write(chunk));
-    const stderr = createRedactedLineWriter((chunk) => process.stderr.write(chunk));
+    const stderr = createRedactedLineWriter((chunk) => {
+      safeStderr = `${safeStderr}${chunk}`.slice(-8_192);
+      process.stderr.write(chunk);
+    });
 
     child.stdout?.setEncoding("utf8");
     child.stderr?.setEncoding("utf8");
@@ -61,7 +65,15 @@ export function runCommandRedacted(command, args) {
       stderr.flush();
 
       if (signal) reject(new Error(`${command} stopped by signal ${signal}`));
-      else if (code !== 0) reject(new Error(`${command} exited with code ${code}`));
+      else if (code !== 0) {
+        const error = new Error(`${command} exited with code ${code}`);
+        Object.defineProperty(error, "safeStderr", {
+          value: safeStderr,
+          enumerable: false,
+          writable: false,
+        });
+        reject(error);
+      }
       else resolveExit(undefined);
     });
   });

@@ -44,4 +44,27 @@ describe("scheduled digest exhaustion recovery", () => {
       error,
     );
   });
+
+  it("observes the exact original recovery promise without changing the existing work chain", async () => {
+    const pending: Promise<unknown>[] = [];
+    const recoveryPromise = Promise.resolve({ attempted: 1, alerted: 0, failed: 1 });
+    const recover = vi.fn().mockReturnValue(recoveryPromise);
+    const observe = vi.fn((_env, _ctx, _input, promise) => promise);
+    const observationContext = { cron: "17 */6 * * *", scheduledTime: 1_768_543_020_000 };
+
+    scheduleDigestScheduleExhaustionRecovery(
+      {} as never,
+      { waitUntil: (promise) => pending.push(promise) },
+      { recover, observe: observe as never, observationContext },
+    );
+
+    expect(observe).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      { ...observationContext, taskName: "digest_schedule_exhaustion_recovery" },
+      recoveryPromise,
+    );
+    expect(pending).toHaveLength(1);
+    await pending[0];
+  });
 });

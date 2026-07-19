@@ -1,6 +1,11 @@
-const MANIFEST_PATH_PATTERN = /^test-results\/deploy-readiness-[a-z0-9-]{1,96}\.json$/u;
-const REMOTE_RESTORE_PATH_PATTERN = /^test-results\/d1-remote-restore-evidence(?:-[a-z0-9-]{1,64})?\.json$/u;
-const WRANGLER_OUTPUT_PATH_PATTERN = /^test-results\/wrangler-deploy-output(?:-[a-z0-9-]{1,64})?\.jsonl$/u;
+const MANIFEST_PATH_PATTERN =
+  /^test-results\/deploy-readiness-[a-z0-9-]{1,96}\.json$/u;
+const REMOTE_RESTORE_PATH_PATTERN =
+  /^test-results\/d1-remote-restore-evidence(?:-[a-z0-9-]{1,64})?\.json$/u;
+const WRANGLER_OUTPUT_PATH_PATTERN =
+  /^test-results\/wrangler-deploy-output(?:-[a-z0-9-]{1,64})?\.jsonl$/u;
+const ROLLBACK_TARGET_PATH_PATTERN =
+  /^test-results\/worker-rollback-target(?:-[a-z0-9-]{1,64})?\.json$/u;
 const FINGERPRINT_PATTERN = /^[a-f0-9]{64}$/u;
 const SAFE_IDENTIFIER_PATTERN = /^[A-Za-z0-9._-]{1,128}$/u;
 
@@ -11,19 +16,24 @@ const SAFE_IDENTIFIER_PATTERN = /^[A-Za-z0-9._-]{1,128}$/u;
  *   args: string[];
  *   env?: Record<string, string>;
  *   includeCloudflareCredentials?: boolean;
+ *   runOnPostDeployFailure?: boolean;
  * }} ProductionDeployStep
  */
 
 /**
- * @param {{ manifestPath: string, remoteRestoreEvidencePath: string, wranglerOutputPath: string }} input
+ * @param {{ manifestPath: string, remoteRestoreEvidencePath: string, wranglerOutputPath: string, rollbackTargetPath?: string }} input
  * @returns {ProductionDeployStep[]}
  */
 export function buildProductionDeployPlan({
   manifestPath,
   remoteRestoreEvidencePath,
   wranglerOutputPath,
+  rollbackTargetPath = "test-results/worker-rollback-target.json",
 }) {
-  if (typeof manifestPath !== "string" || !MANIFEST_PATH_PATTERN.test(manifestPath)) {
+  if (
+    typeof manifestPath !== "string" ||
+    !MANIFEST_PATH_PATTERN.test(manifestPath)
+  ) {
     throw new Error("invalid_deploy_readiness_manifest_path");
   }
   if (
@@ -32,8 +42,17 @@ export function buildProductionDeployPlan({
   ) {
     throw new Error("invalid_remote_restore_evidence_path");
   }
-  if (typeof wranglerOutputPath !== "string" || !WRANGLER_OUTPUT_PATH_PATTERN.test(wranglerOutputPath)) {
+  if (
+    typeof wranglerOutputPath !== "string" ||
+    !WRANGLER_OUTPUT_PATH_PATTERN.test(wranglerOutputPath)
+  ) {
     throw new Error("invalid_wrangler_output_path");
+  }
+  if (
+    typeof rollbackTargetPath !== "string" ||
+    !ROLLBACK_TARGET_PATH_PATTERN.test(rollbackTargetPath)
+  ) {
+    throw new Error("invalid_rollback_target_path");
   }
 
   return [
@@ -81,6 +100,11 @@ export function buildProductionDeployPlan({
       ],
     },
     {
+      id: "cross_browser_risk_proof",
+      command: "node",
+      args: ["scripts/run-cross-browser-risk-proof.mjs"],
+    },
+    {
       id: "remote_restore_evidence",
       command: "node",
       args: [
@@ -103,6 +127,16 @@ export function buildProductionDeployPlan({
       includeCloudflareCredentials: true,
     },
     {
+      id: "capture_worker_rollback_target",
+      command: "node",
+      args: [
+        "scripts/capture-worker-rollback-target.mjs",
+        "--output",
+        rollbackTargetPath,
+      ],
+      includeCloudflareCredentials: true,
+    },
+    {
       id: "deploy",
       command: "wrangler",
       args: ["deploy"],
@@ -110,6 +144,17 @@ export function buildProductionDeployPlan({
         WRANGLER_OUTPUT_FILE_PATH: wranglerOutputPath,
       },
       includeCloudflareCredentials: true,
+    },
+    {
+      id: "verify_worker_rollback_target",
+      command: "node",
+      args: [
+        "scripts/verify-worker-rollback-target.mjs",
+        "--target",
+        rollbackTargetPath,
+        "--wrangler-output",
+        wranglerOutputPath,
+      ],
     },
     {
       id: "partial_refund_invariants_postdeploy",
@@ -130,6 +175,7 @@ export function buildProductionDeployPlan({
         "--wrangler-output",
         wranglerOutputPath,
       ],
+      includeCloudflareCredentials: true,
     },
     {
       id: "partial_refund_invariants_postcanary",
@@ -138,9 +184,39 @@ export function buildProductionDeployPlan({
       includeCloudflareCredentials: true,
     },
     {
+      id: "start_production_soak",
+      command: "node",
+      args: [
+        "scripts/gate-c-soak.mjs",
+        "start",
+        "--manifest",
+        manifestPath,
+        "--wrangler-output",
+        wranglerOutputPath,
+      ],
+    },
+    {
+      id: "rollback_failed_release",
+      command: "node",
+      args: [
+        "scripts/rollback-production.mjs",
+        "--target",
+        rollbackTargetPath,
+        "--wrangler-output",
+        wranglerOutputPath,
+      ],
+      includeCloudflareCredentials: true,
+      runOnPostDeployFailure: true,
+    },
+    {
       id: "live_public_truth",
       command: "node",
       args: ["scripts/check-live-public-home.mjs"],
+    },
+    {
+      id: "production_public_smoke",
+      command: "npm",
+      args: ["run", "e2e:prod:public"],
     },
     {
       id: "oauth_branding",
@@ -152,7 +228,7 @@ export function buildProductionDeployPlan({
 
 /**
  * @param {unknown} evidence
- * @param {{ candidateFingerprint: string, wranglerWorktreeSha256: string, latestMigration?: string, migrationCount?: number, now?: Date }} expected
+ * @param {{ candidateFingerprint: string, wranglerWorktreeSha256: string, latestMigration?: string, migrationCount?: number, migrationBearing?: boolean, now?: Date }} expected
  */
 export function validateRemoteRestoreEvidence(evidence, expected) {
   const issues = [];
@@ -160,17 +236,64 @@ export function validateRemoteRestoreEvidence(evidence, expected) {
     return { ok: false, issues: ["remote_restore_evidence_missing"] };
   }
   const value = /** @type {Record<string, unknown>} */ (evidence);
-  const generatedAt = typeof value.generatedAt === "string" ? Date.parse(value.generatedAt) : Number.NaN;
-  const now = expected.now instanceof Date ? expected.now.getTime() : Date.now();
-  if (!Number.isFinite(generatedAt) || generatedAt > now + 5 * 60 * 1000 || now - generatedAt > 24 * 60 * 60 * 1000) {
+  const generatedAt =
+    typeof value.generatedAt === "string"
+      ? Date.parse(value.generatedAt)
+      : Number.NaN;
+  const now =
+    expected.now instanceof Date ? expected.now.getTime() : Date.now();
+  const migrationBearing = expected.migrationBearing !== false;
+  const maxAgeMs = (migrationBearing ? 24 : 7 * 24) * 60 * 60 * 1000;
+  if (
+    !Number.isFinite(generatedAt) ||
+    generatedAt > now + 5 * 60 * 1000 ||
+    now - generatedAt > maxAgeMs
+  ) {
     issues.push("remote_restore_evidence_stale");
   }
   if (value.schemaVersion !== 1) issues.push("remote_restore_schema");
-  if (value.candidateFingerprint !== expected.candidateFingerprint) issues.push("remote_restore_candidate_mismatch");
-  if (value.wranglerWorktreeSha256 !== expected.wranglerWorktreeSha256) issues.push("remote_restore_config_mismatch");
-  if (value.productionSearchRolloutMode !== "shadow") issues.push("remote_restore_rollout_mode");
-  if (expected.latestMigration && value.latestMigration !== expected.latestMigration) issues.push("remote_restore_migration_mismatch");
-  if (expected.migrationCount && value.migrationCount !== expected.migrationCount) issues.push("remote_restore_migration_count");
+  if (
+    !FINGERPRINT_PATTERN.test(
+      typeof value.candidateFingerprint === "string"
+        ? value.candidateFingerprint
+        : "",
+    )
+  ) {
+    issues.push("remote_restore_candidate_fingerprint");
+  }
+  if (
+    !FINGERPRINT_PATTERN.test(
+      typeof value.wranglerWorktreeSha256 === "string"
+        ? value.wranglerWorktreeSha256
+        : "",
+    )
+  ) {
+    issues.push("remote_restore_config_fingerprint");
+  }
+  if (
+    migrationBearing &&
+    value.candidateFingerprint !== expected.candidateFingerprint
+  ) {
+    issues.push("remote_restore_candidate_mismatch");
+  }
+  if (
+    migrationBearing &&
+    value.wranglerWorktreeSha256 !== expected.wranglerWorktreeSha256
+  ) {
+    issues.push("remote_restore_config_mismatch");
+  }
+  if (value.productionSearchRolloutMode !== "shadow")
+    issues.push("remote_restore_rollout_mode");
+  if (
+    expected.latestMigration &&
+    value.latestMigration !== expected.latestMigration
+  )
+    issues.push("remote_restore_migration_mismatch");
+  if (
+    expected.migrationCount &&
+    value.migrationCount !== expected.migrationCount
+  )
+    issues.push("remote_restore_migration_count");
   for (const field of [
     "databaseIdentitySha256",
     "scratchDatabaseIdentitySha256",
@@ -179,15 +302,23 @@ export function validateRemoteRestoreEvidence(evidence, expected) {
     "rowCountDigestSha256",
     "migrationLedgerSha256",
   ]) {
-    if (!FINGERPRINT_PATTERN.test(typeof value[field] === "string" ? value[field] : "")) {
+    if (
+      !FINGERPRINT_PATTERN.test(
+        typeof value[field] === "string" ? value[field] : "",
+      )
+    ) {
       issues.push(`remote_restore_${field}`);
     }
   }
-  if (typeof value.databaseBookmark !== "string" || value.databaseBookmark.trim().length < 6) {
+  if (
+    typeof value.databaseBookmark !== "string" ||
+    value.databaseBookmark.trim().length < 6
+  ) {
     issues.push("remote_restore_bookmark");
   }
   if (value.integrity !== "ok") issues.push("remote_restore_integrity");
-  if (value.foreignKeyViolations !== 0) issues.push("remote_restore_foreign_keys");
+  if (value.foreignKeyViolations !== 0)
+    issues.push("remote_restore_foreign_keys");
   if (value.exactRowCounts !== true) issues.push("remote_restore_row_counts");
   if (!Number.isInteger(value.planRowCount) || Number(value.planRowCount) < 0) {
     issues.push("remote_restore_plan_rows");
@@ -199,8 +330,10 @@ export function validateRemoteRestoreEvidence(evidence, expected) {
   ) {
     issues.push("remote_restore_dodo_rows");
   }
-  if (value.dodoLinkagePreserved !== true) issues.push("remote_restore_dodo_linkage");
-  if (value.scratchDatabaseRemoved !== true) issues.push("remote_restore_scratch_cleanup");
+  if (value.dodoLinkagePreserved !== true)
+    issues.push("remote_restore_dodo_linkage");
+  if (value.scratchDatabaseRemoved !== true)
+    issues.push("remote_restore_scratch_cleanup");
   return { ok: issues.length === 0, issues };
 }
 
@@ -220,12 +353,13 @@ export function readDeployedWorkerVersionId(output) {
       // machine-readable output entries are eligible release evidence.
     }
   }
-  const deployEntry = [...entries].reverse().find(
-    (entry) => entry?.type === "deploy" && entry?.version === 1,
-  );
-  const versionId = typeof deployEntry?.version_id === "string"
-    ? deployEntry.version_id.trim()
-    : "";
+  const deployEntry = [...entries]
+    .reverse()
+    .find((entry) => entry?.type === "deploy" && entry?.version === 1);
+  const versionId =
+    typeof deployEntry?.version_id === "string"
+      ? deployEntry.version_id.trim()
+      : "";
   if (!SAFE_IDENTIFIER_PATTERN.test(versionId)) {
     throw new Error("deployed_worker_version_missing");
   }
@@ -240,29 +374,53 @@ export function executeProductionDeployPlan(plan, execute) {
   if (!Array.isArray(plan) || typeof execute !== "function") {
     throw new Error("invalid_production_deploy_plan");
   }
-  let canaryFailed = false;
-  let canaryFailure;
+
+  const rollbackStep = plan.find((step) => step.runOnPostDeployFailure);
+  const postCanaryInvariantStep = plan.find(
+    (step) => step.id === "partial_refund_invariants_postcanary",
+  );
+  let deploymentAttempted = false;
+
   for (const step of plan) {
-    if (canaryFailed) {
-      if (step.id !== "partial_refund_invariants_postcanary") throw canaryFailure;
-      try {
-        execute(step);
-      } catch (invariantFailure) {
-        throw new AggregateError(
-          [canaryFailure, invariantFailure],
-          "post_deploy_canary_and_refund_invariant_failed",
-          { cause: canaryFailure },
-        );
-      }
-      throw canaryFailure;
+    if (step.runOnPostDeployFailure) continue;
+
+    if (step.id === "deploy") {
+      // Wrangler can publish the new version before returning a non-zero
+      // status, so every failure from this boundary onward must enter the
+      // validated rollback path rather than assuming no mutation occurred.
+      deploymentAttempted = true;
     }
+
     try {
       execute(step);
-    } catch (error) {
-      if (step.id !== "post_deploy_release_canary") throw error;
-      canaryFailed = true;
-      canaryFailure = error;
+    } catch (releaseFailure) {
+      if (!deploymentAttempted) throw releaseFailure;
+
+      const recoveryFailures = [];
+      if (step.id === "post_deploy_release_canary" && postCanaryInvariantStep) {
+        try {
+          execute(postCanaryInvariantStep);
+        } catch (recoveryFailure) {
+          recoveryFailures.push(recoveryFailure);
+        }
+      }
+
+      if (!rollbackStep) {
+        recoveryFailures.push(new Error("post_deploy_rollback_step_missing"));
+      } else {
+        try {
+          execute(rollbackStep);
+        } catch (recoveryFailure) {
+          recoveryFailures.push(recoveryFailure);
+        }
+      }
+
+      if (recoveryFailures.length === 0) throw releaseFailure;
+      throw new AggregateError(
+        [releaseFailure, ...recoveryFailures],
+        "post_deploy_recovery_failed",
+        { cause: releaseFailure },
+      );
     }
   }
-  if (canaryFailed) throw canaryFailure;
 }

@@ -1,6 +1,8 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { billingCanaryLockBelongsToUser } from "~/lib/billing-canary-lock";
 import type { BillingLifecycleEmailOutboxInput } from "~/lib/delivery.server";
+import type { AppEnv } from "~/lib/env.server";
 
 const DODO_WEBHOOK_MAX_BODY_BYTES = 256_000;
 const DODO_WEBHOOK_PROCESSING_FAILURE_MESSAGE =
@@ -36,6 +38,27 @@ function sameBillingInstant(left: string | null | undefined, right: string | nul
   const leftMs = Date.parse(left ?? "");
   const rightMs = Date.parse(right ?? "");
   return Number.isFinite(leftMs) && Number.isFinite(rightMs) && leftMs === rightMs;
+}
+
+async function getUserIdFromActiveBillingCanaryOriginalPayment(
+  env: AppEnv,
+  paymentId: string,
+) {
+  const activeCanaryLock = await env.DB?.prepare(`
+    SELECT user_id
+    FROM dodo_webhook_event
+    WHERE event_type = 'billing.canary.lock'
+      AND outcome = 'processing'
+      AND processing_started_at IS NOT NULL
+      AND julianday(?) <= julianday(processing_started_at) + (5.0 / 1440.0)
+      AND json_valid(metadata_json)
+      AND json_extract(metadata_json, '$.userPlanSnapshot.dodo_payment_id') = ?
+    LIMIT 1
+  `).bind(
+    new Date().toISOString(),
+    paymentId,
+  ).all<{ user_id: string }>();
+  return activeCanaryLock?.results?.[0]?.user_id ?? null;
 }
 
 export async function action({ context, request }: ActionFunctionArgs) {
@@ -92,12 +115,72 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const verifiedWebhookTimestamp = webhookTimestampIso(payloadTimestamp);
   const eventOccurrenceTimestamp = webhookEventOccurrenceIso(envelope.timestamp);
 
+  const preflightPlanGrant = extractDodoPlanGrant(env, payload);
+  const preflightProofCreditGrant = extractDodoProofCreditGrant(env, payload);
+  const preflightCheckoutFailure = extractDodoPlanCheckoutFailure(env, payload);
+  const preflightSubscriptionGrant = extractDodoSubscriptionGrant(env, payload);
+  const preflightRevocation = extractDodoPlanRevocation(env, payload);
+  const preflightRefund = extractDodoRefund(env, payload);
+  let preflightUserId =
+    preflightPlanGrant?.userId ??
+    preflightProofCreditGrant?.userId ??
+    preflightCheckoutFailure?.userId ??
+    preflightSubscriptionGrant?.userId ??
+    preflightRevocation?.userId ??
+    null;
+  if (!preflightUserId && preflightRevocation) {
+    const lifecycleSubscriptionId =
+      preflightRevocation.subscriptionId !== preflightRevocation.eventType
+        ? preflightRevocation.subscriptionId
+        : null;
+    preflightUserId = await getUserIdForDodoLifecycle(env, {
+      subscriptionId: lifecycleSubscriptionId,
+      customerId: preflightRevocation.customerId,
+      customerEmail: preflightRevocation.customerEmail,
+    });
+  }
+  if (!preflightUserId && preflightRefund) {
+    preflightUserId =
+      (await getUserIdForDodoPayment(env, preflightRefund.paymentId)) ??
+      (await getUserIdFromActiveBillingCanaryOriginalPayment(env, preflightRefund.paymentId));
+  }
+  const declaredCanaryUserId = preflightPlanGrant?.isBillingCanary
+    ? preflightPlanGrant.userId
+    : preflightProofCreditGrant?.isBillingCanary
+      ? preflightProofCreditGrant.userId
+      : null;
+  const declaredCanaryLockId = preflightPlanGrant?.isBillingCanary
+    ? preflightPlanGrant.billingCanaryLockId
+    : preflightProofCreditGrant?.isBillingCanary
+      ? preflightProofCreditGrant.billingCanaryLockId
+      : null;
+  const internalCanaryLockHeader = request.headers.get("x-0509-billing-canary-lock-id");
+  const isInternalBillingCanary = Boolean(
+    declaredCanaryUserId &&
+    billingCanaryLockBelongsToUser(declaredCanaryLockId, declaredCanaryUserId) &&
+    internalCanaryLockHeader === declaredCanaryLockId,
+  );
+
   const claim = await beginDodoWebhookEventProcessing(env, {
     eventId,
     eventType,
-    userId: null,
+    userId: preflightUserId,
     payloadTimestamp,
+    ...(isInternalBillingCanary
+      ? {
+          billingCanaryGuard: "require_lock" as const,
+          billingCanaryLockId: declaredCanaryLockId!,
+        }
+      : preflightUserId
+        ? { billingCanaryGuard: "defer_while_locked" as const }
+        : {}),
   });
+  if (claim.status === "deferred") {
+    throw new Response(DODO_WEBHOOK_PROCESSING_FAILURE_MESSAGE, {
+      status: 503,
+      headers: { "cache-control": "no-store", "retry-after": "60" },
+    });
+  }
   if (claim.status === "duplicate") {
     return Response.json({ ok: true, duplicate: true, outcome: claim.outcome });
   }
@@ -150,9 +233,16 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }> {
     const ledgerBase = { eventId };
     let subscriptionFailureWithCheckoutIdDidNotClear = false;
-    const planGrant = extractDodoPlanGrant(env, payload);
+    const planGrant = preflightPlanGrant;
     if (planGrant) {
-      await applyDodoPlanGrantWithWatchlistReconcile(
+      if (
+        planGrant.isBillingCanary &&
+        isInternalBillingCanary &&
+        !planGrant.billingCanaryExpectedPlanSnapshot
+      ) {
+        throw new Error("billing_canary_plan_snapshot_invalid");
+      }
+      const planGrantApplied = await applyDodoPlanGrantWithWatchlistReconcile(
         env,
         {
           userId: planGrant.userId,
@@ -171,15 +261,29 @@ export async function action({ context, request }: ActionFunctionArgs) {
           outcome: "processed",
           metadata: { action: "plan_grant", userId: planGrant.userId, plan: planGrant.plan },
         },
+        ...(planGrant.isBillingCanary && isInternalBillingCanary
+          ? [{
+              billingCanaryPrecondition: planGrant.billingCanaryExpectedPlanSnapshot,
+              returnMutationTimestamps: true,
+            }]
+          : []),
       );
+      if (planGrant.isBillingCanary && isInternalBillingCanary && planGrantApplied?.changed !== true) {
+        throw new Error("billing_canary_plan_precondition_failed");
+      }
       return {
         outcome: "processed",
         metadata: { action: "plan_grant", userId: planGrant.userId, plan: planGrant.plan },
-        body: { ok: true },
+        body: {
+          ok: true,
+          ...(planGrant.isBillingCanary && isInternalBillingCanary && "watchlistUpdatedAt" in (planGrantApplied ?? {})
+            ? { watchlistUpdatedAt: planGrantApplied?.watchlistUpdatedAt }
+            : {}),
+        },
       };
     }
 
-    const checkoutFailure = extractDodoPlanCheckoutFailure(env, payload);
+    const checkoutFailure = preflightCheckoutFailure;
     if (checkoutFailure) {
       let clearedCheckout = false;
       if (checkoutFailure.checkoutId || checkoutFailure.eventType !== "subscription.failed") {
@@ -229,7 +333,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       }
     }
 
-    const subscriptionGrant = extractDodoSubscriptionGrant(env, payload);
+    const subscriptionGrant = preflightSubscriptionGrant;
     if (subscriptionGrant) {
       const cancellationScheduled = subscriptionGrant.cancellationScheduled === true;
       const cancellationReversalRequested =
@@ -418,7 +522,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       };
     }
 
-    const revocation = extractDodoPlanRevocation(env, payload);
+    const revocation = preflightRevocation;
     if (revocation) {
       const revocationRetryKind: BillingLifecycleEmailKind =
         revocation.action === "payment_issue" ? "payment_issue" : "revoke";
@@ -431,6 +535,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       const userId =
         revocation.userId ??
         retryResolvedUserId ??
+        preflightUserId ??
         (await getUserIdForDodoLifecycle(env, {
           subscriptionId: lifecycleSubscriptionId,
           customerId: revocation.customerId,
@@ -620,12 +725,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
       };
     }
 
-    const refund = extractDodoRefund(env, payload);
+    const refund = preflightRefund;
     if (refund) {
       const retryResolvedUserId =
         lifecycleEmailRetry?.kind === "refund" ? lifecycleEmailRetry.userId : null;
       const refundedUserId =
-        retryResolvedUserId ?? (await getUserIdForDodoPayment(env, refund.paymentId));
+        retryResolvedUserId ?? preflightUserId ?? (await getUserIdForDodoPayment(env, refund.paymentId));
       const refundOutbox = refundedUserId
         ? await prepareLifecycleEmailOutbox(refundedUserId, (profile) => ({
             kind: "refund",
@@ -718,7 +823,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       throw new Error("dodo_refund_payload_unresolvable");
     }
 
-    const grant = extractDodoProofCreditGrant(env, payload);
+    const grant = preflightProofCreditGrant;
     if (!grant) {
       await finalizeDodoWebhookLedgerOnly(env, {
         ...ledgerBase,

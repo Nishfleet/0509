@@ -6,7 +6,12 @@ import type { AdRecord } from "~/lib/types";
  * Renders nothing when first-seen proof is unavailable (honest: no badge
  * when we do not know how long the ad has been running).
  */
-export function AdLongevityPill({ ad }: { ad: Pick<AdRecord, "firstSeenAt" | "lastSeenAt"> }) {
+export function AdLongevityPill({
+  ad,
+}: {
+  ad: Pick<AdRecord, "firstSeenAt" | "lastSeenAt" | "activeStatusObserved">;
+}) {
+  if (ad.activeStatusObserved === false) return null;
   const days = adLongevityDays(ad);
   const label = formatAdLongevityLabel(ad);
   if (days === null || label === null) return null;

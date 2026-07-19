@@ -60,6 +60,7 @@ function mockReliabilityDependencies(input: {
   runStats?: { runs: number; watchlistsChecked: number; adsSeen: number };
   observationsForRun?: Array<Record<string, unknown>>;
   getDigestImpl?: ReturnType<typeof vi.fn>;
+  deliverAlertsImpl?: ReturnType<typeof vi.fn>;
 }) {
   const createWatchlistRun = vi.fn(
     async (_env: unknown, watchlistId: string) => `run-${watchlistId}`,
@@ -233,7 +234,12 @@ function mockReliabilityDependencies(input: {
     upsertAd: vi.fn(),
     upsertProofTarget: vi.fn(),
   }));
-  const deliverWatchlistAlerts = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
+  const deliverWatchlistAlerts = input.deliverAlertsImpl ??
+    vi.fn().mockResolvedValue({
+      attempts: 1,
+      channels: ["email"],
+      details: [{ status: "sent" }],
+    });
   vi.doMock("~/lib/delivery.server", () => ({
     deliverWatchlistAlerts,
     deliverWeeklyDigest,
@@ -327,7 +333,7 @@ describe("scheduled monitoring error isolation", () => {
       return {
         attempts: 1,
         channels: ["email"],
-        details: [],
+        details: [{ status: "sent" }],
       };
     });
     mocks.createWatchlistRun.mockImplementation(async (_env: unknown, watchlistId: string) => {
@@ -658,6 +664,65 @@ describe("instant alert flush", () => {
 
     expect(result.groups).toBe(0);
     expect(mocks.deliverWatchlistAlerts).not.toHaveBeenCalled();
+  });
+
+  it("reports caught per-group delivery failures in its aggregate result", async () => {
+    const mocks = mockReliabilityDependencies({
+      watchlists: [buildWatchlist(1, "adspy")],
+      retryableInstantAttempts: [{
+        id: "attempt-1",
+        watchlistId: "watch-1",
+        eventIds: ["event-a"],
+        status: "failed",
+      }],
+      deliverAlertsImpl: vi.fn().mockRejectedValue(new Error("provider unavailable")),
+    });
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const { flushDeferredInstantAlerts } = await import("~/lib/monitoring.server");
+    const result = await flushDeferredInstantAlerts(mocks.env as never);
+
+    expect(result).toEqual({ groups: 0, attempts: 0, failures: 1 });
+    expect(consoleError).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports resolved provider failures in its aggregate result", async () => {
+    const mocks = mockReliabilityDependencies({
+      watchlists: [buildWatchlist(1, "adspy")],
+      retryableInstantAttempts: [{
+        id: "attempt-1",
+        watchlistId: "watch-1",
+        eventIds: ["event-a"],
+        status: "failed",
+      }],
+      deliverAlertsImpl: vi.fn().mockResolvedValue({
+        attempts: 1,
+        channels: ["email"],
+        details: [{ status: "failed" }],
+      }),
+    });
+
+    const { flushDeferredInstantAlerts } = await import("~/lib/monitoring.server");
+    const result = await flushDeferredInstantAlerts(mocks.env as never);
+
+    expect(result).toEqual({ groups: 1, attempts: 1, failures: 1 });
+  });
+
+  it("fails closed when a resolved provider summary omits attempt details", async () => {
+    const mocks = mockReliabilityDependencies({
+      watchlists: [buildWatchlist(1, "adspy")],
+      retryableInstantAttempts: [{
+        id: "attempt-1",
+        watchlistId: "watch-1",
+        eventIds: ["event-a"],
+        status: "failed",
+      }],
+      deliverAlertsImpl: vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] }),
+    });
+
+    const { flushDeferredInstantAlerts } = await import("~/lib/monitoring.server");
+    expect(await flushDeferredInstantAlerts(mocks.env as never))
+      .toEqual({ groups: 1, attempts: 1, failures: 1 });
   });
 });
 

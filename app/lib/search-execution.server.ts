@@ -39,6 +39,7 @@ export interface ExecuteSearchOptions {
   forceLive?: boolean;
   customerMetaAdLibraryToken?: string | null;
   executionContext?: Pick<ExecutionContext, "waitUntil"> | null;
+  hydratePersisted?: boolean;
 }
 
 export interface ExecuteSearchResult {
@@ -88,7 +89,7 @@ export async function executeSearchWithRelevance(options: ExecuteSearchOptions):
       });
       const v2Result = await applySearchV2PostFilter(
         options.env,
-        await hydrateSearchCandidates(options.env, v2RawResult),
+        await hydrateSearchCandidates(options.env, v2RawResult, options.hydratePersisted),
         v2Context,
       );
       recordSearchObservabilityEvent(
@@ -168,7 +169,7 @@ export async function executeSearchWithRelevance(options: ExecuteSearchOptions):
 
   const v2Result = await applySearchV2PostFilter(
     options.env,
-    await hydrateSearchCandidates(options.env, rawResult),
+    await hydrateSearchCandidates(options.env, rawResult, options.hydratePersisted),
     v2Context,
   );
   recordSearchObservabilityEvent(
@@ -246,8 +247,12 @@ export async function hasWarmSearchCacheEntry(options: SearchCacheProbeOptions):
   }
 }
 
-async function hydrateSearchCandidates(env: AppEnv, result: SearchResponse) {
-  if (!env.DB || result.ads.length === 0) return result;
+async function hydrateSearchCandidates(
+  env: AppEnv,
+  result: SearchResponse,
+  hydratePersisted = true,
+) {
+  if (!hydratePersisted || !env.DB || result.ads.length === 0) return result;
   return {
     ...result,
     ads: await hydrateAdsWithPersistedCreatives(env, result.ads),

@@ -708,8 +708,7 @@ async function loadReport(input: {
     listCollectionItems,
     listWatchEvents,
   } = await import("~/lib/data.server");
-  const { buildCollectionReport, buildWatchlistReport } =
-    await import("~/lib/report-builder.server");
+  const { loadOwnedReportDocument } = await import("~/lib/report-loader.server");
   const parsedReport = input.reportId ? parseReportId(input.reportId) : null;
 
   if (!parsedReport) {
@@ -719,49 +718,22 @@ async function loadReport(input: {
   const env = getEnv(input.context);
   const { workspaceUserId } = await requireWorkspaceSession(env, input.request);
 
-  if (parsedReport.resourceType === "collection") {
-    const collection = await getCollection(
-      env,
-      parsedReport.resourceId,
-      workspaceUserId,
-    );
-    if (!collection) {
-      throw new Response("Not found", { status: 404 });
-    }
-
-    const items = await listCollectionItems(env, collection.id);
-
-    return buildCollectionReport({
-      collection,
-      items,
-    });
-  }
-
-  const watchlist = await getWatchlist(
+  const report = await loadOwnedReportDocument(
     env,
-    parsedReport.resourceId,
     workspaceUserId,
+    input.reportId!,
+    {
+      getCollection,
+      getLatestDigestRunSummaryForWatchlist,
+      getWatchlist,
+      listAdsByIds,
+      listCollectionItems,
+      listWatchEvents,
+    },
+    { parallelWatchlistLookups: true },
   );
-  if (!watchlist) {
+  if (!report) {
     throw new Response("Not found", { status: 404 });
   }
-
-  const events = await listWatchEvents(env, watchlist.id, 60);
-  const [ads, aiWeeklySummary] = await Promise.all([
-    listAdsByIds(
-      env,
-      events
-        .map((event) => event.adId)
-        .filter((adId): adId is string => Boolean(adId)),
-    ),
-    // Latest stored digest paragraph; never a fresh AI call at report time.
-    getLatestDigestRunSummaryForWatchlist(env, workspaceUserId, watchlist.id),
-  ]);
-
-  return buildWatchlistReport({
-    watchlist,
-    events,
-    adsById: new Map(ads.map((ad) => [ad.metaAdId, ad])),
-    aiWeeklySummary,
-  });
+  return report;
 }

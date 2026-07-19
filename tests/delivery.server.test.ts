@@ -1522,9 +1522,10 @@ describe("deliverWatchlistAlerts", () => {
       },
     );
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       attempts: 1,
       channels: ["email"],
+      details: [{ status: "sent" }],
     });
     expect(sendMock).toHaveBeenCalledTimes(1);
     expect(emailSendPayload(sendMock)).toMatchObject({
@@ -1694,6 +1695,7 @@ from:{email:"alerts@0509.io",name:"Five to Nine"},
     expect(result).toEqual({
       attempts: 0,
       channels: [],
+      details: [],
     });
     expect(listDeliveryTargets).not.toHaveBeenCalledWith(
       expect.anything(),
@@ -1817,9 +1819,10 @@ from:{email:"alerts@0509.io",name:"Five to Nine"},
       },
     );
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       attempts: 1,
       channels: ["email"],
+      details: [{ status: "sent" }],
     });
     expect(listAdsByIds).toHaveBeenCalledTimes(1);
     expect(listAdsByIds).toHaveBeenCalledWith(expect.anything(), ["meta-1"]);
@@ -1987,9 +1990,10 @@ from:{email:"alerts@0509.io",name:"Five to Nine"},
       input,
     );
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       attempts: 1,
       channels: ["email"],
+      details: [{ status: "sent" }],
     });
     expect(sendMock).toHaveBeenCalledTimes(1);
     expect(createDeliveryAttempt).toHaveBeenCalledWith(

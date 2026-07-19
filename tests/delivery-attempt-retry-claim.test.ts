@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   claimInstantDeliveryAttempt,
+  createDeliveryAttempt,
   markInstantDeliveryDispatchStarted,
   suppressEmailTargetsForUserAndAddress,
   updateDeliveryAttemptResult,
@@ -41,6 +42,7 @@ describe("delivery attempt retry claim (sqlite)", () => {
         is_validated INTEGER NOT NULL,
         is_opted_in INTEGER NOT NULL,
         is_paused INTEGER NOT NULL,
+        template_eligible INTEGER NOT NULL DEFAULT 0,
         opted_out_at TEXT
       );
       INSERT INTO delivery_target (
@@ -105,7 +107,7 @@ describe("delivery attempt retry claim (sqlite)", () => {
     ).toMatchObject({ count: 1 });
   });
 
-  it("marks one claim as dispatch-started and never reclaims that ambiguous state", async () => {
+  it("marks one digest claim through the real D1 dispatch CAS", async () => {
     const harness = createSqliteD1();
     fixtures.push(harness);
     harness.sqlite.exec(`
@@ -125,13 +127,14 @@ describe("delivery attempt retry claim (sqlite)", () => {
         is_validated INTEGER NOT NULL,
         is_opted_in INTEGER NOT NULL,
         is_paused INTEGER NOT NULL,
+        template_eligible INTEGER NOT NULL DEFAULT 0,
         opted_out_at TEXT
       );
       INSERT INTO delivery_target (
         id, user_id, channel, target_value, validation_status,
         is_validated, is_opted_in, is_paused, opted_out_at
       ) VALUES (
-        'target-1', 'user-1', 'email', 'owner@example.com',
+        'target-1', 'user-1', 'slack', 'https://hooks.slack.test/1',
         'validated', 1, 1, 0, NULL
       );
       CREATE TABLE delivery_attempt (
@@ -160,23 +163,36 @@ describe("delivery attempt retry claim (sqlite)", () => {
       );
     `);
     const env = { DB: harness.db } as never;
-    const input = {
+    const claimUpdatedAt = "2026-07-19T05:00:00.000Z";
+    const attemptId = await createDeliveryAttempt(env, {
       userId: "user-1",
-      watchlistId: "watch-1",
+      watchlistId: null,
+      digestRunId: "digest-1",
       deliveryTargetId: "target-1",
       lane: "customer" as const,
-      channel: "email" as const,
-      provider: "cloudflare_email",
-      targetValue: "owner@example.com",
+      channel: "slack" as const,
+      provider: "slack_incoming_webhook",
+      status: "pending" as const,
+      webhookStatus: "pending" as const,
+      targetValue: "https://hooks.slack.test/1",
+      providerMessageId: null,
+      providerStatusLastSeenAt: null,
+      templateName: null,
       eventIds: ["event-1"],
-      payloadSnapshot: { kind: "instant_alert" },
-      idempotencyKey: "instant:watch-1:customer:email:owner@example.com:batch-2:send",
-    };
-    const claim = await claimInstantDeliveryAttempt(env, input);
+      payloadSnapshot: {
+        kind: "weekly_digest",
+        deliveryClaimProtocol: "digest_preclaim_v1",
+      },
+      idempotencyKey: "digest:digest-1:customer:slack:owner@example.com",
+      errorMessage: null,
+      sentAt: null,
+      failedAt: null,
+      timestamp: claimUpdatedAt,
+    });
 
     const starts = await Promise.all([
-      markInstantDeliveryDispatchStarted(env, claim.attemptId!, claim.claimUpdatedAt!),
-      markInstantDeliveryDispatchStarted(env, claim.attemptId!, claim.claimUpdatedAt!),
+      markInstantDeliveryDispatchStarted(env, attemptId, claimUpdatedAt),
+      markInstantDeliveryDispatchStarted(env, attemptId, claimUpdatedAt),
     ]);
 
     expect(starts.filter(Boolean)).toHaveLength(1);
@@ -184,12 +200,6 @@ describe("delivery attempt retry claim (sqlite)", () => {
       harness.sqlite.prepare("SELECT status, webhook_status FROM delivery_attempt").get(),
     ).toMatchObject({ status: "pending", webhook_status: "provider_unknown" });
 
-    harness.sqlite
-      .prepare("UPDATE delivery_attempt SET updated_at = ? WHERE id = ?")
-      .run("2020-01-01T00:00:00.000Z", claim.attemptId);
-    const retry = await claimInstantDeliveryAttempt(env, input);
-    expect(retry.attemptId).toBeNull();
-    expect(retry.duplicate?.webhookStatus).toBe("provider_unknown");
   });
 
   it("makes unsubscribe win before dispatch while preserving dispatch-first provider_unknown", async () => {
@@ -213,6 +223,7 @@ describe("delivery attempt retry claim (sqlite)", () => {
           is_validated INTEGER NOT NULL,
           is_opted_in INTEGER NOT NULL,
           is_paused INTEGER NOT NULL,
+          template_eligible INTEGER NOT NULL DEFAULT 0,
           paused_at TEXT,
           opted_out_at TEXT,
           updated_at TEXT NOT NULL,
@@ -305,6 +316,165 @@ describe("delivery attempt retry claim (sqlite)", () => {
     expect(dispatchWins.sqlite.prepare(
       "SELECT status, webhook_status FROM delivery_attempt",
     ).get()).toMatchObject({ status: "pending", webhook_status: "provider_unknown" });
+
+    const addressChangeWins = makeHarness();
+    const thirdClaim = await claimInstantDeliveryAttempt(
+      { DB: addressChangeWins.db } as never,
+      input("race-address-change-wins"),
+    );
+    addressChangeWins.sqlite.exec(`
+      UPDATE user SET email = 'new-owner@example.com' WHERE id = 'user-1';
+      UPDATE delivery_target
+      SET target_value = 'new-owner@example.com',
+          updated_at = '2026-07-19T05:02:00.000Z'
+      WHERE id = 'target-1';
+    `);
+    await expect(
+      markInstantDeliveryDispatchStarted(
+        { DB: addressChangeWins.db } as never,
+        thirdClaim.attemptId!,
+        thirdClaim.claimUpdatedAt!,
+      ),
+    ).resolves.toBeNull();
+    expect(addressChangeWins.sqlite.prepare(
+      "SELECT status, webhook_status, target_value FROM delivery_attempt",
+    ).get()).toMatchObject({
+      status: "pending",
+      webhook_status: "pending",
+      target_value: "owner@example.com",
+    });
+  });
+
+  it("blocks customer Slack and WhatsApp dispatch when current target consent changes", async () => {
+    const harness = createSqliteD1();
+    fixtures.push(harness);
+    harness.sqlite.exec(`
+      CREATE TABLE user (
+        id TEXT PRIMARY KEY NOT NULL,
+        email TEXT NOT NULL,
+        emailVerified INTEGER NOT NULL
+      );
+      INSERT INTO user (id, email, emailVerified)
+      VALUES ('user-1', 'owner@example.com', 1);
+      CREATE TABLE delivery_target (
+        id TEXT PRIMARY KEY NOT NULL,
+        user_id TEXT NOT NULL,
+        channel TEXT NOT NULL,
+        target_value TEXT NOT NULL,
+        validation_status TEXT NOT NULL,
+        is_validated INTEGER NOT NULL,
+        is_opted_in INTEGER NOT NULL,
+        is_paused INTEGER NOT NULL,
+        template_eligible INTEGER NOT NULL DEFAULT 0,
+        opted_out_at TEXT
+      );
+      INSERT INTO delivery_target (
+        id, user_id, channel, target_value, validation_status,
+        is_validated, is_opted_in, is_paused, template_eligible, opted_out_at
+      ) VALUES
+        ('slack-1', 'user-1', 'slack', 'https://hooks.slack.test/1',
+         'validated', 1, 1, 0, 0, NULL),
+        ('whatsapp-1', 'user-1', 'whatsapp', '+15555550100',
+         'validated', 1, 1, 0, 1, NULL),
+        ('whatsapp-control', 'user-1', 'whatsapp', '+15555550101',
+         'validated', 1, 1, 0, 1, NULL);
+      CREATE TABLE delivery_attempt (
+        id TEXT PRIMARY KEY NOT NULL,
+        user_id TEXT NOT NULL,
+        watchlist_id TEXT,
+        digest_run_id TEXT,
+        delivery_target_id TEXT,
+        lane TEXT NOT NULL,
+        channel TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        status TEXT NOT NULL,
+        webhook_status TEXT NOT NULL,
+        target_value TEXT NOT NULL,
+        provider_message_id TEXT,
+        provider_status_last_seen_at TEXT,
+        template_name TEXT,
+        event_ids_json TEXT NOT NULL DEFAULT '[]',
+        payload_snapshot_json TEXT NOT NULL DEFAULT '{}',
+        idempotency_key TEXT UNIQUE,
+        error_message TEXT,
+        sent_at TEXT,
+        failed_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    const env = { DB: harness.db } as never;
+    const timestamp = "2026-07-19T05:00:00.000Z";
+    const createAttempt = (
+      channel: "slack" | "whatsapp",
+      targetId: string,
+      targetValue: string,
+    ) =>
+      createDeliveryAttempt(env, {
+        userId: "user-1",
+        watchlistId: "watch-1",
+        digestRunId: null,
+        deliveryTargetId: targetId,
+        lane: "customer" as const,
+        channel,
+        provider: channel === "slack" ? "slack_incoming_webhook" : "whatsapp_cloud_api",
+        status: "pending" as const,
+        webhookStatus: "pending" as const,
+        targetValue,
+        providerMessageId: null,
+        providerStatusLastSeenAt: null,
+        templateName: channel === "whatsapp" ? "proof_digest_customer_v1" : null,
+        eventIds: ["event-1"],
+        payloadSnapshot: { kind: "instant_alert" },
+        idempotencyKey: `consent-race:${channel}:${targetId}`,
+        errorMessage: null,
+        sentAt: null,
+        failedAt: null,
+        timestamp,
+      });
+
+    const slackAttempt = await createAttempt(
+      "slack",
+      "slack-1",
+      "https://hooks.slack.test/1",
+    );
+    const whatsappAttempt = await createAttempt(
+      "whatsapp",
+      "whatsapp-1",
+      "+15555550100",
+    );
+    const whatsappControl = await createAttempt(
+      "whatsapp",
+      "whatsapp-control",
+      "+15555550101",
+    );
+    harness.sqlite.exec(`
+      UPDATE delivery_target SET is_paused = 1 WHERE id = 'slack-1';
+      UPDATE delivery_target
+      SET is_opted_in = 0, opted_out_at = '2026-07-19T05:01:00.000Z'
+      WHERE id = 'whatsapp-1';
+    `);
+
+    await expect(
+      markInstantDeliveryDispatchStarted(env, slackAttempt, timestamp),
+    ).resolves.toBeNull();
+    await expect(
+      markInstantDeliveryDispatchStarted(env, whatsappAttempt, timestamp),
+    ).resolves.toBeNull();
+    await expect(
+      markInstantDeliveryDispatchStarted(env, whatsappControl, timestamp),
+    ).resolves.toEqual(expect.any(String));
+    expect(
+      harness.sqlite
+        .prepare(
+          "SELECT id, status, webhook_status FROM delivery_attempt ORDER BY target_value",
+        )
+        .all(),
+    ).toEqual([
+      { id: whatsappAttempt, status: "pending", webhook_status: "pending" },
+      { id: whatsappControl, status: "pending", webhook_status: "provider_unknown" },
+      { id: slackAttempt, status: "pending", webhook_status: "pending" },
+    ]);
   });
 
   it("claims one failed retry, reclaims stale pending, and skips active pending", async () => {

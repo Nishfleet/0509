@@ -682,7 +682,61 @@ export function extractDodoProofCreditGrant(env: AppEnv, payload: unknown) {
     credits,
     grantedAt,
     metadata: root,
+    billingCanaryLockId:
+      readString(metadata, "canary") === "billing"
+        ? readString(metadata, "billing_canary_lock_id") || null
+        : null,
+    isBillingCanary: readString(metadata, "canary") === "billing",
   };
+}
+
+interface BillingCanaryPlanSnapshotMetadata {
+  plan: string | null;
+  planUpdatedAt: string | null;
+  dodoPaymentId: string | null;
+  dodoProductId: string | null;
+  dodoPlanChangeProductId: string | null;
+  dodoStatus: string | null;
+  dodoSubscriptionId: string | null;
+  dodoCustomerId: string | null;
+  dodoNextBillingAt: string | null;
+  evidenceEntitlementAnchor: string | null;
+  evidenceEntitlementAnchorSource: string | null;
+}
+
+function readBillingCanaryPlanSnapshot(
+  metadata: Record<string, unknown>,
+): BillingCanaryPlanSnapshotMetadata | undefined {
+  if (readString(metadata, "canary") !== "billing") return undefined;
+  const raw = readString(metadata, "expected_plan_snapshot_json");
+  if (!raw) return undefined;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
+    const row = parsed as Record<string, unknown>;
+    const nullableString = (key: string) => {
+      const value = row[key];
+      return value === null || typeof value === "string" ? value : undefined;
+    };
+    const values = {
+      plan: nullableString("plan"),
+      planUpdatedAt: nullableString("plan_updated_at"),
+      dodoPaymentId: nullableString("dodo_payment_id"),
+      dodoProductId: nullableString("dodo_product_id"),
+      dodoPlanChangeProductId: nullableString("dodo_plan_change_product_id"),
+      dodoStatus: nullableString("dodo_status"),
+      dodoSubscriptionId: nullableString("dodo_subscription_id"),
+      dodoCustomerId: nullableString("dodo_customer_id"),
+      dodoNextBillingAt: nullableString("dodo_next_billing_at"),
+      evidenceEntitlementAnchor: nullableString("evidence_entitlement_anchor"),
+      evidenceEntitlementAnchorSource: nullableString("evidence_entitlement_anchor_source"),
+    };
+    return Object.values(values).some((value) => value === undefined)
+      ? undefined
+      : values as BillingCanaryPlanSnapshotMetadata;
+  } catch {
+    return undefined;
+  }
 }
 
 export function extractDodoPlanGrant(env: AppEnv, payload: unknown) {
@@ -734,6 +788,12 @@ export function extractDodoPlanGrant(env: AppEnv, payload: unknown) {
     subscriptionId: readString(root, "subscription_id") || null,
     customerId: readString(objectOrEmpty(root.customer), "customer_id") || null,
     metadata: root,
+    billingCanaryExpectedPlanSnapshot: readBillingCanaryPlanSnapshot(metadata),
+    billingCanaryLockId:
+      readString(metadata, "canary") === "billing"
+        ? readString(metadata, "billing_canary_lock_id") || null
+        : null,
+    isBillingCanary: readString(metadata, "canary") === "billing",
   };
 }
 

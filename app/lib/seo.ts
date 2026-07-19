@@ -48,7 +48,7 @@ export function publicSeoMeta(input: {
   ];
 }
 
-const SITEMAP_PATHS = [
+export const SITEMAP_PATHS = [
   "/",
   "/compare/magicbrief",
   "/help",

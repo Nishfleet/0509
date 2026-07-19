@@ -67,7 +67,7 @@ function pathInside(root, candidate) {
 }
 
 /** @param {any} manifest @param {string} root */
-function validateArtifactFiles(manifest, root) {
+export function validateArtifactFiles(manifest, root) {
   const issues = [];
   const testResultsRoot = resolve(root, "test-results");
   let realOutputRoot;
@@ -156,6 +156,7 @@ export function validateDeployReadiness({ manifest, candidate, root = process.cw
     config?.wranglerWorktreeSha256 !== candidate?.wrangler?.worktreeSha256 ||
     config?.productionSearchRolloutMode !== "shadow" ||
     config?.providerNetworkDeny !== true ||
+    config?.browserProject !== "local-release" ||
     config?.retries !== 0 ||
     config?.workers !== 1
   ) issues.push("postflight_config_identity");

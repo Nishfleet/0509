@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { listAdsByIds, upsertAd } from "~/lib/ad-persistence.server";
+import {
+  hydrateAdsWithPersistedCreatives,
+  listAdsByIds,
+  upsertAd,
+} from "~/lib/ad-persistence.server";
 import type { AdRecord } from "~/lib/types";
 import { applyMigration, createSqliteD1 } from "./helpers/sqlite-d1";
 
@@ -221,6 +225,82 @@ describe("upsertAd seen-window ratchet", () => {
     expect(analysisRows).toEqual(expect.arrayContaining([
       { field_key: "translated_text", field_value: "Earlier translated text" },
       { field_key: "hook", field_value: "Latest scan hook" },
+    ]));
+  });
+
+  it("removes stale hook and offer fields when current source evidence has neither", async () => {
+    await upsertAd(env, buildAd({
+      analysisFields: [
+        {
+          scopeType: "ad",
+          fieldKey: "hook",
+          fieldValue: "Old fabricated hook",
+          provenanceSource: "meta_library_browser",
+          extractorVersion: "structured-v1",
+          confidence: 0.86,
+        },
+        {
+          scopeType: "ad",
+          fieldKey: "offer",
+          fieldValue: "Shop now",
+          provenanceSource: "meta_library_browser",
+          extractorVersion: "structured-v1",
+          confidence: 0.84,
+        },
+      ],
+    }));
+
+    const honestIncoming = buildAd({ hook: "", offer: "", analysisFields: [] });
+    const [hydrated] = await hydrateAdsWithPersistedCreatives(env, [honestIncoming]);
+    expect(hydrated.analysisFields.map((field) => field.fieldKey)).not.toContain("hook");
+    expect(hydrated.analysisFields.map((field) => field.fieldKey)).not.toContain("offer");
+
+    await upsertAd(env, honestIncoming);
+    const [persisted] = await listAdsByIds(env, [honestIncoming.metaAdId]);
+    expect(persisted.analysisFields.map((field) => field.fieldKey)).not.toContain("hook");
+    expect(persisted.analysisFields.map((field) => field.fieldKey)).not.toContain("offer");
+  });
+
+  it("preserves higher-fidelity hook and offer fields across an empty browser fallback", async () => {
+    await upsertAd(env, buildAd({
+      source: "meta_api",
+      analysisFields: [
+        {
+          scopeType: "ad",
+          fieldKey: "hook",
+          fieldValue: "API hook",
+          provenanceSource: "meta_api",
+          extractorVersion: "structured-v1",
+          confidence: 0.86,
+        },
+        {
+          scopeType: "ad",
+          fieldKey: "offer",
+          fieldValue: "₹999",
+          provenanceSource: "meta_api",
+          extractorVersion: "structured-v1",
+          confidence: 0.84,
+        },
+      ],
+    }));
+
+    const browserFallback = buildAd({
+      source: "meta_library_browser",
+      hook: "",
+      offer: "",
+      analysisFields: [],
+    });
+    const [hydrated] = await hydrateAdsWithPersistedCreatives(env, [browserFallback]);
+    expect(hydrated.analysisFields).toEqual(expect.arrayContaining([
+      expect.objectContaining({ fieldKey: "hook", fieldValue: "API hook" }),
+      expect.objectContaining({ fieldKey: "offer", fieldValue: "₹999" }),
+    ]));
+
+    await upsertAd(env, browserFallback);
+    const [persisted] = await listAdsByIds(env, [browserFallback.metaAdId]);
+    expect(persisted.analysisFields).toEqual(expect.arrayContaining([
+      expect.objectContaining({ fieldKey: "hook", fieldValue: "API hook" }),
+      expect.objectContaining({ fieldKey: "offer", fieldValue: "₹999" }),
     ]));
   });
 

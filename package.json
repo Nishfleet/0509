@@ -18,6 +18,9 @@
     "canary:presence-pilot": "node scripts/presence-pilot-canary.mjs",
     "test:presence-load": "node scripts/presence-load-test.mjs",
     "canary:prod": "node scripts/prod-canary.mjs",
+    "gate-c:soak:start": "node scripts/gate-c-soak.mjs start",
+    "gate-c:soak:finalize": "node scripts/gate-c-soak.mjs finalize",
+    "gate-c:soak:restore": "node scripts/release-evidence-archive.mjs restore",
     "check:public-home": "node scripts/check-public-home-current.mjs",
     "check:google-oauth-branding": "node scripts/check-google-oauth-branding.mjs",
     "check:d1:workspace-memberships": "node scripts/check-workspace-member-invariants.mjs",
@@ -45,6 +48,7 @@
   },
   "dependencies": {
     "@better-auth/passkey": "^1.6.21",
+    "@noble/hashes": "2.2.0",
     "@opentelemetry/api": "^1.9.1",
     "better-auth": "^1.6.20",
     "isbot": "^5.1.44",

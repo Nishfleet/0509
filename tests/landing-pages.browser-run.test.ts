@@ -117,6 +117,7 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
   });
 
   it("prefers rendered proof after the safe fetch path validates the URL", async () => {
+    const put = vi.fn();
     mockFetchWithDns(
       vi.fn(async () =>
         new Response("<html><head><title>Raw page</title></head><body>Raw offer</body></html>", {
@@ -146,9 +147,11 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
 
     const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
 
-    const snapshot = await captureLandingPageSnapshot({}, "https://example.com/glow", {
-      preferRendered: true,
-    });
+    const snapshot = await captureLandingPageSnapshot(
+      { LANDING_PAGE_ARTIFACTS: { put } as unknown as R2Bucket },
+      "https://example.com/glow",
+      { preferRendered: true },
+    );
 
     expect(captureRenderedLandingPageSnapshot).toHaveBeenCalledWith(
       expect.anything(),
@@ -161,6 +164,7 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
         screenshotArtifactKey: "landing-pages/rendered.jpeg",
       }),
     });
+    expect(put).not.toHaveBeenCalled();
   });
 
   it("captures a real browser-rendered proof bundle when fetch fails", async () => {
@@ -353,6 +357,46 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
       }),
 	  });
     expect(put).toHaveBeenCalledTimes(2);
+  });
+
+  it("removes the screenshot object when HTML persistence fails", async () => {
+    const screenshotBytes = new Uint8Array([8, 5, 0, 9]);
+    const put = vi.fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("screenshot put failed"));
+    const del = vi.fn().mockResolvedValue(undefined);
+    mockFetchWithDns(
+      vi.fn(async (input) => {
+        if (!String(input).includes("browserless.io/stealth/bql")) {
+          throw new Error("fetch failed");
+        }
+        return new Response(JSON.stringify({
+          data: {
+            html: { html: "<html><head><title>Proof</title></head><body></body></html>" },
+            screenshot: { base64: btoa(String.fromCharCode(...screenshotBytes)) },
+            documentRequests: [{ url: "https://www.example.com/glow" }],
+            url: { url: "https://www.example.com/glow" },
+          },
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }) as never,
+    );
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    const snapshot = await captureLandingPageSnapshot(
+      {
+        BROWSERLESS_TOKEN: "browserless-token",
+        BROWSERLESS_PROOF_ALLOWLIST_ORIGINS: "https://example.com https://www.example.com",
+        LANDING_PAGE_ARTIFACTS: { put, delete: del } as unknown as R2Bucket,
+      },
+      "https://example.com/glow",
+    );
+
+    expect(snapshot).toBeNull();
+    expect(put).toHaveBeenCalledTimes(2);
+    const screenshotKey = String(put.mock.calls[0]?.[0]);
+    expect(screenshotKey).toMatch(/\.jpeg$/u);
+    expect(String(put.mock.calls[1]?.[0])).toMatch(/\.html$/u);
+    expect(del).toHaveBeenCalledWith(screenshotKey);
   });
 
   it("falls back to rendered capture when fetched HTML is over the byte limit", async () => {

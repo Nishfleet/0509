@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { validatePricingPreviewBody } from "../scripts/dodo-pricing-canary.mjs";
+import { fetchPreview, validatePricingPreviewBody } from "../scripts/dodo-pricing-canary.mjs";
 
 function pricingPreview(overrides: Record<string, unknown> = {}) {
   const planPrice = (country = "US") => ({
@@ -97,6 +97,38 @@ describe("Dodo pricing canary script", () => {
       expect.objectContaining({ bundle: "proof_2000", ok: true }),
       expect.objectContaining({ bundle: "proof_7500", ok: true }),
     ]);
+  });
+
+  it("requires the response to match the exact deployed Worker when version-bound", () => {
+    const matching = validatePricingPreviewBody({
+      preview: pricingPreview({ workerVersionId: "worker-v1" }),
+      requestedCountry: "US",
+      status: 200,
+      responseOk: true,
+      expectedWorkerVersionId: "worker-v1",
+    });
+    const drifted = validatePricingPreviewBody({
+      preview: pricingPreview({ workerVersionId: "worker-v2" }),
+      requestedCountry: "US",
+      status: 200,
+      responseOk: true,
+      expectedWorkerVersionId: "worker-v1",
+    });
+
+    expect(matching.ok).toBe(true);
+    expect(matching.workerVersionId).toBe("worker-v1");
+    expect(drifted.ok).toBe(false);
+  });
+
+  it("rejects an unbound direct fetch before making a request", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    await expect(fetchPreview({
+      baseUrl: "https://0509.io",
+      country: "US",
+      token: "canary-token",
+      expectedWorkerVersionId: "",
+    })).rejects.toThrow("pricing_canary_worker_version_missing");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("skips Agency validation when the commercial launch gate is closed", () => {

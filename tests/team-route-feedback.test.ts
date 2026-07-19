@@ -257,6 +257,35 @@ describe("team feedback placement", () => {
 		expect(markup).toContain('tabindex="-1"');
 	});
 
+	it("keeps expired invites visible without counting them as occupied seats", async () => {
+		await mockTeamPresentation(null, {
+			members: [
+				{
+					id: "expired-member",
+					email: "expired@example.com",
+					status: "invited",
+					createdAt: "2026-07-01T00:00:00.000Z",
+					acceptedAt: null,
+					tokenExpiresAt: "2000-01-01T00:00:00.000Z",
+				},
+				{
+					id: "active-member",
+					email: "active@example.com",
+					status: "active",
+					createdAt: "2026-07-01T00:00:00.000Z",
+					acceptedAt: "2026-07-02T00:00:00.000Z",
+					tokenExpiresAt: null,
+				},
+			],
+		});
+		const { default: TeamRoute } = await import("~/routes/app.team");
+		const markup = renderToStaticMarkup(createElement(TeamRoute));
+
+		expect(markup).toContain("2 of 10 Agency seats in use");
+		expect(markup).toContain("Invite expired");
+		expect(markup).toContain('name="email"');
+	});
+
 	it("moves focus to the stable completion target after a removed-member revoke", async () => {
 		await mockTeamPresentation(
 			{

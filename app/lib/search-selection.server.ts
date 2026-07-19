@@ -1,5 +1,5 @@
 import { withStructuredAnalysis } from "~/lib/analysis.server";
-import { isAdLibraryBackedAd } from "~/lib/ad-source-kind";
+import { isAdLibraryBackedAd, mapAdSourceToAnalysisSource } from "~/lib/ad-source-kind";
 import { captureCreativeText } from "~/lib/creative-text.server";
 import {
   hydrateAdsWithPersistedCreatives,
@@ -83,9 +83,9 @@ export async function prepareSearchResultSelection(
   // Active-first, longest-running for display + featured proof default.
   const hydratedAds = sortAdsForSearchDisplay(rawHydratedAds, "active_first");
   const featured = pickFeaturedProofAd(hydratedAds);
-  const resolvedSelectedId = selectedId ?? featured?.metaAdId ?? null;
-  const selectedAdBase =
-    hydratedAds.find((ad) => ad.metaAdId === resolvedSelectedId) ?? featured ?? null;
+  const selectedAdBase = selectedId
+    ? hydratedAds.find((ad) => ad.metaAdId === selectedId) ?? null
+    : featured ?? null;
 
   let selectedAd: AdRecord | null = selectedAdBase;
   let selectionEnrichmentPending = false;
@@ -148,7 +148,9 @@ async function enrichAndPersistSelectedAd(
       : Promise.resolve({ value: null, capturedAt: null });
   const [snapshot, creativeCapture] = await Promise.all([
     selectedAdBase.landingPageUrl && !selectedAdBase.landingPage
-      ? captureLandingPageSnapshot(env, selectedAdBase.landingPageUrl)
+      ? captureLandingPageSnapshot(env, selectedAdBase.landingPageUrl, {
+          persistArtifacts: Boolean(env.DB),
+        })
       : Promise.resolve(selectedAdBase.landingPage ?? null),
     creativeCapturePromise,
   ]);
@@ -221,6 +223,21 @@ function canonicalSelectionAd(
   const analysisFields = new Map(
     storedCanonical.analysisFields.map((field) => [`${field.scopeType}:${field.fieldKey}`, field]),
   );
+  const incomingAnalysisSource = mapAdSourceToAnalysisSource(withoutQueryScope.source);
+  if (
+    providerResultIsFresh &&
+    !withoutQueryScope.hook.trim() &&
+    analysisFields.get("ad:hook")?.provenanceSource === incomingAnalysisSource
+  ) {
+    analysisFields.delete("ad:hook");
+  }
+  if (
+    providerResultIsFresh &&
+    !withoutQueryScope.offer.trim() &&
+    analysisFields.get("ad:offer")?.provenanceSource === incomingAnalysisSource
+  ) {
+    analysisFields.delete("ad:offer");
+  }
   for (const field of withoutQueryScope.analysisFields) {
     const key = `${field.scopeType}:${field.fieldKey}`;
     const storedField = analysisFields.get(key);

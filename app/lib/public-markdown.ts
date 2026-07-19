@@ -7,7 +7,7 @@ import {
 const AUDITED_AGENT_ACTION_GROUPS = auditedAgentActionGroups();
 const AUDITED_AGENT_ACTION_GROUP_SUMMARY = AUDITED_AGENT_ACTION_GROUPS.map((group) => group.label).join(", ");
 
-const PUBLIC_MARKDOWN_PATHS = new Set([
+export const PUBLIC_MARKDOWN_PATHS = [
   "/",
   "/help",
   "/docs",
@@ -17,7 +17,9 @@ const PUBLIC_MARKDOWN_PATHS = new Set([
   "/trust",
   "/privacy",
   "/terms",
-]);
+] as const;
+
+const PUBLIC_MARKDOWN_PATH_SET = new Set<string>(PUBLIC_MARKDOWN_PATHS);
 
 export const PUBLIC_MARKDOWN = `---
 title: Five to Nine
@@ -122,5 +124,5 @@ export function wantsPublicMarkdown(request: Request): boolean {
 }
 
 export function isPublicMarkdownPage(pathname: string): boolean {
-  return PUBLIC_MARKDOWN_PATHS.has(pathname);
+  return PUBLIC_MARKDOWN_PATH_SET.has(pathname);
 }
