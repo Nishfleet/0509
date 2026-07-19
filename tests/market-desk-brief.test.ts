@@ -111,16 +111,16 @@ describe("buildMarketDeskBrief", () => {
     expect(brief.hasMetrics).toBe(true);
   });
 
-  it("makes the free plan activation-only instead of promising recurring monitoring", () => {
+  it("describes free as an activation scan followed by a weekly check", () => {
     const brief = buildMarketDeskBrief(baseInput({
       plan: "free",
       watchlists: [watchlist()],
-      nextScanLabel: "Activation scan only — paid plans include recurring monitoring.",
+      nextScanLabel: "Mon 15 Jun, 3:00 am UTC",
     }));
 
     expect(brief.title).toBe("Activation scan is queued");
-    expect(brief.summary).toContain("activation-only");
-    expect(brief.summary).toContain("Paid plans include recurring monitoring");
+    expect(brief.summary).toContain("activation scan, then a weekly check");
+    expect(brief.summary).toContain("Paid plans check every 3–6 hours");
     expect(brief.summary).not.toContain("Scheduled checks run");
   });
 

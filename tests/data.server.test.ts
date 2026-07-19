@@ -2482,13 +2482,16 @@ describe("scheduled watchlist selection", () => {
 
     await listActiveWatchlists({ DB: mock.db } as never);
 
-    expect(mock.statements[0]?.sql).toContain("INNER JOIN user_plan");
+    // LEFT JOIN + the plan filter behaves like the previous INNER JOIN when
+    // both flags are off: null-plan rows fail the IN () branch.
+    expect(mock.statements[0]?.sql).toContain("LEFT JOIN user_plan");
     expect(mock.statements[0]?.sql).toContain("watchlist.is_active = 1");
     expect(mock.statements[0]?.sql).toContain("user_plan.plan IN ('starter', 'agency')");
     expect(mock.statements[0]?.sql).toContain("user_plan.plan = 'scout'");
+    expect(mock.statements[0]?.sql).toContain("user_plan.plan = 'free' OR user_plan.plan IS NULL");
     expect(mock.statements[0]?.sql).toContain("LIMIT ?");
     expect(mock.statements[0]?.sql).toContain("OFFSET ?");
-    expect(mock.statements[0]?.bindings).toEqual([0, 100, 0]);
+    expect(mock.statements[0]?.bindings).toEqual([0, 0, 100, 0]);
   });
 
   it("can include Scout watchlists for the weekly digest path", async () => {
@@ -2496,7 +2499,15 @@ describe("scheduled watchlist selection", () => {
 
     await listActiveWatchlists({ DB: mock.db } as never, { includeScout: true });
 
-    expect(mock.statements[0]?.bindings).toEqual([1, 100, 0]);
+    expect(mock.statements[0]?.bindings).toEqual([1, 0, 100, 0]);
+  });
+
+  it("includes free (and row-less) watchlists only when the weekly flag is set", async () => {
+    const mock = createMockDb();
+
+    await listActiveWatchlists({ DB: mock.db } as never, { includeFree: true });
+
+    expect(mock.statements[0]?.bindings).toEqual([0, 1, 100, 0]);
   });
 });
 

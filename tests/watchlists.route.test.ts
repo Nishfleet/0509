@@ -700,7 +700,7 @@ describe("watchlists route actions", () => {
     vi.doUnmock("~/lib/plan-feature-gate.server");
   });
 
-  it("blocks free digest alerts instead of saving a silent no-op", async () => {
+  it("saves the free weekly digest toggle (free weekly watch)", async () => {
     const upsertWatchlistDeliveryConfig = vi.fn();
     vi.doMock("~/lib/auth.server", () => ({
       requireWorkspaceSession: vi.fn().mockResolvedValue({
@@ -749,13 +749,12 @@ describe("watchlists route actions", () => {
       }),
     } as never);
 
+    // Free carries the weekly_digest entitlement now, so the digest toggle
+    // saves instead of plan-gating (opt-out must work for free users).
     expect(result).toMatchObject({
-      ok: false,
-      error: "plan_gated",
-      feature: "weekly_digest",
-      plan: "free",
+      ok: true,
     });
-    expect(upsertWatchlistDeliveryConfig).not.toHaveBeenCalled();
+    expect(upsertWatchlistDeliveryConfig).toHaveBeenCalled();
     vi.doUnmock("~/lib/plan-feature-gate.server");
     vi.doUnmock("~/lib/env.server");
     vi.doUnmock("~/lib/data.server");
@@ -1848,7 +1847,8 @@ describe("watchlists route rendering", () => {
     expect(copy(run("pending", "workflow_binding_missing"))).toContain("delayed and queued for recovery");
     expect(copy(run("failed", "provider_unavailable"))).toContain("could not finish");
     expect(copy(run("skipped", "e2e_provider_network_denied"))).toContain("paused safely");
-    expect(copy(run("succeeded"))).toContain("activation-only scan is complete");
+    expect(copy(run("succeeded"))).toContain("activation scan is complete");
+    expect(copy(run("succeeded"))).toContain("checked weekly");
     for (const state of [
       null,
       run("pending"),

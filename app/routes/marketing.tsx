@@ -816,9 +816,8 @@ export default function MarketingRoute() {
             <p>3-hour competitor monitoring for 10 competitors, plus daily and weekly briefs.</p>
           </div>
           <p className="ld-pricing-note">
-            Free includes one activation watchlist and its first baseline only. Review the public
-            search preview first; paid plans add scheduled checks, more watchlists, Collections,
-            digests, and clear check caps. Save
+            Free: watch 1 competitor with a weekly email brief. Paid plans add 3–6 hour checks,
+            evidence, more competitors, Collections, daily briefs, and clear check caps. Save
             winning ads to collections — and see how long each ad has been running when the Ad Library
             shares dates.
           </p>

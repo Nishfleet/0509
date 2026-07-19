@@ -82,7 +82,7 @@ const publicTruthSurfaces = [
     heading: "Get Five to Nine working for your team.",
     truth: [
       "Email delivery is in product scope, but this page does not measure live email-provider availability.",
-      "Free is an activation path, not recurring monitoring",
+      "Free lets you watch one competitor",
     ],
   },
   {
