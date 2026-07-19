@@ -137,6 +137,164 @@ afterEach(() => {
 });
 
 describe("searchMetaLibraryByBrowser", () => {
+  it("maps requested status and creative filters into the Meta search URL", async () => {
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: {},
+    }));
+    const { buildSearchUrl } = await import("~/lib/meta-library-browser.server");
+    const query = {
+      ...buildQuery(),
+      filters: {
+        ...buildQuery().filters,
+        status: "inactive" as const,
+        creativeType: "video" as const,
+      },
+    };
+
+    const url = new URL(buildSearchUrl(query));
+
+    expect(url.searchParams.get("active_status")).toBe("inactive");
+    expect(url.searchParams.get("media_type")).toBe("video");
+
+    const activeImageUrl = new URL(
+      buildSearchUrl({
+        ...query,
+        filters: { ...query.filters, status: "active", creativeType: "image" },
+      }),
+    );
+    expect(activeImageUrl.searchParams.get("active_status")).toBe("active");
+    expect(activeImageUrl.searchParams.get("media_type")).toBe("image");
+
+    const allUrl = new URL(buildSearchUrl(buildQuery()));
+    expect(allUrl.searchParams.get("active_status")).toBe("all");
+    expect(allUrl.searchParams.get("media_type")).toBe("all");
+
+    const carouselUrl = new URL(
+      buildSearchUrl({
+        ...query,
+        filters: { ...query.filters, creativeType: "carousel" },
+      }),
+    );
+    expect(carouselUrl.searchParams.get("media_type")).toBe("all");
+  });
+
+  it("removes Meta UI lines before deriving hook and offer", async () => {
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: {},
+    }));
+    const { normalizeExtractedCard } = await import("~/lib/meta-library-browser.server");
+    const body = [
+      "Active",
+      "Library ID: 1234567890",
+      "Started running on 1 Jul 2026",
+      "Nykaa",
+      "Sponsored",
+      "Meet your new serum.",
+      "BOGO weekend is here.",
+      "Platforms",
+      "Instagram",
+      "Shop now",
+    ].join("\n");
+
+    const ad = normalizeExtractedCard(
+      {
+        libraryId: "1234567890",
+        advertiser: "Nykaa",
+        body,
+        previewHeadline: "Serum launch",
+        previewSubhead: null,
+        cta: "Shop now",
+        adSnapshotUrl: "https://www.facebook.com/ads/library/?id=1234567890",
+        landingPageUrl: "https://www.nykaa.com/serum",
+        platforms: ["Instagram"],
+        active: true,
+      },
+      buildQuery(),
+    );
+
+    expect(ad.body).toBe("Meet your new serum.\nBOGO weekend is here.");
+    expect(ad.hook).toBe("Meet your new serum.");
+    expect(ad.offer).toBe("BOGO");
+    expect(ad.offer).not.toBe(ad.body);
+    expect(ad.body).not.toContain("Library ID");
+    expect(ad.body).not.toContain("Started running");
+  });
+
+  it("does not turn an advertiser or Meta placeholder into ad analysis", async () => {
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: {},
+    }));
+    const { normalizeExtractedCard } = await import("~/lib/meta-library-browser.server");
+
+    const ad = normalizeExtractedCard(
+      {
+        libraryId: "1234567890",
+        advertiser: "Nykaa",
+        body: "Active\nLibrary ID: 1234567890\nNykaa\nSponsored\nView ad details",
+        previewHeadline: "Nykaa",
+        previewSubhead: null,
+        cta: null,
+        adSnapshotUrl: "https://www.facebook.com/ads/library/?id=1234567890",
+        landingPageUrl: null,
+        platforms: [],
+        active: true,
+      },
+      buildQuery(),
+    );
+
+    expect(ad.body).toBe("");
+    expect(ad.hook).toBe("");
+    expect(ad.offer).toBe("");
+  });
+
+  it("post-filters cards whose observed active status contradicts the request", async () => {
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: {},
+    }));
+    const { normalizeAndFilterExtractedCards } = await import(
+      "~/lib/meta-library-browser.server"
+    );
+    const activeCard = {
+      libraryId: "active-1",
+      advertiser: "Nykaa",
+      body: "Sponsored\nFresh serum.",
+      previewHeadline: "Fresh serum",
+      previewSubhead: null,
+      cta: null,
+      adSnapshotUrl: null,
+      landingPageUrl: null,
+      platforms: [],
+      active: true,
+    };
+    const inactiveCard = { ...activeCard, libraryId: "inactive-1", active: false };
+    const unknownCard = { ...activeCard, libraryId: "unknown-1", active: null };
+
+    expect(
+      normalizeAndFilterExtractedCards([activeCard], {
+        ...buildQuery(),
+        filters: { ...buildQuery().filters, status: "inactive" },
+      }),
+    ).toEqual([]);
+    expect(
+      normalizeAndFilterExtractedCards([inactiveCard], {
+        ...buildQuery(),
+        filters: { ...buildQuery().filters, status: "active" },
+      }),
+    ).toEqual([]);
+    expect(
+      normalizeAndFilterExtractedCards([unknownCard], {
+        ...buildQuery(),
+        filters: { ...buildQuery().filters, status: "inactive" },
+      }),
+    ).toEqual([
+      expect.objectContaining({
+        metaAdId: "unknown-1",
+        active: false,
+        activeStatusObserved: false,
+      }),
+    ]);
+  });
+
   it("launches Browser Run without session reuse and normalizes Ad Library results", async () => {
     const { browser, browserContext, page } = createBrowserHarness();
     const launch = vi.fn().mockResolvedValue(browser);
@@ -337,6 +495,7 @@ describe("searchMetaLibraryByBrowser", () => {
                     <body>
                       <article>
                         <strong>Nykaa</strong>
+                        <span>Sponsored</span>
                         <p>Flat 30% off on serums. Instagram Facebook Shop now</p>
                         <a href="/ads/library/?id=1234567890">View ad details</a>
                         <a href="https://www.nykaa.com/glow-sale">Shop now</a>
@@ -381,7 +540,11 @@ describe("searchMetaLibraryByBrowser", () => {
       ads: [
         expect.objectContaining({
           metaAdId: "1234567890",
-          advertiser: "",
+          advertiser: "Nykaa",
+          body: "Flat 30% off on serums.",
+          hook: "Flat 30% off on serums.",
+          offer: "Flat 30% off",
+          cta: "Shop now",
           landingPageUrl: "https://www.nykaa.com/glow-sale",
           source: "meta_library_browser",
         }),
@@ -752,6 +915,7 @@ describe("searchMetaLibraryByBrowser", () => {
                   <body>
                     <article>
                       <strong>Nykaa</strong>
+                      <span>Sponsored</span>
                       <p>Flat 30% off on serums. Instagram Facebook Shop now</p>
                       <a href="/ads/library/?id=1234567890">View ad details</a>
                       <a href="https://www.nykaa.com/glow-sale">Shop now</a>
@@ -787,7 +951,7 @@ describe("searchMetaLibraryByBrowser", () => {
     expect(result.ads).toEqual([
       expect.objectContaining({
         metaAdId: "1234567890",
-        advertiser: "",
+        advertiser: "Nykaa",
       }),
     ]);
   });
@@ -854,7 +1018,7 @@ describe("searchMetaLibraryByBrowser", () => {
           metaAdId: "1280520150312258",
           advertiser: "Nykaa Man",
           body:
-            "For the Man Who Never Settles For Less\nFlat ₹400 Off on Your First Order\nNYKAAMAN.COM\nShop Now",
+            "For the Man Who Never Settles For Less\nFlat ₹400 Off on Your First Order\nNYKAAMAN.COM",
           previewHeadline: "For the Man Who Never Settles For Less",
           cta: "Shop Now",
           adSnapshotUrl: "https://www.facebook.com/ads/library/?id=1280520150312258",
@@ -1167,6 +1331,7 @@ describe("searchMetaLibraryByBrowser", () => {
                     <body>
                       <article>
                         <strong>Nykaa</strong>
+                        <span>Sponsored</span>
                         <p>Flat 30% off on serums. Instagram Facebook Shop now</p>
                         <a href="/ads/library/?id=1234567890">View ad details</a>
                         <a href="https://www.nykaa.com/glow-sale">Shop now</a>
@@ -1481,6 +1646,8 @@ describe("searchMetaLibraryByBrowser", () => {
                 <body>
                   <article>
                     <strong>Nykaa</strong>
+                    <span>Sponsored</span>
+                    <strong>Glow without compromise</strong>
                     <p>Flat 30% off on serums. Instagram Facebook Shop now</p>
                     <a href="/ads/library/?id=1234567890">View ad details</a>
                     <a href="https://www.nykaa.com/glow-sale">Shop now</a>
@@ -1517,7 +1684,7 @@ describe("searchMetaLibraryByBrowser", () => {
     expect(result.ads).toEqual([
       expect.objectContaining({
         metaAdId: "1234567890",
-        advertiser: "",
+        advertiser: "Nykaa",
         adSnapshotUrl: "https://www.facebook.com/ads/library/?id=1234567890",
         landingPageUrl: "https://www.nykaa.com/glow-sale",
         platforms: expect.arrayContaining(["Instagram", "Facebook"]),

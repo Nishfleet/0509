@@ -26,6 +26,7 @@ import {
 	DIGEST_ITEM_SET_PROVENANCE,
 	selectDigestCohort,
 } from "~/lib/digest-provenance";
+import { DIGEST_PROVIDER_CLAIM_PROTOCOL } from "~/lib/delivery-attempt-lease";
 import type { AppEnv } from "~/lib/env.server";
 import type {
   DigestDeliveryRecord,
@@ -1202,6 +1203,10 @@ export async function listRetryableDigestRuns(
               AND delivery_attempt.status = 'pending'
               AND delivery_attempt.webhook_status = 'pending'
               AND delivery_attempt.updated_at <= ?
+              AND json_extract(
+                delivery_attempt.payload_snapshot_json,
+                '$.deliveryClaimProtocol'
+              ) = ?
           )
           OR (
             user.emailVerified = 1
@@ -1278,6 +1283,7 @@ export async function listRetryableDigestRuns(
     `,
     input.since,
 		input.stalePreDispatchBefore,
+		DIGEST_PROVIDER_CLAIM_PROTOCOL,
 		DIGEST_ITEM_SET_PROVENANCE,
     input.limit,
   );

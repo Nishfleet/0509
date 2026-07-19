@@ -8,6 +8,16 @@ export const DELIVERY_PRE_DISPATCH_LEASE_MS = 60_000;
 export const DELIVERY_DISPATCH_UNKNOWN_MESSAGE =
 	"Provider dispatch started; outcome requires reconciliation if interrupted.";
 export const INSTANT_PROVIDER_CLAIM_PROTOCOL = "instant_preclaim_v1";
+export const DIGEST_PROVIDER_CLAIM_PROTOCOL = "digest_preclaim_v1";
+
+export function hasTrustedDigestProviderRetryEvidence(
+	attempt: Pick<DeliveryAttemptRecord, "payloadSnapshot">,
+) {
+	return (
+		attempt.payloadSnapshot.deliveryClaimProtocol ===
+		DIGEST_PROVIDER_CLAIM_PROTOCOL
+	);
+}
 
 export function hasTrustedInstantProviderRetryEvidence(
 	attempt: Pick<DeliveryAttemptRecord, "payloadSnapshot">,

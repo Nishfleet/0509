@@ -92,6 +92,7 @@ harness.sqlite.exec(`
       target_value TEXT NOT NULL DEFAULT 'owner@example.com',
       status TEXT NOT NULL,
       webhook_status TEXT NOT NULL,
+      payload_snapshot_json TEXT NOT NULL DEFAULT '{}',
       updated_at TEXT NOT NULL
     );
   `);

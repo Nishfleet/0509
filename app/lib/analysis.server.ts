@@ -20,8 +20,7 @@ const devnagariPattern = /[\u0900-\u097F]/;
  * decomposes them so bare "r"/"z" before digits and "Bogotá"/"code" match.
  */
 const offerPattern =
-  /(?:(?:up\s*to|upto)\s*)?\d+\s*%\s*off|(?:flat\s*)?\d+\s*%\s*off|buy\s*\d+\s*get\s*\d+|\bbogo\b|free\s+(?:shipping|delivery)|(?:from|starting\s+at)\s*(?:R\$|zł|[₹$€£¥])\s*[\d,.]+|(?:R\$|zł|[₹$€£¥])\s*[\d,.]+(?:\s*off)?|(?:rs\.?|inr)\s*[\d,.]+(?:\s*off)?|sale\s+ends?|deal\s+ends?|launch\s+pricing|free\s+minis?|\bcod\b/i;
-
+  /\b(?:(?:(?:up\s*to|upto|flat)\s*)?\d+\s*%\s*off|buy\s*\d+\s*get\s*\d+|bogo|free\s+(?:shipping|delivery|minis?)|sale\s+ends?|deal\s+ends?|launch\s+pricing|cod)\b|\b(?:from|starting\s+at)\s*(?:R\$|zł|[₹$€£¥])\s*\d[\d,.]*|(?:R\$|zł|[₹$€£¥])\s*\d[\d,.]*(?:\s*off\b)?|\b(?:rs\.?|inr)\s*\d[\d,.]*(?:\s*off\b)?/i;
 const HOOK_MAX_CHARS = 120;
 
 export function inferLanguageLabel(value: string) {
@@ -39,7 +38,10 @@ export function inferDestinationType(url: string | null): DestinationType {
   if (normalized.includes("wa.me") || normalized.includes("whatsapp")) {
     return "whatsapp";
   }
-  if (normalized.includes("play.google.com") || normalized.includes("appstore.com")) {
+  if (
+    normalized.includes("play.google.com") ||
+    normalized.includes("appstore.com")
+  ) {
     return "app";
   }
   if (normalized.includes("lead") || normalized.includes("form")) {
@@ -60,16 +62,17 @@ export function deriveHook(body: string, fallbackHeadline: string) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .find(Boolean);
+  const firstLineSentence = firstLine
+    ?.split(/(?<=[.!?])\s+/)
+    .map((part) => part.trim())
+    .find(Boolean);
   const firstSentence = source
     .split(/(?<=[.!?])\s+/)
     .map((part) => part.trim())
     .find(Boolean);
-
   // Prefer a short first line when the body is multi-line card chrome + copy.
   const candidate =
-    firstLine && firstLine.length <= HOOK_MAX_CHARS
-      ? firstLine
-      : firstSentence || firstLine || fallbackHeadline;
+    firstLineSentence || firstSentence || firstLine || fallbackHeadline;
 
   return clampHook(stripHeavyEmojiRuns(candidate || fallbackHeadline || ""));
 }
@@ -78,7 +81,10 @@ export function deriveHook(body: string, fallbackHeadline: string) {
  * Extract an explicit promo/price phrase. Returns null when none is found —
  * callers must not fall back to repeating the full body or CTA.
  */
-export function deriveOffer(body: string, _fallbackCta?: string): string | null {
+export function deriveOffer(
+  body: string,
+  _fallbackCta?: string,
+): string | null {
   const source = (body || "").trim();
   if (!source) {
     return null;
@@ -100,11 +106,17 @@ export function resolveHookAndOffer(input: {
 }): { hook: string; offer: string } {
   const hook = deriveHook(input.body, input.previewHeadline);
   let offer = deriveOffer(input.body, input.cta) ?? "";
-  if (offer && normalizeComparableCopy(hook) === normalizeComparableCopy(offer)) {
+  if (
+    offer &&
+    normalizeComparableCopy(hook) === normalizeComparableCopy(offer)
+  ) {
     offer = "";
   }
   // If offer somehow equals the whole body, drop it — that is the old failure mode.
-  if (offer && normalizeComparableCopy(offer) === normalizeComparableCopy(input.body)) {
+  if (
+    offer &&
+    normalizeComparableCopy(offer) === normalizeComparableCopy(input.body)
+  ) {
     offer = "";
   }
   return { hook, offer };
@@ -139,7 +151,9 @@ export function composeResearchSummary(
 
   const runningDays = daysRunningSince(ad.firstSeenAt);
   if (runningDays !== null) {
-    parts.push(runningDays === 1 ? "Running 1 day" : `Running ${runningDays} days`);
+    parts.push(
+      runningDays === 1 ? "Running 1 day" : `Running ${runningDays} days`,
+    );
   }
 
   if (ad.variantCount && ad.variantCount > 1) {
@@ -184,8 +198,9 @@ function clampHook(value: string) {
 
 function stripHeavyEmojiRuns(value: string) {
   // Collapse runs of 3+ emoji-ish symbols to two so hooks stay readable.
-  return value.replace(/(\p{Extended_Pictographic}\uFE0F?\u200D?){3,}/gu, (match) =>
-    match.slice(0, 2),
+  return value.replace(
+    /(\p{Extended_Pictographic}\uFE0F?\u200D?){3,}/gu,
+    (match) => match.slice(0, 2),
   );
 }
 
@@ -205,12 +220,17 @@ function daysRunningSince(firstSeenAt: string | null | undefined) {
   if (!Number.isFinite(started)) {
     return null;
   }
-  const days = Math.max(0, Math.floor((Date.now() - started) / (24 * 60 * 60 * 1000)));
+  const days = Math.max(
+    0,
+    Math.floor((Date.now() - started) / (24 * 60 * 60 * 1000)),
+  );
   return days;
 }
 
 function hasDiscountSignal(offer: string) {
-  return /%|off|discount|sale|deal|free\s+(?:shipping|delivery)|bogo|buy\s*\d+/i.test(offer);
+  return /%|off|discount|sale|deal|free\s+(?:shipping|delivery)|bogo|buy\s*\d+/i.test(
+    offer,
+  );
 }
 
 function hostFromUrl(url: string | null | undefined) {
@@ -224,17 +244,31 @@ function hostFromUrl(url: string | null | undefined) {
   }
 }
 
-export { formatOfferDisplay, NO_EXPLICIT_OFFER_LABEL } from "~/lib/analysis-display";
+export {
+  formatOfferDisplay,
+  NO_EXPLICIT_OFFER_LABEL,
+} from "~/lib/analysis-display";
 
-export function buildAnalysisFields(ad: AdRecord, source: AnalysisSource): AnalysisFieldInput[] {
-  const landingPageSource = ad.landingPage ? mapCaptureMethodToSource(ad.landingPage.captureMethod) : source;
+export function buildAnalysisFields(
+  ad: AdRecord,
+  source: AnalysisSource,
+): AnalysisFieldInput[] {
+  const landingPageSource = ad.landingPage
+    ? mapCaptureMethodToSource(ad.landingPage.captureMethod)
+    : source;
   const language = classifyAdLanguage(ad);
   const fields = [
-    createField("hook", ad.hook, source, 0.86),
-    createField("offer", ad.offer, source, 0.84),
+    ...(ad.hook.trim() ? [createField("hook", ad.hook, source, 0.86)] : []),
+    ...(ad.offer.trim() ? [createField("offer", ad.offer, source, 0.84)] : []),
     createField("cta", ad.cta, source, 0.96),
     createField("format", ad.format, source, 0.98),
-    createField("language_label", language.label, source, language.confidence, language.metadata),
+    createField(
+      "language_label",
+      language.label,
+      source,
+      language.confidence,
+      language.metadata,
+    ),
     createField("destination_type", ad.destinationType, source, 0.9),
     createField("landing_page_url", ad.landingPageUrl ?? "", source, 0.99),
     createField(
@@ -248,7 +282,12 @@ export function buildAnalysisFields(ad: AdRecord, source: AnalysisSource): Analy
 
   if (ad.landingPage) {
     const landingPageFields = buildLandingPageAnalysisFields(ad.landingPage);
-    fields.push(...landingPageFields.map((field) => ({ ...field, scopeType: "ad" as const })));
+    fields.push(
+      ...landingPageFields.map((field) => ({
+        ...field,
+        scopeType: "ad" as const,
+      })),
+    );
   }
 
   if (ad.creativeText) {
@@ -270,7 +309,9 @@ export function buildAnalysisFields(ad: AdRecord, source: AnalysisSource): Analy
   return fields;
 }
 
-export function withStructuredAnalysis(ad: Omit<AdRecord, "analysisFields">): AdRecord {
+export function withStructuredAnalysis(
+  ad: Omit<AdRecord, "analysisFields">,
+): AdRecord {
   const source = mapAdSourceToAnalysisSource(ad.source);
   const language = classifyAdLanguage(ad);
   const nextAd = {
@@ -304,7 +345,10 @@ function createField(
 }
 
 function classifyAdLanguage(
-  ad: Pick<AdRecord, "previewHeadline" | "body" | "previewSubhead" | "landingPage">,
+  ad: Pick<
+    AdRecord,
+    "previewHeadline" | "body" | "previewSubhead" | "landingPage"
+  >,
 ) {
   return classifyLanguage({
     previewHeadline: ad.previewHeadline,
@@ -321,11 +365,27 @@ export function buildLandingPageAnalysisFields(
   const fields: AnalysisFieldInput[] = [];
 
   if (snapshot.ctaText) {
-    fields.push(createLandingPageField("cta_text", snapshot.ctaText, provenanceSource, 0.82, snapshot.capturedAt));
+    fields.push(
+      createLandingPageField(
+        "cta_text",
+        snapshot.ctaText,
+        provenanceSource,
+        0.82,
+        snapshot.capturedAt,
+      ),
+    );
   }
 
   if (snapshot.priceText) {
-    fields.push(createLandingPageField("price_text", snapshot.priceText, provenanceSource, 0.84, snapshot.capturedAt));
+    fields.push(
+      createLandingPageField(
+        "price_text",
+        snapshot.priceText,
+        provenanceSource,
+        0.84,
+        snapshot.capturedAt,
+      ),
+    );
   }
 
   if (typeof snapshot.formPresent === "boolean") {

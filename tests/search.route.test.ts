@@ -1713,6 +1713,33 @@ describe("search loader OCR reuse", () => {
 });
 
 describe("search status copy", () => {
+  it("labels missing analysis honestly and flags approximate browser format filters", async () => {
+    const {
+      formatAdActiveStatus,
+      formatCreativeFormatLabel,
+      formatHookLabel,
+      formatOfferLabel,
+      shouldShowApproximateFormatNotice,
+    } = await import("~/routes/search");
+
+    expect(formatHookLabel("")).toBe("Hook not detected.");
+    expect(formatOfferLabel("")).toBe("No explicit offer detected.");
+    expect(formatCreativeFormatLabel("unknown")).toBe("Not detected");
+    expect(formatAdActiveStatus({ active: true, activeStatusObserved: false })).toBe(
+      "Status not detected",
+    );
+    expect(formatAdActiveStatus({ active: true })).toBe("Active");
+    expect(
+      shouldShowApproximateFormatNotice(
+        { creativeType: "carousel" },
+        {
+          source: "meta_library_browser",
+          provider: "meta_library_browser",
+        },
+      ),
+    ).toBe(true);
+  });
+
   it("preserves broader scope for result selection and pagination links", async () => {
     const { withSearchScope } = await import("~/routes/search");
     const base = new URLSearchParams("website=nykaa.com&query=nykaa");

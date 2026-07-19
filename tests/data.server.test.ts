@@ -3589,9 +3589,11 @@ describe("listRetryableDigestRuns", () => {
     expect(query?.sql).toContain("delivery_attempt.status = 'pending'");
     expect(query?.sql).toContain("delivery_attempt.webhook_status = 'pending'");
     expect(query?.sql).toContain("delivery_attempt.updated_at <= ?");
+    expect(query?.sql).toContain("'$.deliveryClaimProtocol'");
     expect(query?.bindings).toEqual([
       "2026-06-01T00:00:00.000Z",
       "2026-07-13T08:59:00.000Z",
+      "digest_preclaim_v1",
       "atomic-v2",
       25,
     ]);

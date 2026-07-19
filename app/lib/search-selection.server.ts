@@ -1,5 +1,5 @@
 import { withStructuredAnalysis } from "~/lib/analysis.server";
-import { isAdLibraryBackedAd } from "~/lib/ad-source-kind";
+import { isAdLibraryBackedAd, mapAdSourceToAnalysisSource } from "~/lib/ad-source-kind";
 import { captureCreativeText } from "~/lib/creative-text.server";
 import {
   hydrateAdsWithPersistedCreatives,
@@ -221,6 +221,21 @@ function canonicalSelectionAd(
   const analysisFields = new Map(
     storedCanonical.analysisFields.map((field) => [`${field.scopeType}:${field.fieldKey}`, field]),
   );
+  const incomingAnalysisSource = mapAdSourceToAnalysisSource(withoutQueryScope.source);
+  if (
+    providerResultIsFresh &&
+    !withoutQueryScope.hook.trim() &&
+    analysisFields.get("ad:hook")?.provenanceSource === incomingAnalysisSource
+  ) {
+    analysisFields.delete("ad:hook");
+  }
+  if (
+    providerResultIsFresh &&
+    !withoutQueryScope.offer.trim() &&
+    analysisFields.get("ad:offer")?.provenanceSource === incomingAnalysisSource
+  ) {
+    analysisFields.delete("ad:offer");
+  }
   for (const field of withoutQueryScope.analysisFields) {
     const key = `${field.scopeType}:${field.fieldKey}`;
     const storedField = analysisFields.get(key);

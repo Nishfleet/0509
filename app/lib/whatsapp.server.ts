@@ -49,7 +49,7 @@ interface WhatsAppSendResult {
   errorMessage: string | null;
 }
 
-interface SendDigestWhatsAppInput {
+export interface SendDigestWhatsAppInput {
   lane: DeliveryLane;
   target: DeliveryTargetRecord;
   itemCount: number;
@@ -210,24 +210,23 @@ export async function sendDigestWhatsApp(
   env: AppEnv,
   input: SendDigestWhatsAppInput,
 ): Promise<WhatsAppSendResult> {
-  const readinessFailure = validateDigestTarget(env, input);
-  const templateName = WHATSAPP_DIGEST_TEMPLATE_NAMES[input.lane];
+  const preparation = prepareDigestWhatsAppTarget(env, input);
 
-  if (readinessFailure) {
+  if (preparation.errorMessage) {
     return {
       provider: "whatsapp_cloud_api",
       status: "failed",
-      webhookStatus: "provider_unknown",
+      webhookStatus: "failed",
       providerMessageId: null,
       providerStatusLastSeenAt: null,
-      templateName,
-      errorMessage: readinessFailure,
+      templateName: preparation.templateName,
+      errorMessage: preparation.errorMessage,
     };
   }
 
   return sendWhatsAppTemplate(env, {
     targetValue: input.target.targetValue,
-    templateName,
+    templateName: preparation.templateName,
     bodyParameters: [
       formatPeriodRange(input.periodStart, input.periodEnd, input.timeZone),
       String(input.itemCount),
@@ -269,6 +268,16 @@ export async function sendInstantWhatsApp(
     templateName,
     bodyParameters,
   });
+}
+
+export function prepareDigestWhatsAppTarget(
+  env: AppEnv,
+  input: SendDigestWhatsAppInput,
+) {
+  return {
+    templateName: WHATSAPP_DIGEST_TEMPLATE_NAMES[input.lane],
+    errorMessage: validateDigestTarget(env, input),
+  };
 }
 
 function validateDigestTarget(env: AppEnv, input: SendDigestWhatsAppInput) {

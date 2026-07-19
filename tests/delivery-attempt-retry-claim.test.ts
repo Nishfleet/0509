@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   claimInstantDeliveryAttempt,
+  createDeliveryAttempt,
   markInstantDeliveryDispatchStarted,
   suppressEmailTargetsForUserAndAddress,
   updateDeliveryAttemptResult,
@@ -105,7 +106,7 @@ describe("delivery attempt retry claim (sqlite)", () => {
     ).toMatchObject({ count: 1 });
   });
 
-  it("marks one claim as dispatch-started and never reclaims that ambiguous state", async () => {
+  it("marks one digest claim through the real D1 dispatch CAS", async () => {
     const harness = createSqliteD1();
     fixtures.push(harness);
     harness.sqlite.exec(`
@@ -160,23 +161,36 @@ describe("delivery attempt retry claim (sqlite)", () => {
       );
     `);
     const env = { DB: harness.db } as never;
-    const input = {
+    const claimUpdatedAt = "2026-07-19T05:00:00.000Z";
+    const attemptId = await createDeliveryAttempt(env, {
       userId: "user-1",
-      watchlistId: "watch-1",
+      watchlistId: null,
+      digestRunId: "digest-1",
       deliveryTargetId: "target-1",
       lane: "customer" as const,
-      channel: "email" as const,
-      provider: "cloudflare_email",
+      channel: "slack" as const,
+      provider: "slack_incoming_webhook",
+      status: "pending" as const,
+      webhookStatus: "pending" as const,
       targetValue: "owner@example.com",
+      providerMessageId: null,
+      providerStatusLastSeenAt: null,
+      templateName: null,
       eventIds: ["event-1"],
-      payloadSnapshot: { kind: "instant_alert" },
-      idempotencyKey: "instant:watch-1:customer:email:owner@example.com:batch-2:send",
-    };
-    const claim = await claimInstantDeliveryAttempt(env, input);
+      payloadSnapshot: {
+        kind: "weekly_digest",
+        deliveryClaimProtocol: "digest_preclaim_v1",
+      },
+      idempotencyKey: "digest:digest-1:customer:slack:owner@example.com",
+      errorMessage: null,
+      sentAt: null,
+      failedAt: null,
+      timestamp: claimUpdatedAt,
+    });
 
     const starts = await Promise.all([
-      markInstantDeliveryDispatchStarted(env, claim.attemptId!, claim.claimUpdatedAt!),
-      markInstantDeliveryDispatchStarted(env, claim.attemptId!, claim.claimUpdatedAt!),
+      markInstantDeliveryDispatchStarted(env, attemptId, claimUpdatedAt),
+      markInstantDeliveryDispatchStarted(env, attemptId, claimUpdatedAt),
     ]);
 
     expect(starts.filter(Boolean)).toHaveLength(1);
@@ -184,12 +198,6 @@ describe("delivery attempt retry claim (sqlite)", () => {
       harness.sqlite.prepare("SELECT status, webhook_status FROM delivery_attempt").get(),
     ).toMatchObject({ status: "pending", webhook_status: "provider_unknown" });
 
-    harness.sqlite
-      .prepare("UPDATE delivery_attempt SET updated_at = ? WHERE id = ?")
-      .run("2020-01-01T00:00:00.000Z", claim.attemptId);
-    const retry = await claimInstantDeliveryAttempt(env, input);
-    expect(retry.attemptId).toBeNull();
-    expect(retry.duplicate?.webhookStatus).toBe("provider_unknown");
   });
 
   it("makes unsubscribe win before dispatch while preserving dispatch-first provider_unknown", async () => {

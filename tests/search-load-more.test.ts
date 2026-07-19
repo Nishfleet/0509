@@ -133,6 +133,46 @@ describe("search load-more accessibility", () => {
     expect(delayed.adCursorById).toEqual(first.adCursorById);
   });
 
+  it("preserves the furthest cursor across a selection-only reload", async () => {
+    const { createSearchAccumulationState, mergeSearchAccumulationState } = await import(
+      "~/routes/search"
+    );
+    const first = createSearchAccumulationState("search-1", result(), ad);
+    const secondAd = { ...ad, metaAdId: "ad-2", previewHeadline: "Second" };
+    const accumulated = mergeSearchAccumulationState(
+      first,
+      result({ ads: [secondAd], nextCursor: "cursor-3" }),
+      { requestedCursor: "cursor-2", selectedAd: null },
+    );
+    const reloaded = mergeSearchAccumulationState(
+      accumulated,
+      result({ ads: [ad], nextCursor: "cursor-2" }),
+      { requestedCursor: null, selectedAd: secondAd },
+    );
+
+    expect(reloaded.result.ads.map((item) => item.metaAdId)).toEqual(["ad-1", "ad-2"]);
+    expect(reloaded.result.nextCursor).toBe("cursor-3");
+    expect(reloaded.selectedAd?.metaAdId).toBe("ad-2");
+  });
+
+  it("does not resurrect pagination after a terminal selection-only reload", async () => {
+    const { createSearchAccumulationState, mergeSearchAccumulationState } = await import(
+      "~/routes/search"
+    );
+    const terminal = createSearchAccumulationState(
+      "search-1",
+      result({ nextCursor: null }),
+      ad,
+    );
+    const reloaded = mergeSearchAccumulationState(
+      terminal,
+      result({ nextCursor: "cursor-2" }),
+      { requestedCursor: null, selectedAd: ad },
+    );
+
+    expect(reloaded.result.nextCursor).toBeNull();
+  });
+
   it("announces loading, result counts, completion, and delayed checks without raw errors", async () => {
     const {
       formatSearchResultsAnnouncement,
