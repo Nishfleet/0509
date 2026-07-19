@@ -83,7 +83,14 @@ export function parseRenderedMetaLibraryHtml(
       : extractRenderedParagraphCopy(contextHtml) ||
         extractRenderedTrailingEmphasisCopy(contextHtml, localAnchorIndex);
     const cta = inferCta(contextLineText);
-    const landingPageUrl = extractExternalLink(contextHtml);
+    const landingPageUrl =
+      extractExternalLink(contextHtml) ??
+      inferLandingPageFromTextBlock(
+        contextLineText
+          .split(/\n+/)
+          .map((line) => line.trim())
+          .filter(Boolean),
+      );
     const media = extractCreativeMediaFromHtml(contextHtml);
     const variantCount = extractVariantCountFromText(contextLineText);
 
@@ -525,7 +532,11 @@ export function extractAdBodyLines(block: string[]) {
   const seen = new Set<string>();
 
   for (const line of afterSponsored) {
-    if (isTextCardUiLine(line) || /^Sponsored$/i.test(line)) {
+    if (
+      isTextCardUiLine(line) ||
+      isLandingPageEvidenceLine(line) ||
+      /^Sponsored$/i.test(line)
+    ) {
       continue;
     }
     const normalized = normalizeExtractedBodyLine(line);
@@ -604,16 +615,25 @@ export function isTextCardUiLine(line: string) {
   );
 }
 
-function inferLandingPageFromTextBlock(block: string[]) {
-  const domainLine = block.find((line) =>
-    /^[A-Z0-9.-]+\.[A-Z]{2,}(?:\/\S*)?$/i.test(line),
+function isLandingPageEvidenceLine(line: string) {
+  const value = line.trim();
+  return (
+    /^[A-Z0-9.-]+\.[A-Z]{2,}(?:\/\S*)?$/i.test(value) ||
+    /^https?:\/\/[^\s]+$/i.test(value)
   );
+}
+
+function inferLandingPageFromTextBlock(block: string[]) {
+  const domainLine = block.find(isLandingPageEvidenceLine);
   if (!domainLine) {
     return null;
   }
 
   try {
-    return new URL(`https://${domainLine.toLowerCase()}`).toString();
+    const normalized = /^https?:\/\//i.test(domainLine)
+      ? domainLine
+      : `https://${domainLine.toLowerCase()}`;
+    return new URL(normalized).toString();
   } catch {
     return null;
   }

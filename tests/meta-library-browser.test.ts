@@ -667,6 +667,35 @@ describe("searchMetaLibraryByBrowser", () => {
     });
   });
 
+  it("keeps a destination-only rendered card out of hook and offer evidence", async () => {
+    vi.doMock("@cloudflare/puppeteer", () => ({ default: {} }));
+    const { parseRenderedMetaLibraryHtml } = await import(
+      "~/lib/meta-library-rendered-card-parser.server"
+    );
+    const { normalizeExtractedCard } = await import(
+      "~/lib/meta-library-browser.server"
+    );
+    const parsed = parseRenderedMetaLibraryHtml(`
+      <article role="article">
+        <strong>Example Brand</strong>
+        <span>Sponsored</span>
+        <span>COD.COM</span>
+        <button>Shop now</button>
+        <a href="/ads/library/?id=9999999999">View ad details</a>
+      </article>
+    `);
+
+    expect(parsed.cards).toHaveLength(1);
+    const ad = normalizeExtractedCard(parsed.cards[0]!, buildQuery());
+    expect(ad.landingPageUrl).toBe("https://cod.com/");
+    expect(ad.body).toBe("");
+    expect(ad.hook).toBe("");
+    expect(ad.offer).toBe("");
+    expect(ad.analysisFields.map((field) => field.fieldKey)).not.toEqual(
+      expect.arrayContaining(["hook", "offer"]),
+    );
+  });
+
   it("falls back to adjacent anchor blocks when rendered markup is unclosed", async () => {
     const { parseRenderedMetaLibraryHtml } = await import(
       "~/lib/meta-library-rendered-card-parser.server"
@@ -1018,7 +1047,7 @@ describe("searchMetaLibraryByBrowser", () => {
           metaAdId: "1280520150312258",
           advertiser: "Nykaa Man",
           body:
-            "For the Man Who Never Settles For Less\nFlat ₹400 Off on Your First Order\nNYKAAMAN.COM",
+            "For the Man Who Never Settles For Less\nFlat ₹400 Off on Your First Order",
           previewHeadline: "For the Man Who Never Settles For Less",
           cta: "Shop Now",
           adSnapshotUrl: "https://www.facebook.com/ads/library/?id=1280520150312258",

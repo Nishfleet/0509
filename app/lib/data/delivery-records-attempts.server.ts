@@ -534,6 +534,17 @@ export async function markInstantDeliveryDispatchStarted(
             WHERE target.id = delivery_attempt.delivery_target_id
               AND target.user_id = delivery_attempt.user_id
               AND target.channel = delivery_attempt.channel
+              AND (
+                (
+                  delivery_attempt.channel = 'email'
+                  AND lower(trim(target.target_value)) =
+                    lower(trim(delivery_attempt.target_value))
+                )
+                OR (
+                  delivery_attempt.channel <> 'email'
+                  AND target.target_value = delivery_attempt.target_value
+                )
+              )
               AND target.is_opted_in = 1
               AND target.is_paused = 0
               AND target.opted_out_at IS NULL

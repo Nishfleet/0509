@@ -316,6 +316,33 @@ describe("delivery attempt retry claim (sqlite)", () => {
     expect(dispatchWins.sqlite.prepare(
       "SELECT status, webhook_status FROM delivery_attempt",
     ).get()).toMatchObject({ status: "pending", webhook_status: "provider_unknown" });
+
+    const addressChangeWins = makeHarness();
+    const thirdClaim = await claimInstantDeliveryAttempt(
+      { DB: addressChangeWins.db } as never,
+      input("race-address-change-wins"),
+    );
+    addressChangeWins.sqlite.exec(`
+      UPDATE user SET email = 'new-owner@example.com' WHERE id = 'user-1';
+      UPDATE delivery_target
+      SET target_value = 'new-owner@example.com',
+          updated_at = '2026-07-19T05:02:00.000Z'
+      WHERE id = 'target-1';
+    `);
+    await expect(
+      markInstantDeliveryDispatchStarted(
+        { DB: addressChangeWins.db } as never,
+        thirdClaim.attemptId!,
+        thirdClaim.claimUpdatedAt!,
+      ),
+    ).resolves.toBeNull();
+    expect(addressChangeWins.sqlite.prepare(
+      "SELECT status, webhook_status, target_value FROM delivery_attempt",
+    ).get()).toMatchObject({
+      status: "pending",
+      webhook_status: "pending",
+      target_value: "owner@example.com",
+    });
   });
 
   it("blocks customer Slack and WhatsApp dispatch when current target consent changes", async () => {
