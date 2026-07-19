@@ -8215,3 +8215,222 @@ reds soften --- */
 .f9-theme-field {
   max-width: 260px;
 }
+
+/* Quick-add palette (workflow-friction pass): first modal in the app.
+   Token-driven so [data-f9-theme="dark"] adapts without overrides. */
+.f9-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  align-items: start;
+  justify-items: center;
+  padding: clamp(16px, 12vh, 120px) 16px 16px;
+  background: rgba(6, 22, 41, 0.42);
+}
+
+.f9-modal {
+  width: min(560px, 100%);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: 0 24px 64px rgba(6, 22, 41, 0.28);
+  outline: none;
+}
+
+.f9-quick-add-form {
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+}
+
+.f9-quick-add-hint {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 0.82rem;
+}
+
+.f9-quick-add-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+[data-f9-theme="dark"] .f9-modal-backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+[data-f9-theme="dark"] .f9-quick-add-dialog .f9-field input {
+  border-color: var(--line);
+  background: var(--dk-input);
+  color: var(--ink);
+}
+
+/* Inline quick-save on search result cards (workflow-friction pass). */
+.f9-result-card-wrap {
+  position: relative;
+}
+
+.f9-quick-save {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+}
+
+.f9-quick-save-button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 5px 10px;
+  opacity: 0;
+  transition: opacity 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+
+.f9-result-card-wrap:hover .f9-quick-save-button,
+.f9-result-card-wrap:focus-within .f9-quick-save-button,
+.f9-quick-save-button:disabled[aria-busy="true"],
+.f9-quick-save-button:focus-visible {
+  opacity: 1;
+}
+
+.f9-quick-save-button:disabled {
+  cursor: default;
+  opacity: 1;
+  color: var(--green-ink);
+  border-color: var(--green-wash);
+  background: var(--green-wash);
+}
+
+@media (hover: none) {
+  .f9-quick-save-button {
+    opacity: 1;
+  }
+}
+
+.f9-quick-save-note {
+  max-width: 240px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  text-align: right;
+}
+
+.f9-quick-save-note.is-error {
+  border-color: var(--red);
+  color: var(--red);
+  background: var(--red-wash);
+}
+
+/* Cross-links between dossier, boards, and live search (workflow-friction). */
+.f9-crosslink-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 0 0 4px;
+}
+
+/* Bulk pause/resume on the watchlists tracking desk (workflow-friction). */
+.f9-bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+}
+
+.f9-work-row-select {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.f9-work-row-select > .f9-work-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.f9-bulk-checkbox {
+  margin-top: 14px;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--green);
+  cursor: pointer;
+}
+
+/* Keyboard navigation on search results (workflow-friction pass). */
+.f9-result-card-wrap.is-key-focus > .f9-result-card {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px var(--green-wash);
+}
+
+.f9-keyboard-hints {
+  position: relative;
+}
+
+.f9-keyboard-hints-trigger {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--ink-soft);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.f9-keyboard-hints-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  gap: 8px;
+  min-width: 240px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: 0 14px 36px rgba(6, 22, 41, 0.16);
+}
+
+.f9-keyboard-hints-popover > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.f9-keyboard-hints-popover dt {
+  font-family: var(--ld-mono);
+  font-size: 0.75rem;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.f9-keyboard-hints-popover dd {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  text-align: right;
+}

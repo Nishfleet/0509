@@ -77,8 +77,12 @@ describe("dashboard v2 production hotfix", () => {
   });
 
   it("removes duplicate search topbar CTAs", () => {
+    // Workflow-friction pass: the topbar CTA is now the quick-add palette
+    // button rather than a /search link, so no search links remain here.
     const searchLinks = appLayout.match(/to="\/search"/g) ?? [];
-    expect(searchLinks).toHaveLength(1);
+    expect(searchLinks).toHaveLength(0);
+    expect(appLayout).toContain("QuickAddPalette");
+    expect(appLayout).toContain("Add competitor");
     expect(appLayout).toContain('to="/app"');
     expect(appLayout).toContain("Overview");
   });
