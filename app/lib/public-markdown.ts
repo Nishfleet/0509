@@ -68,7 +68,7 @@ Five to Nine turns competitor ads and visible landing-page changes into source-b
 - Starter is the recommended plan for retained competitor monitoring.
 - Scout is the entry plan after the public read-only search and sample brief: 3 watchlists, 10 Collections, 6-hour scans, weekly Digest, and 50 checks/month.
 - Starter includes 10 watchlists, 25 Collections, 3-hour scans, daily and weekly Digests, email Notifications, exports, and 250 checks/month.
-- Agency includes 75 watchlists, 250 Collections, 3-hour scans, daily and weekly Digests, team workspace, API/MCP access, reports, branding, and 2,500 checks/month.
+- Agency includes 75 watchlists, 250 Collections, top 25 competitors checked every 3 hours and the rest every 6 hours, daily and weekly Digests, team workspace, API/MCP access, reports, branding, and 2,500 checks/month.
 - Check packs add purchased checks that never expire. They do not change monthly included limits or make monitoring unlimited.
 - Included checks reset every month and do not roll over. Scheduled scans are included with your plan; saved proof-backed captures use checks.
 - Accounts warn after 80% check usage and hard-stop when paid volume is exhausted.
@@ -94,7 +94,7 @@ Current product truth:
 - Account access uses verified access paths.
 - Checkout, plan access, and check limits follow the configured billing provider and visible plan caps; this text does not claim live checkout or provider proof.
 - Email delivery is in product scope for eligible accounts; this text does not measure live provider delivery.
-- Starter is the recommended plan. Paid plans have explicit caps: Scout includes 6-hour scans, weekly digest delivery, and 50 checks/month; Starter includes 3-hour scans, daily and weekly digest delivery, and 250 checks/month; Agency includes 3-hour scans, daily and weekly digests, and 2,500 checks/month. Purchased checks never expire, included checks reset monthly without rollover, and saved proof-backed captures use checks.
+- Starter is the recommended plan. Paid plans have explicit caps: Scout includes 6-hour scans, weekly digest delivery, and 50 checks/month; Starter includes 3-hour scans, daily and weekly digest delivery, and 250 checks/month; Agency includes top 25 competitors every 3 hours (rest every 6 hours), daily and weekly digests, and 2,500 checks/month. Purchased checks never expire, included checks reset monthly without rollover, and saved proof-backed captures use checks.
 - Tracking status is labeled honestly as live, recent, delayed, or sample data.
 - Recent results must not be described as fresh live results.
 - Backup Meta access is optional, owner-provided, tested before saving, stored encrypted, and used only for that account.

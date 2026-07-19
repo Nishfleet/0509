@@ -72,6 +72,10 @@ describe("public markdown", () => {
     expect(PUBLIC_MARKDOWN).toContain("Scout is the entry plan after the public read-only search and sample brief");
     expect(PUBLIC_MARKDOWN).toContain("6-hour scans, weekly Digest, and 50 checks/month");
     expect(PUBLIC_MARKDOWN).toContain("3-hour scans, daily and weekly Digests, email Notifications, exports, and 250 checks/month");
+    expect(PUBLIC_MARKDOWN).toContain(
+      "top 25 competitors checked every 3 hours and the rest every 6 hours",
+    );
+    expect(LLMS_TEXT).toContain("top 25 competitors every 3 hours (rest every 6 hours)");
     expect(PUBLIC_MARKDOWN).toContain("Check packs add purchased checks that never expire");
     expect(PUBLIC_MARKDOWN).toContain("Included checks reset every month and do not roll over");
     expect(PUBLIC_MARKDOWN).toContain("Scheduled scans are included with your plan");

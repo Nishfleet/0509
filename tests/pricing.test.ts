@@ -52,8 +52,12 @@ describe("pricingPlans", () => {
     expect(starter.features).toContain("250 checks/month");
     expect(agency.features).toContain("75 active watchlists");
     expect(agency.features).toContain("250 Collections");
-    expect(agency.features).toContain("3-hour scans");
-    expect(agency.detail).toContain("3-hour competitor monitoring");
+    expect(agency.features).toContain(
+      "Top 25 competitors every 3 hours; rest every 6 hours",
+    );
+    expect(agency.detail).toContain(
+      "75 competitors — top 25 checked every 3 hours, the rest every 6 hours",
+    );
     expect(agency.features).not.toContain("Slack");
     expect(agency.features).toContain("2,500 checks/month");
     expect(agency.features).toContain("Team workspace");

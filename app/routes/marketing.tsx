@@ -217,7 +217,8 @@ export function valueMathLabel(
 function planValueSummary(planId: PricingPlanSlug) {
   if (planId === "scout") return "3 competitors checked every 6 hours";
   if (planId === "starter") return "10 competitors checked every 3 hours";
-  if (planId === "agency") return "75 competitors checked every 3 hours";
+  if (planId === "agency")
+    return "75 competitors — top 25 checked every 3 hours, the rest every 6 hours";
   return "Scheduled competitor monitoring";
 }
 

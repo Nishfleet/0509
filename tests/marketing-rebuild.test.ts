@@ -168,7 +168,9 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("3-hour competitor monitoring");
     expect(marketingRoute).toContain("3 competitors checked every 6 hours");
     expect(marketingRoute).toContain("10 competitors checked every 3 hours");
-    expect(marketingRoute).toContain("75 competitors checked every 3 hours");
+    expect(marketingRoute).toContain(
+      "75 competitors — top 25 checked every 3 hours, the rest every 6 hours",
+    );
     expect(marketingRoute).toContain("valueMathLabel");
     expect(marketingRoute).toContain("Check packs");
     expect(marketingRoute).toContain('className={`f9-commerce-card${plan.slug === "starter" ? " is-recommended" : ""}`}');

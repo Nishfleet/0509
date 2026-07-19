@@ -24,7 +24,14 @@ function planMarketingFeatures(plan: PlanFamily): string[] {
   if (entitlements.scheduledScanCadence === "every_6h") {
     features.push("6-hour scans");
   } else if (entitlements.scheduledScanCadence === "every_3h") {
-    features.push("3-hour scans");
+    // FIX-8 / WP-37: Agency priority slots — only first 25 run every 3h.
+    if (plan === "agency" && entitlements.priorityScanSlots != null) {
+      features.push(
+        `Top ${entitlements.priorityScanSlots} competitors every 3 hours; rest every 6 hours`,
+      );
+    } else {
+      features.push("3-hour scans");
+    }
   }
 
   if (entitlements.digestCadence === "weekly") {
@@ -70,7 +77,7 @@ const PLANS: PricingPlan[] = PLAN_FAMILIES.filter((plan) => plan !== "free").map
         ? "6-hour competitor monitoring for a small watchlist."
         : slug === "starter"
           ? "3-hour competitor monitoring for one brand's core market."
-          : "3-hour competitor monitoring with client-ready reports for crowded categories.",
+          : "75 competitors — top 25 checked every 3 hours, the rest every 6 hours, with client-ready reports.",
     features: planMarketingFeatures(slug),
     monthlySku: `${slug}_monthly_v1`,
     yearlySku: `${slug}_annual_v1`,
