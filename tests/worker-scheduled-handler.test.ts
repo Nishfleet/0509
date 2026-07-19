@@ -28,6 +28,12 @@ async function loadWorker() {
   const scheduleBillingLifecycleEmailRecovery = vi.fn();
   const scheduleDigestScheduleExhaustionRecovery = vi.fn();
   const reportScheduledTaskFailure = vi.fn();
+  const observeScheduledTask = vi.fn((
+    _env: unknown,
+    _ctx: unknown,
+    _input: unknown,
+    taskPromise: Promise<unknown>,
+  ) => taskPromise);
 
   vi.doMock("../app/lib/monitoring.server", () => ({
     flushDeferredInstantAlerts,
@@ -37,6 +43,7 @@ async function loadWorker() {
     sendWeeklyBusinessNumbers,
   }));
   vi.doMock("../app/lib/cron-failure-alert.server", () => ({ reportScheduledTaskFailure }));
+  vi.doMock("../app/lib/release-scheduled-observation.server", () => ({ observeScheduledTask }));
   vi.doMock("../app/lib/monitoring-fanout.server", () => ({
     reconcileOrchestratedWatchlistRuns: vi.fn().mockResolvedValue({
       redispatched: 0,
@@ -84,6 +91,7 @@ async function loadWorker() {
     flushDeferredInstantAlerts,
     scheduleBillingLifecycleEmailRecovery,
     scheduleDigestScheduleExhaustionRecovery,
+    observeScheduledTask,
   };
 }
 
@@ -122,15 +130,24 @@ describe("Worker scheduled handler", () => {
     );
     expect(loaded.runScheduledDiscoveryWarmup).not.toHaveBeenCalled();
     expect(loaded.scheduleBillingLifecycleEmailRecovery).toHaveBeenCalledTimes(1);
+    expect(loaded.scheduleBillingLifecycleEmailRecovery).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      { observationContext: { cron: NORMAL_CRON, scheduledTime } },
+    );
     expect(loaded.scheduleDigestScheduleExhaustionRecovery).not.toHaveBeenCalled();
+    expect(loaded.observeScheduledTask.mock.calls.map((call) => call[2])).toEqual([
+      { cron: NORMAL_CRON, scheduledTime, taskName: "scheduled_monitoring" },
+    ]);
   });
 
   it("delegates DISCOVERY_WARMUP_CRON to discovery warmup", async () => {
     const loaded = await loadWorker();
     const { ctx, pending } = createContext();
 
+    const scheduledTime = Date.parse("2026-07-16T06:17:00.000Z");
     await loaded.worker.scheduled(
-      { cron: WARMUP_CRON, scheduledTime: Date.parse("2026-07-16T06:17:00.000Z") } as never,
+      { cron: WARMUP_CRON, scheduledTime } as never,
       {} as never,
       ctx as never,
     );
@@ -141,5 +158,18 @@ describe("Worker scheduled handler", () => {
     expect(loaded.flushDeferredInstantAlerts).toHaveBeenCalledTimes(1);
     expect(loaded.scheduleBillingLifecycleEmailRecovery).toHaveBeenCalledTimes(1);
     expect(loaded.scheduleDigestScheduleExhaustionRecovery).toHaveBeenCalledTimes(1);
+    expect(loaded.scheduleDigestScheduleExhaustionRecovery).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      { observationContext: { cron: WARMUP_CRON, scheduledTime } },
+    );
+    expect(loaded.observeScheduledTask.mock.calls.map((call) => call[2])).toEqual([
+      { cron: WARMUP_CRON, scheduledTime, taskName: "digest_schedule_recovery" },
+      { cron: WARMUP_CRON, scheduledTime, taskName: "discovery_warmup" },
+      { cron: WARMUP_CRON, scheduledTime, taskName: "monitoring_fanout_reconciliation" },
+      { cron: WARMUP_CRON, scheduledTime, taskName: "instant_alert_flush" },
+      { cron: WARMUP_CRON, scheduledTime, taskName: "retention_sweep" },
+      { cron: WARMUP_CRON, scheduledTime, taskName: "presence_polling_batch" },
+    ]);
   });
 });

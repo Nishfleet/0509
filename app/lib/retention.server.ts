@@ -25,6 +25,7 @@ const WATCHLIST_RUN_RETENTION_DAYS = 90;
 const WATCHLIST_RUN_KEEP_NEWEST = 5;
 const DELIVERY_ATTEMPT_RETENTION_DAYS = 180;
 const SNAPSHOT_RETENTION_DAYS = 90;
+const RELEASE_SCHEDULED_OBSERVATION_RETENTION_DAYS = 90;
 
 const PRESENCE_ITEM_RETENTION_DAYS = 180;
 const SNAPSHOT_RETENTION_LIMIT = 20;
@@ -170,6 +171,18 @@ export async function runRetentionSweep(
         )
       `,
       bindings: [cutoff(PRESENCE_ITEM_RETENTION_DAYS)],
+    },
+    {
+      name: "release_scheduled_observation",
+      sql: `
+        DELETE FROM release_scheduled_observation
+        WHERE id IN (
+          SELECT id FROM release_scheduled_observation
+          WHERE completed_at < ?
+          LIMIT 500
+        )
+      `,
+      bindings: [cutoff(RELEASE_SCHEDULED_OBSERVATION_RETENTION_DAYS)],
     },
   ];
 

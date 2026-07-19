@@ -276,17 +276,24 @@ async function defaultProductionCanary({ workerVersionId, token }) {
 }
 
 /**
- * @param {{ workerVersionId: string, token: string, evidencePath: string, now?: () => Date, dependencies?: GateDependencies }} input
+ * @param {{ workerVersionId: string, token: string, evidencePath: string, gateRunIdOverride?: string, now?: () => Date, dependencies?: GateDependencies }} input
  */
 export async function runVersionBoundGateC({
   workerVersionId,
   token,
   evidencePath,
+  gateRunIdOverride,
   now = () => new Date(),
   dependencies = {},
 }) {
   if (!workerVersionId || !token || !evidencePath) throw new Error("gate_c_inputs_missing");
-  const runId = gateRunId(workerVersionId);
+  const defaultRunId = gateRunId(workerVersionId);
+  const runId = gateRunIdOverride ?? defaultRunId;
+  if (
+    typeof runId !== "string" ||
+    !/^[a-z0-9._-]{1,128}$/u.test(runId) ||
+    (gateRunIdOverride !== undefined && !runId.startsWith(`${defaultRunId}-`))
+  ) throw new Error("gate_c_run_id_invalid");
   const healthAnchor = dependencies.healthAnchor ?? defaultHealthAnchor;
   const backupLifecycle = dependencies.backupLifecycle ?? defaultBackupLifecycle;
   const backupLifecycleRecheck = dependencies.backupLifecycleRecheck ?? defaultBackupLifecycleRecheck;
@@ -607,8 +614,16 @@ async function main() {
   const token = process.env.CANARY_BYPASS_TOKEN?.trim();
   if (!token) throw new Error("canary_bypass_token_missing");
   const safeVersion = gateRunId(workerVersionId);
-  const evidencePath = resolve("test-results", `${safeVersion}.json`);
-  const result = await runVersionBoundGateC({ workerVersionId, token, evidencePath });
+  const requestedEvidencePath = readArg("--evidence");
+  const evidencePath = requestedEvidencePath
+    ? resolve(requestedEvidencePath)
+    : resolve("test-results", `${safeVersion}.json`);
+  if (
+    requestedEvidencePath &&
+    (!/^test-results\/gate-c-[A-Za-z0-9._-]{1,160}\.json$/u.test(requestedEvidencePath) || requestedEvidencePath.includes(".."))
+  ) throw new Error("gate_c_evidence_path_invalid");
+  const gateRunIdOverride = readArg("--gate-run-id") ?? undefined;
+  const result = await runVersionBoundGateC({ workerVersionId, token, evidencePath, gateRunIdOverride });
   process.stdout.write(`${JSON.stringify({
     passed: result.passed,
     workerVersionId,

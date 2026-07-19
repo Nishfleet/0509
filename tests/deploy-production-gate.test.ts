@@ -216,18 +216,30 @@ describe("production deployment readiness gate", () => {
       includeCloudflareCredentials: true,
     });
     expect(plan[canaryIndex + 2]).toMatchObject({
+      id: "start_production_soak",
+      command: "node",
+      args: expect.arrayContaining([
+        "scripts/gate-c-soak.mjs",
+        "start",
+        "--manifest",
+        "test-results/deploy-readiness-test.json",
+        "--wrangler-output",
+        wranglerOutputPath,
+      ]),
+    });
+    expect(plan[canaryIndex + 3]).toMatchObject({
       id: "rollback_failed_release",
       command: "node",
       includeCloudflareCredentials: true,
       runOnPostDeployFailure: true,
     });
-    expect(plan[canaryIndex + 3]).toMatchObject({ id: "live_public_truth" });
-    expect(plan[canaryIndex + 4]).toMatchObject({
+    expect(plan[canaryIndex + 4]).toMatchObject({ id: "live_public_truth" });
+    expect(plan[canaryIndex + 5]).toMatchObject({
       id: "production_public_smoke",
       command: "npm",
       args: ["run", "e2e:prod:public"],
     });
-    expect(plan[canaryIndex + 5]).toMatchObject({ id: "oauth_branding" });
+    expect(plan[canaryIndex + 6]).toMatchObject({ id: "oauth_branding" });
   });
 
   it("captures one stable prior Worker version and emits an exact guarded rollback command", () => {
@@ -699,33 +711,47 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       workflow.indexOf("- name: Verify complete release evidence set"),
       workflow.indexOf("- name: Preserve release evidence"),
     );
-    const uploadStep = workflow.slice(workflow.indexOf("- name: Preserve release evidence"));
+    const archiveStep = workflow.slice(
+      workflow.indexOf("- name: Archive permission-preserving release evidence"),
+      workflow.indexOf("- name: Preserve release evidence"),
+    );
+    const uploadStep = workflow.slice(
+      workflow.indexOf("- name: Preserve release evidence"),
+      workflow.indexOf("- name: Preserve failed release diagnostics"),
+    );
+    const diagnosticStep = workflow.slice(workflow.indexOf("- name: Preserve failed release diagnostics"));
 
     expect(verifyStep).toContain("if: success()");
     expect(verifyStep).toContain("readiness=(test-results/deploy-readiness-*.json)");
     expect(verifyStep).toContain("wrangler=(test-results/wrangler-deploy-output-*.jsonl)");
     expect(verifyStep).toContain("rollback=(test-results/worker-rollback-target-*.json)");
     expect(verifyStep).toContain("gate_c=(test-results/gate-c-*.json)");
+    expect(verifyStep).toContain("production_soak=(test-results/production-soak-*.json)");
+    expect(verifyStep).toContain("node scripts/gate-c-soak.mjs verify-start --journal");
+    expect(archiveStep).toContain("if: success()");
+    expect(archiveStep).toContain("node scripts/release-evidence-archive.mjs create");
+    expect(archiveStep).toContain("production-release-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz");
     expect(verifyStep).toContain('[ "${#readiness[@]}" -ge 5 ]');
     expect(verifyStep).toContain('[ "${#wrangler[@]}" -eq 1 ]');
     expect(verifyStep).toContain('[ "${#rollback[@]}" -eq 1 ]');
     expect(verifyStep).toContain('[ "${#gate_c[@]}" -eq 1 ]');
+    expect(verifyStep).toContain('[ "${#production_soak[@]}" -eq 1 ]');
     expect(verifyStep).toContain("find test-results/gate-b-artifacts -type f -print -quit");
-    expect(uploadStep).toContain("if: always()");
+    expect(uploadStep).toContain("if: success()");
     expect(uploadStep).toContain("uses: actions/upload-artifact@v7");
     expect(uploadStep).toContain(
       "production-release-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}",
     );
-    expect(uploadStep).toContain("test-results/deploy-readiness-*.json");
-    expect(uploadStep).toContain("test-results/gate-b-manifest-*.json");
-    expect(uploadStep).toContain("test-results/gate-b-artifacts/**");
-    expect(uploadStep).toContain("test-results/wrangler-deploy-output-*.jsonl");
-    expect(uploadStep).toContain("test-results/worker-rollback-target-*.json");
-    expect(uploadStep).toContain("test-results/gate-c-*.json");
+    expect(uploadStep).toContain("test-results/production-release-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}.tar.gz");
     expect(uploadStep).toContain("if-no-files-found: error");
-    expect(uploadStep).toContain("retention-days: 30");
+    expect(uploadStep).toContain("retention-days: 90");
     expect(uploadStep).not.toContain("d1-remote-restore-evidence");
     expect(uploadStep).not.toContain("test-results/**");
+    expect(diagnosticStep).toContain("if: failure()");
+    expect(diagnosticStep).toContain("production-release-diagnostics-");
+    expect(diagnosticStep).toContain("test-results/wrangler-deploy-output-*.jsonl");
+    expect(diagnosticStep).toContain("if-no-files-found: warn");
+    expect(diagnosticStep).not.toContain("d1-remote-restore-evidence");
   });
 
   it("accepts only a clean, exact, all-six first-attempt manifest with intact artifacts", () => {

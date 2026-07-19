@@ -103,18 +103,39 @@ jobs:
           wrangler=(test-results/wrangler-deploy-output-*.jsonl)
           rollback=(test-results/worker-rollback-target-*.json)
           gate_c=(test-results/gate-c-*.json)
+          production_soak=(test-results/production-soak-*.json)
 
           [ "${#readiness[@]}" -ge 5 ]
           [ "${#wrangler[@]}" -eq 1 ]
           [ "${#rollback[@]}" -eq 1 ]
           [ "${#gate_c[@]}" -eq 1 ]
+          [ "${#production_soak[@]}" -eq 1 ]
           [ -n "$(find test-results/gate-b-artifacts -type f -print -quit)" ]
+          node scripts/gate-c-soak.mjs verify-start --journal "${production_soak[0]}"
+
+      - name: Archive permission-preserving release evidence
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          node scripts/release-evidence-archive.mjs create \
+            --output "test-results/production-release-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz"
 
       - name: Preserve release evidence
-        if: always()
+        if: success()
         uses: actions/upload-artifact@v7
         with:
           name: production-release-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/production-release-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}.tar.gz
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Preserve failed release diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: production-release-diagnostics-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             test-results/deploy-readiness-*.json
             test-results/gate-b-manifest-*.json
@@ -122,5 +143,6 @@ jobs:
             test-results/wrangler-deploy-output-*.jsonl
             test-results/worker-rollback-target-*.json
             test-results/gate-c-*.json
-          if-no-files-found: error
-          retention-days: 30
+            test-results/production-soak-*.json
+          if-no-files-found: warn
+          retention-days: 90

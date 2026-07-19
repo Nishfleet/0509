@@ -167,6 +167,18 @@ export function buildProductionDeployPlan({
       includeCloudflareCredentials: true,
     },
     {
+      id: "start_production_soak",
+      command: "node",
+      args: [
+        "scripts/gate-c-soak.mjs",
+        "start",
+        "--manifest",
+        manifestPath,
+        "--wrangler-output",
+        wranglerOutputPath,
+      ],
+    },
+    {
       id: "rollback_failed_release",
       command: "node",
       args: [

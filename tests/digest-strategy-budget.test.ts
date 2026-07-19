@@ -210,4 +210,94 @@ describe("scheduled digest strategy budget", () => {
 		expect(data.claimDigestScheduleJob).toHaveBeenCalledTimes(1);
 		expect(deliverWeeklyDigest).toHaveBeenCalledTimes(1);
 	});
+
+	it("surfaces a failed customer digest while continuing the remaining jobs", async () => {
+		const data = dataServerMock();
+		const deliverWeeklyDigest = vi.fn()
+			.mockRejectedValueOnce(new Error("provider unavailable"))
+			.mockResolvedValue({ attempts: 1, channels: ["email"] });
+
+		vi.doMock("~/lib/auth.server", () => ({}));
+		vi.doMock("~/lib/data.server", () => data);
+		vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+		vi.doMock("~/lib/plan.server", () => planServerMock());
+
+		const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+		const result = await runScheduledMonitoring(envWith(vi.fn()), {
+			includeScans: false,
+			includeDigests: true,
+			digestCadence: "weekly",
+			scheduledTime: Date.parse("2026-07-13T05:00:00.000Z"),
+		});
+
+		expect(result).toMatchObject({
+			digests: 3,
+			digestAttempts: 4,
+			digestFailures: 1,
+		});
+		expect(data.failDigestScheduleJob).toHaveBeenCalledTimes(1);
+		expect(data.completeDigestScheduleJob).toHaveBeenCalledTimes(3);
+		expect(deliverWeeklyDigest).toHaveBeenCalledTimes(4);
+	});
+
+	it("treats a resolved provider failure as a failed digest job", async () => {
+		const data = dataServerMock();
+		const deliverWeeklyDigest = vi.fn()
+			.mockResolvedValueOnce({
+				attempts: 1,
+				channels: ["email"],
+				details: [{ status: "failed" }],
+			})
+			.mockResolvedValue({
+				attempts: 1,
+				channels: ["email"],
+				details: [{ status: "sent" }],
+			});
+
+		vi.doMock("~/lib/auth.server", () => ({}));
+		vi.doMock("~/lib/data.server", () => data);
+		vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+		vi.doMock("~/lib/plan.server", () => planServerMock());
+
+		const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+		const result = await runScheduledMonitoring(envWith(vi.fn()), {
+			includeScans: false,
+			includeDigests: true,
+			digestCadence: "weekly",
+			scheduledTime: Date.parse("2026-07-13T05:00:00.000Z"),
+		});
+
+		expect(result).toMatchObject({ digests: 3, digestAttempts: 4, digestFailures: 1 });
+		expect(data.failDigestScheduleJob).toHaveBeenCalledTimes(1);
+	});
+
+	it("fails an unresolved strategy job without masking later successful customers", async () => {
+		const data = dataServerMock();
+		data.completeDigestStrategyGeneration
+			.mockResolvedValueOnce(false)
+			.mockResolvedValue(true);
+		const deliverWeeklyDigest = vi.fn().mockResolvedValue({
+			attempts: 1,
+			channels: ["email"],
+			details: [{ status: "sent" }],
+		});
+
+		vi.doMock("~/lib/auth.server", () => ({}));
+		vi.doMock("~/lib/data.server", () => data);
+		vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+		vi.doMock("~/lib/plan.server", () => planServerMock());
+
+		const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+		const result = await runScheduledMonitoring(envWith(vi.fn().mockResolvedValue(GOOD_PARAGRAPH)), {
+			includeScans: false,
+			includeDigests: true,
+			digestCadence: "weekly",
+			scheduledTime: Date.parse("2026-07-13T05:00:00.000Z"),
+		});
+
+		expect(result).toMatchObject({ digests: 3, digestAttempts: 4, digestFailures: 1 });
+		expect(data.failDigestScheduleJob).toHaveBeenCalledTimes(1);
+		expect(data.completeDigestScheduleJob).toHaveBeenCalledTimes(3);
+		expect(deliverWeeklyDigest).toHaveBeenCalledTimes(3);
+	});
 });

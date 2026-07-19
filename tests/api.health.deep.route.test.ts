@@ -17,7 +17,15 @@ describe("deep health route", () => {
     const prepare = vi.fn().mockReturnValue({ first });
     const { loader } = await import("~/routes/api.health.deep");
     const response = await loader({
-      context: createContext({ DB: { prepare } }),
+      context: createContext({
+        DB: { prepare },
+        CF_VERSION_METADATA: {
+          id: "worker-version-123",
+          tag: "release-2026-07-19",
+          timestamp: "2026-07-19T06:00:00.000Z",
+        },
+        SEARCH_ROLLOUT_MODE: "shadow",
+      }),
       request: new Request("https://0509.io/api/health/deep"),
     } as never);
 
@@ -29,11 +37,18 @@ describe("deep health route", () => {
       status: string;
       app: string;
       checks: { edge: string; d1: string };
+      releaseIdentity: Record<string, unknown>;
     };
     expect(body).toMatchObject({
       status: "ok",
       app: "0509",
       checks: { edge: "ok", d1: "ok" },
+      releaseIdentity: {
+        workerVersionId: "worker-version-123",
+        tag: "release-2026-07-19",
+        timestamp: "2026-07-19T06:00:00.000Z",
+        searchRolloutMode: "shadow",
+      },
     });
   });
 

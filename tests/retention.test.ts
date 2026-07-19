@@ -54,6 +54,7 @@ describe("runRetentionSweep", () => {
       "watchlist_run",
       "delivery_attempt",
       "presence_item",
+      "release_scheduled_observation",
     ]);
 
     // every delete is batched — an unbounded DELETE could blow the cron budget
@@ -132,7 +133,7 @@ describe("runRetentionSweep", () => {
 
     const result = await runRetentionSweep({ DB: db } as never);
 
-    expect(statements.length).toBe(7);
+    expect(statements.length).toBe(8);
     expect(result.deleted.discovery_cache_entry).toBeUndefined();
     expect(result.deleted.delivery_attempt).toBe(1);
     expect(result.failedSteps).toEqual(["discovery_cache_entry"]);

@@ -1,5 +1,7 @@
 import type { LoaderFunctionArgs } from "react-router";
 
+import { readReleaseIdentity } from "~/lib/canary-release-identity.server";
+
 // Cheap uptime probe for Cloudflare health checks and external monitors.
 // Does NOT touch D1 — must stay a pure edge check so a DB blip doesn't
 // make the worker look unhealthy to the monitor.
@@ -13,30 +15,11 @@ import type { LoaderFunctionArgs } from "react-router";
 export async function loader({ context }: LoaderFunctionArgs) {
   const cloudflare = context.cloudflare as { env: Env };
   const env = cloudflare.env;
-  const versionMetadata = env.CF_VERSION_METADATA;
   const normalizeIdentifier = (value: unknown) => {
     const normalized = typeof value === "string" ? value.trim() : "";
     return /^[A-Za-z0-9._-]{1,128}$/.test(normalized) ? normalized : null;
   };
-  const normalizeTimestamp = (value: unknown) => {
-    const normalized = typeof value === "string" ? value.trim() : "";
-    return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/.test(
-      normalized,
-    ) && !Number.isNaN(Date.parse(normalized))
-      ? normalized
-      : null;
-  };
-  const normalizeMode = (value: unknown) => {
-    const normalized =
-      typeof value === "string" ? value.trim().toLowerCase() : "";
-    return /^[a-z0-9_-]{1,32}$/.test(normalized) ? normalized : null;
-  };
-  const releaseIdentity = {
-    workerVersionId: normalizeIdentifier(versionMetadata?.id),
-    tag: normalizeIdentifier(versionMetadata?.tag),
-    timestamp: normalizeTimestamp(versionMetadata?.timestamp),
-    searchRolloutMode: normalizeMode(env.SEARCH_ROLLOUT_MODE),
-  };
+  const releaseIdentity = readReleaseIdentity(env);
 
   return new Response(
     JSON.stringify({

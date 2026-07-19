@@ -37,7 +37,10 @@ import {
   upsertProofTarget,
   upsertAd,
 } from "~/lib/data.server";
-import { runDigestDeliveryCycle } from "~/lib/digest-orchestration.server";
+import {
+  runDigestDeliveryCycle,
+  runDigestDeliveryCycleDetailed,
+} from "~/lib/digest-orchestration.server";
 import { deliveryPreDispatchStaleBefore } from "~/lib/delivery-attempt-lease";
 import type { AppEnv } from "~/lib/env.server";
 import { captureLandingPageSnapshot } from "~/lib/landing-pages.server";
@@ -217,6 +220,8 @@ export async function runScheduledMonitoring(
       skippedForBilling: 0,
       dispatchFailures: 0,
       digests: 0,
+      digestAttempts: 0,
+      digestFailures: 0,
     };
   }
 
@@ -226,14 +231,14 @@ export async function runScheduledMonitoring(
   // scheduled time, so it never depends on tonight's scan results — and a
   // runtime kill mid-scan can no longer wipe out the day's digests for every
   // user (a digest run that is never created is invisible to the retry sweep).
-  const digests = options.includeDigests
-    ? await runDigestDeliveryCycle(env, {
+  const digestResult = options.includeDigests
+    ? await runDigestDeliveryCycleDetailed(env, {
         cadence: options.digestCadence ?? "weekly",
         lookbackDays: options.digestLookbackDays,
         periodEnd: options.scheduledTime,
         deadlineAt,
       })
-    : 0;
+    : { attempted: 0, sent: 0, failed: 0 };
 
   let queued = 0;
   let duplicates = 0;
@@ -355,7 +360,9 @@ export async function runScheduledMonitoring(
     skippedForBudget,
     skippedForBilling,
     dispatchFailures,
-    digests,
+    digests: digestResult.sent,
+    digestAttempts: digestResult.attempted,
+    digestFailures: digestResult.failed,
   };
 }
 
@@ -455,7 +462,7 @@ const INSTANT_ALERT_FLUSH_LIMIT = 50;
 // already-sent batches dedupe, still-quiet batches stay deferred.
 export async function flushDeferredInstantAlerts(env: AppEnv) {
   if (!env.DB) {
-    return { groups: 0, attempts: 0 };
+    return { groups: 0, attempts: 0, failures: 0 };
   }
 
   const since = new Date(
@@ -481,6 +488,7 @@ export async function flushDeferredInstantAlerts(env: AppEnv) {
 
   let flushedGroups = 0;
   let attempts = 0;
+  let failures = 0;
 
   for (const [watchlistId, eventIds] of groups) {
     try {
@@ -507,7 +515,13 @@ export async function flushDeferredInstantAlerts(env: AppEnv) {
 
       flushedGroups += 1;
       attempts += delivery.attempts;
+      if (!Array.isArray(delivery.details) || delivery.details.length !== delivery.attempts) {
+        failures += Math.max(1, delivery.attempts);
+      } else {
+        failures += delivery.details.filter((attempt) => attempt.status !== "sent").length;
+      }
     } catch (error) {
+      failures += 1;
       console.error(
         `Instant alert flush failed for watchlist ${watchlistId}; continuing with remaining watchlists.`,
         error,
@@ -515,7 +529,7 @@ export async function flushDeferredInstantAlerts(env: AppEnv) {
     }
   }
 
-  return { groups: flushedGroups, attempts };
+  return { groups: flushedGroups, attempts, failures };
 }
 
 // Runs after scheduled monitoring: when paying customers' scans or

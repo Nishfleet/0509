@@ -396,6 +396,7 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
     return {
       attempts: 0,
       channels: [] as DeliveryChannel[],
+      details: [] as DigestAttemptSummary[],
     };
   }
 
@@ -406,6 +407,7 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
       return {
         attempts: 0,
         channels: [] as DeliveryChannel[],
+        details: [] as DigestAttemptSummary[],
       };
     }
   }
@@ -417,6 +419,7 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
     return {
       attempts: 0,
       channels: [] as DeliveryChannel[],
+      details: [] as DigestAttemptSummary[],
     };
   }
 
@@ -441,6 +444,7 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
     return {
       attempts: 0,
       channels: [] as DeliveryChannel[],
+      details: [] as DigestAttemptSummary[],
     };
   }
 
@@ -521,6 +525,7 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
   return {
     attempts: attempts.length,
     channels: [...new Set(attempts.map((attempt) => attempt.channel))],
+    details: attempts,
   };
 }
 
