@@ -137,22 +137,28 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { presenceNavVisible } = await import("~/lib/presence-internal-access.server");
   const showSlackDelivery = isSlackDeliveryCustomerFacing();
   const whatsappAvailable = isWhatsAppDeliveryCustomerFacing() && isWhatsAppProviderConfigured(env);
-  const [watchlists, discoveryStatus, plan, showPresenceNav] = await Promise.all([
-    listWatchlists(env, workspaceUserId, { includeInactive: true }),
-    resolveCommercialAdSourceStatus(env).then(toCustomerDiscoveryStatus),
-    getUserPlan(env, workspaceUserId),
-    presenceNavVisible(env, workspaceUserId),
-  ]);
-  const verifiedAccountEmail = (await isUserEmailVerified(env, session.user.id))
-    ? session.user.email
-    : null;
   const url = new URL(request.url);
-  const selectedWatchlistId = url.searchParams.get("watchlist") ?? watchlists[0]?.id ?? null;
   // WP-24: deep-link target from alert/digest emails (`?event=<id>`).
   const highlightedEventId = url.searchParams.get("event")?.trim() || null;
-  const selectedWatchlist = selectedWatchlistId
-    ? await getWatchlist(env, selectedWatchlistId, workspaceUserId)
-    : null;
+  const requestedWatchlistId = url.searchParams.get("watchlist");
+  // Deep links (`?watchlist=<id>`) fetch the selected watchlist concurrently
+  // with the list; the default view only needs the list first to know which
+  // watchlist is newest, so it chains off the same in-flight promise.
+  const watchlistsPromise = listWatchlists(env, workspaceUserId, { includeInactive: true });
+  const selectedWatchlistPromise = (async () => {
+    const id = requestedWatchlistId ?? (await watchlistsPromise)[0]?.id ?? null;
+    return id ? getWatchlist(env, id, workspaceUserId) : null;
+  })();
+  const [watchlists, discoveryStatus, plan, showPresenceNav, emailVerified, selectedWatchlist] =
+    await Promise.all([
+      watchlistsPromise,
+      resolveCommercialAdSourceStatus(env).then(toCustomerDiscoveryStatus),
+      getUserPlan(env, workspaceUserId),
+      presenceNavVisible(env, workspaceUserId),
+      isUserEmailVerified(env, session.user.id),
+      selectedWatchlistPromise,
+    ]);
+  const verifiedAccountEmail = emailVerified ? session.user.email : null;
   const renderedAt = new Date().toISOString();
 
   if (!selectedWatchlist) {

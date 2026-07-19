@@ -59,17 +59,16 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
       upgradePath: "/app/billing?source=reports#plans",
     };
   }
-  const preparedBy = await resolveWorkspacePreparedBy(env, workspaceUserId);
-  const pdfGate = await requireWorkspacePlanFeature(
-    env,
-    workspaceUserId,
-    "pdf_reports",
-  );
-  const report = await loadReport({
-    context,
-    request,
-    reportId: params.id,
-  });
+  // preparedBy, the PDF gate, and the report itself are independent lookups.
+  const [preparedBy, pdfGate, report] = await Promise.all([
+    resolveWorkspacePreparedBy(env, workspaceUserId),
+    requireWorkspacePlanFeature(env, workspaceUserId, "pdf_reports"),
+    loadReport({
+      context,
+      request,
+      reportId: params.id,
+    }),
+  ]);
 
   return {
     report,

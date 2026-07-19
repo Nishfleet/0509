@@ -172,6 +172,16 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       return fallback;
     }
   };
+  const overnightSince = new Date(
+    Date.now() - 24 * 60 * 60 * 1000,
+  ).toISOString();
+  // Single parallel wave: every section query is independent of the others
+  // except recentChanges, which only needs the watchlists list to know
+  // whether any watchlist is active — so it chains off the same in-flight
+  // promise instead of waiting for the whole first wave to settle.
+  const watchlistsPromise = listWatchlists(env, workspaceUserId, {
+    includeInactive: true,
+  });
   const [
     savedQueries,
     collections,
@@ -184,10 +194,15 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     workspaceReadiness,
     counterMoveFollowUps,
     workspaceDeliveryConfig,
+    recentEvents,
+    recentProofCaptures,
+    deliveryTargets,
+    overnightStats,
+    successfulProofStats,
   ] = await Promise.all([
     optionalSection("savedQueries", listSavedQueries(env, workspaceUserId), []),
     optionalSection("collections", listCollections(env, workspaceUserId), []),
-    listWatchlists(env, workspaceUserId, { includeInactive: true }),
+    watchlistsPromise,
     optionalSection("digests", listDigests(env, workspaceUserId), []),
     optionalSection(
       "sourceStatus",
@@ -235,31 +250,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       getWorkspaceDeliveryConfig(env, workspaceUserId),
       null,
     ),
-  ]);
-  const plan = billingInfo.plan;
-  const hasPaymentIssue =
-    plan !== "free" &&
-    (billingInfo.dodoStatus === "payment.failed" ||
-      billingInfo.dodoStatus === "subscription.failed" ||
-      billingInfo.dodoStatus === "subscription.on_hold");
-  const overnightSince = new Date(
-    Date.now() - 24 * 60 * 60 * 1000,
-  ).toISOString();
-  const activeWatchlistsForEvents = watchlists.some(
-    (watchlist) => watchlist.isActive,
-  );
-  const [
-    recentEvents,
-    recentProofCaptures,
-    deliveryTargets,
-    overnightStats,
-    successfulProofStats,
-  ] = await Promise.all([
     optionalSection(
       "recentChanges",
-      activeWatchlistsForEvents
-        ? listRecentWorkspaceWatchEvents(env, workspaceUserId, 8)
-        : Promise.resolve([]),
+      watchlistsPromise.then((allWatchlists) =>
+        allWatchlists.some((watchlist) => watchlist.isActive)
+          ? listRecentWorkspaceWatchEvents(env, workspaceUserId, 8)
+          : [],
+      ),
       [],
     ),
     optionalSection(
@@ -288,6 +285,12 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       { count: 0, latestAt: null },
     ),
   ]);
+  const plan = billingInfo.plan;
+  const hasPaymentIssue =
+    plan !== "free" &&
+    (billingInfo.dodoStatus === "payment.failed" ||
+      billingInfo.dodoStatus === "subscription.failed" ||
+      billingInfo.dodoStatus === "subscription.on_hold");
 
   return {
     savedQueries,
