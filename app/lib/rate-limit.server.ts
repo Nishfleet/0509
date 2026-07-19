@@ -66,6 +66,32 @@ export async function enforcePublicSearchRateLimit(
   );
 }
 
+// Public /ads/:domain brand pages are cache-read-only (no provider spend), so
+// the bucket is more generous than public search, but still bounded: each
+// request costs bounded D1 reads and this is a crawl/abuse-facing surface.
+// Same shape as the public-search policy: per-IP, fail-open.
+export async function enforcePublicBrandPageRateLimit(
+  request: Request,
+  env: AppEnv,
+  ctx?: ExecutionContext,
+): Promise<Response | null> {
+  return enforceRateLimitPolicy(
+    request,
+    env,
+    {
+      scope: "public-brand-page",
+      limit: 120,
+      windowSeconds: 10 * 60,
+      failClosed: false,
+      keyByIpOnly: true,
+      // One shared bucket across every brand page — without this the pathname
+      // (which embeds the domain) would give each domain its own budget.
+      routeOverride: "/ads/:domain",
+    },
+    ctx,
+  );
+}
+
 // Plan-keyed daily live-search ceilings (UTC day). Stacked on the short
 // 10-minute burst bucket so free/Scout cannot burn Browser Rendering all day.
 const ACCOUNT_SEARCH_DAILY_LIMITS: Record<string, number> = {
@@ -461,12 +487,16 @@ async function cleanupRateLimitEvents(env: AppEnv) {
   const longWindowCutoff = new Date(
     Date.now() - LONG_WINDOW_CLEANUP_SECONDS * 1000,
   ).toISOString();
+  // Derive the scope list from LONG_WINDOW_SCOPES (parameterized) so adding a
+  // long-window scope cannot drift from the cleanup SQL.
+  const longWindowScopes = [...LONG_WINDOW_SCOPES];
+  const scopePlaceholders = longWindowScopes.map(() => "?").join(", ");
   await env.DB.prepare(
     `DELETE FROM rate_limit_events
-      WHERE (scope NOT IN ('share-pdf-daily', 'account-search-daily') AND created_at < ?)
-         OR (scope IN ('share-pdf-daily', 'account-search-daily') AND created_at < ?)`,
+      WHERE (scope NOT IN (${scopePlaceholders}) AND created_at < ?)
+         OR (scope IN (${scopePlaceholders}) AND created_at < ?)`,
   )
-    .bind(cutoff, longWindowCutoff)
+    .bind(...longWindowScopes, cutoff, ...longWindowScopes, longWindowCutoff)
     .run();
 }
 

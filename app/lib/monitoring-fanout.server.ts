@@ -162,13 +162,12 @@ export async function selectRankedEligibleOrchestratedRuns(env: AppEnv, now = no
           up.plan
         FROM watchlist_run wr
         INNER JOIN watchlist w ON w.id = wr.watchlist_id
-        INNER JOIN user_plan up ON up.user_id = w.user_id
+        LEFT JOIN user_plan up ON up.user_id = w.user_id
         WHERE wr.status = 'pending'
           AND wr.trigger_type = 'scheduled'
           AND wr.idempotency_key IS NOT NULL
           AND (wr.retry_after IS NULL OR wr.retry_after <= ?)
           AND w.is_active = 1
-          AND up.plan != 'free'
       `,
     )
     .bind(now)
@@ -359,7 +358,13 @@ export async function evaluateScheduledBrowserAccess(env: AppEnv, userId: string
   }
 
   if (billing.plan === "free") {
-    return { eligible: false as const, reason: "plan_ineligible", mode, allowlisted, plan: billing.plan };
+    // Free Weekly Competitor Watch: free is entitlement-eligible for scheduled
+    // scans when its cadence is not "none". Time gating (one Monday tick per
+    // week) happens where watchlists are listed and filtered for a run —
+    // shouldSchedulePlanInRegularScan — not here.
+    return getScheduledMonitoringPolicy("free").scheduledScanCadence === "none"
+      ? { eligible: false as const, reason: "plan_ineligible", mode, allowlisted, plan: billing.plan }
+      : { eligible: true as const, reason: "free_weekly", mode, allowlisted, plan: billing.plan };
   }
 
   if (mode === "all") {

@@ -4,6 +4,7 @@ import {
   Link,
   redirect,
   useActionData,
+  useFetcher,
   useLoaderData,
   useNavigation,
   useRevalidator,
@@ -11,6 +12,7 @@ import {
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { CompetitorDossierPanel } from "~/components/competitor-dossier";
 import { CreativeWall } from "~/components/creative-wall";
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
@@ -19,6 +21,7 @@ import { WatchlistTrends } from "~/components/watchlist-trends";
 import { CopyButton } from "~/components/copy-button";
 import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
+import { ProofGlossary } from "~/components/proof-glossary";
 import { SubmitButton } from "~/components/submit-button";
 import type { AppEnv } from "~/lib/env.server";
 import {
@@ -63,6 +66,7 @@ import {
   whatsappDeliveryUnavailableMessage,
 } from "~/lib/ga-customer-surface";
 import { createReportId } from "~/lib/report";
+import { watchlistLiveSearchHref, watchlistSavedAdsHref } from "~/lib/watchlist-links";
 import {
   formatWatchlistTargetNoun,
   formatWatchlistTrackingRole,
@@ -120,6 +124,12 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { resolveDeliveryConfig } = await import("~/lib/delivery-policy.server");
   const { listCreativeWallAds } = await import("~/lib/watchlist-ads.server");
   const { listWatchlistDailyActivity } = await import("~/lib/watchlist-trends.server");
+  const { buildCompetitorDossier, insufficientCompetitorDossier } = await import(
+    "~/lib/competitor-dossier.server"
+  );
+  const { computeAggressionScore } = await import("~/lib/aggression-score");
+  const { buildCounterBrief } = await import("~/lib/counter-brief.server");
+  const { isPaidPlanFamily } = await import("~/lib/plan-entitlements");
   const env = getEnv(context);
   const { session, workspaceUserId, isMember } = await requireWorkspaceSession(env, request);
   const { getUserPlan } = await import("~/lib/plan.server");
@@ -128,22 +138,28 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { presenceNavVisible } = await import("~/lib/presence-internal-access.server");
   const showSlackDelivery = isSlackDeliveryCustomerFacing();
   const whatsappAvailable = isWhatsAppDeliveryCustomerFacing() && isWhatsAppProviderConfigured(env);
-  const [watchlists, discoveryStatus, plan, showPresenceNav] = await Promise.all([
-    listWatchlists(env, workspaceUserId, { includeInactive: true }),
-    resolveCommercialAdSourceStatus(env).then(toCustomerDiscoveryStatus),
-    getUserPlan(env, workspaceUserId),
-    presenceNavVisible(env, workspaceUserId),
-  ]);
-  const verifiedAccountEmail = (await isUserEmailVerified(env, session.user.id))
-    ? session.user.email
-    : null;
   const url = new URL(request.url);
-  const selectedWatchlistId = url.searchParams.get("watchlist") ?? watchlists[0]?.id ?? null;
   // WP-24: deep-link target from alert/digest emails (`?event=<id>`).
   const highlightedEventId = url.searchParams.get("event")?.trim() || null;
-  const selectedWatchlist = selectedWatchlistId
-    ? await getWatchlist(env, selectedWatchlistId, workspaceUserId)
-    : null;
+  const requestedWatchlistId = url.searchParams.get("watchlist");
+  // Deep links (`?watchlist=<id>`) fetch the selected watchlist concurrently
+  // with the list; the default view only needs the list first to know which
+  // watchlist is newest, so it chains off the same in-flight promise.
+  const watchlistsPromise = listWatchlists(env, workspaceUserId, { includeInactive: true });
+  const selectedWatchlistPromise = (async () => {
+    const id = requestedWatchlistId ?? (await watchlistsPromise)[0]?.id ?? null;
+    return id ? getWatchlist(env, id, workspaceUserId) : null;
+  })();
+  const [watchlists, discoveryStatus, plan, showPresenceNav, emailVerified, selectedWatchlist] =
+    await Promise.all([
+      watchlistsPromise,
+      resolveCommercialAdSourceStatus(env).then(toCustomerDiscoveryStatus),
+      getUserPlan(env, workspaceUserId),
+      presenceNavVisible(env, workspaceUserId),
+      isUserEmailVerified(env, session.user.id),
+      selectedWatchlistPromise,
+    ]);
+  const verifiedAccountEmail = emailVerified ? session.user.email : null;
   const renderedAt = new Date().toISOString();
 
   if (!selectedWatchlist) {
@@ -169,6 +185,10 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       showPresenceNav,
       creativeWall: [] as Awaited<ReturnType<typeof listCreativeWallAds>>,
       trendDailyActivity: [] as Awaited<ReturnType<typeof listWatchlistDailyActivity>>,
+      dossier: null as Awaited<ReturnType<typeof buildCompetitorDossier>> | null,
+      aggression: null as ReturnType<typeof computeAggressionScore>,
+      counterBrief: null as Awaited<ReturnType<typeof buildCounterBrief>>,
+      counterBriefLocked: !isPaidPlanFamily(plan),
       canManageDelivery: !isMember,
       verifiedAccountEmail,
       deliveryTestRequestTokens: {} as Record<string, string>,
@@ -189,6 +209,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     recentProofCaptures,
     creativeWall,
     trendDailyActivity,
+    dossier,
   ] = await Promise.all([
     listEventCandidates(env, selectedWatchlist.id, 12),
     listWatchEvents(env, selectedWatchlist.id, 24),
@@ -220,7 +241,23 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listRecentProofCapturesForWatchlist(env, selectedWatchlist.id, 12),
     listCreativeWallAds(env, selectedWatchlist.id),
     listWatchlistDailyActivity(env, selectedWatchlist.id),
+    // Dossier failure degrades to the honest not-enough-history state — it
+    // must never take the watchlist page down with it.
+    buildCompetitorDossier(env, selectedWatchlist.id, workspaceUserId).catch(() =>
+      insufficientCompetitorDossier(),
+    ),
   ]);
+
+  // Counter-Brief plan gate: paid plans only. Computed per page load with no
+  // persistence — the loader caps generation at 4s (below the module's 10s
+  // default) so a hung Workers AI call cannot stall a paid page load; the
+  // never-throw contract degrades to the no-brief state instead. Typical cost
+  // is ~1-2s on the small shared model; tradeoff documented in
+  // counter-brief.server.ts. Free plans get the upgrade line instead.
+  const counterBriefEligible = isPaidPlanFamily(plan);
+  const counterBrief = counterBriefEligible
+    ? await buildCounterBrief(env, dossier, { timeoutMs: 4000 }).catch(() => null)
+    : null;
 
   const workspaceDeliveryConfig =
     workspaceDeliveryConfigRecord ??
@@ -274,6 +311,12 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     showPresenceNav,
     creativeWall,
     trendDailyActivity,
+    dossier,
+    // Deterministic, public-formula score — computed server-side so SSR and
+    // hydration share one "now".
+    aggression: computeAggressionScore(dossier),
+    counterBrief,
+    counterBriefLocked: !counterBriefEligible,
     canManageDelivery: !isMember,
     verifiedAccountEmail,
     deliveryTestRequestTokens: Object.fromEntries(
@@ -349,7 +392,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     return {
       ok: true,
-      message: `${watchlist.name} refreshed successfully.`,
+      message: `Fresh check complete — ${watchlist.name} is up to date.`,
     };
   }
 
@@ -640,7 +683,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     const limitGate = await requireWorkspacePlanLimit(env, workspaceUserId, "watchlists", {
       limitMessage:
-        "You have reached your competitor tracking limit — pause another watchlist first.",
+        "You've reached your competitor tracking limit — pause another watchlist first.",
     });
     if (!limitGate.ok) {
       return limitGate.result;
@@ -653,10 +696,97 @@ export async function action({ context, request }: ActionFunctionArgs) {
       ? {
           ok: true,
           message: plan === "free"
-            ? "Watchlist resumed. Free includes an activation-only scan; paid plans include recurring monitoring."
+            ? "Watchlist resumed. It rejoins the next weekly check; paid plans check every 3–6 hours."
             : "Watchlist resumed. It rejoins the next scheduled scan.",
         }
       : { ok: false, message: "Watchlist not found." };
+  }
+
+  if (intent === "bulk-watchlists") {
+    const { setWatchlistActive } = await import("~/lib/data.server");
+    const bulkAction = String(formData.get("bulkAction") ?? "");
+    const watchlistIds = [...new Set(formData.getAll("watchlistIds").map(String))].filter(Boolean);
+
+    if ((bulkAction !== "pause" && bulkAction !== "resume") || watchlistIds.length === 0) {
+      return { ok: false, message: "Select at least one watchlist first." };
+    }
+
+    if (bulkAction === "pause") {
+      let paused = 0;
+      for (const watchlistId of watchlistIds) {
+        if (await setWatchlistActive(env, workspaceUserId, watchlistId, false)) {
+          paused += 1;
+        }
+      }
+
+      return paused > 0
+        ? {
+            ok: true,
+            message: `Paused ${paused} of ${watchlistIds.length} selected. Scans and alerts stop, the history stays, and the plan slots are free.`,
+          }
+        : { ok: false, message: "Watchlist not found." };
+    }
+
+    // Resume re-checks the plan limit before each watchlist — the count of
+    // active watchlists changes with every resume, so a single upfront check
+    // could overshoot the plan cap. Already-active selections are no-ops and
+    // must never consume the gate (they hold a plan slot already).
+    const { getWatchlist } = await import("~/lib/data.server");
+    const { requireWorkspacePlanLimit } = await import("~/lib/with-workspace.server");
+    let resumed = 0;
+    let alreadyActive = 0;
+    let hitPlanLimit = false;
+    for (const watchlistId of watchlistIds) {
+      const existing = await getWatchlist(env, watchlistId, workspaceUserId);
+      if (!existing) {
+        continue;
+      }
+      if (existing.isActive) {
+        alreadyActive += 1;
+        continue;
+      }
+      const limitGate = await requireWorkspacePlanLimit(env, workspaceUserId, "watchlists", {
+        limitMessage:
+          "You've reached your competitor tracking limit — pause another watchlist first.",
+      });
+      if (!limitGate.ok) {
+        hitPlanLimit = true;
+        break;
+      }
+      if (await setWatchlistActive(env, workspaceUserId, watchlistId, true)) {
+        resumed += 1;
+      }
+    }
+
+    const alreadyActiveNote = alreadyActive > 0
+      ? ` ${alreadyActive} ${alreadyActive === 1 ? "was" : "were"} already active.`
+      : "";
+
+    if (hitPlanLimit) {
+      return {
+        ok: false,
+        error: "plan_limit_exceeded" as const,
+        message: `Resumed ${resumed} of ${watchlistIds.length} selected.${alreadyActiveNote} You've reached your competitor tracking limit — pause another watchlist first.`,
+      };
+    }
+
+    if (resumed > 0) {
+      return {
+        ok: true,
+        message: `Resumed ${resumed} of ${watchlistIds.length} selected.${alreadyActiveNote} They rejoin the next scheduled scan.`,
+      };
+    }
+
+    if (alreadyActive > 0) {
+      return {
+        ok: true,
+        message: alreadyActive === watchlistIds.length
+          ? "Everything selected is already active — nothing to resume."
+          : `Nothing to resume.${alreadyActiveNote}`,
+      };
+    }
+
+    return { ok: false, message: "Watchlist not found." };
   }
 
   if (intent === "send-test-email") {
@@ -703,7 +833,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         }
       : {
           ok: false,
-        message: `The test email failed to send. Check your delivery settings or email ${SUPPORT_EMAIL}.`,
+        message: `We couldn't send the test email. Check your delivery settings, or email ${SUPPORT_EMAIL} and we'll dig in.`,
         };
   }
 
@@ -787,13 +917,69 @@ export default function WatchlistsRoute() {
   }, [data.highlightedEventId, data.selectedWatchlist?.id]);
   const renderedAt = new Date(data.renderedAt);
   const discoveryStatus = toCustomerDiscoveryStatus(data.discoveryStatus);
-  const actionData = useActionData<typeof action>();
+  const routeActionData = useActionData<typeof action>();
+  // WP-42: pause/resume runs through a fetcher so the row shows its own
+  // pending state instead of lighting up the global route progress bar.
+  const pauseResumeFetcher = useFetcher<typeof action>();
+  // Workflow-friction pass: bulk pause/resume from the tracking desk.
+  const bulkFetcher = useFetcher<typeof action>();
+  const [selectedBulkIds, setSelectedBulkIds] = useState<string[]>([]);
+  const [latestFeedbackSource, setLatestFeedbackSource] = useState<
+    "route" | "fetcher" | "bulk" | null
+  >(null);
+  useEffect(() => {
+    if (routeActionData) setLatestFeedbackSource("route");
+  }, [routeActionData]);
+  useEffect(() => {
+    if (pauseResumeFetcher.data) setLatestFeedbackSource("fetcher");
+  }, [pauseResumeFetcher.data]);
+  useEffect(() => {
+    if (bulkFetcher.data) setLatestFeedbackSource("bulk");
+    if (bulkFetcher.state === "idle" && bulkFetcher.data?.ok) {
+      setSelectedBulkIds([]);
+    }
+  }, [bulkFetcher.data, bulkFetcher.state]);
+  const actionData =
+    latestFeedbackSource === "bulk"
+      ? bulkFetcher.data
+      : latestFeedbackSource === "fetcher"
+        ? pauseResumeFetcher.data
+        : routeActionData;
+  const bulkPending = bulkFetcher.state !== "idle";
+  const toggleBulkSelection = (watchlistId: string) => {
+    setSelectedBulkIds((previous) =>
+      previous.includes(watchlistId)
+        ? previous.filter((id) => id !== watchlistId)
+        : [...previous, watchlistId],
+    );
+  };
+  const submitBulk = (bulkAction: "pause" | "resume") => {
+    if (selectedBulkIds.length === 0 || bulkPending) {
+      return;
+    }
+    const formData = new FormData();
+    formData.set("intent", "bulk-watchlists");
+    formData.set("bulkAction", bulkAction);
+    for (const watchlistId of selectedBulkIds) {
+      formData.append("watchlistIds", watchlistId);
+    }
+    bulkFetcher.submit(formData, { method: "post" });
+  };
+  const pauseResumePending = pauseResumeFetcher.state !== "idle";
+  const pauseResumePendingIntent = pauseResumePending
+    ? pauseResumeFetcher.formData?.get("intent")
+    : null;
   const showSlackDelivery = isSlackDeliveryCustomerFacing();
   const canExport = canUsePlanFeature(data.plan, "export_csv") && canUsePlanFeature(data.plan, "export_json");
   const canReport = canUsePlanFeature(data.plan, "client_reports");
   const canShare = canUsePlanFeature(data.plan, "share_links");
   const canRefresh = data.plan !== "free";
-  const canConfigureDelivery = (data.canManageDelivery ?? true) && data.plan !== "free";
+  const canManageWorkspaceDelivery = data.canManageDelivery ?? true;
+  // Full delivery config (extra targets, channels) stays paid-only; free
+  // owners still manage their weekly digest email settings below.
+  const canConfigureDelivery = canManageWorkspaceDelivery && data.plan !== "free";
+  const canConfigureDigestSettings =
+    canManageWorkspaceDelivery && canUsePlanFeature(data.plan, "weekly_digest");
   const canInstantAlert = canUsePlanFeature(data.plan, "high_priority_alerts");
   const canEmailDelivery = canUsePlanFeature(data.plan, "email_delivery");
   const [searchParams] = useSearchParams();
@@ -871,6 +1057,40 @@ export default function WatchlistsRoute() {
             Pick a tracked brand to review changes, evidence freshness, and alert delivery.
           </p>
 
+          {data.watchlists.length > 1 ? (
+            <div className="f9-bulk-bar">
+              <span className="f9-muted-copy">
+                {selectedBulkIds.length > 0
+                  ? `${selectedBulkIds.length} selected`
+                  : "Select watchlists for bulk actions"}
+              </span>
+              <div className="f9-inline-actions">
+                <button
+                  aria-busy={bulkPending || undefined}
+                  className="f9-secondary-button"
+                  disabled={selectedBulkIds.length === 0 || bulkPending}
+                  onClick={() => submitBulk("pause")}
+                  type="button"
+                >
+                  {bulkPending && bulkFetcher.formData?.get("bulkAction") === "pause"
+                    ? "Pausing…"
+                    : "Pause selected"}
+                </button>
+                <button
+                  aria-busy={bulkPending || undefined}
+                  className="f9-secondary-button"
+                  disabled={selectedBulkIds.length === 0 || bulkPending}
+                  onClick={() => submitBulk("resume")}
+                  type="button"
+                >
+                  {bulkPending && bulkFetcher.formData?.get("bulkAction") === "resume"
+                    ? "Resuming…"
+                    : "Resume selected"}
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           <div className="f9-work-list is-compact">
             {data.watchlists.map((watchlist) => {
               const isActive =
@@ -887,29 +1107,42 @@ export default function WatchlistsRoute() {
               });
 
               return (
-                <Link
-                  className={`f9-work-row ${isActive ? "is-active" : ""} ${isPending ? "is-pending" : ""}`}
-                  key={watchlist.id}
-                  preventScrollReset
-                  to={`/app/watchlists?watchlist=${watchlist.id}`}
-                >
-                  <div>
-                    <h3>{watchlist.name}</h3>
-                    <p className="f9-muted-copy">
-                      {formatWatchlistTrackingRole(watchlist.trackingRole)} · {watchlist.targetLabel}
-                      {watchlist.isActive ? "" : " · Paused"}
-                    </p>
-                    <p className="f9-muted-copy">
-                      {scanPresentation.timestamp ? (
-                        <>
-                          {scanPresentation.label} <LocalTime iso={scanPresentation.timestamp} />
-                        </>
-                      ) : (
-                        scanPresentation.label
-                      )}
-                    </p>
-                  </div>
-                </Link>
+                <div className="f9-work-row-select" key={watchlist.id}>
+                  {data.watchlists.length > 1 ? (
+                    <label className="f9-bulk-select-target">
+                      <input
+                        aria-label={`Select ${watchlist.name} for bulk actions`}
+                        checked={selectedBulkIds.includes(watchlist.id)}
+                        className="f9-bulk-checkbox"
+                        disabled={bulkPending}
+                        onChange={() => toggleBulkSelection(watchlist.id)}
+                        type="checkbox"
+                      />
+                    </label>
+                  ) : null}
+                  <Link
+                    className={`f9-work-row ${isActive ? "is-active" : ""} ${isPending ? "is-pending" : ""}`}
+                    preventScrollReset
+                    to={`/app/watchlists?watchlist=${watchlist.id}`}
+                  >
+                    <div>
+                      <h3>{watchlist.name}</h3>
+                      <p className="f9-muted-copy">
+                        {formatWatchlistTrackingRole(watchlist.trackingRole)} · {watchlist.targetLabel}
+                        {watchlist.isActive ? "" : " · Paused"}
+                      </p>
+                      <p className="f9-muted-copy">
+                        {scanPresentation.timestamp ? (
+                          <>
+                            {scanPresentation.label} <LocalTime iso={scanPresentation.timestamp} />
+                          </>
+                        ) : (
+                          scanPresentation.label
+                        )}
+                      </p>
+                    </div>
+                  </Link>
+                </div>
               );
             })}
             {data.watchlists.length === 0 ? (
@@ -939,7 +1172,7 @@ export default function WatchlistsRoute() {
                     )}
                     {data.selectedWatchlist.isActive
                       ? data.plan === "free"
-                        ? " · activation-only scan; paid plans include recurring monitoring"
+                        ? ` · next weekly check ${formatNextScanLabel(data.plan, renderedAt, data.effectiveDeliveryConfig.timezone)}; paid plans check every 3–6 hours`
                         : sourceCanSchedule
                           ? ` · next scan ${formatNextScanLabel(data.plan, renderedAt, data.effectiveDeliveryConfig.timezone)}`
                           : " · next scan after source access is ready"
@@ -972,7 +1205,7 @@ export default function WatchlistsRoute() {
                         className="f9-secondary-button"
                         href={`/export/watchlist/${data.selectedWatchlist.id}?format=json`}
                       >
-                        JSON export
+                        Export JSON
                       </a>
                     </>
                   ) : (
@@ -993,21 +1226,31 @@ export default function WatchlistsRoute() {
                       Upgrade to share
                     </Link>
                   )}
-                  <Form method="post">
+                  <pauseResumeFetcher.Form method="post">
                     <input
                       name="intent"
                       type="hidden"
                       value={data.selectedWatchlist.isActive ? "pause-watchlist" : "resume-watchlist"}
                     />
                     <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
-                    <SubmitButton
+                    <button
+                      aria-busy={pauseResumePending || undefined}
                       className="f9-secondary-button"
-                      intent={data.selectedWatchlist.isActive ? "pause-watchlist" : "resume-watchlist"}
-                      pendingLabel={data.selectedWatchlist.isActive ? "Pausing…" : "Resuming…"}
+                      disabled={pauseResumePending}
+                      type="submit"
                     >
-                      {data.selectedWatchlist.isActive ? "Pause tracking" : "Resume tracking"}
-                    </SubmitButton>
-                  </Form>
+                      {pauseResumePending ? (
+                        <>
+                          <span aria-hidden="true" className="f9-button-spinner" />
+                          {pauseResumePendingIntent === "pause-watchlist" ? "Pausing…" : "Resuming…"}
+                        </>
+                      ) : data.selectedWatchlist.isActive ? (
+                        "Pause tracking"
+                      ) : (
+                        "Resume tracking"
+                      )}
+                    </button>
+                  </pauseResumeFetcher.Form>
                   {data.selectedWatchlist.isActive && canRefresh ? (
                     <Form method="post">
                       <input name="intent" type="hidden" value="refresh-watchlist" />
@@ -1023,6 +1266,15 @@ export default function WatchlistsRoute() {
                   ) : null}
                 </div>
               </div>
+
+              <p className="f9-crosslink-row">
+                <Link className="f9-text-link" to={watchlistLiveSearchHref(data.selectedWatchlist)}>
+                  Search their ads live
+                </Link>
+                <Link className="f9-text-link" to={watchlistSavedAdsHref(data.selectedWatchlist)}>
+                  Saved ads from this competitor
+                </Link>
+              </p>
 
               {data.selectedWatchlist.isActive && !data.selectedWatchlist.lastScannedAt ? (
                 <FirstScanBanner
@@ -1161,7 +1413,7 @@ export default function WatchlistsRoute() {
                     <p className="f9-muted-copy">{discoveryStatus.recovery}</p>
                   ) : null}
                   <Link className="f9-secondary-button" to="/app/source-access">
-                    Review tracking access
+                    Check source access
                   </Link>
                   {data.showPresenceNav ? (
                     <>
@@ -1177,6 +1429,18 @@ export default function WatchlistsRoute() {
                   ) : null}
                 </section>
                 </div>
+
+                <ProofGlossary />
+
+                {data.dossier ? (
+                  <CompetitorDossierPanel
+                    aggression={data.aggression}
+                    counterBrief={data.counterBrief}
+                    counterBriefLocked={data.counterBriefLocked}
+                    dossier={data.dossier}
+                    watchlistId={data.selectedWatchlist.id}
+                  />
+                ) : null}
 
                 <section>
                   <p className="f9-app-kicker">See what changed</p>
@@ -1255,7 +1519,7 @@ export default function WatchlistsRoute() {
                                     ? `${formatDeliveryAttemptStatusLabel(lastAttempt.status, lastAttempt.channel)} · ${
                                         lastAttempt.targetValue
                                       }`
-                                    : "No watchlist send recorded yet."}
+                                    : "No alert sent for this change yet."}
                                 </p>
                               </div>
                             </div>
@@ -1328,7 +1592,7 @@ export default function WatchlistsRoute() {
                           Using the default alert settings for this account.
                         </p>
                       ) : null}
-                      {canConfigureDelivery ? <Form method="post" className="f9-work-list is-compact">
+                      {canConfigureDigestSettings ? <Form method="post" className="f9-work-list is-compact">
                         <input name="intent" type="hidden" value="save-delivery-config" />
                         <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
                         <label className="f9-field">
@@ -1388,7 +1652,7 @@ export default function WatchlistsRoute() {
                         )}
                         <label className="f9-field f9-field-inline">
                           <input defaultChecked={data.effectiveDeliveryConfig.digestEnabled} name="digestEnabled" type="checkbox" />
-                          <span>{data.plan === "free" ? "Digest alerts (paid recurring monitoring)" : "Digest alerts"}</span>
+                          <span>{data.plan === "free" ? "Weekly digest email" : "Digest alerts"}</span>
                         </label>
                         {canEmailDelivery ? (
                           <label className="f9-field f9-field-inline">
@@ -1422,11 +1686,8 @@ export default function WatchlistsRoute() {
                       </Form> : (
                         <div className="f9-work-list is-compact">
                           <p className="f9-muted-copy">
-                            Free includes one activation scan only. Recurring monitoring and digest alerts start on a paid plan.
+                            Delivery settings are managed by the workspace owner.
                           </p>
-                          <Link className="f9-primary-button" to="/app/billing?source=watchlists#plans">
-                            Upgrade for delivery alerts
-                          </Link>
                         </div>
                       )}
                     </article>
@@ -1588,7 +1849,7 @@ export default function WatchlistsRoute() {
                 <section>
                   <p className="f9-app-kicker">Recent checks</p>
                   {data.runs.length === 0 ? (
-                    <p className="f9-muted-copy">No checks recorded yet.</p>
+                    <p className="f9-muted-copy">No checks yet — the first one shows up here automatically.</p>
                   ) : (
                     <ul className="event-list f9-detail-split">
                       {data.runs.map((run) => {
@@ -1634,7 +1895,7 @@ export default function WatchlistsRoute() {
                   <summary>Candidate history</summary>
                   <div className="f9-work-list is-compact" style={{ marginTop: "1rem" }}>
                     {data.eventCandidates.length === 0 ? (
-                      <p className="f9-muted-copy">No candidate history yet.</p>
+                      <p className="f9-muted-copy">No candidates yet — possible changes appear here before we confirm them.</p>
                     ) : (
                       data.eventCandidates.map((candidate) => (
                         <div className="f9-work-row" key={candidate.id}>
@@ -1973,7 +2234,7 @@ export function resolveWatchlistListScanPresentation(input: {
   if (!run) {
     return input.lastScannedAt
       ? { label: "Last successful check", timestamp: input.lastScannedAt }
-      : { label: "No completed scan yet — open to review status", timestamp: null };
+      : { label: "No completed check yet — open for status", timestamp: null };
   }
   if (run.status === "running") {
     return {
@@ -1990,26 +2251,26 @@ export function resolveWatchlistListScanPresentation(input: {
     ].includes(run.errorCode ?? "");
     return {
       label: delayed
-        ? "Scan delayed — open to review recovery"
+        ? "Check delayed — we're retrying"
         : input.lastScannedAt
-          ? "Next check queued"
+          ? "Next check starts shortly"
           : input.plan === "free"
-            ? "Activation scan queued"
-            : "First scan queued",
+            ? "Activation scan starts shortly"
+            : "First scan starts shortly",
       timestamp: null,
     };
   }
   if (run.status === "failed") {
-    return { label: "Latest check failed — open to recover", timestamp: null };
+    return { label: "Latest check failed — open for next steps", timestamp: null };
   }
   if (run.status === "skipped") {
     if (run.errorCode === "e2e_provider_network_denied") {
       return { label: "New checks paused — source access needed", timestamp: null };
     }
     if (run.errorCode === "capacity_budget") {
-      return { label: "Latest check delayed — next monitoring window", timestamp: null };
+      return { label: "Latest check delayed — runs in the next window", timestamp: null };
     }
-    return { label: "Latest check did not run — open to review", timestamp: null };
+    return { label: "Latest check didn't run — open for details", timestamp: null };
   }
 
   return {
@@ -2028,7 +2289,9 @@ export function resolveEmptyWatchlistEventCopy(input: {
   const scanName = activationOnly ? "activation scan" : "first scan";
   if ((!input.latestRun && input.lastScannedAt) || input.latestRun?.status === "succeeded") {
     if (activationOnly) {
-      return "No confirmed changes yet — your activation-only scan is complete. Paid plans include recurring monitoring for the next change.";
+      return input.nextScanLabel
+        ? `No confirmed changes yet — your activation scan is complete. Your next weekly check runs ${input.nextScanLabel}; paid plans check every 3–6 hours.`
+        : "No confirmed changes yet — your activation scan is complete. Your watchlist is checked weekly; paid plans check every 3–6 hours.";
     }
     return input.nextScanLabel
       ? `No confirmed changes yet — we'll flag the next one. Next scheduled scan: ${input.nextScanLabel}.`
@@ -2037,12 +2300,12 @@ export function resolveEmptyWatchlistEventCopy(input: {
 
   if (!input.latestRun) {
     return activationOnly
-      ? "Your activation scan has not started yet. Review tracking access; contact support if it does not resume."
-      : "Your first scan has not started yet. Review tracking access or retry when the source is ready.";
+      ? "Your activation scan hasn't started yet. Check Source access; if it stays stuck, email support and we'll dig in."
+      : "Your first scan hasn't started yet. Check Source access, then retry once the source is ready.";
   }
   if (input.latestRun.status === "running") {
     return activationOnly
-      ? "Your activation scan is running now. Results appear here when the scan completes. Paid plans add recurring monitoring."
+      ? "Your activation scan is running now. Results appear here when the scan completes. After this, free checks weekly; paid plans check every 3–6 hours."
       : "Your first scan is running now. Results appear here when the scan completes.";
   }
   if (input.latestRun.status === "pending") {
@@ -2053,20 +2316,20 @@ export function resolveEmptyWatchlistEventCopy(input: {
       "workflow_binding_missing",
     ].includes(input.latestRun.errorCode ?? "");
     return delayed
-      ? `Your ${scanName} is delayed and queued for recovery. Review tracking access if it does not resume.`
-      : `Your ${scanName} is queued and waiting for a monitoring worker.`;
+      ? `Your ${scanName} hit a delay, so we're retrying it automatically. If it doesn't start soon, check Source access.`
+      : `Your ${scanName} is in line and starts automatically.`;
   }
   if (input.latestRun.status === "failed") {
     return activationOnly
-      ? "Your activation scan could not finish. Review tracking access, then contact support if it remains unavailable."
-      : "Your first scan could not finish. Review tracking access, then retry or contact support.";
+      ? "Your activation scan couldn't finish. Check Source access, and email support if the next attempt fails too."
+      : "Your first scan couldn't finish. Check Source access, then retry — or email support and we'll dig in.";
   }
   if (input.latestRun.errorCode === "e2e_provider_network_denied") {
     return activationOnly
-      ? "Your activation scan paused safely before an external check. Review tracking access; contact support if it does not resume."
-      : "Your first scan paused safely before an external check. Review tracking access before retrying.";
+      ? "Your activation scan paused safely before an external check. Check Source access; email support if it doesn't resume."
+      : "Your first scan paused safely before an external check. Check Source access before retrying.";
   }
-  return `Your ${scanName} stopped before evidence was created. Review Recent checks for the recovery path.`;
+  return `Your ${scanName} stopped before it could save results. Recent checks shows what happened and what runs next.`;
 }
 
 export function resolveWatchlistRunTiming(run: WatchlistRunRecord) {
@@ -2082,20 +2345,20 @@ export function resolveWatchlistRunTiming(run: WatchlistRunRecord) {
       "workflow_binding_missing",
     ].includes(run.errorCode ?? "");
     return {
-      label: retrying ? "Queued for retry" : "Queued — waiting for a monitoring worker",
+      label: retrying ? "Retrying automatically" : "In line — starts automatically",
       timestamp: null,
     };
   }
   if (run.status === "failed") return { label: "Stopped after a failed check", timestamp: null };
-  if (run.status === "skipped") return { label: "Stopped before evidence was created", timestamp: null };
+  if (run.status === "skipped") return { label: "Stopped before results were saved", timestamp: null };
   return { label: "Completed", timestamp: null };
 }
 
 export function resolveWatchlistRunCustomerError(run: WatchlistRunRecord, plan: string) {
   if (!run.errorMessage) return null;
   return plan === "free"
-    ? "This activation scan failed. Check Source access, then contact support if it does not resume."
-    : "This scan failed. Check Source access, then retry or contact support.";
+    ? "This activation scan failed. Check Source access, and email support if the next attempt fails too."
+    : "This scan failed. Check Source access, then retry — or email support and we'll dig in.";
 }
 
 export function firstScanPollingKey(input: {
@@ -2180,25 +2443,27 @@ function FirstScanBanner(props: {
           ? `${scanLabel} delayed`
           : props.run.status === "running"
             ? "Scanning this competitor now…"
-            : `${scanLabel} queued`;
+            : `${scanLabel} starts shortly`;
 
   const message = safelyPaused
     ? "Provider access is disabled in this local release proof. No external check was attempted."
     : completed
       ? "The first scan is ready. Review the proof below before deciding what to monitor next."
     : failed
-      ? "We could not finish this check. Review Source access, then contact support if the next attempt also fails."
+      ? "We couldn't finish this check. Check Source access, and email support if the next attempt fails too."
       : skipped
-        ? "This check stopped safely before results were created. Review Recent checks for the reason and recovery path."
+        ? "This check stopped safely before results were saved. Recent checks shows what happened and what runs next."
         : delayed || timedOut || !props.run
           ? props.plan === "free"
-            ? "The activation scan is queued for recovery. Paid plans add recurring monitoring after activation."
-            : "The first scan is queued for recovery, and the next scheduled scan remains available."
+            ? "The activation scan hit a delay, so we're retrying it automatically. After activation, free checks weekly; paid plans check every 3–6 hours."
+            : "The first scan hit a delay, so we're retrying it automatically. Your next scheduled scan is unaffected."
           : props.run.status === "running"
             ? props.plan === "free"
-              ? "Your activation scan is running. This page updates by itself when results are ready. Paid plans add recurring monitoring after activation."
+              ? "Your activation scan is running. This page updates by itself when results are ready. After this, free checks weekly; paid plans check every 3–6 hours."
               : "Your first scan is running. This page updates by itself when results are ready."
-            : "The activation scan is waiting for an available monitoring worker. This page updates by itself.";
+            : props.plan === "free"
+              ? "The activation scan is in line and starts automatically. This page updates by itself."
+              : "Your first scan is in line and starts automatically. This page updates by itself.";
 
   return (
     <article
@@ -2214,7 +2479,7 @@ function FirstScanBanner(props: {
           {heading}
         </h2>
         <p>{message}</p>
-        {failed ? <Link to="/app/source-access">Review Source access</Link> : null}
+        {failed ? <Link to="/app/source-access">Check source access</Link> : null}
         {(pastFastPoll || timedOut) && shouldPoll ? (
           <p style={{ marginTop: "0.75rem" }}>
             <button
@@ -2261,7 +2526,7 @@ function formatRunStatusLabel(status: string, errorCode?: string | null) {
     if (errorCode === "dispatch_failed" || errorCode === "reconcile_dispatch_failed") {
       return "Retrying";
     }
-    return "Queued";
+    return "In line";
   }
   if (status === "running") return "Running";
   return status;

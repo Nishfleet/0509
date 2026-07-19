@@ -10,6 +10,7 @@ import { ConfirmSubmitButton } from "~/components/confirm-button";
 import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
+import { ThemeToggle } from "~/components/theme-toggle";
 import {
   hasInvalidCompetitorWebsite,
   normalizeCompetitorWebsiteInput,
@@ -41,42 +42,41 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const session = await requireSession(env, request);
   const isE2EFixtureSession = isE2ETestSessionId(session.session.id);
 
-  const plan = await getUserPlan(env, session.user.id);
-  const reportBrandIdentity = await resolveWorkspaceBrandIdentity(env, session.user.id);
-  const branding = await getWorkspaceBranding(env, session.user.id);
   const passkeysEnabled = !isE2EFixtureSession && isBetterAuthPasskeyEnabled(env);
-  let passkeys: Awaited<ReturnType<typeof listBetterAuthPasskeys>> = [];
+  // Every lookup below is independent — run them as one parallel wave. Each
+  // keeps its original per-section failure fallback.
   let passkeyControlsMessage: string | null = null;
-  if (passkeysEnabled) {
-    try {
-      passkeys = await listBetterAuthPasskeys(env, request);
-    } catch (error) {
-      console.warn("[account] passkey controls unavailable", error);
-      passkeyControlsMessage = "Sign in again to manage passkeys.";
-    }
-  }
-  let activeSessions: Awaited<ReturnType<typeof listBetterAuthSessions>> = [];
   let sessionControlsMessage: string | null = isE2EFixtureSession
     ? "Sign in with email to manage active sessions."
     : null;
-  if (!isE2EFixtureSession) {
-    try {
-      activeSessions = await listBetterAuthSessions(env, request, session.session.id);
-    } catch (error) {
-      console.warn("[account] session controls unavailable", error);
-      sessionControlsMessage = "Sign in again to manage active sessions.";
-    }
-  }
-
-  // Default to verified on a transient DB error so the banner never nags a
-  // verified user; the retention gates re-check on every action anyway.
-  let emailVerified = true;
-  try {
-    const { isUserEmailVerified } = await import("~/lib/email-verification.server");
-    emailVerified = await isUserEmailVerified(env, session.user.id);
-  } catch (error) {
-    console.warn("[account] email verification status unavailable", error);
-  }
+  const [plan, reportBrandIdentity, branding, passkeys, activeSessions, emailVerified] =
+    await Promise.all([
+      getUserPlan(env, session.user.id),
+      resolveWorkspaceBrandIdentity(env, session.user.id),
+      getWorkspaceBranding(env, session.user.id),
+      passkeysEnabled
+        ? listBetterAuthPasskeys(env, request).catch((error) => {
+            console.warn("[account] passkey controls unavailable", error);
+            passkeyControlsMessage = "Sign in again to manage passkeys.";
+            return [] as Awaited<ReturnType<typeof listBetterAuthPasskeys>>;
+          })
+        : ([] as Awaited<ReturnType<typeof listBetterAuthPasskeys>>),
+      isE2EFixtureSession
+        ? ([] as Awaited<ReturnType<typeof listBetterAuthSessions>>)
+        : listBetterAuthSessions(env, request, session.session.id).catch((error) => {
+            console.warn("[account] session controls unavailable", error);
+            sessionControlsMessage = "Sign in again to manage active sessions.";
+            return [] as Awaited<ReturnType<typeof listBetterAuthSessions>>;
+          }),
+      // Default to verified on a transient DB error so the banner never nags a
+      // verified user; the retention gates re-check on every action anyway.
+      import("~/lib/email-verification.server")
+        .then(({ isUserEmailVerified }) => isUserEmailVerified(env, session.user.id))
+        .catch((error) => {
+          console.warn("[account] email verification status unavailable", error);
+          return true;
+        }),
+    ]);
 
   return {
     email: session.user.email,
@@ -295,7 +295,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     });
 
     if (!supportCase) {
-      return { ok: false, intent, message: "Could not open the support deletion request. Email support so we can review it." };
+      return { ok: false, intent, message: "We couldn't open the support deletion request. Email support and we'll take care of it." };
     }
 
     const notificationResult = await notifyAccountDeletionOperator(env, {
@@ -373,6 +373,20 @@ export default function AccountRoute() {
           Signed in as {data.email}. Sign-in security is managed on this page — use it for brand setup,
           sign-in options, and sensitive account requests.
         </p>
+      </article>
+
+      <article className="f9-app-panel">
+        <div className="f9-panel-toolbar">
+          <div>
+            <span className="f9-app-kicker">Appearance</span>
+            <h2>Workspace theme</h2>
+          </div>
+        </div>
+        <p className="f9-muted-copy">
+          Choose how the workspace looks on this device. "System" follows your operating system
+          setting. Saved in this browser only — public pages and shared reports stay light.
+        </p>
+        <ThemeToggle />
       </article>
 
       {!data.emailVerified ? (
@@ -726,7 +740,7 @@ async function registerPasskey(input: {
     } else if (error instanceof Error && error.name === "NotAllowedError") {
       input.setError("Passkey setup was cancelled.");
     } else {
-      input.setError("That passkey could not be added. Try again or use email sign-in.");
+      input.setError("We couldn't add that passkey. Try again, or use email sign-in.");
     }
     input.setPending(false);
   }
@@ -756,7 +770,7 @@ async function removePasskey(input: {
     window.setTimeout(() => window.location.reload(), 400);
   } catch {
     input.setPendingId(null);
-    input.setError("That passkey could not be removed. Try again or use email sign-in.");
+    input.setError("We couldn't remove that passkey. Try again, or use email sign-in.");
   }
 }
 

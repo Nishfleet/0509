@@ -30,7 +30,10 @@ describe("public documentation routes", () => {
 
     expect(markup).toContain("Run a trustworthy first search");
     expect(markup).toContain("No evidence is not proof that a competitor has no active ads");
-    expect(markup).toContain("Free is an activation path, not recurring monitoring");
+    expect(markup).toContain("Free plan scope: watch one competitor with a weekly scheduled check and a weekly email brief");
+    expect(markup).toContain("Use Five to Nine from Claude, ChatGPT, and AI agents");
+    expect(markup).toContain("https://0509.io/api/mcp");
+    expect(markup).toContain("API and MCP access are an Agency-plan feature");
     expect(markup).toContain("Starter plan scope: daily briefs, urgent alerts, evidence capture, and exports");
     expect(markup).toContain("Agency plan scope: client reports, share links, PDF delivery, branding, API/MCP access, and team seats");
     expect(markup).toContain("This documentation does not measure live provider availability");

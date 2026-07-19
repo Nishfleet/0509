@@ -16,6 +16,7 @@ import {
   getWorkspaceDeliveryConfig,
   listAdsByIds,
 	listDigestScheduleJobsAwaitingAlert,
+  listDigests,
   listRetryableDigestRuns,
 	listRetryableDigestScheduleJobs,
 	settleDigestScheduleJobExhaustionAlert,
@@ -59,6 +60,7 @@ const DIGEST_SCHEDULE_JOB_SWEEP_LIMIT = 50;
 const DIGEST_SCHEDULE_JOB_MAX_ATTEMPTS = 5;
 const DIGEST_SCHEDULE_JOB_LEASE_MS = 15 * 60 * 1000;
 const DIGEST_SCHEDULE_JOB_ALERT_LEASE_MS = 15 * 60 * 1000;
+const DAILY_HEARTBEAT_QUIET_STREAK = 3;
 
 export interface DigestOrchestrationOptions {
   cadence?: DigestCadence;
@@ -497,6 +499,16 @@ async function runDigestForUser(
       }
       return 0;
     }
+    // WP-21 heartbeat auto-degrade: after 3 consecutive daily all-quiet
+    // heartbeats, stay silent on further quiet days. No digest run is created
+    // for the skipped day, so the derived streak persists until a period with
+    // events resets the history. Weekly heartbeats are unaffected.
+    if (
+      cadence === "daily" &&
+      (await hasDailyQuietHeartbeatStreak(env, user.id))
+    ) {
+      return 0;
+    }
     heartbeat = runStats;
   }
 
@@ -846,6 +858,30 @@ function readNonNegativeInteger(value: unknown) {
   return typeof value === "number" && Number.isInteger(value) && value >= 0
     ? value
     : null;
+}
+
+/**
+ * WP-21 heartbeat auto-degrade streak, derived from existing digest history
+ * (no new table or migration): true when the user's most recent
+ * DAILY_HEARTBEAT_QUIET_STREAK digest runs are all daily all-quiet heartbeats
+ * (zero items over a daily-sized period). Any digest with movement — or a
+ * weekly digest — breaks the streak and lets daily heartbeats resume.
+ */
+async function hasDailyQuietHeartbeatStreak(env: AppEnv, userId: string) {
+  const recentDigests = await listDigests(
+    env,
+    userId,
+    DAILY_HEARTBEAT_QUIET_STREAK,
+  );
+  return (
+    recentDigests.length >= DAILY_HEARTBEAT_QUIET_STREAK &&
+    recentDigests.every(
+      (digest) =>
+        digest.items.length === 0 &&
+        digestCadenceForPeriod(digest.periodStart, digest.periodEnd) ===
+          "daily",
+    )
+  );
 }
 
 function digestCadenceForPeriod(

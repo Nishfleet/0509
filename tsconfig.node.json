@@ -43,6 +43,7 @@
     "e2e/journey-*-release.spec.ts",
     "scripts/safe-command-output.mjs",
     "tests/**/*",
+    "extension/lib/**/*.mjs",
     "app/**/*",
     "workers/**/*",
     "worker-configuration.d.ts"

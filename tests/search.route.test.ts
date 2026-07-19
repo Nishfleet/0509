@@ -145,6 +145,45 @@ describe("search loader", () => {
     });
   });
 
+  it("returns plan=null to the UI when the plan lookup blips for a signed-in user", async () => {
+    const env = { DB: {} };
+    const getUserPlan = vi.fn().mockRejectedValue(new Error("D1 blip"));
+
+    vi.doMock("~/lib/auth.server", () => ({
+      getOptionalSession: vi.fn().mockResolvedValue(appSession),
+    }));
+    vi.doMock("~/lib/workspace.server", () => ({
+      resolveWorkspace: vi.fn(async (_env: unknown, id: string) => ({
+        workspaceUserId: id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => env),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listCollections: vi.fn().mockResolvedValue([]),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan,
+    }));
+
+    const { loader } = await import("~/routes/search");
+    const result = await loader({
+      context: createContext(env),
+      request: new Request("http://localhost/search"),
+    } as never);
+
+    expect(getUserPlan).toHaveBeenCalled();
+    // On a transient lookup failure the UI must not render from a guess: no
+    // free-plan upsell, no paid-only affordances (plan=null hides both).
+    // Rate limiting substitutes starter sizing internally so a paying
+    // customer is not throttled to free limits, and real plan gates (saves,
+    // watchlists) re-check server-side and fail closed.
+    expect(result).toMatchObject({ plan: null });
+  });
+
   it("does not call live discovery before a signed-in user submits a query", async () => {
     const env = { DB: {} };
     const getOptionalSession = vi.fn().mockResolvedValue(appSession);
@@ -691,7 +730,9 @@ describe("search loader", () => {
       env,
       "user-1",
       undefined,
-      "free",
+      // Plan lookup fails open to "starter" here: this harness env has no real
+      // D1, and a transient lookup blip must never impose free limits.
+      "starter",
     );
   });
 

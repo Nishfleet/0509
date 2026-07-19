@@ -570,7 +570,7 @@ function renderEmailVerificationHtml(input: { name: string | null; verifyUrl: st
         </a>
       </p>
       <p style="margin: 0; color: #5b6577; font-size: 13px;">
-        If you did not create a Five to Nine account, you can ignore this email.
+        If you didn't create a Five to Nine account, you can ignore this email.
       </p>
     </div>
   `;
@@ -653,8 +653,9 @@ export async function sendWelcomeEmail(
           a baseline of the ads they're running so you have a starting point.
         </p>
         <p style="margin: 0 0 12px;">
-          When that first scan finishes, we'll email you what we found. Paid plans
-          keep watching and email you when ads, offers, or landing pages change.
+          When that first scan finishes, we'll email you what we found. After that,
+          free keeps watching with a weekly check and a weekly email brief; paid
+          plans check every 3–6 hours and alert you when things change.
         </p>
         <p style="margin: 0 0 20px;">
           <a href="${escapeHtml(watchlistsUrl)}" style="display: inline-block; background-color: #101828; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-weight: 600;">
@@ -835,7 +836,7 @@ export async function sendFreeActivationResultEmail(
             : ""
         }
         <p style="margin: 0 0 12px;">
-          Free includes this one activation scan. Paid plans keep watching and email you when things change.
+          Free keeps watching this competitor with a weekly check and a weekly email brief. Paid plans check every 3–6 hours and email you as soon as things change.
         </p>
         <p style="margin: 0 0 12px;">
           <a href="${escapeHtml(watchlistUrl)}" style="display: inline-block; background-color: #101828; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-weight: 600; margin-right: 10px;">

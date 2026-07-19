@@ -81,17 +81,17 @@ const PRESENCE_ERROR_COPY: Record<string, PresenceCustomerErrorCopy> = {
   },
   entity_limit: {
     reasonCode: "limit_reached",
-    message: "You have reached the tracked entity limit.",
+    message: "You've reached the tracked entity limit.",
     action: "Remove an entity or review your plan for more capacity.",
   },
   mode_limit: {
     reasonCode: "limit_reached",
-    message: "You have reached the limit for this entity type.",
+    message: "You've reached the limit for this entity type.",
     action: "Remove an entity or review your plan for more capacity.",
   },
   source_limit: {
     reasonCode: "limit_reached",
-    message: "You have reached the source limit for this entity.",
+    message: "You've reached the source limit for this entity.",
     action: "Remove a source or review your plan for more capacity.",
   },
   missing_url: {

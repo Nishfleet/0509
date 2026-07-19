@@ -63,6 +63,7 @@ import { normalizeSavedQuery } from "~/lib/normalize";
 import { getUserPlan, PLAN_LIMITS } from "~/lib/plan.server";
 import { resolveScheduledScanCacheMaxAgeMs } from "~/lib/discovery-cache.server";
 import {
+  getPlanEntitlements,
   getScheduledMonitoringPolicy,
   parsePlanFamily,
   planAllowsDigestCadence,
@@ -263,6 +264,7 @@ export async function runScheduledMonitoring(
   if (options.includeScans !== false) {
     const listedWatchlists = await listActiveWatchlists(env, {
       includeScout: shouldIncludeScoutInScheduledMonitoring(options),
+      includeFree: shouldIncludeFreeInScheduledMonitoring(options),
     });
     const browserAccess = await filterScheduledBrowserWatchlists(
       env,
@@ -768,6 +770,15 @@ export async function runScheduledDiscoveryWarmup(env: AppEnv) {
       continue;
     }
 
+    // Warmup pre-heats cache for frequent scanners only. Weekly-cadence
+    // workspaces (free, and lapsed-paid workspaces whose effective plan is
+    // free) must never trigger the 6-hourly live warmup scrape — their Monday
+    // scan reuses the shared 7-day cache instead.
+    if (access.plan && getPlanEntitlements(access.plan).scheduledScanCadence === "weekly") {
+      skipped += 1;
+      continue;
+    }
+
     if (warmupTargets.length >= DISCOVERY_WARMUP_QUERY_LIMIT) {
       skipped += 1;
       continue;
@@ -837,9 +848,10 @@ export async function runScheduledDiscoveryWarmup(env: AppEnv) {
 // non-fatal because the scheduled scan still covers the watchlist.
 //
 // Free accounts keep their activation scan (their scheduled cadence is
-// "none", so this is the only scan they get), but a per-account daily cap
-// stops a pause/recreate loop from turning watchlist creation into
-// unmetered Browser Rendering usage. Paid plans are uncapped here.
+// weekly, so this is the only scan before the next Monday slot), but a
+// per-account daily cap stops a pause/recreate loop from turning watchlist
+// creation into unmetered Browser Rendering usage. Paid plans are uncapped
+// here.
 const FREE_FIRST_SCAN_DAILY_CAP = 3;
 
 const FIRST_SCAN_IDEMPOTENCY_PREFIX = "watchlist-run:first-scan:";
@@ -2517,6 +2529,17 @@ function shouldIncludeScoutInScheduledMonitoring(
       : new Date(options.scheduledTime);
 
   return shouldSchedulePlanInRegularScan("scout", scheduledAt);
+}
+
+// Free Weekly Competitor Watch: free watchlists join exactly one tick of the
+// regular cron per week (Monday 03:00 UTC — see isWeeklyAlignedScan). Every
+// other tick, and the discovery-warmup cron, never lists them.
+function shouldIncludeFreeInScheduledMonitoring(options: RunScheduledMonitoringOptions) {
+  const scheduledAt = options.scheduledTime === undefined
+    ? new Date()
+    : new Date(options.scheduledTime);
+
+  return shouldSchedulePlanInRegularScan("free", scheduledAt);
 }
 
 async function resolveWatchlistQuery(env: AppEnv, watchlist: WatchlistRecord) {

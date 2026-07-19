@@ -442,10 +442,14 @@ function createFakeD1() {
                 });
               }
               if (sql.includes("DELETE FROM rate_limit_events")) {
-                const [longScope, cutoff, _repeatedLongScope, longWindowCutoff] = args.map(String);
+                // Bind shape: [...longScopes, cutoff, ...longScopes, longWindowCutoff]
+                const scopeCount = (args.length - 2) / 2;
+                const longScopes = new Set(args.slice(0, scopeCount).map(String));
+                const cutoff = String(args[scopeCount]);
+                const longWindowCutoff = String(args[args.length - 1]);
                 for (let index = rows.length - 1; index >= 0; index -= 1) {
                   const row = rows[index]!;
-                  const expired = row.scope === longScope
+                  const expired = longScopes.has(row.scope)
                     ? row.createdAt < longWindowCutoff
                     : row.createdAt < cutoff;
                   if (expired) rows.splice(index, 1);

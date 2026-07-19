@@ -1531,7 +1531,7 @@ describe("deliverWatchlistAlerts", () => {
     expect(emailSendPayload(sendMock)).toMatchObject({
 from:{email:"alerts@0509.io",name:"Five to Nine"},
       to: "owner@example.com",
-      subject: "Landing page URL changed: Nykaa",
+      subject: "Nykaa changed a landing page URL",
       html: expect.stringContaining("Five to Nine alert"),
       headers: expect.objectContaining({
         "X-0509-Tag": "instant-alert",

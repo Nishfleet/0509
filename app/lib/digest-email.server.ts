@@ -32,6 +32,16 @@ export interface DigestEmailHeartbeat {
   adsSeen: number;
 }
 
+/*
+ * Extension note (2026-07-19, counter-brief branch): the Ad Aggression Score
+ * (`app/lib/aggression-score.ts`) is deliberately NOT rendered in digest
+ * emails yet. Digest assembly works from digest items and never builds
+ * competitor dossiers, so the score is not cheaply available here — adding it
+ * would cost a full dossier query chain per watchlist per digest run. If that
+ * cost is ever accepted, compute `computeAggressionScore(await
+ * buildCompetitorDossier(...))` in digest orchestration and pass a precomputed
+ * score line into `DigestEmailInput`; do not query dossiers from this module.
+ */
 export interface DigestEmailModel {
   subject: string;
   preheader: string;
@@ -58,6 +68,10 @@ export interface DigestEmailInput {
   supportEmail: string;
   supportMailto: string;
   unsubscribeUrl: string | null;
+  // Free-plan digests carry one tasteful upgrade line in the footer area.
+  // Absent or empty renders nothing — paid digests are byte-identical.
+  upgradeNote?: string | null;
+  upgradeUrl?: string | null;
 }
 
 export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
@@ -105,7 +119,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">View full digest</a>
       </p>
-      <p style="margin: 0; color: #98a2b3; font-size: 13px;">
+      ${renderUpgradeNoteHtml(input)}<p style="margin: 0; color: #98a2b3; font-size: 13px;">
         Source coverage: verified evidence means a stored screenshot, page record, or source link is attached. Check-spotted and needs-review items are signals from scheduled monitoring and should be checked before sharing externally.
         Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color:#344054;">Notifications</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color:#344054;">${escapeHtml(input.supportEmail)}</a>.
       </p>
@@ -128,6 +142,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
     omittedCount > 0 ? `${omittedCount} more change${omittedCount === 1 ? "" : "s"} are in the full digest.` : null,
     "",
     `View full digest: ${input.fullDigestUrl}`,
+    ...renderUpgradeNoteText(input),
     `Manage frequency: ${input.manageFrequencyUrl}`,
     input.unsubscribeUrl ? `Unsubscribe: ${input.unsubscribeUrl}` : null,
     `Support: ${input.supportEmail}`,
@@ -167,8 +182,8 @@ export function buildScanTroubleEmail(input: {
       <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">Five to Nine</p>
       <h1 style="margin: 0 0 12px;">We hit a problem checking your competitors.</h1>
       <p style="margin: 0 0 16px; color: #475467;">
-        We could not complete checks for <strong>${escapeHtml(listed)}</strong> in this period.
-        Retries are already running automatically — you do not need to do anything.
+        We couldn't complete checks for <strong>${escapeHtml(listed)}</strong> in this period.
+        Retries are already running automatically — you don't need to do anything.
       </p>
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.watchlistsUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">Open watchlists</a>
@@ -187,7 +202,7 @@ export function buildScanTroubleEmail(input: {
     "",
     "We hit a problem checking your competitors.",
     "",
-    `We could not complete checks for ${listed} in this period. Retries are already running automatically.`,
+    `We couldn't complete checks for ${listed} in this period. Retries are already running automatically.`,
     "",
     `Open watchlists: ${input.watchlistsUrl}`,
     `Manage frequency: ${input.manageFrequencyUrl}`,
@@ -222,7 +237,7 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">Review digest history</a>
       </p>
-      <p style="margin: 0; color: #98a2b3; font-size: 13px;">
+      ${renderUpgradeNoteHtml(input)}<p style="margin: 0; color: #98a2b3; font-size: 13px;">
         Source coverage: no action-worthy movement was detected in this period. Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color:#344054;">Notifications</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color:#344054;">${escapeHtml(input.supportEmail)}</a>.
       </p>
     `)}
@@ -236,6 +251,7 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
     `${heartbeat.runs} checks across ${heartbeat.watchlistsChecked} competitors reviewed ${heartbeat.adsSeen} ads. Completed checks found no action-worthy movement across the sources that ran.`,
     "",
     `Review digest history: ${input.fullDigestUrl}`,
+    ...renderUpgradeNoteText(input),
     `Manage frequency: ${input.manageFrequencyUrl}`,
     input.unsubscribeUrl ? `Unsubscribe: ${input.unsubscribeUrl}` : null,
     `Support: ${input.supportEmail}`,
@@ -254,19 +270,23 @@ type TopMoveGroup = {
   items: DigestTrustItem[];
 };
 
-/** Preserve ranked order; group consecutive top moves under the same watchlist label. */
+/**
+ * Group top moves under one label per watchlist across the whole ranked list.
+ * Groups are ordered by each watchlist's first (highest-ranked) appearance and
+ * items inside a group keep their relative rank order, so every watchlist gets
+ * exactly one header even when ranked items interleave.
+ */
 export function groupTopMovesByWatchlist(items: DigestTrustItem[]): TopMoveGroup[] {
-  const groups: TopMoveGroup[] = [];
+  const byName = new Map<string, DigestTrustItem[]>();
   for (const item of items) {
     const name = item.watchlistName?.trim() || "Competitor";
-    const last = groups[groups.length - 1];
-    if (last && last.watchlistName === name) {
-      last.items.push(item);
-    } else {
-      groups.push({ watchlistName: name, items: [item] });
-    }
+    const existing = byName.get(name) ?? [];
+    byName.set(name, [...existing, item]);
   }
-  return groups;
+  return [...byName.entries()].map(([watchlistName, groupItems]) => ({
+    watchlistName,
+    items: groupItems,
+  }));
 }
 
 function renderTopMoveGroupsHtml(
@@ -444,6 +464,31 @@ export function digestItemDeepLink(
   }
   const base = origin.replace(/\/+$/, "");
   return `${base}/app/watchlists?watchlist=${encodeURIComponent(watchlistId)}&event=${encodeURIComponent(eventId)}`;
+}
+
+function renderUpgradeNoteHtml(
+  input: Pick<DigestEmailInput, "upgradeNote" | "upgradeUrl">,
+) {
+  const note = input.upgradeNote?.trim();
+  if (!note) {
+    return "";
+  }
+  const link = input.upgradeUrl?.trim();
+  return `<p style="margin: 0 0 16px; color: #475467; font-size: 13px;">
+        ${escapeHtml(note)}${link ? ` <a href="${escapeHtml(link)}" style="color:#344054; font-weight:700;">See plans</a>` : ""}
+      </p>
+      `;
+}
+
+function renderUpgradeNoteText(
+  input: Pick<DigestEmailInput, "upgradeNote" | "upgradeUrl">,
+): string[] {
+  const note = input.upgradeNote?.trim();
+  if (!note) {
+    return [];
+  }
+  const link = input.upgradeUrl?.trim();
+  return ["", link ? `${note} See plans: ${link}` : note];
 }
 
 function renderStrategySectionHtml(strategyParagraph: string | null) {

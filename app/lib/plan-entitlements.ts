@@ -15,7 +15,7 @@ export type PlanResource = "watchlists" | "collections";
 
 export type DigestCadencePolicy = "none" | "weekly" | "daily_and_weekly";
 
-export type ScheduledScanCadence = "none" | "every_6h" | "every_3h";
+export type ScheduledScanCadence = "none" | "weekly" | "every_6h" | "every_3h";
 
 export type MonitoringQueuePriority = 0 | 1 | 2;
 
@@ -75,6 +75,11 @@ export interface PlanEntitlements {
   features: ReadonlySet<PlanFeature>;
 }
 
+// Free Weekly Competitor Watch (PLG wedge): the weekly digest email is the
+// product demo. Free gets exactly the weekly brief + the email lane it rides
+// on — no instant alerts, Slack, evidence, exports, or collections.
+const FREE_FEATURES: PlanFeature[] = ["weekly_digest", "email_delivery"];
+
 const SCOUT_FEATURES: PlanFeature[] = [
   "competitor_research",
   "weekly_digest",
@@ -116,19 +121,20 @@ const AGENCY_FEATURES: PlanFeature[] = [
 const ENTITLEMENTS: Record<PlanFamily, PlanEntitlements> = {
   free: {
     planFamily: "free",
-    // Activation rung: one retained watchlist slot. Scan/digest/proof budgets
-    // stay conservative (none/0) via existing plan-gating — paid plans unlock
-    // scheduled scans and digests.
+    // Free Weekly Competitor Watch: one watchlist scanned once a week (the
+    // Monday slot of the regular cron; see isWeeklyAlignedScan) feeding the
+    // weekly digest email. Evidence/collections/instant budgets stay 0 —
+    // paid plans unlock 3–6 hour cadence and everything else.
     watchlists: 1,
     collections: 0,
     includedEvidenceChecksPerMonth: 0,
     workspaceSeats: 1,
-    digestCadence: "none",
-    scheduledScanCadence: "none",
+    digestCadence: "weekly",
+    scheduledScanCadence: "weekly",
     priorityScanSlots: null,
     monitoringQueuePriority: 2,
     metaSourceStatus: "unavailable",
-    features: new Set(),
+    features: new Set(FREE_FEATURES),
   },
   scout: {
     planFamily: "scout",
@@ -221,9 +227,23 @@ export function isSixHourAlignedScan(scheduledAt: Date): boolean {
   return scheduledAt.getUTCHours() % 6 === 0;
 }
 
+// Weekly-cadence plans ride exactly one tick of the regular 3-hour cron:
+// Monday 03:00 UTC — two hours before the Monday 05:00 UTC weekly digest
+// cron, so the brief always includes that morning's fresh scan.
+export const WEEKLY_SCAN_UTC_DAY = 1;
+export const WEEKLY_SCAN_UTC_HOUR = 3;
+
+export function isWeeklyAlignedScan(scheduledAt: Date): boolean {
+  return (
+    scheduledAt.getUTCDay() === WEEKLY_SCAN_UTC_DAY &&
+    scheduledAt.getUTCHours() === WEEKLY_SCAN_UTC_HOUR
+  );
+}
+
 export function shouldSchedulePlanInRegularScan(planFamily: PlanFamily, scheduledAt: Date): boolean {
   const cadence = getPlanEntitlements(planFamily).scheduledScanCadence;
   if (cadence === "none") return false;
+  if (cadence === "weekly") return isWeeklyAlignedScan(scheduledAt);
   if (cadence === "every_6h") return isSixHourAlignedScan(scheduledAt);
   return true;
 }

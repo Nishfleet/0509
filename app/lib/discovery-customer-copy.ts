@@ -107,7 +107,7 @@ export function toCustomerDiscoveryStatus(
     recovery:
       normalizedStatus === "healthy" || normalizedStatus === "demo"
         ? null
-        : "Review tracking access and retry when ready.",
+        : "Check source access, then retry once it's ready.",
   };
 }
 

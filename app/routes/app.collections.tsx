@@ -19,6 +19,7 @@ import { EmptyState } from "~/components/empty-state";
 import { PlanLimitState } from "~/components/plan-limit-state";
 import { SubmitButton } from "~/components/submit-button";
 import { formatAdvertiserLabel } from "~/lib/landing-page-display";
+import { matchesAdvertiserFilter } from "~/lib/watchlist-links";
 import { buildCollectionInsightDepth } from "~/lib/insight-depth";
 import { canUsePlanFeature, getPlanLimit } from "~/lib/plan-entitlements";
 import { proofLinkForAd } from "~/lib/proof-link";
@@ -51,22 +52,46 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getUserPlan } = await import("~/lib/plan.server");
   const env = getEnv(context);
   const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
-  const [collections, plan] = await Promise.all([
-    listCollections(env, workspaceUserId),
-    getUserPlan(env, workspaceUserId),
-  ]);
   const url = new URL(request.url);
-  const selectedCollectionId = url.searchParams.get("collection") ?? collections[0]?.id ?? null;
-  const selectedCollection = selectedCollectionId
-    ? await getCollection(env, selectedCollectionId, workspaceUserId)
-    : null;
-  const items = selectedCollection ? await listCollectionItems(env, selectedCollection.id) : [];
+  const requestedCollectionId = url.searchParams.get("collection");
+  // Cross-link filter (workflow-friction pass): watchlists deep-link here
+  // with ?advertiser= to show only that competitor's saved ads.
+  const advertiserFilter = url.searchParams.get("advertiser")?.trim() || null;
+  // Deep links (`?collection=<id>`) resolve the selected collection and its
+  // items concurrently with the list; the default view chains off the same
+  // in-flight list promise to pick the first collection. Items are fetched
+  // alongside the ownership-scoped getCollection and discarded unless that
+  // check passes, trading one speculative read for one less serial wave.
+  const collectionsPromise = listCollections(env, workspaceUserId);
+  const selectionPromise = (async () => {
+    const id = requestedCollectionId ?? (await collectionsPromise)[0]?.id ?? null;
+    if (!id) {
+      return { collection: null, items: [] as Awaited<ReturnType<typeof listCollectionItems>> };
+    }
+    const [collection, items] = await Promise.all([
+      getCollection(env, id, workspaceUserId),
+      listCollectionItems(env, id),
+    ]);
+    return { collection, items: collection ? items : [] };
+  })();
+  const [collections, plan, { collection: selectedCollection, items: allItems }] = await Promise.all([
+    collectionsPromise,
+    getUserPlan(env, workspaceUserId),
+    selectionPromise,
+  ]);
+  // The advertiser filter applies after the concurrent waves resolve — it
+  // never serializes the loader.
+  const items = advertiserFilter
+    ? allItems.filter((item) => matchesAdvertiserFilter(item.ad.advertiser, advertiserFilter))
+    : allItems;
 
   return {
     collections,
     plan,
     selectedCollection,
     items,
+    advertiserFilter,
+    hiddenByAdvertiserFilter: allItems.length - items.length,
   };
 }
 
@@ -91,11 +116,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const description = String(formData.get("description") ?? "").trim();
 
     if (!name) {
-      return { ok: false, intent, message: "Collection name is required." };
+      return { ok: false, intent, message: "Give the collection a name first." };
     }
 
     const limitGate = await requireWorkspacePlanLimit(env, workspaceUserId, "collections", {
-      limitMessage: "You have reached your collection limit.",
+      limitMessage: "You've reached your collection limit.",
     });
     if (!limitGate.ok) {
       return { ...limitGate.result, intent };
@@ -113,7 +138,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         error: "plan_limit_exceeded" as const,
         limit: collectionResult.limit,
         current: collectionResult.current,
-        message: "You have reached your collection limit.",
+        message: "You've reached your collection limit.",
       };
     }
 
@@ -189,7 +214,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           ok: false,
           intent,
           message: sanitizeCustomerFacingMessage(
-            (await error.text()) || "That evidence link could not be saved. Check the URL and date.",
+            (await error.text()) || "We couldn't save that evidence link. Check the URL and date, then try again.",
           ),
         };
       }
@@ -331,7 +356,7 @@ export default function CollectionsRoute() {
               message={
                 collectionLimit === 0
                   ? "Collections start on the Scout plan. Upgrade to save reusable competitor evidence."
-                  : "You have reached your collection limit. Upgrade to save another collection."
+                  : "You've reached your collection limit. Upgrade to save another collection."
               }
               title={collectionLimit === 0 ? "Collections are not included on this plan" : "Collection limit reached"}
             />
@@ -342,7 +367,9 @@ export default function CollectionsRoute() {
               <Link
                 className={`f9-work-row ${searchParams.get("collection") === collection.id || (!searchParams.get("collection") && data.selectedCollection?.id === collection.id) ? "is-active" : ""}`}
                 key={collection.id}
-                to={`/app/collections?collection=${collection.id}`}
+                to={`/app/collections?collection=${collection.id}${
+                  data.advertiserFilter ? `&advertiser=${encodeURIComponent(data.advertiserFilter)}` : ""
+                }`}
               >
                 <div>
                   <h3>{collection.name}</h3>
@@ -403,7 +430,7 @@ export default function CollectionsRoute() {
                         className="f9-secondary-button"
                         href={`/export/collection/${data.selectedCollection.id}?format=json`}
                       >
-                        JSON export
+                        Export JSON
                       </a>
                     </>
                   ) : (
@@ -540,7 +567,27 @@ export default function CollectionsRoute() {
 
               <ActionFeedback data={actionData} intent="remove-item" />
 
-              {data.items.length === 0 ? (
+              {data.advertiserFilter ? (
+                <p className="f9-message is-success" role="status">
+                  Showing saved ads matching “{data.advertiserFilter}”
+                  {data.hiddenByAdvertiserFilter > 0
+                    ? ` — ${data.hiddenByAdvertiserFilter} other saved ${
+                        data.hiddenByAdvertiserFilter === 1 ? "ad is" : "ads are"
+                      } hidden.`
+                    : "."}{" "}
+                  <Link to={`/app/collections?collection=${data.selectedCollection.id}`}>
+                    Clear filter
+                  </Link>
+                </p>
+              ) : null}
+
+              {data.items.length === 0 && data.advertiserFilter ? (
+                <EmptyState
+                  description="No saved ads in this board match that competitor. Check another board on the left, or clear the filter to see everything saved here."
+                  title="No saved ads match this filter"
+                  variant="inline"
+                />
+              ) : data.items.length === 0 ? (
                 <EmptyState
                   action={{ label: "Open search", to: "/search" }}
                   description="Save an evidence link here, or run a competitor search and save the examples your team needs to reuse."
@@ -592,9 +639,9 @@ export default function CollectionsRoute() {
                           className="f9-secondary-button"
                           intent="update-item"
                           match={{ itemId: item.id }}
-                          pendingLabel="Updating…"
+                          pendingLabel="Saving…"
                         >
-                          Update item
+                          Save note and tags
                         </SubmitButton>
                       </Form>
                       <Form method="post">

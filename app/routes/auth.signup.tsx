@@ -104,7 +104,6 @@ export default function SignupRoute() {
 
   return (
     <main className="f9-auth-page">
-      <div className="f9-auth-gradient" aria-hidden="true" />
       <div className="f9-container f9-auth-layout">
         <section className="f9-auth-story">
           <Link className="f9-brand f9-auth-brand" to="/" aria-label="Five to Nine home">
@@ -153,16 +152,16 @@ export default function SignupRoute() {
 
 function signupErrorMessage(code: string | null) {
   if (code === "better_auth_not_configured") {
-    return "Sign-up is not configured yet. Ask support to finish account access setup.";
+    return "Sign-up isn't set up yet. Email support and we'll sort it out.";
   }
   if (code === "callback_failed" || code === "INVALID_TOKEN") {
-    return "That setup link could not be verified. Request a fresh link and try again.";
+    return "We couldn't verify that setup link — it may have expired. Request a fresh one below.";
   }
   if (code === "request_invalid") {
-    return "That setup request could not be verified. Open this page and try again.";
+    return "We couldn't verify that setup request. Reload this page and try again.";
   }
   if (code === "send_failed") {
-    return "We could not send that setup link. Try again in a minute.";
+    return "We couldn't send the setup link. Try again in a minute.";
   }
   if (code === "name_required") {
     return "Enter your name to create the account.";
@@ -171,13 +170,13 @@ function signupErrorMessage(code: string | null) {
     return "Enter a valid email address.";
   }
   if (code === "oauth_not_configured") {
-    return "That sign-in option is not configured yet. Use the email link for now.";
+    return "That sign-in option isn't available yet. Use the email link for now.";
   }
   if (code === "oauth_failed") {
-    return "That sign-in option could not start. Use the email link for now.";
+    return "We couldn't start that sign-in option. Use the email link for now.";
   }
   if (code) {
-    return "That setup request could not be completed. Request a fresh link and try again.";
+    return "We couldn't complete that setup. Request a fresh link and try again.";
   }
   return null;
 }
@@ -188,7 +187,7 @@ function signupActionError(
 ) {
   return {
     ok: false as const,
-    error: signupErrorMessage(code) ?? "That setup request could not be completed.",
+    error: signupErrorMessage(code) ?? "We couldn't complete that setup.",
     ...values,
   };
 }

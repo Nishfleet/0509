@@ -40,8 +40,10 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     };
   }
 
-  const plan = await getUserPlan(env, session.user.id);
-  const members = await listWorkspaceMembers(env, session.user.id);
+  const [plan, members] = await Promise.all([
+    getUserPlan(env, session.user.id),
+    listWorkspaceMembers(env, session.user.id),
+  ]);
 
   return {
     isMember: false as const,
