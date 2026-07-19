@@ -78,7 +78,7 @@ describe("withWorkspace", () => {
       error: "plan_limit_exceeded",
       limit: 1,
       current: 1,
-      message: "You have reached your competitor tracking limit.",
+      message: "You've reached your competitor tracking limit.",
       upgradePath: "/app/billing#plans",
     });
     expect(result.response.status).toBe(402);
@@ -110,7 +110,7 @@ describe("withWorkspace", () => {
       limitMessage: ({ limit }) =>
         limit <= 1
           ? "Free includes 1 watchlist. Upgrade to track more competitors with scheduled scans and digests."
-          : "You have reached your competitor tracking limit.",
+          : "You've reached your competitor tracking limit.",
     });
 
     expect(result.ok).toBe(false);
@@ -167,7 +167,7 @@ describe("requireWorkspacePlanLimit", () => {
       error: "plan_limit_exceeded",
       limit: 3,
       current: 3,
-      message: "You have reached your collection limit.",
+      message: "You've reached your collection limit.",
     });
   });
 });
@@ -179,14 +179,14 @@ describe("planLimitExceededActionResult", () => {
       planLimitExceededActionResult({
         limit: 3,
         current: 3,
-        message: "You have reached your competitor tracking limit.",
+        message: "You've reached your competitor tracking limit.",
       }),
     ).toEqual({
       ok: false,
       error: "plan_limit_exceeded",
       limit: 3,
       current: 3,
-      message: "You have reached your competitor tracking limit.",
+      message: "You've reached your competitor tracking limit.",
     });
   });
 });

@@ -111,16 +111,16 @@ describe("buildMarketDeskBrief", () => {
     expect(brief.hasMetrics).toBe(true);
   });
 
-  it("makes the free plan activation-only instead of promising recurring monitoring", () => {
+  it("describes free as an activation scan followed by a weekly check", () => {
     const brief = buildMarketDeskBrief(baseInput({
       plan: "free",
       watchlists: [watchlist()],
-      nextScanLabel: "Activation scan only — paid plans include recurring monitoring.",
+      nextScanLabel: "Mon 15 Jun, 3:00 am UTC",
     }));
 
     expect(brief.title).toBe("Activation scan is queued");
-    expect(brief.summary).toContain("activation-only");
-    expect(brief.summary).toContain("Paid plans include recurring monitoring");
+    expect(brief.summary).toContain("activation scan, then a weekly check");
+    expect(brief.summary).toContain("Paid plans check every 3–6 hours");
     expect(brief.summary).not.toContain("Scheduled checks run");
   });
 
@@ -133,6 +133,39 @@ describe("buildMarketDeskBrief", () => {
     expect(brief.state).toBe("quiet");
     expect(brief.title).toBe("Quiet check completed");
     expect(brief.summary).toBe("All quiet - 18 ads checked across 1 competitor. Completed checks found no action-worthy movement.");
+  });
+
+  it("describes the free quiet state as a weekly check, never a one-time activation", () => {
+    const brief = buildMarketDeskBrief(baseInput({
+      plan: "free",
+      watchlists: [watchlist({ lastScannedAt: "2026-06-20T02:00:00.000Z" })],
+      overnightStats: { runs: 1, watchlistsChecked: 1, adsSeen: 6 },
+    }));
+
+    expect(brief.state).toBe("quiet");
+    expect(brief.title).toBe("Weekly check complete");
+    expect(brief.summary).toBe(
+      "We checked 1 competitor — nothing moved. The next weekly check runs Monday. Paid plans check every 3–6 hours and add instant alerts.",
+    );
+    expect(brief.items[0]).toMatchObject({
+      label: "Watched",
+      title: "Boat Lifestyle",
+      detail: "Checked this week",
+    });
+    expect(JSON.stringify(brief)).not.toContain("activation");
+  });
+
+  it("frames the free Briefs sent metric around the weekly brief, not a paid pitch", () => {
+    const brief = buildMarketDeskBrief(baseInput({
+      plan: "free",
+      watchlists: [watchlist()],
+    }));
+
+    expect(brief.metrics).toContainEqual({
+      label: "Briefs sent",
+      value: 0,
+      detail: "Weekly brief lands Monday",
+    });
   });
 
   it("prioritizes confirmed competitor changes over quiet run stats", () => {

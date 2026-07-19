@@ -13,7 +13,7 @@ import { isApprovedReportSnapshot } from "~/lib/report-approval";
 const RESOURCE_LABELS: Record<string, string> = {
   collection: "Collection",
   watchlist: "Watchlist",
-  digest: "Digest",
+  digest: "Brief",
   report: "Report",
 };
 
@@ -106,6 +106,7 @@ export default function SharesRoute() {
 				<ActionFeedback data={actionData} intent="revoke-share" />
         {data.shares.length === 0 ? (
 					<EmptyState
+						action={{ label: "Open reports", to: "/app/reports" }}
 						description="Share a watchlist, collection, digest, or report and it will appear here so you can revoke it any time."
 						title="No active share links"
 					/>

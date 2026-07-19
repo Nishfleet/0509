@@ -43,7 +43,11 @@ afterEach(() => {
   vi.resetModules();
 });
 
-function installMocks(listAdsByIds: ReturnType<typeof vi.fn>, addAdToCollection: ReturnType<typeof vi.fn>) {
+function installMocks(
+  listAdsByIds: ReturnType<typeof vi.fn>,
+  addAdToCollection: ReturnType<typeof vi.fn>,
+  getUserPlan: ReturnType<typeof vi.fn> = vi.fn().mockResolvedValue("starter"),
+) {
   const env = { DB: {} };
   vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => env) }));
   vi.doMock("~/lib/auth.server", () => ({
@@ -55,7 +59,7 @@ function installMocks(listAdsByIds: ReturnType<typeof vi.fn>, addAdToCollection:
     }),
   }));
   vi.doMock("~/lib/plan.server", () => ({
-    getUserPlan: vi.fn().mockResolvedValue("starter"),
+    getUserPlan,
   }));
   vi.doMock("~/lib/data.server", () => ({
     addAdToCollection,
@@ -112,6 +116,59 @@ describe("search collection integrity", () => {
     expect(result).toEqual({
       ok: false,
       message: "That ad is no longer available to save. Select it again and retry.",
+    });
+    expect(addAdToCollection).not.toHaveBeenCalled();
+  });
+
+  it("rejects free-plan saves server-side even when the POST bypasses the UI gate", async () => {
+    const listAdsByIds = vi.fn().mockResolvedValue([canonicalAd]);
+    const addAdToCollection = vi.fn();
+    const env = installMocks(listAdsByIds, addAdToCollection, vi.fn().mockResolvedValue("free"));
+    const { action } = await import("~/routes/search");
+    const body = new FormData();
+    body.set("intent", "save-to-collection");
+    body.set("collectionId", "collection-1");
+    body.set("adId", canonicalAd.metaAdId);
+
+    const result = await action({
+      context: { cloudflare: { env } },
+      request: new Request("https://0509.io/search", { method: "POST", body }),
+    } as never);
+
+    expect(result).toEqual({
+      ok: false,
+      error: "plan_limit_exceeded",
+      message: "Saving ads to a collection starts on Scout.",
+      upgradePath: "/app/billing?source=search#plans",
+    });
+    expect(addAdToCollection).not.toHaveBeenCalled();
+    expect(listAdsByIds).not.toHaveBeenCalled();
+  });
+
+  it("fails closed with a retryable error when the plan lookup itself fails", async () => {
+    const listAdsByIds = vi.fn().mockResolvedValue([canonicalAd]);
+    const addAdToCollection = vi.fn();
+    // First lookup (withWorkspace route guard) succeeds; the save gate's own
+    // lookup then fails, which must reject the save rather than fail open.
+    const env = installMocks(
+      listAdsByIds,
+      addAdToCollection,
+      vi.fn().mockResolvedValueOnce("starter").mockRejectedValue(new Error("D1 down")),
+    );
+    const { action } = await import("~/routes/search");
+    const body = new FormData();
+    body.set("intent", "save-to-collection");
+    body.set("collectionId", "collection-1");
+    body.set("adId", canonicalAd.metaAdId);
+
+    const result = await action({
+      context: { cloudflare: { env } },
+      request: new Request("https://0509.io/search", { method: "POST", body }),
+    } as never);
+
+    expect(result).toEqual({
+      ok: false,
+      message: "We couldn't confirm your plan just now. Nothing was saved — try again in a moment.",
     });
     expect(addAdToCollection).not.toHaveBeenCalled();
   });

@@ -108,7 +108,7 @@ describe("dashboard close-counter-move action", () => {
 		expect(result).toEqual({
 			ok: false,
 			intent: "close-counter-move",
-			message: "Could not mark that follow-up done.",
+			message: "We couldn't mark that follow-up done. Refresh and try again.",
 		});
   });
 

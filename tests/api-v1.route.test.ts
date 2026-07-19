@@ -826,7 +826,7 @@ describe("customer API v1", () => {
         body: {
           ok: false,
           error: "plan_limit_exceeded",
-          message: "You have reached your competitor tracking limit.",
+          message: "You've reached your competitor tracking limit.",
         },
       })),
       normalizeCustomerAgentActionName: vi.fn((value: string | null) =>

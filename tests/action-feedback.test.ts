@@ -96,7 +96,7 @@ describe("ActionFeedback", () => {
 		const limited = {
 			ok: false,
 			error: "plan_limit_exceeded",
-			message: "You have reached your collection limit.",
+			message: "You've reached your collection limit.",
 		};
 
 		const markup = await renderFeedback({

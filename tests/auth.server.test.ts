@@ -1426,7 +1426,7 @@ describe("Better Auth auth page errors", () => {
         url: "https://0509.io/auth/login?error=INVALID_TOKEN",
       } as never),
     ).resolves.toMatchObject({
-      error: "That sign-in link could not be verified. Request a fresh link and try again.",
+      error: "We couldn't verify that sign-in link — it may have expired. Request a fresh one below.",
     });
 
     await expect(
@@ -1438,7 +1438,7 @@ describe("Better Auth auth page errors", () => {
         url: "https://0509.io/auth/signup?error=INVALID_TOKEN",
       } as never),
     ).resolves.toMatchObject({
-      error: "That setup link could not be verified. Request a fresh link and try again.",
+      error: "We couldn't verify that setup link — it may have expired. Request a fresh one below.",
     });
   });
 });
@@ -1753,7 +1753,7 @@ describe("Better Auth routes", () => {
 
     expect(result).toEqual({
       ok: false,
-      error: "We could not send that setup link. Try again in a minute.",
+      error: "We couldn't send the setup link. Try again in a minute.",
       email: "owner@example.com",
       name: "Owner",
       redirectTo: "/app/onboard",

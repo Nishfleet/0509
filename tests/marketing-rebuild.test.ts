@@ -95,6 +95,10 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("Meta ads and landing pages");
     expect(marketingRoute).toContain("before your alarm goes off");
     expect(marketingRoute).not.toContain("Paste your competitors. Wake up to the proof-backed counter-move brief.");
+    expect(marketingRoute).toContain("start from the brands you already track");
+    expect(marketingRoute).toContain("scheduled monitoring is included with your plan");
+    expect(marketingRoute).toContain("no proof, no claim");
+    expect(marketingRoute).toContain("what changed, why it matters, what to do next");
     expect(marketingRoute).not.toContain("when monitoring is active");
     expect(marketingRoute).not.toContain("When scheduled monitoring is active");
     expect(marketingRoute).toContain("every 3–6 hours on paid plans");

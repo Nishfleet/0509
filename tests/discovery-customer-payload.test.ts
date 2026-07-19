@@ -53,7 +53,7 @@ describe("customer discovery payloads", () => {
       summary:
         "Live ad checks are temporarily delayed, so we're showing your most recent results. We'll retry automatically.",
       lastCheckedAt: rawDiscoveryStatus.lastCheckedAt,
-      recovery: "Review tracking access and retry when ready.",
+      recovery: "Check source access, then retry once it's ready.",
     });
 
     expect(
@@ -66,7 +66,7 @@ describe("customer discovery payloads", () => {
       summary:
         "Live ad checks are temporarily delayed. We'll retry automatically — results refresh as soon as checks recover.",
       lastCheckedAt: rawDiscoveryStatus.lastCheckedAt,
-      recovery: "Review tracking access and retry when ready.",
+      recovery: "Check source access, then retry once it's ready.",
     });
 
     const unavailable = toCustomerDiscoveryStatus({
@@ -114,7 +114,7 @@ describe("customer discovery payloads", () => {
       },
       discoveryStatus: {
         status: "degraded",
-        recovery: "Review tracking access and retry when ready.",
+        recovery: "Check source access, then retry once it's ready.",
       },
     });
     expect(result.connection).not.toHaveProperty("lastErrorMessage");

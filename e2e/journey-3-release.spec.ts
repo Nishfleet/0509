@@ -4,7 +4,6 @@ import { attachReleaseStateArtifacts } from "./helpers/release-artifacts";
 import {
   expectNoHorizontalOverflow,
   expectPhoneTouchTargets,
-  expectStatusAnnouncement,
   expectVisibleKeyboardFocus,
 } from "./helpers/release-experience";
 
@@ -108,10 +107,10 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
         viewport,
         "/app/watchlists?watchlist=e2e-watchlist-j3-workflow",
         "Watchlists",
-        [/(first scan is queued and waiting for a monitoring worker|first scan paused safely before an external check)/i],
+        [/(first scan is in line and starts automatically|first scan paused safely before an external check)/i],
       );
       await expect(
-        page.getByRole("heading", { name: /First scan (queued|safely paused)/ }),
+        page.getByRole("heading", { name: /First scan (starts shortly|safely paused)/ }),
       ).toBeVisible();
       await expect(page.getByText(/running now/i)).toHaveCount(0);
 
@@ -152,10 +151,10 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
 
       await expect(page.getByText("Last good evidence check", { exact: false })).toBeVisible();
       await expect(page.getByRole("link", { name: /Workflow acceptance watch/ })).toContainText(
-        "No completed scan yet — open to review status",
+        "No completed check yet — open for status",
       );
       await expect(page.getByRole("link", { name: /Crash reclaim watch/ })).toContainText(
-        "No completed scan yet — open to review status",
+        "No completed check yet — open for status",
       );
       await expect(page.getByText("Confidence pending", { exact: false }).first()).toBeVisible();
       await expect(page.getByText("Monitoring history is saved; new checks need source access", { exact: true })).toBeVisible();
@@ -165,10 +164,10 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
       await expect(page.getByRole("checkbox", { name: /High-priority alerts/ })).toBeChecked();
       await expect(page.getByText("Succeeded · Scheduled scan", { exact: true })).toBeVisible();
       await expect(page.getByText("Failed · Scheduled scan", { exact: true })).toBeVisible();
-      await expect(page.getByText("This scan failed. Check Source access, then retry or contact support.", { exact: true })).toBeVisible();
+      await expect(page.getByText("This scan failed. Check Source access, then retry — or email support and we'll dig in.", { exact: true })).toBeVisible();
       await expect(page.getByText(/1 ads seen/)).toBeVisible();
       await expect(page.getByText("Verified from a page snapshot", { exact: false }).first()).toBeVisible();
-      await expect(page.getByText("No watchlist send recorded yet.", { exact: true }).first()).toBeVisible();
+      await expect(page.getByText("No alert sent for this change yet.", { exact: true }).first()).toBeVisible();
       await attachReleaseStateArtifacts({ page, testInfo, prefix: "j3-monitoring", state: "monitoring" });
       annotateFinalUrl(testInfo, page);
     });
@@ -214,7 +213,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
         scenario: "digest",
       })).resolves.toMatchObject({ cleanupVerified: true, includedUsed: 0 });
       await expectResponsiveSurface(page, viewport, "/app/digests", "Briefs", [
-        /Digest history/,
+        /Brief history/,
         /Okara launched a new workflow offer/,
         /sent/i,
       ]);
@@ -229,7 +228,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
         /Configurable/,
       ]);
       await page.goto("/unsubscribe");
-      await expect(page.getByRole("heading", { name: "This unsubscribe link is not valid.", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "This unsubscribe link isn't valid.", exact: true })).toBeVisible();
       await expect(page.locator("body")).toContainText(/link may be incomplete or expired/i);
       await expectVisibleKeyboardFocus(page.locator("a").first());
       await expectNoHorizontalOverflow(page);
@@ -248,11 +247,14 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
       await signInAs(context, baseURL!, "e2e-free-onboarded");
       await page.setViewportSize(viewport);
       await page.goto("/app/digests");
-      await expectStatusAnnouncement(
-        page.getByRole("status").filter({ hasText: "Briefs are included in paid plans" }),
-        "Briefs are included in paid plans",
-      );
-      await expect(page.getByRole("link", { name: "View plans" })).toBeVisible();
+      // Free Weekly Competitor Watch: the free plan now includes a weekly
+      // brief, so /app/digests is a real (empty) surface, not a paid gate.
+      await expect(page.getByRole("heading", { name: "Briefs", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Brief history", exact: true })).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "Your first brief appears after monitoring runs" }).first(),
+      ).toBeVisible();
+      await expect(page.getByText("Briefs are included in paid plans")).toHaveCount(0);
       await expectNoHorizontalOverflow(page);
       await expectPhoneTouchTargets(page);
 

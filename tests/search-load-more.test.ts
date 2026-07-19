@@ -330,6 +330,7 @@ describe("search load-more accessibility", () => {
           showPresenceNav: false,
         }),
         useLocation: vi.fn().mockReturnValue({ pathname: "/search", search: "", hash: "" }),
+        useNavigate: vi.fn().mockReturnValue(vi.fn()),
         useNavigation: vi.fn().mockReturnValue({
           state: "loading",
           location: { pathname: "/search", search: "?after=cursor-2" },

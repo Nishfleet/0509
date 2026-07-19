@@ -123,7 +123,7 @@ export default function UnsubscribeRoute() {
           <span className="f9-app-kicker">Email preferences</span>
           {!data.valid ? (
             <>
-              <h1>This unsubscribe link is not valid.</h1>
+              <h1>This unsubscribe link isn't valid.</h1>
               <p>
                 The link may be incomplete or expired. Open the latest email from Five to Nine and use its
                 unsubscribe link, manage delivery settings from your account, or email{" "}

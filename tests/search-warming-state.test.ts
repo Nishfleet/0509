@@ -66,6 +66,7 @@ async function renderWarmingSearch() {
 			useActionData: vi.fn().mockReturnValue(undefined),
 			useLoaderData: vi.fn().mockReturnValue(warmingLoaderData),
 			useLocation: vi.fn().mockReturnValue({ pathname: "/search", search: originalSearch, hash: "" }),
+			useNavigate: vi.fn().mockReturnValue(vi.fn()),
 			useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
 			useRevalidator: vi.fn().mockReturnValue({ state: "idle", revalidate: vi.fn() }),
 			useRouteLoaderData: vi.fn().mockReturnValue({ session: null }),

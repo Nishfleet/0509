@@ -5,6 +5,7 @@ import {
   useActionData,
   useLoaderData,
   useLocation,
+  useNavigate,
   useNavigation,
   useRevalidator,
   useRouteLoaderData,
@@ -17,6 +18,7 @@ import type {
 } from "react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { AdAnglePill } from "~/components/ad-angle-pill";
 import { AdLongevityPill } from "~/components/ad-longevity-pill";
 import { AdThumb } from "~/components/ad-thumb";
 import {
@@ -24,9 +26,12 @@ import {
   DashboardRouteLoading,
 } from "~/components/dashboard-route-loading";
 import { DashboardShell } from "~/components/dashboard-shell";
+import { ResultQuickSave } from "~/components/result-quick-save";
 import { SearchAnswerPanel } from "~/components/search-answer-panel";
 import { SubmitButton } from "~/components/submit-button";
+import { classifyAdRecordAngle } from "~/lib/ad-display";
 import { isAdLibraryBackedAd } from "~/lib/ad-source-kind";
+import { formatAngleDetail } from "~/lib/angle-display";
 import {
   applyWebsiteSearchFallback,
   competitorTrackingLabel,
@@ -56,7 +61,12 @@ import {
   formatLandingPageSignalValue,
 } from "~/lib/landing-page-display";
 import { customerDiscoverySummary } from "~/lib/discovery-customer-copy";
-import { buildSearchAnswer } from "~/lib/search-answer";
+import { buildSearchAnswer, type SearchStealSummary } from "~/lib/search-answer";
+import {
+  isTypingContext,
+  nextSearchResultIndex,
+  SEARCH_KEYBOARD_HINTS,
+} from "~/lib/search-keyboard";
 import {
   DEFAULT_SEARCH_RESULT_SORT,
   parseSearchResultSort,
@@ -85,7 +95,7 @@ export const links: LinksFunction = () => canonicalLinks("/search");
 
 export const meta: MetaFunction = () =>
   publicSeoMeta({
-    title: "Search | Five to Nine",
+    title: "Search competitor Meta ads free | Five to Nine",
     description: searchDescription,
     pathname: "/search",
   });
@@ -157,6 +167,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       fingerprint: parsed.fingerprint,
       result: buildIdleSearchResult(),
       selectedAd: null,
+      stealSummary: null,
       selectionEnrichmentPending: false,
       collections: [],
       plan: null,
@@ -167,6 +178,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       searchScope: "exact" as const,
       displayDomain: null,
       relevanceApplied: false,
+      watchedWatchlist: null,
       ...navFlags,
     };
   }
@@ -182,6 +194,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       fingerprint: parsed.fingerprint,
       result: buildIdleSearchResult(),
       selectedAd: null,
+      stealSummary: null,
       selectionEnrichmentPending: false,
       collections: [],
       plan: null,
@@ -192,16 +205,35 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       searchScope: "exact" as const,
       displayDomain: null,
       relevanceApplied: false,
+      watchedWatchlist: null,
       ...navFlags,
     };
   }
 
-  const customerMetaAdLibraryToken =
+  // One parallel wave for the independent per-account lookups (customer Meta
+  // token, collections, plan) instead of three serial awaits. Anonymous
+  // visitors resolve constants here — no extra queries on that path.
+  const [customerMetaAdLibraryToken, collections, plan] = await Promise.all([
     session && parsed.filters.query && !providerDeny.enabled
-      ? await (
-          await import("~/lib/customer-meta.server")
-        ).getCustomerMetaAdLibraryToken(env, workspaceUserId!)
-      : null;
+      ? import("~/lib/customer-meta.server").then(({ getCustomerMetaAdLibraryToken }) =>
+          getCustomerMetaAdLibraryToken(env, workspaceUserId!),
+        )
+      : null,
+    session ? listCollections(env, workspaceUserId!) : [],
+    session
+      ? import("~/lib/plan.server")
+          .then(({ getUserPlan }) => getUserPlan(env, workspaceUserId!))
+          .catch((): null => {
+            // On a transient plan-lookup blip (D1 hiccup or isolated test env
+            // without D1) the UI payload gets plan=null so nothing renders
+            // from a guess — no free-plan upsell, no paid-only affordances.
+            // Only the rate-limit call below substitutes "starter" so a
+            // paying customer is not throttled to free limits. Real plan
+            // gates (saves, watchlists) re-check server-side and fail closed.
+            return null;
+          })
+      : (null as "free" | "scout" | "starter" | "agency" | null),
+  ]);
 
   // Selecting an ad from already-rendered results reruns this loader with the
   // same query; when the discovery cache can serve that query, the click must
@@ -244,20 +276,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     }
   }
 
-  const collections = session
-    ? await listCollections(env, workspaceUserId!)
-    : [];
-  let plan: "free" | "scout" | "starter" | "agency" | null = null;
-  if (session) {
-    try {
-      const { getUserPlan } = await import("~/lib/plan.server");
-      plan = await getUserPlan(env, workspaceUserId!);
-    } catch {
-      // Isolated tests may omit D1; treat as free for honest collection gates.
-      plan = "free";
-    }
-  }
-
   if (session && parsed.filters.query && !forceLive) {
     const {
       enforceAuthenticatedSearchRateLimit,
@@ -294,7 +312,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         env,
         session.user.id,
         context.cloudflare?.ctx,
-        plan,
+        // Fail OPEN for rate-limit sizing only: an unknown plan gets starter
+        // limits so a paying customer is not throttled to free ones.
+        plan ?? "starter",
       );
       if (searchLimit) {
         // Prefer an in-product labeled daily/burst limit over a bare JSON 429.
@@ -304,6 +324,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
           fingerprint: parsed.fingerprint,
           result: buildIdleSearchResult(),
           selectedAd: null,
+          stealSummary: null,
           selectionEnrichmentPending: false,
           collections,
           plan,
@@ -315,6 +336,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
           searchScope: "exact" as const,
           displayDomain: null,
           relevanceApplied: false,
+          watchedWatchlist: null,
           ...navFlags,
         };
       }
@@ -328,6 +350,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       fingerprint: parsed.fingerprint,
       result: buildIdleSearchResult(),
       selectedAd: null,
+      stealSummary: null,
       selectionEnrichmentPending: false,
       collections,
       plan,
@@ -338,6 +361,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       searchScope: "exact" as const,
       displayDomain: null,
       relevanceApplied: false,
+      watchedWatchlist: null,
       ...navFlags,
     };
   }
@@ -348,6 +372,25 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     await import("~/lib/search-rollout.server");
   const { prepareSearchResultSelection } =
     await import("~/lib/search-selection.server");
+
+  // Cross-link (workflow-friction pass): if the signed-in user already
+  // watches this competitor, the results page links straight to its dossier.
+  // One indexed D1 list per searched query — never blocks the search itself.
+  const watchedWatchlist = session
+    ? await (async () => {
+        try {
+          const { listWatchlists } = await import("~/lib/data.server");
+          const { findWatchedCompetitor } = await import("~/lib/watchlist-links");
+          const watchlists = await listWatchlists(env, workspaceUserId!);
+          return findWatchedCompetitor(watchlists, {
+            host: competitorWebsite.host,
+            query: parsed.filters.query,
+          });
+        } catch {
+          return null;
+        }
+      })()
+    : null;
 
   const useSearchV2 =
     Boolean(competitorWebsite.raw) &&
@@ -404,12 +447,29 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     },
   );
 
+  // WHAT-TO-STEAL cost design: computed synchronously (small model, ~1-2s) and
+  // only for signed-in users on fresh (cache-miss), non-demo searches with >=3
+  // ads — a fresh live scrape already costs seconds of Browser Rendering.
+  // Cache-hit reloads and ad-selection reruns never call the model: there is no
+  // per-search persistence slot without a new migration, so the client keeps
+  // the last computed summary for the same search key instead.
+  const { buildSearchStealSummary, shouldGenerateStealSummary } = await import(
+    "~/lib/search-steal-summary.server"
+  );
+  const stealSummary = shouldGenerateStealSummary({
+    isSignedIn: Boolean(session),
+    result: hydratedResult,
+  })
+    ? await buildSearchStealSummary(env, hydratedResult.ads)
+    : null;
+
   return {
     mode: parsed.mode,
     filters: parsed.filters,
     fingerprint: parsed.fingerprint,
     result: hydratedResult,
     selectedAd,
+    stealSummary,
     selectionEnrichmentPending: Boolean(selectionEnrichmentPending),
     collections,
     plan,
@@ -420,6 +480,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     displayDomain: searchExecution.displayDomain,
     relevanceApplied: searchExecution.relevanceApplied,
     inputError: null,
+    watchedWatchlist,
     ...navFlags,
   };
 }
@@ -532,7 +593,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         limitMessage: ({ limit }) =>
           limit <= 1
             ? "Free includes 1 watchlist. Upgrade to track more competitors with scheduled scans and digests."
-            : "You have reached your competitor tracking limit.",
+            : "You've reached your competitor tracking limit.",
         upgradePath: "/app/billing?source=search#plans",
       },
     );
@@ -577,7 +638,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
       if (!savedQuery) {
         return {
           ok: false,
-          message: "Could not prepare this competitor for tracking.",
+          message:
+            "We couldn't set up tracking for this competitor. Try again, or email support if it keeps failing.",
         };
       }
 
@@ -611,7 +673,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         message:
           watchlistResult.limit <= 1
             ? "Free includes 1 watchlist. Upgrade to track more competitors with scheduled scans and digests."
-            : "You have reached your competitor tracking limit.",
+            : "You've reached your competitor tracking limit.",
         upgradePath: "/app/billing?source=search#plans",
       });
     }
@@ -630,7 +692,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }
 
     if (!watchlist) {
-      return { ok: false, message: "Could not create this watchlist." };
+      return { ok: false, message: "We couldn't create this watchlist. Try again in a moment." };
     }
 
     if (!workspace.isMember && !workspace.session.user.onboardedAt) {
@@ -653,6 +715,30 @@ export async function action({ context, request }: ActionFunctionArgs) {
       return {
         ok: false,
         message: "Choose a collection and ad before saving.",
+      };
+    }
+
+    // Server-side plan gate: saving to a collection starts on Scout. This
+    // must not trust the client (the free-plan UI hides the form, but the
+    // POST is reachable directly) and must fail CLOSED — if the plan lookup
+    // itself fails we return an honest retryable error, never allow.
+    let savePlan: "free" | "scout" | "starter" | "agency";
+    try {
+      const { getUserPlan } = await import("~/lib/plan.server");
+      savePlan = await getUserPlan(env, workspaceUserId);
+    } catch {
+      return {
+        ok: false,
+        message:
+          "We couldn't confirm your plan just now. Nothing was saved — try again in a moment.",
+      };
+    }
+    if (savePlan === "free") {
+      return {
+        ok: false,
+        error: "plan_limit_exceeded" as const,
+        message: "Saving ads to a collection starts on Scout.",
+        upgradePath: "/app/billing?source=search#plans",
       };
     }
 
@@ -694,6 +780,7 @@ export default function SearchRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const location = useLocation();
+  const navigate = useNavigate();
   const navigation = useNavigation();
   const revalidator = useRevalidator();
   const selectedProofRef = useRef<HTMLElement>(null);
@@ -729,6 +816,21 @@ export default function SearchRoute() {
       requestedCursor,
     ),
   );
+  // The loader only computes the steal summary on fresh (cache-miss) searches;
+  // keep the last computed one client-side so selecting an ad (a cache-served
+  // loader rerun) does not drop it from the panel.
+  const [retainedSteal, setRetainedSteal] = useState<{
+    searchKey: string;
+    summary: SearchStealSummary;
+  } | null>(null);
+  useEffect(() => {
+    if (data.stealSummary) {
+      setRetainedSteal({ searchKey, summary: data.stealSummary });
+    }
+  }, [data.stealSummary, searchKey]);
+  const stealSummary =
+    data.stealSummary ??
+    (retainedSteal?.searchKey === searchKey ? retainedSteal.summary : null);
   const visibleAccumulated =
     accumulated.searchKey === searchKey
       ? accumulated
@@ -782,6 +884,7 @@ export default function SearchRoute() {
   const creativeTextField = selectedAd?.analysisFields.find(
     (field) => field.fieldKey === "ocr_text",
   );
+  const selectedAdAngle = selectedAd ? classifyAdRecordAngle(selectedAd) : null;
   const competitorWebsite = data.competitorWebsite ?? emptyCompetitorWebsite();
   const trackingRole: WatchlistTrackingRole = "competitor";
   const targetNoun = "competitor";
@@ -826,6 +929,100 @@ export default function SearchRoute() {
     currentSearchParams,
     isBroaderScope ? "broader" : "exact",
   );
+  // Shared card href for the result list and keyboard Enter — preserves the
+  // per-ad source cursor semantics of the reconciled accumulation state.
+  const resultCardHref = (metaAdId: string) =>
+    buildSearchResultHref(
+      scopedSearchParams,
+      metaAdId,
+      visibleAccumulated.adCursorById.get(metaAdId) ?? null,
+    );
+
+  // Keyboard basics (workflow-friction pass): j/k or arrows highlight, Enter
+  // opens, s quick-saves, ? toggles the hints popover. Listeners skip typing
+  // contexts and interactive targets, and clean up on unmount.
+  const [keyFocusIndex, setKeyFocusIndex] = useState<number | null>(null);
+  const [showKeyboardHints, setShowKeyboardHints] = useState(false);
+  const keyFocusedAdId =
+    keyFocusIndex !== null ? (visibleAds[keyFocusIndex]?.metaAdId ?? null) : null;
+  const keyboardStateRef = useRef({
+    keyFocusIndex,
+    keyFocusedAdId,
+    resultCardHref,
+    visibleAds,
+  });
+  keyboardStateRef.current = {
+    keyFocusIndex,
+    keyFocusedAdId,
+    resultCardHref,
+    visibleAds,
+  };
+  useEffect(() => {
+    setKeyFocusIndex(null);
+  }, [searchKey, resultSort]);
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        isTypingContext(event.target)
+      ) {
+        return;
+      }
+      const current = keyboardStateRef.current;
+      if (event.key === "?") {
+        event.preventDefault();
+        setShowKeyboardHints((open) => !open);
+        return;
+      }
+      const nextIndex = nextSearchResultIndex(
+        event.key,
+        current.keyFocusIndex,
+        current.visibleAds.length,
+      );
+      if (nextIndex !== null) {
+        event.preventDefault();
+        setKeyFocusIndex(nextIndex);
+        return;
+      }
+      if (!current.keyFocusedAdId) {
+        return;
+      }
+      // Enter/s on a focused link or button keeps its native behavior.
+      if (
+        event.target instanceof HTMLAnchorElement ||
+        event.target instanceof HTMLButtonElement
+      ) {
+        return;
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        navigate(current.resultCardHref(current.keyFocusedAdId));
+        return;
+      }
+      if (event.key === "s") {
+        event.preventDefault();
+        const escaped =
+          typeof CSS !== "undefined" && typeof CSS.escape === "function"
+            ? CSS.escape(current.keyFocusedAdId)
+            : current.keyFocusedAdId.replace(/"/g, '\\"');
+        document
+          .querySelector<HTMLButtonElement>(`[data-quick-save-ad="${escaped}"]`)
+          ?.click();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [navigate]);
+  useEffect(() => {
+    if (keyFocusIndex === null) {
+      return;
+    }
+    document
+      .querySelector(".f9-result-card-wrap.is-key-focus")
+      ?.scrollIntoView({ block: "nearest" });
+  }, [keyFocusIndex]);
 
   // Auto-revalidate while commercial discovery is warming (5s × 12 = 60s cap).
   useEffect(() => {
@@ -1255,6 +1452,29 @@ export default function SearchRoute() {
                         <small>{`Broader matches related to ${displayDomain}`}</small>
                       ) : null}
                     </div>
+                    {visibleAds.length > 0 ? (
+                      <div className="f9-keyboard-hints">
+                        <button
+                          aria-expanded={showKeyboardHints}
+                          aria-label="Keyboard shortcuts"
+                          className="f9-keyboard-hints-trigger"
+                          onClick={() => setShowKeyboardHints((open) => !open)}
+                          type="button"
+                        >
+                          ?
+                        </button>
+                        {showKeyboardHints ? (
+                          <dl className="f9-keyboard-hints-popover">
+                            {SEARCH_KEYBOARD_HINTS.map((hint) => (
+                              <div key={hint.keys}>
+                                <dt>{hint.keys}</dt>
+                                <dd>{hint.action}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                        ) : null}
+                      </div>
+                    ) : null}
                     {visibleAds.length > 1 ? (
                       <label className="f9-search-field f9-result-sort">
                         <span className="f9-sr-only">Sort results</span>
@@ -1304,7 +1524,20 @@ export default function SearchRoute() {
                   </div>
 
                   {searchAnswer ? (
-                    <SearchAnswerPanel answer={searchAnswer} />
+                    <SearchAnswerPanel answer={searchAnswer} steal={stealSummary} />
+                  ) : null}
+
+                  {data.watchedWatchlist ? (
+                    <div className="f9-discovery-banner">
+                      <p>
+                        You watch this competitor —{" "}
+                        <Link
+                          to={`/app/watchlists?watchlist=${data.watchedWatchlist.id}`}
+                        >
+                          open its dossier
+                        </Link>
+                      </p>
+                    </div>
                   ) : null}
 
                   {!data.session ? (
@@ -1340,19 +1573,14 @@ export default function SearchRoute() {
 
                   <div className="f9-results-list">
                     {visibleAds.length > 0 ? (
-                      visibleAds.map((ad) => {
-                        const sourceCursor =
-                          visibleAccumulated.adCursorById.get(ad.metaAdId) ??
-                          null;
-                        return (
+                      visibleAds.map((ad) => (
+                        <div
+                          className={`f9-result-card-wrap${keyFocusedAdId === ad.metaAdId ? " is-key-focus" : ""}`}
+                          key={ad.metaAdId}
+                        >
                           <Link
                             className={`f9-result-card ${selectedAd?.metaAdId === ad.metaAdId ? "is-active" : ""}`}
-                            key={ad.metaAdId}
-                            to={buildSearchResultHref(
-                              scopedSearchParams,
-                              ad.metaAdId,
-                              sourceCursor,
-                            )}
+                            to={resultCardHref(ad.metaAdId)}
                           >
                             <AdThumb ad={ad} />
                             <div className="f9-result-card-body">
@@ -1362,10 +1590,14 @@ export default function SearchRoute() {
                                 </span>
                                 <h3>{ad.previewHeadline}</h3>
                                 <div className="f9-result-card-pills">
+                                  {ad.source === "demo" ? (
+                                    <span className="f9-longevity-pill is-sample">Sample</span>
+                                  ) : null}
                                   <AdLongevityPill ad={ad} />
                                   {ad.variantCount && ad.variantCount > 1 ? (
                                     <span className="f9-longevity-pill">{`×${ad.variantCount} variants`}</span>
                                   ) : null}
+                                  <AdAnglePill ad={ad} />
                                 </div>
                               </div>
                               <p>{formatResultCardSummary(ad)}</p>
@@ -1379,15 +1611,23 @@ export default function SearchRoute() {
                               <em>{ad.format}</em>
                             </div>
                           </Link>
-                        );
-                      })
+                          {data.session && ad.source !== "demo" ? (
+                            <ResultQuickSave
+                              adId={ad.metaAdId}
+                              advertiser={ad.advertiser}
+                              collections={data.collections}
+                              plan={data.plan}
+                            />
+                          ) : null}
+                        </div>
+                      ))
                     ) : (
                       <div className="f9-empty-state">
                         {isSearchWarming ? (
                           <div aria-live="polite" role="status">
                             <h3>Checking the Ad Library now</h3>
                             <p>
-                              Usually under a minute — we will refresh
+                              Usually under a minute — we'll refresh
                               automatically.
                             </p>
                           </div>
@@ -1530,6 +1770,12 @@ export default function SearchRoute() {
 
                       <dl className="f9-detail-grid">
                         <DetailRow label="Hook" value={selectedAd.hook} />
+                        {selectedAdAngle ? (
+                          <DetailRow
+                            label="Angle"
+                            value={formatAngleDetail(selectedAdAngle)}
+                          />
+                        ) : null}
                         <DetailRow
                           label="Offer"
                           value={formatOfferDisplay(selectedAd.offer)}
@@ -1562,10 +1808,10 @@ export default function SearchRoute() {
                         </p>
                         <small>
                           {creativeTextField
-                            ? "Read from the ad creative when available."
+                            ? "Read straight from the ad creative."
                             : selectionEnrichmentUiPending
                               ? "Reading the ad creative now — this updates in a few seconds."
-                              : "Not detected from the ad snapshot yet."}
+                              : "We couldn't read text off this creative."}
                         </small>
                       </div>
 
@@ -1612,7 +1858,7 @@ export default function SearchRoute() {
                             {selectedAd.landingPageUrl}
                           </a>
                         ) : (
-                          <small>No landing page URL detected.</small>
+                          <small>No landing-page link found on this ad.</small>
                         )}
                       </div>
 
@@ -2235,15 +2481,18 @@ export function formatResultsPanelTitle(
       context.displayDomain &&
       !context.isBroaderScope
     ) {
-      return `${result.ads.length} verified ads linked to ${context.displayDomain}`;
+      const verifiedNoun = result.ads.length === 1 ? "ad" : "ads";
+      return `${result.ads.length} verified ${verifiedNoun} linked to ${context.displayDomain}`;
     }
 
     if (context.isBroaderScope && context.displayDomain) {
       const verifiedCount = Math.max(0, Math.floor(result.verifiedCount ?? 0));
       const relatedCount = Math.max(0, result.ads.length - verifiedCount);
+      const relatedNoun = relatedCount === 1 ? "match" : "matches";
+      const broaderNoun = result.ads.length === 1 ? "match" : "matches";
       return verifiedCount > 0
-        ? `${verifiedCount} verified and ${relatedCount} related matches for ${context.displayDomain}`
-        : `${result.ads.length} broader matches for ${context.displayDomain}`;
+        ? `${verifiedCount} verified and ${relatedCount} related ${relatedNoun} for ${context.displayDomain}`
+        : `${result.ads.length} broader ${broaderNoun} for ${context.displayDomain}`;
     }
 
     return formatAdsFoundLabel(result.ads.length);

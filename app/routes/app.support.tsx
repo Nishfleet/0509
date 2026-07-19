@@ -54,13 +54,17 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const selectedCategory = readSupportCaseCategory(url.searchParams.get("category")) ?? "other";
   const selectedCaseId = readSelectedCaseId(url.searchParams.get("case"));
-  const cases = await listSupportCases(env, session.user.id, { status: "all", limit: 20 });
-  const selectedCase = selectedCaseId
-    ? await getSupportCase(env, session.user.id, selectedCaseId)
-    : null;
-  const caseEvents = selectedCase
-    ? await listSupportCaseEvents(env, session.user.id, selectedCase.id, { limit: 30 })
-    : [];
+  // All three reads are scoped to session.user.id, so the selected case and
+  // its events can load concurrently with the case list; events are discarded
+  // when the requested case does not resolve for this user.
+  const [cases, selectedCase, caseEventsRaw] = await Promise.all([
+    listSupportCases(env, session.user.id, { status: "all", limit: 20 }),
+    selectedCaseId ? getSupportCase(env, session.user.id, selectedCaseId) : null,
+    selectedCaseId
+      ? listSupportCaseEvents(env, session.user.id, selectedCaseId, { limit: 30 })
+      : [],
+  ]);
+  const caseEvents = selectedCase ? caseEventsRaw : [];
 
   return {
     email: session.user.email,

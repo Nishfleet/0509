@@ -121,6 +121,7 @@ Important bindings and secrets:
 
 ## Notes
 
+- `extension/` is a standalone Chrome extension (MV3, zero dependencies) that opens Five to Nine for the brand behind the current tab. It is not part of the app build or deploy; see `extension/README.md` for load-unpacked instructions and the store-submission checklist.
 - For the current Cloudflare Worker app, use `.dev.vars` for local secrets. A starter template now lives at `.dev.vars.example`.
 - Supabase is legacy-only under `legacy/`; it is not part of the active `app/` or `workers/` runtime.
 - Better Auth is the active auth provider. D1 remains the source of truth for auth state, product data, billing linkage, watchlists, digests, collections, and customer API keys.

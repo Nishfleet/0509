@@ -1,3 +1,4 @@
+import { classifyAdAngle, type AngleClassification } from "~/lib/angle-classifier";
 import type { AdRecord } from "~/lib/types";
 
 const MS_PER_DAY = 86_400_000;
@@ -35,4 +36,19 @@ export function formatAdLongevityLabel(ad: AdLongevityInput, now: Date = new Dat
   const days = adLongevityDays(ad, now);
   if (days === null) return null;
   return days === 1 ? "Running 1 day" : `Running ${days} days`;
+}
+
+type AdAngleInput = Pick<AdRecord, "hook" | "body" | "offer" | "cta">;
+
+/**
+ * Marketing-angle read for an ad, computed at display time from the ad's
+ * copy fields (deterministic and cheap — never persisted). Returns null when
+ * the classifier cannot make an honest call; render nothing in that case.
+ */
+export function classifyAdRecordAngle(ad: AdAngleInput): AngleClassification | null {
+  const sample = [ad.hook, ad.body, ad.offer, ad.cta]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(" \n ");
+  return classifyAdAngle(sample);
 }

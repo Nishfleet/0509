@@ -30,15 +30,15 @@
   "claims": [
     {
       "claimId": "PLAN-CADENCE",
-      "text": "Scout monitoring every 6 hours; Starter and Agency monitoring every 3 hours.",
+      "text": "Free Competitor Watch scans weekly on the Monday slot; Scout monitoring every 6 hours; Starter and Agency monitoring every 3 hours.",
       "surface": "plan catalog, marketing, dashboard and watchlists",
       "audience": "buyers and signed-in customers",
       "owner": "product and monitoring",
       "source": ["app/lib/plan-entitlements.ts", "docs/plan-catalog.md"],
       "requiredGate": "G360-P1-WORKFLOW,G11-CAPACITY-SLO",
       "requiredEvidence": "same-fingerprint schedule, dispatch, completion, retry and deployed scan-health evidence",
-      "status": "assessed_gate_c_pending",
-      "assessment": "Historical exact candidate passed strict all-six local proof; the closeout candidate still needs scheduled cadence dispatch/completion/recovery evidence on its exact deployed version.",
+      "status": "assessed_pending_reproof",
+      "assessment": "2026-07-20 integration drift: the free plan gained a weekly Monday scan (Free Weekly Competitor Watch), changing the cadence claim. Historical exact-candidate proof covered paid cadences only; the changed claim needs fresh dispatch/completion/recovery evidence on the merged candidate before any closeout.",
       "classification": "discovered",
       "expiry": "any plan, cron, workflow or cadence-copy change"
     },
@@ -66,7 +66,7 @@
       "requiredGate": "G11-INVENTORY,G360-P1-BACKBONE",
       "requiredEvidence": "executable catalog parity plus same-fingerprint plan-boundary and pre-click denial proof",
       "status": "assessed_pending_reproof",
-      "assessment": "The closeout registry now binds every authoritative plan feature to one executable inventory; exact browser and deployed entitlement proof remains required.",
+      "assessment": "The closeout registry binds every authoritative plan feature to one executable inventory; 2026-07-20 integration drift added weekly_digest and email_delivery to the free plan (Free Weekly Competitor Watch), so catalog parity plus exact browser and deployed entitlement proof must repeat on the merged candidate.",
       "classification": "discovered",
       "expiry": "any plan feature, entitlement, pricing or navigation change"
     },
@@ -86,17 +86,17 @@
     },
     {
       "claimId": "FREE-ACTIVATION-ONLY",
-      "text": "Free includes one activation watchlist and first scan, not recurring monitoring, digests or saved evidence.",
+      "text": "Free includes one weekly Competitor Watch watchlist — an activation scan, then a weekly Monday scan feeding a weekly brief email — without instant alerts, evidence checks, collections or exports.",
       "surface": "dashboard, watchlists, Help and public documentation",
       "audience": "free users and buyers",
       "owner": "activation",
       "source": ["app/routes/app.dashboard.tsx", "app/routes/app.watchlists.tsx", "app/lib/public-markdown.ts"],
       "requiredGate": "J2-A-C,J3-A-C",
-      "requiredEvidence": "authoritative first-scan completion/recovery, cap and pre-click plan-boundary proof",
+      "requiredEvidence": "authoritative first-scan completion/recovery, weekly-scan and weekly-brief delivery, cap and pre-click plan-boundary proof",
       "status": "assessed_pending_reproof",
-      "assessment": "Historical strict Journey 2 proof covers activation-only entitlement and recovery; the closeout candidate must repeat it at all three widths and deployed identity.",
+      "assessment": "2026-07-20 integration drift: the overnight stack replaced activation-only free with the recurring Free Weekly Competitor Watch (weekly scan + weekly brief). Historical Journey 2 activation-only proof no longer matches the claim; the changed free contract needs fresh proof at all three widths and deployed identity.",
       "classification": "known",
-      "expiry": "free-plan, first-scan, copy or entitlement change"
+      "expiry": "free-plan, first-scan, weekly-scan, digest, copy or entitlement change"
     },
     {
       "claimId": "FIRST-SCAN-TIMING",
@@ -303,8 +303,8 @@
       "source": ["app/lib/seo.ts", "workers/security-headers.ts"],
       "requiredGate": "G11-SEO",
       "requiredEvidence": "queryful search policy, private/token noindex, structured data, redirects and deployed social/crawl checks",
-      "status": "assessed_gate_c_pending",
-      "assessment": "Current production proves canonical host, redirects, robots, sitemap and public status basics; closeout structured-data, queryful-search and private/token noindex proof must bind to the new deployment.",
+      "status": "assessed_pending_reproof",
+      "assessment": "2026-07-20 integration drift: the overnight stack added /search, /auth/signup and /compare/meta-ad-library to the sitemap and introduced public /ads/:domain brand pages (indexable by default with honest-shell/demo/stale self-noindex, deliberately absent from the static sitemap). Prior canonical/robots/sitemap proof predates these surfaces; indexing claims need fresh proof on the merged candidate.",
       "classification": "discovered",
       "expiry": "route, metadata, host, robots, sitemap or header change"
     },

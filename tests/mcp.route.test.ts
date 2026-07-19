@@ -1276,7 +1276,7 @@ describe("MCP route", () => {
         body: {
           ok: false,
           error: "plan_limit_exceeded",
-          message: "You have reached your competitor tracking limit.",
+          message: "You've reached your competitor tracking limit.",
         },
       })),
       runCustomerAgentAction: vi.fn().mockRejectedValue(new Error("limit")),

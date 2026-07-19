@@ -1,9 +1,35 @@
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import type { LoaderFunctionArgs, ShouldRevalidateFunctionArgs } from "react-router";
 import { Outlet, redirect, useLoaderData } from "react-router";
 
 import { DashboardShell } from "~/components/dashboard-shell";
 import { DashboardRouteError } from "~/components/dashboard-route-loading";
+import { QuickAddPalette } from "~/components/quick-add-palette";
+
+/** Cmd/Ctrl+K anywhere in /app opens quick-add, except while typing. */
+export function isQuickAddShortcut(event: {
+  key: string;
+  metaKey: boolean;
+  ctrlKey: boolean;
+  target: EventTarget | null;
+}) {
+  if (event.key.toLowerCase() !== "k" || (!event.metaKey && !event.ctrlKey)) {
+    return false;
+  }
+  const target = event.target;
+  if (target instanceof HTMLElement) {
+    if (
+      target.isContentEditable ||
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLSelectElement
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getCachedWorkspaceForRequest, requireSession } = await import("~/lib/auth.server");
@@ -47,6 +73,19 @@ export function shouldRevalidate({
 
 export default function AppLayoutRoute() {
   const { session, showOpsNav, showPresenceNav } = useLoaderData<typeof loader>();
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const closeQuickAdd = useCallback(() => setQuickAddOpen(false), []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (isQuickAddShortcut(event)) {
+        event.preventDefault();
+        setQuickAddOpen((open) => !open);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   return (
     <DashboardShell
@@ -58,9 +97,15 @@ export default function AppLayoutRoute() {
           <Link className="f9-secondary-button" prefetch="intent" to="/app">
             Overview
           </Link>
-          <Link className="f9-primary-button" prefetch="intent" to="/search">
-            Add competitor
-          </Link>
+          <button
+            aria-haspopup="dialog"
+            aria-keyshortcuts="Meta+K Control+K"
+            className="f9-primary-button"
+            onClick={() => setQuickAddOpen(true)}
+            type="button"
+          >
+            + Add competitor
+          </button>
         </>
       }
       showOpsNav={showOpsNav}
@@ -68,6 +113,7 @@ export default function AppLayoutRoute() {
       userEmail={session.user.email}
       userName={session.user.name}
     >
+      {quickAddOpen ? <QuickAddPalette onClose={closeQuickAdd} /> : null}
       <Outlet />
     </DashboardShell>
   );

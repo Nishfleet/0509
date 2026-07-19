@@ -2,6 +2,7 @@ import { Form, Link } from "react-router";
 import type { LinksFunction, MetaFunction } from "react-router";
 
 import { BrandWordmark } from "~/components/brand-wordmark";
+import { MarketingFooter } from "~/components/marketing-footer";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
@@ -140,17 +141,7 @@ export default function CompareMagicBriefRoute() {
         </p>
       </section>
 
-      <footer className="ld-footer">
-        <Link className="ld-footer-brand" to="/" aria-label="Five to Nine home">
-          <BrandWordmark meta="Market intelligence" />
-        </Link>
-        <p>Five to Nine helps teams see competitor offer and landing-page changes before the next sales call.</p>
-        <nav aria-label="Footer">
-          <Link to="/privacy">Privacy</Link>
-          <Link to="/terms">Terms</Link>
-          <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>
-        </nav>
-      </footer>
+      <MarketingFooter />
     </main>
   );
 }

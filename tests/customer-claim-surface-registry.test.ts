@@ -92,8 +92,9 @@ function removedTextCheck(pattern: RegExp): ClaimCheck {
 }
 
 const CLAIM_CHECKS: Record<string, ClaimCheck> = {
+  // 2026-07-20 merge: overnight free-weekly-watch stack wins — free scans weekly now.
   "PLAN-CADENCE": sourcePatternCheck(/scheduledScanCadence|6-hour scans/u, (_entry, context) =>
-    context.planCadence.free === "none" &&
+    context.planCadence.free === "weekly" &&
     context.planCadence.scout === "every_6h" &&
     context.planCadence.starter === "every_3h" &&
     context.planCadence.agency === "every_3h"),
@@ -108,8 +109,9 @@ const CLAIM_CHECKS: Record<string, ClaimCheck> = {
   "MULTILINGUAL-TRANSLATION": (entry, context) =>
     removedTextCheck(/30\+ languages|auto-translates it into English/iu)(entry, context) &&
     context.planFeatures.includes("english_translation"),
-  "FREE-ACTIVATION-ONLY": sourcePatternCheck(/first scan|activation|scheduledScanCadence/iu, (_entry, context) =>
-    context.planCadence.free === "none"),
+  // 2026-07-20 merge: overnight stack wins — free is a weekly watch, not activation-only.
+  "FREE-ACTIVATION-ONLY": sourcePatternCheck(/first scan|activation|weekly/iu, (_entry, context) =>
+    context.planCadence.free === "weekly"),
   "FIRST-SCAN-TIMING": removedTextCheck(/couple of minutes/iu),
   "DELIVERY-TIMEZONE": sourcePatternCheck(/IANA|timeZone|timezone/u),
   "SOURCE-STATUS-FRESHNESS": sourcePatternCheck(/setup.?needed|unavailable|source status|freshness/iu),
@@ -152,7 +154,9 @@ function uniqueSorted(values: readonly string[]) {
 }
 
 const expectedPlanFeaturesByPlan: Record<string, readonly string[]> = {
-  free: [],
+  // 2026-07-20 merge: overnight free-weekly-watch stack wins — free gets the
+  // weekly brief plus the email lane it rides on, nothing else.
+  free: ["weekly_digest", "email_delivery"],
   scout: [
     "competitor_research", "weekly_digest", "email_delivery",
     "presence_competitor_tracking", "presence_website_sources", "presence_digest_alerts",
@@ -231,8 +235,11 @@ function registryContractSha256() {
   return createHash("sha256").update(JSON.stringify(contract)).digest("hex");
 }
 
+// 2026-07-20 merge: re-pinned after registry drift updates for the overnight
+// stack (free weekly watch, sitemap additions, /ads/:domain) — all reopened
+// as assessed_pending_reproof, no proof fabricated.
 const EXPECTED_REGISTRY_CONTRACT_SHA256 =
-  "8f6ae5f51058acd8979a4359fabea806fe72b35fc08bf9a79ad3b8dbfa681fd8";
+  "a01572b56652111574736c69526167807e50c9c83fcbef8b57261d20828e2ac7";
 
 type Catalogs = {
   agentActions: string[];
@@ -298,7 +305,9 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "/app/support", "/app/team", "/app/watchlists", "/help", "/search",
   ],
   publicMarkdownPaths: ["/", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],
-  sitemapPaths: ["/", "/compare/magicbrief", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],
+  // 2026-07-20 merge: overnight stack wins — sitemap gained /search, /auth/signup
+  // and /compare/meta-ad-library (SEO-CANONICAL-INDEXING reopened for re-proof).
+  sitemapPaths: ["/", "/search", "/auth/signup", "/compare/magicbrief", "/compare/meta-ad-library", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],
   e2eRoutePaths: [
     "api/e2e/j3/replay", "api/e2e/j4/replay", "api/e2e/billing/replay",
     "api/e2e/billing/state", "api/e2e/support/replay", "api/e2e/support/state",

@@ -1163,7 +1163,7 @@ describe("onboarding route", () => {
       current: 3,
       error: "plan_limit_exceeded",
       limit: 3,
-      message: "You have reached your competitor monitoring limit.",
+      message: "You've reached your competitor monitoring limit.",
       ok: false,
       upgradePath: "/app/billing?source=onboarding#plans",
     });

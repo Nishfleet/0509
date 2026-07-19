@@ -16,15 +16,34 @@ import {
 } from "~/lib/plan-entitlements";
 
 describe("plan entitlements catalog", () => {
-  it("gives free one activation watchlist with no scheduled scans or digests", () => {
+  it("gives free one watchlist on a weekly scan and weekly digest with everything else absent", () => {
     const entitlements = getPlanEntitlements("free");
     expect(getPlanLimit("free", "watchlists")).toBe(1);
     expect(getPlanLimit("free", "collections")).toBe(0);
     expect(getIncludedEvidenceAllowance("free")).toBe(0);
-    expect(entitlements.scheduledScanCadence).toBe("none");
-    expect(entitlements.digestCadence).toBe("none");
-    expect(planAllowsDigestCadence("free", "weekly")).toBe(false);
+    expect(entitlements.scheduledScanCadence).toBe("weekly");
+    expect(entitlements.digestCadence).toBe("weekly");
+    expect(planAllowsDigestCadence("free", "weekly")).toBe(true);
+    expect(planAllowsDigestCadence("free", "daily")).toBe(false);
+    // Free carries only the weekly digest + its email lane; no evidence,
+    // exports, instant alerts, Slack, collections, API, or MCP.
+    expect([...entitlements.features].sort()).toEqual(["email_delivery", "weekly_digest"]);
+    // A Friday 00:00 UTC tick is a 6h-aligned slot for paid plans but must
+    // never include free — free scans only on the weekly Monday slot.
     expect(shouldSchedulePlanInRegularScan("free", new Date("2026-07-03T00:00:00.000Z"))).toBe(false);
+  });
+
+  it("schedules free exactly once per week: only the Monday 03:00 UTC tick of the regular cron", () => {
+    // Walk every 3-hour tick of a full week (2026-06-29 is a Monday).
+    const weekStart = Date.parse("2026-06-29T00:00:00.000Z");
+    const included: string[] = [];
+    for (let tick = 0; tick < 7 * 8; tick += 1) {
+      const at = new Date(weekStart + tick * 3 * 60 * 60 * 1000);
+      if (shouldSchedulePlanInRegularScan("free", at)) {
+        included.push(at.toISOString());
+      }
+    }
+    expect(included).toEqual(["2026-06-29T03:00:00.000Z"]);
   });
 
   it.each([

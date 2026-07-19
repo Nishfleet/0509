@@ -68,12 +68,41 @@ export default function DocsRoute() {
       <PublicDocBlock title="Plan boundaries">
         <p>These are documented plan entitlements, not a live availability guarantee; account and provider readiness still apply.</p>
         <ul className="f9-doc-list">
-          <li>Free is an activation path, not recurring monitoring: one retained watchlist, no scheduled scans, digests, collections, or included evidence checks.</li>
+          <li>Free plan scope: watch one competitor with a weekly scheduled check and a weekly email brief. No collections, evidence checks, instant alerts, or manual refresh — paid plans add 3–6 hour checks and more competitors.</li>
           <li>Scout plan scope: three scheduled watchlists, a six-hour cadence, weekly email briefs, ten collections, and 50 included evidence checks each month.</li>
           <li>Starter plan scope: daily briefs, urgent alerts, evidence capture, and exports, with ten watchlists on a three-hour cadence.</li>
           <li>Agency plan scope: client reports, share links, PDF delivery, branding, API/MCP access, and team seats.</li>
           <li>Unavailable actions should appear locked before click; server-side plan checks still apply.</li>
         </ul>
+      </PublicDocBlock>
+
+      <PublicDocBlock title="Use Five to Nine from Claude, ChatGPT, and AI agents">
+        <p>
+          Five to Nine speaks MCP (Model Context Protocol), so compatible assistants and agents can
+          read your saved competitive evidence and run approved workspace actions. Connect a client
+          to the endpoint with a customer API key from{" "}
+          <Link to="/app/developer-access">Developer access</Link> as the bearer token:
+        </p>
+        <pre className="f9-code-block">
+          <code>{`https://0509.io/api/mcp
+Authorization: Bearer f9_live_...`}</code>
+        </pre>
+        <p>Example prompts once connected:</p>
+        <ul className="f9-doc-list">
+          <li>
+            &ldquo;Check my Five to Nine watchlists and summarize which competitors changed their
+            offers or landing pages this week.&rdquo;
+          </li>
+          <li>
+            &ldquo;Export my &lsquo;Skincare rivals&rsquo; collection from Five to Nine as JSON and
+            draft a counter-move brief from the three longest-running ads.&rdquo;
+          </li>
+        </ul>
+        <p>
+          Honest boundary: API and MCP access are an Agency-plan feature. Read-only keys cover
+          readiness and exports; write-enabled keys unlock only the documented approved actions —
+          see <Link to="/api/docs">API docs</Link> for endpoints and limits.
+        </p>
       </PublicDocBlock>
 
       <PublicDocBlock title="Coverage and trust boundaries">

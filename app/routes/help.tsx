@@ -33,8 +33,9 @@ export default function HelpRoute() {
           <li>Review the digest page after the first monitored change or quiet check.</li>
         </ol>
         <p>
-          Free is an activation path, not recurring monitoring: it gives you one retained watchlist and one first
-          scan. Paid plans add scheduled monitoring and digests, subject to the plan and account configuration.
+          Free lets you watch one competitor: an activation scan when you add it, then a weekly check with a weekly
+          email brief. Paid plans add 3–6 hour checks, daily briefs, evidence, and more competitors, subject to the
+          plan and account configuration.
         </p>
       </PublicDocBlock>
 

@@ -9,6 +9,15 @@ export type SearchAnswerState =
   | "empty"
   | "idle";
 
+/**
+ * AI-generated "What to steal" takeaway rendered inside the search answer
+ * panel. Always exactly 3 bullets; produced and validated server-side by
+ * search-steal-summary.server.ts (absent entirely when validation fails).
+ */
+export interface SearchStealSummary {
+  bullets: string[];
+}
+
 export interface SearchAnswer {
   state: SearchAnswerState;
   title: string;

@@ -1,4 +1,4 @@
-import { canUseSiteRepWidgetScript } from "../app/lib/siterep-widget";
+import { canUseSiteRepWidgetScript, hasSiteRepAuthCookie } from "../app/lib/siterep-widget";
 
 // Baseline security headers applied to every response. CSP allows Google Fonts
 // (used in app/root.tsx) and inline <script>/<style> emitted by React Router's
@@ -33,6 +33,49 @@ export const HTML_NO_STORE_HEADERS: Record<string, string> = {
   pragma: "no-cache",
   expires: "0",
 };
+
+// PERF (2026-07-20): short browser caching for anonymous public HTML.
+//
+// Scope is deliberately narrow:
+// - Anonymous requests only (no better-auth cookie): the root loader embeds
+//   the session in every document, so any response rendered for a signed-in
+//   user must stay no-store.
+// - max-age=300 with NO stale-while-revalidate: deploys replace the hashed
+//   asset manifest, so HTML held longer than a few minutes can reference
+//   assets that no longer exist (the 2026-07-13 asset-skew incident class,
+//   and what the "stale cached public HTML" regression test protects). Five
+//   minutes bounds that window; SWR would stretch it to an hour.
+// - Never cache a response that sets cookies.
+// - `vary: cookie` so any honoring cache revalidates when auth state changes
+//   (e.g. right after login) instead of replaying the logged-out variant.
+export const PUBLIC_HTML_CACHE_CONTROL = "public, max-age=300";
+
+const PUBLIC_CACHEABLE_HTML_PATHS = new Set([
+  "/",
+  "/help",
+  "/docs",
+  "/terms",
+  "/privacy",
+  "/changelog",
+  "/trust",
+  "/compare/magicbrief",
+  "/compare/meta-ad-library",
+]);
+const PUBLIC_CACHEABLE_HTML_PREFIXES = ["/ads/"] as const;
+
+function isPublicCacheableHtmlRequest(request: Request): boolean {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return false;
+  }
+  if (hasSiteRepAuthCookie(request)) {
+    return false;
+  }
+  const pathname = new URL(request.url).pathname;
+  return (
+    PUBLIC_CACHEABLE_HTML_PATHS.has(pathname) ||
+    PUBLIC_CACHEABLE_HTML_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+  );
+}
 
 function isHtmlResponse(headers: Headers) {
   return (headers.get("content-type") ?? "").toLowerCase().includes("text/html");
@@ -97,8 +140,27 @@ export function withSecurityHeaders(response: Response, request?: Request): Resp
     }
   }
   if (isHtmlResponse(headers)) {
-    for (const [name, value] of Object.entries(HTML_NO_STORE_HEADERS)) {
-      headers.set(name, value);
+    const cacheablePublicHtml =
+      request !== undefined &&
+      response.status === 200 &&
+      !headers.has("set-cookie") &&
+      isPublicCacheableHtmlRequest(request);
+    if (cacheablePublicHtml) {
+      headers.set("cache-control", PUBLIC_HTML_CACHE_CONTROL);
+      const vary = headers.get("vary");
+      if (!vary) {
+        headers.set("vary", "cookie");
+      } else if (!vary.toLowerCase().split(",").some((v) => v.trim() === "cookie")) {
+        headers.set("vary", `${vary}, cookie`);
+      }
+      headers.delete("cdn-cache-control");
+      headers.delete("cloudflare-cdn-cache-control");
+      headers.delete("pragma");
+      headers.delete("expires");
+    } else {
+      for (const [name, value] of Object.entries(HTML_NO_STORE_HEADERS)) {
+        headers.set(name, value);
+      }
     }
   }
 	if (isNoindexRequestPath(request)) {

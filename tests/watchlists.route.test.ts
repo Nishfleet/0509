@@ -290,6 +290,15 @@ async function mockRouter(overrides: {
           children,
         ),
       useActionData: vi.fn().mockReturnValue(overrides.actionData),
+      // WP-42: pause/resume submits through a fetcher; render it as a plain
+      // form in static markup.
+      useFetcher: vi.fn().mockReturnValue({
+        state: "idle",
+        data: undefined,
+        formData: undefined,
+        Form: ({ children, ...props }: MockFormProps) =>
+          React.createElement("form", props, children),
+      }),
       useLoaderData: vi.fn().mockReturnValue(overrides.loaderData),
       useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
       useRevalidator: vi
@@ -691,7 +700,7 @@ describe("watchlists route actions", () => {
     vi.doUnmock("~/lib/plan-feature-gate.server");
   });
 
-  it("blocks free digest alerts instead of saving a silent no-op", async () => {
+  it("saves the free weekly digest toggle (free weekly watch)", async () => {
     const upsertWatchlistDeliveryConfig = vi.fn();
     vi.doMock("~/lib/auth.server", () => ({
       requireWorkspaceSession: vi.fn().mockResolvedValue({
@@ -740,13 +749,12 @@ describe("watchlists route actions", () => {
       }),
     } as never);
 
+    // Free carries the weekly_digest entitlement now, so the digest toggle
+    // saves instead of plan-gating (opt-out must work for free users).
     expect(result).toMatchObject({
-      ok: false,
-      error: "plan_gated",
-      feature: "weekly_digest",
-      plan: "free",
+      ok: true,
     });
-    expect(upsertWatchlistDeliveryConfig).not.toHaveBeenCalled();
+    expect(upsertWatchlistDeliveryConfig).toHaveBeenCalled();
     vi.doUnmock("~/lib/plan-feature-gate.server");
     vi.doUnmock("~/lib/env.server");
     vi.doUnmock("~/lib/data.server");
@@ -1777,13 +1785,13 @@ describe("watchlists route rendering", () => {
       lastScannedAt: null,
       latestRun: null,
       plan: "starter",
-    }).label).toBe("No completed scan yet — open to review status");
+    }).label).toBe("No completed check yet — open for status");
     expect(resolveWatchlistListScanPresentation({
       isActive: true,
       lastScannedAt: null,
       latestRun: run("pending", "workflow_binding_missing"),
       plan: "starter",
-    }).label).toBe("Scan delayed — open to review recovery");
+    }).label).toBe("Check delayed — we're retrying");
     expect(resolveWatchlistListScanPresentation({
       isActive: true,
       lastScannedAt: null,
@@ -1795,7 +1803,7 @@ describe("watchlists route rendering", () => {
       lastScannedAt: null,
       latestRun: run("failed", "provider_unavailable"),
       plan: "starter",
-    }).label).toBe("Latest check failed — open to recover");
+    }).label).toBe("Latest check failed — open for next steps");
     expect(resolveWatchlistListScanPresentation({
       isActive: true,
       lastScannedAt: null,
@@ -1835,11 +1843,12 @@ describe("watchlists route rendering", () => {
     });
 
     expect(copy(run("running"))).toContain("activation scan is running now");
-    expect(copy(run("pending"))).toContain("activation scan is queued");
-    expect(copy(run("pending", "workflow_binding_missing"))).toContain("delayed and queued for recovery");
-    expect(copy(run("failed", "provider_unavailable"))).toContain("could not finish");
+    expect(copy(run("pending"))).toContain("activation scan is in line");
+    expect(copy(run("pending", "workflow_binding_missing"))).toContain("retrying it automatically");
+    expect(copy(run("failed", "provider_unavailable"))).toContain("couldn't finish");
     expect(copy(run("skipped", "e2e_provider_network_denied"))).toContain("paused safely");
-    expect(copy(run("succeeded"))).toContain("activation-only scan is complete");
+    expect(copy(run("succeeded"))).toContain("activation scan is complete");
+    expect(copy(run("succeeded"))).toContain("checked weekly");
     for (const state of [
       null,
       run("pending"),
@@ -1870,28 +1879,28 @@ describe("watchlists route rendering", () => {
     ]) {
       const recoveryCopy = copy(state);
       expect(recoveryCopy).not.toMatch(/\bretry\b/i);
-      expect(recoveryCopy).toContain("contact support");
+      expect(recoveryCopy).toContain("support");
     }
 
     expect(resolveWatchlistRunTiming(run("pending"))).toEqual({
-      label: "Queued — waiting for a monitoring worker",
+      label: "In line — starts automatically",
       timestamp: null,
     });
-    expect(resolveWatchlistRunTiming(run("pending", "dispatch_failed")).label).toBe("Queued for retry");
+    expect(resolveWatchlistRunTiming(run("pending", "dispatch_failed")).label).toBe("Retrying automatically");
     expect(resolveWatchlistRunTiming(run("running")).label).toBe("Still running");
     expect(resolveWatchlistRunTiming(run("failed")).label).toBe("Stopped after a failed check");
-    expect(resolveWatchlistRunTiming(run("skipped")).label).toBe("Stopped before evidence was created");
+    expect(resolveWatchlistRunTiming(run("skipped")).label).toBe("Stopped before results were saved");
 
     const failedWithPrivateError = {
       ...run("failed"),
       errorMessage: "provider token leaked",
     };
     expect(resolveWatchlistRunCustomerError(failedWithPrivateError, "free")).toBe(
-      "This activation scan failed. Check Source access, then contact support if it does not resume.",
+      "This activation scan failed. Check Source access, and email support if the next attempt fails too.",
     );
     expect(resolveWatchlistRunCustomerError(failedWithPrivateError, "free")).not.toMatch(/\bretry\b/i);
     expect(resolveWatchlistRunCustomerError(failedWithPrivateError, "starter")).toBe(
-      "This scan failed. Check Source access, then retry or contact support.",
+      "This scan failed. Check Source access, then retry — or email support and we'll dig in.",
     );
     expect(resolveWatchlistRunCustomerError(failedWithPrivateError, "free")).not.toContain(
       "provider token leaked",

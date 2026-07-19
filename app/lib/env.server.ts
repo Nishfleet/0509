@@ -95,6 +95,13 @@ export interface AppEnv {
   MONITORING_SCHEDULED_BROWSER_ALLOWLIST?: string;
   MONITORING_SCHEDULED_BROWSER_MODE?: string;
   SEARCH_ROLLOUT_MODE?: string;
+  /**
+   * Public /ads/:domain brand-page indexing brake. Unset or "1" = indexable
+   * (fresh cached pages carry no robots meta); explicitly "0" = emergency
+   * noindex on every /ads/* page. Cache-miss shells, demo-sourced data, and
+   * cache older than 7 days are ALWAYS noindex regardless of this flag.
+   */
+  PUBLIC_BRAND_PAGES_INDEXABLE?: string;
   PRESENCE_WEBSITE_ROLLOUT?: string;
   PRESENCE_X_ROLLOUT?: string;
   PRESENCE_REDDIT_ROLLOUT?: string;

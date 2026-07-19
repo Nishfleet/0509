@@ -205,7 +205,8 @@ describe("sendFreeActivationResultEmail", () => {
     expect(payload.subject).toContain("Glossier");
     expect(payload.html).toContain("Soft skin kit");
     expect(payload.html).toContain("https://cdn.example.com/ad.jpg");
-    expect(payload.html).toMatch(/Paid plans keep watching/i);
+    expect(payload.html).toMatch(/Free keeps watching this competitor with a weekly check/i);
+    expect(payload.html).toMatch(/Paid plans check every 3–6 hours/i);
     expect(payload.html).toContain("/app/billing");
     expect(payload.headers["List-Unsubscribe"]).toBeTruthy();
   });

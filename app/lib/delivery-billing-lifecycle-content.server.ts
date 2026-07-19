@@ -147,19 +147,19 @@ export function billingRefundEmailContent(
 ): BillingLifecycleEmailContent {
 	return {
 		idempotencyKey: `billing-refund:${input.userId}:${input.eventId}`,
-		subject: "Your Five to Nine refund has been processed",
+		subject: "We've processed your Five to Nine refund",
 		tag: "billing-refund",
 		templateName: "billing_refund_revoked",
 		bodyHtml: renderBillingEmailHtml({
 			name: input.name,
 			paragraphs: [
-				"A full refund for your Five to Nine purchase has been processed. Your workspace has moved to the Free plan, and credits from that purchase have expired.",
+				"We've processed a full refund for your Five to Nine purchase. Your workspace has moved to the Free plan, and credits from that purchase have expired.",
 				"Your boards, history, and evidence stay in place on the Free plan.",
 			],
 			ctaLabel: "View billing",
 			ctaUrl: `${appBaseUrl(env)}/app/billing`,
 			footnote:
-				"If this refund is unexpected, contact support using the address below.",
+				"If this refund is unexpected, email support using the address below and we'll look into it.",
 		}),
 	};
 }

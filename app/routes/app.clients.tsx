@@ -65,27 +65,28 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listAgentMemory(env, workspaceUserId, { limit: 20 }),
     getUserPlan(env, workspaceUserId),
   ]);
-  let roomMemories: AgentMemoryRecord[] = [];
-  try {
-    roomMemories = await listAgentMemoryForClientRooms(
+  // Room memories and per-room approval revalidation only depend on the first
+  // wave — run both in a single second wave instead of serially.
+  const [roomMemories, currentRoomStates] = await Promise.all([
+    listAgentMemoryForClientRooms(
       env,
       workspaceUserId,
       rooms.map((room) => room.id),
       { limitPerRoom: 20 },
-    );
-  } catch (error) {
-    console.error("[clients] room memory lookup failed", error);
-  }
+    ).catch((error): AgentMemoryRecord[] => {
+      console.error("[clients] room memory lookup failed", error);
+      return [];
+    }),
+    Promise.all(rooms.map(async (room) => {
+      const notes = await revalidateRoomApprovals(env, workspaceUserId, room);
+      return {
+        ...room,
+        notes,
+        resourceRefs: filterCurrentRoomResourceRefs(room.resourceRefs, watchlists, collections, notes),
+      };
+    })),
+  ]);
   const memories = uniqueAgentMemories([...recentMemories, ...roomMemories]);
-
-  const currentRoomStates = await Promise.all(rooms.map(async (room) => {
-    const notes = await revalidateRoomApprovals(env, workspaceUserId, room);
-    return {
-      ...room,
-      notes,
-      resourceRefs: filterCurrentRoomResourceRefs(room.resourceRefs, watchlists, collections, notes),
-    };
-  }));
 
   return {
     plan,
@@ -1068,7 +1069,7 @@ function resourceLabel(ref: ClientRoomResourceRef) {
     return "Watchlist";
   }
   if (ref.resourceType === "digest") {
-    return "Digest";
+    return "Brief";
   }
   return "Report";
 }

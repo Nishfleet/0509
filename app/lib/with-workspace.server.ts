@@ -51,8 +51,8 @@ export type WithWorkspaceDenied = {
 export type WithWorkspaceResult = WithWorkspaceOk | WithWorkspaceDenied;
 
 const DEFAULT_LIMIT_MESSAGES: Record<PlanResource, string> = {
-  watchlists: "You have reached your competitor tracking limit.",
-  collections: "You have reached your collection limit.",
+  watchlists: "You've reached your competitor tracking limit.",
+  collections: "You've reached your collection limit.",
 };
 
 export function defaultPlanLimitMessage(resource: PlanResource): string {

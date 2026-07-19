@@ -555,12 +555,37 @@ export function extractAdBodyLines(block: string[]) {
  * hook/offer derivation (DOM/session paths that skip extractAdBodyLines).
  */
 export function stripAdLibraryUiChromeFromBody(body: string): string {
-  const lines = body
+  const lines = truncateAtAdLibraryPageChrome(body)
     .split(/\r?\n/)
     .map((line) => line.replace(/\u00a0/g, " ").trim())
     .filter(Boolean);
   const cleaned = extractAdBodyLines(lines);
   return cleaned.join("\n").trim();
+}
+
+/**
+ * The last card on an Ad Library page can absorb the page footer into its
+ * innerText as one run-on line ("\u2026Shop Now See more System status Ad Library
+ * API About ads and data use \u2026 Meta \u00a9 2026"), which line-based filtering cannot
+ * catch. Truncate at the first footer marker instead.
+ */
+const AD_LIBRARY_PAGE_CHROME_MARKERS = [
+  "See more System status",
+  "System status Ad Library",
+  "Ad Library API",
+  "About ads and data use",
+  "Meta \u00a9 20",
+];
+
+export function truncateAtAdLibraryPageChrome(text: string): string {
+  let cutAt = -1;
+  for (const marker of AD_LIBRARY_PAGE_CHROME_MARKERS) {
+    const index = text.indexOf(marker);
+    if (index >= 0 && (cutAt === -1 || index < cutAt)) {
+      cutAt = index;
+    }
+  }
+  return cutAt >= 0 ? text.slice(0, cutAt).trimEnd() : text;
 }
 
 /** Remove Meta Ad Library controls and metadata before analyzing ad copy. */

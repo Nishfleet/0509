@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Five to Nine — Competitor Ads</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="brand-row">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" role="presentation">
+          <circle cx="12" cy="12" r="9.2" fill="none" stroke="currentColor" stroke-width="1.8" />
+          <line x1="12" y1="12" x2="14.4" y2="17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          <line x1="12" y1="12" x2="15.9" y2="6.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          <circle cx="12" cy="12" r="1.6" fill="#16c47f" stroke="none" />
+        </svg>
+      </span>
+      <span class="brand-kicker">Five to Nine</span>
+      <span class="brand-time" aria-hidden="true">05:09</span>
+    </header>
+
+    <main id="main-view" hidden>
+      <p class="context-line">
+        <span class="pulse-dot" aria-hidden="true"></span>
+        You&rsquo;re on <strong id="domain-label"></strong>
+      </p>
+      <h1 class="headline">See <span id="domain-headline"></span>&rsquo;s Meta&nbsp;ads</h1>
+      <div class="actions">
+        <button id="btn-ads" class="btn btn-primary" type="button">
+          See their Meta ads
+          <span class="btn-arrow" aria-hidden="true">&rarr;</span>
+        </button>
+        <button id="btn-search" class="btn btn-secondary" type="button">Run a live search</button>
+        <button id="btn-watch" class="link-tertiary" type="button">
+          Watch this competitor <span aria-hidden="true">&rarr;</span>
+        </button>
+      </div>
+    </main>
+
+    <main id="fallback-view" hidden>
+      <h1 class="headline">Whose ads do you want to&nbsp;see?</h1>
+      <p class="fallback-note">This page doesn&rsquo;t have a website address. Type any brand&rsquo;s domain instead.</p>
+      <form id="fallback-form">
+        <label class="input-label" for="domain-input">Brand website</label>
+        <input
+          id="domain-input"
+          name="domain"
+          type="text"
+          inputmode="url"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="brand.com"
+        />
+        <p id="input-error" class="input-error" role="alert" hidden>That doesn&rsquo;t look like a website. Try something like brand.com.</p>
+        <div class="actions">
+          <button class="btn btn-primary" type="submit" data-dest="ads">
+            See their Meta ads
+            <span class="btn-arrow" aria-hidden="true">&rarr;</span>
+          </button>
+          <button class="btn btn-secondary" type="submit" data-dest="search">Run a live search</button>
+          <button class="link-tertiary" type="submit" data-dest="watch">
+            Watch this competitor <span aria-hidden="true">&rarr;</span>
+          </button>
+        </div>
+      </form>
+    </main>
+
+    <footer class="foot">
+      <span>0509.io</span>
+      <span class="foot-sep" aria-hidden="true">&middot;</span>
+      <span>Competitor ad intelligence</span>
+    </footer>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

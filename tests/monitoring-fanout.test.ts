@@ -303,11 +303,13 @@ describe("scheduled Browser Run billing access", () => {
     });
     // A lapsed scheduled cancellation reads as the free plan everywhere
     // (getUserPlanBillingInfo applies the same effective-plan rule as
-    // getUserPlan), so the denial reason is plan_ineligible, not
-    // subscription_required. Eligibility stays false either way.
+    // getUserPlan). Free is now entitlement-eligible for scheduled scans
+    // (Free Weekly Competitor Watch); the once-a-week time gate lives in
+    // shouldSchedulePlanInRegularScan at selection time, and the warmup cron
+    // separately skips weekly-cadence plans.
     await expect(evaluateScheduledBrowserAccess(env, "cancel-past-date-owner")).resolves.toMatchObject({
-      eligible: false,
-      reason: "plan_ineligible",
+      eligible: true,
+      reason: "free_weekly",
       plan: "free",
     });
     await expect(evaluateScheduledBrowserAccess(env, "one-time-owner")).resolves.toMatchObject({

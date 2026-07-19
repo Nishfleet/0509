@@ -1218,6 +1218,12 @@ describe("share-pdf rate limit policies", () => {
     expect(source).toContain("LONG_WINDOW_CLEANUP_SECONDS = 25 * 60 * 60");
     expect(source).toMatch(/share-pdf-daily/);
     expect(source).toMatch(/account-search-daily/);
-    expect(source).toMatch(/scope NOT IN \('share-pdf-daily', 'account-search-daily'\)/);
+    // Cleanup derives its scope list from LONG_WINDOW_SCOPES (parameterized),
+    // so the daily scopes above cannot drift out of the DELETE statement.
+    expect(source).toContain(
+      'LONG_WINDOW_SCOPES = new Set(["share-pdf-daily", "account-search-daily"])',
+    );
+    expect(source).toContain("const longWindowScopes = [...LONG_WINDOW_SCOPES]");
+    expect(source).toMatch(/scope NOT IN \(\$\{scopePlaceholders\}\)/);
   });
 });

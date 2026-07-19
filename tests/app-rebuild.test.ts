@@ -95,7 +95,7 @@ describe("app rebuild", () => {
     expect(routeConfig).toContain('route("clients", "routes/app.clients.tsx"');
     expect(dashboardRoute).toContain("getWorkspaceReadiness");
     expect(dashboardRoute).toContain("buildMarketDeskBrief");
-    expect(dashboardRoute).toContain("Market Desk Brief");
+    expect(dashboardRoute).toContain("Brief details");
     expect(dashboardRoute).toContain("Competitor website");
     expect(dashboardRoute).toContain("f9-dashboard-search");
     expect(dashboardRoute).toContain("f9-dashboard-metrics");
@@ -107,7 +107,7 @@ describe("app rebuild", () => {
     expect(dashboardRoute).not.toContain("source state visible");
     expect(dashboardRoute).not.toContain("data.workspaceReadiness.items");
     expect(appSurface).toContain("?format=json");
-    expect(appSurface).toContain("JSON export");
+    expect(appSurface).toContain("Export JSON");
     expect(appSurface).not.toContain("?format=slack");
     expect(appSurface).not.toContain("Slack copy");
     expect(appSurface).toContain("Insight depth");

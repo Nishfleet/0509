@@ -118,7 +118,7 @@ describe("search watchlist limit", () => {
       current: 3,
       error: "plan_limit_exceeded",
       limit: 3,
-      message: "You have reached your competitor tracking limit.",
+      message: "You've reached your competitor tracking limit.",
       ok: false,
       upgradePath: "/app/billing?source=search#plans",
     });
@@ -184,7 +184,7 @@ describe("collection limit", () => {
       error: "plan_limit_exceeded",
       intent: "create-collection",
       limit: 3,
-      message: "You have reached your collection limit.",
+      message: "You've reached your collection limit.",
       ok: false,
     });
     expect(createCollection).not.toHaveBeenCalled();
@@ -448,7 +448,7 @@ describe("dashboard watchlist limit", () => {
       error: "plan_limit_exceeded",
       intent: "track-saved-query",
       limit: 3,
-      message: "You have reached your competitor tracking limit.",
+      message: "You've reached your competitor tracking limit.",
       ok: false,
     });
     expect(createWatchlistWithinLimit).toHaveBeenCalled();
@@ -474,6 +474,7 @@ describe("pricing CTA rendering", () => {
         useActionData: vi.fn().mockReturnValue(overrides.actionData),
         useLoaderData: vi.fn().mockReturnValue(overrides.loaderData),
         useLocation: vi.fn().mockReturnValue({ pathname: "/search", search: "", hash: "", state: null, key: "test" }),
+        useNavigate: vi.fn().mockReturnValue(vi.fn()),
         useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
         useRevalidator: vi.fn().mockReturnValue({ state: "idle", revalidate: vi.fn() }),
         useRouteLoaderData: vi.fn().mockReturnValue(overrides.rootData),
@@ -505,7 +506,7 @@ describe("pricing CTA rendering", () => {
       actionData: {
         ok: false,
         error: "plan_limit_exceeded",
-        message: "You have reached your workspace watchlist limit.",
+        message: "You've reached your workspace watchlist limit.",
       },
       loaderData: {
         savedQueries: [],
@@ -527,12 +528,12 @@ describe("pricing CTA rendering", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("You have reached your workspace watchlist limit.");
+    expect(markup).toContain("reached your workspace watchlist limit.");
     expect(markup).toContain("View plans");
     expect(markup).toContain("/app/billing?source=dashboard-limit#plans");
   });
 
-  it("credits the free activation check without implying recurring quiet monitoring", async () => {
+  it("reports the free weekly check honestly, with the paid cadence upsell", async () => {
     await mockRouter({
       loaderData: {
         savedQueries: [],
@@ -567,9 +568,10 @@ describe("pricing CTA rendering", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Activation check completed");
-    expect(markup).toContain("One-time activation check completed across 1 competitor");
-    expect(markup).toContain("Paid plans include recurring monitoring");
+    expect(markup).toContain("Weekly check complete");
+    expect(markup).toContain("We checked 1 competitor — nothing moved. The next weekly check runs Monday.");
+    expect(markup).toContain("Paid plans check every 3–6 hours and add instant alerts.");
+    expect(markup).not.toContain("One-time activation check");
     expect(markup).not.toContain("All quiet");
     expect(markup).not.toContain("Next sweep: tomorrow morning");
   });
@@ -736,7 +738,7 @@ describe("pricing CTA rendering", () => {
       actionData: {
         ok: false,
         error: "plan_limit_exceeded",
-        message: "You have reached your collection limit.",
+        message: "You've reached your collection limit.",
       },
       loaderData: {
         collections: [],
@@ -748,7 +750,7 @@ describe("pricing CTA rendering", () => {
     const { default: CollectionsRoute } = await import("~/routes/app.collections");
     const markup = renderToStaticMarkup(createElement(CollectionsRoute));
 
-    expect(markup).toContain("You have reached your collection limit.");
+    expect(markup).toContain("reached your collection limit.");
     expect(markup).toContain("View plans");
     expect(markup).toContain("/app/billing?source=collections#plans");
   });
@@ -917,7 +919,7 @@ describe("pricing CTA rendering", () => {
       actionData: {
         ok: false,
         error: "plan_limit_exceeded",
-        message: "You have reached your workspace watchlist limit.",
+        message: "You've reached your workspace watchlist limit.",
       },
       loaderData: {
         mode: "advertiser",
@@ -948,7 +950,7 @@ describe("pricing CTA rendering", () => {
     const { default: SearchRoute } = await import("~/routes/search");
     const markup = renderToStaticMarkup(createElement(SearchRoute));
 
-    expect(markup).toContain("You have reached your workspace watchlist limit.");
+    expect(markup).toContain("reached your workspace watchlist limit.");
     expect(markup).not.toContain("View pricing");
   });
 });

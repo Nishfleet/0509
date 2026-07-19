@@ -114,6 +114,23 @@ const USAGE_BUNDLES: UsageBundle[] = [
   },
 ];
 
+/**
+ * Free weekly digest footer upgrade line. Facts are read from the Scout
+ * entitlements so this can never drift from the catalog; pricing stays with
+ * the /pricing page (Dodo localizes currency at checkout — never hardcode a
+ * monetary amount here).
+ */
+export function freeWeeklyDigestUpgradeNote(): string {
+  const scout = getPlanEntitlements("scout");
+  const cadenceLabel =
+    scout.scheduledScanCadence === "every_3h"
+      ? "checks every 3 hours"
+      : scout.scheduledScanCadence === "every_6h"
+        ? "checks every 6 hours"
+        : "checks weekly";
+  return `You're on the free weekly watch. Scout ${cadenceLabel} and unlocks ${scout.collections} Collections across ${scout.watchlists} competitors.`;
+}
+
 export const EVIDENCE_USAGE_CUSTOMER_COPY =
   "Scheduled scans are included with your plan. A check is used when Five to Nine saves a proof-backed capture with screenshots, page text, and the original link. Included checks reset every month and do not roll over. Purchased checks never expire.";
 

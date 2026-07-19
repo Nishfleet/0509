@@ -2,9 +2,17 @@ import { describe, expect, it } from "vitest";
 
 import {
   HTML_NO_STORE_HEADERS,
+  PUBLIC_HTML_CACHE_CONTROL,
   SECURITY_HEADERS,
   withSecurityHeaders,
 } from "../workers/security-headers";
+
+function htmlResponse(init: ResponseInit & { headers?: Record<string, string> } = {}) {
+  return new Response("<!doctype html>", {
+    ...init,
+    headers: { "content-type": "text/html; charset=utf-8", ...(init.headers ?? {}) },
+  });
+}
 
 function cspDirective(response: Response, name: string) {
   const csp = response.headers.get("content-security-policy") ?? "";
@@ -134,6 +142,70 @@ describe("Worker security headers", () => {
 		expect(helpResponse.headers.has("x-robots-tag")).toBe(false);
 		expect(noRequestResponse.headers.has("x-robots-tag")).toBe(false);
 	});
+
+  describe("anonymous public HTML caching", () => {
+    it("lets anonymous public pages carry short browser caching", () => {
+      for (const path of ["/", "/help", "/docs", "/terms", "/ads/nike.com", "/compare/magicbrief"]) {
+        const response = withSecurityHeaders(
+          htmlResponse(),
+          new Request(`https://0509.io${path}`),
+        );
+        expect(response.headers.get("cache-control"), path).toBe(PUBLIC_HTML_CACHE_CONTROL);
+        expect(response.headers.get("vary"), path).toBe("cookie");
+        expect(response.headers.has("cloudflare-cdn-cache-control"), path).toBe(false);
+        expect(response.headers.has("pragma"), path).toBe(false);
+      }
+    });
+
+    it("keeps signed-in requests no-store even on public paths", () => {
+      const response = withSecurityHeaders(
+        htmlResponse(),
+        new Request("https://0509.io/", {
+          headers: { cookie: "better-auth.session_token=session-123" },
+        }),
+      );
+      expect(response.headers.get("cache-control")).toBe(HTML_NO_STORE_HEADERS["cache-control"]);
+      expect(response.headers.get("cloudflare-cdn-cache-control")).toBe("no-store");
+    });
+
+    it("keeps app, auth, search, share, and status HTML no-store", () => {
+      for (const path of ["/app", "/auth/login", "/search", "/share/abc", "/status", "/unsubscribe"]) {
+        const response = withSecurityHeaders(
+          htmlResponse(),
+          new Request(`https://0509.io${path}`),
+        );
+        expect(response.headers.get("cache-control"), path).toBe(
+          HTML_NO_STORE_HEADERS["cache-control"],
+        );
+      }
+    });
+
+    it("never caches responses that set cookies, non-200s, or non-GETs", () => {
+      const setCookie = withSecurityHeaders(
+        htmlResponse({ headers: { "set-cookie": "state=1" } }),
+        new Request("https://0509.io/"),
+      );
+      const notFound = withSecurityHeaders(
+        htmlResponse({ status: 404 }),
+        new Request("https://0509.io/ads/unknown"),
+      );
+      const post = withSecurityHeaders(
+        htmlResponse(),
+        new Request("https://0509.io/", { method: "POST" }),
+      );
+      for (const response of [setCookie, notFound, post]) {
+        expect(response.headers.get("cache-control")).toBe(HTML_NO_STORE_HEADERS["cache-control"]);
+      }
+    });
+
+    it("bounds the stale window: no stale-while-revalidate on rebuild-sensitive HTML", () => {
+      // Deploys drop old hashed assets; HTML served stale for longer than
+      // max-age could reference assets that no longer exist (2026-07-13
+      // asset-skew incident class). Keep the policy SWR-free.
+      expect(PUBLIC_HTML_CACHE_CONTROL).not.toContain("stale-while-revalidate");
+      expect(PUBLIC_HTML_CACHE_CONTROL).toBe("public, max-age=300");
+    });
+  });
 
   it("leaves non-HTML asset caching alone", () => {
     const response = withSecurityHeaders(

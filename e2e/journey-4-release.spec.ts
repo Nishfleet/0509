@@ -315,7 +315,7 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
       page.getByRole("link", { name: "Export CSV" }),
     ).toHaveAttribute("href", "/export/watchlist/e2e-watchlist-agency-1");
     await expect(
-      page.getByRole("link", { name: "JSON export" }),
+      page.getByRole("link", { name: "Export JSON" }),
     ).toHaveAttribute(
       "href",
       "/export/watchlist/e2e-watchlist-agency-1?format=json",

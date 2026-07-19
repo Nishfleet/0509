@@ -2198,3 +2198,64 @@ describe("searchMetaLibraryByBrowser", () => {
     expect(ad.creativeFormatHint).toBeUndefined();
   });
 });
+
+describe("Ad Library page-chrome truncation", () => {
+  it("truncates run-on footer chrome absorbed by the last card", async () => {
+    const { truncateAtAdLibraryPageChrome } = await import(
+      "~/lib/meta-library-rendered-card-parser.server"
+    );
+
+    const polluted =
+      "Shop our top must-haves now. Shop Now See more System status Ad Library APIAbout ads and data usePrivacyTermsCookies Meta © 2026 | English (US)";
+    expect(truncateAtAdLibraryPageChrome(polluted)).toBe(
+      "Shop our top must-haves now. Shop Now",
+    );
+  });
+
+  it("leaves clean ad copy untouched", async () => {
+    const { truncateAtAdLibraryPageChrome } = await import(
+      "~/lib/meta-library-rendered-card-parser.server"
+    );
+
+    const clean = "Build your own set with the pieces you love most.";
+    expect(truncateAtAdLibraryPageChrome(clean)).toBe(clean);
+  });
+
+  it("strips footer chrome before hook derivation via stripAdLibraryUiChromeFromBody", async () => {
+    const { stripAdLibraryUiChromeFromBody } = await import(
+      "~/lib/meta-library-rendered-card-parser.server"
+    );
+
+    const body =
+      "Active\nLibrary ID: 123456\nReal ad copy here. Shop Now See more System status Ad Library API";
+    const stripped = stripAdLibraryUiChromeFromBody(body);
+    expect(stripped).toContain("Real ad copy here");
+    expect(stripped).not.toContain("Library ID");
+    expect(stripped).not.toContain("System status");
+  });
+});
+
+describe("session extraction card mapping", () => {
+  it("passes variantCount through normalizeExtractedCard", async () => {
+    const { normalizeExtractedCard } = await import("~/lib/meta-library-browser.server");
+
+    const ad = normalizeExtractedCard(
+      {
+        libraryId: "7770001111",
+        advertiser: "Glossier",
+        body: "Smells different on everyone.\n2 ads use this creative and text",
+        previewHeadline: "Glossier You",
+        previewSubhead: null,
+        cta: "Shop Now",
+        adSnapshotUrl: "https://www.facebook.com/ads/library/?id=7770001111",
+        landingPageUrl: "https://www.glossier.com/products/glossier-you",
+        platforms: ["Instagram"],
+        active: true,
+        variantCount: 2,
+      },
+      buildQuery(),
+    );
+
+    expect(ad.variantCount).toBe(2);
+  });
+});

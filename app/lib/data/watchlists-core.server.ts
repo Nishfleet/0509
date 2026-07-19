@@ -96,7 +96,7 @@ export async function listWatchlists(
 }
 export async function listActiveWatchlistsPage(
   env: AppEnv,
-  options: { includeScout?: boolean } & ListPageOptions = {},
+  options: { includeScout?: boolean; includeFree?: boolean } & ListPageOptions = {},
 ): Promise<ListPageResult<WatchlistRecord>> {
   const limit = resolveListPageLimit(options.limit, ACTIVE_WATCHLIST_PAGE_SIZE);
   // Complex plan-priority ORDER BY makes keyset cursors brittle; use offset
@@ -120,12 +120,13 @@ export async function listActiveWatchlistsPage(
         watchlist.created_at,
         watchlist.updated_at
       FROM watchlist
-      INNER JOIN user_plan
+      LEFT JOIN user_plan
         ON user_plan.user_id = watchlist.user_id
       WHERE watchlist.is_active = 1
         AND (
           user_plan.plan IN ('starter', 'agency')
           OR (? = 1 AND user_plan.plan = 'scout')
+          OR (? = 1 AND (user_plan.plan = 'free' OR user_plan.plan IS NULL))
         )
       ORDER BY
         CASE user_plan.plan WHEN 'agency' THEN 0 WHEN 'starter' THEN 1 ELSE 2 END ASC,
@@ -135,6 +136,12 @@ export async function listActiveWatchlistsPage(
       OFFSET ?
     `,
     options.includeScout ? 1 : 0,
+    // Free weekly watch: purely-free workspaces often have no user_plan row
+    // at all (rows are created by billing events), so the free branch matches
+    // both an explicit 'free' row and the missing-row case. With the flag off
+    // the LEFT JOIN + plan filter is behaviorally identical to the previous
+    // INNER JOIN.
+    options.includeFree ? 1 : 0,
     limit,
     offset,
   );
@@ -146,7 +153,7 @@ export async function listActiveWatchlistsPage(
 }
 export async function listActiveWatchlists(
   env: AppEnv,
-  options: { includeScout?: boolean } & ListPageOptions = {},
+  options: { includeScout?: boolean; includeFree?: boolean } & ListPageOptions = {},
 ) {
   // Cron paths need the full active set; page through D1 so a single query
   // never pulls an unbounded watchlist snapshot.
@@ -160,6 +167,7 @@ export async function listActiveWatchlists(
   do {
     const page = await listActiveWatchlistsPage(env, {
       includeScout: options.includeScout,
+      includeFree: options.includeFree,
       limit: ACTIVE_WATCHLIST_PAGE_SIZE,
       cursor,
     });

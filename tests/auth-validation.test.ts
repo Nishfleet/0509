@@ -58,7 +58,7 @@ describe("auth form server validation", () => {
 
     await expect(action({ context: context(), request } as never)).resolves.toEqual({
       ok: false,
-      error: "We could not send that setup link. Try again in a minute.",
+      error: "We couldn't send the setup link. Try again in a minute.",
       email: "owner@example.com",
       name: "Nish",
       redirectTo: "/app/onboard?website=nykaa.com",

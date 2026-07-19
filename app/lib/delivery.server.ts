@@ -228,8 +228,17 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
 
   const digestTimeZone = config.timezone ?? null;
 
+  // Free weekly watch: the digest is the whole product demo, so it stays the
+  // full template with exactly one tasteful upgrade line in the footer area.
+  const upgradeNote =
+    lane === "customer" && entitledConfigs.plan === "free"
+      ? (await import("~/lib/pricing")).freeWeeklyDigestUpgradeNote()
+      : null;
+
   for (const target of emailTargets) {
-    attempts.push(await deliverDigestToEmailTarget(env, input, lane, target, digestTimeZone));
+    attempts.push(
+      await deliverDigestToEmailTarget(env, input, lane, target, digestTimeZone, upgradeNote),
+    );
   }
 
   for (const target of whatsappTargets) {
@@ -827,6 +836,7 @@ async function deliverDigestToEmailTarget(
   lane: DeliveryLane,
   target: DeliveryTargetRecord,
   timeZone: string | null,
+  upgradeNote: string | null = null,
 ): Promise<DigestAttemptSummary> {
   const targetValue = normalizeDeliveryEmailValue(target.targetValue);
   if (!targetValue) {
@@ -863,6 +873,7 @@ async function deliverDigestToEmailTarget(
     cadence: input.cadence,
     timeZone,
     unsubscribeUrl,
+    upgradeNote,
   });
   const attemptClaim = await claimDigestDeliveryAttempt(env, {
     userId: input.userId,
@@ -2090,6 +2101,7 @@ function renderDigestEmail(
     cadence?: DigestCadence;
     timeZone?: string | null;
     unsubscribeUrl: string | null;
+    upgradeNote?: string | null;
   },
 ): ReturnType<typeof buildDigestEmail> {
   const baseUrl = appBaseUrl(env);
@@ -2110,6 +2122,8 @@ function renderDigestEmail(
     supportEmail: SUPPORT_EMAIL,
     supportMailto: SUPPORT_MAILTO,
     unsubscribeUrl: input.unsubscribeUrl,
+    upgradeNote: input.upgradeNote ?? null,
+    upgradeUrl: input.upgradeNote ? `${baseUrl}/#pricing` : null,
   });
 }
 
@@ -2188,6 +2202,7 @@ async function resolveEntitledDeliveryConfigs(
   const { applyDeliveryEntitlements } = await import("~/lib/plan-feature-gate.server");
   const plan = await getUserPlan(env, userId);
   return {
+    plan,
     workspaceConfig: applyDeliveryEntitlements(plan, workspaceConfig),
     watchlistConfig: watchlistConfig ? applyDeliveryEntitlements(plan, watchlistConfig) : null,
   };
@@ -2792,7 +2807,7 @@ function buildInstantAlertContent(
     const isBaseline =
       ((primaryEvent.metadata ?? {}) as Record<string, unknown>).kind === "baseline";
     const subject = provisional
-      ? `Possible change detected: ${competitor}`
+      ? `Possible change at ${competitor}`
       : isBaseline
         ? primaryEvent.title
         : buildInstantSubject(primaryEvent.eventType, competitor, primaryEvent.title);
@@ -2826,8 +2841,14 @@ function buildInstantAlertContent(
   }
 
   const subject = provisional
-    ? `Possible changes detected: ${competitor}`
-    : `${competitor}: ${events.length} changes detected`;
+    ? `Possible changes at ${competitor}`
+    : `${competitor} made ${events.length} changes`;
+
+  // Mirror the single-event gate: only claim an advertiser when real advertiser
+  // metadata exists — never present the watchlist name as an advertiser.
+  const batchedAdvertiserNote = readCompetitorLabel(primaryEvent)
+    ? `<p style="margin: 0 0 12px; color: #5b6577; font-size: 13px;">Advertiser: ${escapeHtml(competitor)}</p>`
+    : "";
 
   return {
     competitor,
@@ -2838,7 +2859,7 @@ function buildInstantAlertContent(
       <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #0b1220; line-height: 1.5;">
         <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine alert</p>
         <h1 style="margin: 0 0 12px;">${escapeHtml(subject)}</h1>
-        <p style="margin: 0 0 12px; color: #5b6577; font-size: 13px;">Advertiser: ${escapeHtml(competitor)}</p>
+        ${batchedAdvertiserNote}
         ${creativeImageHtml}
         <ul style="padding-left: 18px;">
           ${events
@@ -2888,16 +2909,16 @@ function buildInstantSubject(eventType: WatchEventRecord["eventType"], competito
     case "ad_new":
       return `New ad from ${competitor}`;
     case "ad_inactive":
-      return `Ad went inactive: ${competitor}`;
+      return `${competitor} stopped running an ad`;
     case "landing_page_url_changed":
-      return `Landing page URL changed: ${competitor}`;
+      return `${competitor} changed a landing page URL`;
     case "landing_page_headline_changed":
     case "landing_page_offer_changed":
     case "landing_page_cta_changed":
     case "landing_page_form_changed":
-      return `${fallbackTitle}: ${competitor}`;
+      return `${competitor}: ${fallbackTitle}`;
     default:
-      return `${fallbackTitle}: ${competitor}`;
+      return `${competitor}: ${fallbackTitle}`;
   }
 }
 

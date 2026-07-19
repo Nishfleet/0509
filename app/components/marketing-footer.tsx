@@ -1,0 +1,43 @@
+import { Link } from "react-router";
+
+import { BrandWordmark } from "~/components/brand-wordmark";
+import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
+
+export const BRAND_ORIGIN_LINE =
+  "Named for 05:09 — your competitor brief is filed before the workday starts.";
+
+/**
+ * Shared marketing footer for the public funnel: landing page and compare
+ * pages. Keep every public marketing surface on this one footer so link
+ * groups (support, legal, compare pages) never drift apart.
+ */
+export function MarketingFooter() {
+  return (
+    <footer className="ld-footer">
+      <Link className="ld-footer-brand" to="/" aria-label="Five to Nine home">
+        <BrandWordmark meta="Market intelligence" />
+      </Link>
+      <p>
+        Five to Nine helps teams see competitor offer and landing-page changes before the next
+        sales call.
+      </p>
+      <p className="ld-footer-origin">{BRAND_ORIGIN_LINE}</p>
+      <nav aria-label="Footer">
+        <Link to="/help">Help</Link>
+        <Link to="/docs">Docs</Link>
+        <Link to="/api/docs">API docs</Link>
+        <Link to="/status">Status</Link>
+        <Link to="/changelog">Changelog</Link>
+        <Link to="/trust">Trust</Link>
+        <Link to="/privacy">Privacy</Link>
+        <Link to="/terms">Terms</Link>
+        <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>
+      </nav>
+      <nav className="ld-footer-compare" aria-label="Compare">
+        <span className="ld-footer-group-label">Compare</span>
+        <Link to="/compare/meta-ad-library">vs checking the Meta Ad Library by hand</Link>
+        <Link to="/compare/magicbrief">vs MagicBrief</Link>
+      </nav>
+    </footer>
+  );
+}
