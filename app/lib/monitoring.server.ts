@@ -1747,6 +1747,7 @@ export async function runWatchlist(
       baselineRun?.id ?? null,
       eventDrafts,
       effectLease,
+      recentWatchEvents,
     );
     await assertOrchestratedWatchlistRunLease(env, runId, options);
     await reconcileStaleEvidenceBeforeScan(env);
@@ -2604,10 +2605,15 @@ async function persistScanNativeEvents(
   baselineFromRunId: string | null,
   drafts: WatchEventDraft[],
   lease?: { runId: string; processingToken: string },
+  recentWatchEvents: WatchEventRecord[] = [],
 ) {
   const createdEvents: WatchEventRecord[] = [];
+  // FIX-2: creative_copy rides high-score types (≥ instant threshold) but
+  // dynamic/A-B copy would otherwise re-fire every scan. Suppress identical
+  // (adId, from↔to) pairs for 48h either direction.
+  const draftsToPersist = filterSuppressedCreativeCopyDrafts(drafts, recentWatchEvents);
 
-  for (const draft of drafts) {
+  for (const draft of draftsToPersist) {
     await assertOrchestratedWatchlistRunLease(env, runId, {
       orchestrationToken: lease?.processingToken,
     });
@@ -3717,6 +3723,51 @@ function dedupeEventDrafts(drafts: WatchEventDraft[]) {
       return false;
     }
     seen.add(key);
+    return true;
+  });
+}
+
+const CREATIVE_COPY_SUPPRESSION_MS = 48 * 60 * 60 * 1000;
+
+function creativeCopyPairKey(from: string, to: string): string {
+  const a = from.trim().toLowerCase();
+  const b = to.trim().toLowerCase();
+  return a <= b ? `${a}↔${b}` : `${b}↔${a}`;
+}
+
+function isCreativeCopyDraft(draft: WatchEventDraft): boolean {
+  return draft.metadata?.kind === "creative_copy";
+}
+
+/** FIX-2: drop creative_copy drafts seen (either direction) within 48h for the ad. */
+export function filterSuppressedCreativeCopyDrafts(
+  drafts: WatchEventDraft[],
+  recentEvents: Array<{
+    adId: string | null;
+    createdAt: string;
+    metadata: Record<string, unknown> | null;
+  }>,
+  nowMs: number = Date.now(),
+): WatchEventDraft[] {
+  const cutoff = nowMs - CREATIVE_COPY_SUPPRESSION_MS;
+  const recentKeys = new Set<string>();
+
+  for (const event of recentEvents) {
+    if (new Date(event.createdAt).getTime() < cutoff) continue;
+    const metadata = event.metadata ?? {};
+    if (metadata.kind !== "creative_copy") continue;
+    const from = typeof metadata.from === "string" ? metadata.from : "";
+    const to = typeof metadata.to === "string" ? metadata.to : "";
+    recentKeys.add(`${event.adId ?? "none"}:${creativeCopyPairKey(from, to)}`);
+  }
+
+  return drafts.filter((draft) => {
+    if (!isCreativeCopyDraft(draft)) return true;
+    const from = typeof draft.metadata.from === "string" ? draft.metadata.from : "";
+    const to = typeof draft.metadata.to === "string" ? draft.metadata.to : "";
+    const key = `${draft.adId ?? "none"}:${creativeCopyPairKey(from, to)}`;
+    if (recentKeys.has(key)) return false;
+    recentKeys.add(key);
     return true;
   });
 }

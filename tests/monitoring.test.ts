@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { diffWatchlistObservations } from "~/lib/monitoring.server";
+import {
+  diffWatchlistObservations,
+  filterSuppressedCreativeCopyDrafts,
+} from "~/lib/monitoring.server";
 import type { WatchlistRecord } from "~/lib/types";
 
 const baseWatchlist: WatchlistRecord = {
@@ -190,6 +193,76 @@ describe("diffWatchlistObservations", () => {
         metadata: expect.objectContaining({ kind: "creative_copy" }),
       }),
     ]);
+  });
+
+  it("suppresses the same creative_copy pair within 48h either direction (FIX-2)", () => {
+    const drafts = diffWatchlistObservations(
+      baseWatchlist,
+      [
+        observation({
+          ad_id: "ad-1",
+          metadata_json: JSON.stringify({
+            advertiser: "Nykaa",
+            hook: "Ends in 2 days",
+            offer: "20% off",
+          }),
+        }),
+      ],
+      [
+        observation({
+          ad_id: "ad-1",
+          metadata_json: JSON.stringify({
+            advertiser: "Nykaa",
+            hook: "Ends in 3 days",
+            offer: "20% off",
+          }),
+        }),
+      ],
+      [],
+    );
+    expect(drafts).toHaveLength(1);
+
+    const now = Date.parse("2026-07-19T12:00:00.000Z");
+    const recent = [
+      {
+        adId: "ad-1",
+        createdAt: new Date(now - 6 * 60 * 60 * 1000).toISOString(),
+        metadata: {
+          kind: "creative_copy",
+          from: drafts[0]!.metadata.from,
+          to: drafts[0]!.metadata.to,
+        },
+      },
+    ];
+    expect(filterSuppressedCreativeCopyDrafts(drafts, recent, now)).toEqual([]);
+
+    // Reverse direction of the same pair is also suppressed.
+    const reversed = [
+      {
+        adId: "ad-1",
+        createdAt: new Date(now - 6 * 60 * 60 * 1000).toISOString(),
+        metadata: {
+          kind: "creative_copy",
+          from: drafts[0]!.metadata.to,
+          to: drafts[0]!.metadata.from,
+        },
+      },
+    ];
+    expect(filterSuppressedCreativeCopyDrafts(drafts, reversed, now)).toEqual([]);
+
+    // Outside the 48h window the draft is allowed again.
+    const stale = [
+      {
+        adId: "ad-1",
+        createdAt: new Date(now - 50 * 60 * 60 * 1000).toISOString(),
+        metadata: {
+          kind: "creative_copy",
+          from: drafts[0]!.metadata.from,
+          to: drafts[0]!.metadata.to,
+        },
+      },
+    ];
+    expect(filterSuppressedCreativeCopyDrafts(drafts, stale, now)).toHaveLength(1);
   });
 
   it("collapses six ad_new drafts into one aggregate event", () => {

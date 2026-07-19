@@ -44,3 +44,30 @@ export function isDiscoveryCacheWithinMaxAge(
   if (!Number.isFinite(fetchedMs)) return false;
   return nowMs - fetchedMs <= maxAgeMs;
 }
+
+const SCHEDULED_DISCOVERY_CONTEXTS = new Set<DiscoveryRouteContext>([
+  "watchlist_scan",
+  "scheduled_warmup",
+]);
+
+/**
+ * FIX-1: public_search (deep interactive) and scheduled scan/warmup (shallow)
+ * share a fingerprint cache key but must not serve each other.
+ */
+export function isDiscoveryCacheRouteCompatible(
+  requestContext: DiscoveryRouteContext,
+  entryContext: string | null | undefined,
+): boolean {
+  const entry = (entryContext ?? "").trim() as DiscoveryRouteContext;
+  const requestIsScheduled = SCHEDULED_DISCOVERY_CONTEXTS.has(requestContext);
+  const entryIsScheduled = SCHEDULED_DISCOVERY_CONTEXTS.has(entry);
+  if (requestIsScheduled) {
+    return entryIsScheduled;
+  }
+  // Interactive public search only accepts other public_search entries.
+  if (requestContext === "public_search") {
+    return entry === "public_search";
+  }
+  // Unknown future contexts: require exact match.
+  return entry === requestContext;
+}

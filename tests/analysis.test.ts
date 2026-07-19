@@ -105,6 +105,15 @@ describe("deriveHook / deriveOffer", () => {
     expect(formatOfferDisplay("")).toBe(NO_EXPLICIT_OFFER_LABEL);
   });
 
+  it("does not invent offers from ordinary r/z words (FIX-3)", () => {
+    expect(deriveOffer("Over 200 styles")).toBeNull();
+    expect(deriveOffer("Discover 12 colorways")).toBeNull();
+    expect(deriveOffer("Shop the Bogotá collection")).toBeNull();
+    expect(deriveOffer("Use code SUMMER at checkout")).toBeNull();
+    // Still match real multi-char currency tokens.
+    expect(deriveOffer("From R$ 49,90 this week")).toMatch(/R\$\s*49/i);
+  });
+
   it("never returns identical hook and offer strings", () => {
     const body = "Shop now at nike.com for the latest drops.";
     const resolved = resolveHookAndOffer({

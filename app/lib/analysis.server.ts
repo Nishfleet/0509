@@ -14,9 +14,13 @@ import type {
 const EXTRACTOR_VERSION = "v1-structured-analysis";
 
 const devnagariPattern = /[\u0900-\u097F]/;
-/** Promo/price phrases across major currencies — return null when none match. */
+/**
+ * Promo/price phrases across major currencies — return null when none match.
+ * FIX-3: do not put multi-char tokens (R$, zł) inside a character class — that
+ * decomposes them so bare "r"/"z" before digits and "Bogotá"/"code" match.
+ */
 const offerPattern =
-  /(?:(?:up\s*to|upto)\s*)?\d+\s*%\s*off|(?:flat\s*)?\d+\s*%\s*off|buy\s*\d+\s*get\s*\d+|bogo|free\s+(?:shipping|delivery)|(?:from|starting\s+at)\s*[₹$€£¥]\s*[\d,.]+|[₹$€£¥R$₺zł]\s*[\d,.]+(?:\s*off)?|(?:rs\.?|inr)\s*[\d,.]+(?:\s*off)?|sale\s+ends?|deal\s+ends?|launch\s+pricing|free\s+minis?|cod\b/i;
+  /(?:(?:up\s*to|upto)\s*)?\d+\s*%\s*off|(?:flat\s*)?\d+\s*%\s*off|buy\s*\d+\s*get\s*\d+|\bbogo\b|free\s+(?:shipping|delivery)|(?:from|starting\s+at)\s*(?:R\$|zł|[₹$€£¥])\s*[\d,.]+|(?:R\$|zł|[₹$€£¥])\s*[\d,.]+(?:\s*off)?|(?:rs\.?|inr)\s*[\d,.]+(?:\s*off)?|sale\s+ends?|deal\s+ends?|launch\s+pricing|free\s+minis?|\bcod\b/i;
 
 const HOOK_MAX_CHARS = 120;
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildDiscoveryCacheKey,
+  isDiscoveryCacheRouteCompatible,
   isDiscoveryCacheWithinMaxAge,
   resolveDiscoveryCacheTtlMs,
   resolveScheduledScanCacheMaxAgeMs,
@@ -49,5 +50,20 @@ describe("isDiscoveryCacheWithinMaxAge", () => {
     expect(isDiscoveryCacheWithinMaxAge(outside3h, 3 * 60 * 60 * 1000, now)).toBe(false);
     expect(isDiscoveryCacheWithinMaxAge("not-a-date", 3 * 60 * 60 * 1000, now)).toBe(false);
     expect(isDiscoveryCacheWithinMaxAge(within3h, 0, now)).toBe(false);
+  });
+});
+
+describe("isDiscoveryCacheRouteCompatible (FIX-1)", () => {
+  it("keeps scheduled scans off public_search deep entries", () => {
+    expect(isDiscoveryCacheRouteCompatible("watchlist_scan", "public_search")).toBe(false);
+    expect(isDiscoveryCacheRouteCompatible("watchlist_scan", "watchlist_scan")).toBe(true);
+    expect(isDiscoveryCacheRouteCompatible("watchlist_scan", "scheduled_warmup")).toBe(true);
+    expect(isDiscoveryCacheRouteCompatible("scheduled_warmup", "watchlist_scan")).toBe(true);
+  });
+
+  it("keeps interactive search off shallow scan/warmup entries", () => {
+    expect(isDiscoveryCacheRouteCompatible("public_search", "watchlist_scan")).toBe(false);
+    expect(isDiscoveryCacheRouteCompatible("public_search", "scheduled_warmup")).toBe(false);
+    expect(isDiscoveryCacheRouteCompatible("public_search", "public_search")).toBe(true);
   });
 });

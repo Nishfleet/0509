@@ -8,6 +8,7 @@ import {
 import { hasBrowserRunQuickActions } from "~/lib/browser-run.server";
 import {
   buildDiscoveryCacheKey,
+  isDiscoveryCacheRouteCompatible,
   isDiscoveryCacheWithinMaxAge,
   resolveDiscoveryCacheTtlMs,
 } from "~/lib/discovery-cache.server";
@@ -486,19 +487,25 @@ export async function searchAdsViaSourceResolver(
 
   const cached = effectiveEnv.DB ? await getDiscoveryCacheEntry(effectiveEnv, cacheKey) : null;
   const usableCached = isUsableDiscoveryCache(provider, cached) ? cached : null;
-  const unexpiredCache =
-    usableCached && new Date(usableCached.expiresAt).getTime() > Date.now()
+  // FIX-1: never mix interactive (deep) public_search cache with scheduled
+  // (shallow) scan/warmup cache — same key would otherwise fabricate ad_new /
+  // inactive flips, and shallow hits would defeat interactive depth.
+  const routeCompatibleCached =
+    usableCached && isDiscoveryCacheRouteCompatible(routeContext, usableCached.routeContext)
       ? usableCached
       : null;
-  // Normal path: warm unexpired cache. forceLive path (WP-36): shared cache
-  // younger than the caller's cadence window — still a healthy hit so scheduled
-  // scans do not fabricate diffs or pay 10× for the same competitor.
+  const unexpiredCache =
+    routeCompatibleCached && new Date(routeCompatibleCached.expiresAt).getTime() > Date.now()
+      ? routeCompatibleCached
+      : null;
+  // forceLive path (WP-36): shared scan/warmup cache younger than the caller's
+  // cadence window — still a healthy hit so N workspaces pay one scrape.
   const forceLiveSharedHit =
     forceLive &&
     acceptCacheYoungerThanMs != null &&
-    usableCached &&
-    isDiscoveryCacheWithinMaxAge(usableCached.fetchedAt, acceptCacheYoungerThanMs)
-      ? usableCached
+    routeCompatibleCached &&
+    isDiscoveryCacheWithinMaxAge(routeCompatibleCached.fetchedAt, acceptCacheYoungerThanMs)
+      ? routeCompatibleCached
       : null;
   const freshCacheHit = !forceLive ? unexpiredCache : forceLiveSharedHit;
   if (freshCacheHit) {
