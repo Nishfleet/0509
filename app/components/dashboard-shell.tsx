@@ -145,6 +145,9 @@ export function DashboardShell({
 
   return (
     <main className={pageClasses}>
+      <a className="f9-skip-link" href="#f9-main-content">
+        Skip to content
+      </a>
       <div className={`f9-route-progress ${isNavigating ? "is-visible" : ""}`} aria-hidden="true" />
       <div className="f9-cursor-shell">
         <aside className="f9-cursor-rail f9-cursor-rail-desktop" aria-label="Application">
@@ -271,7 +274,7 @@ export function DashboardShell({
         <div aria-live="polite" className="f9-sr-only" role="status">
           {routeAnnouncement}
         </div>
-        <div className="f9-cursor-main" ref={mainRef} tabIndex={-1}>
+        <div className="f9-cursor-main" id="f9-main-content" ref={mainRef} tabIndex={-1}>
           {headerActions ? <header className="f9-dash-topbar">{headerActions}</header> : null}
           {children}
         </div>

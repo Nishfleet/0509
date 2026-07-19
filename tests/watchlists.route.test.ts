@@ -290,6 +290,15 @@ async function mockRouter(overrides: {
           children,
         ),
       useActionData: vi.fn().mockReturnValue(overrides.actionData),
+      // WP-42: pause/resume submits through a fetcher; render it as a plain
+      // form in static markup.
+      useFetcher: vi.fn().mockReturnValue({
+        state: "idle",
+        data: undefined,
+        formData: undefined,
+        Form: ({ children, ...props }: MockFormProps) =>
+          React.createElement("form", props, children),
+      }),
       useLoaderData: vi.fn().mockReturnValue(overrides.loaderData),
       useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
       useRevalidator: vi
