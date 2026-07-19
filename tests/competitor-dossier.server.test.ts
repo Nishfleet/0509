@@ -655,7 +655,7 @@ describe("watchlists route loader dossier integration", () => {
 		lastErrorMessage: null,
 	} as const;
 
-	function mockLoaderDependencies() {
+	function mockLoaderDependencies(plan = "starter") {
 		vi.doMock("~/lib/auth.server", () => ({
 			requireSession: vi.fn().mockResolvedValue(session),
 			requireWorkspaceSession: vi.fn().mockResolvedValue({
@@ -666,7 +666,7 @@ describe("watchlists route loader dossier integration", () => {
 			}),
 		}));
 		vi.doMock("~/lib/plan.server", () => ({
-			getUserPlan: vi.fn().mockResolvedValue("starter"),
+			getUserPlan: vi.fn().mockResolvedValue(plan),
 			checkPlanLimit: vi.fn(),
 		}));
 		vi.doMock("~/lib/email-verification.server", () => ({
@@ -712,6 +712,39 @@ describe("watchlists route loader dossier integration", () => {
 			scanCount: 0,
 			adCount: 0,
 		});
+	});
+
+	it("locks the Counter-Brief for free plans without attempting generation", async () => {
+		mockLoaderDependencies("free");
+
+		const { loader } = await import("~/routes/app.watchlists");
+		const result = (await loader({
+			context: { cloudflare: { env: {} } },
+			request: new Request("http://localhost/app/watchlists?watchlist=watch-1"),
+		} as never)) as { counterBrief: unknown; counterBriefLocked: boolean };
+
+		expect(result.counterBriefLocked).toBe(true);
+		expect(result.counterBrief).toBeNull();
+	});
+
+	it("unlocks the Counter-Brief slot for paid plans and stays honestly null without AI", async () => {
+		mockLoaderDependencies("starter");
+
+		const { loader } = await import("~/routes/app.watchlists");
+		const result = (await loader({
+			context: { cloudflare: { env: {} } },
+			request: new Request("http://localhost/app/watchlists?watchlist=watch-1"),
+		} as never)) as {
+			aggression: unknown;
+			counterBrief: unknown;
+			counterBriefLocked: boolean;
+		};
+
+		expect(result.counterBriefLocked).toBe(false);
+		// No AI binding + not_enough_history dossier -> null, never a fake brief.
+		expect(result.counterBrief).toBeNull();
+		// The aggression score also stays null below the evidence floor.
+		expect(result.aggression).toBeNull();
 	});
 
 	it("degrades a dossier failure to not_enough_history instead of breaking the page", async () => {

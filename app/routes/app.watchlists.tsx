@@ -125,6 +125,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     "~/lib/competitor-dossier.server"
   );
   const { computeAggressionScore } = await import("~/lib/aggression-score");
+  const { buildCounterBrief } = await import("~/lib/counter-brief.server");
+  const { isPaidPlanFamily } = await import("~/lib/plan-entitlements");
   const env = getEnv(context);
   const { session, workspaceUserId, isMember } = await requireWorkspaceSession(env, request);
   const { getUserPlan } = await import("~/lib/plan.server");
@@ -176,6 +178,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       trendDailyActivity: [] as Awaited<ReturnType<typeof listWatchlistDailyActivity>>,
       dossier: null as Awaited<ReturnType<typeof buildCompetitorDossier>> | null,
       aggression: null as ReturnType<typeof computeAggressionScore>,
+      counterBrief: null as Awaited<ReturnType<typeof buildCounterBrief>>,
+      counterBriefLocked: !isPaidPlanFamily(plan),
       canManageDelivery: !isMember,
       verifiedAccountEmail,
       deliveryTestRequestTokens: {} as Record<string, string>,
@@ -235,6 +239,15 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     ),
   ]);
 
+  // Counter-Brief plan gate: paid plans only. Computed per page load with no
+  // persistence — the module's own 10s cap and never-throw contract bound the
+  // cost (~1-2s on the small shared model); tradeoff documented in
+  // counter-brief.server.ts. Free plans get the upgrade line instead.
+  const counterBriefEligible = isPaidPlanFamily(plan);
+  const counterBrief = counterBriefEligible
+    ? await buildCounterBrief(env, dossier).catch(() => null)
+    : null;
+
   const workspaceDeliveryConfig =
     workspaceDeliveryConfigRecord ??
     buildLegacyWorkspaceConfig(workspaceUserId, Boolean(session.user.email));
@@ -291,6 +304,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     // Deterministic, public-formula score — computed server-side so SSR and
     // hydration share one "now".
     aggression: computeAggressionScore(dossier),
+    counterBrief,
+    counterBriefLocked: !counterBriefEligible,
     canManageDelivery: !isMember,
     verifiedAccountEmail,
     deliveryTestRequestTokens: Object.fromEntries(
@@ -1198,6 +1213,8 @@ export default function WatchlistsRoute() {
                 {data.dossier ? (
                   <CompetitorDossierPanel
                     aggression={data.aggression}
+                    counterBrief={data.counterBrief}
+                    counterBriefLocked={data.counterBriefLocked}
                     dossier={data.dossier}
                     watchlistId={data.selectedWatchlist.id}
                   />

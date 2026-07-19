@@ -6,6 +6,7 @@ import {
 	MIN_AGGRESSION_WINDOW_DAYS,
 } from "~/lib/aggression-score";
 import { ANGLE_DISPLAY } from "~/lib/angle-display";
+import type { CounterBrief } from "~/lib/counter-brief.server";
 import type {
 	CompetitorDossier,
 	DossierAdHistoryEntry,
@@ -24,10 +25,15 @@ export function CompetitorDossierPanel({
 	dossier,
 	watchlistId,
 	aggression = null,
+	counterBrief = null,
+	counterBriefLocked = false,
 }: {
 	dossier: CompetitorDossier;
 	watchlistId: string;
 	aggression?: AggressionScore | null;
+	counterBrief?: CounterBrief | null;
+	/** True on free plans: renders the upgrade line instead of a brief. */
+	counterBriefLocked?: boolean;
 }) {
 	return (
 		<section aria-label="Competitor intelligence">
@@ -141,9 +147,61 @@ export function CompetitorDossierPanel({
 							</>
 						)}
 					</p>
+
+					<CounterBriefCard counterBrief={counterBrief} locked={counterBriefLocked} />
 				</div>
 			)}
 		</section>
+	);
+}
+
+/**
+ * AI Counter-Brief card. Three states, all honest:
+ * - free plan: an upgrade line — the brief is a paid capability.
+ * - paid + brief: gap line, three hook directions with grounded rationales,
+ *   watch note, and an explicit AI-disclosure line.
+ * - paid + null (generation failed validation, timed out, or AI is off):
+ *   renders nothing at all — never a placeholder pretending to be insight.
+ */
+function CounterBriefCard({
+	counterBrief,
+	locked,
+}: {
+	counterBrief: CounterBrief | null;
+	locked: boolean;
+}) {
+	if (locked) {
+		return (
+			<div className="f9-counter-brief is-locked">
+				<p className="f9-dossier-subhead">Counter-Brief</p>
+				<p className="f9-counter-brief-upgrade">
+					Counter-Brief is part of paid plans — Scout unlocks it.{" "}
+					<Link to="/app/billing?source=counter-brief#plans">View plans</Link>
+				</p>
+			</div>
+		);
+	}
+	if (!counterBrief) {
+		return null;
+	}
+
+	return (
+		<div className="f9-counter-brief">
+			<p className="f9-dossier-subhead">Counter-Brief</p>
+			<p className="f9-counter-brief-gap">{counterBrief.gap}</p>
+			<ol className="f9-counter-brief-hooks">
+				{counterBrief.hooksToTest.map((hook) => (
+					<li key={hook.direction}>
+						<span className="f9-counter-brief-direction">{hook.direction}</span>
+						<span className="f9-counter-brief-rationale">{hook.rationale}</span>
+					</li>
+				))}
+			</ol>
+			<p className="f9-counter-brief-watch">{counterBrief.watchNote}</p>
+			<p className="f9-counter-brief-disclosure">
+				AI-drafted from observed evidence — verify before briefing.
+			</p>
+		</div>
 	);
 }
 
