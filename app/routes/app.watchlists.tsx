@@ -11,6 +11,7 @@ import {
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { CompetitorDossierPanel } from "~/components/competitor-dossier";
 import { CreativeWall } from "~/components/creative-wall";
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
@@ -120,6 +121,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { resolveDeliveryConfig } = await import("~/lib/delivery-policy.server");
   const { listCreativeWallAds } = await import("~/lib/watchlist-ads.server");
   const { listWatchlistDailyActivity } = await import("~/lib/watchlist-trends.server");
+  const { buildCompetitorDossier, insufficientCompetitorDossier } = await import(
+    "~/lib/competitor-dossier.server"
+  );
   const env = getEnv(context);
   const { session, workspaceUserId, isMember } = await requireWorkspaceSession(env, request);
   const { getUserPlan } = await import("~/lib/plan.server");
@@ -169,6 +173,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       showPresenceNav,
       creativeWall: [] as Awaited<ReturnType<typeof listCreativeWallAds>>,
       trendDailyActivity: [] as Awaited<ReturnType<typeof listWatchlistDailyActivity>>,
+      dossier: null as Awaited<ReturnType<typeof buildCompetitorDossier>> | null,
       canManageDelivery: !isMember,
       verifiedAccountEmail,
       deliveryTestRequestTokens: {} as Record<string, string>,
@@ -189,6 +194,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     recentProofCaptures,
     creativeWall,
     trendDailyActivity,
+    dossier,
   ] = await Promise.all([
     listEventCandidates(env, selectedWatchlist.id, 12),
     listWatchEvents(env, selectedWatchlist.id, 24),
@@ -220,6 +226,11 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listRecentProofCapturesForWatchlist(env, selectedWatchlist.id, 12),
     listCreativeWallAds(env, selectedWatchlist.id),
     listWatchlistDailyActivity(env, selectedWatchlist.id),
+    // Dossier failure degrades to the honest not-enough-history state — it
+    // must never take the watchlist page down with it.
+    buildCompetitorDossier(env, selectedWatchlist.id, workspaceUserId).catch(() =>
+      insufficientCompetitorDossier(),
+    ),
   ]);
 
   const workspaceDeliveryConfig =
@@ -274,6 +285,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     showPresenceNav,
     creativeWall,
     trendDailyActivity,
+    dossier,
     canManageDelivery: !isMember,
     verifiedAccountEmail,
     deliveryTestRequestTokens: Object.fromEntries(
@@ -1177,6 +1189,13 @@ export default function WatchlistsRoute() {
                   ) : null}
                 </section>
                 </div>
+
+                {data.dossier ? (
+                  <CompetitorDossierPanel
+                    dossier={data.dossier}
+                    watchlistId={data.selectedWatchlist.id}
+                  />
+                ) : null}
 
                 <section>
                   <p className="f9-app-kicker">See what changed</p>
