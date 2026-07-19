@@ -2700,6 +2700,12 @@ function buildInstantAlertContent(
     ? `Possible changes detected: ${competitor}`
     : `${competitor}: ${events.length} changes detected`;
 
+  // Mirror the single-event gate: only claim an advertiser when real advertiser
+  // metadata exists — never present the watchlist name as an advertiser.
+  const batchedAdvertiserNote = readCompetitorLabel(primaryEvent)
+    ? `<p style="margin: 0 0 12px; color: #5b6577; font-size: 13px;">Advertiser: ${escapeHtml(competitor)}</p>`
+    : "";
+
   return {
     competitor,
     shortChange: `${events.length} watchlist changes`,
@@ -2709,7 +2715,7 @@ function buildInstantAlertContent(
       <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #0b1220; line-height: 1.5;">
         <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine alert</p>
         <h1 style="margin: 0 0 12px;">${escapeHtml(subject)}</h1>
-        <p style="margin: 0 0 12px; color: #5b6577; font-size: 13px;">Advertiser: ${escapeHtml(competitor)}</p>
+        ${batchedAdvertiserNote}
         ${creativeImageHtml}
         <ul style="padding-left: 18px;">
           ${events

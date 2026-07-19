@@ -4,6 +4,7 @@ import {
   buildDigestEmail,
   buildScanTroubleEmail,
   digestItemDeepLink,
+  groupTopMovesByWatchlist,
 } from "~/lib/digest-email.server";
 
 describe("buildScanTroubleEmail", () => {
@@ -75,6 +76,51 @@ describe("buildDigestEmail", () => {
     expect(email.text).toContain("View full digest: https://0509.io/app/digests");
     expect(email.text).toContain("Manage frequency: https://0509.io/app/notifications");
     expect(email.text).toContain("Unsubscribe: https://0509.io/unsubscribe?sig=test");
+  });
+
+  it("groups interleaved ranked items into one header per watchlist", () => {
+    const items = [
+      digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed"),
+      digestItem("boAt", "New ad detected", 90, "scan_backed"),
+      digestItem("Nykaa", "CTA changed", 85, "scan_backed", "ev-nykaa-2"),
+      digestItem("boAt", "Headline changed", 80, "scan_backed", "ev-boat-2"),
+      digestItem("Nykaa", "Form changed", 75, "scan_backed", "ev-nykaa-3"),
+    ];
+
+    const groups = groupTopMovesByWatchlist(items as never);
+
+    // One group per watchlist even though ranked items interleave.
+    expect(groups.map((group) => group.watchlistName)).toEqual(["Nykaa", "boAt"]);
+    // Rank order preserved inside each group.
+    expect(groups[0].items.map((item) => item.title)).toEqual([
+      "Landing page offer changed",
+      "CTA changed",
+      "Form changed",
+    ]);
+    expect(groups[1].items.map((item) => item.title)).toEqual([
+      "New ad detected",
+      "Headline changed",
+    ]);
+
+    const email = buildDigestEmail({
+      name: "Owner",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      cadence: "weekly",
+      timeZone: "UTC",
+      fullDigestUrl: "https://0509.io/app/digests",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+      items,
+    });
+
+    // Exactly one header per watchlist in the rendered email.
+    expect(email.html.match(/<strong>Nykaa<\/strong>/g)).toHaveLength(1);
+    expect(email.html.match(/<strong>boAt<\/strong>/g)).toHaveLength(1);
+    expect(email.html).toContain(" · 3 changes");
+    expect(email.html).toContain(" · 2 changes");
   });
 
   it("builds digestItemDeepLink only when both ids exist", () => {

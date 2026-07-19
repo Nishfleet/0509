@@ -254,19 +254,23 @@ type TopMoveGroup = {
   items: DigestTrustItem[];
 };
 
-/** Preserve ranked order; group consecutive top moves under the same watchlist label. */
+/**
+ * Group top moves under one label per watchlist across the whole ranked list.
+ * Groups are ordered by each watchlist's first (highest-ranked) appearance and
+ * items inside a group keep their relative rank order, so every watchlist gets
+ * exactly one header even when ranked items interleave.
+ */
 export function groupTopMovesByWatchlist(items: DigestTrustItem[]): TopMoveGroup[] {
-  const groups: TopMoveGroup[] = [];
+  const byName = new Map<string, DigestTrustItem[]>();
   for (const item of items) {
     const name = item.watchlistName?.trim() || "Competitor";
-    const last = groups[groups.length - 1];
-    if (last && last.watchlistName === name) {
-      last.items.push(item);
-    } else {
-      groups.push({ watchlistName: name, items: [item] });
-    }
+    const existing = byName.get(name) ?? [];
+    byName.set(name, [...existing, item]);
   }
-  return groups;
+  return [...byName.entries()].map(([watchlistName, groupItems]) => ({
+    watchlistName,
+    items: groupItems,
+  }));
 }
 
 function renderTopMoveGroupsHtml(
