@@ -357,13 +357,6 @@ function createSessionCardExtractionScript() {
         .join("\n")
         .trim();
 
-    const seen = new Set<string>();
-    const anchors = Array.from(
-      document.querySelectorAll<HTMLAnchorElement>(
-        'a[href*="/ads/library/?id="], a[href*="facebook.com/ads/library/?id="]',
-      ),
-    );
-
     function isCreativeCdnHost(host: string) {
       const lower = host.toLowerCase();
       return lower.includes("fbcdn") || lower.includes("scontent");
@@ -395,6 +388,7 @@ function createSessionCardExtractionScript() {
       let bestUrl: string | null = null;
       let bestArea = -1;
       let firstCdnUrl: string | null = null;
+      let measuredAny = false;
 
       for (const img of images) {
         const raw = img.currentSrc || img.src || img.getAttribute("src") || "";
@@ -416,6 +410,10 @@ function createSessionCardExtractionScript() {
         }
         const width = img.naturalWidth || img.width || 0;
         const height = img.naturalHeight || img.height || 0;
+        if (width > 0 || height > 0) {
+          measuredAny = true;
+        }
+        // Page avatars render as ≤64px squares; never surface them as creatives.
         if (width > 0 && height > 0 && width <= 64 && height <= 64) {
           continue;
         }
@@ -426,47 +424,139 @@ function createSessionCardExtractionScript() {
         }
       }
 
+      // The 2026 Ad Library DOM renders many image creatives as CSS
+      // background-images rather than <img> tags — scan for the first
+      // large CDN-backed background inside the card.
+      if (!bestUrl) {
+        const styled = Array.from(cardRoot.querySelectorAll<HTMLElement>("div, span, a"));
+        for (const el of styled) {
+          if ((el.offsetWidth || 0) < 100) {
+            continue;
+          }
+          const backgroundImage = window.getComputedStyle(el).backgroundImage || "";
+          const match = backgroundImage.match(/url\("(.+?)"\)/);
+          if (!match) {
+            continue;
+          }
+          try {
+            const url = new URL(match[1], location.origin);
+            if (!isCreativeCdnHost(url.hostname)) {
+              continue;
+            }
+            bestUrl = url.toString();
+            break;
+          } catch {
+            // skip invalid background URLs
+          }
+        }
+      }
+
       return {
-        imageUrl: bestUrl || firstCdnUrl,
+        // Fall back to the first CDN image only when nothing was measurable at
+        // all (images not yet loaded); a measured-but-small-only set means the
+        // card had just an avatar, which must stay out of the creative slot.
+        imageUrl: bestUrl || (measuredAny ? null : firstCdnUrl),
         hasVideo,
       };
     }
 
-    const cards = anchors
-      .map((anchor) => {
-        const href = anchor.href || anchor.getAttribute("href") || "";
-        const idMatch = href.match(/[?&]id=(\d+)/);
-        const libraryId = idMatch?.[1];
-        if (!libraryId || seen.has(libraryId)) {
-          return null;
+    function resolveExternalLink(cardRoot: HTMLElement) {
+      const links = Array.from(cardRoot.querySelectorAll<HTMLAnchorElement>("a[href]"));
+      for (const link of links) {
+        const href = link.href || link.getAttribute("href") || "";
+        if (!/^https?:/i.test(href)) {
+          continue;
         }
-        seen.add(libraryId);
+        let parsed: URL;
+        try {
+          parsed = new URL(href);
+        } catch {
+          continue;
+        }
+        const host = parsed.hostname.toLowerCase();
+        if (host === "l.facebook.com" || host === "lm.facebook.com") {
+          // Outbound ad destinations are wrapped as l.facebook.com/l.php?u=<target>.
+          const target = parsed.searchParams.get("u");
+          if (!target) {
+            continue;
+          }
+          try {
+            const decoded = new URL(target);
+            if (!/(^|\.)facebook\.com$|(^|\.)instagram\.com$|(^|\.)fb\.com$/i.test(decoded.hostname)) {
+              return decoded.toString();
+            }
+          } catch {
+            // skip undecodable redirect targets
+          }
+          continue;
+        }
+        if (!/facebook\.com/i.test(host)) {
+          return parsed.toString();
+        }
+      }
+      return null;
+    }
 
-        const card =
-          anchor.closest<HTMLElement>('[role="article"]') ||
-          anchor.closest<HTMLElement>("article") ||
-          anchor.closest<HTMLElement>("[data-ad-preview]") ||
-          anchor.parentElement;
-        const links = Array.from(card?.querySelectorAll<HTMLAnchorElement>("a[href]") ?? []);
-        const externalLink =
-          links
-            .map((link) => link.href)
-            .find(
-              (candidate) =>
-                /^https?:/i.test(candidate) &&
-                !/facebook\.com/i.test(candidate) &&
-                !/l\.facebook\.com/i.test(candidate),
-            ) ?? null;
+    // Card discovery, two paths merged by library id:
+    // Path A — legacy DOM variants exposed id-bearing anchors per card.
+    // Path B — the current (2026) Ad Library DOM has NO id anchors and no
+    // [role=article]; the only stable card marker is the "Library ID: N" text
+    // label. Climb from each label leaf to the widest ancestor that still
+    // contains exactly that one library id: that ancestor is the card root.
+    const roots = new Map<string, HTMLElement>();
+    const anchors = Array.from(
+      document.querySelectorAll<HTMLAnchorElement>(
+        'a[href*="/ads/library/?id="], a[href*="facebook.com/ads/library/?id="]',
+      ),
+    );
+    for (const anchor of anchors) {
+      const href = anchor.href || anchor.getAttribute("href") || "";
+      const idMatch = href.match(/[?&]id=(\d+)/);
+      if (!idMatch) {
+        continue;
+      }
+      const root =
+        anchor.closest<HTMLElement>('[role="article"]') ||
+        anchor.closest<HTMLElement>("article") ||
+        anchor.closest<HTMLElement>("[data-ad-preview]") ||
+        anchor.parentElement;
+      if (root && !roots.has(idMatch[1])) {
+        roots.set(idMatch[1], root);
+      }
+    }
+    const countLibraryIds = (el: HTMLElement) =>
+      ((el.innerText || "").match(/Library ID: \d+/g) || []).length;
+    const labels = Array.from(document.querySelectorAll<HTMLElement>("div, span")).filter(
+      (el) => el.children.length === 0 && /^Library ID: \d+$/.test((el.innerText || "").trim()),
+    );
+    for (const label of labels) {
+      const idMatch = (label.innerText || "").match(/(\d+)/);
+      if (!idMatch || roots.has(idMatch[1])) {
+        continue;
+      }
+      let node: HTMLElement = label;
+      while (
+        node.parentElement &&
+        countLibraryIds(node.parentElement) === 1 &&
+        (node.parentElement.innerText || "").length < 8000
+      ) {
+        node = node.parentElement;
+      }
+      roots.set(idMatch[1], node);
+    }
 
+    const cards = Array.from(roots.entries())
+      .map(([libraryId, card]) => {
+        const externalLink = resolveExternalLink(card);
         const advertiser =
-          card?.querySelector<HTMLElement>("strong, h3, h4, [data-advertiser-name]")?.innerText ??
+          card.querySelector<HTMLElement>("strong, h3, h4, [data-advertiser-name]")?.innerText ??
           null;
         const headline =
-          card?.querySelector<HTMLElement>("h1, h2, h3, [data-headline]")?.innerText ?? null;
-        const text = normalizeText(card?.innerText ?? anchor.innerText);
+          card.querySelector<HTMLElement>("h1, h2, h3, [data-headline]")?.innerText ?? null;
+        const text = normalizeText(card.innerText);
         const cta =
           card
-            ?.querySelector<HTMLElement>(
+            .querySelector<HTMLElement>(
               'button, [role="button"], [data-cta], a[aria-label*="Shop"], a[aria-label*="Learn"]',
             )
             ?.innerText ?? null;
@@ -485,6 +575,7 @@ function createSessionCardExtractionScript() {
             .map((line) => line.trim())
             .find((line) => /^started running on\b/i.test(line)) ?? null;
 
+        const variantMatch = text.match(/(\d+) ads use this creative and text/i);
         const media = pickCreativeMediaFromCard(card);
 
         return {
@@ -494,13 +585,14 @@ function createSessionCardExtractionScript() {
           previewHeadline: normalizeText(headline),
           previewSubhead: null,
           cta: normalizeText(cta),
-          adSnapshotUrl: new URL(href, location.origin).toString(),
+          adSnapshotUrl: `https://www.facebook.com/ads/library/?id=${libraryId}`,
           landingPageUrl: externalLink,
           platforms,
           active: !text.split("\n").some((line) => /^inactive$/i.test(line.trim())),
           startedRunning,
           imageUrl: media.imageUrl,
           hasVideo: media.hasVideo,
+          variantCount: variantMatch ? Number.parseInt(variantMatch[1], 10) : null,
         };
       })
       .filter(Boolean);
@@ -982,40 +1074,52 @@ function buildQuickActionExtractionScript() {
       .join("\\n")
       .trim();
 
-  const seen = new Set();
+  const roots = new Map();
   const anchors = Array.from(document.querySelectorAll(${JSON.stringify(AD_LIBRARY_RESULT_SELECTOR)}));
-  const cards = anchors
-    .map((anchor) => {
-      if (!(anchor instanceof HTMLAnchorElement)) {
-        return null;
-      }
+  for (const anchor of anchors) {
+    if (!(anchor instanceof HTMLAnchorElement)) {
+      continue;
+    }
+    const href = anchor.href || anchor.getAttribute("href") || "";
+    const idMatch = href.match(/[?&]id=(\\d+)/);
+    if (!idMatch) {
+      continue;
+    }
+    const root =
+      anchor.closest('[role="article"]') ||
+      anchor.closest("article") ||
+      anchor.closest("[data-ad-preview]") ||
+      anchor.parentElement;
+    if (root && !roots.has(idMatch[1])) {
+      roots.set(idMatch[1], root);
+    }
+  }
+  const countLibraryIds = (el) => ((renderedText(el) || "").match(/Library ID: \\d+/g) || []).length;
+  const labels = Array.from(document.querySelectorAll("div, span")).filter(
+    (el) => el.children.length === 0 && /^Library ID: \\d+$/.test((renderedText(el) || "").trim()),
+  );
+  for (const label of labels) {
+    const idMatch = (renderedText(label) || "").match(/(\\d+)/);
+    if (!idMatch || roots.has(idMatch[1])) {
+      continue;
+    }
+    let node = label;
+    while (
+      node.parentElement &&
+      countLibraryIds(node.parentElement) === 1 &&
+      (renderedText(node.parentElement) || "").length < 8000
+    ) {
+      node = node.parentElement;
+    }
+    roots.set(idMatch[1], node);
+  }
 
-      const href = anchor.href || anchor.getAttribute("href") || "";
-      const idMatch = href.match(/[?&]id=(\\d+)/);
-      const libraryId = idMatch?.[1];
-      if (!libraryId || seen.has(libraryId)) {
-        return null;
-      }
-      seen.add(libraryId);
-
-      const card =
-        anchor.closest('[role="article"]') ||
-        anchor.closest("article") ||
-        anchor.closest("[data-ad-preview]") ||
-        anchor.parentElement;
-      const links = Array.from(card?.querySelectorAll('a[href]') ?? []);
-      const externalLink =
-        links
-          .map((link) => (link instanceof HTMLAnchorElement ? link.href : link.getAttribute("href") || ""))
-          .find(
-            (candidate) =>
-              /^https?:/i.test(candidate) &&
-              !/facebook\\.com/i.test(candidate) &&
-              !/l\\.facebook\\.com/i.test(candidate),
-          ) ?? null;
+  const cards = Array.from(roots.entries())
+    .map(([libraryId, card]) => {
+      const externalLink = resolveExternalLink(card);
       const advertiser = card?.querySelector("strong, h3, h4, [data-advertiser-name]")?.textContent ?? null;
       const headline = card?.querySelector("h1, h2, h3, [data-headline]")?.textContent ?? null;
-      const text = normalizeText(renderedText(card) || renderedText(anchor));
+      const text = normalizeText(renderedText(card));
       const cta =
         card
           ?.querySelector(
@@ -1037,6 +1141,7 @@ function buildQuickActionExtractionScript() {
           .map((line) => line.trim())
           .find((line) => /^started running on\\b/i.test(line)) ?? null;
 
+      const variantMatch = text.match(/(\\d+) ads use this creative and text/i);
       const media = pickCreativeMediaFromCard(card);
 
       return {
@@ -1046,13 +1151,14 @@ function buildQuickActionExtractionScript() {
         previewHeadline: normalizeText(headline),
         previewSubhead: null,
         cta: normalizeText(cta),
-        adSnapshotUrl: new URL(href, location.origin).toString(),
+        adSnapshotUrl: "https://www.facebook.com/ads/library/?id=" + libraryId,
         landingPageUrl: externalLink,
         platforms,
         active: !text.split("\\n").some((line) => /^inactive$/i.test(line.trim())),
         startedRunning,
         imageUrl: media.imageUrl,
         hasVideo: media.hasVideo,
+        variantCount: variantMatch ? Number.parseInt(variantMatch[1], 10) : null,
       };
     })
     .filter(Boolean);
@@ -1060,6 +1166,45 @@ function buildQuickActionExtractionScript() {
   function isCreativeCdnHost(host) {
     const lower = String(host || "").toLowerCase();
     return lower.includes("fbcdn") || lower.includes("scontent");
+  }
+
+  function resolveExternalLink(cardRoot) {
+    if (!cardRoot) {
+      return null;
+    }
+    const links = Array.from(cardRoot.querySelectorAll("a[href]"));
+    for (const link of links) {
+      const href = (link instanceof HTMLAnchorElement ? link.href : link.getAttribute("href")) || "";
+      if (!/^https?:/i.test(href)) {
+        continue;
+      }
+      let parsed;
+      try {
+        parsed = new URL(href);
+      } catch {
+        continue;
+      }
+      const host = parsed.hostname.toLowerCase();
+      if (host === "l.facebook.com" || host === "lm.facebook.com") {
+        const target = parsed.searchParams.get("u");
+        if (!target) {
+          continue;
+        }
+        try {
+          const decoded = new URL(target);
+          if (!/(^|\\.)facebook\\.com$|(^|\\.)instagram\\.com$|(^|\\.)fb\\.com$/i.test(decoded.hostname)) {
+            return decoded.toString();
+          }
+        } catch {
+          // skip undecodable redirect targets
+        }
+        continue;
+      }
+      if (!/facebook\\.com/i.test(host)) {
+        return parsed.toString();
+      }
+    }
+    return null;
   }
 
   function pickCreativeMediaFromCard(cardRoot) {
@@ -1086,6 +1231,7 @@ function buildQuickActionExtractionScript() {
     let bestUrl = null;
     let bestArea = -1;
     let firstCdnUrl = null;
+    let measuredAny = false;
     for (const img of images) {
       const raw = img.currentSrc || img.src || img.getAttribute("src") || "";
       if (!raw || String(raw).startsWith("data:")) {
@@ -1106,6 +1252,9 @@ function buildQuickActionExtractionScript() {
       }
       const width = img.naturalWidth || img.width || 0;
       const height = img.naturalHeight || img.height || 0;
+      if (width > 0 || height > 0) {
+        measuredAny = true;
+      }
       if (width > 0 && height > 0 && width <= 64 && height <= 64) {
         continue;
       }
@@ -1115,7 +1264,30 @@ function buildQuickActionExtractionScript() {
         bestUrl = absolute;
       }
     }
-    return { imageUrl: bestUrl || firstCdnUrl, hasVideo };
+    if (!bestUrl) {
+      const styled = Array.from(cardRoot.querySelectorAll("div, span, a"));
+      for (const el of styled) {
+        if ((el.offsetWidth || 0) < 100) {
+          continue;
+        }
+        const backgroundImage = window.getComputedStyle(el).backgroundImage || "";
+        const match = backgroundImage.match(/url\\("(.+?)"\\)/);
+        if (!match) {
+          continue;
+        }
+        try {
+          const url = new URL(match[1], location.origin);
+          if (!isCreativeCdnHost(url.hostname)) {
+            continue;
+          }
+          bestUrl = url.toString();
+          break;
+        } catch {
+          // skip invalid background URLs
+        }
+      }
+    }
+    return { imageUrl: bestUrl || (measuredAny ? null : firstCdnUrl), hasVideo };
   }
   const pageText = (document.body?.innerText ?? "").toLowerCase();
   const payload = {
