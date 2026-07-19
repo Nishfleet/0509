@@ -231,7 +231,7 @@ test.describe("local authenticated E2E harness", () => {
     await expect(page).toHaveURL(/\/app\/onboard/);
     await expect(page.getByRole("heading", { name: "Get started" })).toBeVisible();
     await expect(
-      page.getByText("Start with one competitor. We will validate the website, create its watchlist, and queue the first evidence scan."),
+      page.getByText("Start with one competitor. We'll check the website, create its watchlist, and kick off the first scan."),
     ).toBeVisible();
     await expect(page.getByText("The first scan starts immediately. Evidence appears as soon as the source check finishes.")).toBeVisible();
     await expect(page.getByRole("button", { name: "Start tracking this competitor" })).toBeDisabled();
@@ -614,7 +614,11 @@ test.describe("local authenticated E2E harness", () => {
     await signInAs(context, baseURL!, "e2e-free-onboarded");
     await page.goto("/app/digests");
     await expect(page).toHaveURL(/\/app\/digests/);
-    await expect(page.getByRole("heading", { name: "Digests", exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Digests are included in paid plans" })).toBeVisible();
+    // Free Weekly Competitor Watch: free plans now get the (empty) Briefs
+    // surface instead of a paid gate.
+    await expect(page.getByRole("heading", { name: "Briefs", exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Your first brief appears after monitoring runs" }).first(),
+    ).toBeVisible();
   });
 });

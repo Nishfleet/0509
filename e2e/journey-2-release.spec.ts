@@ -72,7 +72,7 @@ for (const viewport of viewports) {
     await expect(page.getByRole("heading", { name: "Get started" })).toBeVisible();
     await expect(
       page.getByText(
-        "Start with one competitor. We will validate the website, create its watchlist, and start the first scan.",
+        "Start with one competitor. We'll check the website, create its watchlist, and kick off the first scan.",
       ),
     ).toBeVisible();
     await expect(
