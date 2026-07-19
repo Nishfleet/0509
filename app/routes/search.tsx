@@ -658,7 +658,8 @@ export default function SearchRoute() {
   }, [searchKey]);
 
   // WP-11: single revalidation ~4s after deferred selection enrichment starts.
-  // Not a poll — one shot per selected ad so OCR/landing slots can fill from D1.
+  // FIX-13: only one shot per selection key — if still pending after that,
+  // UI falls back to "Not detected…" instead of endless "Analyzing creative…".
   useEffect(() => {
     if (!data.selectionEnrichmentPending || !selectionEnrichmentKey) {
       return;
@@ -679,6 +680,10 @@ export default function SearchRoute() {
     selectionEnrichmentRevalidatedFor,
     revalidator,
   ]);
+  // After the one-shot revalidation, do not keep advertising in-flight analysis.
+  const selectionEnrichmentUiPending =
+    Boolean(data.selectionEnrichmentPending) &&
+    selectionEnrichmentRevalidatedFor !== selectionEnrichmentKey;
   const nextCursor = visibleResult.nextCursor;
   const retryingCursor = visibleAccumulated.retryCursor;
   const loadMoreParams = nextCursor
@@ -1205,14 +1210,14 @@ export default function SearchRoute() {
                     <p>
                       {creativeTextField
                         ? formatLandingPageSignalValue(creativeTextField.fieldValue)
-                        : data.selectionEnrichmentPending
+                        : selectionEnrichmentUiPending
                           ? "Analyzing creative…"
                           : formatLandingPageSignalValue(null)}
                     </p>
                     <small>
                       {creativeTextField
                         ? "Read from the ad creative when available."
-                        : data.selectionEnrichmentPending
+                        : selectionEnrichmentUiPending
                           ? "Reading the ad creative now — this updates in a few seconds."
                           : "Not detected from the ad snapshot yet."}
                     </small>
@@ -1222,7 +1227,7 @@ export default function SearchRoute() {
                     <span>Landing page</span>
                     <h3>
                       {selectedAd.landingPage?.rawHeadline ??
-                        (data.selectionEnrichmentPending
+                        (selectionEnrichmentUiPending
                           ? "Analyzing creative…"
                           : "Headline not captured yet")}
                     </h3>

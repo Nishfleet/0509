@@ -27,6 +27,28 @@ export type PrepareSearchResultSelectionOptions = {
   waitUntil?: (promise: Promise<unknown>) => void;
 };
 
+/** FIX-13: prevent a revalidation from scheduling a second enrichment while one runs. */
+const ENRICHMENT_IN_FLIGHT_MS = 90_000;
+const enrichmentInFlightStartedAt = new Map<string, number>();
+
+function tryClaimSelectionEnrichment(metaAdId: string, nowMs: number = Date.now()): boolean {
+  const started = enrichmentInFlightStartedAt.get(metaAdId);
+  if (started != null && nowMs - started < ENRICHMENT_IN_FLIGHT_MS) {
+    return false;
+  }
+  enrichmentInFlightStartedAt.set(metaAdId, nowMs);
+  return true;
+}
+
+function releaseSelectionEnrichment(metaAdId: string) {
+  enrichmentInFlightStartedAt.delete(metaAdId);
+}
+
+/** Test helper — clear in-flight enrichment claims between cases. */
+export function resetSelectionEnrichmentInFlightForTests() {
+  enrichmentInFlightStartedAt.clear();
+}
+
 export function selectionNeedsEnrichment(ad: AdRecord): boolean {
   const needsLanding = Boolean(ad.landingPageUrl?.trim()) && !ad.landingPage;
   const needsCreative =
@@ -73,12 +95,21 @@ export async function prepareSearchResultSelection(
     const needsWork = selectionNeedsEnrichment(selectedAdBase);
     if (needsWork && options.waitUntil) {
       // WP-11 paint-fast path: return base ad now; finish enrichment async.
+      // FIX-13: revalidations must not schedule a second enrichment while one
+      // is already in flight for this ad.
+      const claimed = tryClaimSelectionEnrichment(selectedAdBase.metaAdId);
       selectionEnrichmentPending = true;
-      options.waitUntil(
-        enrichAndPersistSelectedAd(env, selectedAdBase, providerResultIsFresh).catch(() => {
-          // Background enrichment must never throw into the Worker isolate.
-        }),
-      );
+      if (claimed) {
+        options.waitUntil(
+          enrichAndPersistSelectedAd(env, selectedAdBase, providerResultIsFresh)
+            .catch(() => {
+              // Background enrichment must never throw into the Worker isolate.
+            })
+            .finally(() => {
+              releaseSelectionEnrichment(selectedAdBase.metaAdId);
+            }),
+        );
+      }
     } else if (needsWork) {
       // Synchronous path (tests / no ExecutionContext): keep prior behavior.
       selectedAd = await enrichAndPersistSelectedAd(

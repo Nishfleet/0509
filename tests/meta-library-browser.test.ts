@@ -1886,6 +1886,38 @@ describe("searchMetaLibraryByBrowser", () => {
     expect(ad.format).toBe("image");
   });
 
+  it("strips Ad Library chrome lines before hook derivation (FIX-13)", async () => {
+    const { normalizeExtractedCard } = await import("~/lib/meta-library-browser.server");
+    const chromeBody = [
+      "Active",
+      "Library ID: 123",
+      "Started running on Jul 1, 2026",
+      "Real ad copy here",
+    ].join("\n");
+
+    const ad = normalizeExtractedCard(
+      {
+        libraryId: "123",
+        advertiser: "Nykaa",
+        body: chromeBody,
+        previewHeadline: "Active",
+        previewSubhead: null,
+        cta: "Shop now",
+        adSnapshotUrl: "https://www.facebook.com/ads/library/?id=123",
+        landingPageUrl: "https://www.nykaa.com",
+        platforms: ["Facebook"],
+        active: true,
+        imageUrl: null,
+        hasVideo: false,
+      },
+      buildQuery(),
+    );
+
+    expect(ad.hook.toLowerCase()).toContain("real ad copy");
+    expect(ad.hook.toLowerCase()).not.toContain("active");
+    expect(ad.hook.toLowerCase()).not.toContain("library id");
+  });
+
   it("sets video format hint when the extracted card has a video surface", async () => {
     const { normalizeExtractedCard } = await import("~/lib/meta-library-browser.server");
 

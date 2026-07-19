@@ -396,7 +396,7 @@ function inferAdvertiserFromTextBlock(block: string[]) {
   return null;
 }
 
-function extractAdBodyLines(block: string[]) {
+export function extractAdBodyLines(block: string[]) {
   const sponsoredIndex = block.findIndex((line) => /^Sponsored$/i.test(line));
   const afterSponsored = sponsoredIndex >= 0 ? block.slice(sponsoredIndex + 1) : block;
   const bodyLines: string[] = [];
@@ -417,6 +417,19 @@ function extractAdBodyLines(block: string[]) {
   return bodyLines;
 }
 
+/**
+ * FIX-13: strip Ad Library chrome lines from a free-form body string before
+ * hook/offer derivation (DOM/session paths that skip extractAdBodyLines).
+ */
+export function stripAdLibraryUiChromeFromBody(body: string): string {
+  const lines = body
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\u00a0/g, " ").trim())
+    .filter(Boolean);
+  const cleaned = extractAdBodyLines(lines);
+  return cleaned.join("\n").trim();
+}
+
 function normalizeExtractedBodyLine(line: string) {
   return line
     .replace(/\u00a0/g, " ")
@@ -425,7 +438,7 @@ function normalizeExtractedBodyLine(line: string) {
     .toLowerCase();
 }
 
-function isTextCardUiLine(line: string) {
+export function isTextCardUiLine(line: string) {
   return (
     /^Active$/i.test(line) ||
     /^Inactive$/i.test(line) ||

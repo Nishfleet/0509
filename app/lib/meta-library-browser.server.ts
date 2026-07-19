@@ -28,6 +28,7 @@ import {
   inferCta,
   inferPlatforms,
   parseRenderedMetaLibraryHtml,
+  stripAdLibraryUiChromeFromBody,
   stripHtml,
   stripHtmlPreservingLines,
   type ExtractedAdCard,
@@ -1340,8 +1341,14 @@ export function normalizeExtractedCard(card: ExtractedAdCard, query: NormalizedS
   // attribute ads to brands that never ran them. Empty means "unconfirmed"
   // and the display layer labels it that way.
   const advertiser = card.advertiser || "";
-  const body = card.body || advertiser;
-  const previewHeadline = card.previewHeadline || advertiser;
+  const rawBody = card.body || advertiser;
+  // FIX-13: DOM/session/quick-action bodies often include Active / Library ID
+  // chrome as the first lines — strip before hook/offer derivation.
+  const body = stripAdLibraryUiChromeFromBody(rawBody) || rawBody;
+  const previewHeadline =
+    stripAdLibraryUiChromeFromBody(card.previewHeadline || "") ||
+    card.previewHeadline ||
+    advertiser;
   const previewSubhead = card.previewSubhead || body.slice(0, 120);
   const creativeImageUrl = card.imageUrl?.trim() || null;
   const hasVideo = Boolean(card.hasVideo);
