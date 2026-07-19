@@ -8651,6 +8651,114 @@ one signal-green accent.
   font-size: 0.82rem;
 }
 
+/* Ad Aggression Score card: big number + four component bars, token colors
+   only — the public-formula <details> keeps the number explainable in place. */
+.f9-aggression-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+}
+
+.f9-aggression-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.f9-aggression-number {
+  color: var(--ink);
+  font-family: var(--ld-display);
+  font-size: 2.4rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.f9-aggression-band {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.f9-aggression-read {
+  margin: 2px 0 0;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.f9-aggression-bars {
+  display: grid;
+  gap: 7px;
+}
+
+.f9-aggression-bar-row {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 10px;
+}
+
+.f9-aggression-bar-label {
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.f9-aggression-bar-track {
+  display: block;
+  overflow: hidden;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--bone);
+}
+
+.f9-aggression-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--green);
+}
+
+.f9-aggression-bar-value {
+  color: var(--ink-faint);
+  font-family: var(--ld-mono);
+  font-size: 0.74rem;
+  text-align: right;
+}
+
+.f9-aggression-details summary {
+  color: var(--ink-faint);
+  font-size: 0.84rem;
+  cursor: pointer;
+}
+
+.f9-aggression-details ul {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.f9-aggression-details strong {
+  color: var(--ink);
+}
+
+.f9-aggression-details p {
+  margin: 10px 0 0;
+  color: var(--ink-faint);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
 @media (max-width: 980px) {
   .f9-dossier-stats,
   .f9-dossier-leaders {

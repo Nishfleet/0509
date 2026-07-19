@@ -1,6 +1,10 @@
 import { Link } from "react-router";
 
 import { LocalTime } from "~/components/local-time";
+import {
+	type AggressionScore,
+	MIN_AGGRESSION_WINDOW_DAYS,
+} from "~/lib/aggression-score";
 import { ANGLE_DISPLAY } from "~/lib/angle-display";
 import type {
 	CompetitorDossier,
@@ -19,9 +23,11 @@ import type {
 export function CompetitorDossierPanel({
 	dossier,
 	watchlistId,
+	aggression = null,
 }: {
 	dossier: CompetitorDossier;
 	watchlistId: string;
+	aggression?: AggressionScore | null;
 }) {
 	return (
 		<section aria-label="Competitor intelligence">
@@ -63,6 +69,8 @@ export function CompetitorDossierPanel({
 							</dd>
 						</div>
 					</dl>
+
+					<AggressionScorecard aggression={aggression} />
 
 					<div>
 						<p className="f9-dossier-subhead">Angles</p>
@@ -136,6 +144,99 @@ export function CompetitorDossierPanel({
 				</div>
 			)}
 		</section>
+	);
+}
+
+function formatSharePercent(share: number): string {
+	return `${Math.round(share * 100)}%`;
+}
+
+/**
+ * Ad Aggression Score card: big number, four component bars, a neutral banded
+ * interpretation, and a native <details> spelling out the public formula.
+ * Null (window under 14 days) renders an honest explanation, never a score.
+ */
+function AggressionScorecard({ aggression }: { aggression: AggressionScore | null }) {
+	if (!aggression) {
+		return (
+			<p className="f9-dossier-changes">
+				Ad Aggression Score unlocks after {MIN_AGGRESSION_WINDOW_DAYS} days of observed
+				history — too little evidence for a fair score before that.
+			</p>
+		);
+	}
+
+	const rows = [
+		{
+			key: "velocity",
+			label: "Velocity",
+			value: aggression.components.velocity,
+			fact: `${aggression.facts.adsPerWeek} new ads/week over ${aggression.facts.windowDays} days`,
+		},
+		{
+			key: "testing",
+			label: "Testing",
+			value: aggression.components.testing,
+			fact: `${formatSharePercent(aggression.facts.testedShare)} of ads run multiple variants`,
+		},
+		{
+			key: "freshness",
+			label: "Freshness",
+			value: aggression.components.freshness,
+			fact: `${formatSharePercent(aggression.facts.freshShare)} of active ads first observed within 30 days`,
+		},
+		{
+			key: "persistence",
+			label: "Persistence",
+			value: aggression.components.persistence,
+			fact: `${formatSharePercent(aggression.facts.persistentShare)} of ads running 30+ days`,
+		},
+	];
+
+	return (
+		<div className="f9-aggression-card">
+			<div className="f9-aggression-head">
+				<span className="f9-aggression-number">{aggression.score}</span>
+				<div>
+					<p className="f9-aggression-band">
+						{aggression.band.label} · Ad Aggression Score
+					</p>
+					<p className="f9-aggression-read">{aggression.band.interpretation}</p>
+				</div>
+			</div>
+			<div className="f9-aggression-bars">
+				{rows.map((row) => (
+					<div className="f9-aggression-bar-row" key={row.key}>
+						<span className="f9-aggression-bar-label">{row.label}</span>
+						<span aria-hidden="true" className="f9-aggression-bar-track">
+							<span
+								className="f9-aggression-bar-fill"
+								style={{ width: `${(row.value / 25) * 100}%` }}
+							/>
+						</span>
+						<span className="f9-aggression-bar-value">{row.value}/25</span>
+					</div>
+				))}
+			</div>
+			<details className="f9-aggression-details">
+				<summary>How this is computed</summary>
+				<ul>
+					{rows.map((row) => (
+						<li key={row.key}>
+							<strong>
+								{row.label} {row.value}/25
+							</strong>{" "}
+							— {row.fact}
+						</li>
+					))}
+				</ul>
+				<p>
+					The four components sum to the score (formula v{aggression.formulaVersion}, public
+					by design). Computed from {aggression.facts.adCount} observed ad
+					{aggression.facts.adCount === 1 ? "" : "s"} — no model, no hidden weighting.
+				</p>
+			</details>
+		</div>
 	);
 }
 

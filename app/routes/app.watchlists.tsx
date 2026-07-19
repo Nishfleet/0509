@@ -124,6 +124,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { buildCompetitorDossier, insufficientCompetitorDossier } = await import(
     "~/lib/competitor-dossier.server"
   );
+  const { computeAggressionScore } = await import("~/lib/aggression-score");
   const env = getEnv(context);
   const { session, workspaceUserId, isMember } = await requireWorkspaceSession(env, request);
   const { getUserPlan } = await import("~/lib/plan.server");
@@ -174,6 +175,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       creativeWall: [] as Awaited<ReturnType<typeof listCreativeWallAds>>,
       trendDailyActivity: [] as Awaited<ReturnType<typeof listWatchlistDailyActivity>>,
       dossier: null as Awaited<ReturnType<typeof buildCompetitorDossier>> | null,
+      aggression: null as ReturnType<typeof computeAggressionScore>,
       canManageDelivery: !isMember,
       verifiedAccountEmail,
       deliveryTestRequestTokens: {} as Record<string, string>,
@@ -286,6 +288,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     creativeWall,
     trendDailyActivity,
     dossier,
+    // Deterministic, public-formula score — computed server-side so SSR and
+    // hydration share one "now".
+    aggression: computeAggressionScore(dossier),
     canManageDelivery: !isMember,
     verifiedAccountEmail,
     deliveryTestRequestTokens: Object.fromEntries(
@@ -1192,6 +1197,7 @@ export default function WatchlistsRoute() {
 
                 {data.dossier ? (
                   <CompetitorDossierPanel
+                    aggression={data.aggression}
                     dossier={data.dossier}
                     watchlistId={data.selectedWatchlist.id}
                   />
