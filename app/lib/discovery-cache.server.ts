@@ -1,3 +1,4 @@
+import type { AppEnv } from "~/lib/env.server";
 import type { ScheduledScanCadence } from "~/lib/plan-entitlements";
 import type { DiscoveryRouteContext } from "~/lib/types";
 
@@ -43,6 +44,45 @@ export function isDiscoveryCacheWithinMaxAge(
   const fetchedMs = Date.parse(fetchedAt);
   if (!Number.isFinite(fetchedMs)) return false;
   return nowMs - fetchedMs <= maxAgeMs;
+}
+
+export interface DiscoveryCacheReadOnlyLookup {
+  provider: string;
+  fingerprint: string;
+  country: string;
+  cursor?: string | null;
+  /** Exact cache key (e.g. a search-v2 domain key). Wins over the fingerprint triple. */
+  cacheKeyOverride?: string | null;
+}
+
+/**
+ * Cache-READ-ONLY discovery lookup for zero-cost public surfaces
+ * (e.g. /ads/:domain brand pages).
+ *
+ * Reads one `discovery_cache_entry` row by provider/fingerprint/country (or an
+ * exact key override) and returns it — expired or not — so callers can label
+ * freshness honestly. It NEVER falls through to a live provider: no Browser
+ * Rendering, no Meta API, no lease acquisition, no provider-state writes.
+ * Callers that need live data must go through `searchAdsViaSourceResolver`.
+ */
+export async function readDiscoveryCacheEntryCacheOnly(
+  env: AppEnv,
+  lookup: DiscoveryCacheReadOnlyLookup,
+) {
+  if (!env.DB) {
+    return null;
+  }
+
+  const cacheKey =
+    lookup.cacheKeyOverride ??
+    buildDiscoveryCacheKey({
+      provider: lookup.provider,
+      fingerprint: lookup.fingerprint,
+      country: lookup.country,
+      cursor: lookup.cursor,
+    });
+  const { getDiscoveryCacheEntry } = await import("~/lib/data.server");
+  return getDiscoveryCacheEntry(env, cacheKey);
 }
 
 const SCHEDULED_DISCOVERY_CONTEXTS = new Set<DiscoveryRouteContext>([

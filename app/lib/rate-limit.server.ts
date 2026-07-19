@@ -66,6 +66,32 @@ export async function enforcePublicSearchRateLimit(
   );
 }
 
+// Public /ads/:domain brand pages are cache-read-only (no provider spend), so
+// the bucket is more generous than public search, but still bounded: each
+// request costs bounded D1 reads and this is a crawl/abuse-facing surface.
+// Same shape as the public-search policy: per-IP, fail-open.
+export async function enforcePublicBrandPageRateLimit(
+  request: Request,
+  env: AppEnv,
+  ctx?: ExecutionContext,
+): Promise<Response | null> {
+  return enforceRateLimitPolicy(
+    request,
+    env,
+    {
+      scope: "public-brand-page",
+      limit: 120,
+      windowSeconds: 10 * 60,
+      failClosed: false,
+      keyByIpOnly: true,
+      // One shared bucket across every brand page — without this the pathname
+      // (which embeds the domain) would give each domain its own budget.
+      routeOverride: "/ads/:domain",
+    },
+    ctx,
+  );
+}
+
 // Plan-keyed daily live-search ceilings (UTC day). Stacked on the short
 // 10-minute burst bucket so free/Scout cannot burn Browser Rendering all day.
 const ACCOUNT_SEARCH_DAILY_LIMITS: Record<string, number> = {
