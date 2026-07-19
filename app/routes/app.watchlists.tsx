@@ -4,6 +4,7 @@ import {
   Link,
   redirect,
   useActionData,
+  useFetcher,
   useLoaderData,
   useNavigation,
   useRevalidator,
@@ -787,7 +788,23 @@ export default function WatchlistsRoute() {
   }, [data.highlightedEventId, data.selectedWatchlist?.id]);
   const renderedAt = new Date(data.renderedAt);
   const discoveryStatus = toCustomerDiscoveryStatus(data.discoveryStatus);
-  const actionData = useActionData<typeof action>();
+  const routeActionData = useActionData<typeof action>();
+  // WP-42: pause/resume runs through a fetcher so the row shows its own
+  // pending state instead of lighting up the global route progress bar.
+  const pauseResumeFetcher = useFetcher<typeof action>();
+  const [latestFeedbackSource, setLatestFeedbackSource] = useState<"route" | "fetcher" | null>(null);
+  useEffect(() => {
+    if (routeActionData) setLatestFeedbackSource("route");
+  }, [routeActionData]);
+  useEffect(() => {
+    if (pauseResumeFetcher.data) setLatestFeedbackSource("fetcher");
+  }, [pauseResumeFetcher.data]);
+  const actionData =
+    latestFeedbackSource === "fetcher" ? pauseResumeFetcher.data : routeActionData;
+  const pauseResumePending = pauseResumeFetcher.state !== "idle";
+  const pauseResumePendingIntent = pauseResumePending
+    ? pauseResumeFetcher.formData?.get("intent")
+    : null;
   const showSlackDelivery = isSlackDeliveryCustomerFacing();
   const canExport = canUsePlanFeature(data.plan, "export_csv") && canUsePlanFeature(data.plan, "export_json");
   const canReport = canUsePlanFeature(data.plan, "client_reports");
@@ -993,21 +1010,31 @@ export default function WatchlistsRoute() {
                       Upgrade to share
                     </Link>
                   )}
-                  <Form method="post">
+                  <pauseResumeFetcher.Form method="post">
                     <input
                       name="intent"
                       type="hidden"
                       value={data.selectedWatchlist.isActive ? "pause-watchlist" : "resume-watchlist"}
                     />
                     <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
-                    <SubmitButton
+                    <button
+                      aria-busy={pauseResumePending || undefined}
                       className="f9-secondary-button"
-                      intent={data.selectedWatchlist.isActive ? "pause-watchlist" : "resume-watchlist"}
-                      pendingLabel={data.selectedWatchlist.isActive ? "Pausing…" : "Resuming…"}
+                      disabled={pauseResumePending}
+                      type="submit"
                     >
-                      {data.selectedWatchlist.isActive ? "Pause tracking" : "Resume tracking"}
-                    </SubmitButton>
-                  </Form>
+                      {pauseResumePending ? (
+                        <>
+                          <span aria-hidden="true" className="f9-button-spinner" />
+                          {pauseResumePendingIntent === "pause-watchlist" ? "Pausing…" : "Resuming…"}
+                        </>
+                      ) : data.selectedWatchlist.isActive ? (
+                        "Pause tracking"
+                      ) : (
+                        "Resume tracking"
+                      )}
+                    </button>
+                  </pauseResumeFetcher.Form>
                   {data.selectedWatchlist.isActive && canRefresh ? (
                     <Form method="post">
                       <input name="intent" type="hidden" value="refresh-watchlist" />
