@@ -92,6 +92,11 @@ export async function expectNoHorizontalOverflow(page: Page, tolerance = 1): Pro
         if (overflow <= Math.max(allowed, 2) || element.classList.contains("f9-sr-only") || element.classList.contains("ld-sr-only")) {
           return false;
         }
+        // A native select's popup options can be wider than its closed control,
+        // but that internal menu width does not participate in document layout.
+        if (element instanceof HTMLSelectElement) {
+          return false;
+        }
         const overflowX = getComputedStyle(element).overflowX;
         return !["auto", "scroll", "hidden", "clip"].includes(overflowX);
       })

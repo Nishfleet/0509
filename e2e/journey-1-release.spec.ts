@@ -185,7 +185,7 @@ for (const viewport of viewports) {
     // First visit: establish the product promise without an account.
     await page.goto("/");
     await expect(page.getByRole("heading", { name: /They cut.*price/i })).toBeVisible();
-    await expect(page.getByText("No account needed.", { exact: false })).toBeVisible();
+    await expect(page.getByText("No account needed.", { exact: true })).toBeVisible();
     const trialLink = page.getByRole("link", { name: "Try with Nykaa" });
     await expect(trialLink).toBeVisible();
     const trialHref = await trialLink.getAttribute("href");
