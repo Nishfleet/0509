@@ -206,8 +206,8 @@ describe("runScheduledMonitoring workflow idempotency", () => {
       digests: 0,
     });
     expect(scheduleWatchlistFanout).toHaveBeenCalledTimes(2);
-    expect(listActiveWatchlists).toHaveBeenNthCalledWith(1, expect.anything(), { includeScout: false });
-    expect(listActiveWatchlists).toHaveBeenNthCalledWith(2, expect.anything(), { includeScout: false });
+    expect(listActiveWatchlists).toHaveBeenNthCalledWith(1, expect.anything(), { includeScout: false, includeFree: false });
+    expect(listActiveWatchlists).toHaveBeenNthCalledWith(2, expect.anything(), { includeScout: false, includeFree: false });
   });
 
   it("includes Scout watchlists only on six-hour regular scan slots", async () => {
@@ -329,9 +329,11 @@ describe("runScheduledMonitoring workflow idempotency", () => {
       scheduledTime: Date.parse("2026-04-20T09:00:00.000Z"),
     });
 
-    expect(listActiveWatchlists).toHaveBeenNthCalledWith(1, expect.anything(), { includeScout: false });
-    expect(listActiveWatchlists).toHaveBeenNthCalledWith(2, expect.anything(), { includeScout: true });
-    expect(listActiveWatchlists).toHaveBeenNthCalledWith(3, expect.anything(), { includeScout: false });
+    // 2026-04-20 is a Monday: the 03:00 tick is the free weekly slot, the
+    // 06:00 tick is the Scout six-hour slot, and 09:00 includes neither.
+    expect(listActiveWatchlists).toHaveBeenNthCalledWith(1, expect.anything(), { includeScout: false, includeFree: true });
+    expect(listActiveWatchlists).toHaveBeenNthCalledWith(2, expect.anything(), { includeScout: true, includeFree: false });
+    expect(listActiveWatchlists).toHaveBeenNthCalledWith(3, expect.anything(), { includeScout: false, includeFree: false });
   });
 
   it("builds stable proof-capture request keys from the same watch event inputs", async () => {

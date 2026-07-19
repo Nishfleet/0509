@@ -113,19 +113,29 @@ afterEach(() => {
 });
 
 describe("runWeeklyDigests", () => {
-  it("skips digest generation for free-plan users", async () => {
+  it("generates the weekly digest for free-plan users (free weekly watch)", async () => {
     const listWatchlists = vi.fn().mockResolvedValue([
       {
         id: "watch-1",
         name: "boAt watch",
       },
     ]);
+    const deliverWeeklyDigest = vi.fn().mockResolvedValue({
+      attempts: 1,
+      channels: ["email"],
+    });
+    vi.doMock("~/lib/delivery.server", () => ({
+      deliverWeeklyDigest,
+      deliverScanTroubleNotice: vi.fn(),
+    }));
 
     vi.doMock("~/lib/data.server", () => ({
       addDigestItem: vi.fn(),
       clearDigestItems: vi.fn(),
       createAdObservation: vi.fn(),
-      createDigestRun: vi.fn(),
+      createDigestRun: vi
+        .fn()
+        .mockResolvedValue({ digestRunId: "digest-free-1", created: true }),
       createEventCandidate: vi.fn(),
       createLandingPageSnapshot: vi.fn(),
       createProofCapture: vi.fn(),
@@ -134,10 +144,15 @@ describe("runWeeklyDigests", () => {
       countProofCapturesForWatchlistSince: vi.fn(),
       countProofCapturesForWorkspaceSince: vi.fn(),
       finishWatchlistRun: vi.fn(),
-      getDigestByPeriod: vi.fn(),
+      getDigestByPeriod: vi.fn().mockResolvedValue(null),
       getDigest: vi.fn().mockResolvedValue(null),
       listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
       ...digestScheduleDataMocks(),
+      getSuccessfulRunStatsForUserBetween: vi.fn().mockResolvedValue({
+        runs: 2,
+        watchlistsChecked: 1,
+        adsSeen: 5,
+      }),
       getUserDeliveryProfile: vi.fn().mockResolvedValue({
         id: "user-1",
         email: "owner@example.com",
@@ -168,7 +183,7 @@ describe("runWeeklyDigests", () => {
     vi.doMock("~/lib/plan.server", () => ({
       getUserPlan: vi.fn().mockResolvedValue("free"),
       PLAN_LIMITS: {
-        free: { digests: false, digestCadence: "none" },
+        free: { digests: true, digestCadence: "weekly" },
         starter: { digests: true, digestCadence: "weekly" },
         agency: { digests: true, digestCadence: "daily_and_weekly" },
       },
@@ -211,8 +226,20 @@ describe("runWeeklyDigests", () => {
       },
     } as never);
 
-    expect(result).toBe(0);
-    expect(listWatchlists).not.toHaveBeenCalled();
+    // Free now receives the weekly digest (heartbeat when the period is
+    // quiet) — the email itself carries the upgrade line, covered in
+    // tests/free-weekly-watch.test.ts.
+    expect(result).toBe(1);
+    expect(listWatchlists).toHaveBeenCalled();
+    expect(deliverWeeklyDigest).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        userId: "user-1",
+        cadence: "weekly",
+        heartbeat: expect.objectContaining({ runs: 2 }),
+      }),
+    );
+    vi.doUnmock("~/lib/delivery.server");
   });
 
   it("delegates Scout digest delivery to the delivery module after building the digest run", async () => {

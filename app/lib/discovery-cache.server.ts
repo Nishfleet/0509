@@ -25,12 +25,17 @@ export function resolveDiscoveryCacheTtlMs(routeContext: DiscoveryRouteContext) 
  * WP-36: scheduled scans may reuse any shared discovery_cache_entry younger
  * than the plan's scan cadence (cross-workspace). Interactive search is
  * unaffected — it still uses forceLive / expiresAt rules only.
+ *
+ * Free weekly watch: the 7-day window means a free scan of any competitor a
+ * paid workspace already watches is a pure cache hit — near-zero marginal
+ * Browser Rendering cost.
  */
 export function resolveScheduledScanCacheMaxAgeMs(
   cadence: ScheduledScanCadence,
 ): number | null {
   if (cadence === "every_3h") return 3 * 60 * 60 * 1000;
   if (cadence === "every_6h") return 6 * 60 * 60 * 1000;
+  if (cadence === "weekly") return 7 * 24 * 60 * 60 * 1000;
   return null;
 }
 
