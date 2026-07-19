@@ -223,14 +223,14 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     session
       ? import("~/lib/plan.server")
           .then(({ getUserPlan }) => getUserPlan(env, workspaceUserId!))
-          .catch((): "free" | "scout" | "starter" | "agency" => {
-            // Fail OPEN on a transient plan-lookup blip (D1 hiccup or isolated
-            // test env without D1): a paying customer must not be degraded to
-            // free limits. "starter" is the most permissive non-agency plan —
-            // it is used for rate-limit sizing only and, unlike "free",
-            // renders no free-plan upsell UI. Real plan gates (saves,
-            // watchlists) re-check server-side.
-            return "starter";
+          .catch((): null => {
+            // On a transient plan-lookup blip (D1 hiccup or isolated test env
+            // without D1) the UI payload gets plan=null so nothing renders
+            // from a guess — no free-plan upsell, no paid-only affordances.
+            // Only the rate-limit call below substitutes "starter" so a
+            // paying customer is not throttled to free limits. Real plan
+            // gates (saves, watchlists) re-check server-side and fail closed.
+            return null;
           })
       : (null as "free" | "scout" | "starter" | "agency" | null),
   ]);
@@ -312,7 +312,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         env,
         session.user.id,
         context.cloudflare?.ctx,
-        plan,
+        // Fail OPEN for rate-limit sizing only: an unknown plan gets starter
+        // limits so a paying customer is not throttled to free ones.
+        plan ?? "starter",
       );
       if (searchLimit) {
         // Prefer an in-product labeled daily/burst limit over a bare JSON 429.
@@ -713,6 +715,30 @@ export async function action({ context, request }: ActionFunctionArgs) {
       return {
         ok: false,
         message: "Choose a collection and ad before saving.",
+      };
+    }
+
+    // Server-side plan gate: saving to a collection starts on Scout. This
+    // must not trust the client (the free-plan UI hides the form, but the
+    // POST is reachable directly) and must fail CLOSED — if the plan lookup
+    // itself fails we return an honest retryable error, never allow.
+    let savePlan: "free" | "scout" | "starter" | "agency";
+    try {
+      const { getUserPlan } = await import("~/lib/plan.server");
+      savePlan = await getUserPlan(env, workspaceUserId);
+    } catch {
+      return {
+        ok: false,
+        message:
+          "We couldn't confirm your plan just now. Nothing was saved — try again in a moment.",
+      };
+    }
+    if (savePlan === "free") {
+      return {
+        ok: false,
+        error: "plan_limit_exceeded" as const,
+        message: "Saving ads to a collection starts on Scout.",
+        upgradePath: "/app/billing?source=search#plans",
       };
     }
 

@@ -130,6 +130,16 @@ describe("buildCounterBrief guards", () => {
 		expect(brief).toBeNull();
 	});
 
+	it("honors a caller-supplied timeout and returns null when the model hangs", async () => {
+		const run = vi.fn().mockImplementation(() => new Promise(() => {}));
+
+		const brief = await buildCounterBrief({ AI: { run } } as never, buildReadyDossier(), {
+			timeoutMs: 10,
+		});
+
+		expect(brief).toBeNull();
+	});
+
 	it("returns null on a non-JSON model response", async () => {
 		const { env } = fakeAiEnv("I cannot produce a brief right now, sorry!");
 

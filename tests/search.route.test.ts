@@ -145,7 +145,7 @@ describe("search loader", () => {
     });
   });
 
-  it("fails open to starter (never free) when the plan lookup blips for a signed-in user", async () => {
+  it("returns plan=null to the UI when the plan lookup blips for a signed-in user", async () => {
     const env = { DB: {} };
     const getUserPlan = vi.fn().mockRejectedValue(new Error("D1 blip"));
 
@@ -176,9 +176,12 @@ describe("search loader", () => {
     } as never);
 
     expect(getUserPlan).toHaveBeenCalled();
-    // A paying customer must not see free limits or free-plan upsell UI on a
-    // transient lookup failure — rate limiting uses starter sizing instead.
-    expect(result).toMatchObject({ plan: "starter" });
+    // On a transient lookup failure the UI must not render from a guess: no
+    // free-plan upsell, no paid-only affordances (plan=null hides both).
+    // Rate limiting substitutes starter sizing internally so a paying
+    // customer is not throttled to free limits, and real plan gates (saves,
+    // watchlists) re-check server-side and fail closed.
+    expect(result).toMatchObject({ plan: null });
   });
 
   it("does not call live discovery before a signed-in user submits a query", async () => {

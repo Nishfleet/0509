@@ -107,10 +107,12 @@ const GROUNDING_STOPWORDS = new Set([
 export async function buildCounterBrief(
 	env: Pick<AppEnv, "AI">,
 	dossier: CompetitorDossier,
+	options: { timeoutMs?: number } = {},
 ): Promise<CounterBrief | null> {
 	if (!env.AI || dossier.status !== "ready") {
 		return null;
 	}
+	const timeoutMs = options.timeoutMs ?? COUNTER_BRIEF_TIMEOUT_MS;
 
 	const facts = buildCounterBriefFacts(dossier);
 	if (!facts) {
@@ -129,7 +131,7 @@ export async function buildCounterBrief(
 				],
 				max_tokens: MAX_OUTPUT_TOKENS,
 			}),
-			COUNTER_BRIEF_TIMEOUT_MS,
+			timeoutMs,
 			"Counter-brief generation timed out.",
 		);
 		const raw =

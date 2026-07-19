@@ -249,12 +249,14 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   ]);
 
   // Counter-Brief plan gate: paid plans only. Computed per page load with no
-  // persistence — the module's own 10s cap and never-throw contract bound the
-  // cost (~1-2s on the small shared model); tradeoff documented in
+  // persistence — the loader caps generation at 4s (below the module's 10s
+  // default) so a hung Workers AI call cannot stall a paid page load; the
+  // never-throw contract degrades to the no-brief state instead. Typical cost
+  // is ~1-2s on the small shared model; tradeoff documented in
   // counter-brief.server.ts. Free plans get the upgrade line instead.
   const counterBriefEligible = isPaidPlanFamily(plan);
   const counterBrief = counterBriefEligible
-    ? await buildCounterBrief(env, dossier).catch(() => null)
+    ? await buildCounterBrief(env, dossier, { timeoutMs: 4000 }).catch(() => null)
     : null;
 
   const workspaceDeliveryConfig =
@@ -727,14 +729,25 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     // Resume re-checks the plan limit before each watchlist — the count of
     // active watchlists changes with every resume, so a single upfront check
-    // could overshoot the plan cap.
+    // could overshoot the plan cap. Already-active selections are no-ops and
+    // must never consume the gate (they hold a plan slot already).
+    const { getWatchlist } = await import("~/lib/data.server");
     const { requireWorkspacePlanLimit } = await import("~/lib/with-workspace.server");
     let resumed = 0;
+    let alreadyActive = 0;
     let hitPlanLimit = false;
     for (const watchlistId of watchlistIds) {
+      const existing = await getWatchlist(env, watchlistId, workspaceUserId);
+      if (!existing) {
+        continue;
+      }
+      if (existing.isActive) {
+        alreadyActive += 1;
+        continue;
+      }
       const limitGate = await requireWorkspacePlanLimit(env, workspaceUserId, "watchlists", {
         limitMessage:
-          "You have reached your competitor tracking limit — pause another watchlist first.",
+          "You've reached your competitor tracking limit — pause another watchlist first.",
       });
       if (!limitGate.ok) {
         hitPlanLimit = true;
@@ -745,20 +758,35 @@ export async function action({ context, request }: ActionFunctionArgs) {
       }
     }
 
+    const alreadyActiveNote = alreadyActive > 0
+      ? ` ${alreadyActive} ${alreadyActive === 1 ? "was" : "were"} already active.`
+      : "";
+
     if (hitPlanLimit) {
       return {
         ok: false,
         error: "plan_limit_exceeded" as const,
-        message: `Resumed ${resumed} of ${watchlistIds.length} selected. You have reached your competitor tracking limit — pause another watchlist first.`,
+        message: `Resumed ${resumed} of ${watchlistIds.length} selected.${alreadyActiveNote} You've reached your competitor tracking limit — pause another watchlist first.`,
       };
     }
 
-    return resumed > 0
-      ? {
-          ok: true,
-          message: `Resumed ${resumed} of ${watchlistIds.length} selected. They rejoin the next scheduled scan.`,
-        }
-      : { ok: false, message: "Watchlist not found." };
+    if (resumed > 0) {
+      return {
+        ok: true,
+        message: `Resumed ${resumed} of ${watchlistIds.length} selected.${alreadyActiveNote} They rejoin the next scheduled scan.`,
+      };
+    }
+
+    if (alreadyActive > 0) {
+      return {
+        ok: true,
+        message: alreadyActive === watchlistIds.length
+          ? "Everything selected is already active — nothing to resume."
+          : `Nothing to resume.${alreadyActiveNote}`,
+      };
+    }
+
+    return { ok: false, message: "Watchlist not found." };
   }
 
   if (intent === "send-test-email") {
@@ -1081,14 +1109,16 @@ export default function WatchlistsRoute() {
               return (
                 <div className="f9-work-row-select" key={watchlist.id}>
                   {data.watchlists.length > 1 ? (
-                    <input
-                      aria-label={`Select ${watchlist.name} for bulk actions`}
-                      checked={selectedBulkIds.includes(watchlist.id)}
-                      className="f9-bulk-checkbox"
-                      disabled={bulkPending}
-                      onChange={() => toggleBulkSelection(watchlist.id)}
-                      type="checkbox"
-                    />
+                    <label className="f9-bulk-select-target">
+                      <input
+                        aria-label={`Select ${watchlist.name} for bulk actions`}
+                        checked={selectedBulkIds.includes(watchlist.id)}
+                        className="f9-bulk-checkbox"
+                        disabled={bulkPending}
+                        onChange={() => toggleBulkSelection(watchlist.id)}
+                        type="checkbox"
+                      />
+                    </label>
                   ) : null}
                   <Link
                     className={`f9-work-row ${isActive ? "is-active" : ""} ${isPending ? "is-pending" : ""}`}
@@ -2431,7 +2461,9 @@ function FirstScanBanner(props: {
             ? props.plan === "free"
               ? "Your activation scan is running. This page updates by itself when results are ready. After this, free checks weekly; paid plans check every 3–6 hours."
               : "Your first scan is running. This page updates by itself when results are ready."
-            : "The activation scan is in line and starts automatically. This page updates by itself.";
+            : props.plan === "free"
+              ? "The activation scan is in line and starts automatically. This page updates by itself."
+              : "Your first scan is in line and starts automatically. This page updates by itself.";
 
   return (
     <article

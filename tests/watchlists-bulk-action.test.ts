@@ -21,6 +21,9 @@ afterEach(() => {
 
 function installMocks({
   setWatchlistActive = vi.fn().mockResolvedValue(true),
+  getWatchlist = vi.fn().mockImplementation((_env: unknown, watchlistId: string) =>
+    Promise.resolve({ id: watchlistId, userId: "user-1", isActive: false }),
+  ),
   requireWorkspacePlanLimit = vi.fn().mockResolvedValue({
     ok: true,
     plan: "starter",
@@ -28,6 +31,7 @@ function installMocks({
   }),
 }: {
   setWatchlistActive?: ReturnType<typeof vi.fn>;
+  getWatchlist?: ReturnType<typeof vi.fn>;
   requireWorkspacePlanLimit?: ReturnType<typeof vi.fn>;
 } = {}) {
   const env = { DB: {} };
@@ -39,9 +43,9 @@ function installMocks({
       isMember: false,
     }),
   }));
-  vi.doMock("~/lib/data.server", () => ({ setWatchlistActive }));
+  vi.doMock("~/lib/data.server", () => ({ setWatchlistActive, getWatchlist }));
   vi.doMock("~/lib/with-workspace.server", () => ({ requireWorkspacePlanLimit }));
-  return { env, setWatchlistActive, requireWorkspacePlanLimit };
+  return { env, setWatchlistActive, getWatchlist, requireWorkspacePlanLimit };
 }
 
 async function runBulkAction(fields: Record<string, string | string[]>) {
@@ -123,6 +127,41 @@ describe("bulk-watchlists action", () => {
     expect(result.ok).toBe(false);
     expect(result.error).toBe("plan_limit_exceeded");
     expect(result.message).toContain("Resumed 1 of 3 selected");
+    expect(result.message).toContain("You've reached your competitor tracking limit");
+  });
+
+  it("skips already-active watchlists without consuming the plan-limit gate", async () => {
+    const getWatchlist = vi.fn().mockImplementation((_env: unknown, watchlistId: string) =>
+      Promise.resolve({ id: watchlistId, userId: "user-1", isActive: watchlistId === "wl-active" }),
+    );
+    const { setWatchlistActive, requireWorkspacePlanLimit } = installMocks({ getWatchlist });
+
+    const result = await runBulkAction({
+      bulkAction: "resume",
+      watchlistIds: ["wl-active", "wl-paused"],
+    });
+
+    // The active watchlist is a no-op: no gate check, no write.
+    expect(requireWorkspacePlanLimit).toHaveBeenCalledTimes(1);
+    expect(setWatchlistActive).toHaveBeenCalledTimes(1);
+    expect(setWatchlistActive).toHaveBeenCalledWith(expect.anything(), "user-1", "wl-paused", true);
+    expect(result.ok).toBe(true);
+    expect(result.message).toContain("Resumed 1 of 2 selected. 1 was already active.");
+  });
+
+  it("reports an honest no-op when everything selected is already active", async () => {
+    const getWatchlist = vi.fn().mockResolvedValue({ id: "wl-active", userId: "user-1", isActive: true });
+    const { setWatchlistActive, requireWorkspacePlanLimit } = installMocks({ getWatchlist });
+
+    const result = await runBulkAction({
+      bulkAction: "resume",
+      watchlistIds: ["wl-active"],
+    });
+
+    expect(requireWorkspacePlanLimit).not.toHaveBeenCalled();
+    expect(setWatchlistActive).not.toHaveBeenCalled();
+    expect(result.ok).toBe(true);
+    expect(result.message).toBe("Everything selected is already active — nothing to resume.");
   });
 
   it("resumes all selected watchlists when the plan allows it", async () => {
