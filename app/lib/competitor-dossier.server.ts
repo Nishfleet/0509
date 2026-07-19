@@ -161,19 +161,20 @@ export async function buildCompetitorDossier(
 		return insufficientCompetitorDossier();
 	}
 
-	const [stats, history] = await Promise.all([
+	// All four reads are independent — one parallel wave. The hot path is an
+	// established watchlist (enough history), so the change-count reads run
+	// speculatively; the not-enough-history case spends two extra cheap
+	// indexed reads and still returns the honest insufficient state.
+	const [stats, history, changeCount, latestChange] = await Promise.all([
 		getDossierHealthyScanStats(env, watchlistId, userId),
 		listDossierObservationHistory(env, watchlistId, userId),
+		countDossierLandingPageChanges(env, watchlistId, userId),
+		getDossierLatestLandingPageChange(env, watchlistId, userId),
 	]);
 	const scanCount = Number(stats?.scan_count ?? 0);
 	if (scanCount < DOSSIER_MIN_SCANS || history.length === 0) {
 		return insufficientCompetitorDossier(scanCount, history.length);
 	}
-
-	const [changeCount, latestChange] = await Promise.all([
-		countDossierLandingPageChanges(env, watchlistId, userId),
-		getDossierLatestLandingPageChange(env, watchlistId, userId),
-	]);
 
 	const adHistory = history.map((row) => toHistoryEntry(row, now));
 	const longevityLeaders = [...adHistory]
