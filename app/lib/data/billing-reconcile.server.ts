@@ -576,6 +576,9 @@ export async function applyDodoRefundWithWatchlistReconcile(
     refundedAt?: string;
     userId: string | null;
     refundType?: "full" | "partial";
+    /** Minor units; required with paymentAmount for partial top-up proration. */
+    refundAmount?: number | null;
+    paymentAmount?: number | null;
   },
   watchlistLimit: number,
   ledger: DodoWebhookLedgerFinalize,
@@ -588,10 +591,20 @@ export async function applyDodoRefundWithWatchlistReconcile(
   const keepActive = Math.max(0, Math.floor(watchlistLimit));
   const refundType = input.refundType ?? "full";
   const isFullRefund = refundType === "full";
-  // A partial refund does not carry a trustworthy money-to-credit allocation.
-  // Record it in the webhook ledger, but leave purchased credits unchanged for
-  // explicit reconciliation instead of revoking the whole remaining grant.
-  const topUpRefundAllowed = isFullRefund;
+  // FIX-9: partial refunds with money amounts prorate remaining top-up credits;
+  // partial without amounts stay manual-review (no automatic clawback).
+  const canProratePartial =
+    !isFullRefund &&
+    typeof input.refundAmount === "number" &&
+    typeof input.paymentAmount === "number" &&
+    Number.isFinite(input.refundAmount) &&
+    Number.isFinite(input.paymentAmount) &&
+    input.refundAmount > 0 &&
+    input.paymentAmount > 0;
+  const topUpRefundAllowed = isFullRefund || canProratePartial;
+  const refundRatio = canProratePartial
+    ? Math.min(1, Number(input.refundAmount) / Number(input.paymentAmount))
+    : 1;
   const topUpRefundKey = `dodo-refund:${ledger.eventId}:${input.paymentId}`;
 
   const statements = [
@@ -651,16 +664,19 @@ export async function applyDodoRefundWithWatchlistReconcile(
         )
         AND julianday(?) >= julianday(plan_updated_at)
     `).bind(refundedAt, input.paymentId, isFullRefund ? 1 : 0, input.paymentId, refundedAt),
+    // Full refunds expire legacy proof_usage_credit rows; partial proration only
+    // adjusts the top-up ledger (remaining credits stay spendable).
     db.prepare(`
       UPDATE proof_usage_credit
       SET expires_at = ?
       WHERE provider_payment_id = ?
         AND ? = 1
         AND julianday(expires_at) > julianday(?)
-    `).bind(refundedAt, input.paymentId, topUpRefundAllowed ? 1 : 0, refundedAt),
+    `).bind(refundedAt, input.paymentId, isFullRefund ? 1 : 0, refundedAt),
   );
 
   const topUpLedgerIndex = statements.length;
+  // Full: claw back all remaining. Partial+amounts: min(remaining, round(remaining * ratio)).
   statements.push(
     db.prepare(`
       INSERT INTO evidence_top_up_ledger_entry (
@@ -668,14 +684,40 @@ export async function applyDodoRefundWithWatchlistReconcile(
         reservation_id, idempotency_key, metadata_json, created_at
       )
       SELECT ?, grant.id, grant.workspace_user_id,
-             -MAX(
-               0,
-               grant.quantity_granted + COALESCE(
-                 (SELECT SUM(entry.quantity_delta)
-                  FROM evidence_top_up_ledger_entry AS entry
-                  WHERE entry.grant_id = grant.id),
-                 0
-               )
+             -MIN(
+               MAX(
+                 0,
+                 grant.quantity_granted + COALESCE(
+                   (SELECT SUM(entry.quantity_delta)
+                    FROM evidence_top_up_ledger_entry AS entry
+                    WHERE entry.grant_id = grant.id),
+                   0
+                 )
+               ),
+               CASE
+                 WHEN ? = 1 THEN MAX(
+                   0,
+                   grant.quantity_granted + COALESCE(
+                     (SELECT SUM(entry.quantity_delta)
+                      FROM evidence_top_up_ledger_entry AS entry
+                      WHERE entry.grant_id = grant.id),
+                     0
+                   )
+                 )
+                 ELSE CAST(
+                   ROUND(
+                     MAX(
+                       0,
+                       grant.quantity_granted + COALESCE(
+                         (SELECT SUM(entry.quantity_delta)
+                          FROM evidence_top_up_ledger_entry AS entry
+                          WHERE entry.grant_id = grant.id),
+                         0
+                       )
+                     ) * ?
+                   ) AS INTEGER
+                 )
+               END
              ),
              'refund', NULL, ?, ?, ?
       FROM evidence_top_up_grant AS grant
@@ -684,10 +726,15 @@ export async function applyDodoRefundWithWatchlistReconcile(
       ON CONFLICT(idempotency_key) DO NOTHING
     `).bind(
       createId(),
+      isFullRefund ? 1 : 0,
+      refundRatio,
       topUpRefundKey,
       jsonValue({
         reason: `${refundType}_provider_refund`,
         providerEventId: ledger.eventId,
+        refundAmount: input.refundAmount ?? null,
+        paymentAmount: input.paymentAmount ?? null,
+        refundRatio,
       }),
       timestamp,
       input.paymentId,

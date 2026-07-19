@@ -1059,6 +1059,14 @@ export function extractDodoRefund(env: AppEnv, payload: unknown) {
   const amount = numberOrNull(readValue(root, "amount"));
   const refundAmount =
     amount !== null && Number.isSafeInteger(amount) && amount >= 0 ? amount : null;
+  // FIX-9: optional original payment amount for partial top-up proration.
+  const paymentAmountRaw =
+    numberOrNull(readValue(root, "payment_amount")) ??
+    numberOrNull(objectOrEmpty(readValue(root, "payment")).amount as unknown);
+  const paymentAmount =
+    paymentAmountRaw !== null && Number.isSafeInteger(paymentAmountRaw) && paymentAmountRaw > 0
+      ? paymentAmountRaw
+      : null;
   const refundCurrency = cleanCurrency(readValue(root, "currency")) || null;
   const refundReason = readString(root, "reason") || null;
 
@@ -1067,6 +1075,7 @@ export function extractDodoRefund(env: AppEnv, payload: unknown) {
     paymentId,
     refundId,
     refundAmount,
+    paymentAmount,
     refundCurrency,
     refundReason,
     refundType: isPartial ? ("partial" as const) : ("full" as const),

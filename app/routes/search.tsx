@@ -201,6 +201,21 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     const { enforceAuthenticatedSearchRateLimit, enforceSearchSelectionRateLimit } = await import(
       "~/lib/rate-limit.server"
     );
+    // FIX-10: warm discovery cache hits must not burn the daily live-search budget.
+    // Selection URLs already probed above (do not probe twice). Plain reloads probe once.
+    let warmQueryForBudget = selectionServedFromCache;
+    if (!selectionServedFromCache && !url.searchParams.get("selected")) {
+      warmQueryForBudget = await (
+        await import("~/lib/search-execution.server")
+      ).hasWarmSearchCacheEntry({
+        env,
+        competitorWebsite,
+        parsed,
+        scope: searchScope,
+        cursor: url.searchParams.get("after"),
+        customerMetaAdLibraryToken,
+      });
+    }
     if (selectionServedFromCache) {
       const selectionLimit = await enforceSearchSelectionRateLimit(
         request,
@@ -211,7 +226,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       if (selectionLimit) {
         throw selectionLimit;
       }
-    } else {
+    } else if (!warmQueryForBudget) {
       const searchLimit = await enforceAuthenticatedSearchRateLimit(
         request,
         env,
@@ -234,7 +249,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
           competitorWebsite,
           trackingRole,
           inputError:
-            "You've hit today's live-search limit for your plan. Resets at midnight UTC. Cached results still work — upgrade for more live checks.",
+            "You've hit your live-search limit for your plan. The window refreshes about 24 hours after your earlier searches. Cached results still work — upgrade for more live checks.",
           searchScope: "exact" as const,
           displayDomain: null,
           relevanceApplied: false,
