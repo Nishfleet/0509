@@ -7791,6 +7791,7 @@ one signal-green accent.
   --f9-search-ink: var(--ink);
   --f9-search-muted: var(--ink-soft);
   --f9-search-soft: var(--ink-faint);
+  --f9-search-line: var(--line);
   --ld-bone: var(--bone);
   --ld-card: var(--card);
   --ld-ink: var(--ink);
@@ -7955,13 +7956,19 @@ one signal-green accent.
 [data-f9-theme="dark"] .f9-trend-sparse,
 [data-f9-theme="dark"] .f9-search-page .f9-search-answer dl div,
 [data-f9-theme="dark"] .f9-search-page .f9-search-answer-note,
+[data-f9-theme="dark"] .f9-search-page .f9-search-answer-steal,
 [data-f9-theme="dark"] .f9-search-page .f9-panel-head,
 [data-f9-theme="dark"] .f9-search-page .f9-search-signup-cta,
 [data-f9-theme="dark"] .f9-cycle-toggle {
   background: var(--dk-well);
 }
 
+[data-f9-theme="dark"] .f9-search-page .f9-search-answer-steal li {
+  color: var(--ink);
+}
+
 [data-f9-theme="dark"] .f9-search-page .f9-search-answer dl div,
+[data-f9-theme="dark"] .f9-search-page .f9-search-answer-steal,
 [data-f9-theme="dark"] .f9-search-page .f9-panel-head,
 [data-f9-theme="dark"] .f9-search-page .f9-search-answer,
 [data-f9-theme="dark"] .f9-search-page .f9-search-signup-cta,
@@ -8094,6 +8101,37 @@ toggles --- */
 [data-f9-theme="dark"] .f9-longevity-pill.f9-longevity-pill.is-sample {
   background: rgba(236, 233, 226, 0.12);
   color: var(--ink-soft);
+}
+
+/* Angle chips stay neutral metadata (not proof-green) in dark, and the
+   lower-confidence tentative read keeps its outline-only distinction. */
+[data-f9-theme="dark"] .f9-longevity-pill.f9-angle-pill {
+  background: var(--dk-chip);
+  color: var(--ink-soft);
+}
+
+[data-f9-theme="dark"] .f9-longevity-pill.f9-angle-pill.is-tentative {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px rgba(236, 233, 226, 0.28);
+  color: var(--ink-faint);
+}
+
+/* --- Trend charts: ink-on-light fills flip to bone-on-dark --- */
+
+[data-f9-theme="dark"] .f9-trend-bar:not(.is-accent) {
+  fill: rgba(236, 233, 226, 0.22);
+}
+
+[data-f9-theme="dark"] .f9-trend-baseline {
+  fill: rgba(236, 233, 226, 0.16);
+}
+
+[data-f9-theme="dark"] .f9-trend-leader-track {
+  background: rgba(236, 233, 226, 0.1);
+}
+
+[data-f9-theme="dark"] .f9-trend-leader-fill.is-tracked {
+  background: rgba(236, 233, 226, 0.32);
 }
 
 [data-f9-theme="dark"] .f9-status-strip.is-warning,
@@ -8342,6 +8380,19 @@ reds soften --- */
   margin: 0 0 4px;
 }
 
+/* Comfortable phone tap targets for the cross-links without desktop bloat. */
+@media (max-width: 600px) {
+  .f9-crosslink-row {
+    gap: 0 14px;
+  }
+
+  .f9-crosslink-row .f9-text-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
+
 /* Bulk pause/resume on the watchlists tracking desk (workflow-friction). */
 .f9-bulk-bar {
   display: flex;
@@ -8367,8 +8418,17 @@ reds soften --- */
   min-width: 0;
 }
 
+.f9-bulk-select-target {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
 .f9-bulk-checkbox {
-  margin-top: 14px;
   width: 16px;
   height: 16px;
   accent-color: var(--green);
@@ -8383,6 +8443,13 @@ reds soften --- */
 
 .f9-keyboard-hints {
   position: relative;
+}
+
+/* Keyboard shortcuts assume a hardware keyboard; hide the trigger on phones. */
+@media (max-width: 600px) {
+  .f9-keyboard-hints {
+    display: none;
+  }
 }
 
 .f9-keyboard-hints-trigger {
