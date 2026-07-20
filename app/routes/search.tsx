@@ -18,16 +18,14 @@ import type {
 } from "react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { AdAnglePill } from "~/components/ad-angle-pill";
 import { AdLongevityPill } from "~/components/ad-longevity-pill";
-import { Pill } from "~/components/pill";
 import { AdThumb } from "~/components/ad-thumb";
 import {
   DashboardRouteError,
   DashboardRouteLoading,
 } from "~/components/dashboard-route-loading";
 import { DashboardShell } from "~/components/dashboard-shell";
-import { ResultQuickSave } from "~/components/result-quick-save";
+import { SearchResultCard } from "~/components/search/result-card";
 import { SearchAnswerPanel } from "~/components/search-answer-panel";
 import { SubmitButton } from "~/components/submit-button";
 import { classifyAdRecordAngle } from "~/lib/ad-display";
@@ -89,7 +87,6 @@ import {
   formatHookLabel,
   formatOfferLabel,
   formatProofCaptureLabel,
-  formatResultCardSummary,
   formatResultsPanelTitle,
   formatSearchFreshnessLabel,
   formatSearchResultsAnnouncement,
@@ -1624,52 +1621,16 @@ export default function SearchRoute() {
                   <div className="f9-results-list">
                     {visibleAds.length > 0 ? (
                       visibleAds.map((ad) => (
-                        <div
-                          className={`f9-result-card-wrap${keyFocusedAdId === ad.metaAdId ? " is-key-focus" : ""}`}
+                        <SearchResultCard
                           key={ad.metaAdId}
-                        >
-                          <Link
-                            className={`f9-result-card ${selectedAd?.metaAdId === ad.metaAdId ? "is-active" : ""}`}
-                            to={resultCardHref(ad.metaAdId)}
-                          >
-                            <AdThumb ad={ad} />
-                            <div className="f9-result-card-body">
-                              <div>
-                                <span>
-                                  {formatAdvertiserLabel(ad.advertiser)}
-                                </span>
-                                <h3>{ad.previewHeadline}</h3>
-                                <div className="f9-result-card-pills">
-                                  {ad.source === "demo" ? (
-                                    <Pill variant="longevity" state="sample">Sample</Pill>
-                                  ) : null}
-                                  <AdLongevityPill ad={ad} />
-                                  {ad.variantCount && ad.variantCount > 1 ? (
-                                    <Pill variant="longevity">{`×${ad.variantCount} variants`}</Pill>
-                                  ) : null}
-                                  <AdAnglePill ad={ad} />
-                                </div>
-                              </div>
-                              <p>{formatResultCardSummary(ad)}</p>
-                              {ad.domainMatch?.reason ? (
-                                <strong>{ad.domainMatch.reason}</strong>
-                              ) : null}
-                              <small>
-                                {formatOfferDisplay(ad.offer)} ·{" "}
-                                {ad.destinationType} · {ad.languageLabel}
-                              </small>
-                              <em>{ad.format}</em>
-                            </div>
-                          </Link>
-                          {data.session && ad.source !== "demo" ? (
-                            <ResultQuickSave
-                              adId={ad.metaAdId}
-                              advertiser={ad.advertiser}
-                              collections={data.collections}
-                              plan={data.plan}
-                            />
-                          ) : null}
-                        </div>
+                          ad={ad}
+                          href={resultCardHref(ad.metaAdId)}
+                          isActive={selectedAd?.metaAdId === ad.metaAdId}
+                          isKeyFocused={keyFocusedAdId === ad.metaAdId}
+                          canQuickSave={Boolean(data.session)}
+                          collections={data.collections}
+                          plan={data.plan}
+                        />
                       ))
                     ) : (
                       <div className="f9-empty-state">
