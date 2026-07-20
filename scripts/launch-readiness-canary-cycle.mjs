@@ -5,7 +5,10 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { readDeployedWorkerVersionId } from "./deploy-production-plan.mjs";
 import { DEFAULT_BASE_URL, runCanary } from "./launch-readiness-canary.mjs";
-import { checkHealthEndpoint } from "./prod-canary.lib.mjs";
+import {
+  checkHealthEndpoint,
+  DEFAULT_CANARY_HEALTH_BASE_URLS,
+} from "./prod-canary.lib.mjs";
 
 /** @param {unknown} value */
 function isIdentifier(value) {
@@ -107,24 +110,34 @@ export async function runLaunchReadinessCanaryCycle({
  * Wait for the public route to serve the exact Worker version consistently
  * before the first mutating canary call. This absorbs only provider route
  * propagation; canary failures themselves are never retried.
- * @param {{ baseUrl?: string, expectedWorkerVersionId: string, checkHealthImpl?: typeof checkHealthEndpoint, delayImpl?: (ms: number) => Promise<void>, maxSamples?: number, requiredConsecutive?: number }} input
+ * @param {{ baseUrl?: string, healthBaseUrls?: string[], expectedWorkerVersionId: string, checkHealthImpl?: typeof checkHealthEndpoint, delayImpl?: (ms: number) => Promise<void>, maxSamples?: number, requiredConsecutive?: number }} input
  */
 export async function waitForExpectedWorkerVersion({
-  baseUrl = process.env.CANARY_BASE_URL || DEFAULT_BASE_URL,
+  baseUrl,
+  healthBaseUrls,
   expectedWorkerVersionId,
   checkHealthImpl = checkHealthEndpoint,
   delayImpl = (ms) => new Promise((resolveDelay) => setTimeout(resolveDelay, ms)),
   maxSamples = 12,
   requiredConsecutive = 3,
 }) {
+  const resolvedHealthBaseUrls = healthBaseUrls?.length
+    ? [...new Set(healthBaseUrls)]
+    : baseUrl
+      ? [baseUrl]
+      : process.env.CANARY_BASE_URL
+        ? [process.env.CANARY_BASE_URL]
+        : [...DEFAULT_CANARY_HEALTH_BASE_URLS];
   let consecutive = 0;
   for (let sample = 0; sample < maxSamples; sample += 1) {
-    const check = await checkHealthImpl({
-      baseUrl,
-      expectedWorkerVersionId,
-      expectedSearchRolloutMode: null,
-    });
-    consecutive = check.ok ? consecutive + 1 : 0;
+    const checks = await Promise.all(
+      resolvedHealthBaseUrls.map((healthBaseUrl) => checkHealthImpl({
+        baseUrl: healthBaseUrl,
+        expectedWorkerVersionId,
+        expectedSearchRolloutMode: "shadow",
+      })),
+    );
+    consecutive = checks.every((check) => check.ok) ? consecutive + 1 : 0;
     if (consecutive >= requiredConsecutive) return;
     if (sample + 1 < maxSamples) await delayImpl(2_000);
   }
