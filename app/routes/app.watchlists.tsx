@@ -17,6 +17,7 @@ import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page"
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
 import { WatchlistTrends } from "~/components/watchlist-trends";
+import { BulkSelectBar } from "~/components/watchlists/bulk-select-bar";
 import { FirstScanBanner } from "~/components/watchlists/first-scan-banner";
 import { CopyButton } from "~/components/copy-button";
 import { EmptyState } from "~/components/empty-state";
@@ -1084,37 +1085,13 @@ export default function WatchlistsRoute() {
           </p>
 
           {data.watchlists.length > 1 ? (
-            <div className="f9-bulk-bar">
-              <span className="f9-muted-copy">
-                {selectedBulkIds.length > 0
-                  ? `${selectedBulkIds.length} selected`
-                  : "Select watchlists for bulk actions"}
-              </span>
-              <div className="f9-inline-actions">
-                <button
-                  aria-busy={bulkPending || undefined}
-                  className="f9-secondary-button"
-                  disabled={selectedBulkIds.length === 0 || bulkPending}
-                  onClick={() => submitBulk("pause")}
-                  type="button"
-                >
-                  {bulkPending && bulkFetcher.formData?.get("bulkAction") === "pause"
-                    ? "Pausing…"
-                    : "Pause selected"}
-                </button>
-                <button
-                  aria-busy={bulkPending || undefined}
-                  className="f9-secondary-button"
-                  disabled={selectedBulkIds.length === 0 || bulkPending}
-                  onClick={() => submitBulk("resume")}
-                  type="button"
-                >
-                  {bulkPending && bulkFetcher.formData?.get("bulkAction") === "resume"
-                    ? "Resuming…"
-                    : "Resume selected"}
-                </button>
-              </div>
-            </div>
+            <BulkSelectBar
+              onPause={() => submitBulk("pause")}
+              onResume={() => submitBulk("resume")}
+              pending={bulkPending}
+              pendingAction={bulkFetcher.formData?.get("bulkAction")}
+              selectedCount={selectedBulkIds.length}
+            />
           ) : null}
 
           <div className="f9-work-list is-compact">
