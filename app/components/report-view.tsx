@@ -362,7 +362,7 @@ function ReportDecisionSummary({ report }: { report: ReportDocument }) {
       <section className="f9-proof-packet" aria-label="Report decision summary">
         <div>
           <span className="f9-app-kicker">Decision summary</span>
-          <h2>No verified change needs action</h2>
+          <h3>No verified change needs action</h3>
           <p className="f9-muted-copy">{report.summary}</p>
         </div>
         <dl className="proof-trail-list">
@@ -387,7 +387,7 @@ function ReportDecisionSummary({ report }: { report: ReportDocument }) {
     <section className="f9-proof-packet" aria-label="Report decision summary">
       <div>
         <span className="f9-app-kicker">Decision summary</span>
-        <h2>{topEvent.title}</h2>
+        <h3>{topEvent.title}</h3>
         <p className="f9-muted-copy">Review the evidence trail and next action before sharing.</p>
       </div>
       <dl className="proof-trail-list">
@@ -440,7 +440,7 @@ function CollectionDecisionSummary({ report }: { report: ReportDocument }) {
     <section className="f9-proof-packet" aria-label="Report decision summary">
       <div>
         <span className="f9-app-kicker">Decision summary</span>
-        <h2>{hasRows ? "Saved evidence ready for review" : "No saved evidence rows yet"}</h2>
+        <h3>{hasRows ? "Saved evidence ready for review" : "No saved evidence rows yet"}</h3>
         <p className="f9-muted-copy">{report.summary}</p>
       </div>
       <dl className="proof-trail-list">
