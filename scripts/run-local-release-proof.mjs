@@ -256,7 +256,14 @@ const run = spawnSync(
     ...journeyScope.map((journey) => `e2e/journey-${journey}-release.spec.ts`),
     "--config=playwright.config.ts",
     `--project=${releaseProject}`,
-    "--retries=0",
+    // Canonical (chromium) proofs stay strict at zero retries. Diagnostic
+    // cross-browser subsets retry: six deploy runs each lost ONE rotating
+    // engine journey to a ~32s starvation timeout on the shared CI runner
+    // (J2-tablet, J5-mobile, J1-mobile, J1-desktop/mobile-safari…) while the
+    // previous failure passed — the proof's claim is "this journey CAN pass
+    // on this engine", which retries preserve. CLI beats playwright.config,
+    // so this is the authoritative knob.
+    `--retries=${diagnosticSubset ? 2 : 0}`,
     "--workers=1",
   ],
   {
