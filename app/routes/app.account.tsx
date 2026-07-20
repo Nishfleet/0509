@@ -610,7 +610,11 @@ export default function AccountRoute() {
           </div>
         </div>
         {sessionAction?.message ? (
-          <div className={`f9-message ${sessionAction.ok ? "is-success" : "is-error"}`}>
+          <div
+            aria-live={sessionAction.ok ? "polite" : "assertive"}
+            className={`f9-message ${sessionAction.ok ? "is-success" : "is-error"}`}
+            role={sessionAction.ok ? "status" : "alert"}
+          >
             <p>{sessionAction.message}</p>
           </div>
         ) : null}
@@ -619,7 +623,9 @@ export default function AccountRoute() {
           menu to remove access on this device.
         </p>
         {data.sessionControlsMessage ? (
-          <p className="f9-message is-error">{data.sessionControlsMessage}</p>
+          <p aria-live="assertive" className="f9-message is-error" role="alert">
+            {data.sessionControlsMessage}
+          </p>
         ) : null}
         {data.activeSessions.length > 0 ? (
           <div className="f9-passkey-list">

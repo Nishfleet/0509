@@ -96,6 +96,7 @@ export function FirstScanBanner(props: {
     <article
       className={`f9-checkout-banner ${failed || skipped ? "is-error" : completed ? "is-success" : "is-pending"}`}
       aria-live="polite"
+      role="status"
     >
       <div>
         <span className="f9-app-kicker">{props.plan === "free" ? "Activation scan" : "First scan"}</span>

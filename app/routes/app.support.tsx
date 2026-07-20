@@ -323,13 +323,13 @@ export default function SupportRoute() {
               ))}
             </div>
           ) : (
-            <div className="f9-message">
+            <div className="f9-message" role="status">
               <p>No support cases yet. Billing, cancellation, setup, deletion, and security requests can start here.</p>
             </div>
           )}
 
           {data.requestedCaseMissing ? (
-            <div className="f9-message is-error">
+            <div aria-live="assertive" className="f9-message is-error" role="alert">
               <p>That support case is not available for this login.</p>
             </div>
           ) : null}
@@ -339,7 +339,7 @@ export default function SupportRoute() {
           ) : null}
 
           {data.isWorkspaceMember ? (
-            <div className="f9-message">
+            <div className="f9-message" role="status">
               <p>
                 Your support history is private to your login. Account billing changes may still need
                 the owner to confirm.

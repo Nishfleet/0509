@@ -73,7 +73,7 @@ export function ReportView({ report }: { report: ReportDocument }) {
         <section className="f9-proof-packet" aria-label="AI weekly summary">
           <div>
             <span className="f9-app-kicker">AI weekly summary</span>
-            <h3>What competitors did this week</h3>
+            <h2>What competitors did this week</h2>
             <p className="f9-muted-copy">
               Written by AI from the digest for the week ending{" "}
               <LocalTime iso={report.aiWeeklySummary.periodEnd} mode="date" />. Check the evidence rows below before sharing.
@@ -87,7 +87,7 @@ export function ReportView({ report }: { report: ReportDocument }) {
         <section className="f9-proof-packet" aria-label="Report source coverage">
           <div>
             <span className="f9-app-kicker">Evidence and source coverage</span>
-            <h3>Verified evidence filter</h3>
+            <h2>Verified evidence filter</h2>
             <p className="f9-muted-copy">{legacyReportLabelText(report.sourceCoverage.note)}</p>
           </div>
           <dl className="proof-trail-list">
@@ -362,7 +362,7 @@ function ReportDecisionSummary({ report }: { report: ReportDocument }) {
       <section className="f9-proof-packet" aria-label="Report decision summary">
         <div>
           <span className="f9-app-kicker">Decision summary</span>
-          <h3>No verified change needs action</h3>
+          <h2>No verified change needs action</h2>
           <p className="f9-muted-copy">{report.summary}</p>
         </div>
         <dl className="proof-trail-list">
@@ -387,7 +387,7 @@ function ReportDecisionSummary({ report }: { report: ReportDocument }) {
     <section className="f9-proof-packet" aria-label="Report decision summary">
       <div>
         <span className="f9-app-kicker">Decision summary</span>
-        <h3>{topEvent.title}</h3>
+        <h2>{topEvent.title}</h2>
         <p className="f9-muted-copy">Review the evidence trail and next action before sharing.</p>
       </div>
       <dl className="proof-trail-list">
@@ -440,7 +440,7 @@ function CollectionDecisionSummary({ report }: { report: ReportDocument }) {
     <section className="f9-proof-packet" aria-label="Report decision summary">
       <div>
         <span className="f9-app-kicker">Decision summary</span>
-        <h3>{hasRows ? "Saved evidence ready for review" : "No saved evidence rows yet"}</h3>
+        <h2>{hasRows ? "Saved evidence ready for review" : "No saved evidence rows yet"}</h2>
         <p className="f9-muted-copy">{report.summary}</p>
       </div>
       <dl className="proof-trail-list">

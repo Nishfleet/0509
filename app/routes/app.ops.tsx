@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Form, useActionData, useLoaderData } from "react-router";
+import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { LocalTime } from "~/components/local-time";
 import { ProviderObservationTimeField } from "~/components/provider-observation-time";
@@ -364,18 +365,18 @@ export default function OpsRoute() {
   ];
 
   return (
+    <DashboardPage>
     <section className="f9-app-stack">
-      <div className="f9-panel-toolbar">
-        <div>
-          <p className="f9-app-kicker">Ops</p>
-          <h2>Evidence-first monitoring health</h2>
-        </div>
-      </div>
+      <DashboardPageHeader
+        kicker="Ops"
+        lead="Evidence-first monitoring health for failing runs, stuck jobs, and delivery issues."
+        title="Ops"
+      />
 
       {warnings.length ? (
         <div className="f9-app-panel" role="status">
           <p className="f9-app-kicker">Partial operational view</p>
-          <h3>Some operational sections could not be loaded</h3>
+          <h2>Some operational sections could not be loaded</h2>
           {warnings.map((warning) => (
             <p className="f9-muted-copy" key={warning.section}>
               {warning.message}
@@ -433,7 +434,7 @@ export default function OpsRoute() {
             renderItem={(item) => (
               <>
                 <p className="f9-app-kicker">{readableCode(item.priority)} priority</p>
-                <h3>{item.subject}</h3>
+                <h2>{item.subject}</h2>
                 <p>{describeSupportAlert(item)}</p>
                 {item.alert_webhook_status === "provider_unknown" &&
                 item.alert_attempt_id &&
@@ -489,7 +490,7 @@ export default function OpsRoute() {
             renderItem={(item) => (
               <>
                 <p className="f9-app-kicker">{formatBillingLifecycleKind(item.lifecycleKind)}</p>
-                <h3>Provider outcome needs evidence</h3>
+                <h2>Provider outcome needs evidence</h2>
                 <p>
                   Record only a confirmed provider outcome. This action never resends an email and does not expose the
                   recipient or message body.
@@ -535,7 +536,7 @@ export default function OpsRoute() {
             renderItem={(item) => (
               <>
                 <p className="f9-app-kicker">{item.plan} plan · provider outcome unknown</p>
-                <h3>Subscription plan change needs a current-state check</h3>
+                <h2>Subscription plan change needs a current-state check</h2>
                 <p>
                   Read Dodo's current subscription state and reconcile it atomically. This action
                   never sends another plan-change request.
@@ -561,7 +562,7 @@ export default function OpsRoute() {
             renderItem={(item) => (
               <>
                 <p className="f9-app-kicker">Partial provider refund · {maskIdentifier(item.eventId)}</p>
-                <h3>Proof-credit decision needs provider evidence</h3>
+                <h2>Proof-credit decision needs provider evidence</h2>
                 <p>
                   Record whether existing proof credits should be retained or revoked. This action
                   never sends another refund request to the provider.
@@ -613,7 +614,7 @@ export default function OpsRoute() {
             renderItem={(item) => (
               <>
                 <p className="f9-app-kicker">{item.watchlist_name}</p>
-                <h3>Run failed</h3>
+                <h2>Run failed</h2>
                 <p>{describeRunFailure(item.error_code)}</p>
                 <p className="f9-muted-copy">{formatTimestamp(item.started_at)}</p>
               </>
@@ -627,7 +628,7 @@ export default function OpsRoute() {
             renderItem={(item) => (
               <>
                 <p className="f9-app-kicker">{item.watchlist_name}</p>
-                <h3>{item.status === "running" ? "Run still running" : "Run still pending"}</h3>
+                <h2>{item.status === "running" ? "Run still running" : "Run still pending"}</h2>
                 <p className="f9-muted-copy">{formatTimestamp(item.started_at)}</p>
               </>
             )}
@@ -640,7 +641,7 @@ export default function OpsRoute() {
             renderItem={(item) => (
               <>
                 <p className="f9-app-kicker">{item.watchlist_name}</p>
-                <h3>{describeProofFailure(item.failure_code)}</h3>
+                <h2>{describeProofFailure(item.failure_code)}</h2>
                 <p className="f9-muted-copy">{formatTimestamp(item.attempted_at)}</p>
               </>
             )}
@@ -653,7 +654,7 @@ export default function OpsRoute() {
             renderItem={(item) => (
               <>
                 <p className="f9-app-kicker">{item.watchlist_name}</p>
-                <h3>{item.status === "skipped_due_to_rate_limit" ? "Rate-limited evidence check" : "Budget-skipped evidence check"}</h3>
+                <h2>{item.status === "skipped_due_to_rate_limit" ? "Rate-limited evidence check" : "Budget-skipped evidence check"}</h2>
                 <p className="f9-muted-copy">{formatTimestamp(item.attempted_at)}</p>
               </>
             )}
@@ -666,7 +667,7 @@ export default function OpsRoute() {
             renderItem={(item) => (
               <>
                 <p className="f9-app-kicker">{item.watchlist_name ?? "Account default"}</p>
-                <h3>{item.channel === "email" ? "Email delivery" : "WhatsApp delivery"}</h3>
+                <h2>{item.channel === "email" ? "Email delivery" : "WhatsApp delivery"}</h2>
                 <p>{describeDeliveryAttention(item)}</p>
                 <p className="f9-muted-copy">{formatTimestamp(item.created_at)}</p>
               </>
@@ -680,7 +681,7 @@ export default function OpsRoute() {
             renderItem={(item) => (
               <>
                 <p className="f9-app-kicker">{item.watchlist_name ?? "Account default"}</p>
-                <h3>WhatsApp delivery destination</h3>
+                <h2>WhatsApp delivery destination</h2>
                 <p>{describeBlockedTarget(item)}</p>
                 <p className="f9-muted-copy">{formatTimestamp(item.updated_at)}</p>
               </>
@@ -696,7 +697,7 @@ export default function OpsRoute() {
                 <p className="f9-app-kicker">
                   {formatDiscoveryProvider(item.provider)} · {formatRouteContext(item.routeContext)}
                 </p>
-                <h3>{item.failureClass ?? "Discovery failure"}</h3>
+                <h2>{item.failureClass ?? "Discovery failure"}</h2>
                 <p>
                   {item.country}
                   {item.cacheStatus === "stale" ? " · stale cache served" : " · no fresh cache"}
@@ -713,7 +714,7 @@ export default function OpsRoute() {
             renderItem={(item) => (
               <>
                 <p className="f9-app-kicker">{formatDiscoveryProvider(item.provider)}</p>
-                <h3>{formatDiscoveryStatus(item.status)}</h3>
+                <h2>{formatDiscoveryStatus(item.status)}</h2>
                 <p>{describeDiscoveryProviderState(item.status)}</p>
                 <p className="f9-muted-copy">
                   {item.lastFailureAt ? (
@@ -736,7 +737,7 @@ export default function OpsRoute() {
             renderItem={(item) => (
               <>
                 <p className="f9-app-kicker">{item.watchlist_name}</p>
-                <h3>{item.failed_runs + item.failed_proofs + item.failed_deliveries} recent issues</h3>
+                <h2>{item.failed_runs + item.failed_proofs + item.failed_deliveries} recent issues</h2>
                 <p>
                   {item.failed_runs} failed runs · {item.failed_proofs} failed evidence checks · {item.failed_deliveries} failed deliveries
                 </p>
@@ -749,6 +750,7 @@ export default function OpsRoute() {
         </article>
       </div>
     </section>
+    </DashboardPage>
   );
 }
 
@@ -756,7 +758,7 @@ function MetricCard(props: { label: string; value: number }) {
   return (
     <div className="f9-work-row">
       <p className="f9-app-kicker">{props.label}</p>
-      <h3>{props.value}</h3>
+      <p className="f9-ops-metric-value">{props.value}</p>
     </div>
   );
 }
