@@ -27,6 +27,7 @@ import { buildMarketDeskBrief } from "~/lib/market-desk-brief";
 import { buildSearchParams } from "~/lib/normalize";
 import { classifyWatchEventSource } from "~/lib/proof-classification";
 import { formatNextScanLabel } from "~/lib/schedule-display";
+import { formatMachineTokenLabel } from "~/lib/landing-page-display";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import { customerDiscoverySummary } from "~/lib/discovery-customer-copy";
 import type { AppEnv } from "~/lib/env.server";
@@ -676,7 +677,7 @@ export default function AppDashboardRoute() {
                     </Link>
                   ) : (
                     <span className="f9-status-pill">
-                      {item.status.replaceAll("_", " ")}
+                      {formatMachineTokenLabel(item.status)}
                     </span>
                   )}
                 </article>
@@ -790,7 +791,7 @@ export default function AppDashboardRoute() {
                     <span className="f9-status-pill">
                       {followUp.status === "needs_review"
                         ? `${followUp.openCount} open`
-                        : followUp.status.replaceAll("_", " ")}
+                        : formatMachineTokenLabel(followUp.status)}
                     </span>
                   </div>
                 </article>

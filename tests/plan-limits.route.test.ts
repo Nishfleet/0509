@@ -841,7 +841,9 @@ describe("pricing CTA rendering", () => {
     const markup = renderToStaticMarkup(createElement(CollectionsRoute));
 
     expect(markup).toContain("Nykaa");
-    expect(markup).toContain("image");
+    // Legacy items fall back to the ad format; the status pill now renders it
+    // sentence-cased ("Image") instead of relying on CSS capitalize.
+    expect(markup).toContain("Image");
   });
 
   it("renders saved external proof links from the stored proof URL", async () => {
