@@ -175,7 +175,11 @@ export function buildProductionDeployPlan({
     {
       id: "launch_readiness_proof_canary_cycle",
       command: "node",
-      args: ["scripts/launch-readiness-canary-cycle.mjs"],
+      args: [
+        "scripts/launch-readiness-canary-cycle.mjs",
+        "--wrangler-output",
+        wranglerOutputPath,
+      ],
     },
     {
       id: "post_deploy_release_canary",
