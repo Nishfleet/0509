@@ -230,7 +230,11 @@ describe("production deployment readiness gate", () => {
     expect(plan[deployIndex + 3]).toMatchObject({
       id: "launch_readiness_proof_canary_cycle",
       command: "node",
-      args: ["scripts/launch-readiness-canary-cycle.mjs"],
+      args: [
+        "scripts/launch-readiness-canary-cycle.mjs",
+        "--wrangler-output",
+        wranglerOutputPath,
+      ],
     });
     const canaryIndex = plan.findIndex(
       (step: any) => step.id === "post_deploy_release_canary",

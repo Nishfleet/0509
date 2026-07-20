@@ -26,9 +26,20 @@ describe("launch readiness canary cycle", () => {
         },
       });
 
-    await expect(runLaunchReadinessCanaryCycle({ runCanaryImpl })).resolves.toMatchObject({
+    await expect(
+      runLaunchReadinessCanaryCycle({
+        runCanaryImpl,
+        expectedWorkerVersionId: "version-abc",
+      }),
+    ).resolves.toMatchObject({
       ok: true,
       proofCaptureId: "proof-1",
+    });
+    expect(runCanaryImpl).toHaveBeenNthCalledWith(1, {
+      config: expect.objectContaining({
+        cleanup: false,
+        expectedWorkerVersionId: "version-abc",
+      }),
     });
     expect(runCanaryImpl).toHaveBeenNthCalledWith(2, {
       config: expect.objectContaining({
@@ -52,8 +63,19 @@ describe("launch readiness canary cycle", () => {
         payload: { ok: true, cleanup: { preservedProofCaptureId: "other-proof" } },
       });
 
+    await expect(
+      runLaunchReadinessCanaryCycle({
+        runCanaryImpl,
+        expectedWorkerVersionId: "version-abc",
+      }),
+    ).rejects.toThrow("launch_readiness_proof_capture_not_preserved");
+  });
+
+  it("refuses to run unbound — no expected Worker version, no canary", async () => {
+    const runCanaryImpl = vi.fn();
     await expect(runLaunchReadinessCanaryCycle({ runCanaryImpl })).rejects.toThrow(
-      "launch_readiness_proof_capture_not_preserved",
+      "launch_readiness_proof_canary_unbound",
     );
+    expect(runCanaryImpl).not.toHaveBeenCalled();
   });
 });
