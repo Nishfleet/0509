@@ -1,3 +1,4 @@
+import { Pill } from "~/components/pill";
 import { adLongevityDays, formatAdLongevityLabel, STRONG_LONGEVITY_DAYS } from "~/lib/ad-display";
 import type { AdRecord } from "~/lib/types";
 
@@ -17,8 +18,8 @@ export function AdLongevityPill({
   if (days === null || label === null) return null;
 
   return (
-    <span className={`f9-longevity-pill${days >= STRONG_LONGEVITY_DAYS ? " is-strong" : ""}`}>
+    <Pill variant="longevity" state={days >= STRONG_LONGEVITY_DAYS ? "strong" : undefined}>
       {label}
-    </span>
+    </Pill>
   );
 }

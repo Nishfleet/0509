@@ -5,6 +5,10 @@ import { describe, expect, it } from "vitest";
 const css = readFileSync("app/app.css", "utf8");
 const rootTsx = readFileSync("app/root.tsx", "utf8");
 const searchRoute = readFileSync("app/routes/search.tsx", "utf8");
+const searchResultCard = readFileSync(
+  "app/components/search/result-card.tsx",
+  "utf8",
+);
 const accountRoute = readFileSync("app/routes/app.account.tsx", "utf8");
 const watchlistsRoute = readFileSync("app/routes/app.watchlists.tsx", "utf8");
 
@@ -87,8 +91,13 @@ describe("WP-42: optimistic watchlist pause/resume", () => {
 
 describe("WP-45: sample badge on demo-sourced search results", () => {
   it("labels demo-source ads with a Sample pill in result cards", () => {
-    expect(searchRoute).toContain('ad.source === "demo"');
-    expect(searchRoute).toContain('<span className="f9-longevity-pill is-sample">Sample</span>');
+    // The result card (with its demo Sample badge) now lives in the shared
+    // SearchResultCard component; the badge renders via <Pill> and the CSS
+    // selector is unchanged.
+    expect(searchResultCard).toContain('ad.source === "demo"');
+    expect(searchResultCard).toContain(
+      '<Pill variant="longevity" state="sample">',
+    );
     expect(css).toContain(".f9-longevity-pill.f9-longevity-pill.is-sample");
   });
 });

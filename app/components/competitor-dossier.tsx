@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 
 import { LocalTime } from "~/components/local-time";
+import { Pill } from "~/components/pill";
 import {
 	type AggressionScore,
 	MIN_AGGRESSION_WINDOW_DAYS,
@@ -311,14 +312,14 @@ function AngleMixRow({ angleMix }: { angleMix: DossierAngleMix }) {
 			{hasSignal ? (
 				<>
 					{angleMix.shares.map((share) => (
-						<span className="f9-longevity-pill f9-angle-pill" key={share.angle}>
+						<Pill variant="angle" key={share.angle}>
 							{ANGLE_DISPLAY[share.angle].label} ×{share.count}
-						</span>
+						</Pill>
 					))}
 					{angleMix.tentativeCount > 0 ? (
-						<span className="f9-longevity-pill f9-angle-pill is-tentative">
+						<Pill variant="angle" state="tentative">
 							{angleMix.tentativeCount} tentative
-						</span>
+						</Pill>
 					) : null}
 				</>
 			) : (
@@ -338,9 +339,9 @@ function LongevityLeaderCard({ leader }: { leader: DossierAdHistoryEntry }) {
 		<article className="f9-dossier-leader">
 			<div className="f9-dossier-leader-meta">
 				<span className="f9-dossier-leader-days">{leader.longevityLabel}</span>
-				<span className={`f9-status-pill${leader.active ? " is-healthy" : ""}`}>
+				<Pill state={leader.active ? "healthy" : undefined}>
 					{leader.active ? "Active" : "Inactive"}
-				</span>
+				</Pill>
 			</div>
 			<p className="f9-dossier-leader-hook">{leader.hook}</p>
 		</article>

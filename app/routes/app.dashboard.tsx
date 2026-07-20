@@ -19,6 +19,7 @@ import {
 } from "~/components/dashboard-route-loading";
 import { ActionFeedback } from "~/components/action-feedback";
 import { LocalTime } from "~/components/local-time";
+import { Pill } from "~/components/pill";
 import { SubmitButton } from "~/components/submit-button";
 import { toPublicDeliveryTarget } from "~/lib/delivery-target-public";
 import { isSecretishMemoryString } from "~/lib/agent-redaction";
@@ -676,9 +677,9 @@ export default function AppDashboardRoute() {
                       {item.action.label}
                     </Link>
                   ) : (
-                    <span className="f9-status-pill">
+                    <Pill>
                       {formatMachineTokenLabel(item.status)}
-                    </span>
+                    </Pill>
                   )}
                 </article>
               ))}
@@ -788,11 +789,11 @@ export default function AppDashboardRoute() {
                         </SubmitButton>
                       </Form>
                     ) : null}
-                    <span className="f9-status-pill">
+                    <Pill>
                       {followUp.status === "needs_review"
                         ? `${followUp.openCount} open`
                         : formatMachineTokenLabel(followUp.status)}
-                    </span>
+                    </Pill>
                   </div>
                 </article>
               ))}
@@ -878,9 +879,9 @@ export default function AppDashboardRoute() {
                         <LocalTime iso={event.createdAt} />
                       </small>
                     </div>
-                    <span className="f9-status-pill">
+                    <Pill>
                       {classification.label}
-                    </span>
+                    </Pill>
                   </article>
                 );
               })}

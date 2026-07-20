@@ -1958,6 +1958,20 @@ button[aria-busy="true"] {
   font-weight: 600;
 }
 
+/* Tracked-days variant: our observation window, not Meta's published start
+   date — achromatic so it never reads as the green "Running" badge.
+   (Rendered by the creative-wall tracked-days pill.) */
+.f9-longevity-pill.f9-longevity-pill.is-tracked {
+  background: rgba(6, 22, 41, 0.07);
+  color: var(--f9-search-muted, #40546a);
+}
+
+/* Sample-data variant (WP-45): labels demo results on search cards. */
+.f9-longevity-pill.f9-longevity-pill.is-sample {
+  background: rgba(23, 22, 17, 0.08);
+  color: var(--ink-soft);
+}
+
 .f9-muted-copy {
   color: var(--f9-search-muted);
   line-height: 1.58;
@@ -7128,12 +7142,8 @@ one signal-green accent.
   align-items: center;
 }
 
-/* Tracked-days variant: our observation window, not Meta's published start
-   date — achromatic so it never reads as the green "Running" badge. */
-.f9-longevity-pill.f9-longevity-pill.is-tracked {
-  background: rgba(6, 22, 41, 0.07);
-  color: var(--f9-search-muted, #40546a);
-}
+/* Tracked-days / sample longevity-pill variants live with the pill family
+   block near the top of this file. */
 
 .f9-creative-tile-status {
   display: inline-flex;
@@ -7731,15 +7741,6 @@ one signal-green accent.
     background: #efede6;
     color: #11100d;
   }
-}
-
-/* ============================================================
-   WP-45: sample-data pill on search result cards
-   ============================================================ */
-
-.f9-longevity-pill.f9-longevity-pill.is-sample {
-  background: rgba(23, 22, 17, 0.08);
-  color: var(--ink-soft);
 }
 
 /* ============================================================
