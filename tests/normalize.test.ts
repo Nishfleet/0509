@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   fingerprintSavedQuery,
   normalizeHeadline,
+  normalizeNumericPageId,
   normalizeSavedQuery,
+  normalizeSearchFilters,
   parseSearchParams,
   buildSearchParams,
 } from "~/lib/normalize";
@@ -203,5 +205,41 @@ describe("parseSearchParams + buildSearchParams round-trip", () => {
     const rebuilt = buildSearchParams(parsed);
     expect(rebuilt.get("country")).toBe("all");
     expect(rebuilt.get("platform")).toBe("all");
+  });
+});
+describe("numeric page id handling", () => {
+  it("accepts an all-digit page id and rejects anything else", () => {
+    expect(normalizeNumericPageId("15087023444")).toBe("15087023444");
+    expect(normalizeNumericPageId("  15087023444  ")).toBe("15087023444");
+    expect(normalizeNumericPageId("nike")).toBeNull();
+    expect(normalizeNumericPageId("1234")).toBeNull(); // too short to be a page id
+    expect(normalizeNumericPageId("150; DROP")).toBeNull();
+    expect(normalizeNumericPageId("")).toBeNull();
+    expect(normalizeNumericPageId(null)).toBeNull();
+  });
+
+  it("preserves a valid page id in filters and omits the key otherwise", () => {
+    const scoped = normalizeSearchFilters({ query: "nike", pageId: "15087023444" });
+    expect(scoped.pageId).toBe("15087023444");
+
+    const keyword = normalizeSearchFilters({ query: "nike", pageId: "not-a-page" });
+    expect("pageId" in keyword).toBe(false);
+
+    const plain = normalizeSearchFilters({ query: "nike" });
+    expect("pageId" in plain).toBe(false);
+  });
+
+  it("keeps keyword query fingerprints byte-identical when no page id is set", () => {
+    const before = fingerprintSavedQuery(normalizeSavedQuery("keyword", { query: "nike" }));
+    const after = fingerprintSavedQuery(
+      normalizeSavedQuery("keyword", { query: "nike", pageId: "bogus" }),
+    );
+    expect(after).toBe(before);
+
+    // A real page id is a genuinely different query and must fingerprint apart.
+    const scoped = fingerprintSavedQuery(
+      normalizeSavedQuery("keyword", { query: "nike", pageId: "15087023444" }),
+    );
+    expect(scoped).not.toBe(before);
   });
 });
