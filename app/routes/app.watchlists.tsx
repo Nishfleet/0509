@@ -23,6 +23,7 @@ import { DeliverySettingsCard } from "~/components/watchlists/delivery-settings-
 import { DeliveryTargetsSection } from "~/components/watchlists/delivery-targets-section";
 import { FirstScanBanner } from "~/components/watchlists/first-scan-banner";
 import { RecentChecksSection } from "~/components/watchlists/recent-checks-section";
+import { RecentEvidenceChecksCard } from "~/components/watchlists/recent-evidence-checks-card";
 import { CopyButton } from "~/components/copy-button";
 import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
@@ -41,8 +42,6 @@ import {
   formatDeliveryAttemptStatusLabel,
   formatImportanceBandLabel,
   formatMachineTokenLabel,
-  formatProofAgeLabel,
-  formatProofCaptureStatusLabel,
   formatWatchEventStatusLabel,
   formatWatchEventTypeLabel,
   formatWhyAlertedLabel,
@@ -111,6 +110,9 @@ export {
   resolveWatchlistRunTiming,
   resolveWatchlistTrackingPresentation,
 };
+// WatchlistProofAge now lives in its own component module; re-exported here for
+// the hydration test that imports it from "~/routes/app.watchlists".
+export { WatchlistProofAge } from "~/components/watchlists/watchlist-proof-age";
 
 export const meta = () => [{ title: "Watchlists | Five to Nine" }];
 const WATCHLIST_DELIVERY_TARGET_DISPLAY_LIMIT = 12;
@@ -920,10 +922,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
   };
 }
 
-export function WatchlistProofAge({ capturedAt, renderedAt }: { capturedAt: string; renderedAt: string }) {
-  return formatProofAgeLabel(capturedAt, { now: renderedAt });
-}
-
 export default function WatchlistsRoute() {
   const data = useLoaderData<typeof loader>();
 
@@ -1542,50 +1540,7 @@ export default function WatchlistsRoute() {
                   </div>
 
                   <div className="f9-detail-split">
-                    <article className="f9-detail-cell">
-                      <p className="f9-app-kicker">Recent evidence checks</p>
-                      <h3>Evidence freshness</h3>
-                      <p className="f9-muted-copy">
-                        {data.proofSummary.successfulAttempts} successful · {data.proofSummary.failedAttempts} failed
-                        {data.proofSummary.skippedAttempts > 0
-                          ? ` · ${data.proofSummary.skippedAttempts} skipped`
-                          : ""}
-                      </p>
-                      <p className="f9-muted-copy">
-                        {data.proofSummary.lastSuccessfulProofAt ? (
-                          <>
-                            Last good evidence check{" "}
-                            <WatchlistProofAge
-                              capturedAt={data.proofSummary.lastSuccessfulProofAt}
-                              renderedAt={data.renderedAt}
-                            />
-                          </>
-                        ) : (
-                          "No successful evidence check yet."
-                        )}
-                      </p>
-                      <div className="f9-work-list is-compact">
-                        {data.recentProofCaptures.slice(0, 4).map((capture) => (
-                          <div className="f9-work-row" key={capture.id}>
-                            <div>
-                              <h4 style={{ marginBottom: "0.25rem" }}>
-                                {formatProofCaptureStatusLabel(capture.status)}
-                              </h4>
-                              <p className="f9-muted-copy">
-                                {formatConfidenceBandLabel(capture.fieldConfidence)} ·{" "}
-                                <WatchlistProofAge
-                                  capturedAt={capture.succeededAt ?? capture.attemptedAt}
-                                  renderedAt={data.renderedAt}
-                                />
-                              </p>
-                            </div>
-                          </div>
-                        ))}
-                        {data.recentProofCaptures.length === 0 ? (
-                          <p className="f9-muted-copy">Evidence checks will appear here after the next proof-backed check.</p>
-                        ) : null}
-                      </div>
-                    </article>
+                    <RecentEvidenceChecksCard data={data} />
 
                     <DeliverySettingsCard
                       canConfigureDigestSettings={canConfigureDigestSettings}
