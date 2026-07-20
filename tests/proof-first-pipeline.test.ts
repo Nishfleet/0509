@@ -367,25 +367,29 @@ describe("proof-first pipeline", () => {
       }),
     );
 
-    const result = await runWeeklyDigests({
-      DB: {
-        prepare() {
-          return {
-            async all<T>() {
-              return {
-                results: [
-                  {
-                    id: "user-1",
-                    email: "owner@example.com",
-                    name: "Owner",
-                  },
-                ] as T[],
-              };
-            },
-          };
+    // Pin weekly periodEnd to match schedule-job fixtures (not wall-clock).
+    const result = await runWeeklyDigests(
+      {
+        DB: {
+          prepare() {
+            return {
+              async all<T>() {
+                return {
+                  results: [
+                    {
+                      id: "user-1",
+                      email: "owner@example.com",
+                      name: "Owner",
+                    },
+                  ] as T[],
+                };
+              },
+            };
+          },
         },
-      },
-    } as never);
+      } as never,
+      { periodEnd: "2026-07-13T05:00:00.000Z" },
+    );
 
     expect(result).toBe(1);
     expect(deliverWeeklyDigest).toHaveBeenCalledWith(
