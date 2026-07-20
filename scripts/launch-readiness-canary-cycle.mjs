@@ -35,6 +35,14 @@ function startConfig(baseUrl) {
 
 const GATE_RUN_ID_PATTERN = /^[a-z0-9._-]{1,128}$/u;
 
+/**
+ * @param {{
+ *   baseUrl?: string,
+ *   runCanaryImpl?: (input: { config: any }) => Promise<{ payload: any, response: Response }>,
+ *   expectedWorkerVersionId?: string | null,
+ *   gateRunId?: string | null,
+ * }} [input]
+ */
 export async function runLaunchReadinessCanaryCycle({
   baseUrl = process.env.CANARY_BASE_URL || DEFAULT_BASE_URL,
   runCanaryImpl = runCanary,
@@ -104,7 +112,7 @@ function readArg(argv, name) {
 
 /**
  * @param {string[]} argv
- * @param {NodeJS.ProcessEnv} env
+ * @param {Record<string, string | undefined>} env
  */
 export function resolveExpectedWorkerVersionId(argv, env) {
   const wranglerOutputPath = readArg(argv, "--wrangler-output");
@@ -121,7 +129,7 @@ export function resolveExpectedWorkerVersionId(argv, env) {
  * version so the proof is bound to the publish it validates; an explicit
  * --gate-run-id / CANARY_GATE_RUN_ID overrides for manual runs.
  * @param {string[]} argv
- * @param {NodeJS.ProcessEnv} env
+ * @param {Record<string, string | undefined>} env
  * @param {string | null} expectedWorkerVersionId
  */
 export function resolveGateRunId(argv, env, expectedWorkerVersionId) {

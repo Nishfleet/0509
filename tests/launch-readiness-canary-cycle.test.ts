@@ -174,27 +174,27 @@ describe("launch readiness canary cycle", () => {
     expect(() =>
       resolveExpectedWorkerVersionId(["--wrangler-output"], {
         CANARY_EXPECTED_WORKER_VERSION_ID: "stale-version",
-      } as NodeJS.ProcessEnv),
+      }),
     ).toThrow("launch_readiness_proof_canary_missing_value:--wrangler-output");
     expect(() =>
       resolveExpectedWorkerVersionId(
         ["--wrangler-output", "--json"],
-        {} as NodeJS.ProcessEnv,
+        {},
       ),
     ).toThrow("launch_readiness_proof_canary_missing_value:--wrangler-output");
   });
 
   it("derives the gate run id from the deployed Worker version with explicit overrides", () => {
-    expect(resolveGateRunId([], {} as NodeJS.ProcessEnv, "ABC-123")).toBe(
+    expect(resolveGateRunId([], {}, "ABC-123")).toBe(
       "deploy-abc-123",
     );
     expect(
-      resolveGateRunId(["--gate-run-id", "manual-1"], {} as NodeJS.ProcessEnv, "abc"),
+      resolveGateRunId(["--gate-run-id", "manual-1"], {}, "abc"),
     ).toBe("manual-1");
     expect(
-      resolveGateRunId([], { CANARY_GATE_RUN_ID: "env-1" } as NodeJS.ProcessEnv, "abc"),
+      resolveGateRunId([], { CANARY_GATE_RUN_ID: "env-1" }, "abc"),
     ).toBe("env-1");
-    expect(resolveGateRunId([], {} as NodeJS.ProcessEnv, null)).toBeNull();
+    expect(resolveGateRunId([], {}, null)).toBeNull();
   });
 
   it("refuses to run without a gate run id — non-resumable canaries are rejected", async () => {
