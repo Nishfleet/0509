@@ -81,11 +81,21 @@ export async function attachReleaseStateArtifacts({
   // compositor one frame behind the asserted DOM. Wait on semantic browser
   // readiness and two paints rather than a fixed delay so the release image
   // proves the state a customer actually sees.
+  // BOUNDED: on CI's mobile-safari engine with a desktop viewport,
+  // document.fonts.ready (and, throttled, rAF) can simply never settle —
+  // this exact wait ate the full 30s test budget three retries in a row and
+  // blocked a production deploy. The artifact is evidence, not a correctness
+  // gate: prefer a slightly-early screenshot over a dead release train.
   await page.evaluate(async () => {
-    await document.fonts.ready;
-    await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-    });
+    const bounded = <T,>(work: Promise<T>, ms: number) =>
+      Promise.race([work, new Promise<void>((resolve) => setTimeout(resolve, ms))]);
+    await bounded(document.fonts.ready.then(() => undefined), 3000);
+    await bounded(
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }),
+      1000,
+    );
   });
   const screenshot = await page.screenshot({
     animations: "disabled",
