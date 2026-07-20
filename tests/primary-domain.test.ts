@@ -22,6 +22,10 @@ describe("primary domain redirects", () => {
     ).toBe("https://0509.io/privacy");
   });
 
+  it("serves the canonical www health probe without redirecting to the apex", () => {
+    expect(primaryDomainRedirect(new Request("https://www.0509.io/api/health"))).toBeNull();
+  });
+
   it("does not publicly cache auth redirects with query credentials", () => {
     const ticketRedirect = primaryDomainRedirect(
       new Request("https://www.0509.io/auth/better/magic-link?ticket=ticket-1&mode=login"),
