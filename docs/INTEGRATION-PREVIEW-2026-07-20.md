@@ -7,7 +7,15 @@ seam so tonight's real landing is conflict-free. This is **disposable evidence**
 
 ## Verdict
 
-**The 12-branch stack is integration-proven as one tree.**
+**The 12-branch stack is integration-proven AND journey-proven as one tree.**
+
+Gate-B canonical suite on the combined tree: first run 63/66 (`--retries=0`) — Journey 4's
+share/revoke/re-review heading check failed on all viewports. Root cause was a genuine regression
+from `audit/a11y-sweep`: promoting the report Decision-summary heading `h3`→`h2` created two
+level-2 headings with the identical accessible name (a WCAG anti-pattern), tripping Playwright
+strict mode. Fixed in `f5b4565` (3-line revert of just those headings; every other a11y change
+kept; check unweakened). Rerun: **66/66 passed, zero retries** (`.last-run.json` `passed`,
+`failedTests: []`), plus full vitest **350 files / 3737 tests** and clean typecheck on the fixed tree.
 
 All twelve branches from the documented merge order merged cleanly or with fully-resolved seams,
 following the resolution principles (refactor structure wins; feature deltas and tests re-applied
@@ -123,7 +131,7 @@ The other 15 a11y files auto-merged clean.
 ## SHAs
 
 - Base (frozen RC / `origin/main`): `3717419864953f28acfb2a7017285675dabc2772`
-- Preview HEAD: `241e33191b8d44a5fc29de4de351b6edabc5dd91`
+- Preview HEAD: `f5b45657a38e5a86e32e37bffc97de91b1eb7d3f` (merge stack tip `241e331` + Journey-4 fix `f5b4565`)
 
 Merge commits in order: `9ef4b9e` → `a3c42f8` → `ea74c86` → `7c5399a` → `f83485e` → `2f856d7` →
 `d9379e3` → `b4aa734` → `df10bdd` → `ee9644a` → `0e375d7` → `241e331`.
