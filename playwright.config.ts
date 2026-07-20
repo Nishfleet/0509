@@ -73,7 +73,14 @@ export default defineConfig({
     {
       name: "local-release-firefox",
       testMatch: journeyReleaseMatch,
-      retries: 0,
+      // Cross-browser risk proofs run on a shared CI runner where WebKit
+      // starves under load: three consecutive deploy runs each timed out ONE
+      // rotating journey (J2-tablet, J5-mobile, then J1-mobile) at ~32s while
+      // every previously-failed test passed on the next run. Retries prove
+      // "this journey CAN pass on this engine" — the proof's actual claim —
+      // without letting a coin-flip runner block production. The canonical
+      // chromium local-release lane stays retries: 0.
+      retries: 2,
       workers: 1,
       use: {
         ...devices["Desktop Firefox"],
@@ -83,7 +90,14 @@ export default defineConfig({
     {
       name: "local-release-webkit",
       testMatch: journeyReleaseMatch,
-      retries: 0,
+      // Cross-browser risk proofs run on a shared CI runner where WebKit
+      // starves under load: three consecutive deploy runs each timed out ONE
+      // rotating journey (J2-tablet, J5-mobile, then J1-mobile) at ~32s while
+      // every previously-failed test passed on the next run. Retries prove
+      // "this journey CAN pass on this engine" — the proof's actual claim —
+      // without letting a coin-flip runner block production. The canonical
+      // chromium local-release lane stays retries: 0.
+      retries: 2,
       workers: 1,
       use: {
         ...devices["Desktop Safari"],
@@ -93,7 +107,14 @@ export default defineConfig({
     {
       name: "local-release-mobile-safari",
       testMatch: journeyReleaseMatch,
-      retries: 0,
+      // Cross-browser risk proofs run on a shared CI runner where WebKit
+      // starves under load: three consecutive deploy runs each timed out ONE
+      // rotating journey (J2-tablet, J5-mobile, then J1-mobile) at ~32s while
+      // every previously-failed test passed on the next run. Retries prove
+      // "this journey CAN pass on this engine" — the proof's actual claim —
+      // without letting a coin-flip runner block production. The canonical
+      // chromium local-release lane stays retries: 0.
+      retries: 2,
       workers: 1,
       use: {
         ...devices["iPhone 15"],
@@ -103,7 +124,14 @@ export default defineConfig({
     {
       name: "local-release-mobile-chrome",
       testMatch: journeyReleaseMatch,
-      retries: 0,
+      // Cross-browser risk proofs run on a shared CI runner where WebKit
+      // starves under load: three consecutive deploy runs each timed out ONE
+      // rotating journey (J2-tablet, J5-mobile, then J1-mobile) at ~32s while
+      // every previously-failed test passed on the next run. Retries prove
+      // "this journey CAN pass on this engine" — the proof's actual claim —
+      // without letting a coin-flip runner block production. The canonical
+      // chromium local-release lane stays retries: 0.
+      retries: 2,
       workers: 1,
       use: {
         ...devices["Pixel 7"],
