@@ -37,7 +37,11 @@ export function AccountBrandingSection({
           </div>
         </div>
         {brandProfileAction?.message ? (
-          <div className={`f9-message ${brandProfileAction.ok ? "is-success" : "is-error"}`}>
+          <div
+            aria-live={brandProfileAction.ok ? "polite" : "assertive"}
+            className={`f9-message ${brandProfileAction.ok ? "is-success" : "is-error"}`}
+            role={brandProfileAction.ok ? "status" : "alert"}
+          >
             <p>{brandProfileAction.message}</p>
           </div>
         ) : null}

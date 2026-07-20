@@ -44,13 +44,17 @@ export default function SourcesCompatibilityRoute() {
         title="Workspace settings"
       />
       {actionData?.message && !hasNewApiKeySecret ? (
-        <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
+        <div
+          aria-live={actionData.ok ? "polite" : "assertive"}
+          className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}
+          role={actionData.ok ? "status" : "alert"}
+        >
           <p>{actionData.message}</p>
         </div>
       ) : null}
 
       {hasNewApiKeySecret && actionData && "apiKeySecret" in actionData ? (
-        <div className="f9-message is-success">
+        <div aria-live="polite" className="f9-message is-success" role="status">
           <p>Copy this key now. Five to Nine stores only the hashed key and cannot show it again.</p>
           <label className="f9-field">
             <span>{actionData.apiKeyPrefix}</span>

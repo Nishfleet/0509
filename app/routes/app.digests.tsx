@@ -216,7 +216,11 @@ export default function DigestsRoute() {
         />
 
       {actionData?.message ? (
-        <div className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}>
+        <div
+          aria-live={actionData.ok ? "polite" : "assertive"}
+          className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}
+          role={actionData.ok ? "status" : "alert"}
+        >
           <p>
             {actionData.ok && actionData.message.startsWith("http") ? (
               <>

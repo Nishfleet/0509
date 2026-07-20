@@ -1285,7 +1285,7 @@ export default function WatchlistsRoute() {
               ) : null}
 
               {consecutiveFailedRuns >= 3 ? (
-        <div className="f9-message is-error">
+        <div aria-live="assertive" className="f9-message is-error" role="alert">
           <p>
             We're having trouble checking this competitor — the last {consecutiveFailedRuns} checks
             failed. We keep retrying every night; recent errors are listed under Recent checks. If
@@ -2469,6 +2469,7 @@ function FirstScanBanner(props: {
     <article
       className={`f9-checkout-banner ${failed || skipped ? "is-error" : completed ? "is-success" : "is-pending"}`}
       aria-live="polite"
+      role="status"
     >
       <div>
         <span className="f9-app-kicker">{props.plan === "free" ? "Activation scan" : "First scan"}</span>

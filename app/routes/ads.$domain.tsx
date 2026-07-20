@@ -237,7 +237,7 @@ function BrandAdsResults({
               <div className="f9-result-card-body">
                 <div>
                   <span>{ad.advertiser?.trim() || data.brandName}</span>
-                  <h3>{ad.previewHeadline}</h3>
+                  <h2>{ad.previewHeadline}</h2>
                   <div className="f9-result-card-pills">
                     <AdLongevityPill ad={ad} />
                     {ad.variantCount && ad.variantCount > 1 ? (
