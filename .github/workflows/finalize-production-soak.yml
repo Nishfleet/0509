@@ -48,7 +48,7 @@ jobs:
 
       - name: Verify successful protected production deploy
         id: verify_deploy_run
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           DEPLOY_RUN_ID: ${{ inputs.deploy_run_id }}
           DEPLOY_RUN_ATTEMPT: ${{ inputs.deploy_run_attempt }}
@@ -93,11 +93,11 @@ jobs:
             core.setOutput("run-id", String(run.id));
             core.setOutput("run-attempt", String(run.run_attempt));
 
-      - uses: actions/checkout@v6.0.3
+      - uses: actions/checkout@v7.0.0
         with:
           ref: ${{ steps.verify_deploy_run.outputs.sha }}
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
