@@ -4,6 +4,7 @@ import { runCanary } from "../scripts/launch-readiness-canary.mjs";
 import {
   resolveExpectedWorkerVersionId,
   resolveGateRunId,
+  runCanaryCycleCli,
   runLaunchReadinessCanaryCycle,
   waitForExpectedWorkerVersion,
 } from "../scripts/launch-readiness-canary-cycle.mjs";
@@ -381,6 +382,65 @@ describe("launch readiness canary cycle", () => {
       resolveGateRunId([], { CANARY_GATE_RUN_ID: "env-1" }, "abc"),
     ).toBe("env-1");
     expect(resolveGateRunId([], {}, null)).toBeNull();
+  });
+
+  it("--wait-only runs the waiter then exits without any canary mutation", async () => {
+    const waitForExpectedWorkerVersionImpl = vi.fn().mockResolvedValue(undefined);
+    const runCycleImpl = vi.fn();
+
+    await expect(
+      runCanaryCycleCli({
+        argv: ["--wait-only"],
+        env: { CANARY_EXPECTED_WORKER_VERSION_ID: "version-abc" },
+        waitForExpectedWorkerVersionImpl,
+        runCycleImpl,
+      }),
+    ).resolves.toEqual({
+      mode: "wait-only",
+      expectedWorkerVersionId: "version-abc",
+    });
+    expect(waitForExpectedWorkerVersionImpl).toHaveBeenCalledTimes(1);
+    expect(waitForExpectedWorkerVersionImpl).toHaveBeenCalledWith({
+      expectedWorkerVersionId: "version-abc",
+    });
+    // The whole point of the fix: zero canary invocations in --wait-only mode.
+    expect(runCycleImpl).not.toHaveBeenCalled();
+  });
+
+  it("--wait-only still fail-closes on an unbound Worker version — no wait, no canary", async () => {
+    const waitForExpectedWorkerVersionImpl = vi.fn().mockResolvedValue(undefined);
+    const runCycleImpl = vi.fn();
+
+    await expect(
+      runCanaryCycleCli({
+        argv: ["--wait-only"],
+        env: {},
+        waitForExpectedWorkerVersionImpl,
+        runCycleImpl,
+      }),
+    ).rejects.toThrow("launch_readiness_proof_canary_unbound");
+    expect(waitForExpectedWorkerVersionImpl).not.toHaveBeenCalled();
+    expect(runCycleImpl).not.toHaveBeenCalled();
+  });
+
+  it("without --wait-only runs the waiter then the full proof cycle unchanged", async () => {
+    const waitForExpectedWorkerVersionImpl = vi.fn().mockResolvedValue(undefined);
+    const runCycleImpl = vi.fn().mockResolvedValue({ proofCaptureId: "proof-1" });
+
+    await expect(
+      runCanaryCycleCli({
+        argv: [],
+        env: { CANARY_EXPECTED_WORKER_VERSION_ID: "version-abc" },
+        waitForExpectedWorkerVersionImpl,
+        runCycleImpl,
+      }),
+    ).resolves.toEqual({ mode: "cycle", proofCaptureId: "proof-1" });
+    expect(waitForExpectedWorkerVersionImpl).toHaveBeenCalledTimes(1);
+    expect(runCycleImpl).toHaveBeenCalledTimes(1);
+    expect(runCycleImpl).toHaveBeenCalledWith({
+      expectedWorkerVersionId: "version-abc",
+      gateRunId: "deploy-version-abc",
+    });
   });
 
   it("refuses to run without a gate run id — non-resumable canaries are rejected", async () => {

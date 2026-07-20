@@ -173,10 +173,17 @@ export function buildProductionDeployPlan({
       includeCloudflareCredentials: true,
     },
     {
-      id: "launch_readiness_proof_canary_cycle",
+      // Propagation stabilization ONLY — waits for every production alias to
+      // serve the exact deployed Worker version, then exits without mutating.
+      // The single full launch-readiness proof now runs exactly once, inside
+      // Gate C (post_deploy_release_canary). Running a second full proof here
+      // caused proof_email_failed: a duplicate digest send to the same
+      // recipient ~30s later never reached status=sent (2026-07-20).
+      id: "worker_propagation_stabilization",
       command: "node",
       args: [
         "scripts/launch-readiness-canary-cycle.mjs",
+        "--wait-only",
         "--wrangler-output",
         wranglerOutputPath,
       ],

@@ -228,10 +228,11 @@ describe("production deployment readiness gate", () => {
       includeCloudflareCredentials: true,
     });
     expect(plan[deployIndex + 3]).toMatchObject({
-      id: "launch_readiness_proof_canary_cycle",
+      id: "worker_propagation_stabilization",
       command: "node",
       args: [
         "scripts/launch-readiness-canary-cycle.mjs",
+        "--wait-only",
         "--wrangler-output",
         wranglerOutputPath,
       ],
@@ -526,9 +527,9 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     ["verify_worker_rollback_target", "partial_refund_invariants_postdeploy"],
     [
       "partial_refund_invariants_postdeploy",
-      "launch_readiness_proof_canary_cycle",
+      "worker_propagation_stabilization",
     ],
-    ["launch_readiness_proof_canary_cycle", "post_deploy_release_canary"],
+    ["worker_propagation_stabilization", "post_deploy_release_canary"],
     ["partial_refund_invariants_postcanary", "live_public_truth"],
     ["live_public_truth", "production_public_smoke"],
     ["production_public_smoke", "oauth_branding"],
