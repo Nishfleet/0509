@@ -58,6 +58,7 @@ export async function runLaunchReadinessCanaryCycle({
     config: {
       ...startConfig(baseUrl),
       cleanup: true,
+      expectedWorkerVersionId,
       runId,
       digestRunId,
       proofCaptureId,

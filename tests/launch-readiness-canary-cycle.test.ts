@@ -44,6 +44,7 @@ describe("launch readiness canary cycle", () => {
     expect(runCanaryImpl).toHaveBeenNthCalledWith(2, {
       config: expect.objectContaining({
         cleanup: true,
+        expectedWorkerVersionId: "version-abc",
         runId: "run-1",
         digestRunId: "digest-1",
         proofCaptureId: "proof-1",
