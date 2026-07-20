@@ -16,6 +16,7 @@ import { CopyButton } from "~/components/copy-button";
 import { EmptyState } from "~/components/empty-state";
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
 import { LocalTime } from "~/components/local-time";
+import { Pill } from "~/components/pill";
 import { PlanLimitState } from "~/components/plan-limit-state";
 import { ProofGlossary } from "~/components/proof-glossary";
 import { SubmitButton } from "~/components/submit-button";
@@ -417,8 +418,8 @@ export default function DigestsRoute() {
                           <h3>{item.title}</h3>
                         </div>
                         <div className="f9-action-row">
-                          <span className="f9-status-pill">{classification.label}</span>
-                          <span className="f9-status-pill">{formatWatchEventTypeLabel(item.eventType)}</span>
+                          <Pill>{classification.label}</Pill>
+                          <Pill>{formatWatchEventTypeLabel(item.eventType)}</Pill>
                         </div>
                       </div>
                       <p>{item.summary}</p>

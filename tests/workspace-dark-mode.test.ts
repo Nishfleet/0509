@@ -88,7 +88,9 @@ describe("WP-42: optimistic watchlist pause/resume", () => {
 describe("WP-45: sample badge on demo-sourced search results", () => {
   it("labels demo-source ads with a Sample pill in result cards", () => {
     expect(searchRoute).toContain('ad.source === "demo"');
-    expect(searchRoute).toContain('<span className="f9-longevity-pill is-sample">Sample</span>');
+    // The Sample badge now renders via the shared <Pill> component
+    // (variant="longevity" state="sample"); the CSS selector is unchanged.
+    expect(searchRoute).toContain('<Pill variant="longevity" state="sample">Sample</Pill>');
     expect(css).toContain(".f9-longevity-pill.f9-longevity-pill.is-sample");
   });
 });

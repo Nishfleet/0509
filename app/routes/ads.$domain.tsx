@@ -30,6 +30,7 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { AdLongevityPill } from "~/components/ad-longevity-pill";
 import { AdThumb } from "~/components/ad-thumb";
 import { BrandWordmark } from "~/components/brand-wordmark";
+import { Pill } from "~/components/pill";
 import type { BrandIntelTeaser } from "~/lib/brand-page.server";
 import { canonicalUrl, publicSeoMeta } from "~/lib/seo";
 import type { AdRecord } from "~/lib/types";
@@ -241,7 +242,7 @@ function BrandAdsResults({
                   <div className="f9-result-card-pills">
                     <AdLongevityPill ad={ad} />
                     {ad.variantCount && ad.variantCount > 1 ? (
-                      <span className="f9-longevity-pill">{`×${ad.variantCount} variants`}</span>
+                      <Pill variant="longevity">{`×${ad.variantCount} variants`}</Pill>
                     ) : null}
                   </div>
                 </div>

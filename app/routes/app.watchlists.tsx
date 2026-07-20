@@ -21,6 +21,7 @@ import { WatchlistTrends } from "~/components/watchlist-trends";
 import { CopyButton } from "~/components/copy-button";
 import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
+import { Pill } from "~/components/pill";
 import { ProofGlossary } from "~/components/proof-glossary";
 import { SubmitButton } from "~/components/submit-button";
 import type { AppEnv } from "~/lib/env.server";
@@ -1486,7 +1487,7 @@ export default function WatchlistsRoute() {
                                 </p>
                                 <h3>{event.title}</h3>
                               </div>
-                              <span className="f9-status-pill">{formatImportanceBandLabel(event.importanceScore)}</span>
+                              <Pill>{formatImportanceBandLabel(event.importanceScore)}</Pill>
                             </div>
                             <p>{event.summary}</p>
                             <div className="f9-work-list is-compact" style={{ marginTop: "0.75rem" }}>
@@ -1865,7 +1866,7 @@ export default function WatchlistsRoute() {
                                 Started <LocalTime iso={run.startedAt} />
                               </h3>
                             </div>
-                            <span className="f9-status-pill">{run.pagesScanned} {run.pagesScanned === 1 ? "page" : "pages"}</span>
+                            <Pill>{run.pagesScanned} {run.pagesScanned === 1 ? "page" : "pages"}</Pill>
                           </div>
                           <p className="f9-muted-copy">
                             {timing.timestamp ? (

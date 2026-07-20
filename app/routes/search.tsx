@@ -20,6 +20,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AdAnglePill } from "~/components/ad-angle-pill";
 import { AdLongevityPill } from "~/components/ad-longevity-pill";
+import { Pill } from "~/components/pill";
 import { AdThumb } from "~/components/ad-thumb";
 import {
   DashboardRouteError,
@@ -1591,11 +1592,11 @@ export default function SearchRoute() {
                                 <h3>{ad.previewHeadline}</h3>
                                 <div className="f9-result-card-pills">
                                   {ad.source === "demo" ? (
-                                    <span className="f9-longevity-pill is-sample">Sample</span>
+                                    <Pill variant="longevity" state="sample">Sample</Pill>
                                   ) : null}
                                   <AdLongevityPill ad={ad} />
                                   {ad.variantCount && ad.variantCount > 1 ? (
-                                    <span className="f9-longevity-pill">{`×${ad.variantCount} variants`}</span>
+                                    <Pill variant="longevity">{`×${ad.variantCount} variants`}</Pill>
                                   ) : null}
                                   <AdAnglePill ad={ad} />
                                 </div>

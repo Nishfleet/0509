@@ -10,6 +10,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { AdLongevityPill } from "~/components/ad-longevity-pill";
+import { Pill } from "~/components/pill";
 import { AdThumb } from "~/components/ad-thumb";
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
 import { ActionFeedback } from "~/components/action-feedback";
@@ -606,7 +607,7 @@ export default function CollectionsRoute() {
                             <p className="f9-muted-copy">{item.ad.hook}</p>
                           </div>
                         </div>
-                        <span className="f9-status-pill">{formatMachineTokenLabel(item.ad.platforms?.[0] ?? item.ad.format ?? "")}</span>
+                        <Pill>{formatMachineTokenLabel(item.ad.platforms?.[0] ?? item.ad.format ?? "")}</Pill>
                       </div>
                       <p>{item.ad.offer}</p>
                       {proofLinkForAd(item.ad) ? (
