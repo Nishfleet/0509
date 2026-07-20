@@ -33,6 +33,7 @@
     "scripts/verify-post-deploy-release.mjs",
     "scripts/worker-rollback-target.mjs",
     "scripts/gate-c-soak*.mjs",
+    "scripts/check-live-public-home*.mjs",
     "scripts/release-scheduled-observation-contract.mjs",
     "scripts/release-evidence-archive.mjs",
     "e2e/helpers/release-scope.mjs",

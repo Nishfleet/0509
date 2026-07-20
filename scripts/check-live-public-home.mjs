@@ -1,5 +1,25 @@
 #!/usr/bin/env node
+import { fileURLToPath } from "node:url";
+
 const baseUrl = process.env.PUBLIC_HOME_URL ?? "https://0509.io";
+
+// Deploy-gate contract for anonymous public HTML caching.
+//
+// PR #360 (2026-07-20) deliberately moved anonymous public HTML off no-store:
+// the worker now sets `cache-control: public, max-age=300` (NO
+// stale-while-revalidate) with `vary: cookie`, and DELETES cdn-cache-control /
+// cloudflare-cdn-cache-control / pragma / expires on those responses (see
+// PUBLIC_HTML_CACHE_CONTROL + withSecurityHeaders in workers/security-headers.ts).
+// The five-minute bound is the guard against the 2026-07-13 asset-skew incident
+// class; SWR would stretch the stale window to an hour.
+//
+// This gate asserts that exact deliberate contract — equally strict as the old
+// no-store check, just matching what the product genuinely ships now. The
+// coupling test in tests/worker-security-headers.test.ts imports
+// EXPECTED_PUBLIC_HOME_CACHE_CONTROL and PUBLIC_HTML_CACHE_CONTROL and asserts
+// they are equal so the gate and product can never silently diverge again.
+export const EXPECTED_PUBLIC_HOME_CACHE_CONTROL = "public, max-age=300";
+
 const staleSignals = [
   "The market moves after you log off",
   "After-hours market intelligence",
@@ -34,6 +54,7 @@ const requiredSignals = [
   "Start with Starter",
 ];
 
+/** @param {number} ms @returns {Promise<void>} */
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -45,6 +66,15 @@ function buildUrls() {
   return [plain, busted];
 }
 
+/** @param {string} varyHeader @returns {boolean} */
+function varyIncludesCookie(varyHeader) {
+  return varyHeader
+    .toLowerCase()
+    .split(",")
+    .some((token) => token.trim() === "cookie");
+}
+
+/** @param {URL} url */
 async function checkUrl(url) {
   const response = await fetch(url, {
     headers: {
@@ -56,10 +86,16 @@ async function checkUrl(url) {
   });
   const html = await response.text();
   const cacheControl = response.headers.get("cache-control") ?? "";
-  const cloudflareCacheControl = response.headers.get("cloudflare-cdn-cache-control") ?? "";
+  const vary = response.headers.get("vary") ?? "";
   const missing = requiredSignals.filter((signal) => !html.includes(signal));
   const stale = staleSignals.filter((signal) => html.includes(signal));
-  const cacheSafe = cacheControl.includes("no-store") && cloudflareCacheControl.includes("no-store");
+  // Deliberate anonymous public-HTML contract (PR #360): cache-control must be
+  // EXACTLY the bounded public policy (no stale-while-revalidate anywhere), and
+  // the response must vary on cookie so any honoring cache revalidates when auth
+  // state changes. The worker no longer emits cloudflare-cdn-cache-control on
+  // these paths (it deletes it), so it is intentionally not asserted here.
+  const cacheSafe =
+    cacheControl.trim() === EXPECTED_PUBLIC_HOME_CACHE_CONTROL && varyIncludesCookie(vary);
 
   return {
     url: url.toString(),
@@ -68,11 +104,12 @@ async function checkUrl(url) {
     missing,
     stale,
     cacheControl,
-    cloudflareCacheControl,
+    vary,
   };
 }
 
 async function run() {
+  /** @type {Awaited<ReturnType<typeof checkUrl>>[]} */
   let lastResults = [];
   for (let attempt = 1; attempt <= 12; attempt += 1) {
     lastResults = await Promise.all(buildUrls().map(checkUrl));
@@ -88,7 +125,13 @@ async function run() {
   process.exit(1);
 }
 
-run().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exit(1);
-});
+// Only fire the live canary when executed directly; importing this module (the
+// anti-drift coupling test does) must not trigger network calls.
+const invokedDirectly =
+  process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.argv[1];
+if (invokedDirectly) {
+  run().catch((error) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exit(1);
+  });
+}
