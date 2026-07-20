@@ -18,10 +18,10 @@ import { fileURLToPath } from "node:url";
 
 import { readDeployedWorkerVersionId } from "./deploy-production-plan.mjs";
 import {
-  checkHealthEndpoint,
   DEFAULT_CANARY_HEALTH_BASE_URLS,
   formatProductionCanaryReport,
   runProductionCanary,
+  waitForExpectedWorkerVersion,
 } from "./prod-canary.lib.mjs";
 import { fetchPreview } from "./dodo-pricing-canary.mjs";
 import {
@@ -202,16 +202,49 @@ export function sanitizeProofDiagnostics(payload) {
   return Object.keys(diagnostics).length > 0 ? diagnostics : null;
 }
 
-/** @param {{ workerVersionId: string }} input */
-async function defaultHealthAnchor({ workerVersionId }) {
-  const checks = await Promise.all(DEFAULT_CANARY_HEALTH_BASE_URLS.map((baseUrl) =>
-    checkHealthEndpoint({
-      baseUrl,
+/**
+ * Anchor the release identity by REQUIRING the exact deployed Worker version +
+ * shadow mode to hold on ALL THREE public aliases for several consecutive
+ * samples, not just a single fresh-connection snapshot. Deploy attempt 18's
+ * Gate C (run 29764511397) flapped because this ran as a one-shot Promise.all
+ * from a fresh process: its new connections hit a lagging/flapping edge colo
+ * that the propagation waiter's already-converged connections had moved past,
+ * and identity_pre/identity_post failed 0.6s after the waiter declared all
+ * three aliases stable. Sharing waitForExpectedWorkerVersion makes the anchor
+ * bounded and consecutive-sampling — assertion strength is unchanged (exact
+ * worker + shadow on all three aliases) but now proven over `requiredConsecutive`
+ * samples instead of one. On the waiter's fail-closed throw we return
+ * `{ ok: false }` so the surrounding step machinery emits the SAME
+ * identity_pre_failed / identity_post_failed identifiers as before — nothing
+ * downstream changes.
+ * @param {{ workerVersionId: string, checkHealthImpl?: Parameters<typeof waitForExpectedWorkerVersion>[0]["checkHealthImpl"], delayImpl?: (ms: number) => Promise<void>, healthBaseUrls?: string[], maxSamples?: number, maxWaitMs?: number, requiredConsecutive?: number }} input
+ */
+export async function defaultHealthAnchor({
+  workerVersionId,
+  checkHealthImpl,
+  delayImpl,
+  healthBaseUrls,
+  maxSamples,
+  maxWaitMs,
+  requiredConsecutive,
+}) {
+  try {
+    await waitForExpectedWorkerVersion({
       expectedWorkerVersionId: workerVersionId,
-      expectedSearchRolloutMode: "shadow",
-    }),
-  ));
-  return { ok: checks.every((check) => check.ok), hosts: checks.map((check) => ({ url: check.url, ok: check.ok })) };
+      ...(healthBaseUrls ? { healthBaseUrls } : {}),
+      ...(checkHealthImpl ? { checkHealthImpl } : {}),
+      ...(delayImpl ? { delayImpl } : {}),
+      ...(maxSamples !== undefined ? { maxSamples } : {}),
+      ...(maxWaitMs !== undefined ? { maxWaitMs } : {}),
+      ...(requiredConsecutive !== undefined ? { requiredConsecutive } : {}),
+    });
+    const hosts = (healthBaseUrls?.length ? healthBaseUrls : DEFAULT_CANARY_HEALTH_BASE_URLS).map(
+      (url) => ({ url, ok: true }),
+    );
+    return { ok: true, hosts };
+  } catch {
+    return { ok: false, error: "worker_identity_not_stable" };
+  }
 }
 
 /** @param {{ workerVersionId: string, runId: string }} input */
