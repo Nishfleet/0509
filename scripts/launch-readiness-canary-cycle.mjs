@@ -86,36 +86,64 @@ export async function runLaunchReadinessCanaryCycle({
   };
 }
 
-/** @param {string} name */
-function readArg(name) {
-  const index = process.argv.indexOf(name);
-  return index >= 0 ? (process.argv[index + 1] ?? null) : null;
+/**
+ * @param {string[]} argv
+ * @param {string} name
+ */
+function readArg(argv, name) {
+  const index = argv.indexOf(name);
+  if (index < 0) return null;
+  const value = argv[index + 1];
+  if (typeof value !== "string" || !value.trim() || value.startsWith("--")) {
+    // A flag without a value must fail loudly rather than silently falling
+    // back to a stale environment variable.
+    throw new Error(`launch_readiness_proof_canary_missing_value:${name}`);
+  }
+  return value;
 }
 
-function resolveExpectedWorkerVersionId() {
-  const wranglerOutputPath = readArg("--wrangler-output");
+/**
+ * @param {string[]} argv
+ * @param {NodeJS.ProcessEnv} env
+ */
+export function resolveExpectedWorkerVersionId(argv, env) {
+  const wranglerOutputPath = readArg(argv, "--wrangler-output");
   if (wranglerOutputPath) {
     return readDeployedWorkerVersionId(
       readFileSync(resolve(wranglerOutputPath), "utf8"),
     );
   }
-  return process.env.CANARY_EXPECTED_WORKER_VERSION_ID?.trim() || null;
+  return env.CANARY_EXPECTED_WORKER_VERSION_ID?.trim() || null;
 }
 
-function resolveGateRunId() {
+/**
+ * The proof canary's resume identity. Defaults to the exact deployed Worker
+ * version so the proof is bound to the publish it validates; an explicit
+ * --gate-run-id / CANARY_GATE_RUN_ID overrides for manual runs.
+ * @param {string[]} argv
+ * @param {NodeJS.ProcessEnv} env
+ * @param {string | null} expectedWorkerVersionId
+ */
+export function resolveGateRunId(argv, env, expectedWorkerVersionId) {
   return (
-    readArg("--gate-run-id") ??
-    (process.env.CANARY_GATE_RUN_ID?.trim() ||
-      process.env.GITHUB_RUN_ID?.trim() ||
-      null)
+    readArg(argv, "--gate-run-id") ??
+    (env.CANARY_GATE_RUN_ID?.trim() ||
+      (expectedWorkerVersionId
+        ? `deploy-${expectedWorkerVersionId.toLowerCase()}`
+        : null))
   );
 }
 
 async function main() {
   try {
+    const argv = process.argv.slice(2);
+    const expectedWorkerVersionId = resolveExpectedWorkerVersionId(
+      argv,
+      process.env,
+    );
     const result = await runLaunchReadinessCanaryCycle({
-      expectedWorkerVersionId: resolveExpectedWorkerVersionId(),
-      gateRunId: resolveGateRunId(),
+      expectedWorkerVersionId,
+      gateRunId: resolveGateRunId(argv, process.env, expectedWorkerVersionId),
     });
     console.log(
       `launch readiness proof canary cycle: ok (${result.proofCaptureId})`,

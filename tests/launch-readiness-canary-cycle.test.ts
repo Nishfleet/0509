@@ -1,6 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { runLaunchReadinessCanaryCycle } from "../scripts/launch-readiness-canary-cycle.mjs";
+import { runCanary } from "../scripts/launch-readiness-canary.mjs";
+import {
+  resolveExpectedWorkerVersionId,
+  resolveGateRunId,
+  runLaunchReadinessCanaryCycle,
+} from "../scripts/launch-readiness-canary-cycle.mjs";
+
+function jsonResponse(payload: unknown): Response {
+  return {
+    ok: true,
+    status: 200,
+    headers: new Headers(),
+    json: async () => payload,
+  } as unknown as Response;
+}
 
 describe("launch readiness canary cycle", () => {
   it("creates fresh proof and removes only the canary-owned graph", async () => {
@@ -84,6 +98,103 @@ describe("launch readiness canary cycle", () => {
       runLaunchReadinessCanaryCycle({ runCanaryImpl, gateRunId: "1234567890" }),
     ).rejects.toThrow("launch_readiness_proof_canary_unbound");
     expect(runCanaryImpl).not.toHaveBeenCalled();
+  });
+
+  it("integration: real runCanary sends bound gateRunId body and Worker-version headers", async () => {
+    const version = "e8106a7a-be75-401c-a954-0ba0ba94ed41";
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          ok: true,
+          runId: "run-1",
+          digestRunId: "digest-1",
+          proofCaptureId: "proof-1",
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          ok: true,
+          cleanup: { preservedProofCaptureId: "proof-1" },
+        }),
+      );
+
+    await expect(
+      runLaunchReadinessCanaryCycle({
+        runCanaryImpl: ({ config }: { config: any }) =>
+          runCanary({ config, token: "test-token", fetchImpl }),
+        expectedWorkerVersionId: version,
+        gateRunId: `deploy-${version}`,
+      }),
+    ).resolves.toMatchObject({ ok: true, proofCaptureId: "proof-1" });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    const [, startInit] = fetchImpl.mock.calls[0];
+    expect(JSON.parse(startInit.body)).toEqual({
+      gateRunId: `deploy-${version}`,
+    });
+    expect(startInit.headers.get("x-0509-expected-worker-version")).toBe(version);
+    expect(startInit.headers.get("x-0509-canary-operation")).toBeNull();
+    const [, cleanupInit] = fetchImpl.mock.calls[1];
+    expect(cleanupInit.headers.get("x-0509-expected-worker-version")).toBe(version);
+    expect(cleanupInit.headers.get("x-0509-canary-operation")).toBe("cleanup");
+    // Cleanup body carries the three cleanup IDs, never a gateRunId (XOR contract).
+    expect(JSON.parse(cleanupInit.body)).toEqual({
+      runId: "run-1",
+      digestRunId: "digest-1",
+      proofCaptureId: "proof-1",
+    });
+  });
+
+  it("integration: missing or malformed binding makes zero HTTP calls", async () => {
+    const fetchImpl = vi.fn();
+    const runCanaryImpl = ({ config }: { config: any }) =>
+      runCanary({ config, token: "test-token", fetchImpl });
+
+    await expect(runLaunchReadinessCanaryCycle({ runCanaryImpl })).rejects.toThrow(
+      "launch_readiness_proof_canary_unbound",
+    );
+    await expect(
+      runLaunchReadinessCanaryCycle({
+        runCanaryImpl,
+        expectedWorkerVersionId: "version-abc",
+      }),
+    ).rejects.toThrow("launch_readiness_proof_canary_gate_run_missing");
+    await expect(
+      runLaunchReadinessCanaryCycle({
+        runCanaryImpl,
+        expectedWorkerVersionId: "version-abc",
+        gateRunId: "NOT VALID!",
+      }),
+    ).rejects.toThrow("launch_readiness_proof_canary_gate_run_missing");
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("fails loudly when --wrangler-output is supplied without a value", () => {
+    expect(() =>
+      resolveExpectedWorkerVersionId(["--wrangler-output"], {
+        CANARY_EXPECTED_WORKER_VERSION_ID: "stale-version",
+      } as NodeJS.ProcessEnv),
+    ).toThrow("launch_readiness_proof_canary_missing_value:--wrangler-output");
+    expect(() =>
+      resolveExpectedWorkerVersionId(
+        ["--wrangler-output", "--json"],
+        {} as NodeJS.ProcessEnv,
+      ),
+    ).toThrow("launch_readiness_proof_canary_missing_value:--wrangler-output");
+  });
+
+  it("derives the gate run id from the deployed Worker version with explicit overrides", () => {
+    expect(resolveGateRunId([], {} as NodeJS.ProcessEnv, "ABC-123")).toBe(
+      "deploy-abc-123",
+    );
+    expect(
+      resolveGateRunId(["--gate-run-id", "manual-1"], {} as NodeJS.ProcessEnv, "abc"),
+    ).toBe("manual-1");
+    expect(
+      resolveGateRunId([], { CANARY_GATE_RUN_ID: "env-1" } as NodeJS.ProcessEnv, "abc"),
+    ).toBe("env-1");
+    expect(resolveGateRunId([], {} as NodeJS.ProcessEnv, null)).toBeNull();
   });
 
   it("refuses to run without a gate run id — non-resumable canaries are rejected", async () => {
