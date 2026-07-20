@@ -181,6 +181,38 @@ describe("cleanupLaunchReadinessCanary", () => {
     expect(harness.sqlite.prepare("SELECT COUNT(*) AS count FROM digest_run").get()).toEqual({ count: 0 });
   });
 
+  it("preserves scheduled rows that used the canary as a nullable baseline", async () => {
+    const harness = createHarness();
+    seedCanary(harness);
+    harness.sqlite.exec(`
+      INSERT INTO watchlist_run (
+        id, watchlist_id, trigger_type, status, baseline_from_run_id,
+        summary_json, started_at, finished_at, created_at, updated_at
+      ) VALUES (
+        'scheduled-run', 'watch-1', 'scheduled', 'succeeded', 'run-1',
+        '{"kind":"customer_scan"}', '2026-07-16', '2026-07-16', '2026-07-16', '2026-07-16'
+      );
+      INSERT INTO watch_event (
+        id, watchlist_id, run_id, baseline_from_run_id, proof_capture_id,
+        title, summary, metadata_json, created_at
+      ) VALUES (
+        'scheduled-event', 'watch-1', 'scheduled-run', 'run-1', NULL,
+        'Customer evidence', 'Keep this history', '{"kind":"customer_event"}', '2026-07-16'
+      );
+    `);
+
+    await expect(cleanupLaunchReadinessCanary(
+      { DB: harness.db } as never,
+      { ownerUserId: "owner-1", gateRunId: "2026-07-15" },
+    )).resolves.toMatchObject({ cleaned: true, preservedProofCaptureId: "proof-1" });
+    expect(harness.sqlite.prepare(
+      "SELECT id, baseline_from_run_id FROM watchlist_run WHERE id = 'scheduled-run'",
+    ).get()).toEqual({ id: "scheduled-run", baseline_from_run_id: null });
+    expect(harness.sqlite.prepare(
+      "SELECT id, baseline_from_run_id FROM watch_event WHERE id = 'scheduled-event'",
+    ).get()).toEqual({ id: "scheduled-event", baseline_from_run_id: null });
+  });
+
   it("cleans a failed run-only recovery state and is idempotent by gate ID", async () => {
     const harness = createHarness();
     harness.sqlite.exec(`

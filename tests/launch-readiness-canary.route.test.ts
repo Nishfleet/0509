@@ -544,23 +544,13 @@ describe("launch readiness canary route", () => {
       }),
     } as never);
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(409);
     expect(response.headers.get("cache-control")).toBe("no-store");
-    await expect(response.json()).resolves.toMatchObject({
-      ok: true,
-      mode: "cleanup",
-      cleanupTruth: expect.stringContaining("R2 artifacts"),
-      cleanup: {
-        cleaned: true,
-        preservedProofCaptureId: "proof-1",
-      },
+    await expect(response.json()).resolves.toEqual({
+      ok: false,
+      blocker: "worker_version_mismatch",
     });
-    expect(cleanupLaunchReadinessCanary).toHaveBeenCalledWith(expect.anything(), {
-      ownerUserId: "user-1",
-      runId: "run-1",
-      digestRunId: "digest-1",
-      proofCaptureId: "proof-1",
-    });
+    expect(cleanupLaunchReadinessCanary).not.toHaveBeenCalled();
   });
 
   it("accepts cleanup recovery by one stable gate run ID", async () => {

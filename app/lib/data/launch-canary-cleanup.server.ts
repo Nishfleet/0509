@@ -434,8 +434,6 @@ async function cleanupLaunchReadinessCanaryByGateRunId(
     digestDeliveryCount,
     allRunEvents,
     externalDigestReferences,
-    runReferences,
-    eventReferences,
     observationReferences,
     candidateReferences,
     proofEventReferences,
@@ -470,12 +468,6 @@ async function cleanupLaunchReadinessCanaryByGateRunId(
               AND json_extract(metadata_json, '$.proofCaptureId') = ?
           `, event.id, proof.id)
         : Promise.resolve([]),
-      run
-        ? queryOne<CountRow>(env, "SELECT COUNT(*) AS count FROM watchlist_run WHERE baseline_from_run_id = ?", run.id)
-        : Promise.resolve(null),
-      run
-        ? queryOne<CountRow>(env, "SELECT COUNT(*) AS count FROM watch_event WHERE baseline_from_run_id = ?", run.id)
-        : Promise.resolve(null),
       run
         ? queryOne<CountRow>(env, "SELECT COUNT(*) AS count FROM ad_observation WHERE watchlist_run_id = ?", run.id)
         : Promise.resolve(null),
@@ -513,8 +505,6 @@ async function cleanupLaunchReadinessCanaryByGateRunId(
     attempts.some((attempt) => !isCanaryDeliveryAttempt(attempt, input.ownerUserId)) ||
     externalDigestReferences.some((reference) => reference.digest_run_id !== digest?.id) ||
     [
-      runReferences,
-      eventReferences,
       observationReferences,
       candidateReferences,
       proofEventReferences,
@@ -920,22 +910,6 @@ export async function cleanupLaunchReadinessCanary(
     digest.id,
   );
   if (attempts.length === 0 || attempts.some((attempt) => !isCanaryDeliveryAttempt(attempt, identifiers.ownerUserId))) {
-    return emptyResult("shared_rows_present");
-  }
-
-  const [runReferences, eventReferences] = await Promise.all([
-    queryOne<CountRow>(
-      env,
-      "SELECT COUNT(*) AS count FROM watchlist_run WHERE baseline_from_run_id = ?",
-      run.id,
-    ),
-    queryOne<CountRow>(
-      env,
-      "SELECT COUNT(*) AS count FROM watch_event WHERE baseline_from_run_id = ?",
-      run.id,
-    ),
-  ]);
-  if (Number(runReferences?.count ?? 0) > 0 || Number(eventReferences?.count ?? 0) > 0) {
     return emptyResult("shared_rows_present");
   }
 
