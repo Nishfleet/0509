@@ -21,6 +21,7 @@ import { BulkSelectBar } from "~/components/watchlists/bulk-select-bar";
 import { CandidateHistory } from "~/components/watchlists/candidate-history";
 import { DeliverySettingsCard } from "~/components/watchlists/delivery-settings-card";
 import { DeliveryTargetsSection } from "~/components/watchlists/delivery-targets-section";
+import { EventChangesSection } from "~/components/watchlists/event-changes-section";
 import { FirstScanBanner } from "~/components/watchlists/first-scan-banner";
 import { RecentChecksSection } from "~/components/watchlists/recent-checks-section";
 import { RecentEvidenceChecksCard } from "~/components/watchlists/recent-evidence-checks-card";
@@ -37,21 +38,11 @@ import {
   normalizeCompetitorWebsiteInput,
   watchlistFingerprint,
 } from "~/lib/competitor-website";
-import {
-  formatConfidenceBandLabel,
-  formatDeliveryAttemptStatusLabel,
-  formatImportanceBandLabel,
-  formatMachineTokenLabel,
-  formatWatchEventStatusLabel,
-  formatWatchEventTypeLabel,
-  formatWhyAlertedLabel,
-} from "~/lib/landing-page-display";
 import { toPublicDeliveryTarget, type PublicDeliveryTargetRecord } from "~/lib/delivery-target-public";
 import {
   toPublicDeliveryAttemptSummary,
   type PublicDeliveryAttemptSummary,
 } from "~/lib/delivery-attempt-public";
-import { buildChangeIntelligenceSummary } from "~/lib/change-intelligence";
 import { toCustomerDiscoveryStatus } from "~/lib/discovery-customer-copy";
 import { buildWatchlistInsightDepth } from "~/lib/insight-depth";
 import { normalizeSavedQuery } from "~/lib/normalize";
@@ -1443,93 +1434,20 @@ export default function WatchlistsRoute() {
                   />
                 ) : null}
 
-                <section>
-                  <p className="f9-app-kicker">See what changed</p>
-                  {data.events.length === 0 ? (
-                    <p className="f9-muted-copy">
-                      {resolveEmptyWatchlistEventCopy({
-                        lastScannedAt: data.selectedWatchlist.lastScannedAt,
-                        latestRun: (data.runs[0] as WatchlistRunRecord | undefined) ?? null,
-                        nextScanLabel: sourceCanSchedule
-                          ? formatNextScanLabel(
-                              data.plan,
-                              renderedAt,
-                              data.effectiveDeliveryConfig.timezone,
-                            )
-                          : null,
-                        plan: data.plan,
-                      })}
-                    </p>
-                  ) : (
-                    <ul className="event-list">
-                      {data.events.map((event) => {
-                        const proofCapture = event.proofCaptureId
-                          ? proofCapturesById.get(event.proofCaptureId) ?? null
-                          : null;
-                        const lastAttempt = lastAttemptByEventId.get(event.id) ?? null;
-                        const intelligence = buildChangeIntelligenceSummary(
-                          event,
-                          data.effectiveDeliveryConfig.timezone,
-                        );
-
-                        const isHighlighted = data.highlightedEventId === event.id;
-                        return (
-                          <li
-                            className={`f9-event-card${isHighlighted ? " is-highlighted" : ""}`}
-                            id={`event-${event.id}`}
-                            key={event.id}
-                            tabIndex={isHighlighted ? -1 : undefined}
-                          >
-                            <div className="f9-panel-toolbar">
-                              <div>
-                                <p className="f9-app-kicker">
-                                  {formatWatchEventTypeLabel(event.eventType)} · {formatWatchEventStatusLabel(event.status)}
-                                </p>
-                                <h3>{event.title}</h3>
-                              </div>
-                              <span className="f9-status-pill">{formatImportanceBandLabel(event.importanceScore)}</span>
-                            </div>
-                            <p>{event.summary}</p>
-                            <div className="f9-work-list is-compact" style={{ marginTop: "0.75rem" }}>
-                              <div className="f9-work-row">
-                                <p className="f9-app-kicker">Evidence summary</p>
-                                <p className="f9-muted-copy">
-                                  {proofCapture
-                                    ? `${formatConfidenceBandLabel(proofCapture.fieldConfidence)} · ${intelligence.proofTrail}`
-                                    : intelligence.proofTrail}
-                                </p>
-                              </div>
-                              <div className="f9-work-row">
-                                <p className="f9-app-kicker">Why this alerted</p>
-                                <p className="f9-muted-copy">
-                                  {formatWhyAlertedLabel({
-                                    eventType: event.eventType,
-                                    status: event.status,
-                                    metadata: event.metadata,
-                                  })}
-                                </p>
-                              </div>
-                              <div className="f9-work-row">
-                                <p className="f9-app-kicker">Next review</p>
-                                <p className="f9-muted-copy">{intelligence.recommendedAction}</p>
-                              </div>
-                              <div className="f9-work-row">
-                                <p className="f9-app-kicker">Last send state</p>
-                                <p className="f9-muted-copy">
-                                  {lastAttempt
-                                    ? `${formatDeliveryAttemptStatusLabel(lastAttempt.status, lastAttempt.channel)} · ${
-                                        lastAttempt.targetValue
-                                      }`
-                                    : "No alert sent for this change yet."}
-                                </p>
-                              </div>
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </section>
+                <EventChangesSection
+                  data={{
+                    effectiveDeliveryConfig: data.effectiveDeliveryConfig,
+                    events: data.events,
+                    highlightedEventId: data.highlightedEventId,
+                    plan: data.plan,
+                    runs: data.runs,
+                    selectedWatchlist: data.selectedWatchlist,
+                  }}
+                  lastAttemptByEventId={lastAttemptByEventId}
+                  proofCapturesById={proofCapturesById}
+                  renderedAt={renderedAt}
+                  sourceCanSchedule={sourceCanSchedule}
+                />
 
                 <section>
                   <div className="f9-panel-toolbar">
