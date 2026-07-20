@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { EXPECTED_PUBLIC_HOME_CACHE_CONTROL } from "../scripts/check-live-public-home.mjs";
 import {
   HTML_NO_STORE_HEADERS,
   PUBLIC_HTML_CACHE_CONTROL,
@@ -204,6 +205,16 @@ describe("Worker security headers", () => {
       // asset-skew incident class). Keep the policy SWR-free.
       expect(PUBLIC_HTML_CACHE_CONTROL).not.toContain("stale-while-revalidate");
       expect(PUBLIC_HTML_CACHE_CONTROL).toBe("public, max-age=300");
+    });
+
+    it("keeps the live public-home deploy gate coupled to the product policy", () => {
+      // The scripts/check-live-public-home.mjs deploy gate asserts an EXACT
+      // cache-control on https://0509.io/. If the product policy ever changes
+      // without the gate's expectation moving with it (the 2026-07-20 stale-gate
+      // incident: gate still wanted no-store after PR #360 shipped
+      // public, max-age=300), deploys would fail on a policy that is actually
+      // correct. Import both constants and assert they can never diverge.
+      expect(EXPECTED_PUBLIC_HOME_CACHE_CONTROL).toBe(PUBLIC_HTML_CACHE_CONTROL);
     });
   });
 
