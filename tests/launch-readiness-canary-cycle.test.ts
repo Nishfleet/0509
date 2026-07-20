@@ -302,6 +302,21 @@ describe("launch readiness canary cycle", () => {
     expect(delayImpl).toHaveBeenCalledTimes(2);
   });
 
+  it("keeps the default propagation wait bounded at roughly two minutes", async () => {
+    const checkHealthImpl = vi.fn().mockResolvedValue({ ok: false });
+    const delayImpl = vi.fn().mockResolvedValue(undefined);
+
+    await expect(waitForExpectedWorkerVersion({
+      baseUrl: "https://0509.io",
+      expectedWorkerVersionId: "version-abc",
+      checkHealthImpl: checkHealthImpl as never,
+      delayImpl,
+    })).rejects.toThrow("launch_readiness_worker_propagation_not_stable");
+    expect(checkHealthImpl).toHaveBeenCalledTimes(60);
+    expect(delayImpl).toHaveBeenCalledTimes(59);
+    expect(delayImpl).toHaveBeenCalledWith(2_000);
+  });
+
   it("integration: missing or malformed binding makes zero HTTP calls", async () => {
     const fetchImpl = vi.fn();
     const runCanaryImpl = ({ config }: { config: any }) =>

@@ -118,7 +118,7 @@ export async function waitForExpectedWorkerVersion({
   expectedWorkerVersionId,
   checkHealthImpl = checkHealthEndpoint,
   delayImpl = (ms) => new Promise((resolveDelay) => setTimeout(resolveDelay, ms)),
-  maxSamples = 12,
+  maxSamples = 60,
   requiredConsecutive = 3,
 }) {
   const resolvedHealthBaseUrls = healthBaseUrls?.length
