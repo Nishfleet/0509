@@ -238,6 +238,7 @@ describe("launch readiness canary cycle", () => {
     const delayImpl = vi.fn().mockResolvedValue(undefined);
 
     await expect(waitForExpectedWorkerVersion({
+      baseUrl: "https://0509.io",
       expectedWorkerVersionId: "version-abc",
       checkHealthImpl: checkHealthImpl as never,
       delayImpl,
@@ -248,11 +249,49 @@ describe("launch readiness canary cycle", () => {
     expect(delayImpl).toHaveBeenCalledTimes(3);
   });
 
+  it("requires every production alias to converge in the same consecutive samples", async () => {
+    const healthBaseUrls = [
+      "https://0509.io",
+      "https://www.0509.io",
+      "https://api.0509.io",
+    ];
+    let sample = 0;
+    const checkHealthImpl = vi.fn(async ({ baseUrl, expectedSearchRolloutMode }) => {
+      const currentSample = Math.floor(sample / healthBaseUrls.length);
+      sample += 1;
+      return {
+        ok: !(currentSample === 0 && baseUrl === "https://www.0509.io"),
+        expectedSearchRolloutMode,
+      };
+    });
+    const delayImpl = vi.fn().mockResolvedValue(undefined);
+
+    await expect(waitForExpectedWorkerVersion({
+      healthBaseUrls,
+      expectedWorkerVersionId: "version-abc",
+      checkHealthImpl: checkHealthImpl as never,
+      delayImpl,
+      maxSamples: 3,
+      requiredConsecutive: 2,
+    })).resolves.toBeUndefined();
+    expect(checkHealthImpl).toHaveBeenCalledTimes(9);
+    expect(checkHealthImpl.mock.calls.map(([input]) => input.baseUrl)).toEqual([
+      ...healthBaseUrls,
+      ...healthBaseUrls,
+      ...healthBaseUrls,
+    ]);
+    expect(checkHealthImpl.mock.calls.every(([input]) =>
+      input.expectedSearchRolloutMode === "shadow"
+    )).toBe(true);
+    expect(delayImpl).toHaveBeenCalledTimes(2);
+  });
+
   it("fails before mutation when route propagation never stabilizes", async () => {
     const checkHealthImpl = vi.fn().mockResolvedValue({ ok: false });
     const delayImpl = vi.fn().mockResolvedValue(undefined);
 
     await expect(waitForExpectedWorkerVersion({
+      baseUrl: "https://0509.io",
       expectedWorkerVersionId: "version-abc",
       checkHealthImpl: checkHealthImpl as never,
       delayImpl,
