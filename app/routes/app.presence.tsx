@@ -29,7 +29,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { getUserPlan } = await import("~/lib/plan.server");
   const { canUsePresenceFeature, getPresenceLimits, presenceModeAllowed } = await import("~/lib/presence-entitlements");
-  const { getPresenceWorkspaceSnapshot, requirePresenceWorkspaceAccess } = await import(
+  const { getPresenceWorkspaceSnapshot } = await import(
     "~/lib/presence-service.server"
   );
   const { evaluatePresenceWorkspaceAccess } = await import("~/lib/presence-internal-access.server");
@@ -43,8 +43,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const env = getEnv(context);
   const redirectFeedback = readPresenceRedirectFeedback(request);
   const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
-  await requirePresenceWorkspaceAccess(env, workspaceUserId);
   const access = await evaluatePresenceWorkspaceAccess(env, workspaceUserId);
+  // Presence Desk is rollout-gated: the sidebar link is hidden whenever access is
+  // denied (presenceNavVisible mirrors this exact check). A direct URL visit to a
+  // gated workspace should bounce to the dashboard, not throw an uncaught 500.
+  if (!access.allowed) {
+    throw redirect("/app");
+  }
   const plan = await getUserPlan(env, workspaceUserId);
   const snapshot = await getPresenceWorkspaceSnapshot(env, workspaceUserId);
   const limits = getPresenceLimits(plan);

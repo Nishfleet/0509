@@ -53,7 +53,21 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
   const { connectorHasCustomerPollPath } = await import("~/lib/presence-access-gates.server");
   const env = getEnv(context);
   const { workspaceUserId } = await requireWorkspaceSession(env, request);
-  await requirePresenceWorkspaceAccess(env, workspaceUserId);
+  // Rollout-gated, mirrors the Presence index route: bounce direct URL visits from
+  // gated workspaces to the dashboard instead of throwing an uncaught 500.
+  try {
+    await requirePresenceWorkspaceAccess(env, workspaceUserId);
+  } catch (error) {
+    // PresenceServiceError from the gate carries a string code and 403 status;
+    // treat that as "not available" and bounce. Real infra errors (no gate code)
+    // still surface as a 500 rather than being masked by a silent redirect.
+    if (error instanceof Response) throw error;
+    const gate = error as { code?: unknown; status?: unknown };
+    if (typeof gate?.code === "string" && gate?.status === 403) {
+      throw redirect("/app");
+    }
+    throw error;
+  }
   const entityId = params.entityId ?? "";
   const entity = await getTrackedEntity(env, workspaceUserId, entityId);
   if (!entity) {

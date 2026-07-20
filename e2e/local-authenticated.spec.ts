@@ -2,7 +2,7 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
 const fixtureCookie = "f9_e2e_fixture";
 const fixtureModeHeader = "x-0509-e2e-test-mode";
-const clientSideButtonLabels = new Set(["Copy link", "Copied!", "Download PDF", "Try again"]);
+const clientSideButtonLabels = new Set(["Copy link", "Copied!", "Download PDF", "Try again", "+ Add competitor"]);
 
 type VisibleActionControl = {
   buttonType: string;
@@ -62,11 +62,14 @@ async function expectNoFixedAppChrome(page: Page) {
 }
 
 async function expectCompactHeaderActions(page: Page) {
+  // The topbar ships one "Overview" link plus the "+ Add competitor" quick-add
+  // button (a real <button>, not a link — it opens the palette dialog).
   const actions = await page.evaluate(() =>
-    Array.from(document.querySelectorAll(".f9-dash-topbar a")).map((element) => {
+    Array.from(document.querySelectorAll(".f9-dash-topbar a, .f9-dash-topbar button")).map((element) => {
       const rect = element.getBoundingClientRect();
       return {
         height: Math.round(rect.height),
+        tag: element.tagName.toLowerCase(),
         text: element.textContent?.trim() ?? "",
         width: Math.round(rect.width),
       };
@@ -74,10 +77,11 @@ async function expectCompactHeaderActions(page: Page) {
   );
 
   expect(actions).toEqual([
-    expect.objectContaining({ height: expect.any(Number), text: "Overview", width: expect.any(Number) }),
-    expect.objectContaining({ height: expect.any(Number), text: "Add competitor", width: expect.any(Number) }),
+    expect.objectContaining({ tag: "a", text: "Overview" }),
+    expect.objectContaining({ tag: "button", text: "+ Add competitor" }),
   ]);
   for (const action of actions) {
+    expect(action.height).toBeGreaterThanOrEqual(32);
     expect(action.height).toBeLessThanOrEqual(48);
     expect(action.width).toBeLessThanOrEqual(180);
   }
@@ -277,14 +281,18 @@ test.describe("local authenticated E2E harness", () => {
     await expect(page.getByRole("heading", { name: "Watchlists" })).toBeVisible();
     await expect(page.getByText("Okara competitor watch").first()).toBeVisible();
 
+    // Presence is rollout-gated off in the E2E harness (wrangler.e2e.jsonc sets
+    // PRESENCE_WEBSITE_ROLLOUT: "disabled"), so a direct visit bounces to /app
+    // and the sidebar hides the Presence link instead of rendering the desk.
     await page.goto("/app/presence");
+    await expect(page).toHaveURL((url) => url.pathname === "/app");
     await expectAppPage(page);
-    await expect(page.getByRole("heading", { name: "Proof-backed entity tracking" })).toBeVisible();
-    await expect(page.getByText("Okara")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Presence" })).toHaveCount(0);
 
     await page.goto("/app/digests");
     await expectAppPage(page);
-    await expect(page.getByRole("heading", { name: "Digests", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Briefs", exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Okara launched a new workflow offer" }).first()).toBeVisible();
 
     await page.goto("/app/billing");
@@ -348,7 +356,7 @@ test.describe("local authenticated E2E harness", () => {
     await expect(page.getByText("weekly", { exact: false })).toBeVisible();
 
     await page.goto("/app/digests");
-    await expect(page.getByRole("heading", { name: "Digests", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Briefs", exact: true })).toBeVisible();
 
     await page.goto("/app/developer-access");
     await expect(
@@ -371,7 +379,7 @@ test.describe("local authenticated E2E harness", () => {
 
     await page.goto("/app/reports/watchlist:e2e-watchlist-agency-1");
     await expectAppPage(page);
-    await expect(page.getByText("Client-ready report", { exact: true })).toBeVisible();
+    await expect(page.getByText("Evidence report", { exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Okara launched a new workflow offer" }).first()).toBeVisible();
   });
 
@@ -397,7 +405,7 @@ test.describe("local authenticated E2E harness", () => {
         heading: "Collections",
         copy: ["Save the best competitor examples", "Create collection"],
       },
-      { label: "Digests", path: "/app/digests", heading: "Digests", copy: ["Brief history"] },
+      { label: "Briefs", path: "/app/digests", heading: "Briefs", copy: ["Brief history"] },
       {
         label: "Reports",
         path: "/app/shares",

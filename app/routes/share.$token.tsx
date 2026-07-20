@@ -11,6 +11,7 @@ import { ShareBrandIdentity } from "~/components/share-brand-identity";
 import { DigestIntelligence, DigestMovementSummary, DigestProofPacket } from "~/components/digest-intelligence";
 import type { DigestShareSnapshot } from "~/lib/digest-share";
 import { formatAdvertiserLabel } from "~/lib/landing-page-display";
+import { formatWatchEventTypeLabel } from "~/lib/watch-event-display";
 import { emptyInsightDepthSummary } from "~/lib/insight-depth";
 import {
   classifyDigestItemSource,
@@ -270,7 +271,7 @@ export default function ShareRoute() {
                       <p className="f9-app-kicker">{item.watchlistName}</p>
                       <h3>{item.title}</h3>
                     </div>
-                    <span className="f9-status-pill">{item.eventType.replaceAll("_", " ")}</span>
+                    <span className="f9-status-pill">{formatWatchEventTypeLabel(item.eventType)}</span>
                   </div>
                   <p>{item.summary}</p>
                   <DigestIntelligence metadata={item.metadata ?? {}} proofStatus={item.proofStatus} />

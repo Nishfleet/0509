@@ -18,7 +18,7 @@ import { CopyButton } from "~/components/copy-button";
 import { EmptyState } from "~/components/empty-state";
 import { PlanLimitState } from "~/components/plan-limit-state";
 import { SubmitButton } from "~/components/submit-button";
-import { formatAdvertiserLabel } from "~/lib/landing-page-display";
+import { formatAdvertiserLabel, formatMachineTokenLabel } from "~/lib/landing-page-display";
 import { matchesAdvertiserFilter } from "~/lib/watchlist-links";
 import { buildCollectionInsightDepth } from "~/lib/insight-depth";
 import { canUsePlanFeature, getPlanLimit } from "~/lib/plan-entitlements";
@@ -606,7 +606,7 @@ export default function CollectionsRoute() {
                             <p className="f9-muted-copy">{item.ad.hook}</p>
                           </div>
                         </div>
-                        <span className="f9-status-pill">{item.ad.platforms?.[0] ?? item.ad.format}</span>
+                        <span className="f9-status-pill">{formatMachineTokenLabel(item.ad.platforms?.[0] ?? item.ad.format ?? "")}</span>
                       </div>
                       <p>{item.ad.offer}</p>
                       {proofLinkForAd(item.ad) ? (

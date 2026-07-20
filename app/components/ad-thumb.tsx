@@ -39,8 +39,8 @@ export function AdThumb({ ad }: { ad: AdThumbAd }) {
   );
 }
 
-function formatCreativeKind(format: string) {
-  const normalized = format.trim();
+function formatCreativeKind(format: string | null | undefined) {
+  const normalized = format?.trim();
   if (!normalized) return "Ad";
   return `${normalized.charAt(0).toUpperCase()}${normalized.slice(1)}`;
 }

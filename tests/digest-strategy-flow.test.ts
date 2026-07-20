@@ -184,7 +184,7 @@ vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
 vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
 
 const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-const result = await runWeeklyDigests(envWith(aiRun));
+const result = await runWeeklyDigests(envWith(aiRun), { periodEnd: "2026-07-13T05:00:00.000Z" });
 
 expect(result).toBe(1);
 expect(aiRun).toHaveBeenCalledTimes(1);
@@ -264,7 +264,7 @@ vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
 vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
 
 const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-await expect(runWeeklyDigests(envWith(aiRun))).resolves.toBe(1);
+await expect(runWeeklyDigests(envWith(aiRun), { periodEnd: "2026-07-13T05:00:00.000Z" })).resolves.toBe(1);
 
 expect(data.createDigestRun).toHaveBeenCalledWith(
 expect.anything(),
@@ -307,7 +307,7 @@ vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
 vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
 
 const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-await expect(runWeeklyDigests(envWith(aiRun))).resolves.toBe(1);
+await expect(runWeeklyDigests(envWith(aiRun), { periodEnd: "2026-07-13T05:00:00.000Z" })).resolves.toBe(1);
 
 const request = aiRun.mock.calls[0]?.[1] as {
 messages: Array<{ role: string; content: string }>;
@@ -374,7 +374,7 @@ vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
 vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
 
 const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-await expect(runWeeklyDigests(envWith(aiRun))).resolves.toBe(1);
+await expect(runWeeklyDigests(envWith(aiRun), { periodEnd: "2026-07-13T05:00:00.000Z" })).resolves.toBe(1);
 
 expect(aiRun).not.toHaveBeenCalled();
 expect(data.completeDigestStrategyGeneration).toHaveBeenCalledWith(
@@ -419,7 +419,7 @@ vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
 vi.doMock("~/lib/plan.server", () => planServerMock("scout"));
 
 const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-const result = await runWeeklyDigests(envWith(aiRun));
+const result = await runWeeklyDigests(envWith(aiRun), { periodEnd: "2026-07-13T05:00:00.000Z" });
 
 expect(result).toBe(1);
 expect(aiRun).not.toHaveBeenCalled();
@@ -453,7 +453,7 @@ vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
 vi.doMock("~/lib/plan.server", () => planServerMock("free"));
 
 const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-const result = await runWeeklyDigests(envWith(aiRun));
+const result = await runWeeklyDigests(envWith(aiRun), { periodEnd: "2026-07-13T05:00:00.000Z" });
 
 expect(result).toBe(0);
 expect(aiRun).not.toHaveBeenCalled();
@@ -461,6 +461,9 @@ expect(deliverWeeklyDigest).not.toHaveBeenCalled();
 expect(data.createDigestRun).not.toHaveBeenCalled();
 });
 
+// Digest periods are pinned (weekly → Monday 05:00 UTC, daily → Wednesday 04:00 UTC):
+// the Monday daily-digest skip (WP-22) makes unpinned daily runs date-dependent —
+// they passed six days a week and failed every Monday in CI.
 it("skips generation for agency daily digests — weekly only", async () => {
 const data = dataServerMock();
 const deliverWeeklyDigest = vi.fn().mockResolvedValue({ attempts: 1, channels: ["email"] });
@@ -472,7 +475,7 @@ vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
 vi.doMock("~/lib/plan.server", () => planServerMock("agency"));
 
 const { runDailyDigests } = await import("~/lib/monitoring.server");
-const result = await runDailyDigests(envWith(aiRun));
+const result = await runDailyDigests(envWith(aiRun), { periodEnd: "2026-07-15T04:00:00.000Z" });
 
 expect(result).toBe(1);
 expect(aiRun).not.toHaveBeenCalled();
@@ -493,7 +496,7 @@ vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
 vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
 
 const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-const result = await runWeeklyDigests(envWith(aiRun));
+const result = await runWeeklyDigests(envWith(aiRun), { periodEnd: "2026-07-13T05:00:00.000Z" });
 
 expect(result).toBe(1);
 expect(aiRun).toHaveBeenCalledTimes(1);
@@ -564,7 +567,7 @@ vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
 vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
 
 const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-await runWeeklyDigests(envWith(aiRun));
+await runWeeklyDigests(envWith(aiRun), { periodEnd: "2026-07-13T05:00:00.000Z" });
 
 expect(aiRun).not.toHaveBeenCalled();
 expect(data.createDigestRun).not.toHaveBeenCalled();
@@ -627,7 +630,7 @@ vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
 vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
 
 const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-await expect(runWeeklyDigests(envWith(aiRun))).resolves.toBe(0);
+await expect(runWeeklyDigests(envWith(aiRun), { periodEnd: "2026-07-13T05:00:00.000Z" })).resolves.toBe(0);
 
 expect(aiRun).not.toHaveBeenCalled();
 expect(data.createDigestRun).not.toHaveBeenCalled();
@@ -667,7 +670,7 @@ vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
 vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
 
 const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-await expect(runWeeklyDigests(envWith(null))).resolves.toBe(0);
+await expect(runWeeklyDigests(envWith(null), { periodEnd: "2026-07-13T05:00:00.000Z" })).resolves.toBe(0);
 expect(deliverWeeklyDigest).not.toHaveBeenCalled();
 });
 
@@ -704,7 +707,7 @@ vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
 vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
 
 const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-await expect(runWeeklyDigests(envWith(null))).resolves.toBe(1);
+await expect(runWeeklyDigests(envWith(null), { periodEnd: "2026-07-13T05:00:00.000Z" })).resolves.toBe(1);
 expect(deliverWeeklyDigest).toHaveBeenCalledWith(
 expect.anything(),
 expect.objectContaining({
@@ -738,7 +741,7 @@ vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
 vi.doMock("~/lib/plan.server", () => planServerMock("starter"));
 
 const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-await expect(runWeeklyDigests(envWith(aiRun))).resolves.toBe(0);
+await expect(runWeeklyDigests(envWith(aiRun), { periodEnd: "2026-07-13T05:00:00.000Z" })).resolves.toBe(0);
 
 expect(deliverWeeklyDigest).not.toHaveBeenCalled();
 });
