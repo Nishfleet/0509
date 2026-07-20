@@ -1229,6 +1229,119 @@ describe("searchMetaLibraryByBrowser", () => {
     });
   });
 
+  it("falls back to rendered-text parsing when DOM discovery yields only content-free ghost cards", async () => {
+    // Reproduces the logged-out Browser Rendering incident: the "Library ID: N"
+    // label-climbing discovery emits cards that carry a library id but no
+    // advertiser/body/creative (the climb stopped at the bare label on Meta's
+    // flat/virtualized grid). Those non-empty-but-useless cards must not
+    // short-circuit the hardened rendered-text fallback, which parses the ad
+    // copy still present in the page's innerText.
+    const { browser, page } = createBrowserHarness();
+    page.evaluate = vi.fn().mockResolvedValue({
+      cards: [
+        {
+          libraryId: "1280520150312258",
+          advertiser: "",
+          body: "Library ID: 1280520150312258",
+          previewHeadline: "",
+          previewSubhead: null,
+          cta: "",
+          adSnapshotUrl:
+            "https://www.facebook.com/ads/library/?id=1280520150312258",
+          landingPageUrl: null,
+          platforms: [],
+          active: null,
+          startedRunning: null,
+          imageUrl: null,
+          hasVideo: false,
+          variantCount: null,
+        },
+      ],
+      pageText: [
+        "~6,200 results",
+        "Active",
+        "Library ID: 1280520150312258",
+        "Started running on 14 Jul 2025",
+        "Platforms",
+        "Nykaa Man",
+        "Sponsored",
+        "For the Man Who Never Settles For Less",
+        "Flat ₹400 Off on Your First Order",
+        "NYKAAMAN.COM",
+        "Shop Now",
+      ].join("\n"),
+      loginWall: false,
+      noResults: false,
+      rateLimited: false,
+    });
+    const launch = vi.fn().mockResolvedValue(browser);
+    const sessions = vi.fn().mockResolvedValue([]);
+    const limits = vi.fn().mockResolvedValue({
+      activeSessions: [],
+      maxConcurrentSessions: 2,
+      allowedBrowserAcquisitions: 1,
+      timeUntilNextAllowedBrowserAcquisition: 0,
+    });
+    const connect = vi.fn();
+
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch, sessions, limits, connect },
+    }));
+
+    const { searchMetaLibraryByBrowser } = await import(
+      "~/lib/meta-library-browser.server"
+    );
+
+    const result = await searchMetaLibraryByBrowser(
+      {
+        BROWSER: {} as Fetcher,
+      },
+      buildQuery(),
+    );
+
+    // The result is the real ad recovered from rendered text, not the ghost card.
+    expect(result.ads).toHaveLength(1);
+    expect(result.ads[0]).toMatchObject({
+      metaAdId: "1280520150312258",
+      advertiser: "Nykaa Man",
+      cta: "Shop Now",
+      source: "meta_library_browser",
+    });
+    expect(result.ads[0].body).toContain("Never Settles For Less");
+    // The ghost card (empty advertiser + label-only body) must never surface.
+    expect(result.ads[0].advertiser).not.toBe("");
+  });
+
+  it("drops content-free ghost cards even when no rendered-text ad is recoverable", async () => {
+    const { adHasUsableContent } = await import(
+      "~/lib/meta-library-browser.server"
+    );
+    expect(
+      adHasUsableContent({
+        advertiser: "",
+        body: "",
+        previewHeadline: "",
+        creativeImageUrl: null,
+      } as never),
+    ).toBe(false);
+    expect(
+      adHasUsableContent({
+        advertiser: "Nykaa Man",
+        body: "",
+        previewHeadline: "",
+        creativeImageUrl: null,
+      } as never),
+    ).toBe(true);
+    expect(
+      adHasUsableContent({
+        advertiser: "",
+        body: "",
+        previewHeadline: "",
+        creativeImageUrl: "https://scontent.example/creative.jpg",
+      } as never),
+    ).toBe(true);
+  });
+
   it("treats Browser Run no-results page text as a healthy empty Meta result", async () => {
     const { browser, page } = createBrowserHarness();
     page.evaluate = vi.fn(async (callback: () => unknown) => {

@@ -300,7 +300,24 @@ async function searchMetaLibraryViaSessions(
       extractedCards = dedupeExtractedCardsByLibraryId(extractedCards);
     }
 
-    const ads = normalizeAndFilterExtractedCards(extractedCards, query);
+    let ads = normalizeAndFilterExtractedCards(extractedCards, query).filter(
+      adHasUsableContent,
+    );
+
+    // Belt-and-suspenders for the logged-out Browser Rendering DOM: if DOM card
+    // discovery produced no ad with usable content (advertiser/body/headline/
+    // creative), re-derive from the page's rendered text with the hardened
+    // parser before returning an empty result. DOM discovery emitting
+    // content-free "ghost" cards must never suppress this fallback.
+    if (ads.length === 0 && normalizedExtraction.pageText) {
+      const textAds = normalizeAndFilterExtractedCards(
+        extractTextCardsFromVisibleText(normalizedExtraction.pageText),
+        query,
+      ).filter(adHasUsableContent);
+      if (textAds.length > 0) {
+        ads = textAds;
+      }
+    }
 
     return {
       ads,
@@ -567,7 +584,21 @@ function createSessionCardExtractionScript() {
       ) {
         node = node.parentElement;
       }
-      roots.set(idMatch[1], node);
+      // On flat/virtualized Ad Library DOMs (and the logged-out Browser
+      // Rendering variant) the climb can stop at the bare "Library ID: N" leaf,
+      // whose only text is the label itself. Registering such a root emits a
+      // ghost card that has no advertiser/body/creative yet still short-circuits
+      // the hardened rendered-text fallback. Only register a climbed root that
+      // grew into a real card and carries the "Sponsored" marker.
+      const climbedText = node.innerText || "";
+      const looksLikeAdCard =
+        node !== label &&
+        climbedText
+          .split("\n")
+          .some((line) => /^\s*Sponsored\s*$/i.test(line));
+      if (looksLikeAdCard) {
+        roots.set(idMatch[1], node);
+      }
     }
 
     const cards = Array.from(roots.entries())
@@ -1228,7 +1259,16 @@ function buildQuickActionExtractionScript() {
     ) {
       node = node.parentElement;
     }
-    roots.set(idMatch[1], node);
+    // Skip bare "Library ID: N" leaves that never climbed into a real card:
+    // registering them emits ghost cards that suppress the rendered-text
+    // fallback (mirrors the session extractor's guard).
+    const climbedText = renderedText(node) || "";
+    const looksLikeAdCard =
+      node !== label &&
+      climbedText.split("\\n").some((line) => /^\\s*Sponsored\\s*$/i.test(line));
+    if (looksLikeAdCard) {
+      roots.set(idMatch[1], node);
+    }
   }
 
   const cards = Array.from(roots.entries())
@@ -1743,6 +1783,22 @@ export function normalizeExtractedCard(
     creativeFormatHint,
     variantCount: card.variantCount ?? null,
   });
+}
+
+/**
+ * A normalized ad carries usable content when it has any of the fields a
+ * customer actually sees: advertiser, ad copy, a usable headline, or a
+ * creative. Content-free "ghost" cards (e.g. a DOM discovery pass that only
+ * captured a bare "Library ID: N" label) fail this check so they can be dropped
+ * before they suppress the rendered-text fallback or reach the customer.
+ */
+export function adHasUsableContent(ad: AdRecord): boolean {
+  return Boolean(
+    ad.advertiser?.trim() ||
+      ad.body?.trim() ||
+      ad.previewHeadline?.trim() ||
+      ad.creativeImageUrl?.trim(),
+  );
 }
 
 /** Exported for unit tests that assert Ad Library URL filter params. */
