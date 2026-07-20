@@ -19,7 +19,7 @@ export function normalizeSearchFilters(
   defaults: { country?: string } = {},
 ): SearchFilters {
   const fallbackCountry = defaults.country ?? "all";
-  return {
+  const normalized: SearchFilters = {
     query: (filters.query ?? "").trim(),
     country: (filters.country ?? fallbackCountry).trim() || fallbackCountry,
     platform: (filters.platform ?? "all").trim() || "all",
@@ -28,6 +28,21 @@ export function normalizeSearchFilters(
     firstSeenFrom: (filters.firstSeenFrom ?? "").trim(),
     lastSeenFrom: (filters.lastSeenFrom ?? "").trim(),
   };
+  // Only carry a verified numeric page id. Omit the key entirely otherwise so
+  // keyword-query cache fingerprints are byte-identical to their pre-pageId form.
+  const pageId = normalizeNumericPageId(filters.pageId);
+  if (pageId) {
+    normalized.pageId = pageId;
+  }
+  return normalized;
+}
+
+/** A Meta Page id is an all-digit token; reject anything else (never a term). */
+export function normalizeNumericPageId(
+  value: string | null | undefined,
+): string | null {
+  const trimmed = (value ?? "").trim();
+  return /^\d{5,}$/.test(trimmed) ? trimmed : null;
 }
 
 export function normalizeSavedQuery(

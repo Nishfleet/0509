@@ -2259,3 +2259,213 @@ describe("session extraction card mapping", () => {
     expect(ad.variantCount).toBe(2);
   });
 });
+
+describe("page-id-aware discovery", () => {
+  it("scopes the Ad Library URL to view_all_page_id when a verified page id is set", async () => {
+    vi.doMock("@cloudflare/puppeteer", () => ({ default: {} }));
+    const { buildSearchUrl } = await import("~/lib/meta-library-browser.server");
+
+    const url = new URL(
+      buildSearchUrl({
+        mode: "advertiser",
+        filters: {
+          ...buildQuery().filters,
+          query: "nike",
+          country: "United States",
+          status: "active",
+          pageId: "15087023444",
+        },
+      }),
+    );
+
+    // The keyword guess is dropped entirely in favor of exact page scoping.
+    expect(url.searchParams.get("view_all_page_id")).toBe("15087023444");
+    expect(url.searchParams.get("search_type")).toBe("page");
+    expect(url.searchParams.get("q")).toBeNull();
+    // Country/status/media filters still ride along on the scoped scan.
+    expect(url.searchParams.get("country")).toBe("US");
+    expect(url.searchParams.get("active_status")).toBe("active");
+  });
+
+  it("stays a keyword search and ignores a non-numeric page id", async () => {
+    vi.doMock("@cloudflare/puppeteer", () => ({ default: {} }));
+    const { buildSearchUrl } = await import("~/lib/meta-library-browser.server");
+
+    const url = new URL(
+      buildSearchUrl({
+        mode: "keyword",
+        filters: {
+          ...buildQuery().filters,
+          query: "nike",
+          // A spoofed non-numeric value must never scope a scan.
+          pageId: "nike; DROP",
+        },
+      }),
+    );
+
+    expect(url.searchParams.get("view_all_page_id")).toBeNull();
+    expect(url.searchParams.get("q")).toBe("nike");
+    expect(url.searchParams.get("search_type")).toBe("keyword_unordered");
+  });
+
+  it("floats brand-name advertiser matches above unrelated advertisers", async () => {
+    vi.doMock("@cloudflare/puppeteer", () => ({ default: {} }));
+    const { rankExtractedCardsByAdvertiserMatch } = await import(
+      "~/lib/meta-library-browser.server"
+    );
+    const card = (libraryId: string, advertiser: string) => ({
+      libraryId,
+      advertiser,
+      body: "",
+      previewHeadline: "",
+      previewSubhead: null,
+      cta: "",
+      adSnapshotUrl: null,
+      landingPageUrl: null,
+      platforms: [],
+      active: true,
+    });
+    const cards = [
+      card("1", "Whatnot"),
+      card("2", "Nike"),
+      card("3", "Amazon.com"),
+      card("4", "Nike, Inc."),
+    ];
+
+    const ranked = rankExtractedCardsByAdvertiserMatch(cards, {
+      mode: "keyword",
+      filters: { ...buildQuery().filters, query: "nike" },
+    });
+
+    // Nike advertisers first (stable order preserved), resellers after.
+    expect(ranked.map((entry) => entry.libraryId)).toEqual(["2", "4", "1", "3"]);
+  });
+
+  it("does not reorder cards once the scan is already page-scoped", async () => {
+    vi.doMock("@cloudflare/puppeteer", () => ({ default: {} }));
+    const { rankExtractedCardsByAdvertiserMatch } = await import(
+      "~/lib/meta-library-browser.server"
+    );
+    const cards = [
+      { libraryId: "1", advertiser: "Whatnot" },
+      { libraryId: "2", advertiser: "Nike" },
+    ].map((partial) => ({
+      ...partial,
+      body: "",
+      previewHeadline: "",
+      previewSubhead: null,
+      cta: "",
+      adSnapshotUrl: null,
+      landingPageUrl: null,
+      platforms: [],
+      active: true,
+    }));
+
+    const ranked = rankExtractedCardsByAdvertiserMatch(cards, {
+      mode: "advertiser",
+      filters: { ...buildQuery().filters, query: "nike", pageId: "15087023444" },
+    });
+
+    expect(ranked.map((entry) => entry.libraryId)).toEqual(["1", "2"]);
+  });
+
+  it("carries the scraped advertiser page id onto the normalized ad record", async () => {
+    vi.doMock("@cloudflare/puppeteer", () => ({ default: {} }));
+    const { normalizeExtractedCard } = await import(
+      "~/lib/meta-library-browser.server"
+    );
+
+    const ad = normalizeExtractedCard(
+      {
+        libraryId: "1869276447125570",
+        advertiser: "Nike",
+        body: "Celebrate with Nike",
+        previewHeadline: "Nike",
+        previewSubhead: null,
+        cta: "Shop now",
+        adSnapshotUrl:
+          "https://www.facebook.com/ads/library/?id=1869276447125570",
+        landingPageUrl: "https://www.nike.com/",
+        platforms: ["Instagram"],
+        active: true,
+        pageId: "15087023444",
+      },
+      buildQuery(),
+    );
+
+    expect(ad.advertiserPageId).toBe("15087023444");
+  });
+});
+
+describe("Ad Library relay page-identity parsing", () => {
+  it("maps ad_archive_id to the advertiser numeric page id from the relay payload", async () => {
+    const { extractAdArchivePageIdentities } = await import(
+      "~/lib/meta-library-rendered-card-parser.server"
+    );
+    // Shape mirrors the live Ad Library relay payload (collated_results node).
+    const relay = `{"collated_results":[{"ad_archive_id":"1869276447125570","is_active":true,"page_id":"15087023444","page_is_deleted":false,"snapshot":{"page_id":"15087023444","page_name":"Nike"}},{"ad_archive_id":"1033781512449452","page_id":"721404351056614","page_name":"IControl: Easy Widgets Themes"}]}`;
+
+    const identities = extractAdArchivePageIdentities(relay);
+
+    expect(identities.get("1869276447125570")).toEqual({
+      pageId: "15087023444",
+      pageName: "Nike",
+    });
+    expect(identities.get("1033781512449452")?.pageId).toBe("721404351056614");
+  });
+
+  it("resolves escaped-quote relay nodes even when nodes are far apart", async () => {
+    const { extractAdArchivePageIdentities } = await import(
+      "~/lib/meta-library-rendered-card-parser.server"
+    );
+    // Mirrors the LIVE payload: Relay JSON embedded as a string (escaped
+    // quotes), page_id ~90 chars after ad_archive_id, and a large gap of
+    // unrelated snapshot fields before the next node. The earlier lookahead
+    // implementation discarded every match here; the windowed one must not.
+    const filler = "\\\"snapshot\\\":{" + "\\\"x\\\":1,".repeat(400) + "}";
+    const relay =
+      `[{\\"ad_archive_id\\":\\"1869276447125570\\",\\"collation_count\\":null,\\"is_active\\":true,\\"page_id\\":\\"15087023444\\",${filler}},` +
+      `{\\"ad_archive_id\\":\\"1502078871070045\\",\\"page_id\\":\\"112727500143177\\",\\"page_name\\":\\"Whatnot\\"}]`;
+
+    const identities = extractAdArchivePageIdentities(relay);
+
+    expect(identities.get("1869276447125570")?.pageId).toBe("15087023444");
+    expect(identities.get("1502078871070045")?.pageId).toBe("112727500143177");
+  });
+
+  it("reads a numeric advertiser-page link but returns null for a vanity link", async () => {
+    const { numericPageIdFromFacebookProfileHref } = await import(
+      "~/lib/meta-library-rendered-card-parser.server"
+    );
+
+    expect(
+      numericPageIdFromFacebookProfileHref(
+        "https://www.facebook.com/61578892468353/",
+      ),
+    ).toBe("61578892468353");
+    expect(
+      numericPageIdFromFacebookProfileHref("https://www.facebook.com/nike/"),
+    ).toBeNull();
+    expect(
+      numericPageIdFromFacebookProfileHref("https://evil.example/12345/"),
+    ).toBeNull();
+  });
+
+  it("attaches the relay page id to rendered cards by library id", async () => {
+    const { parseRenderedMetaLibraryHtml } = await import(
+      "~/lib/meta-library-rendered-card-parser.server"
+    );
+
+    const result = parseRenderedMetaLibraryHtml(`
+      <script>{"ad_archive_id":"5555555555","page_id":"15087023444","page_name":"Nike"}</script>
+      <article role="article">
+        <strong>Nike</strong>
+        <span>Sponsored</span>
+        <a href="/ads/library/?id=5555555555">View ad details</a>
+      </article>
+    `);
+
+    expect(result.cards).toHaveLength(1);
+    expect(result.cards[0].pageId).toBe("15087023444");
+  });
+});
