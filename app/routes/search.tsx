@@ -1321,6 +1321,22 @@ export default function SearchRoute() {
                   <option value="inactive">Inactive</option>
                 </select>
               </label>
+              <label className="f9-search-field">
+                <span>First seen after</span>
+                <input
+                  defaultValue={data.filters.firstSeenFrom}
+                  name="firstSeenFrom"
+                  type="date"
+                />
+              </label>
+              <label className="f9-search-field">
+                <span>Last active after</span>
+                <input
+                  defaultValue={data.filters.lastSeenFrom}
+                  name="lastSeenFrom"
+                  type="date"
+                />
+              </label>
             </div>
           </details>
           <div className="f9-search-actions">
