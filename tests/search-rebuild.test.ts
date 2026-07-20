@@ -64,6 +64,24 @@ describe("search rebuild", () => {
     expect(searchRoute).toContain("Track this {targetNoun}");
   });
 
+  it("exposes firstSeenFrom / lastSeenFrom date inputs in the Refine panel", () => {
+    // UI labels + named date inputs (not hidden-only plumbing).
+    expect(searchRoute).toContain("First seen after");
+    expect(searchRoute).toContain("Last active after");
+    expect(searchRoute).toMatch(/name="firstSeenFrom"[\s\S]*?type="date"/);
+    expect(searchRoute).toMatch(/name="lastSeenFrom"[\s\S]*?type="date"/);
+    // Action still threads form fields into SearchFilters.
+    expect(searchRoute).toContain('formData.get("firstSeenFrom")');
+    expect(searchRoute).toContain('formData.get("lastSeenFrom")');
+    // Secondary forms keep filter state via hidden fields.
+    expect(searchRoute).toContain(
+      '<input name="firstSeenFrom" type="hidden" value={filters.firstSeenFrom} />',
+    );
+    expect(searchRoute).toContain(
+      '<input name="lastSeenFrom" type="hidden" value={filters.lastSeenFrom} />',
+    );
+  });
+
   it("keeps hidden result markers for production canaries", () => {
     expect(searchRoute).toContain("data-f9-result-source");
     expect(searchRoute).toContain("data-f9-result-cache-status");

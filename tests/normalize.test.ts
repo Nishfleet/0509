@@ -190,6 +190,32 @@ describe("parseSearchParams + buildSearchParams round-trip", () => {
     expect(rebuilt.get("lastSeenFrom")).toBe("2024-12-31");
   });
 
+  it("round-trips Refine panel date filters (firstSeenFrom / lastSeenFrom)", () => {
+    // Mirrors form submission: date inputs → URL params → parse → rebuild.
+    const refineParams = new URLSearchParams({
+      mode: "advertiser",
+      query: "nykaa.com",
+      country: "all",
+      platform: "all",
+      creativeType: "all",
+      status: "all",
+      firstSeenFrom: "2026-01-15",
+      lastSeenFrom: "2026-06-01",
+    });
+
+    const parsed = parseSearchParams(refineParams);
+    expect(parsed.filters.firstSeenFrom).toBe("2026-01-15");
+    expect(parsed.filters.lastSeenFrom).toBe("2026-06-01");
+
+    const rebuilt = buildSearchParams(parsed);
+    expect(rebuilt.get("firstSeenFrom")).toBe("2026-01-15");
+    expect(rebuilt.get("lastSeenFrom")).toBe("2026-06-01");
+
+    const reparsed = parseSearchParams(rebuilt);
+    expect(reparsed.filters.firstSeenFrom).toBe("2026-01-15");
+    expect(reparsed.filters.lastSeenFrom).toBe("2026-06-01");
+  });
+
   it("round-trips with defaults applied (no explicit country/platform in original)", () => {
     const originalParams = new URLSearchParams({
       mode: "advertiser",
