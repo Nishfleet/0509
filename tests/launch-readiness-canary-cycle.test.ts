@@ -30,6 +30,7 @@ describe("launch readiness canary cycle", () => {
       runLaunchReadinessCanaryCycle({
         runCanaryImpl,
         expectedWorkerVersionId: "version-abc",
+        gateRunId: "1234567890",
       }),
     ).resolves.toMatchObject({
       ok: true,
@@ -39,12 +40,16 @@ describe("launch readiness canary cycle", () => {
       config: expect.objectContaining({
         cleanup: false,
         expectedWorkerVersionId: "version-abc",
+        gateRunId: "1234567890",
       }),
     });
     expect(runCanaryImpl).toHaveBeenNthCalledWith(2, {
       config: expect.objectContaining({
         cleanup: true,
         expectedWorkerVersionId: "version-abc",
+        // Cleanup must send the three cleanup IDs WITHOUT a gate run id —
+        // the canary client rejects both together.
+        gateRunId: null,
         runId: "run-1",
         digestRunId: "digest-1",
         proofCaptureId: "proof-1",
@@ -68,15 +73,34 @@ describe("launch readiness canary cycle", () => {
       runLaunchReadinessCanaryCycle({
         runCanaryImpl,
         expectedWorkerVersionId: "version-abc",
+        gateRunId: "1234567890",
       }),
     ).rejects.toThrow("launch_readiness_proof_capture_not_preserved");
   });
 
   it("refuses to run unbound — no expected Worker version, no canary", async () => {
     const runCanaryImpl = vi.fn();
-    await expect(runLaunchReadinessCanaryCycle({ runCanaryImpl })).rejects.toThrow(
-      "launch_readiness_proof_canary_unbound",
-    );
+    await expect(
+      runLaunchReadinessCanaryCycle({ runCanaryImpl, gateRunId: "1234567890" }),
+    ).rejects.toThrow("launch_readiness_proof_canary_unbound");
+    expect(runCanaryImpl).not.toHaveBeenCalled();
+  });
+
+  it("refuses to run without a gate run id — non-resumable canaries are rejected", async () => {
+    const runCanaryImpl = vi.fn();
+    await expect(
+      runLaunchReadinessCanaryCycle({
+        runCanaryImpl,
+        expectedWorkerVersionId: "version-abc",
+      }),
+    ).rejects.toThrow("launch_readiness_proof_canary_gate_run_missing");
+    await expect(
+      runLaunchReadinessCanaryCycle({
+        runCanaryImpl,
+        expectedWorkerVersionId: "version-abc",
+        gateRunId: "NOT VALID!",
+      }),
+    ).rejects.toThrow("launch_readiness_proof_canary_gate_run_missing");
     expect(runCanaryImpl).not.toHaveBeenCalled();
   });
 });

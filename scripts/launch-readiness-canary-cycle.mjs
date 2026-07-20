@@ -33,16 +33,24 @@ function startConfig(baseUrl) {
   };
 }
 
+const GATE_RUN_ID_PATTERN = /^[a-z0-9._-]{1,128}$/u;
+
 export async function runLaunchReadinessCanaryCycle({
   baseUrl = process.env.CANARY_BASE_URL || DEFAULT_BASE_URL,
   runCanaryImpl = runCanary,
   expectedWorkerVersionId = null,
+  gateRunId = null,
 } = {}) {
   if (!isIdentifier(expectedWorkerVersionId)) {
     throw new Error("launch_readiness_proof_canary_unbound");
   }
+  if (typeof gateRunId !== "string" || !GATE_RUN_ID_PATTERN.test(gateRunId)) {
+    throw new Error("launch_readiness_proof_canary_gate_run_missing");
+  }
+  // gateRunId binds only the start canary; cleanup must send the three
+  // cleanup IDs without it (the canary client rejects both together).
   const started = await runCanaryImpl({
-    config: { ...startConfig(baseUrl), expectedWorkerVersionId },
+    config: { ...startConfig(baseUrl), expectedWorkerVersionId, gateRunId },
   });
   const startPayload = started?.payload;
   if (!started?.response?.ok || startPayload?.ok !== true) {
@@ -94,10 +102,20 @@ function resolveExpectedWorkerVersionId() {
   return process.env.CANARY_EXPECTED_WORKER_VERSION_ID?.trim() || null;
 }
 
+function resolveGateRunId() {
+  return (
+    readArg("--gate-run-id") ??
+    (process.env.CANARY_GATE_RUN_ID?.trim() ||
+      process.env.GITHUB_RUN_ID?.trim() ||
+      null)
+  );
+}
+
 async function main() {
   try {
     const result = await runLaunchReadinessCanaryCycle({
       expectedWorkerVersionId: resolveExpectedWorkerVersionId(),
+      gateRunId: resolveGateRunId(),
     });
     console.log(
       `launch readiness proof canary cycle: ok (${result.proofCaptureId})`,
