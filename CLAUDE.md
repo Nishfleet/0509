@@ -72,6 +72,8 @@ npm run dev
 - `app/lib/plan.server.ts` — user plan lookup and free/starter/agency gating
 - `app/lib/rate-limit.server.ts` — D1-backed rate limiting (public search, auth, writes)
 - `app/lib/report-builder.server.ts` — shareable report assembly for collections and watchlists
+- `app/lib/watchlist-display.ts` — pure watchlist presentation/formatters (scan presentation, empty-event copy resolvers, run status/timing labels, delivery-channel visibility, proof summaries) extracted from `app/routes/app.watchlists.tsx`; the route re-exports the test-facing resolver names
+- `app/components/watchlists/` — presentational pieces of the watchlists route (FirstScanBanner, BulkSelectBar, DeliverySettingsCard, DeliveryTargetsSection, RecentChecksSection, RecentEvidenceChecksCard, CandidateHistory, EventChangesSection, TrackingStatusCard, WatchlistSetupCard, WatchlistProofAge). All are read-only over loader data + scalar plan flags — props threaded explicitly, no context. `WatchlistProofAge` is re-exported from the route for its hydration test
 
 ## Current Phase: Pre-Commercial-Launch Hardening
 
