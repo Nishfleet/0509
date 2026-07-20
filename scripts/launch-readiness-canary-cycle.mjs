@@ -215,27 +215,68 @@ export function resolveGateRunId(argv, env, expectedWorkerVersionId) {
   );
 }
 
+/**
+ * CLI orchestration for the propagation waiter and (optionally) the proof
+ * cycle. Dependency-injectable so `--wait-only` can be proven to run the
+ * waiter and NEVER invoke a mutating canary.
+ *
+ * With `--wait-only` the script resolves + waits for the exact deployed Worker
+ * version (same fail-closed missing-value behavior, same all-alias exact-worker
+ * wall-clock waiter) and exits 0 without running any canary mutation. Without
+ * the flag it behaves exactly as before: the full cycle preceded by the waiter.
+ * @param {{
+ *   argv: string[],
+ *   env: Record<string, string | undefined>,
+ *   waitForExpectedWorkerVersionImpl?: typeof waitForExpectedWorkerVersion,
+ *   runCycleImpl?: typeof runLaunchReadinessCanaryCycle,
+ * }} input
+ */
+export async function runCanaryCycleCli({
+  argv,
+  env,
+  waitForExpectedWorkerVersionImpl = waitForExpectedWorkerVersion,
+  runCycleImpl = runLaunchReadinessCanaryCycle,
+}) {
+  const waitOnly = argv.includes("--wait-only");
+  const expectedWorkerVersionId = resolveExpectedWorkerVersionId(argv, env);
+  if (
+    typeof expectedWorkerVersionId !== "string" ||
+    !isIdentifier(expectedWorkerVersionId)
+  ) {
+    throw new Error("launch_readiness_proof_canary_unbound");
+  }
+  await waitForExpectedWorkerVersionImpl({ expectedWorkerVersionId });
+  if (waitOnly) {
+    return {
+      mode: /** @type {const} */ ("wait-only"),
+      expectedWorkerVersionId,
+    };
+  }
+  const result = await runCycleImpl({
+    expectedWorkerVersionId,
+    gateRunId: resolveGateRunId(argv, env, expectedWorkerVersionId),
+  });
+  return {
+    mode: /** @type {const} */ ("cycle"),
+    proofCaptureId: result.proofCaptureId,
+  };
+}
+
 async function main() {
   try {
-    const argv = process.argv.slice(2);
-    const expectedWorkerVersionId = resolveExpectedWorkerVersionId(
-      argv,
-      process.env,
-    );
-    if (
-      typeof expectedWorkerVersionId !== "string" ||
-      !isIdentifier(expectedWorkerVersionId)
-    ) {
-      throw new Error("launch_readiness_proof_canary_unbound");
-    }
-    await waitForExpectedWorkerVersion({ expectedWorkerVersionId });
-    const result = await runLaunchReadinessCanaryCycle({
-      expectedWorkerVersionId,
-      gateRunId: resolveGateRunId(argv, process.env, expectedWorkerVersionId),
+    const outcome = await runCanaryCycleCli({
+      argv: process.argv.slice(2),
+      env: process.env,
     });
-    console.log(
-      `launch readiness proof canary cycle: ok (${result.proofCaptureId})`,
-    );
+    if (outcome.mode === "wait-only") {
+      console.log(
+        `launch readiness worker propagation: stable (${outcome.expectedWorkerVersionId})`,
+      );
+    } else {
+      console.log(
+        `launch readiness proof canary cycle: ok (${outcome.proofCaptureId})`,
+      );
+    }
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;

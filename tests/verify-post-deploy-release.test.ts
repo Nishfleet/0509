@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { runVersionBoundGateC } = await import("../scripts/verify-post-deploy-release.mjs");
+const { runVersionBoundGateC, sanitizeProofDiagnostics } = await import("../scripts/verify-post-deploy-release.mjs");
 const roots: string[] = [];
 
 function evidencePath() {
@@ -34,6 +34,52 @@ function backupReport() {
 
 afterEach(() => {
   while (roots.length > 0) rmSync(roots.pop()!, { recursive: true, force: true });
+});
+
+describe("sanitizeProofDiagnostics", () => {
+  it("keeps only identifier-safe blocker/delivery fields and drops anything address-shaped", () => {
+    const diagnostics = sanitizeProofDiagnostics({
+      ok: false,
+      // recipient/body/token style fields must never survive
+      recipient: "someone@example.com",
+      messageBody: "Your weekly digest…",
+      token: "secret-token",
+      blockers: ["no_digest_delivery_sent", "INVALID BLOCKER!", 42],
+      delivery: {
+        attempts: 2,
+        channels: ["email", "whatsapp"],
+        details: [
+          {
+            channel: "email",
+            status: "unknown",
+            webhookStatus: "provider_unknown",
+            deliveredAt: "2026-07-20T00:00:00.000Z",
+            recipient: "someone@example.com",
+          },
+        ],
+      },
+    });
+    expect(diagnostics).toEqual({
+      blockers: ["no_digest_delivery_sent"],
+      delivery: {
+        attempts: 2,
+        channels: ["email", "whatsapp"],
+        details: [{ channel: "email", status: "unknown", webhookStatus: "provider_unknown" }],
+      },
+    });
+    // Nothing address/body/token-shaped may appear anywhere in the output.
+    const serialized = JSON.stringify(diagnostics);
+    expect(serialized).not.toContain("example.com");
+    expect(serialized).not.toContain("secret-token");
+    expect(serialized).not.toContain("digest…");
+    expect(serialized).not.toContain("deliveredAt");
+  });
+
+  it("returns null when there is nothing safe to report", () => {
+    expect(sanitizeProofDiagnostics(undefined)).toBeNull();
+    expect(sanitizeProofDiagnostics({ ok: false })).toBeNull();
+    expect(sanitizeProofDiagnostics({ ok: false, blockers: [], delivery: {} })).toBeNull();
+  });
 });
 
 describe("version-bound Gate C orchestrator", () => {
@@ -148,6 +194,55 @@ describe("version-bound Gate C orchestrator", () => {
       gateRunId: "gate-c-worker-v1",
       token: "token",
     });
+  });
+
+  it("persists identifier-safe proof blockers and sanitized delivery on proof failure", async () => {
+    const path = evidencePath();
+    const result = await runVersionBoundGateC({
+      workerVersionId: "worker-v1",
+      token: "token",
+      evidencePath: path,
+      dependencies: {
+        healthAnchor: vi.fn(async () => ({ ok: true })),
+        backupLifecycle: vi.fn(async () => ({ ok: true, report: backupReport() })),
+        pricing: vi.fn(async () => ({ ok: true })),
+        billing: vi.fn(async () => ({ ok: true })),
+        proof: vi.fn(async () => ({
+          ok: false,
+          payload: {
+            ok: false,
+            gateRunId: "gate-c-worker-v1",
+            runId: "run-1",
+            digestRunId: "digest-1",
+            proofCaptureId: "proof-1",
+            blockers: ["no_digest_delivery_sent"],
+            // The route already sanitizes this via sanitizeDeliveryForCanary.
+            delivery: {
+              attempts: 1,
+              channels: ["email"],
+              details: [{ channel: "email", status: "unknown", webhookStatus: "provider_unknown", deliveredAt: null }],
+            },
+          },
+        })),
+        productionCanary: vi.fn(),
+        cleanup: vi.fn(async () => ({ ok: true })),
+      },
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.journal.errors).toContain("proof_email_failed");
+    // Gate C is NOT weakened: this proof failed, and it stays failed.
+    const journal = JSON.parse(readFileSync(path, "utf8"));
+    expect(journal.proofDiagnostics).toEqual({
+      blockers: ["no_digest_delivery_sent"],
+      delivery: {
+        attempts: 1,
+        channels: ["email"],
+        // Only identifier-safe fields survive — no deliveredAt, no addresses.
+        details: [{ channel: "email", status: "unknown", webhookStatus: "provider_unknown" }],
+      },
+    });
+    expect(result.journal.proofDiagnostics).toEqual(journal.proofDiagnostics);
   });
 
   it("recovers an interrupted proof by stable gate ID without repeating provider work", async () => {

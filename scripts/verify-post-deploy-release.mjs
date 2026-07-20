@@ -77,6 +77,7 @@ const REQUIRED_PASSED_STEPS = Object.freeze([
  *   cleanupTicket?: CleanupTicket,
  *   productionSummary?: string,
  *   backupLifecycleSummary?: unknown,
+ *   proofDiagnostics?: { blockers?: string[], delivery?: { attempts?: number, channels?: string[], details?: Array<{ channel?: string, status?: string, webhookStatus?: string }> } },
  *   completedAt?: string,
  *   ownerPid?: number
  * }} GateJournal
@@ -140,6 +141,65 @@ function gateRunId(workerVersionId) {
 /** @param {string} step */
 function safeStepError(step) {
   return `${step}_failed`;
+}
+
+const DIAGNOSTIC_IDENTIFIER_PATTERN = /^[a-z0-9._-]{1,128}$/u;
+
+/**
+ * Project a proof canary payload into identifier-safe diagnostics for the
+ * journal so a proof_email failure is actionable. The route already sanitizes
+ * `delivery` via sanitizeDeliveryForCanary (no recipient addresses, no message
+ * bodies, no tokens); this re-projects ONLY identifier-safe fields — blocker
+ * identifiers plus delivery statuses/lanes(channels)/webhookStatus — defensively
+ * dropping everything else (including timestamps) so nothing address-shaped can
+ * ever leak into evidence.
+ * @param {ProofPayload | undefined} payload
+ */
+export function sanitizeProofDiagnostics(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+  const source = /** @type {Record<string, unknown>} */ (payload);
+  /** @type {NonNullable<GateJournal["proofDiagnostics"]>} */
+  const diagnostics = {};
+  if (Array.isArray(source.blockers)) {
+    const blockers = source.blockers.filter(
+      (value) =>
+        typeof value === "string" && DIAGNOSTIC_IDENTIFIER_PATTERN.test(value),
+    );
+    if (blockers.length > 0) diagnostics.blockers = blockers;
+  }
+  const delivery = source.delivery;
+  if (delivery && typeof delivery === "object" && !Array.isArray(delivery)) {
+    const deliverySource = /** @type {Record<string, unknown>} */ (delivery);
+    /** @type {NonNullable<NonNullable<GateJournal["proofDiagnostics"]>["delivery"]>} */
+    const summary = {};
+    if (Number.isInteger(deliverySource.attempts)) {
+      summary.attempts = /** @type {number} */ (deliverySource.attempts);
+    }
+    if (Array.isArray(deliverySource.channels)) {
+      const channels = deliverySource.channels.filter(
+        (value) => typeof value === "string",
+      );
+      if (channels.length > 0) summary.channels = channels;
+    }
+    if (Array.isArray(deliverySource.details)) {
+      summary.details = deliverySource.details
+        .filter((detail) => detail && typeof detail === "object" && !Array.isArray(detail))
+        .map((detail) => {
+          const entry = /** @type {Record<string, unknown>} */ (detail);
+          return {
+            ...(typeof entry.channel === "string" ? { channel: entry.channel } : {}),
+            ...(typeof entry.status === "string" ? { status: entry.status } : {}),
+            ...(typeof entry.webhookStatus === "string"
+              ? { webhookStatus: entry.webhookStatus }
+              : {}),
+          };
+        });
+    }
+    if (Object.keys(summary).length > 0) diagnostics.delivery = summary;
+  }
+  return Object.keys(diagnostics).length > 0 ? diagnostics : null;
 }
 
 /** @param {{ workerVersionId: string }} input */
@@ -378,7 +438,14 @@ export async function runVersionBoundGateC({
       journal.cleanupTicket = cleanupTicket;
       persist();
     }
-    if (!proofResult.ok) throw new Error("proof_email_failed");
+    if (!proofResult.ok) {
+      const diagnostics = sanitizeProofDiagnostics(payload);
+      if (diagnostics) {
+        journal.proofDiagnostics = diagnostics;
+        persist();
+      }
+      throw new Error("proof_email_failed");
+    }
     journal.steps.proof_email = { status: "passed", at: now().toISOString() };
     persist();
     const live = await step("production_meta", () => productionCanary({ workerVersionId, token }));
@@ -629,6 +696,9 @@ async function main() {
     workerVersionId,
     evidencePath,
     errors: result.journal.errors,
+    ...(result.journal.proofDiagnostics
+      ? { proofDiagnostics: result.journal.proofDiagnostics }
+      : {}),
   })}\n`);
   if (!result.passed) process.exitCode = 1;
 }
