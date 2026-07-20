@@ -18,7 +18,11 @@ import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboa
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
 import { WatchlistTrends } from "~/components/watchlist-trends";
 import { BulkSelectBar } from "~/components/watchlists/bulk-select-bar";
+import { CandidateHistory } from "~/components/watchlists/candidate-history";
+import { DeliverySettingsCard } from "~/components/watchlists/delivery-settings-card";
+import { DeliveryTargetsSection } from "~/components/watchlists/delivery-targets-section";
 import { FirstScanBanner } from "~/components/watchlists/first-scan-banner";
+import { RecentChecksSection } from "~/components/watchlists/recent-checks-section";
 import { CopyButton } from "~/components/copy-button";
 import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
@@ -81,10 +85,6 @@ import {
   buildProofSummary,
   emptyProofSummary,
   firstScanPollingKey,
-  formatRunEventTypes,
-  formatRunStatusLabel,
-  formatRunSummary,
-  formatRunTriggerLabel,
   formatWatchlistRefreshFailure,
   isDeliveryTestRequestToken,
   isVisibleDeliveryChannel,
@@ -1587,332 +1587,27 @@ export default function WatchlistsRoute() {
                       </div>
                     </article>
 
-                    <article className="f9-detail-cell">
-                      <p className="f9-app-kicker">Delivery settings</p>
-                      <h3>Channel policy</h3>
-                      {!data.watchlistDeliveryConfig ? (
-                        <p className="f9-muted-copy">
-                          Using the default alert settings for this account.
-                        </p>
-                      ) : null}
-                      {canConfigureDigestSettings ? <Form method="post" className="f9-work-list is-compact">
-                        <input name="intent" type="hidden" value="save-delivery-config" />
-                        <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
-                        <label className="f9-field">
-                          <span>Sensitivity</span>
-                          <select defaultValue={data.effectiveDeliveryConfig.sensitivityMode} name="sensitivityMode">
-                            <option value="quiet">Quiet</option>
-                            <option value="balanced">Balanced</option>
-                            <option value="aggressive">Aggressive</option>
-                            <option value="auto">Auto (Balanced)</option>
-                          </select>
-                        </label>
-                        <label className="f9-field">
-                          <span>Timezone</span>
-                          <input
-                            defaultValue={data.effectiveDeliveryConfig.timezone ?? "UTC"}
-                            aria-describedby="delivery-timezone-help"
-                            name="timezone"
-                            type="text"
-                          />
-                          <small className="f9-muted-copy" id="delivery-timezone-help">
-                            Use an IANA timezone such as Asia/Kolkata or UTC.
-                          </small>
-                        </label>
-                        <div className="f9-field-pair">
-                          <label className="f9-field">
-                            <span>Quiet hours start</span>
-                            <input
-                              defaultValue={data.effectiveDeliveryConfig.quietHours?.startHour ?? 22}
-                              name="quietHoursStart"
-                              type="number"
-                            />
-                          </label>
-                          <label className="f9-field">
-                            <span>Quiet hours end</span>
-                            <input
-                              defaultValue={data.effectiveDeliveryConfig.quietHours?.endHour ?? 8}
-                              name="quietHoursEnd"
-                              type="number"
-                            />
-                          </label>
-                        </div>
-                        {canInstantAlert ? (
-                          <label className="f9-field f9-field-inline">
-                            <input defaultChecked={data.effectiveDeliveryConfig.instantEnabled} name="instantEnabled" type="checkbox" />
-                            <span>High-priority alerts (sent as soon as a scan confirms a major change)</span>
-                          </label>
-                        ) : (
-                          <div className="f9-field f9-action-row">
-                            <label className="f9-field-inline">
-                              <input disabled type="checkbox" />
-                              <span>High-priority alerts require Starter.</span>
-                            </label>
-                            <Link className="f9-secondary-button" to="/app/billing?source=watchlists#plans">
-                              View plans
-                            </Link>
-                          </div>
-                        )}
-                        <label className="f9-field f9-field-inline">
-                          <input defaultChecked={data.effectiveDeliveryConfig.digestEnabled} name="digestEnabled" type="checkbox" />
-                          <span>{data.plan === "free" ? "Weekly digest email" : "Digest alerts"}</span>
-                        </label>
-                        {canEmailDelivery ? (
-                          <label className="f9-field f9-field-inline">
-                            <input defaultChecked={data.effectiveDeliveryConfig.emailEnabled} name="emailEnabled" type="checkbox" />
-                            <span>Email enabled</span>
-                          </label>
-                        ) : (
-                          <label className="f9-field f9-field-inline">
-                            <input disabled type="checkbox" />
-                            <span>
-                              Email delivery requires Scout. {" "}
-                              <Link to="/app/billing?source=watchlists#plans">View plans</Link>
-                            </span>
-                          </label>
-                        )}
-                        {data.whatsappAvailable ? (
-                          <label className="f9-field f9-field-inline">
-                            <input defaultChecked={data.effectiveDeliveryConfig.whatsappEnabled} name="whatsappEnabled" type="checkbox" />
-                            <span>WhatsApp enabled</span>
-                          </label>
-                        ) : null}
-                        {showSlackDelivery ? (
-                        <label className="f9-field f9-field-inline">
-                          <input defaultChecked={data.effectiveDeliveryConfig.slackEnabled} name="slackEnabled" type="checkbox" />
-                          <span>Slack enabled</span>
-                        </label>
-                        ) : null}
-                        <SubmitButton className="f9-primary-button" intent="save-delivery-config" pendingLabel="Saving…">
-                          Save delivery settings
-                        </SubmitButton>
-                      </Form> : (
-                        <div className="f9-work-list is-compact">
-                          <p className="f9-muted-copy">
-                            Delivery settings are managed by the workspace owner.
-                          </p>
-                        </div>
-                      )}
-                    </article>
+                    <DeliverySettingsCard
+                      canConfigureDigestSettings={canConfigureDigestSettings}
+                      canEmailDelivery={canEmailDelivery}
+                      canInstantAlert={canInstantAlert}
+                      data={data}
+                      showSlackDelivery={showSlackDelivery}
+                      watchlistId={data.selectedWatchlist.id}
+                    />
                   </div>
                 </section>
 
-                <section>
-                  <div className="f9-panel-toolbar">
-                    <div>
-                      <p className="f9-app-kicker">Delivery targets</p>
-                      <h3 style={{ marginTop: 0 }}>Targets and pauses</h3>
-                    </div>
-                  </div>
-                  <div className="f9-detail-split">
-                  <div className="f9-detail-cell">
-                  <p className="f9-app-kicker">Watchlist targets</p>
-                  {data.canManageDelivery ? <div className="f9-work-list is-compact">
-                    {data.deliveryTargets.map((target) => (
-                      <div className="f9-work-row" key={target.id}>
-                        <div>
-                          <h4 style={{ marginBottom: "0.25rem" }}>
-                            {target.channel === "email" ? "Email" : "WhatsApp"}
-                          </h4>
-                          <p className="f9-muted-copy">
-                            {toPublicDeliveryTarget(target, {
-                              verifiedAccountEmail: data.verifiedAccountEmail,
-                            }).targetValue}
-                          </p>
-                          <p className="f9-muted-copy">
-                            {target.isPaused
-                              ? "Paused"
-                              : target.channel === "whatsapp" && !data.whatsappAvailable
-                                ? "Not yet available — WhatsApp delivery isn't live"
-                                : target.channel === "whatsapp" && !target.templateEligible
-                                  ? "Waiting for WhatsApp approval"
-                                  : "Ready"}
-                          </p>
-                        </div>
-                        <div style={{ display: "flex", gap: "0.5rem" }}>
-                          {target.channel === "email" && canEmailDelivery ? (
-                            <Form method="post">
-                              <input name="intent" type="hidden" value="send-test-email" />
-                              <input name="targetId" type="hidden" value={target.id} />
-                              <input
-                                name="requestToken"
-                                type="hidden"
-                                value={data.deliveryTestRequestTokens[target.id] ?? ""}
-                              />
-                              <SubmitButton
-                                className="f9-secondary-button"
-                                intent="send-test-email"
-                                match={{ targetId: target.id }}
-                                pendingLabel="Sending…"
-                              >
-                                Send test
-                              </SubmitButton>
-                            </Form>
-                          ) : target.channel === "email" ? (
-                            <Link className="f9-secondary-button" to="/app/billing?source=watchlists#plans">
-                              Upgrade for email
-                            </Link>
-                          ) : null}
-                          <Form method="post">
-                            <input name="intent" type="hidden" value="toggle-delivery-target" />
-                            <input name="targetId" type="hidden" value={target.id} />
-                            <SubmitButton
-                              className="f9-secondary-button"
-                              intent="toggle-delivery-target"
-                              match={{ targetId: target.id }}
-                              pendingLabel={target.isPaused ? "Resuming…" : "Pausing…"}
-                            >
-                              {target.isPaused ? "Resume" : "Pause"}
-                            </SubmitButton>
-                          </Form>
-                        </div>
-                      </div>
-                    ))}
-                    {data.deliveryTargets.length === 0 ? (
-                      <p className="f9-muted-copy">
-                        Using the default delivery target until you add one for this competitor.
-                      </p>
-                    ) : null}
-                  </div> : (
-                    <div className="f9-work-list is-compact">
-                      <p className="f9-muted-copy">
-                        Delivery settings and recipient targets are managed by the workspace owner.
-                      </p>
-                      {data.verifiedAccountEmail ? (
-                        <p className="f9-muted-copy">Your verified account email: {data.verifiedAccountEmail}</p>
-                      ) : null}
-                    </div>
-                  )}
-                  {data.workspaceDeliveryTargets.length > 0 ? (
-                    <div>
-                      <p className="f9-app-kicker">Default delivery</p>
-                      <p className="f9-muted-copy">
-                        {data.workspaceDeliveryTargets
-                          .map((target) =>
-                            toPublicDeliveryTarget(target, {
-                              verifiedAccountEmail: data.verifiedAccountEmail,
-                            }).targetValue,
-                          )
-                          .join(" · ")}
-                      </p>
-                    </div>
-                  ) : null}
-                  </div>
+                <DeliveryTargetsSection
+                  canConfigureDelivery={canConfigureDelivery}
+                  canEmailDelivery={canEmailDelivery}
+                  data={data}
+                  watchlistId={data.selectedWatchlist.id}
+                />
 
-                  {canConfigureDelivery ? <Form method="post" className="f9-detail-cell">
-                    <p className="f9-app-kicker">Add delivery target</p>
-                    <input name="intent" type="hidden" value="add-delivery-target" />
-                    <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
-                    <label className="f9-field">
-                      <span>Channel</span>
-                      <select defaultValue="email" name="channel">
-                        <option value="email">Email</option>
-                        {data.whatsappAvailable ? (
-                          <option value="whatsapp">WhatsApp</option>
-                        ) : null}
-                      </select>
-                    </label>
-                    <label className="f9-field">
-                      <span>Target</span>
-                      <input
-                        name="targetValue"
-                        placeholder={data.whatsappAvailable ? "owner@example.com or +919999999999" : "owner@example.com"}
-                        type="text"
-                      />
-                    </label>
-                    <label className="f9-field f9-field-inline">
-                      <input defaultChecked name="explicitOptIn" type="checkbox" />
-                      <span>Explicit opt-in confirmed</span>
-                    </label>
-                    <SubmitButton className="f9-secondary-button" intent="add-delivery-target" pendingLabel="Adding…">
-                      Add delivery target
-                    </SubmitButton>
-                  </Form> : (
-                    <div className="f9-detail-cell">
-                      <p className="f9-app-kicker">Add delivery target</p>
-                      {data.canManageDelivery ? (
-                        <>
-                          <p className="f9-muted-copy">
-                            Paid plans can send proof-backed alerts to email. Upgrade to add a delivery target.
-                          </p>
-                          <Link className="f9-secondary-button" to="/app/billing?source=watchlists#plans">
-                            Upgrade for delivery
-                          </Link>
-                        </>
-                      ) : (
-                        <p className="f9-muted-copy">
-                          Ask the workspace owner to add or change delivery targets.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  </div>
-                </section>
+                <RecentChecksSection runs={data.runs} />
 
-                <section>
-                  <p className="f9-app-kicker">Recent checks</p>
-                  {data.runs.length === 0 ? (
-                    <p className="f9-muted-copy">No checks yet — the first one shows up here automatically.</p>
-                  ) : (
-                    <ul className="event-list f9-detail-split">
-                      {data.runs.map((run) => {
-                        const timing = resolveWatchlistRunTiming(run);
-                        return (
-                        <li className="f9-event-card" key={run.id}>
-                          <div className="f9-panel-toolbar">
-                            <div>
-                              <p className="f9-app-kicker">
-                                {formatRunStatusLabel(run.status, run.errorCode)} · {formatRunTriggerLabel(run.triggerType)}
-                              </p>
-                              <h3>
-                                Started <LocalTime iso={run.startedAt} />
-                              </h3>
-                            </div>
-                            <span className="f9-status-pill">{run.pagesScanned} {run.pagesScanned === 1 ? "page" : "pages"}</span>
-                          </div>
-                          <p className="f9-muted-copy">
-                            {timing.timestamp ? (
-                              <>
-                                {timing.label} <LocalTime iso={timing.timestamp} />
-                              </>
-                            ) : (
-                              timing.label
-                            )}
-                            {run.baselineFromRunId ? ` · baseline ${run.baselineFromRunId.slice(0, 8)}` : ""}
-                          </p>
-                          {formatRunSummary(run.summary) ? (
-                            <p className="f9-muted-copy">{formatRunSummary(run.summary)}</p>
-                          ) : null}
-                          {formatRunEventTypes(run.summary) ? (
-                            <p className="f9-muted-copy">{formatRunEventTypes(run.summary)}</p>
-                          ) : null}
-                          {run.errorMessage ? <p>{run.errorMessage}</p> : null}
-                        </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </section>
-
-                <details>
-                  <summary>Candidate history</summary>
-                  <div className="f9-work-list is-compact" style={{ marginTop: "1rem" }}>
-                    {data.eventCandidates.length === 0 ? (
-                      <p className="f9-muted-copy">No candidates yet — possible changes appear here before we confirm them.</p>
-                    ) : (
-                      data.eventCandidates.map((candidate) => (
-                        <div className="f9-work-row" key={candidate.id}>
-                          <div>
-                            <h4 style={{ marginBottom: "0.25rem" }}>{candidate.title}</h4>
-                            <p className="f9-muted-copy">
-                              {formatWatchEventStatusLabel(candidate.status)} · {formatImportanceBandLabel(candidate.importanceScore)}
-                            </p>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </details>
+                <CandidateHistory candidates={data.eventCandidates} />
               </div>
             </>
           ) : (
