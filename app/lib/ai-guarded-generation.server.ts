@@ -49,7 +49,7 @@ export function buildDataEnvelope(contentLines: readonly string[]): string {
 }
 
 /** Extract the text payload from a Workers AI run result. */
-export function readAiResponseText(response: unknown): string {
+function readAiResponseText(response: unknown): string {
   if (typeof response === "string") {
     return response;
   }

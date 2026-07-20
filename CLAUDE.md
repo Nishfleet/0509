@@ -72,6 +72,10 @@ npm run dev
 - `app/lib/plan.server.ts` — user plan lookup and free/starter/agency gating
 - `app/lib/rate-limit.server.ts` — D1-backed rate limiting (public search, auth, writes)
 - `app/lib/report-builder.server.ts` — shareable report assembly for collections and watchlists
+- `app/lib/ai-guarded-generation.server.ts` — shared scaffold for guarded Workers AI text generators (untrusted `<<<DATA>>>` envelope builder, prompt-field sanitizer, bounded never-throwing run wrapper, and grounding validation primitives). Used by `search-steal-summary.server.ts`, `counter-brief.server.ts`, and `digest-strategy.server.ts` — each keeps its own prompt/model/gates/output shape.
+- `app/lib/search-display.ts` — pure display/formatting/accumulation/URL helpers for the `/search` route (extracted from `search.tsx`; the route re-exports the test-facing names so `~/routes/search` imports still resolve)
+- `app/components/pill.tsx` — the one `<Pill>` badge component (families via `variant`: status / longevity / angle; `is-*` modifier via `state`). Replaced the scattered longevity/variant/angle/Sample/status pill markup
+- `app/components/search/result-card.tsx` — `SearchResultCard`, the per-ad card extracted from the `/search` results list
 
 ## Current Phase: Pre-Commercial-Launch Hardening
 

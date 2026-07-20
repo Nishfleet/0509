@@ -16,7 +16,7 @@ import type {
 } from "~/lib/types";
 
 /** Recovery window for the client-side "search checks recovered" hint. */
-export const SEARCH_DELAY_RECOVERY_WINDOW_MS = 5 * 60 * 1000;
+const SEARCH_DELAY_RECOVERY_WINDOW_MS = 5 * 60 * 1000;
 
 export function buildIdleSearchResult(): SearchResponse {
   return {
