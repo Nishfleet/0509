@@ -63,29 +63,43 @@ export function monthBoundsUtc(monthKey: string): { start: string; end: string }
 export function buildMonthlyRecapEmail(input: MonthlyRecapStats & { billingUrl: string }) {
   const monthLabel = formatMonthLabel(input.monthKey);
   const greeting = input.name?.trim() ? `Hi ${escapeHtml(input.name.trim())},` : "Hi,";
-  const topLine = input.topCompetitorName
-    ? `Most active competitor: <strong>${escapeHtml(input.topCompetitorName)}</strong> (${input.topCompetitorChanges} change${input.topCompetitorChanges === 1 ? "" : "s"}).`
-    : "No single competitor dominated this month.";
-  const checksLine =
-    input.includedAllowance > 0
-      ? `Evidence checks used: <strong>${input.evidenceCaptured}</strong> of ${input.includedAllowance} included.`
-      : `Evidence captures: <strong>${input.evidenceCaptured}</strong>.`;
 
   const subject = `Your ${monthLabel} recap — ${input.changesCaught} change${input.changesCaught === 1 ? "" : "s"} caught`;
   const preheader = `${input.changesCaught} changes, ${input.evidenceCaptured} evidence captures on ${input.plan}.`;
+  // Lead with the hero number the subscription paid for. When a month caught no
+  // changes but still ran evidence checks, headline the checks instead of a
+  // deflating "0".
+  const heroValue = input.changesCaught > 0 ? input.changesCaught : input.evidenceCaptured;
+  const heroLabel =
+    input.changesCaught > 0
+      ? `competitor change${input.changesCaught === 1 ? "" : "s"} caught in ${escapeHtml(monthLabel)}`
+      : `evidence check${input.evidenceCaptured === 1 ? "" : "s"} run in ${escapeHtml(monthLabel)}`;
+  const statRow = (label: string, value: string) => `
+        <tr>
+          <td style="padding: 12px 0; border-top: 1px solid #eef1f6; color: #5b6577; font-size: 14px;">${label}</td>
+          <td style="padding: 12px 0; border-top: 1px solid #eef1f6; color: #0b1220; font-size: 14px; text-align: right; font-weight: 600;">${value}</td>
+        </tr>`;
+  const checksValue =
+    input.includedAllowance > 0
+      ? `${input.evidenceCaptured} of ${input.includedAllowance}`
+      : `${input.evidenceCaptured}`;
+  const topValue = input.topCompetitorName
+    ? `${escapeHtml(input.topCompetitorName)} · ${input.topCompetitorChanges} change${input.topCompetitorChanges === 1 ? "" : "s"}`
+    : "No single leader";
   const html = `
     <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
       <p style="margin: 0 0 12px;">${greeting}</p>
-      <p style="margin: 0 0 12px;">
-        Here's what Five to Nine caught for you in <strong>${escapeHtml(monthLabel)}</strong>.
-      </p>
-      <ul style="margin: 0 0 16px; padding-left: 20px;">
-        <li style="margin: 0 0 8px;">Changes caught: <strong>${input.changesCaught}</strong></li>
-        <li style="margin: 0 0 8px;">${checksLine}</li>
-        <li style="margin: 0 0 8px;">${topLine}</li>
-      </ul>
-      <p style="margin: 0 0 16px;">
-        <a href="${escapeHtml(input.billingUrl)}" style="display: inline-block; background-color: #101828; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-weight: 600;">
+      <p style="margin: 0 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">Your ${escapeHtml(monthLabel)} recap</p>
+      <p style="margin: 0; font-size: 44px; line-height: 1.05; font-weight: 700; letter-spacing: -1.5px; color: #0b1220;">${heroValue}</p>
+      <p style="margin: 4px 0 20px; font-size: 18px; line-height: 1.3; letter-spacing: -0.3px; color: #0b1220;">${heroLabel}</p>
+      <p style="margin: 0 0 16px;">Here's what Five to Nine watched for you this month.</p>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin: 0 0 24px;">
+        ${statRow("Changes caught", `${input.changesCaught}`)}
+        ${statRow("Evidence checks used", checksValue)}
+        ${statRow("Most active competitor", topValue)}
+      </table>
+      <p style="margin: 0 0 20px;">
+        <a href="${escapeHtml(input.billingUrl)}" style="display: inline-block; background-color: #101828; color: #ffffff; text-decoration: none; padding: 11px 20px; border-radius: 8px; font-weight: 600; font-size: 15px;">
           Review usage &amp; billing
         </a>
       </p>
