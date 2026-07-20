@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { readDeployedWorkerVersionId } from "./deploy-production-plan.mjs";
 import { DEFAULT_BASE_URL, runCanary } from "./launch-readiness-canary.mjs";
+import { checkHealthEndpoint } from "./prod-canary.lib.mjs";
 
 /** @param {unknown} value */
 function isIdentifier(value) {
@@ -64,6 +65,9 @@ export async function runLaunchReadinessCanaryCycle({
   if (!started?.response?.ok || startPayload?.ok !== true) {
     throw new Error("launch_readiness_proof_canary_failed");
   }
+  if (startPayload?.workerVersionId !== expectedWorkerVersionId) {
+    throw new Error("launch_readiness_proof_canary_worker_version_mismatch");
+  }
 
   const { runId, digestRunId, proofCaptureId } = startPayload;
   if (![runId, digestRunId, proofCaptureId].every(isIdentifier)) {
@@ -81,7 +85,12 @@ export async function runLaunchReadinessCanaryCycle({
     },
   });
   if (!cleaned?.response?.ok || cleaned?.payload?.ok !== true) {
-    throw new Error("launch_readiness_proof_canary_cleanup_failed");
+    const status = Number.isInteger(cleaned?.response?.status) ? cleaned.response.status : "unknown";
+    const blocker = isIdentifier(cleaned?.payload?.blocker) ? cleaned.payload.blocker : "unknown";
+    throw new Error(`launch_readiness_proof_canary_cleanup_failed:status=${status}:blocker=${blocker}`);
+  }
+  if (cleaned.payload?.workerVersionId !== expectedWorkerVersionId) {
+    throw new Error("launch_readiness_cleanup_worker_version_mismatch");
   }
   if (cleaned.payload?.cleanup?.preservedProofCaptureId !== proofCaptureId) {
     throw new Error("launch_readiness_proof_capture_not_preserved");
@@ -92,6 +101,34 @@ export async function runLaunchReadinessCanaryCycle({
     proofCaptureId,
     cleanup: cleaned.payload.cleanup,
   };
+}
+
+/**
+ * Wait for the public route to serve the exact Worker version consistently
+ * before the first mutating canary call. This absorbs only provider route
+ * propagation; canary failures themselves are never retried.
+ * @param {{ baseUrl?: string, expectedWorkerVersionId: string, checkHealthImpl?: typeof checkHealthEndpoint, delayImpl?: (ms: number) => Promise<void>, maxSamples?: number, requiredConsecutive?: number }} input
+ */
+export async function waitForExpectedWorkerVersion({
+  baseUrl = process.env.CANARY_BASE_URL || DEFAULT_BASE_URL,
+  expectedWorkerVersionId,
+  checkHealthImpl = checkHealthEndpoint,
+  delayImpl = (ms) => new Promise((resolveDelay) => setTimeout(resolveDelay, ms)),
+  maxSamples = 12,
+  requiredConsecutive = 3,
+}) {
+  let consecutive = 0;
+  for (let sample = 0; sample < maxSamples; sample += 1) {
+    const check = await checkHealthImpl({
+      baseUrl,
+      expectedWorkerVersionId,
+      expectedSearchRolloutMode: null,
+    });
+    consecutive = check.ok ? consecutive + 1 : 0;
+    if (consecutive >= requiredConsecutive) return;
+    if (sample + 1 < maxSamples) await delayImpl(2_000);
+  }
+  throw new Error("launch_readiness_worker_propagation_not_stable");
 }
 
 /**
@@ -149,6 +186,13 @@ async function main() {
       argv,
       process.env,
     );
+    if (
+      typeof expectedWorkerVersionId !== "string" ||
+      !isIdentifier(expectedWorkerVersionId)
+    ) {
+      throw new Error("launch_readiness_proof_canary_unbound");
+    }
+    await waitForExpectedWorkerVersion({ expectedWorkerVersionId });
     const result = await runLaunchReadinessCanaryCycle({
       expectedWorkerVersionId,
       gateRunId: resolveGateRunId(argv, process.env, expectedWorkerVersionId),

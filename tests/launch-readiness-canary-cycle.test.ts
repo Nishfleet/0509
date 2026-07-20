@@ -5,6 +5,7 @@ import {
   resolveExpectedWorkerVersionId,
   resolveGateRunId,
   runLaunchReadinessCanaryCycle,
+  waitForExpectedWorkerVersion,
 } from "../scripts/launch-readiness-canary-cycle.mjs";
 
 function jsonResponse(payload: unknown): Response {
@@ -24,6 +25,7 @@ describe("launch readiness canary cycle", () => {
         response: { ok: true },
         payload: {
           ok: true,
+          workerVersionId: "version-abc",
           runId: "run-1",
           digestRunId: "digest-1",
           proofCaptureId: "proof-1",
@@ -33,6 +35,7 @@ describe("launch readiness canary cycle", () => {
         response: { ok: true },
         payload: {
           ok: true,
+          workerVersionId: "version-abc",
           cleanup: {
             preservedProofCaptureId: "proof-1",
             deleted: { watchlistRuns: 1, digestRuns: 1 },
@@ -76,11 +79,11 @@ describe("launch readiness canary cycle", () => {
       .fn()
       .mockResolvedValueOnce({
         response: { ok: true },
-        payload: { ok: true, runId: "run-1", digestRunId: "digest-1", proofCaptureId: "proof-1" },
+        payload: { ok: true, workerVersionId: "version-abc", runId: "run-1", digestRunId: "digest-1", proofCaptureId: "proof-1" },
       })
       .mockResolvedValueOnce({
         response: { ok: true },
-        payload: { ok: true, cleanup: { preservedProofCaptureId: "other-proof" } },
+        payload: { ok: true, workerVersionId: "version-abc", cleanup: { preservedProofCaptureId: "other-proof" } },
       });
 
     await expect(
@@ -107,6 +110,7 @@ describe("launch readiness canary cycle", () => {
       .mockResolvedValueOnce(
         jsonResponse({
           ok: true,
+          workerVersionId: version,
           runId: "run-1",
           digestRunId: "digest-1",
           proofCaptureId: "proof-1",
@@ -115,6 +119,7 @@ describe("launch readiness canary cycle", () => {
       .mockResolvedValueOnce(
         jsonResponse({
           ok: true,
+          workerVersionId: version,
           cleanup: { preservedProofCaptureId: "proof-1" },
         }),
       );
@@ -144,6 +149,118 @@ describe("launch readiness canary cycle", () => {
       digestRunId: "digest-1",
       proofCaptureId: "proof-1",
     });
+  });
+
+  it("refuses an old Worker that ignores the version-binding header", async () => {
+    const runCanaryImpl = vi.fn().mockResolvedValue({
+      response: { ok: true },
+      payload: {
+        ok: true,
+        workerVersionId: "old-version",
+        runId: "run-1",
+        digestRunId: "digest-1",
+        proofCaptureId: "proof-1",
+      },
+    });
+
+    await expect(runLaunchReadinessCanaryCycle({
+      runCanaryImpl,
+      expectedWorkerVersionId: "version-abc",
+      gateRunId: "deploy-version-abc",
+    })).rejects.toThrow("launch_readiness_proof_canary_worker_version_mismatch");
+    expect(runCanaryImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports the cleanup status and safe blocker without retrying mutation", async () => {
+    const runCanaryImpl = vi
+      .fn()
+      .mockResolvedValueOnce({
+        response: { ok: true, status: 200 },
+        payload: {
+          ok: true,
+          workerVersionId: "version-abc",
+          runId: "run-1",
+          digestRunId: "digest-1",
+          proofCaptureId: "proof-1",
+        },
+      })
+      .mockResolvedValueOnce({
+        response: { ok: false, status: 409 },
+        payload: { ok: false, blocker: "shared_rows_present" },
+      });
+
+    await expect(runLaunchReadinessCanaryCycle({
+      runCanaryImpl,
+      expectedWorkerVersionId: "version-abc",
+      gateRunId: "deploy-version-abc",
+    })).rejects.toThrow(
+      "launch_readiness_proof_canary_cleanup_failed:status=409:blocker=shared_rows_present",
+    );
+    expect(runCanaryImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("refuses cleanup from a different Worker generation", async () => {
+    const runCanaryImpl = vi
+      .fn()
+      .mockResolvedValueOnce({
+        response: { ok: true },
+        payload: {
+          ok: true,
+          workerVersionId: "version-abc",
+          runId: "run-1",
+          digestRunId: "digest-1",
+          proofCaptureId: "proof-1",
+        },
+      })
+      .mockResolvedValueOnce({
+        response: { ok: true },
+        payload: {
+          ok: true,
+          workerVersionId: "old-version",
+          cleanup: { preservedProofCaptureId: "proof-1" },
+        },
+      });
+
+    await expect(runLaunchReadinessCanaryCycle({
+      runCanaryImpl,
+      expectedWorkerVersionId: "version-abc",
+      gateRunId: "deploy-version-abc",
+    })).rejects.toThrow("launch_readiness_cleanup_worker_version_mismatch");
+    expect(runCanaryImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("requires three consecutive exact health identities before mutation", async () => {
+    const checkHealthImpl = vi.fn()
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({ ok: true });
+    const delayImpl = vi.fn().mockResolvedValue(undefined);
+
+    await expect(waitForExpectedWorkerVersion({
+      expectedWorkerVersionId: "version-abc",
+      checkHealthImpl: checkHealthImpl as never,
+      delayImpl,
+      maxSamples: 4,
+      requiredConsecutive: 3,
+    })).resolves.toBeUndefined();
+    expect(checkHealthImpl).toHaveBeenCalledTimes(4);
+    expect(delayImpl).toHaveBeenCalledTimes(3);
+  });
+
+  it("fails before mutation when route propagation never stabilizes", async () => {
+    const checkHealthImpl = vi.fn().mockResolvedValue({ ok: false });
+    const delayImpl = vi.fn().mockResolvedValue(undefined);
+
+    await expect(waitForExpectedWorkerVersion({
+      expectedWorkerVersionId: "version-abc",
+      checkHealthImpl: checkHealthImpl as never,
+      delayImpl,
+      maxSamples: 3,
+      requiredConsecutive: 2,
+    })).rejects.toThrow("launch_readiness_worker_propagation_not_stable");
+    expect(checkHealthImpl).toHaveBeenCalledTimes(3);
+    expect(delayImpl).toHaveBeenCalledTimes(2);
   });
 
   it("integration: missing or malformed binding makes zero HTTP calls", async () => {

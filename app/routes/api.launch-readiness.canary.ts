@@ -113,7 +113,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { verifyExpectedCanaryWorkerVersion } = await import(
     "~/lib/canary-release-identity.server"
   );
-  if (!isCleanupRequest && !verifyExpectedCanaryWorkerVersion(request, env).ok) {
+  if (!verifyExpectedCanaryWorkerVersion(request, env).ok) {
     return Response.json(
       { ok: false, blocker: "worker_version_mismatch" },
       { status: 409, headers: { "cache-control": "no-store" } },
@@ -218,6 +218,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           {
             ok: false,
             mode: "cleanup",
+            workerVersionId: env.CF_VERSION_METADATA?.id ?? null,
             blocker: result.reason ?? "cleanup_not_completed",
             cleanup: result,
             cleanupTruth: CLEANUP_TRUTH,
@@ -233,6 +234,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         {
           ok: true,
           mode: "cleanup",
+          workerVersionId: env.CF_VERSION_METADATA?.id ?? null,
           cleanup: result,
           cleanupTruth: CLEANUP_TRUTH,
         },
