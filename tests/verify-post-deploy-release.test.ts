@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { runVersionBoundGateC, sanitizeProofDiagnostics } = await import("../scripts/verify-post-deploy-release.mjs");
+const { runVersionBoundGateC, sanitizeProofDiagnostics, defaultHealthAnchor } = await import("../scripts/verify-post-deploy-release.mjs");
 const roots: string[] = [];
 
 function evidencePath() {
@@ -79,6 +79,100 @@ describe("sanitizeProofDiagnostics", () => {
     expect(sanitizeProofDiagnostics(undefined)).toBeNull();
     expect(sanitizeProofDiagnostics({ ok: false })).toBeNull();
     expect(sanitizeProofDiagnostics({ ok: false, blockers: [], delivery: {} })).toBeNull();
+  });
+});
+
+describe("defaultHealthAnchor (stabilized identity anchor)", () => {
+  const HOSTS = ["https://0509.io", "https://www.0509.io", "https://api.0509.io"];
+  const instantDelay = () => Promise.resolve();
+
+  type HealthProbeArgs = {
+    baseUrl?: string;
+    expectedWorkerVersionId?: string | null;
+    expectedSearchRolloutMode?: string | null;
+  };
+  type HealthImpl = NonNullable<Parameters<typeof defaultHealthAnchor>[0]["checkHealthImpl"]>;
+
+  it("resets on a flapping sample then passes after 3 consecutive all-alias OKs", async () => {
+    // The first probe of the "flapping" alias fails (lagging edge colo), which
+    // must reset the consecutive counter; convergence then needs THREE clean
+    // all-alias samples — proving a single fresh-connection snapshot is no
+    // longer sufficient (attempt-18 root cause).
+    const callsByHost = new Map<string, number>();
+    const checkHealthImpl = vi.fn(async ({ baseUrl }: HealthProbeArgs) => {
+      const host = baseUrl ?? "";
+      const count = (callsByHost.get(host) ?? 0) + 1;
+      callsByHost.set(host, count);
+      const flapping = host === "https://www.0509.io" && count === 1;
+      return { ok: !flapping };
+    });
+
+    const result = await defaultHealthAnchor({
+      workerVersionId: "worker-v1",
+      checkHealthImpl: checkHealthImpl as unknown as HealthImpl,
+      delayImpl: instantDelay,
+      maxSamples: 20,
+      requiredConsecutive: 3,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.hosts).toEqual(HOSTS.map((url) => ({ url, ok: true })));
+    // The flapping reset means at least 4 samples were needed (1 failed + 3 clean),
+    // not the 3 a single-shot / non-resetting sampler would have accepted.
+    expect(callsByHost.get("https://www.0509.io")).toBeGreaterThanOrEqual(4);
+  });
+
+  it("fails closed with the preserved worker-identity error when it never converges", async () => {
+    // One alias never serves the exact version → the bounded waiter throws
+    // launch_readiness_worker_propagation_not_stable, which the anchor surfaces
+    // as { ok:false }, so the surrounding step machinery still emits the exact
+    // identity_pre_failed / identity_post_failed identifiers downstream.
+    const checkHealthImpl = vi.fn(async ({ baseUrl }: HealthProbeArgs) => ({
+      ok: baseUrl !== "https://api.0509.io",
+    }));
+
+    const result = await defaultHealthAnchor({
+      workerVersionId: "worker-v1",
+      checkHealthImpl: checkHealthImpl as unknown as HealthImpl,
+      delayImpl: instantDelay,
+      maxSamples: 5,
+      maxWaitMs: 1_000,
+      requiredConsecutive: 3,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toBe("worker_identity_not_stable");
+    // Never accepted: consecutive never reached the required streak.
+    expect(checkHealthImpl.mock.calls.length).toBeGreaterThan(0);
+  });
+
+  it("enforces the exact worker version and shadow mode on every alias, every sample", async () => {
+    const checkHealthImpl = vi.fn(async (_args: HealthProbeArgs) => ({ ok: true }));
+
+    const result = await defaultHealthAnchor({
+      workerVersionId: "worker-v1",
+      checkHealthImpl: checkHealthImpl as unknown as HealthImpl,
+      delayImpl: instantDelay,
+      maxSamples: 20,
+      requiredConsecutive: 3,
+    });
+
+    expect(result.ok).toBe(true);
+    // All three aliases probed, each with the exact deployed version + shadow.
+    for (const url of HOSTS) {
+      expect(checkHealthImpl).toHaveBeenCalledWith({
+        baseUrl: url,
+        expectedWorkerVersionId: "worker-v1",
+        expectedSearchRolloutMode: "shadow",
+      });
+    }
+    // Every recorded probe carried the exact-version + shadow assertion.
+    for (const [args] of checkHealthImpl.mock.calls) {
+      expect(args).toMatchObject({
+        expectedWorkerVersionId: "worker-v1",
+        expectedSearchRolloutMode: "shadow",
+      });
+    }
   });
 });
 
