@@ -64,6 +64,32 @@ describe("buildMonthlyRecapEmail", () => {
     expect(model.html).toContain("https://0509.io/app/billing");
     expect(model.text).toContain("Changes caught: 12");
   });
+
+  it("escapes scraped competitor names and user names (HTML injection proof)", () => {
+    const model = buildMonthlyRecapEmail({
+      userId: "user-1",
+      email: "owner@example.com",
+      name: '<img src=x onerror=alert(1)>',
+      plan: "starter",
+      monthKey: "2026-06",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-07-01T00:00:00.000Z",
+      changesCaught: 3,
+      evidenceCaptured: 1,
+      includedAllowance: 250,
+      // topCompetitorName is a scraped/user-controlled watchlist label.
+      topCompetitorName: '</strong><script>alert(document.cookie)</script>',
+      topCompetitorChanges: 2,
+      billingUrl: "https://0509.io/app/billing",
+    });
+
+    // Raw markup never reaches the rendered HTML.
+    expect(model.html).not.toContain("<script>alert(document.cookie)</script>");
+    expect(model.html).not.toContain("<img src=x onerror=alert(1)>");
+    // The payloads survive as inert, escaped text.
+    expect(model.html).toContain("&lt;script&gt;alert(document.cookie)&lt;/script&gt;");
+    expect(model.html).toContain("&lt;img src=x onerror=alert(1)&gt;");
+  });
 });
 
 describe("sendMonthlyCustomerRecaps", () => {

@@ -89,6 +89,12 @@ export const meta = () => [{ title: "Watchlists | Five to Nine" }];
 const WATCHLIST_DELIVERY_TARGET_DISPLAY_LIMIT = 12;
 const WORKSPACE_DELIVERY_TARGET_DISPLAY_LIMIT = 8;
 const RECENT_DELIVERY_ATTEMPT_DISPLAY_LIMIT = 16;
+// Hard cap on ids accepted by the bulk pause/resume action. Bounds per-request
+// D1 work: `formData.getAll` is unbounded in a raw POST and each id runs a
+// scoped write (resume also a lookup + plan-limit count). No legitimate
+// workspace selects more than its watchlist count (agency caps active
+// watchlists at 75); 200 clears real "select all" use with paused-row headroom.
+const MAX_BULK_WATCHLIST_IDS = 200;
 const DELIVERY_MANAGEMENT_INTENTS = new Set([
   "save-delivery-config",
   "add-delivery-target",
@@ -709,6 +715,19 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     if ((bulkAction !== "pause" && bulkAction !== "resume") || watchlistIds.length === 0) {
       return { ok: false, message: "Select at least one watchlist first." };
+    }
+
+    // Bound the per-request work. Every id runs at least one scoped D1 write
+    // (resume also runs a lookup + plan-limit count), and `getAll` is unbounded
+    // in a raw POST, so a scripted request could force thousands of sequential
+    // D1 operations. No legitimate workspace selects more than its watchlist
+    // count (agency caps active watchlists at 75); 200 clears real "select all"
+    // use with headroom for paused rows while capping abuse.
+    if (watchlistIds.length > MAX_BULK_WATCHLIST_IDS) {
+      return {
+        ok: false,
+        message: `Select ${MAX_BULK_WATCHLIST_IDS} or fewer watchlists at a time.`,
+      };
     }
 
     if (bulkAction === "pause") {
