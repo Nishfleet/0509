@@ -17,6 +17,7 @@ const SAFE_IDENTIFIER_PATTERN = /^[A-Za-z0-9._-]{1,128}$/u;
  *   env?: Record<string, string>;
  *   includeCloudflareCredentials?: boolean;
  *   runOnPostDeployFailure?: boolean;
+ *   nonBlockingDiagnostic?: boolean;
  * }} ProductionDeployStep
  */
 
