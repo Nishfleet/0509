@@ -463,9 +463,20 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     ? await buildSearchStealSummary(env, hydratedResult.ads)
     : null;
 
+  // Carry a VERIFIED advertiser page id into the save/track forms so a watchlist
+  // created from this search persists page-scoped scans (view_all_page_id) —
+  // subsequent scrapes return the brand's own ads instead of keyword junk. Only
+  // ever set from a verified match on the result; never from the search input.
+  const verifiedAdvertiserPageId =
+    (searchExecution.result as { verifiedAdvertiserPageId?: string | null })
+      .verifiedAdvertiserPageId ?? null;
+  const filtersForForms = verifiedAdvertiserPageId
+    ? { ...parsed.filters, pageId: verifiedAdvertiserPageId }
+    : parsed.filters;
+
   return {
     mode: parsed.mode,
-    filters: parsed.filters,
+    filters: filtersForForms,
     fingerprint: parsed.fingerprint,
     result: hydratedResult,
     selectedAd,
@@ -530,6 +541,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
         ) as SearchFilters["status"],
         firstSeenFrom: String(formData.get("firstSeenFrom") ?? ""),
         lastSeenFrom: String(formData.get("lastSeenFrom") ?? ""),
+        // Verified page id from the search results (normalizeSearchFilters drops
+        // anything non-numeric, so a spoofed/blank value can never scope a scan).
+        pageId: String(formData.get("pageId") ?? ""),
       },
     ),
     competitorWebsite,
@@ -2147,6 +2161,9 @@ function SearchStateFields({
       <input name="status" type="hidden" value={filters.status} />
       <input name="firstSeenFrom" type="hidden" value={filters.firstSeenFrom} />
       <input name="lastSeenFrom" type="hidden" value={filters.lastSeenFrom} />
+      {filters.pageId ? (
+        <input name="pageId" type="hidden" value={filters.pageId} />
+      ) : null}
     </>
   );
 }
