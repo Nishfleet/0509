@@ -5,10 +5,13 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { readDeployedWorkerVersionId } from "./deploy-production-plan.mjs";
 import { DEFAULT_BASE_URL, runCanary } from "./launch-readiness-canary.mjs";
-import {
-  checkHealthEndpoint,
-  DEFAULT_CANARY_HEALTH_BASE_URLS,
-} from "./prod-canary.lib.mjs";
+import { waitForExpectedWorkerVersion } from "./prod-canary.lib.mjs";
+
+// The propagation waiter now lives in prod-canary.lib.mjs so the post-deploy
+// Gate C verifier can share it without importing this module (that would form a
+// cycle: verifier -> cycle -> deploy-production-plan -> verifier). Re-exported
+// here to keep the historical import path stable for existing callers/tests.
+export { waitForExpectedWorkerVersion };
 
 /** @param {unknown} value */
 function isIdentifier(value) {
@@ -104,67 +107,6 @@ export async function runLaunchReadinessCanaryCycle({
     proofCaptureId,
     cleanup: cleaned.payload.cleanup,
   };
-}
-
-/**
- * Wait for the public route to serve the exact Worker version consistently
- * before the first mutating canary call. This absorbs only provider route
- * propagation; canary failures themselves are never retried.
- * @param {{ baseUrl?: string, healthBaseUrls?: string[], expectedWorkerVersionId: string, checkHealthImpl?: typeof checkHealthEndpoint, delayImpl?: (ms: number) => Promise<void>, maxSamples?: number, maxWaitMs?: number, requiredConsecutive?: number }} input
- */
-export async function waitForExpectedWorkerVersion({
-  baseUrl,
-  healthBaseUrls,
-  expectedWorkerVersionId,
-  checkHealthImpl = checkHealthEndpoint,
-  delayImpl = (ms) => new Promise((resolveDelay) => setTimeout(resolveDelay, ms)),
-  maxSamples = 60,
-  maxWaitMs = 120_000,
-  requiredConsecutive = 3,
-}) {
-  const resolvedHealthBaseUrls = healthBaseUrls?.length
-    ? [...new Set(healthBaseUrls)]
-    : baseUrl
-      ? [baseUrl]
-      : process.env.CANARY_BASE_URL
-        ? [process.env.CANARY_BASE_URL]
-        : [...DEFAULT_CANARY_HEALTH_BASE_URLS];
-  const deadlineReached = Symbol("worker-propagation-deadline");
-  const deadlineSignal = AbortSignal.timeout(maxWaitMs);
-  let resolveDeadline = () => {};
-  const deadlinePromise = new Promise((resolveDeadlinePromise) => {
-    resolveDeadline = () => resolveDeadlinePromise(deadlineReached);
-    deadlineSignal.addEventListener("abort", resolveDeadline, { once: true });
-  });
-
-  let consecutive = 0;
-  try {
-    for (let sample = 0; sample < maxSamples; sample += 1) {
-      const checks = await Promise.race([
-        Promise.all(
-          resolvedHealthBaseUrls.map((healthBaseUrl) => checkHealthImpl({
-            baseUrl: healthBaseUrl,
-            expectedWorkerVersionId,
-            expectedSearchRolloutMode: "shadow",
-          })),
-        ),
-        deadlinePromise,
-      ]);
-      if (checks === deadlineReached) break;
-      consecutive = checks.every((/** @type {{ ok: boolean }} */ check) => check.ok) ? consecutive + 1 : 0;
-      if (consecutive >= requiredConsecutive) return;
-      if (sample + 1 < maxSamples) {
-        const delayResult = await Promise.race([
-          delayImpl(2_000),
-          deadlinePromise,
-        ]);
-        if (delayResult === deadlineReached) break;
-      }
-    }
-  } finally {
-    deadlineSignal.removeEventListener("abort", resolveDeadline);
-  }
-  throw new Error("launch_readiness_worker_propagation_not_stable");
 }
 
 /**
