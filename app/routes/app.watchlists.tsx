@@ -25,6 +25,7 @@ import { EventChangesSection } from "~/components/watchlists/event-changes-secti
 import { FirstScanBanner } from "~/components/watchlists/first-scan-banner";
 import { RecentChecksSection } from "~/components/watchlists/recent-checks-section";
 import { RecentEvidenceChecksCard } from "~/components/watchlists/recent-evidence-checks-card";
+import { TrackingStatusCard } from "~/components/watchlists/tracking-status-card";
 import { CopyButton } from "~/components/copy-button";
 import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
@@ -1359,67 +1360,18 @@ export default function WatchlistsRoute() {
                   </Form>
                 </section>
 
-                <section className="f9-detail-cell">
-                  <p className="f9-app-kicker">Tracking status</p>
-                  <h3>{trackingPresentation.headline}</h3>
-                  <p className="f9-muted-copy">
-                    {trackingPresentation.summary}
-                  </p>
-                  <div className="f9-work-list is-compact">
-                    <div className="f9-work-row">
-                      <p className="f9-app-kicker">How ads are checked</p>
-                      <p className="f9-muted-copy">
-                        Five to Nine checks public ad signals and shows Recent results when live checks are delayed.
-                      </p>
-                    </div>
-                    <div className="f9-work-row">
-                      <p className="f9-app-kicker">Status</p>
-                      <p className="f9-muted-copy">
-                        {trackingPresentation.statusLabel}
-                      </p>
-                    </div>
-                    <div className="f9-work-row">
-                      <p className="f9-app-kicker">Last check</p>
-                      <p className="f9-muted-copy">
-                        {trackingPresentation.lastCheckedAt ? (
-                          <LocalTime iso={trackingPresentation.lastCheckedAt} />
-                        ) : (
-                          "No recent check yet"
-                        )}
-                      </p>
-                    </div>
-                    <div className="f9-work-row">
-                      <p className="f9-app-kicker">Next check</p>
-                      <p className="f9-muted-copy">
-                        {!data.selectedWatchlist.isActive
-                          ? "Paused"
-                          : data.plan === "free"
-                            ? "Activation only — no recurring schedule on Free"
-                            : sourceCanSchedule
-                              ? formatNextScanLabel(data.plan, renderedAt, data.effectiveDeliveryConfig.timezone)
-                              : "After source access is ready"}
-                      </p>
-                    </div>
-                  </div>
-                  {discoveryStatus.recovery ? (
-                    <p className="f9-muted-copy">{discoveryStatus.recovery}</p>
-                  ) : null}
-                  <Link className="f9-secondary-button" to="/app/source-access">
-                    Check source access
-                  </Link>
-                  {data.showPresenceNav ? (
-                    <>
-                      <h3>Website presence</h3>
-                      <p className="f9-muted-copy">
-                        Track public website, blog, and feed changes for this competitor in Presence — separate from ad
-                        watchlists.
-                      </p>
-                      <Link className="f9-secondary-button" to="/app/presence">
-                        Open Presence
-                      </Link>
-                    </>
-                  ) : null}
-                </section>
+                <TrackingStatusCard
+                  data={{
+                    effectiveDeliveryConfig: data.effectiveDeliveryConfig,
+                    plan: data.plan,
+                    selectedWatchlist: data.selectedWatchlist,
+                    showPresenceNav: data.showPresenceNav,
+                  }}
+                  discoveryStatus={discoveryStatus}
+                  renderedAt={renderedAt}
+                  sourceCanSchedule={sourceCanSchedule}
+                  trackingPresentation={trackingPresentation}
+                />
                 </div>
 
                 <ProofGlossary />
