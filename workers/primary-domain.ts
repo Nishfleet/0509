@@ -15,6 +15,11 @@ export function primaryDomainRedirect(request: Request): Response | null {
   }
 
   const hostname = url.hostname.toLowerCase();
+  // Keep the canonical www health probe on the responding Worker so release
+  // gates prove that alias instead of following its ordinary apex redirect.
+  if (hostname === "www.0509.io" && url.pathname === "/api/health") {
+    return null;
+  }
   if (!APEX_REDIRECT_HOSTS.has(hostname) && !API_REDIRECT_HOSTS.has(hostname)) {
     return null;
   }

@@ -94,10 +94,47 @@ describe("production canary", () => {
     expect(fetchImpl).toHaveBeenCalledWith(
       "https://0509.io/api/health",
       expect.objectContaining({
+        redirect: "manual",
         headers: expect.objectContaining({
           "user-agent": "0509-prod-canary/1.0",
         }),
       }),
+    );
+  });
+
+  it("fails closed instead of following a redirect to another health alias", async () => {
+    const fetchImpl = vi.fn(async (_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      if (init?.redirect === "manual") {
+        return new Response(null, {
+          status: 308,
+          headers: { location: "https://0509.io/api/health" },
+        });
+      }
+      return Response.json({
+        status: "ok",
+        app: "0509",
+        releaseIdentity: {
+          workerVersionId: EXPECTED_WORKER_VERSION_ID,
+          searchRolloutMode: EXPECTED_SEARCH_ROLLOUT_MODE,
+        },
+      });
+    });
+
+    const health = await checkHealthEndpoint({
+      baseUrl: "https://www.0509.io",
+      expectedWorkerVersionId: EXPECTED_WORKER_VERSION_ID,
+      expectedSearchRolloutMode: EXPECTED_SEARCH_ROLLOUT_MODE,
+      fetchImpl,
+    });
+
+    expect(health).toMatchObject({
+      ok: false,
+      status: 308,
+      message: "Health endpoint returned 308.",
+    });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://www.0509.io/api/health",
+      expect.objectContaining({ redirect: "manual" }),
     );
   });
 

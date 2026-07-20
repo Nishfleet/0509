@@ -209,6 +209,7 @@ export async function checkHealthEndpoint(options = {}) {
 
   try {
     const response = await fetchImpl(url, {
+      redirect: "manual",
       headers: {
         "user-agent": "0509-prod-canary/1.0",
       },
