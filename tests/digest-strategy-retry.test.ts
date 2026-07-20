@@ -91,7 +91,10 @@ describe("weekly digest retry snapshots", () => {
     vi.doMock("~/lib/plan.server", () => planServerMock());
 
     const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-    await expect(runWeeklyDigests(env())).resolves.toBe(1);
+    // Pin to the stored retry period so the 7-day retry window is not wall-clock-dependent.
+    await expect(
+      runWeeklyDigests(env(), { periodEnd: "2026-04-20T05:00:00.000Z" }),
+    ).resolves.toBe(1);
     expect(deliverWeeklyDigest).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -130,7 +133,10 @@ describe("weekly digest retry snapshots", () => {
     vi.doMock("~/lib/plan.server", () => planServerMock());
 
     const { runWeeklyDigests } = await import("~/lib/monitoring.server");
-    await expect(runWeeklyDigests(env())).resolves.toBe(0);
+    // Pin to the stored retry period so the 7-day retry window is not wall-clock-dependent.
+    await expect(
+      runWeeklyDigests(env(), { periodEnd: "2026-04-20T05:00:00.000Z" }),
+    ).resolves.toBe(0);
     expect(deliverWeeklyDigest).not.toHaveBeenCalled();
   });
 });
