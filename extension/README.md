@@ -31,9 +31,12 @@ checked in).
   domain. No `tabs` permission, no host permissions, no content scripts.
 - **Reads nothing from the page.** Not the DOM, not cookies, not history —
   only the URL of the tab you clicked on, only at the moment you click.
-- **Sends nothing anywhere.** No analytics, no remote code, no background
-  network requests. The extension's only "network" behavior is opening
-  0509.io in a new tab when you press a button.
+- **No background collection.** The extension has no analytics, remote code,
+  or background network requests. The current URL is handled locally and
+  reduced to a domain. When you choose an action, the extension opens a
+  0509.io URL containing that domain, so the domain is sent to Five to Nine as
+  part of the browser request. The extension does not persist the URL or
+  domain. See the [Five to Nine privacy policy](https://0509.io/privacy).
 
 ## Architecture
 
@@ -84,16 +87,34 @@ if the account isn't registered yet.
    > site, or a watchlist so you're alerted when their ads change. If the
    > current tab has no usable address, type any domain instead.
    >
-   > The extension itself collects nothing. It uses only the activeTab
-   > permission to read the current tab's domain at the moment you click —
-   > no content scripts, no browsing history, no analytics, no remote code.
-   > Viewing ads, live searches, and watchlists run on 0509.io; searches
-   > work without an account, watchlists require one.
+   > The extension uses only the activeTab permission to read the current
+   > tab's URL when you open it. It handles that URL locally, extracts the
+   > domain, and sends the domain to 0509.io only when you choose a destination.
+   > It does not read page content or broader browsing history, persist the URL
+   > or domain, run analytics, or load remote code. Viewing ads, live searches,
+   > and watchlists run on 0509.io; searches work without an account, while
+   > watchlists require one. Privacy policy: https://0509.io/privacy
 
-4. **Privacy tab in the dashboard:** declare "no user data collected";
-   single purpose = "show the current site's Meta ads via Five to Nine";
-   justify `activeTab` = "read the active tab's URL to extract the brand
-   domain when the user clicks the action".
+4. **Privacy tab in the dashboard:** use these answers so the dashboard,
+   listing, policy, and behavior agree:
+   - **Single purpose:** "Show the current website's Meta ads and provide
+     user-chosen paths into Five to Nine search and watchlist flows."
+   - **Data usage:** declare **Web browsing activity**. The extension accesses
+     the current tab's URL only when the user opens it, handles the URL locally,
+     and extracts its domain. The domain is sent to 0509.io only after the user
+     chooses an action. A manually entered domain is handled the same way.
+   - **Storage, logging, and sharing:** the extension does not persist the URL
+     or domain. Five to Nine and service providers needed to operate the chosen
+     action process the destination request, which may appear in operational
+     logs. The data is not sold or used for advertising, profiling, or
+     creditworthiness.
+   - **Permission justification:** "activeTab reads the active tab's URL after
+     the user opens the extension so it can extract the website domain. It does
+     not read page content or broader browsing history."
+   - **Limited Use:** certify that Chrome API data is used only for the
+     extension's disclosed single purpose and complies with the Chrome Web
+     Store User Data Policy, including the Limited Use requirements.
+   - **Privacy policy URL:** `https://0509.io/privacy`.
 5. **Verify the `/ads/{domain}` route is live in production** (it ships from
    the public-brand-pages track) before submitting, so the primary button
    never 404s for reviewers.
