@@ -27,9 +27,14 @@ export function PublicDocShell(props: {
   );
 }
 
-export function PublicDocBlock(props: { title: string; children: ReactNode }) {
+export function PublicDocBlock(props: {
+  title: string;
+  children: ReactNode;
+  /** Optional stable anchor id so an in-page TOC can jump to this block. */
+  id?: string;
+}) {
   return (
-    <section className="f9-legal-block">
+    <section className="f9-legal-block" id={props.id}>
       <h2>{props.title}</h2>
       {props.children}
     </section>

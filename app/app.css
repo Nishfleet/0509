@@ -2880,6 +2880,51 @@ button[aria-busy="true"] {
   font-size: 1.28rem;
 }
 
+/* WP-B4.2: in-page docs table of contents. Makes /docs read as docs, distinct
+   from /help. Pure-CSS jump links; no JS, no search index (docs search is a
+   separate part-(c) pass). Scoped to the docs shell — other legal pages that
+   do not render it are unaffected. */
+.f9-legal-page .f9-doc-toc {
+  border: 1px solid var(--f9-search-line);
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin: 0;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.f9-legal-page .f9-doc-toc-label {
+  display: block;
+  color: var(--ld-ink-soft, #55524a);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.f9-legal-page .f9-doc-toc ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 4px 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.f9-legal-page .f9-doc-toc a {
+  display: inline-block;
+  padding: 3px 0;
+  color: var(--ld-ink-soft, #55524a);
+  text-decoration: none;
+  border: 0;
+}
+
+.f9-legal-page .f9-doc-toc a:hover,
+.f9-legal-page .f9-doc-toc a:focus-visible {
+  color: var(--ld-ink, #0e0d0a);
+  text-decoration: underline;
+}
+
 @media (max-width: 980px) {
   .f9-panel-toolbar,
   .f9-work-row {
@@ -4143,6 +4188,17 @@ one signal-green accent.
 
 .f9-home .ld-pricing-faq h3 {
   color: var(--ld-ink);
+}
+
+/* WP-B4.1: the FAQ was a single left-pinned column that left a wide empty
+   band on desktop. Flow the Q&A into two balanced columns at wide widths so
+   the section fills its horizontal space; it collapses back to one column on
+   narrow screens. Landing is light-only; no theme fork needed. */
+@media (min-width: 900px) {
+  .ld-pricing-faq .proof-trail-list {
+    grid-template-columns: 1fr 1fr;
+    column-gap: clamp(32px, 4vw, 56px);
+  }
 }
 
 .ld-bundle-card strong {
