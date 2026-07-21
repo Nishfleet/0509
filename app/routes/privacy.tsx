@@ -7,7 +7,7 @@ import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 const privacyDescription =
-  "How Five to Nine handles account, search, monitoring, evidence, and delivery data.";
+  "How Five to Nine handles account, search, monitoring, evidence, delivery, and browser-extension data.";
 
 export const links: LinksFunction = () => canonicalLinks("/privacy");
 
@@ -62,6 +62,28 @@ export default function PrivacyRoute() {
                 Trust
               </a>{" "}
               notes.
+            </p>
+          </LegalBlock>
+
+          <LegalBlock title="Chrome extension">
+            <p>
+              Five to Nine — Competitor Ads uses Chrome's <code>activeTab</code> permission only when you open the
+              extension. It reads the current tab's URL locally to identify the website's domain. It does not read page
+              content, cookies, passwords, form data, or your broader browsing history, and it has no background
+              collection, analytics, or remote code.
+            </p>
+            <p>
+              The extension does not persist the current URL or domain. If you choose an action, it opens the selected
+              0509.io page and includes the domain in that request so Five to Nine can show the brand page, run the
+              search, or prefill the watchlist flow. A domain you type into the extension is handled in the same way.
+              Five to Nine and the service providers needed to operate the selected action process the domain, and the
+              request may be included in the operational logs described above.
+            </p>
+            <p>
+              We do not sell this data, use it for advertising, profiling, or creditworthiness, or share it except to
+              operate the action you requested or for security, legal, or compliance reasons. Five to Nine's use of
+              information received from Chrome APIs complies with the Chrome Web Store User Data Policy, including its
+              Limited Use requirements.
             </p>
           </LegalBlock>
 
