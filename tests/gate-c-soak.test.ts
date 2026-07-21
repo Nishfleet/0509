@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { appendFileSync, chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -30,6 +31,54 @@ const DEPLOY_RUN_ATTEMPT = 1;
 function privateJson(path: string, value: unknown) {
   writeFileSync(path, `${JSON.stringify(value)}\n`, { mode: 0o600 });
   chmodSync(path, 0o600);
+}
+
+// Writes a Gate-B artifact file and returns the {name,bytes,sha256} record the
+// bound manifest must declare so the archive's integrity check accepts it.
+function writeGateBArtifact(relPath: string, content: string) {
+  writeFileSync(resolve(relPath), content, { mode: 0o600 });
+  chmodSync(resolve(relPath), 0o600);
+  return {
+    name: relPath,
+    bytes: Buffer.byteLength(content),
+    sha256: createHash("sha256").update(content).digest("hex"),
+  };
+}
+
+// A worker-rollback-target payload that passes validateWorkerRollbackEvidence
+// against the deployed WORKER_VERSION (a distinct prior version at 100%).
+function validRollbackTarget() {
+  return {
+    schemaVersion: 1,
+    deploymentId: "deployment-123",
+    versionId: "worker-version-prior",
+    percentage: 100,
+    capturedAt: "2026-07-18T00:00:00.000Z",
+    source: "wrangler deployments status --json",
+  };
+}
+
+// A schemaVersion-3 Gate-B / deploy-readiness manifest that declares the given
+// artifacts (so validateArtifactFiles has something to bind).
+function gateBManifest(artifacts: Array<{ name: string; bytes: number; sha256: string }>) {
+  return {
+    schemaVersion: 3,
+    status: "passed",
+    strict: true,
+    candidateFingerprint: "b".repeat(64),
+    entries: [{ artifacts }],
+    postflight: {
+      launchConfig: {
+        wranglerWorktreeSha256: "c".repeat(64),
+        productionSearchRolloutMode: "shadow",
+        providerNetworkDeny: true,
+        retries: 0,
+        workers: 1,
+      },
+      journeys: [1, 2, 3, 4, 5, 6],
+      isolatedPersistenceRemoved: true,
+    },
+  };
 }
 
 function fixture() {
@@ -459,23 +508,8 @@ describe("Gate C scheduled-work soak journal", () => {
     const evidencePaths = [manifest, wrangler, gateC, evidence, readiness, rollback, artifact];
     roots.push(...evidencePaths.map((path) => resolve(path)), resolve(archive));
     mkdirSync(resolve(dirname(artifact)), { recursive: true });
-    privateJson(resolve(manifest), {
-      schemaVersion: 3,
-      status: "passed",
-      strict: true,
-      candidateFingerprint: "b".repeat(64),
-      postflight: {
-        launchConfig: {
-          wranglerWorktreeSha256: "c".repeat(64),
-          productionSearchRolloutMode: "shadow",
-          providerNetworkDeny: true,
-          retries: 0,
-          workers: 1,
-        },
-        journeys: [1, 2, 3, 4, 5, 6],
-        isolatedPersistenceRemoved: true,
-      },
-    });
+    const artifactRecord = writeGateBArtifact(artifact, `${JSON.stringify({ status: "passed" })}\n`);
+    privateJson(resolve(manifest), gateBManifest([artifactRecord]));
     writeFileSync(resolve(wrangler), `${JSON.stringify({ type: "deploy", version: 1, version_id: WORKER_VERSION })}\n`, { mode: 0o600 });
     chmodSync(resolve(wrangler), 0o600);
     privateJson(resolve(gateC), {
@@ -506,8 +540,7 @@ describe("Gate C scheduled-work soak journal", () => {
     });
     privateJson(resolve(evidence), journal);
     privateJson(resolve(readiness), { status: "passed" });
-    privateJson(resolve(rollback), { status: "passed" });
-    privateJson(resolve(artifact), { status: "passed" });
+    privateJson(resolve(rollback), validRollbackTarget());
 
     createReleaseEvidenceArchive({ archivePath: archive, evidencePaths });
     chmodSync(resolve(archive), 0o644);
@@ -546,24 +579,10 @@ describe("Gate C scheduled-work soak journal", () => {
     const evidencePaths = [readiness, wrangler, gateC, evidence, rollback, artifact];
     roots.push(...evidencePaths.map((path) => resolve(path)), resolve(archive));
     mkdirSync(resolve(dirname(artifact)), { recursive: true });
-    // The deploy-readiness file carries the schemaVersion-3 gate-b manifest.
-    privateJson(resolve(readiness), {
-      schemaVersion: 3,
-      status: "passed",
-      strict: true,
-      candidateFingerprint: "b".repeat(64),
-      postflight: {
-        launchConfig: {
-          wranglerWorktreeSha256: "c".repeat(64),
-          productionSearchRolloutMode: "shadow",
-          providerNetworkDeny: true,
-          retries: 0,
-          workers: 1,
-        },
-        journeys: [1, 2, 3, 4, 5, 6],
-        isolatedPersistenceRemoved: true,
-      },
-    });
+    // The deploy-readiness file carries the schemaVersion-3 gate-b manifest and
+    // declares the Gate-B artifact for integrity binding.
+    const artifactRecord = writeGateBArtifact(artifact, `${JSON.stringify({ status: "passed" })}\n`);
+    privateJson(resolve(readiness), gateBManifest([artifactRecord]));
     writeFileSync(resolve(wrangler), `${JSON.stringify({ type: "deploy", version: 1, version_id: WORKER_VERSION })}\n`, { mode: 0o600 });
     chmodSync(resolve(wrangler), 0o600);
     privateJson(resolve(gateC), {
@@ -596,8 +615,7 @@ describe("Gate C scheduled-work soak journal", () => {
     });
     expect(journal.candidate.gateBManifestPath).toBe(readiness);
     privateJson(resolve(evidence), journal);
-    privateJson(resolve(rollback), { status: "passed" });
-    privateJson(resolve(artifact), { status: "passed" });
+    privateJson(resolve(rollback), validRollbackTarget());
 
     // Under the old code this threw release_evidence_set_incomplete.
     const created = createReleaseEvidenceArchive({ archivePath: archive, evidencePaths });
@@ -609,6 +627,122 @@ describe("Gate C scheduled-work soak journal", () => {
     const restored = restoreReleaseEvidenceArchive({ archivePath: archive });
     expect(restored.entries).toEqual([...evidencePaths].sort());
     for (const path of evidencePaths) expect(statSync(resolve(path)).mode & 0o777).toBe(0o600);
+  });
+
+  it("rejects a tampered Gate-B artifact on both create and restore", () => {
+    mkdirSync(resolve("test-results"), { recursive: true });
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const readiness = `test-results/deploy-readiness-${suffix}.json`;
+    const wrangler = `test-results/wrangler-deploy-output-${suffix}.jsonl`;
+    const gateC = `test-results/gate-c-${suffix}.json`;
+    const evidence = `test-results/production-soak-${suffix}.json`;
+    const rollback = `test-results/worker-rollback-target-${suffix}.json`;
+    const artifact = `test-results/gate-b-artifacts/${suffix}.json`;
+    const createArchive = `test-results/production-release-evidence-${"c".repeat(40)}-127-1.tar.gz`;
+    const restoreArchive = `test-results/production-release-evidence-${"c".repeat(40)}-127-2.tar.gz`;
+    const evidencePaths = [readiness, wrangler, gateC, evidence, rollback, artifact];
+    roots.push(...evidencePaths.map((path) => resolve(path)), resolve(createArchive), resolve(restoreArchive));
+    mkdirSync(resolve(dirname(artifact)), { recursive: true });
+    const artifactRecord = writeGateBArtifact(artifact, `${JSON.stringify({ status: "passed" })}\n`);
+    privateJson(resolve(readiness), gateBManifest([artifactRecord]));
+    writeFileSync(resolve(wrangler), `${JSON.stringify({ type: "deploy", version: 1, version_id: WORKER_VERSION })}\n`, { mode: 0o600 });
+    chmodSync(resolve(wrangler), 0o600);
+    privateJson(resolve(gateC), {
+      schemaVersion: 1,
+      workerVersionId: WORKER_VERSION,
+      searchRolloutMode: "shadow",
+      status: "passed",
+      errors: [],
+      steps: Object.fromEntries([
+        "identity_pre",
+        "backup_lifecycle",
+        "pricing",
+        "billing",
+        "proof_email",
+        "production_meta",
+        "proof_cleanup",
+        "identity_post",
+      ].map((step) => [step, { status: "passed" }])),
+    });
+    const journal = buildRunningSoakJournal({
+      manifestPath: readiness,
+      wranglerOutputPath: wrangler,
+      gateCPath: gateC,
+      now: STARTED_AT,
+      headCommit: HEAD,
+      deploymentWorkflowRunId: DEPLOY_RUN_ID,
+      deploymentWorkflowRunAttempt: DEPLOY_RUN_ATTEMPT,
+    });
+    privateJson(resolve(evidence), journal);
+    privateJson(resolve(rollback), validRollbackTarget());
+
+    // Tamper: append one byte to the Gate-B artifact AFTER the manifest recorded
+    // its original hash. The manifest stays hash-bound to the journal, so the
+    // tamper surfaces only through the new artifact-integrity check.
+    appendFileSync(resolve(artifact), "x");
+
+    // Create must reject the tampered artifact (previously it rode along silently).
+    expect(() => createReleaseEvidenceArchive({ archivePath: createArchive, evidencePaths }))
+      .toThrow("release_evidence_artifact_integrity");
+
+    // Restore must reject it too: hand-tar the tampered set and restore it.
+    execFileSync("tar", ["-czf", restoreArchive, "--", ...evidencePaths]);
+    chmodSync(resolve(restoreArchive), 0o644);
+    for (const path of evidencePaths) rmSync(resolve(path));
+    expect(() => restoreReleaseEvidenceArchive({ archivePath: restoreArchive }))
+      .toThrow("release_evidence_artifact_integrity");
+  });
+
+  it("rejects a rollback-target that is not integrity-bound to the deployed worker version", () => {
+    mkdirSync(resolve("test-results"), { recursive: true });
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const readiness = `test-results/deploy-readiness-${suffix}.json`;
+    const wrangler = `test-results/wrangler-deploy-output-${suffix}.jsonl`;
+    const gateC = `test-results/gate-c-${suffix}.json`;
+    const evidence = `test-results/production-soak-${suffix}.json`;
+    const rollback = `test-results/worker-rollback-target-${suffix}.json`;
+    const artifact = `test-results/gate-b-artifacts/${suffix}.json`;
+    const archive = `test-results/production-release-evidence-${"c".repeat(40)}-128-1.tar.gz`;
+    const evidencePaths = [readiness, wrangler, gateC, evidence, rollback, artifact];
+    roots.push(...evidencePaths.map((path) => resolve(path)), resolve(archive));
+    mkdirSync(resolve(dirname(artifact)), { recursive: true });
+    const artifactRecord = writeGateBArtifact(artifact, `${JSON.stringify({ status: "passed" })}\n`);
+    privateJson(resolve(readiness), gateBManifest([artifactRecord]));
+    writeFileSync(resolve(wrangler), `${JSON.stringify({ type: "deploy", version: 1, version_id: WORKER_VERSION })}\n`, { mode: 0o600 });
+    chmodSync(resolve(wrangler), 0o600);
+    privateJson(resolve(gateC), {
+      schemaVersion: 1,
+      workerVersionId: WORKER_VERSION,
+      searchRolloutMode: "shadow",
+      status: "passed",
+      errors: [],
+      steps: Object.fromEntries([
+        "identity_pre",
+        "backup_lifecycle",
+        "pricing",
+        "billing",
+        "proof_email",
+        "production_meta",
+        "proof_cleanup",
+        "identity_post",
+      ].map((step) => [step, { status: "passed" }])),
+    });
+    const journal = buildRunningSoakJournal({
+      manifestPath: readiness,
+      wranglerOutputPath: wrangler,
+      gateCPath: gateC,
+      now: STARTED_AT,
+      headCommit: HEAD,
+      deploymentWorkflowRunId: DEPLOY_RUN_ID,
+      deploymentWorkflowRunAttempt: DEPLOY_RUN_ATTEMPT,
+    });
+    privateJson(resolve(evidence), journal);
+    // Rollback target points at the SAME version that was just deployed — a
+    // useless rollback that existence-only checks would have archived anyway.
+    privateJson(resolve(rollback), { ...validRollbackTarget(), versionId: WORKER_VERSION });
+
+    expect(() => createReleaseEvidenceArchive({ archivePath: archive, evidencePaths }))
+      .toThrow("release_evidence_rollback_target_integrity");
   });
 
   it("rejects a nonempty but incomplete allowed evidence archive", () => {

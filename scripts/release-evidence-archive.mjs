@@ -15,6 +15,9 @@ import {
 } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { validateArtifactFiles } from "./verify-deploy-readiness.mjs";
+import { readDeployedWorkerVersionId } from "./deploy-production-plan.mjs";
+import { validateWorkerRollbackEvidence } from "./worker-rollback-target.mjs";
 
 const SAFE_ARCHIVE = /^test-results\/production-release-evidence-[a-f0-9]{40}-[1-9][0-9]*-[1-9][0-9]*\.tar\.gz$/u;
 const SAFE_ENTRY = /^test-results\/[A-Za-z0-9._/-]{1,220}$/u;
@@ -95,6 +98,51 @@ function assertJournalBoundEvidence(paths, root) {
       throw new Error("release_evidence_journal_reference_invalid");
     }
   }
+  return journal;
+}
+
+const ROLLBACK_TARGET_EVIDENCE = /^test-results\/worker-rollback-target-[A-Za-z0-9._-]+\.json$/u;
+
+/**
+ * Deep integrity beyond the journal's hash-bound references:
+ *   (a) every Gate-B artifact the bound manifest declares is validated by
+ *       path/bytes/sha256 (validateArtifactFiles), so a tampered artifact
+ *       cannot ride along in the archive undetected — the manifest itself is
+ *       already hash-bound to the journal, closing the chain; and
+ *   (b) the required worker-rollback-target evidence is validated against the
+ *       deployed worker version (validateWorkerRollbackEvidence) instead of
+ *       being archived on existence alone.
+ * @param {any} journal @param {string[]} paths @param {string} root
+ */
+function assertReleaseArtifactIntegrity(journal, paths, root) {
+  const manifestEntry = assertAllowedEvidencePath(journal.candidate.gateBManifestPath);
+  let manifest;
+  try {
+    manifest = JSON.parse(readFileSync(resolve(root, manifestEntry), "utf8"));
+  } catch {
+    throw new Error("release_evidence_manifest_unreadable");
+  }
+  if (!manifest || typeof manifest !== "object" || !Array.isArray(manifest.entries)) {
+    throw new Error("release_evidence_manifest_artifacts_missing");
+  }
+  if (validateArtifactFiles(manifest, root).length > 0) {
+    throw new Error("release_evidence_artifact_integrity");
+  }
+
+  const rollbackEntry = paths.find((path) => ROLLBACK_TARGET_EVIDENCE.test(path));
+  if (!rollbackEntry) throw new Error("release_evidence_rollback_target_missing");
+  const wranglerEntry = assertAllowedEvidencePath(journal.deployment.wranglerOutputPath);
+  let rollbackEvidence;
+  let deployedVersionId;
+  try {
+    rollbackEvidence = JSON.parse(readFileSync(resolve(root, rollbackEntry), "utf8"));
+    deployedVersionId = readDeployedWorkerVersionId(readFileSync(resolve(root, wranglerEntry), "utf8"));
+  } catch {
+    throw new Error("release_evidence_rollback_target_unreadable");
+  }
+  if (!validateWorkerRollbackEvidence(rollbackEvidence, { deployedVersionId }).ok) {
+    throw new Error("release_evidence_rollback_target_integrity");
+  }
 }
 
 /** @param {string} name */
@@ -168,7 +216,8 @@ export function createReleaseEvidenceArchive({ archivePath, evidencePaths }) {
     const stats = lstatSync(resolve(path));
     if (!stats.isFile() || stats.isSymbolicLink()) throw new Error("unsafe_release_evidence_file");
   }
-  assertJournalBoundEvidence(paths, process.cwd());
+  const journal = assertJournalBoundEvidence(paths, process.cwd());
+  assertReleaseArtifactIntegrity(journal, paths, process.cwd());
   execFileSync("tar", ["-czf", safeArchive, "--", ...paths], { stdio: "pipe" });
   chmodSync(safeArchive, 0o600);
   return { archivePath: safeArchive, entries: paths };
@@ -206,7 +255,8 @@ export function restoreReleaseEvidenceArchive({ archivePath }) {
     if (JSON.stringify(extracted) !== JSON.stringify([...listed].sort())) {
       throw new Error("release_evidence_archive_manifest_mismatch");
     }
-    assertJournalBoundEvidence(extracted, temporaryRoot);
+    const journal = assertJournalBoundEvidence(extracted, temporaryRoot);
+    assertReleaseArtifactIntegrity(journal, extracted, temporaryRoot);
     for (const entry of extracted) {
       const source = resolve(temporaryRoot, entry);
       const destination = resolve(entry);
