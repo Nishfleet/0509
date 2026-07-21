@@ -340,7 +340,7 @@ export default function CollectionsRoute() {
               <input name="intent" type="hidden" value="create-collection" />
               <label className="f9-field">
                 <span>Name</span>
-                <input name="name" placeholder="Nykaa competitors" required />
+                <input name="name" placeholder="Competitor set A" required />
               </label>
               <label className="f9-field">
                 <span>Description</span>

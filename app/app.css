@@ -1929,6 +1929,14 @@ button[aria-busy="true"] {
   color: #087764;
 }
 
+/* WP-A4.2: green = live STATE fact; the recommendation nudge is an ink-filled
+   badge so the two never collide. --ink/--bone flip per theme, giving a
+   high-contrast inverted fill in both light and dark. */
+.f9-status-pill.is-recommended {
+  background: var(--ink);
+  color: var(--bone);
+}
+
 .f9-status-pill.is-needs_setup,
 .f9-status-pill.is-cache_only,
 .f9-status-pill.is-degraded,
@@ -3917,8 +3925,10 @@ one signal-green accent.
   font-size: 0.68rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  background: var(--ld-green);
-  color: var(--ld-ink);
+  /* WP-A4.2: recommendation nudge is ink-filled, not green. Green stays for
+     live-state facts only; the card's own green outline marks the pick. */
+  background: var(--ld-ink);
+  color: var(--ld-bone);
   padding: 3px 9px;
   align-self: flex-start;
   font-weight: 600;

@@ -530,7 +530,7 @@ export default function BillingRoute() {
                   ) : isCurrentPlan ? (
                     <Pill state="healthy">Current tier</Pill>
                   ) : plan.slug === "starter" ? (
-                    <Pill>Recommended</Pill>
+                    <Pill state="recommended">Recommended</Pill>
                   ) : null}
                 </div>
                 <p>{plan.detail}</p>
