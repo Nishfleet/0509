@@ -8,7 +8,7 @@ function component(tag: string) {
 	return ({ children, ...props }: Props) => createElement(tag, props, children);
 }
 
-async function mockRoute(loaderData: unknown) {
+async function mockRoute(loaderData: unknown, search = "") {
 	vi.doMock("react-router", async () => {
 		const actual = await vi.importActual<typeof import("react-router")>("react-router");
 		return {
@@ -19,7 +19,7 @@ async function mockRoute(loaderData: unknown) {
 			useActionData: () => null,
 			useLoaderData: () => loaderData,
 			useNavigation: () => ({ state: "idle", location: null }),
-			useSearchParams: () => [new URLSearchParams(), vi.fn()],
+			useSearchParams: () => [new URLSearchParams(search), vi.fn()],
 		};
 	});
 
@@ -54,6 +54,7 @@ function digestData(summary: Record<string, unknown> | null | undefined) {
 		id: "digest-1",
 		periodStart: "2026-07-08T00:00:00.000Z",
 		periodEnd: "2026-07-15T00:00:00.000Z",
+		createdAt: "2026-07-15T09:14:00.000Z",
 		items: [],
 		summary,
 	};
@@ -114,6 +115,77 @@ describe("digests customer presentation", () => {
 		const markup = renderToStaticMarkup(createElement(DigestsRoute));
 
 		expect(markup).toContain(`Showing ${included} of ${total} eligible changes; ${expected} from this digest.`);
+	});
+
+	it("renders the WP-C2 Beat 4 front page for the first filed brief", async () => {
+		// Arrives from the first-run arc (the ?firstrun=1 flag the Overview bridge carries).
+		await mockRoute(digestData(null), "?firstrun=1");
+
+		const { default: DigestsRoute } = await import("~/routes/app.digests");
+		const markup = renderToStaticMarkup(createElement(DigestsRoute));
+
+		// Real filed-time eyebrow — never a "05:09" stamp on the on-demand brief.
+		expect(markup).toContain("FIRST BRIEF · FILED");
+		expect(markup).toContain("2026-07-15T09:14:00.000Z");
+		expect(markup).not.toContain("05:09");
+		// Data-driven H1 (fallback when the builder emits no single lead sentence).
+		// The lead's last word carries the green marker, so it renders split.
+		expect(markup).toContain("Your first brief is ");
+		expect(markup).toContain(">filed.<");
+		// The spine is fully done, and the CTA noun stays "brief".
+		expect(markup).toContain('class="f9-first-run-spine"');
+		expect(markup).toContain("Read the full brief →");
+		// P4: the CTA is a FUNCTIONAL same-page anchor to the full brief detail,
+		// not a no-op link back to the current URL.
+		expect(markup).toContain('href="#first-brief-detail"');
+		expect(markup).toContain('id="first-brief-detail"');
+		expect(markup).toContain("Add a competitor to compare");
+		expect(markup).not.toContain("Read the full edition");
+	});
+
+	it("retires the Beat 4 front page on ordinary Briefs navigation (no arc flag)", async () => {
+		// Same single-digest workspace, but arriving via normal nav — no ?firstrun.
+		await mockRoute(digestData(null));
+		const { default: DigestsRoute } = await import("~/routes/app.digests");
+		const markup = renderToStaticMarkup(createElement(DigestsRoute));
+
+		expect(markup).not.toContain("FIRST BRIEF · FILED");
+		expect(markup).not.toContain("Read the full brief →");
+		// The normal master-detail Briefs page still renders.
+		expect(markup).toContain("Brief history");
+	});
+
+	it("promises the 05:09 cadence only for daily-cadence plans", async () => {
+		await mockRoute({ ...digestData(null), plan: "starter" }, "?firstrun=1");
+		const { default: DigestsRoute } = await import("~/routes/app.digests");
+		expect(renderToStaticMarkup(createElement(DigestsRoute))).toContain(
+			"Tomorrow’s brief files automatically before 05:09.",
+		);
+	});
+
+	it.each(["free", "scout"])(
+		"never promises the daily 05:09 cadence for the weekly %s plan",
+		async (plan) => {
+			await mockRoute({ ...digestData(null), plan }, "?firstrun=1");
+			const { default: DigestsRoute } = await import("~/routes/app.digests");
+			const markup = renderToStaticMarkup(createElement(DigestsRoute));
+			// Weekly plans still see the front page + a real filed time, just no
+			// daily-cadence promise they don't have.
+			expect(markup).toContain("FIRST BRIEF · FILED");
+			expect(markup).not.toContain("05:09");
+		},
+	);
+
+	it("retires the Beat 4 front page once more than one brief exists (even with the arc flag)", async () => {
+		const base = digestData(null);
+		const second = { ...base.selectedDigest, id: "digest-2" };
+		await mockRoute({ ...base, digests: [base.selectedDigest, second] }, "?firstrun=1");
+
+		const { default: DigestsRoute } = await import("~/routes/app.digests");
+		const markup = renderToStaticMarkup(createElement(DigestsRoute));
+
+		expect(markup).not.toContain("FIRST BRIEF · FILED");
+		expect(markup).not.toContain("Read the full brief →");
 	});
 
 	it("omits cohort feedback when counts are null or omitted count is zero", async () => {
