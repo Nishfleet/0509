@@ -199,7 +199,11 @@ export default function BetterAuthMagicLinkRoute() {
           <h2>{isSignup ? "Create your workspace" : "Open your account"}</h2>
             <p>Email security scanners cannot finish this step — tap continue to open your account.</p>
           <Form className="f9-auth-form" method="post" action={cleanMagicLinkPath(data.mode)}>
-            {data.error ? <p className="f9-message is-error">{data.error}</p> : null}
+            {data.error ? (
+              <p aria-live="assertive" className="f9-message is-error" role="alert">
+                {data.error}
+              </p>
+            ) : null}
             <button className="f9-primary-button" type="submit">
               {isSignup ? "Create workspace" : "Continue to account"}
             </button>

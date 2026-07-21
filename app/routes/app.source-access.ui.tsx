@@ -115,7 +115,9 @@ export function SourceAccessRoute() {
 
           {actionData?.message ? (
             <div
+              aria-live={actionData.ok ? "polite" : "assertive"}
               className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}
+              role={actionData.ok ? "status" : "alert"}
             >
               <p>{actionData.message}</p>
             </div>
@@ -223,7 +225,7 @@ export function SourceAccessRoute() {
               </section>
             </div>
           ) : (
-            <div className="f9-message">
+            <div className="f9-message" role="status">
               <p>
                 Only the account owner can add, retest, or disconnect backup
                 source access.

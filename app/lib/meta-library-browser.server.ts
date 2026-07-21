@@ -15,6 +15,7 @@ import {
   hasBrowserRunQuickActions,
 } from "~/lib/browser-run.server";
 import { isoFromCountryName } from "~/lib/countries";
+import { normalizeNumericPageId } from "~/lib/normalize";
 import {
   findStartedRunningLine,
   parseStartedRunningDate,
@@ -539,6 +540,65 @@ function createSessionCardExtractionScript() {
       return null;
     }
 
+    // Relay payload map: each Ad Library result node carries the advertiser's
+    // numeric page_id keyed by ad_archive_id (= library id). This is the
+    // authoritative advertiser identity and covers vanity-linked brands (Nike)
+    // whose card link has no numeric id. Parsed once from the page HTML.
+    const pageIdByLibraryId = new Map<string, string>();
+    try {
+      const relayHtml = document.documentElement.innerHTML;
+      // Window bounded by the NEXT ad_archive_id (real nodes are ~12k chars
+      // apart; a fixed lookahead window would never reach the next node and
+      // discard every match). `[\\]?` tolerates Meta's escaped Relay quotes.
+      const idRegex = /[\\]?"ad_archive_id[\\]?"\s*:\s*[\\]?"(\d+)[\\]?"/g;
+      const relayMatches: RegExpExecArray[] = [];
+      let relayMatch: RegExpExecArray | null;
+      while ((relayMatch = idRegex.exec(relayHtml))) {
+        relayMatches.push(relayMatch);
+      }
+      for (let index = 0; index < relayMatches.length; index += 1) {
+        const current = relayMatches[index];
+        const libId = current[1];
+        if (!libId || pageIdByLibraryId.has(libId)) {
+          continue;
+        }
+        const windowStart = current.index + current[0].length;
+        const nextIndex = relayMatches[index + 1]?.index ?? relayHtml.length;
+        const window = relayHtml.slice(
+          windowStart,
+          Math.min(nextIndex, windowStart + 800),
+        );
+        const pid = window.match(/[\\]?"page_id[\\]?"\s*:\s*[\\]?"(\d{5,})[\\]?"/);
+        if (pid) {
+          pageIdByLibraryId.set(libId, pid[1]);
+        }
+      }
+    } catch {
+      // Relay shape can change; page-scoping is an optimization, never required.
+    }
+
+    function numericPageIdFromCard(cardRoot: HTMLElement): string | null {
+      const links = Array.from(
+        cardRoot.querySelectorAll<HTMLAnchorElement>("a[href]"),
+      );
+      for (const link of links) {
+        const href = link.href || link.getAttribute("href") || "";
+        try {
+          const url = new URL(href, location.origin);
+          if (!/(^|\.)facebook\.com$/i.test(url.hostname)) {
+            continue;
+          }
+          const match = url.pathname.match(/^\/(\d{5,})\/?$/);
+          if (match) {
+            return match[1];
+          }
+        } catch {
+          // skip malformed hrefs
+        }
+      }
+      return null;
+    }
+
     // Card discovery, two paths merged by library id:
     // Path A — legacy DOM variants exposed id-bearing anchors per card.
     // Path B — the current (2026) Ad Library DOM has NO id anchors and no
@@ -692,6 +752,7 @@ function createSessionCardExtractionScript() {
           imageUrl: media.imageUrl,
           hasVideo: media.hasVideo,
           variantCount: variantMatch ? Number.parseInt(variantMatch[1], 10) : null,
+          pageId: pageIdByLibraryId.get(libraryId) ?? numericPageIdFromCard(card),
         };
       })
       .filter(Boolean);
@@ -1222,6 +1283,59 @@ function buildQuickActionExtractionScript() {
       .join("\\n")
       .trim();
 
+  const pageIdByLibraryId = new Map();
+  try {
+    const relayHtml = document.documentElement.innerHTML;
+    // Window bounded by the NEXT ad_archive_id (real nodes are ~12k chars apart;
+    // a fixed lookahead window would never reach the next node and discard every
+    // match). [\\]? tolerates Meta's escaped Relay quotes.
+    const idRegex = /[\\\\]?"ad_archive_id[\\\\]?"\\s*:\\s*[\\\\]?"(\\d+)[\\\\]?"/g;
+    const relayMatches = [];
+    let relayMatch;
+    while ((relayMatch = idRegex.exec(relayHtml))) {
+      relayMatches.push(relayMatch);
+    }
+    for (let index = 0; index < relayMatches.length; index += 1) {
+      const current = relayMatches[index];
+      const libId = current[1];
+      if (!libId || pageIdByLibraryId.has(libId)) {
+        continue;
+      }
+      const windowStart = current.index + current[0].length;
+      const nextIndex = relayMatches[index + 1] ? relayMatches[index + 1].index : relayHtml.length;
+      const relayWindow = relayHtml.slice(windowStart, Math.min(nextIndex, windowStart + 800));
+      const pid = relayWindow.match(/[\\\\]?"page_id[\\\\]?"\\s*:\\s*[\\\\]?"(\\d{5,})[\\\\]?"/);
+      if (pid) {
+        pageIdByLibraryId.set(libId, pid[1]);
+      }
+    }
+  } catch (relayError) {
+    // Relay shape can change; page-scoping is an optimization, never required.
+  }
+
+  function numericPageIdFromCard(cardRoot) {
+    if (!cardRoot) {
+      return null;
+    }
+    const links = Array.from(cardRoot.querySelectorAll("a[href]"));
+    for (const link of links) {
+      const href = (link instanceof HTMLAnchorElement ? link.href : link.getAttribute("href")) || "";
+      try {
+        const url = new URL(href, location.origin);
+        if (!/(^|\\.)facebook\\.com$/i.test(url.hostname)) {
+          continue;
+        }
+        const match = url.pathname.match(/^\\/(\\d{5,})\\/?$/);
+        if (match) {
+          return match[1];
+        }
+      } catch (hrefError) {
+        // skip malformed hrefs
+      }
+    }
+    return null;
+  }
+
   const roots = new Map();
   const anchors = Array.from(document.querySelectorAll(${JSON.stringify(AD_LIBRARY_RESULT_SELECTOR)}));
   for (const anchor of anchors) {
@@ -1341,6 +1455,7 @@ function buildQuickActionExtractionScript() {
         imageUrl: media.imageUrl,
         hasVideo: media.hasVideo,
         variantCount: variantMatch ? Number.parseInt(variantMatch[1], 10) : null,
+        pageId: pageIdByLibraryId.get(libraryId) || numericPageIdFromCard(card),
       };
     })
     .filter(Boolean);
@@ -1754,6 +1869,7 @@ export function normalizeExtractedCard(
   return withStructuredAnalysis({
     metaAdId: card.libraryId,
     advertiser,
+    advertiserPageId: card.pageId ?? null,
     body,
     previewHeadline,
     previewSubhead,
@@ -1801,12 +1917,72 @@ export function adHasUsableContent(ad: AdRecord): boolean {
   );
 }
 
+/**
+ * Prefer cards whose scraped advertiser name matches the queried brand before
+ * unrelated advertisers. A keyword search for "nike" surfaces resellers,
+ * marketplaces, and lookalikes alongside Nike's own ads; this stable reorder
+ * floats the real brand to the top without dropping anything or inventing an
+ * advertiser identity (it only reads the advertiser name discovery already
+ * captured). No-op when the query is empty or already page-scoped.
+ */
+export function rankExtractedCardsByAdvertiserMatch(
+  cards: ExtractedAdCard[],
+  query: NormalizedSavedQuery,
+): ExtractedAdCard[] {
+  if (normalizeNumericPageId(query.filters.pageId)) {
+    return cards;
+  }
+  const term = normalizeBrandMatchToken(query.filters.query);
+  if (!term || term.length < 2) {
+    return cards;
+  }
+  return cards
+    .map((card, index) => ({ card, index }))
+    .sort((left, right) => {
+      const leftRank = advertiserMatchesBrandTerm(left.card.advertiser, term)
+        ? 0
+        : 1;
+      const rightRank = advertiserMatchesBrandTerm(right.card.advertiser, term)
+        ? 0
+        : 1;
+      if (leftRank !== rightRank) {
+        return leftRank - rightRank;
+      }
+      return left.index - right.index;
+    })
+    .map((entry) => entry.card);
+}
+
+function normalizeBrandMatchToken(value: string | null | undefined) {
+  return (value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .trim();
+}
+
+function advertiserMatchesBrandTerm(
+  advertiser: string | null | undefined,
+  term: string,
+) {
+  const normalizedAdvertiser = normalizeBrandMatchToken(advertiser);
+  if (!normalizedAdvertiser) {
+    return false;
+  }
+  // Bidirectional containment on the alphanumeric-only forms: "Nike" matches
+  // "nike", and "Nike, Inc." (→ "nikeinc") still matches "nike". Guard the
+  // reverse direction so a 2-char query can't match every advertiser.
+  return (
+    normalizedAdvertiser.includes(term) ||
+    (term.length >= 4 && term.includes(normalizedAdvertiser))
+  );
+}
+
 /** Exported for unit tests that assert Ad Library URL filter params. */
 export function normalizeAndFilterExtractedCards(
   cards: ExtractedAdCard[],
   query: NormalizedSavedQuery,
 ) {
-  return cards
+  return rankExtractedCardsByAdvertiserMatch(cards, query)
     .filter((card) => {
       if (query.filters.status === "active") {
         return card.active !== false;
@@ -1862,6 +2038,19 @@ export function buildSearchUrl(query: NormalizedSavedQuery) {
   params.set("country", countryCode(query.filters.country));
   params.set("is_targeted_country", "false");
   params.set("media_type", mapMediaTypeParam(query.filters.creativeType));
+
+  // Verified page-scoped scan: when discovery has resolved the advertiser's
+  // exact Meta Page id, scope the scrape to that page (`view_all_page_id`)
+  // instead of a keyword guess. This is what makes mega-brand results (Nike,
+  // Amazon, …) return the brand's own ads instead of resellers and keyword
+  // junk. Only ever set from a verified match — never a search term.
+  const pageId = normalizeNumericPageId(query.filters.pageId);
+  if (pageId) {
+    params.set("search_type", "page");
+    params.set("view_all_page_id", pageId);
+    return `https://www.facebook.com/ads/library/?${params.toString()}`;
+  }
+
   params.set(
     "search_type",
     query.mode === "advertiser" ? "keyword_exact_phrase" : "keyword_unordered",

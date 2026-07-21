@@ -8,8 +8,15 @@
  */
 
 import { adLongevityDays } from "~/lib/ad-display";
+import {
+  buildDataEnvelope,
+  containsPromptEcho,
+  everyCapitalizedTokenGrounded,
+  everyDigitRunGrounded,
+  runGuardedGeneration,
+  sanitizePromptText,
+} from "~/lib/ai-guarded-generation.server";
 import type { AppEnv } from "~/lib/env.server";
-import { promiseWithTimeout } from "~/lib/fetch-timeout.server";
 import type { SearchStealSummary } from "~/lib/search-answer";
 import type { AdRecord, SearchResponse } from "~/lib/types";
 
@@ -97,36 +104,23 @@ export async function buildSearchStealSummary(
 
   const dataBlock = [`Ads analyzed: ${lines.length}`, ...lines].join("\n");
 
-  try {
-    const timeoutMs = Math.min(
-      AI_STEAL_TIMEOUT_MS,
-      Math.max(1, Math.floor(options.timeoutMs ?? AI_STEAL_TIMEOUT_MS)),
-    );
-    const response = await promiseWithTimeout(
-      env.AI.run(STEAL_SUMMARY_MODEL, {
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          {
-            role: "user",
-            content: ["<<<DATA>>>", dataBlock, "<<<END DATA>>>"].join("\n"),
-          },
-        ],
-        max_tokens: MAX_OUTPUT_TOKENS,
-      }),
-      timeoutMs,
-      "Steal summary generation timed out.",
-    );
-    const raw =
-      typeof response === "string"
-        ? response
-        : typeof (response as { response?: unknown }).response === "string"
-          ? (response as { response: string }).response
-          : "";
-    const bullets = validateStealBullets(raw, dataBlock);
-    return bullets ? { bullets } : null;
-  } catch {
+  const timeoutMs = Math.min(
+    AI_STEAL_TIMEOUT_MS,
+    Math.max(1, Math.floor(options.timeoutMs ?? AI_STEAL_TIMEOUT_MS)),
+  );
+  const raw = await runGuardedGeneration(env, {
+    model: STEAL_SUMMARY_MODEL,
+    systemPrompt: SYSTEM_PROMPT,
+    userContent: buildDataEnvelope([dataBlock]),
+    maxTokens: MAX_OUTPUT_TOKENS,
+    timeoutMs,
+    timeoutMessage: "Steal summary generation timed out.",
+  });
+  if (raw === null) {
     return null;
   }
+  const bullets = validateStealBullets(raw, dataBlock);
+  return bullets ? { bullets } : null;
 }
 
 /**
@@ -183,29 +177,22 @@ export function validateStealBullets(raw: string, corpus: string): string[] | nu
     }
 
     const bulletLower = bullet.toLowerCase();
-    if (PROMPT_ECHO_FRAGMENTS.some((fragment) => bulletLower.includes(fragment))) {
+    if (containsPromptEcho(bulletLower, PROMPT_ECHO_FRAGMENTS)) {
       return null;
     }
 
     // Every digit sequence must exist in the input data — fabricated
     // percentages, prices, or day counts reject the whole summary.
-    for (const digits of bullet.match(/\d+/g) ?? []) {
-      if (!corpusLower.includes(digits)) {
-        return null;
-      }
+    if (!everyDigitRunGrounded(bullet, corpusLower, "substring")) {
+      return null;
     }
 
     // Capitalized tokens past the bullet's first word are candidate brand or
     // product names; each must appear (case-insensitively) in the input data.
     // The first word is exempt because sentence-initial capitalization is
     // style, not a factual claim.
-    for (const match of bullet.matchAll(/[A-Z][A-Za-z'’-]+/g)) {
-      if (match.index === 0) {
-        continue;
-      }
-      if (!corpusLower.includes(match[0].toLowerCase())) {
-        return null;
-      }
+    if (!everyCapitalizedTokenGrounded(bullet, corpusLower)) {
+      return null;
     }
   }
 
@@ -213,10 +200,5 @@ export function validateStealBullets(raw: string, corpus: string): string[] | nu
 }
 
 function sanitizePromptField(value: string | null | undefined) {
-  return (value ?? "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replaceAll("<", "‹")
-    .replaceAll(">", "›")
-    .slice(0, MAX_FIELD_LENGTH);
+  return sanitizePromptText(value, { maxLength: MAX_FIELD_LENGTH });
 }

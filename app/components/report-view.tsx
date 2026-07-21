@@ -1,5 +1,6 @@
 import type { ReportDocument } from "~/lib/report";
 import { EmptyState } from "~/components/empty-state";
+import { Pill } from "~/components/pill";
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
 import { safeInsightDepthSummary } from "~/lib/insight-depth";
 import { formatAdvertiserLabel } from "~/lib/landing-page-display";
@@ -72,7 +73,7 @@ export function ReportView({ report }: { report: ReportDocument }) {
         <section className="f9-proof-packet" aria-label="AI weekly summary">
           <div>
             <span className="f9-app-kicker">AI weekly summary</span>
-            <h3>What competitors did this week</h3>
+            <h2>What competitors did this week</h2>
             <p className="f9-muted-copy">
               Written by AI from the digest for the week ending{" "}
               <LocalTime iso={report.aiWeeklySummary.periodEnd} mode="date" />. Check the evidence rows below before sharing.
@@ -86,7 +87,7 @@ export function ReportView({ report }: { report: ReportDocument }) {
         <section className="f9-proof-packet" aria-label="Report source coverage">
           <div>
             <span className="f9-app-kicker">Evidence and source coverage</span>
-            <h3>Verified evidence filter</h3>
+            <h2>Verified evidence filter</h2>
             <p className="f9-muted-copy">{legacyReportLabelText(report.sourceCoverage.note)}</p>
           </div>
           <dl className="proof-trail-list">
@@ -174,8 +175,8 @@ function ReportRowCard({ row }: { row: ReportDocument["rows"][number] }) {
           {subheading ? <p className="f9-muted-copy">{subheading}</p> : null}
         </div>
         <div className="report-card-meta">
-          {languageLabel ? <span className="f9-status-pill">{languageLabel}</span> : null}
-          {row.event ? <span className="f9-status-pill">{row.event.typeLabel}</span> : null}
+          {languageLabel ? <Pill>{languageLabel}</Pill> : null}
+          {row.event ? <Pill>{row.event.typeLabel}</Pill> : null}
         </div>
       </div>
 
@@ -260,9 +261,7 @@ function ReportRowCard({ row }: { row: ReportDocument["rows"][number] }) {
               {row.tags.length > 0 ? (
                 <div className="report-tag-list">
                   {row.tags.map((tag) => (
-                    <span className="f9-status-pill" key={tag}>
-                      {tag}
-                    </span>
+                    <Pill key={tag}>{tag}</Pill>
                   ))}
                 </div>
               ) : null}

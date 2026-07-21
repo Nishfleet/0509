@@ -140,7 +140,7 @@ export function DeveloperAccessRoute() {
               <span className="f9-app-kicker">Create API key</span>
               <h3>Exports and approved actions</h3>
               {createDisabledReason ? (
-                <div className="f9-message is-error">
+                <div aria-live="assertive" className="f9-message is-error" role="alert">
                   <p>{createDisabledReason}</p>
                 </div>
               ) : null}

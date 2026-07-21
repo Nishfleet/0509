@@ -1,8 +1,15 @@
+import {
+	buildDataEnvelope,
+	collapseWhitespace,
+	containsPromptEcho,
+	everyDigitRunGrounded,
+	runGuardedGeneration,
+	sanitizePromptText,
+} from "~/lib/ai-guarded-generation.server";
 import { ANGLE_DISPLAY } from "~/lib/angle-display";
 import type { CompetitorDossier } from "~/lib/competitor-dossier.server";
 import { DIGEST_STRATEGY_MODEL } from "~/lib/digest-strategy";
 import type { AppEnv } from "~/lib/env.server";
-import { promiseWithTimeout } from "~/lib/fetch-timeout.server";
 
 /**
  * AI Counter-Brief: the leap from intelligence to action. Turns a ready
@@ -119,31 +126,18 @@ export async function buildCounterBrief(
 		return null;
 	}
 
-	try {
-		const response = await promiseWithTimeout(
-			env.AI.run(COUNTER_BRIEF_MODEL, {
-				messages: [
-					{ role: "system", content: SYSTEM_PROMPT },
-					{
-						role: "user",
-						content: ["<<<DATA>>>", ...facts.lines, "<<<END DATA>>>"].join("\n"),
-					},
-				],
-				max_tokens: MAX_OUTPUT_TOKENS,
-			}),
-			timeoutMs,
-			"Counter-brief generation timed out.",
-		);
-		const raw =
-			typeof response === "string"
-				? response
-				: typeof (response as { response?: unknown }).response === "string"
-					? (response as { response: string }).response
-					: "";
-		return validateCounterBrief(raw, facts);
-	} catch {
+	const raw = await runGuardedGeneration(env, {
+		model: COUNTER_BRIEF_MODEL,
+		systemPrompt: SYSTEM_PROMPT,
+		userContent: buildDataEnvelope(facts.lines),
+		maxTokens: MAX_OUTPUT_TOKENS,
+		timeoutMs,
+		timeoutMessage: "Counter-brief generation timed out.",
+	});
+	if (raw === null) {
 		return null;
 	}
+	return validateCounterBrief(raw, facts);
 }
 
 /**
@@ -276,7 +270,7 @@ export function validateCounterBrief(
 	const allText = [gap, watchNote, ...hooksToTest.flatMap((hook) => [hook.direction, hook.rationale])]
 		.join(" ")
 		.toLowerCase();
-	if (PROMPT_ECHO_FRAGMENTS.some((fragment) => allText.includes(fragment))) {
+	if (containsPromptEcho(allText, PROMPT_ECHO_FRAGMENTS)) {
 		return null;
 	}
 
@@ -305,9 +299,7 @@ export function validateCounterBrief(
 	}
 
 	// Every digit anywhere in the brief must exist in the input corpus.
-	const corpusDigits = new Set(facts.corpus.match(/\d+/g) ?? []);
-	const outputDigits = allText.match(/\d+/g) ?? [];
-	if (outputDigits.some((run) => !corpusDigits.has(run))) {
+	if (!everyDigitRunGrounded(allText, facts.corpus, "token")) {
 		return null;
 	}
 
@@ -358,16 +350,10 @@ function readCollapsedString(value: unknown): string | null {
 	if (typeof value !== "string") {
 		return null;
 	}
-	const collapsed = value.replace(/\s+/g, " ").trim();
-	return collapsed || null;
+	return collapseWhitespace(value) || null;
 }
 
 /** Prompt-injection hygiene for copy that flows into the model input. */
 function sanitizeFact(value: string): string {
-	return value
-		.replace(/\s+/g, " ")
-		.replaceAll("<", "‹")
-		.replaceAll(">", "›")
-		.trim()
-		.slice(0, MAX_HOOK_FACT_LENGTH);
+	return sanitizePromptText(value, { maxLength: MAX_HOOK_FACT_LENGTH });
 }

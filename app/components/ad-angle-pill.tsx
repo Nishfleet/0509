@@ -1,3 +1,4 @@
+import { Pill } from "~/components/pill";
 import { classifyAdRecordAngle } from "~/lib/ad-display";
 import { ANGLE_DISPLAY, formatAngleTooltip } from "~/lib/angle-display";
 import type { AdRecord } from "~/lib/types";
@@ -13,11 +14,12 @@ export function AdAnglePill({ ad }: { ad: Pick<AdRecord, "hook" | "body" | "offe
   if (!classification) return null;
 
   return (
-    <span
-      className={`f9-longevity-pill f9-angle-pill${classification.lowConfidence ? " is-tentative" : ""}`}
+    <Pill
+      variant="angle"
+      state={classification.lowConfidence ? "tentative" : undefined}
       title={formatAngleTooltip(classification)}
     >
       {ANGLE_DISPLAY[classification.angle].label}
-    </span>
+    </Pill>
   );
 }
