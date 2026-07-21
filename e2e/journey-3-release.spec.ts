@@ -407,6 +407,8 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
       await expect(page.locator("body")).not.toContainText("05:09");
       await expectNoHorizontalOverflow(page);
       await expectPhoneTouchTargets(page);
+      // Capture the release artifact on the genuine front-page state.
+      await attachReleaseStateArtifacts({ page, testInfo, prefix: "j3-first-brief", state: "first-brief-front-page" });
 
       // Retirement: ordinary Briefs navigation (no arc flag) shows the standard
       // master-detail page, never the front-page framing again.
@@ -422,7 +424,6 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
       await expect(page.locator("body")).not.toContainText("05:09");
       await expectNoHorizontalOverflow(page);
       await expectPhoneTouchTargets(page);
-      await attachReleaseStateArtifacts({ page, testInfo, prefix: "j3-first-brief", state: "first-brief-front-page" });
       annotateFinalUrl(testInfo, page);
     });
   }

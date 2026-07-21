@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 const MANIFEST_PATH_PATTERN =
   /^test-results\/deploy-readiness-[a-z0-9-]{1,96}\.json$/u;
 const REMOTE_RESTORE_PATH_PATTERN =
@@ -389,6 +391,32 @@ export function readDeployedWorkerVersionId(output) {
   return versionId;
 }
 
+// When a manifest-backed pre-deploy step (launch:readiness:predeploy) fails,
+// surface WHY straight to stderr: the readiness manifest's status + strictIssues
+// are the actionable diagnosis. Previously the plan printed only a generic
+// "npm run ... failed" and the strictIssues had to be recovered from downloaded
+// CI artifacts. Never masks the original failure; the read is best-effort.
+/**
+ * @param {string} manifestPath
+ * @param {(text: string) => unknown} [write]
+ */
+export function printReleaseReadinessDiagnostics(
+  manifestPath,
+  write = (text) => process.stderr.write(text),
+) {
+  if (typeof manifestPath !== "string" || manifestPath.length === 0) return;
+  try {
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    const status = typeof manifest?.status === "string" ? manifest.status : "unknown";
+    const strictIssues = Array.isArray(manifest?.strictIssues) ? manifest.strictIssues : [];
+    write(
+      `launch:readiness:predeploy failed — manifest status=${status}; strictIssues=${JSON.stringify(strictIssues)}\n`,
+    );
+  } catch {
+    write(`launch:readiness:predeploy failed — readiness manifest unavailable at ${manifestPath}\n`);
+  }
+}
+
 /**
  * @param {ProductionDeployStep[]} plan
  * @param {(step: ProductionDeployStep) => void} execute
@@ -417,6 +445,9 @@ export function executeProductionDeployPlan(plan, execute) {
     try {
       execute(step);
     } catch (releaseFailure) {
+      if (step?.env?.E2E_RELEASE_MANIFEST_PATH) {
+        printReleaseReadinessDiagnostics(step.env.E2E_RELEASE_MANIFEST_PATH);
+      }
       if (step.nonBlockingDiagnostic) {
         process.stderr.write(
           `non-blocking diagnostic failed: ${step.id} — recorded, not fatal\n`,
