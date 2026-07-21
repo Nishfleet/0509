@@ -27,9 +27,24 @@ const ALLOWED_EVIDENCE = [
   /^test-results\/gate-c-[A-Za-z0-9._-]+\.json$/u,
   /^test-results\/production-soak-[A-Za-z0-9._-]+\.json$/u,
 ];
+// The production deploy pipeline writes the gate-B / launch-readiness manifest
+// AND the deploy-readiness manifest to a single file:
+// `test-results/deploy-readiness-<nonce>.json`. `deploy-production-plan.mjs`
+// sets `E2E_RELEASE_MANIFEST_PATH` to that path and passes the same path to
+// `gate-c-soak start --manifest`, so the soak journal's `gateBManifestPath`
+// points at the deploy-readiness file. There is NO standalone
+// `gate-b-manifest-*.json` in a real deploy (that name is only a local-run
+// default in run-local-release-proof.mjs when E2E_RELEASE_MANIFEST_PATH is
+// unset). Requiring a separate gate-b-manifest file therefore made
+// `hasCompleteEvidenceSet` unsatisfiable on the first real run
+// (release_evidence_set_incomplete). The gate-B manifest is still fully
+// archived — as the required deploy-readiness manifest — and still hash-bound
+// via the journal reference check in assertJournalBoundEvidence, so this does
+// not weaken the evidence set. `gate-b-manifest-*.json` stays in
+// ALLOWED_EVIDENCE (archived if a local run ever emits one) but is not
+// required.
 const REQUIRED_EVIDENCE = [
   /^test-results\/deploy-readiness-[A-Za-z0-9._-]+\.json$/u,
-  /^test-results\/gate-b-manifest-[A-Za-z0-9._-]+\.json$/u,
   /^test-results\/gate-b-artifacts\/[A-Za-z0-9._/-]+$/u,
   /^test-results\/wrangler-deploy-output-[A-Za-z0-9._-]+\.jsonl$/u,
   /^test-results\/worker-rollback-target-[A-Za-z0-9._-]+\.json$/u,

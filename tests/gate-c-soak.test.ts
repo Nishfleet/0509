@@ -522,6 +522,95 @@ describe("Gate C scheduled-work soak journal", () => {
     )).toMatchObject({ status: "running", deployment: { workerVersionId: WORKER_VERSION } });
   });
 
+  it("archives the real deploy layout where deploy-readiness IS the gate-b manifest (no standalone gate-b-manifest file)", () => {
+    // Reproduces the first-ever live run of the archive step (deploy run
+    // 29823981684): the production deploy pipeline writes the gate-b /
+    // launch-readiness manifest to `deploy-readiness-<nonce>.json` (via
+    // E2E_RELEASE_MANIFEST_PATH) and feeds that same path to
+    // `gate-c-soak start --manifest`, so the soak journal's gateBManifestPath
+    // points at the deploy-readiness file and NO standalone gate-b-manifest
+    // file exists. The old REQUIRED_EVIDENCE mandated a separate
+    // gate-b-manifest-*.json, so createReleaseEvidenceArchive threw
+    // `release_evidence_set_incomplete` here. This fixture mirrors CI exactly.
+    mkdirSync(resolve("test-results"), { recursive: true });
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const readiness = `test-results/deploy-readiness-${suffix}.json`;
+    const wrangler = `test-results/wrangler-deploy-output-${suffix}.jsonl`;
+    const gateC = `test-results/gate-c-${suffix}.json`;
+    const evidence = `test-results/production-soak-${suffix}.json`;
+    const rollback = `test-results/worker-rollback-target-${suffix}.json`;
+    const artifact = `test-results/gate-b-artifacts/${suffix}.json`;
+    const archive = `test-results/production-release-evidence-${"a".repeat(40)}-126-1.tar.gz`;
+    // Real deploy set: exactly one manifest file, and it is the deploy-readiness
+    // manifest — no gate-b-manifest-*.json.
+    const evidencePaths = [readiness, wrangler, gateC, evidence, rollback, artifact];
+    roots.push(...evidencePaths.map((path) => resolve(path)), resolve(archive));
+    mkdirSync(resolve(dirname(artifact)), { recursive: true });
+    // The deploy-readiness file carries the schemaVersion-3 gate-b manifest.
+    privateJson(resolve(readiness), {
+      schemaVersion: 3,
+      status: "passed",
+      strict: true,
+      candidateFingerprint: "b".repeat(64),
+      postflight: {
+        launchConfig: {
+          wranglerWorktreeSha256: "c".repeat(64),
+          productionSearchRolloutMode: "shadow",
+          providerNetworkDeny: true,
+          retries: 0,
+          workers: 1,
+        },
+        journeys: [1, 2, 3, 4, 5, 6],
+        isolatedPersistenceRemoved: true,
+      },
+    });
+    writeFileSync(resolve(wrangler), `${JSON.stringify({ type: "deploy", version: 1, version_id: WORKER_VERSION })}\n`, { mode: 0o600 });
+    chmodSync(resolve(wrangler), 0o600);
+    privateJson(resolve(gateC), {
+      schemaVersion: 1,
+      workerVersionId: WORKER_VERSION,
+      searchRolloutMode: "shadow",
+      status: "passed",
+      errors: [],
+      steps: Object.fromEntries([
+        "identity_pre",
+        "backup_lifecycle",
+        "pricing",
+        "billing",
+        "proof_email",
+        "production_meta",
+        "proof_cleanup",
+        "identity_post",
+      ].map((step) => [step, { status: "passed" }])),
+    });
+    // Journal binds the gate-b manifest to the deploy-readiness path, exactly as
+    // the deploy pipeline does (gate-c-soak start --manifest <deploy-readiness>).
+    const journal = buildRunningSoakJournal({
+      manifestPath: readiness,
+      wranglerOutputPath: wrangler,
+      gateCPath: gateC,
+      now: STARTED_AT,
+      headCommit: HEAD,
+      deploymentWorkflowRunId: DEPLOY_RUN_ID,
+      deploymentWorkflowRunAttempt: DEPLOY_RUN_ATTEMPT,
+    });
+    expect(journal.candidate.gateBManifestPath).toBe(readiness);
+    privateJson(resolve(evidence), journal);
+    privateJson(resolve(rollback), { status: "passed" });
+    privateJson(resolve(artifact), { status: "passed" });
+
+    // Under the old code this threw release_evidence_set_incomplete.
+    const created = createReleaseEvidenceArchive({ archivePath: archive, evidencePaths });
+    expect(created.entries).not.toContainEqual(expect.stringMatching(/gate-b-manifest/u));
+    expect(created.entries).toContain(readiness);
+    chmodSync(resolve(archive), 0o644);
+    for (const path of evidencePaths) rmSync(resolve(path));
+
+    const restored = restoreReleaseEvidenceArchive({ archivePath: archive });
+    expect(restored.entries).toEqual([...evidencePaths].sort());
+    for (const path of evidencePaths) expect(statSync(resolve(path)).mode & 0o777).toBe(0o600);
+  });
+
   it("rejects a nonempty but incomplete allowed evidence archive", () => {
     mkdirSync(resolve("test-results"), { recursive: true });
     const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
