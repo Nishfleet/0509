@@ -692,7 +692,7 @@ export default function AppDashboardRoute() {
             <div className="f9-panel-toolbar">
               <div>
                 <span className="f9-app-kicker">Next moves</span>
-                <h2>Keep the Market Desk useful</h2>
+                <h2>Keep your overview useful</h2>
               </div>
             </div>
             <div className="f9-work-list is-compact">

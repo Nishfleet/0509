@@ -134,7 +134,7 @@ export const productFaqEntries: ReadonlyArray<FaqJsonLdEntry> = [
   {
     question: "How fast will I hear about changes?",
     answer:
-      "Paid plans run scheduled checks every 3–6 hours: Scout every 6 hours, Starter every 3 hours, and Agency every 3 hours for its first 25 watchlists with the rest every 6 hours. Starter and Agency can also turn on instant alerts, so a confirmed change emails you as soon as a check finds it instead of waiting for the digest.",
+      "Paid plans run scheduled checks every 3–6 hours: Scout every 6 hours, Starter every 3 hours, and Agency every 3 hours for its first 25 watchlists with the rest every 6 hours. Starter and Agency can also turn on instant alerts, so a confirmed change emails you as soon as a check finds it instead of waiting for the brief.",
   },
 ];
 
@@ -648,7 +648,7 @@ export default function MarketingRoute() {
       <section className="ld-proof" id="demo">
         <div className="ld-section-head">
           <span className="ld-kicker">Sample brief</span>
-          <h2>Sample Market Desk Brief</h2>
+          <h2>Sample morning brief</h2>
           <p>
             Preview the morning brief before creating an account. See how Five to Nine turns one competitor move into a clear summary, proof status,
             source, and next action before creating an account.

@@ -64,7 +64,7 @@ describe("buildDigestEmail", () => {
     expect(email.html).toContain("Plum");
     // Cap at 5 — lower-priority Sugar/Dot/Wow omitted from top moves.
     expect(email.html).not.toContain("Sugar");
-    expect(email.html).toContain("3 more changes are in the full digest");
+    expect(email.html).toContain("3 more changes are in the full brief");
     expect(email.html).toContain("Verified evidence");
     expect(email.html).toContain("Check-spotted");
     // WP-24: each top-move deep-links to the watchlist event row (HTML-escaped &).
@@ -73,7 +73,7 @@ describe("buildDigestEmail", () => {
     expect(email.text).toContain(
       "Review in Five to Nine: https://0509.io/app/watchlists?watchlist=wl-nykaa&event=ev-nykaa",
     );
-    expect(email.text).toContain("View full digest: https://0509.io/app/digests");
+    expect(email.text).toContain("View full brief: https://0509.io/app/digests");
     expect(email.text).toContain("Manage frequency: https://0509.io/app/notifications");
     expect(email.text).toContain("Unsubscribe: https://0509.io/unsubscribe?sig=test");
   });

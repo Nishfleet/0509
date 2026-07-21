@@ -1,4 +1,4 @@
-// Workflow-friction pass: bulk pause/resume from the tracking desk.
+// Workflow-friction pass: bulk pause/resume from the competitors list.
 export function BulkSelectBar(props: {
   selectedCount: number;
   pending: boolean;
