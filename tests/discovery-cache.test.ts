@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  STALE_ZERO_RESULT_CUTOFF,
+  DISCOVERY_ADVERTISER_FILTER_EPOCH,
   buildDiscoveryCacheKey,
   isDiscoveryCacheRouteCompatible,
   isDiscoveryCacheWithinMaxAge,
@@ -55,76 +55,55 @@ describe("isDiscoveryCacheWithinMaxAge", () => {
   });
 });
 
-describe("isStaleZeroResultDiscoveryCacheEntry (broken-advertiser-filter cutoff)", () => {
-  const cutoffMs = Date.parse(STALE_ZERO_RESULT_CUTOFF);
-  const beforeCutoff = new Date(cutoffMs - 60 * 60 * 1000).toISOString();
-  const afterCutoff = new Date(cutoffMs + 60 * 60 * 1000).toISOString();
-
-  it("expires an advertiser-mode zero-result entry scraped before the cutoff (forces a fresh scrape)", () => {
+describe("isStaleZeroResultDiscoveryCacheEntry (advertiser-filter contract epoch)", () => {
+  it("rejects an advertiser-mode zero without the current epoch — no matter how recent", () => {
+    // The blocker scenario a timestamp cutoff can never close: a version-pinned
+    // Workflow instance running the BROKEN filter may sleep/retry indefinitely
+    // and write its wrong zero at ANY later wall-clock time. Writer version is
+    // proven by the epoch stamp, never inferred from fetchedAt — so an
+    // unstamped zero is rejected even if written "after noon" (or next week).
     expect(
-      isStaleZeroResultDiscoveryCacheEntry({ adCount: 0, fetchedAt: beforeCutoff, mode: "advertiser" }),
+      isStaleZeroResultDiscoveryCacheEntry({ adCount: 0, mode: "advertiser", filterEpoch: null }),
+    ).toBe(true);
+    expect(
+      isStaleZeroResultDiscoveryCacheEntry({ adCount: 0, mode: "advertiser", filterEpoch: undefined }),
     ).toBe(true);
   });
 
-  it("expires a domain-mode zero-result entry scraped before the cutoff", () => {
-    expect(
-      isStaleZeroResultDiscoveryCacheEntry({ adCount: 0, fetchedAt: beforeCutoff, mode: "domain" }),
-    ).toBe(true);
-  });
-
-  it("never expires a keyword-mode zero (keyword never ran the broken advertiser filter)", () => {
-    // PR #376's broken filter did not affect keyword search — keyword zeros must
-    // be honored regardless of when they were scraped.
-    expect(
-      isStaleZeroResultDiscoveryCacheEntry({ adCount: 0, fetchedAt: beforeCutoff, mode: "keyword" }),
-    ).toBe(false);
-  });
-
-  it("honors an advertiser-mode zero-result entry scraped at or after the cutoff", () => {
-    expect(
-      isStaleZeroResultDiscoveryCacheEntry({ adCount: 0, fetchedAt: afterCutoff, mode: "advertiser" }),
-    ).toBe(false);
+  it("rejects a domain-mode zero carrying an OLD epoch", () => {
     expect(
       isStaleZeroResultDiscoveryCacheEntry({
         adCount: 0,
-        fetchedAt: STALE_ZERO_RESULT_CUTOFF,
-        mode: "advertiser",
-      }),
-    ).toBe(false);
-  });
-
-  it("honors a non-zero-result advertiser entry scraped before the cutoff (never affected)", () => {
-    expect(
-      isStaleZeroResultDiscoveryCacheEntry({ adCount: 5, fetchedAt: beforeCutoff, mode: "advertiser" }),
-    ).toBe(false);
-  });
-
-  it("does not special-case entries with an unparseable timestamp", () => {
-    expect(
-      isStaleZeroResultDiscoveryCacheEntry({ adCount: 0, fetchedAt: "not-a-date", mode: "advertiser" }),
-    ).toBe(false);
-  });
-
-  it("expires a zero written during the old-worker drain window (post-flip, pre-cutoff)", () => {
-    // Blocker scenario: a request served by the BROKEN worker (in-flight at the
-    // 08:14:30Z alias flip, or a version-pinned Workflow instance) finishes
-    // later and writes its zero with a post-flip fetchedAt. That write must
-    // still be treated as stale.
-    expect(
-      isStaleZeroResultDiscoveryCacheEntry({
-        adCount: 0,
-        fetchedAt: "2026-07-21T08:30:00.000Z",
-        mode: "advertiser",
+        mode: "domain",
+        filterEpoch: "advertiser-evidence-filter-v0",
       }),
     ).toBe(true);
   });
 
-  it("pins the cutoff past the maximum old-worker drain window (12:00:00Z)", () => {
-    // The alias flip (08:14:30Z, run 29812131936) is not enough: in-flight
-    // requests and version-pinned Workflow scan instances started on the broken
-    // worker can WRITE zero-result entries with a post-flip fetchedAt. The
-    // cutoff must sit hours past the flip so no broken-worker write survives.
-    expect(STALE_ZERO_RESULT_CUTOFF).toBe("2026-07-21T12:00:00.000Z");
+  it("accepts an advertiser-mode zero stamped with the current epoch", () => {
+    expect(
+      isStaleZeroResultDiscoveryCacheEntry({
+        adCount: 0,
+        mode: "advertiser",
+        filterEpoch: DISCOVERY_ADVERTISER_FILTER_EPOCH,
+      }),
+    ).toBe(false);
+  });
+
+  it("never gates a keyword-mode zero (keyword never ran the broken advertiser filter)", () => {
+    expect(
+      isStaleZeroResultDiscoveryCacheEntry({ adCount: 0, mode: "keyword", filterEpoch: null }),
+    ).toBe(false);
+  });
+
+  it("never gates a non-zero result (the broken filter could only wrongly empty, never wrongly fill)", () => {
+    expect(
+      isStaleZeroResultDiscoveryCacheEntry({ adCount: 5, mode: "advertiser", filterEpoch: null }),
+    ).toBe(false);
+  });
+
+  it("pins the current epoch value", () => {
+    expect(DISCOVERY_ADVERTISER_FILTER_EPOCH).toBe("advertiser-evidence-filter-v1");
   });
 });
 

@@ -52,35 +52,32 @@ export function isDiscoveryCacheWithinMaxAge(
 }
 
 /**
- * Cutoff for the broken-advertiser-filter era (PR #376). Advertiser/domain-mode
- * searches scraped before the advertiser-fix deploy cached 0-ad results that are
- * now wrong, yet stay usable (discoveryEmptyReason "no_results") and can serve
- * for up to the cache TTL — 24h for scans, and up to a 7-day cadence window for
- * shared scheduled hits. A zero-result entry scraped before this instant is
- * treated as expired so the next read re-scrapes fresh.
+ * Contract epoch for the advertiser evidence filter (PR #376). Every discovery
+ * cache WRITE stamps this value into the payload
+ * (`payload.discoveryFilterEpoch`), and the read-side choke point rejects any
+ * advertiser/domain-mode ZERO-result entry that does not carry the CURRENT
+ * epoch.
  *
- * Bound to stable-deployment evidence PLUS the maximum old-code drain window:
- * in deploy run 29812131936 the fixed worker was uploaded at 08:13:55Z,
- * identified at 08:13:58Z, and serving stably on every production alias by
- * 08:14:30Z. The alias flip alone is NOT sufficient — a request served by the
- * broken worker (an in-flight HTTP request, or a version-pinned Workflow scan
- * instance started before the flip) can finish minutes-to-an-hour later and
- * WRITE a zero-result entry whose fetchedAt is after the flip. 12:00:00Z is
- * hours past any plausible drain (HTTP requests finish in minutes; scan
- * workflow instances in well under an hour), so no broken-worker write can
- * carry a post-cutoff fetchedAt. Cost of the wide window: a legitimate
- * new-worker zero written 08:15–12:00 pays one extra re-scrape — cheap, honest.
+ * Why an epoch and not a timestamp cutoff: worker version cannot be inferred
+ * from fetchedAt. Cloudflare Workflow instances are version-pinned and may
+ * sleep or retry indefinitely (per Cloudflare's documented limits and
+ * sleeping/retrying semantics), so an instance running the BROKEN filter can
+ * legitimately wake and write a wrong zero-result entry hours or days after
+ * the fixed worker went live — later than any safe fixed cutoff. Only a
+ * writer-stamped contract version proves which code produced the entry.
  *
- * Keyword-mode searches never applied the advertiser filter and were explicitly
- * unchanged by PR #376 — the invalidation is scoped to the affected query shape
- * (see isStaleZeroResultDiscoveryCacheEntry) and never expires keyword zeros.
+ * Consequences by entry shape:
+ * - advertiser/domain zero WITHOUT the current epoch (all pre-fix writes, and
+ *   any late write from an old pinned instance): rejected -> fresh re-scrape.
+ * - advertiser/domain zero WITH the current epoch: trusted.
+ * - non-zero results: never gated (the broken filter could only wrongly EMPTY
+ *   a result, never wrongly fill one).
+ * - keyword-mode zeros: never gated (keyword search never ran the filter).
  *
- * REMOVABLE after 2026-07-28: one full cache-TTL cycle (7-day max window) past
- * the fix deploy, every pre-fix zero-result entry has aged out on its own and
- * this override — plus its helper and tests — can be deleted.
+ * Bump this value whenever the advertiser evidence-filter contract changes in
+ * a way that invalidates previously cached zero results.
  */
-export const STALE_ZERO_RESULT_CUTOFF = "2026-07-21T12:00:00.000Z";
-const STALE_ZERO_RESULT_CUTOFF_MS = Date.parse(STALE_ZERO_RESULT_CUTOFF);
+export const DISCOVERY_ADVERTISER_FILTER_EPOCH = "advertiser-evidence-filter-v1";
 
 /**
  * The search modes whose zero-result caches the broken advertiser filter could
@@ -89,23 +86,20 @@ const STALE_ZERO_RESULT_CUTOFF_MS = Date.parse(STALE_ZERO_RESULT_CUTOFF);
 const BROKEN_ADVERTISER_FILTER_MODES = new Set<string>(["advertiser", "domain"]);
 
 /**
- * True when a cache entry holds zero ads for an affected query mode AND was
- * scraped before the advertiser-fix cutoff — i.e. a stale zero-result from the
- * broken-filter era that must be re-scraped rather than served. Non-zero
- * results, keyword-mode zeros, and any zero scraped at/after the cutoff are
- * never affected.
+ * True when a cache entry holds zero ads for an affected query mode and does
+ * NOT carry the current writer epoch — i.e. it was written under an older (or
+ * unknown) filter contract and must be re-scraped rather than served. Non-zero
+ * results and keyword-mode zeros are never affected. fetchedAt is deliberately
+ * NOT an input: recency proves nothing about writer version.
  */
 export function isStaleZeroResultDiscoveryCacheEntry(input: {
   adCount: number;
-  fetchedAt: string;
   mode: string;
+  filterEpoch: string | null | undefined;
 }): boolean {
   if (!BROKEN_ADVERTISER_FILTER_MODES.has(input.mode)) return false;
   if (input.adCount > 0) return false;
-  const fetchedMs = Date.parse(input.fetchedAt);
-  // Unparseable timestamp: don't special-case — let normal expiry rules apply.
-  if (!Number.isFinite(fetchedMs)) return false;
-  return fetchedMs < STALE_ZERO_RESULT_CUTOFF_MS;
+  return input.filterEpoch !== DISCOVERY_ADVERTISER_FILTER_EPOCH;
 }
 
 export interface DiscoveryCacheReadOnlyLookup {

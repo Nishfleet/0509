@@ -8,6 +8,7 @@ import {
 import { hasBrowserRunQuickActions } from "~/lib/browser-run.server";
 import {
   buildDiscoveryCacheKey,
+  DISCOVERY_ADVERTISER_FILTER_EPOCH,
   isDiscoveryCacheRouteCompatible,
   isDiscoveryCacheWithinMaxAge,
   isStaleZeroResultDiscoveryCacheEntry,
@@ -755,6 +756,9 @@ export async function searchAdsViaSourceResolver(
             ...liveResult,
             source: provider,
             provider,
+            // Writer contract stamp — proves this entry was produced by the
+            // current advertiser evidence filter (see epoch doc).
+            discoveryFilterEpoch: DISCOVERY_ADVERTISER_FILTER_EPOCH,
           },
           fetchedAt: timestamp,
           expiresAt: new Date(Date.now() + resolveDiscoveryCacheTtlMs(routeContext)).toISOString(),
@@ -1316,13 +1320,15 @@ async function publishDiscoveryLeaseFallbackResult(
   },
 ) {
   const timestamp = new Date().toISOString();
-  const payload =
+  const normalized =
     input.fallback.ads.length === 0 && !input.fallback.discoveryEmptyReason
       ? {
           ...input.fallback,
           discoveryEmptyReason: "no_results" as const,
         }
       : input.fallback;
+  // Lease-fallback writer stamps the same contract epoch as the direct writer.
+  const payload = { ...normalized, discoveryFilterEpoch: DISCOVERY_ADVERTISER_FILTER_EPOCH };
 
   await upsertDiscoveryCacheEntry(env, {
     cacheKey: input.cacheKey,
@@ -1396,11 +1402,11 @@ function sleep(ms: number) {
  *   - route compatibility (FIX-1): interactive public_search and scheduled
  *     scan/warmup share a fingerprint key but must never serve each other —
  *     enforced here so no fallback or lease path can bypass it; and
- *   - the broken-advertiser-filter invalidation: a pre-fix zero-result entry
- *     for an affected query mode is never usable and always forces a fresh
- *     scrape. `mode` is the request's search mode (advertiser / keyword /
- *     domain); keyword zeros are unaffected. Removable after 2026-07-28
- *     (see STALE_ZERO_RESULT_CUTOFF).
+ *   - the advertiser-filter contract gate: an advertiser/domain zero-result
+ *     entry not stamped with the current writer epoch is never usable and
+ *     always forces a fresh scrape. `mode` is the request's search mode
+ *     (advertiser / keyword / domain); keyword zeros are unaffected
+ *     (see DISCOVERY_ADVERTISER_FILTER_EPOCH).
  */
 function isUsableDiscoveryCache(
   provider: AdDiscoveryProvider,
@@ -1423,8 +1429,8 @@ function isUsableDiscoveryCache(
   if (
     isStaleZeroResultDiscoveryCacheEntry({
       adCount: cached.payload.ads.length,
-      fetchedAt: cached.fetchedAt,
       mode,
+      filterEpoch: cached.payload.discoveryFilterEpoch ?? null,
     })
   ) {
     return false;

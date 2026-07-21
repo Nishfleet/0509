@@ -278,6 +278,14 @@ export interface SearchResponse {
   provider?: AdDiscoveryProvider;
   cacheStatus?: DiscoveryCacheStatus;
   discoveryEmptyReason?: "no_results";
+  /**
+   * Contract epoch stamped by the cache WRITER (see
+   * DISCOVERY_ADVERTISER_FILTER_EPOCH in discovery-cache.server.ts). Proves
+   * which advertiser-filter contract produced a cached result — worker version
+   * cannot be inferred from timestamps because sleeping/retrying Workflow
+   * instances can run old code indefinitely.
+   */
+  discoveryFilterEpoch?: string;
   discoveryStatus?: CommercialDiscoveryStatus;
   discoveryProgress?: "warming";
   discoverySummary?: string | null;
