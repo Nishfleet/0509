@@ -270,7 +270,7 @@ export default function ShareRoute() {
                   <div className="f9-panel-toolbar">
                     <div>
                       <p className="f9-app-kicker">{item.watchlistName}</p>
-                      <h3>{item.title}</h3>
+                      <h2>{item.title}</h2>
                     </div>
                     <Pill>{formatWatchEventTypeLabel(item.eventType)}</Pill>
                   </div>
@@ -299,7 +299,7 @@ export default function ShareRoute() {
                   <div className="f9-ad-thumb-row">
                     <AdThumb ad={item.ad} />
                     <div>
-                      <h3>{formatAdvertiserLabel(item.ad.advertiser)}</h3>
+                      <h2>{formatAdvertiserLabel(item.ad.advertiser)}</h2>
                       <AdLongevityPill ad={item.ad} />
                       <p>{item.ad.hook}</p>
                       <p className="f9-muted-copy">{item.tags.join(", ") || "No tags"}</p>
@@ -319,7 +319,7 @@ export default function ShareRoute() {
             <ul className="event-list">
               {data.events.map((event) => (
                 <li className="f9-event-card" key={event.id}>
-                  <h3>{event.title}</h3>
+                  <h2>{event.title}</h2>
                   <p>{event.summary}</p>
                 </li>
               ))}
@@ -332,7 +332,7 @@ export default function ShareRoute() {
             <ul className="event-list">
               {data.digest?.items.map((item) => (
                 <li className="f9-event-card" key={item.id}>
-                  <h3>{item.title}</h3>
+                  <h2>{item.title}</h2>
                   <p>{item.summary}</p>
                 </li>
               ))}
