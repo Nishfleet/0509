@@ -84,13 +84,15 @@ function resolveGateCPath(workerVersionId) {
 async function start() {
   const manifestPath = readArg("--manifest");
   const wranglerOutputPath = readArg("--wrangler-output");
+  const rollbackTargetPath = readArg("--rollback-target");
   const headCommit = readArg("--head") ?? execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
-  if (!manifestPath || !wranglerOutputPath) throw new Error("soak_start_inputs_missing");
+  if (!manifestPath || !wranglerOutputPath || !rollbackTargetPath) throw new Error("soak_start_inputs_missing");
   const deploymentWorkflowRunId = Number(readArg("--deployment-run-id") ?? process.env.GITHUB_RUN_ID);
   const deploymentWorkflowRunAttempt = Number(readArg("--deployment-run-attempt") ?? process.env.GITHUB_RUN_ATTEMPT);
   const provisional = buildRunningSoakJournal({
     manifestPath,
     wranglerOutputPath,
+    rollbackTargetPath,
     gateCPath: readArg("--gate-c") ?? resolveGateCPath(
       (await import("./deploy-production-plan.mjs")).readDeployedWorkerVersionId(
         readFileSync(resolveSafeEvidencePath(wranglerOutputPath), "utf8"),
