@@ -294,6 +294,7 @@ test("WP-C2 Beat 1 empty free workspace keeps the weekly promise honest", async 
   test.info().annotations.push(
     { type: "persona", description: "e2e-free-onboarded" },
     { type: "scenario", description: "first-run-beat-1-empty-free" },
+    { type: "viewport", description: "1440x900" },
   );
   await signInAs(context, baseURL, "e2e-free-onboarded");
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -315,4 +316,6 @@ test("WP-C2 Beat 1 empty free workspace keeps the weekly promise honest", async 
   await expectNoHorizontalOverflow(page);
   await expectPhoneTouchTargets(page);
   await attachReleaseStateArtifacts({ page, testInfo, prefix: "j2-first-run-beat-1", state: "first-run-empty-free" });
+  const finalUrl = new URL(page.url());
+  test.info().annotations.push({ type: "finalUrl", description: `${finalUrl.pathname}${finalUrl.search}` });
 });

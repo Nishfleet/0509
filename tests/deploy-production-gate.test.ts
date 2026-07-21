@@ -13,8 +13,11 @@ import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 const deployPlanModule = await import("../scripts/deploy-production-plan.mjs");
-const { buildProductionDeployPlan, executeProductionDeployPlan } =
-  deployPlanModule;
+const {
+  buildProductionDeployPlan,
+  executeProductionDeployPlan,
+  printReleaseReadinessDiagnostics,
+} = deployPlanModule;
 const { hasMigrationChanges } =
   await import("../scripts/verify-remote-restore-evidence.mjs");
 const rollbackTargetModule =
@@ -503,6 +506,58 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     ]);
     expect(executed).not.toContain("migration_sync");
     expect(executed).not.toContain("deploy");
+  });
+
+  it("surfaces the readiness manifest status and strictIssues on predeploy readiness failure", () => {
+    const root = mkdtempSync(join(tmpdir(), "0509-readiness-diag-"));
+    roots.push(root);
+    const manifestPath = join(root, "manifest.json");
+    writeFileSync(
+      manifestPath,
+      JSON.stringify({
+        status: "failed",
+        strictIssues: ["annotation:finalUrl", "coverage_count:73:66"],
+      }),
+    );
+    const lines: string[] = [];
+    printReleaseReadinessDiagnostics(manifestPath, (text: string) => { lines.push(text); return true; });
+    const output = lines.join("");
+    expect(output).toContain("status=failed");
+    expect(output).toContain("coverage_count:73:66");
+    expect(output).toContain("annotation:finalUrl");
+  });
+
+  it("reports an unavailable readiness manifest without masking the original failure", () => {
+    const lines: string[] = [];
+    printReleaseReadinessDiagnostics(
+      "test-results/deploy-readiness-does-not-exist.json",
+      (text: string) => { lines.push(text); return true; },
+    );
+    expect(lines.join("")).toContain("readiness manifest unavailable");
+  });
+
+  it("prints readiness diagnostics to stderr when launch:readiness:predeploy fails", () => {
+    const plan = buildProductionDeployPlan({
+      manifestPath: "test-results/deploy-readiness-test.json",
+      remoteRestoreEvidencePath,
+      wranglerOutputPath,
+    });
+    const chunks: string[] = [];
+    const original = process.stderr.write;
+    (process.stderr as any).write = (chunk: unknown) => {
+      chunks.push(String(chunk));
+      return true;
+    };
+    try {
+      expect(() =>
+        executeProductionDeployPlan(plan, (step: any) => {
+          if (step.id === "launch_readiness") throw new Error("launch_readiness_failed");
+        }),
+      ).toThrow("launch_readiness_failed");
+    } finally {
+      (process.stderr as any).write = original;
+    }
+    expect(chunks.join("")).toContain("launch:readiness:predeploy failed");
   });
 
   it("stops at the final refund predeploy gate without attempting rollback", () => {
