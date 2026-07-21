@@ -164,6 +164,16 @@ export interface SearchFilters {
   status: SearchStatusFilter;
   firstSeenFrom: string;
   lastSeenFrom: string;
+  /**
+   * Numeric Meta Page id for an advertiser whose identity has been verified for
+   * this query. When present, discovery scopes the Ad Library scrape to that
+   * exact page (`view_all_page_id=<pageId>`) instead of guessing with a keyword
+   * search — this is what makes mega-brand scans (Nike, Amazon, …) return the
+   * brand's own ads instead of resellers/keyword junk. Only ever set after a
+   * verified advertiser match; never a guess. Optional and omitted for keyword
+   * queries so their cache fingerprints stay unchanged.
+   */
+  pageId?: string;
 }
 
 export interface NormalizedSavedQuery {
@@ -199,6 +209,13 @@ export interface LandingPageSnapshotData {
 export interface AdRecord {
   metaAdId: string;
   advertiser: string;
+  /**
+   * Numeric Meta Page id of the advertiser that ran this ad, when discovery
+   * could resolve it (Ad Library relay payload or a numeric advertiser-page
+   * link). Powers verified page-scoped re-scans; never inferred from the
+   * search term.
+   */
+  advertiserPageId?: string | null;
   body: string;
   bodySecondary?: string;
   previewHeadline: string;

@@ -19,6 +19,17 @@ export interface ExtractedAdCard {
   hasVideo?: boolean;
   /** Parsed from "N ads use this creative and text" when present. */
   variantCount?: number | null;
+  /**
+   * Numeric Meta Page id of the advertiser for this card, resolved from the Ad
+   * Library relay payload (ad_archive_id → page_id) or a numeric advertiser-page
+   * link. Enables verified page-scoped re-scans. Null when unresolved.
+   */
+  pageId?: string | null;
+}
+
+export interface AdArchivePageIdentity {
+  pageId: string;
+  pageName: string | null;
 }
 
 export interface RenderedHtmlPayload {
@@ -34,6 +45,7 @@ export function parseRenderedMetaLibraryHtml(
 ): RenderedHtmlPayload {
   const visibleText = stripHtmlPreservingLines(content);
   const text = visibleText.toLowerCase();
+  const pageIdentities = extractAdArchivePageIdentities(content);
   const cards: ExtractedAdCard[] = [];
   const seen = new Set<string>();
   const anchorRegex = /<a\b[^>]*href=(['"])(.*?)\1[^>]*>([\s\S]*?)<\/a>/gi;
@@ -109,6 +121,9 @@ export function parseRenderedMetaLibraryHtml(
       imageUrl: media.imageUrl,
       hasVideo: media.hasVideo,
       variantCount,
+      pageId:
+        pageIdentities.get(libraryId)?.pageId ??
+        extractNumericPageIdFromAdvertiserHtml(contextHtml),
     });
   }
 
@@ -722,6 +737,103 @@ export function extractExternalLink(html: string) {
   }
 
   return null;
+}
+
+/**
+ * The rendered Ad Library ships a Relay payload where each result node carries
+ * `ad_archive_id` alongside the advertiser's numeric `page_id` and `page_name`
+ * (e.g. `"ad_archive_id":"186…","…","page_id":"15087023444","…"`). That map is
+ * the authoritative, per-ad advertiser identity — far more reliable than DOM
+ * scraping — so we key it by library id (= ad_archive_id) for page-scoped
+ * re-scans. Bounded to the first identity seen per id (Relay repeats it).
+ */
+export function extractAdArchivePageIdentities(
+  content: string,
+): Map<string, AdArchivePageIdentity> {
+  const identities = new Map<string, AdArchivePageIdentity>();
+  // Anchor on each ad_archive_id, then read the page_id/page_name from a forward
+  // window bounded by the NEXT ad_archive_id (else +800 chars). The window must
+  // NOT be terminated by a lookahead on the next node — real Ad Library nodes
+  // sit ~12k chars apart, so any fixed-size lookahead window would never reach
+  // the next node and every match would be discarded. In the live payload
+  // page_id sits ~95 chars past ad_archive_id. `[\\]?` tolerates the escaped
+  // quotes Meta uses when the Relay JSON is embedded as a string.
+  const idRegex = /[\\]?"ad_archive_id[\\]?"\s*:\s*[\\]?"(\d+)[\\]?"/g;
+  const matches = [...content.matchAll(idRegex)];
+  for (let index = 0; index < matches.length; index += 1) {
+    const match = matches[index];
+    const libraryId = match[1];
+    if (!libraryId || identities.has(libraryId) || match.index === undefined) {
+      continue;
+    }
+    const windowStart = match.index + match[0].length;
+    const nextIndex = matches[index + 1]?.index ?? content.length;
+    const windowEnd = Math.min(nextIndex, windowStart + 800);
+    const window = content.slice(windowStart, windowEnd);
+    const pageId =
+      window.match(/[\\]?"page_id[\\]?"\s*:\s*[\\]?"(\d{5,})[\\]?"/)?.[1] ?? null;
+    if (!pageId) {
+      continue;
+    }
+    const rawName =
+      window.match(
+        /[\\]?"page_name[\\]?"\s*:\s*[\\]?"((?:[^"\\]|\\.){0,120}?)[\\]?"/,
+      )?.[1] ?? null;
+    identities.set(libraryId, {
+      pageId,
+      pageName: rawName ? decodeJsonStringFragment(rawName) : null,
+    });
+  }
+  return identities;
+}
+
+/**
+ * The current Ad Library links each card's advertiser name to their Page. When
+ * that link is numeric (`facebook.com/61578892468353/`) the digits ARE the
+ * page id. Vanity links (`facebook.com/nike/`) carry no numeric id and return
+ * null — those resolve via the Relay map instead.
+ */
+export function extractNumericPageIdFromAdvertiserHtml(html: string): string | null {
+  const hrefRegex = /\bhref=(['"])(.*?)\1/gi;
+  for (const match of html.matchAll(hrefRegex)) {
+    const href = decodeHtmlEntity(match[2] ?? "");
+    const pageId = numericPageIdFromFacebookProfileHref(href);
+    if (pageId) {
+      return pageId;
+    }
+  }
+  return null;
+}
+
+/** `https://www.facebook.com/<digits>/` → `<digits>`; everything else → null. */
+export function numericPageIdFromFacebookProfileHref(
+  href: string | null | undefined,
+): string | null {
+  if (!href) {
+    return null;
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(href, "https://www.facebook.com");
+  } catch {
+    return null;
+  }
+  if (!/(^|\.)facebook\.com$/i.test(parsed.hostname)) {
+    return null;
+  }
+  const match = parsed.pathname.match(/^\/(\d{5,})\/?$/);
+  return match ? match[1] : null;
+}
+
+function decodeJsonStringFragment(value: string) {
+  return value
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_, code) =>
+      String.fromCharCode(Number.parseInt(code, 16)),
+    )
+    .replace(/\\"/g, '"')
+    .replace(/\\\//g, "/")
+    .replace(/\\\\/g, "\\")
+    .trim();
 }
 
 /**

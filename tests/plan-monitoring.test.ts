@@ -191,40 +191,44 @@ describe("runWeeklyDigests", () => {
 
     const { runWeeklyDigests } = await import("~/lib/monitoring.server");
 
-    const result = await runWeeklyDigests({
-      DB: {
-        prepare() {
-          return {
-            async all<T>() {
-              return {
-                results: [
-                  {
-                    id: "user-1",
-                    email: "owner@example.com",
-                    name: "Owner",
+    // Pin weekly periodEnd (Monday 05:00 UTC) so digest windows are not wall-clock-dependent.
+    const result = await runWeeklyDigests(
+      {
+        DB: {
+          prepare() {
+            return {
+              async all<T>() {
+                return {
+                  results: [
+                    {
+                      id: "user-1",
+                      email: "owner@example.com",
+                      name: "Owner",
+                    },
+                  ] as T[],
+                };
+              },
+              bind() {
+                return {
+                  async all<T>() {
+                    return {
+                      results: [
+                        {
+                          id: "user-1",
+                          email: "owner@example.com",
+                          name: "Owner",
+                        },
+                      ] as T[],
+                    };
                   },
-                ] as T[],
-              };
-            },
-            bind() {
-              return {
-                async all<T>() {
-                  return {
-                    results: [
-                      {
-                        id: "user-1",
-                        email: "owner@example.com",
-                        name: "Owner",
-                      },
-                    ] as T[],
-                  };
-                },
-              };
-            },
-          };
+                };
+              },
+            };
+          },
         },
-      },
-    } as never);
+      } as never,
+      { periodEnd: "2026-07-13T05:00:00.000Z" },
+    );
 
     // Free now receives the weekly digest (heartbeat when the period is
     // quiet) — the email itself carries the upgrade line, covered in
@@ -323,40 +327,44 @@ describe("runWeeklyDigests", () => {
 
     const { runWeeklyDigests } = await import("~/lib/monitoring.server");
 
-    const result = await runWeeklyDigests({
-      DB: {
-        prepare() {
-          return {
-            async all<T>() {
-              return {
-                results: [
-                  {
-                    id: "user-1",
-                    email: "owner@example.com",
-                    name: "Owner",
+    // Pin weekly periodEnd (Monday 05:00 UTC) so digest windows are not wall-clock-dependent.
+    const result = await runWeeklyDigests(
+      {
+        DB: {
+          prepare() {
+            return {
+              async all<T>() {
+                return {
+                  results: [
+                    {
+                      id: "user-1",
+                      email: "owner@example.com",
+                      name: "Owner",
+                    },
+                  ] as T[],
+                };
+              },
+              bind() {
+                return {
+                  async all<T>() {
+                    return {
+                      results: [
+                        {
+                          id: "user-1",
+                          email: "owner@example.com",
+                          name: "Owner",
+                        },
+                      ] as T[],
+                    };
                   },
-                ] as T[],
-              };
-            },
-            bind() {
-              return {
-                async all<T>() {
-                  return {
-                    results: [
-                      {
-                        id: "user-1",
-                        email: "owner@example.com",
-                        name: "Owner",
-                      },
-                    ] as T[],
-                  };
-                },
-              };
-            },
-          };
+                };
+              },
+            };
+          },
         },
-      },
-    } as never);
+      } as never,
+      { periodEnd: "2026-07-13T05:00:00.000Z" },
+    );
 
     expect(result).toBe(1);
     expect(createDigestRun).toHaveBeenCalled();
@@ -448,25 +456,29 @@ describe("runWeeklyDigests", () => {
 
     const { runDailyDigests } = await import("~/lib/monitoring.server");
 
-    const result = await runDailyDigests({
-      DB: {
-        prepare() {
-          return {
-            async all<T>() {
-              return {
-                results: [
-                  {
-                    id: "user-1",
-                    email: "owner@example.com",
-                    name: "Owner",
-                  },
-                ] as T[],
-              };
-            },
-          };
+    // Pin to a non-Monday so the WP-22 Monday daily-skip cannot mask plan gating.
+    const result = await runDailyDigests(
+      {
+        DB: {
+          prepare() {
+            return {
+              async all<T>() {
+                return {
+                  results: [
+                    {
+                      id: "user-1",
+                      email: "owner@example.com",
+                      name: "Owner",
+                    },
+                  ] as T[],
+                };
+              },
+            };
+          },
         },
-      },
-    } as never);
+      } as never,
+      { periodEnd: "2026-07-15T04:00:00.000Z" },
+    );
 
     expect(result).toBe(0);
     expect(listWatchlists).not.toHaveBeenCalled();
@@ -725,25 +737,29 @@ describe("runWeeklyDigests", () => {
 
     const { runWeeklyDigests } = await import("~/lib/monitoring.server");
 
-    const result = await runWeeklyDigests({
-      DB: {
-        prepare() {
-          return {
-            async all<T>() {
-              return {
-                results: [
-                  {
-                    id: "user-1",
-                    email: "owner@example.com",
-                    name: "Owner",
-                  },
-                ] as T[],
-              };
-            },
-          };
+    // Pin weekly periodEnd (Monday 05:00 UTC) so digest windows are not wall-clock-dependent.
+    const result = await runWeeklyDigests(
+      {
+        DB: {
+          prepare() {
+            return {
+              async all<T>() {
+                return {
+                  results: [
+                    {
+                      id: "user-1",
+                      email: "owner@example.com",
+                      name: "Owner",
+                    },
+                  ] as T[],
+                };
+              },
+            };
+          },
         },
-      },
-    } as never);
+      } as never,
+      { periodEnd: "2026-07-13T05:00:00.000Z" },
+    );
 
     expect(result).toBe(1);
     expect(createDigestRun).toHaveBeenCalledWith(

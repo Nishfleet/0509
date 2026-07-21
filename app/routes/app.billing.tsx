@@ -3,6 +3,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import type { ReactNode } from "react";
 
 import { CheckoutReturnNotice } from "~/components/checkout-return-notice";
+import { Pill } from "~/components/pill";
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { LocalTime } from "~/components/local-time";
@@ -306,7 +307,7 @@ export default function BillingRoute() {
       ) : null}
 
       {data.blockedCheckout ? (
-        <div className="f9-message is-error">
+        <div aria-live="assertive" className="f9-message is-error" role="alert">
           <p>
             You already have an active {planLabel} plan, so we stopped that checkout — finishing it
             would have started a second, overlapping subscription. To switch plans or change billing,
@@ -316,7 +317,7 @@ export default function BillingRoute() {
       ) : null}
 
       {data.pendingCheckout ? (
-        <div className="f9-message is-error">
+        <div aria-live="assertive" className="f9-message is-error" role="alert">
           <p>
             A Dodo checkout is already open for this account. Finish that checkout, or wait until
             that payment link expires before starting a new one. If you need help, email{" "}
@@ -336,13 +337,13 @@ export default function BillingRoute() {
       ) : null}
 
       {data.agencyCheckoutHeld ? (
-        <div className="f9-message is-error">
+        <div aria-live="assertive" className="f9-message is-error" role="alert">
           <p>{agencyCheckoutHeldCustomerCopy()}</p>
         </div>
       ) : null}
 
       {data.planCheckoutUnavailable ? (
-        <div className="f9-message is-error">
+        <div aria-live="assertive" className="f9-message is-error" role="alert">
           <p>
             That plan checkout is temporarily unavailable while billing finishes setup. Email{" "}
             <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> from {data.email} and we will help.
@@ -369,7 +370,7 @@ export default function BillingRoute() {
       ) : null}
 
       {data.portalUnavailable ? (
-        <div className="f9-message is-error">
+        <div aria-live="assertive" className="f9-message is-error" role="alert">
           <p>
             We couldn't open your billing portal just now. Email{" "}
             <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> or{" "}
@@ -521,11 +522,11 @@ export default function BillingRoute() {
                     )}
                   </div>
                   {isCurrentBillingChoice ? (
-                    <span className="f9-status-pill is-healthy">Current plan</span>
+                    <Pill state="healthy">Current plan</Pill>
                   ) : isCurrentPlan ? (
-                    <span className="f9-status-pill is-healthy">Current tier</span>
+                    <Pill state="healthy">Current tier</Pill>
                   ) : plan.slug === "starter" ? (
-                    <span className="f9-status-pill">Recommended</span>
+                    <Pill>Recommended</Pill>
                   ) : null}
                 </div>
                 <p>{plan.detail}</p>

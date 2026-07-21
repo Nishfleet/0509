@@ -1407,6 +1407,7 @@ button[aria-busy="true"] {
   transform: translateY(-1px);
 }
 
+.f9-result-card h2,
 .f9-result-card h3 {
   margin: 4px 0 0;
   color: var(--f9-search-ink);
@@ -1877,6 +1878,22 @@ button[aria-busy="true"] {
   letter-spacing: 0;
 }
 
+/* Share/list cards under a page h1 use h2; keep prior h3 card title size */
+.f9-event-card > h2,
+.f9-event-card .f9-panel-toolbar h2,
+.f9-work-row .f9-ad-thumb-row h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.25;
+  font-weight: 600;
+}
+
+.f9-proof-packet > div > h2 {
+  margin: 4px 0 0;
+  font-size: 1.15rem;
+  line-height: 1.25;
+}
+
 .f9-status-strip {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1956,6 +1973,20 @@ button[aria-busy="true"] {
   box-shadow: inset 0 0 0 1px rgba(6, 22, 41, 0.16);
   color: #64788d;
   font-weight: 600;
+}
+
+/* Tracked-days variant: our observation window, not Meta's published start
+   date — achromatic so it never reads as the green "Running" badge.
+   (Rendered by the creative-wall tracked-days pill.) */
+.f9-longevity-pill.f9-longevity-pill.is-tracked {
+  background: rgba(6, 22, 41, 0.07);
+  color: var(--f9-search-muted, #40546a);
+}
+
+/* Sample-data variant (WP-45): labels demo results on search cards. */
+.f9-longevity-pill.f9-longevity-pill.is-sample {
+  background: rgba(23, 22, 17, 0.08);
+  color: var(--ink-soft);
 }
 
 .f9-muted-copy {
@@ -2084,6 +2115,7 @@ button[aria-busy="true"] {
   background: #f6f9fc;
 }
 
+.f9-master-detail .f9-proof-packet h2,
 .f9-master-detail .f9-proof-packet h3 {
   margin: 4px 0 0;
 }
@@ -2181,9 +2213,15 @@ button[aria-busy="true"] {
   border-color: rgba(88, 197, 255, 0.46);
 }
 
-.f9-work-row h3 {
+.f9-work-row h2,
+.f9-work-row h3,
+.f9-work-row .f9-ops-metric-value {
   margin: 0 0 6px;
   font-size: 1.05rem;
+}
+
+.f9-work-row .f9-ops-metric-value {
+  font-weight: 600;
 }
 
 .f9-work-row small {
@@ -4982,6 +5020,7 @@ one signal-green accent.
   box-shadow: 0 10px 28px rgba(14, 13, 10, 0.08);
 }
 
+.f9-search-page .f9-result-card h2,
 .f9-search-page .f9-result-card h3 {
   font-size: 1rem;
   letter-spacing: 0;
@@ -7128,12 +7167,8 @@ one signal-green accent.
   align-items: center;
 }
 
-/* Tracked-days variant: our observation window, not Meta's published start
-   date — achromatic so it never reads as the green "Running" badge. */
-.f9-longevity-pill.f9-longevity-pill.is-tracked {
-  background: rgba(6, 22, 41, 0.07);
-  color: var(--f9-search-muted, #40546a);
-}
+/* Tracked-days / sample longevity-pill variants live with the pill family
+   block near the top of this file. */
 
 .f9-creative-tile-status {
   display: inline-flex;
@@ -7731,15 +7766,6 @@ one signal-green accent.
     background: #efede6;
     color: #11100d;
   }
-}
-
-/* ============================================================
-   WP-45: sample-data pill on search result cards
-   ============================================================ */
-
-.f9-longevity-pill.f9-longevity-pill.is-sample {
-  background: rgba(23, 22, 17, 0.08);
-  color: var(--ink-soft);
 }
 
 /* ============================================================

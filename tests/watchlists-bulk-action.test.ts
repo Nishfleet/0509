@@ -164,6 +164,30 @@ describe("bulk-watchlists action", () => {
     expect(result.message).toBe("Everything selected is already active — nothing to resume.");
   });
 
+  it("rejects an oversized id array before touching D1 (bulk DoS bound)", async () => {
+    const { setWatchlistActive, getWatchlist, requireWorkspacePlanLimit } = installMocks();
+    const ids = Array.from({ length: 201 }, (_, index) => `wl-${index}`);
+
+    const result = await runBulkAction({ bulkAction: "pause", watchlistIds: ids });
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain("200 or fewer");
+    // No per-id work runs when the cap is exceeded.
+    expect(setWatchlistActive).not.toHaveBeenCalled();
+    expect(getWatchlist).not.toHaveBeenCalled();
+    expect(requireWorkspacePlanLimit).not.toHaveBeenCalled();
+  });
+
+  it("allows a selection exactly at the cap", async () => {
+    const { setWatchlistActive } = installMocks();
+    const ids = Array.from({ length: 200 }, (_, index) => `wl-${index}`);
+
+    const result = await runBulkAction({ bulkAction: "pause", watchlistIds: ids });
+
+    expect(result.ok).toBe(true);
+    expect(setWatchlistActive).toHaveBeenCalledTimes(200);
+  });
+
   it("resumes all selected watchlists when the plan allows it", async () => {
     const { setWatchlistActive, requireWorkspacePlanLimit } = installMocks();
     const result = await runBulkAction({

@@ -4,6 +4,7 @@ import {
   applySearchV2PostFilter,
   buildSearchV2CacheKey,
   buildSearchV2SavedQuery,
+  resolveVerifiedAdvertiserPageId,
 } from "~/lib/search-v2.server";
 import { parseSearchInputFromWebsiteField } from "~/lib/search-query";
 import { clearWebsiteIdentityCacheForTests } from "~/lib/website-identity.server";
@@ -150,6 +151,78 @@ describe("search v2 proof policy", () => {
     });
     expect(result.verifiedCount).toBe(1);
     expect(result.broaderCandidateCount).toBe(2);
+  });
+});
+
+describe("verified advertiser page-id scoping", () => {
+  const intent = parseSearchInputFromWebsiteField("https://nykaa.com");
+
+  it("surfaces a single verified advertiser page id for persisted page-scoped scans", async () => {
+    const rawResult: SearchResponse = {
+      ads: [
+        ad({
+          metaAdId: "verified",
+          landingPageUrl: "https://nykaa.com/sale",
+          advertiserPageId: "112233445566",
+        }),
+        // Reseller keyword candidate: verified page id must ignore it entirely.
+        ad({ metaAdId: "reseller", advertiser: "Reseller", advertiserPageId: "999" }),
+      ],
+      nextCursor: null,
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+    };
+
+    const result = await applySearchV2PostFilter({}, rawResult, {
+      queryIntent: intent,
+      scope: "exact",
+      displayDomain: "nykaa.com",
+      identityAliases: [],
+    });
+
+    expect(result.verifiedAdvertiserPageId).toBe("112233445566");
+  });
+
+  it("returns null when verified matches disagree or carry no page id", () => {
+    expect(resolveVerifiedAdvertiserPageId([])).toBeNull();
+    expect(
+      resolveVerifiedAdvertiserPageId([
+        {
+          ad: ad({ advertiserPageId: "111111" }),
+          match: {
+            level: "registrable_domain",
+            matchedDomain: "nykaa.com",
+            matchedSignal: "landing_page_url",
+            confidenceCategory: "verified",
+            providerSource: "meta_library_browser",
+            customerReason: "verified",
+          },
+        },
+        {
+          ad: ad({ advertiserPageId: "222222" }),
+          match: {
+            level: "verified_alias",
+            matchedDomain: "nykaa.com",
+            matchedSignal: "audited_alias",
+            confidenceCategory: "verified",
+            providerSource: "meta_library_browser",
+            customerReason: "verified",
+          },
+        },
+      ]),
+    ).toBeNull();
+  });
+
+  it("persists a verified page id into the saved query for later scans", () => {
+    const scoped = buildSearchV2SavedQuery(intent, "exact", filters, {
+      pageId: "112233445566",
+    });
+    expect(scoped.filters.pageId).toBe("112233445566");
+
+    // No page id → keyword saved query, unchanged fingerprint surface.
+    const keyword = buildSearchV2SavedQuery(intent, "exact", filters);
+    expect("pageId" in keyword.filters).toBe(false);
   });
 });
 

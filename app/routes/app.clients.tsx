@@ -10,6 +10,7 @@ import { sanitizeCustomerFacingMessage } from "~/lib/customer-route-error";
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { EmptyState } from "~/components/empty-state";
+import { Pill } from "~/components/pill";
 import { SubmitButton } from "~/components/submit-button";
 import { isSecretishMemoryField, isSecretishMemoryString } from "~/lib/agent-redaction";
 import { ClientRoomWriteConflictError } from "~/lib/data/customer-api-rooms.server";
@@ -834,7 +835,7 @@ function ClientRoomCard({
         ) : null}
         {room.resourceRefs.length === 0 ? (
           <>
-            <span className="f9-status-pill">No linked resources</span>
+            <Pill>No linked resources</Pill>
             {canManage ? <Link className="f9-secondary-button" to="/app/watchlists">Choose evidence</Link> : null}
           </>
         ) : null}

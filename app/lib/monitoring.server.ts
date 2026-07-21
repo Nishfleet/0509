@@ -25,13 +25,11 @@ import {
   getWatchlist,
   hydrateAdsWithPersistedCreatives,
   getDigest,
-  getSuccessfulRunStatsForUserBetween,
   listActiveWatchlists,
   listAdsByIds,
   listProofCapturesForTarget,
   listProofCapturesForTargets,
   listRecentWorkspaceProofCaptures,
-  listRetryableDigestRuns,
   listRetryableInstantAttempts,
   listLastSuccessfulProofCapturesForAds,
   listObservationsForRun,
@@ -44,7 +42,6 @@ import {
   upsertProofTarget,
   upsertAd,
 } from "~/lib/data.server";
-import { readDigestStrategyNote } from "~/lib/digest-strategy";
 import {
   runDigestDeliveryCycle,
   runDigestDeliveryCycleDetailed,
@@ -66,7 +63,6 @@ import {
   getPlanEntitlements,
   getScheduledMonitoringPolicy,
   parsePlanFamily,
-  planAllowsDigestCadence,
   shouldSchedulePlanInRegularScan,
   shouldScheduleWatchlistInRegularScan,
 } from "~/lib/plan-entitlements";
@@ -2407,119 +2403,6 @@ export async function runDailyDigests(
   });
 }
 
-async function retryFailedDigests(
-  env: AppEnv,
-  input: {
-    retryCandidates: Awaited<ReturnType<typeof listRetryableDigestRuns>>;
-    handledDigestRunIds: Set<string>;
-  },
-) {
-  let retried = 0;
-
-  for (const candidate of input.retryCandidates) {
-    if (input.handledDigestRunIds.has(candidate.id)) {
-      continue;
-    }
-
-    try {
-      const plan = await getUserPlan(env, candidate.userId);
-      const cadence = digestCadenceForPeriod(
-        candidate.periodStart,
-        candidate.periodEnd,
-      );
-      if (
-        !PLAN_LIMITS[plan].digests ||
-        !planAllowsDigestCadence(plan, cadence)
-      ) {
-        continue;
-      }
-
-      const digest = await getDigest(env, candidate.id);
-      if (!digest || !hasCompleteDigestItemSet(digest)) {
-        continue;
-      }
-      let heartbeat: {
-        runs: number;
-        watchlistsChecked: number;
-        adsSeen: number;
-      } | null = null;
-      if (digest.items.length === 0) {
-        const runStats = await getSuccessfulRunStatsForUserBetween(
-          env,
-          candidate.userId,
-          candidate.periodStart,
-          candidate.periodEnd,
-        );
-        if (runStats.runs === 0) {
-          continue;
-        }
-        heartbeat = runStats;
-      }
-
-      const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
-      const delivery = await deliverWeeklyDigest(env, {
-        heartbeat,
-        userId: candidate.userId,
-        userName: candidate.userName,
-        accountEmail: candidate.userEmail,
-        digestRunId: candidate.id,
-        periodStart: candidate.periodStart,
-        periodEnd: candidate.periodEnd,
-        items: digest.items.map((item) => ({
-          eventId: item.id,
-          watchlistId: item.watchlistId,
-          watchlistName: item.watchlistName,
-          eventType: item.eventType,
-          title: item.title,
-          summary: item.summary,
-          metadata: item.metadata,
-        })),
-        // Retries only ever replay the persisted paragraph — never regenerate.
-        strategyParagraph:
-          readDigestStrategyNote(digest.summary)?.paragraph ?? null,
-        cadence,
-        lane: "customer",
-      });
-      if (delivery.attempts > 0) {
-        retried += 1;
-      }
-    } catch (error) {
-      console.error(
-        `Digest retry failed for digest run ${candidate.id}; continuing with remaining retries.`,
-        error,
-      );
-    }
-  }
-
-  return retried;
-}
-
-function digestCadenceForPeriod(
-  periodStart: string,
-  periodEnd: string,
-): DigestCadence {
-  const spanMs =
-    new Date(periodEnd).getTime() - new Date(periodStart).getTime();
-  return spanMs <= 36 * 60 * 60 * 1000 ? "daily" : "weekly";
-}
-
-function hasCompleteDigestItemSet(digest: {
-  summary?: Record<string, unknown>;
-  items: readonly unknown[];
-}) {
-  const expectedItemCount = readDigestExpectedItemCount(digest.summary);
-  return (
-    expectedItemCount !== null && digest.items.length === expectedItemCount
-  );
-}
-
-function readDigestExpectedItemCount(summary?: Record<string, unknown>) {
-  const expectedItemCount = summary?.totalEvents;
-  return Number.isSafeInteger(expectedItemCount) &&
-    Number(expectedItemCount) >= 0
-    ? Number(expectedItemCount)
-    : null;
-}
 function shouldIncludeScoutInScheduledMonitoring(
   options: RunScheduledMonitoringOptions,
 ) {

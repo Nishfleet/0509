@@ -101,7 +101,8 @@ async function expectMobileUtilityInViewport(page: Page) {
     ),
   );
 
-  for (const text of ["Help", "Billing", "Sign out"]) {
+  // Shipped utility rail: Team, Client rooms, Support, Billing (+ Sign out button).
+  for (const text of ["Team", "Client rooms", "Support", "Billing", "Sign out"]) {
     expect(utilityActions).toContainEqual(expect.objectContaining({ text }));
     const action = utilityActions.find((item) => item.text === text);
     expect(action?.top).toBeGreaterThanOrEqual(0);
@@ -110,32 +111,52 @@ async function expectMobileUtilityInViewport(page: Page) {
 }
 
 async function expectMobileNavLinksInContainer(page: Page) {
-  const clippedLinks = await page.evaluate(() => {
+  // The mobile primary nav is a horizontal swipe rail ("Swipe for more"), so
+  // links past the fold legitimately sit outside the visible rect. Every link
+  // must stay inside the rail's scrollable content, stay vertically unclipped,
+  // and the rail must actually scroll so the last link is reachable.
+  const issues = await page.evaluate(() => {
     const nav = document.querySelector(".f9-dash-mobile-nav");
     if (!nav) {
       return ["missing mobile nav"];
     }
 
-    const navRect = nav.getBoundingClientRect();
-    return Array.from(nav.querySelectorAll("a"))
-      .map((element) => {
-        const rect = element.getBoundingClientRect();
-        const text = element.textContent?.trim() ?? "";
+    const problems: string[] = [];
+    const style = window.getComputedStyle(nav);
+    if (nav.scrollWidth > nav.clientWidth + 1 && !["auto", "scroll"].includes(style.overflowX)) {
+      problems.push("mobile nav overflows without horizontal scrolling");
+    }
 
-        return {
-          text,
-          clipped:
-            rect.left < navRect.left ||
-            rect.right > navRect.right ||
-            rect.top < navRect.top ||
-            rect.bottom > navRect.bottom,
-        };
-      })
-      .filter((item) => item.clipped)
-      .map((item) => item.text);
+    const navRect = nav.getBoundingClientRect();
+    for (const element of Array.from(nav.querySelectorAll("a"))) {
+      const rect = element.getBoundingClientRect();
+      const text = element.textContent?.trim() ?? "";
+      if (rect.top < navRect.top || rect.bottom > navRect.bottom) {
+        problems.push(`${text} is vertically clipped`);
+      }
+      const contentLeft = rect.left - navRect.left + nav.scrollLeft;
+      if (contentLeft < -1 || contentLeft + rect.width > nav.scrollWidth + 1) {
+        problems.push(`${text} sits outside the scrollable rail`);
+      }
+    }
+
+    const links = Array.from(nav.querySelectorAll("a"));
+    const last = links.at(-1);
+    if (last) {
+      const previousScrollLeft = nav.scrollLeft;
+      nav.scrollLeft = nav.scrollWidth;
+      const railRect = nav.getBoundingClientRect();
+      const lastRect = last.getBoundingClientRect();
+      if (lastRect.left < railRect.left - 1 || lastRect.right > railRect.right + 1) {
+        problems.push(`${last.textContent?.trim() ?? "last link"} is not reachable by scrolling the rail`);
+      }
+      nav.scrollLeft = previousScrollLeft;
+    }
+
+    return problems;
   });
 
-  expect(clippedLinks).toEqual([]);
+  expect(issues).toEqual([]);
 }
 
 async function collectVisibleActionControls(page: Page) {
@@ -298,7 +319,7 @@ test.describe("local authenticated E2E harness", () => {
     await page.goto("/app/billing");
     await expectAppPage(page);
     await expect(page.getByRole("heading", { name: "Billing & usage" })).toBeVisible();
-    await expect(page.getByText("Starter plan")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Starter plan" })).toBeVisible();
     await expect(page.getByText("purchased checks remaining")).toBeVisible();
 
     await page.goto("/app/source-access");
@@ -379,7 +400,9 @@ test.describe("local authenticated E2E harness", () => {
 
     await page.goto("/app/reports/watchlist:e2e-watchlist-agency-1");
     await expectAppPage(page);
-    await expect(page.getByText("Evidence report", { exact: true })).toBeVisible();
+    // The "Evidence report" kicker ships twice: once in the page header and
+    // once inside the rendered report document.
+    await expect(page.getByText("Evidence report", { exact: true }).first()).toBeVisible();
     await expect(page.getByRole("heading", { name: "Okara launched a new workflow offer" }).first()).toBeVisible();
   });
 
@@ -394,7 +417,7 @@ test.describe("local authenticated E2E harness", () => {
       { label: "Overview", path: "/app", heading: "Overview", copy: ["Market Desk"] },
       { label: "Search", path: "/search", heading: "Find competitor ads", copy: ["Competitor website", "See ads"] },
       {
-        label: "Watchlists",
+        label: "Competitors",
         path: "/app/watchlists",
         heading: "Watchlists",
         copy: ["Monitor competitor ads over time", "Tracking desk"],
@@ -408,9 +431,15 @@ test.describe("local authenticated E2E harness", () => {
       { label: "Briefs", path: "/app/digests", heading: "Briefs", copy: ["Brief history"] },
       {
         label: "Reports",
-        path: "/app/shares",
+        path: "/app/reports",
         heading: "Reports",
-        copy: ["Revoke snapshot and live-view links", "Anyone with a link can open"],
+        copy: ["Open a current proof-backed report"],
+      },
+      {
+        label: "Shared links",
+        path: "/app/shares",
+        heading: "Shared links",
+        copy: ["Review and revoke snapshot or live-view links", "Anyone with a link can open"],
       },
       {
         label: "Notifications",
@@ -545,9 +574,6 @@ test.describe("local authenticated E2E harness", () => {
       { width: 761, height: 900 },
       { width: 1024, height: 768 },
     ];
-    const expectedRedirects: Record<string, RegExp> = {
-      "/app/reports": /\/app\/shares/,
-    };
     const routes = [
       "/app",
       "/app/watchlists",
@@ -563,11 +589,8 @@ test.describe("local authenticated E2E harness", () => {
       await page.setViewportSize(viewport);
       for (const route of routes) {
         await page.goto(route);
-        if (expectedRedirects[route]) {
-          await expect(page).toHaveURL(expectedRedirects[route]);
-        }
         await expectAppPage(page);
-        await expect(page.getByRole("link", { name: "Watchlists" }).first()).toBeVisible();
+        await expect(page.getByRole("link", { name: "Competitors" }).first()).toBeVisible();
         await expect(page.getByRole("link", { name: "Notifications" }).first()).toBeVisible();
         await expect(page.getByRole("button", { name: "Sign out" }).first()).toBeVisible();
         await expectNoFixedAppChrome(page);

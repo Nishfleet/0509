@@ -5,6 +5,7 @@ import { useState } from "react";
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { ActionFeedback } from "~/components/action-feedback";
+import { Pill } from "~/components/pill";
 import { AccountBrandingForm } from "~/components/account-branding-form";
 import { ConfirmSubmitButton } from "~/components/confirm-button";
 import { EmptyState } from "~/components/empty-state";
@@ -609,7 +610,11 @@ export default function AccountRoute() {
           </div>
         </div>
         {sessionAction?.message ? (
-          <div className={`f9-message ${sessionAction.ok ? "is-success" : "is-error"}`}>
+          <div
+            aria-live={sessionAction.ok ? "polite" : "assertive"}
+            className={`f9-message ${sessionAction.ok ? "is-success" : "is-error"}`}
+            role={sessionAction.ok ? "status" : "alert"}
+          >
             <p>{sessionAction.message}</p>
           </div>
         ) : null}
@@ -618,7 +623,9 @@ export default function AccountRoute() {
           menu to remove access on this device.
         </p>
         {data.sessionControlsMessage ? (
-          <p className="f9-message is-error">{data.sessionControlsMessage}</p>
+          <p aria-live="assertive" className="f9-message is-error" role="alert">
+            {data.sessionControlsMessage}
+          </p>
         ) : null}
         {data.activeSessions.length > 0 ? (
           <div className="f9-passkey-list">
@@ -633,7 +640,7 @@ export default function AccountRoute() {
                   <span>{formatSessionLocation(session.ipAddress, session.userAgent)}</span>
                 </div>
                 {session.isCurrent ? (
-                  <span className="f9-status-pill is-healthy">Current</span>
+                  <Pill state="healthy">Current</Pill>
                 ) : (
                   <Form method="post">
                     <input name="intent" type="hidden" value="revoke-session" />

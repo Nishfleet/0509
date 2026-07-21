@@ -26,6 +26,36 @@ import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 const SUPPORT_CASE_IDEMPOTENCY_PREFIX = "support-case:";
 const SUPPORT_CASE_REOPEN_IDEMPOTENCY_PREFIX = "support-case-reopen:";
 
+// Shared surface + type tokens for the transactional/account body copy so every
+// account email reads as one system. The send-time shell (renderEmailShell)
+// supplies the outer white card and footer; these style the inner content.
+const ACCOUNT_BODY_STYLE =
+  "font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;";
+const ACCOUNT_CTA_STYLE =
+  "display: inline-block; background-color: #101828; color: #ffffff; text-decoration: none; padding: 11px 20px; border-radius: 8px; font-weight: 600; font-size: 15px;";
+const ACCOUNT_FOOTNOTE_STYLE = "margin: 0; color: #5b6577; font-size: 13px;";
+
+function accountGreeting(name: string | null): string {
+  return name?.trim() ? `Hi ${escapeHtml(name.trim())},` : "Hi,";
+}
+
+export function renderOperatorAlertHtml(input: {
+  intro?: string;
+  lines: string[];
+}): string {
+  return `
+      <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 14px; line-height: 1.6;">
+        <p style="margin: 0 0 12px;"><strong>${escapeHtml(input.intro ?? "Customer-at-risk signals from recent monitoring:")}</strong></p>
+        <ul style="margin: 0 0 12px; padding-left: 18px;">
+          ${input.lines.map((line) => `<li style="margin: 0 0 6px;">${escapeHtml(line)}</li>`).join("")}
+        </ul>
+        <p style="margin: 0; color: #5b6577; font-size: 12px;">
+          Details: https://0509.io/app/ops
+        </p>
+      </div>
+    `;
+}
+
 // One daily "customer-at-risk" email to the operator when monitoring or
 // delivery is degrading for paying customers — the ops dashboard is
 // pull-only and nobody is paged to it. Day-keyed idempotency: max one/day.
@@ -87,17 +117,7 @@ export async function sendOperatorAlertEmail(
   const providerResult = await sendCloudflareEmail(env, {
     to: recipient,
     subject: input.subject,
-    html: `
-      <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 14px; line-height: 1.6;">
-        <p style="margin: 0 0 12px;"><strong>${escapeHtml(input.intro ?? "Customer-at-risk signals from recent monitoring:")}</strong></p>
-        <ul style="margin: 0 0 12px; padding-left: 18px;">
-          ${input.lines.map((line) => `<li style="margin: 0 0 6px;">${escapeHtml(line)}</li>`).join("")}
-        </ul>
-        <p style="margin: 0; color: #5b6577; font-size: 12px;">
-          Details: https://0509.io/app/ops
-        </p>
-      </div>
-    `,
+    html: renderOperatorAlertHtml(input),
     tag: "operator-alert",
     unsubscribeUrl: null,
   });
@@ -258,22 +278,10 @@ export async function sendDeliveryTestEmail(
   // Cloudflare Email has no bounce webhooks, so a typo'd address shows
   // "sent" forever while the customer receives nothing. This send gives
   // them a way to prove the address works end-to-end.
-  const greeting = input.name?.trim() ? `Hi ${escapeHtml(input.name.trim())},` : "Hi,";
   const providerResult = await sendCloudflareEmail(env, {
     to: recipient,
     subject: "Test email from Five to Nine",
-    html: `
-      <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
-        <p style="margin: 0 0 12px;">${greeting}</p>
-        <p style="margin: 0 0 12px;">
-          This is a test from Five to Nine. If you're reading it, competitor alerts and digests can
-          reach this address.
-        </p>
-        <p style="margin: 0; color: #5b6577; font-size: 13px;">
-          Nothing else changes — this was requested from your workspace delivery settings.
-        </p>
-      </div>
-    `,
+    html: renderDeliveryTestHtml(input),
     tag: "delivery-test",
     unsubscribeUrl: null,
   });
@@ -315,37 +323,12 @@ export async function sendAccountActionEmail(
     actionUrl: string;
   },
 ) {
-  const greeting = input.name?.trim() ? `Hi ${escapeHtml(input.name.trim())},` : "Hi,";
-  const copy =
-    input.kind === "change_email"
-      ? {
-          subject: "Confirm your new email for Five to Nine",
-          body: "Someone asked to change the email on this Five to Nine account. If that was you, confirm with the button below.",
-          action: "Confirm email change",
-        }
-      : {
-          subject: "Confirm account deletion — Five to Nine",
-          body: "Someone asked to permanently delete this Five to Nine account, including watchlists, history, and evidence. If that was you, confirm below. This cannot be undone.",
-          action: "Delete my account",
-        };
+  const copy = accountActionCopy(input.kind);
 
   const providerResult = await sendCloudflareEmail(env, {
     to: input.email,
     subject: copy.subject,
-    html: `
-      <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
-        <p style="margin: 0 0 12px;">${greeting}</p>
-        <p style="margin: 0 0 16px;">${copy.body}</p>
-        <p style="margin: 0 0 20px;">
-          <a href="${escapeHtml(input.actionUrl)}" style="display: inline-block; background-color: #101828; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-weight: 600;">
-            ${copy.action}
-          </a>
-        </p>
-        <p style="margin: 0; color: #5b6577; font-size: 13px;">
-          If you didn't ask for this, ignore this email — nothing changes.
-        </p>
-      </div>
-    `,
+    html: renderAccountActionHtml(input),
     tag: `account-${input.kind.replace("_", "-")}`,
     unsubscribeUrl: null,
   });
@@ -385,25 +368,10 @@ export async function sendTeamInviteEmail(
     acceptUrl: string;
   },
 ) {
-  const inviter = input.ownerName?.trim() ? escapeHtml(input.ownerName.trim()) : "A teammate";
-
   const providerResult = await sendCloudflareEmail(env, {
     to: input.inviteeEmail,
     subject: `${input.ownerName?.trim() || "Your team"} invited you to Five to Nine`,
-    html: `
-      <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
-        <p style="margin: 0 0 12px;">Hi,</p>
-        <p style="margin: 0 0 16px;">${inviter} invited you to their Five to Nine workspace — shared watchlists, collections, and the morning digest on competitor changes.</p>
-        <p style="margin: 0 0 20px;">
-          <a href="${escapeHtml(input.acceptUrl)}" style="display: inline-block; background-color: #101828; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-weight: 600;">
-            Join the workspace
-          </a>
-        </p>
-        <p style="margin: 0; color: #5b6577; font-size: 13px;">
-          The invite expires in 7 days. If you weren't expecting this, ignore this email — nothing changes.
-        </p>
-      </div>
-    `,
+    html: renderTeamInviteHtml(input),
     tag: "team-invite",
     unsubscribeUrl: null,
   });
@@ -532,44 +500,198 @@ export async function sendEmailVerificationEmail(
   }
 }
 
-function renderPasswordResetHtml(input: { name: string | null; resetUrl: string }) {
-  const greeting = input.name?.trim() ? `Hi ${escapeHtml(input.name.trim())},` : "Hi,";
+// ---------------------------------------------------------------------------
+// Pure body builders. Extracted so the render gallery (tests/email-render-
+// gallery.test.ts) can exercise every account/transactional template and so
+// the copy has one home. The send-time shell adds the outer card + footer.
+// ---------------------------------------------------------------------------
+
+export function renderDeliveryTestHtml(input: { name: string | null }) {
+  return `
+      <div style="${ACCOUNT_BODY_STYLE}">
+        <p style="margin: 0 0 12px;">${accountGreeting(input.name)}</p>
+        <p style="margin: 0 0 12px;">
+          This is a test from Five to Nine. If you're reading it, competitor alerts and digests can
+          reach this address.
+        </p>
+        <p style="${ACCOUNT_FOOTNOTE_STYLE}">
+          Nothing else changes — this was requested from your workspace delivery settings.
+        </p>
+      </div>
+    `;
+}
+
+function accountActionCopy(kind: "change_email" | "delete_account") {
+  return kind === "change_email"
+    ? {
+        subject: "Confirm your new email for Five to Nine",
+        body: "Someone asked to change the email on this Five to Nine account. If that was you, confirm with the button below.",
+        action: "Confirm email change",
+      }
+    : {
+        subject: "Confirm account deletion — Five to Nine",
+        body: "Someone asked to permanently delete this Five to Nine account, including watchlists, history, and evidence. If that was you, confirm below. This cannot be undone.",
+        action: "Delete my account",
+      };
+}
+
+export function renderAccountActionHtml(input: {
+  name: string | null;
+  kind: "change_email" | "delete_account";
+  actionUrl: string;
+}) {
+  const copy = accountActionCopy(input.kind);
+  return `
+      <div style="${ACCOUNT_BODY_STYLE}">
+        <p style="margin: 0 0 12px;">${accountGreeting(input.name)}</p>
+        <p style="margin: 0 0 20px;">${copy.body}</p>
+        <p style="margin: 0 0 24px;">
+          <a href="${escapeHtml(input.actionUrl)}" style="${ACCOUNT_CTA_STYLE}">${copy.action}</a>
+        </p>
+        <p style="${ACCOUNT_FOOTNOTE_STYLE}">
+          If you didn't ask for this, ignore this email — nothing changes.
+        </p>
+      </div>
+    `;
+}
+
+export function renderTeamInviteHtml(input: {
+  ownerName: string | null;
+  acceptUrl: string;
+}) {
+  const inviter = input.ownerName?.trim()
+    ? escapeHtml(input.ownerName.trim())
+    : "A teammate";
+  return `
+      <div style="${ACCOUNT_BODY_STYLE}">
+        <p style="margin: 0 0 12px;">Hi,</p>
+        <p style="margin: 0 0 20px;">${inviter} invited you to their Five to Nine workspace — shared watchlists, collections, and the morning digest on competitor changes.</p>
+        <p style="margin: 0 0 24px;">
+          <a href="${escapeHtml(input.acceptUrl)}" style="${ACCOUNT_CTA_STYLE}">Join the workspace</a>
+        </p>
+        <p style="${ACCOUNT_FOOTNOTE_STYLE}">
+          The invite expires in 7 days. If you weren't expecting this, ignore this email — nothing changes.
+        </p>
+      </div>
+    `;
+}
+
+export function renderWelcomeHtml(input: {
+  name: string | null;
+  watchlistsUrl: string;
+}) {
+  return `
+      <div style="${ACCOUNT_BODY_STYLE}">
+        <p style="margin: 0 0 12px;">${accountGreeting(input.name)}</p>
+        <p style="margin: 0 0 12px;">
+          You're in. Add a competitor and we'll run one activation scan right away —
+          a baseline of the ads they're running so you have a starting point.
+        </p>
+        <p style="margin: 0 0 20px;">
+          When that first scan finishes, we'll email you what we found. After that,
+          free keeps watching with a weekly check and a weekly email brief; paid
+          plans check every 3–6 hours and alert you when things change.
+        </p>
+        <p style="margin: 0 0 24px;">
+          <a href="${escapeHtml(input.watchlistsUrl)}" style="${ACCOUNT_CTA_STYLE}">Open your competitors</a>
+        </p>
+        <p style="${ACCOUNT_FOOTNOTE_STYLE}">
+          Need a hand? Reply to this email or write ${escapeHtml(SUPPORT_EMAIL)}.
+        </p>
+      </div>
+    `;
+}
+
+export function renderActivationResultHtml(input: {
+  name: string | null;
+  competitor: string;
+  count: number;
+  topAds: Array<{
+    headline: string | null;
+    body: string | null;
+    creativeImageUrl: string | null;
+  }>;
+  watchlistUrl: string;
+  billingUrl: string;
+}) {
+  const { competitor, count } = input;
+  const topAdsHtml = input.topAds
+    .slice(0, 3)
+    .map((ad) => {
+      const title = escapeHtml((ad.headline || ad.body || "Ad creative").slice(0, 160));
+      const body =
+        ad.body && ad.headline
+          ? `<p style="margin: 4px 0 0; color: #5b6577; font-size: 13px;">${escapeHtml(ad.body.slice(0, 220))}</p>`
+          : "";
+      const image =
+        ad.creativeImageUrl && /^https:\/\//i.test(ad.creativeImageUrl)
+          ? `<img src="${escapeHtml(ad.creativeImageUrl)}" alt="" width="200" style="display:block; max-width:200px; height:auto; border-radius:8px; border:1px solid #e4e7ec; margin: 10px 0 0;">`
+          : "";
+      return `<li style="margin: 0 0 16px;"><strong>${title}</strong>${body}${image}</li>`;
+    })
+    .join("");
 
   return `
-    <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
-      <p style="margin: 0 0 12px;">${greeting}</p>
-      <p style="margin: 0 0 16px;">
+      <div style="${ACCOUNT_BODY_STYLE}">
+        <p style="margin: 0 0 12px;">${accountGreeting(input.name)}</p>
+        <p style="margin: 0 0 16px;">
+          Your activation scan for <strong>${escapeHtml(competitor)}</strong> finished.
+          ${
+            count === 0
+              ? "We didn't find live ads in the Meta Ad Library for this competitor right now — that can still be useful signal."
+              : `We recorded <strong>${count}</strong> active ad${count === 1 ? "" : "s"} as your baseline.`
+          }
+        </p>
+        ${
+          topAdsHtml
+            ? `<p style="margin: 0 0 10px; color: #5b6577; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em;">Top ads</p>
+               <ul style="margin: 0 0 20px; padding-left: 18px;">${topAdsHtml}</ul>`
+            : ""
+        }
+        <p style="margin: 0 0 20px;">
+          Free keeps watching this competitor with a weekly check and a weekly email brief. Paid plans check every 3–6 hours and email you as soon as things change.
+        </p>
+        <p style="margin: 0 0 24px;">
+          <a href="${escapeHtml(input.watchlistUrl)}" style="${ACCOUNT_CTA_STYLE} margin-right: 12px;">View results</a>
+          <a href="${escapeHtml(input.billingUrl)}" style="color: #101828; text-decoration: underline; font-weight: 600;">See paid plans</a>
+        </p>
+        <p style="${ACCOUNT_FOOTNOTE_STYLE}">
+          Questions? ${escapeHtml(SUPPORT_EMAIL)}
+        </p>
+      </div>
+    `;
+}
+
+export function renderPasswordResetHtml(input: { name: string | null; resetUrl: string }) {
+  return `
+    <div style="${ACCOUNT_BODY_STYLE}">
+      <p style="margin: 0 0 12px;">${accountGreeting(input.name)}</p>
+      <p style="margin: 0 0 20px;">
         Someone asked to reset the password for this Five to Nine account. If that was you, use the
         button below — the link works for one hour.
       </p>
-      <p style="margin: 0 0 20px;">
-        <a href="${escapeHtml(input.resetUrl)}" style="display: inline-block; background-color: #101828; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-weight: 600;">
-          Reset password
-        </a>
+      <p style="margin: 0 0 24px;">
+        <a href="${escapeHtml(input.resetUrl)}" style="${ACCOUNT_CTA_STYLE}">Reset password</a>
       </p>
-      <p style="margin: 0; color: #5b6577; font-size: 13px;">
+      <p style="${ACCOUNT_FOOTNOTE_STYLE}">
         If you didn't ask for this, you can ignore this email — your password stays unchanged.
       </p>
     </div>
   `;
 }
 
-function renderEmailVerificationHtml(input: { name: string | null; verifyUrl: string }) {
-  const greeting = input.name?.trim() ? `Hi ${escapeHtml(input.name.trim())},` : "Hi,";
-
+export function renderEmailVerificationHtml(input: { name: string | null; verifyUrl: string }) {
   return `
-    <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
-      <p style="margin: 0 0 12px;">${greeting}</p>
-      <p style="margin: 0 0 16px;">
+    <div style="${ACCOUNT_BODY_STYLE}">
+      <p style="margin: 0 0 12px;">${accountGreeting(input.name)}</p>
+      <p style="margin: 0 0 20px;">
         Confirm this email address to create watchlists and receive competitor digests on Five to Nine.
         You can keep browsing without verifying.
       </p>
-      <p style="margin: 0 0 20px;">
-        <a href="${escapeHtml(input.verifyUrl)}" style="display: inline-block; background-color: #101828; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-weight: 600;">
-          Verify email
-        </a>
+      <p style="margin: 0 0 24px;">
+        <a href="${escapeHtml(input.verifyUrl)}" style="${ACCOUNT_CTA_STYLE}">Verify email</a>
       </p>
-      <p style="margin: 0; color: #5b6577; font-size: 13px;">
+      <p style="${ACCOUNT_FOOTNOTE_STYLE}">
         If you didn't create a Five to Nine account, you can ignore this email.
       </p>
     </div>
@@ -623,7 +745,6 @@ export async function sendWelcomeEmail(
 
   const base = appBaseUrl(env);
   const watchlistsUrl = `${base}/app/watchlists`;
-  const greeting = input.name?.trim() ? `Hi ${escapeHtml(input.name.trim())},` : "Hi,";
   const { buildUnsubscribeUrl } = await import("~/lib/unsubscribe.server");
   // Welcome is product onboarding (not a secret-token transactional). Prefer a
   // List-Unsubscribe when a delivery target exists; otherwise send without —
@@ -645,28 +766,7 @@ export async function sendWelcomeEmail(
   const providerResult = await sendCloudflareEmail(env, {
     to: recipient,
     subject: "Welcome to Five to Nine — here's what happens next",
-    html: `
-      <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
-        <p style="margin: 0 0 12px;">${greeting}</p>
-        <p style="margin: 0 0 12px;">
-          You're in. Add a competitor and we'll run one activation scan right away —
-          a baseline of the ads they're running so you have a starting point.
-        </p>
-        <p style="margin: 0 0 12px;">
-          When that first scan finishes, we'll email you what we found. After that,
-          free keeps watching with a weekly check and a weekly email brief; paid
-          plans check every 3–6 hours and alert you when things change.
-        </p>
-        <p style="margin: 0 0 20px;">
-          <a href="${escapeHtml(watchlistsUrl)}" style="display: inline-block; background-color: #101828; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-weight: 600;">
-            Open your competitors
-          </a>
-        </p>
-        <p style="margin: 0; color: #5b6577; font-size: 13px;">
-          Need a hand? Reply to this email or write ${escapeHtml(SUPPORT_EMAIL)}.
-        </p>
-      </div>
-    `,
+    html: renderWelcomeHtml({ name: input.name, watchlistsUrl }),
     tag: "welcome",
     unsubscribeUrl,
   });
@@ -778,27 +878,10 @@ export async function sendFreeActivationResultEmail(
   const billingUrl = `${base}/app/billing`;
   const competitor = input.competitorName.trim() || "your competitor";
   const count = Math.max(0, Math.floor(input.adsFound));
-  const greeting = input.name?.trim() ? `Hi ${escapeHtml(input.name.trim())},` : "Hi,";
   const subject =
     count === 0
       ? `Your activation scan for ${competitor} found no live ads`
       : `Your activation scan found ${count} ad${count === 1 ? "" : "s"} for ${competitor}`;
-
-  const topAdsHtml = input.topAds
-    .slice(0, 3)
-    .map((ad) => {
-      const title = escapeHtml((ad.headline || ad.body || "Ad creative").slice(0, 160));
-      const body =
-        ad.body && ad.headline
-          ? `<p style="margin: 4px 0 0; color: #5b6577; font-size: 13px;">${escapeHtml(ad.body.slice(0, 220))}</p>`
-          : "";
-      const image =
-        ad.creativeImageUrl && /^https:\/\//i.test(ad.creativeImageUrl)
-          ? `<img src="${escapeHtml(ad.creativeImageUrl)}" alt="" width="240" style="display:block; max-width:240px; border-radius:8px; border:1px solid #e4e7ec; margin: 8px 0 0;">`
-          : "";
-      return `<li style="margin: 0 0 14px;"><strong>${title}</strong>${body}${image}</li>`;
-    })
-    .join("");
 
   let unsubscribeUrl: string | null = null;
   try {
@@ -818,39 +901,14 @@ export async function sendFreeActivationResultEmail(
   const providerResult = await sendCloudflareEmail(env, {
     to: recipient,
     subject,
-    html: `
-      <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
-        <p style="margin: 0 0 12px;">${greeting}</p>
-        <p style="margin: 0 0 12px;">
-          Your activation scan for <strong>${escapeHtml(competitor)}</strong> finished.
-          ${
-            count === 0
-              ? "We did not find live ads in the Ad Library for this competitor right now — that can still be useful signal."
-              : `We recorded <strong>${count}</strong> active ad${count === 1 ? "" : "s"} as your baseline.`
-          }
-        </p>
-        ${
-          topAdsHtml
-            ? `<p style="margin: 0 0 8px; color: #5b6577; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em;">Top ads</p>
-               <ul style="margin: 0 0 16px; padding-left: 18px;">${topAdsHtml}</ul>`
-            : ""
-        }
-        <p style="margin: 0 0 12px;">
-          Free keeps watching this competitor with a weekly check and a weekly email brief. Paid plans check every 3–6 hours and email you as soon as things change.
-        </p>
-        <p style="margin: 0 0 12px;">
-          <a href="${escapeHtml(watchlistUrl)}" style="display: inline-block; background-color: #101828; color: #ffffff; text-decoration: none; padding: 10px 18px; border-radius: 8px; font-weight: 600; margin-right: 10px;">
-            View results
-          </a>
-          <a href="${escapeHtml(billingUrl)}" style="color: #2563eb; text-decoration: underline;">
-            See paid plans
-          </a>
-        </p>
-        <p style="margin: 0; color: #5b6577; font-size: 13px;">
-          Questions? ${escapeHtml(SUPPORT_EMAIL)}
-        </p>
-      </div>
-    `,
+    html: renderActivationResultHtml({
+      name: input.name,
+      competitor,
+      count,
+      topAds: input.topAds,
+      watchlistUrl,
+      billingUrl,
+    }),
     tag: "activation-result",
     unsubscribeUrl,
   });

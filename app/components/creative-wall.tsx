@@ -1,5 +1,6 @@
 import { AdLongevityPill } from "~/components/ad-longevity-pill";
 import { AdThumb } from "~/components/ad-thumb";
+import { Pill } from "~/components/pill";
 import { adLongevityDays } from "~/lib/ad-display";
 import { formatAdvertiserLabel } from "~/lib/landing-page-display";
 import {
@@ -29,11 +30,11 @@ export function CreativeWall({ items, plan }: { items: CreativeWallItem[]; plan:
 					<h3 style={{ marginTop: 0 }}>What they&rsquo;re running</h3>
 				</div>
 				{items.length > 0 ? (
-					<span className="f9-status-pill">
+					<Pill>
 						{isCapped
 							? `Showing ${previewItems.length} of ${items.length} creatives`
 							: `${items.length} creative${items.length === 1 ? "" : "s"}`}
-					</span>
+					</Pill>
 				) : null}
 			</div>
 			{items.length === 0 ? (
@@ -86,6 +87,6 @@ function CreativeTilePill({ item }: { item: CreativeWallItem }) {
 	}
 
 	return (
-		<span className="f9-longevity-pill is-tracked">{formatTrackedDaysLabel(trackedDays)}</span>
+		<Pill variant="longevity" state="tracked">{formatTrackedDaysLabel(trackedDays)}</Pill>
 	);
 }

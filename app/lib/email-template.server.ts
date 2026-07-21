@@ -16,6 +16,18 @@ export const EMAIL_TEXT_LINK = "#5b6577";
 export const EMAIL_BORDER = "#e4e7ec";
 export const EMAIL_CONTENT_MAX_WIDTH_PX = 600;
 
+/**
+ * Explicit heading typography. Email clients each apply their own <h1>/<h2>
+ * user-agent sizes (Gmail, Outlook, and Apple Mail disagree wildly and skew
+ * large), so headings must always carry an explicit size, line-height, weight,
+ * and color. The slight negative tracking echoes the Geist/Vercel display feel
+ * from DESIGN.md without the browser-only font.
+ */
+export const EMAIL_H1_STYLE =
+  "margin: 0 0 12px; font-family: Inter, system-ui, sans-serif; font-size: 24px; line-height: 1.25; letter-spacing: -0.4px; font-weight: 700; color: #0b1220;";
+export const EMAIL_H2_STYLE =
+  "margin: 0 0 12px; font-family: Inter, system-ui, sans-serif; font-size: 17px; line-height: 1.3; letter-spacing: -0.2px; font-weight: 700; color: #0b1220;";
+
 export type RenderEmailShellInput = {
   /** Inner HTML placed in the content cell (already escaped by the caller). */
   bodyHtml: string;

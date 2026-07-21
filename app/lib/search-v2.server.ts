@@ -6,6 +6,7 @@ import {
   rankDomainMatches,
   type DomainMatchedAd,
 } from "~/lib/search-domain-match.server";
+import { normalizeNumericPageId } from "~/lib/normalize";
 import { parseSearchInputFromWebsiteField, type ParsedSearchQuery } from "~/lib/search-query";
 import { resolveWebsiteIdentity } from "~/lib/website-identity.server";
 import type { AdRecord, NormalizedSavedQuery, SearchResponse } from "~/lib/types";
@@ -29,6 +30,35 @@ export interface SearchV2Result extends SearchResponse {
   missingVerificationCount: number;
   rejectedKeywordOnlyCount: number;
   matchedAds: DomainMatchedAd[];
+  /**
+   * Numeric Meta Page id of the verified advertiser, when discovery resolved a
+   * single unambiguous one across the verified matches. Lets a watchlist saved
+   * from this search persist page-scoped scans (`view_all_page_id`) so repeat
+   * scrapes return the brand's own ads instead of keyword junk. Null when no
+   * verified match carried a page id or verified ads disagreed.
+   */
+  verifiedAdvertiserPageId?: string | null;
+}
+
+/**
+ * A page id is only trustworthy when the verified matches agree on exactly one.
+ * Disagreement (two verified advertisers, or none carrying an id) yields null so
+ * we never scope future scans to a guessed or conflicting page.
+ */
+export function resolveVerifiedAdvertiserPageId(
+  matchedAds: DomainMatchedAd[],
+): string | null {
+  const distinct = new Set<string>();
+  for (const entry of matchedAds) {
+    if (entry.match.confidenceCategory !== "verified") {
+      continue;
+    }
+    const pageId = normalizeNumericPageId(entry.ad.advertiserPageId ?? null);
+    if (pageId) {
+      distinct.add(pageId);
+    }
+  }
+  return distinct.size === 1 ? [...distinct][0] : null;
 }
 
 export function buildDomainProviderQuery(intent: ParsedSearchQuery) {
@@ -63,17 +93,24 @@ export function buildSearchV2SavedQuery(
   intent: ParsedSearchQuery,
   scope: SearchScope,
   filters: NormalizedSavedQuery["filters"],
+  options: { pageId?: string | null } = {},
 ): NormalizedSavedQuery {
   const providerTerm =
     intent.intent === "domain"
       ? buildDomainProviderQuery(intent) ?? intent.originalInput
       : intent.normalizedText ?? intent.originalInput;
 
+  // A verified page id scopes the scrape to the exact advertiser page — persist
+  // it so watchlist re-scans skip the keyword guess entirely. Omitted (not
+  // stored) unless it is a real numeric id, keeping keyword fingerprints stable.
+  const pageId = normalizeNumericPageId(options.pageId);
+
   return {
     mode: intent.intent === "domain" ? "advertiser" : "keyword",
     filters: {
       ...filters,
       query: providerTerm ?? "",
+      ...(pageId ? { pageId } : {}),
     },
   };
 }
@@ -147,6 +184,7 @@ export async function applySearchV2PostFilter(
     broaderCandidateCount,
     missingVerificationCount,
     rejectedKeywordOnlyCount,
+    verifiedAdvertiserPageId: resolveVerifiedAdvertiserPageId(ranked),
     discoveryEmptyReason: ads.length === 0 ? "no_results" : result.discoveryEmptyReason,
   };
 }

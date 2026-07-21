@@ -7,10 +7,16 @@
  * never regenerated (nondeterministic customer-visible content).
  */
 
+import {
+	buildDataEnvelope,
+	collapseWhitespace,
+	containsPromptEcho,
+	runGuardedGeneration,
+	sanitizePromptText,
+} from "~/lib/ai-guarded-generation.server";
 import { readDigestIntelligence } from "~/lib/change-intelligence";
 import { DIGEST_STRATEGY_MODEL } from "~/lib/digest-strategy";
 import type { AppEnv } from "~/lib/env.server";
-import { promiseWithTimeout } from "~/lib/fetch-timeout.server";
 import {
 	classifyDigestItemSource,
 	isDigestDecisionCandidate,
@@ -87,38 +93,27 @@ export async function buildWeeklyStrategyParagraph(
     return null;
   }
 
-  try {
-		const timeoutMs = Math.min(
-			AI_STRATEGY_TIMEOUT_MS,
-			Math.max(1, Math.floor(input.timeoutMs ?? AI_STRATEGY_TIMEOUT_MS)),
-		);
-		const response = await promiseWithTimeout(env.AI.run(DIGEST_STRATEGY_MODEL, {
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        {
-          role: "user",
-          content: [
-            "<<<DATA>>>",
-            `This week (${input.periodStart.slice(0, 10)} to ${input.periodEnd.slice(0, 10)}) the evidence below contains ${lines.length} selected change${lines.length === 1 ? "" : "s"} from ${watchlistIds.length} watchlist${watchlistIds.length === 1 ? "" : "s"}.`,
-            "Change lines:",
-            ...lines,
-            "<<<END DATA>>>",
-          ].join("\n"),
-        },
-      ],
-      max_tokens: MAX_OUTPUT_TOKENS,
-		}), timeoutMs, "Digest strategy generation timed out.");
-    const raw =
-      typeof response === "string"
-        ? response
-        : typeof (response as { response?: unknown }).response === "string"
-          ? ((response as { response: string }).response)
-          : "";
-    const paragraph = validateStrategyParagraph(raw, lines);
-    return paragraph ? { paragraph, watchlistIds } : null;
-  } catch {
+  const timeoutMs = Math.min(
+    AI_STRATEGY_TIMEOUT_MS,
+    Math.max(1, Math.floor(input.timeoutMs ?? AI_STRATEGY_TIMEOUT_MS)),
+  );
+  const raw = await runGuardedGeneration(env, {
+    model: DIGEST_STRATEGY_MODEL,
+    systemPrompt: SYSTEM_PROMPT,
+    userContent: buildDataEnvelope([
+      `This week (${input.periodStart.slice(0, 10)} to ${input.periodEnd.slice(0, 10)}) the evidence below contains ${lines.length} selected change${lines.length === 1 ? "" : "s"} from ${watchlistIds.length} watchlist${watchlistIds.length === 1 ? "" : "s"}.`,
+      "Change lines:",
+      ...lines,
+    ]),
+    maxTokens: MAX_OUTPUT_TOKENS,
+    timeoutMs,
+    timeoutMessage: "Digest strategy generation timed out.",
+  });
+  if (raw === null) {
     return null;
   }
+  const paragraph = validateStrategyParagraph(raw, lines);
+  return paragraph ? { paragraph, watchlistIds } : null;
 }
 
 /**
@@ -182,7 +177,7 @@ function formatStrategyLine(item: DigestStrategyItemInput) {
 }
 
 function sanitizePromptData(value: string | null | undefined) {
-  return collapseWhitespace(value).replaceAll("<", "‹").replaceAll(">", "›");
+  return sanitizePromptText(value);
 }
 
 /**
@@ -223,7 +218,7 @@ export function validateStrategyParagraph(
   }
 
   const lowered = paragraph.toLowerCase();
-  if (PROMPT_ECHO_FRAGMENTS.some((fragment) => lowered.includes(fragment))) {
+  if (containsPromptEcho(lowered, PROMPT_ECHO_FRAGMENTS)) {
     return null;
   }
   // Echoing an input line verbatim (with its "- " marker stripped by the
@@ -236,8 +231,4 @@ export function validateStrategyParagraph(
   }
 
   return paragraph;
-}
-
-function collapseWhitespace(value: string | null | undefined) {
-  return (value ?? "").replace(/\s+/g, " ").trim();
 }
