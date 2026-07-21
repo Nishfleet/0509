@@ -408,7 +408,10 @@ export async function hasFreshDiscoveryCacheEntry(
     return fixtureResult?.cacheStatus === "hit";
   }
   const cached = await getDiscoveryCacheEntry(effectiveEnv, cacheKey);
-  if (!cached || !isUsableDiscoveryCache(provider, cached)) {
+  // Same choke point as the resolver: a broken-advertiser-filter pre-fix zero is
+  // not "fresh", so authenticated search does not skip its live-search budget on
+  // a known-bad entry only to have the resolver re-scrape anyway.
+  if (!cached || !isUsableDiscoveryCache(provider, cached, query.mode)) {
     return false;
   }
 
@@ -493,7 +496,11 @@ export async function searchAdsViaSourceResolver(
   }
 
   const cached = effectiveEnv.DB ? await getDiscoveryCacheEntry(effectiveEnv, cacheKey) : null;
-  const usableCached = isUsableDiscoveryCache(provider, cached) ? cached : null;
+  // isUsableDiscoveryCache is the single choke point that also rejects
+  // broken-advertiser-filter pre-fix zeros — so usableCached (and everything
+  // derived from it: cooldown/browser/refresh-failure fallbacks) can never
+  // serve an affected entry.
+  const usableCached = isUsableDiscoveryCache(provider, cached, query.mode) ? cached : null;
   // FIX-1: never mix interactive (deep) public_search cache with scheduled
   // (shallow) scan/warmup cache — same key would otherwise fabricate ad_new /
   // inactive flips, and shallow hits would defeat interactive depth.
@@ -501,21 +508,11 @@ export async function searchAdsViaSourceResolver(
     usableCached && isDiscoveryCacheRouteCompatible(routeContext, usableCached.routeContext)
       ? usableCached
       : null;
-  // Broken-advertiser-filter era: a zero-result entry scraped before the
-  // advertiser-fix cutoff cached wrong "0 ads" data that stays usable and would
-  // otherwise serve for up to the cache TTL (24h scans, up to a 7-day shared
-  // cadence window). Treat it as expired so this read re-scrapes fresh. Non-zero
-  // results are never affected. Removable after 2026-07-28 (see cutoff comment).
-  const staleZeroResult =
-    routeCompatibleCached != null &&
-    isStaleZeroResultDiscoveryCacheEntry({
-      adCount: routeCompatibleCached.payload.ads.length,
-      fetchedAt: routeCompatibleCached.fetchedAt,
-    });
+  // Broken-advertiser-filter pre-fix zeros are already excluded upstream by
+  // isUsableDiscoveryCache (usableCached -> routeCompatibleCached), so both the
+  // fresh hit and the forceLive shared hit inherit the invalidation.
   const unexpiredCache =
-    routeCompatibleCached &&
-    !staleZeroResult &&
-    new Date(routeCompatibleCached.expiresAt).getTime() > Date.now()
+    routeCompatibleCached && new Date(routeCompatibleCached.expiresAt).getTime() > Date.now()
       ? routeCompatibleCached
       : null;
   // forceLive path (WP-36): shared scan/warmup cache younger than the caller's
@@ -524,7 +521,6 @@ export async function searchAdsViaSourceResolver(
     forceLive &&
     acceptCacheYoungerThanMs != null &&
     routeCompatibleCached &&
-    !staleZeroResult &&
     isDiscoveryCacheWithinMaxAge(routeCompatibleCached.fetchedAt, acceptCacheYoungerThanMs)
       ? routeCompatibleCached
       : null;
@@ -641,6 +637,7 @@ export async function searchAdsViaSourceResolver(
       cacheKey,
       fallbackCacheKey: customerFallbackCacheKey,
       provider,
+      mode: query.mode,
       routeContext,
       waitMs: resolveDiscoveryLeaseWaitMs(routeContext),
       minFetchedAtMs: leaseFreshAfterMs,
@@ -1192,6 +1189,7 @@ async function waitForDiscoveryLeaseResolution(
     cacheKey: string;
     fallbackCacheKey?: string | null;
     provider: AdDiscoveryProvider;
+    mode: string;
     routeContext: DiscoveryRouteContext;
     waitMs: number;
     minFetchedAtMs?: number | null;
@@ -1283,6 +1281,7 @@ async function getUsableDiscoveryLeaseCacheEntries(
     cacheKey: string;
     fallbackCacheKey?: string | null;
     provider: AdDiscoveryProvider;
+    mode: string;
   },
 ): Promise<DiscoveryCacheEntry[]> {
   const cacheKeys =
@@ -1296,7 +1295,9 @@ async function getUsableDiscoveryLeaseCacheEntries(
   return entries
     .filter(
       (cached): cached is DiscoveryCacheEntry =>
-        Boolean(cached) && isUsableDiscoveryCache(input.provider, cached),
+        // Choke point: excludes broken-advertiser-filter pre-fix zeros so a lease
+        // waiter can never resolve a known-bad zero as a healthy "hit".
+        Boolean(cached) && isUsableDiscoveryCache(input.provider, cached, input.mode),
     )
     .sort(
       (left, right) => new Date(right.fetchedAt).getTime() - new Date(left.fetchedAt).getTime(),
@@ -1385,15 +1386,41 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Single choke point deciding whether a persisted cache entry may be served.
+ * Every cache-serving path (fresh hit, forceLive shared hit, provider-cooldown
+ * stale fallback, browser-preference fallback, refresh-failure fallback, and
+ * distributed-lease resolution) funnels through here, so the
+ * broken-advertiser-filter invalidation lives here and nowhere else: a pre-fix
+ * zero-result entry for an affected query mode is never usable and always
+ * forces a fresh scrape. `mode` is the request's search mode (advertiser /
+ * keyword / domain); keyword zeros are unaffected. Removable after 2026-07-28
+ * (see STALE_ZERO_RESULT_CUTOFF).
+ */
 function isUsableDiscoveryCache(
   provider: AdDiscoveryProvider,
   cached: Awaited<ReturnType<typeof getDiscoveryCacheEntry>>,
+  mode: string,
 ) {
   if (!cached) {
     return false;
   }
 
-  return isUsableLiveDiscoveryResult(provider, cached.payload);
+  if (!isUsableLiveDiscoveryResult(provider, cached.payload)) {
+    return false;
+  }
+
+  if (
+    isStaleZeroResultDiscoveryCacheEntry({
+      adCount: cached.payload.ads.length,
+      fetchedAt: cached.fetchedAt,
+      mode,
+    })
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
 function isUsableLiveDiscoveryResult(

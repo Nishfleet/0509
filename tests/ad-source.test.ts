@@ -839,9 +839,13 @@ describe("searchAdsViaSourceResolver", () => {
 
   it("still serves a within-window non-zero shared cache entry scraped before the cutoff (unaffected)", async () => {
     // Guardrail: the cutoff only expires ZERO-result entries. A non-zero entry
-    // fetched before the cutoff stays a healthy forceLive shared hit.
+    // genuinely fetched before the cutoff stays a healthy forceLive shared hit.
+    // Use a FIXED pre-cutoff timestamp (not Date.now()-offset, which would land
+    // after the cutoff and prove nothing about pre-cutoff non-zero entries); the
+    // generous acceptance window keeps age out of the picture so the only thing
+    // that could exclude it is the (non-applicable) zero-result rule.
     const metaApiSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>();
-    const fetchedAt = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    const fetchedAt = "2026-07-21T08:00:00.000Z";
     const getDiscoveryCacheEntry = vi.fn().mockResolvedValue({
       cacheKey: "meta_api:fp-nykaa:india:page-1",
       provider: "meta_api",
@@ -923,7 +927,7 @@ describe("searchAdsViaSourceResolver", () => {
         purpose: "watchlist_scan",
         customerMetaAdLibraryToken: "customer-token",
         forceLive: true,
-        acceptCacheYoungerThanMs: 3 * 60 * 60 * 1000,
+        acceptCacheYoungerThanMs: 400 * 24 * 60 * 60 * 1000,
       },
     );
 
@@ -932,6 +936,236 @@ describe("searchAdsViaSourceResolver", () => {
       cacheStatus: "hit",
       ads: [expect.objectContaining({ metaAdId: "pre-cutoff-nonzero-1" })],
     });
+  });
+
+  // ---- broken-advertiser-filter: every cache-serving fallback path is covered ----
+  // These four escape paths (provider cooldown, browser-fallback preference,
+  // refresh-failure, and distributed-lease resolution) plus hasFreshDiscoveryCacheEntry
+  // all read the same isUsableDiscoveryCache choke point, so none can serve a
+  // pre-fix advertiser zero. Each fails under the pre-centralization code.
+  const PRE_CUTOFF_FETCHED_AT = "2026-07-20T12:00:00.000Z"; // before STALE_ZERO_RESULT_CUTOFF, expired
+
+  function staleAdvertiserZeroEntry(overrides: Record<string, unknown> = {}) {
+    return {
+      cacheKey: "meta_library_browser:fp-nykaa:india:page-1",
+      provider: "meta_library_browser",
+      routeContext: "public_search",
+      queryFingerprint: "fp-nykaa",
+      country: "India",
+      cursor: null,
+      payload: buildLiveBrowserResult({ ads: [], discoveryEmptyReason: "no_results" }),
+      fetchedAt: PRE_CUTOFF_FETCHED_AT,
+      expiresAt: "2026-07-20T12:15:00.000Z",
+      browserMsUsed: 2500,
+      createdAt: PRE_CUTOFF_FETCHED_AT,
+      updatedAt: PRE_CUTOFF_FETCHED_AT,
+      ...overrides,
+    };
+  }
+
+  const ADVERTISER_NYKAA_QUERY = {
+    mode: "advertiser" as const,
+    filters: {
+      query: "nykaa",
+      country: "India",
+      platform: "all" as const,
+      creativeType: "all" as const,
+      status: "all" as const,
+      firstSeenFrom: "",
+      lastSeenFrom: "",
+    },
+  };
+
+  it("provider cooldown never serves a pre-fix advertiser zero as a stale cache_only hit", async () => {
+    const browserSearch = vi.fn();
+    const getDiscoveryProviderState = vi.fn().mockResolvedValue({
+      provider: "meta_library_browser",
+      status: "degraded",
+      failureClass: "login_wall",
+      summary: "Commercial discovery degraded.",
+      lastSuccessAt: null,
+      lastFailureAt: new Date().toISOString(),
+      metadata: { cooldownUntil: new Date(Date.now() + 10 * 60 * 1000).toISOString() },
+      updatedAt: new Date().toISOString(),
+    });
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(staleAdvertiserZeroEntry()),
+      getDiscoveryProviderState,
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+    const result = await searchAdsViaSourceResolver(
+      { BROWSER: { fetch: vi.fn() } as unknown as Fetcher, DB: {} as D1Database } as never,
+      ADVERTISER_NYKAA_QUERY,
+      null,
+      { purpose: "public_search" },
+    );
+
+    // Pre-fix: cacheStatus "stale", discoveryStatus "cache_only". Post-fix: honest miss.
+    expect(result.cacheStatus).not.toBe("stale");
+    expect(result.discoveryStatus).not.toBe("cache_only");
+    expect(result.cacheStatus).toBe("miss");
+    expect(result.discoveryStatus).toBe("degraded");
+  });
+
+  it("browser-fallback preference never serves a pre-fix advertiser zero as a stale cache_only hit", async () => {
+    const browserSearch = vi.fn();
+    const getDiscoveryProviderState = vi.fn().mockResolvedValue({
+      provider: "meta_library_browser",
+      status: "degraded",
+      failureClass: "login_wall",
+      summary: "Commercial discovery degraded.",
+      lastSuccessAt: null,
+      lastFailureAt: new Date().toISOString(),
+      // Cooldown already elapsed -> skips the cooldown block, enters the
+      // shouldPreferMetaApiFallbackForPublicSearch branch instead.
+      metadata: { cooldownUntil: new Date(Date.now() - 60 * 1000).toISOString() },
+      updatedAt: new Date().toISOString(),
+    });
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(staleAdvertiserZeroEntry()),
+      getDiscoveryProviderState,
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+    const result = await searchAdsViaSourceResolver(
+      { BROWSER: { fetch: vi.fn() } as unknown as Fetcher, DB: {} as D1Database } as never,
+      ADVERTISER_NYKAA_QUERY,
+      null,
+      { purpose: "public_search" },
+    );
+
+    // Pre-fix: the browser-preference branch returns the stale zero (cacheStatus
+    // "stale"/cache_only). Post-fix: usableCached is null so it returns an honest
+    // degraded miss instead of the known-bad zero.
+    expect(result.cacheStatus).not.toBe("stale");
+    expect(result.discoveryStatus).not.toBe("cache_only");
+    expect(result.cacheStatus).toBe("miss");
+    expect(result.discoveryStatus).toBe("degraded");
+  });
+
+  it("refresh-failure fallback never serves a pre-fix advertiser zero as stale cache", async () => {
+    const browserSearch = vi.fn().mockRejectedValue(new Error("selector drift"));
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {
+        failureClass = "selector_drift";
+      },
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(staleAdvertiserZeroEntry()),
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+    const result = await searchAdsViaSourceResolver(
+      { BROWSER: { fetch: vi.fn() } as unknown as Fetcher, DB: {} as D1Database } as never,
+      ADVERTISER_NYKAA_QUERY,
+      null,
+      { purpose: "public_search" },
+    );
+
+    // Pre-fix: cacheStatus "stale" / cache_only. Post-fix: honest degraded miss after re-scrape attempt.
+    expect(browserSearch).toHaveBeenCalledTimes(1);
+    expect(result.cacheStatus).not.toBe("stale");
+    expect(result.discoveryStatus).not.toBe("cache_only");
+    expect(result.cacheStatus).toBe("miss");
+    expect(result.discoveryStatus).toBe("degraded");
+  });
+
+  it("distributed-lease resolution never reports a pre-fix advertiser zero as a healthy hit", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-21T12:00:00.000Z"));
+    try {
+      const browserSearch = vi.fn();
+      const future = new Date(Date.now() + 180_000).toISOString();
+      // Another isolate owns the lease (holder_id !== our holderId) -> lease not acquired.
+      const db = {
+        prepare: vi.fn(() => ({
+          bind: vi.fn(() => ({
+            run: vi.fn().mockResolvedValue({ success: true }),
+            first: vi.fn().mockResolvedValue({ holder_id: "other-isolate", lease_expires_at: future }),
+          })),
+        })),
+      } as unknown as D1Database;
+      vi.doMock("~/lib/meta-library-browser.server", () => ({
+        searchMetaLibraryByBrowser: browserSearch,
+        CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+      }));
+      vi.doMock("~/lib/data.server", () => ({
+        // Lease waiter finds a pre-fix advertiser zero that is still unexpired.
+        getDiscoveryCacheEntry: vi.fn().mockResolvedValue(
+          staleAdvertiserZeroEntry({
+            fetchedAt: "2026-07-21T08:00:00.000Z",
+            expiresAt: "2026-07-21T13:00:00.000Z",
+          }),
+        ),
+        getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+        upsertDiscoveryCacheEntry: vi.fn(),
+        createDiscoveryFetchLog: vi.fn(),
+        upsertDiscoveryProviderState: vi.fn(),
+      }));
+
+      const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+      const resultPromise = searchAdsViaSourceResolver(
+        { BROWSER: { fetch: vi.fn() } as unknown as Fetcher, DB: db } as never,
+        ADVERTISER_NYKAA_QUERY,
+        null,
+        { purpose: "public_search" },
+      );
+      await vi.advanceTimersByTimeAsync(12_500);
+      const result = await resultPromise;
+
+      // Pre-fix: cacheStatus "hit" with the zero payload. Post-fix: honest warming state.
+      expect(result.cacheStatus).not.toBe("hit");
+      expect(result).toMatchObject({ discoveryProgress: "warming" });
+      expect(browserSearch).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("hasFreshDiscoveryCacheEntry treats a pre-fix advertiser zero as NOT fresh, keyword zero stays fresh", async () => {
+    const getDiscoveryCacheEntry = vi.fn().mockResolvedValue(
+      // Unexpired so, without the fix, it would be reported fresh.
+      staleAdvertiserZeroEntry({ expiresAt: "2026-07-22T12:00:00.000Z" }),
+    );
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { hasFreshDiscoveryCacheEntry } = await import("~/lib/ad-source.server");
+    const env = { BROWSER: { fetch: vi.fn() } as unknown as Fetcher, DB: {} as D1Database } as never;
+
+    // Advertiser mode: known-bad zero -> not fresh, so search keeps its live budget.
+    await expect(
+      hasFreshDiscoveryCacheEntry(env, ADVERTISER_NYKAA_QUERY, null),
+    ).resolves.toBe(false);
+    // Keyword mode: the same unexpired zero was never affected -> still fresh.
+    await expect(
+      hasFreshDiscoveryCacheEntry(env, { ...ADVERTISER_NYKAA_QUERY, mode: "keyword" }, null),
+    ).resolves.toBe(true);
   });
 
   it("rejects forceLive shared hits from public_search cache (FIX-1)", async () => {

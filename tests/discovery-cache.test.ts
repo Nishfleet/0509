@@ -60,31 +60,53 @@ describe("isStaleZeroResultDiscoveryCacheEntry (broken-advertiser-filter cutoff)
   const beforeCutoff = new Date(cutoffMs - 60 * 60 * 1000).toISOString();
   const afterCutoff = new Date(cutoffMs + 60 * 60 * 1000).toISOString();
 
-  it("expires a zero-result entry scraped before the cutoff (forces a fresh scrape)", () => {
+  it("expires an advertiser-mode zero-result entry scraped before the cutoff (forces a fresh scrape)", () => {
     expect(
-      isStaleZeroResultDiscoveryCacheEntry({ adCount: 0, fetchedAt: beforeCutoff }),
+      isStaleZeroResultDiscoveryCacheEntry({ adCount: 0, fetchedAt: beforeCutoff, mode: "advertiser" }),
     ).toBe(true);
   });
 
-  it("honors a zero-result entry scraped at or after the cutoff", () => {
+  it("expires a domain-mode zero-result entry scraped before the cutoff", () => {
     expect(
-      isStaleZeroResultDiscoveryCacheEntry({ adCount: 0, fetchedAt: afterCutoff }),
-    ).toBe(false);
+      isStaleZeroResultDiscoveryCacheEntry({ adCount: 0, fetchedAt: beforeCutoff, mode: "domain" }),
+    ).toBe(true);
+  });
+
+  it("never expires a keyword-mode zero (keyword never ran the broken advertiser filter)", () => {
+    // PR #376's broken filter did not affect keyword search — keyword zeros must
+    // be honored regardless of when they were scraped.
     expect(
-      isStaleZeroResultDiscoveryCacheEntry({ adCount: 0, fetchedAt: STALE_ZERO_RESULT_CUTOFF }),
+      isStaleZeroResultDiscoveryCacheEntry({ adCount: 0, fetchedAt: beforeCutoff, mode: "keyword" }),
     ).toBe(false);
   });
 
-  it("honors a non-zero-result entry scraped before the cutoff (never affected)", () => {
+  it("honors an advertiser-mode zero-result entry scraped at or after the cutoff", () => {
     expect(
-      isStaleZeroResultDiscoveryCacheEntry({ adCount: 5, fetchedAt: beforeCutoff }),
+      isStaleZeroResultDiscoveryCacheEntry({ adCount: 0, fetchedAt: afterCutoff, mode: "advertiser" }),
+    ).toBe(false);
+    expect(
+      isStaleZeroResultDiscoveryCacheEntry({
+        adCount: 0,
+        fetchedAt: STALE_ZERO_RESULT_CUTOFF,
+        mode: "advertiser",
+      }),
+    ).toBe(false);
+  });
+
+  it("honors a non-zero-result advertiser entry scraped before the cutoff (never affected)", () => {
+    expect(
+      isStaleZeroResultDiscoveryCacheEntry({ adCount: 5, fetchedAt: beforeCutoff, mode: "advertiser" }),
     ).toBe(false);
   });
 
   it("does not special-case entries with an unparseable timestamp", () => {
     expect(
-      isStaleZeroResultDiscoveryCacheEntry({ adCount: 0, fetchedAt: "not-a-date" }),
+      isStaleZeroResultDiscoveryCacheEntry({ adCount: 0, fetchedAt: "not-a-date", mode: "advertiser" }),
     ).toBe(false);
+  });
+
+  it("pins the cutoff to the stable-deployment instant (08:15:00Z)", () => {
+    expect(STALE_ZERO_RESULT_CUTOFF).toBe("2026-07-21T08:15:00.000Z");
   });
 });
 

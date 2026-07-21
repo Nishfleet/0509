@@ -52,30 +52,49 @@ export function isDiscoveryCacheWithinMaxAge(
 }
 
 /**
- * Cutoff for the broken-advertiser-filter era. Searches scraped before the
- * advertiser-fix deploy (merge 7c0a92ea, ~2026-07-21T08:00Z) cached 0-ad
- * results that are now wrong, yet stay usable (discoveryEmptyReason
- * "no_results") and can serve for up to the cache TTL — 24h for scans, and up
- * to a 7-day cadence window for shared scheduled hits. A zero-result entry
- * scraped before this instant is treated as expired so the next read re-scrapes
- * fresh. Non-zero results are always honored (they were never affected).
+ * Cutoff for the broken-advertiser-filter era (PR #376). Advertiser/domain-mode
+ * searches scraped before the advertiser-fix deploy cached 0-ad results that are
+ * now wrong, yet stay usable (discoveryEmptyReason "no_results") and can serve
+ * for up to the cache TTL — 24h for scans, and up to a 7-day cadence window for
+ * shared scheduled hits. A zero-result entry scraped before this instant is
+ * treated as expired so the next read re-scrapes fresh.
+ *
+ * Bound to stable-deployment evidence, not the merge time: in deploy run
+ * 29812131936 the fixed worker was uploaded at 08:13:55Z, identified at
+ * 08:13:58Z, and serving stably on every production alias by 08:14:30Z. A
+ * cutoff of 08:15:00Z is conservatively past that last-alias-stable instant, so
+ * no zero produced by the broken worker is left eligible.
+ *
+ * Keyword-mode searches never applied the advertiser filter and were explicitly
+ * unchanged by PR #376 — the invalidation is scoped to the affected query shape
+ * (see isStaleZeroResultDiscoveryCacheEntry) and never expires keyword zeros.
  *
  * REMOVABLE after 2026-07-28: one full cache-TTL cycle (7-day max window) past
  * the fix deploy, every pre-fix zero-result entry has aged out on its own and
  * this override — plus its helper and tests — can be deleted.
  */
-export const STALE_ZERO_RESULT_CUTOFF = "2026-07-21T08:10:00.000Z";
+export const STALE_ZERO_RESULT_CUTOFF = "2026-07-21T08:15:00.000Z";
 const STALE_ZERO_RESULT_CUTOFF_MS = Date.parse(STALE_ZERO_RESULT_CUTOFF);
 
 /**
- * True when a cache entry holds zero ads AND was scraped before the
- * advertiser-fix cutoff — i.e. a stale zero-result from the broken-filter era
- * that must be re-scraped rather than served.
+ * The search modes whose zero-result caches the broken advertiser filter could
+ * corrupt. Keyword mode is deliberately excluded — it never ran the filter.
+ */
+const BROKEN_ADVERTISER_FILTER_MODES = new Set<string>(["advertiser", "domain"]);
+
+/**
+ * True when a cache entry holds zero ads for an affected query mode AND was
+ * scraped before the advertiser-fix cutoff — i.e. a stale zero-result from the
+ * broken-filter era that must be re-scraped rather than served. Non-zero
+ * results, keyword-mode zeros, and any zero scraped at/after the cutoff are
+ * never affected.
  */
 export function isStaleZeroResultDiscoveryCacheEntry(input: {
   adCount: number;
   fetchedAt: string;
+  mode: string;
 }): boolean {
+  if (!BROKEN_ADVERTISER_FILTER_MODES.has(input.mode)) return false;
   if (input.adCount > 0) return false;
   const fetchedMs = Date.parse(input.fetchedAt);
   // Unparseable timestamp: don't special-case — let normal expiry rules apply.
