@@ -5418,6 +5418,22 @@ one signal-green accent.
   justify-content: center;
 }
 
+/* WP-B1: one neutral plan gate. Never red — red stays for errors/deletions.
+   Bone panel with a single upgrade CTA so a gate is never a dead end. */
+.f9-locked-feature {
+  display: grid;
+  gap: 12px;
+  max-width: 560px;
+}
+
+.f9-locked-feature-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 4px;
+}
+
 /* WP-17 icon set: quiet document glyph atop panel empty states. */
 .f9-dash-state-empty > .f9-empty-state-icon {
   width: 20px;
