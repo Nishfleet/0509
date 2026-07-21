@@ -376,7 +376,10 @@ export async function hasFreshDiscoveryCacheEntry(
   env: AppEnv,
   query: NormalizedSavedQuery,
   cursor?: string | null,
-  options: Pick<SearchAdsViaSourceOptions, "cacheKeyOverride" | "customerMetaAdLibraryToken"> = {},
+  options: Pick<
+    SearchAdsViaSourceOptions,
+    "cacheKeyOverride" | "customerMetaAdLibraryToken" | "purpose"
+  > = {},
 ): Promise<boolean> {
   const effectiveEnv = await resolveCommercialDiscoveryEnv(env);
   const provider = resolveCommercialDiscoveryProvider(effectiveEnv, {
@@ -408,10 +411,12 @@ export async function hasFreshDiscoveryCacheEntry(
     return fixtureResult?.cacheStatus === "hit";
   }
   const cached = await getDiscoveryCacheEntry(effectiveEnv, cacheKey);
-  // Same choke point as the resolver: a broken-advertiser-filter pre-fix zero is
-  // not "fresh", so authenticated search does not skip its live-search budget on
-  // a known-bad entry only to have the resolver re-scrape anyway.
-  if (!cached || !isUsableDiscoveryCache(provider, cached, query.mode)) {
+  // Same choke point as the resolver: a route-incompatible entry or a
+  // broken-advertiser-filter pre-fix zero is not "fresh", so authenticated
+  // search does not skip its live-search budget on an entry the resolver
+  // would reject anyway.
+  const precheckRouteContext = options.purpose ?? "public_search";
+  if (!cached || !isUsableDiscoveryCache(provider, cached, query.mode, precheckRouteContext)) {
     return false;
   }
 
@@ -496,33 +501,25 @@ export async function searchAdsViaSourceResolver(
   }
 
   const cached = effectiveEnv.DB ? await getDiscoveryCacheEntry(effectiveEnv, cacheKey) : null;
-  // isUsableDiscoveryCache is the single choke point that also rejects
-  // broken-advertiser-filter pre-fix zeros — so usableCached (and everything
-  // derived from it: cooldown/browser/refresh-failure fallbacks) can never
-  // serve an affected entry.
-  const usableCached = isUsableDiscoveryCache(provider, cached, query.mode) ? cached : null;
-  // FIX-1: never mix interactive (deep) public_search cache with scheduled
-  // (shallow) scan/warmup cache — same key would otherwise fabricate ad_new /
-  // inactive flips, and shallow hits would defeat interactive depth.
-  const routeCompatibleCached =
-    usableCached && isDiscoveryCacheRouteCompatible(routeContext, usableCached.routeContext)
-      ? usableCached
-      : null;
-  // Broken-advertiser-filter pre-fix zeros are already excluded upstream by
-  // isUsableDiscoveryCache (usableCached -> routeCompatibleCached), so both the
-  // fresh hit and the forceLive shared hit inherit the invalidation.
+  // isUsableDiscoveryCache is the single choke point: it rejects
+  // route-incompatible entries (FIX-1 — public_search and scheduled scan/warmup
+  // must never serve each other) AND broken-advertiser-filter pre-fix zeros.
+  // Everything derived from usableCached — fresh hit, forceLive shared hit, and
+  // the cooldown/browser/refresh-failure stale fallbacks — inherits both
+  // exclusions, so no fallback path can cross routes or serve a known-bad zero.
+  const usableCached = isUsableDiscoveryCache(provider, cached, query.mode, routeContext)
+    ? cached
+    : null;
   const unexpiredCache =
-    routeCompatibleCached && new Date(routeCompatibleCached.expiresAt).getTime() > Date.now()
-      ? routeCompatibleCached
-      : null;
+    usableCached && new Date(usableCached.expiresAt).getTime() > Date.now() ? usableCached : null;
   // forceLive path (WP-36): shared scan/warmup cache younger than the caller's
   // cadence window — still a healthy hit so N workspaces pay one scrape.
   const forceLiveSharedHit =
     forceLive &&
     acceptCacheYoungerThanMs != null &&
-    routeCompatibleCached &&
-    isDiscoveryCacheWithinMaxAge(routeCompatibleCached.fetchedAt, acceptCacheYoungerThanMs)
-      ? routeCompatibleCached
+    usableCached &&
+    isDiscoveryCacheWithinMaxAge(usableCached.fetchedAt, acceptCacheYoungerThanMs)
+      ? usableCached
       : null;
   const freshCacheHit = !forceLive ? unexpiredCache : forceLiveSharedHit;
   if (freshCacheHit) {
@@ -1282,6 +1279,7 @@ async function getUsableDiscoveryLeaseCacheEntries(
     fallbackCacheKey?: string | null;
     provider: AdDiscoveryProvider;
     mode: string;
+    routeContext: DiscoveryRouteContext;
   },
 ): Promise<DiscoveryCacheEntry[]> {
   const cacheKeys =
@@ -1295,9 +1293,12 @@ async function getUsableDiscoveryLeaseCacheEntries(
   return entries
     .filter(
       (cached): cached is DiscoveryCacheEntry =>
-        // Choke point: excludes broken-advertiser-filter pre-fix zeros so a lease
-        // waiter can never resolve a known-bad zero as a healthy "hit".
-        Boolean(cached) && isUsableDiscoveryCache(input.provider, cached, input.mode),
+        // Choke point: excludes route-incompatible entries (a lease waiter on a
+        // public search must never resolve a scheduled scan/warmup entry, and
+        // vice versa) and broken-advertiser-filter pre-fix zeros, so a lease
+        // can never resolve either as a healthy "hit".
+        Boolean(cached) &&
+        isUsableDiscoveryCache(input.provider, cached, input.mode, input.routeContext),
     )
     .sort(
       (left, right) => new Date(right.fetchedAt).getTime() - new Date(left.fetchedAt).getTime(),
@@ -1389,20 +1390,29 @@ function sleep(ms: number) {
 /**
  * Single choke point deciding whether a persisted cache entry may be served.
  * Every cache-serving path (fresh hit, forceLive shared hit, provider-cooldown
- * stale fallback, browser-preference fallback, refresh-failure fallback, and
- * distributed-lease resolution) funnels through here, so the
- * broken-advertiser-filter invalidation lives here and nowhere else: a pre-fix
- * zero-result entry for an affected query mode is never usable and always
- * forces a fresh scrape. `mode` is the request's search mode (advertiser /
- * keyword / domain); keyword zeros are unaffected. Removable after 2026-07-28
- * (see STALE_ZERO_RESULT_CUTOFF).
+ * stale fallback, browser-preference fallback, refresh-failure fallback,
+ * distributed-lease resolution, and the fresh-cache pre-check) funnels through
+ * here, so BOTH cross-cutting exclusions live here and nowhere else:
+ *   - route compatibility (FIX-1): interactive public_search and scheduled
+ *     scan/warmup share a fingerprint key but must never serve each other —
+ *     enforced here so no fallback or lease path can bypass it; and
+ *   - the broken-advertiser-filter invalidation: a pre-fix zero-result entry
+ *     for an affected query mode is never usable and always forces a fresh
+ *     scrape. `mode` is the request's search mode (advertiser / keyword /
+ *     domain); keyword zeros are unaffected. Removable after 2026-07-28
+ *     (see STALE_ZERO_RESULT_CUTOFF).
  */
 function isUsableDiscoveryCache(
   provider: AdDiscoveryProvider,
   cached: Awaited<ReturnType<typeof getDiscoveryCacheEntry>>,
   mode: string,
+  routeContext: DiscoveryRouteContext,
 ) {
   if (!cached) {
+    return false;
+  }
+
+  if (!isDiscoveryCacheRouteCompatible(routeContext, cached.routeContext)) {
     return false;
   }
 

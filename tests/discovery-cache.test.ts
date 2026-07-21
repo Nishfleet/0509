@@ -105,8 +105,26 @@ describe("isStaleZeroResultDiscoveryCacheEntry (broken-advertiser-filter cutoff)
     ).toBe(false);
   });
 
-  it("pins the cutoff to the stable-deployment instant (08:15:00Z)", () => {
-    expect(STALE_ZERO_RESULT_CUTOFF).toBe("2026-07-21T08:15:00.000Z");
+  it("expires a zero written during the old-worker drain window (post-flip, pre-cutoff)", () => {
+    // Blocker scenario: a request served by the BROKEN worker (in-flight at the
+    // 08:14:30Z alias flip, or a version-pinned Workflow instance) finishes
+    // later and writes its zero with a post-flip fetchedAt. That write must
+    // still be treated as stale.
+    expect(
+      isStaleZeroResultDiscoveryCacheEntry({
+        adCount: 0,
+        fetchedAt: "2026-07-21T08:30:00.000Z",
+        mode: "advertiser",
+      }),
+    ).toBe(true);
+  });
+
+  it("pins the cutoff past the maximum old-worker drain window (12:00:00Z)", () => {
+    // The alias flip (08:14:30Z, run 29812131936) is not enough: in-flight
+    // requests and version-pinned Workflow scan instances started on the broken
+    // worker can WRITE zero-result entries with a post-flip fetchedAt. The
+    // cutoff must sit hours past the flip so no broken-worker write survives.
+    expect(STALE_ZERO_RESULT_CUTOFF).toBe("2026-07-21T12:00:00.000Z");
   });
 });
 

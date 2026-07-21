@@ -59,11 +59,17 @@ export function isDiscoveryCacheWithinMaxAge(
  * shared scheduled hits. A zero-result entry scraped before this instant is
  * treated as expired so the next read re-scrapes fresh.
  *
- * Bound to stable-deployment evidence, not the merge time: in deploy run
- * 29812131936 the fixed worker was uploaded at 08:13:55Z, identified at
- * 08:13:58Z, and serving stably on every production alias by 08:14:30Z. A
- * cutoff of 08:15:00Z is conservatively past that last-alias-stable instant, so
- * no zero produced by the broken worker is left eligible.
+ * Bound to stable-deployment evidence PLUS the maximum old-code drain window:
+ * in deploy run 29812131936 the fixed worker was uploaded at 08:13:55Z,
+ * identified at 08:13:58Z, and serving stably on every production alias by
+ * 08:14:30Z. The alias flip alone is NOT sufficient — a request served by the
+ * broken worker (an in-flight HTTP request, or a version-pinned Workflow scan
+ * instance started before the flip) can finish minutes-to-an-hour later and
+ * WRITE a zero-result entry whose fetchedAt is after the flip. 12:00:00Z is
+ * hours past any plausible drain (HTTP requests finish in minutes; scan
+ * workflow instances in well under an hour), so no broken-worker write can
+ * carry a post-cutoff fetchedAt. Cost of the wide window: a legitimate
+ * new-worker zero written 08:15–12:00 pays one extra re-scrape — cheap, honest.
  *
  * Keyword-mode searches never applied the advertiser filter and were explicitly
  * unchanged by PR #376 — the invalidation is scoped to the affected query shape
@@ -73,7 +79,7 @@ export function isDiscoveryCacheWithinMaxAge(
  * the fix deploy, every pre-fix zero-result entry has aged out on its own and
  * this override — plus its helper and tests — can be deleted.
  */
-export const STALE_ZERO_RESULT_CUTOFF = "2026-07-21T08:15:00.000Z";
+export const STALE_ZERO_RESULT_CUTOFF = "2026-07-21T12:00:00.000Z";
 const STALE_ZERO_RESULT_CUTOFF_MS = Date.parse(STALE_ZERO_RESULT_CUTOFF);
 
 /**

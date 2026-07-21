@@ -1182,6 +1182,132 @@ describe("searchAdsViaSourceResolver", () => {
     ).resolves.toBe(true);
   });
 
+  // ---- FIX-1 hardening: route compatibility lives in the same choke point ----
+  // The fresh-hit path already refused cross-route entries, but the cooldown /
+  // browser-preference / refresh-failure fallbacks and lease resolution read
+  // usableCached BEFORE the route filter, and hasFreshDiscoveryCacheEntry never
+  // route-filtered at all — so public searches and scheduled scans could consume
+  // each other's incompatible results. Each test fails under that code.
+  function healthyScanRouteEntry(overrides: Record<string, unknown> = {}) {
+    return staleAdvertiserZeroEntry({
+      routeContext: "watchlist_scan",
+      payload: buildLiveBrowserResult(),
+      fetchedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      ...overrides,
+    });
+  }
+
+  it("provider cooldown never serves a scheduled-scan entry to a public search (FIX-1 escape)", async () => {
+    const browserSearch = vi.fn();
+    const getDiscoveryProviderState = vi.fn().mockResolvedValue({
+      provider: "meta_library_browser",
+      status: "degraded",
+      failureClass: "login_wall",
+      summary: "Commercial discovery degraded.",
+      lastSuccessAt: null,
+      lastFailureAt: new Date().toISOString(),
+      metadata: { cooldownUntil: new Date(Date.now() + 10 * 60 * 1000).toISOString() },
+      updatedAt: new Date().toISOString(),
+    });
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(healthyScanRouteEntry()),
+      getDiscoveryProviderState,
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+    const result = await searchAdsViaSourceResolver(
+      { BROWSER: { fetch: vi.fn() } as unknown as Fetcher, DB: {} as D1Database } as never,
+      ADVERTISER_NYKAA_QUERY,
+      null,
+      { purpose: "public_search" },
+    );
+
+    // Pre-fix: the shallow scan entry came back as a stale cache_only hit for the
+    // deep public search. Post-fix: honest miss.
+    expect(result.cacheStatus).not.toBe("stale");
+    expect(result.discoveryStatus).not.toBe("cache_only");
+    expect(result.ads).toEqual([]);
+    expect(result.cacheStatus).toBe("miss");
+  });
+
+  it("distributed-lease resolution never resolves a scheduled-scan entry for a public-search waiter (FIX-1 escape)", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-21T12:00:00.000Z"));
+    try {
+      const browserSearch = vi.fn();
+      const future = new Date(Date.now() + 180_000).toISOString();
+      const db = {
+        prepare: vi.fn(() => ({
+          bind: vi.fn(() => ({
+            run: vi.fn().mockResolvedValue({ success: true }),
+            first: vi.fn().mockResolvedValue({ holder_id: "other-isolate", lease_expires_at: future }),
+          })),
+        })),
+      } as unknown as D1Database;
+      vi.doMock("~/lib/meta-library-browser.server", () => ({
+        searchMetaLibraryByBrowser: browserSearch,
+        CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+      }));
+      vi.doMock("~/lib/data.server", () => ({
+        // The lease waiter finds a healthy, unexpired entry — but it belongs to
+        // the scheduled scan route, not public_search.
+        getDiscoveryCacheEntry: vi.fn().mockResolvedValue(healthyScanRouteEntry()),
+        getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+        upsertDiscoveryCacheEntry: vi.fn(),
+        createDiscoveryFetchLog: vi.fn(),
+        upsertDiscoveryProviderState: vi.fn(),
+      }));
+
+      const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+      const resultPromise = searchAdsViaSourceResolver(
+        { BROWSER: { fetch: vi.fn() } as unknown as Fetcher, DB: db } as never,
+        ADVERTISER_NYKAA_QUERY,
+        null,
+        { purpose: "public_search" },
+      );
+      await vi.advanceTimersByTimeAsync(12_500);
+      const result = await resultPromise;
+
+      // Pre-fix: the scan entry resolved as a healthy cross-route "hit".
+      expect(result.cacheStatus).not.toBe("hit");
+      expect(result).toMatchObject({ discoveryProgress: "warming" });
+      expect(browserSearch).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("hasFreshDiscoveryCacheEntry never counts a route-incompatible entry as fresh (FIX-1 escape)", async () => {
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(healthyScanRouteEntry()),
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { hasFreshDiscoveryCacheEntry } = await import("~/lib/ad-source.server");
+    const env = { BROWSER: { fetch: vi.fn() } as unknown as Fetcher, DB: {} as D1Database } as never;
+
+    // Default (public_search) pre-check must not skip the live-search budget on
+    // a scheduled-scan entry the resolver would reject.
+    await expect(hasFreshDiscoveryCacheEntry(env, ADVERTISER_NYKAA_QUERY, null)).resolves.toBe(
+      false,
+    );
+    // Positive control: the same entry IS fresh for its own route.
+    await expect(
+      hasFreshDiscoveryCacheEntry(env, ADVERTISER_NYKAA_QUERY, null, { purpose: "watchlist_scan" }),
+    ).resolves.toBe(true);
+  });
+
   it("rejects forceLive shared hits from public_search cache (FIX-1)", async () => {
     const metaApiSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>().mockResolvedValue({
       ads: [],
