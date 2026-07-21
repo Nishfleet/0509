@@ -2,7 +2,7 @@ import { Form, Link, useLoaderData, useRouteLoaderData } from "react-router";
 import { useEffect, useState } from "react";
 import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 
-import { BrandWordmark } from "~/components/brand-wordmark";
+import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import { SubmitButton } from "~/components/submit-button";
 import { demoProof } from "~/lib/demo-proof";
@@ -489,26 +489,7 @@ export default function MarketingRoute() {
         05:09 morning brief.
       </p>
 
-      <header className="ld-nav">
-        <Link className="ld-brand" to="/" aria-label="Five to Nine home">
-          <BrandWordmark />
-        </Link>
-
-        <nav className="ld-nav-links" aria-label="Primary">
-          <Link to={publicSearchTrialPath}>Search preview</Link>
-          <a href="#demo">Sample brief</a>
-          <a href="#pricing">Pricing</a>
-        </nav>
-
-        <nav className="ld-nav-actions" aria-label="Account">
-          <Link className="f9-link-arrow" to="/auth/login">
-            Sign in
-          </Link>
-          <Link className="ld-nav-pill" to={primaryCta}>
-            {primaryLabel}
-          </Link>
-        </nav>
-      </header>
+      <MarketingNav />
 
       <section className="ld-hero">
         <Link className="f9-announcement" to={publicSearchTrialPath}>
