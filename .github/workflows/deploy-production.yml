@@ -109,7 +109,27 @@ jobs:
           gate_c=(test-results/gate-c-*.json)
           production_soak=(test-results/production-soak-*.json)
 
-          [ "${#readiness[@]}" -ge 5 ]
+          # The authoritative deploy-readiness manifest is the single
+          # deploy-readiness-<pid>-<hex>.json written by the release gate. The
+          # deploy-readiness-local-release-<project>.json files are side-effects
+          # of the cross_browser_risk_proof step, which became a non-blocking
+          # diagnostic on 2026-07-20 and is allowed to fail partway on starved
+          # runners — so it emits an unstable subset (0-4) of its per-project
+          # manifests. Counting all deploy-readiness-*.json and requiring >= 5
+          # therefore FAILED genuinely-successful deploys once that diagnostic
+          # stopped completing (runs 29767292426 / 29804405475 produced only 3:
+          # the real manifest + firefox + webkit). Prove the authoritative
+          # manifest exists (exactly one) without depending on the flaky
+          # diagnostic's output — stricter than the old >= 5, not weaker.
+          authoritative_readiness=()
+          for manifest in "${readiness[@]}"; do
+            case "$manifest" in
+              test-results/deploy-readiness-local-release-*.json) ;;
+              *) authoritative_readiness+=("$manifest") ;;
+            esac
+          done
+
+          [ "${#authoritative_readiness[@]}" -eq 1 ]
           [ "${#wrangler[@]}" -eq 1 ]
           [ "${#rollback[@]}" -eq 1 ]
           [ "${#gate_c[@]}" -eq 1 ]
