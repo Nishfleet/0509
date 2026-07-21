@@ -147,6 +147,7 @@ export function validateImmediateGateCJournal(journal, workerVersionId) {
  *   manifestPath: string,
  *   wranglerOutputPath: string,
  *   gateCPath: string,
+ *   rollbackTargetPath: string,
  *   now?: Date,
  *   headCommit: string,
  *   deploymentWorkflowRunId: number,
@@ -157,6 +158,7 @@ export function buildRunningSoakJournal({
   manifestPath,
   wranglerOutputPath,
   gateCPath,
+  rollbackTargetPath,
   now = new Date(),
   headCommit,
   deploymentWorkflowRunId,
@@ -171,6 +173,16 @@ export function buildRunningSoakJournal({
   if (!SAFE_VERSION.test(workerVersionId)) throw new Error("unsafe_worker_version");
   const gateC = readSafePrivateJson(gateCPath);
   validateImmediateGateCJournal(gateC, workerVersionId);
+  // Bind the rollback-target evidence into the journal (path + sha256) so the
+  // release-evidence archive can verify it the same way it verifies the
+  // manifest / wrangler / gate-C references, rather than trusting an unbound,
+  // possibly-forged or duplicated worker-rollback-target file.
+  if (typeof rollbackTargetPath !== "string" || !rollbackTargetPath.trim()) {
+    throw new Error("soak_rollback_target_path_missing");
+  }
+  const rollbackPath = resolveSafeEvidencePath(rollbackTargetPath);
+  const rollbackStats = lstatSync(rollbackPath);
+  if (!rollbackStats.isFile() || rollbackStats.isSymbolicLink()) throw new Error("unsafe_rollback_target_file");
   if (!/^[a-f0-9]{40}$/u.test(headCommit ?? "")) throw new Error("unsafe_soak_head_commit");
   if (
     !Number.isSafeInteger(deploymentWorkflowRunId) || deploymentWorkflowRunId <= 0 ||
@@ -201,6 +213,8 @@ export function buildRunningSoakJournal({
       wranglerOutputSha256: sha256File(wranglerPath),
       immediateGateCPath: gateCPath,
       immediateGateCSha256: sha256File(resolveSafeEvidencePath(gateCPath)),
+      workerRollbackTargetPath: rollbackTargetPath,
+      workerRollbackTargetSha256: sha256File(rollbackPath),
     },
     window: {
       startedAt: startedAt.toISOString(),
@@ -239,6 +253,8 @@ function validateSoakJournalIdentityAndReferences(journal) {
     !SHA256.test(journal?.candidate?.gateBManifestSha256 ?? "") ||
     !SHA256.test(journal?.deployment?.wranglerOutputSha256 ?? "") ||
     !SHA256.test(journal?.deployment?.immediateGateCSha256 ?? "") ||
+    typeof journal?.deployment?.workerRollbackTargetPath !== "string" ||
+    !SHA256.test(journal?.deployment?.workerRollbackTargetSha256 ?? "") ||
     !/^[a-f0-9]{40}$/u.test(journal?.candidate?.headCommit ?? "") ||
     journal?.window?.durationMs !== GATE_C_SOAK_DURATION_MS ||
     journal?.thresholds?.taskDurationMs !== 15 * 60 * 1000 ||
@@ -273,6 +289,7 @@ function validateSoakJournalIdentityAndReferences(journal) {
     [journal.candidate.gateBManifestPath, journal.candidate.gateBManifestSha256],
     [journal.deployment.wranglerOutputPath, journal.deployment.wranglerOutputSha256],
     [journal.deployment.immediateGateCPath, journal.deployment.immediateGateCSha256],
+    [journal.deployment.workerRollbackTargetPath, journal.deployment.workerRollbackTargetSha256],
   ];
   for (const [path, expectedHash] of referenced) {
     if (sha256File(resolveSafeEvidencePath(path)) !== expectedHash) throw new Error("soak_referenced_evidence_drift");
