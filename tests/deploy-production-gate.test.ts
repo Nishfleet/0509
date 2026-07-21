@@ -945,7 +945,14 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(archiveStep).toContain(
       "production-release-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz",
     );
-    expect(verifyStep).toContain('[ "${#readiness[@]}" -ge 5 ]');
+    expect(verifyStep).toContain("authoritative_readiness=()");
+    expect(verifyStep).toContain(
+      "test-results/deploy-readiness-local-release-*.json",
+    );
+    expect(verifyStep).toContain(
+      '[ "${#authoritative_readiness[@]}" -eq 1 ]',
+    );
+    expect(verifyStep).not.toContain('[ "${#readiness[@]}" -ge 5 ]');
     expect(verifyStep).toContain('[ "${#wrangler[@]}" -eq 1 ]');
     expect(verifyStep).toContain('[ "${#rollback[@]}" -eq 1 ]');
     expect(verifyStep).toContain('[ "${#gate_c[@]}" -eq 1 ]');
