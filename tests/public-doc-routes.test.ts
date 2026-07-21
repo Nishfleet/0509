@@ -127,6 +127,13 @@ describe("public documentation routes", () => {
     expect(privacyMarkup).toContain("any name, email, or follow-up details you choose to submit");
     expect(privacyMarkup).toContain('href="https://siterep.net/privacy"');
     expect(privacyMarkup).toContain('href="https://siterep.net/trust"');
+    expect(privacyMarkup).toContain("Chrome extension");
+    expect(privacyMarkup).toContain("activeTab");
+    expect(privacyMarkup).toContain("reads the current tab&#x27;s URL locally");
+    expect(privacyMarkup).toContain("does not persist the current URL or domain");
+    expect(privacyMarkup).toContain("service providers needed to operate the selected action");
+    expect(privacyMarkup).toContain("We do not sell this data");
+    expect(privacyMarkup).toContain("Limited Use requirements");
     expect(trustMarkup).not.toMatch(/Dodo Payments: checkout/);
     expect(trustMarkup).toContain("Backup validation and restore drills");
     expect(trustMarkup).toContain("remain owner-operated until recorded as verified");
