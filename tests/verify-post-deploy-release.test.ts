@@ -634,3 +634,100 @@ describe("version-bound Gate C orchestrator", () => {
     expect(proof).not.toHaveBeenCalled();
   });
 });
+
+const { defaultPricing } = await import("../scripts/verify-post-deploy-release.mjs");
+
+describe("defaultPricing bounded retry (run 29852903771 rollback class)", () => {
+
+  it("passes when a one-shot transient (stale-PoP version mismatch) succeeds on retry", async () => {
+    const calls: Record<string, number> = {};
+    const fetcher = vi.fn(async ({ country }: { country: string }) => {
+      calls[country] = (calls[country] ?? 0) + 1;
+      // US hits an edge PoP still serving the previous worker on attempt 1.
+      if (country === "US" && calls[country] === 1) {
+        return { requestedCountry: country, ok: false, status: 200, reason: "worker_version_mismatch" };
+      }
+      return { requestedCountry: country, ok: true, status: 200, reason: "" };
+    });
+    const result = await defaultPricing({
+      workerVersionId: "worker-v1",
+      token: "token",
+      fetcher,
+      sleeper: async () => {},
+    });
+    expect(result.ok).toBe(true);
+    expect(calls).toEqual({ IN: 1, US: 2, GB: 1 });
+  });
+
+  it("still fails closed when a country fails every attempt (no gate weakening)", async () => {
+    const fetcher = vi.fn(async ({ country }: { country: string }) =>
+      country === "GB"
+        ? { requestedCountry: country, ok: false, status: 200, reason: "plan_price_invalid" }
+        : { requestedCountry: country, ok: true, status: 200, reason: "" });
+    const result = await defaultPricing({
+      workerVersionId: "worker-v1",
+      token: "token",
+      attempts: 3,
+      fetcher,
+      sleeper: async () => {},
+    });
+    expect(result.ok).toBe(false);
+    const gb = result.results.find((entry: { requestedCountry?: string }) => entry.requestedCountry === "GB");
+    expect(gb).toMatchObject({ ok: false, attempt: 3, reason: "plan_price_invalid" });
+    expect(fetcher.mock.calls.filter(([input]) => input.country === "GB")).toHaveLength(3);
+  });
+
+  it("captures thrown fetch errors as bounded fetch_failed results and retries them", async () => {
+    let threw = 0;
+    const fetcher = vi.fn(async ({ country }: { country: string }) => {
+      if (country === "IN" && threw === 0) {
+        threw += 1;
+        throw new Error("socket hang up");
+      }
+      return { requestedCountry: country, ok: true, status: 200, reason: "" };
+    });
+    const result = await defaultPricing({
+      workerVersionId: "worker-v1",
+      token: "token",
+      fetcher,
+      sleeper: async () => {},
+    });
+    expect(result.ok).toBe(true);
+    expect(threw).toBe(1);
+  });
+});
+
+describe("gate step failure detail (evidence diagnosability)", () => {
+  it("records the failing step's bounded result detail in the journal", async () => {
+    const path = evidencePath();
+    const pricingFailure = {
+      ok: false,
+      results: [
+        { requestedCountry: "IN", ok: true, status: 200, attempt: 1 },
+        { requestedCountry: "US", ok: false, status: 200, reason: "worker_version_mismatch", attempt: 3 },
+        { requestedCountry: "GB", ok: true, status: 200, attempt: 1 },
+      ],
+    };
+    const result = await runVersionBoundGateC({
+      workerVersionId: "worker-v1",
+      token: "token",
+      evidencePath: path,
+      dependencies: {
+        healthAnchor: vi.fn(async () => ({ ok: true })),
+        backupLifecycle: vi.fn(async () => ({ ok: true, report: backupReport() })),
+        backupLifecycleRecheck: vi.fn(async () => ({ ok: true, report: backupReport() })),
+        backupLifecycleCleanup: vi.fn(async () => ({ ok: true })),
+        pricing: vi.fn(async () => pricingFailure),
+        billing: vi.fn(async () => ({ ok: true })),
+        proof: vi.fn(async () => ({ ok: true, payload: proofPayload() })),
+        cleanup: vi.fn(async () => ({ ok: true })),
+        productionCanary: vi.fn(async () => ({ ok: true, report: "ok" })),
+      },
+    });
+    expect(result.passed).toBe(false);
+    const journal = JSON.parse(readFileSync(path, "utf8"));
+    expect(journal.errors).toContain("pricing_failed");
+    expect(journal.steps.pricing.status).toBe("failed");
+    expect(journal.steps.pricing.detail).toEqual(pricingFailure);
+  });
+});
