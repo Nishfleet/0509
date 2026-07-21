@@ -465,6 +465,31 @@ describe("getWorkspaceReadiness", () => {
     });
   });
 
+  it("never emits two setup gaps with an identical action label + href", async () => {
+    setupMocks({
+      listSavedQueries: vi.fn().mockResolvedValue([]),
+      listWatchlists: vi.fn().mockResolvedValue([createWatchlist({ isActive: false, lastScannedAt: null })]),
+      listRecentWorkspaceProofCaptures: vi.fn().mockResolvedValue([]),
+      getSuccessfulProofCaptureStatsForUser: vi.fn().mockResolvedValue({ count: 0, latestAt: null }),
+      getSuccessfulRunStatsForUserBetween: vi.fn().mockResolvedValue({
+        runs: 0,
+        watchlistsChecked: 0,
+        adsSeen: 0,
+        noChangeRuns: 0,
+      }),
+      listDigests: vi.fn().mockResolvedValue([]),
+      getDeliveryTargetReadinessStats: vi.fn().mockResolvedValue({ activeCount: 0, provenCount: 0 }),
+    });
+
+    const readiness = await loadReadiness();
+    const actionKeys = readiness.items
+      .map((item) => item.action)
+      .filter((action): action is { label: string; href: string } => Boolean(action))
+      .map((action) => `${action.label}::${action.href}`);
+
+    expect(new Set(actionKeys).size).toBe(actionKeys.length);
+  });
+
   it.each(["scout", "starter"] as const)("marks Developer access not applicable for %s", async (plan) => {
     setupMocks({
       listCustomerApiKeys: vi.fn().mockResolvedValue([]),

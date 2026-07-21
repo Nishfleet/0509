@@ -583,14 +583,8 @@ export default function AppDashboardRoute() {
               </p>
             </div>
             <div className="f9-checkout-banner-actions">
-              <Link
-                className="f9-primary-button"
-                to="/app/billing?source=dashboard#plans"
-              >
-                View plans
-              </Link>
-              <Link className="f9-secondary-button" to="/search">
-                Search competitors
+              <Link className="f9-primary-button" to="/search">
+                Add your first competitor
               </Link>
             </div>
           </article>
@@ -603,12 +597,14 @@ export default function AppDashboardRoute() {
               <h2>{marketDeskBrief.title}</h2>
               <p className="f9-muted-copy">{marketDeskBrief.summary}</p>
             </div>
-            <Link
-              className="f9-primary-button"
-              to={marketDeskBrief.action.href}
-            >
-              {marketDeskBrief.action.label}
-            </Link>
+            {competitorCount > 0 ? (
+              <Link
+                className="f9-primary-button"
+                to={marketDeskBrief.action.href}
+              >
+                {marketDeskBrief.action.label}
+              </Link>
+            ) : null}
           </div>
 
           <CommercialSourceStatus status={data.metaStatus} />
@@ -652,19 +648,31 @@ export default function AppDashboardRoute() {
         </article>
 
         {readinessGaps.length > 0 ? (
-          <article className="f9-app-panel">
-            <div className="f9-panel-toolbar">
-              <div>
+          <details className="f9-app-panel f9-setup-strip">
+            <summary className="f9-setup-strip-summary">
+              <span className="f9-setup-strip-head">
                 <span className="f9-app-kicker">Setup</span>
-                <h2>
+                <strong>
                   {workspaceReadiness.readyCount} of{" "}
-                  {workspaceReadiness.totalCount} checks complete
-                </h2>
-              </div>
-              <Link className="f9-secondary-button" to="/status">
-                Platform status
-              </Link>
-            </div>
+                  {workspaceReadiness.totalCount} setup checks complete
+                </strong>
+              </span>
+              <span
+                className="f9-setup-strip-bar"
+                aria-hidden="true"
+              >
+                <span
+                  style={{
+                    width: `${Math.round(
+                      (workspaceReadiness.readyCount /
+                        Math.max(workspaceReadiness.totalCount, 1)) *
+                        100,
+                    )}%`,
+                  }}
+                />
+              </span>
+              <span className="f9-setup-strip-toggle">Finish setup</span>
+            </summary>
             <div className="f9-work-list is-compact">
               {readinessGaps.slice(0, 5).map((item) => (
                 <article className="f9-work-row" key={item.id}>
@@ -684,7 +692,7 @@ export default function AppDashboardRoute() {
                 </article>
               ))}
             </div>
-          </article>
+          </details>
         ) : null}
 
         {retentionMoves.length > 0 ? (

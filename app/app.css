@@ -6777,6 +6777,84 @@ one signal-green accent.
   padding: 24px;
 }
 
+/* WP-B3: setup checklist demoted to a compact one-card progress strip.
+   Collapsed by default; the <details> disclosure expands the item list
+   with no JS and stays keyboard-accessible. */
+.f9-setup-strip {
+  padding: 14px 18px;
+}
+
+.f9-setup-strip > .f9-work-list {
+  margin-top: 14px;
+}
+
+.f9-setup-strip-summary {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.f9-setup-strip-summary::-webkit-details-marker {
+  display: none;
+}
+
+.f9-setup-strip-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.f9-setup-strip-head strong {
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.f9-setup-strip-bar {
+  flex: 1 1 auto;
+  height: 6px;
+  min-width: 60px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.f9-setup-strip-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--green, #1f8a5b);
+}
+
+.f9-setup-strip-toggle {
+  flex: 0 0 auto;
+  color: var(--f9-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.f9-setup-strip[open] .f9-setup-strip-toggle::after {
+  content: " ▲";
+}
+
+.f9-setup-strip:not([open]) .f9-setup-strip-toggle::after {
+  content: " ▾";
+}
+
+@media (max-width: 640px) {
+  .f9-setup-strip-summary {
+    flex-wrap: wrap;
+  }
+
+  .f9-setup-strip-bar {
+    order: 3;
+    flex-basis: 100%;
+  }
+}
+
 .f9-dashboard-hero h1 {
   max-width: 760px;
   margin: 0;
