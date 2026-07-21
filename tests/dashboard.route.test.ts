@@ -300,8 +300,10 @@ describe("dashboard route agent memory", () => {
 
     expect(markup).toContain("Brief");
     expect(markup).toContain("Build your brief");
-    expect(markup).toContain("Add competitors");
-    expect(markup).toContain('href="/app/onboard?resume=1"');
+    // First-run hero drops the separate action button in favour of one
+    // dominant add path: the search form + the free-watch banner CTA.
+    expect(markup).toContain("Add your first competitor");
+    expect(markup).toContain("Search ads");
     expect(markup).not.toContain("Account context saved");
     expect(markup).not.toContain("[redacted]: [redacted]");
     expect(markup).not.toContain("hunter2");

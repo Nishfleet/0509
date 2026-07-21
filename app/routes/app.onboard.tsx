@@ -531,7 +531,7 @@ async function persistCompetitorImportContext(input: {
   }
 
   const room = await input.upsertClientRoom(input.env, input.workspaceUserId, {
-    name: `${input.row.client} Market Desk`,
+    name: `${input.row.client} watch`,
     clientLabel: input.row.client,
   });
   if (!room) {

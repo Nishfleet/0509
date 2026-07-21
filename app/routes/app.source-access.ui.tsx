@@ -54,7 +54,6 @@ export function SourceAccessRoute() {
   return (
     <DashboardPage>
       <DashboardPageHeader
-        action={{ label: "Open watchlists", to: "/app/watchlists" }}
         lead="Backup Meta access and tracking reliability."
         title="Source access"
       />

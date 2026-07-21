@@ -32,7 +32,7 @@ Five to Nine turns competitor ads and visible landing-page changes into source-b
 
 ## Product
 
-- Competitor monitoring for growth teams (Market Desk) plus proof-backed entity tracking (Presence Desk).
+- Competitor monitoring for growth teams plus proof-backed entity tracking (Presence Desk).
 - Public read-only search and a sample brief are buyer-evaluation paths before signup; this text does not claim live availability.
 - Signed-in accounts are the path for saved competitors, retained monitoring, reusable saved evidence, collections, digests, and reports; this text describes the capability, not live account availability.
 - Saving competitor results, saved queries, watchlists, collections, reports, and delivery require an account.

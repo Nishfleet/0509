@@ -107,7 +107,7 @@ export {
 // the hydration test that imports it from "~/routes/app.watchlists".
 export { WatchlistProofAge } from "~/components/watchlists/watchlist-proof-age";
 
-export const meta = () => [{ title: "Watchlists | Five to Nine" }];
+export const meta = () => [{ title: "Competitors | Five to Nine" }];
 const WATCHLIST_DELIVERY_TARGET_DISPLAY_LIMIT = 12;
 const WORKSPACE_DELIVERY_TARGET_DISPLAY_LIMIT = 8;
 const RECENT_DELIVERY_ATTEMPT_DISPLAY_LIMIT = 16;
@@ -125,7 +125,7 @@ const DELIVERY_MANAGEMENT_INTENTS = new Set([
 ]);
 
 export function HydrateFallback() {
-  return <DashboardRouteLoading title="Watchlists" />;
+  return <DashboardRouteLoading title="Competitors" />;
 }
 
 export function ErrorBoundary({ error }: { error: unknown }) {
@@ -958,7 +958,7 @@ export default function WatchlistsRoute() {
   // WP-42: pause/resume runs through a fetcher so the row shows its own
   // pending state instead of lighting up the global route progress bar.
   const pauseResumeFetcher = useFetcher<typeof action>();
-  // Workflow-friction pass: bulk pause/resume from the tracking desk.
+  // Workflow-friction pass: bulk pause/resume from the competitors list.
   const bulkFetcher = useFetcher<typeof action>();
   const [selectedBulkIds, setSelectedBulkIds] = useState<string[]>([]);
   const [latestFeedbackSource, setLatestFeedbackSource] = useState<
@@ -1055,7 +1055,7 @@ export default function WatchlistsRoute() {
       <section className="f9-app-stack">
         <DashboardPageHeader
           lead="Monitor competitor ads over time and get alerted when messaging, creative, or landing pages change."
-          title="Watchlists"
+          title="Competitors"
         />
 
       {actionData?.message ? (
@@ -1087,7 +1087,7 @@ export default function WatchlistsRoute() {
         <article className="f9-app-panel f9-side-panel">
           <div className="f9-panel-toolbar">
             <div>
-              <h2>Tracking desk</h2>
+              <h2>Competitors</h2>
             </div>
           </div>
           <p className="f9-muted-copy">
@@ -1159,12 +1159,7 @@ export default function WatchlistsRoute() {
               );
             })}
             {data.watchlists.length === 0 ? (
-              <EmptyState
-                action={{ label: "Add competitor", to: "/search" }}
-                description="Paste your website or a competitor website to start tracking visible changes."
-                headingLevel="h3"
-                title="Add your first competitor"
-              />
+              <EmptyState title="No competitors yet" variant="inline" />
             ) : null}
           </div>
         </article>
@@ -1401,7 +1396,8 @@ export default function WatchlistsRoute() {
           ) : (
             <EmptyState
               action={{ label: "Add competitor", to: "/search" }}
-              description="Paste your website or a competitor website to start tracking offer, CTA, headline, and form changes."
+              description="Paste your website or a competitor's — we scan their Meta ads and landing page, then email you the moment their offer, creative, or CTA changes."
+              sample={{ label: "See a sample brief", to: "/#demo" }}
               title="Add your first competitor"
             />
           )}

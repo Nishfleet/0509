@@ -95,7 +95,6 @@ export default function SharesRoute() {
     <DashboardPage>
       <section className="f9-app-stack">
         <DashboardPageHeader
-          action={{ label: "Open reports", to: "/app/reports" }}
           lead="Review and revoke snapshot or live-view links shared with clients or teammates."
           title="Shared links"
         />
@@ -106,8 +105,8 @@ export default function SharesRoute() {
 				<ActionFeedback data={actionData} intent="revoke-share" />
         {data.shares.length === 0 ? (
 					<EmptyState
-						action={{ label: "Open reports", to: "/app/reports" }}
-						description="Share a watchlist, collection, digest, or report and it will appear here so you can revoke it any time."
+						action={{ label: "Open competitors", to: "/app/watchlists" }}
+						description="Share a competitor, collection, or report from its own page and the link shows up here to revoke any time."
 						title="No active share links"
 					/>
         ) : (

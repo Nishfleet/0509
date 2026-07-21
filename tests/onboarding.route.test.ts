@@ -622,7 +622,7 @@ describe("onboarding route", () => {
       .fn()
       .mockResolvedValueOnce({
         id: "room-1",
-        name: "Client A Market Desk",
+        name: "Client A watch",
         clientLabel: "Client A",
         status: "active",
         resourceRefs: [],
@@ -630,7 +630,7 @@ describe("onboarding route", () => {
       })
       .mockResolvedValueOnce({
         id: "room-1",
-        name: "Client A Market Desk",
+        name: "Client A watch",
         clientLabel: "Client A",
         status: "active",
         resourceRefs: [
@@ -749,12 +749,12 @@ describe("onboarding route", () => {
       source: "market_desk_import",
     });
     expect(upsertClientRoom).toHaveBeenNthCalledWith(1, {}, "user-1", {
-      name: "Client A Market Desk",
+      name: "Client A watch",
       clientLabel: "Client A",
     });
     expect(upsertClientRoom).toHaveBeenNthCalledWith(2, {}, "user-1", {
       roomId: "room-1",
-      name: "Client A Market Desk",
+      name: "Client A watch",
       clientLabel: "Client A",
       status: "active",
       resourceRefs: [

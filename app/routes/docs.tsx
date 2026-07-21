@@ -23,7 +23,20 @@ export default function DocsRoute() {
       title="Five to Nine docs."
       intro="Task-focused guidance for finding one competitor, judging the proof, saving the work, and knowing what your plan actually includes. This documentation does not measure live provider availability."
     >
-      <PublicDocBlock title="Run a trustworthy first search">
+      <nav className="f9-doc-toc" aria-label="On this page">
+        <span className="f9-doc-toc-label">On this page</span>
+        <ul>
+          <li><a href="#first-search">Run a trustworthy first search</a></li>
+          <li><a href="#proof-labels">Understand the proof labels</a></li>
+          <li><a href="#troubleshoot">Troubleshoot empty or partial results</a></li>
+          <li><a href="#plan-boundaries">Plan boundaries</a></li>
+          <li><a href="#ai-agents">Use Five to Nine from AI agents</a></li>
+          <li><a href="#coverage-trust">Coverage and trust boundaries</a></li>
+          <li><a href="#key-docs">Key docs</a></li>
+        </ul>
+      </nav>
+
+      <PublicDocBlock id="first-search" title="Run a trustworthy first search">
         <ol className="f9-numbered-guide">
           <li>
             Open <Link to="/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com">the Nykaa search example</Link> or paste a competitor website into Search. Provider availability can vary.
@@ -34,7 +47,7 @@ export default function DocsRoute() {
         </ol>
       </PublicDocBlock>
 
-      <PublicDocBlock title="Understand the proof labels">
+      <PublicDocBlock id="proof-labels" title="Understand the proof labels">
         <dl className="proof-trail-list">
           <div>
             <dt>Verified</dt>
@@ -55,7 +68,7 @@ export default function DocsRoute() {
         </dl>
       </PublicDocBlock>
 
-      <PublicDocBlock title="Troubleshoot empty or partial results">
+      <PublicDocBlock id="troubleshoot" title="Troubleshoot empty or partial results">
         <p>
           No evidence is not proof that a competitor has no active ads. Coverage can be partial, delayed,
           cached, or unavailable. Try the brand name with the website, review broader candidates manually,
@@ -65,7 +78,7 @@ export default function DocsRoute() {
         </p>
       </PublicDocBlock>
 
-      <PublicDocBlock title="Plan boundaries">
+      <PublicDocBlock id="plan-boundaries" title="Plan boundaries">
         <p>These are documented plan entitlements, not a live availability guarantee; account and provider readiness still apply.</p>
         <ul className="f9-doc-list">
           <li>Free plan scope: watch one competitor with a weekly scheduled check and a weekly email brief. No collections, evidence checks, instant alerts, or manual refresh — paid plans add 3–6 hour checks and more competitors.</li>
@@ -76,7 +89,7 @@ export default function DocsRoute() {
         </ul>
       </PublicDocBlock>
 
-      <PublicDocBlock title="Use Five to Nine from Claude, ChatGPT, and AI agents">
+      <PublicDocBlock id="ai-agents" title="Use Five to Nine from Claude, ChatGPT, and AI agents">
         <p>
           Five to Nine speaks MCP (Model Context Protocol), so compatible assistants and agents can
           read your saved competitive evidence and run approved workspace actions. Connect a client
@@ -105,7 +118,7 @@ Authorization: Bearer f9_live_...`}</code>
         </p>
       </PublicDocBlock>
 
-      <PublicDocBlock title="Coverage and trust boundaries">
+      <PublicDocBlock id="coverage-trust" title="Coverage and trust boundaries">
         <ul className="f9-doc-list">
           <li>Do not infer spend, reach, impressions, ROAS, or a winning creative from public evidence.</li>
           <li>Broad unsupported-channel monitoring and automatic client sends are not offered.</li>
@@ -114,7 +127,7 @@ Authorization: Bearer f9_live_...`}</code>
         </ul>
       </PublicDocBlock>
 
-      <PublicDocBlock title="Key docs">
+      <PublicDocBlock id="key-docs" title="Key docs">
         <div className="f9-doc-link-grid">
           <Link to="/help">Help</Link>
           <Link to="/api/docs">API docs</Link>

@@ -7,6 +7,7 @@ import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboa
 import { ActionFeedback } from "~/components/action-feedback";
 import { ConfirmSubmitButton } from "~/components/confirm-button";
 import { LocalTime } from "~/components/local-time";
+import { LockedFeature } from "~/components/locked-feature";
 import { SubmitButton } from "~/components/submit-button";
 
 export const meta = () => [{ title: "Team | Five to Nine" }];
@@ -193,6 +194,16 @@ export default function TeamRoute() {
         )}
       </div>
 
+      {data.plan !== "agency" ? (
+        <LockedFeature
+          eyebrow="Team"
+          title="Invite your teammates"
+          reason="Share watchlists, collections, and briefs with teammates — billing stays with you"
+          planNeeded="Agency plan"
+          upgradeTo="/app/billing?source=team#plans"
+          headingLevel="h2"
+        />
+      ) : (
       <article className="f9-app-panel">
         <div className="f9-panel-toolbar">
           <div>
@@ -298,6 +309,7 @@ export default function TeamRoute() {
           </div>
         ) : null}
       </article>
+      )}
       </section>
     </DashboardPage>
   );

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const marketingRoute = readFileSync("app/routes/marketing.tsx", "utf8");
+const marketingNav = readFileSync("app/components/marketing-nav.tsx", "utf8");
 const brandWordmark = readFileSync("app/components/brand-wordmark.tsx", "utf8");
 const appCss = readFileSync("app/app.css", "utf8");
 const rootRoute = readFileSync("app/root.tsx", "utf8");
@@ -54,7 +55,7 @@ describe("marketing rebuild", () => {
   });
 
   it("labels public search as a coverage-qualified preview before account", () => {
-    expect(marketingRoute).toContain("Search preview");
+    expect(marketingNav).toContain("Search preview");
     expect(marketingRoute).toContain("Paste a competitor site — no account needed.");
     expect(marketingRoute).not.toContain("Provider coverage and freshness vary");
     expect(marketingRoute).not.toContain("Early access");
@@ -139,19 +140,20 @@ describe("marketing rebuild", () => {
   });
 
   it("uses the Five to Nine wordmark and icon-style CTA arrows", () => {
-    expect(marketingRoute).toContain("<BrandWordmark />");
+    expect(marketingRoute).toContain("<MarketingNav />");
+    expect(marketingNav).toContain("<BrandWordmark meta={MARKETING_TAGLINE} />");
     expect(brandWordmark).toContain("<span>five</span>");
     expect(brandWordmark).toContain('className="f9-wordmark-bridge">to</span>');
     expect(brandWordmark).toContain("<span>nine</span>");
     expect(marketingRoute).not.toContain("&gt;");
-    expect(marketingRoute).toContain('className="f9-link-arrow"');
+    expect(marketingNav).toContain('className="f9-link-arrow"');
   });
 
   it("keeps the public homepage focused on the customer pain", () => {
     expect(marketingRoute).toContain("Know when competitors change the offer.");
     expect(marketingRoute).toContain("Stop finding out after the sales call.");
-    expect(marketingRoute).toContain("Sample brief");
-    expect(marketingRoute).toContain("Sample Market Desk Brief");
+    expect(marketingNav).toContain("Sample brief");
+    expect(marketingRoute).toContain("Sample morning brief");
     expect(marketingRoute).toContain("Decision summary");
     expect(marketingRoute).toContain("Client-ready view");
     expect(marketingRoute).toContain("What changed");
@@ -267,10 +269,11 @@ describe("marketing rebuild", () => {
   });
 
   it("keeps the primary marketing destinations reachable on narrow screens", () => {
-    expect(marketingRoute).toContain('aria-label="Primary"');
-    expect(marketingRoute).toContain("Search preview");
-    expect(marketingRoute).toContain("Sample brief");
-    expect(marketingRoute).toContain("Pricing");
+    expect(marketingRoute).toContain("<MarketingNav />");
+    expect(marketingNav).toContain('aria-label="Primary"');
+    expect(marketingNav).toContain("Search preview");
+    expect(marketingNav).toContain("Sample brief");
+    expect(marketingNav).toContain("Pricing");
     expect(appCss).not.toContain(".ld-nav-links { display: none; }");
     expect(appCss).toContain("grid-column: 1 / -1");
     expect(appCss).toContain(".f9-home .ld-nav-links a");

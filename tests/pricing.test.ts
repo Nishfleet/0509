@@ -38,14 +38,14 @@ describe("pricingPlans", () => {
     expect(scout.features).toContain("10 Collections");
     expect(scout.features).toContain("6-hour scans");
     expect(scout.detail).toContain("6-hour competitor monitoring");
-    expect(scout.features).toContain("Weekly Digest");
+    expect(scout.features).toContain("Weekly Brief");
     expect(scout.features).not.toContain("Slack");
     expect(scout.features).toContain("50 checks/month");
     expect(starter.features).toContain("10 active watchlists");
     expect(starter.features).toContain("25 Collections");
     expect(starter.features).toContain("3-hour scans");
     expect(starter.detail).toContain("3-hour competitor monitoring");
-    expect(starter.features).toContain("Daily + weekly Digests");
+    expect(starter.features).toContain("Daily + weekly Briefs");
     expect(starter.features).toContain("Email Notifications");
     expect(starter.features).toContain("Exports");
     expect(starter.features).not.toContain("Slack");
@@ -64,7 +64,7 @@ describe("pricingPlans", () => {
     expect(agency.features).toContain("API + MCP access");
     expect(agency.features).toContain("Client reports");
     expect(agency.features).toContain("Shared report branding");
-    expect(agency.features.filter((feature) => feature === "Daily + weekly Digests")).toHaveLength(1);
+    expect(agency.features.filter((feature) => feature === "Daily + weekly Briefs")).toHaveLength(1);
     expect(agency.features.join("\n")).not.toContain("workspace-approved");
     expect(agency.features.join("\n")).not.toContain("nightly queue");
   });

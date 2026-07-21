@@ -147,7 +147,11 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         context.cloudflare?.ctx,
       );
       if (rateLimitResponse) throw rateLimitResponse;
-      return previewDodo0509PlanPrices({ env, request, trustProxyHeaders: false });
+      // Currency display only — resolve buyer country identically to the
+      // public /api/pricing-preview surface (default trustProxyHeaders: true)
+      // so in-app billing and the landing page never show ₹ vs $ for one
+      // browser. Auth-origin trust is pinned separately via BETTER_AUTH_URL.
+      return previewDodo0509PlanPrices({ env, request });
     })(),
   ]);
   const customerBilling = {
@@ -526,7 +530,7 @@ export default function BillingRoute() {
                   ) : isCurrentPlan ? (
                     <Pill state="healthy">Current tier</Pill>
                   ) : plan.slug === "starter" ? (
-                    <Pill>Recommended</Pill>
+                    <Pill state="recommended">Recommended</Pill>
                   ) : null}
                 </div>
                 <p>{plan.detail}</p>

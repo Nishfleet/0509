@@ -1929,6 +1929,14 @@ button[aria-busy="true"] {
   color: #087764;
 }
 
+/* WP-A4.2: green = live STATE fact; the recommendation nudge is an ink-filled
+   badge so the two never collide. --ink/--bone flip per theme, giving a
+   high-contrast inverted fill in both light and dark. */
+.f9-status-pill.is-recommended {
+  background: var(--ink);
+  color: var(--bone);
+}
+
 .f9-status-pill.is-needs_setup,
 .f9-status-pill.is-cache_only,
 .f9-status-pill.is-degraded,
@@ -2870,6 +2878,53 @@ button[aria-busy="true"] {
 .f9-legal-block h2 {
   margin: 0;
   font-size: 1.28rem;
+}
+
+/* WP-B4.2: in-page docs table of contents. Makes /docs read as docs, distinct
+   from /help. Pure-CSS jump links; no JS, no search index (docs search is a
+   separate part-(c) pass). Scoped to the docs shell — other legal pages that
+   do not render it are unaffected. */
+.f9-legal-page .f9-doc-toc {
+  border: 1px solid var(--f9-search-line);
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin: 0;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.f9-legal-page .f9-doc-toc-label {
+  display: block;
+  color: var(--ld-ink-soft, #55524a);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.f9-legal-page .f9-doc-toc ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 2px 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.f9-legal-page .f9-doc-toc a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 4px 0;
+  color: var(--ld-ink-soft, #55524a);
+  text-decoration: none;
+  border: 0;
+}
+
+.f9-legal-page .f9-doc-toc a:hover,
+.f9-legal-page .f9-doc-toc a:focus-visible {
+  color: var(--ld-ink, #0e0d0a);
+  text-decoration: underline;
 }
 
 @media (max-width: 980px) {
@@ -3917,8 +3972,10 @@ one signal-green accent.
   font-size: 0.68rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  background: var(--ld-green);
-  color: var(--ld-ink);
+  /* WP-A4.2: recommendation nudge is ink-filled, not green. Green stays for
+     live-state facts only; the card's own green outline marks the pick. */
+  background: var(--ld-ink);
+  color: var(--ld-bone);
   padding: 3px 9px;
   align-self: flex-start;
   font-weight: 600;
@@ -4135,6 +4192,17 @@ one signal-green accent.
   color: var(--ld-ink);
 }
 
+/* WP-B4.1: the FAQ was a single left-pinned column that left a wide empty
+   band on desktop. Flow the Q&A into two balanced columns at wide widths so
+   the section fills its horizontal space; it collapses back to one column on
+   narrow screens. Landing is light-only; no theme fork needed. */
+@media (min-width: 900px) {
+  .ld-pricing-faq .proof-trail-list {
+    grid-template-columns: 1fr 1fr;
+    column-gap: clamp(32px, 4vw, 56px);
+  }
+}
+
 .ld-bundle-card strong {
   font-family: var(--ld-mono);
   font-size: 1rem;
@@ -4290,22 +4358,36 @@ one signal-green accent.
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 10px;
-    padding: 18px 20px;
+    padding: 14px 20px;
+  }
+
+  /* The compact nav column is too narrow for the wordmark tagline, which wraps
+     to two lines and pushes the hero's primary action below the fold. Drop the
+     decorative tagline here; the wordmark still identifies the brand and the
+     roomy desktop nav keeps the full line. */
+  .ld-nav .f9-brand-wordmark-shell small {
+    display: none;
   }
 
   .ld-nav-links {
     display: flex;
     grid-column: 1 / -1;
     justify-content: space-between;
-    gap: 8px;
+    gap: 4px;
     border-top: 1px solid color-mix(in srgb, var(--ld-ink) 22%, transparent);
     padding-top: 8px;
     font-size: 0.82rem;
   }
 
+  /* Every link in the compact nav row stays a real ≥44px touch target
+     (the short "Help"/"Docs" links would otherwise be ~35px wide). */
+  .ld-nav-links a {
+    min-width: 46px;
+  }
+
   .f9-home .ld-nav-links a {
     justify-content: center;
-    min-width: 0;
+    min-width: 46px;
     padding-inline: 4px;
     text-align: center;
   }
@@ -5408,6 +5490,30 @@ one signal-green accent.
   text-align: center;
   justify-items: center;
   padding: 28px 24px;
+}
+
+/* WP-B2: primary + optional "see a sample" actions share one centred row. */
+.f9-empty-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* WP-B1: one neutral plan gate. Never red — red stays for errors/deletions.
+   Bone panel with a single upgrade CTA so a gate is never a dead end. */
+.f9-locked-feature {
+  display: grid;
+  gap: 12px;
+  max-width: 560px;
+}
+
+.f9-locked-feature-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 4px;
 }
 
 /* WP-17 icon set: quiet document glyph atop panel empty states. */
@@ -6751,6 +6857,84 @@ one signal-green accent.
   display: grid;
   gap: 18px;
   padding: 24px;
+}
+
+/* WP-B3: setup checklist demoted to a compact one-card progress strip.
+   Collapsed by default; the <details> disclosure expands the item list
+   with no JS and stays keyboard-accessible. */
+.f9-setup-strip {
+  padding: 14px 18px;
+}
+
+.f9-setup-strip > .f9-work-list {
+  margin-top: 14px;
+}
+
+.f9-setup-strip-summary {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.f9-setup-strip-summary::-webkit-details-marker {
+  display: none;
+}
+
+.f9-setup-strip-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.f9-setup-strip-head strong {
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.f9-setup-strip-bar {
+  flex: 1 1 auto;
+  height: 6px;
+  min-width: 60px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.f9-setup-strip-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--green, #1f8a5b);
+}
+
+.f9-setup-strip-toggle {
+  flex: 0 0 auto;
+  color: var(--f9-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.f9-setup-strip[open] .f9-setup-strip-toggle::after {
+  content: " ▲";
+}
+
+.f9-setup-strip:not([open]) .f9-setup-strip-toggle::after {
+  content: " ▾";
+}
+
+@media (max-width: 640px) {
+  .f9-setup-strip-summary {
+    flex-wrap: wrap;
+  }
+
+  .f9-setup-strip-bar {
+    order: 3;
+    flex-basis: 100%;
+  }
 }
 
 .f9-dashboard-hero h1 {

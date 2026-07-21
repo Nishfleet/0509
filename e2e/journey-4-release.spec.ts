@@ -439,8 +439,16 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
       await starterPage.goto("/app/reports/watchlist:e2e-watchlist-starter-1");
       await expect(
         starterPage.getByRole("heading", {
-          name: "Reports are included in the Agency plan.",
+          level: 1,
+          name: "Client-ready reports",
+          exact: true,
         }),
+      ).toBeVisible();
+      await expect(
+        starterPage.getByText(
+          "Open client-ready reports and share the evidence with your team — included in the Agency plan.",
+          { exact: true },
+        ),
       ).toBeVisible();
       await expect(
         starterPage.getByRole("link", { name: "Upgrade to Agency" }),
@@ -506,8 +514,19 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
       await starterPage.goto("/app/clients");
       await expect(
         starterPage.getByRole("heading", {
-          name: "Client rooms are an Agency feature.",
+          level: 2,
+          name: "Client rooms",
+          exact: true,
         }),
+      ).toBeVisible();
+      await expect(
+        starterPage.getByText(
+          "Keep watchlists, collections, reports, and client context together for agency delivery — included in the Agency plan.",
+          { exact: true },
+        ),
+      ).toBeVisible();
+      await expect(
+        starterPage.getByRole("link", { name: "Upgrade to Agency" }),
       ).toBeVisible();
       await expect(
         starterPage.getByText("Existing rooms remain available below.", {

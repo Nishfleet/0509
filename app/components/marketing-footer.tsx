@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 
 import { BrandWordmark } from "~/components/brand-wordmark";
+import { MARKETING_TAGLINE } from "~/components/marketing-nav";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 export const BRAND_ORIGIN_LINE =
@@ -15,7 +16,7 @@ export function MarketingFooter() {
   return (
     <footer className="ld-footer">
       <Link className="ld-footer-brand" to="/" aria-label="Five to Nine home">
-        <BrandWordmark meta="Market intelligence" />
+        <BrandWordmark meta={MARKETING_TAGLINE} />
       </Link>
       <p>
         Five to Nine helps teams see competitor offer and landing-page changes before the next

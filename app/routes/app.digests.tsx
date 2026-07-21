@@ -287,11 +287,7 @@ export default function DigestsRoute() {
                 );
               })}
               {data.digests.length === 0 ? (
-                <EmptyState
-                  description="Track a competitor and briefs land here after each monitoring run — movement and all-quiet periods alike."
-                  headingLevel="h3"
-                  title="Your first brief appears after monitoring runs"
-                />
+                <EmptyState title="No briefs yet" variant="inline" />
               ) : null}
             </div>
           </article>
@@ -503,9 +499,10 @@ export default function DigestsRoute() {
               </>
             ) : (
               <EmptyState
-                action={{ label: "Open watchlists", to: "/app/watchlists" }}
-                description="Brief history will show both competitor movement and all-quiet periods."
-                title="Your first brief appears after monitoring runs"
+                action={{ label: "Add competitor", to: "/app/watchlists" }}
+                description="Add a competitor and we file a brief after each check — the moves worth acting on, and an honest 'all quiet' when nothing changed."
+                sample={{ label: "See a sample brief", to: "/#demo" }}
+                title="Your first brief lands after the first scan"
               />
             )}
           </article>
