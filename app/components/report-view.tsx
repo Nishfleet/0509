@@ -1,5 +1,6 @@
 import type { ReportDocument } from "~/lib/report";
 import { EmptyState } from "~/components/empty-state";
+import { Pill } from "~/components/pill";
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
 import { safeInsightDepthSummary } from "~/lib/insight-depth";
 import { formatAdvertiserLabel } from "~/lib/landing-page-display";
@@ -174,8 +175,8 @@ function ReportRowCard({ row }: { row: ReportDocument["rows"][number] }) {
           {subheading ? <p className="f9-muted-copy">{subheading}</p> : null}
         </div>
         <div className="report-card-meta">
-          {languageLabel ? <span className="f9-status-pill">{languageLabel}</span> : null}
-          {row.event ? <span className="f9-status-pill">{row.event.typeLabel}</span> : null}
+          {languageLabel ? <Pill>{languageLabel}</Pill> : null}
+          {row.event ? <Pill>{row.event.typeLabel}</Pill> : null}
         </div>
       </div>
 
@@ -260,9 +261,7 @@ function ReportRowCard({ row }: { row: ReportDocument["rows"][number] }) {
               {row.tags.length > 0 ? (
                 <div className="report-tag-list">
                   {row.tags.map((tag) => (
-                    <span className="f9-status-pill" key={tag}>
-                      {tag}
-                    </span>
+                    <Pill key={tag}>{tag}</Pill>
                   ))}
                 </div>
               ) : null}

@@ -6,6 +6,7 @@ import { AdLongevityPill } from "~/components/ad-longevity-pill";
 import { AdThumb } from "~/components/ad-thumb";
 import { BrandWordmark } from "~/components/brand-wordmark";
 import { LocalTime } from "~/components/local-time";
+import { Pill } from "~/components/pill";
 import { ReportView } from "~/components/report-view";
 import { ShareBrandIdentity } from "~/components/share-brand-identity";
 import { DigestIntelligence, DigestMovementSummary, DigestProofPacket } from "~/components/digest-intelligence";
@@ -271,7 +272,7 @@ export default function ShareRoute() {
                       <p className="f9-app-kicker">{item.watchlistName}</p>
                       <h3>{item.title}</h3>
                     </div>
-                    <span className="f9-status-pill">{formatWatchEventTypeLabel(item.eventType)}</span>
+                    <Pill>{formatWatchEventTypeLabel(item.eventType)}</Pill>
                   </div>
                   <p>{item.summary}</p>
                   <DigestIntelligence metadata={item.metadata ?? {}} proofStatus={item.proofStatus} />

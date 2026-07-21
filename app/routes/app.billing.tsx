@@ -3,6 +3,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import type { ReactNode } from "react";
 
 import { CheckoutReturnNotice } from "~/components/checkout-return-notice";
+import { Pill } from "~/components/pill";
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { LocalTime } from "~/components/local-time";
@@ -521,11 +522,11 @@ export default function BillingRoute() {
                     )}
                   </div>
                   {isCurrentBillingChoice ? (
-                    <span className="f9-status-pill is-healthy">Current plan</span>
+                    <Pill state="healthy">Current plan</Pill>
                   ) : isCurrentPlan ? (
-                    <span className="f9-status-pill is-healthy">Current tier</span>
+                    <Pill state="healthy">Current tier</Pill>
                   ) : plan.slug === "starter" ? (
-                    <span className="f9-status-pill">Recommended</span>
+                    <Pill>Recommended</Pill>
                   ) : null}
                 </div>
                 <p>{plan.detail}</p>

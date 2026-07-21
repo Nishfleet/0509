@@ -5,6 +5,7 @@ import { useState } from "react";
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { ActionFeedback } from "~/components/action-feedback";
+import { Pill } from "~/components/pill";
 import { AccountBrandingForm } from "~/components/account-branding-form";
 import { ConfirmSubmitButton } from "~/components/confirm-button";
 import { EmptyState } from "~/components/empty-state";
@@ -633,7 +634,7 @@ export default function AccountRoute() {
                   <span>{formatSessionLocation(session.ipAddress, session.userAgent)}</span>
                 </div>
                 {session.isCurrent ? (
-                  <span className="f9-status-pill is-healthy">Current</span>
+                  <Pill state="healthy">Current</Pill>
                 ) : (
                   <Form method="post">
                     <input name="intent" type="hidden" value="revoke-session" />
