@@ -2905,15 +2905,17 @@ button[aria-busy="true"] {
 .f9-legal-page .f9-doc-toc ul {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 4px 24px;
+  gap: 2px 24px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .f9-legal-page .f9-doc-toc a {
-  display: inline-block;
-  padding: 3px 0;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 4px 0;
   color: var(--ld-ink-soft, #55524a);
   text-decoration: none;
   border: 0;
@@ -4356,22 +4358,36 @@ one signal-green accent.
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 10px;
-    padding: 18px 20px;
+    padding: 14px 20px;
+  }
+
+  /* The compact nav column is too narrow for the wordmark tagline, which wraps
+     to two lines and pushes the hero's primary action below the fold. Drop the
+     decorative tagline here; the wordmark still identifies the brand and the
+     roomy desktop nav keeps the full line. */
+  .ld-nav .f9-brand-wordmark-shell small {
+    display: none;
   }
 
   .ld-nav-links {
     display: flex;
     grid-column: 1 / -1;
     justify-content: space-between;
-    gap: 8px;
+    gap: 4px;
     border-top: 1px solid color-mix(in srgb, var(--ld-ink) 22%, transparent);
     padding-top: 8px;
     font-size: 0.82rem;
   }
 
+  /* Every link in the compact nav row stays a real ≥44px touch target
+     (the short "Help"/"Docs" links would otherwise be ~35px wide). */
+  .ld-nav-links a {
+    min-width: 46px;
+  }
+
   .f9-home .ld-nav-links a {
     justify-content: center;
-    min-width: 0;
+    min-width: 46px;
     padding-inline: 4px;
     text-align: center;
   }
