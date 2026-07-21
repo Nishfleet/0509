@@ -81,6 +81,59 @@ function gateBManifest(artifacts: Array<{ name: string; bytes: number; sha256: s
   };
 }
 
+function passingGateCJournal() {
+  return {
+    schemaVersion: 1,
+    workerVersionId: WORKER_VERSION,
+    searchRolloutMode: "shadow",
+    status: "passed",
+    errors: [],
+    steps: Object.fromEntries(
+      [
+        "identity_pre",
+        "backup_lifecycle",
+        "pricing",
+        "billing",
+        "proof_email",
+        "production_meta",
+        "proof_cleanup",
+        "identity_post",
+      ].map((step) => [step, { status: "passed" }]),
+    ),
+  };
+}
+
+// Writes the non-manifest soak evidence (wrangler, valid rollback, gate-C) and a
+// journal bound to an already-written readiness manifest. Returns the journal.
+function writeBoundSoakEvidence(paths: {
+  readiness: string;
+  wrangler: string;
+  gateC: string;
+  rollback: string;
+  evidence: string;
+}) {
+  writeFileSync(
+    resolve(paths.wrangler),
+    `${JSON.stringify({ type: "deploy", version: 1, version_id: WORKER_VERSION })}\n`,
+    { mode: 0o600 },
+  );
+  chmodSync(resolve(paths.wrangler), 0o600);
+  privateJson(resolve(paths.rollback), validRollbackTarget());
+  privateJson(resolve(paths.gateC), passingGateCJournal());
+  const journal = buildRunningSoakJournal({
+    manifestPath: paths.readiness,
+    wranglerOutputPath: paths.wrangler,
+    gateCPath: paths.gateC,
+    rollbackTargetPath: paths.rollback,
+    now: STARTED_AT,
+    headCommit: HEAD,
+    deploymentWorkflowRunId: DEPLOY_RUN_ID,
+    deploymentWorkflowRunAttempt: DEPLOY_RUN_ATTEMPT,
+  });
+  privateJson(resolve(paths.evidence), journal);
+  return journal;
+}
+
 function fixture() {
   mkdirSync(resolve("test-results"), { recursive: true });
   const root = mkdtempSync(resolve("test-results", "gate-c-soak-test-"));
@@ -88,6 +141,8 @@ function fixture() {
   const manifest = resolve(root, "manifest.json");
   const wrangler = resolve(root, "wrangler.jsonl");
   const gateC = resolve(root, "gate-c.json");
+  const rollback = resolve(root, "worker-rollback-target.json");
+  privateJson(rollback, validRollbackTarget());
   privateJson(manifest, {
     schemaVersion: 3,
     status: "passed",
@@ -132,6 +187,7 @@ function fixture() {
       manifestPath: repoRelative(manifest),
       wranglerOutputPath: repoRelative(wrangler),
       gateCPath: repoRelative(gateC),
+      rollbackTargetPath: repoRelative(rollback),
       now: STARTED_AT,
       headCommit: HEAD,
       deploymentWorkflowRunId: DEPLOY_RUN_ID,
@@ -510,8 +566,12 @@ describe("Gate C scheduled-work soak journal", () => {
     mkdirSync(resolve(dirname(artifact)), { recursive: true });
     const artifactRecord = writeGateBArtifact(artifact, `${JSON.stringify({ status: "passed" })}\n`);
     privateJson(resolve(manifest), gateBManifest([artifactRecord]));
+    // The separate deploy-readiness file is also a manifest in the set; it
+    // declares no additional artifacts here.
+    privateJson(resolve(readiness), gateBManifest([]));
     writeFileSync(resolve(wrangler), `${JSON.stringify({ type: "deploy", version: 1, version_id: WORKER_VERSION })}\n`, { mode: 0o600 });
     chmodSync(resolve(wrangler), 0o600);
+    privateJson(resolve(rollback), validRollbackTarget());
     privateJson(resolve(gateC), {
       schemaVersion: 1,
       workerVersionId: WORKER_VERSION,
@@ -533,14 +593,13 @@ describe("Gate C scheduled-work soak journal", () => {
       manifestPath: manifest,
       wranglerOutputPath: wrangler,
       gateCPath: gateC,
+      rollbackTargetPath: rollback,
       now: STARTED_AT,
       headCommit: HEAD,
       deploymentWorkflowRunId: DEPLOY_RUN_ID,
       deploymentWorkflowRunAttempt: DEPLOY_RUN_ATTEMPT,
     });
     privateJson(resolve(evidence), journal);
-    privateJson(resolve(readiness), { status: "passed" });
-    privateJson(resolve(rollback), validRollbackTarget());
 
     createReleaseEvidenceArchive({ archivePath: archive, evidencePaths });
     chmodSync(resolve(archive), 0o644);
@@ -602,12 +661,14 @@ describe("Gate C scheduled-work soak journal", () => {
         "identity_post",
       ].map((step) => [step, { status: "passed" }])),
     });
+    privateJson(resolve(rollback), validRollbackTarget());
     // Journal binds the gate-b manifest to the deploy-readiness path, exactly as
     // the deploy pipeline does (gate-c-soak start --manifest <deploy-readiness>).
     const journal = buildRunningSoakJournal({
       manifestPath: readiness,
       wranglerOutputPath: wrangler,
       gateCPath: gateC,
+      rollbackTargetPath: rollback,
       now: STARTED_AT,
       headCommit: HEAD,
       deploymentWorkflowRunId: DEPLOY_RUN_ID,
@@ -615,7 +676,6 @@ describe("Gate C scheduled-work soak journal", () => {
     });
     expect(journal.candidate.gateBManifestPath).toBe(readiness);
     privateJson(resolve(evidence), journal);
-    privateJson(resolve(rollback), validRollbackTarget());
 
     // Under the old code this threw release_evidence_set_incomplete.
     const created = createReleaseEvidenceArchive({ archivePath: archive, evidencePaths });
@@ -647,6 +707,7 @@ describe("Gate C scheduled-work soak journal", () => {
     privateJson(resolve(readiness), gateBManifest([artifactRecord]));
     writeFileSync(resolve(wrangler), `${JSON.stringify({ type: "deploy", version: 1, version_id: WORKER_VERSION })}\n`, { mode: 0o600 });
     chmodSync(resolve(wrangler), 0o600);
+    privateJson(resolve(rollback), validRollbackTarget());
     privateJson(resolve(gateC), {
       schemaVersion: 1,
       workerVersionId: WORKER_VERSION,
@@ -668,13 +729,13 @@ describe("Gate C scheduled-work soak journal", () => {
       manifestPath: readiness,
       wranglerOutputPath: wrangler,
       gateCPath: gateC,
+      rollbackTargetPath: rollback,
       now: STARTED_AT,
       headCommit: HEAD,
       deploymentWorkflowRunId: DEPLOY_RUN_ID,
       deploymentWorkflowRunAttempt: DEPLOY_RUN_ATTEMPT,
     });
     privateJson(resolve(evidence), journal);
-    privateJson(resolve(rollback), validRollbackTarget());
 
     // Tamper: append one byte to the Gate-B artifact AFTER the manifest recorded
     // its original hash. The manifest stays hash-bound to the journal, so the
@@ -710,6 +771,11 @@ describe("Gate C scheduled-work soak journal", () => {
     privateJson(resolve(readiness), gateBManifest([artifactRecord]));
     writeFileSync(resolve(wrangler), `${JSON.stringify({ type: "deploy", version: 1, version_id: WORKER_VERSION })}\n`, { mode: 0o600 });
     chmodSync(resolve(wrangler), 0o600);
+    // Rollback target points at the SAME version that was just deployed — a
+    // useless rollback that existence-only checks would have archived anyway.
+    // It is still journal-bound (path + sha256), so this reaches the content
+    // validation rather than the binding check.
+    privateJson(resolve(rollback), { ...validRollbackTarget(), versionId: WORKER_VERSION });
     privateJson(resolve(gateC), {
       schemaVersion: 1,
       workerVersionId: WORKER_VERSION,
@@ -731,18 +797,126 @@ describe("Gate C scheduled-work soak journal", () => {
       manifestPath: readiness,
       wranglerOutputPath: wrangler,
       gateCPath: gateC,
+      rollbackTargetPath: rollback,
       now: STARTED_AT,
       headCommit: HEAD,
       deploymentWorkflowRunId: DEPLOY_RUN_ID,
       deploymentWorkflowRunAttempt: DEPLOY_RUN_ATTEMPT,
     });
     privateJson(resolve(evidence), journal);
-    // Rollback target points at the SAME version that was just deployed — a
-    // useless rollback that existence-only checks would have archived anyway.
-    privateJson(resolve(rollback), { ...validRollbackTarget(), versionId: WORKER_VERSION });
 
     expect(() => createReleaseEvidenceArchive({ archivePath: archive, evidencePaths }))
       .toThrow("release_evidence_rollback_target_integrity");
+  });
+
+  it("create rejects an archive that omits a manifest-declared artifact (would be unrestorable)", () => {
+    mkdirSync(resolve("test-results"), { recursive: true });
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const readiness = `test-results/deploy-readiness-${suffix}.json`;
+    const wrangler = `test-results/wrangler-deploy-output-${suffix}.jsonl`;
+    const gateC = `test-results/gate-c-${suffix}.json`;
+    const evidence = `test-results/production-soak-${suffix}.json`;
+    const rollback = `test-results/worker-rollback-target-${suffix}.json`;
+    const artifact1 = `test-results/gate-b-artifacts/${suffix}-1.json`;
+    const artifact2 = `test-results/gate-b-artifacts/${suffix}-2.json`;
+    const archive = `test-results/production-release-evidence-${"1".repeat(40)}-201-1.tar.gz`;
+    roots.push(
+      ...[readiness, wrangler, gateC, evidence, rollback, artifact1, artifact2].map((p) => resolve(p)),
+      resolve(archive),
+    );
+    mkdirSync(resolve(dirname(artifact1)), { recursive: true });
+    const rec1 = writeGateBArtifact(artifact1, `${JSON.stringify({ a: 1 })}\n`);
+    const rec2 = writeGateBArtifact(artifact2, `${JSON.stringify({ a: 2 })}\n`);
+    // Manifest declares BOTH artifacts; both exist on disk.
+    privateJson(resolve(readiness), gateBManifest([rec1, rec2]));
+    writeBoundSoakEvidence({ readiness, wrangler, gateC, rollback, evidence });
+
+    // Archive membership omits artifact2 — on-disk validation would pass, but the
+    // archive would be unrestorable. Membership check must catch it at create.
+    const evidencePaths = [readiness, wrangler, gateC, evidence, rollback, artifact1];
+    expect(() => createReleaseEvidenceArchive({ archivePath: archive, evidencePaths }))
+      .toThrow("release_evidence_artifact_membership_mismatch");
+  });
+
+  it("rejects an undeclared gate-b-artifacts file riding along in the archive", () => {
+    mkdirSync(resolve("test-results"), { recursive: true });
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const readiness = `test-results/deploy-readiness-${suffix}.json`;
+    const wrangler = `test-results/wrangler-deploy-output-${suffix}.jsonl`;
+    const gateC = `test-results/gate-c-${suffix}.json`;
+    const evidence = `test-results/production-soak-${suffix}.json`;
+    const rollback = `test-results/worker-rollback-target-${suffix}.json`;
+    const artifact1 = `test-results/gate-b-artifacts/${suffix}-1.json`;
+    const undeclared = `test-results/gate-b-artifacts/${suffix}-stowaway.json`;
+    const archive = `test-results/production-release-evidence-${"2".repeat(40)}-202-1.tar.gz`;
+    roots.push(
+      ...[readiness, wrangler, gateC, evidence, rollback, artifact1, undeclared].map((p) => resolve(p)),
+      resolve(archive),
+    );
+    mkdirSync(resolve(dirname(artifact1)), { recursive: true });
+    const rec1 = writeGateBArtifact(artifact1, `${JSON.stringify({ a: 1 })}\n`);
+    writeGateBArtifact(undeclared, `${JSON.stringify({ stowaway: true })}\n`);
+    // Manifest declares only artifact1, but an undeclared file is in the archive.
+    privateJson(resolve(readiness), gateBManifest([rec1]));
+    writeBoundSoakEvidence({ readiness, wrangler, gateC, rollback, evidence });
+
+    const evidencePaths = [readiness, wrangler, gateC, evidence, rollback, artifact1, undeclared];
+    expect(() => createReleaseEvidenceArchive({ archivePath: archive, evidencePaths }))
+      .toThrow("release_evidence_artifact_membership_mismatch");
+  });
+
+  it("validates EVERY archived manifest — a tampered auxiliary cross-browser artifact is caught", () => {
+    mkdirSync(resolve("test-results"), { recursive: true });
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const readiness = `test-results/deploy-readiness-${suffix}.json`;
+    // A cross-browser diagnostic manifest (deploy-readiness-<project>) also
+    // matches the manifest pattern and declares its own artifact subtree.
+    const auxManifest = `test-results/deploy-readiness-local-release-firefox-${suffix}.json`;
+    const wrangler = `test-results/wrangler-deploy-output-${suffix}.jsonl`;
+    const gateC = `test-results/gate-c-${suffix}.json`;
+    const evidence = `test-results/production-soak-${suffix}.json`;
+    const rollback = `test-results/worker-rollback-target-${suffix}.json`;
+    const artifact1 = `test-results/gate-b-artifacts/${suffix}-authoritative.json`;
+    const artifact2 = `test-results/gate-b-artifacts/${suffix}-firefox.json`;
+    const archive = `test-results/production-release-evidence-${"3".repeat(40)}-203-1.tar.gz`;
+    const evidencePaths = [readiness, auxManifest, wrangler, gateC, evidence, rollback, artifact1, artifact2];
+    roots.push(...evidencePaths.map((p) => resolve(p)), resolve(archive));
+    mkdirSync(resolve(dirname(artifact1)), { recursive: true });
+    const rec1 = writeGateBArtifact(artifact1, `${JSON.stringify({ a: 1 })}\n`);
+    const rec2 = writeGateBArtifact(artifact2, `${JSON.stringify({ a: 2 })}\n`);
+    privateJson(resolve(readiness), gateBManifest([rec1]));
+    privateJson(resolve(auxManifest), gateBManifest([rec2]));
+    writeBoundSoakEvidence({ readiness, wrangler, gateC, rollback, evidence });
+
+    // Tamper the auxiliary manifest's artifact — only caught if aux manifests
+    // are validated too, not just the journal-bound authoritative one.
+    appendFileSync(resolve(artifact2), "x");
+    expect(() => createReleaseEvidenceArchive({ archivePath: archive, evidencePaths }))
+      .toThrow("release_evidence_artifact_integrity");
+  });
+
+  it("rejects a duplicate worker-rollback-target file", () => {
+    mkdirSync(resolve("test-results"), { recursive: true });
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const readiness = `test-results/deploy-readiness-${suffix}.json`;
+    const wrangler = `test-results/wrangler-deploy-output-${suffix}.jsonl`;
+    const gateC = `test-results/gate-c-${suffix}.json`;
+    const evidence = `test-results/production-soak-${suffix}.json`;
+    const rollback = `test-results/worker-rollback-target-${suffix}.json`;
+    const rollbackDuplicate = `test-results/worker-rollback-target-${suffix}-extra.json`;
+    const artifact = `test-results/gate-b-artifacts/${suffix}.json`;
+    const archive = `test-results/production-release-evidence-${"4".repeat(40)}-204-1.tar.gz`;
+    const evidencePaths = [readiness, wrangler, gateC, evidence, rollback, rollbackDuplicate, artifact];
+    roots.push(...evidencePaths.map((p) => resolve(p)), resolve(archive));
+    mkdirSync(resolve(dirname(artifact)), { recursive: true });
+    const rec = writeGateBArtifact(artifact, `${JSON.stringify({ status: "passed" })}\n`);
+    privateJson(resolve(readiness), gateBManifest([rec]));
+    writeBoundSoakEvidence({ readiness, wrangler, gateC, rollback, evidence });
+    // A second, unbound rollback file that the journal does not reference.
+    privateJson(resolve(rollbackDuplicate), validRollbackTarget());
+
+    expect(() => createReleaseEvidenceArchive({ archivePath: archive, evidencePaths }))
+      .toThrow("release_evidence_rollback_target_binding_invalid");
   });
 
   it("rejects a nonempty but incomplete allowed evidence archive", () => {

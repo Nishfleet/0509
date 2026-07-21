@@ -260,6 +260,8 @@ describe("production deployment readiness gate", () => {
         "test-results/deploy-readiness-test.json",
         "--wrangler-output",
         wranglerOutputPath,
+        "--rollback-target",
+        "test-results/worker-rollback-target.json",
       ]),
     });
     expect(plan[canaryIndex + 3]).toMatchObject({

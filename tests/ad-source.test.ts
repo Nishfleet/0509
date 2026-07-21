@@ -8,6 +8,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.useRealTimers();
   vi.doUnmock("cloudflare:workers");
   delete (globalThis as { __APP_REQUEST_ENV__?: unknown }).__APP_REQUEST_ENV__;
   delete (globalThis as { __0509InFlightDiscovery__?: unknown }).__0509InFlightDiscovery__;
@@ -730,6 +731,10 @@ describe("searchAdsViaSourceResolver", () => {
   });
 
   it("re-scrapes a stale zero-result shared cache entry scraped before the advertiser-fix cutoff", async () => {
+    // Frozen just past the cutoff so the fixed pre-cutoff fetchedAt and the
+    // acceptance window stay deterministic forever (no calendar drift).
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-21T12:00:00.000Z"));
     // A watchlist scan cached 0 ads during the broken-advertiser-filter era
     // (fetched before STALE_ZERO_RESULT_CUTOFF). The generous acceptance window
     // isolates the cutoff logic from the age check: without the fix this entry
@@ -838,6 +843,10 @@ describe("searchAdsViaSourceResolver", () => {
   });
 
   it("still serves a within-window non-zero shared cache entry scraped before the cutoff (unaffected)", async () => {
+    // Frozen just past the cutoff so the fixed pre-cutoff fetchedAt and the
+    // acceptance window stay deterministic forever (no calendar drift).
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-21T12:00:00.000Z"));
     // Guardrail: the cutoff only expires ZERO-result entries. A non-zero entry
     // genuinely fetched before the cutoff stays a healthy forceLive shared hit.
     // Use a FIXED pre-cutoff timestamp (not Date.now()-offset, which would land
@@ -1143,8 +1152,13 @@ describe("searchAdsViaSourceResolver", () => {
   });
 
   it("hasFreshDiscoveryCacheEntry treats a pre-fix advertiser zero as NOT fresh, keyword zero stays fresh", async () => {
+    // Frozen just past the cutoff so the future expiresAt (keyword-fresh) never
+    // drifts into the past on a later calendar day.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-21T12:00:00.000Z"));
     const getDiscoveryCacheEntry = vi.fn().mockResolvedValue(
-      // Unexpired so, without the fix, it would be reported fresh.
+      // Unexpired relative to the frozen clock, so without the fix it would be
+      // reported fresh.
       staleAdvertiserZeroEntry({ expiresAt: "2026-07-22T12:00:00.000Z" }),
     );
     vi.doMock("~/lib/data.server", () => ({
