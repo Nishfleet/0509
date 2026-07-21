@@ -36,11 +36,14 @@ export const RELEASE_ARTIFACT_STATE_MATRIX = Object.freeze({
   }),
   "onboarding → search → credible proof": Object.freeze({ prefix: "j2-proof", states: Object.freeze(["onboard", "invalid", "empty", "degraded", "proof"]) }),
   "onboarding → watchlist → first scan state": Object.freeze({ prefix: "j2-activation", states: Object.freeze(["onboard", "activation-paused"]) }),
+  "first-run-beat-1-empty-free": Object.freeze({ prefix: "j2-first-run-beat-1", states: Object.freeze(["first-run-empty-free"]) }),
   "monitoring-proof-freshness-delivery": Object.freeze({ prefix: "j3-monitoring", states: Object.freeze(["monitoring"]) }),
   "digest-notifications-accessibility": Object.freeze({ prefix: "j3-digest", states: Object.freeze(["digest-notifications"]) }),
   "empty-gated-recovery-before-delivery": Object.freeze({ prefix: "j3-gated", states: Object.freeze(["empty-gated-recovery"]) }),
   "preseeded-empty-and-recovered-monitoring-states": Object.freeze({ prefix: "j3-preseeded", states: Object.freeze(["empty-recovered"]) }),
   "owner-member-delivery-privacy": Object.freeze({ prefix: "j3-privacy", states: Object.freeze(["owner-member-privacy"]) }),
+  "first-run-wait-arc-and-free-capacity": Object.freeze({ prefix: "j3-first-run-wait", states: Object.freeze(["first-run-wait"]) }),
+  "first-brief-front-page-and-cadence": Object.freeze({ prefix: "j3-first-brief", states: Object.freeze(["first-brief-front-page"]) }),
   "report-proof-freshness-client-readable": Object.freeze({ prefix: "j4-report", states: Object.freeze(["report-proof"]) }),
   "export-share-plan-truth": Object.freeze({ prefix: "j4-export", states: Object.freeze(["export-share-gate"]) }),
   "client-room-empty-gated-delivery": Object.freeze({ prefix: "j4-clients", states: Object.freeze(["empty-gated-room"]) }),
@@ -73,35 +76,45 @@ export const RELEASE_COVERAGE_MATRIX = Object.freeze({
     viewport,
     finalUrl: { exact: "/auth/signup?redirectTo=%2Fapp%2Fonboard%3Fwebsite%3Dnykaa.com" },
   })),
-  2: RELEASE_COVERAGE_VIEWPORTS.flatMap((viewport) => [
-    {
-      sourceFile: "journey-2-release.spec.ts",
-      persona: "e2e-free",
-      scenario: "onboarding → search → credible proof",
-      viewport,
-      finalUrl: {
-        pathname: "/search",
-        search: {
-          mode: "advertiser",
-          query: "nykaa.com",
-          country: "all",
-          platform: "all",
-          creativeType: "all",
-          status: "all",
-          website: "nykaa.com",
-          trackingRole: "competitor",
-          selected: "e2e-nykaa-live-1",
+  2: [
+    ...RELEASE_COVERAGE_VIEWPORTS.flatMap((viewport) => [
+      {
+        sourceFile: "journey-2-release.spec.ts",
+        persona: "e2e-free",
+        scenario: "onboarding → search → credible proof",
+        viewport,
+        finalUrl: {
+          pathname: "/search",
+          search: {
+            mode: "advertiser",
+            query: "nykaa.com",
+            country: "all",
+            platform: "all",
+            creativeType: "all",
+            status: "all",
+            website: "nykaa.com",
+            trackingRole: "competitor",
+            selected: "e2e-nykaa-live-1",
+          },
         },
       },
-    },
+      {
+        sourceFile: "journey-2-release.spec.ts",
+        persona: `e2e-activation${viewport === "375x812" ? "" : viewport === "768x900" ? "-tablet" : "-desktop"}`,
+        scenario: "onboarding → watchlist → first scan state",
+        viewport,
+        finalUrl: { pathname: "/app/watchlists", searchKeys: ["watchlist"] },
+      },
+    ]),
+    // WP-C2 Beat 1 empty-free honesty runs once at the canonical desktop width.
     {
       sourceFile: "journey-2-release.spec.ts",
-      persona: `e2e-activation${viewport === "375x812" ? "" : viewport === "768x900" ? "-tablet" : "-desktop"}`,
-      scenario: "onboarding → watchlist → first scan state",
-      viewport,
-      finalUrl: { pathname: "/app/watchlists", searchKeys: ["watchlist"] },
+      persona: "e2e-free-onboarded",
+      scenario: "first-run-beat-1-empty-free",
+      viewport: "1440x900",
+      finalUrl: { exact: "/app" },
     },
-  ]),
+  ],
   3: RELEASE_COVERAGE_VIEWPORTS.flatMap((viewport) => [
     {
       sourceFile: "journey-3-release.spec.ts",
@@ -137,6 +150,20 @@ export const RELEASE_COVERAGE_MATRIX = Object.freeze({
       scenario: "owner-member-delivery-privacy",
       viewport,
       finalUrl: { pathname: "/app/watchlists", searchKeys: ["watchlist"] },
+    },
+    {
+      sourceFile: "journey-3-release.spec.ts",
+      persona: "e2e-free-firstscan",
+      scenario: "first-run-wait-arc-and-free-capacity",
+      viewport,
+      finalUrl: { pathname: "/app/watchlists", searchKeys: ["watchlist"] },
+    },
+    {
+      sourceFile: "journey-3-release.spec.ts",
+      persona: "e2e-free-firstbrief,e2e-scout",
+      scenario: "first-brief-front-page-and-cadence",
+      viewport,
+      finalUrl: { pathname: "/app/digests", search: { firstrun: "1" } },
     },
   ]),
   4: RELEASE_COVERAGE_VIEWPORTS.flatMap((viewport) => [
@@ -394,7 +421,7 @@ export function expectedReleaseArtifacts(entry) {
 }
 
 function isReleaseArtifactAttachment(name) {
-  return typeof name === "string" && /^(?:j1|j2-proof|j2-activation|j3-[a-z0-9-]+|j4-[a-z0-9-]+|j5-[a-z0-9-]+|j6-[a-z0-9-]+)-/u.test(name);
+  return typeof name === "string" && /^(?:j1|j2-[a-z0-9-]+|j3-[a-z0-9-]+|j4-[a-z0-9-]+|j5-[a-z0-9-]+|j6-[a-z0-9-]+)-/u.test(name);
 }
 
 function validArtifactBody(expected, attachment) {

@@ -138,16 +138,16 @@ describe("Gate-B Playwright release manifest reporter", () => {
 
     expect(validateReleaseCoverage(entries, [1, 2])).toEqual([]);
     expect(validateReleaseCoverage(entries.slice(1), [1, 2])).toEqual([
-      "coverage_count:8:9",
+      "coverage_count:9:10",
     ]);
     expect(validateReleaseCoverage([...entries, entries[0]], [1, 2])).toEqual([
-      "coverage_count:10:9",
+      "coverage_count:11:10",
     ]);
     expect(validateReleaseCoverage(entries.map((entry, index) => index === 0 ? { ...entry, viewport: "1024x768" } : entry), [1, 2])).toEqual([
       "coverage_missing:journey-1-release.spec.ts:first visit → value → signup:375x812",
       "coverage_unexpected_entry",
     ]);
-    expect(validateReleaseCoverage(entries, [6])).toEqual(["coverage_count:9:18"]);
+    expect(validateReleaseCoverage(entries, [6])).toEqual(["coverage_count:10:18"]);
 
     const directory = makeTestDirectory();
     const outputPath = join(directory, "unsupported.json");
@@ -169,7 +169,7 @@ describe("Gate-B Playwright release manifest reporter", () => {
   it("defines every current Journey 3-6 scenario as an exact canonical three-width contract", () => {
     expect(supportsReleaseCoverage([1, 2, 3, 4, 5, 6])).toBe(true);
     const entries = releaseCoverageEntries([1, 2, 3, 4, 5, 6]);
-    expect(entries).toHaveLength(66);
+    expect(entries).toHaveLength(73);
     expect(validateReleaseCoverage(entries, [1, 2, 3, 4, 5, 6])).toEqual([]);
 
     expect(entries.filter((entry) => entry.sourceFile === "journey-3-release.spec.ts").map((entry) => entry.scenario)).toEqual([
@@ -178,16 +178,22 @@ describe("Gate-B Playwright release manifest reporter", () => {
       "empty-gated-recovery-before-delivery",
       "preseeded-empty-and-recovered-monitoring-states",
       "owner-member-delivery-privacy",
+      "first-run-wait-arc-and-free-capacity",
+      "first-brief-front-page-and-cadence",
       "monitoring-proof-freshness-delivery",
       "digest-notifications-accessibility",
       "empty-gated-recovery-before-delivery",
       "preseeded-empty-and-recovered-monitoring-states",
       "owner-member-delivery-privacy",
+      "first-run-wait-arc-and-free-capacity",
+      "first-brief-front-page-and-cadence",
       "monitoring-proof-freshness-delivery",
       "digest-notifications-accessibility",
       "empty-gated-recovery-before-delivery",
       "preseeded-empty-and-recovered-monitoring-states",
       "owner-member-delivery-privacy",
+      "first-run-wait-arc-and-free-capacity",
+      "first-brief-front-page-and-cadence",
     ]);
     expect(new Set(entries.filter((entry) => entry.sourceFile === "journey-4-release.spec.ts").map((entry) => entry.scenario))).toEqual(new Set([
       "report-proof-freshness-client-readable",
@@ -229,7 +235,7 @@ describe("Gate-B Playwright release manifest reporter", () => {
         sha256: fingerprint,
       })),
     }));
-    expect(entries).toHaveLength(57);
+    expect(entries).toHaveLength(63);
     const lifecycleEntries = entries.filter((entry) => entry.scenario === "journey-5-signed-lifecycle-readback");
     expect(lifecycleEntries).toHaveLength(3);
     expect(lifecycleEntries.every((entry) => entry.artifacts.length === 6)).toBe(true);
@@ -284,8 +290,8 @@ describe("Gate-B Playwright release manifest reporter", () => {
     expect(manifest.status).toBe("passed");
     expect(manifest.strictIssues).toBeUndefined();
     expect(validateReleaseArtifacts(manifest.entries)).toEqual([]);
-    expect(manifest.entries).toHaveLength(9);
-    expect(manifest.entries.flatMap((entry: { artifacts: unknown[] }) => entry.artifacts)).toHaveLength(114);
+    expect(manifest.entries).toHaveLength(10);
+    expect(manifest.entries.flatMap((entry: { artifacts: unknown[] }) => entry.artifacts)).toHaveLength(116);
     for (const artifact of manifest.entries.flatMap((entry: { artifacts: Array<{ name: string; bytes: number; sha256: string }> }) => entry.artifacts)) {
       expect(artifact.name).toMatch(/(?:^|\/)gate-b-artifacts\//u);
       expect(artifact.name).not.toContain(process.cwd());
@@ -329,7 +335,7 @@ describe("Gate-B Playwright release manifest reporter", () => {
     const manifest = readManifest(outputPath);
     expect(manifest.strictIssues).toContain("artifact_invalid");
     expect(manifest.strictIssues).toContain("artifact_missing");
-    expect(manifest.entries.flatMap((entry: { artifacts: unknown[] }) => entry.artifacts)).toHaveLength(112);
+    expect(manifest.entries.flatMap((entry: { artifacts: unknown[] }) => entry.artifacts)).toHaveLength(114);
     expect(JSON.stringify(manifest)).not.toContain("/tmp/unsafe.png");
     expect(JSON.stringify(manifest)).not.toContain("unterminated");
     rmSync(directory, { recursive: true, force: true });
