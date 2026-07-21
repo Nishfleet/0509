@@ -1429,7 +1429,28 @@ function buildQuickActionExtractionScript() {
               .filter((value) => value && beforeSponsored.has(value) && !isUiLine(value)),
           ),
         ];
-        return candidates.length === 1 ? candidates[0] : null;
+        if (candidates.length === 1) return candidates[0];
+        // Logged-out grid cards frequently render the advertiser as a plain
+        // text line directly above "Sponsored" with no <strong>/<h3> wrapper,
+        // so the element scan finds nothing. Recover the closest name-like,
+        // non-UI line before "Sponsored" (bounded so headlines/body never leak
+        // in as a false advertiser name).
+        if (candidates.length === 0) {
+          const priorLines = lines
+            .slice(0, sponsoredIndex)
+            .map((line) => line.replace(/\\s+/g, " ").trim())
+            .filter(
+              (value) =>
+                value &&
+                value.length > 1 &&
+                value.length <= 60 &&
+                value.split(" ").length <= 6 &&
+                !isUiLine(value),
+            );
+          const nearest = priorLines[priorLines.length - 1];
+          if (nearest) return nearest;
+        }
+        return null;
       })();
       const headline = card?.querySelector("h1, h2, h3, [data-headline]")?.textContent ?? null;
       const cta =

@@ -7,6 +7,11 @@ import {
   withStructuredAnalysis,
 } from "~/lib/analysis.server";
 import { countryNameFromIso, isoFromCountryName } from "~/lib/countries";
+import {
+  comparableHostname,
+  parseSearchInput,
+  registrableDomainFromHostname,
+} from "~/lib/search-query";
 import { readResponseJsonWithinLimit } from "~/lib/bounded-response.server";
 import type { AppEnv } from "~/lib/env.server";
 import { fetchWithTimeout } from "~/lib/fetch-timeout.server";
@@ -280,6 +285,107 @@ function detectCreativeType(
   return "image";
 }
 
+/** Alphanumeric-only lowercase form for brand-token comparison ("Nike, Inc." → "nikeinc"). */
+function normalizeBrandToken(value: string | null | undefined): string {
+  return (value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "").trim();
+}
+
+/** Registrable-domain stem ("allbirds.com" → "allbirds"), alphanumeric-only. */
+function brandTokenFromDomain(registrableDomain: string | null | undefined): string {
+  if (!registrableDomain) {
+    return "";
+  }
+  return normalizeBrandToken(registrableDomain.split(".")[0] ?? "");
+}
+
+function extractHostname(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return null;
+    }
+    return url.hostname.trim().toLowerCase().replace(/\.$/, "");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Hierarchy of evidence that a card belongs to the queried advertiser/domain,
+ * strongest first:
+ *   (a) the card's landing/destination domain matches the queried domain;
+ *   (b) the resolved advertiser page id matches a page-scoped query;
+ *   (c) the advertiser display name shares a brand token with the query stem.
+ * A blank advertiser with a matching landing domain (a) or page id (b) still
+ * passes; a blank advertiser with neither is rejected. This replaces the old
+ * `ad.advertiser.includes(rawDomainQuery)` that discarded every real card
+ * because the query was a domain ("allbirds.com") while the scraped advertiser
+ * was a display name ("Allbirds") — or blank on the logged-out grid.
+ */
+function advertiserQueryMatches(
+  ad: AdRecord,
+  filters: NormalizedSavedQuery["filters"],
+): boolean {
+  const rawQuery = filters.query.trim();
+  if (!rawQuery) {
+    return true;
+  }
+
+  const parsed = parseSearchInput(rawQuery);
+  const queryRegistrable =
+    parsed.intent === "domain" ? parsed.registrableDomain : null;
+  const queryComparable =
+    parsed.intent === "domain" ? parsed.comparableHostname : null;
+  const queryToken = queryRegistrable
+    ? brandTokenFromDomain(queryRegistrable)
+    : normalizeBrandToken(rawQuery);
+
+  // (a) STRONGEST — landing/destination domain matches the queried domain.
+  const landingHost =
+    extractHostname(ad.landingPageUrl) ??
+    extractHostname(extractDestinationUrl(ad.adSnapshotUrl ?? undefined));
+  if (landingHost) {
+    const landingRegistrable = registrableDomainFromHostname(landingHost);
+    const landingComparable = comparableHostname(landingHost);
+    if (
+      queryRegistrable &&
+      (landingRegistrable === queryRegistrable ||
+        landingComparable === queryComparable)
+    ) {
+      return true;
+    }
+    // Query is a bare brand ("allbirds") or the domain stem still matches the
+    // landing domain stem — treat a landing-domain-stem match as proof.
+    const landingToken = brandTokenFromDomain(landingRegistrable ?? landingHost);
+    if (queryToken && landingToken && landingToken === queryToken) {
+      return true;
+    }
+  }
+
+  // (b) verified advertiser page identity, when the query is page-scoped.
+  if (filters.pageId && ad.advertiserPageId && ad.advertiserPageId === filters.pageId) {
+    return true;
+  }
+
+  // (c) normalized brand-token match against the advertiser display name.
+  const advertiserToken = normalizeBrandToken(ad.advertiser);
+  if (
+    advertiserToken &&
+    queryToken &&
+    (advertiserToken === queryToken ||
+      advertiserToken.includes(queryToken) ||
+      (queryToken.length >= 4 && queryToken.includes(advertiserToken)))
+  ) {
+    return true;
+  }
+
+  // (d) blank advertiser + no landing/identity proof → reject (no junk pass).
+  return false;
+}
+
 function matchesAd(
   ad: AdRecord,
   mode: SearchMode,
@@ -292,7 +398,7 @@ function matchesAd(
   const queryMatch = !query
     ? true
     : mode === "advertiser"
-      ? ad.advertiser.toLowerCase().includes(query)
+      ? advertiserQueryMatches(ad, filters)
       : searchable.includes(query);
 
   // Demo ads are sample data — they should demo for every visitor country,
