@@ -11,6 +11,18 @@
 import { resolveCommercialDiscoveryProvider } from "~/lib/ad-source.server";
 import { adLongevityDays } from "~/lib/ad-display";
 import {
+  AGGRESSION_FRESHNESS_DAYS,
+  AGGRESSION_PERSISTENCE_DAYS,
+  aggressionBandForScore,
+  AGGRESSION_FORMULA_VERSION,
+  linearShareCurvePoints,
+  MIN_AGGRESSION_WINDOW_DAYS,
+  testingCurvePoints,
+  velocityCurvePoints,
+  type AggressionBandId,
+  type AggressionScoreComponents,
+} from "~/lib/aggression-score";
+import {
   applyWebsiteSearchFallback,
   normalizeCompetitorWebsiteInput,
 } from "~/lib/competitor-website";
@@ -161,6 +173,208 @@ export function buildBrandIntelTeaser(ads: AdRecord[], now: Date = new Date()): 
     longestRunningHook,
     formats,
   };
+}
+
+const MS_PER_DAY = 86_400_000;
+
+/**
+ * Public-page read of the Ad Aggression Score, computed cache-only from the
+ * cached ads' REAL observed fields — never a model, never invented. The
+ * observed window is the span from the oldest ad we can still see (its real
+ * "started running" date) to now; the four 0-25 components reuse the exact
+ * public curve functions in `aggression-score.ts`, so the displayed bars
+ * always sum to the displayed score with no hidden weighting.
+ *
+ * Returns null (→ the UI shows "not enough history yet to score") when the
+ * observed window is shorter than MIN_AGGRESSION_WINDOW_DAYS or no ad carries
+ * a first-seen date — never a score on thin evidence.
+ */
+export interface BrandPageAggression {
+  score: number;
+  components: AggressionScoreComponents;
+  bandId: AggressionBandId;
+  bandLabel: string;
+  bandInterpretation: string;
+  formulaVersion: typeof AGGRESSION_FORMULA_VERSION;
+  windowDays: number;
+  adsPerWeek: number;
+  adCount: number;
+  activeCount: number;
+}
+
+export function computeBrandPageAggressionScore(
+  ads: AdRecord[],
+  now: Date = new Date(),
+): BrandPageAggression | null {
+  if (ads.length === 0) {
+    return null;
+  }
+
+  let earliestFirstSeen = Number.POSITIVE_INFINITY;
+  for (const ad of ads) {
+    if (!ad.firstSeenAt) continue;
+    const parsed = Date.parse(ad.firstSeenAt);
+    if (!Number.isNaN(parsed) && parsed < earliestFirstSeen) {
+      earliestFirstSeen = parsed;
+    }
+  }
+  if (!Number.isFinite(earliestFirstSeen)) {
+    return null;
+  }
+
+  const windowDays = Math.floor((now.getTime() - earliestFirstSeen) / MS_PER_DAY);
+  if (windowDays < MIN_AGGRESSION_WINDOW_DAYS) {
+    return null;
+  }
+
+  const adCount = ads.length;
+  const adsPerWeek = adCount / (windowDays / 7);
+
+  const testedCount = ads.filter((ad) => (ad.variantCount ?? 0) > 1).length;
+  const testedShare = testedCount / adCount;
+
+  const activeAds = ads.filter((ad) => ad.active);
+  const freshCutoff = now.getTime() - AGGRESSION_FRESHNESS_DAYS * MS_PER_DAY;
+  const freshCount = activeAds.filter((ad) => {
+    if (!ad.firstSeenAt) return false;
+    const firstSeen = Date.parse(ad.firstSeenAt);
+    return !Number.isNaN(firstSeen) && firstSeen >= freshCutoff;
+  }).length;
+  const freshShare = activeAds.length > 0 ? freshCount / activeAds.length : 0;
+
+  const persistentCount = ads.filter((ad) => {
+    const days = adLongevityDays(ad, now);
+    return days !== null && days >= AGGRESSION_PERSISTENCE_DAYS;
+  }).length;
+  const persistentShare = persistentCount / adCount;
+
+  const components: AggressionScoreComponents = {
+    velocity: Math.round(velocityCurvePoints(adsPerWeek)),
+    testing: Math.round(testingCurvePoints(testedShare)),
+    freshness: Math.round(linearShareCurvePoints(freshShare)),
+    persistence: Math.round(linearShareCurvePoints(persistentShare)),
+  };
+  const score =
+    components.velocity + components.testing + components.freshness + components.persistence;
+  const band = aggressionBandForScore(score);
+
+  return {
+    score,
+    components,
+    bandId: band.id,
+    bandLabel: band.label,
+    bandInterpretation: band.interpretation,
+    formulaVersion: AGGRESSION_FORMULA_VERSION,
+    windowDays,
+    adsPerWeek: Math.round(adsPerWeek * 10) / 10,
+    adCount,
+    activeCount: activeAds.length,
+  };
+}
+
+/** Ads first observed within this window count toward the "what changed" feed. */
+export const BRAND_CHANGE_FEED_WINDOW_DAYS = 14;
+/** Cap the number of change rows rendered on the public timeline. */
+const BRAND_CHANGE_FEED_MAX_ROWS = 5;
+
+export interface BrandChangeEvent {
+  /** Stable key for React. */
+  id: string;
+  /** Short weekday/relative badge, e.g. "Mon" or "Today". */
+  dayLabel: string;
+  /** True for events first seen today — rendered with the green accent. */
+  isToday: boolean;
+  /** Uppercase source tag, e.g. "AD LIBRARY" — always a real capture source. */
+  source: string;
+  /** One-line move: the ad that entered rotation. */
+  move: string;
+  /** Muted "why it matters" line — a factual template, never a model inference. */
+  why: string;
+  /** Multi-variant count when > 1, for an honest "testing" read. */
+  variantCount: number | null;
+}
+
+/**
+ * Build an honest "what changed this week" feed from the cached ads alone: an
+ * ad whose real first-seen date lands inside the recent window genuinely
+ * entered rotation on that date, so each row maps 1:1 to a real ad and a real
+ * capture source. We can only assert "new ad" from a single cache snapshot —
+ * price/creative diffs need monitoring history a public hit does not have — so
+ * every row is a "New" event and nothing is invented. Returns [] when no ad
+ * was newly observed in the window (→ the section hides rather than fake it).
+ */
+export function buildBrandChangeFeed(ads: AdRecord[], now: Date = new Date()): BrandChangeEvent[] {
+  const windowCutoff = now.getTime() - BRAND_CHANGE_FEED_WINDOW_DAYS * MS_PER_DAY;
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+
+  const events: (BrandChangeEvent & { firstSeenMs: number })[] = [];
+  for (const ad of ads) {
+    if (!ad.firstSeenAt) continue;
+    const firstSeenMs = Date.parse(ad.firstSeenAt);
+    if (Number.isNaN(firstSeenMs) || firstSeenMs < windowCutoff || firstSeenMs > now.getTime()) {
+      continue;
+    }
+
+    const isToday = firstSeenMs >= startOfToday.getTime();
+    const move = brandChangeMove(ad);
+    events.push({
+      id: ad.metaAdId,
+      dayLabel: isToday ? "Today" : brandChangeDayLabel(firstSeenMs),
+      isToday,
+      source: brandChangeSourceLabel(ad.source),
+      move,
+      why: brandChangeWhy(ad),
+      variantCount: ad.variantCount && ad.variantCount > 1 ? ad.variantCount : null,
+      firstSeenMs,
+    });
+  }
+
+  return events
+    .sort((a, b) => b.firstSeenMs - a.firstSeenMs)
+    .slice(0, BRAND_CHANGE_FEED_MAX_ROWS)
+    .map(({ firstSeenMs: _firstSeenMs, ...event }) => event);
+}
+
+function brandChangeMove(ad: AdRecord): string {
+  const headline = ad.previewHeadline?.trim() || ad.hook?.trim() || ad.body?.trim();
+  if (headline) {
+    return `New ad entered rotation — "${truncate(headline, 90)}"`;
+  }
+  const format = ad.format && ad.format !== "unknown" ? `${ad.format} ` : "";
+  return `New ${format}ad entered rotation`;
+}
+
+function brandChangeWhy(ad: AdRecord): string {
+  if (ad.variantCount && ad.variantCount > 1) {
+    return `Launched with ${ad.variantCount} variants — they're testing which creative wins.`;
+  }
+  if (ad.offer?.trim()) {
+    return `Carries a fresh offer — a demand push worth watching.`;
+  }
+  return `A new creative in rotation — the kind of move you'd otherwise miss.`;
+}
+
+const BRAND_CHANGE_SOURCE_LABELS: Record<string, string> = {
+  meta_library_browser: "AD LIBRARY",
+  meta_api: "AD LIBRARY",
+  demo: "AD LIBRARY",
+};
+
+function brandChangeSourceLabel(source: string): string {
+  return BRAND_CHANGE_SOURCE_LABELS[source] ?? "AD LIBRARY";
+}
+
+const WEEKDAY_LABELS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+
+function brandChangeDayLabel(ms: number): string {
+  const day = new Date(ms).getUTCDay();
+  return WEEKDAY_LABELS[day] ?? "—";
+}
+
+function truncate(value: string, max: number): string {
+  if (value.length <= max) return value;
+  return `${value.slice(0, max - 1).trimEnd()}…`;
 }
 
 /** Coarse honest relative label for the freshness line ("about 3 hours ago"). */
