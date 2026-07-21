@@ -82,6 +82,78 @@ describe("extractCreativeTextFromSnapshotHtml", () => {
 
     expect(creativeText).toBeNull();
   });
+
+  it("keeps Arabic creative-overlay lines (classifier global script)", () => {
+    const html = `
+      <html>
+        <body>
+          <div>Sponsored</div>
+          <div>خصم حصري اليوم</div>
+          <div>وفر 50٪ الآن</div>
+          <button>تسوق الآن</button>
+        </body>
+      </html>
+    `;
+
+    const creativeText = extractCreativeTextFromSnapshotHtml(html, {
+      advertiser: "Brand",
+      body: "عرض خاص",
+      previewHeadline: "عرض خاص",
+      previewSubhead: "",
+      cta: "تسوق الآن",
+    });
+
+    expect(creativeText).toContain("خصم حصري اليوم");
+    expect(creativeText).toContain("وفر 50٪ الآن");
+  });
+
+  it("keeps CJK creative-overlay lines (Han)", () => {
+    const html = `
+      <html>
+        <body>
+          <div>Sponsored</div>
+          <div>限时特惠优惠活动中</div>
+          <div>全场立减50元</div>
+          <button>立即购买</button>
+        </body>
+      </html>
+    `;
+
+    const creativeText = extractCreativeTextFromSnapshotHtml(html, {
+      advertiser: "Brand",
+      body: "新品上市",
+      previewHeadline: "新品上市",
+      previewSubhead: "",
+      cta: "立即购买",
+    });
+
+    expect(creativeText).toContain("限时特惠优惠活动中");
+    expect(creativeText).toContain("全场立减50元");
+  });
+
+  it("keeps Cyrillic creative-overlay lines", () => {
+    const html = `
+      <html>
+        <body>
+          <div>Sponsored</div>
+          <div>Скидка 50% сегодня</div>
+          <div>Бесплатная доставка</div>
+          <button>Купить</button>
+        </body>
+      </html>
+    `;
+
+    const creativeText = extractCreativeTextFromSnapshotHtml(html, {
+      advertiser: "Brand",
+      body: "Новая коллекция",
+      previewHeadline: "Новая коллекция",
+      previewSubhead: "",
+      cta: "Купить",
+    });
+
+    expect(creativeText).toContain("Скидка 50% сегодня");
+    expect(creativeText).toContain("Бесплатная доставка");
+  });
 });
 
 describe("captureCreativeText", () => {

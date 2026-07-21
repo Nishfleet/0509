@@ -6,6 +6,7 @@ import {
   readResponseTextWithinLimit,
 } from "~/lib/bounded-response.server";
 import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
+import { hasClassifierScriptChar } from "~/lib/language-classifier";
 import { resolvePublicHttpUrl, resolvePublicRedirectUrl } from "~/lib/public-url.server";
 import type { AdRecord } from "~/lib/types";
 
@@ -416,7 +417,9 @@ function selectCreativeTextCandidates(
     if (normalized.length < 4 || normalized.length > 80) {
       continue;
     }
-    if (!/[a-z\u0900-\u0D7F]/i.test(normalized)) {
+    // Accept any script family covered by language-classifier (Latin, Indic,
+    // Arabic, CJK, Cyrillic, Hangul, Thai, Hebrew, Greek, Ethiopic, …).
+    if (!hasClassifierScriptChar(normalized)) {
       continue;
     }
     if (

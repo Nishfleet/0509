@@ -69,6 +69,17 @@ const SCRIPT_PATTERNS = {
   ethiopic: /[\u1200-\u137F]/g,
 } as const;
 
+/**
+ * True when `value` contains at least one character from any script family
+ * tracked by this classifier (Latin, Indic, Arabic, CJK, Cyrillic, etc.).
+ * Used by creative-text OCR candidate filtering so non-Latin overlays survive.
+ */
+export function hasClassifierScriptChar(value: string): boolean {
+  return Object.values(SCRIPT_PATTERNS).some(
+    (pattern) => (value.match(pattern)?.length ?? 0) > 0,
+  );
+}
+
 const INDIC_SCRIPTS = [
   "bengali",
   "gurmukhi",
