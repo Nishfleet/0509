@@ -9,6 +9,7 @@ import { hasBrowserRunQuickActions } from "~/lib/browser-run.server";
 import {
   buildDiscoveryCacheKey,
   DISCOVERY_ADVERTISER_FILTER_EPOCH,
+  toServableDiscoveryPayload,
   isDiscoveryCacheRouteCompatible,
   isDiscoveryCacheWithinMaxAge,
   isStaleZeroResultDiscoveryCacheEntry,
@@ -525,7 +526,7 @@ export async function searchAdsViaSourceResolver(
   const freshCacheHit = !forceLive ? unexpiredCache : forceLiveSharedHit;
   if (freshCacheHit) {
     return {
-      ...freshCacheHit.payload,
+      ...toServableDiscoveryPayload(freshCacheHit.payload),
       source: provider,
       provider,
       cacheStatus: "hit",
@@ -538,7 +539,7 @@ export async function searchAdsViaSourceResolver(
   if (!forceLive && providerState && shouldUseProviderCooldown(providerState)) {
     if (usableCached) {
       return {
-        ...usableCached.payload,
+        ...toServableDiscoveryPayload(usableCached.payload),
         source: provider,
         provider,
         cacheStatus: "stale",
@@ -596,7 +597,7 @@ export async function searchAdsViaSourceResolver(
 
     if (usableCached) {
       return {
-        ...usableCached.payload,
+        ...toServableDiscoveryPayload(usableCached.payload),
         source: provider,
         provider,
         cacheStatus: "stale",
@@ -875,7 +876,7 @@ export async function searchAdsViaSourceResolver(
 
     if (!forceLive && usableCached) {
       return {
-        ...usableCached.payload,
+        ...toServableDiscoveryPayload(usableCached.payload),
         source: provider,
         provider,
         cacheStatus: "stale",
@@ -1210,7 +1211,7 @@ async function waitForDiscoveryLeaseResolution(
     );
     if (freshCached) {
       return {
-        ...freshCached.payload,
+        ...toServableDiscoveryPayload(freshCached.payload),
         source: freshCached.payload.source,
         provider: freshCached.payload.provider,
         cacheStatus: "hit",
@@ -1239,7 +1240,7 @@ async function waitForDiscoveryLeaseResolution(
       );
       if (staleCached) {
         return {
-          ...staleCached.payload,
+          ...toServableDiscoveryPayload(staleCached.payload),
           source: staleCached.payload.source,
           provider: staleCached.payload.provider,
           cacheStatus: "stale",

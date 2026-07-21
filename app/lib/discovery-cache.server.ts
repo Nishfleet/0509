@@ -80,6 +80,20 @@ export function isDiscoveryCacheWithinMaxAge(
 export const DISCOVERY_ADVERTISER_FILTER_EPOCH = "advertiser-evidence-filter-v1";
 
 /**
+ * Strip writer-contract internals from a cached payload before it is served
+ * anywhere outside the cache row itself. The epoch is a persistence-layer
+ * fact (which filter contract wrote this row); it must never leak into
+ * SearchResponse objects returned to routes, API surfaces, or callers — they
+ * would otherwise serialize an internal versioning field to customers.
+ */
+export function toServableDiscoveryPayload<T extends { discoveryFilterEpoch?: string }>(
+  payload: T,
+): Omit<T, "discoveryFilterEpoch"> {
+  const { discoveryFilterEpoch: _internalWriterEpoch, ...servable } = payload;
+  return servable;
+}
+
+/**
  * The search modes whose zero-result caches the broken advertiser filter could
  * corrupt. Keyword mode is deliberately excluded — it never ran the filter.
  */
@@ -138,7 +152,12 @@ export async function readDiscoveryCacheEntryCacheOnly(
       cursor: lookup.cursor,
     });
   const { getDiscoveryCacheEntry } = await import("~/lib/data.server");
-  return getDiscoveryCacheEntry(env, cacheKey);
+  const entry = await getDiscoveryCacheEntry(env, cacheKey);
+  if (!entry) {
+    return null;
+  }
+  // Writer-contract internals stay in the persisted row only.
+  return { ...entry, payload: toServableDiscoveryPayload(entry.payload) };
 }
 
 const SCHEDULED_DISCOVERY_CONTEXTS = new Set<DiscoveryRouteContext>([

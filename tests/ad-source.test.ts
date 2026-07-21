@@ -1276,6 +1276,54 @@ describe("searchAdsViaSourceResolver", () => {
     expect(result.cacheStatus).toBe("hit");
     expect(result.ads).toEqual([]);
     expect(browserSearch).not.toHaveBeenCalled();
+    // The epoch is a persistence-layer fact — it must never be served.
+    expect("discoveryFilterEpoch" in result).toBe(false);
+  });
+
+  it("strips the writer epoch from every served cache payload (stale fallback included)", async () => {
+    // Cooldown stale-serve path: a stamped NON-zero entry is served cache_only —
+    // the payload must come back without the internal epoch field.
+    const browserSearch = vi.fn();
+    const getDiscoveryProviderState = vi.fn().mockResolvedValue({
+      provider: "meta_library_browser",
+      status: "degraded",
+      failureClass: "login_wall",
+      summary: "Commercial discovery degraded.",
+      lastSuccessAt: null,
+      lastFailureAt: new Date().toISOString(),
+      metadata: { cooldownUntil: new Date(Date.now() + 10 * 60 * 1000).toISOString() },
+      updatedAt: new Date().toISOString(),
+    });
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(
+        staleAdvertiserZeroEntry({
+          payload: {
+            ...buildLiveBrowserResult(),
+            discoveryFilterEpoch: DISCOVERY_ADVERTISER_FILTER_EPOCH,
+          },
+        }),
+      ),
+      getDiscoveryProviderState,
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+    const result = await searchAdsViaSourceResolver(
+      { BROWSER: { fetch: vi.fn() } as unknown as Fetcher, DB: {} as D1Database } as never,
+      ADVERTISER_NYKAA_QUERY,
+      null,
+      { purpose: "public_search" },
+    );
+
+    expect(result.cacheStatus).toBe("stale");
+    expect(result.ads.length).toBeGreaterThan(0);
+    expect("discoveryFilterEpoch" in result).toBe(false);
   });
 
   it("the direct live-scrape writer stamps the current contract epoch on the cached payload", async () => {

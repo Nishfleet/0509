@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   DISCOVERY_ADVERTISER_FILTER_EPOCH,
+  toServableDiscoveryPayload,
   buildDiscoveryCacheKey,
   isDiscoveryCacheRouteCompatible,
   isDiscoveryCacheWithinMaxAge,
@@ -104,6 +105,46 @@ describe("isStaleZeroResultDiscoveryCacheEntry (advertiser-filter contract epoch
 
   it("pins the current epoch value", () => {
     expect(DISCOVERY_ADVERTISER_FILTER_EPOCH).toBe("advertiser-evidence-filter-v1");
+  });
+});
+
+describe("toServableDiscoveryPayload (epoch stays persistence-private)", () => {
+  it("strips the writer epoch and preserves everything else", () => {
+    const served = toServableDiscoveryPayload({
+      ads: [],
+      nextCursor: null,
+      discoveryEmptyReason: "no_results",
+      discoveryFilterEpoch: DISCOVERY_ADVERTISER_FILTER_EPOCH,
+    });
+    expect("discoveryFilterEpoch" in served).toBe(false);
+    expect(served).toMatchObject({ ads: [], nextCursor: null, discoveryEmptyReason: "no_results" });
+  });
+
+  it("cache-only brand-page reads never expose the epoch", async () => {
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue({
+        cacheKey: "meta_library_browser:fp:all:page-1",
+        provider: "meta_library_browser",
+        routeContext: "public_search",
+        payload: {
+          ads: [],
+          nextCursor: null,
+          discoveryEmptyReason: "no_results",
+          discoveryFilterEpoch: DISCOVERY_ADVERTISER_FILTER_EPOCH,
+        },
+        fetchedAt: "2026-07-21T13:00:00.000Z",
+        expiresAt: "2026-07-22T13:00:00.000Z",
+      }),
+    }));
+    const { readDiscoveryCacheEntryCacheOnly } = await import("~/lib/discovery-cache.server");
+    const entry = await readDiscoveryCacheEntryCacheOnly({ DB: {} } as never, {
+      provider: "meta_library_browser",
+      fingerprint: "fp",
+      country: "all",
+    });
+    expect(entry).not.toBeNull();
+    expect(entry && "discoveryFilterEpoch" in entry.payload).toBe(false);
+    vi.doUnmock("~/lib/data.server");
   });
 });
 
