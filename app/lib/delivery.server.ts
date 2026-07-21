@@ -51,6 +51,7 @@ import {
   isSlackDeliveryCustomerFacing,
   isWhatsAppDeliveryCustomerFacing,
 } from "~/lib/ga-customer-surface";
+import { EMAIL_H1_STYLE } from "~/lib/email-template.server";
 import { buildUnsubscribeUrl } from "~/lib/unsubscribe.server";
 import type {
   AdRecord,
@@ -2790,7 +2791,29 @@ function renderCreativeImageHtml(
   return `<img src="${escapeHtml(imageUrl)}" alt="Ad creative" width="280" style="display: block; max-width: 280px; border-radius: 8px; border: 1px solid #e4e7ec; margin: 12px 0;">`;
 }
 
-function buildInstantAlertContent(
+export function renderPresenceDigestHtml(input: {
+  lines: string[];
+  appUrl: string;
+}) {
+  const htmlLines = input.lines
+    .map(
+      (line) =>
+        `<li style="margin: 0 0 8px; color: #475467;">${escapeHtml(line)}</li>`,
+    )
+    .join("");
+  return `
+      <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #0b1220; font-size: 15px; line-height: 1.6;">
+        <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3; margin: 0 0 12px;">Five to Nine presence</p>
+        <h1 style="${EMAIL_H1_STYLE}">Where your competitors showed up</h1>
+        <ul style="margin: 0 0 24px; padding-left: 20px;">${htmlLines}</ul>
+        <p style="margin: 0;">
+          <a href="${escapeHtml(input.appUrl)}" style="display: inline-block; background-color: #101828; color: #ffffff; text-decoration: none; padding: 11px 20px; border-radius: 8px; font-weight: 600; font-size: 15px;">Open presence tracking</a>
+        </p>
+      </div>
+    `;
+}
+
+export function buildInstantAlertContent(
   watchlist: Pick<WatchlistRecord, "id" | "name">,
   events: WatchEventRecord[],
   provisional: boolean,
@@ -2827,14 +2850,14 @@ function buildInstantAlertContent(
       html: `
         <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #0b1220; line-height: 1.5;">
           <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine alert</p>
-          <h1 style="margin: 0 0 12px;">${escapeHtml(subject)}</h1>
+          <h1 style="${EMAIL_H1_STYLE}">${escapeHtml(subject)}</h1>
           ${advertiserNote}
           <p style="margin: 0 0 8px; color: #475467;">${escapeHtml(primaryEvent.summary)}</p>
           <p style="margin: 0 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: #5b6577;">${escapeHtml(intelligence.priorityBand)}</p>
           <p style="margin: 0 0 16px;"><strong>Suggested next action:</strong> ${escapeHtml(intelligence.recommendedAction)}</p>
           ${renderEventDiffHtml(primaryEvent)}
           ${creativeImageHtml}
-          ${watchlistUrl ? `<p style="margin: 0;"><a href="${watchlistUrl}" style="color: #2563eb; text-decoration: underline;">See the evidence</a></p>` : ""}
+          ${watchlistUrl ? `<p style="margin: 16px 0 0;"><a href="${watchlistUrl}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 20px; border-radius:8px; font-weight:600; font-size:15px;">See the evidence</a></p>` : ""}
         </div>
       `,
     };
@@ -2858,7 +2881,7 @@ function buildInstantAlertContent(
     html: `
       <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #0b1220; line-height: 1.5;">
         <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #5b6577;">Five to Nine alert</p>
-        <h1 style="margin: 0 0 12px;">${escapeHtml(subject)}</h1>
+        <h1 style="${EMAIL_H1_STYLE}">${escapeHtml(subject)}</h1>
         ${batchedAdvertiserNote}
         ${creativeImageHtml}
         <ul style="padding-left: 18px;">
@@ -2876,7 +2899,7 @@ function buildInstantAlertContent(
             })
             .join("")}
         </ul>
-        ${watchlistUrl ? `<p style="margin: 16px 0 0;"><a href="${watchlistUrl}" style="color: #2563eb; text-decoration: underline;">View watchlist</a></p>` : ""}
+        ${watchlistUrl ? `<p style="margin: 20px 0 0;"><a href="${watchlistUrl}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 20px; border-radius:8px; font-weight:600; font-size:15px;">View watchlist</a></p>` : ""}
       </div>
     `,
   };
@@ -3016,14 +3039,10 @@ export async function sendPresenceDigestEmail(
     unsubscribeUrl = null;
   }
 
-  const htmlLines = input.lines.map((line) => `<li>${escapeHtml(line)}</li>`).join("");
-  const bodyHtml = `
-      <div style="font-family: Inter, system-ui, sans-serif; background-color: #ffffff; color: #1d2433; font-size: 15px; line-height: 1.6;">
-        <p style="margin: 0 0 12px;">Presence tracking updates</p>
-        <ul style="margin: 0 0 16px; padding-left: 20px;">${htmlLines}</ul>
-        <p style="margin: 0;"><a href="${escapeHtml(buildPresenceAppUrl(env))}">Open presence tracking</a></p>
-      </div>
-    `;
+  const bodyHtml = renderPresenceDigestHtml({
+    lines: input.lines,
+    appUrl: buildPresenceAppUrl(env),
+  });
   const providerResult = await sendCloudflareEmail(env, {
     to: input.email,
     subject: input.subject,

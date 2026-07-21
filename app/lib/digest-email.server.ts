@@ -16,6 +16,8 @@ import {
 } from "~/lib/proof-classification";
 import { safeTimeZone } from "~/lib/safe-timezone";
 import {
+  EMAIL_H1_STYLE,
+  EMAIL_H2_STYLE,
   EMAIL_SURFACE_BG,
   EMAIL_TEXT_PRIMARY,
   renderEmailContentSurface,
@@ -106,14 +108,14 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
     ${renderEmailContentSurface(`
       <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">Five to Nine ${escapeHtml(cadenceLabel)}</p>
-      <h1 style="margin: 0 0 12px;">${escapeHtml(answer)}</h1>
+      <h1 style="${EMAIL_H1_STYLE}">${escapeHtml(answer)}</h1>
 			<p style="margin: 0 0 18px; color: #475467;">${escapeHtml(dateRange)}</p>${renderStrategySectionHtml(strategyParagraph)}
       <div style="margin: 0 0 20px; padding: 14px; border: 1px solid #d7dce5; border-radius: 12px;">
         <p style="margin: 0 0 6px;"><strong>Priority mix:</strong> ${escapeHtml(priorityMixLabel(priorityMix))}</p>
         <p style="margin: 0;"><strong>Evidence mix:</strong> ${escapeHtml(proofMixLabel(proofMix))}</p>
       </div>
       ${renderTrendSectionHtml(trendLines)}
-      <h2 style="font-size: 18px; margin: 0 0 12px;">Top moves</h2>
+      <h2 style="${EMAIL_H2_STYLE}">Top moves</h2>
       ${renderTopMoveGroupsHtml(topMoveGroups, input.periodEnd, input.timeZone, input.fullDigestUrl)}
       ${omittedCount > 0 ? `<p style="margin: 0 0 18px; color: #475467;">${omittedCount} more change${omittedCount === 1 ? "" : "s"} are in the full digest.</p>` : ""}
       <p style="margin: 0 0 20px;">
@@ -180,7 +182,7 @@ export function buildScanTroubleEmail(input: {
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
     ${renderEmailContentSurface(`
       <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">Five to Nine</p>
-      <h1 style="margin: 0 0 12px;">We hit a problem checking your competitors.</h1>
+      <h1 style="${EMAIL_H1_STYLE}">We hit a problem checking your competitors.</h1>
       <p style="margin: 0 0 16px; color: #475467;">
         We couldn't complete checks for <strong>${escapeHtml(listed)}</strong> in this period.
         Retries are already running automatically — you don't need to do anything.
@@ -228,7 +230,7 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
     ${renderEmailContentSurface(`
       <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">Five to Nine ${escapeHtml(cadenceLabel)}</p>
-      <h1 style="margin: 0 0 12px;">All quiet: no competitor moves worth action ${escapeHtml(quietPeriodLabel)}.</h1>
+      <h1 style="${EMAIL_H1_STYLE}">All quiet: no competitor moves worth action ${escapeHtml(quietPeriodLabel)}.</h1>
       <p style="margin: 0 0 18px; color: #475467;">${escapeHtml(dateRange)}</p>
       <p style="margin: 0 0 16px;">
         We ran ${heartbeat.runs} check${heartbeat.runs === 1 ? "" : "s"} across ${heartbeat.watchlistsChecked} competitor${heartbeat.watchlistsChecked === 1 ? "" : "s"}
@@ -509,7 +511,7 @@ function renderTrendSectionHtml(lines: Array<{ text: string }>) {
   }
 
   return `
-      <h2 style="font-size: 18px; margin: 0 0 12px;">Trends this period</h2>
+      <h2 style="${EMAIL_H2_STYLE}">Trends this period</h2>
       <table style="margin: 0 0 20px; border-collapse: collapse; width: 100%; background-color: ${EMAIL_SURFACE_BG}; color: ${EMAIL_TEXT_PRIMARY};">
         ${lines
           .map(
