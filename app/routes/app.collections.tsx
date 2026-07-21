@@ -380,7 +380,7 @@ export default function CollectionsRoute() {
             ))}
             {data.collections.length === 0 ? (
               <EmptyState
-                description="Collections you create with the form above appear here."
+                description="Saved competitor sets appear here."
                 title="Nothing saved yet"
                 variant="inline"
               />
@@ -666,7 +666,7 @@ export default function CollectionsRoute() {
             </>
           ) : (
             <EmptyState
-              description="Collections keep competitor examples, notes, tags, and share links ready for your team. Group competitor ads, offers, and landing-page evidence with the create form."
+              description="Group a competitor's best ads, offers, and landing-page evidence in one place — ready to reuse in a report or share with your team."
               title="Create your first evidence collection"
             />
           )}

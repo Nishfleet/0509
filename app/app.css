@@ -5410,6 +5410,14 @@ one signal-green accent.
   padding: 28px 24px;
 }
 
+/* WP-B2: primary + optional "see a sample" actions share one centred row. */
+.f9-empty-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
 /* WP-17 icon set: quiet document glyph atop panel empty states. */
 .f9-dash-state-empty > .f9-empty-state-icon {
   width: 20px;

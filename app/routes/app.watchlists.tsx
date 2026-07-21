@@ -1159,12 +1159,7 @@ export default function WatchlistsRoute() {
               );
             })}
             {data.watchlists.length === 0 ? (
-              <EmptyState
-                action={{ label: "Add competitor", to: "/search" }}
-                description="Paste your website or a competitor website to start tracking visible changes."
-                headingLevel="h3"
-                title="Add your first competitor"
-              />
+              <EmptyState title="No competitors yet" variant="inline" />
             ) : null}
           </div>
         </article>
@@ -1401,7 +1396,8 @@ export default function WatchlistsRoute() {
           ) : (
             <EmptyState
               action={{ label: "Add competitor", to: "/search" }}
-              description="Paste your website or a competitor website to start tracking offer, CTA, headline, and form changes."
+              description="Paste your website or a competitor's — we scan their Meta ads and landing page, then email you the moment their offer, creative, or CTA changes."
+              sample={{ label: "See a sample brief", to: "/#demo" }}
               title="Add your first competitor"
             />
           )}
