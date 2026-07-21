@@ -51,6 +51,38 @@ export function isDiscoveryCacheWithinMaxAge(
   return nowMs - fetchedMs <= maxAgeMs;
 }
 
+/**
+ * Cutoff for the broken-advertiser-filter era. Searches scraped before the
+ * advertiser-fix deploy (merge 7c0a92ea, ~2026-07-21T08:00Z) cached 0-ad
+ * results that are now wrong, yet stay usable (discoveryEmptyReason
+ * "no_results") and can serve for up to the cache TTL — 24h for scans, and up
+ * to a 7-day cadence window for shared scheduled hits. A zero-result entry
+ * scraped before this instant is treated as expired so the next read re-scrapes
+ * fresh. Non-zero results are always honored (they were never affected).
+ *
+ * REMOVABLE after 2026-07-28: one full cache-TTL cycle (7-day max window) past
+ * the fix deploy, every pre-fix zero-result entry has aged out on its own and
+ * this override — plus its helper and tests — can be deleted.
+ */
+export const STALE_ZERO_RESULT_CUTOFF = "2026-07-21T08:10:00.000Z";
+const STALE_ZERO_RESULT_CUTOFF_MS = Date.parse(STALE_ZERO_RESULT_CUTOFF);
+
+/**
+ * True when a cache entry holds zero ads AND was scraped before the
+ * advertiser-fix cutoff — i.e. a stale zero-result from the broken-filter era
+ * that must be re-scraped rather than served.
+ */
+export function isStaleZeroResultDiscoveryCacheEntry(input: {
+  adCount: number;
+  fetchedAt: string;
+}): boolean {
+  if (input.adCount > 0) return false;
+  const fetchedMs = Date.parse(input.fetchedAt);
+  // Unparseable timestamp: don't special-case — let normal expiry rules apply.
+  if (!Number.isFinite(fetchedMs)) return false;
+  return fetchedMs < STALE_ZERO_RESULT_CUTOFF_MS;
+}
+
 export interface DiscoveryCacheReadOnlyLookup {
   provider: string;
   fingerprint: string;

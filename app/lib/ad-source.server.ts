@@ -10,6 +10,7 @@ import {
   buildDiscoveryCacheKey,
   isDiscoveryCacheRouteCompatible,
   isDiscoveryCacheWithinMaxAge,
+  isStaleZeroResultDiscoveryCacheEntry,
   resolveDiscoveryCacheTtlMs,
 } from "~/lib/discovery-cache.server";
 import { resolveE2EFixtureProviderFromEnv } from "~/lib/e2e-provider.server";
@@ -500,8 +501,21 @@ export async function searchAdsViaSourceResolver(
     usableCached && isDiscoveryCacheRouteCompatible(routeContext, usableCached.routeContext)
       ? usableCached
       : null;
+  // Broken-advertiser-filter era: a zero-result entry scraped before the
+  // advertiser-fix cutoff cached wrong "0 ads" data that stays usable and would
+  // otherwise serve for up to the cache TTL (24h scans, up to a 7-day shared
+  // cadence window). Treat it as expired so this read re-scrapes fresh. Non-zero
+  // results are never affected. Removable after 2026-07-28 (see cutoff comment).
+  const staleZeroResult =
+    routeCompatibleCached != null &&
+    isStaleZeroResultDiscoveryCacheEntry({
+      adCount: routeCompatibleCached.payload.ads.length,
+      fetchedAt: routeCompatibleCached.fetchedAt,
+    });
   const unexpiredCache =
-    routeCompatibleCached && new Date(routeCompatibleCached.expiresAt).getTime() > Date.now()
+    routeCompatibleCached &&
+    !staleZeroResult &&
+    new Date(routeCompatibleCached.expiresAt).getTime() > Date.now()
       ? routeCompatibleCached
       : null;
   // forceLive path (WP-36): shared scan/warmup cache younger than the caller's
@@ -510,6 +524,7 @@ export async function searchAdsViaSourceResolver(
     forceLive &&
     acceptCacheYoungerThanMs != null &&
     routeCompatibleCached &&
+    !staleZeroResult &&
     isDiscoveryCacheWithinMaxAge(routeCompatibleCached.fetchedAt, acceptCacheYoungerThanMs)
       ? routeCompatibleCached
       : null;

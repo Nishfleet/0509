@@ -729,6 +729,211 @@ describe("searchAdsViaSourceResolver", () => {
     });
   });
 
+  it("re-scrapes a stale zero-result shared cache entry scraped before the advertiser-fix cutoff", async () => {
+    // A watchlist scan cached 0 ads during the broken-advertiser-filter era
+    // (fetched before STALE_ZERO_RESULT_CUTOFF). The generous acceptance window
+    // isolates the cutoff logic from the age check: without the fix this entry
+    // would be served as a healthy forceLive shared hit (0 ads); with the fix it
+    // is treated as expired and the live provider is called to re-scrape.
+    const metaApiSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>().mockResolvedValue({
+      ads: [
+        {
+          metaAdId: "fresh-after-fix-1",
+          advertiser: "Nykaa",
+          body: "Now discoverable",
+          previewHeadline: "Now discoverable",
+          previewSubhead: "",
+          hook: "Now discoverable",
+          offer: "Now discoverable",
+          cta: "Shop now",
+          format: "image",
+          languageLabel: "English",
+          destinationType: "website",
+          landingPageUrl: "https://www.nykaa.com/fresh",
+          adSnapshotUrl: "https://www.facebook.com/ads/library/?id=fresh-after-fix-1",
+          countries: ["India"],
+          platforms: ["Facebook"],
+          firstSeenAt: null,
+          lastSeenAt: null,
+          active: true,
+          researchSummary: "Fresh re-scrape after the advertiser fix",
+          source: "meta_api",
+          analysisFields: [],
+          tags: [],
+        },
+      ],
+      nextCursor: null,
+      source: "meta_api",
+      provider: "meta_api",
+      cacheStatus: "miss",
+    });
+    // Fetched 10 minutes before the cutoff — a genuine broken-era zero result.
+    const fetchedAt = "2026-07-21T08:00:00.000Z";
+    const getDiscoveryCacheEntry = vi.fn().mockResolvedValue({
+      cacheKey: "meta_api:fp-nykaa:india:page-1",
+      provider: "meta_api",
+      routeContext: "watchlist_scan",
+      queryFingerprint: "fp-nykaa",
+      country: "India",
+      cursor: null,
+      payload: {
+        ads: [],
+        nextCursor: null,
+        source: "meta_api",
+        provider: "meta_api",
+        cacheStatus: "miss",
+        discoveryEmptyReason: "no_results",
+      },
+      fetchedAt,
+      expiresAt: new Date(Date.now() + 20 * 60 * 60 * 1000).toISOString(),
+      browserMsUsed: null,
+      createdAt: fetchedAt,
+      updatedAt: fetchedAt,
+    });
+
+    vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
+      searchAds: metaApiSearch,
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState: vi.fn(),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      { DB: {} as D1Database } as never,
+      {
+        mode: "advertiser",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "watchlist_scan",
+        customerMetaAdLibraryToken: "customer-token",
+        forceLive: true,
+        // Deliberately huge (far beyond real cadence caps) so the age check can
+        // never be the reason for the miss — the cutoff logic must be.
+        acceptCacheYoungerThanMs: 400 * 24 * 60 * 60 * 1000,
+      },
+    );
+
+    expect(metaApiSearch).toHaveBeenCalledTimes(1);
+    expect(result.cacheStatus).not.toBe("hit");
+    expect(result.ads).toEqual([expect.objectContaining({ metaAdId: "fresh-after-fix-1" })]);
+  });
+
+  it("still serves a within-window non-zero shared cache entry scraped before the cutoff (unaffected)", async () => {
+    // Guardrail: the cutoff only expires ZERO-result entries. A non-zero entry
+    // fetched before the cutoff stays a healthy forceLive shared hit.
+    const metaApiSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>();
+    const fetchedAt = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    const getDiscoveryCacheEntry = vi.fn().mockResolvedValue({
+      cacheKey: "meta_api:fp-nykaa:india:page-1",
+      provider: "meta_api",
+      routeContext: "watchlist_scan",
+      queryFingerprint: "fp-nykaa",
+      country: "India",
+      cursor: null,
+      payload: {
+        ads: [
+          {
+            metaAdId: "pre-cutoff-nonzero-1",
+            advertiser: "Nykaa",
+            body: "Still valid",
+            previewHeadline: "Still valid",
+            previewSubhead: "",
+            hook: "Still valid",
+            offer: null,
+            cta: "Shop now",
+            format: "image",
+            languageLabel: "English",
+            destinationType: "website",
+            landingPageUrl: "https://www.nykaa.com/valid",
+            adSnapshotUrl: "https://www.facebook.com/ads/library/?id=pre-cutoff-nonzero-1",
+            countries: ["India"],
+            platforms: ["Facebook"],
+            firstSeenAt: null,
+            lastSeenAt: null,
+            active: true,
+            researchSummary: "Non-zero pre-cutoff fixture",
+            source: "meta_api",
+            analysisFields: [],
+            tags: [],
+          },
+        ],
+        nextCursor: null,
+        source: "meta_api",
+        provider: "meta_api",
+        cacheStatus: "miss",
+      },
+      fetchedAt,
+      expiresAt: new Date(Date.now() + 20 * 60 * 60 * 1000).toISOString(),
+      browserMsUsed: null,
+      createdAt: fetchedAt,
+      updatedAt: fetchedAt,
+    });
+
+    vi.doMock("~/lib/meta-api.server", () => ({
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
+      searchAds: metaApiSearch,
+      demoSearch: vi.fn(),
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry,
+      getDiscoveryProviderState: vi.fn(),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+
+    const result = await searchAdsViaSourceResolver(
+      { DB: {} as D1Database } as never,
+      {
+        mode: "advertiser",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      {
+        purpose: "watchlist_scan",
+        customerMetaAdLibraryToken: "customer-token",
+        forceLive: true,
+        acceptCacheYoungerThanMs: 3 * 60 * 60 * 1000,
+      },
+    );
+
+    expect(metaApiSearch).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      cacheStatus: "hit",
+      ads: [expect.objectContaining({ metaAdId: "pre-cutoff-nonzero-1" })],
+    });
+  });
+
   it("rejects forceLive shared hits from public_search cache (FIX-1)", async () => {
     const metaApiSearch = vi.fn<(...args: unknown[]) => Promise<SearchResponse>>().mockResolvedValue({
       ads: [],

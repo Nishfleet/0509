@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  STALE_ZERO_RESULT_CUTOFF,
   buildDiscoveryCacheKey,
   isDiscoveryCacheRouteCompatible,
   isDiscoveryCacheWithinMaxAge,
+  isStaleZeroResultDiscoveryCacheEntry,
   resolveDiscoveryCacheTtlMs,
   resolveScheduledScanCacheMaxAgeMs,
 } from "~/lib/discovery-cache.server";
@@ -50,6 +52,39 @@ describe("isDiscoveryCacheWithinMaxAge", () => {
     expect(isDiscoveryCacheWithinMaxAge(outside3h, 3 * 60 * 60 * 1000, now)).toBe(false);
     expect(isDiscoveryCacheWithinMaxAge("not-a-date", 3 * 60 * 60 * 1000, now)).toBe(false);
     expect(isDiscoveryCacheWithinMaxAge(within3h, 0, now)).toBe(false);
+  });
+});
+
+describe("isStaleZeroResultDiscoveryCacheEntry (broken-advertiser-filter cutoff)", () => {
+  const cutoffMs = Date.parse(STALE_ZERO_RESULT_CUTOFF);
+  const beforeCutoff = new Date(cutoffMs - 60 * 60 * 1000).toISOString();
+  const afterCutoff = new Date(cutoffMs + 60 * 60 * 1000).toISOString();
+
+  it("expires a zero-result entry scraped before the cutoff (forces a fresh scrape)", () => {
+    expect(
+      isStaleZeroResultDiscoveryCacheEntry({ adCount: 0, fetchedAt: beforeCutoff }),
+    ).toBe(true);
+  });
+
+  it("honors a zero-result entry scraped at or after the cutoff", () => {
+    expect(
+      isStaleZeroResultDiscoveryCacheEntry({ adCount: 0, fetchedAt: afterCutoff }),
+    ).toBe(false);
+    expect(
+      isStaleZeroResultDiscoveryCacheEntry({ adCount: 0, fetchedAt: STALE_ZERO_RESULT_CUTOFF }),
+    ).toBe(false);
+  });
+
+  it("honors a non-zero-result entry scraped before the cutoff (never affected)", () => {
+    expect(
+      isStaleZeroResultDiscoveryCacheEntry({ adCount: 5, fetchedAt: beforeCutoff }),
+    ).toBe(false);
+  });
+
+  it("does not special-case entries with an unparseable timestamp", () => {
+    expect(
+      isStaleZeroResultDiscoveryCacheEntry({ adCount: 0, fetchedAt: "not-a-date" }),
+    ).toBe(false);
   });
 });
 
