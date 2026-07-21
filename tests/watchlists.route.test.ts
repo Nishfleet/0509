@@ -2149,3 +2149,93 @@ describe("watchlists route rendering", () => {
     expect(markup).not.toContain("Competitor ad checks degraded");
   });
 });
+
+describe("WP-C2 Beat 3 — first-run wait arc (honesty-gated)", () => {
+  const scanRun = (
+    status: WatchlistRunRecord["status"],
+    errorCode: string | null = null,
+  ): WatchlistRunRecord => ({
+    id: `run-${status}-${errorCode ?? "none"}`,
+    watchlistId: "watch-1",
+    triggerType: "manual",
+    status,
+    pageBudget: 1,
+    pagesScanned: 0,
+    baselineFromRunId: null,
+    summary: {},
+    startedAt: "2026-04-18T09:00:00.000Z",
+    finishedAt: status === "succeeded" || status === "failed" ? "2026-04-18T09:02:00.000Z" : null,
+    errorCode,
+    errorMessage: null,
+  });
+
+  it("gates the feed to real status only — no fabricated ad or creative counts", async () => {
+    const { FirstRunWaitArc } = await import("~/components/first-run-wait");
+    const markup = renderToStaticMarkup(
+      createElement(FirstRunWaitArc, { run: scanRun("running"), scanDomain: "rival.com" }),
+    );
+
+    // Reduced honest feed: Queued -> Reading {domain} -> Filing your first brief.
+    expect(markup).toContain("ON THE WIRE");
+    expect(markup).toContain("GOING TO PRESS");
+    // P2: "reading now" is only truthful for a RUNNING scan.
+    expect(markup).toContain("reading rival.com");
+    expect(markup).toContain("Reading rival.com now"); // spine node 2 sub
+    expect(markup).toContain("Reading rival.com");
+    expect(markup).toContain("Filing your first brief");
+    expect(markup).toContain("Sourced or it doesn");
+    // The "running" step is the now line; filing stays pending.
+    expect(markup).toContain('data-status="now"');
+    expect(markup).toContain('data-status="pending"');
+    // Honesty gate: never invent per-field sub-steps the run does not expose.
+    expect(markup).not.toMatch(/\d+\s+active ads/);
+    expect(markup).not.toContain("ads in rotation");
+    expect(markup).not.toContain("Saved every creative");
+    expect(markup).not.toContain("CTA and price captured");
+    // Lead preview is skeleton-only — never a fabricated headline.
+    expect(markup).toContain("SETTING THE LEAD");
+    expect(markup).toContain("f9-wire-skeleton");
+  });
+
+  it("shows a truthful queued state (never 'reading now') while the run is pending", async () => {
+    const { FirstRunWaitArc } = await import("~/components/first-run-wait");
+    const markup = renderToStaticMarkup(
+      createElement(FirstRunWaitArc, { run: scanRun("pending"), scanDomain: "rival.com" }),
+    );
+    // P2: a queued scan is never dressed up as active reading.
+    expect(markup).toContain("is "); // headline "{domain} is next in line."
+    expect(markup).toContain("next in line.");
+    expect(markup).toContain("Queued — next in line"); // spine node 2 sub
+    expect(markup).not.toContain("Reading rival.com now");
+    expect(markup).not.toContain("We're reading rival.com");
+    // The feed still lists the upcoming Reading + Filing steps as pending.
+    expect(markup).toContain("Reading rival.com");
+    expect(markup).toContain("Filing your first brief");
+  });
+
+  it("falls through to the existing failure UI on first_scan_* / failed / skipped runs", async () => {
+    const { FirstRunWaitArc, isHealthyFirstScanInFlight } = await import(
+      "~/components/first-run-wait"
+    );
+    for (const run of [
+      scanRun("pending", "first_scan_dispatch_failed"),
+      scanRun("pending", "first_scan_setup_failed"),
+      scanRun("failed", "first_scan_retry_exhausted"),
+      scanRun("skipped"),
+      scanRun("succeeded"),
+    ]) {
+      expect(isHealthyFirstScanInFlight(run)).toBe(false);
+      const markup = renderToStaticMarkup(
+        createElement(FirstRunWaitArc, { run, scanDomain: "rival.com" }),
+      );
+      // No progress, no partial feed — the arc renders nothing so the existing
+      // FirstScanBanner failure/complete UI is what shows.
+      expect(markup).toBe("");
+    }
+  });
+
+  it("treats a not-yet-written run row as queued and in-flight", async () => {
+    const { isHealthyFirstScanInFlight } = await import("~/components/first-run-wait");
+    expect(isHealthyFirstScanInFlight(null)).toBe(true);
+  });
+});

@@ -298,12 +298,14 @@ describe("dashboard route agent memory", () => {
       await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Brief");
-    expect(markup).toContain("Build your brief");
-    // First-run hero drops the separate action button in favour of one
-    // dominant add path: the search form + the free-watch banner CTA.
-    expect(markup).toContain("Add your first competitor");
-    expect(markup).toContain("Search ads");
+    // WP-C2 Beat 1: empty free workspace leads with the Wire hero + spine.
+    expect(markup).toContain("THE 5·9 WIRE · NOTHING FILED YET");
+    expect(markup).toContain("Name one competitor.");
+    // First-run hero has one dominant add path: the search form.
+    expect(markup).toContain("Assign the beat →");
+    expect(markup).toContain(
+      "Free includes one watchlist — activation scan, weekly check, weekly email brief.",
+    );
     expect(markup).not.toContain("Account context saved");
     expect(markup).not.toContain("[redacted]: [redacted]");
     expect(markup).not.toContain("hunter2");
@@ -506,7 +508,7 @@ describe("dashboard route agent memory", () => {
     );
   });
 
-  it("renders the queued Brief when an active competitor has no scan yet", async () => {
+  it("renders the Beat 2 Wire hero when a first competitor's scan is in flight", async () => {
     mockDashboardLoaderDependencies({
       watchlists: [
         {
@@ -532,11 +534,27 @@ describe("dashboard route agent memory", () => {
       await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Brief");
-    expect(markup).toContain("Activation scan is queued");
+    // WP-C2 Beat 2: competitor added, first scan in flight — spine node 2 now.
+    expect(markup).toContain("THE 5·9 WIRE · BEAT ASSIGNED");
+    expect(markup).toContain("on the wire.");
+    expect(markup).toContain("We’re covering Boat Lifestyle.");
     expect(markup).toContain("Boat Lifestyle");
-    expect(markup).toContain("Open watchlists");
-    expect(markup).toContain("First scan pending");
+    // Honesty: the scan is queued, not confirmed running — no "running now"
+    // claim, and the mirror feed shows Queued (not Reading now).
+    expect(markup).toContain("The first scan is underway");
+    expect(markup).not.toContain("The first scan is running now");
+    // Spine advanced: node 1 done, node 2 now.
+    expect(markup).toContain('data-status="done"');
+    expect(markup).toContain('data-fill="gradient"');
+    // Overview mirror shows the honesty-gated ON-THE-WIRE feed.
+    expect(markup).toContain("ON THE WIRE");
+    // P5 capacity truth: free is a one-watchlist plan and is already at its
+    // limit, so the queue-more card is the upgrade affordance, not an add form
+    // that would be rejected.
+    expect(markup).toContain("Watch more competitors");
+    expect(markup).toContain("View plans");
+    expect(markup).not.toContain("Add another");
+    expect(markup).not.toContain("Activation scan is queued");
   });
 
   it("surfaces safe counter-move follow-ups from agent action audits", async () => {

@@ -285,3 +285,34 @@ for (const viewport of viewports) {
     test.info().annotations.push({ type: "finalUrl", description: `${finalUrl.pathname}${finalUrl.search}` });
   });
 }
+
+test("WP-C2 Beat 1 empty free workspace keeps the weekly promise honest", async ({
+  page,
+  context,
+  baseURL,
+}, testInfo) => {
+  test.info().annotations.push(
+    { type: "persona", description: "e2e-free-onboarded" },
+    { type: "scenario", description: "first-run-beat-1-empty-free" },
+  );
+  await signInAs(context, baseURL, "e2e-free-onboarded");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/app");
+  await expect(page.getByRole("heading", { level: 1, name: "Overview", exact: true })).toBeVisible();
+  await expect(page.locator("body")).toContainText("THE 5·9 WIRE · NOTHING FILED YET");
+  await expect(page.locator("body")).toContainText("Name one competitor.");
+  // Free is weekly, not daily — it must never make the daily "before you wake"
+  // (05:09) delivery promise; it states the weekly brief instead.
+  await expect(page.locator("body")).toContainText("We file your first weekly brief.");
+  await expect(page.getByText("We file the first brief before you wake.")).toHaveCount(0);
+  await expect(page.locator("body")).toContainText(
+    "Free includes one watchlist — activation scan, weekly check, weekly email brief.",
+  );
+  // Forward-only spine + exactly one dominant add action (the search submit).
+  await expect(page.locator(".f9-first-run-spine").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Assign the beat →", exact: true })).toBeVisible();
+  await expect(page.locator("body")).not.toContainText(/stakeout|under watch|on camera|surveillance/i);
+  await expectNoHorizontalOverflow(page);
+  await expectPhoneTouchTargets(page);
+  await attachReleaseStateArtifacts({ page, testInfo, prefix: "j2-first-run-beat-1", state: "first-run-empty-free" });
+});

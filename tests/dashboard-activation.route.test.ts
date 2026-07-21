@@ -101,15 +101,21 @@ describe("dashboard first 15 minutes activation", () => {
       await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Brief");
-    expect(markup).toContain("Build your brief");
-    expect(markup).toContain("Add your first competitor");
+    // WP-C2 Beat 1: the Wire hero leads an empty workspace.
+    expect(markup).toContain("THE 5·9 WIRE · NOTHING FILED YET");
+    expect(markup).toContain("Name one competitor.");
+    expect(markup).toContain("We file the first brief before you wake.");
     // First-run hero drops the separate action button; the search form is the
     // single dominant add path.
     expect(markup).toContain("Competitor website");
-    expect(markup).toContain("Search ads");
+    expect(markup).toContain("Assign the beat →");
     expect(markup).toContain("f9-primary-button");
     expect(markup).toContain('action="/search"');
+    // The forward-only spine sits above the hero: node 1 now, 2–3 idle.
+    expect(markup).toContain('class="f9-first-run-spine"');
+    expect(markup).toContain('data-status="now"');
+    // Exactly one dominant add action — the search box (one submit button).
+    expect(markup.match(/type="submit"/g)?.length ?? 0).toBe(1);
   });
 
   it("surfaces retention moves without showing low-priority optional setup", async () => {
