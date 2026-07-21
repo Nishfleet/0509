@@ -64,7 +64,7 @@ const validRow = {
   foreign_key_violation_count: 0,
   monitoring_recovery_pair_count: 1,
   obsolete_sku_count: 0,
-  persona_count: 22,
+  persona_count: 24,
   support_recovery_case_count: 1,
   unexpected_no_cache_count: 0,
   unlinked_paid_persona_count: 0,

@@ -18,6 +18,14 @@ import {
   DashboardRouteLoading,
 } from "~/components/dashboard-route-loading";
 import { ActionFeedback } from "~/components/action-feedback";
+import {
+  FirstRunSpine,
+  resolveFirstRunFurthest,
+  shouldRenderFirstRunSpine,
+} from "~/components/first-run-spine";
+import { DispatchFeed } from "~/components/first-run-wait";
+import { WireEyebrow, WireHeadline } from "~/components/first-run-wire";
+import { getPlanLimit, planAllowsDigestCadence } from "~/lib/plan-entitlements";
 import { LocalTime } from "~/components/local-time";
 import { Pill } from "~/components/pill";
 import { SubmitButton } from "~/components/submit-button";
@@ -529,6 +537,47 @@ export default function AppDashboardRoute() {
   const statusCards = marketDeskBrief.metrics;
   const hasDashboardMetrics = marketDeskBrief.hasMetrics;
 
+  // WP-C2 first-run arc — all signals derived from existing durable records
+  // (no migration). A completed scan is NOT a brief: `hasAnyBrief` is derived
+  // only from real brief/digest records, so the spine stays through the
+  // "filing" gap (scan done, brief pending) and retires only once a brief has
+  // actually filed. Free's weekly Competitor Watch digest IS that brief.
+  const hasCompetitor = competitorCount > 0;
+  const firstScanComplete =
+    watchlists.some((watchlist) => Boolean(watchlist.lastScannedAt)) ||
+    (data.overnightStats?.runs ?? 0) > 0 ||
+    (data.overnightStats?.watchlistsChecked ?? 0) > 0;
+  const hasAnyBrief = digests.length > 0;
+  const firstRunFurthest = resolveFirstRunFurthest({
+    hasCompetitor,
+    firstScanComplete,
+    hasAnyBrief,
+  });
+  // Show the spine while first-run and there is a genuine arc in progress. A
+  // truly empty workspace shows Beat 1; a stray completed check with no
+  // competitor (e.g. deleted watchlist) is not first-run, so no spine.
+  const showFirstRunSpine =
+    shouldRenderFirstRunSpine({ hasAnyBrief }) &&
+    (hasCompetitor || !firstScanComplete);
+  const showWireBeat1 =
+    showFirstRunSpine && !hasCompetitor && !firstScanComplete;
+  const showWireBeat2 = showFirstRunSpine && hasCompetitor && !firstScanComplete;
+  const firstScanTarget =
+    watchlists.find(
+      (watchlist) => watchlist.isActive && !watchlist.lastScannedAt,
+    ) ??
+    watchlists[0] ??
+    null;
+  const firstScanDomain = firstScanTarget?.targetLabel ?? "your competitor";
+  // Free/Scout are weekly; only daily plans get the "before 05:09" promise.
+  const hasDailyCadence = planAllowsDigestCadence(plan, "daily");
+  // Capacity truth: the queue-more add form only appears when the plan can
+  // actually hold another watchlist; otherwise show the upgrade affordance.
+  const canAddMoreCompetitor = competitorCount < getPlanLimit(plan, "watchlists");
+  // First-brief bridge: once the first brief has filed and it is still the only
+  // one, hand the new user to their front-page brief with the arc-arrival flag.
+  const showFirstBriefBridge = hasAnyBrief && digests.length === 1;
+
   return (
     <DashboardPage>
       <section className="f9-app-stack f9-dashboard-clean">
@@ -569,83 +618,225 @@ export default function AppDashboardRoute() {
           </article>
         ) : null}
 
-        {plan === "free" && competitorCount === 0 ? (
-          <article className="f9-checkout-banner is-pending" aria-live="polite">
+        {showFirstRunSpine ? (
+          <FirstRunSpine
+            furthest={firstRunFurthest}
+            scanDomain={hasCompetitor ? firstScanDomain : undefined}
+            scanPhase={showWireBeat2 ? "queued" : undefined}
+          />
+        ) : null}
+
+        {showFirstBriefBridge ? (
+          <article className="f9-app-panel f9-first-brief-bridge">
             <div>
-              <span className="f9-app-kicker">
-                Free weekly watch
-              </span>
-              <h2>Watch your first competitor free — one weekly email brief.</h2>
-              <p>
-                Free includes one watchlist with an activation scan, a weekly
-                check, and a weekly email brief. Upgrade for 3–6 hour checks,
-                daily briefs, and saved evidence.
+              <WireEyebrow>THE 5·9 WIRE · FIRST BRIEF FILED</WireEyebrow>
+              <h2>Your first brief is ready.</h2>
+              <p className="f9-muted-copy">
+                The full front page — score, moves, and creatives — is waiting
+                in Briefs.
               </p>
             </div>
-            <div className="f9-checkout-banner-actions">
-              <Link className="f9-primary-button" to="/search">
-                Add your first competitor
-              </Link>
-            </div>
+            <Link className="f9-primary-button" to="/app/digests?firstrun=1">
+              Read the full brief →
+            </Link>
           </article>
         ) : null}
 
-        <article className="f9-app-panel f9-dashboard-hero">
-          <div className="f9-panel-toolbar">
-            <div>
-              <span className="f9-app-kicker">{marketDeskBrief.kicker}</span>
-              <h2>{marketDeskBrief.title}</h2>
-              <p className="f9-muted-copy">{marketDeskBrief.summary}</p>
-            </div>
-            {competitorCount > 0 ? (
-              <Link
+        {showWireBeat1 ? (
+          <article className="f9-app-panel f9-dashboard-hero f9-wire-hero">
+            <WireEyebrow>THE 5·9 WIRE · NOTHING FILED YET</WireEyebrow>
+            <WireHeadline
+              before="Name one competitor. "
+              marked={
+                hasDailyCadence
+                  ? "We file the first brief before you wake."
+                  : "We file your first weekly brief."
+              }
+            />
+            <p className="f9-muted-copy f9-wire-sub">
+              {hasDailyCadence
+                ? "Paste a website — a competitor’s or your own. We pull their live Meta ads and landing page, then file a brief the moment their offer, creative, or CTA moves."
+                : "Paste a website — a competitor’s or your own. We pull their live Meta ads and landing page now, then check every week and file a brief when their offer, creative, or CTA moves."}
+            </p>
+
+            <CommercialSourceStatus status={data.metaStatus} />
+
+            <Form action="/search" className="f9-dashboard-search" method="get">
+              <label className="f9-field" htmlFor="dashboard-market-search">
+                <span>Competitor website</span>
+                <input
+                  autoComplete="url"
+                  id="dashboard-market-search"
+                  inputMode="url"
+                  name="website"
+                  placeholder="https://competitor.com"
+                  spellCheck={false}
+                  type="text"
+                />
+              </label>
+              <SubmitButton
                 className="f9-primary-button"
-                to={marketDeskBrief.action.href}
+                getAction="/search"
+                pendingLabel="Filing…"
               >
-                {marketDeskBrief.action.label}
-              </Link>
+                Assign the beat →
+              </SubmitButton>
+            </Form>
+
+            {plan === "free" ? (
+              <p className="f9-wire-eyebrow f9-wire-hint">
+                Free includes one watchlist — activation scan, weekly check,
+                weekly email brief.
+              </p>
             ) : null}
-          </div>
 
-          <CommercialSourceStatus status={data.metaStatus} />
-
-          {marketDeskBrief.items.length > 0 ? (
-            <div
-              className="f9-brief-snapshot"
-              aria-label="Brief details"
-            >
-              {marketDeskBrief.items.map((item) => (
-                <article key={`${item.label}:${item.title}`}>
-                  <span>{item.label}</span>
-                  <strong>{item.title}</strong>
-                  <p>{item.detail}</p>
-                </article>
-              ))}
+            <div className="f9-wire-tease" aria-label="A dimmed sample brief">
+              <WireEyebrow>
+                WHAT LANDS ONCE WE&rsquo;VE FILED — A REAL BRIEF, DIMMED
+              </WireEyebrow>
+              <div className="f9-wire-tease-grid">
+                <div className="f9-wire-tease-score">
+                  <span className="f9-wire-tease-num">
+                    72<small>/100</small>
+                  </span>
+                  <span className="f9-wire-tease-cap">Ad aggression</span>
+                  <span className="f9-wire-tease-flag">DIMMED · sample</span>
+                </div>
+                <div className="f9-wire-tease-thumb">
+                  <span>Their headline, saved to the pixel</span>
+                </div>
+                <div className="f9-wire-tease-thumb">
+                  <span>Every video creative, poster frame and all</span>
+                </div>
+              </div>
             </div>
-          ) : null}
+          </article>
+        ) : showWireBeat2 ? (
+          <article className="f9-app-panel f9-dashboard-hero f9-wire-hero">
+            <WireEyebrow>THE 5·9 WIRE · BEAT ASSIGNED</WireEyebrow>
+            <WireHeadline before={`${firstScanDomain} is `} marked="on the wire." />
 
-          <Form action="/search" className="f9-dashboard-search" method="get">
-            <label className="f9-field" htmlFor="dashboard-market-search">
-              <span>Competitor website</span>
-              <input
-                autoComplete="url"
-                id="dashboard-market-search"
-                inputMode="url"
-                name="website"
-                placeholder="https://competitor.com"
-                spellCheck={false}
-                type="text"
-              />
-            </label>
-            <SubmitButton
-              className="f9-primary-button"
-              getAction="/search"
-              pendingLabel="Searching…"
-            >
-              Search ads
-            </SubmitButton>
-          </Form>
-        </article>
+            <div className="f9-wire-confirm">
+              <span className="f9-app-kicker">Covering {firstScanDomain}</span>
+              <h3>We&rsquo;re covering {firstScanDomain}.</h3>
+              <p>
+                The first scan is underway — you don&rsquo;t have to wait on this
+                page.
+              </p>
+              <p className="f9-wire-eyebrow">
+                Sourced from live Meta ads + landing page.
+              </p>
+            </div>
+
+            <DispatchFeed reading={false} domain={firstScanDomain} />
+
+            {canAddMoreCompetitor ? (
+              <div className="f9-queue-more">
+                <WireEyebrow>A BIGGER BRIEF</WireEyebrow>
+                <h3>Add another competitor</h3>
+                <p className="f9-muted-copy">
+                  Cover three to five and the brief compares their offers side
+                  by side.
+                </p>
+                <Form
+                  action="/search"
+                  className="f9-dashboard-search"
+                  method="get"
+                >
+                  <label className="f9-field" htmlFor="dashboard-queue-more">
+                    <span>Competitor website</span>
+                    <input
+                      autoComplete="url"
+                      id="dashboard-queue-more"
+                      inputMode="url"
+                      name="website"
+                      placeholder="https://another-competitor.com"
+                      spellCheck={false}
+                      type="text"
+                    />
+                  </label>
+                  <SubmitButton
+                    className="f9-primary-button"
+                    getAction="/search"
+                    pendingLabel="Filing…"
+                  >
+                    Add another
+                  </SubmitButton>
+                </Form>
+              </div>
+            ) : (
+              <div className="f9-queue-more">
+                <WireEyebrow>A BIGGER BRIEF</WireEyebrow>
+                <h3>Watch more competitors</h3>
+                <p className="f9-muted-copy">
+                  You&rsquo;ve reached your plan&rsquo;s competitor limit.
+                  Upgrade to watch more competitors and check faster than your
+                  weekly cadence.
+                </p>
+                <Link
+                  className="f9-primary-button"
+                  to="/app/billing?source=dashboard-limit#plans"
+                >
+                  View plans
+                </Link>
+              </div>
+            )}
+          </article>
+        ) : (
+          <article className="f9-app-panel f9-dashboard-hero">
+            <div className="f9-panel-toolbar">
+              <div>
+                <span className="f9-app-kicker">{marketDeskBrief.kicker}</span>
+                <h2>{marketDeskBrief.title}</h2>
+                <p className="f9-muted-copy">{marketDeskBrief.summary}</p>
+              </div>
+              {competitorCount > 0 ? (
+                <Link
+                  className="f9-primary-button"
+                  to={marketDeskBrief.action.href}
+                >
+                  {marketDeskBrief.action.label}
+                </Link>
+              ) : null}
+            </div>
+
+            <CommercialSourceStatus status={data.metaStatus} />
+
+            {marketDeskBrief.items.length > 0 ? (
+              <div className="f9-brief-snapshot" aria-label="Brief details">
+                {marketDeskBrief.items.map((item) => (
+                  <article key={`${item.label}:${item.title}`}>
+                    <span>{item.label}</span>
+                    <strong>{item.title}</strong>
+                    <p>{item.detail}</p>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+
+            <Form action="/search" className="f9-dashboard-search" method="get">
+              <label className="f9-field" htmlFor="dashboard-market-search">
+                <span>Competitor website</span>
+                <input
+                  autoComplete="url"
+                  id="dashboard-market-search"
+                  inputMode="url"
+                  name="website"
+                  placeholder="https://competitor.com"
+                  spellCheck={false}
+                  type="text"
+                />
+              </label>
+              <SubmitButton
+                className="f9-primary-button"
+                getAction="/search"
+                pendingLabel="Searching…"
+              >
+                Search ads
+              </SubmitButton>
+            </Form>
+          </article>
+        )}
 
         {readinessGaps.length > 0 ? (
           <details className="f9-app-panel f9-setup-strip">

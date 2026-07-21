@@ -9,7 +9,9 @@ export const E2E_FIXTURE_EXPECTATIONS = Object.freeze({
   activeMemberships: 1,
   billingReplayBaselines: 12,
   monitoringRecoveryPairs: 1,
-  personas: 22,
+  // 22 baseline personas + 2 WP-C2 first-run personas
+  // (e2e-free-firstbrief, e2e-free-firstscan).
+  personas: 24,
   supportRecoveryCases: 1,
 });
 

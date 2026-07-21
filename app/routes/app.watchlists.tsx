@@ -23,6 +23,7 @@ import { DeliverySettingsCard } from "~/components/watchlists/delivery-settings-
 import { DeliveryTargetsSection } from "~/components/watchlists/delivery-targets-section";
 import { EventChangesSection } from "~/components/watchlists/event-changes-section";
 import { FirstScanBanner } from "~/components/watchlists/first-scan-banner";
+import { FirstRunWaitArc } from "~/components/first-run-wait";
 import { RecentChecksSection } from "~/components/watchlists/recent-checks-section";
 import { RecentEvidenceChecksCard } from "~/components/watchlists/recent-evidence-checks-card";
 import { TrackingStatusCard } from "~/components/watchlists/tracking-status-card";
@@ -1037,6 +1038,12 @@ export default function WatchlistsRoute() {
   );
   const lastAttemptByEventId = buildLastAttemptByEventId(data.recentDeliveryAttempts);
   const insightDepth = data.selectedWatchlist ? buildWatchlistInsightDepth(data.events) : null;
+  // WP-C2 Beat 3 — only carry the Wire arc during the first-run window, i.e.
+  // before any competitor in the workspace has ever completed a scan (its first
+  // readable brief). Derived from existing records; no parallel status source.
+  const firstRunWindow = !data.watchlists.some((watchlist) =>
+    Boolean(watchlist.lastScannedAt),
+  );
   const selectedTrackingRole = normalizeWatchlistTrackingRole(data.selectedWatchlist?.trackingRole);
   const selectedTargetNoun = formatWatchlistTargetNoun(selectedTrackingRole);
   let consecutiveFailedRuns = 0;
@@ -1285,11 +1292,19 @@ export default function WatchlistsRoute() {
               </p>
 
               {data.selectedWatchlist.isActive && !data.selectedWatchlist.lastScannedAt ? (
-                <FirstScanBanner
-                  plan={data.plan}
-                  run={(data.runs[0] as WatchlistRunRecord | undefined) ?? null}
-                  watchlistId={data.selectedWatchlist.id}
-                />
+                <>
+                  {firstRunWindow ? (
+                    <FirstRunWaitArc
+                      run={(data.runs[0] as WatchlistRunRecord | undefined) ?? null}
+                      scanDomain={data.selectedWatchlist.targetLabel}
+                    />
+                  ) : null}
+                  <FirstScanBanner
+                    plan={data.plan}
+                    run={(data.runs[0] as WatchlistRunRecord | undefined) ?? null}
+                    watchlistId={data.selectedWatchlist.id}
+                  />
+                </>
               ) : null}
 
               {consecutiveFailedRuns >= 3 ? (

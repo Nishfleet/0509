@@ -12,6 +12,8 @@ import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page"
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { DigestDecisionSummary, DigestIntelligence, DigestMovementSummary, DigestProofPacket } from "~/components/digest-intelligence";
 import { DigestStrategyNote } from "~/components/digest-strategy-note";
+import { FirstRunSpine } from "~/components/first-run-spine";
+import { WireEyebrow, WireHeadline } from "~/components/first-run-wire";
 import { CopyButton } from "~/components/copy-button";
 import { EmptyState } from "~/components/empty-state";
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
@@ -24,7 +26,7 @@ import { readDigestIntelligence } from "~/lib/change-intelligence";
 import { toPublicDeliveryAttemptSummary } from "~/lib/delivery-attempt-public";
 import { formatWatchEventTypeLabel } from "~/lib/landing-page-display";
 import { buildDigestInsightDepth } from "~/lib/insight-depth";
-import { canUsePlanFeature } from "~/lib/plan-entitlements";
+import { canUsePlanFeature, planAllowsDigestCadence } from "~/lib/plan-entitlements";
 import {
   classifyDigestItemSource,
   priorityMixLabel,
@@ -207,6 +209,19 @@ export default function DigestsRoute() {
   const visibleItems = applyDigestFilters(allItems, selectedFilters);
   const proofMix = summarizeDigestProofMix(allItems);
   const priorityMix = summarizePriorityMix(allItems);
+  // WP-C2 Beat 4 — the "front page" framing shows once, then retires. It renders
+  // only when this is genuinely the only brief AND the visit arrived from the
+  // first-run arc (the `?firstrun=1` flag the Overview bridge / arc carries).
+  // Normal Briefs navigation (no flag) always shows the standard master-detail,
+  // so the front page never repeats on ordinary visits. The filed-time eyebrow
+  // uses the brief's real createdAt, never a "05:09" stamp.
+  const arrivedFromFirstRunArc = searchParams.get("firstrun") === "1";
+  const firstBriefView =
+    data.canAccessDigests &&
+    Boolean(data.selectedDigest) &&
+    data.digests.length === 1 &&
+    arrivedFromFirstRunArc;
+  const firstBriefDomain = data.selectedDigest?.items[0]?.watchlistName ?? null;
 
   return (
     <DashboardPage>
@@ -249,7 +264,48 @@ export default function DigestsRoute() {
           title="Briefs are included in paid plans"
         />
       ) : (
-        <div className="f9-master-detail">
+        <>
+          {firstBriefView && data.selectedDigest ? (
+            <article className="f9-app-panel f9-wire-hero f9-wire-frontpage">
+              <FirstRunSpine furthest="brief" />
+              <WireEyebrow>
+                FIRST BRIEF · FILED{" "}
+                <LocalTime iso={data.selectedDigest.createdAt} />
+              </WireEyebrow>
+              <WireHeadline
+                before={
+                  firstBriefDomain
+                    ? `Your first brief on ${firstBriefDomain} is `
+                    : "Your first brief is "
+                }
+                marked="filed."
+              />
+              <p className="f9-muted-copy f9-wire-sub">
+                The score, today&rsquo;s moves, and every creative below are
+                pulled from your live scan — sourced or they don&rsquo;t run.
+              </p>
+              <div className="f9-wire-frontpage-actions">
+                {/* Same-page anchor: scrolls to the full brief detail below —
+                    a functional jump, not a no-op link to the current URL. */}
+                <a className="f9-primary-button" href="#first-brief-detail">
+                  Read the full brief →
+                </a>
+                <Link className="f9-secondary-button" to="/app/watchlists">
+                  Add a competitor to compare
+                </Link>
+              </div>
+              {planAllowsDigestCadence(plan, "daily") ? (
+                // The "before 05:09" promise is the DAILY cadence (Starter /
+                // Agency). Free and Scout are weekly-only, so we keep the
+                // footer absent rather than assert a cadence they don't have —
+                // absence is honest; a wrong cadence is not.
+                <p className="f9-wire-eyebrow f9-wire-cadence">
+                  Tomorrow&rsquo;s brief files automatically before 05:09.
+                </p>
+              ) : null}
+            </article>
+          ) : null}
+          <div className="f9-master-detail">
           <article className="f9-app-panel f9-side-panel">
             <div className="f9-panel-toolbar">
               <div>
@@ -292,7 +348,7 @@ export default function DigestsRoute() {
             </div>
           </article>
 
-          <article className="f9-app-panel">
+          <article className="f9-app-panel" id="first-brief-detail">
             {data.selectedDigest ? (
               <>
                 <div className="f9-panel-toolbar">
@@ -506,7 +562,8 @@ export default function DigestsRoute() {
               />
             )}
           </article>
-        </div>
+          </div>
+        </>
       )}
       </section>
     </DashboardPage>

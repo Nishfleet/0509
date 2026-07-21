@@ -331,4 +331,99 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
       annotateFinalUrl(testInfo, page);
     });
   }
+
+  for (const viewport of monitoringViewports) {
+    test(`WP-C2 first-run wait arc keeps queued/running + Free capacity honest at ${viewport.width}px`, async ({ page, context, baseURL }, testInfo) => {
+      annotateScenario(testInfo, "first-run-wait-arc-and-free-capacity");
+      testInfo.annotations.push({ type: "persona", description: "e2e-free-firstscan" });
+      testInfo.annotations.push({ type: "viewport", description: `${viewport.width}x${viewport.height}` });
+      await signInAs(context, baseURL!, "e2e-free-firstscan");
+      await page.setViewportSize(viewport);
+
+      // Overview Beat 2: a competitor is added and the first scan is in flight.
+      // The Overview mirror must not claim the scan is confirmed running, and a
+      // one-watchlist Free plan is at capacity -> upgrade affordance, never an
+      // add form that would be rejected.
+      await page.goto("/app");
+      await expect(page.getByRole("heading", { level: 1, name: "Overview", exact: true })).toBeVisible();
+      await expect(page.locator("body")).toContainText("THE 5·9 WIRE · BEAT ASSIGNED");
+      await expect(page.locator("body")).toContainText("The first scan is underway");
+      await expect(page.getByText("The first scan is running now")).toHaveCount(0);
+      await expect(page.locator(".f9-first-run-spine").first()).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Watch more competitors", exact: true })).toBeVisible();
+      await expect(page.getByRole("link", { name: "View plans", exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Add another", exact: true })).toHaveCount(0);
+      await expect(page.locator("body")).not.toContainText(/stakeout|under watch|on camera|surveillance/i);
+      await expectNoHorizontalOverflow(page);
+      await expectPhoneTouchTargets(page);
+
+      // Wait beat on /app/watchlists: the run is genuinely running, so "reading
+      // now" is truthful here — the one place the active-reading line is allowed.
+      await page.goto("/app/watchlists?watchlist=e2e-watchlist-firstscan");
+      await expect(page.getByRole("heading", { level: 1, name: "Competitors", exact: true })).toBeVisible();
+      await expect(page.locator(".f9-wire-wait")).toBeVisible();
+      await expect(page.locator("body")).toContainText("ON THE WIRE");
+      await expect(page.locator("body")).toContainText("GOING TO PRESS");
+      await expect(page.locator("body")).toContainText("Reading Rival Labs now");
+      await expect(page.locator("body")).not.toContainText(/stakeout|under watch|on camera|surveillance/i);
+      await expectNoHorizontalOverflow(page);
+      await expectPhoneTouchTargets(page);
+      await attachReleaseStateArtifacts({ page, testInfo, prefix: "j3-first-run-wait", state: "first-run-wait" });
+      annotateFinalUrl(testInfo, page);
+    });
+  }
+
+  for (const viewport of monitoringViewports) {
+    test(`WP-C2 Beat 4 front page files once with weekly cadence truth at ${viewport.width}px`, async ({ page, context, baseURL }, testInfo) => {
+      annotateScenario(testInfo, "first-brief-front-page-and-cadence");
+      testInfo.annotations.push({ type: "persona", description: "e2e-free-firstbrief,e2e-scout" });
+      testInfo.annotations.push({ type: "viewport", description: `${viewport.width}x${viewport.height}` });
+      await signInAs(context, baseURL!, "e2e-free-firstbrief");
+      await page.setViewportSize(viewport);
+
+      // Overview: the first brief has filed -> the spine retires and the bridge
+      // hands the user to their front-page brief with the arc-arrival flag.
+      await page.goto("/app");
+      await expect(page.getByRole("heading", { level: 1, name: "Overview", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Your first brief is ready.", exact: true })).toBeVisible();
+      await expect(page.getByRole("link", { name: "Read the full brief →", exact: true })).toHaveAttribute(
+        "href",
+        "/app/digests?firstrun=1",
+      );
+      await expect(page.locator(".f9-first-run-spine")).toHaveCount(0);
+      await expectNoHorizontalOverflow(page);
+
+      // Beat 4 front page (arrived from the arc): real filed time, a FUNCTIONAL
+      // same-page anchor CTA, and NO daily 05:09 promise for a weekly plan.
+      await page.goto("/app/digests?firstrun=1");
+      await expect(page.getByRole("heading", { level: 1, name: "Briefs", exact: true })).toBeVisible();
+      await expect(page.locator("body")).toContainText("FIRST BRIEF · FILED");
+      await expect(page.locator("body")).toContainText("Your first brief on Rival Labs is");
+      await expect(page.getByRole("link", { name: "Read the full brief →", exact: true })).toHaveAttribute(
+        "href",
+        "#first-brief-detail",
+      );
+      await expect(page.locator("#first-brief-detail")).toBeVisible();
+      await expect(page.locator("body")).not.toContainText("05:09");
+      await expectNoHorizontalOverflow(page);
+      await expectPhoneTouchTargets(page);
+
+      // Retirement: ordinary Briefs navigation (no arc flag) shows the standard
+      // master-detail page, never the front-page framing again.
+      await page.goto("/app/digests");
+      await expect(page.getByRole("heading", { level: 1, name: "Briefs", exact: true })).toBeVisible();
+      await expect(page.locator("body")).not.toContainText("FIRST BRIEF · FILED");
+      await expect(page.getByRole("heading", { name: "Brief history", exact: true })).toBeVisible();
+
+      // Scout is weekly too — its Briefs surface never promises the daily 05:09.
+      await signInAs(context, baseURL!, "e2e-scout");
+      await page.goto("/app/digests?firstrun=1");
+      await expect(page.getByRole("heading", { level: 1, name: "Briefs", exact: true })).toBeVisible();
+      await expect(page.locator("body")).not.toContainText("05:09");
+      await expectNoHorizontalOverflow(page);
+      await expectPhoneTouchTargets(page);
+      await attachReleaseStateArtifacts({ page, testInfo, prefix: "j3-first-brief", state: "first-brief-front-page" });
+      annotateFinalUrl(testInfo, page);
+    });
+  }
 });

@@ -277,3 +277,31 @@ INSERT INTO support_case_event (id, case_id, user_id, event_type, message, visib
 INSERT INTO workspace_member (id, owner_user_id, member_user_id, invited_email, role, status, token_hash, token_expires_at, created_at, accepted_at, revoked_at) VALUES
   ('e2e-member-active', 'e2e-agency', 'e2e-active-member', 'e2e-active-member@example.invalid', 'member', 'active', NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-10 days'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-9 days'), NULL),
   ('e2e-member-revoked', 'e2e-agency', 'e2e-removed-member', 'e2e-removed-member@example.invalid', 'member', 'revoked', NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-10 days'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-9 days'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-4 days'));
+
+-- WP-C2 Gate-B first-run fixtures (self-contained; cleaned by the LIKE 'e2e-%' resets).
+-- e2e-free-firstbrief: free (weekly) workspace with exactly ONE filed brief — the
+-- Beat 4 front page + retirement + weekly cadence truth.
+INSERT INTO user (id, name, email, emailVerified, image, createdAt, updatedAt, onboardedAt) VALUES
+  ('e2e-free-firstbrief', 'E2E Free First Brief', 'e2e-free-firstbrief@example.invalid', 1, NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-9 days'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-8 days')),
+  ('e2e-free-firstscan', 'E2E Free First Scan', 'e2e-free-firstscan@example.invalid', 1, NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 day'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 day'));
+
+INSERT INTO user_plan (user_id, plan, plan_updated_at, dodo_payment_id, dodo_product_id, dodo_status, dodo_subscription_id, dodo_customer_id, dodo_next_billing_at, evidence_entitlement_anchor, evidence_entitlement_anchor_source) VALUES
+  ('e2e-free-firstbrief', 'free', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  ('e2e-free-firstscan', 'free', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+
+INSERT INTO watchlist (id, user_id, name, target_type, target_id, target_fingerprint, target_label, is_active, last_scanned_at, created_at, updated_at, paused_reason, target_country, tracking_role) VALUES
+  ('e2e-watchlist-firstbrief', 'e2e-free-firstbrief', 'Rival Labs weekly watch', 'advertiser', 'rivallabs.example.invalid', 'e2e-firstbrief-watch', 'Rival Labs', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-6 days'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-8 days'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-6 days'), NULL, 'US', 'competitor'),
+  ('e2e-watchlist-firstscan', 'e2e-free-firstscan', 'Rival Labs first scan', 'advertiser', 'rivallabs.example.invalid', 'e2e-firstscan-watch', 'Rival Labs', 1, NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-3 minutes'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-3 minutes'), NULL, 'US', 'competitor');
+
+INSERT INTO watchlist_run (id, watchlist_id, trigger_type, status, page_budget, pages_scanned, baseline_from_run_id, summary_json, started_at, finished_at, error_code, error_message, created_at, updated_at, idempotency_key, workflow_instance_id, processing_token, processing_started_at, queued_at, attempt_count, retry_after, queue_priority) VALUES
+  ('e2e-run-firstbrief', 'e2e-watchlist-firstbrief', 'scheduled', 'succeeded', 1, 1, NULL, '{"adsSeen":4,"newAds":1,"scanStatus":"healthy"}', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-6 days', '-2 minutes'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-6 days'), NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-6 days', '-2 minutes'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-6 days'), 'e2e-run-firstbrief', NULL, NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-6 days', '-3 minutes'), 1, NULL, 2),
+  ('e2e-run-firstscan', 'e2e-watchlist-firstscan', 'manual', 'running', 1, 0, NULL, '{}', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 minutes'), NULL, NULL, NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-3 minutes'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 minutes'), 'e2e-run-firstscan', NULL, 'e2e-token-firstscan', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 minutes'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-3 minutes'), 1, NULL, 2);
+
+INSERT INTO digest_run (id, user_id, period_start, period_end, summary_json, created_at) VALUES
+  ('e2e-digest-firstbrief', 'e2e-free-firstbrief', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-6 days'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 day'), '{"headline":"Rival Labs is testing hard","topMoves":["Rival Labs launched a new offer"],"allQuiet":false}', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 day'));
+
+INSERT INTO digest_item (id, digest_run_id, watchlist_id, watchlist_name, event_type, title, summary, metadata_json, created_at) VALUES
+  ('e2e-digest-item-firstbrief', 'e2e-digest-firstbrief', 'e2e-watchlist-firstbrief', 'Rival Labs', 'ad_new', 'Rival Labs launched a new offer', 'Fixture first-brief item with verified proof.', '{"proofStatus":"confirmed","priority":"high"}', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 day'));
+
+INSERT INTO digest_delivery (id, digest_run_id, provider, status, recipient_email, external_message_id, error_message, delivered_at, created_at, updated_at) VALUES
+  ('e2e-digest-delivery-firstbrief', 'e2e-digest-firstbrief', 'cloudflare_email', 'sent', 'e2e-free-firstbrief@example.invalid', 'e2e-message-firstbrief', NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 day'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 day'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 day'));
