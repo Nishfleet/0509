@@ -214,6 +214,8 @@ export function buildProductionDeployPlan({
         manifestPath,
         "--wrangler-output",
         wranglerOutputPath,
+        "--rollback-target",
+        rollbackTargetPath,
       ],
     },
     {

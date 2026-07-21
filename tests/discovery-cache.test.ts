@@ -1,9 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
+  DISCOVERY_ADVERTISER_FILTER_EPOCH,
+  toServableDiscoveryPayload,
   buildDiscoveryCacheKey,
   isDiscoveryCacheRouteCompatible,
   isDiscoveryCacheWithinMaxAge,
+  isStaleZeroResultDiscoveryCacheEntry,
   resolveDiscoveryCacheTtlMs,
   resolveScheduledScanCacheMaxAgeMs,
 } from "~/lib/discovery-cache.server";
@@ -50,6 +53,98 @@ describe("isDiscoveryCacheWithinMaxAge", () => {
     expect(isDiscoveryCacheWithinMaxAge(outside3h, 3 * 60 * 60 * 1000, now)).toBe(false);
     expect(isDiscoveryCacheWithinMaxAge("not-a-date", 3 * 60 * 60 * 1000, now)).toBe(false);
     expect(isDiscoveryCacheWithinMaxAge(within3h, 0, now)).toBe(false);
+  });
+});
+
+describe("isStaleZeroResultDiscoveryCacheEntry (advertiser-filter contract epoch)", () => {
+  it("rejects an advertiser-mode zero without the current epoch — no matter how recent", () => {
+    // The blocker scenario a timestamp cutoff can never close: a version-pinned
+    // Workflow instance running the BROKEN filter may sleep/retry indefinitely
+    // and write its wrong zero at ANY later wall-clock time. Writer version is
+    // proven by the epoch stamp, never inferred from fetchedAt — so an
+    // unstamped zero is rejected even if written "after noon" (or next week).
+    expect(
+      isStaleZeroResultDiscoveryCacheEntry({ adCount: 0, mode: "advertiser", filterEpoch: null }),
+    ).toBe(true);
+    expect(
+      isStaleZeroResultDiscoveryCacheEntry({ adCount: 0, mode: "advertiser", filterEpoch: undefined }),
+    ).toBe(true);
+  });
+
+  it("rejects a domain-mode zero carrying an OLD epoch", () => {
+    expect(
+      isStaleZeroResultDiscoveryCacheEntry({
+        adCount: 0,
+        mode: "domain",
+        filterEpoch: "advertiser-evidence-filter-v0",
+      }),
+    ).toBe(true);
+  });
+
+  it("accepts an advertiser-mode zero stamped with the current epoch", () => {
+    expect(
+      isStaleZeroResultDiscoveryCacheEntry({
+        adCount: 0,
+        mode: "advertiser",
+        filterEpoch: DISCOVERY_ADVERTISER_FILTER_EPOCH,
+      }),
+    ).toBe(false);
+  });
+
+  it("never gates a keyword-mode zero (keyword never ran the broken advertiser filter)", () => {
+    expect(
+      isStaleZeroResultDiscoveryCacheEntry({ adCount: 0, mode: "keyword", filterEpoch: null }),
+    ).toBe(false);
+  });
+
+  it("never gates a non-zero result (the broken filter could only wrongly empty, never wrongly fill)", () => {
+    expect(
+      isStaleZeroResultDiscoveryCacheEntry({ adCount: 5, mode: "advertiser", filterEpoch: null }),
+    ).toBe(false);
+  });
+
+  it("pins the current epoch value", () => {
+    expect(DISCOVERY_ADVERTISER_FILTER_EPOCH).toBe("advertiser-evidence-filter-v1");
+  });
+});
+
+describe("toServableDiscoveryPayload (epoch stays persistence-private)", () => {
+  it("strips the writer epoch and preserves everything else", () => {
+    const served = toServableDiscoveryPayload({
+      ads: [],
+      nextCursor: null,
+      discoveryEmptyReason: "no_results",
+      discoveryFilterEpoch: DISCOVERY_ADVERTISER_FILTER_EPOCH,
+    });
+    expect("discoveryFilterEpoch" in served).toBe(false);
+    expect(served).toMatchObject({ ads: [], nextCursor: null, discoveryEmptyReason: "no_results" });
+  });
+
+  it("cache-only brand-page reads never expose the epoch", async () => {
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue({
+        cacheKey: "meta_library_browser:fp:all:page-1",
+        provider: "meta_library_browser",
+        routeContext: "public_search",
+        payload: {
+          ads: [],
+          nextCursor: null,
+          discoveryEmptyReason: "no_results",
+          discoveryFilterEpoch: DISCOVERY_ADVERTISER_FILTER_EPOCH,
+        },
+        fetchedAt: "2026-07-21T13:00:00.000Z",
+        expiresAt: "2026-07-22T13:00:00.000Z",
+      }),
+    }));
+    const { readDiscoveryCacheEntryCacheOnly } = await import("~/lib/discovery-cache.server");
+    const entry = await readDiscoveryCacheEntryCacheOnly({ DB: {} } as never, {
+      provider: "meta_library_browser",
+      fingerprint: "fp",
+      country: "all",
+    });
+    expect(entry).not.toBeNull();
+    expect(entry && "discoveryFilterEpoch" in entry.payload).toBe(false);
+    vi.doUnmock("~/lib/data.server");
   });
 });
 
