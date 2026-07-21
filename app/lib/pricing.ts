@@ -35,9 +35,9 @@ function planMarketingFeatures(plan: PlanFamily): string[] {
   }
 
   if (entitlements.digestCadence === "weekly") {
-    features.push("Weekly Digest");
+    features.push("Weekly Brief");
   } else if (entitlements.digestCadence === "daily_and_weekly") {
-    features.push("Daily + weekly Digests");
+    features.push("Daily + weekly Briefs");
   }
 
   features.push(
@@ -45,7 +45,7 @@ function planMarketingFeatures(plan: PlanFamily): string[] {
   );
 
   if (plan === "scout") {
-    features.push("Saved competitor research", "Email digest delivery");
+    features.push("Saved competitor research", "Email brief delivery");
   }
   if (plan === "starter" || plan === "agency") {
     features.push("Email Notifications");

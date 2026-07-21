@@ -865,9 +865,10 @@ describe("clients route agent memory", () => {
     expect(markup).toContain("Nykaa watchlist");
     expect(markup).toContain("Direct and evidence-led.");
     expect(markup).toContain("Archived desk");
-    expect(markup).toContain("Review Agency plans");
+    expect(markup).toContain("Upgrade to Agency");
     expect(markup).toContain("/app/billing?source=clients#plans");
-    expect(markup.match(/Review Agency plans/g)).toHaveLength(1);
+    expect(markup.match(/Upgrade to Agency/g)).toHaveLength(1);
+    expect(markup).not.toContain("is-error");
     expect(markup).not.toContain("Save client room");
     expect(markup).not.toContain("Save context");
     expect(markup).not.toContain("<form");
@@ -888,9 +889,12 @@ describe("clients route agent memory", () => {
     const { default: ClientsRoute } = await import("~/routes/app.clients");
     const markup = renderToStaticMarkup(createElement(ClientsRoute));
 
-    expect(markup).toContain("Client rooms are an Agency feature.");
-    expect(markup).toContain("Review Agency plans");
-    expect(markup.match(/Review Agency plans/g)).toHaveLength(1);
+    expect(markup).toContain("f9-locked-feature");
+    expect(markup).toContain("included in the Agency plan.");
+    expect(markup).toContain("Upgrade to Agency");
+    expect(markup).toContain("/app/billing?source=clients#plans");
+    expect(markup.match(/Upgrade to Agency/g)).toHaveLength(1);
+    expect(markup).not.toContain("is-error");
     expect(markup).not.toContain("Create the first client room");
     expect(markup).not.toContain("Save client room");
     expect(markup).not.toContain("Save context");

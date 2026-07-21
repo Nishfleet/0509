@@ -10,6 +10,7 @@ import { sanitizeCustomerFacingMessage } from "~/lib/customer-route-error";
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { EmptyState } from "~/components/empty-state";
+import { LockedFeature } from "~/components/locked-feature";
 import { Pill } from "~/components/pill";
 import { SubmitButton } from "~/components/submit-button";
 import { isSecretishMemoryField, isSecretishMemoryString } from "~/lib/agent-redaction";
@@ -452,7 +453,6 @@ export default function ClientsRoute() {
     <DashboardPage>
       <section className="f9-app-stack">
         <DashboardPageHeader
-          action={{ label: "Notifications", to: "/app/notifications" }}
           lead="Package evidence and reports around each client."
           title="Client rooms"
         />
@@ -741,12 +741,14 @@ function staleClientRoomResult(intent: string) {
 
 function AgencyPlanNotice() {
   return (
-    <aside aria-labelledby="client-room-plan-notice" className="f9-message is-error">
-      <span className="f9-app-kicker">Agency feature</span>
-      <h2 id="client-room-plan-notice">Client rooms are an Agency feature.</h2>
-      <p>Existing rooms and saved context stay readable. Upgrade to create or manage client-room delivery.</p>
-      <Link className="f9-primary-button" to={CLIENT_ROOM_BILLING_URL}>Review Agency plans</Link>
-    </aside>
+    <LockedFeature
+      eyebrow="Client rooms"
+      title="Client rooms"
+      reason="Keep watchlists, collections, reports, and client context together for agency delivery"
+      planNeeded="Agency plan"
+      upgradeTo={CLIENT_ROOM_BILLING_URL}
+      headingLevel="h2"
+    />
   );
 }
 

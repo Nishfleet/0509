@@ -295,8 +295,11 @@ describe("billing page", () => {
     expect(result.billing).not.toHaveProperty("dodoPlanChangeProductId");
     expect(result.billing).not.toHaveProperty("dodoSubscriptionId");
     expect(result.billing).not.toHaveProperty("dodoCustomerId");
+    // WP-A3.3: billing resolves buyer currency identically to the public
+    // /api/pricing-preview surface — it must NOT force trustProxyHeaders: false,
+    // which was the cause of the ₹-vs-$ mismatch for one browser.
     expect(mocks.previewDodo0509PlanPrices).toHaveBeenCalledWith(
-      expect.objectContaining({
+      expect.not.objectContaining({
         trustProxyHeaders: false,
       }),
     );

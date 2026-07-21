@@ -1265,7 +1265,7 @@ export default function SearchRoute() {
               defaultValue={competitorWebsite.raw}
               inputMode="url"
               name="website"
-              placeholder="https://nykaa.com"
+              placeholder="https://competitor.com"
               spellCheck={false}
               type="text"
             />

@@ -104,11 +104,12 @@ describe("dashboard first 15 minutes activation", () => {
     expect(markup).toContain("Brief");
     expect(markup).toContain("Build your brief");
     expect(markup).toContain("Add your first competitor");
-    expect(markup).toContain("Add competitors");
+    // First-run hero drops the separate action button; the search form is the
+    // single dominant add path.
     expect(markup).toContain("Competitor website");
     expect(markup).toContain("Search ads");
     expect(markup).toContain("f9-primary-button");
-    expect(markup).toContain('href="/app/onboard?resume=1"');
+    expect(markup).toContain('action="/search"');
   });
 
   it("surfaces retention moves without showing low-priority optional setup", async () => {
@@ -166,7 +167,7 @@ describe("dashboard first 15 minutes activation", () => {
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
     expect(markup).toContain("Next moves");
-    expect(markup).toContain("Keep the Market Desk useful");
+    expect(markup).toContain("Keep your overview useful");
     expect(markup).toContain("No first digest yet");
     expect(markup).toContain("/app/digests");
     expect(markup).not.toContain("Cancellation and help path");

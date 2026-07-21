@@ -117,9 +117,9 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
       ${renderTrendSectionHtml(trendLines)}
       <h2 style="${EMAIL_H2_STYLE}">Top moves</h2>
       ${renderTopMoveGroupsHtml(topMoveGroups, input.periodEnd, input.timeZone, input.fullDigestUrl)}
-      ${omittedCount > 0 ? `<p style="margin: 0 0 18px; color: #475467;">${omittedCount} more change${omittedCount === 1 ? "" : "s"} are in the full digest.</p>` : ""}
+      ${omittedCount > 0 ? `<p style="margin: 0 0 18px; color: #475467;">${omittedCount} more change${omittedCount === 1 ? "" : "s"} are in the full brief.</p>` : ""}
       <p style="margin: 0 0 20px;">
-        <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">View full digest</a>
+        <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">View full brief</a>
       </p>
       ${renderUpgradeNoteHtml(input)}<p style="margin: 0; color: #98a2b3; font-size: 13px;">
         Source coverage: verified evidence means a stored screenshot, page record, or source link is attached. Check-spotted and needs-review items are signals from scheduled monitoring and should be checked before sharing externally.
@@ -141,9 +141,9 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
     "",
     "Top moves:",
     ...renderTopMoveGroupsText(topMoveGroups, input.periodEnd, input.timeZone, input.fullDigestUrl),
-    omittedCount > 0 ? `${omittedCount} more change${omittedCount === 1 ? "" : "s"} are in the full digest.` : null,
+    omittedCount > 0 ? `${omittedCount} more change${omittedCount === 1 ? "" : "s"} are in the full brief.` : null,
     "",
-    `View full digest: ${input.fullDigestUrl}`,
+    `View full brief: ${input.fullDigestUrl}`,
     ...renderUpgradeNoteText(input),
     `Manage frequency: ${input.manageFrequencyUrl}`,
     input.unsubscribeUrl ? `Unsubscribe: ${input.unsubscribeUrl}` : null,
@@ -386,7 +386,7 @@ function renderTopMoveHtml(
   const classification = classifyDigestItemSource(item);
   const watchlistName = item.watchlistName ?? "Competitor";
   const title = item.title ?? "Change detected";
-  const summary = item.summary ?? "Review the full digest for details.";
+  const summary = item.summary ?? "Review the full brief for details.";
   const when = safeTimestamp(item, fallbackTimestamp, timeZone);
   const priority = intelligence.priorityScore === null
     ? intelligence.priorityBand
@@ -431,7 +431,7 @@ function renderTopMoveText(
   const classification = classifyDigestItemSource(item);
   const watchlistName = item.watchlistName ?? "Competitor";
   const title = item.title ?? "Change detected";
-  const summary = item.summary ?? "Review the full digest for details.";
+  const summary = item.summary ?? "Review the full brief for details.";
   const priority = intelligence.priorityScore === null
     ? intelligence.priorityBand
     : `${intelligence.priorityBand} (${intelligence.priorityScore}/100)`;

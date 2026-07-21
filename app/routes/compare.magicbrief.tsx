@@ -1,7 +1,7 @@
 import { Form, Link } from "react-router";
 import type { LinksFunction, MetaFunction } from "react-router";
 
-import { BrandWordmark } from "~/components/brand-wordmark";
+import { MarketingNav } from "~/components/marketing-nav";
 import { MarketingFooter } from "~/components/marketing-footer";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
@@ -54,23 +54,7 @@ const differences = [
 export default function CompareMagicBriefRoute() {
   return (
     <main className="f9-home">
-      <header className="ld-nav">
-        <Link className="ld-brand" to="/" aria-label="Five to Nine home">
-          <BrandWordmark />
-        </Link>
-        <nav className="ld-nav-links" aria-label="Primary">
-          <Link to="/search?website=https%3A%2F%2Fnykaa.com">Search preview</Link>
-          <Link to="/#pricing">Pricing</Link>
-        </nav>
-        <nav className="ld-nav-actions" aria-label="Account">
-          <Link className="f9-link-arrow" to="/auth/login">
-            Sign in
-          </Link>
-          <Link className="ld-nav-pill" to="/auth/signup">
-            Create account
-          </Link>
-        </nav>
-      </header>
+      <MarketingNav />
 
       <section className="ld-hero">
         <p className="ld-case">

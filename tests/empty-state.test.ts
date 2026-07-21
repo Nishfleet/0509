@@ -51,6 +51,22 @@ describe("EmptyState", () => {
 		expect(markup).toContain("Add from search");
 	});
 
+	it("renders the optional sample link as a secondary action beside the primary", async () => {
+		await mockRouter();
+		const markup = await renderEmptyState({
+			title: "Add your first competitor",
+			description: "Paste a website to start tracking.",
+			action: { label: "Add competitor", to: "/search" },
+			sample: { label: "See a sample brief", to: "/#demo" },
+		});
+
+		expect(markup).toContain("f9-empty-actions");
+		expect(markup).toContain("f9-primary-button");
+		expect(markup).toContain("f9-secondary-button");
+		expect(markup).toContain('href="/#demo"');
+		expect(markup).toContain("See a sample brief");
+	});
+
 	it("supports h3 headings so page outlines stay coherent", async () => {
 		await mockRouter();
 		const markup = await renderEmptyState({

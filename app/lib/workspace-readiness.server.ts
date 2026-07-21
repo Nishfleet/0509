@@ -215,7 +215,7 @@ export async function getWorkspaceReadiness(
           : competitorCount > 0
             ? "A watchlist exists but is paused."
             : "Create one retained watchlist.",
-      action: activeWatchlists > 0 ? null : { label: "Open watchlists", href: "/app/watchlists" },
+      action: activeWatchlists > 0 ? null : { label: "Add a competitor", href: "/app/watchlists" },
     },
     {
       id: "first_proof",
@@ -229,7 +229,7 @@ export async function getWorkspaceReadiness(
           : proofUsage.used > 0
             ? "Evidence attempts have run, but no successful source is attached yet."
             : "Refresh a watchlist to capture landing-page evidence.",
-      action: hasFirstValue ? null : { label: "Open watchlists", href: "/app/watchlists" },
+      action: hasFirstValue ? null : { label: "Capture evidence", href: "/app/watchlists" },
     },
     {
       id: "first_digest",

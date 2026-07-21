@@ -45,6 +45,30 @@ describe("public documentation routes", () => {
     expect(markup).not.toContain("Public competitor ad search from a website");
   });
 
+  it("gives /docs an in-page table of contents that jumps to each block — distinct from /help", async () => {
+    const { default: DocsRoute } = await import("~/routes/docs");
+    const docsMarkup = renderToStaticMarkup(createElement(DocsRoute));
+
+    // TOC nav with jump links whose targets match the block ids.
+    expect(docsMarkup).toContain("f9-doc-toc");
+    for (const id of [
+      "first-search",
+      "proof-labels",
+      "troubleshoot",
+      "plan-boundaries",
+      "ai-agents",
+      "coverage-trust",
+      "key-docs",
+    ]) {
+      expect(docsMarkup).toContain(`href="#${id}"`);
+      expect(docsMarkup).toContain(`id="${id}"`);
+    }
+
+    const { default: HelpRoute } = await import("~/routes/help");
+    const helpMarkup = renderToStaticMarkup(createElement(HelpRoute));
+    expect(helpMarkup).not.toContain("f9-doc-toc");
+  });
+
   it("renders API docs with customer-facing boundaries and write-key requirements", async () => {
     const { default: ApiDocsRoute } = await import("~/routes/api.docs");
     const markup = renderToStaticMarkup(createElement(ApiDocsRoute));

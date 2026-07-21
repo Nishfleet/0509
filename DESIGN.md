@@ -54,6 +54,33 @@ SaaS gradients.
 a daily-use tool wants calm restraint, not a poster. The wordmark and green
 accent are the bridge between the two.
 
+### Workspace header-action rule (since 2026-07-21, WP-A3)
+
+The `DashboardPageHeader` top-right `action` slot is reserved for the page's
+own single primary action — create/add for the resource that page manages —
+or nothing. It is never a cross-navigation shortcut to another sidebar
+destination; those already live in the rail. A gate or empty state points at
+that page's real prerequisite, never at a paywalled surface the visitor
+cannot open.
+
+### Badge / pill semantics (since 2026-07-21, WP-A4)
+
+Green (`Pill state="healthy"` / the `--green` family) marks live STATE facts —
+"Current plan", "Active", "Running N days", "Healthy". A distinct ink-filled
+badge (`Pill state="recommended"` in the workspace, `.f9-plan-badge` on
+landing) marks a RECOMMENDATION — "Recommended". Green never means
+"recommended"; the recommendation badge is never green. Green stays the brand
+accent for state; the recommendation nudge uses the inverted ink fill
+(`--ink` background / `--bone` text, which flips correctly in both themes) so
+the two never collide on one screen.
+
+### Plan gates (since 2026-07-21, WP-B1)
+
+Every Agency plan gate renders through the shared `LockedFeature` component:
+a neutral bone `f9-app-panel`, one primary upgrade CTA, an optional "See an
+example" secondary — never the red/`is-error` treatment. Red stays reserved
+for diff-deletion and genuine error semantics. A gate is never a dead end.
+
 ---
 
 # Design System Inspiration of Vercel

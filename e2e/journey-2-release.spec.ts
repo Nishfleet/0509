@@ -240,13 +240,15 @@ for (const viewport of viewports) {
     await expectPhoneTouchTargets(page);
     await submit.press("Enter");
     await expect(page).toHaveURL(/\/app\/watchlists\?watchlist=[^&]+/);
-    await expect(page.getByRole("heading", { name: "Watchlists" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Competitors", exact: true })).toBeVisible();
     const nykaaWatch = page.getByRole("link", { name: /Nykaa watch\s+Competitor · Nykaa/i }).first();
     await expect(nykaaWatch).toBeVisible();
     await expect(nykaaWatch.getByRole("heading", { name: "Nykaa watch", exact: true })).toBeVisible();
     await expect(nykaaWatch.getByText("Competitor · Nykaa", { exact: true })).toBeVisible();
     if (viewport.name === "mobile") {
-      const deskHeading = page.getByRole("heading", { name: "Tracking desk", exact: true });
+      const deskHeading = page
+        .locator(".f9-side-panel")
+        .getByRole("heading", { name: "Competitors", exact: true });
       const deskIntro = page.getByText(
         "Pick a tracked brand to review changes, evidence freshness, and alert delivery.",
         { exact: true },
@@ -255,12 +257,12 @@ for (const viewport of viewports) {
         deskHeading.boundingBox(),
         deskIntro.boundingBox(),
       ]);
-      expect(headingBox, "mobile tracking-desk heading should be measurable").not.toBeNull();
-      expect(introBox, "mobile tracking-desk intro should be measurable").not.toBeNull();
+      expect(headingBox, "mobile competitors-panel heading should be measurable").not.toBeNull();
+      expect(introBox, "mobile competitors-panel intro should be measurable").not.toBeNull();
       if (headingBox && introBox) {
         expect(
           introBox.y - (headingBox.y + headingBox.height),
-          "mobile tracking-desk content should not be stretched apart",
+          "mobile competitors-panel content should not be stretched apart",
         ).toBeLessThanOrEqual(72);
       }
     }

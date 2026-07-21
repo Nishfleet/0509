@@ -7,6 +7,8 @@ export interface EmptyStateProps {
   title: string;
   description?: string;
   action?: { label: string; to: string };
+	/** Optional secondary "See a sample" link, rendered beside the primary action (panel variant only). */
+	sample?: { label: string; to: string };
 	/** Heading element for the panel variant; keep page outlines coherent. */
 	headingLevel?: "h2" | "h3";
 	/**
@@ -22,6 +24,7 @@ export function EmptyState({
 	title,
 	description,
 	action,
+	sample,
 	headingLevel = "h2",
 	variant = "panel",
 	children,
@@ -59,10 +62,19 @@ export function EmptyState({
 			<IconEmpty className="f9-empty-state-icon" />
 			<Heading>{title}</Heading>
       {description ? <p>{description}</p> : null}
-      {action ? (
-        <Link className="f9-primary-button" to={action.to}>
-          {action.label}
-        </Link>
+      {action || sample ? (
+        <div className="f9-empty-actions">
+          {action ? (
+            <Link className="f9-primary-button" to={action.to}>
+              {action.label}
+            </Link>
+          ) : null}
+          {sample ? (
+            <Link className="f9-secondary-button" to={sample.to}>
+              {sample.label}
+            </Link>
+          ) : null}
+        </div>
       ) : null}
 			{children}
     </div>

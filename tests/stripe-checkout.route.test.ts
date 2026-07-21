@@ -447,7 +447,9 @@ describe("marketing route", () => {
 
     expect(markup).toContain("Account review");
     expect(markup).toContain("Agency is available by account review");
-    expect(markup).toContain('href="/auth/signup"');
+    // A2 retired the "Create account" nav link for a single "Open app";
+    // signed-out users still reach signup via the final email CTA action.
+    expect(markup).toContain('action="/auth/signup"');
     expect(markup).not.toContain("plan=agency");
     expect(markup).not.toContain("capacity review");
     expect(markup).not.toContain("higher-volume monitoring coverage");

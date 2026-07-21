@@ -14,6 +14,7 @@ import {
   DashboardRouteLoading,
 } from "~/components/dashboard-route-loading";
 import { ReportView } from "~/components/report-view";
+import { LockedFeature } from "~/components/locked-feature";
 import { ActionFeedback } from "~/components/action-feedback";
 import { CopyButton } from "~/components/copy-button";
 import { SubmitButton } from "~/components/submit-button";
@@ -482,26 +483,13 @@ export default function ReportsRoute() {
     return (
       <DashboardPage>
         <section className="f9-app-stack">
-          <article
-            className="f9-app-panel"
-            aria-labelledby="reports-plan-title"
-            role="status"
-          >
-            <p className="f9-app-kicker">Reports</p>
-            <h1 id="reports-plan-title">
-              Reports are included in the Agency plan.
-            </h1>
-            <p>
-              Upgrade to Agency to open client-ready reports and share the
-              evidence with your team.
-            </p>
-            <Link
-              className="f9-primary-button"
-              to="/app/billing?source=reports#plans"
-            >
-              Upgrade to Agency
-            </Link>
-          </article>
+          <LockedFeature
+            eyebrow="Reports"
+            title="Client-ready reports"
+            reason="Open client-ready reports and share the evidence with your team"
+            planNeeded="Agency plan"
+            upgradeTo="/app/billing?source=reports#plans"
+          />
         </section>
       </DashboardPage>
     );

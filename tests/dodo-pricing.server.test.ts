@@ -494,4 +494,65 @@ describe("Dodo 0509 pricing", () => {
       reason: "missing_monthly_price",
     });
   });
+
+  // WP-A3.3: in-app billing must resolve the buyer currency identically to the
+  // public /api/pricing-preview surface. Billing used to pass
+  // trustProxyHeaders: false, so a cf-ipcountry: IN browser saw ₹ on the
+  // landing page but $ in billing. Both now use the default (true).
+  it("resolves the same currency for billing and public preview from one cf-ipcountry geo", async () => {
+    const env = {
+      DODO_0509_ADAPTIVE_CURRENCY_FEES_INCLUSIVE: "true",
+      DODO_0509_API_KEY: "secret",
+      DODO_0509_BRAND_ID: "brand_0509",
+      DODO_0509_ENVIRONMENT: "test",
+      DODO_0509_PRODUCT_SCOUT_MONTHLY_ID: "prod_scout_monthly",
+    };
+    const makeFetcher = () =>
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          currency: "INR",
+          current_breakup: { total_amount: 499900 },
+          billing_country: "IN",
+          product_cart: [
+            { product_id: "prod_scout_monthly", is_subscription: true, tax_inclusive: false },
+          ],
+        }),
+      );
+    const makeRequest = () =>
+      new Request("https://0509.io/pricing", { headers: { "cf-ipcountry": "IN" } });
+
+    // Public preview path (default trustProxyHeaders: true).
+    const publicPreview = await previewDodo0509PlanPrices({
+      env,
+      request: makeRequest(),
+      fetcher: makeFetcher() as never,
+      bypassCache: true,
+    });
+
+    // Billing loader path — now the default too (no trustProxyHeaders override).
+    const billingPreview = await previewDodo0509PlanPrices({
+      env,
+      request: makeRequest(),
+      fetcher: makeFetcher() as never,
+      bypassCache: true,
+    });
+
+    expect(publicPreview.country).toBe("IN");
+    expect(billingPreview.country).toBe(publicPreview.country);
+    expect(billingPreview.prices.scout?.monthly?.currency).toBe(
+      publicPreview.prices.scout?.monthly?.currency,
+    );
+    expect(billingPreview.prices.scout?.monthly?.currency).toBe("INR");
+
+    // The retired billing behaviour (trustProxyHeaders: false) would have
+    // ignored cf-ipcountry and diverged from the public geo.
+    const legacyBillingPreview = await previewDodo0509PlanPrices({
+      env,
+      request: makeRequest(),
+      fetcher: makeFetcher() as never,
+      bypassCache: true,
+      trustProxyHeaders: false,
+    });
+    expect(legacyBillingPreview.country).not.toBe("IN");
+  });
 });

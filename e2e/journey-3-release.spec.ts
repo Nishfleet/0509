@@ -59,7 +59,10 @@ async function expectResponsiveSurface(
 ) {
   await page.setViewportSize(viewport);
   await page.goto(route);
-  await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
+  // Dashboard surfaces render the page title as the sole level-1 heading; pin
+  // it so a duplicated section heading (e.g. the Competitors list panel h2)
+  // can't satisfy — or ambiguate — this assertion.
+  await expect(page.getByRole("heading", { level: 1, name: heading, exact: true })).toBeVisible();
   for (const pattern of copy) await expect(page.locator("body")).toContainText(pattern);
   const firstAction = page.locator("a, button, input, select, textarea").filter({ visible: true }).first();
   await expectVisibleKeyboardFocus(firstAction);
@@ -106,7 +109,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
         page,
         viewport,
         "/app/watchlists?watchlist=e2e-watchlist-j3-workflow",
-        "Watchlists",
+        "Competitors",
         [/(first scan is in line and starts automatically|first scan paused safely before an external check)/i],
       );
       await expect(
@@ -128,7 +131,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
         page,
         viewport,
         "/app/watchlists?watchlist=e2e-watchlist-j3-crash",
-        "Watchlists",
+        "Competitors",
         [/Scanning this competitor now/, /first scan is running now/i],
       );
       await expect(page.getByText("Still running", { exact: true })).toBeVisible();
@@ -142,7 +145,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
         userId: "e2e-starter",
         scenario: "monitoring",
       })).resolves.toMatchObject({ cleanupVerified: true, includedUsed: 0 });
-      await expectResponsiveSurface(page, viewport, "/app/watchlists?watchlist=e2e-watchlist-starter-1", "Watchlists", [
+      await expectResponsiveSurface(page, viewport, "/app/watchlists?watchlist=e2e-watchlist-starter-1", "Competitors", [
         /Okara competitor watch/,
         /Evidence and alerts/,
         /Evidence freshness/,
@@ -252,7 +255,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
       await expect(page.getByRole("heading", { name: "Briefs", exact: true })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Brief history", exact: true })).toBeVisible();
       await expect(
-        page.getByRole("heading", { name: "Your first brief appears after monitoring runs" }).first(),
+        page.getByRole("heading", { name: "Your first brief lands after the first scan", exact: true }).first(),
       ).toBeVisible();
       await expect(page.getByText("Briefs are included in paid plans")).toHaveCount(0);
       await expectNoHorizontalOverflow(page);
@@ -308,7 +311,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
       testInfo.annotations.push({ type: "viewport", description: `${viewport.width}x${viewport.height}` });
 
       await signInAs(context, baseURL!, "e2e-agency");
-      await expectResponsiveSurface(page, viewport, "/app/watchlists?watchlist=e2e-watchlist-agency-1", "Watchlists", [
+      await expectResponsiveSurface(page, viewport, "/app/watchlists?watchlist=e2e-watchlist-agency-1", "Competitors", [
         /Agency client proof watch/,
         /Targets and pauses/,
       ]);
@@ -317,7 +320,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
 
       await signInAs(context, baseURL!, "e2e-active-member");
       await page.goto("/app/watchlists?watchlist=e2e-watchlist-agency-1");
-      await expect(page.getByRole("heading", { name: "Watchlists", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: "Competitors", exact: true })).toBeVisible();
       await expect(page.getByText("Delivery settings and recipient targets are managed by the workspace owner.", { exact: true })).toBeVisible();
       await expect(page.locator('input[name="targetValue"]')).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Save delivery settings", exact: true })).toHaveCount(0);

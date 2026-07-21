@@ -95,7 +95,7 @@ describe("collection plan controls", () => {
     const markup = await renderCollections("scout");
 
     expect(markup).toContain('name="intent" value="create-collection"');
-    expect(markup).toContain('placeholder="Nykaa competitors"');
+    expect(markup).toContain('placeholder="Competitor set A"');
     expect(markup).toContain("Create collection");
     expect(markup).not.toContain("Collections are not included on this plan");
   });
@@ -223,10 +223,13 @@ describe("reports plan state", () => {
   it.each(["free", "scout", "starter"] as const)("renders an upgrade state for %s", async (plan) => {
     const markup = await renderReportsLocked(plan);
 
-    expect(markup).toContain("Reports are included in the Agency plan.");
-    expect(markup).toContain("Upgrade to Agency to open client-ready reports");
+    expect(markup).toContain("Client-ready reports");
+    expect(markup).toContain("Open client-ready reports and share the evidence with your team");
+    expect(markup).toContain("included in the Agency plan.");
     expect(markup).toContain('href="/app/billing?source=reports#plans"');
+    expect(markup).toContain("Upgrade to Agency");
     expect(markup).not.toContain("Access denied");
+    expect(markup).not.toContain("is-error");
   });
 
   it("returns a useful loader state instead of throwing for non-Agency plans", async () => {
