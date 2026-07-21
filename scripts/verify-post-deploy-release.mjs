@@ -72,7 +72,7 @@ const REQUIRED_PASSED_STEPS = Object.freeze([
  *   searchRolloutMode: string,
  *   gateRunId: string,
  *   status: string,
- *   steps: Record<string, { status: "started" | "passed", at: string }>,
+ *   steps: Record<string, { status: "started" | "passed" | "failed", at: string, detail?: unknown }>,
  *   errors: string[],
  *   cleanupTicket?: CleanupTicket,
  *   productionSummary?: string,
@@ -287,14 +287,44 @@ async function defaultBackupLifecycleRecheck({ expectedSummary }) {
   };
 }
 
-/** @param {{ workerVersionId: string, token: string }} input */
-async function defaultPricing({ workerVersionId, token }) {
-  const results = await Promise.all(PRICING_COUNTRIES.map((country) => fetchPreview({
-    baseUrl: "https://0509.io",
-    country,
-    token,
-    expectedWorkerVersionId: workerVersionId,
-  })));
+/**
+ * @param {{ workerVersionId: string, token: string, attempts?: number, delayMs?: number, sleeper?: (ms: number) => Promise<void>, fetcher?: (input: { baseUrl: string, country: string, token: string, expectedWorkerVersionId?: string | null }) => Promise<{ ok: boolean, requestedCountry?: string, reason?: string } & Record<string, unknown>> }} input
+ *
+ * Each country is checked with a small bounded retry. This does NOT weaken the
+ * gate — every country must still return fully valid, version-pinned pricing —
+ * it only tolerates one-shot transients that a single request can hit right
+ * after a worker flip: an edge PoP still serving the previous version (the
+ * validator pins preview.workerVersionId, so a straggler isolate fails the
+ * check honestly) or a slow cold Dodo live-pricing call. Run 29852903771 was
+ * rolled back by exactly such a one-shot failure. A persistent pricing defect
+ * still fails all attempts and blocks the release.
+ */
+export async function defaultPricing({ workerVersionId, token, attempts = 3, delayMs = 4_000, sleeper, fetcher }) {
+  const wait = sleeper ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+  const fetchOne = fetcher ?? fetchPreview;
+  const results = await Promise.all(PRICING_COUNTRIES.map(async (country) => {
+    let last = null;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        last = await fetchOne({
+          baseUrl: "https://0509.io",
+          country,
+          token,
+          expectedWorkerVersionId: workerVersionId,
+        });
+      } catch (error) {
+        last = {
+          requestedCountry: country,
+          ok: false,
+          status: 0,
+          reason: `fetch_failed:${error instanceof Error ? error.message.slice(0, 120) : "unknown"}`,
+        };
+      }
+      if (last.ok) return { ...last, attempt };
+      if (attempt < attempts) await wait(delayMs);
+    }
+    return { ...(last ?? { requestedCountry: country, ok: false, status: 0, reason: "no_attempt" }), attempt: attempts };
+  }));
   return { ok: results.every((result) => result.ok), results };
 }
 
@@ -387,11 +417,11 @@ export async function runVersionBoundGateC({
     !/^[a-z0-9._-]{1,128}$/u.test(runId) ||
     (gateRunIdOverride !== undefined && !runId.startsWith(`${defaultRunId}-`))
   ) throw new Error("gate_c_run_id_invalid");
-  const healthAnchor = dependencies.healthAnchor ?? defaultHealthAnchor;
+  const healthAnchor = /** @type {(input: { workerVersionId: string }) => Promise<GateStepResult>} */ (dependencies.healthAnchor ?? defaultHealthAnchor);
   const backupLifecycle = dependencies.backupLifecycle ?? defaultBackupLifecycle;
   const backupLifecycleRecheck = dependencies.backupLifecycleRecheck ?? defaultBackupLifecycleRecheck;
   const backupLifecycleCleanup = dependencies.backupLifecycleCleanup ?? defaultBackupLifecycleCleanup;
-  const pricing = dependencies.pricing ?? defaultPricing;
+  const pricing = /** @type {(input: { workerVersionId: string, token: string }) => Promise<GateStepResult>} */ (dependencies.pricing ?? defaultPricing);
   const billing = dependencies.billing ?? defaultBilling;
   const proof = dependencies.proof ?? defaultProof;
   const cleanup = dependencies.cleanup ?? defaultCleanup;
@@ -438,7 +468,19 @@ export async function runVersionBoundGateC({
     journal.steps[name] = { status: "started", at: now().toISOString() };
     persist();
     const result = await operation();
-    if (!result?.ok) throw new Error(safeStepError(name));
+    if (!result?.ok) {
+      // Record WHY before failing: run 29852903771's pricing rollback left only
+      // {status:"started"} in the evidence and the diagnosis needed manual
+      // artifact archaeology. Detail is bounded and secret-free (step results
+      // are already sanitized summaries).
+      journal.steps[name] = {
+        status: "failed",
+        at: now().toISOString(),
+        detail: JSON.parse(JSON.stringify(result ?? null))
+      };
+      persist();
+      throw new Error(safeStepError(name));
+    }
     journal.steps[name] = { status: "passed", at: now().toISOString() };
     persist();
     return result;
