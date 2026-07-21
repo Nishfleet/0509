@@ -56,7 +56,6 @@ export function NotificationsRoute() {
   return (
     <DashboardPage>
       <DashboardPageHeader
-        action={{ label: "Open digests", to: "/app/digests" }}
         lead="Email digest delivery and alert channels."
         title="Notifications"
       />
