@@ -1,0 +1,203 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { BrandPageLoaderData } from "~/routes/ads.$domain";
+import type { AdRecord } from "~/lib/types";
+
+// The default export reads `useLoaderData`; a mutable fixture lets each test
+// render the route with a specific loader payload.
+let currentData: BrandPageLoaderData;
+
+beforeEach(() => {
+  vi.resetModules();
+  vi.doMock("react-router", async () => {
+    const actual = await vi.importActual<typeof import("react-router")>("react-router");
+    const React = await import("react");
+    return {
+      ...actual,
+      useLoaderData: () => currentData,
+      Link: ({ children, to, ...props }: { children?: React.ReactNode; to?: string } & Record<string, unknown>) =>
+        React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+      Form: ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) =>
+        React.createElement("form", props, children),
+    };
+  });
+});
+
+afterEach(() => {
+  vi.doUnmock("react-router");
+  vi.restoreAllMocks();
+  vi.resetModules();
+});
+
+async function render(data: BrandPageLoaderData): Promise<string> {
+  currentData = data;
+  const { default: BrandAdsRoute } = await import("~/routes/ads.$domain");
+  return renderToStaticMarkup(createElement(BrandAdsRoute));
+}
+
+function ad(overrides: Partial<AdRecord> = {}): AdRecord {
+  return {
+    metaAdId: overrides.metaAdId ?? "ad-1",
+    advertiser: "Nike",
+    body: "Run through summer.",
+    previewHeadline: "Run through summer with gear that can take the heat.",
+    previewSubhead: "",
+    hook: "Shop Now",
+    offer: "",
+    cta: "Shop Now",
+    format: "image",
+    languageLabel: "English",
+    destinationType: "website",
+    landingPageUrl: "https://www.nike.com/launch",
+    adSnapshotUrl: null,
+    countries: ["all"],
+    platforms: ["Instagram"],
+    firstSeenAt: new Date("2026-06-01T00:00:00.000Z").toISOString(),
+    lastSeenAt: null,
+    active: true,
+    researchSummary: "",
+    source: "meta_library_browser",
+    analysisFields: [],
+    ...overrides,
+  };
+}
+
+const teaser = {
+  totalCount: 34,
+  activeCount: 28,
+  longestRunningDays: 126,
+  longestRunningHook: "Charge shin guards",
+  formats: ["image", "video", "carousel"],
+};
+
+const aggression = {
+  score: 78,
+  components: { velocity: 22, testing: 19, freshness: 20, persistence: 17 },
+  bandId: "all_out" as const,
+  bandLabel: "All-out",
+  bandInterpretation: "Running an all-out launch and testing push.",
+  formulaVersion: 1 as const,
+  windowDays: 21,
+  adsPerWeek: 6,
+  adCount: 34,
+  activeCount: 28,
+};
+
+const changeEvents = [
+  {
+    id: "evt-1",
+    dayLabel: "Today",
+    isToday: true,
+    source: "AD LIBRARY",
+    move: "New ad entered rotation — a fresh summer creative",
+    why: "Launched with 4 variants — they're testing which creative wins.",
+    variantCount: 4,
+  },
+];
+
+function populated(overrides: Partial<BrandPageLoaderData> = {}): BrandPageLoaderData {
+  return {
+    domain: "nike.com",
+    brandName: "Nike",
+    hasCachedAds: true,
+    ads: Array.from({ length: 6 }, (_v, i) => ad({ metaAdId: `ad-${i}` })),
+    checkedAgo: "about 2 hours ago",
+    teaser,
+    aggression,
+    changeEvents,
+    noindex: false,
+    canonicalPath: "/ads/nike.com",
+    ...overrides,
+  };
+}
+
+describe("/ads/:domain — Case File render", () => {
+  it("renders every section of the populated page in the briefed order", async () => {
+    const markup = await render(populated());
+
+    // Sections present.
+    expect(markup).toContain("ld-ticker"); // capture ticker
+    expect(markup).toContain("Nike is running");
+    expect(markup).toContain("34 Meta ads");
+    expect(markup).toContain("Ad Aggression Score");
+    expect(markup).toContain("f9-ads-watch-strip");
+    expect(markup).toContain("f9-ads-statline");
+    expect(markup).toContain("What changed this week");
+    expect(markup).toContain("All 34 ads, on the wall");
+    expect(markup).toContain("Be the first to know");
+
+    // Order: ticker → hero headline → score → CTA strip → stat line →
+    // what-changed → ad wall → closer.
+    const order = [
+      "ld-ticker",
+      "Nike is running",
+      "Ad Aggression Score",
+      "f9-ads-watch-strip",
+      "f9-ads-statline",
+      "What changed this week",
+      "All 34 ads, on the wall",
+      "Be the first to know",
+    ].map((needle) => markup.indexOf(needle));
+    const sorted = [...order].sort((a, b) => a - b);
+    expect(order).toEqual(sorted);
+    expect(order.every((index) => index >= 0)).toBe(true);
+  });
+
+  it("shows the honest overflow tile and the signup CTA carrying the domain", async () => {
+    const markup = await render(populated());
+
+    // 34 total − 5 shown = +29 more.
+    expect(markup).toContain("+29");
+    expect(markup).toContain("more ads live");
+    // Primary CTA carries the domain into onboarding.
+    expect(markup).toContain(
+      "/auth/signup?redirectTo=%2Fapp%2Fonboard%3Fwebsite%3Dnike.com",
+    );
+  });
+
+  it("hides the score card and states why when the evidence floor is not met", async () => {
+    const markup = await render(populated({ aggression: null }));
+
+    expect(markup).toContain("Not enough history yet to score");
+    // No score band leaks through.
+    expect(markup).not.toContain("f9-ads-score-num");
+    // Stat line still renders from the teaser, minus the score-derived cell.
+    expect(markup).toContain("f9-ads-statline");
+    expect(markup).toContain("Ads live");
+    expect(markup).not.toContain("New this week");
+  });
+
+  it("hides 'What changed this week' entirely when there are no change events", async () => {
+    const markup = await render(populated({ changeEvents: [] }));
+
+    expect(markup).not.toContain("What changed this week");
+    // The rest of the page still renders.
+    expect(markup).toContain("All 34 ads, on the wall");
+  });
+
+  it("renders the teaching shell (not a dotted apology) on a cache miss", async () => {
+    const markup = await render(
+      populated({
+        hasCachedAds: false,
+        ads: [],
+        checkedAgo: null,
+        teaser: null,
+        aggression: null,
+        changeEvents: [],
+        noindex: true,
+      }),
+    );
+
+    expect(markup).toContain("We haven&#x27;t watched nike.com yet");
+    expect(markup).toContain("here&#x27;s what you&#x27;d wake up to");
+    expect(markup).toContain("Run a free live search");
+    expect(markup).toContain("Example");
+    // Never the old apologetic empty state, and no ticker without cached ads.
+    expect(markup).not.toContain("haven&#x27;t checked");
+    expect(markup).not.toContain("ld-ticker");
+    // The signup CTA still carries the domain.
+    expect(markup).toContain("website%3Dnike.com");
+  });
+});

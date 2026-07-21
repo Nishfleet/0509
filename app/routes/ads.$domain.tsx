@@ -19,6 +19,11 @@
  *   - cache entries older than 7 days (stale pages still render with an
  *     honest freshness line but must not rank).
  *
+ * DESIGN: the "Case File" system (see docs/ADS-PAGE-DIRECTIONS-2026-07-21.md).
+ * Every number traces to a real loader field; sections render only when their
+ * data exists (the score hides below the evidence floor, "What changed" hides
+ * with no change events). Honesty is the brand — no invented figures.
+ *
  * SITEMAP: /ads/* is deliberately NOT in the static sitemap. When adding it,
  * generate entries dynamically from cached-fresh pages only — see the
  * commented block above SITEMAP_XML in app/lib/seo.ts for the exact strategy.
@@ -27,12 +32,21 @@
 import { Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 
-import { AdLongevityPill } from "~/components/ad-longevity-pill";
-import { AdThumb } from "~/components/ad-thumb";
-import { BrandWordmark } from "~/components/brand-wordmark";
-import { Pill } from "~/components/pill";
-import type { BrandIntelTeaser } from "~/lib/brand-page.server";
+import { AdCreative } from "~/components/ads/ad-creative";
+import { BrandAdWall } from "~/components/ads/brand-ad-wall";
+import { BrandChangeTimeline } from "~/components/ads/brand-change-timeline";
+import { BrandScoreCard } from "~/components/ads/brand-score-card";
+import { BrandStatLine } from "~/components/ads/brand-stat-line";
+import { BrandTicker } from "~/components/ads/brand-ticker";
+import { MarketingFooter } from "~/components/marketing-footer";
+import { MarketingNav } from "~/components/marketing-nav";
+import type {
+  BrandChangeEvent,
+  BrandIntelTeaser,
+  BrandPageAggression,
+} from "~/lib/brand-page.server";
 import { canonicalUrl, publicSeoMeta } from "~/lib/seo";
+import { SUPPORT_EMAIL } from "~/lib/support";
 import type { AdRecord } from "~/lib/types";
 
 export interface BrandPageLoaderData {
@@ -42,6 +56,8 @@ export interface BrandPageLoaderData {
   ads: AdRecord[];
   checkedAgo: string | null;
   teaser: BrandIntelTeaser | null;
+  aggression: BrandPageAggression | null;
+  changeEvents: BrandChangeEvent[];
   noindex: boolean;
   canonicalPath: string;
 }
@@ -67,7 +83,9 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   }
 
   const {
+    buildBrandChangeFeed,
     buildBrandIntelTeaser,
+    computeBrandPageAggressionScore,
     formatBrandPageCheckedAgo,
     loadBrandPageCacheSnapshot,
   } = await import("~/lib/brand-page.server");
@@ -92,6 +110,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     snapshot = null;
   }
 
+  const now = new Date();
   const emergencyNoindex = env.PUBLIC_BRAND_PAGES_INDEXABLE?.trim() === "0";
   const noindex = emergencyNoindex || !snapshot || !snapshot.freshForIndexing;
 
@@ -100,8 +119,10 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     brandName: brand.displayName,
     hasCachedAds: Boolean(snapshot),
     ads: snapshot?.ads ?? [],
-    checkedAgo: snapshot ? formatBrandPageCheckedAgo(snapshot.fetchedAt) : null,
-    teaser: snapshot ? buildBrandIntelTeaser(snapshot.ads) : null,
+    checkedAgo: snapshot ? formatBrandPageCheckedAgo(snapshot.fetchedAt, now) : null,
+    teaser: snapshot ? buildBrandIntelTeaser(snapshot.ads, now) : null,
+    aggression: snapshot ? computeBrandPageAggressionScore(snapshot.ads, now) : null,
+    changeEvents: snapshot ? buildBrandChangeFeed(snapshot.ads, now) : [],
     noindex,
     canonicalPath: `/ads/${brand.domain}`,
   };
@@ -136,30 +157,17 @@ export default function BrandAdsRoute() {
   const signupPath = `/auth/signup?redirectTo=${encodeURIComponent(postSignupPath)}`;
 
   return (
-    <main className="f9-home f9-brand-ads-page">
-      <header className="ld-nav">
-        <Link className="ld-brand" to="/" aria-label="Five to Nine home">
-          <BrandWordmark />
-        </Link>
-        <nav className="ld-nav-links" aria-label="Primary">
-          <Link to={liveSearchPath}>Search preview</Link>
-          <Link to="/#pricing">Pricing</Link>
-        </nav>
-        <nav className="ld-nav-actions" aria-label="Account">
-          <Link className="f9-link-arrow" to="/auth/login">
-            Sign in
-          </Link>
-          <Link className="ld-nav-pill" to="/auth/signup">
-            Create account
-          </Link>
-        </nav>
-      </header>
+    <main className="f9-home f9-ads-page">
+      {data.hasCachedAds ? <BrandTicker ads={data.ads} brandName={data.brandName} /> : null}
+      <MarketingNav />
 
       {data.hasCachedAds ? (
         <BrandAdsResults data={data} liveSearchPath={liveSearchPath} signupPath={signupPath} />
       ) : (
-        <BrandAdsShell data={data} liveSearchPath={liveSearchPath} />
+        <BrandAdsShell data={data} liveSearchPath={liveSearchPath} signupPath={signupPath} />
       )}
+
+      <MarketingFooter />
     </main>
   );
 }
@@ -174,112 +182,255 @@ function BrandAdsResults({
   signupPath: string;
 }) {
   const teaser = data.teaser;
+  const totalCount = teaser?.totalCount ?? data.ads.length;
+  const adWord = totalCount === 1 ? "ad" : "ads";
+  const watchLabel = `Watch ${data.domain}`;
 
   return (
-    <section className="f9-search-workspace" aria-labelledby="brand-ads-title">
-      <div className="f9-container">
-        <div className="f9-panel-head">
-          <div>
-            <span>Public Ad Library check</span>
-            <h1 id="brand-ads-title">{`${data.brandName} — Meta ads they're running`}</h1>
-            <small>{data.domain}</small>
+    <>
+      {/* 1. HERO — the verdict + the score card */}
+      <section className="f9-ads-hero" aria-labelledby="brand-ads-title">
+        <div className="f9-container">
+          <div className="f9-ads-hero-grid">
+            <div className="f9-ads-hero-copy">
+              <p className="f9-ads-eyebrow">
+                <span aria-hidden="true" className="f9-ads-dot-live" />
+                {`Tracking ${data.domain}`}
+                {data.checkedAgo ? (
+                  <>
+                    <span className="f9-ads-eyebrow-sep" aria-hidden="true">·</span>
+                    <span className="f9-ads-fresh-stamp">{`Last checked ${data.checkedAgo}`}</span>
+                  </>
+                ) : null}
+              </p>
+              <h1 className="f9-ads-headline" id="brand-ads-title">
+                {`${data.brandName} is running `}
+                <span className="f9-ads-hl">{`${totalCount} Meta ${adWord}`}</span>
+                {" right now."}
+              </h1>
+              <p className="f9-ads-subline">
+                {heroDetailSentence(teaser)}
+                <b>Point us at your competitor and you'll never hear their next move from a client first.</b>
+              </p>
+            </div>
+
+            <BrandScoreCard aggression={data.aggression} />
+          </div>
+
+          {/* 2. Primary CTA strip */}
+          <div className="f9-ads-watch-strip">
+            <div className="f9-ads-watch-copy">
+              <h2>
+                {"Watch "}
+                <span className="f9-ads-watch-g">{data.domain}</span>
+                {" — free"}
+              </h2>
+              <p>
+                Create a free account and the first scan runs the moment you land. Every ad, offer,
+                CTA and form change hits your inbox with the screenshot, the page text, and the link.
+              </p>
+            </div>
+            <Link className="f9-ads-watch-btn" to={signupPath}>
+              {`${watchLabel} →`}
+            </Link>
           </div>
         </div>
+      </section>
 
-        <div className="f9-discovery-banner">
-          <p>
-            {`Based on a public Ad Library check from ${data.checkedAgo} — `}
-            <Link to={liveSearchPath}>refresh by searching live</Link>.
+      {/* 3. STAT LINE */}
+      {teaser ? (
+        <BrandStatLine
+          ads={data.ads}
+          aggression={data.aggression}
+          freshnessLabel={data.checkedAgo}
+          movesThisWeek={data.changeEvents.length}
+          teaser={teaser}
+        />
+      ) : null}
+
+      {/* 4. WHAT CHANGED THIS WEEK — only when real change events exist */}
+      {data.changeEvents.length > 0 ? (
+        <section className="f9-ads-sec" aria-labelledby="brand-changed-title">
+          <div className="f9-container">
+            <div className="f9-ads-sec-head">
+              <div className="f9-ads-sec-head-left">
+                <span className="f9-ads-sec-eyebrow">The reason to watch</span>
+                <h2 id="brand-changed-title">What changed this week</h2>
+              </div>
+              <span className="f9-ads-sec-meta">
+                {`${data.changeEvents.length} ${data.changeEvents.length === 1 ? "move" : "moves"} · each with a saved screenshot`}
+              </span>
+            </div>
+            <BrandChangeTimeline events={data.changeEvents} />
+          </div>
+        </section>
+      ) : null}
+
+      {/* 5. THE ADS — the wall of real creatives */}
+      <section className="f9-ads-sec" aria-labelledby="brand-wall-title">
+        <div className="f9-container">
+          <div className="f9-ads-sec-head">
+            <div className="f9-ads-sec-head-left">
+              <span className="f9-ads-sec-eyebrow">Running right now</span>
+              <h2 id="brand-wall-title">{`All ${totalCount} ${adWord}, on the wall`}</h2>
+            </div>
+            <span className="f9-ads-sec-meta">
+              {data.checkedAgo
+                ? `real creatives from the Meta Ad Library · cached ${data.checkedAgo}`
+                : "real creatives from the Meta Ad Library"}
+            </span>
+          </div>
+          <BrandAdWall
+            ads={data.ads}
+            brandName={data.brandName}
+            domain={data.domain}
+            signupPath={signupPath}
+            totalCount={totalCount}
+          />
+        </div>
+      </section>
+
+      {/* 6. CLOSER */}
+      <section className="f9-ads-closer">
+        <div className="f9-container">
+          <h2 className="f9-ads-closer-head">
+            {`${data.brandName} will change their next ad. `}
+            <span className="f9-ads-hl">Be the first to know.</span>
+          </h2>
+          <div className="f9-ads-closer-cta">
+            <Link className="f9-ads-watch-btn" to={signupPath}>
+              {`${watchLabel} →`}
+            </Link>
+            <Link className="f9-ads-ghost" to={liveSearchPath}>
+              or run a live search first ›
+            </Link>
+          </div>
+          <p className="f9-ads-honest">
+            {`Ad creatives are ${data.brandName}'s real ads from the public Meta Ad Library`}
+            {data.checkedAgo ? `, cached ${data.checkedAgo}` : ""}
+            {". This page never runs a live scrape — a live search refreshes it. Coverage and freshness are labeled and vary by source. The Ad Aggression Score is computed from a public formula. "}
+            <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
           </p>
         </div>
-
-        {teaser ? (
-          <dl className="f9-detail-grid f9-brand-teaser">
-            <div>
-              <dt>Ads in this check</dt>
-              <dd>{teaser.totalCount}</dd>
-            </div>
-            <div>
-              <dt>Marked active</dt>
-              <dd>{teaser.activeCount}</dd>
-            </div>
-            {teaser.longestRunningHook && teaser.longestRunningDays !== null ? (
-              <div>
-                <dt>{`Longest-running hook (${teaser.longestRunningDays} ${teaser.longestRunningDays === 1 ? "day" : "days"})`}</dt>
-                <dd>{teaser.longestRunningHook}</dd>
-              </div>
-            ) : null}
-            {teaser.formats.length > 0 ? (
-              <div>
-                <dt>Formats</dt>
-                <dd>{teaser.formats.join(", ")}</dd>
-              </div>
-            ) : null}
-          </dl>
-        ) : null}
-
-        <div className="f9-search-signup-cta">
-          <div>
-            <strong>{`Watch ${data.domain} — get an email when their ads or offer change`}</strong>
-            <p>
-              Create a free account and the first scan runs immediately. Every change lands in
-              your inbox with the screenshot, page text, and link.
-            </p>
-          </div>
-          <Link className="f9-primary-button" to={signupPath}>
-            {`Watch ${data.domain}`}
-          </Link>
-        </div>
-
-        <div className="f9-results-list">
-          {data.ads.map((ad) => (
-            <div className="f9-result-card" key={ad.metaAdId}>
-              <AdThumb ad={ad} />
-              <div className="f9-result-card-body">
-                <div>
-                  <span>{ad.advertiser?.trim() || data.brandName}</span>
-                  <h2>{ad.previewHeadline}</h2>
-                  <div className="f9-result-card-pills">
-                    <AdLongevityPill ad={ad} />
-                    {ad.variantCount && ad.variantCount > 1 ? (
-                      <Pill variant="longevity">{`×${ad.variantCount} variants`}</Pill>
-                    ) : null}
-                  </div>
-                </div>
-                {ad.hook?.trim() ? <p>{ad.hook}</p> : null}
-                <em>{ad.format}</em>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="f9-search-empty-actions">
-          <Link className="f9-secondary-button" to={liveSearchPath}>
-            Run a live search
-          </Link>
-        </div>
-      </div>
-    </section>
+      </section>
+    </>
   );
 }
 
+/** Real-data lead-in to the promise; drops clauses whose data is missing. */
+function heroDetailSentence(teaser: BrandIntelTeaser | null): string {
+  if (!teaser) return "";
+  const parts: string[] = [];
+  if (teaser.formats.length > 1) {
+    parts.push(`across ${teaser.formats.length} formats`);
+  }
+  if (teaser.longestRunningDays !== null) {
+    parts.push(
+      `with one ad live for ${teaser.longestRunningDays} ${teaser.longestRunningDays === 1 ? "day" : "days"}`,
+    );
+  }
+  if (parts.length === 0) {
+    return "They're advertising while your team is offline. ";
+  }
+  return `They're testing ${parts.join(" and ")}. `;
+}
+
+/**
+ * Cache-miss / no-cache teaching shell (per intent audit SF-3): the same
+ * poster system with a clearly-labeled EXAMPLE preview — never a dotted
+ * apology. Always noindexed by the loader.
+ */
 function BrandAdsShell({
   data,
   liveSearchPath,
+  signupPath,
 }: {
   data: BrandPageLoaderData;
   liveSearchPath: string;
+  signupPath: string;
 }) {
+  const exampleAggression: BrandPageAggression = {
+    score: 72,
+    components: { velocity: 20, testing: 18, freshness: 19, persistence: 15 },
+    bandId: "aggressive",
+    bandLabel: "Aggressive",
+    bandInterpretation: "Running an aggressive testing program.",
+    formulaVersion: 1,
+    windowDays: 21,
+    adsPerWeek: 5,
+    adCount: 24,
+    activeCount: 21,
+  };
+  const exampleEvents: BrandChangeEvent[] = [
+    {
+      id: "example-1",
+      dayLabel: "Today",
+      isToday: true,
+      source: "AD LIBRARY",
+      move: "New ad entered rotation — a fresh summer creative",
+      why: "Launched with 3 variants — they're testing which creative wins.",
+      variantCount: 3,
+    },
+  ];
+
   return (
-    <section className="f9-search-workspace" aria-labelledby="brand-ads-title">
+    <section className="f9-ads-shell" aria-labelledby="brand-ads-title">
       <div className="f9-container">
-        <div className="f9-empty-state">
-          <h1 id="brand-ads-title">{`${data.brandName} on Five to Nine`}</h1>
-          <p>{`We haven't checked ${data.domain} recently. Run a free live search to see the Meta ads they're running right now.`}</p>
-          <div className="f9-search-empty-actions">
-            <Link className="f9-primary-button" to={liveSearchPath}>
-              Run a free live search
-            </Link>
+        <p className="f9-ads-eyebrow">
+          <span aria-hidden="true" className="f9-ads-dot-live f9-ads-dot-quiet" />
+          {`Not watching ${data.domain} yet`}
+        </p>
+        <h1 className="f9-ads-headline f9-ads-shell-head" id="brand-ads-title">
+          {`We haven't watched ${data.domain} yet — `}
+          <span className="f9-ads-hl">here's what you'd wake up to.</span>
+        </h1>
+        <p className="f9-ads-subline">
+          Run a free live search and we'll pull their Meta ads right now. Then start watching, and
+          every change lands in your inbox with the screenshot, the page text, and the link.
+        </p>
+
+        <div className="f9-ads-shell-cta">
+          <Link className="f9-ads-watch-btn" to={liveSearchPath}>
+            Run a free live search →
+          </Link>
+          <Link className="f9-ads-ghost" to={signupPath}>
+            {`or watch ${data.domain} ›`}
+          </Link>
+        </div>
+
+        <div className="f9-ads-example" aria-hidden="true">
+          <span className="f9-ads-example-tag">Example — this is what a watched brand looks like</span>
+          <div className="f9-ads-example-grid">
+            <BrandScoreCard aggression={exampleAggression} />
+            <div className="f9-ads-example-side">
+              <BrandChangeTimeline events={exampleEvents} example />
+              <div className="f9-ads-example-cards">
+                <article className="f9-ads-card">
+                  <AdCreative
+                    ad={{
+                      advertiser: data.brandName,
+                      format: "image",
+                      previewHeadline: "Your competitor's headline, saved to the pixel.",
+                      hook: "Shop Now",
+                      creativeImageUrl: null,
+                    }}
+                    savedLabel="Example"
+                  />
+                </article>
+                <article className="f9-ads-card">
+                  <AdCreative
+                    ad={{
+                      advertiser: data.brandName,
+                      format: "video",
+                      previewHeadline: "Every video creative, poster frame and all.",
+                      hook: "Watch",
+                      creativeImageUrl: null,
+                    }}
+                    savedLabel="Example"
+                  />
+                </article>
+              </div>
+            </div>
           </div>
         </div>
       </div>
