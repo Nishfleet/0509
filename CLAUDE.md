@@ -76,6 +76,8 @@ npm run dev
 - `app/lib/search-display.ts` — pure display/formatting/accumulation/URL helpers for the `/search` route (extracted from `search.tsx`; the route re-exports the test-facing names so `~/routes/search` imports still resolve)
 - `app/components/pill.tsx` — the one `<Pill>` badge component (families via `variant`: status / longevity / angle; `is-*` modifier via `state`). Replaced the scattered longevity/variant/angle/Sample/status pill markup
 - `app/components/search/result-card.tsx` — `SearchResultCard`, the per-ad card extracted from the `/search` results list
+- `app/lib/watchlist-display.ts` — pure watchlist presentation/formatters (scan presentation, empty-event copy resolvers, run status/timing labels, delivery-channel visibility, proof summaries) extracted from `app/routes/app.watchlists.tsx`; the route re-exports the test-facing resolver names
+- `app/components/watchlists/` — presentational pieces of the watchlists route (FirstScanBanner, BulkSelectBar, DeliverySettingsCard, DeliveryTargetsSection, RecentChecksSection, RecentEvidenceChecksCard, CandidateHistory, EventChangesSection, TrackingStatusCard, WatchlistSetupCard, WatchlistProofAge). All are read-only over loader data + scalar plan flags — props threaded explicitly, no context. `WatchlistProofAge` is re-exported from the route for its hydration test
 
 ## Current Phase: Pre-Commercial-Launch Hardening
 
