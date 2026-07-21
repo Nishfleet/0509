@@ -714,7 +714,10 @@ describe("/app/shares route", () => {
     expect(meta()).toEqual([{ title: "Shared links | Five to Nine" }]);
     expect(markup).toContain("Shared links");
     expect(markup).toContain("No active share links");
-    expect(markup).toContain('href="/app/reports"');
+    // WP-A3.1: the empty state points at the real prerequisite (Competitors),
+    // not the Agency-paywalled Reports index; no header cross-nav action.
+    expect(markup).toContain('href="/app/watchlists"');
+    expect(markup).not.toContain('href="/app/reports"');
     expect(markup).not.toContain("Reports &amp; shared links");
   });
 

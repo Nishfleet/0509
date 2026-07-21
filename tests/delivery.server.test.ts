@@ -175,7 +175,7 @@ from:{email:"alerts@0509.io",name:"Five to Nine"},
     expect(emailSendPayload(sendMock).html).toContain("Unsubscribe");
     expect(emailSendPayload(sendMock).html).toContain("Verified evidence");
     expect(emailSendPayload(sendMock).text).toContain(
-      "View full digest: https://app.0509.test/app/digests?digest=digest-1",
+      "View full brief: https://app.0509.test/app/digests?digest=digest-1",
     );
     expect(emailSendPayload(sendMock).text).toContain("Manage frequency: https://app.0509.test/app/notifications");
     expect(emailSendPayload(sendMock).text).toContain("Unsubscribe: https://app.0509.test/unsubscribe");
