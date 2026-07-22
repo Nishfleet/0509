@@ -8,7 +8,7 @@ script = "./scripts/codex/setup-worktree.sh"
 [[actions]]
 name = "Repo Status"
 icon = "run"
-command = 'bash "/Users/nish/Vibecoded projects/scripts/repo-status.sh"'
+command = '"$HOME/.local/bin/repo-status"'
 
 [[actions]]
 name = "Start Task Worktree"
@@ -23,12 +23,12 @@ command = './scripts/codex/normalize-base-checkout.sh'
 [[actions]]
 name = "Checkpoint Before Work"
 icon = "run"
-command = 'bash "/Users/nish/Vibecoded projects/scripts/checkpoint-repo.sh" before'
+command = '"$HOME/.local/bin/checkpoint-repo" before'
 
 [[actions]]
 name = "Checkpoint After Work"
 icon = "run"
-command = 'bash "/Users/nish/Vibecoded projects/scripts/checkpoint-repo.sh" after'
+command = '"$HOME/.local/bin/checkpoint-repo" after'
 
 [[actions]]
 name = "Dev Server"
