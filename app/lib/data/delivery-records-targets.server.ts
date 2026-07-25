@@ -624,9 +624,10 @@ export async function suppressEmailTargetsForUserAndAddress(
 }
 
 /**
- * Atomically resume every email target suppressed for this account/address
+ * Atomically re-opt every email target suppressed for this account/address
  * pair. Unsubscribe is account-and-address-wide, so the workspace-default
- * target cannot be resumed safely with a per-target upsert.
+ * target cannot be resumed safely with a per-target upsert. A target that was
+ * already paused before the unsubscribe remains paused after the re-opt.
  */
 export async function resumeEmailTargetsForUserAndAddress(
   env: AppEnv,
@@ -640,8 +641,14 @@ export async function resumeEmailTargetsForUserAndAddress(
         SET is_opted_in = 1,
             opt_in_source = ?,
             opted_in_at = ?,
-            is_paused = 0,
-            paused_at = NULL,
+            is_paused = CASE
+              WHEN paused_at = opted_out_at THEN 0
+              ELSE is_paused
+            END,
+            paused_at = CASE
+              WHEN paused_at = opted_out_at THEN NULL
+              ELSE paused_at
+            END,
             opted_out_at = NULL,
             metadata_json = json_remove(
               COALESCE(metadata_json, '{}'),
@@ -651,6 +658,8 @@ export async function resumeEmailTargetsForUserAndAddress(
         WHERE user_id = ?
           AND channel = 'email'
           AND lower(trim(target_value)) = lower(trim(?))
+          AND is_opted_in = 0
+          AND opted_out_at IS NOT NULL
       `,
     )
     .bind(

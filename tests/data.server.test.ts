@@ -4418,7 +4418,7 @@ describe("email target dispatch and unsubscribe ordering", () => {
     }
   });
 
-  it("atomically resumes every email target for the account and address", async () => {
+  it("re-opts unsubscribe-suppressed email targets without clearing independent pauses", async () => {
     const sqlite = createSqliteD1();
     try {
       sqlite.sqlite.exec(`
@@ -4450,6 +4450,13 @@ describe("email target dispatch and unsubscribe ordering", () => {
            'account_email', '2026-07-15T00:00:00.000Z', 1, '2026-07-16T00:00:00.000Z',
            '2026-07-16T00:00:00.000Z', '{"scope":"watchlist","unsubscribedVia":"email_unsubscribe_link"}',
            '2026-07-16T00:00:00.000Z'),
+          ('target-watchlist-paused-before-unsubscribe', 'user-1', 'watch-2', 'email', 'owner@example.com', 0,
+           'watchlist_settings', '2026-07-14T00:00:00.000Z', 1, '2026-07-15T00:00:00.000Z',
+           '2026-07-16T00:00:00.000Z', '{"scope":"watchlist","unsubscribedVia":"email_unsubscribe_link"}',
+           '2026-07-16T00:00:00.000Z'),
+          ('target-watchlist-manually-paused', 'user-1', 'watch-3', 'email', 'owner@example.com', 1,
+           'watchlist_settings', '2026-07-14T00:00:00.000Z', 1, '2026-07-15T00:00:00.000Z',
+           NULL, '{"scope":"watchlist"}', '2026-07-15T00:00:00.000Z'),
           ('target-other-address', 'user-1', 'watch-2', 'email', 'other@example.com', 0,
            'account_email', '2026-07-15T00:00:00.000Z', 1, '2026-07-16T00:00:00.000Z',
            '2026-07-16T00:00:00.000Z', '{"scope":"watchlist","unsubscribedVia":"email_unsubscribe_link"}',
@@ -4463,14 +4470,18 @@ describe("email target dispatch and unsubscribe ordering", () => {
       await expect(resumeEmailTargetsForUserAndAddress({ DB: sqlite.db } as never, {
         userId: "user-1",
         targetValue: "OWNER@example.com",
-      })).resolves.toBe(2);
+      })).resolves.toBe(3);
 
       const resumed = sqlite.sqlite.prepare(`
         SELECT id, is_opted_in, opt_in_source, is_paused, paused_at, opted_out_at,
                json_extract(metadata_json, '$.scope') AS scope,
                json_extract(metadata_json, '$.unsubscribedVia') AS unsubscribed_via
         FROM delivery_target
-        WHERE id IN ('target-workspace', 'target-watchlist')
+        WHERE id IN (
+          'target-workspace',
+          'target-watchlist',
+          'target-watchlist-paused-before-unsubscribe'
+        )
         ORDER BY id
       `).all() as Array<Record<string, unknown>>;
       expect(resumed).toEqual([
@@ -4480,6 +4491,16 @@ describe("email target dispatch and unsubscribe ordering", () => {
           opt_in_source: "delivery_settings",
           is_paused: 0,
           paused_at: null,
+          opted_out_at: null,
+          scope: "watchlist",
+          unsubscribed_via: null,
+        }),
+        expect.objectContaining({
+          id: "target-watchlist-paused-before-unsubscribe",
+          is_opted_in: 1,
+          opt_in_source: "delivery_settings",
+          is_paused: 1,
+          paused_at: "2026-07-15T00:00:00.000Z",
           opted_out_at: null,
           scope: "watchlist",
           unsubscribed_via: null,
@@ -4505,6 +4526,23 @@ describe("email target dispatch and unsubscribe ordering", () => {
           AND opted_out_at IS NOT NULL
       `).get() as { count: number };
       expect(Number(stillSuppressed.count)).toBe(2);
+
+      const manuallyPaused = sqlite.sqlite.prepare(`
+        SELECT is_opted_in, opt_in_source, is_paused, paused_at, opted_out_at,
+               json_extract(metadata_json, '$.unsubscribedVia') AS unsubscribed_via,
+               updated_at
+        FROM delivery_target
+        WHERE id = 'target-watchlist-manually-paused'
+      `).get() as Record<string, unknown>;
+      expect(manuallyPaused).toEqual(expect.objectContaining({
+        is_opted_in: 1,
+        opt_in_source: "watchlist_settings",
+        is_paused: 1,
+        paused_at: "2026-07-15T00:00:00.000Z",
+        opted_out_at: null,
+        unsubscribed_via: null,
+        updated_at: "2026-07-15T00:00:00.000Z",
+      }));
     } finally {
       sqlite.close();
     }
