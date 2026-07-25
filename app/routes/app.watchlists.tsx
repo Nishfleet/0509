@@ -927,13 +927,12 @@ export async function action({ context, request }: ActionFunctionArgs) {
     if (channel === "whatsapp" && !isWhatsAppDeliveryCustomerFacing()) {
       return { ok: false, message: whatsappDeliveryUnavailableMessage() };
     }
-    const isResumingSuppressedEmailDefault =
-      isDefaultTarget &&
+    const isResumingSuppressedEmail =
       channel === "email" &&
       !isPaused &&
       !target.isOptedIn &&
       target.optedOutAt !== null;
-    if (isResumingSuppressedEmailDefault) {
+    if (isResumingSuppressedEmail) {
       const { resumeEmailTargetsForUserAndAddress } = await import("~/lib/data.server");
       await resumeEmailTargetsForUserAndAddress(env, {
         userId: workspaceUserId,
