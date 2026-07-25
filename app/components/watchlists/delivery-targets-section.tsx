@@ -1,7 +1,10 @@
 import { Form, Link } from "react-router";
 
 import { SubmitButton } from "~/components/submit-button";
-import type { PublicDeliveryTargetRecord } from "~/lib/delivery-target-public";
+import {
+  toPublicDeliveryTarget,
+  type PublicDeliveryTargetRecord,
+} from "~/lib/delivery-target-public";
 
 export function DeliveryTargetsSection(props: {
   data: {
@@ -35,7 +38,11 @@ export function DeliveryTargetsSection(props: {
               <h4 style={{ marginBottom: "0.25rem" }}>
                 {target.channel === "email" ? "Email" : "WhatsApp"}
               </h4>
-              <p className="f9-muted-copy">{target.targetValue}</p>
+              <p className="f9-muted-copy">
+                {toPublicDeliveryTarget(target, {
+                  verifiedAccountEmail: data.verifiedAccountEmail,
+                }).targetValue}
+              </p>
               <p className="f9-muted-copy">
                 {target.isPaused
                   ? "Paused"
@@ -117,7 +124,11 @@ export function DeliveryTargetsSection(props: {
                         ? "Workspace default email"
                         : "Workspace default WhatsApp"}
                     </h4>
-                    <p className="f9-muted-copy">{target.targetValue}</p>
+                    <p className="f9-muted-copy">
+                      {toPublicDeliveryTarget(target, {
+                        verifiedAccountEmail: data.verifiedAccountEmail,
+                      }).targetValue}
+                    </p>
                     <p className="f9-muted-copy">
                       {paused
                         ? "Paused — digests and alerts are switched off"
