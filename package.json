@@ -42,8 +42,8 @@
     "preview": "npm run build && vite preview",
     "provider:bakeoff": "node scripts/provider-bakeoff.mjs",
     "provider:bakeoff:launch": "node scripts/provider-bakeoff.mjs --launch-gate",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "vitest run --configLoader runner",
+    "test:watch": "vitest --configLoader runner",
     "typecheck": "npm run cf-typegen && react-router typegen && tsc -b"
   },
   "dependencies": {

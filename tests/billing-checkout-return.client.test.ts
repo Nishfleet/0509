@@ -43,7 +43,7 @@ describe("billing checkout return polling", () => {
 
     expect(container.textContent).toContain("Dodo is confirming the payment");
 
-    for (let count = 1; count <= 10; count += 1) {
+    for (let count = 1; count <= 20; count += 1) {
       await act(async () => {
         vi.advanceTimersByTime(3000);
       });
@@ -56,7 +56,7 @@ describe("billing checkout return polling", () => {
       vi.advanceTimersByTime(3000);
     });
 
-    expect(revalidate).toHaveBeenCalledTimes(10);
+    expect(revalidate).toHaveBeenCalledTimes(20);
   });
 
   it("does not poll once the returned checkout has activated a paid plan", async () => {

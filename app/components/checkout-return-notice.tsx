@@ -3,9 +3,8 @@ import { useRevalidator } from "react-router";
 
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
-// ~3s per poll. 20 polls ≈ 60s before we escalate to the "taking longer than
-// usual" state. Dodo's signed confirmation normally lands inside a minute, so
-// the alarming state must not fire before that minute is actually up.
+// ~3s per poll. Give the asynchronous signed webhook a one-minute UX window
+// before offering the longer-wait support path.
 const CHECKOUT_ACTIVATION_POLL_LIMIT = 20;
 
 type CheckoutReturnGrant = {

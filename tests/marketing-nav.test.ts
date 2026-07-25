@@ -61,10 +61,7 @@ describe("MarketingNav (shared public nav)", () => {
 		expect(marketing).toContain("<MarketingNav />");
 		expect(magicbrief).toContain("<MarketingNav />");
 		expect(metaLibrary).toContain("<MarketingNav />");
-		// Legal shell keeps its own f9-legal-nav chrome but shares the tagline
-		// and reaches Pricing/Search/Sign in so no public section is stranded.
-		expect(docShell).toContain("MARKETING_TAGLINE");
-		expect(docShell).toContain('to="/#pricing"');
-		expect(docShell).toContain('to="/search"');
+		expect(docShell).toContain('import { MarketingNav }');
+		expect(docShell).toContain("return <MarketingNav />");
 	});
 });

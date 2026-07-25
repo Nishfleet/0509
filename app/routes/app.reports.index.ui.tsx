@@ -70,6 +70,7 @@ export function ReportsIndexRoute() {
   return (
     <DashboardPage>
       <DashboardPageHeader
+        action={{ label: "Manage shared links", to: "/app/shares" }}
         lead="Open a current proof-backed report from a collection or monitored competitor."
         title="Reports"
       />

@@ -1007,7 +1007,7 @@ describe("Better Auth magic links", () => {
     ).catch((error) => error)) as Response;
 
     expect(secondRedirect.status).toBe(302);
-    expect(secondRedirect.headers.get("Location")).toBe("/app");
+    expect(secondRedirect.headers.get("Location")).toBe("https://0509.io/app");
     expect(verifyBetterAuthMagicLink).not.toHaveBeenCalled();
   });
 

@@ -26,10 +26,14 @@ describe("local D1 scratch restore drill", () => {
           dodo_subscription_id TEXT,
           dodo_customer_id TEXT
         );
-        CREATE TABLE proof (id TEXT PRIMARY KEY, body TEXT NOT NULL);
+        CREATE TABLE proof (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL REFERENCES user_plan(user_id),
+          body TEXT NOT NULL
+        );
         INSERT INTO d1_migrations VALUES (1, '0001_fixture.sql', '2026-07-15T00:00:00.000Z');
         INSERT INTO user_plan VALUES ('user-1', 'starter', 'pay-1', 'sub-1', 'cus-1');
-        INSERT INTO proof VALUES ('proof-1', 'before and after');
+        INSERT INTO proof VALUES ('proof-1', 'user-1', 'before and after');
       `);
     } finally {
       database.close();

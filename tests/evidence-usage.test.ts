@@ -161,10 +161,16 @@ describe("evidence usage periods", () => {
   });
 
   it("creates a subscription-anchored period with plan allowance", async () => {
-    const period = await ensureCurrentEvidenceUsagePeriod(env, "user-1", "starter");
-    expect(period.period_start).toBe("2026-06-23T00:00:00.000Z");
-    expect(period.period_end).toBe("2026-07-23T00:00:00.000Z");
-    expect(period.included_allowance).toBe(250);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-01T12:00:00.000Z"));
+    try {
+      const period = await ensureCurrentEvidenceUsagePeriod(env, "user-1", "starter");
+      expect(period.period_start).toBe("2026-06-23T00:00:00.000Z");
+      expect(period.period_end).toBe("2026-07-23T00:00:00.000Z");
+      expect(period.included_allowance).toBe(250);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("upgrades allowance without resetting consumption", async () => {
