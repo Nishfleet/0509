@@ -6,7 +6,7 @@ on:
 
 jobs:
   codex-node-checks:
-    runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ (startsWith(github.head_ref, 'cloud-council/') && vars.RECOVERY_RUNNER) || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
