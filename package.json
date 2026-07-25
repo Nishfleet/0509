@@ -9,7 +9,7 @@
     "restore:d1:transform": "node scripts/d1-restore-transform.mjs",
     "d1:cleanup-0060:evidence": "node scripts/d1-cleanup-0060-evidence.mjs",
     "build": "node scripts/build-production.mjs",
-    "cf-typegen": "wrangler types",
+    "cf-typegen": "WRANGLER_WRITE_LOGS=false wrangler types",
     "canary:proof": "node scripts/launch-readiness-canary.mjs",
     "canary:billing": "node scripts/dodo-billing-canary.mjs",
     "canary:pricing": "node scripts/dodo-pricing-canary.mjs",

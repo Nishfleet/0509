@@ -15,6 +15,7 @@ function run(command, args) {
     env: {
       ...process.env,
       CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: "false",
+      WRANGLER_WRITE_LOGS: process.env.WRANGLER_WRITE_LOGS ?? "false",
     },
     stdio: "inherit",
   });
