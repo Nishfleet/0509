@@ -20,8 +20,8 @@ export const MARKETING_TAGLINE = "Competitor change monitoring";
  */
 export function MarketingNav() {
   return (
-    <header className="ld-nav">
-      <Link className="ld-brand" to="/" aria-label="Five to Nine home">
+    <header className="ld-nav f9-legal-nav">
+      <Link className="ld-brand f9-app-brand" to="/" aria-label="Five to Nine home">
         <BrandWordmark meta={MARKETING_TAGLINE} />
       </Link>
 

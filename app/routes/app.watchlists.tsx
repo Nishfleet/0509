@@ -1325,7 +1325,10 @@ export default function WatchlistsRoute() {
                     </Form>
                   ) : null}
                   {lockedToolbarUpgradeLabel ? (
-                    <Link className="f9-secondary-button" to="/app/billing?source=watchlists#plans">
+                    <Link
+                      className="f9-secondary-button f9-watchlist-upgrade-link"
+                      to="/app/billing?source=watchlists#plans"
+                    >
                       {lockedToolbarUpgradeLabel}
                     </Link>
                   ) : null}

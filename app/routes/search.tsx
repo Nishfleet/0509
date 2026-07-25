@@ -952,13 +952,14 @@ export default function SearchRoute() {
   // D3: route every new signup through onboarding — keyword-only searchers get
   // the same guided first step as website-first ones, instead of being dropped
   // back on /search. D11: carry the website (when present) and the selected
-  // country so onboarding starts from what they were already looking at rather
-  // than re-deriving everything from geo.
+  // non-default country so onboarding starts from an explicit location choice
+  // rather than re-deriving it from geo. Omit "all", which is onboarding's
+  // default and adds no user context.
   const onboardParams = new URLSearchParams();
   if (competitorWebsite.raw) {
     onboardParams.set("website", competitorWebsite.raw);
   }
-  if (data.filters.country) {
+  if (data.filters.country && data.filters.country !== "all") {
     onboardParams.set("country", data.filters.country);
   }
   const onboardQuery = onboardParams.toString();
