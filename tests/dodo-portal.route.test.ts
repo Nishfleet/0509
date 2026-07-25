@@ -14,10 +14,13 @@ const session = {
   },
 };
 
+const enforceBillingProviderRateLimit = vi.fn();
+
 beforeEach(() => {
   vi.resetModules();
+  enforceBillingProviderRateLimit.mockReset().mockResolvedValue(null);
   vi.doMock("~/lib/rate-limit.server", () => ({
-    enforceBillingProviderRateLimit: vi.fn().mockResolvedValue(null),
+    enforceBillingProviderRateLimit,
   }));
 });
 
@@ -227,11 +230,9 @@ describe("Dodo customer portal route", () => {
       getUserPlanBillingInfo: vi.fn().mockResolvedValue({ plan: "starter", dodoCustomerId: "cus_123" }),
     }));
     vi.doMock("~/lib/dodo-billing.server", () => ({ createDodoCustomerPortalSession }));
-    vi.doMock("~/lib/rate-limit.server", () => ({
-      enforceBillingProviderRateLimit: vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ error: "rate_limited" }), { status: 429 }),
-      ),
-    }));
+    enforceBillingProviderRateLimit.mockResolvedValue(
+      new Response(JSON.stringify({ error: "rate_limited" }), { status: 429 }),
+    );
     const { action } = await import("~/routes/api.billing.dodo.portal");
     const response = (await action({
       context: {},

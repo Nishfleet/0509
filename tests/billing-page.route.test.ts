@@ -66,6 +66,7 @@ function mockBillingLoaderDependencies(input: {
       billingCurrency: "INR",
     },
   });
+  const enforceBillingProviderRateLimit = vi.fn().mockResolvedValue(null);
   const checkPlanLimit = vi.fn(async (_env: unknown, _userId: string, resource: string) =>
     resource === "watchlists"
       ? { allowed: true, limit: 10, current: 3 }
@@ -94,7 +95,7 @@ function mockBillingLoaderDependencies(input: {
     getEnv: vi.fn(() => ({})),
   }));
   vi.doMock("~/lib/rate-limit.server", () => ({
-    enforceBillingProviderRateLimit: vi.fn().mockResolvedValue(null),
+    enforceBillingProviderRateLimit,
   }));
   vi.doMock("~/lib/data.server", () => ({
     getUserPlanBillingInfo,
@@ -117,6 +118,7 @@ function mockBillingLoaderDependencies(input: {
   }));
   return {
     checkPlanLimit,
+    enforceBillingProviderRateLimit,
     getProofUsageSummary,
     getUserPlanBillingInfo,
     listActiveProofCreditGrants,
@@ -314,11 +316,9 @@ describe("billing page", () => {
         planUpdatedAt: "2026-06-04T12:00:00.000Z",
       },
     });
-    vi.doMock("~/lib/rate-limit.server", () => ({
-      enforceBillingProviderRateLimit: vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ error: "rate_limit_unavailable" }), { status: 503 }),
-      ),
-    }));
+    mocks.enforceBillingProviderRateLimit.mockResolvedValue(
+      new Response(JSON.stringify({ error: "rate_limit_unavailable" }), { status: 503 }),
+    );
     const { loader } = await import("~/routes/app.billing");
     const response = (await loader({
       context: {},
