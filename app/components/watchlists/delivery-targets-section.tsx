@@ -1,10 +1,7 @@
 import { Form, Link } from "react-router";
 
 import { SubmitButton } from "~/components/submit-button";
-import {
-  toPublicDeliveryTarget,
-  type PublicDeliveryTargetRecord,
-} from "~/lib/delivery-target-public";
+import type { PublicDeliveryTargetRecord } from "~/lib/delivery-target-public";
 
 export function DeliveryTargetsSection(props: {
   data: {
@@ -38,11 +35,7 @@ export function DeliveryTargetsSection(props: {
               <h4 style={{ marginBottom: "0.25rem" }}>
                 {target.channel === "email" ? "Email" : "WhatsApp"}
               </h4>
-              <p className="f9-muted-copy">
-                {toPublicDeliveryTarget(target, {
-                  verifiedAccountEmail: data.verifiedAccountEmail,
-                }).targetValue}
-              </p>
+              <p className="f9-muted-copy">{target.targetValue}</p>
               <p className="f9-muted-copy">
                 {target.isPaused
                   ? "Paused"
@@ -110,15 +103,49 @@ export function DeliveryTargetsSection(props: {
       {data.workspaceDeliveryTargets.length > 0 ? (
         <div>
           <p className="f9-app-kicker">Default delivery</p>
-          <p className="f9-muted-copy">
-            {data.workspaceDeliveryTargets
-              .map((target) =>
-                toPublicDeliveryTarget(target, {
-                  verifiedAccountEmail: data.verifiedAccountEmail,
-                }).targetValue,
-              )
-              .join(" · ")}
-          </p>
+          <div className="f9-work-list is-compact">
+            {data.workspaceDeliveryTargets.map((target) => {
+              // The workspace-default email row is the address the /unsubscribe
+              // promise points back to: pausing here suppresses it, resuming
+              // clears the opt-out set by the one-click unsubscribe link.
+              const paused = target.isPaused;
+              return (
+                <div className="f9-work-row" key={target.id}>
+                  <div>
+                    <h4 style={{ marginBottom: "0.25rem" }}>
+                      {target.channel === "email"
+                        ? "Workspace default email"
+                        : "Workspace default WhatsApp"}
+                    </h4>
+                    <p className="f9-muted-copy">{target.targetValue}</p>
+                    <p className="f9-muted-copy">
+                      {paused
+                        ? "Paused — digests and alerts are switched off"
+                        : target.channel === "whatsapp" && !data.whatsappAvailable
+                          ? "Not yet available — WhatsApp delivery isn't live"
+                          : target.channel === "whatsapp" && !target.templateEligible
+                            ? "Waiting for WhatsApp approval"
+                            : "Ready"}
+                    </p>
+                  </div>
+                  {data.canManageDelivery && target.channel === "email" ? (
+                    <Form method="post">
+                      <input name="intent" type="hidden" value="toggle-delivery-target" />
+                      <input name="targetId" type="hidden" value={target.id} />
+                      <SubmitButton
+                        className="f9-secondary-button"
+                        intent="toggle-delivery-target"
+                        match={{ targetId: target.id }}
+                        pendingLabel={paused ? "Resuming…" : "Pausing…"}
+                      >
+                        {paused ? "Resume" : "Pause"}
+                      </SubmitButton>
+                    </Form>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
         </div>
       ) : null}
       </div>

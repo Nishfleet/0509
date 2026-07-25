@@ -19,7 +19,6 @@ import { pricingPlans, usageBundles } from "~/lib/pricing";
 import {
   canUseSiteRepWidgetScript,
   hasSiteRepAuthCookie,
-  isSiteRepWidgetIsolatedPath,
   SITE_REP_WIDGET,
   shouldReloadForSiteRepWidgetDocument,
   siteRepWidgetForRequestState,
@@ -83,11 +82,11 @@ export const links: LinksFunction = () => [
   },
   // PERF: one combined css2 request (one fewer render-blocking stylesheet
   // fetch) covering exactly the weights app.css uses — Inter 400/500/600/700,
-  // Bricolage Grotesque 600/700 (800 is loaded nowhere in app/), IBM Plex
-  // Mono 400/500/600 — all with display=swap.
+  // Bricolage Grotesque 600/700/800 (800 is the "Caught in the act" hero
+  // type-wall weight), IBM Plex Mono 400/500/600 — all with display=swap.
   {
     rel: "stylesheet",
-    href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500;600&display=swap",
+    href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&display=swap",
   },
 ];
 
@@ -253,24 +252,41 @@ export default function App() {
 }
 
 export function ErrorBoundary({ error }: { error: unknown }) {
-  let message = "Oops!";
-  let details = "An unexpected error occurred.";
+  // Voice rule 6: errors say what happened, what we're doing, and what you can
+  // do — in that order, sentence case, no exclamation marks. The 404 branch is
+  // kept byte-for-byte in step with app/routes/not-found.tsx so a thrown 404
+  // (e.g. /ads/:domain) and a matched not-found render the same page.
+  let heading = "Something went wrong";
+  let paragraphs: string[] = [
+    "Something broke on our side loading this page.",
+    "The error is logged and we look at these.",
+  ];
+  let isNotFound = false;
   let stack: string | undefined;
 
   if (isRouteErrorResponse(error)) {
-    const authUnavailable =
-      error.status === 503 && error.statusText === "Authentication temporarily unavailable";
-    message = error.status === 404 ? "404" : error.status === 503 ? "Temporarily unavailable" : "Error";
-    details =
-      error.status === 404
-        ? "The requested page could not be found."
-        : authUnavailable
-          ? "Authentication is temporarily unavailable. Please try again in a moment."
-          : error.status === 503
-            ? "This part of Five to Nine is temporarily unavailable. Please try again in a moment."
-            : error.statusText || details;
+    if (error.status === 404) {
+      isNotFound = true;
+      heading = "Page not found";
+      paragraphs = ["The page you asked for does not exist."];
+    } else if (
+      error.status === 503 &&
+      error.statusText === "Authentication temporarily unavailable"
+    ) {
+      heading = "Sign-in is unavailable right now";
+      paragraphs = [
+        "Sign-in is temporarily unavailable.",
+        "This usually clears on its own in a moment.",
+      ];
+    } else if (error.status === 503) {
+      heading = "Temporarily unavailable";
+      paragraphs = [
+        "This part of Five to Nine is temporarily unavailable.",
+        "This usually clears on its own in a moment.",
+      ];
+    }
   } else if (import.meta.env.DEV && error && error instanceof Error) {
-    details = error.message;
+    paragraphs = [error.message, "The error is logged and we look at these."];
     stack = error.stack;
   }
 
@@ -285,12 +301,41 @@ export function ErrorBoundary({ error }: { error: unknown }) {
       <div className="f9-container f9-error-layout">
         <section className="f9-error-card">
           <span className="f9-app-kicker">Five to Nine</span>
-          <h1>{message}</h1>
-          <p>{details}</p>
-          <p>
-            <Link to="/app">Back to your workspace</Link> · If this keeps happening, email{" "}
-            <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we'll fix it.
-          </p>
+          <h1>{heading}</h1>
+          {paragraphs.map((paragraph) => (
+            <p key={paragraph}>{paragraph}</p>
+          ))}
+          {isNotFound ? (
+            <div className="f9-action-row">
+              <Link className="f9-primary-button" to="/">
+                Back to Five to Nine
+              </Link>
+              <Link className="f9-secondary-button" to="/search">
+                Open search
+              </Link>
+            </div>
+          ) : (
+            <>
+              <p>
+                Try again, or head back to the start. If it keeps happening, email{" "}
+                <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a>.
+              </p>
+              <div className="f9-action-row">
+                <button
+                  className="f9-primary-button"
+                  onClick={() => {
+                    if (typeof window !== "undefined") window.location.reload();
+                  }}
+                  type="button"
+                >
+                  Try again
+                </button>
+                <Link className="f9-secondary-button" to="/">
+                  Back to the start
+                </Link>
+              </div>
+            </>
+          )}
         </section>
       </div>
       {stack && (

@@ -1,4 +1,4 @@
-import { Form, Link, useActionData, useLoaderData } from "react-router";
+import { Form, Link, useActionData, useLoaderData, useRevalidator } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useState } from "react";
 
@@ -324,12 +324,99 @@ export async function action({ context, request }: ActionFunctionArgs) {
     };
   }
 
-  return { ok: false, intent, message: "Unknown account action." };
+  if (intent === "request-email-change") {
+    if (isE2EFixtureSession) {
+      return { ok: false, intent, message: "Sign in with email to request an email change." };
+    }
+
+    const newEmail = String(formData.get("newEmail") ?? "").trim();
+    const normalizedNewEmail = newEmail.toLowerCase();
+    if (String(formData.get("confirmEmailChange") ?? "") !== "yes") {
+      return {
+        ok: false,
+        intent,
+        message: "Confirm that this opens a support request and that support completes the change.",
+      };
+    }
+    if (!isPlausibleEmail(newEmail)) {
+      return {
+        ok: false,
+        intent,
+        message: "Enter the new email address you'd like on the account.",
+      };
+    }
+    if (normalizedNewEmail === session.user.email.toLowerCase()) {
+      return { ok: false, intent, message: "That's already the email on this account." };
+    }
+
+    const { createSupportCase } = await import("~/lib/data.server");
+
+    const supportCase = await createSupportCase(env, {
+      userId: session.user.id,
+      category: "account",
+      priority: "normal",
+      subject: "Change my Five to Nine account email",
+      detail: [
+        "Signed-in support email-change request.",
+        `Current account email: ${session.user.email}`,
+        `Requested new email: ${newEmail}`,
+        `Account user ID: ${session.user.id}`,
+        "Support verifies ownership and completes the change; nothing changes automatically or in-app.",
+      ].join("\n"),
+      context: {
+        createdFrom: "signed_in_account_email_change_request",
+        source: "app.account",
+        requestedNewEmail: newEmail,
+      },
+      reopenClosed: true,
+      requestKey: `account-email-change:${session.user.id}:${normalizedNewEmail}`,
+    });
+
+    if (!supportCase) {
+      return {
+        ok: false,
+        intent,
+        message: "We couldn't open the email-change request. Email support and we'll take care of it.",
+      };
+    }
+
+    const notificationResult = await notifyAccountEmailChangeOperator(env, {
+      caseId: supportCase.id,
+      dedupeKey: isReopenedSupportCase(supportCase)
+        ? `support-case-reopen:${supportCase.id}:${supportCase.updatedAt}`
+        : `support-case:${supportCase.id}`,
+      requesterEmail: session.user.email,
+      requestedEmail: newEmail,
+      userId: session.user.id,
+    });
+    if (notificationResult === "failed") {
+      return {
+        ok: true,
+        intent,
+        message: `Email-change request opened as case ${supportCase.id}. Support notification failed, so email ${SUPPORT_EMAIL} if you need it handled quickly. Support completes the change; nothing changes automatically or in-app.`,
+      };
+    }
+
+    return {
+      ok: true,
+      intent,
+      message: supportCase.alreadyExists
+        ? `Email-change request is already open as case ${supportCase.id}. Support will verify ownership and complete the change.`
+        : `Email-change request opened as case ${supportCase.id}. Support will verify ownership and complete the change. Nothing changes automatically or in-app.`,
+    };
+  }
+
+  return { ok: false, intent, message: "We couldn't complete that action. Refresh the page and try again." };
+}
+
+function isPlausibleEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) && value.length <= 254;
 }
 
 export default function AccountRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const revalidator = useRevalidator();
   const brandProfileAction =
     actionData?.intent === "save-brand-profile" ? actionData : null;
   const reportBrandingAction =
@@ -346,6 +433,8 @@ export default function AccountRoute() {
       : null;
   const deletionAction =
     actionData?.intent === "request-account-deletion" ? actionData : null;
+  const emailChangeAction =
+    actionData?.intent === "request-email-change" ? actionData : null;
   const resendVerificationAction =
     actionData?.intent === "resend-verification" ? actionData : null;
   const [passkeyPending, setPasskeyPending] = useState(false);
@@ -449,6 +538,7 @@ export default function AccountRoute() {
                       setError: setPasskeyError,
                       setMessage: setPasskeyMessage,
                       setPending: setPasskeyPending,
+                      revalidate: () => revalidator.revalidate(),
                     });
                   }}
                   type="button"
@@ -492,6 +582,7 @@ export default function AccountRoute() {
                                   setMessage: setPasskeyMessage,
                                   setPendingId: setPasskeyPendingId,
                                   setConfirmId: setPasskeyConfirmId,
+                                  revalidate: () => revalidator.revalidate(),
                                 });
                               }}
                               type="button"
@@ -675,10 +766,55 @@ export default function AccountRoute() {
               Revoke other sessions
             </ConfirmSubmitButton>
           </Form>
-          <a className="f9-secondary-button" href={SUPPORT_MAILTO}>
-            Change email
-          </a>
         </div>
+
+        <div className="f9-panel-toolbar">
+          <div>
+            <span className="f9-app-kicker">Email</span>
+            <h3>Change your email</h3>
+          </div>
+        </div>
+        <p className="f9-muted-copy">
+          Support completes email changes so we can verify it's really you. This opens a tracked
+          support request — your email doesn't change automatically or in-app.
+        </p>
+        {emailChangeAction?.message ? (
+          <div
+            aria-live={emailChangeAction.ok ? "polite" : "assertive"}
+            className={`f9-message ${emailChangeAction.ok ? "is-success" : "is-error"}`}
+            role={emailChangeAction.ok ? "status" : "alert"}
+          >
+            <p>{emailChangeAction.message}</p>
+          </div>
+        ) : null}
+        <Form className="f9-auth-form" method="post">
+          <input name="intent" type="hidden" value="request-email-change" />
+          <label className="f9-field">
+            <span>New email address</span>
+            <input
+              autoComplete="email"
+              inputMode="email"
+              name="newEmail"
+              placeholder="you@newdomain.com"
+              required
+              type="email"
+            />
+          </label>
+          <label className="f9-checkbox-row">
+            <input name="confirmEmailChange" required type="checkbox" value="yes" />
+            <span>
+              I understand this opens a support request, and support verifies ownership and completes
+              the change — it doesn't change automatically or in-app.
+            </span>
+          </label>
+          <SubmitButton
+            className="f9-secondary-button"
+            intent="request-email-change"
+            pendingLabel="Sending request…"
+          >
+            Request email change
+          </SubmitButton>
+        </Form>
       </article>
 
       <article className="f9-app-panel">
@@ -726,6 +862,7 @@ async function registerPasskey(input: {
   setError: (message: string | null) => void;
   setMessage: (message: string | null) => void;
   setPending: (pending: boolean) => void;
+  revalidate: () => void;
 }) {
   input.setError(null);
   input.setMessage(null);
@@ -740,7 +877,9 @@ async function registerPasskey(input: {
     }
 
     input.setMessage("Passkey added.");
-    window.setTimeout(() => window.location.reload(), 400);
+    input.setPending(false);
+    // Re-run the loader to pull in the new passkey instead of a full reload.
+    input.revalidate();
   } catch (error) {
     if (error instanceof Error && error.name === "InvalidStateError") {
       input.setError("This passkey is already attached to your account.");
@@ -759,6 +898,7 @@ async function removePasskey(input: {
   setError: (message: string | null) => void;
   setMessage: (message: string | null) => void;
   setPendingId: (id: string | null) => void;
+  revalidate: () => void;
 }) {
   input.setError(null);
   input.setMessage(null);
@@ -774,10 +914,76 @@ async function removePasskey(input: {
     input.setPendingId(null);
     input.setConfirmId(null);
     input.setMessage("Passkey removed.");
-    window.setTimeout(() => window.location.reload(), 400);
+    // Re-run the loader to drop the removed passkey instead of a full reload.
+    input.revalidate();
   } catch {
     input.setPendingId(null);
     input.setError("We couldn't remove that passkey. Try again, or use email sign-in.");
+  }
+}
+
+async function notifyAccountEmailChangeOperator(
+  env: AppEnv,
+  input: {
+    caseId: string;
+    dedupeKey: string;
+    requesterEmail: string;
+    requestedEmail: string;
+    userId: string;
+  },
+): Promise<AccountDeletionOperatorNotificationResult> {
+  const idempotencyKey = input.dedupeKey;
+  const { createSupportCaseEvent, getDeliveryAttemptByIdempotencyKey } = await import("~/lib/data.server");
+  try {
+    const existingAttempt = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
+    if (existingAttempt?.status === "sent") {
+      return "already_sent";
+    }
+
+    const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
+    const notified = await sendOperatorAlertEmail(env, {
+      subject: "0509 account email change request",
+      lines: [
+        `Case: ${input.caseId}`,
+        `Requester (current email): ${input.requesterEmail}`,
+        `Requested new email: ${input.requestedEmail}`,
+        `User ID: ${input.userId}`,
+        "Category: Account",
+        "Action: support verifies ownership and completes the email change; nothing changes automatically or in-app",
+      ],
+      idempotencyKey,
+    });
+
+    await createSupportCaseEvent(env, {
+      caseId: input.caseId,
+      userId: input.userId,
+      eventType: notified ? "support_notified" : "support_notification_failed",
+      message: notified
+        ? "Support was notified about the account email change request."
+        : "Support notification failed for the account email change request.",
+      visibleToCustomer: true,
+      metadata: {
+        delivery: notified ? "sent" : "failed",
+      },
+    });
+    return notified ? "sent" : "failed";
+  } catch (error) {
+    console.error("[account] email change operator notification failed", error);
+    try {
+      await createSupportCaseEvent(env, {
+        caseId: input.caseId,
+        userId: input.userId,
+        eventType: "support_notification_failed",
+        message: "Support notification failed for the account email change request.",
+        visibleToCustomer: true,
+        metadata: {
+          delivery: "failed",
+        },
+      });
+    } catch (eventError) {
+      console.error("[account] email change notification event failed", eventError);
+    }
+    return "failed";
   }
 }
 

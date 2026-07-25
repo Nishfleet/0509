@@ -52,7 +52,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getCollection, listCollectionItems, listCollections } = await import("~/lib/data.server");
   const { getUserPlan } = await import("~/lib/plan.server");
   const env = getEnv(context);
-  const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
+  const { workspaceUserId } = await requireWorkspaceSession(env, request);
   const url = new URL(request.url);
   const requestedCollectionId = url.searchParams.get("collection");
   // Cross-link filter (workflow-friction pass): watchlists deep-link here
@@ -237,7 +237,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     return deleted
       ? { ok: true, intent, message: "Collection deleted. The plan slot is free again." }
-      : { ok: false, intent, message: "Collection not found." };
+      : { ok: false, intent, message: "We couldn't find that collection. Refresh the page and try again." };
   }
 
   if (intent === "remove-item") {
@@ -247,7 +247,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     return removed
       ? { ok: true, intent, itemId, message: "Removed from the collection." }
-      : { ok: false, intent, itemId, message: "Collection item not found." };
+      : { ok: false, intent, itemId, message: "We couldn't find that item. Refresh the page and try again." };
   }
 
   if (intent === "share-collection") {
@@ -264,7 +264,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const collectionId = String(formData.get("collectionId") ?? "");
     const collection = await getCollection(env, collectionId, workspaceUserId);
     if (!collection) {
-      return { ok: false, intent, message: "Collection not found." };
+      return { ok: false, intent, message: "We couldn't find that collection. Refresh the page and try again." };
     }
     const share = await createShareLink(
       env,
@@ -285,7 +285,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   return {
     ok: false,
-    message: "Unknown collections action.",
+    message: "We couldn't complete that action. Refresh the page and try again.",
   };
 }
 
@@ -310,6 +310,7 @@ export default function CollectionsRoute() {
     <DashboardPage>
       <section className="f9-app-stack">
         <DashboardPageHeader
+          kicker="Workspace memory"
           lead="Save the best competitor examples, external evidence, and notes for your team."
           title="Collections"
         />
@@ -405,19 +406,12 @@ export default function CollectionsRoute() {
                       Open report
                     </Link>
                   ) : (
-                    <div>
-                      <button
-                        aria-disabled="true"
-                        className="f9-secondary-button"
-                        disabled
-                        type="button"
-                      >
-                        Open report (Agency only)
-                      </button>{" "}
-                      <Link className="f9-text-link" to="/app/billing?source=collections#plans">
-                        Upgrade to Agency
-                      </Link>
-                    </div>
+                    <Link
+                      className="f9-secondary-button"
+                      to="/app/billing?source=collections#plans"
+                    >
+                      Upgrade for reports
+                    </Link>
                   )}
                   {canExport ? (
                     <>

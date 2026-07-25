@@ -19,7 +19,7 @@ export function PlanLimitState({
       <p>
         {message}
         {typeof current === "number" && typeof limit === "number"
-          ? ` (${current} of ${limit} used.)`
+          ? ` (${current} of ${limit} used)`
           : null}
       </p>
       <div className="f9-inline-actions">

@@ -188,7 +188,7 @@ export async function action({ context, request, params }: ActionFunctionArgs) {
     throw error;
   }
 
-  return { ok: false, message: "Unknown action." };
+  return { ok: false, message: "We couldn't complete that action. Refresh the page and try again." };
 }
 
 export default function PresenceEntityRoute() {
@@ -364,7 +364,7 @@ export default function PresenceEntityRoute() {
           {items.length === 0 ? (
             <EmptyState
               description="Check a source to fetch the latest public content."
-              title="No items yet."
+              title="No items yet"
               variant="inline"
             />
           ) : (

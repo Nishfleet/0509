@@ -3,7 +3,10 @@ import { useRevalidator } from "react-router";
 
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
-const CHECKOUT_ACTIVATION_POLL_LIMIT = 10;
+// ~3s per poll. 20 polls ≈ 60s before we escalate to the "taking longer than
+// usual" state. Dodo's signed confirmation normally lands inside a minute, so
+// the alarming state must not fire before that minute is actually up.
+const CHECKOUT_ACTIVATION_POLL_LIMIT = 20;
 
 type CheckoutReturnGrant = {
   credits?: number | null;
@@ -71,7 +74,7 @@ export function CheckoutReturnNotice({
 
   if (pollCount >= CHECKOUT_ACTIVATION_POLL_LIMIT) {
     return (
-      <div className="f9-message is-error" role="status">
+      <div className="f9-message" role="status">
         <p>
           Confirmation is taking longer than usual. Dodo may still be sending the signed confirmation.
           Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> from this account if the{" "}

@@ -286,6 +286,7 @@ export default function BillingRoute() {
   return (
     <DashboardPage>
       <DashboardPageHeader
+        kicker="Plan"
         lead="Current plan, evidence usage, and renewal status."
         title="Billing & usage"
       />
@@ -604,18 +605,20 @@ export default function BillingRoute() {
                       Request billing help
                     </Link>
                   ) : billing.plan !== "free" ? (
-                    hasPaymentIssue || hasCancellationScheduled || hasPlanChangePending || annualBlocked || !checkoutSku ? (
+                    hasCancellationScheduled || hasPlanChangePending || annualBlocked || !checkoutSku ? (
                       <button className="f9-secondary-button" disabled type="button">
-                        {hasPaymentIssue
-                          ? "Resolve payment first"
-                          : hasCancellationScheduled
-                            ? "Cancellation scheduled"
+                        {hasCancellationScheduled
+                          ? "Cancellation scheduled"
                           : hasPlanChangePending
                             ? "Change pending"
-                          : annualBlocked
-                            ? "Annual unavailable"
-                            : "Change unavailable"}
+                            : annualBlocked
+                              ? "Annual unavailable"
+                              : "Change unavailable"}
                       </button>
+                    ) : hasPaymentIssue ? (
+                      <Link className="f9-secondary-button" to="/app/support?category=billing">
+                        Contact billing support
+                      </Link>
                     ) : (
                       <PriceLoadingButton />
                     )

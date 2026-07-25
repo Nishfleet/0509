@@ -10,10 +10,13 @@ import { BrandWordmark } from "~/components/brand-wordmark";
 export const MARKETING_TAGLINE = "Competitor change monitoring";
 
 /**
- * One shared header nav for every public surface — landing, compare pages,
- * and the legal/doc shell. Reuses the existing `ld-nav*` classes byte-for-byte
- * (no new CSS). Links are absolute-to-home hashes so Pricing / Sample brief
- * work from any page, not just the landing route.
+ * THE single public header for every public surface — landing, /ads/* brand
+ * pages, and the legal/doc shell (via `PublicDocHeader`). One canonical link
+ * list (Search preview, Pricing, Help, Docs, Status) plus Sign in / Open app
+ * — no per-surface improvisation. Uses the `ld-nav*` classes, styled for both
+ * `.f9-home` and `.f9-legal-page` containers in app.css. Links are
+ * absolute-to-home hashes so Pricing works from any page, not just the landing
+ * route.
  */
 export function MarketingNav() {
   return (
@@ -24,10 +27,10 @@ export function MarketingNav() {
 
       <nav className="ld-nav-links" aria-label="Primary">
         <Link to="/search">Search preview</Link>
-        <Link to="/#demo">Sample brief</Link>
         <Link to="/#pricing">Pricing</Link>
         <Link to="/help">Help</Link>
         <Link to="/docs">Docs</Link>
+        <Link to="/status">Status</Link>
       </nav>
 
       <nav className="ld-nav-actions" aria-label="Account">

@@ -18,8 +18,8 @@ import { CopyButton } from "~/components/copy-button";
 import { EmptyState } from "~/components/empty-state";
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
 import { LocalTime } from "~/components/local-time";
+import { LockedFeature } from "~/components/locked-feature";
 import { Pill } from "~/components/pill";
-import { PlanLimitState } from "~/components/plan-limit-state";
 import { ProofGlossary } from "~/components/proof-glossary";
 import { SubmitButton } from "~/components/submit-button";
 import { readDigestIntelligence } from "~/lib/change-intelligence";
@@ -51,7 +51,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { PLAN_LIMITS, getUserPlan } = await import("~/lib/plan.server");
   const { getDigest, listDeliveryAttempts, listDigests } = await import("~/lib/data.server");
   const env = getEnv(context);
-  const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
+  const { workspaceUserId } = await requireWorkspaceSession(env, request);
   const plan = await getUserPlan(env, workspaceUserId);
 
   if (!PLAN_LIMITS[plan].digests) {
@@ -133,7 +133,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     if (!digest || digest.userId !== workspaceUserId) {
       return {
         ok: false,
-        message: "Brief not found.",
+        message: "We couldn't find that brief. Refresh the page and try again.",
       };
     }
 
@@ -156,7 +156,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   return {
     ok: false,
-    message: "Unknown digest action.",
+    message: "We couldn't complete that action. Refresh the page and try again.",
   };
 }
 
@@ -259,9 +259,13 @@ export default function DigestsRoute() {
       ) : null}
 
       {!data.canAccessDigests ? (
-        <PlanLimitState
-          message="Briefs are included in paid plans. Upgrade to get daily or weekly competitor change briefs with evidence and check labels in your inbox. Until then, watchlists and collections keep your research organized."
-          title="Briefs are included in paid plans"
+        <LockedFeature
+          eyebrow="Briefs"
+          title="Competitor change briefs"
+          reason="Get daily or weekly competitor-change briefs with evidence and check labels in your inbox"
+          planNeeded="paid plans"
+          upgradeTo="/app/billing?source=digests#plans"
+          upgradeLabel="See plans"
         />
       ) : (
         <>
@@ -343,7 +347,11 @@ export default function DigestsRoute() {
                 );
               })}
               {data.digests.length === 0 ? (
-                <EmptyState title="No briefs yet" variant="inline" />
+                <EmptyState
+                  description="Your first brief lands after the first competitor scan runs — including an honest 'all quiet' when nothing changed."
+                  title="No briefs yet"
+                  variant="inline"
+                />
               ) : null}
             </div>
           </article>

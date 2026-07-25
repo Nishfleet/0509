@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Form, useActionData, useLoaderData } from "react-router";
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
-import { DashboardRouteLoading } from "~/components/dashboard-route-loading";
+import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { LocalTime } from "~/components/local-time";
 import { ProviderObservationTimeField } from "~/components/provider-observation-time";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
@@ -10,6 +10,10 @@ export const meta = () => [{ title: "Ops | Five to Nine" }];
 
 export function HydrateFallback() {
   return <DashboardRouteLoading title="Ops" />;
+}
+
+export function ErrorBoundary({ error }: { error: unknown }) {
+  return <DashboardRouteError error={error} />;
 }
 
 export async function loader({ context, request }: LoaderFunctionArgs) {

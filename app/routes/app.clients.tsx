@@ -12,6 +12,7 @@ import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboa
 import { EmptyState } from "~/components/empty-state";
 import { LockedFeature } from "~/components/locked-feature";
 import { Pill } from "~/components/pill";
+import { ConfirmSubmitButton } from "~/components/confirm-button";
 import { SubmitButton } from "~/components/submit-button";
 import { isSecretishMemoryField, isSecretishMemoryString } from "~/lib/agent-redaction";
 import { ClientRoomWriteConflictError } from "~/lib/data/customer-api-rooms.server";
@@ -245,7 +246,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     if (clientRoomId) {
       const room = await getClientRoom(env, workspaceUserId, clientRoomId);
       if (!room) {
-        return { ok: false, message: "Client room not found." };
+        return { ok: false, message: "We couldn't find that client room. Refresh the page and try again." };
       }
     }
 
@@ -273,7 +274,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const roomId = String(formData.get("roomId") ?? "");
     const room = await getClientRoom(env, workspaceUserId, roomId);
     if (!room) {
-      return { ok: false, message: "Client room not found." };
+      return { ok: false, message: "We couldn't find that client room. Refresh the page and try again." };
     }
     const nextStatus = readClientRoomStatus(formData.get("status"));
     try {
@@ -308,11 +309,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
     } = await import("~/lib/data.server");
     const roomId = readOptionalString(formData.get("roomId"));
     if (!roomId) {
-      return { ok: false, intent, message: "Client room not found." };
+      return { ok: false, intent, message: "We couldn't find that client room. Refresh the page and try again." };
     }
     const room = await getClientRoom(env, workspaceUserId, roomId);
     if (!room) {
-      return { ok: false, intent, message: "Client room not found." };
+      return { ok: false, intent, message: "We couldn't find that client room. Refresh the page and try again." };
     }
     if (room.status !== "active") {
       return {
@@ -428,7 +429,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   return {
     ok: false,
-    message: "Unknown client room action.",
+    message: "We couldn't complete that action. Refresh the page and try again.",
   };
 }
 
@@ -783,14 +784,16 @@ function ClientRoomCard({
           <input name="roomId" type="hidden" value={room.id} />
           <input name="expectedUpdatedAt" type="hidden" value={room.updatedAt} />
           <input name="status" type="hidden" value="archived" />
-          <SubmitButton
+          <ConfirmSubmitButton
             className="f9-secondary-button"
+            confirmLabel="Confirm — archive room?"
             intent="set-client-room-status"
             match={{ roomId: room.id }}
             pendingLabel="Archiving..."
+            variant="light"
           >
             Archive
-          </SubmitButton>
+          </ConfirmSubmitButton>
         </Form> : null}
       </div>
       <p>{formatRoomNotes(room.notes)}</p>

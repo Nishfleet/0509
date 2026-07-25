@@ -861,7 +861,7 @@ export default function MarketingRoute() {
                 <span>{plan.name}</span>
                 {plan.slug === "starter" ? <em className="f9-plan-badge">Recommended</em> : null}
                 {plan.slug === "agency" && !planSaleOpen ? (
-                  <em className="f9-plan-badge">Account review</em>
+                  <em className="f9-plan-note">Account review</em>
                 ) : null}
                 <h3 className={selectedReady ? undefined : "is-loading-price"}>
                   {priceLabel(

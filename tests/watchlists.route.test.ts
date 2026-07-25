@@ -921,7 +921,7 @@ describe("watchlists route actions", () => {
     } as never);
 
     expect(result).toEqual({
-      message: "Watchlist not found.",
+      message: "We couldn't find that watchlist. Refresh the page and try again.",
       ok: false,
     });
     expect(runWatchlistManual).not.toHaveBeenCalled();
@@ -1034,7 +1034,7 @@ describe("watchlists route actions", () => {
 
     expect(result).toEqual({
       ok: false,
-      message: "Enter a valid IANA timezone, such as Asia/Kolkata or UTC.",
+      message: "Enter a valid IANA timezone, such as America/New_York or UTC.",
     });
     expect(upsertWatchlistDeliveryConfig).not.toHaveBeenCalled();
   });

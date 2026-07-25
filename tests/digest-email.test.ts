@@ -18,7 +18,7 @@ describe("buildScanTroubleEmail", () => {
       unsubscribeUrl: "https://0509.io/unsubscribe?sig=test",
     });
 
-    expect(email.subject).toBe("We hit a problem checking your competitors");
+    expect(email.subject).toBe("2 competitor checks failed — we're retrying automatically");
     expect(email.html).toContain("Nykaa");
     expect(email.html).toContain("boAt");
     expect(email.html).toContain("Retries are already running automatically");

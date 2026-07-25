@@ -122,7 +122,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
         <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">View full brief</a>
       </p>
       ${renderUpgradeNoteHtml(input)}<p style="margin: 0; color: #98a2b3; font-size: 13px;">
-        Source coverage: verified evidence means a stored screenshot, page record, or source link is attached. Check-spotted and needs-review items are signals from scheduled monitoring and should be checked before sharing externally.
+        Source coverage: verified evidence means a stored screenshot, page record, or source link is attached. Some items are flagged for a quick look before you share this externally.
         Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color:#344054;">Notifications</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color:#344054;">${escapeHtml(input.supportEmail)}</a>.
       </p>
     `)}
@@ -149,7 +149,7 @@ export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
     input.unsubscribeUrl ? `Unsubscribe: ${input.unsubscribeUrl}` : null,
     `Support: ${input.supportEmail}`,
     "",
-    "Source coverage: verified evidence means a stored screenshot, page record, or source link is attached. Check-spotted and needs-review items are scheduled monitoring signals to review before external sharing.",
+    "Source coverage: verified evidence means a stored screenshot, page record, or source link is attached. Some items are flagged for a quick look before you share this externally.",
   ].filter((line): line is string => typeof line === "string").join("\n");
 
   return {
@@ -176,7 +176,11 @@ export function buildScanTroubleEmail(input: {
       : names.length <= 5
         ? names.join(", ")
         : `${names.slice(0, 5).join(", ")} and ${names.length - 5} more`;
-  const subject = "We hit a problem checking your competitors";
+  const failedCount = names.length;
+  const subject =
+    failedCount === 0
+      ? "Your competitor checks failed — we're retrying automatically"
+      : `${failedCount} competitor check${failedCount === 1 ? "" : "s"} failed — we're retrying automatically`;
   const preheader = "Retries are running automatically — open watchlists for status.";
   const html = `
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
@@ -370,9 +374,29 @@ function subjectForDigest(totalCount: number, actionCount: number, topItems: Dig
   if (totalCount > topItems.length) {
     return `${totalCount} changes found, ${actionCount} worth action`;
   }
-  const names = uniqueLabels(topItems.map((item) => sanitizeSubjectComponent(item.watchlistName ?? ""))).slice(0, 3).join(", ");
-  const moveLabel = `${topItems.length} competitor move${topItems.length === 1 ? "" : "s"} worth seeing`;
-  return sanitizeEmailSubject(names ? `${moveLabel}: ${names}` : moveLabel);
+  // Lead with the top competitor name rather than a bare count — the name is
+  // the recognizable hook. Stays honest: "made N moves" when a single
+  // competitor drove them, "leads N moves" when several did.
+  const uniqueNames = uniqueLabels(
+    topItems.map((item) => sanitizeSubjectComponent(item.watchlistName ?? "")),
+  );
+  const topName = uniqueNames[0] ?? "";
+  const moveCount = topItems.length;
+  if (topName) {
+    if (uniqueNames.length === 1) {
+      return sanitizeEmailSubject(
+        moveCount === 1
+          ? `${topName} made a competitor move worth seeing`
+          : `${topName} made ${moveCount} moves worth seeing`,
+      );
+    }
+    return sanitizeEmailSubject(
+      `${topName} leads ${moveCount} competitor moves worth seeing`,
+    );
+  }
+  return sanitizeEmailSubject(
+    `${moveCount} competitor move${moveCount === 1 ? "" : "s"} worth seeing`,
+  );
 }
 
 function renderTopMoveHtml(
@@ -394,7 +418,11 @@ function renderTopMoveHtml(
   const metricLines = readMetricBandLines(item.metadata);
   const creativeHtml = renderCreativeThumbnailHtml(item.metadata);
   // WP-24: top-move links land on the watchlist event row when ids exist.
-  const reviewUrl = digestItemDeepLink(item) ?? fullDigestUrl;
+  // W2-C: derive the deep-link origin from the env-built fullDigestUrl (same
+  // source the "View full brief" link uses) instead of the hardcoded default,
+  // so item links honor APP_ORIGIN/BETTER_AUTH_URL like the instant-alert path.
+  const reviewUrl =
+    digestItemDeepLink(item, originFromDigestUrl(fullDigestUrl)) ?? fullDigestUrl;
   const heading = options.omitWatchlistPrefix
     ? escapeHtml(title)
     : `${escapeHtml(watchlistName)}: ${escapeHtml(title)}`;
@@ -437,7 +465,8 @@ function renderTopMoveText(
     : `${intelligence.priorityBand} (${intelligence.priorityScore}/100)`;
   const metricLines = readMetricBandLines(item.metadata);
   const creativeNote = creativeThumbnailTextNote(item.metadata);
-  const reviewUrl = digestItemDeepLink(item) ?? fullDigestUrl;
+  const reviewUrl =
+    digestItemDeepLink(item, originFromDigestUrl(fullDigestUrl)) ?? fullDigestUrl;
   const heading = options.omitWatchlistPrefix ? title : `${watchlistName}: ${title}`;
   return [
     `${index}. ${heading}`,
@@ -466,6 +495,20 @@ export function digestItemDeepLink(
   }
   const base = origin.replace(/\/+$/, "");
   return `${base}/app/watchlists?watchlist=${encodeURIComponent(watchlistId)}&event=${encodeURIComponent(eventId)}`;
+}
+
+/**
+ * Resolve the deep-link origin from the already-env-derived full-digest URL so
+ * per-item links use the same base as the "View full brief" CTA. Falls back to
+ * the production origin only if the URL is somehow not absolute, keeping the
+ * previous hardcoded default as a safe floor.
+ */
+function originFromDigestUrl(fullDigestUrl: string): string {
+  try {
+    return new URL(fullDigestUrl).origin;
+  } catch {
+    return "https://0509.io";
+  }
 }
 
 function renderUpgradeNoteHtml(

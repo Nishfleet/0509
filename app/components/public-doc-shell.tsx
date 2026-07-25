@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 
-import { BrandWordmark } from "~/components/brand-wordmark";
-import { MARKETING_TAGLINE } from "~/components/marketing-nav";
+import { MarketingNav } from "~/components/marketing-nav";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 export function PublicDocShell(props: {
@@ -42,25 +41,9 @@ export function PublicDocBlock(props: {
 }
 
 export function PublicDocHeader() {
-  return (
-    <header className="f9-legal-nav">
-      <div className="f9-container f9-legal-nav-inner">
-        <Link className="f9-app-brand" to="/">
-          <BrandWordmark meta={MARKETING_TAGLINE} />
-        </Link>
-        <nav className="f9-search-nav-links" aria-label="Public navigation">
-          <Link to="/search">Search preview</Link>
-          <Link to="/#demo">Sample brief</Link>
-          <Link to="/#pricing">Pricing</Link>
-          <Link to="/help">Help</Link>
-          <Link to="/docs">Docs</Link>
-          <Link to="/status">Status</Link>
-          <Link to="/auth/login">Sign in</Link>
-          <Link to="/app">Open app</Link>
-        </nav>
-      </div>
-    </header>
-  );
+  // The doc/legal shell shares the one public header so every public surface
+  // shows the same canonical link list and the same bone case-file chrome.
+  return <MarketingNav />;
 }
 
 export function PublicDocFooter() {

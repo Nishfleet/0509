@@ -244,6 +244,13 @@ export async function getShareLink(env: AppEnv, token: string) {
   // Share tokens are bearer credentials; expired or revoked links must
   // behave exactly like links that never existed. expires_at NULL is legacy
   // (pre-expiry links customers already sent out).
+  // Deliberate anti-enumeration choice (W2-C, 2026-07-25): never-existed,
+  // expired, and revoked tokens all collapse to `null` here via the WHERE
+  // clause so a holder can't distinguish "wrong token" from "was valid, now
+  // gone". Kinder per-state copy ("this link expired" vs "was revoked") would
+  // require the query layer to fetch the row unfiltered and return the reason —
+  // a deliberate leak we are not making. Do not split these states in copy
+  // without changing this query and accepting the enumeration trade-off.
   const row = await one<ShareLinkRow>(
     env,
     `

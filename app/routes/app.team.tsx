@@ -132,7 +132,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       : { ok: false, intent, memberId, message: "Invite refreshed, but the email failed to send — retry from this page." };
   }
 
-  return { ok: false, message: "Unknown action." };
+  return { ok: false, message: "We couldn't complete that action. Refresh the page and try again." };
 }
 
 export default function TeamRoute() {

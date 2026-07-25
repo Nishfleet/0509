@@ -84,7 +84,7 @@ export function AuthForm({
               <input name="name" type="hidden" value={(initialName ?? "").trim() || "Account"} />
             ) : null}
             <button className="f9-primary-button" disabled={pending} type="submit">
-              {emailPending ? "Sending..." : "Resend link"}
+              {emailPending ? "Sending…" : "Resend link"}
             </button>
           </Form>
           <p className="f9-auth-switch" style={{ marginTop: "1rem" }}>
@@ -121,7 +121,7 @@ export function AuthForm({
 
         <button className="f9-primary-button" disabled={pending} type="submit">
           {emailPending
-            ? "Sending..."
+            ? "Sending…"
             : isSignup
               ? "Send setup link"
               : "Send sign-in link"}
