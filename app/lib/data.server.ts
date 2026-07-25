@@ -156,6 +156,7 @@ export {
   getDeliveryTargetByProviderIdentifier,
   claimEmailTargetForDispatch,
   suppressEmailTargetsForUserAndAddress,
+  resumeEmailTargetsForUserAndAddress,
   reconcileWhatsAppSetupTargetFromAttempt,
   reconcileWhatsAppSetupTargetByProviderMessageId,
   getUserDeliveryProfile,

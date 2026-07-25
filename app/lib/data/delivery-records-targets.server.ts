@@ -624,6 +624,48 @@ export async function suppressEmailTargetsForUserAndAddress(
 }
 
 /**
+ * Atomically resume every email target suppressed for this account/address
+ * pair. Unsubscribe is account-and-address-wide, so the workspace-default
+ * target cannot be resumed safely with a per-target upsert.
+ */
+export async function resumeEmailTargetsForUserAndAddress(
+  env: AppEnv,
+  input: { userId: string; targetValue: string; source?: string },
+) {
+  const timestamp = nowIso();
+  const result = await ensureDb(env)
+    .prepare(
+      `
+        UPDATE delivery_target
+        SET is_opted_in = 1,
+            opt_in_source = ?,
+            opted_in_at = ?,
+            is_paused = 0,
+            paused_at = NULL,
+            opted_out_at = NULL,
+            metadata_json = json_remove(
+              COALESCE(metadata_json, '{}'),
+              '$.unsubscribedVia'
+            ),
+            updated_at = ?
+        WHERE user_id = ?
+          AND channel = 'email'
+          AND lower(trim(target_value)) = lower(trim(?))
+      `,
+    )
+    .bind(
+      input.source ?? "delivery_settings",
+      timestamp,
+      timestamp,
+      input.userId,
+      input.targetValue,
+    )
+    .run();
+
+  return Number(result?.meta?.changes ?? 0);
+}
+
+/**
  * Claims an active email target immediately before a user-requested test
  * send. The UPDATE is the CAS: an unsubscribe that commits first changes the
  * target state and therefore yields zero rows here, so the provider is never
