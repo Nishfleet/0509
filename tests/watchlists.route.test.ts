@@ -534,10 +534,16 @@ describe("watchlists route actions", () => {
         request: new Request("http://localhost/app/watchlists", { method: "POST", body: formData }),
       } as never);
 
-      expect(result).toEqual({
+      expect("data" in result).toBe(true);
+      if (!("data" in result)) {
+        throw new Error("Expected a status-aware delivery authorization response.");
+      }
+      expect(result.data).toEqual({
         ok: false,
+        error: undefined,
         message: "Only the account owner can manage delivery settings and targets for this workspace.",
       });
+      expect(result.init?.status).toBe(403);
     }
     expect(requireWorkspaceSession).toHaveBeenCalledTimes(4);
   });
