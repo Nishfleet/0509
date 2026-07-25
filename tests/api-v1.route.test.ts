@@ -192,8 +192,25 @@ const digest: DigestRecord = {
   ],
 };
 
-function setupMocks(authOk = true, actionsWriteEnabled = true, workspaceUserId = apiKey.userId) {
-  mockAgencyWorkspacePlan();
+function setupMocks(
+  authOk = true,
+  actionsWriteEnabled = true,
+  workspaceUserId = apiKey.userId,
+  workspacePlan: "agency" | "starter" = "agency",
+) {
+  if (workspacePlan === "agency") {
+    mockAgencyWorkspacePlan();
+  } else {
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("starter"),
+      getEffectiveWorkspacePlan: vi.fn().mockResolvedValue("starter"),
+      getUserPlanForActor: vi.fn().mockResolvedValue("starter"),
+      checkPlanLimit: vi.fn().mockResolvedValue({ allowed: true, limit: 10, current: 1 }),
+      PLAN_LIMITS: {
+        starter: { digests: true },
+      },
+    }));
+  }
   const isMemberWorkspace = workspaceUserId !== apiKey.userId;
   const mocks = {
     findAgentActionAuditByIdempotencyKey: vi.fn().mockResolvedValue(null),
@@ -468,16 +485,7 @@ describe("customer API v1", () => {
   });
 
   it("gates workspace readiness to Agency API access", async () => {
-    setupMocks();
-    vi.doMock("~/lib/plan.server", () => ({
-      getUserPlan: vi.fn().mockResolvedValue("starter"),
-      getEffectiveWorkspacePlan: vi.fn().mockResolvedValue("starter"),
-      getUserPlanForActor: vi.fn().mockResolvedValue("starter"),
-      checkPlanLimit: vi.fn().mockResolvedValue({ allowed: true, limit: 10, current: 1 }),
-      PLAN_LIMITS: {
-        starter: { digests: true },
-      },
-    }));
+    setupMocks(true, true, apiKey.userId, "starter");
     const getWorkspaceReadiness = vi.fn().mockResolvedValue(readinessPayload);
     vi.doMock("~/lib/workspace-readiness.server", () => ({
       getWorkspaceReadiness,

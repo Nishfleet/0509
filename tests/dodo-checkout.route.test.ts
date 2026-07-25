@@ -14,10 +14,13 @@ const session = {
   },
 };
 
+const enforceBillingProviderRateLimit = vi.fn();
+
 beforeEach(() => {
   vi.resetModules();
+  enforceBillingProviderRateLimit.mockReset().mockResolvedValue(null);
   vi.doMock("~/lib/rate-limit.server", () => ({
-    enforceBillingProviderRateLimit: vi.fn().mockResolvedValue(null),
+    enforceBillingProviderRateLimit,
   }));
 });
 
@@ -415,7 +418,12 @@ describe("Dodo checkout route", () => {
   });
 
   it("blocks annual checkout before claiming a lock when savings validation fails", async () => {
-    const validateDodo0509PlanCheckout = vi.fn().mockResolvedValue({
+    const {
+      createDodo0509CheckoutSession,
+      claimDodoPlanCheckout,
+      validateDodo0509PlanCheckout,
+    } = mockCheckoutDependencies("free");
+    validateDodo0509PlanCheckout.mockResolvedValue({
       valid: false,
       reason: "amount_mismatch",
       planId: "starter",
@@ -428,12 +436,6 @@ describe("Dodo checkout route", () => {
         reason: "amount_mismatch",
       },
     });
-    const { createDodo0509CheckoutSession, claimDodoPlanCheckout } =
-      mockCheckoutDependencies("free");
-    vi.doMock("~/lib/dodo-pricing.server", () => ({
-      validateDodo0509PlanCheckout,
-      validateDodo0509TopUpCheckout: vi.fn(),
-    }));
 
     const { action } = await import("~/routes/api.billing.dodo.checkout");
 
@@ -730,11 +732,9 @@ describe("Dodo checkout route", () => {
   it("fails closed before any Dodo call when the provider budget is unavailable", async () => {
     const { createDodo0509CheckoutSession, validateDodo0509PlanCheckout } =
       mockCheckoutDependencies("free");
-    vi.doMock("~/lib/rate-limit.server", () => ({
-      enforceBillingProviderRateLimit: vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ error: "rate_limit_unavailable" }), { status: 503 }),
-      ),
-    }));
+    enforceBillingProviderRateLimit.mockResolvedValue(
+      new Response(JSON.stringify({ error: "rate_limit_unavailable" }), { status: 503 }),
+    );
     const { action } = await import("~/routes/api.billing.dodo.checkout");
     const response = (await action({
       context: {},

@@ -14,10 +14,13 @@ const session = {
   },
 };
 
+const enforceBillingProviderRateLimit = vi.fn();
+
 beforeEach(() => {
   vi.resetModules();
+  enforceBillingProviderRateLimit.mockReset().mockResolvedValue(null);
   vi.doMock("~/lib/rate-limit.server", () => ({
-    enforceBillingProviderRateLimit: vi.fn().mockResolvedValue(null),
+    enforceBillingProviderRateLimit,
   }));
 });
 
@@ -484,11 +487,10 @@ describe("Dodo plan change route", () => {
         dodoSubscriptionId: "sub_123",
       },
     });
-    const enforceBillingProviderRateLimit = vi
-      .fn()
+    enforceBillingProviderRateLimit
+      .mockReset()
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(new Response(JSON.stringify({ error: "rate_limited" }), { status: 429 }));
-    vi.doMock("~/lib/rate-limit.server", () => ({ enforceBillingProviderRateLimit }));
 
     const response = await postPlanChange("starter_monthly_v1");
     expect(response.status).toBe(429);
@@ -505,13 +507,12 @@ describe("Dodo plan change route", () => {
         dodoSubscriptionId: "sub_123",
       },
     });
-    const enforceBillingProviderRateLimit = vi
-      .fn()
+    enforceBillingProviderRateLimit
+      .mockReset()
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(new Response(JSON.stringify({ error: "rate_limited" }), { status: 429 }));
-    vi.doMock("~/lib/rate-limit.server", () => ({ enforceBillingProviderRateLimit }));
 
     const response = await postPlanChange("starter_monthly_v1", confirmFields());
     expect(response.status).toBe(429);
