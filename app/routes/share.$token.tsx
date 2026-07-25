@@ -193,7 +193,7 @@ export default function ShareRoute() {
             {hasAgencyIdentity && data.brandIdentity ? (
               <ShareBrandIdentity identity={data.brandIdentity} />
             ) : (
-              <BrandWordmark meta={MARKETING_TAGLINE} />
+              <BrandWordmark meta="Shared report" />
             )}
           </header>
         ) : (
@@ -202,7 +202,7 @@ export default function ShareRoute() {
               <ShareBrandIdentity identity={data.brandIdentity} />
             ) : (
               <Link className="f9-app-brand" to="/">
-                <BrandWordmark meta={MARKETING_TAGLINE} />
+                <BrandWordmark meta="Shared evidence" />
               </Link>
             )}
           </div>

@@ -42,19 +42,19 @@ export default function StatusRoute() {
         <dl className="proof-trail-list">
           <div>
             <dt>Public search</dt>
-            <dd>Free competitor ad search that runs without an account, rate limited to keep it fair.</dd>
+            <dd>Search is in product scope; this page does not measure live search availability.</dd>
           </div>
           <div>
             <dt>Accounts</dt>
-            <dd>Sign-in is a secure one-time email link — no passwords are stored.</dd>
+            <dd>Secure email-link sign-in is in product scope; this page does not measure live auth-provider availability.</dd>
           </div>
           <div>
             <dt>Billing</dt>
-            <dd>Checkout and plan changes run through Dodo Payments in your local currency.</dd>
+            <dd>Checkout and billing are in product scope; this page does not measure live billing-provider availability.</dd>
           </div>
           <div>
             <dt>Email delivery</dt>
-            <dd>Change alerts and digests are sent by email through Cloudflare Email Service.</dd>
+            <dd>Email delivery is in product scope; this page does not measure live email-provider availability.</dd>
           </div>
         </dl>
       </PublicDocBlock>

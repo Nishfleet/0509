@@ -133,6 +133,7 @@ describe("account page", () => {
           React.createElement("form", props, children),
         useActionData: vi.fn().mockReturnValue(undefined),
         useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
+        useRevalidator: vi.fn().mockReturnValue({ revalidate: vi.fn(), state: "idle" }),
         useLoaderData: vi.fn().mockReturnValue({
           email: "owner@example.com",
           name: "Owner",

@@ -406,12 +406,19 @@ export default function CollectionsRoute() {
                       Open report
                     </Link>
                   ) : (
-                    <Link
-                      className="f9-secondary-button"
-                      to="/app/billing?source=collections#plans"
-                    >
-                      Upgrade for reports
-                    </Link>
+                    <div>
+                      <button
+                        aria-disabled="true"
+                        className="f9-secondary-button"
+                        disabled
+                        type="button"
+                      >
+                        Open report (Agency only)
+                      </button>{" "}
+                      <Link className="f9-text-link" to="/app/billing?source=collections#plans">
+                        Upgrade to Agency
+                      </Link>
+                    </div>
                   )}
                   {canExport ? (
                     <>

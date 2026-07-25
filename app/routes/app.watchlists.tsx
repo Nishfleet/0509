@@ -741,7 +741,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const watchlistIds = [...new Set(formData.getAll("watchlistIds").map(String))].filter(Boolean);
 
     if ((bulkAction !== "pause" && bulkAction !== "resume") || watchlistIds.length === 0) {
-      return { ok: false, message: "Select a watchlist to pause or resume it." };
+      return { ok: false, message: "Select at least one watchlist first." };
     }
 
     // Bound the per-request work. Every id runs at least one scoped D1 write

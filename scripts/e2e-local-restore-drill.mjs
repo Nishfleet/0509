@@ -13,14 +13,27 @@ import {
 import { resolveLocalD1DatabasePath } from "./e2e-local-state-query.mjs";
 
 const SQLITE_PATH = "/usr/bin/sqlite3";
+const PYTHON_PATH = "/usr/bin/python3";
 const RESTORE_TIMEOUT_MS = 30_000;
 const MAX_DUMP_BYTES = 64 * 1024 * 1024;
+const PYTHON_ITERDUMP_SCRIPT = [
+  "import sqlite3",
+  "import sys",
+  "from pathlib import Path",
+  "database_uri = Path(sys.argv[1]).resolve().as_uri() + '?mode=ro'",
+  "database = sqlite3.connect(database_uri, uri=True)",
+  "try:",
+  "    for statement in database.iterdump():",
+  "        print(statement)",
+  "finally:",
+  "    database.close()",
+].join("\n");
 
 function hash(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function sqliteDump(databasePath) {
+function sqliteCliDump(databasePath) {
   const result = spawnSync(SQLITE_PATH, [databasePath, ".dump"], {
     encoding: "utf8",
     maxBuffer: MAX_DUMP_BYTES,
@@ -33,7 +46,7 @@ function sqliteDump(databasePath) {
   return result.stdout;
 }
 
-function sqliteImport(databasePath, sql) {
+function sqliteCliImport(databasePath, sql) {
   const result = spawnSync(SQLITE_PATH, [databasePath], {
     encoding: "utf8",
     input: sql,
@@ -46,6 +59,52 @@ function sqliteImport(databasePath, sql) {
 
 function quoteIdentifier(value) {
   return `"${String(value).replaceAll('"', '""')}"`;
+}
+
+function pythonSqliteDump(databasePath) {
+  const result = spawnSync(PYTHON_PATH, ["-c", PYTHON_ITERDUMP_SCRIPT, databasePath], {
+    encoding: "utf8",
+    maxBuffer: MAX_DUMP_BYTES,
+    timeout: RESTORE_TIMEOUT_MS,
+  });
+  if (result.error?.code === "ETIMEDOUT") throw new Error("scratch_restore_export_timeout");
+  if (result.error || result.status !== 0 || !result.stdout?.trim()) {
+    throw new Error("scratch_restore_export_failed");
+  }
+  return result.stdout;
+}
+
+function nodeSqliteImport(databasePath, sql) {
+  if (Buffer.byteLength(sql) > MAX_DUMP_BYTES) {
+    throw new Error("scratch_restore_import_failed");
+  }
+  const database = new DatabaseSync(databasePath, {
+    enableForeignKeyConstraints: false,
+    timeout: RESTORE_TIMEOUT_MS,
+  });
+  try {
+    database.exec(sql);
+  } finally {
+    database.close();
+  }
+}
+
+function sqliteDump(databasePath) {
+  if (existsSync(SQLITE_PATH)) return sqliteCliDump(databasePath);
+  if (existsSync(PYTHON_PATH)) return pythonSqliteDump(databasePath);
+  throw new Error("scratch_restore_export_failed");
+}
+
+function sqliteImport(databasePath, sql) {
+  if (existsSync(SQLITE_PATH)) {
+    sqliteCliImport(databasePath, sql);
+    return;
+  }
+  try {
+    nodeSqliteImport(databasePath, sql);
+  } catch {
+    throw new Error("scratch_restore_import_failed");
+  }
 }
 
 function databaseEvidence(databasePath) {

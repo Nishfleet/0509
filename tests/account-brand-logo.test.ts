@@ -440,6 +440,7 @@ React.createElement("form", props, children),
 Link: ({ children, to, ...props }: { children?: ReactNode; to?: string } & Record<string, unknown>) =>
 React.createElement("a", { ...props, href: to }, children),
 useActionData: vi.fn().mockReturnValue(input.actionData),
+useRevalidator: vi.fn().mockReturnValue({ revalidate: vi.fn(), state: "idle" }),
 useLoaderData: vi.fn().mockReturnValue({
 email: "owner@example.com",
 emailVerified: true,

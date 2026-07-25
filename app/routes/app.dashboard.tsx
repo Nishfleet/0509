@@ -925,7 +925,7 @@ export default function AppDashboardRoute() {
                 <h2>Responses waiting on you</h2>
               </div>
               <Link className="f9-secondary-button" to="/app/watchlists">
-                Open competitors
+                Review changes
               </Link>
             </div>
             <div className="f9-work-list is-compact">

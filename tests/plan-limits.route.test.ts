@@ -448,7 +448,7 @@ describe("dashboard watchlist limit", () => {
       error: "plan_limit_exceeded",
       intent: "track-saved-query",
       limit: 3,
-      message: "You've reached your competitor tracking limit.",
+      message: "You've reached your competitor tracking limit — pause another watchlist first.",
       ok: false,
     });
     expect(createWatchlistWithinLimit).toHaveBeenCalled();

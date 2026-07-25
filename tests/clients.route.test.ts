@@ -246,7 +246,10 @@ describe("clients route agent memory", () => {
       }),
     } as never);
 
-    expect(result).toEqual({ ok: false, message: "Client room not found." });
+    expect(result).toEqual({
+      ok: false,
+      message: "We couldn't find that client room. Refresh the page and try again.",
+    });
     expect(upsertAgentMemory).not.toHaveBeenCalled();
   });
 
