@@ -10,6 +10,19 @@ export const RELEASE_PROOF_PROJECTS = Object.freeze([
 ]);
 
 /**
+ * The local proof fingerprints the effective source tree, so it does not need
+ * a long-lived feature branch to identify the candidate. Default to the
+ * checked-out commit while preserving an explicit base for callers that need
+ * diff metadata against another ref.
+ *
+ * @param {Record<string, string | undefined>} [env]
+ * @returns {string}
+ */
+export function resolveReleaseCandidateBase(env = process.env) {
+  return env.E2E_RELEASE_BASE ?? "HEAD";
+}
+
+/**
  * @param {Record<string, string | undefined>} [env]
  * @returns {string}
  */

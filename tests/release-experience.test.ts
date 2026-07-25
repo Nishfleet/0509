@@ -15,6 +15,7 @@ const {
 const {
   isCanonicalReleaseScope,
   parseJourneyScope,
+  resolveReleaseCandidateBase,
   resolveJourneyScope,
   resolveReleaseProofInvocation,
   resolveReleaseProofProject,
@@ -72,6 +73,11 @@ describe("release experience pure contract evaluators", () => {
     expect(() => resolveReleaseProofProject({ E2E_RELEASE_PROJECT: "prod-auth" })).toThrow(
       "invalid_release_browser_project",
     );
+  });
+
+  it("identifies the checked-out candidate without requiring a deleted feature branch", () => {
+    expect(resolveReleaseCandidateBase({})).toBe("HEAD");
+    expect(resolveReleaseCandidateBase({ E2E_RELEASE_BASE: "release/base" })).toBe("release/base");
   });
 
   it("calculates document and nested horizontal overflow", () => {

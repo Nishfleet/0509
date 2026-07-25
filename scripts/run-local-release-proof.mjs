@@ -32,6 +32,7 @@ import {
 } from "./local-release-server.mjs";
 import { runLocalD1ScratchRestore } from "./e2e-local-restore-drill.mjs";
 import {
+  resolveReleaseCandidateBase,
   resolveReleaseProofInvocation,
   resolveReleaseProofProject,
 } from "../e2e/helpers/release-scope.mjs";
@@ -59,7 +60,7 @@ if (!supportsReleaseCoverage(journeyScope)) {
   process.stderr.write("release proof refused: coverage_scope_unsupported\n");
   process.exit(1);
 }
-const base = process.env.E2E_RELEASE_BASE ?? "codex/customer-ready-journey";
+const base = resolveReleaseCandidateBase(process.env);
 const candidateScript = resolve(root, "scripts/customer-readiness-candidate.mjs");
 const playwright = resolve(root, "node_modules/.bin/playwright");
 const localStateQueryScript = resolve(root, "scripts/e2e-local-state-query.mjs");
