@@ -80,6 +80,7 @@ import {
   upsertWatchlistDeliveryConfig,
   upsertWorkspaceDeliveryConfig,
   suppressEmailTargetsForUserAndAddress,
+  resumeEmailTargetsForUserAndAddress,
 } from "~/lib/data.server";
 
 function createMockDb(
@@ -4412,6 +4413,98 @@ describe("email target dispatch and unsubscribe ordering", () => {
         webhook_status: "failed",
         error_message: "Email delivery target was unsubscribed before dispatch.",
       });
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("atomically resumes every email target for the account and address", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      sqlite.sqlite.exec(`
+        CREATE TABLE delivery_target (
+          id TEXT PRIMARY KEY NOT NULL,
+          user_id TEXT NOT NULL,
+          watchlist_id TEXT,
+          channel TEXT NOT NULL,
+          target_value TEXT NOT NULL,
+          is_opted_in INTEGER NOT NULL,
+          opt_in_source TEXT NOT NULL,
+          opted_in_at TEXT,
+          is_paused INTEGER NOT NULL,
+          paused_at TEXT,
+          opted_out_at TEXT,
+          metadata_json TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        INSERT INTO delivery_target (
+          id, user_id, watchlist_id, channel, target_value, is_opted_in,
+          opt_in_source, opted_in_at, is_paused, paused_at, opted_out_at,
+          metadata_json, updated_at
+        ) VALUES
+          ('target-workspace', 'user-1', NULL, 'email', 'Owner@Example.com', 0,
+           'account_email', '2026-07-15T00:00:00.000Z', 1, '2026-07-16T00:00:00.000Z',
+           '2026-07-16T00:00:00.000Z', '{"scope":"workspace","unsubscribedVia":"email_unsubscribe_link"}',
+           '2026-07-16T00:00:00.000Z'),
+          ('target-watchlist', 'user-1', 'watch-1', 'email', 'owner@example.com', 0,
+           'account_email', '2026-07-15T00:00:00.000Z', 1, '2026-07-16T00:00:00.000Z',
+           '2026-07-16T00:00:00.000Z', '{"scope":"watchlist","unsubscribedVia":"email_unsubscribe_link"}',
+           '2026-07-16T00:00:00.000Z'),
+          ('target-other-address', 'user-1', 'watch-2', 'email', 'other@example.com', 0,
+           'account_email', '2026-07-15T00:00:00.000Z', 1, '2026-07-16T00:00:00.000Z',
+           '2026-07-16T00:00:00.000Z', '{"scope":"watchlist","unsubscribedVia":"email_unsubscribe_link"}',
+           '2026-07-16T00:00:00.000Z'),
+          ('target-other-user', 'user-2', NULL, 'email', 'owner@example.com', 0,
+           'account_email', '2026-07-15T00:00:00.000Z', 1, '2026-07-16T00:00:00.000Z',
+           '2026-07-16T00:00:00.000Z', '{"scope":"workspace","unsubscribedVia":"email_unsubscribe_link"}',
+           '2026-07-16T00:00:00.000Z');
+      `);
+
+      await expect(resumeEmailTargetsForUserAndAddress({ DB: sqlite.db } as never, {
+        userId: "user-1",
+        targetValue: "OWNER@example.com",
+      })).resolves.toBe(2);
+
+      const resumed = sqlite.sqlite.prepare(`
+        SELECT id, is_opted_in, opt_in_source, is_paused, paused_at, opted_out_at,
+               json_extract(metadata_json, '$.scope') AS scope,
+               json_extract(metadata_json, '$.unsubscribedVia') AS unsubscribed_via
+        FROM delivery_target
+        WHERE id IN ('target-workspace', 'target-watchlist')
+        ORDER BY id
+      `).all() as Array<Record<string, unknown>>;
+      expect(resumed).toEqual([
+        expect.objectContaining({
+          id: "target-watchlist",
+          is_opted_in: 1,
+          opt_in_source: "delivery_settings",
+          is_paused: 0,
+          paused_at: null,
+          opted_out_at: null,
+          scope: "watchlist",
+          unsubscribed_via: null,
+        }),
+        expect.objectContaining({
+          id: "target-workspace",
+          is_opted_in: 1,
+          opt_in_source: "delivery_settings",
+          is_paused: 0,
+          paused_at: null,
+          opted_out_at: null,
+          scope: "workspace",
+          unsubscribed_via: null,
+        }),
+      ]);
+
+      const stillSuppressed = sqlite.sqlite.prepare(`
+        SELECT COUNT(*) AS count
+        FROM delivery_target
+        WHERE id IN ('target-other-address', 'target-other-user')
+          AND is_opted_in = 0
+          AND is_paused = 1
+          AND opted_out_at IS NOT NULL
+      `).get() as { count: number };
+      expect(Number(stillSuppressed.count)).toBe(2);
     } finally {
       sqlite.close();
     }

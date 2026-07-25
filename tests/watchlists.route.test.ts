@@ -1673,6 +1673,61 @@ describe("watchlists route actions", () => {
     });
   });
 
+  it("resumes every matching email target when the workspace default is resumed", async () => {
+    const defaultTarget = {
+      ...deliveryTargets[0],
+      id: "target-email-default",
+      watchlistId: null,
+      isOptedIn: false,
+      isPaused: true,
+      pausedAt: "2026-07-16T00:00:00.000Z",
+      optedOutAt: "2026-07-16T00:00:00.000Z",
+    };
+    const getDeliveryTargetById = vi.fn().mockResolvedValue(defaultTarget);
+    const resumeEmailTargetsForUserAndAddress = vi.fn().mockResolvedValue(2);
+    const upsertDeliveryTarget = vi.fn();
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWatchlist: vi.fn(),
+      getDeliveryTargetById,
+      resumeEmailTargetsForUserAndAddress,
+      upsertDeliveryTarget,
+    }));
+
+    const { action } = await import("~/routes/app.watchlists");
+    const formData = new FormData();
+    formData.set("intent", "toggle-delivery-target");
+    formData.set("targetId", defaultTarget.id);
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app/watchlists", {
+        method: "POST",
+        body: formData,
+      }),
+    } as never);
+
+    expect(result).toEqual({
+      message: "Delivery target resumed.",
+      ok: true,
+    });
+    expect(resumeEmailTargetsForUserAndAddress).toHaveBeenCalledWith(expect.anything(), {
+      userId: "user-1",
+      targetValue: "owner@example.com",
+      source: "delivery_settings",
+    });
+    expect(upsertDeliveryTarget).not.toHaveBeenCalled();
+  });
+
   it("blocks toggling WhatsApp delivery targets while WhatsApp is not customer-facing", async () => {
     const upsertDeliveryTarget = vi.fn();
     const getDeliveryTargetById = vi.fn().mockResolvedValue({

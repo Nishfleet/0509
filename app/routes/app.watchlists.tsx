@@ -884,7 +884,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (intent === "toggle-delivery-target") {
-    const { getDeliveryTargetById, getWatchlist, upsertDeliveryTarget } = await import("~/lib/data.server");
+    const {
+      getDeliveryTargetById,
+      getWatchlist,
+      upsertDeliveryTarget,
+    } = await import("~/lib/data.server");
     const targetId = String(formData.get("targetId") ?? "").trim();
     const target = await getDeliveryTargetById(env, {
       userId: workspaceUserId,
@@ -918,27 +922,33 @@ export async function action({ context, request }: ActionFunctionArgs) {
     if (channel === "whatsapp" && !isWhatsAppDeliveryCustomerFacing()) {
       return { ok: false, message: whatsappDeliveryUnavailableMessage() };
     }
-    await upsertDeliveryTarget(env, {
-      userId: workspaceUserId,
-      watchlistId: target.watchlistId ?? null,
-      channel,
-      targetValue,
-      validationStatus: channel === "email" ? "validated" : "pending",
-      isValidated: channel === "email",
-      isOptedIn: true,
-      optInSource: isDefaultTarget ? "delivery_settings" : "watchlist_settings",
-      optedInAt: new Date().toISOString(),
-      isPaused,
-      // Explicitly clear optedOutAt on resume so the in-product resume path
-      // undoes a prior /unsubscribe suppression for the default target.
-      // Unsubscribe suppresses broadly by user+address; resume is per-target.
-      pausedAt: isPaused ? new Date().toISOString() : null,
-      optedOutAt: isPaused ? target.optedOutAt : null,
-      templateEligible: channel === "email",
-      metadata: {
-        scope: isDefaultTarget ? "workspace" : "watchlist",
-      },
-    });
+    if (isDefaultTarget && channel === "email" && !isPaused) {
+      const { resumeEmailTargetsForUserAndAddress } = await import("~/lib/data.server");
+      await resumeEmailTargetsForUserAndAddress(env, {
+        userId: workspaceUserId,
+        targetValue,
+        source: "delivery_settings",
+      });
+    } else {
+      await upsertDeliveryTarget(env, {
+        userId: workspaceUserId,
+        watchlistId: target.watchlistId ?? null,
+        channel,
+        targetValue,
+        validationStatus: channel === "email" ? "validated" : "pending",
+        isValidated: channel === "email",
+        isOptedIn: true,
+        optInSource: isDefaultTarget ? "delivery_settings" : "watchlist_settings",
+        optedInAt: new Date().toISOString(),
+        isPaused,
+        pausedAt: isPaused ? new Date().toISOString() : null,
+        optedOutAt: isPaused ? target.optedOutAt : null,
+        templateEligible: channel === "email",
+        metadata: {
+          scope: isDefaultTarget ? "workspace" : "watchlist",
+        },
+      });
+    }
 
     return {
       ok: true,

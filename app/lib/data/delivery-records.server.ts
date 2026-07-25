@@ -22,6 +22,7 @@ export {
   getDeliveryTargetByProviderIdentifier,
   claimEmailTargetForDispatch,
   suppressEmailTargetsForUserAndAddress,
+  resumeEmailTargetsForUserAndAddress,
   reconcileWhatsAppSetupTargetFromAttempt,
   reconcileWhatsAppSetupTargetByProviderMessageId,
 } from "~/lib/data/delivery-records-targets.server";
