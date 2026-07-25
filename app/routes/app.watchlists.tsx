@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  data,
   Form,
   Link,
   redirect,
@@ -365,10 +366,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const intent = String(formData.get("intent") ?? "");
 
   if (isMember && DELIVERY_MANAGEMENT_INTENTS.has(intent)) {
-    return {
-      ok: false,
-      message: "Only the account owner can manage delivery settings and targets for this workspace.",
-    };
+    return data(
+      {
+        ok: false,
+        error: undefined,
+        message: "Only the account owner can manage delivery settings and targets for this workspace.",
+      },
+      { status: 403 },
+    );
   }
 
   if (intent === "refresh-watchlist") {
