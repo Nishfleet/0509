@@ -1,5 +1,6 @@
 import type { LoaderFunctionArgs } from "react-router";
 
+import { getCloudflareContext } from "~/lib/cloudflare-context";
 import { readReleaseIdentity } from "~/lib/canary-release-identity.server";
 
 // Cheap uptime probe for Cloudflare health checks and external monitors.
@@ -13,7 +14,7 @@ import { readReleaseIdentity } from "~/lib/canary-release-identity.server";
 // directly instead of wrapping it in the root HTML layout. See
 // `app/routes/api.auth.$.ts` for the same pattern.
 export async function loader({ context }: LoaderFunctionArgs) {
-  const cloudflare = context.cloudflare as { env: Env };
+  const cloudflare = getCloudflareContext(context);
   const env = cloudflare.env;
   const normalizeIdentifier = (value: unknown) => {
     const normalized = typeof value === "string" ? value.trim() : "";

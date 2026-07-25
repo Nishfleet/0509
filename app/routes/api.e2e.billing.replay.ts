@@ -1,5 +1,6 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import { RouterContextProvider, type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
 
+import { cloudflareRuntimeContext, getCloudflareContext } from "~/lib/cloudflare-context";
 import type { AppEnv, EmailSendingBinding } from "~/lib/env.server";
 
 const J5_FIXTURE_SECRET = "e2e-j5-fixture-webhook-secret-v1";
@@ -668,7 +669,11 @@ async function runJ5Replay(
   const commercialProviderReplay = await runJ5CommercialProviderReplay(env, request, mapping);
   const { signDodoWebhookPayload } = await import("~/lib/dodo-billing.server");
   const { action: webhookAction } = await import("~/routes/api.webhooks.dodo");
-  const innerContext = { ...(context as object), cloudflare: { ...((context as { cloudflare: object }).cloudflare), env } };
+  const innerContext = new RouterContextProvider();
+  innerContext.set(cloudflareRuntimeContext, {
+    ...getCloudflareContext(context),
+    env,
+  });
   const entries = payloads(mapping, clock);
   const evidence: Record<string, J5TransitionEvidence> = {};
   let planChangeClaimed = false;

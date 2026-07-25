@@ -8,6 +8,7 @@ import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page"
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
+import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 import { billingSkuForPlanCheckout, TOP_UP_PACK_DISPLAY } from "~/lib/billing-sku-catalog";
 import { agencyCheckoutHeldCustomerCopy } from "~/lib/customer-billing-copy";
 import {
@@ -101,6 +102,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getUserPlanBillingInfo } = await import("~/lib/data.server");
   const { PLAN_LIMITS, checkPlanLimit, getProofUsageSummary } = await import("~/lib/plan.server");
   const env = getEnv(context);
+  const cloudflare = getOptionalCloudflareContext(context);
   const workspace = await requireWorkspaceSession(env, request);
   const { session, workspaceUserId, isMember, ownerName } = workspace;
   const canManageBilling = !isMember || workspaceUserId === session.user.id;
@@ -144,7 +146,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         env,
         workspaceUserId,
         "pricing",
-        context.cloudflare?.ctx,
+        cloudflare?.ctx,
       );
       if (rateLimitResponse) throw rateLimitResponse;
       // Currency display only — resolve buyer country identically to the
@@ -194,7 +196,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         billing,
         workspaceUserId,
         target: planChangePreviewTarget,
-        ctx: context.cloudflare?.ctx,
+        ctx: cloudflare?.ctx,
       })
     : null;
 

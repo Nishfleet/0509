@@ -28,6 +28,7 @@ import {
 import { SearchResultCard } from "~/components/search/result-card";
 import { SearchAnswerPanel } from "~/components/search-answer-panel";
 import { SubmitButton } from "~/components/submit-button";
+import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 import { classifyAdRecordAngle } from "~/lib/ad-display";
 import { isAdLibraryBackedAd } from "~/lib/ad-source-kind";
 import { formatAngleDetail } from "~/lib/angle-display";
@@ -143,6 +144,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { listCollections } = await import("~/lib/data.server");
   const runtimeEnv = getEnv(context);
+  const cloudflare = getOptionalCloudflareContext(context);
   const { resolveE2EProviderDeny, sanitizeE2EProviderEnv } =
     await import("~/lib/e2e-provider.server");
   const providerDeny = await resolveE2EProviderDeny(runtimeEnv, request);
@@ -179,7 +181,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     : { showPresenceNav: false, showOpsNav: false };
   const url = new URL(request.url);
   const visitorCountry = defaultCountryForVisitor(
-    (context.cloudflare as { country?: string | null } | undefined)?.country ??
+    cloudflare?.country ??
       request.headers.get("cf-ipcountry"),
   );
   const competitorWebsite = normalizeCompetitorWebsiteInput(
@@ -307,7 +309,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     const rateLimitResponse = await enforcePublicSearchRateLimit(
       request,
       env,
-      context.cloudflare?.ctx,
+      cloudflare?.ctx,
     );
     if (rateLimitResponse) {
       throw rateLimitResponse;
@@ -339,7 +341,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         request,
         env,
         session.user.id,
-        context.cloudflare?.ctx,
+        cloudflare?.ctx,
       );
       if (selectionLimit) {
         throw selectionLimit;
@@ -349,7 +351,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         request,
         env,
         session.user.id,
-        context.cloudflare?.ctx,
+        cloudflare?.ctx,
         // Fail OPEN for rate-limit sizing only: an unknown plan gets starter
         // limits so a paying customer is not throttled to free ones.
         plan ?? "starter",
@@ -442,7 +444,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         cursor: url.searchParams.get("after"),
         forceLive,
         customerMetaAdLibraryToken,
-        executionContext: context.cloudflare?.ctx,
+        executionContext: cloudflare?.ctx,
         hydratePersisted: Boolean(session),
       })
     : {
@@ -466,9 +468,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         relevanceApplied: false,
       };
 
-  const waitUntil = context.cloudflare?.ctx?.waitUntil?.bind(
-    context.cloudflare.ctx,
-  );
+  const waitUntil = cloudflare?.ctx?.waitUntil?.bind(cloudflare?.ctx);
   const {
     result: hydratedResult,
     selectedAd,
@@ -544,6 +544,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { addAdToCollection, createSavedQuery } =
     await import("~/lib/data.server");
   const env = getEnv(context);
+  const cloudflare = getOptionalCloudflareContext(context);
   const workspace = await withWorkspace(request, env);
   if (!workspace.ok) {
     return workspace.result;
@@ -567,8 +568,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         country:
           String(formData.get("country") ?? "") ||
           defaultCountryForVisitor(
-            (context.cloudflare as { country?: string | null } | undefined)
-              ?.country ?? request.headers.get("cf-ipcountry"),
+            cloudflare?.country ?? request.headers.get("cf-ipcountry"),
           ),
         platform: String(formData.get("platform") ?? "all"),
         creativeType: String(
@@ -733,7 +733,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const watchlist = watchlistResult.watchlist;
     const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
     try {
-      await queueFirstWatchlistScan(env, context.cloudflare?.ctx, watchlist);
+      await queueFirstWatchlistScan(env, cloudflare?.ctx, watchlist);
     } catch {
       return {
         ok: false,

@@ -1,7 +1,8 @@
 /// <reference path="../.react-router/types/+server-build.d.ts" />
 
-import { createRequestHandler } from "react-router";
+import { createRequestHandler, RouterContextProvider } from "react-router";
 
+import { cloudflareRuntimeContext } from "../app/lib/cloudflare-context";
 import { reportScheduledTaskFailure } from "../app/lib/cron-failure-alert.server";
 import { resumePendingDigestScheduleJobsDetailed } from "../app/lib/digest-orchestration.server";
 import {
@@ -39,16 +40,6 @@ export { MonitoringWorkflow } from "./monitoring-workflow";
 type GlobalEnvCarrier = typeof globalThis & {
   __APP_REQUEST_ENV__?: Env;
 };
-
-declare module "react-router" {
-  export interface AppLoadContext {
-    cloudflare: {
-      env: Env;
-      ctx: ExecutionContext;
-      country: string | null;
-    };
-  }
-}
 
 const requestHandler = createRequestHandler(
   () => import("virtual:react-router/server-build"),
@@ -127,13 +118,13 @@ export default {
     }
 
     (globalThis as GlobalEnvCarrier).__APP_REQUEST_ENV__ = env;
-    const response = await requestHandler(request, {
-      cloudflare: {
-        env,
-        ctx,
-        country: request.headers.get("cf-ipcountry"),
-      },
+    const routerContext = new RouterContextProvider();
+    routerContext.set(cloudflareRuntimeContext, {
+      env,
+      ctx,
+      country: request.headers.get("cf-ipcountry"),
     });
+    const response = await requestHandler(request, routerContext);
     return withSecurityHeaders(response, request);
   },
   async scheduled(controller, env, ctx) {

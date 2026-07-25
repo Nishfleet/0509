@@ -1,12 +1,11 @@
-import type { AppEnv, CloudflareRuntimeContext } from "~/lib/env.server";
+import type { AppEnv } from "~/lib/env.server";
+import { getCloudflareContext } from "~/lib/cloudflare-context";
+
+export { cloudflareRuntimeContext, getCloudflareContext } from "~/lib/cloudflare-context";
 
 type GlobalEnvCarrier = typeof globalThis & {
   __APP_REQUEST_ENV__?: AppEnv;
 };
-
-export function getCloudflareContext(context: unknown): CloudflareRuntimeContext {
-  return (context as { cloudflare: CloudflareRuntimeContext }).cloudflare;
-}
 
 export function getEnv(context: unknown): AppEnv {
   const contextEnv = getCloudflareContext(context).env;

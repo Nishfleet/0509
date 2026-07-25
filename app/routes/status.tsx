@@ -2,6 +2,7 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import type { LinksFunction } from "react-router";
 import { useLoaderData } from "react-router";
 
+import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 
@@ -19,12 +20,12 @@ export const meta: MetaFunction = () =>
 
 export async function loader({ context }: LoaderFunctionArgs) {
   const { publicCommercialLaunchSummary } = await import("~/lib/commercial-launch-gate.server");
-  const cloudflare = context.cloudflare as { env?: unknown } | undefined;
-  const env = cloudflare?.env as import("~/lib/env.server").AppEnv | undefined;
+  const cloudflare = getOptionalCloudflareContext(context);
+  const env = cloudflare?.env;
 
   return {
     generatedAt: new Date().toISOString(),
-    appServed: Boolean(cloudflare?.env),
+    appServed: Boolean(env),
     commercialLaunch: env ? publicCommercialLaunchSummary(env) : null,
   };
 }

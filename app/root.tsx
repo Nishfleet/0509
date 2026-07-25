@@ -12,6 +12,7 @@ import {
 } from "react-router";
 import { useEffect, useLayoutEffect, useRef } from "react";
 
+import { getCloudflareContext } from "~/lib/cloudflare-context";
 import type { LoaderFunctionArgs } from "react-router";
 import "./app.css";
 import type { AppEnv } from "~/lib/env.server";
@@ -49,10 +50,7 @@ export interface RootLoaderData {
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getOptionalSession } = await import("~/lib/auth.server");
-  const cloudflare = context.cloudflare as {
-    country?: string | null;
-    env: AppEnv;
-  };
+  const cloudflare = getCloudflareContext(context);
   const env = cloudflare.env;
   const session = await getOptionalSession(env, request);
   const hasAuthCookie = hasSiteRepAuthCookie(request);

@@ -1,5 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 
+import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
+
 const MAX_AUTHENTICATED_API_BODY_BYTES = 64 * 1024;
 
 export async function action({ context, request }: ActionFunctionArgs) {
@@ -12,6 +14,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     enforceAuthenticatedApiLimit,
     verifyAuthenticatedApiIdentity,
   } = await import("~/lib/authenticated-api-limits.server");
+  const cloudflare = getOptionalCloudflareContext(context);
   const {
     customerAgentActionErrorPayload,
     normalizeCustomerAgentActionName,
@@ -88,8 +91,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     request.headers.get("Idempotency-Key")?.trim() ??
     readString(input, "idempotencyKey") ??
     null;
-  const executionContext = ((context.cloudflare as { ctx?: { waitUntil(promise: Promise<unknown>): void } } | undefined)
-    ?.ctx ?? null) as ExecutionContext | null;
+  const executionContext = cloudflare?.ctx ?? null;
 
   try {
     const result = await runCustomerAgentAction(env, {

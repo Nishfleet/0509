@@ -1,6 +1,8 @@
 import { redirect } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
+
 export function loader(_args: LoaderFunctionArgs) {
   return Response.json(
     { error: "Method not allowed. Use POST." },
@@ -19,6 +21,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { createDodoCustomerPortalSession } = await import("~/lib/dodo-billing.server");
   const { enforceBillingProviderRateLimit } = await import("~/lib/rate-limit.server");
   const env = getEnv(context);
+  const cloudflare = getOptionalCloudflareContext(context);
   const { session, workspaceUserId, isMember } = await requireWorkspaceSession(env, request);
   if (isMember && workspaceUserId !== session.user.id) {
     throw new Response("Only the workspace owner can manage billing.", { status: 403 });
@@ -35,7 +38,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     env,
     workspaceUserId,
     "mutation",
-    context.cloudflare?.ctx,
+    cloudflare?.ctx,
   );
   if (mutationLimitResponse) throw mutationLimitResponse;
 
