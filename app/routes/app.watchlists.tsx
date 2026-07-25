@@ -380,7 +380,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const watchlist = await getWatchlist(env, watchlistId, workspaceUserId);
 
     if (!watchlist || !watchlist.isActive) {
-      return { ok: false, message: "Watchlist not found." };
+      return { ok: false, message: "We couldn't find that watchlist. Refresh the page and try again." };
     }
 
     // Manual refresh triggers a usage-billed live scan; without this gate a
@@ -441,7 +441,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const watchlistId = String(formData.get("watchlistId") ?? "");
     const watchlist = await getWatchlist(env, watchlistId, workspaceUserId);
     if (!watchlist) {
-      return { ok: false, message: "Watchlist not found." };
+      return { ok: false, message: "We couldn't find that watchlist. Refresh the page and try again." };
     }
     const share = await createShareLink(
       env,
@@ -465,7 +465,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const targetLabel = readOptionalString(formData.get("targetLabel"));
 
     if (!watchlist) {
-      return { ok: false, message: "Watchlist not found." };
+      return { ok: false, message: "We couldn't find that watchlist. Refresh the page and try again." };
     }
 
     if (!name || (watchlist.targetType !== "saved_query" && !targetLabel)) {
@@ -501,6 +501,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
         : watchlistFingerprint(
             normalizeSavedQuery("advertiser", {
               query: nextTargetLabel,
+              // Legacy pre-0025 rows persisted no target_country; migration 0025
+              // keeps their original India scan country so refingerprinting stays
+              // coherent with the diffs already stored. Not a global-first
+              // default — do not "fix" this to the visitor geo.
               country: watchlist.targetCountry ?? "India",
             }),
             competitorWebsite,
@@ -571,7 +575,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const watchlist = await getOwnedWatchlist(env, workspaceUserId, formData, getWatchlist);
 
     if (!watchlist) {
-      return { ok: false, message: "Watchlist not found." };
+      return { ok: false, message: "We couldn't find that watchlist. Refresh the page and try again." };
     }
 
     const whatsappDeliveryEditable = isWhatsAppDeliveryCustomerFacing() && isWhatsAppProviderConfigured(env);
@@ -606,7 +610,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     if (requestedTimezone && !normalizedRequestedTimezone) {
       return {
         ok: false,
-        message: "Enter a valid IANA timezone, such as Asia/Kolkata or UTC.",
+        message: "Enter a valid IANA timezone, such as America/New_York or UTC.",
       };
     }
     const timezone = normalizedRequestedTimezone ?? safeTimeZone(workspaceConfig.timezone);
@@ -639,7 +643,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const watchlist = await getOwnedWatchlist(env, workspaceUserId, formData, getWatchlist);
 
     if (!watchlist) {
-      return { ok: false, message: "Watchlist not found." };
+      return { ok: false, message: "We couldn't find that watchlist. Refresh the page and try again." };
     }
 
     const requestedChannel = String(formData.get("channel") ?? "");
@@ -701,7 +705,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           message:
             "Watchlist paused. Scans and alerts stop, the history stays, and the plan slot is free.",
         }
-      : { ok: false, message: "Watchlist not found." };
+      : { ok: false, message: "We couldn't find that watchlist. Refresh the page and try again." };
   }
 
   if (intent === "resume-watchlist") {
@@ -728,7 +732,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
             ? "Watchlist resumed. It rejoins the next weekly check; paid plans check every 3–6 hours."
             : "Watchlist resumed. It rejoins the next scheduled scan.",
         }
-      : { ok: false, message: "Watchlist not found." };
+      : { ok: false, message: "We couldn't find that watchlist. Refresh the page and try again." };
   }
 
   if (intent === "bulk-watchlists") {
@@ -737,7 +741,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const watchlistIds = [...new Set(formData.getAll("watchlistIds").map(String))].filter(Boolean);
 
     if ((bulkAction !== "pause" && bulkAction !== "resume") || watchlistIds.length === 0) {
-      return { ok: false, message: "Select at least one watchlist first." };
+      return { ok: false, message: "Select a watchlist to pause or resume it." };
     }
 
     // Bound the per-request work. Every id runs at least one scoped D1 write
@@ -766,7 +770,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
             ok: true,
             message: `Paused ${paused} of ${watchlistIds.length} selected. Scans and alerts stop, the history stays, and the plan slots are free.`,
           }
-        : { ok: false, message: "Watchlist not found." };
+        : { ok: false, message: "We couldn't find that watchlist. Refresh the page and try again." };
     }
 
     // Resume re-checks the plan limit before each watchlist — the count of
@@ -828,7 +832,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       };
     }
 
-    return { ok: false, message: "Watchlist not found." };
+    return { ok: false, message: "We couldn't find that watchlist. Refresh the page and try again." };
   }
 
   if (intent === "send-test-email") {
@@ -852,7 +856,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     });
 
     if (!target || target.userId !== workspaceUserId || target.channel !== "email") {
-      return { ok: false, message: "Email delivery target not found." };
+      return { ok: false, message: "We couldn't find that delivery address. Refresh the page and try again." };
     }
 
     const deliveryGate = await requireDeliveryConfigSave(env, workspaceUserId, { emailEnabled: true });
@@ -886,12 +890,21 @@ export async function action({ context, request }: ActionFunctionArgs) {
       userId: workspaceUserId,
       targetId,
     });
-    const watchlist = target?.watchlistId
+
+    if (!target || target.userId !== workspaceUserId) {
+      return { ok: false, message: "We couldn't find that delivery target. Refresh the page and try again." };
+    }
+
+    // Watchlist-scoped targets require their watchlist to still be active. The
+    // workspace-default target (watchlistId null) has no watchlist — it is the
+    // address the /unsubscribe promise points back to, so it must be
+    // pausable/resumable from delivery settings too.
+    const isDefaultTarget = !target.watchlistId;
+    const watchlist = target.watchlistId
       ? await getWatchlist(env, target.watchlistId, workspaceUserId)
       : null;
-
-    if (!target || target.userId !== workspaceUserId || !target.watchlistId || !watchlist?.isActive) {
-      return { ok: false, message: "Delivery target not found." };
+    if (!isDefaultTarget && !watchlist?.isActive) {
+      return { ok: false, message: "We couldn't find that delivery target. Refresh the page and try again." };
     }
 
     const requestedChannel = target.channel;
@@ -907,19 +920,23 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }
     await upsertDeliveryTarget(env, {
       userId: workspaceUserId,
-      watchlistId: watchlist.id,
+      watchlistId: target.watchlistId ?? null,
       channel,
       targetValue,
       validationStatus: channel === "email" ? "validated" : "pending",
       isValidated: channel === "email",
       isOptedIn: true,
-      optInSource: "watchlist_settings",
+      optInSource: isDefaultTarget ? "delivery_settings" : "watchlist_settings",
       optedInAt: new Date().toISOString(),
       isPaused,
+      // Explicitly clear optedOutAt on resume so the in-product resume path
+      // undoes a prior /unsubscribe suppression for the default target.
+      // Unsubscribe suppresses broadly by user+address; resume is per-target.
       pausedAt: isPaused ? new Date().toISOString() : null,
+      optedOutAt: isPaused ? target.optedOutAt : null,
       templateEligible: channel === "email",
       metadata: {
-        scope: "watchlist",
+        scope: isDefaultTarget ? "workspace" : "watchlist",
       },
     });
 
@@ -931,7 +948,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   return {
     ok: false,
-    message: "Unknown watchlist action.",
+    message: "We couldn't complete that action. Refresh the page and try again.",
   };
 }
 
@@ -1012,6 +1029,24 @@ export default function WatchlistsRoute() {
   const canReport = canUsePlanFeature(data.plan, "client_reports");
   const canShare = canUsePlanFeature(data.plan, "share_links");
   const canRefresh = data.plan !== "free";
+  // Toolbar de-gauntlet: collapse every locked action into ONE upgrade nudge
+  // instead of stacking a separate "Upgrade for X" button beside each real
+  // action. Computed from the same capability flags, so paid tiers keep every
+  // real button and never see this.
+  const lockedToolbarCapabilities = [
+    !canReport ? "reports" : null,
+    !canExport ? "exports" : null,
+    !canShare ? "sharing" : null,
+    data.selectedWatchlist?.isActive && !canRefresh ? "fresh checks" : null,
+  ].filter((label): label is string => label !== null);
+  const lockedToolbarUpgradeLabel =
+    lockedToolbarCapabilities.length === 0
+      ? null
+      : lockedToolbarCapabilities.length === 1
+        ? `Upgrade to unlock ${lockedToolbarCapabilities[0]}`
+        : `Upgrade to unlock ${lockedToolbarCapabilities
+            .slice(0, -1)
+            .join(", ")} & ${lockedToolbarCapabilities[lockedToolbarCapabilities.length - 1]}`;
   const canManageWorkspaceDelivery = data.canManageDelivery ?? true;
   // Full delivery config (extra targets, channels) stays paid-only; free
   // owners still manage their weekly digest email settings below.
@@ -1061,6 +1096,7 @@ export default function WatchlistsRoute() {
     <DashboardPage>
       <section className="f9-app-stack">
         <DashboardPageHeader
+          kicker="Monitoring"
           lead="Monitor competitor ads over time and get alerted when messaging, creative, or landing pages change."
           title="Competitors"
         />
@@ -1166,7 +1202,11 @@ export default function WatchlistsRoute() {
               );
             })}
             {data.watchlists.length === 0 ? (
-              <EmptyState title="No competitors yet" variant="inline" />
+              <EmptyState
+                description="Add one to start your first scan."
+                title="No competitors yet"
+                variant="inline"
+              />
             ) : null}
           </div>
         </article>
@@ -1203,11 +1243,7 @@ export default function WatchlistsRoute() {
                     >
                       Open report
                     </Link>
-                  ) : (
-                    <Link className="f9-secondary-button" to="/app/billing?source=watchlists#plans">
-                      Upgrade for reports
-                    </Link>
-                  )}
+                  ) : null}
                   {canExport ? (
                     <>
                       <a
@@ -1223,11 +1259,7 @@ export default function WatchlistsRoute() {
                         Export JSON
                       </a>
                     </>
-                  ) : (
-                    <Link className="f9-secondary-button" to="/app/billing?source=watchlists#plans">
-                      Upgrade for exports
-                    </Link>
-                  )}
+                  ) : null}
                   {canShare ? (
                     <Form method="post">
                       <input name="intent" type="hidden" value="share-watchlist" />
@@ -1236,11 +1268,7 @@ export default function WatchlistsRoute() {
                         Share summary
                       </SubmitButton>
                     </Form>
-                  ) : (
-                    <Link className="f9-secondary-button" to="/app/billing?source=watchlists#plans">
-                      Upgrade to share
-                    </Link>
-                  )}
+                  ) : null}
                   <pauseResumeFetcher.Form method="post">
                     <input
                       name="intent"
@@ -1274,9 +1302,10 @@ export default function WatchlistsRoute() {
                         Refresh now
                       </SubmitButton>
                     </Form>
-                  ) : data.selectedWatchlist.isActive ? (
-                    <Link className="f9-primary-button" to="/app/billing?source=watchlists#plans">
-                      Upgrade to refresh
+                  ) : null}
+                  {lockedToolbarUpgradeLabel ? (
+                    <Link className="f9-secondary-button" to="/app/billing?source=watchlists#plans">
+                      {lockedToolbarUpgradeLabel}
                     </Link>
                   ) : null}
                 </div>
@@ -1287,7 +1316,7 @@ export default function WatchlistsRoute() {
                   Search their ads live
                 </Link>
                 <Link className="f9-text-link" to={watchlistSavedAdsHref(data.selectedWatchlist)}>
-                  Saved ads from this competitor
+                  Saved ads from this {selectedTargetNoun}
                 </Link>
               </p>
 
@@ -1310,7 +1339,7 @@ export default function WatchlistsRoute() {
               {consecutiveFailedRuns >= 3 ? (
         <div aria-live="assertive" className="f9-message is-error" role="alert">
           <p>
-            We're having trouble checking this competitor — the last {consecutiveFailedRuns} checks
+            We're having trouble checking this {selectedTargetNoun} — the last {consecutiveFailedRuns} checks
             failed. We keep retrying every night; recent errors are listed under Recent checks. If
             this persists for a few days, email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and
             we'll dig in.

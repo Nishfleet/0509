@@ -201,7 +201,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     throw error;
   }
 
-  return { ok: false, message: "Unknown action." };
+  return { ok: false, message: "We couldn't complete that action. Refresh the page and try again." };
 }
 
 export default function PresenceIndexRoute() {
@@ -236,7 +236,7 @@ export default function PresenceIndexRoute() {
         {data.partialDataNotice ? <PartialDataNotice message={data.partialDataNotice} /> : null}
 
         <div className="f9-dashboard-grid">
-          <article className="f9-app-panel">
+          <article className="f9-app-panel" id="add-entity">
             <span className="f9-app-kicker">Add tracked entity</span>
             <h2>Start with a website</h2>
             <ActionFeedback data={actionData} intent={["create-entity", "add-source"]} />
@@ -306,7 +306,7 @@ export default function PresenceIndexRoute() {
           </div>
           {data.snapshot.entities.length === 0 ? (
             <EmptyState
-              action={{ label: "Add from search", to: "/search" }}
+              action={{ label: "Add your first entity above", to: "#add-entity" }}
               description="Add your brand or a competitor with a website source to start collecting proof-backed updates."
               title="No entities yet"
             />
@@ -351,7 +351,7 @@ export default function PresenceIndexRoute() {
           {data.snapshot.recentItems.length === 0 ? (
             <EmptyState
               description="Check a website source to fetch updates."
-              title="No presence items yet."
+              title="No presence items yet"
               variant="inline"
             />
           ) : (
@@ -380,7 +380,7 @@ export default function PresenceIndexRoute() {
 }
 
 export function HydrateFallback() {
-  return <DashboardRouteLoading title="presence" />;
+  return <DashboardRouteLoading title="Presence Desk" />;
 }
 
 export function ErrorBoundary({ error }: { error: unknown }) {

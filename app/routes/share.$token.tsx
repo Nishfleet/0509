@@ -6,6 +6,7 @@ import { AdLongevityPill } from "~/components/ad-longevity-pill";
 import { AdThumb } from "~/components/ad-thumb";
 import { BrandWordmark } from "~/components/brand-wordmark";
 import { LocalTime } from "~/components/local-time";
+import { MARKETING_TAGLINE } from "~/components/marketing-nav";
 import { Pill } from "~/components/pill";
 import { ReportView } from "~/components/report-view";
 import { ShareBrandIdentity } from "~/components/share-brand-identity";
@@ -192,7 +193,7 @@ export default function ShareRoute() {
             {hasAgencyIdentity && data.brandIdentity ? (
               <ShareBrandIdentity identity={data.brandIdentity} />
             ) : (
-              <BrandWordmark meta="Shared report" />
+              <BrandWordmark meta={MARKETING_TAGLINE} />
             )}
           </header>
         ) : (
@@ -201,7 +202,7 @@ export default function ShareRoute() {
               <ShareBrandIdentity identity={data.brandIdentity} />
             ) : (
               <Link className="f9-app-brand" to="/">
-                <BrandWordmark meta="Shared evidence" />
+                <BrandWordmark meta={MARKETING_TAGLINE} />
               </Link>
             )}
           </div>
@@ -351,6 +352,46 @@ export default function ShareRoute() {
             </p>
           </footer>
         )}
+      </div>
+    </main>
+  );
+}
+
+// Terminal share states (missing, expired, revoked) throw a 404 in the loader.
+// Anonymous agency clients must not land on the workspace root boundary, so we
+// render a branded public-system state here. One message covers every terminal
+// state on purpose — the viewer never learns which token existed.
+export function ErrorBoundary({ error }: { error: unknown }) {
+  const status = (error as any)?.status ?? (error as any)?.statusCode;
+  const isGenuine404 = status === 404; // loader throws 404 Responses for terminal states (missing/expired/revoked); other errors (db/render/outages) surface with status undefined or other and must not be treated as 404
+  const title = isGenuine404 ? "This share link isn't available" : "Temporary error";
+  const copy = isGenuine404
+    ? "The link may have expired or been switched off by whoever shared it. Ask them for a fresh link."
+    : "An unexpected error occurred while loading this share. Try refreshing the page or contact support.";
+
+  return (
+    <main className="f9-share-page">
+      <div className="f9-container">
+        <div className="f9-share-header">
+          <Link className="f9-app-brand" to="/">
+            <BrandWordmark meta={MARKETING_TAGLINE} />
+          </Link>
+        </div>
+        <article className="f9-app-panel">
+          <p className="f9-app-kicker">Shared report</p>
+          <h1>{title}</h1>
+          <p className="f9-muted-copy">
+            {copy}
+          </p>
+          <p>
+            <Link to="/">See what Five to Nine does</Link>
+          </p>
+        </article>
+        <footer className="f9-share-footer">
+          <p className="f9-share-powered-by">
+            Powered by <Link to="/">Five to Nine</Link>
+          </p>
+        </footer>
       </div>
     </main>
   );

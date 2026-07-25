@@ -138,7 +138,7 @@ describe("search collection integrity", () => {
     expect(result).toEqual({
       ok: false,
       error: "plan_limit_exceeded",
-      message: "Saving ads to a collection starts on Scout.",
+      message: "Upgrade to Scout to save ads and build your workspace memory.",
       upgradePath: "/app/billing?source=search#plans",
     });
     expect(addAdToCollection).not.toHaveBeenCalled();

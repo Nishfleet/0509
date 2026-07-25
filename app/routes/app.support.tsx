@@ -89,7 +89,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const intent = String(formData.get("intent") ?? "");
 
   if (intent !== "create-support-case") {
-    return { ok: false, message: "Unknown support action." };
+    return { ok: false, message: "We couldn't complete that action. Refresh the page and try again." };
   }
 
   let input;
@@ -147,7 +147,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (!supportCase) {
-    return { ok: false, message: "Support case could not be opened." };
+    return {
+      ok: false,
+      message: `We couldn't open a support case just now. Try again, or email ${SUPPORT_EMAIL} directly.`,
+    };
   }
 
   const operatorNotification = await notifySupportCaseOperator(env, {

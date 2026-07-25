@@ -40,7 +40,14 @@ export function armedConfirmClassName(variant: "danger" | "light") {
  * label to `confirmLabel` with danger styling); the second activation lets the
  * real form submission proceed, so the submitter's name/value semantics and
  * SubmitButton's pending matching keep working. Blur, Escape, or a timeout
- * disarms. Without JavaScript this degrades to a plain submit.
+ * disarms. Without JavaScript this degrades to a plain single-click submit.
+ *
+ * Accepted degradation (W2-C, 2026-07-25): the no-JS path loses only the
+ * confirm affordance, not the action. A disabled-until-hydration guard was
+ * considered and rejected — it would remove the destructive action entirely for
+ * no-JS users, which is worse than losing the confirm step. The confirm is a
+ * progressive enhancement; every destructive action remains server-guarded
+ * (auth, ownership, and stale-write checks) regardless of this button.
  */
 export function ConfirmSubmitButton({
 	children,

@@ -33,7 +33,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { listActiveShareLinks } = await import("~/lib/data.server");
   const { appOrigin } = await import("~/lib/env.server");
   const env = getEnv(context);
-  const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
+  const { workspaceUserId } = await requireWorkspaceSession(env, request);
   const origin = appOrigin(env, request);
   const shares = await listActiveShareLinks(env, workspaceUserId);
 
@@ -71,7 +71,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { getEnv } = await import("~/lib/context.server");
   const { revokeShareLink } = await import("~/lib/data.server");
   const env = getEnv(context);
-  const { session, workspaceUserId } = await requireWorkspaceSession(env, request);
+  const { workspaceUserId } = await requireWorkspaceSession(env, request);
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
 
@@ -81,10 +81,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     return revoked
 			? { ok: true, intent, shareLinkId, message: "Share link revoked. The URL stops working immediately." }
-			: { ok: false, intent, shareLinkId, message: "Share link not found — it may already be revoked." };
+			: { ok: false, intent, shareLinkId, message: "We couldn't find that share link — it may already be revoked. Refresh the page and try again." };
   }
 
-  return { ok: false, message: "Unknown share action." };
+  return { ok: false, message: "We couldn't complete that action. Refresh the page and try again." };
 }
 
 export default function SharesRoute() {
@@ -95,6 +95,7 @@ export default function SharesRoute() {
     <DashboardPage>
       <section className="f9-app-stack">
         <DashboardPageHeader
+          kicker="Access"
           lead="Review and revoke snapshot or live-view links shared with clients or teammates."
           title="Shared links"
         />

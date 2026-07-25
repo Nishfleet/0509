@@ -161,7 +161,7 @@ describe("deliverWeeklyDigest", () => {
     expect(emailSendPayload(sendMock)).toMatchObject({
 from:{email:"alerts@0509.io",name:"Five to Nine"},
       to: "owner@example.com",
-      subject: "1 competitor move worth seeing: boAt watch",
+      subject: "boAt watch made a competitor move worth seeing",
       html: expect.stringContaining("Five to Nine weekly digest"),
       text: expect.stringContaining("Top moves:"),
       headers: expect.objectContaining({
@@ -193,7 +193,7 @@ from:{email:"alerts@0509.io",name:"Five to Nine"},
         status: "pending",
         sentAt: null,
         payloadSnapshot: expect.objectContaining({
-          subject: "1 competitor move worth seeing: boAt watch",
+          subject: "boAt watch made a competitor move worth seeing",
         }),
       }),
     );

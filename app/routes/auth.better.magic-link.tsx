@@ -64,6 +64,18 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       headers.set("Cache-Control", "no-store");
       appendSetCookies(headers, clearBetterAuthMagicLinkConfirmationCookies(request));
       appendSetCookies(headers, clearBetterAuthMagicLinkStateCookies(request));
+      // Double-open: already signed in. Mirror the POST action's
+      // session-present path (better-auth-magic-link-sign-in.server.ts) and
+      // honor the ticket's stored callbackURL instead of dropping it for a
+      // hardcoded /app. The callbackURL is same-origin-validated when the
+      // ticket is read (parseSameOriginUrl), so no hand-rolled check is needed;
+      // fall back to the mode default when no ticket is readable.
+      const verification = await readBetterAuthMagicLinkVerificationTicket(env, request).catch(
+        () => null,
+      );
+      if (verification?.callbackURL) {
+        throw redirect(verification.callbackURL, { headers });
+      }
       throw redirect(mode === "signup" ? "/app/onboard" : "/app", { headers });
     }
 

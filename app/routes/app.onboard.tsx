@@ -14,7 +14,7 @@ import {
 import {
   normalizeSavedQuery,
 } from "~/lib/normalize";
-import { defaultCountryForVisitor } from "~/lib/countries";
+import { ALL_COUNTRIES_VALUE, defaultCountryForVisitor, isoFromCountryName } from "~/lib/countries";
 import {
   buildCompetitorImportPreview,
   COMPETITOR_IMPORT_MAX_BYTES,
@@ -50,6 +50,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const resumeSetup = url.searchParams.get("resume") === "1";
   const prefillWebsite = url.searchParams.get("website")?.trim() ?? "";
+  // Carried from the search handoff (D11). Echoed into the create-watchlist
+  // form and re-validated in the action before it can touch the scan country.
+  const prefillCountry = url.searchParams.get("country")?.trim() ?? "";
 
   if (isMember) {
     const { completeUserOnboarding } = await import("~/lib/data.server");
@@ -73,6 +76,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     watchlistLimit,
     brandWebsite: branding.brandWebsite,
     prefillWebsite,
+    prefillCountry,
     resumeSetup,
     visitorCountry: defaultCountryForVisitor(
       (context.cloudflare as { country?: string | null } | undefined)?.country ??
@@ -354,9 +358,20 @@ export async function action({ context, request }: ActionFunctionArgs) {
       (context.cloudflare as { country?: string | null } | undefined)?.country ??
         request.headers.get("cf-ipcountry"),
     );
+    // D11: honor the country the visitor had selected in search when they were
+    // handed off to onboarding. Only a recognized, specific country overrides
+    // the geo default — an unknown value or "all" falls back to geo so we never
+    // persist a nonsense scan country.
+    const requestedCountry = String(formData.get("country") ?? "").trim();
+    const country =
+      requestedCountry &&
+      requestedCountry.toLowerCase() !== ALL_COUNTRIES_VALUE &&
+      isoFromCountryName(requestedCountry)
+        ? requestedCountry
+        : visitorCountry;
     const normalizedQuery = normalizeSavedQuery("advertiser", {
       query,
-      country: visitorCountry,
+      country,
     });
     const targetFingerprint = watchlistFingerprint(normalizedQuery, competitorWebsite);
     const targetLabel = competitorWebsite.displayName ?? competitorWebsite.searchTerm ?? query;
@@ -413,7 +428,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   return {
     ok: false,
-    message: "Unknown onboarding action.",
+    message: "We couldn't complete that action. Refresh the page and try again.",
   };
 }
 
@@ -629,6 +644,7 @@ export default function AppOnboardRoute() {
             <>
               <Form className="f9-auth-form f9-onboard-single-form" method="post">
                 <input name="intent" type="hidden" value="create-watchlist" />
+                <input name="country" type="hidden" value={data.prefillCountry} />
                 <label className="f9-field">
                   <span>Competitor website</span>
                   <input
@@ -728,7 +744,7 @@ export default function AppOnboardRoute() {
                   className="f9-secondary-button"
                   intent="preview-market-desk-import"
                   name="intent"
-                  pendingLabel="Checking..."
+                  pendingLabel="Checking…"
                   value="preview-market-desk-import"
                 >
                   Preview import
@@ -739,7 +755,7 @@ export default function AppOnboardRoute() {
                     disabled={importPreview.selectedCount === 0}
                     intent="create-market-desk-import"
                     name="intent"
-                    pendingLabel="Creating..."
+                    pendingLabel="Creating…"
                     value="create-market-desk-import"
                   >
 										{importPreview.selectedCount === 1

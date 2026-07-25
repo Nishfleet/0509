@@ -3265,6 +3265,7 @@ one signal-green accent.
 .ld-brand { color: inherit; }
 
 .f9-home .ld-nav a,
+.f9-legal-page .ld-nav a,
 .f9-home .ld-proof-actions a,
 .f9-home .ld-bundle-card > a,
 .f9-home .ld-footer a {
@@ -3282,8 +3283,10 @@ one signal-green accent.
   font-weight: 500;
 }
 
-.f9-home .ld-nav-links a { color: var(--ld-ink-soft); }
-.f9-home .ld-nav-links a:hover { color: var(--ld-ink); }
+.f9-home .ld-nav-links a,
+.f9-legal-page .ld-nav-links a { color: var(--ld-ink-soft); }
+.f9-home .ld-nav-links a:hover,
+.f9-legal-page .ld-nav-links a:hover { color: var(--ld-ink); }
 
 .ld-nav-actions {
   display: flex;
@@ -3292,7 +3295,8 @@ one signal-green accent.
   font-size: 0.92rem;
 }
 
-.f9-home .ld-nav-pill {
+.f9-home .ld-nav-pill,
+.f9-legal-page .ld-nav-pill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3306,7 +3310,8 @@ one signal-green accent.
   touch-action: manipulation;
 }
 
-.f9-home .ld-nav-pill:hover { background: #2a2820; }
+.f9-home .ld-nav-pill:hover,
+.f9-legal-page .ld-nav-pill:hover { background: #2a2820; }
 
 .ld-hero {
   padding: clamp(18px, 3vw, 34px) clamp(20px, 4vw, 48px) 0;
@@ -3358,10 +3363,10 @@ one signal-green accent.
 
 .ld-wall {
   font-family: var(--ld-display);
-  font-weight: 700;
-  font-size: clamp(2.7rem, 8.4vw, 7.4rem);
+  font-weight: 800;
+  font-size: clamp(2.75rem, 8.4vw, 7.625rem);
   line-height: 0.95;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.045em;
   text-transform: uppercase;
   margin: 0;
 }
@@ -3981,6 +3986,23 @@ one signal-green accent.
   font-weight: 600;
 }
 
+/* WP-A4: a neutral status note (e.g. Agency "Account review") — NOT a
+   recommendation. Outline pill, no ink fill and no green, so it can never be
+   read as the recommended pick or as a live-state fact. */
+.f9-home .f9-plan-note {
+  font-style: normal;
+  font-family: var(--ld-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: transparent;
+  color: var(--ld-ink-soft);
+  border: 1.5px solid var(--ld-line);
+  padding: 3px 9px;
+  align-self: flex-start;
+  font-weight: 600;
+}
+
 .f9-home .f9-commerce-card h3 {
   font-family: var(--ld-display);
   font-weight: 700;
@@ -4567,14 +4589,17 @@ one signal-green accent.
 
 /* ============================================================
    Public funnel reskin — "Caught in the act" system extended to
-   /search, /auth/*, legal, error pages (2026-06-12).
+   /search, /auth/*, legal, error, and shared-report pages.
+   /share/:token joined the reskin 2026-07-25 (WP W2-A) so an external
+   client's first brand touch renders bone/ink like the rest of the funnel.
    Landing brief: docs/design/landing-caught-brief.md
    ============================================================ */
 
 .f9-auth-page,
 .f9-search-page,
 .f9-legal-page,
-.f9-error-page {
+.f9-error-page,
+.f9-share-page {
   --ld-bone: #f4f1e8;
   --ld-card: #fffdf6;
   --ld-ink: #0e0d0a;
@@ -4594,16 +4619,35 @@ one signal-green accent.
 .f9-auth-page .f9-wordmark,
 .f9-search-page .f9-wordmark,
 .f9-legal-page .f9-wordmark,
-.f9-error-page .f9-wordmark {
+.f9-error-page .f9-wordmark,
+.f9-share-page .f9-wordmark {
   color: var(--ld-ink);
   font-family: var(--ld-display);
   text-shadow: none;
 }
 
+/* Smallest coherent palette fix per Codex decision review (post public reskin block ~4596):
+   Override the search-specific tokens (defined at .f9-search-page:866 with workspace navy)
+   to use the public "Caught in the act" ld- / bone-ink system precisely when
+   .f9-dash-page-public (from isPublic DashboardShell) is also present.
+   This is the minimal change to address hybrid design system for /search public.
+   Border weight parity and full runtime visual confirmation (browser) remain limitations.
+*/
+.f9-search-page.f9-dash-page-public {
+  --f9-search-ink: var(--ld-ink);
+  --f9-search-muted: var(--ld-ink-soft);
+  --f9-search-soft: var(--ld-ink-faint);
+  --f9-search-line: var(--ld-line);
+  background: var(--ld-bone);
+  color: var(--ld-ink);
+  font-family: var(--f9-font);
+}
+
 .f9-auth-page .f9-wordmark-bridge,
 .f9-search-page .f9-wordmark-bridge,
 .f9-legal-page .f9-wordmark-bridge,
-.f9-error-page .f9-wordmark-bridge {
+.f9-error-page .f9-wordmark-bridge,
+.f9-share-page .f9-wordmark-bridge {
   background: var(--ld-ink);
   border-color: var(--ld-ink);
   color: var(--ld-bone);
@@ -4614,7 +4658,8 @@ one signal-green accent.
 .f9-search-page h1,
 .f9-search-page h2,
 .f9-legal-page h1,
-.f9-error-page h1 {
+.f9-error-page h1,
+.f9-share-page h1 {
   font-family: var(--ld-display);
   font-weight: 700;
   text-transform: uppercase;
@@ -4624,7 +4669,8 @@ one signal-green accent.
 }
 
 .f9-auth-page .f9-auth-story > div > span,
-.f9-legal-page .f9-app-kicker {
+.f9-legal-page .f9-app-kicker,
+.f9-share-page .f9-app-kicker {
   font-family: var(--ld-mono);
   font-size: 0.72rem;
   letter-spacing: 0.16em;
@@ -4649,7 +4695,7 @@ one signal-green accent.
 .f9-auth-page .f9-auth-card {
   background: var(--ld-card);
   border: 2.5px solid var(--ld-ink);
-  border-radius: 16px;
+  border-radius: 0;
   box-shadow: none;
   color: var(--ld-ink);
 }
@@ -4666,7 +4712,7 @@ one signal-green accent.
 .f9-search-page .f9-field select {
   background: var(--ld-bone);
   border: 1.5px solid var(--ld-line);
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--ld-ink);
   font-family: var(--ld-mono);
 }
@@ -4691,11 +4737,12 @@ one signal-green accent.
 .f9-auth-page .f9-primary-button,
 .f9-search-page .f9-primary-button,
 .f9-legal-page .f9-primary-button,
-.f9-error-page .f9-primary-button {
+.f9-error-page .f9-primary-button,
+.f9-share-page .f9-primary-button {
   background: var(--ld-ink);
   color: var(--ld-bone);
   border: 0;
-  border-radius: 10px;
+  border-radius: 8px;
   font-weight: 700;
   box-shadow: none;
 }
@@ -4725,11 +4772,12 @@ one signal-green accent.
 
 .f9-search-page .f9-secondary-button,
 .f9-legal-page .f9-secondary-button,
-.f9-error-page .f9-secondary-button {
+.f9-error-page .f9-secondary-button,
+.f9-share-page .f9-secondary-button {
   background: transparent;
   color: var(--ld-ink);
   border: 1.5px solid var(--ld-ink);
-  border-radius: 10px;
+  border-radius: 8px;
   box-shadow: none;
 }
 
@@ -4805,6 +4853,89 @@ one signal-green accent.
 .f9-legal-page a,
 .f9-error-page a { color: var(--ld-green-ink); }
 
+/* Shared-report surfaces (/share/:token) — case-file cards on bone, so the
+   external client sees the same brand as the rest of the public funnel. */
+.f9-share-page .f9-app-panel,
+.f9-share-page .f9-report-page {
+  background: var(--ld-card);
+  border: 2px solid var(--ld-ink);
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--ld-ink);
+}
+
+.f9-share-page .f9-event-card,
+.f9-share-page .f9-work-row {
+  background: var(--ld-card);
+  border: 1.5px solid var(--ld-line);
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--ld-ink);
+}
+
+.f9-share-page .f9-app-kicker {
+  display: inline-block;
+  width: fit-content;
+}
+
+.f9-share-page .f9-panel-toolbar-heading,
+.f9-share-page .f9-app-panel strong {
+  color: var(--ld-ink);
+}
+
+.f9-share-page .f9-muted-copy,
+.f9-share-page .f9-app-panel p {
+  color: var(--ld-ink-soft);
+}
+
+.f9-share-page .f9-share-header,
+.f9-share-page .f9-share-footer {
+  border-color: var(--ld-line);
+}
+
+.f9-share-page .f9-share-header .f9-wordmark,
+.f9-share-page .f9-share-brand-copy strong {
+  color: var(--ld-ink);
+}
+
+.f9-share-page .f9-share-footer,
+.f9-share-page .f9-share-powered-by {
+  color: var(--ld-ink-soft);
+}
+
+.f9-share-page a,
+.f9-share-page .f9-share-footer a,
+.f9-share-page .f9-share-powered-by a {
+  color: var(--ld-green-ink);
+}
+
+/* Report content (ReportView `.report-*`) uses the legacy `--f9-search-*`
+   blue-white palette. Scope the case-file palette + flat cards to /share only
+   so the shared report reads bone/ink end-to-end while the SAME ReportView in
+   the workspace report preview is untouched. */
+.f9-share-page {
+  --f9-search-ink: var(--ld-ink);
+  --f9-search-muted: var(--ld-ink-soft);
+  --f9-search-soft: var(--ld-ink-faint);
+  --f9-search-line: var(--ld-line);
+}
+
+.f9-share-page :is(
+  .report-stat-card,
+  .report-signal-card,
+  .report-card,
+  .report-event,
+  .report-note,
+  .report-column,
+  .report-analysis,
+  .report-preview
+) {
+  background: var(--ld-card);
+  border-color: var(--ld-ink);
+  border-radius: 0;
+  box-shadow: none;
+}
+
 .f9-doc-footer {
   padding: 0 24px 48px;
 }
@@ -4860,7 +4991,10 @@ one signal-green accent.
 
 .f9-search-page .f9-discovery-banner > span,
 .f9-search-page .f9-panel-head > span,
-.f9-search-page .f9-results-panel .f9-panel-head span {
+.f9-search-page .f9-results-panel .f9-panel-head span,
+.f9-search-page .f9-result-card span,
+.f9-search-page .f9-proof-block > span,
+.f9-search-page .f9-side-note span {
   font-family: var(--ld-mono);
   font-size: 0.7rem;
   letter-spacing: 0.14em;
@@ -6015,7 +6149,10 @@ one signal-green accent.
 }
 
 .ld-hero-grid .ld-wall {
-  font-size: clamp(2.7rem, 6.6vw, 5.9rem);
+  /* Brief target: the hero type-wall reaches ~122px (7.625rem) on wide
+     viewports (~1627px+, where the 1.25fr column is wide enough to hold it
+     without breaking the grid), and floors at 44px (2.75rem) on mobile. */
+  font-size: clamp(2.75rem, 7.5vw, 7.625rem);
 }
 
 .ld-deck-copy {
@@ -6464,7 +6601,12 @@ one signal-green accent.
 }
 
 .f9-search-page .f9-search-grid {
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.f9-search-page .f9-proof-detail {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .f9-search-page .f9-proof-detail:has(> .f9-empty-state) {
@@ -6836,6 +6978,11 @@ one signal-green accent.
   .f9-search-page .f9-search-command .f9-primary-button {
     justify-content: center;
     width: 100%;
+  }
+
+  .f9-search-page .f9-side-note .f9-primary-button {
+    text-align: center;
+    white-space: normal;
   }
 
   .f9-search-page .f9-search-signup-cta {

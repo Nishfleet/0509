@@ -54,6 +54,13 @@ SaaS gradients.
 a daily-use tool wants calm restraint, not a poster. The wordmark and green
 accent are the bridge between the two.
 
+**Shared/external report views** (`/share/:token`, including the PDF variant)
+render in the **public "Caught in the act" system**, not the workspace one
+(added to the reskin 2026-07-25, WP W2-A). A shared report is an external
+client's first brand touch — often before they ever sign in — so it must read
+as the same bone/ink case-file brand as the landing page and search, never as
+a stray logged-out workspace screen.
+
 ### Workspace header-action rule (since 2026-07-21, WP-A3)
 
 The `DashboardPageHeader` top-right `action` slot is reserved for the page's

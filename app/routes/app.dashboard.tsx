@@ -4,7 +4,6 @@ import {
   redirect,
   useActionData,
   useLoaderData,
-  useRevalidator,
 } from "react-router";
 import { useEffect, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
@@ -163,8 +162,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const env = getEnv(context);
   const { workspaceUserId, isMember, ownerName } =
     await requireWorkspaceSession(env, request);
-  const checkoutReturn =
-    new URL(request.url).searchParams.get("checkout") === "dodo";
   const { listWorkspaceMembers } = await import("~/lib/workspace.server");
   const sectionWarnings: Array<{ section: string; message: string }> = [];
   const optionalSection = async <T,>(
@@ -331,7 +328,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     ),
     workspaceDeliveryTimezone: workspaceDeliveryConfig?.timezone ?? null,
     hasPaymentIssue,
-    checkoutReturn,
     sectionWarnings,
   };
 }
@@ -360,7 +356,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       return {
         ok: false,
         intent,
-        message: "Saved query not found.",
+        message: "We couldn't find that saved search. Refresh the page and try again.",
       };
     }
 
@@ -378,7 +374,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       return {
         ok: false,
         intent,
-        message: "Saved query not found.",
+        message: "We couldn't find that saved search. Refresh the page and try again.",
       };
     }
 
@@ -419,7 +415,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           message:
             result.limit <= 1
               ? "Free includes 1 watchlist with a weekly check and weekly email brief. Upgrade for 3–6 hour checks and more competitors."
-              : "You've reached your competitor tracking limit.",
+              : "You've reached your competitor tracking limit — pause another watchlist first.",
         }),
         intent,
       };
@@ -478,7 +474,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   return {
     ok: false,
-    message: "Unknown dashboard action.",
+    message: "We couldn't complete that action. Refresh the page and try again.",
   };
 }
 
@@ -502,7 +498,6 @@ export default function AppDashboardRoute() {
     data.nextScanLabel ??
     formatNextScanLabel(plan, new Date(), data.workspaceDeliveryTimezone);
   const hasPaymentIssue = Boolean(data.hasPaymentIssue);
-  const checkoutReturn = Boolean(data.checkoutReturn);
   const competitorCount = watchlists.length;
   const activeWatchlists = watchlists.filter(
     (watchlist) => watchlist.isActive,
@@ -597,7 +592,6 @@ export default function AppDashboardRoute() {
           </article>
         ) : null}
 
-        {checkoutReturn ? <CheckoutReturnBanner plan={plan} /> : null}
         {hasPaymentIssue ? (
           <article className="f9-checkout-banner is-pending" aria-live="polite">
             <div>
@@ -931,7 +925,7 @@ export default function AppDashboardRoute() {
                 <h2>Responses waiting on you</h2>
               </div>
               <Link className="f9-secondary-button" to="/app/watchlists">
-                Review changes
+                Open competitors
               </Link>
             </div>
             <div className="f9-work-list is-compact">
@@ -1047,7 +1041,7 @@ export default function AppDashboardRoute() {
                 <h2>What changed</h2>
               </div>
               <Link className="f9-secondary-button" to="/app/watchlists">
-                Manage tracking
+                Open competitors
               </Link>
             </div>
 
@@ -1102,7 +1096,7 @@ export default function AppDashboardRoute() {
                   </p>
                 </div>
                 <Link className="f9-secondary-button" to="/app/watchlists">
-                  Open watchlists
+                  Open competitors
                 </Link>
               </div>
               <div className="f9-work-list is-compact">
@@ -1391,91 +1385,6 @@ function formatFollowUpChannel(value: string | null) {
     default:
       return "In app";
   }
-}
-
-const CHECKOUT_ACTIVATION_POLL_LIMIT = 10;
-
-function CheckoutReturnBanner(props: { plan: string }) {
-  const revalidator = useRevalidator();
-  const planActive = props.plan !== "free";
-  const [pollCount, setPollCount] = useState(0);
-
-  useEffect(() => {
-    if (planActive || pollCount >= CHECKOUT_ACTIVATION_POLL_LIMIT) {
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      setPollCount((count) => count + 1);
-      revalidator.revalidate();
-    }, 3000);
-    return () => clearTimeout(timer);
-  }, [planActive, pollCount, revalidator]);
-
-  if (planActive) {
-    const planLabel = props.plan.charAt(0).toUpperCase() + props.plan.slice(1);
-    return (
-      <article className="f9-checkout-banner is-active" aria-live="polite">
-        <div>
-          <span className="f9-app-kicker">Payment received</span>
-          <h2>Your {planLabel} plan is live.</h2>
-          <p>
-            Monitoring, digests, and saved evidence are unlocked. Add your next
-            competitor while the trail is warm.
-          </p>
-        </div>
-        <div className="f9-checkout-banner-actions">
-          <Link className="f9-primary-button" to="/search">
-            Add a competitor
-          </Link>
-          <Link className="f9-secondary-button" to="/app">
-            Dismiss
-          </Link>
-        </div>
-      </article>
-    );
-  }
-
-  if (pollCount >= CHECKOUT_ACTIVATION_POLL_LIMIT) {
-    return (
-      <article className="f9-checkout-banner is-pending" aria-live="polite">
-        <div>
-          <span className="f9-app-kicker">Finishing checkout</span>
-          <h2>Activation is taking longer than usual.</h2>
-          <p>
-            Your payment went through and the plan will activate as soon as Dodo
-            confirms it. If this page still shows the free plan in a few
-            minutes, email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and
-            we'll sort it out.
-          </p>
-        </div>
-        <div className="f9-checkout-banner-actions">
-          <Link
-            className="f9-secondary-button"
-            to="/app/billing?checkout=dodo&kind=plan"
-          >
-            Check again
-          </Link>
-        </div>
-      </article>
-    );
-  }
-
-  return (
-    <article className="f9-checkout-banner is-pending" aria-live="polite">
-      <div>
-        <span className="f9-app-kicker">Finishing checkout</span>
-        <h2>
-          <span className="f9-checkout-pulse" aria-hidden="true" />
-          Activating your plan…
-        </h2>
-        <p>
-          Dodo is confirming the payment. This usually takes under a minute — no
-          need to refresh.
-        </p>
-      </div>
-    </article>
-  );
 }
 
 // Viewer-local greeting: SSR renders a neutral fallback, the browser swaps in

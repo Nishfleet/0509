@@ -30,7 +30,7 @@ export function DashboardPageHeader({ kicker, title, lead, action }: DashboardPa
         {lead ? <p className="f9-muted-copy">{lead}</p> : null}
       </div>
       {action ? (
-        <Link className="f9-secondary-button" to={action.to}>
+        <Link className="f9-primary-button" to={action.to}>
           {action.label}
         </Link>
       ) : null}

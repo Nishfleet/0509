@@ -20,11 +20,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AdLongevityPill } from "~/components/ad-longevity-pill";
 import { AdThumb } from "~/components/ad-thumb";
-import {
-  DashboardRouteError,
-  DashboardRouteLoading,
-} from "~/components/dashboard-route-loading";
 import { DashboardShell } from "~/components/dashboard-shell";
+import {
+  PublicSearchError,
+  PublicSearchLoading,
+} from "~/components/public-route-state";
 import { SearchResultCard } from "~/components/search/result-card";
 import { SearchAnswerPanel } from "~/components/search-answer-panel";
 import { SubmitButton } from "~/components/submit-button";
@@ -49,17 +49,13 @@ import {
   ALL_COUNTRIES_VALUE,
   SUPPORTED_COUNTRIES,
 } from "~/lib/countries";
-import {
-  formatAdsFoundLabel,
-  formatOfferDisplay,
-} from "~/lib/analysis-display";
+import { formatOfferDisplay } from "~/lib/analysis-display";
 import {
   formatAdvertiserLabel,
   formatCaptureMethodLabel,
   formatLandingPageFormValue,
   formatLandingPageSignalValue,
 } from "~/lib/landing-page-display";
-import { customerDiscoverySummary } from "~/lib/discovery-customer-copy";
 import { buildSearchAnswer, type SearchStealSummary } from "~/lib/search-answer";
 import {
   isTypingContext,
@@ -103,12 +99,7 @@ import {
 import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
 import { normalizeWatchlistTrackingRole } from "~/lib/watchlist-role";
 import type { RootLoaderData } from "~/root";
-import type {
-  AdRecord,
-  SearchFilters,
-  SearchResponse,
-  WatchlistTrackingRole,
-} from "~/lib/types";
+import type { SearchFilters, WatchlistTrackingRole } from "~/lib/types";
 
 // Re-exported so existing test imports from "~/routes/search" keep working
 // after the pure helpers moved to "~/lib/search-display".
@@ -779,10 +770,8 @@ export async function action({ context, request }: ActionFunctionArgs) {
       };
     }
 
-    // Server-side plan gate: saving to a collection starts on Scout. This
-    // must not trust the client (the free-plan UI hides the form, but the
-    // POST is reachable directly) and must fail CLOSED — if the plan lookup
-    // itself fails we return an honest retryable error, never allow.
+    // Server-side plan gate. Fail CLOSED for free plan. Message follows DESIGN voice:
+    // verbs, specific benefit, upgrade-oriented, no system-speak. (free UI hides form but POST reachable.)
     let savePlan: "free" | "scout" | "starter" | "agency";
     try {
       const { getUserPlan } = await import("~/lib/plan.server");
@@ -798,7 +787,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       return {
         ok: false,
         error: "plan_limit_exceeded" as const,
-        message: "Saving ads to a collection starts on Scout.",
+        message: "Upgrade to Scout to save ads and build your workspace memory.",
         upgradePath: "/app/billing?source=search#plans",
       };
     }
@@ -834,7 +823,10 @@ export async function action({ context, request }: ActionFunctionArgs) {
     };
   }
 
-  return { ok: false, message: "Unknown search action." };
+  return {
+    ok: false,
+    message: "We couldn't complete that action. Refresh the page and try again.",
+  };
 }
 
 export default function SearchRoute() {
@@ -957,9 +949,20 @@ export default function SearchRoute() {
     competitorWebsite.raw,
     trackingRole,
   );
-  const postSignupPath = competitorWebsite.raw
-    ? `/app/onboard?website=${encodeURIComponent(competitorWebsite.raw)}`
-    : `/search?${currentSearchParams.toString()}`;
+  // D3: route every new signup through onboarding — keyword-only searchers get
+  // the same guided first step as website-first ones, instead of being dropped
+  // back on /search. D11: carry the website (when present) and the selected
+  // country so onboarding starts from what they were already looking at rather
+  // than re-deriving everything from geo.
+  const onboardParams = new URLSearchParams();
+  if (competitorWebsite.raw) {
+    onboardParams.set("website", competitorWebsite.raw);
+  }
+  if (data.filters.country) {
+    onboardParams.set("country", data.filters.country);
+  }
+  const onboardQuery = onboardParams.toString();
+  const postSignupPath = onboardQuery ? `/app/onboard?${onboardQuery}` : "/app/onboard";
   const signupTrackingPath = `/auth/signup?redirectTo=${encodeURIComponent(postSignupPath)}`;
   const inferredWatchlistName =
     (competitorWebsite.displayName ?? data.filters.query) || "Competitor";
@@ -1910,7 +1913,7 @@ export default function SearchRoute() {
 
                       {data.session && data.plan === "free" ? (
                         <div className="f9-side-note">
-                          <p>Saving ads to a collection starts on Scout.</p>
+                          <p>Upgrade to Scout to save ads and build your workspace memory.</p>
                           <Link
                             className="f9-primary-button"
                             to="/app/billing?source=search#plans"
@@ -1969,8 +1972,7 @@ export default function SearchRoute() {
                       ) : data.session ? (
                         <div className="f9-side-note">
                           <p>
-                            Create a collection first, then save ads from
-                            search.
+                            Create a collection to save this ad with your notes and tags.
                           </p>
                           <Link
                             className="f9-secondary-button"
@@ -2074,9 +2076,9 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 }
 
 export function HydrateFallback() {
-  return <DashboardRouteLoading title="search" />;
+  return <PublicSearchLoading />;
 }
 
 export function ErrorBoundary({ error }: { error: unknown }) {
-  return <DashboardRouteError error={error} />;
+  return <PublicSearchError error={error} />;
 }

@@ -269,7 +269,7 @@ export async function action({ context, params, request }: ActionFunctionArgs) {
 
   return {
     ok: false,
-    message: "Unknown report action.",
+    message: "We couldn't complete that action. Refresh the page and try again.",
   };
 }
 
@@ -514,6 +514,8 @@ export default function ReportsRoute() {
     report.resourceType === "collection"
       ? `/app/collections?collection=${report.resourceId}`
       : `/app/watchlists?watchlist=${report.resourceId}`;
+  const backLabel =
+    report.resourceType === "collection" ? "Back to collection" : "Back to competitor";
 
   return (
     <DashboardPage>
@@ -573,7 +575,7 @@ export default function ReportsRoute() {
 
             <div className="f9-action-row">
               <Link className="f9-secondary-button" to={backHref}>
-                Back to account
+                {backLabel}
               </Link>
               <Form method="post">
                 <input name="intent" type="hidden" value="share-report" />
@@ -663,7 +665,7 @@ export default function ReportsRoute() {
           {!reportReadiness.ok ? (
             <div
               aria-live="polite"
-              className="f9-message is-error"
+              className="f9-message"
               role="status"
             >
               <p>{reportReadiness.reason}</p>

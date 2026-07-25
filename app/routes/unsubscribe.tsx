@@ -14,6 +14,9 @@ interface UnsubscribeLoaderData {
   valid: boolean;
   alreadyUnsubscribed: boolean;
   maskedEmail: string | null;
+  // Set only when the suppression adapter itself is unavailable (an ops issue),
+  // so we can show honest "our side broke" copy instead of blaming the link.
+  adapterUnavailable?: boolean;
 }
 
 function readParams(url: URL) {
@@ -89,7 +92,13 @@ export async function action({ context, request }: ActionFunctionArgs): Promise<
 
     if (typeof suppressTargets !== "function") {
       // Never claim success when the atomic suppression adapter is unavailable.
-      return { valid: false, alreadyUnsubscribed: false, maskedEmail: null };
+      // This is our failure, not a bad link — flag it so the UI says so.
+      return {
+        valid: false,
+        alreadyUnsubscribed: false,
+        maskedEmail: maskEmail(target.targetValue),
+        adapterUnavailable: true,
+      };
     }
 
     await suppressTargets(env, {
@@ -121,7 +130,21 @@ export default function UnsubscribeRoute() {
       <section className="f9-container f9-legal-section">
         <article className="f9-legal-card">
           <span className="f9-app-kicker">Email preferences</span>
-          {!data.valid ? (
+          {data.adapterUnavailable ? (
+            <>
+              <h1>We couldn't switch this off just now.</h1>
+              <p>
+                Something broke on our side processing this — your link is fine. Try again in a few
+                minutes, or email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we'll switch it off
+                for you.
+              </p>
+              <Form method="post">
+                <SubmitButton className="f9-primary-button" pendingLabel="Working…">
+                  Try again
+                </SubmitButton>
+              </Form>
+            </>
+          ) : !data.valid ? (
             <>
               <h1>This unsubscribe link isn't valid.</h1>
               <p>

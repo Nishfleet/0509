@@ -65,7 +65,7 @@ export function ResultQuickSave({ adId, advertiser, plan, collections }: ResultQ
       </button>
       {isFree && showGate ? (
         <span className="f9-quick-save-note" role="status">
-          Saving ads to a collection starts on Scout.{" "}
+          Upgrade to Scout to save ads and build your workspace memory.{" "}
           <Link to="/app/billing?source=search#plans">View plans</Link>
         </span>
       ) : null}

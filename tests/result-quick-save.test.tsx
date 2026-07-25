@@ -123,7 +123,7 @@ describe("ResultQuickSave", () => {
     });
 
     expect(submitted).toBe(false);
-    expect(view.textContent).toContain("Saving ads to a collection starts on Scout.");
+    expect(view.textContent).toContain("Upgrade to Scout to save ads and build your workspace memory.");
     const upgrade = view.querySelector<HTMLAnchorElement>('a[href="/app/billing?source=search#plans"]');
     expect(upgrade?.textContent).toBe("View plans");
   });

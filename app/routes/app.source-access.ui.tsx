@@ -54,6 +54,7 @@ export function SourceAccessRoute() {
   return (
     <DashboardPage>
       <DashboardPageHeader
+        kicker="Setup"
         lead="Backup Meta access and tracking reliability."
         title="Source access"
       />
