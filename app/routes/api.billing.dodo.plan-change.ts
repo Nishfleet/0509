@@ -5,6 +5,7 @@ import type {
   DodoPlanChangeEffectiveAt,
   DodoPlanChangeProrationMode,
 } from "~/lib/dodo-billing.server";
+import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 
 export function loader(_args: LoaderFunctionArgs) {
   return Response.json(
@@ -35,6 +36,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     verifyDodoSubscriptionPlanChangePreviewToken,
   } = await import("~/lib/dodo-billing.server");
   const env = getEnv(context);
+  const cloudflare = getOptionalCloudflareContext(context);
   const { session, workspaceUserId, isMember } = await requireWorkspaceSession(env, request);
   if (isMember && workspaceUserId !== session.user.id) {
     throw new Response("Only the workspace owner can manage billing.", { status: 403 });
@@ -132,7 +134,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     env,
     workspaceUserId,
     "pricing",
-    context.cloudflare?.ctx,
+    cloudflare?.ctx,
   );
   if (validationLimitResponse) throw validationLimitResponse;
   const checkoutValidation = await validateDodo0509PlanCheckout({
@@ -156,7 +158,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     env,
     workspaceUserId,
     "pricing",
-    context.cloudflare?.ctx,
+    cloudflare?.ctx,
   );
   if (currencyLimitResponse) throw currencyLimitResponse;
   const previewLimitResponse = await enforceBillingProviderRateLimit(
@@ -164,7 +166,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     env,
     workspaceUserId,
     "pricing",
-    context.cloudflare?.ctx,
+    cloudflare?.ctx,
   );
   if (previewLimitResponse) throw previewLimitResponse;
   try {
@@ -216,7 +218,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     env,
     workspaceUserId,
     "mutation",
-    context.cloudflare?.ctx,
+    cloudflare?.ctx,
   );
   if (mutationLimitResponse) throw mutationLimitResponse;
     const claimed = await claimDodoSubscriptionPlanChange(env, {

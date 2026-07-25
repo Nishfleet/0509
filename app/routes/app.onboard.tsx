@@ -5,6 +5,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 import { DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { SubmitButton } from "~/components/submit-button";
+import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 import { sanitizeCustomerFacingMessage } from "~/lib/customer-route-error";
 import {
   hasInvalidCompetitorWebsite,
@@ -46,6 +47,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getWorkspaceBranding } = await import("~/lib/data.server");
   const { checkPlanLimit, getUserPlan } = await import("~/lib/plan.server");
   const env = getEnv(context);
+  const cloudflare = getOptionalCloudflareContext(context);
   const { session, workspaceUserId, isMember } = await requireWorkspaceSession(env, request);
   const url = new URL(request.url);
   const resumeSetup = url.searchParams.get("resume") === "1";
@@ -79,7 +81,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     prefillCountry,
     resumeSetup,
     visitorCountry: defaultCountryForVisitor(
-      (context.cloudflare as { country?: string | null } | undefined)?.country ??
+      cloudflare?.country ??
         request.headers.get("cf-ipcountry"),
     ),
   };
@@ -91,6 +93,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { checkPlanLimit } = await import("~/lib/plan.server");
   const { completeUserOnboarding, upsertWorkspaceBranding } = await import("~/lib/data.server");
   const env = getEnv(context);
+  const cloudflare = getOptionalCloudflareContext(context);
   const { resolveE2EProviderDeny, sanitizeE2EProviderEnv } = await import("~/lib/e2e-provider.server");
   const providerDeny = await resolveE2EProviderDeny(env, request);
   if (providerDeny.failClosed && !providerDeny.enabled) {
@@ -171,7 +174,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }
 
     const visitorCountry = defaultCountryForVisitor(
-      (context.cloudflare as { country?: string | null } | undefined)?.country ??
+      cloudflare?.country ??
         request.headers.get("cf-ipcountry"),
     );
     const { listWatchlists } = await import("~/lib/data.server");
@@ -292,7 +295,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       if (result.status === "created" && !queuedWatchlistIds.has(watchlist.id)) {
         queuedWatchlistIds.add(watchlist.id);
         createdCount += 1;
-        await queueFirstWatchlistScan(scanEnv, context.cloudflare?.ctx, watchlist);
+        await queueFirstWatchlistScan(scanEnv, cloudflare?.ctx, watchlist);
       }
     }
 
@@ -355,7 +358,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const watchlistLimit = await checkPlanLimit(env, workspaceUserId, "watchlists");
 
     const visitorCountry = defaultCountryForVisitor(
-      (context.cloudflare as { country?: string | null } | undefined)?.country ??
+      cloudflare?.country ??
         request.headers.get("cf-ipcountry"),
     );
     // D11: honor the country the visitor had selected in search when they were
@@ -403,7 +406,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const { queueFirstWatchlistScan } = await import("~/lib/monitoring.server");
     const watchlist = watchlistResult.watchlist;
     try {
-      await queueFirstWatchlistScan(scanEnv, context.cloudflare?.ctx, watchlist);
+      await queueFirstWatchlistScan(scanEnv, cloudflare?.ctx, watchlist);
     } catch {
       return {
         ok: false,

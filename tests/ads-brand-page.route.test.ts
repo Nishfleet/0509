@@ -352,7 +352,7 @@ describe("/ads/:domain indexing flag", () => {
 describe("/ads/:domain meta", () => {
   async function metaFor(data: Record<string, unknown> | undefined) {
     const { meta } = await import("~/routes/ads.$domain");
-    return meta({ data, params: {}, location: { pathname: "/ads/nykaa.com" } } as never) as Array<
+    return meta({ loaderData: data, params: {}, location: { pathname: "/ads/nykaa.com" } } as never) as Array<
       Record<string, string>
     >;
   }

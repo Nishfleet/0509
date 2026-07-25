@@ -40,6 +40,7 @@ import { BrandStatLine } from "~/components/ads/brand-stat-line";
 import { BrandTicker } from "~/components/ads/brand-ticker";
 import { MarketingFooter } from "~/components/marketing-footer";
 import { MarketingNav } from "~/components/marketing-nav";
+import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 import type {
   BrandChangeEvent,
   BrandIntelTeaser,
@@ -71,12 +72,13 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
 
   const { getEnv } = await import("~/lib/context.server");
   const env = getEnv(context);
+  const cloudflare = getOptionalCloudflareContext(context);
 
   const { enforcePublicBrandPageRateLimit } = await import("~/lib/rate-limit.server");
   const rateLimitResponse = await enforcePublicBrandPageRateLimit(
     request,
     env,
-    context.cloudflare?.ctx,
+    cloudflare?.ctx,
   );
   if (rateLimitResponse) {
     throw rateLimitResponse;
@@ -91,7 +93,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   } = await import("~/lib/brand-page.server");
   const { defaultCountryForVisitor } = await import("~/lib/countries");
   const visitorCountry = defaultCountryForVisitor(
-    (context.cloudflare as { country?: string | null } | undefined)?.country ??
+    cloudflare?.country ??
       request.headers.get("cf-ipcountry"),
   );
 
@@ -128,25 +130,25 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
   };
 }
 
-export const meta: MetaFunction<typeof loader> = ({ data }) => {
-  if (!data) {
+export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
+  if (!loaderData) {
     return [
       { title: "Brand ads | Five to Nine" },
       { name: "robots", content: "noindex" },
     ];
   }
 
-  const title = `${data.brandName} Facebook & Instagram ads right now | Five to Nine`;
-  const description = data.hasCachedAds
-    ? `See ${data.ads.length} Meta ${data.ads.length === 1 ? "ad" : "ads"} from ${data.brandName} (${data.domain}), from a public Ad Library check ${data.checkedAgo}. Get an email when their ads or offer change.`
-    : `We haven't checked ${data.domain} recently. Run a free live Meta Ad Library search and track ${data.brandName}'s ads with Five to Nine.`;
+  const title = `${loaderData.brandName} Facebook & Instagram ads right now | Five to Nine`;
+  const description = loaderData.hasCachedAds
+    ? `See ${loaderData.ads.length} Meta ${loaderData.ads.length === 1 ? "ad" : "ads"} from ${loaderData.brandName} (${loaderData.domain}), from a public Ad Library check ${loaderData.checkedAgo}. Get an email when their ads or offer change.`
+    : `We haven't checked ${loaderData.domain} recently. Run a free live Meta Ad Library search and track ${loaderData.brandName}'s ads with Five to Nine.`;
 
   return [
-    ...publicSeoMeta({ title, description, pathname: data.canonicalPath }),
+    ...publicSeoMeta({ title, description, pathname: loaderData.canonicalPath }),
     // links() cannot see route params in this router version, so the
     // canonical tag ships as a meta-descriptor link instead.
-    { tagName: "link", rel: "canonical", href: canonicalUrl(data.canonicalPath) },
-    ...(data.noindex ? [{ name: "robots", content: "noindex" }] : []),
+    { tagName: "link", rel: "canonical", href: canonicalUrl(loaderData.canonicalPath) },
+    ...(loaderData.noindex ? [{ name: "robots", content: "noindex" }] : []),
   ];
 };
 

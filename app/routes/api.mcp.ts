@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
+import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 import {
   AGENT_BLOCKED_CAPABILITIES,
   AGENT_FIRST_WORKFLOW,
@@ -735,6 +736,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     enforceAuthenticatedApiLimit,
   } = await import("~/lib/authenticated-api-limits.server");
   const env = getEnv(context);
+  const cloudflare = getOptionalCloudflareContext(context);
   const auth = await authenticateApiKeyRequest(env, request);
   if (!auth.ok) {
     return auth.response;
@@ -814,7 +816,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   if (message.method === "tools/call") {
-    const executionContext = ((context.cloudflare as { ctx?: ExecutionContext } | undefined)?.ctx ?? null);
+    const executionContext = cloudflare?.ctx ?? null;
     const result = await callTool(
       env,
       auth.apiKey,

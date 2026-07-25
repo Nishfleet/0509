@@ -1,5 +1,6 @@
 import type { LoaderFunctionArgs } from "react-router";
 
+import { getCloudflareContext } from "~/lib/cloudflare-context";
 import { readReleaseIdentity } from "~/lib/canary-release-identity.server";
 import type { AppEnv } from "~/lib/env.server";
 
@@ -33,7 +34,7 @@ async function probeD1(env: AppEnv): Promise<DependencyStatus> {
 // the normal /api/* api-read bucket (unlike /api/health, which stays edge-only
 // and rate-limit-exempt so uptime monitors stay green during a DB outage).
 export async function loader({ context }: LoaderFunctionArgs) {
-  const cloudflare = context.cloudflare as { env: AppEnv };
+  const cloudflare = getCloudflareContext(context);
   const env = cloudflare.env;
   const d1 = await probeD1(env);
   const healthy = d1 === "ok";

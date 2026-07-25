@@ -9,7 +9,9 @@ const runPresencePollingBatchMock = vi.hoisted(() => vi.fn());
 const resumePendingDigestScheduleJobsDetailedMock = vi.hoisted(() => vi.fn());
 
 vi.mock("react-router", () => ({
+  createContext: vi.fn(() => ({})),
   createRequestHandler: vi.fn(() => vi.fn()),
+  RouterContextProvider: class {},
 }));
 vi.mock("~/lib/cron-failure-alert.server", () => ({
   reportScheduledTaskFailure: reportScheduledTaskFailureMock,

@@ -1,5 +1,6 @@
 import { redirect } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 import type { DodoCheckoutPricingContext } from "~/lib/dodo-pricing.server";
 
 export function loader(_args: LoaderFunctionArgs) {
@@ -18,6 +19,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { resolveWorkspace } = await import("~/lib/workspace.server");
   const { enforceBillingProviderRateLimit } = await import("~/lib/rate-limit.server");
   const env = getEnv(context);
+  const cloudflare = getOptionalCloudflareContext(context);
   const session = await requireSession(env, request);
   const formData = await request.formData();
   const target = parseCheckoutTarget(request, formData, checkoutTargetFromSkuSlug);
@@ -55,7 +57,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       env,
       billingUserId,
       "pricing",
-      context.cloudflare?.ctx,
+      cloudflare?.ctx,
     );
     if (pricingLimitResponse) throw pricingLimitResponse;
     const checkoutValidation = await validateDodo0509PlanCheckout({
@@ -86,7 +88,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       env,
       billingUserId,
       "pricing",
-      context.cloudflare?.ctx,
+      cloudflare?.ctx,
     );
     if (pricingLimitResponse) throw pricingLimitResponse;
     const checkoutValidation = await validateDodo0509TopUpCheckout({
@@ -107,7 +109,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       env,
       billingUserId,
       "mutation",
-      context.cloudflare?.ctx,
+      cloudflare?.ctx,
     );
     if (mutationLimitResponse) throw mutationLimitResponse;
     checkout = await createDodo0509CheckoutSession({

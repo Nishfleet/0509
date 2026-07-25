@@ -28,6 +28,7 @@ import { getPlanLimit, planAllowsDigestCadence } from "~/lib/plan-entitlements";
 import { LocalTime } from "~/components/local-time";
 import { Pill } from "~/components/pill";
 import { SubmitButton } from "~/components/submit-button";
+import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 import { toPublicDeliveryTarget } from "~/lib/delivery-target-public";
 import { isSecretishMemoryString } from "~/lib/agent-redaction";
 import { buildChangeIntelligenceSummary } from "~/lib/change-intelligence";
@@ -340,6 +341,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { createWatchlistWithinLimit, getSavedQuery, touchSavedQueryRun } =
     await import("~/lib/data.server");
   const env = getEnv(context);
+  const cloudflare = getOptionalCloudflareContext(context);
   const workspace = await withWorkspace(request, env);
   if (!workspace.ok) {
     return workspace.result;
@@ -425,7 +427,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const watchlist = result.watchlist;
     let firstScanQueued = false;
     try {
-      firstScanQueued = await queueFirstWatchlistScan(env, context.cloudflare?.ctx, watchlist);
+      firstScanQueued = await queueFirstWatchlistScan(env, cloudflare?.ctx, watchlist);
     } catch {
       return {
         ok: true,
