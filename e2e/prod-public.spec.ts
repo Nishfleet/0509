@@ -215,8 +215,14 @@ test.describe("public production-safe E2E smoke", () => {
 
     const invalidShare = await gotoPublicPage(page, "/share/not-a-real-share-token");
     expect(invalidShare?.status()).toBe(404);
-    await expect(page.getByRole("heading", { name: "404" })).toBeVisible();
-    await expect(page.getByText("The requested page could not be found.")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "This share link isn't available" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        "The link may have expired or been switched off by whoever shared it. Ask them for a fresh link.",
+      ),
+    ).toBeVisible();
   });
 
   test("public search stays usable at tablet and mobile widths", async ({ page }) => {

@@ -955,15 +955,19 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(workflow).toContain(
       "runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}",
     );
-    for (const path of [
-      ".github/workflows/ci.yml",
-      ".github/workflows/secret-scan.yml",
-      ".github/workflows/d1-backup-validate.yml",
-    ]) {
-      expect(readFileSync(resolve(path), "utf8")).toContain(
-        "runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}",
-      );
-    }
+    expect(readFileSync(resolve(".github/workflows/ci.yml"), "utf8")).toContain(
+      "runs-on: ${{ (startsWith(github.head_ref, 'cloud-council/') && vars.RECOVERY_RUNNER) || 'ubuntu-latest' }}",
+    );
+    expect(
+      readFileSync(resolve(".github/workflows/d1-backup-validate.yml"), "utf8"),
+    ).toContain(
+      "runs-on: ${{ (startsWith(github.head_ref, 'cloud-council/') && vars.RECOVERY_RUNNER) || 'ubuntu-latest' }}",
+    );
+    expect(
+      readFileSync(resolve(".github/workflows/secret-scan.yml"), "utf8"),
+    ).toContain(
+      "runs-on: ${{ ((github.event_name == 'push' || startsWith(github.head_ref, 'cloud-council/')) && vars.RECOVERY_RUNNER) || 'ubuntu-latest' }}",
+    );
     expect(workflow).not.toContain("- name: Production public smoke");
   });
 
