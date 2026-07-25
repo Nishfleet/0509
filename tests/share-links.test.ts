@@ -865,4 +865,43 @@ describe("/app/shares route", () => {
       "share-1",
     );
   });
+
+  it("reports an already-revoked link as an idempotent not-found result", async () => {
+    vi.doMock("~/lib/auth.server", () => ({
+      requireWorkspaceSession: vi.fn().mockResolvedValue({
+        session,
+        workspaceUserId: "user-1",
+        isMember: false,
+        ownerName: null,
+      }),
+    }));
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({})),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      revokeShareLink: vi.fn().mockResolvedValue(false),
+    }));
+
+    const { action } = await import("~/routes/app.shares");
+    const body = new URLSearchParams({
+      intent: "revoke-share",
+      shareLinkId: "share-1",
+    });
+    const result = await action({
+      context: {},
+      request: new Request("https://0509.io/app/shares", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: body.toString(),
+      }),
+      params: {},
+    } as never);
+
+    expect(result).toEqual({
+      ok: false,
+      intent: "revoke-share",
+      shareLinkId: "share-1",
+      message: "Share link not found — it may already be revoked.",
+    });
+  });
 });

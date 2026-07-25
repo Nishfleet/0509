@@ -81,7 +81,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     return revoked
 			? { ok: true, intent, shareLinkId, message: "Share link revoked. The URL stops working immediately." }
-			: { ok: false, intent, shareLinkId, message: "We couldn't find that share link — it may already be revoked. Refresh the page and try again." };
+			: { ok: false, intent, shareLinkId, message: "Share link not found — it may already be revoked." };
   }
 
   return { ok: false, message: "We couldn't complete that action. Refresh the page and try again." };

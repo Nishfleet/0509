@@ -1278,6 +1278,13 @@ button[aria-busy="true"] {
   color: var(--f9-search-ink, var(--f9-global-ink));
 }
 
+.f9-watchlist-upgrade-link {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
+  white-space: normal;
+}
+
 .f9-search-page a.f9-primary-button {
   color: #fff;
 }
@@ -2799,7 +2806,7 @@ button[aria-busy="true"] {
   font-weight: 600;
 }
 
-.f9-legal-nav {
+.f9-legal-page .f9-legal-nav {
   background: #071523;
 }
 
@@ -3263,6 +3270,10 @@ one signal-green accent.
 }
 
 .ld-brand { color: inherit; }
+
+.ld-brand.f9-app-brand:focus-visible {
+  outline-color: currentColor;
+}
 
 .f9-home .ld-nav a,
 .f9-legal-page .ld-nav a,
@@ -6149,10 +6160,9 @@ one signal-green accent.
 }
 
 .ld-hero-grid .ld-wall {
-  /* Brief target: the hero type-wall reaches ~122px (7.625rem) on wide
-     viewports (~1627px+, where the 1.25fr column is wide enough to hold it
-     without breaking the grid), and floors at 44px (2.75rem) on mobile. */
-  font-size: clamp(2.75rem, 7.5vw, 7.625rem);
+  /* Keep the proof wall forceful without pushing the no-account search below
+     the first desktop viewport. */
+  font-size: clamp(2.75rem, 6.6vw, 5.9rem);
 }
 
 .ld-deck-copy {
