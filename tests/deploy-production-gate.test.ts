@@ -952,6 +952,18 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(workflow).toContain("actions: read");
     expect(workflow).toContain("fetch-depth: 0");
     expect(workflow).toContain("GITHUB_TOKEN: ${{ github.token }}");
+    expect(workflow).toContain(
+      "runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}",
+    );
+    for (const path of [
+      ".github/workflows/ci.yml",
+      ".github/workflows/secret-scan.yml",
+      ".github/workflows/d1-backup-validate.yml",
+    ]) {
+      expect(readFileSync(resolve(path), "utf8")).toContain(
+        "runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}",
+      );
+    }
     expect(workflow).not.toContain("- name: Production public smoke");
   });
 
