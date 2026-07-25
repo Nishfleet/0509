@@ -1,5 +1,5 @@
 import { Form, Link, redirect, useActionData, useLoaderData } from "react-router";
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
@@ -21,8 +21,8 @@ import {
 } from "~/lib/presence-customer-copy";
 import type { PresenceConnectorId } from "~/lib/presence-types";
 
-export const meta = ({ data }: { data: Awaited<ReturnType<typeof loader>> | undefined }) => [
-  { title: data?.entity ? `${data.entity.label} | Presence Desk` : "Presence Desk | Five to Nine" },
+export const meta: MetaFunction<typeof loader> = ({ loaderData }) => [
+  { title: loaderData?.entity ? `${loaderData.entity.label} | Presence Desk` : "Presence Desk | Five to Nine" },
 ];
 
 export function HydrateFallback() {

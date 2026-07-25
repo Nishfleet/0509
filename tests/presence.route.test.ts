@@ -78,6 +78,17 @@ afterEach(() => {
 });
 
 describe("presence desk routes", () => {
+  it("uses loader data for the entity detail page title", async () => {
+    const { meta } = await import("~/routes/app.presence.$entityId");
+
+    expect(meta({
+      loaderData: { entity: { label: "Acme Corp" } },
+    } as never)).toEqual([{ title: "Acme Corp | Presence Desk" }]);
+    expect(meta({ loaderData: undefined } as never)).toEqual([
+      { title: "Presence Desk | Five to Nine" },
+    ]);
+  });
+
   it("renders repositioned Presence Desk index copy", async () => {
     vi.resetModules();
     await mockRouter({
