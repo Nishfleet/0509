@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, createElement } from "react";
+import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { createRoutesStub } from "react-router";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -23,7 +23,7 @@ afterEach(async () => {
   document.body.replaceChildren();
 });
 
-async function renderShell(initialPath: string) {
+async function renderShell(initialPath: string, strict = false) {
   const Stub = createRoutesStub([
     {
       path: "/app/*",
@@ -42,7 +42,8 @@ async function renderShell(initialPath: string) {
   root = createRoot(container);
   const currentRoot = root;
   await act(async () => {
-    currentRoot.render(createElement(Stub, { initialEntries: [initialPath] }));
+    const shell = createElement(Stub, { initialEntries: [initialPath] });
+    currentRoot.render(strict ? createElement(StrictMode, null, shell) : shell);
   });
   return container;
 }
@@ -75,5 +76,16 @@ describe("DashboardShell accessibility (WP-43)", () => {
     for (const link of current) {
       expect(link.getAttribute("href")).toBe("/app/watchlists");
     }
+  });
+
+  it("does not announce or steal focus during a StrictMode initial mount", async () => {
+    const view = await renderShell("/app/watchlists", true);
+
+    await act(async () => {
+      await new Promise((resolve) => window.requestAnimationFrame(resolve));
+    });
+
+    expect(document.activeElement).toBe(document.body);
+    expect(view.querySelector('[role="status"]')?.textContent).toBe("");
   });
 });
