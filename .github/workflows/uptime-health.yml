@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   health:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.MONITORING_RUNNER || 'ubuntu-latest' }}
     # Two probe steps, each worst-case ~70s (3 curl attempts x 20s + delays).
     timeout-minutes: 4
     steps:
