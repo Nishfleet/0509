@@ -13,6 +13,7 @@ describe("uptime health workflow", () => {
     permissions?: Record<string, string>;
     jobs: {
       health?: {
+        "runs-on"?: string;
         "timeout-minutes"?: number;
         steps?: Array<{
           name?: string;
@@ -30,6 +31,9 @@ describe("uptime health workflow", () => {
     expect(parsed.on.schedule).toEqual([
       { cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *" },
     ]);
+    expect(parsed.jobs.health?.["runs-on"]).toBe(
+      "${{ vars.MONITORING_RUNNER || 'ubuntu-latest' }}",
+    );
     expect(parsed.jobs.health?.["timeout-minutes"]).toBe(4);
 
     const healthStep = parsed.jobs.health?.steps?.find((step) => step.name === "Check production health endpoint");
