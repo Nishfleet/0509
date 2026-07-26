@@ -107,16 +107,14 @@ export function DashboardShell({
   const navigation = useNavigation();
   const location = useLocation();
   const isNavigating = Boolean(navigation.location);
-  const hasMountedRef = useRef(false);
+  const previousPathnameRef = useRef(location.pathname);
   const mainRef = useRef<HTMLDivElement>(null);
   const mobilePrimaryRef = useRef<HTMLElement>(null);
   const mobileUtilityRef = useRef<HTMLElement>(null);
   const [routeAnnouncement, setRouteAnnouncement] = useState("");
   useEffect(() => {
-    if (!hasMountedRef.current) {
-      hasMountedRef.current = true;
-      return;
-    }
+    if (previousPathnameRef.current === location.pathname) return;
+    previousPathnameRef.current = location.pathname;
 
     const routeName = formatRouteName(location.pathname);
     setRouteAnnouncement(`Navigated to ${routeName}.`);
