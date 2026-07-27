@@ -10336,6 +10336,7 @@ reds soften --- */
 [data-ed-volume="plain"] .f9-ed-cta--rank2:hover,
 [data-ed-volume="plain"] .f9-ed-panel,
 [data-ed-volume="plain"] .f9-ed-diff-plate,
+[data-ed-volume="plain"] .f9-ed-change-record,
 [data-ed-volume="plain"] .f9-ed-evidence-plate,
 [data-ed-volume="plain"] .f9-ed-specimen {
   box-shadow: none;
@@ -10384,11 +10385,6 @@ reds soften --- */
 .f9-ed-capture-bar.is-captured {
   height: 34px;
   background: var(--ed-rule);
-}
-
-.f9-ed-capture-bar.is-waiting {
-  height: 34px;
-  background: var(--ed-accent);
 }
 
 /* Bar height is monotonic and load-bearing: TALL means we captured a change,
@@ -10588,6 +10584,7 @@ reds soften --- */
 }
 
 .f9-ed-diff-plate,
+.f9-ed-change-record,
 .f9-ed-evidence-plate,
 .f9-ed-specimen,
 .f9-ed-panel {
@@ -10602,6 +10599,35 @@ reds soften --- */
   display: grid;
   gap: 12px;
   padding: 16px;
+}
+
+.f9-ed-change-feed {
+  display: grid;
+  gap: 18px;
+}
+
+/* WP-24: email deep-link highlight for ?event= — box-shadow, not accent outline
+   (brief §10: --ed-accent cannot reach 3:1 as a non-text UI boundary). */
+.f9-ed-diff-plate.is-highlighted,
+.f9-ed-change-record.is-highlighted {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ed-focus) 28%, transparent);
+}
+
+.f9-ed-panel-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.f9-ed-candidate-history {
+  margin-top: 18px;
+}
+
+.f9-ed-candidate-history > summary {
+  min-height: 44px;
+  cursor: pointer;
+  color: var(--ink-soft);
 }
 
 .f9-ed-diff-headline {
@@ -11401,6 +11427,7 @@ reds soften --- */
   }
 
   .f9-ed-diff-plate,
+  .f9-ed-change-record,
   .f9-ed-evidence-plate,
   .f9-ed-specimen,
   .f9-ed-panel,

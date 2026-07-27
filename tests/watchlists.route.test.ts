@@ -195,6 +195,39 @@ const recentProofCaptures: ProofCaptureRecord[] = [
     createdAt: "2026-04-18T09:59:50.000Z",
     updatedAt: "2026-04-18T09:59:50.000Z",
   },
+  {
+    id: "proof-0",
+    proofTargetId: "target-1",
+    status: "succeeded",
+    skipReason: null,
+    failureCode: null,
+    failureReason: null,
+    screenshotArtifactKey: "proofs/proof-0.jpeg",
+    htmlArtifactKey: "proofs/proof-0.html",
+    extractedFields: {
+      rawHeadline: "Glow sale",
+      normalizedHeadline: "glow sale",
+      normalizedHeadlineHash: "hash-b",
+      ctaText: "Shop now",
+      priceText: "Starting at ₹499",
+      formPresent: true,
+    },
+    fieldConfidence: {
+      headline: 0.9,
+      ctaText: 0.8,
+      priceText: 0.85,
+    },
+    extractionWarnings: [],
+    captureMetadata: {},
+    renderMode: "mobile",
+    deviceProfile: "mobile_default",
+    extractorVersion: "lp-signals-v1",
+    idempotencyKey: "proof-request:0",
+    attemptedAt: "2026-04-17T09:59:40.000Z",
+    succeededAt: "2026-04-17T09:59:50.000Z",
+    createdAt: "2026-04-17T09:59:50.000Z",
+    updatedAt: "2026-04-17T09:59:50.000Z",
+  },
 ];
 
 const deliveryTargets: DeliveryTargetRecord[] = [
@@ -436,8 +469,8 @@ describe("watchlists route loader", () => {
         recovery: null,
       },
       proofSummary: {
-        totalAttempts: 1,
-        successfulAttempts: 1,
+        totalAttempts: 2,
+        successfulAttempts: 2,
         failedAttempts: 0,
         lastSuccessfulProofAt: "2026-04-18T09:59:50.000Z",
       },
@@ -2396,8 +2429,8 @@ describe("watchlists route rendering", () => {
     recentDeliveryAttempts,
     recentProofCaptures,
     proofSummary: {
-      totalAttempts: 1,
-      successfulAttempts: 1,
+      totalAttempts: 2,
+      successfulAttempts: 2,
       failedAttempts: 0,
       skippedAttempts: 0,
       lastAttemptAt: "2026-04-18T09:59:50.000Z",
@@ -2429,12 +2462,13 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain('aria-current="page"');
 
     // The change feed is the default panel.
-    expect(markup).toContain("See what changed");
+    expect(markup).toContain("What changed");
+    expect(markup).toContain("f9-ed-diff-plate");
     expect(markup).toContain("High confidence");
-    expect(markup).toContain("Why this alerted");
-    expect(markup).toContain("Verified from a page snapshot");
-    expect(markup).toContain("Next review");
-    expect(markup).toContain("review pricing, discount, COD, and bundle pressure");
+    expect(markup).toContain("This is the stored capture, not a re-render.");
+    expect(markup).toContain("Starting at ₹499");
+    expect(markup).toContain("Starting at ₹799");
+    expect(markup).not.toContain("Insight depth");
     expect(markup).not.toContain("Meta ads tracking beta");
 
     // The rail is exactly three objects (brief §7): number card, fact rail,
@@ -2455,8 +2489,9 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain("How tracking works");
     expect(markup).toContain("Live ad check");
     expect(markup).toContain("Check source access");
-    // The change feed is not also rendered underneath it.
-    expect(markup).not.toContain("See what changed");
+    // The change feed panel is not also rendered underneath it (tab label may still show).
+    expect(markup).not.toContain('aria-label="What changed"');
+    expect(markup).not.toContain("f9-ed-diff-plate");
   });
 
   it("keeps evidence, freshness and the glossary behind the Evidence tab", async () => {
@@ -2464,7 +2499,12 @@ describe("watchlists route rendering", () => {
 
     expect(markup).toContain("Evidence and delivery");
     expect(markup).toContain("Recent evidence checks");
-    expect(markup).toContain("Last good evidence check 1h ago");
+    expect(markup).toContain("Last good check");
+    expect(markup).toContain("1h ago");
+    expect(markup).toContain("Evidence labels");
+    expect(markup).toContain("f9-ed-report-glossary");
+    expect(markup).not.toContain("Insight depth");
+    expect(markup).not.toContain("No evidence yet");
   });
 
   it("keeps delivery settings and recipient targets behind the Delivery tab", async () => {

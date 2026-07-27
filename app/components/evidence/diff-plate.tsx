@@ -73,6 +73,7 @@ export function DiffPlate({
   headline,
   headingLevel = 3,
   why,
+  delivery,
   field,
   caughtLabel,
   verification,
@@ -90,6 +91,8 @@ export function DiffPlate({
   headingLevel?: 2 | 3 | 4;
   /** One sentence of why it matters. */
   why?: string;
+  /** Per-change delivery state — kept separate so exact copy stays addressable. */
+  delivery?: string;
   /** What changed — "OFFER PAGE", "PRICE", "HEADLINE". */
   field: string;
   /** Ink-header left stamp, e.g. "CAUGHT 27 JUL · 06:05 UTC". */
@@ -123,6 +126,7 @@ export function DiffPlate({
       <div className="f9-ed-diff-body">
         <Heading className="f9-ed-diff-headline">{headline}</Heading>
         {why ? <p className="f9-ed-diff-why">{why}</p> : null}
+        {delivery ? <p className="f9-ed-diff-delivery">{delivery}</p> : null}
         <div className="f9-ed-diff-panes">
           <Pane capture={before} label="Before" variant="before" />
           <Pane capture={now} label="Now" variant="now">
