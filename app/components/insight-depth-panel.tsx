@@ -8,7 +8,7 @@ export function InsightDepthPanel({ summary }: { summary: InsightDepthSummary })
         <span className="f9-app-kicker">Insight depth</span>
         <h3 style={{ marginTop: 0 }}>What is working and why</h3>
       </div>
-      <div className="f9-dashboard-grid">
+      <div className="f9-dashboard-grid f9-insight-grid">
         <InsightList
           title="Top hooks"
           items={summary.topHooks.map((item) => ({
@@ -38,7 +38,7 @@ export function InsightDepthPanel({ summary }: { summary: InsightDepthSummary })
           }))}
         />
       </div>
-      <div className="f9-dashboard-grid">
+      <div className="f9-dashboard-grid f9-insight-grid">
         <InsightTimeline title="Creative timeline" items={summary.creativeTimeline} />
         <InsightTimeline title="Landing-page history" items={summary.landingPageHistory} />
       </div>

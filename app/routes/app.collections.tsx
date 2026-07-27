@@ -322,7 +322,7 @@ export default function CollectionsRoute() {
       />
       <ActionFeedback data={actionData} intent="delete-collection" />
 
-      <div className="f9-dashboard-grid">
+      <div className="f9-master-detail">
         <article className="f9-app-panel f9-side-panel">
           <div className="f9-panel-toolbar">
             <div>
@@ -598,7 +598,7 @@ export default function CollectionsRoute() {
               ) : (
                 <div className="f9-work-list">
                   {data.items.map((item) => (
-                    <article className="f9-work-row" key={item.id}>
+                    <article className="f9-work-row is-stacked" key={item.id}>
                       <div className="f9-panel-toolbar">
                         <div className="f9-ad-thumb-row">
                           <AdThumb ad={item.ad} />
