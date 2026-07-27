@@ -32,6 +32,7 @@ const SHARED_LINKS = [
 	{ href: "/#pricing", label: "Pricing" },
 	{ href: "/help", label: "Help" },
 	{ href: "/docs", label: "Docs" },
+	{ href: "/status", label: "Status" },
 	{ href: "/auth/login", label: "Sign in" },
 	{ href: "/app", label: "Open app" },
 ];
@@ -52,16 +53,23 @@ describe("MarketingNav (shared public nav)", () => {
 		expect(markup).not.toContain("Create account");
 	});
 
-	it("is the header used by landing, both compare pages, and the legal doc shell", () => {
+	it("is the header used by landing, both compare pages, and the legal doc shell", async () => {
 		const marketing = readFileSync("app/routes/marketing.tsx", "utf8");
 		const magicbrief = readFileSync("app/routes/compare.magicbrief.tsx", "utf8");
 		const metaLibrary = readFileSync("app/routes/compare.meta-ad-library.tsx", "utf8");
-		const docShell = readFileSync("app/components/public-doc-shell.tsx", "utf8");
 
 		expect(marketing).toContain("<MarketingNav />");
 		expect(magicbrief).toContain("<MarketingNav />");
 		expect(metaLibrary).toContain("<MarketingNav />");
-		expect(docShell).toContain('import { MarketingNav }');
-		expect(docShell).toContain("return <MarketingNav />");
+
+		// The legal/doc shell no longer improvises its own chrome: its header IS
+		// MarketingNav, so the tagline and the Pricing/Search/Sign in links are
+		// byte-identical and no public section is stranded.
+		await mockRouter();
+		const { MarketingNav } = await import("~/components/marketing-nav");
+		const { PublicDocHeader } = await import("~/components/public-doc-shell");
+		expect(renderToStaticMarkup(createElement(PublicDocHeader))).toBe(
+			renderToStaticMarkup(createElement(MarketingNav)),
+		);
 	});
 });

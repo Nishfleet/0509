@@ -95,7 +95,7 @@ describe("status route", () => {
     expect(markup).toContain("Five to Nine service status.");
     expect(markup).toContain("Core surfaces");
     expect(markup).toContain("Public search");
-    expect(markup).toContain("Email delivery is in product scope");
+    expect(markup).toContain("Change alerts and digests are sent by email through Cloudflare Email Service.");
     expect(markup).toContain("Recurring uptime checks are configured and reviewed by the operator");
     expect(markup).toContain("Held — account configuration");
     expect(markup).not.toContain("larger-account monitoring capacity");

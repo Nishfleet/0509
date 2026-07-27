@@ -496,9 +496,9 @@ describe("pricing CTA rendering", () => {
     const { default: DigestsRoute } = await import("~/routes/app.digests");
     const markup = renderToStaticMarkup(createElement(DigestsRoute));
 
-    expect(markup).toContain("Briefs are included in paid plans.");
-    expect(markup).toContain("View plans");
-    expect(markup).toContain("/app/billing?source=limit#plans");
+    expect(markup).toContain("Competitor change briefs");
+    expect(markup).toContain("See plans");
+    expect(markup).toContain("/app/billing?source=digests#plans");
   });
 
   it("offers an upgrade path on dashboard plan-limit errors", async () => {

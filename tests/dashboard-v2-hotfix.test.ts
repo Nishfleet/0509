@@ -73,7 +73,12 @@ describe("dashboard v2 production hotfix", () => {
     expect(shellSource).toContain("useLocation");
     expect(shellSource).toContain('aria-live="polite"');
     expect(shellSource).toContain("f9-sr-only");
-    expect(shellSource).toContain("hasMountedRef");
+    // The initial mount must not announce or focus. The guard is a pathname
+    // comparison (not a "have I mounted yet?" flag) so a StrictMode double
+    // mount cannot flip it and announce on the first render.
+    expect(shellSource).toContain(
+      "if (previousPathnameRef.current === location.pathname) return;",
+    );
   });
 
   it("removes duplicate search topbar CTAs", () => {

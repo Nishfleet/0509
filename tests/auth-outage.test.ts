@@ -32,7 +32,7 @@ describe("auth outage recovery", () => {
     });
     const html = collectText(element);
 
-    expect(html).toContain("Sign-in is temporarily unavailable");
+    expect(html).toContain("Sign-in is temporarily unavailable.");
     expect(html).not.toContain("raw D1 failure");
     expect(element.props).toMatchObject({
       "aria-live": "assertive",
@@ -56,7 +56,7 @@ describe("auth outage recovery", () => {
     );
 
     expect(html).toContain("This part of Five to Nine is temporarily unavailable");
-    expect(html).not.toContain("Authentication is temporarily unavailable");
+    expect(html).not.toContain("Sign-in is temporarily unavailable.");
     expect(html).not.toContain("raw provider failure");
   });
 });
