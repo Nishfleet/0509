@@ -88,9 +88,11 @@ describe("WP-42: optimistic watchlist pause/resume", () => {
     // pending state is the label itself ("Pausing…") rather than a spinner.
     expect(fetcherForm).toContain("Pausing…");
     expect(fetcherForm).toContain("Resuming…");
-    // The opened competitor's toolbar keeps the spinner + aria-busy affordance.
-    expect(watchlistsRoute).toContain("f9-button-spinner");
-    expect(watchlistsRoute).toContain("aria-busy");
+    // BL-007: the board band and the opened competitor now share ONE pause
+    // control, so `aria-busy` is per watchlist instead of firing on every band
+    // whenever any band is pausing. The label IS the pending state (Rank 3),
+    // which is why the old toolbar spinner is gone.
+    expect(fetcherForm).toContain("aria-busy={bandPending || undefined}");
   });
 });
 

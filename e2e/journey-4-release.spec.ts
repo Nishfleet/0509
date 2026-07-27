@@ -352,7 +352,11 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
       "JSON export should be an executable local surface",
     ).toBe(200);
     expect(jsonResponse.headers()["content-type"] ?? "").toMatch(/json/i);
-    await expect(page.getByRole("link", { name: "Open report" })).toBeVisible();
+    // BL-007: the opened competitor no longer repeats the band's report link;
+    // "Package for client" on the band is the one control to the same report.
+    await expect(
+      page.getByRole("link", { name: "Package for client" }).first(),
+    ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Share summary" }),
     ).toBeVisible();

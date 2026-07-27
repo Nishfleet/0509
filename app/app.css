@@ -1198,13 +1198,6 @@ button[aria-busy="true"] {
   color: var(--f9-search-ink, var(--f9-global-ink));
 }
 
-.f9-watchlist-upgrade-link {
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  text-align: center;
-  white-space: normal;
-}
-
 .f9-search-page a.f9-primary-button {
   color: #fff;
 }
@@ -11169,6 +11162,196 @@ reds soften --- */
   color: var(--ink);
 }
 
+/* ============================================================
+   Competitor detail: tab bar + fact rail (BL-007)
+   Brief §6.4 (anchor tab bar), §6.3 (status strip), §6.6 (fact rail),
+   §7 (detail composition: tab bar → panel | 1 number card + 1 fact rail +
+   1 delivery card).
+
+   The opened competitor attaches under its band, so it opens with
+   `border-top: 0` and shares the band's rule weight (§6.1 open state).
+   ============================================================ */
+
+.f9-ed-opened-detail {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+  border: 2.5px solid var(--ed-rule);
+  border-radius: 0;
+  background: var(--ed-surface);
+  box-shadow: var(--ed-shadow);
+  min-width: 0;
+}
+
+/* Grid and flex children default to `min-width: auto`, which lets a
+   horizontally scrolling child (the tab bar, the action line) push the whole
+   panel wider than the viewport. Zero here is what makes §9.1 hold. */
+.f9-ed-opened-detail > *,
+.f9-ed-detail-head > * {
+  min-width: 0;
+}
+
+.f9-ed-detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 24px;
+}
+
+/* --- §6.4 anchor tab bar --- */
+
+.f9-ed-tabbar {
+  border: 2.5px solid var(--ed-rule);
+  background: var(--ed-surface);
+  /* §9.1: the bar scrolls inside its own container, never the page. */
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.f9-ed-tabbar-track {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: max-content;
+}
+
+.f9-ed-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 18px;
+  border-left: 2.5px solid var(--ed-rule);
+  font-family: var(--ed-mono);
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  color: var(--ink-soft);
+  background: transparent;
+}
+
+.f9-ed-tabbar-track > li:first-child .f9-ed-tab {
+  border-left: 0;
+}
+
+.f9-ed-tab:hover {
+  color: var(--ink);
+}
+
+.f9-ed-tab.is-active {
+  background: var(--ed-fill);
+  color: var(--ed-on-fill);
+}
+
+.f9-ed-tab:focus-visible {
+  outline: 2px solid var(--ed-focus);
+  outline-offset: -4px;
+}
+
+.f9-ed-tab-count {
+  padding: 1px 6px;
+  background: var(--ed-accent);
+  color: var(--ed-on-accent);
+  letter-spacing: 0.08em;
+}
+
+/* --- §7 detail composition: panel + the three-object rail --- */
+
+.f9-ed-detail-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 24px;
+  align-items: start;
+}
+
+.f9-ed-detail-main {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+
+.f9-ed-detail-rail {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.f9-ed-number-card {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border: 2.5px solid var(--ed-rule);
+  background: var(--ed-surface);
+}
+
+.f9-ed-number-card > p {
+  margin: 0;
+}
+
+.f9-ed-number-value {
+  font-family: var(--ed-display);
+  font-weight: 800;
+  font-size: clamp(40px, 4vw, 54px);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+
+.f9-ed-number-note {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.f9-ed-rail-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 2.5px solid var(--ed-rule);
+  background: var(--ed-surface);
+  justify-items: start;
+}
+
+.f9-ed-rail-card > p {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.f9-ed-rail-lines {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  width: 100%;
+}
+
+.f9-ed-rail-line {
+  display: grid;
+  grid-template-columns: minmax(0, 90px) minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+}
+
+.f9-ed-rail-line dt {
+  font-family: var(--ed-mono);
+  font-weight: 600;
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.f9-ed-rail-line dd {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ink);
+}
+
 /* --- §9 mobile: one column, every vertical rule becomes a horizontal one --- */
 
 @media (max-width: 900px) {
@@ -11194,6 +11377,12 @@ reds soften --- */
     grid-auto-flow: column;
     justify-content: start;
     align-items: center;
+  }
+
+  /* §9.3: the rail stops being a rail and files under the panel it
+     annotates. It never disappears — the facts are the retention argument. */
+  .f9-ed-detail-body {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -11235,8 +11424,85 @@ reds soften --- */
   .f9-ed-evidence-plate,
   .f9-ed-specimen,
   .f9-ed-panel,
-  .f9-ed-band.is-open {
+  .f9-ed-band.is-open,
+  .f9-ed-opened-detail {
     box-shadow: 4px 4px 0 var(--ed-shadow-ink);
+  }
+
+  .f9-ed-opened-detail {
+    padding: 14px;
+    gap: 14px;
+  }
+
+  .f9-ed-detail-head {
+    align-items: flex-start;
+  }
+
+  /* The competitor strip pairs its cells rather than stacking five full-width
+     rows — same cells, same copy, half the scroll (§9.2). */
+  .f9-ed-opened-detail .f9-ed-status-cell {
+    flex: 1 1 42%;
+    padding: 9px 12px;
+  }
+
+  .f9-ed-opened-detail .f9-ed-status-cell:nth-child(odd) {
+    border-left: 0;
+  }
+
+  .f9-ed-opened-detail .f9-ed-status-cell:nth-child(even) {
+    border-left: 2.5px solid var(--ed-rule);
+    border-top: 2.5px solid var(--ed-rule);
+  }
+
+  .f9-ed-opened-detail .f9-ed-status-cell:nth-child(2) {
+    border-top: 0;
+  }
+
+  /* §9.1: the action line scrolls inside itself, exactly like the tab bar,
+     instead of wrapping into three rows of buttons. */
+  .f9-ed-detail-head .f9-ed-action-row {
+    flex: 1 1 100%;
+    min-width: 0;
+    max-width: 100%;
+    flex-wrap: nowrap;
+    gap: 14px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+
+  .f9-ed-detail-head .f9-ed-action-row > * {
+    flex: 0 0 auto;
+  }
+
+  .f9-ed-detail-body {
+    gap: 14px;
+  }
+
+  .f9-ed-detail-main {
+    gap: 16px;
+  }
+
+  .f9-ed-number-card,
+  .f9-ed-rail-card {
+    padding: 12px;
+    gap: 6px;
+  }
+
+  .f9-ed-detail-rail .f9-ed-fact-row {
+    gap: 4px 10px;
+    padding: 6px 12px;
+  }
+
+  .f9-ed-detail-rail {
+    gap: 12px;
+  }
+
+  .f9-ed-number-value {
+    font-size: 36px;
+  }
+
+  .f9-ed-rail-lines {
+    gap: 4px;
   }
 }
 

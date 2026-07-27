@@ -11,6 +11,9 @@ const FILES = [
   "../app/components/first-run-wait.tsx",
   "../app/routes/app.dashboard.tsx",
   "../app/routes/app.watchlists.tsx",
+  // BL-007: the opened competitor's customer copy moved into its own
+  // component; the banned-vocabulary guard follows the copy.
+  "../app/components/watchlists/competitor-detail.tsx",
   "../app/routes/app.digests.tsx",
 ].map((relative) => fileURLToPath(new URL(relative, import.meta.url)));
 
