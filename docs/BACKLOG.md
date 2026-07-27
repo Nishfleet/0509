@@ -28,6 +28,23 @@ The queue no longer stops when empty — it REFILLS, on evidence only:
    become new packages via a PR to this file. No finding, no package —
    self-invented work stays banned; the audit verdict is the only refill
    source.
+3b. **Anti-theater gates on every refill (Nish, 2026-07-27):**
+   - Every finding is adversarially challenged by a DIFFERENT model than the
+     auditor with one question: "would a paying customer actually notice or
+     care?" Findings that fail die; only survivors become packages.
+   - Every package names the specific customer moment it improves (the
+     renewal lens); a package that can't name one doesn't exist.
+   - FCEA evidence sources MUST include real-world signals, not just the
+     fixture: edge-data states (many watchlists, long names, non-Latin
+     scripts, empty/huge workspaces), the customer-at-risk and business-
+     numbers operator emails, scan-failure rates, and billing lifecycle
+     events. Emails are the monthly product — every rendered template is
+     in scope every audit.
+   - Refill rounds must SHRINK. A refill larger than the previous round is
+     itself a finding about the process and pauses the program for the
+     tech lead + Nish to inspect.
+   - Design-language fidelity check: after each program phase, Nish eyeballs
+     2-3 live surfaces; his "off track" verdict pauses new design packages.
 4. **Nish's standing gates:** he can veto/reorder anytime; pricing, product
    direction, and new-feature ideas park in the lane below for his explicit
    promotion; a design re-direction (new visual language) still requires his
