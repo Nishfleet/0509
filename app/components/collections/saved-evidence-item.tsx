@@ -1,11 +1,15 @@
 import type { ReactNode } from "react";
 
 import { AdThumb } from "~/components/ad-thumb";
-import { CollectionDisclosure } from "~/components/collections/collection-disclosure";
+import {
+  COLLECTION_ITEM_GROUP,
+  CollectionDisclosure,
+} from "~/components/collections/collection-disclosure";
 import { EvidencePlate } from "~/components/evidence/evidence-plate";
 import { SecondaryAction } from "~/components/evidence/cta";
 import {
   buildSavedItemFacts,
+  resolveSavedItemCapturedAt,
   resolveSavedItemChannel,
   resolveSavedItemPlate,
   resolveSavedItemVerification,
@@ -45,7 +49,7 @@ export function SavedEvidenceItem({
       <EvidencePlate
         capture={item.ad.creativeImageUrl ? <AdThumb ad={item.ad} /> : undefined}
         captureLines={plate.captureLines}
-        capturedAt={item.ad.evidenceCapturedAt ?? item.createdAt}
+        capturedAt={resolveSavedItemCapturedAt(item)}
         facts={buildSavedItemFacts(item)}
         footnote={savedItemFootnote(item)}
         headingLevel={3}
@@ -63,6 +67,7 @@ export function SavedEvidenceItem({
         {editor ? (
           <CollectionDisclosure
             className="f9-ed-collection-item-editor"
+            group={COLLECTION_ITEM_GROUP}
             rank={3}
             summary="Edit note and tags"
           >

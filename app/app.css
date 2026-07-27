@@ -12099,12 +12099,25 @@ reds soften --- */
 }
 
 /* The action row is a flex child of the ruled head, so a control can never
-   sit outside the card it belongs to (the audit's overlap defect). */
+   sit outside the card it belongs to (the audit's overlap defect). Top
+   alignment keeps the other controls put when the Export disclosure opens. */
 .f9-ed-collection-head .f9-ed-action-row {
   flex: 0 1 auto;
+  align-items: flex-start;
   justify-content: flex-end;
   gap: 10px 12px;
   min-width: 0;
+}
+
+/* §5: the two export formats are one Rank-2 control that reveals both, so the
+   row keeps to three Rank-2 slots. Its body is an inline pair, not the stacked
+   form panel the other disclosures carry. */
+.f9-ed-collection-export[open] > .f9-ed-disclosure-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 12px 14px;
 }
 
 .f9-ed-collection-head .f9-ed-action-row form {

@@ -103,11 +103,67 @@ export function latestSavedAt(items: readonly CollectionItemRecord[]): string | 
  * §6.9 — the saved item as an evidence plate
  * ------------------------------------------------------------------ */
 
+/**
+ * How this evidence reached the collection. Everything the plate claims about
+ * time is decided from this, because the three kinds hold genuinely different
+ * facts (brief §8.1, §8.3):
+ *
+ * - `captured` — we took the capture ourselves, so we hold a capture TIME.
+ * - `filed`    — someone on the team pasted a link and typed the date they saw
+ *                it. We hold an observation DATE and nothing else: no capture
+ *                of our own, and no run we ever watched.
+ * - `sample`   — demo material, labelled as such.
+ */
+export type SavedItemSourceKind = "captured" | "filed" | "sample";
+
+export function resolveSavedItemSourceKind(
+  source: AdRecord["source"] | undefined,
+): SavedItemSourceKind {
+  if (source === "external") return "filed";
+  if (source === "demo") return "sample";
+  return "captured";
+}
+
 /** Brief §8.3: demo and external material is labelled inline, in mono. */
 export function resolveSavedItemVerification(source: AdRecord["source"] | undefined): string {
   if (source === "demo") return "DEMO DATA — SAMPLE RESULTS";
   if (source === "external") return "EXTERNAL EVIDENCE";
   return "STORED CAPTURE";
+}
+
+/**
+ * The plate's header capture stamp — brief §8.1 ("every number and quote in
+ * the UI traces to a stored capture; it never estimates and never
+ * interpolates") and §13.1.
+ *
+ * ONLY a capture we took has a capture time, and only `evidenceCapturedAt`
+ * records it. The row's `createdAt` is when the item was filed into the
+ * collection, which is a different fact — stamping it on the plate header
+ * claims we were watching at a moment we were not. So there is no fallback:
+ * a captured ad with no `evidenceCapturedAt`, and every filed or sample item,
+ * returns null and the plate prints its own "capture time not recorded".
+ */
+export function resolveSavedItemCapturedAt(item: CollectionItemRecord): string | null {
+  if (resolveSavedItemSourceKind(item.ad.source) !== "captured") return null;
+  const stamp = item.ad.evidenceCapturedAt?.trim();
+  if (!stamp) return null;
+  return Number.isNaN(new Date(stamp).getTime()) ? null : stamp;
+}
+
+/**
+ * A date a person typed, rendered back exactly as they recorded it.
+ *
+ * Deliberately NOT `LocalTime`: an observation date carries no time and no
+ * zone, so converting it into the viewer's timezone would slide "24 Jul" to
+ * "23 Jul" west of UTC and invent precision we were never given. Anchoring to
+ * UTC returns the typed date unchanged. (The global-first rule governs
+ * timestamps of things we observed; this is the customer's own input.)
+ */
+export function formatRecordedObservationDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeZone: "UTC" }).format(parsed);
 }
 
 export function resolveSavedItemChannel(ad: Pick<AdRecord, "platforms" | "format">): string {
@@ -160,6 +216,30 @@ export function resolveSavedItemPlate(
  */
 export function buildSavedItemFacts(item: CollectionItemRecord): FactRow[] {
   const ad = item.ad;
+  const kind = resolveSavedItemSourceKind(ad.source);
+
+  /**
+   * The time row is source-aware, and this is the whole point.
+   *
+   * A filed link stores the typed observation date in `firstSeenAt` with
+   * `lastSeenAt: null` and `active: false` — it was never watched. Running it
+   * through the longevity helper turns "I saw this on 24 Jul" into
+   * "Running 3 days", a duration nobody observed. So a filed item states the
+   * date it was observed and makes no claim about how long anything ran.
+   */
+  const timeRow: FactRow =
+    kind === "captured"
+      ? {
+          key: "Running",
+          value: formatAdLongevityLabel(ad),
+          missingLabel: "not published",
+        }
+      : {
+          key: "Observed",
+          value: formatRecordedObservationDate(ad.firstSeenAt),
+          missingLabel: "date not recorded",
+        };
+
   return [
     {
       key: "Advertiser",
@@ -175,11 +255,7 @@ export function buildSavedItemFacts(item: CollectionItemRecord): FactRow[] {
       value: ad.cta?.trim() || null,
       missingLabel: "none captured",
     },
-    {
-      key: "Running",
-      value: formatAdLongevityLabel(ad),
-      missingLabel: "not published",
-    },
+    timeRow,
     {
       key: "Tags",
       value: item.tags.length > 0 ? item.tags.join(", ") : null,
@@ -193,10 +269,22 @@ export function buildSavedItemFacts(item: CollectionItemRecord): FactRow[] {
   ];
 }
 
-/** The provenance sentence under a saved plate (§8.1). */
+/**
+ * The provenance sentence under a saved plate (§8.1).
+ *
+ * A filed link has no capture of ours behind it, so it must not borrow the
+ * stored-capture note — saying "this is the stored capture" about a URL
+ * somebody pasted is the same false claim as stamping it with a capture time.
+ */
 export function savedItemFootnote(item: CollectionItemRecord): string {
-  const source = item.ad.source === "external" ? "Filed by your team" : "Captured from the ad library";
-  return `${source}. ${COLLECTION_CAPTURE_NOTE}`;
+  switch (resolveSavedItemSourceKind(item.ad.source)) {
+    case "filed":
+      return "Filed by your team from a link they saw. We did not capture this page ourselves.";
+    case "sample":
+      return "Sample data — not a real capture.";
+    default:
+      return `Captured from the ad library. ${COLLECTION_CAPTURE_NOTE}`;
+  }
 }
 
 export function savedItemProofLink(item: CollectionItemRecord): string | null {

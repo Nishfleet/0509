@@ -1,7 +1,10 @@
 import { Form } from "react-router";
 import type { ReactNode } from "react";
 
-import { CollectionDisclosure } from "~/components/collections/collection-disclosure";
+import {
+  COLLECTION_PANEL_GROUP,
+  CollectionDisclosure,
+} from "~/components/collections/collection-disclosure";
 import { SubmitButton } from "~/components/submit-button";
 import { COLLECTION_BOARD_EMPTY_COPY, RESERVED_COLLECTION_SLOT_COPY } from "~/lib/collections-display";
 
@@ -53,7 +56,11 @@ export function CollectionCreatePanel({
 
   if (mode === "disclosure") {
     return (
-      <CollectionDisclosure className="f9-ed-collection-create" summary="New collection">
+      <CollectionDisclosure
+        className="f9-ed-collection-create"
+        group={COLLECTION_PANEL_GROUP}
+        summary="New collection"
+      >
         {fields}
       </CollectionDisclosure>
     );

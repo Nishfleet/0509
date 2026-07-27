@@ -5,7 +5,10 @@ import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page"
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { ActionFeedback } from "~/components/action-feedback";
 import { CollectionCreatePanel } from "~/components/collections/collection-create-panel";
-import { CollectionDisclosure } from "~/components/collections/collection-disclosure";
+import {
+  COLLECTION_PANEL_GROUP,
+  CollectionDisclosure,
+} from "~/components/collections/collection-disclosure";
 import { CollectionSwitch } from "~/components/collections/collection-switch";
 import { SavedEvidenceItem } from "~/components/collections/saved-evidence-item";
 import { ConfirmSubmitButton } from "~/components/confirm-button";
@@ -422,15 +425,22 @@ export default function CollectionsRoute() {
                       Package for client
                     </SecondaryAction>
                   ) : null}
+                  {/* §5 caps an action row at two or three Rank-2 controls, so
+                      the two export formats are one control that reveals both
+                      rather than two of the row's slots. */}
                   {canExport ? (
-                    <>
+                    <CollectionDisclosure
+                      className="f9-ed-collection-export"
+                      group={COLLECTION_PANEL_GROUP}
+                      summary="Export"
+                    >
                       <SecondaryAction href={`/export/collection/${selected.id}`} small>
                         Export CSV
                       </SecondaryAction>
                       <SecondaryAction href={`/export/collection/${selected.id}?format=json`} small>
                         Export JSON
                       </SecondaryAction>
-                    </>
+                    </CollectionDisclosure>
                   ) : null}
                   {canShare ? (
                     <Form method="post">
@@ -588,6 +598,7 @@ export default function CollectionsRoute() {
                   first thing on the page. */}
               <CollectionDisclosure
                 className="f9-ed-collection-external"
+                group={COLLECTION_PANEL_GROUP}
                 summary="Add an evidence link"
               >
                 <Form className="f9-ed-form" method="post">

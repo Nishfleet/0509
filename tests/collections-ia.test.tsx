@@ -9,13 +9,17 @@ import {
   buildSavedItemFacts,
   formatCollectionsUsedValue,
   formatLockedActionsLabel,
+  formatRecordedObservationDate,
   formatSavedItemsValue,
   latestSavedAt,
   resolveCollectionPrimarySlot,
+  resolveSavedItemCapturedAt,
   resolveSavedItemChannel,
   resolveSavedItemPlate,
+  resolveSavedItemSourceKind,
   resolveSavedItemVerification,
   savedItemCaptureLines,
+  savedItemFootnote,
 } from "~/lib/collections-display";
 import type { CollectionItemRecord } from "~/lib/types";
 
@@ -329,6 +333,99 @@ describe("collections evidence plates (brief §6.9)", () => {
     expect(facts.find((row) => row.key === "Your note")?.missingLabel).toBe("none yet");
     expect(facts.find((row) => row.key === "Tags")?.value).toBeNull();
     expect(facts).toHaveLength(6);
+  });
+});
+
+describe("saved-item provenance is source-aware (brief §8.1, §13.1)", () => {
+  it("sorts each source into what it can actually prove", () => {
+    expect(resolveSavedItemSourceKind("external")).toBe("filed");
+    expect(resolveSavedItemSourceKind("demo")).toBe("sample");
+    expect(resolveSavedItemSourceKind("meta_library_browser")).toBe("captured");
+    expect(resolveSavedItemSourceKind(undefined)).toBe("captured");
+  });
+
+  it("stamps a captured plate only from its own capture time", () => {
+    expect(
+      resolveSavedItemCapturedAt(savedItem({ ad: { evidenceCapturedAt: null } as never })),
+    ).toBeNull();
+    expect(resolveSavedItemCapturedAt(savedItem())).toBe("2026-07-20T08:55:00.000Z");
+    // An unparseable stamp is no stamp — never a plausible-looking guess.
+    expect(
+      resolveSavedItemCapturedAt(savedItem({ ad: { evidenceCapturedAt: "not-a-date" } as never })),
+    ).toBeNull();
+  });
+
+  it("never stamps a filed link with the time it was filed", () => {
+    // Regression: `evidenceCapturedAt ?? item.createdAt` printed the filing
+    // time as a capture time, so a link observed on 24 Jul was stamped 27 Jul.
+    const filed = savedItem({
+      createdAt: "2026-07-27T14:00:00.000Z",
+      ad: { source: "external", firstSeenAt: "2026-07-24T00:00:00.000Z" } as never,
+    });
+
+    expect(resolveSavedItemCapturedAt(filed)).toBeNull();
+  });
+
+  it("gives a filed link its observed date and no invented run", () => {
+    const filed = savedItem({
+      ad: {
+        source: "external",
+        firstSeenAt: "2026-07-24T00:00:00.000Z",
+        lastSeenAt: null,
+        active: false,
+      } as never,
+    });
+    const facts = buildSavedItemFacts(filed);
+
+    expect(facts.find((row) => row.key === "Running")).toBeUndefined();
+    expect(facts.find((row) => row.key === "Observed")?.value).toBe("24 Jul 2026");
+    expect(facts.find((row) => row.key === "Observed")?.missingLabel).toBe("date not recorded");
+  });
+
+  it("returns a typed observation date unshifted by the viewer's timezone", () => {
+    expect(formatRecordedObservationDate("2026-07-24T00:00:00.000Z")).toBe("24 Jul 2026");
+    expect(formatRecordedObservationDate(null)).toBeNull();
+    expect(formatRecordedObservationDate("nonsense")).toBeNull();
+  });
+
+  it("does not call a pasted link a stored capture of ours", () => {
+    expect(savedItemFootnote(savedItem({ ad: { source: "external" } as never }))).toBe(
+      "Filed by your team from a link they saw. We did not capture this page ourselves.",
+    );
+    expect(savedItemFootnote(savedItem({ ad: { source: "demo" } as never }))).toBe(
+      "Sample data — not a real capture.",
+    );
+    expect(savedItemFootnote(savedItem())).toContain("This is the stored capture, not a re-render.");
+  });
+
+  it("renders the honest degrade end to end on a filed plate", async () => {
+    const markup = await render({
+      items: [
+        savedItem({
+          createdAt: "2026-07-27T14:00:00.000Z",
+          ad: {
+            source: "external",
+            platforms: ["LinkedIn"],
+            firstSeenAt: "2026-07-24T00:00:00.000Z",
+            lastSeenAt: null,
+            active: false,
+            evidenceCapturedAt: null,
+          } as never,
+        }),
+      ],
+    });
+
+    const plateHeader = markup.match(/<header class="f9-ed-plate-header[^>]*>.*?<\/header>/s)?.[0];
+
+    expect(plateHeader).toContain("EXTERNAL EVIDENCE");
+    expect(plateHeader).toContain("capture time not recorded");
+    // The filing time (27 Jul) never reaches the plate. It is still allowed to
+    // appear elsewhere on the page — the status strip's "Last saved" cell is
+    // exactly that fact, correctly labelled.
+    expect(plateHeader).not.toContain("Jul 2026");
+    expect(markup).toContain("24 Jul 2026");
+    expect(markup).not.toContain("Running");
+    expect(markup).not.toContain("This is the stored capture, not a re-render.");
   });
 });
 
