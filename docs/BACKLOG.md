@@ -1,11 +1,39 @@
 # 0509 Backlog
 
 The single source of unattended work. Rules: agents pull ONLY from this queue —
-never self-invented work; every nightly run ends with a PR link or a named
-blocker; an empty queue means nothing runs. Design-code items were gated on a
-Nish-picked direction; that gate cleared on 2026-07-27 with Direction 2, "The
-Evidence Desk" (`docs/design/EVIDENCE-DESK-BRIEF.md`). Ranked by Nish;
-maintained by the tech-lead session.
+never self-invented work; every run ends with a PR link or a named blocker.
+Design-code items were gated on a Nish-picked direction; that gate cleared on
+2026-07-27 with Direction 2, "The Evidence Desk"
+(`docs/design/EVIDENCE-DESK-BRIEF.md`). Ranked by Nish; maintained by the
+tech-lead session.
+
+## Continuous program (standing order, Nish 2026-07-27)
+
+The queue no longer stops when empty — it REFILLS, on evidence only:
+
+1. **Drain:** packages run continuously — one builder + one independent
+   adversarial reviewer each, consolidated-remediation lineage, full Gate-B
+   proof per package, merge only on APPROVE, every merge deploys via CI.
+   Parallel packages must own disjoint files.
+2. **Refill trigger:** when ≤2 packages remain unstarted, run the
+   **Full Customer Experience Audit (FCEA)**: EVERYTHING a customer can
+   touch, click, see, or receive — every route in every plan tier and state
+   (desktop + mobile, light + dark), every EMAIL template rendered and
+   screenshotted (alerts, digests, heartbeats, dunning, at-risk, welcome —
+   emails ARE the monthly product), PDFs, share links, unsubscribe, checkout
+   return, error/404/empty/loading states, onboarding, exports, API docs.
+   The bar: "built with intent, built to delight" — the customer must feel
+   valued and keep paying month over month for outsized value.
+3. **Repopulate:** audit findings (screenshot-evidenced, severity-ranked)
+   become new packages via a PR to this file. No finding, no package —
+   self-invented work stays banned; the audit verdict is the only refill
+   source.
+4. **Nish's standing gates:** he can veto/reorder anytime; pricing, product
+   direction, and new-feature ideas park in the lane below for his explicit
+   promotion; a design re-direction (new visual language) still requires his
+   pick. Program pauses instantly on his word.
+5. **Terminal condition:** an FCEA that produces zero S1/S2 findings across
+   all surfaces = the program idles (heartbeat audits only, monthly cadence).
 
 ## Done (2026-07-27)
 
