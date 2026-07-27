@@ -2196,6 +2196,12 @@ button[aria-busy="true"] {
   gap: 10px;
 }
 
+/* Insight-depth cards keep two-up only while each column stays readable;
+   below that they drop to one column instead of two-words-per-line. */
+.f9-work-list.is-compact .f9-insight-grid {
+  grid-template-columns: repeat(auto-fit, minmax(248px, 1fr));
+}
+
 .f9-work-row {
   display: flex;
   justify-content: space-between;
@@ -2209,6 +2215,21 @@ button[aria-busy="true"] {
 
 .f9-work-row > div {
   min-width: 0;
+}
+
+/* Saved-evidence cards stack a header, copy, an edit form and a remove action.
+   The base work row is a two-up header/action flex line, which laid those
+   blocks out side by side, crushed the copy and pushed the remove button
+   outside the panel (desktop horizontal scroll). Stack them instead. */
+.f9-work-row.is-stacked {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+}
+
+.f9-work-row.is-stacked > p {
+  margin: 0;
 }
 
 .f9-work-row.is-active {
