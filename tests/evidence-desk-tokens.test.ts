@@ -28,6 +28,16 @@ const REQUIRED_TOKENS = [
   "--ed-shadow-cta",
 ] as const;
 
+/**
+ * Comments are documentation, not declarations — a note explaining why
+ * `border-radius: 6px` from the app-wide focus rule is a problem must not
+ * register as a 6px radius, and a note quoting a hex contrast ratio must not
+ * register as a hardcoded hex.
+ */
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, "");
+}
+
 function edDeclarations(source: string): string[] {
   return source
     .split("\n")
@@ -48,7 +58,7 @@ describe("Evidence Desk token layer (brief §4)", () => {
   });
 
   it("never hardcodes a hex anywhere in the primitives section", () => {
-    const section = css.slice(css.indexOf(PRIMITIVES_MARKER));
+    const section = stripComments(css.slice(css.indexOf(PRIMITIVES_MARKER)));
     expect(section.length).toBeGreaterThan(1000);
     const offenders = section
       .split("\n")
@@ -68,7 +78,7 @@ describe("Evidence Desk token layer (brief §4)", () => {
   });
 
   it("keeps radius at 0 and the structural rule at 2.5px on Evidence Desk surfaces", () => {
-    const section = css.slice(css.indexOf(PRIMITIVES_MARKER));
+    const section = stripComments(css.slice(css.indexOf(PRIMITIVES_MARKER)));
     expect(section).toContain("border-radius: 0;");
     expect(section).toContain("border: 2.5px solid var(--ed-rule);");
     // Catches every non-zero form, including `0px`, `.5rem` and `var(--x)`.
@@ -95,6 +105,14 @@ describe("Evidence Desk token layer (brief §4)", () => {
     // Focus is visible and is NOT the offset shadow (brief §10).
     expect(cta).toContain(".f9-ed-cta:focus-visible");
     expect(cta).toContain("outline: 2.5px solid var(--ed-focus);");
+    // The app-wide `button:focus-visible` rule ships `border-radius: 6px` at
+    // (0,1,1) and outranks `.f9-ed-cta` at (0,1,0), so the focus rule must
+    // restate square corners or every CTA rounds itself on focus.
+    const focusRule = cta.slice(
+      cta.indexOf(".f9-ed-cta:focus-visible {"),
+      cta.indexOf("}", cta.indexOf(".f9-ed-cta:focus-visible {")),
+    );
+    expect(focusRule).toContain("border-radius: 0;");
     // Every rank gives hover feedback too, so focus is not the only signal.
     expect(cta).toContain(".f9-ed-cta--rank1:hover");
     expect(cta).toContain(".f9-ed-cta--rank2:hover");
@@ -131,5 +149,19 @@ describe("Evidence Desk token layer (brief §4)", () => {
     const section = css.slice(css.indexOf(PRIMITIVES_MARKER));
     expect(section).toContain('[data-ed-volume="plain"] .f9-ed-cta--rank1');
     expect(section).toContain('[data-ed-volume="plain"] .f9-ed-diff-plate');
+    // Hover states are shadows too: every rule that paints an offset shadow
+    // needs a Plain-volume counterpart, or the suppression list quietly rots.
+    const suppressed = section.slice(
+      section.indexOf('[data-ed-volume="plain"]'),
+      section.indexOf("}", section.indexOf('[data-ed-volume="plain"]')),
+    );
+    const shadowRules = section
+      .split("\n")
+      .filter((line) => /^\.f9-ed-cta--rank[12]:hover/.test(line.trim()))
+      .map((line) => line.trim().replace(" {", ""));
+    expect(shadowRules.length).toBeGreaterThan(0);
+    for (const rule of shadowRules) {
+      expect(suppressed).toContain(`[data-ed-volume="plain"] ${rule}`);
+    }
   });
 });

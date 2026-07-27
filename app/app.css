@@ -10489,9 +10489,15 @@ reds soften --- */
   text-underline-offset: 4px;
 }
 
+/* The app-wide `button:focus-visible` rule (see "a:focus-visible, …" above)
+   carries `border-radius: 6px` and, at (0,1,1), outranks `.f9-ed-cta` at
+   (0,1,0) — so without this declaration every Evidence Desk CTA grew a
+   Vercel-era rounded corner the moment it took focus. Square is not
+   decoration here; it is the system (brief §4.6). Restate it at (0,2,0). */
 .f9-ed-cta:focus-visible {
   outline: 2.5px solid var(--ed-focus);
   outline-offset: 3px;
+  border-radius: 0;
 }
 
 /* Hover feedback for every rank; the offset shadow is never the signal. */
@@ -10539,6 +10545,8 @@ reds soften --- */
 /* Plain volume (brief §3): settings surfaces keep the ranks and lose the
    offset shadows. Set by <DashboardPage volume="plain">. */
 [data-ed-volume="plain"] .f9-ed-cta--rank1,
+[data-ed-volume="plain"] .f9-ed-cta--rank1:hover,
+[data-ed-volume="plain"] .f9-ed-cta--rank2:hover,
 [data-ed-volume="plain"] .f9-ed-panel,
 [data-ed-volume="plain"] .f9-ed-diff-plate,
 [data-ed-volume="plain"] .f9-ed-evidence-plate,
