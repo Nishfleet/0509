@@ -251,6 +251,11 @@ describe("unsubscribe route", () => {
       params: {},
     } as never);
 
-    expect(data).toMatchObject({ valid: false, alreadyUnsubscribed: false, maskedEmail: expect.any(String), adapterUnavailable: true });
+    expect(data).toEqual({
+      valid: false,
+      alreadyUnsubscribed: false,
+      maskedEmail: "ow•••@example.com",
+      adapterUnavailable: true,
+    });
   });
 });
