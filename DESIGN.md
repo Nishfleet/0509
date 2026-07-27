@@ -39,27 +39,63 @@ scheduled it.
     was carefully scoped ("no confirmed changes", "demo data — sample results")
     keeps its exact meaning after any rewrite.
 
-## Two design systems (since 2026-06-12)
+## One system, two volumes (since 2026-07-27)
 
-**Public surfaces** (landing `/`, `/search`, `/auth/*`, legal, errors) use the
-**"Caught in the act"** system — see `docs/design/landing-caught-brief.md`:
-bone ground `#F4F1E8`, ink `#0E0D0A`, ONE signal-green accent `#16C47F`
-(red `#E0442C` only as diff-deletion semantic), Bricolage Grotesque 800
-uppercase display + Inter body + IBM Plex Mono evidence/timestamps,
-2-2.5px ink borders, zero gradients, case-file/evidence framing, scrolling
-capture ticker. Mobbin-referenced; never let it drift back toward generic
-SaaS gradients.
+Supersedes "Two design systems" (2026-06-12), which split the product into a
+loud public system and a calm Vercel-inspired workspace. The 2026-07-27
+signed-in visual audit found that split *was* the complaint: only Overview had
+been redesigned, and the gulf between the landing page and the interior read
+as two different products. Nish picked direction 2, **"The Evidence Desk"**,
+which deliberately overrides the old convention. Build brief:
+`docs/design/EVIDENCE-DESK-BRIEF.md`.
 
-**Logged-in workspace** (`/app/*`) keeps the Vercel-inspired system below —
-a daily-use tool wants calm restraint, not a poster. The wordmark and green
-accent are the bridge between the two.
+**There is now one system.** Bone ground `#F4F1E8`, ink `#0E0D0A`, ONE
+signal-green accent `#16C47F` (red `#E0442C` diff-deletion semantic only),
+Bricolage Grotesque 800 uppercase display + Inter body + IBM Plex Mono
+evidence/timestamps, 2–2.5px ink rules, square corners, hard offset shadows,
+zero gradients, case-file/evidence framing. Same tokens, same faces, same CTA
+hierarchy, same empty-state grammar everywhere. What changes between surfaces
+is **volume**, never vocabulary.
+
+**Volume 1 — full (the poster voice).** Landing `/`, `/search`, `/auth/*`,
+legal, errors — see `docs/design/landing-caught-brief.md` — plus, inside the
+workspace, the two artefacts that are handed to someone else: the agency
+report cover and its evidence plates. Landing display sizes, the scrolling
+capture ticker, ink-filled cover blocks, 8px offset shadows.
+
+**Volume 2 — workspace (~70%).** Everything else under `/app/*`. Identical
+rules and faces at roughly 70% of the display scale: page titles clamp to
+46px rather than 122px, 5px offset shadows, and the ticker appears on the
+watch board only — never on another workspace screen. The workspace is as
+confident as the pitch; it is not as loud.
+
+**Volume 3 — plain (long-dwell surfaces).** `/app/account`, `/app/billing`,
+`/app/team`, `/app/clients`, `/app/notifications`, `/app/source-access`,
+`/app/developer-access`, `/app/shares`, `/app/support`, `/app/ops`. Same
+tokens and same CTA hierarchy, but no ink-filled headers, no offset shadows
+and no uppercase display type above 22px. This is not a leftover from the old
+system — it is a deliberate mitigation of the named risk that an intense
+workspace fatigues a daily user. Loudness is reserved for evidence and
+deliverables; settings stay quiet on purpose.
 
 **Shared/external report views** (`/share/:token`, including the PDF variant)
-render in the **public "Caught in the act" system**, not the workspace one
-(added to the reskin 2026-07-25, WP W2-A). A shared report is an external
-client's first brand touch — often before they ever sign in — so it must read
-as the same bone/ink case-file brand as the landing page and search, never as
-a stray logged-out workspace screen.
+render at **full volume** (unchanged in spirit from the 2026-07-25 WP W2-A
+rule, now restated in volume terms). A shared report is an external client's
+first brand touch — often before they ever sign in — so it carries the cover,
+the three headline numbers and the numbered evidence plates, never a
+stray logged-out workspace screen.
+
+**Dark theme.** `[data-f9-theme="dark"]` (on `/app` and `/search` only) flips
+tokens; it is not a fourth volume and must not introduce a second visual
+language. Every Evidence Desk rule is written against semantic aliases over
+the existing `--ink` / `--bone` / `--card` / `--line` / `--green` variables —
+no hardcoded hex — and every package ships screenshots of both themes.
+
+**Migration status.** The Vercel-inspired reference below still describes the
+`/app/*` surfaces that no Evidence Desk work package has reached yet. It is
+being retired route by route (see the BL-005…BL-020 packages in
+`docs/BACKLOG.md`); where the two documents disagree on a route that has
+already landed, this section and the Evidence Desk brief win.
 
 ### Workspace header-action rule (since 2026-07-21, WP-A3)
 
@@ -91,6 +127,12 @@ for diff-deletion and genuine error semantics. A gate is never a dead end.
 ---
 
 # Design System Inspiration of Vercel
+
+> **Status (2026-07-27): being retired.** This reference governed the
+> logged-in workspace under the old two-system split. It now describes only
+> the `/app/*` surfaces an Evidence Desk work package has not yet reached.
+> For anything you are building today, read "One system, two volumes" above
+> and `docs/design/EVIDENCE-DESK-BRIEF.md` first.
 
 ## 1. Visual Theme & Atmosphere
 
