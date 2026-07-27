@@ -203,6 +203,15 @@ describe("Gate-B Playwright release manifest reporter", () => {
       "client-room-approval-recovery",
       "missing-report-recovery",
     ]));
+    expect(new Set(entries
+      .filter((entry) => [
+        "empty-gated-recovery-before-delivery",
+        "owner-member-delivery-privacy",
+      ].includes(entry.scenario))
+      .map((entry) => entry.finalUrl))).toEqual(new Set([
+      "/app/watchlists?watchlist=e2e-watchlist-scout-1&tab=delivery",
+      "/app/watchlists?watchlist=e2e-watchlist-agency-1&tab=delivery",
+    ]));
     expect(new Set(entries.filter((entry) => entry.sourceFile === "journey-5-release.spec.ts").map((entry) => entry.scenario))).toEqual(new Set([
       "journey-5-plan-boundary-entitlement",
       "journey-5-signed-lifecycle-readback",
