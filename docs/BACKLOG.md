@@ -256,9 +256,12 @@ in reviewable slices (≤800 lines per file per repo convention).
 Class fix from the evidence-usage time bomb (anchor dates that roll past and
 break the suite monthly). Find all fixed-date assertions; convert to fake
 timers.
-`tests/workspace-readiness.server.test.ts` flaked once in full-suite order
-(needs_setup assertion ~line 584), passed 4x after — suite-ordering suspect,
-will red a deploy eventually.
+The `tests/workspace-readiness.server.test.ts` billing flake noted here was NOT
+a date bomb — it was a `vi.doMock` registration race and is fixed separately.
+Vitest resolves consecutively queued mock registrations in parallel and
+registers each after its module-id resolution settles, so re-mocking a path a
+setup helper already queued lands in settle order, not call order. Guarded by
+`tests/mock-registration-race.test.ts`. The date sweep itself is still open.
 
 ## P3 — Nish-only (console/dashboard access required)
 
