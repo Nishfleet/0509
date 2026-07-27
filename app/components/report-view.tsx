@@ -8,6 +8,7 @@ import {
   EvidencePlate,
   FactRail,
   QuietLineList,
+  STORED_CAPTURE_NOTE,
   SpecimenEmptyState,
   formatPlateNumber,
   type FactRow,
@@ -111,7 +112,8 @@ export interface ReportViewProps {
 
 export function ReportView({ report, preparedBy, railActions, brandingNote }: ReportViewProps) {
   const finding = resolveReportFinding(report);
-  const window = resolveReportWindow(report);
+  const captureWindow = resolveReportWindow(report);
+  const preparedByName = preparedBy?.trim();
   const headlineNumbers = report.stats.slice(0, 3);
   const overflowNumbers = report.stats.slice(3);
   const plateCount = report.rows.length;
@@ -124,14 +126,14 @@ export function ReportView({ report, preparedBy, railActions, brandingNote }: Re
             {report.resourceType === "watchlist"
               ? "Competitor evidence report"
               : "Collection evidence report"}
-            {window ? (
+            {captureWindow ? (
               <>
                 {" · "}
-                <LocalTime iso={window.start} mode="date" />
-                {window.start === window.end ? null : (
+                <LocalTime iso={captureWindow.start} mode="date" />
+                {captureWindow.start === captureWindow.end ? null : (
                   <>
                     {" – "}
-                    <LocalTime iso={window.end} mode="date" />
+                    <LocalTime iso={captureWindow.end} mode="date" />
                   </>
                 )}
               </>
@@ -140,7 +142,13 @@ export function ReportView({ report, preparedBy, railActions, brandingNote }: Re
           <h1 className="f9-ed-report-headline">{finding.headline}</h1>
           <p className="f9-ed-report-standfirst">{report.summary}</p>
           <dl className="f9-ed-report-byline">
-            <ReportBylineCell label="Prepared by" value={preparedBy?.trim() || "Five to Nine"} />
+            {/* White-label: an agency's report carries the agency's name or no
+                byline at all. Five to Nine never signs a document it did not
+                prepare — the product credit lives in the shared page's
+                powered-by footer, which the plan catalog governs. */}
+            {preparedByName ? (
+              <ReportBylineCell label="Prepared by" value={preparedByName} />
+            ) : null}
             <ReportBylineCell label="Subject" value={report.title} />
             <ReportBylineCell
               label="Evidence"
@@ -228,8 +236,8 @@ export function ReportView({ report, preparedBy, railActions, brandingNote }: Re
         <section className="f9-ed-report-section" id="report-04">
           <ReportSectionHeading number="04" title="Every capture" />
           <p className="f9-ed-report-prose">
-            The complete trail behind this report. A line here is a capture we kept, in the order we
-            took it.
+            The complete trail behind this report — every capture that made it in, with the time it
+            was taken.
           </p>
           {plateCount > 0 ? (
             <QuietLineList items={buildCaptureTrail(report)} />
@@ -242,7 +250,7 @@ export function ReportView({ report, preparedBy, railActions, brandingNote }: Re
 
         <section className="f9-ed-report-section" id="report-05">
           <ReportSectionHeading number="05" title="How this was checked" />
-          <FactRail rows={buildMethodRows(report, window, overflowNumbers)} title="Method" />
+          <FactRail rows={buildMethodRows(report, captureWindow, overflowNumbers)} title="Method" />
           {report.sourceCoverage ? (
             <p className="f9-ed-report-prose">
               {legacyReportLabelText(report.sourceCoverage.note)}
@@ -252,7 +260,7 @@ export function ReportView({ report, preparedBy, railActions, brandingNote }: Re
           {/* Brief §6.10: the glossary sits at the END of the document, out of
               the reading flow — it is reference material, not the report. */}
           <details className="f9-ed-report-glossary">
-            <summary className="f9-ed-micro">How to read the evidence labels</summary>
+            <summary className="f9-ed-micro">Evidence labels</summary>
             <ProofGlossary />
           </details>
         </section>
@@ -297,18 +305,33 @@ function ReportBylineCell({ label, value }: { label: string; value: ReactNode })
   );
 }
 
-function ReportEvidencePlate({ number, row }: { number: number; row: ReportRow }) {
+/**
+ * A plate says each thing exactly once. Without this discipline a watch event
+ * with no linked ad — where the builder defaults `previewHeadline` to the
+ * event title — printed the same sentence as the plate header, its heading,
+ * a "stored capture" line and the capture-trail entry.
+ *
+ * Header = the artefact this plate shows (EvidencePlate's own contract).
+ * Heading = the finding. Capture frame = only what we actually captured.
+ */
+export function resolveReportPlateContent(row: ReportRow) {
   const advertiser = presentReportValue(row.advertiser);
+  const advertiserLabel = advertiser ? formatAdvertiserLabel(advertiser) : null;
   const previewHeadline = presentReportValue(row.previewHeadline);
-  const heading = advertiser
-    ? formatAdvertiserLabel(advertiser)
-    : previewHeadline ?? row.event?.title ?? "Saved ad";
-  const verification = row.event
-    ? legacyReportLabelText(row.event.proofStatusLabel)
-    : "Saved evidence";
-  const capturedAt = row.landingPage.capturedAt ?? row.event?.createdAt ?? null;
+  const eventTitle = presentReportValue(row.event?.title);
+
+  const artefactKind =
+    presentReportValue(row.event?.typeLabel) ??
+    presentReportValue(row.formatLabel) ??
+    "Ad creative";
+  const title = advertiserLabel ? `${artefactKind} · ${advertiserLabel}` : artefactKind;
+
+  // The advertiser already identifies an eventless saved ad in the header, so
+  // it never also becomes the heading.
+  const headline = eventTitle ?? (advertiserLabel ? null : previewHeadline);
+
   const captureLines = [
-    previewHeadline,
+    previewHeadline === headline || previewHeadline === eventTitle ? null : previewHeadline,
     presentReportValue(row.offer),
     presentReportValue(row.cta),
     presentReportValue(row.creativeText),
@@ -316,27 +339,46 @@ function ReportEvidencePlate({ number, row }: { number: number; row: ReportRow }
     presentReportValue(row.landingPage.headline),
   ].filter((line): line is string => Boolean(line));
 
+  return {
+    advertiserLabel,
+    artefactKind,
+    title,
+    headline,
+    captureLines,
+    subject: advertiserLabel ?? headline ?? previewHeadline ?? "Saved ad",
+    verification: row.event
+      ? legacyReportLabelText(row.event.proofStatusLabel)
+      : "Saved evidence",
+    capturedAt: row.landingPage.capturedAt ?? row.event?.createdAt ?? null,
+    // A capture note may only claim a capture exists when one does.
+    hasCapture: Boolean(row.previewImageUrl) || captureLines.length > 0,
+  };
+}
+
+function ReportEvidencePlate({ number, row }: { number: number; row: ReportRow }) {
+  const plate = resolveReportPlateContent(row);
+
   return (
     <EvidencePlate
       capture={
         row.previewImageUrl ? (
           <img
-            alt={`${heading} — stored creative capture`}
+            alt={`${plate.subject} — stored creative capture`}
             className="f9-ed-mock-capture"
             referrerPolicy="no-referrer"
             src={row.previewImageUrl}
           />
         ) : null
       }
-      captureLines={captureLines}
-      capturedAt={capturedAt}
+      captureLines={plate.captureLines}
+      capturedAt={plate.capturedAt}
       facts={buildPlateFacts(row)}
-      footnote={buildPlateFootnote(row)}
-      headline={row.event?.title ?? heading}
+      footnote={buildPlateFootnote(row, plate.hasCapture)}
       headingLevel={3}
+      headline={plate.headline ?? undefined}
       number={number}
-      title={heading}
-      verification={verification}
+      title={plate.title}
+      verification={plate.verification}
       why={row.event?.summary}
     />
   );
@@ -412,7 +454,7 @@ function buildPlateFacts(row: ReportRow): FactRow[] {
   return rows;
 }
 
-function buildPlateFootnote(row: ReportRow) {
+function buildPlateFootnote(row: ReportRow, hasCapture: boolean) {
   const parts: string[] = [];
   if (row.event?.proofTrail) {
     parts.push(legacyReportLabelText(row.event.proofTrail));
@@ -434,8 +476,12 @@ function buildPlateFootnote(row: ReportRow) {
   if (row.tags.length > 0) {
     parts.push(`Tagged ${row.tags.join(", ")}`);
   }
-  parts.push("This is the stored capture, not a re-render.");
-  return parts.join(" · ");
+  // Never promise a stored capture on a plate that has none — the frame is
+  // already saying "we could not read this one" (brief §8.1).
+  if (hasCapture) {
+    parts.push(STORED_CAPTURE_NOTE);
+  }
+  return parts.length > 0 ? parts.join(" · ") : undefined;
 }
 
 function ReportMoves({ report }: { report: ReportDocument }) {
@@ -470,18 +516,22 @@ function ReportMoves({ report }: { report: ReportDocument }) {
   );
 }
 
+/**
+ * The trail names the artefact each plate holds, not the finding — the finding
+ * is already the plate's heading, and repeating it here is what made a
+ * one-plate report read like an echo chamber.
+ */
 function buildCaptureTrail(report: ReportDocument): QuietLineItem[] {
   return report.rows.map((row, index) => {
-    const capturedAt = row.landingPage.capturedAt ?? row.event?.createdAt ?? null;
-    const label =
-      row.event?.title ??
-      presentReportValue(row.previewHeadline) ??
-      presentReportValue(row.advertiser) ??
-      "Saved ad";
+    const plate = resolveReportPlateContent(row);
     return {
       id: row.id,
-      stamp: capturedAt ? <LocalTime iso={capturedAt} /> : "capture time not recorded",
-      copy: `Plate ${formatPlateNumber(index + 1)} — ${label}`,
+      stamp: plate.capturedAt ? (
+        <LocalTime iso={plate.capturedAt} />
+      ) : (
+        "capture time not recorded"
+      ),
+      copy: `Plate ${formatPlateNumber(index + 1)} — ${plate.title}`,
     };
   });
 }
@@ -536,7 +586,11 @@ export function resolveReportFinding(report: ReportDocument): {
   if (topEvent) {
     return {
       headline: topEvent.title,
-      verdict: topEvent.recommendedAction,
+      // Mirrors ReportMoves: a blank recommended action is not a verdict, and
+      // an empty accent block would read as a missing product promise.
+      verdict:
+        topEvent.recommendedAction?.trim() ||
+        "We have not scored a next move on this one. The evidence is below — the call is yours.",
     };
   }
 
@@ -584,7 +638,7 @@ function describeWhatWeFound(report: ReportDocument) {
 
 function describePlateReference(plateCount: number) {
   if (plateCount === 0) {
-    return "There is no plate to read yet. Section 04 lists every capture we have taken so far.";
+    return "There is no plate to read yet. The next check that clears the evidence bar opens plate 01.";
   }
   if (plateCount === 1) {
     return "The evidence is plate 01 below, stamped with the time the capture was taken.";

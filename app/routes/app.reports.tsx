@@ -511,6 +511,7 @@ function GatedReportSpecimen() {
 
 export default function ReportsRoute() {
   const data = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
   const params = useParams();
   const [pdfPreparing, setPdfPreparing] = useState(false);
   const [reviewed, setReviewed] = useState(false);
@@ -547,7 +548,6 @@ export default function ReportsRoute() {
     reviewFingerprint,
     reviewNonce,
   } = data;
-  const actionData = useActionData<typeof action>();
   const shareUrl =
     actionData &&
     "shareUrl" in actionData &&

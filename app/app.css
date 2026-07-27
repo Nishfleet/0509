@@ -10563,12 +10563,14 @@ reds soften --- */
 }
 
 .f9-ed-fact-key {
+  min-width: 0;
   font-family: var(--ed-mono);
   font-weight: 600;
   font-size: 9.5px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--ink-soft);
+  overflow-wrap: anywhere;
 }
 
 .f9-ed-fact-value {
@@ -10991,8 +10993,8 @@ reds soften --- */
 }
 
 .f9-ed-report-byline {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 14px 22px;
   margin: 8px 0 0;
   padding-top: 16px;
@@ -11001,6 +11003,7 @@ reds soften --- */
 
 .f9-ed-report-byline-cell {
   display: grid;
+  flex: 1 1 150px;
   gap: 5px;
   min-width: 0;
 }
@@ -11148,7 +11151,8 @@ reds soften --- */
 .f9-ed-report-read p:first-child {
   margin: 0;
   color: var(--ed-on-accent);
-  opacity: 0.7;
+  /* 0.7 measured 4.49:1 against the accent fill — below the 4.5:1 gate. */
+  opacity: 0.75;
 }
 
 .f9-ed-report-read-verdict {
@@ -11297,8 +11301,9 @@ reds soften --- */
 
 .f9-ed-report-contents a {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 12px;
+  min-height: 44px;
   padding: 10px 0;
   border-bottom: 1.5px solid var(--ed-rule-soft);
   font-family: var(--ed-mono);
@@ -11478,6 +11483,28 @@ reds soften --- */
   color: var(--ink);
 }
 
+/* The report is ONE document wherever it renders. `/share/:token` repaints
+   headings and paragraphs into the public system's ink (`.f9-share-page h1`,
+   `.f9-share-page .f9-app-panel p`), which turned the ink cover into ink text
+   on an ink fill. Anything the report renders on a filled ground restates its
+   own on-fill colour here. */
+.f9-share-page .f9-ed-report-headline,
+.f9-share-page .f9-ed-report-cover p,
+.f9-share-page .f9-ed-report-byline dt,
+.f9-share-page .f9-ed-report-byline dd {
+  color: var(--ed-on-fill);
+}
+
+.f9-share-page .f9-ed-report-read p,
+.f9-share-page .f9-ed-report-read-verdict {
+  color: var(--ed-on-accent);
+}
+
+.f9-share-page .f9-ed-plate-header,
+.f9-share-page .f9-ed-plate-header span {
+  color: var(--ed-on-fill);
+}
+
 /* --- §3 full volume: the report and the shared view are the loud surfaces --- */
 
 [data-ed-volume="full"] {
@@ -11489,6 +11516,18 @@ reds soften --- */
 @media (max-width: 1080px) {
   .f9-ed-report {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* One column earlier than the primitive's own 720px breakpoint: inside the
+     report the plate shares its width with the contents rail, so the fact
+     rail runs out of room while the viewport is still a tablet. */
+  .f9-ed-report .f9-ed-evidence-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .f9-ed-report .f9-ed-evidence-capture {
+    border-right: 0;
+    border-bottom: 2.5px solid var(--ed-rule);
   }
 
   .f9-ed-report-main {
@@ -11548,5 +11587,19 @@ reds soften --- */
 
   .f9-ed-report-specimen-numbers {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* At phone width a long value squeezes the key column to nothing, and the
+   overflow guard then breaks the key mid-word ("URGE NCY"). Stack the row
+   instead — scoped to the report so the shared primitive keeps its shape for
+   the packages still building on it. */
+@media (max-width: 520px) {
+  .f9-ed-report .f9-ed-fact-row {
+    /* Give the key a floor and let the VALUE take the slack, so neither column
+       is squeezed into a mid-word break and the row stays one line tall
+       wherever it can. */
+    grid-template-columns: minmax(78px, auto) minmax(0, 1fr);
+    gap: 8px 12px;
   }
 }

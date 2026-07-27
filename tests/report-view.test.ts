@@ -98,7 +98,9 @@ describe("ReportView", () => {
       ],
     };
 
-    const markup = renderToStaticMarkup(createElement(ReportView, { report }));
+    const markup = renderToStaticMarkup(
+      createElement(ReportView, { report, preparedBy: "Northwind Growth" }),
+    );
 
     // §6.10 cover: kicker, the finding as the headline, standfirst, byline.
     expect(markup).toContain("Competitor evidence report");
@@ -108,6 +110,7 @@ describe("ReportView", () => {
     expect(markup).not.toContain("Report for");
     expect(markup).toContain("2 verified-evidence watch events.");
     expect(markup).toContain("Prepared by");
+    expect(markup).toContain("Northwind Growth");
     expect(markup).toContain("2 plates");
 
     // §6.10 "Our read": the verdict, before any number in section 01.
@@ -287,6 +290,119 @@ describe("ReportView", () => {
     expect(markup).not.toContain("Why it matters");
     expect(markup).not.toContain("Signal summary");
     expect(markup.match(/A new offer launched\./g)).toHaveLength(1);
+  });
+
+  /**
+   * White-label regression. Five to Nine never signs a report it did not
+   * prepare — the byline cell exists only when the workspace has an entitled
+   * agency name.
+   */
+  it("omits the prepared-by byline entirely rather than signing with our own name", () => {
+    const markup = renderToStaticMarkup(
+      createElement(ReportView, { report: legacyReport }),
+    );
+
+    expect(markup).not.toContain("Prepared by");
+    expect(markup).not.toMatch(/<dd>Five to Nine<\/dd>/);
+    // (ProofGlossary still names us inside the collapsed §05 glossary —
+    // logged on PR #397 as a separate leak owned by the glossary's package.)
+    // The remaining cells still fill the byline row — no orphan hole.
+    expect(markup).toContain("Subject");
+    expect(markup).toContain("Evidence");
+    expect(markup).toContain("Generated");
+
+    const branded = renderToStaticMarkup(
+      createElement(ReportView, { report: legacyReport, preparedBy: "  Northwind Growth  " }),
+    );
+    expect(branded).toContain("<dd>Northwind Growth</dd>");
+
+    const blank = renderToStaticMarkup(
+      createElement(ReportView, { report: legacyReport, preparedBy: "   " }),
+    );
+    expect(blank).not.toContain("Prepared by");
+  });
+
+  /**
+   * A watch event with no linked ad defaults `previewHeadline` to the event
+   * title. Before this, that one sentence printed as the plate header, the
+   * plate heading, a "stored capture" line and the capture-trail entry.
+   */
+  it("states each sentence once per plate when the event has no linked ad", () => {
+    const eventTitle = "Okara launched a new workflow offer";
+    const report = {
+      ...legacyReport,
+      resourceType: "watchlist" as const,
+      rows: [
+        {
+          ...reportRow("row-unlinked", "https://example.com/source"),
+          advertiser: null,
+          previewHeadline: eventTitle,
+          offer: null,
+          cta: null,
+          creativeText: null,
+          translatedText: null,
+          event: {
+            ...reportRow("row-unlinked", "")!.event!,
+            typeLabel: "New ad",
+            title: eventTitle,
+          },
+        },
+      ],
+    };
+
+    const markup = renderToStaticMarkup(createElement(ReportView, { report }));
+
+    // Cover headline + plate heading. Nothing else repeats it: not the plate
+    // header (which names the artefact), not the mock frame, not §04.
+    expect(markup.match(new RegExp(eventTitle, "g")) ?? []).toHaveLength(2);
+    expect(markup).toContain("PLATE 01 — New ad");
+    expect(markup).toContain("Plate 01 — New ad");
+    expect(markup).not.toContain(`<p class="f9-ed-mock-line">${eventTitle}</p>`);
+  });
+
+  it("does not claim a stored capture on a plate that captured nothing", () => {
+    const empty = {
+      ...legacyReport,
+      rows: [
+        {
+          ...reportRow("row-empty", "https://example.com/source"),
+          advertiser: "Okara",
+          previewHeadline: null,
+          offer: null,
+          cta: null,
+          creativeText: null,
+          translatedText: null,
+          previewImageUrl: null,
+          landingPage: { url: null, headline: null, captureLabel: null, capturedAt: null, signals: [] },
+        },
+      ],
+    };
+
+    const markup = renderToStaticMarkup(createElement(ReportView, { report: empty }));
+
+    expect(markup).toContain("We could not read this one.");
+    expect(markup).not.toContain("This is the stored capture, not a re-render.");
+
+    // …but it still says so on a plate that did capture something.
+    const captured = { ...legacyReport, rows: [reportRow("row-full", "https://example.com/source")] };
+    expect(renderToStaticMarkup(createElement(ReportView, { report: captured }))).toContain(
+      "This is the stored capture, not a re-render.",
+    );
+  });
+
+  it("still states a verdict when the top event carries no recommended action", () => {
+    const row = reportRow("row-no-action", "https://example.com/source");
+    const report = {
+      ...legacyReport,
+      resourceType: "watchlist" as const,
+      rows: [{ ...row, event: { ...row.event!, recommendedAction: "   " } }],
+    };
+
+    const markup = renderToStaticMarkup(createElement(ReportView, { report }));
+
+    expect(markup).toContain("Our read");
+    expect(markup).toContain("We have not scored a next move on this one.");
+    expect(markup).not.toContain('<p class="f9-ed-report-read-verdict"></p>');
   });
 
   it("renders the stored creative capture inside the plate's mock frame", () => {

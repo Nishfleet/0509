@@ -285,15 +285,23 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
         roomResourceCount: 0,
       });
       await expectReportAtViewport(page, viewport);
-      await expect(
-        page.getByText("Evidence and source coverage", { exact: false }),
-      ).toBeVisible();
-      await expect(
-        page.getByText("Verified evidence filter", { exact: true }),
-      ).toBeVisible();
-      await expect(
-        page.getByText("Check-spotted", { exact: true }).first(),
-      ).toBeVisible();
+      // BL-009: source coverage is no longer a mid-report packet — it is the
+      // report's closing "05 — how this was checked" section. Same guarantee,
+      // stated where a client reads it: what was included, what was filtered
+      // out, and the sentence that refuses to estimate.
+      const method = page.locator("#report-05");
+      await expect(method).toContainText("How this was checked");
+      // The proof mix is the method rail, not the glossary that closes the
+      // section — both legitimately use these labels.
+      const methodRail = method.locator(".f9-ed-fact-rail");
+      await expect(methodRail.getByText("Verified evidence", { exact: true })).toBeVisible();
+      await expect(methodRail.getByText("Check-spotted", { exact: true })).toBeVisible();
+      await expect(methodRail.getByText("Needs review", { exact: true })).toBeVisible();
+      await expect(methodRail.getByText("Excluded", { exact: true })).toBeVisible();
+      await expect(method).toContainText("verified-evidence event included");
+      await expect(method).toContainText(
+        "Where a number was not published by the source, this report says so rather than estimating it.",
+      );
       await attachReleaseStateArtifacts({ page, testInfo, prefix: "j4-report", state: "report-proof" });
       annotateFinalUrl(testInfo, page);
     });
@@ -618,10 +626,14 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
       await expect(
         anonymousPage.getByText("Shared report snapshot", { exact: true }),
       ).toBeVisible();
+      // BL-009: the finding is no longer a row heading inside the snapshot —
+      // it IS the shared document's headline (brief §6.10). Asserting level 1
+      // is the stronger form of the same guarantee: an anonymous client sees
+      // what we caught before anything else.
       await expect(
         anonymousPage.getByRole("heading", {
           name: "Okara launched a new workflow offer",
-          level: 2,
+          level: 1,
         }),
       ).toBeVisible();
       await expectTouchTargets(anonymousPage);
