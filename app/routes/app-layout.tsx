@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 import type { LoaderFunctionArgs, ShouldRevalidateFunctionArgs } from "react-router";
 import { Outlet, redirect, useLoaderData } from "react-router";
 
@@ -71,8 +71,20 @@ export function shouldRevalidate({
   return defaultShouldRevalidate;
 }
 
+/**
+ * Routes that carry their own Rank-1 primary (brief §5: exactly one ink-filled
+ * primary per screen). The shell's standing "+ Add competitor" demotes to
+ * Rank 2 there so the page's own primary is the only one in view. BL-009 owns
+ * the reports entries; the rest of this shell belongs to BL-017.
+ */
+export function shellPrimaryIsDemoted(pathname: string) {
+  return pathname === "/app/reports" || pathname.startsWith("/app/reports/");
+}
+
 export default function AppLayoutRoute() {
   const { session, showOpsNav, showPresenceNav } = useLoaderData<typeof loader>();
+  const { pathname } = useLocation();
+  const demoteShellPrimary = shellPrimaryIsDemoted(pathname);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const closeQuickAdd = useCallback(() => setQuickAddOpen(false), []);
 
@@ -100,7 +112,7 @@ export default function AppLayoutRoute() {
           <button
             aria-haspopup="dialog"
             aria-keyshortcuts="Meta+K Control+K"
-            className="f9-primary-button"
+            className={demoteShellPrimary ? "f9-secondary-button" : "f9-primary-button"}
             onClick={() => setQuickAddOpen(true)}
             type="button"
           >

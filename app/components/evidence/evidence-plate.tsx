@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { LocalTime } from "~/components/local-time";
 
 import { FactRail, type FactRow } from "./fact-rail";
@@ -25,8 +27,12 @@ export function formatPlateNumber(value: number): string {
 export function EvidencePlate({
   number,
   title,
+  headline,
+  headingLevel = 3,
+  why,
   verification,
   capturedAt,
+  capture,
   captureLines,
   facts,
   footnote,
@@ -36,9 +42,21 @@ export function EvidencePlate({
   number: number;
   /** What the plate shows — "OFFER PAGE", "AD CREATIVE". */
   title: string;
+  /**
+   * The finding this plate evidences, in display type. Optional: a plate that
+   * is purely a capture (no finding to state) renders without one rather than
+   * inventing a headline.
+   */
+  headline?: string;
+  /** Fits the plate to the surrounding document outline. */
+  headingLevel?: 2 | 3 | 4;
+  /** One sentence of why this plate matters. Rendered once, never repeated. */
+  why?: string;
   /** "VERIFIED", "SAMPLE", "DEMO DATA — SAMPLE RESULTS" (brief §8.3). */
   verification?: string;
   capturedAt?: string | null;
+  /** The stored capture itself (an image we took), above its text lines. */
+  capture?: ReactNode;
   /** Lines of the stored capture, rendered inside the mock frame. */
   captureLines?: readonly string[];
   /** Edited down to what an agency would quote (max 8, brief §6.6). */
@@ -49,6 +67,7 @@ export function EvidencePlate({
 }) {
   const lines = (captureLines ?? []).filter((line) => line.trim().length > 0);
   const stamp = capturedAt && !Number.isNaN(new Date(capturedAt).getTime());
+  const Heading = `h${headingLevel}` as "h2" | "h3" | "h4";
 
   return (
     <article className={className ? `f9-ed-evidence-plate ${className}` : "f9-ed-evidence-plate"}>
@@ -61,9 +80,12 @@ export function EvidencePlate({
           {stamp ? <LocalTime iso={capturedAt} /> : MISSING_CAPTURE_TIME_LABEL}
         </span>
       </header>
+      {headline ? <Heading className="f9-ed-evidence-headline">{headline}</Heading> : null}
+      {why ? <p className="f9-ed-evidence-why">{why}</p> : null}
       <div className="f9-ed-evidence-body">
         <div className="f9-ed-evidence-capture">
           <div className="f9-ed-mock-frame">
+            {capture}
             {lines.length > 0 ? (
               lines.map((line, index) => (
                 // Index key: a stored capture can repeat a line verbatim.
@@ -71,7 +93,7 @@ export function EvidencePlate({
                   {line}
                 </p>
               ))
-            ) : (
+            ) : capture ? null : (
               <p className="f9-ed-mock-empty">{UNREADABLE_CAPTURE_COPY}</p>
             )}
           </div>

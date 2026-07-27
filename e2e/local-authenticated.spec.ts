@@ -400,9 +400,11 @@ test.describe("local authenticated E2E harness", () => {
 
     await page.goto("/app/reports/watchlist:e2e-watchlist-agency-1");
     await expectAppPage(page);
-    // The "Evidence report" kicker ships twice: once in the page header and
-    // once inside the rendered report document.
-    await expect(page.getByText("Evidence report", { exact: true }).first()).toBeVisible();
+    // BL-009: the report opens on its cover, whose mono kicker names the
+    // document and whose headline is the finding (brief §6.10).
+    await expect(page.locator(".f9-ed-report-kicker")).toContainText(
+      "Competitor evidence report",
+    );
     await expect(page.getByRole("heading", { name: "Okara launched a new workflow offer" }).first()).toBeVisible();
   });
 

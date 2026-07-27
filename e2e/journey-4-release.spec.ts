@@ -122,7 +122,7 @@ async function expectNoOverflow(page: Page) {
 async function expectTouchTargets(page: Page) {
   await expectPhoneTouchTargets(page);
   const undersized = await page
-    .locator("button, a.f9-primary-button, a.f9-secondary-button")
+    .locator("button, a.f9-primary-button, a.f9-secondary-button, a.f9-ed-cta")
     .evaluateAll((elements) =>
       elements.flatMap((element) => {
         const rect = element.getBoundingClientRect();
@@ -163,26 +163,30 @@ async function expectKeyboardFocus(page: Page) {
   await expectVisibleKeyboardFocus(control);
 }
 
+// BL-009: source coverage moved into the report's "05 — how this was checked"
+// fact rail, and rows became numbered evidence plates (brief §6.6, §6.9). The
+// claim under test is unchanged: the report must index at least one current
+// verified-evidence artifact.
 async function expectCurrentEvidenceArtifactIndex(page: Page) {
-  const coverage = page.locator('section[aria-label="Report source coverage"]');
-  await expect(coverage).toBeVisible();
-  const verifiedEvidence = coverage
-    .locator("dl > div")
+  const method = page.locator("#report-05");
+  await expect(method).toBeVisible();
+  const verifiedEvidence = method
+    .locator(".f9-ed-fact-row")
     .filter({ hasText: "Verified evidence" })
-    .locator("dd");
+    .locator(".f9-ed-fact-value");
   await expect(verifiedEvidence).toHaveText(/^\d+$/u);
   expect(
     Number(await verifiedEvidence.textContent()),
     "the current report must index at least one verified evidence artifact",
   ).toBeGreaterThan(0);
-  const reportRows = page.locator(
-    'section[aria-label="Report rows"] .report-card',
+  const plates = page.locator(
+    'section[aria-label="Report evidence plates"] .f9-ed-evidence-plate',
   );
   expect(
-    await reportRows.count(),
-    "the report artifact index must contain a current evidence row",
+    await plates.count(),
+    "the report artifact index must contain a current evidence plate",
   ).toBeGreaterThan(0);
-  await expect(reportRows.first()).toBeVisible();
+  await expect(plates.first()).toBeVisible();
 }
 
 async function expectReportAtViewport(
@@ -204,7 +208,7 @@ async function expectReportAtViewport(
   ).toBeVisible();
   await expectCurrentEvidenceArtifactIndex(page);
   await expect(
-    page.getByRole("button", { name: "Share snapshot" }),
+    page.getByRole("button", { name: "Send to client" }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Download PDF" }),
@@ -281,15 +285,23 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
         roomResourceCount: 0,
       });
       await expectReportAtViewport(page, viewport);
-      await expect(
-        page.getByText("Evidence and source coverage", { exact: false }),
-      ).toBeVisible();
-      await expect(
-        page.getByText("Verified evidence filter", { exact: true }),
-      ).toBeVisible();
-      await expect(
-        page.getByText("Check-spotted", { exact: true }).first(),
-      ).toBeVisible();
+      // BL-009: source coverage is no longer a mid-report packet — it is the
+      // report's closing "05 — how this was checked" section. Same guarantee,
+      // stated where a client reads it: what was included, what was filtered
+      // out, and the sentence that refuses to estimate.
+      const method = page.locator("#report-05");
+      await expect(method).toContainText("How this was checked");
+      // The proof mix is the method rail, not the glossary that closes the
+      // section — both legitimately use these labels.
+      const methodRail = method.locator(".f9-ed-fact-rail");
+      await expect(methodRail.getByText("Verified evidence", { exact: true })).toBeVisible();
+      await expect(methodRail.getByText("Check-spotted", { exact: true })).toBeVisible();
+      await expect(methodRail.getByText("Needs review", { exact: true })).toBeVisible();
+      await expect(methodRail.getByText("Excluded", { exact: true })).toBeVisible();
+      await expect(method).toContainText("verified-evidence event included");
+      await expect(method).toContainText(
+        "Where a number was not published by the source, this report says so rather than estimating it.",
+      );
       await attachReleaseStateArtifacts({ page, testInfo, prefix: "j4-report", state: "report-proof" });
       annotateFinalUrl(testInfo, page);
     });
@@ -360,22 +372,26 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
       has: page.locator('input[name="intent"][value="download-pdf"]'),
     });
     await expect(pdfForm).toHaveCount(1);
-    const shareReview = shareForm.locator('input[name="reviewed"]');
-    const pdfReview = pdfForm.locator('input[name="reviewed"]');
-    await expect(shareReview).toHaveAttribute("required", "");
-    await expect(shareReview).toHaveAttribute("value", "true");
-    await expect(shareReview).not.toBeChecked();
-    await expect(pdfReview).toHaveAttribute("required", "");
-    await expect(pdfReview).toHaveAttribute("value", "true");
-    await expect(pdfReview).not.toBeChecked();
-    await shareReview.evaluate((control) => control.removeAttribute("required"));
-    await shareForm.getByRole("button", { name: "Share snapshot" }).click();
+    // BL-009: ONE reviewed-state control for the page, not one floating
+    // checkbox per form. It stays a real field of the share form (so the
+    // browser enforces the attestation without JavaScript) and the PDF
+    // submission mirrors its state into a hidden field.
+    const reviewControl = page.locator('input[type="checkbox"][name="reviewed"]');
+    await expect(reviewControl).toHaveCount(1);
+    await expect(reviewControl).toHaveAttribute("required", "");
+    await expect(reviewControl).toHaveAttribute("value", "true");
+    await expect(reviewControl).toHaveAttribute("form", "report-share-form");
+    await expect(reviewControl).not.toBeChecked();
+    const pdfReview = pdfForm.locator('input[type="hidden"][name="reviewed"]');
+    await expect(pdfReview).toHaveValue("false");
+
+    await reviewControl.evaluate((control) => control.removeAttribute("required"));
+    await shareForm.getByRole("button", { name: "Send to client" }).click();
     await expectLiveRegion(
       page,
       "Review the current evidence before sharing or downloading this report.",
     );
 
-    await pdfReview.evaluate((control) => control.removeAttribute("required"));
     await pdfForm.getByRole("button", { name: "Download PDF" }).click();
     await expectLiveRegion(
       page,
@@ -385,13 +401,16 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
     const staleShareForm = page.locator("form").filter({
       has: page.locator('input[name="intent"][value="share-report"]'),
     });
-    await staleShareForm.locator('input[name="reviewed"]').check();
+    await page.locator('input[type="checkbox"][name="reviewed"]').check();
+    await expect(pdfForm.locator('input[type="hidden"][name="reviewed"]')).toHaveValue(
+      "true",
+    );
     await staleShareForm
       .locator('input[name="reviewFingerprint"]')
       .evaluate((control) => {
         (control as HTMLInputElement).value = "stale";
       });
-    await staleShareForm.getByRole("button", { name: "Share snapshot" }).click();
+    await staleShareForm.getByRole("button", { name: "Send to client" }).click();
     await expectLiveRegion(
       page,
       "The report changed after you opened it. Review the current evidence before sharing or downloading.",
@@ -454,7 +473,7 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
         starterPage.getByRole("link", { name: "Upgrade to Agency" }),
       ).toBeVisible();
       await expect(
-        starterPage.getByRole("button", { name: "Share snapshot" }),
+        starterPage.getByRole("button", { name: "Send to client" }),
       ).toHaveCount(0);
       await expect(
         starterPage.getByRole("button", { name: "Download PDF" }),
@@ -570,12 +589,15 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
       const shareForm = page.locator("form").filter({
         has: page.locator('input[name="intent"][value="share-report"]'),
       });
-      const reviewedControl = shareForm.locator('input[name="reviewed"]');
+      // One reviewed-state control for the page (BL-009); it belongs to the
+      // share form via the `form` attribute rather than sitting inside it.
+      const reviewedControl = page.locator('input[type="checkbox"][name="reviewed"]');
+      await expect(reviewedControl).toHaveCount(1);
       await expect(reviewedControl).toHaveAttribute("required", "");
       await expect(reviewedControl).toHaveAttribute("value", "true");
       await expect(reviewedControl).not.toBeChecked();
       await reviewedControl.check();
-      await shareForm.getByRole("button", { name: "Share snapshot" }).click();
+      await shareForm.getByRole("button", { name: "Send to client" }).click();
       await expectLiveRegion(page, "Snapshot link created.");
       const shareAnchor = page.locator('a[href*="/share/"]').last();
       await expect(shareAnchor).toBeVisible();
@@ -604,10 +626,14 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
       await expect(
         anonymousPage.getByText("Shared report snapshot", { exact: true }),
       ).toBeVisible();
+      // BL-009: the finding is no longer a row heading inside the snapshot —
+      // it IS the shared document's headline (brief §6.10). Asserting level 1
+      // is the stronger form of the same guarantee: an anonymous client sees
+      // what we caught before anything else.
       await expect(
         anonymousPage.getByRole("heading", {
           name: "Okara launched a new workflow offer",
-          level: 2,
+          level: 1,
         }),
       ).toBeVisible();
       await expectTouchTargets(anonymousPage);

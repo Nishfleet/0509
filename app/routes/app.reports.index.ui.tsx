@@ -1,10 +1,19 @@
-import { Link, useLoaderData } from "react-router";
+import { useLoaderData } from "react-router";
 import type { MetaFunction } from "react-router";
 
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
-import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
+import { LockedFeature } from "~/components/locked-feature";
+import { SecondaryAction, SpecimenEmptyState, TertiaryAction } from "~/components/evidence";
+
+/**
+ * The report shelf — BL-009. Brief §6.1 (one full-width band per item, so a
+ * 3+1 orphan hole cannot form), §6.8 (a designed empty state and a designed
+ * plan gate, never a void), §5 (one Rank-1: open the report that is ready to
+ * send; "Manage shared links" is cross-navigation and drops to Rank 3 per
+ * DESIGN.md WP-A3).
+ */
 
 export type ReportsIndexLoaderData =
   | {
@@ -44,6 +53,30 @@ export function ReportsIndexErrorBoundary({ error }: { error: unknown }) {
   return <DashboardRouteError error={error} />;
 }
 
+function ReportsGateSpecimen() {
+  return (
+    <div className="f9-ed-report-specimen">
+      <p className="f9-ed-micro">Sample · not your workspace</p>
+      <p className="f9-ed-report-specimen-headline">Okara cut its team price by a third</p>
+      <div className="f9-ed-report-specimen-numbers">
+        <span>
+          <strong>7</strong>
+          Changes captured
+        </span>
+        <span>
+          <strong>3</strong>
+          Offer pages moved
+        </span>
+        <span>
+          <strong>26 d</strong>
+          History behind it
+        </span>
+      </div>
+      <p className="f9-ed-micro">Plate 01 — offer page · verified evidence</p>
+    </div>
+  );
+}
+
 export function ReportsIndexRoute() {
   const data = useLoaderData<ReportsIndexLoaderData>();
 
@@ -51,61 +84,67 @@ export function ReportsIndexRoute() {
     return (
       <DashboardPage>
         <section className="f9-app-stack">
-          <article aria-labelledby="reports-index-plan-title" className="f9-app-panel" role="status">
-            <p className="f9-app-kicker">Reports</p>
-            <h1 id="reports-index-plan-title">Reports are included in the Agency plan.</h1>
-            <p>
-              Upgrade before opening client reports. Your collections and monitoring remain available
-              on their existing pages.
-            </p>
-            <Link className="f9-primary-button" to={data.upgradePath}>
-              View Agency plan
-            </Link>
-          </article>
+          <LockedFeature
+            eyebrow="Reports"
+            planNeeded="Agency plan"
+            reason="Open client-ready reports and share the evidence with your team"
+            specimen={<ReportsGateSpecimen />}
+            specimenLabel="What an Agency report looks like"
+            title="Client-ready reports"
+            upgradeTo={data.upgradePath}
+          />
         </section>
       </DashboardPage>
     );
   }
 
+  const latest = data.reports[0] ?? null;
+
   return (
     <DashboardPage>
       <DashboardPageHeader
-        action={{ label: "Manage shared links", to: "/app/shares" }}
-        lead="Open a current proof-backed report from a collection or monitored competitor."
+        action={latest ? { label: "Open the latest report", to: latest.href } : undefined}
+        lead="Open a current proof-backed report from a collection or monitored competitor. Every one carries the captures behind it."
         title="Reports"
       />
 
-      <section className="f9-app-panel">
-        {data.reports.length === 0 ? (
-          <EmptyState
-            action={{ label: "Open collections", to: "/app/collections" }}
-            description="Save ads to a collection or add a competitor, then return here to open its report."
-            title="No report sources yet"
-          >
-            <Link className="f9-secondary-button" to="/app/watchlists">
-              Open competitors
-            </Link>
-          </EmptyState>
-        ) : (
-          <div className="f9-work-list">
+      {data.reports.length === 0 ? (
+        <SpecimenEmptyState
+          copy="A report is built from something you already track. Save ads into a collection or add a competitor, and its report opens here with the captures that prove it."
+          headline="No report source yet"
+          primaryAction={{ label: "Open collections", to: "/app/collections" }}
+          secondaryAction={{ label: "Open competitors", to: "/app/watchlists" }}
+          specimen={<ReportsGateSpecimen />}
+          specimenLabel="Plate 01 — pending"
+          stateLabel="Reports · no source yet"
+        />
+      ) : (
+        <>
+          <div className="f9-ed-report-shelf">
             {data.reports.map((report) => (
-              <article className="f9-work-row" key={report.id}>
-                <div>
-                  <span className="f9-app-kicker">{report.typeLabel}</span>
+              <article className="f9-ed-report-band" key={report.id}>
+                <div className="f9-ed-report-band-id">
+                  <p className="f9-ed-micro">{report.typeLabel}</p>
                   <h2>{report.title}</h2>
-                  <p>{report.description}</p>
-                  <small>
-                    Source updated <LocalTime fallback={report.updatedAt} iso={report.updatedAt} />
-                  </small>
                 </div>
-                <Link className="f9-secondary-button" to={report.href}>
-                  Open report
-                </Link>
+                <div className="f9-ed-report-band-body">
+                  <p>{report.description}</p>
+                  <p className="f9-ed-evidence-line">
+                    Source updated{" "}
+                    <LocalTime fallback={report.updatedAt} iso={report.updatedAt} />
+                  </p>
+                </div>
+                <div className="f9-ed-report-band-action">
+                  <SecondaryAction to={report.href}>Open report</SecondaryAction>
+                </div>
               </article>
             ))}
           </div>
-        )}
-      </section>
+          <p className="f9-ed-report-shelf-foot">
+            <TertiaryAction to="/app/shares">Manage shared links</TertiaryAction>
+          </p>
+        </>
+      )}
     </DashboardPage>
   );
 }

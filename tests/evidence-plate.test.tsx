@@ -82,4 +82,59 @@ describe("EvidencePlate", () => {
 
     expect(markup).toContain("DEMO DATA — SAMPLE RESULTS");
   });
+
+  /**
+   * BL-009 additions. The report's reading column needs each plate to state
+   * its finding as a real heading (R4 numbered sections) and to carry the
+   * stored capture itself, not only its transcript — dropping a capture we
+   * hold would break brief §8.1.
+   */
+  it("states the finding as a heading at the level the surrounding document needs", () => {
+    const markup = renderToStaticMarkup(
+      <EvidencePlate
+        capturedAt="2026-07-27T06:05:00.000Z"
+        facts={[{ key: "What changed", value: "Price" }]}
+        headingLevel={2}
+        headline="Okara cut its team price"
+        number={1}
+        title="OFFER PAGE"
+        why="The anchor price moved down before the weekend."
+      />,
+    );
+
+    expect(markup).toContain('<h2 class="f9-ed-evidence-headline">Okara cut its team price</h2>');
+    expect(markup).toContain("The anchor price moved down before the weekend.");
+  });
+
+  it("renders without a headline or a why when there is no finding to state", () => {
+    const markup = renderToStaticMarkup(
+      <EvidencePlate
+        capturedAt="2026-07-27T06:05:00.000Z"
+        captureLines={["Headline copy"]}
+        facts={[{ key: "Source", value: "Meta Ad Library" }]}
+        number={1}
+        title="AD CREATIVE"
+      />,
+    );
+
+    expect(markup).not.toContain("f9-ed-evidence-headline");
+    expect(markup).not.toContain("f9-ed-evidence-why");
+  });
+
+  it("keeps a stored capture in the frame and does not call it unreadable", () => {
+    const markup = renderToStaticMarkup(
+      <EvidencePlate
+        capture={<img alt="stored capture" src="https://cdn.example.com/creative.png" />}
+        capturedAt="2026-07-27T06:05:00.000Z"
+        captureLines={[]}
+        facts={[{ key: "Source", value: "Meta Ad Library" }]}
+        number={4}
+        title="AD CREATIVE"
+      />,
+    );
+
+    expect(markup).toContain('src="https://cdn.example.com/creative.png"');
+    // We hold a capture, so the honest-degrade sentence must NOT fire.
+    expect(markup).not.toContain(UNREADABLE_CAPTURE_COPY);
+  });
 });
