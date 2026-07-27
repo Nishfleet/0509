@@ -19,7 +19,23 @@ function createWatchlist(input: { id?: string; isActive?: boolean; lastScannedAt
   };
 }
 
-function setupMocks(overrides: Record<string, unknown> = {}) {
+/**
+ * Every module path must be registered with `vi.doMock` exactly once per test.
+ * Vitest resolves consecutively queued mock registrations in parallel and
+ * registers them in settle order, so re-mocking an already-queued path inside a
+ * test races with this helper and intermittently loses. Pass module overrides
+ * here instead of calling `vi.doMock` again in the test body.
+ */
+interface ModuleMockOverrides {
+  plan?: Record<string, unknown>;
+  workspace?: Record<string, unknown>;
+  adSource?: Record<string, unknown>;
+}
+
+function setupMocks(
+  overrides: Record<string, unknown> = {},
+  moduleOverrides: ModuleMockOverrides = {},
+) {
   const dataMocks = {
     listSavedQueries: vi.fn().mockResolvedValue([{ id: "query-1" }]),
     listWatchlists: vi.fn().mockResolvedValue([createWatchlist()]),
@@ -116,8 +132,7 @@ function setupMocks(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 
-  vi.doMock("~/lib/data.server", () => dataMocks);
-  vi.doMock("~/lib/plan.server", () => ({
+  const planMocks = {
     getProofUsageSummary: vi.fn().mockResolvedValue({
       plan: "agency",
       used: 2,
@@ -145,8 +160,9 @@ function setupMocks(overrides: Record<string, unknown> = {}) {
         expiresAt: null,
       },
     ]),
-  }));
-  vi.doMock("~/lib/workspace.server", () => ({
+    ...moduleOverrides.plan,
+  };
+  const workspaceMocks = {
     listWorkspaceMembers: vi.fn().mockResolvedValue([
       {
         id: "member-1",
@@ -158,8 +174,9 @@ function setupMocks(overrides: Record<string, unknown> = {}) {
         acceptedAt: now,
       },
     ]),
-  }));
-  vi.doMock("~/lib/ad-source.server", () => ({
+    ...moduleOverrides.workspace,
+  };
+  const adSourceMocks = {
     resolveCommercialAdSourceStatus: vi.fn().mockResolvedValue({
       status: "healthy",
       provider: "meta_library_browser",
@@ -169,7 +186,13 @@ function setupMocks(overrides: Record<string, unknown> = {}) {
       lastErrorCode: null,
       lastErrorMessage: null,
     }),
-  }));
+    ...moduleOverrides.adSource,
+  };
+
+  vi.doMock("~/lib/data.server", () => dataMocks);
+  vi.doMock("~/lib/plan.server", () => planMocks);
+  vi.doMock("~/lib/workspace.server", () => workspaceMocks);
+  vi.doMock("~/lib/ad-source.server", () => adSourceMocks);
 
   return dataMocks;
 }
@@ -548,35 +571,36 @@ describe("getWorkspaceReadiness", () => {
         dodoNextBillingAt: null,
         planUpdatedAt: null,
       }),
+    }, {
+      plan: {
+        getProofUsageSummary: vi.fn().mockResolvedValue({
+          plan: "free",
+          used: 0,
+          baseLimit: 0,
+          extraCredits: 0,
+          limit: 0,
+          remaining: 0,
+          usageRatio: 0,
+          warningLevel: "ok",
+          upgradeTarget: null,
+        }),
+        listActiveProofCreditGrants: vi.fn().mockResolvedValue([]),
+      },
+      workspace: {
+        listWorkspaceMembers: vi.fn().mockResolvedValue([]),
+      },
+      adSource: {
+        resolveCommercialAdSourceStatus: vi.fn().mockResolvedValue({
+          status: "demo",
+          provider: "demo",
+          mode: "demo",
+          summary: "No live commercial discovery provider is configured.",
+          lastCheckedAt: null,
+          lastErrorCode: null,
+          lastErrorMessage: null,
+        }),
+      },
     });
-    vi.doMock("~/lib/plan.server", () => ({
-      getProofUsageSummary: vi.fn().mockResolvedValue({
-        plan: "free",
-        used: 0,
-        baseLimit: 0,
-        extraCredits: 0,
-        limit: 0,
-        remaining: 0,
-        usageRatio: 0,
-        warningLevel: "ok",
-        upgradeTarget: null,
-      }),
-      listActiveProofCreditGrants: vi.fn().mockResolvedValue([]),
-    }));
-    vi.doMock("~/lib/workspace.server", () => ({
-      listWorkspaceMembers: vi.fn().mockResolvedValue([]),
-    }));
-    vi.doMock("~/lib/ad-source.server", () => ({
-      resolveCommercialAdSourceStatus: vi.fn().mockResolvedValue({
-        status: "demo",
-        provider: "demo",
-        mode: "demo",
-        summary: "No live commercial discovery provider is configured.",
-        lastCheckedAt: null,
-        lastErrorCode: null,
-        lastErrorMessage: null,
-      }),
-    }));
 
     const readiness = await loadReadiness();
     const items = Object.fromEntries(readiness.items.map((item) => [item.id, item]));

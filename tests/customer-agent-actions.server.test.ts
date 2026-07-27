@@ -137,7 +137,32 @@ function auditRecord(input: Partial<AgentActionAuditRecord> = {}): AgentActionAu
   };
 }
 
-function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {}) {
+/**
+ * Stand-in for `runAtomicAgentAction`. Tests that need a different atomic
+ * runner must pass it through `setupMocks`, never re-register
+ * `~/lib/agent-actions.server` with a second `vi.doMock`: Vitest resolves
+ * consecutively queued mock registrations in parallel and registers them in
+ * settle order, so a second registration of an already-queued path races with
+ * this helper and intermittently loses.
+ */
+type AtomicAgentActionRunner = (
+  env: never,
+  context: { actionName: string },
+  options: {
+    prepare: (
+      db: never,
+      auditId: string,
+    ) => Promise<{ result: Record<string, unknown> }> | { result: Record<string, unknown> };
+  },
+) => Promise<{ audit: AgentActionAuditRecord; replayed: boolean; result: unknown }>;
+
+function setupMocks(
+  options: {
+    planLimitAllowed?: boolean;
+    plan?: string;
+    runAtomicAgentAction?: AtomicAgentActionRunner;
+  } = {},
+) {
   const mocks = {
     checkPlanLimit: vi.fn().mockResolvedValue({
       allowed: options.planLimitAllowed ?? true,
@@ -503,21 +528,23 @@ function setupMocks(options: { planLimitAllowed?: boolean; plan?: string } = {})
   vi.doMock("~/lib/ad-source.server", () => ({
     CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
   }));
+  const defaultRunAtomicAgentAction: AtomicAgentActionRunner = async (_env, context, atomicOptions) => {
+    const prepared = await atomicOptions.prepare(
+      { prepare: () => ({ bind: () => ({}) }) } as never,
+      "audit-atomic",
+    );
+    return {
+      audit: auditRecord({ actionName: context.actionName, status: "succeeded", result: prepared.result }),
+      replayed: false,
+      result: prepared.result,
+    };
+  };
+  const runAtomicAgentAction = options.runAtomicAgentAction ?? defaultRunAtomicAgentAction;
   vi.doMock("~/lib/agent-actions.server", async () => {
     const actual = await vi.importActual<typeof import("~/lib/agent-actions.server")>("~/lib/agent-actions.server");
     return {
       ...actual,
-      runAtomicAgentAction: vi.fn(async (_env, _context, options) => {
-        const prepared = await options.prepare(
-          { prepare: () => ({ bind: () => ({}) }) } as never,
-          "audit-atomic",
-        );
-        return {
-          audit: auditRecord({ actionName: _context.actionName, status: "succeeded", result: prepared.result }),
-          replayed: false,
-          result: prepared.result,
-        };
-      }),
+      runAtomicAgentAction: vi.fn(runAtomicAgentAction),
     };
   });
 
@@ -1220,7 +1247,27 @@ describe("runCustomerAgentAction", () => {
   });
 
   it("creates report snapshot share links from owned resources", async () => {
-    const mocks = setupMocks();
+    let persistedSnapshot: unknown;
+    const mocks = setupMocks({
+      runAtomicAgentAction: async (_env, _context, atomicOptions) => {
+        const prepared = await atomicOptions.prepare(
+          {
+            prepare: () => ({
+              bind: (...bindings: unknown[]) => {
+                persistedSnapshot = JSON.parse(String(bindings[6]));
+                return {};
+              },
+            }),
+          } as never,
+          "audit-atomic",
+        );
+        return {
+          audit: auditRecord({ actionName: "report.share", status: "succeeded", result: prepared.result }),
+          replayed: false,
+          result: prepared.result,
+        };
+      },
+    });
     mocks.listCollectionItems.mockResolvedValue([{
       id: "item-1",
       collectionId: "collection-1",
@@ -1243,31 +1290,6 @@ describe("runCustomerAgentAction", () => {
         },
       },
     }]);
-    let persistedSnapshot: unknown;
-    vi.doMock("~/lib/agent-actions.server", async () => {
-      const actual = await vi.importActual<typeof import("~/lib/agent-actions.server")>("~/lib/agent-actions.server");
-      return {
-        ...actual,
-        runAtomicAgentAction: vi.fn(async (_env, _context, options) => {
-          const prepared = await options.prepare(
-            {
-              prepare: () => ({
-                bind: (...bindings: unknown[]) => {
-                  persistedSnapshot = JSON.parse(String(bindings[6]));
-                  return {};
-                },
-              }),
-            } as never,
-            "audit-atomic",
-          );
-          return {
-            audit: auditRecord({ actionName: "report.share", status: "succeeded", result: prepared.result }),
-            replayed: false,
-            result: prepared.result,
-          };
-        }),
-      };
-    });
     const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
 
     const outcome = await runCustomerAgentAction(
@@ -1428,24 +1450,19 @@ describe("runCustomerAgentAction", () => {
   });
 
   it("replays report share actions with a reconstructed share URL", async () => {
-    const mocks = setupMocks();
-    vi.doMock("~/lib/agent-actions.server", async () => {
-      const actual = await vi.importActual<typeof import("~/lib/agent-actions.server")>("~/lib/agent-actions.server");
-      const replayedResult = {
-        ok: true,
-        action: "report.share",
-        report: { reportId: "collection:collection-1" },
-        share: { id: "share-1", token: "sharetoken1", expiresAt: "2026-09-19T00:00:00.000Z" },
-        shareUrl: "https://0509.io/share/sharetoken1",
-      };
-      return {
-        ...actual,
-        runAtomicAgentAction: vi.fn().mockResolvedValue({
-          audit: auditRecord({ actionName: "report.share", status: "succeeded", result: replayedResult }),
-          replayed: true,
-          result: replayedResult,
-        }),
-      };
+    const replayedResult = {
+      ok: true,
+      action: "report.share",
+      report: { reportId: "collection:collection-1" },
+      share: { id: "share-1", token: "sharetoken1", expiresAt: "2026-09-19T00:00:00.000Z" },
+      shareUrl: "https://0509.io/share/sharetoken1",
+    };
+    const mocks = setupMocks({
+      runAtomicAgentAction: async () => ({
+        audit: auditRecord({ actionName: "report.share", status: "succeeded", result: replayedResult }),
+        replayed: true,
+        result: replayedResult,
+      }),
     });
     const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
 
@@ -3329,7 +3346,27 @@ describe("runCustomerAgentAction", () => {
   });
 
   it("requires and forwards the last observed timestamp for client-room updates", async () => {
-    const mocks = setupMocks();
+    let boundValues: unknown[] = [];
+    const mocks = setupMocks({
+      runAtomicAgentAction: async (_env, _context, atomicOptions) => {
+        const prepared = await atomicOptions.prepare(
+          {
+            prepare: () => ({
+              bind: (...bindings: unknown[]) => {
+                boundValues = bindings;
+                return {};
+              },
+            }),
+          } as never,
+          "audit-atomic",
+        );
+        return {
+          audit: auditRecord({ actionName: "client_room.upsert", status: "succeeded", result: prepared.result }),
+          replayed: false,
+          result: prepared.result,
+        };
+      },
+    });
     mocks.getClientRoom.mockResolvedValue({
       id: "room-1",
       userId: "user-1",
@@ -3340,31 +3377,6 @@ describe("runCustomerAgentAction", () => {
       notes: { goal: "Weekly proof review" },
       createdAt: "2026-06-19T00:00:00.000Z",
       updatedAt: "2026-07-15T10:00:00.000Z",
-    });
-    let boundValues: unknown[] = [];
-    vi.doMock("~/lib/agent-actions.server", async () => {
-      const actual = await vi.importActual<typeof import("~/lib/agent-actions.server")>("~/lib/agent-actions.server");
-      return {
-        ...actual,
-        runAtomicAgentAction: vi.fn(async (_env, _context, options) => {
-          const prepared = await options.prepare(
-            {
-              prepare: () => ({
-                bind: (...bindings: unknown[]) => {
-                  boundValues = bindings;
-                  return {};
-                },
-              }),
-            } as never,
-            "audit-atomic",
-          );
-          return {
-            audit: auditRecord({ actionName: "client_room.upsert", status: "succeeded", result: prepared.result }),
-            replayed: false,
-            result: prepared.result,
-          };
-        }),
-      };
     });
     const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
 
@@ -3392,7 +3404,28 @@ describe("runCustomerAgentAction", () => {
   });
 
   it("clears stale report approvals from the committed and replayed result when refs change", async () => {
-    const mocks = setupMocks();
+    let committedResult: Record<string, unknown> | null = null;
+    const mocks = setupMocks({
+      runAtomicAgentAction: async (_env, context, atomicOptions) => {
+        if (committedResult) {
+          return {
+            audit: auditRecord({ actionName: context.actionName, status: "succeeded", result: committedResult }),
+            replayed: true,
+            result: committedResult,
+          };
+        }
+        const prepared = await atomicOptions.prepare(
+          { prepare: () => ({ bind: () => ({}) }) } as never,
+          "audit-atomic",
+        );
+        committedResult = prepared.result;
+        return {
+          audit: auditRecord({ actionName: context.actionName, status: "succeeded", result: prepared.result }),
+          replayed: false,
+          result: prepared.result,
+        };
+      },
+    });
     mocks.getClientRoom.mockResolvedValue({
       id: "room-1",
       userId: "user-1",
@@ -3415,32 +3448,6 @@ describe("runCustomerAgentAction", () => {
       },
       createdAt: "2026-06-19T00:00:00.000Z",
       updatedAt: "2026-07-15T10:00:00.000Z",
-    });
-    let committedResult: Record<string, unknown> | null = null;
-    vi.doMock("~/lib/agent-actions.server", async () => {
-      const actual = await vi.importActual<typeof import("~/lib/agent-actions.server")>("~/lib/agent-actions.server");
-      return {
-        ...actual,
-        runAtomicAgentAction: vi.fn(async (_env, context, options) => {
-          if (committedResult) {
-            return {
-              audit: auditRecord({ actionName: context.actionName, status: "succeeded", result: committedResult }),
-              replayed: true,
-              result: committedResult,
-            };
-          }
-          const prepared = await options.prepare(
-            { prepare: () => ({ bind: () => ({}) }) } as never,
-            "audit-atomic",
-          );
-          committedResult = prepared.result;
-          return {
-            audit: auditRecord({ actionName: context.actionName, status: "succeeded", result: prepared.result }),
-            replayed: false,
-            result: prepared.result,
-          };
-        }),
-      };
     });
     const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
     const input = {
