@@ -256,6 +256,9 @@ in reviewable slices (≤800 lines per file per repo convention).
 Class fix from the evidence-usage time bomb (anchor dates that roll past and
 break the suite monthly). Find all fixed-date assertions; convert to fake
 timers.
+`tests/workspace-readiness.server.test.ts` flaked once in full-suite order
+(needs_setup assertion ~line 584), passed 4x after — suite-ordering suspect,
+will red a deploy eventually.
 
 ## P3 — Nish-only (console/dashboard access required)
 
