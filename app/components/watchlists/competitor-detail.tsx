@@ -6,7 +6,6 @@ import { CreativeWall } from "~/components/creative-wall";
 import { SecondaryAction, TertiaryAction } from "~/components/evidence/cta";
 import { StatusStrip, type StatusCell } from "~/components/evidence/status-strip";
 import { FirstRunWaitArc } from "~/components/first-run-wait";
-import { InsightDepthPanel } from "~/components/insight-depth-panel";
 import { LocalTime } from "~/components/local-time";
 import { Pill } from "~/components/pill";
 import { ProofGlossary } from "~/components/proof-glossary";
@@ -23,7 +22,6 @@ import { RecentChecksSection } from "~/components/watchlists/recent-checks-secti
 import { RecentEvidenceChecksCard } from "~/components/watchlists/recent-evidence-checks-card";
 import { WatchlistSetupCard } from "~/components/watchlists/watchlist-setup-card";
 import type { PublicDeliveryAttemptSummary } from "~/lib/delivery-attempt-public";
-import { buildWatchlistInsightDepth } from "~/lib/insight-depth";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import type { WatchlistRecord } from "~/lib/types";
 import {
@@ -104,6 +102,8 @@ export interface CompetitorDetailProps {
   canEmailDelivery: boolean;
   showSlackDelivery: boolean;
   lockedToolbarUpgradeLabel: string | null;
+  /** URL-driven disclosure for quiet-line collapse (brief §6.7, §11). */
+  checksExpanded?: boolean;
 }
 
 const RANK2 = "f9-ed-cta f9-ed-cta--rank2";
@@ -378,7 +378,6 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
   }
 
   if (props.activeTab === "evidence") {
-    const insightDepth = buildWatchlistInsightDepth(data.events);
     return (
       <>
         {data.dossier ? (
@@ -397,23 +396,32 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
           </div>
         </div>
         <RecentEvidenceChecksCard data={data} />
-        <RecentChecksSection runs={data.runs} />
-        <InsightDepthPanel summary={insightDepth} />
+        <RecentChecksSection
+          checksExpanded={props.checksExpanded}
+          runs={data.runs}
+          watchlistId={watchlist.id}
+        />
         <CandidateHistory candidates={data.eventCandidates} />
-        <ProofGlossary />
+        <details className="f9-ed-report-glossary">
+          <summary className="f9-ed-micro">Evidence labels</summary>
+          <ProofGlossary />
+        </details>
       </>
     );
   }
 
   return (
     <EventChangesSection
+      checksExpanded={props.checksExpanded}
       data={data}
       lastAttemptByEventId={buildLastAttemptByEventId(data.recentDeliveryAttempts)}
       proofCapturesById={
         new Map(data.recentProofCaptures.map((capture) => [capture.id, capture]))
       }
+      recentProofCaptures={data.recentProofCaptures}
       renderedAt={props.renderedAt}
       sourceCanSchedule={props.sourceCanSchedule}
+      watchlistId={watchlist.id}
     />
   );
 }

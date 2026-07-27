@@ -132,7 +132,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
         viewport,
         "/app/watchlists?watchlist=e2e-watchlist-j3-crash",
         "Competitors",
-        [/Scanning this competitor now/, /first scan is running now/i],
+        [/Scanning this competitor now/, /(first scan is running|First capture running|Your first scan is running)/i],
       );
       // BL-007: run history lives on the Evidence tab.
       await page.goto("/app/watchlists?watchlist=e2e-watchlist-j3-crash&tab=evidence");
@@ -166,8 +166,9 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
       );
       await expect(page.getByText("Needs source access", { exact: true })).toBeVisible();
       await expect(page.getByText("After source access is ready", { exact: true })).toBeVisible();
-      await expect(page.getByText("Verified from a page snapshot", { exact: false }).first()).toBeVisible();
-      await expect(page.getByText("No alert sent for this change yet.", { exact: true }).first()).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Okara launched a new workflow offer" }).first()).toBeVisible();
+      await expect(page.getByText("This is the stored capture, not a re-render.", { exact: true }).first()).toBeVisible();
+      await expect(page.getByText("Fixture confirmed proof-backed event.", { exact: true }).first()).toBeVisible();
 
       await expectResponsiveSurface(
         page,
@@ -176,11 +177,10 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
         "Competitors",
         [/Evidence and alerts/, /Evidence freshness/],
       );
-      await expect(page.getByText("Last good evidence check", { exact: false })).toBeVisible();
+      await expect(page.getByText("Last good check", { exact: false })).toBeVisible();
       await expect(page.getByText("Confidence pending", { exact: false }).first()).toBeVisible();
-      await expect(page.getByText("Succeeded · Scheduled scan", { exact: true })).toBeVisible();
-      await expect(page.getByText("Failed · Scheduled scan", { exact: true })).toBeVisible();
-      await expect(page.getByText("This scan failed. Check Source access, then retry — or email support and we'll dig in.", { exact: true })).toBeVisible();
+      await expect(page.getByText(/Checked\./).first()).toBeVisible();
+      await expect(page.getByText(/Check failed — This scan failed\. Check Source access/).first()).toBeVisible();
       await expect(page.getByText(/1 ads seen/)).toBeVisible();
 
       await expectResponsiveSurface(
@@ -330,8 +330,8 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
 
       await signInAs(context, baseURL!, "e2e-starter");
       await page.goto("/app/watchlists?watchlist=e2e-watchlist-starter-1");
-      await expect(page.getByText("Okara launched a new workflow offer", { exact: true }).first()).toBeVisible();
-      await expect(page.getByText("Verified from a page snapshot", { exact: false }).first()).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Okara launched a new workflow offer" }).first()).toBeVisible();
+      await expect(page.getByText("This is the stored capture, not a re-render.", { exact: true }).first()).toBeVisible();
       await expectNoHorizontalOverflow(page);
       await expectPhoneTouchTargets(page);
       await attachReleaseStateArtifacts({ page, testInfo, prefix: "j3-preseeded", state: "empty-recovered" });
