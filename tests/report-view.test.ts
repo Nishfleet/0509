@@ -24,10 +24,15 @@ describe("ReportView", () => {
       createElement(ReportView, { report: legacyReport }),
     );
 
+    // Brief §6.6/A2: the six-box grid is replaced by honest fact rows.
     expect(markup).not.toContain("Insight depth");
     expect(markup).not.toContain("Pending");
-		expect(markup).toContain("f9-dash-state-empty");
-		expect(markup).not.toContain("f9-empty-panel");
+    // §6.8: an empty report is a specimen panel with a reserved slot, never
+    // a bare "No data" box.
+    expect(markup).toContain("f9-ed-specimen");
+    expect(markup).toContain("No plate is filed yet");
+    expect(markup).not.toContain("f9-empty-panel");
+    expect(markup).not.toContain("f9-dash-state-empty");
   });
 
   it("normalizes legacy system labels without rewriting customer-owned report text", () => {
@@ -39,9 +44,7 @@ describe("ReportView", () => {
       rows: [reportRow("row-proofpoint", "https://example.com/source")],
     };
 
-    const markup = renderToStaticMarkup(
-      createElement(ReportView, { report }),
-    );
+    const markup = renderToStaticMarkup(createElement(ReportView, { report }));
 
     expect(markup).toContain("Proofpoint watch");
     expect(markup).toContain("Proofpoint executive summary");
@@ -64,18 +67,21 @@ describe("ReportView", () => {
       ],
     };
 
-    const markup = renderToStaticMarkup(
-      createElement(ReportView, { report }),
-    );
+    const markup = renderToStaticMarkup(createElement(ReportView, { report }));
 
     expect(markup).not.toContain("href=\"javascript:alert(1)\"");
     expect(markup).toContain("href=\"https://example.com/source\"");
+    // The blocked URL still renders a row, honestly (brief §6.6).
+    expect(markup).toContain("none stored");
   });
 
-  it("leads proof reports with a decision summary and glossary", () => {
+  it("opens on an ink cover whose headline is the finding, not 'Report for X'", () => {
     const highPriorityRow = reportRow("row-high", "https://example.com/high");
     const report = {
       ...legacyReport,
+      resourceType: "watchlist" as const,
+      title: "Okara",
+      summary: "2 verified-evidence watch events.",
       rows: [
         reportRow("row-low", "https://example.com/low"),
         {
@@ -92,97 +98,176 @@ describe("ReportView", () => {
       ],
     };
 
-    const markup = renderToStaticMarkup(
-      createElement(ReportView, { report }),
-    );
+    const markup = renderToStaticMarkup(createElement(ReportView, { report }));
 
-    expect(markup).toContain("Decision summary");
-    expect(markup).toContain("Pricing page changed");
-    expect(markup).toContain("Evidence summary");
-    expect(markup).toContain("Verified evidence attached. Review before sharing.");
+    // §6.10 cover: kicker, the finding as the headline, standfirst, byline.
+    expect(markup).toContain("Competitor evidence report");
+    expect(markup).toContain(
+      '<h1 class="f9-ed-report-headline">Pricing page changed</h1>',
+    );
+    expect(markup).not.toContain("Report for");
+    expect(markup).toContain("2 verified-evidence watch events.");
+    expect(markup).toContain("Prepared by");
+    expect(markup).toContain("2 plates");
+
+    // §6.10 "Our read": the verdict, before any number in section 01.
+    expect(markup).toContain("Our read");
+    expect(markup).toContain("Today: brief a counter-offer.");
+    expect(markup.indexOf("Our read")).toBeLessThan(markup.indexOf("What we found</span>") + 400);
+
+    // The old decision-summary / stacked-label block is gone.
+    expect(markup).not.toContain("Decision summary");
     expect(markup).not.toContain("Why it matters");
     expect(markup).not.toContain("client-ready");
-    expect(markup).toContain("High priority");
-    expect(markup).toContain("Today: brief a counter-offer.");
-    expect(markup).toContain("Source glossary");
-    expect(markup).toContain("Evidence unavailable");
   });
 
-	it("omits missing row fields entirely instead of rendering placeholder prose", () => {
-		const sparseRow: ReportDocument["rows"][number] = {
-			...reportRow("row-sparse", "https://example.com/source"),
-			advertiser: null,
-			previewHeadline: "New offer",
-			offer: null,
-			cta: null,
-			languageLabel: null,
-			creativeText: null,
-			translatedText: null,
-			landingPage: { url: null, headline: null, captureLabel: null, capturedAt: null, signals: [] },
-		};
-		const report = { ...legacyReport, rows: [sparseRow] };
-
-		const markup = renderToStaticMarkup(
-			createElement(ReportView, { report }),
-		);
-
-		expect(markup).not.toMatch(/unavailable<\/dd>/i);
-		expect(markup).not.toContain("Offer unavailable");
-		expect(markup).not.toContain("CTA unavailable");
-		expect(markup).not.toContain("Creative text unavailable");
-		expect(markup).not.toContain("Translation unavailable");
-		expect(markup).not.toContain("Landing page unavailable");
-		expect(markup).not.toContain("<dt>Offer</dt>");
-		expect(markup).not.toContain("<dt>URL</dt>");
-		expect(markup).not.toContain("Landing page</p>");
-		// The row still leads with what is known.
-		expect(markup).toContain("New offer");
-	});
-
-	it("treats legacy placeholder snapshot values as missing", () => {
-		const legacyPlaceholderRow: ReportDocument["rows"][number] = {
-			...reportRow("row-legacy", "https://example.com/source"),
-			advertiser: "Ad context unavailable",
-			previewHeadline: "Preview unavailable",
-			offer: "Offer unavailable",
-			cta: "CTA unavailable",
-			languageLabel: "Language unavailable",
-			creativeText: "Creative text unavailable",
-			translatedText: "Translation unavailable",
-			landingPage: {
-				url: "Landing page unavailable",
-				headline: "Landing page headline unavailable",
-				captureLabel: "Not checked yet",
-				capturedAt: null,
-				signals: [
-					{ label: "CTA", value: "Not detected" },
-					{ label: "Price", value: "Not detected" },
-				],
-			},
-		};
-		const report = { ...legacyReport, rows: [legacyPlaceholderRow] };
-
-		const markup = renderToStaticMarkup(
-			createElement(ReportView, { report }),
-		);
-
-		expect(markup).not.toContain("Offer unavailable");
-		expect(markup).not.toContain("Ad context unavailable");
-		expect(markup).not.toContain("Landing page unavailable");
-		expect(markup).not.toContain("Not detected");
-		expect(markup).not.toContain("Not checked yet");
-	});
-
-  it("does not describe saved collection proof as a no-action watchlist report", () => {
-    const savedProofRow = { ...reportRow("row-collection", ""), event: undefined };
+  it("renders exactly three headline numbers and pushes the fourth into the method rail", () => {
     const report = {
       ...legacyReport,
-      rows: [savedProofRow],
+      resourceType: "watchlist" as const,
+      stats: [
+        { label: "Events", value: "4" },
+        { label: "Linked ads", value: "3" },
+        { label: "Event types", value: "Offer, Creative" },
+        { label: "Excluded", value: "2" },
+      ],
+      rows: [reportRow("row-1", "https://example.com/source")],
     };
 
-    const markup = renderToStaticMarkup(
-      createElement(ReportView, { report }),
+    const markup = renderToStaticMarkup(createElement(ReportView, { report }));
+
+    // Three, because a 3-up band cannot produce the 3+1 orphan hole.
+    expect(markup).toContain('data-count="3"');
+    expect(markup.match(/f9-ed-report-number"/g)).toHaveLength(3);
+    expect(markup).toContain("Changes we captured and kept");
+    // The fourth number is a fact row, not a fourth tile.
+    expect(markup).toContain('<span class="f9-ed-fact-key">Excluded</span>');
+  });
+
+  it("renders evidence as numbered plates and references them by number in the prose", () => {
+    const report = {
+      ...legacyReport,
+      rows: [
+        reportRow("row-1", "https://example.com/one"),
+        reportRow("row-2", "https://example.com/two"),
+      ],
+    };
+
+    const markup = renderToStaticMarkup(createElement(ReportView, { report }));
+
+    expect(markup).toContain("PLATE 01 —");
+    expect(markup).toContain("PLATE 02 —");
+    expect(markup).toContain("The evidence is plates 01–02 below");
+    // §03 recommendations cite the plate they came from.
+    expect(markup).toContain("Plate 01");
+  });
+
+  it("ends on 'how this was checked' with the standing honesty sentence, and keeps the glossary out of the reading flow", () => {
+    const report = {
+      ...legacyReport,
+      rows: [reportRow("row-1", "https://example.com/source")],
+    };
+
+    const markup = renderToStaticMarkup(createElement(ReportView, { report }));
+
+    expect(markup).toContain("How this was checked");
+    expect(markup).toContain(
+      "Where a number was not published by the source, this report says so rather than estimating it.",
     );
+    // The glossary is the last thing in the document, after section 05 opens —
+    // never inlined between the summary and the evidence (current defect).
+    expect(markup).toContain("Source glossary");
+    expect(markup.indexOf("Source glossary")).toBeGreaterThan(markup.indexOf("PLATE 01"));
+    expect(markup.indexOf("Source glossary")).toBeGreaterThan(
+      markup.indexOf("How this was checked"),
+    );
+  });
+
+  it("carries a contents rail and renders the client action card only when the caller supplies one", () => {
+    const withoutActions = renderToStaticMarkup(
+      createElement(ReportView, { report: legacyReport }),
+    );
+    expect(withoutActions).toContain("f9-ed-report-contents");
+    expect(withoutActions).toContain('href="#report-05"');
+    expect(withoutActions).not.toContain("f9-ed-report-rail-actions");
+
+    const withActions = renderToStaticMarkup(
+      createElement(ReportView, {
+        report: legacyReport,
+        preparedBy: "Agency Fixture Studio",
+        railActions: createElement("button", { type: "button" }, "Send to client"),
+      }),
+    );
+    expect(withActions).toContain("f9-ed-report-rail-actions");
+    expect(withActions).toContain("Send to client");
+    expect(withActions).toContain("Agency Fixture Studio");
+  });
+
+  it("omits missing row fields as honest fact rows instead of rendering placeholder prose", () => {
+    const sparseRow: ReportDocument["rows"][number] = {
+      ...reportRow("row-sparse", "https://example.com/source"),
+      advertiser: null,
+      previewHeadline: "New offer",
+      offer: null,
+      cta: null,
+      languageLabel: null,
+      creativeText: null,
+      translatedText: null,
+      landingPage: { url: null, headline: null, captureLabel: null, capturedAt: null, signals: [] },
+    };
+    const report = { ...legacyReport, rows: [sparseRow] };
+
+    const markup = renderToStaticMarkup(createElement(ReportView, { report }));
+
+    expect(markup).not.toContain("Offer unavailable");
+    expect(markup).not.toContain("CTA unavailable");
+    expect(markup).not.toContain("Creative text unavailable");
+    expect(markup).not.toContain("Translation unavailable");
+    expect(markup).not.toContain("Landing page unavailable");
+    // A value we do not have is a muted row, never an empty card (§6.6, R5).
+    expect(markup).toContain("we could not read this one");
+    expect(markup).toContain("f9-ed-fact-value is-missing");
+    // The row still leads with what is known.
+    expect(markup).toContain("New offer");
+  });
+
+  it("treats legacy placeholder snapshot values as missing", () => {
+    const legacyPlaceholderRow: ReportDocument["rows"][number] = {
+      ...reportRow("row-legacy", "https://example.com/source"),
+      advertiser: "Ad context unavailable",
+      previewHeadline: "Preview unavailable",
+      offer: "Offer unavailable",
+      cta: "CTA unavailable",
+      languageLabel: "Language unavailable",
+      creativeText: "Creative text unavailable",
+      translatedText: "Translation unavailable",
+      landingPage: {
+        url: "Landing page unavailable",
+        headline: "Landing page headline unavailable",
+        captureLabel: "Not checked yet",
+        capturedAt: null,
+        signals: [
+          { label: "CTA", value: "Not detected" },
+          { label: "Price", value: "Not detected" },
+        ],
+      },
+    };
+    const report = { ...legacyReport, rows: [legacyPlaceholderRow] };
+
+    const markup = renderToStaticMarkup(createElement(ReportView, { report }));
+
+    expect(markup).not.toContain("Offer unavailable");
+    expect(markup).not.toContain("Ad context unavailable");
+    expect(markup).not.toContain("Landing page unavailable");
+    expect(markup).not.toContain("Not detected");
+    expect(markup).not.toContain("Not checked yet");
+  });
+
+  it("does not describe saved collection evidence as a no-action watchlist report", () => {
+    const savedProofRow = { ...reportRow("row-collection", ""), event: undefined };
+    const report = { ...legacyReport, rows: [savedProofRow] };
+
+    const markup = renderToStaticMarkup(createElement(ReportView, { report }));
 
     expect(markup).toContain("Saved evidence ready for review");
     expect(markup).toContain("1 saved evidence item packaged for review.");
@@ -190,19 +275,36 @@ describe("ReportView", () => {
     expect(markup).not.toContain("No client-ready change needs action");
   });
 
-  it("shows each event summary as a signal summary without duplicating it as impact copy", () => {
+  it("states each event summary exactly once, on its own plate", () => {
     const report = {
       ...legacyReport,
       rows: [reportRow("row-signal", "https://example.com/source")],
     };
 
-    const markup = renderToStaticMarkup(
-      createElement(ReportView, { report }),
-    );
+    const markup = renderToStaticMarkup(createElement(ReportView, { report }));
 
-    expect(markup).toContain("Signal summary");
+    expect(markup).toContain("f9-ed-evidence-why");
     expect(markup).not.toContain("Why it matters");
+    expect(markup).not.toContain("Signal summary");
     expect(markup.match(/A new offer launched\./g)).toHaveLength(1);
+  });
+
+  it("renders the stored creative capture inside the plate's mock frame", () => {
+    const report = {
+      ...legacyReport,
+      rows: [
+        {
+          ...reportRow("row-image", "https://example.com/source"),
+          previewImageUrl: "https://cdn.example.com/creative.png",
+        },
+      ],
+    };
+
+    const markup = renderToStaticMarkup(createElement(ReportView, { report }));
+
+    expect(markup).toContain("f9-ed-mock-capture");
+    expect(markup).toContain('src="https://cdn.example.com/creative.png"');
+    expect(markup).toContain('referrerPolicy="no-referrer"');
   });
 });
 

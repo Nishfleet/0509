@@ -9,7 +9,9 @@ describe("deferred empty-state consolidation", () => {
 	it.each([
 		["watchlists", watchlists, 2],
 		["digests", digests, 3],
-		["report view", reportView, 1],
+		// BL-009: the report's last EmptyState became the §6.8 specimen plate
+		// (a panel with a reserved, numbered slot), so the count is now zero.
+		["report view", reportView, 0],
 	])("moves all real %s empty panels onto EmptyState", (_label, source, expectedCount) => {
 		expect(source).not.toContain('className="f9-empty-panel"');
 		expect(source.match(/<EmptyState\b/g) ?? []).toHaveLength(expectedCount);

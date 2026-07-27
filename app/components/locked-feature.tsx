@@ -1,4 +1,6 @@
-import { Link } from "react-router";
+import type { ReactNode } from "react";
+
+import { PrimaryAction, SecondaryAction } from "~/components/evidence";
 
 export interface LockedFeatureProps {
   /** Small kicker naming the surface, e.g. "Reports". */
@@ -19,12 +21,30 @@ export interface LockedFeatureProps {
   seeExampleLabel?: string;
   /** Heading element — h1 for full-page gates (default), h2 when embedded. */
   headingLevel?: "h1" | "h2";
+  /**
+   * Honest context for a deep link into the gated surface, stamped in the ink
+   * header — "Competitor report" when someone opened a report URL they cannot
+   * read. Never the gated content itself.
+   */
+  context?: string;
+  /** Label above the dimmed specimen slot. */
+  specimenLabel?: string;
+  /**
+   * A dimmed, inert preview of what the plan unlocks (brief §6.8 part 3), so
+   * the gate is a reserved slot rather than a void. Omitting it leaves the
+   * slot out entirely rather than showing an empty box.
+   */
+  specimen?: ReactNode;
 }
 
 /**
- * One shared plan-gate. Neutral bone panel, never the red/error treatment
- * (red stays reserved for diff-deletion and genuine errors). Always renders a
- * single primary upgrade CTA so a gate is never a dead end.
+ * One shared plan-gate, built as the brief's specimen panel (§6.8) rather than
+ * a bare wall: an ink header stating the real state, a headline and one honest
+ * paragraph, an optional dimmed specimen of what the plan unlocks, and exactly
+ * one Rank-1 action so a gate is never a dead end (§5, DESIGN.md WP-B1).
+ *
+ * Never the red/error treatment — red stays reserved for diff-deletion and
+ * genuine errors (brief §4.5).
  */
 export function LockedFeature({
   eyebrow,
@@ -36,31 +56,51 @@ export function LockedFeature({
   seeExampleTo,
   seeExampleLabel = "See an example",
   headingLevel = "h1",
+  context,
+  specimenLabel = "Included in this plan",
+  specimen,
 }: LockedFeatureProps) {
   const Heading = headingLevel;
   const titleId = `locked-${eyebrow.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-title`;
 
   return (
-    <article
-      className="f9-app-panel f9-locked-feature"
+    <section
       aria-labelledby={titleId}
+      className="f9-ed-specimen f9-locked-feature"
       role="status"
     >
-      <p className="f9-app-kicker">{eyebrow}</p>
-      <Heading id={titleId}>{title}</Heading>
-      <p>
-        {reason} — included in the {planNeeded}.
-      </p>
-      <div className="f9-locked-feature-actions">
-        <Link className="f9-primary-button" to={upgradeTo}>
-          {upgradeLabel}
-        </Link>
-        {seeExampleTo ? (
-          <Link className="f9-secondary-button" to={seeExampleTo}>
-            {seeExampleLabel}
-          </Link>
+      <header className="f9-ed-plate-header f9-ed-micro">
+        <span>
+          {eyebrow} · {planNeeded} required
+        </span>
+        {context ? <span className="f9-ed-plate-header-end">{context}</span> : null}
+      </header>
+      <div className="f9-ed-specimen-body">
+        <Heading className="f9-ed-specimen-headline" id={titleId}>
+          {title}
+        </Heading>
+        <p className="f9-ed-specimen-copy">
+          {reason} — included in the {planNeeded}.
+        </p>
+        {specimen ? (
+          <div className="f9-ed-specimen-slot">
+            <div aria-hidden="true" className="f9-ed-specimen-scan" />
+            <div className="f9-ed-specimen-slot-header f9-ed-micro">{specimenLabel}</div>
+            {/* A preview of what the plan unlocks, not content: hidden from
+                assistive tech AND removed from the tab order so no dimmed
+                control can be reached. */}
+            <div aria-hidden="true" className="f9-ed-specimen-slot-inner" inert>
+              {specimen}
+            </div>
+          </div>
         ) : null}
+        <div className="f9-ed-action-row">
+          <PrimaryAction to={upgradeTo}>{upgradeLabel}</PrimaryAction>
+          {seeExampleTo ? (
+            <SecondaryAction to={seeExampleTo}>{seeExampleLabel}</SecondaryAction>
+          ) : null}
+        </div>
       </div>
-    </article>
+    </section>
   );
 }
