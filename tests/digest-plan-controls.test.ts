@@ -63,13 +63,13 @@ async function renderDigest(plan: "free" | "scout" | "starter" | "agency") {
     };
   });
   vi.doMock("~/components/digest-intelligence", () => ({
+    DesignedDigestBrief: ({ actions }: MockProps & { actions?: ReactNode }) =>
+      createElement("article", null, actions),
     DigestDecisionSummary: () => null,
     DigestIntelligence: () => null,
     DigestMovementSummary: () => null,
     DigestProofPacket: () => null,
   }));
-  vi.doMock("~/components/digest-strategy-note", () => ({ DigestStrategyNote: () => null }));
-  vi.doMock("~/components/insight-depth-panel", () => ({ InsightDepthPanel: () => null }));
   vi.doMock("~/components/local-time", () => ({ LocalTime: () => null }));
   vi.doMock("~/components/proof-glossary", () => ({ ProofGlossary: () => null }));
   vi.doMock("~/components/dashboard-page", () => ({

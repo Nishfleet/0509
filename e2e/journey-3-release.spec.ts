@@ -265,7 +265,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
       })).resolves.toMatchObject({ cleanupVerified: true, includedUsed: 0 });
       await expectResponsiveSurface(page, viewport, "/app/digests", "Briefs", [
         /Brief history/,
-        /Okara launched a new workflow offer/,
+        /Landing page offer changed/,
         /sent/i,
       ]);
       await expect(page.getByText("proof", { exact: false }).first()).toBeVisible();
@@ -430,7 +430,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
   }
 
   for (const viewport of monitoringViewports) {
-    test(`WP-C2 Beat 4 front page files once with weekly cadence truth at ${viewport.width}px`, async ({ page, context, baseURL }, testInfo) => {
+    test(`first filed brief opens as the one designed brief at ${viewport.width}px`, async ({ page, context, baseURL }, testInfo) => {
       annotateScenario(testInfo, "first-brief-front-page-and-cadence");
       testInfo.annotations.push({ type: "persona", description: "e2e-free-firstbrief,e2e-scout" });
       testInfo.annotations.push({ type: "viewport", description: `${viewport.width}x${viewport.height}` });
@@ -449,29 +449,29 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
       await expect(page.locator(".f9-first-run-spine")).toHaveCount(0);
       await expectNoHorizontalOverflow(page);
 
-      // Beat 4 front page (arrived from the arc): real filed time, a FUNCTIONAL
-      // same-page anchor CTA, and NO daily 05:09 promise for a weekly plan.
+      // BL-015: the arc lands directly on the same designed brief used by
+      // ordinary navigation. There is no second front-page hero above it.
       await page.goto("/app/digests?firstrun=1");
       await expect(page.getByRole("heading", { level: 1, name: "Briefs", exact: true })).toBeVisible();
-      await expect(page.locator("body")).toContainText("FIRST BRIEF · FILED");
-      await expect(page.locator("body")).toContainText("Your first brief on Rival Labs is");
-      await expect(page.getByRole("link", { name: "Read the full brief →", exact: true })).toHaveAttribute(
-        "href",
-        "#first-brief-detail",
-      );
+      await expect(page.locator(".f9-ed-brief")).toHaveCount(1);
+      await expect(
+        page.getByRole("heading", { name: "Rival Labs launched a new offer", exact: true }),
+      ).toBeVisible();
       await expect(page.locator("#first-brief-detail")).toBeVisible();
+      await expect(page.locator("body")).not.toContainText("FIRST BRIEF · FILED");
       await expect(page.locator("body")).not.toContainText("05:09");
       await expectNoHorizontalOverflow(page);
       await expectPhoneTouchTargets(page);
       // Capture the release artifact on the genuine front-page state.
       await attachReleaseStateArtifacts({ page, testInfo, prefix: "j3-first-brief", state: "first-brief-front-page" });
 
-      // Retirement: ordinary Briefs navigation (no arc flag) shows the standard
-      // master-detail page, never the front-page framing again.
+      // Ordinary navigation resolves to the same document — one route, one
+      // artifact, with no arrival-dependent duplicate.
       await page.goto("/app/digests");
       await expect(page.getByRole("heading", { level: 1, name: "Briefs", exact: true })).toBeVisible();
       await expect(page.locator("body")).not.toContainText("FIRST BRIEF · FILED");
       await expect(page.getByRole("heading", { name: "Brief history", exact: true })).toBeVisible();
+      await expect(page.locator(".f9-ed-brief")).toHaveCount(1);
 
       // Scout is weekly too — its Briefs surface never promises the daily 05:09.
       await signInAs(context, baseURL!, "e2e-scout");

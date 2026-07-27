@@ -1972,35 +1972,6 @@ button[aria-busy="true"] {
   align-items: start;
 }
 
-/* Master–detail pages (watchlists, digests): the record list is a compact
-   selector rail and the selected record owns the wide column. The base
-   dashboard grid is main-first, which used to starve these detail panes
-   into a ~320px rail. */
-.f9-master-detail {
-  display: grid;
-  grid-template-columns: minmax(264px, 324px) minmax(0, 1fr);
-  gap: 16px;
-  align-items: start;
-}
-
-.f9-master-detail > .f9-side-panel {
-  position: sticky;
-  top: 18px;
-  max-height: calc(100vh - 36px);
-  overflow: auto;
-}
-
-/* Detail toolbars carry up to six actions — wrap them under the title
-   instead of crushing it into a one-word-per-line column. */
-.f9-master-detail .f9-panel-toolbar {
-  flex-wrap: wrap;
-}
-
-.f9-master-detail .f9-panel-toolbar > div:first-child {
-  flex: 1 1 240px;
-  min-width: 0;
-}
-
 /* Two-up flow for detail sections that can share a row; collapses on its
    own once a column would fall under 300px. */
 .f9-detail-split {
@@ -2031,71 +2002,6 @@ button[aria-busy="true"] {
   gap: 10px;
 }
 
-/* Proof packets inside the wide detail column read as grouping cards. */
-.f9-master-detail .f9-proof-packet {
-  display: grid;
-  gap: 12px;
-  align-content: start;
-  min-width: 0;
-  padding: 18px;
-  border: 1px solid var(--f9-search-line);
-  border-radius: 8px;
-  background: #f6f9fc;
-}
-
-.f9-master-detail .f9-proof-packet h2,
-.f9-master-detail .f9-proof-packet h3 {
-  margin: 4px 0 0;
-}
-
-.f9-master-detail .f9-proof-packet .f9-muted-copy {
-  margin: 0;
-}
-
-.f9-master-detail .f9-proof-packet .proof-trail-list div {
-  padding: 10px 0;
-}
-
-/* Digest movement summary reads as a stat strip in the wide column. */
-.f9-master-detail .digest-movement-summary {
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  column-gap: 20px;
-}
-
-/* Digest filter bar: labelled selects in one row, apply button at the end. */
-.f9-filter-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 10px;
-  align-items: end;
-}
-
-.f9-filter-row label {
-  display: grid;
-  gap: 7px;
-  color: var(--f9-search-soft);
-  font-size: 0.82rem;
-  font-weight: 700;
-}
-
-.f9-filter-row select {
-  width: 100%;
-  min-height: 46px;
-  padding: 11px 13px;
-  border: 1px solid rgba(6, 22, 41, 0.12);
-  border-radius: 14px;
-  background: #fff;
-  color: var(--f9-search-ink);
-  font-size: 0.95rem;
-  font-weight: 600;
-}
-
-.f9-filter-row select:focus {
-  border-color: rgba(10, 169, 130, 0.44);
-  box-shadow: 0 0 0 4px rgba(10, 169, 130, 0.1);
-  outline: none;
-}
-
 .f9-activity-panel {
   min-height: 420px;
 }
@@ -2107,12 +2013,6 @@ button[aria-busy="true"] {
 .f9-work-list.is-compact .f9-dashboard-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-}
-
-/* Insight-depth cards keep two-up only while each column stays readable;
-   below that they drop to one column instead of two-words-per-line. */
-.f9-work-list.is-compact .f9-insight-grid {
-  grid-template-columns: repeat(auto-fit, minmax(248px, 1fr));
 }
 
 .f9-work-row {
@@ -2847,19 +2747,8 @@ button[aria-busy="true"] {
 
   .f9-dashboard-grid,
   .f9-work-list.is-compact .f9-dashboard-grid,
-  .f9-master-detail,
   .f9-status-strip {
     grid-template-columns: 1fr;
-  }
-
-  .f9-master-detail > .f9-side-panel {
-    position: static;
-    max-height: none;
-    overflow: visible;
-  }
-
-  .f9-master-detail .f9-panel-toolbar > div:first-child {
-    flex: 0 1 auto;
   }
 
   .f9-auth-layout,
@@ -2896,7 +2785,6 @@ button[aria-busy="true"] {
     gap: 12px;
   }
 .f9-detail-split,
-.f9-filter-row,
 .f9-app-panel {
     grid-template-columns: 1fr;
   }
@@ -8219,7 +8107,6 @@ one signal-green accent.
 [data-f9-theme="dark"] .f9-status-strip > div,
 [data-f9-theme="dark"] .f9-passkey-row,
 [data-f9-theme="dark"] .f9-detail-cell,
-[data-f9-theme="dark"] .f9-master-detail .f9-proof-packet,
 [data-f9-theme="dark"] .f9-annual-note,
 [data-f9-theme="dark"] .f9-import-summary span,
 [data-f9-theme="dark"] .f9-side-note,
@@ -8311,7 +8198,6 @@ toggles --- */
 [data-f9-theme="dark"] .f9-search-page .f9-field input,
 [data-f9-theme="dark"] .f9-search-page .f9-field select,
 [data-f9-theme="dark"] .f9-search-page .f9-field textarea,
-[data-f9-theme="dark"] .f9-filter-row select,
 [data-f9-theme="dark"] .f9-field input[type="file"],
 [data-f9-theme="dark"] .f9-search-page .f9-search-field input,
 [data-f9-theme="dark"] .f9-search-page .f9-search-field select {
@@ -12532,4 +12418,284 @@ reds soften --- */
    leaving a hollow gap beside a taller fact rail. */
 .f9-ed-collection-item .f9-ed-mock-frame {
   height: 100%;
+}
+
+/* ============================================================
+   BL-015 — one designed brief (brief §7, workspace volume)
+   ============================================================ */
+
+.f9-ed-brief-history {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: stretch;
+  border: 2.5px solid var(--ed-rule);
+  background: var(--ed-surface);
+}
+
+.f9-ed-brief-history h2 {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 12px 16px;
+  border-right: 2.5px solid var(--ed-rule);
+  font-family: var(--ed-display);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.f9-ed-brief-history-track {
+  display: flex;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.f9-ed-brief-history-empty {
+  align-self: center;
+  margin: 0;
+  padding: 12px 16px;
+  font-family: var(--ed-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+}
+
+.f9-ed-brief-history-link {
+  display: grid;
+  gap: 3px;
+  flex: 0 0 min(230px, 72vw);
+  min-height: 58px;
+  padding: 9px 13px;
+  border-left: 1.5px solid var(--ed-rule-soft);
+  font-family: var(--ed-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+}
+
+.f9-ed-brief-history-link:first-child {
+  border-left: 0;
+}
+
+.f9-ed-brief-history-link time {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.f9-ed-brief-history-link.is-active {
+  background: var(--ed-fill);
+  color: var(--ed-on-fill);
+}
+
+.f9-ed-brief-history-link.is-active time {
+  color: var(--ed-on-fill);
+}
+
+.f9-ed-brief-history-link.is-pending {
+  opacity: 0.62;
+}
+
+.f9-ed-brief-history-link:focus-visible,
+.f9-ed-brief-filter summary:focus-visible,
+.f9-ed-brief-filter-menu a:focus-visible,
+.f9-ed-brief-filter-reset:focus-visible {
+  outline: 3px solid var(--ed-focus);
+  outline-offset: -3px;
+}
+
+.f9-ed-brief-filters {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 9px 12px;
+  border: 2px solid var(--ed-rule);
+  background: var(--ed-surface-sunk);
+  font-family: var(--ed-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.f9-ed-brief-filters > .f9-ed-micro {
+  padding: 7px 0;
+  color: var(--ink-faint);
+}
+
+.f9-ed-brief-filter {
+  position: relative;
+  min-width: 0;
+}
+
+.f9-ed-brief-filter summary {
+  min-height: 30px;
+  padding: 7px 0;
+  cursor: pointer;
+  color: var(--ink);
+  list-style-position: inside;
+  white-space: nowrap;
+}
+
+.f9-ed-brief-filter-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  display: grid;
+  width: max-content;
+  min-width: 190px;
+  max-width: min(300px, calc(100vw - 48px));
+  border: 2px solid var(--ed-rule);
+  background: var(--ed-surface);
+  box-shadow: var(--ed-shadow);
+}
+
+.f9-ed-brief-filter-menu a {
+  min-height: 44px;
+  padding: 12px 14px;
+  border-top: 1.5px solid var(--ed-rule-soft);
+  overflow-wrap: anywhere;
+}
+
+.f9-ed-brief-filter-menu a:first-child {
+  border-top: 0;
+}
+
+.f9-ed-brief-filter-menu a[aria-current="true"] {
+  background: var(--ed-fill);
+  color: var(--ed-on-fill);
+}
+
+.f9-ed-brief-filter-reset {
+  min-height: 30px;
+  padding: 7px 0;
+  text-decoration: underline 2px var(--ed-accent);
+  text-underline-offset: 4px;
+}
+
+.f9-ed-brief {
+  min-width: 0;
+  border: 2.5px solid var(--ed-rule);
+  background: var(--ed-surface);
+  box-shadow: var(--ed-shadow-lg);
+}
+
+.f9-ed-brief-date {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding: 10px 16px;
+  background: var(--ed-fill);
+  color: var(--ed-on-fill);
+}
+
+.f9-ed-brief-heading {
+  display: grid;
+  gap: 16px;
+  padding: 26px;
+  border-bottom: 2.5px solid var(--ed-rule);
+}
+
+.f9-ed-brief-heading > .f9-ed-micro,
+.f9-ed-brief-read p {
+  margin: 0;
+}
+
+.f9-ed-brief-heading h2 {
+  max-width: 22ch;
+  margin: 0;
+  font-family: var(--ed-display);
+  font-size: clamp(28px, 3.2vw, 46px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.02;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.f9-ed-brief-read {
+  display: grid;
+  gap: 8px;
+  max-width: 64ch;
+  padding: 16px 18px;
+  background: var(--ed-accent);
+  color: var(--ed-on-accent);
+}
+
+.f9-ed-brief-read > p:last-child {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.f9-ed-brief-section {
+  display: grid;
+  gap: 14px;
+  padding: 22px 26px 26px;
+  border-top: 2.5px solid var(--ed-rule);
+}
+
+.f9-ed-brief-header + .f9-ed-brief-section {
+  border-top: 0;
+}
+
+.f9-ed-brief-section-title {
+  max-width: 20ch;
+  margin: 0;
+  font-family: var(--ed-display);
+  font-size: clamp(22px, 2.2vw, 31px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+
+.f9-ed-brief-diffs,
+.f9-ed-brief-section > .f9-ed-quiet-list {
+  display: grid;
+  gap: 12px;
+}
+
+.f9-ed-brief-section > .f9-ed-fact-rail {
+  width: min(100%, 760px);
+}
+
+@media (max-width: 720px) {
+  .f9-ed-brief-history {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .f9-ed-brief-history h2 {
+    border-right: 0;
+    border-bottom: 2.5px solid var(--ed-rule);
+  }
+
+  .f9-ed-brief-filters {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  .f9-ed-brief-filter-menu {
+    position: static;
+    margin: 4px 0;
+    box-shadow: none;
+  }
+
+  .f9-ed-brief-date {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .f9-ed-brief-heading,
+  .f9-ed-brief-section {
+    padding: 18px;
+  }
+
+  .f9-ed-brief {
+    box-shadow: 4px 4px 0 var(--ed-shadow-ink);
+  }
 }
