@@ -57,6 +57,11 @@
      resolve to the dark end of the palette, which is the only readable
      side of #16c47f. */
   --ed-on-accent: var(--ink);
+  /* Focus ring. --ed-accent is a 2.01:1 marker colour against bone and
+     cannot carry a non-text UI boundary (brief §10, WCAG 1.4.11 needs
+     >=3:1); --green-ink is the readable end of the accent family in both
+     themes (8.0:1 on bone in light, 11.9:1 on ink in dark). */
+  --ed-focus: var(--green-ink);
   --ed-accent-wash: color-mix(in srgb, var(--green) 12%, transparent);
   --ed-accent-mark: color-mix(in srgb, var(--green) 34%, transparent);
   --ed-deletion: var(--red);
@@ -10485,8 +10490,37 @@ reds soften --- */
 }
 
 .f9-ed-cta:focus-visible {
-  outline: 2.5px solid var(--ed-accent);
+  outline: 2.5px solid var(--ed-focus);
   outline-offset: 3px;
+}
+
+/* Hover feedback for every rank; the offset shadow is never the signal. */
+.f9-ed-cta {
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease,
+    text-decoration-color 140ms ease;
+}
+
+.f9-ed-cta--rank1:hover {
+  box-shadow: 5px 5px 0 var(--ed-accent);
+}
+
+.f9-ed-cta--rank2:hover {
+  background: var(--ed-surface-sunk);
+  box-shadow: 3px 3px 0 var(--ed-rule-soft);
+}
+
+.f9-ed-cta--rank3:hover {
+  text-decoration-color: var(--ed-focus);
+  text-decoration-thickness: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .f9-ed-cta {
+    transition: none;
+  }
 }
 
 .f9-ed-cta[aria-disabled="true"],
@@ -10521,10 +10555,13 @@ reds soften --- */
 }
 
 /* Wide objects scroll inside their own container, never the page (brief
-   §9.1). The track is margin-auto rather than justify-content:flex-end so the
-   oldest bars stay reachable once the strip overflows. */
+   §9.1). The container is RTL so the strip is anchored to its right edge:
+   the newest day — today, the one that matters — is the default view at any
+   width, and the older days scroll into reach on the left. The track flips
+   back to LTR so the bars keep their oldest-to-newest reading order. */
 .f9-ed-capture-strip {
   display: flex;
+  direction: rtl;
   height: 34px;
   overflow-x: auto;
   overflow-y: hidden;
@@ -10532,10 +10569,11 @@ reds soften --- */
 
 .f9-ed-capture-track {
   display: flex;
+  direction: ltr;
   align-items: flex-end;
   gap: 3px;
   height: 34px;
-  margin-left: auto;
+  margin-left: 0;
 }
 
 .f9-ed-capture-bar {
@@ -10558,8 +10596,14 @@ reds soften --- */
   background: var(--ed-accent);
 }
 
+/* Bar height is monotonic and load-bearing: TALL means we captured a change,
+   SHORT means no change. A day we never checked must therefore be short —
+   a full-height dashed slot has the silhouette of a caught change and would
+   read an outage as a run of findings, inverting brief §8.1. The dashed
+   edge and the empty fill are what say "no data"; the height never does. */
 .f9-ed-capture-bar.is-unchecked {
-  height: 34px;
+  box-sizing: border-box;
+  height: 8px;
   background: none;
   border: 1px dashed var(--ed-rule-dashed);
 }

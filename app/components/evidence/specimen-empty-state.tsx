@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { type ActionTarget, resolveActionTarget } from "./action-target";
 import { PrimaryAction, SecondaryAction } from "./cta";
 
 /**
@@ -23,16 +24,13 @@ export const RESERVED_SLOT_LABEL = "PLATE 01 — PENDING";
 export const RESERVED_SLOT_COPY =
   "This slot is reserved. The first capture fills it — nothing is broken.";
 
-export interface SpecimenAction {
-  label: string;
-  to?: string;
-  href?: string;
-  onClick?: () => void;
-}
+/** An empty-state action must go somewhere — see `action-target.ts`. */
+export type SpecimenAction = { label: string } & ActionTarget;
 
 export function SpecimenEmptyState({
   stateLabel,
   headline,
+  headingLevel = 2,
   copy,
   specimenLabel = RESERVED_SLOT_LABEL,
   specimen,
@@ -43,6 +41,8 @@ export function SpecimenEmptyState({
   /** The real state, in mono: "OKARA · FIRST CAPTURE RUNNING · STARTED 03:12 UTC". */
   stateLabel: string;
   headline: string;
+  /** Fits the panel to the surrounding document outline. */
+  headingLevel?: 2 | 3 | 4;
   /** What will fill the space, and when. Product voice, never "No data". */
   copy: string;
   specimenLabel?: string;
@@ -52,38 +52,35 @@ export function SpecimenEmptyState({
   secondaryAction?: SpecimenAction;
   className?: string;
 }) {
+  const Heading = `h${headingLevel}` as "h2" | "h3" | "h4";
+
   return (
     <section className={className ? `f9-ed-specimen ${className}` : "f9-ed-specimen"}>
       <header className="f9-ed-plate-header f9-ed-micro">
         <span>{stateLabel}</span>
       </header>
       <div className="f9-ed-specimen-body">
-        <h2 className="f9-ed-specimen-headline">{headline}</h2>
+        <Heading className="f9-ed-specimen-headline">{headline}</Heading>
         <p className="f9-ed-specimen-copy">{copy}</p>
         <div className="f9-ed-specimen-slot">
           <div className="f9-ed-specimen-scan" aria-hidden="true" />
           <div className="f9-ed-specimen-slot-header f9-ed-micro">{specimenLabel}</div>
-          <div className="f9-ed-specimen-slot-inner" aria-hidden="true">
+          {/* The specimen is a preview of what will land here, not content:
+              hidden from assistive tech AND removed from the tab order, so a
+              dimmed sample control can never be reached. */}
+          <div className="f9-ed-specimen-slot-inner" aria-hidden="true" inert>
             {specimen ?? <p className="f9-ed-specimen-copy">{RESERVED_SLOT_COPY}</p>}
           </div>
         </div>
         {primaryAction || secondaryAction ? (
           <div className="f9-ed-action-row">
             {primaryAction ? (
-              <PrimaryAction
-                to={primaryAction.to}
-                href={primaryAction.href}
-                onClick={primaryAction.onClick}
-              >
+              <PrimaryAction {...resolveActionTarget(primaryAction)}>
                 {primaryAction.label}
               </PrimaryAction>
             ) : null}
             {secondaryAction ? (
-              <SecondaryAction
-                to={secondaryAction.to}
-                href={secondaryAction.href}
-                onClick={secondaryAction.onClick}
-              >
+              <SecondaryAction {...resolveActionTarget(secondaryAction)}>
                 {secondaryAction.label}
               </SecondaryAction>
             ) : null}

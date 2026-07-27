@@ -65,8 +65,9 @@ export function EvidencePlate({
         <div className="f9-ed-evidence-capture">
           <div className="f9-ed-mock-frame">
             {lines.length > 0 ? (
-              lines.map((line) => (
-                <p className="f9-ed-mock-line" key={line}>
+              lines.map((line, index) => (
+                // Index key: a stored capture can repeat a line verbatim.
+                <p className="f9-ed-mock-line" key={`${index}-${line}`}>
                   {line}
                 </p>
               ))

@@ -43,20 +43,42 @@ describe("QuietLine", () => {
 
 describe("QuietLineList", () => {
   it("collapses past the fifth line into a Rank-3 load-more", () => {
-    const markup = renderRouted(<QuietLineList items={checks} loadMoreTo="?checks=all" />);
+    const markup = renderRouted(<QuietLineList items={checks} loadMore={{ to: "?checks=all" }} />);
 
     expect(markup.match(/f9-ed-quiet-line/g)).toHaveLength(QUIET_LINE_VISIBLE_LIMIT);
     expect(markup).toContain("Load 41 earlier checks");
     expect(markup).toContain("f9-ed-cta--rank3");
+    // The control is a real destination, never a handler-less button.
+    expect(markup).toContain('href="/?checks=all"');
   });
 
   it("singularises the load-more and drops it once expanded", () => {
     const six = checks.slice(0, 6);
-    expect(renderToStaticMarkup(<QuietLineList items={six} />)).toContain("Load 1 earlier check");
+    const collapsed = renderRouted(<QuietLineList items={six} loadMore={{ to: "?checks=all" }} />);
+    expect(collapsed).toContain("Load 1 earlier check");
 
-    const expanded = renderToStaticMarkup(<QuietLineList items={six} expanded />);
+    const expanded = renderRouted(
+      <QuietLineList items={six} loadMore={{ to: "?checks=all" }} expanded />,
+    );
     expect(expanded).not.toContain("earlier check");
     expect(expanded.match(/f9-ed-quiet-line/g)).toHaveLength(6);
+  });
+
+  it("shows the whole trail rather than a dead control when there is nowhere to go", () => {
+    const markup = renderToStaticMarkup(<QuietLineList items={checks} />);
+
+    expect(markup.match(/f9-ed-quiet-line/g)).toHaveLength(checks.length);
+    expect(markup).not.toContain("earlier check");
+    expect(markup).not.toContain("f9-ed-cta");
+  });
+
+  it("accepts a handler as a destination for client-side disclosure", () => {
+    const markup = renderToStaticMarkup(
+      <QuietLineList items={checks} loadMore={{ onClick: () => {} }} />,
+    );
+
+    expect(markup).toContain("Load 41 earlier checks");
+    expect(markup).toContain("<button");
   });
 
   it("renders nothing when there is no audit trail to show", () => {

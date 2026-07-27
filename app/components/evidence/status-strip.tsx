@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { type ActionTarget, resolveActionTarget } from "./action-target";
 import { TertiaryAction } from "./cta";
 import { DEFAULT_MISSING_VALUE, isMissingFactValue } from "./fact-rail";
 
@@ -25,11 +26,8 @@ export interface StatusCell {
   missingLabel?: string;
 }
 
-export interface StatusStripAction {
-  label: string;
-  to?: string;
-  onClick?: () => void;
-}
+/** A strip action must go somewhere — see `action-target.ts`. */
+export type StatusStripAction = { label: string } & ActionTarget;
 
 export function StatusStrip({
   cells,
@@ -65,9 +63,7 @@ export function StatusStrip({
       })}
       {action ? (
         <div className="f9-ed-status-cell">
-          <TertiaryAction to={action.to} onClick={action.onClick}>
-            {action.label}
-          </TertiaryAction>
+          <TertiaryAction {...resolveActionTarget(action)}>{action.label}</TertiaryAction>
         </div>
       ) : null}
     </div>

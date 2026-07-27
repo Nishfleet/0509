@@ -7,6 +7,12 @@
  */
 
 export {
+  resolveActionTarget,
+  type ActionTarget,
+  type ResolvedActionTarget,
+} from "./action-target";
+
+export {
   PrimaryAction,
   SecondaryAction,
   TertiaryAction,

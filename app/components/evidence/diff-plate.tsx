@@ -71,6 +71,7 @@ function Pane({
 
 export function DiffPlate({
   headline,
+  headingLevel = 3,
   why,
   field,
   caughtLabel,
@@ -85,6 +86,8 @@ export function DiffPlate({
 }: {
   /** The finding, uppercase display type, max 22ch. */
   headline: string;
+  /** Fits the plate to the surrounding document outline. */
+  headingLevel?: 2 | 3 | 4;
   /** One sentence of why it matters. */
   why?: string;
   /** What changed — "OFFER PAGE", "PRICE", "HEADLINE". */
@@ -107,6 +110,8 @@ export function DiffPlate({
     return <QuietLine stamp={degradeStamp ?? caughtLabel} copy={degradeCopy} />;
   }
 
+  const Heading = `h${headingLevel}` as "h2" | "h3" | "h4";
+
   return (
     <article className={className ? `f9-ed-diff-plate ${className}` : "f9-ed-diff-plate"}>
       <header className="f9-ed-plate-header f9-ed-micro">
@@ -116,15 +121,17 @@ export function DiffPlate({
         {verification ? <span className="f9-ed-plate-header-end">{verification}</span> : null}
       </header>
       <div className="f9-ed-diff-body">
-        <h3 className="f9-ed-diff-headline">{headline}</h3>
+        <Heading className="f9-ed-diff-headline">{headline}</Heading>
         {why ? <p className="f9-ed-diff-why">{why}</p> : null}
         <div className="f9-ed-diff-panes">
           <Pane capture={before} label="Before" variant="before" />
           <Pane capture={now} label="Now" variant="now">
             {extraChanges.length > 0 ? (
               <div className="f9-ed-diff-extra">
-                {extraChanges.map((change) => (
-                  <span className="f9-ed-diff-note" key={change.key}>
+                {extraChanges.map((change, index) => (
+                  // Index key: two rows may legitimately report the same
+                  // field name from different captures.
+                  <span className="f9-ed-diff-note" key={`${index}-${change.key}`}>
                     {change.key}: {change.value}
                   </span>
                 ))}

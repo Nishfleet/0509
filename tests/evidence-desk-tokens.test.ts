@@ -71,7 +71,14 @@ describe("Evidence Desk token layer (brief §4)", () => {
     const section = css.slice(css.indexOf(PRIMITIVES_MARKER));
     expect(section).toContain("border-radius: 0;");
     expect(section).toContain("border: 2.5px solid var(--ed-rule);");
-    expect(section).not.toMatch(/border-radius:\s*(?!0)[0-9]/);
+    // Catches every non-zero form, including `0px`, `.5rem` and `var(--x)`.
+    // Matching the whole declaration avoids the backtracking hole a bare
+    // `\s*(?!0…)` lookahead leaves open.
+    const radii = [...section.matchAll(/border-radius:\s*([^;]+);/g)].map((match) =>
+      match[1].trim(),
+    );
+    expect(radii.length).toBeGreaterThan(0);
+    expect(radii.filter((value) => value !== "0")).toEqual([]);
   });
 
   it("pauses the specimen scan line under prefers-reduced-motion (brief §11)", () => {
@@ -87,7 +94,37 @@ describe("Evidence Desk token layer (brief §4)", () => {
     expect(cta.match(/min-height: 44px;/g)?.length).toBeGreaterThanOrEqual(2);
     // Focus is visible and is NOT the offset shadow (brief §10).
     expect(cta).toContain(".f9-ed-cta:focus-visible");
-    expect(cta).toContain("outline: 2.5px solid var(--ed-accent);");
+    expect(cta).toContain("outline: 2.5px solid var(--ed-focus);");
+    // Every rank gives hover feedback too, so focus is not the only signal.
+    expect(cta).toContain(".f9-ed-cta--rank1:hover");
+    expect(cta).toContain(".f9-ed-cta--rank2:hover");
+    expect(cta).toContain(".f9-ed-cta--rank3:hover");
+  });
+
+  it("never paints a focus ring in the marker accent, which cannot reach 3:1", () => {
+    // --ed-accent (#16c47f) is 2.01:1 on bone and 2.16:1 on card: legal as a
+    // fill or a marker, illegal as a non-text UI boundary (WCAG 1.4.11).
+    // --ed-focus resolves to --green-ink, which flips with the theme.
+    expect(css).toContain("--ed-focus: var(--green-ink);");
+    const section = css.slice(css.indexOf(PRIMITIVES_MARKER));
+    const focusRules = section.split("\n").filter((line) => line.includes("outline:"));
+    expect(focusRules.length).toBeGreaterThan(0);
+    for (const rule of focusRules) {
+      expect(rule).not.toContain("var(--ed-accent)");
+    }
+  });
+
+  it("anchors the capture strip to today rather than to the oldest day", () => {
+    const section = css.slice(css.indexOf(PRIMITIVES_MARKER));
+    const strip = section.slice(
+      section.indexOf(".f9-ed-capture-strip {"),
+      section.indexOf(".f9-ed-capture-bar {"),
+    );
+    // RTL container + LTR track: the newest bar is in view at any width, and
+    // the older days scroll into reach instead of the reverse.
+    expect(strip).toContain("direction: rtl;");
+    expect(strip).toContain("direction: ltr;");
+    expect(strip).not.toContain("justify-content: flex-end;");
   });
 
   it("drops the offset shadows in the Plain volume (brief §3)", () => {

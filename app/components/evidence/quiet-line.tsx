@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { type ActionTarget, resolveActionTarget } from "./action-target";
 import { TertiaryAction } from "./cta";
 
 /**
@@ -9,7 +10,10 @@ import { TertiaryAction } from "./cta";
  * warning styling, never apologised for and never omitted. The complete
  * audit trail is the retention argument, so quiet is a finding, not a gap.
  *
- * Runs collapse after the fifth into a Rank-3 "Load N earlier checks".
+ * Runs collapse after the fifth into a Rank-3 "Load N earlier checks" — but
+ * only when the caller supplies somewhere for that control to go. Without a
+ * target the list renders in full rather than hiding checks behind a button
+ * that does nothing; the audit trail is never the thing that gets dropped.
  */
 
 export const QUIET_LINE_VISIBLE_LIMIT = 5;
@@ -35,19 +39,21 @@ export function QuietLineList({
   items,
   limit = QUIET_LINE_VISIBLE_LIMIT,
   expanded = false,
-  loadMoreTo,
-  onLoadMore,
+  loadMore,
 }: {
   items: readonly QuietLineItem[];
   limit?: number;
   expanded?: boolean;
-  /** URL-driven disclosure keeps the list free of client state (brief §11). */
-  loadMoreTo?: string;
-  onLoadMore?: () => void;
+  /**
+   * Where "Load N earlier checks" goes. URL-driven disclosure (`{ to }`)
+   * keeps the list free of client state (brief §11).
+   */
+  loadMore?: ActionTarget;
 }) {
   if (items.length === 0) return null;
 
-  const visible = expanded ? items : items.slice(0, limit);
+  const collapsible = Boolean(loadMore) && !expanded;
+  const visible = collapsible ? items.slice(0, limit) : items;
   const hidden = items.length - visible.length;
 
   return (
@@ -55,8 +61,8 @@ export function QuietLineList({
       {visible.map((item) => (
         <QuietLine key={item.id} stamp={item.stamp} copy={item.copy} />
       ))}
-      {hidden > 0 ? (
-        <TertiaryAction to={loadMoreTo} onClick={onLoadMore}>
+      {loadMore && hidden > 0 ? (
+        <TertiaryAction {...resolveActionTarget(loadMore)}>
           {`Load ${hidden} earlier ${hidden === 1 ? "check" : "checks"}`}
         </TertiaryAction>
       ) : null}

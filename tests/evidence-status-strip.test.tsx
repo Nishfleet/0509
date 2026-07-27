@@ -2,7 +2,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createRoutesStub } from "react-router";
 import { describe, expect, it } from "vitest";
 
-import { STATUS_STRIP_MAX_CELLS, StatusStrip } from "~/components/evidence/status-strip";
+import { resolveActionTarget } from "~/components/evidence/action-target";
+import {
+  STATUS_STRIP_MAX_CELLS,
+  StatusStrip,
+  type StatusStripAction,
+} from "~/components/evidence/status-strip";
 
 /** BL-005 — brief §6.3: one strip replaces seven scattered status cards. */
 
@@ -59,5 +64,20 @@ describe("StatusStrip", () => {
 
   it("renders nothing rather than an empty ruled bar", () => {
     expect(renderToStaticMarkup(<StatusStrip cells={[]} />)).toBe("");
+  });
+
+  it("cannot be given an action with no destination", () => {
+    // Types-only guard, exercised at runtime through the resolver: every
+    // branch of the union produces exactly one live prop.
+    expect(resolveActionTarget({ to: "/app/watchlists" })).toEqual({ to: "/app/watchlists" });
+    expect(resolveActionTarget({ href: "https://example.com" })).toEqual({
+      href: "https://example.com",
+    });
+    const onClick = () => {};
+    expect(resolveActionTarget({ onClick })).toEqual({ onClick });
+
+    // @ts-expect-error — an action with no target must not typecheck.
+    const dead: StatusStripAction = { label: "Check now" };
+    expect(dead.label).toBe("Check now");
   });
 });

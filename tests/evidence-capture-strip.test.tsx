@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -110,5 +112,47 @@ describe("CaptureStrip", () => {
 
   it("renders nothing when there is no window to draw", () => {
     expect(renderToStaticMarkup(<CaptureStrip days={[]} />)).toBe("");
+  });
+});
+
+describe("capture bar silhouette (brief §6.2, §8.1)", () => {
+  const css = readFileSync("app/app.css", "utf8");
+
+  function barHeight(state: string): number {
+    const marker = `.f9-ed-capture-bar.is-${state} {`;
+    const start = css.indexOf(marker);
+    expect(start, `${marker} should exist`).toBeGreaterThan(-1);
+    const block = css.slice(start, css.indexOf("}", start));
+    const match = block.match(/height:\s*(\d+(?:\.\d+)?)px/);
+    expect(match, `is-${state} should declare a height`).not.toBeNull();
+    return Number(match![1]);
+  }
+
+  it("keeps height monotonic: tall means a change, short means no change", () => {
+    const quiet = barHeight("quiet");
+    const captured = barHeight("captured");
+    const waiting = barHeight("waiting");
+    const unchecked = barHeight("unchecked");
+
+    expect(captured).toBeGreaterThan(quiet);
+    expect(waiting).toBe(captured);
+    // The load-bearing assertion: an outage must never wear the silhouette
+    // of a caught change. A day we did not check reads as "no change plus no
+    // data", so it stays short and says the rest with a dashed edge.
+    expect(unchecked).not.toBe(captured);
+    expect(unchecked).toBeLessThan(captured);
+    expect(unchecked).toBe(quiet);
+  });
+
+  it("distinguishes an unchecked day from a quiet day without using height", () => {
+    const start = css.indexOf(".f9-ed-capture-bar.is-unchecked {");
+    const block = css.slice(start, css.indexOf("}", start));
+    expect(block).toContain("border: 1px dashed var(--ed-rule-dashed);");
+    expect(block).toContain("background: none;");
+
+    const quietStart = css.indexOf(".f9-ed-capture-bar.is-quiet {");
+    const quietBlock = css.slice(quietStart, css.indexOf("}", quietStart));
+    expect(quietBlock).toContain("background: var(--ed-bar-quiet);");
+    expect(quietBlock).not.toContain("dashed");
   });
 });

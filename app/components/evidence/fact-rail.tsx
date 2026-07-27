@@ -62,8 +62,10 @@ export function FactRail({
   return (
     <div className={className ? `f9-ed-fact-rail ${className}` : "f9-ed-fact-rail"}>
       {title ? <div className="f9-ed-fact-rail-header f9-ed-micro">{title}</div> : null}
-      {visible.map((row) => (
-        <FactRailRow key={row.key} row={row} />
+      {visible.map((row, index) => (
+        // Index key: a rail may legitimately repeat a key (two "Source" rows
+        // from two captures), and rows never reorder within a render.
+        <FactRailRow key={`${index}-${row.key}`} row={row} />
       ))}
     </div>
   );
