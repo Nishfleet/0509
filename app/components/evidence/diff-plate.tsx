@@ -1,0 +1,140 @@
+import type { ReactNode } from "react";
+
+import { LocalTime } from "~/components/local-time";
+
+import { QuietLine } from "./quiet-line";
+
+/**
+ * Diff plate — brief §6.5 (R7 Neon/Figma compare framing). The signature
+ * object of the product: it renders a SINGLE changed token, not an object
+ * dump, with the capture time stamped on both sides.
+ *
+ * Proof architecture (brief §8.2): **two timestamps or no diff.** If either
+ * capture time is missing the plate refuses to render and degrades to a quiet
+ * line — we never imply a before/after we cannot evidence.
+ *
+ * Red appears nowhere in this component except the deletion (brief §4.5).
+ */
+
+export const STORED_CAPTURE_NOTE = "This is the stored capture, not a re-render.";
+
+export const DIFF_PLATE_DEGRADE_COPY =
+  "Checked. We recorded a change here but kept only one capture time, so there is no before-and-after to show yet.";
+
+export interface DiffCapture {
+  /** ISO timestamp of the capture. Missing/invalid degrades the whole plate. */
+  capturedAt?: string | null;
+  /** The changed token itself — a price, a headline, a CTA label. */
+  value?: ReactNode | null;
+  /** Quoted page copy, presented as stored capture text. */
+  quote?: string | null;
+  /** Mono capture note (source, capture id). */
+  note?: string | null;
+}
+
+export interface DiffPlateExtraChange {
+  key: string;
+  value: string;
+}
+
+export function hasCaptureTime(iso: string | null | undefined): boolean {
+  if (!iso) return false;
+  return !Number.isNaN(new Date(iso).getTime());
+}
+
+function Pane({
+  capture,
+  label,
+  variant,
+  children,
+}: {
+  capture: DiffCapture;
+  label: string;
+  variant: "before" | "now";
+  children?: ReactNode;
+}) {
+  return (
+    <div className={`f9-ed-diff-pane is-${variant}`}>
+      <span className="f9-ed-diff-label">{label}</span>
+      <span className="f9-ed-evidence-line">
+        <LocalTime iso={capture.capturedAt ?? null} />
+      </span>
+      <span className="f9-ed-diff-value">
+        {variant === "before" ? <s>{capture.value}</s> : <mark>{capture.value}</mark>}
+      </span>
+      {capture.quote ? <p className="f9-ed-diff-quote">“{capture.quote}”</p> : null}
+      {capture.note ? <p className="f9-ed-diff-note">{capture.note}</p> : null}
+      {children}
+    </div>
+  );
+}
+
+export function DiffPlate({
+  headline,
+  why,
+  field,
+  caughtLabel,
+  verification,
+  before,
+  now,
+  extraChanges = [],
+  actions,
+  degradeStamp,
+  degradeCopy = DIFF_PLATE_DEGRADE_COPY,
+  className,
+}: {
+  /** The finding, uppercase display type, max 22ch. */
+  headline: string;
+  /** One sentence of why it matters. */
+  why?: string;
+  /** What changed — "OFFER PAGE", "PRICE", "HEADLINE". */
+  field: string;
+  /** Ink-header left stamp, e.g. "CAUGHT 27 JUL · 06:05 UTC". */
+  caughtLabel: string;
+  /** Ink-header right stamp, e.g. "VERIFIED · 2 CAPTURES". */
+  verification?: string;
+  before: DiffCapture;
+  now: DiffCapture;
+  /** Further changed fields live as rows in the `now` pane, not new plates. */
+  extraChanges?: readonly DiffPlateExtraChange[];
+  /** Rank-2 / Rank-3 actions. Never a Rank-1 — a plate repeats. */
+  actions?: ReactNode;
+  degradeStamp?: ReactNode;
+  degradeCopy?: string;
+  className?: string;
+}) {
+  if (!hasCaptureTime(before.capturedAt) || !hasCaptureTime(now.capturedAt)) {
+    return <QuietLine stamp={degradeStamp ?? caughtLabel} copy={degradeCopy} />;
+  }
+
+  return (
+    <article className={className ? `f9-ed-diff-plate ${className}` : "f9-ed-diff-plate"}>
+      <header className="f9-ed-plate-header f9-ed-micro">
+        <span>
+          {caughtLabel} · {field}
+        </span>
+        {verification ? <span className="f9-ed-plate-header-end">{verification}</span> : null}
+      </header>
+      <div className="f9-ed-diff-body">
+        <h3 className="f9-ed-diff-headline">{headline}</h3>
+        {why ? <p className="f9-ed-diff-why">{why}</p> : null}
+        <div className="f9-ed-diff-panes">
+          <Pane capture={before} label="Before" variant="before" />
+          <Pane capture={now} label="Now" variant="now">
+            {extraChanges.length > 0 ? (
+              <div className="f9-ed-diff-extra">
+                {extraChanges.map((change) => (
+                  <span className="f9-ed-diff-note" key={change.key}>
+                    {change.key}: {change.value}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </Pane>
+        </div>
+        <p className="f9-ed-diff-note">{STORED_CAPTURE_NOTE}</p>
+        {actions ? <div className="f9-ed-action-row">{actions}</div> : null}
+      </div>
+    </article>
+  );
+}
