@@ -75,10 +75,22 @@ export function shouldRevalidate({
  * Routes that carry their own Rank-1 primary (brief §5: exactly one ink-filled
  * primary per screen). The shell's standing "+ Add competitor" demotes to
  * Rank 2 there so the page's own primary is the only one in view. BL-009 owns
- * the reports entries; the rest of this shell belongs to BL-017.
+ * the reports entries and BL-014 the collections entry; the rest of this shell
+ * belongs to BL-017.
+ *
+ * §5 is a SCREEN contract, not a component one: counting only the child route
+ * hides the shell's own ink primary. `/app/collections` renders its own Rank-1
+ * on the gated, first-run and nothing-filed states, so the shell demotes
+ * across the whole route — which also leaves the populated board at zero
+ * primaries, legitimate per §5 because reading saved evidence is not a CTA and
+ * creating another collection is a Rank-2 reveal (§7).
  */
 export function shellPrimaryIsDemoted(pathname: string) {
-  return pathname === "/app/reports" || pathname.startsWith("/app/reports/");
+  return (
+    pathname === "/app/reports" ||
+    pathname.startsWith("/app/reports/") ||
+    pathname === "/app/collections"
+  );
 }
 
 export default function AppLayoutRoute() {
