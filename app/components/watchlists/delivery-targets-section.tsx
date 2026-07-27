@@ -1,5 +1,6 @@
-import { Form, Link } from "react-router";
+import { Form } from "react-router";
 
+import { TertiaryAction } from "~/components/evidence/cta";
 import { SubmitButton } from "~/components/submit-button";
 import {
   toPublicDeliveryTarget,
@@ -64,7 +65,7 @@ export function DeliveryTargetsSection(props: {
                     value={data.deliveryTestRequestTokens[target.id] ?? ""}
                   />
                   <SubmitButton
-                    className="f9-secondary-button"
+                    className="f9-ed-cta f9-ed-cta--rank3"
                     intent="send-test-email"
                     match={{ targetId: target.id }}
                     pendingLabel="Sending…"
@@ -73,15 +74,15 @@ export function DeliveryTargetsSection(props: {
                   </SubmitButton>
                 </Form>
               ) : target.channel === "email" ? (
-                <Link className="f9-secondary-button" to="/app/billing?source=watchlists#plans">
+                <TertiaryAction to="/app/billing?source=watchlists#plans">
                   Upgrade for email
-                </Link>
+                </TertiaryAction>
               ) : null}
               <Form method="post">
                 <input name="intent" type="hidden" value="toggle-delivery-target" />
                 <input name="targetId" type="hidden" value={target.id} />
                 <SubmitButton
-                  className="f9-secondary-button"
+                  className="f9-ed-cta f9-ed-cta--rank3"
                   intent="toggle-delivery-target"
                   match={{ targetId: target.id }}
                   pendingLabel={target.isPaused ? "Resuming…" : "Pausing…"}
@@ -144,7 +145,7 @@ export function DeliveryTargetsSection(props: {
                       <input name="intent" type="hidden" value="toggle-delivery-target" />
                       <input name="targetId" type="hidden" value={target.id} />
                       <SubmitButton
-                        className="f9-secondary-button"
+                        className="f9-ed-cta f9-ed-cta--rank3"
                         intent="toggle-delivery-target"
                         match={{ targetId: target.id }}
                         pendingLabel={paused ? "Resuming…" : "Pausing…"}
@@ -186,7 +187,7 @@ export function DeliveryTargetsSection(props: {
           <input defaultChecked name="explicitOptIn" type="checkbox" />
           <span>Explicit opt-in confirmed</span>
         </label>
-        <SubmitButton className="f9-secondary-button" intent="add-delivery-target" pendingLabel="Adding…">
+        <SubmitButton className="f9-ed-cta f9-ed-cta--rank2" intent="add-delivery-target" pendingLabel="Adding…">
           Add delivery target
         </SubmitButton>
       </Form> : (
@@ -197,9 +198,9 @@ export function DeliveryTargetsSection(props: {
               <p className="f9-muted-copy">
                 Paid plans can send proof-backed alerts to email. Upgrade to add a delivery target.
               </p>
-              <Link className="f9-secondary-button" to="/app/billing?source=watchlists#plans">
+              <TertiaryAction to="/app/billing?source=watchlists#plans">
                 Upgrade for delivery
-              </Link>
+              </TertiaryAction>
             </>
           ) : (
             <p className="f9-muted-copy">
