@@ -2,13 +2,15 @@
 
 ## Agent operating model (Nish, 2026-07-19)
 
-Three roles, kept separate — this split shipped the 2026-07-19 product-readiness stack and Nish endorsed it as the standing model:
+Three roles stay separate as Nish's standing model:
 
 - **Builders** (fast models: Grok, Cursor Composer): implement from meticulous work-package specs (`docs/PRODUCT-READINESS-SPEC-*` pattern — anchor strings, acceptance criteria, guardrails). Builders never merge or deploy their own work.
 - **Prod-touchers** (Codex or any TTY session that can pass safe-deploy admin auth, or Nish): merges that trigger deploys, remote D1 migrations, secrets, restore drills, provider mutations. Headless agent sessions are fail-closed by the safe-deploy wrapper — by design; do not route around it.
 - **Reviewer/coordinator** (Claude): audits, spec authoring, independent multi-domain review of every builder stack BEFORE merge (`docs/REVIEW-FIXES-*` pattern), landing-order coordination across agents, live prod verification after deploy.
 
-Every substantial builder stack gets an independent review pass before merge — the 2026-07-19 stack had 3 blockers and 6 customer-facing email bugs caught this way. Deploy-gate e2e (Gate-B journeys, restore-evidence) is Codex-owned; product changes that alter public copy/states require the gate specs to be updated in the same landing sequence.
+Every substantial builder stack gets an independent review before merge. Deploy-gate e2e (Gate-B journeys, restore-evidence) is Codex-owned; product changes that alter public copy/states require the gate specs to be updated in the same landing sequence.
+
+History: `docs/PROJECT-HISTORY.md`.
 
 ## Build
 ```bash
@@ -86,26 +88,20 @@ npm run dev
 The checked-in Cloudflare app is the active production runtime and billing is wired:
 
 - onboarding, collections, watchlists, digests, reports, share/export flows, customer API keys, and MCP endpoint exist in `app/`
-- **billing IS live via Dodo Payments**: `api.billing.dodo.checkout.ts` (303 to hosted checkout) + `api.webhooks.dodo.ts` (signed, idempotent). `payment.succeeded` grants plans/credits; `subscription.cancelled/expired/failed/on_hold` revoke to free with the same monotonic-timestamp ordering (2026-06-11). The Dodo dashboard webhook must have subscription events enabled (including refund events). As of 2026-06-12: `subscription.failed/on_hold` are a dunning grace state (plan kept, `dodo_status` flagged, banner shown) — only `cancelled/expired` revoke; `refund.succeeded` revokes plan + expires credits; a `dodo_webhook_event` ledger dedupes redeliveries; a ±5min replay window is enforced; `/app/billing` shows plan/usage/cancel guidance; checkout blocks double-subscriptions. Do not describe billing as "not live."
+- **billing IS live via Dodo Payments**: `api.billing.dodo.checkout.ts` redirects to hosted checkout; `api.webhooks.dodo.ts` is signed, replay-windowed, monotonic, and idempotent. Failed/on-hold subscriptions retain the plan as dunning grace; cancelled/expired subscriptions and successful refunds revoke it. `/app/billing` shows plan, usage, and cancellation guidance and blocks double subscriptions. Do not describe billing as "not live."
 - Dodo returns to `/app/billing?checkout=dodo`, which renders a checkout-return notice that polls plan activation ~20x every 3s (`CheckoutReturnNotice` in `app/components/checkout-return-notice.tsx`, rendered on the billing page)
 - support contact is `support@0509.io` (`app/lib/support.ts`), surfaced on marketing footer, app sidebar, /terms, /privacy, /unsubscribe, and email footers; inbound routing is Cloudflare Email Routing (dashboard-configured)
 - Dodo is the only active billing processor. Stripe was never wired; tests assert no Stripe route exposure.
 - region-aware pricing was REMOVED in `migrations/0016_drop_region_pricing.sql`; pricing is live-loaded from Dodo (`app/lib/dodo-pricing.server.ts`, `/api/pricing-preview`)
 - plan gating is enforced at creation time (`checkPlanLimit`), on manual refresh (free plan blocked), on watchlist resume, and on downgrade/revocation/refund (over-limit watchlists auto-pause, newest kept); authenticated live search is rate-limited per account (60/10min)
-- a retention audit (first-week experience, signal quality, promise-vs-delivery, churn lifecycle) followed on 2026-06-12 and a 12-PR program (#160-#172) landed the same day: Dodo subscription grants fixed for real payloads (subscription payments carry NO product_cart — grants come from checkout metadata; subscription.active/renewed handled; migration 0023 rebuilt user_plan absorbing remote drift and added subscription/customer/next-billing linkage), first scan on watchlist creation, all-quiet heartbeat digests, baseline event instead of first-scan ad_new flood, canonical-URL diffing + 48h per-field suppression + stale-cache-honest scans, paused-watchlist visibility + auto-resume on grant, per-plan daily proof caps (agency math now reachable), Dodo customer portal + cancel-at-period-end guard, scan-failure notices + nightly customer-at-risk operator email, before/now diffs + links in alert emails, /app/account (password/email/sessions/delete), honest cadence copy, hidden-value pricing bullets + agency scan priority. A live-mode Dodo API key lives at ~/.config/dodo/claude-api-key. RESOLVED 2026-06-12 (verified via Dodo API): the production webhook ep_3DyWwxkqJjUoAInxV07esfVvUDb subscribes to all 8 handled events (payment.succeeded, refund.succeeded, subscription.active/renewed/cancelled/expired/failed/on_hold) — filter_types match the handler exactly.
-- a full launch audit (security, code, architecture, DB, business) was completed 2026-06-11 and a 13-PR hardening program (#138-#158) landed 2026-06-12 resolving: SSRF in creative-text, open redirect on auth `redirectTo`, D1 100-param crashes, missing indexes (0022) + retention sweep, share-link expiry/revocation (+ `/app/shares`), password reset, billing page + double-subscription guard, dunning grace + refund handling + Dodo event ledger, digests-before-scans + cron deadline guard, digest-only Mondays, scraper advertiser/CTA honesty, instant-alert retry + quiet-hours flush, watchlist pause/resume + collection delete + send-test-email, cost gates. CURRENT GA POSTURE: Email is the verified delivery lane; WhatsApp and Slack are dormant/non-GA customer channels; Workflow-based monitoring fan-out is live in prod (`MONITORING_FANOUT_MODE=fanout`, max 8 in-flight).
-- a round-3 audit program (waves A/B/C + ops) landed 2026-06-12 as PRs #176-#186: scan-reliability interaction fixes (deletion guard, operator-alert FK, email-change target migration, paused_reason, in-flight scan guard with lazy scan thunks, soft-failure classification, capacity staleness signals), pending states + first-scan live pulse, tab titles/favicon/PNG og-image, the GLOBAL-FIRST pass (see Conventions; migrations 0024-0025), email dark-mode hardening, dashboard wake-up greeting, creative thumbnails (creativeImageUrl on AdRecord raw_json), Boards rename + ad-longevity badges, weekly business-numbers operator email (Monday cron), D1→R2 weekly backups (npm run backup:d1:r2 + scheduled task on Nish's Mac; docs/ops-backup-uptime.md), and agency report branding (migration 0026, /app/account, plan-gated). Remote D1 migrations applied through 0026. PENDING NISH (see docs/ops-backup-uptime.md): UptimeRobot monitor on /api/health, Dodo dashboard customer-portal "Allow Subscription Updates" toggle, WhatsApp Meta-side setup.
+Current GA posture: Email is the verified delivery lane; WhatsApp and Slack are dormant/non-GA customer channels; Workflow-based monitoring fan-out is live in prod (`MONITORING_FANOUT_MODE=fanout`, max 8 in-flight).
 
-Last local verification on 2026-06-11:
-
-- `npm test` passed (`74` files / `502` tests)
-- `npm run build` passed
-- remote D1 migration state checked via `wrangler d1 migrations list 0509 --remote`
+Audit-program, incident, and verification history: `docs/PROJECT-HISTORY.md`.
 
 ## Production Reality
 
 - `https://0509.io`, `https://www.0509.io`, and `https://api.0509.io` are the primary production domains for the current Cloudflare app under `app/` and `workers/`.
-- **Deploys go through CI, not your terminal.** Every push to `main` auto-deploys via `.github/workflows/deploy-production.yml` (the Cloudflare deploy token lives in the GitHub `production` environment). That workflow runs typecheck → full tests → materializes private remote-restore evidence → `npm run deploy` → verifies the release evidence set. `npm run deploy` executes `scripts/deploy-production-plan.mjs`: D1 migration-sync blocks; `launch:readiness:predeploy` (typecheck, tests, build, audit, and `e2e:local:release`) plus `verify-deploy-readiness.mjs` require a strict first-attempt Chromium `local-release` 66-entry Gate-B proof and block release; `cross_browser_risk_proof` (`scripts/run-cross-browser-risk-proof.mjs`) is a non-blocking diagnostic (`nonBlockingDiagnostic: true`); `remote_restore_evidence` (`scripts/verify-remote-restore-evidence.mjs`) blocks under policy `fresh-exact-24h` for migration-bearing deploys and `verified-ledger-7d` otherwise; post-deploy steps include rollback-target verification, launch-readiness canary cycle, version-bound release canary, Gate-C soak start, live public truth, and `e2e:prod:public` smoke. Do NOT also run `npm run deploy` locally for routine ships — on 2026-07-13 a local deploy interleaved with CI deploys, hashed asset names flip-flopped between versions, and live sessions (including the owner mid-sign-in) got unstyled pages and root error boundaries. Local deploy is break-glass only, when Actions is down and after checking no CI deploy run is in flight.
+- **Deploys go through CI, not your terminal.** Every push to `main` auto-deploys through `.github/workflows/deploy-production.yml`, which runs typecheck, full tests, restore-evidence materialization, `npm run deploy`, and release-evidence verification. Do not run `npm run deploy` locally for routine ships. Local deploy is break-glass only when Actions is down and no CI deploy is in flight. Full gate sequence and incident history: `docs/PROJECT-HISTORY.md`.
 - `0509.in`, `www.0509.in`, and `api.0509.in` are redirect compatibility routes only. Do not introduce new `.in` product copy, auth origins, SEO links, or support addresses.
 - Cloudflare deploy state is represented by `wrangler.jsonc`: D1 database `0509`, R2 bucket binding `LANDING_PAGE_ARTIFACTS`, Browser Rendering, Workers AI, Cloudflare Email Service, and `MonitoringWorkflow` bindings are configured there. `wrangler.jsonc` sets `MONITORING_FANOUT_MODE: "fanout"` and `MONITORING_FANOUT_GLOBAL: "1"` (max 8 in-flight via `MONITORING_FANOUT_MAX_INFLIGHT`).
 - Remote D1 migrations: remote D1 and the repo migration chain are through `0070_release_scheduled_observations.sql`. The post-deploy cleanup allowlist in `scripts/d1-migration-sync-check.lib.mjs` is empty.
@@ -148,7 +144,7 @@ The product is **Five to Nine**; **0509.io** is its current production domain (0
 - Immutability: create new objects, never mutate existing ones.
 - File organization: 200-400 lines typical, 800 max.
 - D1 queries: always use parameterized `.bind()` — never string interpolation.
-- Prod schema changes go through ONE door: a numbered file in `migrations/` applied with `npx wrangler d1 migrations apply 0509 --remote`. Never run DDL via `wrangler d1 execute --remote`. `npm run deploy` enforces this via `scripts/check-d1-migrations-synced.mjs`, which fails the deploy while remote D1 is behind `migrations/` except for an explicitly allowlisted post-deploy cleanup migration (`POST_DEPLOY_CLEANUP_MIGRATIONS` in `scripts/d1-migration-sync-check.lib.mjs` — currently empty after `0060` completed). (Lesson from the 0019_slack_delivery drift incident, 2026-06-11: schema was changed out-of-band, the migration ledger lied, and the next apply crashed on it.)
+- Prod schema changes go through ONE door: a numbered file in `migrations/` applied with `npx wrangler d1 migrations apply 0509 --remote`. Never run DDL via `wrangler d1 execute --remote`. `npm run deploy` enforces migration sync through `scripts/check-d1-migrations-synced.mjs`; only migrations explicitly listed in `POST_DEPLOY_CLEANUP_MIGRATIONS` may trail, and that allowlist is currently empty. Incident history: `docs/PROJECT-HISTORY.md`.
 
 ## Design System
 
@@ -157,3 +153,7 @@ See `DESIGN.md` in the repo root for the canonical design reference. The picked 
 Per Nish's "delightmaxxing >>>>>" preference (2026-04-06): do not ship generic AI-default styling. If a UI change can be more delightful, more polished, or more consistent with Vercel's aesthetic, take the extra time to do it.
 
 Source: https://github.com/VoltAgent/awesome-design-md
+
+## Backlog
+
+Current backlog: `docs/BACKLOG.md`.
