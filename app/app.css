@@ -10251,6 +10251,9 @@ reds soften --- */
   align-self: flex-start;
   max-width: 100%;
   min-height: 44px;
+  /* Brief §9.6: 44px on BOTH axes for all three ranks. BL-005 set the height
+     only, so a short Rank-3 label ("Pause") landed at 38px wide. */
+  min-width: 44px;
   padding: 10px 16px;
   border: 2.5px solid var(--ed-rule);
   border-radius: 0;
