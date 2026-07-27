@@ -84,8 +84,13 @@ describe("WP-42: optimistic watchlist pause/resume", () => {
       watchlistsRoute.indexOf("</pauseResumeFetcher.Form>"),
     );
     expect(fetcherForm).toContain('"pause-watchlist" : "resume-watchlist"');
-    expect(fetcherForm).toContain("f9-button-spinner");
-    expect(fetcherForm).toContain("aria-busy");
+    // BL-006: the first fetcher form is the band's Rank-3 pause control, whose
+    // pending state is the label itself ("Pausing…") rather than a spinner.
+    expect(fetcherForm).toContain("Pausing…");
+    expect(fetcherForm).toContain("Resuming…");
+    // The opened competitor's toolbar keeps the spinner + aria-busy affordance.
+    expect(watchlistsRoute).toContain("f9-button-spinner");
+    expect(watchlistsRoute).toContain("aria-busy");
   });
 });
 

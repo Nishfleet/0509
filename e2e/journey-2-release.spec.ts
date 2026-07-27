@@ -246,23 +246,22 @@ for (const viewport of viewports) {
     await expect(nykaaWatch.getByRole("heading", { name: "Nykaa watch", exact: true })).toBeVisible();
     await expect(nykaaWatch.getByText("Competitor · Nykaa", { exact: true })).toBeVisible();
     if (viewport.name === "mobile") {
-      const deskHeading = page
-        .locator(".f9-side-panel")
-        .getByRole("heading", { name: "Competitors", exact: true });
-      const deskIntro = page.getByText(
-        "Pick a tracked brand to review changes, evidence freshness, and alert delivery.",
-        { exact: true },
-      );
-      const [headingBox, introBox] = await Promise.all([
-        deskHeading.boundingBox(),
-        deskIntro.boundingBox(),
+      // BL-006 replaced the master/detail side panel (and its "Pick a tracked
+      // brand…" intro) with the watch board. The guarantee this assertion
+      // protects is unchanged: a competitor's identity must not be stretched
+      // apart down the phone screen — it is now measured on the band itself.
+      const bandName = nykaaWatch.getByRole("heading", { name: "Nykaa watch", exact: true });
+      const bandMeta = page.locator(".f9-ed-band-meta").first();
+      const [nameBox, metaBox] = await Promise.all([
+        bandName.boundingBox(),
+        bandMeta.boundingBox(),
       ]);
-      expect(headingBox, "mobile competitors-panel heading should be measurable").not.toBeNull();
-      expect(introBox, "mobile competitors-panel intro should be measurable").not.toBeNull();
-      if (headingBox && introBox) {
+      expect(nameBox, "mobile band name should be measurable").not.toBeNull();
+      expect(metaBox, "mobile band meta lines should be measurable").not.toBeNull();
+      if (nameBox && metaBox) {
         expect(
-          introBox.y - (headingBox.y + headingBox.height),
-          "mobile competitors-panel content should not be stretched apart",
+          metaBox.y - (nameBox.y + nameBox.height),
+          "mobile band content should not be stretched apart",
         ).toBeLessThanOrEqual(72);
       }
     }

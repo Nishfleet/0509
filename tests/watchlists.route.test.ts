@@ -456,6 +456,78 @@ describe("watchlists route loader", () => {
     });
   });
 
+  // BL-006 list/detail split (brief §7): `/app/watchlists` is the watch board.
+  // Nothing about a single competitor loads until a band is opened.
+  it("loads the board only until a competitor is opened", async () => {
+    const getWatchlist = vi.fn().mockResolvedValue(watchlist);
+    const listWatchEvents = vi.fn().mockResolvedValue(recentEvents);
+    const listWatchlistRuns = vi.fn().mockResolvedValue(recentRuns);
+
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+      requireWorkspaceSession: vi.fn().mockImplementation(async () => ({
+        session,
+        workspaceUserId: session.user.id,
+        isMember: false,
+        ownerName: null,
+      })),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("starter"),
+      checkPlanLimit: vi.fn(),
+    }));
+    vi.doMock("~/lib/email-verification.server", () => ({
+      isUserEmailVerified: vi.fn().mockResolvedValue(true),
+    }));
+    vi.doMock("~/lib/ad-source.server", () => ({
+      resolveCommercialAdSourceStatus: vi.fn().mockResolvedValue(discoveryStatus),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWatchlist,
+      getWatchlistDeliveryConfig: vi.fn().mockResolvedValue(watchlistDeliveryConfig),
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue(workspaceDeliveryConfig),
+      listDeliveryAttempts: vi.fn().mockResolvedValue([]),
+      listDeliveryTargets: vi.fn().mockResolvedValue([]),
+      listEventCandidates: vi.fn().mockResolvedValue([]),
+      listRecentProofCapturesForWatchlist: vi.fn().mockResolvedValue([]),
+      listWatchEvents,
+      listWatchlistRuns,
+      listWatchlists: vi.fn().mockResolvedValue([watchlist]),
+    }));
+
+    const { loader } = await import("~/routes/app.watchlists");
+    const board = (await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app/watchlists"),
+    } as never)) as {
+      selectedWatchlist: unknown;
+      watchlists: unknown[];
+      captureWindow: { windowDays: number; days: Record<string, unknown> };
+      effectiveDeliveryConfig: { timezone: string | null };
+    };
+
+    expect(board.selectedWatchlist).toBeNull();
+    expect(board.watchlists).toEqual([watchlist]);
+    expect(board.captureWindow.windowDays).toBe(30);
+    // The board is the default view, so it must resolve the workspace
+    // delivery timezone: "Next check" would otherwise print UTC beside a
+    // viewer-local "Last check" and disagree with /app/dashboard.
+    expect(board.effectiveDeliveryConfig.timezone).toBe(workspaceDeliveryConfig.timezone);
+    // No detail query runs for a board-only view.
+    expect(getWatchlist).not.toHaveBeenCalled();
+    expect(listWatchEvents).not.toHaveBeenCalled();
+    expect(listWatchlistRuns).not.toHaveBeenCalled();
+
+    const opened = (await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app/watchlists?watchlist=watch-1"),
+    } as never)) as { selectedWatchlist: unknown };
+
+    expect(opened.selectedWatchlist).toEqual(watchlist);
+    expect(getWatchlist).toHaveBeenCalledWith(expect.anything(), "watch-1", "user-1");
+    expect(listWatchEvents).toHaveBeenCalled();
+  });
+
   it("does not return owner delivery targets to workspace members", async () => {
     const memberSession = {
       ...session,
@@ -2117,6 +2189,161 @@ describe("watchlists route rendering", () => {
       statusLabel: "Needs source access",
       lastCheckedAt: "2026-04-18T10:01:00.000Z",
     });
+  });
+
+  // BL-006 — brief §6.1/§6.3/§7: the board is the page.
+  it("renders the watch board with one band per competitor and no detail panel", async () => {
+    await mockRouter({
+      actionData: undefined,
+      searchParams: new URLSearchParams(),
+      loaderData: {
+        renderedAt: "2026-04-18T10:59:50.000Z",
+        plan: "starter",
+        canManageDelivery: true,
+        verifiedAccountEmail: "owner@example.com",
+        watchlists: [watchlist, { ...watchlist, id: "watch-2", name: "Paused rival", isActive: false }],
+        selectedWatchlist: null,
+        captureWindow: {
+          endDate: "2026-04-18",
+          windowDays: 30,
+          days: {
+            "watch-1": [
+              { date: "2026-04-17", state: "quiet" },
+              { date: "2026-04-18", state: "captured" },
+            ],
+          },
+          capturedChanges: { "watch-1": 2 },
+          totalCapturedChanges: 2,
+          failedChecks: {},
+        },
+        eventCandidates: [],
+        events: [],
+        runs: [],
+        workspaceDeliveryConfig,
+        watchlistDeliveryConfig: null,
+        discoveryStatus,
+        effectiveDeliveryConfig: {
+          sensitivityMode: "balanced",
+          instantEnabled: false,
+          digestEnabled: true,
+          digestCadencePreference: "plan_default",
+          emailEnabled: true,
+          whatsappEnabled: false,
+          slackEnabled: false,
+          quietHours: null,
+          timezone: "UTC",
+        },
+        deliveryTargets: [],
+        workspaceDeliveryTargets: [],
+        recentDeliveryAttempts: [],
+        recentProofCaptures: [],
+        proofSummary: {
+          totalAttempts: 0,
+          successfulAttempts: 0,
+          failedAttempts: 0,
+          skippedAttempts: 0,
+          lastAttemptAt: null,
+          lastSuccessfulProofAt: null,
+        },
+        creativeWall: [],
+        trendDailyActivity: [],
+      },
+    });
+
+    const { default: WatchlistsRoute } = await import("~/routes/app.watchlists");
+    const markup = renderToStaticMarkup(createElement(WatchlistsRoute));
+
+    // One band per competitor, each with its capture strip and worded legend.
+    expect(markup.match(/f9-ed-band"/g)?.length ?? 0).toBeGreaterThanOrEqual(1);
+    expect(markup).toContain("Nykaa watch");
+    expect(markup).toContain("Paused rival");
+    expect(markup.match(/f9-ed-capture-strip/g)).toHaveLength(2);
+    expect(markup).toContain("Short bar = checked, nothing changed.");
+    // The workspace ticker exists here.
+    expect(markup).toContain("f9-ed-ticker");
+    expect(markup).toContain("NYKAA WATCH · 2 CHANGES CAUGHT · 30D");
+    // One status strip carries page-level status; no scattered status cards.
+    expect(markup).toContain("f9-ed-status-strip");
+    expect(markup).toContain("Caught · 30d");
+    expect(markup).not.toContain("Tracking status");
+    // Zero Rank-1s here on purpose: the shell topbar already carries
+    // "+ Add competitor", and two ink primaries on one screen is the §5 bug.
+    expect(markup).not.toContain("f9-ed-cta--rank1");
+    // The detail surface stays closed until a band is opened.
+    expect(markup).not.toContain("Evidence and alerts");
+    expect(markup).not.toContain("Watchlist setup");
+    // The checkbox rail is gone.
+    expect(markup).not.toContain('type="checkbox"');
+    expect(markup).not.toContain("f9-bulk-checkbox");
+    // No bulk bar without a selection.
+    expect(markup).not.toContain("competitors selected");
+  });
+
+  it("renders the designed specimen panel when nothing is tracked yet", async () => {
+    await mockRouter({
+      actionData: undefined,
+      searchParams: new URLSearchParams(),
+      loaderData: {
+        renderedAt: "2026-04-18T10:59:50.000Z",
+        plan: "free",
+        canManageDelivery: true,
+        verifiedAccountEmail: null,
+        watchlists: [],
+        selectedWatchlist: null,
+        captureWindow: {
+          endDate: "2026-04-18",
+          windowDays: 30,
+          days: {},
+          capturedChanges: {},
+          totalCapturedChanges: 0,
+          failedChecks: {},
+        },
+        eventCandidates: [],
+        events: [],
+        runs: [],
+        workspaceDeliveryConfig,
+        watchlistDeliveryConfig: null,
+        discoveryStatus,
+        effectiveDeliveryConfig: {
+          sensitivityMode: "balanced",
+          instantEnabled: false,
+          digestEnabled: true,
+          digestCadencePreference: "plan_default",
+          emailEnabled: true,
+          whatsappEnabled: false,
+          slackEnabled: false,
+          quietHours: null,
+          timezone: "UTC",
+        },
+        deliveryTargets: [],
+        workspaceDeliveryTargets: [],
+        recentDeliveryAttempts: [],
+        recentProofCaptures: [],
+        proofSummary: {
+          totalAttempts: 0,
+          successfulAttempts: 0,
+          failedAttempts: 0,
+          skippedAttempts: 0,
+          lastAttemptAt: null,
+          lastSuccessfulProofAt: null,
+        },
+        creativeWall: [],
+        trendDailyActivity: [],
+      },
+    });
+
+    const { default: WatchlistsRoute } = await import("~/routes/app.watchlists");
+    const markup = renderToStaticMarkup(createElement(WatchlistsRoute));
+
+    expect(markup).toContain("f9-ed-specimen");
+    expect(markup).toContain("Add your first competitor");
+    expect(markup).toContain("BAND 01 — RESERVED");
+    expect(markup).toContain("See a sample brief");
+    // The empty state carries the screen's only Rank-1; the header drops its.
+    expect(markup.match(/f9-ed-cta--rank1/g)).toHaveLength(1);
+    // No board chrome without competitors.
+    expect(markup).not.toContain("f9-ed-ticker");
+    expect(markup).not.toContain("f9-ed-status-strip");
   });
 
   it("renders the selected watchlist as a proof-first control panel", async () => {

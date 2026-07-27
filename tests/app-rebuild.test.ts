@@ -11,6 +11,8 @@ const collectionsRoute = readFileSync("app/routes/app.collections.tsx", "utf8");
 const clientsRoute = readFileSync("app/routes/app.clients.tsx", "utf8");
 const digestsRoute = readFileSync("app/routes/app.digests.tsx", "utf8");
 const watchlistsRoute = readFileSync("app/routes/app.watchlists.tsx", "utf8");
+// BL-006 moved the competitor row out of the route and into the band.
+const competitorBand = readFileSync("app/components/watchlists/competitor-band.tsx", "utf8");
 const notificationsUiRoute = readFileSync("app/routes/app.notifications.ui.tsx", "utf8");
 const sourceAccessUiRoute = readFileSync("app/routes/app.source-access.ui.tsx", "utf8");
 const developerAccessUiRoute = readFileSync("app/routes/app.developer-access.ui.tsx", "utf8");
@@ -80,9 +82,9 @@ describe("app rebuild", () => {
     expect(shellComponent).toContain('prefetch="intent"');
     expect(appLayout).toContain("shouldRevalidate");
     expect(appLayout).toContain("currentUrl.pathname === nextUrl.pathname");
-    expect(watchlistsRoute).toContain("to={`/app/watchlists?watchlist=${watchlist.id}`}");
-    expect(watchlistsRoute).toContain("preventScrollReset");
-    expect(watchlistsRoute).not.toContain("href={`/app/watchlists?watchlist=${watchlist.id}`}");
+    expect(competitorBand).toContain("`/app/watchlists?watchlist=${props.id}`");
+    expect(competitorBand).toContain("preventScrollReset");
+    expect(competitorBand).not.toContain("href={openHref}");
     expect(digestsRoute).toContain("to={`/app/digests?digest=${digest.id}`}");
     expect(digestsRoute).toContain("preventScrollReset");
     expect(digestsRoute).not.toContain("href={`/app/digests?digest=${digest.id}`}");
