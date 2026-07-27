@@ -14,6 +14,11 @@ export interface ResultQuickSaveProps {
  * save-to-collection action; free users get the existing plan-gate copy
  * inline. The full detail flow (choose board, note, tags) stays available in
  * the detail aside.
+ *
+ * BL-014: this is the entry point into a collection, so it carries the
+ * Rank-2 class pair rather than a fourth bespoke chip style (brief §5,
+ * "the chip-that-is-secretly-a-button" is a retired style). `.f9-quick-save-
+ * button` now carries only the card-reveal behaviour.
  */
 export function ResultQuickSave({ adId, advertiser, plan, collections }: ResultQuickSaveProps) {
   const fetcher = useFetcher<{ ok: boolean; message?: string }>();
@@ -55,7 +60,7 @@ export function ResultQuickSave({ adId, advertiser, plan, collections }: ResultQ
             ? "Save ad (paid plans)"
             : `Save ${advertiser?.trim() || "this ad"} to ${targetCollection?.name ?? "your collection"}`
         }
-        className="f9-quick-save-button"
+        className="f9-ed-cta f9-ed-cta--rank2 is-small f9-quick-save-button"
         data-quick-save-ad={adId}
         disabled={pending || saved}
         onClick={handleClick}

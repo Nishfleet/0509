@@ -96,11 +96,17 @@ describe("collection plan controls", () => {
   it("locks collection creation before click for Free", async () => {
     const markup = await renderCollections("free", []);
 
+    // BL-014: the gate is the shared LockedFeature specimen panel (brief §6.8,
+    // DESIGN.md WP-B1), not the old dashed PlanLimitState card.
+    expect(markup).toContain("f9-ed-specimen f9-locked-feature");
     expect(markup).toContain("Collections are not included on this plan");
-    expect(markup).toContain("Collections start on the Scout plan.");
-    expect(markup).toContain('href="/app/billing?source=limit#plans"');
+    expect(markup).toContain("Collections · Scout plan required");
+    expect(markup).toContain("Upgrade to Scout");
+    expect(markup).toContain('href="/app/billing?source=collections#plans"');
     expect(markup).not.toContain('name="intent" value="create-collection"');
     expect(markup).not.toContain('placeholder="Nykaa competitors"');
+    // The gate owns the screen's single Rank-1 (brief §5).
+    expect(markup.match(/f9-ed-cta--rank1/g) ?? []).toHaveLength(1);
   });
 
   it("keeps collection creation available for Scout below its limit", async () => {
@@ -112,13 +118,17 @@ describe("collection plan controls", () => {
     expect(markup).not.toContain("Collections are not included on this plan");
   });
 
-  it("locks report, CSV/JSON export, and share before click for Scout", async () => {
+  it("locks report, CSV/JSON export, and share behind ONE nudge for Scout", async () => {
     const markup = await renderCollections("scout");
 
-    expect(markup).toContain("Open report (Agency only)");
-    expect(markup).toContain("Upgrade to Agency");
-    expect(markup).toContain("Upgrade to Starter for exports");
-    expect(markup).toContain("Upgrade to Agency to share");
+    // BL-014 (brief §5, retired styles): three locked actions collapse into a
+    // single Rank-2 nudge instead of a disabled button plus a floating
+    // "Upgrade to Agency" text link in the right rail.
+    expect(markup).toContain("Upgrade to unlock client reports, exports &amp; share links");
+    expect(markup).not.toContain("Open report (Agency only)");
+    expect(markup).not.toContain("Upgrade to Starter for exports");
+    expect(markup).not.toContain("Upgrade to Agency to share");
+    expect(markup).not.toContain("f9-text-link");
     expect(markup).not.toContain('href="/app/reports/collection:collection-1"');
     expect(markup).not.toContain("/export/collection/collection-1");
     expect(markup).not.toContain("name=\"intent\" value=\"share-collection\"");
@@ -129,7 +139,7 @@ describe("collection plan controls", () => {
 
     expect(markup).toContain('href="/export/collection/collection-1"');
     expect(markup).toContain('href="/export/collection/collection-1?format=json"');
-    expect(markup).toContain("Upgrade to Agency");
+    expect(markup).toContain("Upgrade to unlock client reports");
     // WP-29: Starter gets watermarked share links; reports stay Agency-only.
     expect(markup).toContain('name="intent" value="share-collection"');
     expect(markup).toContain("Create share link");

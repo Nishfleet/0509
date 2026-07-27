@@ -1,30 +1,50 @@
-import {
-  Form,
-  Link,
-  useActionData,
-  useLoaderData,
-  useSearchParams,
-} from "react-router";
+import { Form, Link, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
-import { AdLongevityPill } from "~/components/ad-longevity-pill";
-import { Pill } from "~/components/pill";
-import { AdThumb } from "~/components/ad-thumb";
-import { InsightDepthPanel } from "~/components/insight-depth-panel";
 import { ActionFeedback } from "~/components/action-feedback";
+import { CollectionCreatePanel } from "~/components/collections/collection-create-panel";
+import {
+  COLLECTION_PANEL_GROUP,
+  CollectionDisclosure,
+} from "~/components/collections/collection-disclosure";
+import { CollectionSwitch } from "~/components/collections/collection-switch";
+import { SavedEvidenceItem } from "~/components/collections/saved-evidence-item";
 import { ConfirmSubmitButton } from "~/components/confirm-button";
 import { CopyButton } from "~/components/copy-button";
-import { EmptyState } from "~/components/empty-state";
-import { PlanLimitState } from "~/components/plan-limit-state";
+import { FactRail } from "~/components/evidence/fact-rail";
+import { QuietLine } from "~/components/evidence/quiet-line";
+import { SecondaryAction, TertiaryAction } from "~/components/evidence/cta";
+import { SpecimenEmptyState } from "~/components/evidence/specimen-empty-state";
+import { StatusStrip, type StatusCell } from "~/components/evidence/status-strip";
+import { LocalTime } from "~/components/local-time";
+import { LockedFeature } from "~/components/locked-feature";
 import { SubmitButton } from "~/components/submit-button";
-import { formatAdvertiserLabel, formatMachineTokenLabel } from "~/lib/landing-page-display";
+import {
+  COLLECTION_FILTERED_EMPTY_COPY,
+  COLLECTION_ITEMS_EMPTY_COPY,
+  buildCollectionFacts,
+  collectionHref,
+  formatCollectionsUsedValue,
+  formatLockedActionsLabel,
+  formatSavedItemsValue,
+  latestSavedAt,
+  resolveCollectionPrimarySlot,
+} from "~/lib/collections-display";
 import { matchesAdvertiserFilter } from "~/lib/watchlist-links";
-import { buildCollectionInsightDepth } from "~/lib/insight-depth";
 import { canUsePlanFeature, getPlanLimit } from "~/lib/plan-entitlements";
-import { proofLinkForAd } from "~/lib/proof-link";
 import { createReportId } from "~/lib/report";
+
+// Re-exported for test-facing imports from "~/routes/app.collections" (same
+// pattern as the watchlists route). Presentation logic lives in
+// ~/lib/collections-display.
+export {
+  buildCollectionFacts,
+  formatLockedActionsLabel,
+  formatSavedItemsValue,
+  resolveCollectionPrimarySlot,
+};
 
 const externalProofChannels = [
   "TikTok",
@@ -292,11 +312,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
 export default function CollectionsRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
-  const [searchParams] = useSearchParams();
   const plan = data.plan ?? "free";
   const collectionLimit = getPlanLimit(plan, "collections");
   const canCreateCollection = data.collections.length < collectionLimit;
-  const insightDepth = data.selectedCollection ? buildCollectionInsightDepth(data.items) : null;
   const canOpenReport = canUsePlanFeature(plan, "client_reports");
   const canExport =
     canUsePlanFeature(plan, "export_csv") && canUsePlanFeature(plan, "export_json");
@@ -305,6 +323,53 @@ export default function CollectionsRoute() {
     actionData && "shareUrl" in actionData && typeof actionData.shareUrl === "string"
       ? actionData.shareUrl
       : null;
+
+  const selected = data.selectedCollection;
+  const items = data.items;
+  const hiddenByFilter = data.hiddenByAdvertiserFilter ?? 0;
+  const newestSavedAt = latestSavedAt(items);
+
+  // Brief §5: one Rank-1 per screen. Every slot that wants a primary asks the
+  // same resolver, and the losers drop to Rank 2.
+  const primarySlot = resolveCollectionPrimarySlot({
+    canCreate: canCreateCollection,
+    hasCollections: data.collections.length > 0,
+    hasSelection: Boolean(selected),
+    hasItems: items.length > 0 || hiddenByFilter > 0,
+  });
+
+  // One nudge instead of an "Upgrade for X" button beside every locked action
+  // — this is what retires the floating upgrade text link (§5).
+  const lockedActionsLabel = formatLockedActionsLabel(
+    [
+      !canOpenReport ? "client reports" : null,
+      !canExport ? "exports" : null,
+      !canShare ? "share links" : null,
+    ].filter((label): label is string => label !== null),
+  );
+
+  const statusCells: StatusCell[] = [
+    {
+      key: "Collection",
+      value: selected?.name ?? null,
+      missingLabel: "none selected yet",
+    },
+    {
+      key: "Saved evidence",
+      value: formatSavedItemsValue(items.length, hiddenByFilter),
+      missingLabel: "nothing saved yet",
+    },
+    {
+      key: "Last saved",
+      value: newestSavedAt ? <LocalTime iso={newestSavedAt} /> : null,
+      missingLabel: "no captures filed yet",
+    },
+    {
+      key: "Collections",
+      value: formatCollectionsUsedValue(data.collections.length, collectionLimit),
+      missingLabel: "not included on this plan",
+    },
+  ];
 
   return (
     <DashboardPage>
@@ -315,158 +380,101 @@ export default function CollectionsRoute() {
           title="Collections"
         />
 
-      <ActionFeedback
-        data={actionData}
-        fallback
-        planLimitTo="/app/billing?source=collections#plans"
-      />
-      <ActionFeedback data={actionData} intent="delete-collection" />
+        <ActionFeedback
+          data={actionData}
+          fallback
+          planLimitTo="/app/billing?source=collections#plans"
+        />
+        <ActionFeedback data={actionData} intent="delete-collection" />
 
-      <div className="f9-master-detail">
-        <article className="f9-app-panel f9-side-panel">
-          <div className="f9-panel-toolbar">
-            <div>
-              <span className="f9-app-kicker">Create collection</span>
-              <h2>Keep the best ads reusable.</h2>
-            </div>
-          </div>
+        {/* §6.3 — the one place page-level status renders on this surface. */}
+        <StatusStrip
+          action={
+            data.advertiserFilter && selected
+              ? { label: "Clear filter", to: collectionHref(selected.id) }
+              : undefined
+          }
+          ariaLabel="Collections status"
+          cells={statusCells}
+        />
 
-          <ActionFeedback
-            data={actionData}
-            intent="create-collection"
-            planLimitTo="/app/billing?source=collections#plans"
-          />
-          {canCreateCollection ? (
-            <Form className="f9-auth-form" method="post">
-              <input name="intent" type="hidden" value="create-collection" />
-              <label className="f9-field">
-                <span>Name</span>
-                <input name="name" placeholder="Competitor set A" required />
-              </label>
-              <label className="f9-field">
-                <span>Description</span>
-                <textarea name="description" placeholder="Optional context for the team" rows={3} />
-              </label>
-              <SubmitButton className="f9-primary-button" intent="create-collection" pendingLabel="Creating…">
-                Create collection
-              </SubmitButton>
-            </Form>
-          ) : (
-            <PlanLimitState
-              current={collectionLimit > 0 ? data.collections.length : undefined}
-              limit={collectionLimit > 0 ? collectionLimit : undefined}
-              message={
-                collectionLimit === 0
-                  ? "Collections start on the Scout plan. Upgrade to save reusable competitor evidence."
-                  : "You've reached your collection limit. Upgrade to save another collection."
-              }
-              title={collectionLimit === 0 ? "Collections are not included on this plan" : "Collection limit reached"}
-            />
-          )}
+        <CollectionSwitch
+          advertiserFilter={data.advertiserFilter}
+          collections={data.collections}
+          selectedId={selected?.id ?? null}
+        />
 
-          <div className="f9-work-list is-compact">
-            {data.collections.map((collection) => (
-              <Link
-                className={`f9-work-row ${searchParams.get("collection") === collection.id || (!searchParams.get("collection") && data.selectedCollection?.id === collection.id) ? "is-active" : ""}`}
-                key={collection.id}
-                to={`/app/collections?collection=${collection.id}${
-                  data.advertiserFilter ? `&advertiser=${encodeURIComponent(data.advertiserFilter)}` : ""
-                }`}
-              >
-                <div>
-                  <h3>{collection.name}</h3>
-                  <p className="f9-muted-copy">{collection.description || "No description yet."}</p>
+        {/* §7 — the inversion: the saved evidence is the page. */}
+        {selected ? (
+          <div className="f9-ed-collection-layout">
+            <div className="f9-ed-collection-main">
+              <header className="f9-ed-collection-head">
+                <div className="f9-ed-collection-head-title">
+                  <span className="f9-ed-micro">Selected collection</span>
+                  <h2 className="f9-ed-collection-name">{selected.name}</h2>
+                  {selected.description ? (
+                    <p className="f9-ed-collection-lead">{selected.description}</p>
+                  ) : null}
                 </div>
-              </Link>
-            ))}
-            {data.collections.length === 0 ? (
-              <EmptyState
-                description="Saved competitor sets appear here."
-                title="Nothing saved yet"
-                variant="inline"
-              />
-            ) : null}
-          </div>
-        </article>
-
-        <article className="f9-app-panel">
-          {data.selectedCollection ? (
-            <>
-              <div className="f9-panel-toolbar">
-                <div>
-                  <span className="f9-app-kicker">Selected collection</span>
-                  <h2>{data.selectedCollection.name}</h2>
-                </div>
-                <div className="f9-action-row">
+                <div className="f9-ed-action-row">
                   {canOpenReport ? (
-                    <Link
-                      className="f9-secondary-button"
-                      to={`/app/reports/${createReportId("collection", data.selectedCollection.id)}`}
+                    <SecondaryAction
+                      small
+                      to={`/app/reports/${createReportId("collection", selected.id)}`}
                     >
-                      Open report
-                    </Link>
-                  ) : (
-                    <div>
-                      <button
-                        aria-disabled="true"
-                        className="f9-secondary-button"
-                        disabled
-                        type="button"
-                      >
-                        Open report (Agency only)
-                      </button>{" "}
-                      <Link className="f9-text-link" to="/app/billing?source=collections#plans">
-                        Upgrade to Agency
-                      </Link>
-                    </div>
-                  )}
+                      Package for client
+                    </SecondaryAction>
+                  ) : null}
+                  {/* §5 caps an action row at two or three Rank-2 controls, so
+                      the two export formats are one control that reveals both
+                      rather than two of the row's slots. */}
                   {canExport ? (
-                    <>
-                      <a
-                        className="f9-secondary-button"
-                        href={`/export/collection/${data.selectedCollection.id}`}
-                      >
+                    <CollectionDisclosure
+                      className="f9-ed-collection-export"
+                      group={COLLECTION_PANEL_GROUP}
+                      summary="Export"
+                    >
+                      <SecondaryAction href={`/export/collection/${selected.id}`} small>
                         Export CSV
-                      </a>
-                      <a
-                        className="f9-secondary-button"
-                        href={`/export/collection/${data.selectedCollection.id}?format=json`}
-                      >
+                      </SecondaryAction>
+                      <SecondaryAction href={`/export/collection/${selected.id}?format=json`} small>
                         Export JSON
-                      </a>
-                    </>
-                  ) : (
-                    <Link className="f9-secondary-button" to="/app/billing?source=collections#plans">
-                      Upgrade to Starter for exports
-                    </Link>
-                  )}
+                      </SecondaryAction>
+                    </CollectionDisclosure>
+                  ) : null}
                   {canShare ? (
                     <Form method="post">
                       <input name="intent" type="hidden" value="share-collection" />
-                      <input name="collectionId" type="hidden" value={data.selectedCollection.id} />
-                      <SubmitButton className="f9-primary-button" intent="share-collection" pendingLabel="Creating…">
+                      <input name="collectionId" type="hidden" value={selected.id} />
+                      <SubmitButton
+                        className="f9-ed-cta f9-ed-cta--rank2 is-small"
+                        intent="share-collection"
+                        pendingLabel="Creating…"
+                      >
                         Create share link
                       </SubmitButton>
                     </Form>
-                  ) : (
-                    <Link className="f9-primary-button" to="/app/billing?source=collections#plans">
-                      Upgrade to Agency to share
-                    </Link>
-                  )}
+                  ) : null}
+                  {lockedActionsLabel ? (
+                    <SecondaryAction small to="/app/billing?source=collections#plans">
+                      {lockedActionsLabel}
+                    </SecondaryAction>
+                  ) : null}
                   <Form method="post">
                     <input name="intent" type="hidden" value="delete-collection" />
-                    <input name="collectionId" type="hidden" value={data.selectedCollection.id} />
+                    <input name="collectionId" type="hidden" value={selected.id} />
                     <ConfirmSubmitButton
-                      className="f9-secondary-button"
+                      className="f9-ed-cta f9-ed-cta--rank3 is-small"
                       confirmLabel="Confirm — delete collection?"
                       intent="delete-collection"
                       pendingLabel="Deleting…"
+                      variant="light"
                     >
                       Delete collection
                     </ConfirmSubmitButton>
                   </Form>
                 </div>
-              </div>
+              </header>
 
               <ActionFeedback data={actionData} intent="share-collection">
                 {shareUrl ? (
@@ -488,191 +496,259 @@ export default function CollectionsRoute() {
                 ) : null}
               </ActionFeedback>
 
-              {insightDepth ? <InsightDepthPanel summary={insightDepth} /> : null}
-
-              <Form className="f9-auth-form" method="post">
-                <input name="intent" type="hidden" value="add-external-proof" />
-                <input name="collectionId" type="hidden" value={data.selectedCollection.id} />
-                <div className="f9-panel-toolbar">
-                  <div>
-                    <span className="f9-app-kicker">External evidence</span>
-                    <h3>Add an evidence link</h3>
-                  </div>
-                </div>
-                <div className="f9-field-grid">
-                  <label className="f9-field">
-                    <span>Channel</span>
-                    <select name="channel" defaultValue="TikTok">
-                      {externalProofChannels.map((channel) => (
-                        <option key={channel} value={channel}>
-                          {channel}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="f9-field">
-                    <span>Advertiser</span>
-                    <input name="advertiser" placeholder="Competitor name" required />
-                  </label>
-                </div>
-                <label className="f9-field">
-                  <span>Evidence URL</span>
-                  <input name="proofUrl" placeholder="https://..." required type="url" />
-                </label>
-                <label className="f9-field">
-                  <span>Hook</span>
-                  <input name="hook" placeholder="Main claim, hook, or visible change" required />
-                </label>
-                <div className="f9-field-grid">
-                  <label className="f9-field">
-                    <span>Offer</span>
-                    <input name="offer" placeholder="Optional offer" />
-                  </label>
-                  <label className="f9-field">
-                    <span>CTA</span>
-                    <input name="cta" placeholder="Optional CTA" />
-                  </label>
-                </div>
-                <div className="f9-field-grid">
-                  <label className="f9-field">
-                    <span>Observed</span>
-                    <input name="observedAt" type="date" />
-                  </label>
-                  <label className="f9-field">
-                    <span>Tags</span>
-                    <input name="tags" placeholder="campaign, launch, offer" />
-                  </label>
-                </div>
-                <div className="f9-field-grid">
-                  <label className="f9-field">
-                    <span>Spend</span>
-                    <input name="spend" placeholder="Visible spend" />
-                  </label>
-                  <label className="f9-field">
-                    <span>Impressions</span>
-                    <input name="impressions" placeholder="Visible impressions" />
-                  </label>
-                </div>
-                <label className="f9-field">
-                  <span>Reach</span>
-                  <input name="reach" placeholder="Visible reach" />
-                </label>
-                <label className="f9-field">
-                  <span>Note</span>
-                  <textarea name="note" placeholder="Optional team context" rows={2} />
-                </label>
-                <ActionFeedback data={actionData} intent="add-external-proof" />
-                <SubmitButton className="f9-secondary-button" intent="add-external-proof" pendingLabel="Saving…">
-                  Save evidence link
-                </SubmitButton>
-              </Form>
-
               <ActionFeedback data={actionData} intent="remove-item" />
 
+              {/* §6.7 — a filter that hides evidence is stated as one dashed
+                  line, never as a green success banner. */}
               {data.advertiserFilter ? (
-                <p className="f9-message is-success" role="status">
-                  Showing saved ads matching “{data.advertiserFilter}”
-                  {data.hiddenByAdvertiserFilter > 0
-                    ? ` — ${data.hiddenByAdvertiserFilter} other saved ${
-                        data.hiddenByAdvertiserFilter === 1 ? "ad is" : "ads are"
-                      } hidden.`
-                    : "."}{" "}
-                  <Link to={`/app/collections?collection=${data.selectedCollection.id}`}>
-                    Clear filter
-                  </Link>
-                </p>
+                <QuietLine
+                  copy={
+                    items.length === 0
+                      ? COLLECTION_FILTERED_EMPTY_COPY
+                      : `Showing saved evidence matching “${data.advertiserFilter}”.${
+                          hiddenByFilter > 0
+                            ? ` ${hiddenByFilter} other saved ${
+                                hiddenByFilter === 1 ? "item is" : "items are"
+                              } hidden.`
+                            : ""
+                        }`
+                  }
+                  stamp="Filter"
+                />
               ) : null}
 
-              {data.items.length === 0 && data.advertiserFilter ? (
-                <EmptyState
-                  description="No saved ads in this board match that competitor. Check another board on the left, or clear the filter to see everything saved here."
-                  title="No saved ads match this filter"
-                  variant="inline"
-                />
-              ) : data.items.length === 0 ? (
-                <EmptyState
-                  action={{ label: "Open search", to: "/search" }}
-                  description="Save an evidence link here, or run a competitor search and save the examples your team needs to reuse."
-                  title="Add evidence or save from search"
-                />
-              ) : (
-                <div className="f9-work-list">
-                  {data.items.map((item) => (
-                    <article className="f9-work-row is-stacked" key={item.id}>
-                      <div className="f9-panel-toolbar">
-                        <div className="f9-ad-thumb-row">
-                          <AdThumb ad={item.ad} />
-                          <div>
-                            <h3>{formatAdvertiserLabel(item.ad.advertiser)}</h3>
-                            <AdLongevityPill ad={item.ad} />
-                            <p className="f9-muted-copy">{item.ad.hook}</p>
-                          </div>
-                        </div>
-                        <Pill>{formatMachineTokenLabel(item.ad.platforms?.[0] ?? item.ad.format ?? "")}</Pill>
-                      </div>
-                      <p>{item.ad.offer}</p>
-                      {proofLinkForAd(item.ad) ? (
-                        <p className="f9-muted-copy">
-                          <a href={proofLinkForAd(item.ad) ?? undefined} rel="noreferrer" target="_blank">
-                            Open evidence
-                          </a>
-                        </p>
-                      ) : null}
-                      <p className="f9-muted-copy">
-                        {item.tags.length > 0 ? item.tags.join(", ") : "No tags yet"}
-                      </p>
-                      <Form className="f9-auth-form" method="post">
-                        <input name="intent" type="hidden" value="update-item" />
-                        <input name="itemId" type="hidden" value={item.id} />
-                        <label className="f9-field">
-                          <span>Note</span>
-                          <textarea defaultValue={item.note ?? ""} name="note" rows={3} />
-                        </label>
-                        <label className="f9-field">
-                          <span>Tags</span>
-                          <input defaultValue={item.tags.join(", ")} name="tags" />
-                        </label>
-                        <ActionFeedback
-                          data={actionData}
-                          intent="update-item"
-                          match={{ itemId: item.id }}
-                        />
-                        <SubmitButton
-                          className="f9-secondary-button"
-                          intent="update-item"
-                          match={{ itemId: item.id }}
-                          pendingLabel="Saving…"
-                        >
-                          Save note and tags
-                        </SubmitButton>
-                      </Form>
-                      <Form method="post">
-                        <input name="intent" type="hidden" value="remove-item" />
-                        <input name="itemId" type="hidden" value={item.id} />
-                        <ConfirmSubmitButton
-                          className="f9-secondary-button"
-                          confirmLabel="Confirm — remove?"
-                          intent="remove-item"
-                          match={{ itemId: item.id }}
-                          pendingLabel="Removing…"
-                          variant="light"
-                        >
-                          Remove from collection
-                        </ConfirmSubmitButton>
-                      </Form>
-                    </article>
+              {items.length > 0 ? (
+                <div className="f9-ed-collection-items">
+                  {items.map((item, index) => (
+                    <SavedEvidenceItem
+                      editor={
+                        <>
+                          <Form className="f9-ed-form" method="post">
+                            <input name="intent" type="hidden" value="update-item" />
+                            <input name="itemId" type="hidden" value={item.id} />
+                            <label className="f9-field">
+                              <span>Note</span>
+                              <textarea defaultValue={item.note ?? ""} name="note" rows={2} />
+                            </label>
+                            <label className="f9-field">
+                              <span>Tags</span>
+                              <input defaultValue={item.tags.join(", ")} name="tags" />
+                            </label>
+                            <ActionFeedback
+                              data={actionData}
+                              intent="update-item"
+                              match={{ itemId: item.id }}
+                            />
+                            <div className="f9-ed-action-row">
+                              <SubmitButton
+                                className="f9-ed-cta f9-ed-cta--rank2 is-small"
+                                intent="update-item"
+                                match={{ itemId: item.id }}
+                                pendingLabel="Saving…"
+                              >
+                                Save note and tags
+                              </SubmitButton>
+                            </div>
+                          </Form>
+                          <Form method="post">
+                            <input name="intent" type="hidden" value="remove-item" />
+                            <input name="itemId" type="hidden" value={item.id} />
+                            <ConfirmSubmitButton
+                              className="f9-ed-cta f9-ed-cta--rank3 is-small"
+                              confirmLabel="Confirm — remove?"
+                              intent="remove-item"
+                              match={{ itemId: item.id }}
+                              pendingLabel="Removing…"
+                              variant="light"
+                            >
+                              Remove from collection
+                            </ConfirmSubmitButton>
+                          </Form>
+                        </>
+                      }
+                      item={item}
+                      key={item.id}
+                      number={index + 1}
+                    />
                   ))}
                 </div>
+              ) : data.advertiserFilter ? null : (
+                /* §6.8 — a panel, not a void: the state, what fills it, and a
+                   numbered reserved slot so it reads as reserved. */
+                <SpecimenEmptyState
+                  copy={COLLECTION_ITEMS_EMPTY_COPY}
+                  headingLevel={3}
+                  headline="Nothing filed here yet"
+                  primaryAction={
+                    primarySlot === "items-empty"
+                      ? { label: "Save evidence from search", to: "/search" }
+                      : undefined
+                  }
+                  secondaryAction={
+                    primarySlot === "items-empty"
+                      ? undefined
+                      : { label: "Save evidence from search", to: "/search" }
+                  }
+                  specimenLabel="Plate 01 — reserved"
+                  stateLabel={`${selected.name} · nothing filed yet`}
+                />
               )}
-            </>
-          ) : (
-            <EmptyState
-              description="Group a competitor's best ads, offers, and landing-page evidence in one place — ready to reuse in a report or share with your team."
-              title="Create your first evidence collection"
-            />
-          )}
-        </article>
-      </div>
+
+              {/* §7 — the 11-field evidence form is a Rank-2 reveal, not the
+                  first thing on the page. */}
+              <CollectionDisclosure
+                className="f9-ed-collection-external"
+                group={COLLECTION_PANEL_GROUP}
+                summary="Add an evidence link"
+              >
+                <Form className="f9-ed-form" method="post">
+                  <input name="intent" type="hidden" value="add-external-proof" />
+                  <input name="collectionId" type="hidden" value={selected.id} />
+                  <p className="f9-ed-form-lead">
+                    External evidence — file an ad or landing page we do not scan ourselves. It
+                    joins this collection with the date you saw it.
+                  </p>
+                  <div className="f9-field-grid">
+                    <label className="f9-field">
+                      <span>Channel</span>
+                      <select name="channel" defaultValue="TikTok">
+                        {externalProofChannels.map((channel) => (
+                          <option key={channel} value={channel}>
+                            {channel}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="f9-field">
+                      <span>Advertiser</span>
+                      <input name="advertiser" placeholder="Competitor name" required />
+                    </label>
+                  </div>
+                  <label className="f9-field">
+                    <span>Evidence URL</span>
+                    <input name="proofUrl" placeholder="https://..." required type="url" />
+                  </label>
+                  <label className="f9-field">
+                    <span>Hook</span>
+                    <input name="hook" placeholder="Main claim, hook, or visible change" required />
+                  </label>
+                  <div className="f9-field-grid">
+                    <label className="f9-field">
+                      <span>Offer</span>
+                      <input name="offer" placeholder="Optional offer" />
+                    </label>
+                    <label className="f9-field">
+                      <span>CTA</span>
+                      <input name="cta" placeholder="Optional CTA" />
+                    </label>
+                  </div>
+                  <div className="f9-field-grid">
+                    <label className="f9-field">
+                      <span>Observed</span>
+                      <input name="observedAt" type="date" />
+                    </label>
+                    <label className="f9-field">
+                      <span>Tags</span>
+                      <input name="tags" placeholder="campaign, launch, offer" />
+                    </label>
+                  </div>
+                  <div className="f9-field-grid">
+                    <label className="f9-field">
+                      <span>Spend</span>
+                      <input name="spend" placeholder="Visible spend" />
+                    </label>
+                    <label className="f9-field">
+                      <span>Impressions</span>
+                      <input name="impressions" placeholder="Visible impressions" />
+                    </label>
+                  </div>
+                  <label className="f9-field">
+                    <span>Reach</span>
+                    <input name="reach" placeholder="Visible reach" />
+                  </label>
+                  <label className="f9-field">
+                    <span>Note</span>
+                    <textarea name="note" placeholder="Optional team context" rows={2} />
+                  </label>
+                  <ActionFeedback data={actionData} intent="add-external-proof" />
+                  <div className="f9-ed-action-row">
+                    <SubmitButton
+                      className="f9-ed-cta f9-ed-cta--rank2"
+                      intent="add-external-proof"
+                      pendingLabel="Saving…"
+                    >
+                      Save evidence link
+                    </SubmitButton>
+                  </div>
+                </Form>
+              </CollectionDisclosure>
+            </div>
+
+            {/* §6.6 — ONE fact rail, edited down. This is the row-for-box swap
+                that deletes the six-box insight grid from this route. */}
+            <aside className="f9-ed-collection-rail">
+              <FactRail
+                rows={buildCollectionFacts({
+                  collection: selected,
+                  collectionLimit,
+                  collectionsUsed: data.collections.length,
+                  hiddenByFilter,
+                  items,
+                })}
+                title="This collection"
+              />
+            </aside>
+          </div>
+        ) : null}
+
+        {primarySlot === "gate" ? (
+          <LockedFeature
+            eyebrow="Collections"
+            headingLevel="h2"
+            planNeeded="Scout plan"
+            reason="A collection keeps the ad, the offer and the landing page exactly as we captured them, ready to reuse in a client report"
+            specimen={
+              <p className="f9-ed-specimen-copy">
+                Saved evidence renders as numbered plates — the capture, its offer and call to
+                action, and the time we took it.
+              </p>
+            }
+            specimenLabel="Included from Scout"
+            title="Collections are not included on this plan"
+            upgradeLabel="Upgrade to Scout"
+            upgradeTo="/app/billing?source=collections#plans"
+          />
+        ) : canCreateCollection ? (
+          <CollectionCreatePanel
+            feedback={
+              <ActionFeedback
+                data={actionData}
+                intent="create-collection"
+                planLimitTo="/app/billing?source=collections#plans"
+              />
+            }
+            mode={primarySlot === "create" ? "first-run" : "disclosure"}
+          />
+        ) : (
+          /* At the plan's limit, with boards full of evidence: a Rank-2 note
+             beside the content, never a wall over it (§5, WP-B1). */
+          <section className="f9-ed-panel f9-ed-collection-limit">
+            <header className="f9-ed-plate-header f9-ed-micro">
+              <span>Collections · limit reached</span>
+            </header>
+            <div className="f9-ed-specimen-body">
+              <p className="f9-ed-specimen-copy">
+                You are using all {collectionLimit} collections on this plan. Delete one you no
+                longer need, or move up a plan to keep more evidence sets side by side.
+              </p>
+              <div className="f9-ed-action-row">
+                <SecondaryAction to="/app/billing?source=collections#plans">
+                  View plans
+                </SecondaryAction>
+              </div>
+            </div>
+          </section>
+        )}
       </section>
     </DashboardPage>
   );
