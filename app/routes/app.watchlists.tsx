@@ -8,7 +8,6 @@ import {
   useFetcher,
   useLoaderData,
   useNavigation,
-  useSearchParams,
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
@@ -199,6 +198,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     emailVerified,
     selectedWatchlist,
     captureWindow,
+    workspaceDeliveryConfigRecord,
   ] = await Promise.all([
     watchlistsPromise,
     resolveCommercialAdSourceStatus(env).then(toCustomerDiscoveryStatus),
@@ -206,15 +206,24 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     presenceNavVisible(env, workspaceUserId),
     isUserEmailVerified(env, session.user.id),
     selectedWatchlistPromise,
-    // Two workspace-scoped rollups feed every band's capture strip (§6.2).
-    // A board must never take the page down, so a failure degrades to an
-    // all-unchecked window rather than an error boundary.
+    // Three workspace-scoped rollups feed every band's capture strip and its
+    // failure state (§6.2). A board must never take the page down, so a
+    // failure degrades to an all-unchecked window rather than an error
+    // boundary.
     loadWatchBoardCaptureWindow(env, workspaceUserId, { now }).catch(() =>
       emptyWatchBoardCaptureWindow(now),
     ),
+    // The board is the DEFAULT view, so it needs the workspace delivery
+    // timezone too: without it "Next check" would render in UTC while "Last
+    // check" renders in the viewer's zone, and the two would disagree with
+    // /app/dashboard.
+    getWorkspaceDeliveryConfig(env, workspaceUserId),
   ]);
   const verifiedAccountEmail = emailVerified ? session.user.email : null;
   const renderedAt = now.toISOString();
+  const workspaceDeliveryConfig =
+    workspaceDeliveryConfigRecord ??
+    buildLegacyWorkspaceConfig(workspaceUserId, Boolean(session.user.email));
 
   if (!selectedWatchlist) {
     return {
@@ -226,9 +235,15 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       eventCandidates: [] as EventCandidateRecord[],
       events: [] as WatchEventRecord[],
       runs: [],
-      workspaceDeliveryConfig: buildLegacyWorkspaceConfig(workspaceUserId, Boolean(session.user.email)),
+      workspaceDeliveryConfig: maskDormantDeliveryConfig(workspaceDeliveryConfig, {
+        showSlackDelivery,
+        whatsappAvailable,
+      }),
       watchlistDeliveryConfig: null,
-      effectiveDeliveryConfig: buildLegacyWorkspaceConfig(workspaceUserId, Boolean(session.user.email)),
+      effectiveDeliveryConfig: maskDormantDeliveryConfig(
+        resolveDeliveryConfig({ workspaceConfig: workspaceDeliveryConfig, watchlistConfig: null }),
+        { showSlackDelivery, whatsappAvailable },
+      ),
       deliveryTargets: [] as PublicDeliveryTargetRecord[],
       workspaceDeliveryTargets: [] as PublicDeliveryTargetRecord[],
       recentDeliveryAttempts: [] as PublicDeliveryAttemptSummary[],
@@ -256,7 +271,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     eventCandidates,
     events,
     runs,
-    workspaceDeliveryConfigRecord,
     watchlistDeliveryConfig,
     watchlistDeliveryTargetsByChannel,
     workspaceDeliveryTargetsByChannel,
@@ -269,7 +283,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listEventCandidates(env, selectedWatchlist.id, 12),
     listWatchEvents(env, selectedWatchlist.id, 24),
     listWatchlistRuns(env, selectedWatchlist.id, 12),
-    getWorkspaceDeliveryConfig(env, workspaceUserId),
     getWatchlistDeliveryConfig(env, selectedWatchlist.id),
     Promise.all(deliveryChannels.map((channel) =>
       listDeliveryTargets(env, workspaceUserId, {
@@ -314,9 +327,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     ? await buildCounterBrief(env, dossier, { timeoutMs: 4000 }).catch(() => null)
     : null;
 
-  const workspaceDeliveryConfig =
-    workspaceDeliveryConfigRecord ??
-    buildLegacyWorkspaceConfig(workspaceUserId, Boolean(session.user.email));
   const effectiveDeliveryConfig = resolveDeliveryConfig({
     workspaceConfig: workspaceDeliveryConfig,
     watchlistConfig: watchlistDeliveryConfig,
@@ -1102,7 +1112,6 @@ export default function WatchlistsRoute() {
     canManageWorkspaceDelivery && canUsePlanFeature(data.plan, "weekly_digest");
   const canInstantAlert = canUsePlanFeature(data.plan, "high_priority_alerts");
   const canEmailDelivery = canUsePlanFeature(data.plan, "email_delivery");
-  const [searchParams] = useSearchParams();
   const navigation = useNavigation();
   const trackingPresentation = resolveWatchlistTrackingPresentation(
     discoveryStatus,
@@ -1110,7 +1119,6 @@ export default function WatchlistsRoute() {
     data.proofSummary,
   );
   const sourceCanSchedule = discoveryStatus.status !== "demo" && discoveryStatus.status !== "disabled";
-  const hasExplicitWatchlistSelection = searchParams.has("watchlist");
   const pendingWatchlistId =
     navigation.location?.pathname === "/app/watchlists"
       ? new URLSearchParams(navigation.location.search).get("watchlist")
@@ -1146,8 +1154,13 @@ export default function WatchlistsRoute() {
     days: {},
     capturedChanges: {},
     totalCapturedChanges: 0,
+    failedChecks: {},
   };
-  const boardBands = toWatchBoardBandSummaries(data.watchlists, captureWindow.capturedChanges);
+  const boardBands = toWatchBoardBandSummaries(
+    data.watchlists,
+    captureWindow.capturedChanges,
+    captureWindow.failedChecks,
+  );
   const boardSummary = summarizeWatchBoard(boardBands);
   const hasCompetitors = boardBands.length > 0;
   const nextScanLabel = formatNextScanLabel(
@@ -1188,8 +1201,12 @@ export default function WatchlistsRoute() {
           />
         ) : null}
 
+        {/* No Rank-1 here: the workspace shell's "+ Add competitor" already
+            carries this screen's one action, and two ink primaries 200px
+            apart is the collision brief §5 forbids. Zero Rank-1s on a screen
+            is legitimate (cta.tsx §5). The empty state below still carries
+            one, because the shell button is the only other way in. */}
         <DashboardPageHeader
-          action={hasCompetitors ? { label: "Add competitor", to: "/search" } : undefined}
           kicker="Monitoring"
           lead="Monitor competitor ads over time and get alerted when messaging, creative, or landing pages change."
           title="Competitors"

@@ -436,7 +436,10 @@ export function formatRunTriggerLabel(triggerType: string) {
    never claims a state the loader did not prove.
    ========================================================================== */
 
-export type WatchBandState = "caught" | "quiet" | "watching" | "paused";
+export type WatchBandState = "caught" | "quiet" | "watching" | "paused" | "attention";
+
+/** Consecutive failed checks before a band stops claiming to be quiet. */
+export const WATCH_BAND_FAILURE_THRESHOLD = 3;
 
 export interface WatchBandStamp {
   state: WatchBandState;
@@ -450,20 +453,25 @@ const BAND_STAMPS: Record<WatchBandState, WatchBandStamp> = {
   quiet: { state: "quiet", pillState: "quiet", label: "Quiet" },
   watching: { state: "watching", pillState: "watching", label: "Watching" },
   paused: { state: "paused", pillState: "pending", label: "Paused" },
+  attention: { state: "attention", pillState: "pending", label: "Needs attention" },
 };
 
 /**
  * A band's state is read off stored evidence only:
- * paused → the watchlist is off; caught → a confirmed change sits in the
- * window; watching → tracking is on but no check has completed yet; quiet →
- * we checked and nothing changed, which is a finding, not a gap (R2).
+ * paused → the watchlist is off; attention → three or more checks in a row
+ * have failed since the last success, so the board never stamps "Quiet" over
+ * scanning that is broken; caught → a confirmed change sits in the window;
+ * watching → tracking is on but no check has completed yet; quiet → we
+ * checked and nothing changed, which is a finding, not a gap (R2).
  */
 export function resolveWatchBandState(input: {
   isActive: boolean;
   lastScannedAt: string | null;
   capturedChanges: number;
+  failedChecks?: number;
 }): WatchBandStamp {
   if (!input.isActive) return BAND_STAMPS.paused;
+  if ((input.failedChecks ?? 0) >= WATCH_BAND_FAILURE_THRESHOLD) return BAND_STAMPS.attention;
   if (input.capturedChanges > 0) return BAND_STAMPS.caught;
   if (!input.lastScannedAt) return BAND_STAMPS.watching;
   return BAND_STAMPS.quiet;
@@ -489,6 +497,8 @@ export interface WatchBoardBandSummary {
   isActive: boolean;
   lastScannedAt: string | null;
   capturedChanges: number;
+  /** Consecutive failed checks since the last successful one. */
+  failedChecks?: number;
 }
 
 export interface WatchBoardSummary {
@@ -496,6 +506,7 @@ export interface WatchBoardSummary {
   watching: number;
   paused: number;
   caught: number;
+  needsAttention: number;
   capturedChanges: number;
   lastCheckAt: string | null;
   stamp: WatchBandStamp;
@@ -505,6 +516,11 @@ export function summarizeWatchBoard(bands: readonly WatchBoardBandSummary[]): Wa
   const watching = bands.filter((band) => band.isActive).length;
   const caught = bands.filter((band) => band.capturedChanges > 0).length;
   const capturedChanges = bands.reduce((total, band) => total + band.capturedChanges, 0);
+  // A workspace whose scanning is failing must not read as quiet at the top
+  // of the board either.
+  const needsAttention = bands.filter(
+    (band) => band.isActive && (band.failedChecks ?? 0) >= WATCH_BAND_FAILURE_THRESHOLD,
+  ).length;
   const lastCheckAt = bands.reduce<string | null>((latest, band) => {
     if (!band.lastScannedAt) return latest;
     return !latest || band.lastScannedAt > latest ? band.lastScannedAt : latest;
@@ -515,12 +531,14 @@ export function summarizeWatchBoard(bands: readonly WatchBoardBandSummary[]): Wa
     watching,
     paused: bands.length - watching,
     caught,
+    needsAttention,
     capturedChanges,
     lastCheckAt,
     stamp: resolveWatchBandState({
       isActive: watching > 0,
       lastScannedAt: lastCheckAt,
       capturedChanges,
+      failedChecks: needsAttention > 0 ? WATCH_BAND_FAILURE_THRESHOLD : 0,
     }),
   };
 }
@@ -575,6 +593,9 @@ export function buildWatchBoardTickerItems(
   return bands.map((band) => {
     const name = band.name.trim().toUpperCase();
     if (!band.isActive) return `${name} · PAUSED`;
+    if ((band.failedChecks ?? 0) >= WATCH_BAND_FAILURE_THRESHOLD) {
+      return `${name} · ${band.failedChecks} CHECKS FAILED`;
+    }
     if (band.capturedChanges > 0) {
       const changes = band.capturedChanges === 1 ? "1 CHANGE" : `${band.capturedChanges} CHANGES`;
       return `${name} · ${changes} CAUGHT · ${windowDays}D`;

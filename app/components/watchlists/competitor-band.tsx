@@ -37,6 +37,8 @@ export interface CompetitorBandProps {
   createdAt: string;
   plan: string;
   capturedChanges: number;
+  /** Consecutive failed checks since the last successful one. */
+  failedChecks?: number;
   captureDays: readonly CaptureDay[];
   captureEndDate: string;
   captureWindowDays: number;
@@ -61,7 +63,11 @@ export function CompetitorBand(props: CompetitorBandProps) {
     isActive: props.isActive,
     lastScannedAt: props.lastScannedAt,
     capturedChanges: props.capturedChanges,
+    failedChecks: props.failedChecks ?? 0,
   });
+  // WP-C2 Beat 3: the first capture is the retention-critical moment, so its
+  // live state stays visible on the board itself, not one click away.
+  const awaitingFirstCapture = props.isActive && !props.lastScannedAt;
   const market = formatWatchBandMarket(props.targetCountry);
   const cadence = formatWatchBandCadence({ isActive: props.isActive, plan: props.plan });
   const openHref = `/app/watchlists?watchlist=${props.id}`;
@@ -126,12 +132,26 @@ export function CompetitorBand(props: CompetitorBandProps) {
             Watching since <LocalTime iso={props.createdAt} mode="date" />
           </li>
         </ul>
+
+        {awaitingFirstCapture ? (
+          <p className="f9-ed-band-first-capture" role="status">
+            <span aria-hidden="true" className="f9-checkout-pulse" />
+            Waiting on the first capture — this page updates itself.
+          </p>
+        ) : null}
+
+        {stamp.state === "attention" ? (
+          <p className="f9-ed-band-attention" role="status">
+            {props.failedChecks} checks in a row failed. Open this competitor for what to do next.
+          </p>
+        ) : null}
       </div>
 
       <div className="f9-ed-band-cell f9-ed-band-capture">
         <CaptureStrip
           days={props.captureDays}
           endDate={props.captureEndDate}
+          startDate={props.createdAt}
           windowDays={props.captureWindowDays}
         />
       </div>

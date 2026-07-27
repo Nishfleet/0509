@@ -10575,6 +10575,15 @@ reds soften --- */
   border: 1px dashed var(--ed-rule-dashed);
 }
 
+/* Before the watch existed there was nothing to check, so the slot is a void:
+   it holds the day's place in the window and says nothing at all. A dash here
+   would read as a monitoring gap we are responsible for (BL-006). */
+.f9-ed-capture-bar.is-prewatch {
+  height: 8px;
+  background: none;
+  border: 0;
+}
+
 .f9-ed-capture-legend {
   margin: 0;
   font-family: var(--ed-mono);
@@ -11168,6 +11177,25 @@ reds soften --- */
   font-size: 10.5px;
   letter-spacing: 0.06em;
   color: var(--ink-soft);
+}
+
+.f9-ed-band-first-capture,
+.f9-ed-band-attention {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--ed-mono);
+  font-weight: 500;
+  font-size: 10.5px;
+  line-height: 1.45;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+
+.f9-ed-band-attention {
+  padding-left: 8px;
+  border-left: 3px solid var(--ed-deletion);
 }
 
 .f9-ed-band-meta {

@@ -503,11 +503,16 @@ describe("watchlists route loader", () => {
       selectedWatchlist: unknown;
       watchlists: unknown[];
       captureWindow: { windowDays: number; days: Record<string, unknown> };
+      effectiveDeliveryConfig: { timezone: string | null };
     };
 
     expect(board.selectedWatchlist).toBeNull();
     expect(board.watchlists).toEqual([watchlist]);
     expect(board.captureWindow.windowDays).toBe(30);
+    // The board is the default view, so it must resolve the workspace
+    // delivery timezone: "Next check" would otherwise print UTC beside a
+    // viewer-local "Last check" and disagree with /app/dashboard.
+    expect(board.effectiveDeliveryConfig.timezone).toBe(workspaceDeliveryConfig.timezone);
     // No detail query runs for a board-only view.
     expect(getWatchlist).not.toHaveBeenCalled();
     expect(listWatchEvents).not.toHaveBeenCalled();
@@ -2209,6 +2214,7 @@ describe("watchlists route rendering", () => {
           },
           capturedChanges: { "watch-1": 2 },
           totalCapturedChanges: 2,
+          failedChecks: {},
         },
         eventCandidates: [],
         events: [],
@@ -2260,9 +2266,9 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain("f9-ed-status-strip");
     expect(markup).toContain("Caught · 30d");
     expect(markup).not.toContain("Tracking status");
-    // Exactly one Rank-1 on the screen: "Add competitor".
-    expect(markup.match(/f9-ed-cta--rank1/g)).toHaveLength(1);
-    expect(markup).toContain("Add competitor");
+    // Zero Rank-1s here on purpose: the shell topbar already carries
+    // "+ Add competitor", and two ink primaries on one screen is the §5 bug.
+    expect(markup).not.toContain("f9-ed-cta--rank1");
     // The detail surface stays closed until a band is opened.
     expect(markup).not.toContain("Evidence and alerts");
     expect(markup).not.toContain("Watchlist setup");
@@ -2290,6 +2296,7 @@ describe("watchlists route rendering", () => {
           days: {},
           capturedChanges: {},
           totalCapturedChanges: 0,
+          failedChecks: {},
         },
         eventCandidates: [],
         events: [],

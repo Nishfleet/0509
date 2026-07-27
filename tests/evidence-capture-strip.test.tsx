@@ -6,6 +6,8 @@ import { describe, expect, it } from "vitest";
 import {
   CAPTURE_STRIP_GAP_LEGEND,
   CAPTURE_STRIP_LEGEND,
+  CAPTURE_STRIP_LEGEND_BASE,
+  CAPTURE_STRIP_WAITING_LEGEND,
   CaptureStrip,
   buildCaptureWindow,
   trailingQuietRun,
@@ -81,6 +83,32 @@ describe("trailingQuietRun", () => {
     expect(trailingQuietRun(window)).toBe(5);
   });
 
+  /**
+   * BL-006 blocking finding 3: the leading skip is capped at ONE slot, so a
+   * paused competitor or a source outage can never print "nothing has
+   * changed" over a watch that stopped watching.
+   */
+  it("stops rather than skipping a second unchecked day at the leading edge", () => {
+    const window = buildCaptureWindow(quietDays(5, "2026-07-20"), {
+      endDate: "2026-07-27",
+      windowDays: 10,
+    });
+
+    // 20-24 quiet, then 25/26/27 unchecked: three days with no check at all.
+    expect(window.slice(-3).every((day) => day.state === "unchecked")).toBe(true);
+    expect(trailingQuietRun(window)).toBe(0);
+  });
+
+  it("ends the run at the prewatch void instead of counting past it", () => {
+    const window = buildCaptureWindow(quietDays(3, "2026-07-25"), {
+      endDate: "2026-07-27",
+      startDate: "2026-07-25",
+      windowDays: 10,
+    });
+
+    expect(trailingQuietRun(window)).toBe(3);
+  });
+
   it("still stops at an unchecked day inside the run", () => {
     const window = buildCaptureWindow(
       [...quietDays(2, "2026-07-26"), ...quietDays(2, "2026-07-22")],
@@ -113,9 +141,58 @@ describe("CaptureStrip", () => {
       <CaptureStrip days={[{ date: "2026-07-27", state: "captured" }]} windowDays={1} />,
     );
 
-    expect(markup).toContain(CAPTURE_STRIP_LEGEND);
+    expect(markup).toContain(CAPTURE_STRIP_LEGEND_BASE);
     expect(markup).toContain("a change we captured");
     expect(markup).toContain('data-capture-state="captured"');
+  });
+
+  /** BL-006: a legend must not promise a state the window cannot show. */
+  it("prints the green clause only when a waiting day is actually in the window", () => {
+    const withWaiting = renderToStaticMarkup(
+      <CaptureStrip days={[{ date: "2026-07-27", state: "waiting" }]} windowDays={1} />,
+    );
+    expect(withWaiting).toContain(CAPTURE_STRIP_WAITING_LEGEND);
+    expect(withWaiting).toContain(CAPTURE_STRIP_LEGEND);
+
+    const withoutWaiting = renderToStaticMarkup(
+      <CaptureStrip days={quietDays(3, "2026-07-25")} windowDays={3} />,
+    );
+    expect(withoutWaiting).toContain(CAPTURE_STRIP_LEGEND_BASE);
+    expect(withoutWaiting).not.toContain(CAPTURE_STRIP_WAITING_LEGEND);
+  });
+
+  /**
+   * BL-006 blocking finding 1: a competitor created yesterday must not be
+   * shown 29 slots claiming we failed to check days it did not exist for.
+   */
+  it("renders days before the watch began as a void, not as missed checks", () => {
+    const markup = renderToStaticMarkup(
+      <CaptureStrip
+        days={[{ date: "2026-07-27", state: "quiet" }]}
+        endDate="2026-07-27"
+        startDate="2026-07-26T09:12:00.000Z"
+        windowDays={30}
+      />,
+    );
+
+    // 28 prewatch slots, one unchecked (the 26th, after the watch began), one
+    // quiet (today). No gap sentence, because there is no gap we own.
+    expect(markup.match(/is-prewatch/g)).toHaveLength(28);
+    expect(markup.match(/is-unchecked/g)).toHaveLength(1);
+    // A prewatch slot names no state and carries no title at all.
+    expect(markup).not.toMatch(/is-prewatch"[^>]*title=/);
+    expect(markup).not.toContain("28 Jun");
+  });
+
+  it("keeps a stored day even when it predates the recorded start", () => {
+    const window = buildCaptureWindow([{ date: "2026-07-20", state: "captured" }], {
+      endDate: "2026-07-27",
+      startDate: "2026-07-25",
+      windowDays: 8,
+    });
+
+    expect(window.find((day) => day.date === "2026-07-20")?.state).toBe("captured");
+    expect(window.find((day) => day.date === "2026-07-21")?.state).toBe("prewatch");
   });
 
   it("states a long quiet run as a finding, not as a gap", () => {

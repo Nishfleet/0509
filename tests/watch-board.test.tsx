@@ -17,6 +17,7 @@ import {
   resolveWatchBandState,
   resolveWatchBoardStripAction,
   summarizeWatchBoard,
+  WATCH_BAND_FAILURE_THRESHOLD,
 } from "~/lib/watchlist-display";
 
 /**
@@ -67,6 +68,46 @@ describe("watch band state (brief §6.1)", () => {
     expect(
       resolveWatchBandState({ isActive: true, lastScannedAt: "2026-07-26", capturedChanges: 0 }),
     ).toMatchObject({ label: "Quiet", pillState: "quiet" });
+  });
+
+  /** BL-006 finding 5: the board must never stamp "Quiet" over broken scanning. */
+  it("stamps Needs attention once checks keep failing, ahead of quiet and caught", () => {
+    expect(WATCH_BAND_FAILURE_THRESHOLD).toBe(3);
+    expect(
+      resolveWatchBandState({
+        isActive: true,
+        lastScannedAt: "2026-07-26",
+        capturedChanges: 0,
+        failedChecks: 3,
+      }),
+    ).toMatchObject({ state: "attention", label: "Needs attention" });
+    // A competitor that caught something last week but is failing now still
+    // reads as broken, because the scanning is what stopped working.
+    expect(
+      resolveWatchBandState({
+        isActive: true,
+        lastScannedAt: "2026-07-26",
+        capturedChanges: 4,
+        failedChecks: 5,
+      }).state,
+    ).toBe("attention");
+    // Two failures is not yet a pattern, and a paused watch is paused first.
+    expect(
+      resolveWatchBandState({
+        isActive: true,
+        lastScannedAt: "2026-07-26",
+        capturedChanges: 0,
+        failedChecks: 2,
+      }).state,
+    ).toBe("quiet");
+    expect(
+      resolveWatchBandState({
+        isActive: false,
+        lastScannedAt: "2026-07-26",
+        capturedChanges: 0,
+        failedChecks: 9,
+      }).state,
+    ).toBe("paused");
   });
 
   it("degrades the market line honestly instead of guessing a country", () => {
@@ -143,6 +184,15 @@ describe("watch board summary (brief §6.3)", () => {
     });
   });
 
+  it("carries broken scanning into the workspace stamp and the ticker", () => {
+    const failing = [{ ...bands[0], capturedChanges: 0, failedChecks: 4 }, bands[1]];
+    const summary = summarizeWatchBoard(failing);
+
+    expect(summary.needsAttention).toBe(1);
+    expect(summary.stamp.state).toBe("attention");
+    expect(buildWatchBoardTickerItems(failing, 30)[0]).toBe("OKARA · 4 CHECKS FAILED");
+  });
+
   it("builds ticker lines from stored facts only", () => {
     expect(buildWatchBoardTickerItems(bands, 30)).toEqual([
       "OKARA · 3 CHANGES CAUGHT · 30D",
@@ -184,6 +234,23 @@ describe("capture window rollup (brief §6.2, §8.1)", () => {
     expect(window.days.w1.some((day) => day.date === "2026-07-27")).toBe(false);
   });
 
+  it("counts hard failures since the last success and ignores soft cooldowns", () => {
+    const window = buildWatchBoardCaptureWindow({
+      checkedRows: [],
+      capturedRows: [],
+      // The query already excludes rate_limited / cache_only rows; the merge
+      // must not invent an entry for a watchlist with zero hard failures.
+      failedRows: [
+        { watchlist_id: "w1", day: null, hits: 3 },
+        { watchlist_id: "w2", day: null, hits: 0 },
+      ],
+      now,
+      windowDays: 30,
+    });
+
+    expect(window.failedChecks).toEqual({ w1: 3 });
+  });
+
   it("drops rows outside the window and never invents a watchlist", () => {
     const window = buildWatchBoardCaptureWindow({
       checkedRows: [
@@ -217,6 +284,47 @@ describe("CompetitorBand (brief §6.1)", () => {
     // No checkbox rail, and no Vercel-era row classes.
     expect(markup).not.toContain('type="checkbox"');
     expect(markup).not.toContain("f9-work-row");
+  });
+
+  it("keeps the first-capture state visible on the board itself", () => {
+    const markup = renderRouted(
+      <CompetitorBand
+        {...band}
+        capturedChanges={0}
+        lastScannedAt={null}
+        scanLabel="No completed check yet — open for status"
+        scanTimestamp={null}
+      />,
+    );
+
+    expect(markup).toContain("f9-ed-stamp is-watching");
+    expect(markup).toContain("Waiting on the first capture — this page updates itself.");
+    expect(markup).toContain("f9-checkout-pulse");
+  });
+
+  it("says three failed checks in words, not just as a stamp colour", () => {
+    const markup = renderRouted(<CompetitorBand {...band} failedChecks={3} />);
+
+    expect(markup).toContain("Needs attention");
+    expect(markup).toContain("3 checks in a row failed.");
+    // A settled competitor says nothing of the sort.
+    expect(renderRouted(<CompetitorBand {...band} />)).not.toContain("checks in a row failed");
+  });
+
+  it("voids the days before the watch existed instead of dashing them", () => {
+    const markup = renderRouted(
+      <CompetitorBand
+        {...band}
+        captureDays={[{ date: "2026-07-27", state: "quiet" }]}
+        captureEndDate="2026-07-27"
+        createdAt="2026-07-27T10:00:00.000Z"
+      />,
+    );
+
+    // A competitor added today: 29 void slots and today's check. None of them
+    // claims we failed to check, so the gap sentence never prints.
+    expect(markup.match(/is-prewatch/g)).toHaveLength(29);
+    expect(markup).not.toContain("A dashed slot means we did not check that day.");
   });
 
   it("says the market is not recorded rather than dropping the row", () => {

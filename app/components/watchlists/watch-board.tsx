@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { useRevalidator } from "react-router";
 
 import type { CaptureDay } from "~/components/evidence/capture-strip";
 import { CompetitorBand } from "~/components/watchlists/competitor-band";
@@ -22,6 +23,9 @@ export interface WatchBoardCaptureWindowView {
   windowDays: number;
   days: Record<string, readonly CaptureDay[]>;
   capturedChanges: Record<string, number>;
+  /** Optional so a cached loader payload from before BL-006's remediation
+   *  degrades to "no known failures" instead of crashing the board. */
+  failedChecks?: Record<string, number>;
 }
 
 export interface WatchBoardProps {
@@ -43,6 +47,7 @@ export interface WatchBoardProps {
 export function toWatchBoardBandSummaries(
   watchlists: readonly WatchlistRecord[],
   capturedChanges: Record<string, number>,
+  failedChecks: Record<string, number> = {},
 ): WatchBoardBandSummary[] {
   return watchlists.map((watchlist) => ({
     id: watchlist.id,
@@ -50,10 +55,47 @@ export function toWatchBoardBandSummaries(
     isActive: watchlist.isActive,
     lastScannedAt: watchlist.lastScannedAt,
     capturedChanges: capturedChanges[watchlist.id] ?? 0,
+    failedChecks: failedChecks[watchlist.id] ?? 0,
   }));
 }
 
+/** ~10 minutes of 30s polls — long enough for a first capture to land. */
+const FIRST_CAPTURE_POLL_MS = 30_000;
+const FIRST_CAPTURE_POLL_LIMIT = 20;
+
+/**
+ * WP-C2 Beat 3: the first capture is the retention-critical first-run moment,
+ * so the board — not just the opened competitor — keeps refreshing itself
+ * while any competitor is still waiting for its first check. Bounded, and it
+ * stops the moment nothing is waiting.
+ */
+function useBoardFirstCapturePolling(awaiting: boolean) {
+  const revalidator = useRevalidator();
+  const [polls, setPolls] = useState(0);
+
+  useEffect(() => {
+    setPolls(0);
+  }, [awaiting]);
+
+  useEffect(() => {
+    if (!awaiting || polls >= FIRST_CAPTURE_POLL_LIMIT) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      setPolls((count) => count + 1);
+      if (revalidator.state === "idle") {
+        revalidator.revalidate();
+      }
+    }, FIRST_CAPTURE_POLL_MS);
+    return () => clearTimeout(timer);
+  }, [awaiting, polls, revalidator]);
+}
+
 export function WatchBoard(props: WatchBoardProps) {
+  useBoardFirstCapturePolling(
+    props.watchlists.some((watchlist) => watchlist.isActive && !watchlist.lastScannedAt),
+  );
+
   return (
     <div className="f9-ed-board">
       {props.watchlists.map((watchlist) => {
@@ -69,6 +111,7 @@ export function WatchBoard(props: WatchBoardProps) {
         return (
           <CompetitorBand
             capturedChanges={capturedChanges}
+            failedChecks={props.captureWindow.failedChecks?.[watchlist.id] ?? 0}
             captureDays={props.captureWindow.days[watchlist.id] ?? []}
             captureEndDate={props.captureWindow.endDate}
             captureWindowDays={props.captureWindow.windowDays}

@@ -5,9 +5,10 @@ import type { AppEnv } from "~/lib/env.server";
  * Watch-board capture window (BL-006; brief §6.2).
  *
  * The board draws one 30-day capture strip per competitor, so it needs a
- * per-watchlist / per-day rollup for the WHOLE workspace. Two workspace-scoped
- * queries do it — ownership stays in SQL and there is no id list to chunk, so
- * a 75-watchlist agency costs the same two round trips as a one-competitor
+ * per-watchlist / per-day rollup for the WHOLE workspace. Three
+ * workspace-scoped queries do it (checked days, captured days, consecutive
+ * failures) — ownership stays in SQL and there is no id list to chunk, so a
+ * 75-watchlist agency costs the same three round trips as a one-competitor
  * workspace (no D1 parameter ceiling, brief §11).
  *
  * Honesty rules baked into the shape:
@@ -40,6 +41,12 @@ export interface WatchBoardCaptureWindow {
   capturedChanges: Record<string, number>;
   /** Confirmed changes captured across the workspace inside the window. */
   totalCapturedChanges: number;
+  /**
+   * watchlistId → hard failures since the last successful run. Soft provider
+   * cooldowns are excluded, exactly as the opened competitor's banner does,
+   * so a rate limit never reads as broken tracking.
+   */
+  failedChecks: Record<string, number>;
 }
 
 export const WATCH_BOARD_WINDOW_DAYS = 30;
@@ -62,6 +69,7 @@ export function emptyWatchBoardCaptureWindow(
     days: {},
     capturedChanges: {},
     totalCapturedChanges: 0,
+    failedChecks: {},
   };
 }
 
@@ -81,7 +89,7 @@ export async function loadWatchBoardCaptureWindow(
     .toISOString()
     .slice(0, 10);
 
-  const [checkedRows, capturedRows] = await Promise.all([
+  const [checkedRows, capturedRows, failedRows] = await Promise.all([
     queryAll<DayRow>(
       env,
       `
@@ -115,24 +123,53 @@ export async function loadWatchBoardCaptureWindow(
       userId,
       sinceIso,
     ),
+    // Consecutive hard failures = failed runs started after the newest
+    // succeeded run. Soft provider cooldowns are skipped, matching the opened
+    // competitor's failure banner, so a rate limit never reads as broken.
+    queryAll<DayRow>(
+      env,
+      `
+        SELECT watchlist_run.watchlist_id AS watchlist_id,
+               NULL AS day,
+               COUNT(*) AS hits
+        FROM watchlist_run
+        INNER JOIN watchlist ON watchlist.id = watchlist_run.watchlist_id
+        WHERE watchlist.user_id = ?
+          AND watchlist_run.status = 'failed'
+          AND COALESCE(watchlist_run.error_code, '') NOT IN ('rate_limited', 'cache_only')
+          AND watchlist_run.started_at > COALESCE(
+            (
+              SELECT MAX(succeeded.started_at)
+              FROM watchlist_run AS succeeded
+              WHERE succeeded.watchlist_id = watchlist_run.watchlist_id
+                AND succeeded.status = 'succeeded'
+            ),
+            ''
+          )
+        GROUP BY watchlist_run.watchlist_id
+      `,
+      userId,
+    ),
   ]);
 
   return buildWatchBoardCaptureWindow({
     checkedRows,
     capturedRows,
+    failedRows,
     now,
     windowDays,
   });
 }
 
 /**
- * Pure merge of the two rollups — exported so the honest-degrade paths (a
- * capture with no completed run, a run with no capture) are unit-testable
- * without D1.
+ * Pure merge of the rollups — exported so the honest-degrade paths (a capture
+ * with no completed run, a run with no capture, failures with no window) are
+ * unit-testable without D1.
  */
 export function buildWatchBoardCaptureWindow(input: {
   checkedRows: readonly DayRow[];
   capturedRows: readonly DayRow[];
+  failedRows?: readonly DayRow[];
   now: Date;
   windowDays: number;
 }): WatchBoardCaptureWindow {
@@ -172,12 +209,20 @@ export function buildWatchBoardCaptureWindow(input: {
       .map(([date, state]) => ({ date, state }));
   }
 
+  const failedChecks: Record<string, number> = {};
+  for (const row of input.failedRows ?? []) {
+    if (!row.watchlist_id) continue;
+    const hits = toCount(row.hits);
+    if (hits > 0) failedChecks[row.watchlist_id] = hits;
+  }
+
   return {
     endDate,
     windowDays: input.windowDays,
     days,
     capturedChanges,
     totalCapturedChanges,
+    failedChecks,
   };
 }
 
