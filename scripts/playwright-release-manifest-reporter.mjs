@@ -135,7 +135,12 @@ export const RELEASE_COVERAGE_MATRIX = Object.freeze({
       persona: "e2e-free-onboarded,e2e-scout",
       scenario: "empty-gated-recovery-before-delivery",
       viewport,
-      finalUrl: { pathname: "/app/watchlists", searchKeys: ["watchlist"] },
+      // #403 deploy unblock: BL-008 preserves these BL-007 delivery proofs on
+      // the Delivery tab, so the strict registry must match the captured URL.
+      finalUrl: {
+        pathname: "/app/watchlists",
+        search: { watchlist: "e2e-watchlist-scout-1", tab: "delivery" },
+      },
     },
     {
       sourceFile: "journey-3-release.spec.ts",
@@ -149,7 +154,10 @@ export const RELEASE_COVERAGE_MATRIX = Object.freeze({
       persona: "e2e-agency,e2e-active-member",
       scenario: "owner-member-delivery-privacy",
       viewport,
-      finalUrl: { pathname: "/app/watchlists", searchKeys: ["watchlist"] },
+      finalUrl: {
+        pathname: "/app/watchlists",
+        search: { watchlist: "e2e-watchlist-agency-1", tab: "delivery" },
+      },
     },
     {
       sourceFile: "journey-3-release.spec.ts",
