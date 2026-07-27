@@ -314,6 +314,24 @@ async function mockRouter(overrides: {
   });
 }
 
+/**
+ * Renders `/app/watchlists` with an opened competitor on `tab`. BL-007 made
+ * the detail URL-addressable, so a render helper has to name the tab the way
+ * a customer's URL does.
+ */
+async function renderWatchlistsRoute(loaderData: unknown, tab?: string) {
+  vi.resetModules();
+  await mockRouter({
+    actionData: undefined,
+    loaderData,
+    searchParams: new URLSearchParams(
+      tab ? `watchlist=watch-1&tab=${tab}` : "watchlist=watch-1",
+    ),
+  });
+  const { default: WatchlistsRoute } = await import("~/routes/app.watchlists");
+  return renderToStaticMarkup(createElement(WatchlistsRoute));
+}
+
 beforeEach(() => {
   vi.resetModules();
 });
@@ -2346,74 +2364,117 @@ describe("watchlists route rendering", () => {
     expect(markup).not.toContain("f9-ed-status-strip");
   });
 
-  it("renders the selected watchlist as a proof-first control panel", async () => {
-    await mockRouter({
-      actionData: undefined,
-      loaderData: {
-        renderedAt: "2026-04-18T10:59:50.000Z",
-        plan: "starter",
-        canManageDelivery: false,
-        verifiedAccountEmail: "member@example.com",
-        watchlists: [watchlist],
-        selectedWatchlist: watchlist,
-        eventCandidates: recentCandidates,
-        events: recentEvents,
-        runs: recentRuns,
-        workspaceDeliveryConfig,
-        watchlistDeliveryConfig,
-        discoveryStatus,
-        effectiveDeliveryConfig: {
-          sensitivityMode: "quiet",
-          instantEnabled: true,
-          digestEnabled: true,
-  digestCadencePreference: "plan_default",
-          emailEnabled: true,
-          whatsappEnabled: true,
-          slackEnabled: false,
-          quietHours: {
-            startHour: 22,
-            endHour: 8,
-          },
-          timezone: "Asia/Kolkata",
-        },
-        deliveryTargets,
-        workspaceDeliveryTargets: [],
-        recentDeliveryAttempts,
-        recentProofCaptures,
-        proofSummary: {
-          totalAttempts: 1,
-          successfulAttempts: 1,
-          failedAttempts: 0,
-          skippedAttempts: 0,
-          lastAttemptAt: "2026-04-18T09:59:50.000Z",
-          lastSuccessfulProofAt: "2026-04-18T09:59:50.000Z",
-        },
-        creativeWall: [],
-        trendDailyActivity: [],
+  const selectedPanelLoaderData = {
+    renderedAt: "2026-04-18T10:59:50.000Z",
+    plan: "starter",
+    canManageDelivery: false,
+    verifiedAccountEmail: "member@example.com",
+    watchlists: [watchlist],
+    selectedWatchlist: watchlist,
+    eventCandidates: recentCandidates,
+    events: recentEvents,
+    runs: recentRuns,
+    workspaceDeliveryConfig,
+    watchlistDeliveryConfig,
+    discoveryStatus,
+    effectiveDeliveryConfig: {
+      sensitivityMode: "quiet",
+      instantEnabled: true,
+      digestEnabled: true,
+      digestCadencePreference: "plan_default",
+      emailEnabled: true,
+      whatsappEnabled: true,
+      slackEnabled: false,
+      quietHours: {
+        startHour: 22,
+        endHour: 8,
       },
-    });
+      timezone: "Asia/Kolkata",
+    },
+    deliveryTargets,
+    workspaceDeliveryTargets: [],
+    recentDeliveryAttempts,
+    recentProofCaptures,
+    proofSummary: {
+      totalAttempts: 1,
+      successfulAttempts: 1,
+      failedAttempts: 0,
+      skippedAttempts: 0,
+      lastAttemptAt: "2026-04-18T09:59:50.000Z",
+      lastSuccessfulProofAt: "2026-04-18T09:59:50.000Z",
+    },
+    creativeWall: [],
+    trendDailyActivity: [],
+  };
 
-    const { default: WatchlistsRoute } =
-      await import("~/routes/app.watchlists");
-    const markup = renderToStaticMarkup(createElement(WatchlistsRoute));
+  // BL-007 (brief §6.4): the opened competitor is five URL-addressable
+  // surfaces, not one scroll. Each assertion below now names the tab the
+  // customer has to be on to see it.
+  it("opens the competitor on the change feed with the tab bar and the fact rail", async () => {
+    const markup = await renderWatchlistsRoute(selectedPanelLoaderData);
 
+    // The tab bar is real navigation: five links, fixed order, the active one
+    // marked with aria-current and not by ink alone (brief §10).
+    expect(markup).toContain('aria-label="Competitor sections"');
+    for (const [label, href] of [
+      ["What changed", "/app/watchlists?watchlist=watch-1"],
+      ["Evidence", "/app/watchlists?watchlist=watch-1&amp;tab=evidence"],
+      ["Creative", "/app/watchlists?watchlist=watch-1&amp;tab=creative"],
+      ["Delivery", "/app/watchlists?watchlist=watch-1&amp;tab=delivery"],
+      ["Setup", "/app/watchlists?watchlist=watch-1&amp;tab=setup"],
+    ]) {
+      expect(markup).toContain(`href="${href}"`);
+      expect(markup).toContain(label);
+    }
+    expect(markup).toContain('aria-current="page"');
+
+    // The change feed is the default panel.
     expect(markup).toContain("See what changed");
-    expect(markup).toContain("Watchlist setup");
-    expect(markup).toContain("Save watchlist");
-    expect(markup).toContain("Tracking status");
-    expect(markup).not.toContain("Meta ads tracking beta");
-    expect(markup).toContain("Live ad check");
-    expect(markup).toContain("Evidence and delivery");
     expect(markup).toContain("High confidence");
     expect(markup).toContain("Why this alerted");
     expect(markup).toContain("Verified from a page snapshot");
     expect(markup).toContain("Next review");
     expect(markup).toContain("review pricing, discount, COD, and bundle pressure");
-    expect(markup.match(/Delivery settings and recipient targets are managed by the workspace owner\./g)).toHaveLength(1);
-    expect(markup).toContain("Ask the workspace owner to add or change delivery targets.");
+    expect(markup).not.toContain("Meta ads tracking beta");
+
+    // The rail is exactly three objects (brief §7): number card, fact rail,
+    // delivery card — and nothing from the other tabs leaks onto this one.
+    expect(markup).toContain("f9-ed-number-card");
+    expect(markup).toContain("f9-ed-fact-rail");
+    expect(markup).toContain("Who gets told");
+    expect(markup).toContain("Watching");
+    expect(markup).not.toContain("Save watchlist");
+    expect(markup).not.toContain("Recent evidence checks");
+  });
+
+  it("keeps setup, its explainers and the source-access route behind the Setup tab", async () => {
+    const markup = await renderWatchlistsRoute(selectedPanelLoaderData, "setup");
+
+    expect(markup).toContain("Watchlist setup");
+    expect(markup).toContain("Save watchlist");
+    expect(markup).toContain("How tracking works");
+    expect(markup).toContain("Live ad check");
+    expect(markup).toContain("Check source access");
+    // The change feed is not also rendered underneath it.
+    expect(markup).not.toContain("See what changed");
+  });
+
+  it("keeps evidence, freshness and the glossary behind the Evidence tab", async () => {
+    const markup = await renderWatchlistsRoute(selectedPanelLoaderData, "evidence");
+
+    expect(markup).toContain("Evidence and delivery");
     expect(markup).toContain("Recent evidence checks");
     expect(markup).toContain("Last good evidence check 1h ago");
+  });
+
+  it("keeps delivery settings and recipient targets behind the Delivery tab", async () => {
+    const markup = await renderWatchlistsRoute(selectedPanelLoaderData, "delivery");
+
     expect(markup).toContain("Delivery settings");
+    expect(
+      markup.match(/Delivery settings and recipient targets are managed by the workspace owner\./g),
+    ).toHaveLength(1);
+    expect(markup).toContain("Ask the workspace owner to add or change delivery targets.");
     expect(markup).not.toContain("Slack enabled");
     expect(markup).not.toContain("WhatsApp — not yet available");
     expect(markup).not.toContain("WhatsApp enabled");
@@ -2432,6 +2493,8 @@ describe("watchlists route rendering", () => {
 
     await mockRouter({
       actionData: undefined,
+      // BL-007: the tracking headline and its summary live on the Setup tab.
+      searchParams: new URLSearchParams("watchlist=watch-1&tab=setup"),
       loaderData: {
         renderedAt: "2026-04-18T10:59:50.000Z",
         plan: "starter",
@@ -2498,6 +2561,8 @@ describe("watchlists route rendering", () => {
 
     await mockRouter({
       actionData: undefined,
+      // BL-007: the tracking headline and its summary live on the Setup tab.
+      searchParams: new URLSearchParams("watchlist=watch-1&tab=setup"),
       loaderData: {
         renderedAt: "2026-04-18T10:59:50.000Z",
         plan: "starter",

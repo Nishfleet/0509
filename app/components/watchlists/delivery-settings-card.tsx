@@ -1,5 +1,6 @@
-import { Form, Link } from "react-router";
+import { Form } from "react-router";
 
+import { TertiaryAction } from "~/components/evidence/cta";
 import { SubmitButton } from "~/components/submit-button";
 import type { EffectiveDeliveryConfig, WatchlistDeliveryConfigRecord } from "~/lib/types";
 
@@ -86,9 +87,7 @@ export function DeliverySettingsCard(props: {
               <input disabled type="checkbox" />
               <span>High-priority alerts require Starter.</span>
             </label>
-            <Link className="f9-secondary-button" to="/app/billing?source=watchlists#plans">
-              View plans
-            </Link>
+            <TertiaryAction to="/app/billing?source=watchlists#plans">View plans</TertiaryAction>
           </div>
         )}
         <label className="f9-field f9-field-inline">
@@ -105,7 +104,7 @@ export function DeliverySettingsCard(props: {
             <input disabled type="checkbox" />
             <span>
               Email delivery requires Scout. {" "}
-              <Link to="/app/billing?source=watchlists#plans">View plans</Link>
+              <TertiaryAction to="/app/billing?source=watchlists#plans">View plans</TertiaryAction>
             </span>
           </label>
         )}
@@ -121,7 +120,7 @@ export function DeliverySettingsCard(props: {
           <span>Slack enabled</span>
         </label>
         ) : null}
-        <SubmitButton className="f9-primary-button" intent="save-delivery-config" pendingLabel="Saving…">
+        <SubmitButton className="f9-ed-cta f9-ed-cta--rank2" intent="save-delivery-config" pendingLabel="Saving…">
           Save delivery settings
         </SubmitButton>
       </Form> : (
