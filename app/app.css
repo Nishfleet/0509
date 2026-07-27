@@ -12674,11 +12674,6 @@ reds soften --- */
     border-bottom: 2.5px solid var(--ed-rule);
   }
 
-  .f9-ed-brief-filters {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-  }
-
   .f9-ed-brief-filter-menu {
     position: static;
     margin: 4px 0;
