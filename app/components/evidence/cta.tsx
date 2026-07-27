@@ -45,6 +45,12 @@ export interface EvidenceActionProps {
   target?: string;
   className?: string;
   "aria-label"?: string;
+  /**
+   * Announces an in-flight action on THIS control. BL-007: a pause/resume
+   * control must be busy for its own row only — a shared fetcher used to
+   * light every band up at once.
+   */
+  "aria-busy"?: boolean;
 }
 
 function classesFor(rank: EvidenceActionRank, small?: boolean, className?: string): string {
@@ -70,6 +76,7 @@ function EvidenceAction({ rank, props }: { rank: EvidenceActionRank; props: Evid
     target,
     className,
     "aria-label": ariaLabel,
+    "aria-busy": ariaBusy,
   } = props;
   const classes = classesFor(rank, small, className);
 
@@ -107,6 +114,7 @@ function EvidenceAction({ rank, props }: { rank: EvidenceActionRank; props: Evid
       disabled={disabled}
       title={title}
       aria-label={ariaLabel}
+      aria-busy={ariaBusy || undefined}
       onClick={onClick}
     >
       {children}

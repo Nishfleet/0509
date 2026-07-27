@@ -41,7 +41,12 @@ describe("plan feature enforcement matrix", () => {
   });
 
   it("keeps server entry points wired to authoritative gates", () => {
-    const watchlists = readFileSync(join(process.cwd(), "app/routes/app.watchlists.tsx"), "utf8");
+    // BL-007: the watchlists action moved out of the route into its own
+    // server module; the gate is asserted where the code now lives.
+    const watchlists = readFileSync(
+      join(process.cwd(), "app/lib/watchlist-route-actions.server.ts"),
+      "utf8",
+    );
     const delivery = readFileSync(join(process.cwd(), "app/lib/delivery.server.ts"), "utf8");
     const share = readFileSync(join(process.cwd(), "app/routes/share.$token.tsx"), "utf8");
 

@@ -134,6 +134,8 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
         "Competitors",
         [/Scanning this competitor now/, /first scan is running now/i],
       );
+      // BL-007: run history lives on the Evidence tab.
+      await page.goto("/app/watchlists?watchlist=e2e-watchlist-j3-crash&tab=evidence");
       await expect(page.getByText("Still running", { exact: true })).toBeVisible();
       await expect(runJ3Replay(page, {
         idempotencyKey: `e2e-j3-reconcile-monitoring-${viewportKey}`,
@@ -145,32 +147,64 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
         userId: "e2e-starter",
         scenario: "monitoring",
       })).resolves.toMatchObject({ cleanupVerified: true, includedUsed: 0 });
+      // BL-007: the opened competitor is five URL-addressable surfaces
+      // (What changed · Evidence · Creative · Delivery · Setup), so each
+      // promise is now checked at the URL a customer would actually be on.
+      // Page-level status — the state stamp, last/next check and ad source —
+      // stays on the strip above the tab bar and is checked on every tab.
       await expectResponsiveSurface(page, viewport, "/app/watchlists?watchlist=e2e-watchlist-starter-1", "Competitors", [
         /Okara competitor watch/,
-        /Evidence and alerts/,
-        /Evidence freshness/,
+        /What changed/,
         /confirmed/i,
       ]);
 
-      await expect(page.getByText("Last good evidence check", { exact: false })).toBeVisible();
       await expect(page.getByRole("link", { name: /Workflow acceptance watch/ })).toContainText(
         "No completed check yet — open for status",
       );
       await expect(page.getByRole("link", { name: /Crash reclaim watch/ })).toContainText(
         "No completed check yet — open for status",
       );
-      await expect(page.getByText("Confidence pending", { exact: false }).first()).toBeVisible();
-      await expect(page.getByText("Monitoring history is saved; new checks need source access", { exact: true })).toBeVisible();
       await expect(page.getByText("Needs source access", { exact: true })).toBeVisible();
       await expect(page.getByText("After source access is ready", { exact: true })).toBeVisible();
-      await expect(page.getByText("High-priority alerts (sent as soon as a scan confirms a major change)")).toBeVisible();
-      await expect(page.getByRole("checkbox", { name: /High-priority alerts/ })).toBeChecked();
+      await expect(page.getByText("Verified from a page snapshot", { exact: false }).first()).toBeVisible();
+      await expect(page.getByText("No alert sent for this change yet.", { exact: true }).first()).toBeVisible();
+
+      await expectResponsiveSurface(
+        page,
+        viewport,
+        "/app/watchlists?watchlist=e2e-watchlist-starter-1&tab=evidence",
+        "Competitors",
+        [/Evidence and alerts/, /Evidence freshness/],
+      );
+      await expect(page.getByText("Last good evidence check", { exact: false })).toBeVisible();
+      await expect(page.getByText("Confidence pending", { exact: false }).first()).toBeVisible();
       await expect(page.getByText("Succeeded · Scheduled scan", { exact: true })).toBeVisible();
       await expect(page.getByText("Failed · Scheduled scan", { exact: true })).toBeVisible();
       await expect(page.getByText("This scan failed. Check Source access, then retry — or email support and we'll dig in.", { exact: true })).toBeVisible();
       await expect(page.getByText(/1 ads seen/)).toBeVisible();
-      await expect(page.getByText("Verified from a page snapshot", { exact: false }).first()).toBeVisible();
-      await expect(page.getByText("No alert sent for this change yet.", { exact: true }).first()).toBeVisible();
+
+      await expectResponsiveSurface(
+        page,
+        viewport,
+        "/app/watchlists?watchlist=e2e-watchlist-starter-1&tab=delivery",
+        "Competitors",
+        [/High-priority alerts/],
+      );
+      await expect(page.getByText("High-priority alerts (sent as soon as a scan confirms a major change)")).toBeVisible();
+      await expect(page.getByRole("checkbox", { name: /High-priority alerts/ })).toBeChecked();
+
+      await expectResponsiveSurface(
+        page,
+        viewport,
+        "/app/watchlists?watchlist=e2e-watchlist-starter-1&tab=setup",
+        "Competitors",
+        [/How tracking works/],
+      );
+      await expect(page.getByText("Monitoring history is saved; new checks need source access", { exact: true })).toBeVisible();
+
+      // The release artifact is captured on the default surface a customer
+      // lands on from an alert email.
+      await page.goto("/app/watchlists?watchlist=e2e-watchlist-starter-1");
       await attachReleaseStateArtifacts({ page, testInfo, prefix: "j3-monitoring", state: "monitoring" });
       annotateFinalUrl(testInfo, page);
     });
@@ -268,7 +302,8 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
       await expectPhoneTouchTargets(page);
 
       await signInAs(context, baseURL!, "e2e-scout");
-      await page.goto("/app/watchlists?watchlist=e2e-watchlist-scout-1");
+      // BL-007: the delivery gate lives on the Delivery tab.
+      await page.goto("/app/watchlists?watchlist=e2e-watchlist-scout-1&tab=delivery");
       await expect(page.getByText("High-priority alerts require Starter", { exact: false })).toBeVisible();
       await expect(page.getByRole("checkbox", { name: /High-priority alerts/ })).toBeDisabled();
       await expect(page.getByText("Email delivery requires Scout", { exact: false })).toHaveCount(0);
@@ -311,7 +346,8 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
       testInfo.annotations.push({ type: "viewport", description: `${viewport.width}x${viewport.height}` });
 
       await signInAs(context, baseURL!, "e2e-agency");
-      await expectResponsiveSurface(page, viewport, "/app/watchlists?watchlist=e2e-watchlist-agency-1", "Competitors", [
+      // BL-007: delivery config and recipient targets live on the Delivery tab.
+      await expectResponsiveSurface(page, viewport, "/app/watchlists?watchlist=e2e-watchlist-agency-1&tab=delivery", "Competitors", [
         /Agency client proof watch/,
         /Targets and pauses/,
       ]);
@@ -319,7 +355,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
       await expect(page.getByRole("button", { name: "Save delivery settings", exact: true })).toHaveCount(1);
 
       await signInAs(context, baseURL!, "e2e-active-member");
-      await page.goto("/app/watchlists?watchlist=e2e-watchlist-agency-1");
+      await page.goto("/app/watchlists?watchlist=e2e-watchlist-agency-1&tab=delivery");
       await expect(page.getByRole("heading", { level: 1, name: "Competitors", exact: true })).toBeVisible();
       await expect(page.getByText("Delivery settings and recipient targets are managed by the workspace owner.", { exact: true })).toBeVisible();
       await expect(page.locator('input[name="targetValue"]')).toHaveCount(0);
