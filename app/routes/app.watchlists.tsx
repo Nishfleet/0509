@@ -8,7 +8,6 @@ import {
   useFetcher,
   useLoaderData,
   useNavigation,
-  useSearchParams,
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
@@ -16,9 +15,14 @@ import { CompetitorDossierPanel } from "~/components/competitor-dossier";
 import { CreativeWall } from "~/components/creative-wall";
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
+import { SpecimenEmptyState } from "~/components/evidence/specimen-empty-state";
+import { TertiaryAction } from "~/components/evidence/cta";
 import { InsightDepthPanel } from "~/components/insight-depth-panel";
 import { WatchlistTrends } from "~/components/watchlist-trends";
 import { BulkSelectBar } from "~/components/watchlists/bulk-select-bar";
+import { WatchBoard, toWatchBoardBandSummaries } from "~/components/watchlists/watch-board";
+import { WatchBoardStatus } from "~/components/watchlists/watch-board-status";
+import { WatchBoardTicker } from "~/components/watchlists/watch-board-ticker";
 import { CandidateHistory } from "~/components/watchlists/candidate-history";
 import { DeliverySettingsCard } from "~/components/watchlists/delivery-settings-card";
 import { DeliveryTargetsSection } from "~/components/watchlists/delivery-targets-section";
@@ -30,7 +34,6 @@ import { RecentEvidenceChecksCard } from "~/components/watchlists/recent-evidenc
 import { TrackingStatusCard } from "~/components/watchlists/tracking-status-card";
 import { WatchlistSetupCard } from "~/components/watchlists/watchlist-setup-card";
 import { CopyButton } from "~/components/copy-button";
-import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
 import { ProofGlossary } from "~/components/proof-glossary";
 import { SubmitButton } from "~/components/submit-button";
@@ -77,6 +80,7 @@ import type {
 import {
   buildLastAttemptByEventId,
   buildProofSummary,
+  buildWatchBoardTickerItems,
   emptyProofSummary,
   firstScanPollingKey,
   formatWatchlistRefreshFailure,
@@ -91,6 +95,7 @@ import {
   resolveWatchlistTrackingPresentation,
   sortByCreatedAtDesc,
   sortByUpdatedAtDesc,
+  summarizeWatchBoard,
   visibleDeliveryChannels,
 } from "~/lib/watchlist-display";
 
@@ -151,6 +156,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listWatchlistRuns,
     listWatchlists,
   } = await import("~/lib/data.server");
+  const { emptyWatchBoardCaptureWindow, loadWatchBoardCaptureWindow } = await import(
+    "~/lib/watchlist-board.server"
+  );
   const { resolveDeliveryConfig } = await import("~/lib/delivery-policy.server");
   const { listCreativeWallAds } = await import("~/lib/watchlist-ads.server");
   const { listWatchlistDailyActivity } = await import("~/lib/watchlist-trends.server");
@@ -171,39 +179,71 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   // WP-24: deep-link target from alert/digest emails (`?event=<id>`).
   const highlightedEventId = url.searchParams.get("event")?.trim() || null;
-  const requestedWatchlistId = url.searchParams.get("watchlist");
-  // Deep links (`?watchlist=<id>`) fetch the selected watchlist concurrently
-  // with the list; the default view only needs the list first to know which
-  // watchlist is newest, so it chains off the same in-flight promise.
+  const requestedWatchlistId = url.searchParams.get("watchlist")?.trim() || null;
+  // BL-006 list/detail split (brief §7): `/app/watchlists` IS the watch board.
+  // A competitor's detail only loads when a band is opened (`?watchlist=<id>`),
+  // so the default view no longer pays for twelve detail queries — or renders
+  // a 9,000px scroll — to show a board. BL-007 turns this seam into
+  // `/app/watchlists/:id`.
   const watchlistsPromise = listWatchlists(env, workspaceUserId, { includeInactive: true });
-  const selectedWatchlistPromise = (async () => {
-    const id = requestedWatchlistId ?? (await watchlistsPromise)[0]?.id ?? null;
-    return id ? getWatchlist(env, id, workspaceUserId) : null;
-  })();
-  const [watchlists, discoveryStatus, plan, showPresenceNav, emailVerified, selectedWatchlist] =
-    await Promise.all([
-      watchlistsPromise,
-      resolveCommercialAdSourceStatus(env).then(toCustomerDiscoveryStatus),
-      getUserPlan(env, workspaceUserId),
-      presenceNavVisible(env, workspaceUserId),
-      isUserEmailVerified(env, session.user.id),
-      selectedWatchlistPromise,
-    ]);
+  const selectedWatchlistPromise = requestedWatchlistId
+    ? getWatchlist(env, requestedWatchlistId, workspaceUserId)
+    : Promise.resolve(null);
+  const now = new Date();
+  const [
+    watchlists,
+    discoveryStatus,
+    plan,
+    showPresenceNav,
+    emailVerified,
+    selectedWatchlist,
+    captureWindow,
+    workspaceDeliveryConfigRecord,
+  ] = await Promise.all([
+    watchlistsPromise,
+    resolveCommercialAdSourceStatus(env).then(toCustomerDiscoveryStatus),
+    getUserPlan(env, workspaceUserId),
+    presenceNavVisible(env, workspaceUserId),
+    isUserEmailVerified(env, session.user.id),
+    selectedWatchlistPromise,
+    // Three workspace-scoped rollups feed every band's capture strip and its
+    // failure state (§6.2). A board must never take the page down, so a
+    // failure degrades to an all-unchecked window rather than an error
+    // boundary.
+    loadWatchBoardCaptureWindow(env, workspaceUserId, { now }).catch(() =>
+      emptyWatchBoardCaptureWindow(now),
+    ),
+    // The board is the DEFAULT view, so it needs the workspace delivery
+    // timezone too: without it "Next check" would render in UTC while "Last
+    // check" renders in the viewer's zone, and the two would disagree with
+    // /app/dashboard.
+    getWorkspaceDeliveryConfig(env, workspaceUserId),
+  ]);
   const verifiedAccountEmail = emailVerified ? session.user.email : null;
-  const renderedAt = new Date().toISOString();
+  const renderedAt = now.toISOString();
+  const workspaceDeliveryConfig =
+    workspaceDeliveryConfigRecord ??
+    buildLegacyWorkspaceConfig(workspaceUserId, Boolean(session.user.email));
 
   if (!selectedWatchlist) {
     return {
       renderedAt,
+      captureWindow,
       watchlists,
       selectedWatchlist: null,
       highlightedEventId: null as string | null,
       eventCandidates: [] as EventCandidateRecord[],
       events: [] as WatchEventRecord[],
       runs: [],
-      workspaceDeliveryConfig: buildLegacyWorkspaceConfig(workspaceUserId, Boolean(session.user.email)),
+      workspaceDeliveryConfig: maskDormantDeliveryConfig(workspaceDeliveryConfig, {
+        showSlackDelivery,
+        whatsappAvailable,
+      }),
       watchlistDeliveryConfig: null,
-      effectiveDeliveryConfig: buildLegacyWorkspaceConfig(workspaceUserId, Boolean(session.user.email)),
+      effectiveDeliveryConfig: maskDormantDeliveryConfig(
+        resolveDeliveryConfig({ workspaceConfig: workspaceDeliveryConfig, watchlistConfig: null }),
+        { showSlackDelivery, whatsappAvailable },
+      ),
       deliveryTargets: [] as PublicDeliveryTargetRecord[],
       workspaceDeliveryTargets: [] as PublicDeliveryTargetRecord[],
       recentDeliveryAttempts: [] as PublicDeliveryAttemptSummary[],
@@ -231,7 +271,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     eventCandidates,
     events,
     runs,
-    workspaceDeliveryConfigRecord,
     watchlistDeliveryConfig,
     watchlistDeliveryTargetsByChannel,
     workspaceDeliveryTargetsByChannel,
@@ -244,7 +283,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listEventCandidates(env, selectedWatchlist.id, 12),
     listWatchEvents(env, selectedWatchlist.id, 24),
     listWatchlistRuns(env, selectedWatchlist.id, 12),
-    getWorkspaceDeliveryConfig(env, workspaceUserId),
     getWatchlistDeliveryConfig(env, selectedWatchlist.id),
     Promise.all(deliveryChannels.map((channel) =>
       listDeliveryTargets(env, workspaceUserId, {
@@ -289,9 +327,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     ? await buildCounterBrief(env, dossier, { timeoutMs: 4000 }).catch(() => null)
     : null;
 
-  const workspaceDeliveryConfig =
-    workspaceDeliveryConfigRecord ??
-    buildLegacyWorkspaceConfig(workspaceUserId, Boolean(session.user.email));
   const effectiveDeliveryConfig = resolveDeliveryConfig({
     workspaceConfig: workspaceDeliveryConfig,
     watchlistConfig: watchlistDeliveryConfig,
@@ -310,6 +345,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
   return {
     renderedAt,
+    captureWindow,
     watchlists,
     selectedWatchlist,
     highlightedEventId,
@@ -1021,6 +1057,7 @@ export default function WatchlistsRoute() {
         ? pauseResumeFetcher.data
         : routeActionData;
   const bulkPending = bulkFetcher.state !== "idle";
+  const clearBulkSelection = () => setSelectedBulkIds([]);
   const toggleBulkSelection = (watchlistId: string) => {
     setSelectedBulkIds((previous) =>
       previous.includes(watchlistId)
@@ -1075,7 +1112,6 @@ export default function WatchlistsRoute() {
     canManageWorkspaceDelivery && canUsePlanFeature(data.plan, "weekly_digest");
   const canInstantAlert = canUsePlanFeature(data.plan, "high_priority_alerts");
   const canEmailDelivery = canUsePlanFeature(data.plan, "email_delivery");
-  const [searchParams] = useSearchParams();
   const navigation = useNavigation();
   const trackingPresentation = resolveWatchlistTrackingPresentation(
     discoveryStatus,
@@ -1083,7 +1119,6 @@ export default function WatchlistsRoute() {
     data.proofSummary,
   );
   const sourceCanSchedule = discoveryStatus.status !== "demo" && discoveryStatus.status !== "disabled";
-  const hasExplicitWatchlistSelection = searchParams.has("watchlist");
   const pendingWatchlistId =
     navigation.location?.pathname === "/app/watchlists"
       ? new URLSearchParams(navigation.location.search).get("watchlist")
@@ -1112,9 +1147,65 @@ export default function WatchlistsRoute() {
     consecutiveFailedRuns += 1;
   }
 
+  // ---- watch board (brief §6.1, §6.3, §7) --------------------------------
+  const captureWindow = data.captureWindow ?? {
+    endDate: data.renderedAt.slice(0, 10),
+    windowDays: 30,
+    days: {},
+    capturedChanges: {},
+    totalCapturedChanges: 0,
+    failedChecks: {},
+  };
+  const boardBands = toWatchBoardBandSummaries(
+    data.watchlists,
+    captureWindow.capturedChanges,
+    captureWindow.failedChecks,
+  );
+  const boardSummary = summarizeWatchBoard(boardBands);
+  const hasCompetitors = boardBands.length > 0;
+  const nextScanLabel = formatNextScanLabel(
+    data.plan,
+    renderedAt,
+    data.effectiveDeliveryConfig.timezone,
+  );
+  const renderBandPauseAction = (watchlist: (typeof data.watchlists)[number]) => {
+    const bandPending =
+      pauseResumePending && pauseResumeFetcher.formData?.get("watchlistId") === watchlist.id;
+    return (
+      <pauseResumeFetcher.Form method="post">
+        <input
+          name="intent"
+          type="hidden"
+          value={watchlist.isActive ? "pause-watchlist" : "resume-watchlist"}
+        />
+        <input name="watchlistId" type="hidden" value={watchlist.id} />
+        <TertiaryAction disabled={pauseResumePending} type="submit">
+          {bandPending
+            ? watchlist.isActive
+              ? "Pausing…"
+              : "Resuming…"
+            : watchlist.isActive
+              ? "Pause watching"
+              : "Resume watching"}
+        </TertiaryAction>
+      </pauseResumeFetcher.Form>
+    );
+  };
+
   return (
     <DashboardPage>
       <section className="f9-app-stack">
+        {hasCompetitors ? (
+          <WatchBoardTicker
+            items={buildWatchBoardTickerItems(boardBands, captureWindow.windowDays)}
+          />
+        ) : null}
+
+        {/* No Rank-1 here: the workspace shell's "+ Add competitor" already
+            carries this screen's one action, and two ink primaries 200px
+            apart is the collision brief §5 forbids. Zero Rank-1s on a screen
+            is legitimate (cta.tsx §5). The empty state below still carries
+            one, because the shell button is the only other way in. */}
         <DashboardPageHeader
           kicker="Monitoring"
           lead="Monitor competitor ads over time and get alerted when messaging, creative, or landing pages change."
@@ -1146,94 +1237,54 @@ export default function WatchlistsRoute() {
         </p>
       ) : null}
 
-      <div className="f9-master-detail">
-        <article className="f9-app-panel f9-side-panel">
-          <div className="f9-panel-toolbar">
-            <div>
-              <h2>Competitors</h2>
-            </div>
-          </div>
-          <p className="f9-muted-copy">
-            Pick a tracked brand to review changes, evidence freshness, and alert delivery.
-          </p>
+      {hasCompetitors ? (
+        <>
+          <WatchBoardStatus
+            nextScanLabel={nextScanLabel}
+            sourceCanSchedule={sourceCanSchedule}
+            summary={boardSummary}
+            trackingStatusLabel={trackingPresentation.statusLabel}
+            windowDays={captureWindow.windowDays}
+          />
 
-          {data.watchlists.length > 1 ? (
-            <BulkSelectBar
-              onPause={() => submitBulk("pause")}
-              onResume={() => submitBulk("resume")}
-              pending={bulkPending}
-              pendingAction={bulkFetcher.formData?.get("bulkAction")}
-              selectedCount={selectedBulkIds.length}
-            />
-          ) : null}
+          <BulkSelectBar
+            onClear={clearBulkSelection}
+            onPause={() => submitBulk("pause")}
+            onResume={() => submitBulk("resume")}
+            pending={bulkPending}
+            pendingAction={bulkFetcher.formData?.get("bulkAction")}
+            selectedCount={selectedBulkIds.length}
+          />
 
-          <div className="f9-work-list is-compact">
-            {data.watchlists.map((watchlist) => {
-              const isActive =
-                searchParams.get("watchlist") === watchlist.id ||
-                (!searchParams.get("watchlist") && data.selectedWatchlist?.id === watchlist.id);
-              const isPending = pendingWatchlistId === watchlist.id;
-              const scanPresentation = resolveWatchlistListScanPresentation({
-                isActive: watchlist.isActive,
-                lastScannedAt: watchlist.lastScannedAt,
-                latestRun: isActive
-                  ? ((data.runs[0] as WatchlistRunRecord | undefined) ?? null)
-                  : null,
-                plan: data.plan,
-              });
+          <WatchBoard
+            canReport={canReport}
+            captureWindow={captureWindow}
+            onToggleSelect={toggleBulkSelection}
+            openWatchlistId={data.selectedWatchlist?.id ?? null}
+            openWatchlistRun={(data.runs[0] as WatchlistRunRecord | undefined) ?? null}
+            pendingWatchlistId={pendingWatchlistId}
+            plan={data.plan}
+            renderPauseAction={renderBandPauseAction}
+            selectable={data.watchlists.length > 1}
+            selectedIds={selectedBulkIds}
+            selectionDisabled={bulkPending}
+            watchlists={data.watchlists}
+          />
+        </>
+      ) : (
+        <SpecimenEmptyState
+          copy="Paste your website or a competitor's — we scan their Meta ads and landing page, then email you the moment their offer, creative, or CTA changes."
+          headline="Add your first competitor"
+          primaryAction={{ label: "Add competitor", to: "/search" }}
+          secondaryAction={{ label: "See a sample brief", to: "/#demo" }}
+          specimenLabel="BAND 01 — RESERVED"
+          stateLabel="WATCH BOARD · NOTHING TRACKED YET"
+        />
+      )}
 
-              return (
-                <div className="f9-work-row-select" key={watchlist.id}>
-                  {data.watchlists.length > 1 ? (
-                    <label className="f9-bulk-select-target">
-                      <input
-                        aria-label={`Select ${watchlist.name} for bulk actions`}
-                        checked={selectedBulkIds.includes(watchlist.id)}
-                        className="f9-bulk-checkbox"
-                        disabled={bulkPending}
-                        onChange={() => toggleBulkSelection(watchlist.id)}
-                        type="checkbox"
-                      />
-                    </label>
-                  ) : null}
-                  <Link
-                    className={`f9-work-row ${isActive ? "is-active" : ""} ${isPending ? "is-pending" : ""}`}
-                    preventScrollReset
-                    to={`/app/watchlists?watchlist=${watchlist.id}`}
-                  >
-                    <div>
-                      <h3>{watchlist.name}</h3>
-                      <p className="f9-muted-copy">
-                        {formatWatchlistTrackingRole(watchlist.trackingRole)} · {watchlist.targetLabel}
-                        {watchlist.isActive ? "" : " · Paused"}
-                      </p>
-                      <p className="f9-muted-copy">
-                        {scanPresentation.timestamp ? (
-                          <>
-                            {scanPresentation.label} <LocalTime iso={scanPresentation.timestamp} />
-                          </>
-                        ) : (
-                          scanPresentation.label
-                        )}
-                      </p>
-                    </div>
-                  </Link>
-                </div>
-              );
-            })}
-            {data.watchlists.length === 0 ? (
-              <EmptyState
-                description="Add one to start your first scan."
-                title="No competitors yet"
-                variant="inline"
-              />
-            ) : null}
-          </div>
-        </article>
-
-        <article className={`f9-app-panel${hasExplicitWatchlistSelection ? " f9-selected-detail-priority" : ""}`}>
-          {data.selectedWatchlist ? (
-            <>
+      {data.selectedWatchlist ? (
+        <article className="f9-app-panel f9-ed-opened-detail">
+          <>
               <div className="f9-panel-toolbar">
                 <div>
                   <p className="f9-app-kicker">Selected watchlist</p>
@@ -1459,17 +1510,9 @@ export default function WatchlistsRoute() {
 
                 <CandidateHistory candidates={data.eventCandidates} />
               </div>
-            </>
-          ) : (
-            <EmptyState
-              action={{ label: "Add competitor", to: "/search" }}
-              description="Paste your website or a competitor's — we scan their Meta ads and landing page, then email you the moment their offer, creative, or CTA changes."
-              sample={{ label: "See a sample brief", to: "/#demo" }}
-              title="Add your first competitor"
-            />
-          )}
+          </>
         </article>
-      </div>
+      ) : null}
       </section>
     </DashboardPage>
   );

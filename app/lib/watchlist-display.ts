@@ -1,3 +1,4 @@
+import { countryNameFromIso } from "~/lib/countries";
 import type { PublicDeliveryAttemptSummary } from "~/lib/delivery-attempt-public";
 import {
   customerDiscoverySummary,
@@ -426,4 +427,180 @@ export function formatRunTriggerLabel(triggerType: string) {
   if (triggerType === "scheduled") return "Scheduled scan";
   if (triggerType === "workflow") return "Background scan";
   return triggerType;
+}
+
+/* ==========================================================================
+   Watch board (BL-006; brief §6.1, §6.3, §7)
+   Pure presentation for the competitor band, the workspace status strip and
+   the board ticker. Every value below traces to a stored record — a band
+   never claims a state the loader did not prove.
+   ========================================================================== */
+
+export type WatchBandState = "caught" | "quiet" | "watching" | "paused" | "attention";
+
+/** Consecutive failed checks before a band stops claiming to be quiet. */
+export const WATCH_BAND_FAILURE_THRESHOLD = 3;
+
+export interface WatchBandStamp {
+  state: WatchBandState;
+  /** Pill `stamp` modifier — the ED state stamp families (brief §6.1). */
+  pillState: "caught" | "quiet" | "watching" | "pending";
+  label: string;
+}
+
+const BAND_STAMPS: Record<WatchBandState, WatchBandStamp> = {
+  caught: { state: "caught", pillState: "caught", label: "Caught" },
+  quiet: { state: "quiet", pillState: "quiet", label: "Quiet" },
+  watching: { state: "watching", pillState: "watching", label: "Watching" },
+  paused: { state: "paused", pillState: "pending", label: "Paused" },
+  attention: { state: "attention", pillState: "pending", label: "Needs attention" },
+};
+
+/**
+ * A band's state is read off stored evidence only:
+ * paused → the watchlist is off; attention → three or more checks in a row
+ * have failed since the last success, so the board never stamps "Quiet" over
+ * scanning that is broken; caught → a confirmed change sits in the window;
+ * watching → tracking is on but no check has completed yet; quiet → we
+ * checked and nothing changed, which is a finding, not a gap (R2).
+ */
+export function resolveWatchBandState(input: {
+  isActive: boolean;
+  lastScannedAt: string | null;
+  capturedChanges: number;
+  failedChecks?: number;
+}): WatchBandStamp {
+  if (!input.isActive) return BAND_STAMPS.paused;
+  if ((input.failedChecks ?? 0) >= WATCH_BAND_FAILURE_THRESHOLD) return BAND_STAMPS.attention;
+  if (input.capturedChanges > 0) return BAND_STAMPS.caught;
+  if (!input.lastScannedAt) return BAND_STAMPS.watching;
+  return BAND_STAMPS.quiet;
+}
+
+/** Meta line 1 — the market we scan for this competitor. */
+export function formatWatchBandMarket(targetCountry: string | null | undefined): string | null {
+  const raw = targetCountry?.trim();
+  if (!raw) return null;
+  if (raw.toLowerCase() === "all") return "Every market";
+  return countryNameFromIso(raw) ?? raw;
+}
+
+/** Meta line 2 — cadence, in the same words the plan actually delivers. */
+export function formatWatchBandCadence(input: { isActive: boolean; plan: string }): string {
+  if (!input.isActive) return "Paused — no checks run";
+  return input.plan === "free" ? "Checked weekly" : "Checked every 3–6 hours";
+}
+
+export interface WatchBoardBandSummary {
+  id: string;
+  name: string;
+  isActive: boolean;
+  lastScannedAt: string | null;
+  capturedChanges: number;
+  /** Consecutive failed checks since the last successful one. */
+  failedChecks?: number;
+}
+
+export interface WatchBoardSummary {
+  competitors: number;
+  watching: number;
+  paused: number;
+  caught: number;
+  needsAttention: number;
+  capturedChanges: number;
+  lastCheckAt: string | null;
+  stamp: WatchBandStamp;
+}
+
+export function summarizeWatchBoard(bands: readonly WatchBoardBandSummary[]): WatchBoardSummary {
+  const watching = bands.filter((band) => band.isActive).length;
+  const caught = bands.filter((band) => band.capturedChanges > 0).length;
+  const capturedChanges = bands.reduce((total, band) => total + band.capturedChanges, 0);
+  // A workspace whose scanning is failing must not read as quiet at the top
+  // of the board either.
+  const needsAttention = bands.filter(
+    (band) => band.isActive && (band.failedChecks ?? 0) >= WATCH_BAND_FAILURE_THRESHOLD,
+  ).length;
+  const lastCheckAt = bands.reduce<string | null>((latest, band) => {
+    if (!band.lastScannedAt) return latest;
+    return !latest || band.lastScannedAt > latest ? band.lastScannedAt : latest;
+  }, null);
+
+  return {
+    competitors: bands.length,
+    watching,
+    paused: bands.length - watching,
+    caught,
+    needsAttention,
+    capturedChanges,
+    lastCheckAt,
+    stamp: resolveWatchBandState({
+      isActive: watching > 0,
+      lastScannedAt: lastCheckAt,
+      capturedChanges,
+      failedChecks: needsAttention > 0 ? WATCH_BAND_FAILURE_THRESHOLD : 0,
+    }),
+  };
+}
+
+/** The one number the board exists to report (brief §6.3, cell 2). */
+export function formatWatchBoardCaughtValue(summary: WatchBoardSummary, windowDays: number): string | null {
+  if (summary.capturedChanges === 0) return null;
+  const changes = `${summary.capturedChanges} ${summary.capturedChanges === 1 ? "change" : "changes"}`;
+  const across = `${summary.caught} of ${summary.competitors}`;
+  return `${changes} · ${across} · ${windowDays}d`;
+}
+
+/** Honest copy for the caught cell when nothing was captured. */
+export function formatWatchBoardQuietValue(summary: WatchBoardSummary, windowDays: number): string {
+  if (summary.competitors === 0) return "nothing tracked yet";
+  if (summary.lastCheckAt) return `nothing changed in ${windowDays} days`;
+  return "no completed check yet";
+}
+
+export function formatWatchBoardNextCheck(input: {
+  activeCompetitors: number;
+  sourceCanSchedule: boolean;
+  nextScanLabel: string;
+}): string | null {
+  if (input.activeCompetitors === 0) return null;
+  if (!input.sourceCanSchedule) return null;
+  return input.nextScanLabel;
+}
+
+/**
+ * The strip's single Rank-3 action. It points at whatever is actually
+ * blocking or shaping the next check, never at a generic destination.
+ */
+export function resolveWatchBoardStripAction(input: {
+  sourceCanSchedule: boolean;
+  trackingStatusLabel: string;
+}): { label: string; to: string } {
+  if (!input.sourceCanSchedule || input.trackingStatusLabel === "Needs source access") {
+    return { label: "Source access", to: "/app/source-access" };
+  }
+  return { label: "Alert delivery", to: "/app/notifications" };
+}
+
+/**
+ * Ticker lines — the one ticker in the workspace (brief §7). Every line is a
+ * stored fact about a real competitor; there is no filler entry.
+ */
+export function buildWatchBoardTickerItems(
+  bands: readonly WatchBoardBandSummary[],
+  windowDays: number,
+): string[] {
+  return bands.map((band) => {
+    const name = band.name.trim().toUpperCase();
+    if (!band.isActive) return `${name} · PAUSED`;
+    if ((band.failedChecks ?? 0) >= WATCH_BAND_FAILURE_THRESHOLD) {
+      return `${name} · ${band.failedChecks} CHECKS FAILED`;
+    }
+    if (band.capturedChanges > 0) {
+      const changes = band.capturedChanges === 1 ? "1 CHANGE" : `${band.capturedChanges} CHANGES`;
+      return `${name} · ${changes} CAUGHT · ${windowDays}D`;
+    }
+    if (!band.lastScannedAt) return `${name} · FIRST CHECK RUNNING`;
+    return `${name} · QUIET · NOTHING CHANGED`;
+  });
 }

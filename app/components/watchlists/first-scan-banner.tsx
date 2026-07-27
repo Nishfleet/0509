@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link, useRevalidator } from "react-router";
+import { useRevalidator } from "react-router";
 
+import { SecondaryAction, TertiaryAction } from "~/components/evidence/cta";
 import { firstScanPollingKey } from "~/lib/watchlist-display";
 import type { WatchlistRunRecord } from "~/lib/types";
 
@@ -94,40 +95,43 @@ export function FirstScanBanner(props: {
 
   return (
     <article
-      className={`f9-checkout-banner ${failed || skipped ? "is-error" : completed ? "is-success" : "is-pending"}`}
+      className={`f9-ed-first-scan ${failed || skipped ? "is-error" : completed ? "is-success" : "is-pending"}`}
       aria-live="polite"
       role="status"
     >
-      <div>
-        <span className="f9-app-kicker">{props.plan === "free" ? "Activation scan" : "First scan"}</span>
-        <h2>
+      <header className="f9-ed-first-scan-header f9-ed-micro">
+        {props.plan === "free" ? "Activation scan" : "First scan"}
+      </header>
+      <div className="f9-ed-first-scan-body">
+        <h2 className="f9-ed-first-scan-headline">
           {props.run?.status === "running" ? (
             <span className="f9-checkout-pulse" aria-hidden="true" />
           ) : null}
           {heading}
         </h2>
-        <p>{message}</p>
-        {failed ? <Link to="/app/source-access">Check source access</Link> : null}
-        {(pastFastPoll || timedOut) && shouldPoll ? (
-          <p style={{ marginTop: "0.75rem" }}>
-            <button
-              className="f9-secondary-button"
-              type="button"
-              onClick={() => {
-                if (revalidator.state === "idle") {
-                  revalidator.revalidate();
-                }
-              }}
-            >
-              Check now
-            </button>
-            {pastFastPoll && !timedOut ? (
-              <span className="f9-muted-copy" style={{ marginLeft: "0.75rem" }}>
-                Still waiting — checking every 30 seconds.
-              </span>
-            ) : null}
-          </p>
-        ) : null}
+        <p className="f9-ed-first-scan-copy">{message}</p>
+        <div className="f9-ed-action-row">
+          {failed ? <TertiaryAction to="/app/source-access">Check source access</TertiaryAction> : null}
+          {(pastFastPoll || timedOut) && shouldPoll ? (
+            <>
+              <SecondaryAction
+                small
+                onClick={() => {
+                  if (revalidator.state === "idle") {
+                    revalidator.revalidate();
+                  }
+                }}
+              >
+                Check now
+              </SecondaryAction>
+              {pastFastPoll && !timedOut ? (
+                <span className="f9-ed-evidence-line">
+                  Still waiting — checking every 30 seconds.
+                </span>
+              ) : null}
+            </>
+          ) : null}
+        </div>
       </div>
     </article>
   );
