@@ -1,14 +1,30 @@
 import type { ReactNode } from "react";
-import { Link } from "react-router";
+
+import { PrimaryAction } from "~/components/evidence/cta";
+
+/**
+ * The workspace page shell.
+ *
+ * Evidence Desk (BL-005): `volume` stamps `data-ed-volume` on the content
+ * wrapper so the Plain volume (brief §3 — long-dwell settings surfaces) keeps
+ * the tokens and the CTA hierarchy while dropping the offset shadows. The
+ * default is the Workspace volume.
+ */
+
+export type DashboardVolume = "workspace" | "plain";
 
 export interface DashboardPageProps {
   children: React.ReactNode;
   className?: string;
+  volume?: DashboardVolume;
 }
 
-export function DashboardPage({ children, className }: DashboardPageProps) {
+export function DashboardPage({ children, className, volume = "workspace" }: DashboardPageProps) {
   return (
-    <div className={className ? `f9-dash-content ${className}` : "f9-dash-content"}>
+    <div
+      className={className ? `f9-dash-content ${className}` : "f9-dash-content"}
+      data-ed-volume={volume}
+    >
       {children}
     </div>
   );
@@ -21,6 +37,11 @@ export interface DashboardPageHeaderProps {
   action?: { label: string; to: string };
 }
 
+/**
+ * The `action` slot carries the page's single Rank-1 primary action (brief
+ * §5, DESIGN.md WP-A3) — the one thing the page exists to do, never a
+ * cross-navigation shortcut to a sidebar destination.
+ */
 export function DashboardPageHeader({ kicker, title, lead, action }: DashboardPageHeaderProps) {
   return (
     <header className="f9-dash-page-header">
@@ -29,11 +50,7 @@ export function DashboardPageHeader({ kicker, title, lead, action }: DashboardPa
         <h1>{title}</h1>
         {lead ? <p className="f9-muted-copy">{lead}</p> : null}
       </div>
-      {action ? (
-        <Link className="f9-primary-button" to={action.to}>
-          {action.label}
-        </Link>
-      ) : null}
+      {action ? <PrimaryAction to={action.to}>{action.label}</PrimaryAction> : null}
     </header>
   );
 }
