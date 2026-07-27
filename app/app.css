@@ -10359,6 +10359,7 @@ reds soften --- */
 [data-ed-volume="plain"] .f9-ed-cta--rank2:hover,
 [data-ed-volume="plain"] .f9-ed-panel,
 [data-ed-volume="plain"] .f9-ed-diff-plate,
+[data-ed-volume="plain"] .f9-ed-change-record,
 [data-ed-volume="plain"] .f9-ed-evidence-plate,
 [data-ed-volume="plain"] .f9-ed-specimen {
   box-shadow: none;
@@ -10606,6 +10607,7 @@ reds soften --- */
 }
 
 .f9-ed-diff-plate,
+.f9-ed-change-record,
 .f9-ed-evidence-plate,
 .f9-ed-specimen,
 .f9-ed-panel {
@@ -10629,7 +10631,8 @@ reds soften --- */
 
 /* WP-24: email deep-link highlight for ?event= — box-shadow, not accent outline
    (brief §10: --ed-accent cannot reach 3:1 as a non-text UI boundary). */
-.f9-ed-diff-plate.is-highlighted {
+.f9-ed-diff-plate.is-highlighted,
+.f9-ed-change-record.is-highlighted {
   outline: none;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--ed-focus) 28%, transparent);
 }
@@ -11447,6 +11450,7 @@ reds soften --- */
   }
 
   .f9-ed-diff-plate,
+  .f9-ed-change-record,
   .f9-ed-evidence-plate,
   .f9-ed-specimen,
   .f9-ed-panel,

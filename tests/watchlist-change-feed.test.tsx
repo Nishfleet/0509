@@ -3,18 +3,28 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
 
-import { STORED_CAPTURE_NOTE } from "~/components/evidence/diff-plate";
+import { DIFF_PLATE_DEGRADE_COPY, STORED_CAPTURE_NOTE } from "~/components/evidence/diff-plate";
 import {
+  EVENT_CHANGE_AD_NEW_COPY,
+  EVENT_CHANGE_SUPPRESSED_COPY,
+  EVENT_DELIVERY_NONE_COPY,
   EventChangesSection,
   buildQuietCheckItems,
+  canRenderEventDiffPlate,
   formatCaughtStamp,
+  formatEventChangeWhy,
+  formatEventDeliveryLine,
+  formatPlateVerification,
   formatQuietCheckCopy,
+  hasStoredDiffFieldValues,
+  resolveEventChangeQuietCopy,
   resolveEventDiffCaptures,
   resolvePriorProofCapture,
 } from "~/components/watchlists/event-changes-section";
+import { buildChangeIntelligenceSummary } from "~/lib/change-intelligence";
 import type { ProofCaptureRecord, WatchEventRecord, WatchlistRunRecord } from "~/lib/types";
 
-const event: WatchEventRecord = {
+const offerEvent: WatchEventRecord = {
   id: "event-1",
   watchlistId: "watch-1",
   runId: "run-1",
@@ -30,12 +40,39 @@ const event: WatchEventRecord = {
   metadata: {
     from: "Starting at ₹499",
     to: "Starting at ₹799",
+    proofTrail: "Verified from a page snapshot",
   },
   confirmedAt: "2026-04-18T10:00:00.000Z",
   suppressedAt: null,
   invalidatedAt: null,
   lastEvaluatedAt: "2026-04-18T10:00:00.000Z",
   createdAt: "2026-04-18T10:00:00.000Z",
+};
+
+const adNewEvent: WatchEventRecord = {
+  ...offerEvent,
+  id: "event-ad-new",
+  eventType: "ad_new",
+  proofCaptureId: null,
+  title: "New ad detected",
+  summary: "A new ad appeared on this watchlist.",
+  metadata: {
+    kind: "ad_new",
+    recommendedAction: "Review the new creative.",
+  },
+};
+
+const suppressedEvent: WatchEventRecord = {
+  ...offerEvent,
+  id: "event-suppressed",
+  eventType: "ad_inactive",
+  status: "suppressed",
+  proofCaptureId: null,
+  title: "Suppressed low-signal change",
+  summary: "Fixture suppressed item should not dominate trust views.",
+  metadata: { source: "scan_spotted" },
+  confirmedAt: null,
+  suppressedAt: "2026-04-18T10:01:00.000Z",
 };
 
 const captures: ProofCaptureRecord[] = [
@@ -85,6 +122,21 @@ const captures: ProofCaptureRecord[] = [
   },
 ];
 
+const baselineRun: WatchlistRunRecord = {
+  id: "run-0",
+  watchlistId: "watch-1",
+  triggerType: "scheduled",
+  status: "succeeded",
+  pageBudget: 3,
+  pagesScanned: 1,
+  baselineFromRunId: null,
+  summary: {},
+  startedAt: "2026-04-17T04:00:00.000Z",
+  finishedAt: "2026-04-17T04:01:00.000Z",
+  errorCode: null,
+  errorMessage: null,
+};
+
 describe("event change feed helpers", () => {
   it("formats a caught stamp in UTC mono voice", () => {
     expect(formatCaughtStamp("2026-04-18T10:00:00.000Z")).toContain("CAUGHT 18 APR");
@@ -95,9 +147,9 @@ describe("event change feed helpers", () => {
     expect(resolvePriorProofCapture(current, captures)?.id).toBe("proof-0");
   });
 
-  it("builds both diff panes from stored captures", () => {
+  it("builds both diff panes from stored captures and metadata from/to only", () => {
     const diff = resolveEventDiffCaptures({
-      event,
+      event: offerEvent,
       proofCapture: captures[0],
       priorProofCapture: captures[1],
       runsById: new Map(),
@@ -107,6 +159,102 @@ describe("event change feed helpers", () => {
     expect(diff.now.capturedAt).toBe("2026-04-18T09:59:50.000Z");
     expect(diff.before.value).toBe("Starting at ₹499");
     expect(diff.now.value).toBe("Starting at ₹799");
+  });
+
+  it("does not invent diff tokens from event.title for production ad_new shapes", () => {
+    const diff = resolveEventDiffCaptures({
+      event: adNewEvent,
+      proofCapture: null,
+      priorProofCapture: null,
+      runsById: new Map([["run-0", baselineRun]]),
+    });
+
+    expect(hasStoredDiffFieldValues(adNewEvent)).toBe(false);
+    expect(diff.before.value).toBeNull();
+    expect(diff.now.value).toBeNull();
+    expect(canRenderEventDiffPlate({ event: adNewEvent, before: diff.before, now: diff.now })).toBe(
+      false,
+    );
+    expect(
+      resolveEventChangeQuietCopy({
+        event: adNewEvent,
+        hasStoredDiffFields: false,
+        hasBothCaptureTimes: true,
+      }),
+    ).toBe(EVENT_CHANGE_AD_NEW_COPY);
+  });
+
+  it("uses the one-capture degrade copy only when from/to exist but a timestamp is missing", () => {
+    const diff = resolveEventDiffCaptures({
+      event: offerEvent,
+      proofCapture: captures[0],
+      priorProofCapture: null,
+      runsById: new Map(),
+    });
+
+    expect(
+      resolveEventChangeQuietCopy({
+        event: offerEvent,
+        hasStoredDiffFields: true,
+        hasBothCaptureTimes: false,
+      }),
+    ).toBe(DIFF_PLATE_DEGRADE_COPY);
+    expect(canRenderEventDiffPlate({ event: offerEvent, before: diff.before, now: diff.now })).toBe(
+      false,
+    );
+  });
+
+  it("uses baseline timestamps without inventing field values when from/to are absent", () => {
+    const baselineEvent: WatchEventRecord = {
+      ...adNewEvent,
+      baselineFromRunId: "run-0",
+      metadata: { kind: "baseline" },
+    };
+    const diff = resolveEventDiffCaptures({
+      event: baselineEvent,
+      proofCapture: captures[0],
+      priorProofCapture: null,
+      runsById: new Map([["run-0", baselineRun]]),
+    });
+
+    expect(diff.before.capturedAt).toBe("2026-04-17T04:01:00.000Z");
+    expect(diff.before.value).toBeNull();
+    expect(canRenderEventDiffPlate({ event: baselineEvent, before: diff.before, now: diff.now })).toBe(
+      false,
+    );
+  });
+
+  it("restores the per-change no-send delivery line", () => {
+    const intelligence = buildChangeIntelligenceSummary(offerEvent, "UTC");
+    expect(formatEventDeliveryLine(null)).toBe(EVENT_DELIVERY_NONE_COPY);
+    expect(
+      formatEventChangeWhy({
+        event: offerEvent,
+        intelligence,
+      }),
+    ).toBe("The landing-page offer changed.");
+  });
+
+  it("does not pair confidence pending with verified when no confidence is stored", () => {
+    const intelligence = buildChangeIntelligenceSummary(offerEvent, "UTC");
+    const pendingCapture = { ...captures[0], fieldConfidence: {} };
+    const label = formatPlateVerification({
+      event: offerEvent,
+      proofCapture: pendingCapture,
+      intelligence,
+    });
+    expect(label).not.toContain("VERIFIED");
+    expect(label).not.toContain("Confidence pending");
+  });
+
+  it("labels suppressed events with status-aware copy, not one-capture degrade", () => {
+    expect(
+      resolveEventChangeQuietCopy({
+        event: suppressedEvent,
+        hasStoredDiffFields: false,
+        hasBothCaptureTimes: false,
+      }),
+    ).toBe(EVENT_CHANGE_SUPPRESSED_COPY);
   });
 
   it("renders quiet checks as one dashed line each", () => {
@@ -165,7 +313,7 @@ describe("EventChangesSection", () => {
     const markup = renderChangeFeed({
       checksExpanded: false,
       data: {
-        events: [event],
+        events: [offerEvent],
         runs: [],
         selectedWatchlist: {
           id: "watch-1",
@@ -188,6 +336,37 @@ describe("EventChangesSection", () => {
     expect(markup).toContain("17 Apr 2026, 09:59 UTC");
     expect(markup).toContain("18 Apr 2026, 09:59 UTC");
     expect(markup).toContain(STORED_CAPTURE_NOTE);
+    expect(markup).toContain(EVENT_DELIVERY_NONE_COPY);
     expect(markup).not.toContain("Insight depth");
+  });
+
+  it("renders unenriched ad_new and suppressed events without diff plates", () => {
+    const markup = renderChangeFeed({
+      checksExpanded: false,
+      data: {
+        events: [suppressedEvent, adNewEvent],
+        runs: [],
+        selectedWatchlist: {
+          id: "watch-1",
+          name: "Nykaa watch",
+          lastScannedAt: "2026-04-18T09:00:00.000Z",
+        },
+        plan: "starter",
+        effectiveDeliveryConfig: { timezone: "UTC" },
+        highlightedEventId: null,
+      },
+      lastAttemptByEventId: new Map(),
+      proofCapturesById: new Map(),
+      recentProofCaptures: [],
+      renderedAt: new Date("2026-04-18T10:59:50.000Z"),
+      sourceCanSchedule: true,
+      watchlistId: "watch-1",
+    });
+
+    expect(markup).not.toContain("f9-ed-diff-plate");
+    expect(markup).toContain("f9-ed-change-record");
+    expect(markup).toContain(EVENT_CHANGE_AD_NEW_COPY);
+    expect(markup).toContain(EVENT_CHANGE_SUPPRESSED_COPY);
+    expect(markup).not.toContain(DIFF_PLATE_DEGRADE_COPY);
   });
 });

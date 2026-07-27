@@ -166,9 +166,23 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
       );
       await expect(page.getByText("Needs source access", { exact: true })).toBeVisible();
       await expect(page.getByText("After source access is ready", { exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Landing page offer changed" }).first()).toBeVisible();
       await expect(page.getByRole("heading", { name: "Okara launched a new workflow offer" }).first()).toBeVisible();
       await expect(page.getByText("This is the stored capture, not a re-render.", { exact: true }).first()).toBeVisible();
-      await expect(page.getByText("Fixture confirmed proof-backed event.", { exact: true }).first()).toBeVisible();
+      await expect(page.getByText("No alert sent for this change yet.", { exact: true }).first()).toBeVisible();
+      await expect(
+        page.getByText(
+          "Checked. We recorded a new ad. There is no stored before-and-after field to show.",
+          { exact: true },
+        ).first(),
+      ).toBeVisible();
+      await expect(
+        page.getByText(
+          "Suppressed. This low-signal change is not shown as a before-and-after.",
+          { exact: true },
+        ).first(),
+      ).toBeVisible();
+      await expect(page.getByText("Fixture confirmed proof-backed offer change.", { exact: true }).first()).toBeVisible();
 
       await expectResponsiveSurface(
         page,
@@ -330,8 +344,14 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
 
       await signInAs(context, baseURL!, "e2e-starter");
       await page.goto("/app/watchlists?watchlist=e2e-watchlist-starter-1");
-      await expect(page.getByRole("heading", { name: "Okara launched a new workflow offer" }).first()).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Landing page offer changed" }).first()).toBeVisible();
       await expect(page.getByText("This is the stored capture, not a re-render.", { exact: true }).first()).toBeVisible();
+      await expect(
+        page.getByText(
+          "Checked. We recorded a new ad. There is no stored before-and-after field to show.",
+          { exact: true },
+        ).first(),
+      ).toBeVisible();
       await expectNoHorizontalOverflow(page);
       await expectPhoneTouchTargets(page);
       await attachReleaseStateArtifacts({ page, testInfo, prefix: "j3-preseeded", state: "empty-recovered" });

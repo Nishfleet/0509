@@ -1,6 +1,11 @@
 import { LocalTime } from "~/components/local-time";
 import { SecondaryAction } from "~/components/evidence/cta";
-import { DiffPlate, type DiffCapture } from "~/components/evidence/diff-plate";
+import {
+  DiffPlate,
+  DIFF_PLATE_DEGRADE_COPY,
+  hasCaptureTime,
+  type DiffCapture,
+} from "~/components/evidence/diff-plate";
 import { QuietLine, QuietLineList, type QuietLineItem } from "~/components/evidence/quiet-line";
 import { SpecimenEmptyState } from "~/components/evidence/specimen-empty-state";
 import { buildChangeIntelligenceSummary } from "~/lib/change-intelligence";
@@ -78,6 +83,103 @@ function readMetadataString(metadata: Record<string, unknown>, key: string): str
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+export const EVENT_DELIVERY_NONE_COPY = "No alert sent for this change yet.";
+
+export const EVENT_CHANGE_SUPPRESSED_COPY =
+  "Suppressed. This low-signal change is not shown as a before-and-after.";
+
+export const EVENT_CHANGE_AD_NEW_COPY =
+  "Checked. We recorded a new ad. There is no stored before-and-after field to show.";
+
+export const EVENT_CHANGE_BASELINE_COPY =
+  "Checked. This is the baseline capture. There is no before-and-after to show.";
+
+export const EVENT_CHANGE_NO_FIELD_DIFF_COPY =
+  "Checked. We recorded this change without stored before-and-after field values.";
+
+export function hasStoredDiffFieldValues(event: WatchEventRecord): boolean {
+  return Boolean(
+    readMetadataString(event.metadata, "from") && readMetadataString(event.metadata, "to"),
+  );
+}
+
+export function canRenderEventDiffPlate(input: {
+  event: WatchEventRecord;
+  before: DiffCapture;
+  now: DiffCapture;
+}): boolean {
+  if (!hasStoredDiffFieldValues(input.event)) {
+    return false;
+  }
+
+  return hasCaptureTime(input.before.capturedAt) && hasCaptureTime(input.now.capturedAt);
+}
+
+export function resolveEventChangeQuietCopy(input: {
+  event: WatchEventRecord;
+  hasStoredDiffFields: boolean;
+  hasBothCaptureTimes: boolean;
+}): string {
+  if (input.event.status === "suppressed") {
+    return EVENT_CHANGE_SUPPRESSED_COPY;
+  }
+
+  if (input.hasStoredDiffFields && !input.hasBothCaptureTimes) {
+    return DIFF_PLATE_DEGRADE_COPY;
+  }
+
+  if (input.event.metadata?.kind === "baseline") {
+    return EVENT_CHANGE_BASELINE_COPY;
+  }
+
+  if (input.event.eventType === "ad_new") {
+    return EVENT_CHANGE_AD_NEW_COPY;
+  }
+
+  if (input.event.eventType === "ad_inactive") {
+    return "Checked. We recorded this ad as inactive. There is no stored before-and-after field to show.";
+  }
+
+  return EVENT_CHANGE_NO_FIELD_DIFF_COPY;
+}
+
+export function formatEventChangeWhy(input: {
+  event: WatchEventRecord;
+  intelligence: ReturnType<typeof buildChangeIntelligenceSummary>;
+}): string {
+  return input.event.summary || input.intelligence.recommendedAction;
+}
+
+export function formatEventDeliveryLine(
+  lastAttempt: PublicDeliveryAttemptSummary | null,
+): string {
+  return lastAttempt
+    ? `Last send: ${formatDeliveryAttemptStatusLabel(lastAttempt.status, lastAttempt.channel)} · ${lastAttempt.targetValue}.`
+    : EVENT_DELIVERY_NONE_COPY;
+}
+
+export function formatPlateVerification(input: {
+  event: WatchEventRecord;
+  proofCapture: ProofCaptureRecord | null;
+  intelligence: ReturnType<typeof buildChangeIntelligenceSummary>;
+}): string {
+  if (!input.proofCapture) {
+    return `${formatImportanceBandLabel(input.event.importanceScore)} · ${formatWatchEventStatusLabel(input.event.status).toUpperCase()}`;
+  }
+
+  const confidenceValues = Object.values(input.proofCapture.fieldConfidence ?? {}).filter((value) =>
+    Number.isFinite(value),
+  );
+  if (confidenceValues.length === 0) {
+    return (
+      input.intelligence.proofTrail ||
+      `${formatImportanceBandLabel(input.event.importanceScore)} · ${formatWatchEventStatusLabel(input.event.status).toUpperCase()}`
+    );
+  }
+
+  return `${formatConfidenceBandLabel(input.proofCapture.fieldConfidence)} · VERIFIED`;
+}
+
 export function resolvePriorProofCapture(
   capture: ProofCaptureRecord | null,
   captures: readonly ProofCaptureRecord[],
@@ -118,14 +220,14 @@ export function resolveEventDiffCaptures(input: {
   return {
     before: {
       capturedAt: beforeAt,
-      value: from ?? input.event.title,
-      quote: from ?? null,
+      value: from,
+      quote: from,
       note: input.priorProofCapture ? `capture ${input.priorProofCapture.id.slice(0, 8)}` : null,
     },
     now: {
       capturedAt: nowAt,
-      value: to ?? input.event.title,
-      quote: to ?? null,
+      value: to,
+      quote: to,
       note: input.proofCapture ? `capture ${input.proofCapture.id.slice(0, 8)}` : null,
     },
   };
@@ -266,6 +368,9 @@ export function EventChangesSection(props: {
               priorProofCapture,
               runsById,
             });
+            const hasStoredDiffFields = hasStoredDiffFieldValues(event);
+            const hasBothCaptureTimes =
+              hasCaptureTime(before.capturedAt) && hasCaptureTime(now.capturedAt);
             const intelligence = buildChangeIntelligenceSummary(
               event,
               data.effectiveDeliveryConfig.timezone,
@@ -273,34 +378,58 @@ export function EventChangesSection(props: {
             const lastAttempt = lastAttemptByEventId.get(event.id) ?? null;
             const caughtAt = now.capturedAt ?? event.confirmedAt ?? event.createdAt;
             const isHighlighted = data.highlightedEventId === event.id;
+            const why = formatEventChangeWhy({ event, intelligence });
+            const delivery = formatEventDeliveryLine(lastAttempt);
+            const verification = formatPlateVerification({ event, proofCapture, intelligence });
+            const actions = (
+              <SecondaryAction to={watchlistDetailTabHref(props.watchlistId, "evidence")}>
+                Open evidence
+              </SecondaryAction>
+            );
+            const caughtLabel = caughtAt ? formatCaughtStamp(caughtAt) : "CHANGE RECORDED";
+            const degradeStamp = caughtAt ? <LocalTime iso={caughtAt} /> : "capture time not recorded";
 
-            const plate = (
+            const plate = canRenderEventDiffPlate({ event, before, now }) ? (
               <DiffPlate
-                actions={
-                  <SecondaryAction to={watchlistDetailTabHref(props.watchlistId, "evidence")}>
-                    Open evidence
-                  </SecondaryAction>
-                }
+                actions={actions}
                 before={before}
-                caughtLabel={caughtAt ? formatCaughtStamp(caughtAt) : "CHANGE RECORDED"}
+                caughtLabel={caughtLabel}
                 className={isHighlighted ? "is-highlighted" : undefined}
-                degradeStamp={
-                  caughtAt ? <LocalTime iso={caughtAt} /> : "capture time not recorded"
-                }
+                degradeStamp={degradeStamp}
+                delivery={delivery}
                 field={diffFieldLabel(event)}
                 headline={event.title}
                 now={now}
-                verification={
-                  proofCapture
-                    ? `${formatConfidenceBandLabel(proofCapture.fieldConfidence)} · VERIFIED`
-                    : `${formatImportanceBandLabel(event.importanceScore)} · ${formatWatchEventStatusLabel(event.status).toUpperCase()}`
-                }
-                why={
-                  lastAttempt
-                    ? `${event.summary || intelligence.recommendedAction} Last send: ${formatDeliveryAttemptStatusLabel(lastAttempt.status, lastAttempt.channel)} · ${lastAttempt.targetValue}.`
-                    : event.summary || intelligence.recommendedAction
-                }
+                verification={verification}
+                why={why}
               />
+            ) : (
+              <article
+                className={
+                  isHighlighted ? "f9-ed-change-record is-highlighted" : "f9-ed-change-record"
+                }
+              >
+                <header className="f9-ed-plate-header f9-ed-micro">
+                  <span>
+                    {caughtLabel} · {diffFieldLabel(event)}
+                  </span>
+                  <span className="f9-ed-plate-header-end">{verification}</span>
+                </header>
+                <div className="f9-ed-diff-body">
+                  <h3 className="f9-ed-diff-headline">{event.title}</h3>
+                  <p className="f9-ed-diff-why">{why}</p>
+                  <p className="f9-ed-diff-delivery">{delivery}</p>
+                  <QuietLine
+                    copy={resolveEventChangeQuietCopy({
+                      event,
+                      hasStoredDiffFields,
+                      hasBothCaptureTimes,
+                    })}
+                    stamp={degradeStamp}
+                  />
+                  <div className="f9-ed-action-row">{actions}</div>
+                </div>
+              </article>
             );
 
             return isHighlighted ? (
