@@ -288,6 +288,26 @@ Console-noise only, first-party wired (`app/lib/siterep-widget`, `root.tsx`).
 Fix the key or remove the widget — open question 1 from the gap table. One
 small session either way; not part of the Evidence Desk program.
 
+
+### BL-022 — Instant-alert evidence honesty (email)
+From the challenged email audit (artifacts: 0509-audit-artifacts/email-audit/,
+CHALLENGE-VERDICT.md). Surviving S1s, one builder class: instant confirmed +
+instant batched alerts render Before/Now claims with NO capture timestamps
+("when was this true?" unanswerable at the moment a customer may act on
+pricing); scan-trouble mail claims "Retries are already running automatically"
+without retry proof. Fix: capture times on every emailed diff row (or honest
+degrade per brief §6.5/§8), and outage copy that states only what the system
+can prove. **Customer moment:** the highest-urgency mail the product sends;
+acting on an alert same-day. Acceptance: re-rendered templates + screenshots,
+unit tests on builders, no unproved claims.
+
+### BL-023 — Monthly recap CTA points at evidence, not billing
+Surviving S2: the paid monthly recap's only button goes to /app/billing.
+Rank-1 becomes "Review this month's evidence" (digests/watchlists surface);
+billing drops to secondary. **Customer moment:** the "was this worth it?"
+renewal skim. XS scope per CHALLENGE-VERDICT.md; acceptance evidence:
+monthly-recap-active/quiet renders + screenshots.
+
 ## P2 — engineering health
 
 ### BL-010 — Split app/lib/data.server.ts by domain
