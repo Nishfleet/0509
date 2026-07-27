@@ -5,9 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   CAPTURE_STRIP_GAP_LEGEND,
-  CAPTURE_STRIP_LEGEND,
   CAPTURE_STRIP_LEGEND_BASE,
-  CAPTURE_STRIP_WAITING_LEGEND,
   CaptureStrip,
   buildCaptureWindow,
   trailingQuietRun,
@@ -28,14 +26,14 @@ describe("buildCaptureWindow", () => {
   it("expands a sparse list into a full right-aligned window", () => {
     const window = buildCaptureWindow(
       [
-        { date: "2026-07-27", state: "waiting" },
+        { date: "2026-07-27", state: "captured" },
         { date: "2026-07-26", state: "quiet" },
       ],
       { windowDays: 5 },
     );
 
     expect(window).toHaveLength(5);
-    expect(window.at(-1)).toEqual({ date: "2026-07-27", state: "waiting" });
+    expect(window.at(-1)).toEqual({ date: "2026-07-27", state: "captured" });
     expect(window.at(-2)).toEqual({ date: "2026-07-26", state: "quiet" });
   });
 
@@ -124,7 +122,7 @@ describe("CaptureStrip", () => {
     const markup = renderToStaticMarkup(
       <CaptureStrip
         days={[
-          { date: "2026-07-27", state: "waiting" },
+          { date: "2026-07-27", state: "captured" },
           { date: "2026-07-25", state: "quiet" },
         ]}
         windowDays={4}
@@ -146,19 +144,13 @@ describe("CaptureStrip", () => {
     expect(markup).toContain('data-capture-state="captured"');
   });
 
-  /** BL-006: a legend must not promise a state the window cannot show. */
-  it("prints the green clause only when a waiting day is actually in the window", () => {
-    const withWaiting = renderToStaticMarkup(
-      <CaptureStrip days={[{ date: "2026-07-27", state: "waiting" }]} windowDays={1} />,
+  /** BL-008: the waiting state had no producer — the legend must not promise it. */
+  it("never prints a waiting clause because no producer supplies that state", () => {
+    const markup = renderToStaticMarkup(
+      <CaptureStrip days={[{ date: "2026-07-27", state: "captured" }]} windowDays={1} />,
     );
-    expect(withWaiting).toContain(CAPTURE_STRIP_WAITING_LEGEND);
-    expect(withWaiting).toContain(CAPTURE_STRIP_LEGEND);
-
-    const withoutWaiting = renderToStaticMarkup(
-      <CaptureStrip days={quietDays(3, "2026-07-25")} windowDays={3} />,
-    );
-    expect(withoutWaiting).toContain(CAPTURE_STRIP_LEGEND_BASE);
-    expect(withoutWaiting).not.toContain(CAPTURE_STRIP_WAITING_LEGEND);
+    expect(markup).not.toContain("waiting on you");
+    expect(markup).toContain(CAPTURE_STRIP_LEGEND_BASE);
   });
 
   /**
@@ -233,11 +225,9 @@ describe("capture bar silhouette (brief §6.2, §8.1)", () => {
   it("keeps height monotonic: tall means a change, short means no change", () => {
     const quiet = barHeight("quiet");
     const captured = barHeight("captured");
-    const waiting = barHeight("waiting");
     const unchecked = barHeight("unchecked");
 
     expect(captured).toBeGreaterThan(quiet);
-    expect(waiting).toBe(captured);
     // The load-bearing assertion: an outage must never wear the silhouette
     // of a caught change. A day we did not check reads as "no change plus no
     // data", so it stays short and says the rest with a dashed edge.
@@ -256,5 +246,9 @@ describe("capture bar silhouette (brief §6.2, §8.1)", () => {
     const quietBlock = css.slice(quietStart, css.indexOf("}", quietStart));
     expect(quietBlock).toContain("background: var(--ed-bar-quiet);");
     expect(quietBlock).not.toContain("dashed");
+  });
+
+  it("does not ship a waiting bar style without a producer for that state", () => {
+    expect(css).not.toContain(".f9-ed-capture-bar.is-waiting");
   });
 });

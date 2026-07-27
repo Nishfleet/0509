@@ -17,7 +17,7 @@
  * was nothing to check yet — so they render as a void, carry no state word,
  * and are excluded from the gap legend and the quiet run (BL-006).
  */
-export type CaptureDayState = "quiet" | "captured" | "waiting" | "unchecked" | "prewatch";
+export type CaptureDayState = "quiet" | "captured" | "unchecked" | "prewatch";
 
 export interface CaptureDay {
   /** ISO calendar date, `YYYY-MM-DD`. */
@@ -33,18 +33,12 @@ export const CAPTURE_QUIET_RUN_THRESHOLD = 7;
 export const CAPTURE_STRIP_LEGEND_BASE =
   "Short bar = checked, nothing changed. Tall bar = a change we captured.";
 
-/** Only printed when the window actually contains a waiting day (BL-006). */
-export const CAPTURE_STRIP_WAITING_LEGEND = "Green = waiting on you.";
-
-export const CAPTURE_STRIP_LEGEND = `${CAPTURE_STRIP_LEGEND_BASE} ${CAPTURE_STRIP_WAITING_LEGEND}`;
-
 export const CAPTURE_STRIP_GAP_LEGEND = "A dashed slot means we did not check that day.";
 
 /** Composes the legend from what the window actually contains — a legend must
  *  never promise a state this strip cannot show. */
 export function captureStripLegend(window: readonly CaptureDay[]): string {
   const clauses = [CAPTURE_STRIP_LEGEND_BASE];
-  if (window.some((day) => day.state === "waiting")) clauses.push(CAPTURE_STRIP_WAITING_LEGEND);
   if (window.some((day) => day.state === "unchecked")) clauses.push(CAPTURE_STRIP_GAP_LEGEND);
   return clauses.join(" ");
 }
@@ -52,7 +46,6 @@ export function captureStripLegend(window: readonly CaptureDay[]): string {
 const STATE_WORDS: Record<CaptureDayState, string> = {
   quiet: "checked, nothing changed",
   captured: "a change we captured",
-  waiting: "a change waiting on you",
   unchecked: "we did not check that day",
   prewatch: "",
 };

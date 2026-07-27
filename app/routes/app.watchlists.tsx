@@ -389,6 +389,7 @@ export default function WatchlistsRoute() {
           trackingPresentation={trackingPresentation}
           watchlist={selectedWatchlist}
           windowDays={captureWindow.windowDays}
+          checksExpanded={searchParams.get("checks") === "all"}
         />
       ) : null}
       </section>

@@ -200,7 +200,7 @@ async function expectReportAtViewport(
   ).toBeVisible();
   await expect(
     page
-      .getByRole("heading", { name: "Okara launched a new workflow offer" })
+      .getByRole("heading", { name: "Landing page offer changed" })
       .first(),
   ).toBeVisible();
   await expect(
@@ -636,7 +636,7 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
       // what we caught before anything else.
       await expect(
         anonymousPage.getByRole("heading", {
-          name: "Okara launched a new workflow offer",
+          name: "Landing page offer changed",
           level: 1,
         }),
       ).toBeVisible();
