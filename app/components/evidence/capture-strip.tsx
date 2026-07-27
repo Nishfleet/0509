@@ -80,14 +80,33 @@ export function buildCaptureWindow(
   return window;
 }
 
-/** Length of the trailing run of days with nothing captured. */
+/**
+ * Length of the trailing run of days we checked and found nothing.
+ *
+ * BL-006 decision (BL-005 left this open as known defect 4): an unchecked day
+ * at the LEADING edge is skipped, an unchecked day INSIDE the run terminates
+ * it. The two positions mean different things:
+ *
+ * - the newest slot is unchecked for most of every day, simply because that
+ *   day's scan has not run yet. That is "not yet", not a gap, and letting it
+ *   terminate the run made the finding blink out and back every morning;
+ * - an unchecked day between quiet days is a real hole in the evidence. We
+ *   cannot say nothing changed on a day we did not look, so the run stops
+ *   there and the sentence only ever counts days we actually checked
+ *   (brief §8.1 — never estimate, never interpolate).
+ */
 export function trailingQuietRun(window: readonly CaptureDay[]): number {
   let run = 0;
   for (let index = window.length - 1; index >= 0; index -= 1) {
     const state = window[index].state;
     if (state === "captured" || state === "waiting") break;
-    if (state === "quiet") run += 1;
-    else break;
+    if (state === "quiet") {
+      run += 1;
+      continue;
+    }
+    // unchecked
+    if (run === 0) continue;
+    break;
   }
   return run;
 }

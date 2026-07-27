@@ -64,6 +64,31 @@ describe("trailingQuietRun", () => {
     const window = buildCaptureWindow(quietDays(3, "2026-07-25"), { windowDays: 8 });
     expect(trailingQuietRun(window)).toBe(3);
   });
+
+  /**
+   * BL-006 decision (BL-005 known defect 4). Position decides meaning: the
+   * newest slot is unchecked for most of every day simply because that day's
+   * scan has not run yet, while a hole between two checked days is missing
+   * evidence we must not paper over.
+   */
+  it("skips a leading unchecked day — today before its scan is 'not yet', not a gap", () => {
+    const window = buildCaptureWindow(quietDays(5, "2026-07-22"), {
+      endDate: "2026-07-27",
+      windowDays: 8,
+    });
+
+    expect(window.at(-1)).toEqual({ date: "2026-07-27", state: "unchecked" });
+    expect(trailingQuietRun(window)).toBe(5);
+  });
+
+  it("still stops at an unchecked day inside the run", () => {
+    const window = buildCaptureWindow(
+      [...quietDays(2, "2026-07-26"), ...quietDays(2, "2026-07-22")],
+      { endDate: "2026-07-27", windowDays: 8 },
+    );
+
+    expect(trailingQuietRun(window)).toBe(2);
+  });
 });
 
 describe("CaptureStrip", () => {
