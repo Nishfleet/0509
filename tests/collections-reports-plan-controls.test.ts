@@ -18,7 +18,11 @@ function createContext() {
   return { cloudflare: { env: {} } };
 }
 
-function installRouterMocks(input: { loaderData: unknown; actionData?: unknown }) {
+function installRouterMocks(input: {
+  loaderData: unknown;
+  actionData?: unknown;
+  params?: Record<string, string>;
+}) {
   vi.doMock("react-router", async () => {
     const actual = await vi.importActual<typeof import("react-router")>("react-router");
     const React = await import("react");
@@ -31,6 +35,7 @@ function installRouterMocks(input: { loaderData: unknown; actionData?: unknown }
       useActionData: vi.fn().mockReturnValue(input.actionData),
       useLoaderData: vi.fn().mockReturnValue(input.loaderData),
       useNavigation: vi.fn().mockReturnValue({ state: "idle", formData: null, location: null }),
+      useParams: vi.fn().mockReturnValue(input.params ?? {}),
       useSearchParams: vi.fn().mockReturnValue([new URLSearchParams(), vi.fn()]),
     };
   });
@@ -57,7 +62,13 @@ async function renderCollections(
   return renderToStaticMarkup(createElement(CollectionsRoute));
 }
 
-async function renderReportsLocked(plan: "free" | "scout" | "starter") {
+async function renderReportsLocked(
+  plan: "free" | "scout" | "starter",
+  params: Record<string, string> = {},
+) {
+  // Each render installs its own params mock, so the route module has to be
+  // re-imported rather than served from the registry.
+  vi.resetModules();
   installRouterMocks({
     loaderData: {
       accessDenied: true,
@@ -66,6 +77,7 @@ async function renderReportsLocked(plan: "free" | "scout" | "starter") {
       preparedBy: null,
       report: null,
     },
+    params,
   });
   const { default: ReportsRoute } = await import("~/routes/app.reports");
   return renderToStaticMarkup(createElement(ReportsRoute));
@@ -230,6 +242,39 @@ describe("reports plan state", () => {
     expect(markup).toContain("Upgrade to Agency");
     expect(markup).not.toContain("Access denied");
     expect(markup).not.toContain("is-error");
+  });
+
+  it("renders the gate as a designed specimen panel, not a bare upgrade wall", async () => {
+    const markup = await renderReportsLocked("starter");
+
+    // Brief §6.8: ink header stating the real state, an honest paragraph, a
+    // dimmed SAMPLE in a labelled slot, one Rank-1 out.
+    expect(markup).toContain("f9-ed-specimen f9-locked-feature");
+    expect(markup).toContain("Reports · Agency plan required");
+    expect(markup).toContain("f9-ed-specimen-slot");
+    expect(markup).toContain("What an Agency report looks like");
+    expect(markup).toContain("Sample · not your workspace");
+    expect(markup.match(/f9-ed-cta--rank1/g) ?? []).toHaveLength(1);
+    expect(markup).not.toContain("f9-primary-button");
+  });
+
+  it("keeps the report kind the URL already revealed, and nothing else, across the gate", async () => {
+    const competitor = await renderReportsLocked("starter", {
+      id: "watchlist:watch-1",
+    });
+    expect(competitor).toContain("Competitor report");
+    expect(competitor).not.toContain("Collection report");
+    // The report itself never crosses the gate.
+    expect(competitor).not.toContain("watch-1");
+
+    const collection = await renderReportsLocked("starter", {
+      id: "collection:collection-1",
+    });
+    expect(collection).toContain("Collection report");
+
+    const index = await renderReportsLocked("starter");
+    expect(index).not.toContain("Competitor report");
+    expect(index).not.toContain("Collection report");
   });
 
   it("returns a useful loader state instead of throwing for non-Agency plans", async () => {

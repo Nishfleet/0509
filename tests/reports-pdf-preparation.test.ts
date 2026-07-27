@@ -40,7 +40,12 @@ async function importRoute() {
 		DashboardRouteError: component("div"),
 		DashboardRouteLoading: component("div"),
 	}));
-	vi.doMock("~/components/report-view", () => ({ ReportView: component("article") }));
+	// The client action card lives in the report's contents rail (brief §6.10),
+	// so the stub has to render the `railActions` slot for the PDF form to exist.
+	vi.doMock("~/components/report-view", () => ({
+		ReportView: ({ railActions, brandingNote }: Props) =>
+			createElement("article", null, railActions as ReactNode, brandingNote as ReactNode),
+	}));
 	vi.doMock("~/components/action-feedback", () => ({ ActionFeedback: component("div") }));
 	vi.doMock("~/components/copy-button", () => ({ CopyButton: component("button") }));
 	return await import("~/routes/app.reports");

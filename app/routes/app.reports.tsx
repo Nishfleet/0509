@@ -4,6 +4,7 @@ import {
   redirect,
   useActionData,
   useLoaderData,
+  useParams,
 } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useEffect, useState } from "react";
@@ -15,6 +16,7 @@ import {
 } from "~/components/dashboard-route-loading";
 import { ReportView } from "~/components/report-view";
 import { LockedFeature } from "~/components/locked-feature";
+import { TertiaryAction } from "~/components/evidence";
 import { ActionFeedback } from "~/components/action-feedback";
 import { CopyButton } from "~/components/copy-button";
 import { SubmitButton } from "~/components/submit-button";
@@ -470,9 +472,49 @@ function isValidSnapshotGeneratedAt(value: unknown) {
   );
 }
 
+/**
+ * The gated deep link (brief §6.8, WP-B1). The report itself never crosses the
+ * plan gate — the loader returns `report: null` — so the only context we can
+ * honestly stamp is what the URL already told us: which kind of report was
+ * asked for. The dimmed slot holds a SAMPLE report, never a redacted preview
+ * of the workspace's own evidence.
+ */
+function gatedReportContext(reportId: string | undefined) {
+  const parsed = reportId ? parseReportId(reportId) : null;
+  if (!parsed) return undefined;
+  return parsed.resourceType === "watchlist" ? "Competitor report" : "Collection report";
+}
+
+function GatedReportSpecimen() {
+  return (
+    <div className="f9-ed-report-specimen">
+      <p className="f9-ed-micro">Sample · not your workspace</p>
+      <p className="f9-ed-report-specimen-headline">Okara cut its team price by a third</p>
+      <div className="f9-ed-report-specimen-numbers">
+        <span>
+          <strong>7</strong>
+          Changes captured
+        </span>
+        <span>
+          <strong>3</strong>
+          Offer pages moved
+        </span>
+        <span>
+          <strong>26 d</strong>
+          History behind it
+        </span>
+      </div>
+      <p className="f9-ed-micro">Plate 01 — offer page · verified evidence</p>
+    </div>
+  );
+}
+
 export default function ReportsRoute() {
   const data = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
+  const params = useParams();
   const [pdfPreparing, setPdfPreparing] = useState(false);
+  const [reviewed, setReviewed] = useState(false);
   useEffect(() => {
     if (!pdfPreparing) return;
     const timeout = setTimeout(() => setPdfPreparing(false), 75_000);
@@ -484,10 +526,13 @@ export default function ReportsRoute() {
       <DashboardPage>
         <section className="f9-app-stack">
           <LockedFeature
+            context={gatedReportContext(params.id)}
             eyebrow="Reports"
-            title="Client-ready reports"
-            reason="Open client-ready reports and share the evidence with your team"
             planNeeded="Agency plan"
+            reason="Open client-ready reports and share the evidence with your team"
+            specimen={<GatedReportSpecimen />}
+            specimenLabel="What an Agency report looks like"
+            title="Client-ready reports"
             upgradeTo="/app/billing?source=reports#plans"
           />
         </section>
@@ -503,7 +548,6 @@ export default function ReportsRoute() {
     reviewFingerprint,
     reviewNonce,
   } = data;
-  const actionData = useActionData<typeof action>();
   const shareUrl =
     actionData &&
     "shareUrl" in actionData &&
@@ -562,53 +606,73 @@ export default function ReportsRoute() {
           ) : null}
         </ActionFeedback>
 
-        <article className="f9-app-panel f9-report-page">
-          <div className="f9-panel-toolbar f9-report-toolbar">
-            <div>
-              <p className="f9-app-kicker">Evidence report</p>
-              <p className="f9-panel-toolbar-heading">
+        <ReportView
+          brandingNote={
+            <p className="f9-ed-report-footnote">
+              {preparedBy
+                ? `This report carries your agency name, ${preparedBy}, on every page you send.`
+                : "Set an agency name in Account to put your own brand on the report you send."}
+            </p>
+          }
+          preparedBy={preparedBy}
+          railActions={
+            <div className="f9-ed-report-actions">
+              <p className="f9-ed-micro">
                 {reportReadiness.ok
                   ? "Approved evidence report"
                   : "Evidence report · review required"}
               </p>
-            </div>
 
-            <div className="f9-action-row">
-              <Link className="f9-secondary-button" to={backHref}>
-                {backLabel}
-              </Link>
-              <Form method="post">
-                <input name="intent" type="hidden" value="share-report" />
+              {reportReadiness.ok ? null : (
+                <p className="f9-ed-report-footnote">{reportReadiness.reason}</p>
+              )}
+
+              {/* One reviewed-state control for the whole page. It is a real
+                  field of the share form (so the browser still enforces it
+                  without JS) and the PDF form mirrors its state, which is what
+                  retires the two duplicate floating checkboxes. */}
+              <label className="f9-ed-review-check" htmlFor="report-reviewed">
                 <input
-                  name="reviewFingerprint"
-                  type="hidden"
-                  value={reviewFingerprint}
+                  checked={reviewed}
+                  disabled={!reportReadiness.ok}
+                  form="report-share-form"
+                  id="report-reviewed"
+                  name="reviewed"
+                  onChange={(event) => setReviewed(event.currentTarget.checked)}
+                  required
+                  type="checkbox"
+                  value="true"
                 />
+                <span>I reviewed this evidence.</span>
+              </label>
+              {reportReadiness.ok && !reviewed ? (
+                <p className="f9-ed-report-footnote">
+                  Tick the box before you send this on. Nothing leaves the workspace until you
+                  have read the evidence yourself.
+                </p>
+              ) : null}
+
+              <Form id="report-share-form" method="post">
+                <input name="intent" type="hidden" value="share-report" />
+                <input name="reviewFingerprint" type="hidden" value={reviewFingerprint} />
                 <input name="reviewNonce" type="hidden" value={reviewNonce} />
-                <label className="f9-muted-copy">
-                  <input
-                    name="reviewed"
-                    type="checkbox"
-                    value="true"
-                    required
-                    disabled={!reportReadiness.ok}
-                  />{" "}
-                  I reviewed this evidence.
-                </label>
                 <SubmitButton
-                  className="f9-secondary-button"
+                  className="f9-ed-cta f9-ed-cta--rank1"
                   disabled={!reportReadiness.ok}
                   intent="share-report"
                   pendingLabel="Creating…"
                 >
-                  Share snapshot
+                  Send to client
                 </SubmitButton>
               </Form>
+
               {pdfAvailable ? (
                 // reloadDocument: a browser-native POST follows the 303 into
                 // the attachment download without routing PDF bytes through
                 // the SPA navigation.
                 <Form
+                  aria-busy={pdfPreparing}
+                  data-pdf-preparing={pdfPreparing ? "true" : "false"}
                   method="post"
                   onSubmit={(event) => {
                     if (pdfPreparing) {
@@ -618,28 +682,13 @@ export default function ReportsRoute() {
                     setPdfPreparing(true);
                   }}
                   reloadDocument
-                  aria-busy={pdfPreparing}
-                  data-pdf-preparing={pdfPreparing ? "true" : "false"}
                 >
                   <input name="intent" type="hidden" value="download-pdf" />
-                  <input
-                    name="reviewFingerprint"
-                    type="hidden"
-                    value={reviewFingerprint}
-                  />
+                  <input name="reviewFingerprint" type="hidden" value={reviewFingerprint} />
                   <input name="reviewNonce" type="hidden" value={reviewNonce} />
-                  <label className="f9-muted-copy">
-                    <input
-                      name="reviewed"
-                      type="checkbox"
-                      value="true"
-                      required
-                      disabled={!reportReadiness.ok}
-                    />{" "}
-                    I reviewed this evidence.
-                  </label>
+                  <input name="reviewed" type="hidden" value={reviewed ? "true" : "false"} />
                   <SubmitButton
-                    className="f9-primary-button"
+                    className="f9-ed-cta f9-ed-cta--rank2"
                     disabled={!reportReadiness.ok || pdfPreparing}
                     intent="download-pdf"
                     pendingLabel="Preparing…"
@@ -648,35 +697,19 @@ export default function ReportsRoute() {
                   </SubmitButton>
                 </Form>
               ) : (
-                <p className="f9-muted-copy">
-                  PDF export is unavailable for this workspace. Review plan
-                  access before preparing a client copy.
+                <p className="f9-ed-report-footnote">
+                  PDF export is unavailable for this workspace. Review plan access before
+                  preparing a client copy.
                 </p>
               )}
+
+              <TertiaryAction to={backHref}>
+                {reportReadiness.ok ? backLabel : "Review or recapture evidence"}
+              </TertiaryAction>
             </div>
-          </div>
-
-          {preparedBy ? (
-            <p className="f9-share-prepared-by">
-              Prepared by <strong>{preparedBy}</strong>
-            </p>
-          ) : null}
-
-          {!reportReadiness.ok ? (
-            <div
-              aria-live="polite"
-              className="f9-message"
-              role="status"
-            >
-              <p>{reportReadiness.reason}</p>
-              <Link className="f9-secondary-button" to={backHref}>
-                Review or recapture evidence
-              </Link>
-            </div>
-          ) : null}
-
-          <ReportView report={report} />
-        </article>
+          }
+          report={report}
+        />
       </section>
     </DashboardPage>
   );

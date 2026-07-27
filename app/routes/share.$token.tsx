@@ -241,7 +241,11 @@ export default function ShareRoute() {
                 </button>
               )}
             </div>
-            <ReportView report={reportSnapshot} />
+            {/* BL-009: the loader already resolves the sharer's agency name.
+                Passing it is what puts the AGENCY on the cover byline; without
+                it the byline renders no "prepared by" line at all, and never
+                Five to Nine's name on someone else's white-labelled report. */}
+            <ReportView preparedBy={data.preparedBy} report={reportSnapshot} />
           </article>
         ) : digestSnapshot ? (
           <article className="f9-app-panel">

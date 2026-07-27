@@ -1,11 +1,35 @@
-import type { ReportDocument } from "~/lib/report";
-import { EmptyState } from "~/components/empty-state";
-import { Pill } from "~/components/pill";
-import { InsightDepthPanel } from "~/components/insight-depth-panel";
-import { safeInsightDepthSummary } from "~/lib/insight-depth";
-import { formatAdvertiserLabel } from "~/lib/landing-page-display";
+import type { ReactNode } from "react";
+
+import type { ReportDocument, ReportEventSummary, ReportRow } from "~/lib/report";
 import { LocalTime } from "~/components/local-time";
 import { ProofGlossary } from "~/components/proof-glossary";
+import { formatAdvertiserLabel } from "~/lib/landing-page-display";
+import {
+  EvidencePlate,
+  FactRail,
+  QuietLineList,
+  STORED_CAPTURE_NOTE,
+  SpecimenEmptyState,
+  formatPlateNumber,
+  type FactRow,
+  type QuietLineItem,
+} from "~/components/evidence";
+
+/**
+ * The agency report as a deliverable — BL-009.
+ *
+ * Build brief: docs/design/EVIDENCE-DESK-BRIEF.md §6.10 (cover + three-number
+ * headline strip + contents rail + "Our read" callout), §6.9 (numbered
+ * evidence plates, referenced by number in the prose — R3 + R4), §4.4 (full
+ * volume type), §8.4 ("how this was checked"). This is the artefact an agency
+ * hands to a client, so it runs at FULL volume (DESIGN.md "One system, two
+ * volumes") while the rest of the workspace stays at 0.7.
+ *
+ * It replaces 4,400px of stacked `MICRO-LABEL: value` rows (anti-reference A1)
+ * with one document: an ink cover whose headline is the finding, exactly three
+ * numbers, five numbered sections in one reading column, and the evidence as
+ * numbered plates.
+ */
 
 function legacyReportLabelText(value: string) {
   return value
@@ -43,442 +67,602 @@ function presentReportValue(value: string | null | undefined): string | null {
   return LEGACY_PLACEHOLDER_VALUES.has(trimmed.toLowerCase()) ? null : trimmed;
 }
 
-export function ReportView({ report }: { report: ReportDocument }) {
-  const reportSnapshot = report as ReportDocument & { insightDepth?: unknown };
-  const insightDepth = reportSnapshot.insightDepth
-    ? safeInsightDepthSummary(reportSnapshot.insightDepth)
-    : null;
+/** Brief §8.4 — every report ends with this sentence, verbatim. */
+export const REPORT_METHOD_SENTENCE =
+  "Where a number was not published by the source, this report says so rather than estimating it.";
+
+export const REPORT_SECTIONS = [
+  { id: "report-01", number: "01", title: "What we found" },
+  { id: "report-02", number: "02", title: "The evidence" },
+  { id: "report-03", number: "03", title: "What we recommend" },
+  { id: "report-04", number: "04", title: "Every capture" },
+  { id: "report-05", number: "05", title: "How this was checked" },
+] as const;
+
+/**
+ * A 26ch note under each headline number (brief §6.10). Anything we cannot
+ * describe honestly falls back to how the number was produced, never to a
+ * claim about what it means.
+ */
+const HEADLINE_NUMBER_NOTES: Record<string, string> = {
+  Ads: "Saved ads, each with its capture",
+  Countries: "Countries these ads ran in",
+  Platforms: "Where we saw them running",
+  Events: "Changes we captured and kept",
+  "Linked ads": "Changes with an ad attached",
+  "Event types": "Kinds of change in the window",
+  Excluded: "Left out for want of evidence",
+};
+
+const HEADLINE_NUMBER_FALLBACK_NOTE = "Counted from the captures below";
+
+export interface ReportViewProps {
+  report: ReportDocument;
+  /** Cover byline — the agency that prepared this. */
+  preparedBy?: string | null;
+  /**
+   * The client action card (brief §6.10) — Rank 1 "Send to client", Rank 2
+   * "Download PDF". Rendered at the top of the contents rail so the report's
+   * one primary action is never duplicated inside the document.
+   */
+  railActions?: ReactNode;
+  /** Agency branding note under the rail. */
+  brandingNote?: ReactNode;
+}
+
+export function ReportView({ report, preparedBy, railActions, brandingNote }: ReportViewProps) {
+  const finding = resolveReportFinding(report);
+  const captureWindow = resolveReportWindow(report);
+  const preparedByName = preparedBy?.trim();
+  const headlineNumbers = report.stats.slice(0, 3);
+  const overflowNumbers = report.stats.slice(3);
+  const plateCount = report.rows.length;
 
   return (
-    <div className="report-layout">
-      <section className="report-hero">
-        <div>
-          <p className="f9-app-kicker">Evidence report</p>
-          <h1>{report.title}</h1>
-          <p className="f9-muted-copy">{report.subtitle}</p>
-        </div>
-        <div className="report-meta">
-          <p className="f9-app-kicker">Generated</p>
-          <p>
-            <LocalTime iso={report.generatedAt} />
+    <div className="f9-ed-report" data-ed-volume="full">
+      <div className="f9-ed-report-main">
+        <header className="f9-ed-report-cover">
+          <p className="f9-ed-report-kicker f9-ed-micro">
+            {report.resourceType === "watchlist"
+              ? "Competitor evidence report"
+              : "Collection evidence report"}
+            {captureWindow ? (
+              <>
+                {" · "}
+                <LocalTime iso={captureWindow.start} mode="date" />
+                {captureWindow.start === captureWindow.end ? null : (
+                  <>
+                    {" – "}
+                    <LocalTime iso={captureWindow.end} mode="date" />
+                  </>
+                )}
+              </>
+            ) : null}
           </p>
-        </div>
-      </section>
-
-      <p className="report-summary">{report.summary}</p>
-
-      <ReportDecisionSummary report={report} />
-
-      {report.aiWeeklySummary ? (
-        <section className="f9-proof-packet" aria-label="AI weekly summary">
-          <div>
-            <span className="f9-app-kicker">AI weekly summary</span>
-            <h2>What competitors did this week</h2>
-            <p className="f9-muted-copy">
-              Written by AI from the digest for the week ending{" "}
-              <LocalTime iso={report.aiWeeklySummary.periodEnd} mode="date" />. Check the evidence rows below before sharing.
-            </p>
-          </div>
-          <p>{report.aiWeeklySummary.paragraph}</p>
-        </section>
-      ) : null}
-
-      {report.sourceCoverage ? (
-        <section className="f9-proof-packet" aria-label="Report source coverage">
-          <div>
-            <span className="f9-app-kicker">Evidence and source coverage</span>
-            <h2>Verified evidence filter</h2>
-            <p className="f9-muted-copy">{legacyReportLabelText(report.sourceCoverage.note)}</p>
-          </div>
-          <dl className="proof-trail-list">
-            <div>
-              <dt>Verified evidence</dt>
-              <dd>{report.sourceCoverage.proofMix.verifiedProof}</dd>
-            </div>
-            <div>
-              <dt>Check-spotted</dt>
-              <dd>{report.sourceCoverage.proofMix.scanSpotted}</dd>
-            </div>
-            <div>
-              <dt>Needs review</dt>
-              <dd>{report.sourceCoverage.proofMix.needsReview}</dd>
-            </div>
-            <div>
-              <dt>Excluded</dt>
-              <dd>{report.sourceCoverage.excluded}</dd>
-            </div>
+          <h1 className="f9-ed-report-headline">{finding.headline}</h1>
+          <p className="f9-ed-report-standfirst">{report.summary}</p>
+          <dl className="f9-ed-report-byline">
+            {/* White-label: an agency's report carries the agency's name or no
+                byline at all. Five to Nine never signs a document it did not
+                prepare — the product credit lives in the shared page's
+                powered-by footer, which the plan catalog governs. */}
+            {preparedByName ? (
+              <ReportBylineCell label="Prepared by" value={preparedByName} />
+            ) : null}
+            <ReportBylineCell label="Subject" value={report.title} />
+            <ReportBylineCell
+              label="Evidence"
+              value={
+                plateCount === 0
+                  ? "No plates yet"
+                  : `${plateCount} plate${plateCount === 1 ? "" : "s"}`
+              }
+            />
+            <ReportBylineCell
+              label="Generated"
+              value={<LocalTime iso={report.generatedAt} />}
+            />
           </dl>
+        </header>
+
+        {headlineNumbers.length > 0 ? (
+          <section
+            aria-label="Report headline numbers"
+            className="f9-ed-report-numbers"
+            data-count={headlineNumbers.length}
+          >
+            {headlineNumbers.map((stat) => (
+              <article className="f9-ed-report-number" key={stat.label}>
+                <p className="f9-ed-report-number-key f9-ed-micro">{stat.label}</p>
+                <strong className="f9-ed-report-number-value">{stat.value}</strong>
+                <p className="f9-ed-report-number-note">
+                  {HEADLINE_NUMBER_NOTES[stat.label] ?? HEADLINE_NUMBER_FALLBACK_NOTE}
+                </p>
+              </article>
+            ))}
+          </section>
+        ) : null}
+
+        <section className="f9-ed-report-section" id="report-01">
+          <ReportSectionHeading number="01" title="What we found" />
+          <aside className="f9-ed-report-read">
+            <p className="f9-ed-micro">Our read</p>
+            <p className="f9-ed-report-read-verdict">{finding.verdict}</p>
+          </aside>
+          <p className="f9-ed-report-prose">{describeWhatWeFound(report)}</p>
+          <p className="f9-ed-report-prose">{describePlateReference(plateCount)}</p>
+          {report.aiWeeklySummary ? (
+            <div className="f9-ed-report-aside">
+              <p className="f9-ed-micro">
+                AI weekly summary · week ending{" "}
+                <LocalTime iso={report.aiWeeklySummary.periodEnd} mode="date" />
+              </p>
+              <p className="f9-ed-report-prose">{report.aiWeeklySummary.paragraph}</p>
+              <p className="f9-ed-report-footnote">
+                Written by AI from the stored digest. Every claim it makes is checkable against the
+                plates below.
+              </p>
+            </div>
+          ) : null}
         </section>
-      ) : null}
 
-      <section className="report-stats" aria-label="Report summary">
-        {report.stats.map((stat) => (
-          <article className="report-stat-card" key={stat.label}>
-            <p className="f9-app-kicker">{stat.label}</p>
-            <strong>{stat.value}</strong>
-          </article>
-        ))}
-      </section>
+        <section
+          aria-label="Report evidence plates"
+          className="f9-ed-report-section"
+          id="report-02"
+        >
+          <ReportSectionHeading number="02" title="The evidence" />
+          {plateCount > 0 ? (
+            <div className="f9-ed-report-plates">
+              {report.rows.map((row, index) => (
+                <ReportEvidencePlate key={row.id} number={index + 1} row={row} />
+              ))}
+            </div>
+          ) : (
+            <SpecimenEmptyState
+              copy="Only a change with a stored capture is filed here. The next check that finds something opens plate 01, with the capture time it was taken from."
+              headingLevel={3}
+              headline="No plate is filed yet"
+              stateLabel={`${report.title} · no verified evidence in this window`}
+            />
+          )}
+        </section>
 
-      <ProofGlossary />
+        <section className="f9-ed-report-section" id="report-03">
+          <ReportSectionHeading number="03" title="What we recommend" />
+          <ReportMoves report={report} />
+        </section>
 
-      {insightDepth ? <InsightDepthPanel summary={insightDepth} /> : null}
+        <section className="f9-ed-report-section" id="report-04">
+          <ReportSectionHeading number="04" title="Every capture" />
+          <p className="f9-ed-report-prose">
+            The complete trail behind this report — every capture that made it in, with the time it
+            was taken.
+          </p>
+          {plateCount > 0 ? (
+            <QuietLineList items={buildCaptureTrail(report)} />
+          ) : (
+            <p className="f9-ed-report-prose">
+              No capture has been filed in this window yet.
+            </p>
+          )}
+        </section>
 
-      <section className="report-list" aria-label="Report rows">
-        {report.rows.map((row) => (
-          <ReportRowCard key={row.id} row={row} />
-        ))}
-      </section>
-      {report.rows.length === 0 ? (
-        <EmptyState
-          description="Only changes with saved evidence are included in source-backed reports."
-          title="No verified evidence in this report"
-        />
-      ) : null}
+        <section className="f9-ed-report-section" id="report-05">
+          <ReportSectionHeading number="05" title="How this was checked" />
+          <FactRail rows={buildMethodRows(report, captureWindow, overflowNumbers)} title="Method" />
+          {report.sourceCoverage ? (
+            <p className="f9-ed-report-prose">
+              {legacyReportLabelText(report.sourceCoverage.note)}
+            </p>
+          ) : null}
+          <p className="f9-ed-report-prose">{REPORT_METHOD_SENTENCE}</p>
+          {/* Brief §6.10: the glossary sits at the END of the document, out of
+              the reading flow — it is reference material, not the report. */}
+          <details className="f9-ed-report-glossary">
+            <summary className="f9-ed-micro">Evidence labels</summary>
+            <ProofGlossary />
+          </details>
+        </section>
+      </div>
+
+      <aside aria-label="Report contents and actions" className="f9-ed-report-rail">
+        {railActions ? <div className="f9-ed-report-rail-actions">{railActions}</div> : null}
+        <nav aria-label="Report contents" className="f9-ed-report-contents">
+          <p className="f9-ed-micro">Contents</p>
+          <ol>
+            {REPORT_SECTIONS.map((section) => (
+              <li key={section.id}>
+                <a href={`#${section.id}`}>
+                  <span className="f9-ed-report-contents-number">{section.number}</span>
+                  <span>{section.title}</span>
+                </a>
+              </li>
+            ))}
+          </ol>
+        </nav>
+        {brandingNote ? <div className="f9-ed-report-rail-brand">{brandingNote}</div> : null}
+      </aside>
     </div>
   );
 }
 
-function ReportRowCard({ row }: { row: ReportDocument["rows"][number] }) {
-  const advertiser = presentReportValue(row.advertiser);
-  const previewHeadline = presentReportValue(row.previewHeadline);
-  const languageLabel = presentReportValue(row.languageLabel);
-  const heading = advertiser
-    ? formatAdvertiserLabel(advertiser)
-    : previewHeadline ?? row.event?.title ?? "Saved ad";
-  const subheading = advertiser ? previewHeadline : null;
-
-  const adSummaryFields = [
-    { label: "Offer", value: presentReportValue(row.offer) },
-    { label: "CTA", value: presentReportValue(row.cta) },
-    { label: "Creative text", value: presentReportValue(row.creativeText) },
-    { label: "Translated text", value: presentReportValue(row.translatedText) },
-  ].filter((field): field is { label: string; value: string } => Boolean(field.value));
-  const hasAdSummary = adSummaryFields.length > 0 || row.tags.length > 0 || Boolean(row.note);
-
-  const landingPageUrl = presentReportValue(row.landingPage.url);
-  const landingPageHeadline = presentReportValue(row.landingPage.headline);
-  const captureLabel = presentReportValue(row.landingPage.captureLabel);
-  const landingPageSignals = row.landingPage.signals
-    .map((signal) => ({ label: signal.label, value: presentReportValue(signal.value) }))
-    .filter((signal): signal is { label: string; value: string } => Boolean(signal.value));
-  const hasLandingPage =
-    Boolean(landingPageUrl || landingPageHeadline || captureLabel) ||
-    landingPageSignals.length > 0;
-
+function ReportSectionHeading({ number, title }: { number: string; title: string }) {
   return (
-    <article className="report-card">
-      <div className="report-card-header">
-        <div>
-          <p className="f9-app-kicker">{row.formatLabel}</p>
-          <h2>{heading}</h2>
-          {subheading ? <p className="f9-muted-copy">{subheading}</p> : null}
-        </div>
-        <div className="report-card-meta">
-          {languageLabel ? <Pill>{languageLabel}</Pill> : null}
-          {row.event ? <Pill>{row.event.typeLabel}</Pill> : null}
-        </div>
-      </div>
-
-      {row.previewImageUrl ? (
-        <img
-          alt={`${heading} creative preview`}
-          className="report-preview"
-          referrerPolicy="no-referrer"
-          src={row.previewImageUrl}
-        />
-      ) : null}
-
-      {row.event ? (
-        <section className="report-event">
-          <p className="f9-app-kicker">Competitor change</p>
-          <h3>{row.event.title}</h3>
-          <p className="f9-app-kicker">Signal summary</p>
-          <p>{row.event.summary}</p>
-          <dl className="proof-trail-list">
-            <div>
-              <dt>Source status</dt>
-              <dd>{legacyReportLabelText(row.event.proofStatusLabel)}</dd>
-            </div>
-            <div>
-              <dt>Source type</dt>
-              <dd>{legacyReportLabelText(row.event.sourceTypeLabel)}</dd>
-            </div>
-            <div>
-              <dt>Priority</dt>
-              <dd>
-                {row.event.priorityBand}
-                {row.event.priorityScore === null ? "" : ` · ${row.event.priorityScore}/100`}
-              </dd>
-            </div>
-            <div>
-              <dt>Next move</dt>
-              <dd>{row.event.recommendedAction}</dd>
-            </div>
-            <div>
-              <dt>Source trail</dt>
-              <dd>{legacyReportLabelText(row.event.proofTrail)}</dd>
-            </div>
-            {row.event.sourceUrl && isHttpUrl(row.event.sourceUrl) ? (
-              <div>
-                <dt>Source link</dt>
-                <dd>
-                  <a href={row.event.sourceUrl} rel="noreferrer" target="_blank">
-                    Open source
-                  </a>
-                </dd>
-              </div>
-            ) : null}
-            {row.event.metaAdId ? (
-              <div>
-                <dt>Meta ad ID</dt>
-                <dd>{row.event.metaAdId}</dd>
-              </div>
-            ) : null}
-          </dl>
-          <p className="f9-muted-copy">
-            <LocalTime iso={row.event.createdAt} />
-          </p>
-        </section>
-      ) : null}
-
-      {hasAdSummary || hasLandingPage ? (
-        <div className="report-columns">
-          {hasAdSummary ? (
-            <section className="report-column">
-              <p className="f9-app-kicker">Ad summary</p>
-              {adSummaryFields.length > 0 ? (
-                <dl className="report-field-list">
-                  {adSummaryFields.map((field) => (
-                    <div className="report-field" key={`${row.id}-summary-${field.label}`}>
-                      <dt>{field.label}</dt>
-                      <dd>{field.value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              ) : null}
-
-              {row.tags.length > 0 ? (
-                <div className="report-tag-list">
-                  {row.tags.map((tag) => (
-                    <Pill key={tag}>{tag}</Pill>
-                  ))}
-                </div>
-              ) : null}
-
-              {row.note ? (
-                <div className="report-note">
-                  <p className="f9-app-kicker">Team note</p>
-                  <p>{row.note}</p>
-                </div>
-              ) : null}
-            </section>
-          ) : null}
-
-          {hasLandingPage ? (
-            <section className="report-column">
-              <p className="f9-app-kicker">Landing page</p>
-              <dl className="report-field-list">
-                {landingPageUrl ? (
-                  <div className="report-field">
-                    <dt>URL</dt>
-                    <dd>
-                      {isHttpUrl(landingPageUrl) ? (
-                        <a href={landingPageUrl} rel="noreferrer" target="_blank">
-                          {landingPageUrl}
-                        </a>
-                      ) : (
-                        landingPageUrl
-                      )}
-                    </dd>
-                  </div>
-                ) : null}
-                {landingPageHeadline ? (
-                  <div className="report-field">
-                    <dt>Headline</dt>
-                    <dd>{landingPageHeadline}</dd>
-                  </div>
-                ) : null}
-                {captureLabel ? (
-                  <div className="report-field">
-                    <dt>Capture</dt>
-                    <dd>
-                      {captureLabel}
-                      {row.landingPage.capturedAt ? (
-                        <> · <LocalTime iso={row.landingPage.capturedAt} /></>
-                      ) : null}
-                    </dd>
-                  </div>
-                ) : null}
-              </dl>
-
-              {landingPageSignals.length > 0 ? (
-                <div className="report-signal-grid">
-                  {landingPageSignals.map((signal) => (
-                    <div className="report-signal-card" key={signal.label}>
-                      <p className="f9-app-kicker">{signal.label}</p>
-                      <strong>{signal.value}</strong>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </section>
-          ) : null}
-        </div>
-      ) : null}
-
-      {row.analysisFields.length > 0 ? (
-        <section className="report-analysis">
-          <p className="f9-app-kicker">Evidence fields</p>
-          <dl className="report-field-list">
-            {row.analysisFields.map((field) => (
-              <div className="report-field" key={`${row.id}-${field.label}`}>
-                <dt>{field.label}</dt>
-                <dd>{field.value}</dd>
-                {field.sourceLabel ? (
-                  <p className="report-field-meta">{field.sourceLabel}</p>
-                ) : null}
-              </div>
-            ))}
-          </dl>
-        </section>
-      ) : null}
-    </article>
+    <h2 className="f9-ed-report-section-heading">
+      <span className="f9-ed-report-section-number">{number}</span>
+      <span>{title}</span>
+    </h2>
   );
 }
 
-function ReportDecisionSummary({ report }: { report: ReportDocument }) {
-  const topEvent = report.rows
-    .map((row) => row.event)
-    .filter((event): event is NonNullable<typeof event> => Boolean(event))
-    .sort((a, b) => (b.priorityScore ?? -1) - (a.priorityScore ?? -1))[0] ?? null;
+function ReportBylineCell({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="f9-ed-report-byline-cell">
+      <dt className="f9-ed-micro">{label}</dt>
+      <dd>{value}</dd>
+    </div>
+  );
+}
 
-  if (!topEvent && report.resourceType === "collection") {
-    return <CollectionDecisionSummary report={report} />;
+/**
+ * A plate says each thing exactly once. Without this discipline a watch event
+ * with no linked ad — where the builder defaults `previewHeadline` to the
+ * event title — printed the same sentence as the plate header, its heading,
+ * a "stored capture" line and the capture-trail entry.
+ *
+ * Header = the artefact this plate shows (EvidencePlate's own contract).
+ * Heading = the finding. Capture frame = only what we actually captured.
+ */
+export function resolveReportPlateContent(row: ReportRow) {
+  const advertiser = presentReportValue(row.advertiser);
+  const advertiserLabel = advertiser ? formatAdvertiserLabel(advertiser) : null;
+  const previewHeadline = presentReportValue(row.previewHeadline);
+  const eventTitle = presentReportValue(row.event?.title);
+
+  const artefactKind =
+    presentReportValue(row.event?.typeLabel) ??
+    presentReportValue(row.formatLabel) ??
+    "Ad creative";
+  const title = advertiserLabel ? `${artefactKind} · ${advertiserLabel}` : artefactKind;
+
+  // The advertiser already identifies an eventless saved ad in the header, so
+  // it never also becomes the heading.
+  const headline = eventTitle ?? (advertiserLabel ? null : previewHeadline);
+
+  const captureLines = [
+    previewHeadline === headline || previewHeadline === eventTitle ? null : previewHeadline,
+    presentReportValue(row.offer),
+    presentReportValue(row.cta),
+    presentReportValue(row.creativeText),
+    presentReportValue(row.translatedText),
+    presentReportValue(row.landingPage.headline),
+  ].filter((line): line is string => Boolean(line));
+
+  return {
+    advertiserLabel,
+    artefactKind,
+    title,
+    headline,
+    captureLines,
+    subject: advertiserLabel ?? headline ?? previewHeadline ?? "Saved ad",
+    verification: row.event
+      ? legacyReportLabelText(row.event.proofStatusLabel)
+      : "Saved evidence",
+    capturedAt: row.landingPage.capturedAt ?? row.event?.createdAt ?? null,
+    // A capture note may only claim a capture exists when one does.
+    hasCapture: Boolean(row.previewImageUrl) || captureLines.length > 0,
+  };
+}
+
+function ReportEvidencePlate({ number, row }: { number: number; row: ReportRow }) {
+  const plate = resolveReportPlateContent(row);
+
+  return (
+    <EvidencePlate
+      capture={
+        row.previewImageUrl ? (
+          <img
+            alt={`${plate.subject} — stored creative capture`}
+            className="f9-ed-mock-capture"
+            referrerPolicy="no-referrer"
+            src={row.previewImageUrl}
+          />
+        ) : null
+      }
+      captureLines={plate.captureLines}
+      capturedAt={plate.capturedAt}
+      facts={buildPlateFacts(row)}
+      footnote={buildPlateFootnote(row, plate.hasCapture)}
+      headingLevel={3}
+      headline={plate.headline ?? undefined}
+      number={number}
+      title={plate.title}
+      verification={plate.verification}
+      why={row.event?.summary}
+    />
+  );
+}
+
+/**
+ * Brief §6.6 — edited down to what an agency would quote, and a value we do
+ * not have still renders as a row with an honest inline string. This is the
+ * rule that deletes the six-box "Insight depth" grid (A2) from the report.
+ */
+function buildPlateFacts(row: ReportRow): FactRow[] {
+  const event = row.event;
+  const landingPageUrl = presentReportValue(row.landingPage.url);
+  const rows: FactRow[] = [
+    {
+      key: "What changed",
+      missingLabel: "a saved ad, not a change",
+      value: event?.typeLabel ?? null,
+    },
+    {
+      key: "First seen",
+      missingLabel: "capture time not recorded",
+      value: event ? <LocalTime iso={event.createdAt} /> : null,
+    },
+    {
+      key: "Source status",
+      missingLabel: "saved by hand",
+      value: event ? legacyReportLabelText(event.proofStatusLabel) : null,
+    },
+    {
+      key: "Source",
+      missingLabel: "not published",
+      value: event ? legacyReportLabelText(event.sourceTypeLabel) : null,
+    },
+    {
+      key: "Source link",
+      missingLabel: "none stored",
+      value:
+        event?.sourceUrl && isHttpUrl(event.sourceUrl) ? (
+          <a href={event.sourceUrl} rel="noreferrer" target="_blank">
+            Open the source
+          </a>
+        ) : null,
+    },
+    {
+      key: "Still live at",
+      missingLabel: "we could not read this one",
+      value:
+        landingPageUrl && isHttpUrl(landingPageUrl) ? (
+          <a href={landingPageUrl} rel="noreferrer" target="_blank">
+            Open the page
+          </a>
+        ) : (
+          landingPageUrl
+        ),
+    },
+    {
+      key: "Language",
+      missingLabel: "we could not read this one",
+      value: presentReportValue(row.languageLabel),
+    },
+    {
+      key: "Urgency",
+      missingLabel: "none scored",
+      value: event
+        ? event.priorityScore === null
+          ? event.priorityBand
+          : `${event.priorityBand} · ${event.priorityScore}/100`
+        : null,
+    },
+  ];
+
+  return rows;
+}
+
+function buildPlateFootnote(row: ReportRow, hasCapture: boolean) {
+  const parts: string[] = [];
+  if (row.event?.proofTrail) {
+    parts.push(legacyReportLabelText(row.event.proofTrail));
   }
+  const format = presentReportValue(row.formatLabel);
+  if (format && format !== "unknown") {
+    parts.push(`Format: ${format}`);
+  }
+  if (row.event?.metaAdId) {
+    parts.push(`Meta ad ID ${row.event.metaAdId}`);
+  }
+  const captureLabel = presentReportValue(row.landingPage.captureLabel);
+  if (captureLabel) {
+    parts.push(captureLabel);
+  }
+  if (row.note) {
+    parts.push(`Team note: ${row.note}`);
+  }
+  if (row.tags.length > 0) {
+    parts.push(`Tagged ${row.tags.join(", ")}`);
+  }
+  // Never promise a stored capture on a plate that has none — the frame is
+  // already saying "we could not read this one" (brief §8.1).
+  if (hasCapture) {
+    parts.push(STORED_CAPTURE_NOTE);
+  }
+  return parts.length > 0 ? parts.join(" · ") : undefined;
+}
 
-  if (!topEvent) {
+function ReportMoves({ report }: { report: ReportDocument }) {
+  const moves: Array<{ plate: number; action: string }> = [];
+  const seen = new Set<string>();
+  report.rows.forEach((row, index) => {
+    const action = row.event?.recommendedAction?.trim();
+    if (!action || seen.has(action)) return;
+    seen.add(action);
+    moves.push({ plate: index + 1, action });
+  });
+
+  if (moves.length === 0) {
     return (
-      <section className="f9-proof-packet" aria-label="Report decision summary">
-        <div>
-          <span className="f9-app-kicker">Decision summary</span>
-          <h3>No verified change needs action</h3>
-          <p className="f9-muted-copy">{report.summary}</p>
-        </div>
-        <dl className="proof-trail-list">
-          <div>
-            <dt>What changed</dt>
-            <dd>No verified report row needs action.</dd>
-          </div>
-          <div>
-            <dt>Next action</dt>
-            <dd>Review source coverage or wait for the next source-backed report.</dd>
-          </div>
-        </dl>
-      </section>
+      <p className="f9-ed-report-prose">
+        {report.rows.length > 0
+          ? "Nothing here needs a move today. Read the plates, then send this on."
+          : "Nothing needs action from this window. The next check that finds something changes that."}
+      </p>
     );
   }
 
-  const urgency = topEvent.priorityScore === null
-    ? topEvent.priorityBand
-    : `${topEvent.priorityBand} · ${topEvent.priorityScore}/100`;
-
   return (
-    <section className="f9-proof-packet" aria-label="Report decision summary">
-      <div>
-        <span className="f9-app-kicker">Decision summary</span>
-        <h3>{topEvent.title}</h3>
-        <p className="f9-muted-copy">Review the evidence trail and next action before sharing.</p>
-      </div>
-      <dl className="proof-trail-list">
-        <div>
-          <dt>What changed</dt>
-          <dd>{topEvent.title}</dd>
-        </div>
-        <div>
-          <dt>Evidence summary</dt>
-          <dd>{reportEvidenceSummary(topEvent)}</dd>
-        </div>
-        <div>
-          <dt>Urgency</dt>
-          <dd>{urgency}</dd>
-        </div>
-        <div>
-          <dt>Source status</dt>
-          <dd>{legacyReportLabelText(topEvent.proofStatusLabel)}</dd>
-        </div>
-        <div>
-          <dt>Source</dt>
-          <dd>{legacyReportLabelText(topEvent.sourceTypeLabel)}</dd>
-        </div>
-        <div>
-          <dt>Last seen</dt>
-          <dd><LocalTime iso={topEvent.createdAt} /></dd>
-        </div>
-        <div>
-          <dt>Next action</dt>
-          <dd>{topEvent.recommendedAction}</dd>
-        </div>
-      </dl>
-    </section>
+    <ol className="f9-ed-report-moves">
+      {moves.map((move) => (
+        <li key={`${move.plate}-${move.action}`}>
+          <span className="f9-ed-micro">Plate {formatPlateNumber(move.plate)}</span>
+          <p>{move.action}</p>
+        </li>
+      ))}
+    </ol>
   );
 }
 
-function reportEvidenceSummary(event: NonNullable<ReportDocument["rows"][number]["event"]>) {
-  const status = legacyReportLabelText(event.proofStatusLabel);
-  return status === "Verified evidence"
-    ? "Verified evidence attached. Review before sharing."
-    : `Evidence status: ${status}. Review before sharing.`;
+/**
+ * The trail names the artefact each plate holds, not the finding — the finding
+ * is already the plate's heading, and repeating it here is what made a
+ * one-plate report read like an echo chamber.
+ */
+function buildCaptureTrail(report: ReportDocument): QuietLineItem[] {
+  return report.rows.map((row, index) => {
+    const plate = resolveReportPlateContent(row);
+    return {
+      id: row.id,
+      stamp: plate.capturedAt ? (
+        <LocalTime iso={plate.capturedAt} />
+      ) : (
+        "capture time not recorded"
+      ),
+      copy: `Plate ${formatPlateNumber(index + 1)} — ${plate.title}`,
+    };
+  });
 }
 
-function CollectionDecisionSummary({ report }: { report: ReportDocument }) {
-  const rowCount = report.rows.length;
-  const rowLabel = `${rowCount} saved evidence item${rowCount === 1 ? "" : "s"}`;
-  const hasRows = rowCount > 0;
+function buildMethodRows(
+  report: ReportDocument,
+  window: { start: string; end: string } | null,
+  overflowNumbers: ReportDocument["stats"],
+): FactRow[] {
+  const coverage = report.sourceCoverage;
 
+  // Kept under the 8-row ceiling (brief §6.6) and ordered so the proof mix —
+  // the numbers a client can audit — always survives the slice.
+  return [
+    // The report TYPE is already stamped on the cover kicker, so the rail
+    // spends its first row on the thing the kicker cannot say: what was
+    // watched.
+    { key: "Subject", missingLabel: "not published", value: presentReportValue(report.subtitle) },
+    {
+      key: "Window",
+      missingLabel: "a single capture",
+      value: window ? (
+        <>
+          <LocalTime iso={window.start} mode="date" />
+          {window.start === window.end ? null : (
+            <>
+              {" – "}
+              <LocalTime iso={window.end} mode="date" />
+            </>
+          )}
+        </>
+      ) : null,
+    },
+    ...(coverage
+      ? [
+          { key: "Verified evidence", value: String(coverage.proofMix.verifiedProof) },
+          { key: "Check-spotted", value: String(coverage.proofMix.scanSpotted) },
+          { key: "Needs review", value: String(coverage.proofMix.needsReview) },
+        ]
+      : [{ key: "Evidence included", value: String(report.rows.length) }]),
+    { key: "Generated", value: <LocalTime iso={report.generatedAt} /> },
+    ...overflowNumbers.map((stat) => ({ key: stat.label, value: stat.value })),
+  ];
+}
+
+export function resolveReportFinding(report: ReportDocument): {
+  headline: string;
+  verdict: string;
+} {
+  const topEvent = resolveTopEvent(report);
+
+  if (topEvent) {
+    return {
+      headline: topEvent.title,
+      // Mirrors ReportMoves: a blank recommended action is not a verdict, and
+      // an empty accent block would read as a missing product promise.
+      verdict:
+        topEvent.recommendedAction?.trim() ||
+        "We have not scored a next move on this one. The evidence is below — the call is yours.",
+    };
+  }
+
+  if (report.resourceType === "collection") {
+    return report.rows.length > 0
+      ? {
+          headline: "Saved evidence ready for review",
+          verdict: "This is a curated evidence set, not a live change alert.",
+        }
+      : {
+          headline: "Nothing saved here yet",
+          verdict:
+            "Anything you save from a search or a competitor shows up here with the capture that proves it.",
+        };
+  }
+
+  return {
+    headline: "Nothing changed in this window",
+    verdict: "We checked and nothing moved. That is the finding, not a gap.",
+  };
+}
+
+function resolveTopEvent(report: ReportDocument): ReportEventSummary | null {
   return (
-    <section className="f9-proof-packet" aria-label="Report decision summary">
-      <div>
-        <span className="f9-app-kicker">Decision summary</span>
-        <h3>{hasRows ? "Saved evidence ready for review" : "No saved evidence rows yet"}</h3>
-        <p className="f9-muted-copy">{report.summary}</p>
-      </div>
-      <dl className="proof-trail-list">
-        <div>
-          <dt>What changed</dt>
-          <dd>{hasRows ? `${rowLabel} packaged for review.` : "No saved evidence is in this report."}</dd>
-        </div>
-        <div>
-          <dt>Evidence summary</dt>
-          <dd>
-            {hasRows
-              ? "This is a curated evidence set, not a live change alert."
-              : "The report is ready to fill once evidence is saved."}
-          </dd>
-        </div>
-        <div>
-          <dt>Urgency</dt>
-          <dd>{hasRows ? "Review before sharing" : "No action needed"}</dd>
-        </div>
-        <div>
-          <dt>Source status</dt>
-          <dd>{hasRows ? "Saved evidence collection" : "Evidence unavailable"}</dd>
-        </div>
-        <div>
-          <dt>Source</dt>
-          <dd>{hasRows ? "Saved collection" : "No source rows"}</dd>
-        </div>
-        <div>
-          <dt>Last seen</dt>
-          <dd><LocalTime iso={report.generatedAt} /></dd>
-        </div>
-        <div>
-          <dt>Next action</dt>
-          <dd>{hasRows ? "Review the rows below, then share or export the report." : "Save evidence into this collection."}</dd>
-        </div>
-      </dl>
-    </section>
+    report.rows
+      .map((row) => row.event)
+      .filter((event): event is ReportEventSummary => Boolean(event))
+      .sort((left, right) => (right.priorityScore ?? -1) - (left.priorityScore ?? -1))[0] ?? null
   );
+}
+
+function describeWhatWeFound(report: ReportDocument) {
+  const count = report.rows.length;
+
+  if (report.resourceType === "collection") {
+    return count === 0
+      ? "No saved evidence is in this report."
+      : `${count} saved evidence item${count === 1 ? "" : "s"} packaged for review.`;
+  }
+
+  return count === 0
+    ? "No change cleared the evidence bar in this window."
+    : `${count} change${count === 1 ? "" : "s"} cleared the evidence bar in this window.`;
+}
+
+function describePlateReference(plateCount: number) {
+  if (plateCount === 0) {
+    return "There is no plate to read yet. The next check that clears the evidence bar opens plate 01.";
+  }
+  if (plateCount === 1) {
+    return "The evidence is plate 01 below, stamped with the time the capture was taken.";
+  }
+  return `The evidence is plates 01–${formatPlateNumber(plateCount)} below, each stamped with the time its capture was taken.`;
+}
+
+/**
+ * The window this report covers, taken only from capture timestamps we hold.
+ * Never widened to look thorough (brief §8.1).
+ */
+function resolveReportWindow(report: ReportDocument): { start: string; end: string } | null {
+  const stamps = report.rows
+    .flatMap((row) => [row.event?.createdAt, row.landingPage.capturedAt])
+    .filter((value): value is string => Boolean(value))
+    .map((value) => Date.parse(value))
+    .filter((value) => Number.isFinite(value));
+
+  if (stamps.length === 0) return null;
+
+  return {
+    start: new Date(Math.min(...stamps)).toISOString(),
+    end: new Date(Math.max(...stamps)).toISOString(),
+  };
 }
 
 function isHttpUrl(value: string) {

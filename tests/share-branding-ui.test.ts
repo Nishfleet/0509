@@ -42,6 +42,82 @@ async function renderShare(brandIdentity: {
 	return renderToStaticMarkup(createElement(ShareRoute));
 }
 
+const reportSnapshot = {
+	kind: "report",
+	reportId: "shared-report",
+	resourceType: "watchlist",
+	resourceId: "shared",
+	title: "Okara",
+	subtitle: "advertiser · Okara",
+	summary: "1 verified-evidence watch event with linked ad context where available.",
+	generatedAt: "2026-07-27T06:05:00.000Z",
+	stats: [{ label: "Events", value: "1" }],
+	rows: [
+		{
+			id: "row-1",
+			advertiser: "Okara",
+			previewHeadline: "Team plan now ₹1,199",
+			offer: "₹1,199",
+			cta: "Start free",
+			formatLabel: "Image",
+			languageLabel: "English",
+			previewImageUrl: null,
+			creativeText: null,
+			translatedText: null,
+			landingPage: {
+				url: "https://okara.example/pricing",
+				headline: null,
+				captureLabel: "Checked in browser",
+				capturedAt: "2026-07-27T06:05:00.000Z",
+				signals: [],
+			},
+			analysisFields: [],
+			tags: [],
+			note: null,
+			event: {
+				typeLabel: "Offer",
+				title: "Okara cut its team price",
+				summary: "The anchor price moved down before the weekend.",
+				createdAt: "2026-07-27T06:05:00.000Z",
+				priorityScore: 91,
+				priorityBand: "High priority",
+				recommendedAction: "Today: brief a counter-offer.",
+				proofTrail: "Verified from a page snapshot",
+				proofStatusLabel: "Verified evidence",
+				sourceTypeLabel: "Saved evidence",
+				sourceUrl: "https://okara.example/pricing",
+				metaAdId: null,
+			},
+		},
+	],
+};
+
+async function renderReportShare(brandIdentity: {
+	brandName: string | null;
+	brandWebsite: string | null;
+	brandLogo: string | null;
+} | null) {
+	vi.doMock("react-router", async () => {
+		const actual = await vi.importActual<typeof import("react-router")>("react-router");
+		const React = await import("react");
+		return {
+			...actual,
+			Link: ({ children, to, ...props }: { children?: ReactNode; to?: string } & Record<string, unknown>) =>
+				React.createElement("a", { ...props, href: to }, children),
+			useLoaderData: vi.fn().mockReturnValue({
+				mode: "snapshot",
+				resourceType: "report",
+				payload: reportSnapshot,
+				preparedBy: brandIdentity?.brandName ?? null,
+				brandIdentity,
+			}),
+		};
+	});
+
+	const { default: ShareRoute } = await import("~/routes/share.$token");
+	return renderToStaticMarkup(createElement(ShareRoute));
+}
+
 describe("shared report agency identity", () => {
 	it("visibly leads with the entitled Agency logo, name, and safe website", async () => {
 		const markup = await renderShare({
@@ -79,6 +155,61 @@ describe("shared report agency identity", () => {
 
 		expect(markup).not.toContain("javascript:");
 		expect(markup).toContain('alt="Northwind Growth logo"');
+	});
+
+	/**
+	 * BL-009 regression. The report cover carries a "prepared by" byline. It
+	 * must never sign an agency's white-labelled report with our own name:
+	 * Five to Nine appears on a shared report ONLY in the powered-by footer,
+	 * which the plan catalog governs.
+	 */
+	it("signs the shared report cover with the agency, never with Five to Nine", async () => {
+		const markup = await renderReportShare({
+			brandName: "Northwind Growth",
+			brandWebsite: "https://northwind.example/work",
+			brandLogo: logo,
+		});
+
+		expect(markup).toContain("f9-ed-report-cover");
+		expect(markup).toContain("Prepared by");
+		expect(markup).toContain("Northwind Growth");
+
+		const cover = markup.slice(
+			markup.indexOf("f9-ed-report-cover"),
+			markup.indexOf("f9-ed-report-numbers"),
+		);
+		expect(cover).toContain("Northwind Growth");
+		expect(cover).not.toContain("Five to Nine");
+
+		// Our name appears nowhere in the report document itself; the only
+		// credit is the powered-by footer the plan catalog governs.
+		// (`ProofGlossary` still carries one "Five to Nine" sentence inside the
+		// collapsed §05 glossary — logged on PR #397 as a separate leak owned
+		// by the glossary's own package, not by the report cover.)
+		const document = markup.slice(
+			markup.indexOf("f9-ed-report-cover"),
+			markup.indexOf("f9-ed-report-glossary"),
+		);
+		expect(document).not.toContain("Five to Nine");
+		expect(markup).toContain('class="f9-share-powered-by"');
+		expect(markup).toContain("Powered by");
+	});
+
+	it("renders no byline cell at all when the sharer has no entitled agency name", async () => {
+		const markup = await renderReportShare(null);
+
+		expect(markup).toContain("f9-ed-report-cover");
+		const cover = markup.slice(
+			markup.indexOf("f9-ed-report-cover"),
+			markup.indexOf("f9-ed-report-numbers"),
+		);
+		expect(cover).not.toContain("Prepared by");
+		expect(cover).not.toContain("Five to Nine");
+		// A missing byline is not an orphan hole: the remaining cells still fill
+		// the row (brief §6.10).
+		expect(cover).toContain("Subject");
+		expect(cover).toContain("Evidence");
+		expect(cover).toContain("Generated");
 	});
 
 	it("declares noindex and nofollow in route metadata", async () => {
