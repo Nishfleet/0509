@@ -77,21 +77,84 @@ async function mintShareUrl(page, watchlistId) {
 
 async function captureSurface(page, consoleErrors, file, checks = {}) {
   await page.waitForTimeout(500);
-  const metrics = await page.evaluate(() => ({
-    docHeight: Math.round(document.documentElement.scrollHeight),
-    scrollWidth: Math.round(document.documentElement.scrollWidth),
-    innerWidth: window.innerWidth,
-    cover: Boolean(document.querySelector(".f9-ed-report-cover")),
-    plates: document.querySelectorAll(".f9-ed-evidence-plate").length,
-    toolbarHeading: document.querySelectorAll(".f9-panel-toolbar-heading").length,
-    fiveToNineInDocument: (document.querySelector("[data-report-root]")?.textContent ?? "").includes(
-      "Five to Nine",
-    ),
-    overflowing: [...document.querySelectorAll("body *")]
-      .filter((node) => node.getBoundingClientRect().right > window.innerWidth + 1)
-      .slice(0, 5)
-      .map((node) => `${node.tagName.toLowerCase()}.${node.className}`.slice(0, 90)),
-  }));
+  const metrics = await page.evaluate(() => {
+    const renderedLineCharacterCounts = (node) => {
+      const lineCounts = new Map();
+      const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+      let textNode = walker.nextNode();
+      while (textNode) {
+        for (let index = 0; index < textNode.textContent.length; index += 1) {
+          if (/\s/.test(textNode.textContent[index])) continue;
+          const range = document.createRange();
+          range.setStart(textNode, index);
+          range.setEnd(textNode, index + 1);
+          const rect = range.getBoundingClientRect();
+          const lineTop = Math.round(rect.top * 2) / 2;
+          lineCounts.set(lineTop, (lineCounts.get(lineTop) ?? 0) + 1);
+        }
+        textNode = walker.nextNode();
+      }
+      return [...lineCounts.values()];
+    };
+    const textMetrics = (node) => {
+      const rect = node.getBoundingClientRect();
+      const computed = getComputedStyle(node);
+      const lineHeight = Number.parseFloat(computed.lineHeight);
+      const estimatedLines = Number.isFinite(lineHeight) && lineHeight > 0
+        ? Math.ceil(rect.height / lineHeight)
+        : null;
+      const lineCharacterCounts = renderedLineCharacterCounts(node);
+      return {
+        text: (node.textContent ?? "").trim(),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        lineHeight: Number.isFinite(lineHeight) ? Math.round(lineHeight * 10) / 10 : null,
+        estimatedLines,
+        lineCharacterCounts,
+        maxCharactersOnOneLine: Math.max(0, ...lineCharacterCounts),
+      };
+    };
+    const factRailLabels = [...document.querySelectorAll(".f9-ed-fact-key")]
+      .map(textMetrics)
+      .map((metric) => ({
+        ...metric,
+        // Word wrapping is acceptable ("Still" / "live" / "at"). A letter
+        // stack has many rendered lines but never fits more than two visible
+        // characters on any one line.
+        letterStacked:
+          metric.estimatedLines !== null &&
+          metric.estimatedLines > 2 &&
+          metric.maxCharactersOnOneLine <= 2,
+      }));
+    const headlineNumbers = [...document.querySelectorAll(".f9-ed-report-number-value")]
+      .map(textMetrics)
+      .map((metric) => ({
+        ...metric,
+        readable: metric.estimatedLines !== null && metric.estimatedLines <= 3,
+      }));
+
+    return {
+      docHeight: Math.round(document.documentElement.scrollHeight),
+      scrollWidth: Math.round(document.documentElement.scrollWidth),
+      innerWidth: window.innerWidth,
+      cover: Boolean(document.querySelector(".f9-ed-report-cover")),
+      plates: document.querySelectorAll(".f9-ed-evidence-plate").length,
+      toolbarHeading: document.querySelectorAll(".f9-panel-toolbar-heading").length,
+      fiveToNineInDocument: (document.querySelector("[data-report-root]")?.textContent ?? "").includes(
+        "Five to Nine",
+      ),
+      factRailLabels,
+      letterStackedFactRailLabels: factRailLabels
+        .filter((metric) => metric.letterStacked)
+        .map((metric) => metric.text),
+      headlineNumbers,
+      readableHeadlineNumberCount: headlineNumbers.filter((metric) => metric.readable).length,
+      overflowing: [...document.querySelectorAll("body *")]
+        .filter((node) => node.getBoundingClientRect().right > window.innerWidth + 1)
+        .slice(0, 5)
+        .map((node) => `${node.tagName.toLowerCase()}.${node.className}`.slice(0, 90)),
+    };
+  });
   await page.screenshot({ path: file, fullPage: true });
   return {
     ...metrics,
@@ -199,7 +262,26 @@ console.log(
   results
     .map(
       (r) =>
-        `${r.viewport} ${r.persona}/${r.surface} — height ${r.docHeight}px, overflow ${r.horizontalOverflow}px, cover ${r.cover}, plates ${r.plates}, toolbar headings ${r.toolbarHeading}, console errors ${r.consoleErrors.length}`,
+        `${r.viewport} ${r.persona}/${r.surface} — height ${r.docHeight}px, overflow ${r.horizontalOverflow}px, cover ${r.cover}, plates ${r.plates}, headline numbers ${r.readableHeadlineNumberCount}/${r.headlineNumbers.length} readable, letter-stacked labels ${r.letterStackedFactRailLabels.length}, toolbar headings ${r.toolbarHeading}, console errors ${r.consoleErrors.length}`,
     )
     .join("\n"),
 );
+
+const pdfLayoutFailures = results
+  .filter((result) => result.surface === "pdf-variant")
+  .filter(
+    (result) =>
+      result.headlineNumbers.length !== 3 ||
+      result.readableHeadlineNumberCount !== 3 ||
+      result.letterStackedFactRailLabels.length > 0,
+  );
+if (pdfLayoutFailures.length > 0) {
+  throw new Error(
+    `PDF layout proof failed: ${pdfLayoutFailures
+      .map(
+        (result) =>
+          `${result.viewport}/${result.persona} numbers=${result.readableHeadlineNumberCount}/${result.headlineNumbers.length} stacked=${result.letterStackedFactRailLabels.join(",") || "none"}`,
+      )
+      .join("; ")}`,
+  );
+}

@@ -3003,6 +3003,32 @@ button[aria-busy="true"] {
   max-width: 780px;
 }
 
+/* Mirror the print document layout in the screen-rendered PDF variant.
+   The CDP renderer loads this URL before switching media; keeping the
+   300px contents rail here squeezed the report and letter-stacked facts. */
+.f9-share-pdf .f9-ed-report {
+  display: block;
+  width: 100%;
+  box-shadow: none;
+  border: 0;
+}
+
+.f9-share-pdf .f9-ed-report-rail {
+  display: none !important;
+}
+
+/* The PDF page is narrower than the desktop viewport that hosts it. Stack the
+   plate internally too, so long values cannot squeeze fact labels into
+   letter columns merely because the viewport media query has not fired. */
+.f9-share-pdf .f9-ed-evidence-body {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.f9-share-pdf .f9-ed-evidence-capture {
+  border-right: 0;
+  border-bottom: 2.5px solid var(--ed-rule);
+}
+
 .f9-pdf-masthead {
   display: flex;
   align-items: baseline;
