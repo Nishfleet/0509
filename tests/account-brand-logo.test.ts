@@ -478,6 +478,16 @@ expect(markup).toContain('alt="Northwind Growth logo"');
 expect(markup).toContain("Remove current logo");
 });
 
+it("keeps completed workspaces on live competitor and brand actions", async () => {
+const markup = await renderAccount();
+
+expect(markup).toContain('href="/app/watchlists"');
+expect(markup).toContain("Add competitor");
+expect(markup).toContain('href="#brand-profile"');
+expect(markup).toContain("update your own brand website");
+expect(markup).not.toContain("/app#setup-checklist");
+});
+
 it("announces save success politely and errors as alerts", async () => {
 const success = await renderAccount({
 actionData: {

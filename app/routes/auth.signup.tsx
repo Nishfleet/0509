@@ -25,7 +25,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const env = getEnv(context);
   const session = await getOptionalSession(env, request);
   const url = new URL(request.url);
-  const redirectTo = safeRedirectPath(url.searchParams.get("redirectTo"), "/app/onboard");
+  const redirectTo = safeRedirectPath(url.searchParams.get("redirectTo"), "/app#setup-checklist");
 
   if (session) {
     throw redirect(redirectTo);
@@ -61,7 +61,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const name = String(formData.get("name") ?? "").trim();
-  const redirectTo = safeRedirectPath(String(formData.get("redirectTo") ?? ""), "/app/onboard");
+  const redirectTo = safeRedirectPath(String(formData.get("redirectTo") ?? ""), "/app#setup-checklist");
 
   if (!name) {
     return signupActionError("name_required", { email, name, redirectTo });

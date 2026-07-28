@@ -76,7 +76,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       if (verification?.callbackURL) {
         throw redirect(verification.callbackURL, { headers });
       }
-      throw redirect(mode === "signup" ? "/app/onboard" : "/app", { headers });
+      throw redirect(mode === "signup" ? "/app#setup-checklist" : "/app", { headers });
     }
 
     const ticketId = url.searchParams.get("ticket") || "";

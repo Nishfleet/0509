@@ -507,7 +507,7 @@ describe("Gate-B Playwright release manifest reporter", () => {
     const outputPath = join(directory, "manifest.json");
     const releaseAnnotations = annotations({
       scenario: "first visit → value → signup",
-      finalUrl: "/auth/signup?redirectTo=%2Fapp%2Fonboard%3Fwebsite%3Dnykaa.com",
+      finalUrl: "/auth/signup?redirectTo=%2Fapp%3Fwebsite%3Dnykaa.com%23setup-checklist",
     });
     const releaseTest = fakeTest("journey-1-release", releaseAnnotations);
     releaseTest.parent.project = () => ({
@@ -529,7 +529,7 @@ describe("Gate-B Playwright release manifest reporter", () => {
     expect(readManifest(outputPath).entries[0]).toMatchObject({
       browser: "chromium",
       scenario: "first visit → value → signup",
-      finalUrl: "/auth/signup?redirectTo=%2Fapp%2Fonboard%3Fwebsite%3Dnykaa.com",
+      finalUrl: "/auth/signup?redirectTo=%2Fapp%3Fwebsite%3Dnykaa.com%23setup-checklist",
     });
     rmSync(directory, { recursive: true, force: true });
   });

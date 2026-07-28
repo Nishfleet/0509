@@ -609,7 +609,7 @@ describe("pricing CTA rendering", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Assign the beat →");
+    expect(markup).toContain("Search ads");
     expect(markup).toContain("Competitor website");
     expect(markup).not.toContain("Screenshots and landing-page evidence are attached to the trail.");
   });
@@ -726,7 +726,7 @@ describe("pricing CTA rendering", () => {
     const { default: AppDashboardRoute } = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Assign the beat →");
+    expect(markup).toContain("Search ads");
     expect(markup).not.toContain("Prove delivery");
     expect(markup).not.toContain("Delivery target is saved; send the first proof-backed brief to prove it reaches the team.");
     expect(markup).not.toContain("A successful delivery trail exists.");

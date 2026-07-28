@@ -57,7 +57,7 @@ Auth runtime decision: `docs/auth-runtime.md`
 - `/auth/better/oauth`
 - `/auth/better/magic-link`
 - `/auth/logout`
-- `/app/onboard`
+- `/app` (persistent setup checklist for incomplete workspaces)
 - `/app` workspace dashboard
 - `/app/presence` Presence Desk — proof-backed entity tracking
 - `/app/collections`

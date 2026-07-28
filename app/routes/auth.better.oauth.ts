@@ -26,7 +26,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const redirectTo = safeRedirectPath(
     String(formData.get("redirectTo") ?? ""),
-    mode === "signup" ? "/app/onboard" : "/app",
+    mode === "signup" ? "/app#setup-checklist" : "/app",
   );
 
   if (

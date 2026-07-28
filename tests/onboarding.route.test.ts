@@ -1,9 +1,4 @@
-import { createElement, type ReactNode } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
-type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
 
 function createContext() {
   return {
@@ -16,12 +11,13 @@ function createContext() {
 async function expectRedirect(
   callback: () => Promise<unknown>,
   location: string,
+  status = 302,
 ) {
   try {
     await callback();
   } catch (error) {
     expect(error).toBeInstanceOf(Response);
-    expect((error as Response).status).toBe(302);
+    expect((error as Response).status).toBe(status);
     expect((error as Response).headers.get("Location")).toBe(location);
     return;
   }
@@ -53,6 +49,7 @@ afterEach(() => {
   vi.doUnmock("~/lib/email-verification.server");
   vi.doUnmock("~/lib/env.server");
   vi.doUnmock("~/lib/presence-internal-access.server");
+  vi.doUnmock("~/lib/setup-checklist-action.server");
   vi.doUnmock("~/lib/workspace.server");
   vi.resetModules();
 });
@@ -77,7 +74,7 @@ function authModuleFromSession(session: unknown) {
 }
 
 describe("auth signup loader", () => {
-  it("defaults new signups to the onboarding flow", async () => {
+  it("defaults new signups to the setup card in Overview", async () => {
     vi.doMock("~/lib/auth.server", () => ({
       getOptionalSession: vi.fn().mockResolvedValue(null),
     }));
@@ -90,185 +87,232 @@ describe("auth signup loader", () => {
     } as never);
 
     expect(result).toEqual({
-      redirectTo: "/app/onboard",
+      redirectTo: "/app#setup-checklist",
       prefillEmail: "",
       linkSent: false,
     });
   });
 });
 
-describe("onboarding route", () => {
-  it("redirects unauthenticated users to login", async () => {
+describe("retired onboarding compatibility route", () => {
+  it("permanently redirects setup context to the anchored Overview card", async () => {
     vi.doMock("~/lib/auth.server", () => ({
-      requireWorkspaceSession: vi.fn().mockImplementation(() => {
-        throw new Response(null, {
-          headers: {
-            Location: "/auth/login?redirectTo=%2Fapp%2Fonboard",
-          },
-          status: 302,
-        });
-      }),
-      requireSession: vi.fn().mockImplementation(() => {
-        throw new Response(null, {
-          headers: {
-            Location: "/auth/login?redirectTo=%2Fapp%2Fonboard",
-          },
-          status: 302,
-        });
-      }),
+      requireSession: vi.fn().mockResolvedValue({ user: { id: "user-1" } }),
     }));
-
+    vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => ({})) }));
     const { loader } = await import("~/routes/app.onboard");
 
     await expectRedirect(
-      () =>
-        loader({
-          context: createContext(),
-          request: new Request("http://localhost/app/onboard"),
-        } as never),
-      "/auth/login?redirectTo=%2Fapp%2Fonboard",
+      () => loader({
+        context: createContext(),
+        request: new Request("http://localhost/app/onboard?website=nykaa.com&country=IN"),
+      } as never),
+      "/app?website=nykaa.com&country=IN#setup-checklist",
+      301,
     );
   });
 
-  it("redirects completed users away from onboarding", async () => {
-    vi.doMock("~/lib/auth.server", () => authModuleFromSession({
-        user: {
-          id: "user-1",
-          email: "owner@example.com",
-          name: "Owner",
-          onboardedAt: "2026-04-02 18:30:00",
-        },
-        session: {
-          id: "session-1",
-          userId: "user-1",
-          expiresAt: "2026-04-03T00:00:00.000Z",
-        },
-      }));
-
+  it("keeps direct watchlist handoffs working", async () => {
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue({ user: { id: "user-1" } }),
+    }));
+    vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => ({})) }));
     const { loader } = await import("~/routes/app.onboard");
 
     await expectRedirect(
-      () =>
-        loader({
-          context: createContext(),
-          request: new Request("http://localhost/app/onboard"),
-        } as never),
-      "/app",
+      () => loader({
+        context: createContext(),
+        request: new Request("http://localhost/app/onboard?watchlist=watch-1"),
+      } as never),
+      "/app/watchlists?watchlist=watch-1",
+      301,
     );
   });
 
-  it("lets completed users resume setup from the explicit account link", async () => {
-    vi.doMock("~/lib/auth.server", () => authModuleFromSession({
-        user: {
-          id: "user-1",
-          email: "owner@example.com",
-          name: "Owner",
-          onboardedAt: "2026-04-02 18:30:00",
-        },
-        session: {
-          id: "session-1",
-          userId: "user-1",
-          expiresAt: "2026-04-03T00:00:00.000Z",
-        },
-      }));
-    vi.doMock("~/lib/data.server", () => ({
-      getWorkspaceBranding: vi.fn().mockResolvedValue({
-        brandName: null,
-        brandWebsite: "https://mybrand.example",
-      }),
-    }));
-    vi.doMock("~/lib/plan.server", () => ({
-      checkPlanLimit: vi.fn().mockResolvedValue({
-        allowed: true,
-        current: 1,
-        limit: 3,
-      }),
-      getUserPlan: vi.fn().mockResolvedValue("starter"),
-    }));
-
-    const { loader } = await import("~/routes/app.onboard");
-    const result = await loader({
-      context: createContext(),
-      request: new Request("http://localhost/app/onboard?resume=1"),
-    } as never);
-
-    expect(result).toMatchObject({
-      brandWebsite: "https://mybrand.example",
-      plan: "starter",
-      resumeSetup: true,
+  it("forwards a legacy POST to the setup action handler", async () => {
+    const handleSetupChecklistAction = vi.fn().mockResolvedValue({
+      ok: false,
+      intent: "create-watchlist",
+      message: "Keep the entered website visible.",
     });
-  });
+    vi.doMock("~/lib/setup-checklist-action.server", () => ({
+      handleSetupChecklistAction,
+    }));
+    const { action } = await import("~/routes/app.onboard");
+    const args = {
+      context: createContext(),
+      request: new Request("http://localhost/app/onboard", {
+        method: "POST",
+        body: new URLSearchParams({
+          intent: "create-watchlist",
+          website: "competitor.example",
+        }),
+      }),
+    } as never;
 
-  it("redirects unfinished users from the workspace to onboarding", async () => {
-    vi.doMock("~/lib/auth.server", () => authModuleFromSession({
-        user: {
-          id: "user-1",
-          email: "owner@example.com",
-          name: "Owner",
-          onboardedAt: null,
-        },
-        session: {
-          id: "session-1",
-          userId: "user-1",
-          expiresAt: "2026-04-03T00:00:00.000Z",
-        },
-      }));
+    const response = await action(args);
+    const result = await (response as Response).json();
 
-    const { loader } = await import("~/routes/app-layout");
-
-    await expectRedirect(
-      () =>
-        loader({
-          context: createContext(),
-          request: new Request("http://localhost/app/watchlists"),
-        } as never),
-      "/app/onboard",
+    expect(result).toMatchObject({ intent: "create-watchlist" });
+    expect((response as Response).headers.get("Set-Cookie")).toContain(
+      "f9_onboard_compat=1",
     );
+    expect(handleSetupChecklistAction).toHaveBeenCalledWith(args);
   });
 
-  it("lets unfinished users reach billing before setup is complete", async () => {
-    const unfinishedSession = {
-      user: {
-        id: "user-1",
-        email: "owner@example.com",
-        name: "Owner",
-        onboardedAt: null,
-      },
-      session: {
-        id: "session-1",
-        userId: "user-1",
-        expiresAt: "2026-04-03T00:00:00.000Z",
-      },
+  it("serves one compatibility loader pass after a legacy validation result", async () => {
+    const session = {
+      user: { id: "user-1", onboardedAt: "2026-07-01T00:00:00.000Z" },
+      session: { id: "session-1", userId: "user-1" },
     };
-    vi.doMock("~/lib/auth.server", () => authModuleFromSession(unfinishedSession));
-    vi.doMock("~/lib/context.server", () => ({
-      getEnv: vi.fn(() => ({})),
-    }));
-    vi.doMock("~/lib/env.server", () => ({
-      isOpsUserAllowed: vi.fn(() => false),
-    }));
-    vi.doMock("~/lib/presence-internal-access.server", () => ({
-      presenceNavVisible: vi.fn().mockResolvedValue(false),
-    }));
-    vi.doMock("~/lib/workspace.server", () => ({
-      resolveWorkspace: vi.fn().mockResolvedValue({
+    vi.doMock("~/lib/auth.server", () => ({
+      requireSession: vi.fn().mockResolvedValue(session),
+      requireWorkspaceSession: vi.fn().mockResolvedValue({
+        session,
         workspaceUserId: "user-1",
         isMember: false,
         ownerName: null,
       }),
     }));
+    vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => ({})) }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWorkspaceBranding: vi.fn().mockResolvedValue({
+        brandWebsite: "https://brand.example",
+      }),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("free"),
+      checkPlanLimit: vi.fn().mockResolvedValue({
+        allowed: true,
+        current: 0,
+        limit: 1,
+      }),
+    }));
+    const { loader } = await import("~/routes/app.onboard");
 
-    const { loader } = await import("~/routes/app-layout");
-    const result = await loader({
+    const response = await loader({
       context: createContext(),
-      request: new Request("http://localhost/app/billing?plan=starter&cycle=monthly#plans"),
+      request: new Request(
+        "http://localhost/app/onboard?website=competitor.example&country=IN",
+        {
+          headers: { cookie: "f9_onboard_compat=1" },
+        },
+      ),
+    } as never);
+    const data = await (response as Response).json();
+
+    expect(data).toMatchObject({
+      plan: "free",
+      prefillWebsite: "competitor.example",
+      prefillCountry: "IN",
+      resumeSetup: true,
+      watchlistLimit: { allowed: true, current: 0, limit: 1 },
+    });
+    expect((response as Response).headers.get("Set-Cookie")).toContain(
+      "Max-Age=0",
+    );
+  });
+});
+
+describe("setup checklist actions", () => {
+  it("processes a member's shared-workspace setup action instead of redirecting it away", async () => {
+    const completeUserOnboarding = vi.fn();
+    vi.doMock("~/lib/auth.server", () => ({
+      requireWorkspaceSession: vi.fn().mockResolvedValue({
+        session: {
+          user: {
+            id: "member-1",
+            email: "member@example.com",
+            name: "Member",
+            onboardedAt: null,
+          },
+          session: {
+            id: "session-member-1",
+            userId: "member-1",
+            expiresAt: "2026-04-03T00:00:00.000Z",
+          },
+        },
+        workspaceUserId: "owner-1",
+        isMember: true,
+        ownerName: "Owner",
+      }),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      completeUserOnboarding,
+      upsertWorkspaceBranding: vi.fn(),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      checkPlanLimit: vi.fn(),
+    }));
+
+    const { handleSetupChecklistAction: action } = await import("~/lib/setup-checklist-action.server");
+    const formData = new FormData();
+    formData.set("intent", "create-watchlist");
+    formData.set("website", "incomplete");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app", {
+        method: "POST",
+        body: formData,
+      }),
     } as never);
 
-    expect(result).toMatchObject({
-      session: unfinishedSession,
-      showOpsNav: false,
-      showPresenceNav: false,
+    expect(result).toEqual({
+      ok: false,
+      intent: "create-watchlist",
+      message: "That website looks incomplete. Add the full domain, like brand.com.",
     });
+    expect(completeUserOnboarding).not.toHaveBeenCalled();
+  });
+
+  it("never lets a member overwrite the workspace owner's brand website", async () => {
+    const completeUserOnboarding = vi.fn().mockResolvedValue(undefined);
+    const upsertWorkspaceBranding = vi.fn();
+    vi.doMock("~/lib/auth.server", () => ({
+      requireWorkspaceSession: vi.fn().mockResolvedValue({
+        session: {
+          user: {
+            id: "member-1",
+            email: "member@example.com",
+            name: "Member",
+            onboardedAt: null,
+          },
+          session: {
+            id: "session-member-1",
+            userId: "member-1",
+            expiresAt: "2026-04-03T00:00:00.000Z",
+          },
+        },
+        workspaceUserId: "owner-1",
+        isMember: true,
+        ownerName: "Owner",
+      }),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      completeUserOnboarding,
+      upsertWorkspaceBranding,
+    }));
+    vi.doMock("~/lib/plan.server", () => ({ checkPlanLimit: vi.fn() }));
+
+    const { handleSetupChecklistAction: action } = await import("~/lib/setup-checklist-action.server");
+    const formData = new FormData();
+    formData.set("intent", "finish");
+    formData.set("brandWebsite", "https://attacker.example");
+
+    await expectRedirect(
+      () => action({
+        context: createContext(),
+        request: new Request("http://localhost/app", {
+          method: "POST",
+          body: formData,
+        }),
+      } as never),
+      "/app",
+    );
+
+    expect(upsertWorkspaceBranding).not.toHaveBeenCalled();
+    expect(completeUserOnboarding).toHaveBeenCalledWith({}, "member-1");
   });
 
   it("creates a first watchlist and marks the user onboarded", async () => {
@@ -314,7 +358,7 @@ describe("onboarding route", () => {
       }),
     }));
 
-    const { action } = await import("~/routes/app.onboard");
+    const { handleSetupChecklistAction: action } = await import("~/lib/setup-checklist-action.server");
     const formData = new FormData();
     formData.set("intent", "create-watchlist");
     formData.set("website", "https://boat-lifestyle.com");
@@ -381,7 +425,7 @@ describe("onboarding route", () => {
       }),
     }));
 
-    const { action } = await import("~/routes/app.onboard");
+    const { handleSetupChecklistAction: action } = await import("~/lib/setup-checklist-action.server");
     const formData = new FormData();
     formData.set("intent", "preview-market-desk-import");
     formData.set("competitors", "boat-lifestyle.com\nnoise.com\nwakefit.co");
@@ -447,7 +491,7 @@ describe("onboarding route", () => {
       }),
     }));
 
-    const { action } = await import("~/routes/app.onboard");
+    const { handleSetupChecklistAction: action } = await import("~/lib/setup-checklist-action.server");
     const formData = new FormData();
     formData.set("intent", "preview-market-desk-import");
     formData.set("competitors", "");
@@ -513,7 +557,7 @@ describe("onboarding route", () => {
     }));
 
     const { COMPETITOR_IMPORT_MAX_BYTES } = await import("~/lib/competitor-import");
-    const { action } = await import("~/routes/app.onboard");
+    const { handleSetupChecklistAction: action } = await import("~/lib/setup-checklist-action.server");
     const formData = new FormData();
     formData.set("intent", "preview-market-desk-import");
     formData.set("competitors", "boat-lifestyle.com");
@@ -572,7 +616,7 @@ describe("onboarding route", () => {
     }));
 
     const { COMPETITOR_IMPORT_MAX_BYTES } = await import("~/lib/competitor-import");
-    const { action } = await import("~/routes/app.onboard");
+    const { handleSetupChecklistAction: action } = await import("~/lib/setup-checklist-action.server");
 
     const result = await action({
       context: createContext(),
@@ -685,7 +729,7 @@ describe("onboarding route", () => {
       getUserPlan: vi.fn().mockResolvedValue("agency"),
     }));
 
-    const { action } = await import("~/routes/app.onboard");
+    const { handleSetupChecklistAction: action } = await import("~/lib/setup-checklist-action.server");
     const formData = new FormData();
     formData.set("intent", "create-market-desk-import");
     formData.set(
@@ -824,7 +868,7 @@ describe("onboarding route", () => {
         getUserPlan: vi.fn().mockResolvedValue(plan),
       }));
 
-      const { action } = await import("~/routes/app.onboard");
+      const { handleSetupChecklistAction: action } = await import("~/lib/setup-checklist-action.server");
       const formData = new FormData();
       formData.set("intent", "create-market-desk-import");
       formData.set("competitors", "name,website,client\nBoat Lifestyle,boat-lifestyle.com,Client A");
@@ -884,7 +928,7 @@ describe("onboarding route", () => {
       }),
     }));
 
-    const { action } = await import("~/routes/app.onboard");
+    const { handleSetupChecklistAction: action } = await import("~/lib/setup-checklist-action.server");
     const formData = new FormData();
     formData.set("intent", "create-market-desk-import");
     formData.set("competitors", "boat-lifestyle.com\nnoise.com");
@@ -971,7 +1015,7 @@ describe("onboarding route", () => {
       }),
     }));
 
-    const { action } = await import("~/routes/app.onboard");
+    const { handleSetupChecklistAction: action } = await import("~/lib/setup-checklist-action.server");
     const formData = new FormData();
     formData.set("intent", "create-market-desk-import");
     formData.set("competitors", "boat-lifestyle.com");
@@ -1036,7 +1080,7 @@ describe("onboarding route", () => {
       checkPlanLimit,
     }));
 
-    const { action } = await import("~/routes/app.onboard");
+    const { handleSetupChecklistAction: action } = await import("~/lib/setup-checklist-action.server");
     const formData = new FormData();
     formData.set("intent", "create-watchlist");
     formData.set("website", "samplebrand");
@@ -1051,6 +1095,7 @@ describe("onboarding route", () => {
 
     expect(result).toEqual({
       ok: false,
+      intent: "create-watchlist",
       message: "That website looks incomplete. Add the full domain, like brand.com.",
     });
     expect(checkPlanLimit).not.toHaveBeenCalled();
@@ -1087,7 +1132,7 @@ describe("onboarding route", () => {
       checkPlanLimit,
     }));
 
-    const { action } = await import("~/routes/app.onboard");
+    const { handleSetupChecklistAction: action } = await import("~/lib/setup-checklist-action.server");
     const formData = new FormData();
     formData.set("intent", "create-watchlist");
     formData.set("website", "https://boat-lifestyle.com");
@@ -1103,6 +1148,7 @@ describe("onboarding route", () => {
 
     expect(result).toEqual({
       ok: false,
+      intent: "create-watchlist",
       message: "That website looks incomplete. Add the full domain, like brand.com.",
     });
     expect(checkPlanLimit).not.toHaveBeenCalled();
@@ -1146,7 +1192,7 @@ describe("onboarding route", () => {
       }),
     }));
 
-    const { action } = await import("~/routes/app.onboard");
+    const { handleSetupChecklistAction: action } = await import("~/lib/setup-checklist-action.server");
     const formData = new FormData();
     formData.set("intent", "create-watchlist");
     formData.set("query", "boAt");
@@ -1162,6 +1208,7 @@ describe("onboarding route", () => {
     expect(result).toEqual({
       current: 3,
       error: "plan_limit_exceeded",
+      intent: "create-watchlist",
       limit: 3,
       message: "You've reached your competitor monitoring limit.",
       ok: false,
@@ -1198,7 +1245,7 @@ describe("onboarding route", () => {
       upsertWorkspaceBranding,
     }));
 
-    const { action } = await import("~/routes/app.onboard");
+    const { handleSetupChecklistAction: action } = await import("~/lib/setup-checklist-action.server");
     const formData = new FormData();
     formData.set("intent", "finish");
     formData.set("brandWebsite", "mybrand.example");
@@ -1221,162 +1268,4 @@ describe("onboarding route", () => {
     expect(completeUserOnboarding).toHaveBeenCalledWith({}, "user-1");
   });
 
-  it("renders a pricing CTA when onboarding watchlists are gated", async () => {
-    vi.doMock("react-router", async () => {
-      const actual = await vi.importActual<typeof import("react-router")>("react-router");
-      const React = await import("react");
-
-      return {
-        ...actual,
-        Form: ({ children, ...props }: MockFormProps) =>
-          React.createElement("form", props, children),
-        Link: ({ children, to, ...props }: MockLinkProps) =>
-          React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
-        useActionData: vi.fn().mockReturnValue({
-          ok: false,
-          error: "plan_limit_exceeded",
-          message:
-            "Free includes 1 watchlist. Upgrade for more competitors, scheduled scans, and digests.",
-          upgradePath: "/app/billing?source=onboarding#plans",
-        }),
-        useLoaderData: vi.fn().mockReturnValue({
-          session: {
-            user: {
-              id: "user-1",
-              email: "owner@example.com",
-              name: "Owner",
-              onboardedAt: null,
-            },
-          },
-          plan: "free",
-          watchlistLimit: {
-            allowed: false,
-            current: 1,
-            limit: 1,
-          },
-          brandWebsite: null,
-          visitorCountry: "India",
-        }),
-        useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
-      };
-    });
-
-    const { default: AppOnboardRoute } = await import("~/routes/app.onboard");
-    const markup = renderToStaticMarkup(createElement(AppOnboardRoute));
-
-    expect(markup).toContain("Your free watchlist slot is in use");
-    expect(markup).toContain("Free includes 1 watchlist.");
-    expect(markup).toContain("View plans");
-    expect(markup).toContain('href="/app/billing?source=onboarding#plans"');
-    expect(markup).not.toContain("Create watchlist for");
-  });
-
-  it.each([
-    ["nykaa.com", "/search?website=nykaa.com"],
-    ["", "/search"],
-  ] as const)("preserves a valid onboarding website in Search first (%s)", async (prefillWebsite, expectedHref) => {
-    vi.doMock("react-router", async () => {
-      const actual = await vi.importActual<typeof import("react-router")>("react-router");
-      const React = await import("react");
-
-      return {
-        ...actual,
-        Form: ({ children, ...props }: MockFormProps) =>
-          React.createElement("form", props, children),
-        Link: ({ children, to, ...props }: MockLinkProps) =>
-          React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
-        useActionData: vi.fn().mockReturnValue(null),
-        useLoaderData: vi.fn().mockReturnValue({
-          session: {
-            user: {
-              id: "user-1",
-              email: "owner@example.com",
-              name: "Owner",
-              onboardedAt: null,
-            },
-          },
-          plan: "free",
-          watchlistLimit: {
-            allowed: true,
-            current: 0,
-            limit: 1,
-          },
-          brandWebsite: null,
-          prefillWebsite,
-          resumeSetup: false,
-          visitorCountry: "India",
-        }),
-        useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
-      };
-    });
-
-    const { default: AppOnboardRoute } = await import("~/routes/app.onboard");
-    const markup = renderToStaticMarkup(createElement(AppOnboardRoute));
-
-    expect(markup).toContain(`href="${expectedHref.replaceAll("&", "&amp;")}"`);
-    expect(markup).toContain("Search first instead");
-  });
-
-  it("pluralizes the bulk-import create button correctly", async () => {
-    const renderWithImportRows = async (rawText: string) => {
-      vi.resetModules();
-      const { buildCompetitorImportPreview } = await import("~/lib/competitor-import");
-      const preview = buildCompetitorImportPreview({
-        rawText,
-        country: "US",
-        planLimit: 10,
-        currentCount: 0,
-      });
-
-      vi.doMock("react-router", async () => {
-        const actual = await vi.importActual<typeof import("react-router")>("react-router");
-        const React = await import("react");
-
-        return {
-          ...actual,
-          Form: ({ children, ...props }: MockFormProps) =>
-            React.createElement("form", props, children),
-          Link: ({ children, to, ...props }: MockLinkProps) =>
-            React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
-          useActionData: vi.fn().mockReturnValue({
-            ok: true,
-            preview,
-            rawText,
-            brandWebsiteInput: "",
-          }),
-          useLoaderData: vi.fn().mockReturnValue({
-            session: {
-              user: {
-                id: "user-1",
-                email: "owner@example.com",
-                name: "Owner",
-                onboardedAt: null,
-              },
-            },
-            plan: "starter",
-            watchlistLimit: {
-              allowed: true,
-              current: 0,
-              limit: 10,
-            },
-            brandWebsite: null,
-            visitorCountry: "United States",
-          }),
-          useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
-        };
-      });
-
-      const { default: AppOnboardRoute } = await import("~/routes/app.onboard");
-      return renderToStaticMarkup(createElement(AppOnboardRoute));
-    };
-
-    const singleMarkup = await renderWithImportRows("nykaa.com");
-    expect(singleMarkup).toContain("Create watchlist");
-    expect(singleMarkup).not.toContain("1 watchlists");
-
-    const multiMarkup = await renderWithImportRows(
-      "nykaa.com\nboat-lifestyle.com\nmamaearth.in",
-    );
-    expect(multiMarkup).toContain("Create 3 watchlists");
-  });
 });

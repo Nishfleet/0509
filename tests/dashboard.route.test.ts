@@ -112,7 +112,7 @@ function mockDashboardLoaderDependencies(
     watchlists?: unknown[];
     metaStatus?: Record<string, unknown>;
     recentWorkspaceEvents?: unknown[];
-    failedSection?: "collections" | "recentProofCaptures";
+    failedSection?: "collections" | "recentProofCaptures" | "readiness";
     workspace?: {
       workspaceUserId?: string;
       isMember?: boolean;
@@ -135,17 +135,20 @@ function mockDashboardLoaderDependencies(
     isMember: options.workspace?.isMember ?? false,
     ownerName: options.workspace?.ownerName ?? null,
   };
-  const getWorkspaceReadiness = vi.fn().mockResolvedValue({
-    generatedAt: "2026-06-20T00:00:00.000Z",
-    readyCount: 1,
-    totalCount: 1,
-    items: [],
-    nextActions: [],
-    nudges: [],
-    counts: {
-      agentMemoryEntries: 1,
-    },
-  });
+  const getWorkspaceReadiness =
+    options.failedSection === "readiness"
+      ? vi.fn().mockRejectedValue(new Error("private readiness detail"))
+      : vi.fn().mockResolvedValue({
+          generatedAt: "2026-06-20T00:00:00.000Z",
+          readyCount: 1,
+          totalCount: 1,
+          items: [],
+          nextActions: [],
+          nudges: [],
+          counts: {
+            agentMemoryEntries: 1,
+          },
+        });
 
   vi.doMock("~/lib/auth.server", () => ({
     requireWorkspaceSession: vi.fn(async () => ({
@@ -247,11 +250,52 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.doUnmock("~/lib/setup-checklist-action.server");
   vi.useRealTimers();
   vi.resetModules();
 });
 
 describe("dashboard route agent memory", () => {
+  it("delegates multipart setup imports before cloning or parsing the request", async () => {
+    const handleSetupChecklistAction = vi.fn().mockResolvedValue({
+      ok: false,
+      intent: "preview-market-desk-import",
+      message: "Import is too large.",
+    });
+    vi.doMock("~/lib/context.server", () => ({ getEnv: vi.fn(() => ({})) }));
+    vi.doMock("~/lib/with-workspace.server", () => ({
+      withWorkspace: vi.fn().mockResolvedValue({
+        ok: true,
+        workspaceUserId: "owner-1",
+      }),
+      planLimitExceededActionResult: vi.fn(),
+    }));
+    vi.doMock("~/lib/setup-checklist-action.server", () => ({
+      handleSetupChecklistAction,
+      oversizedMultipartImportMessage: vi.fn(() => "Import is too large."),
+    }));
+    const clone = vi.fn(() => {
+      throw new Error("multipart body must not be cloned before the size guard");
+    });
+    const request = {
+      headers: new Headers({
+        "content-type": "multipart/form-data; boundary=oversized",
+      }),
+      clone,
+    } as unknown as Request;
+
+    const { action } = await import("~/routes/app.dashboard");
+    const result = await action({
+      context: createContext(),
+      request,
+      params: {},
+    } as never);
+
+    expect(result).toMatchObject({ intent: "preview-market-desk-import" });
+    expect(handleSetupChecklistAction).toHaveBeenCalledOnce();
+    expect(clone).not.toHaveBeenCalled();
+  });
+
   it("provides a complete fail-closed readiness fallback shape", async () => {
     const { unavailableWorkspaceReadiness } = await import("~/routes/app.dashboard");
 
@@ -298,14 +342,9 @@ describe("dashboard route agent memory", () => {
       await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    // WP-C2 Beat 1: empty free workspace leads with the Wire hero + spine.
-    expect(markup).toContain("THE 5·9 WIRE · NOTHING FILED YET");
-    expect(markup).toContain("Name one competitor.");
-    // First-run hero has one dominant add path: the search form.
-    expect(markup).toContain("Assign the beat →");
-    expect(markup).toContain(
-      "Free includes one watchlist — activation scan, weekly check, weekly email brief.",
-    );
+    expect(markup).toContain("Build your brief");
+    expect(markup).toContain("Search ads");
+    expect(markup).not.toContain("f9-first-run-spine");
     expect(markup).not.toContain("Account context saved");
     expect(markup).not.toContain("[redacted]: [redacted]");
     expect(markup).not.toContain("hunter2");
@@ -387,6 +426,33 @@ describe("dashboard route agent memory", () => {
       },
     ]);
     expect(JSON.stringify(loaderData)).not.toContain("private database detail");
+  });
+
+  it("fails closed with a retryable setup specimen when readiness cannot load", async () => {
+    mockDashboardLoaderDependencies({ failedSection: "readiness" });
+
+    const { loader } = await import("~/routes/app.dashboard");
+    const loaderData = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app"),
+    } as never);
+
+    expect(loaderData.sectionWarnings).toContainEqual({
+      section: "readiness",
+      message: "We couldn't load this section.",
+    });
+
+    vi.resetModules();
+    await mockRouter(loaderData);
+    const { default: AppDashboardRoute } =
+      await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).toContain('id="setup-checklist"');
+    expect(markup).toContain("Setup status is temporarily unavailable");
+    expect(markup).toContain("Retry setup status");
+    expect(markup).toContain("/app?retrySetup=1#setup-checklist");
+    expect(markup).not.toContain("Search ads");
   });
 
   it.each([
@@ -534,27 +600,14 @@ describe("dashboard route agent memory", () => {
       await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    // WP-C2 Beat 2: competitor added, first scan in flight — spine node 2 now.
-    expect(markup).toContain("THE 5·9 WIRE · BEAT ASSIGNED");
-    expect(markup).toContain("on the wire.");
-    expect(markup).toContain("We’re covering Boat Lifestyle.");
+    // A first scan uses the ordinary brief card; there is no second first-run
+    // pattern beside the persistent setup checklist.
+    expect(markup).toContain("Activation scan is queued");
     expect(markup).toContain("Boat Lifestyle");
-    // Honesty: the scan is queued, not confirmed running — no "running now"
-    // claim, and the mirror feed shows Queued (not Reading now).
-    expect(markup).toContain("The first scan is underway");
     expect(markup).not.toContain("The first scan is running now");
-    // Spine advanced: node 1 done, node 2 now.
-    expect(markup).toContain('data-status="done"');
-    expect(markup).toContain('data-fill="gradient"');
-    // Overview mirror shows the honesty-gated ON-THE-WIRE feed.
-    expect(markup).toContain("ON THE WIRE");
-    // P5 capacity truth: free is a one-watchlist plan and is already at its
-    // limit, so the queue-more card is the upgrade affordance, not an add form
-    // that would be rejected.
-    expect(markup).toContain("Watch more competitors");
-    expect(markup).toContain("View plans");
+    expect(markup).not.toContain("ON THE WIRE");
+    expect(markup).toContain("Open watchlists");
     expect(markup).not.toContain("Add another");
-    expect(markup).not.toContain("Activation scan is queued");
   });
 
   it("surfaces safe counter-move follow-ups from agent action audits", async () => {

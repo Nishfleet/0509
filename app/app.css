@@ -2263,82 +2263,6 @@ button[aria-busy="true"] {
   }
 }
 
-.f9-onboard-page {
-  --f9-search-ink: #061629;
-  --f9-search-muted: #40546a;
-  --f9-search-soft: #64788d;
-  --f9-search-line: rgba(6, 22, 41, 0.1);
-  position: relative;
-  overflow: hidden;
-  min-height: 100vh;
-  background: #071523;
-  color: #fff;
-  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
-
-.f9-onboard-layout {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  place-items: center;
-  min-height: 100vh;
-  padding: 54px 0;
-}
-
-.f9-onboard-card {
-  display: grid;
-  gap: 20px;
-  width: min(100%, 920px);
-  padding: clamp(24px, 4vw, 44px);
-  border: 1px solid rgba(255, 255, 255, 0.72);
-  border-radius: 32px;
-  background: rgba(255, 255, 255, 0.96);
-  color: var(--f9-search-ink);
-  box-shadow: 0 38px 110px rgba(0, 0, 0, 0.28);
-}
-
-.f9-onboard-card h1 {
-  max-width: 12ch;
-  margin: 0;
-  font-size: clamp(2.4rem, 5vw, 4.6rem);
-  font-weight: 700;
-  line-height: 1.02;
-  letter-spacing: 0;
-}
-
-.f9-onboard-step {
-  display: grid;
-  gap: 14px;
-  padding: 20px;
-  border: 1px solid var(--f9-search-line);
-  border-radius: 24px;
-  background: #f6f9fc;
-}
-
-.f9-onboard-step h2 {
-  margin: 0;
-  font-size: 1.4rem;
-  line-height: 1.08;
-}
-
-.f9-onboard-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-  align-items: center;
-}
-
-.f9-onboard-actions .f9-text-link {
-  display: inline-flex;
-  align-items: center;
-  min-width: 44px;
-  min-height: 44px;
-}
-
-.f9-onboard-import-form textarea {
-  min-height: 160px;
-  resize: vertical;
-}
 
 .f9-import-preview {
   display: grid;
@@ -6808,6 +6732,7 @@ one signal-green accent.
 
   .f9-search-page .f9-search-command .f9-primary-button {
     justify-content: center;
+    min-height: 45px;
     width: 100%;
   }
 
@@ -6837,83 +6762,6 @@ one signal-green accent.
   padding: 24px;
 }
 
-/* WP-B3: setup checklist demoted to a compact one-card progress strip.
-   Collapsed by default; the <details> disclosure expands the item list
-   with no JS and stays keyboard-accessible. */
-.f9-setup-strip {
-  padding: 14px 18px;
-}
-
-.f9-setup-strip > .f9-work-list {
-  margin-top: 14px;
-}
-
-.f9-setup-strip-summary {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  cursor: pointer;
-  list-style: none;
-}
-
-.f9-setup-strip-summary::-webkit-details-marker {
-  display: none;
-}
-
-.f9-setup-strip-head {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.f9-setup-strip-head strong {
-  color: var(--ink);
-  font-weight: 600;
-  font-size: 0.95rem;
-}
-
-.f9-setup-strip-bar {
-  flex: 1 1 auto;
-  height: 6px;
-  min-width: 60px;
-  border-radius: 999px;
-  background: var(--line);
-  overflow: hidden;
-}
-
-.f9-setup-strip-bar > span {
-  display: block;
-  height: 100%;
-  border-radius: 999px;
-  background: var(--green, #1f8a5b);
-}
-
-.f9-setup-strip-toggle {
-  flex: 0 0 auto;
-  color: var(--f9-muted);
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-.f9-setup-strip[open] .f9-setup-strip-toggle::after {
-  content: " ▲";
-}
-
-.f9-setup-strip:not([open]) .f9-setup-strip-toggle::after {
-  content: " ▾";
-}
-
-@media (max-width: 640px) {
-  .f9-setup-strip-summary {
-    flex-wrap: wrap;
-  }
-
-  .f9-setup-strip-bar {
-    order: 3;
-    flex-basis: 100%;
-  }
-}
 
 .f9-dashboard-hero h1 {
   max-width: 760px;
@@ -9537,533 +9385,159 @@ reds soften --- */
   }
 }
 
-/* ============================================================
-   WP-C2 — First-run arc (the Wire register). Additive only.
-   Tokens resolve in both themes; the green marker keeps fixed
-   dark-green ink so text stays legible on the accent fill.
-   ============================================================ */
 
-.f9-first-run-spine {
-  margin: 0 0 0.25rem;
-}
-
-.f9-spine-rail {
-  display: flex;
-  align-items: flex-start;
+/* BL-016 — persistent setup checklist (brief §6.11, R6). */
+.f9-ed-setup-card {
+  display: grid;
   gap: 0;
-  list-style: none;
-  margin: 0;
-  padding: 0.35rem 0.15rem;
+  border: 2.5px solid var(--ed-rule);
+  background: var(--ed-surface);
+  box-shadow: var(--ed-shadow);
 }
 
-.f9-spine-node {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.6rem;
-  flex: 0 0 auto;
-  max-width: 15rem;
-}
-
-.f9-spine-node-dot {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.6rem;
-  height: 1.6rem;
-  border-radius: 999px;
-  border: 1.5px solid var(--line);
-  background: var(--card, #21201c);
-  color: var(--ink-soft);
-  font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 0.72rem;
-  font-weight: 600;
-  flex: 0 0 auto;
-}
-
-.f9-spine-node[data-status="now"] .f9-spine-node-dot {
-  border-color: var(--green);
-  color: var(--green-ink);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--green-ink) 26%, transparent);
-}
-
-.f9-spine-node[data-status="done"] .f9-spine-node-dot {
-  border-color: var(--green);
-  background: var(--green);
-  color: #06371f;
-}
-
-.f9-spine-node-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-  padding-top: 0.1rem;
-}
-
-.f9-spine-node-label {
-  font-weight: 600;
-  font-size: 0.9rem;
-  color: var(--ink);
-  line-height: 1.2;
-}
-
-.f9-spine-node[data-status="idle"] .f9-spine-node-label {
-  color: var(--ink-soft);
-}
-
-.f9-spine-node-sub {
-  font-size: 0.76rem;
-  color: var(--ink-faint, var(--ink-soft));
-  line-height: 1.25;
-}
-
-.f9-spine-track {
-  flex: 1 1 auto;
-  height: 2px;
-  min-width: 1.5rem;
-  margin: 0.75rem 0.5rem 0;
-  border-radius: 2px;
-  background: var(--line);
-  align-self: flex-start;
-}
-
-.f9-spine-track[data-fill="solid"] {
-  background: var(--green);
-}
-
-.f9-spine-track[data-fill="gradient"] {
-  background: linear-gradient(
-    90deg,
-    var(--green) 0%,
-    var(--green) 50%,
-    var(--line) 50%,
-    var(--line) 100%
-  );
-}
-
-.f9-first-run-spine[data-variant="compact"] .f9-spine-rail {
-  padding: 0.2rem 0;
-}
-
-.f9-first-run-spine[data-variant="compact"] .f9-spine-node-label {
-  font-size: 0.84rem;
-}
-
-/* Mobile pill — hidden on desktop, shown when the rail collapses. */
-.f9-first-run-spine-pill {
-  display: none;
-  flex-direction: column;
-  gap: 0.4rem;
-  margin: 0;
-}
-
-.f9-spine-pill-label {
-  font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 0.74rem;
-  letter-spacing: 0.06em;
-  color: var(--ink-soft);
-}
-
-.f9-spine-progress {
-  display: block;
-  height: 4px;
-  border-radius: 999px;
-  background: var(--line);
-  overflow: hidden;
-}
-
-.f9-spine-progress > span {
-  display: block;
-  height: 100%;
-  border-radius: 999px;
-  background: var(--green);
-}
-
-/* --- Wire atmosphere --- */
-
-.f9-wire-eyebrow {
-  display: inline-block;
-  font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 0.72rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--green-ink);
-}
-
-.f9-wire-hint {
-  color: var(--ink-soft);
-  margin-top: -0.25rem;
-}
-
-.f9-wire-headline {
-  font-family: "Bricolage Grotesque", var(--f9-font, Inter, system-ui, sans-serif);
-  font-weight: 700;
-  font-size: clamp(1.6rem, 3.4vw, 2.35rem);
-  line-height: 1.06;
-  letter-spacing: -0.02em;
-  margin: 0.4rem 0 0.2rem;
-  color: var(--ink);
-  max-width: 26ch;
-}
-
-.f9-wire-mark {
-  background: var(--green);
-  color: #06371f;
-  padding: 0 0.08em;
-  box-decoration-break: clone;
-  -webkit-box-decoration-break: clone;
-}
-
-.f9-wire-sub {
-  max-width: 56ch;
-}
-
-.f9-wire-hero {
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-}
-
-/* --- Beat 1 dimmed payoff tease --- */
-
-.f9-wire-tease {
-  border: 1px dashed var(--line);
-  border-radius: 12px;
-  padding: 1rem;
-  opacity: 0.7;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.f9-wire-tease-grid {
+.f9-ed-setup-header {
   display: grid;
-  grid-template-columns: minmax(9rem, 1fr) 1fr 1fr;
-  gap: 0.75rem;
+  gap: 5px;
+  padding: 13px 16px;
+  background: var(--ed-fill);
+  color: var(--ed-on-fill);
 }
 
-.f9-wire-tease-score {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  padding: 0.75rem;
-  border-radius: 10px;
-  background: var(--green-wash);
+.f9-ed-setup-header .f9-ed-micro {
+  color: inherit;
 }
 
-.f9-wire-tease-num {
-  font-family: "Bricolage Grotesque", var(--f9-font, Inter, system-ui, sans-serif);
-  font-weight: 700;
-  font-size: 2rem;
-  line-height: 1;
-  color: var(--ink);
-}
-
-.f9-wire-tease-num small {
-  font-size: 0.9rem;
-  color: var(--ink-soft);
-}
-
-.f9-wire-tease-cap {
-  font-size: 0.8rem;
-  color: var(--ink-soft);
-}
-
-.f9-wire-tease-flag {
-  font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 0.62rem;
-  letter-spacing: 0.1em;
-  color: var(--ink-faint, var(--ink-soft));
-  margin-top: 0.1rem;
-}
-
-.f9-wire-tease-thumb {
-  border-radius: 10px;
-  background: var(--dk-well, var(--card, #21201c));
-  border: 1px solid var(--line);
-  min-height: 5rem;
-  display: flex;
-  align-items: flex-end;
-  padding: 0.6rem;
-}
-
-.f9-wire-tease-thumb span {
-  font-size: 0.72rem;
-  color: var(--ink-soft);
-  line-height: 1.25;
-}
-
-/* --- Beat 2 confirmation + queue-more --- */
-
-.f9-wire-confirm {
-  border: 1px solid var(--green);
-  background: var(--green-wash);
-  border-radius: 12px;
-  padding: 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.f9-wire-confirm h3 {
+.f9-ed-setup-header h2 {
   margin: 0;
-  font-size: 1.1rem;
-  color: var(--ink);
+  font-family: "Bricolage Grotesque", var(--f9-font);
+  font-size: clamp(1.15rem, 2vw, 1.55rem);
+  line-height: 1.1;
 }
 
-.f9-wire-confirm p {
-  margin: 0;
-  color: var(--ink-soft);
-}
-
-.f9-queue-more {
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.f9-queue-more h3 {
-  margin: 0;
-  font-size: 1rem;
-}
-
-/* --- Beat 3 dispatch feed + honest deal + skeleton --- */
-
-.f9-wire-wait {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: 1.15rem;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--card, #21201c);
-  margin-bottom: 1rem;
-}
-
-.f9-wire-wait-sub {
-  max-width: 56ch;
-  color: var(--ink-soft);
-  margin: 0.25rem 0 0;
-}
-
-.f9-wire-elapsed {
-  font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 0.74rem;
-  color: var(--ink-faint, var(--ink-soft));
-  margin: 0.35rem 0 0;
-}
-
-.f9-wire-wait-body {
+.f9-ed-setup-list {
   display: grid;
-  grid-template-columns: 1.4fr 1fr;
-  gap: 1rem;
-}
-
-.f9-dispatch-feed {
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 0.9rem 1rem;
-  background: var(--bone, #171611);
-}
-
-.f9-dispatch-head {
-  font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 0.7rem;
-  letter-spacing: 0.14em;
-  color: var(--green-ink);
-  margin: 0 0 0.6rem;
-}
-
-.f9-dispatch-list {
-  list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
+  list-style: none;
 }
 
-.f9-dispatch-line {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.6rem;
+.f9-ed-setup-row {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--ed-rule-soft);
 }
 
-.f9-dispatch-marker {
-  width: 0.7rem;
-  height: 0.7rem;
-  border-radius: 999px;
-  border: 1.5px solid var(--line);
-  margin-top: 0.15rem;
-  flex: 0 0 auto;
+.f9-ed-setup-row > span:last-child {
+  display: grid;
+  gap: 2px;
 }
 
-.f9-dispatch-line[data-status="done"] .f9-dispatch-marker {
-  background: var(--green);
-  border-color: var(--green);
-}
-
-.f9-dispatch-line[data-status="now"] .f9-dispatch-marker {
-  border-color: var(--green);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--green-ink) 26%, transparent);
-  animation: f9-dispatch-pulse 1.4s ease-in-out infinite;
-}
-
-.f9-dispatch-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-}
-
-.f9-dispatch-label {
-  font-size: 0.88rem;
+.f9-ed-setup-row strong,
+.f9-ed-setup-row small {
   color: var(--ink);
 }
 
-.f9-dispatch-line[data-status="pending"] .f9-dispatch-label {
-  color: var(--ink-faint, var(--ink-soft));
-}
-
-.f9-dispatch-sub {
-  font-size: 0.74rem;
+.f9-ed-setup-row small {
   color: var(--ink-soft);
+  line-height: 1.4;
 }
 
-@keyframes f9-dispatch-pulse {
-  0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--green-ink) 26%, transparent); }
-  50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--green-ink) 6%, transparent); }
-}
-
-.f9-honest-deal {
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 0.9rem 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.f9-honest-deal h3 {
-  margin: 0.25rem 0 0;
-  font-size: 1rem;
-  color: var(--ink);
-}
-
-.f9-honest-deal p {
-  margin: 0;
-  font-size: 0.86rem;
-  color: var(--ink-soft);
-  line-height: 1.45;
-}
-
-.f9-wire-lead-preview {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.f9-wire-skeleton {
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-}
-
-.f9-wire-skeleton-bar {
-  height: 1.15rem;
-  border-radius: 6px;
-  background: linear-gradient(
-    90deg,
-    var(--dk-well, #262420) 0%,
-    var(--dk-chip, #33302a) 50%,
-    var(--dk-well, #262420) 100%
-  );
-  background-size: 200% 100%;
-  animation: f9-wire-shimmer 1.6s ease-in-out infinite;
-}
-
-@keyframes f9-wire-shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-
-/* --- Beat 4 front page --- */
-
-.f9-wire-frontpage {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.f9-wire-frontpage-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-  margin-top: 0.25rem;
-}
-
-.f9-wire-cadence {
-  color: var(--ink-soft);
-  margin: 0.15rem 0 0;
-}
-
-.f9-wire-stamp {
-  display: inline-block;
-  align-self: flex-start;
-  font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 0.7rem;
-  letter-spacing: 0.16em;
+.f9-ed-setup-stamp {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.f9-ed-setup-row[data-state="done"] .f9-ed-setup-stamp,
+.f9-ed-setup-row[data-state="next"] .f9-ed-setup-stamp {
   color: var(--green-ink);
-  border: 1.5px solid var(--green-ink);
-  border-radius: 4px;
-  padding: 0.25rem 0.5rem;
-  transform: rotate(-3deg);
 }
 
-/* --- Mobile collapse (§6) --- */
-@media (max-width: 640px) {
-  .f9-first-run-spine .f9-spine-rail {
-    display: none;
-  }
-  .f9-first-run-spine-pill {
-    display: flex;
-  }
-  .f9-wire-tease-grid {
-    grid-template-columns: 1fr;
-  }
-  .f9-wire-wait-body {
-    grid-template-columns: 1fr;
-  }
+.f9-ed-setup-row[data-state="done"] strong {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  color: var(--ink-soft);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .f9-dispatch-line[data-status="now"] .f9-dispatch-marker,
-  .f9-wire-skeleton-bar {
-    animation: none;
-  }
+.f9-ed-setup-primary,
+.f9-ed-setup-import,
+.f9-ed-setup-links,
+.f9-ed-setup-card > .f9-ed-action-row,
+.f9-ed-setup-capacity,
+.f9-ed-setup-card > .f9-message {
+  margin: 14px 16px 0;
 }
 
-/* WP-C2 — first-brief bridge on the Overview (producer of the ?firstrun=1
-   arc-arrival flag that gates the Beat-4 front page). */
-.f9-first-brief-bridge {
+.f9-ed-setup-primary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.f9-ed-setup-primary .f9-field {
+  margin: 0;
+}
+
+.f9-ed-setup-import {
+  padding-top: 12px;
+  border-top: 1px dashed var(--ed-rule-dashed);
+}
+
+.f9-ed-setup-import > summary {
+  width: fit-content;
+  min-height: 44px;
+  cursor: pointer;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.f9-ed-setup-import > form {
+  display: grid;
+  gap: 12px;
+  padding: 4px 0 2px;
+}
+
+.f9-ed-setup-import textarea {
+  min-height: 124px;
+  resize: vertical;
+}
+
+.f9-ed-setup-links {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  border: 1px solid var(--green);
-  background: var(--green-wash);
+  gap: 14px;
+  padding-bottom: 16px;
 }
-.f9-first-brief-bridge h2 {
-  margin: 0.15rem 0;
-  font-size: 1.15rem;
-  color: var(--ink);
-}
-.f9-first-brief-bridge p {
-  margin: 0;
-  color: var(--ink-soft);
+
+@media (max-width: 640px) {
+  .f9-ed-setup-card {
+    box-shadow: 4px 4px 0 var(--ed-rule);
+  }
+
+  .f9-ed-setup-row {
+    grid-template-columns: 62px minmax(0, 1fr);
+    padding-inline: 12px;
+  }
+
+  .f9-ed-setup-primary {
+    grid-template-columns: 1fr;
+    margin-inline: 12px;
+  }
+
+  .f9-ed-setup-import,
+  .f9-ed-setup-links,
+  .f9-ed-setup-card > .f9-ed-action-row,
+  .f9-ed-setup-capacity,
+  .f9-ed-setup-card > .f9-message {
+    margin-inline: 12px;
+  }
 }
 
 /* ============================================================

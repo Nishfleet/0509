@@ -8,7 +8,7 @@ type MockLinkProps = { children?: ReactNode; to?: string } & Record<
   unknown
 >;
 
-async function mockRouter(loaderData: unknown) {
+async function mockRouter(loaderData: unknown, actionData?: unknown) {
   vi.doMock("react-router", async () => {
     const actual =
       await vi.importActual<typeof import("react-router")>("react-router");
@@ -24,7 +24,7 @@ async function mockRouter(loaderData: unknown) {
           { ...props, href: typeof to === "string" ? to : "" },
           children,
         ),
-      useActionData: vi.fn().mockReturnValue(undefined),
+      useActionData: vi.fn().mockReturnValue(actionData),
       useLoaderData: vi.fn().mockReturnValue(loaderData),
       useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
       useRevalidator: vi.fn().mockReturnValue({ revalidate: vi.fn() }),
@@ -65,8 +65,16 @@ function baseDashboardData(overrides: Record<string, unknown> = {}) {
     workspaceReadiness: {
       generatedAt: "2026-06-20T00:00:00.000Z",
       readyCount: 0,
-      totalCount: 0,
-      items: [],
+      totalCount: 1,
+      items: [
+        {
+          id: "first_competitor",
+          label: "First competitor",
+          status: "needs_setup",
+          detail: "Paste one competitor website to start.",
+          action: { label: "Search competitor", href: "/search" },
+        },
+      ],
       nextActions: [],
       nudges: [],
       counts: {
@@ -101,21 +109,89 @@ describe("dashboard first 15 minutes activation", () => {
       await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    // WP-C2 Beat 1: the Wire hero leads an empty workspace.
-    expect(markup).toContain("THE 5·9 WIRE · NOTHING FILED YET");
-    expect(markup).toContain("Name one competitor.");
-    expect(markup).toContain("We file the first brief before you wake.");
-    // First-run hero drops the separate action button; the search form is the
-    // single dominant add path.
+    expect(markup).toContain('id="setup-checklist"');
+    expect(markup).toContain("Setup · 0 of 1 done");
+    expect(markup).toContain("Finish the workspace that sends your first brief");
+    expect(markup).toContain("First competitor");
+    expect(markup).toContain("Next");
+    expect(markup).toContain('aria-current="step"');
+    expect(markup).not.toContain('aria-hidden="true" class="f9-ed-setup-stamp"');
     expect(markup).toContain("Competitor website");
-    expect(markup).toContain("Assign the beat →");
-    expect(markup).toContain("f9-primary-button");
-    expect(markup).toContain('action="/search"');
-    // The forward-only spine sits above the hero: node 1 now, 2–3 idle.
-    expect(markup).toContain('class="f9-first-run-spine"');
-    expect(markup).toContain('data-status="now"');
-    // Exactly one dominant add action — the search box (one submit button).
-    expect(markup.match(/type="submit"/g)?.length ?? 0).toBe(1);
+    expect(markup).toContain("Track this competitor");
+    expect(markup).toContain("Add several competitors by paste or CSV");
+    expect(markup).toContain("Search first instead");
+    expect(markup).toContain("Add your brand website");
+    expect(markup).not.toContain("f9-first-run-spine");
+    expect(markup.match(/f9-ed-cta--rank1/g)?.length ?? 0).toBe(1);
+  });
+
+  it("keeps the filed brief reachable while setup still has another step", async () => {
+    await mockRouter(
+      baseDashboardData({
+        digests: [{ id: "digest-1", delivery: { status: "sent" } }],
+      }),
+    );
+
+    const { default: AppDashboardRoute } =
+      await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).toContain('href="/app/digests?firstrun=1"');
+    expect(markup).toContain("Read latest brief");
+    expect(markup).toContain('class="f9-secondary-button"');
+    expect(markup.match(/f9-ed-cta--rank1/g)?.length ?? 0).toBe(1);
+  });
+
+  it("restores the state-specific Overview action after setup is complete", async () => {
+    await mockRouter(
+      baseDashboardData({
+        watchlists: [
+          {
+            id: "watchlist-1",
+            name: "Rival watch",
+            targetType: "advertiser",
+            targetLabel: "Rival Labs",
+            isActive: true,
+            lastScannedAt: "2026-06-20T08:00:00.000Z",
+          },
+        ],
+        digests: [{ id: "digest-1", delivery: { status: "sent" } }],
+        recentEvents: [
+          {
+            id: "event-1",
+            watchlistId: "watchlist-1",
+            eventType: "offer_change",
+            title: "Rival Labs changed its offer",
+            summary: "A confirmed competitor move is ready to review.",
+            status: "confirmed",
+            metadata: {},
+          },
+        ],
+        workspaceReadiness: {
+          readyCount: 4,
+          totalCount: 4,
+          items: [
+            ...["first_competitor", "first_watchlist", "first_proof", "first_digest"].map((id) => ({
+              id,
+              label: id,
+              status: "ready",
+              detail: "Durable activation step complete.",
+              action: null,
+            })),
+          ],
+          nudges: [],
+          counts: { agentMemoryEntries: 0, competitors: 1, activeWatchlists: 1 },
+        },
+      }),
+    );
+
+    const { default: AppDashboardRoute } =
+      await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).toContain("Review moves");
+    expect(markup).toContain('href="/app/watchlists"');
+    expect(markup).not.toContain("Read latest brief");
   });
 
   it("surfaces retention moves without showing low-priority optional setup", async () => {
@@ -179,6 +255,210 @@ describe("dashboard first 15 minutes activation", () => {
     expect(markup).not.toContain("Cancellation and help path");
     expect(markup).not.toContain("Developer access is missing");
     expect(markup).not.toContain("No client room yet");
+  });
+
+  it("does not resurrect setup for volatile source, billing, or delivery health", async () => {
+    await mockRouter(
+      baseDashboardData({
+        workspaceReadiness: {
+          readyCount: 4,
+          totalCount: 7,
+          items: [
+            ...["first_competitor", "first_watchlist", "first_proof", "first_digest"].map((id) => ({
+              id,
+              label: id,
+              status: id === "first_watchlist" ? "attention" : "ready",
+              detail:
+                id === "first_watchlist"
+                  ? "A watchlist exists but is paused."
+                  : "Durable activation step complete.",
+              action: null,
+            })),
+            {
+              id: "source",
+              label: "Source access",
+              status: "attention",
+              detail: "Provider health is temporarily degraded.",
+              action: { label: "Open source access", href: "/app/source-access" },
+            },
+            {
+              id: "billing",
+              label: "Billing",
+              status: "attention",
+              detail: "Payment needs attention.",
+              action: { label: "Open billing", href: "/app/billing" },
+            },
+            {
+              id: "delivery",
+              label: "Delivery",
+              status: "needs_proof",
+              detail: "Delivery needs a fresh check.",
+              action: { label: "Open notifications", href: "/app/notifications" },
+            },
+          ],
+          nudges: [],
+          counts: { agentMemoryEntries: 0, competitors: 1, successfulProofs: 1 },
+        },
+      }),
+    );
+
+    const { default: AppDashboardRoute } =
+      await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).not.toContain('id="setup-checklist"');
+    expect(markup).not.toContain("Finish the workspace that sends your first brief");
+  });
+
+  it("replaces bulk import with the plan path when competitor capacity is full", async () => {
+    await mockRouter(
+      baseDashboardData({
+        workspaceReadiness: {
+          readyCount: 2,
+          totalCount: 7,
+          items: [
+            {
+              id: "first_competitor",
+              label: "First competitor",
+              status: "ready",
+              detail: "One competitor saved.",
+              action: null,
+            },
+            {
+              id: "first_watchlist",
+              label: "First watchlist",
+              status: "ready",
+              detail: "One active watchlist.",
+              action: null,
+            },
+            {
+              id: "first_proof",
+              label: "First evidence",
+              status: "needs_setup",
+              detail: "Capture the first evidence.",
+              action: { label: "Capture evidence", href: "/app/watchlists" },
+            },
+            {
+              id: "first_digest",
+              label: "First digest",
+              status: "needs_setup",
+              detail: "Wait for the first brief.",
+              action: { label: "Open digests", href: "/app/digests" },
+            },
+          ],
+          billing: { plan: "free" },
+          nudges: [],
+          counts: { agentMemoryEntries: 0, competitors: 1, activeWatchlists: 1 },
+        },
+      }),
+    );
+
+    const { default: AppDashboardRoute } =
+      await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).not.toContain("Add several competitors by paste or CSV");
+    expect(markup).toContain("Your current plan is at its competitor limit.");
+    expect(markup).toContain("/app/billing?source=setup-checklist#plans");
+  });
+
+  it("keeps the next setup action after an unusable import preview", async () => {
+    await mockRouter(baseDashboardData(), {
+      ok: false,
+      intent: "preview-market-desk-import",
+      message: "No ready competitors found.",
+      preview: {
+        error: null,
+        selectedCount: 0,
+        rows: [],
+        summary: {
+          valid: 0,
+          over_cap: 0,
+          duplicate: 0,
+          existing: 0,
+          invalid: 1,
+        },
+      },
+    });
+
+    const { default: AppDashboardRoute } =
+      await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).toContain("Track this competitor");
+    expect(markup).toContain("No ready competitors found.");
+    expect(markup).not.toContain("Create 0 watchlists");
+    expect(markup.match(/f9-ed-cta--rank1/g)?.length ?? 0).toBe(1);
+  });
+
+  it("keeps unrelated dashboard feedback out of the setup live region", async () => {
+    await mockRouter(baseDashboardData(), {
+      ok: true,
+      intent: "close-counter-move",
+      message: "Marked done.",
+    });
+
+    const { default: AppDashboardRoute } =
+      await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).toContain('id="setup-checklist"');
+    expect(markup.match(/Marked done\./g)?.length ?? 0).toBe(1);
+  });
+
+  it("uses active watchlists, not paused history, for import capacity", async () => {
+    await mockRouter(
+      baseDashboardData({
+        workspaceReadiness: {
+          readyCount: 2,
+          totalCount: 7,
+          items: [
+            {
+              id: "first_competitor",
+              label: "First competitor",
+              status: "ready",
+              detail: "Two competitors saved.",
+              action: null,
+            },
+            {
+              id: "first_watchlist",
+              label: "First watchlist",
+              status: "attention",
+              detail: "Both watchlists are paused.",
+              action: { label: "Add a competitor", href: "/app/watchlists" },
+            },
+            {
+              id: "first_proof",
+              label: "First evidence",
+              status: "needs_setup",
+              detail: "Capture the first evidence.",
+              action: { label: "Capture evidence", href: "/app/watchlists" },
+            },
+            {
+              id: "first_digest",
+              label: "First digest",
+              status: "needs_setup",
+              detail: "Wait for the first brief.",
+              action: { label: "Open digests", href: "/app/digests" },
+            },
+          ],
+          billing: { plan: "free" },
+          nudges: [],
+          counts: {
+            agentMemoryEntries: 0,
+            competitors: 2,
+            activeWatchlists: 0,
+          },
+        },
+      }),
+    );
+
+    const { default: AppDashboardRoute } =
+      await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).toContain("Add several competitors by paste or CSV");
+    expect(markup).not.toContain("Your current plan is at its competitor limit.");
   });
 
   it("shows the first setup loop complete when scan, proof, delivery, and context exist", async () => {
@@ -266,6 +546,7 @@ describe("dashboard first 15 minutes activation", () => {
     expect(markup).toContain("Competitors watched");
     expect(markup).toContain("Evidence checks");
     expect(markup).toContain("Being watched");
+    expect(markup).not.toContain('id="setup-checklist"');
     expect(markup).not.toContain("First 15 minutes");
     expect(markup).not.toContain("Retained value loop");
   });
@@ -294,6 +575,28 @@ describe("dashboard first 15 minutes activation", () => {
             createdAt: "2026-06-20T08:10:00.000Z",
           },
         ],
+        workspaceReadiness: {
+          readyCount: 1,
+          totalCount: 2,
+          items: [
+            {
+              id: "first_competitor",
+              label: "First competitor",
+              status: "ready",
+              detail: "1 competitor saved.",
+              action: null,
+            },
+            {
+              id: "first_watchlist",
+              label: "First watchlist",
+              status: "attention",
+              detail: "A watchlist exists but is paused.",
+              action: { label: "Add a competitor", href: "/app/watchlists" },
+            },
+          ],
+          nudges: [],
+          counts: { agentMemoryEntries: 0 },
+        },
       }),
     );
 
@@ -303,7 +606,8 @@ describe("dashboard first 15 minutes activation", () => {
 
     expect(markup).toContain("Tracking is paused");
     expect(markup).toContain("Resume a competitor watch");
-    expect(markup).toContain("Resume watch");
+    expect(markup).toContain("Add a competitor");
+    expect(markup).toContain("/app/watchlists");
     expect(markup).toContain("All paused");
     expect(markup).toContain("Paused");
     expect(markup).not.toContain("Watching for the next change");

@@ -88,7 +88,7 @@ describe("buildMarketDeskBrief", () => {
       kicker: "Brief",
       title: "Build your brief",
       action: {
-        href: "/app/onboard?resume=1",
+        href: "/app#setup-checklist",
         label: "Add competitors",
       },
       hasMetrics: false,

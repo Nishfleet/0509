@@ -203,9 +203,6 @@ export default function WatchlistsRoute() {
   // WP-C2 Beat 3 — only carry the Wire arc during the first-run window, i.e.
   // before any competitor in the workspace has ever completed a scan (its first
   // readable brief). Derived from existing records; no parallel status source.
-  const firstRunWindow = !data.watchlists.some((watchlist) =>
-    Boolean(watchlist.lastScannedAt),
-  );
 
   // ---- watch board (brief §6.1, §6.3, §7) --------------------------------
   const captureWindow = data.captureWindow ?? {
@@ -380,7 +377,6 @@ export default function WatchlistsRoute() {
             captureWindow.failedChecks?.[selectedWatchlist.id] ??
             countHardFailuresSinceLastSuccess(data.runs)
           }
-          firstRunWindow={firstRunWindow}
           lockedToolbarUpgradeLabel={lockedToolbarUpgradeLabel}
           nextScanLabel={nextScanLabel}
           renderedAt={renderedAt}

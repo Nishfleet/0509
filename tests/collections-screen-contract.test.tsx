@@ -132,7 +132,7 @@ describe("collections screen-level Rank-1 budget (brief §5)", () => {
     expect(shellPrimaryIsDemoted("/app/collections")).toBe(true);
     // Unchanged for its neighbours — this is a surgical, route-scoped entry.
     expect(shellPrimaryIsDemoted("/app/watchlists")).toBe(false);
-    expect(shellPrimaryIsDemoted("/app")).toBe(false);
+    expect(shellPrimaryIsDemoted("/app")).toBe(true);
   });
 
   it.each([

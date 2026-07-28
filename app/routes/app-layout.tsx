@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation } from "react-router";
 import type { LoaderFunctionArgs, ShouldRevalidateFunctionArgs } from "react-router";
-import { Outlet, redirect, useLoaderData } from "react-router";
+import { Outlet, useLoaderData } from "react-router";
 
 import { DashboardShell } from "~/components/dashboard-shell";
 import { DashboardRouteError } from "~/components/dashboard-route-loading";
@@ -38,12 +38,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { presenceNavVisible } = await import("~/lib/presence-internal-access.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
-  const path = new URL(request.url).pathname;
-
-  if (!session.user.onboardedAt && path !== "/app/billing") {
-    throw redirect("/app/onboard");
-  }
-
   const workspace = await getCachedWorkspaceForRequest(env, request, session.user.id);
   const showPresenceNav = await presenceNavVisible(env, workspace.workspaceUserId);
 
@@ -89,7 +83,8 @@ export function shellPrimaryIsDemoted(pathname: string) {
   return (
     pathname === "/app/reports" ||
     pathname.startsWith("/app/reports/") ||
-    pathname === "/app/collections"
+    pathname === "/app/collections" ||
+    pathname === "/app"
   );
 }
 

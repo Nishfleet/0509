@@ -155,7 +155,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
 export default function BrandAdsRoute() {
   const data = useLoaderData<typeof loader>();
   const liveSearchPath = `/search?website=${encodeURIComponent(data.domain)}`;
-  const postSignupPath = `/app/onboard?website=${encodeURIComponent(data.domain)}`;
+  const postSignupPath = `/app?website=${encodeURIComponent(data.domain)}#setup-checklist`;
   const signupPath = `/auth/signup?redirectTo=${encodeURIComponent(postSignupPath)}`;
 
   return (

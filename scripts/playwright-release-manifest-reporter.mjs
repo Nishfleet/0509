@@ -74,7 +74,7 @@ export const RELEASE_COVERAGE_MATRIX = Object.freeze({
     persona: "anonymous",
     scenario: "first visit → value → signup",
     viewport,
-    finalUrl: { exact: "/auth/signup?redirectTo=%2Fapp%2Fonboard%3Fwebsite%3Dnykaa.com" },
+    finalUrl: { exact: "/auth/signup?redirectTo=%2Fapp%3Fwebsite%3Dnykaa.com%23setup-checklist" },
   })),
   2: [
     ...RELEASE_COVERAGE_VIEWPORTS.flatMap((viewport) => [
@@ -399,6 +399,10 @@ function safeRelativeUrl(value) {
   if (!parsed.pathname.split("/").every((segment) => segment === "" || URL_TOKEN_PATTERN.test(segment))) return null;
   if (parsed.hash && (!URL_TOKEN_PATTERN.test(parsed.hash.slice(1)) || SECRET_LIKE_VALUE.test(parsed.hash))) return null;
   for (const [key, queryValue] of parsed.searchParams) {
+    if (key === "redirectTo") {
+      if (safeRelativeUrl(queryValue) === null) return null;
+      continue;
+    }
     if (
       SENSITIVE_QUERY_KEY.test(key) ||
       !URL_TOKEN_PATTERN.test(key) ||

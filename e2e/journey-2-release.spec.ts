@@ -68,15 +68,15 @@ for (const viewport of viewports) {
     );
     await signInAs(context, baseURL, "e2e-free");
 
-    await page.goto("/app/onboard?website=nykaa.com");
-    await expect(page.getByRole("heading", { name: "Get started" })).toBeVisible();
+    await page.goto("/app?website=nykaa.com#setup-checklist");
+    await expect(page.getByRole("heading", { name: "Finish the workspace that sends your first brief" })).toBeVisible();
     await expect(
       page.getByText(
-        "Start with one competitor. We'll check the website, create its watchlist, and kick off the first scan.",
+        "Paste one competitor website to start.",
       ),
     ).toBeVisible();
     await expect(
-      page.getByText("The first scan starts immediately. Evidence appears as soon as the source check finishes."),
+      page.getByText("We create the watchlist and start its first scan immediately."),
     ).toBeVisible();
     const onboardingWebsite = page.getByLabel("Competitor website");
     await expect(onboardingWebsite).toHaveValue("nykaa.com");
@@ -85,18 +85,18 @@ for (const viewport of viewports) {
     await expectMinimumTouchTarget(onboardingWebsite);
     await expectFocusTransition(
       onboardingWebsite,
-      page.locator("form.f9-onboard-single-form details > summary").first(),
+      page.locator("form.f9-ed-setup-primary button[type='submit']"),
     );
     await expectVisibleKeyboardFocus(onboardingWebsite);
     await expectPhoneTouchTargets(page);
-    const onboardingSubmit = page.locator("form.f9-onboard-single-form button[type='submit']");
-    await expect(onboardingSubmit).toHaveAccessibleName("Start tracking Nykaa");
+    const onboardingSubmit = page.locator("form.f9-ed-setup-primary button[type='submit']");
+    await expect(onboardingSubmit).toHaveAccessibleName("Track Nykaa");
     await expect(onboardingSubmit).toBeEnabled();
     await onboardingWebsite.fill("");
-    await expect(onboardingSubmit).toHaveAccessibleName("Start tracking this competitor");
+    await expect(onboardingSubmit).toHaveAccessibleName("Track this competitor");
     await expect(onboardingSubmit).toBeDisabled();
     await onboardingWebsite.fill("nykaa.com");
-    await expect(onboardingSubmit).toHaveAccessibleName("Start tracking Nykaa");
+    await expect(onboardingSubmit).toHaveAccessibleName("Track Nykaa");
     await expect(onboardingSubmit).toBeEnabled();
     await expectNoHorizontalOverflow(page);
     await attachReleaseStateArtifacts({ page, testInfo, prefix: "j2-proof", state: "onboard" });
@@ -217,19 +217,19 @@ for (const viewport of viewports) {
       { type: "scenario", description: "onboarding → watchlist → first scan state" },
     );
     await signInAs(context, baseURL, persona);
-    await page.goto("/app/onboard");
-    await expect(page.getByRole("heading", { name: "Get started" })).toBeVisible();
+    await page.goto("/app#setup-checklist");
+    await expect(page.getByRole("heading", { name: "Finish the workspace that sends your first brief" })).toBeVisible();
     const website = page.getByLabel("Competitor website");
-    await expect(website).toHaveAttribute("aria-describedby", "onboard-competitor-hint");
+    await expect(website).toHaveAttribute("aria-describedby", "setup-competitor-hint");
     await expect(website).toHaveAttribute("aria-invalid", "false");
     await expectMinimumTouchTarget(website);
     await expectFocusTransition(
       website,
-      page.locator("form.f9-onboard-single-form details > summary").first(),
+      page.locator(".f9-ed-setup-import > summary").first(),
     );
     await expectVisibleKeyboardFocus(website);
     await expectPhoneTouchTargets(page);
-    const submit = page.getByRole("button", { name: /Start tracking/i });
+    const submit = page.locator("form.f9-ed-setup-primary button[type='submit']");
     await expect(submit).toBeDisabled();
     await attachReleaseStateArtifacts({ page, testInfo, prefix: "j2-activation", state: "onboard" });
     await website.fill("https://nykaa.com");
@@ -285,7 +285,7 @@ for (const viewport of viewports) {
   });
 }
 
-test("WP-C2 Beat 1 empty free workspace keeps the weekly promise honest", async ({
+test("persistent setup card keeps an empty free workspace honest", async ({
   page,
   context,
   baseURL,
@@ -299,18 +299,12 @@ test("WP-C2 Beat 1 empty free workspace keeps the weekly promise honest", async 
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/app");
   await expect(page.getByRole("heading", { level: 1, name: "Overview", exact: true })).toBeVisible();
-  await expect(page.locator("body")).toContainText("THE 5·9 WIRE · NOTHING FILED YET");
-  await expect(page.locator("body")).toContainText("Name one competitor.");
-  // Free is weekly, not daily — it must never make the daily "before you wake"
-  // (05:09) delivery promise; it states the weekly brief instead.
-  await expect(page.locator("body")).toContainText("We file your first weekly brief.");
+  await expect(page.locator("#setup-checklist")).toBeVisible();
+  await expect(page.locator("#setup-checklist")).toContainText("Setup · 0 of 4 done");
+  await expect(page.locator("#setup-checklist")).toContainText("First competitor");
   await expect(page.getByText("We file the first brief before you wake.")).toHaveCount(0);
-  await expect(page.locator("body")).toContainText(
-    "Free includes one watchlist — activation scan, weekly check, weekly email brief.",
-  );
-  // Forward-only spine + exactly one dominant add action (the search submit).
-  await expect(page.locator(".f9-first-run-spine").first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Assign the beat →", exact: true })).toBeVisible();
+  await expect(page.locator(".f9-first-run-spine")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Track this competitor", exact: true })).toBeVisible();
   await expect(page.locator("body")).not.toContainText(/stakeout|under watch|on camera|surveillance/i);
   await expectNoHorizontalOverflow(page);
   await expectPhoneTouchTargets(page);
