@@ -58,6 +58,127 @@ async function prepare(context: BrowserContext, baseURL: string, user: string, t
   }, theme);
 }
 
+/**
+ * Counts EVERY painted green in the first viewport, not just this layer's own
+ * `.f9-wk-ins` class.
+ *
+ * Round 1 measured `.f9-wk-ins` and reported "1 green mark" while BL-016's
+ * setup card was still painting green-ink step stamps and green Rank-3
+ * underlines on the same screen. The review called that overselling, and it
+ * was: a probe that only looks at the classes you wrote can only ever confirm
+ * what you already believe.
+ *
+ * Method (quoted in the build report):
+ *  - Resolve every green token the stylesheet exposes — `--green`,
+ *    `--green-ink`, `--green-wash`, `--ed-accent`, `--ed-accent-wash`,
+ *    `--ed-accent-mark`, `--ed-focus`, `--wk-focus` — through a probe element,
+ *    so `color-mix()` and aliases resolve to real computed colours.
+ *  - ALSO flag any colour whose green channel dominates both others by >20,
+ *    which catches a hardcoded green nobody routed through a token.
+ *  - Scan every element intersecting the first viewport, skipping anything
+ *    invisible (display/visibility/opacity/zero-box).
+ *  - Read `color`, `background-color`, `background-image`, the four
+ *    `border-*-color`s, `text-decoration-color`, `box-shadow`, `fill` and
+ *    `stroke`. A border colour counts only when that border is actually
+ *    painted (non-zero width, style not `none`); a decoration colour only when
+ *    `text-decoration-line` is not `none`; a background colour only when its
+ *    alpha is non-zero.
+ *  - `outline-color` is collected SEPARATELY as `focusReservations`: a focus
+ *    ring is not painted until focus lands, and a visible green focus ring is
+ *    a sanctioned exception (it is a boundary, not a state marker).
+ */
+async function auditGreen(page: Page) {
+  return page.evaluate(() => {
+    const probe = document.createElement("span");
+    probe.style.position = "absolute";
+    probe.style.opacity = "0";
+    document.body.appendChild(probe);
+    const rootStyle = getComputedStyle(document.documentElement);
+    const tokenGreens = new Set<string>();
+    for (const token of [
+      "--green",
+      "--green-ink",
+      "--green-wash",
+      "--ed-accent",
+      "--ed-accent-wash",
+      "--ed-accent-mark",
+      "--ed-focus",
+      "--wk-focus",
+    ]) {
+      const raw = rootStyle.getPropertyValue(token).trim();
+      if (!raw) continue;
+      probe.style.color = "";
+      probe.style.color = raw;
+      const resolved = getComputedStyle(probe).color;
+      if (resolved) tokenGreens.add(resolved);
+    }
+    probe.remove();
+
+    const parse = (value: string) =>
+      [...value.matchAll(/rgba?\(([^)]+)\)/g)].map((match) => {
+        const parts = match[1].split(/[,/\s]+/).filter(Boolean).map(Number);
+        return { raw: `rgb(${parts.slice(0, 3).join(", ")})`, r: parts[0], g: parts[1], b: parts[2], a: parts[3] ?? 1 };
+      });
+
+    const isGreen = (value: string) =>
+      parse(value).some(
+        (c) =>
+          c.a > 0.04 &&
+          (tokenGreens.has(c.raw) || (c.g > c.r + 20 && c.g > c.b + 20)),
+      );
+
+    const label = (node: Element) =>
+      `${node.tagName.toLowerCase()}${
+        typeof node.className === "string" && node.className
+          ? `.${node.className.trim().split(/\s+/).join(".")}`
+          : ""
+      }`;
+
+    const hits: { element: string; property: string; value: string }[] = [];
+    const focusReservations: { element: string; value: string }[] = [];
+    const viewportHeight = window.innerHeight;
+
+    for (const node of document.querySelectorAll("body *")) {
+      const style = getComputedStyle(node);
+      if (style.display === "none" || style.visibility === "hidden") continue;
+      if (Number(style.opacity) === 0) continue;
+      const rect = node.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) continue;
+      if (rect.bottom <= 0 || rect.top >= viewportHeight) continue;
+
+      const checks: [string, string][] = [
+        ["color", style.color],
+        ["background-color", style.backgroundColor],
+        ["background-image", style.backgroundImage],
+        ["box-shadow", style.boxShadow],
+        ["fill", style.fill],
+        ["stroke", style.stroke],
+      ];
+      for (const side of ["Top", "Right", "Bottom", "Left"] as const) {
+        const width = style[`border${side}Width` as "borderTopWidth"];
+        const borderStyle = style[`border${side}Style` as "borderTopStyle"];
+        if (width === "0px" || borderStyle === "none") continue;
+        checks.push([
+          `border-${side.toLowerCase()}-color`,
+          style[`border${side}Color` as "borderTopColor"],
+        ]);
+      }
+      if (style.textDecorationLine !== "none") {
+        checks.push(["text-decoration-color", style.textDecorationColor]);
+      }
+      for (const [property, value] of checks) {
+        if (!value || value === "none") continue;
+        if (isGreen(value)) hits.push({ element: label(node), property, value });
+      }
+      if (style.outlineStyle !== "none" && isGreen(style.outlineColor)) {
+        focusReservations.push({ element: label(node), value: style.outlineColor });
+      }
+    }
+
+    return { tokenGreens: [...tokenGreens], hits, focusReservations };
+  });
+}
+
 async function measure(page: Page) {
   return page.evaluate(() => ({
     theme: document.documentElement.getAttribute("data-f9-theme"),
@@ -118,6 +239,7 @@ test.describe("BL-030 live proof", () => {
           await page.goto(`${base}${surface.url}`, { waitUntil: "networkidle" });
           await page.waitForTimeout(400);
           const measured = await measure(page);
+          const green = await auditGreen(page);
           const file = path.join(
             OUT_DIR,
             `${PREFIX}-${surface.name}-${viewport.name}-${theme}.png`,
@@ -134,6 +256,11 @@ test.describe("BL-030 live proof", () => {
             docHeight: measured.docHeight,
             horizontalOverflow: measured.overflow,
             greenMarks: measured.greenMarks,
+            // Every painted green in the first viewport, counted the honest
+            // way (see auditGreen). The budget is ONE.
+            greenPainted: green.hits.length,
+            greenPaintedDetail: green.hits,
+            greenFocusReservations: green.focusReservations.length,
             ruleWeights: measured.ruleWeights,
             consoleErrors,
             pageErrors,
@@ -145,6 +272,15 @@ test.describe("BL-030 live proof", () => {
           if (measured.overflow > 1) {
             failures.push(
               `${surface.name} ${viewport.name} ${theme}: horizontal overflow ${measured.overflow}`,
+            );
+          }
+          // One green mark per viewport is program law, so the evidence set
+          // refuses to be produced with more than one — on a rebuilt surface.
+          const rebuilt = !surface.name.startsWith("collections-");
+          if (rebuilt && green.hits.length > 1) {
+            failures.push(
+              `${surface.name} ${viewport.name} ${theme}: ${green.hits.length} painted greens — ` +
+                green.hits.map((hit) => `${hit.element}{${hit.property}}`).join(", "),
             );
           }
           await context.close();

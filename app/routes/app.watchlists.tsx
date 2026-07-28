@@ -15,7 +15,6 @@ import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboa
 import { LocalTime } from "~/components/local-time";
 import { useQuickAdd } from "~/components/quick-add-context";
 import { TertiaryAction } from "~/components/evidence/cta";
-import { SpecimenEmptyState } from "~/components/evidence/specimen-empty-state";
 import { BulkSelectBar } from "~/components/watchlists/bulk-select-bar";
 import { CompetitorDetail } from "~/components/watchlists/competitor-detail";
 import {
@@ -461,7 +460,9 @@ export default function WatchlistsRoute() {
                       >
                         Open the capture <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
                       </Link>
-                      {canReport ? (
+                      {/* Same gate the deleted band carried: a report needs a
+                          completed check behind it, not just the entitlement. */}
+                      {canReport && selectedWatchlist.lastScannedAt ? (
                         <Link
                           className="f9-wk-lnk"
                           to={`/app/reports/${createReportId("watchlist", selectedWatchlist.id)}`}
@@ -516,16 +517,26 @@ export default function WatchlistsRoute() {
           </div>
         </>
       ) : (
-        <div className="f9-wk-sec">
-          <SpecimenEmptyState
-            copy="Paste your website or a competitor's — we scan their Meta ads and landing page, then email you the moment their offer, creative, or CTA changes."
-            headline="Add your first competitor"
-            primaryAction={{ label: "Add competitor", to: "/search" }}
-            secondaryAction={{ label: "See a sample brief", to: "/#demo" }}
-            specimenLabel="BAND 01 — RESERVED"
-            stateLabel="WATCH BOARD · NOTHING TRACKED YET"
-          />
-        </div>
+        /* An empty board is not an occasion for a dimmed specimen panel with
+           a caps-mono "BAND 01 — RESERVED" plate: that is the v3 ornament
+           habit, and a customer who has nothing tracked needs a sentence and
+           a way in, not a diagram of the thing they do not have yet. The
+           page's one filled button already sits in the header. */
+        <section aria-labelledby="competitors-empty-title" className="f9-wk-sec">
+          <p className="f9-wk-kick" id="competitors-empty-title">
+            Nothing tracked yet
+          </p>
+          <p className="f9-wk-lede">
+            Add your first competitor and its first check starts immediately. We scan
+            their Meta ads and their landing page, then email you the moment their
+            offer, creative, or CTA changes.
+          </p>
+          <div className="f9-wk-acts">
+            <Link className="f9-wk-lnk" to="/#demo">
+              See a sample brief <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
+            </Link>
+          </div>
+        </section>
       )}
 
       {selectedWatchlist ? (
@@ -568,8 +579,20 @@ export default function WatchlistsRoute() {
         <span>Next check {nextScanLabel}</span>
         {/* Source state is told ONCE per screen. With a competitor open its
             own status strip carries it, so the board line stands down rather
-            than repeating the same words 400px apart. */}
-        {selectedWatchlist ? null : <span>{trackingPresentation.statusLabel}</span>}
+            than repeating the same words 400px apart. On the board it stays a
+            LINK when something is actually blocking the next check — the
+            deleted status strip carried that link, and a label you cannot act
+            on is a worse answer than the one we shipped. */}
+        {selectedWatchlist ? null : sourceCanSchedule &&
+          trackingPresentation.statusLabel !== "Needs source access" ? (
+          <span>{trackingPresentation.statusLabel}</span>
+        ) : (
+          <span>
+            <Link className="f9-wk-lnk f9-wk-lnk--quiet" to="/app/source-access">
+              {trackingPresentation.statusLabel}
+            </Link>
+          </span>
+        )}
       </div>
     </DashboardPage>
   );

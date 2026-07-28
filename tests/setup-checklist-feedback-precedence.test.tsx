@@ -145,6 +145,14 @@ function useCurrentUrl() {
   return `${location.pathname}${location.search}`;
 }
 
+/** The quick-create submit, found by its form rather than its label — the
+ *  label is exactly what changes while the fetcher is in flight. */
+function quickCreateSubmit(view: HTMLElement) {
+  return view.querySelector<HTMLButtonElement>(
+    "form.f9-ed-setup-primary button[type='submit']",
+  )!;
+}
+
 function trackButton(view: HTMLElement) {
   return [...view.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
     button.textContent?.startsWith("Track "),
@@ -159,6 +167,50 @@ async function settle() {
   await act(async () => {});
   await act(async () => {});
 }
+
+describe("setup checklist quick-create pending state", () => {
+  /**
+   * Review finding 4: the salvage commit claims `SubmitButton.pending` exists
+   * so a fetcher-driven submit still shows its in-flight treatment, but
+   * nothing asserted it. A fetcher submission never enters `useNavigation()`,
+   * so without the prop this button would go from idle straight to answered
+   * and the customer would get no feedback on the slowest action on the page.
+   */
+  it("marks the submit busy while the fetcher is in flight, and clears it after", async () => {
+    let release: (() => void) | null = null;
+    const view = await renderSetupCard(async ({ request }) => {
+      await request.formData();
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return { ok: false, intent: "create-watchlist", message: REFUSAL_MESSAGE };
+    });
+
+    const button = quickCreateSubmit(view);
+    expect(button.getAttribute("aria-busy")).toBeNull();
+    expect(button.disabled).toBe(false);
+
+    await act(async () => {
+      button.click();
+    });
+    await settle();
+
+    const busy = quickCreateSubmit(view);
+    expect(busy.getAttribute("aria-busy")).toBe("true");
+    expect(busy.disabled).toBe(true);
+    expect(busy.textContent).toContain("Starting first scan…");
+
+    await act(async () => {
+      release?.();
+    });
+    await settle();
+
+    const settled = quickCreateSubmit(view);
+    expect(settled.getAttribute("aria-busy")).toBeNull();
+    expect(settled.disabled).toBe(false);
+    expect(view.textContent).toContain(REFUSAL_MESSAGE);
+  });
+});
 
 describe("setup checklist feedback precedence", () => {
   it("lets a bulk-import preview replace a retained quick-create refusal", async () => {

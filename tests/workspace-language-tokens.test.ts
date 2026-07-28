@@ -142,3 +142,51 @@ describe("workspace language layer (BL-030)", () => {
     expect(dark).toContain("--wk-on-band: #ece9e1;");
   });
 });
+
+describe("the coexistence seam inside a rebuilt page (BL-030 round 2)", () => {
+  /**
+   * A rebuilt page may still host an Evidence Desk component whose phase has
+   * not landed. Round 1 scoped down its rule weight and its shadow but left
+   * its green and its caps-mono alone, and then reported the page as "one
+   * green mark" using a probe that only counted this layer's own class. The
+   * budget is the page's, not the layer's.
+   */
+  it("spends no green on the setup card inside a rebuilt page", () => {
+    const section = stripComments(layer());
+    const scoped = section.slice(section.indexOf(".f9-wk-page .f9-ed-cta {"));
+    expect(scoped).toContain(".f9-wk-page .f9-ed-setup-stamp");
+    expect(scoped).toContain(".f9-wk-page .f9-ed-cta--rank3");
+    // Rank 3's accent underline and the step stamps are the two green
+    // moments that used to sit beside the Overnight mark.
+    expect(scoped).toMatch(
+      /\.f9-wk-page \.f9-ed-cta--rank3 \{[^}]*text-decoration-color: currentColor/,
+    );
+    for (const selector of [
+      ".f9-wk-page .f9-ed-setup-stamp",
+      '.f9-wk-page .f9-ed-setup-row[data-state="done"] .f9-ed-setup-stamp',
+      '.f9-wk-page .f9-ed-setup-row[data-state="next"] .f9-ed-setup-stamp',
+    ]) {
+      const block = scoped.slice(scoped.indexOf(`${selector} {`));
+      expect(block.slice(0, block.indexOf("}"))).not.toMatch(/green/);
+    }
+    // Nothing in the whole scoped seam may reach for the accent.
+    expect(scoped).not.toMatch(/--green|--ed-accent/);
+  });
+
+  it("keeps the caps-mono budget to the page's own three kickers", () => {
+    const section = stripComments(layer());
+    const scoped = section.slice(section.indexOf(".f9-wk-page .f9-ed-cta {"));
+    // The setup card shipped a fourth and fifth caps-mono surface: its
+    // "SETUP · N OF 4 DONE" kicker and its DONE / NEXT / PENDING stamps.
+    for (const selector of [
+      ".f9-wk-page .f9-ed-setup-stamp",
+      ".f9-wk-page .f9-ed-setup-header .f9-ed-micro",
+    ]) {
+      const block = scoped.slice(scoped.indexOf(`${selector} {`));
+      const body = block.slice(0, block.indexOf("}"));
+      expect(body).toContain("text-transform: none;");
+      expect(body).toContain("font-family: var(--f9-font);");
+      expect(body).toContain("letter-spacing: 0;");
+    }
+  });
+});

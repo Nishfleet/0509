@@ -2387,13 +2387,23 @@ describe("watchlists route rendering", () => {
     const { default: WatchlistsRoute } = await import("~/routes/app.watchlists");
     const markup = renderToStaticMarkup(createElement(WatchlistsRoute));
 
-    expect(markup).toContain("f9-ed-specimen");
-    expect(markup).toContain("Add your first competitor");
-    expect(markup).toContain("BAND 01 — RESERVED");
+    // BL-030 round 2: an empty board gets a sentence and a way in, not a
+    // dimmed specimen plate. The caps-mono "BAND 01 — RESERVED" diagram of the
+    // thing the customer does not have yet was the v3 ornament habit.
+    expect(markup).not.toContain("f9-ed-specimen");
+    expect(markup).not.toContain("BAND 01 — RESERVED");
+    expect(markup).not.toContain("WATCH BOARD · NOTHING TRACKED YET");
+    expect(markup).toContain("Nothing tracked yet");
+    expect(markup).toContain(
+      "Add your first competitor and its first check starts immediately.",
+    );
     expect(markup).toContain("See a sample brief");
-    // The empty state carries the screen's only Rank-1; the header drops its.
-    expect(markup.match(/f9-ed-cta--rank1/g)).toHaveLength(1);
+    // The screen still carries exactly one filled button, and it is the
+    // header's — the one thing this page exists to do.
+    expect(markup).not.toContain("f9-ed-cta--rank1");
+    expect(markup.match(/class="f9-wk-btn"/g)).toHaveLength(1);
     // No board chrome without competitors.
+    expect(markup).not.toContain("f9-wk-tabs");
     expect(markup).not.toContain("f9-ed-ticker");
     expect(markup).not.toContain("f9-ed-status-strip");
   });

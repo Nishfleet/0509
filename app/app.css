@@ -12697,6 +12697,20 @@ reds soften --- */
   font-size: 12.5px;
 }
 
+/* The one link the operational line may carry (source access, when something
+   is blocking the next check). It keeps the line's voice — 12.5px, muted,
+   underlined — and the layer's 44px target. */
+.f9-wk-lnk--quiet {
+  color: var(--ink-faint);
+  font-size: 12.5px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.f9-wk-lnk--quiet:hover {
+  color: var(--ink);
+}
+
 .f9-wk-opline span + span::before {
   margin: 0 10px;
   color: var(--ink-faint);
@@ -12783,6 +12797,68 @@ reds soften --- */
 .f9-wk-page .f9-ed-cta {
   border-width: 1px;
   box-shadow: none;
+}
+
+/* Rank 3's accent underline is a green moment. On a rebuilt page the green
+   budget is spent — once, on the caught change — so the underline goes ink at
+   this layer's rule weight. The affordance is the underline, not its colour. */
+.f9-wk-page .f9-ed-cta--rank3 {
+  text-decoration-color: currentColor;
+  text-decoration-thickness: 1px;
+}
+
+/* The setup card's step stamps were green-ink caps-mono: two budget breaches
+   at once — a second and third green moment beside the Overnight mark, and a
+   fourth caps-mono surface beside the page's three kickers. The v4 DNA states
+   a state as a WORD: "Caught" in ink, "Quiet" in grey, sentence case, body
+   face. The stamps now say exactly that, so state stays a text channel and
+   never a colour-only one. */
+.f9-wk-page .f9-ed-setup-stamp {
+  color: var(--ink-faint);
+  font-family: var(--f9-font);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.f9-wk-page .f9-ed-setup-row[data-state="done"] .f9-ed-setup-stamp {
+  color: var(--ink-faint);
+}
+
+.f9-wk-page .f9-ed-setup-row[data-state="next"] .f9-ed-setup-stamp {
+  color: var(--ink);
+}
+
+/* The opened competitor's BL-007 record sits inside the same page, and its
+   state stamps and tab counts paint green — the caught stamp's 5px accent
+   edge and the "what changed" tab count's accent fill both land inside the
+   FIRST viewport at 1440 and 1920. Green is program law, not a rule weight,
+   so the named coexistence deviation does not cover it: the record keeps its
+   own geometry until phase P1, but it gives the accent back. The state is
+   still stated in words on the stamp itself, so nothing becomes colour-only. */
+.f9-wk-page .f9-ed-stamp.is-caught {
+  border-left-color: var(--ed-rule);
+}
+
+.f9-wk-page .f9-ed-stamp.is-watching {
+  background: var(--ed-surface-sunk);
+  color: var(--ink);
+}
+
+.f9-wk-page .f9-ed-tab-count {
+  background: var(--ed-surface-sunk);
+  color: var(--ink);
+}
+
+/* Same budget, other axis: "SETUP · N OF 4 DONE" was a fourth caps-mono
+   surface. It is a context line, so it reads as one. */
+.f9-wk-page .f9-ed-setup-header .f9-ed-micro {
+  font-family: var(--f9-font);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .f9-wk-page .f9-ed-setup-card {
