@@ -8,7 +8,11 @@ type MockLinkProps = { children?: ReactNode; to?: string } & Record<
   unknown
 >;
 
-async function mockRouter(loaderData: unknown, actionData?: unknown) {
+async function mockRouter(
+  loaderData: unknown,
+  actionData?: unknown,
+  fetcherData?: unknown,
+) {
   vi.doMock("react-router", async () => {
     const actual =
       await vi.importActual<typeof import("react-router")>("react-router");
@@ -28,6 +32,16 @@ async function mockRouter(loaderData: unknown, actionData?: unknown) {
       useLoaderData: vi.fn().mockReturnValue(loaderData),
       useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
       useRevalidator: vi.fn().mockReturnValue({ revalidate: vi.fn() }),
+      // BL-030 salvage of PR #416: the setup card's quick-create answers
+      // through a fetcher, so the route-level specs have to be able to hand
+      // it retained fetcher data.
+      useFetcher: vi.fn().mockReturnValue({
+        Form: ({ children, ...props }: MockFormProps) =>
+          React.createElement("form", props, children),
+        data: fetcherData,
+        state: "idle",
+        submit: vi.fn(),
+      }),
     };
   });
 }
@@ -391,6 +405,78 @@ describe("dashboard first 15 minutes activation", () => {
     expect(markup).toContain("No ready competitors found.");
     expect(markup).not.toContain("Create 0 watchlists");
     expect(markup.match(/f9-ed-cta--rank1/g)?.length ?? 0).toBe(1);
+  });
+
+  it("does not let a retained quick-create refusal mask a bulk-import preview", async () => {
+    // Salvaged from PR #416 (f761dd7) by BL-030: the refused quick-create answers through a fetcher, and
+    // React Router retains `fetcher.data` after that fetcher goes idle. The
+    // import forms still answer through the route action, so a
+    // fetcher-data-always-wins selection would hide every later import result
+    // behind the first refusal until a full page reload.
+    await mockRouter(
+      baseDashboardData(),
+      {
+        ok: true,
+        intent: "preview-market-desk-import",
+        message: "Ready to create 1 competitor watchlist.",
+        rawText: "boat-lifestyle.com",
+        preview: {
+          ok: true,
+          error: null,
+          planLimit: 10,
+          currentCount: 0,
+          availableSlots: 10,
+          selectedCount: 1,
+          rows: [
+            {
+              id: "row-1",
+              rowNumber: 1,
+              raw: "boat-lifestyle.com",
+              name: null,
+              website: "https://boat-lifestyle.com",
+              normalizedUrl: "https://boat-lifestyle.com",
+              host: "boat-lifestyle.com",
+              notes: null,
+              tags: [],
+              client: null,
+              status: "valid",
+              reason: null,
+              selected: true,
+              target: {
+                name: "boat-lifestyle.com watch",
+                targetType: "page",
+                targetId: "boat-lifestyle.com",
+                targetFingerprint: "page:boat-lifestyle.com",
+                targetLabel: "boAt Lifestyle",
+                targetCountry: "IN",
+                trackingRole: "competitor",
+              },
+            },
+          ],
+          summary: {
+            valid: 1,
+            over_cap: 0,
+            duplicate: 0,
+            existing: 0,
+            invalid: 0,
+          },
+        },
+      },
+      {
+        ok: false,
+        intent: "create-watchlist",
+        message: "We didn't start anything — there's no website to check yet.",
+      },
+    );
+
+    const { default: AppDashboardRoute } =
+      await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup).toContain("Ready to create 1 competitor watchlist.");
+    expect(markup).toContain("f9-import-preview");
+    expect(markup).toContain("Create watchlist");
+    expect(markup).not.toContain("there&#x27;s no website to check yet");
   });
 
   it("keeps unrelated dashboard feedback out of the setup live region", async () => {
