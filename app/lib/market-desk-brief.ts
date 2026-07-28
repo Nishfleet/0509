@@ -279,7 +279,7 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
     summary: isFreePlan
       ? "Add your first competitor — free watches it with a weekly check and a weekly email brief. Paid plans check every 3–6 hours."
       : "Add your first competitor or paste several at once, then Five to Nine turns daily checks into a source-backed brief.",
-    action: { href: "/app/onboard?resume=1", label: "Add competitors" },
+    action: { href: "/app#setup-checklist", label: "Add competitors" },
     metrics,
     items: [],
     hasMetrics,

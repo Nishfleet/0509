@@ -5,7 +5,6 @@ import { CompetitorDossierPanel } from "~/components/competitor-dossier";
 import { CreativeWall } from "~/components/creative-wall";
 import { SecondaryAction, TertiaryAction } from "~/components/evidence/cta";
 import { StatusStrip, type StatusCell } from "~/components/evidence/status-strip";
-import { FirstRunWaitArc } from "~/components/first-run-wait";
 import { LocalTime } from "~/components/local-time";
 import { Pill } from "~/components/pill";
 import { ProofGlossary } from "~/components/proof-glossary";
@@ -90,7 +89,6 @@ export interface CompetitorDetailProps {
   failedChecks: number;
   nextScanLabel: string;
   sourceCanSchedule: boolean;
-  firstRunWindow: boolean;
   trackingPresentation: ReturnType<typeof resolveWatchlistTrackingPresentation>;
   discoveryRecovery: string | null;
   canExport: boolean;
@@ -248,12 +246,7 @@ export function CompetitorDetail(props: CompetitorDetailProps) {
       />
 
       {watchlist.isActive && !watchlist.lastScannedAt ? (
-        <>
-          {props.firstRunWindow ? (
-            <FirstRunWaitArc run={latestRun} scanDomain={watchlist.targetLabel} />
-          ) : null}
-          <FirstScanBanner plan={data.plan} run={latestRun} watchlistId={watchlist.id} />
-        </>
+        <FirstScanBanner plan={data.plan} run={latestRun} watchlistId={watchlist.id} />
       ) : null}
 
       {props.failedChecks >= 3 ? (

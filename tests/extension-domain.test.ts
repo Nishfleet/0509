@@ -54,15 +54,15 @@ describe("extension domain normalization", () => {
     expect(urls.ads).toBe("https://0509.io/ads/acme.com");
     expect(urls.search).toBe("https://0509.io/search?website=https%3A%2F%2Facme.com");
     expect(urls.watch).toBe(
-      "https://0509.io/auth/signup?redirectTo=%2Fapp%2Fonboard%3Fwebsite%3Dhttps%253A%252F%252Facme.com",
+      "https://0509.io/auth/signup?redirectTo=%2Fapp%3Fwebsite%3Dhttps%253A%252F%252Facme.com%23setup-checklist",
     );
   });
 
   it("round-trips the watch redirect through double decoding", () => {
     const urls = buildDestinations("acme.com");
     const redirectTo = new URL(urls.watch).searchParams.get("redirectTo");
-    expect(redirectTo).toBe("/app/onboard?website=https%3A%2F%2Facme.com");
-    const website = new URLSearchParams(redirectTo!.split("?")[1]).get("website");
+    expect(redirectTo).toBe("/app?website=https%3A%2F%2Facme.com#setup-checklist");
+    const website = new URL(redirectTo!, "https://0509.io").searchParams.get("website");
     expect(website).toBe("https://acme.com");
   });
 });

@@ -69,10 +69,10 @@ export function domainFromInput(input) {
  */
 export function buildDestinations(domain) {
   const site = `https://${domain}`;
-  const onboardPath = `/app/onboard?website=${encodeURIComponent(site)}`;
+  const setupPath = `/app?website=${encodeURIComponent(site)}#setup-checklist`;
   return {
     ads: `https://0509.io/ads/${encodeURIComponent(domain)}`,
     search: `https://0509.io/search?website=${encodeURIComponent(site)}`,
-    watch: `https://0509.io/auth/signup?redirectTo=${encodeURIComponent(onboardPath)}`,
+    watch: `https://0509.io/auth/signup?redirectTo=${encodeURIComponent(setupPath)}`,
   };
 }

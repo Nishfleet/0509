@@ -949,21 +949,20 @@ export default function SearchRoute() {
     competitorWebsite.raw,
     trackingRole,
   );
-  // D3: route every new signup through onboarding — keyword-only searchers get
-  // the same guided first step as website-first ones, instead of being dropped
-  // back on /search. D11: carry the website (when present) and the selected
-  // non-default country so onboarding starts from an explicit location choice
+  // Route every new signup to the persistent setup card. Carry the website
+  // (when present) and selected non-default country so the first action keeps
+  // the visitor's search context.
   // rather than re-deriving it from geo. Omit "all", which is onboarding's
   // default and adds no user context.
-  const onboardParams = new URLSearchParams();
+  const setupParams = new URLSearchParams();
   if (competitorWebsite.raw) {
-    onboardParams.set("website", competitorWebsite.raw);
+    setupParams.set("website", competitorWebsite.raw);
   }
   if (data.filters.country && data.filters.country !== "all") {
-    onboardParams.set("country", data.filters.country);
+    setupParams.set("country", data.filters.country);
   }
-  const onboardQuery = onboardParams.toString();
-  const postSignupPath = onboardQuery ? `/app/onboard?${onboardQuery}` : "/app/onboard";
+  const setupQuery = setupParams.toString();
+  const postSignupPath = `/app${setupQuery ? `?${setupQuery}` : ""}#setup-checklist`;
   const signupTrackingPath = `/auth/signup?redirectTo=${encodeURIComponent(postSignupPath)}`;
   const inferredWatchlistName =
     (competitorWebsite.displayName ?? data.filters.query) || "Competitor";

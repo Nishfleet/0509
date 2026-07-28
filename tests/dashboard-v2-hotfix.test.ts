@@ -117,11 +117,9 @@ describe("dashboard v2 production hotfix", () => {
 
   it("keeps customer terminology out of primary app surfaces", () => {
     const searchRoute = readFileSync("app/routes/search.tsx", "utf8");
-    const onboardRoute = readFileSync("app/routes/app.onboard.tsx", "utf8");
     const pricingSource = readFileSync("app/lib/pricing.ts", "utf8");
 
     expect(searchRoute).not.toMatch(/\bboard(s)?\b/i);
-    expect(onboardRoute).not.toContain("weekly change briefs");
     expect(pricingSource).not.toContain("saved boards");
     expect(pricingSource).not.toContain("boards, and briefs");
   });

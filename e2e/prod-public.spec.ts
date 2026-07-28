@@ -275,7 +275,8 @@ test.describe("public production-safe E2E smoke", () => {
     const signup = page.getByRole("link", { name: "Create account" }).last();
     const signupTarget = new URL((await signup.getAttribute("href"))!, baseURL);
     expect(signupTarget.pathname).toBe("/auth/signup");
-    expect(signupTarget.searchParams.get("redirectTo")).toContain("/app/onboard?");
+    expect(signupTarget.searchParams.get("redirectTo")).toContain("/app?");
+    expect(signupTarget.searchParams.get("redirectTo")).toContain("#setup-checklist");
     expect(signupTarget.searchParams.get("redirectTo")).toContain("website=nykaa.com");
 
     for (const viewport of [

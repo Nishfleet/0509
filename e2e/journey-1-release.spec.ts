@@ -330,7 +330,7 @@ for (const viewport of viewports) {
     expect(signupHref).toBeTruthy();
     const signupUrl = new URL(signupHref!, page.url());
     expect(signupUrl.pathname).toBe("/auth/signup");
-    expect(signupUrl.searchParams.get("redirectTo")).toBe("/app/onboard?website=nykaa.com");
+    expect(signupUrl.searchParams.get("redirectTo")).toBe("/app?website=nykaa.com#setup-checklist");
     await createAccount.press("Enter");
     await expect(page).toHaveURL(/\/auth\/signup\?redirectTo=/);
     await expect(page.getByRole("heading", { name: "Verify your work email to start." })).toBeVisible();
@@ -342,7 +342,7 @@ for (const viewport of viewports) {
     await expectPhoneTouchTargets(page);
     await expectNoHorizontalOverflow(page);
     const finalUrl = new URL(page.url());
-    expect(finalUrl.searchParams.get("redirectTo")).toBe("/app/onboard?website=nykaa.com");
+    expect(finalUrl.searchParams.get("redirectTo")).toBe("/app?website=nykaa.com#setup-checklist");
     await attachReleaseStateArtifacts({ page, testInfo, prefix: "j1", state: "signup" });
     test.info().annotations.push({
       type: "finalUrl",

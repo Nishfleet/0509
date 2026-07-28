@@ -504,14 +504,15 @@ export default function AccountRoute() {
         <div className="f9-panel-toolbar">
           <div>
             <span className="f9-app-kicker">Setup</span>
-            <h2>Resume account setup</h2>
+            <h2>Add another competitor</h2>
           </div>
-          <Link className="f9-secondary-button" to="/app/onboard?resume=1">
-            Resume setup
+          <Link className="f9-secondary-button" to="/app/watchlists">
+            Add competitor
           </Link>
         </div>
         <p className="f9-muted-copy">
-          Add another competitor watch or update your own brand website without resetting the account.
+          Extend the watch board without resetting the account, or{" "}
+          <Link to="#brand-profile">update your own brand website</Link> above.
         </p>
       </article>
 
@@ -615,7 +616,7 @@ export default function AccountRoute() {
         </article>
       ) : null}
 
-      <article className="f9-app-panel">
+      <article className="f9-app-panel" id="brand-profile">
         <div className="f9-panel-toolbar">
           <div>
             <span className="f9-app-kicker">My brand</span>
