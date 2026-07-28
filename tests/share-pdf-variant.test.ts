@@ -499,9 +499,10 @@ describe("/share/:token PDF variant markup", () => {
     const { default: ShareRoute } = await import("~/routes/share.$token");
     const markup = renderToStaticMarkup(createElement(ShareRoute));
 
-    expect(markup).toContain('href="/share/token-1/pdf"');
     expect(markup).toContain("Download PDF");
     expect(markup).not.toContain("Print report");
+    expect(markup).toContain('class="f9-ed-report-actions"');
+    expect(markup).not.toContain("f9-panel-toolbar-heading");
   });
 
   it("offers an honest Print button (never labeled PDF) when the plan disallows PDFs", async () => {

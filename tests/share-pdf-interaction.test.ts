@@ -62,7 +62,10 @@ beforeEach(() => {
 	vi.doMock("~/components/ad-thumb", () => ({ AdThumb: component("span") }));
 	vi.doMock("~/components/brand-wordmark", () => ({ BrandWordmark: component("span") }));
 	vi.doMock("~/components/local-time", () => ({ LocalTime: component("time") }));
-	vi.doMock("~/components/report-view", () => ({ ReportView: component("section") }));
+	vi.doMock("~/components/report-view", () => ({
+		ReportView: ({ railActions }: { railActions?: ReactNode }) =>
+			createElement("section", null, railActions),
+	}));
 	vi.doMock("~/components/share-brand-identity", () => ({ ShareBrandIdentity: component("span") }));
 	vi.doMock("~/components/digest-intelligence", () => ({
 		DigestIntelligence: component("span"),
@@ -91,7 +94,7 @@ async function renderShare() {
 	await act(async () => {
 		mountedRoot.render(createElement(ShareRoute));
 	});
-	return document.querySelector("a[data-pdf-preparing]") as HTMLAnchorElement;
+	return document.querySelector('a[data-pdf-preparing], a[href$="/pdf"]') as HTMLAnchorElement;
 }
 
 describe("public share PDF interaction", () => {

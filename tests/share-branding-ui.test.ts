@@ -183,12 +183,9 @@ describe("shared report agency identity", () => {
 
 		// Our name appears nowhere in the report document itself; the only
 		// credit is the powered-by footer the plan catalog governs.
-		// (`ProofGlossary` still carries one "Five to Nine" sentence inside the
-		// collapsed §05 glossary — logged on PR #397 as a separate leak owned
-		// by the glossary's own package, not by the report cover.)
 		const document = markup.slice(
 			markup.indexOf("f9-ed-report-cover"),
-			markup.indexOf("f9-ed-report-glossary"),
+			markup.indexOf("f9-share-powered-by"),
 		);
 		expect(document).not.toContain("Five to Nine");
 		expect(markup).toContain('class="f9-share-powered-by"');
@@ -220,15 +217,29 @@ describe("shared report agency identity", () => {
 		]));
 	});
 
-	it("keeps identity and attribution in print while hiding only app controls", () => {
+	it("keeps identity and attribution in print while hiding only client actions", () => {
 		const appCss = readFileSync("app/app.css", "utf8");
 		const printCss = appCss.slice(appCss.indexOf("@media print"));
 
 		expect(printCss).toContain(".f9-share-brand-identity");
 		expect(printCss).toContain(".f9-share-powered-by");
-		expect(printCss).toContain(".f9-report-toolbar button");
-		expect(printCss).toContain(".f9-report-toolbar a");
-		expect(printCss).not.toMatch(/\.f9-report-toolbar\s*\{[^}]*display:\s*none/);
+		expect(printCss).toContain(".f9-ed-report-rail");
 		expect(printCss).not.toMatch(/\.f9-share-header,[\s\S]{0,160}display:\s*none/);
+	});
+
+	it("keeps the screen-rendered PDF variant full-width without its contents rail", () => {
+		const appCss = readFileSync("app/app.css", "utf8");
+		const pdfStart = appCss.indexOf(".f9-share-pdf {");
+		const pdfCss = appCss.slice(pdfStart, appCss.indexOf("@media print", pdfStart));
+
+		expect(pdfCss).toMatch(
+			/\.f9-share-pdf \.f9-ed-report\s*{[\s\S]*?display:\s*block;[\s\S]*?width:\s*100%;/,
+		);
+		expect(pdfCss).toMatch(
+			/\.f9-share-pdf \.f9-ed-report-rail\s*{[\s\S]*?display:\s*none !important;/,
+		);
+		expect(pdfCss).toMatch(
+			/\.f9-share-pdf \.f9-ed-evidence-body\s*{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\);/,
+		);
 	});
 });

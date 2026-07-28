@@ -628,8 +628,8 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
         "an anonymous client should be able to open the approved snapshot",
       ).toBe(200);
       await expect(
-        anonymousPage.getByText("Shared report snapshot", { exact: true }),
-      ).toBeVisible();
+        anonymousPage.locator(".f9-ed-report-kicker"),
+      ).toContainText("Competitor evidence report");
       // BL-009: the finding is no longer a row heading inside the snapshot —
       // it IS the shared document's headline (brief §6.10). Asserting level 1
       // is the stronger form of the same guarantee: an anonymous client sees
@@ -713,8 +713,8 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
         "the replacement approved snapshot should open anonymously",
       ).toBe(200);
       await expect(
-        anonymousPage.getByText("Shared report snapshot", { exact: true }),
-      ).toBeVisible();
+        anonymousPage.locator(".f9-ed-report-kicker"),
+      ).toContainText("Competitor evidence report");
       await expectTouchTargets(anonymousPage);
       await expectNoOverflow(anonymousPage);
       await expectKeyboardFocus(anonymousPage);
