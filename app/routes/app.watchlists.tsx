@@ -459,14 +459,14 @@ export default function WatchlistsRoute() {
                         className="f9-wk-lnk"
                         to={watchlistDetailTabHref(selectedWatchlist.id, "evidence")}
                       >
-                        Open the capture <span className="f9-wk-chev">&rsaquo;</span>
+                        Open the capture <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
                       </Link>
                       {canReport ? (
                         <Link
                           className="f9-wk-lnk"
                           to={`/app/reports/${createReportId("watchlist", selectedWatchlist.id)}`}
                         >
-                          Package for client <span className="f9-wk-chev">&rsaquo;</span>
+                          Package for client <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
                         </Link>
                       ) : null}
                     </div>
@@ -479,7 +479,7 @@ export default function WatchlistsRoute() {
                         className="f9-wk-lnk"
                         to={watchlistDetailTabHref(selectedWatchlist.id, "evidence")}
                       >
-                        Open the capture <span className="f9-wk-chev">&rsaquo;</span>
+                        Open the capture <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
                       </Link>
                     </div>
                   </DetailBlock>
@@ -566,7 +566,10 @@ export default function WatchlistsRoute() {
           {rows.length} {rows.length === 1 ? "competitor" : "competitors"}
         </span>
         <span>Next check {nextScanLabel}</span>
-        <span>{trackingPresentation.statusLabel}</span>
+        {/* Source state is told ONCE per screen. With a competitor open its
+            own status strip carries it, so the board line stands down rather
+            than repeating the same words 400px apart. */}
+        {selectedWatchlist ? null : <span>{trackingPresentation.statusLabel}</span>}
       </div>
     </DashboardPage>
   );

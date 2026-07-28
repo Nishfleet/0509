@@ -12072,6 +12072,7 @@ reds soften --- */
 .f9-wk-lnk {
   display: inline-flex;
   align-items: center;
+  min-width: 44px;
   min-height: 44px;
   margin: 0;
   padding: 0;
@@ -12195,8 +12196,11 @@ reds soften --- */
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 34px;
-  padding: 7px 8px;
+  /* The concept draws 34px rows; DESIGN.md §9.6 and the release journeys
+     require 44px on anything actionable, and accessibility outranks a 10px
+     rhythm. The padding shrinks so the row still READS at concept density. */
+  min-height: 44px;
+  padding: 6px 8px;
   border-radius: 0;
   background: none;
   color: var(--wk-on-band);
@@ -12231,8 +12235,8 @@ reds soften --- */
   align-items: center;
   gap: 8px;
   width: 100%;
-  min-height: 34px;
-  padding: 7px 8px;
+  min-height: 44px;
+  padding: 6px 8px;
   border: 0;
   border-radius: 0;
   background: none;
@@ -12303,7 +12307,8 @@ reds soften --- */
 .f9-dash-page-app .f9-wk-foot-links button {
   display: inline-flex;
   align-items: center;
-  min-height: 34px;
+  min-width: 44px;
+  min-height: 44px;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -12408,8 +12413,8 @@ reds soften --- */
 }
 
 .f9-wk-row.has-lead {
-  gap: 14px 16px;
-  grid-template-columns: 20px 158px minmax(0, 1fr) 92px 96px 10px;
+  gap: 14px 12px;
+  grid-template-columns: 44px 140px minmax(0, 1fr) 92px 96px 10px;
 }
 
 .f9-wk-row.has-trail {
@@ -12419,6 +12424,10 @@ reds soften --- */
 /* The name is the link; its ::after stretches over the row so the whole
    record is the hit area without nesting anything inside an anchor. */
 .f9-wk-rowlink {
+  display: inline-flex;
+  align-items: center;
+  min-width: 44px;
+  min-height: 44px;
   border: 0;
   padding: 0;
   background: none;
@@ -12443,9 +12452,21 @@ reds soften --- */
   justify-content: flex-start;
 }
 
+/* The bulk-select control is a real 44x44 target even though the box it draws
+   is 15px — a checkbox you cannot hit on a phone is not a feature. */
+.f9-wk-row-lead label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-left: -14px;
+  cursor: pointer;
+}
+
 .f9-wk-row-lead input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   margin: 0;
   accent-color: var(--ink);
 }
@@ -12635,6 +12656,8 @@ reds soften --- */
 .f9-wk-tab {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  min-width: 44px;
   min-height: 44px;
   margin-bottom: -1px;
   padding: 12px 0 11px;
@@ -12811,30 +12834,56 @@ reds soften --- */
 }
 
 @media (max-width: 900px) {
-  .f9-wk-row {
-    gap: 4px 16px;
-    grid-template-columns: minmax(0, 1fr) auto;
+  .f9-wk-row,
+  .f9-wk-row.has-lead,
+  .f9-wk-row.has-trail {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 12px;
+    grid-template-columns: none;
   }
 
-  .f9-wk-row .f9-wk-say {
-    order: 3;
-    grid-column: 1 / -1;
-    white-space: normal;
+  .f9-wk-row .f9-wk-row-lead {
+    order: 0;
+    flex: none;
+  }
+
+  .f9-wk-row .f9-wk-nm {
+    order: 1;
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .f9-wk-row .f9-wk-st {
     order: 2;
+    flex: none;
+    margin-left: auto;
     text-align: right;
+  }
+
+  .f9-wk-row .f9-wk-go,
+  .f9-wk-row .f9-wk-row-trail {
+    order: 3;
+    flex: none;
+  }
+
+  .f9-wk-row .f9-wk-say {
+    order: 4;
+    flex: 1 1 100%;
+    min-width: 0;
+    white-space: normal;
   }
 
   .f9-wk-row .f9-wk-tm {
-    order: 4;
+    order: 5;
+    flex: 1 1 100%;
+    min-width: 0;
     text-align: left;
   }
 
-  .f9-wk-row .f9-wk-go {
-    order: 5;
-    text-align: right;
+  .f9-wk-row.has-lead .f9-wk-row-lead label {
+    margin-left: -14px;
   }
 }
 

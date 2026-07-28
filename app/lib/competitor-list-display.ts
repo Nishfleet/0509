@@ -93,7 +93,10 @@ export function resolveCompetitorRowLine(input: {
       return `${count} ${count === 1 ? "change" : "changes"} captured in the last ${input.windowDays} days.`;
     }
     case "watching":
-      return "First capture is running. This row updates itself.";
+      // The list loader does not read this competitor's runs (that is one
+      // query per row), so it must not claim a capture is running. It states
+      // the fact it has — nothing has completed — and what happens next.
+      return "No completed check yet. This row updates itself when the first capture lands.";
     default:
       return `Checked, and nothing has changed in the last ${input.windowDays} days.`;
   }

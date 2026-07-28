@@ -158,12 +158,14 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
         /confirmed/i,
       ]);
 
-      await expect(page.getByRole("link", { name: /Workflow acceptance watch/ })).toContainText(
-        "No completed check yet — open for status",
-      );
-      await expect(page.getByRole("link", { name: /Crash reclaim watch/ })).toContainText(
-        "No completed check yet — open for status",
-      );
+      // BL-030: the list row states the competitor's state in one sentence,
+      // so the promise is checked on the row rather than on its name link.
+      await expect(
+        page.locator(".f9-wk-row", { hasText: "Workflow acceptance watch" }).first(),
+      ).toContainText("No completed check yet");
+      await expect(
+        page.locator(".f9-wk-row", { hasText: "Crash reclaim watch" }).first(),
+      ).toContainText("No completed check yet");
       await expect(page.getByText("Needs source access", { exact: true })).toBeVisible();
       await expect(page.getByText("After source access is ready", { exact: true })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Landing page offer changed" }).first()).toBeVisible();

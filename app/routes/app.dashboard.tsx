@@ -656,7 +656,7 @@ export default function AppDashboardRoute() {
         <FeedbackStrip
           actions={
             <Link className="f9-wk-lnk" to="/app/billing">
-              Plan &amp; billing <span className="f9-wk-chev">&rsaquo;</span>
+              Plan &amp; billing <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
             </Link>
           }
           label="Payment issue"
@@ -673,7 +673,7 @@ export default function AppDashboardRoute() {
         <FeedbackStrip
           actions={
             <Link className="f9-wk-lnk" to="/app/billing?source=evidence#top-ups">
-              Review check packs <span className="f9-wk-chev">&rsaquo;</span>
+              Review check packs <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
             </Link>
           }
           label="Evidence usage"
@@ -727,7 +727,7 @@ export default function AppDashboardRoute() {
           {digests.length > 0 ? (
             <p className="f9-wk-note">
               <Link className="f9-wk-lnk" to="/app/digests?firstrun=1">
-                Read latest brief <span className="f9-wk-chev">&rsaquo;</span>
+                Read latest brief <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
               </Link>
             </p>
           ) : null}

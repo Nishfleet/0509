@@ -174,7 +174,10 @@ describe("the competitors list", () => {
         "attention",
         "4 checks in a row failed. We're still retrying and the history stays.",
       ],
-      ["watching", "First capture is running. This row updates itself."],
+      [
+        "watching",
+        "No completed check yet. This row updates itself when the first capture lands.",
+      ],
       ["quiet", "Checked, and nothing has changed in the last 30 days."],
       ["paused", "Paused. No checks run and the history stays."],
     ]);
