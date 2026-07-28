@@ -21,6 +21,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AdLongevityPill } from "~/components/ad-longevity-pill";
 import { AdThumb } from "~/components/ad-thumb";
 import { DashboardShell } from "~/components/dashboard-shell";
+import { SpecimenEmptyState } from "~/components/evidence/specimen-empty-state";
 import {
   PublicSearchError,
   PublicSearchLoading,
@@ -1253,13 +1254,19 @@ export default function SearchRoute() {
         aria-labelledby="search-command-title"
       >
         <div className="f9-search-command-head">
+          <span className="f9-ed-micro">Meta Ad Library · live search</span>
           <h1 id="search-command-title">Find competitor ads</h1>
+          <p>
+            Paste one competitor website. We pull what they are running right
+            now, read the offer off the landing page, and keep the capture so a
+            later change is provable.
+          </p>
         </div>
 
         <Form className="f9-search-command-form" method="get">
           <input name="mode" type="hidden" value="advertiser" />
           <input name="trackingRole" type="hidden" value="competitor" />
-          <label className="f9-search-field">
+          <label className="f9-search-field is-primary">
             <span>Competitor website</span>
             <input
               aria-invalid={Boolean(data.inputError)}
@@ -1273,11 +1280,29 @@ export default function SearchRoute() {
               type="text"
             />
           </label>
+          {/* Brief §5: the one Rank-1 on this screen — the page exists to run
+              this search. The hint sits inside the form row it describes
+              instead of dangling under the button. */}
+          <div className="f9-search-actions">
+            <SubmitButton
+              className="f9-ed-cta f9-ed-cta--rank1"
+              getAction="/search"
+              pendingLabel="Searching…"
+            >
+              See ads
+            </SubmitButton>
+          </div>
+          <p className="f9-search-command-hint" id="search-command-hint">
+            {data.inputError ??
+              (rootData.session
+                ? "Paste one competitor website."
+                : "Paste one competitor website. No account needed.")}
+          </p>
           <details
             className="f9-search-refine-disclosure"
             open={!hasSearchQuery}
           >
-            <summary>Refine search</summary>
+            <summary className="f9-ed-micro">Refine search</summary>
             <div
               className="f9-search-refine"
               role="group"
@@ -1342,22 +1367,7 @@ export default function SearchRoute() {
               </label>
             </div>
           </details>
-          <div className="f9-search-actions">
-            <SubmitButton
-              className="f9-primary-button"
-              getAction="/search"
-              pendingLabel="Searching…"
-            >
-              See ads
-            </SubmitButton>
-          </div>
         </Form>
-        <p className="f9-search-command-hint" id="search-command-hint">
-          {data.inputError ??
-            (rootData.session
-              ? "Paste one competitor website."
-              : "Paste one competitor website. No account needed.")}
-        </p>
         {canTrackCurrentCompetitor && rootData.session ? (
           <div className="f9-search-retention">
             <Form className="f9-quick-track-form" method="post">
@@ -1374,7 +1384,7 @@ export default function SearchRoute() {
                 value={`${inferredWatchlistName} watch`}
               />
               <SubmitButton
-                className="f9-secondary-button"
+                className="f9-ed-cta f9-ed-cta--rank2"
                 intent="create-watchlist"
                 pendingLabel="Creating…"
               >
@@ -1400,7 +1410,7 @@ export default function SearchRoute() {
                 />
               </label>
               <SubmitButton
-                className="f9-secondary-button"
+                className="f9-ed-cta f9-ed-cta--rank2"
                 intent="save-query"
                 pendingLabel="Saving…"
               >
@@ -2005,10 +2015,56 @@ export default function SearchRoute() {
                 </aside>
               </div>
             </>
-          ) : null}
+          ) : (
+            /* Brief §6.8 — before the first search the result area is a panel,
+               not a 2,000px void (A3). The specimen is the real result shape,
+               dimmed, inert and labelled as a sample: nothing invented is ever
+               presented as a finding (§8.3, §8.5). No Rank-1 here — "See ads"
+               above is this screen's only one (§5). */
+            <SpecimenEmptyState
+              className="f9-search-specimen"
+              copy="Paste a competitor website above and press See ads. Every ad they are running comes back as a card like this one — the creative, how long it has been live, and the offer we read off the landing page. Then we keep the capture, so the next time that offer moves you can prove it."
+              headline="What one competitor looks like"
+              specimen={<SearchResultSpecimen />}
+              specimenLabel="Result 01 — sample shape, not a finding"
+              stateLabel="No search run yet · Meta Ad Library"
+            />
+          )}
         </div>
       </section>
     </DashboardShell>
+  );
+}
+
+/**
+ * The dimmed shape a real result takes (brief §6.8 part 3). It mirrors the
+ * grammar of `SearchResultCard` — advertiser, longevity, hook, capture line —
+ * without borrowing a real advertiser, a real number or a real quote. Its
+ * container is `aria-hidden` + `inert`, and every string here says "sample".
+ */
+function SearchResultSpecimen() {
+  return (
+    <div className="f9-search-specimen-card">
+      <div className="f9-search-specimen-head">
+        <span className="f9-ed-micro">Sample advertiser</span>
+        <span className="f9-ed-micro">Sample</span>
+      </div>
+      <div className="f9-search-specimen-body">
+        <div className="f9-search-specimen-thumb">
+          <span className="f9-ed-micro">Creative</span>
+        </div>
+        <div className="f9-search-specimen-lines">
+          <strong>The hook they lead with lands here</strong>
+          <span className="f9-search-specimen-line" />
+          <p>The offer we read off their landing page lands here</p>
+        </div>
+      </div>
+      <div className="f9-search-specimen-facts">
+        <span>Running — sample</span>
+        <span>First seen — sample</span>
+        <span>Offer read — sample</span>
+      </div>
+    </div>
   );
 }
 

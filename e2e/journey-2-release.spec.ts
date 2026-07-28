@@ -93,8 +93,13 @@ for (const viewport of viewports) {
     await expect(onboardingSubmit).toHaveAccessibleName("Track Nykaa");
     await expect(onboardingSubmit).toBeEnabled();
     await onboardingWebsite.fill("");
+    // BL-025: the Rank-1 is never rendered disabled (brief §5) — the washed
+    // ink fill under a live accent offset read half-built. The name still
+    // tracks the field, and the refusal of an empty website is proven against
+    // the action in "persistent setup card keeps an empty free workspace
+    // honest" below.
     await expect(onboardingSubmit).toHaveAccessibleName("Track this competitor");
-    await expect(onboardingSubmit).toBeDisabled();
+    await expect(onboardingSubmit).toBeEnabled();
     await onboardingWebsite.fill("nykaa.com");
     await expect(onboardingSubmit).toHaveAccessibleName("Track Nykaa");
     await expect(onboardingSubmit).toBeEnabled();
@@ -223,14 +228,18 @@ for (const viewport of viewports) {
     await expect(website).toHaveAttribute("aria-describedby", "setup-competitor-hint");
     await expect(website).toHaveAttribute("aria-invalid", "false");
     await expectMinimumTouchTarget(website);
+    // BL-025: Tab out of the website field now lands on the card's Rank-1,
+    // which is no longer rendered disabled and therefore no longer skipped in
+    // the tab order. The guarantee is unchanged — the next stop after the
+    // field is a real, reachable control, not a keyboard dead end.
     await expectFocusTransition(
       website,
-      page.locator(".f9-ed-setup-import > summary").first(),
+      page.locator("form.f9-ed-setup-primary button[type='submit']").first(),
     );
     await expectVisibleKeyboardFocus(website);
     await expectPhoneTouchTargets(page);
     const submit = page.locator("form.f9-ed-setup-primary button[type='submit']");
-    await expect(submit).toBeDisabled();
+    await expect(submit).toBeEnabled();
     await attachReleaseStateArtifacts({ page, testInfo, prefix: "j2-activation", state: "onboard" });
     await website.fill("https://nykaa.com");
     await expect(submit).toBeEnabled();
@@ -304,7 +313,29 @@ test("persistent setup card keeps an empty free workspace honest", async ({
   await expect(page.locator("#setup-checklist")).toContainText("First competitor");
   await expect(page.getByText("We file the first brief before you wake.")).toHaveCount(0);
   await expect(page.locator(".f9-first-run-spine")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Track this competitor", exact: true })).toBeVisible();
+  const trackCompetitor = page.getByRole("button", { name: "Track this competitor", exact: true });
+  await expect(trackCompetitor).toBeVisible();
+
+  // BL-025 — the checklist state is one §6.3 status strip, not four repeated
+  // title+sentence rows, and every step still states itself in words so colour
+  // is never the only channel (brief §10).
+  const setupTrack = page.locator(".f9-ed-setup-track");
+  await expect(setupTrack.locator("li")).toHaveCount(4);
+  await expect(setupTrack).toContainText("Now");
+  await expect(setupTrack).toContainText("Still to come");
+  await expect(page.locator(".f9-ed-setup-row")).toHaveCount(0);
+  await expect(page.locator(".f9-ed-setup-stamp")).toHaveCount(0);
+
+  // The Rank-1 is enabled (§5), and an empty website is refused by the action
+  // with the honest message rather than by a dead-looking button.
+  await expect(trackCompetitor).toBeEnabled();
+  await trackCompetitor.click();
+  await expect(page).toHaveURL(/\/app(\?|$)/);
+  await expect(
+    page.getByText("Enter a full website address first, like brand.com."),
+  ).toBeVisible();
+  await expect(page.locator("#setup-checklist")).toBeVisible();
+
   await expect(page.locator("body")).not.toContainText(/stakeout|under watch|on camera|surveillance/i);
   await expectNoHorizontalOverflow(page);
   await expectPhoneTouchTargets(page);

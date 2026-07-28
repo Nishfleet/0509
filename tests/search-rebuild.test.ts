@@ -98,3 +98,66 @@ describe("search rebuild", () => {
     expect(searchCss).toContain("color: #fff;");
   });
 });
+
+describe("search — Evidence Desk treatment (BL-025)", () => {
+  it("runs exactly one Rank-1 CTA and retires the fourth button style from the command block", () => {
+    // Brief §5: "See ads" is the single thing this page exists to do.
+    expect(searchRoute).toMatch(/f9-ed-cta--rank1[\s\S]*?See ads/);
+    expect(searchClasses.filter((className) => className === "f9-ed-cta--rank1")).toHaveLength(1);
+    // The command block no longer reaches for `.f9-primary-button` /
+    // `.f9-secondary-button` — the workspace button API is the three ranks.
+    expect(searchCss).not.toContain(".f9-search-page .f9-search-command .f9-primary-button");
+    expect(searchCss).not.toContain(".f9-search-page .f9-search-command .f9-secondary-button");
+  });
+
+  it("opens in the desk voice: mono kicker, display title, one honest lead", () => {
+    expect(searchRoute).toContain("Meta Ad Library · live search");
+    expect(searchRoute).toContain('<h1 id="search-command-title">Find competitor ads</h1>');
+    expect(searchCss).toContain("font-family: var(--ed-display);");
+    // Brief §4.6: radius 0 and 2.5px rules replaced the 8/10px Vercel-era card
+    // chrome on every control in this block.
+    expect(searchCss).not.toContain("border: 1px solid #ddd8cd;");
+    expect(searchCss).not.toContain("border: 1px solid #d8d2c5;");
+    expect(searchCss).not.toContain("color: #9b978f;");
+  });
+
+  it("integrates the helper text into the form it describes", () => {
+    // The hint used to sit after </Form>, dangling under the button.
+    const formBlock = searchRoute.slice(
+      searchRoute.indexOf('<Form className="f9-search-command-form"'),
+      searchRoute.indexOf("</Form>", searchRoute.indexOf('<Form className="f9-search-command-form"')),
+    );
+    expect(formBlock).toContain('id="search-command-hint"');
+    expect(formBlock).toContain('className="f9-search-command-hint"');
+    expect(searchCss).toMatch(/\.f9-search-command-hint \{[\s\S]*?grid-column: 1 \/ -1;/);
+  });
+
+  it("fills the pre-search result area with a labelled specimen, never a void", () => {
+    // Brief §6.8 / anti-reference A3: an empty state is a panel, and the
+    // specimen is inert, dimmed and labelled — no invented finding.
+    expect(searchRoute).toContain("SpecimenEmptyState");
+    expect(searchRoute).toContain("No search run yet · Meta Ad Library");
+    expect(searchRoute).toContain("Result 01 — sample shape, not a finding");
+    expect(searchRoute).toContain("Sample advertiser");
+    // The specimen carries no Rank-1 of its own (§5: one per screen).
+    const specimenBlock = searchRoute.slice(searchRoute.indexOf("<SpecimenEmptyState"));
+    expect(specimenBlock.slice(0, specimenBlock.indexOf("/>"))).not.toContain("primaryAction");
+  });
+
+  it("styles the filter row itself instead of shipping native select and date chrome", () => {
+    expect(searchCss).toMatch(/\.f9-search-page \.f9-search-field select \{[\s\S]*?appearance: none;/);
+    expect(searchCss).toContain(".f9-search-page .f9-search-field input[type=\"date\"]");
+    expect(searchCss).toContain(".f9-search-page .f9-search-refine-disclosure > summary::after");
+  });
+
+  it("lets the dark theme flip the command block through the --ed-* aliases only", () => {
+    // BL-025 deleted the dark-only duplicates of these controls; a second
+    // theme-scoped rule for them can only drift from the token layer.
+    expect(searchCss).not.toContain('[data-f9-theme="dark"] .f9-search-page .f9-search-field input');
+    expect(searchCss).not.toContain('[data-f9-theme="dark"] .f9-search-page .f9-search-field select');
+    expect(searchCss).not.toContain('[data-f9-theme="dark"] .f9-search-page .f9-search-command-hint,');
+    expect(searchCss).not.toContain(
+      '[data-f9-theme="dark"] .f9-search-page .f9-search-refine-disclosure',
+    );
+  });
+});

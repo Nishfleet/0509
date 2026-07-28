@@ -259,7 +259,20 @@ test.describe("local authenticated E2E harness", () => {
       page.getByText("Paste one competitor website to start."),
     ).toBeVisible();
     await expect(page.getByText("We create the watchlist and start its first scan immediately.")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Track this competitor" })).toBeDisabled();
+
+    // BL-025: the one Rank-1 on this screen is never rendered disabled — a
+    // washed-out ink fill under a full-strength accent offset read half-built.
+    // The guarantee this assertion has always carried is unchanged: an empty
+    // website field cannot start a scan. It is now enforced by the action,
+    // which answers with the honest message instead of creating anything.
+    const trackCompetitor = page.getByRole("button", { name: "Track this competitor" });
+    await expect(trackCompetitor).toBeEnabled();
+    await trackCompetitor.click();
+    await expect(page).toHaveURL(/\/app/);
+    await expect(
+      page.getByText("Enter a full website address first, like brand.com."),
+    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Finish the workspace that sends your first brief" })).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });
 

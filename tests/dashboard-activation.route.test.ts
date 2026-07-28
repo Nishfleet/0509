@@ -113,9 +113,7 @@ describe("dashboard first 15 minutes activation", () => {
     expect(markup).toContain("Setup · 0 of 1 done");
     expect(markup).toContain("Finish the workspace that sends your first brief");
     expect(markup).toContain("First competitor");
-    expect(markup).toContain("Next");
     expect(markup).toContain('aria-current="step"');
-    expect(markup).not.toContain('aria-hidden="true" class="f9-ed-setup-stamp"');
     expect(markup).toContain("Competitor website");
     expect(markup).toContain("Track this competitor");
     expect(markup).toContain("Add several competitors by paste or CSV");
@@ -123,6 +121,31 @@ describe("dashboard first 15 minutes activation", () => {
     expect(markup).toContain("Add your brand website");
     expect(markup).not.toContain("f9-first-run-spine");
     expect(markup.match(/f9-ed-cta--rank1/g)?.length ?? 0).toBe(1);
+
+    // BL-025 — the step state is ONE §6.3 status strip, not four repeated
+    // title+sentence rows (§6.6 kills the micro-label stack). Every step still
+    // states itself in words, so colour is never the only channel (§10).
+    expect(markup).toContain("f9-ed-setup-track");
+    expect(markup).toContain("f9-ed-status-cell");
+    expect(markup).toContain(">Now<");
+    expect(markup).not.toContain("f9-ed-setup-row");
+    expect(markup).not.toContain("f9-ed-setup-stamp");
+    expect(markup).not.toContain("f9-ed-setup-list");
+
+    // The ink treatment is an accent STRIP carrying mono only. The display
+    // headline moved onto the card surface, so the inverted block can never
+    // grow into a full-height sheet again.
+    expect(markup).toContain("f9-ed-setup-strip");
+    expect(markup).not.toContain("f9-ed-setup-header");
+    const strip = markup.slice(
+      markup.indexOf("f9-ed-setup-strip"),
+      markup.indexOf("f9-ed-setup-track"),
+    );
+    expect(strip).not.toContain("<h2");
+
+    // §5: the single Rank-1 is never rendered disabled — the action answers an
+    // empty or malformed website with its own honest message.
+    expect(markup).not.toMatch(/f9-ed-cta--rank1[^>]*disabled/);
   });
 
   it("keeps the filed brief reachable while setup still has another step", async () => {

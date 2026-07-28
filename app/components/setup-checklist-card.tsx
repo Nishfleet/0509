@@ -69,147 +69,188 @@ export function SetupChecklistCard({
       className="f9-ed-setup-card"
       id="setup-checklist"
     >
-      <header className="f9-ed-setup-header">
+      {/* Brief §6.11 ink header — a STRIP, not a sheet. It carries mono only:
+          the ink/inverted treatment is an accent in this system (plate headers,
+          cover blocks), and a full panel of it reads as a rendering error on
+          the dark ground (BL-025, Nish 2026-07-28). */}
+      <header className="f9-ed-setup-strip">
         <span className="f9-ed-micro">
           Setup · {readyCount} of {items.length} done
         </span>
-        <h2 id="setup-checklist-title">Finish the workspace that sends your first brief</h2>
+        <span aria-hidden="true" className="f9-ed-setup-ticks">
+          {items.map((item) => (
+            <i
+              data-state={
+                isBlockingSetupItemComplete(readiness, item)
+                  ? "done"
+                  : item.id === nextItem.id
+                    ? "next"
+                    : "pending"
+              }
+              key={item.id}
+            />
+          ))}
+        </span>
       </header>
 
-      {setupActionData?.message ? (
-        <div
-          aria-live={setupActionData.ok ? "polite" : "assertive"}
-          className={`f9-message ${setupActionData.ok ? "is-success" : "is-error"}`}
-          role={setupActionData.ok ? "status" : "alert"}
-        >
-          <p>{setupActionData.message}</p>
-          {!setupActionData.ok && setupActionData.upgradePath ? (
-            <Link to={setupActionData.upgradePath}>View plans</Link>
-          ) : null}
-        </div>
-      ) : null}
-
-      {!hasActionableImportPreview && nextIsCompetitor ? (
-        <Form className="f9-ed-setup-primary" method="post">
-          <input name="intent" type="hidden" value="create-watchlist" />
-          <input name="country" type="hidden" value={prefillCountry} />
-          <label className="f9-field" htmlFor="setup-competitor-website">
-            <span>Competitor website</span>
-            <input
-              aria-describedby="setup-competitor-hint"
-              aria-invalid={Boolean(normalizedWebsite.error)}
-              autoComplete="url"
-              id="setup-competitor-website"
-              inputMode="url"
-              name="website"
-              onChange={(event) => setWebsite(event.currentTarget.value)}
-              placeholder="https://competitor.com"
-              spellCheck={false}
-              type="text"
-              value={website}
-            />
-            <small id="setup-competitor-hint">
-              {normalizedWebsite.error ?? "We create the watchlist and start its first scan immediately."}
-            </small>
-          </label>
-          <SubmitButton
-            className="f9-ed-cta f9-ed-cta--rank1"
-            disabled={!canSubmitWebsite}
-            intent="create-watchlist"
-            pendingLabel="Starting first scan…"
-          >
-            Track {normalizedWebsite.displayName ?? "this competitor"}
-          </SubmitButton>
-        </Form>
-      ) : !hasActionableImportPreview && nextItem.action ? (
-        <div className="f9-ed-action-row">
-          <PrimaryAction to={nextItem.action.href}>{nextItem.action.label}</PrimaryAction>
-        </div>
-      ) : null}
-
-      <ol className="f9-ed-setup-list">
+      {/* Brief §6.3 status strip: the four steps as ONE ruled row of key/value
+          cells, replacing four repeated title+sentence rows (§6.6 kills the
+          micro-label stack). Each cell states its own step in words, so colour
+          is never the only channel (§10). */}
+      <ol aria-label="Setup steps" className="f9-ed-status-strip f9-ed-setup-track">
         {items.map((item) => {
           const done = isBlockingSetupItemComplete(readiness, item);
           const isNext = item.id === nextItem.id;
           return (
             <li
               aria-current={isNext ? "step" : undefined}
-              className="f9-ed-setup-row"
+              className="f9-ed-status-cell"
               data-state={done ? "done" : isNext ? "next" : "pending"}
               key={item.id}
             >
-              <span className="f9-ed-setup-stamp">
-                {done ? "Done" : isNext ? "Next" : "Pending"}
-              </span>
-              <span>
-                <strong>{item.label}</strong>
-                <small>{item.detail}</small>
+              <span aria-hidden="true" className="f9-ed-setup-track-bar" />
+              <span className="f9-ed-status-key">{item.label}</span>
+              <span className="f9-ed-status-value">
+                {done ? "Done" : isNext ? "Now" : "Still to come"}
               </span>
             </li>
           );
         })}
       </ol>
 
-      {hasWatchlistCapacity ? (
-        <details className="f9-ed-setup-import" open={Boolean(importPreview) || undefined}>
-          <summary>Add several competitors by paste or CSV</summary>
-          <Form encType="multipart/form-data" method="post">
-          <label className="f9-field">
-            <span>Competitors</span>
-            <textarea
-              defaultValue={setupActionData?.rawText ?? ""}
-              name="competitors"
-              placeholder={"competitor.com\nbrand two\nname,website,notes,tags,client"}
-              rows={5}
-              spellCheck={false}
-            />
-            <small>Paste domains, URLs, names, or CSV rows. Existing competitors and plan limits are checked before any write.</small>
-          </label>
-          <label className="f9-field">
-            <span>CSV or text file</span>
-            <input accept=".csv,.txt,text/csv,text/plain" name="competitorFile" type="file" />
-          </label>
-          {importPreview ? <ImportPreview preview={importPreview} /> : null}
-          <div className="f9-ed-action-row">
-            <SubmitButton
-              className="f9-ed-cta f9-ed-cta--rank2"
-              intent="preview-market-desk-import"
-              name="intent"
-              pendingLabel="Checking…"
-              value="preview-market-desk-import"
-            >
-              Preview import
-            </SubmitButton>
-            {hasActionableImportPreview && importPreview ? (
-              <SubmitButton
-                className="f9-ed-cta f9-ed-cta--rank1"
-                intent="create-market-desk-import"
-                name="intent"
-                pendingLabel="Creating…"
-                value="create-market-desk-import"
-              >
-                {importPreview.selectedCount === 1
-                  ? "Create watchlist"
-                  : `Create ${importPreview.selectedCount} watchlists`}
-              </SubmitButton>
+      <div className="f9-ed-setup-body">
+        <div className="f9-ed-setup-lede">
+          <h2 id="setup-checklist-title">Finish the workspace that sends your first brief</h2>
+          <p>{nextItem.detail}</p>
+        </div>
+
+        {setupActionData?.message ? (
+          <div
+            aria-live={setupActionData.ok ? "polite" : "assertive"}
+            className={`f9-message ${setupActionData.ok ? "is-success" : "is-error"}`}
+            role={setupActionData.ok ? "status" : "alert"}
+          >
+            <p>{setupActionData.message}</p>
+            {!setupActionData.ok && setupActionData.upgradePath ? (
+              <Link to={setupActionData.upgradePath}>View plans</Link>
             ) : null}
           </div>
-          </Form>
-        </details>
-      ) : (
-        <p className="f9-ed-setup-capacity">
-          Your current plan is at its competitor limit.{" "}
-          <TertiaryAction to="/app/billing?source=setup-checklist#plans">
-            View plans
-          </TertiaryAction>
-        </p>
-      )}
+        ) : null}
 
-      <div className="f9-ed-setup-links">
-        <TertiaryAction href={website.trim() ? `/search?website=${encodeURIComponent(website.trim())}` : "/search"}>
-          Search first instead
-        </TertiaryAction>
-        <TertiaryAction to="/app/account#brand-profile">Add your brand website</TertiaryAction>
+        {!hasActionableImportPreview && nextIsCompetitor ? (
+          <Form className="f9-ed-setup-primary" method="post">
+            <input name="intent" type="hidden" value="create-watchlist" />
+            <input name="country" type="hidden" value={prefillCountry} />
+            <label className="f9-field" htmlFor="setup-competitor-website">
+              <span>Competitor website</span>
+              <input
+                aria-describedby="setup-competitor-hint"
+                aria-invalid={Boolean(normalizedWebsite.error)}
+                autoComplete="url"
+                id="setup-competitor-website"
+                inputMode="url"
+                name="website"
+                onChange={(event) => setWebsite(event.currentTarget.value)}
+                placeholder="https://competitor.com"
+                spellCheck={false}
+                type="text"
+                value={website}
+              />
+            </label>
+            {/* Brief §5: the one Rank-1 on this screen. It is never rendered
+                disabled — a washed-out ink fill under a full-strength accent
+                offset reads half-built, and the action already answers an empty
+                or malformed website with the honest message the card shows
+                above (setup-checklist-action.server). */}
+            <SubmitButton
+              className="f9-ed-cta f9-ed-cta--rank1"
+              intent="create-watchlist"
+              pendingLabel="Starting first scan…"
+            >
+              Track {normalizedWebsite.displayName ?? "this competitor"}
+            </SubmitButton>
+            <small
+              className="f9-ed-setup-hint"
+              data-state={website.trim() && !canSubmitWebsite ? "invalid" : "ok"}
+              id="setup-competitor-hint"
+            >
+              {normalizedWebsite.error ?? "We create the watchlist and start its first scan immediately."}
+            </small>
+          </Form>
+        ) : !hasActionableImportPreview && nextItem.action ? (
+          <div className="f9-ed-action-row">
+            <PrimaryAction to={nextItem.action.href}>{nextItem.action.label}</PrimaryAction>
+          </div>
+        ) : null}
+
+        {/* Brief §5 Rank-2/Rank-3 foot: the bulk-import disclosure is a real
+            Rank-2 control (no native ► marker) and the two low-frequency links
+            are a ruled Rank-3 row, not floating underlines. */}
+        <div className="f9-ed-setup-foot">
+          {hasWatchlistCapacity ? (
+            <details className="f9-ed-setup-import" open={Boolean(importPreview) || undefined}>
+              <summary className="f9-ed-cta f9-ed-cta--rank2">
+                Add several competitors by paste or CSV
+              </summary>
+              <Form encType="multipart/form-data" method="post">
+                <label className="f9-field">
+                  <span>Competitors</span>
+                  <textarea
+                    defaultValue={setupActionData?.rawText ?? ""}
+                    name="competitors"
+                    placeholder={"competitor.com\nbrand two\nname,website,notes,tags,client"}
+                    rows={5}
+                    spellCheck={false}
+                  />
+                  <small>Paste domains, URLs, names, or CSV rows. Existing competitors and plan limits are checked before any write.</small>
+                </label>
+                <label className="f9-field">
+                  <span>CSV or text file</span>
+                  <input accept=".csv,.txt,text/csv,text/plain" name="competitorFile" type="file" />
+                </label>
+                {importPreview ? <ImportPreview preview={importPreview} /> : null}
+                <div className="f9-ed-action-row">
+                  <SubmitButton
+                    className="f9-ed-cta f9-ed-cta--rank2"
+                    intent="preview-market-desk-import"
+                    name="intent"
+                    pendingLabel="Checking…"
+                    value="preview-market-desk-import"
+                  >
+                    Preview import
+                  </SubmitButton>
+                  {hasActionableImportPreview && importPreview ? (
+                    <SubmitButton
+                      className="f9-ed-cta f9-ed-cta--rank1"
+                      intent="create-market-desk-import"
+                      name="intent"
+                      pendingLabel="Creating…"
+                      value="create-market-desk-import"
+                    >
+                      {importPreview.selectedCount === 1
+                        ? "Create watchlist"
+                        : `Create ${importPreview.selectedCount} watchlists`}
+                    </SubmitButton>
+                  ) : null}
+                </div>
+              </Form>
+            </details>
+          ) : (
+            <p className="f9-ed-setup-capacity">
+              Your current plan is at its competitor limit.{" "}
+              <TertiaryAction to="/app/billing?source=setup-checklist#plans">
+                View plans
+              </TertiaryAction>
+            </p>
+          )}
+
+          <div className="f9-ed-setup-links">
+            <TertiaryAction href={website.trim() ? `/search?website=${encodeURIComponent(website.trim())}` : "/search"}>
+              Search first instead
+            </TertiaryAction>
+            <TertiaryAction to="/app/account#brand-profile">Add your brand website</TertiaryAction>
+          </div>
+        </div>
       </div>
     </section>
   );

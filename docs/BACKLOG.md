@@ -45,6 +45,16 @@ The queue no longer stops when empty — it REFILLS, on evidence only:
      tech lead + Nish to inspect.
    - Design-language fidelity check: after each program phase, Nish eyeballs
      2-3 live surfaces; his "off track" verdict pauses new design packages.
+   - **STATUS 2026-07-28 — the fidelity check fired and the verdict was OFF
+     TRACK.** Nish eyeballed the live signed-in Overview and `/search` after
+     the day's deploys and returned: *"this screams unfinished and ai slop"*,
+     with screenshots of both. Per the rule above, **new design packages are
+     paused**: BL-018 onward do not start until Nish re-approves the design
+     language on live surfaces. The remediation package is BL-025 (below); it
+     ships behind an independent adversarial review **and** Nish's explicit
+     visual re-approval, and neither the pause nor the package is lifted by
+     any agent. The two named surfaces are the only ones cleared for design
+     work while the pause holds.
 4. **Nish's standing gates:** he can veto/reorder anytime; pricing, product
    direction, and new-feature ideas park in the lane below for his explicit
    promotion; a design re-direction (new visual language) still requires his
@@ -76,6 +86,28 @@ The queue no longer stops when empty — it REFILLS, on evidence only:
   screen-reader announcement without painting a workspace-sized ring, and the
   signed-in shell plus page canvas no longer stop at the 1480px shell cap or
   the nested 1120px content cap.
+- **BL-025 — De-slop the Overview setup moment; give `/search` the Evidence
+  Desk treatment.** ✅ Triggered by the 2026-07-28 design-language fidelity
+  check (rule 3b): Nish eyeballed the live signed-in Overview and `/search`
+  and returned **"this screams unfinished and ai slop"** with screenshots of
+  both — the program-pausing verdict. Overview: the BL-016 checklist opened on
+  a ~610px inverted sheet, its Rank-1 rendered disabled (a washed ink fill
+  under a live green offset, reading half-built), four repeated
+  `NEXT`/`PENDING` title+sentence rows were the §6.6 micro-label stack, the
+  bulk-import disclosure shipped its native ► marker, and the workspace
+  actions floated detached above a full-width canvas. The ink treatment is now
+  an accent strip (brief §6.11, matching `.f9-ed-plate-header`), the four rows
+  are ONE §6.3 status strip, the Rank-1 is never disabled (the action already
+  refuses an empty website honestly), the disclosure is a real Rank-2 and the
+  links a ruled Rank-3 foot, and the topbar is a ruled masthead. Card height
+  609px → 385px. `/search` — a route no Evidence Desk package had ever
+  reached — went from a Vercel-era form stranded in the full-width shell (bare
+  title, native selects and date inputs, a white `.f9-primary-button`, a
+  dangling hint and a ~1,100px void) to §7 composition: mono kicker + display
+  title, one Rank-1 (`See ads`), styled square 2.5px controls with a mono
+  filter row, the hint inside the form, and a §6.8 specimen empty state where
+  the void was. Proof:
+  `0509-audit-artifacts-bl025/` (both surfaces, both themes, 390/1440/1920).
 
 ## P1 — the Evidence Desk program (gate cleared, ordered)
 
