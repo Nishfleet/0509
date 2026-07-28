@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { CreativeWall } from "~/components/creative-wall";
 import { WatchlistTrends } from "~/components/watchlist-trends";
@@ -24,6 +24,15 @@ const daily: WatchlistDailyActivity[] = [
 ];
 
 describe("creative wall + trend cards rendering", () => {
+	beforeAll(() => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-07-15T00:00:00.000Z"));
+	});
+
+	afterAll(() => {
+		vi.useRealTimers();
+	});
+
 	it("renders populated wall + trends", () => {
 		const wall = renderToStaticMarkup(createElement(CreativeWall, { items, plan: "starter" }));
 		expect(wall).toContain("f9-creative-wall");
