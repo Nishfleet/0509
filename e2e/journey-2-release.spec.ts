@@ -330,16 +330,35 @@ test("persistent setup card keeps an empty free workspace honest", async ({
   // with the honest message rather than by a dead-looking button.
   await expect(trackCompetitor).toBeEnabled();
   await trackCompetitor.click();
-  await expect(page).toHaveURL(/\/app(\?|$)/);
+
+  // Assert the PATHNAME exactly. `app.dashboard.tsx` is the index child of
+  // `/app` (app/routes.ts), so React Router marks the index action submission
+  // and the browser lands on `/app?index`. A loose /\/app(\?|$)/ regex accepts
+  // that silently — and also accepts `/app/watchlists?…`, which is precisely
+  // the "did not stay on Overview" failure this line exists to catch.
+  const refusedUrl = new URL(page.url());
+  expect(refusedUrl.pathname, "empty submit must not leave Overview").toBe("/app");
+  expect(refusedUrl.searchParams.has("watchlist")).toBe(false);
   await expect(
-    page.getByText("Enter a full website address first, like brand.com."),
+    page.getByText("We didn't start anything — there's no website to check yet."),
   ).toBeVisible();
+  await expect(page.getByText("Paste the competitor's full address, like brand.com.")).toBeVisible();
   await expect(page.locator("#setup-checklist")).toBeVisible();
+  await expect(page.locator(".f9-ed-setup-message")).toBeVisible();
 
   await expect(page.locator("body")).not.toContainText(/stakeout|under watch|on camera|surveillance/i);
   await expectNoHorizontalOverflow(page);
   await expectPhoneTouchTargets(page);
   await attachReleaseStateArtifacts({ page, testInfo, prefix: "j2-first-run-beat-1", state: "first-run-empty-free" });
+
+  // The card is *persistent* — the thing this scenario is named for. A refused
+  // submit writes nothing, so a reload must land back on a clean 0-of-4 card
+  // rather than a half-created workspace. This also returns the journey to the
+  // canonical `/app` that RELEASE_COVERAGE_MATRIX annotates for this scenario.
+  await page.goto("/app");
+  await expect(page.locator("#setup-checklist")).toBeVisible();
+  await expect(page.locator("#setup-checklist")).toContainText("Setup · 0 of 4 done");
+  await expect(page.locator(".f9-ed-setup-message")).toHaveCount(0);
   const finalUrl = new URL(page.url());
   test.info().annotations.push({ type: "finalUrl", description: `${finalUrl.pathname}${finalUrl.search}` });
 });

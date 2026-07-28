@@ -274,10 +274,16 @@ export async function handleSetupChecklistAction(
     }
 
     if (!query) {
+      // DESIGN.md voice rule 6 — an error says three things in order: what
+      // happened, what we're doing about it, and what you can do. Rule 7: the
+      // system explains itself, it never scolds. This is the refusal BL-025
+      // put behind the always-enabled Rank-1, so it is the one the customer
+      // actually meets.
       return {
         ok: false,
         intent,
-        message: "Enter a full website address first, like brand.com.",
+        message:
+          "We didn't start anything — there's no website to check yet. Nothing was created. Paste the competitor's full address, like brand.com.",
       };
     }
 

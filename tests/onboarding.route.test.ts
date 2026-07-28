@@ -266,6 +266,58 @@ describe("setup checklist actions", () => {
     expect(completeUserOnboarding).not.toHaveBeenCalled();
   });
 
+  // BL-025: the Rank-1 on the setup card is never rendered disabled, so THIS
+  // is the guard that stops an empty website from starting a scan. It is the
+  // refusal the customer actually meets, so it also carries the DESIGN.md
+  // voice-rule-6 shape: what happened, what we're doing, what you can do.
+  it("refuses an empty website without writing anything, and says all three things", async () => {
+    const completeUserOnboarding = vi.fn();
+    const createWatchlistWithinLimit = vi.fn();
+    vi.doMock("~/lib/auth.server", () => ({
+      requireWorkspaceSession: vi.fn().mockResolvedValue({
+        session: {
+          user: { id: "owner-1", email: "owner@example.com", name: "Owner", onboardedAt: null },
+          session: {
+            id: "session-owner-1",
+            userId: "owner-1",
+            expiresAt: "2026-04-03T00:00:00.000Z",
+          },
+        },
+        workspaceUserId: "owner-1",
+        isMember: false,
+      }),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      completeUserOnboarding,
+      createWatchlistWithinLimit,
+      upsertWorkspaceBranding: vi.fn(),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({ checkPlanLimit: vi.fn() }));
+
+    const { handleSetupChecklistAction: action } = await import("~/lib/setup-checklist-action.server");
+    const formData = new FormData();
+    formData.set("intent", "create-watchlist");
+    formData.set("website", "   ");
+
+    const result = await action({
+      context: createContext(),
+      request: new Request("http://localhost/app", { method: "POST", body: formData }),
+    } as never);
+
+    const message = (result as { message: string }).message;
+    expect(result).toMatchObject({ ok: false, intent: "create-watchlist" });
+    // what happened · what we're doing about it · what you can do
+    expect(message).toContain("We didn't start anything");
+    expect(message).toContain("Nothing was created.");
+    expect(message).toContain("Paste the competitor's full address, like brand.com.");
+    // Voice rule 7 — the system explains itself, it never scolds.
+    expect(message).not.toMatch(/invalid|error|you must|required/i);
+    // Nothing was written, which is what the removed `disabled` attribute used
+    // to be standing in for.
+    expect(createWatchlistWithinLimit).not.toHaveBeenCalled();
+    expect(completeUserOnboarding).not.toHaveBeenCalled();
+  });
+
   it("never lets a member overwrite the workspace owner's brand website", async () => {
     const completeUserOnboarding = vi.fn().mockResolvedValue(undefined);
     const upsertWorkspaceBranding = vi.fn();

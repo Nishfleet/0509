@@ -106,8 +106,17 @@ The queue no longer stops when empty — it REFILLS, on evidence only:
   dangling hint and a ~1,100px void) to §7 composition: mono kicker + display
   title, one Rank-1 (`See ads`), styled square 2.5px controls with a mono
   filter row, the hint inside the form, and a §6.8 specimen empty state where
-  the void was. Proof:
-  `0509-audit-artifacts-bl025/` (both surfaces, both themes, 390/1440/1920).
+  the void was. The independent adversarial review BLOCKED the first revision:
+  the Gate-B strict manifest was `status: "failed"` (the package's own e2e
+  change left the scenario on `/app?index`, which the coverage matrix cannot
+  annotate) while the builder had reported the Playwright case count as the
+  gate. Fixed at the cause — the scenario ends on the canonical `/app` and the
+  loose `toHaveURL` that hid it now asserts the pathname exactly — plus the
+  refusal moved into desk language and the voice-rule-6 three-part shape, and
+  the in-flight Rank-1 stopped washing out. Proof:
+  `0509-audit-artifacts-bl025/` (both surfaces + the refusal state, both
+  themes, 390/1440/1920) with a `BUILD-REPORT.md` that opens on a correction
+  of the false gate claim.
 
 ## P1 — the Evidence Desk program (gate cleared, ordered)
 

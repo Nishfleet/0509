@@ -146,6 +146,12 @@ describe("dashboard first 15 minutes activation", () => {
     // §5: the single Rank-1 is never rendered disabled — the action answers an
     // empty or malformed website with its own honest message.
     expect(markup).not.toMatch(/f9-ed-cta--rank1[^>]*disabled/);
+
+    // BL-025 F2 — action feedback renders in the card's own language. The
+    // Vercel-era `.f9-message` pill (18px radius / soft shadow, or 12px under
+    // `.f9-dash-page`) must not appear inside an Evidence Desk card.
+    expect(markup).toContain("f9-ed-setup-action");
+    expect(markup).not.toContain('class="f9-message');
   });
 
   it("keeps the filed brief reachable while setup still has another step", async () => {

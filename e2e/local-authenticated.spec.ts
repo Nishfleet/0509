@@ -268,10 +268,16 @@ test.describe("local authenticated E2E harness", () => {
     const trackCompetitor = page.getByRole("button", { name: "Track this competitor" });
     await expect(trackCompetitor).toBeEnabled();
     await trackCompetitor.click();
-    await expect(page).toHaveURL(/\/app/);
+    // Exact pathname: `/app` is an index route, so the refused submit lands on
+    // `/app?index`. A /\/app/ substring match would also accept
+    // `/app/watchlists`, which is the failure this line exists to catch.
+    const refusedUrl = new URL(page.url());
+    expect(refusedUrl.pathname).toBe("/app");
+    expect(refusedUrl.searchParams.has("watchlist")).toBe(false);
     await expect(
-      page.getByText("Enter a full website address first, like brand.com."),
+      page.getByText("We didn't start anything — there's no website to check yet."),
     ).toBeVisible();
+    await expect(page.getByText("Paste the competitor's full address, like brand.com.")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Finish the workspace that sends your first brief" })).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });

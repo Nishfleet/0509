@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Form, Link } from "react-router";
+import { Form } from "react-router";
 
 import { PrimaryAction, TertiaryAction } from "~/components/evidence/cta";
 import { SubmitButton } from "~/components/submit-button";
@@ -124,15 +124,28 @@ export function SetupChecklistCard({
           <p>{nextItem.detail}</p>
         </div>
 
+        {/* The feedback and the control it belongs to are ONE grid item, so an
+            error can never reflow the two-column composition or land a column
+            away from the field it is about. */}
+        <div className="f9-ed-setup-action">
+        {/* BL-025 F2: this is the moment the always-enabled Rank-1 hands the
+            customer, so it cannot arrive as a rounded soft-shadow banner
+            inside a zero-radius desk card. Desk geometry, a mono state stamp,
+            and the recovery as a real Rank-3 — not a floating text link (§5
+            retired styles). The stamp is a state LABEL, never a claim: an
+            `ok: false` import can still have created some rows
+            (`setup-checklist-action.server.ts`), so nothing here asserts that
+            nothing happened. */}
         {setupActionData?.message ? (
           <div
             aria-live={setupActionData.ok ? "polite" : "assertive"}
-            className={`f9-message ${setupActionData.ok ? "is-success" : "is-error"}`}
+            className={`f9-ed-setup-message ${setupActionData.ok ? "is-success" : "is-error"}`}
             role={setupActionData.ok ? "status" : "alert"}
           >
+            <span className="f9-ed-micro">{setupActionData.ok ? "Done" : "Not done yet"}</span>
             <p>{setupActionData.message}</p>
             {!setupActionData.ok && setupActionData.upgradePath ? (
-              <Link to={setupActionData.upgradePath}>View plans</Link>
+              <TertiaryAction to={setupActionData.upgradePath}>View plans</TertiaryAction>
             ) : null}
           </div>
         ) : null}
@@ -182,6 +195,7 @@ export function SetupChecklistCard({
             <PrimaryAction to={nextItem.action.href}>{nextItem.action.label}</PrimaryAction>
           </div>
         ) : null}
+        </div>
 
         {/* Brief §5 Rank-2/Rank-3 foot: the bulk-import disclosure is a real
             Rank-2 control (no native ► marker) and the two low-frequency links

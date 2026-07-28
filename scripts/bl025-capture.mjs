@@ -31,6 +31,21 @@ const THEMES = ["light", "dark"];
 const SURFACES = [
   { name: "overview", url: "/app", user: "e2e-free" },
   { name: "search", url: "/search", user: "e2e-free" },
+  /**
+   * BL-025 F2 — the refusal the always-enabled Rank-1 hands the customer. It
+   * is a real rendered state of the Overview, so it gets the same both-theme
+   * / three-viewport proof as the idle state. Reached by submitting the empty
+   * field, exactly as a customer would.
+   */
+  {
+    name: "overview-refusal",
+    url: "/app",
+    user: "e2e-free-onboarded",
+    async prepare(page) {
+      await page.getByRole("button", { name: "Track this competitor", exact: true }).click();
+      await page.waitForSelector(".f9-ed-setup-message", { state: "visible" });
+    },
+  },
 ];
 /** Horizontal-scroll sweep (brief §9.1) runs wider than the capture set. */
 const SWEEP_WIDTHS = [320, 360, 390, 414, 480, 640, 768, 1024, 1280, 1440, 1600, 1920, 2560];
@@ -80,6 +95,10 @@ for (const surface of SURFACES) {
 
       await page.goto(`${BASE_URL}${surface.url}`, { waitUntil: "networkidle" });
       await page.waitForTimeout(400);
+      if (surface.prepare) {
+        await surface.prepare(page);
+        await page.waitForTimeout(400);
+      }
 
       const measured = await page.evaluate(() => ({
         theme: document.documentElement.getAttribute("data-f9-theme"),
@@ -116,7 +135,7 @@ for (const surface of SURFACES) {
 }
 
 // Horizontal-scroll sweep, dark theme (the denser of the two grounds).
-for (const surface of SURFACES) {
+for (const surface of SURFACES.filter((entry) => !entry.prepare)) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await applyFixtureHeader(context);
   await context.addCookies([
