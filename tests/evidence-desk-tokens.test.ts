@@ -12,6 +12,20 @@ import { describe, expect, it } from "vitest";
 const css = readFileSync("app/app.css", "utf8");
 
 const PRIMITIVES_MARKER = "Evidence Desk primitives (BL-005, 2026-07-27)";
+/**
+ * BL-030 appended a second, independent design layer to app.css. The
+ * Evidence Desk section is now bounded on both sides — its rules end where
+ * the workspace-language layer begins. `tests/workspace-language-tokens.test.ts`
+ * holds that layer to its own (different) contract.
+ */
+const WORKSPACE_LANGUAGE_MARKER =
+  "BL-030 — the landing-language workspace layer (2026-07-29)";
+
+function evidenceDeskSection(source: string): string {
+  const start = source.indexOf(PRIMITIVES_MARKER);
+  const end = source.indexOf(WORKSPACE_LANGUAGE_MARKER);
+  return end > start ? source.slice(start, end) : source.slice(start);
+}
 
 const REQUIRED_TOKENS = [
   "--ed-rule",
@@ -58,7 +72,7 @@ describe("Evidence Desk token layer (brief §4)", () => {
   });
 
   it("never hardcodes a hex anywhere in the primitives section", () => {
-    const section = stripComments(css.slice(css.indexOf(PRIMITIVES_MARKER)));
+    const section = stripComments(evidenceDeskSection(css));
     expect(section.length).toBeGreaterThan(1000);
     const offenders = section
       .split("\n")
@@ -78,7 +92,7 @@ describe("Evidence Desk token layer (brief §4)", () => {
   });
 
   it("keeps radius at 0 and the structural rule at 2.5px on Evidence Desk surfaces", () => {
-    const section = stripComments(css.slice(css.indexOf(PRIMITIVES_MARKER)));
+    const section = stripComments(evidenceDeskSection(css));
     expect(section).toContain("border-radius: 0;");
     expect(section).toContain("border: 2.5px solid var(--ed-rule);");
     // Catches every non-zero form, including `0px`, `.5rem` and `var(--x)`.
@@ -92,13 +106,13 @@ describe("Evidence Desk token layer (brief §4)", () => {
   });
 
   it("pauses the specimen scan line under prefers-reduced-motion (brief §11)", () => {
-    const section = css.slice(css.indexOf(PRIMITIVES_MARKER));
+    const section = evidenceDeskSection(css);
     expect(section).toContain("@media (prefers-reduced-motion: reduce)");
     expect(section).toContain(".f9-ed-specimen-scan {\n    animation: none;");
   });
 
   it("keeps every CTA rank at a 44px touch target (brief §9.6)", () => {
-    const section = css.slice(css.indexOf(PRIMITIVES_MARKER));
+    const section = evidenceDeskSection(css);
     const cta = section.slice(section.indexOf(".f9-ed-cta {"), section.indexOf(".f9-ed-capture {"));
     expect(cta).toContain("min-height: 44px;");
     expect(cta.match(/min-height: 44px;/g)?.length).toBeGreaterThanOrEqual(2);
@@ -124,7 +138,7 @@ describe("Evidence Desk token layer (brief §4)", () => {
     // fill or a marker, illegal as a non-text UI boundary (WCAG 1.4.11).
     // --ed-focus resolves to --green-ink, which flips with the theme.
     expect(css).toContain("--ed-focus: var(--green-ink);");
-    const section = css.slice(css.indexOf(PRIMITIVES_MARKER));
+    const section = evidenceDeskSection(css);
     const focusRules = section.split("\n").filter((line) => line.includes("outline:"));
     expect(focusRules.length).toBeGreaterThan(0);
     for (const rule of focusRules) {
@@ -133,7 +147,7 @@ describe("Evidence Desk token layer (brief §4)", () => {
   });
 
   it("anchors the capture strip to today rather than to the oldest day", () => {
-    const section = css.slice(css.indexOf(PRIMITIVES_MARKER));
+    const section = evidenceDeskSection(css);
     const strip = section.slice(
       section.indexOf(".f9-ed-capture-strip {"),
       section.indexOf(".f9-ed-capture-bar {"),
@@ -146,7 +160,7 @@ describe("Evidence Desk token layer (brief §4)", () => {
   });
 
   it("drops the offset shadows in the Plain volume (brief §3)", () => {
-    const section = css.slice(css.indexOf(PRIMITIVES_MARKER));
+    const section = evidenceDeskSection(css);
     expect(section).toContain('[data-ed-volume="plain"] .f9-ed-cta--rank1');
     expect(section).toContain('[data-ed-volume="plain"] .f9-ed-diff-plate');
     // Hover states are shadows too: every rule that paints an offset shadow
