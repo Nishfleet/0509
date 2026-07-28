@@ -11,6 +11,12 @@
 - Manual run any time: `D1_BACKUP_MANUAL_APPROVED=0509-manual-d1-export npm run backup:d1:r2` from the repo root (wrangler OAuth session and R2 access must be available). This marker is the script's explicit confirmation for a production-blocking remote D1 export; unapproved manual runs fail before Wrangler starts.
 - Backup command output redacts temporary signed export URL query strings before logging.
 
+### Runner fallback
+
+Routine recovery jobs run on the VPS self-hosted runner with the repository variable `RECOVERY_RUNNER=vps`. GitHub-hosted minutes are an emergency reserve only: if the VPS is down, unset `RECOVERY_RUNNER` to route these jobs to the `ubuntu-latest` fallback, then re-set it to `vps` after recovery.
+
+The 2026-07-26 weekly backup failed because the GitHub-hosted minutes were exhausted. Verify and record the next successful weekly backup run.
+
 ### Owner actions to unblock Actions backups
 
 1. Add repository secrets (or secrets on the `d1-backup-r2` GitHub Environment): `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` (token needs D1 export + R2 write on the backup bucket).

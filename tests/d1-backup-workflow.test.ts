@@ -23,7 +23,9 @@ describe("scheduled D1 backup workflow", () => {
   it("runs the existing D1-to-R2 backup script on a weekly schedule", () => {
     expect(parsed.on.workflow_dispatch).toBeDefined();
     expect(parsed.on.schedule).toEqual([{ cron: "17 22 * * SUN" }]);
-    expect(parsed.jobs.backup?.if).toBe("github.ref == 'refs/heads/main'");
+    expect(parsed.jobs.backup?.if).toBe(
+      "github.repository == 'nish3451/0509' && github.ref == 'refs/heads/main'",
+    );
     expect(parsed.jobs.backup?.environment).toBe("d1-backup-r2");
 
     const backupSteps = parsed.jobs.backup?.steps?.map((step) => step.run).filter(Boolean);
