@@ -195,6 +195,21 @@ describe("Gate-B Playwright release manifest reporter", () => {
       "first-run-wait-arc-and-free-capacity",
       "first-brief-front-page-and-cadence",
     ]);
+    expect(
+      entries
+        .filter((entry) =>
+          entry.sourceFile === "journey-3-release.spec.ts" &&
+          ["empty-gated-recovery-before-delivery", "owner-member-delivery-privacy"].includes(entry.scenario)
+        )
+        .map((entry) => entry.finalUrl),
+    ).toEqual([
+      "/app/watchlists?watchlist=e2e-watchlist-scout-1&tab=delivery",
+      "/app/watchlists?watchlist=e2e-watchlist-agency-1&tab=delivery",
+      "/app/watchlists?watchlist=e2e-watchlist-scout-1&tab=delivery",
+      "/app/watchlists?watchlist=e2e-watchlist-agency-1&tab=delivery",
+      "/app/watchlists?watchlist=e2e-watchlist-scout-1&tab=delivery",
+      "/app/watchlists?watchlist=e2e-watchlist-agency-1&tab=delivery",
+    ]);
     expect(new Set(entries.filter((entry) => entry.sourceFile === "journey-4-release.spec.ts").map((entry) => entry.scenario))).toEqual(new Set([
       "report-proof-freshness-client-readable",
       "export-share-plan-truth",

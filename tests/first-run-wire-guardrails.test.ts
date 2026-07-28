@@ -51,9 +51,14 @@ describe("first-run wire — banned surveillance vocabulary", () => {
 
 describe("first-run wire — naming spine is 'brief', never 'edition'", () => {
   it("keeps the deliverable/CTA noun as 'brief'", () => {
+    const overview = sources.find((s) => s.path.endsWith("app.dashboard.tsx"))!;
     const digests = sources.find((s) => s.path.endsWith("app.digests.tsx"))!;
-    expect(digests.text).toContain("Read the full brief →");
-    expect(digests.text).not.toContain("Read the full edition");
+    expect(overview.text).toContain("Read the full brief →");
+    // BL-015 retires the duplicate first-run front page on Briefs itself:
+    // the Overview bridge still names the CTA, and the destination is now the
+    // one designed brief instead of a second hero above it.
+    expect(digests.text).not.toContain("f9-wire-frontpage");
+    expect(`${overview.text}\n${digests.text}`).not.toContain("Read the full edition");
   });
 
   it("never introduces 'edition' as a noun anywhere in the first-run arc", () => {

@@ -651,7 +651,7 @@ test.describe("local authenticated E2E harness", () => {
     // surface instead of a paid gate.
     await expect(page.getByRole("heading", { name: "Briefs", exact: true })).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Your first brief appears after monitoring runs" }).first(),
+      page.getByRole("heading", { name: "Your first brief lands after the first scan" }).first(),
     ).toBeVisible();
   });
 });

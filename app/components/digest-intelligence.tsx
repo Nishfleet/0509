@@ -1,5 +1,16 @@
-import { readDigestIntelligence } from "~/lib/change-intelligence";
+import type { ReactNode } from "react";
+
+import {
+  DiffPlate,
+  FactRail,
+  QuietLine,
+  SecondaryAction,
+  type FactRow,
+} from "~/components/evidence";
 import { LocalTime } from "~/components/local-time";
+import { readDigestIntelligence } from "~/lib/change-intelligence";
+import { readDigestStrategyNote } from "~/lib/digest-strategy";
+import { formatWatchEventTypeLabel } from "~/lib/landing-page-display";
 import {
   classifyDigestItemSource,
   isDigestDecisionCandidate,
@@ -16,10 +27,188 @@ export interface DigestMovementItem {
 }
 
 export interface DigestProofPacketItem extends DigestMovementItem {
+  id?: string;
   title: string;
   summary?: string;
   eventType?: string;
   createdAt?: string;
+}
+
+export interface DesignedDigestBriefProps {
+  id: string;
+  periodStart: string;
+  periodEnd: string;
+  createdAt: string;
+  items: DigestProofPacketItem[];
+  allItems: DigestProofPacketItem[];
+  summary?: Record<string, unknown> | null;
+  deliveryLabel?: string | null;
+  deliveryRecipient?: string | null;
+  cohortNote?: string | null;
+  actions?: ReactNode;
+}
+
+/**
+ * One designed brief — BL-015, brief §7.
+ *
+ * The route hands this component a selected, optionally filtered item set.
+ * The component deliberately partitions it into real two-capture diffs and
+ * honest quiet lines. `from` + `to` is not enough: an earlier and current
+ * capture timestamp are both required before the signature diff object can
+ * render (brief §6.5.3 / §8.2, and BL-008's binding honesty precedent).
+ */
+export function DesignedDigestBrief({
+  id,
+  periodStart,
+  periodEnd,
+  createdAt,
+  items,
+  allItems,
+  summary,
+  deliveryLabel,
+  deliveryRecipient,
+  cohortNote,
+  actions,
+}: DesignedDigestBriefProps) {
+  const finding = resolveDigestFinding(allItems);
+  const strategy = readDigestStrategyNote(summary);
+  const diffs = items
+    .map((item) => ({ item, captures: resolveDigestDiffCaptures(item) }))
+    .filter(
+      (entry): entry is {
+        item: DigestProofPacketItem;
+        captures: NonNullable<ReturnType<typeof resolveDigestDiffCaptures>>;
+      } => entry.captures !== null,
+    );
+  const diffIds = new Set(diffs.map(({ item }) => item.id ?? itemKey(item)));
+  const quietItems = items.filter((item) => !diffIds.has(item.id ?? itemKey(item)));
+  const hasUnreadSource = allItems.some((item) =>
+    ["proof_failed", "proof_pending", "unknown"].includes(
+      classifyDigestItemSource(item).status,
+    ),
+  );
+
+  return (
+    <article className="f9-ed-brief" id={id}>
+      <header className="f9-ed-brief-header">
+        <div className="f9-ed-brief-date f9-ed-micro">
+          <span>
+            Brief · <LocalTime iso={periodStart} mode="date" /> –{" "}
+            <LocalTime iso={periodEnd} mode="date" />
+          </span>
+          <span>
+            Filed <LocalTime iso={createdAt} />
+          </span>
+        </div>
+        <div className="f9-ed-brief-heading">
+          <p className="f9-ed-micro">The finding</p>
+          <h2>{finding}</h2>
+          {strategy ? (
+            <aside aria-label="AI summary of the week" className="f9-ed-brief-read">
+              <p className="f9-ed-micro">
+                AI summary · checked against the filed changes
+                {strategy.generatedAt ? (
+                  <>
+                    {" · "}
+                    <LocalTime iso={strategy.generatedAt} />
+                  </>
+                ) : null}
+              </p>
+              <p>{strategy.paragraph}</p>
+            </aside>
+          ) : null}
+          {actions ? <div className="f9-ed-action-row">{actions}</div> : null}
+        </div>
+      </header>
+
+      <section aria-label="Changes in this brief" className="f9-ed-brief-section">
+        <h3 className="f9-ed-brief-section-title">What changed</h3>
+        {diffs.length > 0 ? (
+          <div className="f9-ed-brief-diffs">
+            {diffs.map(({ item, captures }) => {
+              const sourceUrl = readSafeSourceUrl(item.metadata);
+              return (
+                <DiffPlate
+                  actions={
+                    sourceUrl ? (
+                      <SecondaryAction href={sourceUrl} rel="noreferrer" small target="_blank">
+                        Open the source
+                      </SecondaryAction>
+                    ) : undefined
+                  }
+                  before={captures.before}
+                  caughtLabel={`Caught · ${item.watchlistName || "Competitor"}`}
+                  field={formatWatchEventTypeLabel(item.eventType ?? "change")}
+                  headline={item.title || "Change captured"}
+                  key={item.id ?? itemKey(item)}
+                  now={captures.now}
+                  verification={classifyDigestItemSource(item).label}
+                  why={item.summary}
+                />
+              );
+            })}
+          </div>
+        ) : (
+          <QuietLine
+            copy={
+              allItems.length === 0
+                ? "Checked throughout this window. Nothing changed. That is the finding."
+                : items.length === 0
+                  ? "No filed changes match this filter. Clear the filters to read every check."
+                  : "No item in this brief has both stored capture times, so no before-and-after is shown."
+            }
+            stamp={<LocalTime iso={periodEnd} mode="date" />}
+          />
+        )}
+      </section>
+
+      <section aria-label="Checks without a comparison" className="f9-ed-brief-section">
+        <h3 className="f9-ed-brief-section-title">What we checked</h3>
+        <div className="f9-ed-quiet-list">
+          {quietItems.map((item) => (
+            <QuietLine
+              copy={digestQuietCopy(item)}
+              key={item.id ?? itemKey(item)}
+              stamp={<LocalTime iso={readDigestDecisionTimestamp(item) ?? createdAt} />}
+            />
+          ))}
+          {hasUnreadSource ? (
+            <QuietLine
+              copy={
+                <>
+                  We could not read this source on <LocalTime iso={periodEnd} mode="date" />.
+                  Everything else in this brief was checked.
+                </>
+              }
+              stamp="Source"
+            />
+          ) : null}
+          {quietItems.length === 0 && !hasUnreadSource ? (
+            <QuietLine
+              copy="Every filed change above has a complete two-capture comparison."
+              stamp="Checks"
+            />
+          ) : null}
+        </div>
+      </section>
+
+      <section aria-label="Brief facts" className="f9-ed-brief-section">
+        <h3 className="f9-ed-brief-section-title">At a glance</h3>
+        <FactRail
+          rows={buildDigestFacts({
+            allItems,
+            cohortNote,
+            createdAt,
+            deliveryLabel,
+            deliveryRecipient,
+            periodEnd,
+            periodStart,
+          })}
+          title="Brief facts"
+        />
+      </section>
+    </article>
+  );
 }
 
 export function DigestDecisionSummary({ items }: { items: DigestProofPacketItem[] }) {
@@ -296,4 +485,173 @@ function readDigestDecisionTimestamp(item: DigestProofPacketItem) {
 
 function readString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function itemKey(item: DigestProofPacketItem) {
+  return [
+    item.watchlistName,
+    item.eventType ?? "",
+    item.title,
+    item.createdAt ?? "",
+  ].join(":");
+}
+
+function resolveDigestFinding(items: DigestProofPacketItem[]) {
+  const ranked = items
+    .map((item, index) => ({
+      item,
+      index,
+      score: readDigestIntelligence(item.metadata ?? {}).priorityScore ?? -1,
+    }))
+    .filter(({ item }) => isDigestDecisionCandidate(item))
+    .sort((left, right) => right.score - left.score || left.index - right.index);
+  return ranked[0]?.item.title?.trim() || "Nothing changed in this window";
+}
+
+function readMetadataString(
+  metadata: Record<string, unknown> | undefined,
+  keys: readonly string[],
+) {
+  for (const key of keys) {
+    const value = readString(metadata?.[key]);
+    if (value) return value;
+  }
+  return null;
+}
+
+export function resolveDigestDiffCaptures(item: DigestProofPacketItem) {
+  const from = readMetadataString(item.metadata, ["from"]);
+  const to = readMetadataString(item.metadata, ["to"]);
+  const beforeCapturedAt = readMetadataString(item.metadata, [
+    "beforeCapturedAt",
+    "fromCapturedAt",
+    "previousCapturedAt",
+    "baselineCapturedAt",
+  ]);
+  const nowCapturedAt = readMetadataString(item.metadata, [
+    "confirmedAt",
+    "capturedAt",
+  ]);
+  const beforeTime = beforeCapturedAt ? Date.parse(beforeCapturedAt) : Number.NaN;
+  const nowTime = nowCapturedAt ? Date.parse(nowCapturedAt) : Number.NaN;
+
+  if (
+    !from ||
+    !to ||
+    !beforeCapturedAt ||
+    !nowCapturedAt ||
+    Number.isNaN(beforeTime) ||
+    Number.isNaN(nowTime) ||
+    beforeTime >= nowTime
+  ) {
+    return null;
+  }
+
+  return {
+    before: {
+      capturedAt: beforeCapturedAt,
+      note: "Earlier stored capture",
+      quote: from,
+      value: from,
+    },
+    now: {
+      capturedAt: nowCapturedAt,
+      note: "Current stored capture",
+      quote: to,
+      value: to,
+    },
+  };
+}
+
+function digestQuietCopy(item: DigestProofPacketItem) {
+  const from = readMetadataString(item.metadata, ["from"]);
+  const to = readMetadataString(item.metadata, ["to"]);
+  const context = item.summary?.trim() ? ` ${item.summary.trim()}` : "";
+  if (from && to) {
+    return `Checked. ${item.title}.${context} We have the changed values, but not two stored capture times, so there is no before-and-after to show.`;
+  }
+  return `Checked. ${item.title}.${context} This event does not contain a stored before-and-after field.`;
+}
+
+function readSafeSourceUrl(metadata: Record<string, unknown> | undefined) {
+  const candidate = readMetadataString(metadata, [
+    "sourceUrl",
+    "proofUrl",
+    "landingPageUrl",
+    "websiteUrl",
+    "websiteProofUrl",
+    "canonicalUrl",
+  ]);
+  if (!candidate) return null;
+  try {
+    const url = new URL(candidate);
+    return url.protocol === "http:" || url.protocol === "https:" ? candidate : null;
+  } catch {
+    return null;
+  }
+}
+
+function buildDigestFacts(input: {
+  allItems: DigestProofPacketItem[];
+  cohortNote?: string | null;
+  createdAt: string;
+  deliveryLabel?: string | null;
+  deliveryRecipient?: string | null;
+  periodStart: string;
+  periodEnd: string;
+}): FactRow[] {
+  const competitors = new Set(
+    input.allItems.map((item) => item.watchlistName).filter(Boolean),
+  );
+  const proofMix = summarizeDigestProofMix(input.allItems);
+  const priorityMix = summarizePriorityMix(input.allItems);
+
+  return [
+    {
+      key: "Movement",
+      value: `${input.allItems.length} change${input.allItems.length === 1 ? "" : "s"} across ${competitors.size} competitor${competitors.size === 1 ? "" : "s"}`,
+    },
+    { key: "Priority", value: priorityMixLabel(priorityMix) },
+    {
+      key: "Evidence",
+      missingLabel: "none yet",
+      value: input.allItems.length > 0 ? digestEvidenceFactLabel(proofMix) : null,
+    },
+    {
+      key: "Window",
+      value: (
+        <>
+          <LocalTime iso={input.periodStart} mode="date" /> –{" "}
+          <LocalTime iso={input.periodEnd} mode="date" />
+        </>
+      ),
+    },
+    {
+      key: "Cohort",
+      missingLabel: "every eligible change included",
+      value: input.cohortNote,
+    },
+    {
+      key: "Delivery",
+      missingLabel: "no sends recorded yet",
+      value: input.deliveryLabel,
+    },
+    {
+      key: "Recipient",
+      missingLabel: "none recorded",
+      value: input.deliveryRecipient,
+    },
+    { key: "Filed", value: <LocalTime iso={input.createdAt} /> },
+  ];
+}
+
+function digestEvidenceFactLabel(proofMix: ReturnType<typeof summarizeDigestProofMix>) {
+  const unread = proofMix.proofPending + proofMix.proofFailed + proofMix.unknown;
+  return [
+    proofMix.verifiedProof ? `${proofMix.verifiedProof} verified` : null,
+    proofMix.scanSpotted ? `${proofMix.scanSpotted} check-spotted` : null,
+    proofMix.needsReview ? `${proofMix.needsReview} needs review` : null,
+    unread ? `${unread} source${unread === 1 ? "" : "s"} need attention` : null,
+    proofMix.excluded ? `${proofMix.excluded} excluded` : null,
+  ].filter(Boolean).join(" · ");
 }
