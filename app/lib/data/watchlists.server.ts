@@ -35,6 +35,7 @@ export {
 
 export {
   hasInFlightWatchlistRun,
+  listWatchlistRunPairsForEventIds,
   createWatchlistRun,
   finishWatchlistRun,
   getRecentSuccessfulRuns,
@@ -66,6 +67,7 @@ export {
   upsertProofTarget,
   listProofCapturesForTarget,
   listProofCapturesForTargets,
+  listProofCapturePairsForEventIds,
   listSuccessfulProofCapturesForAd,
   listLastSuccessfulProofCapturesForAds,
   listRecentProofCapturesForWatchlist,

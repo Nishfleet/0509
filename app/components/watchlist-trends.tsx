@@ -34,7 +34,7 @@ export function WatchlistTrends({
 			<div className="f9-panel-toolbar">
 				<div>
 					<p className="f9-app-kicker">Trends</p>
-					<h3 style={{ marginTop: 0 }}>How this competitor is moving</h3>
+					<h3 className="f9-trend-heading">How this competitor is moving</h3>
 				</div>
 			</div>
 			<div className="f9-trend-grid">
@@ -112,7 +112,6 @@ function TimelineBars({ timeline }: { timeline: LaunchTimeline }) {
 						className={`f9-trend-bar${bucket.count > 0 ? " is-accent" : ""}`}
 						height={bucket.count > 0 ? barHeight : 1.5}
 						key={bucket.weekStart}
-						rx="1"
 						width={Math.max(2, slot - 6)}
 						x={index * slot + 3}
 						y={bucket.count > 0 ? 55 - barHeight : 53.5}
@@ -229,7 +228,6 @@ function ActivityStrip({
 						className={`f9-trend-bar${accent && value > 0 ? " is-accent" : ""}`}
 						height={value > 0 ? barHeight : 1}
 						key={index}
-						rx="1"
 						width={Math.max(2, slot - 3)}
 						x={index * slot + 1.5}
 						y={value > 0 ? 23 - barHeight : 22}

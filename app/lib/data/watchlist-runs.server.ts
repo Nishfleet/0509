@@ -2,6 +2,7 @@ import {
   ensureDb,
   execute as run,
   queryAll as many,
+  queryIn,
   queryOne as one,
 } from "~/lib/data/d1.server";
 import { billingCanaryMutationGuardSql } from "~/lib/data/billing-canary-lock.server";
@@ -21,6 +22,43 @@ import {
 } from "~/lib/list-pagination";
 import type { WatchlistRunRecord } from "~/lib/types";
 const OBSERVATION_RUN_PAGE_SIZE = 200;
+
+export async function listWatchlistRunPairsForEventIds(
+  env: AppEnv,
+  userId: string,
+  eventIds: string[],
+) {
+  const uniqueEventIds = [...new Set(eventIds.filter(Boolean))];
+  if (uniqueEventIds.length === 0) return [];
+
+  const rows = await queryIn<{
+    id: string;
+    started_at: string;
+    finished_at: string | null;
+  }>(env, {
+    buildSql: (placeholders) => `
+      SELECT DISTINCT
+        watchlist_run.id,
+        watchlist_run.started_at,
+        watchlist_run.finished_at
+      FROM watch_event
+      INNER JOIN watchlist ON watchlist.id = watch_event.watchlist_id
+      INNER JOIN watchlist_run
+        ON watchlist_run.id = watch_event.run_id
+        OR watchlist_run.id = watch_event.baseline_from_run_id
+      WHERE watch_event.id IN (${placeholders})
+        AND watchlist.user_id = ?
+    `,
+    values: uniqueEventIds,
+    suffix: [userId],
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    startedAt: row.started_at,
+    finishedAt: row.finished_at,
+  }));
+}
+
 export async function hasInFlightWatchlistRun(
   env: AppEnv,
   watchlistId: string,

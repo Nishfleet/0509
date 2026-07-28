@@ -19,6 +19,14 @@ import {
 import { ActionFeedback } from "~/components/action-feedback";
 import { SetupChecklistCard } from "~/components/setup-checklist-card";
 import { SpecimenEmptyState } from "~/components/evidence/specimen-empty-state";
+import { DiffPlate } from "~/components/evidence/diff-plate";
+import { FactRail } from "~/components/evidence/fact-rail";
+import { QuietLine } from "~/components/evidence/quiet-line";
+import {
+  PrimaryAction,
+  SecondaryAction,
+  TertiaryAction,
+} from "~/components/evidence/cta";
 import { LocalTime } from "~/components/local-time";
 import { Pill } from "~/components/pill";
 import { SubmitButton } from "~/components/submit-button";
@@ -33,11 +41,11 @@ import { classifyWatchEventSource } from "~/lib/proof-classification";
 import { formatNextScanLabel } from "~/lib/schedule-display";
 import { formatMachineTokenLabel } from "~/lib/landing-page-display";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
-import { customerDiscoverySummary } from "~/lib/discovery-customer-copy";
 import type { AppEnv } from "~/lib/env.server";
 import type {
   AgentActionAuditRecord,
-  CommercialDiscoveryStatus,
+  ProofCaptureRecord,
+  WatchEventRecord,
 } from "~/lib/types";
 import type { WorkspaceReadiness } from "~/lib/workspace-readiness.server";
 
@@ -55,6 +63,18 @@ const COUNTER_MOVE_AUDIT_PAGE_LIMIT = 30;
 const COUNTER_MOVE_AUDIT_MAX_PAGES = 10;
 const COUNTER_MOVE_FOLLOW_UP_DISPLAY_LIMIT = 3;
 const COUNTER_MOVE_FOLLOW_UP_AUDIT_FRESHNESS_MS = 7 * 24 * 60 * 60 * 1000;
+
+type OverviewProofPair = {
+  eventId: string;
+  current: ProofCaptureRecord;
+  previous: ProofCaptureRecord | null;
+};
+
+type OverviewRunTimestamp = {
+  id: string;
+  startedAt: string;
+  finishedAt: string | null;
+};
 
 type ListRecentAgentActionAudits = (
   env: AppEnv,
@@ -140,10 +160,11 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     listCollections,
     listDeliveryTargets,
     listDigests,
+    listProofCapturePairsForEventIds,
     listRecentAgentActionAudits,
-    listRecentWorkspaceProofCaptures,
     listRecentWorkspaceWatchEvents,
     listSavedQueries,
+    listWatchlistRunPairsForEventIds,
     getWorkspaceDeliveryConfig,
     listWatchlists,
   } = await import("~/lib/data.server");
@@ -186,6 +207,32 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const watchlistsPromise = listWatchlists(env, workspaceUserId, {
     includeInactive: true,
   });
+  const recentEventsPromise = optionalSection(
+    "recentChanges",
+    watchlistsPromise.then((allWatchlists) =>
+      allWatchlists.some((watchlist) => watchlist.isActive)
+        ? listRecentWorkspaceWatchEvents(env, workspaceUserId, 8)
+        : [],
+    ),
+    [],
+  );
+  const overviewEventIdsPromise = recentEventsPromise.then((events) =>
+    events.slice(0, 3).map((event) => event.id),
+  );
+  const recentProofPairsPromise = overviewEventIdsPromise.then((eventIds) =>
+    optionalSection(
+      "recentProof",
+      listProofCapturePairsForEventIds(env, workspaceUserId, eventIds),
+      [],
+    ),
+  );
+  const recentEventRunsPromise = overviewEventIdsPromise.then((eventIds) =>
+    optionalSection(
+      "recentRuns",
+      listWatchlistRunPairsForEventIds(env, workspaceUserId, eventIds),
+      [],
+    ),
+  );
   const [
     savedQueries,
     collections,
@@ -199,7 +246,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     counterMoveFollowUps,
     workspaceDeliveryConfig,
     recentEvents,
-    recentProofCaptures,
+    recentProofPairs,
+    recentEventRuns,
     deliveryTargets,
     overnightStats,
     successfulProofStats,
@@ -254,20 +302,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       getWorkspaceDeliveryConfig(env, workspaceUserId),
       null,
     ),
-    optionalSection(
-      "recentChanges",
-      watchlistsPromise.then((allWatchlists) =>
-        allWatchlists.some((watchlist) => watchlist.isActive)
-          ? listRecentWorkspaceWatchEvents(env, workspaceUserId, 8)
-          : [],
-      ),
-      [],
-    ),
-    optionalSection(
-      "recentProof",
-      listRecentWorkspaceProofCaptures(env, workspaceUserId, 8),
-      [],
-    ),
+    recentEventsPromise,
+    recentProofPairsPromise,
+    recentEventRunsPromise,
     optionalSection(
       "delivery",
       listDeliveryTargets(env, workspaceUserId, { limit: 12 }),
@@ -289,6 +326,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       { count: 0, latestAt: null },
     ),
   ]);
+  const recentProofCaptures = recentProofPairs.flatMap((pair) =>
+    pair.previous ? [pair.current, pair.previous] : [pair.current],
+  );
   const plan = billingInfo.plan;
   const hasPaymentIssue =
     plan !== "free" &&
@@ -303,6 +343,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     digests,
     recentEvents,
     recentProofCaptures,
+    recentProofPairs,
+    recentEventRuns,
     deliveryTargets: deliveryTargets.map((target) => toPublicDeliveryTarget(target)),
     metaStatus,
     proofUsage,
@@ -520,6 +562,8 @@ export default function AppDashboardRoute() {
   const digests = data.digests ?? [];
   const recentEvents = data.recentEvents ?? [];
   const recentProofCaptures = data.recentProofCaptures ?? [];
+  const recentProofPairs = data.recentProofPairs ?? [];
+  const recentEventRuns = data.recentEventRuns ?? [];
   const proofUsage = data.proofUsage ?? {
     warningLevel: "ok",
     used: 0,
@@ -547,6 +591,21 @@ export default function AppDashboardRoute() {
   const readinessUnavailable =
     data.sectionWarnings?.some((warning) => warning.section === "readiness") ??
     false;
+  const recentChangesUnavailable =
+    data.sectionWarnings?.some(
+      (warning) => warning.section === "recentChanges",
+    ) ?? false;
+  const allActiveWatchlistsHaveScanHistory =
+    activeWatchlists > 0 &&
+    watchlists
+      .filter((watchlist) => watchlist.isActive)
+      .every((watchlist) => Boolean(watchlist.lastScannedAt));
+  const proofHistoryUnavailable =
+    data.sectionWarnings?.some((warning) => warning.section === "recentProof") ??
+    false;
+  const runHistoryUnavailable =
+    data.sectionWarnings?.some((warning) => warning.section === "recentRuns") ??
+    false;
   const readinessGaps = workspaceReadiness
     ? pendingBlockingSetupItems(workspaceReadiness)
     : [];
@@ -569,18 +628,27 @@ export default function AppDashboardRoute() {
   });
   const statusCards = marketDeskBrief.metrics;
   const hasDashboardMetrics = marketDeskBrief.hasMetrics;
+  const overviewMetrics = statusCards
+    .filter((card) => card.label !== "Moves found")
+    .slice(0, 3);
+  const sourceNeedsRecovery =
+    Boolean(data.metaStatus) && data.metaStatus?.status !== "healthy";
 
   return (
-    <DashboardPage>
-      <section className="f9-app-stack f9-dashboard-clean">
+    <DashboardPage className="f9-overview">
+      <section className="f9-app-stack">
         <DashboardPageHeader
-          kicker={<WakeGreeting />}
-          lead="Your brief, competitor watchlists, and what needs attention next."
-          title="Overview"
+          kicker={
+            <>
+              <WakeGreeting /> · Overview · {marketDeskBrief.kicker}
+            </>
+          }
+          lead={marketDeskBrief.summary}
+          title={marketDeskBrief.title}
         />
 
         {data.sectionWarnings?.length ? (
-          <article aria-live="polite" className="f9-app-panel" role="status">
+          <article aria-live="polite" className="f9-ed-panel f9-overview-notice" role="status">
             <p className="f9-app-kicker">Partial overview</p>
             <h2>We couldn't load part of this overview</h2>
             <p className="f9-muted-copy">
@@ -602,9 +670,9 @@ export default function AppDashboardRoute() {
               </p>
             </div>
             <div className="f9-checkout-banner-actions">
-              <Link className="f9-secondary-button" to="/app/billing">
+              <SecondaryAction to="/app/billing">
                 Plan &amp; billing
-              </Link>
+              </SecondaryAction>
             </div>
           </article>
         ) : null}
@@ -631,73 +699,57 @@ export default function AppDashboardRoute() {
           />
         ) : null}
 
-        {(
-          <article className="f9-app-panel f9-dashboard-hero">
-            <div className="f9-panel-toolbar">
-              <div>
-                <span className="f9-app-kicker">{marketDeskBrief.kicker}</span>
-                <h2>{marketDeskBrief.title}</h2>
-                <p className="f9-muted-copy">{marketDeskBrief.summary}</p>
-              </div>
-              {digests.length > 0 && hasBlockingSetupGaps ? (
-                <Link
-                  className="f9-secondary-button"
-                  to="/app/digests?firstrun=1"
-                >
-                  Read latest brief
-                </Link>
-              ) : competitorCount > 0 && !hasBlockingSetupGaps ? (
-                <Link
-                  className="f9-primary-button"
-                  to={marketDeskBrief.action.href}
-                >
-                  {marketDeskBrief.action.label}
-                </Link>
-              ) : null}
+        {digests.length > 0 && hasBlockingSetupGaps ? (
+          <div className="f9-overview-setup-companion">
+            <SecondaryAction to="/app/digests?firstrun=1">
+              Read latest brief
+            </SecondaryAction>
+          </div>
+        ) : null}
+
+        <section aria-labelledby="overview-changes-title" className="f9-overview-section">
+          <header className="f9-overview-section-head">
+            <div>
+              <span className="f9-app-kicker">Latest stored changes</span>
+              <h2 id="overview-changes-title">What changed</h2>
             </div>
-
-            <CommercialSourceStatus status={data.metaStatus} />
-
-            {marketDeskBrief.items.length > 0 ? (
-              <div className="f9-brief-snapshot" aria-label="Brief details">
-                {marketDeskBrief.items.map((item) => (
-                  <article key={`${item.label}:${item.title}`}>
-                    <span>{item.label}</span>
-                    <strong>{item.title}</strong>
-                    <p>{item.detail}</p>
-                  </article>
-                ))}
-              </div>
+            {visibleRecentEvents.length > 0 ? (
+              <SecondaryAction to="/app/watchlists">Open competitors</SecondaryAction>
             ) : null}
-
-            {!hasBlockingSetupGaps ? (
-              <Form action="/search" className="f9-dashboard-search" method="get">
-                <label className="f9-field" htmlFor="dashboard-market-search">
-                  <span>Competitor website</span>
-                  <input
-                    autoComplete="url"
-                    id="dashboard-market-search"
-                    inputMode="url"
-                    name="website"
-                    placeholder="https://competitor.com"
-                    spellCheck={false}
-                    type="text"
-                  />
-                </label>
-                <SubmitButton
-                  className="f9-primary-button"
-                  getAction="/search"
-                  pendingLabel="Searching…"
-                >
-                  Search ads
-                </SubmitButton>
-              </Form>
-            ) : null}
-          </article>
-        )}
+          </header>
+          {visibleRecentEvents.length > 0 ? (
+            <div className="f9-overview-change-list">
+              {visibleRecentEvents.slice(0, 3).map((event) => (
+                <OverviewChangePlate
+                  event={event}
+                  key={event.id}
+                  proofHistoryUnavailable={proofHistoryUnavailable}
+                  proofPairs={recentProofPairs}
+                  runHistoryUnavailable={runHistoryUnavailable}
+                  runs={recentEventRuns}
+                />
+              ))}
+            </div>
+          ) : (
+            <QuietLine
+              copy={
+                recentChangesUnavailable
+                  ? "Change history is temporarily unavailable. Refresh before deciding that the latest check was quiet."
+                  : activeWatchlists === 0 && competitorCount > 0
+                    ? "Monitoring is paused. Resume a competitor before expecting a new check."
+                  : allActiveWatchlistsHaveScanHistory
+                    ? "Every active competitor has scan history. No change events are filed in the recent feed."
+                  : competitorCount > 0
+                    ? "The first check is still pending for at least one active competitor. Changes will appear after a successful scan."
+                  : "Nothing filed yet — add a competitor and the first capture starts the evidence trail."
+              }
+              stamp="Latest check"
+            />
+          )}
+        </section>
 
         {retentionMoves.length > 0 ? (
-          <article className="f9-app-panel">
+          <article className="f9-ed-panel f9-overview-panel">
             <div className="f9-panel-toolbar">
               <div>
                 <span className="f9-app-kicker">Next moves</span>
@@ -711,38 +763,26 @@ export default function AppDashboardRoute() {
                     <h3>{nudge.title}</h3>
                     <p className="f9-muted-copy">{nudge.detail}</p>
                   </div>
-                  <Link className="f9-secondary-button" to={nudge.href}>
+                  <SecondaryAction to={nudge.href}>
                     Open
-                  </Link>
+                  </SecondaryAction>
                 </article>
               ))}
             </div>
           </article>
         ) : null}
 
-        {hasDashboardMetrics ? (
-          <div className="f9-dashboard-metrics" aria-label="Account summary">
-            {statusCards.map((card) => (
-              <article className="f9-app-panel" key={card.label}>
-                <span className="f9-app-kicker">{card.label}</span>
-                <strong>{card.value}</strong>
-                <small>{card.detail}</small>
-              </article>
-            ))}
-          </div>
-        ) : null}
-
         <ActionFeedback data={actionData} intent="close-counter-move" />
         {counterMoveFollowUps.length > 0 ? (
-          <article className="f9-app-panel">
+          <article className="f9-ed-panel f9-overview-panel">
             <div className="f9-panel-toolbar">
               <div>
                 <span className="f9-app-kicker">Follow-ups</span>
                 <h2>Responses waiting on you</h2>
               </div>
-              <Link className="f9-secondary-button" to="/app/watchlists">
+              <SecondaryAction to="/app/watchlists">
                 Review changes
-              </Link>
+              </SecondaryAction>
             </div>
             <div className="f9-work-list is-compact">
               {counterMoveFollowUps.map((followUp) => (
@@ -789,7 +829,7 @@ export default function AppDashboardRoute() {
                           value={followUp.eventId}
                         />
                         <SubmitButton
-                          className="f9-secondary-button"
+                          className="f9-ed-cta f9-ed-cta--rank3"
                           intent="close-counter-move"
                           match={{ auditId: followUp.id }}
                           pendingLabel="Saving…"
@@ -812,7 +852,7 @@ export default function AppDashboardRoute() {
 
         {proofUsage.warningLevel !== "ok" ? (
           <article
-            className={`f9-app-panel f9-proof-usage-alert is-${proofUsage.warningLevel}`}
+            className={`f9-ed-panel f9-proof-usage-alert is-${proofUsage.warningLevel}`}
           >
             <div>
               <span className="f9-app-kicker">Evidence usage</span>
@@ -829,12 +869,9 @@ export default function AppDashboardRoute() {
                 ? ` Move to ${proofUsage.upgradeTarget} or add an overflow pack before the next busy campaign.`
                 : " Add an overflow pack before the next busy campaign."}
             </p>
-            <Link
-              className="f9-secondary-button"
-              to="/app/billing?source=evidence#top-ups"
-            >
+            <SecondaryAction to="/app/billing?source=evidence#top-ups">
               Review check packs
-            </Link>
+            </SecondaryAction>
           </article>
         ) : null}
 
@@ -849,127 +886,283 @@ export default function AppDashboardRoute() {
           planLimitTo="/app/billing?source=dashboard-limit#plans"
         />
 
-        {visibleRecentEvents.length > 0 ? (
-          <article className="f9-app-panel f9-activity-panel">
-            <div className="f9-panel-toolbar">
-              <div>
-                <span className="f9-app-kicker">Recent changes</span>
-                <h2>What changed</h2>
-              </div>
-              <Link className="f9-secondary-button" to="/app/watchlists">
-                Open competitors
-              </Link>
+        <section aria-labelledby="overview-watch-title" className="f9-overview-section">
+          <header className="f9-overview-section-head">
+            <div>
+              <span className="f9-app-kicker">Watch board summary</span>
+              <h2 id="overview-watch-title">Being watched</h2>
+              <p className="f9-muted-copy">
+                {plan === "free"
+                  ? `Next weekly check: ${formatNextScanLabel(plan, new Date(), data.workspaceDeliveryTimezone)}. Paid plans check every 3–6 hours.`
+                  : `Next scheduled scan: ${formatNextScanLabel(plan, new Date(), data.workspaceDeliveryTimezone)}`}
+              </p>
             </div>
+            {watchlists.length > 0 ? (
+              <SecondaryAction to="/app/watchlists">Open competitors</SecondaryAction>
+            ) : null}
+          </header>
 
-            <div className="f9-work-list">
-              {visibleRecentEvents.map((event) => {
-                const intelligence = buildChangeIntelligenceSummary(event);
-                const classification = classifyWatchEventSource(event);
-                const urgency =
-                  intelligence.priorityScore === null
-                    ? intelligence.priorityBand
-                    : `${intelligence.priorityBand} · ${intelligence.priorityScore}/100`;
-                return (
-                  <article className="f9-work-row" key={event.id}>
-                    <div>
-                      <h3>{event.title}</h3>
-                      <p className="f9-muted-copy">
-                        <strong>Why it matters:</strong> {event.summary}
-                      </p>
-                      <p className="f9-muted-copy">
-                        {urgency} · {classification.label} · Source:{" "}
-                        {classification.sourceTypeLabel}
-                      </p>
-                      <p className="f9-muted-copy">
-                        Next action: {intelligence.recommendedAction}
-                      </p>
-                      <small>
-                        {event.eventType.replaceAll("_", " ")} · Last seen{" "}
-                        <LocalTime iso={event.createdAt} />
-                      </small>
-                    </div>
-                    <Pill>
-                      {classification.label}
-                    </Pill>
-                  </article>
-                );
-              })}
+          {hasDashboardMetrics ? (
+            <div
+              aria-label="Account summary"
+              className="f9-overview-stat-band"
+              data-count={overviewMetrics.length}
+            >
+              {overviewMetrics.map((card) => (
+                <article key={card.label}>
+                  <span className="f9-app-kicker">{card.label}</span>
+                  <strong>{card.value}</strong>
+                  <small>{card.detail}</small>
+                </article>
+              ))}
             </div>
-          </article>
-        ) : null}
+          ) : null}
 
-        <div className="f9-dashboard-grid">
           {watchlists.length > 0 ? (
-            <article className="f9-app-panel">
-              <div className="f9-panel-toolbar">
-                <div>
-                  <span className="f9-app-kicker">Competitors</span>
-                  <h2>Being watched</h2>
-                  <p className="f9-muted-copy">
-                    {plan === "free"
-                      ? `Next weekly check: ${formatNextScanLabel(plan, new Date(), data.workspaceDeliveryTimezone)}. Paid plans check every 3–6 hours.`
-                      : `Next scheduled scan: ${formatNextScanLabel(plan, new Date(), data.workspaceDeliveryTimezone)}`}
-                  </p>
-                </div>
-                <Link className="f9-secondary-button" to="/app/watchlists">
-                  Open competitors
-                </Link>
-              </div>
-              <div className="f9-work-list is-compact">
-                {watchlists.slice(0, 5).map((watchlist) => (
-                  <div className="f9-work-row" key={watchlist.id}>
-                    <div>
-                      <h3>{watchlist.name}</h3>
-                      <p className="f9-muted-copy">{watchlist.targetLabel}</p>
-                    </div>
-                    <small>
-                      {watchlist.lastScannedAt ? (
-                        <>
-                          Last scan{" "}
-                          <LocalTime
-                            iso={watchlist.lastScannedAt}
-                            mode="date"
-                          />
-                        </>
-                      ) : (
-                        "Not scanned yet"
-                      )}
-                    </small>
+            <div className="f9-overview-watchlist">
+              {watchlists.slice(0, 5).map((watchlist) => (
+                <article className="f9-overview-watch-row" key={watchlist.id}>
+                  <div>
+                    <h3>{watchlist.name}</h3>
+                    <p>{watchlist.targetLabel}</p>
                   </div>
-                ))}
-              </div>
-            </article>
+                  <small>
+                    {watchlist.lastScannedAt ? (
+                      <>
+                        Last scan <LocalTime iso={watchlist.lastScannedAt} mode="date" />
+                      </>
+                    ) : (
+                      "Not scanned yet"
+                    )}
+                  </small>
+                </article>
+              ))}
+            </div>
           ) : null}
 
-          {collections.length > 0 ? (
-            <article className="f9-app-panel">
-              <div className="f9-panel-toolbar">
-                <div>
-                  <span className="f9-app-kicker">Saved evidence</span>
-                  <h2>Useful examples</h2>
-                </div>
-                <Link className="f9-secondary-button" to="/app/collections">
-                  Open collections
-                </Link>
-              </div>
-              <div className="f9-work-list is-compact">
-                {collections.slice(0, 4).map((collection) => (
-                  <div className="f9-work-row" key={collection.id}>
-                    <div>
-                      <h3>{collection.name}</h3>
-                      <p className="f9-muted-copy">
-                        {collection.description || "Saved for reuse."}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </article>
+          <FactRail
+            rows={[
+              {
+                key: "Source access",
+                value: sourceNeedsRecovery ? (
+                  <TertiaryAction to="/app/source-access">
+                    {formatCommercialSourceStatus(data.metaStatus?.status ?? "")}
+                  </TertiaryAction>
+                ) : (
+                  "Live source ready"
+                ),
+              },
+              {
+                key: "Source note",
+                value: commercialSourceSummary(data.metaStatus),
+                missingLabel: "we could not read this one",
+              },
+              {
+                key: "Watch state",
+                value:
+                  competitorCount === 0
+                    ? null
+                    : activeWatchlists > 0
+                      ? "Watching"
+                      : "Paused",
+                missingLabel: "none yet",
+              },
+              {
+                key: "Saved examples",
+                value:
+                  collections.length > 0 ? (
+                    <TertiaryAction to="/app/collections">
+                      {collections.length} saved
+                    </TertiaryAction>
+                  ) : null,
+                missingLabel: "none yet",
+              },
+              {
+                key: "Next check",
+                value: nextScanLabel,
+              },
+            ]}
+            title="Workspace facts"
+          />
+
+          {!hasBlockingSetupGaps ? (
+            <Form action="/search" className="f9-overview-search" method="get">
+              <label className="f9-field" htmlFor="dashboard-market-search">
+                <span>Competitor website</span>
+                <input
+                  autoComplete="url"
+                  id="dashboard-market-search"
+                  inputMode="url"
+                  name="website"
+                  placeholder="https://competitor.com"
+                  spellCheck={false}
+                  type="text"
+                />
+              </label>
+              <SubmitButton
+                className="f9-ed-cta f9-ed-cta--rank2"
+                getAction="/search"
+                pendingLabel="Searching…"
+              >
+                Search ads
+              </SubmitButton>
+            </Form>
           ) : null}
-        </div>
+        </section>
+
+        {!hasBlockingSetupGaps ? (
+          <div className="f9-overview-primary">
+            <PrimaryAction to={marketDeskBrief.action.href}>
+              {marketDeskBrief.action.label}
+            </PrimaryAction>
+          </div>
+        ) : null}
       </section>
     </DashboardPage>
   );
+}
+
+function OverviewChangePlate({
+  event,
+  proofHistoryUnavailable,
+  proofPairs,
+  runHistoryUnavailable,
+  runs,
+}: {
+  event: WatchEventRecord;
+  proofHistoryUnavailable: boolean;
+  proofPairs: OverviewProofPair[];
+  runHistoryUnavailable: boolean;
+  runs: OverviewRunTimestamp[];
+}) {
+  const captures = resolveOverviewDiffCaptures(event, proofPairs, runs);
+  const evidenceHistoryUnavailable = event.proofCaptureId
+    ? proofHistoryUnavailable
+    : runHistoryUnavailable;
+  const hasStoredComparisonValues = Boolean(
+    readOverviewMetadataString(event.metadata, ["from"]) &&
+      readOverviewMetadataString(event.metadata, ["to"]),
+  );
+  const intelligence = buildChangeIntelligenceSummary(event);
+  const classification = classifyWatchEventSource(event);
+  const urgency =
+    intelligence.priorityScore === null
+      ? intelligence.priorityBand
+      : `${intelligence.priorityBand} · ${intelligence.priorityScore}/100`;
+
+  return (
+    <DiffPlate
+      actions={
+        <SecondaryAction
+          to={`/app/watchlists?watchlist=${encodeURIComponent(event.watchlistId)}&event=${encodeURIComponent(event.id)}`}
+        >
+          Open the capture
+        </SecondaryAction>
+      }
+      before={captures?.before ?? { capturedAt: null }}
+      caughtLabel={formatCaughtLabel(event.createdAt)}
+      degradeCopy={
+        captures
+          ? undefined
+          : !hasStoredComparisonValues
+            ? `Checked. ${event.title}. ${event.summary} This change has no stored before-and-after field values to compare.`
+          : evidenceHistoryUnavailable
+            ? `${event.title}. ${event.summary} Capture history is temporarily unavailable, so the before-and-after cannot be verified right now.`
+            : `Checked. ${event.title}. ${event.summary} We do not have two stored capture times, so there is no before-and-after to show.`
+      }
+      degradeStamp={<LocalTime iso={event.createdAt} />}
+      delivery={`Next action: ${intelligence.recommendedAction}`}
+      field={event.eventType.replaceAll("_", " ")}
+      headline={event.title}
+      now={captures?.now ?? { capturedAt: null }}
+      verification={`${classification.label} · ${urgency}`}
+      why={event.summary}
+    />
+  );
+}
+
+function resolveOverviewDiffCaptures(
+  event: WatchEventRecord,
+  proofPairs: OverviewProofPair[],
+  runs: OverviewRunTimestamp[],
+) {
+  const from = readOverviewMetadataString(event.metadata, ["from"]);
+  const to = readOverviewMetadataString(event.metadata, ["to"]);
+  const proofPair = event.proofCaptureId
+    ? proofPairs.find((pair) => pair.eventId === event.id)
+    : undefined;
+  const currentCapture = proofPair?.current;
+  const runsById = new Map(runs.map((run) => [run.id, run]));
+  const currentRun = runsById.get(event.runId);
+  const baselineRun = event.baselineFromRunId
+    ? runsById.get(event.baselineFromRunId)
+    : undefined;
+  const nowCapturedAt = event.proofCaptureId
+    ? event.confirmedAt ??
+      currentCapture?.succeededAt ??
+      currentCapture?.attemptedAt ??
+      null
+    : currentRun?.finishedAt ?? currentRun?.startedAt ?? null;
+  const nowTime = nowCapturedAt ? Date.parse(nowCapturedAt) : Number.NaN;
+  const previousCapture = proofPair?.previous;
+  const previousCapturedAt =
+    previousCapture?.succeededAt ?? previousCapture?.attemptedAt ?? null;
+  const beforeCapturedAt =
+    previousCapturedAt ??
+    baselineRun?.finishedAt ??
+    baselineRun?.startedAt ??
+    null;
+  const beforeTime = beforeCapturedAt ? Date.parse(beforeCapturedAt) : Number.NaN;
+
+  if (
+    !from ||
+    !to ||
+    !beforeCapturedAt ||
+    !nowCapturedAt ||
+    Number.isNaN(beforeTime) ||
+    Number.isNaN(nowTime) ||
+    beforeTime >= nowTime
+  ) {
+    return null;
+  }
+
+  return {
+    before: {
+      capturedAt: beforeCapturedAt,
+      note: "Earlier stored capture",
+      quote: from,
+      value: from,
+    },
+    now: {
+      capturedAt: nowCapturedAt,
+      note: "Current stored capture",
+      quote: to,
+      value: to,
+    },
+  };
+}
+
+function readOverviewMetadataString(
+  metadata: Record<string, unknown> | undefined,
+  keys: readonly string[],
+) {
+  for (const key of keys) {
+    const value = metadata?.[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+function formatCaughtLabel(iso: string | null | undefined) {
+  if (!iso || Number.isNaN(Date.parse(iso))) return "Caught";
+  return `Caught ${new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    hour: "2-digit",
+    hour12: false,
+    minute: "2-digit",
+    month: "short",
+    timeZone: "UTC",
+  }).format(new Date(iso))} UTC`;
 }
 
 function mapCounterMoveFollowUpAudits(audits: AgentActionAuditRecord[]) {
@@ -978,54 +1171,6 @@ function mapCounterMoveFollowUpAudits(audits: AgentActionAuditRecord[]) {
     .filter((summary): summary is NonNullable<typeof summary> =>
       Boolean(summary),
     );
-}
-
-function CommercialSourceStatus({
-  status,
-}: {
-  status:
-    | {
-        status: CommercialDiscoveryStatus;
-        summary?: string | null;
-        lastCheckedAt?: string | null;
-      }
-    | null
-    | undefined;
-}) {
-  if (!status) {
-    return null;
-  }
-
-  const label = formatCommercialSourceStatus(status.status);
-  const needsRecovery = status.status !== "healthy";
-  const summary =
-    status.status === "healthy"
-      ? (customerDiscoverySummary(status.summary) ??
-        "Live ad checks are ready.")
-      : status.status === "demo"
-        ? "Live ad checks aren't configured yet, so searches show labeled sample data."
-        : status.status === "disabled"
-          ? "Live ad checks are unavailable right now. Review source access before relying on fresh results."
-          : (customerDiscoverySummary(status.summary) ??
-            "Live ad checks are temporarily delayed. We'll retry automatically — results refresh as soon as checks recover.");
-
-  return (
-    <div
-      className={`f9-status-strip ${needsRecovery ? "is-warning" : "is-healthy"}`}
-      aria-label="Commercial ad source status"
-    >
-      <div>
-        <span className="f9-app-kicker">Commercial ad source</span>
-        <strong>{label}</strong>
-        <p className="f9-muted-copy">{summary}</p>
-      </div>
-      {needsRecovery ? (
-        <Link className="f9-secondary-button" to="/app/source-access">
-          Open Source access
-        </Link>
-      ) : null}
-    </div>
-  );
 }
 
 function formatCommercialSourceStatus(status: string) {
@@ -1042,6 +1187,29 @@ function formatCommercialSourceStatus(status: string) {
     default:
       return "Source access needs attention";
   }
+}
+
+function commercialSourceSummary(
+  status:
+    | {
+        status?: string | null;
+        summary?: string | null;
+      }
+    | null
+    | undefined,
+) {
+  if (!status) return null;
+  if (status.status === "healthy") return "Live ad checks are ready.";
+  if (status.status === "demo") {
+    return "Live ad checks aren't configured yet, so searches show labeled sample data.";
+  }
+  if (status.status === "disabled") {
+    return "Live ad checks are unavailable right now. Review source access before relying on fresh results.";
+  }
+  return (
+    status.summary?.trim() ||
+    "Live ad checks are temporarily delayed. We'll retry automatically — results refresh as soon as checks recover."
+  );
 }
 
 async function listActionableCounterMoveFollowUps(

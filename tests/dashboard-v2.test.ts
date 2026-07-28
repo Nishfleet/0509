@@ -101,8 +101,10 @@ describe("dashboard v2 shell", () => {
   it("keeps narrow authenticated navigation in page flow", () => {
     expect(appCss).not.toMatch(/\.f9-cursor-main\s*\{[^}]*order:\s*1/s);
     expect(shellSource).toContain("f9-dash-mobile-nav");
-    expect(shellSource).toContain("f9-dash-mobile-context");
-    expect(shellSource).toContain("Swipe for more");
+    expect(shellSource).not.toContain("f9-dash-mobile-context");
+    expect(shellSource).not.toContain("Swipe for more");
+    expect(shellSource).toContain('aria-label="Workspace sections"');
+    expect(shellSource).toContain('role="group"');
     expect(shellSource).toContain('aria-label="Workspace and account"');
     expect(shellSource).toContain('a[aria-current="page"]');
     expect(appCss).toContain(".f9-dash-page-app .f9-dash-mobile-nav");
@@ -111,6 +113,9 @@ describe("dashboard v2 shell", () => {
     expect(appCss).not.toContain(".f9-cursor-rail > div:not(");
     expect(appCss).not.toMatch(/\.f9-dash(?:-page-app)?\s+\.f9-dash-mobile-nav\s*\{[^}]*position:\s*fixed/s);
     expect(appCss).not.toMatch(/\.f9-dash(?:-page-app)?\s+\.f9-dash-mobile-utility\s*\{[^}]*position:\s*fixed/s);
+    expect(appCss).toMatch(
+      /\.f9-dash-page-app \.f9-dash-mobile-nav > \.f9-dash-mobile-utility\s*\{\s*display:\s*contents;/s,
+    );
     expect(shellSource.indexOf('className="f9-dash-mobile-nav"')).toBeLessThan(
       shellSource.indexOf('className="f9-cursor-main"'),
     );

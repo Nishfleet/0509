@@ -120,7 +120,7 @@ test.describe("Journey 6 release: recovery across account, support, retention, a
       await signInAs(context, baseURL!, "e2e-starter");
       await page.setViewportSize(viewport);
       await page.goto("/app");
-      await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
+      await expect(page.locator("#f9-main-content").getByRole("heading", { level: 1 })).toBeVisible();
       await page.locator('a[href="/app/account"]:visible').first().click();
       await expect(page.getByRole("heading", { name: "Account & security" })).toBeVisible();
       await expectRouteAnnouncement(page, "Navigated to Account.");
@@ -129,7 +129,7 @@ test.describe("Journey 6 release: recovery across account, support, retention, a
       await expectMinimumTouchTarget(page.getByRole("button", { name: "Save my brand" }));
       await expectExperience(page);
       await page.locator('a[href="/app"]:visible').first().click();
-      await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
+      await expect(page.locator("#f9-main-content").getByRole("heading", { level: 1 })).toBeVisible();
       await expectRouteAnnouncement(page, "Navigated to App.");
       await expectExperience(page);
       await attachReleaseStateArtifacts({ page, testInfo, prefix: "j6-return", state: "dashboard-account" });
@@ -231,7 +231,7 @@ test.describe("Journey 6 release: recovery across account, support, retention, a
       await signInAs(context, baseURL!, "e2e-starter");
       await page.setViewportSize(viewport);
       await page.goto("/app");
-      await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
+      await expect(page.locator("#f9-main-content").getByRole("heading", { level: 1 })).toBeVisible();
       const token = viewportKey(viewport);
       const failureKey = `e2e-j6-retention-failure-${token}`;
       const failureRun = `e2e-run-j6-retention-failure-${token}`;
@@ -258,7 +258,7 @@ test.describe("Journey 6 release: recovery across account, support, retention, a
       await expect(page.getByRole("heading", { name: "Account & security" })).toBeVisible();
       await expectRouteAnnouncement(page, "Navigated to Account.");
       await page.locator('a[href="/app"]:visible').first().click();
-      await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
+      await expect(page.locator("#f9-main-content").getByRole("heading", { level: 1 })).toBeVisible();
       await expectRouteAnnouncement(page, "Navigated to App.");
       await expectExperience(page);
       await attachReleaseStateArtifacts({ page, testInfo, prefix: "j6-retention", state: "retention-restore-integrity" });
@@ -275,7 +275,7 @@ test.describe("Journey 6 release: recovery across account, support, retention, a
       await signInAs(context, baseURL!, "e2e-starter");
       await page.setViewportSize(viewport);
       await page.goto("/app");
-      await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
+      await expect(page.locator("#f9-main-content").getByRole("heading", { level: 1 })).toBeVisible();
       const token = viewportKey(viewport);
       const outageKey = `e2e-j6-auth-outage-${token}`;
       const outageRun = `e2e-run-j6-auth-outage-${token}`;
@@ -296,7 +296,7 @@ test.describe("Journey 6 release: recovery across account, support, retention, a
       const recovery = await replay(page, "/api/e2e/auth/replay", "e2e-starter", recoveryKey, recoveryRun, "j6");
       expect(recovery).toMatchObject({ action: "auth_recovery", outcome: "recovery", auth: { status: "recovered" } });
       await page.goto("/app");
-      await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
+      await expect(page.locator("#f9-main-content").getByRole("heading", { level: 1 })).toBeVisible();
       await expectVisibleKeyboardFocus(page.locator('a[href="/app/account"]:visible').first());
       await expectExperience(page);
       await attachReleaseStateArtifacts({ page, testInfo, prefix: "j6-auth", state: "auth-outage-recovery" });

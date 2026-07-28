@@ -36,8 +36,8 @@ describe("app rebuild", () => {
     expect(appLayout).toContain("DashboardShell");
     expect(shellComponent).toContain("f9-cursor-shell");
     expect(appSurface).toContain('className="f9-app-stack"');
-    expect(appSurface).toContain("f9-dashboard-clean");
-    expect(appSurface).toContain('className="f9-dashboard-search"');
+    expect(appSurface).toContain("f9-overview");
+    expect(appSurface).toContain('className="f9-overview-search"');
     expect(appSurface).toContain('id="setup-checklist"');
     expect(appSurface).not.toContain('className="f9-onboard-page"');
     expect(appClasses).not.toEqual(
@@ -97,11 +97,11 @@ describe("app rebuild", () => {
     expect(routeConfig).toContain('route("clients", "routes/app.clients.tsx"');
     expect(dashboardRoute).toContain("getWorkspaceReadiness");
     expect(dashboardRoute).toContain("buildMarketDeskBrief");
-    expect(dashboardRoute).toContain("Brief details");
+    expect(dashboardRoute).toContain("Latest stored changes");
     expect(dashboardRoute).toContain("Competitor website");
-    expect(dashboardRoute).toContain("f9-dashboard-search");
-    expect(dashboardRoute).toContain("f9-dashboard-metrics");
-    expect(dashboardRoute).toContain("Recent changes");
+    expect(dashboardRoute).toContain("f9-overview-search");
+    expect(dashboardRoute).toContain("f9-overview-stat-band");
+    expect(dashboardRoute).toContain("What changed");
     expect(dashboardRoute).not.toContain("Retained value loop");
     expect(dashboardRoute).not.toContain("Account setup");
     expect(dashboardRoute).not.toContain("Remembered");
