@@ -28,7 +28,7 @@ jobs:
   finalize:
     name: Finalize exact Worker soak
     if: github.repository == 'nish3451/0509'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 45
     environment:
       name: production

@@ -14,8 +14,8 @@ permissions:
 
 jobs:
   backup:
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    if: github.repository == 'nish3451/0509' && github.ref == 'refs/heads/main'
+    runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 20
     environment: d1-backup-r2
     env:
