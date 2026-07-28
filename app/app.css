@@ -2915,6 +2915,26 @@ textarea:focus-visible,
   border-radius: 6px;
 }
 
+/* DashboardShell moves focus here after route changes so assistive technology
+   announces the new page. It is a document region, not an interactive
+   control, so never draw the global focus ring around the whole workspace. */
+.f9-cursor-main:focus,
+.f9-cursor-main:focus-visible {
+  outline: none;
+}
+
+/* Preserve a local destination cue when keyboard navigation triggers the
+   route-focus handoff. Pointer-driven and initial focus remain visually quiet. */
+.f9-cursor-main:focus-visible {
+  box-shadow: inset 0 3px 0 var(--green-ink);
+}
+
+/* The skip link still leaves a local destination cue without recreating the
+   full-region ring. Route-driven focus has no hash, so first load stays clean. */
+.f9-cursor-main:target {
+  box-shadow: inset 0 3px 0 var(--green-ink);
+}
+
 @media (max-width: 640px) {
   .f9-panel-toolbar {
     flex-direction: column;
@@ -5140,6 +5160,11 @@ one signal-green accent.
   padding: 22px 24px 64px;
 }
 
+.f9-dash-page-app .f9-cursor-shell {
+  width: 100%;
+  max-width: none;
+}
+
 .f9-cursor-main {
   min-width: 0;
 }
@@ -5344,7 +5369,7 @@ one signal-green accent.
 .f9-dash-content {
   display: grid;
   gap: 16px;
-  max-width: 1120px;
+  width: 100%;
 }
 
 .f9-dash-page-header {
@@ -6426,10 +6451,15 @@ one signal-green accent.
 
 /* Final search cleanup: keep the Cursor-style rail unboxed. */
 .f9-search-page .f9-cursor-shell {
-  grid-template-columns: 218px minmax(0, 1fr);
   gap: 24px;
-  width: min(100%, 1390px);
   padding-top: 20px;
+}
+
+@media (min-width: 761px) {
+  .f9-dash-page-public.f9-search-page .f9-cursor-shell {
+    grid-template-columns: 218px minmax(0, 1fr);
+    width: min(100%, 1390px);
+  }
 }
 
 .f9-search-page .f9-cursor-rail {
