@@ -17,57 +17,56 @@ export interface DashboardNavSection {
   items: DashboardNavItem[];
 }
 
+/**
+ * BL-030 — the rail is regrouped, not reduced.
+ *
+ * The old model shipped SIX mono section labels over sixteen destinations in
+ * one flat list: more label than content, and the labels ate the vertical
+ * space that would otherwise give the rail any hierarchy. The concept v4 rail
+ * carries the eight daily jobs ungrouped and sentence-cased, then one
+ * disclosure row — "Workspace & account" — holding the seven long-dwell
+ * settings routes. Nine visible rows instead of sixteen, and every route in
+ * `app/routes.ts` is still one click or one disclosure away.
+ */
 export const DASHBOARD_PRIMARY_NAV: DashboardNavSection[] = [
   {
     items: [
       { label: "Overview", to: "/app", end: true },
-      { label: "Search", to: "/search" },
-    ],
-  },
-  {
-    title: "Monitor",
-    items: [
       { label: "Competitors", to: "/app/watchlists" },
       { label: "Presence", to: "/app/presence", requiresPresence: true },
-    ],
-  },
-  {
-    title: "Library",
-    items: [{ label: "Collections", to: "/app/collections" }],
-  },
-  {
-    title: "Review",
-    items: [
+      { label: "Search", to: "/search" },
       { label: "Briefs", to: "/app/digests" },
+      { label: "Collections", to: "/app/collections" },
       { label: "Reports", to: "/app/reports" },
       { label: "Shared links", to: "/app/shares" },
+      { label: "Client rooms", to: "/app/clients" },
     ],
   },
 ];
 
+/** The seven long-dwell settings routes, behind the one disclosure row. */
 export const DASHBOARD_SETTINGS_NAV: DashboardNavSection[] = [
   {
-    title: "Delivery",
-    items: [{ label: "Client rooms", to: "/app/clients" }],
-  },
-  {
-    title: "Workspace",
     items: [
       { label: "Notifications", to: "/app/notifications" },
       { label: "Source access", to: "/app/source-access" },
       { label: "Developer access", to: "/app/developer-access" },
       { label: "Team", to: "/app/team" },
-    ],
-  },
-  {
-    title: "Account",
-    items: [
       { label: "Billing & usage", to: "/app/billing" },
       { label: "Account & security", to: "/app/account" },
       { label: "Help & support", to: "/app/support" },
     ],
   },
 ];
+
+/** Pathnames that live inside the "Workspace & account" disclosure. */
+export function isSettingsNavPath(pathname: string) {
+  return DASHBOARD_SETTINGS_NAV.some((section) =>
+    section.items.some(
+      (item) => pathname === item.to || pathname.startsWith(`${item.to}/`),
+    ),
+  );
+}
 
 export const DASHBOARD_STAFF_NAV: DashboardNavItem[] = [
   { label: "Ops", to: "/app/ops", requiresOps: true },

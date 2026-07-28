@@ -100,6 +100,12 @@ export interface CompetitorDetailProps {
   canEmailDelivery: boolean;
   showSlackDelivery: boolean;
   lockedToolbarUpgradeLabel: string | null;
+  /**
+   * BL-030: pause/resume moved here when the list stopped carrying per-band
+   * action rows. It is still ONE control for this competitor, rendered by the
+   * route so the fetcher's per-watchlist busy state is unchanged.
+   */
+  pauseAction?: ReactNode;
   /** URL-driven disclosure for quiet-line collapse (brief §6.7, §11). */
   checksExpanded?: boolean;
 }
@@ -202,10 +208,10 @@ export function CompetitorDetail(props: CompetitorDetailProps) {
               </SubmitButton>
             </Form>
           ) : null}
-          {/* "Package for client" and pause/resume are NOT repeated here: the
-              open band sits directly above and already carries both (§6.1
-              right cell). Two identical buttons 60px apart is the toolbar
-              gauntlet the audit flagged. */}
+          {/* BL-030: the list no longer carries per-row action rows, so this
+              is now the single home for pause/resume. "Package for client"
+              lives once, in the peek pane above. */}
+          {props.pauseAction}
           {props.canShare ? (
             <Form method="post">
               <input name="intent" type="hidden" value="share-watchlist" />

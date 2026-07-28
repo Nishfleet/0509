@@ -10,7 +10,8 @@ import {
   PUBLIC_SEARCH_NAV,
   buildDashboardMobileNav,
   filterDashboardNav,
-  type DashboardNavSection,
+  isSettingsNavPath,
+  type DashboardNavItem,
 } from "~/lib/dashboard-navigation";
 import { SUPPORT_EMAIL } from "~/lib/support";
 
@@ -28,6 +29,12 @@ export interface DashboardShellProps {
   showOpsNav?: boolean;
   railNote?: React.ReactNode;
   headerActions?: React.ReactNode;
+  /**
+   * Opens the ⌘K command palette. BL-030: the affordance is visible chrome in
+   * the rail, not folklore — it is the one navigation control whose cost does
+   * not scale with the number of competitors.
+   */
+  onCommandPalette?: () => void;
   children: React.ReactNode;
 }
 
@@ -44,36 +51,34 @@ const MOBILE_UTILITY_NAV = [
   { label: "Billing", to: "/app/billing" },
 ] as const;
 
-function NavSections({ sections }: { sections: DashboardNavSection[] }) {
+/**
+ * BL-030 — a rail row. Text only: the concept's rail carries no icons, no
+ * mono caps and no boxes, so a row is a label and (when the caller has one)
+ * a count. Green never appears here — the rail is monochrome by rule, and
+ * green belongs to the work.
+ */
+function WorkspaceNavLink({ item }: { item: DashboardNavItem }) {
   return (
-    <>
-      {sections.map((section) => (
-        <div className="f9-dash-nav-group" key={section.title ?? section.items[0]?.to ?? "nav"}>
-          {section.title ? <p className="f9-dash-nav-section">{section.title}</p> : null}
-          <nav aria-label={section.title ?? "Application"}>
-            {section.items.map((item) => {
-              const Icon = navIconFor(item);
-              return (
-                <NavLink
-                  className={(state) => {
-                    const base = navLinkClassName(state);
-                    return ["f9-dash-nav-link", base].filter(Boolean).join(" ");
-                  }}
-                  end={item.end}
-                  key={item.to}
-                  prefetch="intent"
-                  to={item.to}
-                >
-                  <Icon />
-                  <span>{item.label}</span>
-                </NavLink>
-              );
-            })}
-          </nav>
-        </div>
-      ))}
-    </>
+    <NavLink
+      className={(state) => {
+        const base = navLinkClassName(state);
+        return ["f9-dash-nav-link", "f9-wk-nav-a", base].filter(Boolean).join(" ");
+      }}
+      end={item.end}
+      prefetch="intent"
+      to={item.to}
+    >
+      <span>{item.label}</span>
+    </NavLink>
   );
+}
+
+function initialFor(...candidates: (string | null | undefined)[]) {
+  for (const candidate of candidates) {
+    const trimmed = candidate?.trim();
+    if (trimmed) return trimmed.slice(0, 1).toUpperCase();
+  }
+  return "F";
 }
 
 export function DashboardShell({
@@ -88,6 +93,7 @@ export function DashboardShell({
   showOpsNav = false,
   railNote,
   headerActions,
+  onCommandPalette,
   children,
 }: DashboardShellProps) {
   const primary = filterDashboardNav(DASHBOARD_PRIMARY_NAV, {
@@ -108,6 +114,12 @@ export function DashboardShell({
   const mobilePrimaryRef = useRef<HTMLElement>(null);
   const mobileUtilityRef = useRef<HTMLElement>(null);
   const [routeAnnouncement, setRouteAnnouncement] = useState("");
+  // The disclosure starts open when the customer is standing inside it, so a
+  // deep link into a settings route never hides its own active row.
+  const [settingsOpen, setSettingsOpen] = useState(() => isSettingsNavPath(location.pathname));
+  useEffect(() => {
+    if (isSettingsNavPath(location.pathname)) setSettingsOpen(true);
+  }, [location.pathname]);
   useEffect(() => {
     if (previousPathnameRef.current === location.pathname) return;
     previousPathnameRef.current = location.pathname;
@@ -142,20 +154,14 @@ export function DashboardShell({
       </a>
       <div className={`f9-route-progress ${isNavigating ? "is-visible" : ""}`} aria-hidden="true" />
       <div className="f9-cursor-shell">
-        <aside className="f9-cursor-rail f9-cursor-rail-desktop" aria-label="Application">
-          <div className="f9-cursor-account">
-            <span>{accountLabel}</span>
-            <strong>{accountTitle}</strong>
-            <small>{accountDetail}</small>
-            {userName ? (
-              <>
-                <strong className="f9-dash-user-name">{userName}</strong>
-                {userEmail ? <small>{userEmail}</small> : null}
-              </>
-            ) : null}
-          </div>
+        {isPublic ? (
+          <aside className="f9-cursor-rail f9-cursor-rail-desktop" aria-label="Application">
+            <div className="f9-cursor-account">
+              <span>{accountLabel}</span>
+              <strong>{accountTitle}</strong>
+              <small>{accountDetail}</small>
+            </div>
 
-          {isPublic ? (
             <nav aria-label="Search">
               {PUBLIC_SEARCH_NAV.map((item) => {
                 const Icon = navIconFor(item);
@@ -176,57 +182,125 @@ export function DashboardShell({
                 );
               })}
             </nav>
-          ) : (
-            <>
-              <NavSections sections={primary} />
-              <NavSections sections={settings} />
 
-              {staff.length > 0 ? (
-                <nav aria-label="Staff">
-                  {staff.map((item) => {
-                    const Icon = navIconFor(item);
-                    return (
-                      <NavLink
-                        className={(state) => {
-                          const base = navLinkClassName(state);
-                          return ["f9-dash-nav-link", base].filter(Boolean).join(" ");
-                        }}
-                        end={item.end}
-                        key={item.to}
-                        prefetch="intent"
-                        to={item.to}
-                      >
-                        <Icon />
-                        <span>{item.label}</span>
-                      </NavLink>
-                    );
-                  })}
-                </nav>
-              ) : null}
-            </>
-          )}
+            {railNote}
 
-          {railNote}
-
-          <div className="f9-dash-rail-footer">
-            <Link prefetch="intent" to="/help">
-              Help
-            </Link>
-            <Link prefetch="intent" to="/docs">
-              Docs
-            </Link>
-            {isPublic ? (
+            <div className="f9-dash-rail-footer">
+              <Link prefetch="intent" to="/help">
+                Help
+              </Link>
+              <Link prefetch="intent" to="/docs">
+                Docs
+              </Link>
               <Link prefetch="intent" to="/auth/login">
                 Sign in
               </Link>
-            ) : (
-              <>
+            </div>
+          </aside>
+        ) : (
+          /**
+           * BL-030 — the rail is the workspace's ink block. The landing
+           * punctuates a long bone page with full-bleed ink bands; a
+           * workspace screen recurs a hundred times a day and cannot, so the
+           * ink moves to the one element that is always present. Nine visible
+           * rows: eight daily jobs plus the "Workspace & account" disclosure
+           * holding the seven long-dwell settings routes. Sixteen
+           * destinations, none removed.
+           */
+          <aside
+            aria-label="Application"
+            className="f9-cursor-rail f9-cursor-rail-desktop f9-wk-rail"
+          >
+            <div className="f9-wk-rail-head">
+              <Link className="f9-wk-wordmark" prefetch="intent" to="/app">
+                Five to Nine
+              </Link>
+            </div>
+
+            {onCommandPalette ? (
+              <button
+                aria-haspopup="dialog"
+                aria-keyshortcuts="Meta+K Control+K"
+                className="f9-wk-search"
+                onClick={onCommandPalette}
+                type="button"
+              >
+                Search&hellip;
+                <span aria-hidden="true" className="f9-wk-key">
+                  &#8984;K
+                </span>
+              </button>
+            ) : null}
+
+            <div className="f9-wk-nav">
+              {primary.map((section) => (
+                <div className="f9-dash-nav-group" key={section.items[0]?.to ?? "nav"}>
+                  <nav aria-label="Workspace">
+                    {section.items.map((item) => (
+                      <WorkspaceNavLink item={item} key={item.to} />
+                    ))}
+                  </nav>
+                </div>
+              ))}
+
+              {settings.length > 0 ? (
+                <div className="f9-dash-nav-group f9-wk-more-group">
+                  <button
+                    aria-controls="f9-wk-settings-nav"
+                    aria-expanded={settingsOpen}
+                    className="f9-wk-more"
+                    onClick={() => setSettingsOpen((open) => !open)}
+                    type="button"
+                  >
+                    Workspace &amp; account
+                    <span aria-hidden="true" className="f9-wk-caret">
+                      {settingsOpen ? "▴" : "▾"}
+                    </span>
+                  </button>
+                  <nav aria-label="Workspace and account" hidden={!settingsOpen} id="f9-wk-settings-nav">
+                    {settings.flatMap((section) =>
+                      section.items.map((item) => <WorkspaceNavLink item={item} key={item.to} />),
+                    )}
+                  </nav>
+                </div>
+              ) : null}
+
+              {staff.length > 0 ? (
+                <div className="f9-dash-nav-group">
+                  <nav aria-label="Staff">
+                    {staff.map((item) => (
+                      <WorkspaceNavLink item={item} key={item.to} />
+                    ))}
+                  </nav>
+                </div>
+              ) : null}
+            </div>
+
+            {railNote}
+
+            <div className="f9-wk-foot">
+              <div className="f9-wk-acct">
+                <span aria-hidden="true" className="f9-wk-avatar">
+                  {initialFor(userName, userEmail, accountTitle)}
+                </span>
+                <span>
+                  <b className="f9-dash-user-name">{userName?.trim() || accountTitle}</b>
+                  <small>{userEmail?.trim() || accountDetail}</small>
+                </span>
+              </div>
+              <div className="f9-dash-rail-footer f9-wk-foot-links">
+                <Link prefetch="intent" to="/help">
+                  Help
+                </Link>
+                <Link prefetch="intent" to="/docs">
+                  Docs
+                </Link>
                 <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
                 <SignOutButton />
-              </>
-            )}
-          </div>
-        </aside>
+              </div>
+            </div>
+          </aside>
+        )}
 
         {!isPublic && mobileNav.length > 0 ? (
           <nav

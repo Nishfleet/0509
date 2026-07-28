@@ -248,8 +248,10 @@ describe("dashboard first 15 minutes activation", () => {
       await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup).toContain("Next moves");
-    expect(markup).toContain("Keep your overview useful");
+    // BL-030: the retention nudges are rows in "Still running" rather than
+    // their own panel — the nudge itself is what the customer acts on, and a
+    // panel heading above it was chrome explaining chrome.
+    expect(markup).toContain("Still running");
     expect(markup).toContain("No first digest yet");
     expect(markup).toContain("/app/digests");
     expect(markup).not.toContain("Cancellation and help path");
@@ -537,15 +539,16 @@ describe("dashboard first 15 minutes activation", () => {
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
     expect(markup).toContain("Overview");
-    expect(markup).toContain("Brief");
     expect(markup).toContain("Quiet check completed");
     expect(markup).toContain("0 ads checked across 1 competitor");
     expect(markup).toContain(
       "Completed checks found no action-worthy movement",
     );
-    expect(markup).toContain("Competitors watched");
+    // The stat band is gone (four numbers shouting at once). The same facts
+    // are rows in "Still running" and the operational line at the foot.
+    expect(markup).toContain("Competitors");
     expect(markup).toContain("Evidence checks");
-    expect(markup).toContain("Being watched");
+    expect(markup).toContain("Still running");
     expect(markup).not.toContain('id="setup-checklist"');
     expect(markup).not.toContain("First 15 minutes");
     expect(markup).not.toContain("Retained value loop");
@@ -608,8 +611,9 @@ describe("dashboard first 15 minutes activation", () => {
     expect(markup).toContain("Resume a competitor watch");
     expect(markup).toContain("Add a competitor");
     expect(markup).toContain("/app/watchlists");
-    expect(markup).toContain("All paused");
-    expect(markup).toContain("Paused");
+    expect(markup).toContain(
+      "Every competitor is paused. No checks run until you resume one.",
+    );
     expect(markup).not.toContain("Watching for the next change");
     expect(markup).not.toContain("Your watchlist is ready");
     expect(markup).not.toContain("move need review");
@@ -695,7 +699,7 @@ describe("dashboard first 15 minutes activation", () => {
 
     expect(markup).toContain("Quiet check completed");
     expect(markup).toContain("0 ads checked across 1 competitor");
-    expect(markup).toContain("Being watched");
+    expect(markup).toContain("Still running");
     expect(markup).not.toContain("First 15 minutes");
     expect(markup).not.toContain("Prove delivery");
     expect(markup).not.toContain("Retained value loop");
@@ -779,7 +783,7 @@ describe("dashboard first 15 minutes activation", () => {
 
     expect(markup).toContain("Quiet check completed");
     expect(markup).toContain("0 ads checked across 1 competitor");
-    expect(markup).toContain("Being watched");
+    expect(markup).toContain("Still running");
     expect(markup).not.toContain("First 15 minutes");
     expect(markup).not.toContain("Prove delivery");
     expect(markup).not.toContain("A successful delivery trail exists");
@@ -859,8 +863,9 @@ describe("dashboard first 15 minutes activation", () => {
 
     expect(markup).toContain("Watching for the next change");
     expect(markup).toContain("Your watchlist is ready.");
-    expect(markup).toContain("Briefs sent");
-    expect(markup).toContain("Email trail active");
+    // Brief-delivery history is a /app/digests fact, not an Overview stat
+    // card; the Overview says whether a brief was filed, in its context line.
+    expect(markup).toContain("Your latest brief was filed");
     expect(markup).not.toContain("Set delivery");
     expect(markup).not.toContain("A successful delivery trail exists");
     expect(markup).not.toContain("Retained value loop");
@@ -954,8 +959,9 @@ describe("dashboard first 15 minutes activation", () => {
 
     expect(markup).toContain("1 follow-up to decide");
     expect(markup).toContain("Responses waiting on you");
-    expect(markup).toContain("Review changes");
+    // The row itself opens the competitor that is waiting on a decision.
     expect(markup).toContain("Review Nykaa move");
+    expect(markup).toContain('aria-label="Responses waiting on you"');
     expect(markup).not.toContain("no urgent competitor move is waiting");
     expect(markup).not.toContain("No changes worth your time");
   });

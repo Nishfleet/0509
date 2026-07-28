@@ -2303,28 +2303,30 @@ describe("watchlists route rendering", () => {
     const { default: WatchlistsRoute } = await import("~/routes/app.watchlists");
     const markup = renderToStaticMarkup(createElement(WatchlistsRoute));
 
-    // One band per competitor, each with its capture strip and worded legend.
-    expect(markup.match(/f9-ed-band"/g)?.length ?? 0).toBeGreaterThanOrEqual(1);
+    // BL-030 — the list is a list: one ruled row per competitor, each with a
+    // name, one plain sentence, one status word and one date. The band, its
+    // 30-day histogram, the ticker and the five-cell status strip are gone;
+    // the same facts are one line of text or one row of the detail pane.
+    expect(markup.match(/class="f9-wk-row(?: [^"]*)?"/g)).toHaveLength(2);
     expect(markup).toContain("Nykaa watch");
     expect(markup).toContain("Paused rival");
-    expect(markup.match(/f9-ed-capture-strip/g)).toHaveLength(2);
-    expect(markup).toContain("Short bar = checked, nothing changed.");
-    // The workspace ticker exists here.
-    expect(markup).toContain("f9-ed-ticker");
-    expect(markup).toContain("NYKAA WATCH · 2 CHANGES CAUGHT · 30D");
-    // One status strip carries page-level status; no scattered status cards.
-    expect(markup).toContain("f9-ed-status-strip");
-    expect(markup).toContain("Caught · 30d");
-    expect(markup).not.toContain("Tracking status");
-    // Zero Rank-1s here on purpose: the shell topbar already carries
-    // "+ Add competitor", and two ink primaries on one screen is the §5 bug.
+    expect(markup).toContain("2 changes captured in the last 30 days.");
+    expect(markup).toContain("Paused. No checks run and the history stays.");
+    expect(markup).not.toContain("f9-ed-capture-strip");
+    expect(markup).not.toContain("f9-ed-ticker");
+    expect(markup).not.toContain("f9-ed-status-strip");
+    // Exactly one filled button — the page's single action.
+    expect(markup.match(/class="f9-wk-btn"/g)).toHaveLength(1);
+    expect(markup).toContain("Add competitor");
     expect(markup).not.toContain("f9-ed-cta--rank1");
-    // The detail surface stays closed until a band is opened.
+    // The five state filters are navigation, with honest counts.
+    expect(markup).toContain('class="f9-wk-tab is-on"');
+    expect(markup).toContain("Caught");
+    expect(markup).toContain("Paused");
+    // The detail pane and the full record stay closed until a row is opened.
+    expect(markup).not.toContain("f9-wk-detail");
     expect(markup).not.toContain("Evidence and alerts");
     expect(markup).not.toContain("Watchlist setup");
-    // The checkbox rail is gone.
-    expect(markup).not.toContain('type="checkbox"');
-    expect(markup).not.toContain("f9-bulk-checkbox");
     // No bulk bar without a selection.
     expect(markup).not.toContain("competitors selected");
   });

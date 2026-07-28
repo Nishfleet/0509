@@ -11,8 +11,9 @@ const collectionsRoute = readFileSync("app/routes/app.collections.tsx", "utf8");
 const clientsRoute = readFileSync("app/routes/app.clients.tsx", "utf8");
 const digestsRoute = readFileSync("app/routes/app.digests.tsx", "utf8");
 const watchlistsRoute = readFileSync("app/routes/app.watchlists.tsx", "utf8");
-// BL-006 moved the competitor row out of the route and into the band.
-const competitorBand = readFileSync("app/components/watchlists/competitor-band.tsx", "utf8");
+// BL-030 replaced BL-006's competitor band with the ruled list row; the row
+// component is where the competitor link now lives.
+const ruledList = readFileSync("app/components/workspace/ruled-list.tsx", "utf8");
 const notificationsUiRoute = readFileSync("app/routes/app.notifications.ui.tsx", "utf8");
 const sourceAccessUiRoute = readFileSync("app/routes/app.source-access.ui.tsx", "utf8");
 const developerAccessUiRoute = readFileSync("app/routes/app.developer-access.ui.tsx", "utf8");
@@ -38,6 +39,9 @@ describe("app rebuild", () => {
     expect(appSurface).toContain('className="f9-app-stack"');
     expect(appSurface).toContain("f9-overview");
     expect(appSurface).toContain('className="f9-overview-search"');
+    // BL-030: the two rebuilt surfaces run on the workspace-language layer.
+    expect(dashboardRoute).toContain('className="f9-wk-page f9-overview"');
+    expect(watchlistsRoute).toContain('className="f9-wk-page"');
     expect(appSurface).toContain('id="setup-checklist"');
     expect(appSurface).not.toContain('className="f9-onboard-page"');
     expect(appClasses).not.toEqual(
@@ -82,9 +86,12 @@ describe("app rebuild", () => {
     expect(shellComponent).toContain('prefetch="intent"');
     expect(appLayout).toContain("shouldRevalidate");
     expect(appLayout).toContain("currentUrl.pathname === nextUrl.pathname");
-    expect(competitorBand).toContain("`/app/watchlists?watchlist=${props.id}`");
-    expect(competitorBand).toContain("preventScrollReset");
-    expect(competitorBand).not.toContain("href={openHref}");
+    // The competitor row opens through a <Link>, never a raw href, so the
+    // peek pane is a client transition and the list keeps its scroll.
+    expect(ruledList).toContain("<Link");
+    expect(ruledList).toContain('prefetch="intent"');
+    expect(ruledList).not.toContain("href=");
+    expect(watchlistsRoute).toContain("watchlistDetailTabHref(row.id)");
     expect(digestsRoute).toContain("to={`/app/digests?digest=${digest.id}`}");
     expect(digestsRoute).toContain("preventScrollReset");
     expect(digestsRoute).not.toContain("href={`/app/digests?digest=${digest.id}`}");
@@ -97,11 +104,14 @@ describe("app rebuild", () => {
     expect(routeConfig).toContain('route("clients", "routes/app.clients.tsx"');
     expect(dashboardRoute).toContain("getWorkspaceReadiness");
     expect(dashboardRoute).toContain("buildMarketDeskBrief");
-    expect(dashboardRoute).toContain("Latest stored changes");
+    // BL-030 replaced the "Latest stored changes" kicker + stat band with the
+    // concept v4 kickers. The Overview still names the same three jobs.
+    expect(dashboardRoute).toContain("Overnight");
+    expect(dashboardRoute).toContain("What changed");
+    expect(dashboardRoute).toContain("Still running");
     expect(dashboardRoute).toContain("Competitor website");
     expect(dashboardRoute).toContain("f9-overview-search");
-    expect(dashboardRoute).toContain("f9-overview-stat-band");
-    expect(dashboardRoute).toContain("What changed");
+    expect(dashboardRoute).not.toContain("f9-overview-stat-band");
     expect(dashboardRoute).not.toContain("Retained value loop");
     expect(dashboardRoute).not.toContain("Account setup");
     expect(dashboardRoute).not.toContain("Remembered");

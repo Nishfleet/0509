@@ -8,10 +8,7 @@ import {
 import { useEffect, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
-import {
-  DashboardPage,
-  DashboardPageHeader,
-} from "~/components/dashboard-page";
+import { DashboardPage } from "~/components/dashboard-page";
 import {
   DashboardRouteError,
   DashboardRouteLoading,
@@ -19,34 +16,24 @@ import {
 import { ActionFeedback } from "~/components/action-feedback";
 import { SetupChecklistCard } from "~/components/setup-checklist-card";
 import { SpecimenEmptyState } from "~/components/evidence/specimen-empty-state";
-import { DiffPlate } from "~/components/evidence/diff-plate";
-import { FactRail } from "~/components/evidence/fact-rail";
-import { QuietLine } from "~/components/evidence/quiet-line";
-import {
-  PrimaryAction,
-  SecondaryAction,
-  TertiaryAction,
-} from "~/components/evidence/cta";
 import { LocalTime } from "~/components/local-time";
-import { Pill } from "~/components/pill";
 import { SubmitButton } from "~/components/submit-button";
+import { FeedbackStrip } from "~/components/workspace/feedback-strip";
+import { RuledList, RuledRow } from "~/components/workspace/ruled-list";
+import { WorkingHeader } from "~/components/workspace/working-header";
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 import { toPublicDeliveryTarget } from "~/lib/delivery-target-public";
 import { isSecretishMemoryString } from "~/lib/agent-redaction";
-import { buildChangeIntelligenceSummary } from "~/lib/change-intelligence";
+import { firstChangeMark } from "~/lib/change-mark";
 import { buildMarketDeskBrief } from "~/lib/market-desk-brief";
+import { buildOvernightSentence } from "~/lib/overnight-sentence";
 import { pendingBlockingSetupItems } from "~/lib/setup-checklist";
 import { buildSearchParams } from "~/lib/normalize";
-import { classifyWatchEventSource } from "~/lib/proof-classification";
 import { formatNextScanLabel } from "~/lib/schedule-display";
 import { formatMachineTokenLabel } from "~/lib/landing-page-display";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import type { AppEnv } from "~/lib/env.server";
-import type {
-  AgentActionAuditRecord,
-  ProofCaptureRecord,
-  WatchEventRecord,
-} from "~/lib/types";
+import type { AgentActionAuditRecord } from "~/lib/types";
 import type { WorkspaceReadiness } from "~/lib/workspace-readiness.server";
 
 export const meta = () => [{ title: "Overview | Five to Nine" }];
@@ -63,18 +50,6 @@ const COUNTER_MOVE_AUDIT_PAGE_LIMIT = 30;
 const COUNTER_MOVE_AUDIT_MAX_PAGES = 10;
 const COUNTER_MOVE_FOLLOW_UP_DISPLAY_LIMIT = 3;
 const COUNTER_MOVE_FOLLOW_UP_AUDIT_FRESHNESS_MS = 7 * 24 * 60 * 60 * 1000;
-
-type OverviewProofPair = {
-  eventId: string;
-  current: ProofCaptureRecord;
-  previous: ProofCaptureRecord | null;
-};
-
-type OverviewRunTimestamp = {
-  id: string;
-  startedAt: string;
-  finishedAt: string | null;
-};
 
 type ListRecentAgentActionAudits = (
   env: AppEnv,
@@ -562,8 +537,6 @@ export default function AppDashboardRoute() {
   const digests = data.digests ?? [];
   const recentEvents = data.recentEvents ?? [];
   const recentProofCaptures = data.recentProofCaptures ?? [];
-  const recentProofPairs = data.recentProofPairs ?? [];
-  const recentEventRuns = data.recentEventRuns ?? [];
   const proofUsage = data.proofUsage ?? {
     warningLevel: "ok",
     used: 0,
@@ -600,12 +573,6 @@ export default function AppDashboardRoute() {
     watchlists
       .filter((watchlist) => watchlist.isActive)
       .every((watchlist) => Boolean(watchlist.lastScannedAt));
-  const proofHistoryUnavailable =
-    data.sectionWarnings?.some((warning) => warning.section === "recentProof") ??
-    false;
-  const runHistoryUnavailable =
-    data.sectionWarnings?.some((warning) => warning.section === "recentRuns") ??
-    false;
   const readinessGaps = workspaceReadiness
     ? pendingBlockingSetupItems(workspaceReadiness)
     : [];
@@ -626,255 +593,103 @@ export default function AppDashboardRoute() {
     plan,
     sourceStatus: data.metaStatus?.status,
   });
-  const statusCards = marketDeskBrief.metrics;
-  const hasDashboardMetrics = marketDeskBrief.hasMetrics;
-  const overviewMetrics = statusCards
-    .filter((card) => card.label !== "Moves found")
-    .slice(0, 3);
   const sourceNeedsRecovery =
     Boolean(data.metaStatus) && data.metaStatus?.status !== "healthy";
+  const latestDigest = digests[0] ?? null;
+  // A competitor name, not an event title, is what the row is about — the
+  // Bricolage face means "a watched entity" and nothing else.
+  const watchlistNameById = new Map(
+    watchlists.map((watchlist) => [watchlist.id, watchlist.name]),
+  );
+  const changedWatchlistCount = new Set(
+    visibleRecentEvents.map((event) => event.watchlistId),
+  ).size;
+  // Honest degrade: the strip NAMES what could not be read, so "temporarily
+  // unavailable" is never mistaken for "no stored evidence exists".
+  const sectionWarningCopy = formatOverviewSectionWarnings(data.sectionWarnings ?? []);
+  const lastCheckAt = watchlists.reduce<string | null>((latest, watchlist) => {
+    if (!watchlist.lastScannedAt) return latest;
+    return !latest || watchlist.lastScannedAt > latest ? watchlist.lastScannedAt : latest;
+  }, null);
+
+  const overnight = buildOvernightSentence({
+    briefTitle: marketDeskBrief.title,
+    briefSummary: marketDeskBrief.summary,
+    changeCount: visibleRecentEvents.length,
+    headline: visibleRecentEvents[0]?.title ?? null,
+    mark: firstChangeMark(visibleRecentEvents)?.mark ?? null,
+    quietCompetitors: Math.max(0, activeWatchlists - changedWatchlistCount),
+  });
 
   return (
-    <DashboardPage className="f9-overview">
-      <section className="f9-app-stack">
-        <DashboardPageHeader
-          kicker={
-            <>
-              <WakeGreeting /> · Overview · {marketDeskBrief.kicker}
-            </>
+    <DashboardPage className="f9-wk-page f9-overview">
+      <WorkingHeader
+        action={
+          hasBlockingSetupGaps
+            ? null
+            : { label: marketDeskBrief.action.label, to: marketDeskBrief.action.href }
+        }
+        context={
+          <>
+            <WakeGreeting />.{" "}
+            {latestDigest ? (
+              <>
+                Your latest brief was filed{" "}
+                <LocalTime iso={latestDigest.createdAt} mode="date" />.
+              </>
+            ) : (
+              "No brief has been filed yet."
+            )}
+          </>
+        }
+        title="Overview"
+      />
+
+      {sectionWarningCopy ? (
+        <FeedbackStrip label="Partial overview" tone="bad">
+          {sectionWarningCopy} Everything else shown here is current — refresh to load the
+          rest.
+        </FeedbackStrip>
+      ) : null}
+
+      {hasPaymentIssue ? (
+        <FeedbackStrip
+          actions={
+            <Link className="f9-wk-lnk" to="/app/billing">
+              Plan &amp; billing <span className="f9-wk-chev">&rsaquo;</span>
+            </Link>
           }
-          lead={marketDeskBrief.summary}
-          title={marketDeskBrief.title}
-        />
+          label="Payment issue"
+          tone="bad"
+        >
+          Your last renewal payment didn&apos;t go through. Billing reported a payment
+          issue. Review the current status and payment method from your provider receipt,
+          or email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we&apos;ll help before
+          anything is interrupted.
+        </FeedbackStrip>
+      ) : null}
 
-        {data.sectionWarnings?.length ? (
-          <article aria-live="polite" className="f9-ed-panel f9-overview-notice" role="status">
-            <p className="f9-app-kicker">Partial overview</p>
-            <h2>We couldn't load part of this overview</h2>
-            <p className="f9-muted-copy">
-              Everything shown here is current. Refresh to load the rest.
-            </p>
-          </article>
-        ) : null}
+      {proofUsage.warningLevel !== "ok" ? (
+        <FeedbackStrip
+          actions={
+            <Link className="f9-wk-lnk" to="/app/billing?source=evidence#top-ups">
+              Review check packs <span className="f9-wk-chev">&rsaquo;</span>
+            </Link>
+          }
+          label="Evidence usage"
+          tone="bad"
+        >
+          {proofUsage.warningLevel === "exhausted"
+            ? "You've used all your evidence checks. "
+            : "You've used over 80% of your evidence checks. "}
+          {proofUsage.used} of {proofUsage.limit} checks used in the current billing period.
+          {proofUsage.upgradeTarget
+            ? ` Move to ${proofUsage.upgradeTarget} or add an overflow pack before the next busy campaign.`
+            : " Add an overflow pack before the next busy campaign."}
+        </FeedbackStrip>
+      ) : null}
 
-        {hasPaymentIssue ? (
-          <article className="f9-checkout-banner is-pending" aria-live="polite">
-            <div>
-              <span className="f9-app-kicker">Payment issue</span>
-              <h2>Your last renewal payment didn't go through.</h2>
-              <p>
-                Billing reported a payment issue. Review the current status and
-                payment method from your provider receipt, or email{" "}
-                <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we'll help
-                before anything is interrupted.
-              </p>
-            </div>
-            <div className="f9-checkout-banner-actions">
-              <SecondaryAction to="/app/billing">
-                Plan &amp; billing
-              </SecondaryAction>
-            </div>
-          </article>
-        ) : null}
-
-        {readinessUnavailable ? (
-          <div id="setup-checklist">
-            <SpecimenEmptyState
-              copy="The workspace is still available, but setup progress could not be checked. Retry before assuming activation is complete."
-              headline="Setup status is temporarily unavailable"
-              primaryAction={{
-                label: "Retry setup status",
-                href: "/app?retrySetup=1#setup-checklist",
-              }}
-              specimenLabel="SETUP CHECKS — RETRY REQUIRED"
-              stateLabel="SETUP · STATUS UNAVAILABLE"
-            />
-          </div>
-        ) : workspaceReadiness ? (
-          <SetupChecklistCard
-            actionData={actionData}
-            prefillCountry={data.setupPrefillCountry}
-            prefillWebsite={data.setupPrefillWebsite}
-            readiness={workspaceReadiness}
-          />
-        ) : null}
-
-        {digests.length > 0 && hasBlockingSetupGaps ? (
-          <div className="f9-overview-setup-companion">
-            <SecondaryAction to="/app/digests?firstrun=1">
-              Read latest brief
-            </SecondaryAction>
-          </div>
-        ) : null}
-
-        <section aria-labelledby="overview-changes-title" className="f9-overview-section">
-          <header className="f9-overview-section-head">
-            <div>
-              <span className="f9-app-kicker">Latest stored changes</span>
-              <h2 id="overview-changes-title">What changed</h2>
-            </div>
-            {visibleRecentEvents.length > 0 ? (
-              <SecondaryAction to="/app/watchlists">Open competitors</SecondaryAction>
-            ) : null}
-          </header>
-          {visibleRecentEvents.length > 0 ? (
-            <div className="f9-overview-change-list">
-              {visibleRecentEvents.slice(0, 3).map((event) => (
-                <OverviewChangePlate
-                  event={event}
-                  key={event.id}
-                  proofHistoryUnavailable={proofHistoryUnavailable}
-                  proofPairs={recentProofPairs}
-                  runHistoryUnavailable={runHistoryUnavailable}
-                  runs={recentEventRuns}
-                />
-              ))}
-            </div>
-          ) : (
-            <QuietLine
-              copy={
-                recentChangesUnavailable
-                  ? "Change history is temporarily unavailable. Refresh before deciding that the latest check was quiet."
-                  : activeWatchlists === 0 && competitorCount > 0
-                    ? "Monitoring is paused. Resume a competitor before expecting a new check."
-                  : allActiveWatchlistsHaveScanHistory
-                    ? "Every active competitor has scan history. No change events are filed in the recent feed."
-                  : competitorCount > 0
-                    ? "The first check is still pending for at least one active competitor. Changes will appear after a successful scan."
-                  : "Nothing filed yet — add a competitor and the first capture starts the evidence trail."
-              }
-              stamp="Latest check"
-            />
-          )}
-        </section>
-
-        {retentionMoves.length > 0 ? (
-          <article className="f9-ed-panel f9-overview-panel">
-            <div className="f9-panel-toolbar">
-              <div>
-                <span className="f9-app-kicker">Next moves</span>
-                <h2>Keep your overview useful</h2>
-              </div>
-            </div>
-            <div className="f9-work-list is-compact">
-              {retentionMoves.slice(0, 4).map((nudge) => (
-                <article className="f9-work-row" key={nudge.id}>
-                  <div>
-                    <h3>{nudge.title}</h3>
-                    <p className="f9-muted-copy">{nudge.detail}</p>
-                  </div>
-                  <SecondaryAction to={nudge.href}>
-                    Open
-                  </SecondaryAction>
-                </article>
-              ))}
-            </div>
-          </article>
-        ) : null}
-
-        <ActionFeedback data={actionData} intent="close-counter-move" />
-        {counterMoveFollowUps.length > 0 ? (
-          <article className="f9-ed-panel f9-overview-panel">
-            <div className="f9-panel-toolbar">
-              <div>
-                <span className="f9-app-kicker">Follow-ups</span>
-                <h2>Responses waiting on you</h2>
-              </div>
-              <SecondaryAction to="/app/watchlists">
-                Review changes
-              </SecondaryAction>
-            </div>
-            <div className="f9-work-list is-compact">
-              {counterMoveFollowUps.map((followUp) => (
-                <article className="f9-work-row" key={followUp.id}>
-                  <div>
-                    <h3>
-                      {followUp.watchlistId ? (
-                        <Link
-                          to={`/app/watchlists?watchlist=${followUp.watchlistId}`}
-                        >
-                          {followUp.title}
-                        </Link>
-                      ) : (
-                        followUp.title
-                      )}
-                    </h3>
-                    <p className="f9-muted-copy">
-                      {followUp.ownerLabel} · {followUp.channelLabel}
-                      {followUp.expiresAt ? (
-                        <>
-                          {" "}
-                          · expires{" "}
-                          <LocalTime iso={followUp.expiresAt} mode="date" />
-                        </>
-                      ) : null}
-                    </p>
-                  </div>
-                  <div className="f9-inline-actions">
-                    {followUp.eventId ? (
-                      <Form method="post">
-                        <input
-                          name="intent"
-                          type="hidden"
-                          value="close-counter-move"
-                        />
-                        <input
-                          name="auditId"
-                          type="hidden"
-                          value={followUp.id}
-                        />
-                        <input
-                          name="eventId"
-                          type="hidden"
-                          value={followUp.eventId}
-                        />
-                        <SubmitButton
-                          className="f9-ed-cta f9-ed-cta--rank3"
-                          intent="close-counter-move"
-                          match={{ auditId: followUp.id }}
-                          pendingLabel="Saving…"
-                        >
-                          Mark done
-                        </SubmitButton>
-                      </Form>
-                    ) : null}
-                    <Pill>
-                      {followUp.status === "needs_review"
-                        ? `${followUp.openCount} open`
-                        : formatMachineTokenLabel(followUp.status)}
-                    </Pill>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </article>
-        ) : null}
-
-        {proofUsage.warningLevel !== "ok" ? (
-          <article
-            className={`f9-ed-panel f9-proof-usage-alert is-${proofUsage.warningLevel}`}
-          >
-            <div>
-              <span className="f9-app-kicker">Evidence usage</span>
-              <h2>
-                {proofUsage.warningLevel === "exhausted"
-                  ? "You've used all your evidence checks"
-                  : "You've used over 80% of your evidence checks"}
-              </h2>
-            </div>
-            <p>
-              {proofUsage.used} of {proofUsage.limit} checks used in the current
-              billing period.
-              {proofUsage.upgradeTarget
-                ? ` Move to ${proofUsage.upgradeTarget} or add an overflow pack before the next busy campaign.`
-                : " Add an overflow pack before the next busy campaign."}
-            </p>
-            <SecondaryAction to="/app/billing?source=evidence#top-ups">
-              Review check packs
-            </SecondaryAction>
-          </article>
-        ) : null}
-
+      <div className="f9-wk-sec">
         <ActionFeedback
           data={actionData}
           fallback
@@ -885,284 +700,248 @@ export default function AppDashboardRoute() {
           intent={["run-saved-query", "track-saved-query"]}
           planLimitTo="/app/billing?source=dashboard-limit#plans"
         />
+        <ActionFeedback data={actionData} intent="close-counter-move" />
+      </div>
 
-        <section aria-labelledby="overview-watch-title" className="f9-overview-section">
-          <header className="f9-overview-section-head">
-            <div>
-              <span className="f9-app-kicker">Watch board summary</span>
-              <h2 id="overview-watch-title">Being watched</h2>
-              <p className="f9-muted-copy">
-                {plan === "free"
-                  ? `Next weekly check: ${formatNextScanLabel(plan, new Date(), data.workspaceDeliveryTimezone)}. Paid plans check every 3–6 hours.`
-                  : `Next scheduled scan: ${formatNextScanLabel(plan, new Date(), data.workspaceDeliveryTimezone)}`}
-              </p>
-            </div>
-            {watchlists.length > 0 ? (
-              <SecondaryAction to="/app/watchlists">Open competitors</SecondaryAction>
-            ) : null}
-          </header>
-
-          {hasDashboardMetrics ? (
-            <div
-              aria-label="Account summary"
-              className="f9-overview-stat-band"
-              data-count={overviewMetrics.length}
-            >
-              {overviewMetrics.map((card) => (
-                <article key={card.label}>
-                  <span className="f9-app-kicker">{card.label}</span>
-                  <strong>{card.value}</strong>
-                  <small>{card.detail}</small>
-                </article>
-              ))}
-            </div>
-          ) : null}
-
-          {watchlists.length > 0 ? (
-            <div className="f9-overview-watchlist">
-              {watchlists.slice(0, 5).map((watchlist) => (
-                <article className="f9-overview-watch-row" key={watchlist.id}>
-                  <div>
-                    <h3>{watchlist.name}</h3>
-                    <p>{watchlist.targetLabel}</p>
-                  </div>
-                  <small>
-                    {watchlist.lastScannedAt ? (
-                      <>
-                        Last scan <LocalTime iso={watchlist.lastScannedAt} mode="date" />
-                      </>
-                    ) : (
-                      "Not scanned yet"
-                    )}
-                  </small>
-                </article>
-              ))}
-            </div>
-          ) : null}
-
-          <FactRail
-            rows={[
-              {
-                key: "Source access",
-                value: sourceNeedsRecovery ? (
-                  <TertiaryAction to="/app/source-access">
-                    {formatCommercialSourceStatus(data.metaStatus?.status ?? "")}
-                  </TertiaryAction>
-                ) : (
-                  "Live source ready"
-                ),
-              },
-              {
-                key: "Source note",
-                value: commercialSourceSummary(data.metaStatus),
-                missingLabel: "we could not read this one",
-              },
-              {
-                key: "Watch state",
-                value:
-                  competitorCount === 0
-                    ? null
-                    : activeWatchlists > 0
-                      ? "Watching"
-                      : "Paused",
-                missingLabel: "none yet",
-              },
-              {
-                key: "Saved examples",
-                value:
-                  collections.length > 0 ? (
-                    <TertiaryAction to="/app/collections">
-                      {collections.length} saved
-                    </TertiaryAction>
-                  ) : null,
-                missingLabel: "none yet",
-              },
-              {
-                key: "Next check",
-                value: nextScanLabel,
-              },
-            ]}
-            title="Workspace facts"
+      {readinessUnavailable ? (
+        <div className="f9-wk-sec" id="setup-checklist">
+          <SpecimenEmptyState
+            copy="The workspace is still available, but setup progress could not be checked. Retry before assuming activation is complete."
+            headline="Setup status is temporarily unavailable"
+            primaryAction={{
+              label: "Retry setup status",
+              href: "/app?retrySetup=1#setup-checklist",
+            }}
+            specimenLabel="SETUP CHECKS — RETRY REQUIRED"
+            stateLabel="SETUP · STATUS UNAVAILABLE"
           />
-
-          {!hasBlockingSetupGaps ? (
-            <Form action="/search" className="f9-overview-search" method="get">
-              <label className="f9-field" htmlFor="dashboard-market-search">
-                <span>Competitor website</span>
-                <input
-                  autoComplete="url"
-                  id="dashboard-market-search"
-                  inputMode="url"
-                  name="website"
-                  placeholder="https://competitor.com"
-                  spellCheck={false}
-                  type="text"
-                />
-              </label>
-              <SubmitButton
-                className="f9-ed-cta f9-ed-cta--rank2"
-                getAction="/search"
-                pendingLabel="Searching…"
-              >
-                Search ads
-              </SubmitButton>
-            </Form>
+        </div>
+      ) : workspaceReadiness && hasBlockingSetupGaps ? (
+        <div className="f9-wk-sec">
+          <SetupChecklistCard
+            actionData={actionData}
+            prefillCountry={data.setupPrefillCountry}
+            prefillWebsite={data.setupPrefillWebsite}
+            readiness={workspaceReadiness}
+          />
+          {digests.length > 0 ? (
+            <p className="f9-wk-note">
+              <Link className="f9-wk-lnk" to="/app/digests?firstrun=1">
+                Read latest brief <span className="f9-wk-chev">&rsaquo;</span>
+              </Link>
+            </p>
           ) : null}
-        </section>
+        </div>
+      ) : null}
 
-        {!hasBlockingSetupGaps ? (
-          <div className="f9-overview-primary">
-            <PrimaryAction to={marketDeskBrief.action.href}>
-              {marketDeskBrief.action.label}
-            </PrimaryAction>
-          </div>
+      <section aria-labelledby="overview-overnight-title" className="f9-wk-sec">
+        <p className="f9-wk-kick" id="overview-overnight-title">
+          Overnight
+        </p>
+        <p className="f9-wk-lede">
+          {overnight.lead}
+          {overnight.mark ? (
+            <>
+              <s className="f9-wk-del">{overnight.mark.from}</s> &rarr;{" "}
+              <ins className="f9-wk-ins">{overnight.mark.to}</ins>
+            </>
+          ) : null}
+          {overnight.tail}
+        </p>
+      </section>
+
+      <section aria-labelledby="overview-changes-title" className="f9-wk-sec">
+        <p className="f9-wk-kick" id="overview-changes-title">
+          What changed
+        </p>
+        {visibleRecentEvents.length > 0 ? (
+          <RuledList aria-label="What changed">
+            {visibleRecentEvents.slice(0, 3).map((event) => (
+              <RuledRow
+                key={event.id}
+                name={watchlistNameById.get(event.watchlistId) ?? event.title}
+                say={event.summary}
+                status="Caught"
+                statusTone="on"
+                time={<LocalTime iso={event.createdAt} mode="date" />}
+                to={`/app/watchlists?watchlist=${encodeURIComponent(event.watchlistId)}&event=${encodeURIComponent(event.id)}`}
+              />
+            ))}
+          </RuledList>
+        ) : (
+          <p className="f9-wk-note">
+            {recentChangesUnavailable
+              ? "Change history is temporarily unavailable. Refresh before deciding that the latest check was quiet."
+              : activeWatchlists === 0 && competitorCount > 0
+                ? "Monitoring is paused. Resume a competitor before expecting a new check."
+                : allActiveWatchlistsHaveScanHistory
+                  ? "Every active competitor has scan history. No change events are filed in the recent feed."
+                  : competitorCount > 0
+                    ? "The first check is still pending for at least one active competitor. Changes will appear after a successful scan."
+                    : "Nothing filed yet — add a competitor and the first capture starts the evidence trail."}
+          </p>
+        )}
+
+        {counterMoveFollowUps.length > 0 ? (
+          <RuledList aria-label="Responses waiting on you">
+            {counterMoveFollowUps.map((followUp) => (
+              <RuledRow
+                key={followUp.id}
+                name={followUp.title}
+                plain
+                say={`${followUp.ownerLabel} · ${followUp.channelLabel}`}
+                status={
+                  followUp.status === "needs_review"
+                    ? `${followUp.openCount} open`
+                    : formatMachineTokenLabel(followUp.status)
+                }
+                time={
+                  followUp.expiresAt ? (
+                    <LocalTime iso={followUp.expiresAt} mode="date" />
+                  ) : null
+                }
+                to={
+                  followUp.watchlistId
+                    ? `/app/watchlists?watchlist=${followUp.watchlistId}`
+                    : undefined
+                }
+                trail={
+                  followUp.eventId ? (
+                    <Form method="post">
+                      <input name="intent" type="hidden" value="close-counter-move" />
+                      <input name="auditId" type="hidden" value={followUp.id} />
+                      <input name="eventId" type="hidden" value={followUp.eventId} />
+                      <SubmitButton
+                        className="f9-wk-lnk"
+                        intent="close-counter-move"
+                        match={{ auditId: followUp.id }}
+                        pendingLabel="Saving…"
+                      >
+                        Mark done
+                      </SubmitButton>
+                    </Form>
+                  ) : null
+                }
+              />
+            ))}
+          </RuledList>
         ) : null}
       </section>
+
+      <section aria-labelledby="overview-running-title" className="f9-wk-sec">
+        <p className="f9-wk-kick" id="overview-running-title">
+          Still running
+        </p>
+        <RuledList aria-label="Still running">
+          <RuledRow
+            name="Competitors"
+            plain
+            say={
+              competitorCount === 0
+                ? "Nothing is being watched yet. Add a competitor and its first check starts immediately."
+                : activeWatchlists === 0
+                  ? "Every competitor is paused. No checks run until you resume one."
+                  : `${activeWatchlists} being checked${
+                      competitorCount - activeWatchlists > 0
+                        ? `, ${competitorCount - activeWatchlists} paused`
+                        : ""
+                    }. Next check ${nextScanLabel}.`
+            }
+            status={String(competitorCount)}
+            to="/app/watchlists"
+          />
+          <RuledRow
+            name="Evidence checks"
+            plain
+            say={
+              proofUsage.limit
+                ? `${proofUsage.used} of ${proofUsage.limit} checks used in the current billing period.`
+                : `${successfulProofs} checks have succeeded so far.`
+            }
+            status={
+              proofUsage.limit
+                ? `${proofUsage.remaining ?? 0} left this month`
+                : `${successfulProofs} succeeded`
+            }
+            to="/app/billing?source=evidence#top-ups"
+          />
+          {sourceNeedsRecovery ? (
+            <RuledRow
+              name="Source access"
+              plain
+              say={
+                commercialSourceSummary(data.metaStatus) ??
+                "Live ad checks need attention before this brief can be trusted."
+              }
+              status={formatCommercialSourceStatus(data.metaStatus?.status ?? "")}
+              statusTone="bad"
+              to="/app/source-access"
+            />
+          ) : null}
+          {collections.length > 0 ? (
+            <RuledRow
+              name="Saved examples"
+              plain
+              say="Ads and captures you filed for later."
+              status={`${collections.length} saved`}
+              to="/app/collections"
+            />
+          ) : null}
+          {retentionMoves.slice(0, 3).map((nudge) => (
+            <RuledRow
+              key={nudge.id}
+              name={nudge.title}
+              plain
+              say={nudge.detail}
+              to={nudge.href}
+            />
+          ))}
+        </RuledList>
+      </section>
+
+      {!hasBlockingSetupGaps ? (
+        <section aria-labelledby="overview-search-title" className="f9-wk-sec">
+          <p className="f9-wk-kick" id="overview-search-title">
+            Check a competitor now
+          </p>
+          <Form action="/search" className="f9-overview-search" method="get">
+            <label className="f9-field" htmlFor="dashboard-market-search">
+              <span>Competitor website</span>
+              <input
+                autoComplete="url"
+                id="dashboard-market-search"
+                inputMode="url"
+                name="website"
+                placeholder="https://competitor.com"
+                spellCheck={false}
+                type="text"
+              />
+            </label>
+            <SubmitButton
+              className="f9-ed-cta f9-ed-cta--rank2"
+              getAction="/search"
+              pendingLabel="Searching…"
+            >
+              Search ads
+            </SubmitButton>
+          </Form>
+        </section>
+      ) : null}
+
+      <div className="f9-wk-opline">
+        <span>
+          Last check{" "}
+          {lastCheckAt ? <LocalTime iso={lastCheckAt} mode="date" /> : "not yet"}
+        </span>
+        <span>Next check {nextScanLabel}</span>
+        <span>
+          {proofUsage.limit
+            ? `${proofUsage.remaining ?? 0} checks left this period`
+            : `${successfulProofs} checks succeeded`}
+        </span>
+      </div>
     </DashboardPage>
   );
-}
-
-function OverviewChangePlate({
-  event,
-  proofHistoryUnavailable,
-  proofPairs,
-  runHistoryUnavailable,
-  runs,
-}: {
-  event: WatchEventRecord;
-  proofHistoryUnavailable: boolean;
-  proofPairs: OverviewProofPair[];
-  runHistoryUnavailable: boolean;
-  runs: OverviewRunTimestamp[];
-}) {
-  const captures = resolveOverviewDiffCaptures(event, proofPairs, runs);
-  const evidenceHistoryUnavailable = event.proofCaptureId
-    ? proofHistoryUnavailable
-    : runHistoryUnavailable;
-  const hasStoredComparisonValues = Boolean(
-    readOverviewMetadataString(event.metadata, ["from"]) &&
-      readOverviewMetadataString(event.metadata, ["to"]),
-  );
-  const intelligence = buildChangeIntelligenceSummary(event);
-  const classification = classifyWatchEventSource(event);
-  const urgency =
-    intelligence.priorityScore === null
-      ? intelligence.priorityBand
-      : `${intelligence.priorityBand} · ${intelligence.priorityScore}/100`;
-
-  return (
-    <DiffPlate
-      actions={
-        <SecondaryAction
-          to={`/app/watchlists?watchlist=${encodeURIComponent(event.watchlistId)}&event=${encodeURIComponent(event.id)}`}
-        >
-          Open the capture
-        </SecondaryAction>
-      }
-      before={captures?.before ?? { capturedAt: null }}
-      caughtLabel={formatCaughtLabel(event.createdAt)}
-      degradeCopy={
-        captures
-          ? undefined
-          : !hasStoredComparisonValues
-            ? `Checked. ${event.title}. ${event.summary} This change has no stored before-and-after field values to compare.`
-          : evidenceHistoryUnavailable
-            ? `${event.title}. ${event.summary} Capture history is temporarily unavailable, so the before-and-after cannot be verified right now.`
-            : `Checked. ${event.title}. ${event.summary} We do not have two stored capture times, so there is no before-and-after to show.`
-      }
-      degradeStamp={<LocalTime iso={event.createdAt} />}
-      delivery={`Next action: ${intelligence.recommendedAction}`}
-      field={event.eventType.replaceAll("_", " ")}
-      headline={event.title}
-      now={captures?.now ?? { capturedAt: null }}
-      verification={`${classification.label} · ${urgency}`}
-      why={event.summary}
-    />
-  );
-}
-
-function resolveOverviewDiffCaptures(
-  event: WatchEventRecord,
-  proofPairs: OverviewProofPair[],
-  runs: OverviewRunTimestamp[],
-) {
-  const from = readOverviewMetadataString(event.metadata, ["from"]);
-  const to = readOverviewMetadataString(event.metadata, ["to"]);
-  const proofPair = event.proofCaptureId
-    ? proofPairs.find((pair) => pair.eventId === event.id)
-    : undefined;
-  const currentCapture = proofPair?.current;
-  const runsById = new Map(runs.map((run) => [run.id, run]));
-  const currentRun = runsById.get(event.runId);
-  const baselineRun = event.baselineFromRunId
-    ? runsById.get(event.baselineFromRunId)
-    : undefined;
-  const nowCapturedAt = event.proofCaptureId
-    ? event.confirmedAt ??
-      currentCapture?.succeededAt ??
-      currentCapture?.attemptedAt ??
-      null
-    : currentRun?.finishedAt ?? currentRun?.startedAt ?? null;
-  const nowTime = nowCapturedAt ? Date.parse(nowCapturedAt) : Number.NaN;
-  const previousCapture = proofPair?.previous;
-  const previousCapturedAt =
-    previousCapture?.succeededAt ?? previousCapture?.attemptedAt ?? null;
-  const beforeCapturedAt =
-    previousCapturedAt ??
-    baselineRun?.finishedAt ??
-    baselineRun?.startedAt ??
-    null;
-  const beforeTime = beforeCapturedAt ? Date.parse(beforeCapturedAt) : Number.NaN;
-
-  if (
-    !from ||
-    !to ||
-    !beforeCapturedAt ||
-    !nowCapturedAt ||
-    Number.isNaN(beforeTime) ||
-    Number.isNaN(nowTime) ||
-    beforeTime >= nowTime
-  ) {
-    return null;
-  }
-
-  return {
-    before: {
-      capturedAt: beforeCapturedAt,
-      note: "Earlier stored capture",
-      quote: from,
-      value: from,
-    },
-    now: {
-      capturedAt: nowCapturedAt,
-      note: "Current stored capture",
-      quote: to,
-      value: to,
-    },
-  };
-}
-
-function readOverviewMetadataString(
-  metadata: Record<string, unknown> | undefined,
-  keys: readonly string[],
-) {
-  for (const key of keys) {
-    const value = metadata?.[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-  return null;
-}
-
-function formatCaughtLabel(iso: string | null | undefined) {
-  if (!iso || Number.isNaN(Date.parse(iso))) return "Caught";
-  return `Caught ${new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    hour: "2-digit",
-    hour12: false,
-    minute: "2-digit",
-    month: "short",
-    timeZone: "UTC",
-  }).format(new Date(iso))} UTC`;
 }
 
 function mapCounterMoveFollowUpAudits(audits: AgentActionAuditRecord[]) {
@@ -1369,6 +1148,38 @@ function formatFollowUpChannel(value: string | null) {
     default:
       return "In app";
   }
+}
+
+/**
+ * BL-030 — the partial-overview strip names what it could not read.
+ *
+ * "Capture history is temporarily unavailable" and "no stored evidence
+ * exists" are different claims, and the customer's whole reason for paying is
+ * that we never conflate them. Each degraded section gets its own sentence.
+ */
+const OVERVIEW_SECTION_LABELS: Record<string, string> = {
+  readiness: "Setup status",
+  recentChanges: "Change history",
+  recentProof: "Capture history",
+  recentRuns: "Check history",
+  collections: "Saved examples",
+  digests: "Brief history",
+};
+
+export function formatOverviewSectionWarnings(
+  warnings: readonly { section: string }[],
+): string | null {
+  if (warnings.length === 0) return null;
+  const labels = [
+    ...new Set(
+      warnings.map(
+        (warning) => OVERVIEW_SECTION_LABELS[warning.section] ?? "Part of this overview",
+      ),
+    ),
+  ];
+  return labels
+    .map((label) => `${label} is temporarily unavailable.`)
+    .join(" ");
 }
 
 // Viewer-local greeting: SSR renders a neutral fallback, the browser swaps in
