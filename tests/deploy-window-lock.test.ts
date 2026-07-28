@@ -23,8 +23,19 @@ function envFor(
   lockFile: string,
   overrides: Record<string, string> = {},
 ): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  for (const name of [
+    "GITHUB_ENV",
+    "DEPLOY_WINDOW_RELEASE_TOKEN",
+    "GITHUB_RUN_ID",
+    "GITHUB_RUN_ATTEMPT",
+    "GITHUB_JOB",
+  ]) {
+    delete env[name];
+  }
+
   return {
-    ...process.env,
+    ...env,
     DEPLOY_WINDOW_LOCK_FILE: lockFile,
     DEPLOY_WINDOW_ACQUIRE_TIMEOUT: "0.4",
     DEPLOY_WINDOW_HOLD_CAP: "10",

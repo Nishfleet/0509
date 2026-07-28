@@ -945,29 +945,77 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       resolve(".github/workflows/deploy-production.yml"),
       "utf8",
     );
+    const checkoutIndex = workflow.indexOf("- uses: actions/checkout@v6.0.3");
+    const acquireIndex = workflow.indexOf("- name: Acquire deploy window");
+    const verifySecretsIndex = workflow.indexOf(
+      "- name: Verify Cloudflare deploy secrets",
+    );
+    const testIndex = workflow.indexOf("- name: Test");
+    const materializeIndex = workflow.indexOf(
+      "- name: Materialize private remote-restore evidence",
+    );
+    const deployIndex = workflow.indexOf("- name: Deploy");
+    const verifyEvidenceIndex = workflow.indexOf(
+      "- name: Verify complete release evidence set",
+    );
+    const releaseIndex = workflow.indexOf("- name: Release deploy window");
+    const verifySecretsStep = workflow.slice(
+      verifySecretsIndex,
+      workflow.indexOf("- uses: actions/setup-node@v6"),
+    );
+    const materializeStep = workflow.slice(materializeIndex, deployIndex);
+    const deployStep = workflow.slice(deployIndex, verifyEvidenceIndex);
+    const releaseStep = workflow.slice(releaseIndex);
 
-    expect(workflow).toContain("D1_REMOTE_RESTORE_EVIDENCE_JSON");
-    expect(workflow).toContain("D1_REMOTE_RESTORE_EVIDENCE_PATH");
-    expect(workflow).toContain("CANARY_BYPASS_TOKEN");
+    expect(checkoutIndex).toBeGreaterThanOrEqual(0);
+    expect(acquireIndex).toBeGreaterThan(checkoutIndex);
+    expect(verifySecretsIndex).toBeGreaterThan(acquireIndex);
+    expect(testIndex).toBeGreaterThan(verifySecretsIndex);
+    expect(materializeIndex).toBeGreaterThan(testIndex);
+    expect(deployIndex).toBeGreaterThan(materializeIndex);
+    expect(verifyEvidenceIndex).toBeGreaterThan(deployIndex);
+    expect(releaseIndex).toBeGreaterThan(verifyEvidenceIndex);
+    expect(workflow).toContain("timeout-minutes: 270");
+    expect(workflow.slice(acquireIndex, verifySecretsIndex)).toContain(
+      "run: ./scripts/deploy-window-lock.sh acquire",
+    );
+    expect(verifySecretsStep).toContain(
+      "CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}",
+    );
+    expect(verifySecretsStep).toContain(
+      "D1_REMOTE_RESTORE_EVIDENCE_JSON: ${{ secrets.D1_REMOTE_RESTORE_EVIDENCE_JSON }}",
+    );
+    expect(materializeStep).toContain(
+      "D1_REMOTE_RESTORE_EVIDENCE_JSON: ${{ secrets.D1_REMOTE_RESTORE_EVIDENCE_JSON }}",
+    );
+    expect(materializeStep).toContain(
+      "printf '%s' \"$D1_REMOTE_RESTORE_EVIDENCE_JSON\" > test-results/d1-remote-restore-evidence.json",
+    );
+    expect(deployStep).toContain(
+      "CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}",
+    );
+    expect(deployStep).toContain(
+      "D1_REMOTE_RESTORE_EVIDENCE_PATH: test-results/d1-remote-restore-evidence.json",
+    );
+    expect(deployStep).toContain("GITHUB_TOKEN: ${{ github.token }}");
+    expect(releaseStep).toContain("if: always()");
+    expect(releaseStep).toContain(
+      "run: ./scripts/deploy-window-lock.sh release",
+    );
     expect(workflow).toContain("actions: read");
     expect(workflow).toContain("fetch-depth: 0");
-    expect(workflow).toContain("GITHUB_TOKEN: ${{ github.token }}");
     expect(workflow).toContain(
       "runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}",
     );
     expect(readFileSync(resolve(".github/workflows/ci.yml"), "utf8")).toContain(
-      "runs-on: ${{ (startsWith(github.head_ref, 'cloud-council/') && vars.RECOVERY_RUNNER) || 'ubuntu-latest' }}",
+      "runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}",
     );
     expect(
       readFileSync(resolve(".github/workflows/d1-backup-validate.yml"), "utf8"),
-    ).toContain(
-      "runs-on: ${{ (startsWith(github.head_ref, 'cloud-council/') && vars.RECOVERY_RUNNER) || 'ubuntu-latest' }}",
-    );
+    ).toContain("runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}");
     expect(
       readFileSync(resolve(".github/workflows/secret-scan.yml"), "utf8"),
-    ).toContain(
-      "runs-on: ${{ ((github.event_name == 'push' || startsWith(github.head_ref, 'cloud-council/')) && vars.RECOVERY_RUNNER) || 'ubuntu-latest' }}",
-    );
+    ).toContain("runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}");
     expect(workflow).not.toContain("- name: Production public smoke");
   });
 
