@@ -12764,6 +12764,68 @@ reds soften --- */
 }
 
 /* ---------------------------------------------------------------
+   Coexistence seam.
+
+   A rebuilt page may still host an Evidence Desk component whose own
+   phase has not landed — on Overview that is BL-016's setup checklist
+   card. Its markup, its ids and every guarantee its journeys assert are
+   untouched; only its volume is brought down to this layer's, so the
+   page keeps ONE rule weight and the ink fill stays reserved for the
+   feedback strip. The card goes back to its own language the moment it
+   is rendered outside a `.f9-wk-page`.
+   --------------------------------------------------------------- */
+
+/* The Evidence Desk CTA ranks still power the setup card's submits and the
+   opened competitor's record. Inside a rebuilt page they keep their rank
+   semantics — ink fill for Rank 1, surface for Rank 2, underline for Rank 3 —
+   and give up their 2.5px cut and their offset shadow, which are the two
+   things that would break the one-rule-weight and no-elevation rules. */
+.f9-wk-page .f9-ed-cta {
+  border-width: 1px;
+  box-shadow: none;
+}
+
+.f9-wk-page .f9-ed-setup-card {
+  border: 1px solid var(--wk-rule);
+  background: transparent;
+  box-shadow: none;
+}
+
+.f9-wk-page .f9-ed-setup-header {
+  padding: 16px 18px 12px;
+  background: transparent;
+  color: var(--ink);
+}
+
+.f9-wk-page .f9-ed-setup-header .f9-ed-micro {
+  color: var(--ink-faint);
+}
+
+/* Bricolage means "a watched entity". A setup step is not one. */
+.f9-wk-page .f9-ed-setup-header h2 {
+  font-family: var(--f9-font);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.f9-wk-page .f9-ed-setup-import {
+  border-top-color: var(--wk-rule);
+  border-top-style: solid;
+  border-top-width: 1px;
+}
+
+.f9-wk-page .f9-ed-setup-primary,
+.f9-wk-page .f9-ed-setup-import,
+.f9-wk-page .f9-ed-setup-links,
+.f9-wk-page .f9-ed-setup-capacity,
+.f9-wk-page .f9-ed-setup-card > .f9-ed-action-row,
+.f9-wk-page .f9-ed-setup-card > .f9-message {
+  margin-right: 18px;
+  margin-left: 18px;
+}
+
+/* ---------------------------------------------------------------
    Responsive. Nothing scrolls horizontally at any width; the row grid
    folds before the page does.
    --------------------------------------------------------------- */
