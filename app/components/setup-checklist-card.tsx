@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Form, useFetcher } from "react-router";
 
 import { PrimaryAction, TertiaryAction } from "~/components/evidence/cta";
@@ -70,10 +70,32 @@ export function SetupChecklistCard({
     actionData?.intent && SETUP_ACTION_INTENTS.has(actionData.intent)
       ? actionData
       : undefined;
-  // The fetcher owns the create-watchlist result; the route action still owns
-  // the import intents, which post through a navigating <Form>.
+  /**
+   * There is ONE feedback slot on this card and two submission lanes feeding
+   * it: the quick-create fetcher above, and the bulk-import forms below, which
+   * are still navigating `<Form>`s answering through the route action. The
+   * slot belongs to whichever lane answered LAST.
+   *
+   * This has to be tracked, not derived: React Router retains `fetcher.data`
+   * after the fetcher returns to idle, so "fetcher data wins when present"
+   * makes the first refusal permanent — a later import preview completes on
+   * the server and is then invisible until a full page reload (BL-025 round-3
+   * review finding). The same pattern is used for the coexisting fetcher and
+   * route-action feedback on `app/routes/app.watchlists.tsx`.
+   */
+  const [latestFeedbackSource, setLatestFeedbackSource] = useState<
+    "route" | "fetcher" | null
+  >(null);
+  useEffect(() => {
+    if (routeActionData) setLatestFeedbackSource("route");
+  }, [routeActionData]);
+  useEffect(() => {
+    if (fetcherData) setLatestFeedbackSource("fetcher");
+  }, [fetcherData]);
   const setupActionData =
-    fetcherData?.intent && SETUP_ACTION_INTENTS.has(fetcherData.intent)
+    latestFeedbackSource === "fetcher" &&
+    fetcherData?.intent &&
+    SETUP_ACTION_INTENTS.has(fetcherData.intent)
       ? fetcherData
       : routeActionData;
   const creatingWatchlist = createFetcher.state !== "idle";

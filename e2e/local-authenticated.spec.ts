@@ -300,6 +300,22 @@ test.describe("local authenticated E2E harness", () => {
     expect(refusedUrl.searchParams.has("watchlist")).toBe(false);
     await expect(page.getByRole("heading", { name: "Finish the workspace that sends your first brief" })).toBeVisible();
     await expectNoHorizontalOverflow(page);
+
+    // BL-025 round-3: the refusal above is a FETCHER result, and React Router
+    // retains fetcher data after the fetcher goes idle. The bulk-import forms
+    // still answer through the ROUTE ACTION, so the customer must be able to
+    // continue straight into an import — a stale refusal winning forever left
+    // the preview completed on the server but invisible until a reload.
+    await page.getByText("Add several competitors by paste or CSV").click();
+    await page.getByLabel("Competitors").fill("boat-lifestyle.com");
+    await page.getByRole("button", { name: "Preview import" }).click();
+
+    await expect(page.getByRole("region", { name: "Competitor import preview" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Create watchlist" })).toBeVisible();
+    await expect(
+      page.getByText("We didn't start anything — there's no website to check yet."),
+    ).toHaveCount(0);
+    await expectNoHorizontalOverflow(page);
   });
 
   test("new starter completes one-competitor onboarding and reaches the queued watchlist", async ({
