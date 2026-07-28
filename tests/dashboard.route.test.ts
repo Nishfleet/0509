@@ -112,7 +112,13 @@ function mockDashboardLoaderDependencies(
     watchlists?: unknown[];
     metaStatus?: Record<string, unknown>;
     recentWorkspaceEvents?: unknown[];
-    failedSection?: "collections" | "recentProofCaptures" | "readiness";
+    recentProofPairs?: unknown[];
+    recentEventRuns?: unknown[];
+    failedSection?:
+      | "collections"
+      | "recentChanges"
+      | "recentProofCaptures"
+      | "readiness";
     workspace?: {
       workspaceUserId?: string;
       isMember?: boolean;
@@ -210,13 +216,19 @@ function mockDashboardLoaderDependencies(
         : vi.fn().mockResolvedValue([]),
     listDeliveryTargets: vi.fn().mockResolvedValue([]),
     listDigests: vi.fn().mockResolvedValue([]),
-    listRecentWorkspaceProofCaptures:
+    listProofCapturePairsForEventIds:
       options.failedSection === "recentProofCaptures"
         ? vi.fn().mockRejectedValue(new Error("private provider detail"))
-        : vi.fn().mockResolvedValue([]),
-    listRecentWorkspaceWatchEvents,
+        : vi.fn().mockResolvedValue(options.recentProofPairs ?? []),
+    listRecentWorkspaceWatchEvents:
+      options.failedSection === "recentChanges"
+        ? vi.fn().mockRejectedValue(new Error("private monitoring detail"))
+        : listRecentWorkspaceWatchEvents,
     getWorkspaceDeliveryConfig,
     listSavedQueries: vi.fn().mockResolvedValue([]),
+    listWatchlistRunPairsForEventIds: vi
+      .fn()
+      .mockResolvedValue(options.recentEventRuns ?? []),
     listWatchEvents,
     listWatchlists,
   }));
@@ -406,6 +418,292 @@ describe("dashboard route agent memory", () => {
 
     expect(deps.listRecentWorkspaceWatchEvents).toHaveBeenCalledTimes(1);
     expect(loaderData.recentEvents).toEqual(recentWorkspaceEvents);
+  });
+
+  it("caps the overview at three honest diff plates and one Rank-1 action", async () => {
+    const recentWorkspaceEvents = Array.from({ length: 5 }, (_, index) => ({
+      id: `event-${index}`,
+      watchlistId: "watch-1",
+      runId: `run-${index}`,
+      title: `Offer move ${index}`,
+      summary: "A source-backed offer changed.",
+      eventType: "landing_page_offer_changed",
+      status: "confirmed",
+      importanceScore: 90 - index,
+      adId: null,
+      baselineFromRunId: null,
+      candidateId: null,
+      proofCaptureId: `capture-${index}`,
+      metadata: {
+        from: "Free trial",
+        to: "Starting at ₹499",
+      },
+      confirmedAt: `2026-06-20T${String(8 + index).padStart(2, "0")}:00:00.000Z`,
+      suppressedAt: null,
+      invalidatedAt: null,
+      lastEvaluatedAt: `2026-06-20T${String(8 + index).padStart(2, "0")}:00:00.000Z`,
+      createdAt: `2026-06-20T${String(8 + index).padStart(2, "0")}:00:00.000Z`,
+    }));
+    const recentProofCaptures = [
+      {
+        id: "capture-baseline",
+        proofTargetId: "proof-target-before-redirect",
+        status: "succeeded",
+        succeededAt: "2026-06-19T08:00:00.000Z",
+        attemptedAt: "2026-06-19T08:00:00.000Z",
+      },
+      ...Array.from({ length: 5 }, (_, index) => ({
+        id: `capture-${index}`,
+        proofTargetId: "proof-target-1",
+        status: "succeeded",
+        succeededAt: `2026-06-20T${String(8 + index).padStart(2, "0")}:00:00.000Z`,
+        attemptedAt: `2026-06-20T${String(8 + index).padStart(2, "0")}:00:00.000Z`,
+      })),
+    ];
+    const recentProofPairs = recentWorkspaceEvents.map((event, index) => ({
+      eventId: event.id,
+      current: recentProofCaptures[index + 1],
+      previous: recentProofCaptures[index],
+    }));
+    mockDashboardLoaderDependencies({
+      watchlists: [
+        {
+          id: "watch-1",
+          name: "Rival watch",
+          targetType: "advertiser",
+          targetLabel: "Rival Labs",
+          isActive: true,
+          lastScannedAt: "2026-06-20T08:00:00.000Z",
+        },
+      ],
+      recentWorkspaceEvents,
+      recentProofPairs,
+    });
+
+    const { loader } = await import("~/routes/app.dashboard");
+    const loaderData = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app"),
+    } as never);
+
+    vi.resetModules();
+    await mockRouter(loaderData);
+    const { default: AppDashboardRoute } =
+      await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
+
+    expect(markup.match(/class="f9-ed-diff-plate"/g)).toHaveLength(3);
+    expect(markup.match(/f9-ed-cta--rank1/g)).toHaveLength(1);
+    expect(markup).toContain(
+      'href="/app/watchlists?watchlist=watch-1&amp;event=event-0"',
+    );
+    expect(markup).toContain('class="f9-overview-stat-band" data-count="3"');
+    expect(markup).not.toContain("Useful examples");
+    expect(markup).not.toContain("f9-dashboard-grid");
+  });
+
+  it("uses run timestamps for stored scan-native diffs without proof captures", async () => {
+    mockDashboardLoaderDependencies({
+      watchlists: [
+        {
+          id: "watch-1",
+          name: "Rival watch",
+          targetType: "advertiser",
+          targetLabel: "Rival Labs",
+          isActive: true,
+          lastScannedAt: "2026-06-20T08:00:00.000Z",
+        },
+      ],
+      recentWorkspaceEvents: [
+        {
+          id: "event-run-backed",
+          watchlistId: "watch-1",
+          runId: "run-current",
+          title: "Landing page moved",
+          summary: "The destination URL changed.",
+          eventType: "landing_page_url_changed",
+          status: "confirmed",
+          importanceScore: 80,
+          adId: "ad-1",
+          baselineFromRunId: "run-baseline",
+          candidateId: "candidate-1",
+          proofCaptureId: null,
+          metadata: {
+            from: "https://rival.example/old",
+            to: "https://rival.example/new",
+          },
+          confirmedAt: null,
+          suppressedAt: null,
+          invalidatedAt: null,
+          lastEvaluatedAt: null,
+          createdAt: "2026-06-20T08:00:00.000Z",
+        },
+      ],
+      recentEventRuns: [
+        {
+          id: "run-current",
+          watchlistId: "watch-1",
+          triggerType: "scheduled",
+          status: "succeeded",
+          pageBudget: 1,
+          pagesScanned: 1,
+          baselineFromRunId: "run-baseline",
+          summary: {},
+          startedAt: "2026-06-20T07:55:00.000Z",
+          finishedAt: "2026-06-20T08:00:00.000Z",
+          errorCode: null,
+          errorMessage: null,
+        },
+        {
+          id: "run-baseline",
+          watchlistId: "watch-1",
+          triggerType: "scheduled",
+          status: "succeeded",
+          pageBudget: 1,
+          pagesScanned: 1,
+          baselineFromRunId: null,
+          summary: {},
+          startedAt: "2026-06-19T07:55:00.000Z",
+          finishedAt: "2026-06-19T08:00:00.000Z",
+          errorCode: null,
+          errorMessage: null,
+        },
+      ],
+    });
+    const { loader } = await import("~/routes/app.dashboard");
+    const loaderData = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app"),
+    } as never);
+
+    vi.resetModules();
+    await mockRouter(loaderData);
+    const route = await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(route.default));
+    expect(markup.match(/class="f9-ed-diff-plate"/g)).toHaveLength(1);
+    expect(markup).toContain("https://rival.example/old");
+    expect(markup).toContain("https://rival.example/new");
+  });
+
+  it("does not report a quiet check before scan history exists or when changes fail to load", async () => {
+    const watchlists = [
+      {
+        id: "watch-pending",
+        name: "Pending watch",
+        targetType: "advertiser",
+        targetLabel: "Pending Labs",
+        isActive: true,
+        lastScannedAt: null,
+      },
+    ];
+    mockDashboardLoaderDependencies({ watchlists });
+    const { loader } = await import("~/routes/app.dashboard");
+    const pendingData = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app"),
+    } as never);
+
+    vi.resetModules();
+    await mockRouter(pendingData);
+    let route = await import("~/routes/app.dashboard");
+    let markup = renderToStaticMarkup(createElement(route.default));
+    expect(markup).toContain("The first check is still pending");
+    expect(markup).not.toContain("Checked. Nothing has changed");
+
+    vi.resetModules();
+    mockDashboardLoaderDependencies({
+      failedSection: "recentChanges",
+      watchlists: [
+        {
+          ...watchlists[0],
+          lastScannedAt: "2026-06-20T08:00:00.000Z",
+        },
+      ],
+    });
+    const failedRoute = await import("~/routes/app.dashboard");
+    const unavailableData = await failedRoute.loader({
+      context: createContext(),
+      request: new Request("http://localhost/app"),
+    } as never);
+
+    vi.resetModules();
+    await mockRouter(unavailableData);
+    route = await import("~/routes/app.dashboard");
+    markup = renderToStaticMarkup(createElement(route.default));
+    expect(markup).toContain("Change history is temporarily unavailable");
+    expect(markup).not.toContain("Checked. Nothing has changed");
+
+    vi.resetModules();
+    mockDashboardLoaderDependencies({
+      watchlists: [
+        {
+          ...watchlists[0],
+          isActive: false,
+          lastScannedAt: "2026-06-20T08:00:00.000Z",
+        },
+      ],
+    });
+    const pausedRoute = await import("~/routes/app.dashboard");
+    const pausedData = await pausedRoute.loader({
+      context: createContext(),
+      request: new Request("http://localhost/app"),
+    } as never);
+    vi.resetModules();
+    await mockRouter(pausedData);
+    route = await import("~/routes/app.dashboard");
+    markup = renderToStaticMarkup(createElement(route.default));
+    expect(markup).toContain("Monitoring is paused");
+    expect(markup).not.toContain("latest stored capture");
+  });
+
+  it("labels unavailable capture history without claiming stored evidence is missing", async () => {
+    mockDashboardLoaderDependencies({
+      failedSection: "recentProofCaptures",
+      watchlists: [
+        {
+          id: "watch-1",
+          name: "Rival watch",
+          targetType: "advertiser",
+          targetLabel: "Rival Labs",
+          isActive: true,
+          lastScannedAt: "2026-06-20T08:00:00.000Z",
+        },
+      ],
+      recentWorkspaceEvents: [
+        {
+          id: "event-1",
+          watchlistId: "watch-1",
+          runId: "run-1",
+          title: "Offer changed",
+          summary: "A proof-backed offer moved.",
+          eventType: "landing_page_offer_changed",
+          status: "confirmed",
+          importanceScore: 90,
+          adId: null,
+          baselineFromRunId: null,
+          candidateId: null,
+          proofCaptureId: "capture-1",
+          metadata: { from: "Free", to: "₹499" },
+          confirmedAt: "2026-06-20T08:00:00.000Z",
+          suppressedAt: null,
+          invalidatedAt: null,
+          lastEvaluatedAt: "2026-06-20T08:00:00.000Z",
+          createdAt: "2026-06-20T08:00:00.000Z",
+        },
+      ],
+    });
+    const { loader } = await import("~/routes/app.dashboard");
+    const loaderData = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app"),
+    } as never);
+
+    vi.resetModules();
+    await mockRouter(loaderData);
+    const route = await import("~/routes/app.dashboard");
+    const markup = renderToStaticMarkup(createElement(route.default));
+    expect(markup).toContain("Capture history is temporarily unavailable");
+    expect(markup).not.toContain("We do not have two stored capture times");
   });
 
   it("keeps the dashboard usable when a non-critical section fails", async () => {

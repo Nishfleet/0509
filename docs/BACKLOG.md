@@ -98,6 +98,8 @@ has landed.
   **zero console errors**, **zero horizontal scroll**, and the measured mobile
   document height before/after; deleted CSS listed next to added CSS; brief
   §13 conformance checklist answered line by line.
+- Any package that changes a canonical URL must update RELEASE_COVERAGE_MATRIX in the same PR (Gate-B asserts exact URLs; lesson of the 2026-07-27 deploy blockage).
+- Full `npm test` before every PR — including CI/scripts/docs-only changes; guard tests assert workflow-file structure (lesson of deploy run 30327319587).
 - IDs skip 010–012 — those are the pre-existing P2 engineering-health items.
 
 ### BL-005 — Evidence Desk foundation: tokens, CTA ranks, pattern primitives

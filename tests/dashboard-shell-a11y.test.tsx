@@ -81,6 +81,19 @@ describe("DashboardShell accessibility (WP-43)", () => {
     }
   });
 
+  it("renders one mobile anchor bar without instructional swipe copy", async () => {
+    const view = await renderShell("/app/watchlists");
+    const tabBar = view.querySelector('nav[aria-label="Workspace sections"]');
+    const utilityGroup = tabBar?.querySelector(
+      '[role="group"][aria-label="Workspace and account"]',
+    );
+
+    expect(tabBar).not.toBeNull();
+    expect(utilityGroup).not.toBeNull();
+    expect(tabBar?.contains(utilityGroup ?? null)).toBe(true);
+    expect(view.textContent).not.toContain("Swipe for more");
+  });
+
   it("does not announce or steal focus during a StrictMode initial mount", async () => {
     const view = await renderShell("/app/watchlists", true);
 

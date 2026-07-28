@@ -202,6 +202,99 @@ export async function listProofCapturesForTargets(
 
   return capturesByTargetId;
 }
+
+export async function listProofCapturePairsForEventIds(
+  env: AppEnv,
+  userId: string,
+  eventIds: string[],
+) {
+  const uniqueEventIds = [...new Set(eventIds.filter(Boolean))];
+  if (uniqueEventIds.length === 0) return [];
+
+  const currentRows = await queryIn<
+    ProofCaptureRow & {
+      event_confirmed_at: string | null;
+      event_id: string;
+    }
+  >(env, {
+    buildSql: (placeholders) => `
+      SELECT
+        ${PROOF_CAPTURE_LIST_COLUMNS},
+        watch_event.confirmed_at AS event_confirmed_at,
+        watch_event.id AS event_id
+      FROM watch_event
+      INNER JOIN watchlist ON watchlist.id = watch_event.watchlist_id
+      INNER JOIN proof_capture ON proof_capture.id = watch_event.proof_capture_id
+      WHERE watch_event.id IN (${placeholders})
+        AND watchlist.user_id = ?
+    `,
+    values: uniqueEventIds,
+    suffix: [userId],
+  });
+
+  const previousRows = await Promise.all(
+    currentRows.map((current) => {
+      const currentAt =
+        current.event_confirmed_at ??
+        current.succeeded_at ??
+        current.attempted_at;
+      return one<ProofCaptureRow>(
+        env,
+        `
+          SELECT ${PROOF_CAPTURE_LIST_COLUMNS}
+          FROM proof_capture
+          INNER JOIN proof_target AS prior_target
+            ON prior_target.id = proof_capture.proof_target_id
+          INNER JOIN proof_target AS current_target
+            ON current_target.id = ?
+          WHERE (
+              proof_capture.proof_target_id = ?
+              OR (
+                prior_target.watchlist_id = current_target.watchlist_id
+                AND (
+                  prior_target.ad_id = current_target.ad_id
+                  OR (
+                    prior_target.ad_id IS NULL
+                    AND current_target.ad_id IS NULL
+                  )
+                )
+              )
+            )
+            AND proof_capture.id <> ?
+            AND proof_capture.status = 'succeeded'
+            AND COALESCE(
+              proof_capture.succeeded_at,
+              proof_capture.attempted_at
+            ) < ?
+          ORDER BY
+            CASE
+              WHEN proof_capture.proof_target_id = current_target.id THEN 0
+              ELSE 1
+            END ASC,
+            COALESCE(
+              proof_capture.succeeded_at,
+              proof_capture.attempted_at
+            ) DESC
+          LIMIT 1
+        `,
+        current.proof_target_id,
+        current.proof_target_id,
+        current.id,
+        currentAt,
+      );
+    }),
+  );
+
+  return currentRows.map((current, index) => {
+    const previous = previousRows[index];
+    return {
+      eventId: current.event_id,
+      current: toProofCaptureRecord(current),
+      previous: previous ? toProofCaptureRecord(previous) : null,
+    };
+  });
+}
+
 async function getProofCaptureByIdempotencyKey(
   env: AppEnv,
   idempotencyKey: string,
