@@ -12,7 +12,8 @@ jobs:
   codex-node-checks:
     if: github.repository == 'nish3451/0509' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}
-    timeout-minutes: 240
+    # 180m lock wait + 60m build/test/typecheck + 30m cleanup slack = 270m.
+    timeout-minutes: 270
     steps:
       - uses: actions/checkout@v7
 

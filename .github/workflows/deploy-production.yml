@@ -20,11 +20,11 @@ jobs:
     name: Deploy Worker
     if: github.repository == 'nish3451/0509' && github.ref == 'refs/heads/main'
     runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}
-    # Budget = deploy-window wait (up to 3h behind a running fleet lane on the
-    # shared VPS runner) + the ~40min release pipeline. The old 45min budget
-    # is what turned lane contention into an opaque cancelled-step failure
-    # (run 30318665935).
-    timeout-minutes: 240
+    # Budget: 180m maximum deploy-window wait + 60m conservative pipeline +
+    # 30m cancellation/release slack = 270m. With cancel-in-progress: false,
+    # a queued deploy cannot drain until the running job (including its lock
+    # wait) finishes, so stacked pushes may each consume this full budget.
+    timeout-minutes: 270
     environment:
       name: production
       url: https://0509.io
