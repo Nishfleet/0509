@@ -207,11 +207,7 @@ export default function TeamRoute() {
       <article className="f9-app-panel">
         <div className="f9-panel-toolbar">
           <div>
-            <h2>
-              {data.plan === "agency"
-                ? `${seatsUsed} of ${data.seatLimit} Agency seats in use`
-                : "Team seats come with Agency"}
-            </h2>
+            <h2>{`${seatsUsed} of ${data.seatLimit} Agency seats in use`}</h2>
           </div>
         </div>
 
