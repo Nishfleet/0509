@@ -330,6 +330,9 @@ test.describe("local authenticated E2E harness", () => {
         { exact: true },
       ),
     ).toBeVisible();
+    await expect(
+      page.locator("#f9-main-content").getByText("Landing page offer changed", { exact: true }),
+    ).toBeVisible();
 
     await page.goto("/app/billing");
     await expectAppPage(page);
@@ -378,6 +381,7 @@ test.describe("local authenticated E2E harness", () => {
         { exact: true },
       ),
     ).toBeVisible();
+    await expect(page.locator("#f9-main-content")).toContainText("Invite your teammates");
 
     await page.goto("/app/sources");
     await expect(page).toHaveURL(/\/app\/sources/);
@@ -483,7 +487,7 @@ test.describe("local authenticated E2E harness", () => {
         heading: "Developer access",
         copy: ["Connect exports and approved actions"],
       },
-      { label: "Team", path: "/app/team", heading: "Team", copy: ["Agency"] },
+      { label: "Team", path: "/app/team", heading: "Team", copy: ["Agency seats in use"] },
       {
         label: "Client rooms",
         path: "/app/clients",
