@@ -8,6 +8,7 @@ import { BrandWordmark } from "~/components/brand-wordmark";
 import { LocalTime } from "~/components/local-time";
 import { MARKETING_TAGLINE } from "~/components/marketing-nav";
 import { Pill } from "~/components/pill";
+import { SpecimenEmptyState } from "~/components/evidence/specimen-empty-state";
 import { ReportView } from "~/components/report-view";
 import { ShareBrandIdentity } from "~/components/share-brand-identity";
 import { DigestIntelligence, DigestMovementSummary, DigestProofPacket } from "~/components/digest-intelligence";
@@ -208,44 +209,46 @@ export default function ShareRoute() {
           </div>
         )}
         {reportSnapshot ? (
-          <article className="f9-app-panel f9-report-page" data-report-root>
-            <div className="f9-panel-toolbar f9-report-toolbar">
-              <div>
-                <p className="f9-app-kicker">Shared report snapshot</p>
-                <p className="f9-panel-toolbar-heading">{reportSnapshot.title}</p>
-              </div>
-              {pdfVariant ? null : pdfPath ? (
-                <a
-                  aria-busy={pdfPreparing}
-                  aria-disabled={pdfPreparing}
-                  className="f9-secondary-button"
-                  data-pdf-preparing={pdfPreparing ? "true" : "false"}
-                  href={pdfPath}
-                  onClick={(event) => {
-                    if (pdfPreparing) {
-                      event.preventDefault();
-                      return;
-                    }
-                    setPdfPreparing(true);
-                  }}
-                >
-                  {pdfPreparing ? "Preparing…" : "Download PDF"}
-                </a>
-              ) : (
-                <button
-                  className="f9-secondary-button"
-                  onClick={() => window.print()}
-                  type="button"
-                >
-                  Print report
-                </button>
-              )}
-            </div>
-            {/* BL-009: the loader already resolves the sharer's agency name.
-                Passing it is what puts the AGENCY on the cover byline; without
-                it the byline renders no "prepared by" line at all, and never
-                Five to Nine's name on someone else's white-labelled report. */}
-            <ReportView preparedBy={data.preparedBy} report={reportSnapshot} />
+          <article className="f9-share-report" data-report-root>
+            {/* BL-009/BL-013: ReportView is the document. The cover already
+                carries the finding and subject (brief §6.10); client actions
+                live in the contents rail, never in a second headline row. */}
+            <ReportView
+              preparedBy={data.preparedBy}
+              railActions={
+                pdfVariant ? null : (
+                  <div className="f9-ed-report-actions">
+                    {pdfPath ? (
+                      <a
+                        aria-busy={pdfPreparing}
+                        aria-disabled={pdfPreparing}
+                        className="f9-ed-cta f9-ed-cta--rank2"
+                        data-pdf-preparing={pdfPreparing ? "true" : "false"}
+                        href={pdfPath}
+                        onClick={(event) => {
+                          if (pdfPreparing) {
+                            event.preventDefault();
+                            return;
+                          }
+                          setPdfPreparing(true);
+                        }}
+                      >
+                        {pdfPreparing ? "Preparing…" : "Download PDF"}
+                      </a>
+                    ) : (
+                      <button
+                        className="f9-ed-cta f9-ed-cta--rank2"
+                        onClick={() => window.print()}
+                        type="button"
+                      >
+                        Print report
+                      </button>
+                    )}
+                  </div>
+                )
+              }
+              report={reportSnapshot}
+            />
           </article>
         ) : digestSnapshot ? (
           <article className="f9-app-panel">
@@ -381,16 +384,13 @@ export function ErrorBoundary({ error }: { error: unknown }) {
             <BrandWordmark meta={MARKETING_TAGLINE} />
           </Link>
         </div>
-        <article className="f9-app-panel">
-          <p className="f9-app-kicker">Shared report</p>
-          <h1>{title}</h1>
-          <p className="f9-muted-copy">
-            {copy}
-          </p>
-          <p>
-            <Link to="/">See what Five to Nine does</Link>
-          </p>
-        </article>
+        <SpecimenEmptyState
+          copy={copy}
+          headline={title}
+          primaryAction={{ label: "See what Five to Nine does", to: "/" }}
+          specimenLabel="SHARED REPORT · LINK UNAVAILABLE"
+          stateLabel="SHARED REPORT · LINK UNAVAILABLE"
+        />
         <footer className="f9-share-footer">
           <p className="f9-share-powered-by">
             Powered by <Link to="/">Five to Nine</Link>

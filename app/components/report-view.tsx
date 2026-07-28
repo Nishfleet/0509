@@ -261,7 +261,7 @@ export function ReportView({ report, preparedBy, railActions, brandingNote }: Re
               the reading flow — it is reference material, not the report. */}
           <details className="f9-ed-report-glossary">
             <summary className="f9-ed-micro">Evidence labels</summary>
-            <ProofGlossary />
+            <ProofGlossary audience="deliverable" />
           </details>
         </section>
       </div>

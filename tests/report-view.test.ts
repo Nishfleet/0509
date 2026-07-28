@@ -304,9 +304,8 @@ describe("ReportView", () => {
 
     expect(markup).not.toContain("Prepared by");
     expect(markup).not.toMatch(/<dd>Five to Nine<\/dd>/);
-    // (ProofGlossary still names us inside the collapsed §05 glossary —
-    // logged on PR #397 as a separate leak owned by the glossary's package.)
-    // The remaining cells still fill the byline row — no orphan hole.
+    expect(markup).not.toContain("Five to Nine cannot show enough source evidence");
+    expect(markup).toContain("Not enough source evidence was stored for a confident decision.");
     expect(markup).toContain("Subject");
     expect(markup).toContain("Evidence");
     expect(markup).toContain("Generated");

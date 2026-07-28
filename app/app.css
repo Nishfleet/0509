@@ -2864,7 +2864,8 @@ button[aria-busy="true"] {
   .f9-ed-report-cover,
   .f9-ed-report-number,
   .f9-ed-evidence-plate,
-  .f9-ed-report-read {
+  .f9-ed-report-read,
+  .f9-ed-report-section {
     break-inside: avoid;
     page-break-inside: avoid;
   }
@@ -2888,6 +2889,32 @@ button[aria-busy="true"] {
 
 .f9-share-pdf .f9-container {
   max-width: 780px;
+}
+
+/* Mirror the print document layout in the screen-rendered PDF variant.
+   The CDP renderer loads this URL before switching media; keeping the
+   300px contents rail here squeezed the report and letter-stacked facts. */
+.f9-share-pdf .f9-ed-report {
+  display: block;
+  width: 100%;
+  box-shadow: none;
+  border: 0;
+}
+
+.f9-share-pdf .f9-ed-report-rail {
+  display: none !important;
+}
+
+/* The PDF page is narrower than the desktop viewport that hosts it. Stack the
+   plate internally too, so long values cannot squeeze fact labels into
+   letter columns merely because the viewport media query has not fired. */
+.f9-share-pdf .f9-ed-evidence-body {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.f9-share-pdf .f9-ed-evidence-capture {
+  border-right: 0;
+  border-bottom: 2.5px solid var(--ed-rule);
 }
 
 .f9-pdf-masthead {
@@ -2917,6 +2944,7 @@ button[aria-busy="true"] {
 .f9-share-pdf .f9-ed-evidence-plate,
 .f9-share-pdf .f9-ed-report-number,
 .f9-share-pdf .f9-ed-report-read,
+.f9-share-pdf .f9-ed-report-section,
 .f9-share-pdf .f9-proof-packet {
   break-inside: avoid;
   page-break-inside: avoid;
@@ -4677,6 +4705,16 @@ one signal-green accent.
   color: var(--ld-ink);
 }
 
+/* BL-013: ReportView is the document — no second card frame around it. */
+.f9-share-page .f9-share-report {
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  color: inherit;
+}
+
 .f9-share-page .f9-event-card,
 .f9-share-page .f9-work-row {
   background: var(--ld-card);
@@ -4699,6 +4737,12 @@ one signal-green accent.
 .f9-share-page .f9-muted-copy,
 .f9-share-page .f9-app-panel p {
   color: var(--ld-ink-soft);
+}
+
+.f9-share-page .f9-ed-report-prose,
+.f9-share-page .f9-ed-report-footnote,
+.f9-share-page .f9-ed-report-number-note {
+  color: var(--ed-text);
 }
 
 .f9-share-page .f9-share-header,

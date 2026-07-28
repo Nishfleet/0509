@@ -1,11 +1,20 @@
-export function ProofGlossary() {
+export function ProofGlossary({
+  audience = "workspace",
+}: {
+  /** Workspace copy names the product; deliverable copy stays brand-neutral. */
+  audience?: "workspace" | "deliverable";
+}) {
+  const isDeliverable = audience === "deliverable";
+
   return (
     <section className="f9-proof-packet" aria-label="Source status glossary">
       <div>
         <span className="f9-app-kicker">Source glossary</span>
         <h3>How to read evidence labels</h3>
         <p className="f9-muted-copy">
-          Use these labels before sharing a change with teammates or clients.
+          {isDeliverable
+            ? "These are the labels stamped on the evidence in this report."
+            : "Use these labels before sharing a change with teammates or clients."}
         </p>
       </div>
       <dl className="proof-trail-list">
@@ -15,7 +24,11 @@ export function ProofGlossary() {
         </div>
         <div>
           <dt>Check-spotted</dt>
-          <dd>The scheduled check saw the change; review it before sharing externally.</dd>
+          <dd>
+            {isDeliverable
+              ? "The scheduled check saw the change; treat it as a lead until a capture is stored."
+              : "The scheduled check saw the change; review it before sharing externally."}
+          </dd>
         </div>
         <div>
           <dt>Needs review</dt>
@@ -23,7 +36,11 @@ export function ProofGlossary() {
         </div>
         <div>
           <dt>Evidence unavailable</dt>
-          <dd>Five to Nine cannot show enough source evidence for a confident decision.</dd>
+          <dd>
+            {isDeliverable
+              ? "Not enough source evidence was stored for a confident decision."
+              : "Five to Nine cannot show enough source evidence for a confident decision."}
+          </dd>
         </div>
       </dl>
     </section>
