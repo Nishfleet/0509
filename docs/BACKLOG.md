@@ -69,6 +69,14 @@ The queue no longer stops when empty — it REFILLS, on evidence only:
   `docs/design/EVIDENCE-DESK-BRIEF.md`; the volume split is now `DESIGN.md`
   "One system, two volumes".
 
+## Done (2026-07-28)
+
+- **BL-024 — Workspace shell: kill the first-load focus ring, go full
+  width.** ✅ Direct Nish feedback. The signed-in route-focus target keeps its
+  screen-reader announcement without painting a workspace-sized ring, and the
+  signed-in shell plus page canvas no longer stop at the 1480px shell cap or
+  the nested 1120px content cap.
+
 ## P1 — the Evidence Desk program (gate cleared, ordered)
 
 Every package below is one builder session. They are ordered by the audit's
