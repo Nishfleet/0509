@@ -249,17 +249,17 @@ async function expectAppActionControlsWired(page: Page) {
 }
 
 test.describe("local authenticated E2E harness", () => {
-  test("new customer is routed to onboarding without magic-link login", async ({ page, context, baseURL }) => {
+  test("new customer sees setup inside Overview without magic-link login", async ({ page, context, baseURL }) => {
     await signInAs(context, baseURL!, "e2e-free");
     await page.goto("/app");
 
-    await expect(page).toHaveURL(/\/app\/onboard/);
-    await expect(page.getByRole("heading", { name: "Get started" })).toBeVisible();
+    await expect(page).toHaveURL(/\/app/);
+    await expect(page.getByRole("heading", { name: "Finish the workspace that sends your first brief" })).toBeVisible();
     await expect(
-      page.getByText("Start with one competitor. We'll check the website, create its watchlist, and kick off the first scan."),
+      page.getByText("Paste one competitor website to start."),
     ).toBeVisible();
-    await expect(page.getByText("The first scan starts immediately. Evidence appears as soon as the source check finishes.")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Start tracking this competitor" })).toBeDisabled();
+    await expect(page.getByText("We create the watchlist and start its first scan immediately.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Track this competitor" })).toBeDisabled();
     await expectNoHorizontalOverflow(page);
   });
 
@@ -270,15 +270,15 @@ test.describe("local authenticated E2E harness", () => {
   }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await signInAs(context, baseURL!, "e2e-activation");
-    await page.goto("/app/onboard?website=nykaa.com");
+    await page.goto("/app?website=nykaa.com#setup-checklist");
 
     await expect(page.getByLabel("Competitor website")).toHaveValue("nykaa.com");
     await expectNoHorizontalOverflow(page);
-    await page.getByRole("button", { name: "Start tracking Nykaa" }).focus();
+    await page.getByRole("button", { name: "Track Nykaa" }).focus();
     await page.keyboard.press("Enter");
 
     await expect(page).toHaveURL(/\/app\/watchlists\?watchlist=/);
-    await expect(page.getByRole("heading", { name: "Watchlists" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Competitors" })).toBeVisible();
     await expect(page.getByText("Nykaa watch").first()).toBeVisible();
   });
 

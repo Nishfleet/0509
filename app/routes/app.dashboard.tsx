@@ -17,14 +17,8 @@ import {
   DashboardRouteLoading,
 } from "~/components/dashboard-route-loading";
 import { ActionFeedback } from "~/components/action-feedback";
-import {
-  FirstRunSpine,
-  resolveFirstRunFurthest,
-  shouldRenderFirstRunSpine,
-} from "~/components/first-run-spine";
-import { DispatchFeed } from "~/components/first-run-wait";
-import { WireEyebrow, WireHeadline } from "~/components/first-run-wire";
-import { getPlanLimit, planAllowsDigestCadence } from "~/lib/plan-entitlements";
+import { SetupChecklistCard } from "~/components/setup-checklist-card";
+import { SpecimenEmptyState } from "~/components/evidence/specimen-empty-state";
 import { LocalTime } from "~/components/local-time";
 import { Pill } from "~/components/pill";
 import { SubmitButton } from "~/components/submit-button";
@@ -33,6 +27,7 @@ import { toPublicDeliveryTarget } from "~/lib/delivery-target-public";
 import { isSecretishMemoryString } from "~/lib/agent-redaction";
 import { buildChangeIntelligenceSummary } from "~/lib/change-intelligence";
 import { buildMarketDeskBrief } from "~/lib/market-desk-brief";
+import { pendingBlockingSetupItems } from "~/lib/setup-checklist";
 import { buildSearchParams } from "~/lib/normalize";
 import { classifyWatchEventSource } from "~/lib/proof-classification";
 import { formatNextScanLabel } from "~/lib/schedule-display";
@@ -161,6 +156,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     getUserPlanBillingInfo,
   } = await import("~/lib/data.server");
   const env = getEnv(context);
+  const requestUrl = new URL(request.url);
   const { workspaceUserId, isMember, ownerName } =
     await requireWorkspaceSession(env, request);
   const { listWorkspaceMembers } = await import("~/lib/workspace.server");
@@ -330,10 +326,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     workspaceDeliveryTimezone: workspaceDeliveryConfig?.timezone ?? null,
     hasPaymentIssue,
     sectionWarnings,
+    setupPrefillWebsite: requestUrl.searchParams.get("website")?.trim() ?? "",
+    setupPrefillCountry: requestUrl.searchParams.get("country")?.trim() ?? "",
   };
 }
 
-export async function action({ context, request }: ActionFunctionArgs) {
+export async function action(args: ActionFunctionArgs) {
+  const { context, request } = args;
   const { getEnv } = await import("~/lib/context.server");
   const { withWorkspace, planLimitExceededActionResult } =
     await import("~/lib/with-workspace.server");
@@ -347,8 +346,41 @@ export async function action({ context, request }: ActionFunctionArgs) {
     return workspace.result;
   }
   const { workspaceUserId } = workspace;
+  let setupActionModule:
+    | typeof import("~/lib/setup-checklist-action.server")
+    | undefined;
+  if (
+    request.headers
+      .get("content-type")
+      ?.toLowerCase()
+      .includes("multipart/form-data")
+  ) {
+    setupActionModule = await import(
+      "~/lib/setup-checklist-action.server"
+    );
+    const { COMPETITOR_IMPORT_MAX_BYTES } = await import(
+      "~/lib/competitor-import"
+    );
+    if (
+      setupActionModule.oversizedMultipartImportMessage(
+        request,
+        COMPETITOR_IMPORT_MAX_BYTES,
+      )
+    ) {
+      return setupActionModule.handleSetupChecklistAction(args);
+    }
+  }
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
+  if (
+    intent === "create-watchlist" ||
+    intent === "preview-market-desk-import" ||
+    intent === "create-market-desk-import" ||
+    intent === "finish"
+  ) {
+    setupActionModule ??= await import("~/lib/setup-checklist-action.server");
+    return setupActionModule.handleSetupChecklistAction(args, formData);
+  }
 
   if (intent === "run-saved-query") {
     const savedQueryId = String(formData.get("savedQueryId") ?? "");
@@ -512,10 +544,14 @@ export default function AppDashboardRoute() {
     data.successfulProofStats?.count ?? recentSuccessfulProofs;
   const counterMoveFollowUps = data.counterMoveFollowUps ?? [];
   const workspaceReadiness = data.workspaceReadiness;
-  const readinessGaps =
-    workspaceReadiness?.items.filter(
-      (item) => item.status !== "ready" && item.status !== "not_applicable",
-    ) ?? [];
+  const readinessUnavailable =
+    data.sectionWarnings?.some((warning) => warning.section === "readiness") ??
+    false;
+  const readinessGaps = workspaceReadiness
+    ? pendingBlockingSetupItems(workspaceReadiness)
+    : [];
+  const hasBlockingSetupGaps =
+    readinessUnavailable || readinessGaps.length > 0;
   const retentionMoves = (workspaceReadiness?.nudges ?? []).filter(
     (nudge) => nudge.priority !== "low",
   );
@@ -533,47 +569,6 @@ export default function AppDashboardRoute() {
   });
   const statusCards = marketDeskBrief.metrics;
   const hasDashboardMetrics = marketDeskBrief.hasMetrics;
-
-  // WP-C2 first-run arc — all signals derived from existing durable records
-  // (no migration). A completed scan is NOT a brief: `hasAnyBrief` is derived
-  // only from real brief/digest records, so the spine stays through the
-  // "filing" gap (scan done, brief pending) and retires only once a brief has
-  // actually filed. Free's weekly Competitor Watch digest IS that brief.
-  const hasCompetitor = competitorCount > 0;
-  const firstScanComplete =
-    watchlists.some((watchlist) => Boolean(watchlist.lastScannedAt)) ||
-    (data.overnightStats?.runs ?? 0) > 0 ||
-    (data.overnightStats?.watchlistsChecked ?? 0) > 0;
-  const hasAnyBrief = digests.length > 0;
-  const firstRunFurthest = resolveFirstRunFurthest({
-    hasCompetitor,
-    firstScanComplete,
-    hasAnyBrief,
-  });
-  // Show the spine while first-run and there is a genuine arc in progress. A
-  // truly empty workspace shows Beat 1; a stray completed check with no
-  // competitor (e.g. deleted watchlist) is not first-run, so no spine.
-  const showFirstRunSpine =
-    shouldRenderFirstRunSpine({ hasAnyBrief }) &&
-    (hasCompetitor || !firstScanComplete);
-  const showWireBeat1 =
-    showFirstRunSpine && !hasCompetitor && !firstScanComplete;
-  const showWireBeat2 = showFirstRunSpine && hasCompetitor && !firstScanComplete;
-  const firstScanTarget =
-    watchlists.find(
-      (watchlist) => watchlist.isActive && !watchlist.lastScannedAt,
-    ) ??
-    watchlists[0] ??
-    null;
-  const firstScanDomain = firstScanTarget?.targetLabel ?? "your competitor";
-  // Free/Scout are weekly; only daily plans get the "before 05:09" promise.
-  const hasDailyCadence = planAllowsDigestCadence(plan, "daily");
-  // Capacity truth: the queue-more add form only appears when the plan can
-  // actually hold another watchlist; otherwise show the upgrade affordance.
-  const canAddMoreCompetitor = competitorCount < getPlanLimit(plan, "watchlists");
-  // First-brief bridge: once the first brief has filed and it is still the only
-  // one, hand the new user to their front-page brief with the arc-arrival flag.
-  const showFirstBriefBridge = hasAnyBrief && digests.length === 1;
 
   return (
     <DashboardPage>
@@ -614,171 +609,29 @@ export default function AppDashboardRoute() {
           </article>
         ) : null}
 
-        {showFirstRunSpine ? (
-          <FirstRunSpine
-            furthest={firstRunFurthest}
-            scanDomain={hasCompetitor ? firstScanDomain : undefined}
-            scanPhase={showWireBeat2 ? "queued" : undefined}
+        {readinessUnavailable ? (
+          <div id="setup-checklist">
+            <SpecimenEmptyState
+              copy="The workspace is still available, but setup progress could not be checked. Retry before assuming activation is complete."
+              headline="Setup status is temporarily unavailable"
+              primaryAction={{
+                label: "Retry setup status",
+                href: "/app?retrySetup=1#setup-checklist",
+              }}
+              specimenLabel="SETUP CHECKS — RETRY REQUIRED"
+              stateLabel="SETUP · STATUS UNAVAILABLE"
+            />
+          </div>
+        ) : workspaceReadiness ? (
+          <SetupChecklistCard
+            actionData={actionData}
+            prefillCountry={data.setupPrefillCountry}
+            prefillWebsite={data.setupPrefillWebsite}
+            readiness={workspaceReadiness}
           />
         ) : null}
 
-        {showFirstBriefBridge ? (
-          <article className="f9-app-panel f9-first-brief-bridge">
-            <div>
-              <WireEyebrow>THE 5·9 WIRE · FIRST BRIEF FILED</WireEyebrow>
-              <h2>Your first brief is ready.</h2>
-              <p className="f9-muted-copy">
-                The full front page — score, moves, and creatives — is waiting
-                in Briefs.
-              </p>
-            </div>
-            <Link className="f9-primary-button" to="/app/digests?firstrun=1">
-              Read the full brief →
-            </Link>
-          </article>
-        ) : null}
-
-        {showWireBeat1 ? (
-          <article className="f9-app-panel f9-dashboard-hero f9-wire-hero">
-            <WireEyebrow>THE 5·9 WIRE · NOTHING FILED YET</WireEyebrow>
-            <WireHeadline
-              before="Name one competitor. "
-              marked={
-                hasDailyCadence
-                  ? "We file the first brief before you wake."
-                  : "We file your first weekly brief."
-              }
-            />
-            <p className="f9-muted-copy f9-wire-sub">
-              {hasDailyCadence
-                ? "Paste a website — a competitor’s or your own. We pull their live Meta ads and landing page, then file a brief the moment their offer, creative, or CTA moves."
-                : "Paste a website — a competitor’s or your own. We pull their live Meta ads and landing page now, then check every week and file a brief when their offer, creative, or CTA moves."}
-            </p>
-
-            <CommercialSourceStatus status={data.metaStatus} />
-
-            <Form action="/search" className="f9-dashboard-search" method="get">
-              <label className="f9-field" htmlFor="dashboard-market-search">
-                <span>Competitor website</span>
-                <input
-                  autoComplete="url"
-                  id="dashboard-market-search"
-                  inputMode="url"
-                  name="website"
-                  placeholder="https://competitor.com"
-                  spellCheck={false}
-                  type="text"
-                />
-              </label>
-              <SubmitButton
-                className="f9-primary-button"
-                getAction="/search"
-                pendingLabel="Filing…"
-              >
-                Assign the beat →
-              </SubmitButton>
-            </Form>
-
-            {plan === "free" ? (
-              <p className="f9-wire-eyebrow f9-wire-hint">
-                Free includes one watchlist — activation scan, weekly check,
-                weekly email brief.
-              </p>
-            ) : null}
-
-            <div className="f9-wire-tease" aria-label="A dimmed sample brief">
-              <WireEyebrow>
-                WHAT LANDS ONCE WE&rsquo;VE FILED — A REAL BRIEF, DIMMED
-              </WireEyebrow>
-              <div className="f9-wire-tease-grid">
-                <div className="f9-wire-tease-score">
-                  <span className="f9-wire-tease-num">
-                    72<small>/100</small>
-                  </span>
-                  <span className="f9-wire-tease-cap">Ad aggression</span>
-                  <span className="f9-wire-tease-flag">DIMMED · sample</span>
-                </div>
-                <div className="f9-wire-tease-thumb">
-                  <span>Their headline, saved to the pixel</span>
-                </div>
-                <div className="f9-wire-tease-thumb">
-                  <span>Every video creative, poster frame and all</span>
-                </div>
-              </div>
-            </div>
-          </article>
-        ) : showWireBeat2 ? (
-          <article className="f9-app-panel f9-dashboard-hero f9-wire-hero">
-            <WireEyebrow>THE 5·9 WIRE · BEAT ASSIGNED</WireEyebrow>
-            <WireHeadline before={`${firstScanDomain} is `} marked="on the wire." />
-
-            <div className="f9-wire-confirm">
-              <span className="f9-app-kicker">Covering {firstScanDomain}</span>
-              <h3>We&rsquo;re covering {firstScanDomain}.</h3>
-              <p>
-                The first scan is underway — you don&rsquo;t have to wait on this
-                page.
-              </p>
-              <p className="f9-wire-eyebrow">
-                Sourced from live Meta ads + landing page.
-              </p>
-            </div>
-
-            <DispatchFeed reading={false} domain={firstScanDomain} />
-
-            {canAddMoreCompetitor ? (
-              <div className="f9-queue-more">
-                <WireEyebrow>A BIGGER BRIEF</WireEyebrow>
-                <h3>Add another competitor</h3>
-                <p className="f9-muted-copy">
-                  Cover three to five and the brief compares their offers side
-                  by side.
-                </p>
-                <Form
-                  action="/search"
-                  className="f9-dashboard-search"
-                  method="get"
-                >
-                  <label className="f9-field" htmlFor="dashboard-queue-more">
-                    <span>Competitor website</span>
-                    <input
-                      autoComplete="url"
-                      id="dashboard-queue-more"
-                      inputMode="url"
-                      name="website"
-                      placeholder="https://another-competitor.com"
-                      spellCheck={false}
-                      type="text"
-                    />
-                  </label>
-                  <SubmitButton
-                    className="f9-primary-button"
-                    getAction="/search"
-                    pendingLabel="Filing…"
-                  >
-                    Add another
-                  </SubmitButton>
-                </Form>
-              </div>
-            ) : (
-              <div className="f9-queue-more">
-                <WireEyebrow>A BIGGER BRIEF</WireEyebrow>
-                <h3>Watch more competitors</h3>
-                <p className="f9-muted-copy">
-                  You&rsquo;ve reached your plan&rsquo;s competitor limit.
-                  Upgrade to watch more competitors and check faster than your
-                  weekly cadence.
-                </p>
-                <Link
-                  className="f9-primary-button"
-                  to="/app/billing?source=dashboard-limit#plans"
-                >
-                  View plans
-                </Link>
-              </div>
-            )}
-          </article>
-        ) : (
+        {(
           <article className="f9-app-panel f9-dashboard-hero">
             <div className="f9-panel-toolbar">
               <div>
@@ -786,7 +639,14 @@ export default function AppDashboardRoute() {
                 <h2>{marketDeskBrief.title}</h2>
                 <p className="f9-muted-copy">{marketDeskBrief.summary}</p>
               </div>
-              {competitorCount > 0 ? (
+              {digests.length > 0 && hasBlockingSetupGaps ? (
+                <Link
+                  className="f9-secondary-button"
+                  to="/app/digests?firstrun=1"
+                >
+                  Read latest brief
+                </Link>
+              ) : competitorCount > 0 && !hasBlockingSetupGaps ? (
                 <Link
                   className="f9-primary-button"
                   to={marketDeskBrief.action.href}
@@ -810,77 +670,31 @@ export default function AppDashboardRoute() {
               </div>
             ) : null}
 
-            <Form action="/search" className="f9-dashboard-search" method="get">
-              <label className="f9-field" htmlFor="dashboard-market-search">
-                <span>Competitor website</span>
-                <input
-                  autoComplete="url"
-                  id="dashboard-market-search"
-                  inputMode="url"
-                  name="website"
-                  placeholder="https://competitor.com"
-                  spellCheck={false}
-                  type="text"
-                />
-              </label>
-              <SubmitButton
-                className="f9-primary-button"
-                getAction="/search"
-                pendingLabel="Searching…"
-              >
-                Search ads
-              </SubmitButton>
-            </Form>
+            {!hasBlockingSetupGaps ? (
+              <Form action="/search" className="f9-dashboard-search" method="get">
+                <label className="f9-field" htmlFor="dashboard-market-search">
+                  <span>Competitor website</span>
+                  <input
+                    autoComplete="url"
+                    id="dashboard-market-search"
+                    inputMode="url"
+                    name="website"
+                    placeholder="https://competitor.com"
+                    spellCheck={false}
+                    type="text"
+                  />
+                </label>
+                <SubmitButton
+                  className="f9-primary-button"
+                  getAction="/search"
+                  pendingLabel="Searching…"
+                >
+                  Search ads
+                </SubmitButton>
+              </Form>
+            ) : null}
           </article>
         )}
-
-        {readinessGaps.length > 0 ? (
-          <details className="f9-app-panel f9-setup-strip">
-            <summary className="f9-setup-strip-summary">
-              <span className="f9-setup-strip-head">
-                <span className="f9-app-kicker">Setup</span>
-                <strong>
-                  {workspaceReadiness.readyCount} of{" "}
-                  {workspaceReadiness.totalCount} setup checks complete
-                </strong>
-              </span>
-              <span
-                className="f9-setup-strip-bar"
-                aria-hidden="true"
-              >
-                <span
-                  style={{
-                    width: `${Math.round(
-                      (workspaceReadiness.readyCount /
-                        Math.max(workspaceReadiness.totalCount, 1)) *
-                        100,
-                    )}%`,
-                  }}
-                />
-              </span>
-              <span className="f9-setup-strip-toggle">Finish setup</span>
-            </summary>
-            <div className="f9-work-list is-compact">
-              {readinessGaps.slice(0, 5).map((item) => (
-                <article className="f9-work-row" key={item.id}>
-                  <div>
-                    <h3>{item.label}</h3>
-                    <p className="f9-muted-copy">{item.detail}</p>
-                  </div>
-                  {item.action ? (
-                    <Link className="f9-secondary-button" to={item.action.href}>
-                      {item.action.label}
-                    </Link>
-                  ) : (
-                    <Pill>
-                      {formatMachineTokenLabel(item.status)}
-                    </Pill>
-                  )}
-                </article>
-              ))}
-            </div>
-          </details>
-        ) : null}
 
         {retentionMoves.length > 0 ? (
           <article className="f9-app-panel">

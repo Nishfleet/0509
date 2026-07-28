@@ -151,9 +151,9 @@ describe("/ads/:domain — Case File render", () => {
     // 34 total − 5 shown = +29 more.
     expect(markup).toContain("+29");
     expect(markup).toContain("more ads live");
-    // Primary CTA carries the domain into onboarding.
+    // Primary CTA carries the domain into the Overview setup card.
     expect(markup).toContain(
-      "/auth/signup?redirectTo=%2Fapp%2Fonboard%3Fwebsite%3Dnike.com",
+      "/auth/signup?redirectTo=%2Fapp%3Fwebsite%3Dnike.com%23setup-checklist",
     );
   });
 
