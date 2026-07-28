@@ -986,6 +986,18 @@ describe("searchAdsViaSourceResolver", () => {
     },
   };
 
+  describe("broken-advertiser-filter cache choke points", () => {
+    const AD_SOURCE_ADVERTISER_FIX_TEST_NOW = "2026-07-21T12:00:00.000Z";
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(AD_SOURCE_ADVERTISER_FIX_TEST_NOW));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
   it("provider cooldown never serves a pre-fix advertiser zero as a stale cache_only hit", async () => {
     const browserSearch = vi.fn();
     const getDiscoveryProviderState = vi.fn().mockResolvedValue({
@@ -1101,9 +1113,6 @@ describe("searchAdsViaSourceResolver", () => {
   });
 
   it("distributed-lease resolution never reports a pre-fix advertiser zero as a healthy hit", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-21T12:00:00.000Z"));
-    try {
       const browserSearch = vi.fn();
       const future = new Date(Date.now() + 180_000).toISOString();
       // Another isolate owns the lease (holder_id !== our holderId) -> lease not acquired.
@@ -1147,16 +1156,9 @@ describe("searchAdsViaSourceResolver", () => {
       expect(result.cacheStatus).not.toBe("hit");
       expect(result).toMatchObject({ discoveryProgress: "warming" });
       expect(browserSearch).not.toHaveBeenCalled();
-    } finally {
-      vi.useRealTimers();
-    }
   });
 
   it("hasFreshDiscoveryCacheEntry treats a pre-fix advertiser zero as NOT fresh, keyword zero stays fresh", async () => {
-    // Frozen just past the cutoff so the future expiresAt (keyword-fresh) never
-    // drifts into the past on a later calendar day.
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-21T12:00:00.000Z"));
     const getDiscoveryCacheEntry = vi.fn().mockResolvedValue(
       // Unexpired relative to the frozen clock, so without the fix it would be
       // reported fresh.
@@ -1181,6 +1183,8 @@ describe("searchAdsViaSourceResolver", () => {
     await expect(
       hasFreshDiscoveryCacheEntry(env, { ...ADVERTISER_NYKAA_QUERY, mode: "keyword" }, null),
     ).resolves.toBe(true);
+  });
+
   });
 
   // ---- FIX-1 hardening: route compatibility lives in the same choke point ----

@@ -908,10 +908,15 @@ describe("dashboard route agent memory", () => {
     expect(markup).not.toContain("Add another");
   });
 
-  it("surfaces safe counter-move follow-ups from agent action audits", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-06-20T00:00:00.000Z"));
+  describe("counter-move follow-up loader filtering", () => {
+    const DASHBOARD_COUNTER_MOVE_TEST_NOW = "2026-06-20T00:00:00.000Z";
 
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date(DASHBOARD_COUNTER_MOVE_TEST_NOW));
+    });
+
+  it("surfaces safe counter-move follow-ups from agent action audits", async () => {
     mockDashboardLoaderDependencies({
       counterMoveAudits: [
         {
@@ -1103,8 +1108,6 @@ describe("dashboard route agent memory", () => {
   });
 
   it("redacts secret-like counter-move follow-up audit text before rendering", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-06-20T00:00:00.000Z"));
     const liveKey = ["f9", "live", "countermove"].join("_");
     const slackHook = "https://hooks.slack.com/services/T/B/C";
 
@@ -1178,9 +1181,6 @@ describe("dashboard route agent memory", () => {
   });
 
   it("paginates past newer quiet briefs to keep open counter-move follow-ups visible", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-06-20T00:00:00.000Z"));
-
     mockDashboardLoaderDependencies({
       counterMoveAudits: [
         ...Array.from({ length: 30 }, (_, index) =>
@@ -1229,9 +1229,6 @@ describe("dashboard route agent memory", () => {
   });
 
   it("keeps stale audit-backed counter-move follow-ups until their embedded expiry closes", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-06-20T00:00:00.000Z"));
-
     mockDashboardLoaderDependencies({
       counterMoveAudits: [
         createCounterMoveAudit({
@@ -1259,9 +1256,6 @@ describe("dashboard route agent memory", () => {
   });
 
   it("hides stale audit-backed counter-move follow-ups when no valid expiry exists", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-06-20T00:00:00.000Z"));
-
     mockDashboardLoaderDependencies({
       counterMoveAudits: [
         createCounterMoveAudit({
@@ -1283,5 +1277,6 @@ describe("dashboard route agent memory", () => {
     } as never);
 
     expect(loaderData.counterMoveFollowUps).toEqual([]);
+  });
   });
 });

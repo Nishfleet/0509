@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+/** Frozen anchor for subscription-period and reservation tests (anchor 2026-06-23). */
+const EVIDENCE_USAGE_TEST_NOW = "2026-07-01T12:00:00.000Z";
 
 import {
   ensureCurrentEvidenceUsagePeriod,
@@ -157,20 +160,20 @@ describe("evidence usage periods", () => {
   let env: TestEnv;
 
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(EVIDENCE_USAGE_TEST_NOW));
     env = createTestEnv();
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("creates a subscription-anchored period with plan allowance", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-01T12:00:00.000Z"));
-    try {
-      const period = await ensureCurrentEvidenceUsagePeriod(env, "user-1", "starter");
-      expect(period.period_start).toBe("2026-06-23T00:00:00.000Z");
-      expect(period.period_end).toBe("2026-07-23T00:00:00.000Z");
-      expect(period.included_allowance).toBe(250);
-    } finally {
-      vi.useRealTimers();
-    }
+    const period = await ensureCurrentEvidenceUsagePeriod(env, "user-1", "starter");
+    expect(period.period_start).toBe("2026-06-23T00:00:00.000Z");
+    expect(period.period_end).toBe("2026-07-23T00:00:00.000Z");
+    expect(period.included_allowance).toBe(250);
   });
 
   it("upgrades allowance without resetting consumption", async () => {
@@ -228,7 +231,7 @@ describe("evidence usage periods", () => {
       providerProductId: "prod-burst",
       quantityGranted: 500,
     });
-    const now = new Date().toISOString();
+    const now = EVIDENCE_USAGE_TEST_NOW;
     await env.DB.prepare(`
       INSERT INTO dodo_webhook_event (
         event_id, event_type, user_id, received_at, outcome,

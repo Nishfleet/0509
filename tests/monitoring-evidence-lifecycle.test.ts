@@ -1,4 +1,7 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+/** Matches evidence-usage.test.ts — keeps entitlement periods on the June-23 anchor month. */
+const MONITORING_EVIDENCE_TEST_NOW = "2026-07-01T12:00:00.000Z";
 
 import {
   ensureCurrentEvidenceUsagePeriod,
@@ -444,10 +447,16 @@ async function installManualRunMocks(input: {
   }));
 }
 
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date(MONITORING_EVIDENCE_TEST_NOW));
+});
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.resetModules();
   vi.doUnmock("~/lib/monitoring-fanout.server");
+  vi.useRealTimers();
 });
 
 describe("monitoring evidence lifecycle acceptance", () => {
