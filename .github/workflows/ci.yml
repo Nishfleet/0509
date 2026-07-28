@@ -4,11 +4,23 @@ on:
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   codex-node-checks:
-    runs-on: ${{ (startsWith(github.head_ref, 'cloud-council/') && vars.RECOVERY_RUNNER) || 'ubuntu-latest' }}
+    if: github.repository == 'nish3451/0509' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}
+    # 180m lock wait + 60m build/test/typecheck + 30m cleanup slack = 270m.
+    timeout-minutes: 270
     steps:
       - uses: actions/checkout@v7
+
+      - name: Acquire deploy window (serialize with fleet lanes on the VPS runner)
+        shell: bash
+        run: ./scripts/deploy-window-lock.sh acquire
+
       - uses: actions/setup-node@v6
         with:
           node-version-file: ".node-version"
@@ -26,3 +38,8 @@ jobs:
         run: npm run test
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Release deploy window
+        if: always()
+        shell: bash
+        run: ./scripts/deploy-window-lock.sh release
