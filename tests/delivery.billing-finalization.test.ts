@@ -117,6 +117,8 @@ status: "sent",
 );
 });
 it("sends the scheduled-cancellation email with the active-until date and event-keyed idempotency", async () => {
+vi.useFakeTimers();
+vi.setSystemTime(new Date("2026-07-15T00:00:00.000Z"));
 const sendMock = mockEmailSend();
 const mocks = mockBillingDataServer({
 getUserPlanBillingInfo: vi.fn().mockResolvedValue({
