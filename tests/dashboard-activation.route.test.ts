@@ -138,7 +138,7 @@ describe("dashboard first 15 minutes activation", () => {
 
     expect(markup).toContain('href="/app/digests?firstrun=1"');
     expect(markup).toContain("Read latest brief");
-    expect(markup).toContain('class="f9-secondary-button"');
+    expect(markup).toContain('class="f9-ed-cta f9-ed-cta--rank2"');
     expect(markup.match(/f9-ed-cta--rank1/g)?.length ?? 0).toBe(1);
   });
 

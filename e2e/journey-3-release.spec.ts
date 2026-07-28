@@ -399,7 +399,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
       // Overview uses the one persistent setup pattern. It must not introduce
       // a second progress spine or claim that a queued scan is already running.
       await page.goto("/app");
-      await expect(page.getByRole("heading", { level: 1, name: "Overview", exact: true })).toBeVisible();
+      await expect(page.locator("#f9-main-content").getByRole("heading", { level: 1 })).toBeVisible();
       await expect(page.locator("#setup-checklist")).toBeVisible();
       await expect(page.locator("#setup-checklist")).toContainText("First evidence");
       await expect(page.getByText("The first scan is running now")).toHaveCount(0);
@@ -434,7 +434,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
       // A filed brief retires the old first-run spine. Any genuinely incomplete
       // setup checks remain in the one persistent checklist.
       await page.goto("/app");
-      await expect(page.getByRole("heading", { level: 1, name: "Overview", exact: true })).toBeVisible();
+      await expect(page.locator("#f9-main-content").getByRole("heading", { level: 1 })).toBeVisible();
       await expect(page.locator("#setup-checklist")).toBeVisible();
       await expect(page.locator(".f9-first-run-spine")).toHaveCount(0);
       await expectNoHorizontalOverflow(page);

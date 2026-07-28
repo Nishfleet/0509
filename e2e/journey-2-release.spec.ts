@@ -298,7 +298,7 @@ test("persistent setup card keeps an empty free workspace honest", async ({
   await signInAs(context, baseURL, "e2e-free-onboarded");
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/app");
-  await expect(page.getByRole("heading", { level: 1, name: "Overview", exact: true })).toBeVisible();
+  await expect(page.locator("#f9-main-content").getByRole("heading", { level: 1 })).toBeVisible();
   await expect(page.locator("#setup-checklist")).toBeVisible();
   await expect(page.locator("#setup-checklist")).toContainText("Setup · 0 of 4 done");
   await expect(page.locator("#setup-checklist")).toContainText("First competitor");

@@ -44,10 +44,6 @@ const MOBILE_UTILITY_NAV = [
   { label: "Billing", to: "/app/billing" },
 ] as const;
 
-function navItemMatchesPath(item: { to: string; end?: boolean }, pathname: string) {
-  return item.end ? pathname === item.to : pathname === item.to || pathname.startsWith(`${item.to}/`);
-}
-
 function NavSections({ sections }: { sections: DashboardNavSection[] }) {
   return (
     <>
@@ -135,8 +131,6 @@ export function DashboardShell({
     });
     return () => window.cancelAnimationFrame(frame);
   }, [location.pathname]);
-  const currentMobileLabel = [...mobileNav, ...MOBILE_UTILITY_NAV]
-    .find((item) => navItemMatchesPath(item, location.pathname))?.label ?? "Navigate";
   const pageClasses = ["f9-dash-page", isPublic ? "f9-dash-page-public" : "f9-dash-page-app", pageClassName]
     .filter(Boolean)
     .join(" ");
@@ -235,25 +229,28 @@ export function DashboardShell({
         </aside>
 
         {!isPublic && mobileNav.length > 0 ? (
-          <>
-            <p className="f9-dash-mobile-context">
-              <strong>{currentMobileLabel}</strong>
-              <span>Swipe for more</span>
-            </p>
-            <nav aria-label="Primary" className="f9-dash-mobile-nav" ref={mobilePrimaryRef}>
-              {mobileNav.map((item) => (
-                <NavLink
-                  className={navLinkClassName}
-                  end={item.end}
-                  key={item.to}
-                  prefetch="intent"
-                  to={item.to}
-                >
-                  {item.label}
-                </NavLink>
-              ))}
-            </nav>
-            <nav aria-label="Workspace and account" className="f9-dash-mobile-utility" ref={mobileUtilityRef}>
+          <nav
+            aria-label="Workspace sections"
+            className="f9-dash-mobile-nav"
+            ref={mobilePrimaryRef}
+          >
+            {mobileNav.map((item) => (
+              <NavLink
+                className={navLinkClassName}
+                end={item.end}
+                key={item.to}
+                prefetch="intent"
+                to={item.to}
+              >
+                {item.label}
+              </NavLink>
+            ))}
+            <span
+              aria-label="Workspace and account"
+              className="f9-dash-mobile-utility"
+              ref={mobileUtilityRef}
+              role="group"
+            >
               {MOBILE_UTILITY_NAV.map((item) => (
                 <NavLink
                   className={navLinkClassName}
@@ -265,8 +262,8 @@ export function DashboardShell({
                 </NavLink>
               ))}
               <SignOutButton />
-            </nav>
-          </>
+            </span>
+          </nav>
         ) : null}
 
         <div aria-live="polite" className="f9-sr-only" role="status">
