@@ -3,6 +3,8 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 const fixtureCookie = "f9_e2e_fixture";
 const fixtureModeHeader = "x-0509-e2e-test-mode";
 const clientSideButtonLabels = new Set(["Copy link", "Copied!", "Download PDF", "Try again", "+ Add competitor"]);
+/** See journey-2-release.spec.ts — bounded window for asserting no navigation. */
+const NAVIGATION_COMMIT_WINDOW_MS = 1_000;
 
 type VisibleActionControl = {
   buttonType: string;
@@ -267,17 +269,35 @@ test.describe("local authenticated E2E harness", () => {
     // which answers with the honest message instead of creating anything.
     const trackCompetitor = page.getByRole("button", { name: "Track this competitor" });
     await expect(trackCompetitor).toBeEnabled();
+
+    // A refused submit must not navigate at all — see journey-2-release.spec.ts
+    // for the full reasoning. Both `/app/watchlists?…` (the submit wrongly
+    // succeeded) and `/app?index` (React Router's index-action marker, the
+    // non-canonical URL that broke Gate-B's coverage annotation) must fail
+    // here. Sampling `page.url()` right after `click()` cannot catch either:
+    // the navigation commits asynchronously, up to ~100ms after the refusal
+    // renders, so an early sample always reports the pre-click value.
+    const navigations: string[] = [];
+    const recordNavigation = (frame: { url(): string }) => {
+      if (frame !== page.mainFrame()) return;
+      const navigated = new URL(page.mainFrame().url());
+      navigations.push(`${navigated.pathname}${navigated.search}`);
+    };
+    page.on("framenavigated", recordNavigation);
     await trackCompetitor.click();
-    // Exact pathname: `/app` is an index route, so the refused submit lands on
-    // `/app?index`. A /\/app/ substring match would also accept
-    // `/app/watchlists`, which is the failure this line exists to catch.
-    const refusedUrl = new URL(page.url());
-    expect(refusedUrl.pathname).toBe("/app");
-    expect(refusedUrl.searchParams.has("watchlist")).toBe(false);
+    await expect(page.locator(".f9-ed-setup-message")).toBeVisible();
     await expect(
       page.getByText("We didn't start anything — there's no website to check yet."),
     ).toBeVisible();
     await expect(page.getByText("Paste the competitor's full address, like brand.com.")).toBeVisible();
+    await page.waitForTimeout(NAVIGATION_COMMIT_WINDOW_MS);
+    page.off("framenavigated", recordNavigation);
+    expect(navigations, "a refused submit must not navigate the browser").toEqual([]);
+
+    const refusedUrl = new URL(page.url());
+    expect(`${refusedUrl.pathname}${refusedUrl.search}`).toBe("/app");
+    expect(refusedUrl.searchParams.has("index")).toBe(false);
+    expect(refusedUrl.searchParams.has("watchlist")).toBe(false);
     await expect(page.getByRole("heading", { name: "Finish the workspace that sends your first brief" })).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });

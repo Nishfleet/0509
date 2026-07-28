@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Form } from "react-router";
+import { Form, useFetcher } from "react-router";
 
 import { PrimaryAction, TertiaryAction } from "~/components/evidence/cta";
 import { SubmitButton } from "~/components/submit-button";
@@ -48,10 +48,35 @@ export function SetupChecklistCard({
   const hasWatchlistCapacity =
     (readiness.counts?.activeWatchlists ?? 0) <
     getPlanLimit(readiness.billing?.plan ?? "free", "watchlists");
-  const setupActionData =
+  /**
+   * The "track this competitor" submit is a FETCHER, not a navigating form.
+   *
+   * `app.dashboard.tsx` is the index child of `/app` (`app/routes.ts`), so a
+   * navigating `<Form method="post">` here resolves its action to `/app?index`
+   * — React Router's index-route marker — and pushes that into the address
+   * bar. On the success path the action redirects, so nobody saw it; on the
+   * refusal path the action returns data and the customer is left looking at
+   * `0509.io/app?index`, a leaked framework detail. That same non-canonical
+   * URL is what made Gate-B's coverage annotation unresolvable and caused the
+   * first BL-025 review BLOCK.
+   *
+   * A fetcher submits without navigating, so the URL stays exactly `/app`.
+   * Redirects thrown by the action are still followed, so creating the first
+   * watchlist still lands on `/app/watchlists?watchlist=…`.
+   */
+  const createFetcher = useFetcher<SetupActionData>();
+  const fetcherData = createFetcher.data;
+  const routeActionData =
     actionData?.intent && SETUP_ACTION_INTENTS.has(actionData.intent)
       ? actionData
       : undefined;
+  // The fetcher owns the create-watchlist result; the route action still owns
+  // the import intents, which post through a navigating <Form>.
+  const setupActionData =
+    fetcherData?.intent && SETUP_ACTION_INTENTS.has(fetcherData.intent)
+      ? fetcherData
+      : routeActionData;
+  const creatingWatchlist = createFetcher.state !== "idle";
   const importPreview = setupActionData?.preview ?? null;
   const hasActionableImportPreview = Boolean(
     importPreview && importPreview.selectedCount > 0,
@@ -151,7 +176,7 @@ export function SetupChecklistCard({
         ) : null}
 
         {!hasActionableImportPreview && nextIsCompetitor ? (
-          <Form className="f9-ed-setup-primary" method="post">
+          <createFetcher.Form className="f9-ed-setup-primary" method="post">
             <input name="intent" type="hidden" value="create-watchlist" />
             <input name="country" type="hidden" value={prefillCountry} />
             <label className="f9-field" htmlFor="setup-competitor-website">
@@ -178,6 +203,11 @@ export function SetupChecklistCard({
             <SubmitButton
               className="f9-ed-cta f9-ed-cta--rank1"
               intent="create-watchlist"
+              // A fetcher submit never enters `useNavigation()`, so the pending
+              // state has to come from the fetcher itself — otherwise the
+              // in-flight treatment fixed in the F2 pass would silently stop
+              // firing for this button.
+              pending={creatingWatchlist}
               pendingLabel="Starting first scan…"
             >
               Track {normalizedWebsite.displayName ?? "this competitor"}
@@ -189,7 +219,7 @@ export function SetupChecklistCard({
             >
               {normalizedWebsite.error ?? "We create the watchlist and start its first scan immediately."}
             </small>
-          </Form>
+          </createFetcher.Form>
         ) : !hasActionableImportPreview && nextItem.action ? (
           <div className="f9-ed-action-row">
             <PrimaryAction to={nextItem.action.href}>{nextItem.action.label}</PrimaryAction>

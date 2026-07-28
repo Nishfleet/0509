@@ -472,6 +472,13 @@ describe("pricing CTA rendering", () => {
         Link: ({ children, to, ...props }: MockLinkProps) =>
           React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
         useActionData: vi.fn().mockReturnValue(overrides.actionData),
+        useFetcher: vi.fn().mockReturnValue({
+          Form: ({ children, ...props }: MockFormProps) =>
+            React.createElement("form", props, children),
+          data: undefined,
+          state: "idle",
+          submit: vi.fn(),
+        }),
         useLoaderData: vi.fn().mockReturnValue(overrides.loaderData),
         useLocation: vi.fn().mockReturnValue({ pathname: "/search", search: "", hash: "", state: null, key: "test" }),
         useNavigate: vi.fn().mockReturnValue(vi.fn()),

@@ -25,6 +25,15 @@ async function mockRouter(loaderData: unknown, actionData?: unknown) {
           children,
         ),
       useActionData: vi.fn().mockReturnValue(actionData),
+      // BL-025: the setup card's create-watchlist submit is a fetcher, so it
+      // never navigates and never leaves `/app?index` in the address bar.
+      useFetcher: vi.fn().mockReturnValue({
+        Form: ({ children, ...props }: MockFormProps) =>
+          React.createElement("form", props, children),
+        data: undefined,
+        state: "idle",
+        submit: vi.fn(),
+      }),
       useLoaderData: vi.fn().mockReturnValue(loaderData),
       useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
       useRevalidator: vi.fn().mockReturnValue({ revalidate: vi.fn() }),

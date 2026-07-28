@@ -13,6 +13,15 @@ import { requireExactReleaseBaseURL } from "./helpers/release-origin";
 
 const fixtureCookie = "f9_e2e_fixture";
 const fixtureModeHeader = "x-0509-e2e-test-mode";
+/**
+ * How long to let a client-side navigation commit before asserting that none
+ * happened. Asserting an ABSENCE needs a bounded window — a retrying matcher
+ * cannot help, because it passes on the first (still-correct) sample. Measured
+ * against the deliberately-broken build in `scripts/bl025-mutation-check.sh`:
+ * the navigation commits within ~100ms of the refusal rendering, so 1s is ten
+ * times the observed worst case and costs one second in one test.
+ */
+const NAVIGATION_COMMIT_WINDOW_MS = 1_000;
 const viewports = [
   { name: "mobile", width: 375, height: 812 },
   { name: "tablet", width: 768, height: 900 },
@@ -329,22 +338,53 @@ test("persistent setup card keeps an empty free workspace honest", async ({
   // The Rank-1 is enabled (§5), and an empty website is refused by the action
   // with the honest message rather than by a dead-looking button.
   await expect(trackCompetitor).toBeEnabled();
-  await trackCompetitor.click();
 
-  // Assert the PATHNAME exactly. `app.dashboard.tsx` is the index child of
-  // `/app` (app/routes.ts), so React Router marks the index action submission
-  // and the browser lands on `/app?index`. A loose /\/app(\?|$)/ regex accepts
-  // that silently — and also accepts `/app/watchlists?…`, which is precisely
-  // the "did not stay on Overview" failure this line exists to catch.
-  const refusedUrl = new URL(page.url());
-  expect(refusedUrl.pathname, "empty submit must not leave Overview").toBe("/app");
-  expect(refusedUrl.searchParams.has("watchlist")).toBe(false);
+  // A refused submit must not navigate the browser AT ALL. Two wrong outcomes
+  // have to fail here: `/app/watchlists?watchlist=…` (the submit wrongly
+  // succeeded — the original point of this check) and `/app?index` (React
+  // Router's index-route action marker; `app.dashboard.tsx` is the index child
+  // of `/app`, so a navigating <Form> lands there). That second URL is what
+  // made Gate-B's coverage annotation unresolvable and caused the first BL-025
+  // BLOCK, so this test has to be able to catch it coming back — which is why
+  // the setup form is a fetcher.
+  //
+  // Sampling `page.url()` straight after `click()` proves nothing: click
+  // resolves on dispatch, and a client-side navigation commits its URL
+  // asynchronously — measured at up to ~100ms AFTER the refusal has already
+  // rendered. An earlier version of this assertion did exactly that and so
+  // passed against the very `/app?index` it was written to reject. Record
+  // main-frame navigations from before the click, wait for the refusal, then
+  // give any pending navigation a bounded window to commit before asserting
+  // that none did. Both halves are proven by scripts/bl025-mutation-check.sh.
+  const navigations: string[] = [];
+  const recordNavigation = (frame: { url(): string }) => {
+    if (frame !== page.mainFrame()) return;
+    const navigated = new URL(page.mainFrame().url());
+    navigations.push(`${navigated.pathname}${navigated.search}`);
+  };
+  page.on("framenavigated", recordNavigation);
+  await trackCompetitor.click();
+  await expect(page.locator(".f9-ed-setup-message")).toBeVisible();
   await expect(
     page.getByText("We didn't start anything — there's no website to check yet."),
   ).toBeVisible();
   await expect(page.getByText("Paste the competitor's full address, like brand.com.")).toBeVisible();
   await expect(page.locator("#setup-checklist")).toBeVisible();
-  await expect(page.locator(".f9-ed-setup-message")).toBeVisible();
+  await page.waitForTimeout(NAVIGATION_COMMIT_WINDOW_MS);
+  page.off("framenavigated", recordNavigation);
+  expect(navigations, "a refused submit must not navigate the browser").toEqual([]);
+
+  // With no navigation recorded the URL cannot have moved, so this is now a
+  // statement of the canonical value rather than a lucky sample. Compare the
+  // complete path+query: `toHaveURL(/\/app(\?|$)/)` and `pathname === "/app"`
+  // both accept `/app?index`.
+  const refusedUrl = new URL(page.url());
+  expect(
+    `${refusedUrl.pathname}${refusedUrl.search}`,
+    "empty submit must leave the browser on the canonical /app, with no index or watchlist marker",
+  ).toBe("/app");
+  expect(refusedUrl.searchParams.has("index"), "no React Router index marker").toBe(false);
+  expect(refusedUrl.searchParams.has("watchlist"), "no watchlist was created").toBe(false);
 
   await expect(page.locator("body")).not.toContainText(/stakeout|under watch|on camera|surveillance/i);
   await expectNoHorizontalOverflow(page);

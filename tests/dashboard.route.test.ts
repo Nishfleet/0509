@@ -99,6 +99,13 @@ async function mockRouter(loaderData: unknown) {
           children,
         ),
       useActionData: vi.fn().mockReturnValue(undefined),
+      useFetcher: vi.fn().mockReturnValue({
+        Form: ({ children, ...props }: MockFormProps) =>
+          React.createElement("form", props, children),
+        data: undefined,
+        state: "idle",
+        submit: vi.fn(),
+      }),
       useLoaderData: vi.fn().mockReturnValue(loaderData),
       useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
       useRevalidator: vi.fn().mockReturnValue({ revalidate: vi.fn() }),
