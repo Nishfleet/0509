@@ -10,30 +10,18 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
-import { DigestDecisionSummary, DigestIntelligence, DigestMovementSummary, DigestProofPacket } from "~/components/digest-intelligence";
-import { DigestStrategyNote } from "~/components/digest-strategy-note";
-import { FirstRunSpine } from "~/components/first-run-spine";
-import { WireEyebrow, WireHeadline } from "~/components/first-run-wire";
+import { DesignedDigestBrief } from "~/components/digest-intelligence";
 import { CopyButton } from "~/components/copy-button";
-import { EmptyState } from "~/components/empty-state";
-import { InsightDepthPanel } from "~/components/insight-depth-panel";
+import { SecondaryAction } from "~/components/evidence/cta";
+import { SpecimenEmptyState } from "~/components/evidence/specimen-empty-state";
 import { LocalTime } from "~/components/local-time";
 import { LockedFeature } from "~/components/locked-feature";
-import { Pill } from "~/components/pill";
-import { ProofGlossary } from "~/components/proof-glossary";
 import { SubmitButton } from "~/components/submit-button";
 import { readDigestIntelligence } from "~/lib/change-intelligence";
 import { toPublicDeliveryAttemptSummary } from "~/lib/delivery-attempt-public";
 import { formatWatchEventTypeLabel } from "~/lib/landing-page-display";
-import { buildDigestInsightDepth } from "~/lib/insight-depth";
-import { canUsePlanFeature, planAllowsDigestCadence } from "~/lib/plan-entitlements";
-import {
-  classifyDigestItemSource,
-  priorityMixLabel,
-  proofMixLabel,
-  summarizeDigestProofMix,
-  summarizePriorityMix,
-} from "~/lib/proof-classification";
+import { canUsePlanFeature } from "~/lib/plan-entitlements";
+import { classifyDigestItemSource } from "~/lib/proof-classification";
 
 export const meta = () => [{ title: "Briefs | Five to Nine" }];
 
@@ -195,9 +183,6 @@ export default function DigestsRoute() {
     sentAt?: string | null;
     createdAt: string;
   }> = data.canAccessDigests ? (data.selectedDigestAttempts ?? []) : [];
-  const insightDepth = data.canAccessDigests && data.selectedDigest
-    ? buildDigestInsightDepth(data.selectedDigest.items)
-    : null;
   const allItems = data.canAccessDigests && data.selectedDigest ? data.selectedDigest.items : [];
   const selectedFilters = {
     competitor: searchParams.get("competitor") ?? "all",
@@ -207,376 +192,293 @@ export default function DigestsRoute() {
   };
   const filterOptions = buildDigestFilterOptions(allItems);
   const visibleItems = applyDigestFilters(allItems, selectedFilters);
-  const proofMix = summarizeDigestProofMix(allItems);
-  const priorityMix = summarizePriorityMix(allItems);
-  // WP-C2 Beat 4 — the "front page" framing shows once, then retires. It renders
-  // only when this is genuinely the only brief AND the visit arrived from the
-  // first-run arc (the `?firstrun=1` flag the Overview bridge / arc carries).
-  // Normal Briefs navigation (no flag) always shows the standard master-detail,
-  // so the front page never repeats on ordinary visits. The filed-time eyebrow
-  // uses the brief's real createdAt, never a "05:09" stamp.
-  const arrivedFromFirstRunArc = searchParams.get("firstrun") === "1";
-  const firstBriefView =
-    data.canAccessDigests &&
-    Boolean(data.selectedDigest) &&
-    data.digests.length === 1 &&
-    arrivedFromFirstRunArc;
-  const firstBriefDomain = data.selectedDigest?.items[0]?.watchlistName ?? null;
+  const deliveryLabel =
+    selectedDigestAttempts.length > 0
+      ? selectedDigestAttempts
+          .map(
+            (attempt) =>
+              describeAttemptStatus(
+                attempt.status,
+                attempt.channel,
+                attempt.webhookStatus ?? null,
+              ),
+          )
+          .join(" · ")
+      : data.canAccessDigests && data.selectedDigest?.delivery?.status === "sent"
+        ? "Sent — predates per-recipient tracking"
+        : null;
+  const deliveryRecipient = selectedDigestAttempts[0]?.targetValue ?? null;
 
   return (
     <DashboardPage>
       <section className="f9-app-stack">
         <DashboardPageHeader
-          lead="Review competitor changes with evidence, check labels, history, and delivery health."
+          kicker="Filed evidence"
+          lead="Read each period as one brief: the finding, the captured changes, the quiet checks, and the facts behind it."
           title="Briefs"
         />
 
-      {actionData?.message ? (
-        <div
-          aria-live={actionData.ok ? "polite" : "assertive"}
-          className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}
-          role={actionData.ok ? "status" : "alert"}
-        >
-          <p>
-            {actionData.ok && actionData.message.startsWith("http") ? (
-              <>
-                <a href={actionData.message} rel="noreferrer" target="_blank">
-                  {actionData.message}
-                </a>{" "}
-                <CopyButton value={actionData.message} />
-              </>
+        {actionData?.message ? (
+          <div
+            aria-live={actionData.ok ? "polite" : "assertive"}
+            className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}
+            role={actionData.ok ? "status" : "alert"}
+          >
+            <p>
+              {actionData.ok && actionData.message.startsWith("http") ? (
+                <>
+                  <a href={actionData.message} rel="noreferrer" target="_blank">
+                    {actionData.message}
+                  </a>{" "}
+                  <CopyButton value={actionData.message} />
+                </>
               ) : (
                 actionData.message
               )}
-            {!actionData.ok && (actionData.error === "plan_limit_exceeded" || actionData.error === "plan_gated") ? (
-              <>
-                {" "}
-                <Link to="/app/billing?source=digests#plans">View plans</Link> to unlock this control.
-              </>
-            ) : null}
-          </p>
-        </div>
-      ) : null}
-
-      {!data.canAccessDigests ? (
-        <LockedFeature
-          eyebrow="Briefs"
-          title="Competitor change briefs"
-          reason="Get daily or weekly competitor-change briefs with evidence and check labels in your inbox"
-          planNeeded="paid plans"
-          upgradeTo="/app/billing?source=digests#plans"
-          upgradeLabel="See plans"
-          headingLevel="h2"
-        />
-      ) : (
-        <>
-          {firstBriefView && data.selectedDigest ? (
-            <article className="f9-app-panel f9-wire-hero f9-wire-frontpage">
-              <FirstRunSpine furthest="brief" />
-              <WireEyebrow>
-                FIRST BRIEF · FILED{" "}
-                <LocalTime iso={data.selectedDigest.createdAt} />
-              </WireEyebrow>
-              <WireHeadline
-                before={
-                  firstBriefDomain
-                    ? `Your first brief on ${firstBriefDomain} is `
-                    : "Your first brief is "
-                }
-                marked="filed."
-              />
-              <p className="f9-muted-copy f9-wire-sub">
-                The score, today&rsquo;s moves, and every creative below are
-                pulled from your live scan — sourced or they don&rsquo;t run.
-              </p>
-              <div className="f9-wire-frontpage-actions">
-                {/* Same-page anchor: scrolls to the full brief detail below —
-                    a functional jump, not a no-op link to the current URL. */}
-                <a className="f9-primary-button" href="#first-brief-detail">
-                  Read the full brief →
-                </a>
-                <Link className="f9-secondary-button" to="/app/watchlists">
-                  Add a competitor to compare
-                </Link>
-              </div>
-              {planAllowsDigestCadence(plan, "daily") ? (
-                // The "before 05:09" promise is the DAILY cadence (Starter /
-                // Agency). Free and Scout are weekly-only, so we keep the
-                // footer absent rather than assert a cadence they don't have —
-                // absence is honest; a wrong cadence is not.
-                <p className="f9-wire-eyebrow f9-wire-cadence">
-                  Tomorrow&rsquo;s brief files automatically before 05:09.
-                </p>
+              {!actionData.ok &&
+              (actionData.error === "plan_limit_exceeded" ||
+                actionData.error === "plan_gated") ? (
+                <>
+                  {" "}
+                  <Link to="/app/billing?source=digests#plans">View plans</Link> to unlock this
+                  control.
+                </>
               ) : null}
-            </article>
-          ) : null}
-          <div className="f9-master-detail">
-          <article className="f9-app-panel f9-side-panel">
-            <div className="f9-panel-toolbar">
-              <div>
-                <h2>Brief history</h2>
-              </div>
-            </div>
+            </p>
+          </div>
+        ) : null}
 
-            <div className="f9-work-list is-compact">
-              {data.digests.map((digest) => {
-                const isActive =
-                  searchParams.get("digest") === digest.id ||
-                  (!searchParams.get("digest") && data.selectedDigest?.id === digest.id);
-                const isPending = pendingDigestId === digest.id;
-
-                return (
-                  <Link
-                    className={`f9-work-row ${isActive ? "is-active" : ""} ${isPending ? "is-pending" : ""}`}
-                    key={digest.id}
-                    preventScrollReset
-                    to={`/app/digests?digest=${digest.id}`}
-                  >
-                    <div>
-                      <h3><LocalTime iso={digest.periodEnd} mode="date" /></h3>
-                      <p className="f9-muted-copy">
-                        {formatDigestSidebarMovement(digest.items)}
-                      </p>
-                      <p className="f9-muted-copy">
+        {!data.canAccessDigests ? (
+          <LockedFeature
+            eyebrow="Briefs"
+            headingLevel="h2"
+            planNeeded="paid plans"
+            reason="Get daily or weekly competitor-change briefs with evidence and check labels in your inbox"
+            title="Competitor change briefs"
+            upgradeLabel="See plans"
+            upgradeTo="/app/billing?source=digests#plans"
+          />
+        ) : data.selectedDigest ? (
+          <>
+            <nav aria-label="Brief history" className="f9-ed-brief-history">
+              <h2>Brief history</h2>
+              <div className="f9-ed-brief-history-track">
+                {data.digests.map((digest) => {
+                  const isActive =
+                    searchParams.get("digest") === digest.id ||
+                    (!searchParams.get("digest") && data.selectedDigest?.id === digest.id);
+                  const isPending = pendingDigestId === digest.id;
+                  return (
+                    <Link
+                      aria-current={isActive ? "page" : undefined}
+                      className={`f9-ed-brief-history-link ${isActive ? "is-active" : ""} ${isPending ? "is-pending" : ""}`}
+                      key={digest.id}
+                      preventScrollReset
+                      to={`/app/digests?digest=${digest.id}`}
+                    >
+                      <LocalTime iso={digest.periodEnd} mode="date" />
+                      <span>{formatDigestSidebarMovement(digest.items)}</span>
+                      <span>
                         {formatDigestSidebarStatus(
                           digestAttemptsByDigestId[digest.id] ?? [],
                           digest.delivery?.status ?? null,
                         )}
-                      </p>
-                    </div>
-                  </Link>
-                );
-              })}
-              {data.digests.length === 0 ? (
-                <EmptyState
-                  description="Your first brief lands after the first competitor scan runs — including an honest 'all quiet' when nothing changed."
-                  title="No briefs yet"
-                  variant="inline"
-                />
-              ) : null}
-            </div>
-          </article>
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </nav>
 
-          <article className="f9-app-panel" id="first-brief-detail">
-            {data.selectedDigest ? (
-              <>
-                <div className="f9-panel-toolbar">
-                  <div>
-                    <span className="f9-app-kicker">Selected brief</span>
-                    <h2>
-                      <LocalTime iso={data.selectedDigest.periodStart} mode="date" /> to{" "}
-                      <LocalTime iso={data.selectedDigest.periodEnd} mode="date" />
-                    </h2>
-                  </div>
-                  <div className="f9-action-row">
-                    {canExport ? (
-                      <>
-                        <a
-                          className="f9-secondary-button"
-                          href={`/export/digest/${data.selectedDigest.id}`}
-                        >
-                          Export CSV
-                        </a>
-                        <a
-                          className="f9-secondary-button"
-                          href={`/export/digest/${data.selectedDigest.id}?format=json`}
-                        >
-                          Export JSON
-                        </a>
-                      </>
-                    ) : (
-                      <Link className="f9-secondary-button" to="/app/billing?source=digests#plans">
-                        Upgrade for exports
-                      </Link>
-                    )}
-                    {canShare ? (
-                      <Form method="post">
-                        <input name="intent" type="hidden" value="share-digest" />
-                        <input name="digestId" type="hidden" value={data.selectedDigest.id} />
-                        <SubmitButton className="f9-primary-button" intent="share-digest" pendingLabel="Creating…">
-                          Share snapshot
-                        </SubmitButton>
-                      </Form>
-                    ) : (
-                      <Link className="f9-primary-button" to="/app/billing?source=digests#plans">
-                        Upgrade to share
-                      </Link>
-                    )}
-                  </div>
-                </div>
+            <DigestFilterRow
+              options={filterOptions}
+              searchParams={searchParams}
+              selected={selectedFilters}
+            />
 
-                <DigestStrategyNote summary={data.selectedDigest.summary ?? null} />
-
-                <div className="f9-detail-split">
-                  <DigestDecisionSummary items={data.selectedDigest.items} />
-                  <DigestProofPacket items={data.selectedDigest.items} />
-                </div>
-
-                <DigestMovementSummary items={data.selectedDigest.items} />
-
-                {insightDepth ? <InsightDepthPanel summary={insightDepth} /> : null}
-
-                <section className="f9-detail-cell">
-                  <div>
-                    <span className="f9-app-kicker">Filters</span>
-                    <h3 style={{ marginTop: 0 }}>Full brief detail</h3>
-                    <p className="f9-muted-copy">
-                      {priorityMixLabel(priorityMix)} · {proofMixLabel(proofMix)}
-                    </p>
-                    {digestCohortNote(data.selectedDigest.summary) ? (
-                      <p className="f9-muted-copy">{digestCohortNote(data.selectedDigest.summary)}</p>
-                    ) : null}
-                  </div>
-                  <Form method="get" className="f9-filter-row">
-                    <input name="digest" type="hidden" value={data.selectedDigest.id} />
-                    <label>
-                      Competitor
-                      <select name="competitor" defaultValue={selectedFilters.competitor}>
-                        <option value="all">All competitors</option>
-                        {filterOptions.competitors.map((name) => (
-                          <option key={name} value={name}>{name}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Urgency
-                      <select name="urgency" defaultValue={selectedFilters.urgency}>
-                        <option value="all">All urgency</option>
-                        <option value="high">High</option>
-                        <option value="medium">Medium</option>
-                        <option value="low">Low</option>
-                      </select>
-                    </label>
-                    <label>
-                      Source
-                      <select name="proofStatus" defaultValue={selectedFilters.proofStatus}>
-                        <option value="all">All source states</option>
-                        {filterOptions.proofStatuses.map((status) => (
-                          <option key={status.value} value={status.value}>{status.label}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Type
-                      <select name="eventType" defaultValue={selectedFilters.eventType}>
-                        <option value="all">All event types</option>
-                        {filterOptions.eventTypes.map((type) => (
-                          <option key={type} value={type}>{formatWatchEventTypeLabel(type)}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <SubmitButton className="f9-secondary-button" getAction="/app/digests" pendingLabel="Filtering…">
-                      Apply filters
-                    </SubmitButton>
-                  </Form>
-                </section>
-
-                <ul className="event-list">
-                  {visibleItems.map((item) => {
-                    const classification = classifyDigestItemSource(item);
-                    const sourceUrl = readDigestSourceUrl(item.metadata);
-                    return (
-                    <li className="f9-event-card" key={item.id}>
-                      <div className="f9-panel-toolbar">
-                        <div>
-                          <span className="f9-app-kicker">{item.watchlistName}</span>
-                          <h3>{item.title}</h3>
-                        </div>
-                        <div className="f9-action-row">
-                          <Pill>{classification.label}</Pill>
-                          <Pill>{formatWatchEventTypeLabel(item.eventType)}</Pill>
-                        </div>
-                      </div>
-                      <p>{item.summary}</p>
-                      <dl className="proof-trail-list">
-                        <div>
-                          <dt>Source type</dt>
-                          <dd>{classification.sourceTypeLabel}</dd>
-                        </div>
-                        <div>
-                          <dt>Captured</dt>
-                          <dd>{readDigestTimestamp(item.metadata) ? <LocalTime iso={readDigestTimestamp(item.metadata)!} /> : "No timestamp captured"}</dd>
-                        </div>
-                        {sourceUrl ? (
-                          <div>
-                            <dt>Source link</dt>
-                            <dd>
-                              <a href={sourceUrl} rel="noreferrer" target="_blank">Open source</a>
-                            </dd>
-                          </div>
-                        ) : null}
-                      </dl>
-                      <DigestIntelligence metadata={item.metadata} proofStatus={classification.status} />
-                    </li>
-                    );
-                  })}
-                </ul>
-                {visibleItems.length === 0 ? (
-                  <EmptyState
-                    description={
-                      allItems.length === 0
-                        ? "We ran every check for this period and found nothing worth acting on."
-                        : "Adjust the filters to see more of this brief."
-                    }
-                    headingLevel="h3"
-                    title={allItems.length === 0 ? "All quiet for this period" : "No changes match these filters"}
-                  />
-                ) : null}
-
-                <div className="f9-detail-split">
-                <section className="f9-detail-cell">
-                  <div>
-                    <span className="f9-app-kicker">Delivery health</span>
-                    <h3 style={{ marginTop: 0 }}>Recent channel outcomes</h3>
-                  </div>
-                  {selectedDigestAttempts.length > 0 ? (
-                    selectedDigestAttempts.map((attempt) => (
-                      <div className="f9-work-row" key={`${attempt.channel}:${attempt.targetValue}`}>
-                        <div>
-                          <h4 style={{ marginBottom: "0.25rem" }}>
-                            {formatDeliveryChannelLabel(attempt.channel)}
-                          </h4>
-                          <p className="f9-muted-copy" style={{ marginBottom: "0.25rem" }}>
-                            {describeAttemptStatus(attempt.status, attempt.channel, attempt.webhookStatus ?? null)}
-                          </p>
-                          <p className="f9-muted-copy">{attempt.targetValue}</p>
-                          {attempt.providerStatusLastSeenAt ? (
-                            <p className="f9-muted-copy">
-                              Provider status checked <LocalTime iso={attempt.providerStatusLastSeenAt} />
-                            </p>
-                          ) : null}
-                          {attempt.errorMessage ? (
-                            <p className="f9-muted-copy">{attempt.errorMessage}</p>
-                          ) : null}
-                        </div>
-                      </div>
-                    ))
+            <DesignedDigestBrief
+              actions={
+                <>
+                  {canExport ? (
+                    <>
+                      <SecondaryAction href={`/export/digest/${data.selectedDigest.id}`} small>
+                        Export CSV
+                      </SecondaryAction>
+                      <SecondaryAction
+                        href={`/export/digest/${data.selectedDigest.id}?format=json`}
+                        small
+                      >
+                        Export JSON
+                      </SecondaryAction>
+                    </>
                   ) : (
-                    <p className="f9-muted-copy">
-                      {data.selectedDigest.delivery?.status === "sent"
-                        ? "This brief predates per-recipient tracking, so we can't confirm who received it."
-                        : "No sends recorded for this brief yet."}
-                    </p>
+                    <SecondaryAction small to="/app/billing?source=digests#plans">
+                      Upgrade for exports
+                    </SecondaryAction>
                   )}
-                </section>
-                <ProofGlossary />
-                </div>
-              </>
-            ) : (
-              <EmptyState
-                action={{ label: "Add competitor", to: "/app/watchlists" }}
-                description="Add a competitor and we file a brief after each check — the moves worth acting on, and an honest 'all quiet' when nothing changed."
-                sample={{ label: "See a sample brief", to: "/#demo" }}
-                title="Your first brief lands after the first scan"
-              />
-            )}
-          </article>
-          </div>
-        </>
-      )}
+                  {canShare ? (
+                    <Form method="post">
+                      <input name="intent" type="hidden" value="share-digest" />
+                      <input name="digestId" type="hidden" value={data.selectedDigest.id} />
+                      <SubmitButton
+                        className="f9-ed-cta f9-ed-cta--rank1 is-small"
+                        intent="share-digest"
+                        pendingLabel="Creating…"
+                      >
+                        Share snapshot
+                      </SubmitButton>
+                    </Form>
+                  ) : (
+                    <SecondaryAction small to="/app/billing?source=digests#plans">
+                      Upgrade to share
+                    </SecondaryAction>
+                  )}
+                </>
+              }
+              allItems={allItems}
+              cohortNote={digestCohortNote(data.selectedDigest.summary)}
+              createdAt={data.selectedDigest.createdAt}
+              deliveryLabel={deliveryLabel}
+              deliveryRecipient={deliveryRecipient}
+              id="first-brief-detail"
+              items={visibleItems}
+              periodEnd={data.selectedDigest.periodEnd}
+              periodStart={data.selectedDigest.periodStart}
+              summary={data.selectedDigest.summary ?? null}
+            />
+          </>
+        ) : (
+          <>
+            <nav aria-label="Brief history" className="f9-ed-brief-history">
+              <h2>Brief history</h2>
+              <p className="f9-ed-brief-history-empty">
+                The first completed check files the first date here.
+              </p>
+            </nav>
+            <SpecimenEmptyState
+              copy="Add a competitor and the first completed check files one brief here — a finding when something moved, or an honest all-quiet line when it did not."
+              headline="Your first brief lands after the first scan"
+              primaryAction={{ label: "Add competitor", to: "/search" }}
+              secondaryAction={{ label: "See a sample brief", to: "/#demo" }}
+              specimenLabel="Brief 01 — reserved"
+              stateLabel="Brief desk · no completed check yet"
+            />
+          </>
+        )}
       </section>
     </DashboardPage>
   );
+}
+
+function DigestFilterRow({
+  options,
+  searchParams,
+  selected,
+}: {
+  options: ReturnType<typeof buildDigestFilterOptions>;
+  searchParams: URLSearchParams;
+  selected: {
+    competitor: string;
+    urgency: string;
+    proofStatus: string;
+    eventType: string;
+  };
+}) {
+  const filters = [
+    {
+      key: "competitor",
+      label: "Competitor",
+      selected: selected.competitor,
+      allLabel: "All competitors",
+      values: options.competitors.map((value) => ({ value, label: value })),
+    },
+    {
+      key: "urgency",
+      label: "Urgency",
+      selected: selected.urgency,
+      allLabel: "All urgency",
+      values: ["high", "medium", "low"].map((value) => ({
+        value,
+        label: `${value[0].toUpperCase()}${value.slice(1)}`,
+      })),
+    },
+    {
+      key: "proofStatus",
+      label: "Source",
+      selected: selected.proofStatus,
+      allLabel: "All source states",
+      values: options.proofStatuses,
+    },
+    {
+      key: "eventType",
+      label: "Type",
+      selected: selected.eventType,
+      allLabel: "All event types",
+      values: options.eventTypes.map((value) => ({
+        value,
+        label: formatWatchEventTypeLabel(value),
+      })),
+    },
+  ] as const;
+  const hasActiveFilter = filters.some((filter) => filter.selected !== "all");
+
+  return (
+    <nav aria-label="Filter this brief" className="f9-ed-brief-filters">
+      <span className="f9-ed-micro">Filter</span>
+      {filters.map((filter) => {
+        const currentLabel =
+          filter.selected === "all"
+            ? filter.allLabel
+            : filter.values.find((option) => option.value === filter.selected)?.label ??
+              filter.allLabel;
+        return (
+          <details className="f9-ed-brief-filter" key={filter.key}>
+            <summary>
+              {filter.label}: {currentLabel}
+            </summary>
+            <div className="f9-ed-brief-filter-menu">
+              <Link preventScrollReset to={digestFilterHref(searchParams, filter.key, "all")}>
+                {filter.allLabel}
+              </Link>
+              {filter.values.map((option) => (
+                <Link
+                  aria-current={option.value === filter.selected ? "true" : undefined}
+                  key={option.value}
+                  preventScrollReset
+                  to={digestFilterHref(searchParams, filter.key, option.value)}
+                >
+                  {option.label}
+                </Link>
+              ))}
+            </div>
+          </details>
+        );
+      })}
+      {hasActiveFilter ? (
+        <Link
+          className="f9-ed-brief-filter-reset"
+          preventScrollReset
+          to={digestFilterResetHref(searchParams)}
+        >
+          Clear filters
+        </Link>
+      ) : null}
+    </nav>
+  );
+}
+
+function digestFilterHref(searchParams: URLSearchParams, key: string, value: string) {
+  const next = new URLSearchParams(searchParams);
+  if (value === "all") next.delete(key);
+  else next.set(key, value);
+  return `/app/digests${next.size > 0 ? `?${next.toString()}` : ""}`;
+}
+
+function digestFilterResetHref(searchParams: URLSearchParams) {
+  const next = new URLSearchParams();
+  const digestId = searchParams.get("digest");
+  if (digestId) next.set("digest", digestId);
+  return `/app/digests${next.size > 0 ? `?${next.toString()}` : ""}`;
 }
 
 function digestCohortNote(summary: Record<string, unknown> | undefined) {
@@ -628,21 +530,14 @@ function formatDigestSidebarStatus(
     .join(" · ");
 }
 
-function formatDigestSidebarMovement(items: Array<{ metadata?: Record<string, unknown> }>) {
+function formatDigestSidebarMovement(
+  items: Array<{ watchlistName?: string; metadata?: Record<string, unknown> }>,
+) {
   if (items.length === 0) {
     return "All quiet";
   }
-  const proofMix = summarizeDigestProofMix(
-    items.map((item) => ({
-      watchlistName: "",
-      eventType: "ad_new",
-      title: "",
-      summary: "",
-      metadata: item.metadata ?? {},
-      createdAt: "",
-    })),
-  );
-  return `${items.length} change${items.length === 1 ? "" : "s"} · ${proofMixLabel(proofMix)}`;
+  const competitors = new Set(items.map((item) => item.watchlistName).filter(Boolean));
+  return `${items.length} change${items.length === 1 ? "" : "s"} · ${competitors.size} competitor${competitors.size === 1 ? "" : "s"}`;
 }
 
 function formatDeliveryChannelLabel(channel: string) {
@@ -746,11 +641,6 @@ function digestUrgency(metadata: Record<string, unknown> | undefined) {
   if (band.includes("high")) return "high";
   if (band.includes("medium")) return "medium";
   return "low";
-}
-
-function readDigestTimestamp(metadata: Record<string, unknown> | undefined) {
-  const value = metadata?.confirmedAt ?? metadata?.capturedAt ?? metadata?.createdAt;
-  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 export function readDigestSourceUrl(metadata: Record<string, unknown> | undefined) {

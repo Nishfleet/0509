@@ -2,7 +2,112 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { DigestDecisionSummary, DigestIntelligence, DigestMovementSummary, DigestProofPacket } from "~/components/digest-intelligence";
+import {
+  DesignedDigestBrief,
+  DigestDecisionSummary,
+  DigestIntelligence,
+  DigestMovementSummary,
+  DigestProofPacket,
+  resolveDigestDiffCaptures,
+} from "~/components/digest-intelligence";
+
+describe("DesignedDigestBrief", () => {
+  const baseItem = {
+    id: "item-1",
+    title: "Offer changed",
+    summary: "The competitor lowered the anchor price.",
+    eventType: "landing_page_offer_changed",
+    watchlistName: "Nykaa",
+    createdAt: "2026-07-27T06:05:00.000Z",
+    metadata: {
+      from: "₹1,499",
+      to: "₹1,199",
+      priorityScore: 92,
+      priorityBand: "High priority",
+      proofCaptureId: "proof-1",
+      confirmedAt: "2026-07-27T06:05:00.000Z",
+    },
+  };
+
+  it("renders a diff only when both stored capture timestamps exist", () => {
+    const complete = {
+      ...baseItem,
+      metadata: {
+        ...baseItem.metadata,
+        beforeCapturedAt: "2026-07-26T04:00:00.000Z",
+      },
+    };
+    const markup = renderToStaticMarkup(
+      createElement(DesignedDigestBrief, {
+        id: "brief",
+        periodStart: "2026-07-26T00:00:00.000Z",
+        periodEnd: "2026-07-27T00:00:00.000Z",
+        createdAt: "2026-07-27T07:00:00.000Z",
+        items: [complete],
+        allItems: [complete],
+      }),
+    );
+
+    expect(markup).toContain("f9-ed-diff-plate");
+    expect(markup).toContain('dateTime="2026-07-26T04:00:00.000Z"');
+    expect(markup).toContain('dateTime="2026-07-27T06:05:00.000Z"');
+    expect(markup).toContain("This is the stored capture, not a re-render.");
+  });
+
+  it("degrades a from/to pair with one timestamp to one quiet line", () => {
+    expect(resolveDigestDiffCaptures(baseItem)).toBeNull();
+    const markup = renderToStaticMarkup(
+      createElement(DesignedDigestBrief, {
+        id: "brief",
+        periodStart: "2026-07-26T00:00:00.000Z",
+        periodEnd: "2026-07-27T00:00:00.000Z",
+        createdAt: "2026-07-27T07:00:00.000Z",
+        items: [baseItem],
+        allItems: [baseItem],
+      }),
+    );
+
+    expect(markup).not.toContain("f9-ed-diff-plate");
+    expect(markup).toContain("not two stored capture times");
+    expect(markup.match(/f9-ed-fact-rail"/g)).toHaveLength(1);
+    expect(markup.match(/evidence unavailable/gi) ?? []).toHaveLength(0);
+  });
+
+  it("refuses a comparison when the supposed before capture is not earlier", () => {
+    expect(
+      resolveDigestDiffCaptures({
+        ...baseItem,
+        metadata: {
+          ...baseItem.metadata,
+          beforeCapturedAt: "2026-07-28T04:00:00.000Z",
+        },
+      }),
+    ).toBeNull();
+  });
+
+  it("states an unread source once instead of repeating empty evidence labels", () => {
+    const unread = {
+      ...baseItem,
+      metadata: {
+        priorityScore: null,
+        proofStatus: "failed",
+      },
+    };
+    const markup = renderToStaticMarkup(
+      createElement(DesignedDigestBrief, {
+        id: "brief",
+        periodStart: "2026-07-26T00:00:00.000Z",
+        periodEnd: "2026-07-27T00:00:00.000Z",
+        createdAt: "2026-07-27T07:00:00.000Z",
+        items: [unread],
+        allItems: [unread],
+      }),
+    );
+
+    expect(markup.match(/We could not read this source on/g)).toHaveLength(1);
+    expect(markup).not.toContain("Source unavailable");
+  });
+});
 
 describe("DigestDecisionSummary", () => {
   it("leads with the highest-priority customer decision", () => {

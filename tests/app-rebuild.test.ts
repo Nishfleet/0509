@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
@@ -20,11 +20,10 @@ const sourcesCompatibilityRoute = readFileSync("app/routes/app.sources.tsx", "ut
 const reportsRoute = readFileSync("app/routes/app.reports.tsx", "utf8");
 const opsRoute = readFileSync("app/routes/app.ops.tsx", "utf8");
 const digestIntelligence = readFileSync("app/components/digest-intelligence.tsx", "utf8");
-const insightDepthPanel = readFileSync("app/components/insight-depth-panel.tsx", "utf8");
 const reportView = readFileSync("app/components/report-view.tsx", "utf8");
 const signOutButton = readFileSync("app/components/sign-out-button.tsx", "utf8");
 const appCss = readFileSync("app/app.css", "utf8");
-const appSurface = `${appLayout}\n${shellComponent}\n${dashboardRoute}\n${onboardRoute}\n${collectionsRoute}\n${clientsRoute}\n${digestsRoute}\n${watchlistsRoute}\n${notificationsUiRoute}\n${sourceAccessUiRoute}\n${developerAccessUiRoute}\n${sourcesCompatibilityRoute}\n${reportsRoute}\n${opsRoute}\n${digestIntelligence}\n${insightDepthPanel}\n${reportView}\n${signOutButton}`;
+const appSurface = `${appLayout}\n${shellComponent}\n${dashboardRoute}\n${onboardRoute}\n${collectionsRoute}\n${clientsRoute}\n${digestsRoute}\n${watchlistsRoute}\n${notificationsUiRoute}\n${sourceAccessUiRoute}\n${developerAccessUiRoute}\n${sourcesCompatibilityRoute}\n${reportsRoute}\n${opsRoute}\n${digestIntelligence}\n${reportView}\n${signOutButton}`;
 const appClasses = Array.from(appSurface.matchAll(/className=(?:"([^"]+)"|{`([^`]+)`})/g)).flatMap((match) =>
   (match[1] ?? match[2])
     .split(/\s+/)
@@ -112,11 +111,11 @@ describe("app rebuild", () => {
     expect(appSurface).toContain("Export JSON");
     expect(appSurface).not.toContain("?format=slack");
     expect(appSurface).not.toContain("Slack copy");
-    expect(appSurface).toContain("Insight depth");
-    expect(appSurface).toContain("Top hooks");
-    expect(appSurface).toContain("Media mix");
-    expect(appSurface).toContain("Observed campaign duration");
-    expect(appSurface).toContain("Landing-page history");
+    expect(appSurface).not.toContain("InsightDepthPanel");
+    expect(digestsRoute).not.toContain("Insight depth");
+    expect(existsSync("app/components/insight-depth-panel.tsx")).toBe(false);
+    expect(existsSync("app/components/digest-strategy-note.tsx")).toBe(false);
+    expect(appCss).not.toContain(".f9-insight-grid");
     expect(appSurface).toContain("Developer access");
     expect(appSurface).toContain("approved actions");
     expect(appSurface).toContain("Create API key");

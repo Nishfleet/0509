@@ -139,7 +139,10 @@ export const RELEASE_COVERAGE_MATRIX = Object.freeze({
       // the Delivery tab, so the strict registry must match the captured URL.
       finalUrl: {
         pathname: "/app/watchlists",
-        search: { watchlist: "e2e-watchlist-scout-1", tab: "delivery" },
+        search: {
+          watchlist: "e2e-watchlist-scout-1",
+          tab: "delivery",
+        },
       },
     },
     {
@@ -156,7 +159,10 @@ export const RELEASE_COVERAGE_MATRIX = Object.freeze({
       viewport,
       finalUrl: {
         pathname: "/app/watchlists",
-        search: { watchlist: "e2e-watchlist-agency-1", tab: "delivery" },
+        search: {
+          watchlist: "e2e-watchlist-agency-1",
+          tab: "delivery",
+        },
       },
     },
     {
