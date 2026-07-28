@@ -331,7 +331,9 @@ test.describe("local authenticated E2E harness", () => {
       ),
     ).toBeVisible();
     await expect(
-      page.locator("#f9-main-content").getByText("Landing page offer changed", { exact: true }),
+      page
+        .locator("#f9-main-content")
+        .getByRole("heading", { level: 2, name: "Landing page offer changed", exact: true }),
     ).toBeVisible();
 
     await page.goto("/app/billing");
