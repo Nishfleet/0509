@@ -11,9 +11,14 @@ on:
       - "migrations/**"
       - ".github/workflows/d1-backup-validate.yml"
 
+concurrency:
+  group: d1-backup-validate-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
-    runs-on: ${{ (startsWith(github.head_ref, 'cloud-council/') && vars.RECOVERY_RUNNER) || 'ubuntu-latest' }}
+    if: github.repository == 'nish3451/0509' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
