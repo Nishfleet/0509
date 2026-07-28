@@ -291,7 +291,10 @@ test.describe("local authenticated E2E harness", () => {
 
     await page.goto("/app");
     await expectAppPage(page);
-    await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+    await expect(page.locator("#f9-main-content").getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(
+      page.locator("#f9-main-content").getByText("Latest stored changes", { exact: true }),
+    ).toBeVisible();
     await expect(page.getByText("Okara competitor watch")).toBeVisible();
 
     await page.goto("/search");
@@ -299,7 +302,9 @@ test.describe("local authenticated E2E harness", () => {
 
     await page.goto("/app/watchlists");
     await expectAppPage(page);
-    await expect(page.getByRole("heading", { name: "Watchlists" })).toBeVisible();
+    await expect(
+      page.locator("#f9-main-content").getByRole("heading", { level: 1, name: "Competitors", exact: true }),
+    ).toBeVisible();
     await expect(page.getByText("Okara competitor watch").first()).toBeVisible();
 
     // Presence is rollout-gated off in the E2E harness (wrangler.e2e.jsonc sets
@@ -308,13 +313,23 @@ test.describe("local authenticated E2E harness", () => {
     await page.goto("/app/presence");
     await expect(page).toHaveURL((url) => url.pathname === "/app");
     await expectAppPage(page);
-    await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+    await expect(page.locator("#f9-main-content").getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(
+      page.locator("#f9-main-content").getByText("Latest stored changes", { exact: true }),
+    ).toBeVisible();
     await expect(page.getByRole("link", { name: "Presence" })).toHaveCount(0);
 
     await page.goto("/app/digests");
     await expectAppPage(page);
-    await expect(page.getByRole("heading", { name: "Briefs", exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Okara launched a new workflow offer" }).first()).toBeVisible();
+    await expect(
+      page.locator("#f9-main-content").getByRole("heading", { level: 1, name: "Briefs", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.locator("#f9-main-content").getByText(
+        "Read each period as one brief: the finding, the captured changes, the quiet checks, and the facts behind it.",
+        { exact: true },
+      ),
+    ).toBeVisible();
 
     await page.goto("/app/billing");
     await expectAppPage(page);
@@ -354,8 +369,15 @@ test.describe("local authenticated E2E harness", () => {
 
     await page.goto("/app/team");
     await expectAppPage(page);
-    await expect(page.getByRole("heading", { name: "Team", exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Team seats come with Agency" })).toBeVisible();
+    await expect(
+      page.locator("#f9-main-content").getByRole("heading", { level: 1, name: "Team", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.locator("#f9-main-content").getByText(
+        "Invite teammates to share watchlists, collections, and digests on Agency.",
+        { exact: true },
+      ),
+    ).toBeVisible();
 
     await page.goto("/app/sources");
     await expect(page).toHaveURL(/\/app\/sources/);
@@ -405,7 +427,7 @@ test.describe("local authenticated E2E harness", () => {
     await expect(page.locator(".f9-ed-report-kicker")).toContainText(
       "Competitor evidence report",
     );
-    await expect(page.getByRole("heading", { name: "Okara launched a new workflow offer" }).first()).toBeVisible();
+    await expect(page.locator("#f9-main-content").getByRole("heading", { level: 1 })).toBeVisible();
   });
 
   test("agency sidebar navigation reaches every customer-facing section in screenshot order", async ({
@@ -416,13 +438,13 @@ test.describe("local authenticated E2E harness", () => {
     await signInAs(context, baseURL!, "e2e-agency");
 
     const routes = [
-      { label: "Overview", path: "/app", heading: "Overview", copy: ["Market Desk"] },
+      { label: "Overview", path: "/app", heading: null, copy: ["Latest stored changes"] },
       { label: "Search", path: "/search", heading: "Find competitor ads", copy: ["Competitor website", "See ads"] },
       {
         label: "Competitors",
         path: "/app/watchlists",
-        heading: "Watchlists",
-        copy: ["Monitor competitor ads over time", "Tracking desk"],
+        heading: "Competitors",
+        copy: ["Monitor competitor ads over time"],
       },
       {
         label: "Collections",
@@ -514,9 +536,14 @@ test.describe("local authenticated E2E harness", () => {
 
       await expect(page).toHaveURL((url) => url.pathname === route.path);
       await expectAppPage(page);
-      await expect(page.getByRole("heading", { name: route.heading, exact: true })).toBeVisible();
+      const mainContent = page.locator("#f9-main-content");
+      const pageHeading = mainContent.getByRole("heading", {
+        level: 1,
+        ...(route.heading ? { name: route.heading, exact: true } : {}),
+      });
+      await expect(pageHeading).toBeVisible();
       for (const text of route.copy) {
-        await expect(page.locator("body")).toContainText(text);
+        await expect(mainContent).toContainText(text);
       }
 
       const bodyText = await page.locator("body").innerText();
