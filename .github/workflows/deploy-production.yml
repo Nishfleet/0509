@@ -20,7 +20,11 @@ jobs:
     name: Deploy Worker
     if: github.repository == 'nish3451/0509' && github.ref == 'refs/heads/main'
     runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}
-    timeout-minutes: 45
+    # Budget = deploy-window wait (up to 3h behind a running fleet lane on the
+    # shared VPS runner) + the ~40min release pipeline. The old 45min budget
+    # is what turned lane contention into an opaque cancelled-step failure
+    # (run 30318665935).
+    timeout-minutes: 240
     environment:
       name: production
       url: https://0509.io
@@ -28,6 +32,10 @@ jobs:
       - uses: actions/checkout@v6.0.3
         with:
           fetch-depth: 0
+
+      - name: Acquire deploy window (serialize with fleet lanes on the VPS runner)
+        shell: bash
+        run: ./scripts/deploy-window-lock.sh acquire
 
       - name: Verify Cloudflare deploy secrets
         shell: bash
@@ -170,3 +178,8 @@ jobs:
             test-results/production-soak-*.json
           if-no-files-found: warn
           retention-days: 90
+
+      - name: Release deploy window
+        if: always()
+        shell: bash
+        run: ./scripts/deploy-window-lock.sh release
