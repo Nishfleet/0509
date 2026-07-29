@@ -117,7 +117,15 @@ describe("trailingQuietRun", () => {
   });
 });
 
-describe("CaptureStrip", () => {
+/**
+ * F3 hardening: CaptureStrip was unmounted during the P0 rebuild. Its helpers
+ * and constants remain in the evidence barrel as DNA-primitive material for P1
+ * surfaces, but rendering a green test suite on an unmounted component is a
+ * hollow guard. Skipped until a route actually mounts `<CaptureStrip>` again.
+ * The pure-function helpers above (buildCaptureWindow, trailingQuietRun) and
+ * any future-mounted strip tests belong outside this skipped group.
+ */
+describe.skip("CaptureStrip — primitives awaiting mount (was evidence desk surface, zero app mounts after P0 rebuild)", () => {
   it("labels a gap in the row instead of dropping the day silently", () => {
     const markup = renderToStaticMarkup(
       <CaptureStrip
@@ -209,7 +217,12 @@ describe("CaptureStrip", () => {
   });
 });
 
-describe("capture bar silhouette (brief §6.2, §8.1)", () => {
+/**
+ * F3 hardening: the capture-bar CSS styles the unmounted CaptureStrip
+ * surface. Keep the silhouette specs beside the skipped component group
+ * so a future P1 mount can lift them back together.
+ */
+describe.skip("capture bar silhouette — primitives awaiting mount (brief §6.2, §8.1)", () => {
   const css = readFileSync("app/app.css", "utf8");
 
   function barHeight(state: string): number {

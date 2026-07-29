@@ -227,6 +227,13 @@ describe("shared report agency identity", () => {
 		expect(printCss).not.toMatch(/\.f9-share-header,[\s\S]{0,160}display:\s*none/);
 	});
 
+	/**
+	 * F2 hardening: the previous regex matched `display: none !important`
+	 * anywhere in the PDF CSS slice, so a `display: block !important`
+	 * mutation would still pass by consuming a later button rule. Now we
+	 * extract just the rail rule body and assert inside it — a visible
+	 * rail fails.
+	 */
 	it("keeps the screen-rendered PDF variant full-width without its contents rail", () => {
 		const appCss = readFileSync("app/app.css", "utf8");
 		const pdfStart = appCss.indexOf(".f9-share-pdf {");
@@ -235,9 +242,14 @@ describe("shared report agency identity", () => {
 		expect(pdfCss).toMatch(
 			/\.f9-share-pdf \.f9-ed-report\s*{[\s\S]*?display:\s*block;[\s\S]*?width:\s*100%;/,
 		);
-		expect(pdfCss).toMatch(
-			/\.f9-share-pdf \.f9-ed-report-rail\s*{[\s\S]*?display:\s*none !important;/,
-		);
+
+		const railIdx = pdfCss.indexOf(".f9-share-pdf .f9-ed-report-rail");
+		expect(railIdx).toBeGreaterThanOrEqual(0);
+		const railBodyStart = pdfCss.indexOf("{", railIdx) + 1;
+		const railBodyEnd = pdfCss.indexOf("}", railBodyStart);
+		const railBody = pdfCss.slice(railBodyStart, railBodyEnd);
+		expect(railBody).toMatch(/display:\s*none !important/);
+
 		expect(pdfCss).toMatch(
 			/\.f9-share-pdf \.f9-ed-evidence-body\s*{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\);/,
 		);

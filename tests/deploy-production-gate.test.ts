@@ -987,9 +987,13 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(verifyEvidenceIndex).toBeGreaterThan(deployIndex);
     expect(releaseIndex).toBeGreaterThan(verifyEvidenceIndex);
     expect(workflow).toContain("timeout-minutes: 270");
-    expect(workflow.slice(acquireIndex, verifySecretsIndex)).toContain(
-      "run: ./scripts/deploy-window-lock.sh acquire",
-    );
+    /**
+     * F5 hardening: toContain matched any suffix, so acquire-broken passed.
+     * Now we assert the full run line with its trailing newline.
+     */
+    expect(
+      workflow.slice(acquireIndex, verifySecretsIndex),
+    ).toMatch(/run:\s*\.\/scripts\/deploy-window-lock\.sh acquire\n/);
     expect(verifySecretsStep).toContain(
       "CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}",
     );
@@ -1010,8 +1014,8 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     );
     expect(deployStep).toContain("GITHUB_TOKEN: ${{ github.token }}");
     expect(releaseStep).toContain("if: always()");
-    expect(releaseStep).toContain(
-      "run: ./scripts/deploy-window-lock.sh release",
+    expect(releaseStep).toMatch(
+      /run:\s*\.\/scripts\/deploy-window-lock\.sh release\n/,
     );
     expect(workflow).toContain("actions: read");
     expect(workflow).toContain("fetch-depth: 0");
