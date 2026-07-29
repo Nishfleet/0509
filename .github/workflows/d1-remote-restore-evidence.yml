@@ -1,0 +1,87 @@
+name: D1 remote restore evidence
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Explicit low-traffic recovery windows: Monday/Thursday 02:17 IST.
+    - cron: "47 20 * * SUN,WED"
+
+concurrency:
+  group: d1-remote-restore-evidence
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  restore:
+    if: github.repository == 'nish3451/0509' && github.ref == 'refs/heads/main'
+    runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 300
+    environment: d1-backup-r2
+    env:
+      D1_DATABASE_NAME: "0509"
+      R2_BACKUP_BUCKET: "0509-landing-page-artifacts"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: ".node-version"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: node scripts/validate-d1-backup.mjs
+      - name: Create fresh backup and prove an isolated remote restore
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          D1_BACKUP_AUTOMATION_APPROVED: "0509-weekly-d1-to-r2"
+          D1_REMOTE_RESTORE_AUTOMATION_APPROVED: "0509-remote-restore-evidence"
+          D1_REMOTE_RESTORE_MAX_SQL_BYTES: ${{ vars.D1_REMOTE_RESTORE_MAX_SQL_BYTES }}
+        run: |
+          set -euo pipefail
+          umask 077
+          npm run restore:d1:remote-evidence -- \
+            --output test-results/d1-remote-restore-evidence.json
+      - name: Archive permission-preserving restore evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$(stat -c '%a' test-results/d1-remote-restore-evidence.json)" = "600"
+          tar --format=posix -czf \
+            "test-results/d1-remote-restore-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}.tar.gz" \
+            -C test-results \
+            d1-remote-restore-evidence.json
+      - name: Preserve private restore evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}
+          path: test-results/d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}.tar.gz
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 8
+
+  cleanup:
+    name: Confirm scratch D1 cleanup
+    if: always() && github.repository == 'nish3451/0509' && github.ref == 'refs/heads/main'
+    needs: restore
+    runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 120
+    environment: d1-backup-r2
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: ".node-version"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Delete every exact scratch database from this run
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          D1_REMOTE_RESTORE_AUTOMATION_APPROVED: "0509-remote-restore-evidence"
+        run: npm run restore:d1:remote-evidence -- --cleanup-only --sweep-stale

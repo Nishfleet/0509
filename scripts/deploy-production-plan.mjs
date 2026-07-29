@@ -253,7 +253,7 @@ export function buildProductionDeployPlan({
 
 /**
  * @param {unknown} evidence
- * @param {{ candidateFingerprint: string, wranglerWorktreeSha256: string, latestMigration?: string, migrationCount?: number, migrationBearing?: boolean, now?: Date }} expected
+ * @param {{ candidateFingerprint: string, wranglerWorktreeSha256: string, latestMigration?: string, migrationCount?: number, migrationBearing?: boolean, restoreCritical?: boolean, now?: Date, minimumValidityMs?: number }} expected
  */
 export function validateRemoteRestoreEvidence(evidence, expected) {
   const issues = [];
@@ -268,11 +268,19 @@ export function validateRemoteRestoreEvidence(evidence, expected) {
   const now =
     expected.now instanceof Date ? expected.now.getTime() : Date.now();
   const migrationBearing = expected.migrationBearing !== false;
-  const maxAgeMs = (migrationBearing ? 24 : 7 * 24) * 60 * 60 * 1000;
+  const exactEvidenceRequired =
+    migrationBearing || expected.restoreCritical === true;
+  const maxAgeMs =
+    (exactEvidenceRequired ? 24 : 7 * 24) * 60 * 60 * 1000;
+  const minimumValidityMs =
+    Number.isSafeInteger(expected.minimumValidityMs) &&
+    Number(expected.minimumValidityMs) >= 0
+      ? Number(expected.minimumValidityMs)
+      : 0;
   if (
     !Number.isFinite(generatedAt) ||
     generatedAt > now + 5 * 60 * 1000 ||
-    now - generatedAt > maxAgeMs
+    now + minimumValidityMs - generatedAt > maxAgeMs
   ) {
     issues.push("remote_restore_evidence_stale");
   }
@@ -296,13 +304,12 @@ export function validateRemoteRestoreEvidence(evidence, expected) {
     issues.push("remote_restore_config_fingerprint");
   }
   if (
-    migrationBearing &&
+    exactEvidenceRequired &&
     value.candidateFingerprint !== expected.candidateFingerprint
   ) {
     issues.push("remote_restore_candidate_mismatch");
   }
   if (
-    migrationBearing &&
     value.wranglerWorktreeSha256 !== expected.wranglerWorktreeSha256
   ) {
     issues.push("remote_restore_config_mismatch");
@@ -326,6 +333,8 @@ export function validateRemoteRestoreEvidence(evidence, expected) {
     "transformedSqlSha256",
     "rowCountDigestSha256",
     "migrationLedgerSha256",
+    "schemaDigestSha256",
+    "contentDigestSha256",
   ]) {
     if (
       !FINGERPRINT_PATTERN.test(

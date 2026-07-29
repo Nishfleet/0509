@@ -5,6 +5,7 @@ import { isDeepStrictEqual } from "node:util";
 
 const requiredSupportFiles = [
   "scripts/d1-backup-to-r2.mjs",
+  "scripts/d1-backup-local-storage.mjs",
   "scripts/d1-backup.mjs",
   "scripts/d1-backup-lifecycle-canary.mjs",
   "scripts/d1-restore-transform.mjs",

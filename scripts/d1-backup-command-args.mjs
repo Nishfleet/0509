@@ -1,7 +1,19 @@
+import { homedir } from "node:os";
+import { resolve } from "node:path";
+
 export const BACKUP_AUTOMATION_APPROVAL = "0509-weekly-d1-to-r2";
 export const MANUAL_BACKUP_APPROVAL = "0509-manual-d1-export";
 export const BACKUP_DATABASE_NAME = "0509";
 export const BACKUP_BUCKET_NAME = "0509-landing-page-artifacts";
+
+/** @param {string} homeDirectory */
+export function resolveBackupLocalDirectory(homeDirectory = homedir()) {
+  const home = String(homeDirectory).trim();
+  if (!home || home.includes("\0")) {
+    throw new Error("backup_local_directory_invalid");
+  }
+  return resolve(home, ".local", "state", "0509", "backups", "d1");
+}
 
 /** @param {string} databaseName @param {string} stamp */
 export function buildBackupObjectKey(databaseName, stamp) {

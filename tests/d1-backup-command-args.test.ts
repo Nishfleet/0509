@@ -1,4 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
   BACKUP_AUTOMATION_APPROVAL,
@@ -12,9 +16,44 @@ import {
   buildR2DeleteArgs,
   buildR2GetArgs,
   buildR2PutArgs,
+  resolveBackupLocalDirectory,
 } from "../scripts/d1-backup-command-args.mjs";
+import {
+  prepareBackupLocalDirectory,
+  secureBackupLocalFile,
+} from "../scripts/d1-backup-local-storage.mjs";
 
 describe("D1 backup command arguments", () => {
+  const temporaryDirectories: string[] = [];
+
+  afterEach(async () => {
+    await Promise.all(
+      temporaryDirectories.splice(0).map((directory) =>
+        rm(directory, { force: true, recursive: true }),
+      ),
+    );
+  });
+
+  it("keeps retained local backups outside the checkout", () => {
+    expect(resolveBackupLocalDirectory("/srv/runner-home")).toBe(
+      "/srv/runner-home/.local/state/0509/backups/d1",
+    );
+  });
+
+  it("enforces private modes on retained backup directories and files", async () => {
+    const root = await mkdtemp(join(tmpdir(), "d1-backup-modes-"));
+    temporaryDirectories.push(root);
+    const directory = join(root, "retained");
+    const file = join(directory, "0509.sql");
+
+    await prepareBackupLocalDirectory(directory);
+    await writeFile(file, "backup", { mode: 0o666 });
+    await secureBackupLocalFile(file);
+
+    expect((await stat(directory)).mode & 0o777).toBe(0o700);
+    expect((await stat(file)).mode & 0o777).toBe(0o600);
+  });
+
   it("keeps remote D1 export confirmation unless an approval path opts out", () => {
     expect(buildD1ExportArgs("0509", "/tmp/backup.sql")).toEqual([
       "wrangler",

@@ -2,8 +2,6 @@ name: D1 backup to R2
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "17 22 * * SUN"
 
 concurrency:
   group: d1-backup-r2
@@ -16,7 +14,7 @@ jobs:
   backup:
     if: github.repository == 'nish3451/0509' && github.ref == 'refs/heads/main'
     runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}
-    timeout-minutes: 20
+    timeout-minutes: 300
     environment: d1-backup-r2
     env:
       D1_DATABASE_NAME: "0509"
