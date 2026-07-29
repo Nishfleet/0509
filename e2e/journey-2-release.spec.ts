@@ -285,7 +285,14 @@ for (const viewport of viewports) {
     await attachReleaseStateArtifacts({ page, testInfo, prefix: "j2-activation", state: "activation-paused" });
     const createdWatchlistId = finalUrl.searchParams.get("watchlist");
     expect(createdWatchlistId).toBeTruthy();
-    await expect(page.locator('input[name="watchlistId"]').first()).toHaveValue(createdWatchlistId!);
+    const activeTab = page
+      .getByRole("navigation", { name: "Competitor sections" })
+      .getByRole("link", { name: "What changed", exact: true });
+    await expect(activeTab).toHaveAttribute("aria-current", "page");
+    await expect(activeTab).toHaveAttribute(
+      "href",
+      `/app/watchlists?watchlist=${createdWatchlistId}`,
+    );
     test.info().annotations.push({ type: "finalUrl", description: `${finalUrl.pathname}${finalUrl.search}` });
   });
 }
