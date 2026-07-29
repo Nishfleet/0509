@@ -322,6 +322,17 @@ export default function WatchlistsRoute() {
     ? captureWindow.failedChecks?.[selectedWatchlist.id] ?? countHardFailuresSinceLastSuccess(data.runs)
     : 0;
   const marked = selectedWatchlist ? firstChangeMark(data.events ?? []) : null;
+  // Preserve the pre-BL-030 entitlement contract independently of whether
+  // this check caught a change: Agency can package every completed check.
+  const packageForClientAction =
+    canReport && selectedWatchlist?.lastScannedAt ? (
+      <Link
+        className="f9-wk-lnk"
+        to={`/app/reports/${createReportId("watchlist", selectedWatchlist.id)}`}
+      >
+        Package for client <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
+      </Link>
+    ) : null;
 
   return (
     <DashboardPage className="f9-wk-page">
@@ -460,16 +471,7 @@ export default function WatchlistsRoute() {
                       >
                         Open the capture <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
                       </Link>
-                      {/* Same gate the deleted band carried: a report needs a
-                          completed check behind it, not just the entitlement. */}
-                      {canReport && selectedWatchlist.lastScannedAt ? (
-                        <Link
-                          className="f9-wk-lnk"
-                          to={`/app/reports/${createReportId("watchlist", selectedWatchlist.id)}`}
-                        >
-                          Package for client <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
-                        </Link>
-                      ) : null}
+                      {packageForClientAction}
                     </div>
                   </DetailBlock>
                 ) : (
@@ -482,6 +484,7 @@ export default function WatchlistsRoute() {
                       >
                         Open the capture <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
                       </Link>
+                      {packageForClientAction}
                     </div>
                   </DetailBlock>
                 )}
