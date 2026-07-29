@@ -15,11 +15,13 @@ import { describe, expect, it } from "vitest";
 
 const css = readFileSync("app/app.css", "utf8");
 const MARKER = "BL-030 — the landing-language workspace layer (2026-07-29)";
+const NEXT_LAYER_MARKER = "/* === BL-041 team, billing, and account (landing language) === */";
 
 function layer(): string {
   const index = css.indexOf(MARKER);
   expect(index).toBeGreaterThan(0);
-  return css.slice(index);
+  const end = css.indexOf(NEXT_LAYER_MARKER, index);
+  return css.slice(index, end === -1 ? undefined : end);
 }
 
 function stripComments(source: string): string {

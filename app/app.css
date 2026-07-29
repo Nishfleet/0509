@@ -13375,3 +13375,860 @@ reds soften --- */
     padding-top: 26px;
   }
 }
+
+/* === BL-041 team, billing, and account (landing language) === */
+
+/*
+ * Long-dwell settings follow the v4 boringness budget. The working header is
+ * the only display-sized object. Sections are page-native, divided by the
+ * shared 1px rule; they never become cards, wells, or floating specimens.
+ * These pages spend no decorative green. A Team/branding upgrade or an
+ * actionable selected plan may spend the viewport's one filled action.
+ */
+
+.f9-bl041-page {
+  --bl041-max-copy: 68ch;
+
+  border-radius: 0;
+  color: var(--ink);
+}
+
+.f9-bl041-page *,
+.f9-bl041-page *::before,
+.f9-bl041-page *::after {
+  border-radius: 0;
+}
+
+.f9-bl041-flow {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.f9-bl041-section,
+.f9-bl041-lock {
+  margin: 0;
+  padding: 30px var(--wk-pad);
+  border: 0;
+  border-bottom: 1px solid var(--wk-rule);
+  background: transparent;
+  box-shadow: none;
+}
+
+.f9-bl041-section-head,
+.f9-bl041-page .f9-panel-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.f9-bl041-section h2,
+.f9-bl041-lock h2,
+.f9-bl041-page .f9-checkout-banner h2 {
+  margin: 3px 0 0;
+  color: var(--ink);
+  font-family: var(--f9-font);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.f9-bl041-section h3 {
+  margin: 3px 0 0;
+  color: var(--ink);
+  font-family: var(--f9-font);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.f9-bl041-label,
+.f9-bl041-page .f9-app-kicker {
+  display: block;
+  margin: 0;
+  color: var(--ink-faint);
+  font-family: var(--f9-font);
+  font-size: 12.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.f9-bl041-copy,
+.f9-bl041-note,
+.f9-bl041-empty,
+.f9-bl041-page .f9-muted-copy {
+  max-width: var(--bl041-max-copy);
+  margin: 10px 0 0;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.58;
+}
+
+.f9-bl041-page a {
+  color: inherit;
+  text-underline-offset: 3px;
+}
+
+.f9-bl041-page a.f9-wk-btn {
+  color: var(--wk-on-fill);
+  text-decoration: none;
+}
+
+/*
+ * Buttons: one ink fill at most. Everything else is a 44px text action.
+ * Provider and account controls keep their exact forms/actions; only their
+ * visual rank changes inside these three routes.
+ */
+
+.f9-bl041-page :is(
+  .f9-primary-button,
+  .f9-secondary-button,
+  .f9-text-link,
+  .f9-bl041-text-action
+) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: auto;
+  min-width: 44px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink);
+  cursor: pointer;
+  font-family: var(--f9-font);
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-transform: none;
+}
+
+.f9-bl041-page :is(
+  .f9-primary-button,
+  .f9-secondary-button,
+  .f9-text-link,
+  .f9-bl041-text-action
+):hover {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink-soft);
+  transform: none;
+}
+
+.f9-bl041-page :is(
+  .f9-primary-button,
+  .f9-secondary-button,
+  .f9-text-link,
+  .f9-bl041-text-action
+):disabled {
+  border: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.f9-bl041-danger-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--red);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font-family: var(--f9-font);
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.f9-bl041-danger-action:hover {
+  background: var(--wk-sunk);
+}
+
+.f9-bl041-page :focus-visible {
+  outline: 2px solid var(--wk-focus);
+  outline-offset: 2px;
+}
+
+/* Forms are frames, not pills. Labels sit above real values. */
+
+.f9-bl041-page :is(.f9-auth-form, .f9-bl041-invite) {
+  display: grid;
+  width: min(100%, 640px);
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.f9-bl041-invite {
+  grid-template-columns: minmax(220px, 420px) auto;
+  align-items: end;
+}
+
+.f9-bl041-field,
+.f9-bl041-page .f9-field {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  font-weight: 400;
+}
+
+.f9-bl041-page :is(
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="search"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="file"],
+  select,
+  textarea
+) {
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 11px;
+  border: 1px solid var(--wk-rule);
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink);
+  font-family: var(--f9-font);
+  font-size: 14px;
+}
+
+.f9-bl041-page input[type="file"]::file-selector-button {
+  min-height: 32px;
+  margin-right: 10px;
+  padding: 4px 9px;
+  border: 1px solid var(--wk-rule);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+}
+
+.f9-bl041-page :is(input, select, textarea)::placeholder {
+  color: var(--ink-faint);
+  opacity: 1;
+}
+
+.f9-bl041-page .f9-checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.f9-bl041-page .f9-checkbox-row input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 3px 0 0;
+  accent-color: var(--ink);
+}
+
+/* Quiet, in-flow notices. Errors keep deletion red as a second text channel. */
+
+.f9-bl041-page .f9-message {
+  position: relative;
+  z-index: auto;
+  max-width: var(--bl041-max-copy);
+  margin: 14px 0 0;
+  padding: 9px 0 9px 13px;
+  border: 0;
+  border-left: 1px solid var(--wk-rule);
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.f9-bl041-page .f9-message p {
+  margin: 0;
+}
+
+.f9-bl041-page .f9-message.is-error {
+  border-left-color: var(--red);
+  background: transparent;
+  color: var(--ink);
+}
+
+.f9-bl041-page .f9-message.is-success {
+  border-left-color: var(--wk-rule);
+  color: var(--ink);
+}
+
+.f9-bl041-team > #team-action-feedback {
+  margin: 0 var(--wk-pad);
+}
+
+/*
+ * Locked surfaces: no shadow card, no ink specimen header, no dashed theatre.
+ * One quiet explanation and one filled upgrade action.
+ */
+
+.f9-bl041-lock .f9-locked-feature,
+.f9-bl041-lock .f9-ed-specimen-body {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.f9-bl041-lock .f9-ed-plate-header {
+  display: block;
+  margin: 0 0 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  font-family: var(--f9-font);
+  font-size: 12.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.f9-bl041-lock .f9-ed-specimen-headline {
+  margin-top: 0;
+}
+
+.f9-bl041-lock .f9-ed-specimen-copy {
+  max-width: var(--bl041-max-copy);
+  margin: 10px 0 0;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.58;
+}
+
+.f9-bl041-lock .f9-ed-action-row {
+  margin-top: 18px;
+}
+
+.f9-bl041-lock .f9-ed-cta--rank1 {
+  min-height: 44px;
+  padding: 9px 14px;
+  border: 1px solid var(--wk-fill);
+  background: var(--wk-fill);
+  box-shadow: none;
+  color: var(--wk-on-fill);
+  font-family: var(--f9-font);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Team: one invite instrument, then one ruled list. */
+
+.f9-bl041-member-list {
+  margin-top: 20px;
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-bl041-member-row {
+  display: grid;
+  align-items: center;
+  gap: 8px 24px;
+  min-height: 70px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--wk-rule);
+  grid-template-columns: minmax(220px, 1fr) minmax(0, 1fr) auto;
+}
+
+.f9-bl041-member-row > div:first-child {
+  min-width: 0;
+}
+
+.f9-bl041-entity {
+  font-family: var(--ld-display);
+  font-size: 15.5px;
+  font-weight: 700;
+  letter-spacing: -0.012em;
+}
+
+.f9-bl041-member-row p {
+  margin: 4px 0 0;
+  color: var(--ink-faint);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.f9-bl041-row-actions,
+.f9-bl041-page .f9-account-security-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0 18px;
+}
+
+.f9-bl041-empty {
+  padding: 17px 0;
+  border-top: 1px solid var(--wk-rule);
+}
+
+/* Account: flat records and a deliberately unmistakable final boundary. */
+
+.f9-bl041-account .f9-theme-field {
+  width: min(100%, 260px);
+  margin-top: 16px;
+}
+
+.f9-bl041-account .f9-passkey-list {
+  display: block;
+  margin-top: 18px;
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-bl041-account .f9-passkey-row {
+  display: grid;
+  align-items: center;
+  gap: 12px 24px;
+  margin: 0;
+  padding: 13px 0;
+  border: 0;
+  border-bottom: 1px solid var(--wk-rule);
+  background: transparent;
+  box-shadow: none;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+}
+
+.f9-bl041-account .f9-passkey-row div {
+  gap: 3px;
+}
+
+.f9-bl041-account .f9-passkey-row strong {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.f9-bl041-account .f9-passkey-row span {
+  color: var(--ink-faint);
+  font-size: 12.5px;
+}
+
+.f9-bl041-account .f9-dash-state-empty {
+  min-height: 0;
+  margin-top: 14px;
+  padding: 13px 0;
+  border: 0;
+  border-top: 1px solid var(--wk-rule);
+  background: transparent;
+  box-shadow: none;
+}
+
+.f9-bl041-account .f9-brand-logo-preview {
+  padding: 13px 0;
+  border: 0;
+  border-top: 1px solid var(--wk-rule);
+  border-bottom: 1px solid var(--wk-rule);
+  background: transparent;
+}
+
+.f9-bl041-entitlement {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-bl041-entitlement p {
+  max-width: var(--bl041-max-copy);
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.f9-bl041-subsection {
+  margin-top: 30px;
+  padding-top: 24px;
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-bl041-danger {
+  border-top: 1px solid var(--red);
+  border-bottom-color: var(--red);
+}
+
+.f9-bl041-danger > p {
+  max-width: var(--bl041-max-copy);
+  margin: 12px 0 0;
+  color: var(--ink);
+  font-size: 13.5px;
+  line-height: 1.58;
+}
+
+/* Billing: price choices form one ruled comparison, not a card deck. */
+
+.f9-bl041-billing .f9-checkout-banner {
+  position: relative;
+  z-index: auto;
+  display: block;
+  margin: 0;
+  padding: 24px var(--wk-pad);
+  border: 0;
+  border-bottom: 1px solid var(--wk-rule);
+  background: transparent;
+  box-shadow: none;
+}
+
+.f9-bl041-billing .f9-checkout-banner.is-active,
+.f9-bl041-billing .f9-checkout-banner.is-pending {
+  border-color: var(--wk-rule);
+  background: transparent;
+}
+
+.f9-bl041-billing .f9-checkout-banner p {
+  max-width: var(--bl041-max-copy);
+  margin: 8px 0 0;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.f9-bl041-billing .f9-checkout-banner form,
+.f9-bl041-billing .f9-checkout-banner > div > a {
+  margin-top: 8px;
+}
+
+.f9-bl041-billing > .f9-bl041-flow > .f9-message,
+.f9-bl041-billing > .f9-bl041-flow > [class*="checkout-return"] {
+  margin-right: var(--wk-pad);
+  margin-left: var(--wk-pad);
+}
+
+.f9-bl041-billing .f9-cycle-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.f9-bl041-billing .f9-cycle-toggle a,
+.f9-bl041-billing .f9-cycle-toggle button {
+  min-width: 44px;
+  min-height: 44px;
+  margin-bottom: -1px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink-faint);
+  font-size: 13.5px;
+  font-weight: 400;
+}
+
+.f9-bl041-billing .f9-cycle-toggle :is(a, button).is-active {
+  border-bottom-color: var(--ink);
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink);
+}
+
+.f9-bl041-billing .f9-app-plan-grid,
+.f9-bl041-billing .f9-topup-grid {
+  display: grid;
+  gap: 0;
+  margin-top: 22px;
+  border-top: 1px solid var(--wk-rule);
+  border-bottom: 1px solid var(--wk-rule);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.f9-bl041-billing .f9-app-plan-card,
+.f9-bl041-billing .f9-topup-card {
+  display: flex;
+  min-width: 0;
+  min-height: 100%;
+  flex-direction: column;
+  align-content: initial;
+  gap: 11px;
+  padding: 18px;
+  border: 0;
+  border-right: 1px solid var(--wk-rule);
+  background: transparent;
+  box-shadow: none;
+}
+
+.f9-bl041-billing :is(.f9-app-plan-card, .f9-topup-card):last-child {
+  border-right: 0;
+}
+
+.f9-bl041-billing .f9-app-plan-card.is-selected {
+  background: var(--wk-sunk);
+  box-shadow: none;
+}
+
+.f9-bl041-billing .f9-app-plan-card.is-recommended {
+  box-shadow: none;
+}
+
+.f9-bl041-billing .f9-app-plan-card-head {
+  gap: 16px;
+}
+
+.f9-bl041-billing .f9-app-plan-card-head strong,
+.f9-bl041-billing .f9-topup-card strong {
+  margin-top: 5px;
+  color: var(--ink);
+  font-family: var(--f9-font);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.f9-bl041-billing .f9-app-plan-card p,
+.f9-bl041-billing .f9-topup-card p {
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.f9-bl041-billing :is(.f9-status-pill, .f9-plan-limit-strip span) {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  font-family: var(--f9-font);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.f9-bl041-billing .f9-status-pill.is-healthy {
+  color: var(--ink);
+}
+
+.f9-bl041-billing .f9-plan-limit-strip {
+  gap: 0;
+}
+
+.f9-bl041-billing .f9-plan-limit-strip span + span::before {
+  margin: 0 7px;
+  color: var(--ink-faint);
+  content: "·";
+}
+
+.f9-bl041-billing .f9-annual-note,
+.f9-bl041-billing .f9-annual-note.is-valid,
+.f9-bl041-billing .f9-annual-note.is-unavailable {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  font-size: 12.5px;
+  font-weight: 400;
+}
+
+.f9-bl041-billing .f9-app-plan-card .f9-plan-feature-list {
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.f9-bl041-billing .f9-plan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 16px;
+  margin-top: auto;
+}
+
+.f9-bl041-billing .f9-plan-actions form {
+  width: auto;
+}
+
+.f9-bl041-billing .f9-app-plan-card .f9-wk-btn {
+  width: auto;
+}
+
+.f9-bl041-billing .f9-work-list {
+  display: block;
+  margin-top: 20px;
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-bl041-billing .f9-work-row {
+  display: grid;
+  align-items: start;
+  gap: 24px;
+  margin: 0;
+  padding: 13px 0;
+  border: 0;
+  border-bottom: 1px solid var(--wk-rule);
+  background: transparent;
+  box-shadow: none;
+  grid-template-columns: minmax(180px, 0.55fr) minmax(0, 1.45fr);
+}
+
+.f9-bl041-billing .f9-work-row > strong {
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.f9-bl041-billing .f9-work-row > span {
+  min-width: 0;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.f9-bl041-billing .f9-work-list > .f9-muted-copy {
+  max-width: none;
+  margin: 0;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--wk-rule);
+}
+
+.f9-bl041-billing .f9-skeleton-line {
+  border: 0;
+  background: var(--wk-sunk);
+  box-shadow: none;
+}
+
+.f9-bl041-billing .f9-button-spinner,
+.f9-bl041-billing .f9-checkout-pulse {
+  border-color: var(--ink-faint);
+  background: transparent;
+}
+
+/*
+ * Earlier component rules use higher-specificity radii. Make square geometry
+ * explicit on every interactive or plate-like descendant that can appear on
+ * these surfaces; the capture harness verifies the computed result.
+ */
+
+.f9-bl041-page :is(
+  a,
+  button,
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="search"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="file"],
+  input[type="checkbox"],
+  select,
+  textarea,
+  .f9-message,
+  .f9-locked-feature,
+  .f9-ed-specimen-body,
+  .f9-ed-cta,
+  .f9-dash-state-empty,
+  .f9-brand-logo-preview,
+  .f9-checkout-banner,
+  .f9-cycle-toggle,
+  .f9-app-plan-card,
+  .f9-topup-card,
+  .f9-status-pill,
+  .f9-plan-limit-strip span,
+  .f9-annual-note,
+  .f9-skeleton-line,
+  .f9-button-spinner,
+  .f9-checkout-pulse
+) {
+  border-radius: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .f9-bl041-page *,
+  .f9-bl041-page *::before,
+  .f9-bl041-page *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media (max-width: 920px) {
+  .f9-bl041-billing .f9-app-plan-grid,
+  .f9-bl041-billing .f9-topup-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .f9-bl041-billing .f9-app-plan-card,
+  .f9-bl041-billing .f9-topup-card {
+    border-right: 0;
+    border-bottom: 1px solid var(--wk-rule);
+  }
+
+  .f9-bl041-billing :is(.f9-app-plan-card, .f9-topup-card):last-child {
+    border-bottom: 0;
+  }
+
+  .f9-bl041-member-row,
+  .f9-bl041-account .f9-passkey-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .f9-bl041-section,
+  .f9-bl041-lock {
+    padding-top: 24px;
+    padding-bottom: 24px;
+  }
+
+  .f9-bl041-section-head,
+  .f9-bl041-page .f9-panel-toolbar,
+  .f9-bl041-entitlement {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .f9-bl041-invite {
+    grid-template-columns: 1fr;
+  }
+
+  .f9-bl041-member-row,
+  .f9-bl041-account .f9-passkey-row,
+  .f9-bl041-billing .f9-work-row {
+    grid-template-columns: 1fr;
+  }
+
+  .f9-bl041-row-actions,
+  .f9-bl041-page .f9-account-security-actions {
+    justify-content: flex-start;
+  }
+
+  .f9-bl041-billing .f9-cycle-toggle {
+    width: auto;
+  }
+}

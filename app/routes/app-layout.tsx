@@ -98,7 +98,15 @@ export function shellPrimaryIsDemoted(pathname: string) {
  * coexistence proof in the BL-030 report shows.
  */
 export function shellTopbarIsSuppressed(pathname: string) {
-  return pathname === "/app" || pathname === "/app/watchlists";
+  const normalizedPathname =
+    pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
+  return (
+    normalizedPathname === "/app" ||
+    normalizedPathname === "/app/watchlists" ||
+    normalizedPathname === "/app/team" ||
+    normalizedPathname === "/app/billing" ||
+    normalizedPathname === "/app/account"
+  );
 }
 
 export default function AppLayoutRoute() {

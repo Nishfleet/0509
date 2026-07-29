@@ -81,9 +81,19 @@ async function expectCompactHeaderActions(page: Page) {
   // "Overview" link plus the "+ Add competitor" quick-add button (a real
   // <button>, not a link — it opens the palette dialog).
   const pathname = new URL(page.url()).pathname;
-  if (pathname === "/app" || pathname === "/app/watchlists") {
+  const workingHeaderRoutes = new Set([
+    "/app",
+    "/app/watchlists",
+    "/app/team",
+    "/app/billing",
+    "/app/account",
+  ]);
+  if (workingHeaderRoutes.has(pathname)) {
     await expect(page.locator(".f9-dash-topbar")).toHaveCount(0);
-    await expect(page.locator(".f9-wk-head .f9-wk-btn")).toHaveCount(1);
+    await expect(page.locator(".f9-wk-head")).toHaveCount(1);
+    if (pathname === "/app" || pathname === "/app/watchlists") {
+      await expect(page.locator(".f9-wk-head .f9-wk-btn")).toHaveCount(1);
+    }
     return;
   }
   const actions = await page.evaluate(() =>
@@ -391,7 +401,7 @@ test.describe("local authenticated E2E harness", () => {
     await page.goto("/app/account");
     await expectAppPage(page);
     await expect(page.getByRole("heading", { name: "Account & security" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "E2E Starter" })).toBeVisible();
+    await expect(page.getByText(/Signed in as e2e-starter@example\.invalid/)).toBeVisible();
     await expect(page.getByLabel("My brand website")).toHaveValue("https://starter.example.invalid");
 
     await page.goto("/app/notifications");
@@ -405,7 +415,7 @@ test.describe("local authenticated E2E harness", () => {
     ).toBeVisible();
     await expect(
       page.locator("#f9-main-content").getByText(
-        "Invite teammates to share watchlists, collections, and digests on Agency.",
+        "Team access is included with Agency.",
         { exact: true },
       ),
     ).toBeVisible();
@@ -519,7 +529,7 @@ test.describe("local authenticated E2E harness", () => {
         heading: "Developer access",
         copy: ["Connect exports and approved actions"],
       },
-      { label: "Team", path: "/app/team", heading: "Team", copy: ["Agency seats in use"] },
+      { label: "Team", path: "/app/team", heading: "Team", copy: ["2 of 10 seats in use"] },
       {
         label: "Client rooms",
         path: "/app/clients",
