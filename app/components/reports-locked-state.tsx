@@ -18,7 +18,6 @@ export function ReportsLockedState({ context, upgradeTo }: ReportsLockedStatePro
     <section
       aria-labelledby="reports-locked-title"
       className="f9-wk-reports-locked f9-locked-feature"
-      role="status"
     >
       <WorkingHeader
         action={{ label: "Upgrade to Agency", to: upgradeTo }}

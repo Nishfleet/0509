@@ -13629,7 +13629,7 @@ reds soften --- */
 .f9-wk-report-view .f9-copy-button {
   padding: 0;
   border: 0;
-  border-bottom: 1px solid currentColor;
+  border-bottom: 1px solid currentcolor;
   border-radius: 0;
   background: transparent;
   color: inherit;
