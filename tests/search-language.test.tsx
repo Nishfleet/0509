@@ -107,12 +107,48 @@ describe("BL-031 — the search result row", () => {
 });
 
 describe("BL-031 — the page budgets", () => {
-  it("spends exactly one filled button on the page, and it is the search submit", () => {
+  it("spends one filled button per conversion moment, and never two in one viewport", () => {
+    // ROUND 2. The DNA's "exactly one per screen" was written against concept
+    // pages that were 900px documents in a 900px viewport, so per-screen and
+    // per-page were the same number and the word was never tested. The landing
+    // — the reference implementation of this language — draws TWO ink fills,
+    // the hero `.ld-command` submit and the `.ld-final` `Create account`
+    // submit, ~6,000px apart and never in one screen. The law is therefore one
+    // fill per VIEWPORT, and a fill is the commit of a conversion moment.
+    //
+    // This route has exactly two conversion moments, and they are mutually
+    // distant by construction: the instrument's commit in the command band,
+    // and the retention band below the whole split. The band's commit has two
+    // audience branches that can never both render.
     const filled = [...route.matchAll(/className="f9-wk-btn"/g)];
-    expect(filled).toHaveLength(1);
-    // The old page carried three: See ads, Create account, Save to collection.
+    expect(filled).toHaveLength(3);
+    expect(route).toContain(`<SubmitButton
+              className="f9-wk-btn"
+              getAction="/search"`);
+    expect(route).toContain(`<Link className="f9-wk-btn" to={signupTrackingPath}>`);
+    expect(route).toContain(`className="f9-wk-btn"
+                      intent="create-watchlist"`);
+    // The real budget is paint-measured: `e2e/bl031-capture` slides a
+    // viewport-height window down the document and refuses to write the
+    // evidence set if any window ever holds two fills.
     expect(route).not.toContain("f9-primary-button");
     expect(route).not.toContain("f9-secondary-button");
+  });
+
+  it("puts the retention band below the whole split, not inside the results column", () => {
+    // A band at the foot of the left column ends ~1,000px above an open peek
+    // pane and can share a viewport with `See ads`; a page-level band cannot.
+    const split = route.indexOf('className={`f9-wk-split is-wide');
+    const retain = route.indexOf('className="f9-wk-retain f9-search-signup-cta"');
+    const paneClose = route.indexOf("</DetailPane>");
+    expect(split).toBeGreaterThan(-1);
+    expect(retain).toBeGreaterThan(paneClose);
+    // And the results panel no longer carries it.
+    const panel = route.slice(
+      route.indexOf('className="f9-results-panel"'),
+      route.indexOf("</section>", route.indexOf('className="f9-results-panel"')),
+    );
+    expect(panel).not.toContain("f9-search-signup-cta");
   });
 
   it("spends at most three caps-mono kickers on any one state of the page", () => {

@@ -10921,6 +10921,17 @@ reds soften --- */
   white-space: nowrap;
 }
 
+/* ROUND 2 — caught by eyeball, not by a probe: `.f9-search-page a { color:
+   inherit }` is (0,1,1) and beats `.f9-wk-btn` (0,1,0), so a Rank-1 button
+   rendered as a <Link> painted ink-on-ink and its label disappeared. Nothing
+   in the harness measures label contrast; the same trap already has a
+   hand-written escape for `a.f9-primary-button` further up this file. Fixed at
+   the primitive so every page's link-shaped Rank-1 is safe, not just this
+   one. */
+a.f9-wk-btn {
+  color: var(--wk-on-fill);
+}
+
 .f9-wk-btn:hover {
   opacity: 0.86;
 }
@@ -12353,8 +12364,13 @@ textarea.f9-wk-in {
    disclosure that stays shut until the visitor actually has filters on.
    --------------------------------------------------------------- */
 
+/* ROUND 2 — the instrument's vertical rhythm, tightened against the v4 scale.
+   The header above it is P0's, unmodified (26/20 around a 28px title). This
+   band opens at 14px rather than 22px because the header rule already does the
+   separating work; the 22px was landing rhythm on a workspace screen, which is
+   the correction v3 recorded and this row had quietly kept. */
 .f9-wk-command {
-  padding: 22px var(--wk-pad) 0;
+  padding: 14px var(--wk-pad) 0;
 }
 
 .f9-wk-command-row {
@@ -12383,7 +12399,7 @@ textarea.f9-wk-in {
 }
 
 .f9-wk-refine {
-  margin-top: 12px;
+  margin-top: 8px;
 }
 
 .f9-wk-refine > summary {
@@ -12431,6 +12447,48 @@ textarea.f9-wk-in {
   margin-top: 0;
 }
 
+/* ROUND 2 — the refine disclosure is an INSTRUMENT control, so above the
+   width where there is room for it, it sits in the instrument's own row
+   rather than on a row of its own. That is the header contract measured off
+   incident.io (title left, actions inline right, ONE row) applied to the
+   command band, and it removes a whole 52px band from every state without
+   removing a control: closed, `Refine search` is a word beside the button;
+   open, its panel fills the space to the right of the 640px command row
+   instead of pushing the results down a second time.
+
+   Below 1080px the two columns cannot both be honest widths, so it falls back
+   to the stacked layout — the phone has the vertical room the desktop does
+   not. */
+@media (min-width: 1080px) {
+  .f9-search-page .f9-wk-command-form {
+    display: grid;
+    align-items: end;
+    column-gap: 28px;
+    grid-template-columns: minmax(0, 640px) minmax(0, 1fr);
+  }
+
+  .f9-search-page .f9-wk-command-form > .f9-wk-command-row {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .f9-search-page .f9-wk-command-form > .f9-wk-hint {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .f9-search-page .f9-wk-command-form > .f9-wk-refine {
+    align-self: end;
+    margin-top: 0;
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .f9-search-page .f9-wk-command-form > .f9-wk-refine > .f9-search-refine {
+    margin-bottom: 0;
+  }
+}
+
 .f9-save-query-form {
   display: flex;
   max-width: 480px;
@@ -12466,7 +12524,9 @@ textarea.f9-wk-in {
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
-  padding: 30px 0 14px;
+  /* ROUND 2: 30/14 → 20/12. The answer needs air above it, not a section gap
+     from a 6,000px marketing scroll. */
+  padding: 20px 0 12px;
 }
 
 .f9-wk-sec-headings {
@@ -12559,19 +12619,40 @@ textarea.f9-wk-in {
   padding: 14px 0 0;
 }
 
-.f9-search-signup-cta {
-  margin-top: 26px;
-  padding: 22px 0 28px;
+/* ---------------------------------------------------------------
+   The retention band (round 2). The page's second and last conversion
+   moment, below the whole split rather than at the foot of the left
+   column, and the same object for both audiences.
+
+   It carries NO new type role and NO new colour: its line is the
+   section title (17px Inter 600) it shares with the results head, and
+   its weight comes from isolation, not from scale — v3's lesson, that
+   scale is not a carrier of character. What makes it unmissable is
+   that it is alone: a full-width rule, 44px of air above the line, and
+   nothing else in its viewport. The commit is the one filled button
+   the DNA allows per viewport; the landing does exactly this with its
+   `.ld-final` band, 6,000px below the hero's.
+   --------------------------------------------------------------- */
+
+.f9-wk-retain {
+  padding: 44px var(--wk-pad) 52px;
   border-top: 1px solid var(--wk-rule);
 }
 
-.f9-search-signup-cta .f9-wk-lede {
-  font-size: 16px;
-  font-weight: 600;
+.f9-wk-retain-say {
+  max-width: 58ch;
+  margin: 10px 0 0;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.55;
 }
 
-.f9-search-signup-cta .f9-wk-acts {
-  margin-top: 12px;
+.f9-wk-retain .f9-wk-acts {
+  margin-top: 20px;
+}
+
+.f9-wk-retain .f9-wk-acts.is-row {
+  margin-top: 20px;
 }
 
 /* ---------------------------------------------------------------
@@ -12830,17 +12911,18 @@ textarea.f9-wk-in {
     padding-top: 18px;
   }
 
+  /* ROUND 2 — DNA §1 says the Rank-1 button is NEVER full-width, and the phone
+     rule that stacked `See ads` under the field and stretched it across the
+     screen was an unnamed deviation from it. The instrument stays one row at
+     every width: it obeys the rule, it reads as one object rather than two,
+     and it takes 56px off the top of every phone search. */
   .f9-wk-command-row {
-    flex-wrap: wrap;
-    align-items: stretch;
-  }
-
-  .f9-wk-command-row .f9-wk-field {
-    flex: 1 1 100%;
+    gap: 10px;
   }
 
   .f9-wk-command-row .f9-wk-btn {
-    width: 100%;
+    padding-right: 12px;
+    padding-left: 12px;
   }
 
   .f9-wk-sec-head {

@@ -290,9 +290,33 @@ async function measure(page: Page) {
       0,
       document.documentElement.scrollWidth - document.documentElement.clientWidth,
     ),
-    // The page's one filled button. Two is a bug; zero is legitimate on a
-    // surface with nothing to do, which /search never is.
+    // The page's filled buttons. ROUND 2: the budget is one per VIEWPORT, not
+    // one per document — the landing, this language's reference
+    // implementation, draws two ink fills ~6,000px apart and they never share
+    // a screen. `filledButtons` stays as the document total (reported, not
+    // budgeted); `filledInAnyViewport` is the law, measured by sliding a
+    // viewport-height window down the page and taking the worst window.
     filledButtons: document.querySelectorAll(".f9-wk-page .f9-wk-btn").length,
+    filledInAnyViewport: (() => {
+      const vh = window.innerHeight;
+      const boxes = [...document.querySelectorAll(".f9-wk-page .f9-wk-btn")]
+        .map((node) => {
+          const rect = node.getBoundingClientRect();
+          return {
+            top: rect.top + window.scrollY,
+            bottom: rect.bottom + window.scrollY,
+          };
+        })
+        .filter((box) => box.bottom > box.top);
+      if (boxes.length === 0) return 0;
+      const count = (start: number) =>
+        boxes.filter((box) => box.bottom > start && box.top < start + vh).length;
+      // Every window that could possibly be worst starts either at a button's
+      // top or ends at a button's bottom.
+      return Math.max(
+        ...boxes.flatMap((box) => [count(box.top), count(box.bottom - vh)]),
+      );
+    })(),
     rows: document.querySelectorAll(".f9-wk-page .f9-wk-row").length,
     // The Mobbin-calibrated number the concept notes argue from: where the
     // first record a customer can act on begins, as a share of the viewport.
@@ -301,6 +325,39 @@ async function measure(page: Page) {
       const row = document.querySelector(".f9-wk-page .f9-wk-row");
       if (!row) return null;
       return Math.round(row.getBoundingClientRect().top + window.scrollY);
+    })(),
+    // ROUND 2: the per-element stack above the first record, so the intent
+    // audit argues from measured heights rather than from a single total. The
+    // amendment forbids "search needs its instrument" as a blanket defence —
+    // this is what makes the per-element defence checkable.
+    firstRowStack: (() => {
+      const page = document.querySelector(".f9-wk-page");
+      const row = page?.querySelector(".f9-wk-row");
+      if (!page || !row) return null;
+      const name = (node: Element) =>
+        `${node.tagName.toLowerCase()}${
+          typeof node.className === "string" && node.className
+            ? `.${node.className.trim().split(/\s+/).join(".")}`
+            : ""
+        }`;
+      const stack: { el: string; top: number; height: number }[] = [];
+      let node: Element | null = row;
+      while (node && node !== page) {
+        const parent: Element | null = node.parentElement;
+        if (!parent) break;
+        for (const sibling of Array.from(parent.children)) {
+          if (sibling === node) break;
+          const rect = sibling.getBoundingClientRect();
+          if (rect.height === 0) continue;
+          stack.push({
+            el: name(sibling),
+            top: Math.round(rect.top + window.scrollY),
+            height: Math.round(rect.height),
+          });
+        }
+        node = parent;
+      }
+      return stack.sort((a, b) => a.top - b.top);
     })(),
     // Every interactive target inside the page, measured. 44px is the floor.
     smallTargets: [
@@ -405,8 +462,10 @@ test.describe("BL-031 live proof", () => {
             docHeight: measured.docHeight,
             horizontalOverflow: measured.overflow,
             filledButtons: measured.filledButtons,
+            filledInAnyViewport: measured.filledInAnyViewport,
             rows: measured.rows,
             firstRowTop: measured.firstRowTop,
+            firstRowStack: measured.firstRowStack,
             greenPainted: paint.hits.length,
             greenPaintedDetail: paint.hits,
             greenFocusReservations: paint.focusReservations.length,
@@ -453,9 +512,10 @@ test.describe("BL-031 live proof", () => {
                 paint.capsMono.join(" | "),
             );
           }
-          if (measured.filledButtons > 1) {
+          if (measured.filledInAnyViewport > 1) {
             failures.push(
-              `${surface.name} ${viewport.name} ${theme}: ${measured.filledButtons} filled buttons`,
+              `${surface.name} ${viewport.name} ${theme}: ${measured.filledInAnyViewport} filled buttons share one viewport ` +
+                `(${measured.filledButtons} on the document)`,
             );
           }
           if (measured.smallTargets.length > 0) {
@@ -507,7 +567,7 @@ test.describe("BL-031 live proof", () => {
 
     expect(
       failures,
-      "one green, three caps-mono, one filled button, one rule weight, 44px targets, zero console errors, zero horizontal scroll 320-2560",
+      "one green, three caps-mono, one filled button PER VIEWPORT, one rule weight, 44px targets, zero console errors, zero horizontal scroll 320-2560",
     ).toEqual([]);
   });
 });

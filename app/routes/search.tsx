@@ -1201,12 +1201,35 @@ export default function SearchRoute() {
     data.filters.firstSeenFrom ? "first seen" : null,
     data.filters.lastSeenFrom ? "last active" : null,
   ].filter((entry): entry is string => entry !== null);
+  // BL-031 round 2 — the instrument's own state, and the hinge for everything
+  // that sits above the first record. "Used" means a search actually ran and
+  // was accepted; an invalid domain has not used the instrument, it has been
+  // refused by it.
+  const instrumentUsed = hasSearchQuery && !data.inputError;
+  const hasResults = visibleAds.length > 0;
   // One context line under the title (the v4 header contract): what this page
   // searches and what happens to a result. Provenance belongs to the capture,
   // so source and freshness are told once, in the evidence pane.
-  const headerContext = rootData.session
-    ? "Public Meta Ad Library search. Save an ad to a collection, or start watching the competitor."
-    : "Public Meta Ad Library search. No account needed.";
+  //
+  // ROUND 2: the context line qualifies the TITLE — it explains what the
+  // instrument does before you have used it. Once a search has run, the line
+  // that qualifies this page is the ANSWER, and the answer is the results
+  // section head one block below. Printing both is the "three tellings of one
+  // fact" the concept notes killed, and it costs 27px above the first record.
+  // The anonymous "No account needed." claim in particular is asserted before
+  // the search and PROVEN by it — repeating it afterwards is weaker, not
+  // stronger.
+  const headerContext = instrumentUsed
+    ? null
+    : rootData.session
+      ? "Public Meta Ad Library search. Save an ad to a collection, or start watching the competitor."
+      : "Public Meta Ad Library search. No account needed.";
+  // The hint is instruction for an unused instrument. It stays for the resting
+  // state and it becomes the `role="alert"` on a refused one; a field that
+  // already holds the domain you searched does not need to be told what to
+  // paste into it.
+  const commandHint =
+    data.inputError ?? (instrumentUsed ? null : "Paste one competitor website.");
   // ONE heading per state, and it is the sentence that state actually wants
   // to say. The search answer's title is the strongest when there is one (it
   // is what the old page rendered as the answer panel's h3, directly under a
@@ -1318,7 +1341,7 @@ export default function SearchRoute() {
               <span className="f9-wk-lab">Competitor website</span>
               <input
                 aria-invalid={Boolean(data.inputError)}
-                aria-describedby="search-command-hint"
+                aria-describedby={commandHint ? "search-command-hint" : undefined}
                 autoComplete="url"
                 className="f9-wk-in"
                 defaultValue={competitorWebsite.raw}
@@ -1341,14 +1364,16 @@ export default function SearchRoute() {
             {/* DNA §2: validation speaks in product voice under the field it
                 is about — one telling, not a banner plus a hint saying the
                 same thing 200px apart. */}
-            <p
-              aria-live={data.inputError ? "assertive" : undefined}
-              className={`f9-wk-hint${data.inputError ? " is-bad" : ""}`}
-              id="search-command-hint"
-              role={data.inputError ? "alert" : undefined}
-            >
-              {data.inputError ?? "Paste one competitor website."}
-            </p>
+            {commandHint ? (
+              <p
+                aria-live={data.inputError ? "assertive" : undefined}
+                className={`f9-wk-hint${data.inputError ? " is-bad" : ""}`}
+                id="search-command-hint"
+                role={data.inputError ? "alert" : undefined}
+              >
+                {commandHint}
+              </p>
+            ) : null}
 
             <details
               className="f9-wk-refine"
@@ -1443,61 +1468,6 @@ export default function SearchRoute() {
             </details>
           </Form>
 
-          {canTrackCurrentCompetitor && rootData.session ? (
-            <div className="f9-wk-acts is-row">
-              <Form className="f9-quick-track-form" method="post">
-                <input name="intent" type="hidden" value="create-watchlist" />
-                <SearchStateFields
-                  competitorWebsite={competitorWebsite.raw}
-                  filters={data.filters}
-                  mode={data.mode}
-                  trackingRole={trackingRole}
-                />
-                <input
-                  name="name"
-                  type="hidden"
-                  value={`${inferredWatchlistName} watch`}
-                />
-                <SubmitButton
-                  className="f9-wk-lnk"
-                  intent="create-watchlist"
-                  pendingLabel="Creating…"
-                >
-                  Track this {targetNoun}
-                </SubmitButton>
-              </Form>
-              <details className="f9-wk-refine is-inline">
-                <summary>Save this search</summary>
-                <Form className="f9-save-query-form" method="post">
-                  <input name="intent" type="hidden" value="save-query" />
-                  <SearchStateFields
-                    competitorWebsite={competitorWebsite.raw}
-                    filters={data.filters}
-                    mode={data.mode}
-                    trackingRole={trackingRole}
-                  />
-                  <label className="f9-wk-field">
-                    <span className="f9-wk-lab">Save search as</span>
-                    <input
-                      autoComplete="off"
-                      className="f9-wk-in"
-                      defaultValue={inferredWatchlistName}
-                      name="name"
-                      placeholder="Competitor research"
-                      type="text"
-                    />
-                  </label>
-                  <SubmitButton
-                    className="f9-wk-lnk"
-                    intent="save-query"
-                    pendingLabel="Saving…"
-                  >
-                    Save search
-                  </SubmitButton>
-                </Form>
-              </details>
-            </div>
-          ) : null}
         </section>
 
         {actionData?.message ? (
@@ -1518,6 +1488,7 @@ export default function SearchRoute() {
         ) : null}
 
         {hasSearchQuery ? (
+          <>
           <div
             className={`f9-wk-split is-wide${selectedAd ? "" : " is-single"}`}
           >
@@ -1632,7 +1603,17 @@ export default function SearchRoute() {
                   </p>
                 ) : null}
 
-                {discoverySummary && visibleAds.length > 0 ? (
+                {/* ROUND 2: a CAVEAT arrives before the material, a FOOTNOTE
+                    after it. On a healthy check this line says "Live ad checks
+                    are ready" — that is a footnote, and it repeats the
+                    freshness the evidence pane already attaches to the
+                    capture, so it moves below the rows with the rest of the
+                    provenance. When discovery is degraded, cache-only or demo,
+                    the same line is a caveat about what you are about to read
+                    and it stays above, where you cannot miss it. */}
+                {discoverySummary &&
+                visibleAds.length > 0 &&
+                visibleResult.discoveryStatus !== "healthy" ? (
                   <p className="f9-wk-note">{discoverySummary}</p>
                 ) : null}
 
@@ -1758,6 +1739,12 @@ export default function SearchRoute() {
                     them — and putting it above pushed the first row to 67% of
                     the viewport when every list this was calibrated against
                     starts its records inside 20%. */}
+                {discoverySummary &&
+                visibleAds.length > 0 &&
+                visibleResult.discoveryStatus === "healthy" ? (
+                  <p className="f9-wk-small">{discoverySummary}</p>
+                ) : null}
+
                 {searchAnswer ? (
                   <SearchAnswerPanel
                     answer={searchAnswer}
@@ -1789,24 +1776,6 @@ export default function SearchRoute() {
                   </Form>
                 ) : null}
 
-                {!data.session ? (
-                  <div className="f9-search-signup-cta">
-                    <p className="f9-wk-lede">
-                      {visibleAds.length > 0
-                        ? "Keep this competitor under watch"
-                        : "Keep checking this competitor"}
-                    </p>
-                    <p className="f9-wk-note">{signupCtaBody}</p>
-                    <div className="f9-wk-acts">
-                      <Link className="f9-wk-lnk" to={signupTrackingPath}>
-                        Create account{" "}
-                        <span aria-hidden="true" className="f9-wk-chev">
-                          &rsaquo;
-                        </span>
-                      </Link>
-                    </div>
-                  </div>
-                ) : null}
               </section>
             </div>
 
@@ -2046,8 +2015,17 @@ export default function SearchRoute() {
                     </div>
                   </DetailBlock>
                 ) : (
+                  /* The band below the split is the page's account ask and it
+                     says the whole pitch. This block is about the capture in
+                     front of you, so it says only what an account does to THIS
+                     capture — the same sentence twice on one screen is the
+                     duplication this rebuild spent a package removing. */
                   <DetailBlock kicker="Keep this evidence">
-                    <p className="f9-wk-note">{signupCtaBody}</p>
+                    <p className="f9-wk-note">
+                      This capture is a moment in time. An account keeps it and
+                      re-checks {competitorWatchLabel} on a schedule, so the
+                      next version can be compared against it.
+                    </p>
                     <div className="f9-wk-acts">
                       <Link className="f9-wk-lnk" to={signupTrackingPath}>
                         Create account to track this competitor{" "}
@@ -2061,6 +2039,133 @@ export default function SearchRoute() {
               </DetailPane>
             ) : null}
           </div>
+
+          {/* THE RETENTION BAND — round 2's resolution of §9.1.
+              -----------------------------------------------------------------
+              WHY IT IS A BAND, AND WHY IT IS HERE. The page used to split this
+              job in two: the signed-in retention actions sat ABOVE the results
+              (asking you to watch a competitor before you had seen a single
+              ad), and the anonymous signup sat at the foot of the LEFT COLUMN,
+              which with a peek pane open ends ~1,000px above the pane and can
+              land beside `See ads`. One job, two homes, neither of them the
+              moment. It is now one page-level band below the whole split: the
+              same sentence to both audiences — you have the material, now keep
+              it working — and it is the last thing on the page in every state.
+
+              WHY IT IS FILLED. The DNA says "exactly one per screen", and the
+              v4 concepts never tested the word: both concept pages are 900px
+              documents in a 900px viewport, so per-screen and per-page were the
+              same number. The landing — the reference implementation of this
+              entire language — disambiguates it: it draws TWO ink fills, the
+              hero `.ld-command` submit and the `.ld-final` `Create account`
+              submit, ~6,000px apart, each the only fill in its own viewport.
+              So the law is ONE FILL PER VIEWPORT, and a fill marks the commit
+              of a conversion moment. `See ads` is the instrument's commit; this
+              is the page's second and last one, and it owns its own screen.
+              `e2e/bl031-capture` enforces it by paint: it slides a
+              viewport-height window down the document and fails the evidence
+              set if any window ever holds two.
+
+              WHY IT IS FILLED ONLY WHEN THE SEARCH FOUND SOMETHING. A commit is
+              earned. An empty search has produced nothing to keep, its honest
+              next steps already live in the empty block above, and its document
+              is short enough that a fill here would sit in the same viewport as
+              `See ads` — the law and the product argument give the same
+              answer. */}
+          {instrumentUsed ? (
+            !data.session ? (
+              <div className="f9-wk-retain f9-search-signup-cta">
+                <p className="f9-wk-sec-title">
+                  {hasResults
+                    ? "Keep this competitor under watch"
+                    : "Keep checking this competitor"}
+                </p>
+                <p className="f9-wk-retain-say">{signupCtaBody}</p>
+                <div className="f9-wk-acts">
+                  {hasResults ? (
+                    <Link className="f9-wk-btn" to={signupTrackingPath}>
+                      Create account
+                    </Link>
+                  ) : (
+                    <Link className="f9-wk-lnk" to={signupTrackingPath}>
+                      Create account{" "}
+                      <span aria-hidden="true" className="f9-wk-chev">
+                        &rsaquo;
+                      </span>
+                    </Link>
+                  )}
+                </div>
+              </div>
+            ) : canTrackCurrentCompetitor && hasResults ? (
+              <div className="f9-wk-retain">
+                <p className="f9-wk-sec-title">
+                  Keep this competitor under watch
+                </p>
+                <p className="f9-wk-retain-say">
+                  We&rsquo;ll check {competitorWatchLabel} on a schedule, save
+                  the screenshots, and email you when the ads, the offer, or the
+                  landing page moves.
+                </p>
+                <div className="f9-wk-acts is-row">
+                  <Form className="f9-quick-track-form" method="post">
+                    <input name="intent" type="hidden" value="create-watchlist" />
+                    <SearchStateFields
+                      competitorWebsite={competitorWebsite.raw}
+                      filters={data.filters}
+                      mode={data.mode}
+                      trackingRole={trackingRole}
+                    />
+                    <input
+                      name="name"
+                      type="hidden"
+                      value={`${inferredWatchlistName} watch`}
+                    />
+                    <SubmitButton
+                      className="f9-wk-btn"
+                      intent="create-watchlist"
+                      pendingLabel="Creating…"
+                    >
+                      Track this {targetNoun}
+                    </SubmitButton>
+                  </Form>
+                  {/* Rank 2, and it stays text: two fills in one band is the
+                      bug the law is there to prevent, and saving the query is
+                      the reversible half of this decision. */}
+                  <details className="f9-wk-refine is-inline">
+                    <summary>Save this search</summary>
+                    <Form className="f9-save-query-form" method="post">
+                      <input name="intent" type="hidden" value="save-query" />
+                      <SearchStateFields
+                        competitorWebsite={competitorWebsite.raw}
+                        filters={data.filters}
+                        mode={data.mode}
+                        trackingRole={trackingRole}
+                      />
+                      <label className="f9-wk-field">
+                        <span className="f9-wk-lab">Save search as</span>
+                        <input
+                          autoComplete="off"
+                          className="f9-wk-in"
+                          defaultValue={inferredWatchlistName}
+                          name="name"
+                          placeholder="Competitor research"
+                          type="text"
+                        />
+                      </label>
+                      <SubmitButton
+                        className="f9-wk-lnk"
+                        intent="save-query"
+                        pendingLabel="Saving…"
+                      >
+                        Save search
+                      </SubmitButton>
+                    </Form>
+                  </details>
+                </div>
+              </div>
+            ) : null
+          ) : null}
+          </>
         ) : (
           /* Pre-search. The boringness budget: a quiet explanation and the one
              Rank-1 above it. No specimen, no dimmed sample card, no diagram of

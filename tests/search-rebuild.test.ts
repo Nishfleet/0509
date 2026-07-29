@@ -92,8 +92,21 @@ describe("search rebuild", () => {
     // BL-031: the banner box became a quiet note line in the results column.
     // The guarantee is the same — a cached or degraded result set still says
     // so above the rows, rather than presenting stale evidence as fresh.
-    expect(searchRoute).toContain("discoverySummary && visibleAds.length > 0");
+    //
+    // ROUND 2 sharpens it into the caveat/footnote split: a summary about a
+    // NOT-healthy check is a caveat and stays above the rows where it cannot
+    // be missed; on a healthy check the same line reads "Live ad checks are
+    // ready", which is provenance the evidence pane already attaches to the
+    // capture, so it joins the footnotes below the list. The warning path is
+    // the one this test guards, and it is asserted by POSITION.
+    const caveat = searchRoute.indexOf('visibleResult.discoveryStatus !== "healthy"');
+    const footnote = searchRoute.indexOf('visibleResult.discoveryStatus === "healthy"');
+    const rows = searchRoute.indexOf("<RuledList");
+    expect(caveat).toBeGreaterThan(-1);
+    expect(caveat).toBeLessThan(rows);
+    expect(footnote).toBeGreaterThan(rows);
     expect(searchRoute).toContain('<p className="f9-wk-note">{discoverySummary}</p>');
+    expect(searchRoute).toContain('<p className="f9-wk-small">{discoverySummary}</p>');
   });
 
   it("keeps primary search links legible on dark buttons", () => {
