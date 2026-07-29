@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
+import { shellTopbarIsSuppressed } from "~/routes/app-layout";
+
 const layout = readFileSync("app/routes/app-layout.tsx", "utf8");
 const sourceAccess = readFileSync(
   "app/routes/app.source-access.ui.tsx",
@@ -22,8 +24,13 @@ const bl040Css = css.slice(cssHeadingIndex);
 
 describe("BL-040 landing-language surfaces", () => {
   it("suppresses the old shell topbar on both rebuilt routes", () => {
-    expect(layout).toContain('pathname === "/app/source-access"');
-    expect(layout).toContain('pathname === "/app/developer-access"');
+    expect(layout).toContain('normalizedPathname === "/app/source-access"');
+    expect(layout).toContain('normalizedPathname === "/app/developer-access"');
+    expect(shellTopbarIsSuppressed("/app/source-access")).toBe(true);
+    expect(shellTopbarIsSuppressed("/app/source-access/")).toBe(true);
+    expect(shellTopbarIsSuppressed("/app/developer-access")).toBe(true);
+    expect(shellTopbarIsSuppressed("/app/developer-access/")).toBe(true);
+    expect(shellTopbarIsSuppressed("/app/notifications")).toBe(false);
   });
 
   it("uses the working header and page layer without old panel theatre", () => {

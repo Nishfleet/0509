@@ -98,11 +98,13 @@ export function shellPrimaryIsDemoted(pathname: string) {
  * coexistence proof in the BL-030 report shows.
  */
 export function shellTopbarIsSuppressed(pathname: string) {
+  const normalizedPathname =
+    pathname.length > 1 ? pathname.replace(/\/+$/u, "") : pathname;
   return (
-    pathname === "/app" ||
-    pathname === "/app/watchlists" ||
-    pathname === "/app/source-access" ||
-    pathname === "/app/developer-access"
+    normalizedPathname === "/app" ||
+    normalizedPathname === "/app/watchlists" ||
+    normalizedPathname === "/app/source-access" ||
+    normalizedPathname === "/app/developer-access"
   );
 }
 
