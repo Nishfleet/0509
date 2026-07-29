@@ -195,7 +195,9 @@ describe("workspace settings route components", () => {
   it("renders notifications without source-token or API-key setup", async () => {
     await mockRouter({
       emailDeliveryReady: true,
+      digestCadencePreference: "plan_default",
       showSlackDelivery: false,
+      slackDelivery: { plan: "starter", entitled: true },
       canManageWhatsAppDelivery: false,
       slackTargets: [],
       whatsappTargets: [],
@@ -214,19 +216,20 @@ describe("workspace settings route components", () => {
     const markup = renderToStaticMarkup(createElement(NotificationsRoute));
 
     expect(markup).toContain("Notifications");
-    expect(markup).toContain("Email digest delivery and alert channels");
-    expect(markup).toContain("Digest and alert delivery");
-    expect(markup).toContain("Open watchlists");
+    expect(markup).toContain(
+      "Choose how briefs and confirmed competitor changes reach your team.",
+    );
+    expect(markup).toContain("Delivery channels");
+    expect(markup).toContain("Tune on competitors");
     expect(markup).not.toContain("Ad Library API page");
     expect(markup).not.toContain("Test and save access");
     expect(markup).not.toContain("Create API key");
     expect(markup).not.toContain("Save Slack delivery");
-    expect(markup).not.toContain("WhatsApp delivery");
-    expect(markup).not.toContain(
-      "WhatsApp delivery is enabled for this account",
+    expect(markup).toContain(
+      "WhatsApp delivery is not available at general availability yet. Use email delivery.",
     );
     expect(markup).not.toContain(
-      "WhatsApp is not available for this account yet",
+      "WhatsApp delivery is enabled for this account",
     );
     expect(markup).not.toContain("Save WhatsApp delivery");
     expect(markup).not.toContain("Delivery confirmation");

@@ -845,8 +845,11 @@ describe("notifications route", () => {
       const markup = renderToStaticMarkup(createElement(NotificationsRoute));
 
       expect(markup).toContain("Slack delivery is included in Starter and Agency plans.");
+      expect(markup).toContain("Slack controls are locked on this plan");
       expect(markup).toContain("View plans");
       expect(markup.match(/View plans/g)).toHaveLength(1);
+      expect(markup).toContain("f9-nt-lock");
+      expect(markup).not.toContain("f9-ed-specimen");
       expect(markup).toContain("Legacy growth alerts");
       expect(markup).toContain("Paused");
       expect(markup).not.toContain("slackWebhookUrl");
@@ -871,6 +874,13 @@ describe("notifications route", () => {
           lastSuccessfulDeliveryAt: null,
           createdAt: "2026-06-01T00:00:00.000Z",
         },
+        {
+          id: "slack-target-2",
+          displayName: "Founder alerts",
+          isPaused: true,
+          lastSuccessfulDeliveryAt: "2026-06-02T00:00:00.000Z",
+          createdAt: "2026-06-01T00:00:00.000Z",
+        },
       ],
       whatsappTargets: [],
       whatsappDelivery: {
@@ -889,6 +899,199 @@ describe("notifications route", () => {
     expect(markup).toContain("name=\"slackWebhookUrl\"");
     expect(markup).toContain("Save Slack delivery");
     expect(markup).toContain("value=\"pause-slack-webhook\"");
+    expect(markup).toContain("value=\"resume-slack-webhook\"");
+    expect(markup).toContain("Founder alerts");
+    expect(markup).toContain("Paused");
+  });
+
+  it("renders the GA surface as three quiet ruled channel definitions", async () => {
+    await mockRouter({
+      emailDeliveryReady: true,
+      digestCadencePreference: "plan_default",
+      showSlackDelivery: false,
+      slackDelivery: { plan: "starter", entitled: true },
+      canManageWhatsAppDelivery: false,
+      slackTargets: [],
+      whatsappTargets: [],
+      whatsappDelivery: {
+        providerConfigured: false,
+        customerReady: false,
+        webhookConfigured: false,
+        configuredTargets: 0,
+        usableTargets: 0,
+        lastSuccessfulDeliveryAt: null,
+      },
+    });
+
+    const { default: NotificationsRoute } = await import("~/routes/app.notifications");
+    const markup = renderToStaticMarkup(createElement(NotificationsRoute));
+
+    expect(markup).toContain("f9-wk-page f9-nt-page");
+    expect(markup).toContain("Delivery channels");
+    expect(markup.match(/f9-nt-definition-row/g)).toHaveLength(3);
+    expect(markup).toContain("Digest delivery can use the account email.");
+    expect(markup).toContain(
+      "Slack delivery is not available at general availability yet. Use email delivery.",
+    );
+    expect(markup).toContain(
+      "WhatsApp delivery is not available at general availability yet. Use email delivery.",
+    );
+    expect(markup).toContain("Quiet hours");
+    expect(markup).toContain("Recipients");
+    expect(markup).toContain("name=\"digestCadencePreference\"");
+    expect(markup).not.toContain("f9-app-panel");
+    expect(markup).not.toContain("f9-status-strip");
+    expect(markup).not.toContain("Save Slack delivery");
+    expect(markup).not.toContain("Save WhatsApp delivery");
+  });
+
+  it("keeps missing-email delivery honest and points to the account", async () => {
+    await mockRouter({
+      emailDeliveryReady: false,
+      digestCadencePreference: "weekly_only",
+      showSlackDelivery: false,
+      slackDelivery: { plan: "free", entitled: false },
+      canManageWhatsAppDelivery: false,
+      slackTargets: [],
+      whatsappTargets: [],
+      whatsappDelivery: {
+        providerConfigured: false,
+        customerReady: false,
+        webhookConfigured: false,
+        configuredTargets: 0,
+        usableTargets: 0,
+        lastSuccessfulDeliveryAt: null,
+      },
+    });
+
+    const { default: NotificationsRoute } = await import("~/routes/app.notifications");
+    const markup = renderToStaticMarkup(createElement(NotificationsRoute));
+
+    expect(markup).toContain("Needs email");
+    expect(markup).toContain("Add an account email first.");
+    expect(markup).toContain("No account email is ready, so email delivery cannot start yet.");
+    expect(markup).toContain("href=\"/app/account\"");
+    expect(markup).toContain("value=\"weekly_only\" selected");
+  });
+
+  it("renders action outcomes through the single workspace feedback strip", async () => {
+    await mockRouter(
+      {
+        emailDeliveryReady: true,
+        digestCadencePreference: "plan_default",
+        showSlackDelivery: false,
+        slackDelivery: { plan: "starter", entitled: true },
+        canManageWhatsAppDelivery: false,
+        slackTargets: [],
+        whatsappTargets: [],
+        whatsappDelivery: {
+          providerConfigured: false,
+          customerReady: false,
+          webhookConfigured: false,
+          configuredTargets: 0,
+          usableTargets: 0,
+          lastSuccessfulDeliveryAt: null,
+        },
+      },
+      { ok: false, message: "Frequency could not be saved." },
+    );
+
+    const { default: NotificationsRoute } = await import("~/routes/app.notifications");
+    const markup = renderToStaticMarkup(createElement(NotificationsRoute));
+
+    expect(markup).toContain("f9-wk-strip is-bad");
+    expect(markup).toContain("role=\"alert\"");
+    expect(markup).toContain("Not saved");
+    expect(markup).toContain("Frequency could not be saved.");
+    expect(markup).not.toContain("f9-message");
+  });
+
+  it("renders customer-facing WhatsApp setup and recipient truth without changing its actions", async () => {
+    const { isWhatsAppDeliveryCustomerFacing } = await import("~/lib/ga-customer-surface");
+    vi.mocked(isWhatsAppDeliveryCustomerFacing).mockReturnValue(true);
+    await mockRouter({
+      emailDeliveryReady: true,
+      digestCadencePreference: "plan_default",
+      showSlackDelivery: false,
+      slackDelivery: { plan: "agency", entitled: true },
+      canManageWhatsAppDelivery: true,
+      slackTargets: [],
+      whatsappTargets: [
+        {
+          id: "whatsapp-target-1",
+          displayName: "Founder phone",
+          isPaused: false,
+          validationStatus: "validated",
+          templateEligible: true,
+          lastSuccessfulDeliveryAt: "2026-06-07T00:00:00.000Z",
+          createdAt: "2026-06-02T00:00:00.000Z",
+        },
+        {
+          id: "whatsapp-target-2",
+          displayName: "Growth lead phone",
+          isPaused: false,
+          validationStatus: "pending",
+          templateEligible: false,
+          lastSuccessfulDeliveryAt: null,
+          createdAt: "2026-06-03T00:00:00.000Z",
+        },
+      ],
+      whatsappDelivery: {
+        providerConfigured: true,
+        customerReady: true,
+        webhookConfigured: true,
+        configuredTargets: 2,
+        usableTargets: 1,
+        lastSuccessfulDeliveryAt: "2026-06-07T00:00:00.000Z",
+      },
+    });
+
+    const { default: NotificationsRoute } = await import("~/routes/app.notifications");
+    const markup = renderToStaticMarkup(createElement(NotificationsRoute));
+
+    expect(markup).toContain("WhatsApp delivery is enabled for this account.");
+    expect(markup).toContain("name=\"whatsappDestinationName\"");
+    expect(markup).toContain("name=\"whatsappTargetValue\"");
+    expect(markup).toContain("name=\"whatsappExplicitOptIn\"");
+    expect(markup).toContain("Save WhatsApp delivery");
+    expect(markup).toContain("Founder phone");
+    expect(markup).toContain("Template-ready");
+    expect(markup).toContain("Growth lead phone");
+    expect(markup).toContain("Needs validation");
+    expect(markup).toContain("no successful send yet");
+    expect(markup).toContain("1 of 2 configured recipients can receive updates.");
+    expect(markup).not.toContain(
+      "WhatsApp delivery is not available at general availability yet.",
+    );
+  });
+
+  it("states the customer-facing WhatsApp setup barrier when account checks are incomplete", async () => {
+    const { isWhatsAppDeliveryCustomerFacing } = await import("~/lib/ga-customer-surface");
+    vi.mocked(isWhatsAppDeliveryCustomerFacing).mockReturnValue(true);
+    await mockRouter({
+      emailDeliveryReady: true,
+      digestCadencePreference: "plan_default",
+      showSlackDelivery: false,
+      slackDelivery: { plan: "agency", entitled: true },
+      canManageWhatsAppDelivery: false,
+      slackTargets: [],
+      whatsappTargets: [],
+      whatsappDelivery: {
+        providerConfigured: true,
+        customerReady: false,
+        webhookConfigured: false,
+        configuredTargets: 0,
+        usableTargets: 0,
+        lastSuccessfulDeliveryAt: null,
+      },
+    });
+
+    const { default: NotificationsRoute } = await import("~/routes/app.notifications");
+    const markup = renderToStaticMarkup(createElement(NotificationsRoute));
+
+    expect(markup).toContain("Setup not ready");
+    expect(markup).toContain("WhatsApp setup is not ready for this account.");
+    expect(markup).not.toContain("name=\"whatsappTargetValue\"");
   });
 
   it.each(["free", "scout"] as const)(
