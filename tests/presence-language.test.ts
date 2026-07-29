@@ -72,6 +72,8 @@ describe("BL-034 Presence landing language", () => {
       .toEqual(["1px"]);
     expect([...section.matchAll(/border-radius:\s*([^;]+);/g)].map((match) => match[1]))
       .toEqual(["0"]);
+    expect(section).toContain("animation-duration: 0.01ms !important;");
+    expect(section).toContain("animation-iteration-count: 1 !important;");
   });
 
   it("keeps caps-mono ornament out of the route and atomic feedback in the shared strip", () => {

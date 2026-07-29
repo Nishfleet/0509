@@ -267,6 +267,7 @@ describe("presence desk routes", () => {
     expect(html).toContain("Review tracked entities");
     expect(html).not.toContain('name="trackingMode"');
     expect(html).not.toContain("read-only on the Starter plan");
+    expect(html).not.toMatch(/<div class="f9-pr-lock"[^>]*role=/);
   });
 
   it("keeps a downgraded workspace slot count at zero", async () => {

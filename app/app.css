@@ -13774,6 +13774,8 @@ reds soften --- */
   .f9-pr-page *,
   .f9-pr-page *::before,
   .f9-pr-page *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }

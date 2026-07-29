@@ -319,7 +319,7 @@ export default function PresenceIndexRoute() {
               </div>
             </Form>
           ) : (
-            <div className="f9-pr-lock" data-bl034-first-row role="status">
+            <div className="f9-pr-lock" data-bl034-first-row>
               {planAllowsEntityCreation ? (
                 <>
                   <p>
