@@ -243,9 +243,11 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
         <section aria-labelledby="competitor-monitoring-title" className="f9-bl035-section">
           <h3 id="competitor-monitoring-title">Monitoring</h3>
           <p className="f9-muted-copy">
-            {watchlist.isActive
-              ? `Automatic checks are on. The next one is ${props.nextScanLabel}.`
-              : "Watching is paused. The evidence already on file stays here."}
+            {!watchlist.isActive
+              ? "Watching is paused. The evidence already on file stays here."
+              : props.sourceCanSchedule
+                ? `Automatic checks are on. The next one is ${props.nextScanLabel}.`
+                : "Automatic checks are waiting for source access. The evidence already on file stays here."}
           </p>
           {watchlist.isActive ? (
             <div className="f9-bl035-local-actions">

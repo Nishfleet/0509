@@ -2669,21 +2669,28 @@ describe("watchlists route rendering", () => {
   });
 
   it("keeps blocked source access actionable in the compressed working header", async () => {
-    const markup = await renderWatchlistsRoute({
-      ...selectedPanelLoaderData,
-      discoveryStatus: {
-        status: "demo",
-        provider: "meta_library_browser",
-        mode: "demo",
-        summary: "Live source access is unavailable.",
-        lastCheckedAt: null,
-        lastErrorCode: null,
-        lastErrorMessage: null,
+    const markup = await renderWatchlistsRoute(
+      {
+        ...selectedPanelLoaderData,
+        discoveryStatus: {
+          status: "demo",
+          provider: "meta_library_browser",
+          mode: "demo",
+          summary: "Live source access is unavailable.",
+          lastCheckedAt: null,
+          lastErrorCode: null,
+          lastErrorMessage: null,
+        },
       },
-    });
+      "setup",
+    );
 
     expect(markup).toContain('href="/app/source-access"');
     expect(markup).toContain("Needs source access");
+    expect(markup).toContain(
+      "Automatic checks are waiting for source access. The evidence already on file stays here.",
+    );
+    expect(markup).not.toContain("Automatic checks are on.");
     expect(markup.indexOf("Needs source access")).toBeLessThan(
       markup.indexOf('aria-label="Competitor sections"'),
     );
