@@ -125,13 +125,31 @@ describe("report client action card", () => {
 			const rank1 = container.querySelectorAll(".f9-ed-cta--rank1");
 			expect(rank1).toHaveLength(1);
 			expect(rank1[0].textContent).toContain("Send to client");
+			expect(rank1[0].classList.contains("f9-wk-btn")).toBe(true);
 
 			const rank2 = container.querySelector(".f9-ed-cta--rank2") as HTMLElement;
 			expect(rank2.textContent).toContain("Download PDF");
+			expect(rank2.classList.contains("f9-wk-lnk")).toBe(true);
 
 			// The retired styles never ship again (brief §5).
 			expect(container.querySelector(".f9-primary-button")).toBeNull();
 			expect(container.querySelector(".f9-secondary-button")).toBeNull();
+		} finally {
+			await act(async () => root.unmount());
+			container.remove();
+		}
+	});
+
+	it("keeps PDF entitlement honest without removing report review or sharing", async () => {
+		const { container, root } = await renderRoute({ pdfAvailable: false });
+		try {
+			expect(container.textContent).toContain(
+				"PDF export is unavailable for this workspace. Review plan access before preparing a client copy.",
+			);
+			expect(container.querySelector('input[value="download-pdf"]')).toBeNull();
+			expect(container.querySelector('input[value="share-report"]')).not.toBeNull();
+			expect(container.querySelector('input[type="checkbox"][name="reviewed"]')).not.toBeNull();
+			expect(container.querySelectorAll(".f9-wk-btn")).toHaveLength(1);
 		} finally {
 			await act(async () => root.unmount());
 			container.remove();

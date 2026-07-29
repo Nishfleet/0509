@@ -254,17 +254,16 @@ describe("reports plan state", () => {
     expect(markup).not.toContain("is-error");
   });
 
-  it("renders the gate as a designed specimen panel, not a bare upgrade wall", async () => {
+  it("renders the gate as a quiet v4 explanation, not a specimen panel", async () => {
     const markup = await renderReportsLocked("starter");
 
-    // Brief §6.8: ink header stating the real state, an honest paragraph, a
-    // dimmed SAMPLE in a labelled slot, one Rank-1 out.
-    expect(markup).toContain("f9-ed-specimen f9-locked-feature");
-    expect(markup).toContain("Reports · Agency plan required");
-    expect(markup).toContain("f9-ed-specimen-slot");
-    expect(markup).toContain("What an Agency report looks like");
-    expect(markup).toContain("Sample · not your workspace");
-    expect(markup.match(/f9-ed-cta--rank1/g) ?? []).toHaveLength(1);
+    expect(markup).toContain("f9-wk-reports-locked f9-locked-feature");
+    expect(markup).toContain("Everything stays private until you choose to send it.");
+    expect(markup).toContain("Your workspace evidence is not used as an upgrade preview.");
+    expect(markup).not.toContain("f9-ed-specimen");
+    expect(markup).not.toContain("f9-ed-specimen-slot");
+    expect(markup).not.toContain("Sample · not your workspace");
+    expect(markup.match(/f9-wk-btn/g) ?? []).toHaveLength(1);
     expect(markup).not.toContain("f9-primary-button");
   });
 

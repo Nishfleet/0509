@@ -98,7 +98,7 @@ describe("reports index", () => {
     expect(listWatchlists).not.toHaveBeenCalled();
   });
 
-  it("renders report artifacts as bands, one Rank-1, and an honestly separate shared-link action", async () => {
+  it("renders report sources as quiet ruled rows with one filled header action", async () => {
     await installIndexMocks({
       accessDenied: false,
       reports: [
@@ -115,45 +115,41 @@ describe("reports index", () => {
     const { ReportsIndexRoute } = await import("~/routes/app.reports.index.ui");
     const markup = renderToStaticMarkup(createElement(ReportsIndexRoute));
 
-    expect(markup).toContain("<h1>Reports</h1>");
+    expect(markup).toContain(">Reports</h1>");
     expect(markup).toContain("Offer tests");
     expect(markup).toContain('href="/app/reports/collection%3Acollection-1"');
-    expect(markup).toContain("Open report");
 
-    // Brief §6.1: one full-width band per source, never a card grid, so a
-    // 3+1 orphan hole cannot form.
-    expect(markup).toContain("f9-ed-report-shelf");
-    expect(markup).toContain("f9-ed-report-band");
+    expect(markup).toContain("f9-wk-rows");
+    expect(markup.match(/class="[^"]*\bf9-wk-row\b[^"]*"/g) ?? []).toHaveLength(1);
+    expect(markup).not.toContain("f9-ed-report-shelf");
+    expect(markup).not.toContain("f9-ed-report-band");
     expect(markup).not.toContain("f9-work-row");
+    expect(markup).not.toContain("Open report");
 
-    // Brief §5 + DESIGN.md WP-A3: the header's Rank-1 is the thing this page
-    // exists to do, and cross-navigation to /app/shares drops to Rank 3.
     expect(markup).toContain("Open the latest report");
-    expect(markup.match(/f9-ed-cta--rank1/g) ?? []).toHaveLength(1);
+    expect(markup.match(/f9-wk-btn/g) ?? []).toHaveLength(1);
     expect(markup).toContain('href="/app/shares"');
     expect(markup).toContain("Manage shared links");
-    expect(markup).toContain("f9-ed-cta--rank3");
+    expect(markup).toContain("f9-wk-lnk");
     expect(markup).not.toContain("f9-primary-button");
     expect(markup).not.toContain("f9-secondary-button");
   });
 
-  it("renders a designed specimen instead of an empty box when there is no report source", async () => {
+  it("renders an explanation and two real paths without specimen theater when empty", async () => {
     await installIndexMocks({ accessDenied: false, reports: [] });
     const { ReportsIndexRoute } = await import("~/routes/app.reports.index.ui");
     const markup = renderToStaticMarkup(createElement(ReportsIndexRoute));
 
-    expect(markup).toContain("f9-ed-specimen");
     expect(markup).toContain("No report source yet");
-    expect(markup).toContain("f9-ed-specimen-slot");
     expect(markup).toContain("Open collections");
     expect(markup).toContain("Open competitors");
-    // No header Rank-1 while there is nothing to open: the specimen carries
-    // the page's single primary.
-    expect(markup.match(/f9-ed-cta--rank1/g) ?? []).toHaveLength(1);
+    expect(markup).not.toContain("f9-ed-specimen");
+    expect(markup).not.toContain("f9-ed-specimen-slot");
+    expect(markup.match(/f9-wk-btn/g) ?? []).toHaveLength(1);
     expect(markup).not.toContain("Open the latest report");
   });
 
-  it("renders the Starter gate as a designed LockedFeature with a sample specimen", async () => {
+  it("renders the Starter gate as a quiet explanation with one upgrade action", async () => {
     await installIndexMocks({
       accessDenied: true,
       feature: "client_reports",
@@ -171,12 +167,11 @@ describe("reports index", () => {
     );
     expect(markup).toContain('href="/app/billing?source=reports#plans"');
     expect(markup).toContain("Upgrade to Agency");
-    // Brief §6.8: a dimmed, labelled SAMPLE, never a redacted preview of the
-    // workspace's own evidence and never a 1,000px void.
-    expect(markup).toContain("f9-ed-specimen-slot");
-    expect(markup).toContain("Sample · not your workspace");
-    expect(markup).toContain("What an Agency report looks like");
-    expect(markup.match(/f9-ed-cta--rank1/g) ?? []).toHaveLength(1);
+    expect(markup).toContain("Your workspace evidence is not used as an upgrade preview.");
+    expect(markup).not.toContain("f9-ed-specimen-slot");
+    expect(markup).not.toContain("Sample · not your workspace");
+    expect(markup).not.toContain("What an Agency report looks like");
+    expect(markup.match(/f9-wk-btn/g) ?? []).toHaveLength(1);
   });
 });
 
@@ -192,25 +187,8 @@ async function installIndexMocks(loaderData: unknown) {
     };
   });
   vi.doMock("~/components/dashboard-page", () => ({
-    DashboardPage: ({ children }: MockProps) => children,
-    DashboardPageHeader: ({
-      action,
-      lead,
-      title,
-    }: {
-      action?: { label: string; to: string };
-      lead: string;
-      title: string;
-    }) => (
-      <header>
-        <h1>{title}</h1>
-        <p>{lead}</p>
-        {action ? (
-          <a className="f9-ed-cta f9-ed-cta--rank1" href={action.to}>
-            {action.label}
-          </a>
-        ) : null}
-      </header>
+    DashboardPage: ({ children, className }: MockProps) => (
+      <main className={typeof className === "string" ? className : undefined}>{children}</main>
     ),
   }));
 }
