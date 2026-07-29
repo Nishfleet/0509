@@ -129,7 +129,7 @@ describe("digests customer presentation", () => {
 		},
 	);
 
-	it("reports the latest filing time even when a backfill has an older period", async () => {
+	it("reports the newest filing shown even when a backfill has an older period", async () => {
 		const data = digestData(null);
 		data.digests.push({
 			...data.selectedDigest,
@@ -143,7 +143,7 @@ describe("digests customer presentation", () => {
 		const markup = renderToStaticMarkup(createElement(DigestsRoute));
 
 		expect(markup).toMatch(
-			/Latest filed <time>2026-07-20T12:30:00\.000Z<\/time>/,
+			/Newest filing shown <time>2026-07-20T12:30:00\.000Z<\/time>/,
 		);
 	});
 

@@ -213,16 +213,17 @@ export default function DigestsRoute() {
     : data.selectedDigest
       ? null
       : { label: "Add competitor", to: "/search" };
-  const latestFiledAt =
+  const newestVisibleFilingAt =
     data.canAccessDigests && data.selectedDigest
-      ? latestDigestCreatedAt(data.digests, data.selectedDigest.createdAt)
+      ? newestVisibleDigestCreatedAt(data.digests, data.selectedDigest.createdAt)
       : null;
   const headerContext = !data.canAccessDigests ? (
     "This workspace does not include retained briefs."
   ) : data.selectedDigest ? (
     <>
       Showing {data.digests.length} recent brief{data.digests.length === 1 ? "" : "s"} on
-      file. Latest filed <LocalTime iso={latestFiledAt ?? data.selectedDigest.createdAt} />.
+      file. Newest filing shown{" "}
+      <LocalTime iso={newestVisibleFilingAt ?? data.selectedDigest.createdAt} />.
     </>
   ) : (
     "No briefs filed yet. The first completed check files one here."
@@ -494,7 +495,7 @@ function digestFilterResetHref(searchParams: URLSearchParams) {
   return `/app/digests${next.size > 0 ? `?${next.toString()}` : ""}`;
 }
 
-export function latestDigestCreatedAt(
+export function newestVisibleDigestCreatedAt(
   digests: Array<{ createdAt: string }>,
   fallback: string,
 ) {
