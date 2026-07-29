@@ -8,7 +8,7 @@
 # Usage:
 #   deploy-window-lock.sh acquire        # wait, then hold across later CI steps
 #   deploy-window-lock.sh release        # release the proven current owner
-#   deploy-window-lock.sh run -- <cmd>   # run one heavy command under the lock
+#   deploy-window-lock.sh run -- <cmd>   # run in the bounded verification pool
 #
 # GitHub Actions receives the private release capability through $GITHUB_ENV.
 # Local callers must set DEPLOY_WINDOW_CAPABILITY_FILE to their own private
@@ -27,6 +27,10 @@ META_LOCK_FILE="${LOCK_FILE}.meta.lock"
 ACQUIRE_TIMEOUT="${DEPLOY_WINDOW_ACQUIRE_TIMEOUT:-10800}"
 HOLD_CAP="${DEPLOY_WINDOW_HOLD_CAP:-21600}"
 POLL_INTERVAL="${DEPLOY_WINDOW_POLL_INTERVAL:-0.1}"
+VERIFY_SLOTS="${DEPLOY_WINDOW_VERIFY_SLOTS:-3}"
+VERIFY_ROOT="${DEPLOY_WINDOW_VERIFY_ROOT:-${LOCK_FILE}.verify}"
+VERIFY_TMP_ROOT="${DEPLOY_WINDOW_VERIFY_TMP_ROOT:-${TMPDIR:-/tmp}/0509-verification}"
+VERIFY_POLL_INTERVAL="${DEPLOY_WINDOW_VERIFY_POLL_INTERVAL:-0.1}"
 CAPABILITY_FILE="${DEPLOY_WINDOW_CAPABILITY_FILE:-}"
 RELEASE_TOKEN="${DEPLOY_WINDOW_RELEASE_TOKEN:-}"
 if [ -n "${DEPLOY_WINDOW_CALLER_ID:-}" ]; then
@@ -174,7 +178,7 @@ load_release_token() {
 validate_durations() {
   local name value
 
-  for name in ACQUIRE_TIMEOUT HOLD_CAP POLL_INTERVAL; do
+  for name in ACQUIRE_TIMEOUT HOLD_CAP POLL_INTERVAL VERIFY_POLL_INTERVAL; do
     value="${!name}"
     if ! is_duration "$value"; then
       echo "deploy-window-lock: ${name} must be a non-negative number of seconds (got '${value}')." >&2
@@ -184,6 +188,14 @@ validate_durations() {
 
   if [[ "$HOLD_CAP" =~ ^0+([.]0+)?$ ]] || [[ "$POLL_INTERVAL" =~ ^0+([.]0+)?$ ]]; then
     echo "deploy-window-lock: HOLD_CAP and POLL_INTERVAL must be greater than zero." >&2
+    exit 64
+  fi
+  if [[ "$VERIFY_POLL_INTERVAL" =~ ^0+([.]0+)?$ ]]; then
+    echo "deploy-window-lock: VERIFY_POLL_INTERVAL must be greater than zero." >&2
+    exit 64
+  fi
+  if [[ ! "$VERIFY_SLOTS" =~ ^[1-9][0-9]*$ ]] || [ "$VERIFY_SLOTS" -gt 8 ]; then
+    echo "deploy-window-lock: DEPLOY_WINDOW_VERIFY_SLOTS must be an integer from 1 through 8." >&2
     exit 64
   fi
   if [[ ! "$CALLER_ID" =~ ^[A-Za-z0-9_.-]+$ ]]; then
@@ -288,6 +300,7 @@ acquire_window() {
   # The holder keeps fd 9 open across CI steps. Its flock waiter and capped
   # sleep explicitly do not inherit fd 9, so killing the holder cannot leave a
   # child process holding or later acquiring the main lock.
+  # shellcheck disable=SC2016 # The single-quoted program expands in the holder.
   setsid bash -c '
     set -euo pipefail
 
@@ -510,6 +523,59 @@ release_window() {
   echo "deploy window released (owner pid ${target_pid})"
 }
 
+run_in_verification_lane() {
+  local deadline now slot candidate_fd slot_fd="" result lane_tmp default_port
+
+  mkdir -p "$VERIFY_ROOT" "$VERIFY_TMP_ROOT"
+  deadline="$(awk -v now="$(date +%s.%N)" -v wait="$ACQUIRE_TIMEOUT" 'BEGIN { printf "%.9f", now + wait }')"
+
+  while [ -z "$slot_fd" ]; do
+    for ((slot = 1; slot <= VERIFY_SLOTS; slot += 1)); do
+      exec {candidate_fd}>"${VERIFY_ROOT}/slot-${slot}.lock"
+      if flock --exclusive --nonblock "$candidate_fd"; then
+        slot_fd="$candidate_fd"
+        break
+      fi
+      exec {candidate_fd}>&-
+    done
+
+    if [ -n "$slot_fd" ]; then
+      break
+    fi
+
+    now="$(date +%s.%N)"
+    if awk -v now="$now" -v deadline="$deadline" 'BEGIN { exit(now >= deadline ? 0 : 1) }'; then
+      echo "deploy-window-lock: verification pool stayed full for ${ACQUIRE_TIMEOUT}s." >&2
+      return 1
+    fi
+    sleep "$VERIFY_POLL_INTERVAL"
+  done
+
+  mkdir -p "${VERIFY_TMP_ROOT}/slot-${slot}"
+  lane_tmp="$(mktemp -d "${VERIFY_TMP_ROOT}/slot-${slot}/${CALLER_ID}-$$.XXXXXX")"
+  default_port=$((4190 + slot))
+  if (
+    trap 'rm -rf -- "$lane_tmp"' EXIT
+    export TMPDIR="$lane_tmp"
+    export DEPLOY_WINDOW_SLOT="$slot"
+    export DEPLOY_WINDOW_VERIFY_SLOT="$slot"
+    export E2E_BASE_URL="${E2E_BASE_URL:-http://127.0.0.1:${default_port}}"
+
+    exec {gate_fd}>"$LOCK_FILE"
+    flock --shared --wait "$ACQUIRE_TIMEOUT" "$gate_fd"
+    echo "verification lane ${slot}/${VERIFY_SLOTS} acquired"
+    "$@"
+  ); then
+    result=0
+  else
+    result=$?
+  fi
+
+  flock --unlock "$slot_fd" 2>/dev/null || true
+  exec {slot_fd}>&-
+  return "$result"
+}
+
 validate_durations
 
 case "${1:-}" in
@@ -530,7 +596,7 @@ case "${1:-}" in
       echo "deploy-window-lock: run requires a command" >&2
       exit 64
     fi
-    exec flock --exclusive --wait "$ACQUIRE_TIMEOUT" "$LOCK_FILE" "$@"
+    run_in_verification_lane "$@"
     ;;
 
   *)

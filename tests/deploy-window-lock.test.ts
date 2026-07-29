@@ -1,10 +1,17 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 const script = resolve("scripts/deploy-window-lock.sh");
+const flockCompat = resolve("scripts/flock-compat.sh");
 const hasRequiredTools =
   spawnSync("flock", ["--version"], { stdio: "ignore" }).status === 0 &&
   spawnSync("setsid", ["--version"], { stdio: "ignore" }).status === 0 &&
@@ -30,6 +37,7 @@ function envFor(
     "GITHUB_RUN_ID",
     "GITHUB_RUN_ATTEMPT",
     "GITHUB_JOB",
+    "E2E_BASE_URL",
   ]) {
     delete env[name];
   }
@@ -104,7 +112,10 @@ async function waitFor(
 }
 
 function probeIsFree(lockFile: string): boolean {
-  return spawnSync("flock", ["--exclusive", "--nonblock", lockFile, "true"]).status === 0;
+  return (
+    spawnSync("flock", ["--exclusive", "--nonblock", lockFile, "true"])
+      .status === 0
+  );
 }
 
 afterEach(() => {
@@ -152,6 +163,240 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
     expect(readFileSync(marker, "utf8")).toBe("ran");
   });
 
+  it("runs three isolated verification lanes while a fourth waits", async () => {
+    const lockFile = scratchLock();
+    const verifyRoot = `${lockFile}.verify`;
+    const tmpRoot = `${lockFile}.tmp`;
+    const overrides = {
+      DEPLOY_WINDOW_ACQUIRE_TIMEOUT: "2",
+      DEPLOY_WINDOW_VERIFY_ROOT: verifyRoot,
+      DEPLOY_WINDOW_VERIFY_TMP_ROOT: tmpRoot,
+    };
+    const command = [
+      "run",
+      "--",
+      "bash",
+      "-c",
+      'printf "%s|%s|%s" "$DEPLOY_WINDOW_VERIFY_SLOT" "$TMPDIR" "$E2E_BASE_URL" >"$1"; while [ ! -e "$2" ]; do sleep 0.01; done',
+      "lane",
+    ];
+    const lanes = Array.from({ length: 3 }, (_, index) => {
+      const marker = `${lockFile}.lane-${index + 1}`;
+      const stop = `${marker}.stop`;
+      const child = spawnScript(
+        lockFile,
+        [...command, marker, stop],
+        overrides,
+      );
+      return { child, marker, result: completed(child), stop };
+    });
+
+    await waitFor(() => lanes.every(({ marker }) => existsSync(marker)));
+    const activeDetails = lanes.map(({ marker }) =>
+      readFileSync(marker, "utf8").split("|"),
+    );
+    expect(new Set(activeDetails.map(([slot]) => slot))).toEqual(
+      new Set(["1", "2", "3"]),
+    );
+    expect(new Set(activeDetails.map(([, tmp]) => tmp)).size).toBe(3);
+    expect(new Set(activeDetails.map(([, , baseUrl]) => baseUrl))).toEqual(
+      new Set([
+        "http://127.0.0.1:4191",
+        "http://127.0.0.1:4192",
+        "http://127.0.0.1:4193",
+      ]),
+    );
+
+    const fourthMarker = `${lockFile}.lane-4`;
+    const fourthStop = `${fourthMarker}.stop`;
+    const fourth = spawnScript(
+      lockFile,
+      [...command, fourthMarker, fourthStop],
+      overrides,
+    );
+    const fourthResult = completed(fourth);
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
+    expect(existsSync(fourthMarker)).toBe(false);
+    expect(probeIsFree(lockFile)).toBe(false);
+
+    writeFileSync(lanes[0]!.stop, "");
+    expect((await lanes[0]!.result).code).toBe(0);
+    await waitFor(() => existsSync(fourthMarker));
+
+    for (const lane of lanes.slice(1)) {
+      writeFileSync(lane.stop, "");
+    }
+    writeFileSync(fourthStop, "");
+    const remainingResults = await Promise.all([
+      ...lanes.slice(1).map(({ result }) => result),
+      fourthResult,
+    ]);
+    expect(remainingResults.every(({ code }) => code === 0)).toBe(true);
+
+    const allDetails = [
+      ...activeDetails,
+      readFileSync(fourthMarker, "utf8").split("|"),
+    ];
+    const tmpDirs = allDetails.map(([, tmp]) => tmp!);
+    expect(new Set(tmpDirs).size).toBe(4);
+    for (const path of tmpDirs) {
+      expect(path.startsWith(tmpRoot)).toBe(true);
+      expect(existsSync(path)).toBe(false);
+    }
+    expect(probeIsFree(lockFile)).toBe(true);
+  });
+
+  it("keeps new verification lanes behind a legacy exclusive holder", async () => {
+    const lockFile = scratchLock();
+    const legacyReady = `${lockFile}.legacy-ready`;
+    const legacyStop = `${lockFile}.legacy-stop`;
+    const marker = `${lockFile}.new-lane`;
+    const legacy = spawn(
+      "flock",
+      [
+        "--exclusive",
+        lockFile,
+        "bash",
+        "-c",
+        'printf "ready" >"$1"; while [ ! -e "$2" ]; do sleep 0.01; done',
+        "legacy",
+        legacyReady,
+        legacyStop,
+      ],
+      { stdio: "ignore" },
+    );
+    liveChildren.add(legacy);
+    legacy.once("exit", () => liveChildren.delete(legacy));
+    await waitFor(() => existsSync(legacyReady));
+
+    const lane = spawnScript(
+      lockFile,
+      ["run", "--", "bash", "-c", 'printf "ran" >"$1"', "lane", marker],
+      { DEPLOY_WINDOW_ACQUIRE_TIMEOUT: "2" },
+    );
+    const laneResult = completed(lane);
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
+    expect(lane.exitCode).toBeNull();
+    expect(existsSync(marker)).toBe(false);
+
+    writeFileSync(legacyStop, "");
+    const completedLane = await laneResult;
+    expect(completedLane.code, completedLane.stderr).toBe(0);
+    expect(readFileSync(marker, "utf8")).toBe("ran");
+  });
+
+  it("drains all active verification lanes before deploy acquire", async () => {
+    const lockFile = scratchLock();
+    const command = [
+      "run",
+      "--",
+      "bash",
+      "-c",
+      'printf "started" >"$1"; while [ ! -e "$2" ]; do sleep 0.01; done',
+      "lane",
+    ];
+    const overrides = {
+      DEPLOY_WINDOW_ACQUIRE_TIMEOUT: "2",
+      DEPLOY_WINDOW_VERIFY_ROOT: `${lockFile}.verify`,
+      DEPLOY_WINDOW_VERIFY_TMP_ROOT: `${lockFile}.tmp`,
+    };
+    const lanes = Array.from({ length: 3 }, (_, index) => {
+      const marker = `${lockFile}.drain-${index + 1}`;
+      const stop = `${marker}.stop`;
+      const child = spawnScript(
+        lockFile,
+        [...command, marker, stop],
+        overrides,
+      );
+      return { marker, result: completed(child), stop };
+    });
+    await waitFor(() => lanes.every(({ marker }) => existsSync(marker)));
+
+    const deployOverrides = {
+      DEPLOY_WINDOW_ACQUIRE_TIMEOUT: "2",
+      DEPLOY_WINDOW_CALLER_ID: "vitest-deploy-drain",
+      DEPLOY_WINDOW_CAPABILITY_FILE: `${lockFile}.cap.deploy`,
+    };
+    const deploy = spawnScript(lockFile, ["acquire"], deployOverrides);
+    const deployResult = completed(deploy);
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
+    expect(deploy.exitCode).toBeNull();
+    expect(existsSync(deployOverrides.DEPLOY_WINDOW_CAPABILITY_FILE)).toBe(
+      false,
+    );
+
+    for (const lane of lanes) {
+      writeFileSync(lane.stop, "");
+    }
+    expect(
+      (await Promise.all(lanes.map(({ result }) => result))).every(
+        ({ code }) => code === 0,
+      ),
+    ).toBe(true);
+
+    const acquired = await deployResult;
+    expect(acquired.code, acquired.stderr).toBe(0);
+    expect(existsSync(deployOverrides.DEPLOY_WINDOW_CAPABILITY_FILE)).toBe(
+      true,
+    );
+    expect(run(lockFile, "release", deployOverrides).status).toBe(0);
+    expect(probeIsFree(lockFile)).toBe(true);
+  });
+
+  it("routes legacy exact-lock commands into a verification lane", () => {
+    const lockFile = scratchLock();
+    const marker = `${lockFile}.compat-marker`;
+    const routed = spawnSync(
+      flockCompat,
+      [
+        "--exclusive",
+        "--wait",
+        "2",
+        lockFile,
+        "bash",
+        "-c",
+        'printf "%s|%s" "$DEPLOY_WINDOW_VERIFY_SLOT" "$TMPDIR" >"$1"',
+        "lane",
+        marker,
+      ],
+      {
+        encoding: "utf8",
+        env: envFor(lockFile, {
+          DEPLOY_WINDOW_VERIFY_SLOTS: "3",
+          DEPLOY_WINDOW_VERIFY_ROOT: `${lockFile}.verify`,
+          DEPLOY_WINDOW_VERIFY_TMP_ROOT: `${lockFile}.tmp`,
+          FLOCK_COMPAT_REAL: "/usr/bin/flock",
+          FLOCK_COMPAT_LOCK_FILE: lockFile,
+        }),
+      },
+    );
+
+    expect(routed.status, routed.stderr).toBe(0);
+    expect(readFileSync(marker, "utf8")).toMatch(/^\d\|.+\.tmp\//u);
+  });
+
+  it("keeps ordinary CI checks in the bounded verification pool", () => {
+    const workflow = readFileSync(resolve(".github/workflows/ci.yml"), "utf8");
+
+    expect(workflow).not.toContain("Acquire deploy window");
+    expect(workflow).not.toContain("Release deploy window");
+    expect(workflow).toContain(
+      "./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts",
+    );
+    expect(workflow).toContain(
+      "./scripts/deploy-window-lock.sh run -- npm install --ignore-scripts",
+    );
+    expect(workflow).toContain(
+      "run: ./scripts/deploy-window-lock.sh run -- npm run build",
+    );
+    expect(workflow).toContain(
+      "run: ./scripts/deploy-window-lock.sh run -- npm run test",
+    );
+    expect(workflow).toContain(
+      "run: ./scripts/deploy-window-lock.sh run -- npm run typecheck",
+    );
+  });
+
   it("fails acquire after its timeout behind an unregistered lane", async () => {
     const lockFile = scratchLock();
     const lane = spawn("flock", ["--exclusive", lockFile, "sleep", "2"], {
@@ -191,7 +436,9 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
 
     const secondRelease = run(lockFile, "release", secondCaller);
     expect(secondRelease.status).toBe(0);
-    expect(secondRelease.stdout).toContain("has no successful-acquire capability");
+    expect(secondRelease.stdout).toContain(
+      "has no successful-acquire capability",
+    );
     expect(readFileSync(`${lockFile}.held`, "utf8")).toBe(ownerBefore);
     expect(() => process.kill(Number(trueOwnerPid), 0)).not.toThrow();
     expect(probeIsFree(lockFile)).toBe(false);
@@ -211,7 +458,9 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
     const acquireResult = completed(acquire);
     await waitFor(() => existsSync(`${lockFile}.held`));
 
-    const holderPid = Number(readFileSync(`${lockFile}.held`, "utf8").split(" ")[0]);
+    const holderPid = Number(
+      readFileSync(`${lockFile}.held`, "utf8").split(" ")[0],
+    );
     process.kill(holderPid, "SIGKILL");
 
     const result = await acquireResult;
