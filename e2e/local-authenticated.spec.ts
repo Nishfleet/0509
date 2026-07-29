@@ -300,8 +300,11 @@ test.describe("local authenticated E2E harness", () => {
     await page.keyboard.press("Enter");
 
     await expect(page).toHaveURL(/\/app\/watchlists\?watchlist=/);
-    await expect(page.getByRole("heading", { name: "Competitors" })).toBeVisible();
-    await expect(page.getByText("Nykaa watch").first()).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Nykaa watch", exact: true }),
+    ).toBeVisible();
+    await expect(page.locator(".f9-wk-context")).toContainText("Nykaa");
+    await expect(page.locator(".f9-bl035-detail")).toBeVisible();
   });
 
   test("starter customer journey covers dashboard, search, watchlists, presence, digests, billing, developer, support, and account", async ({
