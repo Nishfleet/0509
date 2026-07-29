@@ -513,7 +513,7 @@ describe("clients route agent memory", () => {
     const { default: ClientsRoute } = await import("~/routes/app.clients");
     const markup = renderToStaticMarkup(createElement(ClientsRoute));
 
-    expect(markup).toContain("Report preferences and notes");
+    expect(markup).toContain("Report preferences, tone, and follow-up notes");
     expect(markup).toContain("Save context");
     expect(markup).toContain("review_cadence");
     expect(markup).toContain("Weekly client-ready review with direct tone.");
@@ -525,6 +525,11 @@ describe("clients route agent memory", () => {
     expect(markup).toContain("room notes saved");
     expect(markup).toContain("Open the report and share the snapshot when ready.");
     expect(markup).toContain('name="intent" value="approve-client-room"');
+    expect(markup).toContain("Create client room");
+    expect(markup).toContain("f9-wk-page f9-clients-page");
+    expect(markup).not.toContain("f9-app-panel");
+    expect(markup).not.toContain("f9-dash-state-empty");
+    expect(markup).not.toContain("f9-primary-button");
   });
 
   it("fails closed when report revalidation helpers are unavailable", async () => {
@@ -879,28 +884,34 @@ describe("clients route agent memory", () => {
     expect(markup).not.toContain(">Restore<");
   });
 
-  it("renders a locked empty state instead of a dead-end create prompt", async () => {
-    await mockRouter({
-      plan: "free",
-      canManageClientRooms: false,
-      rooms: [],
-      watchlists: [],
-      collections: [],
-      memories: [],
-    });
+  it.each(["free", "scout", "starter"] as const)(
+    "renders a quiet locked empty state instead of a dead-end create prompt on %s",
+    async (plan) => {
+      await mockRouter({
+        plan,
+        canManageClientRooms: false,
+        rooms: [],
+        watchlists: [],
+        collections: [],
+        memories: [],
+      });
 
-    const { default: ClientsRoute } = await import("~/routes/app.clients");
-    const markup = renderToStaticMarkup(createElement(ClientsRoute));
+      const { default: ClientsRoute } = await import("~/routes/app.clients");
+      const markup = renderToStaticMarkup(createElement(ClientsRoute));
 
-    expect(markup).toContain("f9-locked-feature");
-    expect(markup).toContain("included in the Agency plan.");
-    expect(markup).toContain("Upgrade to Agency");
-    expect(markup).toContain("/app/billing?source=clients#plans");
-    expect(markup.match(/Upgrade to Agency/g)).toHaveLength(1);
-    expect(markup).not.toContain("is-error");
-    expect(markup).not.toContain("Create the first client room");
-    expect(markup).not.toContain("Save client room");
-    expect(markup).not.toContain("Save context");
-    expect(markup).not.toContain("<form");
-  });
+      expect(markup).toContain("f9-clients-gate");
+      expect(markup).toContain("Client rooms stay readable");
+      expect(markup).toContain("Agency plan unlocks creation and updates");
+      expect(markup).toContain("Upgrade to Agency");
+      expect(markup).toContain("/app/billing?source=clients#plans");
+      expect(markup.match(/Upgrade to Agency/g)).toHaveLength(1);
+      expect(markup).not.toContain("is-error");
+      expect(markup).not.toContain("f9-locked-feature");
+      expect(markup).not.toContain("f9-ed-specimen");
+      expect(markup).not.toContain("f9-dash-state-empty");
+      expect(markup).not.toContain("Save client room");
+      expect(markup).not.toContain("Save context");
+      expect(markup).not.toContain("<form");
+    },
+  );
 });

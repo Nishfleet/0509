@@ -524,7 +524,7 @@ test.describe("local authenticated E2E harness", () => {
         label: "Client rooms",
         path: "/app/clients",
         heading: "Client rooms",
-        copy: ["Package evidence and reports"],
+        copy: ["Keep reviewed evidence and client context"],
       },
       {
         label: "Billing & usage",
