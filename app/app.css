@@ -13342,6 +13342,7 @@ reds soften --- */
 
 .f9-bl035-tabs ul {
   display: flex;
+  gap: 0 22px;
   min-width: max-content;
   margin: 0;
   padding: 0;
@@ -13846,6 +13847,38 @@ reds soften --- */
   border: 1px solid var(--wk-rule);
   border-radius: 0;
   background: transparent;
+}
+
+/* Setup inherits the search mode switch and cross-route links. On the deep
+   surface they are one ruled instrument and quiet 44px actions, not a
+   floating selected pill or two proof-green decorations. */
+.f9-bl035-detail .f9-mode-toggle {
+  gap: 0;
+  padding: 0;
+  border: 1px solid var(--wk-rule);
+  background: transparent;
+}
+
+.f9-bl035-detail .f9-mode-toggle label + label {
+  border-left: 1px solid var(--wk-rule);
+}
+
+.f9-bl035-detail .f9-mode-toggle label.is-active {
+  background: var(--wk-sunk);
+  box-shadow: none;
+  color: var(--ink);
+}
+
+.f9-bl035-detail .f9-crosslink-row .f9-text-link {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  color: var(--ink);
+  font-weight: 400;
+  text-decoration: underline;
+  text-decoration-color: currentColor;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
 
 /* The signed-in rail foot owns identity plus one session action. Help, Docs
