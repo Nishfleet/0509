@@ -486,7 +486,7 @@ test.describe("local authenticated E2E harness", () => {
         label: "Collections",
         path: "/app/collections",
         heading: "Collections",
-        copy: ["Save the best competitor examples", "Create collection"],
+        copy: ["Saved evidence stays attached", "Start your first collection"],
       },
       { label: "Briefs", path: "/app/digests", heading: "Briefs", copy: ["Brief history"] },
       {

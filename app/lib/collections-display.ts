@@ -63,9 +63,9 @@ export const COLLECTION_BOARD_EMPTY_COPY =
 export const COLLECTION_FILTERED_EMPTY_COPY =
   "Nothing saved here matches that competitor. Clear the filter to see everything in this collection, or switch to another one.";
 
-/** The numbered reserved slot's copy on the first-run panel (§6.8 part 3). */
+/** Provenance promise shown before the first collection exists. */
 export const RESERVED_COLLECTION_SLOT_COPY =
-  "The first thing you save lands here as plate 01 — the ad exactly as we captured it, its offer and call to action, and the time we took it.";
+  "The first thing you save lands here with its source, the evidence itself, and the note your team adds.";
 
 /** Brief §6.5.4 honesty note, restated for a saved capture. */
 export const COLLECTION_CAPTURE_NOTE =
@@ -122,6 +122,18 @@ export function resolveSavedItemSourceKind(
   if (source === "external") return "filed";
   if (source === "demo") return "sample";
   return "captured";
+}
+
+/** Sentence-case provenance for the ruled row and its detail pane. */
+export function resolveSavedItemStatus(source: AdRecord["source"] | undefined): string {
+  switch (resolveSavedItemSourceKind(source)) {
+    case "filed":
+      return "Filed";
+    case "sample":
+      return "Sample";
+    default:
+      return "Captured";
+  }
 }
 
 /** Brief §8.3: demo and external material is labelled inline, in mono. */
@@ -291,6 +303,22 @@ export function savedItemProofLink(item: CollectionItemRecord): string | null {
   return proofLinkForAd(item.ad);
 }
 
+/** One plain sentence for the ruled list; depth stays in the detail pane. */
+export function savedItemRowSummary(item: CollectionItemRecord): string {
+  const candidates = [
+    item.ad.hook,
+    item.ad.previewHeadline,
+    item.ad.offer,
+    item.ad.body,
+    item.ad.creativeText,
+    item.note,
+  ];
+  return (
+    candidates.map((value) => value?.trim() ?? "").find(Boolean) ??
+    "Evidence saved without readable copy."
+  );
+}
+
 /* ------------------------------------------------------------------ *
  * §6.6 — the ONE fact rail that replaces the five-action rail
  * ------------------------------------------------------------------ */
@@ -389,6 +417,17 @@ export function formatLockedActionsLabel(locked: readonly string[]): string | nu
 /** Keeps the collection deep-link shape in one place. */
 export function collectionHref(collectionId: string, advertiserFilter?: string | null): string {
   const params = new URLSearchParams({ collection: collectionId });
+  if (advertiserFilter) params.set("advertiser", advertiserFilter);
+  return `/app/collections?${params.toString()}`;
+}
+
+/** Deep-link one saved record without changing the loader's collection read. */
+export function collectionItemHref(
+  collectionId: string,
+  itemId: string,
+  advertiserFilter?: string | null,
+): string {
+  const params = new URLSearchParams({ collection: collectionId, item: itemId });
   if (advertiserFilter) params.set("advertiser", advertiserFilter);
   return `/app/collections?${params.toString()}`;
 }
