@@ -1,21 +1,17 @@
 /**
- * Capture strip — brief §6.2 (R7 base/compare framing, R2 mixed weights).
+ * Capture-window helpers — brief §6.2.
  *
- * A row of 9px bars, 34px tall, right-aligned to today. The strip is the
- * thing an agency reads at a glance, so it is honest by construction: a day
- * we did not check renders as a LABELLED dashed gap, never as a silent
- * absence and never as a short "nothing changed" bar.
- *
- * Colour is never the only channel (brief §10) — each bar names its state in
- * words via title/aria-label, and the legend is one mono line in product
- * voice underneath.
+ * `buildCaptureWindow` and `trailingQuietRun` remain as DNA primitives for
+ * P1 daily-surface packages even though CaptureStrip itself was deleted
+ * during F3 guard hardening (zero app consumers after the P0 rebuild, and no
+ * named package in the P1 backlog commits to mounting it).
  */
 
 /**
  * `prewatch` is the only state the caller never supplies: it is the part of
  * the window that predates the watch itself. Those days are not gaps — there
  * was nothing to check yet — so they render as a void, carry no state word,
- * and are excluded from the gap legend and the quiet run (BL-006).
+ * and are excluded from the quiet run (BL-006).
  */
 export type CaptureDayState = "quiet" | "captured" | "unchecked" | "prewatch";
 
@@ -27,29 +23,6 @@ export interface CaptureDay {
 
 export const CAPTURE_WINDOW_DAYS = 30;
 
-/** A quiet run at least this long is stated as a finding, not left implicit. */
-export const CAPTURE_QUIET_RUN_THRESHOLD = 7;
-
-export const CAPTURE_STRIP_LEGEND_BASE =
-  "Short bar = checked, nothing changed. Tall bar = a change we captured.";
-
-export const CAPTURE_STRIP_GAP_LEGEND = "A dashed slot means we did not check that day.";
-
-/** Composes the legend from what the window actually contains — a legend must
- *  never promise a state this strip cannot show. */
-export function captureStripLegend(window: readonly CaptureDay[]): string {
-  const clauses = [CAPTURE_STRIP_LEGEND_BASE];
-  if (window.some((day) => day.state === "unchecked")) clauses.push(CAPTURE_STRIP_GAP_LEGEND);
-  return clauses.join(" ");
-}
-
-const STATE_WORDS: Record<CaptureDayState, string> = {
-  quiet: "checked, nothing changed",
-  captured: "a change we captured",
-  unchecked: "we did not check that day",
-  prewatch: "",
-};
-
 const DAY_MS = 86_400_000;
 
 function toUtcDate(value: string): Date | null {
@@ -60,12 +33,6 @@ function toUtcDate(value: string): Date | null {
 function isoDay(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
-
-const DAY_LABEL = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  month: "short",
-  timeZone: "UTC",
-});
 
 /**
  * Expands a sparse list of checked days into the full right-aligned window.
@@ -146,60 +113,4 @@ export function trailingQuietRun(window: readonly CaptureDay[]): number {
     break;
   }
   return run;
-}
-
-export function CaptureStrip({
-  days,
-  endDate,
-  startDate,
-  windowDays = CAPTURE_WINDOW_DAYS,
-  quietRunLabel,
-  className,
-}: {
-  days: readonly CaptureDay[];
-  endDate?: string;
-  /** When the watch began. Earlier slots render as the prewatch void. */
-  startDate?: string;
-  windowDays?: number;
-  /** Overrides the derived "nothing has changed" finding sentence. */
-  quietRunLabel?: string;
-  className?: string;
-}) {
-  const window = buildCaptureWindow(days, { endDate, windowDays, startDate });
-  if (window.length === 0) return null;
-
-  const legend = captureStripLegend(window);
-  const quietRun = trailingQuietRun(window);
-  const finding =
-    quietRunLabel ??
-    (quietRun >= CAPTURE_QUIET_RUN_THRESHOLD
-      ? `Nothing has changed here in ${quietRun} days. That is a finding, not a gap.`
-      : null);
-
-  return (
-    <div className={className ? `f9-ed-capture ${className}` : "f9-ed-capture"}>
-      <div className="f9-ed-capture-strip" role="img" aria-label={legend}>
-        <div className="f9-ed-capture-track">
-          {window.map((day) => {
-            // The prewatch void names no state: there is nothing to say about
-            // a day before the watch existed.
-            const label =
-              day.state === "prewatch"
-                ? undefined
-                : `${DAY_LABEL.format(new Date(`${day.date}T00:00:00.000Z`))} — ${STATE_WORDS[day.state]}`;
-            return (
-              <span
-                key={day.date}
-                className={`f9-ed-capture-bar is-${day.state}`}
-                data-capture-state={day.state}
-                title={label}
-              />
-            );
-          })}
-        </div>
-      </div>
-      <p className="f9-ed-capture-legend">{legend}</p>
-      {finding ? <p className="f9-ed-capture-finding">{finding}</p> : null}
-    </div>
-  );
 }

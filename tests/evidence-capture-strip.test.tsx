@@ -1,12 +1,6 @@
-import { readFileSync } from "node:fs";
-
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import {
-  CAPTURE_STRIP_GAP_LEGEND,
-  CAPTURE_STRIP_LEGEND_BASE,
-  CaptureStrip,
   buildCaptureWindow,
   trailingQuietRun,
   type CaptureDay,
@@ -48,6 +42,17 @@ describe("buildCaptureWindow", () => {
   it("returns nothing rather than guessing a window with no dates at all", () => {
     expect(buildCaptureWindow([], {})).toEqual([]);
     expect(buildCaptureWindow([{ date: "not-a-date", state: "quiet" }], {})).toEqual([]);
+  });
+
+  it("keeps a stored day even when it predates the recorded start", () => {
+    const window = buildCaptureWindow([{ date: "2026-07-20", state: "captured" }], {
+      endDate: "2026-07-27",
+      startDate: "2026-07-25",
+      windowDays: 8,
+    });
+
+    expect(window.find((day) => day.date === "2026-07-20")?.state).toBe("captured");
+    expect(window.find((day) => day.date === "2026-07-21")?.state).toBe("prewatch");
   });
 });
 
@@ -114,154 +119,5 @@ describe("trailingQuietRun", () => {
     );
 
     expect(trailingQuietRun(window)).toBe(2);
-  });
-});
-
-/**
- * F3 hardening: CaptureStrip was unmounted during the P0 rebuild. Its helpers
- * and constants remain in the evidence barrel as DNA-primitive material for P1
- * surfaces, but rendering a green test suite on an unmounted component is a
- * hollow guard. Skipped until a route actually mounts `<CaptureStrip>` again.
- * The pure-function helpers above (buildCaptureWindow, trailingQuietRun) and
- * any future-mounted strip tests belong outside this skipped group.
- */
-describe.skip("CaptureStrip — primitives awaiting mount (was evidence desk surface, zero app mounts after P0 rebuild)", () => {
-  it("labels a gap in the row instead of dropping the day silently", () => {
-    const markup = renderToStaticMarkup(
-      <CaptureStrip
-        days={[
-          { date: "2026-07-27", state: "captured" },
-          { date: "2026-07-25", state: "quiet" },
-        ]}
-        windowDays={4}
-      />,
-    );
-
-    expect(markup.match(/is-unchecked/g)).toHaveLength(2);
-    expect(markup).toContain("we did not check that day");
-    expect(markup).toContain(CAPTURE_STRIP_GAP_LEGEND);
-  });
-
-  it("names every bar in words so colour is never the only channel", () => {
-    const markup = renderToStaticMarkup(
-      <CaptureStrip days={[{ date: "2026-07-27", state: "captured" }]} windowDays={1} />,
-    );
-
-    expect(markup).toContain(CAPTURE_STRIP_LEGEND_BASE);
-    expect(markup).toContain("a change we captured");
-    expect(markup).toContain('data-capture-state="captured"');
-  });
-
-  /** BL-008: the waiting state had no producer — the legend must not promise it. */
-  it("never prints a waiting clause because no producer supplies that state", () => {
-    const markup = renderToStaticMarkup(
-      <CaptureStrip days={[{ date: "2026-07-27", state: "captured" }]} windowDays={1} />,
-    );
-    expect(markup).not.toContain("waiting on you");
-    expect(markup).toContain(CAPTURE_STRIP_LEGEND_BASE);
-  });
-
-  /**
-   * BL-006 blocking finding 1: a competitor created yesterday must not be
-   * shown 29 slots claiming we failed to check days it did not exist for.
-   */
-  it("renders days before the watch began as a void, not as missed checks", () => {
-    const markup = renderToStaticMarkup(
-      <CaptureStrip
-        days={[{ date: "2026-07-27", state: "quiet" }]}
-        endDate="2026-07-27"
-        startDate="2026-07-26T09:12:00.000Z"
-        windowDays={30}
-      />,
-    );
-
-    // 28 prewatch slots, one unchecked (the 26th, after the watch began), one
-    // quiet (today). No gap sentence, because there is no gap we own.
-    expect(markup.match(/is-prewatch/g)).toHaveLength(28);
-    expect(markup.match(/is-unchecked/g)).toHaveLength(1);
-    // A prewatch slot names no state and carries no title at all.
-    expect(markup).not.toMatch(/is-prewatch"[^>]*title=/);
-    expect(markup).not.toContain("28 Jun");
-  });
-
-  it("keeps a stored day even when it predates the recorded start", () => {
-    const window = buildCaptureWindow([{ date: "2026-07-20", state: "captured" }], {
-      endDate: "2026-07-27",
-      startDate: "2026-07-25",
-      windowDays: 8,
-    });
-
-    expect(window.find((day) => day.date === "2026-07-20")?.state).toBe("captured");
-    expect(window.find((day) => day.date === "2026-07-21")?.state).toBe("prewatch");
-  });
-
-  it("states a long quiet run as a finding, not as a gap", () => {
-    const markup = renderToStaticMarkup(
-      <CaptureStrip days={quietDays(26, "2026-07-02")} windowDays={26} />,
-    );
-
-    expect(markup).toContain("Nothing has changed here in 26 days. That is a finding, not a gap.");
-  });
-
-  it("stays quiet about short runs and drops the gap sentence when there are no gaps", () => {
-    const markup = renderToStaticMarkup(
-      <CaptureStrip days={quietDays(4, "2026-07-24")} windowDays={4} />,
-    );
-
-    expect(markup).not.toContain("That is a finding");
-    expect(markup).not.toContain(CAPTURE_STRIP_GAP_LEGEND);
-  });
-
-  it("renders nothing when there is no window to draw", () => {
-    expect(renderToStaticMarkup(<CaptureStrip days={[]} />)).toBe("");
-  });
-});
-
-/**
- * F3 hardening: the capture-bar CSS styles the unmounted CaptureStrip
- * surface. Keep the silhouette specs beside the skipped component group
- * so a future P1 mount can lift them back together.
- */
-describe.skip("capture bar silhouette — primitives awaiting mount (brief §6.2, §8.1)", () => {
-  const css = readFileSync("app/app.css", "utf8");
-
-  function barHeight(state: string): number {
-    const marker = `.f9-ed-capture-bar.is-${state} {`;
-    const start = css.indexOf(marker);
-    expect(start, `${marker} should exist`).toBeGreaterThan(-1);
-    const block = css.slice(start, css.indexOf("}", start));
-    const match = block.match(/height:\s*(\d+(?:\.\d+)?)px/);
-    expect(match, `is-${state} should declare a height`).not.toBeNull();
-    return Number(match![1]);
-  }
-
-  it("keeps height monotonic: tall means a change, short means no change", () => {
-    const quiet = barHeight("quiet");
-    const captured = barHeight("captured");
-    const unchecked = barHeight("unchecked");
-
-    expect(captured).toBeGreaterThan(quiet);
-    // The load-bearing assertion: an outage must never wear the silhouette
-    // of a caught change. A day we did not check reads as "no change plus no
-    // data", so it stays short and says the rest with a dashed edge.
-    expect(unchecked).not.toBe(captured);
-    expect(unchecked).toBeLessThan(captured);
-    expect(unchecked).toBe(quiet);
-  });
-
-  it("distinguishes an unchecked day from a quiet day without using height", () => {
-    const start = css.indexOf(".f9-ed-capture-bar.is-unchecked {");
-    const block = css.slice(start, css.indexOf("}", start));
-    expect(block).toContain("border: 1px dashed var(--ed-rule-dashed);");
-    expect(block).toContain("background: none;");
-
-    const quietStart = css.indexOf(".f9-ed-capture-bar.is-quiet {");
-    const quietBlock = css.slice(quietStart, css.indexOf("}", quietStart));
-    expect(quietBlock).toContain("background: var(--ed-bar-quiet);");
-    expect(quietBlock).not.toContain("dashed");
-  });
-
-  it("does not ship a waiting bar style without a producer for that state", () => {
-    expect(css).not.toContain(".f9-ed-capture-bar.is-waiting");
   });
 });
