@@ -130,6 +130,8 @@ describe("developer access route API-key readiness", () => {
     expect(markup).toContain("2 active keys · 1 with approved actions");
     expect(markup).toContain("Read only");
     expect(markup).toContain("Agent actions");
+    expect(markup).toContain("<p>Read-only · never used</p>");
+    expect(markup).toContain("<p>Approved actions · never used</p>");
     expect(markup).toContain("Revoked");
   });
 

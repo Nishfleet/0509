@@ -15,8 +15,7 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
  */
 const ENABLED = process.env.BL040_CAPTURE === "1";
 const OUT_DIR =
-  process.env.BL040_OUT ??
-  "/home/nish/workspaces/products/0509-audit-artifacts-bl040";
+  process.env.BL040_OUT ?? path.join(process.cwd(), "bl040-artifacts");
 const PREFIX = process.env.BL040_PREFIX ?? "after";
 
 const VIEWPORTS = [
