@@ -1,7 +1,32 @@
+import { homedir } from "node:os";
+import { resolve } from "node:path";
+
 export const BACKUP_AUTOMATION_APPROVAL = "0509-weekly-d1-to-r2";
 export const MANUAL_BACKUP_APPROVAL = "0509-manual-d1-export";
 export const BACKUP_DATABASE_NAME = "0509";
 export const BACKUP_BUCKET_NAME = "0509-landing-page-artifacts";
+
+/**
+ * @param {string} homeDirectory
+ * @param {Record<string, string | undefined>} env
+ */
+export function resolveBackupLocalDirectory(
+  homeDirectory = homedir(),
+  env = process.env,
+) {
+  const automationDirectory = env.D1_BACKUP_LOCAL_DIRECTORY?.trim();
+  if (env.GITHUB_ACTIONS === "true") {
+    if (!automationDirectory || automationDirectory.includes("\0")) {
+      throw new Error("backup_automation_local_directory_missing");
+    }
+    return resolve(automationDirectory);
+  }
+  const home = String(homeDirectory).trim();
+  if (!home || home.includes("\0")) {
+    throw new Error("backup_local_directory_invalid");
+  }
+  return resolve(home, ".local", "state", "0509", "backups", "d1");
+}
 
 /** @param {string} databaseName @param {string} stamp */
 export function buildBackupObjectKey(databaseName, stamp) {
