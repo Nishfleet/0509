@@ -4,7 +4,7 @@ export type BrowserBinding = BrowserWorker;
 
 export interface EmailAddress {
   email: string;
-  name?: string;
+  name: string;
 }
 
 export interface EmailSendingBinding {
