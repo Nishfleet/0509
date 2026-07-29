@@ -45,6 +45,7 @@ describe("BL-040 landing-language surfaces", () => {
     expect(developerAccess).toContain("f9-bl040-key-rows");
     expect(developerAccess).toContain('"Reveal"');
     expect(developerAccess).toContain('"Copy"');
+    expect(developerAccess).toContain("key={actionData.apiKeyPrefix}");
     expect(developerAccess).toContain('confirmLabel="Confirm — revoke key?"');
     expect(developerAccess).not.toContain("f9-secondary-button");
   });

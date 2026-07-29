@@ -137,7 +137,12 @@ export function DeveloperAccessRoute() {
       actionData &&
       actionData.apiKeySecret &&
       actionData.apiKeyPrefix ? (
-        <section aria-labelledby="new-key-title" className="f9-bl040-section">
+        <section
+          aria-labelledby="new-key-title"
+          aria-live="polite"
+          className="f9-bl040-section"
+          role="status"
+        >
           <div className="f9-bl040-section-head">
             <div>
               <h2 id="new-key-title">Copy the new key now</h2>
@@ -148,6 +153,7 @@ export function DeveloperAccessRoute() {
             </div>
           </div>
           <NewApiKeySecret
+            key={actionData.apiKeyPrefix}
             prefix={actionData.apiKeyPrefix}
             secret={actionData.apiKeySecret}
           />
