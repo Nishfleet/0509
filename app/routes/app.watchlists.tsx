@@ -560,7 +560,7 @@ export default function WatchlistsRoute() {
         {selectedWatchlist ? null : sourceCanSchedule &&
           trackingPresentation.statusLabel !== "Needs source access" ? (
             <span>{trackingPresentation.statusLabel}</span>
-          ) : selectedWatchlist ? null : (
+          ) : (
             <span>
               <Link className="f9-wk-lnk f9-wk-lnk--quiet" to="/app/source-access">
                 {trackingPresentation.statusLabel}

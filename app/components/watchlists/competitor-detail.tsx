@@ -249,6 +249,10 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
           </p>
           {watchlist.isActive ? (
             <div className="f9-bl035-local-actions">
+              {/* Lower paid plans keep Upgrade as the header's Rank-1 action,
+                  so their entitled manual refresh settles here as quiet
+                  Setup work. Agency uses Refresh in the header and must not
+                  duplicate it in this panel. */}
               {props.canRefresh && props.lockedCapabilities.length > 0 ? (
                 <Form method="post">
                   <input name="intent" type="hidden" value="refresh-watchlist" />
