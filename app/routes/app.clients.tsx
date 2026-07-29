@@ -3,8 +3,9 @@ import {
   Link,
   useActionData,
   useLoaderData,
+  useNavigation,
 } from "react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { sanitizeCustomerFacingMessage } from "~/lib/customer-route-error";
@@ -436,7 +437,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
 export default function ClientsRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const navigation = useNavigation();
   const [composerOpen, setComposerOpen] = useState(false);
+  const composerSubmissionPending = useRef(false);
   const canManageClientRooms = data.canManageClientRooms;
   const activeRooms = data.rooms.filter((room) => room.status === "active");
   const archivedRooms = data.rooms.filter((room) => room.status === "archived");
@@ -452,10 +455,23 @@ export default function ClientsRoute() {
   }
 
   useEffect(() => {
-    if (actionData?.ok && actionData.message === "Client room saved.") {
+    if (
+      navigation.state !== "idle" &&
+      navigation.formData?.get("intent") === "upsert-client-room"
+    ) {
+      composerSubmissionPending.current = true;
+      return;
+    }
+    if (
+      navigation.state === "idle" &&
+      composerSubmissionPending.current &&
+      actionData
+    ) {
+      composerSubmissionPending.current = false;
+      if (!actionData.ok) return;
       setComposerOpen(false);
     }
-  }, [actionData]);
+  }, [actionData, navigation.formData, navigation.state]);
 
   return (
     <DashboardPage className="f9-wk-page f9-clients-page">
@@ -695,7 +711,11 @@ function ClientContextSection({
           <strong>Saved context</strong>
           <small>Report preferences, tone, and follow-up notes</small>
         </span>
-        <span>{memories.length} saved</span>
+        <span>
+          {memories.length > 8
+            ? `8 of ${memories.length} shown`
+            : `${memories.length} saved`}
+        </span>
       </summary>
       <div className="f9-clients-disclosure-body">
         {canManage ? (

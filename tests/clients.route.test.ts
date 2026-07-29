@@ -532,6 +532,33 @@ describe("clients route agent memory", () => {
     expect(markup).not.toContain("f9-primary-button");
   });
 
+  it("labels the saved-context preview honestly when more than eight memories exist", async () => {
+    await mockRouter({
+      rooms: [],
+      watchlists: [],
+      collections: [],
+      memories: Array.from({ length: 9 }, (_, index) => ({
+        id: `memory-${index + 1}`,
+        key: `context_${index + 1}`,
+        scope: "workspace",
+        watchlistId: null,
+        clientRoomId: null,
+        source: "owner_ui",
+        updatedAt: "2026-06-20T00:00:00.000Z",
+        preview: `Context preview ${index + 1}`,
+      })),
+      plan: "agency",
+      canManageClientRooms: true,
+    });
+
+    const { default: ClientsRoute } = await import("~/routes/app.clients");
+    const markup = renderToStaticMarkup(createElement(ClientsRoute));
+
+    expect(markup).toContain("8 of 9 shown");
+    expect(markup).toContain("Context preview 8");
+    expect(markup).not.toContain("Context preview 9");
+  });
+
   it("fails closed when report revalidation helpers are unavailable", async () => {
     mockAuth();
     vi.doMock("~/lib/data.server", () => ({

@@ -17,8 +17,8 @@ const THEMES = ["light", "dark"] as const;
 const SWEEP_WIDTHS = [320, 360, 390, 414, 480, 640, 768, 1024, 1280, 1440, 1600, 1920, 2560];
 
 const SURFACES = [
-  { name: "agency-empty", user: "e2e-agency", mode: "empty" },
-  { name: "agency-composer", user: "e2e-agency", mode: "composer" },
+  { name: "agency-empty", user: "e2e-agency-unbranded", mode: "empty" },
+  { name: "agency-composer", user: "e2e-agency-unbranded", mode: "composer" },
   { name: "starter-locked", user: "e2e-starter", mode: "locked" },
   { name: "agency-room", user: "e2e-agency", mode: "room" },
 ] as const;
@@ -68,6 +68,12 @@ async function openSurface(
     await seedAgencyRoom(page);
   }
   await page.goto("/app/clients", { waitUntil: "networkidle" });
+  if (mode === "empty" || mode === "composer") {
+    await expect(
+      page.locator(".f9-client-room-card"),
+      `${mode} proof must use an Agency fixture with no persisted rooms`,
+    ).toHaveCount(0);
+  }
   if (mode === "composer") {
     await page.getByRole("button", { name: "Create client room" }).click();
     await expect(page.getByRole("button", { name: "Save client room" })).toBeVisible();
@@ -75,7 +81,9 @@ async function openSurface(
   if (mode === "room") {
     await expect(page.locator(".f9-client-room-card").first()).toBeVisible();
   }
-  await page.waitForTimeout(150);
+  // The shared Settle token is 260ms. Measure stable target geometry after it
+  // completes so transforms cannot turn an authored 44px control into 43.99px.
+  await page.waitForTimeout(320);
 }
 
 async function measure(page: Page) {
@@ -350,6 +358,7 @@ test.describe("BL-037 live proof", () => {
     const metrics: unknown[] = [];
     const sweep: unknown[] = [];
     const failures: string[] = [];
+    let composerCloseProof = false;
 
     for (const surface of SURFACES) {
       for (const theme of THEMES) {
@@ -467,9 +476,28 @@ test.describe("BL-037 live proof", () => {
       }
     }
 
+    const submissionContext = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+    });
+    await prepare(submissionContext, baseURL!, "e2e-agency-unbranded", "light");
+    const submissionPage = await submissionContext.newPage();
+    await openSurface(submissionPage, "composer");
+    await submissionPage.getByLabel("Name", { exact: true }).fill("Capture handoff room");
+    await submissionPage.getByRole("button", { name: "Save client room" }).click();
+    await expect(submissionPage.getByText("Client room saved.", { exact: true })).toBeVisible();
+    await expect(submissionPage.getByRole("button", { name: "Create client room" })).toBeVisible();
+    await expect(submissionPage.getByRole("button", { name: "Save client room" })).toHaveCount(0);
+    composerCloseProof = true;
+    await submissionContext.close();
+
     writeFileSync(
       path.join(OUT_DIR, `${PREFIX}-metrics.json`),
-      `${JSON.stringify({ capturedAt: new Date().toISOString(), metrics, sweep }, null, 2)}\n`,
+      `${JSON.stringify({
+        capturedAt: new Date().toISOString(),
+        composerCloseProof,
+        metrics,
+        sweep,
+      }, null, 2)}\n`,
     );
 
     expect(
