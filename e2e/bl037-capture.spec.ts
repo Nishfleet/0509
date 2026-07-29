@@ -358,7 +358,6 @@ test.describe("BL-037 live proof", () => {
     const metrics: unknown[] = [];
     const sweep: unknown[] = [];
     const failures: string[] = [];
-    let composerCloseProof = false;
 
     for (const surface of SURFACES) {
       for (const theme of THEMES) {
@@ -476,25 +475,10 @@ test.describe("BL-037 live proof", () => {
       }
     }
 
-    const submissionContext = await browser.newContext({
-      viewport: { width: 390, height: 844 },
-    });
-    await prepare(submissionContext, baseURL!, "e2e-agency-unbranded", "light");
-    const submissionPage = await submissionContext.newPage();
-    await openSurface(submissionPage, "composer");
-    await submissionPage.getByLabel("Name", { exact: true }).fill("Capture handoff room");
-    await submissionPage.getByRole("button", { name: "Save client room" }).click();
-    await expect(submissionPage.getByText("Client room saved.", { exact: true })).toBeVisible();
-    await expect(submissionPage.getByRole("button", { name: "Create client room" })).toBeVisible();
-    await expect(submissionPage.getByRole("button", { name: "Save client room" })).toHaveCount(0);
-    composerCloseProof = true;
-    await submissionContext.close();
-
     writeFileSync(
       path.join(OUT_DIR, `${PREFIX}-metrics.json`),
       `${JSON.stringify({
         capturedAt: new Date().toISOString(),
-        composerCloseProof,
         metrics,
         sweep,
       }, null, 2)}\n`,

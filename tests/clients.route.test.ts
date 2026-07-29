@@ -72,6 +72,42 @@ function mockAuth(plan: "free" | "scout" | "starter" | "agency" = "agency") {
 }
 
 describe("clients route agent memory", () => {
+  it("closes the composer only after its own successful navigation completes", async () => {
+    const { transitionClientRoomComposerSubmission } = await import("~/routes/app.clients");
+
+    const submitting = transitionClientRoomComposerSubmission(
+      false,
+      "submitting",
+      "upsert-client-room",
+      undefined,
+    );
+    expect(submitting).toEqual({ pending: true, close: false });
+    expect(
+      transitionClientRoomComposerSubmission(
+        submitting.pending,
+        "idle",
+        undefined,
+        true,
+      ),
+    ).toEqual({ pending: false, close: true });
+    expect(
+      transitionClientRoomComposerSubmission(
+        submitting.pending,
+        "idle",
+        undefined,
+        false,
+      ),
+    ).toEqual({ pending: false, close: false });
+    expect(
+      transitionClientRoomComposerSubmission(
+        false,
+        "submitting",
+        "upsert-agent-memory",
+        undefined,
+      ),
+    ).toEqual({ pending: false, close: false });
+  });
+
   it("saves owner-created operating memory through existing account storage", async () => {
     mockAuth();
     const upsertAgentMemory = vi.fn().mockResolvedValue({

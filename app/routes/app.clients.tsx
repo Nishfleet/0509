@@ -434,6 +434,21 @@ export async function action({ context, request }: ActionFunctionArgs) {
   };
 }
 
+export function transitionClientRoomComposerSubmission(
+  pending: boolean,
+  navigationState: "idle" | "loading" | "submitting",
+  formIntent: FormDataEntryValue | null | undefined,
+  actionOk: boolean | undefined,
+) {
+  if (navigationState !== "idle" && formIntent === "upsert-client-room") {
+    return { pending: true, close: false };
+  }
+  if (navigationState === "idle" && pending && actionOk !== undefined) {
+    return { pending: false, close: actionOk };
+  }
+  return { pending, close: false };
+}
+
 export default function ClientsRoute() {
   const data = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
@@ -455,20 +470,14 @@ export default function ClientsRoute() {
   }
 
   useEffect(() => {
-    if (
-      navigation.state !== "idle" &&
-      navigation.formData?.get("intent") === "upsert-client-room"
-    ) {
-      composerSubmissionPending.current = true;
-      return;
-    }
-    if (
-      navigation.state === "idle" &&
-      composerSubmissionPending.current &&
-      actionData
-    ) {
-      composerSubmissionPending.current = false;
-      if (!actionData.ok) return;
+    const transition = transitionClientRoomComposerSubmission(
+      composerSubmissionPending.current,
+      navigation.state,
+      navigation.formData?.get("intent"),
+      actionData?.ok,
+    );
+    composerSubmissionPending.current = transition.pending;
+    if (transition.close) {
       setComposerOpen(false);
     }
   }, [actionData, navigation.formData, navigation.state]);
