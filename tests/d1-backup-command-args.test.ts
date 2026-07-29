@@ -2,7 +2,7 @@ import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   BACKUP_AUTOMATION_APPROVAL,
@@ -27,6 +27,7 @@ describe("D1 backup command arguments", () => {
   const temporaryDirectories: string[] = [];
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
     await Promise.all(
       temporaryDirectories.splice(0).map((directory) =>
         rm(directory, { force: true, recursive: true }),
@@ -35,6 +36,7 @@ describe("D1 backup command arguments", () => {
   });
 
   it("keeps retained local backups outside the checkout", () => {
+    vi.stubEnv("GITHUB_ACTIONS", "false");
     expect(resolveBackupLocalDirectory("/srv/runner-home")).toBe(
       "/srv/runner-home/.local/state/0509/backups/d1",
     );

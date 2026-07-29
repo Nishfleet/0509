@@ -10,7 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { parse } from "yaml";
 
 import {
@@ -74,6 +74,10 @@ function aggregateEvidence() {
 }
 
 describe("D1 remote restore evidence automation", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("wires exact-R2 retrieval and independent exact-run cleanup into Actions", () => {
     const script = readFileSync(
       "scripts/d1-remote-restore-evidence.mjs",
@@ -372,6 +376,7 @@ describe("D1 remote restore evidence automation", () => {
   });
 
   it("removes only current-run and stale strict local restore temp directories", () => {
+    vi.stubEnv("GITHUB_ACTIONS", "false");
     const root = mkdtempSync(join(tmpdir(), "0509-local-cleanup-test-"));
     const current = join(
       root,
