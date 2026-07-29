@@ -8,6 +8,8 @@ import { execFileSync } from "node:child_process";
 const DOMAIN = "0509-customer-readiness-candidate:v1";
 const SOURCE_TREE_DOMAIN = "0509-customer-readiness-source-tree:v1";
 const SHA256_HEX = /^[a-f0-9]{64}$/;
+const D1_UUID =
+  /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 
 function parseArgs(args) {
   const parsed = {
@@ -256,9 +258,25 @@ function readWranglerBytes(bytes) {
   } catch {
     throw new Error("wrangler_config_invalid");
   }
+  const d1Matches = Array.isArray(config?.d1_databases)
+    ? config.d1_databases.filter(
+        (database) =>
+          database?.binding === "DB" &&
+          database?.database_name === "0509" &&
+          D1_UUID.test(database?.database_id ?? ""),
+      )
+    : [];
   return {
     bytes,
     mode: config?.vars?.SEARCH_ROLLOUT_MODE,
+    d1Database:
+      d1Matches.length === 1
+        ? {
+            binding: d1Matches[0].binding,
+            name: d1Matches[0].database_name,
+            uuid: d1Matches[0].database_id,
+          }
+        : null,
   };
 }
 
@@ -364,6 +382,8 @@ function createReport(cwd, args) {
       worktreeSearchRolloutModeSha256:
         typeof worktreeWrangler.mode === "string" ? hashValue(worktreeWrangler.mode) : null,
       worktreeSha256: createHash("sha256").update(worktreeWrangler.bytes).digest("hex"),
+      d1Database: committedWrangler.d1Database,
+      worktreeD1Database: worktreeWrangler.d1Database,
     },
     deployedIdentity: {
       ...deployedIdentity,
