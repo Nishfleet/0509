@@ -203,7 +203,29 @@ async function auditGreen(page: Page) {
       }
     }
 
-    return { tokenGreens: [...tokenGreens], hits, focusReservations };
+    /**
+     * Round 4: the announcement green, measured as a PAINTED node rather than
+     * as a CSS string. Document-scoped on purpose — the plate that owns the
+     * announcement may sit below the fold, and "the rule matched nothing" is
+     * exactly the defect that shipped in round 3.
+     */
+    const plateMarks = [...document.querySelectorAll(".f9-ed-diff-value mark")];
+    const paintedPlateMarks = plateMarks.filter((node) =>
+      isGreen(getComputedStyle(node).backgroundColor),
+    );
+    const markablePlates = document.querySelectorAll(
+      ".f9-ed-diff-plate.is-newest",
+    ).length;
+
+    return {
+      tokenGreens: [...tokenGreens],
+      hits,
+      focusReservations,
+      plateMarks: plateMarks.length,
+      paintedPlateMarks: paintedPlateMarks.length,
+      paintedPlateMarkValues: paintedPlateMarks.map((node) => node.textContent ?? ""),
+      markablePlates,
+    };
   });
 }
 
@@ -297,6 +319,11 @@ test.describe("BL-030 live proof", () => {
             greenPainted: green.hits.length,
             greenPaintedDetail: green.hits,
             greenFocusReservations: green.focusReservations.length,
+            // Document-scoped announcement proof (round 4).
+            plateMarks: green.plateMarks,
+            paintedPlateMarks: green.paintedPlateMarks,
+            paintedPlateMarkValues: green.paintedPlateMarkValues,
+            markablePlates: green.markablePlates,
             ruleWeights: measured.ruleWeights,
             consoleErrors,
             pageErrors,
@@ -312,6 +339,24 @@ test.describe("BL-030 live proof", () => {
           }
           // One green mark per viewport is program law, so the evidence set
           // refuses to be produced with more than one — on a rebuilt surface.
+          /**
+           * The record's announcement, asserted as paint. If the feed contains
+           * an event that carries a before/now mark, EXACTLY ONE plate mark in
+           * the document must resolve green — and if it does not, no plate
+           * mark may. Round 3 advertised this fill while shipping a selector
+           * that matched nothing; this is the assertion that would have caught
+           * it, and it runs in both themes at all three widths.
+           */
+          if (surface.name.startsWith("detail-") || surface.name === "competitors-pane") {
+            const expected = green.markablePlates > 0 ? 1 : 0;
+            if (green.paintedPlateMarks !== expected) {
+              failures.push(
+                `${surface.name} ${viewport.name} ${theme}: ${green.paintedPlateMarks} painted plate marks, expected ${expected} ` +
+                  `(${green.markablePlates} plate(s) carry is-newest, ${green.plateMarks} NOW token(s) in the feed)`,
+              );
+            }
+          }
+
           const rebuilt = !surface.name.startsWith("collections-");
           if (rebuilt && green.hits.length > 1) {
             failures.push(

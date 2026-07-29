@@ -13200,8 +13200,15 @@ reds soften --- */
   color: var(--ink);
 }
 
-.f9-wk-page .f9-ed-change-feed > :first-child .f9-ed-diff-value mark,
-.f9-wk-page .f9-ed-detail-main > .f9-ed-diff-plate:first-of-type .f9-ed-diff-value mark {
+/* The plate that owns the announcement is marked by the component, which
+   knows the feed's order and which events actually carry a before/now mark.
+   Round 3 tried to infer it positionally and both arms missed the live DOM —
+   every event is wrapped in a div, and the newest event on the release
+   fixture is a suppressed record with no mark at all — so the announcement
+   green was dead here and the spec, which only asserted that this selector
+   string existed, could not fail. `tests/event-change-green-mark.test.tsx`
+   now renders the tree and resolves this rule against it. */
+.f9-wk-page .f9-ed-diff-plate.is-newest .f9-ed-diff-value mark {
   background: var(--green);
   color: var(--ed-on-accent);
 }

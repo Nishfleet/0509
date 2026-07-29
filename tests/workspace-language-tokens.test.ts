@@ -151,6 +151,13 @@ describe("the coexistence seam inside a rebuilt page (BL-030 round 2)", () => {
    * green mark" using a probe that only counted this layer's own class. The
    * budget is the page's, not the layer's.
    */
+  /**
+   * NOTE: this case proves the seam's INVENTORY of accent rules — that exactly
+   * one rule in the scoped layer reaches for green. It cannot prove that rule
+   * matches a real node; round 3 shipped a selector that matched nothing and
+   * this shape of assertion passed anyway. `tests/event-change-green-mark.test.tsx`
+   * is the one that renders the tree and fails when the wiring breaks.
+   */
   it("spends no green on the setup card inside a rebuilt page", () => {
     const section = stripComments(layer());
     const scoped = section.slice(section.indexOf(".f9-wk-page .f9-ed-cta {"));
@@ -178,8 +185,7 @@ describe("the coexistence seam inside a rebuilt page (BL-030 round 2)", () => {
       .filter(([, , body]) => /--green\b|--ed-accent\b/.test(body))
       .map(([, selector]) => selector.trim().replace(/\s+/g, " "));
     expect(accentRules).toEqual([
-      ".f9-wk-page .f9-ed-change-feed > :first-child .f9-ed-diff-value mark, " +
-        ".f9-wk-page .f9-ed-detail-main > .f9-ed-diff-plate:first-of-type .f9-ed-diff-value mark",
+      ".f9-wk-page .f9-ed-diff-plate.is-newest .f9-ed-diff-value mark",
     ]);
     // And the default for every other plate's token is the sunk ground.
     expect(scoped).toMatch(

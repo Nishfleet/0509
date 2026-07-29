@@ -115,6 +115,54 @@ export function canRenderEventDiffPlate(input: {
   return hasCaptureTime(input.before.capturedAt) && hasCaptureTime(input.now.capturedAt);
 }
 
+/**
+ * BL-030 round 4 — which event owns the view's ONE green mark.
+ *
+ * The green fill is the announcement; an archived capture is a record, and
+ * records are not highlighted (the same rule that already forbids animating a
+ * diff). So exactly one plate in the feed may paint its NOW token green: the
+ * NEWEST event that actually renders a diff plate with a before/now mark.
+ *
+ * This is computed here, where the list is built and the order is known,
+ * rather than guessed with a CSS positional selector. Round 3 tried
+ * `.f9-ed-change-feed > :first-child` and `.f9-ed-detail-main > .f9-ed-diff-plate:first-of-type`;
+ * both missed the live DOM — every event is wrapped in a `<div>`, and the
+ * newest event on the release fixture is a suppressed change RECORD with no
+ * `<mark>` at all — so the announcement green was dead on this surface and
+ * nothing caught it, because the spec asserted a CSS string instead of a
+ * painted node.
+ *
+ * Returns null when no event in the feed carries a mark, which is a real
+ * state: a competitor whose only stored changes are suppressed, or scan-native
+ * with no before/after field values, announces nothing and shows no green.
+ */
+export function resolveNewestMarkedEventId(input: {
+  events: readonly WatchEventRecord[];
+  proofCapturesById: Map<string, ProofCaptureRecord>;
+  recentProofCaptures: readonly ProofCaptureRecord[];
+  runsById: Map<string, WatchlistRunRecord>;
+}): string | null {
+  for (const event of input.events) {
+    const proofCapture = event.proofCaptureId
+      ? input.proofCapturesById.get(event.proofCaptureId) ?? null
+      : null;
+    const priorProofCapture = resolvePriorProofCapture(
+      proofCapture,
+      input.recentProofCaptures,
+    );
+    const { before, now } = resolveEventDiffCaptures({
+      event,
+      proofCapture,
+      priorProofCapture,
+      runsById: input.runsById,
+    });
+    if (canRenderEventDiffPlate({ event, before, now })) {
+      return event.id;
+    }
+  }
+  return null;
+}
+
 export function resolveEventChangeQuietCopy(input: {
   event: WatchEventRecord;
   hasStoredDiffFields: boolean;
@@ -310,6 +358,12 @@ export function EventChangesSection(props: {
   const quietChecks = buildQuietCheckItems(
     data.runs.filter((run) => run.status === "succeeded" && !eventRunIds.has(run.id)),
   );
+  const newestMarkedEventId = resolveNewestMarkedEventId({
+    events: data.events,
+    proofCapturesById,
+    recentProofCaptures,
+    runsById,
+  });
   const latestRun = (data.runs[0] as WatchlistRunRecord | undefined) ?? null;
   const awaitingFirstCapture =
     !data.selectedWatchlist.lastScannedAt &&
@@ -389,12 +443,19 @@ export function EventChangesSection(props: {
             const caughtLabel = caughtAt ? formatCaughtStamp(caughtAt) : "CHANGE RECORDED";
             const degradeStamp = caughtAt ? <LocalTime iso={caughtAt} /> : "capture time not recorded";
 
+            // The newest event that actually carries a mark owns the view's one
+            // green; every plate below it is a record and renders in ink.
+            const isNewestMarked = event.id === newestMarkedEventId;
+            const plateClassName =
+              [isHighlighted ? "is-highlighted" : null, isNewestMarked ? "is-newest" : null]
+                .filter(Boolean)
+                .join(" ") || undefined;
             const plate = canRenderEventDiffPlate({ event, before, now }) ? (
               <DiffPlate
                 actions={actions}
                 before={before}
                 caughtLabel={caughtLabel}
-                className={isHighlighted ? "is-highlighted" : undefined}
+                className={plateClassName}
                 degradeStamp={degradeStamp}
                 delivery={delivery}
                 field={diffFieldLabel(event)}
