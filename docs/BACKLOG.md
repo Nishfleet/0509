@@ -206,6 +206,7 @@ condition.
   audit table; the deleted-CSS ledger.
 - Any package that changes a canonical URL must update RELEASE_COVERAGE_MATRIX in the same PR (Gate-B asserts exact URLs; lesson of the 2026-07-27 deploy blockage).
 - Full `npm test` before every PR — including CI/scripts/docs-only changes; guard tests assert workflow-file structure (lesson of deploy run 30327319587).
+- Dependency PRs run `launch:readiness:predeploy` locally before merge — raw vitest+typecheck is not the deploy gate (lesson of run 30416112116).
 - Accessibility outranks concept fidelity where they collide: every actionable
   control keeps a 44x44px target even when the concept draws it smaller, and
   the deviation is named in the intent audit rather than quietly taken.
