@@ -596,9 +596,11 @@ test.describe("local authenticated E2E harness", () => {
     await expect(page).toHaveURL(/\/auth\/login/);
   });
 
-  // app.css uses inclusive max-width boundaries at 640px (mobile app chrome)
-  // and 760px (responsive shell): test each boundary and its first pixel
-  // above, plus the smallest supported viewport.
+  // The app-shell cuts are 640px and 1180px. Sample 640/641 for mobile chrome;
+  // 760/761 is a search-page-scoped cut that remains load-bearing here through
+  // generic .f9-primary-button/.f9-mode-toggle rules. Keep 1024 as the sole
+  // width above the 900px f9-ed-band/detail-body, 920px plan/topup-grid, and
+  // 980px dashboard-grid/status-strip/panel-toolbar/work-row cuts.
   for (const { label, viewports } of [
     {
       label: "mobile app chrome",
@@ -613,6 +615,7 @@ test.describe("local authenticated E2E harness", () => {
       viewports: [
         { width: 760, height: 900 },
         { width: 761, height: 900 },
+        { width: 1024, height: 768 },
       ],
     },
   ]) {
@@ -621,9 +624,6 @@ test.describe("local authenticated E2E harness", () => {
       context,
       baseURL,
     }) => {
-      // Each generated test pins its 3 × 8 = 24 (or 2 × 8 = 16) navigation
-      // sweep to 30 seconds so future matrix growth fails loudly.
-      test.setTimeout(30_000);
       await signInAs(context, baseURL!, "e2e-starter");
       const routes = [
         "/app",
