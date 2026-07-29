@@ -99,6 +99,7 @@ describe("D1 remote restore evidence automation", () => {
       };
       jobs?: {
         cleanup?: {
+          env?: Record<string, string>;
           environment?: string;
           if?: string;
           needs?: string;
@@ -133,6 +134,11 @@ describe("D1 remote restore evidence automation", () => {
     expect(workflow.jobs?.cleanup?.environment).toBe("d1-backup-r2");
     expect(workflow.jobs?.cleanup?.if).toContain("always()");
     expect(workflow.jobs?.cleanup?.needs).toBe("restore");
+    expect(
+      workflow.jobs?.cleanup?.env?.D1_BACKUP_LOCAL_DIRECTORY,
+    ).toBe(
+      "${{ runner.temp }}/0509-d1-backups-${{ github.run_id }}-${{ github.run_attempt }}",
+    );
     expect(workflow.jobs?.restore?.["timeout-minutes"]).toBe(300);
     expect(
       (workflow.jobs?.cleanup as any)?.steps?.[0]?.with?.clean,
@@ -442,6 +448,79 @@ describe("D1 remote restore evidence automation", () => {
       ).toEqual([current]);
       expect(existsSync(localPath)).toBe(false);
       expect(existsSync(current)).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("deletes stale-run and prior-attempt temp directories against their owning backups", () => {
+    const root = mkdtempSync(join(tmpdir(), "0509-local-stale-cleanup-test-"));
+    const tempDirectory = join(root, "temp");
+    const backupRoot = join(root, "backups");
+    const currentBackupDirectory = join(
+      backupRoot,
+      "0509-d1-backups-30423695493-2",
+    );
+    const priorAttemptBackupDirectory = join(
+      backupRoot,
+      "0509-d1-backups-30423695493-1",
+    );
+    const staleBackupDirectory = join(
+      backupRoot,
+      "0509-d1-backups-30423695495-1",
+    );
+    const priorAttempt = join(
+      tempDirectory,
+      "0509-remote-restore-30423695493-1-Ab12Cd",
+    );
+    const stale = join(
+      tempDirectory,
+      "0509-remote-restore-30423695495-1-Ij56Kl",
+    );
+    const fileName = "0509-2026-07-29T04-38-02-954Z.sql";
+    const priorAttemptLocalPath = join(
+      priorAttemptBackupDirectory,
+      fileName,
+    );
+    const staleLocalPath = join(staleBackupDirectory, fileName);
+    mkdirSync(currentBackupDirectory, { recursive: true });
+    mkdirSync(priorAttemptBackupDirectory, { recursive: true });
+    mkdirSync(staleBackupDirectory, { recursive: true });
+    mkdirSync(priorAttempt, { recursive: true });
+    mkdirSync(stale, { recursive: true });
+    writeFileSync(priorAttemptLocalPath, "private fixture");
+    writeFileSync(staleLocalPath, "private fixture");
+    writeFileSync(
+      join(priorAttempt, "backup-local-manifest.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        localPath: priorAttemptLocalPath,
+        remoteKey: `backups/d1/${fileName}`,
+      }),
+    );
+    writeFileSync(
+      join(stale, "backup-local-manifest.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        localPath: staleLocalPath,
+        remoteKey: `backups/d1/${fileName}`,
+      }),
+    );
+    utimesSync(stale, new Date("2020-01-01"), new Date("2020-01-01"));
+    try {
+      expect(
+        cleanupLocalRestoreTempDirectories({
+          runId: "30423695493",
+          tempDirectory,
+          backupDirectory: currentBackupDirectory,
+          now: new Date("2026-07-29T12:00:00.000Z"),
+          sweepStale: true,
+        }),
+      ).toEqual([priorAttempt, stale].sort());
+      expect(existsSync(priorAttemptLocalPath)).toBe(false);
+      expect(existsSync(priorAttempt)).toBe(false);
+      expect(existsSync(staleLocalPath)).toBe(false);
+      expect(existsSync(stale)).toBe(false);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

@@ -14,7 +14,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -483,6 +483,39 @@ function removeOwnedLocalBackup(localPath) {
 }
 
 /**
+ * Resolve a temp directory's exact owning backup directory. Actions cleanup
+ * can encounter directories from an older run or an earlier attempt, so the
+ * current run-scoped directory is only the trusted sibling-directory anchor.
+ * @param {string} currentBackupDirectory
+ * @param {string} currentRunId
+ * @param {string} ownerRunId
+ * @param {string} ownerRunAttempt
+ */
+function resolveOwnedBackupDirectory(
+  currentBackupDirectory,
+  currentRunId,
+  ownerRunId,
+  ownerRunAttempt,
+) {
+  const currentDirectory = resolve(currentBackupDirectory);
+  const currentName = basename(currentDirectory);
+  const match = currentName.match(
+    /^0509-d1-backups-([1-9][0-9]{4,19})-([1-9][0-9]{0,5})$/u,
+  );
+  if (!match) {
+    if (ownerRunId === currentRunId) return currentDirectory;
+    throw new Error("remote_restore_backup_directory_context_invalid");
+  }
+  if (match[1] !== currentRunId) {
+    throw new Error("remote_restore_backup_directory_context_invalid");
+  }
+  return join(
+    dirname(currentDirectory),
+    `0509-d1-backups-${ownerRunId}-${ownerRunAttempt}`,
+  );
+}
+
+/**
  * Remove only strict run-scoped temp directories from this run, plus stale
  * strict directories when the independent cleanup job requests a sweep.
  * @param {{
@@ -519,18 +552,31 @@ export function cleanupLocalRestoreTempDirectories({
         sweepStale &&
         statSync(path).mtimeMs <=
           now.getTime() - STALE_LOCAL_RESTORE_AGE_MS;
-      if (match[1] === runId || stale) targets.push(path);
+      if (match[1] === runId || stale) {
+        targets.push({
+          path,
+          ownerRunId: match[1],
+          ownerRunAttempt: match[2],
+        });
+      }
     } catch (error) {
       errors.push(error);
     }
   }
-  for (const path of targets.sort()) {
+  targets.sort((left, right) => left.path.localeCompare(right.path));
+  for (const target of targets) {
+    const { path, ownerRunId, ownerRunAttempt } = target;
     try {
       const manifestPath = join(path, "backup-local-manifest.json");
       if (existsSync(manifestPath)) {
         const ownedBackup = readOwnedBackupManifest(
           manifestPath,
-          backupDirectory,
+          resolveOwnedBackupDirectory(
+            backupDirectory,
+            runId,
+            ownerRunId,
+            ownerRunAttempt,
+          ),
         );
         removeOwnedLocalBackup(ownedBackup.localPath);
       }
@@ -549,7 +595,7 @@ export function cleanupLocalRestoreTempDirectories({
       { cause: errors[0] },
     );
   }
-  return targets;
+  return targets.map(({ path }) => path);
 }
 
 /** @param {string} outputPath */

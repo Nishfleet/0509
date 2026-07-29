@@ -74,6 +74,8 @@ jobs:
     runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 120
     environment: d1-backup-r2
+    env:
+      D1_BACKUP_LOCAL_DIRECTORY: ${{ runner.temp }}/0509-d1-backups-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v7
         with:
