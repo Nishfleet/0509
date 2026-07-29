@@ -340,6 +340,7 @@ function NewApiKeySecret({
       await navigator.clipboard.writeText(secret);
       setCopyState("copied");
     } catch {
+      setRevealed(true);
       setCopyState("error");
     }
   }
