@@ -1,19 +1,24 @@
+import { useEffect, useId, useState } from "react";
 import { Form, useActionData, useLoaderData } from "react-router";
 import type { MetaFunction } from "react-router";
 
-import { ActionFeedback } from "~/components/action-feedback";
 import { ConfirmSubmitButton } from "~/components/confirm-button";
-import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
-import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardPage } from "~/components/dashboard-page";
 import { SubmitButton } from "~/components/submit-button";
-import type { NullableString, RouteActionData } from "~/routes/workspace-settings.shared";
+import { FeedbackStrip } from "~/components/workspace/feedback-strip";
+import { WorkingHeader } from "~/components/workspace/working-header";
+import type {
+  NullableString,
+  RouteActionData,
+} from "~/routes/workspace-settings.shared";
 
 export const developerAccessMeta: MetaFunction = () => [
   { title: "Developer access | Five to Nine" },
   {
     name: "description",
-    content: "Manage API keys for exports and approved account actions in Five to Nine.",
+    content:
+      "Manage API keys for exports and approved account actions in Five to Nine.",
   },
 ];
 
@@ -42,202 +47,336 @@ type DeveloperAccessActionData = RouteActionData & {
 export function DeveloperAccessRoute() {
   const data = useLoaderData<DeveloperAccessLoaderData>();
   const actionData = useActionData<DeveloperAccessActionData>();
-  const activeApiKeyCount = data.apiKeys.filter((apiKey) => !apiKey.revokedAt).length;
-  const writeEnabledApiKeyCount = data.apiKeys.filter((apiKey) => !apiKey.revokedAt && apiKey.actionsWriteEnabled).length;
-  const hasNewApiKeySecret = Boolean(actionData && "apiKeySecret" in actionData && actionData.apiKeySecret);
-  const canCreateApiKeys = data.canCreateApiKeys !== false && !data.createDisabledReason;
+  const activeApiKeys = data.apiKeys.filter((apiKey) => !apiKey.revokedAt);
+  const activeApiKeyCount = activeApiKeys.length;
+  const writeEnabledApiKeyCount = activeApiKeys.filter(
+    (apiKey) => apiKey.actionsWriteEnabled,
+  ).length;
+  const hasNewApiKeySecret = Boolean(
+    actionData &&
+      "apiKeySecret" in actionData &&
+      actionData.apiKeySecret,
+  );
+  const canCreateApiKeys =
+    data.canCreateApiKeys !== false && !data.createDisabledReason;
   const createDisabledReason = data.createDisabledReason ?? null;
-  const ownerManagedApiKeys = Boolean(createDisabledReason?.startsWith("Only "));
+  const ownerManagedApiKeys = Boolean(
+    createDisabledReason?.startsWith("Only "),
+  );
+  const planLocked = Boolean(createDisabledReason && !ownerManagedApiKeys);
 
   return (
-    <DashboardPage>
-      <DashboardPageHeader
-        action={{ label: "API docs", to: "/api/docs" }}
-        lead="API keys for exports and approved account actions."
+    <DashboardPage className="f9-wk-page f9-bl040-page f9-bl040-developer">
+      <WorkingHeader
+        action={
+          planLocked
+            ? {
+                label: "Upgrade to Agency",
+                to: "/app/billing?source=developer-access#plans",
+              }
+            : null
+        }
+        context={`${activeApiKeyCount} active ${
+          activeApiKeyCount === 1 ? "key" : "keys"
+        } · ${writeEnabledApiKeyCount} with approved actions · saved account data only`}
         title="Developer access"
       />
-      <section className="f9-app-stack">
-        <section className="f9-app-panel f9-source-setup">
-          <div className="f9-panel-toolbar">
-            <div>
-              <span className="f9-app-kicker">Developer access</span>
-              <h2>Connect exports and approved actions</h2>
-            </div>
-            <a className="f9-secondary-button" href="/api/docs" target="_blank" rel="noreferrer">
-              API docs
-            </a>
+
+      {actionData?.message && !hasNewApiKeySecret ? (
+        <FeedbackStrip
+          label={actionData.ok ? "Access updated" : "Access issue"}
+          tone={actionData.ok ? "ok" : "bad"}
+        >
+          {actionData.message}
+        </FeedbackStrip>
+      ) : null}
+
+      <section aria-labelledby="developer-scope-title" className="f9-bl040-section">
+        <div className="f9-bl040-section-head">
+          <div>
+            <h2 id="developer-scope-title">Connect exports and approved actions</h2>
+            <p>
+              Read keys reach saved workspace material. Write access is for trusted,
+              approved account actions.
+            </p>
           </div>
+          <a
+            className="f9-bl040-text-action"
+            href="/api/docs"
+            rel="noreferrer"
+            target="_blank"
+          >
+            API docs <span aria-hidden="true">&rsaquo;</span>
+          </a>
+        </div>
 
-          <p className="f9-muted-copy">
-            API keys can read saved collections, watchlists, digests, source trails, and exports for this account.
-            Write-enabled keys can run approved account actions only for trusted workflows. See the{" "}
-            <a href="/api/docs" rel="noreferrer" target="_blank">
-              API documentation
-            </a>{" "}
-            for the full capability list.
-          </p>
-
-          <div className="f9-status-strip">
-            <div>
-              <span className="f9-app-kicker">Active keys</span>
-              <strong>{activeApiKeyCount}</strong>
-            </div>
-            <div>
-              <span className="f9-app-kicker">Write access</span>
-              <strong>{writeEnabledApiKeyCount > 0 ? `${writeEnabledApiKeyCount} enabled` : "Needs write key"}</strong>
-            </div>
-            <div>
-              <span className="f9-app-kicker">Scope</span>
-              <strong>Saved account data only</strong>
-            </div>
+        <div aria-label="API connection facts" className="f9-bl040-rows" role="list">
+          <div
+            className="f9-bl040-fact-row"
+            data-bl040-first-row
+            role="listitem"
+          >
+            <span>JSON endpoint</span>
+            <code>{"/api/v1/watchlists/{id}?format=json"}</code>
           </div>
+          <div className="f9-bl040-fact-row" role="listitem">
+            <span>Authorization</span>
+            <code>Bearer your Five to Nine API key</code>
+          </div>
+          <div className="f9-bl040-fact-row" role="listitem">
+            <span>Coverage</span>
+            <p>
+              Saved account data and manual external evidence links. This does not add
+              automated TikTok, Google, LinkedIn, or Pinterest ingestion.
+            </p>
+          </div>
+        </div>
+      </section>
 
-          <ActionFeedback data={actionData} fallback />
-
-          <div className="f9-dashboard-grid">
-            <section className="f9-app-panel f9-source-guide">
-              <span className="f9-app-kicker">Tool setup</span>
-              <h3>Connect your tools without exposing secrets</h3>
-              <ol className="f9-numbered-guide">
-                <li>
-                  <strong>Create a read key</strong>
-                  <span>Use it for saved collections, watchlists, digests, and reports.</span>
-                </li>
-                <li>
-                  <strong>Enable write access only when needed</strong>
-                  <span>Allow trusted workflows to run approved account actions.</span>
-                </li>
-                <li>
-                  <strong>Review and revoke keys</strong>
-                  <span>Remove keys you no longer use from this page.</span>
-                </li>
-              </ol>
-            </section>
-
-            <section className="f9-app-panel f9-source-guide">
-              <span className="f9-app-kicker">API examples</span>
-              <h3>Current live endpoints</h3>
-              <dl className="proof-trail-list">
-                <div>
-                  <dt>JSON</dt>
-                  <dd>{"/api/v1/watchlists/{id}?format=json"}</dd>
-                </div>
-                <div>
-                  <dt>Header</dt>
-                  <dd>Authorization: Bearer your Five to Nine API key</dd>
-                </div>
-              </dl>
-              <p className="f9-muted-copy">
-                This API can read saved manual external evidence links in collections. Write-enabled keys can update
-                approved account resources, but this does not add automated TikTok, Google, LinkedIn, or Pinterest
-                ingestion.
+      {hasNewApiKeySecret &&
+      actionData &&
+      actionData.apiKeySecret &&
+      actionData.apiKeyPrefix ? (
+        <section aria-labelledby="new-key-title" className="f9-bl040-section">
+          <div className="f9-bl040-section-head">
+            <div>
+              <h2 id="new-key-title">Copy the new key now</h2>
+              <p>
+                Five to Nine stores only the hashed key and cannot show the full secret
+                again.
               </p>
-            </section>
+            </div>
           </div>
+          <NewApiKeySecret
+            prefix={actionData.apiKeyPrefix}
+            secret={actionData.apiKeySecret}
+          />
+        </section>
+      ) : null}
 
-          <div className="f9-dashboard-grid">
-            <section className="f9-app-panel f9-source-guide">
-              <span className="f9-app-kicker">Create API key</span>
-              <h3>Exports and approved actions</h3>
-              {createDisabledReason ? (
-                <div aria-live="assertive" className="f9-message is-error" role="alert">
-                  <p>{createDisabledReason}</p>
-                </div>
-              ) : null}
-              {!hasNewApiKeySecret ? (
-                <ActionFeedback data={actionData} intent="create-api-key" />
-              ) : null}
-              {hasNewApiKeySecret && actionData && "apiKeySecret" in actionData ? (
-                <div className="f9-message is-success" role="status">
-                  <p>Copy this key now. Five to Nine stores only the hashed key and cannot show it again.</p>
-                  <label className="f9-field">
-                    <span>{actionData.apiKeyPrefix}</span>
-                    <textarea readOnly rows={3} value={actionData.apiKeySecret} />
-                  </label>
-                </div>
-              ) : null}
-              <Form className="f9-auth-form" method="post">
-                <input name="intent" type="hidden" value="create-api-key" />
-                <label className="f9-field">
-                  <span>Key name</span>
-                  <input
-                    autoComplete="off"
-                    disabled={!canCreateApiKeys}
-                    name="apiKeyName"
-                    placeholder="Zapier, workflow script, assistant..."
-                    type="text"
-                  />
-                </label>
-                <label className="f9-checkbox-row">
-                  <input disabled={!canCreateApiKeys} name="actionsWriteEnabled" type="checkbox" value="1" />
-                  <span>Allow approved account actions</span>
-                </label>
-                <SubmitButton
-                  className="f9-primary-button"
-                  disabled={!canCreateApiKeys}
-                  intent="create-api-key"
-                  pendingLabel="Creating…"
-                >
-                  {canCreateApiKeys ? "Create API key" : "API keys unavailable"}
-                </SubmitButton>
-              </Form>
-            </section>
+      {canCreateApiKeys ? (
+        <section aria-labelledby="create-key-title" className="f9-bl040-section">
+          <div className="f9-bl040-section-head">
+            <div>
+              <h2 id="create-key-title">Create an API key</h2>
+              <p>
+                Name the tool, keep it read-only by default, and revoke it here when the
+                connection is retired.
+              </p>
+            </div>
           </div>
-
-          <ActionFeedback data={actionData} intent="revoke-api-key" />
-          <div className="f9-work-list">
-            {data.apiKeys.length > 0 ? (
-              data.apiKeys.map((apiKey) => (
-                <article className="f9-work-row" key={apiKey.id}>
-                  <div>
-                    <strong>{apiKey.name}</strong>
-                    <p>
-                      {apiKey.keyPrefix}...
-                      {apiKey.lastUsedAt ? (
-                        <> · last used <LocalTime iso={apiKey.lastUsedAt} /></>
-                      ) : (
-                        " · never used"
-                      )}
-                      {apiKey.revokedAt ? (
-                        <> · revoked <LocalTime iso={apiKey.revokedAt} /></>
-                      ) : (
-                        ""
-                      )}
-                      {" · "}
-                      {apiKey.actionsWriteEnabled ? "actions enabled" : "read-only"}
-                    </p>
-                  </div>
-                  {apiKey.revokedAt ? null : (
-                    <Form method="post">
-                      <input name="intent" type="hidden" value="revoke-api-key" />
-                      <input name="apiKeyId" type="hidden" value={apiKey.id} />
-                      <ConfirmSubmitButton
-                        className="f9-secondary-button"
-                        confirmLabel="Confirm — revoke key?"
-                        intent="revoke-api-key"
-                        match={{ apiKeyId: apiKey.id }}
-                        pendingLabel="Removing…"
-                      >
-                        Revoke
-                      </ConfirmSubmitButton>
-                    </Form>
-                  )}
-                </article>
-              ))
-            ) : (
-              <EmptyState
-                description={
-                  ownerManagedApiKeys
-                    ? createDisabledReason ?? "API keys are managed by the account owner."
-                    : "Create one when you are ready to connect an external tool."
-                }
-                title={ownerManagedApiKeys ? "API keys are managed by the account owner" : "No API keys yet"}
-                variant="row"
+          <Form className="f9-bl040-key-form" method="post">
+            <input name="intent" type="hidden" value="create-api-key" />
+            <label className="f9-bl040-field">
+              <span>Key name</span>
+              <input
+                autoComplete="off"
+                name="apiKeyName"
+                placeholder="Workflow script or reporting tool"
+                type="text"
               />
-            )}
+            </label>
+            <label className="f9-bl040-check">
+              <input
+                name="actionsWriteEnabled"
+                type="checkbox"
+                value="1"
+              />
+              <span>
+                Allow approved account actions
+                <small>Leave off for exports and reporting.</small>
+              </span>
+            </label>
+            <SubmitButton
+              className="f9-wk-btn"
+              intent="create-api-key"
+              pendingLabel="Creating…"
+            >
+              Create API key
+            </SubmitButton>
+          </Form>
+        </section>
+      ) : (
+        <section aria-labelledby="developer-lock-title" className="f9-bl040-section">
+          <div className="f9-bl040-quiet">
+            <h2 id="developer-lock-title">
+              {ownerManagedApiKeys
+                ? "API keys are managed by the account owner"
+                : "Developer access is on Agency"}
+            </h2>
+            <p>
+              {createDisabledReason ??
+                "Developer access is included in the Agency plan. Upgrade to Agency to create API keys."}
+            </p>
+            {planLocked ? (
+              <p>
+                Existing keys remain visible below so you can review or revoke them. The
+                Agency upgrade action above is the only step needed to create another.
+              </p>
+            ) : null}
           </div>
         </section>
+      )}
+
+      <section aria-labelledby="api-keys-title" className="f9-bl040-section">
+        <div className="f9-bl040-section-head">
+          <div>
+            <h2 id="api-keys-title">API keys</h2>
+            <p>
+              Full secrets disappear after creation. Rows retain the prefix, scope, and
+              activity needed to identify a key safely.
+            </p>
+          </div>
+        </div>
+
+        <div aria-label="API keys" className="f9-bl040-key-rows" role="list">
+          {data.apiKeys.length > 0 ? (
+            data.apiKeys.map((apiKey) => (
+              <article
+                className={`f9-bl040-key-row${apiKey.revokedAt ? " is-revoked" : ""}`}
+                key={apiKey.id}
+                role="listitem"
+              >
+                <div>
+                  <strong className="f9-bl040-key-name">{apiKey.name}</strong>
+                  <code>{apiKey.keyPrefix}…</code>
+                </div>
+                <p>
+                  {apiKey.actionsWriteEnabled ? "Approved actions" : "Read-only"}
+                  {" · "}
+                  {apiKey.lastUsedAt ? (
+                    <>
+                      last used <LocalTime iso={apiKey.lastUsedAt} />
+                    </>
+                  ) : (
+                    "never used"
+                  )}
+                </p>
+                <span
+                  className={`f9-bl040-status${apiKey.revokedAt ? " is-bad" : ""}`}
+                >
+                  {apiKey.revokedAt ? (
+                    <>
+                      Revoked <LocalTime iso={apiKey.revokedAt} />
+                    </>
+                  ) : (
+                    "Active"
+                  )}
+                </span>
+                {apiKey.revokedAt ? (
+                  <span aria-hidden="true" className="f9-bl040-key-spacer" />
+                ) : (
+                  <Form method="post">
+                    <input name="intent" type="hidden" value="revoke-api-key" />
+                    <input name="apiKeyId" type="hidden" value={apiKey.id} />
+                    <ConfirmSubmitButton
+                      className="f9-bl040-text-action is-danger"
+                      confirmLabel="Confirm — revoke key?"
+                      intent="revoke-api-key"
+                      match={{ apiKeyId: apiKey.id }}
+                      pendingLabel="Removing…"
+                      variant="light"
+                    >
+                      Revoke
+                    </ConfirmSubmitButton>
+                  </Form>
+                )}
+              </article>
+            ))
+          ) : (
+            <div className="f9-bl040-empty-row" role="listitem">
+              <strong>
+                {ownerManagedApiKeys
+                  ? "No keys are visible to workspace members"
+                  : "No API keys yet"}
+              </strong>
+              <p>
+                {ownerManagedApiKeys
+                  ? "The account owner can review and manage developer access."
+                  : planLocked
+                    ? "Upgrade to Agency when an external tool needs account access."
+                    : "Create a key when an external tool is ready to connect."}
+              </p>
+            </div>
+          )}
+        </div>
       </section>
+
+      <p className="f9-wk-opline">
+        Use read-only keys unless a trusted workflow needs an approved account action.
+      </p>
     </DashboardPage>
+  );
+}
+
+function NewApiKeySecret({
+  prefix,
+  secret,
+}: {
+  prefix: string;
+  secret: string;
+}) {
+  const [revealed, setRevealed] = useState(false);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "error">(
+    "idle",
+  );
+  const statusId = `new-api-key-status-${useId().replace(/:/g, "")}`;
+
+  useEffect(() => {
+    if (copyState !== "copied") return;
+    const timer = window.setTimeout(() => setCopyState("idle"), 2000);
+    return () => window.clearTimeout(timer);
+  }, [copyState]);
+
+  async function copySecret() {
+    setCopyState("idle");
+    try {
+      await navigator.clipboard.writeText(secret);
+      setCopyState("copied");
+    } catch {
+      setCopyState("error");
+    }
+  }
+
+  return (
+    <div className="f9-bl040-secret-row">
+      <code aria-label="New API key">
+        {revealed ? secret : `${prefix}••••••••••••••••`}
+      </code>
+      <div className="f9-bl040-text-actions">
+        <button
+          aria-pressed={revealed}
+          className="f9-bl040-text-action"
+          onClick={() => setRevealed((value) => !value)}
+          type="button"
+        >
+          {revealed ? "Hide" : "Reveal"}
+        </button>
+        <button
+          aria-describedby={statusId}
+          className="f9-bl040-text-action"
+          onClick={() => void copySecret()}
+          type="button"
+        >
+          {copyState === "copied"
+            ? "Copied"
+            : copyState === "error"
+              ? "Try copy again"
+              : "Copy"}
+        </button>
+      </div>
+      <span
+        aria-live="polite"
+        className="f9-sr-only"
+        id={statusId}
+        role="status"
+      >
+        {copyState === "copied"
+          ? "API key copied."
+          : copyState === "error"
+            ? "Could not copy the API key. Select and copy it manually."
+            : ""}
+      </span>
+    </div>
   );
 }

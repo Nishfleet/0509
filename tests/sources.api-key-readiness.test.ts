@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
 type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
 
-async function mockRouter(loaderData: unknown) {
+async function mockRouter(loaderData: unknown, actionData?: unknown) {
   vi.doMock("react-router", async () => {
     const actual = await vi.importActual<typeof import("react-router")>("react-router");
     const React = await import("react");
@@ -16,7 +16,7 @@ async function mockRouter(loaderData: unknown) {
         React.createElement("form", props, children),
       Link: ({ children, to, ...props }: MockLinkProps) =>
         React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
-      useActionData: vi.fn().mockReturnValue(undefined),
+      useActionData: vi.fn().mockReturnValue(actionData),
       useLoaderData: vi.fn().mockReturnValue(loaderData),
       useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
     };
@@ -43,10 +43,10 @@ describe("developer access route API-key readiness", () => {
     const { default: DeveloperAccessRoute } = await import("~/routes/app.developer-access");
     const markup = renderToStaticMarkup(createElement(DeveloperAccessRoute));
 
-    expect(markup).toMatch(/Active keys[\s\S]*?<strong>0<\/strong>/);
-    expect(markup).toContain("Needs write key");
+    expect(markup).toContain("0 active keys · 0 with approved actions");
+    expect(markup).toContain("No API keys yet");
     expect(markup).toContain("Allow approved account actions");
-    expect(markup).toContain("API documentation");
+    expect(markup).toContain("API docs");
   });
 
   it("explains plan-gated API keys before submit", async () => {
@@ -60,9 +60,33 @@ describe("developer access route API-key readiness", () => {
     const markup = renderToStaticMarkup(createElement(DeveloperAccessRoute));
 
     expect(markup).toContain("Developer access is included in the Agency plan. Upgrade to Agency to create API keys.");
-    expect(markup).toContain("API keys unavailable");
-    expect(markup).toContain("disabled");
-    expect(markup).not.toContain(">Create API key</button>");
+    expect(markup).toContain("Developer access is on Agency");
+    expect(markup).toContain(
+      'href="/app/billing?source=developer-access#plans"',
+    );
+    expect(markup).not.toContain('name="apiKeyName"');
+  });
+
+  it("keeps member-managed developer access quiet and owner-only", async () => {
+    await mockRouter({
+      canCreateApiKeys: false,
+      createDisabledReason:
+        "Only Owner can create or revoke API keys for this workspace.",
+      apiKeys: [],
+    });
+
+    const { default: DeveloperAccessRoute } = await import(
+      "~/routes/app.developer-access"
+    );
+    const markup = renderToStaticMarkup(createElement(DeveloperAccessRoute));
+
+    expect(markup).toContain("API keys are managed by the account owner");
+    expect(markup).toContain(
+      "Only Owner can create or revoke API keys for this workspace.",
+    );
+    expect(markup).not.toContain("Upgrade to Agency");
+    expect(markup).not.toContain('name="apiKeyName"');
+    expect(markup).toContain("No keys are visible to workspace members");
   });
 
   it("counts active keys and write-enabled keys separately", async () => {
@@ -103,8 +127,37 @@ describe("developer access route API-key readiness", () => {
     const { default: DeveloperAccessRoute } = await import("~/routes/app.developer-access");
     const markup = renderToStaticMarkup(createElement(DeveloperAccessRoute));
 
-    expect(markup).toMatch(/Active keys[\s\S]*?<strong>2<\/strong>/);
-    expect(markup).toContain("1 enabled");
-    expect(markup).not.toContain("Needs write key");
+    expect(markup).toContain("2 active keys · 1 with approved actions");
+    expect(markup).toContain("Read only");
+    expect(markup).toContain("Agent actions");
+    expect(markup).toContain("Revoked");
+  });
+
+  it("keeps a one-time secret hidden with reveal and copy text actions", async () => {
+    await mockRouter(
+      {
+        canCreateApiKeys: true,
+        createDisabledReason: null,
+        apiKeys: [],
+      },
+      {
+        ok: true,
+        intent: "create-api-key",
+        message: "API key created.",
+        apiKeyPrefix: "f9_live_new",
+        apiKeySecret: "f9_live_new_secret",
+      },
+    );
+
+    const { default: DeveloperAccessRoute } = await import(
+      "~/routes/app.developer-access"
+    );
+    const markup = renderToStaticMarkup(createElement(DeveloperAccessRoute));
+
+    expect(markup).toContain("Copy the new key now");
+    expect(markup).toContain("f9_live_new••••••••••••••••");
+    expect(markup).not.toContain("f9_live_new_secret");
+    expect(markup).toContain(">Reveal<");
+    expect(markup).toContain(">Copy<");
   });
 });
