@@ -411,7 +411,7 @@ function WhatsAppDelivery({ data }: { data: NotificationsLoaderData }) {
             className="f9-nt-input"
             inputMode="tel"
             name="whatsappTargetValue"
-            placeholder="+919876543210"
+            placeholder="+15551234567"
             type="tel"
           />
         </label>
@@ -440,8 +440,8 @@ function WhatsAppDelivery({ data }: { data: NotificationsLoaderData }) {
           status={data.whatsappDelivery.customerReady ? "Enabled" : "Not enabled"}
         />
         <ChannelRow
-          copy="Delivery turns on after the first test message is confirmed."
-          name="Successful test"
+          copy="The confirmation webhook is configured for delivery receipts."
+          name="Delivery webhook"
           status={data.whatsappDelivery.webhookConfigured ? "Configured" : "Not configured"}
         />
         <ChannelRow

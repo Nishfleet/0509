@@ -37,9 +37,11 @@ describe("BL-039 notifications rebuild", () => {
     expect(css.match(/BL-039 notifications \(landing language\)/g)).toHaveLength(
       1,
     );
-    const layer = stripComments(css.slice(css.indexOf(MARKER)));
+    const markerIndex = css.indexOf(MARKER);
+    expect(markerIndex).toBeGreaterThan(-1);
+    const layer = stripComments(css.slice(markerIndex));
     expect(layer.length).toBeGreaterThan(1_000);
-    expect(css.indexOf(MARKER)).toBeGreaterThan(css.indexOf("BL-030"));
+    expect(markerIndex).toBeGreaterThan(css.indexOf("BL-030"));
 
     const widths = new Set<string>();
     for (const match of layer.matchAll(
@@ -58,7 +60,9 @@ describe("BL-039 notifications rebuild", () => {
   });
 
   it("keeps the owned layer square, flat, and token-based", () => {
-    const layer = stripComments(css.slice(css.indexOf(MARKER)));
+    const markerIndex = css.indexOf(MARKER);
+    expect(markerIndex).toBeGreaterThan(-1);
+    const layer = stripComments(css.slice(markerIndex));
     const radii = [...layer.matchAll(/border-radius:\s*([^;]+);/g)].map(
       (match) => match[1].trim(),
     );

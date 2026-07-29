@@ -1052,8 +1052,14 @@ describe("notifications route", () => {
     expect(markup).toContain("WhatsApp delivery is enabled for this account.");
     expect(markup).toContain("name=\"whatsappDestinationName\"");
     expect(markup).toContain("name=\"whatsappTargetValue\"");
+    expect(markup).toContain("placeholder=\"+15551234567\"");
     expect(markup).toContain("name=\"whatsappExplicitOptIn\"");
     expect(markup).toContain("Save WhatsApp delivery");
+    expect(markup).toContain("Delivery webhook");
+    expect(markup).toContain(
+      "The confirmation webhook is configured for delivery receipts.",
+    );
+    expect(markup).not.toContain("Successful test");
     expect(markup).toContain("Founder phone");
     expect(markup).toContain("Template-ready");
     expect(markup).toContain("Growth lead phone");
