@@ -358,6 +358,7 @@ test.describe("BL-037 live proof", () => {
     const metrics: unknown[] = [];
     const sweep: unknown[] = [];
     const failures: string[] = [];
+    let disclosureStateProof = false;
 
     for (const surface of SURFACES) {
       for (const theme of THEMES) {
@@ -475,10 +476,28 @@ test.describe("BL-037 live proof", () => {
       }
     }
 
+    const disclosureContext = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+    });
+    await prepare(disclosureContext, baseURL!, "e2e-agency", "light");
+    const disclosurePage = await disclosureContext.newPage();
+    await openSurface(disclosurePage, "room");
+    const firstRoom = disclosurePage.locator(".f9-client-room-card").first();
+    await expect(firstRoom).toHaveAttribute("open", "");
+    await firstRoom.locator("summary").click();
+    await expect(firstRoom).not.toHaveAttribute("open", "");
+    await disclosurePage.getByRole("button", { name: "Create client room" }).click();
+    await expect(firstRoom).not.toHaveAttribute("open", "");
+    await disclosurePage.getByRole("button", { name: "Cancel" }).click();
+    await expect(firstRoom).not.toHaveAttribute("open", "");
+    disclosureStateProof = true;
+    await disclosureContext.close();
+
     writeFileSync(
       path.join(OUT_DIR, `${PREFIX}-metrics.json`),
       `${JSON.stringify({
         capturedAt: new Date().toISOString(),
+        disclosureStateProof,
         metrics,
         sweep,
       }, null, 2)}\n`,

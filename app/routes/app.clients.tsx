@@ -911,9 +911,14 @@ function ClientRoomCard({
   room: ClientRoomRecord;
 }) {
   const handoff = summarizeClientRoomHandoff(room, memories, canManage);
+  const [open, setOpen] = useState(initiallyOpen);
 
   return (
-    <details className="f9-client-room-card f9-clients-room" open={initiallyOpen}>
+    <details
+      className="f9-client-room-card f9-clients-room"
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+      open={open}
+    >
       <summary>
         <span className="f9-wk-nm">{room.name}</span>
         <span className="f9-clients-room-summary">
