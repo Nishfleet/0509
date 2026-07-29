@@ -1207,12 +1207,15 @@ export default function SearchRoute() {
   const headerContext = rootData.session
     ? "Public Meta Ad Library search. Save an ad to a collection, or start watching the competitor."
     : "Public Meta Ad Library search. No account needed.";
-  // The empty / delayed / disabled states own the section's heading rather
-  // than printing a second one under the results title. Warming keeps the
+  // ONE heading per state, and it is the sentence that state actually wants
+  // to say. The search answer's title is the strongest when there is one (it
+  // is what the old page rendered as the answer panel's h3, directly under a
+  // near-identical results title); otherwise the empty / delayed / disabled
+  // states own it; otherwise the results count does. Warming keeps the
   // results title ("Search in progress") and states the live check as a
   // sentence in its own polite live region.
   const emptyHeadline =
-    visibleAds.length === 0 && !isSearchWarming && !searchAnswer
+    visibleAds.length === 0 && !isSearchWarming
       ? formatEmptyResultHeadline(visibleResult, {
           displayDomain,
           isDomainSearch,
@@ -1220,6 +1223,15 @@ export default function SearchRoute() {
           relevanceApplied: data.relevanceApplied,
         })
       : null;
+  const sectionHeadline =
+    searchAnswer?.title ??
+    emptyHeadline ??
+    formatResultsPanelTitle(visibleResult, {
+      displayDomain,
+      isDomainSearch,
+      isBroaderScope,
+      relevanceApplied: data.relevanceApplied,
+    });
   const selectedLongevity = selectedAd ? formatAdLongevityLabel(selectedAd) : null;
   const selectedRunning =
     selectedAd?.activeStatusObserved !== false && Boolean(selectedAd?.active);
@@ -1511,7 +1523,11 @@ export default function SearchRoute() {
           >
             <div className="f9-wk-split-list">
               <section
-                aria-labelledby="search-results-title"
+                /* No `aria-labelledby` here: when the heading reads "Enter a
+                   competitor website" the region borrows the same accessible
+                   name as the search field, and `getByLabel` — the way an
+                   assistive reader addresses a control — resolves to both. A
+                   section with a heading inside needs no second name. */
                 className="f9-results-panel"
                 data-f9-result-cache-status={
                   visibleResult.cacheStatus ?? undefined
@@ -1530,14 +1546,8 @@ export default function SearchRoute() {
                         directly under this one ("No verified ads for X" over
                         "No verified ads found for X"); the state's own
                         sentence is now the section title. */}
-                    <h2 className="f9-wk-sec-title" id="search-results-title">
-                      {emptyHeadline ??
-                        formatResultsPanelTitle(visibleResult, {
-                          displayDomain,
-                          isDomainSearch,
-                          isBroaderScope,
-                          relevanceApplied: data.relevanceApplied,
-                        })}
+                    <h2 className="f9-wk-sec-title">
+                      {sectionHeadline}
                     </h2>
                     {/* One sub-line, and the search answer's own sentence
                         wins it when there is one — the panel below then
@@ -1658,7 +1668,7 @@ export default function SearchRoute() {
                           automatically.
                         </p>
                       </div>
-                    ) : emptyHeadline ? (
+                    ) : !searchAnswer ? (
                       <p className="f9-wk-note">
                         {isDelayedDiscoveryStatus(visibleResult.discoveryStatus)
                           ? (discoverySummary ??

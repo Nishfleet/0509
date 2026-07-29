@@ -43,11 +43,16 @@ export function SearchResultRow({
 }) {
   const isDemo = ad.source === "demo";
   const running = ad.activeStatusObserved !== false && ad.active;
+  const advertiser = formatAdvertiserLabel(ad.advertiser);
+  const summary = formatResultCardSummary(ad);
   return (
     <RuledRow
       keyFocused={isKeyFocused}
-      name={formatAdvertiserLabel(ad.advertiser)}
-      say={formatResultCardSummary(ad)}
+      // Twenty results from one advertiser would otherwise be twenty links
+      // called "Nykaa". The link is named for the ad it opens.
+      linkLabel={`${advertiser} — ${summary}`}
+      name={advertiser}
+      say={summary}
       selected={isActive}
       status={isDemo ? "Sample" : formatAdActiveStatus(ad)}
       statusTone={isDemo ? "quiet" : running ? "on" : "quiet"}

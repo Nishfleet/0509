@@ -5657,8 +5657,13 @@ one signal-green accent.
   letter-spacing: 0.08em;
 }
 
+/* BL-031: 34px, and the 44px overrides only existed inside two media
+   queries, so at every other width the public rail's own nav links measured
+   38px. They inherited enough height from the pinned `ui-sans-serif` stack to
+   scrape past; taking that stack off exposed the real number. A 44px target
+   is a rule at every width, not at two of them. */
 .f9-dash-page-public.f9-search-page .f9-cursor-rail nav a {
-  min-height: 34px;
+  min-height: 44px;
   padding: 7px 10px;
   border-radius: 7px;
   transition: background-color 140ms ease, color 140ms ease;
@@ -12885,4 +12890,25 @@ textarea.f9-wk-in {
 .f9-wk-page .f9-search-answer dd {
   font-size: 13.5px;
   font-weight: 600;
+}
+
+/* The bleed belongs to the results SECTION, not to the ruled list inside it.
+   A negative margin on a child makes that child wider than its parent, which
+   is a nested horizontal overflow even when the document itself never
+   scrolls — the capture harness measures the document and would never have
+   seen it; the release journeys measure nested elements and caught it at
+   375px immediately. Same lesson BL-030 round 3 recorded on the setup card,
+   relearned here rather than assumed. */
+.f9-wk-split-list > .f9-results-panel {
+  margin-right: calc(var(--wk-pad) * -1);
+  margin-left: calc(var(--wk-pad) * -1);
+}
+
+.f9-results-panel > :not(.f9-wk-rows) {
+  padding-right: var(--wk-pad);
+  padding-left: var(--wk-pad);
+}
+
+.f9-results-panel > .f9-wk-rows.is-bleed {
+  margin: 0;
 }

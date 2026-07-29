@@ -26,6 +26,14 @@ export interface RuledRowProps {
   time?: ReactNode;
   /** Internal destination. The name is the link and the whole row is its hit area. */
   to?: string;
+  /**
+   * BL-031: an accessible name for the row's link when the visible name alone
+   * is ambiguous. On /search twenty rows can all be called "Nykaa"; a link
+   * named only "Nykaa" is a real defect for anyone reading the page through a
+   * links list. The visible text is untouched — this only widens what the
+   * link is CALLED, and the sentence it borrows is already in the row.
+   */
+  linkLabel?: string;
   onClick?: () => void;
   /**
    * A real control that must stay clickable inside the row (the bulk-select
@@ -87,6 +95,7 @@ export function RuledRow({
   statusTone = "quiet",
   time,
   to,
+  linkLabel,
   onClick,
   lead,
   trail,
@@ -116,6 +125,7 @@ export function RuledRow({
       <span className="f9-wk-nm">
         <Link
           aria-current={selected ? "true" : undefined}
+          aria-label={linkLabel}
           className="f9-wk-rowlink"
           prefetch="intent"
           to={to}
