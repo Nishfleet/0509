@@ -77,12 +77,13 @@ async function auditPaint(page: Page) {
       "--ed-focus",
       "--wk-focus",
     ]) {
+      probe.style.color = "";
+      const baseline = getComputedStyle(probe).color;
       const raw = rootStyle.getPropertyValue(token).trim();
       if (!raw) continue;
-      probe.style.color = "";
       probe.style.color = raw;
       const resolved = getComputedStyle(probe).color;
-      if (resolved) tokenGreens.add(resolved);
+      if (resolved && resolved !== baseline) tokenGreens.add(resolved);
     }
     probe.remove();
 
