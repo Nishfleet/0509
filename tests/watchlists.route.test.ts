@@ -2491,8 +2491,9 @@ describe("watchlists route rendering", () => {
       expect(markup).toContain(`href="${href}"`);
       expect(markup).toContain(label);
     }
-    expect(markup).toContain('aria-current="page"');
-    expect(markup).toContain('class="f9-wk-tab is-on"');
+    expect(markup).toMatch(
+      /<a(?=[^>]*aria-current="page")(?=[^>]*class="f9-wk-tab is-on")(?=[^>]*href="\/app\/watchlists\?watchlist=watch-1")[^>]*><span>What changed<\/span><\/a>/,
+    );
 
     // The change feed is the default panel.
     expect(markup).toContain("What changed");
