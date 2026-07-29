@@ -490,6 +490,12 @@ test.describe("BL-037 live proof", () => {
     await expect(firstRoom).not.toHaveAttribute("open", "");
     await disclosurePage.getByRole("button", { name: "Cancel" }).click();
     await expect(firstRoom).not.toHaveAttribute("open", "");
+    await firstRoom.locator("summary").click();
+    await expect(firstRoom).toHaveAttribute("open", "");
+    await disclosurePage.getByRole("button", { name: "Create client room" }).click();
+    await expect(firstRoom).toHaveAttribute("open", "");
+    await disclosurePage.getByRole("button", { name: "Cancel" }).click();
+    await expect(firstRoom).toHaveAttribute("open", "");
     disclosureStateProof = true;
     await disclosureContext.close();
 
