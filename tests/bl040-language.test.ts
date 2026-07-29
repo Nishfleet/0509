@@ -14,7 +14,11 @@ const developerAccess = readFileSync(
 const css = readFileSync("app/app.css", "utf8");
 const cssHeading =
   "/* === BL-040 source + developer access (landing language) === */";
-const bl040Css = css.slice(css.indexOf(cssHeading));
+const cssHeadingIndex = css.indexOf(cssHeading);
+if (cssHeadingIndex < 0) {
+  throw new Error(`app/app.css is missing the BL-040 heading: ${cssHeading}`);
+}
+const bl040Css = css.slice(cssHeadingIndex);
 
 describe("BL-040 landing-language surfaces", () => {
   it("suppresses the old shell topbar on both rebuilt routes", () => {

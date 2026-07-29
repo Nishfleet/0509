@@ -377,10 +377,8 @@ function NewApiKeySecret({
         </button>
       </div>
       <span
-        aria-live="polite"
         className="f9-sr-only"
         id={statusId}
-        role="status"
       >
         {copyState === "copied"
           ? "API key copied."

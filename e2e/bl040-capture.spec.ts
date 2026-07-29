@@ -315,12 +315,15 @@ async function measure(page: Page) {
         [...document.querySelectorAll(".f9-wk-page, .f9-wk-page *")]
           .flatMap((node) => {
             const style = getComputedStyle(node);
-            return [
-              style.borderTopWidth,
-              style.borderRightWidth,
-              style.borderBottomWidth,
-              style.borderLeftWidth,
-            ];
+            return (["Top", "Right", "Bottom", "Left"] as const)
+              .filter(
+                (side) =>
+                  style[`border${side}Style` as "borderTopStyle"] !== "none",
+              )
+              .map(
+                (side) =>
+                  style[`border${side}Width` as "borderTopWidth"],
+              );
           })
           .filter((width) => width !== "0px"),
       ),

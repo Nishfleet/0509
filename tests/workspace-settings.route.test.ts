@@ -164,7 +164,7 @@ describe("workspace settings route components", () => {
       "Only the account owner can add, retest, or disconnect the backup token.",
     );
     expect(markup).not.toContain("9876");
-    expect(markup).not.toContain("Paste the full Meta access token here");
+    expect(markup).not.toContain("Paste the full Meta access token");
     expect(markup).not.toContain("Test and save access");
   });
 
