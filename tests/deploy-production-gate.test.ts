@@ -787,13 +787,24 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       wranglerOutputPath,
     });
     const executed: string[] = [];
-    expect(() =>
-      executeProductionDeployPlan(plan, (step: any) => {
-        executed.push(step.id);
-        if (step.id === "launch_readiness")
-          throw new Error("intentional_gate_failure");
-      }),
-    ).toThrow("intentional_gate_failure");
+    const chunks: string[] = [];
+    const original = process.stderr.write;
+    (process.stderr as any).write = (chunk: unknown) => {
+      chunks.push(String(chunk));
+      return true;
+    };
+    try {
+      expect(() =>
+        executeProductionDeployPlan(plan, (step: any) => {
+          executed.push(step.id);
+          if (step.id === "launch_readiness")
+            throw new Error("intentional_gate_failure");
+        }),
+      ).toThrow("intentional_gate_failure");
+    } finally {
+      (process.stderr as any).write = original;
+    }
+    expect(chunks.join("")).toContain("launch:readiness:predeploy failed");
     expect(executed).not.toContain("deploy");
   });
 
