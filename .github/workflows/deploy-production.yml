@@ -16,9 +16,200 @@ permissions:
   deployments: write
 
 jobs:
+  prepare_remote_restore_evidence:
+    name: Prepare D1 remote restore evidence
+    if: github.repository == 'nish3451/0509' && github.ref == 'refs/heads/main'
+    runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6.0.3
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: ".node-version"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: node scripts/validate-d1-backup.mjs
+      - name: Bind a clean exact-main candidate manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          node scripts/customer-readiness-candidate.mjs --base HEAD \
+            > "$RUNNER_TEMP/d1-remote-restore-candidate.json"
+          node scripts/build-remote-restore-candidate-manifest.mjs \
+            --candidate "$RUNNER_TEMP/d1-remote-restore-candidate.json" \
+            --output "$RUNNER_TEMP/d1-remote-restore-candidate-manifest.json"
+      - name: Verify pre-generated exact R2 restore evidence
+        shell: bash
+        env:
+          D1_REMOTE_RESTORE_EVIDENCE_MIN_VALIDITY_MS: "43200000"
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          umask 077
+          evidence="$RUNNER_TEMP/d1-remote-restore-evidence.json"
+          manifest="$RUNNER_TEMP/d1-remote-restore-candidate-manifest.json"
+          cache="$RUNNER_TEMP/d1-remote-restore-evidence-cache"
+          evidence_valid=false
+
+          verify_evidence() {
+            local attempt
+            local status
+            for attempt in 1 2 3; do
+              set +e
+              node scripts/verify-remote-restore-evidence.mjs \
+                --manifest "$manifest" \
+                --remote-evidence "$evidence"
+              status=$?
+              set -e
+              if [ "$status" -ne 2 ]; then
+                return "$status"
+              fi
+              if [ "$attempt" -lt 3 ]; then
+                sleep $((attempt * 5))
+              fi
+            done
+            return 2
+          }
+
+          find_recent_artifact() {
+            local attempt
+            local output
+            local status
+            for attempt in 1 2 3; do
+              set +e
+              output="$(
+                node scripts/find-recent-remote-restore-artifact.mjs
+              )"
+              status=$?
+              set -e
+              if [ "$status" -ne 2 ]; then
+                if [ "$status" -eq 0 ]; then
+                  printf '%s\n' "$output"
+                fi
+                return "$status"
+              fi
+              printf '::warning::Restore-evidence artifact lookup infrastructure failure; retrying (%s/3).\n' \
+                "$attempt" >&2
+              if [ "$attempt" -lt 3 ]; then
+                sleep $((attempt * 5))
+              fi
+            done
+            return 2
+          }
+
+          download_artifact() {
+            local attempt
+            local name="$2"
+            local run_id="$1"
+            local target="$3"
+            if ! command -v gh >/dev/null 2>&1; then
+              printf '::warning::GitHub CLI is unavailable on this runner; restore-evidence artifact reuse is unavailable.\n' >&2
+              return 1
+            fi
+            for attempt in 1 2 3; do
+              if gh run download "$run_id" \
+                --repo "$GITHUB_REPOSITORY" \
+                --name "$name" \
+                --dir "$target"; then
+                return 0
+              fi
+              printf '::warning::Restore-evidence artifact download infrastructure failure; retrying (%s/3).\n' \
+                "$attempt" >&2
+              if [ "$attempt" -lt 3 ]; then
+                sleep $((attempt * 5))
+              fi
+            done
+            return 2
+          }
+
+          rm -f -- "$evidence"
+          mkdir -p -- "$cache"
+          artifact_status=0
+          artifact_tsv=""
+          artifact_tsv="$(find_recent_artifact)" ||
+            artifact_status=$?
+          if [ "$artifact_status" -eq 0 ]; then
+            prior_run_id=""
+            prior_name=""
+            IFS=$'\t' read -r prior_run_id prior_name <<< "$artifact_tsv"
+            if [[ ! "$prior_run_id" =~ ^[0-9]+$ ]] ||
+              [[ ! "$prior_name" =~ ^d1-remote-restore-evidence-[a-f0-9]{40}-[0-9]+$ ]]; then
+              printf '::error::Restore-evidence artifact finder returned an invalid identity.\n' >&2
+              exit 2
+            fi
+            download_status=0
+            download_artifact "$prior_run_id" "$prior_name" "$cache" ||
+              download_status=$?
+            if [ "$download_status" -eq 2 ]; then
+              printf '::error::Restore-evidence artifact download failed after retries.\n' >&2
+              exit "$download_status"
+            fi
+            if [ "$download_status" -eq 0 ]; then
+              shopt -s nullglob
+              archives=("$cache"/*.tar.gz)
+              if [ "${#archives[@]}" -eq 1 ] &&
+                [ "$(tar -tzf "${archives[0]}")" = "d1-remote-restore-evidence.json" ] &&
+                [[ "$(tar -tvzf "${archives[0]}")" = -* ]]; then
+                if tar -xOzf "${archives[0]}" \
+                  d1-remote-restore-evidence.json > "$evidence"; then
+                  chmod 600 "$evidence"
+                  verification_status=0
+                  verify_evidence || verification_status=$?
+                  if [ "$verification_status" -eq 0 ]; then
+                    printf 'Recent private restore evidence is valid for this deploy.\n'
+                    evidence_valid=true
+                  elif [ "$verification_status" -eq 1 ]; then
+                    rm -f -- "$evidence"
+                  else
+                    exit "$verification_status"
+                  fi
+                else
+                  rm -f -- "$evidence"
+                fi
+              fi
+            fi
+          elif [ "$artifact_status" -ne 1 ]; then
+            printf '::error::Restore-evidence artifact lookup infrastructure failed after retries.\n' >&2
+            exit "$artifact_status"
+          fi
+
+          rm -rf -- "$cache"
+          if [ "$evidence_valid" != true ]; then
+            printf '::error::No valid pre-generated restore evidence is available. Run the D1 remote restore evidence workflow in its recovery window, then rerun this deploy.\n' >&2
+            exit 1
+          fi
+
+          verify_evidence
+          test "$(stat -c '%a' "$evidence")" = "600"
+      - name: Archive permission-preserving restore evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          tar --format=posix -czf \
+            "$RUNNER_TEMP/d1-remote-restore-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}.tar.gz" \
+            -C "$RUNNER_TEMP" \
+            d1-remote-restore-evidence.json
+      - name: Preserve private restore evidence for this deploy only
+        uses: actions/upload-artifact@v7
+        with:
+          name: d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}.tar.gz
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 8
+
   deploy:
     name: Deploy Worker
-    if: github.repository == 'nish3451/0509' && github.ref == 'refs/heads/main'
+    if: >-
+      github.repository == 'nish3451/0509' &&
+      github.ref == 'refs/heads/main' &&
+      needs.prepare_remote_restore_evidence.result == 'success'
+    needs: prepare_remote_restore_evidence
     runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}
     # Budget: 180m maximum deploy-window wait + 60m conservative pipeline +
     # 30m cancellation/release slack = 270m. With cancel-in-progress: false,
@@ -43,7 +234,6 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}
-          D1_REMOTE_RESTORE_EVIDENCE_JSON: ${{ secrets.D1_REMOTE_RESTORE_EVIDENCE_JSON }}
         run: |
           set -euo pipefail
 
@@ -57,10 +247,6 @@ jobs:
           if [ -z "${CANARY_BYPASS_TOKEN:-}" ]; then
             missing+=("CANARY_BYPASS_TOKEN")
           fi
-          if [ -z "${D1_REMOTE_RESTORE_EVIDENCE_JSON:-}" ]; then
-            missing+=("D1_REMOTE_RESTORE_EVIDENCE_JSON")
-          fi
-
           if [ "${#missing[@]}" -gt 0 ]; then
             printf 'Missing required GitHub secret(s): %s\n' "${missing[*]}" >&2
             printf 'Add them as repository or production-environment secrets so every main push deploys automatically.\n' >&2
@@ -85,14 +271,26 @@ jobs:
         run: npm run test
 
       - name: Materialize private remote-restore evidence
+        uses: actions/download-artifact@v8
+        with:
+          name: d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}
+          path: test-results/remote-restore-download
+
+      - name: Verify and extract private remote-restore evidence
         shell: bash
-        env:
-          D1_REMOTE_RESTORE_EVIDENCE_JSON: ${{ secrets.D1_REMOTE_RESTORE_EVIDENCE_JSON }}
         run: |
           set -euo pipefail
-          mkdir -p test-results
+          shopt -s nullglob
           umask 077
-          printf '%s' "$D1_REMOTE_RESTORE_EVIDENCE_JSON" > test-results/d1-remote-restore-evidence.json
+          archives=(test-results/remote-restore-download/*.tar.gz)
+          [ "${#archives[@]}" -eq 1 ]
+          [ "$(tar -tzf "${archives[0]}")" = "d1-remote-restore-evidence.json" ]
+          [[ "$(tar -tvzf "${archives[0]}")" = -* ]]
+          tar -xOzf "${archives[0]}" \
+            d1-remote-restore-evidence.json \
+            > test-results/d1-remote-restore-evidence.json
+          chmod 600 test-results/d1-remote-restore-evidence.json
+          rm -rf -- test-results/remote-restore-download
 
       - name: Deploy
         env:

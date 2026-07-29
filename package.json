@@ -10,6 +10,7 @@
     "backup:d1": "node scripts/d1-backup.mjs",
     "backup:d1:r2": "node scripts/d1-backup-to-r2.mjs",
     "restore:d1:transform": "node scripts/d1-restore-transform.mjs",
+    "restore:d1:remote-evidence": "node scripts/d1-remote-restore-evidence.mjs",
     "d1:cleanup-0060:evidence": "node scripts/d1-cleanup-0060-evidence.mjs",
     "build": "node scripts/build-production.mjs",
     "cf-typegen": "WRANGLER_WRITE_LOGS=false wrangler types",

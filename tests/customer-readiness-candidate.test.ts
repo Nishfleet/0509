@@ -35,6 +35,13 @@ function writeWrangler(repo: string, mode: string) {
   writeFileSync(
     join(repo, "wrangler.jsonc"),
     `{
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "0509",
+          "database_id": "746c6e3d-782e-443a-82d6-28ca93a16294"
+        }
+      ],
       "vars": {
         "SEARCH_ROLLOUT_MODE": "${mode}"
       }
@@ -196,6 +203,18 @@ describe("customer readiness candidate identity", () => {
 
     writeWrangler(shadowRepo, "shadow");
     const noEvidence = runCandidate(shadowRepo);
+    expect(noEvidence.report?.wrangler).toMatchObject({
+      d1Database: {
+        binding: "DB",
+        name: "0509",
+        uuid: "746c6e3d-782e-443a-82d6-28ca93a16294",
+      },
+      worktreeD1Database: {
+        binding: "DB",
+        name: "0509",
+        uuid: "746c6e3d-782e-443a-82d6-28ca93a16294",
+      },
+    });
     expect(noEvidence.report?.deployedIdentity).toMatchObject({
       classification: "external_proof_required",
       evidenceProvided: false,

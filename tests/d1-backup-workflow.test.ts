@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
-describe("scheduled D1 backup workflow", () => {
+describe("manual D1 backup workflow", () => {
   const workflow = readFileSync(".github/workflows/d1-backup-r2.yml", "utf8");
   const parsed = parse(workflow) as {
     on: {
@@ -20,16 +20,19 @@ describe("scheduled D1 backup workflow", () => {
     };
   };
 
-  it("runs the existing D1-to-R2 backup script on a weekly schedule", () => {
+  it("runs the existing D1-to-R2 backup script only on explicit dispatch", () => {
     expect(parsed.on.workflow_dispatch).toBeDefined();
-    expect(parsed.on.schedule).toEqual([{ cron: "17 22 * * SUN" }]);
+    expect(parsed.on.schedule).toBeUndefined();
     expect(parsed.jobs.backup?.if).toBe(
       "github.repository == 'nish3451/0509' && github.ref == 'refs/heads/main'",
     );
     expect(parsed.jobs.backup?.environment).toBe("d1-backup-r2");
 
-    const backupSteps = parsed.jobs.backup?.steps?.map((step) => step.run).filter(Boolean);
-    expect(backupSteps).toContain("npm run backup:d1:r2");
+    const backupSteps = parsed.jobs.backup?.steps
+      ?.map((step) => step.run)
+      .filter(Boolean);
+    expect(backupSteps?.some((run) => run?.includes("npm run backup:d1:r2")))
+      .toBe(true);
   });
 
   it("keeps backup auth scoped to the approved backup step and validates before upload", () => {
@@ -38,14 +41,20 @@ describe("scheduled D1 backup workflow", () => {
 
     const steps = parsed.jobs.backup?.steps ?? [];
     expect(steps).toContainEqual(expect.objectContaining({ run: "npm ci --ignore-scripts" }));
-    const backupStep = steps.find((step) => step.run === "npm run backup:d1:r2");
+    const backupStep = steps.find(
+      (step) => step.name === "Run approved D1-to-R2 backup",
+    );
+    expect(backupStep?.run).toBe("npm run backup:d1:r2");
     expect(backupStep?.env?.CLOUDFLARE_ACCOUNT_ID).toBe("${{ secrets.CLOUDFLARE_ACCOUNT_ID }}");
     expect(backupStep?.env?.CLOUDFLARE_API_TOKEN).toBe("${{ secrets.CLOUDFLARE_API_TOKEN }}");
     expect(backupStep?.env?.D1_BACKUP_AUTOMATION_APPROVED).toBe("0509-weekly-d1-to-r2");
 
     const backupSteps = steps.map((step) => step.run).filter(Boolean);
     expect(backupSteps.indexOf("node scripts/validate-d1-backup.mjs")).toBeGreaterThanOrEqual(0);
-    expect(backupSteps.indexOf("npm run backup:d1:r2")).toBeGreaterThan(
+    const backupIndex = backupSteps.findIndex((run) =>
+      run?.includes("npm run backup:d1:r2"),
+    );
+    expect(backupIndex).toBeGreaterThan(
       backupSteps.indexOf("node scripts/validate-d1-backup.mjs"),
     );
     expect(workflow).not.toMatch(/api[_-]?token:\s*['\"]/i);
