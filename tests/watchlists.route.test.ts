@@ -304,6 +304,10 @@ function createContext() {
 
 async function mockRouter(overrides: {
   actionData?: unknown;
+  fetcher?: {
+    state: "idle" | "submitting" | "loading";
+    formData?: FormData;
+  };
   loaderData?: unknown;
   searchParams?: URLSearchParams;
 }) {
@@ -326,9 +330,9 @@ async function mockRouter(overrides: {
       // WP-42: pause/resume submits through a fetcher; render it as a plain
       // form in static markup.
       useFetcher: vi.fn().mockReturnValue({
-        state: "idle",
+        state: overrides.fetcher?.state ?? "idle",
         data: undefined,
-        formData: undefined,
+        formData: overrides.fetcher?.formData,
         Form: ({ children, ...props }: MockFormProps) =>
           React.createElement("form", props, children),
       }),
@@ -352,10 +356,15 @@ async function mockRouter(overrides: {
  * the detail URL-addressable, so a render helper has to name the tab the way
  * a customer's URL does.
  */
-async function renderWatchlistsRoute(loaderData: unknown, tab?: string) {
+async function renderWatchlistsRoute(
+  loaderData: unknown,
+  tab?: string,
+  fetcher?: { state: "idle" | "submitting" | "loading"; formData?: FormData },
+) {
   vi.resetModules();
   await mockRouter({
     actionData: undefined,
+    fetcher,
     loaderData,
     searchParams: new URLSearchParams(
       tab ? `watchlist=watch-1&tab=${tab}` : "watchlist=watch-1",
@@ -2457,6 +2466,18 @@ describe("watchlists route rendering", () => {
   it("opens the competitor on the change feed with the tab bar and the fact rail", async () => {
     const markup = await renderWatchlistsRoute(selectedPanelLoaderData);
 
+    // BL-035: `?watchlist=` is its own working surface. The old board + peek
+    // + below-board BL-007 record stack is gone; the entity owns the header,
+    // tabs follow immediately, and there is one content split.
+    expect(markup).toContain("<h1 class=\"f9-wk-title\">Nykaa watch</h1>");
+    expect(markup).toContain("All competitors");
+    expect(markup).toContain('class="f9-bl035-detail"');
+    expect(markup).not.toContain('aria-label="Competitors"');
+    expect(markup).not.toContain("f9-wk-detail");
+    expect(markup).not.toContain("f9-wk-record");
+    expect(markup).not.toContain("f9-ed-detail-head");
+    expect(markup).not.toContain("f9-ed-status-strip");
+
     // The tab bar is real navigation: five links, fixed order, the active one
     // marked with aria-current and not by ink alone (brief §10).
     expect(markup).toContain('aria-label="Competitor sections"');
@@ -2471,6 +2492,7 @@ describe("watchlists route rendering", () => {
       expect(markup).toContain(label);
     }
     expect(markup).toContain('aria-current="page"');
+    expect(markup).toContain('class="f9-wk-tab is-on"');
 
     // The change feed is the default panel.
     expect(markup).toContain("What changed");
@@ -2502,6 +2524,167 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain("Package for client");
     expect(markup).toContain(
       'href="/app/reports/watchlist:watch-1"',
+    );
+  });
+
+  it.each([
+    {
+      plan: "free",
+      share: false,
+      export: false,
+      report: false,
+      primary: "Upgrade plan",
+    },
+    {
+      plan: "scout",
+      share: false,
+      export: false,
+      report: false,
+      primary: "Upgrade plan",
+    },
+    {
+      plan: "starter",
+      share: true,
+      export: true,
+      report: false,
+      primary: "Upgrade plan",
+    },
+    {
+      plan: "agency",
+      share: true,
+      export: true,
+      report: true,
+      primary: "Refresh now",
+    },
+  ])(
+    "re-proves the completed active $plan action contract",
+    async ({ plan, share, export: canExport, report, primary }) => {
+      const markup = await renderWatchlistsRoute(
+        { ...selectedPanelLoaderData, plan },
+        "evidence",
+      );
+
+      expect(markup.match(/class="f9-wk-btn"/g)).toHaveLength(1);
+      expect(markup).toContain(`>${primary}</`);
+      expect(markup.includes("Share summary")).toBe(share);
+      expect(markup.includes("Export CSV")).toBe(canExport);
+      expect(markup.includes("Export JSON")).toBe(canExport);
+      expect(markup.includes("Package for client")).toBe(report);
+      expect(markup).not.toContain("f9-ed-detail-head");
+      expect(markup).not.toContain("f9-ed-status-strip");
+    },
+  );
+
+  it.each([
+    { plan: "free", hasLockedCapabilities: true },
+    { plan: "scout", hasLockedCapabilities: true },
+    { plan: "starter", hasLockedCapabilities: true },
+    { plan: "agency", hasLockedCapabilities: false },
+  ])(
+    "makes resume the one Rank-1 action for a paused $plan competitor",
+    async ({ plan, hasLockedCapabilities }) => {
+      const paused = { ...watchlist, isActive: false };
+      const markup = await renderWatchlistsRoute(
+        {
+          ...selectedPanelLoaderData,
+          plan,
+          watchlists: [paused],
+          selectedWatchlist: paused,
+        },
+        "setup",
+      );
+
+      expect(markup.match(/class="f9-wk-btn"/g)).toHaveLength(1);
+      expect(markup).toContain(">Resume watching</button>");
+      expect(markup).toContain(
+        "Watching is paused. The evidence already on file stays here.",
+      );
+      expect(markup.includes(">Upgrade plan</a>")).toBe(hasLockedCapabilities);
+      expect(markup).not.toContain(">Refresh now</button>");
+    },
+  );
+
+  it("keeps manual refresh for an active Agency competitor before its first successful scan", async () => {
+    const firstScanWatchlist = { ...watchlist, lastScannedAt: null };
+    const markup = await renderWatchlistsRoute(
+      {
+        ...selectedPanelLoaderData,
+        plan: "agency",
+        watchlists: [firstScanWatchlist],
+        selectedWatchlist: firstScanWatchlist,
+      },
+    );
+
+    expect(markup.match(/>Refresh now<\/button>/g)).toHaveLength(1);
+    expect(markup).not.toContain(">Upgrade plan</a>");
+  });
+
+  it("shows the fetcher-backed resume pending state in the working header", async () => {
+    const paused = { ...watchlist, isActive: false };
+    const formData = new FormData();
+    formData.set("intent", "resume-watchlist");
+    formData.set("watchlistId", paused.id);
+    const markup = await renderWatchlistsRoute(
+      {
+        ...selectedPanelLoaderData,
+        plan: "agency",
+        watchlists: [paused],
+        selectedWatchlist: paused,
+      },
+      "setup",
+      { state: "submitting", formData },
+    );
+
+    expect(markup).toContain('aria-busy="true"');
+    expect(markup).toContain("disabled");
+    expect(markup).toContain("Resuming…");
+  });
+
+  it("keeps repeated failures as page state and points to the Evidence section", async () => {
+    const failedRuns = Array.from({ length: 3 }, (_, index) => ({
+      ...recentRuns[0],
+      id: `failed-${index}`,
+      status: "failed" as const,
+      finishedAt: `2026-04-18T0${8 - index}:01:00.000Z`,
+      errorCode: "source_timeout",
+      errorMessage: "private provider detail",
+    }));
+    const markup = await renderWatchlistsRoute({
+      ...selectedPanelLoaderData,
+      runs: failedRuns,
+      captureWindow: {
+        endDate: "2026-04-18",
+        windowDays: 30,
+        days: {},
+        capturedChanges: {},
+        totalCapturedChanges: 0,
+        failedChecks: { "watch-1": 3 },
+      },
+    });
+
+    expect(markup).toContain("the last 3 checks failed");
+    expect(markup).toContain("recent errors are listed under Evidence");
+    expect(markup).not.toContain("private provider detail");
+  });
+
+  it("keeps blocked source access actionable in the compressed working header", async () => {
+    const markup = await renderWatchlistsRoute({
+      ...selectedPanelLoaderData,
+      discoveryStatus: {
+        status: "demo",
+        provider: "meta_library_browser",
+        mode: "demo",
+        summary: "Live source access is unavailable.",
+        lastCheckedAt: null,
+        lastErrorCode: null,
+        lastErrorMessage: null,
+      },
+    });
+
+    expect(markup).toContain('href="/app/source-access"');
+    expect(markup).toContain("Needs source access");
+    expect(markup.indexOf("Needs source access")).toBeLessThan(
+      markup.indexOf('aria-label="Competitor sections"'),
     );
   });
 
