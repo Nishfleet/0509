@@ -347,9 +347,13 @@ function NewApiKeySecret({
 
   return (
     <div className="f9-bl040-secret-row">
-      <code aria-label="New API key">
-        {revealed ? secret : `${prefix}••••••••••••••••`}
-      </code>
+      <input
+        aria-label={`New API key beginning ${prefix}`}
+        className="f9-bl040-secret-control"
+        readOnly
+        type={revealed ? "text" : "password"}
+        value={secret}
+      />
       <div className="f9-bl040-text-actions">
         <button
           aria-pressed={revealed}

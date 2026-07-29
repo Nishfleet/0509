@@ -45,6 +45,8 @@ describe("BL-040 landing-language surfaces", () => {
     expect(developerAccess).toContain("f9-bl040-key-rows");
     expect(developerAccess).toContain('"Reveal"');
     expect(developerAccess).toContain('"Copy"');
+    expect(developerAccess).toContain('readOnly');
+    expect(developerAccess).toContain('type={revealed ? "text" : "password"}');
     expect(developerAccess).toContain("key={actionData.apiKeyPrefix}");
     expect(developerAccess).toMatch(
       /catch \{\s*setRevealed\(true\);\s*setCopyState\("error"\);/u,
@@ -61,7 +63,7 @@ describe("BL-040 landing-language surfaces", () => {
       [...bl040Css.matchAll(/border-radius:\s*([^;\n]+)/gu)].map((match) =>
         match[1].trim(),
       ),
-    ).toEqual(["0", "0", "0"]);
+    ).toEqual(["0", "0", "0", "0"]);
     expect(
       [...bl040Css.matchAll(/box-shadow:\s*([^;\n]+)/gu)].map((match) =>
         match[1].trim(),

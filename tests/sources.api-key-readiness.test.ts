@@ -157,8 +157,9 @@ describe("developer access route API-key readiness", () => {
     const markup = renderToStaticMarkup(createElement(DeveloperAccessRoute));
 
     expect(markup).toContain("Copy the new key now");
-    expect(markup).toContain("f9_live_new••••••••••••••••");
-    expect(markup).not.toContain("f9_live_new_secret");
+    expect(markup).toContain('type="password"');
+    expect(markup).toContain('readOnly=""');
+    expect(markup).toContain('value="f9_live_new_secret"');
     expect(markup).toContain('role="status"');
     expect(markup).toContain(">Reveal<");
     expect(markup).toContain(">Copy<");
