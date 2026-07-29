@@ -387,6 +387,19 @@ test.describe("BL-041 live proof", () => {
               `${surface.name} ${viewport.name} ${theme}: horizontal overflow ${measured.horizontalOverflow}`,
             );
           }
+          const firstRowRange =
+            viewport.width < 600
+              ? { min: 132, max: 176 }
+              : { min: 96, max: 120 };
+          if (
+            measured.firstRowTop === null ||
+            measured.firstRowTop < firstRowRange.min ||
+            measured.firstRowTop > firstRowRange.max
+          ) {
+            failures.push(
+              `${surface.name} ${viewport.name} ${theme}: first row ${measured.firstRowTop ?? "missing"}px outside ${firstRowRange.min}-${firstRowRange.max}px`,
+            );
+          }
           if (paint.green.length > 1) {
             failures.push(
               `${surface.name} ${viewport.name} ${theme}: ${paint.green.length} painted greens — ` +
@@ -458,7 +471,7 @@ test.describe("BL-041 live proof", () => {
     );
     expect(
       failures,
-      "≤1 green, ≤3 caps-mono, ≤1 filled action per viewport, radius 0, 1px rules, 44px targets, zero errors, zero overflow",
+      "compressed first row, ≤1 green, ≤3 caps-mono, ≤1 filled action per viewport, radius 0, 1px rules, 44px targets, zero errors, zero overflow",
     ).toEqual([]);
   });
 });

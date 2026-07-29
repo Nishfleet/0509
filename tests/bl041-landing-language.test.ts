@@ -131,4 +131,11 @@ describe("BL-041 landing-language settings layer", () => {
       /\.f9-bl041-danger-action \{[^}]*border: 1px solid var\(--red\);[^}]*background: transparent/,
     );
   });
+
+  it("keeps the current session legible without restoring a pill", () => {
+    expect(account).toContain('className="f9-bl041-current"');
+    expect(layer()).toMatch(
+      /\.f9-bl041-account \.f9-passkey-row > \.f9-bl041-current \{[^}]*font-family: var\(--ld-mono\);[^}]*font-weight: 700;/,
+    );
+  });
 });
