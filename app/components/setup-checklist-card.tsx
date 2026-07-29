@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Form, Link } from "react-router";
+import { useEffect, useState } from "react";
+import { Form, Link, useFetcher } from "react-router";
 
 import { PrimaryAction, TertiaryAction } from "~/components/evidence/cta";
 import { SubmitButton } from "~/components/submit-button";
@@ -48,10 +48,57 @@ export function SetupChecklistCard({
   const hasWatchlistCapacity =
     (readiness.counts?.activeWatchlists ?? 0) <
     getPlanLimit(readiness.billing?.plan ?? "free", "watchlists");
-  const setupActionData =
+  /**
+   * The "track this competitor" submit is a FETCHER, not a navigating form.
+   *
+   * `app.dashboard.tsx` is the index child of `/app` (`app/routes.ts`), so a
+   * navigating `<Form method="post">` here resolves its action to `/app?index`
+   * — React Router's index-route marker — and pushes that into the address
+   * bar. On the success path the action redirects, so nobody saw it; on any
+   * refusal path (a plan limit, an unverified email, a website the server
+   * could not normalize) the action returns data and the customer is left
+   * looking at `0509.io/app?index`, a leaked framework detail. A fetcher
+   * submits without navigating, so the URL stays exactly `/app`; redirects
+   * thrown by the action are still followed, so creating the first watchlist
+   * still lands on `/app/watchlists?watchlist=…`.
+   *
+   * Salvaged from the parked BL-025 stack (PR #416, 7642826/f761dd7) — its
+   * behavioural fixes were certified by review; its visuals were not.
+   */
+  const createFetcher = useFetcher<SetupActionData>();
+  const fetcherData = createFetcher.data;
+  const routeActionData =
     actionData?.intent && SETUP_ACTION_INTENTS.has(actionData.intent)
       ? actionData
       : undefined;
+  /**
+   * There is ONE feedback slot on this card and two submission lanes feeding
+   * it: the quick-create fetcher above, and the bulk-import forms below, which
+   * are still navigating `<Form>`s answering through the route action. The
+   * slot belongs to whichever lane answered LAST.
+   *
+   * This has to be tracked, not derived: React Router retains `fetcher.data`
+   * after the fetcher returns to idle, so "fetcher data wins when present"
+   * makes the first refusal permanent — a later import preview completes on
+   * the server and is then invisible until a full page reload. Same idiom as
+   * the coexisting fetcher/route-action feedback on `app/routes/app.watchlists.tsx`.
+   */
+  const [latestFeedbackSource, setLatestFeedbackSource] = useState<
+    "route" | "fetcher" | null
+  >(null);
+  useEffect(() => {
+    if (routeActionData) setLatestFeedbackSource("route");
+  }, [routeActionData]);
+  useEffect(() => {
+    if (fetcherData) setLatestFeedbackSource("fetcher");
+  }, [fetcherData]);
+  const setupActionData =
+    latestFeedbackSource === "fetcher" &&
+    fetcherData?.intent &&
+    SETUP_ACTION_INTENTS.has(fetcherData.intent)
+      ? fetcherData
+      : routeActionData;
+  const creatingWatchlist = createFetcher.state !== "idle";
   const importPreview = setupActionData?.preview ?? null;
   const hasActionableImportPreview = Boolean(
     importPreview && importPreview.selectedCount > 0,
@@ -90,7 +137,7 @@ export function SetupChecklistCard({
       ) : null}
 
       {!hasActionableImportPreview && nextIsCompetitor ? (
-        <Form className="f9-ed-setup-primary" method="post">
+        <createFetcher.Form className="f9-ed-setup-primary" method="post">
           <input name="intent" type="hidden" value="create-watchlist" />
           <input name="country" type="hidden" value={prefillCountry} />
           <label className="f9-field" htmlFor="setup-competitor-website">
@@ -116,11 +163,15 @@ export function SetupChecklistCard({
             className="f9-ed-cta f9-ed-cta--rank1"
             disabled={!canSubmitWebsite}
             intent="create-watchlist"
+            // A fetcher submit never enters `useNavigation()`, so the pending
+            // state has to come from the fetcher itself — otherwise the
+            // in-flight treatment would silently stop firing for this button.
+            pending={creatingWatchlist}
             pendingLabel="Starting first scan…"
           >
             Track {normalizedWebsite.displayName ?? "this competitor"}
           </SubmitButton>
-        </Form>
+        </createFetcher.Form>
       ) : !hasActionableImportPreview && nextItem.action ? (
         <div className="f9-ed-action-row">
           <PrimaryAction to={nextItem.action.href}>{nextItem.action.label}</PrimaryAction>

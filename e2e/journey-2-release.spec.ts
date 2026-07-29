@@ -241,27 +241,32 @@ for (const viewport of viewports) {
     await submit.press("Enter");
     await expect(page).toHaveURL(/\/app\/watchlists\?watchlist=[^&]+/);
     await expect(page.getByRole("heading", { level: 1, name: "Competitors", exact: true })).toBeVisible();
-    const nykaaWatch = page.getByRole("link", { name: /Nykaa watch\s+Competitor · Nykaa/i }).first();
-    await expect(nykaaWatch).toBeVisible();
-    await expect(nykaaWatch.getByRole("heading", { name: "Nykaa watch", exact: true })).toBeVisible();
-    await expect(nykaaWatch.getByText("Competitor · Nykaa", { exact: true })).toBeVisible();
+    // BL-030 replaced BL-006's competitor band with a ruled list row and a
+    // peek pane. The guarantees are unchanged: the newly tracked competitor is
+    // identifiable in the list by name, its target is named on the surface,
+    // and on a phone its identity is not stretched apart down the screen.
+    const nykaaRow = page.locator(".f9-wk-row", { hasText: "Nykaa watch" }).first();
+    await expect(nykaaRow).toBeVisible();
+    await expect(
+      nykaaRow.getByRole("link", { name: "Nykaa watch", exact: true }),
+    ).toBeVisible();
+    // The pane opened by ?watchlist=<id> names the competitor and its target.
+    const nykaaPane = page.locator(".f9-wk-detail");
+    await expect(nykaaPane.getByRole("heading", { name: "Nykaa watch", exact: true })).toBeVisible();
+    await expect(nykaaPane.getByText("Nykaa", { exact: true })).toBeVisible();
     if (viewport.name === "mobile") {
-      // BL-006 replaced the master/detail side panel (and its "Pick a tracked
-      // brand…" intro) with the watch board. The guarantee this assertion
-      // protects is unchanged: a competitor's identity must not be stretched
-      // apart down the phone screen — it is now measured on the band itself.
-      const bandName = nykaaWatch.getByRole("heading", { name: "Nykaa watch", exact: true });
-      const bandMeta = page.locator(".f9-ed-band-meta").first();
-      const [nameBox, metaBox] = await Promise.all([
-        bandName.boundingBox(),
-        bandMeta.boundingBox(),
+      const rowName = nykaaRow.getByRole("link", { name: "Nykaa watch", exact: true });
+      const rowLine = nykaaRow.locator(".f9-wk-say");
+      const [nameBox, lineBox] = await Promise.all([
+        rowName.boundingBox(),
+        rowLine.boundingBox(),
       ]);
-      expect(nameBox, "mobile band name should be measurable").not.toBeNull();
-      expect(metaBox, "mobile band meta lines should be measurable").not.toBeNull();
-      if (nameBox && metaBox) {
+      expect(nameBox, "mobile row name should be measurable").not.toBeNull();
+      expect(lineBox, "mobile row sentence should be measurable").not.toBeNull();
+      if (nameBox && lineBox) {
         expect(
-          metaBox.y - (nameBox.y + nameBox.height),
-          "mobile band content should not be stretched apart",
+          lineBox.y - (nameBox.y + nameBox.height),
+          "mobile row content should not be stretched apart",
         ).toBeLessThanOrEqual(72);
       }
     }

@@ -18,6 +18,13 @@ interface SubmitButtonProps {
    * pending while a navigation to this pathname is loading.
    */
   getAction?: string;
+  /**
+   * Forces the in-flight state from outside. A fetcher submission never enters
+   * `useNavigation()`, so a caller using `useFetcher` must pass its own
+   * `fetcher.state !== "idle"` here or the button would never show pending.
+   * Omitted (the default) keeps the navigation-derived behaviour unchanged.
+   */
+  pending?: boolean;
   pendingLabel?: string;
   className?: string;
   disabled?: boolean;
@@ -39,10 +46,11 @@ export function SubmitButton(props: SubmitButtonProps) {
   const matchMatches = Object.entries(props.match ?? {}).every(
     ([field, expected]) => formData?.get(field) === expected,
   );
-  const pending = props.getAction
+  const navigationPending = props.getAction
     ? navigation.state === "loading" &&
       navigation.location?.pathname === props.getAction
     : Boolean(formData) && intentMatches && matchMatches;
+  const pending = props.pending ?? navigationPending;
 
   return (
     <button

@@ -145,7 +145,9 @@ describe("collections screen-level Rank-1 budget (brief §5)", () => {
 
     expect(screenPrimaries(view)).toHaveLength(expected);
     // The shell's own button is still there, just no longer ink-filled.
-    const shellButton = view.querySelector('button[aria-keyshortcuts]');
+    // BL-030 added a second ⌘K affordance — the rail's visible command bar —
+    // so this has to name the topbar button rather than the first match.
+    const shellButton = view.querySelector('.f9-dash-topbar button[aria-keyshortcuts]');
     expect(shellButton?.textContent).toContain("Add competitor");
     expect(shellButton?.classList.contains("f9-primary-button")).toBe(false);
   });

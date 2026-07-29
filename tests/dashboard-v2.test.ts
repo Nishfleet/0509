@@ -28,20 +28,43 @@ const PRIMARY_APP_ROUTE_FILES = readdirSync("app/routes").filter(
     name !== "app.onboard.tsx",
 );
 
+/**
+ * BL-030 regrouped the rail: the six mono section labels are gone (six labels
+ * over sixteen destinations read as soup), the daily jobs are one ungrouped
+ * list, and the seven long-dwell settings routes sit behind one disclosure.
+ * The guarantee these cases carry is unchanged — every customer destination
+ * still maps to exactly one path, and it is still reachable from the rail.
+ */
 const CUSTOMER_NAV_CASES = [
-  { label: "Competitors", path: "/app/watchlists", section: "Monitor" },
-  { label: "Briefs", path: "/app/digests", section: "Review" },
-  { label: "Reports", path: "/app/reports", section: "Review" },
-  { label: "Shared links", path: "/app/shares", section: "Review" },
-  { label: "Client rooms", path: "/app/clients", section: "Delivery" },
+  { label: "Competitors", path: "/app/watchlists", group: "primary" },
+  { label: "Briefs", path: "/app/digests", group: "primary" },
+  { label: "Reports", path: "/app/reports", group: "primary" },
+  { label: "Shared links", path: "/app/shares", group: "primary" },
+  { label: "Client rooms", path: "/app/clients", group: "primary" },
+  { label: "Billing & usage", path: "/app/billing", group: "settings" },
+  { label: "Account & security", path: "/app/account", group: "settings" },
 ] as const;
 
 describe("dashboard v2 navigation", () => {
-  it.each(CUSTOMER_NAV_CASES)("maps $label to $path in $section", ({ label, path, section }) => {
-    const navSection = [...DASHBOARD_PRIMARY_NAV, ...DASHBOARD_SETTINGS_NAV].find(
-      (candidate) => candidate.title === section,
-    );
-    expect(navSection?.items).toContainEqual(expect.objectContaining({ label, to: path }));
+  it.each(CUSTOMER_NAV_CASES)("maps $label to $path in the $group rail", ({ label, path, group }) => {
+    const sections = group === "primary" ? DASHBOARD_PRIMARY_NAV : DASHBOARD_SETTINGS_NAV;
+    const items = sections.flatMap((section) => section.items);
+    expect(items).toContainEqual(expect.objectContaining({ label, to: path }));
+    const other = group === "primary" ? DASHBOARD_SETTINGS_NAV : DASHBOARD_PRIMARY_NAV;
+    expect(other.flatMap((section) => section.items).map((item) => item.to)).not.toContain(path);
+  });
+
+  it("keeps the rail to nine visible rows: eight daily jobs plus one disclosure", () => {
+    const visible = filterDashboardNav(DASHBOARD_PRIMARY_NAV, {
+      showPresence: false,
+      showOps: false,
+    }).flatMap((section) => section.items);
+    expect(visible).toHaveLength(8);
+    // Every section is ungrouped: no mono label may reappear above a row.
+    expect(DASHBOARD_PRIMARY_NAV.every((section) => section.title === undefined)).toBe(true);
+    expect(DASHBOARD_SETTINGS_NAV.every((section) => section.title === undefined)).toBe(true);
+    // The disclosure holds the seven long-dwell settings routes.
+    expect(DASHBOARD_SETTINGS_NAV.flatMap((section) => section.items)).toHaveLength(7);
   });
 
   it("exposes the unified customer IA", () => {

@@ -1,0 +1,382 @@
+import { readFileSync } from "node:fs";
+import type { ReactElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { createRoutesStub } from "react-router";
+import { describe, expect, it } from "vitest";
+
+import { DashboardShell } from "~/components/dashboard-shell";
+import { RuledList, RuledRow } from "~/components/workspace/ruled-list";
+import { WorkingHeader } from "~/components/workspace/working-header";
+import { firstChangeMark, readChangeMark } from "~/lib/change-mark";
+import {
+  countCompetitorStates,
+  filterCompetitorRows,
+  formatCompetitorContextLine,
+  resolveCompetitorFilter,
+  resolveCompetitorRowLine,
+  toCompetitorRows,
+} from "~/lib/competitor-list-display";
+import {
+  DASHBOARD_PRIMARY_NAV,
+  DASHBOARD_SETTINGS_NAV,
+  isSettingsNavPath,
+} from "~/lib/dashboard-navigation";
+import { buildOvernightSentence } from "~/lib/overnight-sentence";
+import type { WatchEventRecord, WatchlistRecord } from "~/lib/types";
+
+/**
+ * BL-030 — the two reference surfaces and the rail that carries them.
+ *
+ * Every claim these surfaces make has to come off stored evidence. The list
+ * loader deliberately does not read per-competitor events, so a row states
+ * the SHAPE of what happened and the detail pane states what it was; a
+ * sentence that cannot be derived is not written.
+ */
+
+function renderRouted(element: ReactElement, path = "/app"): string {
+  const Stub = createRoutesStub([{ path, Component: () => element }]);
+  return renderToStaticMarkup(<Stub initialEntries={[path]} />);
+}
+
+function watchlist(overrides: Partial<WatchlistRecord> = {}): WatchlistRecord {
+  return {
+    id: "watch-1",
+    userId: "user-1",
+    name: "Nykaa watch",
+    targetType: "advertiser",
+    targetId: "nykaa",
+    targetFingerprint: "advertiser:nykaa",
+    targetLabel: "Nykaa",
+    targetCountry: "IN",
+    isActive: true,
+    lastScannedAt: "2026-07-27T04:00:00.000Z",
+    createdAt: "2026-06-02T00:00:00.000Z",
+    updatedAt: "2026-07-27T04:00:00.000Z",
+    ...overrides,
+  } as WatchlistRecord;
+}
+
+function event(overrides: Partial<WatchEventRecord> = {}): WatchEventRecord {
+  return {
+    id: "event-1",
+    watchlistId: "watch-1",
+    runId: "run-1",
+    eventType: "offer_changed",
+    status: "confirmed",
+    importanceScore: 60,
+    adId: null,
+    baselineFromRunId: null,
+    candidateId: null,
+    proofCaptureId: null,
+    title: "Offer price changed on nykaa.com",
+    summary: "The offer page moved from $68 to $52.",
+    metadata: { from: "$68", to: "$52" },
+    confirmedAt: "2026-07-28T03:41:00.000Z",
+    suppressedAt: null,
+    invalidatedAt: null,
+    lastEvaluatedAt: null,
+    createdAt: "2026-07-28T03:41:00.000Z",
+    ...overrides,
+  } as WatchEventRecord;
+}
+
+describe("the one green mark", () => {
+  it("reads both sides off stored metadata or renders no mark at all", () => {
+    expect(readChangeMark(event())).toEqual({ from: "$68", to: "$52" });
+    expect(readChangeMark(event({ metadata: { from: "$68" } }))).toBeNull();
+    expect(readChangeMark(event({ metadata: {} }))).toBeNull();
+  });
+
+  it("refuses a mark whose two halves are equal — that is not a change", () => {
+    expect(readChangeMark(event({ metadata: { from: "$52", to: "$52" } }))).toBeNull();
+  });
+
+  it("refuses a paragraph: the mark is a token, not a landing page", () => {
+    const long = "a".repeat(120);
+    expect(readChangeMark(event({ metadata: { from: long, to: "$52" } }))).toBeNull();
+  });
+
+  it("takes the newest event that actually has a readable mark", () => {
+    const marked = firstChangeMark([
+      event({ id: "no-mark", metadata: {} }),
+      event({ id: "marked" }),
+    ]);
+    expect(marked?.event.id).toBe("marked");
+  });
+});
+
+describe("the overnight sentence", () => {
+  it("falls back to the brief's own state headline when nothing was captured", () => {
+    expect(
+      buildOvernightSentence({
+        briefTitle: "Quiet check completed",
+        briefSummary: "All quiet - 12 ads checked across 3 competitors.",
+        changeCount: 0,
+        headline: null,
+        mark: null,
+        quietCompetitors: 3,
+      }),
+    ).toEqual({
+      lead: "Quiet check completed. All quiet - 12 ads checked across 3 competitors.",
+      mark: null,
+      tail: "",
+    });
+  });
+
+  it("names the change, carries the mark, and states what did not move", () => {
+    const sentence = buildOvernightSentence({
+      briefTitle: "2 competitor moves to review",
+      briefSummary: "unused",
+      changeCount: 2,
+      headline: "Offer price changed on nykaa.com",
+      mark: { from: "$68", to: "$52" },
+      quietCompetitors: 7,
+    });
+    expect(sentence.lead).toBe("Offer price changed on nykaa.com — ");
+    expect(sentence.mark).toEqual({ from: "$68", to: "$52" });
+    expect(sentence.tail).toBe(
+      ". 1 other change is on file. Nothing moved on your other 7 competitors.",
+    );
+  });
+
+  it("still says what happened when there is no stored before and after", () => {
+    const sentence = buildOvernightSentence({
+      briefTitle: "1 competitor move to review",
+      briefSummary: "unused",
+      changeCount: 1,
+      headline: "CTA changed on boat-lifestyle.com",
+      mark: null,
+      quietCompetitors: 0,
+    });
+    expect(sentence.mark).toBeNull();
+    expect(sentence.lead).toBe("CTA changed on boat-lifestyle.com.");
+  });
+});
+
+describe("the competitors list", () => {
+  const rows = toCompetitorRows({
+    watchlists: [
+      watchlist({ id: "caught" }),
+      watchlist({ id: "attention" }),
+      watchlist({ id: "watching", lastScannedAt: null }),
+      watchlist({ id: "quiet" }),
+      watchlist({ id: "paused", isActive: false }),
+    ],
+    capturedChanges: { caught: 2 },
+    failedChecks: { attention: 4 },
+    windowDays: 30,
+  });
+
+  it("writes one plain sentence per state, and quiet is a finding not a gap", () => {
+    expect(rows.map((row) => [row.state, row.line])).toEqual([
+      ["caught", "2 changes captured in the last 30 days."],
+      [
+        "attention",
+        "4 checks in a row failed. We're still retrying and the history stays.",
+      ],
+      [
+        "watching",
+        "No completed check yet. This row updates itself when the first capture lands.",
+      ],
+      ["quiet", "Checked, and nothing has changed in the last 30 days."],
+      ["paused", "Paused. No checks run and the history stays."],
+    ]);
+  });
+
+  it("never colours a status without also saying it in words", () => {
+    expect(rows.map((row) => [row.statusLabel, row.statusTone])).toEqual([
+      ["Caught", "on"],
+      ["Needs attention", "bad"],
+      ["Watching", "quiet"],
+      ["Quiet", "quiet"],
+      ["Paused", "quiet"],
+    ]);
+  });
+
+  it("counts a competitor still waiting for its first capture in All only", () => {
+    // Calling it quiet would claim we checked and found nothing, which is
+    // exactly the dishonest read the board exists to avoid.
+    expect(countCompetitorStates(rows)).toEqual({
+      all: 5,
+      caught: 1,
+      quiet: 1,
+      attention: 1,
+      paused: 1,
+    });
+  });
+
+  it("resolves an unknown, blank or absent filter to All rather than 404ing", () => {
+    expect(resolveCompetitorFilter(null)).toBe("all");
+    expect(resolveCompetitorFilter("  ")).toBe("all");
+    expect(resolveCompetitorFilter("nonsense")).toBe("all");
+    expect(resolveCompetitorFilter("PAUSED")).toBe("paused");
+  });
+
+  it("filters to exactly the rows in that state", () => {
+    expect(filterCompetitorRows(rows, "caught").map((row) => row.id)).toEqual(["caught"]);
+    expect(filterCompetitorRows(rows, "all")).toHaveLength(5);
+  });
+
+  it("answers the page's own question in the context line", () => {
+    expect(formatCompetitorContextLine({ rows, windowDays: 30 })).toBe(
+      "5 competitors. 1 changed in the last 30 days.",
+    );
+    expect(
+      formatCompetitorContextLine({
+        rows: toCompetitorRows({
+          watchlists: [watchlist({ isActive: false })],
+          capturedChanges: {},
+          windowDays: 30,
+        }),
+        windowDays: 30,
+      }),
+    ).toBe("1 competitor. All paused — no checks run until you resume one.");
+    expect(formatCompetitorContextLine({ rows: [], windowDays: 30 })).toBe(
+      "No competitors yet. Add one and its first check starts immediately.",
+    );
+  });
+
+  it("never invents a longest-quiet-run it did not measure", () => {
+    for (const row of rows) {
+      expect(row.line).not.toMatch(/\d+ days ago|since \d/);
+    }
+  });
+});
+
+describe("the ruled row", () => {
+  it("is five cells: name, one sentence, one status word, one time, one chevron", () => {
+    const markup = renderRouted(
+      <RuledList>
+        <RuledRow
+          name="Glossier"
+          say="2 changes captured in the last 30 days."
+          status="Caught"
+          statusTone="on"
+          time="27 Jul 2026"
+          to="/app/watchlists?watchlist=w1"
+        />
+      </RuledList>,
+    );
+    expect(markup).toContain('class="f9-wk-nm"');
+    expect(markup).toContain('class="f9-wk-say"');
+    expect(markup).toContain('class="f9-wk-st is-on"');
+    expect(markup).toContain('class="f9-wk-tm"');
+    expect(markup).toContain('class="f9-wk-go"');
+    // No boxes: a status is a word, never a chip or a pill.
+    expect(markup).not.toContain("f9-pill");
+    expect(markup).not.toContain("f9-ed-stamp");
+  });
+
+  it("gives a summary row the body face — Bricolage means a watched entity", () => {
+    const markup = renderRouted(
+      <RuledList>
+        <RuledRow name="Setup" plain say="One step left" />
+      </RuledList>,
+    );
+    expect(markup).toContain("f9-wk-row is-plain");
+  });
+
+  it("keeps a real in-row control above the row-wide hit area", () => {
+    const markup = renderRouted(
+      <RuledList>
+        <RuledRow
+          lead={<input type="checkbox" />}
+          name="Glossier"
+          to="/app/watchlists?watchlist=w1"
+          trail={<button type="submit">Mark done</button>}
+        />
+      </RuledList>,
+    );
+    expect(markup).toContain("f9-wk-row has-lead has-trail");
+    expect(markup).toContain('class="f9-wk-row-lead"');
+    expect(markup).toContain('class="f9-wk-row-trail"');
+    // The chevron gives way to the control rather than sitting beside it.
+    expect(markup).not.toContain('class="f9-wk-go"');
+  });
+});
+
+describe("the working header", () => {
+  it("is one row: title left, at most one action inline right, one context line", () => {
+    const markup = renderRouted(
+      <WorkingHeader
+        action={{ label: "Add competitor", to: "/search" }}
+        context="9 competitors. 2 changed in the last 30 days."
+        title="Competitors"
+      />,
+    );
+    expect(markup.match(/class="f9-wk-btn"/g)).toHaveLength(1);
+    expect(markup).toContain('<h1 class="f9-wk-title">Competitors</h1>');
+    expect(markup).toContain('class="f9-wk-context"');
+  });
+
+  it("renders no action at all rather than a disabled one", () => {
+    const markup = renderRouted(<WorkingHeader action={null} title="Overview" />);
+    expect(markup).not.toContain("f9-wk-btn");
+  });
+});
+
+describe("the rail", () => {
+  const shellSource = readFileSync("app/components/dashboard-shell.tsx", "utf8");
+
+  function renderShell(pathname = "/app") {
+    return renderRouted(
+      <DashboardShell
+        accountDetail="Competitor intelligence workspace"
+        accountLabel="Workspace"
+        accountTitle="Five to Nine"
+        onCommandPalette={() => {}}
+        userEmail="owner@example.com"
+        userName="Owner"
+      >
+        <p>content</p>
+      </DashboardShell>,
+      pathname,
+    );
+  }
+
+  it("shows nine rows: eight daily jobs plus one disclosure", () => {
+    const markup = renderShell();
+    const rows = markup.match(/class="f9-dash-nav-link f9-wk-nav-a[^"]*"/g) ?? [];
+    // Eight visible jobs; the seven settings routes are inside the disclosure
+    // and are rendered (hidden) so a deep link still finds its own row.
+    expect(rows).toHaveLength(15);
+    expect(markup).toContain("Workspace &amp; account");
+    expect(markup).toContain('aria-expanded="false"');
+    expect(markup).toContain('hidden=""');
+  });
+
+  it("makes ⌘K visible chrome rather than folklore", () => {
+    const markup = renderShell();
+    expect(markup).toContain('class="f9-wk-search"');
+    expect(markup).toContain('aria-keyshortcuts="Meta+K Control+K"');
+    expect(markup).toContain("⌘K");
+  });
+
+  it("opens the disclosure when the customer is standing inside it", () => {
+    const markup = renderShell("/app/billing");
+    expect(markup).toContain('aria-expanded="true"');
+    expect(markup).not.toContain('hidden=""');
+    expect(isSettingsNavPath("/app/billing")).toBe(true);
+    expect(isSettingsNavPath("/app/watchlists")).toBe(false);
+  });
+
+  it("carries a workspace footer block, and every route is still reachable", () => {
+    const markup = renderShell();
+    expect(markup).toContain('class="f9-wk-foot"');
+    expect(markup).toContain('class="f9-wk-avatar"');
+    expect(markup).toContain("Sign out");
+    for (const item of [...DASHBOARD_PRIMARY_NAV, ...DASHBOARD_SETTINGS_NAV].flatMap(
+      (section) => section.items,
+    )) {
+      if (item.requiresPresence || item.requiresOps) continue;
+      expect(markup).toContain(`href="${item.to}"`);
+    }
+  });
+
+  it("keeps the rail text-only: no icons, no mono caps, no group labels", () => {
+    expect(shellSource).not.toContain("navIconFor(item)\n                return");
+    const railSection = shellSource.slice(shellSource.indexOf("f9-wk-rail"));
+    expect(railSection).not.toContain("f9-dash-nav-section");
+    expect(railSection).not.toContain("<Icon />");
+  });
+});
