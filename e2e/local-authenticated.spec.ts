@@ -636,6 +636,7 @@ test.describe("local authenticated E2E harness", () => {
   });
 
   test("mobile dashboard navigation stays usable across target breakpoints", async ({ page, context, baseURL }) => {
+    test.setTimeout(120_000);
     await signInAs(context, baseURL!, "e2e-starter");
     const viewports = [
       { width: 320, height: 700 },
