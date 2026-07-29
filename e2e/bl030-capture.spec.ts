@@ -36,6 +36,34 @@ const SURFACES = [
     url: "/app/watchlists?watchlist=e2e-watchlist-starter-1",
     user: "e2e-starter",
   },
+  // Round 3: the opened competitor's RECORD, scrolled to, is its own view and
+  // gets its own budget. Each tab is captured because the owner's complaint
+  // ("a busy box — where's the coherence?") was about what these five panels
+  // looked like, not about the peek pane above them.
+  {
+    name: "detail-changed",
+    url: "/app/watchlists?watchlist=e2e-watchlist-starter-1",
+    user: "e2e-starter",
+    anchor: ".f9-ed-tabbar",
+  },
+  {
+    name: "detail-evidence",
+    url: "/app/watchlists?watchlist=e2e-watchlist-starter-1&tab=evidence",
+    user: "e2e-starter",
+    anchor: ".f9-ed-tabbar",
+  },
+  {
+    name: "detail-delivery",
+    url: "/app/watchlists?watchlist=e2e-watchlist-starter-1&tab=delivery",
+    user: "e2e-starter",
+    anchor: ".f9-ed-tabbar",
+  },
+  {
+    name: "detail-setup",
+    url: "/app/watchlists?watchlist=e2e-watchlist-starter-1&tab=setup",
+    user: "e2e-starter",
+    anchor: ".f9-ed-tabbar",
+  },
   { name: "collections-untouched", url: "/app/collections", user: "e2e-agency" },
 ] as const;
 const SWEEP_WIDTHS = [320, 360, 390, 414, 480, 640, 768, 1024, 1280, 1440, 1600, 1920, 2560];
@@ -238,6 +266,14 @@ test.describe("BL-030 live proof", () => {
 
           await page.goto(`${base}${surface.url}`, { waitUntil: "networkidle" });
           await page.waitForTimeout(400);
+          // A surface with an anchor is measured from that anchor down: the
+          // record is its own view, so its green and rule budgets are counted
+          // against the viewport a customer actually reads it in.
+          const anchor = "anchor" in surface ? (surface as { anchor: string }).anchor : null;
+          if (anchor) {
+            await page.locator(anchor).first().scrollIntoViewIfNeeded();
+            await page.waitForTimeout(200);
+          }
           const measured = await measure(page);
           const green = await auditGreen(page);
           const file = path.join(

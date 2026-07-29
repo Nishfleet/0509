@@ -169,8 +169,22 @@ describe("the coexistence seam inside a rebuilt page (BL-030 round 2)", () => {
       const block = scoped.slice(scoped.indexOf(`${selector} {`));
       expect(block.slice(0, block.indexOf("}"))).not.toMatch(/green/);
     }
-    // Nothing in the whole scoped seam may reach for the accent.
-    expect(scoped).not.toMatch(/--green|--ed-accent/);
+    // The scoped seam may reach for the accent in EXACTLY one place: the NOW
+    // token of the newest change, which is this view's single green mark.
+    // Every other rule in the seam is monochrome, and the archived plates
+    // below the newest one render the same token in ink — records are not
+    // highlighted, the same rule that already forbids animating a diff.
+    const accentRules = [...scoped.matchAll(/([^{}]+)\{([^}]*)\}/g)]
+      .filter(([, , body]) => /--green\b|--ed-accent\b/.test(body))
+      .map(([, selector]) => selector.trim().replace(/\s+/g, " "));
+    expect(accentRules).toEqual([
+      ".f9-wk-page .f9-ed-change-feed > :first-child .f9-ed-diff-value mark, " +
+        ".f9-wk-page .f9-ed-detail-main > .f9-ed-diff-plate:first-of-type .f9-ed-diff-value mark",
+    ]);
+    // And the default for every other plate's token is the sunk ground.
+    expect(scoped).toMatch(
+      /\.f9-wk-page \.f9-ed-diff-value mark \{[^}]*background: var\(--wk-sunk\)/,
+    );
   });
 
   it("keeps the caps-mono budget to the page's own three kickers", () => {

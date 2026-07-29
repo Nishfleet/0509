@@ -12861,14 +12861,24 @@ reds soften --- */
   text-transform: none;
 }
 
+/* Round 3, owner verdict: "why an outline? the section beneath this looks
+   clean asf!" — the setup card is a SECTION, not a card. No perimeter, no
+   distinct ground, steps separated by the same hairline as every other ruled
+   list, and everything aligned to the page gutter so it reads as one column
+   with What changed and Still running. Content and behaviour unchanged. */
 .f9-wk-page .f9-ed-setup-card {
-  border: 1px solid var(--wk-rule);
+  /* Bleeds to the page edge exactly like `.f9-wk-rows.is-bleed`, so its
+     hairlines and its hover run the full column instead of stopping short —
+     and, because the bleed is on the CARD and the gutter moves onto its
+     children, the section is never wider than the page. */
+  margin: 0 calc(var(--wk-pad) * -1);
+  border: 0;
   background: transparent;
   box-shadow: none;
 }
 
 .f9-wk-page .f9-ed-setup-header {
-  padding: 16px 18px 12px;
+  padding: 0 var(--wk-pad);
   background: transparent;
   color: var(--ink);
 }
@@ -12897,8 +12907,315 @@ reds soften --- */
 .f9-wk-page .f9-ed-setup-capacity,
 .f9-wk-page .f9-ed-setup-card > .f9-ed-action-row,
 .f9-wk-page .f9-ed-setup-card > .f9-message {
-  margin-right: 18px;
-  margin-left: 18px;
+  margin-right: 0;
+  margin-left: 0;
+  padding-right: var(--wk-pad);
+  padding-left: var(--wk-pad);
+}
+
+.f9-wk-page .f9-ed-setup-list {
+  margin: 14px 0 0;
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-wk-page .f9-ed-setup-row {
+  padding: 13px var(--wk-pad);
+  border-bottom: 1px solid var(--wk-rule);
+  border-top: 0;
+}
+
+.f9-wk-page .f9-ed-setup-links {
+  padding-bottom: 0;
+}
+
+/* ---------------------------------------------------------------
+   Round 3 — the competitor record's coherence pass.
+
+   Owner verdict on the opened competitor: "a busy box… where's the
+   coherence?" — the cream sheet, the black event-header bars, the
+   shadow-offset plates, the boxed buttons, the boxed status strip and
+   the dashed evidence boxes were the Evidence Desk shouting next to the
+   new board. This is a COHERENCE pass, not an IA rebuild: the tab
+   structure, every panel, every control and every string are untouched.
+   The full IA rebuild of this surface is still phase P1.
+
+   Everything below is scoped to `.f9-wk-page`, so `/share/:token`, the
+   PDF and every route whose phase has not landed render exactly as
+   before.
+   --------------------------------------------------------------- */
+
+/* 1. No sheets. The record is page-native, so it follows the workspace
+      theme the same way the board does, and separation comes from the
+      one 1px rule rather than from a border plus a shadow plus a
+      lighter ground. */
+.f9-wk-page .f9-ed-opened-detail,
+.f9-wk-page .f9-ed-panel,
+.f9-wk-page .f9-ed-diff-plate,
+.f9-wk-page .f9-ed-change-record,
+.f9-wk-page .f9-ed-evidence-plate,
+.f9-wk-page .f9-ed-number-card,
+.f9-wk-page .f9-ed-rail-card,
+.f9-wk-page .f9-ed-status-strip,
+.f9-wk-page .f9-ed-fact-rail,
+.f9-wk-page .f9-ed-first-scan,
+.f9-wk-page .f9-ed-tabbar {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.f9-wk-page .f9-ed-opened-detail {
+  padding: 0;
+}
+
+.f9-wk-page .f9-ed-panel,
+.f9-wk-page .f9-ed-diff-plate,
+.f9-wk-page .f9-ed-change-record,
+.f9-wk-page .f9-ed-evidence-plate,
+.f9-wk-page .f9-ed-number-card,
+.f9-wk-page .f9-ed-rail-card,
+.f9-wk-page .f9-ed-first-scan {
+  border-top: 1px solid var(--wk-rule);
+}
+
+/* 2. The ink header bars become quiet ruled headers. Ink is reserved for
+      the rail and the feedback strip; a capture header is the machine
+      naming a timestamp, which is what the mono kicker is for. */
+.f9-wk-page .f9-ed-plate-header,
+.f9-wk-page .f9-ed-first-scan-header,
+.f9-wk-page .f9-ed-fact-rail-header {
+  padding: 12px 0 10px;
+  border-bottom: 1px solid var(--wk-rule);
+  background: transparent;
+  color: var(--ink);
+}
+
+.f9-wk-page .f9-ed-plate-header .f9-ed-plate-header-end {
+  color: var(--ink-faint);
+}
+
+/* The one sanctioned caps-mono inside the record: the capture timestamp
+   on a plate header. Every other micro label gives the face back, which
+   is what keeps this view inside the three-kicker budget. */
+.f9-wk-page .f9-ed-micro {
+  font-family: var(--f9-font);
+  font-size: 12.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.f9-wk-page .f9-ed-plate-header .f9-ed-micro {
+  font-family: var(--ld-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* An error still speaks in colour AND words; the 6px slab becomes a rule,
+   and the success accent goes away entirely — green is not a decoration. */
+.f9-wk-page .f9-ed-first-scan.is-error .f9-ed-first-scan-header {
+  border-left: 1px solid var(--red);
+  padding-left: 12px;
+}
+
+.f9-wk-page .f9-ed-first-scan.is-success .f9-ed-first-scan-header {
+  border-left: 0;
+}
+
+/* 3. The tab bar reads like the board's filter tabs: text, one hairline
+      underline for the active panel, no ink fill and no boxed cells. */
+.f9-wk-page .f9-ed-tabbar {
+  border-bottom: 1px solid var(--wk-rule);
+}
+
+.f9-wk-page .f9-ed-tab {
+  border-left: 0;
+  border-bottom: 1px solid transparent;
+  margin-bottom: -1px;
+  background: transparent;
+  color: var(--ink-faint);
+  font-family: var(--f9-font);
+  font-size: 13.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.f9-wk-page .f9-ed-tab:hover {
+  color: var(--ink-soft);
+}
+
+.f9-wk-page .f9-ed-tab.is-active,
+.f9-wk-page .f9-ed-tab[aria-current="page"] {
+  border-bottom-color: var(--ink);
+  background: transparent;
+  color: var(--ink);
+}
+
+.f9-wk-page .f9-ed-tab-count {
+  font-family: var(--f9-font);
+  font-size: 13.5px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* 3b. The panel kickers inside the record are a hardcoded teal caps-mono
+       (`.f9-app-kicker`, a pre-Evidence-Desk survivor). They are a second
+       green moment and a fourth caps-mono surface at once, so inside a
+       rebuilt page they become the same quiet sentence-case label the rest
+       of the record now uses. */
+.f9-wk-page .f9-app-kicker {
+  color: var(--ink-faint);
+  font-family: var(--f9-font);
+  font-size: 12.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* 4. A state is a word. The boxed, caps-mono, accent-edged stamp becomes
+      the same "Caught" / "Quiet" the ruled rows use. */
+.f9-wk-page .f9-ed-stamp {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--f9-font);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.f9-wk-page .f9-ed-stamp.is-quiet,
+.f9-wk-page .f9-ed-stamp.is-pending {
+  color: var(--ink-faint);
+}
+
+/* 5. The status strip loses its 2.5px cage; the cells stay a strip,
+      divided by the one rule weight. */
+.f9-wk-page .f9-ed-status-strip {
+  border-top: 1px solid var(--wk-rule);
+  border-bottom: 1px solid var(--wk-rule);
+}
+
+.f9-wk-page .f9-ed-status-cell {
+  border-left: 1px solid var(--wk-rule);
+}
+
+.f9-wk-page .f9-ed-status-value,
+.f9-wk-page .f9-ed-fact-value,
+.f9-wk-page .f9-ed-rail-line dd {
+  font-family: var(--f9-font);
+  font-size: 13px;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 6. The boxed fact rails become ruled definition lists, exactly like the
+      P0 peek pane's. */
+.f9-wk-page .f9-ed-fact-row {
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-wk-page .f9-ed-fact-key,
+.f9-wk-page .f9-ed-rail-line dt {
+  color: var(--ink-faint);
+  font-family: var(--f9-font);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* 7. The dashed evidence boxes become quiet lines. */
+.f9-wk-page .f9-ed-quiet-line {
+  padding: 12px 0;
+  border: 0;
+  border-top: 1px solid var(--wk-rule);
+  font-family: var(--ld-mono);
+  font-size: 11.5px;
+}
+
+.f9-wk-page .f9-ed-capture-bar.is-unchecked {
+  border-width: 1px;
+}
+
+/* The last boxes the probe found: the before/now pane frame and its divider,
+   the sparse-trend notice and the proof packet. Same treatment as everything
+   else in the record — the rule stays, at the page's one weight. */
+.f9-wk-page .f9-ed-diff-panes {
+  border-width: 1px;
+}
+
+.f9-wk-page .f9-ed-diff-pane.is-before {
+  border-right-width: 1px;
+}
+
+.f9-wk-page .f9-trend-sparse,
+.f9-wk-page .f9-proof-packet {
+  border-width: 1px;
+}
+
+/* Narrow widths restack the record and the Evidence Desk's own responsive
+   rules restore its 2.5px cuts — the pane divider turning horizontal, the
+   status cells gaining a top rule, the evidence capture's frame. The one rule
+   weight is a rule at every width, not only at 1440. */
+@media (max-width: 720px) {
+  .f9-wk-page .f9-ed-diff-pane.is-before,
+  .f9-wk-page .f9-ed-evidence-capture,
+  .f9-wk-page .f9-ed-status-cell,
+  .f9-wk-page .f9-ed-opened-detail .f9-ed-status-cell:nth-child(even) {
+    border-width: 1px;
+  }
+}
+
+/* 8. Type: nothing inside the record may out-shout the 28px page title,
+      and Bricolage still means a watched entity — a change headline and a
+      rollup number are neither. */
+.f9-wk-page .f9-ed-diff-headline {
+  font-family: var(--f9-font);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.f9-wk-page .f9-ed-number-value {
+  font-family: var(--f9-font);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+/* 9. The one green in this view: the NOW token of the newest change.
+      Every later plate is an archived record, and records are not
+      highlighted — the same rule that already forbids animating a diff. */
+.f9-wk-page .f9-ed-diff-value mark {
+  padding: 0 3px;
+  background: var(--wk-sunk);
+  color: var(--ink);
+}
+
+.f9-wk-page .f9-ed-change-feed > :first-child .f9-ed-diff-value mark,
+.f9-wk-page .f9-ed-detail-main > .f9-ed-diff-plate:first-of-type .f9-ed-diff-value mark {
+  background: var(--green);
+  color: var(--ed-on-accent);
+}
+
+.f9-wk-page .f9-ed-diff-value {
+  font-size: 19px;
+}
+
+/* The deep-link highlight was a green ring. A selected record reads the
+   way a selected row reads. */
+.f9-wk-page .f9-ed-diff-plate.is-highlighted,
+.f9-wk-page .f9-ed-change-record.is-highlighted {
+  background: var(--wk-sunk);
+  box-shadow: none;
 }
 
 /* ---------------------------------------------------------------
