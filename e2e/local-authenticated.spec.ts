@@ -596,49 +596,66 @@ test.describe("local authenticated E2E harness", () => {
     await expect(page).toHaveURL(/\/auth\/login/);
   });
 
-  test("mobile dashboard navigation stays usable across target breakpoints", async ({ page, context, baseURL }) => {
-    await signInAs(context, baseURL!, "e2e-starter");
-    const viewports = [
-      { width: 320, height: 700 },
-      { width: 375, height: 812 },
-      { width: 430, height: 932 },
-      { width: 640, height: 900 },
-      { width: 641, height: 900 },
-      { width: 750, height: 900 },
-      { width: 760, height: 900 },
-      { width: 761, height: 900 },
-      { width: 1024, height: 768 },
-    ];
-    const routes = [
-      "/app",
-      "/app/watchlists",
-      "/app/sources",
-      "/app/notifications",
-      "/app/source-access",
-      "/app/developer-access",
-      "/app/billing",
-      "/app/reports",
-    ];
+  // app.css uses inclusive max-width boundaries at 640px (mobile app chrome)
+  // and 760px (responsive shell): test each boundary and its first pixel
+  // above, plus the smallest supported viewport.
+  for (const { label, viewports } of [
+    {
+      label: "mobile app chrome",
+      viewports: [
+        { width: 320, height: 700 },
+        { width: 640, height: 900 },
+        { width: 641, height: 900 },
+      ],
+    },
+    {
+      label: "responsive shell",
+      viewports: [
+        { width: 760, height: 900 },
+        { width: 761, height: 900 },
+      ],
+    },
+  ]) {
+    test(`mobile dashboard navigation stays usable across target breakpoints: ${label}`, async ({
+      page,
+      context,
+      baseURL,
+    }) => {
+      // Each generated test pins its 3 × 8 = 24 (or 2 × 8 = 16) navigation
+      // sweep to 30 seconds so future matrix growth fails loudly.
+      test.setTimeout(30_000);
+      await signInAs(context, baseURL!, "e2e-starter");
+      const routes = [
+        "/app",
+        "/app/watchlists",
+        "/app/sources",
+        "/app/notifications",
+        "/app/source-access",
+        "/app/developer-access",
+        "/app/billing",
+        "/app/reports",
+      ];
 
-    for (const viewport of viewports) {
-      await page.setViewportSize(viewport);
-      for (const route of routes) {
-        await page.goto(route);
-        await expectAppPage(page);
-        await expect(page.getByRole("link", { name: "Competitors" }).first()).toBeVisible();
-        await expect(page.getByRole("link", { name: "Notifications" }).first()).toBeVisible();
-        await expect(page.getByRole("button", { name: "Sign out" }).first()).toBeVisible();
-        await expectNoFixedAppChrome(page);
-        await expectCompactHeaderActions(page);
-        if (viewport.width <= 640) {
-          await expect(page.getByRole("link", { name: "Developer access" }).first()).toBeVisible();
-          await expectMobileNavLinksInContainer(page);
-          await expectMobileUtilityInViewport(page);
+      for (const viewport of viewports) {
+        await page.setViewportSize(viewport);
+        for (const route of routes) {
+          await page.goto(route);
+          await expectAppPage(page);
+          await expect(page.getByRole("link", { name: "Competitors" }).first()).toBeVisible();
+          await expect(page.getByRole("link", { name: "Notifications" }).first()).toBeVisible();
+          await expect(page.getByRole("button", { name: "Sign out" }).first()).toBeVisible();
+          await expectNoFixedAppChrome(page);
+          await expectCompactHeaderActions(page);
+          if (viewport.width <= 640) {
+            await expect(page.getByRole("link", { name: "Developer access" }).first()).toBeVisible();
+            await expectMobileNavLinksInContainer(page);
+            await expectMobileUtilityInViewport(page);
+          }
+          await expectNoHorizontalOverflow(page);
         }
-        await expectNoHorizontalOverflow(page);
       }
-    }
-  });
+    });
+  }
 
   test("billing cycle picker keeps monthly and annual intent accessible on small screens", async ({
     page,
