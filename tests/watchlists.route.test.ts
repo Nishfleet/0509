@@ -2492,6 +2492,19 @@ describe("watchlists route rendering", () => {
     expect(markup).not.toContain("Recent evidence checks");
   });
 
+  it("keeps Package for client available for a quiet completed Agency check", async () => {
+    const markup = await renderWatchlistsRoute({
+      ...selectedPanelLoaderData,
+      plan: "agency",
+      events: [],
+    });
+
+    expect(markup).toContain("Package for client");
+    expect(markup).toContain(
+      'href="/app/reports/watchlist:watch-1"',
+    );
+  });
+
   it("keeps setup, its explainers and the source-access route behind the Setup tab", async () => {
     const markup = await renderWatchlistsRoute(selectedPanelLoaderData, "setup");
 
