@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { validateRemoteRestoreEvidence } from "./deploy-production-plan.mjs";
+import { allowedRemoteMigrationLedgers } from "./d1-migration-sync-check.lib.mjs";
 
 /** @param {string} name */
 function readArg(name) {
@@ -238,13 +239,21 @@ async function main() {
     .sort();
   const { migrationBearing, restoreCritical } =
     await restoreEvidenceClassification();
+  const allowedMigrationStates = allowedRemoteMigrationLedgers(
+    migrations,
+  ).flatMap((ledger) => {
+    const latestMigration = ledger.at(-1);
+    // An empty ledger names no migration, so it cannot match remote state.
+    return latestMigration
+      ? [{ latestMigration, migrationCount: ledger.length }]
+      : [];
+  });
   const verificationNow = new Date();
   const verdict = validateRemoteRestoreEvidence(evidence, {
     candidateFingerprint: manifest.candidateFingerprint,
     wranglerWorktreeSha256:
       manifest.postflight?.launchConfig?.wranglerWorktreeSha256,
-    latestMigration: migrations.at(-1),
-    migrationCount: migrations.length,
+    allowedMigrationStates,
     migrationBearing,
     restoreCritical,
     now: verificationNow,

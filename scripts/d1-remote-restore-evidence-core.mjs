@@ -2,6 +2,10 @@ import { createHash } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 
 import { sha256CanonicalJson } from "./d1-backup-lifecycle-canary.mjs";
+import {
+  POST_DEPLOY_CLEANUP_MIGRATIONS,
+  allowedRemoteMigrationLedgers,
+} from "./d1-migration-sync-check.lib.mjs";
 
 const APPROVAL_MARKER = "0509-remote-restore-evidence";
 const REPOSITORY = "nish3451/0509";
@@ -245,15 +249,23 @@ export function assertRestoreRoundTrip(source, restored) {
  * set. Comparing only the latest name can hide a missing earlier migration.
  * @param {DatabaseEvidence["migrationLedger"]} ledger
  * @param {string[]} repositoryMigrations
+ * @param {Set<string>} cleanupMigrations
  */
 export function assertMigrationLedgerMatchesRepository(
   ledger,
   repositoryMigrations,
+  cleanupMigrations = POST_DEPLOY_CLEANUP_MIGRATIONS,
 ) {
   const ledgerNames = ledger.map((entry) => entry.name);
+  const allowedLedgers = allowedRemoteMigrationLedgers(
+    repositoryMigrations,
+    cleanupMigrations,
+  );
   if (
-    ledgerNames.length !== repositoryMigrations.length ||
-    JSON.stringify(ledgerNames) !== JSON.stringify(repositoryMigrations)
+    !allowedLedgers.some(
+      (allowedLedger) =>
+        JSON.stringify(ledgerNames) === JSON.stringify(allowedLedger),
+    )
   ) {
     throw new Error("source_backup_migration_ledger_stale");
   }

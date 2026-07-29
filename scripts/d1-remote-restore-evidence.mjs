@@ -805,12 +805,16 @@ async function runAutomation(outputPath) {
     const migrations = readdirSync(resolve("migrations"))
       .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
       .sort();
-    const latestMigration = migrations.at(-1);
-    if (!latestMigration) throw new Error("latest_migration_missing");
     assertMigrationLedgerMatchesRepository(
       sourceAggregate.migrationLedger,
       migrations,
     );
+    const sourceMigrationNames = sourceAggregate.migrationLedger.map(
+      (entry) => entry.name,
+    );
+    const latestMigration = sourceMigrationNames.at(-1);
+    const migrationCount = sourceMigrationNames.length;
+    if (!latestMigration) throw new Error("latest_migration_missing");
     const evidence = buildRemoteRestoreEvidence({
       candidate,
       aggregate: sourceAggregate,
@@ -820,14 +824,14 @@ async function runAutomation(outputPath) {
       scratchDatabase: { name: scratchName, uuid: scratchUuid },
       databaseBookmark,
       latestMigration,
-      migrationCount: migrations.length,
+      migrationCount,
       scratchDatabaseRemoved: scratchRemoved,
     });
     const verdict = validateRemoteRestoreEvidence(evidence, {
       candidateFingerprint: candidate.fingerprint,
       wranglerWorktreeSha256: candidate.wrangler.worktreeSha256,
       latestMigration,
-      migrationCount: migrations.length,
+      migrationCount,
       migrationBearing: true,
     });
     if (!verdict.ok) {
@@ -841,7 +845,7 @@ async function runAutomation(outputPath) {
         backupFile: ownedBackup.fileName,
         remoteObjectKey,
         scratchRemoved: true,
-        migrationCount: migrations.length,
+        migrationCount,
         latestMigration,
         rowCountDigestSha256: evidence.rowCountDigestSha256,
         migrationLedgerSha256: evidence.migrationLedgerSha256,

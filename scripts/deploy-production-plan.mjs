@@ -253,7 +253,17 @@ export function buildProductionDeployPlan({
 
 /**
  * @param {unknown} evidence
- * @param {{ candidateFingerprint: string, wranglerWorktreeSha256: string, latestMigration?: string, migrationCount?: number, migrationBearing?: boolean, restoreCritical?: boolean, now?: Date, minimumValidityMs?: number }} expected
+ * @param {{
+ *   candidateFingerprint: string,
+ *   wranglerWorktreeSha256: string,
+ *   latestMigration?: string,
+ *   migrationCount?: number,
+ *   allowedMigrationStates?: Array<{ latestMigration: string, migrationCount: number }>,
+ *   migrationBearing?: boolean,
+ *   restoreCritical?: boolean,
+ *   now?: Date,
+ *   minimumValidityMs?: number,
+ * }} expected
  */
 export function validateRemoteRestoreEvidence(evidence, expected) {
   const issues = [];
@@ -316,16 +326,28 @@ export function validateRemoteRestoreEvidence(evidence, expected) {
   }
   if (value.productionSearchRolloutMode !== "shadow")
     issues.push("remote_restore_rollout_mode");
-  if (
-    expected.latestMigration &&
-    value.latestMigration !== expected.latestMigration
-  )
-    issues.push("remote_restore_migration_mismatch");
-  if (
-    expected.migrationCount &&
-    value.migrationCount !== expected.migrationCount
-  )
-    issues.push("remote_restore_migration_count");
+  if (expected.allowedMigrationStates) {
+    const migrationStateMatches = expected.allowedMigrationStates.some(
+      (state) =>
+        state?.latestMigration === value.latestMigration &&
+        state?.migrationCount === value.migrationCount,
+    );
+    if (!migrationStateMatches) {
+      issues.push("remote_restore_migration_mismatch");
+      issues.push("remote_restore_migration_count");
+    }
+  } else {
+    if (
+      expected.latestMigration &&
+      value.latestMigration !== expected.latestMigration
+    )
+      issues.push("remote_restore_migration_mismatch");
+    if (
+      expected.migrationCount &&
+      value.migrationCount !== expected.migrationCount
+    )
+      issues.push("remote_restore_migration_count");
+  }
   for (const field of [
     "databaseIdentitySha256",
     "scratchDatabaseIdentitySha256",

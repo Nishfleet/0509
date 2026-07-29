@@ -886,6 +886,40 @@ describe("D1 remote restore evidence automation", () => {
     ).toThrow("source_backup_migration_ledger_stale");
   });
 
+  it("accepts exactly an allowlisted cleanup suffix before or after cleanup", () => {
+    const ledger = aggregateEvidence().migrationLedger;
+    const repository = [
+      "0001_first.sql",
+      "0002_second.sql",
+      "0003_destructive_cleanup.sql",
+    ];
+    const cleanup = new Set(["0003_destructive_cleanup.sql"]);
+    expect(
+      assertMigrationLedgerMatchesRepository(ledger, repository, cleanup),
+    ).toBe(true);
+    expect(
+      assertMigrationLedgerMatchesRepository(
+        [
+          ...ledger,
+          {
+            id: 3,
+            name: "0003_destructive_cleanup.sql",
+            appliedAt: "2026-07-03 00:00:00",
+          },
+        ],
+        repository,
+        cleanup,
+      ),
+    ).toBe(true);
+    expect(() =>
+      assertMigrationLedgerMatchesRepository(
+        [ledger[0]],
+        repository,
+        cleanup,
+      ),
+    ).toThrow("source_backup_migration_ledger_stale");
+  });
+
   it("binds the listed production database to the configured Worker D1 UUID", () => {
     const configured = {
       binding: "DB",

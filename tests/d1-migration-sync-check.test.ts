@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  allowedRemoteMigrationLedgers,
   blockingPendingMigrationNames,
   hasOnlyPostDeployCleanupMigrations,
   pendingMigrationNames,
@@ -35,5 +36,35 @@ Migrations to be applied:
     expect(pendingMigrationNames(output)).toEqual(["0061_add_new_runtime_table.sql"]);
     expect(blockingPendingMigrationNames(output)).toEqual(["0061_add_new_runtime_table.sql"]);
     expect(hasOnlyPostDeployCleanupMigrations(output)).toBe(false);
+  });
+
+  it("allows only a contiguous post-deploy cleanup suffix to remain pending", () => {
+    const repository = [
+      "0001_first.sql",
+      "0002_compatible.sql",
+      "0003_destructive_cleanup.sql",
+      "0004_final_cleanup.sql",
+    ];
+    expect(
+      allowedRemoteMigrationLedgers(
+        repository,
+        new Set([
+          "0003_destructive_cleanup.sql",
+          "0004_final_cleanup.sql",
+        ]),
+      ),
+    ).toEqual([repository, repository.slice(0, 2)]);
+    expect(() =>
+      allowedRemoteMigrationLedgers(
+        repository,
+        new Set(["0002_compatible.sql"]),
+      ),
+    ).toThrow("post_deploy_cleanup_migration_allowlist_invalid");
+    expect(() =>
+      allowedRemoteMigrationLedgers(
+        repository,
+        new Set(["9999_missing.sql"]),
+      ),
+    ).toThrow("post_deploy_cleanup_migration_allowlist_invalid");
   });
 });

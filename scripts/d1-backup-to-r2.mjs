@@ -14,6 +14,8 @@ import {
   resolveBackupLocalDirectory,
 } from "./d1-backup-command-args.mjs";
 import {
+  assertAutomationBackupLocalDirectory,
+  isRetryableD1ExportBusyError,
   prepareBackupLocalDirectory,
   secureBackupLocalFile,
 } from "./d1-backup-local-storage.mjs";
@@ -43,7 +45,11 @@ function delay(milliseconds) {
  * Retry one provider operation without changing its local path or R2 key.
  * @param {string} label
  * @param {(attempt: number) => Promise<unknown>} operation
- * @param {{ attempts?: number, delayCapMs?: number }} [options]
+ * @param {{
+ *   attempts?: number,
+ *   delayCapMs?: number,
+ *   shouldRetry?: (error: unknown) => boolean,
+ * }} [options]
  */
 async function runProviderOperationWithRetry(
   label,
@@ -51,6 +57,7 @@ async function runProviderOperationWithRetry(
   {
     attempts = PROVIDER_ATTEMPTS,
     delayCapMs = Number.POSITIVE_INFINITY,
+    shouldRetry = () => true,
   } = {},
 ) {
   /** @type {unknown[]} */
@@ -60,6 +67,7 @@ async function runProviderOperationWithRetry(
       return await operation(attempt);
     } catch (error) {
       errors.push(error);
+      if (!shouldRetry(error)) throw error;
       if (attempt < attempts) {
         console.warn(`${label} failed; retrying attempt ${attempt + 1}.`);
         await delay(
@@ -86,6 +94,9 @@ const automationApproved = assertBackupAutomationApproval({ databaseName, bucket
 const manualApproved = assertManualBackupApproval({ databaseName, bucketName, automationApproved });
 const skipD1ExportConfirmation = automationApproved || manualApproved;
 
+if (automationApproved) {
+  assertAutomationBackupLocalDirectory(localDir);
+}
 await prepareBackupLocalDirectory(localDir);
 if (localManifestPath) {
   await writeFile(
@@ -127,6 +138,7 @@ await runProviderOperationWithRetry(
   {
     attempts: D1_EXPORT_ATTEMPTS,
     delayCapMs: D1_EXPORT_RETRY_DELAY_CAP_MS,
+    shouldRetry: isRetryableD1ExportBusyError,
   },
 );
 
@@ -145,7 +157,7 @@ try {
     );
   });
 } catch (uploadError) {
-  if (!localManifestPath) throw uploadError;
+  if (!localManifestPath && !automationApproved) throw uploadError;
   try {
     await removePartialLocalExport();
   } catch (cleanupError) {
@@ -158,7 +170,9 @@ try {
   throw uploadError;
 }
 
-if (!localManifestPath) {
+if (automationApproved && !localManifestPath) {
+  await removePartialLocalExport();
+} else if (!localManifestPath) {
   const entries = (await readdir(localDir))
     .filter(
       (name) =>
