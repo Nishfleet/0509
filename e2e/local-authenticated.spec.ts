@@ -350,12 +350,7 @@ test.describe("local authenticated E2E harness", () => {
     await expect(
       page.locator("#f9-main-content").getByRole("heading", { level: 1, name: "Briefs", exact: true }),
     ).toBeVisible();
-    await expect(
-      page.locator("#f9-main-content").getByText(
-        "Read each period as one brief: the finding, the captured changes, the quiet checks, and the facts behind it.",
-        { exact: true },
-      ),
-    ).toBeVisible();
+    await expect(page.locator("#f9-main-content")).toContainText("brief on file");
     await expect(
       page
         .locator("#f9-main-content")
