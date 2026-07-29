@@ -20,6 +20,9 @@ const ENABLED = process.env.BL030_CAPTURE === "1";
 const OUT_DIR =
   process.env.BL030_OUT ?? "/home/nish/workspaces/products/0509-audit-artifacts-bl030";
 const PREFIX = process.env.BL030_PREFIX ?? "after";
+const BL036_ENABLED = process.env.BL036_CAPTURE === "1";
+const BL036_OUT_DIR =
+  process.env.BL036_OUT ?? "/home/nish/workspaces/products/0509-audit-artifacts-bl036";
 
 const VIEWPORTS = [
   { name: "390", width: 390, height: 844 },
@@ -399,5 +402,87 @@ test.describe("BL-030 live proof", () => {
     );
 
     expect(failures, "zero console errors and zero horizontal scroll 320-2560").toEqual([]);
+  });
+});
+
+test.describe("BL-036 quiet Agency detail proof", () => {
+  test.skip(!BL036_ENABLED, "set BL036_CAPTURE=1 to capture the quiet Agency state");
+
+  test("captures the 1440 quiet detail in both themes without changing the paint law", async ({
+    browser,
+    baseURL,
+  }) => {
+    mkdirSync(BL036_OUT_DIR, { recursive: true });
+    const metrics: unknown[] = [];
+    const failures: string[] = [];
+
+    for (const theme of THEMES) {
+      const context = await browser.newContext({
+        viewport: { width: 1440, height: 900 },
+        deviceScaleFactor: 2,
+      });
+      await prepare(context, baseURL!, "e2e-agency", theme);
+      const page = await context.newPage();
+      const consoleErrors: string[] = [];
+      const pageErrors: string[] = [];
+      page.on("console", (message) => {
+        if (message.type() === "error") consoleErrors.push(message.text());
+      });
+      page.on("pageerror", (error) => pageErrors.push(String(error)));
+
+      await page.goto(
+        `${baseURL}/app/watchlists?watchlist=e2e-watchlist-agency-quiet`,
+        { waitUntil: "networkidle" },
+      );
+      await expect(
+        page.locator(".f9-wk-detail").getByRole("link", {
+          name: "Package for client",
+        }),
+      ).toBeVisible();
+
+      const measured = await measure(page);
+      const green = await auditGreen(page);
+      const screenshot = `bl036-quiet-agency-detail-1440-${theme}.png`;
+      await page.screenshot({
+        path: path.join(BL036_OUT_DIR, screenshot),
+        fullPage: true,
+      });
+
+      metrics.push({
+        theme,
+        resolvedTheme: measured.theme,
+        viewport: "1440x900",
+        horizontalOverflow: measured.overflow,
+        greenPainted: green.hits.length,
+        greenPaintedDetail: green.hits,
+        paintedPlateMarks: green.paintedPlateMarks,
+        markablePlates: green.markablePlates,
+        ruleWeights: measured.ruleWeights,
+        consoleErrors,
+        pageErrors,
+        screenshot,
+      });
+      if (measured.overflow > 1) {
+        failures.push(`${theme}: horizontal overflow ${measured.overflow}`);
+      }
+      if (green.hits.length > 1) {
+        failures.push(`${theme}: ${green.hits.length} painted greens`);
+      }
+      if (green.paintedPlateMarks !== 0 || green.markablePlates !== 0) {
+        failures.push(
+          `${theme}: quiet state painted ${green.paintedPlateMarks} change marks across ${green.markablePlates} markable plates`,
+        );
+      }
+      if (consoleErrors.length || pageErrors.length) {
+        failures.push(`${theme}: console/page errors`);
+      }
+      await context.close();
+    }
+
+    writeFileSync(
+      path.join(BL036_OUT_DIR, "bl036-quiet-agency-detail-metrics.json"),
+      `${JSON.stringify({ capturedAt: new Date().toISOString(), metrics }, null, 2)}\n`,
+    );
+    expect(failures, "quiet Agency proof preserves the one-green paint law").toEqual([]);
   });
 });
