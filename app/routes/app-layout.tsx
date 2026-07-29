@@ -6,6 +6,7 @@ import { Outlet, useLoaderData } from "react-router";
 import { DashboardShell } from "~/components/dashboard-shell";
 import { DashboardRouteError } from "~/components/dashboard-route-loading";
 import { QuickAddPalette } from "~/components/quick-add-palette";
+import { QuickAddProvider } from "~/components/quick-add-context";
 
 /** Cmd/Ctrl+K anywhere in /app opens quick-add, except while typing. */
 export function isQuickAddShortcut(event: {
@@ -88,12 +89,26 @@ export function shellPrimaryIsDemoted(pathname: string) {
   );
 }
 
+/**
+ * BL-030 - surfaces rebuilt in the landing language own their whole page,
+ * header included: a working header is title left / one action inline right /
+ * one context line, and a second right-aligned action band floating above it
+ * is the "chrome explaining chrome" the concept deleted. Every other route
+ * still runs on the old shell topbar until its phase lands, which is what the
+ * coexistence proof in the BL-030 report shows.
+ */
+export function shellTopbarIsSuppressed(pathname: string) {
+  return pathname === "/app" || pathname === "/app/watchlists";
+}
+
 export default function AppLayoutRoute() {
   const { session, showOpsNav, showPresenceNav } = useLoaderData<typeof loader>();
   const { pathname } = useLocation();
   const demoteShellPrimary = shellPrimaryIsDemoted(pathname);
+  const hideTopbar = shellTopbarIsSuppressed(pathname);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const closeQuickAdd = useCallback(() => setQuickAddOpen(false), []);
+  const openQuickAdd = useCallback(() => setQuickAddOpen(true), []);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -112,28 +127,33 @@ export default function AppLayoutRoute() {
       accountLabel="Workspace"
       accountTitle="Five to Nine"
       headerActions={
-        <>
-          <Link className="f9-secondary-button" prefetch="intent" to="/app">
-            Overview
-          </Link>
-          <button
-            aria-haspopup="dialog"
-            aria-keyshortcuts="Meta+K Control+K"
-            className={demoteShellPrimary ? "f9-secondary-button" : "f9-primary-button"}
-            onClick={() => setQuickAddOpen(true)}
-            type="button"
-          >
-            + Add competitor
-          </button>
-        </>
+        hideTopbar ? null : (
+          <>
+            <Link className="f9-secondary-button" prefetch="intent" to="/app">
+              Overview
+            </Link>
+            <button
+              aria-haspopup="dialog"
+              aria-keyshortcuts="Meta+K Control+K"
+              className={demoteShellPrimary ? "f9-secondary-button" : "f9-primary-button"}
+              onClick={openQuickAdd}
+              type="button"
+            >
+              + Add competitor
+            </button>
+          </>
+        )
       }
+      onCommandPalette={openQuickAdd}
       showOpsNav={showOpsNav}
       showPresenceNav={showPresenceNav}
       userEmail={session.user.email}
       userName={session.user.name}
     >
-      {quickAddOpen ? <QuickAddPalette onClose={closeQuickAdd} /> : null}
-      <Outlet />
+      <QuickAddProvider open={openQuickAdd}>
+        {quickAddOpen ? <QuickAddPalette onClose={closeQuickAdd} /> : null}
+        <Outlet />
+      </QuickAddProvider>
     </DashboardShell>
   );
 }

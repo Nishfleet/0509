@@ -158,12 +158,14 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
         /confirmed/i,
       ]);
 
-      await expect(page.getByRole("link", { name: /Workflow acceptance watch/ })).toContainText(
-        "No completed check yet — open for status",
-      );
-      await expect(page.getByRole("link", { name: /Crash reclaim watch/ })).toContainText(
-        "No completed check yet — open for status",
-      );
+      // BL-030: the list row states the competitor's state in one sentence,
+      // so the promise is checked on the row rather than on its name link.
+      await expect(
+        page.locator(".f9-wk-row", { hasText: "Workflow acceptance watch" }).first(),
+      ).toContainText("No completed check yet");
+      await expect(
+        page.locator(".f9-wk-row", { hasText: "Crash reclaim watch" }).first(),
+      ).toContainText("No completed check yet");
       await expect(page.getByText("Needs source access", { exact: true })).toBeVisible();
       await expect(page.getByText("After source access is ready", { exact: true })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Landing page offer changed" }).first()).toBeVisible();
@@ -310,8 +312,17 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
       await expectPhoneTouchTargets(page);
 
       await page.goto("/app/watchlists");
-      await expect(page.getByText("Add your first competitor", { exact: true }).first()).toBeVisible();
-      await expect(page.getByRole("link", { name: "Add competitor" }).first()).toBeVisible();
+      // BL-030 round 2: an empty board explains itself in a sentence and hands
+      // over the page's one filled action, which is the header's quick-add
+      // button. The guarantee is unchanged — a customer with nothing tracked
+      // is told what happens next and given one way in.
+      await expect(
+        page.getByText("Add your first competitor and its first check starts immediately.", {
+          exact: false,
+        }),
+      ).toBeVisible();
+      await expect(page.getByRole("button", { name: "Add competitor", exact: true })).toBeVisible();
+      await expect(page.getByRole("link", { name: "See a sample brief" })).toBeVisible();
       await expectNoHorizontalOverflow(page);
       await expectPhoneTouchTargets(page);
 
@@ -340,7 +351,11 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
       await signInAs(context, baseURL!, "e2e-free-onboarded");
       await page.setViewportSize(viewport);
       await page.goto("/app/watchlists");
-      await expect(page.getByText("Add your first competitor", { exact: true }).first()).toBeVisible();
+      await expect(
+        page.getByText("Add your first competitor and its first check starts immediately.", {
+          exact: false,
+        }),
+      ).toBeVisible();
 
       await signInAs(context, baseURL!, "e2e-starter");
       await page.goto("/app/watchlists?watchlist=e2e-watchlist-starter-1");

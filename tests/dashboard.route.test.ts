@@ -492,12 +492,16 @@ describe("dashboard route agent memory", () => {
       await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(AppDashboardRoute));
 
-    expect(markup.match(/class="f9-ed-diff-plate"/g)).toHaveLength(3);
-    expect(markup.match(/f9-ed-cta--rank1/g)).toHaveLength(1);
+    // BL-030: the Overview lists at most three changes as ruled rows and the
+    // evidence itself lives one click away in the competitor's peek pane.
+    // The screen still carries exactly one filled button.
+    expect(markup.match(/class="f9-wk-row"/g)).toHaveLength(3);
+    expect(markup.match(/class="f9-wk-btn"/g)).toHaveLength(1);
+    expect(markup).not.toContain("f9-ed-diff-plate");
     expect(markup).toContain(
       'href="/app/watchlists?watchlist=watch-1&amp;event=event-0"',
     );
-    expect(markup).toContain('class="f9-overview-stat-band" data-count="3"');
+    expect(markup).not.toContain("f9-overview-stat-band");
     expect(markup).not.toContain("Useful examples");
     expect(markup).not.toContain("f9-dashboard-grid");
   });
@@ -580,9 +584,11 @@ describe("dashboard route agent memory", () => {
     await mockRouter(loaderData);
     const route = await import("~/routes/app.dashboard");
     const markup = renderToStaticMarkup(createElement(route.default));
-    expect(markup.match(/class="f9-ed-diff-plate"/g)).toHaveLength(1);
-    expect(markup).toContain("https://rival.example/old");
-    expect(markup).toContain("https://rival.example/new");
+    // The stored before/after still renders — as the page's one green mark in
+    // the Overnight sentence, using the same metadata the diff plate read.
+    expect(markup).toContain('<s class="f9-wk-del">https://rival.example/old</s>');
+    expect(markup).toContain('<ins class="f9-wk-ins">https://rival.example/new</ins>');
+    expect(markup.match(/f9-wk-ins/g)).toHaveLength(1);
   });
 
   it("does not report a quiet check before scan history exists or when changes fail to load", async () => {
@@ -901,7 +907,6 @@ describe("dashboard route agent memory", () => {
     // A first scan uses the ordinary brief card; there is no second first-run
     // pattern beside the persistent setup checklist.
     expect(markup).toContain("Activation scan is queued");
-    expect(markup).toContain("Boat Lifestyle");
     expect(markup).not.toContain("The first scan is running now");
     expect(markup).not.toContain("ON THE WIRE");
     expect(markup).toContain("Open watchlists");

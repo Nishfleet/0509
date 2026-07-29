@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Link,
   useActionData,
@@ -10,37 +10,55 @@ import {
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { CopyButton } from "~/components/copy-button";
-import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardPage } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
+import { LocalTime } from "~/components/local-time";
+import { useQuickAdd } from "~/components/quick-add-context";
 import { TertiaryAction } from "~/components/evidence/cta";
-import { SpecimenEmptyState } from "~/components/evidence/specimen-empty-state";
 import { BulkSelectBar } from "~/components/watchlists/bulk-select-bar";
 import { CompetitorDetail } from "~/components/watchlists/competitor-detail";
-import { WatchBoard, toWatchBoardBandSummaries } from "~/components/watchlists/watch-board";
-import { WatchBoardStatus } from "~/components/watchlists/watch-board-status";
-import { WatchBoardTicker } from "~/components/watchlists/watch-board-ticker";
+import {
+  DetailBlock,
+  DetailFacts,
+  DetailPane,
+  DetailPaneHead,
+} from "~/components/workspace/detail-pane";
+import { FeedbackStrip } from "~/components/workspace/feedback-strip";
+import { RuledList, RuledRow } from "~/components/workspace/ruled-list";
+import { useFirstCapturePolling } from "~/components/workspace/use-first-capture-polling";
+import { WorkingHeader } from "~/components/workspace/working-header";
+import { firstChangeMark } from "~/lib/change-mark";
+import {
+  COMPETITOR_FILTER_PARAM,
+  COMPETITOR_FILTERS,
+  competitorFilterLabel,
+  countCompetitorStates,
+  filterCompetitorRows,
+  formatCompetitorContextLine,
+  resolveCompetitorFilter,
+  toCompetitorRows,
+} from "~/lib/competitor-list-display";
 import { toCustomerDiscoveryStatus } from "~/lib/discovery-customer-copy";
 import {
   isSlackDeliveryCustomerFacing,
   isWhatsAppDeliveryCustomerFacing,
 } from "~/lib/ga-customer-surface";
 import { canUsePlanFeature } from "~/lib/plan-entitlements";
+import { createReportId } from "~/lib/report";
 import { formatNextScanLabel } from "~/lib/schedule-display";
-import type { WatchlistRunRecord } from "~/lib/types";
 import { countHardFailuresSinceLastSuccess } from "~/lib/watchlist-detail-display";
 import {
   resolveWatchlistDetailTab,
+  watchlistDetailTabHref,
   WATCHLIST_DETAIL_TAB_PARAM,
 } from "~/lib/watchlist-detail-tabs";
 import {
-  buildWatchBoardTickerItems,
   firstScanPollingKey,
   resolveEmptyWatchlistEventCopy,
   resolveWatchlistListScanPresentation,
   resolveWatchlistRunCustomerError,
   resolveWatchlistRunTiming,
   resolveWatchlistTrackingPresentation,
-  summarizeWatchBoard,
 } from "~/lib/watchlist-display";
 
 // Re-exported for test-facing imports from "~/routes/app.watchlists" (see
@@ -84,12 +102,25 @@ export async function action(args: ActionFunctionArgs) {
   return handleWatchlistsAction(args);
 }
 
+/**
+ * BL-030 — Competitors, rebuilt in the landing language (concept v4).
+ *
+ * The page is a list of nine records and a peek pane. What went, and why:
+ * the ticker (triple-redundant with the rows and the context line), the
+ * five-cell status strip (five numbers shouting at once), the per-band
+ * capture histogram (the same fact is one line of text), the state stamps,
+ * the boxed chips and every 2-2.5px "cut" rule. One rule weight survives:
+ * 1px. Character is spent in four places only — the Bricolage title, the
+ * Bricolage competitor names, the single green mark in the detail pane, and
+ * the motion curves. Behaviour, loaders and actions are untouched.
+ */
 export default function WatchlistsRoute() {
   const data = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   // Tabs are navigation, not state (brief §6.4/§11): the active panel is read
   // off the URL, so deep links, the back button and SSR all agree.
   const activeTab = resolveWatchlistDetailTab(searchParams.get(WATCHLIST_DETAIL_TAB_PARAM));
+  const activeFilter = resolveCompetitorFilter(searchParams.get(COMPETITOR_FILTER_PARAM));
 
   // WP-24: email deep-links land on ?event= — scroll/focus that row once.
   useEffect(() => {
@@ -200,11 +231,7 @@ export default function WatchlistsRoute() {
     navigation.location?.pathname === "/app/watchlists"
       ? new URLSearchParams(navigation.location.search).get("watchlist")
       : null;
-  // WP-C2 Beat 3 — only carry the Wire arc during the first-run window, i.e.
-  // before any competitor in the workspace has ever completed a scan (its first
-  // readable brief). Derived from existing records; no parallel status source.
 
-  // ---- watch board (brief §6.1, §6.3, §7) --------------------------------
   const captureWindow = data.captureWindow ?? {
     endDate: data.renderedAt.slice(0, 10),
     windowDays: 30,
@@ -213,24 +240,52 @@ export default function WatchlistsRoute() {
     totalCapturedChanges: 0,
     failedChecks: {},
   };
-  const boardBands = toWatchBoardBandSummaries(
-    data.watchlists,
-    captureWindow.capturedChanges,
-    captureWindow.failedChecks,
+  const rows = useMemo(
+    () =>
+      toCompetitorRows({
+        watchlists: data.watchlists,
+        capturedChanges: captureWindow.capturedChanges,
+        failedChecks: captureWindow.failedChecks,
+        windowDays: captureWindow.windowDays,
+      }),
+    [data.watchlists, captureWindow.capturedChanges, captureWindow.failedChecks, captureWindow.windowDays],
   );
-  const boardSummary = summarizeWatchBoard(boardBands);
-  const hasCompetitors = boardBands.length > 0;
+  const filterCounts = countCompetitorStates(rows);
+  const visibleRows = filterCompetitorRows(rows, activeFilter);
+  const hasCompetitors = rows.length > 0;
   const nextScanLabel = formatNextScanLabel(
     data.plan,
     renderedAt,
     data.effectiveDeliveryConfig.timezone,
   );
+  const selectable = data.watchlists.length > 1;
+  const quickAdd = useQuickAdd();
+  useFirstCapturePolling(
+    data.watchlists.some((watchlist) => watchlist.isActive && !watchlist.lastScannedAt),
+  );
+
   /**
-   * One pause/resume control, used by every band and by the opened
-   * competitor's action row. `aria-busy` and the pending label are per
-   * watchlist — a reviewer's finding on BL-006: the old detail button lit up
-   * whenever ANY band was pausing. The disabled state stays global on purpose:
-   * there is a single fetcher, so a second submit would cancel the first.
+   * The filter tabs are links, so they are back-button correct and shareable.
+   * Every other param on the URL — the opened competitor, its tab, an emailed
+   * `?event=` — survives a filter change untouched.
+   */
+  const filterHref = (filter: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (filter === "all") {
+      params.delete(COMPETITOR_FILTER_PARAM);
+    } else {
+      params.set(COMPETITOR_FILTER_PARAM, filter);
+    }
+    const query = params.toString();
+    return query ? `/app/watchlists?${query}` : "/app/watchlists";
+  };
+
+  /**
+   * One pause/resume control, used by the opened competitor's action row.
+   * `aria-busy` and the pending label are per watchlist — a reviewer's
+   * finding on BL-006: the old detail button lit up whenever ANY band was
+   * pausing. The disabled state stays global on purpose: there is a single
+   * fetcher, so a second submit would cancel the first.
    */
   const renderPauseAction = (watchlist: (typeof data.watchlists)[number]) => {
     const bandPending =
@@ -257,32 +312,55 @@ export default function WatchlistsRoute() {
   };
 
   const selectedWatchlist = data.selectedWatchlist;
+  const selectedRow = selectedWatchlist
+    ? rows.find((row) => row.id === selectedWatchlist.id) ?? null
+    : null;
+  const selectedCapturedChanges = selectedWatchlist
+    ? captureWindow.capturedChanges[selectedWatchlist.id] ?? 0
+    : 0;
+  const selectedFailedChecks = selectedWatchlist
+    ? captureWindow.failedChecks?.[selectedWatchlist.id] ?? countHardFailuresSinceLastSuccess(data.runs)
+    : 0;
+  const marked = selectedWatchlist ? firstChangeMark(data.events ?? []) : null;
 
   return (
-    <DashboardPage>
-      <section className="f9-app-stack">
-        {hasCompetitors ? (
-          <WatchBoardTicker
-            items={buildWatchBoardTickerItems(boardBands, captureWindow.windowDays)}
-          />
-        ) : null}
+    <DashboardPage className="f9-wk-page">
+      <WorkingHeader
+        action={
+          quickAdd
+            ? {
+                label: "Add competitor",
+                onClick: quickAdd.open,
+                "aria-haspopup": "dialog",
+                "aria-keyshortcuts": "Meta+K Control+K",
+              }
+            : { label: "Add competitor", to: "/search" }
+        }
+        context={formatCompetitorContextLine({ rows, windowDays: captureWindow.windowDays })}
+        title="Competitors"
+      />
 
-        {/* No Rank-1 here: the workspace shell's "+ Add competitor" already
-            carries this screen's one action, and two ink primaries 200px
-            apart is the collision brief §5 forbids. Zero Rank-1s on a screen
-            is legitimate (cta.tsx §5). The empty state below still carries
-            one, because the shell button is the only other way in. */}
-        <DashboardPageHeader
-          kicker="Monitoring"
-          lead="Monitor competitor ads over time and get alerted when messaging, creative, or landing pages change."
-          title="Competitors"
-        />
+      {hasCompetitors ? (
+        <div className="f9-wk-tabs" role="navigation" aria-label="Filter competitors by state">
+          {COMPETITOR_FILTERS.map((filter) => (
+            <Link
+              aria-current={filter === activeFilter ? "page" : undefined}
+              className={`f9-wk-tab${filter === activeFilter ? " is-on" : ""}`}
+              key={filter}
+              prefetch="intent"
+              to={filterHref(filter)}
+            >
+              {competitorFilterLabel(filter)}
+              <span className="f9-wk-tab-n">{filterCounts[filter]}</span>
+            </Link>
+          ))}
+        </div>
+      ) : null}
 
       {actionData?.message ? (
-        <p
-          aria-live="polite"
-          className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}
-          role="status"
+        <FeedbackStrip
+          label={actionData.ok ? "Done" : "Not done"}
+          tone={actionData.ok ? "ok" : "bad"}
         >
           {actionData.ok && actionData.message.startsWith("http") ? (
             <>
@@ -291,36 +369,22 @@ export default function WatchlistsRoute() {
               </a>{" "}
               <CopyButton value={actionData.message} />
             </>
-            ) : (
-              actionData.message
-            )}
-          {!actionData.ok && (actionData.error === "plan_limit_exceeded" || actionData.error === "plan_gated") ? (
+          ) : (
+            actionData.message
+          )}
+          {!actionData.ok &&
+          (actionData.error === "plan_limit_exceeded" || actionData.error === "plan_gated") ? (
             <>
               {" "}
-              <Link to="/app/billing?source=watchlists#plans">View plans</Link> to unlock this control.
+              <Link to="/app/billing?source=watchlists#plans">View plans</Link> to unlock this
+              control.
             </>
           ) : null}
-        </p>
+        </FeedbackStrip>
       ) : null}
 
       {hasCompetitors ? (
         <>
-          {/* Brief §6.3: the status strip is the ONLY place page-level status
-              renders. With a competitor open, the page is about that
-              competitor, so its strip is the page strip and the workspace
-              rollup stands down — two five-cell strips 200px apart was the
-              same duplication §6.3 exists to delete. The board surface
-              (`/app/watchlists` with nothing open) is unchanged. */}
-          {selectedWatchlist ? null : (
-            <WatchBoardStatus
-              nextScanLabel={nextScanLabel}
-              sourceCanSchedule={sourceCanSchedule}
-              summary={boardSummary}
-              trackingStatusLabel={trackingPresentation.statusLabel}
-              windowDays={captureWindow.windowDays}
-            />
-          )}
-
           <BulkSelectBar
             onClear={clearBulkSelection}
             onPause={() => submitBulk("pause")}
@@ -330,65 +394,206 @@ export default function WatchlistsRoute() {
             selectedCount={selectedBulkIds.length}
           />
 
-          <WatchBoard
-            canReport={canReport}
-            captureWindow={captureWindow}
-            onToggleSelect={toggleBulkSelection}
-            openWatchlistId={data.selectedWatchlist?.id ?? null}
-            openWatchlistRun={(data.runs[0] as WatchlistRunRecord | undefined) ?? null}
-            pendingWatchlistId={pendingWatchlistId}
-            plan={data.plan}
-            renderPauseAction={renderPauseAction}
-            selectable={data.watchlists.length > 1}
-            selectedIds={selectedBulkIds}
-            selectionDisabled={bulkPending}
-            watchlists={data.watchlists}
-          />
+          <div className={`f9-wk-split${selectedWatchlist ? "" : " is-single"}`}>
+            <div className="f9-wk-split-list">
+              <RuledList aria-label="Competitors" flush>
+                {visibleRows.map((row) => (
+                  <RuledRow
+                    key={row.id}
+                    lead={
+                      selectable ? (
+                        <label>
+                          <span className="f9-sr-only">Select {row.name}</span>
+                          <input
+                            checked={selectedBulkIds.includes(row.id)}
+                            disabled={bulkPending}
+                            onChange={() => toggleBulkSelection(row.id)}
+                            type="checkbox"
+                          />
+                        </label>
+                      ) : null
+                    }
+                    name={row.name}
+                    off={!row.isActive}
+                    pending={pendingWatchlistId === row.id}
+                    say={row.line}
+                    selected={selectedWatchlist?.id === row.id}
+                    status={row.statusLabel}
+                    statusTone={row.statusTone}
+                    time={
+                      row.lastScannedAt ? (
+                        <LocalTime iso={row.lastScannedAt} mode="date" />
+                      ) : (
+                        "—"
+                      )
+                    }
+                    to={watchlistDetailTabHref(row.id)}
+                  />
+                ))}
+                {visibleRows.length === 0 ? (
+                  <p className="f9-wk-empty-filter">
+                    No competitor is in this state right now.{" "}
+                    <Link to={filterHref("all")}>Show all {filterCounts.all}</Link>.
+                  </p>
+                ) : null}
+              </RuledList>
+            </div>
+
+            {selectedWatchlist && selectedRow ? (
+              <DetailPane label={selectedWatchlist.name}>
+                <DetailPaneHead
+                  name={selectedWatchlist.name}
+                  site={selectedWatchlist.targetLabel}
+                />
+
+                {marked ? (
+                  <DetailBlock kicker="Caught">
+                    <p className="f9-wk-change">
+                      <s className="f9-wk-del">{marked.mark.from}</s> &rarr;{" "}
+                      <ins className="f9-wk-ins">{marked.mark.to}</ins>
+                    </p>
+                    <p className="f9-wk-quote">{marked.event.summary}</p>
+                    <div className="f9-wk-acts">
+                      <Link
+                        className="f9-wk-lnk"
+                        to={watchlistDetailTabHref(selectedWatchlist.id, "evidence")}
+                      >
+                        Open the capture <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
+                      </Link>
+                      {/* Same gate the deleted band carried: a report needs a
+                          completed check behind it, not just the entitlement. */}
+                      {canReport && selectedWatchlist.lastScannedAt ? (
+                        <Link
+                          className="f9-wk-lnk"
+                          to={`/app/reports/${createReportId("watchlist", selectedWatchlist.id)}`}
+                        >
+                          Package for client <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
+                        </Link>
+                      ) : null}
+                    </div>
+                  </DetailBlock>
+                ) : (
+                  <DetailBlock kicker={selectedRow.statusLabel}>
+                    <p className="f9-wk-quote">{selectedRow.line}</p>
+                    <div className="f9-wk-acts">
+                      <Link
+                        className="f9-wk-lnk"
+                        to={watchlistDetailTabHref(selectedWatchlist.id, "evidence")}
+                      >
+                        Open the capture <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
+                      </Link>
+                    </div>
+                  </DetailBlock>
+                )}
+
+                <DetailBlock>
+                  <DetailFacts
+                    rows={[
+                      {
+                        key: "Last check",
+                        value: selectedWatchlist.lastScannedAt ? (
+                          <LocalTime iso={selectedWatchlist.lastScannedAt} mode="date" />
+                        ) : (
+                          "No completed check yet"
+                        ),
+                      },
+                      { key: "Next check", value: nextScanLabel },
+                      {
+                        key: `Changes in ${captureWindow.windowDays} days`,
+                        value: selectedCapturedChanges,
+                      },
+                      ...(selectedFailedChecks > 0
+                        ? [{ key: "Failed checks", value: selectedFailedChecks }]
+                        : []),
+                      {
+                        key: "Watching since",
+                        value: <LocalTime iso={selectedWatchlist.createdAt} mode="date" />,
+                      },
+                    ]}
+                  />
+                </DetailBlock>
+              </DetailPane>
+            ) : null}
+          </div>
         </>
       ) : (
-        <SpecimenEmptyState
-          copy="Paste your website or a competitor's — we scan their Meta ads and landing page, then email you the moment their offer, creative, or CTA changes."
-          headline="Add your first competitor"
-          primaryAction={{ label: "Add competitor", to: "/search" }}
-          secondaryAction={{ label: "See a sample brief", to: "/#demo" }}
-          specimenLabel="BAND 01 — RESERVED"
-          stateLabel="WATCH BOARD · NOTHING TRACKED YET"
-        />
+        /* An empty board is not an occasion for a dimmed specimen panel with
+           a caps-mono "BAND 01 — RESERVED" plate: that is the v3 ornament
+           habit, and a customer who has nothing tracked needs a sentence and
+           a way in, not a diagram of the thing they do not have yet. The
+           page's one filled button already sits in the header. */
+        <section aria-labelledby="competitors-empty-title" className="f9-wk-sec">
+          <p className="f9-wk-kick" id="competitors-empty-title">
+            Nothing tracked yet
+          </p>
+          <p className="f9-wk-lede">
+            Add your first competitor and its first check starts immediately. We scan
+            their Meta ads and their landing page, then email you the moment their
+            offer, creative, or CTA changes.
+          </p>
+          <div className="f9-wk-acts">
+            <Link className="f9-wk-lnk" to="/#demo">
+              See a sample brief <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
+            </Link>
+          </div>
+        </section>
       )}
 
       {selectedWatchlist ? (
-        <CompetitorDetail
-          activeTab={activeTab}
-          canConfigureDelivery={canConfigureDelivery}
-          canConfigureDigestSettings={canConfigureDigestSettings}
-          canEmailDelivery={canEmailDelivery}
-          canExport={canExport}
-          canInstantAlert={canInstantAlert}
-          canRefresh={canRefresh}
-          canShare={canShare}
-          capturedChanges={captureWindow.capturedChanges[selectedWatchlist.id] ?? 0}
-          data={{ ...data, selectedWatchlist }}
-          discoveryRecovery={discoveryStatus.recovery ?? null}
-          // The board counts hard failures since the last success in SQL; the
-          // detail now counts them the same way over the loaded runs, and
-          // prefers the board's rollup so one competitor never reports two
-          // different failure counts on one page.
-          failedChecks={
-            captureWindow.failedChecks?.[selectedWatchlist.id] ??
-            countHardFailuresSinceLastSuccess(data.runs)
-          }
-          lockedToolbarUpgradeLabel={lockedToolbarUpgradeLabel}
-          nextScanLabel={nextScanLabel}
-          renderedAt={renderedAt}
-          showSlackDelivery={showSlackDelivery}
-          sourceCanSchedule={sourceCanSchedule}
-          trackingPresentation={trackingPresentation}
-          watchlist={selectedWatchlist}
-          windowDays={captureWindow.windowDays}
-          checksExpanded={searchParams.get("checks") === "all"}
-        />
+        <div className="f9-wk-record">
+          <CompetitorDetail
+            activeTab={activeTab}
+            canConfigureDelivery={canConfigureDelivery}
+            canConfigureDigestSettings={canConfigureDigestSettings}
+            canEmailDelivery={canEmailDelivery}
+            canExport={canExport}
+            canInstantAlert={canInstantAlert}
+            canRefresh={canRefresh}
+            canShare={canShare}
+            capturedChanges={selectedCapturedChanges}
+            data={{ ...data, selectedWatchlist }}
+            discoveryRecovery={discoveryStatus.recovery ?? null}
+            // The board counts hard failures since the last success in SQL; the
+            // detail now counts them the same way over the loaded runs, and
+            // prefers the board's rollup so one competitor never reports two
+            // different failure counts on one page.
+            failedChecks={selectedFailedChecks}
+            lockedToolbarUpgradeLabel={lockedToolbarUpgradeLabel}
+            nextScanLabel={nextScanLabel}
+            renderedAt={renderedAt}
+            showSlackDelivery={showSlackDelivery}
+            sourceCanSchedule={sourceCanSchedule}
+            trackingPresentation={trackingPresentation}
+            watchlist={selectedWatchlist}
+            windowDays={captureWindow.windowDays}
+            pauseAction={renderPauseAction(selectedWatchlist)}
+            checksExpanded={searchParams.get("checks") === "all"}
+          />
+        </div>
       ) : null}
-      </section>
+
+      <div className="f9-wk-opline">
+        <span>
+          {rows.length} {rows.length === 1 ? "competitor" : "competitors"}
+        </span>
+        <span>Next check {nextScanLabel}</span>
+        {/* Source state is told ONCE per screen. With a competitor open its
+            own status strip carries it, so the board line stands down rather
+            than repeating the same words 400px apart. On the board it stays a
+            LINK when something is actually blocking the next check — the
+            deleted status strip carried that link, and a label you cannot act
+            on is a worse answer than the one we shipped. */}
+        {selectedWatchlist ? null : sourceCanSchedule &&
+          trackingPresentation.statusLabel !== "Needs source access" ? (
+          <span>{trackingPresentation.statusLabel}</span>
+        ) : (
+          <span>
+            <Link className="f9-wk-lnk f9-wk-lnk--quiet" to="/app/source-access">
+              {trackingPresentation.statusLabel}
+            </Link>
+          </span>
+        )}
+      </div>
     </DashboardPage>
   );
 }

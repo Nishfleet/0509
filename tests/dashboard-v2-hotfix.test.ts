@@ -9,6 +9,7 @@ import {
 import { agencyCheckoutHeldCustomerCopy } from "~/lib/customer-billing-copy";
 import {
   buildDashboardMobileNav,
+  DASHBOARD_PRIMARY_NAV,
   DASHBOARD_SETTINGS_NAV,
 } from "~/lib/dashboard-navigation";
 
@@ -103,13 +104,16 @@ describe("dashboard v2 production hotfix", () => {
   });
 
   it("exposes Team and Client rooms in the mobile utility strip", () => {
+    // BL-030 moved Client rooms into the rail's daily jobs (it is delivery
+    // work, not a settings screen); Team stayed behind the disclosure. Both
+    // are still in the mobile utility strip, which is what this guards.
     const settingsItems = DASHBOARD_SETTINGS_NAV.flatMap((section) => section.items);
     expect(settingsItems).toEqual(
-      expect.arrayContaining([
-        { label: "Team", to: "/app/team" },
-        { label: "Client rooms", to: "/app/clients" },
-      ]),
+      expect.arrayContaining([{ label: "Team", to: "/app/team" }]),
     );
+    expect(
+      DASHBOARD_PRIMARY_NAV.flatMap((section) => section.items),
+    ).toEqual(expect.arrayContaining([{ label: "Client rooms", to: "/app/clients" }]));
     expect(shellSource).toContain("f9-dash-mobile-utility");
     expect(shellSource).toContain("MOBILE_UTILITY_NAV.map");
     expect(appCss).toMatch(/\.f9-dash-mobile-utility\s*\{[^}]*display:\s*none/s);

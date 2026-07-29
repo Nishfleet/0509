@@ -20,10 +20,20 @@ describe("deferred empty-state consolidation", () => {
 		expect(source.match(/<EmptyState\b/g) ?? []).toHaveLength(expectedCount);
 	});
 
-	it("gives the watch board a specimen panel instead of an empty box", () => {
-		expect(watchlists).toContain("<SpecimenEmptyState");
-		expect(watchlists).toContain('headline="Add your first competitor"');
+	it("gives the competitors board a sentence, not an empty box and not a specimen", () => {
+		// BL-030 round 2: the specimen plate was the right answer under the
+		// Evidence Desk (a designed reserved slot beats a grey box). Under the
+		// landing language it is ornament — a caps-mono diagram of the thing the
+		// customer does not have yet. The guarantee this case has always carried
+		// is that the empty board is DESIGNED rather than a bare box; it is now
+		// carried by one sentence and one way in.
 		expect(watchlists).not.toContain("<EmptyState");
+		expect(watchlists).not.toContain("<SpecimenEmptyState");
+		expect(watchlists).toContain("Nothing tracked yet");
+		expect(watchlists).toContain(
+			"Add your first competitor and its first check starts immediately.",
+		);
+		expect(watchlists).toContain("See a sample brief");
 	});
 
 	it("gives the brief desk one specimen panel instead of parallel empty boxes", () => {

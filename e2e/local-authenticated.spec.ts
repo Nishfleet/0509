@@ -2,7 +2,20 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
 const fixtureCookie = "f9_e2e_fixture";
 const fixtureModeHeader = "x-0509-e2e-test-mode";
-const clientSideButtonLabels = new Set(["Copy link", "Copied!", "Download PDF", "Try again", "+ Add competitor"]);
+const clientSideButtonLabels = new Set([
+  "Copy link",
+  "Copied!",
+  "Download PDF",
+  "Try again",
+  "+ Add competitor",
+  // BL-030 rail + rebuilt surfaces: the visible ⌘K affordance, the
+  // "Workspace & account" disclosure, and the Competitors page action, which
+  // opens the same quick-add dialog rather than navigating.
+  "Search…⌘K",
+  "Workspace & account▾",
+  "Workspace & account▴",
+  "Add competitor",
+]);
 
 type VisibleActionControl = {
   buttonType: string;
@@ -62,8 +75,17 @@ async function expectNoFixedAppChrome(page: Page) {
 }
 
 async function expectCompactHeaderActions(page: Page) {
-  // The topbar ships one "Overview" link plus the "+ Add competitor" quick-add
-  // button (a real <button>, not a link — it opens the palette dialog).
+  // BL-030: surfaces rebuilt in the landing language own their whole page and
+  // carry their single action in the working header, so they ship no topbar at
+  // all. Every route still on the old system keeps the shipped contract: one
+  // "Overview" link plus the "+ Add competitor" quick-add button (a real
+  // <button>, not a link — it opens the palette dialog).
+  const pathname = new URL(page.url()).pathname;
+  if (pathname === "/app" || pathname === "/app/watchlists") {
+    await expect(page.locator(".f9-dash-topbar")).toHaveCount(0);
+    await expect(page.locator(".f9-wk-head .f9-wk-btn")).toHaveCount(1);
+    return;
+  }
   const actions = await page.evaluate(() =>
     Array.from(document.querySelectorAll(".f9-dash-topbar a, .f9-dash-topbar button")).map((element) => {
       const rect = element.getBoundingClientRect();
@@ -292,10 +314,14 @@ test.describe("local authenticated E2E harness", () => {
     await page.goto("/app");
     await expectAppPage(page);
     await expect(page.locator("#f9-main-content").getByRole("heading", { level: 1 })).toBeVisible();
+    // BL-030: the Overview's kickers are Overnight / What changed / Still
+    // running, and the watched competitors themselves live on /app/watchlists.
     await expect(
-      page.locator("#f9-main-content").getByText("Latest stored changes", { exact: true }),
+      page.locator("#f9-main-content").getByText("Overnight", { exact: true }),
     ).toBeVisible();
-    await expect(page.getByText("Okara competitor watch")).toBeVisible();
+    await expect(
+      page.locator("#f9-main-content").getByText("What changed", { exact: true }),
+    ).toBeVisible();
 
     await page.goto("/search");
     await expect(page.getByRole("heading", { name: "Find competitor ads" })).toBeVisible();
@@ -315,7 +341,7 @@ test.describe("local authenticated E2E harness", () => {
     await expectAppPage(page);
     await expect(page.locator("#f9-main-content").getByRole("heading", { level: 1 })).toBeVisible();
     await expect(
-      page.locator("#f9-main-content").getByText("Latest stored changes", { exact: true }),
+      page.locator("#f9-main-content").getByText("Overnight", { exact: true }),
     ).toBeVisible();
     await expect(page.getByRole("link", { name: "Presence" })).toHaveCount(0);
 
@@ -401,8 +427,12 @@ test.describe("local authenticated E2E harness", () => {
 
     await page.goto("/app");
     await expectAppPage(page);
-    await expect(page.getByText("Scout weekly watch")).toBeVisible();
-    await expect(page.getByText("weekly", { exact: false })).toBeVisible();
+    // The Overview states the cadence as the next check it can actually
+    // promise, not as an adjective; the competitor itself is named on its own
+    // surface. Both are the honest homes for these two facts.
+    await expect(page.locator("#f9-main-content")).toContainText("Next check");
+    await page.goto("/app/watchlists");
+    await expect(page.getByText("Scout weekly watch").first()).toBeVisible();
 
     await page.goto("/app/digests");
     await expect(page.getByRole("heading", { name: "Briefs", exact: true })).toBeVisible();
@@ -444,13 +474,13 @@ test.describe("local authenticated E2E harness", () => {
     await signInAs(context, baseURL!, "e2e-agency");
 
     const routes = [
-      { label: "Overview", path: "/app", heading: null, copy: ["Latest stored changes"] },
+      { label: "Overview", path: "/app", heading: null, copy: ["Overnight"] },
       { label: "Search", path: "/search", heading: "Find competitor ads", copy: ["Competitor website", "See ads"] },
       {
         label: "Competitors",
         path: "/app/watchlists",
         heading: "Competitors",
-        copy: ["Monitor competitor ads over time"],
+        copy: ["changed in the last 30 days"],
       },
       {
         label: "Collections",
@@ -531,6 +561,12 @@ test.describe("local authenticated E2E harness", () => {
     await page.goto("/app");
     for (const route of routes) {
       const link = page.locator(".f9-cursor-rail").getByRole("link", { name: route.label, exact: true }).first();
+      // BL-030 regrouped the rail: the seven long-dwell settings routes sit
+      // behind one "Workspace & account" disclosure. Every section is still
+      // reachable from the sidebar — one row may have to be opened first.
+      if (!(await link.isVisible())) {
+        await page.locator(".f9-cursor-rail").getByRole("button", { name: /Workspace & account/ }).click();
+      }
       await expect(link, `${route.label} sidebar link should be visible`).toBeVisible();
 
       if (new URL(page.url()).pathname !== route.path) {

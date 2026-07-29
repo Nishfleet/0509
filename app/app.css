@@ -697,18 +697,6 @@ img {
   box-shadow: none;
 }
 
-.f9-proof-usage-alert {
-  border-color: rgba(255, 193, 111, 0.42);
-  background:
-    var(--amber-wash);
-}
-
-.f9-proof-usage-alert.is-exhausted {
-  border-color: rgba(255, 94, 94, 0.42);
-  background:
-    var(--red-wash);
-}
-
 @keyframes f9-card-float {
   from {
     transform: translateY(0);
@@ -926,12 +914,6 @@ img {
   margin: 0;
   max-width: 56ch;
   color: #475467;
-}
-
-.f9-checkout-banner-actions {
-  display: flex;
-  gap: 10px;
-  flex: 0 0 auto;
 }
 
 .f9-checkout-pulse {
@@ -5288,17 +5270,6 @@ one signal-green accent.
   background: var(--bone);
 }
 
-.f9-dash-nav-section {
-  margin: 8px 0 0;
-  padding: 0 10px;
-  color: #8a857a;
-  font-family: var(--ld-mono);
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
 .f9-dash-rail-footer {
   display: grid;
   gap: 6px;
@@ -5721,8 +5692,7 @@ one signal-green accent.
   }
 
   .f9-dash-page-app .f9-cursor-account,
-  .f9-dash-page-app .f9-cursor-rail-note,
-  .f9-dash-page-app .f9-dash-nav-section {
+  .f9-dash-page-app .f9-cursor-rail-note {
     display: none;
   }
 
@@ -5879,7 +5849,6 @@ one signal-green accent.
   .f9-cursor-rail nav {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
 
 
 }
@@ -6769,143 +6738,6 @@ one signal-green accent.
   text-transform: uppercase;
 }
 
-.f9-overview-notice,
-.f9-overview-panel {
-  display: grid;
-  gap: 14px;
-  padding: 18px;
-}
-
-.f9-overview-notice h2,
-.f9-overview-panel h2 {
-  margin: 0;
-}
-
-.f9-overview-setup-companion {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.f9-overview-section {
-  display: grid;
-  gap: 14px;
-  min-width: 0;
-  padding: 20px;
-  border: 2.5px solid var(--ed-rule);
-  background: var(--ed-surface);
-}
-
-.f9-overview-section-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px 20px;
-  min-width: 0;
-  padding-bottom: 14px;
-  border-bottom: 2.5px solid var(--ed-rule);
-}
-
-.f9-overview-section-head > div {
-  min-width: 0;
-}
-
-.f9-overview-section-head h2 {
-  margin: 4px 0 0;
-  font-family: var(--ed-display);
-  font-size: clamp(24px, 2.4vw, 34px);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.02;
-  text-transform: uppercase;
-}
-
-.f9-overview-section-head p {
-  margin-bottom: 0;
-}
-
-.f9-overview-change-list {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  min-width: 0;
-}
-
-.f9-overview-change-list > :only-child {
-  grid-column: 1 / -1;
-}
-
-.f9-overview-change-list > :first-child:nth-last-child(2),
-.f9-overview-change-list > :first-child:nth-last-child(2) ~ * {
-  grid-column: span 3;
-}
-
-.f9-overview-stat-band {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  border: 2.5px solid var(--ed-rule);
-  background: var(--ed-surface);
-}
-
-.f9-overview-stat-band[data-count="1"] {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.f9-overview-stat-band article {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-  padding: 16px;
-  border-left: 2.5px solid var(--ed-rule);
-}
-
-.f9-overview-stat-band article:first-child {
-  border-left: 0;
-}
-
-.f9-overview-stat-band strong {
-  font-family: var(--ed-display);
-  font-size: clamp(28px, 3vw, 42px);
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  line-height: 1;
-}
-
-.f9-overview-stat-band small {
-  color: var(--ink-soft);
-  font-family: var(--ed-mono);
-  font-size: 10.5px;
-}
-
-.f9-overview-watchlist {
-  display: grid;
-  border: 2.5px solid var(--ed-rule);
-}
-
-.f9-overview-watch-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px 20px;
-  min-width: 0;
-  padding: 13px 16px;
-  border-top: 1.5px solid var(--ed-rule-soft);
-}
-
-.f9-overview-watch-row:first-child {
-  border-top: 0;
-}
-
-.f9-overview-watch-row h3,
-.f9-overview-watch-row p {
-  margin: 0;
-}
-
-.f9-overview-watch-row p,
-.f9-overview-watch-row small {
-  color: var(--ink-soft);
-}
-
 .f9-overview-search {
   display: grid;
   grid-template-columns: minmax(240px, 560px) max-content;
@@ -6921,48 +6753,13 @@ one signal-green accent.
   border-radius: 0;
 }
 
-.f9-overview-primary {
-  display: flex;
-  justify-content: flex-start;
-  padding-bottom: 5px;
-}
-
 .f9-overview .f9-ed-fact-row {
   grid-template-columns: minmax(108px, auto) minmax(0, 1fr);
   gap: 8px 12px;
 }
 
-@media (max-width: 1080px) {
-  .f9-overview-change-list {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .f9-overview-change-list > *,
-  .f9-overview-change-list > :first-child:nth-last-child(2),
-  .f9-overview-change-list > :first-child:nth-last-child(2) ~ * {
-    grid-column: auto;
-  }
-}
-
 @media (max-width: 720px) {
-  .f9-overview-section {
-    padding: 14px;
-  }
 
-  .f9-overview-stat-band {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .f9-overview-stat-band article {
-    border-top: 2.5px solid var(--ed-rule);
-    border-left: 0;
-  }
-
-  .f9-overview-stat-band article:first-child {
-    border-top: 0;
-  }
-
-  .f9-overview-watch-row,
   .f9-overview-search {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -7982,10 +7779,6 @@ one signal-green accent.
   color: var(--ink);
 }
 
-[data-f9-theme="dark"] .f9-dash-nav-section {
-  color: var(--ink-faint);
-}
-
 [data-f9-theme="dark"] .f9-dash-rail-footer {
   border-top-color: var(--line);
 }
@@ -8532,8 +8325,10 @@ reds soften --- */
 
 /* BL-006 deleted the checkbox rail and its bulk bar from the watch board:
    `.f9-bulk-bar`, `.f9-work-row-select`, `.f9-bulk-select-target` and
-   `.f9-bulk-checkbox` lived only on `/app/watchlists`. Selection is now
-   band-level (`.f9-ed-band-select`, brief §6.1). */
+   `.f9-bulk-checkbox` lived only on `/app/watchlists`. BL-030 then deleted
+   the band itself; bulk selection is now the ruled row's `lead` cell
+   (`.f9-wk-row-lead`), which is a real control sitting above the row-wide
+   hit area rather than a second column of chrome. */
 
 /* Keyboard navigation on search results (workflow-friction pass). */
 .f9-result-card-wrap.is-key-focus > .f9-result-card {
@@ -10347,244 +10142,20 @@ reds soften --- */
 
 /* --- §7 the one ticker in the workspace --- */
 
-.f9-ed-ticker {
-  overflow: hidden;
-  padding: 9px 0;
-  border-top: 2.5px solid var(--ed-rule);
-  border-bottom: 2.5px solid var(--ed-rule);
-  background: var(--ed-surface-sunk);
-}
-
-.f9-ed-ticker-belt {
-  display: flex;
-  width: max-content;
-  animation: f9-ed-ticker-run 46s linear infinite;
-}
-
-.f9-ed-ticker-run {
-  display: flex;
-  flex: none;
-  align-items: center;
-}
-
-.f9-ed-ticker-item {
-  font-family: var(--ed-mono);
-  font-weight: 600;
-  font-size: 10px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  color: var(--ink-soft);
-  padding: 0 18px;
-  border-right: 1.5px solid var(--ed-rule-soft);
-}
-
 @keyframes f9-ed-ticker-run {
   from { transform: translate3d(0, 0, 0); }
   to { transform: translate3d(-50%, 0, 0); }
 }
 
-.f9-ed-ticker:hover .f9-ed-ticker-belt {
-  animation-play-state: paused;
-}
-
 /* --- §6.1 competitor band --- */
 
-.f9-ed-board {
-  display: grid;
-  gap: 16px;
-}
-
-.f9-ed-band {
-  display: grid;
-  grid-template-columns: 230px minmax(0, 1fr) 250px;
-  border: 2.5px solid var(--ed-rule);
-  background: var(--ed-surface-sunk);
-}
-
 /* The opened band lifts and the detail panel attaches beneath it. */
-.f9-ed-band.is-open {
-  background: var(--ed-surface);
-  box-shadow: var(--ed-shadow);
-}
-
 /* Selection is band-level. The accent is a state marker on a container, not
    an affordance (§4.5) — the word "Selected" carries it too (§10). */
-.f9-ed-band.is-selected {
-  border-left-width: 8px;
-  border-left-color: var(--ed-accent);
-}
-
-.f9-ed-band.is-pending {
-  opacity: 0.62;
-}
-
-.f9-ed-band-cell {
-  display: grid;
-  align-content: start;
-  gap: 10px;
-  min-width: 0;
-  padding: 16px 18px;
-  border-left: 2.5px solid var(--ed-rule);
-}
-
-.f9-ed-band-cell:first-child {
-  border-left: 0;
-}
-
-.f9-ed-band-stamp-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 26px;
-}
-
-.f9-ed-band-select {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 0;
-  border: 0;
-  background: none;
-  cursor: pointer;
-}
-
-.f9-ed-band-select:focus-visible {
-  outline: 2.5px solid var(--ed-focus);
-  outline-offset: 3px;
-  border-radius: 0;
-}
-
-.f9-ed-band-select-hint {
-  font-family: var(--ed-mono);
-  font-weight: 600;
-  font-size: 9.5px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-
-.f9-ed-band-select[aria-pressed="true"] .f9-ed-band-select-hint {
-  color: var(--ink);
-}
-
-.f9-ed-band-open {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-  text-decoration: none;
-  color: inherit;
-}
-
-.f9-ed-band-open:focus-visible {
-  outline: 2.5px solid var(--ed-focus);
-  outline-offset: 3px;
-  border-radius: 0;
-}
-
-.f9-ed-band-name {
-  font-family: var(--ed-display);
-  font-weight: 800;
-  font-size: 23px;
-  line-height: 1.05;
-  letter-spacing: -0.02em;
-  text-transform: uppercase;
-  overflow-wrap: anywhere;
-}
-
-.f9-ed-band-open:hover .f9-ed-band-name {
-  text-decoration: underline;
-  text-decoration-color: var(--ed-accent);
-  text-decoration-thickness: 2px;
-  text-underline-offset: 4px;
-}
-
-.f9-ed-band-name {
-  margin: 0;
-}
-
-.f9-ed-band-target {
-  font-family: var(--ed-mono);
-  font-weight: 600;
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink);
-}
-
-.f9-ed-band-scan {
-  font-family: var(--ed-mono);
-  font-weight: 400;
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  color: var(--ink-soft);
-}
-
-.f9-ed-band-first-capture,
-.f9-ed-band-attention {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  font-family: var(--ed-mono);
-  font-weight: 500;
-  font-size: 10.5px;
-  line-height: 1.45;
-  letter-spacing: 0.04em;
-  color: var(--ink);
-}
-
-.f9-ed-band-attention {
-  padding-left: 8px;
-  border-left: 3px solid var(--ed-deletion);
-}
-
-.f9-ed-band-meta {
-  display: grid;
-  gap: 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.f9-ed-band-meta li {
-  font-family: var(--ed-mono);
-  font-weight: 500;
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
-
-.f9-ed-band-meta li.is-missing {
-  font-weight: 400;
-  letter-spacing: normal;
-  text-transform: none;
-  color: var(--ink-faint);
-}
-
-.f9-ed-band-capture {
-  align-content: center;
-}
-
 /* 30 bars at 9px + 29 gaps at 3px is 357px. Capping the scroll box at the
    strip's natural width keeps it a legible object at the head of the cell
    instead of a thin line adrift in 1fr; the legend still uses the full cell
    width, so it stays one or two lines. */
-.f9-ed-band-capture .f9-ed-capture-strip {
-  max-width: 360px;
-}
-
-.f9-ed-band-actions {
-  align-content: center;
-  gap: 12px;
-}
-
-.f9-ed-band-actions form {
-  display: flex;
-}
-
 /* --- first-capture panel (brief §6.8 shape, honest run copy unchanged) --- */
 
 .f9-ed-first-scan {
@@ -10847,40 +10418,10 @@ reds soften --- */
 /* --- §9 mobile: one column, every vertical rule becomes a horizontal one --- */
 
 @media (max-width: 900px) {
-  .f9-ed-band {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .f9-ed-band-cell {
-    border-left: 0;
-    border-top: 2.5px solid var(--ed-rule);
-  }
-
-  .f9-ed-band-cell:first-child {
-    border-top: 0;
-  }
-
-  .f9-ed-band-capture,
-  .f9-ed-band-actions {
-    align-content: start;
-  }
-
-  .f9-ed-band-actions {
-    grid-auto-flow: column;
-    justify-content: start;
-    align-items: center;
-  }
-
   /* §9.3: the rail stops being a rail and files under the panel it
      annotates. It never disappears — the facts are the retention argument. */
   .f9-ed-detail-body {
     grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .f9-ed-ticker-belt {
-    animation: none;
   }
 }
 
@@ -10917,7 +10458,6 @@ reds soften --- */
   .f9-ed-evidence-plate,
   .f9-ed-specimen,
   .f9-ed-panel,
-  .f9-ed-band.is-open,
   .f9-ed-opened-detail {
     box-shadow: 4px 4px 0 var(--ed-shadow-ink);
   }
@@ -12292,5 +11832,1546 @@ reds soften --- */
 
   .f9-ed-brief {
     box-shadow: 4px 4px 0 var(--ed-shadow-ink);
+  }
+}
+
+/* ================================================================
+   BL-030 — the landing-language workspace layer (2026-07-29)
+   Reference implementation: 0509-audit-artifacts/landing-rehash-concepts/
+   concept-overview-v4.html + concept-watchlists-v4.html.
+   Program rules: 0509-audit-artifacts/REBUILD-PROGRAM-DRAFT.md.
+
+   THE BORINGNESS BUDGET. Build every surface as if it were Linear —
+   quiet, sentence-case, hairline, almost boring at first glance — then
+   spend landing character in EXACTLY four places:
+
+     1. Bricolage Grotesque on the page title and on watched-entity
+        names. Nothing else. A summary row is not an entity.
+     2. ONE green mark per viewport (.f9-wk-ins), and it is always the
+        caught change. Green never marks clickability.
+     3. Radius 0 everywhere, including the one filled button and the
+        selected-row highlight.
+     4. The three motion curves below, with a reduced-motion kill.
+
+   One rule weight on the page: 1px. If a rule in this layer is not 1px
+   it is a bug (tests/workspace-language-tokens.test.ts enforces it).
+
+   v1/v2/v3 of the concept are documented FAILURE MODES — busy
+   dashboard, poster, ornament. Reviewers cite them by name. Do not
+   re-decorate the survivors.
+
+   Every colour here resolves through the canonical workspace tokens at
+   the head of this file, except the rail band tones, which are the one
+   genuinely new pigment family (the rail is the workspace's ink block).
+   ================================================================ */
+
+:root {
+  /* The rail is the workspace's ink block: permanent, peripheral, and it
+     does the landing's ink/bone contrast work on every page for free.
+     Monochrome by rule — green only ever appears in the work. */
+  --wk-band: #14120d;
+  --wk-band-2: #211e18;
+  --wk-on-band: #eeebe2;
+  --wk-on-band-dim: #8d8878;
+  --wk-band-rule: #2a2720;
+
+  /* Row hover / selected ground. One step off the page, never a card. */
+  --wk-sunk: #eae6d9;
+
+  --wk-rule: var(--line);
+  --wk-fill: var(--ink);
+  --wk-on-fill: var(--bone);
+  --wk-focus: var(--green-ink);
+
+  --wk-rail-w: 218px;
+  --wk-pad: 36px;
+
+  /* Motion DNA — a page turning, not a jelly. */
+  --wk-snap: 120ms cubic-bezier(0.2, 0, 0.2, 1);
+  --wk-settle: 260ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  --wk-land: 340ms cubic-bezier(0.2, 0.9, 0.3, 1.06);
+}
+
+[data-f9-theme="dark"] {
+  /* Large blocks do not invert — a bone rail in dark mode is a glare
+     slab. The rail is cut deeper than the page instead, exactly how
+     Linear's and Attio's sidebars behave. */
+  --wk-band: #0d0c09;
+  --wk-band-2: #201d17;
+  --wk-on-band: #ece9e1;
+  --wk-on-band-dim: #89846f;
+  --wk-band-rule: #2a2720;
+  --wk-sunk: #211e18;
+  --wk-fill: var(--ink);
+  --wk-on-fill: #15140f;
+  --wk-focus: var(--green-ink);
+}
+
+/* ---------------------------------------------------------------
+   Character 4 — motion. Snap for state you caused, Settle for
+   structure changing, Land reserved for a capture arriving. Hover
+   moves colour only, never position or scale.
+   --------------------------------------------------------------- */
+
+.f9-wk-nav-a,
+.f9-wk-search,
+.f9-wk-more,
+.f9-wk-tab,
+.f9-wk-row,
+.f9-wk-btn,
+.f9-wk-lnk {
+  transition:
+    background-color var(--wk-snap),
+    color var(--wk-snap),
+    border-color var(--wk-snap);
+}
+
+.f9-wk-detail {
+  animation: f9-wk-settle var(--wk-settle) both;
+}
+
+.f9-wk-strip {
+  animation: f9-wk-land var(--wk-land) both;
+}
+
+@keyframes f9-wk-settle {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes f9-wk-land {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .f9-wk-nav-a,
+  .f9-wk-search,
+  .f9-wk-more,
+  .f9-wk-tab,
+  .f9-wk-row,
+  .f9-wk-btn,
+  .f9-wk-lnk,
+  .f9-wk-detail,
+  .f9-wk-strip {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ---------------------------------------------------------------
+   Character 1 — Bricolage, twice. Page title and watched entities.
+   --------------------------------------------------------------- */
+
+.f9-wk-title {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--ld-display);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.022em;
+  line-height: 1.1;
+}
+
+.f9-wk-nm {
+  font-family: var(--ld-display);
+  font-size: 15.5px;
+  font-weight: 700;
+  letter-spacing: -0.012em;
+}
+
+/* A summary row is not a watched entity, so it does not get the face. */
+.f9-wk-row.is-plain .f9-wk-nm {
+  font-family: var(--f9-font);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+/* ---------------------------------------------------------------
+   Character 2 — one green mark per viewport, always the caught change.
+   The green fill is the ANNOUNCEMENT; the capture is the record, and
+   records are not highlighted.
+   --------------------------------------------------------------- */
+
+.f9-wk-ins {
+  padding: 0 3px;
+  background: var(--green);
+  color: var(--ed-on-accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.f9-wk-del {
+  color: var(--ink-faint);
+  text-decoration: line-through;
+  text-decoration-color: var(--red);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------
+   The sanctioned mono kickers. Three per page maximum, one per block,
+   never stacked two deep.
+   --------------------------------------------------------------- */
+
+.f9-wk-kick {
+  margin: 0;
+  color: var(--ink-faint);
+  font-family: var(--ld-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* ---------------------------------------------------------------
+   Buttons — one filled button per page, everything else is text.
+   --------------------------------------------------------------- */
+
+.f9-wk-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 9px 14px;
+  border: 1px solid var(--wk-fill);
+  border-radius: 0;
+  background: var(--wk-fill);
+  color: var(--wk-on-fill);
+  cursor: pointer;
+  font-family: var(--f9-font);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.f9-wk-btn:hover {
+  opacity: 0.86;
+}
+
+.f9-wk-btn[aria-disabled="true"],
+.f9-wk-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.f9-wk-lnk {
+  display: inline-flex;
+  align-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  font-family: var(--f9-font);
+  font-size: 13.5px;
+  text-align: left;
+  text-decoration: none;
+}
+
+.f9-wk-lnk:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.f9-wk-lnk .f9-wk-chev {
+  margin-left: 5px;
+  color: var(--ink-faint);
+}
+
+.f9-wk-page :focus-visible,
+.f9-wk-rail :focus-visible {
+  outline: 2px solid var(--wk-focus);
+  outline-offset: 2px;
+}
+
+.f9-wk-rail :focus-visible {
+  outline-color: var(--green);
+}
+
+/* ---------------------------------------------------------------
+   The rail. Nine visible rows, a visible command affordance, one
+   disclosure holding the long-dwell settings routes, and a workspace
+   footer block. The IA is regrouped, not reduced.
+   --------------------------------------------------------------- */
+
+.f9-dash-page-app .f9-cursor-shell {
+  display: grid;
+  grid-template-columns: var(--wk-rail-w) minmax(0, 1fr);
+  gap: 0;
+  width: 100%;
+  max-width: none;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+.f9-dash-page-app .f9-wk-rail {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  align-content: stretch;
+  gap: 0;
+  height: 100vh;
+  min-height: 100vh;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--wk-band);
+  color: var(--wk-on-band);
+}
+
+.f9-wk-rail-head {
+  padding: 20px 16px 6px;
+}
+
+.f9-wk-wordmark {
+  color: var(--wk-on-band);
+  font-family: var(--ld-display);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+}
+
+.f9-wk-search {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: calc(100% - 20px);
+  min-height: 44px;
+  margin: 6px 10px 10px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--wk-on-band-dim);
+  cursor: text;
+  font-family: var(--f9-font);
+  font-size: 13px;
+  text-align: left;
+}
+
+.f9-wk-search:hover {
+  background: var(--wk-band-2);
+}
+
+.f9-wk-search .f9-wk-key {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--wk-on-band-dim);
+}
+
+.f9-wk-nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 10px;
+}
+
+.f9-dash-page-app .f9-wk-nav nav {
+  display: block;
+  gap: 0;
+}
+
+.f9-dash-page-app .f9-wk-nav-a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  /* The concept draws 34px rows; DESIGN.md §9.6 and the release journeys
+     require 44px on anything actionable, and accessibility outranks a 10px
+     rhythm. The padding shrinks so the row still READS at concept density. */
+  min-height: 44px;
+  padding: 6px 8px;
+  border-radius: 0;
+  background: none;
+  color: var(--wk-on-band);
+  font-size: 13.5px;
+  font-weight: 400;
+  line-height: 1.35;
+  text-decoration: none;
+}
+
+.f9-dash-page-app .f9-wk-nav-a:hover {
+  background: var(--wk-band-2);
+  color: var(--wk-on-band);
+}
+
+.f9-dash-page-app .f9-wk-nav-a.is-active,
+.f9-dash-page-app .f9-wk-nav-a[aria-current="page"] {
+  background: var(--wk-on-band);
+  color: var(--wk-band);
+  font-weight: 500;
+}
+
+.f9-dash-page-app .f9-wk-nav-a.is-pending {
+  opacity: 0.72;
+}
+
+.f9-wk-nav .f9-wk-more-group {
+  margin-top: 14px;
+}
+
+.f9-wk-more {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--wk-on-band-dim);
+  cursor: pointer;
+  font-family: var(--f9-font);
+  font-size: 13px;
+  text-align: left;
+}
+
+.f9-wk-more:hover {
+  background: var(--wk-band-2);
+}
+
+.f9-wk-more .f9-wk-caret {
+  margin-left: auto;
+  font-size: 9px;
+}
+
+.f9-wk-foot {
+  padding: 14px 16px 16px;
+  border-top: 1px solid var(--wk-band-rule);
+}
+
+.f9-wk-acct {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.f9-wk-avatar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--wk-on-band-dim);
+  border-radius: 0;
+  color: var(--wk-on-band);
+  font-family: var(--ld-display);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.f9-wk-acct b {
+  display: block;
+  color: var(--wk-on-band);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.f9-wk-acct small {
+  display: block;
+  color: var(--wk-on-band-dim);
+  font-size: 11.5px;
+}
+
+.f9-wk-foot-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 14px;
+  margin-top: 10px;
+}
+
+.f9-dash-page-app .f9-wk-foot-links a,
+.f9-dash-page-app .f9-wk-foot-links button {
+  display: inline-flex;
+  align-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--wk-on-band-dim);
+  font-family: var(--f9-font);
+  font-size: 11.5px;
+  font-weight: 400;
+  text-decoration: none;
+}
+
+.f9-dash-page-app .f9-wk-foot-links a:hover,
+.f9-dash-page-app .f9-wk-foot-links button:hover {
+  background: none;
+  color: var(--wk-on-band);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ---------------------------------------------------------------
+   The working page: header, sections, the list that is a list, the
+   detail pane, the tab bar, and the one quiet operational line.
+   --------------------------------------------------------------- */
+
+.f9-dash-page-app .f9-cursor-main:has(.f9-wk-page) {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.f9-wk-page {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+.f9-wk-head {
+  padding: 26px var(--wk-pad) 20px;
+  border-bottom: 1px solid var(--wk-rule);
+}
+
+.f9-wk-head-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.f9-wk-context {
+  margin: 9px 0 0;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+}
+
+.f9-wk-sec {
+  padding: 34px var(--wk-pad) 0;
+}
+
+.f9-wk-sec > .f9-wk-kick + .f9-wk-lede,
+.f9-wk-sec > .f9-wk-kick + .f9-wk-rows {
+  margin-top: 13px;
+}
+
+.f9-wk-lede {
+  max-width: 62ch;
+  margin: 0;
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.f9-wk-rows {
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-wk-rows.is-bleed {
+  margin: 0 calc(var(--wk-pad) * -1);
+}
+
+.f9-wk-rows.is-flush {
+  border-top: 0;
+}
+
+.f9-wk-row {
+  position: relative;
+  display: grid;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+  padding: 15px 0;
+  border: 0;
+  border-bottom: 1px solid var(--wk-rule);
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  grid-template-columns: 168px minmax(0, 1fr) 92px 96px 10px;
+  text-align: left;
+  text-decoration: none;
+}
+
+.f9-wk-row.has-lead {
+  gap: 14px 12px;
+  grid-template-columns: 44px 140px minmax(0, 1fr) 92px 96px 10px;
+}
+
+.f9-wk-row.has-trail {
+  grid-template-columns: 168px minmax(0, 1fr) 92px 96px auto;
+}
+
+/* The name is the link; its ::after stretches over the row so the whole
+   record is the hit area without nesting anything inside an anchor. */
+.f9-wk-rowlink {
+  display: inline-flex;
+  align-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+}
+
+.f9-wk-rowlink::after {
+  position: absolute;
+  content: "";
+  inset: 0;
+}
+
+.f9-wk-row-lead {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+/* The bulk-select control is a real 44x44 target even though the box it draws
+   is 15px — a checkbox you cannot hit on a phone is not a feature. */
+.f9-wk-row-lead label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-left: -14px;
+  cursor: pointer;
+}
+
+.f9-wk-row-lead input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--ink);
+}
+
+.f9-wk-rows.is-bleed .f9-wk-row {
+  padding-right: var(--wk-pad);
+  padding-left: var(--wk-pad);
+}
+
+.f9-wk-row:hover,
+.f9-wk-row.is-sel {
+  background: var(--wk-sunk);
+}
+
+.f9-wk-row.is-pending {
+  opacity: 0.72;
+}
+
+.f9-wk-say {
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.f9-wk-st {
+  color: var(--ink-faint);
+  font-size: 13px;
+}
+
+.f9-wk-st.is-on {
+  color: var(--ink);
+}
+
+.f9-wk-st.is-bad {
+  color: var(--red);
+}
+
+.f9-wk-tm {
+  color: var(--ink-faint);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.f9-wk-go {
+  color: var(--ink-faint);
+  font-size: 13px;
+}
+
+.f9-wk-row.is-off .f9-wk-nm,
+.f9-wk-row.is-off .f9-wk-say {
+  color: var(--ink-faint);
+}
+
+.f9-wk-row-trail {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* A paragraph that answers a section when there is no list to show. */
+.f9-wk-note {
+  max-width: 62ch;
+  margin: 13px 0 0;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.f9-wk-empty-filter {
+  margin: 0;
+  padding: 18px 0;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+}
+
+.f9-wk-rows.is-bleed .f9-wk-empty-filter {
+  padding-right: var(--wk-pad);
+  padding-left: var(--wk-pad);
+}
+
+.f9-wk-split {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr) 336px;
+}
+
+.f9-wk-split.is-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* The opened competitor's full record keeps the Evidence Desk tab surfaces
+   (BL-007) until their own phase; it sits below the list/pane split so the
+   peek pane stays the fast answer and the tabs stay the deep one. */
+.f9-wk-record {
+  padding: 30px var(--wk-pad) 0;
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-wk-split-list {
+  min-width: 0;
+  padding: 0 var(--wk-pad);
+}
+
+.f9-wk-detail {
+  min-width: 0;
+  padding: 26px 28px 28px;
+  border-left: 1px solid var(--wk-rule);
+}
+
+.f9-wk-detail-name {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--ld-display);
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.f9-wk-detail-site {
+  margin: 5px 0 0;
+  color: var(--ink-faint);
+  font-size: 13px;
+  word-break: break-word;
+}
+
+.f9-wk-blk {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-wk-change {
+  margin: 11px 0 0;
+  font-size: 19px;
+  line-height: 1.35;
+}
+
+.f9-wk-quote {
+  margin: 12px 0 0;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.f9-wk-acts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.f9-wk-dl {
+  display: grid;
+  gap: 8px 16px;
+  margin: 0;
+  font-size: 13px;
+  grid-template-columns: 1fr auto;
+}
+
+.f9-wk-dl dt {
+  margin: 0;
+  color: var(--ink-faint);
+}
+
+.f9-wk-dl dd {
+  margin: 0;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.f9-wk-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 22px;
+  padding: 0 var(--wk-pad);
+  border-bottom: 1px solid var(--wk-rule);
+}
+
+.f9-wk-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  margin-bottom: -1px;
+  padding: 12px 0 11px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+  font-family: var(--f9-font);
+  font-size: 13.5px;
+  text-decoration: none;
+}
+
+.f9-wk-tab .f9-wk-tab-n {
+  margin-left: 6px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.f9-wk-tab:hover {
+  color: var(--ink-soft);
+}
+
+.f9-wk-tab.is-on,
+.f9-wk-tab[aria-selected="true"],
+.f9-wk-tab[aria-current="page"] {
+  border-bottom-color: var(--ink);
+  color: var(--ink);
+}
+
+.f9-wk-opline {
+  margin-top: auto;
+  padding: 16px var(--wk-pad) 22px;
+  border-top: 1px solid var(--wk-rule);
+  color: var(--ink-faint);
+  font-size: 12.5px;
+}
+
+/* The one link the operational line may carry (source access, when something
+   is blocking the next check). It keeps the line's voice — 12.5px, muted,
+   underlined — and the layer's 44px target. */
+.f9-wk-lnk--quiet {
+  color: var(--ink-faint);
+  font-size: 12.5px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.f9-wk-lnk--quiet:hover {
+  color: var(--ink);
+}
+
+.f9-wk-opline span + span::before {
+  margin: 0 10px;
+  color: var(--ink-faint);
+  content: "·";
+  opacity: 0.55;
+}
+
+/* ---------------------------------------------------------------
+   The feedback surface (DNA §4). One place, one voice: an ink strip
+   pinned to the bottom-left of the content column, never top-right,
+   never a floating card deck. Two notifications never stack — the
+   newer one replaces the older.
+   --------------------------------------------------------------- */
+
+.f9-wk-strip {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin: 0 var(--wk-pad) 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--wk-band);
+  border-radius: 0;
+  background: var(--wk-band);
+  color: var(--wk-on-band);
+}
+
+.f9-wk-strip-body {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.f9-wk-strip-label {
+  display: block;
+  color: var(--wk-on-band-dim);
+  font-family: var(--ld-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.f9-wk-strip p {
+  margin: 5px 0 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.f9-wk-strip a,
+.f9-wk-strip .f9-wk-lnk {
+  color: var(--wk-on-band);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.f9-wk-strip.is-bad .f9-wk-strip-label {
+  color: var(--red);
+}
+
+.f9-wk-strip-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ---------------------------------------------------------------
+   Coexistence seam.
+
+   A rebuilt page may still host an Evidence Desk component whose own
+   phase has not landed — on Overview that is BL-016's setup checklist
+   card. Its markup, its ids and every guarantee its journeys assert are
+   untouched; only its volume is brought down to this layer's, so the
+   page keeps ONE rule weight and the ink fill stays reserved for the
+   feedback strip. The card goes back to its own language the moment it
+   is rendered outside a `.f9-wk-page`.
+   --------------------------------------------------------------- */
+
+/* The Evidence Desk CTA ranks still power the setup card's submits and the
+   opened competitor's record. Inside a rebuilt page they keep their rank
+   semantics — ink fill for Rank 1, surface for Rank 2, underline for Rank 3 —
+   and give up their 2.5px cut and their offset shadow, which are the two
+   things that would break the one-rule-weight and no-elevation rules. */
+.f9-wk-page .f9-ed-cta {
+  border-width: 1px;
+  box-shadow: none;
+}
+
+/* Rank 3's accent underline is a green moment. On a rebuilt page the green
+   budget is spent — once, on the caught change — so the underline goes ink at
+   this layer's rule weight. The affordance is the underline, not its colour. */
+.f9-wk-page .f9-ed-cta--rank3 {
+  text-decoration-color: currentColor;
+  text-decoration-thickness: 1px;
+}
+
+/* The setup card's step stamps were green-ink caps-mono: two budget breaches
+   at once — a second and third green moment beside the Overnight mark, and a
+   fourth caps-mono surface beside the page's three kickers. The v4 DNA states
+   a state as a WORD: "Caught" in ink, "Quiet" in grey, sentence case, body
+   face. The stamps now say exactly that, so state stays a text channel and
+   never a colour-only one. */
+.f9-wk-page .f9-ed-setup-stamp {
+  color: var(--ink-faint);
+  font-family: var(--f9-font);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.f9-wk-page .f9-ed-setup-row[data-state="done"] .f9-ed-setup-stamp {
+  color: var(--ink-faint);
+}
+
+.f9-wk-page .f9-ed-setup-row[data-state="next"] .f9-ed-setup-stamp {
+  color: var(--ink);
+}
+
+/* The opened competitor's BL-007 record sits inside the same page, and its
+   state stamps and tab counts paint green — the caught stamp's 5px accent
+   edge and the "what changed" tab count's accent fill both land inside the
+   FIRST viewport at 1440 and 1920. Green is program law, not a rule weight,
+   so the named coexistence deviation does not cover it: the record keeps its
+   own geometry until phase P1, but it gives the accent back. The state is
+   still stated in words on the stamp itself, so nothing becomes colour-only. */
+.f9-wk-page .f9-ed-stamp.is-caught {
+  border-left-color: var(--ed-rule);
+}
+
+.f9-wk-page .f9-ed-stamp.is-watching {
+  background: var(--ed-surface-sunk);
+  color: var(--ink);
+}
+
+.f9-wk-page .f9-ed-tab-count {
+  background: var(--ed-surface-sunk);
+  color: var(--ink);
+}
+
+/* Same budget, other axis: "SETUP · N OF 4 DONE" was a fourth caps-mono
+   surface. It is a context line, so it reads as one. */
+.f9-wk-page .f9-ed-setup-header .f9-ed-micro {
+  font-family: var(--f9-font);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Round 3, owner verdict: "why an outline? the section beneath this looks
+   clean asf!" — the setup card is a SECTION, not a card. No perimeter, no
+   distinct ground, steps separated by the same hairline as every other ruled
+   list, and everything aligned to the page gutter so it reads as one column
+   with What changed and Still running. Content and behaviour unchanged. */
+.f9-wk-page .f9-ed-setup-card {
+  /* Bleeds to the page edge exactly like `.f9-wk-rows.is-bleed`, so its
+     hairlines and its hover run the full column instead of stopping short —
+     and, because the bleed is on the CARD and the gutter moves onto its
+     children, the section is never wider than the page. */
+  margin: 0 calc(var(--wk-pad) * -1);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.f9-wk-page .f9-ed-setup-header {
+  padding: 0 var(--wk-pad);
+  background: transparent;
+  color: var(--ink);
+}
+
+.f9-wk-page .f9-ed-setup-header .f9-ed-micro {
+  color: var(--ink-faint);
+}
+
+/* Bricolage means "a watched entity". A setup step is not one. */
+.f9-wk-page .f9-ed-setup-header h2 {
+  font-family: var(--f9-font);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.f9-wk-page .f9-ed-setup-import {
+  border-top-color: var(--wk-rule);
+  border-top-style: solid;
+  border-top-width: 1px;
+}
+
+.f9-wk-page .f9-ed-setup-primary,
+.f9-wk-page .f9-ed-setup-import,
+.f9-wk-page .f9-ed-setup-links,
+.f9-wk-page .f9-ed-setup-capacity,
+.f9-wk-page .f9-ed-setup-card > .f9-ed-action-row,
+.f9-wk-page .f9-ed-setup-card > .f9-message {
+  margin-right: 0;
+  margin-left: 0;
+  padding-right: var(--wk-pad);
+  padding-left: var(--wk-pad);
+}
+
+.f9-wk-page .f9-ed-setup-list {
+  margin: 14px 0 0;
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-wk-page .f9-ed-setup-row {
+  padding: 13px var(--wk-pad);
+  border-bottom: 1px solid var(--wk-rule);
+  border-top: 0;
+}
+
+.f9-wk-page .f9-ed-setup-links {
+  padding-bottom: 0;
+}
+
+/* ---------------------------------------------------------------
+   Round 3 — the competitor record's coherence pass.
+
+   Owner verdict on the opened competitor: "a busy box… where's the
+   coherence?" — the cream sheet, the black event-header bars, the
+   shadow-offset plates, the boxed buttons, the boxed status strip and
+   the dashed evidence boxes were the Evidence Desk shouting next to the
+   new board. This is a COHERENCE pass, not an IA rebuild: the tab
+   structure, every panel, every control and every string are untouched.
+   The full IA rebuild of this surface is still phase P1.
+
+   Everything below is scoped to `.f9-wk-page`, so `/share/:token`, the
+   PDF and every route whose phase has not landed render exactly as
+   before.
+   --------------------------------------------------------------- */
+
+/* 1. No sheets. The record is page-native, so it follows the workspace
+      theme the same way the board does, and separation comes from the
+      one 1px rule rather than from a border plus a shadow plus a
+      lighter ground. */
+.f9-wk-page .f9-ed-opened-detail,
+.f9-wk-page .f9-ed-panel,
+.f9-wk-page .f9-ed-diff-plate,
+.f9-wk-page .f9-ed-change-record,
+.f9-wk-page .f9-ed-evidence-plate,
+.f9-wk-page .f9-ed-number-card,
+.f9-wk-page .f9-ed-rail-card,
+.f9-wk-page .f9-ed-status-strip,
+.f9-wk-page .f9-ed-fact-rail,
+.f9-wk-page .f9-ed-first-scan,
+.f9-wk-page .f9-ed-tabbar {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.f9-wk-page .f9-ed-opened-detail {
+  padding: 0;
+}
+
+.f9-wk-page .f9-ed-panel,
+.f9-wk-page .f9-ed-diff-plate,
+.f9-wk-page .f9-ed-change-record,
+.f9-wk-page .f9-ed-evidence-plate,
+.f9-wk-page .f9-ed-number-card,
+.f9-wk-page .f9-ed-rail-card,
+.f9-wk-page .f9-ed-first-scan {
+  border-top: 1px solid var(--wk-rule);
+}
+
+/* 2. The ink header bars become quiet ruled headers. Ink is reserved for
+      the rail and the feedback strip; a capture header is the machine
+      naming a timestamp, which is what the mono kicker is for. */
+.f9-wk-page .f9-ed-plate-header,
+.f9-wk-page .f9-ed-first-scan-header,
+.f9-wk-page .f9-ed-fact-rail-header {
+  padding: 12px 0 10px;
+  border-bottom: 1px solid var(--wk-rule);
+  background: transparent;
+  color: var(--ink);
+}
+
+.f9-wk-page .f9-ed-plate-header .f9-ed-plate-header-end {
+  color: var(--ink-faint);
+}
+
+/* The one sanctioned caps-mono inside the record: the capture timestamp
+   on a plate header. Every other micro label gives the face back, which
+   is what keeps this view inside the three-kicker budget. */
+.f9-wk-page .f9-ed-micro {
+  font-family: var(--f9-font);
+  font-size: 12.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.f9-wk-page .f9-ed-plate-header .f9-ed-micro {
+  font-family: var(--ld-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* An error still speaks in colour AND words; the 6px slab becomes a rule,
+   and the success accent goes away entirely — green is not a decoration. */
+.f9-wk-page .f9-ed-first-scan.is-error .f9-ed-first-scan-header {
+  border-left: 1px solid var(--red);
+  padding-left: 12px;
+}
+
+.f9-wk-page .f9-ed-first-scan.is-success .f9-ed-first-scan-header {
+  border-left: 0;
+}
+
+/* 3. The tab bar reads like the board's filter tabs: text, one hairline
+      underline for the active panel, no ink fill and no boxed cells. */
+.f9-wk-page .f9-ed-tabbar {
+  border-bottom: 1px solid var(--wk-rule);
+}
+
+.f9-wk-page .f9-ed-tab {
+  border-left: 0;
+  border-bottom: 1px solid transparent;
+  margin-bottom: -1px;
+  background: transparent;
+  color: var(--ink-faint);
+  font-family: var(--f9-font);
+  font-size: 13.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.f9-wk-page .f9-ed-tab:hover {
+  color: var(--ink-soft);
+}
+
+.f9-wk-page .f9-ed-tab.is-active,
+.f9-wk-page .f9-ed-tab[aria-current="page"] {
+  border-bottom-color: var(--ink);
+  background: transparent;
+  color: var(--ink);
+}
+
+.f9-wk-page .f9-ed-tab-count {
+  font-family: var(--f9-font);
+  font-size: 13.5px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* 3b. The panel kickers inside the record are a hardcoded teal caps-mono
+       (`.f9-app-kicker`, a pre-Evidence-Desk survivor). They are a second
+       green moment and a fourth caps-mono surface at once, so inside a
+       rebuilt page they become the same quiet sentence-case label the rest
+       of the record now uses. */
+.f9-wk-page .f9-app-kicker {
+  color: var(--ink-faint);
+  font-family: var(--f9-font);
+  font-size: 12.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* 4. A state is a word. The boxed, caps-mono, accent-edged stamp becomes
+      the same "Caught" / "Quiet" the ruled rows use. */
+.f9-wk-page .f9-ed-stamp {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--f9-font);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.f9-wk-page .f9-ed-stamp.is-quiet,
+.f9-wk-page .f9-ed-stamp.is-pending {
+  color: var(--ink-faint);
+}
+
+/* 5. The status strip loses its 2.5px cage; the cells stay a strip,
+      divided by the one rule weight. */
+.f9-wk-page .f9-ed-status-strip {
+  border-top: 1px solid var(--wk-rule);
+  border-bottom: 1px solid var(--wk-rule);
+}
+
+.f9-wk-page .f9-ed-status-cell {
+  border-left: 1px solid var(--wk-rule);
+}
+
+.f9-wk-page .f9-ed-status-value,
+.f9-wk-page .f9-ed-fact-value,
+.f9-wk-page .f9-ed-rail-line dd {
+  font-family: var(--f9-font);
+  font-size: 13px;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 6. The boxed fact rails become ruled definition lists, exactly like the
+      P0 peek pane's. */
+.f9-wk-page .f9-ed-fact-row {
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-wk-page .f9-ed-fact-key,
+.f9-wk-page .f9-ed-rail-line dt {
+  color: var(--ink-faint);
+  font-family: var(--f9-font);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* 7. The dashed evidence boxes become quiet lines. */
+.f9-wk-page .f9-ed-quiet-line {
+  padding: 12px 0;
+  border: 0;
+  border-top: 1px solid var(--wk-rule);
+  font-family: var(--ld-mono);
+  font-size: 11.5px;
+}
+
+.f9-wk-page .f9-ed-capture-bar.is-unchecked {
+  border-width: 1px;
+}
+
+/* The last boxes the probe found: the before/now pane frame and its divider,
+   the sparse-trend notice and the proof packet. Same treatment as everything
+   else in the record — the rule stays, at the page's one weight. */
+.f9-wk-page .f9-ed-diff-panes {
+  border-width: 1px;
+}
+
+.f9-wk-page .f9-ed-diff-pane.is-before {
+  border-right-width: 1px;
+}
+
+.f9-wk-page .f9-trend-sparse,
+.f9-wk-page .f9-proof-packet {
+  border-width: 1px;
+}
+
+/* Narrow widths restack the record and the Evidence Desk's own responsive
+   rules restore its 2.5px cuts — the pane divider turning horizontal, the
+   status cells gaining a top rule, the evidence capture's frame. The one rule
+   weight is a rule at every width, not only at 1440. */
+@media (max-width: 720px) {
+  .f9-wk-page .f9-ed-diff-pane.is-before,
+  .f9-wk-page .f9-ed-evidence-capture,
+  .f9-wk-page .f9-ed-status-cell,
+  .f9-wk-page .f9-ed-opened-detail .f9-ed-status-cell:nth-child(even) {
+    border-width: 1px;
+  }
+}
+
+/* 8. Type: nothing inside the record may out-shout the 28px page title,
+      and Bricolage still means a watched entity — a change headline and a
+      rollup number are neither. */
+.f9-wk-page .f9-ed-diff-headline {
+  font-family: var(--f9-font);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.f9-wk-page .f9-ed-number-value {
+  font-family: var(--f9-font);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+/* 9. The one green in this view: the NOW token of the newest change.
+      Every later plate is an archived record, and records are not
+      highlighted — the same rule that already forbids animating a diff. */
+.f9-wk-page .f9-ed-diff-value mark {
+  padding: 0 3px;
+  background: var(--wk-sunk);
+  color: var(--ink);
+}
+
+/* The plate that owns the announcement is marked by the component, which
+   knows the feed's order and which events actually carry a before/now mark.
+   Round 3 tried to infer it positionally and both arms missed the live DOM —
+   every event is wrapped in a div, and the newest event on the release
+   fixture is a suppressed record with no mark at all — so the announcement
+   green was dead here and the spec, which only asserted that this selector
+   string existed, could not fail. `tests/event-change-green-mark.test.tsx`
+   now renders the tree and resolves this rule against it. */
+.f9-wk-page .f9-ed-diff-plate.is-newest .f9-ed-diff-value mark {
+  background: var(--green);
+  color: var(--ed-on-accent);
+}
+
+.f9-wk-page .f9-ed-diff-value {
+  font-size: 19px;
+}
+
+/* The deep-link highlight was a green ring. A selected record reads the
+   way a selected row reads. */
+.f9-wk-page .f9-ed-diff-plate.is-highlighted,
+.f9-wk-page .f9-ed-change-record.is-highlighted {
+  background: var(--wk-sunk);
+  box-shadow: none;
+}
+
+/* ---------------------------------------------------------------
+   Responsive. Nothing scrolls horizontally at any width; the row grid
+   folds before the page does.
+   --------------------------------------------------------------- */
+
+@media (max-width: 1180px) {
+  .f9-dash-page-app .f9-cursor-shell {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .f9-dash-page-app .f9-wk-rail {
+    position: static;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    height: auto;
+    min-height: 0;
+    padding: 8px 12px;
+  }
+
+  .f9-wk-rail-head,
+  .f9-wk-foot {
+    padding: 0;
+    border: 0;
+  }
+
+  .f9-wk-search {
+    width: auto;
+    margin: 0;
+  }
+
+  .f9-wk-nav {
+    flex: 1 1 100%;
+    overflow: visible;
+    padding: 0;
+  }
+
+  .f9-dash-page-app .f9-wk-nav nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+  }
+
+  .f9-wk-nav .f9-wk-more-group {
+    display: inline-flex;
+    flex-wrap: wrap;
+    margin-top: 0;
+  }
+
+  .f9-wk-foot {
+    margin-left: auto;
+  }
+
+  .f9-wk-foot-links {
+    margin-top: 0;
+  }
+
+  .f9-wk-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .f9-wk-detail {
+    border-top: 1px solid var(--wk-rule);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .f9-wk-row,
+  .f9-wk-row.has-lead,
+  .f9-wk-row.has-trail {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 12px;
+    grid-template-columns: none;
+  }
+
+  .f9-wk-row .f9-wk-row-lead {
+    order: 0;
+    flex: none;
+  }
+
+  .f9-wk-row .f9-wk-nm {
+    order: 1;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .f9-wk-row .f9-wk-st {
+    order: 2;
+    flex: none;
+    margin-left: auto;
+    text-align: right;
+  }
+
+  .f9-wk-row .f9-wk-go,
+  .f9-wk-row .f9-wk-row-trail {
+    order: 3;
+    flex: none;
+  }
+
+  .f9-wk-row .f9-wk-say {
+    order: 4;
+    flex: 1 1 100%;
+    min-width: 0;
+    white-space: normal;
+  }
+
+  .f9-wk-row .f9-wk-tm {
+    order: 5;
+    flex: 1 1 100%;
+    min-width: 0;
+    text-align: left;
+  }
+
+  .f9-wk-row.has-lead .f9-wk-row-lead label {
+    margin-left: -14px;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --wk-pad: 16px;
+  }
+
+  .f9-dash-page-app .f9-wk-rail {
+    display: none;
+  }
+
+  .f9-wk-head {
+    padding-top: 18px;
+  }
+
+  .f9-wk-head-top {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .f9-wk-title {
+    font-size: 24px;
+  }
+
+  .f9-wk-sec {
+    padding-top: 26px;
   }
 }
