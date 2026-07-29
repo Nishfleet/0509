@@ -1,0 +1,68 @@
+import type { ComponentProps } from "react";
+
+import { RuledRow } from "~/components/workspace/ruled-list";
+import { ResultQuickSave } from "~/components/result-quick-save";
+import { formatAdLongevityLabel } from "~/lib/ad-display";
+import { formatAdvertiserLabel } from "~/lib/landing-page-display";
+import { formatAdActiveStatus, formatResultCardSummary } from "~/lib/search-display";
+import type { AdRecord } from "~/lib/types";
+
+type ResultQuickSaveProps = ComponentProps<typeof ResultQuickSave>;
+
+/**
+ * BL-031 — one search result, as a ruled row (concept v4).
+ *
+ * This replaced `SearchResultCard`, which was a bordered card carrying a
+ * thumbnail, four pills, a summary, a domain-match line, an offer/destination/
+ * language line and a format tag — nine elements repeated per result. The v4
+ * list is a list: entity name, one plain sentence, one status word, one time,
+ * one chevron. The creative, the angle, the offer, the destination and the
+ * language all still exist; they moved into the detail pane, where the
+ * creative is finally big enough to read.
+ *
+ * Demo-mode honesty is unchanged and is now stated in the row's own status
+ * column: a demo-sourced result says the word "Sample" where a live result
+ * says "Active". It was a boxed pill; a state is a word.
+ */
+export function SearchResultRow({
+  ad,
+  href,
+  isActive,
+  isKeyFocused,
+  canQuickSave,
+  collections,
+  plan,
+}: {
+  ad: AdRecord;
+  href: string;
+  isActive: boolean;
+  isKeyFocused: boolean;
+  canQuickSave: boolean;
+  collections: ResultQuickSaveProps["collections"];
+  plan: ResultQuickSaveProps["plan"];
+}) {
+  const isDemo = ad.source === "demo";
+  const running = ad.activeStatusObserved !== false && ad.active;
+  return (
+    <RuledRow
+      keyFocused={isKeyFocused}
+      name={formatAdvertiserLabel(ad.advertiser)}
+      say={formatResultCardSummary(ad)}
+      selected={isActive}
+      status={isDemo ? "Sample" : formatAdActiveStatus(ad)}
+      statusTone={isDemo ? "quiet" : running ? "on" : "quiet"}
+      time={formatAdLongevityLabel(ad) ?? "—"}
+      to={href}
+      trail={
+        canQuickSave && !isDemo ? (
+          <ResultQuickSave
+            adId={ad.metaAdId}
+            advertiser={ad.advertiser}
+            collections={collections}
+            plan={plan}
+          />
+        ) : undefined
+      }
+    />
+  );
+}

@@ -89,8 +89,11 @@ describe("search rebuild", () => {
   });
 
   it("keeps freshness warnings visible when non-empty results are cached or degraded", () => {
+    // BL-031: the banner box became a quiet note line in the results column.
+    // The guarantee is the same — a cached or degraded result set still says
+    // so above the rows, rather than presenting stale evidence as fresh.
     expect(searchRoute).toContain("discoverySummary && visibleAds.length > 0");
-    expect(searchRoute).toContain('className="f9-discovery-banner"');
+    expect(searchRoute).toContain('<p className="f9-wk-note">{discoverySummary}</p>');
   });
 
   it("keeps primary search links legible on dark buttons", () => {

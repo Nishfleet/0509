@@ -18,16 +18,26 @@ import type {
 } from "react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { AdLongevityPill } from "~/components/ad-longevity-pill";
 import { AdThumb } from "~/components/ad-thumb";
+import { DashboardPage } from "~/components/dashboard-page";
 import { DashboardShell } from "~/components/dashboard-shell";
 import {
   PublicSearchError,
   PublicSearchLoading,
 } from "~/components/public-route-state";
-import { SearchResultCard } from "~/components/search/result-card";
+import { SearchResultRow } from "~/components/search/result-row";
 import { SearchAnswerPanel } from "~/components/search-answer-panel";
 import { SubmitButton } from "~/components/submit-button";
+import {
+  DetailBlock,
+  DetailFacts,
+  DetailPane,
+  DetailPaneHead,
+} from "~/components/workspace/detail-pane";
+import { FeedbackStrip } from "~/components/workspace/feedback-strip";
+import { RuledList } from "~/components/workspace/ruled-list";
+import { WorkingHeader } from "~/components/workspace/working-header";
+import { formatAdLongevityLabel } from "~/lib/ad-display";
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 import { classifyAdRecordAngle } from "~/lib/ad-display";
 import { isAdLibraryBackedAd } from "~/lib/ad-source-kind";
@@ -971,9 +981,6 @@ export default function SearchRoute() {
     !data.inputError;
   const discoverySummary = formatDiscoverySummary(visibleResult);
   const hasSearchQuery = Boolean(data.filters.query || competitorWebsite.raw);
-  const landingPageCount = visibleAds.filter(
-    (ad) => ad.landingPage || ad.landingPageUrl,
-  ).length;
   const displayDomain =
     data.displayDomain ?? competitorWebsite.host ?? competitorWebsite.raw;
   const isDomainSearch = Boolean(
@@ -1084,7 +1091,7 @@ export default function SearchRoute() {
       return;
     }
     document
-      .querySelector(".f9-result-card-wrap.is-key-focus")
+      .querySelector(".f9-wk-row.is-key-focus")
       ?.scrollIntoView({ block: "nearest" });
   }, [keyFocusIndex]);
 
@@ -1178,6 +1185,45 @@ export default function SearchRoute() {
         })
       : null;
 
+  // BL-031: the refine panel is a disclosure that stays SHUT until the visitor
+  // actually has filters on, so the pre-search screen is one field and one
+  // button instead of a six-control form page. The count is written into the
+  // summary so a narrowed search never looks like a broad one.
+  const activeRefineFilters = [
+    data.filters.country && data.filters.country !== ALL_COUNTRIES_VALUE
+      ? "country"
+      : null,
+    data.filters.platform && data.filters.platform !== "all" ? "platform" : null,
+    data.filters.creativeType && data.filters.creativeType !== "all"
+      ? "creative"
+      : null,
+    data.filters.status && data.filters.status !== "all" ? "status" : null,
+    data.filters.firstSeenFrom ? "first seen" : null,
+    data.filters.lastSeenFrom ? "last active" : null,
+  ].filter((entry): entry is string => entry !== null);
+  // One context line under the title (the v4 header contract): what this page
+  // searches and what happens to a result. Provenance belongs to the capture,
+  // so source and freshness are told once, in the evidence pane.
+  const headerContext = rootData.session
+    ? "Public Meta Ad Library search. Save an ad to a collection, or start watching the competitor."
+    : "Public Meta Ad Library search. No account needed.";
+  // The empty / delayed / disabled states own the section's heading rather
+  // than printing a second one under the results title. Warming keeps the
+  // results title ("Search in progress") and states the live check as a
+  // sentence in its own polite live region.
+  const emptyHeadline =
+    visibleAds.length === 0 && !isSearchWarming && !searchAnswer
+      ? formatEmptyResultHeadline(visibleResult, {
+          displayDomain,
+          isDomainSearch,
+          isBroaderScope,
+          relevanceApplied: data.relevanceApplied,
+        })
+      : null;
+  const selectedLongevity = selectedAd ? formatAdLongevityLabel(selectedAd) : null;
+  const selectedRunning =
+    selectedAd?.activeStatusObserved !== false && Boolean(selectedAd?.active);
+
   useEffect(() => {
     if (new URLSearchParams(location.search).has("selected")) {
       selectedProofRef.current?.focus();
@@ -1232,60 +1278,90 @@ export default function SearchRoute() {
       accountTitle="Five to Nine"
       isPublic={!rootData.session}
       pageClassName="f9-search-page"
-      railNote={
-        visibleAds.length > 0 ? (
-          <div className="f9-cursor-rail-note">
-            <span>Saved evidence</span>
-            <strong>
-              {landingPageCount}/{visibleAds.length}
-            </strong>
-            <small>From this search</small>
-          </div>
-        ) : null
-      }
       showOpsNav={data.showOpsNav}
       showPresenceNav={data.showPresenceNav}
       userEmail={rootData.session?.user.email}
       userName={rootData.session?.user.name}
     >
-      <section
-        className="f9-search-command"
-        aria-labelledby="search-command-title"
-      >
-        <div className="f9-search-command-head">
-          <h1 id="search-command-title">Find competitor ads</h1>
-        </div>
+      <DashboardPage className="f9-wk-page">
+        <WorkingHeader
+          context={headerContext}
+          title="Find competitor ads"
+          titleId="search-command-title"
+        />
 
-        <Form className="f9-search-command-form" method="get">
-          <input name="mode" type="hidden" value="advertiser" />
-          <input name="trackingRole" type="hidden" value="competitor" />
-          <label className="f9-search-field">
-            <span>Competitor website</span>
-            <input
-              aria-invalid={Boolean(data.inputError)}
-              aria-describedby="search-command-hint"
-              autoComplete="url"
-              defaultValue={competitorWebsite.raw}
-              inputMode="url"
-              name="website"
-              placeholder="https://competitor.com"
-              spellCheck={false}
-              type="text"
-            />
-          </label>
-          <details
-            className="f9-search-refine-disclosure"
-            open={!hasSearchQuery}
-          >
-            <summary>Refine search</summary>
+        {/* The command band. DNA §2: the input is a frame, its label sits
+            above it as a micro-label, and the page's ONE filled button is the
+            submit that runs the search. Everything else on this page is a
+            text action. */}
+        <section
+          aria-labelledby="search-command-title"
+          className="f9-wk-command"
+        >
+          <Form className="f9-wk-command-form" method="get">
+            <input name="mode" type="hidden" value="advertiser" />
+            <input name="trackingRole" type="hidden" value="competitor" />
+            <div className="f9-wk-command-row">
+            <label className="f9-wk-field is-lead">
+              <span className="f9-wk-lab">Competitor website</span>
+              <input
+                aria-invalid={Boolean(data.inputError)}
+                aria-describedby="search-command-hint"
+                autoComplete="url"
+                className="f9-wk-in"
+                defaultValue={competitorWebsite.raw}
+                inputMode="url"
+                name="website"
+                placeholder="https://competitor.com"
+                spellCheck={false}
+                type="text"
+              />
+            </label>
+            <SubmitButton
+              className="f9-wk-btn"
+              getAction="/search"
+              pendingLabel="Searching…"
+            >
+              See ads
+            </SubmitButton>
+            </div>
+
+            {/* DNA §2: validation speaks in product voice under the field it
+                is about — one telling, not a banner plus a hint saying the
+                same thing 200px apart. */}
+            <p
+              aria-live={data.inputError ? "assertive" : undefined}
+              className={`f9-wk-hint${data.inputError ? " is-bad" : ""}`}
+              id="search-command-hint"
+              role={data.inputError ? "alert" : undefined}
+            >
+              {data.inputError ?? "Paste one competitor website."}
+            </p>
+
+            <details
+              className="f9-wk-refine"
+              open={activeRefineFilters.length > 0}
+            >
+            <summary>
+              Refine search
+              {activeRefineFilters.length > 0 ? (
+                <span className="f9-wk-refine-n">
+                  {activeRefineFilters.length} on
+                </span>
+              ) : null}
+            </summary>
             <div
               className="f9-search-refine"
               role="group"
               aria-label="Search filters"
             >
-              <label className="f9-search-field">
-                <span>Country</span>
-                <select defaultValue={data.filters.country} name="country">
+              <label className="f9-wk-field">
+                <span className="f9-wk-lab">Country</span>
+                <select
+                  className="f9-wk-sel"
+                  defaultValue={data.filters.country}
+                  name="country"
+                >
                   <option value={ALL_COUNTRIES_VALUE}>All countries</option>
                   {SUPPORTED_COUNTRIES.map((country) => (
                     <option key={country.code} value={country.name}>
@@ -1294,9 +1370,13 @@ export default function SearchRoute() {
                   ))}
                 </select>
               </label>
-              <label className="f9-search-field">
-                <span>Platform</span>
-                <select defaultValue={data.filters.platform} name="platform">
+              <label className="f9-wk-field">
+                <span className="f9-wk-lab">Platform</span>
+                <select
+                  className="f9-wk-sel"
+                  defaultValue={data.filters.platform}
+                  name="platform"
+                >
                   <option value="all">All platforms</option>
                   <option value="Facebook">Facebook</option>
                   <option value="Instagram">Instagram</option>
@@ -1304,9 +1384,10 @@ export default function SearchRoute() {
                   <option value="Messenger">Messenger</option>
                 </select>
               </label>
-              <label className="f9-search-field">
-                <span>Creative</span>
+              <label className="f9-wk-field">
+                <span className="f9-wk-lab">Creative</span>
                 <select
+                  className="f9-wk-sel"
                   defaultValue={data.filters.creativeType}
                   name="creativeType"
                 >
@@ -1316,250 +1397,168 @@ export default function SearchRoute() {
                   <option value="carousel">Carousel</option>
                 </select>
               </label>
-              <label className="f9-search-field">
-                <span>Status</span>
-                <select defaultValue={data.filters.status} name="status">
+              <label className="f9-wk-field">
+                <span className="f9-wk-lab">Status</span>
+                <select
+                  className="f9-wk-sel"
+                  defaultValue={data.filters.status}
+                  name="status"
+                >
                   <option value="all">All statuses</option>
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
                 </select>
               </label>
-              <label className="f9-search-field">
-                <span>First seen after</span>
+              <label className="f9-wk-field">
+                <span className="f9-wk-lab">First seen after</span>
                 <input
+                  className="f9-wk-in"
                   defaultValue={data.filters.firstSeenFrom}
                   name="firstSeenFrom"
                   type="date"
                 />
               </label>
-              <label className="f9-search-field">
-                <span>Last active after</span>
+              <label className="f9-wk-field">
+                <span className="f9-wk-lab">Last active after</span>
                 <input
+                  className="f9-wk-in"
                   defaultValue={data.filters.lastSeenFrom}
                   name="lastSeenFrom"
                   type="date"
                 />
               </label>
             </div>
-          </details>
-          <div className="f9-search-actions">
-            <SubmitButton
-              className="f9-primary-button"
-              getAction="/search"
-              pendingLabel="Searching…"
-            >
-              See ads
-            </SubmitButton>
-          </div>
-        </Form>
-        <p className="f9-search-command-hint" id="search-command-hint">
-          {data.inputError ??
-            (rootData.session
-              ? "Paste one competitor website."
-              : "Paste one competitor website. No account needed.")}
-        </p>
-        {canTrackCurrentCompetitor && rootData.session ? (
-          <div className="f9-search-retention">
-            <Form className="f9-quick-track-form" method="post">
-              <input name="intent" type="hidden" value="create-watchlist" />
-              <SearchStateFields
-                competitorWebsite={competitorWebsite.raw}
-                filters={data.filters}
-                mode={data.mode}
-                trackingRole={trackingRole}
-              />
-              <input
-                name="name"
-                type="hidden"
-                value={`${inferredWatchlistName} watch`}
-              />
-              <SubmitButton
-                className="f9-secondary-button"
-                intent="create-watchlist"
-                pendingLabel="Creating…"
-              >
-                Track this {targetNoun}
-              </SubmitButton>
-            </Form>
-            <Form className="f9-save-query-form" method="post">
-              <input name="intent" type="hidden" value="save-query" />
-              <SearchStateFields
-                competitorWebsite={competitorWebsite.raw}
-                filters={data.filters}
-                mode={data.mode}
-                trackingRole={trackingRole}
-              />
-              <label className="f9-search-field">
-                <span>Save search as</span>
-                <input
-                  autoComplete="off"
-                  defaultValue={inferredWatchlistName}
-                  name="name"
-                  placeholder="Competitor research"
-                  type="text"
+            </details>
+          </Form>
+
+          {canTrackCurrentCompetitor && rootData.session ? (
+            <div className="f9-wk-acts is-row">
+              <Form className="f9-quick-track-form" method="post">
+                <input name="intent" type="hidden" value="create-watchlist" />
+                <SearchStateFields
+                  competitorWebsite={competitorWebsite.raw}
+                  filters={data.filters}
+                  mode={data.mode}
+                  trackingRole={trackingRole}
                 />
-              </label>
-              <SubmitButton
-                className="f9-secondary-button"
-                intent="save-query"
-                pendingLabel="Saving…"
-              >
-                Save search
-              </SubmitButton>
-            </Form>
-          </div>
-        ) : null}
-      </section>
-
-      <section className="f9-search-workspace">
-        <div className="f9-container">
-          {actionData?.message ? (
-            <div
-              aria-live={actionData.ok ? "polite" : "assertive"}
-              className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}
-              role={actionData.ok ? "status" : "alert"}
-            >
-              <p>
-                {actionData.message}
-                {"error" in actionData &&
-                actionData.error === "plan_limit_exceeded" ? (
-                  <>
-                    {" "}
-                    <Link to="/app/billing?source=search#plans">
-                      View plans
-                    </Link>{" "}
-                    to raise the limit.
-                  </>
-                ) : null}
-              </p>
-            </div>
-          ) : null}
-
-          {data.inputError ? (
-            <div
-              aria-live="assertive"
-              className="f9-message is-error"
-              role="alert"
-            >
-              <p>{data.inputError}</p>
-            </div>
-          ) : null}
-
-          {hasSearchQuery ? (
-            <>
-              <div className="f9-search-grid">
-                {selectedAd ? (
-                  <section
-                    aria-labelledby="selected-proof-title"
-                    className="f9-proof-summary"
-                    id="selected-proof"
-                    ref={selectedProofRef}
-                    tabIndex={-1}
-                  >
-                    <div className="f9-panel-head">
-                      <div>
-                        <span>Selected proof</span>
-                        <h2 id="selected-proof-title">
-                          {formatAdvertiserLabel(selectedAd.advertiser)}
-                        </h2>
-                        <AdLongevityPill ad={selectedAd} />
-                      </div>
-                      <em
-                        className={
-                          selectedAd.activeStatusObserved !== false &&
-                          selectedAd.active
-                            ? "is-active"
-                            : ""
-                        }
-                      >
-                        {formatAdActiveStatus(selectedAd)}
-                      </em>
-                    </div>
-                    <p className="f9-proof-provenance">
-                      <strong>{formatSearchSourceLabel(visibleResult)}</strong>
-                      <span>{formatSearchFreshnessLabel(visibleResult)}</span>
-                      <span>{formatProofCaptureLabel(selectedAd)}</span>
-                    </p>
-                    <div className="f9-detail-hero">
-                      <div className="f9-ad-thumb-row">
-                        <AdThumb ad={selectedAd} />
-                        <div>
-                          <h3>{selectedAd.previewHeadline}</h3>
-                          <p>{formatAdDetailBody(selectedAd)}</p>
-                        </div>
-                      </div>
-                    </div>
-                    {selectedAd.domainMatch?.reason ? (
-                      <p>{selectedAd.domainMatch.reason}</p>
-                    ) : null}
-                    <Link
-                      className="f9-secondary-button"
-                      to="#selected-proof-detail"
-                    >
-                      Review full evidence
-                    </Link>
-                  </section>
-                ) : null}
-                <section
-                  className="f9-results-panel"
-                  data-f9-result-cache-status={
-                    visibleResult.cacheStatus ?? undefined
-                  }
-                  data-f9-result-empty-reason={
-                    visibleResult.discoveryEmptyReason ?? undefined
-                  }
-                  data-f9-result-source={
-                    visibleResult.provider ?? visibleResult.source
-                  }
+                <input
+                  name="name"
+                  type="hidden"
+                  value={`${inferredWatchlistName} watch`}
+                />
+                <SubmitButton
+                  className="f9-wk-lnk"
+                  intent="create-watchlist"
+                  pendingLabel="Creating…"
                 >
-                  <div className="f9-panel-head">
-                    <div>
-                      <span>Results</span>
-                      <h2>
-                        {formatResultsPanelTitle(visibleResult, {
+                  Track this {targetNoun}
+                </SubmitButton>
+              </Form>
+              <details className="f9-wk-refine is-inline">
+                <summary>Save this search</summary>
+                <Form className="f9-save-query-form" method="post">
+                  <input name="intent" type="hidden" value="save-query" />
+                  <SearchStateFields
+                    competitorWebsite={competitorWebsite.raw}
+                    filters={data.filters}
+                    mode={data.mode}
+                    trackingRole={trackingRole}
+                  />
+                  <label className="f9-wk-field">
+                    <span className="f9-wk-lab">Save search as</span>
+                    <input
+                      autoComplete="off"
+                      className="f9-wk-in"
+                      defaultValue={inferredWatchlistName}
+                      name="name"
+                      placeholder="Competitor research"
+                      type="text"
+                    />
+                  </label>
+                  <SubmitButton
+                    className="f9-wk-lnk"
+                    intent="save-query"
+                    pendingLabel="Saving…"
+                  >
+                    Save search
+                  </SubmitButton>
+                </Form>
+              </details>
+            </div>
+          ) : null}
+        </section>
+
+        {actionData?.message ? (
+          <FeedbackStrip
+            label={actionData.ok ? "Done" : "Not done"}
+            tone={actionData.ok ? "ok" : "bad"}
+          >
+            {actionData.message}
+            {"error" in actionData &&
+            actionData.error === "plan_limit_exceeded" ? (
+              <>
+                {" "}
+                <Link to="/app/billing?source=search#plans">View plans</Link> to
+                raise the limit.
+              </>
+            ) : null}
+          </FeedbackStrip>
+        ) : null}
+
+        {hasSearchQuery ? (
+          <div
+            className={`f9-wk-split is-wide${selectedAd ? "" : " is-single"}`}
+          >
+            <div className="f9-wk-split-list">
+              <section
+                aria-labelledby="search-results-title"
+                className="f9-results-panel"
+                data-f9-result-cache-status={
+                  visibleResult.cacheStatus ?? undefined
+                }
+                data-f9-result-empty-reason={
+                  visibleResult.discoveryEmptyReason ?? undefined
+                }
+                data-f9-result-source={
+                  visibleResult.provider ?? visibleResult.source
+                }
+              >
+                <div className="f9-wk-sec-head">
+                  <div className="f9-wk-sec-headings">
+                    {/* ONE heading per state. The empty and delayed states
+                        used to print a near-identical second headline
+                        directly under this one ("No verified ads for X" over
+                        "No verified ads found for X"); the state's own
+                        sentence is now the section title. */}
+                    <h2 className="f9-wk-sec-title" id="search-results-title">
+                      {emptyHeadline ??
+                        formatResultsPanelTitle(visibleResult, {
                           displayDomain,
                           isDomainSearch,
                           isBroaderScope,
                           relevanceApplied: data.relevanceApplied,
                         })}
-                      </h2>
-                      {isDomainSearch &&
+                    </h2>
+                    {/* One sub-line, and the search answer's own sentence
+                        wins it when there is one — the panel below then
+                        carries only the facts it uniquely knows. */}
+                    {searchAnswer ? (
+                      <p className="f9-wk-sec-sub">{searchAnswer.summary}</p>
+                    ) : isDomainSearch &&
                       data.relevanceApplied &&
                       !isBroaderScope ? (
-                        <small>{`Verified ads linked to ${displayDomain}`}</small>
-                      ) : null}
-                      {isDomainSearch && isBroaderScope ? (
-                        <small>{`Broader matches related to ${displayDomain}`}</small>
-                      ) : null}
-                    </div>
-                    {visibleAds.length > 0 ? (
-                      <div className="f9-keyboard-hints">
-                        <button
-                          aria-expanded={showKeyboardHints}
-                          aria-label="Keyboard shortcuts"
-                          className="f9-keyboard-hints-trigger"
-                          onClick={() => setShowKeyboardHints((open) => !open)}
-                          type="button"
-                        >
-                          ?
-                        </button>
-                        {showKeyboardHints ? (
-                          <dl className="f9-keyboard-hints-popover">
-                            {SEARCH_KEYBOARD_HINTS.map((hint) => (
-                              <div key={hint.keys}>
-                                <dt>{hint.keys}</dt>
-                                <dd>{hint.action}</dd>
-                              </div>
-                            ))}
-                          </dl>
-                        ) : null}
-                      </div>
+                      <p className="f9-wk-sec-sub">{`Verified ads linked to ${displayDomain}`}</p>
+                    ) : isDomainSearch && isBroaderScope ? (
+                      <p className="f9-wk-sec-sub">{`Broader matches related to ${displayDomain}`}</p>
                     ) : null}
+                  </div>
+                  <div className="f9-wk-sec-acts">
                     {visibleAds.length > 1 ? (
-                      <label className="f9-search-field f9-result-sort">
+                      <label className="f9-wk-field is-inline">
                         <span className="f9-sr-only">Sort results</span>
                         <select
                           aria-label="Sort results"
+                          className="f9-wk-sel"
                           value={resultSort}
                           onChange={(event) =>
                             setResultSort(
@@ -1575,439 +1574,509 @@ export default function SearchRoute() {
                         </select>
                       </label>
                     ) : null}
-                    {loadMoreParams ? (
-                      <Form
-                        aria-label={
-                          retryingCursor
-                            ? "Retry search results"
-                            : "Load more search results"
-                        }
-                        className="f9-load-more-form"
-                        method="get"
-                        action="/search"
-                      >
-                        <SearchQueryFields params={loadMoreParams} />
-                        <SubmitButton
-                          className="f9-secondary-button"
-                          getAction="/search"
-                          match={{ after: loadMoreParams.get("after") ?? "" }}
-                          pendingLabel="Loading…"
+                    {visibleAds.length > 0 ? (
+                      <div className="f9-wk-hints">
+                        <button
+                          aria-expanded={showKeyboardHints}
+                          aria-label="Keyboard shortcuts"
+                          className="f9-wk-lnk"
+                          onClick={() => setShowKeyboardHints((open) => !open)}
+                          type="button"
                         >
-                          {retryingCursor ? "Retry" : "Load more"}
-                        </SubmitButton>
-                      </Form>
+                          Shortcuts
+                        </button>
+                        {showKeyboardHints ? (
+                          <dl className="f9-wk-hints-body">
+                            {SEARCH_KEYBOARD_HINTS.map((hint) => (
+                              <div key={hint.keys}>
+                                <dt>{hint.keys}</dt>
+                                <dd>{hint.action}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
+                </div>
 
-                  <div aria-live="polite" className="f9-sr-only" role="status">
-                    {resultsAnnouncement}
-                  </div>
+                <div aria-live="polite" className="f9-sr-only" role="status">
+                  {resultsAnnouncement}
+                </div>
 
-                  {searchAnswer ? (
-                    <SearchAnswerPanel answer={searchAnswer} steal={stealSummary} />
-                  ) : null}
+                {data.watchedWatchlist ? (
+                  <p className="f9-wk-note">
+                    You already watch this competitor.{" "}
+                    <Link
+                      className="f9-wk-lnk f9-wk-lnk--quiet"
+                      to={`/app/watchlists?watchlist=${data.watchedWatchlist.id}`}
+                    >
+                      Open its dossier
+                    </Link>
+                  </p>
+                ) : null}
 
-                  {data.watchedWatchlist ? (
-                    <div className="f9-discovery-banner">
-                      <p>
-                        You watch this competitor —{" "}
-                        <Link
-                          to={`/app/watchlists?watchlist=${data.watchedWatchlist.id}`}
-                        >
-                          open its dossier
-                        </Link>
-                      </p>
-                    </div>
-                  ) : null}
+                {formatFilterApproximate ? (
+                  <p className="f9-wk-note" role="status">
+                    Format filters are approximate for this source
+                  </p>
+                ) : null}
 
-                  {!data.session ? (
-                    <div className="f9-search-signup-cta">
-                      <div>
-                        <strong>
-                          {visibleAds.length > 0
-                            ? "Keep this competitor under watch"
-                            : "Keep checking this competitor"}
-                        </strong>
-                        <p>{signupCtaBody}</p>
+                {discoverySummary && visibleAds.length > 0 ? (
+                  <p className="f9-wk-note">{discoverySummary}</p>
+                ) : null}
+
+                {visibleAds.length > 0 ? (
+                  <RuledList aria-label="Search results">
+                    {visibleAds.map((ad) => (
+                      <SearchResultRow
+                        key={ad.metaAdId}
+                        ad={ad}
+                        href={resultCardHref(ad.metaAdId)}
+                        isActive={selectedAd?.metaAdId === ad.metaAdId}
+                        isKeyFocused={keyFocusedAdId === ad.metaAdId}
+                        canQuickSave={Boolean(data.session)}
+                        collections={data.collections}
+                        plan={data.plan}
+                      />
+                    ))}
+                  </RuledList>
+                ) : (
+                  /* Honest states, designed rather than bolted on: warming says
+                     it is still checking, delayed says the check is delayed,
+                     and a real empty says what we looked for and what to try
+                     next. No dimmed specimen — a diagram of the thing the
+                     visitor does not have yet is the v3 ornament habit. */
+                  <div className="f9-wk-empty">
+                    {isSearchWarming ? (
+                      <div aria-live="polite" role="status">
+                        <p className="f9-wk-lede">
+                          Checking the Ad Library now
+                        </p>
+                        <p className="f9-wk-note">
+                          Usually under a minute — we&rsquo;ll refresh
+                          automatically.
+                        </p>
                       </div>
-                      <Link
-                        className="f9-primary-button"
-                        to={signupTrackingPath}
-                      >
-                        Create account
+                    ) : emptyHeadline ? (
+                      <p className="f9-wk-note">
+                        {isDelayedDiscoveryStatus(visibleResult.discoveryStatus)
+                          ? (discoverySummary ??
+                            "Fresh checks are delayed, so coverage may be incomplete.")
+                          : isDomainSearch &&
+                              data.relevanceApplied &&
+                              !isBroaderScope
+                            ? "We couldn't confirm any ads whose advertiser or landing page is connected to this website."
+                            : (discoverySummary ??
+                              "Try another competitor website.")}
+                      </p>
+                    ) : null}
+                    {isSearchWarming ? (
+                      <div className="f9-wk-acts">
+                        <Link className="f9-wk-lnk" to={retrySearchPath}>
+                          Retry this search{" "}
+                          <span aria-hidden="true" className="f9-wk-chev">
+                            &rsaquo;
+                          </span>
+                        </Link>
+                        <Link className="f9-wk-lnk" to="/search">
+                          Try another domain{" "}
+                          <span aria-hidden="true" className="f9-wk-chev">
+                            &rsaquo;
+                          </span>
+                        </Link>
+                      </div>
+                    ) : isDomainSearch && !isBroaderScope ? (
+                      <div className="f9-wk-acts">
+                        {rootData.session ? (
+                          <Form className="f9-quick-track-form" method="post">
+                            <input
+                              name="intent"
+                              type="hidden"
+                              value="create-watchlist"
+                            />
+                            <SearchStateFields
+                              competitorWebsite={competitorWebsite.raw}
+                              filters={data.filters}
+                              mode={data.mode}
+                              trackingRole={trackingRole}
+                            />
+                            <input
+                              name="name"
+                              type="hidden"
+                              value={`${inferredWatchlistName} watch`}
+                            />
+                            <SubmitButton
+                              className="f9-wk-lnk"
+                              intent="create-watchlist"
+                              pendingLabel="Creating…"
+                            >
+                              Track this {targetNoun}
+                            </SubmitButton>
+                          </Form>
+                        ) : null}
+                        <Link
+                          className="f9-wk-lnk"
+                          to={`/search?${broaderSearchParams.toString()}`}
+                        >
+                          Search broader matches for “
+                          {displayDomain.split(".")[0] ?? displayDomain}”{" "}
+                          <span aria-hidden="true" className="f9-wk-chev">
+                            &rsaquo;
+                          </span>
+                        </Link>
+                        <Link className="f9-wk-lnk" to="/search">
+                          Try another domain{" "}
+                          <span aria-hidden="true" className="f9-wk-chev">
+                            &rsaquo;
+                          </span>
+                        </Link>
+                        <Link className="f9-wk-lnk" to="/app/watchlists">
+                          View monitoring setup{" "}
+                          <span aria-hidden="true" className="f9-wk-chev">
+                            &rsaquo;
+                          </span>
+                        </Link>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+
+                {/* Provenance sits UNDER the results, not above them. It is
+                    the footnote on the material — how many were verified,
+                    whether the landing page was read, which source produced
+                    them — and putting it above pushed the first row to 67% of
+                    the viewport when every list this was calibrated against
+                    starts its records inside 20%. */}
+                {searchAnswer ? (
+                  <SearchAnswerPanel
+                    answer={searchAnswer}
+                    showHeadline={false}
+                    steal={stealSummary}
+                  />
+                ) : null}
+
+                {loadMoreParams ? (
+                  <Form
+                    aria-label={
+                      retryingCursor
+                        ? "Retry search results"
+                        : "Load more search results"
+                    }
+                    className="f9-wk-more-results"
+                    method="get"
+                    action="/search"
+                  >
+                    <SearchQueryFields params={loadMoreParams} />
+                    <SubmitButton
+                      className="f9-wk-lnk"
+                      getAction="/search"
+                      match={{ after: loadMoreParams.get("after") ?? "" }}
+                      pendingLabel="Loading…"
+                    >
+                      {retryingCursor ? "Retry" : "Load more"}
+                    </SubmitButton>
+                  </Form>
+                ) : null}
+
+                {!data.session ? (
+                  <div className="f9-search-signup-cta">
+                    <p className="f9-wk-lede">
+                      {visibleAds.length > 0
+                        ? "Keep this competitor under watch"
+                        : "Keep checking this competitor"}
+                    </p>
+                    <p className="f9-wk-note">{signupCtaBody}</p>
+                    <div className="f9-wk-acts">
+                      <Link className="f9-wk-lnk" to={signupTrackingPath}>
+                        Create account{" "}
+                        <span aria-hidden="true" className="f9-wk-chev">
+                          &rsaquo;
+                        </span>
                       </Link>
                     </div>
-                  ) : null}
-
-                  {formatFilterApproximate ? (
-                    <div className="f9-discovery-banner" role="status">
-                      <p>Format filters are approximate for this source</p>
-                    </div>
-                  ) : null}
-
-                  {discoverySummary && visibleAds.length > 0 ? (
-                    <div className="f9-discovery-banner">
-                      <p>{discoverySummary}</p>
-                    </div>
-                  ) : null}
-
-                  <div className="f9-results-list">
-                    {visibleAds.length > 0 ? (
-                      visibleAds.map((ad) => (
-                        <SearchResultCard
-                          key={ad.metaAdId}
-                          ad={ad}
-                          href={resultCardHref(ad.metaAdId)}
-                          isActive={selectedAd?.metaAdId === ad.metaAdId}
-                          isKeyFocused={keyFocusedAdId === ad.metaAdId}
-                          canQuickSave={Boolean(data.session)}
-                          collections={data.collections}
-                          plan={data.plan}
-                        />
-                      ))
-                    ) : (
-                      <div className="f9-empty-state">
-                        {isSearchWarming ? (
-                          <div aria-live="polite" role="status">
-                            <h3>Checking the Ad Library now</h3>
-                            <p>
-                              Usually under a minute — we'll refresh
-                              automatically.
-                            </p>
-                          </div>
-                        ) : !searchAnswer ? (
-                          <>
-                            <h3>
-                              {formatEmptyResultHeadline(visibleResult, {
-                                displayDomain,
-                                isDomainSearch,
-                                isBroaderScope,
-                                relevanceApplied: data.relevanceApplied,
-                              })}
-                            </h3>
-                            <p>
-                              {isDelayedDiscoveryStatus(
-                                visibleResult.discoveryStatus,
-                              )
-                                ? (discoverySummary ??
-                                  "Fresh checks are delayed, so coverage may be incomplete.")
-                                : isDomainSearch &&
-                                    data.relevanceApplied &&
-                                    !isBroaderScope
-                                  ? "We couldn't confirm any ads whose advertiser or landing page is connected to this website."
-                                  : (discoverySummary ??
-                                    "Try another competitor website.")}
-                            </p>
-                          </>
-                        ) : null}
-                        {isSearchWarming ? (
-                          <div className="f9-search-empty-actions">
-                            <Link
-                              className="f9-secondary-button"
-                              to={retrySearchPath}
-                            >
-                              Retry this search
-                            </Link>
-                            <Link className="f9-secondary-button" to="/search">
-                              Try another domain
-                            </Link>
-                          </div>
-                        ) : isDomainSearch && !isBroaderScope ? (
-                          <div className="f9-search-empty-actions">
-                            {rootData.session ? (
-                              <Form
-                                className="f9-quick-track-form"
-                                method="post"
-                              >
-                                <input
-                                  name="intent"
-                                  type="hidden"
-                                  value="create-watchlist"
-                                />
-                                <SearchStateFields
-                                  competitorWebsite={competitorWebsite.raw}
-                                  filters={data.filters}
-                                  mode={data.mode}
-                                  trackingRole={trackingRole}
-                                />
-                                <input
-                                  name="name"
-                                  type="hidden"
-                                  value={`${inferredWatchlistName} watch`}
-                                />
-                                <SubmitButton
-                                  className="f9-secondary-button"
-                                  intent="create-watchlist"
-                                  pendingLabel="Creating…"
-                                >
-                                  Track this {targetNoun}
-                                </SubmitButton>
-                              </Form>
-                            ) : null}
-                            <Link
-                              className="f9-secondary-button"
-                              to={`/search?${broaderSearchParams.toString()}`}
-                            >
-                              Search broader matches for “
-                              {displayDomain.split(".")[0] ?? displayDomain}”
-                            </Link>
-                            <Link className="f9-secondary-button" to="/search">
-                              Try another domain
-                            </Link>
-                            <Link
-                              className="f9-secondary-button"
-                              to="/app/watchlists"
-                            >
-                              View monitoring setup
-                            </Link>
-                          </div>
-                        ) : null}
-                      </div>
-                    )}
                   </div>
-                </section>
+                ) : null}
+              </section>
+            </div>
 
-                <aside
-                  className="f9-proof-detail"
-                  id="selected-proof-detail"
-                  tabIndex={-1}
-                >
-                  {selectedAd ? (
+            {selectedAd ? (
+              <DetailPane
+                className="f9-proof-summary"
+                focusable
+                id="selected-proof"
+                label="Selected ad evidence"
+                paneRef={selectedProofRef}
+              >
+                <DetailPaneHead
+                  name={formatAdvertiserLabel(selectedAd.advertiser)}
+                  site={
                     <>
-                      <div className="f9-panel-head">
-                        <div>
-                          <span>Ad details</span>
-                          <h2>
-                            {formatAdvertiserLabel(selectedAd.advertiser)}
-                          </h2>
-                          <AdLongevityPill ad={selectedAd} />
-                        </div>
-                        <em
-                          className={
-                            selectedAd.activeStatusObserved !== false &&
-                            selectedAd.active
-                              ? "is-active"
-                              : ""
-                          }
-                        >
-                          {formatAdActiveStatus(selectedAd)}
-                        </em>
-                      </div>
-
-                      <p className="f9-proof-provenance">
-                        <strong>
-                          {formatSearchSourceLabel(visibleResult)}
-                        </strong>
-                        <span>{formatSearchFreshnessLabel(visibleResult)}</span>
-                        <span>{formatProofCaptureLabel(selectedAd)}</span>
-                      </p>
-
-                      <div className="f9-detail-hero">
-                        <div className="f9-ad-thumb-row">
-                          <AdThumb ad={selectedAd} />
-                          <div>
-                            <h3>{selectedAd.previewHeadline}</h3>
-                            <p>{formatAdDetailBody(selectedAd)}</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <dl className="f9-detail-grid">
-                        <DetailRow label="Hook" value={selectedAd.hook} />
-                        {selectedAdAngle ? (
-                          <DetailRow
-                            label="Angle"
-                            value={formatAngleDetail(selectedAdAngle)}
-                          />
-                        ) : null}
-                        <DetailRow
-                          label="Offer"
-                          value={formatOfferDisplay(selectedAd.offer)}
-                        />
-                        <DetailRow label="CTA" value={selectedAd.cta} />
-                        <DetailRow
-                          label="Format"
-                          value={formatCreativeFormatLabel(selectedAd.format)}
-                        />
-                        <DetailRow
-                          label="Language"
-                          value={selectedAd.languageLabel}
-                        />
-                        <DetailRow
-                          label="Destination"
-                          value={selectedAd.destinationType}
-                        />
-                      </dl>
-
-                      <div className="f9-proof-block">
-                        <span>Text in the ad</span>
-                        <p>
-                          {creativeTextField
-                            ? formatLandingPageSignalValue(
-                                creativeTextField.fieldValue,
-                              )
-                            : selectionEnrichmentUiPending
-                              ? "Analyzing creative…"
-                              : formatLandingPageSignalValue(null)}
-                        </p>
-                        <small>
-                          {creativeTextField
-                            ? "Read straight from the ad creative."
-                            : selectionEnrichmentUiPending
-                              ? "Reading the ad creative now — this updates in a few seconds."
-                              : "We couldn't read text off this creative."}
-                        </small>
-                      </div>
-
-                      <div className="f9-proof-block">
-                        <span>Landing page</span>
-                        <h3>
-                          {selectedAd.landingPage?.rawHeadline ??
-                            (selectionEnrichmentUiPending
-                              ? "Analyzing creative…"
-                              : "Headline not captured yet")}
-                        </h3>
-                        <dl className="f9-detail-grid">
-                          <DetailRow
-                            label="Primary CTA"
-                            value={formatLandingPageSignalValue(
-                              selectedAd.landingPage?.ctaText,
-                            )}
-                          />
-                          <DetailRow
-                            label="Visible price/offer"
-                            value={formatLandingPageSignalValue(
-                              selectedAd.landingPage?.priceText,
-                            )}
-                          />
-                          <DetailRow
-                            label="Form present"
-                            value={formatLandingPageFormValue(
-                              selectedAd.landingPage?.formPresent,
-                            )}
-                          />
-                          <DetailRow
-                            label="Page check"
-                            value={formatCaptureMethodLabel(
-                              selectedAd.landingPage?.captureMethod,
-                            )}
-                          />
-                        </dl>
-                        {selectedAd.landingPageUrl ? (
-                          <a
-                            href={selectedAd.landingPageUrl}
-                            rel="noreferrer"
-                            target="_blank"
-                          >
-                            {selectedAd.landingPageUrl}
-                          </a>
-                        ) : (
-                          <small>No landing-page link found on this ad.</small>
-                        )}
-                      </div>
-
-                      <div className="f9-proof-block">
-                        <span>Source note</span>
-                        <p>{selectedAd.researchSummary}</p>
-                      </div>
-
-                      {data.session && data.plan === "free" ? (
-                        <div className="f9-side-note">
-                          <p>Upgrade to Scout to save ads and build your workspace memory.</p>
-                          <Link
-                            className="f9-primary-button"
-                            to="/app/billing?source=search#plans"
-                          >
-                            View plans
-                          </Link>
-                        </div>
-                      ) : data.session && data.collections.length > 0 ? (
-                        <Form className="f9-save-stack" method="post">
-                          <input
-                            name="intent"
-                            type="hidden"
-                            value="save-to-collection"
-                          />
-                          <input
-                            name="adId"
-                            type="hidden"
-                            value={selectedAd.metaAdId}
-                          />
-                          <label className="f9-field">
-                            <span>Collection</span>
-                            <select name="collectionId" required>
-                              {data.collections.map((collection) => (
-                                <option
-                                  key={collection.id}
-                                  value={collection.id}
-                                >
-                                  {collection.name}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label className="f9-field">
-                            <span>Note</span>
-                            <textarea
-                              name="note"
-                              placeholder="Why this ad matters"
-                              rows={3}
-                            />
-                          </label>
-                          <label className="f9-field">
-                            <span>Tags</span>
-                            <input
-                              name="tags"
-                              placeholder="discount, COD, creator-led"
-                            />
-                          </label>
-                          <SubmitButton
-                            className="f9-primary-button"
-                            intent="save-to-collection"
-                            pendingLabel="Saving…"
-                          >
-                            Save to collection
-                          </SubmitButton>
-                        </Form>
-                      ) : data.session ? (
-                        <div className="f9-side-note">
-                          <p>
-                            Create a collection to save this ad with your notes and tags.
-                          </p>
-                          <Link
-                            className="f9-secondary-button"
-                            to="/app/collections"
-                          >
-                            Open collections
-                          </Link>
-                        </div>
-                      ) : (
-                        <div className="f9-side-note">
-                          <p>{signupCtaBody}</p>
-                          <Link
-                            className="f9-primary-button"
-                            to={signupTrackingPath}
-                          >
-                            Create account to track this competitor
-                          </Link>
-                        </div>
-                      )}
+                      <span className={selectedRunning ? "f9-wk-st is-on" : "f9-wk-st"}>
+                        {formatAdActiveStatus(selectedAd)}
+                      </span>
+                      {selectedLongevity ? <> · {selectedLongevity}</> : null}
                     </>
+                  }
+                />
+
+                <div className="f9-wk-creative">
+                  <AdThumb ad={selectedAd} />
+                  <h3 className="f9-wk-creative-head">
+                    {selectedAd.previewHeadline}
+                  </h3>
+                  <p className="f9-wk-quote">{formatAdDetailBody(selectedAd)}</p>
+                </div>
+
+                {/* Provenance is told ONCE per screen, and it belongs to the
+                    capture: which source produced it, how fresh it is, and
+                    whether the landing page was captured. */}
+                <p className="f9-wk-prov">
+                  <span>{formatSearchSourceLabel(visibleResult)}</span>
+                  <span>{formatSearchFreshnessLabel(visibleResult)}</span>
+                  <span>{formatProofCaptureLabel(selectedAd)}</span>
+                </p>
+                {selectedAd.domainMatch?.reason ? (
+                  <p className="f9-wk-quote">{selectedAd.domainMatch.reason}</p>
+                ) : null}
+
+                <DetailBlock kicker="What the ad says">
+                  <DetailFacts
+                    rows={[
+                      { key: "Hook", value: selectedAd.hook },
+                      ...(selectedAdAngle
+                        ? [
+                            {
+                              key: "Angle",
+                              value: formatAngleDetail(selectedAdAngle),
+                            },
+                          ]
+                        : []),
+                      {
+                        key: "Offer",
+                        value: formatOfferDisplay(selectedAd.offer),
+                      },
+                      { key: "CTA", value: selectedAd.cta },
+                      {
+                        key: "Format",
+                        value: formatCreativeFormatLabel(selectedAd.format),
+                      },
+                      ...(selectedAd.variantCount && selectedAd.variantCount > 1
+                        ? [
+                            {
+                              key: "Variants",
+                              value: `${selectedAd.variantCount} running`,
+                            },
+                          ]
+                        : []),
+                      { key: "Language", value: selectedAd.languageLabel },
+                      {
+                        key: "Destination",
+                        value: selectedAd.destinationType,
+                      },
+                    ]}
+                  />
+                  <p className="f9-wk-quote">
+                    {creativeTextField
+                      ? formatLandingPageSignalValue(
+                          creativeTextField.fieldValue,
+                        )
+                      : selectionEnrichmentUiPending
+                        ? "Analyzing creative…"
+                        : formatLandingPageSignalValue(null)}
+                  </p>
+                  <p className="f9-wk-small">
+                    {creativeTextField
+                      ? "Text read straight from the ad creative."
+                      : selectionEnrichmentUiPending
+                        ? "Reading the ad creative now — this updates in a few seconds."
+                        : "We couldn't read text off this creative."}
+                  </p>
+                </DetailBlock>
+
+                <DetailBlock kicker="Landing page">
+                  <h4 className="f9-wk-blk-head">
+                    {selectedAd.landingPage?.rawHeadline ??
+                      (selectionEnrichmentUiPending
+                        ? "Analyzing creative…"
+                        : "Headline not captured yet")}
+                  </h4>
+                  <DetailFacts
+                    rows={[
+                      {
+                        key: "Primary CTA",
+                        value: formatLandingPageSignalValue(
+                          selectedAd.landingPage?.ctaText,
+                        ),
+                      },
+                      {
+                        key: "Visible price/offer",
+                        value: formatLandingPageSignalValue(
+                          selectedAd.landingPage?.priceText,
+                        ),
+                      },
+                      {
+                        key: "Form present",
+                        value: formatLandingPageFormValue(
+                          selectedAd.landingPage?.formPresent,
+                        ),
+                      },
+                      {
+                        key: "Page check",
+                        value: formatCaptureMethodLabel(
+                          selectedAd.landingPage?.captureMethod,
+                        ),
+                      },
+                    ]}
+                  />
+                  {selectedAd.landingPageUrl ? (
+                    <a
+                      className="f9-wk-url"
+                      href={selectedAd.landingPageUrl}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      {selectedAd.landingPageUrl}
+                    </a>
                   ) : (
-                    <div className="f9-empty-state">
-                      <h2>No ad selected</h2>
-                      <p>
-                        Run a search and select one result to inspect the offer
-                        and landing page.
-                      </p>
-                    </div>
+                    <p className="f9-wk-small">
+                      No landing-page link found on this ad.
+                    </p>
                   )}
-                </aside>
-              </div>
-            </>
-          ) : null}
-        </div>
-      </section>
+                </DetailBlock>
+
+                <DetailBlock>
+                  <p className="f9-wk-small">{selectedAd.researchSummary}</p>
+                </DetailBlock>
+
+                {data.session && data.plan === "free" ? (
+                  <DetailBlock kicker="Save this ad">
+                    <p className="f9-wk-note">
+                      Upgrade to Scout to save ads and build your workspace
+                      memory.
+                    </p>
+                    <div className="f9-wk-acts">
+                      <Link
+                        className="f9-wk-lnk"
+                        to="/app/billing?source=search#plans"
+                      >
+                        View plans{" "}
+                        <span aria-hidden="true" className="f9-wk-chev">
+                          &rsaquo;
+                        </span>
+                      </Link>
+                    </div>
+                  </DetailBlock>
+                ) : data.session && data.collections.length > 0 ? (
+                  <DetailBlock kicker="Save this ad">
+                    <Form className="f9-save-stack" method="post">
+                      <input
+                        name="intent"
+                        type="hidden"
+                        value="save-to-collection"
+                      />
+                      <input
+                        name="adId"
+                        type="hidden"
+                        value={selectedAd.metaAdId}
+                      />
+                      <label className="f9-wk-field">
+                        <span className="f9-wk-lab">Collection</span>
+                        <select
+                          className="f9-wk-sel"
+                          name="collectionId"
+                          required
+                        >
+                          {data.collections.map((collection) => (
+                            <option key={collection.id} value={collection.id}>
+                              {collection.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="f9-wk-field">
+                        <span className="f9-wk-lab">Note</span>
+                        <textarea
+                          className="f9-wk-in"
+                          name="note"
+                          placeholder="Why this ad matters"
+                          rows={3}
+                        />
+                      </label>
+                      <label className="f9-wk-field">
+                        <span className="f9-wk-lab">Tags</span>
+                        <input
+                          className="f9-wk-in"
+                          name="tags"
+                          placeholder="discount, COD, creator-led"
+                        />
+                      </label>
+                      <SubmitButton
+                        className="f9-wk-lnk"
+                        intent="save-to-collection"
+                        pendingLabel="Saving…"
+                      >
+                        Save to collection
+                      </SubmitButton>
+                    </Form>
+                  </DetailBlock>
+                ) : data.session ? (
+                  <DetailBlock kicker="Save this ad">
+                    <p className="f9-wk-note">
+                      Create a collection to save this ad with your notes and
+                      tags.
+                    </p>
+                    <div className="f9-wk-acts">
+                      <Link className="f9-wk-lnk" to="/app/collections">
+                        Open collections{" "}
+                        <span aria-hidden="true" className="f9-wk-chev">
+                          &rsaquo;
+                        </span>
+                      </Link>
+                    </div>
+                  </DetailBlock>
+                ) : (
+                  <DetailBlock kicker="Keep this evidence">
+                    <p className="f9-wk-note">{signupCtaBody}</p>
+                    <div className="f9-wk-acts">
+                      <Link className="f9-wk-lnk" to={signupTrackingPath}>
+                        Create account to track this competitor{" "}
+                        <span aria-hidden="true" className="f9-wk-chev">
+                          &rsaquo;
+                        </span>
+                      </Link>
+                    </div>
+                  </DetailBlock>
+                )}
+              </DetailPane>
+            ) : null}
+          </div>
+        ) : (
+          /* Pre-search. The boringness budget: a quiet explanation and the one
+             Rank-1 above it. No specimen, no dimmed sample card, no diagram of
+             a result — the form IS the affordance and the sentence says what
+             comes back. */
+          <section aria-labelledby="search-idle-title" className="f9-wk-sec">
+            <p className="f9-wk-kick" id="search-idle-title">
+              Nothing searched yet
+            </p>
+            <p className="f9-wk-lede">
+              Paste a competitor website and press See ads. We read what they
+              are running on Meta right now, pull the offer off their landing
+              page, and keep the capture — so the next time that offer moves,
+              you can prove it.
+            </p>
+            <div className="f9-wk-acts">
+              <Link className="f9-wk-lnk" to="/#demo">
+                See a sample brief{" "}
+                <span aria-hidden="true" className="f9-wk-chev">
+                  &rsaquo;
+                </span>
+              </Link>
+            </div>
+          </section>
+        )}
+      </DashboardPage>
     </DashboardShell>
   );
 }

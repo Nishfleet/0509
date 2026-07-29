@@ -45,6 +45,12 @@ export interface RuledRowProps {
   /** Route navigation is in flight for this row. */
   pending?: boolean;
   /**
+   * BL-031: the row the roving keyboard cursor is on (j/k/arrows on /search).
+   * It is a *cursor*, not a selection — the selected row is `selected` — so it
+   * draws as a rule on the row's leading edge rather than as a second ground.
+   */
+  keyFocused?: boolean;
+  /**
    * A summary row (Setup / Quiet / Checks) is not a watched entity, so it
    * does not get the display face. DNA: Bricolage means a watched entity.
    */
@@ -88,6 +94,7 @@ export function RuledRow({
   off = false,
   pending = false,
   plain = false,
+  keyFocused = false,
   id,
 }: RuledRowProps) {
   const className = [
@@ -98,6 +105,7 @@ export function RuledRow({
     selected ? "is-sel" : null,
     off ? "is-off" : null,
     pending ? "is-pending" : null,
+    keyFocused ? "is-key-focus" : null,
   ]
     .filter(Boolean)
     .join(" ");
