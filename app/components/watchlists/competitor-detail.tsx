@@ -125,6 +125,7 @@ export function CompetitorDetail(props: CompetitorDetailProps) {
     isActive: watchlist.isActive,
     plan: data.plan,
     createdAt: watchlist.createdAt,
+    lastScannedAt: watchlist.lastScannedAt,
     now: props.renderedAt,
     proofSummary: data.proofSummary,
     storedChanges: data.events.length,

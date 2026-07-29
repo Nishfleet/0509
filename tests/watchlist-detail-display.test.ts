@@ -9,6 +9,7 @@ import {
   formatCaughtNote,
   formatCaughtNumber,
   formatEvidenceAttempts,
+  formatLastCheck,
   formatWatchAge,
   formatWatchMarket,
 } from "~/lib/watchlist-detail-display";
@@ -143,6 +144,7 @@ describe("fact rail rows (brief §6.6)", () => {
       isActive: true,
       plan: "starter",
       createdAt: "2026-07-01T09:00:00.000Z",
+      lastScannedAt: "2026-07-27T08:01:00.000Z",
       now,
       proofSummary: { ...emptyProof, totalAttempts: 3, successfulAttempts: 2, failedAttempts: 1 },
       storedChanges: 4,
@@ -158,6 +160,7 @@ describe("fact rail rows (brief §6.6)", () => {
       isActive: false,
       plan: "free",
       createdAt: null,
+      lastScannedAt: null,
       now,
       proofSummary: emptyProof,
       storedChanges: 0,
@@ -166,6 +169,7 @@ describe("fact rail rows (brief §6.6)", () => {
     expect(byKey.get("Market")?.value).toBeNull();
     expect(byKey.get("Market")?.missingLabel).toBe("not set — scanned as first saved");
     expect(byKey.get("Watch age")?.value).toBeNull();
+    expect(byKey.get("Last check")?.missingLabel).toBe("none yet");
     expect(byKey.get("Evidence checks")?.missingLabel).toBe("none yet");
     expect(byKey.get("Changes on file")?.missingLabel).toBe("none yet");
     expect(byKey.get("Cadence")?.value).toBe("Paused — no checks run");
@@ -179,6 +183,9 @@ describe("fact rail rows (brief §6.6)", () => {
     expect(formatWatchAge("2026-07-26T00:00:00.000Z", now)).toBe("Watching 1 day");
     expect(formatWatchAge("2026-07-01T00:00:00.000Z", now)).toBe("Watching 26 days");
     expect(formatWatchAge("not-a-date", now)).toBeNull();
+    expect(formatLastCheck("2026-07-27T08:01:00.000Z", now)).toBe("59m ago");
+    expect(formatLastCheck("2026-07-25T08:01:00.000Z", now)).toBe("2d ago");
+    expect(formatLastCheck("not-a-date", now)).toBeNull();
     expect(formatEvidenceAttempts(emptyProof)).toBeNull();
     expect(
       formatEvidenceAttempts({

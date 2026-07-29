@@ -2636,9 +2636,9 @@ describe("watchlists route rendering", () => {
       { state: "submitting", formData },
     );
 
-    expect(markup).toContain('aria-busy="true"');
-    expect(markup).toContain("disabled");
-    expect(markup).toContain("Resuming…");
+    expect(markup).toMatch(
+      /<button(?=[^>]*aria-busy="true")(?=[^>]*disabled)[^>]*>[\s\S]*?Resuming…<\/button>/,
+    );
   });
 
   it("keeps repeated failures as page state and points to the Evidence section", async () => {
@@ -2666,6 +2666,19 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain("the last 3 checks failed");
     expect(markup).toContain("recent errors are listed under Evidence");
     expect(markup).not.toContain("private provider detail");
+  });
+
+  it("keeps the entity detail coherent if the parallel board list misses its selected row", async () => {
+    const markup = await renderWatchlistsRoute({
+      ...selectedPanelLoaderData,
+      watchlists: [],
+    });
+
+    expect(markup).toContain("<h1 class=\"f9-wk-title\">Nykaa watch</h1>");
+    expect(markup).toContain("All competitors");
+    expect(markup).toContain('aria-label="Competitor sections"');
+    expect(markup).toContain('class="f9-bl035-detail"');
+    expect(markup).not.toContain('aria-label="Competitors"');
   });
 
   it("keeps blocked source access actionable in the compressed working header", async () => {

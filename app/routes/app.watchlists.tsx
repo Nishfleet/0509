@@ -300,6 +300,9 @@ export default function WatchlistsRoute() {
   const selectedRow = selectedWatchlist
     ? rows.find((row) => row.id === selectedWatchlist.id) ?? null
     : null;
+  const selectedStatusLabel = selectedWatchlist
+    ? selectedRow?.statusLabel ?? (selectedWatchlist.isActive ? "Watching" : "Paused")
+    : null;
   const selectedCapturedChanges = selectedWatchlist
     ? captureWindow.capturedChanges[selectedWatchlist.id] ?? 0
     : 0;
@@ -359,13 +362,13 @@ export default function WatchlistsRoute() {
         }
         actionSlot={selectedHeaderAction}
         context={
-          selectedWatchlist && selectedRow ? (
+          selectedWatchlist ? (
             <>
               <Link className="f9-bl035-back" to="/app/watchlists">
                 All competitors
               </Link>
               <span aria-hidden="true"> &rsaquo; </span>
-              {selectedWatchlist.targetLabel} · {selectedRow.statusLabel} ·{" "}
+              {selectedWatchlist.targetLabel} · {selectedStatusLabel} ·{" "}
               {sourceCanSchedule &&
               trackingPresentation.statusLabel !== "Needs source access" ? (
                 trackingPresentation.statusLabel
@@ -440,7 +443,7 @@ export default function WatchlistsRoute() {
         </FeedbackStrip>
       ) : null}
 
-      {selectedWatchlist && selectedRow ? (
+      {selectedWatchlist ? (
         <CompetitorDetail
           activeTab={activeTab}
           canConfigureDelivery={canConfigureDelivery}

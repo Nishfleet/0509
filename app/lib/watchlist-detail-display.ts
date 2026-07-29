@@ -93,6 +93,20 @@ export function formatWatchAge(createdAt: string | null, now: Date): string | nu
   return days === 1 ? "Watching 1 day" : `Watching ${days} days`;
 }
 
+/** Compact freshness for the rail, stable from the loader's rendered-at time. */
+export function formatLastCheck(lastScannedAt: string | null, now: Date): string | null {
+  if (!lastScannedAt) return null;
+  const checkedAt = Date.parse(lastScannedAt);
+  if (Number.isNaN(checkedAt)) return null;
+  const elapsedMs = Math.max(0, now.getTime() - checkedAt);
+  const minutes = Math.floor(elapsedMs / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 export function formatWatchMarket(targetCountry: string | null | undefined): string | null {
   const raw = targetCountry?.trim();
   if (!raw) return null;
@@ -114,9 +128,9 @@ export function formatEvidenceAttempts(summary: WatchlistProofSummary): string |
  * loader returns (§6.6). Eight rows is the hard ceiling and this rail sits
  * at it; adding a ninth means removing one.
  *
- * Rows deliberately do NOT repeat the status strip (state, last check, next
- * check, ad source) — the rail answers "what exactly are we watching and how
- * do we know", the strip answers "where does it stand right now".
+ * BL-035 removed the status strip, so Last check stays in this shared rail
+ * across every URL tab. Next check remains Setup work and source health stays
+ * in the working header.
  */
 export function buildCompetitorFactRows(input: {
   targetLabel: string;
@@ -125,6 +139,7 @@ export function buildCompetitorFactRows(input: {
   isActive: boolean;
   plan: string;
   createdAt: string | null;
+  lastScannedAt: string | null;
   now: Date;
   proofSummary: WatchlistProofSummary;
   storedChanges: number;
@@ -143,6 +158,11 @@ export function buildCompetitorFactRows(input: {
     {
       key: "Cadence",
       value: formatWatchBandCadence({ isActive: input.isActive, plan: input.plan }),
+    },
+    {
+      key: "Last check",
+      value: formatLastCheck(input.lastScannedAt, input.now),
+      missingLabel: "none yet",
     },
     {
       key: "Watch age",
