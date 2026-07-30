@@ -48,6 +48,7 @@ const REPORT_BASE_PAYLOAD = {
       previewImageUrl: null,
       creativeText: null,
       translatedText: null,
+      captureReasonCode: "ocr_provider_failed",
       landingPage: {
         url: "https://example.com/evidence",
         headline: "Current evidence",
@@ -387,6 +388,11 @@ describe("/share/:token loader PDF affordances", () => {
         generatedAt: "2026-07-01T00:05:00.000Z",
         periodEnd: "2026-07-01T00:00:00.000Z",
       },
+      rows: [
+        expect.objectContaining({
+          captureReasonCode: "ocr_provider_failed",
+        }),
+      ],
     });
     expect(JSON.stringify(result)).not.toContain("agency");
   });

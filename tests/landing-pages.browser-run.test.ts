@@ -269,6 +269,44 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
     });
   });
 
+  it("renders a body-empty SPA shell with only a bare form wrapper", async () => {
+    mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          '<html><head><title>Glow serum</title></head><body><form id="root"></form><script src="/app.js"></script></body></html>',
+          { status: 200 },
+        ),
+      ) as never,
+    );
+    const captureRenderedLandingPageSnapshot = vi.fn().mockResolvedValue({
+      rawUrl: "https://example.com/offer",
+      canonicalUrl: "https://example.com/offer",
+      rawHeadline: "Hydrated launch offer",
+      normalizedHeadline: "hydrated launch offer",
+      normalizedHeadlineHash: "hash-rendered",
+      ctaText: "Buy now",
+      priceText: "$49.99",
+      formPresent: true,
+      captureMethod: "browser_render",
+      capturedAt: "2026-07-30T00:00:00.000Z",
+      artifactKey: null,
+      metadata: {},
+    });
+    vi.doMock("~/lib/browser-run.server", () => ({
+      captureRenderedLandingPageSnapshot,
+    }));
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    const snapshot = await captureLandingPageSnapshot({}, "https://example.com/offer");
+
+    expect(captureRenderedLandingPageSnapshot).toHaveBeenCalledTimes(1);
+    expect(snapshot).toMatchObject({
+      ctaText: "Buy now",
+      formPresent: true,
+      captureMethod: "browser_render",
+    });
+  });
+
   it("captures a real browser-rendered proof bundle when fetch fails", async () => {
     mockFetchWithDns(vi.fn(async () => {
       throw new Error("fetch failed");

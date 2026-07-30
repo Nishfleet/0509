@@ -170,9 +170,7 @@ async function captureLandingPageSnapshotAt(
     const hasMeaningfulBodyText = hasMeaningfulLandingPageBodyText(html, {
       documentMode: "raw",
     });
-    const signalsAreEmpty =
-      !signals.ctaText && !signals.priceText && !signals.formPresent;
-    const looksLikeSignalEmptyShell = signalsAreEmpty && !hasMeaningfulBodyText;
+    const looksLikeSignalEmptyShell = !hasMeaningfulBodyText;
     const headline =
       decodeHtml(findFirstMatch(html, OG_TITLE_REGEX) ?? "") ||
       decodeHtml(findFirstMatch(html, TITLE_REGEX) ?? "") ||
