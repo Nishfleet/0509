@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { ReportView } from "~/components/report-view";
+import { UNREADABLE_CAPTURE_COPY } from "~/components/evidence";
 import type { ReportDocument } from "~/lib/report";
 
 const legacyReport = {
@@ -206,7 +207,7 @@ describe("ReportView", () => {
     expect(withActions).toContain("Agency Fixture Studio");
   });
 
-  it("omits missing row fields as honest fact rows instead of rendering placeholder prose", () => {
+  it("renders an absent landing-page URL as none stored", () => {
     const sparseRow: ReportDocument["rows"][number] = {
       ...reportRow("row-sparse", "https://example.com/source"),
       advertiser: null,
@@ -227,11 +228,66 @@ describe("ReportView", () => {
     expect(markup).not.toContain("Creative text unavailable");
     expect(markup).not.toContain("Translation unavailable");
     expect(markup).not.toContain("Landing page unavailable");
-    // A value we do not have is a muted row, never an empty card (§6.6, R5).
-    expect(markup).toContain("we could not read this one");
+    expect(markup).toMatch(
+      /<span class="f9-ed-fact-key">Still live at<\/span><span class="f9-ed-fact-value is-missing">none stored<\/span>/,
+    );
     expect(markup).toContain("f9-ed-fact-value is-missing");
     // The row still leads with what is known.
     expect(markup).toContain("New offer");
+  });
+
+  it("renders an undetected language as Not detected", () => {
+    const sparseRow: ReportDocument["rows"][number] = {
+      ...reportRow("row-language", "https://example.com/source"),
+      languageLabel: null,
+    };
+
+    const markup = renderToStaticMarkup(
+      createElement(ReportView, { report: { ...legacyReport, rows: [sparseRow] } }),
+    );
+
+    expect(markup).toMatch(
+      /<span class="f9-ed-fact-key">Language<\/span><span class="f9-ed-fact-value is-missing">Not detected<\/span>/,
+    );
+  });
+
+  it("keeps unreadable-capture copy in the creative frame only", () => {
+    const unreadableRow = unreadableReportRow("row-unreadable");
+
+    const markup = renderToStaticMarkup(
+      createElement(ReportView, {
+        report: { ...legacyReport, rows: [unreadableRow] },
+      }),
+    );
+
+    expect(markup).toContain(
+      `<p class="f9-ed-mock-empty">${UNREADABLE_CAPTURE_COPY}</p>`,
+    );
+    expect(markup.match(new RegExp(UNREADABLE_CAPTURE_COPY, "g"))).toHaveLength(1);
+    expect(markup).not.toContain(
+      `<span class="f9-ed-fact-value is-missing">${UNREADABLE_CAPTURE_COPY}</span>`,
+    );
+  });
+
+  it("keeps event verification when only the linked creative is unreadable", () => {
+    const verifiedUnreadableRow = unreadableReportRow(
+      "row-verified-unreadable",
+    );
+
+    const markup = renderToStaticMarkup(
+      createElement(ReportView, {
+        report: {
+          ...legacyReport,
+          resourceType: "watchlist",
+          rows: [verifiedUnreadableRow],
+        },
+      }),
+    );
+
+    expect(markup).toContain("Verified evidence");
+    expect(markup).toContain(
+      `<p class="f9-ed-mock-empty">${UNREADABLE_CAPTURE_COPY}</p>`,
+    );
   });
 
   it("treats legacy placeholder snapshot values as missing", () => {
@@ -262,7 +318,12 @@ describe("ReportView", () => {
     expect(markup).not.toContain("Offer unavailable");
     expect(markup).not.toContain("Ad context unavailable");
     expect(markup).not.toContain("Landing page unavailable");
-    expect(markup).not.toContain("Not detected");
+    // Legacy signal placeholders remain omitted; the only surviving
+    // "Not detected" is the honest Language fact-row fallback.
+    expect(markup.match(/Not detected/g)).toHaveLength(1);
+    expect(markup).toMatch(
+      /<span class="f9-ed-fact-key">Language<\/span><span class="f9-ed-fact-value is-missing">Not detected<\/span>/,
+    );
     expect(markup).not.toContain("Not checked yet");
   });
 
@@ -452,6 +513,25 @@ function reportRow(id: string, sourceUrl: string): ReportDocument["rows"][number
       sourceTypeLabel: "Proof snapshot",
       sourceUrl,
       metaAdId: null,
+    },
+  };
+}
+
+function unreadableReportRow(id: string): ReportDocument["rows"][number] {
+  return {
+    ...reportRow(id, "https://example.com/source"),
+    previewHeadline: null,
+    offer: null,
+    cta: null,
+    creativeText: null,
+    translatedText: null,
+    previewImageUrl: null,
+    landingPage: {
+      url: null,
+      headline: null,
+      captureLabel: null,
+      capturedAt: null,
+      signals: [],
     },
   };
 }
