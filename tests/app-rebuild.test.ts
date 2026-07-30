@@ -135,6 +135,10 @@ describe("app rebuild", () => {
     expect(appSurface).toContain("approved actions");
     expect(appSurface).toContain("Create API key");
     expect(appSurface).toContain("/api/v1");
+    expect(collectionsRoute).toContain(
+      'import { CollectionExternalProofSection } from "~/components/collections/collection-external-proof-section";',
+    );
+    expect(collectionsRoute).toContain("<CollectionExternalProofSection");
     expect(appSurface).toContain("File evidence from another source");
     expect(appSurface).toContain("Save evidence link");
     expect(appSurface).toContain("Google / YouTube");
