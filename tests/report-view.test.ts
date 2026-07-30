@@ -263,7 +263,7 @@ describe("ReportView", () => {
     expect(markup).toContain(
       `<p class="f9-ed-mock-empty">${UNREADABLE_CAPTURE_COPY}</p>`,
     );
-    expect(markup.match(new RegExp(UNREADABLE_CAPTURE_COPY, "g"))).toHaveLength(1);
+    expect(markup.split(UNREADABLE_CAPTURE_COPY)).toHaveLength(2);
     expect(markup).not.toContain(
       `<span class="f9-ed-fact-value is-missing">${UNREADABLE_CAPTURE_COPY}</span>`,
     );
