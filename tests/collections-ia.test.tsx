@@ -227,10 +227,29 @@ describe("collections IA inversion (brief §7)", () => {
     const markup = await render({ collections: [], selectedCollection: null });
 
     expect(markup).toContain("Start your first collection");
+    expect(markup).toContain("its recorded source, and your team&#x27;s notes");
+    expect(markup).not.toContain("exactly as we captured them");
     expect(markup).toContain("The first thing you save lands here with its source");
     expect(markup).toContain('value="create-collection"');
     expect(markup).not.toContain("<summary");
   });
+
+  it.each(["free", "agency"])(
+    "does not render first-run or an empty-plan lock when %s has collections but a stale selection",
+    async (plan) => {
+      const markup = await render({
+        collections: [collection],
+        plan,
+        selectedCollection: null,
+      });
+
+      expect(markup).toContain("Launch proof");
+      expect(markup).toContain("Choose another collection above.");
+      expect(markup).not.toContain("Start your first collection");
+      expect(markup).not.toContain("Collections start on Scout");
+      expect(markup).not.toContain("no collection exists on this plan yet");
+    },
+  );
 
   it("leaves no retired workspace styles on the route", async () => {
     const markup = await render({ items: [savedItem()] });
@@ -470,6 +489,18 @@ describe("collections empty and filtered states (brief §6.7, §6.8)", () => {
     expect(markup).toContain("1 other saved item is hidden.");
     expect(markup).not.toContain("is-success");
   });
+
+  it("never labels filtered-away evidence as if nothing has ever been filed", async () => {
+    const markup = await render({
+      advertiserFilter: "Okara",
+      hiddenByAdvertiserFilter: 1,
+      items: [],
+    });
+
+    expect(markup).toContain("<dt>Saved evidence</dt><dd>0 of 1 shown</dd>");
+    expect(markup).toContain("<dt>Competitors</dt><dd>hidden by filter</dd>");
+    expect(markup).not.toContain(">none yet<");
+  });
 });
 
 describe("collections display helpers", () => {
@@ -535,5 +566,26 @@ describe("collections display helpers", () => {
     expect(rows.find((row) => row.key === "Collections")?.missingLabel).toBe(
       "not included on this plan",
     );
+  });
+
+  it("uses the hidden total instead of 'none yet' when a filter removes every item", () => {
+    const rows = buildCollectionFacts({
+      collection,
+      collectionLimit: 25,
+      collectionsUsed: 1,
+      hiddenByFilter: 1,
+      items: [],
+    });
+
+    expect(rows.find((row) => row.key === "Saved evidence")?.value).toBe("0 of 1 shown");
+    for (const key of [
+      "Competitors",
+      "Channels",
+      "Filed by your team",
+      "Openable evidence",
+      "Tags in use",
+    ]) {
+      expect(rows.find((row) => row.key === key)?.missingLabel).toBe("hidden by filter");
+    }
   });
 });

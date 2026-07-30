@@ -37,6 +37,21 @@ const SURFACES = [
     user: "e2e-starter",
   },
   {
+    name: "collections-filed",
+    url: "/app/collections?collection=e2e-collection-starter-1&item=e2e-collection-item-external",
+    user: "e2e-starter",
+  },
+  {
+    name: "collections-sample",
+    url: "/app/collections?collection=e2e-collection-starter-1&item=e2e-collection-item-demo",
+    user: "e2e-starter",
+  },
+  {
+    name: "collections-stale-selection",
+    url: "/app/collections?collection=e2e-collection-deleted",
+    user: "e2e-starter",
+  },
+  {
     name: "collections-item-editor",
     url: "/app/collections",
     user: "e2e-starter",

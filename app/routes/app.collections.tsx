@@ -316,6 +316,12 @@ export default function CollectionsRoute() {
       : null;
   const createPanelOpen =
     searchParams.get("panel") === "new" || actionIntent === "create-collection";
+  const primarySlot = resolveCollectionPrimarySlot({
+    canCreate: canCreateCollection,
+    hasCollections: data.collections.length > 0,
+    hasItems: items.length + hiddenByFilter > 0,
+    hasSelection: selected !== null,
+  });
 
   const lockedActionsLabel = formatLockedActionsLabel(
     [
@@ -367,7 +373,7 @@ export default function CollectionsRoute() {
               ) : null}
             </>
           ) : (
-            "Saved evidence stays attached to its source, capture time, and team notes."
+            "Saved evidence stays attached to its source, recorded date, and team notes."
           )
         }
         title="Collections"
@@ -454,9 +460,9 @@ export default function CollectionsRoute() {
             </section>
           )}
         </>
-      ) : canCreateCollection ? (
+      ) : primarySlot === "create" ? (
         <CollectionCreatePanel mode="first-run" />
-      ) : (
+      ) : primarySlot === "gate" ? (
         <section aria-labelledby="collections-locked-title" className="f9-wk-sec f9-col-locked">
           <p className="f9-wk-kick">Scout plan</p>
           <h2 className="f9-col-section-title" id="collections-locked-title">
@@ -470,6 +476,18 @@ export default function CollectionsRoute() {
           <Link className="f9-wk-btn" to="/app/billing?source=collections#plans">
             Upgrade to Scout
           </Link>
+        </section>
+      ) : (
+        <section
+          aria-labelledby="collection-selection-missing-title"
+          className="f9-wk-sec f9-col-empty"
+        >
+          <h2 className="f9-col-section-title" id="collection-selection-missing-title">
+            That collection is no longer available
+          </h2>
+          <p className="f9-col-note">
+            Choose another collection above.
+          </p>
         </section>
       )}
     </DashboardPage>

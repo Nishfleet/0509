@@ -58,7 +58,7 @@ export const COLLECTION_ITEMS_EMPTY_COPY =
   "Nothing saved here yet. Anything you save from a search or a watchlist shows up here with the capture that proves it.";
 
 export const COLLECTION_BOARD_EMPTY_COPY =
-  "A collection is where the evidence you want to reuse lives — the ad, the offer and the landing page exactly as we captured them, ready to drop into a client report.";
+  "A collection keeps reusable evidence together — the ad, the offer, the landing page, its recorded source, and your team's notes.";
 
 export const COLLECTION_FILTERED_EMPTY_COPY =
   "Nothing saved here matches that competitor. Clear the filter to see everything in this collection, or switch to another one.";
@@ -338,6 +338,7 @@ export function buildCollectionFacts(input: {
   collectionLimit: number;
 }): FactRow[] {
   const { items } = input;
+  const filteredMissingLabel = input.hiddenByFilter > 0 ? "hidden by filter" : "none yet";
   const advertisers = new Set<string>();
   const channels = new Set<string>();
   const tags = new Set<string>();
@@ -357,33 +358,38 @@ export function buildCollectionFacts(input: {
   return [
     {
       key: "Saved evidence",
-      value: items.length > 0 ? `${items.length}` : null,
+      value:
+        input.hiddenByFilter > 0
+          ? formatSavedItemsValue(items.length, input.hiddenByFilter)
+          : items.length > 0
+            ? `${items.length}`
+            : null,
       missingLabel: "none yet",
     },
     {
       key: "Competitors",
       value: advertisers.size > 0 ? `${advertisers.size}` : null,
-      missingLabel: "none yet",
+      missingLabel: filteredMissingLabel,
     },
     {
       key: "Channels",
       value: channels.size > 0 ? Array.from(channels).slice(0, 3).join(", ") : null,
-      missingLabel: "none yet",
+      missingLabel: filteredMissingLabel,
     },
     {
       key: "Filed by your team",
       value: external > 0 ? `${external}` : null,
-      missingLabel: "none yet",
+      missingLabel: filteredMissingLabel,
     },
     {
       key: "Openable evidence",
       value: items.length > 0 ? `${withProof} of ${items.length}` : null,
-      missingLabel: "none yet",
+      missingLabel: filteredMissingLabel,
     },
     {
       key: "Tags in use",
       value: tags.size > 0 ? Array.from(tags).slice(0, 4).join(", ") : null,
-      missingLabel: "none yet",
+      missingLabel: filteredMissingLabel,
     },
     {
       key: "Hidden by filter",

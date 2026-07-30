@@ -100,7 +100,10 @@ describe("collection plan controls", () => {
     // dashed specimen theatre or shadow card.
     expect(markup).toContain("f9-col-locked");
     expect(markup).toContain("Collections start on Scout");
-    expect(markup).toContain("Saved evidence stays attached");
+    expect(markup).toContain(
+      "Saved evidence stays attached to its source, recorded date, and team notes.",
+    );
+    expect(markup).not.toContain("source, capture time, and team notes");
     expect(markup).toContain("Upgrade to Scout");
     expect(markup).toContain('href="/app/billing?source=collections#plans"');
     expect(markup).not.toContain('name="intent" value="create-collection"');

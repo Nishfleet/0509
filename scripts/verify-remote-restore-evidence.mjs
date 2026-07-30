@@ -5,7 +5,10 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { validateRemoteRestoreEvidence } from "./deploy-production-plan.mjs";
-import { allowedRemoteMigrationLedgers } from "./d1-migration-sync-check.lib.mjs";
+import {
+  allowedProductionMigrationLedgers,
+  migrationLedgerState,
+} from "./d1-migration-sync-check.lib.mjs";
 
 /** @param {string} name */
 function readArg(name) {
@@ -136,7 +139,7 @@ function changedPathsFromNameStatus(diffOutput) {
 }
 
 const RESTORE_CRITICAL_PATH_PATTERN =
-  /^(?:wrangler\.jsonc|\.node-version|package(?:-lock)?\.json|\.github\/workflows\/(?:deploy-production|d1-backup-r2|d1-remote-restore-evidence)\.yml|scripts\/(?:customer-readiness-candidate|deploy-production-plan|safe-command-output|validate-d1-backup|build-remote-restore-candidate-manifest|find-recent-remote-restore-artifact|verify-remote-restore-evidence|d1-(?:backup|remote-restore|restore)[^/]*)\.mjs)$/u;
+  /^(?:wrangler\.jsonc|\.node-version|package(?:-lock)?\.json|\.github\/workflows\/(?:deploy-production|d1-backup-r2|d1-remote-restore-evidence)\.yml|scripts\/(?:customer-readiness-candidate|deploy-production-plan|safe-command-output|validate-d1-backup|build-remote-restore-candidate-manifest|find-recent-remote-restore-artifact|verify-remote-restore-evidence|d1-(?:backup|migration-sync|remote-restore|restore)[^/]*)\.mjs)$/u;
 
 /** @param {unknown} diffOutput */
 export function hasRestoreCriticalChanges(diffOutput) {
@@ -239,15 +242,9 @@ async function main() {
     .sort();
   const { migrationBearing, restoreCritical } =
     await restoreEvidenceClassification();
-  const allowedMigrationStates = allowedRemoteMigrationLedgers(
+  const allowedMigrationStates = allowedProductionMigrationLedgers(
     migrations,
-  ).flatMap((ledger) => {
-    const latestMigration = ledger.at(-1);
-    // An empty ledger names no migration, so it cannot match remote state.
-    return latestMigration
-      ? [{ latestMigration, migrationCount: ledger.length }]
-      : [];
-  });
+  ).map((ledger) => migrationLedgerState(ledger));
   const verificationNow = new Date();
   const verdict = validateRemoteRestoreEvidence(evidence, {
     candidateFingerprint: manifest.candidateFingerprint,
