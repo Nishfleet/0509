@@ -7,6 +7,7 @@ import {
   grantEvidenceTopUp,
   applyTopUpRefundAdjustment,
   isEvidenceUsageStorageUnavailableError,
+  listTopUpGrantHistory,
   migrateLegacyTopUpCreditsIfNeeded,
   reconcileStaleEvidenceReservations,
   rebuildTopUpGrantBalance,
@@ -1095,6 +1096,63 @@ describe("evidence usage periods", () => {
       source: "test",
     });
     expect(attempt).toEqual({ ok: false, reason: "top_up_inactive_plan" });
+  });
+
+  it("fails loudly when paid top-up balances cannot be read", async () => {
+    await grantEvidenceTopUp(env, {
+      workspaceUserId: "user-1",
+      skuSlug: "burst_500_v1",
+      providerPaymentId: "pay-read-failure",
+      providerProductId: "prod-burst",
+      quantityGranted: 3,
+    });
+    const realPrepare = env.DB.prepare.bind(env.DB);
+    env.DB.prepare = ((sql: string) => {
+      const statement = realPrepare(sql);
+      if (!sql.includes("ORDER BY granted_at ASC")) {
+        return statement;
+      }
+      return {
+        bind(...bindings: unknown[]) {
+          const bound = statement.bind(...bindings);
+          return {
+            ...bound,
+            async all() {
+              throw new Error("D1 top-up balance read failed");
+            },
+          };
+        },
+      };
+    }) as typeof env.DB.prepare;
+
+    await expect(
+      getEvidenceUsageSummary(env, "user-1"),
+    ).rejects.toThrow("D1 top-up balance read failed");
+  });
+
+  it("fails loudly when paid top-up history cannot be read", async () => {
+    const realPrepare = env.DB.prepare.bind(env.DB);
+    env.DB.prepare = ((sql: string) => {
+      const statement = realPrepare(sql);
+      if (!sql.includes("ORDER BY granted_at DESC")) {
+        return statement;
+      }
+      return {
+        bind(...bindings: unknown[]) {
+          const bound = statement.bind(...bindings);
+          return {
+            ...bound,
+            async all() {
+              throw new Error("D1 top-up history read failed");
+            },
+          };
+        },
+      };
+    }) as typeof env.DB.prepare;
+
+    await expect(
+      listTopUpGrantHistory(env, "user-1"),
+    ).rejects.toThrow("D1 top-up history read failed");
   });
 
   it("migrates legacy credits once without double counting", async () => {

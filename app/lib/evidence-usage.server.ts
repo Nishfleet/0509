@@ -59,6 +59,18 @@ export interface EvidenceFinalizationLease {
   processingToken: string;
 }
 
+export class EvidenceTopUpReadError extends Error {
+  override readonly name = "EvidenceTopUpReadError";
+
+  constructor(message: string, cause: unknown) {
+    super(message, { cause });
+  }
+}
+
+export function isEvidenceTopUpReadError(error: unknown) {
+  return error instanceof EvidenceTopUpReadError;
+}
+
 function createId() {
   return crypto.randomUUID();
 }
@@ -207,8 +219,8 @@ async function listActiveTopUpGrants(env: AppEnv, workspaceUserId: string) {
       .bind(workspaceUserId)
       .all<TopUpGrantRow>();
     return result.results ?? [];
-  } catch {
-    return [];
+  } catch (error) {
+    throw new EvidenceTopUpReadError("D1 top-up balance read failed", error);
   }
 }
 
@@ -468,8 +480,8 @@ export async function listTopUpGrantHistory(env: AppEnv, workspaceUserId: string
       .bind(workspaceUserId, limit)
       .all<TopUpGrantRow>();
     return result.results ?? [];
-  } catch {
-    return [];
+  } catch (error) {
+    throw new EvidenceTopUpReadError("D1 top-up history read failed", error);
   }
 }
 

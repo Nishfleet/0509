@@ -256,6 +256,7 @@ export async function runScheduledMonitoring(
   let skippedForBudget = 0;
   let skippedForBilling = 0;
   let dispatchFailures = 0;
+  let planLookupFailures = 0;
 
   if (options.includeScans !== false) {
     const listedWatchlists = await listActiveWatchlists(env, {
@@ -268,11 +269,13 @@ export async function runScheduledMonitoring(
     );
     const scheduledTime = options.scheduledTime ?? Date.now();
     // WP-37: agency overflow watchlists only on 6h-aligned slots.
-    const watchlists = await filterWatchlistsByPriorityScanSlots(
+    const priorityScanResult = await filterWatchlistsByPriorityScanSlotsDetailed(
       env,
       browserAccess.watchlists,
       scheduledTime,
     );
+    const watchlists = priorityScanResult.watchlists;
+    planLookupFailures = priorityScanResult.planLookupFailures;
     skippedForBilling = browserAccess.skipped;
 
     const fanoutMode = resolveMonitoringFanoutMode(env);
@@ -376,6 +379,12 @@ export async function runScheduledMonitoring(
     }
   }
 
+  if (planLookupFailures > 0) {
+    throw new Error(
+      `Scheduled monitoring skipped ${planLookupFailures} workspace(s) because plan lookup failed.`,
+    );
+  }
+
   return {
     queued,
     duplicates,
@@ -419,8 +428,21 @@ export async function filterWatchlistsByPriorityScanSlots(
   watchlists: WatchlistRecord[],
   scheduledTime: number,
 ): Promise<WatchlistRecord[]> {
+  const result = await filterWatchlistsByPriorityScanSlotsDetailed(
+    env,
+    watchlists,
+    scheduledTime,
+  );
+  return result.watchlists;
+}
+
+async function filterWatchlistsByPriorityScanSlotsDetailed(
+  env: AppEnv,
+  watchlists: WatchlistRecord[],
+  scheduledTime: number,
+) {
   if (watchlists.length === 0) {
-    return watchlists;
+    return { watchlists, planLookupFailures: 0 };
   }
 
   const scheduledAt = new Date(scheduledTime);
@@ -433,28 +455,39 @@ export async function filterWatchlistsByPriorityScanSlots(
 
   const planByUser = new Map<string, PlanFamily>();
   const eligibleIds = new Set<string>();
+  let planLookupFailures = 0;
 
   for (const [userId, userWatchlists] of byUser) {
     let plan = planByUser.get(userId);
     if (!plan) {
       try {
-        // Runtime mocks may omit a plan; keep billing-eligible watchlists rather
-        // than inventing free (starve) or agency (wrong priority slots).
         const raw = (await getUserPlan(env, userId)) as
           | PlanFamily
           | null
           | undefined;
         if (raw == null) {
-          for (const watchlist of userWatchlists) {
-            eligibleIds.add(watchlist.id);
-          }
+          planLookupFailures += 1;
+          console.error(
+            "[monitoring] Plan lookup failed; scheduled scans were skipped for the workspace.",
+            {
+              workspaceUserId: userId,
+              watchlistCount: userWatchlists.length,
+              error: new Error("Plan lookup returned no value."),
+            },
+          );
           continue;
         }
         plan = parsePlanFamily(raw);
-      } catch {
-        for (const watchlist of userWatchlists) {
-          eligibleIds.add(watchlist.id);
-        }
+      } catch (error) {
+        planLookupFailures += 1;
+        console.error(
+          "[monitoring] Plan lookup failed; scheduled scans were skipped for the workspace.",
+          {
+            workspaceUserId: userId,
+            watchlistCount: userWatchlists.length,
+            error,
+          },
+        );
         continue;
       }
       planByUser.set(userId, plan);
@@ -479,7 +512,10 @@ export async function filterWatchlistsByPriorityScanSlots(
     });
   }
 
-  return watchlists.filter((watchlist) => eligibleIds.has(watchlist.id));
+  return {
+    watchlists: watchlists.filter((watchlist) => eligibleIds.has(watchlist.id)),
+    planLookupFailures,
+  };
 }
 
 const INSTANT_ALERT_FLUSH_LOOKBACK_HOURS = 48;

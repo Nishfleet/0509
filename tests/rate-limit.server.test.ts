@@ -262,6 +262,40 @@ describe("enforceAuthenticatedSearchRateLimit", () => {
 });
 
 describe("enforceSearchSelectionRateLimit", () => {
+  it("claims the spend budget synchronously without a deferred event write", async () => {
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.99);
+    const env = { DB: createFakeD1() } as unknown as AppEnv;
+    const waitUntil = vi.fn();
+
+    await expect(
+      enforceSearchSelectionRateLimit(
+        new Request("https://0509.io/search?query=nykaa&selected=meta-1"),
+        env,
+        "user-1",
+        { waitUntil } as unknown as ExecutionContext,
+      ),
+    ).resolves.toBeNull();
+
+    expect(waitUntil).not.toHaveBeenCalled();
+    randomSpy.mockRestore();
+  });
+
+  it("admits at most 120 concurrent warm selections", async () => {
+    const env = { DB: createFakeD1() } as unknown as AppEnv;
+    const results = await Promise.all(
+      Array.from({ length: 121 }, () =>
+        enforceSearchSelectionRateLimit(
+          new Request("https://0509.io/search?query=nykaa&selected=meta-1"),
+          env,
+          "user-concurrent",
+        ),
+      ),
+    );
+
+    expect(results.filter((result) => result === null)).toHaveLength(120);
+    expect(results.filter((result) => result?.status === 429)).toHaveLength(1);
+  });
+
   it("refuses the 121st warm selection in the window without touching the fresh-search bucket", async () => {
     const env = { DB: createFakeD1() } as unknown as AppEnv;
 
