@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { creativeCaptureSourceFingerprint } from "~/lib/creative-capture-policy";
 import type { AdRecord } from "~/lib/types";
 
 const baseAd: AdRecord = {
@@ -257,6 +258,7 @@ describe("WP-11 paint-fast selection enrichment", () => {
         capturedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
         extractionStatus: "unreadable",
         unreadableReasonCode: "ocr_binding_missing",
+        creativeSourceFingerprint: creativeCaptureSourceFingerprint(baseAd),
       },
     };
 

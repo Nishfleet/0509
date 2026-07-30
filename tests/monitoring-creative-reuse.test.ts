@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { creativeCaptureSourceFingerprint } from "~/lib/creative-capture-policy";
 import type { AdRecord, WatchlistRecord } from "~/lib/types";
 
 const watchlist: WatchlistRecord = {
@@ -70,6 +71,18 @@ describe("runWatchlistManual OCR reuse", () => {
         capturedAt: new Date().toISOString(),
         extractionStatus: "unreadable",
         unreadableReasonCode: "ocr_binding_missing",
+        creativeSourceFingerprint: "different-source",
+      },
+      expectedCaptureCalls: 1,
+      scenario: "recaptures when recent unreadable metadata belongs to another source",
+    },
+    {
+      creativeText: null,
+      creativeTextMetadata: {
+        capturedAt: new Date().toISOString(),
+        extractionStatus: "unreadable",
+        unreadableReasonCode: "ocr_binding_missing",
+        creativeSourceFingerprint: creativeCaptureSourceFingerprint(baseAd),
       },
       expectedCaptureCalls: 0,
       scenario: "reuses a recent persisted unreadable OCR result",

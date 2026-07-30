@@ -5,6 +5,7 @@ import {
   readResponseBytesWithinLimit,
   readResponseTextWithinLimit,
 } from "~/lib/bounded-response.server";
+import { creativeCaptureSourceFingerprint } from "~/lib/creative-capture-policy";
 import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
 import { hasClassifierScriptChar } from "~/lib/language-classifier";
 import { resolvePublicHttpUrl, resolvePublicRedirectUrl } from "~/lib/public-url.server";
@@ -42,7 +43,7 @@ type KnownAdText = Pick<
   | "previewSubhead"
   | "cta"
   | "creativeImageUrl"
->;
+> & { adSnapshotUrl?: string | null };
 
 type CreativeTextEnv = Pick<AppEnv, "AI">;
 
@@ -138,7 +139,11 @@ export async function captureCreativeText(
   url: string,
   ad: KnownAdText,
 ): Promise<CreativeTextCaptureResult | null> {
-  const primaryResult = await captureCreativeTextFromSource(env, url, ad);
+  const primaryResult = withCreativeSourceFingerprint(
+    await captureCreativeTextFromSource(env, url, ad),
+    ad,
+    url,
+  );
   const creativeImageUrl = ad.creativeImageUrl?.trim() ?? "";
   if (
     primaryResult?.text ||
@@ -149,10 +154,10 @@ export async function captureCreativeText(
     return primaryResult;
   }
 
-  const fallbackResult = await captureCreativeTextFromSource(
-    env,
-    creativeImageUrl,
+  const fallbackResult = withCreativeSourceFingerprint(
+    await captureCreativeTextFromSource(env, creativeImageUrl, ad),
     ad,
+    url,
   );
   if (!fallbackResult) return primaryResult;
 
@@ -234,7 +239,24 @@ async function captureCreativeTextFromSource(
       });
     }
 
-    const html = await readResponseTextWithinLimit(response, MAX_CREATIVE_SNAPSHOT_HTML_BYTES);
+    const genericPayload = isGenericCreativeContentType(contentType)
+      ? await readGenericCreativeResource(response, responseUrl)
+      : null;
+    if (genericPayload?.image) {
+      const ocr = await extractCreativeTextFromImage(env, genericPayload.image, ad);
+      return buildOcrCaptureResult(ocr, {
+        capturedAt,
+        fetchStatus: response.status,
+        extractionPath: "direct_image_ocr",
+        fallbackImageUrl: responseUrl,
+      });
+    }
+    const html = isGenericCreativeContentType(contentType)
+      ? genericPayload?.html ?? null
+      : await readResponseTextWithinLimit(
+          response,
+          MAX_CREATIVE_SNAPSHOT_HTML_BYTES,
+        );
     if (!html) {
       return buildUnreadableCreativeResult(
         "creative_snapshot_empty_or_oversized",
@@ -453,6 +475,100 @@ async function readDirectCreativeImage(
   };
 }
 
+async function readGenericCreativeResource(
+  response: Response,
+  imageUrl: string,
+): Promise<{ html: string | null; image: CreativeImagePayload | null } | null> {
+  if (contentLengthExceeds(response.headers, MAX_CREATIVE_IMAGE_BYTES)) {
+    releaseFetchTimeout(response);
+    return null;
+  }
+  const bytes = await readResponseBytesWithinLimit(
+    response,
+    MAX_CREATIVE_IMAGE_BYTES,
+  );
+  if (!bytes?.byteLength) return null;
+
+  const detectedContentType = detectImageContentType(bytes);
+  if (detectedContentType) {
+    return {
+      html: null,
+      image: {
+        bytes,
+        contentType: detectedContentType,
+        imageUrl,
+        imageFetchStatus: response.status,
+      },
+    };
+  }
+  return {
+    html:
+      bytes.byteLength <= MAX_CREATIVE_SNAPSHOT_HTML_BYTES
+        ? new TextDecoder().decode(bytes)
+        : null,
+    image: null,
+  };
+}
+
+function isGenericCreativeContentType(contentType: string) {
+  const normalized = contentType.split(";", 1)[0]?.trim().toLowerCase() ?? "";
+  return (
+    !normalized ||
+    normalized === "application/octet-stream" ||
+    normalized === "binary/octet-stream"
+  );
+}
+
+function detectImageContentType(bytes: Uint8Array): string | null {
+  if (
+    bytes[0] === 0xff &&
+    bytes[1] === 0xd8 &&
+    bytes[2] === 0xff
+  ) {
+    return "image/jpeg";
+  }
+  if (
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  ) {
+    return "image/png";
+  }
+  const prefix = new TextDecoder("ascii").decode(bytes.slice(0, 12));
+  if (prefix.startsWith("GIF87a") || prefix.startsWith("GIF89a")) {
+    return "image/gif";
+  }
+  if (prefix.startsWith("RIFF") && prefix.slice(8, 12) === "WEBP") {
+    return "image/webp";
+  }
+  if (prefix.startsWith("BM")) {
+    return "image/bmp";
+  }
+  if (
+    (bytes[0] === 0x49 &&
+      bytes[1] === 0x49 &&
+      bytes[2] === 0x2a &&
+      bytes[3] === 0x00) ||
+    (bytes[0] === 0x4d &&
+      bytes[1] === 0x4d &&
+      bytes[2] === 0x00 &&
+      bytes[3] === 0x2a)
+  ) {
+    return "image/tiff";
+  }
+  if (prefix.slice(4, 8) === "ftyp") {
+    const brand = prefix.slice(8, 12);
+    if (brand === "avif" || brand === "avis") return "image/avif";
+    if (brand === "heic" || brand === "heix") return "image/heic";
+  }
+  return null;
+}
+
 function mergeCreativeImageCandidates(
   persistedFallback: string | null | undefined,
   discovered: string[],
@@ -461,6 +577,28 @@ function mergeCreativeImageCandidates(
     ? [...discovered, persistedFallback.trim()]
     : discovered;
   return [...new Set(candidates)];
+}
+
+function withCreativeSourceFingerprint(
+  result: CreativeTextCaptureResult | null,
+  ad: KnownAdText,
+  captureUrl: string,
+) {
+  const sourceFingerprint = creativeCaptureSourceFingerprint(
+    {
+      adSnapshotUrl: ad.adSnapshotUrl,
+      creativeImageUrl: result?.imageUrl ?? ad.creativeImageUrl,
+    },
+    captureUrl,
+  );
+  if (!result || !sourceFingerprint) return result;
+  return {
+    ...result,
+    metadata: {
+      ...result.metadata,
+      creativeSourceFingerprint: sourceFingerprint,
+    },
+  };
 }
 
 function buildOcrCaptureResult(

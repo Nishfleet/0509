@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { creativeCaptureSourceFingerprint } from "~/lib/creative-capture-policy";
 import {
   captureCreativeText,
   createMissingCreativeCaptureResult,
@@ -365,6 +366,10 @@ describe("captureCreativeText", () => {
       imageUrl: "https://cdn.example.com/current.jpg",
       metadata: {
         extractionPath: "snapshot_image_ocr",
+        creativeSourceFingerprint: creativeCaptureSourceFingerprint({
+          adSnapshotUrl: "https://facebook.example.com/ad-snapshot",
+          creativeImageUrl: "https://cdn.example.com/current.jpg",
+        }),
       },
     });
     expect(aiRun).toHaveBeenCalledTimes(1);
@@ -522,6 +527,42 @@ describe("captureCreativeText", () => {
     expect(result).toMatchObject({
       text: "Summer Drop\n30% OFF",
       imageUrl: "https://cdn.example.com/creative.jpg",
+      metadata: {
+        extractionPath: "direct_image_ocr",
+        extractionStatus: "readable",
+      },
+    });
+  });
+
+  it("OCRs image bytes served with a generic content type", async () => {
+    const aiRun = vi.fn().mockResolvedValue({
+      description: "Summer Drop\n30% OFF",
+    });
+    mockFetchWithDns(
+      () =>
+        new Response(Uint8Array.from([255, 216, 255, 217]), {
+          status: 200,
+          headers: { "content-type": "application/octet-stream" },
+        }),
+    );
+
+    const result = await captureCreativeText(
+      { AI: { run: aiRun } } as never,
+      "https://cdn.example.com/creative",
+      {
+        advertiser: "Nykaa",
+        body: "",
+        previewHeadline: "",
+        previewSubhead: "",
+        cta: "",
+        creativeImageUrl: "https://cdn.example.com/creative",
+      },
+    );
+
+    expect(aiRun).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      text: "Summer Drop\n30% OFF",
+      imageUrl: "https://cdn.example.com/creative",
       metadata: {
         extractionPath: "direct_image_ocr",
         extractionStatus: "readable",
