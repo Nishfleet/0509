@@ -247,6 +247,66 @@ describe("extractLandingPageSignals", () => {
     expect(performance.now() - startedAt).toBeLessThan(750);
   }, 3_000);
 
+  it("does not rescan overlapping windows of repeated malformed tags", () => {
+    const html = "<input".repeat(5_000);
+    const startedAt = performance.now();
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: null,
+      priceText: null,
+      formPresent: false,
+    });
+    expect(performance.now() - startedAt).toBeLessThan(300);
+  }, 3_000);
+
+  it("recovers a valid submit tag after a malformed quoted tag", () => {
+    const html = `
+      <img alt="unterminated attribute
+      <input name="email" type="submit" value="Get started">
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Get started",
+      formPresent: true,
+    });
+  });
+
+  it("keeps less-than comparisons inside quoted attributes", () => {
+    const html = `
+      <script data-rule="quantity<10">window.offer = "$9.99";</script>
+      <button>Book demo</button>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Book demo",
+      priceText: null,
+      formPresent: false,
+    });
+  });
+
+  it("keeps less-than comparisons inside multiline quoted attributes", () => {
+    const html = `
+      <script data-rule="first line
+        literal<word">window.offer = "$9.99";</script>
+      <button>Book demo</button>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Book demo",
+      priceText: null,
+      formPresent: false,
+    });
+  });
+
+  it("recovers a valid tag inside a single-line unterminated quoted attribute", () => {
+    const html = `<img alt='unterminated <input name="email" type="submit" value="Get started">`;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Get started",
+      formPresent: true,
+    });
+  });
+
   it("removes hidden elements whose opening tag exceeds the normal scan bound", () => {
     const html = `
       <script data-payload="${"x".repeat(5_000)}">
@@ -271,6 +331,120 @@ describe("extractLandingPageSignals", () => {
     expect(extractLandingPageSignals(html)).toMatchObject({
       ctaText: "Get started",
       formPresent: true,
+    });
+  });
+
+  it("does not treat the name attribute token itself as a lead field", () => {
+    const html = `
+      <input name="quantity" type="number">
+      <input type="submit" value="Buy now">
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Buy now",
+      formPresent: false,
+    });
+  });
+
+  it("uses semantic input attributes when the field name is opaque", () => {
+    const html = `
+      <input name="entry.123456" autocomplete="email">
+      <input type="submit" value="Get started">
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Get started",
+      formPresent: true,
+    });
+  });
+
+  it("detects phone lead forms from the language-independent tel type", () => {
+    const html = `
+      <input type="tel" name="contact" placeholder="+49 151 123456">
+      <input type="submit" value="Get started">
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Get started",
+      formPresent: true,
+    });
+  });
+
+  it("detects lead fields whose semantic names use camelCase or separators", () => {
+    const html = `
+      <input name="firstName">
+      <input id="user_email">
+      <input type="submit" value="Get started">
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Get started",
+      formPresent: true,
+    });
+  });
+
+  it("keeps content after a hidden opening tag with an unquoted less-than value", () => {
+    const html = `
+      <script data-rule=quantity<breakpoint>window.offer = "$9.99";</script>
+      <button>Buy now</button>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Buy now",
+      priceText: null,
+      formPresent: false,
+    });
+  });
+
+  it("keeps submit controls whose unquoted attributes contain less-than signs", () => {
+    const html = `
+      <input name="email">
+      <input data-rule=quantity<breakpoint type="submit" value="Buy now">
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Buy now",
+      formPresent: true,
+    });
+  });
+
+  it("recovers a tag that starts near the end of a failed unquoted scan window", () => {
+    const html = `
+      <div data-rule=${"x".repeat(4_080)}<input name="email" type="submit" value="Get started">
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Get started",
+      formPresent: true,
+    });
+  });
+
+  it("prioritizes hidden tags when recovering an unterminated quoted tag", () => {
+    const html = `
+      <div alt='broken <script>window.offer = "$9.99";</script>
+      <button>Buy now</button>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Buy now",
+      priceText: null,
+      formPresent: false,
+    });
+  });
+
+  it("prioritizes the active hidden element's closing tag during recovery", () => {
+    const html = `
+      <script>
+        if (count<items.length) render();
+        // Don't re-render
+      </script>
+      <button>Buy now</button>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Buy now",
+      priceText: null,
+      formPresent: false,
     });
   });
 

@@ -3260,6 +3260,9 @@ async function evaluateSelectiveProofCandidates(
           ctaText: snapshot.ctaText ?? null,
           priceText: snapshot.priceText ?? null,
           formPresent: snapshot.formPresent ?? null,
+          extractorVersion:
+            readSnapshotString(snapshot.metadata, "extractorVersion") ??
+            LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
         },
         lastSuccessfulProof,
         recentWatchEvents: proofAwareRecentEvents,
@@ -3752,6 +3755,9 @@ async function evaluateDirectWebsiteProofCandidate(
         ctaText: snapshot.ctaText ?? null,
         priceText: snapshot.priceText ?? null,
         formPresent: snapshot.formPresent ?? null,
+        extractorVersion:
+          readSnapshotString(snapshot.metadata, "extractorVersion") ??
+          LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
       },
       lastSuccessfulProof: finalLastSuccessfulProof,
       recentWatchEvents: input.recentWatchEvents,

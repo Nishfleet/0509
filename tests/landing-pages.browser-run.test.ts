@@ -374,7 +374,7 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
         renderMode: "mobile",
         deviceProfile: "mobile_default",
         renderProvider: "cloudflare_browser_run",
-        extractorVersion: "lp-signals-v2",
+        extractorVersion: "lp-signals-v3",
         extractionWarnings: [],
         extractedFieldConfidence: {
           headline: 0.95,

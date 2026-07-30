@@ -1,4 +1,4 @@
-export const LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION = "lp-signals-v2";
+export const LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION = "lp-signals-v3";
 
 const CTA_PRIORITY_PATTERNS = [
   /\b(buy now|shop now|add to cart|get offer|claim deal|book demo|whatsapp us|get started)\b/i,
@@ -14,6 +14,9 @@ const PRICE_PATTERNS = [
   /\b((?:up to\s+)?\d+%\s*off)\b/i,
   /\b(buy\s*\d+\s*get\s*\d+)\b/i,
 ] as const;
+const LEAD_FIELD_PATTERN = /\b(name|email|phone|mobile|tel|whatsapp)\b/i;
+const MAX_HTML_TAG_SCAN_LENGTH = 4_096;
+const HIDDEN_RECOVERY_TAG_NAMES = new Set(["script", "style", "template"]);
 
 export function extractLandingPageSignals(
   html: string,
@@ -95,11 +98,14 @@ function removeNonVisibleElements(
       !prefix.closing &&
       elementNames.has(prefix.name),
     );
-    const tag = readHtmlTag(
+    const parsedTag = readHtmlTag(
       html,
       tagStart,
       hiddenOpeningTag ? html.length - tagStart : undefined,
+      !hiddenOpeningTag,
+      hiddenElement,
     );
+    const tag = parsedTag.tag;
     if (!tag) {
       if (hiddenOpeningTag) {
         if (!hiddenElement) {
@@ -108,7 +114,7 @@ function removeNonVisibleElements(
         copyFrom = html.length;
         break;
       }
-      cursor = tagStart + 1;
+      cursor = parsedTag.nextCursor;
       continue;
     }
 
@@ -137,7 +143,7 @@ function removeNonVisibleElements(
       }
     }
 
-    cursor = tag.end;
+    cursor = parsedTag.nextCursor;
   }
 
   if (!hiddenElement) {
@@ -195,7 +201,16 @@ function detectFormPresence(html: string) {
   const hasLeadInputs = [
     ...inputTags,
     ...extractHtmlStartTags(html, "textarea"),
-  ].some((tag) => /\b(name|email|phone|mobile|whatsapp)\b/i.test(tag));
+  ].some((tag) =>
+    [
+      readAttribute(tag, "type"),
+      readAttribute(tag, "name"),
+      readAttribute(tag, "placeholder"),
+      readAttribute(tag, "autocomplete"),
+      readAttribute(tag, "aria-label"),
+      readAttribute(tag, "id"),
+    ].some(isLeadFieldValue),
+  );
   const hasSubmitAction =
     inputTags.some(
       (tag) => readAttribute(tag, "type")?.toLowerCase() === "submit",
@@ -207,21 +222,30 @@ function detectFormPresence(html: string) {
   return hasLeadInputs && hasSubmitAction;
 }
 
+function isLeadFieldValue(value: string | null) {
+  if (!value) return false;
+  const normalized = value
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ");
+  return LEAD_FIELD_PATTERN.test(normalized);
+}
+
 function extractHtmlStartTags(html: string, tagName: string) {
   const tags: string[] = [];
   let cursor = 0;
   while (cursor < html.length) {
     const tagStart = html.indexOf("<", cursor);
     if (tagStart < 0) break;
-    const tag = readHtmlTag(html, tagStart);
+    const parsedTag = readHtmlTag(html, tagStart);
+    const tag = parsedTag.tag;
     if (!tag) {
-      cursor = tagStart + 1;
+      cursor = parsedTag.nextCursor;
       continue;
     }
     if (!tag.closing && tag.name === tagName) {
       tags.push(html.slice(tagStart, tag.end));
     }
-    cursor = tag.end;
+    cursor = parsedTag.nextCursor;
   }
   return tags;
 }
@@ -229,20 +253,82 @@ function extractHtmlStartTags(html: string, tagName: string) {
 function readHtmlTag(
   html: string,
   start: number,
-  maxScanLength = 4_096,
+  maxScanLength = MAX_HTML_TAG_SCAN_LENGTH,
+  recoverNestedTagStarts = true,
+  preferredClosingTagName: string | null = null,
 ) {
   const prefix = readHtmlTagPrefix(html, start);
-  if (!prefix) return null;
+  if (!prefix) {
+    return {
+      nextCursor: Math.min(html.length, start + 1),
+      tag: null,
+    };
+  }
   const { closing, name, nameEnd, nameStart } = prefix;
   let cursor = nameEnd;
 
   let quote: "\"" | "'" | null = null;
+  let preferredClosingTagRecoveryStart: number | null = null;
+  let hiddenTagRecoveryStart: number | null = null;
+  let nestedTagRecoveryStart: number | null = null;
   const scanLimit = Math.min(html.length, cursor + maxScanLength);
   for (; cursor < scanLimit; cursor += 1) {
     const character = html[cursor];
     if (quote) {
-      if (character === quote) quote = null;
+      if (character === quote) {
+        quote = null;
+        continue;
+      }
+      const nestedPrefix =
+        recoverNestedTagStarts && character === "<"
+          ? readHtmlTagPrefix(html, cursor)
+          : null;
+      if (nestedPrefix) {
+        // A less-than sequence is legal inside a quoted attribute. Remember
+        // it only as a recovery point; use it if the containing tag never
+        // closes, otherwise keep the attribute intact. Retaining the latest
+        // point also keeps repeated malformed prefixes linear.
+        nestedTagRecoveryStart = cursor;
+        if (
+          preferredClosingTagRecoveryStart === null &&
+          nestedPrefix.closing &&
+          nestedPrefix.name === preferredClosingTagName
+        ) {
+          preferredClosingTagRecoveryStart = cursor;
+        }
+        if (
+          hiddenTagRecoveryStart === null &&
+          !nestedPrefix.closing &&
+          HIDDEN_RECOVERY_TAG_NAMES.has(nestedPrefix.name)
+        ) {
+          hiddenTagRecoveryStart = cursor;
+        }
+      }
       continue;
+    }
+    const nestedPrefix =
+      recoverNestedTagStarts && character === "<"
+        ? readHtmlTagPrefix(html, cursor)
+        : null;
+    if (nestedPrefix) {
+      // Browsers keep "<" in unquoted attribute values, so do not abort a
+      // tag that later closes. This point is used only if the bounded scan
+      // fails, preserving tags that begin near the end of that window.
+      nestedTagRecoveryStart = cursor;
+      if (
+        preferredClosingTagRecoveryStart === null &&
+        nestedPrefix.closing &&
+        nestedPrefix.name === preferredClosingTagName
+      ) {
+        preferredClosingTagRecoveryStart = cursor;
+      }
+      if (
+        hiddenTagRecoveryStart === null &&
+        !nestedPrefix.closing &&
+        HIDDEN_RECOVERY_TAG_NAMES.has(nestedPrefix.name)
+      ) {
+        hiddenTagRecoveryStart = cursor;
+      }
     }
     if (character === "\"" || character === "'") {
       quote = character;
@@ -255,14 +341,24 @@ function readHtmlTag(
       beforeEnd -= 1;
     }
     return {
-      closing,
-      end: cursor + 1,
-      name,
-      selfClosing: !closing && html[beforeEnd] === "/",
+      nextCursor: cursor + 1,
+      tag: {
+        closing,
+        end: cursor + 1,
+        name,
+        selfClosing: !closing && html[beforeEnd] === "/",
+      },
     };
   }
 
-  return null;
+  return {
+    nextCursor:
+      preferredClosingTagRecoveryStart ??
+      hiddenTagRecoveryStart ??
+      nestedTagRecoveryStart ??
+      scanLimit,
+    tag: null,
+  };
 }
 
 function readHtmlTagPrefix(html: string, start: number) {
@@ -283,7 +379,17 @@ function readHtmlTagPrefix(html: string, start: number) {
   };
 }
 
-function readAttribute(tag: string, attribute: "type" | "value") {
+function readAttribute(
+  tag: string,
+  attribute:
+    | "type"
+    | "value"
+    | "name"
+    | "placeholder"
+    | "autocomplete"
+    | "aria-label"
+    | "id",
+) {
   for (const match of tag.matchAll(
     /\b([a-z][a-z0-9:_-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/gi,
   )) {
