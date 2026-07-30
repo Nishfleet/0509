@@ -1543,7 +1543,9 @@ describe("runWatchlistManual cheap scan path", () => {
     );
   });
 
-  it("still captures direct competitor website proof when ad discovery fails", async () => {
+  it.each(["failed", "pending"])(
+    "keeps the run failed when direct website proof succeeds but alert delivery is %s",
+    async (alertStatus) => {
     class MockCommercialDiscoveryError extends Error {
       failureClass = "browser_launch_failed" as const;
     }
@@ -1556,7 +1558,7 @@ describe("runWatchlistManual cheap scan path", () => {
     const deliverWatchlistAlerts = vi.fn().mockResolvedValue({
       attempts: 1,
       channels: ["email"],
-      details: [{ status: "failed" }],
+      details: [{ status: alertStatus }],
     });
     const websiteWatchlist: WatchlistRecord = {
       ...watchlist,
@@ -1753,7 +1755,8 @@ describe("runWatchlistManual cheap scan path", () => {
       }),
     );
     expect(deliverWatchlistAlerts).toHaveBeenCalled();
-  });
+    },
+  );
 
 	it("keeps failed discovery failed when direct website fallback skips", async () => {
 	  class MockCommercialDiscoveryError extends Error {

@@ -1770,7 +1770,7 @@ function summarizeAlertDelivery(delivery: {
   return {
     attempts: delivery.details.length,
     accepted: delivery.details.filter((attempt) => attempt.status === "sent").length,
-    failures: delivery.details.filter((attempt) => attempt.status === "failed").length,
+    failures: delivery.details.filter((attempt) => attempt.status !== "sent").length,
   };
 }
 

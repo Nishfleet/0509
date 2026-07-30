@@ -120,6 +120,13 @@ async function deliverScanTroubleNoticeOrThrow(
   const { deliverScanTroubleNotice } = await import("~/lib/delivery.server");
   const delivery = await deliverScanTroubleNotice(env, input);
   if (!delivery.sent) {
+    if (
+      delivery.reason === "disabled" ||
+      delivery.reason === "unverified" ||
+      delivery.reason === "no_email"
+    ) {
+      return;
+    }
     throw new Error(
       `Scan-trouble notice was not accepted (${delivery.reason}).`,
     );

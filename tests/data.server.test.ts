@@ -3570,6 +3570,9 @@ describe("getOperatorSnapshot", () => {
       expect(deliveryFailures?.sql).toContain("delivery_attempt.status = 'sent'");
       expect(deliveryFailures?.sql).toContain("delivery_attempt.webhook_status = 'provider_unknown'");
       expect(deliveryFailures?.sql).toContain("delivery_attempt.updated_at <= ?");
+      expect(deliveryFailures?.sql).toContain(
+        "CASE WHEN delivery_attempt.status = 'failed' THEN 0 ELSE 1 END",
+      );
       expect(discoveryFailures?.bindings).toContain(recentWindowIso);
     } finally {
       vi.useRealTimers();

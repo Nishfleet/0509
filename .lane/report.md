@@ -6,10 +6,10 @@ Branch: `fix/silent-fixstatus`
 
 | Finding | Status-honest behavior |
 |---|---|
-| C3 | Email accepted with `sent/provider_unknown` is presented as **Delivery unconfirmed**, receives explicit recovery copy, enters aged operator attention after 15 minutes, and is eligible for evidence-based reconciliation. Provider acceptance is no longer presented as terminal delivery. |
-| C4 | Every scan-trouble-notice branch now throws on `{ sent:false }`, so the durable digest job fails and remains retryable. A replay that finds the same notice already accepted completes without sending twice. |
+| C3 | Email accepted with `sent/provider_unknown` is presented as **Delivery unconfirmed**, receives explicit recovery copy, enters aged operator attention after 15 minutes, and is eligible for evidence-based reconciliation. Real failures are prioritized in the bounded ops list, and later provider rejection corrects both attempt and digest aggregate unless another recipient succeeded. |
+| C4 | Every attempted scan-trouble notice that is not accepted fails the durable digest job and remains retryable. Intentional `disabled`, `unverified`, and `no_email` policy skips complete cleanly. A replay that finds the same notice already accepted completes without sending twice. |
 | C5 | A saved support case whose operator notification failed now returns the same honest warning while persisting a `failed/support_notification_failed` agent audit. Reuse of the idempotency key atomically reclaims that failed audit and retries the idempotent notification; concurrent reclaim losers do not execute or overwrite the winner. |
-| C8 | Failed customer-alert attempts finalize the watchlist run as `failed` (the schema has no `degraded` state), record accepted/attempt/failure counts, preserve `lastScannedAt`, and propagate failure into scheduled `inlineFailures`. The direct-website recovery branch has the same contract. |
+| C8 | Failed or unresolved customer-alert attempts finalize the watchlist run as `failed` (the schema has no `degraded` state), record accepted/attempt/failure counts, preserve `lastScannedAt`, and propagate failure into scheduled `inlineFailures`. The direct-website recovery branch has the same contract. |
 
 No delivery/provider gate was loosened. Monitoring continues to fail rather than substitute demo data.
 
@@ -27,7 +27,7 @@ The lock-wrapped targeted baseline on `46fe111` exited 1 with **7 failures and 2
 ## Cause-level changes
 
 - Delivery truth: public/customer readers distinguish provider acceptance from confirmed delivery; aged accepted/unconfirmed attempts are visible to ops and existing evidence reconciliation.
-- Durable digest truth: a trouble notice must be accepted before its schedule job can complete.
+- Durable digest truth: an attempted trouble notice must be accepted before its schedule job can complete; explicit customer/account policy skips are not delivery failures.
 - Agent audit truth: resolved application-level failures can persist a failed audit, and support notification retries use a conditional `failed → started` reclaim.
 - Monitoring truth: delivery details determine run status and counters; the durable failed state is recorded before the error is propagated.
 
@@ -43,9 +43,9 @@ Only the status-honesty cause paths, their data barrels, and focused tests were 
 |---|---|
 | Failing-first probes | PASS as evidence: expected 7 red / 224 green before implementation |
 | Locked `npm ci` | PASS — 293 packages, 0 vulnerabilities |
-| Focused status-honesty Vitest | PASS — 10 files, 255 tests |
+| Focused status-honesty Vitest | PASS — initial 10 files / 255 tests; post-review 4 files / 145 tests |
 | API/MCP route regression probes | PASS — 2 files, 42 tests |
-| Locked full Vitest | PASS — 385 files, 4,168 tests |
+| Locked full Vitest | PASS — 385 files, 4,171 tests |
 | Locked typecheck | PASS |
 | Gate-B local release | PASS — 73/73, journeys 1–6, strict |
 | `git diff --check` | PASS |
@@ -53,12 +53,12 @@ Only the status-honesty cause paths, their data barrels, and focused tests were 
 
 Gate-B manifest:
 
-- file: `test-results/gate-b-manifest-local-release-local-e61406fb0af0f49b83a638fa52a5d2a6.json`
+- file: `test-results/gate-b-manifest-local-release-local-f1d1ffd31424559a297a2916e9c7e845.json`
 - `"schemaVersion": 3`
-- `"candidateFingerprint": "2a09d486355adf9e643586ce6efc93ddafb15d7213ad39ba324c19445cfb825f"`
+- `"candidateFingerprint": "171e3819539a8e2fdad3ccf15c309e2859497c0f14255332cbbd398c957325f3"`
 - `"environment": "local"`
-- `"runOrigin": "http://127.0.0.1:37375"`
-- `"serverIdentity": "local-e61406fb0af0f49b83a638fa52a5d2a6"`
+- `"runOrigin": "http://127.0.0.1:42493"`
+- `"serverIdentity": "local-f1d1ffd31424559a297a2916e9c7e845"`
 - `"status": "passed"`
 - `"strict": true`
 - `"entries": 73`; non-passing entries: `0`
@@ -78,8 +78,8 @@ No nonsensical field values or contradictory labels were observed. Known fixture
 
 | Pass | Result |
 |---|---|
-| `sgscan` | The final staged run still reported “No diff against origin/HEAD” and scanned the whole tree. It exited 1 on repository-wide existing warnings; the only warning in an owned file is an unchanged dynamic `RegExp` line in operator reconciliation. No ERROR or introduced match was identified. |
-| `crgate` | Completed one available local review: 4 findings, 1 fixed, 3 rejected after code verification (decisions below). |
+| `sgscan` | PASS — final staged diff scanned against `origin/HEAD`; no new security findings. |
+| `crgate` | Initial local review: 4 findings, 1 fixed and 3 rejected after code verification. The automatically attached PR review later exposed four additional status-honesty gaps; all four were reproduced red and fixed. Final local full-diff review: 0 findings. |
 | Greptile | The GitHub app returned no code findings because the account has reached its 50-credit trial limit. |
 | `bugbot-gate status` | `ALLOW BUGBOT`; the automatically attached Bugbot check then hit its usage limit and completed neutral. No direct Bugbot invocation was made. |
 
@@ -93,6 +93,19 @@ The additional configured `autoreview --thinking high` attempt was unavailable b
 | Extract the 18-line scan-trouble orchestration policy into another module | **Rejected.** It is orchestration policy used only by this module; extracting a one-function module would widen the import/mock boundary without separating a reusable domain. The helper already centralizes all three callers. Revisit if another owner appears. |
 | Change a valid `Asia/Kolkata` test fixture timezone to `UTC` | **Rejected.** Timezone does not participate in the duplicate-claim branch, and both values are valid IANA zones; changing it would add no guarantee. |
 | Prevent failed evidence from reconciling `sent/provider_unknown` | **Rejected.** A later provider bounce/failure is exactly the evidence that must correct an accepted-but-unconfirmed email. Blocking that transition would recreate C3. Reconciliation remains evidence- and audit-gated. |
+
+### Post-PR review decisions
+
+| Finding | Decision |
+|---|---|
+| Treat `pending` customer-alert details as unsuccessful | **Fixed.** Every non-`sent` detail is now an honest failure; red/green coverage drives the direct-website fallback. |
+| Do not fail digest jobs for intentional delivery opt-outs | **Fixed.** `disabled`, `unverified`, and `no_email` complete as policy skips; `duplicate`, `claim_lost`, and provider failure remain retryable failures. |
+| Downgrade an accepted digest when provider evidence later rejects it | **Fixed.** Attempt and aggregate now agree; a separate successful recipient is the only preservation case, covered by SQLite/D1 tests. |
+| Keep unconfirmed sends from hiding real ops failures | **Fixed.** Failed attempts sort first inside the bounded attention query. |
+| Extract duplicated action/monitoring orchestration helpers | **Rejected.** These are local policy branches with distinct inputs; extraction would widen change scope without altering correctness. |
+| Centralize the two customer-facing unconfirmed classifiers | **Rejected.** The route label and recovery-message policy intentionally have different output contracts; both are directly covered. |
+| Replace the pre-existing trusted reconciliation SQL builder | **Rejected.** The builder selects only internal constant scopes/qualifiers and binds runtime values. Rewriting the whole reconciliation query family is outside this bounded status lane. |
+| Add 80% docstring coverage | **Rejected.** This is a repository-wide informational warning, unrelated to the diff and not a status-honesty gate. |
 
 ### Bugbot gate decision (verbatim)
 

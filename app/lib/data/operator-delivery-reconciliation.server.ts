@@ -434,31 +434,80 @@ async function reconcileDeliveryAttemptWithAudit(
             ON CONFLICT(digest_run_id)
             DO UPDATE SET
               provider = CASE
-                WHEN digest_delivery.status = 'sent' AND excluded.status != 'sent'
+                WHEN digest_delivery.status = 'sent'
+                  AND excluded.status != 'sent'
+                  AND EXISTS (
+                    SELECT 1
+                    FROM delivery_attempt AS other_attempt
+                    WHERE other_attempt.digest_run_id = digest_delivery.digest_run_id
+                      AND other_attempt.id != ?
+                      AND other_attempt.status = 'sent'
+                  )
                   THEN digest_delivery.provider
                 ELSE excluded.provider
               END,
               status = CASE
-                WHEN digest_delivery.status = 'sent' THEN 'sent'
+                WHEN digest_delivery.status = 'sent'
+                  AND excluded.status != 'sent'
+                  AND EXISTS (
+                    SELECT 1
+                    FROM delivery_attempt AS other_attempt
+                    WHERE other_attempt.digest_run_id = digest_delivery.digest_run_id
+                      AND other_attempt.id != ?
+                      AND other_attempt.status = 'sent'
+                  )
+                  THEN 'sent'
                 ELSE excluded.status
               END,
               recipient_email = CASE
-                WHEN digest_delivery.status = 'sent' AND excluded.status != 'sent'
+                WHEN digest_delivery.status = 'sent'
+                  AND excluded.status != 'sent'
+                  AND EXISTS (
+                    SELECT 1
+                    FROM delivery_attempt AS other_attempt
+                    WHERE other_attempt.digest_run_id = digest_delivery.digest_run_id
+                      AND other_attempt.id != ?
+                      AND other_attempt.status = 'sent'
+                  )
                   THEN digest_delivery.recipient_email
                 ELSE excluded.recipient_email
               END,
               external_message_id = CASE
-                WHEN digest_delivery.status = 'sent' AND excluded.status != 'sent'
+                WHEN digest_delivery.status = 'sent'
+                  AND excluded.status != 'sent'
+                  AND EXISTS (
+                    SELECT 1
+                    FROM delivery_attempt AS other_attempt
+                    WHERE other_attempt.digest_run_id = digest_delivery.digest_run_id
+                      AND other_attempt.id != ?
+                      AND other_attempt.status = 'sent'
+                  )
                   THEN digest_delivery.external_message_id
                 ELSE excluded.external_message_id
               END,
               error_message = CASE
-                WHEN digest_delivery.status = 'sent' AND excluded.status != 'sent'
+                WHEN digest_delivery.status = 'sent'
+                  AND excluded.status != 'sent'
+                  AND EXISTS (
+                    SELECT 1
+                    FROM delivery_attempt AS other_attempt
+                    WHERE other_attempt.digest_run_id = digest_delivery.digest_run_id
+                      AND other_attempt.id != ?
+                      AND other_attempt.status = 'sent'
+                  )
                   THEN digest_delivery.error_message
                 ELSE excluded.error_message
               END,
               delivered_at = CASE
-                WHEN digest_delivery.status = 'sent' AND excluded.status != 'sent'
+                WHEN digest_delivery.status = 'sent'
+                  AND excluded.status != 'sent'
+                  AND EXISTS (
+                    SELECT 1
+                    FROM delivery_attempt AS other_attempt
+                    WHERE other_attempt.digest_run_id = digest_delivery.digest_run_id
+                      AND other_attempt.id != ?
+                      AND other_attempt.status = 'sent'
+                  )
                   THEN digest_delivery.delivered_at
                 ELSE excluded.delivered_at
               END,
@@ -474,6 +523,12 @@ async function reconcileDeliveryAttemptWithAudit(
           reconciledAt,
           normalized.attemptId,
           auditId,
+          normalized.attemptId,
+          normalized.attemptId,
+          normalized.attemptId,
+          normalized.attemptId,
+          normalized.attemptId,
+          normalized.attemptId,
         ),
     );
   }

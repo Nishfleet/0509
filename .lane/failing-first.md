@@ -14,3 +14,22 @@ Baseline result on `46fe111`: **7 targeted failures, 224 passing**.
 | C8 | failed alert attempt left `inlineFailures: 0` instead of failing the watchlist run. |
 
 Vitest exited `1` on 2026-07-30 before any production-code changes.
+
+## Post-PR review probes
+
+Command (lock-wrapped):
+
+`npm test -- tests/digest-strategy-budget.test.ts tests/operator-delivery-reconciliation.test.ts tests/plan-monitoring.test.ts tests/data.server.test.ts`
+
+Result against the first remediation candidate, before follow-up production changes:
+**4 targeted failures, 140 passing**.
+
+| Review gap | Failing assertion before follow-up |
+|---|---|
+| C3 ops attention | Accepted/unconfirmed rows were not ordered behind real failures and could consume the eight-row limit. |
+| C3 reconciliation | Provider rejection changed an accepted attempt to failed while `digest_delivery` remained `sent`. |
+| C4 policy skip | Intentional `disabled` delivery produced four durable job failures instead of four clean completions. |
+| C8 unresolved attempt | A `pending` alert detail resolved the run successfully instead of failing it honestly. |
+
+The follow-up focused run passed **145/145**, including a complementary case proving
+that a different successful recipient keeps the digest aggregate sent.
