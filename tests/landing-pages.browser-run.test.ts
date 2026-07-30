@@ -429,6 +429,53 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
     });
   });
 
+  it("keeps Browser Run HTML evidence when the screenshot artifact is oversized", async () => {
+    const put = vi.fn();
+    mockFetchWithDns(vi.fn(async () => {
+      throw new Error("fetch failed");
+    }) as never);
+
+    const page = {
+      goto: vi.fn(),
+      on: vi.fn(),
+      setUserAgent: vi.fn(),
+      setRequestInterception: vi.fn(),
+      setViewport: vi.fn(),
+      content: vi.fn().mockResolvedValue(
+        "<html><head><title>Oversized screenshot proof</title></head><body><button>Buy now</button></body></html>",
+      ),
+      screenshot: vi.fn().mockResolvedValue(new Uint8Array(3_000_001)),
+      url: vi.fn().mockReturnValue("https://example.com/offer"),
+    };
+    const browser = {
+      newPage: vi.fn().mockResolvedValue(page),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch: vi.fn().mockResolvedValue(browser) },
+    }));
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    const snapshot = await captureLandingPageSnapshot(
+      {
+        BROWSER: {} as Fetcher,
+        LANDING_PAGE_ARTIFACTS: { put } as unknown as R2Bucket,
+      },
+      "https://example.com/offer",
+    );
+
+    expect(snapshot).toMatchObject({
+      rawHeadline: "Oversized screenshot proof",
+      ctaText: "Buy now",
+      metadata: {
+        screenshotArtifactKey: null,
+        htmlArtifactKey: expect.stringMatching(/\.html$/u),
+        captureWarningCodes: ["screenshot_too_large"],
+      },
+    });
+    expect(put).toHaveBeenCalledTimes(1);
+  });
+
   it("returns null when Browser Run launch does not settle", async () => {
     vi.useFakeTimers();
     mockFetchWithDns(vi.fn(async () => {
@@ -667,6 +714,52 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
         screenshotArtifactKey: null,
         htmlArtifactKey: expect.stringMatching(/\.html$/u),
         captureWarningCodes: ["screenshot_too_large"],
+      },
+    });
+    expect(put).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps Browserless HTML evidence when screenshot base64 is malformed", async () => {
+    const put = vi.fn();
+    mockFetchWithDns(
+      vi.fn(async (input) => {
+        if (!String(input).includes("browserless.io/stealth/bql")) {
+          throw new Error("fetch failed");
+        }
+
+        return new Response(
+          JSON.stringify({
+            data: {
+              html: {
+                html: "<html><head><title>Decoded proof</title></head><body><a>Buy now</a></body></html>",
+              },
+              screenshot: { base64: "%%%truncated%%%" },
+              documentRequests: [{ url: "https://www.example.com/glow" }],
+              url: { url: "https://www.example.com/glow" },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }) as never,
+    );
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    const snapshot = await captureLandingPageSnapshot(
+      {
+        BROWSERLESS_TOKEN: "browserless-token",
+        BROWSERLESS_PROOF_ALLOWLIST_ORIGINS: "https://example.com https://www.example.com",
+        LANDING_PAGE_ARTIFACTS: { put } as unknown as R2Bucket,
+      },
+      "https://example.com/glow",
+    );
+
+    expect(snapshot).toMatchObject({
+      rawHeadline: "Decoded proof",
+      ctaText: "Buy now",
+      metadata: {
+        screenshotArtifactKey: null,
+        htmlArtifactKey: expect.stringMatching(/\.html$/u),
+        captureWarningCodes: ["screenshot_decode_failed"],
       },
     });
     expect(put).toHaveBeenCalledTimes(1);

@@ -320,7 +320,7 @@ describe("buildWatchlistReport", () => {
     });
   });
 
-  it("does not present a failed proof attempt as a capture timestamp", () => {
+  it("does not present a failed proof attempt as a successful capture", () => {
     const proof: ProofCaptureRecord = {
       id: "proof-failed",
       proofTargetId: "target-1",
@@ -333,7 +333,10 @@ describe("buildWatchlistReport", () => {
       extractedFields: {},
       fieldConfidence: {},
       extractionWarnings: [],
-      captureMetadata: { unreadableReasonCode: "landing_blocked" },
+      captureMetadata: {
+        captureMethod: "browser_render",
+        unreadableReasonCode: "landing_blocked",
+      },
       renderMode: "mobile",
       deviceProfile: "mobile_default",
       extractorVersion: "lp-signals-v2",
@@ -347,7 +350,9 @@ describe("buildWatchlistReport", () => {
     const report = buildWatchlistReport({
       watchlist,
       events: [watchEvent],
-      adsById: new Map([[baseAd.metaAdId, baseAd]]),
+      adsById: new Map([
+        [baseAd.metaAdId, { ...baseAd, landingPage: null }],
+      ]),
       proofCapturesByEventId: new Map([[watchEvent.id, proof]]),
       generatedAt: "2026-04-01T02:00:00.000Z",
     });
@@ -355,7 +360,8 @@ describe("buildWatchlistReport", () => {
     expect(report.rows[0]).toMatchObject({
       captureReasonCode: "landing_blocked",
       landingPage: {
-        capturedAt: baseAd.landingPage?.capturedAt,
+        captureLabel: null,
+        capturedAt: null,
       },
     });
   });
@@ -402,6 +408,54 @@ describe("buildWatchlistReport", () => {
     expect(report.rows[0]?.captureReasonCode).toBe("ocr_provider_failed");
     expect(report.rows[0]?.landingPage.headline).toBeNull();
     expect(report.rows[0]?.landingPage.signals).toEqual([]);
+  });
+
+  it("does not attach a newer landing failure reason to a linked successful proof", () => {
+    const proof: ProofCaptureRecord = {
+      id: "proof-succeeded",
+      proofTargetId: "target-1",
+      status: "succeeded",
+      skipReason: null,
+      failureCode: null,
+      failureReason: null,
+      screenshotArtifactKey: null,
+      htmlArtifactKey: null,
+      extractedFields: {
+        rawHeadline: "Historical captured offer",
+        ctaText: "Buy now",
+      },
+      fieldConfidence: {},
+      extractionWarnings: [],
+      captureMetadata: { captureMethod: "landing_page_fetch" },
+      renderMode: "mobile",
+      deviceProfile: "mobile_default",
+      extractorVersion: "lp-signals-v2",
+      idempotencyKey: "proof-succeeded",
+      attemptedAt: "2026-04-01T01:00:00.000Z",
+      succeededAt: "2026-04-01T01:00:01.000Z",
+      createdAt: "2026-04-01T01:00:00.000Z",
+      updatedAt: "2026-04-01T01:00:01.000Z",
+    };
+    const adWithNewerLandingFailure: AdRecord = {
+      ...baseAd,
+      landingPage: {
+        ...baseAd.landingPage!,
+        metadata: {
+          unreadableReasonCode: "landing_blocked",
+        },
+      },
+    };
+
+    const report = buildWatchlistReport({
+      watchlist,
+      events: [watchEvent],
+      adsById: new Map([[baseAd.metaAdId, adWithNewerLandingFailure]]),
+      proofCapturesByEventId: new Map([[watchEvent.id, proof]]),
+      generatedAt: "2026-04-01T02:00:00.000Z",
+    });
+
+    expect(report.rows[0]?.captureReasonCode).toBeNull();
+    expect(report.rows[0]?.landingPage.headline).toBe("Historical captured offer");
   });
 
 	it("emits null for missing fields instead of placeholder prose", () => {

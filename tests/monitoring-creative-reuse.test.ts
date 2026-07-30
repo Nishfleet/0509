@@ -90,6 +90,17 @@ describe("runWatchlistManual OCR reuse", () => {
     {
       creativeText: null,
       creativeTextMetadata: {
+        capturedAt: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(),
+        extractionStatus: "unreadable",
+        unreadableReasonCode: "ocr_binding_missing",
+        creativeSourceFingerprint: creativeCaptureSourceFingerprint(baseAd),
+      },
+      expectedCaptureCalls: 1,
+      scenario: "recaptures an unreadable OCR result after the cooldown",
+    },
+    {
+      creativeText: null,
+      creativeTextMetadata: {
         capturedAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
         extractionStatus: "unreadable",
         unreadableReasonCode: "ocr_binding_missing",

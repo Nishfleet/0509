@@ -374,7 +374,12 @@ export async function captureBrowserlessProofSnapshot(
     } else if (base64DecodedLengthExceeds(screenshotBase64, MAX_RENDERED_SCREENSHOT_BYTES)) {
       captureWarningCodes.push("screenshot_too_large");
     } else {
-      screenshot = decodeBase64ToUint8Array(screenshotBase64);
+      try {
+        screenshot = decodeBase64ToUint8Array(screenshotBase64);
+      } catch (error) {
+        captureWarningCodes.push("screenshot_decode_failed");
+        logRenderedCaptureWarning("screenshot_decode_failed", error);
+      }
     }
 
     return await buildBrowserRenderedSnapshot(env, {
@@ -504,13 +509,18 @@ async function buildBrowserRenderedSnapshot(
   },
 ): Promise<LandingPageSnapshotData | null> {
   const html = input.html;
-  const screenshotBytes = input.screenshot ? toUint8Array(input.screenshot) : null;
-  if (
-    utf8ByteLength(html) > MAX_RENDERED_HTML_BYTES ||
-    (screenshotBytes?.byteLength ?? 0) > MAX_RENDERED_SCREENSHOT_BYTES
-  ) {
+  const requestedScreenshotBytes = input.screenshot
+    ? toUint8Array(input.screenshot)
+    : null;
+  if (utf8ByteLength(html) > MAX_RENDERED_HTML_BYTES) {
     return null;
   }
+  const screenshotTooLarge =
+    (requestedScreenshotBytes?.byteLength ?? 0) >
+    MAX_RENDERED_SCREENSHOT_BYTES;
+  const screenshotBytes = screenshotTooLarge
+    ? null
+    : requestedScreenshotBytes;
 
   const signals = extractLandingPageSignals(html, { documentMode: "rendered" });
   const headline = resolveHeadline(html);
@@ -525,6 +535,7 @@ async function buildBrowserRenderedSnapshot(
   );
   const captureWarningCodes = [
     ...(input.captureWarningCodes ?? []),
+    ...(screenshotTooLarge ? ["screenshot_too_large"] : []),
     ...persisted.captureWarningCodes,
   ];
 

@@ -298,6 +298,7 @@ function readProofBoolean(proofCapture: ProofCaptureRecord | null, key: string) 
 }
 
 function readProofCaptureMethod(proofCapture: ProofCaptureRecord | null) {
+  if (proofCapture?.status !== "succeeded") return null;
   const captureMethod = proofCapture?.captureMetadata.captureMethod;
   if (captureMethod === "landing_page_fetch" || captureMethod === "browser_render") {
     return captureMethod;
@@ -305,7 +306,7 @@ function readProofCaptureMethod(proofCapture: ProofCaptureRecord | null) {
   if (typeof proofCapture?.captureMetadata.renderProvider === "string") {
     return "browser_render" as const;
   }
-  return proofCapture?.status === "succeeded" ? ("landing_page_fetch" as const) : null;
+  return "landing_page_fetch" as const;
 }
 
 function resolveCaptureReasonCode(
@@ -331,7 +332,6 @@ function resolveCaptureReasonCode(
     return (
       proofCapture.failureCode ??
       readRecordString(proofCapture.captureMetadata, "unreadableReasonCode") ??
-      landingReason ??
       missingCreativeReason ??
       eventReason ??
       "landing_capture_failed"
@@ -343,7 +343,6 @@ function resolveCaptureReasonCode(
         proofCapture.captureMetadata,
         "unreadableReasonCode",
       ) ??
-      landingReason ??
       missingCreativeReason ??
       eventReason
     );
