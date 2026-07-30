@@ -48,8 +48,8 @@ Cloudflare D1 behavior was checked against the official prepared-statement, retu
 | Gate-B local release | PASS — 73/73, strict, 0 failures, 0 retries, 0 first-attempt failures, 254 artifacts |
 | `sgscan --baseline-commit HEAD` | PASS — no new security findings |
 | `crgate --agent --include-untracked` | `crgate: rate-limited, skipped` — free tier was 3/3; no force override |
-| Greptile GitHub review | PENDING PR |
-| `bugbot-gate status` | PENDING PR |
+| Greptile GitHub review | Informational — trial account has reached its 50-credit limit; no code finding produced |
+| `bugbot-gate status` | `SKIP BUGBOT` — risk `normal`; ordinary code/content diff; use cheaper checks first |
 
 Gate-B covers the canonical journey and content-sanity ugly states. No user-facing copy changed in this lane.
 
@@ -65,5 +65,7 @@ manifestSha256: f1cf6295a6533c407c861984114590733d1cd036e5f308c6e3a1870714b5516b
 ## Delivery
 
 - Branch: `fix/silent-fixmoney`
-- Pull request: PENDING
+- Pull request: https://github.com/nish3451/0509/pull/445
 - Merge: not performed
+
+The GitHub-installed Bugbot hook ran independently of this lane command and returned a neutral usage-limit result. The lane did not invoke Bugbot directly and followed the `bugbot-gate status` decision above.
