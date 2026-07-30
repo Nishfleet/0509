@@ -23,7 +23,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version-file: ".node-version"
-          cache: ${{ hashFiles('package-lock.json') != '' && 'npm' || '' }}
+          cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' }}
       - name: Install dependencies
         run: |
           if [ -f package-lock.json ]; then

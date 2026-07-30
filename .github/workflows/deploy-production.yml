@@ -28,7 +28,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version-file: ".node-version"
-          cache: npm
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
       - run: npm ci --ignore-scripts
       - run: node scripts/validate-d1-backup.mjs
       - name: Bind a clean exact-main candidate manifest
@@ -256,7 +257,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version-file: ".node-version"
-          cache: npm
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
 
       - name: Install dependencies
         run: npm ci --ignore-scripts
