@@ -745,6 +745,21 @@ async function runAutomation(outputPath) {
     ) {
       throw new Error("source_backup_integrity_failed");
     }
+    const migrations = readdirSync(resolve("migrations"))
+      .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
+      .sort();
+    try {
+      assertMigrationLedgerMatchesRepository(
+        sourceAggregate.migrationLedger,
+        migrations,
+      );
+    } catch (error) {
+      rethrowWithMigrationLedgerDiagnostics(
+        error,
+        sourceAggregate.migrationLedger,
+        migrations,
+      );
+    }
 
     const databases = await assertScratchAbsent(scratchName);
     const productionMatches = databases.filter(
@@ -904,21 +919,6 @@ async function runAutomation(outputPath) {
     const databaseBookmark = scratchLifecycle.result;
     const scratchRemoved = scratchLifecycle.scratchRemoved;
 
-    const migrations = readdirSync(resolve("migrations"))
-      .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
-      .sort();
-    try {
-      assertMigrationLedgerMatchesRepository(
-        sourceAggregate.migrationLedger,
-        migrations,
-      );
-    } catch (error) {
-      rethrowWithMigrationLedgerDiagnostics(
-        error,
-        sourceAggregate.migrationLedger,
-        migrations,
-      );
-    }
     const sourceMigrationNames = sourceAggregate.migrationLedger.map(
       (entry) => entry.name,
     );
