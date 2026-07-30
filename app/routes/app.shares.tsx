@@ -134,7 +134,7 @@ export default function SharesRoute() {
                 plain
                 say={
                   isWithheld ? (
-                    "This link is withheld until the evidence is reviewed again."
+                    "This link stays unavailable. Review the evidence to create a new link."
                   ) : (
                     <a
                       className="f9-bl038-url"
@@ -209,8 +209,8 @@ export default function SharesRoute() {
 
       <p className="f9-bl038-note f9-wk-note">
         Anyone with a link can open what it points to until it expires or you revoke it. Reviewed
-        report links may be temporarily withheld until their evidence is reviewed again. New links
-        expire automatically after 90 days.
+        Approval-expired report links stay unavailable; reviewing again creates a new link to
+        share. New links expire automatically after 90 days.
       </p>
 
       <div className="f9-wk-opline">

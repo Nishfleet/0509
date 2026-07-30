@@ -75,7 +75,7 @@ describe("/app/shares rendered conditional-action contract", () => {
       expect(container.textContent).toContain("4 links shown");
       expect(container.textContent).not.toContain("4 active links");
       expect(container.textContent).toContain(
-        "Reviewed report links may be temporarily withheld until their evidence is reviewed again.",
+        "Approval-expired report links stay unavailable; reviewing again creates a new link to share.",
       );
 
       const approved = rowNamed(rows, "Report · Snapshot", "Approved");
@@ -88,7 +88,7 @@ describe("/app/shares rendered conditional-action contract", () => {
       const expired = rowNamed(rows, "Report · Snapshot", "Expired");
       expect(expired.querySelector(".f9-wk-st")?.className).toContain("is-bad");
       expect(expired.textContent).toContain(
-        "This link is withheld until the evidence is reviewed again.",
+        "This link stays unavailable. Review the evidence to create a new link.",
       );
       expect(expired.querySelector('a[href="https://0509.io/share/expired"]')).toBeNull();
       expect(buttonsNamed(expired, "Copy link")).toHaveLength(0);
