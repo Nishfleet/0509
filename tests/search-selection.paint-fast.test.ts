@@ -248,6 +248,63 @@ describe("WP-11 paint-fast selection enrichment", () => {
     );
   });
 
+  it("does not invent a capture timestamp when the capture result omits one", async () => {
+    const captureCreativeText = vi.fn().mockResolvedValue({
+      text: null,
+      captureMethod: "ad_snapshot_fetch",
+      imageUrl: "https://cdn.example.com/creative.jpg",
+      metadata: {
+        extractionStatus: "unreadable",
+        unreadableReasonCode: "no_creative_capture_stored",
+      },
+    });
+    const upsertAd = vi.fn();
+
+    vi.doMock("~/lib/analysis.server", () => ({
+      withStructuredAnalysis: vi.fn((ad: AdRecord) => ad),
+    }));
+    vi.doMock("~/lib/creative-text.server", () => ({
+      captureCreativeText,
+    }));
+    vi.doMock("~/lib/landing-pages.server", () => ({
+      captureLandingPageSnapshot: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/translation.server", () => ({
+      translateAdText: vi.fn().mockResolvedValue(null),
+      buildTranslatedAnalysisField: vi.fn(),
+      withTranslatedAnalysisField: vi.fn((fields: unknown) => fields),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      hydrateAdsWithPersistedCreatives: vi.fn(async (_env: unknown, ads: AdRecord[]) => ads),
+      listAdsByIds: vi.fn().mockResolvedValue([]),
+      upsertAd,
+    }));
+
+    const { prepareSearchResultSelection } = await import(
+      "~/lib/search-selection.server"
+    );
+    await prepareSearchResultSelection(
+      { DB: {} } as never,
+      {
+        ads: [baseAd],
+        nextCursor: null,
+        source: "meta_library_browser",
+        cacheStatus: "hit",
+      },
+      baseAd.metaAdId,
+      { enrichSelected: true, hydratePersisted: true },
+    );
+
+    expect(upsertAd).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        creativeTextMetadata: expect.not.objectContaining({
+          capturedAt: expect.anything(),
+        }),
+      }),
+    );
+  });
+
   it("honors a recent unreadable creative result while enriching the landing page", async () => {
     const captureCreativeText = vi.fn();
     const captureLandingPageSnapshot = vi.fn().mockResolvedValue(null);
@@ -338,6 +395,7 @@ describe("WP-11 paint-fast selection enrichment", () => {
         capturedAt: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(),
         extractionStatus: "unreadable",
         unreadableReasonCode: "ocr_binding_missing",
+        creativeSourceFingerprint: creativeCaptureSourceFingerprint(baseAd),
       },
     };
 

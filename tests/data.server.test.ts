@@ -52,6 +52,8 @@ import {
   markDodoSubscriptionPlanChangeScheduled,
   listRecentAgentActionAudits,
   listRecentWorkspaceWatchEvents,
+  listProofCapturesForTarget,
+  listProofCapturesForTargets,
   listClientRooms,
   listAgentMemory,
   listAgentMemoryForClientRooms,
@@ -116,6 +118,46 @@ function createMockDb(
     },
   };
 }
+
+describe("proof capture history windows", () => {
+  it("keeps every recent failed capture alongside the capped target history", async () => {
+    const cutoff = "2026-07-30T06:00:00.000Z";
+    const mock = createMockDb();
+
+    await (
+      listProofCapturesForTarget as unknown as (
+        env: unknown,
+        proofTargetId: string,
+        limit: number,
+        recentFailureCutoff: string,
+      ) => Promise<unknown>
+    )({ DB: mock.db }, "proof-target-1", 20, cutoff);
+
+    const query = findStatement(mock.statements, "FROM proof_capture");
+    expect(query?.sql).toContain("rn <= ?");
+    expect(query?.sql).toContain("OR (status = 'failed'");
+    expect(query?.bindings).toContain(cutoff);
+  });
+
+  it("keeps every recent failed capture in batched target history", async () => {
+    const cutoff = "2026-07-30T06:00:00.000Z";
+    const mock = createMockDb();
+
+    await (
+      listProofCapturesForTargets as unknown as (
+        env: unknown,
+        proofTargetIds: string[],
+        limit: number,
+        recentFailureCutoff: string,
+      ) => Promise<unknown>
+    )({ DB: mock.db }, ["proof-target-1", "proof-target-2"], 20, cutoff);
+
+    const query = findStatement(mock.statements, "FROM proof_capture");
+    expect(query?.sql).toContain("rn <= ?");
+    expect(query?.sql).toContain("OR (status = 'failed'");
+    expect(query?.bindings).toContain(cutoff);
+  });
+});
 
 function createMissingTableDb(tableName: string) {
   return {

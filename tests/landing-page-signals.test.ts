@@ -157,6 +157,25 @@ describe("extractLandingPageSignals", () => {
     });
   });
 
+  it("ignores commented-out CTA, price, and form markup", () => {
+    const html = `
+      <main>
+        <!--
+          <a href="/checkout">Buy now</a>
+          <p>Old price $9.99</p>
+          <form action="/lead"><input type="submit" value="Get offer"></form>
+        -->
+        <p>Current product details.</p>
+      </main>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: null,
+      priceText: null,
+      formPresent: false,
+    });
+  });
+
   it("keeps noscript fallback signals for raw fetch captures", () => {
     const html = `
       <noscript>

@@ -76,6 +76,14 @@ function removeNonVisibleElements(
   while (cursor < html.length) {
     const tagStart = html.indexOf("<", cursor);
     if (tagStart < 0) break;
+    if (!hiddenElement && html.startsWith("<!--", tagStart)) {
+      const commentEnd = html.indexOf("-->", tagStart + 4);
+      output.push(html.slice(copyFrom, tagStart), " ");
+      copyFrom = commentEnd < 0 ? html.length : commentEnd + 3;
+      cursor = copyFrom;
+      if (commentEnd < 0) break;
+      continue;
+    }
     const tag = readHtmlTag(html, tagStart);
     if (!tag) {
       cursor = tagStart + 1;

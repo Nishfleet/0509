@@ -2964,6 +2964,9 @@ async function evaluateSelectiveProofCandidates(
     env,
     proofCandidates.map((candidate) => candidate.proofTarget.id),
     20,
+    new Date(
+      Date.now() - V1_PROOF_BUDGETS.targetFailureCooldownMs,
+    ).toISOString(),
   );
   const successfulCapturesByAdId = await listLastSuccessfulProofCapturesForAds(
     env,
@@ -3438,6 +3441,9 @@ async function evaluateDirectWebsiteProofCandidate(
     env,
     proofTarget.id,
     20,
+    new Date(
+      Date.now() - V1_PROOF_BUDGETS.targetFailureCooldownMs,
+    ).toISOString(),
   );
   const proofRequestKeyBase = buildProofCaptureRequestIdempotencyKey({
     watchlistId: input.watchlist.id,

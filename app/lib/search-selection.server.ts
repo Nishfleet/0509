@@ -157,9 +157,7 @@ async function enrichAndPersistSelectedAd(
           capturedAt:
             typeof value?.metadata.capturedAt === "string"
               ? value.metadata.capturedAt
-              : value
-                ? new Date().toISOString()
-                : null,
+              : null,
         }))
       : Promise.resolve({ value: null, capturedAt: null });
   const [snapshot, creativeCapture] = await Promise.all([
