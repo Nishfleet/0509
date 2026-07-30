@@ -455,7 +455,7 @@ describe("captureCreativeText", () => {
         extractionPath: "snapshot_image_ocr",
         creativeSourceFingerprint: creativeCaptureSourceFingerprint({
           adSnapshotUrl: "https://facebook.example.com/ad-snapshot",
-          creativeImageUrl: "https://cdn.example.com/current.jpg",
+          creativeImageUrl: "https://cdn.example.com/persisted.jpg",
         }),
       },
     });
@@ -464,6 +464,50 @@ describe("captureCreativeText", () => {
       CREATIVE_TEXT_OCR_MODEL,
       expect.objectContaining({ image: [4, 5, 6] }),
     );
+  });
+
+  it("fingerprints a redirected direct image by its requested provider URL", async () => {
+    const requestedImageUrl = "https://images.example.com/creative.jpg";
+    const redirectedImageUrl = "https://cdn.example.com/creative-v2.jpg";
+    mockFetchWithDns((url) => {
+      if (url === requestedImageUrl) {
+        return new Response(null, {
+          status: 302,
+          headers: { location: redirectedImageUrl },
+        });
+      }
+
+      const response = new Response(Uint8Array.from([255, 216, 255, 217]), {
+        status: 200,
+        headers: { "content-type": "image/jpeg" },
+      });
+      Object.defineProperty(response, "url", { value: redirectedImageUrl });
+      return response;
+    });
+
+    const result = await captureCreativeText(
+      {} as never,
+      requestedImageUrl,
+      {
+        advertiser: "Nykaa",
+        body: "",
+        previewHeadline: "",
+        previewSubhead: "",
+        cta: "",
+        creativeImageUrl: requestedImageUrl,
+      },
+    );
+
+    expect(result).toMatchObject({
+      text: null,
+      imageUrl: redirectedImageUrl,
+      metadata: {
+        unreadableReasonCode: "ocr_binding_missing",
+        creativeSourceFingerprint: creativeCaptureSourceFingerprint({
+          creativeImageUrl: requestedImageUrl,
+        }),
+      },
+    });
   });
 
   it("falls back to Workers AI OCR when the snapshot HTML has no distinct creative text", async () => {

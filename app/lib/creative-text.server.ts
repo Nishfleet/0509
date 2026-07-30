@@ -593,13 +593,7 @@ function withCreativeSourceFingerprint(
   ad: KnownAdText,
   captureUrl: string,
 ) {
-  const sourceFingerprint = creativeCaptureSourceFingerprint(
-    {
-      adSnapshotUrl: ad.adSnapshotUrl,
-      creativeImageUrl: result?.imageUrl ?? ad.creativeImageUrl,
-    },
-    captureUrl,
-  );
+  const sourceFingerprint = creativeCaptureSourceFingerprint(ad, captureUrl);
   if (!result || !sourceFingerprint) return result;
   return {
     ...result,
