@@ -98,7 +98,8 @@ describe("interactive Meta pagination honesty", () => {
     expect(result).toMatchObject({
       ads: [firstAd],
       nextCursor: "cursor-2",
-      discoveryStatus: "degraded",
+      discoveryStatus: "healthy",
+      discoveryPartial: true,
       discoverySummary: expect.stringContaining("results shown are partial"),
       discoveryFailureClass: "browser_unavailable",
     });
@@ -171,7 +172,8 @@ describe("interactive Meta pagination honesty", () => {
     expect(result).toMatchObject({
       ads: [firstAd],
       nextCursor: "cursor-2",
-      discoveryStatus: "degraded",
+      discoveryStatus: "healthy",
+      discoveryPartial: true,
       discoveryFailureClass: "browser_unavailable",
     });
     expect(upsertDiscoveryProviderState).toHaveBeenCalledWith(

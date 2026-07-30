@@ -178,6 +178,7 @@ describe("sendMonthlyCustomerRecaps", () => {
         emailEnabled: true,
       }),
       listDeliveryTargets: vi.fn().mockResolvedValue([]),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: upsertDeliveryTarget,
       upsertDeliveryTarget,
     }));
     vi.doMock("~/lib/delivery-email-core.server", () => ({
@@ -233,12 +234,9 @@ describe("sendMonthlyCustomerRecaps", () => {
       expect.anything(),
       expect.objectContaining({
         userId: "user-1",
-        channel: "email",
         targetValue: "owner@example.com",
-        validationStatus: "validated",
-        isValidated: true,
-        isOptedIn: true,
         optInSource: "account_email",
+        metadata: { autoProvisioned: true },
       }),
     );
 

@@ -995,12 +995,13 @@ async function resolveActivationEmailTarget(
           input: { userId: string; targetValue: string },
         ) => Promise<boolean>)
       | undefined;
-  const upsertTarget = deliveryData.upsertDeliveryTarget;
+  const provisionTarget =
+    deliveryData.provisionVerifiedAccountEmailTargetIfUnsuppressed;
   if (
     !normalized ||
     typeof listTargets !== "function" ||
     typeof suppressionReader !== "function" ||
-    typeof upsertTarget !== "function"
+    typeof provisionTarget !== "function"
   ) {
     return { target: null, reason: "target_unavailable" };
   }
@@ -1039,16 +1040,10 @@ async function resolveActivationEmailTarget(
     return { target: null, reason: "unsubscribed" };
   }
 
-  const provisioned = await upsertTarget(env, {
+  const provisioned = await provisionTarget(env, {
     userId,
-    watchlistId: null,
-    channel: "email",
     targetValue: normalized,
-    validationStatus: "validated",
-    isValidated: true,
-    isOptedIn: true,
     optInSource: "account_email",
-    optedInAt: new Date().toISOString(),
     metadata: {
       autoProvisioned: true,
       purpose: "free_activation_result",

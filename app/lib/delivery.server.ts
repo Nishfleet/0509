@@ -15,6 +15,7 @@ import {
   legacyWorkspaceDeliveryDefaults,
   listAdsByIds,
   listDeliveryTargets,
+  provisionVerifiedAccountEmailTargetIfUnsuppressed,
   reconcileDeliveryAttemptByProviderMessageId,
   updateDeliveryAttemptResult,
   upsertDeliveryTarget,
@@ -1913,16 +1914,10 @@ export async function resolveDigestEmailTargets(
     return [];
   }
 
-  const fallbackTarget = await upsertDeliveryTarget(env, {
+  const fallbackTarget = await provisionVerifiedAccountEmailTargetIfUnsuppressed(env, {
     userId,
-    watchlistId: null,
-    channel: "email",
     targetValue: normalizedAccountEmail,
-    validationStatus: "validated",
-    isValidated: true,
-    isOptedIn: true,
     optInSource: AUTO_PROVISIONED_EMAIL_SOURCE,
-    optedInAt: new Date().toISOString(),
     metadata: {
       autoProvisioned: true,
     },
@@ -1965,16 +1960,10 @@ async function resolveAlertEmailTargets(
     return [];
   }
 
-  const fallbackTarget = await upsertDeliveryTarget(env, {
+  const fallbackTarget = await provisionVerifiedAccountEmailTargetIfUnsuppressed(env, {
     userId,
-    watchlistId: null,
-    channel: "email",
     targetValue: accountEmail,
-    validationStatus: "validated",
-    isValidated: true,
-    isOptedIn: true,
     optInSource: AUTO_PROVISIONED_EMAIL_SOURCE,
-    optedInAt: new Date().toISOString(),
     metadata: {
       autoProvisioned: true,
     },
@@ -3090,16 +3079,10 @@ export async function sendPresenceDigestEmail(
         targetId: usable.id,
       });
     } else if (!targets.some((t) => t.targetValue.trim().toLowerCase() === normalized)) {
-      const provisioned = await upsertDeliveryTarget(env, {
+      const provisioned = await provisionVerifiedAccountEmailTargetIfUnsuppressed(env, {
         userId: input.userId,
-        watchlistId: null,
-        channel: "email",
         targetValue: input.email.trim().toLowerCase(),
-        validationStatus: "validated",
-        isValidated: true,
-        isOptedIn: true,
         optInSource: AUTO_PROVISIONED_EMAIL_SOURCE,
-        optedInAt: new Date().toISOString(),
         metadata: { autoProvisioned: true, purpose: "presence_digest" },
       });
       if (provisioned?.id) {

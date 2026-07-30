@@ -18,6 +18,21 @@ function emailSendPayload(sendMock: ReturnType<typeof vi.fn>) {
   return sendMock.mock.calls[0]?.[0];
 }
 
+function mockAtomicEmailProvision() {
+  return vi.fn().mockResolvedValue({
+    id: "email-target-1",
+    userId: "user-1",
+    watchlistId: null,
+    channel: "email",
+    targetValue: "owner@example.com",
+    validationStatus: "validated",
+    isValidated: true,
+    isOptedIn: true,
+    isPaused: false,
+    optedOutAt: null,
+  });
+}
+
 beforeEach(() => {
   vi.resetModules();
   emailSend = vi.fn();
@@ -98,6 +113,7 @@ describe("deliverWeeklyDigest", () => {
       }),
       legacyWorkspaceDeliveryDefaults: vi.fn(),
       listDeliveryTargets: vi.fn().mockResolvedValue([]),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: upsertDeliveryTarget,
       upsertDeliveryTarget,
       upsertDigestDelivery,
     }));
@@ -577,6 +593,7 @@ webhookStatus:"pending",
 
         return [];
       }),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: upsertDeliveryTarget,
       upsertDeliveryTarget,
       upsertDigestDelivery: vi.fn(),
     }));
@@ -698,6 +715,7 @@ webhookStatus:"pending",
 
         return [];
       }),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: mockAtomicEmailProvision(),
       upsertDeliveryTarget: vi.fn().mockResolvedValue({
         id: "email-target-1",
         userId: "user-1",
@@ -1365,6 +1383,7 @@ webhookStatus:"pending",
     vi.doMock("~/lib/data.server", () => ({
       listDeliveryTargets,
       hasSuppressedEmailTargetForUserAndAddress: vi.fn().mockResolvedValue(false),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: upsertDeliveryTarget,
       upsertDeliveryTarget,
     }));
 
@@ -1385,8 +1404,9 @@ webhookStatus:"pending",
       expect.anything(),
       expect.objectContaining({
         userId: "user-1",
-        watchlistId: null,
         targetValue: "owner@example.com",
+        optInSource: "account_email",
+        metadata: { autoProvisioned: true },
       }),
     );
   });
@@ -1557,6 +1577,7 @@ describe("deliverWatchlistAlerts", () => {
       listDeliveryTargets: vi.fn().mockResolvedValue([]),
       reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
       updateDeliveryAttemptResult,
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: upsertDeliveryTarget,
       upsertDeliveryTarget,
       upsertDigestDelivery: vi.fn(),
     }));
@@ -1833,6 +1854,7 @@ from:{email:"alerts@0509.io",name:"Five to Nine"},
       listDeliveryTargets: vi.fn().mockResolvedValue([]),
       reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
       updateDeliveryAttemptResult: vi.fn().mockResolvedValue(true),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: mockAtomicEmailProvision(),
       upsertDeliveryTarget: vi.fn().mockResolvedValue({
         id: "email-target-1",
         userId: "user-1",
@@ -2016,6 +2038,7 @@ from:{email:"alerts@0509.io",name:"Five to Nine"},
       listDeliveryTargets: vi.fn().mockResolvedValue([]),
       reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
       updateDeliveryAttemptResult: vi.fn().mockResolvedValue(true),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: upsertDeliveryTarget,
       upsertDeliveryTarget,
       upsertDigestDelivery: vi.fn(),
     }));
@@ -2528,6 +2551,7 @@ describe("instant alert failed-send retry", () => {
       legacyWorkspaceDeliveryDefaults: vi.fn(),
       listDeliveryTargets: vi.fn().mockResolvedValue([]),
       reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: mockAtomicEmailProvision(),
       upsertDeliveryTarget: vi.fn().mockResolvedValue({
         id: "email-target-1",
         userId: "user-1",
@@ -2638,6 +2662,7 @@ describe("alert email content quality", () => {
       listDeliveryTargets: vi.fn().mockResolvedValue([]),
       reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
       updateDeliveryAttemptResult: vi.fn(),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: mockAtomicEmailProvision(),
       upsertDeliveryTarget: vi.fn().mockResolvedValue({
         id: "email-target-1",
         userId: "user-1",

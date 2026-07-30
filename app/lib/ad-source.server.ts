@@ -92,7 +92,8 @@ export async function searchMetaApiAdsWithInteractiveDepth(
         ...first,
         ads,
         nextCursor,
-        discoveryStatus: "degraded",
+        discoveryStatus: "healthy",
+        discoveryPartial: true,
         discoverySummary:
           "Some additional Meta results could not be loaded. The results shown are partial; retry to continue from the saved cursor.",
         discoveryFailureClass: resolveMetaApiFailureClass(error),
@@ -752,7 +753,7 @@ export async function searchAdsViaSourceResolver(
       }
       const browserMsUsed = Date.now() - startedAt;
       const timestamp = new Date().toISOString();
-      const partial = liveResult.discoveryStatus === "degraded";
+      const partial = liveResult.discoveryPartial === true;
 
       if (effectiveEnv.DB) {
         if (!partial) {
@@ -823,6 +824,7 @@ export async function searchAdsViaSourceResolver(
       provider,
       cacheStatus: "miss",
       discoveryStatus: result.discoveryStatus ?? "healthy",
+      discoveryPartial: result.discoveryPartial ?? false,
       discoverySummary: result.discoverySummary ?? null,
       discoveryFailureClass: result.discoveryFailureClass ?? null,
     };

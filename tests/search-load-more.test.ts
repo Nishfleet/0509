@@ -230,6 +230,7 @@ describe("search load-more accessibility", () => {
       hasRecentSearchDelay,
       resolveRecoveredSearchKey,
     } = await import("~/routes/search");
+    const { formatSearchFreshnessLabel } = await import("~/lib/search-display");
 
     expect(formatSearchResultsAnnouncement(result(), { isLoading: true })).toBe(
       "Loading more search results…",
@@ -252,6 +253,15 @@ describe("search load-more accessibility", () => {
     })).toBe("1 more result loaded. 2 total search results. More results are available.");
     expect(formatSearchResultsAnnouncement(result(), { retryCursor: "cursor-2" })).toBe(
       "1 search result remains available. Fresh checks for more results are delayed. Retry when ready.",
+    );
+    const partial = result({
+      discoveryStatus: "healthy",
+      discoveryPartial: true,
+      discoverySummary: "Some additional Meta results could not be loaded.",
+    });
+    expect(formatSearchFreshnessLabel(partial)).toBe("Fresh partial result");
+    expect(formatSearchResultsAnnouncement(partial)).toBe(
+      "1 fresh search result loaded. Additional results could not be loaded; retry to continue.",
     );
 
     const recoveredKey = resolveRecoveredSearchKey({

@@ -287,6 +287,7 @@ export interface SearchResponse {
    */
   discoveryFilterEpoch?: string;
   discoveryStatus?: CommercialDiscoveryStatus;
+  discoveryPartial?: boolean;
   discoveryProgress?: "warming";
   discoverySummary?: string | null;
   discoveryFailureClass?: DiscoveryFailureClass | null;

@@ -148,6 +148,7 @@ async function loadDelivery(
       }),
       getWatchlistDeliveryConfig: vi.fn().mockResolvedValue(null),
       listDeliveryTargets: vi.fn().mockResolvedValue([]),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: upsertDeliveryTarget,
       upsertDeliveryTarget,
       upsertDigestDelivery: vi.fn(),
     };

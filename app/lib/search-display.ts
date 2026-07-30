@@ -150,6 +150,7 @@ export function formatSearchSourceLabel(result: SearchResponse) {
 }
 
 export function formatSearchFreshnessLabel(result: SearchResponse) {
+  if (result.discoveryPartial) return "Fresh partial result";
   if (isDelayedDiscoveryStatus(result.discoveryStatus))
     return "Fresh check delayed";
   if (result.cacheStatus === "hit") return "Recent cached result";
@@ -352,6 +353,10 @@ export function formatSearchResultsAnnouncement(
     ? " More results are available."
     : " No more results.";
   const recovery = options.recovered ? " Search checks have recovered." : "";
+
+  if (result.discoveryPartial) {
+    return `${resultCount} fresh search ${resultLabel} loaded. Additional results could not be loaded; retry to continue.`;
+  }
 
   if (options.retryCursor) {
     const availabilityVerb = resultCount === 1 ? "remains" : "remain";

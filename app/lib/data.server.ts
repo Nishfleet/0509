@@ -153,6 +153,7 @@ export {
   upsertWorkspaceDeliveryConfig,
   listDeliveryTargets,
   hasSuppressedEmailTargetForUserAndAddress,
+  provisionVerifiedAccountEmailTargetIfUnsuppressed,
   getDeliveryTargetReadinessStats,
   upsertDeliveryTarget,
   getDeliveryTargetById,

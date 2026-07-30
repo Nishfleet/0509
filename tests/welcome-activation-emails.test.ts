@@ -59,6 +59,17 @@ function mockClaimPath(options?: {
     isValidated: true,
     validationStatus: "validated",
   });
+  const provisionVerifiedAccountEmailTargetIfUnsuppressed = vi
+    .fn()
+    .mockResolvedValue({
+      id: "target-provisioned",
+      targetValue: "owner@example.com",
+      isOptedIn: true,
+      optedOutAt: null,
+      isPaused: false,
+      isValidated: true,
+      validationStatus: "validated",
+    });
 
   vi.doMock("~/lib/data.server", () => ({
     claimInstantDeliveryAttempt,
@@ -73,6 +84,7 @@ function mockClaimPath(options?: {
     legacyWorkspaceDeliveryDefaults: vi.fn(),
     listDeliveryTargets,
     hasSuppressedEmailTargetForUserAndAddress,
+    provisionVerifiedAccountEmailTargetIfUnsuppressed,
     getOldestUserId: vi.fn(),
     getUserDeliveryProfile: vi.fn(),
     getUserIdByEmail: vi.fn(),
@@ -91,6 +103,7 @@ function mockClaimPath(options?: {
     updateDeliveryAttemptResult,
     listDeliveryTargets,
     hasSuppressedEmailTargetForUserAndAddress,
+    provisionVerifiedAccountEmailTargetIfUnsuppressed,
     upsertDeliveryTarget,
   };
 }
@@ -232,6 +245,7 @@ describe("sendFreeActivationResultEmail", () => {
     const {
       claimInstantDeliveryAttempt,
       listDeliveryTargets,
+      provisionVerifiedAccountEmailTargetIfUnsuppressed,
       upsertDeliveryTarget,
     } = mockClaimPath();
     listDeliveryTargets.mockResolvedValue([]);
@@ -255,17 +269,14 @@ describe("sendFreeActivationResultEmail", () => {
     });
 
     expect(result).toEqual({ sent: true, reason: "sent" });
-    expect(upsertDeliveryTarget).toHaveBeenCalledWith(
+    expect(provisionVerifiedAccountEmailTargetIfUnsuppressed).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         userId: "user-1",
-        watchlistId: null,
-        channel: "email",
         targetValue: "owner@example.com",
-        isValidated: true,
-        isOptedIn: true,
       }),
     );
+    expect(upsertDeliveryTarget).not.toHaveBeenCalled();
     expect(claimInstantDeliveryAttempt).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ deliveryTargetId: "target-provisioned" }),
