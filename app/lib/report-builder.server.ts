@@ -183,9 +183,10 @@ function buildReportRow(
   const proofCapture = options.proofCapture ?? null;
   const creativeText = ad?.creativeText?.trim() || findAnalysisFieldValue(ad, "ocr_text");
   const landingPageHeadline =
-    readProofString(proofCapture, "rawHeadline", "headline") ||
-    ad?.landingPage?.rawHeadline ||
-    findAnalysisFieldValue(ad, "landing_page_headline_summary");
+    proofCapture
+      ? readProofString(proofCapture, "rawHeadline", "headline")
+      : ad?.landingPage?.rawHeadline ||
+        findAnalysisFieldValue(ad, "landing_page_headline_summary");
   const landingPageUrl =
     readProofString(proofCapture, "canonicalUrl") ??
     ad?.landingPage?.canonicalUrl ??

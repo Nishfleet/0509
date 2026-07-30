@@ -370,7 +370,7 @@ describe("buildWatchlistReport", () => {
       failureReason: null,
       screenshotArtifactKey: null,
       htmlArtifactKey: null,
-      extractedFields: { rawHeadline: "Readable landing headline" },
+      extractedFields: {},
       fieldConfidence: {},
       extractionWarnings: [],
       captureMetadata: { captureMethod: "landing_page_fetch" },
@@ -400,6 +400,7 @@ describe("buildWatchlistReport", () => {
     });
 
     expect(report.rows[0]?.captureReasonCode).toBe("ocr_provider_failed");
+    expect(report.rows[0]?.landingPage.headline).toBeNull();
     expect(report.rows[0]?.landingPage.signals).toEqual([]);
   });
 
