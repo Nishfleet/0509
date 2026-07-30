@@ -24,6 +24,7 @@ set -euo pipefail
 LOCK_FILE="${DEPLOY_WINDOW_LOCK_FILE:-${HOME}/.local/state/0509/deploy-window.lock}"
 OWNER_FILE="${LOCK_FILE}.held"
 META_LOCK_FILE="${LOCK_FILE}.meta.lock"
+ADMISSION_LOCK_FILE="${LOCK_FILE}.admission.lock"
 ACQUIRE_TIMEOUT="${DEPLOY_WINDOW_ACQUIRE_TIMEOUT:-10800}"
 HOLD_CAP="${DEPLOY_WINDOW_HOLD_CAP:-21600}"
 POLL_INTERVAL="${DEPLOY_WINDOW_POLL_INTERVAL:-0.1}"
@@ -312,15 +313,18 @@ acquire_window() {
     set -euo pipefail
 
     lock_file="$1"
-    acquire_timeout="$2"
-    hold_cap="$3"
-    owner_file="$4"
-    meta_lock_file="$5"
-    owner_verifier="$6"
-    owner_caller="$7"
-    capability_file="$8"
+    admission_lock_file="$2"
+    acquire_timeout="$3"
+    hold_cap="$4"
+    owner_file="$5"
+    meta_lock_file="$6"
+    owner_verifier="$7"
+    owner_caller="$8"
+    capability_file="$9"
     flock_pid=""
     sleeper_pid=""
+    deadline=""
+    remaining=""
 
     stat_line="$(<"/proc/$$/stat")"
     stat_fields="${stat_line##*) }"
@@ -342,7 +346,7 @@ acquire_window() {
       fi
 
       exec 8>"$meta_lock_file"
-      flock --exclusive 8 9>&-
+      flock --exclusive 8 7>&- 9>&-
       if [ -f "$owner_file" ]; then
         read -r current_pid current_start current_token current_caller extra <"$owner_file" || true
       fi
@@ -362,7 +366,7 @@ acquire_window() {
       if [ "$capability_hash" = "$owner_verifier" ]; then
         rm -f -- "$capability_file"
       fi
-      flock --unlock 8 9>&-
+      flock --unlock 8 7>&- 9>&-
       exec 8>&-
     }
 
@@ -370,8 +374,26 @@ acquire_window() {
     trap "exit 130" INT
     trap "exit 143" TERM
 
+    deadline="$(awk -v now="$(date +%s.%N)" -v wait="$acquire_timeout" \
+      "BEGIN { printf \"%.9f\", now + wait }")"
+
+    # Production takes the admission turnstile before the deploy gate. New
+    # shared entrants stop here while already-admitted lanes drain.
+    exec 7>"$admission_lock_file"
+    remaining="$(awk -v now="$(date +%s.%N)" -v deadline="$deadline" \
+      "BEGIN { left = deadline - now; printf \"%.9f\", (left > 0 ? left : 0) }")"
+    flock --exclusive --wait "$remaining" 7 9>&- </dev/null >/dev/null 2>&1 &
+    flock_pid=$!
+    if ! wait "$flock_pid"; then
+      flock_pid=""
+      exit 99
+    fi
+    flock_pid=""
+
     exec 9>"$lock_file"
-    flock --exclusive --wait "$acquire_timeout" 9 </dev/null >/dev/null 2>&1 &
+    remaining="$(awk -v now="$(date +%s.%N)" -v deadline="$deadline" \
+      "BEGIN { left = deadline - now; printf \"%.9f\", (left > 0 ? left : 0) }")"
+    flock --exclusive --wait "$remaining" 9 7>&- </dev/null >/dev/null 2>&1 &
     flock_pid=$!
     if ! wait "$flock_pid"; then
       flock_pid=""
@@ -380,22 +402,22 @@ acquire_window() {
     flock_pid=""
 
     exec 8>"$meta_lock_file"
-    flock --exclusive 8 9>&-
+    flock --exclusive 8 7>&- 9>&-
     if [ -e "$owner_file" ]; then
-      flock --unlock 8 9>&-
+      flock --unlock 8 7>&- 9>&-
       exec 8>&-
       exit 98
     fi
     umask 077
     printf "%s %s %s %s\n" "$$" "$holder_start" "$owner_verifier" "$owner_caller" >"$owner_file"
-    flock --unlock 8 9>&-
+    flock --unlock 8 7>&- 9>&-
     exec 8>&-
 
-    sleep "$hold_cap" 9>&- </dev/null >/dev/null 2>&1 &
+    sleep "$hold_cap" 7>&- 9>&- </dev/null >/dev/null 2>&1 &
     sleeper_pid=$!
     wait "$sleeper_pid" 2>/dev/null || true
     sleeper_pid=""
-  ' holder "$LOCK_FILE" "$ACQUIRE_TIMEOUT" "$HOLD_CAP" "$OWNER_FILE" "$META_LOCK_FILE" "$acquire_verifier" "$CALLER_ID" "$CAPABILITY_FILE" </dev/null >/dev/null 2>&1 &
+  ' holder "$LOCK_FILE" "$ADMISSION_LOCK_FILE" "$ACQUIRE_TIMEOUT" "$HOLD_CAP" "$OWNER_FILE" "$META_LOCK_FILE" "$acquire_verifier" "$CALLER_ID" "$CAPABILITY_FILE" </dev/null >/dev/null 2>&1 &
   holder_pid=$!
   holder_start="$(process_start_time "$holder_pid")"
 
@@ -531,7 +553,7 @@ release_window() {
 }
 
 run_in_verification_lane() {
-  local deadline now remaining slot candidate_fd slot_fd="" result lane_tmp default_port
+  local deadline now remaining slot candidate_fd slot_fd="" admission_fd gate_fd result lane_tmp default_port
 
   mkdir -p "$VERIFY_ROOT"
   if [ -L "$VERIFY_TMP_ROOT" ]; then
@@ -583,13 +605,31 @@ run_in_verification_lane() {
     export DEPLOY_WINDOW_VERIFY_SLOT="$slot"
     export E2E_BASE_URL="${E2E_BASE_URL:-http://127.0.0.1:${default_port}}"
 
+    exec {admission_fd}>"$ADMISSION_LOCK_FILE"
+    if ! flock --shared --wait "$remaining" "$admission_fd"; then
+      echo "deploy-window-lock: deploy admission barrier stayed locked for the ${ACQUIRE_TIMEOUT}s total acquire budget." >&2
+      exit 75
+    fi
+
+    now="$(date +%s.%N)"
+    remaining="$(awk -v now="$now" -v deadline="$deadline" \
+      'BEGIN { left = deadline - now; printf "%.9f", (left > 0 ? left : 0) }')"
     exec {gate_fd}>"$LOCK_FILE"
     if ! flock --shared --wait "$remaining" "$gate_fd"; then
       echo "deploy-window-lock: shared deploy gate stayed locked for the ${ACQUIRE_TIMEOUT}s total acquire budget." >&2
       exit 75
     fi
+
+    flock --unlock "$admission_fd"
+    exec {admission_fd}>&-
     echo "verification lane ${slot}/${VERIFY_SLOTS} acquired"
-    "$@"
+    (
+      # The wrapper retains the gate and slot descriptors. The command and any
+      # descendants must not be able to outlive those locks.
+      exec {gate_fd}>&-
+      exec {slot_fd}>&-
+      "$@"
+    )
   ); then
     result=0
   else

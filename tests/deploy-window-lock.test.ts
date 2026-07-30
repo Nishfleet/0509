@@ -127,6 +127,17 @@ function probeIsFree(lockFile: string): boolean {
   );
 }
 
+function admissionAllowsShared(lockFile: string): boolean {
+  return (
+    spawnSync("flock", [
+      "--shared",
+      "--nonblock",
+      `${lockFile}.admission.lock`,
+      "true",
+    ]).status === 0
+  );
+}
+
 afterEach(() => {
   for (const child of liveChildren) {
     child.kill("SIGKILL");
@@ -327,6 +338,45 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
     expect(existsSync(marker)).toBe(false);
   });
 
+  it("does not let background descendants retain lane locks", async () => {
+    const lockFile = scratchLock();
+    const childPidFile = `${lockFile}.background-pid`;
+    const lane = spawnScript(
+      lockFile,
+      [
+        "run",
+        "--",
+        "bash",
+        "-c",
+        'sleep 10 </dev/null >/dev/null 2>&1 & printf "%s" "$!" >"$1"',
+        "lane",
+        childPidFile,
+      ],
+      {
+        DEPLOY_WINDOW_ACQUIRE_TIMEOUT: "2",
+        DEPLOY_WINDOW_VERIFY_ROOT: `${lockFile}.verify`,
+        DEPLOY_WINDOW_VERIFY_TMP_ROOT: `${lockFile}.tmp`,
+      },
+    );
+
+    const result = await completed(lane);
+    expect(result.code, result.stderr).toBe(0);
+    const childPid = Number(readFileSync(childPidFile, "utf8"));
+    try {
+      expect(Number.isInteger(childPid)).toBe(true);
+      expect(() => process.kill(childPid, 0)).not.toThrow();
+      expect(probeIsFree(lockFile)).toBe(true);
+    } finally {
+      if (Number.isInteger(childPid)) {
+        try {
+          process.kill(childPid, "SIGKILL");
+        } catch {
+          // The descendant may have exited after the assertion probe.
+        }
+      }
+    }
+  });
+
   it("drains all active verification lanes before deploy acquire", async () => {
     const lockFile = scratchLock();
     const command = [
@@ -361,17 +411,31 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
     };
     const deploy = spawnScript(lockFile, ["acquire"], deployOverrides);
     const deployResult = completed(deploy);
-    await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
+    await waitFor(() => !admissionAllowsShared(lockFile));
     expect(deploy.exitCode).toBeNull();
     expect(existsSync(deployOverrides.DEPLOY_WINDOW_CAPABILITY_FILE)).toBe(
       false,
     );
 
-    for (const lane of lanes) {
+    const fourthMarker = `${lockFile}.drain-4`;
+    const fourthStop = `${fourthMarker}.stop`;
+    const fourth = spawnScript(
+      lockFile,
+      [...command, fourthMarker, fourthStop],
+      overrides,
+    );
+    const fourthResult = completed(fourth);
+
+    writeFileSync(lanes[0]!.stop, "");
+    expect((await lanes[0]!.result).code).toBe(0);
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
+    expect(existsSync(fourthMarker)).toBe(false);
+
+    for (const lane of lanes.slice(1)) {
       writeFileSync(lane.stop, "");
     }
     expect(
-      (await Promise.all(lanes.map(({ result }) => result))).every(
+      (await Promise.all(lanes.slice(1).map(({ result }) => result))).every(
         ({ code }) => code === 0,
       ),
     ).toBe(true);
@@ -381,7 +445,11 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
     expect(existsSync(deployOverrides.DEPLOY_WINDOW_CAPABILITY_FILE)).toBe(
       true,
     );
+    expect(existsSync(fourthMarker)).toBe(false);
     expect(run(lockFile, "release", deployOverrides).status).toBe(0);
+    await waitFor(() => existsSync(fourthMarker));
+    writeFileSync(fourthStop, "");
+    expect((await fourthResult).code).toBe(0);
     expect(probeIsFree(lockFile)).toBe(true);
   });
 
