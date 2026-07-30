@@ -263,6 +263,7 @@ export type DiscoveryRouteContext = "public_search" | "watchlist_scan" | "schedu
 export type DiscoveryFetchStatus = "succeeded" | "failed";
 export type CommercialDiscoveryStatus = "healthy" | "demo" | "degraded" | "cache_only" | "disabled";
 export type DiscoveryFailureClass =
+  | "provider_unavailable"
   | "browser_unavailable"
   | "browser_launch_failed"
   | "timeout"

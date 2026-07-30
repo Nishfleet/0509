@@ -101,7 +101,7 @@ describe("interactive Meta pagination honesty", () => {
       discoveryStatus: "healthy",
       discoveryPartial: true,
       discoverySummary: expect.stringContaining("results shown are partial"),
-      discoveryFailureClass: "browser_unavailable",
+      discoveryFailureClass: "provider_unavailable",
     });
   });
 
@@ -174,14 +174,14 @@ describe("interactive Meta pagination honesty", () => {
       nextCursor: "cursor-2",
       discoveryStatus: "healthy",
       discoveryPartial: true,
-      discoveryFailureClass: "browser_unavailable",
+      discoveryFailureClass: "provider_unavailable",
     });
     expect(upsertDiscoveryProviderState).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         provider: "meta_api",
         status: "degraded",
-        failureClass: "browser_unavailable",
+        failureClass: "provider_unavailable",
         lastSuccessAt: previousSuccess,
         lastFailureAt: expect.any(String),
         metadata: expect.objectContaining({ partial: true }),
@@ -190,8 +190,9 @@ describe("interactive Meta pagination honesty", () => {
     expect(upsertDiscoveryCacheEntry).not.toHaveBeenCalled();
   });
 
-  it("maps unclassified Meta API first-page failures to browser_unavailable", async () => {
+  it("maps unclassified Meta API first-page failures to provider_unavailable", async () => {
     const upsertDiscoveryProviderState = vi.fn();
+    const before = Date.now();
     vi.doMock("~/lib/meta-api.server", () => ({
       searchAds: vi.fn().mockRejectedValue(new Error("upstream opaque failure")),
       demoSearch: vi.fn(),
@@ -234,15 +235,20 @@ describe("interactive Meta pagination honesty", () => {
       { purpose: "public_search" },
     );
 
-    expect(result.discoveryFailureClass).toBe("browser_unavailable");
+    expect(result.discoveryFailureClass).toBe("provider_unavailable");
     expect(result.discoveryFailureClass).not.toBe("browser_launch_failed");
+    expect(result.discoveryFailureClass).not.toBe("browser_unavailable");
     expect(upsertDiscoveryProviderState).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         provider: "meta_api",
-        failureClass: "browser_unavailable",
+        failureClass: "provider_unavailable",
       }),
     );
+    const providerStateInput = upsertDiscoveryProviderState.mock.calls[0]?.[1];
+    const cooldownUntil = Date.parse(providerStateInput.metadata.cooldownUntil);
+    expect(cooldownUntil).toBeGreaterThanOrEqual(before + 5 * 60 * 1000);
+    expect(cooldownUntil).toBeLessThanOrEqual(Date.now() + 5 * 60 * 1000);
   });
 
   it("does not globally cool down Meta after a successful first page was partial", async () => {

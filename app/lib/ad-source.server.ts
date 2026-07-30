@@ -111,6 +111,7 @@ export async function searchMetaApiAdsWithInteractiveDepth(
 const PUBLIC_SEARCH_PROVIDER_COOLDOWN_MS = 2 * 60 * 1000;
 const RATE_LIMIT_PROVIDER_COOLDOWN_MS = 15 * 60 * 1000;
 const TIMEOUT_PROVIDER_COOLDOWN_MS = 5 * 60 * 1000;
+const PROVIDER_UNAVAILABLE_COOLDOWN_MS = 5 * 60 * 1000;
 const BROWSER_FAILURE_PROVIDER_COOLDOWN_MS = 5 * 60 * 1000;
 const LOGIN_WALL_PROVIDER_COOLDOWN_MS = 10 * 60 * 1000;
 const EXTRACTION_FAILURE_PROVIDER_COOLDOWN_MS = 10 * 60 * 1000;
@@ -1501,10 +1502,10 @@ function resolveFailureClass(error: unknown): DiscoveryFailureClass {
 
 function resolveMetaApiFailureClass(error: unknown): DiscoveryFailureClass {
   const failureClass = resolveFailureClass(error);
-  // The shared fallback is browser-specific. For an otherwise unclassified
-  // Meta request failure, the existing unavailable class is the truthful,
-  // provider-neutral state exposed to customers.
-  return failureClass === "browser_launch_failed" ? "browser_unavailable" : failureClass;
+  // The shared fallback is browser-specific. Keep opaque API failures in a
+  // provider-neutral class so persisted health, cooldowns, and operator copy
+  // never claim that the browser path failed.
+  return failureClass === "browser_launch_failed" ? "provider_unavailable" : failureClass;
 }
 
 function shouldUseProviderCooldown(
@@ -1624,6 +1625,8 @@ function resolveDiscoveryCooldownMs(
       return RATE_LIMIT_PROVIDER_COOLDOWN_MS;
     case "timeout":
       return TIMEOUT_PROVIDER_COOLDOWN_MS;
+    case "provider_unavailable":
+      return PROVIDER_UNAVAILABLE_COOLDOWN_MS;
     case "login_wall":
       return LOGIN_WALL_PROVIDER_COOLDOWN_MS;
     case "selector_drift":

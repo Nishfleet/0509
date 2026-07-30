@@ -33,7 +33,7 @@ temporarily restoring unsafe behavior.
 | M2 | Audit lines 166-172: the one-shot Free activation path ended in an empty catch and later scans never retried. | Later successful Free scans re-enter the existing idempotent activation claim; accepted sends remain deduplicated and failures actively page. Before claiming, the sender resolves or lazily provisions a validated, opted-in workspace target for the verified account email, preserves account-wide suppression, and attaches that target ID so the production customer dispatch gate can advance. Provisioning uses one D1 `INSERT … SELECT … WHERE NOT EXISTS` statement over account-wide exact-address suppression; an unsubscribe that wins blocks the insert, while an unsubscribe that follows suppresses the inserted row before the unchanged dispatch CAS can advance. Digest, alert, presence-digest, and activation lazy provisioning all use that atomic primitive. Target lookup/provisioning failure fails closed and pages instead of calling the provider. `data.server.test.ts`, `free-activation-observability.test.ts`, `welcome-activation-emails.test.ts`, and the full monitoring/delivery suite. |
 | M4 | Audit lines 182-188: the board loader catch returned an all-zero window with no degradation flag. | Loader returns `captureWindowDegraded`; populated boards show a partial-data notice rather than believable zeros. Empty boards do not get competitor-specific wording. `watchlists.route.test.ts`. |
 | M5 | Audit lines 190-196: memory failures became `[]`; report-load/helper failures appeared as revoked/absent approvals, with an old test expecting `{}`. | Memory and approval-read failures are visibly labeled. Saved approvals remain in the response during transient/helper unavailability, while readiness is fail-closed as “unavailable” until refresh. `clients.route.test.ts`. |
-| M6 | Audit lines 198-204: a later Meta page exception broke the loop and returned page 1 as if complete. | Retained results now carry `discoveryStatus: healthy` plus a distinct `discoveryPartial: true`, an API-appropriate unavailable failure class, a partial summary and retry cursor. That distinction keeps already-fresh page-one results from being mislabeled as stale/delayed while the UI explicitly says “Fresh partial result” and announces that additional results could not load. The resolver records the failed fetch, preserves the provider’s prior successful timestamp, does not cache the partial response, and marks provider state partial so a successful first page cannot globally cool down unrelated searches. Operator rows and provider state explicitly label partial discovery, including the later-page failure class. Launch readiness excludes partial attempts from complete-result success-rate denominators, reports their own rate, and blocks separately when that rate exceeds 5%, so partial data is neither counted as full failure nor allowed to look healthy. `ad-source.test.ts`, `search-load-more.test.ts`, `meta-ads-readiness.test.ts`, and `ops.route.test.ts`. |
+| M6 | Audit lines 198-204: a later Meta page exception broke the loop and returned page 1 as if complete. | Retained results now carry `discoveryStatus: healthy` plus a distinct `discoveryPartial: true`, a provider-appropriate failure class, a partial summary and retry cursor. Opaque Meta API failures use the provider-neutral `provider_unavailable` class rather than the browser taxonomy; migration 0074 preserves both discovery evidence stores and their indexes while expanding the D1 allowlist. The new class explicitly retains the prior five-minute outage backoff instead of silently falling through to the two-minute public-search default. That distinction keeps already-fresh page-one results from being mislabeled as stale/delayed while the UI explicitly says “Fresh partial result” and announces that additional results could not load. Partial exact-domain pages also qualify definitive zero-verification headlines and facts as “loaded so far.” The resolver records the failed fetch, preserves the provider’s prior successful timestamp, does not cache the partial response, and marks provider state partial so a successful first page cannot globally cool down unrelated searches. Operator rows and provider state explicitly label partial discovery, including the later-page failure class. Launch readiness excludes partial attempts from complete-result success-rate denominators, reports their own rate, and blocks separately when that rate exceeds 5%, so partial data is neither counted as full failure nor allowed to look healthy. `ad-source.test.ts`, `discovery-failure-class-migration.test.ts`, `search-answer.test.ts`, `search-load-more.test.ts`, `meta-ads-readiness.test.ts`, and `ops.route.test.ts`. |
 | F1 | `CONTENT-SANITY-SWEEP.md:25-34`; `report-view.test.ts` locked “we could not read this one” into URL/language fields. | URL absence is `none stored`; language absence is `Not detected`; malformed and non-HTTP landing values are treated as missing rather than leaked as raw text. Report evidence links are real 44px phone targets implemented through the repository’s shared CSS layer. |
 | F2 | Content sweep lines 36-44: instant Before/Now appeared with no capture clocks. | Before/Now renders only with two real, valid, ordered capture timestamps, and each pane names its capture time. The evaluator now propagates proof capture clocks from the current and previous captures; missing, unparsable, or non-chronological clocks fall back to a complete honest “comparison is not shown because capture times were unavailable or invalid” sentence in both HTML and text-only delivery copy. `watch-event-evaluator.test.ts`, `delivery.server.test.ts`, and the email gallery cover both paths. |
 | F3 | Content sweep lines 46-54: scan-trouble mail claimed retries were already running. | Copy now promises only the next scheduled check. `digest-email.test.ts`. |
@@ -56,17 +56,17 @@ retryable and durably visible instead of pretending a second page occurred.
 | Gate | Result |
 |---|---|
 | Lock-wrapped `npm ci` | Passed on remediation tip; 291 packages added / 292 audited, 0 vulnerabilities |
-| Focused regression suites | Passed; BLOCK-remediation suite 4 files, 30/30; crgate follow-up suite 8 files, 161/161 |
-| Lock-wrapped full Vitest | Passed on remediation tip; **388** files, **4200/4200** tests |
-| Lock-wrapped typecheck | Passed; Wrangler typegen, React Router typegen, `tsc -b` |
-| Full Gate B | Passed on remediation tip; 73/73, zero retries |
+| Focused regression suites | Passed; BLOCK-remediation suite 4 files, 30/30; crgate follow-up suite 8 files, 161/161; terminal provider/partial suite 3 files, 94/94 |
+| Lock-wrapped full Vitest | Passed on final remediation source; **389** files, **4202/4202** tests |
+| Lock-wrapped typecheck | Passed on final remediation source; Wrangler typegen, React Router typegen, `tsc -b` |
+| Full Gate B | Deterministic final artifact below is the source of truth; handoff is allowed only when its terminal fields are strict/pass with 73 passed entries |
 | `git diff --check` | Passed |
-| `sgscan` | Passed on the remediation tip; exit 0, no new security findings |
-| CodeRabbit local (`crgate`) | Pre-final remediation tip: 8 findings (3 major / 5 minor); all actionable product findings fixed with regressions (see follow-up table). Report process findings applied. Second tip pass left running/quota-shared; prior actionable set already closed. |
+| `sgscan` | Passed on the final diff; exit 0, no new security findings |
+| CodeRabbit local (`crgate`) | Remediation tip: 8 findings (3 major / 5 minor); all actionable product findings fixed with regressions (see follow-up table). Final provider/partial delta followed a new exact Codex review; `crgate --quota` reports 3/3 reviews used in the last hour, so no forced/redundant fourth spend. |
 | CodeRabbit PR | The initial 4 actionable inline findings were verified and fixed (shared CSS, D1 NULL fallback, failed-page count zero, failure-mode-specific alert keys). A later review posted one actionable dispatch-gate diagnostic and identified the verified-account-email fallback plus health-query index outside the narrow diff range; all three were verified and fixed. The terminal review found that the operator's partial-result label hid the retained failure class; its regression failed first and the rendering now preserves both the partial status and cause. The docstring warning and broad client-route extraction request are repository-wide/out-of-lane maintainability work, not correctness findings in this candidate. |
 | Greptile PR review | Unavailable: `nish3451 has reached the 50-credit limit for trial accounts`; no inline or general code findings were produced |
-| Cross-model adversarial review | BLOCK review (`pr447-REVIEW-VERDICT.md`) findings 1–3 fixed at cause. Earlier Codex-engine passes also found valid edge cases in recap dispatch ownership, retention grace, global unsubscribe preservation, operator partial visibility, partial-result readiness denominators, workspace/watchlist delivery scope, idempotent customer-risk replays, legacy C6 count migration, the production Free-activation dispatch target, lazy-provision/unsubscribe atomicity, and fresh-partial presentation. Every accepted finding received a failing-first regression and cause-level fix. |
-| `bugbot-gate status` | Verbatim on tip: `ALLOW BUGBOT` — `risk: high` — `reason: High-risk or critical diff. One paid Bugbot run is justified.` Paid run not invoked (spend needs Nish). GitHub automatic Bugbot previously hit usage limit; expected/non-blocking. |
+| Cross-model adversarial review | BLOCK review (`pr447-REVIEW-VERDICT.md`) findings 1–3 fixed at cause. Earlier Codex-engine passes also found valid edge cases in recap dispatch ownership, retention grace, global unsubscribe preservation, operator partial visibility, partial-result readiness denominators, workspace/watchlist delivery scope, idempotent customer-risk replays, legacy C6 count migration, the production Free-activation dispatch target, lazy-provision/unsubscribe atomicity, and fresh-partial presentation. The terminal exact-candidate pass found two further P2s: opaque Meta API errors still used a browser class, and one partial exact-domain path retained a definitive zero-verification headline. Both failed first and were fixed at cause. The follow-up delta review found one P3 backoff regression; it also failed first and the provider-neutral class now retains the established five-minute cooldown. |
+| `bugbot-gate status` | Final status is run after the immutable push and printed verbatim in the handoff. Historical pre-final status was `ALLOW BUGBOT` / `risk: high`; GitHub's automatic Bugbot attempt previously hit the usage limit. |
 
 ### PR CI merge-ref blocker
 
@@ -93,18 +93,16 @@ violate this lane's coordinate-by-avoidance boundary. The check must remain
 failed/canceled until that owning lane fixes the real-flock resolution, after
 which this PR's failed job should be rerun.
 
-Gate B manifest (remediation tip; fields from the artifact file, not stdout):
+Gate B manifest source of truth (final remediation source):
 
-- path: `test-results/gate-b-manifest-local-release-local-4bb3abb5c61668bb5f21de566f23037d.json`
-- `schemaVersion`: `3`
-- `status`: `passed`
-- `strict`: `true`
-- `strictIssues`: `null`
-- `candidateFingerprint`: `cbb6a627d035ce09d352a48ed381e08d7444d54c0cb32c52cf75a819d18cf14f`
-- `environment`: `local`
-- `serverIdentity`: `local-4bb3abb5c61668bb5f21de566f23037d`
-- entries: `73` (status histogram: passed=73)
-- postflight: `j6_retention_alert_count=1`, `j6_retention_alert_mismatch_count=0`, `foreign_key_violation_count=0`, scratch restore integrity `ok`, `scratchDatabaseRemoved=true`
+- deterministic path: `test-results/gate-b-manifest-pr447-final.json`
+- acceptance contract: `schemaVersion=3`, `status=passed`, `strict=true`,
+  `strictIssues=null`, 73 passed entries, zero postflight mismatches/foreign-key
+  violations, scratch restore integrity `ok`, scratch database removed, and
+  isolated persistence removed
+- the report intentionally does not self-embed the final fingerprint: this
+  tracked report is part of the hashed candidate. The handoff prints the
+  observed terminal artifact fields after the immutable run.
 
 ## Remediation for `pr447-REVIEW-VERDICT.md` (VERDICT: BLOCK)
 
@@ -134,6 +132,17 @@ should be resolved on the remediation push.
 | Meta API outer catch used browser failure class | minor | **Fixed** — `resolveMetaApiFailureClass` on top-level catch |
 | Report omitted build line | minor/process | Noted; lock-wrapped typecheck + full Vitest remain the gate record |
 | Dead paused-watchlist fixture data | minor | **Fixed** — fixture trimmed to the workspace-scoped path under test |
+
+### Terminal exact-candidate and delta reviews (2 P2 + 1 P3)
+
+| Finding | Disposition |
+|---|---|
+| Opaque Meta API failures still used `browser_unavailable` | **Fixed** — `provider_unavailable` is now a distinct runtime/D1 class; migration 0074 preserves old evidence and hot indexes while extending both failure-class checks |
+| Partial exact-domain results retained “No verified ads found” | **Fixed** — title and zero fact explicitly say “loaded so far” while the answer remains degraded and retryable |
+| Provider-neutral failures silently shortened outage cooldown | **Fixed** — an explicit `provider_unavailable` switch preserves the established five-minute backoff rather than falling through to the two-minute public-search default |
+
+Failing-first focused evidence produced exactly 2 failures for the P2 set and
+1 failure for the P3; the repaired provider/partial/migration suite passed 94/94.
 
 ## Review dispositions and residual limits
 
