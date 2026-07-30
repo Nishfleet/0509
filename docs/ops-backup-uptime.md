@@ -4,7 +4,7 @@
 
 - `npm run backup:d1:r2` is the owner-operated backup command. It exports the remote D1 database (`0509`) to `$HOME/.local/state/0509/backups/d1/<timestamp>.sql` and uploads it to the R2 bucket under `backups/d1/` when production auth is available. Keeping retained copies outside the checkout prevents Actions cleanup from deleting them.
 - The repository validation gate is `node scripts/validate-d1-backup.mjs`. It dry-runs backup-script prerequisites, the D1 binding, and the current migration chain through the latest migration; it does not prove that a fresh production R2 object exists.
-- `.github/workflows/d1-backup-r2.yml` is the explicit backup-only fallback: it supports `workflow_dispatch`, runs only on `main`, uses the `d1-backup-r2` GitHub Environment, validates with `node scripts/validate-d1-backup.mjs`, then runs `npm run backup:d1:r2` with `D1_BACKUP_AUTOMATION_APPROVED=0509-weekly-d1-to-r2`. Scheduled off-machine backups are produced by the restore-evidence workflow below, so a second independent export cron is intentionally disabled.
+- `.github/workflows/d1-backup-r2.yml` is the explicit backup-only fallback: it supports `workflow_dispatch`, runs only on protected `main`, uses the branch-restricted `production` GitHub Environment, validates with `node scripts/validate-d1-backup.mjs`, then runs `npm run backup:d1:r2` with `D1_BACKUP_AUTOMATION_APPROVED=0509-weekly-d1-to-r2`. Scheduled off-machine backups are produced by the restore-evidence workflow below, so a second independent export cron is intentionally disabled.
 - **Unblocked 2026-07-13:** repository secrets `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` (scoped custom token: D1 Edit + Workers R2 Storage Edit) were added by the owner, and dispatch run `29225583866` completed the full validate → export → upload chain ("Upload complete. Backup complete.", fresh timestamped object under the private R2 backup prefix). Historical context: the former weekly backup-only cron produced runs `28339411098`, `28758345164`, and `29212868653` while the secrets were missing; that redundant cron is now retired in favor of the scheduled restore-evidence proof.
 - **Mac-side scheduled backup (the currently-live automated path):** a Claude scheduled task `0509-weekly-d1-backup` on Nish's Mac runs the manual-approved backup weekly (Sunday mornings, local). Caveat found 2026-07-13: its runs on 2026-07-05/12 silently produced no artifact because the task prompt predated the `D1_BACKUP_MANUAL_APPROVED` interlock; the prompt now sets the marker and verifies a fresh `$HOME/.local/state/0509/backups/d1/` file plus `validate-d1-backup.mjs` before reporting success. This path depends on the Mac being awake/app open — the Actions path above remains the wanted off-machine redundancy.
 - Cloudflare documents that D1 export blocks other database requests while it runs. Keep this schedule in a low-traffic window and move it if real customer traffic shows a better quiet period.
@@ -19,17 +19,16 @@ fallbacks:
 - `vps-verify`: three isolated, no-sudo verification runners. GitHub assigns
   each waiting job to the first matching idle runner; the repository lock
   provides three FIFO heavy-work slots and makes a fourth contender wait.
-- `vps-deploy`: one isolated deploy coordinator. Only protected recovery and
-  production jobs run here, and the exclusive deploy window drains all active
-  verification slots before provider work begins.
 - `0509-monitoring-hardened`: one isolated monitoring runner for the public
   uptime workflow.
 
-All five units use distinct non-login accounts, a capped `github-0509.slice`,
-and the root-created lock state under `/run/lock/0509`. They cannot read
+The three verification units and monitoring unit use distinct non-login
+accounts, a capped `github-0509.slice`, separate verification/reserved child
+slices, and the root-created lock state under `/run/lock/0509`. They cannot read
 `/home/nish`, use passwordless sudo, or inherit the interactive Claude, Codex,
-Hermes, or GitHub operator credentials. Production credentials remain scoped
-to protected GitHub Environments and never enter a verification job.
+Hermes, or GitHub operator credentials. Privileged backup, restore, finalization,
+and production deployment jobs use fresh GitHub-hosted machines; no
+repository-level VPS runner is eligible to receive production secrets.
 
 Do not restore `RECOVERY_RUNNER` or `MONITORING_RUNNER` fallback expressions.
 An outage should queue visibly rather than silently moving protected work to a
@@ -42,11 +41,10 @@ The 2026-07-26 weekly backup failed because the GitHub-hosted minutes were exhau
 ### VPS-assisted remote restore evidence
 
 The `D1 remote restore evidence` workflow performs the restore drill on the
-recovery runner during explicit low-traffic recovery windows (Monday and
+GitHub-hosted runner during explicit low-traffic recovery windows (Monday and
 Thursday at 02:17 IST) or by manual dispatch. It reuses the protected
-`d1-backup-r2` environment, not the production deployment environment, so the
-already-proven recovery token does not need to be copied into another secret
-store.
+branch-restricted `production` environment so provider credentials are not
+available as repository-level secrets or to pull-request jobs.
 The workflow creates a fresh D1 export, uploads it to private R2,
 download that exact R2 object, restore it into a run-scoped scratch D1 database,
 compare schema, key-bearing content digests, migration ledger, and aggregates
@@ -129,7 +127,7 @@ The local baseline imports the untouched R2 SQL; only the scratch restore uses
 the statement-size transformer. Schema and content digests therefore detect a
 lossy transformer regression instead of comparing two transformed copies.
 
-The GitHub `d1-backup-r2` environment token used by the backup and restore workflows must be
+The GitHub `production` environment token used by the backup and restore workflows must be
 able to export, create, execute against, and delete D1 databases, and read/write
 objects in the private backup R2 bucket. These capabilities are broader than a
 Worker-deploy-only token; missing capability fails the protected drill before

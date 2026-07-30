@@ -11,7 +11,7 @@ readonly SOURCE_DIR
 readonly STATE_ROOT="/var/lib/github-runners"
 readonly TOOL_ROOT="/opt/0509-runner"
 readonly LOCK_GROUP="gha0509-lock"
-readonly INSTANCES=(verify1 verify2 verify3 deploy monitor)
+readonly INSTANCES=(verify1 verify2 verify3 monitor)
 
 die() {
   printf 'runner provisioning error: %s\n' "$*" >&2
@@ -44,17 +44,33 @@ account_for() {
 
 labels_for() {
   case "$1" in
-    verify*) printf 'vps-verify\n' ;;
-    deploy) printf 'vps-deploy\n' ;;
-    monitor) printf '0509-monitoring-hardened\n' ;;
+    verify*) printf 'vps-verify,0509-%s\n' "$1" ;;
+    monitor) printf '0509-monitoring-hardened,0509-monitor\n' ;;
     *) die "unknown runner instance: $1" ;;
   esac
+}
+
+assert_legacy_runner_drain() {
+  if pgrep -f '/Runner.Worker' >/dev/null; then
+    die "a GitHub Actions Runner.Worker is still active; drain jobs before registration"
+  fi
+
+  local unit
+  while read -r unit; do
+    [[ -n "${unit}" ]] || continue
+    if systemctl is-active --quiet "${unit}"; then
+      die "legacy runner service ${unit} is active; stop all legacy runners before registration"
+    fi
+  done < <(
+    systemctl list-unit-files --type=service --no-legend \
+      'actions.runner.nish3451-0509.*.service' |
+      awk '{ print $1 }'
+  )
 }
 
 limits_for() {
   case "$1" in
     verify*) printf 'CPUQuota=125%%\nMemoryHigh=2500M\nMemoryMax=3G\n' ;;
-    deploy) printf 'CPUQuota=150%%\nMemoryHigh=3G\nMemoryMax=4G\n' ;;
     monitor) printf 'CPUQuota=75%%\nMemoryHigh=1500M\nMemoryMax=2G\n' ;;
     *) die "unknown runner instance: $1" ;;
   esac
@@ -84,6 +100,10 @@ install_policy_files() {
     "${TOOL_ROOT}/bin/flock"
   install -o root -g root -m 0644 "${SOURCE_DIR}/github-0509.slice" \
     /etc/systemd/system/github-0509.slice
+  install -o root -g root -m 0644 "${SOURCE_DIR}/github-0509-verify.slice" \
+    /etc/systemd/system/github-0509-verify.slice
+  install -o root -g root -m 0644 "${SOURCE_DIR}/github-0509-reserved.slice" \
+    /etc/systemd/system/github-0509-reserved.slice
   install -o root -g root -m 0644 "${SOURCE_DIR}/github-runner-0509@.service" \
     /etc/systemd/system/github-runner-0509@.service
   install -o root -g root -m 0644 "${SOURCE_DIR}/github-runner-0509.tmpfiles" \
@@ -109,7 +129,17 @@ configure_instance() {
   account="$(account_for "${instance}")"
   labels="$(labels_for "${instance}")"
   state="${STATE_ROOT}/${instance}"
-  [[ ! -e "${state}/.runner" ]] || die "${instance} is already configured"
+  if [[ -e "${state}/.runner" ]]; then
+    local configured_name configured_url
+    configured_name="$(jq -r '.agentName // empty' "${state}/.runner")"
+    configured_url="$(jq -r '.gitHubUrl // empty' "${state}/.runner")"
+    [[ "${configured_name}" == "0509-hardened-${instance}" ]] ||
+      die "${instance} has an unexpected existing runner identity"
+    [[ "${configured_url}" == "${REPOSITORY_URL}" ]] ||
+      die "${instance} has an unexpected existing repository binding"
+    printf 'Validated existing runner identity for %s; skipping registration.\n' "${instance}"
+    return 0
+  fi
 
   tar --extract --gzip --file "${archive}" --directory "${state}"
   chown -R "${account}:${account}" "${state}"
@@ -133,6 +163,10 @@ install_limits() {
     install -d -o root -g root -m 0755 "${dropin}"
     {
       printf '[Service]\n'
+      case "${instance}" in
+        verify*) printf 'Slice=github-0509-verify.slice\n' ;;
+        monitor) printf 'Slice=github-0509-reserved.slice\n' ;;
+      esac
       limits_for "${instance}"
     } >"${dropin}/limits.conf"
     chmod 0644 "${dropin}/limits.conf"
@@ -143,6 +177,7 @@ main() {
   require_root
   secure_token_file
   trap destroy_token_file EXIT
+  assert_legacy_runner_drain
   create_accounts
   install_policy_files
   install_limits

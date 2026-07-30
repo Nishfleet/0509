@@ -388,6 +388,32 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
     expect(readFileSync(recoveredMarker, "utf8")).toBe("ok");
   });
 
+  it("repairs a corrupted queue counter instead of permanently wedging lanes", () => {
+    const lockFile = scratchLock();
+    const verifyRoot = `${lockFile}.verify`;
+    const queueDir = `${verifyRoot}/queue`;
+    mkdirSync(queueDir, { recursive: true });
+    writeFileSync(`${queueDir}/next-ticket`, "not-a-ticket\n");
+
+    const result = spawnSync(
+      script,
+      ["run", "--", "bash", "-c", "true"],
+      {
+        encoding: "utf8",
+        env: envFor(lockFile, {
+          DEPLOY_WINDOW_VERIFY_ROOT: verifyRoot,
+          DEPLOY_WINDOW_VERIFY_TMP_ROOT: `${lockFile}.tmp`,
+        }),
+        timeout: 3_000,
+      },
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(readFileSync(`${queueDir}/next-ticket`, "utf8")).toMatch(
+      /^[0-9]{20}\n$/u,
+    );
+  });
+
   it("keeps new verification lanes behind a legacy exclusive holder", async () => {
     const lockFile = scratchLock();
     const legacyReady = `${lockFile}.legacy-ready`;

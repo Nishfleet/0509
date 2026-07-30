@@ -585,6 +585,16 @@ run_in_verification_lane() {
   local deadline now remaining slot candidate_fd slot_fd="" admission_fd gate_fd result lane_tmp default_port
   local lane_holder_pid="" queue_lock_fd="" queue_ticket="" queue_ticket_start=""
   local queue_dir="${VERIFY_ROOT}/queue" queue_lock_file="${VERIFY_ROOT}/queue.lock"
+  local max_queue_ticket="09000000000000000000"
+
+  queue_ticket_number_is_safe() {
+    local candidate="$1"
+
+    # shellcheck disable=SC2071 # fixed-width decimal strings avoid overflow
+    [[ "$candidate" =~ ^[0-9]{20}$ ]] &&
+      { [[ "$candidate" < "$max_queue_ticket" ]] ||
+        [[ "$candidate" == "$max_queue_ticket" ]]; }
+  }
 
   remove_queue_ticket() {
     local ticket="$queue_ticket"
@@ -600,7 +610,7 @@ run_in_verification_lane() {
   }
 
   purge_stale_queue_tickets_locked() {
-    local candidate name candidate_pid candidate_start
+    local candidate name candidate_pid candidate_start ticket_prefix
     local -a candidates
 
     candidates=("$queue_dir"/*)
@@ -614,6 +624,11 @@ run_in_verification_lane() {
         rm -f -- "$candidate"
         continue
       fi
+      ticket_prefix="${name%%.*}"
+      if ! queue_ticket_number_is_safe "$ticket_prefix"; then
+        rm -f -- "$candidate"
+        continue
+      fi
       candidate_pid="${name#*.}"
       candidate_pid="${candidate_pid%%.*}"
       candidate_start="${name##*.}"
@@ -624,7 +639,8 @@ run_in_verification_lane() {
   }
 
   enqueue_verification_ticket() {
-    local next_ticket
+    local candidate name next_ticket next_ticket_record ticket_prefix
+    local -a candidates
 
     queue_ticket_start="$(process_start_time "$$")"
     if [[ ! "$queue_ticket_start" =~ ^[1-9][0-9]*$ ]]; then
@@ -634,16 +650,27 @@ run_in_verification_lane() {
     exec {queue_lock_fd}>"$queue_lock_file"
     flock --exclusive "$queue_lock_fd"
     purge_stale_queue_tickets_locked
-    next_ticket=0
+    next_ticket_record=""
     if [ -f "${queue_dir}/next-ticket" ]; then
-      read -r next_ticket <"${queue_dir}/next-ticket" || true
+      read -r next_ticket_record <"${queue_dir}/next-ticket" || true
     fi
-    if [[ ! "$next_ticket" =~ ^[0-9]+$ ]]; then
-      flock --unlock "$queue_lock_fd"
-      exec {queue_lock_fd}>&-
-      queue_lock_fd=""
-      echo "deploy-window-lock: verification queue counter is invalid; refusing admission." >&2
-      return 70
+    if queue_ticket_number_is_safe "$next_ticket_record"; then
+      next_ticket=$((10#$next_ticket_record))
+    else
+      # The queue counter is coordination state, not a security boundary.
+      # Rebuild it from live tickets so corruption cannot wedge future lanes.
+      next_ticket=0
+      candidates=("$queue_dir"/*.*.*)
+      for candidate in "${candidates[@]}"; do
+        [ -e "$candidate" ] || continue
+        name="$(basename "$candidate")"
+        [[ "$name" =~ ^[0-9]{20}[.][1-9][0-9]*[.][1-9][0-9]*$ ]] || continue
+        ticket_prefix="${name%%.*}"
+        queue_ticket_number_is_safe "$ticket_prefix" || continue
+        if [ $((10#$ticket_prefix)) -gt "$next_ticket" ]; then
+          next_ticket=$((10#$ticket_prefix))
+        fi
+      done
     fi
     next_ticket=$((10#$next_ticket + 1))
     # `next-ticket` may be pre-created root:gha0509-lock 0660. Keep its

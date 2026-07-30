@@ -26,7 +26,7 @@ describe("manual D1 backup workflow", () => {
     expect(parsed.jobs.backup?.if).toBe(
       "github.repository == 'nish3451/0509' && github.ref == 'refs/heads/main'",
     );
-    expect(parsed.jobs.backup?.environment).toBe("d1-backup-r2");
+    expect(parsed.jobs.backup?.environment).toBe("production");
 
     const backupSteps = parsed.jobs.backup?.steps
       ?.map((step) => step.run)

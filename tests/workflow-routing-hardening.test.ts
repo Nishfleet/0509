@@ -6,7 +6,6 @@ import { parse } from "yaml";
 
 const workflowsDirectory = ".github/workflows";
 const verificationRunner = ["self-hosted", "linux", "x64", "vps-verify"];
-const deployRunner = ["self-hosted", "linux", "x64", "vps-deploy"];
 const monitoringRunner = ["self-hosted", "linux", "x64", "0509-monitoring-hardened"];
 const fullSha = /@[a-f0-9]{40}(?:\s|#|$)/;
 
@@ -60,7 +59,7 @@ describe("workflow routing hardening", () => {
       ["deploy-production.yml", "deploy"],
       ["finalize-production-soak.yml", "finalize"],
     ] as const) {
-      expect(job(file, id)["runs-on"]).toEqual(deployRunner);
+      expect(job(file, id)["runs-on"]).toBe("ubuntu-latest");
     }
     expect(job("uptime-health.yml", "health")["runs-on"]).toEqual(monitoringRunner);
   });
@@ -150,14 +149,21 @@ describe("workflow routing hardening", () => {
 
   it("keeps blue-green runner proof jobs read-only and isolated by lane", () => {
     const { source, parsed } = workflow("runner-hardening-proof.yml");
-    expect(parsed.jobs?.verify?.["runs-on"]).toEqual(verificationRunner);
-    expect(parsed.jobs?.deploy?.["runs-on"]).toEqual(deployRunner);
+    expect(parsed.jobs?.verify?.["runs-on"]).toEqual([
+      ...verificationRunner,
+      "${{ matrix.label }}",
+    ]);
+    expect(parsed.jobs?.deploy).toBeUndefined();
     expect(parsed.jobs?.monitor?.["runs-on"]).toEqual(monitoringRunner);
     expect(source).toContain("github.ref == 'refs/heads/main'");
     expect(source).toContain("/run/lock/0509/deploy-window.lock");
     expect(source).toContain("/home/nish");
     expect(source).toContain("sudo -n true");
     expect(source).toContain("github-0509.slice");
+    for (const instance of ["verify1", "verify2", "verify3"]) {
+      expect(source).toContain(`label: 0509-${instance}`);
+      expect(source).toContain(`account: gha0509-${instance}`);
+    }
     expect(source).not.toMatch(/secrets\.|wrangler|cloudflare|dodo|npm |npx /i);
   });
 });
