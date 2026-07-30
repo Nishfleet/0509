@@ -760,7 +760,7 @@ SELECT
   ) AS j6_retention_fixture_count,
   (SELECT COUNT(*) FROM cron_failure_alert_throttle
     WHERE task_key = 'retention_sweep'
-      AND (alert_count <> 1 OR last_error <> 'operator_alert_not_sent')
+      AND (alert_count <> 0 OR last_error <> 'operator_alert_not_sent')
   ) AS j6_retention_alert_mismatch_count,
   (SELECT COUNT(*) FROM cron_failure_alert_throttle
     WHERE task_key = 'retention_sweep'

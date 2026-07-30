@@ -170,14 +170,8 @@ export async function listAdsByIds(env: AppEnv, adIds: string[]) {
         typeof row.destination_type === "undefined"
           ? raw.destinationType
           : row.destination_type,
-      landingPageUrl:
-        typeof row.landing_page_url === "undefined"
-          ? raw.landingPageUrl
-          : row.landing_page_url,
-      adSnapshotUrl:
-        typeof row.ad_snapshot_url === "undefined"
-          ? raw.adSnapshotUrl
-          : row.ad_snapshot_url,
+      landingPageUrl: row.landing_page_url ?? raw.landingPageUrl,
+      adSnapshotUrl: row.ad_snapshot_url ?? raw.adSnapshotUrl,
       countries:
         typeof row.countries_json === "undefined"
           ? raw.countries
@@ -202,16 +196,11 @@ export async function listAdsByIds(env: AppEnv, adIds: string[]) {
           ? raw.researchSummary
           : row.research_summary,
       analysisFields: raw.analysisFields ?? [],
-      creativeText:
-        typeof row.creative_text === "undefined"
-          ? raw.creativeText
-          : row.creative_text,
+      creativeText: row.creative_text ?? raw.creativeText,
       creativeTextCaptureMethod:
-        typeof row.creative_text_capture_method === "undefined"
-          ? raw.creativeTextCaptureMethod
-          : row.creative_text_capture_method,
+        row.creative_text_capture_method ?? raw.creativeTextCaptureMethod,
       creativeTextMetadata:
-        typeof row.creative_text_metadata_json === "undefined"
+        row.creative_text_metadata_json == null
           ? raw.creativeTextMetadata
           : parseJson<Record<string, unknown> | null>(
               row.creative_text_metadata_json,

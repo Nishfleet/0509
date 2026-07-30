@@ -182,9 +182,77 @@ describe("interactive Meta pagination honesty", () => {
         failureClass: "browser_unavailable",
         lastSuccessAt: previousSuccess,
         lastFailureAt: expect.any(String),
+        metadata: expect.objectContaining({ partial: true }),
       }),
     );
     expect(upsertDiscoveryCacheEntry).not.toHaveBeenCalled();
+  });
+
+  it("does not globally cool down Meta after a successful first page was partial", async () => {
+    const firstAd = buildLiveBrowserResult().ads[0];
+    const searchAds = vi.fn().mockResolvedValue({
+      ads: [firstAd],
+      nextCursor: null,
+      source: "meta_api",
+    });
+
+    vi.doMock("~/lib/meta-api.server", () => ({
+      searchAds,
+      demoSearch: vi.fn(),
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: vi.fn(),
+      getInteractiveMetaApiExtraPages: vi.fn().mockReturnValue(2),
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState: vi.fn().mockResolvedValue({
+        provider: "meta_api",
+        status: "degraded",
+        failureClass: "browser_unavailable",
+        summary: "A later page was unavailable.",
+        lastSuccessAt: "2026-07-29T12:00:00.000Z",
+        lastFailureAt: new Date().toISOString(),
+        metadata: { partial: true, routeContext: "public_search" },
+        updatedAt: new Date().toISOString(),
+      }),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+    const result = await searchAdsViaSourceResolver(
+      {
+        DB: {} as D1Database,
+        META_AD_LIBRARY_TOKEN: "platform-token",
+        ALLOW_PLATFORM_META_API_FALLBACK: "true",
+      } as never,
+      {
+        mode: "advertiser",
+        filters: {
+          query: "another-brand",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      { purpose: "public_search" },
+    );
+
+    expect(searchAds).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      ads: [firstAd],
+      discoveryStatus: "healthy",
+      discoveryFailureClass: null,
+    });
   });
 });
 

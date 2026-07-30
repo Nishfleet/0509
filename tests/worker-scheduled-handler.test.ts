@@ -146,12 +146,6 @@ describe("Worker scheduled handler", () => {
     expect(loaded.scheduleBillingLifecycleEmailRecovery).toHaveBeenCalledWith(
       expect.anything(),
       expect.anything(),
-      {
-        observationContext: {
-          cron: HEARTBEAT_CRON,
-          scheduledTime: Date.parse("2026-07-30T12:13:00.000Z"),
-        },
-      },
     );
   });
 

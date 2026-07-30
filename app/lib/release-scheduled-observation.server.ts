@@ -312,6 +312,8 @@ export function observeScheduledTask<T>(
       });
       if (
         classification.outcome === "degraded" &&
+        // Retention already has a dedicated failed-step page in workers/app.ts;
+        // suppressing the generic page avoids double-alerting the same run.
         input.taskName !== "retention_sweep"
       ) {
         await reportDegraded(input.taskName);

@@ -215,6 +215,13 @@ img {
    The agency report now renders through the Evidence Desk `.f9-ed-report-*`
    layer at the end of this file. */
 
+.f9-report-fact-link {
+  display: inline-flex;
+  align-items: center;
+  min-width: 44px;
+  min-height: 44px;
+}
+
 .error-stack {
   overflow: auto;
   padding: 16px;

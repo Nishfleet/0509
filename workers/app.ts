@@ -137,12 +137,11 @@ export default {
       scheduledTime: controller.scheduledTime,
     });
 
-    // Every cron also drains a bounded customer-email outbox. A heartbeat is
-    // independent of customer monitoring work, but must not break this shared
-    // recovery invariant.
-    scheduleBillingLifecycleEmailRecovery(env, ctx, { observationContext });
-
     if (controller.cron === SCHEDULED_OBSERVATION_HEARTBEAT_CRON) {
+      // Preserve the shared outbox drain without trying to record the heartbeat
+      // cron in the release-soak observation table, whose contract intentionally
+      // accepts only the four production workload schedules.
+      scheduleBillingLifecycleEmailRecovery(env, ctx);
       ctx.waitUntil(
         sendScheduledObservationHeartbeat(env).then(
           (result) => {
@@ -161,6 +160,7 @@ export default {
     }
 
     const scheduledTask = resolveScheduledTask(controller.cron);
+    scheduleBillingLifecycleEmailRecovery(env, ctx, { observationContext });
 		const observe = <T>(taskName: ReleaseScheduledTaskName, taskPromise: Promise<T>) =>
 			observeScheduledTask(env, ctx, { ...observationContext, taskName }, taskPromise);
 

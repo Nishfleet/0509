@@ -1,8 +1,12 @@
+import { readFileSync } from "node:fs";
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   formatScheduledObservationHealthLines,
   listScheduledObservationHealth,
+  SCHEDULED_OBSERVATION_DEADLINES,
+  SCHEDULED_OBSERVATION_HEARTBEAT_CRON,
   sendScheduledObservationHeartbeat,
 } from "~/lib/scheduled-observation-health.server";
 
@@ -25,6 +29,19 @@ describe("scheduled observation heartbeat", () => {
   beforeEach(() => {
     sendOperatorAlertEmail.mockReset();
     sendOperatorAlertEmail.mockResolvedValue(true);
+  });
+
+  it("covers every configured workload cron except the heartbeat itself", () => {
+    const wranglerConfig = readFileSync("wrangler.jsonc", "utf8");
+    const cronBlock = wranglerConfig.match(/"crons"\s*:\s*\[([\s\S]*?)\]/)?.[1] ?? "";
+    const configuredCrons = [...cronBlock.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+    const workloadCrons = configuredCrons.filter(
+      (cron) => cron !== SCHEDULED_OBSERVATION_HEARTBEAT_CRON,
+    );
+
+    expect(workloadCrons.sort()).toEqual(
+      SCHEDULED_OBSERVATION_DEADLINES.map((entry) => entry.cron).sort(),
+    );
   });
 
   it("detects a missed production schedule from observation freshness", async () => {

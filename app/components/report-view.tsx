@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import type { ReportDocument, ReportEventSummary, ReportRow } from "~/lib/report";
 import { LocalTime } from "~/components/local-time";
@@ -58,13 +58,6 @@ const LEGACY_PLACEHOLDER_VALUES = new Set([
   "not detected",
   "not checked yet",
 ]);
-
-const REPORT_FACT_LINK_STYLE: CSSProperties = {
-  alignItems: "center",
-  display: "inline-flex",
-  minHeight: 44,
-  minWidth: 44,
-};
 
 function presentReportValue(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
@@ -426,9 +419,9 @@ function buildPlateFacts(row: ReportRow): FactRow[] {
       value:
         event?.sourceUrl && isHttpUrl(event.sourceUrl) ? (
           <a
+            className="f9-report-fact-link"
             href={event.sourceUrl}
             rel="noreferrer"
-            style={REPORT_FACT_LINK_STYLE}
             target="_blank"
           >
             Open the source
@@ -441,9 +434,9 @@ function buildPlateFacts(row: ReportRow): FactRow[] {
       value:
         landingPageUrl && isHttpUrl(landingPageUrl) ? (
           <a
+            className="f9-report-fact-link"
             href={landingPageUrl}
             rel="noreferrer"
-            style={REPORT_FACT_LINK_STYLE}
             target="_blank"
           >
             Open the page

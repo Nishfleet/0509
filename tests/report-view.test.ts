@@ -71,9 +71,8 @@ describe("ReportView", () => {
 
     expect(markup).not.toContain("href=\"javascript:alert(1)\"");
     expect(markup).toContain("href=\"https://example.com/source\"");
-    expect(markup).toContain(
-      'style="align-items:center;display:inline-flex;min-height:44px;min-width:44px"',
-    );
+    expect(markup).toContain('class="f9-report-fact-link"');
+    expect(markup).not.toContain('style="');
     // The blocked URL still renders a row, honestly (brief §6.6).
     expect(markup).toContain("none stored");
   });

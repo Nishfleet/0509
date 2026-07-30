@@ -2797,6 +2797,74 @@ describe("listAdsByIds", () => {
     });
   });
 
+  it("falls back to raw JSON when nullable canonical columns are NULL", async () => {
+    const row = {
+      id: "legacy-ad-1",
+      advertiser: "Legacy brand",
+      body: "Legacy body",
+      body_secondary: null,
+      preview_headline: "",
+      preview_subhead: "",
+      hook: "",
+      offer_text: "",
+      cta: "",
+      creative_format: "image",
+      language_label: "",
+      destination_type: "unknown",
+      landing_page_url: null,
+      ad_snapshot_url: null,
+      countries_json: "[]",
+      platforms_json: "[]",
+      first_seen_at: null,
+      last_seen_at: null,
+      is_active: 1,
+      source: "meta_api",
+      research_summary: "",
+      creative_text: null,
+      creative_text_capture_method: null,
+      creative_text_metadata_json: null,
+      raw_json: JSON.stringify({
+        metaAdId: "legacy-ad-1",
+        landingPageUrl: "https://legacy.example.invalid/launch",
+        adSnapshotUrl: "https://legacy.example.invalid/ad.png",
+        creativeText: "Text retained in the legacy payload",
+        creativeTextCaptureMethod: "ad_snapshot_fetch",
+        creativeTextMetadata: { extractor: "legacy" },
+        analysisFields: [
+          {
+            scopeType: "ad",
+            fieldKey: "hook",
+            fieldValue: "Legacy hook",
+            provenanceSource: "meta_api",
+          },
+        ],
+      }),
+    };
+    const db = {
+      prepare: vi.fn(() => ({
+        bind: vi.fn(() => ({
+          all: vi.fn().mockResolvedValue({ results: [row] }),
+        })),
+      })),
+    };
+
+    const [ad] = await listAdsByIds({ DB: db } as never, ["legacy-ad-1"]);
+
+    expect(ad).toMatchObject({
+      landingPageUrl: "https://legacy.example.invalid/launch",
+      adSnapshotUrl: "https://legacy.example.invalid/ad.png",
+      creativeText: "Text retained in the legacy payload",
+      creativeTextCaptureMethod: "ad_snapshot_fetch",
+      creativeTextMetadata: { extractor: "legacy" },
+      analysisFields: [
+        expect.objectContaining({
+          fieldKey: "hook",
+          fieldValue: "Legacy hook",
+        }),
+      ],
+    });
+  });
+
   it("chunks lookups so 150 ad ids never exceed D1's bound-parameter cap", async () => {
     const adIds = Array.from({ length: 150 }, (_, index) => `ad-${index}`);
     const statements: Array<{ sql: string; bindings: unknown[] }> = [];

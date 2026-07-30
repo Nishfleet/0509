@@ -2,7 +2,7 @@ import type { AppEnv } from "~/lib/env.server";
 
 export const SCHEDULED_OBSERVATION_HEARTBEAT_CRON = "13 * * * *";
 
-const SCHEDULE_DEADLINES = Object.freeze([
+export const SCHEDULED_OBSERVATION_DEADLINES = Object.freeze([
   { cron: "0 */3 * * *", maxAgeMs: 4 * 60 * 60 * 1000 },
   { cron: "17 */6 * * *", maxAgeMs: 7 * 60 * 60 * 1000 },
   { cron: "0 4 * * *", maxAgeMs: 26 * 60 * 60 * 1000 },
@@ -34,7 +34,7 @@ export async function listScheduledObservationHealth(
     (result.results ?? []).map((row) => [row.cron, row.last_scheduled_at]),
   );
 
-  return SCHEDULE_DEADLINES.map(({ cron, maxAgeMs }) => {
+  return SCHEDULED_OBSERVATION_DEADLINES.map(({ cron, maxAgeMs }) => {
     const lastScheduledAt = lastByCron.get(cron) ?? null;
     const lastScheduledMs = lastScheduledAt ? Date.parse(lastScheduledAt) : Number.NaN;
     return {

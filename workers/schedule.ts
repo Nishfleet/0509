@@ -86,8 +86,16 @@ export function resolveOperationalRiskAlertIdempotencyKey(
     return `operator-alert:fanout-dispatch:${dayKey}`;
   }
 
-  if ((input.inlineFailures ?? 0) > 0 || (input.digestFailures ?? 0) > 0) {
-    return `operator-alert:scheduled-degraded:${dayKey}`;
+  const inlineFailed = (input.inlineFailures ?? 0) > 0;
+  const digestFailed = (input.digestFailures ?? 0) > 0;
+  if (inlineFailed || digestFailed) {
+    const failureMode =
+      inlineFailed && digestFailed
+        ? "inline-and-digest"
+        : inlineFailed
+          ? "inline"
+          : "digest";
+    return `operator-alert:scheduled-degraded-${failureMode}:${dayKey}`;
   }
 
   return null;

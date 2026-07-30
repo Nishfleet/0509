@@ -63,7 +63,8 @@ function createThrottleDb(
                   last_error: resolvedLastError,
                   alert_count: sql.includes("alert_count + 1")
                     ? (existing?.alert_count ?? 0) + 1
-                    : existing?.alert_count ?? 1,
+                    : existing?.alert_count ??
+                      (sql.includes("'operator_alert_not_sent', 0)") ? 0 : 1),
                 });
                 return { success: true };
               },
@@ -198,7 +199,7 @@ describe("cron failure alert throttle", () => {
     expect(rows.get("scheduled_monitoring")).toMatchObject({
       last_alerted_at: new Date(now.getTime() + 1_000).toISOString(),
       last_error: "operator_alert_not_sent",
-      alert_count: 1,
+      alert_count: 0,
     });
     expect(JSON.stringify(rows.get("scheduled_monitoring"))).not.toContain("provider response leaked");
   });
@@ -222,7 +223,7 @@ describe("cron failure alert throttle", () => {
     expect(rows.get("scheduled_monitoring")).toMatchObject({
       last_alerted_at: nextWindow.toISOString(),
       last_error: "operator_alert_not_sent",
-      alert_count: 1,
+      alert_count: 0,
     });
   });
 

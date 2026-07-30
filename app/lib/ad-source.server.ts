@@ -808,6 +808,7 @@ export async function searchAdsViaSourceResolver(
           lastFailureAt: partial ? timestamp : null,
           metadata: {
             customerOwned: provider === "meta_api" ? hasCustomerMetaToken : false,
+            partial,
             routeContext,
           },
         });
@@ -1505,6 +1506,12 @@ function shouldUseProviderCooldown(
   providerState: Awaited<ReturnType<typeof getDiscoveryProviderState>>,
 ) {
   if (!providerState?.updatedAt) {
+    return false;
+  }
+
+  // A later-page failure still produced a successful first page. Keep that
+  // request visibly degraded without blocking unrelated uncached searches.
+  if (providerState.metadata?.partial === true) {
     return false;
   }
 
