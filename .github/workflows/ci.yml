@@ -12,34 +12,28 @@ jobs:
   codex-node-checks:
     if: github.repository == 'nish3451/0509' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}
-    # 180m lock wait + 60m build/test/typecheck + 30m cleanup slack = 270m.
+    # The 270m job cap bounds setup plus all per-step waits. Each heavy step has
+    # one 180m total budget shared between its lane slot and the deploy gate.
     timeout-minutes: 270
     steps:
       - uses: actions/checkout@v7
-
-      - name: Acquire deploy window (serialize with fleet lanes on the VPS runner)
-        shell: bash
-        run: ./scripts/deploy-window-lock.sh acquire
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v6
         with:
           node-version-file: ".node-version"
-          cache: npm
+          cache: ${{ hashFiles('package-lock.json') != '' && 'npm' || '' }}
       - name: Install dependencies
         run: |
           if [ -f package-lock.json ]; then
-            npm ci --ignore-scripts
+            ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
           else
-            npm install --ignore-scripts
+            ./scripts/deploy-window-lock.sh run -- npm install --ignore-scripts
           fi
       - name: Build
-        run: npm run build
+        run: ./scripts/deploy-window-lock.sh run -- npm run build
       - name: Test
-        run: npm run test
+        run: ./scripts/deploy-window-lock.sh run -- npm run test
       - name: Typecheck
-        run: npm run typecheck
-
-      - name: Release deploy window
-        if: always()
-        shell: bash
-        run: ./scripts/deploy-window-lock.sh release
+        run: ./scripts/deploy-window-lock.sh run -- npm run typecheck
