@@ -453,6 +453,15 @@ test.describe("BL-033a live proof", () => {
           if ("open" in surface && surface.open) {
             await page.locator(surface.open).click();
           }
+          if (surface.name === "collections-populated") {
+            const capturedFact = page
+              .locator(".f9-wk-detail dt")
+              .filter({ hasText: /^Captured$/ });
+            await expect(capturedFact).toHaveCount(1);
+            await expect(
+              capturedFact.locator("xpath=following-sibling::dd[1]//time"),
+            ).toHaveAttribute("datetime", /\d{4}-\d{2}-\d{2}T/);
+          }
           await page.waitForTimeout(400);
           const measured = await measure(page);
           const paint = await auditPaint(page);

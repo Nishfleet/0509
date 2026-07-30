@@ -222,7 +222,7 @@ INSERT INTO discovery_cache_entry (cache_key, provider, route_context, query_fin
 INSERT INTO collection (id, user_id, name, description, created_at, updated_at) VALUES
   ('e2e-collection-starter-1', 'e2e-starter', 'Launch moves', 'Non-customer E2E report fixture.', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-14 days'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour'));
 INSERT INTO collection_item (id, collection_id, ad_id, note, ad_snapshot_json, created_at, updated_at) VALUES
-  ('e2e-collection-item-1', 'e2e-collection-starter-1', 'e2e-ad-1', 'Fixture proof item.', '{"id":"e2e-ad-1","advertiser":"Okara"}', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour')),
+  ('e2e-collection-item-1', 'e2e-collection-starter-1', 'e2e-ad-1', 'Fixture proof item.', json_object('id', 'e2e-ad-1', 'advertiser', 'Okara', 'source', 'meta_library_browser', 'evidenceCapturedAt', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-59 minutes')), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 hour')),
   ('e2e-collection-item-external', 'e2e-collection-starter-1', 'e2e-ad-external', 'Filed by the team after reviewing the annual offer.', '{"id":"e2e-ad-external","advertiser":"Filed Rival","source":"external"}', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 days'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 days')),
   ('e2e-collection-item-demo', 'e2e-collection-starter-1', 'e2e-ad-demo', 'Sample-only evidence fixture.', '{"id":"e2e-ad-demo","advertiser":"Sample Rival","source":"demo"}', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-3 days'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-3 days'));
 

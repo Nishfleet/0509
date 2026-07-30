@@ -380,6 +380,18 @@ describe("saved-item provenance is source-aware (brief §8.1, §13.1)", () => {
     ).toBeNull();
   });
 
+  it("keeps a real capture's precise timestamp in the selected detail", async () => {
+    const capturedAt = "2026-07-20T08:55:00.000Z";
+    const markup = await render({
+      items: [savedItem({ ad: { evidenceCapturedAt: capturedAt } as never })],
+    });
+    const detail = markup.match(/<aside[^>]*class="f9-wk-detail"[^>]*>.*?<\/aside>/s)?.[0];
+
+    expect(detail).toContain(
+      `<dt>Captured</dt><dd><time dateTime="${capturedAt}">20 Jul 2026, 08:55 UTC</time></dd>`,
+    );
+  });
+
   it("never stamps a filed link with the time it was filed", () => {
     // Regression: `evidenceCapturedAt ?? item.createdAt` printed the filing
     // time as a capture time, so a link observed on 24 Jul was stamped 27 Jul.

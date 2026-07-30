@@ -5,6 +5,7 @@ import {
   COLLECTION_ITEM_GROUP,
   CollectionDisclosure,
 } from "~/components/collections/collection-disclosure";
+import { LocalTime } from "~/components/local-time";
 import {
   DetailBlock,
   DetailFacts,
@@ -12,6 +13,7 @@ import {
 } from "~/components/workspace/detail-pane";
 import {
   buildSavedItemFacts,
+  resolveSavedItemCapturedAt,
   resolveSavedItemChannel,
   resolveSavedItemPlate,
   resolveSavedItemStatus,
@@ -40,6 +42,22 @@ export function SavedEvidenceItem({
 }) {
   const proofLink = savedItemProofLink(item);
   const plate = resolveSavedItemPlate(item.ad);
+  const capturedAt = resolveSavedItemCapturedAt(item);
+  const facts = buildSavedItemFacts(item).flatMap((row) => {
+    const renderedRow = {
+      key: row.key,
+      value: row.value ?? row.missingLabel ?? "Not recorded",
+    };
+    return row.key === "Running" && capturedAt
+      ? [
+          {
+            key: "Captured",
+            value: <LocalTime iso={capturedAt} />,
+          },
+          renderedRow,
+        ]
+      : [renderedRow];
+  });
 
   return (
     <>
@@ -73,12 +91,7 @@ export function SavedEvidenceItem({
         </div>
       </DetailBlock>
       <DetailBlock>
-        <DetailFacts
-          rows={buildSavedItemFacts(item).map((row) => ({
-            key: row.key,
-            value: row.value ?? row.missingLabel ?? "Not recorded",
-          }))}
-        />
+        <DetailFacts rows={facts} />
       </DetailBlock>
       {editor ? (
         <DetailBlock>
