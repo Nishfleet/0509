@@ -119,6 +119,6 @@ The repository's canonical lane policy says to record this decision and never in
 
 - Non-draft PR: https://github.com/nish3451/0509/pull/446
 - Gitleaks: passed.
-- CI: pending a clean retry after the shared deployment lock is released. The initial run and first retry failed only at lock acquisition; build, test, and typecheck never started.
+- CI: the final-head result is tracked by the PR check. Earlier attempts that overlapped another lane failed only at shared-lock acquisition; build, test, and typecheck never started in those attempts.
 - Greptile: no code review was available because its GitHub app reported the account's 50-credit trial limit reached.
 - Merge: not performed.
