@@ -65,12 +65,11 @@ export interface CreativeTextCaptureResult {
 
 export function createMissingCreativeCaptureResult(
   ad: Pick<AdRecord, "creativeImageUrl">,
-  capturedAt = new Date().toISOString(),
 ): CreativeTextCaptureResult {
   return buildUnreadableCreativeResult(
     "no_creative_capture_stored",
     ad.creativeImageUrl ?? null,
-    capturedAt,
+    null,
   );
 }
 
@@ -181,7 +180,7 @@ async function captureCreativeTextFromSource(
 ): Promise<CreativeTextCaptureResult | null> {
   const capturedAt = new Date().toISOString();
   if (!url) {
-    return createMissingCreativeCaptureResult(ad, capturedAt);
+    return createMissingCreativeCaptureResult(ad);
   }
   if (!/^https?:\/\//i.test(url)) {
     return buildUnreadableCreativeResult(
@@ -490,7 +489,7 @@ function buildOcrCaptureResult(
 function buildUnreadableCreativeResult(
   reasonCode: CreativeUnreadableReasonCode,
   imageUrl: string | null,
-  capturedAt: string,
+  capturedAt: string | null,
   metadata: Record<string, unknown> = {},
 ): CreativeTextCaptureResult {
   return {
@@ -499,7 +498,7 @@ function buildUnreadableCreativeResult(
     extractorVersion: CREATIVE_TEXT_EXTRACTOR_VERSION,
     imageUrl,
     metadata: {
-      capturedAt,
+      ...(capturedAt ? { capturedAt } : {}),
       extractionStatus: "unreadable",
       unreadableReasonCode: reasonCode,
       ...metadata,

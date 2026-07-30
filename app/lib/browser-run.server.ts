@@ -512,7 +512,7 @@ async function buildBrowserRenderedSnapshot(
     return null;
   }
 
-  const signals = extractLandingPageSignals(html);
+  const signals = extractLandingPageSignals(html, { documentMode: "rendered" });
   const headline = resolveHeadline(html);
   const normalized = normalizeHeadline(headline);
 

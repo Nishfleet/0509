@@ -165,7 +165,7 @@ async function captureLandingPageSnapshotAt(
         fetchStatus: response.status,
       });
     }
-    const signals = extractLandingPageSignals(html);
+    const signals = extractLandingPageSignals(html, { documentMode: "raw" });
     const headline =
       decodeHtml(findFirstMatch(html, OG_TITLE_REGEX) ?? "") ||
       decodeHtml(findFirstMatch(html, TITLE_REGEX) ?? "") ||

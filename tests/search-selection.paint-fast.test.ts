@@ -246,4 +246,103 @@ describe("WP-11 paint-fast selection enrichment", () => {
       imageOnlyAd,
     );
   });
+
+  it("honors a recent unreadable creative result while enriching the landing page", async () => {
+    const captureCreativeText = vi.fn();
+    const captureLandingPageSnapshot = vi.fn().mockResolvedValue(null);
+    const recentUnreadableAd: AdRecord = {
+      ...baseAd,
+      creativeText: null,
+      creativeTextMetadata: {
+        capturedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+        extractionStatus: "unreadable",
+        unreadableReasonCode: "ocr_binding_missing",
+      },
+    };
+
+    vi.doMock("~/lib/analysis.server", () => ({
+      withStructuredAnalysis: vi.fn((ad: AdRecord) => ad),
+    }));
+    vi.doMock("~/lib/creative-text.server", () => ({
+      captureCreativeText,
+    }));
+    vi.doMock("~/lib/landing-pages.server", () => ({
+      captureLandingPageSnapshot,
+    }));
+    vi.doMock("~/lib/translation.server", () => ({
+      translateAdText: vi.fn().mockResolvedValue(null),
+      buildTranslatedAnalysisField: vi.fn(),
+      withTranslatedAnalysisField: vi.fn((fields: unknown) => fields),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      hydrateAdsWithPersistedCreatives: vi.fn(async (_env: unknown, ads: AdRecord[]) => ads),
+      listAdsByIds: vi.fn().mockResolvedValue([]),
+      upsertAd: vi.fn(),
+    }));
+
+    const { prepareSearchResultSelection, selectionNeedsEnrichment } = await import(
+      "~/lib/search-selection.server"
+    );
+
+    expect(selectionNeedsEnrichment({
+      ...recentUnreadableAd,
+      landingPage: {
+        rawUrl: recentUnreadableAd.landingPageUrl ?? "",
+        canonicalUrl: recentUnreadableAd.landingPageUrl ?? "",
+        rawHeadline: "",
+        normalizedHeadline: "",
+        normalizedHeadlineHash: "",
+        ctaText: null,
+        priceText: null,
+        formPresent: null,
+        captureMethod: "landing_page_fetch",
+        capturedAt: new Date().toISOString(),
+      },
+    })).toBe(false);
+
+    await prepareSearchResultSelection(
+      {} as never,
+      {
+        ads: [recentUnreadableAd],
+        nextCursor: null,
+        source: "meta_library_browser",
+        cacheStatus: "hit",
+      },
+      recentUnreadableAd.metaAdId,
+      { enrichSelected: true, hydratePersisted: true },
+    );
+
+    expect(captureLandingPageSnapshot).toHaveBeenCalledTimes(1);
+    expect(captureCreativeText).not.toHaveBeenCalled();
+  });
+
+  it("retries unreadable creative capture after the selection cooldown", async () => {
+    const staleUnreadableAd: AdRecord = {
+      ...baseAd,
+      landingPage: {
+        rawUrl: baseAd.landingPageUrl ?? "",
+        canonicalUrl: baseAd.landingPageUrl ?? "",
+        rawHeadline: "",
+        normalizedHeadline: "",
+        normalizedHeadlineHash: "",
+        ctaText: null,
+        priceText: null,
+        formPresent: null,
+        captureMethod: "landing_page_fetch",
+        capturedAt: new Date().toISOString(),
+      },
+      creativeText: null,
+      creativeTextMetadata: {
+        capturedAt: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(),
+        extractionStatus: "unreadable",
+        unreadableReasonCode: "ocr_binding_missing",
+      },
+    };
+
+    const { selectionNeedsEnrichment } = await import(
+      "~/lib/search-selection.server"
+    );
+
+    expect(selectionNeedsEnrichment(staleUnreadableAd)).toBe(true);
+  });
 });

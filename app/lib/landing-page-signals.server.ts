@@ -15,8 +15,14 @@ const PRICE_PATTERNS = [
   /\b(buy\s*\d+\s*get\s*\d+)\b/i,
 ] as const;
 
-export function extractLandingPageSignals(html: string) {
-  const normalizedHtml = removeNonVisibleElements(html ?? "");
+export function extractLandingPageSignals(
+  html: string,
+  options: { documentMode?: "raw" | "rendered" } = {},
+) {
+  const normalizedHtml = removeNonVisibleElements(
+    html ?? "",
+    options.documentMode ?? "raw",
+  );
   const ctaCandidates = [
     ...extractButtonText(normalizedHtml),
     ...extractSubmitValues(normalizedHtml),
@@ -35,11 +41,59 @@ export function extractLandingPageSignals(html: string) {
   };
 }
 
-function removeNonVisibleElements(html: string) {
-  return html.replace(
-    /<(script|style|noscript|template)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,
-    " ",
+function removeNonVisibleElements(html: string, documentMode: "raw" | "rendered") {
+  const elementNames = new Set(
+    documentMode === "rendered"
+      ? ["script", "style", "noscript", "template"]
+      : ["script", "style", "template"],
   );
+  const output: string[] = [];
+  let copyFrom = 0;
+  let cursor = 0;
+  let hiddenElement: string | null = null;
+  let hiddenDepth = 0;
+
+  while (cursor < html.length) {
+    const tagStart = html.indexOf("<", cursor);
+    if (tagStart < 0) break;
+    const tag = readHtmlTag(html, tagStart);
+    if (!tag) {
+      cursor = tagStart + 1;
+      continue;
+    }
+
+    if (!hiddenElement) {
+      if (!tag.closing && elementNames.has(tag.name)) {
+        output.push(html.slice(copyFrom, tagStart), " ");
+        copyFrom = tag.end;
+        if (!tag.selfClosing) {
+          hiddenElement = tag.name;
+          hiddenDepth = 1;
+        }
+      }
+    } else if (tag.name === hiddenElement) {
+      if (
+        hiddenElement === "template" &&
+        !tag.closing &&
+        !tag.selfClosing
+      ) {
+        hiddenDepth += 1;
+      } else if (tag.closing) {
+        hiddenDepth -= 1;
+        if (hiddenDepth === 0) {
+          hiddenElement = null;
+          copyFrom = tag.end;
+        }
+      }
+    }
+
+    cursor = tag.end;
+  }
+
+  if (!hiddenElement) {
+    output.push(html.slice(copyFrom));
+  }
+  return output.join("");
 }
 
 function extractButtonText(html: string) {
@@ -47,8 +101,7 @@ function extractButtonText(html: string) {
 }
 
 function extractSubmitValues(html: string) {
-  return [...html.matchAll(/<input\b[^>]*>/gi)]
-    .map((match) => match[0])
+  return extractHtmlStartTags(html, "input")
     .filter((tag) => readAttribute(tag, "type")?.toLowerCase() === "submit")
     .map((tag) => readAttribute(tag, "value") ?? "");
 }
@@ -88,16 +141,79 @@ function detectFormPresence(html: string) {
     return true;
   }
 
-  const hasLeadInputs =
-    /<input\b[^>]*(name|email|phone|mobile|whatsapp)[^>]*>/i.test(html) ||
-    /<(input|textarea)\b[^>]*(placeholder|name)=["'][^"']*(name|email|phone|mobile|whatsapp)[^"']*["'][^>]*>/i.test(
-      html,
-    );
+  const inputTags = extractHtmlStartTags(html, "input");
+  const hasLeadInputs = [
+    ...inputTags,
+    ...extractHtmlStartTags(html, "textarea"),
+  ].some((tag) => /\b(name|email|phone|mobile|whatsapp)\b/i.test(tag));
   const hasSubmitAction =
-    /<input\b[^>]*type=["']submit["'][^>]*>/i.test(html) ||
-    /<button\b[^>]*type=["']submit["'][^>]*>/i.test(html);
+    inputTags.some(
+      (tag) => readAttribute(tag, "type")?.toLowerCase() === "submit",
+    ) ||
+    extractHtmlStartTags(html, "button").some(
+      (tag) => readAttribute(tag, "type")?.toLowerCase() === "submit",
+    );
 
   return hasLeadInputs && hasSubmitAction;
+}
+
+function extractHtmlStartTags(html: string, tagName: string) {
+  const tags: string[] = [];
+  let cursor = 0;
+  while (cursor < html.length) {
+    const tagStart = html.indexOf("<", cursor);
+    if (tagStart < 0) break;
+    const tag = readHtmlTag(html, tagStart);
+    if (!tag) {
+      cursor = tagStart + 1;
+      continue;
+    }
+    if (!tag.closing && tag.name === tagName) {
+      tags.push(html.slice(tagStart, tag.end));
+    }
+    cursor = tag.end;
+  }
+  return tags;
+}
+
+function readHtmlTag(html: string, start: number) {
+  let cursor = start + 1;
+  const closing = html[cursor] === "/";
+  if (closing) cursor += 1;
+
+  const nameStart = cursor;
+  while (cursor < html.length && /[a-z0-9:_-]/i.test(html[cursor] ?? "")) {
+    cursor += 1;
+  }
+  if (cursor === nameStart) return null;
+  const name = html.slice(nameStart, cursor).toLowerCase();
+
+  let quote: "\"" | "'" | null = null;
+  for (; cursor < html.length; cursor += 1) {
+    const character = html[cursor];
+    if (quote) {
+      if (character === quote) quote = null;
+      continue;
+    }
+    if (character === "\"" || character === "'") {
+      quote = character;
+      continue;
+    }
+    if (character !== ">") continue;
+
+    let beforeEnd = cursor - 1;
+    while (beforeEnd > nameStart && /\s/.test(html[beforeEnd] ?? "")) {
+      beforeEnd -= 1;
+    }
+    return {
+      closing,
+      end: cursor + 1,
+      name,
+      selfClosing: !closing && html[beforeEnd] === "/",
+    };
+  }
+
+  return null;
 }
 
 function readAttribute(tag: string, attribute: "type" | "value") {

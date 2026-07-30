@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   captureCreativeText,
+  createMissingCreativeCaptureResult,
   CREATIVE_TEXT_EXTRACTOR_VERSION,
   extractCreativeTextFromSnapshotHtml,
 } from "~/lib/creative-text.server";
@@ -31,6 +32,23 @@ function mockFetchWithDns(handler: (url: string) => Response | Promise<Response>
 afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
+});
+
+describe("createMissingCreativeCaptureResult", () => {
+  it("does not timestamp an absent creative source as captured evidence", () => {
+    const result = createMissingCreativeCaptureResult({
+      creativeImageUrl: null,
+    });
+
+    expect(result).toMatchObject({
+      text: null,
+      metadata: {
+        extractionStatus: "unreadable",
+        unreadableReasonCode: "no_creative_capture_stored",
+      },
+    });
+    expect(result.metadata).not.toHaveProperty("capturedAt");
+  });
 });
 
 describe("extractCreativeTextFromSnapshotHtml", () => {

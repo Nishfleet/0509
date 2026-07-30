@@ -157,6 +157,77 @@ describe("extractLandingPageSignals", () => {
     });
   });
 
+  it("keeps noscript fallback signals for raw fetch captures", () => {
+    const html = `
+      <noscript>
+        <a href="/checkout">Shop now</a>
+        <p>Fallback price $39.99</p>
+        <form action="/lead"><input name="email"></form>
+      </noscript>
+    `;
+
+    expect(extractLandingPageSignals(html, { documentMode: "raw" })).toMatchObject({
+      ctaText: "Shop now",
+      priceText: "$39.99",
+      formPresent: true,
+    });
+  });
+
+  it("ignores noscript fallback signals in rendered captures", () => {
+    const html = `
+      <noscript>
+        <a href="/checkout">Shop now</a>
+        <p>Fallback price $39.99</p>
+      </noscript>
+      <main>
+        <button>Book demo</button>
+        <p>Team plan $79.99</p>
+      </main>
+    `;
+
+    expect(extractLandingPageSignals(html, { documentMode: "rendered" })).toMatchObject({
+      ctaText: "Book demo",
+      priceText: "$79.99",
+    });
+  });
+
+  it("reads submit inputs whose quoted attributes contain greater-than signs", () => {
+    const html = `
+      <input data-rule="quantity > 1" value="Get started" type="submit">
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Get started",
+    });
+  });
+
+  it("treats the remainder of malformed unclosed script content as non-visible", () => {
+    const html = `
+      <script>
+        window.cfg = { price: "$9.99" };
+        ${"<script>".repeat(2_000)}
+        <main>Displayed-looking but still script content $49.99</main>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: null,
+      priceText: null,
+      formPresent: false,
+    });
+  });
+
+  it("detects unquoted submit controls with quote-complicated attributes", () => {
+    const html = `
+      <input name="email" placeholder="Work email">
+      <input data-rule="quantity > 1" type=submit value="Get started">
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Get started",
+      formPresent: true,
+    });
+  });
+
   it("returns null CTA and price when nothing high-signal is detected", () => {
     const html = `
       <html>
