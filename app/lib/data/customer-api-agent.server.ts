@@ -330,6 +330,39 @@ export async function claimAgentActionAudit(
     : null;
 }
 
+export async function reclaimFailedAgentActionAudit(
+  env: AppEnv,
+  auditId: string,
+) {
+  const timestamp = nowIso();
+  const result = await run(
+    env,
+    `
+      UPDATE agent_action_audit
+      SET status = 'started',
+          result_json = NULL,
+          error_code = NULL,
+          error_message = NULL,
+          updated_at = ?
+      WHERE id = ?
+        AND status = 'failed'
+    `,
+    timestamp,
+    auditId,
+  );
+
+  if (Number(result.meta?.changes ?? 0) !== 1) {
+    return null;
+  }
+
+  const row = await one<AgentActionAuditRow>(
+    env,
+    "SELECT * FROM agent_action_audit WHERE id = ?",
+    auditId,
+  );
+  return row ? toAgentActionAuditRecord(row) : null;
+}
+
 export async function finishAgentActionAudit(
   env: AppEnv,
   auditId: string,

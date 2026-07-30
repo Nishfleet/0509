@@ -108,6 +108,24 @@ interface DigestSourceItem {
   metadata: Record<string, unknown>;
 }
 
+async function deliverScanTroubleNoticeOrThrow(
+  env: AppEnv,
+  input: {
+    userId: string;
+    accountEmail: string;
+    watchlistNames: string[];
+    periodKey: string;
+  },
+) {
+  const { deliverScanTroubleNotice } = await import("~/lib/delivery.server");
+  const delivery = await deliverScanTroubleNotice(env, input);
+  if (!delivery.sent) {
+    throw new Error(
+      `Scan-trouble notice was not accepted (${delivery.reason}).`,
+    );
+  }
+}
+
 function countAcceptedDigestDelivery(delivery: {
   attempts: number;
   details?: Array<{ status?: string }>;
@@ -489,8 +507,7 @@ async function runDigestForUser(
       // Paid digests with active watchlists but zero successful scans: tell the
       // customer instead of going silent (operator already has at-risk mail).
       if (watchlists.length > 0) {
-        const { deliverScanTroubleNotice } = await import("~/lib/delivery.server");
-        await deliverScanTroubleNotice(env, {
+        await deliverScanTroubleNoticeOrThrow(env, {
           userId: user.id,
           accountEmail: user.email,
           watchlistNames: watchlists.map((watchlist) => watchlist.name),
@@ -629,8 +646,7 @@ async function runDigestForUser(
     );
     if (runStats.runs === 0) {
       if (watchlists.length > 0) {
-        const { deliverScanTroubleNotice } = await import("~/lib/delivery.server");
-        await deliverScanTroubleNotice(env, {
+        await deliverScanTroubleNoticeOrThrow(env, {
           userId: user.id,
           accountEmail: user.email,
           watchlistNames: watchlists.map((watchlist) => watchlist.name),
@@ -715,8 +731,7 @@ async function retryFailedDigests(
         if (runStats.runs === 0) {
           const userWatchlists = await listWatchlists(env, candidate.userId);
           if (userWatchlists.length > 0) {
-            const { deliverScanTroubleNotice } = await import("~/lib/delivery.server");
-            await deliverScanTroubleNotice(env, {
+            await deliverScanTroubleNoticeOrThrow(env, {
               userId: candidate.userId,
               accountEmail: candidate.userEmail,
               watchlistNames: userWatchlists.map((watchlist) => watchlist.name),

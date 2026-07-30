@@ -201,6 +201,7 @@ function setupMocks(authOk = true, actionsWriteEnabled = true) {
       audit,
       claimed: true,
     }),
+    reclaimFailedAgentActionAudit: vi.fn().mockResolvedValue(null),
     finishAgentActionAudit: vi.fn().mockImplementation((_env, auditId: string, input: Record<string, unknown>) =>
       Promise.resolve({
         ...audit,

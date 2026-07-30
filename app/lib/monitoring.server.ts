@@ -1753,12 +1753,42 @@ async function completeWatchlistRun(
   await finishWatchlistRun(env, runId, input);
 }
 
+function summarizeAlertDelivery(delivery: {
+  attempts: number;
+  details?: Array<{ status?: string }>;
+}) {
+  // Production delivery returns one detail per attempt. Keep the fallback for
+  // narrow tests that predate per-attempt delivery state.
+  if (!Array.isArray(delivery.details)) {
+    return {
+      attempts: delivery.attempts,
+      accepted: delivery.attempts,
+      failures: 0,
+    };
+  }
+
+  return {
+    attempts: delivery.details.length,
+    accepted: delivery.details.filter((attempt) => attempt.status === "sent").length,
+    failures: delivery.details.filter((attempt) => attempt.status === "failed").length,
+  };
+}
+
 class StaleOrchestratedWatchlistRunError extends Error {
   constructor() {
     super(
       "Stale orchestrated watchlist run token; refusing side effects or finalization.",
     );
     this.name = "StaleOrchestratedWatchlistRunError";
+  }
+}
+
+class RecordedAlertDeliveryFailureError extends Error {
+  constructor(failures: number, attempts: number) {
+    super(
+      `${failures} of ${attempts} alert delivery attempt${attempts === 1 ? "" : "s"} failed.`,
+    );
+    this.name = "RecordedAlertDeliveryFailureError";
   }
 }
 
@@ -1946,6 +1976,7 @@ export async function runWatchlist(
             lane: "customer",
           })
         : { attempts: 0, channels: [] };
+    const alertOutcome = summarizeAlertDelivery(alertDelivery);
 
     // WP-25: free users get no digests/instant alerts — send one activation-result
     // email when this run established the baseline (first successful scan).
@@ -1964,7 +1995,7 @@ export async function runWatchlist(
       runId,
       watchlist.id,
       {
-        status: "succeeded",
+        status: alertOutcome.failures > 0 ? "failed" : "succeeded",
         pagesScanned,
         summary: {
           adsSeen: currentObservations.length,
@@ -1980,14 +2011,22 @@ export async function runWatchlist(
             scanNativeEvents.length +
             proofEvaluation.confirmedEventCount +
             directWebsiteProofEvaluation.confirmedEventCount,
-          sendsTriggered: alertDelivery.attempts,
+          sendsTriggered: alertOutcome.accepted,
+          sendAttempts: alertOutcome.attempts,
+          sendFailures: alertOutcome.failures,
           events: allEvents.length,
           eventTypes: summarizeEventTypes(allEvents),
         },
+        errorCode:
+          alertOutcome.failures > 0 ? "alert_delivery_failed" : null,
+        errorMessage:
+          alertOutcome.failures > 0
+            ? `${alertOutcome.failures} customer alert delivery attempt${alertOutcome.failures === 1 ? "" : "s"} failed.`
+            : null,
       },
       options,
     );
-    if (!options.orchestrationToken) {
+    if (!options.orchestrationToken && alertOutcome.failures === 0) {
       await touchWatchlistScanned(env, watchlist.id);
     }
     const commercialProvider = resolveCommercialDiscoveryProvider(env, {
@@ -1995,13 +2034,17 @@ export async function runWatchlist(
     });
     await logMetaIntegrationStatus(env, {
       status:
-        commercialProvider === "meta_library_browser"
+        alertOutcome.failures > 0
+          ? "degraded"
+          : commercialProvider === "meta_library_browser"
           ? "healthy"
           : commercialProvider === "meta_api"
             ? "degraded"
             : "demo",
       summary:
-        commercialProvider === "meta_library_browser"
+        alertOutcome.failures > 0
+          ? "Watchlist evidence completed, but customer alert delivery failed."
+          : commercialProvider === "meta_library_browser"
           ? "Scheduled watchlist scan completed through the commercial discovery resolver."
           : commercialProvider === "meta_api"
             ? "Scheduled watchlist scan completed with the diagnostic Meta API path."
@@ -2012,8 +2055,18 @@ export async function runWatchlist(
       },
     });
 
+    if (alertOutcome.failures > 0) {
+      throw new RecordedAlertDeliveryFailureError(
+        alertOutcome.failures,
+        alertOutcome.attempts,
+      );
+    }
+
     return { runId, events: allEvents.length };
   } catch (error) {
+    if (error instanceof RecordedAlertDeliveryFailureError) {
+      throw error;
+    }
     if (error instanceof StaleOrchestratedWatchlistRunError) {
       throw error;
     }
@@ -2109,13 +2162,14 @@ export async function runWatchlist(
               lane: "customer",
             })
           : { attempts: 0, channels: [] };
+      const alertOutcome = summarizeAlertDelivery(alertDelivery);
 
       await completeWatchlistRun(
         env,
         runId,
         watchlist.id,
         {
-          status: "succeeded",
+          status: alertOutcome.failures > 0 ? "failed" : "succeeded",
           pagesScanned: 0,
           summary: {
             adsSeen: 0,
@@ -2123,7 +2177,9 @@ export async function runWatchlist(
             candidatesDetected: directWebsiteProofEvaluation.candidateCount,
             proofsAttempted: directWebsiteProofEvaluation.proofAttemptCount,
             eventsConfirmed: directWebsiteProofEvaluation.confirmedEventCount,
-            sendsTriggered: alertDelivery.attempts,
+            sendsTriggered: alertOutcome.accepted,
+            sendAttempts: alertOutcome.attempts,
+            sendFailures: alertOutcome.failures,
             events: directWebsiteProofEvaluation.events.length,
             eventTypes: summarizeEventTypes(
               directWebsiteProofEvaluation.events,
@@ -2132,24 +2188,44 @@ export async function runWatchlist(
             scanErrorCode: errorCode,
             scanErrorMessage: details,
           },
+          errorCode:
+            alertOutcome.failures > 0 ? "alert_delivery_failed" : null,
+          errorMessage:
+            alertOutcome.failures > 0
+              ? `${alertOutcome.failures} customer alert delivery attempt${alertOutcome.failures === 1 ? "" : "s"} failed.`
+              : null,
         },
         options,
       );
-      if (!options.orchestrationToken) {
+      if (!options.orchestrationToken && alertOutcome.failures === 0) {
         await touchWatchlistScanned(env, watchlist.id);
       }
       await logMetaIntegrationStatus(env, {
         status: "degraded",
         summary:
-          "Commercial discovery failed, but direct website evidence still completed.",
+          alertOutcome.failures > 0
+            ? "Commercial discovery failed; direct website evidence completed, but customer alert delivery failed."
+            : "Commercial discovery failed, but direct website evidence still completed.",
         errorCode,
         errorMessage: details,
         metadata: {
           watchlistId: watchlist.id,
           runId,
           websiteProofUrl: directWebsiteProofEvaluation.websiteUrl,
+          alertDeliveryAttempts: alertOutcome.attempts,
+          alertDeliveryAccepted: alertOutcome.accepted,
+          alertDeliveryFailures: alertOutcome.failures,
+          alertDeliveryErrorCode:
+            alertOutcome.failures > 0 ? "alert_delivery_failed" : null,
         },
       });
+
+      if (alertOutcome.failures > 0) {
+        throw new RecordedAlertDeliveryFailureError(
+          alertOutcome.failures,
+          alertOutcome.attempts,
+        );
+      }
 
       return { runId, events: directWebsiteProofEvaluation.events.length };
     }

@@ -48,6 +48,7 @@ import {
   getWeeklyBusinessSummary,
   findAgentActionAuditByIdempotencyKey,
   finishAgentActionAudit,
+  reclaimFailedAgentActionAudit,
   isBlockingDodoSubscriptionPlanChangeStatus,
   markDodoSubscriptionPlanChangeScheduled,
   listRecentAgentActionAudits,
@@ -497,6 +498,58 @@ describe("agent action audit persistence", () => {
     ]);
     expect(update?.bindings[8]).toBe("audit-1");
     expect(audit?.id).toBe("audit-1");
+  });
+
+  it("atomically reclaims a failed audit only once", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      sqlite.sqlite.exec(`
+        CREATE TABLE agent_action_audit (
+          id TEXT PRIMARY KEY NOT NULL,
+          user_id TEXT NOT NULL,
+          api_key_id TEXT,
+          action_name TEXT NOT NULL,
+          resource_type TEXT,
+          resource_id TEXT,
+          idempotency_key TEXT,
+          status TEXT NOT NULL CHECK (status IN ('started', 'succeeded', 'failed')),
+          result_json TEXT,
+          error_code TEXT,
+          error_message TEXT,
+          metadata_json TEXT NOT NULL DEFAULT '{}',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        INSERT INTO agent_action_audit (
+          id, user_id, action_name, idempotency_key, status, result_json,
+          error_code, error_message, metadata_json, created_at, updated_at
+        ) VALUES (
+          'audit-1', 'user-1', 'support_case.create', 'idem-1', 'failed',
+          '{"ok":false}', 'support_notification_failed', 'Delivery failed.',
+          '{}', '2026-06-19T00:00:00.000Z', '2026-06-19T00:01:00.000Z'
+        );
+      `);
+
+      const first = await reclaimFailedAgentActionAudit(
+        { DB: sqlite.db } as never,
+        "audit-1",
+      );
+      const second = await reclaimFailedAgentActionAudit(
+        { DB: sqlite.db } as never,
+        "audit-1",
+      );
+
+      expect(first).toMatchObject({
+        id: "audit-1",
+        status: "started",
+        result: null,
+        errorCode: null,
+        errorMessage: null,
+      });
+      expect(second).toBeNull();
+    } finally {
+      sqlite.close();
+    }
   });
 });
 
@@ -3512,8 +3565,11 @@ describe("getOperatorSnapshot", () => {
       expect(failedProofs?.bindings).toContain(recentWindowIso);
       expect(budgetBlockedProofs?.bindings).toContain(recentWindowIso);
       expect(deliveryFailures?.bindings).toContain(recentWindowIso);
+      expect(deliveryFailures?.bindings).toContain("2026-04-26T09:45:00.000Z");
       expect(deliveryFailures?.sql).toContain("delivery_attempt.status = 'pending'");
+      expect(deliveryFailures?.sql).toContain("delivery_attempt.status = 'sent'");
       expect(deliveryFailures?.sql).toContain("delivery_attempt.webhook_status = 'provider_unknown'");
+      expect(deliveryFailures?.sql).toContain("delivery_attempt.updated_at <= ?");
       expect(discoveryFailures?.bindings).toContain(recentWindowIso);
     } finally {
       vi.useRealTimers();

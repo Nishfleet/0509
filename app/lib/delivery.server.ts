@@ -354,6 +354,9 @@ export async function deliverScanTroubleNotice(
     idempotencyKey,
   });
   if (!claim.attemptId || !claim.claimUpdatedAt) {
+    if (claim.duplicate?.status === "sent") {
+      return { sent: true as const, reason: "sent" as const };
+    }
     return { sent: false as const, reason: "duplicate" as const };
   }
 

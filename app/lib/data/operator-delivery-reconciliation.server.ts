@@ -75,6 +75,7 @@ type DeliveryReconciliationScope = {
   failedClassifications: readonly InstantDeliveryEvidenceClassification[];
   attemptPredicate: string;
   allowsUnclassifiedFailure: boolean;
+  allowsAcceptedProviderUnknown: boolean;
   requiresSettledProviderWindow: boolean;
   updatesDigestDelivery: boolean;
 };
@@ -98,6 +99,7 @@ const BILLING_RECONCILIATION_SCOPE: DeliveryReconciliationScope = {
     )
   `,
   allowsUnclassifiedFailure: false,
+  allowsAcceptedProviderUnknown: true,
   requiresSettledProviderWindow: false,
   updatesDigestDelivery: false,
 };
@@ -118,6 +120,7 @@ const DIGEST_RECONCILIATION_SCOPE: DeliveryReconciliationScope = {
     AND delivery_attempt.idempotency_key LIKE 'digest:%:customer:email:%'
   `,
   allowsUnclassifiedFailure: false,
+  allowsAcceptedProviderUnknown: true,
   requiresSettledProviderWindow: false,
   updatesDigestDelivery: true,
 };
@@ -139,6 +142,7 @@ const INSTANT_RECONCILIATION_SCOPE: DeliveryReconciliationScope = {
     AND delivery_attempt.idempotency_key LIKE 'instant:%:customer:email:%'
   `,
   allowsUnclassifiedFailure: false,
+  allowsAcceptedProviderUnknown: true,
   requiresSettledProviderWindow: false,
   updatesDigestDelivery: false,
 };
@@ -161,6 +165,7 @@ const INSTANT_WHATSAPP_RECONCILIATION_SCOPE: DeliveryReconciliationScope = {
     AND delivery_attempt.idempotency_key LIKE 'instant:%:customer:whatsapp:%'
   `,
   allowsUnclassifiedFailure: true,
+  allowsAcceptedProviderUnknown: false,
   requiresSettledProviderWindow: true,
   updatesDigestDelivery: false,
 };
@@ -183,6 +188,7 @@ const INSTANT_SLACK_RECONCILIATION_SCOPE: DeliveryReconciliationScope = {
     AND delivery_attempt.idempotency_key LIKE 'instant:%:customer:slack:%'
   `,
   allowsUnclassifiedFailure: true,
+  allowsAcceptedProviderUnknown: false,
   requiresSettledProviderWindow: true,
   updatesDigestDelivery: false,
 };
@@ -206,6 +212,7 @@ const SUPPORT_ALERT_RECONCILIATION_SCOPE: DeliveryReconciliationScope = {
     AND json_extract(delivery_attempt.payload_snapshot_json, '$.kind') = 'support_case_operator_alert'
   `,
   allowsUnclassifiedFailure: false,
+  allowsAcceptedProviderUnknown: true,
   requiresSettledProviderWindow: false,
   updatesDigestDelivery: false,
 };
@@ -591,6 +598,9 @@ function reconciliationStatePredicate(
             ? ""
             : `AND ${qualifier}provider_status_last_seen_at IS NOT NULL`}
         )
+        ${scope.allowsAcceptedProviderUnknown
+          ? `OR ${qualifier}status = 'sent'`
+          : ""}
       )
     )
   `;

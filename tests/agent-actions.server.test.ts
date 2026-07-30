@@ -34,6 +34,15 @@ function setupDataMock(existing: AgentActionAuditRecord | null = null) {
       audit: auditRecord(),
       claimed: true,
     }),
+    reclaimFailedAgentActionAudit: vi.fn().mockImplementation((_, auditId: string) =>
+      Promise.resolve(auditRecord({
+        id: auditId,
+        actionName: existing?.actionName ?? "support_case.create",
+        resourceType: existing?.resourceType ?? "support_case",
+        resourceId: existing?.resourceId ?? "case-1",
+        status: "started",
+      })),
+    ),
     finishAgentActionAudit: vi.fn().mockResolvedValue(completed),
   };
 
@@ -279,6 +288,91 @@ describe("runAuditedAgentAction", () => {
     expect(outcome.result).toEqual({ watchlistId: "watchlist-1" });
     expect(action).not.toHaveBeenCalled();
     expect(mocks.claimAgentActionAudit).not.toHaveBeenCalled();
+    expect(mocks.finishAgentActionAudit).not.toHaveBeenCalled();
+  });
+
+  it("retries a failed non-terminal action with the same idempotency key", async () => {
+    const existing = auditRecord({
+      status: "failed",
+      actionName: "support_case.create",
+      resourceType: "support_case",
+      resourceId: "case-1",
+      result: { ok: false, supportCase: { id: "case-1" } },
+      errorCode: "support_notification_failed",
+    });
+    const completed = auditRecord({
+      status: "succeeded",
+      actionName: "support_case.create",
+      resourceType: "support_case",
+      resourceId: "case-1",
+      result: { ok: true, supportCase: { id: "case-1" } },
+    });
+    const mocks = setupDataMock(existing);
+    mocks.finishAgentActionAudit.mockResolvedValue(completed);
+    const { runAuditedAgentAction } = await import("~/lib/agent-actions.server");
+    const action = vi.fn().mockResolvedValue({
+      resourceType: "support_case",
+      resourceId: "case-1",
+      result: { ok: true, supportCase: { id: "case-1" } },
+    });
+
+    const outcome = await runAuditedAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        actionName: "support_case.create",
+        idempotencyKey: "idem-1",
+      },
+      action,
+      { retryFailed: true },
+    );
+
+    expect(action).toHaveBeenCalledTimes(1);
+    expect(outcome).toMatchObject({
+      replayed: false,
+      audit: { status: "succeeded" },
+      result: { ok: true, supportCase: { id: "case-1" } },
+    });
+    expect(mocks.claimAgentActionAudit).not.toHaveBeenCalled();
+    expect(mocks.reclaimFailedAgentActionAudit).toHaveBeenCalledWith(
+      expect.anything(),
+      "audit-1",
+    );
+    expect(mocks.finishAgentActionAudit).toHaveBeenCalledWith(
+      expect.anything(),
+      "audit-1",
+      expect.objectContaining({ status: "succeeded" }),
+    );
+  });
+
+  it("does not rerun a failed action when another caller reclaimed it first", async () => {
+    const existing = auditRecord({
+      status: "failed",
+      actionName: "support_case.create",
+      errorCode: "support_notification_failed",
+    });
+    const mocks = setupDataMock(existing);
+    mocks.reclaimFailedAgentActionAudit.mockResolvedValue(null);
+    const {
+      AgentActionReplayUnavailableError,
+      runAuditedAgentAction,
+    } = await import("~/lib/agent-actions.server");
+    const action = vi.fn();
+
+    await expect(
+      runAuditedAgentAction(
+        { DB: {} } as never,
+        {
+          userId: "user-1",
+          actionName: "support_case.create",
+          idempotencyKey: "idem-1",
+        },
+        action,
+        { retryFailed: true },
+      ),
+    ).rejects.toBeInstanceOf(AgentActionReplayUnavailableError);
+
+    expect(action).not.toHaveBeenCalled();
     expect(mocks.finishAgentActionAudit).not.toHaveBeenCalled();
   });
 

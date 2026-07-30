@@ -243,6 +243,7 @@ export {
   listRecentAgentActionAudits,
   createAgentActionAudit,
   claimAgentActionAudit,
+  reclaimFailedAgentActionAudit,
   finishAgentActionAudit,
   closeCounterMoveFollowUp,
   upsertAgentMemory,

@@ -26,7 +26,11 @@ export function toPublicDeliveryAttemptSummary(
     providerStatusLastSeenAt: attempt.providerStatusLastSeenAt,
     sentAt: attempt.sentAt,
     createdAt: attempt.createdAt,
-    errorMessage: deliveryRecoveryMessage(attempt.status, attempt.webhookStatus),
+    errorMessage: deliveryRecoveryMessage(
+      attempt.channel,
+      attempt.status,
+      attempt.webhookStatus,
+    ),
   };
 }
 
@@ -41,9 +45,17 @@ function deliveryTargetLabel(channel: DeliveryAttemptRecord["channel"]) {
 }
 
 function deliveryRecoveryMessage(
+  channel: DeliveryAttemptRecord["channel"],
   status: DeliveryAttemptRecord["status"],
   webhookStatus: DeliveryAttemptRecord["webhookStatus"],
 ) {
+  if (
+    channel === "email" &&
+    status === "sent" &&
+    webhookStatus === "provider_unknown"
+  ) {
+    return "The email provider accepted this message, but final delivery is unconfirmed.";
+  }
   if (status === "pending" && webhookStatus === "provider_unknown") {
     return "Provider outcome is unknown. Check again later or contact support.";
   }

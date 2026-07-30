@@ -192,6 +192,7 @@ export async function listOutstandingBillingLifecycleProviderUnknownAttempts(
         AND webhook_status = 'provider_unknown'
         AND (
           status = 'pending'
+          OR status = 'sent'
           OR (status = 'failed' AND provider_status_last_seen_at IS NOT NULL)
         )
         AND (
@@ -224,6 +225,7 @@ export async function listOutstandingDigestProviderUnknownAttempts(
         AND webhook_status = 'provider_unknown'
         AND (
           status = 'pending'
+          OR status = 'sent'
           OR (status = 'failed' AND provider_status_last_seen_at IS NOT NULL)
         )
         AND idempotency_key LIKE 'digest:%:customer:email:%'
@@ -255,6 +257,7 @@ export async function listOutstandingInstantProviderUnknownAttempts(
             webhook_status = 'provider_unknown'
             AND (
               status = 'failed'
+              OR (channel = 'email' AND status = 'sent')
               OR (
                 status = 'pending'
                 AND (channel = 'email' OR julianday(updated_at) <= julianday('now', '-60 seconds'))

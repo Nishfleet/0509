@@ -55,6 +55,9 @@ export interface AgentActionSuccess<T extends JsonRecord> {
   resourceId?: string | null;
   result: T;
   metadata?: JsonRecord | null;
+  auditStatus?: "succeeded" | "failed";
+  errorCode?: string | null;
+  errorMessage?: string | null;
 }
 
 export interface AuditedAgentActionResult<T extends JsonRecord> {
@@ -65,6 +68,7 @@ export interface AuditedAgentActionResult<T extends JsonRecord> {
 
 export interface AuditedAgentActionOptions<T extends JsonRecord> {
   replayCompleted?: (audit: AgentActionAuditRecord) => Promise<T | null> | T | null;
+  retryFailed?: boolean;
 }
 
 export interface AtomicAgentActionOptions<T extends JsonRecord> {
@@ -128,9 +132,11 @@ export async function runAuditedAgentAction<T extends JsonRecord>(
   action: () => Promise<AgentActionSuccess<T>>,
   options: AuditedAgentActionOptions<T> = {},
 ): Promise<AuditedAgentActionResult<T>> {
-  const { findAgentActionAuditByIdempotencyKey, claimAgentActionAudit, finishAgentActionAudit } = await import(
-    "~/lib/data.server"
-  );
+  const {
+    findAgentActionAuditByIdempotencyKey,
+    claimAgentActionAudit,
+    reclaimFailedAgentActionAudit,
+  } = await import("~/lib/data.server");
   const actionName = normalizeActionName(context.actionName);
   const idempotencyKey = normalizeOptionalString(context.idempotencyKey);
 
@@ -141,14 +147,21 @@ export async function runAuditedAgentAction<T extends JsonRecord>(
         throw new AgentActionIdempotencyConflictError();
       }
       assertIdempotencyRequestMatches(existing, context.metadata ?? {});
-      if (existing.status !== "succeeded" || !existing.result) {
-        throw new AgentActionReplayUnavailableError();
+      if (existing.status === "succeeded" && existing.result) {
+        return {
+          audit: existing,
+          replayed: true,
+          result: (await options.replayCompleted?.(existing)) ?? existing.result as T,
+        };
       }
-      return {
-        audit: existing,
-        replayed: true,
-        result: (await options.replayCompleted?.(existing)) ?? existing.result as T,
-      };
+      if (existing.status === "failed" && options.retryFailed) {
+        const reclaimed = await reclaimFailedAgentActionAudit(env, existing.id);
+        if (!reclaimed) {
+          throw new AgentActionReplayUnavailableError();
+        }
+        return executeAuditedAgentAction(env, context, actionName, reclaimed, action);
+      }
+      throw new AgentActionReplayUnavailableError();
     }
   }
 
@@ -171,26 +184,57 @@ export async function runAuditedAgentAction<T extends JsonRecord>(
       throw new AgentActionIdempotencyConflictError();
     }
     assertIdempotencyRequestMatches(claim.audit, context.metadata ?? {});
-    if (claim.audit.status !== "succeeded" || !claim.audit.result) {
-      throw new AgentActionReplayUnavailableError();
+    if (claim.audit.status === "succeeded" && claim.audit.result) {
+      return {
+        audit: claim.audit,
+        replayed: true,
+        result: (await options.replayCompleted?.(claim.audit)) ?? claim.audit.result as T,
+      };
     }
-    return {
-      audit: claim.audit,
-      replayed: true,
-      result: (await options.replayCompleted?.(claim.audit)) ?? claim.audit.result as T,
-    };
+    if (claim.audit.status === "failed" && options.retryFailed) {
+      const reclaimed = await reclaimFailedAgentActionAudit(env, claim.audit.id);
+      if (!reclaimed) {
+        throw new AgentActionReplayUnavailableError();
+      }
+      return executeAuditedAgentAction(env, context, actionName, reclaimed, action);
+    }
+    throw new AgentActionReplayUnavailableError();
   }
 
-  const audit = claim.audit;
+  return executeAuditedAgentAction(
+    env,
+    context,
+    actionName,
+    claim.audit,
+    action,
+  );
+}
 
+async function executeAuditedAgentAction<T extends JsonRecord>(
+  env: AppEnv,
+  context: AgentActionContext,
+  actionName: string,
+  audit: AgentActionAuditRecord,
+  action: () => Promise<AgentActionSuccess<T>>,
+): Promise<AuditedAgentActionResult<T>> {
+  const { finishAgentActionAudit } = await import("~/lib/data.server");
   try {
     const success = await action();
     const result = success.result;
+    const auditStatus = success.auditStatus ?? "succeeded";
     const completed = await finishAgentActionAudit(env, audit.id, {
-      status: "succeeded",
+      status: auditStatus,
       resourceType: normalizeOptionalString(success.resourceType ?? context.resourceType),
       resourceId: normalizeOptionalString(success.resourceId ?? context.resourceId),
       result: redactAgentActionResult(result, { actionName }),
+      errorCode:
+        auditStatus === "failed"
+          ? normalizeOptionalString(success.errorCode) ?? "action_incomplete"
+          : null,
+      errorMessage:
+        auditStatus === "failed"
+          ? normalizeOptionalString(success.errorMessage) ?? "Agent action did not complete."
+          : null,
       metadata: sanitizeAgentActionMetadata({
         ...(context.metadata ?? {}),
         ...(success.metadata ?? {}),

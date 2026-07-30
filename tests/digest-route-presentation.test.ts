@@ -40,7 +40,10 @@ async function mockRoute(loaderData: unknown, search = "") {
 	vi.doMock("~/components/submit-button", () => ({ SubmitButton: component("button") }));
 }
 
-function digestData(summary: Record<string, unknown> | null | undefined) {
+function digestData(
+	summary: Record<string, unknown> | null | undefined,
+	attempts: Array<Record<string, unknown>> = [],
+) {
 	const digest = {
 		id: "digest-1",
 		periodStart: "2026-07-08T00:00:00.000Z",
@@ -51,9 +54,9 @@ function digestData(summary: Record<string, unknown> | null | undefined) {
 	};
 	return {
 		digests: [digest],
-		digestAttemptsByDigestId: { "digest-1": [] },
+		digestAttemptsByDigestId: { "digest-1": attempts },
 		selectedDigest: digest,
-		selectedDigestAttempts: [],
+		selectedDigestAttempts: attempts,
 		canAccessDigests: true,
 	};
 }
@@ -138,5 +141,28 @@ describe("digests customer presentation", () => {
 			const markup = renderToStaticMarkup(createElement(DigestsRoute));
 			expect(markup).not.toContain("eligible changes;");
 		}
+	});
+
+	it("does not call a provider-accepted email delivered or sent while delivery is unconfirmed", async () => {
+		await mockRoute(
+			digestData(null, [{
+				channel: "email",
+				targetValue: "Configured email recipient",
+				status: "sent",
+				webhookStatus: "provider_unknown",
+				errorMessage: "The email provider accepted this message, but final delivery is unconfirmed.",
+				providerStatusLastSeenAt: null,
+				sentAt: "2026-07-15T09:14:00.000Z",
+				createdAt: "2026-07-15T09:14:00.000Z",
+			}]),
+		);
+
+		const { default: DigestsRoute } = await import("~/routes/app.digests");
+		const markup = renderToStaticMarkup(createElement(DigestsRoute));
+
+		expect(markup).toContain("Delivery unconfirmed");
+		expect(markup).toContain("Email delivery unconfirmed");
+		expect(markup).not.toContain(">Sent<");
+		expect(markup).not.toContain("Email sent");
 	});
 });

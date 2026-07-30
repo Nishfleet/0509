@@ -456,6 +456,11 @@ export async function runCustomerAgentAction(
           resourceType: "support_case",
           resourceId: result.supportCase.id,
           result,
+          auditStatus: result.ok ? "succeeded" as const : "failed" as const,
+          errorCode: result.ok ? null : "support_notification_failed",
+          errorMessage: result.ok
+            ? null
+            : "Support case was saved, but the operator notification failed.",
           metadata: {
             supportCaseId: result.supportCase.id,
             category: result.supportCase.category,
@@ -489,6 +494,7 @@ export async function runCustomerAgentAction(
     }
   }, {
     replayCompleted: (audit) => replayCustomerAgentAction(env, context, actionName, audit),
+    retryFailed: actionName === "support_case.create",
   });
 }
 

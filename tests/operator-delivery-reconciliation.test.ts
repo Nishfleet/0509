@@ -394,8 +394,44 @@ describe("operator digest email reconciliation", () => {
     });
   });
 
+  it("reconciles an accepted digest email whose final delivery remained unknown", async () => {
+    const harness = setup();
+    harness.sqlite.prepare(`
+      UPDATE delivery_attempt
+      SET status = 'sent',
+          error_message = NULL,
+          sent_at = '2026-07-15T18:00:30.000Z',
+          failed_at = NULL
+      WHERE id = 'digest-attempt-1'
+    `).run();
+
+    await expect(
+      reconcileDigestEmailAttemptWithAudit({ DB: harness.db } as never, input()),
+    ).resolves.toMatchObject({ ok: true, replayed: false, outcome: "sent" });
+
+    expect(
+      harness.sqlite.prepare(`
+        SELECT status, webhook_status, sent_at
+        FROM delivery_attempt
+        WHERE id = 'digest-attempt-1'
+      `).get(),
+    ).toMatchObject({
+      status: "sent",
+      webhook_status: "delivered",
+      sent_at: "2026-07-15T18:01:00.000Z",
+    });
+  });
+
   it("lists only digest email attempts whose provider outcome still needs reconciliation", async () => {
     const harness = setup();
+    harness.sqlite.prepare(`
+      UPDATE delivery_attempt
+      SET status = 'sent',
+          error_message = NULL,
+          sent_at = '2026-07-15T18:00:30.000Z',
+          failed_at = NULL
+      WHERE id = 'digest-attempt-1'
+    `).run();
     harness.sqlite.prepare(`
       INSERT INTO delivery_attempt (
         id, user_id, lane, channel, provider, status, webhook_status,
