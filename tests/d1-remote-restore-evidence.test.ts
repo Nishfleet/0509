@@ -46,6 +46,10 @@ import { selectRecentRemoteRestoreArtifact } from "../scripts/find-recent-remote
 const fingerprint = "a".repeat(64);
 const wranglerHash = "b".repeat(64);
 const fileHash = "c".repeat(64);
+const toyLedgerOptions = {
+  baseline: ["0001_first.sql", "0002_second.sql"],
+  retiredMigrations: new Set<string>(),
+};
 
 function aggregateEvidence() {
   return {
@@ -1060,12 +1064,14 @@ describe("D1 remote restore evidence automation", () => {
       assertMigrationLedgerMatchesRepository(ledger, [
         "0001_first.sql",
         "0002_second.sql",
-      ]),
+      ], undefined, toyLedgerOptions),
     ).toBe(true);
     expect(() =>
       assertMigrationLedgerMatchesRepository(
         [ledger[1]],
         ["0001_first.sql", "0002_second.sql"],
+        undefined,
+        toyLedgerOptions,
       ),
     ).toThrow("source_backup_migration_ledger_stale");
   });
@@ -1123,7 +1129,12 @@ describe("D1 remote restore evidence automation", () => {
     ];
     const cleanup = new Set(["0003_destructive_cleanup.sql"]);
     expect(
-      assertMigrationLedgerMatchesRepository(ledger, repository, cleanup),
+      assertMigrationLedgerMatchesRepository(
+        ledger,
+        repository,
+        cleanup,
+        toyLedgerOptions,
+      ),
     ).toBe(true);
     expect(
       assertMigrationLedgerMatchesRepository(
@@ -1137,6 +1148,7 @@ describe("D1 remote restore evidence automation", () => {
         ],
         repository,
         cleanup,
+        toyLedgerOptions,
       ),
     ).toBe(true);
     expect(() =>
@@ -1144,6 +1156,7 @@ describe("D1 remote restore evidence automation", () => {
         [ledger[0]],
         repository,
         cleanup,
+        toyLedgerOptions,
       ),
     ).toThrow("source_backup_migration_ledger_stale");
   });
@@ -1202,11 +1215,14 @@ describe("D1 remote restore evidence automation", () => {
     });
 
     expect(evidence).toMatchObject({
-      schemaVersion: 1,
+      schemaVersion: 2,
       candidateFingerprint: fingerprint,
       wranglerWorktreeSha256: wranglerHash,
       latestMigration: "0002_second.sql",
       migrationCount: 2,
+      migrationLedgerNames: ["0001_first.sql", "0002_second.sql"],
+      migrationLedgerNamesSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      migrationLedgerBaselineSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
       productionSearchRolloutMode: "shadow",
       integrity: "ok",
       foreignKeyViolations: 0,
