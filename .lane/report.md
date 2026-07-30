@@ -61,6 +61,31 @@ retryable and durably visible instead of pretending a second page occurred.
 | Greptile PR review | Unavailable: `nish3451 has reached the 50-credit limit for trial accounts`; no inline or general code findings were produced |
 | `bugbot-gate status` | `ALLOW BUGBOT` — `risk: high` — `reason: High-risk or critical diff. One paid Bugbot run is justified.` GitHub's automatic attempt then reported `Bugbot couldn't run - usage limit reached`; expected/non-blocking, and `bugbot-gate mark-bugbot` recorded the fingerprint |
 
+### PR CI merge-ref blocker
+
+GitHub run `30545966908`, job `codex-node-checks`, is not green. The first
+attempt logged every test file as passing, then retained a Vitest worker until
+GitHub canceled the operation. A single authorized failed-job rerun reproduced
+the same non-terminating process and was canceled to release the shared
+self-hosted runner once the cause was proven.
+
+The PR merge ref includes `origin/main` commit `e0ed012` (#440), which is newer
+than this lane's `46fe111` base and added the deploy-window compatibility
+tests. On CI, that test calculates `realFlock` with `command -v flock`; PATH
+resolves it to the installed `/home/nish/.local/bin/flock` compatibility shim.
+The test exports that same path as `FLOCK_COMPAT_REAL`. Its fd-lock probe then
+executes the shim as its own "real" flock indefinitely:
+
+`deploy-window-lock.sh -> /home/nish/.local/bin/flock -> deploy-window-lock.sh`
+
+The second attempt's process tree reproduced that exact recursion under
+`tests/deploy-window-lock.test.ts`; no candidate test assertion failed.
+Fixing `scripts/flock-compat.sh`, `scripts/deploy-window-lock.sh`, their tests,
+or the installed runner shim belongs to #440's lock/CI ownership and would
+violate this lane's coordinate-by-avoidance boundary. The check must remain
+failed/canceled until that owning lane fixes the real-flock resolution, after
+which this PR's failed job should be rerun.
+
 Gate B manifest:
 
 - path: `test-results/gate-b-manifest-local-release-local-7bae353159bd4ea847529a3ff4d73c47.json`
