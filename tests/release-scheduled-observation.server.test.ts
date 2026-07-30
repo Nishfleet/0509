@@ -129,6 +129,16 @@ describe("release scheduled observations", () => {
       .toMatchObject({ outcome: "no_work", metrics: { sent: false } });
     expect(classifyScheduledTaskResult("weekly_business_numbers", { sent: false, reason: "delivery_failed" }))
       .toMatchObject({ outcome: "degraded", metrics: { sent: false } });
+    expect(classifyScheduledTaskResult("customer_at_risk_alert", {
+      sent: false,
+      reason: "duplicate",
+      signals: 2,
+    })).toMatchObject({ outcome: "no_work", metrics: { sent: false, signals: 2 } });
+    expect(classifyScheduledTaskResult("customer_at_risk_alert", {
+      sent: false,
+      reason: "delivery_failed",
+      signals: 2,
+    })).toMatchObject({ outcome: "degraded", metrics: { sent: false, signals: 2 } });
     expect(classifyScheduledTaskResult("digest_schedule_exhaustion_recovery", {
       attempted: 1,
       alerted: 0,

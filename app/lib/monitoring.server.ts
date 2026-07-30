@@ -773,13 +773,46 @@ export async function sendCustomerAtRiskAlert(
   }
 
   const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
+  const idempotencyKey =
+    options.idempotencyKey ??
+    `operator-alert:${new Date().toISOString().slice(0, 10)}`;
   const sent = await sendOperatorAlertEmail(env, {
     subject: `0509 customer-at-risk: ${lines.length} signal${lines.length === 1 ? "" : "s"}`,
     lines,
-    idempotencyKey: options.idempotencyKey,
+    idempotencyKey,
   });
 
-  return { sent, signals: lines.length };
+  if (sent) {
+    return { sent: true, reason: "sent" as const, signals: lines.length };
+  }
+
+  try {
+    const { getDeliveryAttemptByIdempotencyKey } =
+      await import("~/lib/data.server");
+    const durableAttempt = await getDeliveryAttemptByIdempotencyKey(
+      env,
+      idempotencyKey,
+    );
+    if (durableAttempt?.status === "sent") {
+      return {
+        sent: false,
+        reason: "duplicate" as const,
+        signals: lines.length,
+      };
+    }
+  } catch {
+    return {
+      sent: false,
+      reason: "delivery_state_unavailable" as const,
+      signals: lines.length,
+    };
+  }
+
+  return {
+    sent: false,
+    reason: "delivery_failed" as const,
+    signals: lines.length,
+  };
 }
 
 export async function runScheduledDiscoveryWarmup(env: AppEnv) {

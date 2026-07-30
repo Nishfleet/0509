@@ -97,6 +97,22 @@ export function classifyScheduledTaskResult(
     };
   }
 
+  if (taskName === "customer_at_risk_alert") {
+    const metrics = {
+      sent: result.sent === true,
+      signals: safeCount(result.signals),
+    };
+    return {
+      outcome:
+        metrics.signals === 0 || result.reason === "duplicate"
+          ? "no_work"
+          : metrics.sent
+            ? "completed"
+            : "degraded",
+      metrics,
+    };
+  }
+
   if (taskName === "digest_schedule_exhaustion_recovery") {
     const metrics = {
       attempted: safeCount(result.attempted),

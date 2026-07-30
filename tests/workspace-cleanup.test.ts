@@ -658,6 +658,38 @@ describe("customer-at-risk operator alert", () => {
     expect(call.lines[0]).toContain("fan-out job(s) failed to dispatch");
     expect(call.lines[0]).not.toContain("check window filled");
   });
+
+  it("distinguishes an accepted customer-risk replay from a delivery failure", async () => {
+    const sendOperatorAlertEmail = vi.fn().mockResolvedValue(false);
+    const getDeliveryAttemptByIdempotencyKey = vi.fn().mockResolvedValue({
+      status: "sent",
+    });
+    vi.doMock("~/lib/delivery.server", () => ({ sendOperatorAlertEmail }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDeliveryAttemptByIdempotencyKey,
+      getOperatorRiskSummary: vi.fn().mockResolvedValue({
+        troubleWatchlists: [],
+        staleWatchlists: [],
+        deliveryFailures24h: 0,
+        stuckRuns: 0,
+      }),
+    }));
+
+    const { sendCustomerAtRiskAlert } = await import("~/lib/monitoring.server");
+    const result = await sendCustomerAtRiskAlert({ DB: {} } as never, {
+      inlineFailures: 1,
+    });
+
+    expect(result).toMatchObject({
+      sent: false,
+      reason: "duplicate",
+      signals: 1,
+    });
+    expect(getDeliveryAttemptByIdempotencyKey).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringMatching(/^operator-alert:\d{4}-\d{2}-\d{2}$/),
+    );
+  });
 });
 
 describe("account deletion billing guard", () => {
