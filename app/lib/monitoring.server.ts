@@ -1,9 +1,7 @@
 import { buildAnalysisFields } from "~/lib/analysis.server";
-import {
-  isAdLibraryBackedAd,
-  mapAdSourceToAnalysisSource,
-} from "~/lib/ad-source-kind";
+import { mapAdSourceToAnalysisSource } from "~/lib/ad-source-kind";
 import { type DigestCadence } from "~/lib/change-intelligence";
+import { shouldAttemptCreativeTextCapture } from "~/lib/creative-capture-policy";
 import {
   captureCreativeText,
   createMissingCreativeCaptureResult,
@@ -3949,7 +3947,7 @@ async function enrichAdForCheapScan(env: AppEnv, ad: AdRecord) {
   const creativeSourceUrl =
     ad.adSnapshotUrl?.trim() || ad.creativeImageUrl?.trim() || null;
   const capturedCreativeText =
-    isAdLibraryBackedAd(ad) && !ad.creativeText?.trim()
+    shouldAttemptCreativeTextCapture(ad)
       ? creativeSourceUrl
         ? await captureCreativeText(env, creativeSourceUrl, ad)
         : createMissingCreativeCaptureResult(ad)

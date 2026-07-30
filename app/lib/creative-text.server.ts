@@ -454,10 +454,12 @@ async function readDirectCreativeImage(
 }
 
 function mergeCreativeImageCandidates(
-  preferred: string | null | undefined,
+  persistedFallback: string | null | undefined,
   discovered: string[],
 ) {
-  const candidates = preferred?.trim() ? [preferred.trim(), ...discovered] : discovered;
+  const candidates = persistedFallback?.trim()
+    ? [...discovered, persistedFallback.trim()]
+    : discovered;
   return [...new Set(candidates)];
 }
 

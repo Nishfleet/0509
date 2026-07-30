@@ -4,6 +4,7 @@ import {
   captureCreativeText,
   createMissingCreativeCaptureResult,
   CREATIVE_TEXT_EXTRACTOR_VERSION,
+  CREATIVE_TEXT_OCR_MODEL,
   extractCreativeTextFromSnapshotHtml,
 } from "~/lib/creative-text.server";
 
@@ -320,6 +321,57 @@ describe("captureCreativeText", () => {
       },
     });
     expect(result?.metadata).not.toHaveProperty("sourceFallbackAttempted");
+  });
+
+  it("prefers a snapshot-discovered image over a stale persisted image", async () => {
+    const aiRun = vi.fn(async (_model: string, input: { image: number[] }) => ({
+      description:
+        input.image[0] === 4 ? "Fresh snapshot creative" : "Stale persisted creative",
+    }));
+    mockFetchWithDns((url) => {
+      if (url.includes("current.jpg")) {
+        return new Response(Uint8Array.from([4, 5, 6]), {
+          status: 200,
+          headers: { "content-type": "image/jpeg" },
+        });
+      }
+      if (url.includes("persisted.jpg")) {
+        return new Response(Uint8Array.from([1, 2, 3]), {
+          status: 200,
+          headers: { "content-type": "image/jpeg" },
+        });
+      }
+      return new Response(
+        '<meta property="og:image" content="https://cdn.example.com/current.jpg"><div>Nykaa</div>',
+        { status: 200, headers: { "content-type": "text/html" } },
+      );
+    });
+
+    const result = await captureCreativeText(
+      { AI: { run: aiRun } } as never,
+      "https://facebook.example.com/ad-snapshot",
+      {
+        advertiser: "Nykaa",
+        body: "",
+        previewHeadline: "",
+        previewSubhead: "",
+        cta: "",
+        creativeImageUrl: "https://cdn.example.com/persisted.jpg",
+      },
+    );
+
+    expect(result).toMatchObject({
+      text: "Fresh snapshot creative",
+      imageUrl: "https://cdn.example.com/current.jpg",
+      metadata: {
+        extractionPath: "snapshot_image_ocr",
+      },
+    });
+    expect(aiRun).toHaveBeenCalledTimes(1);
+    expect(aiRun).toHaveBeenCalledWith(
+      CREATIVE_TEXT_OCR_MODEL,
+      expect.objectContaining({ image: [4, 5, 6] }),
+    );
   });
 
   it("falls back to Workers AI OCR when the snapshot HTML has no distinct creative text", async () => {

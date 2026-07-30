@@ -1,5 +1,6 @@
 import { withStructuredAnalysis } from "~/lib/analysis.server";
-import { isAdLibraryBackedAd, mapAdSourceToAnalysisSource } from "~/lib/ad-source-kind";
+import { mapAdSourceToAnalysisSource } from "~/lib/ad-source-kind";
+import { shouldAttemptCreativeTextCapture } from "~/lib/creative-capture-policy";
 import { captureCreativeText } from "~/lib/creative-text.server";
 import {
   hydrateAdsWithPersistedCreatives,
@@ -29,9 +30,6 @@ export type PrepareSearchResultSelectionOptions = {
 
 /** FIX-13: prevent a revalidation from scheduling a second enrichment while one runs. */
 const ENRICHMENT_IN_FLIGHT_MS = 90_000;
-// Reuse persisted unreadable outcomes during revalidation, but retry later in
-// case a provider binding or the remote creative has recovered.
-const CREATIVE_CAPTURE_RETRY_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 const enrichmentInFlightStartedAt = new Map<string, number>();
 
 function tryClaimSelectionEnrichment(metaAdId: string, nowMs: number = Date.now()): boolean {
@@ -54,7 +52,7 @@ export function resetSelectionEnrichmentInFlightForTests() {
 
 export function selectionNeedsEnrichment(ad: AdRecord): boolean {
   const needsLanding = Boolean(ad.landingPageUrl?.trim()) && !ad.landingPage;
-  const needsCreative = needsCreativeTextCapture(ad);
+  const needsCreative = shouldAttemptCreativeTextCapture(ad);
   const hasTranslatedField = ad.analysisFields.some(
     (field) => field.fieldKey === "translated_text" && Boolean(field.fieldValue?.trim()),
   );
@@ -69,29 +67,6 @@ export function selectionNeedsEnrichment(ad: AdRecord): boolean {
     language === "ambiguous";
   const needsTranslation = !looksEnglish && !hasTranslatedField;
   return needsLanding || needsCreative || needsTranslation;
-}
-
-function needsCreativeTextCapture(ad: AdRecord, nowMs = Date.now()) {
-  if (
-    !isAdLibraryBackedAd(ad) ||
-    !Boolean(ad.adSnapshotUrl?.trim() || ad.creativeImageUrl?.trim()) ||
-    Boolean(ad.creativeText?.trim())
-  ) {
-    return false;
-  }
-
-  const metadata = ad.creativeTextMetadata;
-  const hasUnreadableResult =
-    metadata?.extractionStatus === "unreadable" ||
-    typeof metadata?.unreadableReasonCode === "string";
-  if (!hasUnreadableResult) return true;
-
-  const capturedAt =
-    typeof metadata?.capturedAt === "string"
-      ? Date.parse(metadata.capturedAt)
-      : Number.NaN;
-  if (!Number.isFinite(capturedAt)) return true;
-  return nowMs - capturedAt >= CREATIVE_CAPTURE_RETRY_COOLDOWN_MS;
 }
 
 export async function prepareSearchResultSelection(
@@ -172,7 +147,7 @@ async function enrichAndPersistSelectedAd(
     null;
   const creativeCapturePromise =
     creativeSourceUrl &&
-    needsCreativeTextCapture(selectedAdBase)
+    shouldAttemptCreativeTextCapture(selectedAdBase)
       ? captureCreativeText(
           env,
           creativeSourceUrl,

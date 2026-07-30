@@ -50,15 +50,35 @@ describe("runWatchlistManual OCR reuse", () => {
   it.each([
     {
       creativeText: "60 Hours Playback\nOnly ₹999",
+      creativeTextMetadata: {
+        source: "stored",
+      },
       expectedCaptureCalls: 0,
       scenario: "reuses non-empty stored creative text",
     },
     {
       creativeText: "   ",
+      creativeTextMetadata: {
+        source: "stored",
+      },
       expectedCaptureCalls: 1,
       scenario: "recaptures whitespace-only stored creative text",
     },
-  ])("$scenario", async ({ creativeText, expectedCaptureCalls }) => {
+    {
+      creativeText: null,
+      creativeTextMetadata: {
+        capturedAt: new Date().toISOString(),
+        extractionStatus: "unreadable",
+        unreadableReasonCode: "ocr_binding_missing",
+      },
+      expectedCaptureCalls: 0,
+      scenario: "reuses a recent persisted unreadable OCR result",
+    },
+  ])("$scenario", async ({
+    creativeText,
+    creativeTextMetadata,
+    expectedCaptureCalls,
+  }) => {
     const env = {
       ALLOW_PLATFORM_META_API_FALLBACK: "true",
       META_AD_LIBRARY_TOKEN: "token",
@@ -67,9 +87,7 @@ describe("runWatchlistManual OCR reuse", () => {
       ...baseAd,
       creativeText,
       creativeTextCaptureMethod: "ad_snapshot_fetch",
-      creativeTextMetadata: {
-        source: "stored",
-      },
+      creativeTextMetadata,
     };
     const captureCreativeText = vi.fn().mockResolvedValue({
       text: "Fresh OCR",
