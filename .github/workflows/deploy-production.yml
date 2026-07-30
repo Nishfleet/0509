@@ -197,18 +197,30 @@ jobs:
             "$evidence_name"
           chmod 600 "$archive"
           VERIFY_LANE
+      - name: Stage verified restore evidence for upload
+        shell: bash
+        env:
+          RESTORE_EVIDENCE_SOURCE: /run/lock/0509/d1-remote-restore-evidence-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.tar.gz
+          RESTORE_EVIDENCE_UPLOAD: ${{ runner.temp }}/d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}.tar.gz
+        run: |
+          set -euo pipefail
+          test -f "$RESTORE_EVIDENCE_SOURCE"
+          install -m 600 "$RESTORE_EVIDENCE_SOURCE" "$RESTORE_EVIDENCE_UPLOAD"
+          rm -f -- "$RESTORE_EVIDENCE_SOURCE"
       - name: Preserve private restore evidence for this deploy only
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}
-          path: /run/lock/0509/d1-remote-restore-evidence-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.tar.gz
+          path: ${{ runner.temp }}/d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}.tar.gz
           if-no-files-found: error
           overwrite: true
           retention-days: 8
       - name: Remove local restore evidence archive
         if: always()
         shell: bash
-        run: rm -f -- "/run/lock/0509/d1-remote-restore-evidence-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}.tar.gz"
+        run: |
+          rm -f -- "/run/lock/0509/d1-remote-restore-evidence-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}.tar.gz"
+          rm -f -- "$RUNNER_TEMP/d1-remote-restore-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}.tar.gz"
 
   deploy:
     name: Deploy Worker
