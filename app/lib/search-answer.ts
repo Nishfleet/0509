@@ -87,12 +87,28 @@ export function buildSearchAnswer(input: {
   if (!result.discoveryPartial || adCount === 0) {
     return answer;
   }
+  const qualified =
+    domain && answer.title === `No verified ads found for ${domain}`
+      ? {
+          ...answer,
+          title: `No verified ads in the results loaded so far for ${domain}`,
+          facts: answer.facts.map((fact) =>
+            fact.label === "Verified ads"
+              ? {
+                  label: "Verified ads loaded so far",
+                  value: fact.value,
+                  detail: "Exact website match on the partial page",
+                }
+              : fact,
+          ),
+        }
+      : answer;
   return {
-    ...answer,
+    ...qualified,
     state: "degraded",
-    summary: `${answer.summary} Additional results could not be loaded, so this page is partial.`,
-    note: answer.note
-      ? `${answer.note} Retry to continue loading the remaining results.`
+    summary: `${qualified.summary} Additional results could not be loaded, so this page is partial.`,
+    note: qualified.note
+      ? `${qualified.note} Retry to continue loading the remaining results.`
       : "Retry to continue loading the remaining results.",
   };
 }

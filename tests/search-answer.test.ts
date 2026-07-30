@@ -217,6 +217,32 @@ describe("buildSearchAnswer", () => {
     expect(answer.note).toContain("Retry to continue loading the remaining results.");
   });
 
+  it("qualifies zero verified evidence when a non-empty result page is partial", () => {
+    const answer = buildSearchAnswer({
+      result: response({
+        ads: [ad()],
+        verifiedCount: 0,
+        nextCursor: "cursor-2",
+        discoveryPartial: true,
+        discoverySummary: "Some additional Meta results could not be loaded.",
+      }),
+      displayDomain: "boat-lifestyle.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+    });
+
+    expect(answer).toMatchObject({
+      state: "degraded",
+      title: "No verified ads in the results loaded so far for boat-lifestyle.com",
+    });
+    expect(answer.facts).toContainEqual({
+      label: "Verified ads loaded so far",
+      value: "0",
+      detail: "Exact website match on the partial page",
+    });
+    expect(answer.title).not.toContain("No verified ads found");
+  });
+
   it("does not turn an explicit zero verified count into proof", () => {
     const answer = buildSearchAnswer({
       result: response({
