@@ -228,6 +228,7 @@ async function measure(page: Page) {
     const navStyle = nav ? getComputedStyle(nav) : null;
     const desktopRail = document.querySelector<HTMLElement>(".f9-wk-rail");
     const desktopRailStyle = desktopRail ? getComputedStyle(desktopRail) : null;
+    const desktopRailRect = desktopRail?.getBoundingClientRect() ?? null;
     const controls = nav
       ? [...nav.querySelectorAll<HTMLElement>("a, button")].map((node) => {
           const rect = node.getBoundingClientRect();
@@ -394,7 +395,14 @@ async function measure(page: Page) {
       controls,
       docHeight: document.documentElement.scrollHeight,
       desktopActive,
+      desktopRailBox: desktopRailRect
+        ? {
+            height: Math.round(desktopRailRect.height * 10) / 10,
+            width: Math.round(desktopRailRect.width * 10) / 10,
+          }
+        : null,
       desktopRailDisplay: desktopRailStyle?.display ?? null,
+      desktopRailVisibility: desktopRailStyle?.visibility ?? null,
       filledInAnyViewport,
       firstRowStack,
       firstRowTop,
@@ -581,6 +589,7 @@ test.describe("BL-042 mobile top navigation proof", () => {
 
         await page.goto(`${base}${surface.url}`, { waitUntil: "networkidle" });
         await page.waitForTimeout(400);
+        await expect(page.locator(".f9-wk-rail")).toBeVisible();
         const lockedFeature = page.locator(".f9-locked-feature");
         await expect(lockedFeature).toBeVisible();
         await expect(
@@ -625,6 +634,16 @@ test.describe("BL-042 mobile top navigation proof", () => {
 
         if (measured.desktopRailDisplay === "none") {
           failures.push(`${surface.name} ${theme}: desktop rail is hidden`);
+        }
+        if (
+          measured.desktopRailVisibility !== "visible" ||
+          measured.desktopRailBox === null ||
+          measured.desktopRailBox.width === 0 ||
+          measured.desktopRailBox.height === 0
+        ) {
+          failures.push(
+            `${surface.name} ${theme}: desktop rail is not visibly rendered`,
+          );
         }
         if (
           measured.desktopActive.length !== 1 ||
