@@ -8,7 +8,7 @@
 # Usage:
 #   deploy-window-lock.sh acquire        # wait, then hold across later CI steps
 #   deploy-window-lock.sh release        # release the proven current owner
-#   deploy-window-lock.sh run -- <cmd>   # run in one bounded heavy-work slot
+#   deploy-window-lock.sh run -- <cmd>   # run in one isolated heavy-work slot
 #
 # GitHub Actions receives the private release capability through $GITHUB_ENV.
 # Local callers must set DEPLOY_WINDOW_CAPABILITY_FILE to their own private
@@ -20,12 +20,20 @@
 # in ascending order so deploys keep whole-box exclusivity. The detached holder
 # self-expires after HOLD_CAP seconds. Its per-slot owner records are written
 # only after it owns every flock, and every owner-record mutation is serialized
-# by that slot's separate metadata flock.
+# by that slot's separate metadata flock. During the slot-path migration, run
+# clients lock both the previous and isolated path for their selected slot so
+# old and new checkout generations share one capacity bound.
 set -euo pipefail
 
 LOCK_FILE="${DEPLOY_WINDOW_LOCK_FILE:-${HOME}/.local/state/0509/deploy-window.lock}"
 LOCK_STEM="${LOCK_FILE%.lock}"
-SLOT_COUNT="${DEPLOY_WINDOW_SLOTS:-3}"
+COMMAND="${1:-}"
+if [ "$COMMAND" = "release" ]; then
+  # Release trusts the persisted pool size, not inherited run-only settings.
+  SLOT_COUNT="${DEPLOY_WINDOW_SLOTS:-3}"
+else
+  SLOT_COUNT="${DEPLOY_WINDOW_SLOTS:-${DEPLOY_WINDOW_VERIFY_SLOTS:-3}}"
+fi
 POOL_SIZE_FILE="${LOCK_STEM}.slots"
 POOL_SIZE_LOCK_FILE="${POOL_SIZE_FILE}.lock"
 ADMISSION_LOCK_FILE="${LOCK_STEM}.admission.lock"
@@ -35,6 +43,10 @@ DRAIN_INTENT_META_LOCK_FILE="${DRAIN_INTENT_FILE}.meta.lock"
 ACQUIRE_TIMEOUT="${DEPLOY_WINDOW_ACQUIRE_TIMEOUT:-10800}"
 HOLD_CAP="${DEPLOY_WINDOW_HOLD_CAP:-21600}"
 POLL_INTERVAL="${DEPLOY_WINDOW_POLL_INTERVAL:-0.1}"
+CANCEL_GRACE="${DEPLOY_WINDOW_CANCEL_GRACE:-5}"
+VERIFY_ROOT="${DEPLOY_WINDOW_VERIFY_ROOT:-${LOCK_FILE}.verify}"
+VERIFY_TMP_ROOT="${DEPLOY_WINDOW_VERIFY_TMP_ROOT:-${TMPDIR:-/tmp}/0509-verification-$(id -u)}"
+VERIFY_PORT_BASE="${DEPLOY_WINDOW_VERIFY_PORT_BASE:-4190}"
 CAPABILITY_FILE="${DEPLOY_WINDOW_CAPABILITY_FILE:-}"
 RELEASE_TOKEN="${DEPLOY_WINDOW_RELEASE_TOKEN:-}"
 ALL_METADATA_FDS=()
@@ -47,11 +59,13 @@ else
 fi
 
 mkdir -p "$(dirname "$LOCK_FILE")"
+mkdir -p "$VERIFY_ROOT"
 
 select_slot() {
   local slot="$1"
 
-  ACTIVE_LOCK_FILE="${LOCK_STEM}.slot${slot}"
+  ACTIVE_LOCK_FILE="${VERIFY_ROOT}/slot-${slot}.lock"
+  ROLLOUT_LOCK_FILE="${LOCK_STEM}.slot${slot}"
   OWNER_FILE="${ACTIVE_LOCK_FILE}.held"
   META_LOCK_FILE="${ACTIVE_LOCK_FILE}.meta.lock"
 }
@@ -108,13 +122,21 @@ unlock_metadata() {
 }
 
 lock_all_metadata() {
-  local slot metadata_fd
+  local slot metadata_fd deadline remaining
 
   ALL_METADATA_FDS=()
+  deadline="$(awk -v now="$(date +%s.%N)" -v timeout="$ACQUIRE_TIMEOUT" \
+    'BEGIN { printf "%.9f", now + timeout }')"
   for ((slot = 1; slot <= SLOT_COUNT; slot += 1)); do
     select_slot "$slot"
     exec {metadata_fd}>"$META_LOCK_FILE"
-    flock --exclusive "$metadata_fd"
+    remaining="$(awk -v now="$(date +%s.%N)" -v deadline="$deadline" \
+      'BEGIN { left = deadline - now; printf "%.9f", (left > 0 ? left : 0) }')"
+    if ! flock --exclusive --wait "$remaining" "$metadata_fd"; then
+      eval "exec ${metadata_fd}>&-"
+      unlock_all_metadata
+      return 1
+    fi
     ALL_METADATA_FDS+=("$metadata_fd")
   done
 }
@@ -242,9 +264,27 @@ load_release_token() {
 }
 
 validate_durations() {
+  local mode="$1"
   local name value
+  local -a names
 
-  for name in ACQUIRE_TIMEOUT HOLD_CAP POLL_INTERVAL; do
+  case "$mode" in
+    acquire)
+      names=(ACQUIRE_TIMEOUT HOLD_CAP POLL_INTERVAL)
+      ;;
+    release)
+      names=(ACQUIRE_TIMEOUT)
+      ;;
+    run)
+      names=(ACQUIRE_TIMEOUT POLL_INTERVAL CANCEL_GRACE)
+      ;;
+    *)
+      echo "deploy-window-lock: unsupported validation mode '${mode}'." >&2
+      exit 64
+      ;;
+  esac
+
+  for name in "${names[@]}"; do
     value="${!name}"
     if ! is_duration "$value"; then
       echo "deploy-window-lock: ${name} must be a non-negative number of seconds (got '${value}')." >&2
@@ -252,18 +292,49 @@ validate_durations() {
     fi
   done
 
-  if [[ "$HOLD_CAP" =~ ^0+([.]0+)?$ ]] || [[ "$POLL_INTERVAL" =~ ^0+([.]0+)?$ ]]; then
-    echo "deploy-window-lock: HOLD_CAP and POLL_INTERVAL must be greater than zero." >&2
+  if { [ "$mode" != "release" ] && [[ "$POLL_INTERVAL" =~ ^0+([.]0+)?$ ]]; } ||
+     { [ "$mode" = "acquire" ] && [[ "$HOLD_CAP" =~ ^0+([.]0+)?$ ]]; } ||
+     { [ "$mode" = "run" ] && [[ "$CANCEL_GRACE" =~ ^0+([.]0+)?$ ]]; }; then
+    echo "deploy-window-lock: HOLD_CAP, POLL_INTERVAL, and CANCEL_GRACE must be greater than zero when used." >&2
     exit 64
   fi
-  if [[ ! "$SLOT_COUNT" =~ ^[1-9][0-9]*$ ]]; then
-    echo "deploy-window-lock: DEPLOY_WINDOW_SLOTS must be a positive integer (got '${SLOT_COUNT}')." >&2
+  if [[ ! "$SLOT_COUNT" =~ ^[1-9][0-9]*$ ]] || [ "$SLOT_COUNT" -gt 8 ]; then
+    echo "deploy-window-lock: slot count must be an integer from 1 through 8 (got '${SLOT_COUNT}')." >&2
+    exit 64
+  fi
+  if [ -n "${DEPLOY_WINDOW_SLOTS:-}" ] &&
+     [ -n "${DEPLOY_WINDOW_VERIFY_SLOTS:-}" ] &&
+     [ "$DEPLOY_WINDOW_SLOTS" != "$DEPLOY_WINDOW_VERIFY_SLOTS" ]; then
+    echo "deploy-window-lock: DEPLOY_WINDOW_SLOTS and DEPLOY_WINDOW_VERIFY_SLOTS must match when both are set." >&2
+    exit 64
+  fi
+  if [ "$mode" = "run" ] &&
+     { [[ ! "$VERIFY_PORT_BASE" =~ ^[0-9]+$ ]] ||
+       [ "$VERIFY_PORT_BASE" -lt 1024 ] ||
+       [ "$VERIFY_PORT_BASE" -gt 65527 ]; }; then
+    echo "deploy-window-lock: DEPLOY_WINDOW_VERIFY_PORT_BASE must be an integer from 1024 through 65527." >&2
     exit 64
   fi
   if [[ ! "$CALLER_ID" =~ ^[A-Za-z0-9_.-]+$ ]]; then
     echo "deploy-window-lock: caller ID contains unsupported characters: '${CALLER_ID}'." >&2
     exit 64
   fi
+}
+
+load_pool_size_for_release() {
+  local established_slots="" extra=""
+
+  if [ ! -f "$POOL_SIZE_FILE" ]; then
+    return 0
+  fi
+  read -r established_slots extra <"$POOL_SIZE_FILE" || true
+  if [[ ! "$established_slots" =~ ^[1-9][0-9]*$ ]] ||
+     [ "$established_slots" -gt 8 ] ||
+     [ -n "$extra" ]; then
+    echo "deploy-window-lock: invalid persisted pool size in ${POOL_SIZE_FILE}." >&2
+    return 64
+  fi
+  SLOT_COUNT="$established_slots"
 }
 
 validate_pool_size() {
@@ -306,6 +377,7 @@ acquire_window() {
   local stale_records=0
   local holder_pid="" holder_start=""
   local acquire_complete=0
+  local acquire_deadline
 
   if [ -z "${GITHUB_ENV:-}" ] && [ -z "$CAPABILITY_FILE" ]; then
     echo "deploy-window-lock: acquire needs GITHUB_ENV or DEPLOY_WINDOW_CAPABILITY_FILE to pass its private release capability." >&2
@@ -341,6 +413,8 @@ acquire_window() {
 
   acquire_token="$(< /proc/sys/kernel/random/uuid)"
   acquire_verifier="$(capability_verifier "$acquire_token")"
+  acquire_deadline="$(awk -v now="$(date +%s.%N)" -v timeout="$ACQUIRE_TIMEOUT" \
+    'BEGIN { printf "%.9f", now + timeout }')"
 
   holder_is_live() {
     [ -n "$holder_pid" ] || return 1
@@ -415,11 +489,11 @@ acquire_window() {
   setsid bash -c '
     set -euo pipefail
 
-    lock_stem="$1"
+    verify_root="$1"
     legacy_lock_file="$2"
     admission_lock_file="$3"
     slot_count="$4"
-    acquire_timeout="$5"
+    acquire_deadline="$5"
     hold_cap="$6"
     owner_verifier="$7"
     owner_caller="$8"
@@ -440,9 +514,6 @@ acquire_window() {
         eval "exec ${inherited_fd}>&-" 2>/dev/null || true
       fi
     done
-    acquire_deadline="$(awk -v now="$(date +%s.%N)" -v timeout="$acquire_timeout" \
-      "BEGIN { printf \"%.9f\", now + timeout }")"
-
     flock_without_held_fds() {
       local held_fd
 
@@ -496,7 +567,7 @@ acquire_window() {
 
       if [ "$owners_registered" -eq 1 ]; then
         for ((slot = 1; slot <= slot_count; slot += 1)); do
-          slot_file="${lock_stem}.slot${slot}"
+          slot_file="${verify_root}/slot-${slot}.lock"
           owner_file="${slot_file}.held"
           meta_lock_file="${slot_file}.meta.lock"
           current_pid=""
@@ -612,14 +683,14 @@ acquire_window() {
     exec 6>&-
 
     for ((slot = 1; slot <= slot_count; slot += 1)); do
-      slot_file="${lock_stem}.slot${slot}"
+      slot_file="${verify_root}/slot-${slot}.lock"
       exec {slot_fd}>"$slot_file"
       held_fds+=("$slot_fd")
       acquire_flock --exclusive "$slot_fd" || exit 99
     done
 
     for ((slot = 1; slot <= slot_count; slot += 1)); do
-      slot_file="${lock_stem}.slot${slot}"
+      slot_file="${verify_root}/slot-${slot}.lock"
       owner_file="${slot_file}.held"
       meta_lock_file="${slot_file}.meta.lock"
       exec 8>"$meta_lock_file"
@@ -647,7 +718,7 @@ acquire_window() {
     sleeper_pid=$!
     wait "$sleeper_pid" 2>/dev/null || true
     sleeper_pid=""
-  ' holder "$LOCK_STEM" "$LOCK_FILE" "$ADMISSION_LOCK_FILE" "$SLOT_COUNT" "$ACQUIRE_TIMEOUT" "$HOLD_CAP" "$acquire_verifier" "$CALLER_ID" "$CAPABILITY_FILE" "$DRAIN_SERIAL_LOCK_FILE" "$DRAIN_INTENT_FILE" "$DRAIN_INTENT_META_LOCK_FILE" </dev/null >/dev/null 2>&1 &
+  ' holder "$VERIFY_ROOT" "$LOCK_FILE" "$ADMISSION_LOCK_FILE" "$SLOT_COUNT" "$acquire_deadline" "$HOLD_CAP" "$acquire_verifier" "$CALLER_ID" "$CAPABILITY_FILE" "$DRAIN_SERIAL_LOCK_FILE" "$DRAIN_INTENT_FILE" "$DRAIN_INTENT_META_LOCK_FILE" </dev/null >/dev/null 2>&1 &
   holder_pid=$!
   holder_start="$(process_start_time "$holder_pid")"
 
@@ -700,7 +771,11 @@ acquire_window() {
       # Hold every metadata lock while re-proving the pool and publishing the
       # release capability. A self-expiring holder blocks in cleanup and keeps
       # its slot fds open until this atomic proof/publish section is complete.
-      lock_all_metadata
+      if ! lock_all_metadata; then
+        echo "deploy-window-lock: gave up after ${ACQUIRE_TIMEOUT}s waiting to prove slot metadata." >&2
+        fail_started_acquire
+        return 1
+      fi
       proven_slots=0
       for ((slot = 1; slot <= SLOT_COUNT; slot += 1)); do
         select_slot "$slot"
@@ -746,7 +821,10 @@ release_window() {
   # The successful acquire published its capability while holding these same
   # metadata locks. Re-take all of them in ascending order so the holder cannot
   # self-expire between proof and the release signal.
-  lock_all_metadata
+  if ! lock_all_metadata; then
+    echo "deploy-window-lock: gave up after ${ACQUIRE_TIMEOUT}s waiting to verify release metadata." >&2
+    return 1
+  fi
   for ((slot = 1; slot <= SLOT_COUNT; slot += 1)); do
     select_slot "$slot"
     read_owner_unlocked
@@ -858,12 +936,53 @@ release_window() {
 }
 
 run_in_slot() {
-  local slot slot_fd selected_slot legacy_fd admission_fd
-  local run_deadline remaining now sleep_for
+  local slot slot_fd rollout_slot_fd selected_slot legacy_fd admission_fd
+  local run_deadline remaining now sleep_for lane_tmp default_port result
   local intent_pid intent_start intent_token intent_caller intent_extra
+  local lane_holder_pid=""
+
+  interrupt_lane() {
+    local exit_code="$1"
+
+    trap - INT TERM
+    if [ -n "$lane_holder_pid" ] && kill -0 "$lane_holder_pid" 2>/dev/null; then
+      kill -TERM "$lane_holder_pid" 2>/dev/null || true
+      wait "$lane_holder_pid" 2>/dev/null || true
+    fi
+    if [ -n "${slot_fd:-}" ]; then
+      flock --unlock "$slot_fd" 2>/dev/null || true
+      eval "exec ${slot_fd}>&-"
+    fi
+    if [ -n "${rollout_slot_fd:-}" ]; then
+      flock --unlock "$rollout_slot_fd" 2>/dev/null || true
+      eval "exec ${rollout_slot_fd}>&-"
+    fi
+    if [ -n "${admission_fd:-}" ]; then
+      flock --unlock "$admission_fd" 2>/dev/null || true
+      eval "exec ${admission_fd}>&-"
+    fi
+    if [ -n "${legacy_fd:-}" ]; then
+      flock --unlock "$legacy_fd" 2>/dev/null || true
+      eval "exec ${legacy_fd}>&-"
+    fi
+    exit "$exit_code"
+  }
 
   run_deadline="$(awk -v now="$(date +%s.%N)" -v timeout="$ACQUIRE_TIMEOUT" \
     'BEGIN { printf "%.9f", now + timeout }')"
+
+  if [ -L "$VERIFY_TMP_ROOT" ]; then
+    echo "deploy-window-lock: refusing symlinked verification tmp root ${VERIFY_TMP_ROOT}." >&2
+    return 73
+  fi
+  if [ ! -e "$VERIFY_TMP_ROOT" ]; then
+    (umask 077; mkdir -p "$VERIFY_TMP_ROOT")
+  fi
+  if [ ! -d "$VERIFY_TMP_ROOT" ] || [ ! -O "$VERIFY_TMP_ROOT" ]; then
+    echo "deploy-window-lock: refusing unowned verification tmp root ${VERIFY_TMP_ROOT}." >&2
+    return 73
+  fi
+  chmod 700 "$VERIFY_TMP_ROOT"
 
   exec {legacy_fd}>"$LOCK_FILE"
   remaining="$(awk -v now="$(date +%s.%N)" -v deadline="$run_deadline" \
@@ -929,44 +1048,138 @@ run_in_slot() {
 
   for ((slot = 1; slot <= SLOT_COUNT; slot += 1)); do
     select_slot "$slot"
+    exec {rollout_slot_fd}>"$ROLLOUT_LOCK_FILE"
+    if ! flock --exclusive --nonblock "$rollout_slot_fd"; then
+      eval "exec ${rollout_slot_fd}>&-"
+      continue
+    fi
     exec {slot_fd}>"$ACTIVE_LOCK_FILE"
     if flock --exclusive --nonblock "$slot_fd"; then
       selected_slot="$slot"
       break
     fi
     eval "exec ${slot_fd}>&-"
+    flock --unlock "$rollout_slot_fd"
+    eval "exec ${rollout_slot_fd}>&-"
   done
 
   if [ -z "${selected_slot:-}" ]; then
     selected_slot=$((($$ % SLOT_COUNT) + 1))
     select_slot "$selected_slot"
+    exec {rollout_slot_fd}>"$ROLLOUT_LOCK_FILE"
+    remaining="$(awk -v now="$(date +%s.%N)" -v deadline="$run_deadline" \
+      'BEGIN { remaining = deadline - now; printf "%.9f", (remaining > 0 ? remaining : 0) }')"
+    if ! flock --exclusive --wait "$remaining" "$rollout_slot_fd"; then
+      eval "exec ${rollout_slot_fd}>&-"
+      echo "deploy-window-lock: gave up after ${ACQUIRE_TIMEOUT}s waiting for slot ${selected_slot}/${SLOT_COUNT}." >&2
+      return 1
+    fi
     exec {slot_fd}>"$ACTIVE_LOCK_FILE"
     remaining="$(awk -v now="$(date +%s.%N)" -v deadline="$run_deadline" \
       'BEGIN { remaining = deadline - now; printf "%.9f", (remaining > 0 ? remaining : 0) }')"
     if ! flock --exclusive --wait "$remaining" "$slot_fd"; then
       eval "exec ${slot_fd}>&-"
+      flock --unlock "$rollout_slot_fd"
+      eval "exec ${rollout_slot_fd}>&-"
       echo "deploy-window-lock: gave up after ${ACQUIRE_TIMEOUT}s waiting for slot ${selected_slot}/${SLOT_COUNT}." >&2
       return 1
     fi
   fi
 
-  export DEPLOY_WINDOW_SLOT="$selected_slot"
-  exec "$@"
-}
+  trap 'interrupt_lane 130' INT
+  trap 'interrupt_lane 143' TERM
+  mkdir -p "${VERIFY_TMP_ROOT}/slot-${selected_slot}"
+  lane_tmp="$(mktemp -d "${VERIFY_TMP_ROOT}/slot-${selected_slot}/${CALLER_ID}-$$.XXXXXX")"
+  default_port=$((VERIFY_PORT_BASE + selected_slot))
+  (
+    command_pid=""
 
-validate_durations
-validate_pool_size
+    # shellcheck disable=SC2329 # Invoked indirectly from the signal traps.
+    terminate_command_group() {
+      local exit_code="$1"
+      local cancel_deadline now
+
+      trap - INT TERM
+      if [ -n "$command_pid" ] && kill -0 "$command_pid" 2>/dev/null; then
+        kill -TERM -- "-${command_pid}" 2>/dev/null || true
+        cancel_deadline="$(awk -v now="$(date +%s.%N)" -v grace="$CANCEL_GRACE" \
+          'BEGIN { printf "%.9f", now + grace }')"
+        while kill -0 "$command_pid" 2>/dev/null &&
+          [ "$(process_state "$command_pid")" != "Z" ]; do
+          now="$(date +%s.%N)"
+          if awk -v now="$now" -v deadline="$cancel_deadline" \
+            'BEGIN { exit(now >= deadline ? 0 : 1) }'; then
+            kill -KILL -- "-${command_pid}" 2>/dev/null || true
+            break
+          fi
+          sleep 0.02
+        done
+        wait "$command_pid" 2>/dev/null || true
+      fi
+      exit "$exit_code"
+    }
+
+    trap 'terminate_command_group 130' INT
+    trap 'terminate_command_group 143' TERM
+    trap 'rm -rf -- "$lane_tmp"' EXIT
+    export TMPDIR="$lane_tmp"
+    export DEPLOY_WINDOW_SLOT="$selected_slot"
+    export DEPLOY_WINDOW_VERIFY_SLOT="$selected_slot"
+    export E2E_BASE_URL="${E2E_BASE_URL:-http://127.0.0.1:${default_port}}"
+
+    echo "verification lane ${selected_slot}/${SLOT_COUNT} acquired" >&2
+    (
+      # This wrapper retains every lock. The command and its descendants close
+      # them before exec so background work cannot retain pool capacity.
+      eval "exec ${slot_fd}>&-"
+      eval "exec ${rollout_slot_fd}>&-"
+      eval "exec ${admission_fd}>&-"
+      eval "exec ${legacy_fd}>&-"
+      exec setsid "$@"
+    ) &
+    command_pid=$!
+    if wait "$command_pid"; then
+      exit 0
+    else
+      exit $?
+    fi
+  ) &
+  lane_holder_pid=$!
+
+  if wait "$lane_holder_pid"; then
+    result=0
+  else
+    result=$?
+  fi
+  trap - INT TERM
+
+  flock --unlock "$slot_fd" 2>/dev/null || true
+  eval "exec ${slot_fd}>&-"
+  flock --unlock "$rollout_slot_fd" 2>/dev/null || true
+  eval "exec ${rollout_slot_fd}>&-"
+  flock --unlock "$admission_fd" 2>/dev/null || true
+  eval "exec ${admission_fd}>&-"
+  flock --unlock "$legacy_fd" 2>/dev/null || true
+  eval "exec ${legacy_fd}>&-"
+  return "$result"
+}
 
 case "${1:-}" in
   acquire)
+    validate_durations acquire
+    validate_pool_size
     acquire_window
     ;;
 
   release)
+    validate_durations release
+    load_pool_size_for_release
     release_window
     ;;
 
   run)
+    validate_durations run
+    validate_pool_size
     shift
     if [ "${1:-}" = "--" ]; then
       shift

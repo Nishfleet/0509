@@ -4,7 +4,9 @@ import { DatabaseSync } from "node:sqlite";
 import { sha256CanonicalJson } from "./d1-backup-lifecycle-canary.mjs";
 import {
   POST_DEPLOY_CLEANUP_MIGRATIONS,
-  allowedRemoteMigrationLedgers,
+  PRODUCTION_MIGRATION_LEDGER_BASELINE_SHA256,
+  allowedProductionMigrationLedgers,
+  migrationLedgerNamesSha256,
 } from "./d1-migration-sync-check.lib.mjs";
 
 const APPROVAL_MARKER = "0509-remote-restore-evidence";
@@ -250,16 +252,20 @@ export function assertRestoreRoundTrip(source, restored) {
  * @param {DatabaseEvidence["migrationLedger"]} ledger
  * @param {string[]} repositoryMigrations
  * @param {Set<string>} cleanupMigrations
+ * @param {{ baseline?: readonly string[], retiredMigrations?: Set<string> }} options
  */
 export function assertMigrationLedgerMatchesRepository(
   ledger,
   repositoryMigrations,
   cleanupMigrations = POST_DEPLOY_CLEANUP_MIGRATIONS,
+  options = {},
 ) {
   const ledgerNames = ledger.map((entry) => entry.name);
-  const allowedLedgers = allowedRemoteMigrationLedgers(
+  const allowedLedgers = allowedProductionMigrationLedgers(
     repositoryMigrations,
     cleanupMigrations,
+    options.baseline,
+    options.retiredMigrations,
   );
   if (
     !allowedLedgers.some(
@@ -337,12 +343,17 @@ export function buildRemoteRestoreEvidence({
     typeof latestMigration !== "string" ||
     !Number.isInteger(migrationCount) ||
     migrationCount < 1 ||
+    latestMigration !== aggregate.migrationLedger.at(-1)?.name ||
+    migrationCount !== aggregate.migrationLedger.length ||
     scratchDatabaseRemoved !== true
   ) {
     throw new Error("remote_restore_evidence_input_invalid");
   }
+  const migrationLedgerNames = aggregate.migrationLedger.map(
+    (entry) => entry.name,
+  );
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     candidateFingerprint: candidate.fingerprint,
     generatedAt,
     databaseIdentitySha256: sha256CanonicalJson(productionDatabase),
@@ -352,6 +363,11 @@ export function buildRemoteRestoreEvidence({
     transformedSqlSha256,
     rowCountDigestSha256: aggregate.rowCountDigestSha256,
     migrationLedgerSha256: aggregate.migrationLedgerSha256,
+    migrationLedgerBaselineSha256:
+      PRODUCTION_MIGRATION_LEDGER_BASELINE_SHA256,
+    migrationLedgerNames,
+    migrationLedgerNamesSha256:
+      migrationLedgerNamesSha256(migrationLedgerNames),
     schemaDigestSha256: aggregate.schemaDigestSha256,
     contentDigestSha256: aggregate.contentDigestSha256,
     wranglerWorktreeSha256: candidate.wrangler.worktreeSha256,
