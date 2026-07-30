@@ -232,11 +232,86 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
     });
   });
 
+  it("renders an SPA shell whose root contains only a loading placeholder", async () => {
+    mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          '<html><head><title>Glow serum</title></head><body><div id="root">Loading…</div><script src="/app.js"></script></body></html>',
+          { status: 200 },
+        ),
+      ) as never,
+    );
+    const captureRenderedLandingPageSnapshot = vi.fn().mockResolvedValue({
+      rawUrl: "https://example.com/offer",
+      canonicalUrl: "https://example.com/offer",
+      rawHeadline: "Hydrated launch offer",
+      normalizedHeadline: "hydrated launch offer",
+      normalizedHeadlineHash: "hash-rendered",
+      ctaText: "Buy now",
+      priceText: "$49.99",
+      formPresent: false,
+      captureMethod: "browser_render",
+      capturedAt: "2026-07-30T00:00:00.000Z",
+      artifactKey: null,
+      metadata: {},
+    });
+    vi.doMock("~/lib/browser-run.server", () => ({
+      captureRenderedLandingPageSnapshot,
+    }));
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    const snapshot = await captureLandingPageSnapshot({}, "https://example.com/offer");
+
+    expect(captureRenderedLandingPageSnapshot).toHaveBeenCalledTimes(1);
+    expect(snapshot).toMatchObject({
+      rawHeadline: "Hydrated launch offer",
+      ctaText: "Buy now",
+      captureMethod: "browser_render",
+    });
+  });
+
   it("ignores noscript boilerplate when deciding whether a page is an SPA shell", async () => {
     mockFetchWithDns(
       vi.fn(async () =>
         new Response(
           '<html><head><title>Glow serum</title></head><body><noscript>You need to enable JavaScript to run this app.</noscript><div id="root"></div><script src="/app.js"></script></body></html>',
+          { status: 200 },
+        ),
+      ) as never,
+    );
+    const captureRenderedLandingPageSnapshot = vi.fn().mockResolvedValue({
+      rawUrl: "https://example.com/offer",
+      canonicalUrl: "https://example.com/offer",
+      rawHeadline: "Hydrated launch offer",
+      normalizedHeadline: "hydrated launch offer",
+      normalizedHeadlineHash: "hash-rendered",
+      ctaText: "Buy now",
+      priceText: "$49.99",
+      formPresent: false,
+      captureMethod: "browser_render",
+      capturedAt: "2026-07-30T00:00:00.000Z",
+      artifactKey: null,
+      metadata: {},
+    });
+    vi.doMock("~/lib/browser-run.server", () => ({
+      captureRenderedLandingPageSnapshot,
+    }));
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    const snapshot = await captureLandingPageSnapshot({}, "https://example.com/offer");
+
+    expect(captureRenderedLandingPageSnapshot).toHaveBeenCalledTimes(1);
+    expect(snapshot).toMatchObject({
+      ctaText: "Buy now",
+      captureMethod: "browser_render",
+    });
+  });
+
+  it("ignores XHTML-style noscript boilerplate when deciding whether a page is an SPA shell", async () => {
+    mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          '<html><head><title>Glow serum</title></head><body><noscript/>You need to enable JavaScript to run this app.</noscript><div id="root"></div><script src="/app.js"></script></body></html>',
           { status: 200 },
         ),
       ) as never,

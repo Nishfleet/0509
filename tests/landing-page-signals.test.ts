@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { extractLandingPageSignals, LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION } from "~/lib/landing-page-signals.server";
+import {
+  extractLandingPageSignals,
+  hasMeaningfulLandingPageBodyText,
+  LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+} from "~/lib/landing-page-signals.server";
 import { captureLandingPageSnapshot } from "~/lib/landing-pages.server";
 
 const DNS_JSON_ENDPOINT = "https://cloudflare-dns.com/dns-query";
@@ -37,6 +41,32 @@ function mockFetchWithDns(handler: typeof fetch) {
 }
 
 describe("extractLandingPageSignals", () => {
+  it("treats entity-encoded loading text as an SPA shell placeholder", () => {
+    expect(
+      hasMeaningfulLandingPageBodyText(
+        '<body><div id="root">Loading&hellip;</div></body>',
+      ),
+    ).toBe(false);
+  });
+
+  it("decodes HTML entities once without corrupting literal entity text", () => {
+    expect(
+      extractLandingPageSignals(
+        "<button>Buy now &amp;hellip;</button>",
+      ),
+    ).toMatchObject({
+      ctaText: "Buy now &hellip;",
+    });
+  });
+
+  it("keeps body text after an XHTML-style empty head", () => {
+    expect(
+      hasMeaningfulLandingPageBodyText(
+        "<html><head/><body>Actual offer details</body></html>",
+      ),
+    ).toBe(true);
+  });
+
   it("extracts CTA text from a primary button", () => {
     const html = `
       <html>
@@ -154,6 +184,22 @@ describe("extractLandingPageSignals", () => {
 
     expect(extractLandingPageSignals(html)).toMatchObject({
       priceText: "$49.99",
+    });
+  });
+
+  it("treats XHTML-style script slashes as non-void HTML markup", () => {
+    const html = `
+      <script />window.offer = "$9.99";</script>
+      <main>
+        <p>Launch price $49.99 for this week</p>
+        <button>Buy now</button>
+      </main>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Buy now",
+      priceText: "$49.99",
+      formPresent: false,
     });
   });
 

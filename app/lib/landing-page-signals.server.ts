@@ -17,6 +17,8 @@ const PRICE_PATTERNS = [
 const LEAD_FIELD_PATTERN = /\b(name|email|phone|mobile|tel|whatsapp)\b/i;
 const MAX_HTML_TAG_SCAN_LENGTH = 4_096;
 const HIDDEN_RECOVERY_TAG_NAMES = new Set(["script", "style", "template"]);
+const SHELL_PLACEHOLDER_PATTERN =
+  /^(?:loading(?:\s+(?:app|application))?(?:,\s*please wait)?|please wait|initializing)(?:[.!…]+)?$/i;
 
 export function extractLandingPageSignals(
   html: string,
@@ -54,7 +56,8 @@ export function hasMeaningfulLandingPageBodyText(
     true,
     true,
   );
-  return cleanText(stripTags(bodyHtml)).length > 0;
+  const bodyText = cleanText(stripTags(bodyHtml));
+  return bodyText.length > 0 && !SHELL_PLACEHOLDER_PATTERN.test(bodyText);
 }
 
 function removeNonVisibleElements(
@@ -122,7 +125,10 @@ function removeNonVisibleElements(
       if (!tag.closing && elementNames.has(tag.name)) {
         output.push(html.slice(copyFrom, tagStart), " ");
         copyFrom = tag.end;
-        if (!tag.selfClosing) {
+        // HTML ignores XHTML-style slashes on these non-void elements. An
+        // empty <head/> is the exception here because browsers implicitly
+        // close it at body flow even without a literal </head>.
+        if (!tag.selfClosing || tag.name !== "head") {
           hiddenElement = tag.name;
           hiddenDepth = 1;
         }
@@ -130,8 +136,7 @@ function removeNonVisibleElements(
     } else if (tag.name === hiddenElement) {
       if (
         hiddenElement === "template" &&
-        !tag.closing &&
-        !tag.selfClosing
+        !tag.closing
       ) {
         hiddenDepth += 1;
       } else if (tag.closing) {
@@ -422,10 +427,23 @@ function cleanText(value: string) {
 }
 
 function decodeHtml(value: string) {
-  return value
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">");
+  return value.replace(
+    /&(amp|quot|#39|lt|gt|hellip|#8230|#x2026);/gi,
+    (entity) => {
+      switch (entity.toLowerCase()) {
+        case "&amp;":
+          return "&";
+        case "&quot;":
+          return '"';
+        case "&#39;":
+          return "'";
+        case "&lt;":
+          return "<";
+        case "&gt;":
+          return ">";
+        default:
+          return "…";
+      }
+    },
+  );
 }
