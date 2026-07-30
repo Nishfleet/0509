@@ -165,6 +165,17 @@ afterEach(() => {
 });
 
 describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
+  it("uses shared proc identity instead of cross-user signal permission for liveness", () => {
+    const source = readFileSync(script, "utf8");
+    const liveness = source.slice(
+      source.indexOf("process_identity_is_live()"),
+      source.indexOf("\n}\n", source.indexOf("process_identity_is_live()")) + 3,
+    );
+    expect(liveness).toContain('process_start_time "$pid"');
+    expect(liveness).toContain('process_state "$pid"');
+    expect(liveness).not.toContain('kill -0 "$pid"');
+  });
+
   it("acquires and releases a proven holder", () => {
     const lockFile = scratchLock();
 

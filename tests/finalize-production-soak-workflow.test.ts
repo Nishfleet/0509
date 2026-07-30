@@ -20,7 +20,6 @@ describe("production soak finalization workflow", () => {
     });
     expect(parsed.concurrency).toEqual({
       group: "production-deploy-refs/heads/main",
-      queue: "max",
       "cancel-in-progress": false,
     });
     expect(parsed.permissions).toEqual({ actions: "read", contents: "read" });

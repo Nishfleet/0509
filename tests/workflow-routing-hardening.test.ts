@@ -15,7 +15,7 @@ type Job = {
   steps?: Step[];
 };
 type Workflow = {
-  concurrency?: { group?: string; queue?: string; "cancel-in-progress"?: boolean };
+  concurrency?: { group?: string; "cancel-in-progress"?: boolean };
   jobs?: Record<string, Job>;
 };
 
@@ -115,7 +115,7 @@ describe("workflow routing hardening", () => {
     }
   });
 
-  it("preserves every deploy, backup, restore, and finalization run while allowing latest-only CI", () => {
+  it("never cancels an active protected operation while allowing latest-only CI", () => {
     for (const filename of [
       "d1-backup-r2.yml",
       "d1-remote-restore-evidence.yml",
@@ -123,8 +123,8 @@ describe("workflow routing hardening", () => {
       "finalize-production-soak.yml",
     ]) {
       const concurrency = workflow(filename).parsed.concurrency;
-      expect(concurrency?.queue, filename).toBe("max");
       expect(concurrency?.["cancel-in-progress"], filename).toBe(false);
+      expect(JSON.stringify(concurrency), filename).not.toContain('"queue"');
     }
     for (const filename of ["ci.yml", "cross-browser-matrix.yml", "d1-backup-validate.yml", "secret-scan.yml"]) {
       expect(workflow(filename).parsed.concurrency?.["cancel-in-progress"], filename).toBe(true);

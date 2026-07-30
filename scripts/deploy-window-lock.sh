@@ -79,10 +79,16 @@ process_identity_is_live() {
   local expected_start="$2"
   local current_start current_state
 
-  kill -0 "$pid" 2>/dev/null || return 1
+  [[ "$pid" =~ ^[1-9][0-9]*$ ]] || return 1
+  [[ "$expected_start" =~ ^[1-9][0-9]*$ ]] || return 1
+  # Distinct hardened runners have distinct UIDs, so kill -0 can return EPERM
+  # for a live peer. /proc identity is the shared liveness authority.
   current_start="$(process_start_time "$pid")"
   current_state="$(process_state "$pid")"
-  [ "$current_start" = "$expected_start" ] && [ "$current_state" != "Z" ]
+  [ -n "$current_start" ] &&
+    [ "$current_start" = "$expected_start" ] &&
+    [ -n "$current_state" ] &&
+    [ "$current_state" != "Z" ]
 }
 
 lock_metadata() {
