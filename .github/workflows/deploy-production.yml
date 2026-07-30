@@ -188,24 +188,26 @@ jobs:
 
           verify_evidence
           test "$(stat -c '%a' "$evidence")" = "600"
+          archive="$GITHUB_WORKSPACE/.d1-remote-restore-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}.tar.gz"
+          evidence_dir="${evidence%/*}"
+          evidence_name="${evidence##*/}"
+          tar --format=posix -czf "$archive" \
+            -C "$evidence_dir" \
+            "$evidence_name"
+          chmod 600 "$archive"
           VERIFY_LANE
-      - name: Archive permission-preserving restore evidence
-        shell: bash
-        run: |
-          set -euo pipefail
-          umask 077
-          tar --format=posix -czf \
-            "$RUNNER_TEMP/d1-remote-restore-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}.tar.gz" \
-            -C "$RUNNER_TEMP" \
-            d1-remote-restore-evidence.json
       - name: Preserve private restore evidence for this deploy only
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}
-          path: ${{ runner.temp }}/d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}.tar.gz
+          path: ${{ github.workspace }}/.d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}.tar.gz
           if-no-files-found: error
           overwrite: true
           retention-days: 8
+      - name: Remove local restore evidence archive
+        if: always()
+        shell: bash
+        run: rm -f -- "$GITHUB_WORKSPACE/.d1-remote-restore-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}.tar.gz"
 
   deploy:
     name: Deploy Worker
