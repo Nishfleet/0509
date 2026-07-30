@@ -8,27 +8,36 @@
 # Usage:
 #   deploy-window-lock.sh acquire        # wait, then hold across later CI steps
 #   deploy-window-lock.sh release        # release the proven current owner
-#   deploy-window-lock.sh run -- <cmd>   # run one heavy command under the lock
+#   deploy-window-lock.sh run -- <cmd>   # run in one bounded heavy-work slot
 #
 # GitHub Actions receives the private release capability through $GITHUB_ENV.
 # Local callers must set DEPLOY_WINDOW_CAPABILITY_FILE to their own private
 # scratch path for the acquire/release pair; no capability is stored beside
 # the shared lock where another caller could discover it.
 #
-# The lock lives outside every checkout so worktrees owned by the same runner
-# user share it. The detached holder self-expires after HOLD_CAP seconds. Its
-# owner record is written only after it owns the main flock and every owner
-# record mutation is serialized by a separate metadata flock.
+# The slot pool lives outside every checkout so worktrees owned by the same
+# runner user share it. `run --` owns one slot; acquire/release owns every slot
+# in ascending order so deploys keep whole-box exclusivity. The detached holder
+# self-expires after HOLD_CAP seconds. Its per-slot owner records are written
+# only after it owns every flock, and every owner-record mutation is serialized
+# by that slot's separate metadata flock.
 set -euo pipefail
 
 LOCK_FILE="${DEPLOY_WINDOW_LOCK_FILE:-${HOME}/.local/state/0509/deploy-window.lock}"
-OWNER_FILE="${LOCK_FILE}.held"
-META_LOCK_FILE="${LOCK_FILE}.meta.lock"
+LOCK_STEM="${LOCK_FILE%.lock}"
+SLOT_COUNT="${DEPLOY_WINDOW_SLOTS:-3}"
+POOL_SIZE_FILE="${LOCK_STEM}.slots"
+POOL_SIZE_LOCK_FILE="${POOL_SIZE_FILE}.lock"
+ADMISSION_LOCK_FILE="${LOCK_STEM}.admission.lock"
+DRAIN_SERIAL_LOCK_FILE="${LOCK_STEM}.drain.serial.lock"
+DRAIN_INTENT_FILE="${LOCK_STEM}.draining"
+DRAIN_INTENT_META_LOCK_FILE="${DRAIN_INTENT_FILE}.meta.lock"
 ACQUIRE_TIMEOUT="${DEPLOY_WINDOW_ACQUIRE_TIMEOUT:-10800}"
 HOLD_CAP="${DEPLOY_WINDOW_HOLD_CAP:-21600}"
 POLL_INTERVAL="${DEPLOY_WINDOW_POLL_INTERVAL:-0.1}"
 CAPABILITY_FILE="${DEPLOY_WINDOW_CAPABILITY_FILE:-}"
 RELEASE_TOKEN="${DEPLOY_WINDOW_RELEASE_TOKEN:-}"
+ALL_METADATA_FDS=()
 if [ -n "${DEPLOY_WINDOW_CALLER_ID:-}" ]; then
   CALLER_ID="$DEPLOY_WINDOW_CALLER_ID"
 elif [ -n "${GITHUB_RUN_ID:-}" ]; then
@@ -38,6 +47,14 @@ else
 fi
 
 mkdir -p "$(dirname "$LOCK_FILE")"
+
+select_slot() {
+  local slot="$1"
+
+  ACTIVE_LOCK_FILE="${LOCK_STEM}.slot${slot}"
+  OWNER_FILE="${ACTIVE_LOCK_FILE}.held"
+  META_LOCK_FILE="${ACTIVE_LOCK_FILE}.meta.lock"
+}
 
 is_duration() {
   [[ "$1" =~ ^[0-9]+([.][0-9]+)?$ ]]
@@ -90,6 +107,28 @@ unlock_metadata() {
   exec 8>&-
 }
 
+lock_all_metadata() {
+  local slot metadata_fd
+
+  ALL_METADATA_FDS=()
+  for ((slot = 1; slot <= SLOT_COUNT; slot += 1)); do
+    select_slot "$slot"
+    exec {metadata_fd}>"$META_LOCK_FILE"
+    flock --exclusive "$metadata_fd"
+    ALL_METADATA_FDS+=("$metadata_fd")
+  done
+}
+
+unlock_all_metadata() {
+  local metadata_fd
+
+  for metadata_fd in "${ALL_METADATA_FDS[@]}"; do
+    flock --unlock "$metadata_fd"
+    eval "exec ${metadata_fd}>&-"
+  done
+  ALL_METADATA_FDS=()
+}
+
 read_owner_unlocked() {
   OWNER_PID=""
   OWNER_START=""
@@ -112,40 +151,71 @@ recorded_process_is_alive() {
 }
 
 recorded_owner_is_proven() {
+  local fd_path fd_number
+
   recorded_process_is_alive || return 1
-  [ "/proc/${OWNER_PID}/fd/9" -ef "$LOCK_FILE" ] 2>/dev/null || return 1
-  awk '
-    $1 == "lock:" && $3 == "FLOCK" && $5 == "WRITE" {
-      found = 1
-    }
-    END { exit(found ? 0 : 1) }
-  ' "/proc/${OWNER_PID}/fdinfo/9" 2>/dev/null || return 1
+  for fd_path in "/proc/${OWNER_PID}"/fd/*; do
+    if [ "$fd_path" -ef "$ACTIVE_LOCK_FILE" ] 2>/dev/null; then
+      fd_number="${fd_path##*/}"
+      if awk '
+        $1 == "lock:" && $3 == "FLOCK" && $5 == "WRITE" {
+          found = 1
+        }
+        END { exit(found ? 0 : 1) }
+      ' "/proc/${OWNER_PID}/fdinfo/${fd_number}" 2>/dev/null; then
+        break
+      fi
+      fd_number=""
+    fi
+  done
+  [ -n "${fd_number:-}" ] || return 1
 
   # Kernel proof is paired with an independent contention probe. Success here
   # would mean the recorded process cannot be accepted as the current owner.
-  if flock --exclusive --nonblock "$LOCK_FILE" true 2>/dev/null; then
+  if flock --exclusive --nonblock "$ACTIVE_LOCK_FILE" true 2>/dev/null; then
     return 1
   fi
 }
 
-remove_records_if_token() {
+remove_all_records_if_token() {
   local expected_token="$1"
-  local expected_verifier capability_token=""
+  local expected_verifier capability_token="" slot
+  local intent_pid="" intent_start="" intent_token="" intent_caller="" intent_extra=""
 
   expected_verifier="$(capability_verifier "$expected_token")"
 
-  lock_metadata
-  read_owner_unlocked
-  if [ "$OWNER_TOKEN" = "$expected_verifier" ]; then
-    rm -f -- "$OWNER_FILE"
-  fi
+  for ((slot = 1; slot <= SLOT_COUNT; slot += 1)); do
+    select_slot "$slot"
+    exec 8>"$META_LOCK_FILE"
+    if flock --exclusive --nonblock 8; then
+      read_owner_unlocked
+      if [ "$OWNER_TOKEN" = "$expected_verifier" ] ||
+         { [ -f "$OWNER_FILE" ] && ! recorded_owner_is_proven; }; then
+        rm -f -- "$OWNER_FILE"
+      fi
+      flock --unlock 8
+    fi
+    exec 8>&-
+  done
+
   if [ -n "$CAPABILITY_FILE" ] && [ -f "$CAPABILITY_FILE" ]; then
     read -r capability_token <"$CAPABILITY_FILE" || true
   fi
   if [ "$capability_token" = "$expected_token" ]; then
     rm -f -- "$CAPABILITY_FILE"
   fi
-  unlock_metadata
+
+  exec 6>"$DRAIN_INTENT_META_LOCK_FILE"
+  if flock --exclusive --nonblock 6; then
+    if [ -f "$DRAIN_INTENT_FILE" ]; then
+      read -r intent_pid intent_start intent_token intent_caller intent_extra <"$DRAIN_INTENT_FILE" || true
+    fi
+    if [ "$intent_token" = "$expected_verifier" ]; then
+      rm -f -- "$DRAIN_INTENT_FILE"
+    fi
+    flock --unlock 6
+  fi
+  exec 6>&-
 }
 
 publish_capability_unlocked() {
@@ -186,14 +256,46 @@ validate_durations() {
     echo "deploy-window-lock: HOLD_CAP and POLL_INTERVAL must be greater than zero." >&2
     exit 64
   fi
+  if [[ ! "$SLOT_COUNT" =~ ^[1-9][0-9]*$ ]]; then
+    echo "deploy-window-lock: DEPLOY_WINDOW_SLOTS must be a positive integer (got '${SLOT_COUNT}')." >&2
+    exit 64
+  fi
   if [[ ! "$CALLER_ID" =~ ^[A-Za-z0-9_.-]+$ ]]; then
     echo "deploy-window-lock: caller ID contains unsupported characters: '${CALLER_ID}'." >&2
     exit 64
   fi
 }
 
+validate_pool_size() {
+  local established_slots="" extra=""
+
+  exec 7>"$POOL_SIZE_LOCK_FILE"
+  flock --exclusive 7
+  if [ -f "$POOL_SIZE_FILE" ]; then
+    read -r established_slots extra <"$POOL_SIZE_FILE" || true
+    if [[ ! "$established_slots" =~ ^[1-9][0-9]*$ ]] || [ -n "$extra" ]; then
+      flock --unlock 7
+      exec 7>&-
+      echo "deploy-window-lock: invalid persisted pool size in ${POOL_SIZE_FILE}." >&2
+      return 64
+    fi
+    if [ "$established_slots" != "$SLOT_COUNT" ]; then
+      flock --unlock 7
+      exec 7>&-
+      echo "deploy-window-lock: pool was initialized with ${established_slots} slots; refusing DEPLOY_WINDOW_SLOTS=${SLOT_COUNT}." >&2
+      echo "Drain the pool and remove ${POOL_SIZE_FILE} before intentionally resizing it." >&2
+      return 64
+    fi
+  else
+    (umask 077; printf '%s\n' "$SLOT_COUNT" >"$POOL_SIZE_FILE")
+  fi
+  flock --unlock 7
+  exec 7>&-
+}
+
 acquire_window() {
-  local existing_pid acquire_token acquire_verifier
+  local existing_pid acquire_token acquire_verifier slot proven_slots
+  local stale_records=0
   local holder_pid="" holder_start=""
   local acquire_complete=0
 
@@ -202,24 +304,32 @@ acquire_window() {
     return 64
   fi
 
-  lock_metadata
-  read_owner_unlocked
-  if [ -f "$OWNER_FILE" ]; then
+  for ((slot = 1; slot <= SLOT_COUNT; slot += 1)); do
+    select_slot "$slot"
+    lock_metadata
+    read_owner_unlocked
+    if [ ! -f "$OWNER_FILE" ]; then
+      unlock_metadata
+      continue
+    fi
+
     existing_pid="${OWNER_PID:-unknown}"
     if recorded_owner_is_proven; then
       unlock_metadata
-      echo "deploy-window-lock: lock already has a proven owner PID ${existing_pid}; refusing a second acquire." >&2
+      echo "deploy-window-lock: slot ${slot} already has a proven owner PID ${existing_pid}; refusing a second acquire." >&2
       echo "If no active CI job owns that PID, it is a live orphan; release it explicitly or wait for its hold cap." >&2
       return 1
     fi
-
     rm -f -- "$OWNER_FILE"
     unlock_metadata
-    echo "deploy-window-lock: removed a stale owner record for PID ${existing_pid}; acquire failed safely." >&2
-    echo "Re-run acquire now that the stale record has been cleaned." >&2
+    stale_records=$((stale_records + 1))
+  done
+
+  if [ "$stale_records" -gt 0 ]; then
+    echo "deploy-window-lock: removed ${stale_records} stale slot owner record(s); acquire failed safely." >&2
+    echo "Re-run acquire now that the stale records have been cleaned." >&2
     return 1
   fi
-  unlock_metadata
 
   acquire_token="$(< /proc/sys/kernel/random/uuid)"
   acquire_verifier="$(capability_verifier "$acquire_token")"
@@ -235,6 +345,10 @@ acquire_window() {
 
   cleanup_started_holder() {
     local attempts holder_pgid
+
+    if [ "${#ALL_METADATA_FDS[@]}" -gt 0 ]; then
+      unlock_all_metadata
+    fi
 
     if holder_is_live; then
       holder_pgid="$(process_group_id "$holder_pid")"
@@ -263,7 +377,7 @@ acquire_window() {
     if [ -n "$holder_pid" ]; then
       wait "$holder_pid" 2>/dev/null || true
     fi
-    remove_records_if_token "$acquire_token"
+    remove_all_records_if_token "$acquire_token"
   }
 
   fail_started_acquire() {
@@ -285,22 +399,32 @@ acquire_window() {
   trap 'interrupt_acquire 143' TERM
   trap 'if [ "$acquire_complete" -ne 1 ]; then cleanup_started_holder; fi' EXIT
 
-  # The holder keeps fd 9 open across CI steps. Its flock waiter and capped
-  # sleep explicitly do not inherit fd 9, so killing the holder cannot leave a
-  # child process holding or later acquiring the main lock.
+  # The holder keeps one fd per slot open across CI steps. Slots are acquired
+  # in ascending order, the shared order that prevents all-slot deadlocks.
+  # Its active flock waiter is tracked and killed during cleanup; the capped
+  # sleep explicitly inherits none of the slot fds.
+  # shellcheck disable=SC2016 # The single-quoted program expands in the holder.
   setsid bash -c '
     set -euo pipefail
 
-    lock_file="$1"
-    acquire_timeout="$2"
-    hold_cap="$3"
-    owner_file="$4"
-    meta_lock_file="$5"
-    owner_verifier="$6"
-    owner_caller="$7"
-    capability_file="$8"
+    lock_stem="$1"
+    legacy_lock_file="$2"
+    admission_lock_file="$3"
+    slot_count="$4"
+    acquire_timeout="$5"
+    hold_cap="$6"
+    owner_verifier="$7"
+    owner_caller="$8"
+    capability_file="$9"
+    drain_serial_lock_file="${10}"
+    drain_intent_file="${11}"
+    drain_intent_meta_lock_file="${12}"
     flock_pid=""
     sleeper_pid=""
+    owners_registered=0
+    held_fds=()
+    acquire_deadline="$(awk -v now="$(date +%s.%N)" -v timeout="$acquire_timeout" \
+      "BEGIN { printf \"%.9f\", now + timeout }")"
 
     stat_line="$(<"/proc/$$/stat")"
     stat_fields="${stat_line##*) }"
@@ -309,7 +433,8 @@ acquire_window() {
 
     cleanup() {
       local current_pid="" current_start="" current_token="" current_caller="" extra=""
-      local capability_token="" capability_hash=""
+      local capability_token="" capability_hash="" slot slot_file owner_file meta_lock_file
+      local intent_pid="" intent_start="" intent_token="" intent_caller="" intent_extra=""
 
       trap - EXIT INT TERM
       if [ -n "$flock_pid" ]; then
@@ -321,18 +446,54 @@ acquire_window() {
         wait "$sleeper_pid" 2>/dev/null || true
       fi
 
-      exec 8>"$meta_lock_file"
-      flock --exclusive 8 9>&-
-      if [ -f "$owner_file" ]; then
-        read -r current_pid current_start current_token current_caller extra <"$owner_file" || true
+      # Before registration there is no capability handshake to preserve, so
+      # clear (or safely abandon) drain intent first and never block on slot
+      # metadata. After registration, blocking slot cleanup is the handshake
+      # that keeps the holder live through the parent final proof/publication.
+      exec 6>"$drain_intent_meta_lock_file"
+      if flock --exclusive --nonblock 6; then
+        if [ -f "$drain_intent_file" ]; then
+          read -r intent_pid intent_start intent_token intent_caller intent_extra <"$drain_intent_file" || true
+        fi
+        if [ "$intent_pid" = "$$" ] &&
+           [ "$intent_start" = "$holder_start" ] &&
+           [ "$intent_token" = "$owner_verifier" ] &&
+           [ "$intent_caller" = "$owner_caller" ] &&
+           [ -z "$intent_extra" ]; then
+          rm -f -- "$drain_intent_file"
+        fi
+        flock --unlock 6
       fi
-      if [ "$current_pid" = "$$" ] &&
-         [ "$current_start" = "$holder_start" ] &&
-         [ "$current_token" = "$owner_verifier" ] &&
-         [ "$current_caller" = "$owner_caller" ] &&
-         [ -z "$extra" ]; then
-        rm -f -- "$owner_file"
+      exec 6>&-
+
+      if [ "$owners_registered" -eq 1 ]; then
+        for ((slot = 1; slot <= slot_count; slot += 1)); do
+          slot_file="${lock_stem}.slot${slot}"
+          owner_file="${slot_file}.held"
+          meta_lock_file="${slot_file}.meta.lock"
+          current_pid=""
+          current_start=""
+          current_token=""
+          current_caller=""
+          extra=""
+
+          exec 8>"$meta_lock_file"
+          flock --exclusive 8
+          if [ -f "$owner_file" ]; then
+            read -r current_pid current_start current_token current_caller extra <"$owner_file" || true
+          fi
+          if [ "$current_pid" = "$$" ] &&
+             [ "$current_start" = "$holder_start" ] &&
+             [ "$current_token" = "$owner_verifier" ] &&
+             [ "$current_caller" = "$owner_caller" ] &&
+             [ -z "$extra" ]; then
+            rm -f -- "$owner_file"
+          fi
+          flock --unlock 8
+          exec 8>&-
+        done
       fi
+
       if [ -n "$capability_file" ] && [ -f "$capability_file" ]; then
         read -r capability_token <"$capability_file" || true
       fi
@@ -342,143 +503,301 @@ acquire_window() {
       if [ "$capability_hash" = "$owner_verifier" ]; then
         rm -f -- "$capability_file"
       fi
-      flock --unlock 8 9>&-
-      exec 8>&-
+
     }
 
     trap cleanup EXIT
     trap "exit 130" INT
     trap "exit 143" TERM
 
-    exec 9>"$lock_file"
-    flock --exclusive --wait "$acquire_timeout" 9 </dev/null >/dev/null 2>&1 &
-    flock_pid=$!
-    if ! wait "$flock_pid"; then
-      flock_pid=""
-      exit 99
-    fi
-    flock_pid=""
+    acquire_flock() {
+      local mode="$1"
+      local target_fd="$2"
+      local remaining held_fd
 
-    exec 8>"$meta_lock_file"
-    flock --exclusive 8 9>&-
-    if [ -e "$owner_file" ]; then
-      flock --unlock 8 9>&-
-      exec 8>&-
-      exit 98
+      remaining="$(awk -v now="$(date +%s.%N)" -v deadline="$acquire_deadline" \
+        "BEGIN { remaining = deadline - now; printf \"%.9f\", (remaining > 0 ? remaining : 0) }")"
+      (
+        for held_fd in "${held_fds[@]}"; do
+          if [ "$held_fd" != "$target_fd" ]; then
+            eval "exec ${held_fd}>&-"
+          fi
+        done
+        exec flock "$mode" --wait "$remaining" "$target_fd"
+      ) </dev/null >/dev/null 2>&1 &
+      flock_pid=$!
+      if ! wait "$flock_pid"; then
+        flock_pid=""
+        return 1
+      fi
+      flock_pid=""
+    }
+
+    # New pool clients share the legacy lock so an old exclusive client still
+    # excludes them during rollout. Deploy holders then take the admission gate
+    # exclusively before draining slots; run clients take it shared.
+    exec {legacy_fd}>"$legacy_lock_file"
+    held_fds+=("$legacy_fd")
+    acquire_flock --shared "$legacy_fd" || exit 99
+
+    exec {drain_serial_fd}>"$drain_serial_lock_file"
+    held_fds+=("$drain_serial_fd")
+    acquire_flock --exclusive "$drain_serial_fd" || exit 99
+
+    exec 6>"$drain_intent_meta_lock_file"
+    acquire_flock --exclusive 6 || exit 99
+    # Owning the serialization flock proves no live deploy holder can own an
+    # older intent. Anything left here is a crash/partial-write orphan.
+    if [ -e "$drain_intent_file" ]; then
+      rm -f -- "$drain_intent_file"
     fi
     umask 077
-    printf "%s %s %s %s\n" "$$" "$holder_start" "$owner_verifier" "$owner_caller" >"$owner_file"
-    flock --unlock 8 9>&-
-    exec 8>&-
+    printf "%s %s %s %s\n" "$$" "$holder_start" "$owner_verifier" "$owner_caller" >"$drain_intent_file"
+    flock --unlock 6
+    exec 6>&-
 
-    sleep "$hold_cap" 9>&- </dev/null >/dev/null 2>&1 &
+    exec {admission_fd}>"$admission_lock_file"
+    held_fds+=("$admission_fd")
+    acquire_flock --exclusive "$admission_fd" || exit 99
+
+    exec 6>"$drain_intent_meta_lock_file"
+    acquire_flock --exclusive 6 || exit 99
+    intent_pid=""
+    intent_start=""
+    intent_token=""
+    intent_caller=""
+    intent_extra=""
+    if [ -f "$drain_intent_file" ]; then
+      read -r intent_pid intent_start intent_token intent_caller intent_extra <"$drain_intent_file" || true
+    fi
+    if [ "$intent_pid" != "$$" ] ||
+       [ "$intent_start" != "$holder_start" ] ||
+       [ "$intent_token" != "$owner_verifier" ] ||
+       [ "$intent_caller" != "$owner_caller" ] ||
+       [ -n "$intent_extra" ]; then
+      flock --unlock 6
+      exec 6>&-
+      exit 97
+    fi
+    rm -f -- "$drain_intent_file"
+    flock --unlock 6
+    exec 6>&-
+
+    for ((slot = 1; slot <= slot_count; slot += 1)); do
+      slot_file="${lock_stem}.slot${slot}"
+      exec {slot_fd}>"$slot_file"
+      held_fds+=("$slot_fd")
+      acquire_flock --exclusive "$slot_fd" || exit 99
+    done
+
+    for ((slot = 1; slot <= slot_count; slot += 1)); do
+      slot_file="${lock_stem}.slot${slot}"
+      owner_file="${slot_file}.held"
+      meta_lock_file="${slot_file}.meta.lock"
+      exec 8>"$meta_lock_file"
+      flock --exclusive 8
+      if [ -e "$owner_file" ]; then
+        flock --unlock 8
+        exec 8>&-
+        exit 98
+      fi
+      umask 077
+      if [ "$slot" -eq "$slot_count" ]; then
+        owners_registered=1
+      fi
+      printf "%s %s %s %s\n" "$$" "$holder_start" "$owner_verifier" "$owner_caller" >"$owner_file"
+      flock --unlock 8
+      exec 8>&-
+    done
+
+    (
+      for held_fd in "${held_fds[@]}"; do
+        eval "exec ${held_fd}>&-"
+      done
+      sleep "$hold_cap"
+    ) </dev/null >/dev/null 2>&1 &
     sleeper_pid=$!
     wait "$sleeper_pid" 2>/dev/null || true
     sleeper_pid=""
-  ' holder "$LOCK_FILE" "$ACQUIRE_TIMEOUT" "$HOLD_CAP" "$OWNER_FILE" "$META_LOCK_FILE" "$acquire_verifier" "$CALLER_ID" "$CAPABILITY_FILE" </dev/null >/dev/null 2>&1 &
+  ' holder "$LOCK_STEM" "$LOCK_FILE" "$ADMISSION_LOCK_FILE" "$SLOT_COUNT" "$ACQUIRE_TIMEOUT" "$HOLD_CAP" "$acquire_verifier" "$CALLER_ID" "$CAPABILITY_FILE" "$DRAIN_SERIAL_LOCK_FILE" "$DRAIN_INTENT_FILE" "$DRAIN_INTENT_META_LOCK_FILE" </dev/null >/dev/null 2>&1 &
   holder_pid=$!
   holder_start="$(process_start_time "$holder_pid")"
 
   while kill -0 "$holder_pid" 2>/dev/null; do
     sleep "$POLL_INTERVAL"
-    lock_metadata
-    read_owner_unlocked
+    proven_slots=0
+    for ((slot = 1; slot <= SLOT_COUNT; slot += 1)); do
+      select_slot "$slot"
+      lock_metadata
+      read_owner_unlocked
 
-    if [ -f "$OWNER_FILE" ]; then
+      if [ ! -f "$OWNER_FILE" ]; then
+        unlock_metadata
+        continue
+      fi
+
       existing_pid="${OWNER_PID:-unknown}"
       if [ "$OWNER_TOKEN" = "$acquire_verifier" ]; then
         if recorded_owner_is_proven &&
            [ "$OWNER_PID" = "$holder_pid" ] &&
            [ "$OWNER_START" = "$holder_start" ] &&
            [ "$OWNER_CALLER" = "$CALLER_ID" ]; then
-          publish_capability_unlocked "$acquire_token"
+          proven_slots=$((proven_slots + 1))
           unlock_metadata
-          echo "deploy window acquired (holder pid ${holder_pid}, self-expires in ${HOLD_CAP}s)"
-          acquire_complete=1
-          exit 0
+          continue
         fi
 
         rm -f -- "$OWNER_FILE"
         unlock_metadata
-        echo "deploy-window-lock: holder PID ${existing_pid} died or lost its flock after registering; acquire failed safely." >&2
+        echo "deploy-window-lock: holder PID ${existing_pid} died or lost slot ${slot} after registering; acquire failed safely." >&2
         fail_started_acquire
         return 1
       fi
 
       if recorded_owner_is_proven; then
         unlock_metadata
-        echo "deploy-window-lock: lock became owned by proven owner PID ${existing_pid}; refusing a second acquire." >&2
+        echo "deploy-window-lock: slot ${slot} became owned by proven owner PID ${existing_pid}; refusing a second acquire." >&2
         fail_started_acquire
         return 1
       fi
 
       rm -f -- "$OWNER_FILE"
       unlock_metadata
-      echo "deploy-window-lock: removed an invalid competing owner record for PID ${existing_pid}; acquire failed safely." >&2
+      echo "deploy-window-lock: removed an invalid competing slot ${slot} owner record for PID ${existing_pid}; acquire failed safely." >&2
       fail_started_acquire
       return 1
+    done
+
+    if [ "$proven_slots" -eq "$SLOT_COUNT" ]; then
+      # Hold every metadata lock while re-proving the pool and publishing the
+      # release capability. A self-expiring holder blocks in cleanup and keeps
+      # its slot fds open until this atomic proof/publish section is complete.
+      lock_all_metadata
+      proven_slots=0
+      for ((slot = 1; slot <= SLOT_COUNT; slot += 1)); do
+        select_slot "$slot"
+        read_owner_unlocked
+        if [ -f "$OWNER_FILE" ] &&
+           [ "$OWNER_TOKEN" = "$acquire_verifier" ] &&
+           [ "$OWNER_PID" = "$holder_pid" ] &&
+           [ "$OWNER_START" = "$holder_start" ] &&
+           [ "$OWNER_CALLER" = "$CALLER_ID" ] &&
+           recorded_owner_is_proven; then
+          proven_slots=$((proven_slots + 1))
+        fi
+      done
+
+      if [ "$proven_slots" -eq "$SLOT_COUNT" ]; then
+        publish_capability_unlocked "$acquire_token"
+        unlock_all_metadata
+        echo "deploy window acquired (${SLOT_COUNT} slots, holder pid ${holder_pid}, self-expires in ${HOLD_CAP}s)"
+        acquire_complete=1
+        exit 0
+      fi
+      unlock_all_metadata
     fi
-    unlock_metadata
   done
 
   wait "$holder_pid" 2>/dev/null || true
-  echo "deploy-window-lock: gave up after ${ACQUIRE_TIMEOUT}s; an unregistered fleet lane still holds ${LOCK_FILE}." >&2
+  echo "deploy-window-lock: gave up after ${ACQUIRE_TIMEOUT}s while draining ${SLOT_COUNT} slots; an unregistered fleet lane still holds the pool." >&2
   echo "Finish or stop the lane, then re-run this job." >&2
   fail_started_acquire
   return 1
 }
 
 release_window() {
-  local target_pid target_start target_token release_verifier attempts
+  local target_pid="" target_start="" release_verifier attempts
+  local slot absent_slots=0 matching_slots=0 stale_owner=0
 
   if ! load_release_token; then
     echo "deploy window not released (caller has no successful-acquire capability)"
     return 0
   fi
   release_verifier="$(capability_verifier "$RELEASE_TOKEN")"
-  lock_metadata
-  read_owner_unlocked
 
-  if [ ! -f "$OWNER_FILE" ]; then
+  # The successful acquire published its capability while holding these same
+  # metadata locks. Re-take all of them in ascending order so the holder cannot
+  # self-expire between proof and the release signal.
+  lock_all_metadata
+  for ((slot = 1; slot <= SLOT_COUNT; slot += 1)); do
+    select_slot "$slot"
+    read_owner_unlocked
+
+    if [ ! -f "$OWNER_FILE" ]; then
+      absent_slots=$((absent_slots + 1))
+      continue
+    fi
+
+    if [ "$OWNER_TOKEN" != "$release_verifier" ]; then
+      target_pid="${OWNER_PID:-unknown}"
+      if [ -n "$CAPABILITY_FILE" ]; then
+        rm -f -- "$CAPABILITY_FILE"
+      fi
+      unlock_all_metadata
+      echo "deploy window not released (capability does not own slot ${slot} PID ${target_pid})"
+      return 0
+    fi
+
+    if [ -z "$target_pid" ]; then
+      target_pid="${OWNER_PID:-unknown}"
+      target_start="$OWNER_START"
+    elif [ "$OWNER_PID" != "$target_pid" ] || [ "$OWNER_START" != "$target_start" ]; then
+      unlock_all_metadata
+      echo "deploy-window-lock: refusing release; capability records disagree across slots." >&2
+      return 1
+    fi
+
+    matching_slots=$((matching_slots + 1))
+    if ! recorded_owner_is_proven; then
+      if ! recorded_process_is_alive; then
+        rm -f -- "$OWNER_FILE"
+        stale_owner=1
+        continue
+      fi
+
+      unlock_all_metadata
+      echo "deploy-window-lock: refusing to signal live PID ${target_pid}; slot ${slot} is not provably owned." >&2
+      return 1
+    fi
+  done
+
+  if [ "$absent_slots" -eq "$SLOT_COUNT" ]; then
     if [ -n "$CAPABILITY_FILE" ]; then
       rm -f -- "$CAPABILITY_FILE"
     fi
-    unlock_metadata
+    unlock_all_metadata
     echo "deploy window already released (no registered owner)"
     return 0
   fi
 
-  target_pid="${OWNER_PID:-unknown}"
-  target_start="$OWNER_START"
-  target_token="$OWNER_TOKEN"
-
-  if [ "$target_token" != "$release_verifier" ]; then
+  if [ "$stale_owner" -eq 1 ]; then
+    for ((slot = 1; slot <= SLOT_COUNT; slot += 1)); do
+      select_slot "$slot"
+      read_owner_unlocked
+      if [ "$OWNER_TOKEN" = "$release_verifier" ]; then
+        rm -f -- "$OWNER_FILE"
+      fi
+    done
     if [ -n "$CAPABILITY_FILE" ]; then
       rm -f -- "$CAPABILITY_FILE"
     fi
-    unlock_metadata
-    echo "deploy window not released (capability does not own PID ${target_pid})"
+    unlock_all_metadata
+    echo "deploy-window-lock: cleaned stale owner records for PID ${target_pid}; no process was signalled." >&2
     return 0
   fi
 
-  if ! recorded_owner_is_proven; then
-    if ! recorded_process_is_alive; then
-      rm -f -- "$OWNER_FILE"
-      if [ -n "$CAPABILITY_FILE" ]; then
-        rm -f -- "$CAPABILITY_FILE"
-      fi
-      unlock_metadata
-      echo "deploy-window-lock: cleaned a stale owner record for PID ${target_pid}; no process was signalled." >&2
-      return 0
-    fi
-
-    unlock_metadata
-    echo "deploy-window-lock: refusing to signal live PID ${target_pid}; it is not provably the current lock owner." >&2
+  if [ "$matching_slots" -ne "$SLOT_COUNT" ]; then
+    unlock_all_metadata
+    echo "deploy-window-lock: refusing release; capability owns only ${matching_slots}/${SLOT_COUNT} slot records." >&2
     return 1
   fi
 
-  kill -TERM "$target_pid"
-  unlock_metadata
+  if ! kill -TERM "$target_pid"; then
+    unlock_all_metadata
+    echo "deploy-window-lock: proven owner PID ${target_pid} exited before it could be signalled." >&2
+    return 1
+  fi
+  unlock_all_metadata
 
   attempts=0
   while [ "$attempts" -lt 10 ]; do
@@ -506,11 +825,109 @@ release_window() {
     return 1
   fi
 
-  remove_records_if_token "$RELEASE_TOKEN"
-  echo "deploy window released (owner pid ${target_pid})"
+  remove_all_records_if_token "$RELEASE_TOKEN"
+  echo "deploy window released (${SLOT_COUNT} slots, owner pid ${target_pid})"
+}
+
+run_in_slot() {
+  local slot slot_fd selected_slot legacy_fd admission_fd
+  local run_deadline remaining now sleep_for
+  local intent_pid intent_start intent_token intent_caller intent_extra
+
+  run_deadline="$(awk -v now="$(date +%s.%N)" -v timeout="$ACQUIRE_TIMEOUT" \
+    'BEGIN { printf "%.9f", now + timeout }')"
+
+  exec {legacy_fd}>"$LOCK_FILE"
+  remaining="$(awk -v now="$(date +%s.%N)" -v deadline="$run_deadline" \
+    'BEGIN { remaining = deadline - now; printf "%.9f", (remaining > 0 ? remaining : 0) }')"
+  if ! flock --shared --wait "$remaining" "$legacy_fd"; then
+    eval "exec ${legacy_fd}>&-"
+    echo "deploy-window-lock: gave up after ${ACQUIRE_TIMEOUT}s waiting for the legacy rollout gate." >&2
+    return 1
+  fi
+
+  exec {admission_fd}>"$ADMISSION_LOCK_FILE"
+  while true; do
+    intent_pid=""
+    intent_start=""
+    intent_token=""
+    intent_caller=""
+    intent_extra=""
+
+    exec 6>"$DRAIN_INTENT_META_LOCK_FILE"
+    remaining="$(awk -v now="$(date +%s.%N)" -v deadline="$run_deadline" \
+      'BEGIN { remaining = deadline - now; printf "%.9f", (remaining > 0 ? remaining : 0) }')"
+    if ! flock --exclusive --wait "$remaining" 6; then
+      exec 6>&-
+      eval "exec ${admission_fd}>&-"
+      eval "exec ${legacy_fd}>&-"
+      echo "deploy-window-lock: gave up after ${ACQUIRE_TIMEOUT}s waiting for lane admission." >&2
+      return 1
+    fi
+    if [ -f "$DRAIN_INTENT_FILE" ]; then
+      read -r intent_pid intent_start intent_token intent_caller intent_extra <"$DRAIN_INTENT_FILE" || true
+      if [[ ! "$intent_pid" =~ ^[1-9][0-9]*$ ]] ||
+         [[ ! "$intent_start" =~ ^[1-9][0-9]*$ ]] ||
+         [ -z "$intent_token" ] ||
+         [ -z "$intent_caller" ] ||
+         [ -n "$intent_extra" ] ||
+         ! process_identity_is_live "$intent_pid" "$intent_start"; then
+        rm -f -- "$DRAIN_INTENT_FILE"
+        intent_pid=""
+      fi
+    fi
+
+    if [ -z "$intent_pid" ] &&
+       flock --shared --nonblock "$admission_fd"; then
+      flock --unlock 6
+      exec 6>&-
+      break
+    fi
+    flock --unlock 6
+    exec 6>&-
+
+    now="$(date +%s.%N)"
+    if awk -v now="$now" -v deadline="$run_deadline" \
+      'BEGIN { exit(now >= deadline ? 0 : 1) }'; then
+      eval "exec ${admission_fd}>&-"
+      eval "exec ${legacy_fd}>&-"
+      echo "deploy-window-lock: gave up after ${ACQUIRE_TIMEOUT}s waiting for lane admission." >&2
+      return 1
+    fi
+    sleep_for="$(awk -v now="$now" -v deadline="$run_deadline" -v poll="$POLL_INTERVAL" \
+      'BEGIN { remaining = deadline - now; printf "%.9f", remaining < poll ? remaining : poll }')"
+    sleep "$sleep_for"
+  done
+
+  for ((slot = 1; slot <= SLOT_COUNT; slot += 1)); do
+    select_slot "$slot"
+    exec {slot_fd}>"$ACTIVE_LOCK_FILE"
+    if flock --exclusive --nonblock "$slot_fd"; then
+      selected_slot="$slot"
+      break
+    fi
+    eval "exec ${slot_fd}>&-"
+  done
+
+  if [ -z "${selected_slot:-}" ]; then
+    selected_slot=$((($$ % SLOT_COUNT) + 1))
+    select_slot "$selected_slot"
+    exec {slot_fd}>"$ACTIVE_LOCK_FILE"
+    remaining="$(awk -v now="$(date +%s.%N)" -v deadline="$run_deadline" \
+      'BEGIN { remaining = deadline - now; printf "%.9f", (remaining > 0 ? remaining : 0) }')"
+    if ! flock --exclusive --wait "$remaining" "$slot_fd"; then
+      eval "exec ${slot_fd}>&-"
+      echo "deploy-window-lock: gave up after ${ACQUIRE_TIMEOUT}s waiting for slot ${selected_slot}/${SLOT_COUNT}." >&2
+      return 1
+    fi
+  fi
+
+  export DEPLOY_WINDOW_SLOT="$selected_slot"
+  exec "$@"
 }
 
 validate_durations
+validate_pool_size
 
 case "${1:-}" in
   acquire)
@@ -530,7 +947,7 @@ case "${1:-}" in
       echo "deploy-window-lock: run requires a command" >&2
       exit 64
     fi
-    exec flock --exclusive --wait "$ACQUIRE_TIMEOUT" "$LOCK_FILE" "$@"
+    run_in_slot "$@"
     ;;
 
   *)
