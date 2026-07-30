@@ -664,13 +664,15 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
         concurrentOwnerPage.goto("/app/shares"),
       ]);
       const shareRowFor = (ownerPage: Page) => ownerPage
-        .locator(".f9-work-row")
+        .locator(".f9-wk-row")
         .filter({ hasText: firstShareUrl });
       const firstShareRow = shareRowFor(page);
       const concurrentShareRow = shareRowFor(concurrentOwnerPage);
       await Promise.all([
-        expect(firstShareRow).toContainText("Report · Approved current evidence"),
-        expect(concurrentShareRow).toContainText("Report · Approved current evidence"),
+        expect(firstShareRow).toContainText("Report · Snapshot"),
+        expect(concurrentShareRow).toContainText("Report · Snapshot"),
+        expect(firstShareRow).toContainText("Approved"),
+        expect(concurrentShareRow).toContainText("Approved"),
       ]);
       const armRevoke = async (ownerPage: Page) => {
         const revokeButton = shareRowFor(ownerPage).getByRole("button", {
@@ -689,7 +691,7 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
       ]);
       await Promise.all([firstConfirm.click(), concurrentConfirm.click()]);
       const feedbackText = async (ownerPage: Page) => {
-        const feedback = ownerPage.locator(".f9-action-feedback");
+        const feedback = ownerPage.locator(".f9-wk-strip p");
         await expect(feedback).toBeVisible();
         return (await feedback.innerText()).trim();
       };
@@ -703,10 +705,10 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
       ].sort());
       await Promise.all([page.reload(), concurrentOwnerPage.reload()]);
       await expect(
-        page.locator(".f9-work-row").filter({ hasText: firstShareUrl }),
+        page.locator(".f9-wk-row").filter({ hasText: firstShareUrl }),
       ).toHaveCount(0);
       await expect(
-        concurrentOwnerPage.locator(".f9-work-row").filter({ hasText: firstShareUrl }),
+        concurrentOwnerPage.locator(".f9-wk-row").filter({ hasText: firstShareUrl }),
       ).toHaveCount(0);
       await concurrentOwnerPage.close();
       const revokedResponse = await anonymousPage.goto(firstShareUrl);
@@ -731,9 +733,9 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
       await expectNoOverflow(anonymousPage);
       await expectKeyboardFocus(anonymousPage);
       await page.goto("/app/shares");
-      await expect(
-        page.locator(".f9-work-row").filter({ hasText: secondShareUrl }),
-      ).toContainText("Report · Approved current evidence");
+      const replacementRow = page.locator(".f9-wk-row").filter({ hasText: secondShareUrl });
+      await expect(replacementRow).toContainText("Report · Snapshot");
+      await expect(replacementRow).toContainText("Approved");
       await attachReleaseStateArtifacts({ page, testInfo, prefix: "j4-share", state: "share-revoke-rereview" });
       annotateFinalUrl(testInfo, page);
     } finally {

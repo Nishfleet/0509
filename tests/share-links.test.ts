@@ -769,7 +769,6 @@ describe("/app/shares route", () => {
         resourceLabel: "Collection",
         mode: "Snapshot",
         state: "Snapshot",
-        stateTone: "quiet",
         createdAt: "2026-06-01T00:00:00.000Z",
         expiresAt: "2026-09-01T00:00:00.000Z",
       },
@@ -820,7 +819,7 @@ describe("/app/shares route", () => {
     } as never);
 
     expect(result.shares[0]).toMatchObject({
-      state: "Expired",
+      state: "Approval expired · review again",
       recoveryPath: "/app/reports/collection:col-1",
     });
   });
