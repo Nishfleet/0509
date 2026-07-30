@@ -2716,7 +2716,6 @@ button[aria-busy="true"] {
   }
 
   .f9-cursor-rail,
-  .f9-dash-topbar,
   .f9-report-toolbar button,
   .f9-report-toolbar a {
     display: none !important;
@@ -5297,39 +5296,6 @@ one signal-green accent.
   color: #11100d;
 }
 
-.f9-dash-topbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-bottom: 18px;
-}
-
-.f9-dash-topbar .f9-primary-button,
-.f9-dash-topbar .f9-secondary-button {
-  flex: 0 0 auto;
-  width: auto;
-  min-height: 44px;
-  padding: 9px 13px;
-  border: 2.5px solid var(--ed-rule);
-  border-radius: 0;
-  background: var(--ed-fill);
-  color: var(--ed-on-fill);
-  box-shadow: none;
-  font-family: var(--ed-mono);
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.f9-dash-topbar .f9-secondary-button {
-  border-color: var(--ed-rule);
-  background: var(--ed-surface);
-  color: var(--ink);
-}
-
 .f9-dash-page .f9-field input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]),
 .f9-dash-page .f9-action-row input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]),
 .f9-dash-page .f9-field select,
@@ -5747,10 +5713,6 @@ one signal-green accent.
   min-height: 44px;
 }
 
-.f9-dash-mobile-utility {
-  display: none;
-}
-
 @media (max-width: 640px) {
   .f9-cursor-shell {
     padding: 12px 8px;
@@ -5768,82 +5730,6 @@ one signal-green accent.
 
   .f9-dash-page-app .f9-cursor-main {
     order: 2;
-  }
-
-  /* Compatibility selector for the pre-BL-017 utility group. The group now
-     participates in the single §6.4 bar through the more-specific `contents`
-     rule below; it is no longer a second scrolling row. */
-  .f9-dash-page-app .f9-dash-mobile-utility {
-    position: static;
-    display: flex;
-    flex-wrap: nowrap;
-    align-items: center;
-    justify-content: flex-start;
-    overflow-x: auto;
-  }
-
-  .f9-dash-page-app .f9-dash-mobile-nav > .f9-dash-mobile-utility {
-    display: contents;
-  }
-
-  .f9-dash-page-app .f9-dash-mobile-nav::-webkit-scrollbar {
-    display: none;
-  }
-
-  .f9-dash-page-app .f9-dash-mobile-nav {
-    order: 1;
-    position: static;
-    display: flex;
-    gap: 0;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    padding: 0;
-    border: 2.5px solid var(--ed-rule);
-    border-radius: 0;
-    background: var(--ed-surface);
-    scroll-snap-type: x proximity;
-    scrollbar-width: none;
-  }
-
-  .f9-dash-page-app .f9-dash-mobile-nav a,
-  .f9-dash-page-app .f9-dash-mobile-nav button {
-    flex: 0 0 auto;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 44px;
-    padding: 9px 12px;
-    border: 0;
-    border-left: 2.5px solid var(--ed-rule);
-    border-radius: 0;
-    background: var(--ed-surface);
-    color: var(--ink);
-    font-family: var(--ed-mono);
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.1em;
-    line-height: 1.1;
-    text-align: center;
-    text-decoration: none;
-    text-transform: uppercase;
-    white-space: nowrap;
-    scroll-snap-align: start;
-  }
-
-  .f9-dash-page-app .f9-dash-mobile-nav > a:first-child {
-    border-left: 0;
-  }
-
-  .f9-dash-page-app .f9-dash-mobile-nav a.is-active,
-  .f9-dash-page-app .f9-dash-mobile-utility a.is-active {
-    background: var(--ed-fill);
-    color: var(--ed-on-fill);
-  }
-
-  .f9-dash-page-app .f9-dash-mobile-nav :is(a, button):focus-visible {
-    outline: 2.5px solid var(--ed-focus);
-    outline-offset: -4px;
-    border-radius: 0;
   }
 
   .f9-cursor-rail nav {
@@ -6865,13 +6751,6 @@ one signal-green accent.
   border-color: #9b1e15;
 }
 
-.f9-dash-topbar .f9-danger-button {
-  min-height: 36px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 0.88rem;
-}
-
 .f9-confirm-armed {
   animation: f9-confirm-settle 160ms ease;
 }
@@ -7665,14 +7544,6 @@ one signal-green accent.
   opacity: 1;
 }
 
-@media (max-width: 640px) {
-  .f9-dash-page-app .f9-dash-mobile-nav a[aria-current="page"],
-  .f9-dash-page-app .f9-dash-mobile-utility a[aria-current="page"] {
-    background: var(--ed-fill);
-    color: var(--ed-on-fill);
-  }
-}
-
 /* ============================================================
    WP-46: keep the lightweight sample-brief artifact visible in the
    mobile hero (the heavy .ld-stack is hidden at this width).
@@ -7792,28 +7663,6 @@ one signal-green accent.
 [data-f9-theme="dark"] .f9-dash-rail-footer button:hover {
   background: var(--dk-hover);
   color: var(--ink);
-}
-
-[data-f9-theme="dark"] .f9-dash-topbar .f9-secondary-button {
-  border-color: var(--line);
-}
-
-[data-f9-theme="dark"] .f9-dash-page-app .f9-dash-mobile-nav a,
-[data-f9-theme="dark"] .f9-dash-page-app .f9-dash-mobile-utility a,
-[data-f9-theme="dark"] .f9-dash-page-app .f9-dash-mobile-utility button {
-  color: var(--ink-soft);
-}
-
-[data-f9-theme="dark"] .f9-dash-page-app .f9-dash-mobile-nav a.is-active,
-[data-f9-theme="dark"] .f9-dash-page-app .f9-dash-mobile-nav a[aria-current="page"],
-[data-f9-theme="dark"] .f9-dash-page-app .f9-dash-mobile-utility a.is-active,
-[data-f9-theme="dark"] .f9-dash-page-app .f9-dash-mobile-utility a[aria-current="page"] {
-  background: var(--ed-fill);
-  color: var(--ed-on-fill);
-}
-
-[data-f9-theme="dark"] .f9-dash-page-app .f9-dash-mobile-nav a:focus-visible {
-  outline-color: var(--ed-focus);
 }
 
 [data-f9-theme="dark"] .f9-search-page :is(a, button, input, select, textarea):focus-visible {
@@ -13373,5 +13222,97 @@ reds soften --- */
 
   .f9-wk-sec {
     padding-top: 26px;
+  }
+}
+
+/* === BL-042 mobile top navigation (landing language) === */
+
+@media (max-width: 640px) {
+  .f9-dash-page-app .f9-cursor-shell {
+    gap: 0;
+  }
+
+  .f9-dash-page-app .f9-dash-mobile-nav {
+    position: static;
+    order: 1;
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding: 0 var(--wk-pad);
+    border: 0;
+    border-bottom: 1px solid var(--wk-rule);
+    border-radius: 0;
+    background: var(--bone);
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  .f9-dash-page-app .f9-dash-mobile-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .f9-dash-page-app .f9-dash-mobile-nav > form {
+    flex: 0 0 auto;
+    display: flex;
+  }
+
+  .f9-dash-page-app .f9-dash-mobile-nav a,
+  .f9-dash-page-app .f9-dash-mobile-nav button {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    margin: 0 18px -1px 0;
+    padding: 0;
+    border: 0;
+    border-bottom: 1px solid transparent;
+    border-radius: 0;
+    background: none;
+    color: var(--ink-faint);
+    cursor: pointer;
+    font-family: var(--f9-font);
+    font-size: 13.5px;
+    font-weight: 400;
+    letter-spacing: 0;
+    line-height: 1.35;
+    text-align: center;
+    text-decoration: none;
+    text-transform: none;
+    white-space: nowrap;
+    scroll-snap-align: start;
+    transition:
+      color var(--wk-snap),
+      border-color var(--wk-snap);
+  }
+
+  .f9-dash-page-app .f9-dash-mobile-nav :is(a, button):hover {
+    color: var(--ink-soft);
+  }
+
+  .f9-dash-page-app .f9-dash-mobile-nav a.is-active,
+  .f9-dash-page-app .f9-dash-mobile-nav a[aria-current="page"] {
+    border-bottom-color: var(--ink);
+    background: none;
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  .f9-dash-page-app .f9-dash-mobile-nav :is(a, button):focus-visible {
+    outline: 2px solid var(--wk-focus);
+    outline-offset: -3px;
+  }
+
+  .f9-dash-page-app .f9-dash-mobile-nav > form:last-child button {
+    margin-right: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .f9-dash-page-app .f9-dash-mobile-nav :is(a, button) {
+    transition: none;
   }
 }

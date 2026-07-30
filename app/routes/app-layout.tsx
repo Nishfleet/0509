@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, useLocation } from "react-router";
 import type { LoaderFunctionArgs, ShouldRevalidateFunctionArgs } from "react-router";
 import { Outlet, useLoaderData } from "react-router";
 
@@ -66,46 +65,8 @@ export function shouldRevalidate({
   return defaultShouldRevalidate;
 }
 
-/**
- * Routes that carry their own Rank-1 primary (brief §5: exactly one ink-filled
- * primary per screen). The shell's standing "+ Add competitor" demotes to
- * Rank 2 there so the page's own primary is the only one in view. BL-009 owns
- * the reports entries and BL-014 the collections entry; the rest of this shell
- * belongs to BL-017.
- *
- * §5 is a SCREEN contract, not a component one: counting only the child route
- * hides the shell's own ink primary. `/app/collections` renders its own Rank-1
- * on the gated, first-run and nothing-filed states, so the shell demotes
- * across the whole route — which also leaves the populated board at zero
- * primaries, legitimate per §5 because reading saved evidence is not a CTA and
- * creating another collection is a Rank-2 reveal (§7).
- */
-export function shellPrimaryIsDemoted(pathname: string) {
-  return (
-    pathname === "/app/reports" ||
-    pathname.startsWith("/app/reports/") ||
-    pathname === "/app/collections" ||
-    pathname === "/app"
-  );
-}
-
-/**
- * BL-030 - surfaces rebuilt in the landing language own their whole page,
- * header included: a working header is title left / one action inline right /
- * one context line, and a second right-aligned action band floating above it
- * is the "chrome explaining chrome" the concept deleted. Every other route
- * still runs on the old shell topbar until its phase lands, which is what the
- * coexistence proof in the BL-030 report shows.
- */
-export function shellTopbarIsSuppressed(pathname: string) {
-  return pathname === "/app" || pathname === "/app/watchlists";
-}
-
 export default function AppLayoutRoute() {
   const { session, showOpsNav, showPresenceNav } = useLoaderData<typeof loader>();
-  const { pathname } = useLocation();
-  const demoteShellPrimary = shellPrimaryIsDemoted(pathname);
-  const hideTopbar = shellTopbarIsSuppressed(pathname);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const closeQuickAdd = useCallback(() => setQuickAddOpen(false), []);
   const openQuickAdd = useCallback(() => setQuickAddOpen(true), []);
@@ -126,24 +87,6 @@ export default function AppLayoutRoute() {
       accountDetail="Competitor intelligence workspace"
       accountLabel="Workspace"
       accountTitle="Five to Nine"
-      headerActions={
-        hideTopbar ? null : (
-          <>
-            <Link className="f9-secondary-button" prefetch="intent" to="/app">
-              Overview
-            </Link>
-            <button
-              aria-haspopup="dialog"
-              aria-keyshortcuts="Meta+K Control+K"
-              className={demoteShellPrimary ? "f9-secondary-button" : "f9-primary-button"}
-              onClick={openQuickAdd}
-              type="button"
-            >
-              + Add competitor
-            </button>
-          </>
-        )
-      }
       onCommandPalette={openQuickAdd}
       showOpsNav={showOpsNav}
       showPresenceNav={showPresenceNav}

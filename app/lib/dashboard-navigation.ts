@@ -95,28 +95,32 @@ export function filterDashboardNav(
     .filter((section) => section.items.length > 0);
 }
 
-/** Primary routes for the compact mobile navigation. */
-export function buildDashboardMobileNav(options: { showPresence: boolean }) {
-  const items: DashboardNavItem[] = [
-    { label: "Overview", to: "/app", end: true },
-    { label: "Search", to: "/search" },
-    { label: "Competitors", to: "/app/watchlists" },
-  ];
-
-  if (options.showPresence) {
-    items.push({ label: "Presence", to: "/app/presence" });
-  }
-
-  items.push(
-    { label: "Collections", to: "/app/collections" },
-    { label: "Briefs", to: "/app/digests" },
-    { label: "Reports", to: "/app/reports" },
-    { label: "Shared links", to: "/app/shares" },
-    { label: "Notifications", to: "/app/notifications" },
-    { label: "Source access", to: "/app/source-access" },
-    { label: "Developer access", to: "/app/developer-access" },
-    { label: "Account", to: "/app/account" },
+/**
+ * BL-042 — one mobile route row, sourced from the same IA as the desktop rail.
+ *
+ * The previous helper maintained a second hand-written route list while the
+ * shell appended Team, Client rooms, Support and Billing from a third list.
+ * That produced duplicate navigation models and made some destinations look
+ * like boxed utilities rather than peers. Flattening the canonical groups
+ * keeps every entitled destination reachable exactly once.
+ */
+export function buildDashboardMobileNav(options: {
+  showPresence: boolean;
+  showOps?: boolean;
+}) {
+  const visible = {
+    showPresence: options.showPresence,
+    showOps: options.showOps ?? false,
+  };
+  const primary = filterDashboardNav(DASHBOARD_PRIMARY_NAV, visible).flatMap(
+    (section) => section.items,
+  );
+  const settings = filterDashboardNav(DASHBOARD_SETTINGS_NAV, visible).flatMap(
+    (section) => section.items,
+  );
+  const staff = DASHBOARD_STAFF_NAV.filter(
+    (item) => !item.requiresOps || visible.showOps,
   );
 
-  return items;
+  return [...primary, ...settings, ...staff];
 }

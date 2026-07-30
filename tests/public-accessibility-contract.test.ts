@@ -11,7 +11,7 @@ describe("public accessibility source contract", () => {
     expect(css).toContain(`.f9-share-header .f9-app-brand:focus-visible {
   outline-color: var(--f9-search-ink);`);
     expect(css).toContain(`.f9-dash-page-app .f9-dash-mobile-nav :is(a, button):focus-visible {
-    outline: 2.5px solid var(--ed-focus);`);
+    outline: 2px solid var(--wk-focus);`);
   });
 
   it("disables smooth scrolling when reduced motion is requested", () => {

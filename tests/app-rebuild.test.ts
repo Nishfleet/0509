@@ -98,8 +98,9 @@ describe("app rebuild", () => {
   });
 
   it("matches the advertised competitor-ad dashboard surface", () => {
-    expect(appLayout).toContain("Add competitor");
-    expect(appLayout).toContain("Overview");
+    expect(appLayout).not.toContain("headerActions=");
+    expect(shellComponent).toContain('aria-label="Workspace sections"');
+    expect(shellComponent).not.toContain("f9-dash-topbar");
     expect(routeConfig).toContain('route("api/v1/workspace-readiness"');
     expect(routeConfig).toContain('route("clients", "routes/app.clients.tsx"');
     expect(dashboardRoute).toContain("getWorkspaceReadiness");

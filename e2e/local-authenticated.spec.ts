@@ -7,7 +7,6 @@ const clientSideButtonLabels = new Set([
   "Copied!",
   "Download PDF",
   "Try again",
-  "+ Add competitor",
   // BL-030 rail + rebuilt surfaces: the visible ⌘K affordance, the
   // "Workspace & account" disclosure, and the Competitors page action, which
   // opens the same quick-add dialog rather than navigating.
@@ -57,7 +56,11 @@ async function expectNoHorizontalOverflow(page: Page) {
 
 async function expectNoFixedAppChrome(page: Page) {
   const fixedChrome = await page.evaluate(() =>
-    Array.from(document.querySelectorAll(".f9-dash-mobile-nav, .f9-dash-mobile-utility"))
+    Array.from(
+      document.querySelectorAll(
+        ".f9-dash-mobile-nav, .f9-dash-mobile-utility",
+      ),
+    )
       .map((element) => {
         const style = window.getComputedStyle(element);
         const rect = element.getBoundingClientRect();
@@ -74,69 +77,16 @@ async function expectNoFixedAppChrome(page: Page) {
   expect(fixedChrome).toEqual([]);
 }
 
-async function expectCompactHeaderActions(page: Page) {
-  // BL-030: surfaces rebuilt in the landing language own their whole page and
-  // carry their single action in the working header, so they ship no topbar at
-  // all. Every route still on the old system keeps the shipped contract: one
-  // "Overview" link plus the "+ Add competitor" quick-add button (a real
-  // <button>, not a link — it opens the palette dialog).
-  const pathname = new URL(page.url()).pathname;
-  if (pathname === "/app" || pathname === "/app/watchlists") {
-    await expect(page.locator(".f9-dash-topbar")).toHaveCount(0);
-    await expect(page.locator(".f9-wk-head .f9-wk-btn")).toHaveCount(1);
-    return;
-  }
-  const actions = await page.evaluate(() =>
-    Array.from(document.querySelectorAll(".f9-dash-topbar a, .f9-dash-topbar button")).map((element) => {
-      const rect = element.getBoundingClientRect();
-      return {
-        height: Math.round(rect.height),
-        tag: element.tagName.toLowerCase(),
-        text: element.textContent?.trim() ?? "",
-        width: Math.round(rect.width),
-      };
-    }),
-  );
-
-  expect(actions).toEqual([
-    expect.objectContaining({ tag: "a", text: "Overview" }),
-    expect.objectContaining({ tag: "button", text: "+ Add competitor" }),
-  ]);
-  for (const action of actions) {
-    expect(action.height).toBeGreaterThanOrEqual(32);
-    expect(action.height).toBeLessThanOrEqual(48);
-    expect(action.width).toBeLessThanOrEqual(180);
-  }
-}
-
-async function expectMobileUtilityInViewport(page: Page) {
-  const utilityActions = await page.evaluate(() =>
-    Array.from(document.querySelectorAll(".f9-dash-mobile-utility a, .f9-dash-mobile-utility button")).map(
-      (element) => {
-        const rect = element.getBoundingClientRect();
-        return {
-          bottom: Math.round(rect.bottom),
-          text: element.textContent?.trim() ?? "",
-          top: Math.round(rect.top),
-        };
-      },
-    ),
-  );
-
-  // Shipped utility rail: Team, Client rooms, Support, Billing (+ Sign out button).
-  for (const text of ["Team", "Client rooms", "Support", "Billing", "Sign out"]) {
-    expect(utilityActions).toContainEqual(expect.objectContaining({ text }));
-    const action = utilityActions.find((item) => item.text === text);
-    expect(action?.top).toBeGreaterThanOrEqual(0);
-    expect(action?.bottom).toBeLessThanOrEqual(page.viewportSize()!.height);
-  }
+async function expectNoShellActionRow(page: Page) {
+  // BL-042: actions belong to the route's working header. The shell must not
+  // prepend the old boxed "Overview / + Add competitor" twin to any page.
+  await expect(page.locator(".f9-dash-topbar")).toHaveCount(0);
 }
 
 async function expectMobileNavLinksInContainer(page: Page) {
-  // The mobile primary nav is a horizontal swipe rail ("Swipe for more"), so
-  // links past the fold legitimately sit outside the visible rect. Every link
-  // must stay inside the rail's scrollable content, stay vertically unclipped,
-  // and the rail must actually scroll so the last link is reachable.
+  // The mobile primary nav is a quiet horizontally scrolling text row. Links
+  // past the fold legitimately sit outside the visible rect; no instructional
+  // copy is needed. Every route must remain reachable inside the row.
   const issues = await page.evaluate(() => {
     const nav = document.querySelector(".f9-dash-mobile-nav");
     if (!nav) {
@@ -150,7 +100,7 @@ async function expectMobileNavLinksInContainer(page: Page) {
     }
 
     const navRect = nav.getBoundingClientRect();
-    for (const element of Array.from(nav.querySelectorAll("a"))) {
+    for (const element of Array.from(nav.querySelectorAll("a, button"))) {
       const rect = element.getBoundingClientRect();
       const text = element.textContent?.trim() ?? "";
       if (rect.top < navRect.top || rect.bottom > navRect.bottom) {
@@ -162,8 +112,8 @@ async function expectMobileNavLinksInContainer(page: Page) {
       }
     }
 
-    const links = Array.from(nav.querySelectorAll("a"));
-    const last = links.at(-1);
+    const controls = Array.from(nav.querySelectorAll("a, button"));
+    const last = controls.at(-1);
     if (last) {
       const previousScrollLeft = nav.scrollLeft;
       nav.scrollLeft = nav.scrollWidth;
@@ -665,11 +615,10 @@ test.describe("local authenticated E2E harness", () => {
         await expect(page.getByRole("link", { name: "Notifications" }).first()).toBeVisible();
         await expect(page.getByRole("button", { name: "Sign out" }).first()).toBeVisible();
         await expectNoFixedAppChrome(page);
-        await expectCompactHeaderActions(page);
+        await expectNoShellActionRow(page);
         if (viewport.width <= 640) {
           await expect(page.getByRole("link", { name: "Developer access" }).first()).toBeVisible();
           await expectMobileNavLinksInContainer(page);
-          await expectMobileUtilityInViewport(page);
         }
         await expectNoHorizontalOverflow(page);
       }
