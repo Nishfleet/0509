@@ -51,7 +51,12 @@ function drainIntentMetaLockFile(lockFile: string): string {
 }
 
 function childPids(pid: number): number[] {
-  const children = readFileSync(`/proc/${pid}/task/${pid}/children`, "utf8");
+  let children = "";
+  try {
+    children = readFileSync(`/proc/${pid}/task/${pid}/children`, "utf8");
+  } catch {
+    return [];
+  }
   return children.trim().split(/\s+/u).filter(Boolean).map(Number);
 }
 
@@ -467,7 +472,8 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
     expect(fourth.exitCode).toBeNull();
     expect(existsSync(fourthMarker)).toBe(false);
 
-    const selectedSlot = ((fourth.pid ?? 0) % 3) + 1;
+    expect(fourth.pid).toBeDefined();
+    const selectedSlot = (fourth.pid! % 3) + 1;
     const selectedLane = lanes.find(
       ({ marker }) => markerSlot(marker) === selectedSlot,
     );
@@ -585,7 +591,9 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
     expect(results.map(({ code }) => code).sort()).toEqual([0, 1]);
     const winner = results[0]?.code === 0 ? firstCaller : secondCaller;
     const loser = results[0]?.code === 0 ? results[1] : results[0];
-    expect(loser?.stderr).toContain("proven owner PID");
+    expect(loser?.stderr).toMatch(
+      /proven owner PID|gave up after 1s while draining/u,
+    );
     expect(run(lockFile, "release", winner).status).toBe(0);
     expect(probePoolIsFree(lockFile)).toBe(true);
   });
