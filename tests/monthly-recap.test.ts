@@ -99,7 +99,13 @@ describe("sendMonthlyCustomerRecaps", () => {
       { DB: {} } as never,
       { scheduledTime: Date.parse("2026-07-13T05:00:00.000Z") },
     );
-    expect(result).toEqual({ attempted: 0, sent: 0, skipped: 0, duplicates: 0 });
+    expect(result).toEqual({
+      attempted: 0,
+      sent: 0,
+      skipped: 0,
+      duplicates: 0,
+      failed: 0,
+    });
   });
 
   it("sends one recap per paid user with activity and dedupes by month key", async () => {
@@ -247,6 +253,57 @@ describe("sendMonthlyCustomerRecaps", () => {
       { DB: {} } as never,
       { force: true, scheduledTime: Date.parse("2026-07-06T05:00:00.000Z") },
     );
-    expect(result).toMatchObject({ attempted: 1, sent: 0, skipped: 1 });
+    expect(result).toMatchObject({
+      attempted: 1,
+      sent: 0,
+      skipped: 1,
+      failed: 0,
+    });
+  });
+
+  it("counts per-user data failures separately from intentional skips", async () => {
+    vi.doMock("~/lib/data.server", () => ({
+      claimInstantDeliveryAttempt: vi.fn(),
+      markInstantDeliveryDispatchStarted: vi.fn(),
+      updateDeliveryAttemptResult: vi.fn(),
+      getUserDeliveryProfile: vi.fn().mockResolvedValue({
+        email: "owner@example.com",
+        name: "Owner",
+      }),
+    }));
+    vi.doMock("~/lib/delivery-email-core.server", () => ({
+      EMAIL_PROVIDER: "cloudflare",
+      appBaseUrl: () => "https://0509.io",
+      escapeHtml: (value: string) => value,
+      providerAcceptedAt: () => null,
+      sendCloudflareEmail: vi.fn(),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("starter"),
+    }));
+    vi.doMock("~/lib/data/d1.server", () => ({
+      queryAll: vi.fn().mockResolvedValue([
+        {
+          user_id: "user-1",
+          email: "owner@example.com",
+          name: "Owner",
+          plan: "starter",
+        },
+      ]),
+      queryOne: vi.fn().mockRejectedValue(new Error("recap stats unavailable")),
+    }));
+
+    const { sendMonthlyCustomerRecaps } = await import("~/lib/monthly-recap.server");
+    const result = await sendMonthlyCustomerRecaps(
+      { DB: {} } as never,
+      { force: true, scheduledTime: Date.parse("2026-07-06T05:00:00.000Z") },
+    );
+
+    expect(result).toMatchObject({
+      attempted: 1,
+      sent: 0,
+      skipped: 0,
+      failed: 1,
+    });
   });
 });

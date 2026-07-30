@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DISCOVERY_WARMUP_CRON } from "../workers/schedule";
+import {
+  DISCOVERY_WARMUP_CRON,
+  WEEKLY_DIGEST_CRON,
+} from "../workers/schedule";
 
 const NORMAL_CRON = "0 * * * *";
 const WARMUP_CRON = DISCOVERY_WARMUP_CRON;
@@ -36,6 +39,7 @@ async function loadWorker() {
   const sendMonthlyCustomerRecaps = vi.fn().mockResolvedValue({
     sent: 0,
     skipped: 0,
+    failed: 0,
   });
   const reportScheduledTaskFailure = vi.fn();
   const observeScheduledTask = vi.fn((
@@ -123,7 +127,7 @@ afterEach(() => {
 });
 
 describe("Worker scheduled handler", () => {
-  it("runs the independent observation heartbeat without customer workloads", async () => {
+  it("runs the independent observation heartbeat while preserving shared email recovery", async () => {
     const loaded = await loadWorker();
     const { ctx, pending } = createContext();
 
@@ -139,7 +143,16 @@ describe("Worker scheduled handler", () => {
 
     expect(loaded.sendScheduledObservationHeartbeat).toHaveBeenCalledTimes(1);
     expect(loaded.runScheduledMonitoring).not.toHaveBeenCalled();
-    expect(loaded.scheduleBillingLifecycleEmailRecovery).not.toHaveBeenCalled();
+    expect(loaded.scheduleBillingLifecycleEmailRecovery).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      {
+        observationContext: {
+          cron: HEARTBEAT_CRON,
+          scheduledTime: Date.parse("2026-07-30T12:13:00.000Z"),
+        },
+      },
+    );
   });
 
   it("pages a rejected independent observation heartbeat", async () => {
@@ -199,6 +212,36 @@ describe("Worker scheduled handler", () => {
     expect(loaded.observeScheduledTask.mock.calls.map((call) => call[2])).toEqual([
       { cron: NORMAL_CRON, scheduledTime, taskName: "scheduled_monitoring" },
     ]);
+  });
+
+  it("pages monthly recap failures without paging intentional skips", async () => {
+    const loaded = await loadWorker();
+    const { ctx, pending } = createContext();
+    loaded.sendMonthlyCustomerRecaps
+      .mockResolvedValueOnce({ sent: 0, skipped: 2, failed: 0 })
+      .mockResolvedValueOnce({ sent: 0, skipped: 0, failed: 1 });
+
+    for (const scheduledTime of [
+      Date.parse("2026-07-06T05:00:00.000Z"),
+      Date.parse("2026-08-03T05:00:00.000Z"),
+    ]) {
+      await loaded.worker.scheduled(
+        { cron: WEEKLY_DIGEST_CRON, scheduledTime } as never,
+        {} as never,
+        ctx as never,
+      );
+    }
+    await Promise.all(pending);
+
+    expect(loaded.sendMonthlyCustomerRecaps).toHaveBeenCalledTimes(2);
+    expect(loaded.reportScheduledTaskFailure).toHaveBeenCalledTimes(1);
+    expect(loaded.reportScheduledTaskFailure).toHaveBeenCalledWith(
+      expect.anything(),
+      "monthly_customer_recaps_degraded",
+      expect.objectContaining({
+        message: "monthly customer recaps completed with 1 failed recipients",
+      }),
+    );
   });
 
   it("delegates DISCOVERY_WARMUP_CRON to discovery warmup", async () => {

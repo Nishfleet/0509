@@ -95,7 +95,7 @@ export async function searchMetaApiAdsWithInteractiveDepth(
         discoveryStatus: "degraded",
         discoverySummary:
           "Some additional Meta results could not be loaded. The results shown are partial; retry to continue from the saved cursor.",
-        discoveryFailureClass: resolveFailureClass(error),
+        discoveryFailureClass: resolveMetaApiFailureClass(error),
       };
     }
   }
@@ -802,7 +802,9 @@ export async function searchAdsViaSourceResolver(
               : provider === "meta_library_browser"
               ? "Live commercial discovery running through Browser Run."
               : "Official Meta API is available for limited diagnostic use.",
-          lastSuccessAt: partial ? null : timestamp,
+          lastSuccessAt: partial
+            ? providerState?.lastSuccessAt ?? usableCached?.fetchedAt ?? null
+            : timestamp,
           lastFailureAt: partial ? timestamp : null,
           metadata: {
             customerOwned: provider === "meta_api" ? hasCustomerMetaToken : false,
@@ -1489,6 +1491,14 @@ function resolveFailureClass(error: unknown): DiscoveryFailureClass {
   }
 
   return "browser_launch_failed";
+}
+
+function resolveMetaApiFailureClass(error: unknown): DiscoveryFailureClass {
+  const failureClass = resolveFailureClass(error);
+  // The shared fallback is browser-specific. For an otherwise unclassified
+  // Meta request failure, the existing unavailable class is the truthful,
+  // provider-neutral state exposed to customers.
+  return failureClass === "browser_launch_failed" ? "browser_unavailable" : failureClass;
 }
 
 function shouldUseProviderCooldown(

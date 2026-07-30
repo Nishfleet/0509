@@ -255,15 +255,21 @@ export async function loadMonthlyRecapStats(
 export async function sendMonthlyCustomerRecaps(
   env: AppEnv,
   options: { scheduledTime?: number; force?: boolean } = {},
-): Promise<{ attempted: number; sent: number; skipped: number; duplicates: number }> {
+): Promise<{
+  attempted: number;
+  sent: number;
+  skipped: number;
+  duplicates: number;
+  failed: number;
+}> {
   if (!env.DB) {
-    return { attempted: 0, sent: 0, skipped: 0, duplicates: 0 };
+    return { attempted: 0, sent: 0, skipped: 0, duplicates: 0, failed: 0 };
   }
 
   const now =
     options.scheduledTime === undefined ? new Date() : new Date(options.scheduledTime);
   if (!options.force && !isFirstMondayOfMonth(now)) {
-    return { attempted: 0, sent: 0, skipped: 0, duplicates: 0 };
+    return { attempted: 0, sent: 0, skipped: 0, duplicates: 0, failed: 0 };
   }
 
   const monthKey = previousCalendarMonthKey(now);
@@ -272,6 +278,7 @@ export async function sendMonthlyCustomerRecaps(
   let sent = 0;
   let skipped = 0;
   let duplicates = 0;
+  let failed = 0;
   const billingUrl = `${appBaseUrl(env)}/app/billing`;
 
   for (const user of users) {
@@ -313,11 +320,17 @@ export async function sendMonthlyCustomerRecaps(
         duplicates += 1;
       } else if (result.sent) {
         sent += 1;
-      } else {
+      } else if (
+        result.reason === "unverified" ||
+        result.reason === "disabled" ||
+        result.reason === "missing_email"
+      ) {
         skipped += 1;
+      } else {
+        failed += 1;
       }
     } catch (error) {
-      skipped += 1;
+      failed += 1;
       console.error(
         `Monthly recap failed for user ${user.userId}; continuing with remaining users.`,
         error,
@@ -325,7 +338,7 @@ export async function sendMonthlyCustomerRecaps(
     }
   }
 
-  return { attempted, sent, skipped, duplicates };
+  return { attempted, sent, skipped, duplicates, failed };
 }
 
 async function sendOneMonthlyRecap(

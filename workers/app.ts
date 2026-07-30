@@ -132,6 +132,16 @@ export default {
     return withSecurityHeaders(response, request);
   },
   async scheduled(controller, env, ctx) {
+    const observationContext = Object.freeze({
+      cron: controller.cron,
+      scheduledTime: controller.scheduledTime,
+    });
+
+    // Every cron also drains a bounded customer-email outbox. A heartbeat is
+    // independent of customer monitoring work, but must not break this shared
+    // recovery invariant.
+    scheduleBillingLifecycleEmailRecovery(env, ctx, { observationContext });
+
     if (controller.cron === SCHEDULED_OBSERVATION_HEARTBEAT_CRON) {
       ctx.waitUntil(
         sendScheduledObservationHeartbeat(env).then(
@@ -151,17 +161,8 @@ export default {
     }
 
     const scheduledTask = resolveScheduledTask(controller.cron);
-		const observationContext = Object.freeze({
-			cron: controller.cron,
-			scheduledTime: controller.scheduledTime,
-		});
 		const observe = <T>(taskName: ReleaseScheduledTaskName, taskPromise: Promise<T>) =>
 			observeScheduledTask(env, ctx, { ...observationContext, taskName }, taskPromise);
-
-		// Every cron also drains a bounded customer-email outbox. Keeping this
-		// before the warmup early return ensures a worker that stopped after the
-		// durable pre-dispatch claim cannot strand a finalized billing event.
-		scheduleBillingLifecycleEmailRecovery(env, ctx, { observationContext });
 
     if (controller.cron === WEEKLY_DIGEST_CRON) {
       // Monday morning: the operator gets last week's business numbers
@@ -184,11 +185,11 @@ export default {
             if (result.sent > 0) {
               console.log("monthly customer recaps sent", result);
             }
-            if (result.skipped > 0) {
+            if (result.failed > 0) {
               await reportScheduledTaskFailure(
                 env,
                 "monthly_customer_recaps_degraded",
-                new Error("monthly customer recaps completed with skipped recipients"),
+                new Error(`monthly customer recaps completed with ${result.failed} failed recipients`),
               );
             }
           },

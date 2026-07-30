@@ -3277,6 +3277,7 @@ async function evaluateSelectiveProofCandidates(
         recentWatchEvents: proofAwareRecentEvents,
         sensitivityMode: "balanced",
         burstCount: (eventTypesByAd.get(observation.ad_id) ?? []).length,
+        currentCapturedAt: snapshot.capturedAt,
       });
 
       for (const event of evaluated.events) {
@@ -3746,6 +3747,7 @@ async function evaluateDirectWebsiteProofCandidate(
       recentWatchEvents: input.recentWatchEvents,
       sensitivityMode: "balanced",
       burstCount: 1,
+      currentCapturedAt: snapshot.capturedAt,
     });
 
     const proofEvents: WatchEventRecord[] = [];
