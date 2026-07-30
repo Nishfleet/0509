@@ -192,6 +192,7 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
         reasonCode: "landing_blocked",
       }),
     );
+    expect(onFailure).toHaveBeenCalledTimes(1);
   });
 
   it("renders a successful but signal-empty HTML shell before accepting it as evidence", async () => {
