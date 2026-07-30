@@ -263,6 +263,47 @@ describe("captureCreativeText", () => {
     });
   });
 
+  it("does not re-OCR the stored creative image after snapshot OCR already tried it", async () => {
+    const aiRun = vi.fn().mockResolvedValue({ description: "" });
+    mockFetchWithDns((url) => {
+      if (url.includes("cdn.example.com")) {
+        return new Response(Uint8Array.from([255, 216, 255, 217]), {
+          status: 200,
+          headers: { "content-type": "image/jpeg" },
+        });
+      }
+      return new Response("<html><body><div>Nykaa</div></body></html>", {
+        status: 200,
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    });
+
+    const result = await captureCreativeText(
+      { AI: { run: aiRun } } as never,
+      "https://facebook.example.com/ad-snapshot",
+      {
+        advertiser: "Nykaa",
+        body: "",
+        previewHeadline: "",
+        previewSubhead: "",
+        cta: "",
+        creativeImageUrl: "https://cdn.example.com/creative.jpg",
+      },
+    );
+
+    expect(aiRun).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({
+      text: null,
+      imageUrl: "https://cdn.example.com/creative.jpg",
+      metadata: {
+        extractionPath: "snapshot_image_ocr",
+        ocrAttemptCount: 2,
+        unreadableReasonCode: "ocr_empty_result",
+      },
+    });
+    expect(result?.metadata).not.toHaveProperty("sourceFallbackAttempted");
+  });
+
   it("falls back to Workers AI OCR when the snapshot HTML has no distinct creative text", async () => {
     const aiRun = vi.fn().mockResolvedValue({
       description: "Launch Sale\nFlat ₹400 Off",

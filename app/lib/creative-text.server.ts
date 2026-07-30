@@ -144,7 +144,8 @@ export async function captureCreativeText(
   if (
     primaryResult?.text ||
     !creativeImageUrl ||
-    creativeImageUrl === url.trim()
+    creativeImageUrl === url.trim() ||
+    primaryResult?.metadata.extractionPath === "snapshot_image_ocr"
   ) {
     return primaryResult;
   }
