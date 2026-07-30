@@ -247,6 +247,21 @@ describe("extractLandingPageSignals", () => {
     expect(performance.now() - startedAt).toBeLessThan(750);
   }, 3_000);
 
+  it("removes hidden elements whose opening tag exceeds the normal scan bound", () => {
+    const html = `
+      <script data-payload="${"x".repeat(5_000)}">
+        window.offer = "$9.99";
+      </script>
+      <main>Visible price $49.99</main>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      priceText: "$49.99",
+      ctaText: null,
+      formPresent: false,
+    });
+  });
+
   it("detects unquoted submit controls with quote-complicated attributes", () => {
     const html = `
       <input name="email" placeholder="Work email">

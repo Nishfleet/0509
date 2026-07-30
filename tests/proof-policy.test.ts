@@ -195,6 +195,29 @@ describe("proof policy", () => {
       skipReason: "skipped_due_to_budget",
     });
   });
+
+  it("honors the target failure cooldown even for a forced first proof", () => {
+    const decision = evaluateProofPolicy({
+      sensitivityMode: "balanced",
+      triggerEventTypes: ["landing_page_url_changed"],
+      lastSuccessfulProofAt: null,
+      watchlistRunAttemptCount: 0,
+      watchlistDailyAttemptCount: 0,
+      workspaceDailyAttemptCount: 0,
+      workspaceRecentAttempts: [],
+      activeCaptureCount: 0,
+      burstCount: 1,
+      proofRequestDuplicate: false,
+      recentFailureCountForTarget: 2,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(decision).toMatchObject({
+      shouldCapture: false,
+      forced: true,
+      skipReason: "skipped_due_to_rate_limit",
+    });
+  });
 });
 
 describe("per-plan daily proof caps (2026-06-12)", () => {

@@ -89,8 +89,25 @@ function removeNonVisibleElements(
       if (commentEnd < 0) break;
       continue;
     }
-    const tag = readHtmlTag(html, tagStart);
+    const prefix = readHtmlTagPrefix(html, tagStart);
+    const hiddenOpeningTag = Boolean(
+      prefix &&
+      !prefix.closing &&
+      elementNames.has(prefix.name),
+    );
+    const tag = readHtmlTag(
+      html,
+      tagStart,
+      hiddenOpeningTag ? html.length - tagStart : undefined,
+    );
     if (!tag) {
+      if (hiddenOpeningTag) {
+        if (!hiddenElement) {
+          output.push(html.slice(copyFrom, tagStart), " ");
+        }
+        copyFrom = html.length;
+        break;
+      }
       cursor = tagStart + 1;
       continue;
     }
@@ -209,20 +226,18 @@ function extractHtmlStartTags(html: string, tagName: string) {
   return tags;
 }
 
-function readHtmlTag(html: string, start: number) {
-  let cursor = start + 1;
-  const closing = html[cursor] === "/";
-  if (closing) cursor += 1;
-
-  const nameStart = cursor;
-  while (cursor < html.length && /[a-z0-9:_-]/i.test(html[cursor] ?? "")) {
-    cursor += 1;
-  }
-  if (cursor === nameStart) return null;
-  const name = html.slice(nameStart, cursor).toLowerCase();
+function readHtmlTag(
+  html: string,
+  start: number,
+  maxScanLength = 4_096,
+) {
+  const prefix = readHtmlTagPrefix(html, start);
+  if (!prefix) return null;
+  const { closing, name, nameEnd, nameStart } = prefix;
+  let cursor = nameEnd;
 
   let quote: "\"" | "'" | null = null;
-  const scanLimit = Math.min(html.length, cursor + 4_096);
+  const scanLimit = Math.min(html.length, cursor + maxScanLength);
   for (; cursor < scanLimit; cursor += 1) {
     const character = html[cursor];
     if (quote) {
@@ -248,6 +263,24 @@ function readHtmlTag(html: string, start: number) {
   }
 
   return null;
+}
+
+function readHtmlTagPrefix(html: string, start: number) {
+  let cursor = start + 1;
+  const closing = html[cursor] === "/";
+  if (closing) cursor += 1;
+
+  const nameStart = cursor;
+  while (cursor < html.length && /[a-z0-9:_-]/i.test(html[cursor] ?? "")) {
+    cursor += 1;
+  }
+  if (cursor === nameStart) return null;
+  return {
+    closing,
+    name: html.slice(nameStart, cursor).toLowerCase(),
+    nameEnd: cursor,
+    nameStart,
+  };
 }
 
 function readAttribute(tag: string, attribute: "type" | "value") {

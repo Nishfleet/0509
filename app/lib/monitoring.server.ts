@@ -3057,6 +3057,10 @@ async function evaluateSelectiveProofCandidates(
           status: proofDecision.skipReason,
           skipReason: proofDecision.skipReason,
           failureReason: "Evidence policy skipped the attempt.",
+          captureMetadata:
+            recentFailureCountForTarget >= 2
+              ? { unreadableReasonCode: "landing_capture_retry_cooldown" }
+              : undefined,
           extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
           idempotencyKey: `${proofRequestKey}:skip:${proofDecision.skipReason}`,
         });

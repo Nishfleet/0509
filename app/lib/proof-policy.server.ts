@@ -158,6 +158,10 @@ export function evaluateProofPolicy(input: ProofPolicyInput): ProofPolicyDecisio
     return buildSkippedDecision(threshold, score, bucket, forced, "skipped_due_to_rate_limit");
   }
 
+  if (input.recentFailureCountForTarget >= 2) {
+    return buildSkippedDecision(threshold, score, bucket, forced, "skipped_due_to_rate_limit");
+  }
+
   if (!forced) {
     const circuitBreakerOpen = isCircuitBreakerOpen(input.workspaceRecentAttempts);
     if (circuitBreakerOpen) {
