@@ -341,6 +341,9 @@ test.describe("BL-038 live proof", () => {
     browser,
     baseURL,
   }) => {
+    if (!baseURL) {
+      throw new Error("Playwright baseURL must be configured for BL-038 capture");
+    }
     mkdirSync(OUT_DIR, { recursive: true });
     const metrics: unknown[] = [];
     const sweep: unknown[] = [];
@@ -354,7 +357,7 @@ test.describe("BL-038 live proof", () => {
             viewport: { width: viewport.width, height: viewport.height },
             deviceScaleFactor: 2,
           });
-          await prepare(context, baseURL!, surface.user, theme);
+          await prepare(context, baseURL, surface.user, theme);
           const page = await context.newPage();
           const consoleErrors: string[] = [];
           const pageErrors: string[] = [];
@@ -440,7 +443,7 @@ test.describe("BL-038 live proof", () => {
           baseURL,
           viewport: { width: 1440, height: 900 },
         });
-        await prepare(context, baseURL!, surface.user, theme);
+        await prepare(context, baseURL, surface.user, theme);
         const page = await context.newPage();
         for (const width of SWEEP_WIDTHS) {
           await page.setViewportSize({ width, height: 900 });

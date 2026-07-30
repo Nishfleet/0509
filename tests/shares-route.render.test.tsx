@@ -72,6 +72,8 @@ describe("/app/shares rendered conditional-action contract", () => {
       expect(buttonsNamed(container, "Copy link")).toHaveLength(3);
       expect(container.querySelectorAll('a[href="/app/reports/watchlist:watch-1"]')).toHaveLength(1);
       expect(container.textContent).not.toContain("Upgrade");
+      expect(container.textContent).toContain("4 links shown");
+      expect(container.textContent).not.toContain("4 active links");
 
       const approved = rowNamed(rows, "Report · Snapshot", "Approved");
       expect(approved.querySelector(".f9-wk-st")?.className).toContain("is-on");

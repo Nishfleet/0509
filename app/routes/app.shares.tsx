@@ -98,7 +98,7 @@ export default function SharesRoute() {
   return (
     <DashboardPage className="f9-wk-page">
       <WorkingHeader
-        context={`${data.shares.length} active ${data.shares.length === 1 ? "link" : "links"}`}
+        context={`${data.shares.length} ${data.shares.length === 1 ? "link" : "links"} shown`}
         title="Shared links"
       />
 
@@ -214,7 +214,7 @@ export default function SharesRoute() {
 
       <div className="f9-wk-opline">
         <span>
-          {data.shares.length} active {data.shares.length === 1 ? "link" : "links"}
+          {data.shares.length} {data.shares.length === 1 ? "link" : "links"} shown
         </span>
       </div>
     </DashboardPage>
