@@ -203,6 +203,36 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
     expect(probePoolIsFree(lockFile)).toBe(true);
   });
 
+  it("does not leak unrelated descriptors into the detached holder", async () => {
+    const lockFile = scratchLock();
+    const caller = {
+      DEPLOY_WINDOW_CALLER_ID: "vitest-inherited-fd",
+      DEPLOY_WINDOW_CAPABILITY_FILE: `${lockFile}.cap.inherited-fd`,
+    };
+    const child = spawn(script, ["acquire"], {
+      env: envFor(lockFile, caller),
+      stdio: ["ignore", "pipe", "pipe", "pipe"],
+    });
+    liveChildren.add(child);
+    child.once("exit", () => liveChildren.delete(child));
+    const result = completed(child);
+    let unrelatedPipeClosed = false;
+    child.stdio[3]?.once("close", () => {
+      unrelatedPipeClosed = true;
+    });
+
+    try {
+      await waitFor(() => child.exitCode !== null);
+      await waitFor(() => unrelatedPipeClosed, 300);
+      expect((await result).code).toBe(0);
+    } finally {
+      expect(run(lockFile, "release", caller).status).toBe(0);
+      await result;
+    }
+
+    expect(probePoolIsFree(lockFile)).toBe(true);
+  });
+
   it("rejects a slot-count change after the pool is initialized", () => {
     const lockFile = scratchLock();
     writeFileSync(`${poolSizeFile(lockFile)}.tmp.orphan`, "");

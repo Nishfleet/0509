@@ -431,6 +431,15 @@ acquire_window() {
     sleeper_pid=""
     owners_registered=0
     held_fds=()
+    # GitHub Runner and other orchestrators may pass private pipe descriptors
+    # above stderr. A detached holder must not keep those pipes alive after the
+    # acquire client exits, so discard everything before opening our own locks.
+    for inherited_fd_path in /proc/$$/fd/*; do
+      inherited_fd="${inherited_fd_path##*/}"
+      if [[ "$inherited_fd" =~ ^[0-9]+$ ]] && [ "$inherited_fd" -gt 2 ]; then
+        eval "exec ${inherited_fd}>&-" 2>/dev/null || true
+      fi
+    done
     acquire_deadline="$(awk -v now="$(date +%s.%N)" -v timeout="$acquire_timeout" \
       "BEGIN { printf \"%.9f\", now + timeout }")"
 
