@@ -511,13 +511,14 @@ describe("operator digest email reconciliation", () => {
     expect(replay).toMatchObject({ ok: true, replayed: true, outcome: "failed" });
     expect(
       harness.sqlite.prepare(`
-        SELECT status, webhook_status, provider_status_last_seen_at
+        SELECT status, webhook_status, provider_status_last_seen_at, sent_at
         FROM delivery_attempt WHERE id = 'digest-attempt-1'
       `).get(),
     ).toMatchObject({
       status: "failed",
       webhook_status: "failed",
       provider_status_last_seen_at: "2026-07-15T18:01:00.000Z",
+      sent_at: "2026-07-15T18:00:30.000Z",
     });
     expect(
       harness.sqlite.prepare("SELECT COUNT(*) AS count FROM agent_action_audit").get(),

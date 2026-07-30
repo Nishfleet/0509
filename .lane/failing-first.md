@@ -31,5 +31,20 @@ Result against the first remediation candidate, before follow-up production chan
 | C4 policy skip | Intentional `disabled` delivery produced four durable job failures instead of four clean completions. |
 | C8 unresolved attempt | A `pending` alert detail resolved the run successfully instead of failing it honestly. |
 
-The follow-up focused run passed **145/145**, including a complementary case proving
+The follow-up run passed **145/145**, including a complementary case proving
 that a different successful recipient keeps the digest aggregate sent.
+
+## Final-head review probes
+
+Command (lock-wrapped):
+
+`npx vitest run tests/monitoring-reliability.test.ts tests/operator-delivery-reconciliation.test.ts tests/delivery-attempt-public.test.ts`
+
+Result against `2f9dfbf`, before the final-head review remediation:
+**3 targeted failures, 37 passing**.
+
+| Review gap | Failing assertion before follow-up |
+|---|---|
+| C8 quiet-hours deferral | A detail backed by durable `skipped_due_to_quiet_hours` state incremented `inlineFailures` and failed the completed scan. |
+| C3 acceptance history | Provider rejection reconciliation erased the accepted email's original `sent_at`. |
+| C3 recovery copy | The public attempt summary claimed the rejection occurred before provider acceptance despite a persisted acceptance timestamp. |

@@ -378,7 +378,10 @@ async function reconcileDeliveryAttemptWithAudit(
               json(?)
             ),
             error_message = ?,
-            sent_at = ?,
+            sent_at = CASE
+              WHEN ? = 'failed' THEN sent_at
+              ELSE ?
+            END,
             failed_at = ?,
             updated_at = ?
         WHERE id = ?
@@ -401,6 +404,7 @@ async function reconcileDeliveryAttemptWithAudit(
       scope.evidencePath,
       jsonValue(evidence),
       errorMessage,
+      normalized.outcome,
       normalized.outcome === "sent" ? normalized.observedAt : null,
       normalized.outcome === "failed" ? normalized.observedAt : null,
       reconciledAt,

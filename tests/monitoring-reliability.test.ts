@@ -839,6 +839,46 @@ describe("first-scan baseline event", () => {
       }),
     );
   });
+
+  it("keeps the run successful when an alert is intentionally deferred by quiet hours", async () => {
+    const observations = [{
+      id: "obs-1",
+      ad_id: "ad-1",
+      landing_page_url: null,
+      metadata_json: "{}",
+    }];
+    const mocks = mockReliabilityDependencies({
+      watchlists: [buildWatchlist(1, "adspy")],
+      observationsForRun: observations,
+      deliverAlertsImpl: vi.fn().mockResolvedValue({
+        attempts: 1,
+        channels: ["email"],
+        details: [{ status: "failed", deferredByQuietHours: true }],
+      }),
+    });
+
+    const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+    const result = await runScheduledMonitoring(mocks.env as never, {
+      includeDigests: false,
+      scheduledTime: Date.parse("2026-06-11T04:00:00.000Z"),
+    });
+
+    expect(result.inlineFailures).toBe(0);
+    expect(mocks.finishWatchlistRun).toHaveBeenCalledWith(
+      expect.anything(),
+      "run-watch-1",
+      expect.objectContaining({
+        status: "succeeded",
+        errorCode: null,
+        summary: expect.objectContaining({
+          sendsTriggered: 0,
+          sendAttempts: 0,
+          sendFailures: 0,
+          sendDeferrals: 1,
+        }),
+      }),
+    );
+  });
 });
 
 describe("concurrent-scan guard", () => {

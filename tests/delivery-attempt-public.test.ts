@@ -72,4 +72,36 @@ describe("public delivery attempt summaries", () => {
       "The email provider accepted this message, but final delivery is unconfirmed.",
     );
   });
+
+  it("distinguishes a provider rejection after the email was accepted", () => {
+    const summary = toPublicDeliveryAttemptSummary({
+      id: "attempt-rejected",
+      userId: "user-1",
+      watchlistId: null,
+      digestRunId: "digest-1",
+      deliveryTargetId: "target-1",
+      lane: "customer",
+      channel: "email",
+      provider: "cloudflare_email",
+      status: "failed",
+      webhookStatus: "failed",
+      targetValue: "owner@example.com",
+      providerMessageId: "provider-message-1",
+      providerStatusLastSeenAt: "2026-07-15T04:05:00.000Z",
+      templateName: "weekly_digest",
+      eventIds: [],
+      payloadSnapshot: {},
+      idempotencyKey: "digest:digest-1:customer:email:owner@example.com",
+      errorMessage: "Provider reconciliation confirmed rejection.",
+      sentAt: "2026-07-15T04:00:00.000Z",
+      failedAt: "2026-07-15T04:05:00.000Z",
+      createdAt: "2026-07-15T04:00:00.000Z",
+      updatedAt: "2026-07-15T04:05:00.000Z",
+    });
+
+    expect(summary.sentAt).toBe("2026-07-15T04:00:00.000Z");
+    expect(summary.errorMessage).toBe(
+      "The provider accepted this email, but later reported that delivery failed. Review the recipient address or contact support.",
+    );
+  });
 });

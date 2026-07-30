@@ -115,6 +115,7 @@ interface DigestAttemptSummary {
   // unset. Gates the failed→pending aggregate overwrite in
   // upsertDigestDelivery.
   claimedByThisRun?: boolean;
+  deferredByQuietHours?: boolean;
 }
 
 
@@ -1042,6 +1043,7 @@ async function deliverInstantEmailBatch(
       providerMessageId: null,
       errorMessage: null,
       deliveredAt: null,
+      deferredByQuietHours: true,
     };
   }
 
@@ -1256,6 +1258,7 @@ async function deliverInstantWhatsAppBatch(
       providerMessageId: null,
       errorMessage: null,
       deliveredAt: null,
+      deferredByQuietHours: true,
     };
   }
 
@@ -1423,6 +1426,7 @@ async function deliverInstantSlackBatch(
       providerMessageId: null,
       errorMessage: null,
       deliveredAt: null,
+      deferredByQuietHours: true,
     };
   }
 
@@ -2532,6 +2536,7 @@ function summarizeDeliveryAttempt(attempt: DeliveryAttemptRecord): DigestAttempt
     providerMessageId: attempt.providerMessageId,
     errorMessage: attempt.errorMessage,
     deliveredAt: attempt.sentAt,
+    deferredByQuietHours: attempt.status === "skipped_due_to_quiet_hours",
   };
 }
 

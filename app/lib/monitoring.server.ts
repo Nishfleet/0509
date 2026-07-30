@@ -1755,7 +1755,7 @@ async function completeWatchlistRun(
 
 function summarizeAlertDelivery(delivery: {
   attempts: number;
-  details?: Array<{ status?: string }>;
+  details?: Array<{ status?: string; deferredByQuietHours?: boolean }>;
 }) {
   // Production delivery returns one detail per attempt. Keep the fallback for
   // narrow tests that predate per-attempt delivery state.
@@ -1764,13 +1764,21 @@ function summarizeAlertDelivery(delivery: {
       attempts: delivery.attempts,
       accepted: delivery.attempts,
       failures: 0,
+      deferrals: 0,
     };
   }
 
+  const deferrals = delivery.details.filter(
+    (attempt) => attempt.deferredByQuietHours === true,
+  );
+  const attemptedDeliveries = delivery.details.filter(
+    (attempt) => attempt.deferredByQuietHours !== true,
+  );
   return {
-    attempts: delivery.details.length,
-    accepted: delivery.details.filter((attempt) => attempt.status === "sent").length,
-    failures: delivery.details.filter((attempt) => attempt.status !== "sent").length,
+    attempts: attemptedDeliveries.length,
+    accepted: attemptedDeliveries.filter((attempt) => attempt.status === "sent").length,
+    failures: attemptedDeliveries.filter((attempt) => attempt.status !== "sent").length,
+    deferrals: deferrals.length,
   };
 }
 
@@ -2014,6 +2022,7 @@ export async function runWatchlist(
           sendsTriggered: alertOutcome.accepted,
           sendAttempts: alertOutcome.attempts,
           sendFailures: alertOutcome.failures,
+          sendDeferrals: alertOutcome.deferrals,
           events: allEvents.length,
           eventTypes: summarizeEventTypes(allEvents),
         },
@@ -2180,6 +2189,7 @@ export async function runWatchlist(
             sendsTriggered: alertOutcome.accepted,
             sendAttempts: alertOutcome.attempts,
             sendFailures: alertOutcome.failures,
+            sendDeferrals: alertOutcome.deferrals,
             events: directWebsiteProofEvaluation.events.length,
             eventTypes: summarizeEventTypes(
               directWebsiteProofEvaluation.events,
@@ -2215,6 +2225,7 @@ export async function runWatchlist(
           alertDeliveryAttempts: alertOutcome.attempts,
           alertDeliveryAccepted: alertOutcome.accepted,
           alertDeliveryFailures: alertOutcome.failures,
+          alertDeliveryDeferrals: alertOutcome.deferrals,
           alertDeliveryErrorCode:
             alertOutcome.failures > 0 ? "alert_delivery_failed" : null,
         },
