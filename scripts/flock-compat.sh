@@ -1,17 +1,14 @@
 #!/usr/bin/env bash
 # Compatibility shim for legacy 0509 fleet commands that called `flock`
-# directly. Exact exclusive waits on the shared deploy-window path are routed
-# into the bounded verification pool. Every other flock invocation passes
-# through unchanged, including fd-based production acquire/release calls.
+# directly. Protected deploy-window calls are parsed deliberately: supported
+# exclusive waits enter the verification pool, and every other protected form
+# is denied rather than silently bypassing the deploy admission barrier.
 set -euo pipefail
 
 REAL_FLOCK="${FLOCK_COMPAT_REAL:-/usr/bin/flock}"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd -P)"
 VERIFY_RUNNER="${FLOCK_COMPAT_VERIFY_RUNNER:-${SCRIPT_DIR}/deploy-window-lock.sh}"
 LOCK_FILE_OVERRIDE="${FLOCK_COMPAT_LOCK_FILE:-}"
-# Coupled to deploy-window-lock.sh's canonical default. When no override is
-# supplied, do not export DEPLOY_WINDOW_LOCK_FILE below: the runner resolves
-# its own default, so the integration test catches either side drifting.
 DEFAULT_LOCK_FILE="${HOME:+${HOME}/.local/state/0509/deploy-window.lock}"
 LOCK_FILE="${LOCK_FILE_OVERRIDE:-$DEFAULT_LOCK_FILE}"
 
@@ -20,25 +17,80 @@ if [ ! -x "$REAL_FLOCK" ]; then
   exit 127
 fi
 
-if [ "${FLOCK_COMPAT_DISABLE:-0}" != "1" ] &&
-   [ "${1:-}" = "--exclusive" ] &&
-   [ "${2:-}" = "--wait" ] &&
-   [[ "${3:-}" =~ ^[0-9]+([.][0-9]+)?$ ]] &&
-   [ -n "$LOCK_FILE" ] &&
-   [ "${4:-}" = "$LOCK_FILE" ] &&
-   [ "$#" -ge 5 ]; then
+exclusive=0
+wait_seconds=""
+unsupported=0
+target=""
+index=1
+
+# Parse only the command form (`flock [options] lock command...`). fd forms do
+# not name the protected lock and retain native flock behavior below.
+while [ "$index" -le "$#" ]; do
+  argument="${!index}"
+  case "$argument" in
+    --exclusive|-x)
+      exclusive=1
+      index=$((index + 1))
+      ;;
+    --wait|--timeout|-w)
+      index=$((index + 1))
+      if [ "$index" -gt "$#" ] || [[ ! "${!index}" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+        unsupported=1
+      else
+        wait_seconds="${!index}"
+      fi
+      index=$((index + 1))
+      ;;
+    --wait=*|--timeout=*)
+      wait_seconds="${argument#*=}"
+      [[ "$wait_seconds" =~ ^[0-9]+([.][0-9]+)?$ ]] || unsupported=1
+      index=$((index + 1))
+      ;;
+    -w[0-9]*|-w.*)
+      wait_seconds="${argument#-w}"
+      [[ "$wait_seconds" =~ ^[0-9]+([.][0-9]+)?$ ]] || unsupported=1
+      index=$((index + 1))
+      ;;
+    --shared|-s|--unlock|-u|--nonblock|-n|--close|-o|--no-fork|-F|--verbose|-V|--conflict-exit-code*|-E*)
+      unsupported=1
+      index=$((index + 1))
+      ;;
+    --)
+      index=$((index + 1))
+      [ "$index" -le "$#" ] && target="${!index}"
+      break
+      ;;
+    -*)
+      # An unknown option before the target might alter exclusion semantics.
+      unsupported=1
+      index=$((index + 1))
+      ;;
+    *)
+      target="$argument"
+      break
+      ;;
+  esac
+done
+
+if [ -n "$LOCK_FILE" ] && [ "$target" = "$LOCK_FILE" ]; then
+  if [ "$exclusive" -ne 1 ] || [ -z "$wait_seconds" ] || [ "$unsupported" -ne 0 ]; then
+    echo "flock-compat: unsupported protected lock invocation; use an exclusive bounded wait or deploy-window-lock.sh run -- ..." >&2
+    exit 64
+  fi
   if [ ! -x "$VERIFY_RUNNER" ]; then
     echo "flock-compat: verification runner is unavailable at ${VERIFY_RUNNER}" >&2
     exit 127
   fi
-  export DEPLOY_WINDOW_ACQUIRE_TIMEOUT="$3"
+  # Everything following the lock argument is the legacy command. Options are
+  # permitted in any order before it, but never forwarded to real flock.
+  index=$((index + 1))
+  export DEPLOY_WINDOW_ACQUIRE_TIMEOUT="$wait_seconds"
   if [ -n "$LOCK_FILE_OVERRIDE" ]; then
-    export DEPLOY_WINDOW_LOCK_FILE="$4"
+    export DEPLOY_WINDOW_LOCK_FILE="$target"
   else
     unset DEPLOY_WINDOW_LOCK_FILE
   fi
-  shift 4
-  exec "$VERIFY_RUNNER" run -- "$@"
+  exec "$VERIFY_RUNNER" run -- "${@:$index}"
 fi
 
 exec "$REAL_FLOCK" "$@"
