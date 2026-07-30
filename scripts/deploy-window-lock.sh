@@ -267,7 +267,7 @@ validate_durations() {
 }
 
 validate_pool_size() {
-  local established_slots="" extra=""
+  local established_slots="" extra="" pool_size_tmp=""
 
   exec 7>"$POOL_SIZE_LOCK_FILE"
   flock --exclusive 7
@@ -287,7 +287,15 @@ validate_pool_size() {
       return 64
     fi
   else
-    (umask 077; printf '%s\n' "$SLOT_COUNT" >"$POOL_SIZE_FILE")
+    pool_size_tmp="$(umask 077; mktemp "${POOL_SIZE_FILE}.tmp.XXXXXX")"
+    if ! printf '%s\n' "$SLOT_COUNT" >"$pool_size_tmp" ||
+       ! mv --no-target-directory -- "$pool_size_tmp" "$POOL_SIZE_FILE"; then
+      rm -f -- "$pool_size_tmp"
+      flock --unlock 7
+      exec 7>&-
+      echo "deploy-window-lock: failed to initialize ${POOL_SIZE_FILE} atomically." >&2
+      return 1
+    fi
   fi
   flock --unlock 7
   exec 7>&-

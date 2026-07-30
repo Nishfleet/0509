@@ -1,8 +1,10 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -198,6 +200,7 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
 
   it("rejects a slot-count change after the pool is initialized", () => {
     const lockFile = scratchLock();
+    writeFileSync(`${poolSizeFile(lockFile)}.tmp.orphan`, "");
     const initialized = spawnSync(script, ["run", "--", "true"], {
       encoding: "utf8",
       env: envFor(lockFile, { DEPLOY_WINDOW_SLOTS: "3" }),
@@ -211,6 +214,22 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
     });
     expect(mismatched.status).toBe(64);
     expect(mismatched.stderr).toContain("pool was initialized with 3 slots");
+    expect(probePoolIsFree(lockFile)).toBe(true);
+  });
+
+  it("fails closed when the pool-size destination is a directory", () => {
+    const lockFile = scratchLock();
+    const destination = poolSizeFile(lockFile);
+    mkdirSync(destination);
+
+    const result = spawnSync(script, ["run", "--", "true"], {
+      encoding: "utf8",
+      env: envFor(lockFile),
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("failed to initialize");
+    expect(readdirSync(destination)).toEqual([]);
     expect(probePoolIsFree(lockFile)).toBe(true);
   });
 
