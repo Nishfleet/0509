@@ -55,18 +55,18 @@ retryable and durably visible instead of pretending a second page occurred.
 
 | Gate | Result |
 |---|---|
-| Lock-wrapped `npm ci` | Passed; 293 packages, 0 vulnerabilities |
-| Focused regression suites | Passed; initial 5 files, 158/158 tests; late-review suite 8 files, 229/229; corrected Gate-B contract 2 files, 21/21; final proof checks 2 files, 17/17; final PR-thread suite 4 files, 42/42; broader scheduler/migration suite 8 files, 62/62; mixed alert-key suite 2 files, 9/9; accepted→rejected alert evidence suite 3 files, 13/13; final degradation/text/claim suite 4 files, 47/47; first adversarial-review suite 4 files, 27/27; verified-email fallback and health-index suite 4 files, 39/39; account suppression and partial-visibility suite 4 files, 133/133; direct-address/partial-denominator suite 2 files, 30/30; explicit partial-rate suite 1 file, 7/7; workspace digest-scope suite 2 files, 25/25; final delivery/data/readiness/operator suite 4 files, 162/162; PR failure-class visibility suite 1 file, 22/22; consolidated F2/F4/M6 review suite 3 files, 156/156; customer-risk replay suite 2 files, 39/39; legacy C6 alert-evidence suite 2 files, 13/13; activation dispatch-target suite 2 files, 6/6; atomic-provision/partial-freshness suite 4 files, 200/200; delivery harness compatibility suite 5 files, 48/48 |
-| Lock-wrapped full Vitest | Passed after all review fixes; 387 files, 4,193/4,193 tests. One earlier run hit the deploy-window lock protocol test’s timing race (4,170 passed, 1 failed); that test passed 5/5 in isolation and subsequent complete runs passed. The final pre-green run failed 20 tests because full-module test doubles lacked the new atomic data export; the repaired harnesses exercise the new contract and the next complete run passed. |
+| Lock-wrapped `npm ci` | Passed on remediation tip; 291 packages added / 292 audited, 0 vulnerabilities |
+| Focused regression suites | Passed; BLOCK-remediation suite 4 files, 30/30; crgate follow-up suite 8 files, 161/161 |
+| Lock-wrapped full Vitest | Passed on remediation tip; **388** files, **4200/4200** tests |
 | Lock-wrapped typecheck | Passed; Wrangler typegen, React Router typegen, `tsc -b` |
-| Full Gate B | Passed; 73/73, first attempt, zero retries |
+| Full Gate B | Passed on remediation tip; 73/73, zero retries |
 | `git diff --check` | Passed |
-| `sgscan` | Passed on the final diff; exit 0, no new security findings |
-| CodeRabbit local | Quota-guarded passes fixed the initial valid findings, scheduler/provider-state issues, partial-cache proof, heartbeat-config/NULL-safe proof, mixed-mode alert-key collision, accepted→rejected throttle evidence ordering, malformed landing handling, bounded channel-failure counts, and partial-result consumers. Stale claims that the health helper lacked `setRows` and broad module-extraction requests were verified against the code and not applied. A proposed removal of the cron allowlist constraint was rejected as gate weakening; migration/config parity tests prove the allowlist stays synchronized. One pass emitted only a report-only request to repeat stale pre-install `npm run build`/`npm test` failures; it was not applied because lock-wrapped install/full Vitest/typecheck and strict Gate B were green. The last permitted pass found two valid existing-lane gaps—F2 fallback wording for invalid clocks and F4 raw fallback for three nullable canonical fields. Both failed first and were fixed in one consolidated remediation; the hourly 3/3 quota then prevented a redundant rerun. |
+| `sgscan` | Passed on the remediation tip; exit 0, no new security findings |
+| CodeRabbit local (`crgate`) | Pre-final remediation tip: 8 findings (3 major / 5 minor); all actionable product findings fixed with regressions (see follow-up table). Report process findings applied. Second tip pass left running/quota-shared; prior actionable set already closed. |
 | CodeRabbit PR | The initial 4 actionable inline findings were verified and fixed (shared CSS, D1 NULL fallback, failed-page count zero, failure-mode-specific alert keys). A later review posted one actionable dispatch-gate diagnostic and identified the verified-account-email fallback plus health-query index outside the narrow diff range; all three were verified and fixed. The terminal review found that the operator's partial-result label hid the retained failure class; its regression failed first and the rendering now preserves both the partial status and cause. The docstring warning and broad client-route extraction request are repository-wide/out-of-lane maintainability work, not correctness findings in this candidate. |
 | Greptile PR review | Unavailable: `nish3451 has reached the 50-credit limit for trial accounts`; no inline or general code findings were produced |
-| Cross-model adversarial review | Iterative high-thinking Codex-engine passes found valid edge cases in recap dispatch ownership, retention grace, global unsubscribe preservation, operator partial visibility, partial-result readiness denominators, workspace/watchlist delivery scope, idempotent customer-risk replays, legacy C6 count migration, the production Free-activation dispatch target, lazy-provision/unsubscribe atomicity, and fresh-partial presentation. Every accepted finding received a failing-first regression and cause-level fix. The terminal exact-candidate rerun remains required before push. The default Claude-backed command could not authenticate, so it contributed no signal. |
-| `bugbot-gate status` | `ALLOW BUGBOT` — `risk: high` — `reason: High-risk or critical diff. One paid Bugbot run is justified.` GitHub's automatic attempt then reported `Bugbot couldn't run - usage limit reached`; expected/non-blocking, and `bugbot-gate mark-bugbot` recorded the fingerprint |
+| Cross-model adversarial review | BLOCK review (`pr447-REVIEW-VERDICT.md`) findings 1–3 fixed at cause. Earlier Codex-engine passes also found valid edge cases in recap dispatch ownership, retention grace, global unsubscribe preservation, operator partial visibility, partial-result readiness denominators, workspace/watchlist delivery scope, idempotent customer-risk replays, legacy C6 count migration, the production Free-activation dispatch target, lazy-provision/unsubscribe atomicity, and fresh-partial presentation. Every accepted finding received a failing-first regression and cause-level fix. |
+| `bugbot-gate status` | Verbatim on tip: `ALLOW BUGBOT` — `risk: high` — `reason: High-risk or critical diff. One paid Bugbot run is justified.` Paid run not invoked (spend needs Nish). GitHub automatic Bugbot previously hit usage limit; expected/non-blocking. |
 
 ### PR CI merge-ref blocker
 
@@ -93,18 +93,18 @@ violate this lane's coordinate-by-avoidance boundary. The check must remain
 failed/canceled until that owning lane fixes the real-flock resolution, after
 which this PR's failed job should be rerun.
 
-Gate B manifest:
+Gate B manifest (remediation tip; fields from the artifact file, not stdout):
 
-- path: `test-results/gate-b-manifest-local-release-local-03d8f8d62304c9fdb4310b9dbe898845.json`
+- path: `test-results/gate-b-manifest-local-release-local-4bb3abb5c61668bb5f21de566f23037d.json`
 - `schemaVersion`: `3`
 - `status`: `passed`
 - `strict`: `true`
-- `candidateFingerprint`: `69a021f51de2301d66b708cac82019559d51e70a506d9d4a984976940661f366`
+- `strictIssues`: `null`
+- `candidateFingerprint`: `cbb6a627d035ce09d352a48ed381e08d7444d54c0cb32c52cf75a819d18cf14f`
 - `environment`: `local`
-- `serverIdentity`: `local-03d8f8d62304c9fdb4310b9dbe898845`
-- entries: `73`
-- retries: `0`
-- postflight: `j6_retention_alert_count=1`, `j6_retention_alert_mismatch_count=0`, foreign-key violations `0`, scratch restore integrity `ok`, scratch foreign-key violations `0`, scratch database removed `true`, isolated persistence removed `true`, migrations `67`
+- `serverIdentity`: `local-4bb3abb5c61668bb5f21de566f23037d`
+- entries: `73` (status histogram: passed=73)
+- postflight: `j6_retention_alert_count=1`, `j6_retention_alert_mismatch_count=0`, `foreign_key_violation_count=0`, scratch restore integrity `ok`, `scratchDatabaseRemoved=true`
 
 ## Remediation for `pr447-REVIEW-VERDICT.md` (VERDICT: BLOCK)
 
