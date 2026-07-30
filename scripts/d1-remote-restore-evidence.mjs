@@ -76,6 +76,38 @@ const FORCE_KILL_DELAY_MS = 5_000;
 const STALE_LOCAL_RESTORE_AGE_MS = 24 * 60 * 60 * 1000;
 
 /**
+ * Preserve the fail-closed error while exposing only migration filenames
+ * needed to reconcile an append-only production ledger.
+ *
+ * @param {unknown} error
+ * @param {Array<{ name: string }>} ledger
+ * @param {string[]} repositoryMigrations
+ * @param {(message: string) => void} write
+ * @returns {never}
+ */
+export function rethrowWithMigrationLedgerDiagnostics(
+  error,
+  ledger,
+  repositoryMigrations,
+  write = console.error,
+) {
+  if (
+    error instanceof Error &&
+    error.message === "source_backup_migration_ledger_stale"
+  ) {
+    write(
+      `source_backup_migration_ledger_names:${JSON.stringify(
+        ledger.map((entry) => entry.name),
+      )}`,
+    );
+    write(
+      `repository_migration_names:${JSON.stringify(repositoryMigrations)}`,
+    );
+  }
+  throw error;
+}
+
+/**
  * Capture raw stdout only in memory while writing redacted output to Actions.
  * @param {string} command
  * @param {string[]} args
@@ -875,10 +907,18 @@ async function runAutomation(outputPath) {
     const migrations = readdirSync(resolve("migrations"))
       .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
       .sort();
-    assertMigrationLedgerMatchesRepository(
-      sourceAggregate.migrationLedger,
-      migrations,
-    );
+    try {
+      assertMigrationLedgerMatchesRepository(
+        sourceAggregate.migrationLedger,
+        migrations,
+      );
+    } catch (error) {
+      rethrowWithMigrationLedgerDiagnostics(
+        error,
+        sourceAggregate.migrationLedger,
+        migrations,
+      );
+    }
     const sourceMigrationNames = sourceAggregate.migrationLedger.map(
       (entry) => entry.name,
     );
