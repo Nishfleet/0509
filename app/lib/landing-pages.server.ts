@@ -44,6 +44,11 @@ interface CaptureLandingPageSnapshotOptions {
   preferRendered?: boolean;
 }
 
+interface LandingPageCaptureAttemptState {
+  captureWarningCodes: string[];
+  renderedAttempted: boolean;
+}
+
 export async function captureLandingPageSnapshot(
   env: AppEnv,
   url: string,
@@ -54,7 +59,10 @@ export async function captureLandingPageSnapshot(
     return failLandingCapture(options, "landing_url_invalid");
   }
 
-  return captureLandingPageSnapshotAt(env, publicUrl, options, 0);
+  return captureLandingPageSnapshotAt(env, publicUrl, options, 0, {
+    captureWarningCodes: [],
+    renderedAttempted: false,
+  });
 }
 
 async function captureLandingPageSnapshotAt(
@@ -62,6 +70,7 @@ async function captureLandingPageSnapshotAt(
   url: URL,
   options: CaptureLandingPageSnapshotOptions,
   redirectCount: number,
+  state: LandingPageCaptureAttemptState,
 ): Promise<LandingPageSnapshotData | null> {
   if (redirectCount > MAX_LANDING_PAGE_REDIRECTS) {
     return failLandingCapture(options, "landing_redirect_limit", { redirectCount });
@@ -73,8 +82,9 @@ async function captureLandingPageSnapshotAt(
       return failLandingCapture(options, "landing_redirect_blocked", { redirectCount });
     }
 
-    const captureWarningCodes: string[] = [];
-    if (options.preferRendered) {
+    const { captureWarningCodes } = state;
+    if (options.preferRendered && !state.renderedAttempted) {
+      state.renderedAttempted = true;
       const renderedSnapshot = await captureRenderedSnapshot(
         env,
         resolvedUrl.toString(),
@@ -101,7 +111,13 @@ async function captureLandingPageSnapshotAt(
       const redirectedUrl = resolvePublicRedirectUrl(response.headers.get("location"), resolvedUrl);
       releaseFetchTimeout(response);
       return redirectedUrl
-        ? captureLandingPageSnapshotAt(env, redirectedUrl, options, redirectCount + 1)
+        ? captureLandingPageSnapshotAt(
+            env,
+            redirectedUrl,
+            options,
+            redirectCount + 1,
+            state,
+          )
         : failLandingCapture(options, "landing_redirect_blocked", {
             fetchStatus: response.status,
             redirectCount,
@@ -124,7 +140,11 @@ async function captureLandingPageSnapshotAt(
         fetchStatus === 401 || fetchStatus === 403 || fetchStatus === 429
           ? "landing_blocked"
           : "landing_http_error";
-      if (options.allowRenderedFallback !== false) {
+      if (
+        options.allowRenderedFallback !== false &&
+        !state.renderedAttempted
+      ) {
+        state.renderedAttempted = true;
         const rendered = await captureRenderedSnapshot(env, finalUrl.toString(), options);
         if (rendered) return rendered;
       }
@@ -133,7 +153,11 @@ async function captureLandingPageSnapshotAt(
 
     const html = await readResponseTextWithinLimit(response, MAX_LANDING_PAGE_HTML_BYTES);
     if (!html) {
-      if (options.allowRenderedFallback !== false) {
+      if (
+        options.allowRenderedFallback !== false &&
+        !state.renderedAttempted
+      ) {
+        state.renderedAttempted = true;
         const rendered = await captureRenderedSnapshot(env, finalUrl.toString(), options);
         if (rendered) return rendered;
       }
@@ -152,11 +176,13 @@ async function captureLandingPageSnapshotAt(
     const canonicalUrl = finalUrl.toString();
     if (
       options.allowRenderedFallback !== false &&
+      !state.renderedAttempted &&
       headline === "Landing page" &&
       !signals.ctaText &&
       !signals.priceText &&
       !signals.formPresent
     ) {
+      state.renderedAttempted = true;
       const renderedSnapshot = await captureRenderedSnapshot(env, canonicalUrl, options);
       if (renderedSnapshot) {
         return renderedSnapshot;
@@ -206,7 +232,11 @@ async function captureLandingPageSnapshotAt(
     };
   } catch (error) {
     logLandingCaptureWarning("landing_fetch_failed", error);
-    if (options.allowRenderedFallback !== false) {
+    if (
+      options.allowRenderedFallback !== false &&
+      !state.renderedAttempted
+    ) {
+      state.renderedAttempted = true;
       const rendered = await captureRenderedSnapshot(env, url.toString(), options);
       if (rendered) return rendered;
     }

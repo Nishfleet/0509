@@ -168,6 +168,32 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
     expect(nonDnsFetchCalls(fetch)).toHaveLength(0);
   });
 
+  it("does not repeat a failed rendered-first attempt after a blocked static fetch", async () => {
+    mockFetchWithDns(
+      vi.fn(async () => new Response("blocked", { status: 403 })) as never,
+    );
+    const captureRenderedLandingPageSnapshot = vi.fn().mockResolvedValue(null);
+    vi.doMock("~/lib/browser-run.server", () => ({
+      captureRenderedLandingPageSnapshot,
+    }));
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    const onFailure = vi.fn();
+    const snapshot = await captureLandingPageSnapshot(
+      {},
+      "https://example.com/blocked",
+      { onFailure, preferRendered: true },
+    );
+
+    expect(snapshot).toBeNull();
+    expect(captureRenderedLandingPageSnapshot).toHaveBeenCalledTimes(1);
+    expect(onFailure).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reasonCode: "landing_blocked",
+      }),
+    );
+  });
+
   it("renders a successful but signal-empty HTML shell before accepting it as evidence", async () => {
     mockFetchWithDns(
       vi.fn(async () =>

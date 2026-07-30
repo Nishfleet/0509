@@ -3949,7 +3949,7 @@ async function enrichAdForCheapScan(env: AppEnv, ad: AdRecord) {
   const creativeSourceUrl =
     ad.adSnapshotUrl?.trim() || ad.creativeImageUrl?.trim() || null;
   const capturedCreativeText =
-    isAdLibraryBackedAd(ad) && !ad.creativeText
+    isAdLibraryBackedAd(ad) && !ad.creativeText?.trim()
       ? creativeSourceUrl
         ? await captureCreativeText(env, creativeSourceUrl, ad)
         : createMissingCreativeCaptureResult(ad)

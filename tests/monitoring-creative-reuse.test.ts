@@ -47,14 +47,25 @@ afterEach(() => {
 });
 
 describe("runWatchlistManual OCR reuse", () => {
-  it("hydrates stored creative text before deciding whether to capture OCR", async () => {
+  it.each([
+    {
+      creativeText: "60 Hours Playback\nOnly ₹999",
+      expectedCaptureCalls: 0,
+      scenario: "reuses non-empty stored creative text",
+    },
+    {
+      creativeText: "   ",
+      expectedCaptureCalls: 1,
+      scenario: "recaptures whitespace-only stored creative text",
+    },
+  ])("$scenario", async ({ creativeText, expectedCaptureCalls }) => {
     const env = {
       ALLOW_PLATFORM_META_API_FALLBACK: "true",
       META_AD_LIBRARY_TOKEN: "token",
     };
     const hydratedAd: AdRecord = {
       ...baseAd,
-      creativeText: "60 Hours Playback\nOnly ₹999",
+      creativeText,
       creativeTextCaptureMethod: "ad_snapshot_fetch",
       creativeTextMetadata: {
         source: "stored",
@@ -141,6 +152,6 @@ describe("runWatchlistManual OCR reuse", () => {
     await runWatchlistManual(env as never, watchlist);
 
     expect(hydrateAdsWithPersistedCreatives).toHaveBeenCalledWith(env, [baseAd]);
-    expect(captureCreativeText).not.toHaveBeenCalled();
+    expect(captureCreativeText).toHaveBeenCalledTimes(expectedCaptureCalls);
   });
 });
