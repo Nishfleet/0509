@@ -2,6 +2,7 @@ import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import {
   existsSync,
   mkdtempSync,
+  mkdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -12,7 +13,11 @@ import { afterEach, describe, expect, it } from "vitest";
 
 const script = resolve("scripts/deploy-window-lock.sh");
 const flockCompat = resolve("scripts/flock-compat.sh");
+const realFlock = spawnSync("sh", ["-c", "command -v flock"], {
+  encoding: "utf8",
+}).stdout.trim();
 const hasRequiredTools =
+  realFlock.length > 0 &&
   spawnSync("flock", ["--version"], { stdio: "ignore" }).status === 0 &&
   spawnSync("setsid", ["--version"], { stdio: "ignore" }).status === 0 &&
   existsSync("/proc/self/stat");
@@ -38,6 +43,10 @@ function envFor(
     "GITHUB_RUN_ATTEMPT",
     "GITHUB_JOB",
     "E2E_BASE_URL",
+    "DEPLOY_WINDOW_VERIFY_PORT_BASE",
+    "DEPLOY_WINDOW_VERIFY_ROOT",
+    "DEPLOY_WINDOW_VERIFY_SLOTS",
+    "DEPLOY_WINDOW_VERIFY_TMP_ROOT",
   ]) {
     delete env[name];
   }
@@ -169,6 +178,7 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
     const tmpRoot = `${lockFile}.tmp`;
     const overrides = {
       DEPLOY_WINDOW_ACQUIRE_TIMEOUT: "2",
+      DEPLOY_WINDOW_VERIFY_SLOTS: "3",
       DEPLOY_WINDOW_VERIFY_ROOT: verifyRoot,
       DEPLOY_WINDOW_VERIFY_TMP_ROOT: tmpRoot,
     };
@@ -272,7 +282,11 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
     const lane = spawnScript(
       lockFile,
       ["run", "--", "bash", "-c", 'printf "ran" >"$1"', "lane", marker],
-      { DEPLOY_WINDOW_ACQUIRE_TIMEOUT: "2" },
+      {
+        DEPLOY_WINDOW_ACQUIRE_TIMEOUT: "2",
+        DEPLOY_WINDOW_VERIFY_ROOT: `${lockFile}.verify`,
+        DEPLOY_WINDOW_VERIFY_TMP_ROOT: `${lockFile}.tmp`,
+      },
     );
     const laneResult = completed(lane);
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 100));
@@ -283,6 +297,34 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
     const completedLane = await laneResult;
     expect(completedLane.code, completedLane.stderr).toBe(0);
     expect(readFileSync(marker, "utf8")).toBe("ran");
+  });
+
+  it("does not run after the shared deploy-gate budget expires", async () => {
+    const lockFile = scratchLock();
+    const marker = `${lockFile}.timed-out-lane`;
+    const legacy = spawn("flock", ["--exclusive", lockFile, "sleep", "2"], {
+      stdio: "ignore",
+    });
+    liveChildren.add(legacy);
+    legacy.once("exit", () => liveChildren.delete(legacy));
+    await waitFor(() => !probeIsFree(lockFile));
+
+    const lane = spawnScript(
+      lockFile,
+      ["run", "--", "bash", "-c", 'printf "ran" >"$1"', "lane", marker],
+      {
+        DEPLOY_WINDOW_ACQUIRE_TIMEOUT: "0.2",
+        DEPLOY_WINDOW_VERIFY_ROOT: `${lockFile}.verify`,
+        DEPLOY_WINDOW_VERIFY_TMP_ROOT: `${lockFile}.tmp`,
+      },
+    );
+    const result = await completed(lane);
+
+    expect(result.code).toBe(75);
+    expect(result.stderr).toContain(
+      "shared deploy gate stayed locked for the 0.2s total acquire budget",
+    );
+    expect(existsSync(marker)).toBe(false);
   });
 
   it("drains all active verification lanes before deploy acquire", async () => {
@@ -365,7 +407,7 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
           DEPLOY_WINDOW_VERIFY_SLOTS: "3",
           DEPLOY_WINDOW_VERIFY_ROOT: `${lockFile}.verify`,
           DEPLOY_WINDOW_VERIFY_TMP_ROOT: `${lockFile}.tmp`,
-          FLOCK_COMPAT_REAL: "/usr/bin/flock",
+          FLOCK_COMPAT_REAL: realFlock,
           FLOCK_COMPAT_LOCK_FILE: lockFile,
         }),
       },
@@ -375,11 +417,78 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
     expect(readFileSync(marker, "utf8")).toMatch(/^\d\|.+\.tmp\//u);
   });
 
+  it("keeps the compat default lock path coupled to the runner", async () => {
+    const lockFile = scratchLock();
+    const home = resolve(lockFile, "..", "home");
+    const defaultLock = join(
+      home,
+      ".local",
+      "state",
+      "0509",
+      "deploy-window.lock",
+    );
+    const marker = `${lockFile}.default-route`;
+    mkdirSync(resolve(defaultLock, ".."), { recursive: true });
+    const legacy = spawn("flock", ["--exclusive", defaultLock, "sleep", "1"], {
+      stdio: "ignore",
+    });
+    liveChildren.add(legacy);
+    legacy.once("exit", () => liveChildren.delete(legacy));
+    await waitFor(() => !probeIsFree(defaultLock));
+
+    const env = envFor(defaultLock, {
+      HOME: home,
+      FLOCK_COMPAT_REAL: realFlock,
+      FLOCK_COMPAT_VERIFY_RUNNER: script,
+      DEPLOY_WINDOW_VERIFY_ROOT: `${lockFile}.verify`,
+      DEPLOY_WINDOW_VERIFY_TMP_ROOT: `${lockFile}.tmp`,
+    });
+    delete env.FLOCK_COMPAT_LOCK_FILE;
+    delete env.DEPLOY_WINDOW_LOCK_FILE;
+    const routed = spawn(
+      flockCompat,
+      [
+        "--exclusive",
+        "--wait",
+        "2",
+        defaultLock,
+        "bash",
+        "-c",
+        'printf "%s" "$DEPLOY_WINDOW_VERIFY_SLOT" >"$1"',
+        "lane",
+        marker,
+      ],
+      { env, stdio: ["ignore", "pipe", "pipe"] },
+    );
+    const result = await completed(routed);
+
+    expect(result.code, result.stderr).toBe(0);
+    expect(readFileSync(marker, "utf8")).toMatch(/^[1-3]$/u);
+  });
+
+  it("passes ordinary flock calls through when HOME is unset", () => {
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      FLOCK_COMPAT_REAL: realFlock,
+    };
+    delete env.HOME;
+    delete env.FLOCK_COMPAT_LOCK_FILE;
+
+    const result = spawnSync(flockCompat, ["--version"], {
+      encoding: "utf8",
+      env,
+    });
+
+    expect(result.status, result.stderr).toBe(0);
+  });
+
   it("keeps ordinary CI checks in the bounded verification pool", () => {
     const workflow = readFileSync(resolve(".github/workflows/ci.yml"), "utf8");
 
     expect(workflow).not.toContain("Acquire deploy window");
     expect(workflow).not.toContain("Release deploy window");
+    expect(workflow).toContain("persist-credentials: false");
+    expect(workflow).toContain("hashFiles('package-lock.json')");
     expect(workflow).toContain(
       "./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts",
     );

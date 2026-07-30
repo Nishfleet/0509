@@ -29,8 +29,9 @@ HOLD_CAP="${DEPLOY_WINDOW_HOLD_CAP:-21600}"
 POLL_INTERVAL="${DEPLOY_WINDOW_POLL_INTERVAL:-0.1}"
 VERIFY_SLOTS="${DEPLOY_WINDOW_VERIFY_SLOTS:-3}"
 VERIFY_ROOT="${DEPLOY_WINDOW_VERIFY_ROOT:-${LOCK_FILE}.verify}"
-VERIFY_TMP_ROOT="${DEPLOY_WINDOW_VERIFY_TMP_ROOT:-${TMPDIR:-/tmp}/0509-verification}"
+VERIFY_TMP_ROOT="${DEPLOY_WINDOW_VERIFY_TMP_ROOT:-${TMPDIR:-/tmp}/0509-verification-$(id -u)}"
 VERIFY_POLL_INTERVAL="${DEPLOY_WINDOW_VERIFY_POLL_INTERVAL:-0.1}"
+VERIFY_PORT_BASE="${DEPLOY_WINDOW_VERIFY_PORT_BASE:-4190}"
 CAPABILITY_FILE="${DEPLOY_WINDOW_CAPABILITY_FILE:-}"
 RELEASE_TOKEN="${DEPLOY_WINDOW_RELEASE_TOKEN:-}"
 if [ -n "${DEPLOY_WINDOW_CALLER_ID:-}" ]; then
@@ -196,6 +197,12 @@ validate_durations() {
   fi
   if [[ ! "$VERIFY_SLOTS" =~ ^[1-9][0-9]*$ ]] || [ "$VERIFY_SLOTS" -gt 8 ]; then
     echo "deploy-window-lock: DEPLOY_WINDOW_VERIFY_SLOTS must be an integer from 1 through 8." >&2
+    exit 64
+  fi
+  if [[ ! "$VERIFY_PORT_BASE" =~ ^[0-9]+$ ]] ||
+     [ "$VERIFY_PORT_BASE" -lt 1024 ] ||
+     [ "$VERIFY_PORT_BASE" -gt 65527 ]; then
+    echo "deploy-window-lock: DEPLOY_WINDOW_VERIFY_PORT_BASE must be an integer from 1024 through 65527." >&2
     exit 64
   fi
   if [[ ! "$CALLER_ID" =~ ^[A-Za-z0-9_.-]+$ ]]; then
@@ -524,9 +531,21 @@ release_window() {
 }
 
 run_in_verification_lane() {
-  local deadline now slot candidate_fd slot_fd="" result lane_tmp default_port
+  local deadline now remaining slot candidate_fd slot_fd="" result lane_tmp default_port
 
-  mkdir -p "$VERIFY_ROOT" "$VERIFY_TMP_ROOT"
+  mkdir -p "$VERIFY_ROOT"
+  if [ -L "$VERIFY_TMP_ROOT" ]; then
+    echo "deploy-window-lock: refusing symlinked verification tmp root ${VERIFY_TMP_ROOT}." >&2
+    return 73
+  fi
+  if [ ! -e "$VERIFY_TMP_ROOT" ]; then
+    (umask 077; mkdir -p "$VERIFY_TMP_ROOT")
+  fi
+  if [ ! -d "$VERIFY_TMP_ROOT" ] || [ ! -O "$VERIFY_TMP_ROOT" ]; then
+    echo "deploy-window-lock: refusing unowned verification tmp root ${VERIFY_TMP_ROOT}." >&2
+    return 73
+  fi
+  chmod 700 "$VERIFY_TMP_ROOT"
   deadline="$(awk -v now="$(date +%s.%N)" -v wait="$ACQUIRE_TIMEOUT" 'BEGIN { printf "%.9f", now + wait }')"
 
   while [ -z "$slot_fd" ]; do
@@ -546,14 +565,17 @@ run_in_verification_lane() {
     now="$(date +%s.%N)"
     if awk -v now="$now" -v deadline="$deadline" 'BEGIN { exit(now >= deadline ? 0 : 1) }'; then
       echo "deploy-window-lock: verification pool stayed full for ${ACQUIRE_TIMEOUT}s." >&2
-      return 1
+      return 75
     fi
     sleep "$VERIFY_POLL_INTERVAL"
   done
 
   mkdir -p "${VERIFY_TMP_ROOT}/slot-${slot}"
   lane_tmp="$(mktemp -d "${VERIFY_TMP_ROOT}/slot-${slot}/${CALLER_ID}-$$.XXXXXX")"
-  default_port=$((4190 + slot))
+  default_port=$((VERIFY_PORT_BASE + slot))
+  now="$(date +%s.%N)"
+  remaining="$(awk -v now="$now" -v deadline="$deadline" \
+    'BEGIN { left = deadline - now; printf "%.9f", (left > 0 ? left : 0) }')"
   if (
     trap 'rm -rf -- "$lane_tmp"' EXIT
     export TMPDIR="$lane_tmp"
@@ -562,7 +584,10 @@ run_in_verification_lane() {
     export E2E_BASE_URL="${E2E_BASE_URL:-http://127.0.0.1:${default_port}}"
 
     exec {gate_fd}>"$LOCK_FILE"
-    flock --shared --wait "$ACQUIRE_TIMEOUT" "$gate_fd"
+    if ! flock --shared --wait "$remaining" "$gate_fd"; then
+      echo "deploy-window-lock: shared deploy gate stayed locked for the ${ACQUIRE_TIMEOUT}s total acquire budget." >&2
+      exit 75
+    fi
     echo "verification lane ${slot}/${VERIFY_SLOTS} acquired"
     "$@"
   ); then

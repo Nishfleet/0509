@@ -12,16 +12,18 @@ jobs:
   codex-node-checks:
     if: github.repository == 'nish3451/0509' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}
-    # Bounded verification lanes allow CI to share the VPS without blocking every
-    # isolated fleet worktree behind one global owner.
+    # The 270m job cap bounds setup plus all per-step waits. Each heavy step has
+    # one 180m total budget shared between its lane slot and the deploy gate.
     timeout-minutes: 270
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v6
         with:
           node-version-file: ".node-version"
-          cache: npm
+          cache: ${{ hashFiles('package-lock.json') != '' && 'npm' || '' }}
       - name: Install dependencies
         run: |
           if [ -f package-lock.json ]; then
