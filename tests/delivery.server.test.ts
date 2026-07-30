@@ -1514,6 +1514,56 @@ webhookStatus:"pending",
 });
 
 describe("deliverWatchlistAlerts", () => {
+  it("does not reuse an alert target for a globally suppressed email address", async () => {
+    const existingTarget = {
+      id: "email-target-suppressed",
+      userId: "user-1",
+      watchlistId: null,
+      channel: "email",
+      targetValue: "owner@example.com",
+      validationStatus: "validated",
+      isValidated: true,
+      isOptedIn: true,
+      optInSource: "account_email",
+      optedInAt: "2026-04-19T00:00:00.000Z",
+      isPaused: false,
+      pausedAt: null,
+      optedOutAt: null,
+      templateEligible: false,
+      lastSuccessfulDeliveryAt: null,
+      lastSuccessfulAttemptId: null,
+      providerIdentifier: null,
+      metadata: {},
+      createdAt: "2026-04-19T00:00:00.000Z",
+      updatedAt: "2026-04-19T00:00:00.000Z",
+    };
+    const hasSuppressedEmailTargetForUserAndAddress = vi
+      .fn()
+      .mockResolvedValue(true);
+
+    vi.doMock("~/lib/data.server", () => ({
+      listDeliveryTargets: vi.fn().mockResolvedValue([existingTarget]),
+      hasSuppressedEmailTargetForUserAndAddress,
+    }));
+
+    const { resolveAlertEmailTargets } = await import("~/lib/delivery.server");
+    const targets = await resolveAlertEmailTargets(
+      emailEnv as never,
+      "user-1",
+      "watch-1",
+      "owner@example.com",
+    );
+
+    expect(targets).toEqual([]);
+    expect(hasSuppressedEmailTargetForUserAndAddress).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        userId: "user-1",
+        targetValue: "owner@example.com",
+      },
+    );
+  });
+
   it("sends instant alerts for confirmed watch events that clear delivery policy", async () => {
     const sendMock = mockEmailSend("msg_instant_1");
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-instant-1");

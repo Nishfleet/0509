@@ -1873,31 +1873,15 @@ export async function resolveDigestEmailTargets(
   if (!normalizedAccountEmail) {
     return [];
   }
+  if (await hasSuppressedEmailAddress(env, userId, normalizedAccountEmail)) {
+    return [];
+  }
   const workspaceTargets = await listDeliveryTargets(env, userId, {
     watchlistId: null,
     channel: "email",
     targetValue: normalizedAccountEmail,
     limit: 10,
   });
-  const suppressionReader = (
-    "hasSuppressedEmailTargetForUserAndAddress" in deliveryData
-      ? deliveryData.hasSuppressedEmailTargetForUserAndAddress
-      : undefined
-  ) as
-    | ((
-        readerEnv: AppEnv,
-        input: { userId: string; targetValue: string },
-      ) => Promise<boolean>)
-    | undefined;
-  if (
-    typeof suppressionReader === "function" &&
-    await suppressionReader(env, {
-      userId,
-      targetValue: normalizedAccountEmail,
-    })
-  ) {
-    return [];
-  }
   const configuredTargets = dedupeTargetsByValue(
     workspaceTargets.filter((target: DeliveryTargetRecord) =>
       isUsableEmailTarget(target, normalizedAccountEmail),
@@ -1926,7 +1910,30 @@ export async function resolveDigestEmailTargets(
   return fallbackTarget ? [fallbackTarget] : [];
 }
 
-async function resolveAlertEmailTargets(
+async function hasSuppressedEmailAddress(
+  env: AppEnv,
+  userId: string,
+  targetValue: string,
+) {
+  const suppressionReader = (
+    "hasSuppressedEmailTargetForUserAndAddress" in deliveryData
+      ? deliveryData.hasSuppressedEmailTargetForUserAndAddress
+      : undefined
+  ) as
+    | ((
+        readerEnv: AppEnv,
+        input: { userId: string; targetValue: string },
+      ) => Promise<boolean>)
+    | undefined;
+  return typeof suppressionReader === "function"
+    ? suppressionReader(env, {
+      userId,
+      targetValue,
+    })
+    : false;
+}
+
+export async function resolveAlertEmailTargets(
   env: AppEnv,
   userId: string,
   watchlistId: string,
@@ -1935,6 +1942,13 @@ async function resolveAlertEmailTargets(
   if ("migrateAutoProvisionedEmailTargets" in deliveryData && accountEmail) {
     const migrate = deliveryData.migrateAutoProvisionedEmailTargets;
     if (typeof migrate === "function") await migrate(env, userId, accountEmail);
+  }
+  const normalizedAccountEmail = normalizeDeliveryEmailValue(accountEmail);
+  if (!normalizedAccountEmail) {
+    return [];
+  }
+  if (await hasSuppressedEmailAddress(env, userId, normalizedAccountEmail)) {
+    return [];
   }
   const allTargets = dedupeTargetsByValue([
     ...(await listDeliveryTargets(env, userId, {
@@ -1948,7 +1962,9 @@ async function resolveAlertEmailTargets(
       limit: 10,
     })),
   ]);
-  const combinedTargets = allTargets.filter((target) => isUsableEmailTarget(target, accountEmail));
+  const combinedTargets = allTargets.filter((target) =>
+    isUsableEmailTarget(target, normalizedAccountEmail),
+  );
 
   if (combinedTargets.length > 0) {
     return combinedTargets;
@@ -1956,13 +1972,13 @@ async function resolveAlertEmailTargets(
 
   // Never re-provision an address the recipient unsubscribed or paused —
   // upsertDeliveryTarget would reset those flags.
-  if (!accountEmail || hasEmailTargetForAddress(allTargets, accountEmail)) {
+  if (hasEmailTargetForAddress(allTargets, normalizedAccountEmail)) {
     return [];
   }
 
   const fallbackTarget = await provisionVerifiedAccountEmailTargetIfUnsuppressed(env, {
     userId,
-    targetValue: accountEmail,
+    targetValue: normalizedAccountEmail,
     optInSource: AUTO_PROVISIONED_EMAIL_SOURCE,
     metadata: {
       autoProvisioned: true,
