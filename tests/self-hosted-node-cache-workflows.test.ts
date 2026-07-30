@@ -52,7 +52,7 @@ describe("runner-routed setup-node cache workflows", () => {
       },
     );
 
-    expect(runnerRoutedJobs).toHaveLength(12);
+    expect(runnerRoutedJobs).toHaveLength(11);
     for (const { workflowPath, jobName, job } of runnerRoutedJobs) {
       expect(job?.["runs-on"], `${workflowPath}:${jobName}`).toMatch(
         /^\$\{\{ vars\.(RECOVERY|MONITORING)_RUNNER \|\| 'ubuntu-latest' \}\}$/,
