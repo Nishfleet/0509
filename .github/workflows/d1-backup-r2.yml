@@ -19,21 +19,28 @@ jobs:
     env:
       D1_DATABASE_NAME: "0509"
       R2_BACKUP_BUCKET: "0509-landing-page-artifacts"
-      D1_BACKUP_LOCAL_DIRECTORY: ${{ runner.temp }}/0509-d1-backups-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v7
+      - name: Bind run-scoped backup directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'D1_BACKUP_LOCAL_DIRECTORY=%s\n' \
+            "$RUNNER_TEMP/0509-d1-backups-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            >> "$GITHUB_ENV"
       - uses: actions/setup-node@v6
         with:
           node-version-file: ".node-version"
-          cache: npm
-      - run: npm ci --ignore-scripts
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
+      - run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
       - run: node scripts/validate-d1-backup.mjs
       - name: Run approved D1-to-R2 backup
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           D1_BACKUP_AUTOMATION_APPROVED: "0509-weekly-d1-to-r2"
-        run: npm run backup:d1:r2
+        run: ./scripts/deploy-window-lock.sh run -- node scripts/d1-backup-to-r2.mjs
       - name: Remove run-scoped plaintext backup files
         if: always()
         run: node scripts/d1-backup-local-cleanup.mjs

@@ -330,8 +330,9 @@ test.describe("local authenticated E2E harness", () => {
     await expect(
       page.getByText("Developer access is included in the Agency plan. Upgrade to Agency to create API keys."),
     ).toBeVisible();
-    await expect(page.getByLabel("Key name")).toBeDisabled();
-    await expect(page.getByRole("button", { name: "API keys unavailable" })).toBeDisabled();
+    await expect(page.getByRole("heading", { name: "Developer access is on Agency" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Upgrade to Agency" })).toBeVisible();
+    await expect(page.getByLabel("Key name")).toHaveCount(0);
 
     await page.goto("/app/support");
     await expectAppPage(page);
@@ -391,8 +392,8 @@ test.describe("local authenticated E2E harness", () => {
     await expect(
       page.getByText("Developer access is included in the Agency plan. Upgrade to Agency to create API keys."),
     ).toBeVisible();
-    await expect(page.getByLabel("Key name")).toBeDisabled();
-    await expect(page.getByRole("button", { name: "API keys unavailable" })).toBeDisabled();
+    await expect(page.getByRole("link", { name: "Upgrade to Agency" })).toBeVisible();
+    await expect(page.getByLabel("Key name")).toHaveCount(0);
   });
 
   test("agency fixture exposes developer controls without enabling unavailable social delivery", async ({ page, context, baseURL }) => {
