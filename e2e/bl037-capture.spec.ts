@@ -364,6 +364,7 @@ test.describe("BL-037 live proof", () => {
       for (const theme of THEMES) {
         for (const viewport of VIEWPORTS) {
           const context = await browser.newContext({
+            baseURL,
             viewport: { width: viewport.width, height: viewport.height },
             deviceScaleFactor: 2,
           });
@@ -450,7 +451,10 @@ test.describe("BL-037 live proof", () => {
 
     for (const surface of SURFACES) {
       for (const theme of THEMES) {
-        const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+        const context = await browser.newContext({
+          baseURL,
+          viewport: { width: 1440, height: 900 },
+        });
         await prepare(context, baseURL!, surface.user, theme);
         const page = await context.newPage();
         for (const width of SWEEP_WIDTHS) {
@@ -477,6 +481,7 @@ test.describe("BL-037 live proof", () => {
     }
 
     const disclosureContext = await browser.newContext({
+      baseURL,
       viewport: { width: 1440, height: 900 },
     });
     await prepare(disclosureContext, baseURL!, "e2e-agency", "light");
