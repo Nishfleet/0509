@@ -139,6 +139,13 @@ export async function runCustomerAgentAction(
       "Provide idempotencyKey or an Idempotency-Key header before running this action.",
     );
   }
+  if (actionName === "support_case.create" && idempotencyKey && idempotencyKey.length > 120) {
+    throw new CustomerAgentActionError(
+      "invalid_idempotency_key",
+      "Support-case idempotency keys must be 120 characters or fewer.",
+      { status: 400 },
+    );
+  }
 
   if (actionName === "share.create" || actionName === "report.share" || actionName === "client_room.upsert") {
     const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");

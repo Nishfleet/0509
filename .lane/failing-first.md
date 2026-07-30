@@ -48,3 +48,14 @@ Result against `2f9dfbf`, before the final-head review remediation:
 | C8 quiet-hours deferral | A detail backed by durable `skipped_due_to_quiet_hours` state incremented `inlineFailures` and failed the completed scan. |
 | C3 acceptance history | Provider rejection reconciliation erased the accepted email's original `sent_at`. |
 | C3 recovery copy | The public attempt summary claimed the rejection occurred before provider acceptance despite a persisted acceptance timestamp. |
+
+## Final C5 review probe
+
+Command (lock-wrapped):
+
+`npx vitest run tests/customer-agent-actions.server.test.ts`
+
+Result against `0a54978`, before the oversized-key remediation:
+**1 targeted failure, 77 passing**. A 121-character API idempotency key proceeded
+into support-case creation even though the support-case store cannot persist a
+request key above 120 characters.

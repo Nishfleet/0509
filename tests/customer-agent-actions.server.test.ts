@@ -2900,6 +2900,35 @@ describe("runCustomerAgentAction", () => {
     expect(mocks.sendOperatorAlertEmail).toHaveBeenCalledTimes(2);
   });
 
+  it("rejects support idempotency keys that cannot be persisted for case dedupe", async () => {
+    const mocks = setupMocks();
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await expect(
+      runCustomerAgentAction(
+        { DB: {} } as never,
+        {
+          userId: "user-1",
+          apiKeyId: "api-key-1",
+          idempotencyKey: `support-${"x".repeat(113)}`,
+          source: "api_v1",
+        },
+        "support_case.create",
+        {
+          category: "delivery",
+          subject: "Digest did not arrive",
+          detail: "Please check the digest delivery trail.",
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: "invalid_idempotency_key",
+      status: 400,
+    });
+
+    expect(mocks.createSupportCase).not.toHaveBeenCalled();
+    expect(mocks.claimAgentActionAudit).not.toHaveBeenCalled();
+  });
+
   it("saves support but does not email the operator after API-key authority is lost", async () => {
     const mocks = setupMocks();
     const authorizeExternalEffect = vi.fn().mockRejectedValue(
