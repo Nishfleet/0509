@@ -235,6 +235,18 @@ describe("extractLandingPageSignals", () => {
     });
   });
 
+  it("bounds malformed quoted-tag scanning", () => {
+    const html = `<input title="${"<".repeat(50_000)}`;
+    const startedAt = performance.now();
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: null,
+      priceText: null,
+      formPresent: false,
+    });
+    expect(performance.now() - startedAt).toBeLessThan(750);
+  }, 3_000);
+
   it("detects unquoted submit controls with quote-complicated attributes", () => {
     const html = `
       <input name="email" placeholder="Work email">

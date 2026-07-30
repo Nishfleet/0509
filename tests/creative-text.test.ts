@@ -324,6 +324,93 @@ describe("captureCreativeText", () => {
     expect(result?.metadata).not.toHaveProperty("sourceFallbackAttempted");
   });
 
+  it("retries a stored creative image omitted by the snapshot candidate cap", async () => {
+    const aiRun = vi.fn().mockResolvedValue({
+      description: "Stored creative\n50% OFF",
+    });
+    const discoveredImages = Array.from(
+      { length: 5 },
+      (_, index) =>
+        `<meta property="og:image" content="https://cdn.example.com/discovered-${index}.jpg">`,
+    ).join("");
+    mockFetchWithDns((url) => {
+      if (url.includes("stored.jpg")) {
+        return new Response(Uint8Array.from([255, 216, 255, 217]), {
+          status: 200,
+          headers: { "content-type": "image/jpeg" },
+        });
+      }
+      if (url.includes("discovered-")) {
+        return new Response("<html></html>", {
+          status: 200,
+          headers: { "content-type": "text/html" },
+        });
+      }
+      return new Response(`${discoveredImages}<div>Nykaa</div>`, {
+        status: 200,
+        headers: { "content-type": "text/html" },
+      });
+    });
+
+    const result = await captureCreativeText(
+      { AI: { run: aiRun } } as never,
+      "https://facebook.example.com/ad-snapshot",
+      {
+        advertiser: "Nykaa",
+        body: "",
+        previewHeadline: "",
+        previewSubhead: "",
+        cta: "",
+        creativeImageUrl: "https://cdn.example.com/stored.jpg",
+      },
+    );
+
+    expect(aiRun).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      text: "Stored creative\n50% OFF",
+      imageUrl: "https://cdn.example.com/stored.jpg",
+      metadata: {
+        extractionPath: "direct_image_ocr",
+        sourceFallbackAttempted: true,
+      },
+    });
+  });
+
+  it("never persists an inline-image sentinel as the creative thumbnail", async () => {
+    const aiRun = vi.fn().mockResolvedValue({
+      description: "Inline creative\n50% OFF",
+    });
+    mockFetchWithDns((url) => {
+      if (url.includes("facebook.example.com")) {
+        return new Response(
+          '<meta property="og:image" content="data:image/png;base64,iVBORw0KGgo="><img src="https://cdn.example.com/fallback.jpg"><div>Nykaa</div>',
+          { status: 200, headers: { "content-type": "text/html" } },
+        );
+      }
+      return new Response(Uint8Array.from([255, 216, 255, 217]), {
+        status: 200,
+        headers: { "content-type": "image/jpeg" },
+      });
+    });
+
+    const result = await captureCreativeText(
+      { AI: { run: aiRun } } as never,
+      "https://facebook.example.com/ad-snapshot",
+      {
+        advertiser: "Nykaa",
+        body: "",
+        previewHeadline: "",
+        previewSubhead: "",
+        cta: "",
+      },
+    );
+
+    expect(result).toMatchObject({
+      text: "Inline creative\n50% OFF",
+      imageUrl: "https://cdn.example.com/fallback.jpg",
+    });
+  });
+
   it("prefers a snapshot-discovered image over a stale persisted image", async () => {
     const aiRun = vi.fn(async (_model: string, input: { image: number[] }) => ({
       description:

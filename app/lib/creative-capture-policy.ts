@@ -58,6 +58,6 @@ export function shouldAttemptCreativeTextCapture(
     typeof metadata?.capturedAt === "string"
       ? Date.parse(metadata.capturedAt)
       : Number.NaN;
-  if (!Number.isFinite(capturedAt)) return true;
+  if (!Number.isFinite(capturedAt) || capturedAt > nowMs) return true;
   return nowMs - capturedAt >= CREATIVE_CAPTURE_RETRY_COOLDOWN_MS;
 }

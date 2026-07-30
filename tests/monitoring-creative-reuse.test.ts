@@ -87,6 +87,17 @@ describe("runWatchlistManual OCR reuse", () => {
       expectedCaptureCalls: 0,
       scenario: "reuses a recent persisted unreadable OCR result",
     },
+    {
+      creativeText: null,
+      creativeTextMetadata: {
+        capturedAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        extractionStatus: "unreadable",
+        unreadableReasonCode: "ocr_binding_missing",
+        creativeSourceFingerprint: creativeCaptureSourceFingerprint(baseAd),
+      },
+      expectedCaptureCalls: 1,
+      scenario: "recaptures when the unreadable timestamp is in the future",
+    },
   ])("$scenario", async ({
     creativeText,
     creativeTextMetadata,

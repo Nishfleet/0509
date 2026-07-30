@@ -49,6 +49,7 @@ export function hasMeaningfulLandingPageBodyText(
     html ?? "",
     options.documentMode ?? "raw",
     true,
+    true,
   );
   return cleanText(stripTags(bodyHtml)).length > 0;
 }
@@ -57,6 +58,7 @@ function removeNonVisibleElements(
   html: string,
   documentMode: "raw" | "rendered",
   removeDocumentMetadata = false,
+  ignoreNoscript = false,
 ) {
   const elementNames = new Set(
     documentMode === "rendered"
@@ -66,6 +68,9 @@ function removeNonVisibleElements(
   if (removeDocumentMetadata) {
     elementNames.add("head");
     elementNames.add("title");
+  }
+  if (ignoreNoscript) {
+    elementNames.add("noscript");
   }
   const output: string[] = [];
   let copyFrom = 0;
@@ -217,7 +222,8 @@ function readHtmlTag(html: string, start: number) {
   const name = html.slice(nameStart, cursor).toLowerCase();
 
   let quote: "\"" | "'" | null = null;
-  for (; cursor < html.length; cursor += 1) {
+  const scanLimit = Math.min(html.length, cursor + 4_096);
+  for (; cursor < scanLimit; cursor += 1) {
     const character = html[cursor];
     if (quote) {
       if (character === quote) quote = null;
@@ -256,7 +262,20 @@ function readAttribute(tag: string, attribute: "type" | "value") {
 }
 
 function stripTags(value: string) {
-  return value.replace(/<[^>]+>/g, " ");
+  const output: string[] = [];
+  let cursor = 0;
+  while (cursor < value.length) {
+    const tagStart = value.indexOf("<", cursor);
+    if (tagStart < 0) {
+      output.push(value.slice(cursor));
+      break;
+    }
+    output.push(value.slice(cursor, tagStart), " ");
+    const tagEnd = value.indexOf(">", tagStart + 1);
+    if (tagEnd < 0) break;
+    cursor = tagEnd + 1;
+  }
+  return output.join("");
 }
 
 function cleanText(value: string) {
