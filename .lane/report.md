@@ -49,6 +49,7 @@ Cloudflare D1 behavior was checked against the official prepared-statement, retu
 | `sgscan --baseline-commit HEAD` | PASS — no new security findings |
 | `crgate --agent --include-untracked` | `crgate: rate-limited, skipped` — free tier was 3/3; no force override |
 | Greptile GitHub review | Informational — trial account has reached its 50-credit limit; no code finding produced |
+| Unsolicited GitHub CodeRabbit review | One verified minor test-isolation finding addressed by restoring the `Math.random` spy in `finally`; full Vitest and typecheck re-passed |
 | `bugbot-gate status` | `SKIP BUGBOT` — risk `normal`; ordinary code/content diff; use cheaper checks first |
 
 Gate-B covers the canonical journey and content-sanity ugly states. No user-facing copy changed in this lane.

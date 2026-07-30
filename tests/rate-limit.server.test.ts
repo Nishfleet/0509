@@ -267,17 +267,20 @@ describe("enforceSearchSelectionRateLimit", () => {
     const env = { DB: createFakeD1() } as unknown as AppEnv;
     const waitUntil = vi.fn();
 
-    await expect(
-      enforceSearchSelectionRateLimit(
-        new Request("https://0509.io/search?query=nykaa&selected=meta-1"),
-        env,
-        "user-1",
-        { waitUntil } as unknown as ExecutionContext,
-      ),
-    ).resolves.toBeNull();
+    try {
+      await expect(
+        enforceSearchSelectionRateLimit(
+          new Request("https://0509.io/search?query=nykaa&selected=meta-1"),
+          env,
+          "user-1",
+          { waitUntil } as unknown as ExecutionContext,
+        ),
+      ).resolves.toBeNull();
 
-    expect(waitUntil).not.toHaveBeenCalled();
-    randomSpy.mockRestore();
+      expect(waitUntil).not.toHaveBeenCalled();
+    } finally {
+      randomSpy.mockRestore();
+    }
   });
 
   it("admits at most 120 concurrent warm selections", async () => {
