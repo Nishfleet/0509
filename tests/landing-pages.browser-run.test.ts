@@ -197,9 +197,10 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
   it("renders a successful but signal-empty HTML shell before accepting it as evidence", async () => {
     mockFetchWithDns(
       vi.fn(async () =>
-        new Response('<html><body><div id="root"></div><script src="/app.js"></script></body></html>', {
-          status: 200,
-        }),
+        new Response(
+          '<html><head><title>Glow serum</title></head><body><div id="root"></div><script src="/app.js"></script></body></html>',
+          { status: 200 },
+        ),
       ) as never,
     );
     const captureRenderedLandingPageSnapshot = vi.fn().mockResolvedValue({

@@ -41,12 +41,32 @@ export function extractLandingPageSignals(
   };
 }
 
-function removeNonVisibleElements(html: string, documentMode: "raw" | "rendered") {
+export function hasMeaningfulLandingPageBodyText(
+  html: string,
+  options: { documentMode?: "raw" | "rendered" } = {},
+) {
+  const bodyHtml = removeNonVisibleElements(
+    html ?? "",
+    options.documentMode ?? "raw",
+    true,
+  );
+  return cleanText(stripTags(bodyHtml)).length > 0;
+}
+
+function removeNonVisibleElements(
+  html: string,
+  documentMode: "raw" | "rendered",
+  removeDocumentMetadata = false,
+) {
   const elementNames = new Set(
     documentMode === "rendered"
       ? ["script", "style", "noscript", "template"]
       : ["script", "style", "template"],
   );
+  if (removeDocumentMetadata) {
+    elementNames.add("head");
+    elementNames.add("title");
+  }
   const output: string[] = [];
   let copyFrom = 0;
   let cursor = 0;

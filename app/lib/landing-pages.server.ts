@@ -4,6 +4,7 @@ import type { AppEnv } from "~/lib/env.server";
 import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
 import {
   extractLandingPageSignals,
+  hasMeaningfulLandingPageBodyText,
   LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
 } from "~/lib/landing-page-signals.server";
 import { normalizeHeadline } from "~/lib/normalize";
@@ -166,6 +167,12 @@ async function captureLandingPageSnapshotAt(
       });
     }
     const signals = extractLandingPageSignals(html, { documentMode: "raw" });
+    const hasMeaningfulBodyText = hasMeaningfulLandingPageBodyText(html, {
+      documentMode: "raw",
+    });
+    const signalsAreEmpty =
+      !signals.ctaText && !signals.priceText && !signals.formPresent;
+    const looksLikeSignalEmptyShell = signalsAreEmpty && !hasMeaningfulBodyText;
     const headline =
       decodeHtml(findFirstMatch(html, OG_TITLE_REGEX) ?? "") ||
       decodeHtml(findFirstMatch(html, TITLE_REGEX) ?? "") ||
@@ -177,10 +184,7 @@ async function captureLandingPageSnapshotAt(
     if (
       options.allowRenderedFallback !== false &&
       !state.renderedAttempted &&
-      headline === "Landing page" &&
-      !signals.ctaText &&
-      !signals.priceText &&
-      !signals.formPresent
+      looksLikeSignalEmptyShell
     ) {
       state.renderedAttempted = true;
       const renderedSnapshot = await captureRenderedSnapshot(env, canonicalUrl, options);
@@ -214,10 +218,7 @@ async function captureLandingPageSnapshotAt(
       metadata: {
         captureMethod: "landing_page_fetch",
         captureWarningCodes,
-        ...(headline === "Landing page" &&
-        !signals.ctaText &&
-        !signals.priceText &&
-        !signals.formPresent
+        ...(looksLikeSignalEmptyShell
           ? { unreadableReasonCode: "landing_signals_not_detected" }
           : {}),
         extractionWarnings: buildExtractionWarnings({
