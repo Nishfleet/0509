@@ -122,6 +122,11 @@ async function recordFailedAttempt(env: AppEnv, taskKey: string, at: string) {
          THEN cron_failure_alert_throttle.last_error
          ELSE excluded.last_error
        END,
+       alert_count = CASE
+         WHEN cron_failure_alert_throttle.last_error = 'operator_alert_sent'
+         THEN cron_failure_alert_throttle.alert_count
+         ELSE 0
+       END,
        last_failed_at = excluded.last_failed_at,
        failed_count = MIN(
          cron_failure_alert_throttle.failed_count + 1,

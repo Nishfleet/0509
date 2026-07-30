@@ -70,10 +70,15 @@ function createThrottleDb(
                   last_error: preserveAccepted
                     ? existing.last_error
                     : resolvedLastError,
-                  alert_count: sql.includes("alert_count + 1")
-                    ? (existing?.alert_count ?? 0) + 1
-                    : existing?.alert_count ??
-                      (failedAttempt ? 0 : 1),
+                  alert_count:
+                    failedAttempt && sql.includes("alert_count = CASE")
+                      ? preserveAccepted
+                        ? existing?.alert_count ?? 0
+                        : 0
+                      : sql.includes("alert_count + 1")
+                        ? (existing?.alert_count ?? 0) + 1
+                        : existing?.alert_count ??
+                          (failedAttempt ? 0 : 1),
                   last_failed_at: failedAttempt && sql.includes("last_failed_at")
                     ? detail ?? lastAlertedAt
                     : existing?.last_failed_at ?? null,
@@ -280,6 +285,52 @@ describe("cron failure alert throttle", () => {
       last_error: "operator_alert_sent",
       alert_count: 1,
       last_failed_at: rejectedAt.toISOString(),
+      failed_count: 1,
+    });
+  });
+
+  it("does not preserve a legacy rejected-page count as accepted evidence", async () => {
+    sendOperatorAlertEmail
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    const rows = new Map<string, ThrottleRow>([
+      [
+        "scheduled_monitoring",
+        {
+          last_alerted_at: "2026-07-12T06:00:00.000Z",
+          last_error: "operator_alert_not_sent",
+          alert_count: 4,
+          last_failed_at: null,
+          failed_count: 0,
+        },
+      ],
+    ]);
+    const env = {
+      DB: createThrottleDb(rows),
+      EMAIL: {},
+    } as never;
+
+    await alertScheduledTaskFailure(
+      env,
+      "scheduled_monitoring",
+      new Error("first retry"),
+      { now: new Date("2026-07-12T12:00:00.000Z") },
+    );
+    expect(rows.get("scheduled_monitoring")).toMatchObject({
+      last_error: "operator_alert_not_sent",
+      alert_count: 0,
+      failed_count: 1,
+    });
+
+    await alertScheduledTaskFailure(
+      env,
+      "scheduled_monitoring",
+      new Error("accepted retry"),
+      { now: new Date("2026-07-12T12:00:01.000Z") },
+    );
+    expect(rows.get("scheduled_monitoring")).toMatchObject({
+      last_error: "operator_alert_sent",
+      alert_count: 1,
       failed_count: 1,
     });
   });
