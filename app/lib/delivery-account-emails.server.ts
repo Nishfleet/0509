@@ -973,7 +973,7 @@ async function resolveActivationEmailTarget(
   accountEmail: string,
 ): Promise<{
   target: ActivationEmailTarget | null;
-  reason: "unsubscribed" | "target_unavailable";
+  reason: "unsubscribed" | "target_unavailable" | "target_not_ready" | null;
 }> {
   const normalized = normalizeDeliveryEmail(accountEmail);
   const listTargets = deliveryData.listDeliveryTargets as
@@ -1031,13 +1031,14 @@ async function resolveActivationEmailTarget(
       target.validationStatus === "validated",
   );
   if (usable) {
-    return { target: usable, reason: "target_unavailable" };
+    return { target: usable, reason: null };
   }
 
   // A workspace target for this address is authoritative even when paused or
   // invalid. Never let lazy provisioning reset its consent/readiness state.
+  // Paused/unvalidated is not an opt-out — callers should still page.
   if (targets.length > 0) {
-    return { target: null, reason: "unsubscribed" };
+    return { target: null, reason: "target_not_ready" };
   }
 
   const provisioned = await provisionTarget(env, {
@@ -1054,6 +1055,6 @@ async function resolveActivationEmailTarget(
   }
   return {
     target: provisioned as ActivationEmailTarget,
-    reason: "target_unavailable",
+    reason: null,
   };
 }

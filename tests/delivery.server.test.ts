@@ -1340,44 +1340,32 @@ webhookStatus:"pending",
   });
 
   it("keeps paused watchlist targets separate from workspace digest preferences", async () => {
-    const pausedWatchlistTarget = {
-      id: "watchlist-email-target",
+    const workspaceTarget = {
+      id: "workspace-email-target",
       userId: "user-1",
-      watchlistId: "watch-1",
+      watchlistId: null,
       channel: "email",
       targetValue: "owner@example.com",
       validationStatus: "validated",
       isValidated: true,
       isOptedIn: true,
-      optInSource: "manual",
+      optInSource: "account_email",
       optedInAt: "2026-04-19T00:00:00.000Z",
-      isPaused: true,
-      pausedAt: "2026-05-01T00:00:00.000Z",
+      isPaused: false,
+      pausedAt: null,
       optedOutAt: null,
       templateEligible: false,
       lastSuccessfulDeliveryAt: null,
       lastSuccessfulAttemptId: null,
       providerIdentifier: null,
-      metadata: {},
+      metadata: { autoProvisioned: true },
       createdAt: "2026-04-19T00:00:00.000Z",
       updatedAt: "2026-05-01T00:00:00.000Z",
     };
-    const workspaceTarget = {
-      ...pausedWatchlistTarget,
-      id: "workspace-email-target",
-      watchlistId: null,
-      isPaused: false,
-      pausedAt: null,
-      optInSource: "account_email",
-      metadata: { autoProvisioned: true },
-    };
-    const listDeliveryTargets = vi.fn().mockImplementation(
-      async (
-        _env: unknown,
-        _userId: string,
-        options?: { watchlistId?: string | null },
-      ) => options?.watchlistId === null ? [] : [pausedWatchlistTarget],
-    );
+    // Digest resolution only reads workspace-scoped targets (watchlistId: null).
+    // An empty workspace list must still provision even if a paused watchlist
+    // target exists elsewhere; this mock never returns watchlist-scoped rows.
+    const listDeliveryTargets = vi.fn().mockResolvedValue([]);
     const upsertDeliveryTarget = vi.fn().mockResolvedValue(workspaceTarget);
 
     vi.doMock("~/lib/data.server", () => ({

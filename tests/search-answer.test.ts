@@ -197,6 +197,26 @@ describe("buildSearchAnswer", () => {
     });
   });
 
+  it("does not present a non-empty partial search as complete", () => {
+    const answer = buildSearchAnswer({
+      result: response({
+        ads: [ad()],
+        verifiedCount: 1,
+        nextCursor: "cursor-2",
+        discoveryPartial: true,
+        discoverySummary: "Some additional Meta results could not be loaded.",
+      }),
+      displayDomain: "boat-lifestyle.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+    });
+
+    expect(answer.state).toBe("degraded");
+    expect(answer.title).toContain("verified ad");
+    expect(answer.summary).toContain("this page is partial");
+    expect(answer.note).toContain("Retry to continue loading the remaining results.");
+  });
+
   it("does not turn an explicit zero verified count into proof", () => {
     const answer = buildSearchAnswer({
       result: response({

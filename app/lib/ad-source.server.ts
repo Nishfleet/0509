@@ -829,7 +829,10 @@ export async function searchAdsViaSourceResolver(
       discoveryFailureClass: result.discoveryFailureClass ?? null,
     };
   } catch (error) {
-    const failureClass = resolveFailureClass(error);
+    const failureClass =
+      provider === "meta_api"
+        ? resolveMetaApiFailureClass(error)
+        : resolveFailureClass(error);
     const timestamp = new Date().toISOString();
     const cooldownState = buildDiscoveryCooldownState(error, failureClass);
     const summary = buildDiscoveryFailureSummary({

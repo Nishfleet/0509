@@ -312,6 +312,9 @@ describe("ops route", () => {
     const markup = renderToStaticMarkup(createElement(OpsRoute));
 
     expect(markup).toContain("Partial discovery result");
+    expect(markup).toContain(
+      "Any first-page results were retained; later-page retrieval failed.",
+    );
     expect(markup).toContain("Failure class: provider_timeout.");
   });
 

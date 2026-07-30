@@ -263,6 +263,16 @@ describe("search load-more accessibility", () => {
     expect(formatSearchResultsAnnouncement(partial)).toBe(
       "1 fresh search result loaded. Additional results could not be loaded; retry to continue.",
     );
+    expect(formatSearchResultsAnnouncement(partial, { addedCount: 1 })).toBe(
+      "1 more result loaded. 1 total search result. Additional results could not be loaded; retry to continue.",
+    );
+    expect(
+      formatSearchResultsAnnouncement(
+        result({ ads: [], discoveryPartial: true, nextCursor: "cursor-2" }),
+      ),
+    ).toBe(
+      "No fresh search results loaded. Additional results could not be loaded; retry to continue.",
+    );
 
     const recoveredKey = resolveRecoveredSearchKey({
       currentDiscoveryStatus: "healthy",

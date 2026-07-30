@@ -1,12 +1,18 @@
 # Silent-failure observability remediation
 
+**Status: remediated, not merge-ready.** Product findings from the BLOCK
+review and the follow-up crgate pass are cause-fixed with regressions. This
+report is not merge approval: external PR CI (`codex-node-checks` lock/flock
+recursion owned by #440), Greptile credit exhaustion, and Bugbot usage limits
+remain outside this lane. Do not merge from this worktree.
+
 Branch: `fix/silent-fixobserve`
 Base: `origin/main` at `46fe111`
 Pull request: https://github.com/nish3451/0509/pull/447
 
 ## Outcome
 
-This lane closes C1, C2, M2, M4, M5, M6 and content-sanity F1–F4. C6 is
+This lane remediates C1, C2, M2, M4, M5, M6 and content-sanity F1–F4. C6 is
 partially closed without inventing a credential: failed email pages are
 recorded but never activate the successful-page throttle, so each later
 failure retries. No Telegram/Hermes webhook secret or config key exists in
@@ -115,6 +121,19 @@ the current candidate; none park or weaken gates.
 
 GitHub Codex inline threads for findings 1–3 are answered by the fixes above and
 should be resolved on the remediation push.
+
+### Follow-up crgate on remediation tip (8 findings)
+
+| Finding | Class | Disposition |
+|---|---|---|
+| Report “closes” vs merge readiness | major/process | **Fixed** — top status is `remediated, not merge-ready` |
+| Non-empty `discoveryPartial` looked complete | major | **Fixed** — answer stays factful but `state: degraded` + partial notice |
+| Activation `unsubscribed` overloaded for paused/unvalidated | major | **Fixed** — `target_not_ready`; only true suppression stays quiet |
+| Ops partial copy overstated retained evidence | minor | **Fixed** — “Any first-page results…” wording |
+| Partial announcement ignored `addedCount` / zero | minor | **Fixed** — count-aware partial announcements |
+| Meta API outer catch used browser failure class | minor | **Fixed** — `resolveMetaApiFailureClass` on top-level catch |
+| Report omitted build line | minor/process | Noted; lock-wrapped typecheck + full Vitest remain the gate record |
+| Dead paused-watchlist fixture data | minor | **Fixed** — fixture trimmed to the workspace-scoped path under test |
 
 ## Review dispositions and residual limits
 

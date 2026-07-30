@@ -355,6 +355,13 @@ export function formatSearchResultsAnnouncement(
   const recovery = options.recovered ? " Search checks have recovered." : "";
 
   if (result.discoveryPartial) {
+    if (options.addedCount && options.addedCount > 0) {
+      const addedLabel = options.addedCount === 1 ? "result" : "results";
+      return `${options.addedCount} more ${addedLabel} loaded. ${resultCount} total search ${resultLabel}. Additional results could not be loaded; retry to continue.`;
+    }
+    if (resultCount === 0) {
+      return "No fresh search results loaded. Additional results could not be loaded; retry to continue.";
+    }
     return `${resultCount} fresh search ${resultLabel} loaded. Additional results could not be loaded; retry to continue.`;
   }
 

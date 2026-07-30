@@ -190,6 +190,61 @@ describe("interactive Meta pagination honesty", () => {
     expect(upsertDiscoveryCacheEntry).not.toHaveBeenCalled();
   });
 
+  it("maps unclassified Meta API first-page failures to browser_unavailable", async () => {
+    const upsertDiscoveryProviderState = vi.fn();
+    vi.doMock("~/lib/meta-api.server", () => ({
+      searchAds: vi.fn().mockRejectedValue(new Error("upstream opaque failure")),
+      demoSearch: vi.fn(),
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: vi.fn(),
+      getInteractiveMetaApiExtraPages: vi.fn().mockReturnValue(0),
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState,
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+    const result = await searchAdsViaSourceResolver(
+      {
+        DB: {} as D1Database,
+        META_AD_LIBRARY_TOKEN: "platform-token",
+        ALLOW_PLATFORM_META_API_FALLBACK: "true",
+      } as never,
+      {
+        mode: "advertiser",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      { purpose: "public_search" },
+    );
+
+    expect(result.discoveryFailureClass).toBe("browser_unavailable");
+    expect(result.discoveryFailureClass).not.toBe("browser_launch_failed");
+    expect(upsertDiscoveryProviderState).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        provider: "meta_api",
+        failureClass: "browser_unavailable",
+      }),
+    );
+  });
+
   it("does not globally cool down Meta after a successful first page was partial", async () => {
     const firstAd = buildLiveBrowserResult().ads[0];
     const searchAds = vi.fn().mockResolvedValue({

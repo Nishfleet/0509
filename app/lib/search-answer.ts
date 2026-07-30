@@ -72,6 +72,52 @@ export function buildSearchAnswer(input: {
     };
   }
 
+  const answer = buildCompleteSearchAnswer({
+    result,
+    displayDomain: domain,
+    isDomainSearch: input.isDomainSearch,
+    isBroaderScope: input.isBroaderScope,
+    adCount,
+    broaderCount,
+    verifiedCount,
+    landingFact,
+    sourceLabel,
+    landingPageCount,
+  });
+  if (!result.discoveryPartial || adCount === 0) {
+    return answer;
+  }
+  return {
+    ...answer,
+    state: "degraded",
+    summary: `${answer.summary} Additional results could not be loaded, so this page is partial.`,
+    note: answer.note
+      ? `${answer.note} Retry to continue loading the remaining results.`
+      : "Retry to continue loading the remaining results.",
+  };
+}
+
+function buildCompleteSearchAnswer(input: {
+  result: SearchResponse;
+  displayDomain: string | null;
+  isDomainSearch: boolean;
+  isBroaderScope: boolean;
+  adCount: number;
+  broaderCount: number;
+  verifiedCount: number;
+  landingFact: SearchAnswer["facts"][number];
+  sourceLabel: string;
+  landingPageCount: number;
+}): SearchAnswer {
+  const result = input.result;
+  const adCount = input.adCount;
+  const domain = input.displayDomain;
+  const broaderCount = input.broaderCount;
+  const verifiedCount = input.verifiedCount;
+  const landingFact = input.landingFact;
+  const sourceLabel = input.sourceLabel;
+  const landingPageCount = input.landingPageCount;
+
   if (isDelayedSearchStatus(result.discoveryStatus) && adCount === 0) {
     return {
       state: "degraded",

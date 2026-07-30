@@ -708,7 +708,7 @@ export default function OpsRoute() {
                   {item.partial
                     ? (
                         <>
-                          First-page evidence was retained; a later page could not be fetched.
+                          Any first-page results were retained; later-page retrieval failed.
                           {item.failureClass ? ` Failure class: ${item.failureClass}.` : ""}
                         </>
                       )
@@ -729,7 +729,7 @@ export default function OpsRoute() {
                 <h2>{item.partial ? "Partial results retained" : formatDiscoveryStatus(item.status)}</h2>
                 <p>
                   {item.partial
-                    ? "The first page is usable, but later-page retrieval is degraded."
+                    ? "Any retained first-page results remain usable, but later-page retrieval is degraded."
                     : describeDiscoveryProviderState(item.status)}
                 </p>
                 <p className="f9-muted-copy">

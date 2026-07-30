@@ -315,4 +315,41 @@ describe("sendFreeActivationResultEmail", () => {
     expect(emailSend).not.toHaveBeenCalled();
     expect(claimInstantDeliveryAttempt).not.toHaveBeenCalled();
   });
+
+  it("does not treat a paused workspace target as an unsubscribe", async () => {
+    const emailSend = vi.fn().mockResolvedValue({ messageId: "msg_x" });
+    const { claimInstantDeliveryAttempt, listDeliveryTargets } = mockClaimPath();
+    listDeliveryTargets.mockResolvedValue([
+      {
+        id: "target-paused",
+        targetValue: "owner@example.com",
+        isOptedIn: true,
+        optedOutAt: null,
+        isPaused: true,
+        isValidated: true,
+        validationStatus: "validated",
+      },
+    ]);
+
+    const env = {
+      EMAIL: { send: emailSend },
+      EMAIL_FROM_EMAIL: "alerts@0509.io",
+      APP_ORIGIN: "https://0509.io",
+    };
+
+    const { sendFreeActivationResultEmail } = await import("~/lib/delivery.server");
+    const result = await sendFreeActivationResultEmail(env as never, {
+      userId: "user-1",
+      email: "owner@example.com",
+      name: null,
+      watchlistId: "wl-1",
+      competitorName: "Nike",
+      adsFound: 3,
+      topAds: [],
+    });
+
+    expect(result).toEqual({ sent: false, reason: "target_not_ready" });
+    expect(emailSend).not.toHaveBeenCalled();
+    expect(claimInstantDeliveryAttempt).not.toHaveBeenCalled();
+  });
 });
