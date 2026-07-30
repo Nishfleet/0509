@@ -36,7 +36,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version-file: ".node-version"
-          cache: npm
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
       - run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
       - run: node scripts/validate-d1-backup.mjs
       - name: Create fresh backup and prove an isolated remote restore
@@ -94,7 +95,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version-file: ".node-version"
-          cache: npm
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
       - run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
       - name: Delete every exact scratch database from this run
         env:
