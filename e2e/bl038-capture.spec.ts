@@ -70,7 +70,7 @@ async function openSurface(
   if (mode === "approved") {
     await seedApprovedShare(page);
   }
-  await page.goto("/app/shares", { waitUntil: "networkidle" });
+  await page.goto("/app/shares");
   if (mode === "empty") {
     await expect(page.locator(".f9-wk-row")).toHaveCount(0);
     await expect(page.getByText("No active share links", { exact: true })).toBeVisible();
@@ -80,7 +80,9 @@ async function openSurface(
     await expect(row.getByRole("button", { name: "Copy link" })).toBeVisible();
     await expect(row.getByRole("button", { name: "Revoke" })).toBeVisible();
   }
-  await page.waitForTimeout(180);
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+  });
 }
 
 async function measure(page: Page) {
