@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -8,7 +9,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { parse } from "yaml";
@@ -78,6 +80,68 @@ describe("D1 remote restore evidence automation", () => {
     vi.unstubAllEnvs();
   });
 
+  it("forwards cancellation to a detached provider child before exiting", async () => {
+    const root = mkdtempSync(join(tmpdir(), "0509-d1-cancel-"));
+    const helper = join(root, "cancel-helper.mjs");
+    const childPidFile = join(root, "provider.pid");
+    const moduleUrl = pathToFileURL(
+      resolve("scripts/d1-remote-restore-evidence.mjs"),
+    ).href;
+    writeFileSync(
+      helper,
+      [
+        `import { runCaptured } from ${JSON.stringify(moduleUrl)};`,
+        `await runCaptured(process.execPath, ["-e", ${JSON.stringify(
+          [
+            'const { writeFileSync } = require("node:fs");',
+            "writeFileSync(process.argv[1], String(process.pid));",
+            'process.on("SIGTERM", () => setTimeout(() => process.exit(0), 250));',
+            "setInterval(() => {}, 1_000);",
+          ].join(""),
+        )}, process.argv[2]]);`,
+      ].join("\n"),
+    );
+    const helperProcess = spawn(process.execPath, [helper, childPidFile], {
+      stdio: "ignore",
+    });
+    const completed = new Promise<{ code: number | null; signal: string | null }>(
+      (resolveCompleted, reject) => {
+        helperProcess.once("error", reject);
+        helperProcess.once("close", (code, signal) => {
+          resolveCompleted({ code, signal });
+        });
+      },
+    );
+    let childPid = 0;
+
+    try {
+      const deadline = Date.now() + 2_000;
+      while (!existsSync(childPidFile)) {
+        if (Date.now() >= deadline) throw new Error("provider child did not start");
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));
+      }
+      childPid = Number(readFileSync(childPidFile, "utf8"));
+      expect(() => process.kill(childPid, 0)).not.toThrow();
+
+      helperProcess.kill("SIGTERM");
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
+      expect(() => process.kill(childPid, 0)).not.toThrow();
+
+      expect(await completed).toEqual({ code: null, signal: "SIGTERM" });
+      expect(() => process.kill(childPid, 0)).toThrow();
+    } finally {
+      helperProcess.kill("SIGKILL");
+      if (Number.isInteger(childPid) && childPid > 0) {
+        try {
+          process.kill(-childPid, "SIGKILL");
+        } catch {
+          // The cancellation relay should already have reaped the child group.
+        }
+      }
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("wires exact-R2 retrieval and independent exact-run cleanup into Actions", () => {
     const script = readFileSync(
       "scripts/d1-remote-restore-evidence.mjs",
@@ -141,10 +205,13 @@ describe("D1 remote restore evidence automation", () => {
     expect(workflow.jobs?.cleanup?.if).toContain("always()");
     expect(workflow.jobs?.cleanup?.needs).toBe("restore");
     for (const [job, consumer] of [
-      [workflow.jobs?.restore, "npm run restore:d1:remote-evidence --"],
+      [
+        workflow.jobs?.restore,
+        "node scripts/d1-remote-restore-evidence.mjs",
+      ],
       [
         workflow.jobs?.cleanup,
-        "npm run restore:d1:remote-evidence -- --cleanup-only",
+        "node scripts/d1-remote-restore-evidence.mjs --cleanup-only",
       ],
     ] as const) {
       expect(job?.env?.D1_BACKUP_LOCAL_DIRECTORY).toBeUndefined();
@@ -153,6 +220,7 @@ describe("D1 remote restore evidence automation", () => {
       ) ?? -1;
       expect(bindingIndex).toBeGreaterThanOrEqual(0);
       const bindingStep = job?.steps?.[bindingIndex];
+      expect(bindingStep?.run).toContain("D1_BACKUP_LOCAL_DIRECTORY=%s");
       expect(bindingStep?.run).toContain(
         "$RUNNER_TEMP/0509-d1-backups-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}",
       );
@@ -161,6 +229,12 @@ describe("D1 remote restore evidence automation", () => {
         step.run?.includes(consumer)
       ) ?? -1;
       expect(consumerIndex).toBeGreaterThan(bindingIndex);
+      expect(job?.steps).toContainEqual(expect.objectContaining({
+        run: "./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts",
+      }));
+      expect(job?.steps?.[consumerIndex]?.run).toContain(
+        "./scripts/deploy-window-lock.sh run -- node scripts/d1-remote-restore-evidence.mjs",
+      );
     }
     expect(workflow.jobs?.restore?.["timeout-minutes"]).toBe(300);
     expect(
@@ -168,7 +242,7 @@ describe("D1 remote restore evidence automation", () => {
     ).toBe(true);
     expect(workflow.jobs?.cleanup?.steps).toContainEqual(
       expect.objectContaining({
-        run: "npm run restore:d1:remote-evidence -- --cleanup-only --sweep-stale",
+        run: "./scripts/deploy-window-lock.sh run -- node scripts/d1-remote-restore-evidence.mjs --cleanup-only --sweep-stale",
       }),
     );
   });
@@ -209,7 +283,9 @@ describe("D1 remote restore evidence automation", () => {
     expect(deployWorkflow).not.toContain("group: d1-production-export");
     expect(manualWorkflow).not.toContain("group: d1-production-export");
     expect(backupWorkflow).not.toContain("group: d1-production-export");
-    expect(backupWorkflow).toContain("run: npm run backup:d1:r2");
+    expect(backupWorkflow).toContain(
+      "run: ./scripts/deploy-window-lock.sh run -- node scripts/d1-backup-to-r2.mjs",
+    );
     const backupScript = readFileSync(
       "scripts/d1-backup-to-r2.mjs",
       "utf8",

@@ -31,7 +31,9 @@ describe("manual D1 backup workflow", () => {
     const backupSteps = parsed.jobs.backup?.steps
       ?.map((step) => step.run)
       .filter(Boolean);
-    expect(backupSteps?.some((run) => run?.includes("npm run backup:d1:r2")))
+    expect(backupSteps?.some((run) =>
+      run?.includes("node scripts/d1-backup-to-r2.mjs")
+    ))
       .toBe(true);
   });
 
@@ -46,15 +48,20 @@ describe("manual D1 backup workflow", () => {
     );
     expect(bindingIndex).toBeGreaterThanOrEqual(0);
     const bindingStep = steps[bindingIndex];
+    expect(bindingStep?.run).toContain("D1_BACKUP_LOCAL_DIRECTORY=%s");
     expect(bindingStep?.run).toContain(
       "$RUNNER_TEMP/0509-d1-backups-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}",
     );
     expect(bindingStep?.run).toContain('>> "$GITHUB_ENV"');
-    expect(steps).toContainEqual(expect.objectContaining({ run: "npm ci --ignore-scripts" }));
+    expect(steps).toContainEqual(expect.objectContaining({
+      run: "./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts",
+    }));
     const backupStep = steps.find(
       (step) => step.name === "Run approved D1-to-R2 backup",
     );
-    expect(backupStep?.run).toBe("npm run backup:d1:r2");
+    expect(backupStep?.run).toBe(
+      "./scripts/deploy-window-lock.sh run -- node scripts/d1-backup-to-r2.mjs",
+    );
     expect(backupStep?.env?.CLOUDFLARE_ACCOUNT_ID).toBe("${{ secrets.CLOUDFLARE_ACCOUNT_ID }}");
     expect(backupStep?.env?.CLOUDFLARE_API_TOKEN).toBe("${{ secrets.CLOUDFLARE_API_TOKEN }}");
     expect(backupStep?.env?.D1_BACKUP_AUTOMATION_APPROVED).toBe("0509-weekly-d1-to-r2");
@@ -62,10 +69,12 @@ describe("manual D1 backup workflow", () => {
     const backupSteps = steps.map((step) => step.run).filter(Boolean);
     expect(backupSteps.indexOf("node scripts/validate-d1-backup.mjs")).toBeGreaterThanOrEqual(0);
     const backupIndex = backupSteps.findIndex((run) =>
-      run?.includes("npm run backup:d1:r2"),
+      run?.includes("node scripts/d1-backup-to-r2.mjs"),
     );
     expect(
-      steps.findIndex((step) => step.run?.includes("npm run backup:d1:r2")),
+      steps.findIndex((step) =>
+        step.run?.includes("node scripts/d1-backup-to-r2.mjs")
+      ),
     ).toBeGreaterThan(bindingIndex);
     expect(backupIndex).toBeGreaterThan(
       backupSteps.indexOf("node scripts/validate-d1-backup.mjs"),

@@ -37,7 +37,7 @@ jobs:
         with:
           node-version-file: ".node-version"
           cache: npm
-      - run: npm ci --ignore-scripts
+      - run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
       - run: node scripts/validate-d1-backup.mjs
       - name: Create fresh backup and prove an isolated remote restore
         env:
@@ -49,7 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          npm run restore:d1:remote-evidence -- \
+          ./scripts/deploy-window-lock.sh run -- node scripts/d1-remote-restore-evidence.mjs \
             --output test-results/d1-remote-restore-evidence.json
       - name: Remove run-scoped plaintext backup files
         if: always()
@@ -95,10 +95,10 @@ jobs:
         with:
           node-version-file: ".node-version"
           cache: npm
-      - run: npm ci --ignore-scripts
+      - run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
       - name: Delete every exact scratch database from this run
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           D1_REMOTE_RESTORE_AUTOMATION_APPROVED: "0509-remote-restore-evidence"
-        run: npm run restore:d1:remote-evidence -- --cleanup-only --sweep-stale
+        run: ./scripts/deploy-window-lock.sh run -- node scripts/d1-remote-restore-evidence.mjs --cleanup-only --sweep-stale

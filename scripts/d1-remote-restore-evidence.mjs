@@ -85,7 +85,7 @@ const STALE_LOCAL_RESTORE_AGE_MS = 24 * 60 * 60 * 1000;
  *   env?: Record<string, string>,
  * }} options
  */
-function runCaptured(
+export function runCaptured(
   command,
   args,
   {
@@ -110,8 +110,10 @@ function runCaptured(
     let stdout = "";
     let stderr = "";
     let outputBytes = 0;
-    /** @type {"timeout" | "output" | null} */
+    /** @type {"timeout" | "output" | "signal" | null} */
     let terminationReason = null;
+    /** @type {NodeJS.Signals | null} */
+    let forwardedSignal = null;
     /** @type {NodeJS.Timeout | null} */
     let forceKillTimer = null;
 
@@ -129,7 +131,7 @@ function runCaptured(
         }
       }
     };
-    /** @param {"timeout" | "output"} reason */
+    /** @param {"timeout" | "output" | "signal"} reason */
     const requestTermination = (reason) => {
       if (terminationReason) return;
       terminationReason = reason;
@@ -138,6 +140,20 @@ function runCaptured(
         () => signalProcessTree("SIGKILL"),
         FORCE_KILL_DELAY_MS,
       );
+    };
+    /** @param {NodeJS.Signals} signal */
+    const forwardParentSignal = (signal) => {
+      if (forwardedSignal) return;
+      forwardedSignal = signal;
+      requestTermination("signal");
+    };
+    const onSigint = () => forwardParentSignal("SIGINT");
+    const onSigterm = () => forwardParentSignal("SIGTERM");
+    process.on("SIGINT", onSigint);
+    process.on("SIGTERM", onSigterm);
+    const clearProcessSignalHandlers = () => {
+      process.removeListener("SIGINT", onSigint);
+      process.removeListener("SIGTERM", onSigterm);
     };
     const timer = setTimeout(
       () => requestTermination("timeout"),
@@ -178,11 +194,17 @@ function runCaptured(
     child.on("error", (error) => {
       clearTimeout(timer);
       if (forceKillTimer) clearTimeout(forceKillTimer);
+      clearProcessSignalHandlers();
+      if (forwardedSignal) {
+        process.kill(process.pid, forwardedSignal);
+        return;
+      }
       reject(error);
     });
     child.on("close", (code, signal) => {
       clearTimeout(timer);
       if (forceKillTimer) clearTimeout(forceKillTimer);
+      clearProcessSignalHandlers();
       if (!quiet) {
         if (pendingStdout) {
           process.stdout.write(redactSensitiveOutput(pendingStdout));
@@ -191,7 +213,9 @@ function runCaptured(
           process.stderr.write(redactSensitiveOutput(pendingStderr));
         }
       }
-      if (terminationReason === "output") {
+      if (forwardedSignal) {
+        process.kill(process.pid, forwardedSignal);
+      } else if (terminationReason === "output") {
         reject(new Error("remote_restore_command_output_too_large"));
       } else if (terminationReason === "timeout") {
         reject(new Error("remote_restore_command_timeout"));
