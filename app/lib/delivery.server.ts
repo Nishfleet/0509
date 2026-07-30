@@ -2766,7 +2766,7 @@ function renderEventDiffText(event: WatchEventRecord) {
   const captures = resolveEventDiffCaptures(metadata);
   return captures
     ? ` — was "${from}" (captured ${formatEventCaptureTime(captures.beforeCapturedAt)}), now "${to}" (captured ${formatEventCaptureTime(captures.nowCapturedAt)})`
-    : " — changed values were recorded, but one or both capture times were not";
+    : " — changed values were recorded, but one or both capture times were not recorded.";
 }
 
 function resolveEventDiffCaptures(metadata: Record<string, unknown>) {

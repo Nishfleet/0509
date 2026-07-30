@@ -2636,36 +2636,46 @@ describe("alert email content quality", () => {
 
   it("does not label changed values Before/Now when capture times are missing", async () => {
     const { buildInstantAlertContent } = await import("~/lib/delivery.server");
+    const event = {
+      id: "event-1",
+      watchlistId: "watch-1",
+      runId: "run-1",
+      eventType: "landing_page_offer_changed",
+      status: "confirmed",
+      importanceScore: 90,
+      adId: "meta-1",
+      baselineFromRunId: null,
+      candidateId: "candidate-1",
+      proofCaptureId: "proof-1",
+      title: "Offer changed",
+      summary: "The offer changed.",
+      metadata: { from: "20% off", to: "40% off" },
+      confirmedAt: "2026-04-19T00:00:00.000Z",
+      suppressedAt: null,
+      invalidatedAt: null,
+      lastEvaluatedAt: "2026-04-19T00:00:00.000Z",
+      createdAt: "2026-04-19T00:00:00.000Z",
+    } as const;
+    const single = buildInstantAlertContent(
+      { id: "watch-1", name: "Nykaa watch" },
+      [event],
+      false,
+      { APP_ORIGIN: "https://0509.io" } as never,
+    );
     const content = buildInstantAlertContent(
       { id: "watch-1", name: "Nykaa watch" },
-      [{
-        id: "event-1",
-        watchlistId: "watch-1",
-        runId: "run-1",
-        eventType: "landing_page_offer_changed",
-        status: "confirmed",
-        importanceScore: 90,
-        adId: "meta-1",
-        baselineFromRunId: null,
-        candidateId: "candidate-1",
-        proofCaptureId: "proof-1",
-        title: "Offer changed",
-        summary: "The offer changed.",
-        metadata: { from: "20% off", to: "40% off" },
-        confirmedAt: "2026-04-19T00:00:00.000Z",
-        suppressedAt: null,
-        invalidatedAt: null,
-        lastEvaluatedAt: "2026-04-19T00:00:00.000Z",
-        createdAt: "2026-04-19T00:00:00.000Z",
-      }],
+      [event, { ...event, id: "event-2" }],
       false,
       { APP_ORIGIN: "https://0509.io" } as never,
     );
 
-    expect(content.html).toContain(
+    expect(single.html).toContain(
       "Before/Now comparison not shown because one or both capture times were not recorded.",
     );
-    expect(content.html).not.toContain(">Before<");
-    expect(content.html).not.toContain(">Now<");
+    expect(content.html).toContain(
+      "changed values were recorded, but one or both capture times were not recorded.",
+    );
+    expect(single.html).not.toContain(">Before<");
+    expect(single.html).not.toContain(">Now<");
   });
 });

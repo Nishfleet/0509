@@ -120,12 +120,14 @@ describe("release scheduled observations", () => {
     expect(classifyScheduledTaskResult("instant_alert_flush", { groups: 0, attempts: 0, failures: 2 }))
       .toMatchObject({ outcome: "degraded", metrics: { failures: 2 } });
     expect(classifyScheduledTaskResult("scheduled_monitoring", { queued: 0, duplicates: 1 }))
-      .toMatchObject({ outcome: "degraded", metrics: { duplicates: 1 } });
+      .toMatchObject({ outcome: "no_work", metrics: { duplicates: 1 } });
     expect(classifyScheduledTaskResult("scheduled_monitoring", { digests: 2, digestAttempts: 3, digestFailures: 1 }))
       .toMatchObject({ outcome: "degraded", metrics: { digests: 2, digestAttempts: 3, digestFailures: 1 } });
     expect(classifyScheduledTaskResult("digest_schedule_recovery", { attempted: 2, sent: 1, failed: 1 }))
       .toMatchObject({ outcome: "degraded", metrics: { attempted: 2, digests: 1, failures: 1 } });
-    expect(classifyScheduledTaskResult("weekly_business_numbers", { sent: false }))
+    expect(classifyScheduledTaskResult("weekly_business_numbers", { sent: false, reason: "duplicate" }))
+      .toMatchObject({ outcome: "no_work", metrics: { sent: false } });
+    expect(classifyScheduledTaskResult("weekly_business_numbers", { sent: false, reason: "delivery_failed" }))
       .toMatchObject({ outcome: "degraded", metrics: { sent: false } });
     expect(classifyScheduledTaskResult("digest_schedule_exhaustion_recovery", {
       attempted: 1,
@@ -145,7 +147,7 @@ describe("release scheduled observations", () => {
     expect(JSON.stringify(classifyScheduledTaskResult("presence_polling_batch", { polled: 1, results: [{ ok: true, targetId: "private" }] }))).not.toContain("private");
   });
 
-  it("actively reports a fulfilled degraded scheduled result", async () => {
+  it("records scheduled-monitoring degradation without sending a duplicate generic page", async () => {
     const { pending, ctx } = context();
     const reportDegraded = vi.fn().mockResolvedValue(undefined);
     const task = Promise.resolve({
@@ -172,7 +174,64 @@ describe("release scheduled observations", () => {
     );
     await Promise.all(pending);
 
-    expect(reportDegraded).toHaveBeenCalledWith("scheduled_monitoring");
+    expect(reportDegraded).not.toHaveBeenCalled();
+  });
+
+  it("actively reports fulfilled degradation without a dedicated worker page", async () => {
+    const { pending, ctx } = context();
+    const reportDegraded = vi.fn().mockResolvedValue(undefined);
+
+    await observeScheduledTask(
+      {} as never,
+      ctx as never,
+      {
+        cron: "17 */6 * * *",
+        scheduledTime: Date.parse("2026-07-19T06:17:00.000Z"),
+        taskName: "instant_alert_flush",
+      },
+      Promise.resolve({ groups: 1, failures: 1 }),
+      {
+        record: vi.fn().mockResolvedValue(undefined),
+        reportDegraded,
+      },
+    );
+    await Promise.all(pending);
+
+    expect(reportDegraded).toHaveBeenCalledWith("instant_alert_flush");
+  });
+
+  it("keeps degraded-page failure separate from successful observation persistence", async () => {
+    const { pending, ctx } = context();
+    const record = vi.fn().mockResolvedValue(undefined);
+    const logObservationFailure = vi.fn();
+    const logDegradedReportFailure = vi.fn();
+
+    await observeScheduledTask(
+      {} as never,
+      ctx as never,
+      {
+        cron: "17 */6 * * *",
+        scheduledTime: Date.parse("2026-07-19T06:17:00.000Z"),
+        taskName: "instant_alert_flush",
+      },
+      Promise.resolve({ groups: 1, failures: 1 }),
+      {
+        record,
+        reportDegraded: vi.fn().mockRejectedValue(new Error("page failed")),
+        logObservationFailure,
+        logDegradedReportFailure,
+      },
+    );
+    await Promise.all(pending);
+
+    expect(record).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ outcome: "degraded" }),
+    );
+    expect(logObservationFailure).not.toHaveBeenCalled();
+    expect(logDegradedReportFailure).toHaveBeenCalledWith(
+      "instant_alert_flush",
+    );
   });
 
   it("reduces thrown values to stable categories", () => {

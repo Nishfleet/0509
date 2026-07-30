@@ -105,13 +105,26 @@ async function recordThrottleAttempt(env: AppEnv, taskKey: string, at: string, d
 
 async function recordFailedAttempt(env: AppEnv, taskKey: string, at: string) {
   await env.DB!.prepare(
-    `INSERT INTO cron_failure_alert_throttle (task_key, last_alerted_at, last_error, alert_count)
-     VALUES (?, ?, 'operator_alert_not_sent', 0)
+    `INSERT INTO cron_failure_alert_throttle (
+       task_key, last_alerted_at, last_error, alert_count,
+       last_failed_at, failed_count
+     )
+     VALUES (?, ?, 'operator_alert_not_sent', 0, ?, 1)
      ON CONFLICT(task_key) DO UPDATE SET
-       last_alerted_at = excluded.last_alerted_at,
-       last_error = excluded.last_error`,
+       last_alerted_at = CASE
+         WHEN cron_failure_alert_throttle.last_error = 'operator_alert_sent'
+         THEN cron_failure_alert_throttle.last_alerted_at
+         ELSE excluded.last_alerted_at
+       END,
+       last_error = CASE
+         WHEN cron_failure_alert_throttle.last_error = 'operator_alert_sent'
+         THEN cron_failure_alert_throttle.last_error
+         ELSE excluded.last_error
+       END,
+       last_failed_at = excluded.last_failed_at,
+       failed_count = cron_failure_alert_throttle.failed_count + 1`,
   )
-    .bind(taskKey, at)
+    .bind(taskKey, at, at)
     .run();
 }
 

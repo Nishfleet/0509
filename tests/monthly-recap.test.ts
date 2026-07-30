@@ -104,6 +104,7 @@ describe("sendMonthlyCustomerRecaps", () => {
       sent: 0,
       skipped: 0,
       duplicates: 0,
+      claimLost: 0,
       failed: 0,
     });
   });
@@ -115,10 +116,15 @@ describe("sendMonthlyCustomerRecaps", () => {
         attemptId: "attempt-1",
         claimUpdatedAt: "2026-07-06T05:00:00.000Z",
       })
-      .mockResolvedValueOnce({ attemptId: null, claimUpdatedAt: null });
+      .mockResolvedValueOnce({ attemptId: null, claimUpdatedAt: null })
+      .mockResolvedValueOnce({
+        attemptId: "attempt-3",
+        claimUpdatedAt: "2026-07-06T05:00:03.000Z",
+      });
     const markInstantDeliveryDispatchStarted = vi
       .fn()
-      .mockResolvedValue("2026-07-06T05:00:01.000Z");
+      .mockResolvedValueOnce("2026-07-06T05:00:01.000Z")
+      .mockResolvedValueOnce(null);
     const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
     const sendCloudflareEmail = vi.fn().mockResolvedValue({
       provider: "cloudflare",
@@ -140,6 +146,18 @@ describe("sendMonthlyCustomerRecaps", () => {
       claimInstantDeliveryAttempt,
       markInstantDeliveryDispatchStarted,
       updateDeliveryAttemptResult,
+      getDeliveryAttemptByIdempotencyKey: vi
+        .fn()
+        .mockResolvedValueOnce({
+          status: "pending",
+          webhookStatus: "provider_unknown",
+          updatedAt: "2026-07-06T05:00:04.000Z",
+        })
+        .mockResolvedValueOnce({
+          status: "pending",
+          webhookStatus: "pending",
+          updatedAt: "2026-07-06T05:00:05.000Z",
+        }),
       getUserDeliveryProfile: vi.fn().mockResolvedValue({
         email: "owner@example.com",
         name: "Owner",
@@ -152,6 +170,8 @@ describe("sendMonthlyCustomerRecaps", () => {
           id: "target-1",
           channel: "email",
           targetValue: "owner@example.com",
+          validationStatus: "validated",
+          isValidated: true,
           isOptedIn: true,
           isPaused: false,
           optedOutAt: null,
@@ -214,6 +234,33 @@ describe("sendMonthlyCustomerRecaps", () => {
     );
     expect(second.duplicates).toBe(1);
     expect(second.sent).toBe(0);
+
+    const claimLost = await sendMonthlyCustomerRecaps(
+      { DB: {} } as never,
+      { scheduledTime: Date.parse("2026-07-06T05:00:00.000Z") },
+    );
+    expect(claimLost).toMatchObject({
+      claimLost: 1,
+      failed: 0,
+      sent: 0,
+      duplicates: 0,
+    });
+
+    claimInstantDeliveryAttempt.mockResolvedValueOnce({
+      attemptId: "attempt-4",
+      claimUpdatedAt: "2026-07-06T05:00:05.000Z",
+    });
+    markInstantDeliveryDispatchStarted.mockResolvedValueOnce(null);
+    const rejected = await sendMonthlyCustomerRecaps(
+      { DB: {} } as never,
+      { scheduledTime: Date.parse("2026-07-06T05:00:00.000Z") },
+    );
+    expect(rejected).toMatchObject({
+      claimLost: 0,
+      failed: 1,
+      sent: 0,
+      duplicates: 0,
+    });
   });
 
   it("skips users with zero activity", async () => {

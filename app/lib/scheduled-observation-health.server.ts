@@ -33,17 +33,46 @@ export async function listScheduledObservationHealth(
   const lastByCron = new Map(
     (result.results ?? []).map((row) => [row.cron, row.last_scheduled_at]),
   );
+  const nowIso = now.toISOString();
+  const observedCrons = new Set(lastByCron.keys());
+
+  await env.DB.batch(
+    SCHEDULED_OBSERVATION_DEADLINES.map(({ cron }) =>
+      env.DB!.prepare(`
+          INSERT INTO scheduled_observation_health_state (
+            cron, baseline_at, had_observation, updated_at
+          ) VALUES (?, ?, ?, ?)
+          ON CONFLICT(cron) DO UPDATE SET
+            had_observation = excluded.had_observation,
+            updated_at = excluded.updated_at
+        `).bind(cron, nowIso, observedCrons.has(cron) ? 1 : 0, nowIso),
+    ),
+  );
+
+  const stateResult = await env.DB.prepare(`
+      SELECT cron, baseline_at
+      FROM scheduled_observation_health_state
+    `).all<{ cron: string; baseline_at: string }>();
+  const baselineByCron = new Map(
+    (stateResult.results ?? []).map((row) => [row.cron, row.baseline_at]),
+  );
 
   return SCHEDULED_OBSERVATION_DEADLINES.map(({ cron, maxAgeMs }) => {
     const lastScheduledAt = lastByCron.get(cron) ?? null;
     const lastScheduledMs = lastScheduledAt ? Date.parse(lastScheduledAt) : Number.NaN;
+    const baselineAt = baselineByCron.get(cron);
+    const baselineMs = baselineAt ? Date.parse(baselineAt) : Number.NaN;
+    if (!Number.isFinite(baselineMs)) {
+      throw new Error("scheduled_observation_health_baseline_unavailable");
+    }
+    const freshnessReferenceMs = Number.isFinite(lastScheduledMs)
+      ? lastScheduledMs
+      : baselineMs;
     return {
       cron,
       lastScheduledAt,
       maxAgeMs,
-      overdue:
-        !Number.isFinite(lastScheduledMs) ||
-        now.getTime() - lastScheduledMs > maxAgeMs,
+      overdue: now.getTime() - freshnessReferenceMs > maxAgeMs,
     };
   });
 }

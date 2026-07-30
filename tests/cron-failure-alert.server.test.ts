@@ -17,6 +17,8 @@ type ThrottleRow = {
   last_alerted_at: string;
   last_error: string | null;
   alert_count: number;
+  last_failed_at?: string | null;
+  failed_count?: number;
 };
 
 function createThrottleDb(
@@ -46,25 +48,37 @@ function createThrottleDb(
 
       if (sql.includes("INSERT INTO cron_failure_alert_throttle")) {
         return {
-          bind(taskKey: string, lastAlertedAt: string, lastError: string) {
+          bind(taskKey: string, lastAlertedAt: string, detail?: string) {
             return {
               async run() {
                 if (options.failUpsert) {
                   throw new Error("throttle write failed");
                 }
                 const existing = rows.get(taskKey);
+                const failedAttempt = sql.includes("'operator_alert_not_sent'");
                 const resolvedLastError =
-                  lastError ??
-                  (sql.includes("'operator_alert_not_sent'")
-                    ? "operator_alert_not_sent"
-                    : null);
+                  failedAttempt ? "operator_alert_not_sent" : detail ?? null;
+                const preserveAccepted = failedAttempt &&
+                  existing?.last_error === "operator_alert_sent" &&
+                  sql.includes("last_failed_at") &&
+                  sql.includes("CASE");
                 rows.set(taskKey, {
-                  last_alerted_at: lastAlertedAt,
-                  last_error: resolvedLastError,
+                  last_alerted_at: preserveAccepted
+                    ? existing.last_alerted_at
+                    : lastAlertedAt,
+                  last_error: preserveAccepted
+                    ? existing.last_error
+                    : resolvedLastError,
                   alert_count: sql.includes("alert_count + 1")
                     ? (existing?.alert_count ?? 0) + 1
                     : existing?.alert_count ??
-                      (sql.includes("'operator_alert_not_sent', 0)") ? 0 : 1),
+                      (failedAttempt ? 0 : 1),
+                  last_failed_at: failedAttempt && sql.includes("last_failed_at")
+                    ? detail ?? lastAlertedAt
+                    : existing?.last_failed_at ?? null,
+                  failed_count: failedAttempt && sql.includes("failed_count")
+                    ? (existing?.failed_count ?? 0) + 1
+                    : existing?.failed_count ?? 0,
                 });
                 return { success: true };
               },
@@ -224,6 +238,43 @@ describe("cron failure alert throttle", () => {
       last_alerted_at: nextWindow.toISOString(),
       last_error: "operator_alert_not_sent",
       alert_count: 0,
+    });
+  });
+
+  it("preserves an accepted throttle row when a later page is rejected", async () => {
+    const rows = new Map<string, ThrottleRow>();
+    const firstAt = new Date("2026-07-12T06:00:00.000Z");
+    const rejectedAt = new Date(
+      firstAt.getTime() + CRON_FAILURE_ALERT_THROTTLE_MS,
+    );
+    const env = {
+      DB: createThrottleDb(rows),
+      LAUNCH_CANARY_EMAIL: "ops@0509.io",
+    } as unknown as AppEnv;
+
+    sendOperatorAlertEmail
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+
+    await alertScheduledTaskFailure(
+      env,
+      "scheduled_monitoring",
+      new Error("first"),
+      { now: firstAt },
+    );
+    await alertScheduledTaskFailure(
+      env,
+      "scheduled_monitoring",
+      new Error("second"),
+      { now: rejectedAt },
+    );
+
+    expect(rows.get("scheduled_monitoring")).toMatchObject({
+      last_alerted_at: firstAt.toISOString(),
+      last_error: "operator_alert_sent",
+      alert_count: 1,
+      last_failed_at: rejectedAt.toISOString(),
+      failed_count: 1,
     });
   });
 

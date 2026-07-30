@@ -1006,6 +1006,32 @@ describe("weekly business numbers", () => {
     expect(lines[5]).toContain("n/a");
   });
 
+  it("distinguishes an accepted idempotent replay from a delivery failure", async () => {
+    const sendOperatorAlertEmail = vi.fn().mockResolvedValue(false);
+    vi.doMock("~/lib/delivery.server", () => ({ sendOperatorAlertEmail }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWeeklyBusinessSummary: vi.fn().mockResolvedValue({
+        signups7d: 0,
+        activated7d: 0,
+        payingByPlan: [],
+        dunningCount: 0,
+        revokedToFree7d: 0,
+        digestAttempts7d: 0,
+        digestSent7d: 0,
+        oldestActivePaidScanAt: null,
+      }),
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue({
+        status: "sent",
+      }),
+    }));
+
+    const { sendWeeklyBusinessNumbers } = await import("~/lib/monitoring.server");
+    await expect(sendWeeklyBusinessNumbers({ DB: {} } as never)).resolves.toMatchObject({
+      sent: false,
+      reason: "duplicate",
+    });
+  });
+
   it("includes annual validation drift lines for operators (WP-38)", async () => {
     const {
       buildWeeklyBusinessLines,

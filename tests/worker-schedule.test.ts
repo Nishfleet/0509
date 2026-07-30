@@ -94,5 +94,13 @@ describe("worker schedule", () => {
       inlineFailures: 1,
       digestFailures: 1,
     })).toBe("operator-alert:scheduled-degraded-inline-and-digest:2026-07-03");
+    expect(resolveOperationalRiskAlertIdempotencyKey("2026-07-03", {
+      skippedForBudget: 2,
+      dispatchFailures: 1,
+      inlineFailures: 1,
+      digestFailures: 1,
+    })).toBe(
+      "operator-alert:scheduled-degraded-scan-budget-and-fanout-dispatch-and-inline-and-digest:2026-07-03",
+    );
   });
 });

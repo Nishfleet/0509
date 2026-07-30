@@ -677,16 +677,35 @@ export async function sendWeeklyBusinessNumbers(env: AppEnv) {
     annualValidationDriftLines = ["Annual validation: preview_failed"];
   }
   const weekStamp = new Date().toISOString().slice(0, 10);
+  const idempotencyKey = `business-weekly:${weekStamp}`;
   const sent = await sendOperatorAlertEmail(env, {
     subject: "Five to Nine — weekly business numbers",
     lines: [
       ...buildWeeklyBusinessLines(summary, { annualValidationDriftLines }),
       ...scheduledObservationHealthLines,
     ],
-    idempotencyKey: `business-weekly:${weekStamp}`,
+    idempotencyKey,
   });
 
-  return { sent };
+  if (sent) {
+    return { sent: true, reason: "sent" as const };
+  }
+
+  try {
+    const { getDeliveryAttemptByIdempotencyKey } =
+      await import("~/lib/data.server");
+    const durableAttempt = await getDeliveryAttemptByIdempotencyKey(
+      env,
+      idempotencyKey,
+    );
+    if (durableAttempt?.status === "sent") {
+      return { sent: false, reason: "duplicate" as const };
+    }
+  } catch {
+    return { sent: false, reason: "delivery_state_unavailable" as const };
+  }
+
+  return { sent: false, reason: "delivery_failed" as const };
 }
 
 export async function sendCustomerAtRiskAlert(

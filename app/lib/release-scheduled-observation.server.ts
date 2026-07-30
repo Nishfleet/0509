@@ -30,6 +30,7 @@ type ObservationDependencies = {
   randomUUID?: () => string;
   record?: (env: AppEnv, input: RecordInput) => Promise<void>;
   logObservationFailure?: (taskName: ReleaseScheduledTaskName) => void;
+  logDegradedReportFailure?: (taskName: ReleaseScheduledTaskName) => void;
   reportDegraded?: (taskName: ReleaseScheduledTaskName) => Promise<unknown>;
 };
 
@@ -86,7 +87,14 @@ export function classifyScheduledTaskResult(
 
   if (taskName === "weekly_business_numbers") {
     const metrics = { sent: result.sent === true };
-    return { outcome: metrics.sent ? "completed" : "degraded", metrics };
+    return {
+      outcome: metrics.sent
+        ? "completed"
+        : result.reason === "duplicate"
+          ? "no_work"
+          : "degraded",
+      metrics,
+    };
   }
 
   if (taskName === "digest_schedule_exhaustion_recovery") {
@@ -197,7 +205,7 @@ export function classifyScheduledTaskResult(
       digestAttempts: safeCount(result.digestAttempts),
       digestFailures: safeCount(result.digestFailures),
     };
-    const degraded = metrics.inlineFailures + metrics.skippedForBudget + metrics.dispatchFailures + metrics.duplicates + metrics.digestFailures > 0;
+    const degraded = metrics.inlineFailures + metrics.skippedForBudget + metrics.dispatchFailures + metrics.digestFailures > 0;
     const productive = metrics.queued + metrics.inlineRuns + metrics.digests > 0;
     return { outcome: degraded ? "degraded" : productive ? "completed" : "no_work", metrics };
   }
@@ -313,10 +321,20 @@ export function observeScheduledTask<T>(
       if (
         classification.outcome === "degraded" &&
         // Retention already has a dedicated failed-step page in workers/app.ts;
-        // suppressing the generic page avoids double-alerting the same run.
-        input.taskName !== "retention_sweep"
+        // scheduled monitoring likewise has a dedicated risk page with
+        // failure-mode-specific idempotency. Suppress generic duplicates.
+        input.taskName !== "retention_sweep" &&
+        input.taskName !== "scheduled_monitoring"
       ) {
-        await reportDegraded(input.taskName);
+        try {
+          await reportDegraded(input.taskName);
+        } catch {
+          (dependencies.logDegradedReportFailure ?? ((taskName) => {
+            console.error("release scheduled degraded alert failed", {
+              taskName,
+            });
+          }))(input.taskName);
+        }
       }
     },
     async (error) => {

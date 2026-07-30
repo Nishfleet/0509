@@ -17,11 +17,48 @@ vi.mock("~/lib/delivery.server", () => ({
     sendOperatorAlertEmail(...args),
 }));
 
-function healthDb(rows: Array<{ cron: string; last_scheduled_at: string | null }>) {
+function healthDb(initialRows: Array<{ cron: string; last_scheduled_at: string | null }>) {
+  let rows = initialRows;
+  const state = new Map<string, {
+    cron: string;
+    baseline_at: string;
+    had_observation: number;
+  }>();
+
   return {
-    prepare: vi.fn(() => ({
-      all: vi.fn().mockResolvedValue({ results: rows }),
-    })),
+    setRows(nextRows: typeof rows) {
+      rows = nextRows;
+    },
+    prepare: vi.fn((sql: string) => {
+      const statement = {
+        sql,
+        bindings: [] as unknown[],
+        bind(...bindings: unknown[]) {
+          statement.bindings = bindings;
+          return statement;
+        },
+        all: vi.fn(async () => ({
+          results: sql.includes("FROM release_scheduled_observation")
+            ? rows
+            : [...state.values()],
+        })),
+      };
+      return statement;
+    }),
+    batch: vi.fn(async (statements: Array<{
+      bindings: [string, string, number, string];
+    }>) => {
+      for (const statement of statements) {
+        const [cron, baselineAt, hadObservation] = statement.bindings;
+        const current = state.get(cron);
+        state.set(cron, {
+          cron,
+          baseline_at: current?.baseline_at ?? baselineAt,
+          had_observation: hadObservation,
+        });
+      }
+      return [];
+    }),
   };
 }
 
@@ -67,16 +104,24 @@ describe("scheduled observation heartbeat", () => {
     ]);
   });
 
-  it("pages through the existing operator alert when a schedule is overdue", async () => {
+  it("gives newly activated schedules one cadence before paging", async () => {
     const now = new Date("2026-07-30T12:13:00.000Z");
+    const db = healthDb([]);
     const env = {
-      DB: healthDb([]),
+      DB: db,
       LAUNCH_CANARY_EMAIL: "ops@0509.io",
     };
 
-    const result = await sendScheduledObservationHeartbeat(env as never, { now });
+    const initial = await sendScheduledObservationHeartbeat(env as never, { now });
+    expect(initial).toMatchObject({ sent: false, reason: "healthy" });
+    expect(initial.health.filter((entry) => entry.overdue)).toHaveLength(0);
+    expect(sendOperatorAlertEmail).not.toHaveBeenCalled();
 
-    expect(result).toMatchObject({ sent: true, reason: "sent" });
+    const afterGrace = await sendScheduledObservationHeartbeat(env as never, {
+      now: new Date("2026-08-08T12:13:00.001Z"),
+    });
+
+    expect(afterGrace).toMatchObject({ sent: true, reason: "sent" });
     expect(sendOperatorAlertEmail).toHaveBeenCalledWith(
       env,
       expect.objectContaining({
@@ -84,5 +129,24 @@ describe("scheduled observation heartbeat", () => {
         idempotencyKey: expect.stringMatching(/^scheduled-observation-heartbeat:\d+$/),
       }),
     );
+  });
+
+  it("does not renew grace when retained observation evidence disappears", async () => {
+    const first = new Date("2026-07-20T12:13:00.000Z");
+    const db = healthDb([
+      { cron: "0 */3 * * *", last_scheduled_at: "2026-07-20T12:00:00.000Z" },
+    ]);
+    const env = { DB: db };
+
+    await listScheduledObservationHealth(env as never, { now: first });
+    db.setRows([]);
+    const afterRetention = await listScheduledObservationHealth(env as never, {
+      now: new Date("2026-07-30T12:13:00.000Z"),
+    });
+
+    expect(afterRetention.find((entry) => entry.cron === "0 */3 * * *")).toMatchObject({
+      lastScheduledAt: null,
+      overdue: true,
+    });
   });
 });
