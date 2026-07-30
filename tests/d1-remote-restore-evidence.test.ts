@@ -29,6 +29,7 @@ import {
   parseWranglerJson,
   readOwnedBackupManifest,
   removeScratchDatabase,
+  rethrowWithMigrationLedgerDiagnostics,
   resolveMaxSqlBytes,
   staleScratchDatabaseNames,
   sweepStaleScratchDatabases,
@@ -1067,6 +1068,50 @@ describe("D1 remote restore evidence automation", () => {
         ["0001_first.sql", "0002_second.sql"],
       ),
     ).toThrow("source_backup_migration_ledger_stale");
+  });
+
+  it("reports migration filenames only for a stale ledger and rethrows", () => {
+    const ledger = aggregateEvidence().migrationLedger;
+    const repository = ["0001_first.sql", "0002_second.sql"];
+    const staleError = new Error("source_backup_migration_ledger_stale");
+    const write = vi.fn();
+
+    let thrown;
+    try {
+      rethrowWithMigrationLedgerDiagnostics(
+        staleError,
+        ledger,
+        repository,
+        write,
+      );
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBe(staleError);
+    expect(write.mock.calls).toEqual([
+      [
+        'source_backup_migration_ledger_names:["0001_first.sql","0002_second.sql"]',
+      ],
+      [
+        'repository_migration_names:["0001_first.sql","0002_second.sql"]',
+      ],
+    ]);
+
+    const unrelatedError = new Error("scratch_restore_content_mismatch");
+    write.mockClear();
+    thrown = undefined;
+    try {
+      rethrowWithMigrationLedgerDiagnostics(
+        unrelatedError,
+        ledger,
+        repository,
+        write,
+      );
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBe(unrelatedError);
+    expect(write).not.toHaveBeenCalled();
   });
 
   it("accepts exactly an allowlisted cleanup suffix before or after cleanup", () => {
