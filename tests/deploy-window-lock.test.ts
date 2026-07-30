@@ -14,12 +14,14 @@ import { afterEach, describe, expect, it } from "vitest";
 
 const script = resolve("scripts/deploy-window-lock.sh");
 const flockCompat = resolve("scripts/flock-compat.sh");
-const realFlock = spawnSync("sh", ["-c", "command -v flock"], {
-  encoding: "utf8",
-}).stdout.trim();
+const realFlock = existsSync("/usr/bin/flock")
+  ? "/usr/bin/flock"
+  : spawnSync("sh", ["-c", "command -v flock"], {
+      encoding: "utf8",
+    }).stdout.trim();
 const hasRequiredTools =
   realFlock.length > 0 &&
-  spawnSync("flock", ["--version"], { stdio: "ignore" }).status === 0 &&
+  spawnSync(realFlock, ["--version"], { stdio: "ignore" }).status === 0 &&
   spawnSync("setsid", ["--version"], { stdio: "ignore" }).status === 0 &&
   existsSync("/proc/self/stat");
 
