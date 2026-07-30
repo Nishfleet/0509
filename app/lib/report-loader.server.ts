@@ -59,6 +59,7 @@ export async function loadOwnedReportDocument(
         env,
         userId,
         events.map((event) => event.id),
+        { includePrevious: false },
       );
     const [ads, proofCapturePairs, aiWeeklySummary] = options.parallelWatchlistLookups
       ? await Promise.all([loadAds(), loadProofCaptures(), loadSummary()])

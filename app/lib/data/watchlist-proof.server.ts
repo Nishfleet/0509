@@ -207,6 +207,7 @@ export async function listProofCapturePairsForEventIds(
   env: AppEnv,
   userId: string,
   eventIds: string[],
+  options: { includePrevious?: boolean } = {},
 ) {
   const uniqueEventIds = [...new Set(eventIds.filter(Boolean))];
   if (uniqueEventIds.length === 0) return [];
@@ -231,6 +232,14 @@ export async function listProofCapturePairsForEventIds(
     values: uniqueEventIds,
     suffix: [userId],
   });
+
+  if (options.includePrevious === false) {
+    return currentRows.map((current) => ({
+      eventId: current.event_id,
+      current: toProofCaptureRecord(current),
+      previous: null,
+    }));
+  }
 
   const previousRows = await Promise.all(
     currentRows.map((current) => {

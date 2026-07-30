@@ -199,6 +199,7 @@ describe("loadOwnedReportDocument", () => {
       env,
       "user-1",
       ["event-1", "event-2"],
+      { includePrevious: false },
     );
     expect(data.getLatestDigestRunSummaryForWatchlist).toHaveBeenCalledWith(
       env,

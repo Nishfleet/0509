@@ -360,6 +360,48 @@ describe("buildWatchlistReport", () => {
     });
   });
 
+  it("keeps a creative unreadable reason when a landing proof succeeded", () => {
+    const proof: ProofCaptureRecord = {
+      id: "proof-succeeded",
+      proofTargetId: "target-1",
+      status: "succeeded",
+      skipReason: null,
+      failureCode: null,
+      failureReason: null,
+      screenshotArtifactKey: null,
+      htmlArtifactKey: null,
+      extractedFields: { rawHeadline: "Readable landing headline" },
+      fieldConfidence: {},
+      extractionWarnings: [],
+      captureMetadata: { captureMethod: "landing_page_fetch" },
+      renderMode: "mobile",
+      deviceProfile: "mobile_default",
+      extractorVersion: "lp-signals-v2",
+      idempotencyKey: "proof-succeeded",
+      attemptedAt: "2026-04-01T01:00:00.000Z",
+      succeededAt: "2026-04-01T01:00:01.000Z",
+      createdAt: "2026-04-01T01:00:00.000Z",
+      updatedAt: "2026-04-01T01:00:01.000Z",
+    };
+    const adWithUnreadableCreative: AdRecord = {
+      ...baseAd,
+      creativeText: null,
+      creativeTextMetadata: {
+        unreadableReasonCode: "ocr_provider_failed",
+      },
+    };
+
+    const report = buildWatchlistReport({
+      watchlist,
+      events: [watchEvent],
+      adsById: new Map([[baseAd.metaAdId, adWithUnreadableCreative]]),
+      proofCapturesByEventId: new Map([[watchEvent.id, proof]]),
+      generatedAt: "2026-04-01T02:00:00.000Z",
+    });
+
+    expect(report.rows[0]?.captureReasonCode).toBe("ocr_provider_failed");
+  });
+
 	it("emits null for missing fields instead of placeholder prose", () => {
 		const report = buildWatchlistReport({
 			watchlist,

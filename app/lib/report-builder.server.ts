@@ -306,28 +306,45 @@ function resolveCaptureReasonCode(
   proofCapture: ProofCaptureRecord | null,
   eventReasonCode: string | null | undefined,
 ) {
-  if (proofCapture?.status === "failed") {
-    return (
-      proofCapture.failureCode ??
-      readRecordString(proofCapture.captureMetadata, "unreadableReasonCode") ??
-      "landing_capture_failed"
-    );
-  }
-  if (proofCapture?.status === "succeeded") {
-    return readRecordString(
-      proofCapture.captureMetadata,
-      "unreadableReasonCode",
-    );
-  }
-
   const landingReason = readRecordString(
     ad?.landingPage?.metadata,
     "unreadableReasonCode",
   );
+  const creativeReason = readRecordString(
+    ad?.creativeTextMetadata,
+    "unreadableReasonCode",
+  );
+  const missingCreativeReason =
+    creativeReason && !presentString(ad?.creativeText)
+      ? creativeReason
+      : null;
+  const eventReason = presentString(eventReasonCode);
+
+  if (proofCapture?.status === "failed") {
+    return (
+      proofCapture.failureCode ??
+      readRecordString(proofCapture.captureMetadata, "unreadableReasonCode") ??
+      landingReason ??
+      missingCreativeReason ??
+      eventReason ??
+      "landing_capture_failed"
+    );
+  }
+  if (proofCapture?.status === "succeeded") {
+    return (
+      readRecordString(
+        proofCapture.captureMetadata,
+        "unreadableReasonCode",
+      ) ??
+      landingReason ??
+      missingCreativeReason ??
+      eventReason
+    );
+  }
+
   if (landingReason) return landingReason;
-  const creativeReason = readRecordString(ad?.creativeTextMetadata, "unreadableReasonCode");
-  if (creativeReason && !presentString(ad?.creativeText)) return creativeReason;
-  return presentString(eventReasonCode);
+  if (missingCreativeReason) return missingCreativeReason;
+  return eventReason;
 }
 
 function readRecordString(
