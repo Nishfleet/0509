@@ -19,18 +19,18 @@ fallbacks:
 - `vps-verify`: three isolated, no-sudo verification runners. GitHub assigns
   each waiting job to the first matching idle runner; the repository lock
   provides three FIFO heavy-work slots and makes a fourth contender wait.
-- `0509-monitoring-hardened`: one isolated monitoring runner for the public
-  uptime workflow.
 
-The three verification units and monitoring unit use distinct non-login
-accounts, a capped `github-0509.slice`, separate verification/reserved child
-slices, and the root-created lock state under `/run/lock/0509`. They cannot read
+The three verification units use distinct non-login accounts, a capped
+`github-0509.slice` and `github-0509-verify.slice`, and the root-created lock
+state under `/run/lock/0509`. They cannot read
 `/home/nish`, use passwordless sudo, or inherit the interactive Claude, Codex,
 Hermes, or GitHub operator credentials. Privileged backup, restore, finalization,
-and production deployment jobs use fresh GitHub-hosted machines; no
-repository-level VPS runner is eligible to receive production secrets.
+production deployment, and public uptime jobs use fresh GitHub-hosted machines;
+no repository-level VPS runner is eligible to receive production secrets or
+trusted operational work.
 
-Do not restore `RECOVERY_RUNNER` or `MONITORING_RUNNER` fallback expressions.
+Do not restore runner-variable fallback expressions or add trusted jobs to the
+repository-level self-hosted fleet.
 An outage should queue visibly rather than silently moving protected work to a
 different trust boundary. For emergency recovery, repair or deliberately
 replace the matching hardened label and run the read-only
