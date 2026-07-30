@@ -4,6 +4,7 @@ export const DAILY_DIGEST_CRON = "0 4 * * *";
 /** @deprecated The 04:00 cron now sends daily digests only. */
 export const DAILY_MONITORING_CRON = DAILY_DIGEST_CRON;
 export const WEEKLY_DIGEST_CRON = "0 5 * * MON";
+export { SCHEDULED_OBSERVATION_HEARTBEAT_CRON } from "../app/lib/scheduled-observation-health.server";
 
 export type ScheduledTask =
   | {
@@ -66,7 +67,12 @@ export function resolveScheduledTask(cron: string): ScheduledTask {
 
 export function resolveOperationalRiskAlertIdempotencyKey(
   dayKey: string,
-  input: { skippedForBudget: number; dispatchFailures: number },
+  input: {
+    skippedForBudget: number;
+    dispatchFailures: number;
+    inlineFailures?: number;
+    digestFailures?: number;
+  },
 ) {
   if (input.skippedForBudget > 0 && input.dispatchFailures > 0) {
     return `operator-alert:scan-budget-and-fanout-dispatch:${dayKey}`;
@@ -78,6 +84,10 @@ export function resolveOperationalRiskAlertIdempotencyKey(
 
   if (input.dispatchFailures > 0) {
     return `operator-alert:fanout-dispatch:${dayKey}`;
+  }
+
+  if ((input.inlineFailures ?? 0) > 0 || (input.digestFailures ?? 0) > 0) {
+    return `operator-alert:scheduled-degraded:${dayKey}`;
   }
 
   return null;

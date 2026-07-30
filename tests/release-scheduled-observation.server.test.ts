@@ -133,7 +133,46 @@ describe("release scheduled observations", () => {
       failed: 1,
     })).toMatchObject({ outcome: "degraded", metrics: { attempted: 1, alerted: 0, failures: 1 } });
     expect(classifyScheduledTaskResult("presence_polling_batch", { polled: 2, results: [{ ok: true, targetId: "private" }, { ok: false, errorCode: "private" }] })).toMatchObject({ outcome: "degraded", metrics: { polled: 2, failed: 1 } });
+    expect(classifyScheduledTaskResult("monitoring_fanout_reconciliation", {
+      recovered: 0,
+      redispatched: 0,
+      redispatchFailures: 2,
+      firstScans: { failures: 0 },
+    })).toMatchObject({
+      outcome: "degraded",
+      metrics: { redispatchFailures: 2 },
+    });
     expect(JSON.stringify(classifyScheduledTaskResult("presence_polling_batch", { polled: 1, results: [{ ok: true, targetId: "private" }] }))).not.toContain("private");
+  });
+
+  it("actively reports a fulfilled degraded scheduled result", async () => {
+    const { pending, ctx } = context();
+    const reportDegraded = vi.fn().mockResolvedValue(undefined);
+    const task = Promise.resolve({
+      queued: 0,
+      inlineFailures: 1,
+      skippedForBudget: 0,
+      dispatchFailures: 0,
+      digestFailures: 0,
+    });
+
+    await observeScheduledTask(
+      {} as never,
+      ctx as never,
+      {
+        cron: "0 */3 * * *",
+        scheduledTime: Date.parse("2026-07-19T06:00:00.000Z"),
+        taskName: "scheduled_monitoring",
+      },
+      task,
+      {
+        record: vi.fn().mockResolvedValue(undefined),
+        reportDegraded,
+      },
+    );
+    await Promise.all(pending);
+
+    expect(reportDegraded).toHaveBeenCalledWith("scheduled_monitoring");
   });
 
   it("reduces thrown values to stable categories", () => {

@@ -2734,17 +2734,25 @@ function renderEventDiffHtml(event: WatchEventRecord) {
   if (!from || !to) {
     return "";
   }
+  const captures = resolveEventDiffCaptures(metadata);
+  if (!captures) {
+    return `
+      <p style="margin: 0 0 16px; color: #667085; font-size: 13px;">
+        Before/Now comparison not shown because one or both capture times were not recorded.
+      </p>
+    `;
+  }
 
   // The one fact the customer actually wants: what it said before, and now.
   return `
     <table style="margin: 0 0 16px; border-collapse: collapse; font-size: 14px; background-color: #ffffff; color: #0b1220;">
       <tr>
         <td style="padding: 4px 10px 4px 0; color: #98a2b3; vertical-align: top;">Before</td>
-        <td style="padding: 4px 0; color: #475467;">${escapeHtml(from)}</td>
+        <td style="padding: 4px 0; color: #475467;">${escapeHtml(from)}<br><small>Captured ${escapeHtml(formatEventCaptureTime(captures.beforeCapturedAt))}</small></td>
       </tr>
       <tr>
         <td style="padding: 4px 10px 4px 0; color: #98a2b3; vertical-align: top;">Now</td>
-        <td style="padding: 4px 0; color: #0b1220;"><strong>${escapeHtml(to)}</strong></td>
+        <td style="padding: 4px 0; color: #0b1220;"><strong>${escapeHtml(to)}</strong><br><small>Captured ${escapeHtml(formatEventCaptureTime(captures.nowCapturedAt))}</small></td>
       </tr>
     </table>
   `;
@@ -2754,7 +2762,48 @@ function renderEventDiffText(event: WatchEventRecord) {
   const metadata = (event.metadata ?? {}) as Record<string, unknown>;
   const from = typeof metadata.from === "string" ? metadata.from.trim() : "";
   const to = typeof metadata.to === "string" ? metadata.to.trim() : "";
-  return from && to ? ` — was "${from}", now "${to}"` : "";
+  if (!from || !to) return "";
+  const captures = resolveEventDiffCaptures(metadata);
+  return captures
+    ? ` — was "${from}" (captured ${formatEventCaptureTime(captures.beforeCapturedAt)}), now "${to}" (captured ${formatEventCaptureTime(captures.nowCapturedAt)})`
+    : " — changed values were recorded, but one or both capture times were not";
+}
+
+function resolveEventDiffCaptures(metadata: Record<string, unknown>) {
+  const read = (keys: string[]) => {
+    for (const key of keys) {
+      const value = metadata[key];
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+    return null;
+  };
+  const beforeCapturedAt = read([
+    "beforeCapturedAt",
+    "fromCapturedAt",
+    "previousCapturedAt",
+    "baselineCapturedAt",
+  ]);
+  const nowCapturedAt = read(["capturedAt", "nowCapturedAt"]);
+  const beforeMs = beforeCapturedAt ? Date.parse(beforeCapturedAt) : Number.NaN;
+  const nowMs = nowCapturedAt ? Date.parse(nowCapturedAt) : Number.NaN;
+  if (
+    !beforeCapturedAt ||
+    !nowCapturedAt ||
+    !Number.isFinite(beforeMs) ||
+    !Number.isFinite(nowMs) ||
+    beforeMs >= nowMs
+  ) {
+    return null;
+  }
+  return { beforeCapturedAt, nowCapturedAt };
+}
+
+function formatEventCaptureTime(value: string) {
+  return `${new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "UTC",
+  }).format(new Date(value))} UTC`;
 }
 
 // Fetches the ads referenced by alert events in one batched call. A missing

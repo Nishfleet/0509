@@ -52,6 +52,58 @@ function buildLiveBrowserResult(overrides: Partial<SearchResponse> = {}): Search
   };
 }
 
+describe("interactive Meta pagination honesty", () => {
+  it("labels and preserves a partial result when a bounded later page fails", async () => {
+    const firstAd = buildLiveBrowserResult().ads[0];
+    const searchAds = vi.fn()
+      .mockResolvedValueOnce({
+        ads: [firstAd],
+        nextCursor: "cursor-2",
+        source: "meta_api",
+      })
+      .mockRejectedValueOnce(new Error("page 2 unavailable"));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      searchAds,
+      demoSearch: vi.fn(),
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: vi.fn(),
+      getInteractiveMetaApiExtraPages: vi.fn().mockReturnValue(2),
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+
+    const { searchMetaApiAdsWithInteractiveDepth } = await import(
+      "~/lib/ad-source.server"
+    );
+    const result = await searchMetaApiAdsWithInteractiveDepth(
+      {} as never,
+      {
+        mode: "advertiser",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      { interactive: true },
+    );
+
+    expect(result).toMatchObject({
+      ads: [firstAd],
+      nextCursor: "cursor-2",
+      discoveryStatus: "degraded",
+      discoverySummary: expect.stringContaining("results shown are partial"),
+    });
+  });
+});
+
 describe("resolveCommercialAdSourceStatus", () => {
   it("treats the official Meta API as diagnostic-only even when a token exists", async () => {
     vi.doMock(

@@ -532,6 +532,17 @@ describe("watchlists route loader", () => {
     vi.doMock("~/lib/ad-source.server", () => ({
       resolveCommercialAdSourceStatus: vi.fn().mockResolvedValue(discoveryStatus),
     }));
+    vi.doMock("~/lib/watchlist-board.server", () => ({
+      loadWatchBoardCaptureWindow: vi.fn().mockRejectedValue(new Error("rollup unavailable")),
+      emptyWatchBoardCaptureWindow: vi.fn().mockReturnValue({
+        endDate: "2026-04-18",
+        windowDays: 30,
+        days: {},
+        capturedChanges: {},
+        totalCapturedChanges: 0,
+        failedChecks: {},
+      }),
+    }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist,
       getWatchlistDeliveryConfig: vi.fn().mockResolvedValue(watchlistDeliveryConfig),
@@ -553,12 +564,14 @@ describe("watchlists route loader", () => {
       selectedWatchlist: unknown;
       watchlists: unknown[];
       captureWindow: { windowDays: number; days: Record<string, unknown> };
+      captureWindowDegraded: boolean;
       effectiveDeliveryConfig: { timezone: string | null };
     };
 
     expect(board.selectedWatchlist).toBeNull();
     expect(board.watchlists).toEqual([watchlist]);
     expect(board.captureWindow.windowDays).toBe(30);
+    expect(board.captureWindowDegraded).toBe(true);
     // The board is the default view, so it must resolve the workspace
     // delivery timezone: "Next check" would otherwise print UTC beside a
     // viewer-local "Last check" and disagree with /app/dashboard.
@@ -2266,6 +2279,7 @@ describe("watchlists route rendering", () => {
           totalCapturedChanges: 2,
           failedChecks: {},
         },
+        captureWindowDegraded: true,
         eventCandidates: [],
         events: [],
         runs: [],
@@ -2311,6 +2325,7 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain("Nykaa watch");
     expect(markup).toContain("Paused rival");
     expect(markup).toContain("2 changes captured in the last 30 days.");
+    expect(markup).toContain("Recent change and failed-check totals could not be loaded.");
     expect(markup).toContain("Paused. No checks run and the history stays.");
     expect(markup).not.toContain("f9-ed-capture-strip");
     expect(markup).not.toContain("f9-ed-ticker");

@@ -508,6 +508,8 @@ describe("clients route agent memory", () => {
       ],
       plan: "agency",
       canManageClientRooms: true,
+      roomMemoryUnavailable: true,
+      approvalUnavailableRoomIds: [],
     });
 
     const { default: ClientsRoute } = await import("~/routes/app.clients");
@@ -524,10 +526,11 @@ describe("clients route agent memory", () => {
     expect(markup).toContain("1 saved memory");
     expect(markup).toContain("room notes saved");
     expect(markup).toContain("Open the report and share the snapshot when ready.");
+    expect(markup).toContain("Saved client context could not be loaded.");
     expect(markup).toContain('name="intent" value="approve-client-room"');
   });
 
-  it("fails closed when report revalidation helpers are unavailable", async () => {
+  it("preserves saved approvals but marks readiness unavailable when revalidation helpers are unavailable", async () => {
     mockAuth();
     vi.doMock("~/lib/data.server", () => ({
       listAgentMemory: vi.fn().mockResolvedValue([]),
@@ -566,7 +569,71 @@ describe("clients route agent memory", () => {
       request: new Request("http://localhost/app/clients"),
     } as never);
 
-    expect(result.rooms[0].notes.reportApprovals).toEqual({});
+    expect(result.rooms[0].notes.reportApprovals).toEqual({
+      "watchlist-watchlist-1": {
+        evidenceFingerprint: "approved",
+        reviewedAt: expect.any(String),
+        approvalExpiresAt: expect.any(String),
+      },
+    });
+    expect(result.approvalUnavailableRoomIds).toEqual(["room-1"]);
+  });
+
+  it("preserves a saved approval and labels it unavailable when revalidation throws", async () => {
+    mockAuth();
+    const reviewedAt = new Date(Date.now() - 60_000).toISOString();
+    const approvalExpiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    vi.doMock("~/lib/data.server", () => ({
+      listAgentMemory: vi.fn().mockResolvedValue([]),
+      listAgentMemoryForClientRooms: vi.fn().mockResolvedValue([]),
+      listClientRooms: vi.fn().mockResolvedValue([{
+        id: "room-1",
+        name: "Nykaa weekly desk",
+        clientLabel: "Nykaa",
+        status: "active",
+        notes: {
+          reportApprovals: {
+            "watchlist:watchlist-1": {
+              evidenceFingerprint: "approved",
+              reviewedAt,
+              approvalExpiresAt,
+            },
+          },
+        },
+        resourceRefs: [{ resourceType: "report", resourceId: "watchlist:watchlist-1" }],
+        createdAt: "2026-06-20T00:00:00.000Z",
+        updatedAt: "2026-06-20T00:00:00.000Z",
+      }]),
+      listCollections: vi.fn().mockResolvedValue([]),
+      listWatchlists: vi.fn().mockResolvedValue([{
+        id: "watchlist-1",
+        isActive: true,
+      }]),
+      getLatestDigestRunSummaryForWatchlist: vi.fn(),
+      listAdsByIds: vi.fn(),
+      listCollectionItems: vi.fn(),
+      listWatchEvents: vi.fn().mockRejectedValue(new Error("transient D1 failure")),
+      getCollection: vi.fn(),
+      getWatchlist: vi.fn().mockResolvedValue({
+        id: "watchlist-1",
+        isActive: true,
+      }),
+    }));
+
+    const { loader } = await import("~/routes/app.clients");
+    const result = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app/clients"),
+    } as never);
+
+    expect(result.rooms[0].notes.reportApprovals).toEqual({
+      "watchlist:watchlist-1": {
+        evidenceFingerprint: "approved",
+        reviewedAt,
+        approvalExpiresAt,
+      },
+    });
+    expect(result.approvalUnavailableRoomIds).toEqual(["room-1"]);
   });
 
   it("strips expired and malformed room approvals", async () => {

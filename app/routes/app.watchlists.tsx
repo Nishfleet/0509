@@ -13,6 +13,7 @@ import { CopyButton } from "~/components/copy-button";
 import { DashboardPage } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { LocalTime } from "~/components/local-time";
+import { PartialDataNotice } from "~/components/partial-data-notice";
 import { useQuickAdd } from "~/components/quick-add-context";
 import { TertiaryAction } from "~/components/evidence/cta";
 import { BulkSelectBar } from "~/components/watchlists/bulk-select-bar";
@@ -350,6 +351,10 @@ export default function WatchlistsRoute() {
         context={formatCompetitorContextLine({ rows, windowDays: captureWindow.windowDays })}
         title="Competitors"
       />
+
+      {data.captureWindowDegraded && hasCompetitors ? (
+        <PartialDataNotice message="Recent change and failed-check totals could not be loaded. Competitor rows below are incomplete; open a competitor for its latest check history." />
+      ) : null}
 
       {hasCompetitors ? (
         <div className="f9-wk-tabs" role="navigation" aria-label="Filter competitors by state">

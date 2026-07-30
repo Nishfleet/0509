@@ -2610,6 +2610,8 @@ describe("alert email content quality", () => {
               advertiser: "Nykaa",
               from: "Glow Serum Sale",
               to: "Glow Serum Weekend Sale",
+              beforeCapturedAt: "2026-04-18T00:00:00.000Z",
+              capturedAt: "2026-04-19T00:00:00.000Z",
             },
             confirmedAt: "2026-04-19T00:00:00.000Z",
             suppressedAt: null,
@@ -2625,8 +2627,45 @@ describe("alert email content quality", () => {
     expect(payload.html).toContain("Before");
     expect(payload.html).toContain("Glow Serum Sale");
     expect(payload.html).toContain("Glow Serum Weekend Sale");
+    expect(payload.html).toContain("Captured 18 Apr 2026");
+    expect(payload.html).toContain("Captured 19 Apr 2026");
     expect(payload.html).toContain("See the evidence");
     // WP-24: evidence link deep-links to the event row.
     expect(payload.html).toContain("/app/watchlists?watchlist=watch-1&event=event-1");
+  });
+
+  it("does not label changed values Before/Now when capture times are missing", async () => {
+    const { buildInstantAlertContent } = await import("~/lib/delivery.server");
+    const content = buildInstantAlertContent(
+      { id: "watch-1", name: "Nykaa watch" },
+      [{
+        id: "event-1",
+        watchlistId: "watch-1",
+        runId: "run-1",
+        eventType: "landing_page_offer_changed",
+        status: "confirmed",
+        importanceScore: 90,
+        adId: "meta-1",
+        baselineFromRunId: null,
+        candidateId: "candidate-1",
+        proofCaptureId: "proof-1",
+        title: "Offer changed",
+        summary: "The offer changed.",
+        metadata: { from: "20% off", to: "40% off" },
+        confirmedAt: "2026-04-19T00:00:00.000Z",
+        suppressedAt: null,
+        invalidatedAt: null,
+        lastEvaluatedAt: "2026-04-19T00:00:00.000Z",
+        createdAt: "2026-04-19T00:00:00.000Z",
+      }],
+      false,
+      { APP_ORIGIN: "https://0509.io" } as never,
+    );
+
+    expect(content.html).toContain(
+      "Before/Now comparison not shown because one or both capture times were not recorded.",
+    );
+    expect(content.html).not.toContain(">Before<");
+    expect(content.html).not.toContain(">Now<");
   });
 });

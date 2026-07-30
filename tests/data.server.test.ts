@@ -2743,6 +2743,60 @@ describe("listAdsByIds", () => {
     expect(result).toEqual([ad]);
   });
 
+  it("hydrates canonical SQL columns when raw_json is sparse", async () => {
+    const row = {
+      id: "e2e-ad-1",
+      advertiser: "Okara",
+      body: "Fixture creative text",
+      body_secondary: null,
+      preview_headline: "Free trial",
+      preview_subhead: "",
+      hook: "Free trial",
+      offer_text: "Starting at ₹499",
+      cta: "Learn more",
+      creative_format: "image",
+      language_label: "English",
+      destination_type: "website",
+      landing_page_url: "https://okara.example.invalid/launch",
+      ad_snapshot_url: "https://facebook.example.invalid/ad/1",
+      countries_json: '["India"]',
+      platforms_json: '["Facebook"]',
+      first_seen_at: null,
+      last_seen_at: null,
+      is_active: 1,
+      source: "meta_api",
+      research_summary: "Stored fixture evidence",
+      creative_text: "Fixture creative text",
+      creative_text_capture_method: "ad_snapshot_fetch",
+      creative_text_metadata_json: '{"captured":true}',
+      raw_json: JSON.stringify({
+        metaAdId: "stale-raw-id",
+        advertiser: "Stale raw advertiser",
+        languageLabel: "Stale raw language",
+        landingPageUrl: "https://stale.example.invalid",
+        creativeText: "Stale raw creative",
+      }),
+    };
+    const db = {
+      prepare: vi.fn(() => ({
+        bind: vi.fn(() => ({
+          all: vi.fn().mockResolvedValue({ results: [row] }),
+        })),
+      })),
+    };
+
+    const [ad] = await listAdsByIds({ DB: db } as never, ["e2e-ad-1"]);
+
+    expect(ad).toMatchObject({
+      metaAdId: "e2e-ad-1",
+      advertiser: "Okara",
+      languageLabel: "English",
+      landingPageUrl: "https://okara.example.invalid/launch",
+      creativeText: "Fixture creative text",
+      analysisFields: [],
+    });
+  });
+
   it("chunks lookups so 150 ad ids never exceed D1's bound-parameter cap", async () => {
     const adIds = Array.from({ length: 150 }, (_, index) => `ad-${index}`);
     const statements: Array<{ sql: string; bindings: unknown[] }> = [];

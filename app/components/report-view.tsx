@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 import type { ReportDocument, ReportEventSummary, ReportRow } from "~/lib/report";
 import { LocalTime } from "~/components/local-time";
@@ -58,6 +58,13 @@ const LEGACY_PLACEHOLDER_VALUES = new Set([
   "not detected",
   "not checked yet",
 ]);
+
+const REPORT_FACT_LINK_STYLE: CSSProperties = {
+  alignItems: "center",
+  display: "inline-flex",
+  minHeight: 44,
+  minWidth: 44,
+};
 
 function presentReportValue(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
@@ -418,17 +425,27 @@ function buildPlateFacts(row: ReportRow): FactRow[] {
       missingLabel: "none stored",
       value:
         event?.sourceUrl && isHttpUrl(event.sourceUrl) ? (
-          <a href={event.sourceUrl} rel="noreferrer" target="_blank">
+          <a
+            href={event.sourceUrl}
+            rel="noreferrer"
+            style={REPORT_FACT_LINK_STYLE}
+            target="_blank"
+          >
             Open the source
           </a>
         ) : null,
     },
     {
       key: "Still live at",
-      missingLabel: "we could not read this one",
+      missingLabel: "none stored",
       value:
         landingPageUrl && isHttpUrl(landingPageUrl) ? (
-          <a href={landingPageUrl} rel="noreferrer" target="_blank">
+          <a
+            href={landingPageUrl}
+            rel="noreferrer"
+            style={REPORT_FACT_LINK_STYLE}
+            target="_blank"
+          >
             Open the page
           </a>
         ) : (
@@ -437,7 +454,7 @@ function buildPlateFacts(row: ReportRow): FactRow[] {
     },
     {
       key: "Language",
-      missingLabel: "we could not read this one",
+      missingLabel: "Not detected",
       value: presentReportValue(row.languageLabel),
     },
     {

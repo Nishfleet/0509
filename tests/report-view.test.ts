@@ -71,6 +71,9 @@ describe("ReportView", () => {
 
     expect(markup).not.toContain("href=\"javascript:alert(1)\"");
     expect(markup).toContain("href=\"https://example.com/source\"");
+    expect(markup).toContain(
+      'style="align-items:center;display:inline-flex;min-height:44px;min-width:44px"',
+    );
     // The blocked URL still renders a row, honestly (brief §6.6).
     expect(markup).toContain("none stored");
   });
@@ -228,7 +231,8 @@ describe("ReportView", () => {
     expect(markup).not.toContain("Translation unavailable");
     expect(markup).not.toContain("Landing page unavailable");
     // A value we do not have is a muted row, never an empty card (§6.6, R5).
-    expect(markup).toContain("we could not read this one");
+    expect(markup).toContain("none stored");
+    expect(markup).toContain("Not detected");
     expect(markup).toContain("f9-ed-fact-value is-missing");
     // The row still leads with what is known.
     expect(markup).toContain("New offer");
@@ -262,7 +266,7 @@ describe("ReportView", () => {
     expect(markup).not.toContain("Offer unavailable");
     expect(markup).not.toContain("Ad context unavailable");
     expect(markup).not.toContain("Landing page unavailable");
-    expect(markup).not.toContain("Not detected");
+    expect(markup).toContain("Not detected");
     expect(markup).not.toContain("Not checked yet");
   });
 

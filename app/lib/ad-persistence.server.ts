@@ -7,6 +7,29 @@ import type { AdRecord, AnalysisFieldInput } from "~/lib/types";
 interface AdLookupRow {
   id: string;
   raw_json: string;
+  advertiser: string;
+  body: string;
+  body_secondary: string | null;
+  preview_headline: string;
+  preview_subhead: string;
+  hook: string;
+  offer_text: string;
+  cta: string;
+  creative_format: AdRecord["format"];
+  language_label: string;
+  destination_type: AdRecord["destinationType"];
+  landing_page_url: string | null;
+  ad_snapshot_url: string | null;
+  countries_json: string;
+  platforms_json: string;
+  first_seen_at: string | null;
+  last_seen_at: string | null;
+  is_active: number;
+  source: AdRecord["source"];
+  research_summary: string;
+  creative_text: string | null;
+  creative_text_capture_method: AdRecord["creativeTextCaptureMethod"];
+  creative_text_metadata_json: string | null;
 }
 
 function nowIso() {
@@ -96,7 +119,13 @@ export async function listAdsByIds(env: AppEnv, adIds: string[]) {
       return many<AdLookupRow>(
         env,
         `
-          SELECT id, raw_json
+          SELECT
+            id, raw_json, advertiser, body, body_secondary, preview_headline,
+            preview_subhead, hook, offer_text, cta, creative_format,
+            language_label, destination_type, landing_page_url, ad_snapshot_url,
+            countries_json, platforms_json, first_seen_at, last_seen_at,
+            is_active, source, research_summary, creative_text,
+            creative_text_capture_method, creative_text_metadata_json
           FROM ad
           WHERE id IN (${placeholders})
         `,
@@ -107,10 +136,94 @@ export async function listAdsByIds(env: AppEnv, adIds: string[]) {
   const adsById = new Map<string, AdRecord>();
 
   for (const row of chunkedRows.flat()) {
-    const ad = parseJson<AdRecord | null>(row.raw_json, null);
-    if (ad) {
-      adsById.set(row.id, ad);
-    }
+    const raw = parseJson<Partial<AdRecord> | null>(row.raw_json, null) ?? {};
+    const hydrated = {
+      ...raw,
+      metaAdId: row.id,
+      advertiser:
+        typeof row.advertiser === "undefined" ? raw.advertiser : row.advertiser,
+      body: typeof row.body === "undefined" ? raw.body : row.body,
+      bodySecondary:
+        typeof row.body_secondary === "undefined"
+          ? raw.bodySecondary
+          : row.body_secondary ?? undefined,
+      previewHeadline:
+        typeof row.preview_headline === "undefined"
+          ? raw.previewHeadline
+          : row.preview_headline,
+      previewSubhead:
+        typeof row.preview_subhead === "undefined"
+          ? raw.previewSubhead
+          : row.preview_subhead,
+      hook: typeof row.hook === "undefined" ? raw.hook : row.hook,
+      offer: typeof row.offer_text === "undefined" ? raw.offer : row.offer_text,
+      cta: typeof row.cta === "undefined" ? raw.cta : row.cta,
+      format:
+        typeof row.creative_format === "undefined"
+          ? raw.format
+          : row.creative_format,
+      languageLabel:
+        typeof row.language_label === "undefined"
+          ? raw.languageLabel
+          : row.language_label,
+      destinationType:
+        typeof row.destination_type === "undefined"
+          ? raw.destinationType
+          : row.destination_type,
+      landingPageUrl:
+        typeof row.landing_page_url === "undefined"
+          ? raw.landingPageUrl
+          : row.landing_page_url,
+      adSnapshotUrl:
+        typeof row.ad_snapshot_url === "undefined"
+          ? raw.adSnapshotUrl
+          : row.ad_snapshot_url,
+      countries:
+        typeof row.countries_json === "undefined"
+          ? raw.countries
+          : parseJson<string[]>(row.countries_json, []),
+      platforms:
+        typeof row.platforms_json === "undefined"
+          ? raw.platforms
+          : parseJson<string[]>(row.platforms_json, []),
+      firstSeenAt:
+        typeof row.first_seen_at === "undefined"
+          ? raw.firstSeenAt
+          : row.first_seen_at,
+      lastSeenAt:
+        typeof row.last_seen_at === "undefined"
+          ? raw.lastSeenAt
+          : row.last_seen_at,
+      active:
+        typeof row.is_active === "undefined" ? raw.active : row.is_active === 1,
+      source: typeof row.source === "undefined" ? raw.source : row.source,
+      researchSummary:
+        typeof row.research_summary === "undefined"
+          ? raw.researchSummary
+          : row.research_summary,
+      analysisFields: raw.analysisFields ?? [],
+      creativeText:
+        typeof row.creative_text === "undefined"
+          ? raw.creativeText
+          : row.creative_text,
+      creativeTextCaptureMethod:
+        typeof row.creative_text_capture_method === "undefined"
+          ? raw.creativeTextCaptureMethod
+          : row.creative_text_capture_method,
+      creativeTextMetadata:
+        typeof row.creative_text_metadata_json === "undefined"
+          ? raw.creativeTextMetadata
+          : parseJson<Record<string, unknown> | null>(
+              row.creative_text_metadata_json,
+              null,
+            ),
+    };
+    adsById.set(
+      row.id,
+      Object.fromEntries(
+        Object.entries(hydrated).filter((entry) => entry[1] !== undefined),
+      ) as unknown as AdRecord,
+    );
   }
 
   return uniqueIds

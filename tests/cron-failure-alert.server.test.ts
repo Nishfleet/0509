@@ -31,6 +31,12 @@ function createThrottleDb(
             return {
               async first() {
                 const row = rows.get(taskKey);
+                if (
+                  sql.includes("last_error = 'operator_alert_sent'") &&
+                  row?.last_error !== "operator_alert_sent"
+                ) {
+                  return null;
+                }
                 return row ? { last_alerted_at: row.last_alerted_at } : null;
               },
             };
@@ -47,10 +53,17 @@ function createThrottleDb(
                   throw new Error("throttle write failed");
                 }
                 const existing = rows.get(taskKey);
+                const resolvedLastError =
+                  lastError ??
+                  (sql.includes("'operator_alert_not_sent'")
+                    ? "operator_alert_not_sent"
+                    : null);
                 rows.set(taskKey, {
                   last_alerted_at: lastAlertedAt,
-                  last_error: lastError,
-                  alert_count: (existing?.alert_count ?? 0) + 1,
+                  last_error: resolvedLastError,
+                  alert_count: sql.includes("alert_count + 1")
+                    ? (existing?.alert_count ?? 0) + 1
+                    : existing?.alert_count ?? 1,
                 });
                 return { success: true };
               },
@@ -110,7 +123,7 @@ describe("cron failure alert throttle", () => {
         "instant_alert_flush",
         {
           last_alerted_at: firstAt.toISOString(),
-          last_error: "first",
+          last_error: "operator_alert_sent",
           alert_count: 1,
         },
       ],
@@ -139,7 +152,7 @@ describe("cron failure alert throttle", () => {
         "scheduled_monitoring",
         {
           last_alerted_at: firstAt.toISOString(),
-          last_error: "first",
+          last_error: "operator_alert_sent",
           alert_count: 1,
         },
       ],
@@ -163,7 +176,7 @@ describe("cron failure alert throttle", () => {
     expect(rows.get("scheduled_monitoring")?.last_alerted_at).toBe(later.toISOString());
   });
 
-  it("records a false send and suppresses repeated provider calls in the same window", async () => {
+  it("records but does not throttle a page that the email channel did not accept", async () => {
     sendOperatorAlertEmail.mockResolvedValue(false);
     const rows = new Map<string, ThrottleRow>();
     const now = new Date("2026-07-12T12:00:00.000Z");
@@ -179,11 +192,11 @@ describe("cron failure alert throttle", () => {
       alertScheduledTaskFailure(env, "scheduled_monitoring", new Error("second raw failure"), {
         now: new Date(now.getTime() + 1_000),
       }),
-    ).resolves.toEqual({ sent: false, reason: "throttled" });
+    ).resolves.toEqual({ sent: false, reason: "email_skipped" });
 
-    expect(sendOperatorAlertEmail).toHaveBeenCalledTimes(1);
+    expect(sendOperatorAlertEmail).toHaveBeenCalledTimes(2);
     expect(rows.get("scheduled_monitoring")).toMatchObject({
-      last_alerted_at: now.toISOString(),
+      last_alerted_at: new Date(now.getTime() + 1_000).toISOString(),
       last_error: "operator_alert_not_sent",
       alert_count: 1,
     });
@@ -198,14 +211,19 @@ describe("cron failure alert throttle", () => {
       DB: createThrottleDb(rows),
       LAUNCH_CANARY_EMAIL: "ops@0509.io",
     } as unknown as AppEnv;
+    const nextWindow = new Date(firstAt.getTime() + CRON_FAILURE_ALERT_THROTTLE_MS);
 
     await alertScheduledTaskFailure(env, "scheduled_monitoring", new Error("first"), { now: firstAt });
     await alertScheduledTaskFailure(env, "scheduled_monitoring", new Error("second"), {
-      now: new Date(firstAt.getTime() + CRON_FAILURE_ALERT_THROTTLE_MS),
+      now: nextWindow,
     });
 
     expect(sendOperatorAlertEmail).toHaveBeenCalledTimes(2);
-    expect(rows.get("scheduled_monitoring")?.alert_count).toBe(2);
+    expect(rows.get("scheduled_monitoring")).toMatchObject({
+      last_alerted_at: nextWindow.toISOString(),
+      last_error: "operator_alert_not_sent",
+      alert_count: 1,
+    });
   });
 
   it("keeps reportScheduledTaskFailure non-throwing when a false-send throttle write fails", async () => {

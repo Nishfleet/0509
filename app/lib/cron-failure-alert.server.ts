@@ -30,7 +30,7 @@ function throttleWindowKey(nowMs: number) {
 
 /**
  * Log is the caller's job. This only decides whether to email the operator
- * and records the throttle row when a send is attempted/accepted.
+ * and records the page attempt. Only an accepted page activates the throttle.
  */
 export async function alertScheduledTaskFailure(
   env: AppEnv,
@@ -48,7 +48,9 @@ export async function alertScheduledTaskFailure(
   const failureCategory = safeFailureCategory(error);
 
   const existing = await env.DB.prepare(
-    `SELECT last_alerted_at FROM cron_failure_alert_throttle WHERE task_key = ?`,
+    `SELECT last_alerted_at
+     FROM cron_failure_alert_throttle
+     WHERE task_key = ? AND last_error = 'operator_alert_sent'`,
   )
     .bind(normalizedTaskKey)
     .first<{ last_alerted_at: string }>();
@@ -76,7 +78,10 @@ export async function alertScheduledTaskFailure(
   });
 
   if (!sent) {
-    await recordThrottleAttempt(env, normalizedTaskKey, nowIso, "operator_alert_not_sent");
+    // A channel that did not accept the page has not alerted anyone. Do not
+    // activate the successful-alert throttle: the next failure must retry.
+    // Keep one durable failed-page fact so the channel outage stays observable.
+    await recordFailedAttempt(env, normalizedTaskKey, nowIso);
     return { sent: false, reason: "email_skipped" };
   }
 
@@ -95,6 +100,18 @@ async function recordThrottleAttempt(env: AppEnv, taskKey: string, at: string, d
        alert_count = cron_failure_alert_throttle.alert_count + 1`,
   )
     .bind(taskKey, at, detail)
+    .run();
+}
+
+async function recordFailedAttempt(env: AppEnv, taskKey: string, at: string) {
+  await env.DB!.prepare(
+    `INSERT INTO cron_failure_alert_throttle (task_key, last_alerted_at, last_error, alert_count)
+     VALUES (?, ?, 'operator_alert_not_sent', 1)
+     ON CONFLICT(task_key) DO UPDATE SET
+       last_alerted_at = excluded.last_alerted_at,
+       last_error = excluded.last_error`,
+  )
+    .bind(taskKey, at)
     .run();
 }
 

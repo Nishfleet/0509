@@ -8,7 +8,7 @@ import {
 } from "~/lib/digest-email.server";
 
 describe("buildScanTroubleEmail", () => {
-  it("names affected watchlists and points to retries + watchlists", () => {
+  it("names affected watchlists without claiming an active retry", () => {
     const email = buildScanTroubleEmail({
       watchlistNames: ["Nykaa", "boAt"],
       watchlistsUrl: "https://0509.io/app/watchlists",
@@ -18,10 +18,11 @@ describe("buildScanTroubleEmail", () => {
       unsubscribeUrl: "https://0509.io/unsubscribe?sig=test",
     });
 
-    expect(email.subject).toBe("2 competitor checks failed — we're retrying automatically");
+    expect(email.subject).toBe("2 competitor checks did not complete");
     expect(email.html).toContain("Nykaa");
     expect(email.html).toContain("boAt");
-    expect(email.html).toContain("Retries are already running automatically");
+    expect(email.html).toContain("We'll try again at the next scheduled check");
+    expect(email.html).not.toContain("Retries are already running automatically");
     expect(email.html).toContain("/app/watchlists");
     expect(email.text).toContain("Open watchlists: https://0509.io/app/watchlists");
   });

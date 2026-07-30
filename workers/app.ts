@@ -26,6 +26,10 @@ import {
   type ReleaseScheduledTaskName,
 } from "../app/lib/release-scheduled-observation.server";
 import { runRetentionSweep } from "../app/lib/retention.server";
+import {
+  sendScheduledObservationHeartbeat,
+  SCHEDULED_OBSERVATION_HEARTBEAT_CRON,
+} from "../app/lib/scheduled-observation-health.server";
 import { scheduleBillingLifecycleEmailRecovery } from "./delivery-recovery";
 import { scheduleDigestScheduleExhaustionRecovery } from "./digest-schedule-recovery";
 import { primaryDomainRedirect } from "./primary-domain";
@@ -128,6 +132,24 @@ export default {
     return withSecurityHeaders(response, request);
   },
   async scheduled(controller, env, ctx) {
+    if (controller.cron === SCHEDULED_OBSERVATION_HEARTBEAT_CRON) {
+      ctx.waitUntil(
+        sendScheduledObservationHeartbeat(env).then(
+          (result) => {
+            if (result.reason !== "healthy") {
+              console.log("scheduled observation heartbeat completed", {
+                overdue: result.health.filter((entry) => entry.overdue).length,
+                sent: result.sent,
+              });
+            }
+          },
+          (error) =>
+            reportScheduledTaskFailure(env, "scheduled_observation_heartbeat", error),
+        ),
+      );
+      return;
+    }
+
     const scheduledTask = resolveScheduledTask(controller.cron);
 		const observationContext = Object.freeze({
 			cron: controller.cron,
@@ -158,9 +180,16 @@ export default {
       // WP-26: first Monday of the month → prior-month customer recap.
       ctx.waitUntil(
         sendMonthlyCustomerRecaps(env, { scheduledTime: controller.scheduledTime }).then(
-          (result) => {
+          async (result) => {
             if (result.sent > 0) {
               console.log("monthly customer recaps sent", result);
+            }
+            if (result.skipped > 0) {
+              await reportScheduledTaskFailure(
+                env,
+                "monthly_customer_recaps_degraded",
+                new Error("monthly customer recaps completed with skipped recipients"),
+              );
             }
           },
           (error) => reportScheduledTaskFailure(env, "monthly_customer_recaps", error),
@@ -205,6 +234,7 @@ export default {
               result.redispatched > 0 ||
               result.recovered > 0 ||
               result.cancelled > 0 ||
+              result.redispatchFailures > 0 ||
               firstScans.redispatched > 0 ||
               firstScans.cancelled > 0 ||
               firstScans.failures > 0
@@ -281,7 +311,9 @@ export default {
           if (
             scheduledTask.includeRiskAlert ||
             result.skippedForBudget > 0 ||
-            result.dispatchFailures > 0
+            result.dispatchFailures > 0 ||
+            result.inlineFailures > 0 ||
+            result.digestFailures > 0
           ) {
             const scheduledDay = new Date(controller.scheduledTime).toISOString().slice(0, 10);
             const operationalIdempotencyKey = resolveOperationalRiskAlertIdempotencyKey(
@@ -289,12 +321,16 @@ export default {
               {
                 skippedForBudget: result.skippedForBudget,
                 dispatchFailures: result.dispatchFailures,
+                inlineFailures: result.inlineFailures,
+                digestFailures: result.digestFailures,
               },
             );
             try {
               const alert = await observe("customer_at_risk_alert", sendCustomerAtRiskAlert(env, {
                 skippedForBudget: result.skippedForBudget,
                 dispatchFailures: result.dispatchFailures,
+                inlineFailures: result.inlineFailures,
+                digestFailures: result.digestFailures,
                 idempotencyKey: scheduledTask.includeRiskAlert
                   ? undefined
                   : operationalIdempotencyKey ?? undefined,

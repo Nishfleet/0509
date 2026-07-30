@@ -30,6 +30,7 @@ type ObservationDependencies = {
   randomUUID?: () => string;
   record?: (env: AppEnv, input: RecordInput) => Promise<void>;
   logObservationFailure?: (taskName: ReleaseScheduledTaskName) => void;
+  reportDegraded?: (taskName: ReleaseScheduledTaskName) => Promise<unknown>;
 };
 
 const SAFE_WORKER_VERSION = /^[A-Za-z0-9._-]{1,128}$/u;
@@ -131,12 +132,18 @@ export function classifyScheduledTaskResult(
       recovered: safeCount(result.recovered),
       cancelled: safeCount(result.cancelled),
       redispatched: safeCount(result.redispatched),
+      redispatchFailures: safeCount(result.redispatchFailures),
       firstScanRedispatched: safeCount(firstScans.redispatched),
       firstScanCancelled: safeCount(firstScans.cancelled),
       firstScanFailures: safeCount(firstScans.failures),
     };
     return {
-      outcome: metrics.firstScanFailures > 0 ? "degraded" : hasAnyWork(metrics) ? "completed" : "no_work",
+      outcome:
+        metrics.redispatchFailures + metrics.firstScanFailures > 0
+          ? "degraded"
+          : hasAnyWork(metrics)
+            ? "completed"
+            : "no_work",
       metrics,
     };
   }
@@ -275,6 +282,18 @@ export function observeScheduledTask<T>(
 ) {
   const now = dependencies.now ?? (() => new Date());
   const record = dependencies.record ?? recordReleaseScheduledObservation;
+  const reportDegraded =
+    dependencies.reportDegraded ??
+    (async (taskName: ReleaseScheduledTaskName) => {
+      const { reportScheduledTaskFailure } = await import(
+        "~/lib/cron-failure-alert.server"
+      );
+      return reportScheduledTaskFailure(
+        env,
+        `${taskName}_degraded`,
+        new Error("scheduled task completed with a degraded outcome"),
+      );
+    });
   const startedAt = now();
   const observationPromise = taskPromise.then(
     async (value) => {
@@ -286,7 +305,17 @@ export function observeScheduledTask<T>(
         completedAt,
         ...classification,
         failureCategory: null,
+      }).catch(() => {
+        (dependencies.logObservationFailure ?? ((taskName) => {
+          console.error("release scheduled observation failed", { taskName });
+        }))(input.taskName);
       });
+      if (
+        classification.outcome === "degraded" &&
+        input.taskName !== "retention_sweep"
+      ) {
+        await reportDegraded(input.taskName);
+      }
     },
     async (error) => {
       const completedAt = now();
