@@ -9,16 +9,19 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 const script = resolve("scripts/deploy-window-lock.sh");
 const flockCompat = resolve("scripts/flock-compat.sh");
-const realFlock = spawnSync("sh", ["-c", "command -v flock"], {
-  encoding: "utf8",
-}).stdout.trim();
+const realFlock = existsSync("/usr/bin/flock")
+  ? "/usr/bin/flock"
+  : spawnSync("sh", ["-c", "command -v flock"], {
+      encoding: "utf8",
+    }).stdout.trim();
 const hasRequiredTools =
   realFlock.length > 0 &&
-  spawnSync("flock", ["--version"], { stdio: "ignore" }).status === 0 &&
+  spawnSync(realFlock, ["--version"], { stdio: "ignore" }).status === 0 &&
   spawnSync("setsid", ["--version"], { stdio: "ignore" }).status === 0 &&
   existsSync("/proc/self/stat");
 
@@ -439,6 +442,63 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
       if (Number.isInteger(commandPid) && commandPid > 0) {
         try {
           process.kill(-commandPid, "SIGKILL");
+        } catch {
+          // The cancellation path should already have reaped the group.
+        }
+      }
+    }
+  });
+
+  it("keeps the lane locked until a detached D1 provider child stops", async () => {
+    const lockFile = scratchLock();
+    const helper = `${lockFile}.d1-cancel-helper.mjs`;
+    const childPidFile = `${lockFile}.d1-provider-pid`;
+    const moduleUrl = pathToFileURL(
+      resolve("scripts/d1-remote-restore-evidence.mjs"),
+    ).href;
+    writeFileSync(
+      helper,
+      [
+        `import { runCaptured } from ${JSON.stringify(moduleUrl)};`,
+        `await runCaptured(process.execPath, ["-e", ${JSON.stringify(
+          [
+            'const { writeFileSync } = require("node:fs");',
+            "writeFileSync(process.argv[1], String(process.pid));",
+            'process.on("SIGTERM", () => setTimeout(() => process.exit(0), 250));',
+            "setInterval(() => {}, 1_000);",
+          ].join(""),
+        )}, process.argv[2]]);`,
+      ].join("\n"),
+    );
+
+    const lane = spawnScript(
+      lockFile,
+      ["run", "--", process.execPath, helper, childPidFile],
+      {
+        DEPLOY_WINDOW_ACQUIRE_TIMEOUT: "2",
+        DEPLOY_WINDOW_VERIFY_ROOT: `${lockFile}.verify`,
+        DEPLOY_WINDOW_VERIFY_TMP_ROOT: `${lockFile}.tmp`,
+      },
+    );
+    const laneResult = completed(lane);
+    let childPid = 0;
+
+    try {
+      await waitFor(() => existsSync(childPidFile));
+      childPid = Number(readFileSync(childPidFile, "utf8"));
+      expect(() => process.kill(childPid, 0)).not.toThrow();
+
+      lane.kill("SIGTERM");
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 50));
+      expect(probeIsFree(lockFile)).toBe(false);
+
+      expect((await laneResult).code).toBe(143);
+      await waitFor(() => probeIsFree(lockFile) && slotIsFree(lockFile, 1));
+      expect(() => process.kill(childPid, 0)).toThrow();
+    } finally {
+      if (Number.isInteger(childPid) && childPid > 0) {
+        try {
+          process.kill(-childPid, "SIGKILL");
         } catch {
           // The cancellation path should already have reaped the group.
         }
