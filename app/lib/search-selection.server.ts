@@ -53,7 +53,7 @@ export function selectionNeedsEnrichment(ad: AdRecord): boolean {
   const needsLanding = Boolean(ad.landingPageUrl?.trim()) && !ad.landingPage;
   const needsCreative =
     isAdLibraryBackedAd(ad) &&
-    Boolean(ad.adSnapshotUrl?.trim()) &&
+    Boolean(ad.adSnapshotUrl?.trim() || ad.creativeImageUrl?.trim()) &&
     !ad.creativeText?.trim();
   const hasTranslatedField = ad.analysisFields.some(
     (field) => field.fieldKey === "translated_text" && Boolean(field.fieldValue?.trim()),
@@ -102,8 +102,14 @@ export async function prepareSearchResultSelection(
       if (claimed) {
         options.waitUntil(
           enrichAndPersistSelectedAd(env, selectedAdBase, providerResultIsFresh)
-            .catch(() => {
+            .catch((error) => {
               // Background enrichment must never throw into the Worker isolate.
+              console.warn(
+                JSON.stringify({
+                  event: "search_selection_enrichment_failed",
+                  errorName: error instanceof Error ? error.name : "UnknownError",
+                }),
+              );
             })
             .finally(() => {
               releaseSelectionEnrichment(selectedAdBase.metaAdId);
@@ -137,13 +143,26 @@ async function enrichAndPersistSelectedAd(
   selectedAdBase: AdRecord,
   providerResultIsFresh: boolean,
 ): Promise<AdRecord> {
+  const creativeSourceUrl =
+    selectedAdBase.adSnapshotUrl?.trim() ||
+    selectedAdBase.creativeImageUrl?.trim() ||
+    null;
   const creativeCapturePromise =
     isAdLibraryBackedAd(selectedAdBase) &&
-    selectedAdBase.adSnapshotUrl &&
+    creativeSourceUrl &&
     !selectedAdBase.creativeText
-      ? captureCreativeText(env, selectedAdBase.adSnapshotUrl, selectedAdBase).then((value) => ({
+      ? captureCreativeText(
+          env,
+          creativeSourceUrl,
+          selectedAdBase,
+        ).then((value) => ({
           value,
-          capturedAt: value ? new Date().toISOString() : null,
+          capturedAt:
+            typeof value?.metadata.capturedAt === "string"
+              ? value.metadata.capturedAt
+              : value
+                ? new Date().toISOString()
+                : null,
         }))
       : Promise.resolve({ value: null, capturedAt: null });
   const [snapshot, creativeCapture] = await Promise.all([

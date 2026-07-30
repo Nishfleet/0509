@@ -90,6 +90,59 @@ describe("extractLandingPageSignals", () => {
     });
   });
 
+  it("extracts submit CTA values regardless of HTML attribute order", () => {
+    const html = `
+      <form>
+        <input value="Get Offer" class="primary" type="submit" />
+      </form>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Get Offer",
+      formPresent: true,
+    });
+  });
+
+  it("extracts unquoted submit attributes", () => {
+    const html = `
+      <form>
+        <input value=Submit type=submit />
+      </form>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Submit",
+      formPresent: true,
+    });
+  });
+
+  it("keeps the opposite quote inside a quoted submit value", () => {
+    const html = `
+      <form>
+        <input type='submit' value="Buy now — customer's choice" />
+      </form>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Buy now — customer's choice",
+      formPresent: true,
+    });
+  });
+
+  it("extracts decimal prices in non-INR currencies", () => {
+    const html = `
+      <main>
+        <p>Launch price $49.99 for this week</p>
+        <a href="/checkout">Buy now</a>
+      </main>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Buy now",
+      priceText: "$49.99",
+    });
+  });
+
   it("returns null CTA and price when nothing high-signal is detected", () => {
     const html = `
       <html>
@@ -162,6 +215,31 @@ describe("captureLandingPageSnapshot", () => {
     expect(put).not.toHaveBeenCalled();
   });
 
+  it("keeps a readable fetch capture when optional R2 persistence fails", async () => {
+    mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          "<html><head><title>Readable offer</title></head><body><button>Buy now</button></body></html>",
+          { status: 200 },
+        ),
+      ) as never,
+    );
+    const put = vi.fn().mockRejectedValue(new Error("R2 unavailable"));
+
+    const snapshot = await captureLandingPageSnapshot(
+      { LANDING_PAGE_ARTIFACTS: { put } as unknown as R2Bucket },
+      "https://example.com/offer",
+    );
+
+    expect(snapshot).toMatchObject({
+      rawHeadline: "Readable offer",
+      artifactKey: null,
+      metadata: {
+        captureWarningCodes: ["artifact_persistence_failed"],
+      },
+    });
+  });
+
   it("releases fetch timeout timers on redirect responses without a usable location", async () => {
     vi.useFakeTimers();
     mockFetchWithDns(
@@ -192,5 +270,24 @@ describe("captureLandingPageSnapshot", () => {
 
     expect(snapshot).toBeNull();
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("reports a stable reason code when a blocked landing page cannot be captured", async () => {
+    mockFetchWithDns(
+      vi.fn(async () => new Response("forbidden", { status: 403 })) as never,
+    );
+    const onFailure = vi.fn();
+
+    const snapshot = await captureLandingPageSnapshot(
+      {},
+      "https://example.com/glow",
+      { allowRenderedFallback: false, onFailure },
+    );
+
+    expect(snapshot).toBeNull();
+    expect(onFailure).toHaveBeenCalledWith({
+      reasonCode: "landing_blocked",
+      metadata: { fetchStatus: 403 },
+    });
   });
 });

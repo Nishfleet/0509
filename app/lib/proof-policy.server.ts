@@ -21,6 +21,7 @@ export const V1_PROOF_BUDGETS = {
   workspaceConcurrencyCap: 2,
   freshnessWindowMs: 7 * 24 * 60 * 60 * 1000,
   proofDedupeWindowMs: 6 * 60 * 60 * 1000,
+  targetFailureCooldownMs: 6 * 60 * 60 * 1000,
 } as const;
 
 export type ProofPolicyBucket =
@@ -100,6 +101,22 @@ export function isProofFresh(lastSuccessfulProofAt: string | null, now = new Dat
     new Date(now).getTime() - new Date(lastSuccessfulProofAt).getTime() <
     V1_PROOF_BUDGETS.freshnessWindowMs
   );
+}
+
+export function countRecentProofFailures(
+  captures: Array<Pick<{ status: ProofStatus; attemptedAt: string }, "status" | "attemptedAt">>,
+  now = new Date().toISOString(),
+) {
+  const nowMs = new Date(now).getTime();
+  return captures.filter((capture) => {
+    if (capture.status !== "failed") return false;
+    const attemptedAtMs = new Date(capture.attemptedAt).getTime();
+    return (
+      Number.isFinite(attemptedAtMs) &&
+      nowMs - attemptedAtMs >= 0 &&
+      nowMs - attemptedAtMs < V1_PROOF_BUDGETS.targetFailureCooldownMs
+    );
+  }).length;
 }
 
 export function evaluateProofPolicy(input: ProofPolicyInput): ProofPolicyDecision {

@@ -189,4 +189,60 @@ describe("WP-11 paint-fast selection enrichment", () => {
     expect(captureLandingPageSnapshot).not.toHaveBeenCalled();
     expect(result.selectedAd?.creativeText).toBe("Already captured");
   });
+
+  it("falls back to a creative image when the snapshot URL is blank", async () => {
+    const captureCreativeText = vi.fn().mockResolvedValue({
+      text: "Image-only OCR",
+      captureMethod: "ad_snapshot_fetch",
+      imageUrl: "https://cdn.example.com/creative.jpg",
+      metadata: { capturedAt: "2026-07-18T00:00:00.000Z" },
+    });
+    const imageOnlyAd: AdRecord = {
+      ...baseAd,
+      landingPageUrl: null,
+      adSnapshotUrl: "   ",
+      creativeImageUrl: "https://cdn.example.com/creative.jpg",
+    };
+
+    vi.doMock("~/lib/analysis.server", () => ({
+      withStructuredAnalysis: vi.fn((ad: AdRecord) => ad),
+    }));
+    vi.doMock("~/lib/creative-text.server", () => ({
+      captureCreativeText,
+    }));
+    vi.doMock("~/lib/landing-pages.server", () => ({
+      captureLandingPageSnapshot: vi.fn(),
+    }));
+    vi.doMock("~/lib/translation.server", () => ({
+      translateAdText: vi.fn().mockResolvedValue(null),
+      buildTranslatedAnalysisField: vi.fn(),
+      withTranslatedAnalysisField: vi.fn((fields: unknown) => fields),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      hydrateAdsWithPersistedCreatives: vi.fn(async (_env: unknown, ads: AdRecord[]) => ads),
+      listAdsByIds: vi.fn().mockResolvedValue([]),
+      upsertAd: vi.fn(),
+    }));
+
+    const { prepareSearchResultSelection } = await import(
+      "~/lib/search-selection.server"
+    );
+    await prepareSearchResultSelection(
+      {} as never,
+      {
+        ads: [imageOnlyAd],
+        nextCursor: null,
+        source: "meta_library_browser",
+        cacheStatus: "hit",
+      },
+      imageOnlyAd.metaAdId,
+      { enrichSelected: true, hydratePersisted: true },
+    );
+
+    expect(captureCreativeText).toHaveBeenCalledWith(
+      expect.anything(),
+      imageOnlyAd.creativeImageUrl,
+      imageOnlyAd,
+    );
+  });
 });

@@ -296,6 +296,7 @@ function mockShareLoaderCollaborators(input: {
     getShareLink: vi.fn().mockResolvedValue(input.share ?? REPORT_SHARE),
     getWatchlist: vi.fn(),
     listCollectionItems: vi.fn(),
+    listProofCapturePairsForEventIds: vi.fn().mockResolvedValue([]),
     listWatchEvents: vi.fn(),
   }));
 }
@@ -631,6 +632,7 @@ describe("/app/reports/:id PDF wiring", () => {
           },
         ],
       ),
+      listProofCapturePairsForEventIds: vi.fn().mockResolvedValue([]),
       listWatchEvents: vi.fn(),
     }));
     return { createShareLink, reviewFingerprint };

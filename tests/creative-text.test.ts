@@ -157,6 +157,30 @@ describe("extractCreativeTextFromSnapshotHtml", () => {
 });
 
 describe("captureCreativeText", () => {
+  it("records an unreadable reason when the stored capture URL is invalid", async () => {
+    const result = await captureCreativeText(
+      {
+        AI: undefined,
+      } as never,
+      "not-a-public-http-url",
+      {
+        advertiser: "Nykaa",
+        body: "",
+        previewHeadline: "",
+        previewSubhead: "",
+        cta: "",
+      },
+    );
+
+    expect(result).toMatchObject({
+      text: null,
+      metadata: {
+        extractionStatus: "unreadable",
+        unreadableReasonCode: "creative_capture_url_invalid",
+      },
+    });
+  });
+
   it("fetches the ad snapshot and returns best-effort creative text metadata", async () => {
     mockFetchWithDns(
       () =>
@@ -274,6 +298,123 @@ describe("captureCreativeText", () => {
     });
   });
 
+  it("retries one transient Workers AI failure before declaring the image unreadable", async () => {
+    const transient = Object.assign(new Error("Workers AI request timeout (3007)"), {
+      status: 408,
+    });
+    const aiRun = vi.fn()
+      .mockRejectedValueOnce(transient)
+      .mockResolvedValueOnce({
+        description: "Launch Sale\nFlat ₹400 Off",
+      });
+
+    mockFetchWithDns((url) => {
+      if (url.includes("cdn.example.com")) {
+        return new Response(Uint8Array.from([255, 216, 255, 217]), {
+          status: 200,
+          headers: { "content-type": "image/jpeg" },
+        });
+      }
+      return new Response(
+        '<meta property="og:image" content="https://cdn.example.com/creative.jpg"><div>Nykaa</div>',
+        { status: 200, headers: { "content-type": "text/html" } },
+      );
+    });
+
+    const result = await captureCreativeText(
+      { AI: { run: aiRun } } as never,
+      "https://facebook.example.com/ad-snapshot",
+      {
+        advertiser: "Nykaa",
+        body: "Glow Days are live.",
+        previewHeadline: "Festive glow",
+        previewSubhead: "",
+        cta: "Shop now",
+      },
+    );
+
+    expect(aiRun).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({
+      text: "Launch Sale\nFlat ₹400 Off",
+      metadata: {
+        extractionStatus: "readable",
+        ocrAttemptCount: 2,
+      },
+    });
+  });
+
+  it("OCRs a direct image-only creative instead of treating the bytes as snapshot HTML", async () => {
+    const aiRun = vi.fn().mockResolvedValue({
+      description: "Summer Drop\n30% OFF",
+    });
+    mockFetchWithDns(
+      () =>
+        new Response(Uint8Array.from([255, 216, 255, 217]), {
+          status: 200,
+          headers: { "content-type": "image/jpeg" },
+        }),
+    );
+
+    const result = await captureCreativeText(
+      { AI: { run: aiRun } } as never,
+      "https://cdn.example.com/creative.jpg",
+      {
+        advertiser: "Nykaa",
+        body: "",
+        previewHeadline: "",
+        previewSubhead: "",
+        cta: "",
+      },
+    );
+
+    expect(aiRun).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      text: "Summer Drop\n30% OFF",
+      imageUrl: "https://cdn.example.com/creative.jpg",
+      metadata: {
+        extractionPath: "direct_image_ocr",
+        extractionStatus: "readable",
+      },
+    });
+  });
+
+  it("retains the creative image and a persisted reason when the AI binding is missing", async () => {
+    mockFetchWithDns((url) => {
+      if (url.includes("cdn.example.com")) {
+        return new Response(Uint8Array.from([255, 216, 255, 217]), {
+          status: 200,
+          headers: { "content-type": "image/jpeg" },
+        });
+      }
+      return new Response(
+        '<meta property="og:image" content="https://cdn.example.com/creative.jpg"><div>Nykaa</div>',
+        { status: 200, headers: { "content-type": "text/html" } },
+      );
+    });
+
+    const result = await captureCreativeText(
+      { AI: undefined } as never,
+      "https://facebook.example.com/ad-snapshot",
+      {
+        advertiser: "Nykaa",
+        body: "",
+        previewHeadline: "",
+        previewSubhead: "",
+        cta: "",
+      },
+    );
+
+    expect(result).toMatchObject({
+      text: null,
+      imageUrl: "https://cdn.example.com/creative.jpg",
+      metadata: {
+        extractionStatus: "unreadable",
+        unreadableReasonCode: "ocr_binding_missing",
+        capturedAt: expect.any(String),
+      },
+    });
+  });
+
   it("refuses oversized snapshot HTML before OCR", async () => {
     const aiRun = vi.fn();
     mockFetchWithDns(
@@ -298,7 +439,13 @@ describe("captureCreativeText", () => {
       },
     );
 
-    expect(result).toBeNull();
+    expect(result).toMatchObject({
+      text: null,
+      metadata: {
+        extractionStatus: "unreadable",
+        unreadableReasonCode: "creative_snapshot_empty_or_oversized",
+      },
+    });
     expect(aiRun).not.toHaveBeenCalled();
   });
 
@@ -346,7 +493,13 @@ describe("captureCreativeText", () => {
       },
     );
 
-    expect(result).toBeNull();
+    expect(result).toMatchObject({
+      text: null,
+      imageUrl: "https://cdn.example.com/creative.jpg",
+      metadata: {
+        unreadableReasonCode: "creative_image_invalid_or_oversized",
+      },
+    });
     expect(aiRun).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
   });
@@ -373,7 +526,12 @@ describe("captureCreativeText", () => {
       },
     );
 
-    expect(result).toBeNull();
+    expect(result).toMatchObject({
+      text: null,
+      metadata: {
+        unreadableReasonCode: "creative_snapshot_fetch_failed",
+      },
+    });
     expect(aiRun).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
   });
@@ -421,7 +579,13 @@ describe("captureCreativeText", () => {
       },
     );
 
-    expect(result).toBeNull();
+    expect(result).toMatchObject({
+      text: null,
+      imageUrl: "https://cdn.example.com/creative.jpg",
+      metadata: {
+        unreadableReasonCode: "creative_image_invalid_or_oversized",
+      },
+    });
     expect(aiRun).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
   });

@@ -36,7 +36,12 @@ const MAX_CREATIVE_IMAGE_CANDIDATES = 5;
 
 type KnownAdText = Pick<
   AdRecord,
-  "advertiser" | "body" | "previewHeadline" | "previewSubhead" | "cta"
+  | "advertiser"
+  | "body"
+  | "previewHeadline"
+  | "previewSubhead"
+  | "cta"
+  | "creativeImageUrl"
 >;
 
 type CreativeTextEnv = Pick<AppEnv, "AI">;
@@ -55,6 +60,37 @@ export interface CreativeTextCaptureResult {
   // Best https creative image mined from the snapshot — used as the ad
   // thumbnail. data: URLs are excluded (megabytes of base64 in raw_json).
   imageUrl: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export function createMissingCreativeCaptureResult(
+  ad: Pick<AdRecord, "creativeImageUrl">,
+  capturedAt = new Date().toISOString(),
+): CreativeTextCaptureResult {
+  return buildUnreadableCreativeResult(
+    "no_creative_capture_stored",
+    ad.creativeImageUrl ?? null,
+    capturedAt,
+  );
+}
+
+export type CreativeUnreadableReasonCode =
+  | "no_creative_capture_stored"
+  | "creative_capture_url_invalid"
+  | "creative_snapshot_fetch_failed"
+  | "creative_snapshot_http_error"
+  | "creative_snapshot_empty_or_oversized"
+  | "creative_image_missing"
+  | "creative_image_invalid_or_oversized"
+  | "ocr_binding_missing"
+  | "ocr_provider_failed"
+  | "ocr_empty_result"
+  | "ocr_text_filtered";
+
+interface CreativeOcrResult {
+  text: string | null;
+  imageUrl: string | null;
+  reasonCode: CreativeUnreadableReasonCode | null;
   metadata: Record<string, unknown>;
 }
 
@@ -103,8 +139,16 @@ export async function captureCreativeText(
   url: string,
   ad: KnownAdText,
 ): Promise<CreativeTextCaptureResult | null> {
-  if (!url || !/^https?:\/\//i.test(url)) {
-    return null;
+  const capturedAt = new Date().toISOString();
+  if (!url) {
+    return createMissingCreativeCaptureResult(ad, capturedAt);
+  }
+  if (!/^https?:\/\//i.test(url)) {
+    return buildUnreadableCreativeResult(
+      "creative_capture_url_invalid",
+      ad.creativeImageUrl ?? null,
+      capturedAt,
+    );
   }
 
   try {
@@ -112,17 +156,60 @@ export async function captureCreativeText(
       "user-agent": "0509-bot/1.0 (+https://0509.io)",
     });
 
-    if (!response?.ok) {
-      if (response) releaseFetchTimeout(response);
-      return null;
+    if (!response) {
+      return buildUnreadableCreativeResult(
+        "creative_snapshot_fetch_failed",
+        ad.creativeImageUrl ?? null,
+        capturedAt,
+      );
+    }
+    if (!response.ok) {
+      const fetchStatus = response.status;
+      releaseFetchTimeout(response);
+      return buildUnreadableCreativeResult(
+        "creative_snapshot_http_error",
+        ad.creativeImageUrl ?? null,
+        capturedAt,
+        { fetchStatus },
+      );
+    }
+
+    const responseUrl = response.url || url;
+    const contentType = response.headers.get("content-type") ?? "";
+    if (contentType.toLowerCase().startsWith("image/")) {
+      const image = await readDirectCreativeImage(response, responseUrl, contentType);
+      if (!image) {
+        return buildUnreadableCreativeResult(
+          "creative_image_invalid_or_oversized",
+          responseUrl,
+          capturedAt,
+          { fetchStatus: response.status, extractionPath: "direct_image_ocr" },
+        );
+      }
+      const ocr = await extractCreativeTextFromImage(env, image, ad);
+      return buildOcrCaptureResult(ocr, {
+        capturedAt,
+        fetchStatus: response.status,
+        extractionPath: "direct_image_ocr",
+        fallbackImageUrl: responseUrl,
+      });
     }
 
     const html = await readResponseTextWithinLimit(response, MAX_CREATIVE_SNAPSHOT_HTML_BYTES);
     if (!html) {
-      return null;
+      return buildUnreadableCreativeResult(
+        "creative_snapshot_empty_or_oversized",
+        ad.creativeImageUrl ?? null,
+        capturedAt,
+        { fetchStatus: response.status },
+      );
     }
+    const creativeImageCandidates = mergeCreativeImageCandidates(
+      ad.creativeImageUrl,
+      extractCreativeImageCandidates(html, responseUrl),
+    );
     const creativeImageUrl =
-      extractCreativeImageCandidates(html, response.url || url).find(
+      creativeImageCandidates.find(
         (candidate) => !candidate.startsWith("data:"),
       ) ?? null;
     const extractedFromHtml = extractCreativeTextFromSnapshotHtml(html, ad);
@@ -133,35 +220,33 @@ export async function captureCreativeText(
         extractorVersion: CREATIVE_TEXT_EXTRACTOR_VERSION,
         imageUrl: creativeImageUrl,
         metadata: {
+          capturedAt,
           fetchStatus: response.status,
           extractionPath: "snapshot_html",
+          extractionStatus: "readable",
         },
       };
     }
 
     const extractedFromImage = await extractCreativeTextFromSnapshotImage(
       env,
-      response.url || url,
-      html,
+      responseUrl,
+      creativeImageCandidates,
       ad,
     );
-    if (!extractedFromImage) {
-      return null;
-    }
-
-    return {
-      text: extractedFromImage.text,
-      captureMethod: "ad_snapshot_fetch",
-      extractorVersion: CREATIVE_TEXT_EXTRACTOR_VERSION,
-      imageUrl: creativeImageUrl,
-      metadata: {
-        fetchStatus: response.status,
-        extractionPath: "snapshot_image_ocr",
-        ...extractedFromImage.metadata,
-      },
-    };
-  } catch {
-    return null;
+    return buildOcrCaptureResult(extractedFromImage, {
+      capturedAt,
+      fetchStatus: response.status,
+      extractionPath: "snapshot_image_ocr",
+      fallbackImageUrl: creativeImageUrl,
+    });
+  } catch (error) {
+    logCreativeCaptureWarning("creative_snapshot_fetch_failed", error);
+    return buildUnreadableCreativeResult(
+      "creative_snapshot_fetch_failed",
+      ad.creativeImageUrl ?? null,
+      capturedAt,
+    );
   }
 }
 
@@ -189,51 +274,241 @@ export function extractCreativeTextFromSnapshotHtml(
 async function extractCreativeTextFromSnapshotImage(
   env: CreativeTextEnv,
   snapshotUrl: string,
-  html: string,
+  candidates: string[],
   ad: KnownAdText,
-) {
+): Promise<CreativeOcrResult> {
+  if (candidates.length === 0) {
+    return {
+      text: null,
+      imageUrl: null,
+      reasonCode: "creative_image_missing",
+      metadata: { ocrAttemptCount: 0 },
+    };
+  }
   if (!env.AI) {
-    return null;
+    return {
+      text: null,
+      imageUrl: candidates.find((candidate) => !candidate.startsWith("data:")) ?? null,
+      reasonCode: "ocr_binding_missing",
+      metadata: { ocrAttemptCount: 0 },
+    };
   }
 
-  const candidates = extractCreativeImageCandidates(html, snapshotUrl).slice(0, MAX_CREATIVE_IMAGE_CANDIDATES);
-  for (const candidate of candidates) {
+  let lastReason: CreativeUnreadableReasonCode = "creative_image_invalid_or_oversized";
+  let lastMetadata: Record<string, unknown> = { ocrAttemptCount: 0 };
+  let lastImageUrl =
+    candidates.find((candidate) => !candidate.startsWith("data:")) ?? null;
+  for (const candidate of candidates.slice(0, MAX_CREATIVE_IMAGE_CANDIDATES)) {
     try {
       const image = await fetchCreativeImagePayload(candidate, snapshotUrl);
       if (!image) {
         continue;
       }
+      const ocr = await extractCreativeTextFromImage(env, image, ad);
+      if (ocr.text) return ocr;
+      lastReason = ocr.reasonCode ?? lastReason;
+      lastMetadata = ocr.metadata;
+      lastImageUrl = ocr.imageUrl ?? lastImageUrl;
+    } catch (error) {
+      lastReason = "creative_image_invalid_or_oversized";
+      logCreativeCaptureWarning(lastReason, error);
+      continue;
+    }
+  }
 
+  return {
+    text: null,
+    imageUrl: lastImageUrl,
+    reasonCode: lastReason,
+    metadata: lastMetadata,
+  };
+}
+
+async function extractCreativeTextFromImage(
+  env: CreativeTextEnv,
+  image: CreativeImagePayload,
+  ad: KnownAdText,
+): Promise<CreativeOcrResult> {
+  if (!env.AI) {
+    return {
+      text: null,
+      imageUrl: image.imageUrl,
+      reasonCode: "ocr_binding_missing",
+      metadata: buildOcrMetadata(image, 0),
+    };
+  }
+
+  let lastReason: CreativeUnreadableReasonCode = "ocr_provider_failed";
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
       const response = await env.AI.run(CREATIVE_TEXT_OCR_MODEL, {
         image: [...image.bytes],
         prompt: OCR_PROMPT,
         max_tokens: 256,
       });
-      const text = selectCreativeTextCandidates(
-        splitTextLines(readOcrDescription(response)),
-        ad,
-      );
+      const rawDescription = readOcrDescription(response);
+      if (!rawDescription.trim()) {
+        lastReason = "ocr_empty_result";
+        if (attempt === 1) continue;
+        return {
+          text: null,
+          imageUrl: image.imageUrl,
+          reasonCode: lastReason,
+          metadata: buildOcrMetadata(image, attempt),
+        };
+      }
 
+      const text = selectCreativeTextCandidates(splitTextLines(rawDescription), ad);
       if (!text) {
-        continue;
+        return {
+          text: null,
+          imageUrl: image.imageUrl,
+          reasonCode: "ocr_text_filtered",
+          metadata: buildOcrMetadata(image, attempt),
+        };
       }
 
       return {
         text,
-        metadata: {
-          imageUrl: image.imageUrl,
-          imageFetchStatus: image.imageFetchStatus,
-          imageContentType: image.contentType,
-          ocrProvider: "workers_ai",
-          ocrModel: CREATIVE_TEXT_OCR_MODEL,
-        },
+        imageUrl: image.imageUrl,
+        reasonCode: null,
+        metadata: buildOcrMetadata(image, attempt),
       };
-    } catch {
-      continue;
+    } catch (error) {
+      lastReason = "ocr_provider_failed";
+      logCreativeCaptureWarning(lastReason, error, attempt);
+      if (attempt === 1 && isTransientOcrError(error)) continue;
+      return {
+        text: null,
+        imageUrl: image.imageUrl,
+        reasonCode: lastReason,
+        metadata: buildOcrMetadata(image, attempt),
+      };
     }
   }
 
-  return null;
+  return {
+    text: null,
+    imageUrl: image.imageUrl,
+    reasonCode: lastReason,
+    metadata: buildOcrMetadata(image, 2),
+  };
+}
+
+async function readDirectCreativeImage(
+  response: Response,
+  imageUrl: string,
+  contentType: string,
+): Promise<CreativeImagePayload | null> {
+  if (contentLengthExceeds(response.headers, MAX_CREATIVE_IMAGE_BYTES)) {
+    releaseFetchTimeout(response);
+    return null;
+  }
+  const bytes = await readResponseBytesWithinLimit(response, MAX_CREATIVE_IMAGE_BYTES);
+  if (!bytes?.byteLength) return null;
+  return {
+    bytes,
+    contentType,
+    imageUrl,
+    imageFetchStatus: response.status,
+  };
+}
+
+function mergeCreativeImageCandidates(
+  preferred: string | null | undefined,
+  discovered: string[],
+) {
+  const candidates = preferred?.trim() ? [preferred.trim(), ...discovered] : discovered;
+  return [...new Set(candidates)];
+}
+
+function buildOcrCaptureResult(
+  ocr: CreativeOcrResult,
+  input: {
+    capturedAt: string;
+    extractionPath: "direct_image_ocr" | "snapshot_image_ocr";
+    fallbackImageUrl: string | null;
+    fetchStatus: number;
+  },
+): CreativeTextCaptureResult {
+  return {
+    text: ocr.text,
+    captureMethod: "ad_snapshot_fetch",
+    extractorVersion: CREATIVE_TEXT_EXTRACTOR_VERSION,
+    imageUrl: ocr.imageUrl ?? input.fallbackImageUrl,
+    metadata: {
+      capturedAt: input.capturedAt,
+      fetchStatus: input.fetchStatus,
+      extractionPath: input.extractionPath,
+      extractionStatus: ocr.text ? "readable" : "unreadable",
+      ...(ocr.reasonCode ? { unreadableReasonCode: ocr.reasonCode } : {}),
+      ...ocr.metadata,
+    },
+  };
+}
+
+function buildUnreadableCreativeResult(
+  reasonCode: CreativeUnreadableReasonCode,
+  imageUrl: string | null,
+  capturedAt: string,
+  metadata: Record<string, unknown> = {},
+): CreativeTextCaptureResult {
+  return {
+    text: null,
+    captureMethod: "ad_snapshot_fetch",
+    extractorVersion: CREATIVE_TEXT_EXTRACTOR_VERSION,
+    imageUrl,
+    metadata: {
+      capturedAt,
+      extractionStatus: "unreadable",
+      unreadableReasonCode: reasonCode,
+      ...metadata,
+    },
+  };
+}
+
+function buildOcrMetadata(image: CreativeImagePayload, ocrAttemptCount: number) {
+  return {
+    imageUrl: image.imageUrl,
+    imageFetchStatus: image.imageFetchStatus,
+    imageContentType: image.contentType,
+    ocrProvider: "workers_ai",
+    ocrModel: CREATIVE_TEXT_OCR_MODEL,
+    ocrAttemptCount,
+  };
+}
+
+function isTransientOcrError(error: unknown) {
+  const status =
+    error && typeof error === "object" && "status" in error
+      ? Number(error.status)
+      : Number.NaN;
+  if (status === 408 || status === 429 || status >= 500) return true;
+  const message = error instanceof Error ? error.message : String(error);
+  return /\b(?:3007|3008|3036|3040)\b|timeout|timed out|capacity|rate.?limit|temporar/i.test(
+    message,
+  );
+}
+
+function logCreativeCaptureWarning(
+  reasonCode: CreativeUnreadableReasonCode,
+  error: unknown,
+  attempt?: number,
+) {
+  const status =
+    error && typeof error === "object" && "status" in error
+      ? Number(error.status)
+      : null;
+  console.warn(
+    JSON.stringify({
+      event: "creative_text_capture_warning",
+      reasonCode,
+      ocrModel: reasonCode.startsWith("ocr_") ? CREATIVE_TEXT_OCR_MODEL : undefined,
+      attempt,
+      status: Number.isFinite(status) ? status : undefined,
+      errorName: error instanceof Error ? error.name : "UnknownError",
+    }),
+  );
 }
 
 function extractCreativeImageCandidates(html: string, snapshotUrl: string) {
@@ -451,8 +726,8 @@ function scoreCandidate(value: string) {
   return score;
 }
 
-function normalizeLine(value: string) {
-  return decodeHtml(value).replace(/\s+/g, " ").trim();
+function normalizeLine(value: string | null | undefined) {
+  return decodeHtml(value ?? "").replace(/\s+/g, " ").trim();
 }
 
 function stripTags(value: string) {

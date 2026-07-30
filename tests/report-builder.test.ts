@@ -12,6 +12,7 @@ import type {
   AdRecord,
   CollectionItemRecord,
   CollectionRecord,
+  ProofCaptureRecord,
   WatchEventRecord,
   WatchlistRecord,
 } from "~/lib/types";
@@ -253,6 +254,109 @@ describe("buildWatchlistReport", () => {
       },
       creativeText: "60 Hours Playback\nOnly ₹999",
 			translatedText: null,
+    });
+  });
+
+  it("hydrates an unlinked event from its stored proof capture instead of emitting an empty plate", () => {
+    const event = {
+      ...watchEvent,
+      adId: null,
+      metadata: { advertiser: "boAt", sourceStatus: "proof_backed" },
+    };
+    const proof: ProofCaptureRecord = {
+      id: "proof-1",
+      proofTargetId: "target-1",
+      status: "succeeded",
+      skipReason: null,
+      failureCode: null,
+      failureReason: null,
+      screenshotArtifactKey: null,
+      htmlArtifactKey: "landing-pages/proof.html",
+      extractedFields: {
+        rawHeadline: "Rockerz launch offer",
+        ctaText: "Shop now",
+        priceText: "₹999",
+        formPresent: false,
+        canonicalUrl: "https://boat.example.com/rockerz",
+      },
+      fieldConfidence: {},
+      extractionWarnings: [],
+      captureMetadata: { captureMethod: "browser_render" },
+      renderMode: "mobile",
+      deviceProfile: "mobile_default",
+      extractorVersion: "lp-signals-v1",
+      idempotencyKey: "proof-1",
+      attemptedAt: "2026-03-31T00:00:00.000Z",
+      succeededAt: "2026-03-31T00:00:01.000Z",
+      createdAt: "2026-03-31T00:00:00.000Z",
+      updatedAt: "2026-03-31T00:00:01.000Z",
+    };
+
+    const report = buildWatchlistReport({
+      watchlist,
+      events: [event],
+      adsById: new Map(),
+      proofCapturesByEventId: new Map([[event.id, proof]]),
+      generatedAt: "2026-04-01T00:00:00.000Z",
+    });
+
+    expect(report.rows[0]).toMatchObject({
+      advertiser: "boAt",
+      captureReasonCode: null,
+      event: {
+        sourceUrl: "https://boat.example.com/rockerz",
+      },
+      landingPage: {
+        url: "https://boat.example.com/rockerz",
+        headline: "Rockerz launch offer",
+        captureLabel: "Checked in browser",
+        capturedAt: "2026-03-31T00:00:01.000Z",
+        signals: [
+          { label: "CTA", value: "Shop now" },
+          { label: "Price", value: "₹999" },
+          { label: "Form present", value: "No" },
+        ],
+      },
+    });
+  });
+
+  it("does not present a failed proof attempt as a capture timestamp", () => {
+    const proof: ProofCaptureRecord = {
+      id: "proof-failed",
+      proofTargetId: "target-1",
+      status: "failed",
+      skipReason: null,
+      failureCode: "landing_blocked",
+      failureReason: "Landing page was blocked.",
+      screenshotArtifactKey: null,
+      htmlArtifactKey: null,
+      extractedFields: {},
+      fieldConfidence: {},
+      extractionWarnings: [],
+      captureMetadata: { unreadableReasonCode: "landing_blocked" },
+      renderMode: "mobile",
+      deviceProfile: "mobile_default",
+      extractorVersion: "lp-signals-v2",
+      idempotencyKey: "proof-failed",
+      attemptedAt: "2026-04-01T01:00:00.000Z",
+      succeededAt: null,
+      createdAt: "2026-04-01T01:00:00.000Z",
+      updatedAt: "2026-04-01T01:00:00.000Z",
+    };
+
+    const report = buildWatchlistReport({
+      watchlist,
+      events: [watchEvent],
+      adsById: new Map([[baseAd.metaAdId, baseAd]]),
+      proofCapturesByEventId: new Map([[watchEvent.id, proof]]),
+      generatedAt: "2026-04-01T02:00:00.000Z",
+    });
+
+    expect(report.rows[0]).toMatchObject({
+      captureReasonCode: "landing_blocked",
+      landingPage: {
+        capturedAt: baseAd.landingPage?.capturedAt,
+      },
     });
   });
 

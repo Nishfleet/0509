@@ -208,14 +208,21 @@ export async function captureBrowserRunSnapshot(
     if (utf8ByteLength(html) > MAX_RENDERED_HTML_BYTES) {
       return null;
     }
-    const screenshot = await page.screenshot({
-      type: "jpeg",
-      quality: 85,
-      fullPage: false,
-    });
     const canonicalUrl = (await resolvePublicHttpUrl(page.url() || targetUrl))?.toString();
     if (!canonicalUrl) {
       return null;
+    }
+    let screenshot: Uint8Array | ArrayBuffer | Buffer | null = null;
+    const captureWarningCodes: string[] = [];
+    try {
+      screenshot = await page.screenshot({
+        type: "jpeg",
+        quality: 85,
+        fullPage: false,
+      });
+    } catch (error) {
+      captureWarningCodes.push("screenshot_capture_failed");
+      logRenderedCaptureWarning("screenshot_capture_failed", error);
     }
 
     return await buildBrowserRenderedSnapshot(env, {
@@ -225,8 +232,10 @@ export async function captureBrowserRunSnapshot(
       screenshot,
       provider: "cloudflare_browser_run",
       persistArtifacts: options.persistArtifacts,
+      captureWarningCodes,
     });
-  } catch {
+  } catch (error) {
+    logRenderedCaptureWarning("browser_render_failed", error);
     return null;
   } finally {
     await browser?.close().catch(() => undefined);
@@ -352,24 +361,33 @@ export async function captureBrowserlessProofSnapshot(
     if (
       !response.ok ||
       !html ||
-      !screenshotBase64 ||
       utf8ByteLength(html) > MAX_RENDERED_HTML_BYTES ||
-      base64DecodedLengthExceeds(screenshotBase64, MAX_RENDERED_SCREENSHOT_BYTES) ||
       !canonicalUrl ||
       publicDocumentUrls.some((requestUrl) => !requestUrl)
     ) {
       return null;
+    }
+    const captureWarningCodes: string[] = [];
+    let screenshot: Uint8Array | null = null;
+    if (!screenshotBase64) {
+      captureWarningCodes.push("screenshot_capture_failed");
+    } else if (base64DecodedLengthExceeds(screenshotBase64, MAX_RENDERED_SCREENSHOT_BYTES)) {
+      captureWarningCodes.push("screenshot_too_large");
+    } else {
+      screenshot = decodeBase64ToUint8Array(screenshotBase64);
     }
 
     return await buildBrowserRenderedSnapshot(env, {
       url: targetUrl,
       canonicalUrl,
       html,
-      screenshot: decodeBase64ToUint8Array(screenshotBase64),
+      screenshot,
       provider: "browserless_bql",
       persistArtifacts: options.persistArtifacts,
+      captureWarningCodes,
     });
-  } catch {
+  } catch (error) {
+    logRenderedCaptureWarning("browserless_render_failed", error);
     return null;
   }
 }
@@ -473,7 +491,7 @@ export async function captureBrowserRunQuickActionScrape(
   };
 }
 
-function buildBrowserRenderedSnapshot(
+async function buildBrowserRenderedSnapshot(
   env: AppEnv,
   input: {
     url: string;
@@ -481,30 +499,36 @@ function buildBrowserRenderedSnapshot(
     html: string;
     provider: string;
     persistArtifacts?: boolean;
-    screenshot: Uint8Array | ArrayBuffer | Buffer;
+    screenshot: Uint8Array | ArrayBuffer | Buffer | null;
+    captureWarningCodes?: string[];
   },
 ): Promise<LandingPageSnapshotData | null> {
   const html = input.html;
-  const screenshotBytes = toUint8Array(input.screenshot);
+  const screenshotBytes = input.screenshot ? toUint8Array(input.screenshot) : null;
   if (
     utf8ByteLength(html) > MAX_RENDERED_HTML_BYTES ||
-    screenshotBytes.byteLength > MAX_RENDERED_SCREENSHOT_BYTES
+    (screenshotBytes?.byteLength ?? 0) > MAX_RENDERED_SCREENSHOT_BYTES
   ) {
-    return Promise.resolve(null);
+    return null;
   }
 
   const signals = extractLandingPageSignals(html);
   const headline = resolveHeadline(html);
   const normalized = normalizeHeadline(headline);
 
-  return persistBrowserArtifacts(
+  const persisted = await persistBrowserArtifacts(
     env,
     input.canonicalUrl,
     html,
     screenshotBytes,
     input.persistArtifacts !== false,
-  ).then(
-    ({ htmlArtifactKey, screenshotArtifactKey }) => ({
+  );
+  const captureWarningCodes = [
+    ...(input.captureWarningCodes ?? []),
+    ...persisted.captureWarningCodes,
+  ];
+
+  return {
       rawUrl: input.url,
       canonicalUrl: input.canonicalUrl,
       rawHeadline: normalized.raw,
@@ -515,10 +539,18 @@ function buildBrowserRenderedSnapshot(
       formPresent: signals.formPresent,
       captureMethod: "browser_render",
       capturedAt: new Date().toISOString(),
-      artifactKey: htmlArtifactKey,
+      artifactKey: persisted.htmlArtifactKey,
       metadata: {
-        htmlArtifactKey,
-        screenshotArtifactKey,
+        captureMethod: "browser_render",
+        htmlArtifactKey: persisted.htmlArtifactKey,
+        screenshotArtifactKey: persisted.screenshotArtifactKey,
+        captureWarningCodes,
+        ...(headline === "Landing page" &&
+        !signals.ctaText &&
+        !signals.priceText &&
+        !signals.formPresent
+          ? { unreadableReasonCode: "landing_signals_not_detected" }
+          : {}),
         renderMode: MOBILE_RENDER_MODE,
         deviceProfile: MOBILE_DEVICE_PROFILE,
         renderProvider: input.provider,
@@ -536,8 +568,7 @@ function buildBrowserRenderedSnapshot(
           formPresent: typeof signals.formPresent === "boolean" ? 0.9 : 0.25,
         },
       },
-    }),
-  );
+    };
 }
 
 function buildBrowserlessBqlEndpoint(env: AppEnv) {
@@ -561,13 +592,14 @@ async function persistBrowserArtifacts(
   env: AppEnv,
   canonicalUrl: string,
   html: string,
-  screenshot: Uint8Array,
+  screenshot: Uint8Array | null,
   persistArtifacts: boolean,
 ) {
   if (!persistArtifacts || !env.LANDING_PAGE_ARTIFACTS) {
     return {
       htmlArtifactKey: null,
       screenshotArtifactKey: null,
+      captureWarningCodes: [] as string[],
     };
   }
 
@@ -577,16 +609,27 @@ async function persistBrowserArtifacts(
   const htmlArtifactKey = `${baseKey}.html`;
   const screenshotArtifactKey = `${baseKey}.jpeg`;
 
-  await env.LANDING_PAGE_ARTIFACTS.put(screenshotArtifactKey, toUint8Array(screenshot), {
-    httpMetadata: {
-      contentType: "image/jpeg",
-    },
-    customMetadata: {
-      sourceUrl: canonicalUrl,
-      renderMode: MOBILE_RENDER_MODE,
-      deviceProfile: MOBILE_DEVICE_PROFILE,
-    },
-  });
+  let persistedScreenshotArtifactKey: string | null = null;
+  let persistedHtmlArtifactKey: string | null = null;
+  const captureWarningCodes: string[] = [];
+  if (screenshot) {
+    try {
+      await env.LANDING_PAGE_ARTIFACTS.put(screenshotArtifactKey, screenshot, {
+        httpMetadata: {
+          contentType: "image/jpeg",
+        },
+        customMetadata: {
+          sourceUrl: canonicalUrl,
+          renderMode: MOBILE_RENDER_MODE,
+          deviceProfile: MOBILE_DEVICE_PROFILE,
+        },
+      });
+      persistedScreenshotArtifactKey = screenshotArtifactKey;
+    } catch (error) {
+      captureWarningCodes.push("screenshot_persistence_failed");
+      logRenderedCaptureWarning("screenshot_persistence_failed", error);
+    }
+  }
   try {
     await env.LANDING_PAGE_ARTIFACTS.put(htmlArtifactKey, html, {
       httpMetadata: {
@@ -597,15 +640,27 @@ async function persistBrowserArtifacts(
         renderMode: MOBILE_RENDER_MODE,
       },
     });
+    persistedHtmlArtifactKey = htmlArtifactKey;
   } catch (error) {
-    await env.LANDING_PAGE_ARTIFACTS.delete(screenshotArtifactKey).catch(() => undefined);
-    throw error;
+    captureWarningCodes.push("html_persistence_failed");
+    logRenderedCaptureWarning("html_persistence_failed", error);
   }
 
   return {
-    htmlArtifactKey,
-    screenshotArtifactKey,
+    htmlArtifactKey: persistedHtmlArtifactKey,
+    screenshotArtifactKey: persistedScreenshotArtifactKey,
+    captureWarningCodes,
   };
+}
+
+function logRenderedCaptureWarning(reasonCode: string, error: unknown) {
+  console.warn(
+    JSON.stringify({
+      event: "landing_render_capture_warning",
+      reasonCode,
+      errorName: error instanceof Error ? error.name : "UnknownError",
+    }),
+  );
 }
 
 function resolveHeadline(html: string) {

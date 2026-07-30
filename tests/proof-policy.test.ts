@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildCanonicalPageIdentity,
   buildProofTargetIdentity,
+  countRecentProofFailures,
   evaluateProofPolicy,
 } from "~/lib/proof-policy.server";
 
@@ -23,6 +24,17 @@ describe("proof policy", () => {
         canonicalPageIdentity: "example.com/glow?plan=pro",
       }),
     ).toBe("watch-1:meta-boat-1:example.com/glow?plan=pro");
+  });
+
+  it("lets old landing failures age out of the per-target retry cooldown", () => {
+    const now = "2026-04-18T12:00:00.000Z";
+    const failures = [
+      { status: "failed" as const, attemptedAt: "2026-04-18T11:00:00.000Z" },
+      { status: "failed" as const, attemptedAt: "2026-04-17T11:00:00.000Z" },
+      { status: "succeeded" as const, attemptedAt: "2026-04-18T11:30:00.000Z" },
+    ];
+
+    expect(countRecentProofFailures(failures, now)).toBe(1);
   });
 
   it("forces proof for landing-page URL changes even when normal budgets are exhausted", () => {
