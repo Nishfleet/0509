@@ -45,6 +45,10 @@ const aria = Buffer.from('- main "0509":\n  - heading "Proof"\n', "utf8");
 const remoteRestoreEvidencePath =
   "test-results/d1-remote-restore-evidence.json";
 const wranglerOutputPath = "test-results/wrangler-deploy-output.jsonl";
+const migrationLedgerNames = ["0001_first.sql", "0002_second.sql"];
+const migrationLedgerNamesHash = createHash("sha256")
+  .update(JSON.stringify(migrationLedgerNames))
+  .digest("hex");
 
 afterEach(() => {
   while (roots.length > 0)
@@ -153,7 +157,7 @@ function passingEvidence() {
 
 function passingRemoteRestoreEvidence() {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     candidateFingerprint: fingerprint,
     generatedAt: "2026-07-16T10:00:00.000Z",
     databaseIdentitySha256: "1".repeat(64),
@@ -163,11 +167,14 @@ function passingRemoteRestoreEvidence() {
     transformedSqlSha256: "4".repeat(64),
     rowCountDigestSha256: "5".repeat(64),
     migrationLedgerSha256: "6".repeat(64),
+    migrationLedgerBaselineSha256: "9".repeat(64),
+    migrationLedgerNames,
+    migrationLedgerNamesSha256: migrationLedgerNamesHash,
     schemaDigestSha256: "7".repeat(64),
     contentDigestSha256: "8".repeat(64),
     wranglerWorktreeSha256: wranglerHash,
-    latestMigration: "0067_workspace_membership_invariants.sql",
-    migrationCount: 67,
+    latestMigration: "0002_second.sql",
+    migrationCount: 2,
     planRowCount: 5,
     dodoLinkedPlanRowCount: 5,
     productionSearchRolloutMode: "shadow",
@@ -837,6 +844,15 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     });
     expect(
       validateRemoteRestoreEvidence(
+        { ...passingRemoteRestoreEvidence(), schemaVersion: 1 },
+        expected,
+      ),
+    ).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining(["remote_restore_schema"]),
+    });
+    expect(
+      validateRemoteRestoreEvidence(
         {
           ...passingRemoteRestoreEvidence(),
           generatedAt: "2026-07-14T10:00:00.000Z",
@@ -886,6 +902,46 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     ).toEqual({ ok: true, issues: [] });
   });
 
+  it("rejects a reordered same-count ledger even when its self-hash is valid", () => {
+    const validateRemoteRestoreEvidence = (
+      deployPlanModule as Record<string, unknown>
+    ).validateRemoteRestoreEvidence;
+    expect(typeof validateRemoteRestoreEvidence).toBe("function");
+    if (typeof validateRemoteRestoreEvidence !== "function") return;
+    const evidence = passingRemoteRestoreEvidence();
+    const reorderedNames = [...migrationLedgerNames].reverse();
+    const reorderedEvidence = {
+      ...evidence,
+      migrationLedgerNames: reorderedNames,
+      migrationLedgerNamesSha256: createHash("sha256")
+        .update(JSON.stringify(reorderedNames))
+        .digest("hex"),
+    };
+    expect(
+      validateRemoteRestoreEvidence(reorderedEvidence, {
+        candidateFingerprint: fingerprint,
+        wranglerWorktreeSha256: wranglerHash,
+        allowedMigrationStates: [
+          {
+            latestMigration: evidence.latestMigration,
+            migrationCount: evidence.migrationCount,
+            migrationLedgerNames,
+            migrationLedgerNamesSha256: migrationLedgerNamesHash,
+            migrationLedgerBaselineSha256:
+              evidence.migrationLedgerBaselineSha256,
+          },
+        ],
+        now: new Date("2026-07-16T12:00:00.000Z"),
+      }),
+    ).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining([
+        "remote_restore_migration_mismatch",
+        "remote_restore_migration_ledger_order",
+      ]),
+    });
+  });
+
   it("requires fresh exact restore evidence for migration deploys but permits a seven-day drill for code-only deploys", () => {
     const validateRemoteRestoreEvidence = (
       deployPlanModule as Record<string, unknown>
@@ -902,8 +958,8 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     const expected = {
       candidateFingerprint: fingerprint,
       wranglerWorktreeSha256: wranglerHash,
-      latestMigration: "0067_workspace_membership_invariants.sql",
-      migrationCount: 67,
+      latestMigration: "0002_second.sql",
+      migrationCount: 2,
       migrationBearing: false,
       now: new Date("2026-07-16T12:00:00.000Z"),
     };
@@ -1055,6 +1111,9 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     ).toBe(false);
     expect(hasRestoreCriticalChanges("app/routes/search.tsx\n")).toBe(false);
     expect(hasRestoreCriticalChanges("wrangler.jsonc\n")).toBe(true);
+    expect(
+      hasRestoreCriticalChanges("scripts/d1-migration-sync-check.lib.mjs\n"),
+    ).toBe(true);
     expect(
       hasRestoreCriticalChanges(
         "scripts/d1-remote-restore-evidence-core.mjs\n",
