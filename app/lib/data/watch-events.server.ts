@@ -1,9 +1,12 @@
 import {
-  execute as run,
+  ensureDb,
   queryAll as many,
   queryIn,
-  queryOne as one,
 } from "~/lib/data/d1.server";
+import {
+  bindD1Named,
+  type NamedD1Binding,
+} from "~/lib/d1-bind.server";
 import {
   boolToInt,
   createId,
@@ -237,29 +240,33 @@ async function getExistingWatchEvent(
     summary: string;
   },
 ) {
-  const row = await one<{ id: string }>(
-    env,
-    `
-      SELECT id
-      FROM watch_event
-      WHERE watchlist_id = ?
-        AND run_id = ?
-        AND event_type = ?
-        AND ad_id IS ?
-        AND proof_capture_id IS ?
-        AND title = ?
-        AND summary = ?
-      ORDER BY created_at ASC
-      LIMIT 1
-    `,
-    input.watchlistId,
-    input.runId,
-    input.eventType,
-    input.adId,
-    input.proofCaptureId,
-    input.title,
-    input.summary,
-  );
+  const result = await bindD1Named(
+    ensureDb(env).prepare(
+      `
+        SELECT id
+        FROM watch_event
+        WHERE watchlist_id = ?
+          AND run_id = ?
+          AND event_type = ?
+          AND ad_id IS ?
+          AND proof_capture_id IS ?
+          AND title = ?
+          AND summary = ?
+        ORDER BY created_at ASC
+        LIMIT 1
+      `,
+    ),
+    [
+      ["watchEvent.watchlistId", input.watchlistId],
+      ["watchEvent.runId", input.runId],
+      ["watchEvent.eventType", input.eventType],
+      ["watchEvent.adId", input.adId, "null"],
+      ["watchEvent.proofCaptureId", input.proofCaptureId, "null"],
+      ["watchEvent.title", input.title],
+      ["watchEvent.summary", input.summary],
+    ],
+  ).all<{ id: string }>();
+  const row = result.results?.[0] ?? null;
 
   return row?.id ?? null;
 }
@@ -310,60 +317,70 @@ export async function createWatchEvent(
   const status = input.status ?? "confirmed";
   const proofCaptureId = input.proofCaptureId ?? null;
   try {
-    const result = await run(
-      env,
-      `
-        INSERT INTO watch_event (
-          id,
-          watchlist_id,
-          run_id,
-          event_type,
-          status,
-          importance_score,
-          ad_id,
-          baseline_from_run_id,
-          candidate_id,
-          proof_capture_id,
-          title,
-          summary,
-          metadata_json,
-          confirmed_at,
-          suppressed_at,
-          invalidated_at,
-          last_evaluated_at,
-          created_at
-        )
-        ${proofCaptureId
-          ? `SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-             WHERE NOT EXISTS (
-               SELECT 1
-               FROM proof_capture
-               WHERE id = ?
-                 AND json_valid(capture_metadata_json)
-                 AND json_type(capture_metadata_json, '${PROOF_CAPTURE_CLEANUP_CLAIM_PATH}') IS NOT NULL
-             )`
-          : "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"}
-      `,
-      id,
-      input.watchlistId,
-      input.runId,
-      input.eventType,
-      status,
-      input.importanceScore ?? 0,
-      input.adId,
-      input.baselineFromRunId,
-      input.candidateId ?? null,
-      proofCaptureId,
-      input.title,
-      input.summary,
-      jsonValue(input.metadata),
-      input.confirmedAt ?? (status === "confirmed" ? timestamp : null),
-      input.suppressedAt ?? null,
-      input.invalidatedAt ?? null,
-      input.lastEvaluatedAt ?? timestamp,
-      timestamp,
-      ...(proofCaptureId ? [proofCaptureId] : []),
-    );
+    const result = await bindD1Named(
+      ensureDb(env).prepare(
+        `
+          INSERT INTO watch_event (
+            id,
+            watchlist_id,
+            run_id,
+            event_type,
+            status,
+            importance_score,
+            ad_id,
+            baseline_from_run_id,
+            candidate_id,
+            proof_capture_id,
+            title,
+            summary,
+            metadata_json,
+            confirmed_at,
+            suppressed_at,
+            invalidated_at,
+            last_evaluated_at,
+            created_at
+          )
+          ${proofCaptureId
+            ? `SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+               WHERE NOT EXISTS (
+                 SELECT 1
+                 FROM proof_capture
+                 WHERE id = ?
+                   AND json_valid(capture_metadata_json)
+                   AND json_type(capture_metadata_json, '${PROOF_CAPTURE_CLEANUP_CLAIM_PATH}') IS NOT NULL
+               )`
+            : "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"}
+        `,
+      ),
+      [
+        ["watchEvent.id", id],
+        ["watchEvent.watchlistId", input.watchlistId],
+        ["watchEvent.runId", input.runId],
+        ["watchEvent.eventType", input.eventType],
+        ["watchEvent.status", status],
+        ["watchEvent.importanceScore", input.importanceScore ?? 0],
+        ["watchEvent.adId", input.adId, "null"],
+        ["watchEvent.baselineFromRunId", input.baselineFromRunId, "null"],
+        ["watchEvent.candidateId", input.candidateId, "null"],
+        ["watchEvent.proofCaptureId", proofCaptureId],
+        ["watchEvent.title", input.title],
+        ["watchEvent.summary", input.summary],
+        ["watchEvent.metadata", jsonValue(input.metadata)],
+        [
+          "watchEvent.confirmedAt",
+          input.confirmedAt ?? (status === "confirmed" ? timestamp : null),
+        ],
+        ["watchEvent.suppressedAt", input.suppressedAt, "null"],
+        ["watchEvent.invalidatedAt", input.invalidatedAt, "null"],
+        ["watchEvent.lastEvaluatedAt", input.lastEvaluatedAt ?? timestamp],
+        ["watchEvent.createdAt", timestamp],
+        ...(proofCaptureId
+          ? ([
+              ["watchEvent.proofCaptureGuardId", proofCaptureId],
+            ] satisfies NamedD1Binding[])
+          : []),
+      ],
+    ).run();
     if (proofCaptureId && Number(result.meta?.changes ?? 0) !== 1) {
       throw new Error(PROOF_CAPTURE_CLEANUP_CLAIMED_ERROR);
     }
@@ -401,29 +418,33 @@ async function getExistingEventCandidate(
     summary: string;
   },
 ) {
-  const row = await one<{ id: string }>(
-    env,
-    `
-      SELECT id
-      FROM event_candidate
-      WHERE watchlist_id = ?
-        AND run_id = ?
-        AND event_type = ?
-        AND ad_id IS ?
-        AND proof_target_id IS ?
-        AND title = ?
-        AND summary = ?
-      ORDER BY created_at ASC
-      LIMIT 1
-    `,
-    input.watchlistId,
-    input.runId,
-    input.eventType,
-    input.adId,
-    input.proofTargetId,
-    input.title,
-    input.summary,
-  );
+  const result = await bindD1Named(
+    ensureDb(env).prepare(
+      `
+        SELECT id
+        FROM event_candidate
+        WHERE watchlist_id = ?
+          AND run_id = ?
+          AND event_type = ?
+          AND ad_id IS ?
+          AND proof_target_id IS ?
+          AND title = ?
+          AND summary = ?
+        ORDER BY created_at ASC
+        LIMIT 1
+      `,
+    ),
+    [
+      ["eventCandidate.watchlistId", input.watchlistId],
+      ["eventCandidate.runId", input.runId],
+      ["eventCandidate.eventType", input.eventType],
+      ["eventCandidate.adId", input.adId, "null"],
+      ["eventCandidate.proofTargetId", input.proofTargetId, "null"],
+      ["eventCandidate.title", input.title],
+      ["eventCandidate.summary", input.summary],
+    ],
+  ).all<{ id: string }>();
+  const row = result.results?.[0] ?? null;
 
   return row?.id ?? null;
 }
@@ -471,50 +492,56 @@ export async function createEventCandidate(
   ]);
   const timestamp = nowIso();
   try {
-    await run(
-      env,
-      `
-        INSERT INTO event_candidate (
-          id,
-          watchlist_id,
-          run_id,
-          event_type,
-          status,
-          importance_score,
-          ad_id,
-          proof_target_id,
-          title,
-          summary,
-          metadata_json,
-          proof_required,
-          skip_reason,
-          dedupe_reason,
-          detected_at,
-          last_evaluated_at,
-          created_at,
-          updated_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      id,
-      input.watchlistId,
-      input.runId,
-      input.eventType,
-      input.status ?? "detected",
-      input.importanceScore ?? 0,
-      input.adId,
-      input.proofTargetId ?? null,
-      input.title,
-      input.summary,
-      jsonValue(input.metadata ?? {}),
-      boolToInt(input.proofRequired ?? false),
-      input.skipReason ?? null,
-      input.dedupeReason ?? null,
-      input.detectedAt ?? timestamp,
-      input.lastEvaluatedAt ?? null,
-      timestamp,
-      timestamp,
-    );
+    await bindD1Named(
+      ensureDb(env).prepare(
+        `
+          INSERT INTO event_candidate (
+            id,
+            watchlist_id,
+            run_id,
+            event_type,
+            status,
+            importance_score,
+            ad_id,
+            proof_target_id,
+            title,
+            summary,
+            metadata_json,
+            proof_required,
+            skip_reason,
+            dedupe_reason,
+            detected_at,
+            last_evaluated_at,
+            created_at,
+            updated_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+      ),
+      [
+        ["eventCandidate.id", id],
+        ["eventCandidate.watchlistId", input.watchlistId],
+        ["eventCandidate.runId", input.runId],
+        ["eventCandidate.eventType", input.eventType],
+        ["eventCandidate.status", input.status ?? "detected"],
+        ["eventCandidate.importanceScore", input.importanceScore ?? 0],
+        ["eventCandidate.adId", input.adId, "null"],
+        ["eventCandidate.proofTargetId", input.proofTargetId, "null"],
+        ["eventCandidate.title", input.title],
+        ["eventCandidate.summary", input.summary],
+        ["eventCandidate.metadata", jsonValue(input.metadata ?? {})],
+        [
+          "eventCandidate.proofRequired",
+          boolToInt(input.proofRequired ?? false),
+        ],
+        ["eventCandidate.skipReason", input.skipReason, "null"],
+        ["eventCandidate.dedupeReason", input.dedupeReason, "null"],
+        ["eventCandidate.detectedAt", input.detectedAt ?? timestamp],
+        ["eventCandidate.lastEvaluatedAt", input.lastEvaluatedAt, "null"],
+        ["eventCandidate.createdAt", timestamp],
+        ["eventCandidate.updatedAt", timestamp],
+      ],
+    ).run();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (!isUniqueConstraintError(message)) {
