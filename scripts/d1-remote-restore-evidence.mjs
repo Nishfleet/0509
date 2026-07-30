@@ -26,6 +26,10 @@ import {
   DEFAULT_MAX_STATEMENT_BYTES,
   transformD1RestoreSql,
 } from "./d1-restore-transform.mjs";
+import {
+  allowedProductionMigrationLedgers,
+  migrationLedgerState,
+} from "./d1-migration-sync-check.lib.mjs";
 import { validateRemoteRestoreEvidence } from "./deploy-production-plan.mjs";
 import { redactSensitiveOutput } from "./safe-command-output.mjs";
 import {
@@ -845,7 +849,10 @@ async function runAutomation(outputPath) {
             "--command",
             `SELECT
              (SELECT COUNT(*) FROM d1_migrations) AS migration_count,
-             (SELECT COALESCE(MAX(name), '') FROM d1_migrations) AS latest_migration,
+             (SELECT COALESCE(
+                (SELECT name FROM d1_migrations ORDER BY id DESC LIMIT 1),
+                ''
+              )) AS latest_migration,
              (SELECT COUNT(*) FROM user_plan) AS plan_row_count,
              (SELECT COUNT(*) FROM user_plan
                WHERE dodo_payment_id IS NOT NULL
@@ -940,8 +947,9 @@ async function runAutomation(outputPath) {
     const verdict = validateRemoteRestoreEvidence(evidence, {
       candidateFingerprint: candidate.fingerprint,
       wranglerWorktreeSha256: candidate.wrangler.worktreeSha256,
-      latestMigration,
-      migrationCount,
+      allowedMigrationStates: allowedProductionMigrationLedgers(
+        migrations,
+      ).map((ledger) => migrationLedgerState(ledger)),
       migrationBearing: true,
     });
     if (!verdict.ok) {
@@ -959,6 +967,7 @@ async function runAutomation(outputPath) {
         latestMigration,
         rowCountDigestSha256: evidence.rowCountDigestSha256,
         migrationLedgerSha256: evidence.migrationLedgerSha256,
+        migrationLedgerNamesSha256: evidence.migrationLedgerNamesSha256,
       })}\n`,
     );
   } catch (error) {

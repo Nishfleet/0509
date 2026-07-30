@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 const MANIFEST_PATH_PATTERN =
@@ -258,7 +259,15 @@ export function buildProductionDeployPlan({
  *   wranglerWorktreeSha256: string,
  *   latestMigration?: string,
  *   migrationCount?: number,
- *   allowedMigrationStates?: Array<{ latestMigration: string, migrationCount: number }>,
+ *   migrationLedgerNamesSha256?: string,
+ *   migrationLedgerBaselineSha256?: string,
+ *   allowedMigrationStates?: Array<{
+ *     latestMigration: string,
+ *     migrationCount: number,
+ *     migrationLedgerNames: string[],
+ *     migrationLedgerNamesSha256: string,
+ *     migrationLedgerBaselineSha256: string,
+ *   }>,
  *   migrationBearing?: boolean,
  *   restoreCritical?: boolean,
  *   now?: Date,
@@ -294,7 +303,7 @@ export function validateRemoteRestoreEvidence(evidence, expected) {
   ) {
     issues.push("remote_restore_evidence_stale");
   }
-  if (value.schemaVersion !== 1) issues.push("remote_restore_schema");
+  if (value.schemaVersion !== 2) issues.push("remote_restore_schema");
   if (
     !FINGERPRINT_PATTERN.test(
       typeof value.candidateFingerprint === "string"
@@ -327,14 +336,29 @@ export function validateRemoteRestoreEvidence(evidence, expected) {
   if (value.productionSearchRolloutMode !== "shadow")
     issues.push("remote_restore_rollout_mode");
   if (expected.allowedMigrationStates) {
+    const migrationBaselineMatches = expected.allowedMigrationStates.some(
+      (state) =>
+        state?.migrationLedgerBaselineSha256 ===
+        value.migrationLedgerBaselineSha256,
+    );
+    if (!migrationBaselineMatches) {
+      issues.push("remote_restore_migration_baseline_mismatch");
+    }
     const migrationStateMatches = expected.allowedMigrationStates.some(
       (state) =>
         state?.latestMigration === value.latestMigration &&
-        state?.migrationCount === value.migrationCount,
+        state?.migrationCount === value.migrationCount &&
+        state?.migrationLedgerNamesSha256 ===
+          value.migrationLedgerNamesSha256 &&
+        state?.migrationLedgerBaselineSha256 ===
+          value.migrationLedgerBaselineSha256 &&
+        JSON.stringify(state?.migrationLedgerNames) ===
+          JSON.stringify(value.migrationLedgerNames),
     );
     if (!migrationStateMatches) {
       issues.push("remote_restore_migration_mismatch");
       issues.push("remote_restore_migration_count");
+      issues.push("remote_restore_migration_ledger_order");
     }
   } else {
     if (
@@ -347,6 +371,43 @@ export function validateRemoteRestoreEvidence(evidence, expected) {
       value.migrationCount !== expected.migrationCount
     )
       issues.push("remote_restore_migration_count");
+    if (
+      expected.migrationLedgerNamesSha256 &&
+      value.migrationLedgerNamesSha256 !==
+        expected.migrationLedgerNamesSha256
+    ) {
+      issues.push("remote_restore_migration_ledger_order");
+    }
+    if (
+      expected.migrationLedgerBaselineSha256 &&
+      value.migrationLedgerBaselineSha256 !==
+        expected.migrationLedgerBaselineSha256
+    ) {
+      issues.push("remote_restore_migration_baseline_mismatch");
+    }
+  }
+  const migrationLedgerNames = Array.isArray(value.migrationLedgerNames)
+    ? value.migrationLedgerNames
+    : [];
+  const migrationLedgerNamesValid =
+    migrationLedgerNames.length > 0 &&
+    migrationLedgerNames.every(
+      (name) =>
+        typeof name === "string" &&
+        /^\d{4}_[A-Za-z0-9_]+\.sql$/u.test(name),
+    ) &&
+    new Set(migrationLedgerNames).size === migrationLedgerNames.length;
+  const calculatedMigrationLedgerNamesSha256 = migrationLedgerNamesValid
+    ? createHash("sha256")
+        .update(JSON.stringify(migrationLedgerNames))
+        .digest("hex")
+    : "";
+  if (
+    !migrationLedgerNamesValid ||
+    calculatedMigrationLedgerNamesSha256 !==
+      value.migrationLedgerNamesSha256
+  ) {
+    issues.push("remote_restore_migration_ledger_hash");
   }
   for (const field of [
     "databaseIdentitySha256",
@@ -355,6 +416,8 @@ export function validateRemoteRestoreEvidence(evidence, expected) {
     "transformedSqlSha256",
     "rowCountDigestSha256",
     "migrationLedgerSha256",
+    "migrationLedgerBaselineSha256",
+    "migrationLedgerNamesSha256",
     "schemaDigestSha256",
     "contentDigestSha256",
   ]) {
