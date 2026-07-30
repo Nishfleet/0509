@@ -208,9 +208,9 @@ export default function SharesRoute() {
       )}
 
       <p className="f9-bl038-note f9-wk-note">
-        Anyone with a link can open what it points to until it expires or you revoke it. Reviewed
-        Approval-expired report links stay unavailable; reviewing again creates a new link to
-        share. New links expire automatically after 90 days.
+        Anyone with a link can open what it points to until it expires or you revoke it.
+        Approval-expired report links stay unavailable; reviewing again creates a new link to share.
+        New links expire automatically after 90 days.
       </p>
 
       <div className="f9-wk-opline">
