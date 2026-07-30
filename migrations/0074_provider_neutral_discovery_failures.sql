@@ -1,4 +1,4 @@
-PRAGMA foreign_keys = OFF;
+PRAGMA defer_foreign_keys = ON;
 
 CREATE TABLE discovery_fetch_log_provider_failure_new (
   id TEXT PRIMARY KEY NOT NULL,
@@ -107,3 +107,5 @@ FROM discovery_provider_state;
 
 DROP TABLE discovery_provider_state;
 ALTER TABLE discovery_provider_state_provider_failure_new RENAME TO discovery_provider_state;
+
+PRAGMA defer_foreign_keys = OFF;

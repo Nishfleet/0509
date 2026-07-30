@@ -38,8 +38,10 @@ describe("provider-neutral discovery failure migration", () => {
       )
     `).run();
 
+    db.exec("PRAGMA foreign_keys = ON;");
     applyMigration(db, "migrations/0074_provider_neutral_discovery_failures.sql");
 
+    expect(db.prepare("PRAGMA foreign_keys").get()).toEqual({ foreign_keys: 1 });
     expect(
       db.prepare(`
         SELECT failure_class
@@ -90,6 +92,20 @@ describe("provider-neutral discovery failure migration", () => {
         WHERE provider = 'meta_api'
       `).get(),
     ).toEqual({ failure_class: "provider_unavailable" });
+    expect(() =>
+      db.prepare(`
+        UPDATE discovery_fetch_log
+        SET failure_class = 'not_a_failure_class'
+        WHERE id = 'fetch-api'
+      `).run(),
+    ).toThrow();
+    expect(() =>
+      db.prepare(`
+        UPDATE discovery_provider_state
+        SET failure_class = 'not_a_failure_class'
+        WHERE provider = 'meta_api'
+      `).run(),
+    ).toThrow();
 
     const indexNames = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")

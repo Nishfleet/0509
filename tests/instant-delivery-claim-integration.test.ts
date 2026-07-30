@@ -222,6 +222,69 @@ describe("instant delivery durable claim wiring", () => {
     ).toMatchObject({ count: 1, id: "attempt-failed", status: "sent" });
   });
 
+  it("attaches the current target when reclaiming a legacy failed customer attempt", async () => {
+    const harness = createSqliteD1();
+    fixtures.push(harness);
+    createAttemptTable(harness);
+    harness.sqlite.exec(`
+      INSERT INTO delivery_attempt (
+        id, user_id, watchlist_id, delivery_target_id, lane, channel, provider,
+        status, webhook_status, target_value, template_name, idempotency_key,
+        error_message, failed_at, created_at, updated_at
+      ) VALUES (
+        'attempt-legacy-activation', 'user-1', 'watch-1', NULL, 'customer',
+        'email', 'cloudflare_email', 'failed', 'failed', 'owner@example.com',
+        'activation_result', 'activation-result:user-1:watch-1', 'smtp down',
+        '2026-07-14T00:00:00.000Z', '2026-07-14T00:00:00.000Z',
+        '2026-07-14T00:00:00.000Z'
+      );
+    `);
+
+    const {
+      claimInstantDeliveryAttempt,
+      markInstantDeliveryDispatchStarted,
+    } = await import("~/lib/data/delivery-records-attempts.server");
+    const env = { DB: harness.db } as never;
+    const claim = await claimInstantDeliveryAttempt(env, {
+      userId: "user-1",
+      watchlistId: "watch-1",
+      deliveryTargetId: "email-target-1",
+      lane: "customer",
+      channel: "email",
+      provider: "cloudflare_email",
+      targetValue: "owner@example.com",
+      templateName: "activation_result",
+      eventIds: [],
+      payloadSnapshot: {
+        kind: "activation_result",
+        watchlistId: "watch-1",
+        adsFound: 1,
+      },
+      idempotencyKey: "activation-result:user-1:watch-1",
+    });
+
+    expect(claim).toMatchObject({
+      attemptId: "attempt-legacy-activation",
+      reclaimed: true,
+    });
+    expect(
+      harness.sqlite
+        .prepare(`
+          SELECT delivery_target_id
+          FROM delivery_attempt
+          WHERE id = 'attempt-legacy-activation'
+        `)
+        .get(),
+    ).toEqual({ delivery_target_id: "email-target-1" });
+    await expect(
+      markInstantDeliveryDispatchStarted(
+        env,
+        "attempt-legacy-activation",
+        claim.claimUpdatedAt!,
+      ),
+    ).resolves.toEqual(expect.any(String));
+  });
+
   it("fails closed when the durable claim disappears during provider I/O", async () => {
     const harness = createSqliteD1();
     fixtures.push(harness);

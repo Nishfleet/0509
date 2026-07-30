@@ -56,16 +56,16 @@ retryable and durably visible instead of pretending a second page occurred.
 | Gate | Result |
 |---|---|
 | Lock-wrapped `npm ci` | Passed on remediation tip; 291 packages added / 292 audited, 0 vulnerabilities |
-| Focused regression suites | Passed; BLOCK-remediation suite 4 files, 30/30; crgate follow-up suite 8 files, 161/161; terminal provider/partial suite 3 files, 94/94 |
-| Lock-wrapped full Vitest | Passed on final remediation source; **389** files, **4202/4202** tests |
+| Focused regression suites | Passed; BLOCK-remediation suite 4 files, 30/30; crgate follow-up suite 8 files, 161/161; terminal provider/partial suite 3 files, 94/94; final activation/search/migration suite 5 files, 108/108 |
+| Lock-wrapped full Vitest | Passed on final remediation source; **389** files, **4204/4204** tests |
 | Lock-wrapped typecheck | Passed on final remediation source; Wrangler typegen, React Router typegen, `tsc -b` |
 | Full Gate B | Deterministic final artifact below is the source of truth; handoff is allowed only when its terminal fields are strict/pass with 73 passed entries |
 | `git diff --check` | Passed |
 | `sgscan` | Passed on the final diff; exit 0, no new security findings |
-| CodeRabbit local (`crgate`) | Remediation tip: 8 findings (3 major / 5 minor); all actionable product findings fixed with regressions (see follow-up table). Final provider/partial delta followed a new exact Codex review; `crgate --quota` reports 3/3 reviews used in the last hour, so no forced/redundant fourth spend. |
-| CodeRabbit PR | The initial 4 actionable inline findings were verified and fixed (shared CSS, D1 NULL fallback, failed-page count zero, failure-mode-specific alert keys). A later review posted one actionable dispatch-gate diagnostic and identified the verified-account-email fallback plus health-query index outside the narrow diff range; all three were verified and fixed. The terminal review found that the operator's partial-result label hid the retained failure class; its regression failed first and the rendering now preserves both the partial status and cause. The docstring warning and broad client-route extraction request are repository-wide/out-of-lane maintainability work, not correctness findings in this candidate. |
+| CodeRabbit local (`crgate`) | Initial remediation tip: 8 findings (3 major / 5 minor), all actionable product findings fixed with regressions. A later 5-finding consolidated set was fixed at cause. The terminal post-fix pass produced 2 minor items: explicit stale-partial reset coverage was added, while its report warning was rejected after the actual lock-wrapped typecheck and full Vitest completed successfully (see follow-up tables). |
+| CodeRabbit PR | The initial 4 actionable inline findings were verified and fixed (shared CSS, D1 NULL fallback, failed-page count zero, failure-mode-specific alert keys). A later review posted one actionable dispatch-gate diagnostic and identified the verified-account-email fallback plus health-query index outside the narrow diff range; all three were verified and fixed. The terminal review found that the operator's partial-result label hid the retained failure class; its regression failed first and the rendering now preserves both the partial status and cause. A post-push Codex PR review then found that reclaiming a pre-target activation failure left `delivery_target_id=NULL`; the generic reclaim CAS now attaches only a missing current target before dispatch. The docstring warning and broad client-route extraction request are repository-wide/out-of-lane maintainability work, not correctness findings in this candidate. |
 | Greptile PR review | Unavailable: `nish3451 has reached the 50-credit limit for trial accounts`; no inline or general code findings were produced |
-| Cross-model adversarial review | BLOCK review (`pr447-REVIEW-VERDICT.md`) findings 1–3 fixed at cause. Earlier Codex-engine passes also found valid edge cases in recap dispatch ownership, retention grace, global unsubscribe preservation, operator partial visibility, partial-result readiness denominators, workspace/watchlist delivery scope, idempotent customer-risk replays, legacy C6 count migration, the production Free-activation dispatch target, lazy-provision/unsubscribe atomicity, and fresh-partial presentation. The terminal exact-candidate pass found two further P2s: opaque Meta API errors still used a browser class, and one partial exact-domain path retained a definitive zero-verification headline. Both failed first and were fixed at cause. The follow-up delta review found one P3 backoff regression; it also failed first and the provider-neutral class now retains the established five-minute cooldown. |
+| Cross-model adversarial review | BLOCK review (`pr447-REVIEW-VERDICT.md`) findings 1–3 fixed at cause. Earlier Codex-engine passes also found valid edge cases in recap dispatch ownership, retention grace, global unsubscribe preservation, operator partial visibility, partial-result readiness denominators, workspace/watchlist delivery scope, idempotent customer-risk replays, legacy C6 count migration, the production Free-activation dispatch target, lazy-provision/unsubscribe atomicity, and fresh-partial presentation. The terminal exact-candidate pass found two further P2s: opaque Meta API errors still used a browser class, and one partial exact-domain path retained a definitive zero-verification headline. Both failed first and were fixed at cause. The follow-up delta review found one P3 backoff regression; it also failed first and the provider-neutral class now retains the established five-minute cooldown. The final exact eight-file Claude pass accepted no actionable findings and rated the patch correct at 0.85. |
 | `bugbot-gate status` | Final status is run after the immutable push and printed verbatim in the handoff. Historical pre-final status was `ALLOW BUGBOT` / `risk: high`; GitHub's automatic Bugbot attempt previously hit the usage limit. |
 
 ### PR CI merge-ref blocker
@@ -143,6 +143,41 @@ should be resolved on the remediation push.
 
 Failing-first focused evidence produced exactly 2 failures for the P2 set and
 1 failure for the P3; the repaired provider/partial/migration suite passed 94/94.
+
+### Post-push PR review (1 P2 finding)
+
+| Finding | Disposition |
+|---|---|
+| Reclaimed legacy activation attempts retained `delivery_target_id=NULL` | **Fixed** — the exact-version reclaim update fills only a missing target from the resolved claim input; existing non-null target ownership is never rewritten, and the unchanged customer dispatch CAS remains the consent/readiness gate |
+
+The integration regression failed first on the durable NULL row, then proved
+the same attempt is reclaimed in place with the current target and advances
+through `markInstantDeliveryDispatchStarted`. The complete run first exposed
+two stale SQLite harnesses that omitted the production column; after bringing
+those fixtures to schema parity, the focused claim/activation suite passed
+24/24.
+
+### Consolidated terminal CodeRabbit remediation (5 findings)
+
+| Finding | Disposition |
+|---|---|
+| Migration tests did not prove invalid failure classes remain rejected in both stores | **Fixed** — both rebuilt `CHECK` constraints are exercised with rejected invalid updates |
+| Positive partial results retained definitive verified/broader titles and fact labels | **Fixed** — every positive partial state now says “loaded so far,” remains degraded, and retains the retry instruction |
+| Zero-ad partial results discarded broader/raw candidate counts | **Fixed** — the partial summary and fact rail preserve related candidates loaded so far without presenting a complete no-ads result |
+| Migration 0074 left SQLite foreign-key enforcement disabled | **Fixed at the documented D1 cause** — the rebuild uses transaction-scoped `defer_foreign_keys` instead of unsupported migration-time enforcement toggling; the regression proves `foreign_keys=1` survives |
+| Partial broader-match behavior lacked direct coverage | **Fixed** — the regression asserts degraded state, qualified title/facts, partial summary, and retry copy |
+
+The failing-first run produced four failures: foreign-key enforcement was left
+off, the zero-ad related-candidate fact was absent, and both positive verified
+and broader partial titles were definitive. The repaired activation, search,
+and migration suite passed 108/108 across five files.
+
+### Terminal post-fix CodeRabbit pass (2 minor findings)
+
+| Finding | Disposition |
+|---|---|
+| Successful discovery recovery did not explicitly assert stale `discoveryPartial` is cleared | **Fixed (coverage)** — the existing success-after-partial regression now requires `discoveryPartial: false` |
+| Report gates should be marked incomplete because the review sandbox could not execute project binaries | **Rejected after direct verification** — the authoritative project commands resolved the binaries and passed under the lock: typecheck completed all three stages and full Vitest passed 389 files / 4204 tests |
 
 ## Review dispositions and residual limits
 

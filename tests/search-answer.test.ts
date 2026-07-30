@@ -178,6 +178,7 @@ describe("buildSearchAnswer", () => {
     const answer = buildSearchAnswer({
       result: response({
         ads: [],
+        broaderCandidateCount: 3,
         nextCursor: "cursor-2",
         discoveryPartial: true,
         discoverySummary: "Some additional Meta results could not be loaded.",
@@ -192,8 +193,13 @@ describe("buildSearchAnswer", () => {
       state: "degraded",
       title: "Search results are partial",
       summary:
-        "Additional results could not be loaded, so this is not a complete no-ads result.",
+        "3 related candidates are available on the partial page. Additional results could not be loaded, so this is not a complete no-ads result.",
       note: "Retry to continue loading the remaining results.",
+    });
+    expect(answer.facts).toContainEqual({
+      label: "Related candidates loaded so far",
+      value: "3",
+      detail: "Available to review separately without a verified website claim",
     });
   });
 
@@ -211,10 +217,45 @@ describe("buildSearchAnswer", () => {
       isBroaderScope: false,
     });
 
-    expect(answer.state).toBe("degraded");
-    expect(answer.title).toContain("verified ad");
+    expect(answer).toMatchObject({
+      state: "degraded",
+      title: "1 verified ad loaded so far for boat-lifestyle.com",
+    });
+    expect(answer.facts).toContainEqual({
+      label: "Verified ads loaded so far",
+      value: "1",
+      detail: "Connected to this domain on the partial page",
+    });
     expect(answer.summary).toContain("this page is partial");
     expect(answer.note).toContain("Retry to continue loading the remaining results.");
+  });
+
+  it("qualifies broader matches when the result page is partial", () => {
+    const answer = buildSearchAnswer({
+      result: response({
+        ads: [ad({ landingPageUrl: null })],
+        verifiedCount: 0,
+        broaderCandidateCount: 1,
+        nextCursor: "cursor-2",
+        discoveryPartial: true,
+        discoverySummary: "Some additional Meta results could not be loaded.",
+      }),
+      displayDomain: "boat-lifestyle.com",
+      isDomainSearch: true,
+      isBroaderScope: true,
+    });
+
+    expect(answer).toMatchObject({
+      state: "degraded",
+      title: "1 broader match loaded so far for boat-lifestyle.com",
+      summary: expect.stringContaining("this page is partial"),
+      note: expect.stringContaining("Retry to continue loading the remaining results."),
+    });
+    expect(answer.facts).toContainEqual({
+      label: "Related matches loaded so far",
+      value: "1",
+      detail: "Unverified advertiser/text candidates on the partial page",
+    });
   });
 
   it("qualifies zero verified evidence when a non-empty result page is partial", () => {

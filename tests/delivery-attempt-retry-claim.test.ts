@@ -572,6 +572,7 @@ describe("delivery attempt retry claim (sqlite)", () => {
     harness.sqlite.exec(`
       CREATE TABLE delivery_attempt (
         id TEXT PRIMARY KEY NOT NULL,
+        delivery_target_id TEXT,
         provider TEXT NOT NULL,
         status TEXT NOT NULL,
         webhook_status TEXT NOT NULL,
@@ -640,6 +641,7 @@ describe("delivery attempt retry claim (sqlite)", () => {
     harness.sqlite.exec(`
       CREATE TABLE delivery_attempt (
         id TEXT PRIMARY KEY NOT NULL,
+        delivery_target_id TEXT,
         provider TEXT NOT NULL,
         status TEXT NOT NULL,
         webhook_status TEXT NOT NULL,

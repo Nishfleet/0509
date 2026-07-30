@@ -314,6 +314,7 @@ describe("interactive Meta pagination honesty", () => {
     expect(result).toMatchObject({
       ads: [firstAd],
       discoveryStatus: "healthy",
+      discoveryPartial: false,
       discoveryFailureClass: null,
     });
   });
