@@ -103,11 +103,17 @@ describe("D1 remote restore evidence automation", () => {
           environment?: string;
           if?: string;
           needs?: string;
-          steps?: Array<{ run?: string }>;
+          steps?: Array<{
+            name?: string;
+            run?: string;
+            with?: Record<string, unknown>;
+          }>;
         };
         restore?: {
+          env?: Record<string, string>;
           environment?: string;
           "timeout-minutes"?: number;
+          steps?: Array<{ name?: string; run?: string }>;
         };
       };
     };
@@ -134,11 +140,28 @@ describe("D1 remote restore evidence automation", () => {
     expect(workflow.jobs?.cleanup?.environment).toBe("d1-backup-r2");
     expect(workflow.jobs?.cleanup?.if).toContain("always()");
     expect(workflow.jobs?.cleanup?.needs).toBe("restore");
-    expect(
-      workflow.jobs?.cleanup?.env?.D1_BACKUP_LOCAL_DIRECTORY,
-    ).toBe(
-      "${{ runner.temp }}/0509-d1-backups-${{ github.run_id }}-${{ github.run_attempt }}",
-    );
+    for (const [job, consumer] of [
+      [workflow.jobs?.restore, "npm run restore:d1:remote-evidence --"],
+      [
+        workflow.jobs?.cleanup,
+        "npm run restore:d1:remote-evidence -- --cleanup-only",
+      ],
+    ] as const) {
+      expect(job?.env?.D1_BACKUP_LOCAL_DIRECTORY).toBeUndefined();
+      const bindingIndex = job?.steps?.findIndex(
+        (step) => step.name === "Bind run-scoped backup directory",
+      ) ?? -1;
+      expect(bindingIndex).toBeGreaterThanOrEqual(0);
+      const bindingStep = job?.steps?.[bindingIndex];
+      expect(bindingStep?.run).toContain(
+        "$RUNNER_TEMP/0509-d1-backups-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}",
+      );
+      expect(bindingStep?.run).toContain('>> "$GITHUB_ENV"');
+      const consumerIndex = job?.steps?.findIndex((step) =>
+        step.run?.includes(consumer)
+      ) ?? -1;
+      expect(consumerIndex).toBeGreaterThan(bindingIndex);
+    }
     expect(workflow.jobs?.restore?.["timeout-minutes"]).toBe(300);
     expect(
       (workflow.jobs?.cleanup as any)?.steps?.[0]?.with?.clean,

@@ -38,8 +38,18 @@ describe("manual D1 backup workflow", () => {
   it("keeps backup auth scoped to the approved backup step and validates before upload", () => {
     expect(parsed.jobs.backup?.env?.CLOUDFLARE_ACCOUNT_ID).toBeUndefined();
     expect(parsed.jobs.backup?.env?.CLOUDFLARE_API_TOKEN).toBeUndefined();
+    expect(parsed.jobs.backup?.env?.D1_BACKUP_LOCAL_DIRECTORY).toBeUndefined();
 
     const steps = parsed.jobs.backup?.steps ?? [];
+    const bindingIndex = steps.findIndex(
+      (step) => step.name === "Bind run-scoped backup directory",
+    );
+    expect(bindingIndex).toBeGreaterThanOrEqual(0);
+    const bindingStep = steps[bindingIndex];
+    expect(bindingStep?.run).toContain(
+      "$RUNNER_TEMP/0509-d1-backups-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}",
+    );
+    expect(bindingStep?.run).toContain('>> "$GITHUB_ENV"');
     expect(steps).toContainEqual(expect.objectContaining({ run: "npm ci --ignore-scripts" }));
     const backupStep = steps.find(
       (step) => step.name === "Run approved D1-to-R2 backup",
@@ -54,6 +64,9 @@ describe("manual D1 backup workflow", () => {
     const backupIndex = backupSteps.findIndex((run) =>
       run?.includes("npm run backup:d1:r2"),
     );
+    expect(
+      steps.findIndex((step) => step.run?.includes("npm run backup:d1:r2")),
+    ).toBeGreaterThan(bindingIndex);
     expect(backupIndex).toBeGreaterThan(
       backupSteps.indexOf("node scripts/validate-d1-backup.mjs"),
     );
