@@ -5,11 +5,12 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
 /**
  * BL-042 live proof — the mobile top navigation shared by every signed-in
- * route. The three owner-required surfaces are captured at 390px in both
- * themes; the same routes are swept from 320 through 2560. Whole-viewport
+ * route. The three owner-required mobile surfaces are captured at 390px in
+ * both themes; the same routes are swept from 320 through 2560. A plan-locked
+ * Reports surface is also captured at 1440px in both themes so the deleted
+ * desktop topbar is proved over a real non-happy child state. Whole-viewport
  * paint is recorded so inherited child-surface debt cannot disappear from the
- * report, while shell-law assertions are scoped to the shell this package
- * owns.
+ * report, while shell-law assertions are scoped to the shell this package owns.
  *
  * Opt in with `BL042_CAPTURE=1` and optionally set `BL042_OUT`.
  */
@@ -26,6 +27,15 @@ const SURFACES = [
     current: "/app/watchlists",
   },
   { name: "briefs", url: "/app/digests", user: "e2e-starter", current: "/app/digests" },
+] as const;
+const DESKTOP_SURFACES = [
+  {
+    name: "reports-locked",
+    url: "/app/reports",
+    user: "e2e-free-onboarded",
+    current: "/app/reports",
+    state: "locked-feature",
+  },
 ] as const;
 const THEMES = ["light", "dark"] as const;
 const SWEEP_WIDTHS = [
@@ -130,9 +140,20 @@ async function auditPaint(page: Page) {
 
     const greenPainted: { element: string; property: string; value: string }[] = [];
     const navGreenPainted: { element: string; property: string; value: string }[] = [];
+    const shellGreenPainted: {
+      element: string;
+      property: string;
+      value: string;
+    }[] = [];
     const capsMono: string[] = [];
     const navCapsMono: string[] = [];
+    const shellCapsMono: string[] = [];
     const nav = document.querySelector(".f9-dash-mobile-nav");
+    const shellRoots = [
+      document.querySelector(".f9-wk-rail"),
+      nav,
+      document.querySelector(".f9-dash-topbar"),
+    ].filter((node): node is Element => node !== null);
     const viewportHeight = window.innerHeight;
     for (const node of document.querySelectorAll("body *")) {
       const style = getComputedStyle(node);
@@ -156,6 +177,7 @@ async function auditPaint(page: Page) {
         const entry = `${label(node)}: ${(node.textContent ?? "").trim().slice(0, 48)}`;
         capsMono.push(entry);
         if (nav?.contains(node)) navCapsMono.push(entry);
+        if (shellRoots.some((root) => root.contains(node))) shellCapsMono.push(entry);
       }
 
       const checks: [string, string][] = [
@@ -183,10 +205,20 @@ async function auditPaint(page: Page) {
           const entry = { element: label(node), property, value };
           greenPainted.push(entry);
           if (nav?.contains(node)) navGreenPainted.push(entry);
+          if (shellRoots.some((root) => root.contains(node))) {
+            shellGreenPainted.push(entry);
+          }
         }
       }
     }
-    return { capsMono, greenPainted, navCapsMono, navGreenPainted };
+    return {
+      capsMono,
+      greenPainted,
+      navCapsMono,
+      navGreenPainted,
+      shellCapsMono,
+      shellGreenPainted,
+    };
   });
 }
 
@@ -194,6 +226,8 @@ async function measure(page: Page) {
   return page.evaluate(() => {
     const nav = document.querySelector<HTMLElement>(".f9-dash-mobile-nav");
     const navStyle = nav ? getComputedStyle(nav) : null;
+    const desktopRail = document.querySelector<HTMLElement>(".f9-wk-rail");
+    const desktopRailStyle = desktopRail ? getComputedStyle(desktopRail) : null;
     const controls = nav
       ? [...nav.querySelectorAll<HTMLElement>("a, button")].map((node) => {
           const rect = node.getBoundingClientRect();
@@ -216,6 +250,13 @@ async function measure(page: Page) {
       ? [...nav.querySelectorAll<HTMLAnchorElement>('a[aria-current="page"]')].map(
           (node) => node.getAttribute("href"),
         )
+      : [];
+    const desktopActive = desktopRail
+      ? [
+          ...desktopRail.querySelectorAll<HTMLAnchorElement>(
+            'a[aria-current="page"]',
+          ),
+        ].map((node) => node.getAttribute("href"))
       : [];
     const navRuleWeights = nav
       ? [
@@ -352,6 +393,8 @@ async function measure(page: Page) {
       allTargets,
       controls,
       docHeight: document.documentElement.scrollHeight,
+      desktopActive,
+      desktopRailDisplay: desktopRailStyle?.display ?? null,
       filledInAnyViewport,
       firstRowStack,
       firstRowTop,
@@ -367,7 +410,8 @@ async function measure(page: Page) {
       navClientWidth: nav?.clientWidth ?? null,
       routeHrefs,
       shellActionRows: document.querySelectorAll(".f9-dash-topbar").length,
-      theme: document.documentElement.getAttribute("data-f9-theme"),
+      appliedTheme:
+        document.documentElement.getAttribute("data-f9-theme") ?? "light",
     };
   });
 }
@@ -376,7 +420,7 @@ test.describe("BL-042 mobile top navigation proof", () => {
   test.skip(!ENABLED, "set BL042_CAPTURE=1 to write the BL-042 evidence set");
   test.setTimeout(15 * 60 * 1000);
 
-  test("captures Overview, Competitors and Briefs in both themes and sweeps 320-2560", async ({
+  test("captures mobile and desktop shell proof in both themes and sweeps 320-2560", async ({
     browser,
     baseURL,
   }) => {
@@ -416,6 +460,7 @@ test.describe("BL-042 mobile top navigation proof", () => {
           url: surface.url,
           user: surface.user,
           viewport: "390x844",
+          state: "filed",
           theme,
           ...measured,
           capsMono: paint.capsMono.length,
@@ -426,6 +471,10 @@ test.describe("BL-042 mobile top navigation proof", () => {
           navCapsMonoDetail: paint.navCapsMono,
           navGreenPainted: paint.navGreenPainted.length,
           navGreenPaintedDetail: paint.navGreenPainted,
+          shellCapsMono: paint.shellCapsMono.length,
+          shellCapsMonoDetail: paint.shellCapsMono,
+          shellGreenPainted: paint.shellGreenPainted.length,
+          shellGreenPaintedDetail: paint.shellGreenPainted,
           consoleErrors,
           pageErrors,
           screenshot,
@@ -515,6 +564,106 @@ test.describe("BL-042 mobile top navigation proof", () => {
       }
     }
 
+    for (const surface of DESKTOP_SURFACES) {
+      for (const theme of THEMES) {
+        const context = await browser.newContext({
+          viewport: { width: 1440, height: 900 },
+          deviceScaleFactor: 2,
+        });
+        await prepare(context, base, surface.user, theme);
+        const page = await context.newPage();
+        const consoleErrors: string[] = [];
+        const pageErrors: string[] = [];
+        page.on("console", (message) => {
+          if (message.type() === "error") consoleErrors.push(message.text());
+        });
+        page.on("pageerror", (error) => pageErrors.push(String(error)));
+
+        await page.goto(`${base}${surface.url}`, { waitUntil: "networkidle" });
+        await page.waitForTimeout(400);
+        const lockedFeature = page.locator(".f9-locked-feature");
+        await expect(lockedFeature).toBeVisible();
+        await expect(
+          lockedFeature.getByRole("heading", { name: "Client-ready reports" }),
+        ).toBeVisible();
+        const measured = await measure(page);
+        const paint = await auditPaint(page);
+        const visibleText = await page
+          .locator("#f9-main-content")
+          .innerText();
+        const screenshot = `after-${surface.name}-1440-${theme}.png`;
+        await page.screenshot({
+          path: path.join(OUT_DIR, screenshot),
+          fullPage: true,
+        });
+
+        metrics.push({
+          surface: surface.name,
+          url: surface.url,
+          user: surface.user,
+          viewport: "1440x900",
+          state: surface.state,
+          theme,
+          ...measured,
+          capsMono: paint.capsMono.length,
+          capsMonoDetail: paint.capsMono,
+          greenPainted: paint.greenPainted.length,
+          greenPaintedDetail: paint.greenPainted,
+          navCapsMono: paint.navCapsMono.length,
+          navCapsMonoDetail: paint.navCapsMono,
+          navGreenPainted: paint.navGreenPainted.length,
+          navGreenPaintedDetail: paint.navGreenPainted,
+          shellCapsMono: paint.shellCapsMono.length,
+          shellCapsMonoDetail: paint.shellCapsMono,
+          shellGreenPainted: paint.shellGreenPainted.length,
+          shellGreenPaintedDetail: paint.shellGreenPainted,
+          consoleErrors,
+          pageErrors,
+          screenshot,
+          visibleText,
+        });
+
+        if (measured.desktopRailDisplay === "none") {
+          failures.push(`${surface.name} ${theme}: desktop rail is hidden`);
+        }
+        if (
+          measured.desktopActive.length !== 1 ||
+          measured.desktopActive[0] !== surface.current
+        ) {
+          failures.push(
+            `${surface.name} ${theme}: desktop aria-current ${JSON.stringify(measured.desktopActive)}`,
+          );
+        }
+        if (measured.shellActionRows !== 0) {
+          failures.push(`${surface.name} ${theme}: shell action row still renders`);
+        }
+        if (paint.shellCapsMono.length > 0) {
+          failures.push(
+            `${surface.name} ${theme}: ${paint.shellCapsMono.length} caps-mono shell surfaces`,
+          );
+        }
+        if (paint.shellGreenPainted.length > 0) {
+          failures.push(
+            `${surface.name} ${theme}: ${paint.shellGreenPainted.length} painted shell greens`,
+          );
+        }
+        if (measured.horizontalOverflow > 1) {
+          failures.push(
+            `${surface.name} ${theme}: horizontal overflow ${measured.horizontalOverflow}`,
+          );
+        }
+        if (consoleErrors.length || pageErrors.length) {
+          failures.push(
+            `${surface.name} ${theme}: console/page errors — ${[
+              ...consoleErrors,
+              ...pageErrors,
+            ].join(" | ")}`,
+          );
+        }
+        await context.close();
+      }
+    }
+
     for (const surface of SURFACES) {
       for (const theme of THEMES) {
         const context = await browser.newContext({
@@ -549,13 +698,39 @@ test.describe("BL-042 mobile top navigation proof", () => {
       }
     }
 
+    const captureSummary = {
+      total: metrics.length,
+      mobile390: metrics.filter(
+        (metric) =>
+          (metric as { viewport?: string }).viewport === "390x844",
+      ).length,
+      desktop1440: metrics.filter(
+        (metric) =>
+          (metric as { viewport?: string }).viewport === "1440x900",
+      ).length,
+      desktopLockedFeature: metrics.filter(
+        (metric) =>
+          (metric as { viewport?: string; state?: string }).viewport ===
+            "1440x900" &&
+          (metric as { state?: string }).state === "locked-feature",
+      ).length,
+    };
     writeFileSync(
       path.join(OUT_DIR, "after-metrics.json"),
-      `${JSON.stringify({ capturedAt: new Date().toISOString(), metrics, sweep }, null, 2)}\n`,
+      `${JSON.stringify({
+        capturedAt: new Date().toISOString(),
+        summary: {
+          captures: captureSummary,
+          sweepStates: sweep.length,
+          failures,
+        },
+        metrics,
+        sweep,
+      }, null, 2)}\n`,
     );
     expect(
       failures,
-      "zero shell-nav greens/caps-mono, one fill per viewport, one 1px nav rule, 44px targets, aria-current, every route once, zero errors/overflow",
+      "zero shell greens/caps-mono/action rows, one mobile fill per viewport, one 1px mobile nav rule, 44px mobile targets, aria-current, every route once, locked desktop proof, zero errors/overflow",
     ).toEqual([]);
   });
 });
