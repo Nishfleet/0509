@@ -208,7 +208,8 @@ export default function SharesRoute() {
       )}
 
       <p className="f9-bl038-note f9-wk-note">
-        Anyone with a link can open what it points to until it expires or you revoke it. New links
+        Anyone with a link can open what it points to until it expires or you revoke it. Reviewed
+        report links may be temporarily withheld until their evidence is reviewed again. New links
         expire automatically after 90 days.
       </p>
 

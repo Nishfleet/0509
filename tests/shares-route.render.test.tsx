@@ -74,6 +74,9 @@ describe("/app/shares rendered conditional-action contract", () => {
       expect(container.textContent).not.toContain("Upgrade");
       expect(container.textContent).toContain("4 links shown");
       expect(container.textContent).not.toContain("4 active links");
+      expect(container.textContent).toContain(
+        "Reviewed report links may be temporarily withheld until their evidence is reviewed again.",
+      );
 
       const approved = rowNamed(rows, "Report · Snapshot", "Approved");
       expect(approved.querySelector(".f9-wk-st")?.className).toContain("is-on");
