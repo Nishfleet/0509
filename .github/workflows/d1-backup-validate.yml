@@ -18,13 +18,13 @@ concurrency:
 jobs:
   validate:
     if: github.repository == 'nish3451/0509' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}
+    runs-on: [self-hosted, linux, x64, vps-verify]
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version-file: ".node-version"
           cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
           package-manager-cache: ${{ runner.environment == 'github-hosted' }}
-      - run: npm ci
+      - run: ./scripts/deploy-window-lock.sh run -- npm ci
       - run: node scripts/validate-d1-backup.mjs

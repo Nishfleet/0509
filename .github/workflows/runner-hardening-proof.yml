@@ -1,0 +1,86 @@
+name: Hardened runner proof
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify lane isolation
+    if: github.repository == 'nish3451/0509' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, x64, vps-verify]
+    timeout-minutes: 3
+    steps:
+      - name: Prove verification runner boundary
+        shell: bash
+        env:
+          EXPECTED_ACCOUNT_PATTERN: '^gha0509-verify[1-3]$'
+          EXPECTED_LANE: vps-verify
+        run: |
+          set -euo pipefail
+          actual_user="$(id -un)"
+          [[ "$actual_user" =~ $EXPECTED_ACCOUNT_PATTERN ]]
+          [[ "${DEPLOY_WINDOW_LOCK_FILE:-}" = "/run/lock/0509/deploy-window.lock" ]]
+          [[ -r "$DEPLOY_WINDOW_LOCK_FILE" && -w "$DEPLOY_WINDOW_LOCK_FILE" ]]
+          ! { [[ -r /home/nish ]] || [[ -x /home/nish ]]; }
+          if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+            printf 'runner unexpectedly has passwordless sudo\n' >&2
+            exit 1
+          fi
+          grep -Fq 'github-0509.slice' /proc/self/cgroup
+          printf 'lane=%s user=%s cgroup=github-0509.slice lock=ok\n' \
+            "$EXPECTED_LANE" "$actual_user" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Deploy lane isolation
+    if: github.repository == 'nish3451/0509' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, x64, vps-deploy]
+    timeout-minutes: 3
+    steps:
+      - name: Prove deploy runner boundary without provider access
+        shell: bash
+        env:
+          EXPECTED_ACCOUNT_PATTERN: '^gha0509-deploy$'
+          EXPECTED_LANE: vps-deploy
+        run: |
+          set -euo pipefail
+          actual_user="$(id -un)"
+          [[ "$actual_user" =~ $EXPECTED_ACCOUNT_PATTERN ]]
+          [[ "${DEPLOY_WINDOW_LOCK_FILE:-}" = "/run/lock/0509/deploy-window.lock" ]]
+          [[ -r "$DEPLOY_WINDOW_LOCK_FILE" && -w "$DEPLOY_WINDOW_LOCK_FILE" ]]
+          ! { [[ -r /home/nish ]] || [[ -x /home/nish ]]; }
+          if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+            printf 'runner unexpectedly has passwordless sudo\n' >&2
+            exit 1
+          fi
+          grep -Fq 'github-0509.slice' /proc/self/cgroup
+          printf 'lane=%s user=%s cgroup=github-0509.slice lock=ok\n' \
+            "$EXPECTED_LANE" "$actual_user" >> "$GITHUB_STEP_SUMMARY"
+
+  monitor:
+    name: Monitoring lane isolation
+    if: github.repository == 'nish3451/0509' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, x64, 0509-monitoring-hardened]
+    timeout-minutes: 3
+    steps:
+      - name: Prove monitoring runner boundary without provider access
+        shell: bash
+        env:
+          EXPECTED_ACCOUNT_PATTERN: '^gha0509-monitor$'
+          EXPECTED_LANE: 0509-monitoring-hardened
+        run: |
+          set -euo pipefail
+          actual_user="$(id -un)"
+          [[ "$actual_user" =~ $EXPECTED_ACCOUNT_PATTERN ]]
+          [[ "${DEPLOY_WINDOW_LOCK_FILE:-}" = "/run/lock/0509/deploy-window.lock" ]]
+          [[ -r "$DEPLOY_WINDOW_LOCK_FILE" && -w "$DEPLOY_WINDOW_LOCK_FILE" ]]
+          ! { [[ -r /home/nish ]] || [[ -x /home/nish ]]; }
+          if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+            printf 'runner unexpectedly has passwordless sudo\n' >&2
+            exit 1
+          fi
+          grep -Fq 'github-0509.slice' /proc/self/cgroup
+          printf 'lane=%s user=%s cgroup=github-0509.slice lock=ok\n' \
+            "$EXPECTED_LANE" "$actual_user" >> "$GITHUB_STEP_SUMMARY"

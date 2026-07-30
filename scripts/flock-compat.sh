@@ -46,12 +46,26 @@ while [ "$index" -le "$#" ]; do
       [[ "$wait_seconds" =~ ^[0-9]+([.][0-9]+)?$ ]] || unsupported=1
       index=$((index + 1))
       ;;
+    -xw|-wx)
+      exclusive=1
+      index=$((index + 1))
+      if [ "$index" -gt "$#" ] || [[ ! "${!index}" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+        unsupported=1
+      else
+        wait_seconds="${!index}"
+      fi
+      index=$((index + 1))
+      ;;
     -w[0-9]*|-w.*)
       wait_seconds="${argument#-w}"
       [[ "$wait_seconds" =~ ^[0-9]+([.][0-9]+)?$ ]] || unsupported=1
       index=$((index + 1))
       ;;
-    --shared|-s|--unlock|-u|--nonblock|-n|--close|-o|--no-fork|-F|--verbose|-V|--conflict-exit-code*|-E*)
+    --conflict-exit-code|-E)
+      unsupported=1
+      index=$((index + 2))
+      ;;
+    --shared|-s|--unlock|-u|--nonblock|-n|--close|-o|--no-fork|-F|--verbose|-V|--conflict-exit-code=*|-E*)
       unsupported=1
       index=$((index + 1))
       ;;
