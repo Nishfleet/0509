@@ -79,6 +79,13 @@ describe("workflow routing hardening", () => {
     }
   });
 
+  it("keeps the verification typecheck heap inside its runner cgroup budget", () => {
+    const typecheck = job("ci.yml", "codex-node-checks").steps?.find(
+      (step) => step.run === "./scripts/deploy-window-lock.sh run -- npm run typecheck",
+    );
+    expect(typecheck?.env?.NODE_OPTIONS).toBe("--max-old-space-size=2048");
+  });
+
   it("serializes every heavyweight command through its runner lane", () => {
     for (const filename of readdirSync(workflowsDirectory).filter((name) => /\.ya?ml$/.test(name))) {
       const { parsed } = workflow(filename);
