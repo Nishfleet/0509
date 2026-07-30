@@ -887,7 +887,7 @@ function staleClientRoomResult(intent: string) {
 
 function AgencyPlanNotice() {
   return (
-    <section aria-labelledby="client-rooms-gate-title" className="f9-wk-sec f9-clients-gate" role="status">
+    <section aria-labelledby="client-rooms-gate-title" className="f9-wk-sec f9-clients-gate">
       <p className="f9-wk-kick">Agency plan</p>
       <h2 id="client-rooms-gate-title">Client rooms stay readable</h2>
       <p>
