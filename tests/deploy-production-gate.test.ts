@@ -1160,7 +1160,9 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       resolve(".github/workflows/deploy-production.yml"),
       "utf8",
     );
-    const checkoutIndex = workflow.indexOf("- uses: actions/checkout@v6.0.3");
+    const checkoutIndex = workflow.indexOf(
+      "- uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10",
+    );
     const acquireIndex = workflow.indexOf("- name: Acquire deploy window");
     const verifySecretsIndex = workflow.indexOf(
       "- name: Verify Cloudflare deploy secrets",
@@ -1169,6 +1171,9 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     const materializeIndex = workflow.indexOf(
       "- name: Materialize private remote-restore evidence",
     );
+    const synchronizeCanaryIndex = workflow.indexOf(
+      "- name: Synchronize private canary token",
+    );
     const deployIndex = workflow.indexOf("- name: Deploy");
     const verifyEvidenceIndex = workflow.indexOf(
       "- name: Verify complete release evidence set",
@@ -1176,9 +1181,10 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     const releaseIndex = workflow.indexOf("- name: Release deploy window");
     const verifySecretsStep = workflow.slice(
       verifySecretsIndex,
-      workflow.indexOf("- uses: actions/setup-node@v6", verifySecretsIndex),
+      workflow.indexOf("- uses: actions/setup-node@", verifySecretsIndex),
     );
-    const materializeStep = workflow.slice(materializeIndex, deployIndex);
+    const materializeStep = workflow.slice(materializeIndex, synchronizeCanaryIndex);
+    const synchronizeCanaryStep = workflow.slice(synchronizeCanaryIndex, deployIndex);
     const deployStep = workflow.slice(deployIndex, verifyEvidenceIndex);
     const releaseStep = workflow.slice(releaseIndex);
 
@@ -1187,7 +1193,8 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(verifySecretsIndex).toBeGreaterThan(acquireIndex);
     expect(testIndex).toBeGreaterThan(verifySecretsIndex);
     expect(materializeIndex).toBeGreaterThan(testIndex);
-    expect(deployIndex).toBeGreaterThan(materializeIndex);
+    expect(synchronizeCanaryIndex).toBeGreaterThan(materializeIndex);
+    expect(deployIndex).toBeGreaterThan(synchronizeCanaryIndex);
     expect(verifyEvidenceIndex).toBeGreaterThan(deployIndex);
     expect(releaseIndex).toBeGreaterThan(verifyEvidenceIndex);
     expect(workflow).toContain("timeout-minutes: 270");
@@ -1201,7 +1208,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       "D1_REMOTE_RESTORE_EVIDENCE_JSON",
     );
     expect(materializeStep).toContain(
-      "uses: actions/download-artifact@v8",
+      "uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
     );
     expect(materializeStep).toContain(
       "d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}",
@@ -1212,6 +1219,12 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(workflow).toContain("overwrite: true");
     expect(materializeStep).toContain(
       'chmod 600 test-results/d1-remote-restore-evidence.json',
+    );
+    expect(synchronizeCanaryStep).toContain(
+      "CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}",
+    );
+    expect(synchronizeCanaryStep).toContain(
+      "./node_modules/.bin/wrangler secret put CANARY_BYPASS_TOKEN --name 0509",
     );
     expect(deployStep).toContain(
       "CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}",
@@ -1251,17 +1264,20 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(workflow).toContain('return 2');
     expect(workflow).not.toContain("gh secret set");
     expect(workflow).toContain(
-      "runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}",
+      "runs-on: [self-hosted, linux, x64, vps-verify]",
+    );
+    expect(workflow).toContain(
+      "runs-on: ubuntu-latest",
     );
     expect(readFileSync(resolve(".github/workflows/ci.yml"), "utf8")).toContain(
-      "runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}",
+      "runs-on: [self-hosted, linux, x64, vps-verify]",
     );
     expect(
       readFileSync(resolve(".github/workflows/d1-backup-validate.yml"), "utf8"),
-    ).toContain("runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}");
+    ).toContain("runs-on: [self-hosted, linux, x64, vps-verify]");
     expect(
       readFileSync(resolve(".github/workflows/secret-scan.yml"), "utf8"),
-    ).toContain("runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}");
+    ).toContain("runs-on: [self-hosted, linux, x64, vps-verify]");
     expect(workflow).not.toContain("- name: Production public smoke");
   });
 
@@ -1278,6 +1294,15 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
         "Verify pre-generated exact R2 restore evidence",
     )?.run;
     expect(typeof shell).toBe("string");
+    expect(shell).toContain(
+      "./scripts/deploy-window-lock.sh run -- bash -euo pipefail <<'VERIFY_LANE'",
+    );
+    const executableShell = shell
+      .replace(
+        "./scripts/deploy-window-lock.sh run -- bash -euo pipefail <<'VERIFY_LANE'\n",
+        "",
+      )
+      .replace(/\nVERIFY_LANE\s*$/u, "");
 
     const runMode = (
       mode:
@@ -1378,7 +1403,7 @@ esac
         chmodSync(join(bin, name), 0o755);
       }
 
-      const result = spawnSync("/bin/bash", ["-c", shell], {
+      const result = spawnSync("/bin/bash", ["-c", executableShell], {
         cwd: process.cwd(),
         env: {
           ...process.env,
@@ -1534,7 +1559,9 @@ esac
       "find test-results/gate-b-artifacts -type f -print -quit",
     );
     expect(uploadStep).toContain("if: success()");
-    expect(uploadStep).toContain("uses: actions/upload-artifact@v7");
+    expect(uploadStep).toContain(
+      "uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+    );
     expect(uploadStep).toContain(
       "production-release-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}",
     );
