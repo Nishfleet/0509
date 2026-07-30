@@ -1425,6 +1425,7 @@ esac
           GITHUB_WORKSPACE: root,
           GITHUB_SHA: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           GITHUB_RUN_ID: "30574154496",
+          RESTORE_EVIDENCE_ARCHIVE: join(root, "d1-remote-restore-evidence.tar.gz"),
           GITHUB_REPOSITORY: "nish3451/0509",
         },
         encoding: "utf8",
