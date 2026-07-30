@@ -80,8 +80,8 @@ No nonsensical field values or contradictory labels were observed. Known fixture
 |---|---|
 | `sgscan` | The final staged run still reported “No diff against origin/HEAD” and scanned the whole tree. It exited 1 on repository-wide existing warnings; the only warning in an owned file is an unchanged dynamic `RegExp` line in operator reconciliation. No ERROR or introduced match was identified. |
 | `crgate` | Completed one available local review: 4 findings, 1 fixed, 3 rejected after code verification (decisions below). |
-| Greptile | Pending PR creation |
-| `bugbot-gate status` | Pending PR creation |
+| Greptile | The GitHub app returned no code findings because the account has reached its 50-credit trial limit. |
+| `bugbot-gate status` | `ALLOW BUGBOT`; the automatically attached Bugbot check then hit its usage limit and completed neutral. No direct Bugbot invocation was made. |
 
 The additional configured `autoreview --thinking high` attempt was unavailable because its OAuth session had expired; it produced no finding and consumed no review.
 
@@ -94,6 +94,31 @@ The additional configured `autoreview --thinking high` attempt was unavailable b
 | Change a valid `Asia/Kolkata` test fixture timezone to `UTC` | **Rejected.** Timezone does not participate in the duplicate-claim branch, and both values are valid IANA zones; changing it would add no guarantee. |
 | Prevent failed evidence from reconciling `sent/provider_unknown` | **Rejected.** A later provider bounce/failure is exactly the evidence that must correct an accepted-but-unconfirmed email. Blocking that transition would recreate C3. Reconciliation remains evidence- and audit-gated. |
 
+### Bugbot gate decision (verbatim)
+
+```text
+ALLOW BUGBOT
+risk: high
+reason: High-risk or critical diff. One paid Bugbot run is justified.
+repo: /home/nish/workspaces/products/0509-fixstatus
+branch: fix/silent-fixstatus
+base: origin/main
+diff: 29 files, +893/-52
+fingerprint: 6562729c4a1565d81e4a258a334a189f0e36d4e998cce689c8aa1cef144f0eb6
+signals:
+- high-risk path: tests/billing-lifecycle-attempts-data.test.ts
+next: paid Bugbot is justified but optional spend; ask Nish only before spending.
+prompt: Bugbot is recommended for this diff. It may cost about $1. Should I run it once?
+if declined: run or confirm stronger no-spend gates, including focused autoreview, then continue if clean.
+after approval: run /review-bugbot once, then run `bugbot-gate mark-bugbot`.
+```
+
+The repository's canonical lane policy says to record this decision and never invoke Bugbot directly. GitHub's automatically attached Cursor Bugbot check independently attempted a review, hit its usage limit, and completed neutral.
+
 ## PR
 
-Pending final gates and push.
+- Non-draft PR: https://github.com/nish3451/0509/pull/446
+- Gitleaks: passed.
+- CI: pending a clean retry after the shared deployment lock is released. The initial run and first retry failed only at lock acquisition; build, test, and typecheck never started.
+- Greptile: no code review was available because its GitHub app reported the account's 50-credit trial limit reached.
+- Merge: not performed.
