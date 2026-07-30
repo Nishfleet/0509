@@ -1392,6 +1392,16 @@ case "$1" in
     printf '{"artifact":true}'
     : > "$FAKE_ARTIFACT_MARKER"
     ;;
+  --format=posix)
+    while [ "$#" -gt 0 ]; do
+      if [ "$1" = "-czf" ]; then
+        : > "$2"
+        exit 0
+      fi
+      shift
+    done
+    exit 95
+    ;;
   *) exit 93 ;;
 esac
 `,
@@ -1412,6 +1422,9 @@ esac
           FAKE_MODE: mode,
           FAKE_ARTIFACT_MARKER: artifactMarker,
           RUNNER_TEMP: runnerTemp,
+          GITHUB_WORKSPACE: root,
+          GITHUB_SHA: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          GITHUB_RUN_ID: "30574154496",
           GITHUB_REPOSITORY: "nish3451/0509",
         },
         encoding: "utf8",
@@ -1430,7 +1443,7 @@ esac
     expect(artifact.calls.filter((call) => call.startsWith("gh ")))
       .toHaveLength(1);
     expect(artifact.calls.filter((call) => call.startsWith("tar ")))
-      .toHaveLength(3);
+      .toHaveLength(4);
 
     const unavailable = runMode("unavailable");
     expect(unavailable.result.status).toBe(1);
