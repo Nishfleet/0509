@@ -116,9 +116,9 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
     );
   });
 
-  it("prefers rendered proof after the safe fetch path validates the URL", async () => {
+  it("prefers rendered proof before static fetch after public URL validation", async () => {
     const put = vi.fn();
-    mockFetchWithDns(
+    const fetch = mockFetchWithDns(
       vi.fn(async () =>
         new Response("<html><head><title>Raw page</title></head><body>Raw offer</body></html>", {
           status: 200,
@@ -165,6 +165,7 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
       }),
     });
     expect(put).not.toHaveBeenCalled();
+    expect(nonDnsFetchCalls(fetch)).toHaveLength(0);
   });
 
   it("renders a successful but signal-empty HTML shell before accepting it as evidence", async () => {

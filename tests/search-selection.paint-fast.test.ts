@@ -190,7 +190,7 @@ describe("WP-11 paint-fast selection enrichment", () => {
     expect(result.selectedAd?.creativeText).toBe("Already captured");
   });
 
-  it("falls back to a creative image when the snapshot URL is blank", async () => {
+  it("OCRs whitespace-only creative text from the image when the snapshot URL is blank", async () => {
     const captureCreativeText = vi.fn().mockResolvedValue({
       text: "Image-only OCR",
       captureMethod: "ad_snapshot_fetch",
@@ -202,6 +202,7 @@ describe("WP-11 paint-fast selection enrichment", () => {
       landingPageUrl: null,
       adSnapshotUrl: "   ",
       creativeImageUrl: "https://cdn.example.com/creative.jpg",
+      creativeText: "   ",
     };
 
     vi.doMock("~/lib/analysis.server", () => ({

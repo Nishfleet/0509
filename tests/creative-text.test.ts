@@ -223,6 +223,46 @@ describe("captureCreativeText", () => {
     });
   });
 
+  it("falls back to the stored creative image when the snapshot fetch fails", async () => {
+    const aiRun = vi.fn().mockResolvedValue({
+      description: "Fallback Creative\n40% OFF",
+    });
+    mockFetchWithDns((url) => {
+      if (url.includes("facebook.example.com")) {
+        return new Response("expired snapshot", { status: 404 });
+      }
+      return new Response(Uint8Array.from([255, 216, 255, 217]), {
+        status: 200,
+        headers: { "content-type": "image/jpeg" },
+      });
+    });
+
+    const result = await captureCreativeText(
+      { AI: { run: aiRun } } as never,
+      "https://facebook.example.com/ad-snapshot",
+      {
+        advertiser: "Nykaa",
+        body: "",
+        previewHeadline: "",
+        previewSubhead: "",
+        cta: "",
+        creativeImageUrl: "https://cdn.example.com/creative.jpg",
+      },
+    );
+
+    expect(aiRun).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      text: "Fallback Creative\n40% OFF",
+      imageUrl: "https://cdn.example.com/creative.jpg",
+      metadata: {
+        extractionStatus: "readable",
+        extractionPath: "direct_image_ocr",
+        sourceFallbackAttempted: true,
+        sourceFallbackFromReasonCode: "creative_snapshot_http_error",
+      },
+    });
+  });
+
   it("falls back to Workers AI OCR when the snapshot HTML has no distinct creative text", async () => {
     const aiRun = vi.fn().mockResolvedValue({
       description: "Launch Sale\nFlat ₹400 Off",

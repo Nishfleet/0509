@@ -73,6 +73,19 @@ async function captureLandingPageSnapshotAt(
       return failLandingCapture(options, "landing_redirect_blocked", { redirectCount });
     }
 
+    const captureWarningCodes: string[] = [];
+    if (options.preferRendered) {
+      const renderedSnapshot = await captureRenderedSnapshot(
+        env,
+        resolvedUrl.toString(),
+        options,
+      );
+      if (renderedSnapshot) {
+        return renderedSnapshot;
+      }
+      captureWarningCodes.push("rendered_fallback_failed");
+    }
+
     const response = await fetchWithTimeout(
       resolvedUrl.toString(),
       {
@@ -137,14 +150,7 @@ async function captureLandingPageSnapshotAt(
 
     const normalized = normalizeHeadline(headline);
     const canonicalUrl = finalUrl.toString();
-    const captureWarningCodes: string[] = [];
-    if (options.preferRendered) {
-      const renderedSnapshot = await captureRenderedSnapshot(env, canonicalUrl, options);
-      if (renderedSnapshot) {
-        return renderedSnapshot;
-      }
-      captureWarningCodes.push("rendered_fallback_failed");
-    } else if (
+    if (
       options.allowRenderedFallback !== false &&
       headline === "Landing page" &&
       !signals.ctaText &&

@@ -139,6 +139,45 @@ export async function captureCreativeText(
   url: string,
   ad: KnownAdText,
 ): Promise<CreativeTextCaptureResult | null> {
+  const primaryResult = await captureCreativeTextFromSource(env, url, ad);
+  const creativeImageUrl = ad.creativeImageUrl?.trim() ?? "";
+  if (
+    primaryResult?.text ||
+    !creativeImageUrl ||
+    creativeImageUrl === url.trim()
+  ) {
+    return primaryResult;
+  }
+
+  const fallbackResult = await captureCreativeTextFromSource(
+    env,
+    creativeImageUrl,
+    ad,
+  );
+  if (!fallbackResult) return primaryResult;
+
+  const primaryReasonCode =
+    typeof primaryResult?.metadata.unreadableReasonCode === "string"
+      ? primaryResult.metadata.unreadableReasonCode
+      : null;
+  return {
+    ...fallbackResult,
+    metadata: {
+      ...fallbackResult.metadata,
+      sourceFallbackAttempted: true,
+      sourceFallbackSucceeded: Boolean(fallbackResult.text),
+      ...(primaryReasonCode
+        ? { sourceFallbackFromReasonCode: primaryReasonCode }
+        : {}),
+    },
+  };
+}
+
+async function captureCreativeTextFromSource(
+  env: CreativeTextEnv,
+  url: string,
+  ad: KnownAdText,
+): Promise<CreativeTextCaptureResult | null> {
   const capturedAt = new Date().toISOString();
   if (!url) {
     return createMissingCreativeCaptureResult(ad, capturedAt);

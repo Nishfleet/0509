@@ -150,7 +150,7 @@ async function enrichAndPersistSelectedAd(
   const creativeCapturePromise =
     isAdLibraryBackedAd(selectedAdBase) &&
     creativeSourceUrl &&
-    !selectedAdBase.creativeText
+    !selectedAdBase.creativeText?.trim()
       ? captureCreativeText(
           env,
           creativeSourceUrl,
