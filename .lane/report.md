@@ -100,6 +100,22 @@ Gate B manifest:
 - retries: `0`
 - postflight: `j6_retention_alert_count=1`, `j6_retention_alert_mismatch_count=0`, foreign-key violations `0`, scratch restore integrity `ok`, scratch foreign-key violations `0`, scratch database removed `true`, isolated persistence removed `true`, migrations `67`
 
+## Remediation for `pr447-REVIEW-VERDICT.md` (VERDICT: BLOCK)
+
+Cross-model gate blocked at tip `59f590f`. Cause-level remediations below are on
+the current candidate; none park or weaken gates.
+
+| Finding | Verdict class | Disposition | Cause-level fix | Regression |
+|---|---|---|---|---|
+| 1. C2 dual-page `scheduled_monitoring` | **BLOCK** | **Fixed** | Generic `reportDegraded` now suppresses `scheduled_monitoring` the same way it already suppresses `retention_sweep`. Dedicated `sendCustomerAtRiskAlert` remains the sole operator page for budget/dispatch/inline/digest degradation, with failure-mode-specific idempotency keys. | `release-scheduled-observation.server.test.ts` asserts `reportDegraded` is not called for `inlineFailures > 0`. `worker-scheduled-handler.test.ts` asserts exactly one `sendCustomerAtRiskAlert` and no `scheduled_monitoring_degraded` page. |
+| 2. Idempotent / no-work outcomes page as degraded | **BLOCK** | **Fixed** | `sendWeeklyBusinessNumbers` returns a reason discriminator; durable accepted attempt → `reason: "duplicate"` classified `no_work`. `duplicates`-only monitoring is `no_work` (pages only on inline/budget/dispatch/digest failure classes). Customer-risk accepted replays follow the same durable-evidence rule. | Classifier cases in `release-scheduled-observation.server.test.ts`; weekly/risk replay coverage in monitoring/workspace suites. |
+| 3. Heartbeat “never” grace | **FINDING** | **Fixed** | Migration `0072` + `scheduled_observation_health_state` stores an allowlisted per-cron activation baseline. Absent observation uses baseline, not immediate overdue. Baseline is never renewed merely because retention deleted the last row; unavailable baseline fails the health read. | `scheduled-observation-health.server.test.ts` (one cadence before paging; retention does not renew grace); migration parity suite. |
+| 4. Lane report under-states late Codex batch | **FINDING (process)** | **Fixed** | This remediation table + dispositions replace the earlier “two Codex findings” understatement. Early Codex (capture clocks + monthly recap) and late Codex (dual-page, grace, idempotent replay) are both recorded. | Report-only; no product code. |
+| 5. Residuals (C6 partial, email-only deadman, CodeRabbit extract, Greptile/Bugbot limits, BEHIND main) | Residual | **Accepted as stated** | Unchanged honest limits from the BLOCK review. No gate weakening. Rebase onto `origin/main` (`e0ed012` lock isolation) remains a land-time merge step, not a product block. | N/A |
+
+GitHub Codex inline threads for findings 1–3 are answered by the fixes above and
+should be resolved on the remediation push.
+
 ## Review dispositions and residual limits
 
 - CodeRabbit’s valid canonical-column, empty-board copy, saved-approval, and
@@ -118,26 +134,27 @@ Gate B manifest:
   fixture expectation (`alert_count=1`); the harness was updated to require the
   honest zero count while retaining the durable failure row, then the full
   suite and Gate B passed.
-- Codex’s two inline PR findings were confirmed and fixed: proof-backed events
-  now propagate real current/previous capture clocks to the F2 email renderer,
-  and monthly recap distinguishes genuine failures from expected no-op skips
-  so C2 pages only actionable degradation. Both received focused regressions,
-  then the full Vitest, typecheck, and strict Gate B were rerun.
-- Codex’s final three PR findings were also confirmed: scheduled monitoring no
-  longer double-pages through both the generic observer and its dedicated risk
-  mail; idempotent scheduled/weekly replays are separated from real delivery
-  failure using durable accepted-attempt evidence; and a new/reset cron gets
-  one full cadence of durable D1 activation grace. CodeRabbit’s later
-  mixed-mode idempotency finding was valid and fixed so a same-day budget or
-  dispatch page cannot suppress a concurrent inline/digest failure. Its claim
-  that the health test helper lacked `setRows` was stale; the method and passing
-  reset regression were already present. A subsequent accepted→rejected
-  ordering finding was valid: migration 0073 now keeps the accepted throttle
-  fact and the later channel-failure fact independently instead of allowing
-  either to erase the other. The final quota-guarded pass also found and fixed
-  three valid edge cases: degraded-page failure now logs on its own path,
-  text-only missing-clock copy is a complete sentence, and monthly recap
-  `claim_lost` outcomes no longer inflate recipient delivery failures.
+- Codex’s **early** two inline PR findings were confirmed and fixed: proof-backed
+  events now propagate real current/previous capture clocks to the F2 email
+  renderer, and monthly recap distinguishes genuine failures from expected no-op
+  skips so C2 pages only actionable degradation. Both received focused
+  regressions, then the full Vitest, typecheck, and strict Gate B were rerun.
+- Codex’s **late** three PR findings (the BLOCK review’s findings 1–3) were also
+  confirmed and fixed: scheduled monitoring no longer double-pages through both
+  the generic observer and its dedicated risk mail; idempotent scheduled/weekly
+  replays are separated from real delivery failure using durable accepted-attempt
+  evidence; and a new/reset cron gets one full cadence of durable D1 activation
+  grace. See the remediation table above. CodeRabbit’s later mixed-mode
+  idempotency finding was valid and fixed so a same-day budget or dispatch page
+  cannot suppress a concurrent inline/digest failure. Its claim that the health
+  test helper lacked `setRows` was stale; the method and passing reset regression
+  were already present. A subsequent accepted→rejected ordering finding was
+  valid: migration 0073 now keeps the accepted throttle fact and the later
+  channel-failure fact independently instead of allowing either to erase the
+  other. The final quota-guarded pass also found and fixed three valid edge
+  cases: degraded-page failure now logs on its own path, text-only missing-clock
+  copy is a complete sentence, and monthly recap `claim_lost` outcomes no longer
+  inflate recipient delivery failures.
 - The final high-thinking adversarial pass found two more confirmed edge
   cases. Monthly recap now treats a dispatch-gate rejection as `claim_lost`
   only when the durable attempt proves another owner advanced; an unexplained

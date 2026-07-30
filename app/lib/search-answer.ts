@@ -57,6 +57,21 @@ export function buildSearchAnswer(input: {
         : "Not captured yet; use the ad cards as creative signals only",
   };
 
+  if (result.discoveryPartial && adCount === 0) {
+    return {
+      state: "degraded",
+      title: "Search results are partial",
+      summary: "Additional results could not be loaded, so this is not a complete no-ads result.",
+      facts: [
+        { label: "Fresh ads", value: "Partial", detail: sourceLabel },
+        landingFact,
+      ],
+      // Do not route through customerDiscoverySummary: that helper remaps
+      // unknown/partial text into "temporarily delayed" copy.
+      note: "Retry to continue loading the remaining results.",
+    };
+  }
+
   if (isDelayedSearchStatus(result.discoveryStatus) && adCount === 0) {
     return {
       state: "degraded",

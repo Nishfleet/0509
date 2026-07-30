@@ -112,6 +112,7 @@ async function loadWorker() {
     scheduleDigestScheduleExhaustionRecovery,
     observeScheduledTask,
     reportScheduledTaskFailure,
+    sendCustomerAtRiskAlert,
     sendMonthlyCustomerRecaps,
     sendScheduledObservationHeartbeat,
   };
@@ -206,6 +207,46 @@ describe("Worker scheduled handler", () => {
     expect(loaded.observeScheduledTask.mock.calls.map((call) => call[2])).toEqual([
       { cron: NORMAL_CRON, scheduledTime, taskName: "scheduled_monitoring" },
     ]);
+  });
+
+  it("pages scheduled-monitoring inline failures once through the dedicated risk alert", async () => {
+    const loaded = await loadWorker();
+    const { ctx, pending } = createContext();
+    loaded.runScheduledMonitoring.mockResolvedValueOnce({
+      queued: 0,
+      duplicates: 0,
+      inlineRuns: 0,
+      inlineFailures: 1,
+      skippedForBudget: 0,
+      skippedForBilling: 0,
+      dispatchFailures: 0,
+      digests: 0,
+      digestFailures: 0,
+    });
+
+    await loaded.worker.scheduled(
+      {
+        cron: NORMAL_CRON,
+        scheduledTime: Date.parse("2026-07-30T04:00:00.000Z"),
+      } as never,
+      {} as never,
+      ctx as never,
+    );
+    await Promise.all(pending);
+
+    expect(loaded.sendCustomerAtRiskAlert).toHaveBeenCalledTimes(1);
+    expect(loaded.sendCustomerAtRiskAlert).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        inlineFailures: 1,
+        idempotencyKey: expect.stringMatching(/inline/),
+      }),
+    );
+    expect(loaded.reportScheduledTaskFailure).not.toHaveBeenCalledWith(
+      expect.anything(),
+      "scheduled_monitoring_degraded",
+      expect.anything(),
+    );
   });
 
   it("pages monthly recap failures without paging intentional skips", async () => {

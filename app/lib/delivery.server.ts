@@ -3053,56 +3053,75 @@ export async function sendPresenceDigestEmail(
   const { renderEmailShell } = await import("~/lib/email-template.server");
   const { buildUnsubscribeUrl } = await import("~/lib/unsubscribe.server");
 
-  // Prefer an opted-in account email target so List-Unsubscribe works; never
-  // re-provision a paused/unsubscribed address.
-  let deliveryTargetId: string | null = null;
-  let unsubscribeUrl: string | null = null;
-  try {
-    const targets = await listDeliveryTargets(env, input.userId, {
-      watchlistId: null,
-      channel: "email",
-      limit: 10,
-    });
-    const normalized = input.email.trim().toLowerCase();
-    const usable = targets.find(
+  const normalized = input.email.trim().toLowerCase();
+  if (!normalized) return false;
+  const targets = await listDeliveryTargets(env, input.userId, {
+    watchlistId: null,
+    channel: "email",
+    limit: 10,
+  });
+  const matchingTargets = targets.filter(
+    (target) => target.targetValue.trim().toLowerCase() === normalized,
+  );
+  let deliveryTarget =
+    matchingTargets.find(
       (target) =>
-        target.targetValue.trim().toLowerCase() === normalized &&
         target.isOptedIn &&
         !target.optedOutAt &&
         !target.isPaused &&
-        target.isValidated,
-    );
-    if (usable) {
-      deliveryTargetId = usable.id;
-      unsubscribeUrl = await buildUnsubscribeUrl(env, {
-        userId: input.userId,
-        targetId: usable.id,
-      });
-    } else if (!targets.some((t) => t.targetValue.trim().toLowerCase() === normalized)) {
-      const provisioned = await provisionVerifiedAccountEmailTargetIfUnsuppressed(env, {
-        userId: input.userId,
-        targetValue: input.email.trim().toLowerCase(),
-        optInSource: AUTO_PROVISIONED_EMAIL_SOURCE,
-        metadata: { autoProvisioned: true, purpose: "presence_digest" },
-      });
-      if (provisioned?.id) {
-        deliveryTargetId = provisioned.id;
-        unsubscribeUrl = await buildUnsubscribeUrl(env, {
-          userId: input.userId,
-          targetId: provisioned.id,
-        });
-      }
-    }
-  } catch {
-    unsubscribeUrl = null;
+        target.isValidated &&
+        target.validationStatus === "validated",
+    ) ?? null;
+  if (!deliveryTarget && matchingTargets.length > 0) {
+    return false;
   }
+  deliveryTarget ??= await provisionVerifiedAccountEmailTargetIfUnsuppressed(env, {
+    userId: input.userId,
+    targetValue: normalized,
+    optInSource: AUTO_PROVISIONED_EMAIL_SOURCE,
+    metadata: { autoProvisioned: true, purpose: "presence_digest" },
+  });
+  if (!deliveryTarget) return false;
+
+  const unsubscribeUrl = await buildUnsubscribeUrl(env, {
+    userId: input.userId,
+    targetId: deliveryTarget.id,
+  });
 
   const bodyHtml = renderPresenceDigestHtml({
     lines: input.lines,
     appUrl: buildPresenceAppUrl(env),
   });
+  const payloadSnapshot = {
+    kind: "presence_digest",
+    lineCount: input.lines.length,
+  };
+  const claim = await claimInstantDeliveryAttempt(env, {
+    userId: input.userId,
+    watchlistId: null,
+    deliveryTargetId: deliveryTarget.id,
+    lane: "customer",
+    channel: "email",
+    provider: EMAIL_PROVIDER,
+    targetValue: normalized,
+    templateName: "presence_digest",
+    eventIds: [],
+    payloadSnapshot,
+    idempotencyKey: input.idempotencyKey,
+  });
+  if (!claim.attemptId || !claim.claimUpdatedAt) {
+    return claim.duplicate?.status === "sent";
+  }
+
+  const dispatchStartedAt = await markInstantDeliveryDispatchStarted(
+    env,
+    claim.attemptId,
+    claim.claimUpdatedAt,
+  );
+  if (!dispatchStartedAt) return false;
+
   const providerResult = await sendCloudflareEmail(env, {
-    to: input.email,
+    to: normalized,
     subject: input.subject,
     html: renderEmailShell({
       bodyHtml,
@@ -3113,29 +3132,23 @@ export async function sendPresenceDigestEmail(
     unsubscribeUrl,
   });
 
-  await createDeliveryAttempt(env, {
-    userId: input.userId,
-    watchlistId: null,
-    digestRunId: null,
-    deliveryTargetId,
-    lane: "customer",
-    channel: "email",
+  const finalized = await updateDeliveryAttemptResult(env, claim.attemptId, {
     provider: providerResult.provider,
     status: providerResult.status,
     webhookStatus: providerResult.webhookStatus,
-    targetValue: input.email,
     providerMessageId: providerResult.providerMessageId,
     providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
-    templateName: "presence_digest",
-    eventIds: [],
-    payloadSnapshot: { kind: "presence_digest", lineCount: input.lines.length },
-    idempotencyKey: input.idempotencyKey,
     errorMessage: providerResult.errorMessage,
     sentAt: providerAcceptedAt(providerResult),
     failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+    payloadSnapshot,
+    targetValue: normalized,
+    expectedStatus: "pending",
+    expectedWebhookStatus: "provider_unknown",
+    expectedUpdatedAt: dispatchStartedAt,
   });
 
-  return providerResult.status === "sent";
+  return finalized !== false && providerResult.status === "sent";
 }
 
 function buildPresenceAppUrl(env: AppEnv) {

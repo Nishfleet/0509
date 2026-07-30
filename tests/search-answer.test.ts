@@ -39,6 +39,7 @@ function response(input: Partial<SearchResponse> = {}): SearchResponse {
     provider: input.provider ?? "meta_library_browser",
     cacheStatus: input.cacheStatus ?? "miss",
     discoveryStatus: input.discoveryStatus ?? "healthy",
+    discoveryPartial: input.discoveryPartial ?? false,
     discoverySummary: input.discoverySummary ?? null,
     discoveryFailureClass: input.discoveryFailureClass ?? null,
     verifiedCount: input.verifiedCount,
@@ -172,6 +173,29 @@ describe("buildSearchAnswer", () => {
       });
     },
   );
+
+  it("does not present a zero-result partial search as complete", () => {
+    const answer = buildSearchAnswer({
+      result: response({
+        ads: [],
+        nextCursor: "cursor-2",
+        discoveryPartial: true,
+        discoverySummary: "Some additional Meta results could not be loaded.",
+        discoveryFailureClass: "browser_unavailable",
+      }),
+      displayDomain: "boat-lifestyle.com",
+      isDomainSearch: true,
+      isBroaderScope: false,
+    });
+
+    expect(answer).toMatchObject({
+      state: "degraded",
+      title: "Search results are partial",
+      summary:
+        "Additional results could not be loaded, so this is not a complete no-ads result.",
+      note: "Retry to continue loading the remaining results.",
+    });
+  });
 
   it("does not turn an explicit zero verified count into proof", () => {
     const answer = buildSearchAnswer({
