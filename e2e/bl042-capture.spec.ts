@@ -15,7 +15,7 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
  */
 const ENABLED = process.env.BL042_CAPTURE === "1";
 const OUT_DIR =
-  process.env.BL042_OUT ?? "/home/nish/workspaces/products/0509-audit-artifacts-bl042";
+  process.env.BL042_OUT ?? path.resolve("test-results", "bl042-capture");
 
 const SURFACES = [
   { name: "overview", url: "/app", user: "e2e-starter", current: "/app" },
