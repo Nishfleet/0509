@@ -27,13 +27,24 @@ permissions:
 jobs:
   finalize:
     name: Finalize exact Worker soak
-    if: github.repository == 'nish3451/0509'
-    runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}
+    if: github.repository == 'nish3451/0509' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     environment:
       name: production
       url: https://0509.io
     steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Acquire deploy window
+        shell: bash
+        env:
+          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
+        run: ./scripts/deploy-window-lock.sh acquire
+
       - name: Validate immutable deploy identity
         shell: bash
         env:
@@ -48,7 +59,7 @@ jobs:
 
       - name: Verify successful protected production deploy
         id: verify_deploy_run
-        uses: actions/github-script@v8
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           DEPLOY_RUN_ID: ${{ inputs.deploy_run_id }}
           DEPLOY_RUN_ATTEMPT: ${{ inputs.deploy_run_attempt }}
@@ -93,11 +104,11 @@ jobs:
             core.setOutput("run-id", String(run.id));
             core.setOutput("run-attempt", String(run.run_attempt));
 
-      - uses: actions/checkout@v6.0.3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           ref: ${{ steps.verify_deploy_run.outputs.sha }}
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version-file: ".node-version"
           cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
@@ -107,7 +118,7 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Download immutable running-soak evidence
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: production-release-evidence-${{ steps.verify_deploy_run.outputs.sha }}-${{ steps.verify_deploy_run.outputs.run-id }}-${{ steps.verify_deploy_run.outputs.run-attempt }}
           path: test-results
@@ -146,7 +157,7 @@ jobs:
           node scripts/release-evidence-archive.mjs create --output "$FINAL_ARCHIVE"
 
       - name: Preserve immutable passed release evidence
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: production-release-final-evidence-${{ steps.verify_deploy_run.outputs.sha }}-${{ steps.verify_deploy_run.outputs.run-id }}-${{ steps.verify_deploy_run.outputs.run-attempt }}
           path: test-results/production-release-evidence-${{ steps.verify_deploy_run.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}.tar.gz
@@ -155,7 +166,7 @@ jobs:
 
       - name: Preserve failed finalization diagnostics
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: production-soak-finalization-diagnostics-${{ inputs.deploy_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -163,3 +174,19 @@ jobs:
             test-results/production-soak-*.json
           if-no-files-found: warn
           retention-days: 90
+
+      - name: Release deploy window
+        if: always()
+        shell: bash
+        env:
+          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
+        run: ./scripts/deploy-window-lock.sh release
+
+      - name: Remove deploy-window capability file
+        if: always()
+        shell: bash
+        env:
+          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
+        run: |
+          umask 077
+          rm -f -- "$DEPLOY_WINDOW_CAPABILITY_FILE"
