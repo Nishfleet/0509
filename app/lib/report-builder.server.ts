@@ -257,13 +257,19 @@ function buildLandingPageSignals(
   proofCapture: ProofCaptureRecord | null = null,
 ): ReportField[] {
 	const ctaText = presentString(
-    readProofString(proofCapture, "ctaText", "cta") ?? ad?.landingPage?.ctaText,
+    proofCapture
+      ? readProofString(proofCapture, "ctaText", "cta")
+      : ad?.landingPage?.ctaText,
   );
 	const priceText = presentString(
-    readProofString(proofCapture, "priceText", "offer") ?? ad?.landingPage?.priceText,
+    proofCapture
+      ? readProofString(proofCapture, "priceText", "offer")
+      : ad?.landingPage?.priceText,
   );
 	const formPresent =
-    readProofBoolean(proofCapture, "formPresent") ?? ad?.landingPage?.formPresent;
+    proofCapture
+      ? readProofBoolean(proofCapture, "formPresent")
+      : ad?.landingPage?.formPresent;
 
 	return [
 		...(ctaText ? [{ label: "CTA", value: ctaText }] : []),

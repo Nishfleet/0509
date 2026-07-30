@@ -360,7 +360,7 @@ describe("buildWatchlistReport", () => {
     });
   });
 
-  it("keeps a creative unreadable reason when a landing proof succeeded", () => {
+  it("keeps a creative unreadable reason and proof-scoped signals when landing proof succeeded", () => {
     const proof: ProofCaptureRecord = {
       id: "proof-succeeded",
       proofTargetId: "target-1",
@@ -400,6 +400,7 @@ describe("buildWatchlistReport", () => {
     });
 
     expect(report.rows[0]?.captureReasonCode).toBe("ocr_provider_failed");
+    expect(report.rows[0]?.landingPage.signals).toEqual([]);
   });
 
 	it("emits null for missing fields instead of placeholder prose", () => {
