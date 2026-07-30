@@ -1,10 +1,10 @@
 # Silent-failure observability remediation
 
-**Status: remediated, not merge-ready.** Product findings from the BLOCK
-review and the follow-up crgate pass are cause-fixed with regressions. This
-report is not merge approval: external PR CI (`codex-node-checks` lock/flock
-recursion owned by #440), Greptile credit exhaustion, and Bugbot usage limits
-remain outside this lane. Do not merge from this worktree.
+**Status: remediated; terminal PR checks green; not merged.** Product findings
+from the BLOCK review and the follow-up crgate pass are cause-fixed with
+regressions. This report is not merge approval: Greptile credit exhaustion and
+Bugbot usage limits prevented findings from those services. Do not merge from
+this worktree.
 
 Branch: `fix/silent-fixobserve`
 Base: `origin/main` at `46fe111`
