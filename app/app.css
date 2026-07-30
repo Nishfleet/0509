@@ -1673,7 +1673,7 @@ button[aria-busy="true"] {
 }
 
 .f9-app-kicker {
-  color: #0a8f78;
+  color: var(--ink-soft);
   font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 0.78rem;
   font-weight: 600;
@@ -2908,13 +2908,13 @@ textarea:focus-visible,
 /* Preserve a local destination cue when keyboard navigation triggers the
    route-focus handoff. Pointer-driven and initial focus remain visually quiet. */
 .f9-cursor-main:focus-visible {
-  box-shadow: inset 0 3px 0 var(--green-ink);
+  box-shadow: inset 0 3px 0 var(--ink);
 }
 
 /* The skip link still leaves a local destination cue without recreating the
    full-region ring. Route-driven focus has no hash, so first load stays clean. */
 .f9-cursor-main:target {
-  box-shadow: inset 0 3px 0 var(--green-ink);
+  box-shadow: inset 0 3px 0 var(--ink);
 }
 
 @media (max-width: 640px) {
@@ -5162,7 +5162,7 @@ one signal-green accent.
   opacity: 0;
   transform: scaleX(0.28);
   transform-origin: left;
-  background: linear-gradient(90deg, #0aa982, #58c5ff);
+  background: var(--ink);
   transition: opacity 120ms ease;
 }
 
@@ -8093,7 +8093,6 @@ toggles --- */
 /* --- Accent text: greens brighten,
 reds soften --- */
 
-[data-f9-theme="dark"] .f9-app-kicker,
 [data-f9-theme="dark"] .f9-import-row.is-valid em,
 [data-f9-theme="dark"] .f9-text-link,
 [data-f9-theme="dark"] .f9-annual-note.is-valid,
