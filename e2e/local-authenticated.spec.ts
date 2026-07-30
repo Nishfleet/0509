@@ -81,9 +81,24 @@ async function expectCompactHeaderActions(page: Page) {
   // "Overview" link plus the "+ Add competitor" quick-add button (a real
   // <button>, not a link — it opens the palette dialog).
   const pathname = new URL(page.url()).pathname;
-  if (pathname === "/app" || pathname === "/app/watchlists") {
+  if (
+    pathname === "/app" ||
+    pathname === "/app/watchlists" ||
+    pathname === "/app/source-access" ||
+    pathname === "/app/developer-access"
+  ) {
     await expect(page.locator(".f9-dash-topbar")).toHaveCount(0);
-    await expect(page.locator(".f9-wk-head .f9-wk-btn")).toHaveCount(1);
+    const filledButtonCount = await page
+      .locator(".f9-wk-page .f9-wk-btn")
+      .count();
+    if (
+      pathname === "/app/source-access" ||
+      pathname === "/app/developer-access"
+    ) {
+      expect(filledButtonCount).toBeLessThanOrEqual(1);
+    } else {
+      expect(filledButtonCount).toBe(1);
+    }
     return;
   }
   const actions = await page.evaluate(() =>
@@ -380,8 +395,9 @@ test.describe("local authenticated E2E harness", () => {
     await expect(
       page.getByText("Developer access is included in the Agency plan. Upgrade to Agency to create API keys."),
     ).toBeVisible();
-    await expect(page.getByLabel("Key name")).toBeDisabled();
-    await expect(page.getByRole("button", { name: "API keys unavailable" })).toBeDisabled();
+    await expect(page.getByRole("heading", { name: "Developer access is on Agency" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Upgrade to Agency" })).toBeVisible();
+    await expect(page.getByLabel("Key name")).toHaveCount(0);
 
     await page.goto("/app/support");
     await expectAppPage(page);
@@ -441,8 +457,8 @@ test.describe("local authenticated E2E harness", () => {
     await expect(
       page.getByText("Developer access is included in the Agency plan. Upgrade to Agency to create API keys."),
     ).toBeVisible();
-    await expect(page.getByLabel("Key name")).toBeDisabled();
-    await expect(page.getByRole("button", { name: "API keys unavailable" })).toBeDisabled();
+    await expect(page.getByRole("link", { name: "Upgrade to Agency" })).toBeVisible();
+    await expect(page.getByLabel("Key name")).toHaveCount(0);
   });
 
   test("agency fixture exposes developer controls without enabling unavailable social delivery", async ({ page, context, baseURL }) => {
