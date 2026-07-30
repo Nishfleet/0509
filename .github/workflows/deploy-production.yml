@@ -32,10 +32,11 @@ jobs:
           cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
           package-manager-cache: ${{ runner.environment == 'github-hosted' }}
       - run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
-      - run: node scripts/validate-d1-backup.mjs
+      - run: ./scripts/deploy-window-lock.sh run -- node scripts/validate-d1-backup.mjs
       - name: Bind a clean exact-main candidate manifest
         shell: bash
         run: |
+          ./scripts/deploy-window-lock.sh run -- bash -euo pipefail <<'VERIFY_LANE'
           set -euo pipefail
           umask 077
           node scripts/customer-readiness-candidate.mjs --base HEAD \
@@ -43,6 +44,7 @@ jobs:
           node scripts/build-remote-restore-candidate-manifest.mjs \
             --candidate "$RUNNER_TEMP/d1-remote-restore-candidate.json" \
             --output "$RUNNER_TEMP/d1-remote-restore-candidate-manifest.json"
+          VERIFY_LANE
       - name: Verify pre-generated exact R2 restore evidence
         shell: bash
         env:
@@ -50,6 +52,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
+          ./scripts/deploy-window-lock.sh run -- bash -euo pipefail <<'VERIFY_LANE'
           set -euo pipefail
           umask 077
           evidence="$RUNNER_TEMP/d1-remote-restore-evidence.json"
@@ -187,6 +190,7 @@ jobs:
 
           verify_evidence
           test "$(stat -c '%a' "$evidence")" = "600"
+          VERIFY_LANE
       - name: Archive permission-preserving restore evidence
         shell: bash
         run: |

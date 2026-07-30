@@ -328,9 +328,15 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
     await waitFor(() => existsSync(firstMarker));
     const second = spawnScript(lockFile, waitingCommand(secondMarker, secondStop), overrides);
     const secondResult = completed(second);
+    const queueDir = `${overrides.DEPLOY_WINDOW_VERIFY_ROOT}/queue`;
+    await waitFor(
+      () =>
+        existsSync(queueDir) &&
+        readdirSync(queueDir).filter((entry) => /^\d{20}\.\d+\.\d+$/u.test(entry))
+          .length === 1,
+    );
     const third = spawnScript(lockFile, waitingCommand(thirdMarker, thirdStop), overrides);
     const thirdResult = completed(third);
-    const queueDir = `${overrides.DEPLOY_WINDOW_VERIFY_ROOT}/queue`;
     await waitFor(
       () =>
         existsSync(queueDir) &&
@@ -998,7 +1004,7 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
     const result = await acquireResult;
     expect(result.code).toBe(1);
     expect(result.stderr).toContain("died or lost its flock");
-    expect(existsSync(`${lockFile}.held`)).toBe(false);
+    expect(readFileSync(`${lockFile}.held`, "utf8")).toBe("");
     expect(probeIsFree(lockFile)).toBe(true);
   });
 });

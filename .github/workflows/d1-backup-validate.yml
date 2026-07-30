@@ -27,4 +27,4 @@ jobs:
           cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
           package-manager-cache: ${{ runner.environment == 'github-hosted' }}
       - run: ./scripts/deploy-window-lock.sh run -- npm ci
-      - run: node scripts/validate-d1-backup.mjs
+      - run: ./scripts/deploy-window-lock.sh run -- node scripts/validate-d1-backup.mjs

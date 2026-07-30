@@ -11,9 +11,31 @@
 - Manual run any time: `D1_BACKUP_MANUAL_APPROVED=0509-manual-d1-export npm run backup:d1:r2` from the repo root (wrangler OAuth session and R2 access must be available). This marker is the script's explicit confirmation for a production-blocking remote D1 export; unapproved manual runs fail before Wrangler starts.
 - Backup command output redacts temporary signed export URL query strings before logging.
 
-### Runner fallback
+### Hardened runner routing
 
-Routine recovery jobs run on the VPS self-hosted runner with the repository variable `RECOVERY_RUNNER=vps`. GitHub-hosted minutes are an emergency reserve only: if the VPS is down, unset `RECOVERY_RUNNER` to route these jobs to the `ubuntu-latest` fallback, then re-set it to `vps` after recovery.
+The VPS runner fleet uses immutable labels instead of repository-variable
+fallbacks:
+
+- `vps-verify`: three isolated, no-sudo verification runners. GitHub assigns
+  each waiting job to the first matching idle runner; the repository lock
+  provides three FIFO heavy-work slots and makes a fourth contender wait.
+- `vps-deploy`: one isolated deploy coordinator. Only protected recovery and
+  production jobs run here, and the exclusive deploy window drains all active
+  verification slots before provider work begins.
+- `0509-monitoring-hardened`: one isolated monitoring runner for the public
+  uptime workflow.
+
+All five units use distinct non-login accounts, a capped `github-0509.slice`,
+and the root-created lock state under `/run/lock/0509`. They cannot read
+`/home/nish`, use passwordless sudo, or inherit the interactive Claude, Codex,
+Hermes, or GitHub operator credentials. Production credentials remain scoped
+to protected GitHub Environments and never enter a verification job.
+
+Do not restore `RECOVERY_RUNNER` or `MONITORING_RUNNER` fallback expressions.
+An outage should queue visibly rather than silently moving protected work to a
+different trust boundary. For emergency recovery, repair or deliberately
+replace the matching hardened label and run the read-only
+`runner-hardening-proof.yml` workflow before resuming provider work.
 
 The 2026-07-26 weekly backup failed because the GitHub-hosted minutes were exhausted. Verify and record the next successful weekly backup run.
 

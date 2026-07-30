@@ -35,7 +35,7 @@ jobs:
           cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
           package-manager-cache: ${{ runner.environment == 'github-hosted' }}
       - run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
-      - run: node scripts/validate-d1-backup.mjs
+      - run: ./scripts/deploy-window-lock.sh run -- node scripts/validate-d1-backup.mjs
       - name: Run approved D1-to-R2 backup
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

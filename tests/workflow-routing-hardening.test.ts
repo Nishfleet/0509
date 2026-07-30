@@ -89,7 +89,14 @@ describe("workflow routing hardening", () => {
           (step) => step.run === "./scripts/deploy-window-lock.sh acquire",
         );
         for (const step of candidate.steps ?? []) {
-          if (!step.run || !/(?:\bnpm (?:ci|install|run)|\bnpx |\bplaywright )/.test(step.run)) continue;
+          if (
+            !step.run ||
+            !/(?:\bnpm (?:ci|install|run)|\bnpx |\bplaywright |(?:validate-d1-backup|customer-readiness-candidate|build-remote-restore-candidate-manifest|verify-remote-restore-evidence|d1-remote-restore-evidence|d1-backup-to-r2|run-cross-browser-risk-proof)\.mjs)/.test(
+              step.run,
+            )
+          ) {
+            continue;
+          }
           expect(
             step.run,
             `${filename}:${id} heavyweight command must use the shared lane or exclusive deploy lock`,

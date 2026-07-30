@@ -34,14 +34,14 @@ jobs:
       - name: Install dependencies
         run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
 
-      - name: Install Playwright browsers with system dependencies
+      - name: Install Playwright browsers
         run: ./scripts/deploy-window-lock.sh run -- npx playwright install chromium firefox webkit
 
       - name: Build
         run: ./scripts/deploy-window-lock.sh run -- npm run build
 
       - name: Run cross-browser risk proof
-        run: node scripts/run-cross-browser-risk-proof.mjs
+        run: ./scripts/deploy-window-lock.sh run -- node scripts/run-cross-browser-risk-proof.mjs
 
       - name: Upload artifacts on failure
         if: failure()
