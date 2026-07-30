@@ -706,7 +706,12 @@ export default function OpsRoute() {
                 </h2>
                 <p>
                   {item.partial
-                    ? "First-page evidence was retained; a later page could not be fetched."
+                    ? (
+                        <>
+                          First-page evidence was retained; a later page could not be fetched.
+                          {item.failureClass ? ` Failure class: ${item.failureClass}.` : ""}
+                        </>
+                      )
                     : `${item.country}${item.cacheStatus === "stale" ? " · stale cache served" : " · no fresh cache"}`}
                 </p>
                 <p className="f9-muted-copy">{formatTimestamp(item.createdAt)}</p>

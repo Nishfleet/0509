@@ -2764,7 +2764,7 @@ function renderEventDiffHtml(event: WatchEventRecord) {
   if (!captures) {
     return `
       <p style="margin: 0 0 16px; color: #667085; font-size: 13px;">
-        Before/Now comparison not shown because one or both capture times were not recorded.
+        Before/Now comparison not shown because one or both capture times were unavailable or invalid.
       </p>
     `;
   }
@@ -2792,7 +2792,7 @@ function renderEventDiffText(event: WatchEventRecord) {
   const captures = resolveEventDiffCaptures(metadata);
   return captures
     ? ` — was "${from}" (captured ${formatEventCaptureTime(captures.beforeCapturedAt)}), now "${to}" (captured ${formatEventCaptureTime(captures.nowCapturedAt)})`
-    : " — changed values were recorded, but one or both capture times were not recorded.";
+    : " — changed values were recorded, but one or both capture times were unavailable or invalid.";
 }
 
 function resolveEventDiffCaptures(metadata: Record<string, unknown>) {

@@ -2825,8 +2825,11 @@ describe("listAdsByIds", () => {
       creative_text_metadata_json: null,
       raw_json: JSON.stringify({
         metaAdId: "legacy-ad-1",
+        bodySecondary: "Secondary text retained in the legacy payload",
         landingPageUrl: "https://legacy.example.invalid/launch",
         adSnapshotUrl: "https://legacy.example.invalid/ad.png",
+        firstSeenAt: "2026-01-02T03:04:05.000Z",
+        lastSeenAt: "2026-02-03T04:05:06.000Z",
         creativeText: "Text retained in the legacy payload",
         creativeTextCaptureMethod: "ad_snapshot_fetch",
         creativeTextMetadata: { extractor: "legacy" },
@@ -2851,8 +2854,11 @@ describe("listAdsByIds", () => {
     const [ad] = await listAdsByIds({ DB: db } as never, ["legacy-ad-1"]);
 
     expect(ad).toMatchObject({
+      bodySecondary: "Secondary text retained in the legacy payload",
       landingPageUrl: "https://legacy.example.invalid/launch",
       adSnapshotUrl: "https://legacy.example.invalid/ad.png",
+      firstSeenAt: "2026-01-02T03:04:05.000Z",
+      lastSeenAt: "2026-02-03T04:05:06.000Z",
       creativeText: "Text retained in the legacy payload",
       creativeTextCaptureMethod: "ad_snapshot_fetch",
       creativeTextMetadata: { extractor: "legacy" },

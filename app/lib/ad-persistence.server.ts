@@ -143,10 +143,7 @@ export async function listAdsByIds(env: AppEnv, adIds: string[]) {
       advertiser:
         typeof row.advertiser === "undefined" ? raw.advertiser : row.advertiser,
       body: typeof row.body === "undefined" ? raw.body : row.body,
-      bodySecondary:
-        typeof row.body_secondary === "undefined"
-          ? raw.bodySecondary
-          : row.body_secondary ?? undefined,
+      bodySecondary: row.body_secondary ?? raw.bodySecondary,
       previewHeadline:
         typeof row.preview_headline === "undefined"
           ? raw.previewHeadline
@@ -180,14 +177,8 @@ export async function listAdsByIds(env: AppEnv, adIds: string[]) {
         typeof row.platforms_json === "undefined"
           ? raw.platforms
           : parseJson<string[]>(row.platforms_json, []),
-      firstSeenAt:
-        typeof row.first_seen_at === "undefined"
-          ? raw.firstSeenAt
-          : row.first_seen_at,
-      lastSeenAt:
-        typeof row.last_seen_at === "undefined"
-          ? raw.lastSeenAt
-          : row.last_seen_at,
+      firstSeenAt: row.first_seen_at ?? raw.firstSeenAt,
+      lastSeenAt: row.last_seen_at ?? raw.lastSeenAt,
       active:
         typeof row.is_active === "undefined" ? raw.active : row.is_active === 1,
       source: typeof row.source === "undefined" ? raw.source : row.source,

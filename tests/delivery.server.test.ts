@@ -2757,10 +2757,10 @@ describe("alert email content quality", () => {
     );
 
     expect(single.html).toContain(
-      "Before/Now comparison not shown because one or both capture times were not recorded.",
+      "Before/Now comparison not shown because one or both capture times were unavailable or invalid.",
     );
     expect(content.html).toContain(
-      "changed values were recorded, but one or both capture times were not recorded.",
+      "changed values were recorded, but one or both capture times were unavailable or invalid.",
     );
     expect(single.html).not.toContain(">Before<");
     expect(single.html).not.toContain(">Now<");
