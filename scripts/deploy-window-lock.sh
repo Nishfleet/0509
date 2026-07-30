@@ -443,6 +443,17 @@ acquire_window() {
     acquire_deadline="$(awk -v now="$(date +%s.%N)" -v timeout="$acquire_timeout" \
       "BEGIN { printf \"%.9f\", now + timeout }")"
 
+    flock_without_held_fds() {
+      local held_fd
+
+      (
+        for held_fd in "${held_fds[@]}"; do
+          eval "exec ${held_fd}>&-"
+        done
+        exec flock "$@"
+      )
+    }
+
     stat_line="$(<"/proc/$$/stat")"
     stat_fields="${stat_line##*) }"
     read -r -a stat_fields <<<"$stat_fields"
@@ -468,7 +479,7 @@ acquire_window() {
       # metadata. After registration, blocking slot cleanup is the handshake
       # that keeps the holder live through the parent final proof/publication.
       exec 6>"$drain_intent_meta_lock_file"
-      if flock --exclusive --nonblock 6; then
+      if flock_without_held_fds --exclusive --nonblock 6; then
         if [ -f "$drain_intent_file" ]; then
           read -r intent_pid intent_start intent_token intent_caller intent_extra <"$drain_intent_file" || true
         fi
@@ -495,7 +506,7 @@ acquire_window() {
           extra=""
 
           exec 8>"$meta_lock_file"
-          flock --exclusive 8
+          flock_without_held_fds --exclusive 8
           if [ -f "$owner_file" ]; then
             read -r current_pid current_start current_token current_caller extra <"$owner_file" || true
           fi
@@ -612,7 +623,7 @@ acquire_window() {
       owner_file="${slot_file}.held"
       meta_lock_file="${slot_file}.meta.lock"
       exec 8>"$meta_lock_file"
-      flock --exclusive 8
+      acquire_flock --exclusive 8 || exit 99
       if [ -e "$owner_file" ]; then
         flock --unlock 8
         exec 8>&-

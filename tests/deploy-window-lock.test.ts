@@ -60,6 +60,14 @@ function childPids(pid: number): number[] {
   return children.trim().split(/\s+/u).filter(Boolean).map(Number);
 }
 
+function processName(pid: number): string | undefined {
+  try {
+    return readFileSync(`/proc/${pid}/comm`, "utf8").trim();
+  } catch {
+    return undefined;
+  }
+}
+
 function markerSlot(path: string): number | undefined {
   if (!existsSync(path)) return undefined;
   const value = readFileSync(path, "utf8").trim();
@@ -847,5 +855,60 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
     writeFileSync(blockerStop, "");
     expect((await blockingResult).code).toBe(0);
     await waitFor(() => probePoolIsFree(lockFile));
+  });
+
+  it("does not leak pool slots from a killed cleanup metadata waiter", async () => {
+    const lockFile = scratchLock();
+    const caller = {
+      DEPLOY_WINDOW_CALLER_ID: "vitest-cleanup-metadata",
+      DEPLOY_WINDOW_CAPABILITY_FILE: `${lockFile}.cap.cleanup-metadata`,
+    };
+    expect(run(lockFile, "acquire", caller).status).toBe(0);
+    const holderPid = Number(
+      readFileSync(ownerFile(lockFile, 1), "utf8").split(" ")[0],
+    );
+    const [sleeperPid] = childPids(holderPid);
+    expect(sleeperPid).toBeDefined();
+
+    const blockerStop = `${lockFile}.metadata-blocker-stop`;
+    const metadataBlocker = spawn(
+      "flock",
+      [
+        "--exclusive",
+        `${slotFile(lockFile, 1)}.meta.lock`,
+        "bash",
+        "-c",
+        'while [ ! -e "$1" ]; do sleep 0.01; done',
+        "metadata-blocker",
+        blockerStop,
+      ],
+      { stdio: "ignore" },
+    );
+    const blockerResult = completed(metadataBlocker);
+    liveChildren.add(metadataBlocker);
+    metadataBlocker.once("exit", () => liveChildren.delete(metadataBlocker));
+    await waitFor(
+      () =>
+        spawnSync("flock", [
+          "--exclusive",
+          "--nonblock",
+          `${slotFile(lockFile, 1)}.meta.lock`,
+          "true",
+        ]).status !== 0,
+    );
+
+    process.kill(holderPid, "SIGTERM");
+    await waitFor(() => {
+      const children = childPids(holderPid);
+      return (
+        !children.includes(sleeperPid!) &&
+        children.some((pid) => processName(pid) === "flock")
+      );
+    });
+    process.kill(holderPid, "SIGKILL");
+    await waitFor(() => probePoolIsFree(lockFile));
+
+    writeFileSync(blockerStop, "");
+    expect((await blockerResult).code).toBe(0);
   });
 });
