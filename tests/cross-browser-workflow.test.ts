@@ -17,35 +17,35 @@ describe("cross-browser workflow", () => {
   const parsed = parse(workflow) as {
     jobs: {
       matrix: {
-        "runs-on": string;
+        "runs-on": string[];
         steps: Step[];
       };
     };
   };
 
-  it("routes to the monitoring runner with a hosted fallback", () => {
-    expect(parsed.jobs.matrix["runs-on"]).toBe(
-      "${{ vars.MONITORING_RUNNER || 'ubuntu-latest' }}",
-    );
+  it("routes only to a hardened verification runner", () => {
+    expect(parsed.jobs.matrix["runs-on"]).toEqual([
+      "self-hosted",
+      "linux",
+      "x64",
+      "vps-verify",
+    ]);
   });
 
-  it("installs system packages only on GitHub-hosted runners", () => {
-    const hostedInstall = parsed.jobs.matrix.steps.find(
-      (step) =>
-        step.name === "Install Playwright browsers with system dependencies",
-    );
-    expect(hostedInstall).toMatchObject({
-      if: "runner.environment == 'github-hosted'",
-      run: "npx playwright install chromium firefox webkit --with-deps",
-    });
-
-    const selfHostedInstall = parsed.jobs.matrix.steps.find(
+  it("runs browser installation and proof inside a verification lane", () => {
+    const browserInstall = parsed.jobs.matrix.steps.find(
       (step) => step.name === "Install Playwright browsers",
     );
-    expect(selfHostedInstall).toMatchObject({
-      if: "runner.environment == 'self-hosted'",
-      run: "npx playwright install chromium firefox webkit",
+    expect(browserInstall).toMatchObject({
+      run: "./scripts/deploy-window-lock.sh run -- npx playwright install chromium firefox webkit",
     });
-    expect(selfHostedInstall?.run).not.toContain("--with-deps");
+    expect(browserInstall?.run).not.toContain("--with-deps");
+
+    const proof = parsed.jobs.matrix.steps.find(
+      (step) => step.name === "Run cross-browser risk proof",
+    );
+    expect(proof?.run).toBe(
+      "./scripts/deploy-window-lock.sh run -- node scripts/run-cross-browser-risk-proof.mjs",
+    );
   });
 });

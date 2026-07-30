@@ -26,7 +26,7 @@ describe("manual D1 backup workflow", () => {
     expect(parsed.jobs.backup?.if).toBe(
       "github.repository == 'nish3451/0509' && github.ref == 'refs/heads/main'",
     );
-    expect(parsed.jobs.backup?.environment).toBe("d1-backup-r2");
+    expect(parsed.jobs.backup?.environment).toBe("production");
 
     const backupSteps = parsed.jobs.backup?.steps
       ?.map((step) => step.run)
@@ -67,7 +67,9 @@ describe("manual D1 backup workflow", () => {
     expect(backupStep?.env?.D1_BACKUP_AUTOMATION_APPROVED).toBe("0509-weekly-d1-to-r2");
 
     const backupSteps = steps.map((step) => step.run).filter(Boolean);
-    expect(backupSteps.indexOf("node scripts/validate-d1-backup.mjs")).toBeGreaterThanOrEqual(0);
+    const validationCommand =
+      "./scripts/deploy-window-lock.sh run -- node scripts/validate-d1-backup.mjs";
+    expect(backupSteps.indexOf(validationCommand)).toBeGreaterThanOrEqual(0);
     const backupIndex = backupSteps.findIndex((run) =>
       run?.includes("node scripts/d1-backup-to-r2.mjs"),
     );
@@ -77,7 +79,7 @@ describe("manual D1 backup workflow", () => {
       ),
     ).toBeGreaterThan(bindingIndex);
     expect(backupIndex).toBeGreaterThan(
-      backupSteps.indexOf("node scripts/validate-d1-backup.mjs"),
+      backupSteps.indexOf(validationCommand),
     );
     expect(workflow).not.toMatch(/api[_-]?token:\s*['\"]/i);
   });

@@ -205,8 +205,8 @@ describe("D1 remote restore evidence automation", () => {
     expect(workflow.on?.schedule).toEqual([
       { cron: "47 20 * * SUN,WED" },
     ]);
-    expect(workflow.jobs?.restore?.environment).toBe("d1-backup-r2");
-    expect(workflow.jobs?.cleanup?.environment).toBe("d1-backup-r2");
+    expect(workflow.jobs?.restore?.environment).toBe("production");
+    expect(workflow.jobs?.cleanup?.environment).toBe("production");
     expect(workflow.jobs?.cleanup?.if).toContain("always()");
     expect(workflow.jobs?.cleanup?.needs).toBe("restore");
     for (const [job, consumer] of [

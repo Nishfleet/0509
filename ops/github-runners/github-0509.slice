@@ -1,0 +1,11 @@
+[Unit]
+Description=0509 GitHub Actions runner resource boundary
+
+[Slice]
+CPUAccounting=true
+CPUQuota=300%
+MemoryAccounting=true
+MemoryHigh=10G
+MemoryMax=12G
+TasksAccounting=true
+TasksMax=1536
