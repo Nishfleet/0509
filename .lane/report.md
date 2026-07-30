@@ -66,32 +66,29 @@ retryable and durably visible instead of pretending a second page occurred.
 | CodeRabbit PR | The initial 4 actionable inline findings were verified and fixed (shared CSS, D1 NULL fallback, failed-page count zero, failure-mode-specific alert keys). A later review posted one actionable dispatch-gate diagnostic and identified the verified-account-email fallback plus health-query index outside the narrow diff range; all three were verified and fixed. The terminal review found that the operator's partial-result label hid the retained failure class; its regression failed first and the rendering now preserves both the partial status and cause. A historical outside-diff major found during the final audit was also fixed: alert target reuse now honors account-wide exact-address suppression before delivery. A post-push Codex PR review then found that reclaiming a pre-target activation failure left `delivery_target_id=NULL`; the generic reclaim CAS now attaches only a missing current target before dispatch. The docstring warning and broad client-route extraction request are repository-wide/out-of-lane maintainability work, not correctness findings in this candidate. |
 | Greptile PR review | Unavailable: `nish3451 has reached the 50-credit limit for trial accounts`; no inline or general code findings were produced |
 | Cross-model adversarial review | BLOCK review (`pr447-REVIEW-VERDICT.md`) findings 1–3 fixed at cause. Earlier Codex-engine passes also found valid edge cases in recap dispatch ownership, retention grace, global unsubscribe preservation, operator partial visibility, partial-result readiness denominators, workspace/watchlist delivery scope, idempotent customer-risk replays, legacy C6 count migration, the production Free-activation dispatch target, lazy-provision/unsubscribe atomicity, and fresh-partial presentation. The terminal exact-candidate pass found two further P2s: opaque Meta API errors still used a browser class, and one partial exact-domain path retained a definitive zero-verification headline. Both failed first and were fixed at cause. The follow-up delta review found one P3 backoff regression; it also failed first and the provider-neutral class now retains the established five-minute cooldown. The exact eight-file Claude pass accepted no actionable findings at 0.85, and the final alert-suppression delta passed a separate exact review at 0.90. |
-| `bugbot-gate status` | Final status is run after the immutable push and printed verbatim in the handoff. Historical pre-final status was `ALLOW BUGBOT` / `risk: high`; GitHub's automatic Bugbot attempt previously hit the usage limit. |
+| `bugbot-gate status` | `ALLOW BUGBOT` / `risk: high` for the terminal code fingerprint; one run was triggered and marked. Cursor returned its expected usage-limit result, so no Bugbot findings were produced. |
 
-### PR CI merge-ref blocker
+### PR CI terminal result
 
-GitHub run `30545966908`, job `codex-node-checks`, is not green. The first
-attempt logged every test file as passing, then retained a Vitest worker until
-GitHub canceled the operation. A single authorized failed-job rerun reproduced
-the same non-terminating process and was canceled to release the shared
-self-hosted runner once the cause was proven.
+Historical GitHub run `30545966908` retained a Vitest worker after every test
+file passed because its merge ref contained the older deploy-window shim
+recursion described below. The owning lane subsequently repaired that shared
+runner path. On remediation code tip `374570f`, exact-head run `30583993791`
+passed install, build, full test, and typecheck in 3m3s; Gitleaks run
+`30583993799` and backup-tool validation run `30583993779` also passed.
 
-The PR merge ref includes `origin/main` commit `e0ed012` (#440), which is newer
-than this lane's `46fe111` base and added the deploy-window compatibility
-tests. On CI, that test calculates `realFlock` with `command -v flock`; PATH
-resolves it to the installed `/home/nish/.local/bin/flock` compatibility shim.
-The test exports that same path as `FLOCK_COMPAT_REAL`. Its fd-lock probe then
-executes the shim as its own "real" flock indefinitely:
+The historical merge ref included `origin/main` commit `e0ed012` (#440), which
+was newer than this lane's `46fe111` base and added the deploy-window
+compatibility tests. On that old CI run, `command -v flock` resolved to the
+installed `/home/nish/.local/bin/flock` compatibility shim and its fd-lock
+probe executed the shim as its own “real” flock indefinitely:
 
 `deploy-window-lock.sh -> /home/nish/.local/bin/flock -> deploy-window-lock.sh`
 
-The second attempt's process tree reproduced that exact recursion under
-`tests/deploy-window-lock.test.ts`; no candidate test assertion failed.
-Fixing `scripts/flock-compat.sh`, `scripts/deploy-window-lock.sh`, their tests,
-or the installed runner shim belongs to #440's lock/CI ownership and would
-violate this lane's coordinate-by-avoidance boundary. The check must remain
-failed/canceled until that owning lane fixes the real-flock resolution, after
-which this PR's failed job should be rerun.
+The second historical attempt reproduced that recursion under
+`tests/deploy-window-lock.test.ts`; no candidate assertion failed. This lane
+correctly did not edit #440's lock/CI ownership. The green terminal run proves
+the external blocker is now cleared without gate weakening or cross-lane edits.
 
 Gate B manifest source of truth (final remediation source):
 
