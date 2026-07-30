@@ -20,6 +20,7 @@ describe("production soak finalization workflow", () => {
     });
     expect(parsed.concurrency).toEqual({
       group: "production-deploy-refs/heads/main",
+      queue: "max",
       "cancel-in-progress": false,
     });
     expect(parsed.permissions).toEqual({ actions: "read", contents: "read" });
@@ -29,7 +30,9 @@ describe("production soak finalization workflow", () => {
 
     const provenance = parsed.jobs?.finalize?.steps?.find((step) => step.name === "Verify successful protected production deploy");
     expect(provenance?.id).toBe("verify_deploy_run");
-    expect(provenance?.uses).toBe("actions/github-script@v8");
+    expect(provenance?.uses).toBe(
+      "actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd",
+    );
     const script = String(provenance?.with?.script);
     expect(script).toContain("github.rest.actions.getWorkflowRun");
     expect(script).toContain('run.head_branch === "main"');
@@ -100,14 +103,18 @@ describe("production soak finalization workflow", () => {
     const archive = steps.find((step) => step.name === "Archive immutable passed release evidence");
     const upload = steps.find((step) => step.name === "Preserve immutable passed release evidence");
 
-    expect(download?.uses).toBe("actions/download-artifact@v8");
+    expect(download?.uses).toBe(
+      "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+    );
     expect(download?.with?.["run-id"]).toContain("steps.verify_deploy_run.outputs.run-id");
     expect(download?.with?.name).toContain("steps.verify_deploy_run.outputs.sha");
     expect(download?.with?.["github-token"]).toContain("secrets.GITHUB_TOKEN");
     expect(restore?.run).toContain("release-evidence-archive.mjs restore");
     expect(finalize?.run).toContain("gate-c-soak.mjs finalize");
     expect(archive?.run).toContain("release-evidence-archive.mjs create");
-    expect(upload?.uses).toBe("actions/upload-artifact@v7");
+    expect(upload?.uses).toBe(
+      "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+    );
     expect(upload?.with?.name).toContain("production-release-final-evidence-");
     expect(upload?.with?.["retention-days"]).toBe(90);
     expect(workflow).not.toContain("D1_REMOTE_RESTORE_EVIDENCE_JSON");

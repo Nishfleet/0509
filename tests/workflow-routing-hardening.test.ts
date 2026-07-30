@@ -6,7 +6,6 @@ import { parse } from "yaml";
 
 const workflowsDirectory = ".github/workflows";
 const verificationRunner = ["self-hosted", "linux", "x64", "vps-verify"];
-const monitoringRunner = ["self-hosted", "linux", "x64", "0509-monitoring-hardened"];
 const fullSha = /@[a-f0-9]{40}(?:\s|#|$)/;
 
 type Step = { uses?: string; run?: string; env?: Record<string, string> };
@@ -42,7 +41,7 @@ describe("workflow routing hardening", () => {
     }
   });
 
-  it("uses dedicated immutable runner labels for verification, production, and monitoring", () => {
+  it("uses dedicated immutable runner labels for verification and GitHub-hosted trusted operations", () => {
     for (const [file, id] of [
       ["ci.yml", "codex-node-checks"],
       ["cross-browser-matrix.yml", "matrix"],
@@ -61,7 +60,7 @@ describe("workflow routing hardening", () => {
     ] as const) {
       expect(job(file, id)["runs-on"]).toBe("ubuntu-latest");
     }
-    expect(job("uptime-health.yml", "health")["runs-on"]).toEqual(monitoringRunner);
+    expect(job("uptime-health.yml", "health")["runs-on"]).toBe("ubuntu-latest");
   });
 
   it("keeps production secrets and production environments out of verification jobs", () => {
@@ -154,7 +153,7 @@ describe("workflow routing hardening", () => {
       "${{ matrix.label }}",
     ]);
     expect(parsed.jobs?.deploy).toBeUndefined();
-    expect(parsed.jobs?.monitor?.["runs-on"]).toEqual(monitoringRunner);
+    expect(parsed.jobs?.monitor).toBeUndefined();
     expect(source).toContain("github.ref == 'refs/heads/main'");
     expect(source).toContain("/run/lock/0509/deploy-window.lock");
     expect(source).toContain("/home/nish");

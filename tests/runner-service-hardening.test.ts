@@ -17,10 +17,6 @@ const verifySlice = readFileSync(
   "ops/github-runners/github-0509-verify.slice",
   "utf8",
 );
-const reservedSlice = readFileSync(
-  "ops/github-runners/github-0509-reserved.slice",
-  "utf8",
-);
 const tmpfiles = readFileSync(
   "ops/github-runners/github-runner-0509.tmpfiles",
   "utf8",
@@ -28,18 +24,22 @@ const tmpfiles = readFileSync(
 
 describe("hardened GitHub runner services", () => {
   it("uses separate non-login identities and dedicated routing labels", () => {
-    for (const instance of ["verify1", "verify2", "verify3", "monitor"]) {
+    expect(provisioner).toContain("readonly INSTANCES=(verify1 verify2 verify3)");
+    for (const instance of ["verify1", "verify2", "verify3"]) {
       expect(provisioner).toContain(instance);
     }
     expect(provisioner).toContain("printf 'gha0509-%s");
     expect(provisioner).toContain("vps-verify");
     expect(provisioner).toContain("0509-%s");
     expect(provisioner).not.toContain("vps-deploy");
-    expect(provisioner).toContain("0509-monitoring-hardened");
+    expect(provisioner).not.toContain("monitor");
+    expect(provisioner).not.toContain("github-0509-reserved");
     expect(provisioner).toContain("--disableupdate");
     expect(provisioner).not.toMatch(/cp .*\.credentials/);
-    expect(provisioner).toContain("Runner.Worker");
-    expect(provisioner).toContain("legacy runner service");
+    expect(provisioner).toContain("Runner\\.(Listener|Worker)");
+    expect(provisioner).toContain("--state=active");
+    expect(provisioner).toContain("--property=ExecStart");
+    expect(provisioner).toContain("--property=Description");
     expect(provisioner).toContain("Validated existing runner identity");
   });
 
@@ -51,7 +51,7 @@ describe("hardened GitHub runner services", () => {
     expect(provisioner).not.toMatch(/echo .*registration_token/i);
   });
 
-  it("sandboxes every runner in a capped shared slice", () => {
+  it("sandboxes the verification fleet in a capped shared slice", () => {
     expect(unit).toContain("User=gha0509-%i");
     expect(unit).toContain("Slice=github-0509.slice");
     expect(unit).toContain("NoNewPrivileges=true");
@@ -70,10 +70,7 @@ describe("hardened GitHub runner services", () => {
     expect(verifySlice).toContain("CPUQuota=225%");
     expect(verifySlice).toContain("MemoryMax=8G");
     expect(verifySlice).toContain("TasksMax=1024");
-    expect(reservedSlice).toContain("CPUQuota=75%");
-    expect(reservedSlice).toContain("MemoryLow=2G");
     expect(provisioner).toContain("Slice=github-0509-verify.slice");
-    expect(provisioner).toContain("Slice=github-0509-reserved.slice");
   });
 
   it("uses root-created stable lock inodes with only lock-group access", () => {
@@ -102,10 +99,8 @@ describe("hardened GitHub runner services", () => {
     expect(unit).toContain("Environment=PATH=/opt/0509-runner/bin:");
   });
 
-  it("keeps each unit below the aggregate cap and reserves host headroom", () => {
+  it("keeps each verification unit below the aggregate cap", () => {
     expect(provisioner).toContain("CPUQuota=125%");
     expect(provisioner).toContain("MemoryMax=3G");
-    expect(provisioner).toContain("CPUQuota=75%");
-    expect(provisioner).toContain("MemoryMax=2G");
   });
 });

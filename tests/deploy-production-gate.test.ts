@@ -1171,6 +1171,9 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     const materializeIndex = workflow.indexOf(
       "- name: Materialize private remote-restore evidence",
     );
+    const synchronizeCanaryIndex = workflow.indexOf(
+      "- name: Synchronize private canary token",
+    );
     const deployIndex = workflow.indexOf("- name: Deploy");
     const verifyEvidenceIndex = workflow.indexOf(
       "- name: Verify complete release evidence set",
@@ -1178,9 +1181,10 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     const releaseIndex = workflow.indexOf("- name: Release deploy window");
     const verifySecretsStep = workflow.slice(
       verifySecretsIndex,
-      workflow.indexOf("- uses: actions/setup-node@v6", verifySecretsIndex),
+      workflow.indexOf("- uses: actions/setup-node@", verifySecretsIndex),
     );
-    const materializeStep = workflow.slice(materializeIndex, deployIndex);
+    const materializeStep = workflow.slice(materializeIndex, synchronizeCanaryIndex);
+    const synchronizeCanaryStep = workflow.slice(synchronizeCanaryIndex, deployIndex);
     const deployStep = workflow.slice(deployIndex, verifyEvidenceIndex);
     const releaseStep = workflow.slice(releaseIndex);
 
@@ -1189,7 +1193,8 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(verifySecretsIndex).toBeGreaterThan(acquireIndex);
     expect(testIndex).toBeGreaterThan(verifySecretsIndex);
     expect(materializeIndex).toBeGreaterThan(testIndex);
-    expect(deployIndex).toBeGreaterThan(materializeIndex);
+    expect(synchronizeCanaryIndex).toBeGreaterThan(materializeIndex);
+    expect(deployIndex).toBeGreaterThan(synchronizeCanaryIndex);
     expect(verifyEvidenceIndex).toBeGreaterThan(deployIndex);
     expect(releaseIndex).toBeGreaterThan(verifyEvidenceIndex);
     expect(workflow).toContain("timeout-minutes: 270");
@@ -1214,6 +1219,12 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(workflow).toContain("overwrite: true");
     expect(materializeStep).toContain(
       'chmod 600 test-results/d1-remote-restore-evidence.json',
+    );
+    expect(synchronizeCanaryStep).toContain(
+      "CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}",
+    );
+    expect(synchronizeCanaryStep).toContain(
+      "./node_modules/.bin/wrangler secret put CANARY_BYPASS_TOKEN --name 0509",
     );
     expect(deployStep).toContain(
       "CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}",

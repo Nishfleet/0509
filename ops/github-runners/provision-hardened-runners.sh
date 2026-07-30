@@ -11,7 +11,7 @@ readonly SOURCE_DIR
 readonly STATE_ROOT="/var/lib/github-runners"
 readonly TOOL_ROOT="/opt/0509-runner"
 readonly LOCK_GROUP="gha0509-lock"
-readonly INSTANCES=(verify1 verify2 verify3 monitor)
+readonly INSTANCES=(verify1 verify2 verify3)
 
 die() {
   printf 'runner provisioning error: %s\n' "$*" >&2
@@ -45,33 +45,45 @@ account_for() {
 labels_for() {
   case "$1" in
     verify*) printf 'vps-verify,0509-%s\n' "$1" ;;
-    monitor) printf '0509-monitoring-hardened,0509-monitor\n' ;;
     *) die "unknown runner instance: $1" ;;
   esac
 }
 
-assert_legacy_runner_drain() {
-  if pgrep -f '/Runner.Worker' >/dev/null; then
-    die "a GitHub Actions Runner.Worker is still active; drain jobs before registration"
+assert_runner_drain() {
+  local active_services unit exec_start description
+
+  if pgrep -f 'Runner\.(Listener|Worker)' >/dev/null; then
+    die "a GitHub Actions Runner.Listener or Runner.Worker is still active; drain jobs before registration"
   fi
 
-  local unit
+  if ! active_services="$(systemctl list-units --type=service --state=active --no-legend --plain --full)"; then
+    die "could not inspect active systemd services before runner registration"
+  fi
+
   while read -r unit; do
+    unit="${unit%% *}"
     [[ -n "${unit}" ]] || continue
-    if systemctl is-active --quiet "${unit}"; then
-      die "legacy runner service ${unit} is active; stop all legacy runners before registration"
+    if ! exec_start="$(systemctl show --property=ExecStart --value "${unit}")"; then
+      die "could not inspect ExecStart for active service ${unit} before runner registration"
     fi
-  done < <(
-    systemctl list-unit-files --type=service --no-legend \
-      'actions.runner.nish3451-0509.*.service' |
-      awk '{ print $1 }'
-  )
+    if ! description="$(systemctl show --property=Description --value "${unit}")"; then
+      die "could not inspect Description for active service ${unit} before runner registration"
+    fi
+    if [[ "${exec_start}" == *"Runner.Listener"* ||
+      "${exec_start}" == *"Runner.Worker"* ||
+      "${exec_start}" == *"/actions-runner/"*"run.sh"* ||
+      "${exec_start}" == *"/actions-runner/"*"runsvc.sh"* ||
+      "${exec_start}" == *"/github-runners/"*"run.sh"* ||
+      "${exec_start}" == *"/github-runners/"*"runsvc.sh"* ||
+      "${description}" =~ [Gg]it[Hh]ub.*[Aa]ctions.*[Rr]unner ]]; then
+      die "GitHub Actions runner service ${unit} is active; stop all runners before registration"
+    fi
+  done <<<"${active_services}"
 }
 
 limits_for() {
   case "$1" in
     verify*) printf 'CPUQuota=125%%\nMemoryHigh=2500M\nMemoryMax=3G\n' ;;
-    monitor) printf 'CPUQuota=75%%\nMemoryHigh=1500M\nMemoryMax=2G\n' ;;
     *) die "unknown runner instance: $1" ;;
   esac
 }
@@ -102,8 +114,6 @@ install_policy_files() {
     /etc/systemd/system/github-0509.slice
   install -o root -g root -m 0644 "${SOURCE_DIR}/github-0509-verify.slice" \
     /etc/systemd/system/github-0509-verify.slice
-  install -o root -g root -m 0644 "${SOURCE_DIR}/github-0509-reserved.slice" \
-    /etc/systemd/system/github-0509-reserved.slice
   install -o root -g root -m 0644 "${SOURCE_DIR}/github-runner-0509@.service" \
     /etc/systemd/system/github-runner-0509@.service
   install -o root -g root -m 0644 "${SOURCE_DIR}/github-runner-0509.tmpfiles" \
@@ -163,10 +173,7 @@ install_limits() {
     install -d -o root -g root -m 0755 "${dropin}"
     {
       printf '[Service]\n'
-      case "${instance}" in
-        verify*) printf 'Slice=github-0509-verify.slice\n' ;;
-        monitor) printf 'Slice=github-0509-reserved.slice\n' ;;
-      esac
+      printf 'Slice=github-0509-verify.slice\n'
       limits_for "${instance}"
     } >"${dropin}/limits.conf"
     chmod 0644 "${dropin}/limits.conf"
@@ -177,7 +184,7 @@ main() {
   require_root
   secure_token_file
   trap destroy_token_file EXIT
-  assert_legacy_runner_drain
+  assert_runner_drain
   create_accounts
   install_policy_files
   install_limits
