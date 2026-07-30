@@ -50,27 +50,27 @@ retryable and durably visible instead of pretending a second page occurred.
 | Gate | Result |
 |---|---|
 | Lock-wrapped `npm ci` | Passed; 293 packages, 0 vulnerabilities |
-| Focused regression suites | Passed; initial 5 files, 158/158 tests; late-review suite 8 files, 229/229; corrected Gate-B contract 2 files, 21/21 |
+| Focused regression suites | Passed; initial 5 files, 158/158 tests; late-review suite 8 files, 229/229; corrected Gate-B contract 2 files, 21/21; final proof checks 2 files, 17/17 |
 | Lock-wrapped full Vitest | Passed after all review fixes; 386 files, 4,174/4,174 tests. One earlier run hit the deploy-window lock protocol test’s timing race (4,170 passed, 1 failed); that test passed 5/5 in isolation and subsequent complete runs passed. |
 | Lock-wrapped typecheck | Passed; Wrangler typegen, React Router typegen, `tsc -b` |
 | Full Gate B | Passed; 73/73, first attempt, zero retries |
 | `git diff --check` | Passed |
 | `sgscan` | Passed on the final diff; exit 0, no new security findings |
-| CodeRabbit local | Three quota-guarded passes: initial 6 findings (5 valid fixes; broad monitoring-module extraction deferred as out of lane), then 2 valid scheduler/provider-state fixes, then 1 valid partial-cache proof assertion. All actionable local findings were applied. |
+| CodeRabbit local | Four quota-guarded passes: initial 6 findings (5 valid fixes; broad monitoring-module extraction deferred as out of lane), then 2 valid scheduler/provider-state fixes, then 1 valid partial-cache proof assertion, and finally 2 valid proof hardenings (explicit heartbeat-config assertion and NULL-safe fixture comparison). All actionable local findings were applied. |
 | CodeRabbit PR | Passed after posting 4 actionable inline findings; all four were verified and fixed (shared CSS, D1 NULL fallback, failed-page count zero, failure-mode-specific alert keys). The docstring warning and broad client-route extraction request are repository-wide/out-of-lane maintainability work, not correctness findings in this candidate. |
 | Greptile PR review | Unavailable: `nish3451 has reached the 50-credit limit for trial accounts`; no inline or general code findings were produced |
 | `bugbot-gate status` | `ALLOW BUGBOT` — `risk: high` — `reason: High-risk or critical diff. One paid Bugbot run is justified.` GitHub's automatic attempt then reported `Bugbot couldn't run - usage limit reached`; expected/non-blocking, and `bugbot-gate mark-bugbot` recorded the fingerprint |
 
 Gate B manifest:
 
-- path: `test-results/gate-b-manifest-local-release-local-59f6d540b80ae8b089100036bb9f1cf4.json`
+- path: `test-results/gate-b-manifest-local-release-local-7bae353159bd4ea847529a3ff4d73c47.json`
 - `schemaVersion`: `3`
 - `status`: `passed`
 - `strict`: `true`
 - `strictIssues`: `null`
-- `candidateFingerprint`: `3897f94b24ffe6dda387a077f3907115876ba3095b13d6f73ebbac2fcd3d26b9`
+- `candidateFingerprint`: `fbbdca57fa5943f95769f0b86967d30bc9c82920f5c60a0743fd976c080b3baa`
 - `environment`: `local`
-- `serverIdentity`: `local-59f6d540b80ae8b089100036bb9f1cf4`
+- `serverIdentity`: `local-7bae353159bd4ea847529a3ff4d73c47`
 - entries: `73`
 - postflight: `j6_retention_alert_count=1`, `j6_retention_alert_mismatch_count=0`, foreign-key violations `0`, scratch restore integrity `ok`, isolated persistence removed `true`
 

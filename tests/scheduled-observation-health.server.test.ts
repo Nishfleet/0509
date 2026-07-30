@@ -35,6 +35,8 @@ describe("scheduled observation heartbeat", () => {
     const wranglerConfig = readFileSync("wrangler.jsonc", "utf8");
     const cronBlock = wranglerConfig.match(/"crons"\s*:\s*\[([\s\S]*?)\]/)?.[1] ?? "";
     const configuredCrons = [...cronBlock.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+    expect(configuredCrons).toContain(SCHEDULED_OBSERVATION_HEARTBEAT_CRON);
+
     const workloadCrons = configuredCrons.filter(
       (cron) => cron !== SCHEDULED_OBSERVATION_HEARTBEAT_CRON,
     );
