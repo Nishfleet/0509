@@ -347,7 +347,7 @@ export async function createWatchEvent(
                  FROM proof_capture
                  WHERE id = ?
                    AND json_valid(capture_metadata_json)
-                   AND json_type(capture_metadata_json, '${PROOF_CAPTURE_CLEANUP_CLAIM_PATH}') IS NOT NULL
+                   AND json_type(capture_metadata_json, ?) IS NOT NULL
                )`
             : "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"}
         `,
@@ -377,6 +377,10 @@ export async function createWatchEvent(
         ...(proofCaptureId
           ? ([
               ["watchEvent.proofCaptureGuardId", proofCaptureId],
+              [
+                "watchEvent.proofCaptureCleanupClaimPath",
+                PROOF_CAPTURE_CLEANUP_CLAIM_PATH,
+              ],
             ] satisfies NamedD1Binding[])
           : []),
       ],

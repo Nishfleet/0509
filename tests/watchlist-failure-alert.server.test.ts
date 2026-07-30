@@ -322,7 +322,7 @@ describe("consecutive scheduled watchlist failure alerts", () => {
     }
   });
 
-  it("records and throttles an operator sender failure", async () => {
+  it("retries an operator sender failure without burning the throttle window", async () => {
     deliveryMocks.sendOperatorAlertEmail.mockRejectedValue(
       new Error("email unavailable"),
     );
@@ -351,6 +351,7 @@ describe("consecutive scheduled watchlist failure alerts", () => {
         reason: "email_failed",
         consecutiveFailures: 3,
       });
+      deliveryMocks.sendOperatorAlertEmail.mockResolvedValue(true);
       await expect(
         alertConsecutiveWatchlistFailures(
           { DB: harness.db } as never,
@@ -360,17 +361,29 @@ describe("consecutive scheduled watchlist failure alerts", () => {
           ),
         ),
       ).resolves.toEqual({
-        sent: false,
-        reason: "throttled",
+        sent: true,
+        reason: "sent",
         consecutiveFailures: 3,
       });
-      expect(deliveryMocks.sendOperatorAlertEmail).toHaveBeenCalledTimes(1);
+      expect(deliveryMocks.sendOperatorAlertEmail).toHaveBeenCalledTimes(2);
+      expect(
+        harness.sqlite
+          .prepare(
+            `SELECT last_error, alert_count
+             FROM cron_failure_alert_throttle
+             WHERE task_key = ?`,
+          )
+          .get(`watchlist_failure_${WATCHLIST_ID}`),
+      ).toEqual({
+        last_error: "operator_alert_sent",
+        alert_count: 1,
+      });
     } finally {
       harness.close();
     }
   });
 
-  it("logs a false operator send without changing the failed run path", async () => {
+  it("logs and retries a false operator send without changing the failed run path", async () => {
     deliveryMocks.sendOperatorAlertEmail.mockResolvedValue(false);
     const consoleError = vi
       .spyOn(console, "error")
@@ -413,9 +426,167 @@ describe("consecutive scheduled watchlist failure alerts", () => {
           consecutiveFailures: 3,
         }),
       );
+      expect(
+        harness.sqlite
+          .prepare(
+            `SELECT task_key
+             FROM cron_failure_alert_throttle
+             WHERE task_key = ?`,
+          )
+          .get(`watchlist_failure_${WATCHLIST_ID}`),
+      ).toBeUndefined();
+
+      deliveryMocks.sendOperatorAlertEmail.mockResolvedValue(true);
+      await expect(
+        reportConsecutiveWatchlistFailure(
+          { DB: harness.db } as never,
+          {
+            watchlistId: WATCHLIST_ID,
+            watchlistName: "adspy watch",
+            runId: "failed-3",
+            triggerType: "scheduled",
+          },
+        ),
+      ).resolves.toMatchObject({
+        sent: true,
+        reason: "sent",
+        consecutiveFailures: 3,
+      });
+      expect(deliveryMocks.sendOperatorAlertEmail).toHaveBeenCalledTimes(2);
     } finally {
       consoleError.mockRestore();
       harness.close();
+    }
+  });
+
+  it("keeps throttle keys isolated for future non-UUID watchlist IDs", async () => {
+    const harness = createHarness();
+    const futureWatchlistId = "workspace/watchlist:future-format";
+    harness.sqlite
+      .prepare(
+        `INSERT INTO watchlist (
+           id,
+           user_id,
+           name,
+           target_type,
+           target_id,
+           target_fingerprint,
+           target_label,
+           target_country,
+           is_active,
+           created_at,
+           updated_at
+         )
+         VALUES (?, ?, 'future watch', 'advertiser', 'future', 'fp-future', 'future', NULL, 1, ?, ?)`,
+      )
+      .run(
+        futureWatchlistId,
+        USER_ID,
+        "2026-07-01T00:00:00.000Z",
+        "2026-07-01T00:00:00.000Z",
+      );
+    for (const [index, startedAt] of [
+      "2026-07-19T06:00:00.000Z",
+      "2026-07-19T09:00:00.000Z",
+      "2026-07-19T12:00:00.000Z",
+    ].entries()) {
+      harness.sqlite
+        .prepare(
+          `INSERT INTO watchlist_run (
+             id,
+             watchlist_id,
+             trigger_type,
+             status,
+             page_budget,
+             pages_scanned,
+             summary_json,
+             started_at,
+             finished_at,
+             error_code,
+             created_at,
+             updated_at
+           )
+           VALUES (?, ?, 'scheduled', 'failed', 2, 0, '{}', ?, ?, 'monitoring_failed', ?, ?)`,
+        )
+        .run(
+          `future-failed-${index + 1}`,
+          futureWatchlistId,
+          startedAt,
+          startedAt,
+          startedAt,
+          startedAt,
+        );
+    }
+
+    try {
+      await expect(
+        alertConsecutiveWatchlistFailures(
+          { DB: harness.db } as never,
+          {
+            watchlistId: futureWatchlistId,
+            watchlistName: "future watch",
+            runId: "future-failed-3",
+            triggerType: "scheduled",
+            now: new Date("2026-07-19T12:00:01.000Z"),
+          },
+        ),
+      ).resolves.toMatchObject({
+        sent: true,
+        reason: "sent",
+        consecutiveFailures: 3,
+      });
+      expect(
+        harness.sqlite
+          .prepare(
+            `SELECT task_key
+             FROM cron_failure_alert_throttle
+             WHERE task_key = ?`,
+          )
+          .get(`watchlist_failure_${futureWatchlistId}`),
+      ).toEqual({
+        task_key: `watchlist_failure_${futureWatchlistId}`,
+      });
+    } finally {
+      harness.close();
+    }
+  });
+
+  it("reports an unknown count when alert evaluation itself fails", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const db = {
+      prepare: vi.fn(() => {
+        throw new Error("D1 unavailable");
+      }),
+    };
+
+    try {
+      await expect(
+        reportConsecutiveWatchlistFailure(
+          { DB: db } as never,
+          {
+            watchlistId: WATCHLIST_ID,
+            watchlistName: "adspy watch",
+            runId: "failed-3",
+            triggerType: "scheduled",
+          },
+        ),
+      ).resolves.toEqual({
+        sent: false,
+        reason: "alert_failed",
+        consecutiveFailures: null,
+      });
+      expect(consoleError).toHaveBeenCalledWith(
+        "watchlist failure alert itself failed",
+        expect.objectContaining({
+          watchlistId: WATCHLIST_ID,
+          runId: "failed-3",
+          error: "D1 unavailable",
+        }),
+      );
+    } finally {
+      consoleError.mockRestore();
     }
   });
 });

@@ -21,8 +21,9 @@ export type WatchlistFailureAlertResult = {
     | "throttled"
     | "no_db"
     | "email_skipped"
-    | "email_failed";
-  consecutiveFailures: number;
+    | "email_failed"
+    | "alert_failed";
+  consecutiveFailures: number | null;
 };
 
 function safeIdentifier(value: string) {
@@ -76,7 +77,7 @@ export async function alertConsecutiveWatchlistFailures(
     };
   }
 
-  const watchlistId = safeIdentifier(input.watchlistId);
+  const displayWatchlistId = safeIdentifier(input.watchlistId);
   const runId = safeIdentifier(input.runId);
   const runs = await bindD1Named(
     env.DB.prepare(
@@ -113,7 +114,7 @@ export async function alertConsecutiveWatchlistFailures(
 
   const now = input.now ?? new Date();
   const nowIso = now.toISOString();
-  const taskKey = throttleKey(watchlistId);
+  const taskKey = throttleKey(input.watchlistId);
   const existing = await bindD1Named(
     env.DB.prepare(
       `SELECT last_alerted_at
@@ -145,7 +146,7 @@ export async function alertConsecutiveWatchlistFailures(
       subject: `0509 watchlist monitoring failure: ${safeLabel(input.watchlistName)}`,
       intro: "A watchlist monitoring promise needs attention:",
       lines: [
-        `Watchlist "${safeLabel(input.watchlistName)}" (${watchlistId}) has failed ${consecutiveFailures} consecutive scheduled runs.`,
+        `Watchlist "${safeLabel(input.watchlistName)}" (${displayWatchlistId}) has failed ${consecutiveFailures} consecutive scheduled runs.`,
         `Latest run: ${runId}.`,
         `Failure code: ${safeErrorCode(latestFailure?.error_code ?? null)}.`,
         `Time (UTC): ${nowIso}`,
@@ -153,15 +154,9 @@ export async function alertConsecutiveWatchlistFailures(
         "Repeating alerts for this watchlist are throttled to one per 6 hours.",
       ],
       idempotencyKey:
-        `watchlist-failure:${watchlistId}:${throttleWindowKey(now.getTime())}`,
+        `watchlist-failure:${input.watchlistId}:${throttleWindowKey(now.getTime())}`,
     });
   } catch {
-    await recordThrottleAttempt(
-      env,
-      taskKey,
-      nowIso,
-      "operator_alert_failed",
-    );
     return {
       sent: false,
       reason: "email_failed",
@@ -169,12 +164,14 @@ export async function alertConsecutiveWatchlistFailures(
     };
   }
 
-  await recordThrottleAttempt(
-    env,
-    taskKey,
-    nowIso,
-    sent ? "operator_alert_sent" : "operator_alert_not_sent",
-  );
+  if (sent) {
+    await recordThrottleAttempt(
+      env,
+      taskKey,
+      nowIso,
+      "operator_alert_sent",
+    );
+  }
   return {
     sent,
     reason: sent ? "sent" : "email_skipped",
@@ -247,8 +244,8 @@ export async function reportConsecutiveWatchlistFailure(
     });
     return {
       sent: false,
-      reason: "email_failed" as const,
-      consecutiveFailures: 0,
+      reason: "alert_failed" as const,
+      consecutiveFailures: null,
     };
   }
 }
