@@ -178,9 +178,24 @@ load_release_token() {
 }
 
 validate_durations() {
+  local mode="$1"
   local name value
+  local -a names
 
-  for name in ACQUIRE_TIMEOUT HOLD_CAP POLL_INTERVAL VERIFY_POLL_INTERVAL; do
+  case "$mode" in
+    acquire)
+      names=(ACQUIRE_TIMEOUT HOLD_CAP POLL_INTERVAL)
+      ;;
+    run)
+      names=(ACQUIRE_TIMEOUT VERIFY_POLL_INTERVAL)
+      ;;
+    *)
+      echo "deploy-window-lock: unsupported validation mode '${mode}'." >&2
+      exit 64
+      ;;
+  esac
+
+  for name in "${names[@]}"; do
     value="${!name}"
     if ! is_duration "$value"; then
       echo "deploy-window-lock: ${name} must be a non-negative number of seconds (got '${value}')." >&2
@@ -188,21 +203,24 @@ validate_durations() {
     fi
   done
 
-  if [[ "$HOLD_CAP" =~ ^0+([.]0+)?$ ]] || [[ "$POLL_INTERVAL" =~ ^0+([.]0+)?$ ]]; then
+  if [ "$mode" = "acquire" ] &&
+     { [[ "$HOLD_CAP" =~ ^0+([.]0+)?$ ]] || [[ "$POLL_INTERVAL" =~ ^0+([.]0+)?$ ]]; }; then
     echo "deploy-window-lock: HOLD_CAP and POLL_INTERVAL must be greater than zero." >&2
     exit 64
   fi
-  if [[ "$VERIFY_POLL_INTERVAL" =~ ^0+([.]0+)?$ ]]; then
+  if [ "$mode" = "run" ] && [[ "$VERIFY_POLL_INTERVAL" =~ ^0+([.]0+)?$ ]]; then
     echo "deploy-window-lock: VERIFY_POLL_INTERVAL must be greater than zero." >&2
     exit 64
   fi
-  if [[ ! "$VERIFY_SLOTS" =~ ^[1-9][0-9]*$ ]] || [ "$VERIFY_SLOTS" -gt 8 ]; then
+  if [ "$mode" = "run" ] &&
+     { [[ ! "$VERIFY_SLOTS" =~ ^[1-9][0-9]*$ ]] || [ "$VERIFY_SLOTS" -gt 8 ]; }; then
     echo "deploy-window-lock: DEPLOY_WINDOW_VERIFY_SLOTS must be an integer from 1 through 8." >&2
     exit 64
   fi
-  if [[ ! "$VERIFY_PORT_BASE" =~ ^[0-9]+$ ]] ||
-     [ "$VERIFY_PORT_BASE" -lt 1024 ] ||
-     [ "$VERIFY_PORT_BASE" -gt 65527 ]; then
+  if [ "$mode" = "run" ] &&
+     { [[ ! "$VERIFY_PORT_BASE" =~ ^[0-9]+$ ]] ||
+       [ "$VERIFY_PORT_BASE" -lt 1024 ] ||
+       [ "$VERIFY_PORT_BASE" -gt 65527 ]; }; then
     echo "deploy-window-lock: DEPLOY_WINDOW_VERIFY_PORT_BASE must be an integer from 1024 through 65527." >&2
     exit 64
   fi
@@ -554,6 +572,22 @@ release_window() {
 
 run_in_verification_lane() {
   local deadline now remaining slot candidate_fd slot_fd="" admission_fd gate_fd result lane_tmp default_port
+  local lane_holder_pid=""
+
+  interrupt_lane() {
+    local exit_code="$1"
+
+    trap - INT TERM
+    if [ -n "$lane_holder_pid" ] && kill -0 "$lane_holder_pid" 2>/dev/null; then
+      kill -TERM "$lane_holder_pid" 2>/dev/null || true
+      wait "$lane_holder_pid" 2>/dev/null || true
+    fi
+    if [ -n "$slot_fd" ]; then
+      flock --unlock "$slot_fd" 2>/dev/null || true
+      exec {slot_fd}>&-
+    fi
+    exit "$exit_code"
+  }
 
   mkdir -p "$VERIFY_ROOT"
   if [ -L "$VERIFY_TMP_ROOT" ]; then
@@ -592,13 +626,31 @@ run_in_verification_lane() {
     sleep "$VERIFY_POLL_INTERVAL"
   done
 
+  trap 'interrupt_lane 130' INT
+  trap 'interrupt_lane 143' TERM
   mkdir -p "${VERIFY_TMP_ROOT}/slot-${slot}"
   lane_tmp="$(mktemp -d "${VERIFY_TMP_ROOT}/slot-${slot}/${CALLER_ID}-$$.XXXXXX")"
   default_port=$((VERIFY_PORT_BASE + slot))
   now="$(date +%s.%N)"
   remaining="$(awk -v now="$now" -v deadline="$deadline" \
     'BEGIN { left = deadline - now; printf "%.9f", (left > 0 ? left : 0) }')"
-  if (
+  (
+    command_pid=""
+
+    # shellcheck disable=SC2329 # Invoked indirectly from the signal traps.
+    terminate_command_group() {
+      local exit_code="$1"
+
+      trap - INT TERM
+      if [ -n "$command_pid" ] && kill -0 "$command_pid" 2>/dev/null; then
+        kill -TERM -- "-${command_pid}" 2>/dev/null || true
+        wait "$command_pid" 2>/dev/null || true
+      fi
+      exit "$exit_code"
+    }
+
+    trap 'terminate_command_group 130' INT
+    trap 'terminate_command_group 143' TERM
     trap 'rm -rf -- "$lane_tmp"' EXIT
     export TMPDIR="$lane_tmp"
     export DEPLOY_WINDOW_SLOT="$slot"
@@ -628,23 +680,32 @@ run_in_verification_lane() {
       # descendants must not be able to outlive those locks.
       exec {gate_fd}>&-
       exec {slot_fd}>&-
-      "$@"
-    )
-  ); then
+      exec setsid "$@"
+    ) &
+    command_pid=$!
+    if wait "$command_pid"; then
+      exit 0
+    else
+      exit $?
+    fi
+  ) &
+  lane_holder_pid=$!
+
+  if wait "$lane_holder_pid"; then
     result=0
   else
     result=$?
   fi
+  trap - INT TERM
 
   flock --unlock "$slot_fd" 2>/dev/null || true
   exec {slot_fd}>&-
   return "$result"
 }
 
-validate_durations
-
 case "${1:-}" in
   acquire)
+    validate_durations acquire
     acquire_window
     ;;
 
@@ -653,6 +714,7 @@ case "${1:-}" in
     ;;
 
   run)
+    validate_durations run
     shift
     if [ "${1:-}" = "--" ]; then
       shift

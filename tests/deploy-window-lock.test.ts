@@ -138,6 +138,17 @@ function admissionAllowsShared(lockFile: string): boolean {
   );
 }
 
+function slotIsFree(lockFile: string, slot: number): boolean {
+  return (
+    spawnSync("flock", [
+      "--exclusive",
+      "--nonblock",
+      `${lockFile}.verify/slot-${slot}.lock`,
+      "true",
+    ]).status === 0
+  );
+}
+
 afterEach(() => {
   for (const child of liveChildren) {
     child.kill("SIGKILL");
@@ -158,6 +169,21 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
     expect(probeIsFree(lockFile)).toBe(false);
 
     const released = run(lockFile, "release");
+    expect(released.status, released.stderr).toBe(0);
+    expect(released.stdout).toContain("deploy window released");
+    expect(probeIsFree(lockFile)).toBe(true);
+  });
+
+  it("releases even when inherited verification settings are invalid", () => {
+    const lockFile = scratchLock();
+
+    expect(run(lockFile, "acquire").status).toBe(0);
+    const released = run(lockFile, "release", {
+      DEPLOY_WINDOW_VERIFY_POLL_INTERVAL: "bogus",
+      DEPLOY_WINDOW_VERIFY_PORT_BASE: "bogus",
+      DEPLOY_WINDOW_VERIFY_SLOTS: "bogus",
+    });
+
     expect(released.status, released.stderr).toBe(0);
     expect(released.stdout).toContain("deploy window released");
     expect(probeIsFree(lockFile)).toBe(true);
@@ -372,6 +398,49 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
           process.kill(childPid, "SIGKILL");
         } catch {
           // The descendant may have exited after the assertion probe.
+        }
+      }
+    }
+  });
+
+  it("forwards cancellation and reaps the lock-holding command group", async () => {
+    const lockFile = scratchLock();
+    const marker = `${lockFile}.cancelled-command`;
+    let commandPid = 0;
+    const lane = spawnScript(
+      lockFile,
+      [
+        "run",
+        "--",
+        "bash",
+        "-c",
+        'printf "%s" "$$" >"$1"; sleep 30',
+        "lane",
+        marker,
+      ],
+      {
+        DEPLOY_WINDOW_ACQUIRE_TIMEOUT: "2",
+        DEPLOY_WINDOW_VERIFY_ROOT: `${lockFile}.verify`,
+        DEPLOY_WINDOW_VERIFY_TMP_ROOT: `${lockFile}.tmp`,
+      },
+    );
+    const laneResult = completed(lane);
+
+    try {
+      await waitFor(() => existsSync(marker));
+      commandPid = Number(readFileSync(marker, "utf8"));
+      expect(() => process.kill(commandPid, 0)).not.toThrow();
+
+      lane.kill("SIGTERM");
+      expect((await laneResult).code).toBe(143);
+      await waitFor(() => probeIsFree(lockFile) && slotIsFree(lockFile, 1));
+      expect(() => process.kill(commandPid, 0)).toThrow();
+    } finally {
+      if (Number.isInteger(commandPid) && commandPid > 0) {
+        try {
+          process.kill(-commandPid, "SIGKILL");
+        } catch {
+          // The cancellation path should already have reaped the group.
         }
       }
     }
