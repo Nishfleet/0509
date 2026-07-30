@@ -2,7 +2,7 @@
 
 Branch: `fix/silent-fixobserve`
 Base: `origin/main` at `46fe111`
-Pull request: pending creation
+Pull request: https://github.com/nish3451/0509/pull/447
 
 ## Outcome
 
@@ -57,8 +57,8 @@ retryable and durably visible instead of pretending a second page occurred.
 | `git diff --check` | Passed |
 | `sgscan` | Exit 1 from repository-wide pre-existing warnings because HEAD equals the base and the wrapper cannot baseline uncommitted changes. No warning is in this lane’s changed lines; the changed-line logger heuristic is INFO only and interpolates a sanitized task key. |
 | CodeRabbit local | Initial 6 findings: 5 valid fixes applied, broad monitoring-module extraction deferred as out of lane; final exact-candidate review: 0 findings |
-| Greptile PR review | Pending PR creation |
-| `bugbot-gate status` | Pending PR creation |
+| Greptile PR review | Unavailable: `nish3451 has reached the 50-credit limit for trial accounts`; no inline or general code findings were produced |
+| `bugbot-gate status` | `ALLOW BUGBOT` — `risk: high` — `reason: High-risk or critical diff. One paid Bugbot run is justified.` GitHub's automatic attempt then reported `Bugbot couldn't run - usage limit reached`; expected/non-blocking, and `bugbot-gate mark-bugbot` recorded the fingerprint |
 
 Gate B manifest:
 
@@ -79,6 +79,10 @@ Gate B manifest:
   rejected-heartbeat findings were fixed. Its request to split the existing
   4,000+ line monitoring module below 800 lines is a separate architectural
   refactor and would violate this lane’s bounded ownership.
+- Greptile could not supply the second PR-level opinion because the account's
+  trial credits are exhausted. There are no unresolved Greptile threads; the
+  mandatory cross-model adversarial review therefore remains a merge-time
+  gate rather than a completed signal from this lane.
 - The hourly heartbeat is independent of the four production workload cron
   expressions, but it still uses Cloudflare’s scheduler. It detects one or
   more missed workload triggers when the heartbeat runs; only an external
