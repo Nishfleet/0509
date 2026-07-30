@@ -16,6 +16,7 @@ export {
 
 export {
   listDeliveryTargets,
+  hasSuppressedEmailTargetForUserAndAddress,
   getDeliveryTargetReadinessStats,
   upsertDeliveryTarget,
   getDeliveryTargetById,

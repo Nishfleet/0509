@@ -441,9 +441,7 @@ function buildPlateFacts(row: ReportRow): FactRow[] {
           >
             Open the page
           </a>
-        ) : (
-          landingPageUrl
-        ),
+        ) : null,
     },
     {
       key: "Language",

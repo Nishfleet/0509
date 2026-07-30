@@ -29,7 +29,12 @@ import type {
 export async function listDeliveryTargets(
   env: AppEnv,
   userId: string,
-  options: { watchlistId?: string | null; channel?: DeliveryChannel; limit?: number } = {},
+  options: {
+    watchlistId?: string | null;
+    channel?: DeliveryChannel;
+    targetValue?: string;
+    limit?: number;
+  } = {},
 ) {
   const limit = Math.max(1, Math.min(100, Math.floor(options.limit ?? 20)));
   const clauses = ["user_id = ?"];
@@ -43,6 +48,10 @@ export async function listDeliveryTargets(
   if (options.channel) {
     clauses.push("channel = ?");
     bindings.push(options.channel);
+  }
+  if (options.targetValue !== undefined) {
+    clauses.push("lower(trim(target_value)) = lower(trim(?))");
+    bindings.push(options.targetValue);
   }
 
   const rows = await many<DeliveryTargetRow>(
@@ -59,6 +68,27 @@ export async function listDeliveryTargets(
   );
 
   return rows.map(toDeliveryTargetRecord);
+}
+
+export async function hasSuppressedEmailTargetForUserAndAddress(
+  env: AppEnv,
+  input: { userId: string; targetValue: string },
+) {
+  const row = await one<{ suppressed: number }>(
+    env,
+    `
+      SELECT 1 AS suppressed
+      FROM delivery_target
+      WHERE user_id = ?
+        AND channel = 'email'
+        AND lower(trim(target_value)) = lower(trim(?))
+        AND opted_out_at IS NOT NULL
+      LIMIT 1
+    `,
+    input.userId,
+    input.targetValue,
+  );
+  return row?.suppressed === 1;
 }
 
 export async function getDeliveryTargetReadinessStats(env: AppEnv, userId: string) {

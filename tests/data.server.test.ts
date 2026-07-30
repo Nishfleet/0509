@@ -3637,6 +3637,17 @@ describe("getOperatorSnapshot", () => {
       expect(deliveryFailures?.sql).toContain("delivery_attempt.status = 'pending'");
       expect(deliveryFailures?.sql).toContain("delivery_attempt.webhook_status = 'provider_unknown'");
       expect(discoveryFailures?.bindings).toContain(recentWindowIso);
+      expect(discoveryFailures?.sql).toContain(
+        "json_extract(discovery_fetch_log.metadata_json, '$.partial') AS partial",
+      );
+      const discoveryProviders = findStatement(
+        mock.statements,
+        "FROM discovery_provider_state",
+        "ORDER BY updated_at DESC",
+      );
+      expect(discoveryProviders?.sql).toContain(
+        "json_extract(metadata_json, '$.partial') AS partial",
+      );
     } finally {
       vi.useRealTimers();
     }

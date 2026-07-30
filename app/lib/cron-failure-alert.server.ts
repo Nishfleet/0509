@@ -2,6 +2,7 @@ import type { AppEnv } from "~/lib/env.server";
 
 /** One operator alert per scheduled task per this window. */
 export const CRON_FAILURE_ALERT_THROTTLE_MS = 6 * 60 * 60 * 1000;
+export const CRON_FAILURE_ALERT_COUNT_MAX = 1_000_000;
 
 export type CronFailureAlertResult = {
   sent: boolean;
@@ -122,7 +123,10 @@ async function recordFailedAttempt(env: AppEnv, taskKey: string, at: string) {
          ELSE excluded.last_error
        END,
        last_failed_at = excluded.last_failed_at,
-       failed_count = cron_failure_alert_throttle.failed_count + 1`,
+       failed_count = MIN(
+         cron_failure_alert_throttle.failed_count + 1,
+         ${CRON_FAILURE_ALERT_COUNT_MAX}
+       )`,
   )
     .bind(taskKey, at, at)
     .run();

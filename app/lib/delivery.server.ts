@@ -1859,7 +1859,7 @@ async function beginDigestProviderDispatch(
   return { dispatchStartedAt: null, duplicate: current };
 }
 
-async function resolveDigestEmailTargets(
+export async function resolveDigestEmailTargets(
   env: AppEnv,
   userId: string,
   accountEmail: string | null,
@@ -1868,13 +1868,39 @@ async function resolveDigestEmailTargets(
     const migrate = deliveryData.migrateAutoProvisionedEmailTargets;
     if (typeof migrate === "function") await migrate(env, userId, accountEmail);
   }
-  const allTargets = await listDeliveryTargets(env, userId, {
+  const normalizedAccountEmail = normalizeDeliveryEmailValue(accountEmail);
+  if (!normalizedAccountEmail) {
+    return [];
+  }
+  const workspaceTargets = await listDeliveryTargets(env, userId, {
     watchlistId: null,
     channel: "email",
+    targetValue: normalizedAccountEmail,
     limit: 10,
   });
-  const configuredTargets = allTargets.filter((target: DeliveryTargetRecord) =>
-    isUsableEmailTarget(target, accountEmail),
+  const suppressionReader = (
+    "hasSuppressedEmailTargetForUserAndAddress" in deliveryData
+      ? deliveryData.hasSuppressedEmailTargetForUserAndAddress
+      : undefined
+  ) as
+    | ((
+        readerEnv: AppEnv,
+        input: { userId: string; targetValue: string },
+      ) => Promise<boolean>)
+    | undefined;
+  if (
+    typeof suppressionReader === "function" &&
+    await suppressionReader(env, {
+      userId,
+      targetValue: normalizedAccountEmail,
+    })
+  ) {
+    return [];
+  }
+  const configuredTargets = dedupeTargetsByValue(
+    workspaceTargets.filter((target: DeliveryTargetRecord) =>
+      isUsableEmailTarget(target, normalizedAccountEmail),
+    ),
   );
 
   if (configuredTargets.length > 0) {
@@ -1883,7 +1909,7 @@ async function resolveDigestEmailTargets(
 
   // Never re-provision an address the recipient unsubscribed or paused —
   // upsertDeliveryTarget would reset those flags.
-  if (!accountEmail || hasEmailTargetForAddress(allTargets, accountEmail)) {
+  if (workspaceTargets.length > 0) {
     return [];
   }
 
@@ -1891,7 +1917,7 @@ async function resolveDigestEmailTargets(
     userId,
     watchlistId: null,
     channel: "email",
-    targetValue: accountEmail,
+    targetValue: normalizedAccountEmail,
     validationStatus: "validated",
     isValidated: true,
     isOptedIn: true,

@@ -135,6 +135,18 @@ describe("sendMonthlyCustomerRecaps", () => {
       errorMessage: null,
       deliveredAt: null,
     });
+    const upsertDeliveryTarget = vi.fn().mockResolvedValue({
+      id: "target-1",
+      channel: "email",
+      targetValue: "owner@example.com",
+      validationStatus: "validated",
+      isValidated: true,
+      isOptedIn: true,
+      isPaused: false,
+      optedOutAt: null,
+      optInSource: "account_email",
+      metadata: { autoProvisioned: true },
+    });
 
     vi.doMock("~/lib/email-verification.server", () => ({
       isUserEmailVerified: vi.fn().mockResolvedValue(true),
@@ -165,18 +177,8 @@ describe("sendMonthlyCustomerRecaps", () => {
       getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
         emailEnabled: true,
       }),
-      listDeliveryTargets: vi.fn().mockResolvedValue([
-        {
-          id: "target-1",
-          channel: "email",
-          targetValue: "owner@example.com",
-          validationStatus: "validated",
-          isValidated: true,
-          isOptedIn: true,
-          isPaused: false,
-          optedOutAt: null,
-        },
-      ]),
+      listDeliveryTargets: vi.fn().mockResolvedValue([]),
+      upsertDeliveryTarget,
     }));
     vi.doMock("~/lib/delivery-email-core.server", () => ({
       EMAIL_PROVIDER: "cloudflare",
@@ -227,6 +229,18 @@ describe("sendMonthlyCustomerRecaps", () => {
       templateName: "monthly_recap",
       deliveryTargetId: "target-1",
     });
+    expect(upsertDeliveryTarget).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        userId: "user-1",
+        channel: "email",
+        targetValue: "owner@example.com",
+        validationStatus: "validated",
+        isValidated: true,
+        isOptedIn: true,
+        optInSource: "account_email",
+      }),
+    );
 
     const second = await sendMonthlyCustomerRecaps(
       { DB: {} } as never,
@@ -251,6 +265,7 @@ describe("sendMonthlyCustomerRecaps", () => {
       claimUpdatedAt: "2026-07-06T05:00:05.000Z",
     });
     markInstantDeliveryDispatchStarted.mockResolvedValueOnce(null);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const rejected = await sendMonthlyCustomerRecaps(
       { DB: {} } as never,
       { scheduledTime: Date.parse("2026-07-06T05:00:00.000Z") },
@@ -261,6 +276,13 @@ describe("sendMonthlyCustomerRecaps", () => {
       sent: 0,
       duplicates: 0,
     });
+    expect(consoleError).toHaveBeenCalledWith(
+      "Monthly recap dispatch gate rejected.",
+      expect.objectContaining({
+        userId: "user-1",
+        reason: "dispatch_gate_rejected",
+      }),
+    );
   });
 
   it("skips users with zero activity", async () => {

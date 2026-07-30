@@ -9,3 +9,6 @@ CREATE TABLE IF NOT EXISTS scheduled_observation_health_state (
   had_observation INTEGER NOT NULL DEFAULT 0 CHECK (had_observation IN (0, 1)),
   updated_at TEXT NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_release_scheduled_observation_cron_scheduled
+  ON release_scheduled_observation(cron, scheduled_at);

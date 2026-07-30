@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   alertScheduledTaskFailure,
+  CRON_FAILURE_ALERT_COUNT_MAX,
   CRON_FAILURE_ALERT_THROTTLE_MS,
   reportScheduledTaskFailure,
 } from "~/lib/cron-failure-alert.server";
@@ -77,7 +78,12 @@ function createThrottleDb(
                     ? detail ?? lastAlertedAt
                     : existing?.last_failed_at ?? null,
                   failed_count: failedAttempt && sql.includes("failed_count")
-                    ? (existing?.failed_count ?? 0) + 1
+                    ? sql.includes("failed_count = MIN")
+                      ? Math.min(
+                          (existing?.failed_count ?? 0) + 1,
+                          CRON_FAILURE_ALERT_COUNT_MAX,
+                        )
+                      : (existing?.failed_count ?? 0) + 1
                     : existing?.failed_count ?? 0,
                 });
                 return { success: true };
@@ -276,6 +282,40 @@ describe("cron failure alert throttle", () => {
       last_failed_at: rejectedAt.toISOString(),
       failed_count: 1,
     });
+  });
+
+  it("caps the durable rejected-page aggregate while continuing to retry", async () => {
+    sendOperatorAlertEmail.mockResolvedValue(false);
+    const rows = new Map<string, ThrottleRow>([
+      [
+        "scheduled_monitoring",
+        {
+          last_alerted_at: "2026-07-12T06:00:00.000Z",
+          last_error: "operator_alert_not_sent",
+          alert_count: 0,
+          last_failed_at: "2026-07-12T06:00:00.000Z",
+          failed_count: CRON_FAILURE_ALERT_COUNT_MAX,
+        },
+      ],
+    ]);
+    const env = {
+      DB: createThrottleDb(rows),
+      LAUNCH_CANARY_EMAIL: "ops@0509.io",
+    } as unknown as AppEnv;
+
+    await expect(
+      alertScheduledTaskFailure(
+        env,
+        "scheduled_monitoring",
+        new Error("email still unavailable"),
+        { now: new Date("2026-07-12T12:00:00.000Z") },
+      ),
+    ).resolves.toEqual({ sent: false, reason: "email_skipped" });
+
+    expect(sendOperatorAlertEmail).toHaveBeenCalledTimes(1);
+    expect(rows.get("scheduled_monitoring")?.failed_count).toBe(
+      CRON_FAILURE_ALERT_COUNT_MAX,
+    );
   });
 
   it("keeps reportScheduledTaskFailure non-throwing when a false-send throttle write fails", async () => {

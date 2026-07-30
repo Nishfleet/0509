@@ -16,6 +16,10 @@ export type ScheduledObservationHealth = {
   overdue: boolean;
 };
 
+/**
+ * Reads schedule freshness after lazily initializing/updating aggregate health
+ * state for every configured cron. Callers should account for those D1 writes.
+ */
 export async function listScheduledObservationHealth(
   env: AppEnv,
   options: { now?: Date } = {},

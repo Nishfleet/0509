@@ -701,10 +701,13 @@ export default function OpsRoute() {
                 <p className="f9-app-kicker">
                   {formatDiscoveryProvider(item.provider)} · {formatRouteContext(item.routeContext)}
                 </p>
-                <h2>{item.failureClass ?? "Discovery failure"}</h2>
+                <h2>
+                  {item.partial ? "Partial discovery result" : item.failureClass ?? "Discovery failure"}
+                </h2>
                 <p>
-                  {item.country}
-                  {item.cacheStatus === "stale" ? " · stale cache served" : " · no fresh cache"}
+                  {item.partial
+                    ? "First-page evidence was retained; a later page could not be fetched."
+                    : `${item.country}${item.cacheStatus === "stale" ? " · stale cache served" : " · no fresh cache"}`}
                 </p>
                 <p className="f9-muted-copy">{formatTimestamp(item.createdAt)}</p>
               </>
@@ -718,8 +721,12 @@ export default function OpsRoute() {
             renderItem={(item) => (
               <>
                 <p className="f9-app-kicker">{formatDiscoveryProvider(item.provider)}</p>
-                <h2>{formatDiscoveryStatus(item.status)}</h2>
-                <p>{describeDiscoveryProviderState(item.status)}</p>
+                <h2>{item.partial ? "Partial results retained" : formatDiscoveryStatus(item.status)}</h2>
+                <p>
+                  {item.partial
+                    ? "The first page is usable, but later-page retrieval is degraded."
+                    : describeDiscoveryProviderState(item.status)}
+                </p>
                 <p className="f9-muted-copy">
                   {item.lastFailureAt ? (
                     <>Last failure {formatTimestamp(item.lastFailureAt)}</>

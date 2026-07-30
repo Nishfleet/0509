@@ -1223,7 +1223,39 @@ webhookStatus:"pending",
 
   it("skips opted-out email targets and never re-provisions the account email", async () => {
     const sendMock = mockEmailSend("msg_1");
-		const upsertDeliveryTarget = vi.fn();
+    const upsertDeliveryTarget = vi.fn();
+    const optedOutWatchlistTarget = {
+      id: "email-target-1",
+      userId: "user-1",
+      watchlistId: "watch-1",
+      channel: "email",
+      targetValue: "owner@example.com",
+      validationStatus: "validated",
+      isValidated: true,
+      isOptedIn: false,
+      optInSource: "account_email",
+      optedInAt: "2026-04-19T00:00:00.000Z",
+      isPaused: true,
+      pausedAt: "2026-05-01T00:00:00.000Z",
+      optedOutAt: "2026-05-01T00:00:00.000Z",
+      templateEligible: false,
+      lastSuccessfulDeliveryAt: null,
+      lastSuccessfulAttemptId: null,
+      providerIdentifier: null,
+      metadata: {},
+      createdAt: "2026-04-19T00:00:00.000Z",
+      updatedAt: "2026-05-01T00:00:00.000Z",
+    };
+    const listDeliveryTargets = vi.fn().mockImplementation(
+      async (
+        _env: unknown,
+        _userId: string,
+        options?: { watchlistId?: string | null },
+      ) => options?.watchlistId === null ? [] : [optedOutWatchlistTarget],
+    );
+    const hasSuppressedEmailTargetForUserAndAddress = vi
+      .fn()
+      .mockResolvedValue(true);
 
     vi.doMock("~/lib/data.server", () => ({
       listAdsByIds: vi.fn().mockResolvedValue([]),
@@ -1245,30 +1277,8 @@ webhookStatus:"pending",
         updatedAt: "2026-04-19T00:00:00.000Z",
       }),
       legacyWorkspaceDeliveryDefaults: vi.fn(),
-      listDeliveryTargets: vi.fn().mockResolvedValue([
-        {
-          id: "email-target-1",
-          userId: "user-1",
-          watchlistId: null,
-          channel: "email",
-          targetValue: "owner@example.com",
-          validationStatus: "validated",
-          isValidated: true,
-          isOptedIn: false,
-          optInSource: "account_email",
-          optedInAt: "2026-04-19T00:00:00.000Z",
-          isPaused: true,
-          pausedAt: "2026-05-01T00:00:00.000Z",
-          optedOutAt: "2026-05-01T00:00:00.000Z",
-          templateEligible: false,
-          lastSuccessfulDeliveryAt: null,
-          lastSuccessfulAttemptId: null,
-          providerIdentifier: null,
-          metadata: {},
-          createdAt: "2026-04-19T00:00:00.000Z",
-          updatedAt: "2026-05-01T00:00:00.000Z",
-        },
-      ]),
+      listDeliveryTargets,
+      hasSuppressedEmailTargetForUserAndAddress,
       upsertDeliveryTarget,
       upsertDigestDelivery: vi.fn(),
     }));
@@ -1302,6 +1312,83 @@ webhookStatus:"pending",
     });
     expect(sendMock).not.toHaveBeenCalled();
     expect(upsertDeliveryTarget).not.toHaveBeenCalled();
+    expect(hasSuppressedEmailTargetForUserAndAddress).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        userId: "user-1",
+        targetValue: "owner@example.com",
+      },
+    );
+  });
+
+  it("keeps paused watchlist targets separate from workspace digest preferences", async () => {
+    const pausedWatchlistTarget = {
+      id: "watchlist-email-target",
+      userId: "user-1",
+      watchlistId: "watch-1",
+      channel: "email",
+      targetValue: "owner@example.com",
+      validationStatus: "validated",
+      isValidated: true,
+      isOptedIn: true,
+      optInSource: "manual",
+      optedInAt: "2026-04-19T00:00:00.000Z",
+      isPaused: true,
+      pausedAt: "2026-05-01T00:00:00.000Z",
+      optedOutAt: null,
+      templateEligible: false,
+      lastSuccessfulDeliveryAt: null,
+      lastSuccessfulAttemptId: null,
+      providerIdentifier: null,
+      metadata: {},
+      createdAt: "2026-04-19T00:00:00.000Z",
+      updatedAt: "2026-05-01T00:00:00.000Z",
+    };
+    const workspaceTarget = {
+      ...pausedWatchlistTarget,
+      id: "workspace-email-target",
+      watchlistId: null,
+      isPaused: false,
+      pausedAt: null,
+      optInSource: "account_email",
+      metadata: { autoProvisioned: true },
+    };
+    const listDeliveryTargets = vi.fn().mockImplementation(
+      async (
+        _env: unknown,
+        _userId: string,
+        options?: { watchlistId?: string | null },
+      ) => options?.watchlistId === null ? [] : [pausedWatchlistTarget],
+    );
+    const upsertDeliveryTarget = vi.fn().mockResolvedValue(workspaceTarget);
+
+    vi.doMock("~/lib/data.server", () => ({
+      listDeliveryTargets,
+      hasSuppressedEmailTargetForUserAndAddress: vi.fn().mockResolvedValue(false),
+      upsertDeliveryTarget,
+    }));
+
+    const { resolveDigestEmailTargets } = await import("~/lib/delivery.server");
+    const targets = await resolveDigestEmailTargets(
+      emailEnv as never,
+      "user-1",
+      "owner@example.com",
+    );
+
+    expect(targets).toEqual([workspaceTarget]);
+    expect(listDeliveryTargets).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      expect.objectContaining({ watchlistId: null }),
+    );
+    expect(upsertDeliveryTarget).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        userId: "user-1",
+        watchlistId: null,
+        targetValue: "owner@example.com",
+      }),
+    );
   });
 
   it("binds auto-provisioned delivery to the current verified account email", async () => {

@@ -77,6 +77,27 @@ describe("ReportView", () => {
     expect(markup).toContain("none stored");
   });
 
+  it("treats a non-http landing page value as missing instead of displaying it", () => {
+    const row = reportRow("row-landing", "https://example.com/source");
+    const report = {
+      ...legacyReport,
+      rows: [
+        {
+          ...row,
+          landingPage: {
+            ...row.landingPage,
+            url: "javascript:alert(1)",
+          },
+        },
+      ],
+    };
+
+    const markup = renderToStaticMarkup(createElement(ReportView, { report }));
+
+    expect(markup).not.toContain("javascript:alert(1)");
+    expect(markup).toContain("none stored");
+  });
+
   it("opens on an ink cover whose headline is the finding, not 'Report for X'", () => {
     const highPriorityRow = reportRow("row-high", "https://example.com/high");
     const report = {

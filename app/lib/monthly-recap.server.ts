@@ -356,24 +356,17 @@ async function sendOneMonthlyRecap(
     return { sent: false as const, reason: "unverified" as const };
   }
 
-  const {
-    listDeliveryTargets,
-    getWorkspaceDeliveryConfig,
-  } = await import("~/lib/data.server");
+  const { getWorkspaceDeliveryConfig } = await import("~/lib/data.server");
   const workspaceConfig = await getWorkspaceDeliveryConfig(env, stats.userId);
   if (workspaceConfig && !workspaceConfig.emailEnabled) {
     return { sent: false as const, reason: "disabled" as const };
   }
 
-  const targets = await listDeliveryTargets(env, stats.userId);
-  const emailTargets = targets.filter(
-    (target) =>
-      target.channel === "email" &&
-      target.isValidated &&
-      target.validationStatus === "validated" &&
-      target.isOptedIn &&
-      !target.isPaused &&
-      !target.optedOutAt,
+  const { resolveDigestEmailTargets } = await import("~/lib/delivery.server");
+  const emailTargets = await resolveDigestEmailTargets(
+    env,
+    stats.userId,
+    stats.email.trim().toLowerCase() || null,
   );
   const primaryTarget = emailTargets[0] ?? null;
   if (!primaryTarget) {
@@ -437,6 +430,13 @@ async function sendOneMonthlyRecap(
         durableAttempt.webhookStatus !== "pending" ||
         durableAttempt.updatedAt !== claim.claimUpdatedAt
       );
+    if (!anotherOwnerAdvanced) {
+      console.error("Monthly recap dispatch gate rejected.", {
+        userId: stats.userId,
+        reason: "dispatch_gate_rejected",
+        durableAttemptPresent: durableAttempt !== null,
+      });
+    }
     return {
       sent: false as const,
       reason: anotherOwnerAdvanced
