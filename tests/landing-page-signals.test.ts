@@ -143,6 +143,20 @@ describe("extractLandingPageSignals", () => {
     });
   });
 
+  it("ignores non-visible script data before matching the displayed price", () => {
+    const html = `
+      <script>window.cfg = { price: "$9.99" };</script>
+      <style>.price::before { content: "$19.99"; }</style>
+      <main>
+        <p>Launch price $49.99 for this week</p>
+      </main>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      priceText: "$49.99",
+    });
+  });
+
   it("returns null CTA and price when nothing high-signal is detected", () => {
     const html = `
       <html>

@@ -16,7 +16,7 @@ const PRICE_PATTERNS = [
 ] as const;
 
 export function extractLandingPageSignals(html: string) {
-  const normalizedHtml = html ?? "";
+  const normalizedHtml = removeNonVisibleElements(html ?? "");
   const ctaCandidates = [
     ...extractButtonText(normalizedHtml),
     ...extractSubmitValues(normalizedHtml),
@@ -33,6 +33,13 @@ export function extractLandingPageSignals(html: string) {
     formPresent,
     extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
   };
+}
+
+function removeNonVisibleElements(html: string) {
+  return html.replace(
+    /<(script|style|noscript|template)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,
+    " ",
+  );
 }
 
 function extractButtonText(html: string) {
