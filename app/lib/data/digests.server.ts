@@ -979,6 +979,11 @@ export async function upsertDigestDelivery(
             digest_delivery.delivered_at IS NOT NULL
             AND excluded.delivered_at IS NULL
           )
+          OR (
+            digest_delivery.delivered_at IS NOT NULL
+            AND excluded.delivered_at IS NOT NULL
+            AND julianday(excluded.delivered_at) < julianday(digest_delivery.delivered_at)
+          )
         )
       )
       AND NOT (

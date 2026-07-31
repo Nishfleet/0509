@@ -222,6 +222,58 @@ harness.close();
 }
 });
 
+it("does not let older confirmed delivery displace newer receipt evidence", async () => {
+const harness = setup();
+try {
+const env = { DB: harness.db } as never;
+const digestRunId = await createDigestRun(
+env,
+"user-1",
+"2026-07-06T05:00:00.000Z",
+"2026-07-13T05:00:00.000Z",
+{ totalEvents: 0, watchlists: 1 },
+);
+await upsertDigestDelivery(env, digestRunId, {
+provider: "cloudflare_email",
+status: "sent",
+recipientEmail: "newer@example.com",
+externalMessageId: "message-newer",
+errorMessage: null,
+deliveredAt: "2026-07-13T05:20:00.000Z",
+});
+await upsertDigestDelivery(env, digestRunId, {
+provider: "cloudflare_email",
+status: "sent",
+recipientEmail: "older@example.com",
+externalMessageId: "message-older",
+errorMessage: null,
+deliveredAt: "2026-07-13T05:10:00.000Z",
+});
+
+expect((await getDigest(env, digestRunId))?.delivery).toMatchObject({
+recipientEmail: "newer@example.com",
+externalMessageId: "message-newer",
+deliveredAt: "2026-07-13T05:20:00.000Z",
+});
+
+await upsertDigestDelivery(env, digestRunId, {
+provider: "cloudflare_email",
+status: "sent",
+recipientEmail: "latest@example.com",
+externalMessageId: "message-latest",
+errorMessage: null,
+deliveredAt: "2026-07-13T05:30:00.000Z",
+});
+expect((await getDigest(env, digestRunId))?.delivery).toMatchObject({
+recipientEmail: "latest@example.com",
+externalMessageId: "message-latest",
+deliveredAt: "2026-07-13T05:30:00.000Z",
+});
+} finally {
+harness.close();
+}
+});
+
 it("never buries a failed digest delivery under an overlapping writer's pending mirror", async () => {
 // Duplicate cron fire: writer X records the failure; the losing writer Y
 // observed X's in-flight pending attempt and mirrors it afterwards. The
