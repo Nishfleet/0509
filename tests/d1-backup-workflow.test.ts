@@ -26,36 +26,60 @@ describe("manual D1 backup workflow", () => {
     expect(parsed.jobs.backup?.if).toBe(
       "github.repository == 'nish3451/0509' && github.ref == 'refs/heads/main'",
     );
-    expect(parsed.jobs.backup?.environment).toBe("d1-backup-r2");
+    expect(parsed.jobs.backup?.environment).toBe("production");
 
     const backupSteps = parsed.jobs.backup?.steps
       ?.map((step) => step.run)
       .filter(Boolean);
-    expect(backupSteps?.some((run) => run?.includes("npm run backup:d1:r2")))
+    expect(backupSteps?.some((run) =>
+      run?.includes("node scripts/d1-backup-to-r2.mjs")
+    ))
       .toBe(true);
   });
 
   it("keeps backup auth scoped to the approved backup step and validates before upload", () => {
     expect(parsed.jobs.backup?.env?.CLOUDFLARE_ACCOUNT_ID).toBeUndefined();
     expect(parsed.jobs.backup?.env?.CLOUDFLARE_API_TOKEN).toBeUndefined();
+    expect(parsed.jobs.backup?.env?.D1_BACKUP_LOCAL_DIRECTORY).toBeUndefined();
 
     const steps = parsed.jobs.backup?.steps ?? [];
-    expect(steps).toContainEqual(expect.objectContaining({ run: "npm ci --ignore-scripts" }));
+    const bindingIndex = steps.findIndex(
+      (step) => step.name === "Bind run-scoped backup directory",
+    );
+    expect(bindingIndex).toBeGreaterThanOrEqual(0);
+    const bindingStep = steps[bindingIndex];
+    expect(bindingStep?.run).toContain("D1_BACKUP_LOCAL_DIRECTORY=%s");
+    expect(bindingStep?.run).toContain(
+      "$RUNNER_TEMP/0509-d1-backups-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}",
+    );
+    expect(bindingStep?.run).toContain('>> "$GITHUB_ENV"');
+    expect(steps).toContainEqual(expect.objectContaining({
+      run: "./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts",
+    }));
     const backupStep = steps.find(
       (step) => step.name === "Run approved D1-to-R2 backup",
     );
-    expect(backupStep?.run).toBe("npm run backup:d1:r2");
+    expect(backupStep?.run).toBe(
+      "./scripts/deploy-window-lock.sh run -- node scripts/d1-backup-to-r2.mjs",
+    );
     expect(backupStep?.env?.CLOUDFLARE_ACCOUNT_ID).toBe("${{ secrets.CLOUDFLARE_ACCOUNT_ID }}");
     expect(backupStep?.env?.CLOUDFLARE_API_TOKEN).toBe("${{ secrets.CLOUDFLARE_API_TOKEN }}");
     expect(backupStep?.env?.D1_BACKUP_AUTOMATION_APPROVED).toBe("0509-weekly-d1-to-r2");
 
     const backupSteps = steps.map((step) => step.run).filter(Boolean);
-    expect(backupSteps.indexOf("node scripts/validate-d1-backup.mjs")).toBeGreaterThanOrEqual(0);
+    const validationCommand =
+      "./scripts/deploy-window-lock.sh run -- node scripts/validate-d1-backup.mjs";
+    expect(backupSteps.indexOf(validationCommand)).toBeGreaterThanOrEqual(0);
     const backupIndex = backupSteps.findIndex((run) =>
-      run?.includes("npm run backup:d1:r2"),
+      run?.includes("node scripts/d1-backup-to-r2.mjs"),
     );
+    expect(
+      steps.findIndex((step) =>
+        step.run?.includes("node scripts/d1-backup-to-r2.mjs")
+      ),
+    ).toBeGreaterThan(bindingIndex);
     expect(backupIndex).toBeGreaterThan(
-      backupSteps.indexOf("node scripts/validate-d1-backup.mjs"),
+      backupSteps.indexOf(validationCommand),
     );
     expect(workflow).not.toMatch(/api[_-]?token:\s*['\"]/i);
   });

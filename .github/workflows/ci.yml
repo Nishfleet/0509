@@ -11,19 +11,20 @@ concurrency:
 jobs:
   codex-node-checks:
     if: github.repository == 'nish3451/0509' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}
+    runs-on: [self-hosted, linux, x64, vps-verify]
     # The 270m job cap bounds setup plus all per-step waits. Each heavy step has
     # one 180m total budget shared between its lane slot and the deploy gate.
     timeout-minutes: 270
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version-file: ".node-version"
-          cache: ${{ hashFiles('package-lock.json') != '' && 'npm' || '' }}
+          cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' }}
       - name: Install dependencies
         run: |
           if [ -f package-lock.json ]; then
@@ -36,4 +37,9 @@ jobs:
       - name: Test
         run: ./scripts/deploy-window-lock.sh run -- npm run test
       - name: Typecheck
+        env:
+          # Node derives a ~1.2 GiB heap from the 3 GiB runner cgroup, while
+          # this project's composite TypeScript build needs more headroom.
+          # Keep it below MemoryHigh/MemoryMax so systemd still fails closed.
+          NODE_OPTIONS: --max-old-space-size=2048
         run: ./scripts/deploy-window-lock.sh run -- npm run typecheck

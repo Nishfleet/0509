@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -8,7 +9,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { parse } from "yaml";
@@ -27,6 +29,7 @@ import {
   parseWranglerJson,
   readOwnedBackupManifest,
   removeScratchDatabase,
+  rethrowWithMigrationLedgerDiagnostics,
   resolveMaxSqlBytes,
   staleScratchDatabaseNames,
   sweepStaleScratchDatabases,
@@ -43,6 +46,10 @@ import { selectRecentRemoteRestoreArtifact } from "../scripts/find-recent-remote
 const fingerprint = "a".repeat(64);
 const wranglerHash = "b".repeat(64);
 const fileHash = "c".repeat(64);
+const toyLedgerOptions = {
+  baseline: ["0001_first.sql", "0002_second.sql"],
+  retiredMigrations: new Set<string>(),
+};
 
 function aggregateEvidence() {
   return {
@@ -78,6 +85,68 @@ describe("D1 remote restore evidence automation", () => {
     vi.unstubAllEnvs();
   });
 
+  it("forwards cancellation to a detached provider child before exiting", async () => {
+    const root = mkdtempSync(join(tmpdir(), "0509-d1-cancel-"));
+    const helper = join(root, "cancel-helper.mjs");
+    const childPidFile = join(root, "provider.pid");
+    const moduleUrl = pathToFileURL(
+      resolve("scripts/d1-remote-restore-evidence.mjs"),
+    ).href;
+    writeFileSync(
+      helper,
+      [
+        `import { runCaptured } from ${JSON.stringify(moduleUrl)};`,
+        `await runCaptured(process.execPath, ["-e", ${JSON.stringify(
+          [
+            'const { writeFileSync } = require("node:fs");',
+            "writeFileSync(process.argv[1], String(process.pid));",
+            'process.on("SIGTERM", () => setTimeout(() => process.exit(0), 250));',
+            "setInterval(() => {}, 1_000);",
+          ].join(""),
+        )}, process.argv[2]]);`,
+      ].join("\n"),
+    );
+    const helperProcess = spawn(process.execPath, [helper, childPidFile], {
+      stdio: "ignore",
+    });
+    const completed = new Promise<{ code: number | null; signal: string | null }>(
+      (resolveCompleted, reject) => {
+        helperProcess.once("error", reject);
+        helperProcess.once("close", (code, signal) => {
+          resolveCompleted({ code, signal });
+        });
+      },
+    );
+    let childPid = 0;
+
+    try {
+      const deadline = Date.now() + 2_000;
+      while (!existsSync(childPidFile)) {
+        if (Date.now() >= deadline) throw new Error("provider child did not start");
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));
+      }
+      childPid = Number(readFileSync(childPidFile, "utf8"));
+      expect(() => process.kill(childPid, 0)).not.toThrow();
+
+      helperProcess.kill("SIGTERM");
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
+      expect(() => process.kill(childPid, 0)).not.toThrow();
+
+      expect(await completed).toEqual({ code: null, signal: "SIGTERM" });
+      expect(() => process.kill(childPid, 0)).toThrow();
+    } finally {
+      helperProcess.kill("SIGKILL");
+      if (Number.isInteger(childPid) && childPid > 0) {
+        try {
+          process.kill(-childPid, "SIGKILL");
+        } catch {
+          // The cancellation relay should already have reaped the child group.
+        }
+      }
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("wires exact-R2 retrieval and independent exact-run cleanup into Actions", () => {
     const script = readFileSync(
       "scripts/d1-remote-restore-evidence.mjs",
@@ -103,11 +172,17 @@ describe("D1 remote restore evidence automation", () => {
           environment?: string;
           if?: string;
           needs?: string;
-          steps?: Array<{ run?: string }>;
+          steps?: Array<{
+            name?: string;
+            run?: string;
+            with?: Record<string, unknown>;
+          }>;
         };
         restore?: {
+          env?: Record<string, string>;
           environment?: string;
           "timeout-minutes"?: number;
+          steps?: Array<{ name?: string; run?: string }>;
         };
       };
     };
@@ -130,22 +205,49 @@ describe("D1 remote restore evidence automation", () => {
     expect(workflow.on?.schedule).toEqual([
       { cron: "47 20 * * SUN,WED" },
     ]);
-    expect(workflow.jobs?.restore?.environment).toBe("d1-backup-r2");
-    expect(workflow.jobs?.cleanup?.environment).toBe("d1-backup-r2");
+    expect(workflow.jobs?.restore?.environment).toBe("production");
+    expect(workflow.jobs?.cleanup?.environment).toBe("production");
     expect(workflow.jobs?.cleanup?.if).toContain("always()");
     expect(workflow.jobs?.cleanup?.needs).toBe("restore");
-    expect(
-      workflow.jobs?.cleanup?.env?.D1_BACKUP_LOCAL_DIRECTORY,
-    ).toBe(
-      "${{ runner.temp }}/0509-d1-backups-${{ github.run_id }}-${{ github.run_attempt }}",
-    );
+    for (const [job, consumer] of [
+      [
+        workflow.jobs?.restore,
+        "node scripts/d1-remote-restore-evidence.mjs",
+      ],
+      [
+        workflow.jobs?.cleanup,
+        "node scripts/d1-remote-restore-evidence.mjs --cleanup-only",
+      ],
+    ] as const) {
+      expect(job?.env?.D1_BACKUP_LOCAL_DIRECTORY).toBeUndefined();
+      const bindingIndex = job?.steps?.findIndex(
+        (step) => step.name === "Bind run-scoped backup directory",
+      ) ?? -1;
+      expect(bindingIndex).toBeGreaterThanOrEqual(0);
+      const bindingStep = job?.steps?.[bindingIndex];
+      expect(bindingStep?.run).toContain("D1_BACKUP_LOCAL_DIRECTORY=%s");
+      expect(bindingStep?.run).toContain(
+        "$RUNNER_TEMP/0509-d1-backups-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}",
+      );
+      expect(bindingStep?.run).toContain('>> "$GITHUB_ENV"');
+      const consumerIndex = job?.steps?.findIndex((step) =>
+        step.run?.includes(consumer)
+      ) ?? -1;
+      expect(consumerIndex).toBeGreaterThan(bindingIndex);
+      expect(job?.steps).toContainEqual(expect.objectContaining({
+        run: "./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts",
+      }));
+      expect(job?.steps?.[consumerIndex]?.run).toContain(
+        "./scripts/deploy-window-lock.sh run -- node scripts/d1-remote-restore-evidence.mjs",
+      );
+    }
     expect(workflow.jobs?.restore?.["timeout-minutes"]).toBe(300);
     expect(
       (workflow.jobs?.cleanup as any)?.steps?.[0]?.with?.clean,
     ).toBe(true);
     expect(workflow.jobs?.cleanup?.steps).toContainEqual(
       expect.objectContaining({
-        run: "npm run restore:d1:remote-evidence -- --cleanup-only --sweep-stale",
+        run: "./scripts/deploy-window-lock.sh run -- node scripts/d1-remote-restore-evidence.mjs --cleanup-only --sweep-stale",
       }),
     );
   });
@@ -186,7 +288,9 @@ describe("D1 remote restore evidence automation", () => {
     expect(deployWorkflow).not.toContain("group: d1-production-export");
     expect(manualWorkflow).not.toContain("group: d1-production-export");
     expect(backupWorkflow).not.toContain("group: d1-production-export");
-    expect(backupWorkflow).toContain("run: npm run backup:d1:r2");
+    expect(backupWorkflow).toContain(
+      "run: ./scripts/deploy-window-lock.sh run -- node scripts/d1-backup-to-r2.mjs",
+    );
     const backupScript = readFileSync(
       "scripts/d1-backup-to-r2.mjs",
       "utf8",
@@ -960,14 +1064,60 @@ describe("D1 remote restore evidence automation", () => {
       assertMigrationLedgerMatchesRepository(ledger, [
         "0001_first.sql",
         "0002_second.sql",
-      ]),
+      ], undefined, toyLedgerOptions),
     ).toBe(true);
     expect(() =>
       assertMigrationLedgerMatchesRepository(
         [ledger[1]],
         ["0001_first.sql", "0002_second.sql"],
+        undefined,
+        toyLedgerOptions,
       ),
     ).toThrow("source_backup_migration_ledger_stale");
+  });
+
+  it("reports migration filenames only for a stale ledger and rethrows", () => {
+    const ledger = aggregateEvidence().migrationLedger;
+    const repository = ["0001_first.sql", "0002_second.sql"];
+    const staleError = new Error("source_backup_migration_ledger_stale");
+    const write = vi.fn();
+
+    let thrown;
+    try {
+      rethrowWithMigrationLedgerDiagnostics(
+        staleError,
+        ledger,
+        repository,
+        write,
+      );
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBe(staleError);
+    expect(write.mock.calls).toEqual([
+      [
+        'source_backup_migration_ledger_names:["0001_first.sql","0002_second.sql"]',
+      ],
+      [
+        'repository_migration_names:["0001_first.sql","0002_second.sql"]',
+      ],
+    ]);
+
+    const unrelatedError = new Error("scratch_restore_content_mismatch");
+    write.mockClear();
+    thrown = undefined;
+    try {
+      rethrowWithMigrationLedgerDiagnostics(
+        unrelatedError,
+        ledger,
+        repository,
+        write,
+      );
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBe(unrelatedError);
+    expect(write).not.toHaveBeenCalled();
   });
 
   it("accepts exactly an allowlisted cleanup suffix before or after cleanup", () => {
@@ -979,7 +1129,12 @@ describe("D1 remote restore evidence automation", () => {
     ];
     const cleanup = new Set(["0003_destructive_cleanup.sql"]);
     expect(
-      assertMigrationLedgerMatchesRepository(ledger, repository, cleanup),
+      assertMigrationLedgerMatchesRepository(
+        ledger,
+        repository,
+        cleanup,
+        toyLedgerOptions,
+      ),
     ).toBe(true);
     expect(
       assertMigrationLedgerMatchesRepository(
@@ -993,6 +1148,7 @@ describe("D1 remote restore evidence automation", () => {
         ],
         repository,
         cleanup,
+        toyLedgerOptions,
       ),
     ).toBe(true);
     expect(() =>
@@ -1000,6 +1156,7 @@ describe("D1 remote restore evidence automation", () => {
         [ledger[0]],
         repository,
         cleanup,
+        toyLedgerOptions,
       ),
     ).toThrow("source_backup_migration_ledger_stale");
   });
@@ -1058,11 +1215,14 @@ describe("D1 remote restore evidence automation", () => {
     });
 
     expect(evidence).toMatchObject({
-      schemaVersion: 1,
+      schemaVersion: 2,
       candidateFingerprint: fingerprint,
       wranglerWorktreeSha256: wranglerHash,
       latestMigration: "0002_second.sql",
       migrationCount: 2,
+      migrationLedgerNames: ["0001_first.sql", "0002_second.sql"],
+      migrationLedgerNamesSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      migrationLedgerBaselineSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
       productionSearchRolloutMode: "shadow",
       integrity: "ok",
       foreignKeyViolations: 0,
