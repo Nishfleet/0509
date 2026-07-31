@@ -3633,8 +3633,14 @@ describe("getOperatorSnapshot", () => {
       expect(failedProofs?.bindings).toContain(recentWindowIso);
       expect(budgetBlockedProofs?.bindings).toContain(recentWindowIso);
       expect(deliveryFailures?.bindings).toContain(recentWindowIso);
+      expect(deliveryFailures?.bindings).toContain("2026-04-26T09:45:00.000Z");
       expect(deliveryFailures?.sql).toContain("delivery_attempt.status = 'pending'");
+      expect(deliveryFailures?.sql).toContain("delivery_attempt.status = 'sent'");
       expect(deliveryFailures?.sql).toContain("delivery_attempt.webhook_status = 'provider_unknown'");
+      expect(deliveryFailures?.sql).toContain("delivery_attempt.updated_at <= ?");
+      expect(deliveryFailures?.sql).toContain(
+        "CASE WHEN delivery_attempt.status = 'failed' THEN 0 ELSE 1 END",
+      );
       expect(discoveryFailures?.bindings).toContain(recentWindowIso);
     } finally {
       vi.useRealTimers();

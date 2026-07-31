@@ -75,6 +75,7 @@ type DeliveryReconciliationScope = {
   failedClassifications: readonly InstantDeliveryEvidenceClassification[];
   attemptPredicate: string;
   allowsUnclassifiedFailure: boolean;
+  allowsAcceptedProviderUnknown: boolean;
   requiresSettledProviderWindow: boolean;
   updatesDigestDelivery: boolean;
 };
@@ -98,6 +99,7 @@ const BILLING_RECONCILIATION_SCOPE: DeliveryReconciliationScope = {
     )
   `,
   allowsUnclassifiedFailure: false,
+  allowsAcceptedProviderUnknown: true,
   requiresSettledProviderWindow: false,
   updatesDigestDelivery: false,
 };
@@ -118,6 +120,7 @@ const DIGEST_RECONCILIATION_SCOPE: DeliveryReconciliationScope = {
     AND delivery_attempt.idempotency_key LIKE 'digest:%:customer:email:%'
   `,
   allowsUnclassifiedFailure: false,
+  allowsAcceptedProviderUnknown: true,
   requiresSettledProviderWindow: false,
   updatesDigestDelivery: true,
 };
@@ -139,6 +142,7 @@ const INSTANT_RECONCILIATION_SCOPE: DeliveryReconciliationScope = {
     AND delivery_attempt.idempotency_key LIKE 'instant:%:customer:email:%'
   `,
   allowsUnclassifiedFailure: false,
+  allowsAcceptedProviderUnknown: true,
   requiresSettledProviderWindow: false,
   updatesDigestDelivery: false,
 };
@@ -161,6 +165,7 @@ const INSTANT_WHATSAPP_RECONCILIATION_SCOPE: DeliveryReconciliationScope = {
     AND delivery_attempt.idempotency_key LIKE 'instant:%:customer:whatsapp:%'
   `,
   allowsUnclassifiedFailure: true,
+  allowsAcceptedProviderUnknown: false,
   requiresSettledProviderWindow: true,
   updatesDigestDelivery: false,
 };
@@ -183,6 +188,7 @@ const INSTANT_SLACK_RECONCILIATION_SCOPE: DeliveryReconciliationScope = {
     AND delivery_attempt.idempotency_key LIKE 'instant:%:customer:slack:%'
   `,
   allowsUnclassifiedFailure: true,
+  allowsAcceptedProviderUnknown: false,
   requiresSettledProviderWindow: true,
   updatesDigestDelivery: false,
 };
@@ -206,6 +212,7 @@ const SUPPORT_ALERT_RECONCILIATION_SCOPE: DeliveryReconciliationScope = {
     AND json_extract(delivery_attempt.payload_snapshot_json, '$.kind') = 'support_case_operator_alert'
   `,
   allowsUnclassifiedFailure: false,
+  allowsAcceptedProviderUnknown: true,
   requiresSettledProviderWindow: false,
   updatesDigestDelivery: false,
 };
@@ -338,6 +345,10 @@ async function reconcileDeliveryAttemptWithAudit(
         FROM delivery_attempt
         WHERE delivery_attempt.id = ?
           AND delivery_attempt.updated_at = ?
+          AND (
+            delivery_attempt.sent_at IS NULL
+            OR julianday(?) >= julianday(delivery_attempt.sent_at)
+          )
           AND delivery_attempt.lane = '${scope.lane}'
           ${reconciliationStatePredicate(scope, "delivery_attempt.")}
           ${scope.attemptPredicate}
@@ -354,6 +365,7 @@ async function reconcileDeliveryAttemptWithAudit(
       reconciledAt,
       normalized.attemptId,
       normalized.expectedUpdatedAt,
+      normalized.observedAt,
     );
   const updateAttempt = db
     .prepare(
@@ -371,11 +383,19 @@ async function reconcileDeliveryAttemptWithAudit(
               json(?)
             ),
             error_message = ?,
-            sent_at = ?,
+            sent_at = CASE
+              WHEN ? = 'failed' THEN sent_at
+              WHEN sent_at IS NOT NULL THEN sent_at
+              ELSE ?
+            END,
             failed_at = ?,
             updated_at = ?
         WHERE id = ?
           AND updated_at = ?
+          AND (
+            sent_at IS NULL
+            OR julianday(?) >= julianday(sent_at)
+          )
           AND lane = '${scope.lane}'
           ${reconciliationStatePredicate(scope, "")}
           ${scope.attemptPredicate}
@@ -394,11 +414,13 @@ async function reconcileDeliveryAttemptWithAudit(
       scope.evidencePath,
       jsonValue(evidence),
       errorMessage,
+      normalized.outcome,
       normalized.outcome === "sent" ? normalized.observedAt : null,
       normalized.outcome === "failed" ? normalized.observedAt : null,
       reconciledAt,
       normalized.attemptId,
       normalized.expectedUpdatedAt,
+      normalized.observedAt,
       auditId,
     );
 
@@ -427,32 +449,133 @@ async function reconcileDeliveryAttemptWithAudit(
             ON CONFLICT(digest_run_id)
             DO UPDATE SET
               provider = CASE
-                WHEN digest_delivery.status = 'sent' AND excluded.status != 'sent'
-                  THEN digest_delivery.provider
+                WHEN digest_delivery.status = 'sent'
+                  AND excluded.status != 'sent'
+                  AND EXISTS (
+                    SELECT 1
+                    FROM delivery_attempt AS other_attempt
+                    WHERE other_attempt.digest_run_id = digest_delivery.digest_run_id
+                      AND other_attempt.id != ?
+                      AND other_attempt.status = 'sent'
+                  )
+                  THEN (
+                    SELECT other_attempt.provider
+                    FROM delivery_attempt AS other_attempt
+                    WHERE other_attempt.digest_run_id = digest_delivery.digest_run_id
+                      AND other_attempt.id != ?
+                      AND other_attempt.status = 'sent'
+                    ORDER BY COALESCE(other_attempt.sent_at, other_attempt.created_at) DESC,
+                      other_attempt.id DESC
+                    LIMIT 1
+                  )
                 ELSE excluded.provider
               END,
               status = CASE
-                WHEN digest_delivery.status = 'sent' THEN 'sent'
+                WHEN digest_delivery.status = 'sent'
+                  AND excluded.status != 'sent'
+                  AND EXISTS (
+                    SELECT 1
+                    FROM delivery_attempt AS other_attempt
+                    WHERE other_attempt.digest_run_id = digest_delivery.digest_run_id
+                      AND other_attempt.id != ?
+                      AND other_attempt.status = 'sent'
+                  )
+                  THEN 'sent'
                 ELSE excluded.status
               END,
               recipient_email = CASE
-                WHEN digest_delivery.status = 'sent' AND excluded.status != 'sent'
-                  THEN digest_delivery.recipient_email
+                WHEN digest_delivery.status = 'sent'
+                  AND excluded.status != 'sent'
+                  AND EXISTS (
+                    SELECT 1
+                    FROM delivery_attempt AS other_attempt
+                    WHERE other_attempt.digest_run_id = digest_delivery.digest_run_id
+                      AND other_attempt.id != ?
+                      AND other_attempt.status = 'sent'
+                  )
+                  THEN (
+                    SELECT other_attempt.target_value
+                    FROM delivery_attempt AS other_attempt
+                    WHERE other_attempt.digest_run_id = digest_delivery.digest_run_id
+                      AND other_attempt.id != ?
+                      AND other_attempt.status = 'sent'
+                    ORDER BY COALESCE(other_attempt.sent_at, other_attempt.created_at) DESC,
+                      other_attempt.id DESC
+                    LIMIT 1
+                  )
                 ELSE excluded.recipient_email
               END,
               external_message_id = CASE
-                WHEN digest_delivery.status = 'sent' AND excluded.status != 'sent'
-                  THEN digest_delivery.external_message_id
+                WHEN digest_delivery.status = 'sent'
+                  AND excluded.status != 'sent'
+                  AND EXISTS (
+                    SELECT 1
+                    FROM delivery_attempt AS other_attempt
+                    WHERE other_attempt.digest_run_id = digest_delivery.digest_run_id
+                      AND other_attempt.id != ?
+                      AND other_attempt.status = 'sent'
+                  )
+                  THEN (
+                    SELECT other_attempt.provider_message_id
+                    FROM delivery_attempt AS other_attempt
+                    WHERE other_attempt.digest_run_id = digest_delivery.digest_run_id
+                      AND other_attempt.id != ?
+                      AND other_attempt.status = 'sent'
+                    ORDER BY COALESCE(other_attempt.sent_at, other_attempt.created_at) DESC,
+                      other_attempt.id DESC
+                    LIMIT 1
+                  )
                 ELSE excluded.external_message_id
               END,
               error_message = CASE
-                WHEN digest_delivery.status = 'sent' AND excluded.status != 'sent'
-                  THEN digest_delivery.error_message
+                WHEN digest_delivery.status = 'sent'
+                  AND excluded.status != 'sent'
+                  AND EXISTS (
+                    SELECT 1
+                    FROM delivery_attempt AS other_attempt
+                    WHERE other_attempt.digest_run_id = digest_delivery.digest_run_id
+                      AND other_attempt.id != ?
+                      AND other_attempt.status = 'sent'
+                  )
+                  THEN (
+                    SELECT other_attempt.error_message
+                    FROM delivery_attempt AS other_attempt
+                    WHERE other_attempt.digest_run_id = digest_delivery.digest_run_id
+                      AND other_attempt.id != ?
+                      AND other_attempt.status = 'sent'
+                    ORDER BY COALESCE(other_attempt.sent_at, other_attempt.created_at) DESC,
+                      other_attempt.id DESC
+                    LIMIT 1
+                  )
                 ELSE excluded.error_message
               END,
               delivered_at = CASE
-                WHEN digest_delivery.status = 'sent' AND excluded.status != 'sent'
-                  THEN digest_delivery.delivered_at
+                WHEN digest_delivery.status = 'sent'
+                  AND excluded.status != 'sent'
+                  AND EXISTS (
+                    SELECT 1
+                    FROM delivery_attempt AS other_attempt
+                    WHERE other_attempt.digest_run_id = digest_delivery.digest_run_id
+                      AND other_attempt.id != ?
+                      AND other_attempt.status = 'sent'
+                  )
+                  THEN (
+                    SELECT CASE
+                      WHEN other_attempt.webhook_status = 'delivered'
+                        THEN COALESCE(
+                          other_attempt.provider_status_last_seen_at,
+                          other_attempt.sent_at
+                        )
+                      ELSE NULL
+                    END
+                    FROM delivery_attempt AS other_attempt
+                    WHERE other_attempt.digest_run_id = digest_delivery.digest_run_id
+                      AND other_attempt.id != ?
+                      AND other_attempt.status = 'sent'
+                    ORDER BY COALESCE(other_attempt.sent_at, other_attempt.created_at) DESC,
+                      other_attempt.id DESC
+                    LIMIT 1
+                  )
                 ELSE excluded.delivered_at
               END,
               updated_at = excluded.updated_at
@@ -467,6 +590,17 @@ async function reconcileDeliveryAttemptWithAudit(
           reconciledAt,
           normalized.attemptId,
           auditId,
+          normalized.attemptId,
+          normalized.attemptId,
+          normalized.attemptId,
+          normalized.attemptId,
+          normalized.attemptId,
+          normalized.attemptId,
+          normalized.attemptId,
+          normalized.attemptId,
+          normalized.attemptId,
+          normalized.attemptId,
+          normalized.attemptId,
         ),
     );
   }
@@ -591,6 +725,9 @@ function reconciliationStatePredicate(
             ? ""
             : `AND ${qualifier}provider_status_last_seen_at IS NOT NULL`}
         )
+        ${scope.allowsAcceptedProviderUnknown
+          ? `OR ${qualifier}status = 'sent'`
+          : ""}
       )
     )
   `;

@@ -559,8 +559,8 @@ function describeAttemptStatus(status: string, channel: string, webhookStatus: s
       if (webhookStatus === "delivered") {
         return "Delivered";
       }
-      if (channel === "email") {
-        return "Sent";
+      if (channel === "email" && webhookStatus === "provider_unknown") {
+        return "Delivery unconfirmed";
       }
       return "Sent";
     case "failed":

@@ -168,7 +168,13 @@ export async function action({ context, request }: ActionFunctionArgs) {
         attemptId: String(formData.get("attemptId") ?? ""),
         expectedUpdatedAt: String(formData.get("expectedUpdatedAt") ?? ""),
         outcome: String(formData.get("outcome") ?? "") as "sent" | "failed",
+        evidenceClassification: String(formData.get("evidenceClassification") ?? "") as
+          | "controlled_inbox_receipt"
+          | "provider_acceptance_log"
+          | "provider_delivery_confirmation"
+          | "provider_rejection_log",
         evidenceReference: String(formData.get("evidenceReference") ?? ""),
+        observedAt: String(formData.get("observedAt") ?? ""),
         providerMessageId: String(formData.get("providerMessageId") ?? "").trim() || null,
       });
 
@@ -507,8 +513,22 @@ export default function OpsRoute() {
                     <span>Confirmed provider outcome</span>
                     <select defaultValue="" name="outcome" required>
                       <option disabled value="">Choose an outcome</option>
-                      <option value="sent">Accepted or delivered</option>
+                      <option value="sent">
+                        {item.status === "sent" ? "Confirmed delivered" : "Accepted or delivered"}
+                      </option>
                       <option value="failed">Not accepted</option>
+                    </select>
+                  </label>
+                  <label className="f9-field">
+                    <span>Evidence classification</span>
+                    <select defaultValue="" name="evidenceClassification" required>
+                      <option disabled value="">Choose evidence</option>
+                      <option value="controlled_inbox_receipt">Controlled inbox receipt</option>
+                      {item.status === "pending" ? (
+                        <option value="provider_acceptance_log">Provider acceptance log</option>
+                      ) : null}
+                      <option value="provider_delivery_confirmation">Provider delivery confirmation</option>
+                      <option value="provider_rejection_log">Provider rejection log</option>
                     </select>
                   </label>
                   <label className="f9-field">
@@ -519,6 +539,7 @@ export default function OpsRoute() {
                     <span>Provider message ID (optional)</span>
                     <input maxLength={255} name="providerMessageId" />
                   </label>
+                  <ProviderObservationTimeField />
                   <button className="f9-secondary-button" type="submit">
                     Record provider evidence
                   </button>
@@ -819,6 +840,9 @@ function describeDeliveryAttention(item: {
   if (item.status === "pending" && item.webhook_status === "provider_unknown") {
     return "Provider outcome is unknown. Check the provider console before deciding whether a retry is safe.";
   }
+  if (item.status === "sent" && item.webhook_status === "provider_unknown") {
+    return "Provider accepted this email, but final delivery is still unconfirmed. Check the provider console; do not resend it.";
+  }
 
   return "Delivery failed before provider acceptance and can be reviewed for retry.";
 }
@@ -827,11 +851,14 @@ function describeSupportAlert(item: {
   alert_status: string | null;
   alert_webhook_status: string | null;
 }) {
+  if (item.alert_webhook_status === "provider_unknown") {
+    if (item.alert_status === "sent") {
+      return "Provider accepted this operator alert, but final delivery is still unconfirmed. Check the provider console; do not resend it.";
+    }
+    return "Provider outcome is unknown; inspect the provider console before any resend.";
+  }
   if (item.alert_status === "sent") {
     return "Operator alert sent.";
-  }
-  if (item.alert_webhook_status === "provider_unknown") {
-    return "Provider outcome is unknown; inspect the provider console before any resend.";
   }
   if (item.alert_status === "failed") {
     return "Operator alert failed before acceptance and can be retried safely.";

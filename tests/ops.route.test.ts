@@ -226,7 +226,7 @@ describe("ops route", () => {
           budgetBlockedProofs: 0,
           blockedTargets: 0,
           deliveryFailures: 0,
-          deliveryAttention: 1,
+          deliveryAttention: 2,
           degradedWatchlists: 0,
           discoveryFailures: 0,
           discoveryProvidersNeedingAttention: 0,
@@ -250,6 +250,18 @@ describe("ops route", () => {
             error_message: "Cloudflare Email send outcome is unknown after provider timeout.",
             created_at: "2026-07-02T00:00:00.000Z",
           },
+          {
+            attempt_id: "attempt-2",
+            watchlist_id: null,
+            watchlist_name: null,
+            channel: "email",
+            target_value: "accepted@example.com",
+            status: "sent",
+            webhook_status: "provider_unknown",
+            provider_status_last_seen_at: "2026-07-02T01:00:00.000Z",
+            error_message: null,
+            created_at: "2026-07-02T01:00:00.000Z",
+          },
         ],
         degradedWatchlists: [],
         discoveryFailures: [],
@@ -264,7 +276,10 @@ describe("ops route", () => {
     expect(markup).toContain("Recent delivery attention");
     expect(markup).toContain("Email delivery");
     expect(markup).toContain("Provider outcome is unknown");
+    expect(markup).toContain("Provider accepted this email, but final delivery is still unconfirmed");
+    expect(markup).toContain("do not resend it");
     expect(markup).not.toContain("ops@example.com");
+    expect(markup).not.toContain("accepted@example.com");
     expect(markup).not.toContain("Cloudflare Email send outcome is unknown after provider timeout.");
     expect(markup).not.toContain("No recent delivery failures.");
   });
@@ -384,6 +399,16 @@ describe("ops route", () => {
           alert_status: "failed",
           alert_webhook_status: "provider_unknown",
           alert_updated_at: "2026-07-15T04:01:00.000Z",
+        }, {
+          case_id: "case-2",
+          category: "delivery",
+          priority: "urgent",
+          subject: "Accepted alert awaiting evidence",
+          updated_at: "2026-07-15T04:00:00.000Z",
+          alert_attempt_id: "support-attempt-2",
+          alert_status: "sent",
+          alert_webhook_status: "provider_unknown",
+          alert_updated_at: "2026-07-15T04:01:00.000Z",
         }],
         failingRuns: [],
         stuckRuns: [],
@@ -403,6 +428,8 @@ describe("ops route", () => {
 
     expect(markup).toContain("Record provider evidence");
     expect(markup).toContain("Confirmed provider outcome");
+    expect(markup).toContain("Provider accepted this operator alert, but final delivery is still unconfirmed");
+    expect(markup).toContain("do not resend it");
     expect(markup).not.toContain("Retry operator alert");
     expect(markup).not.toContain("operator@example.test");
   });
@@ -680,6 +707,7 @@ describe("ops route", () => {
       billingLifecycleCandidates: [{
         attemptId: "attempt-opaque-1",
         lifecycleKind: "refund_revoked",
+        status: "sent",
         providerStatusLastSeenAt: "2026-07-15T04:01:00.000Z",
         createdAt: "2026-07-15T04:00:00.000Z",
         updatedAt: "2026-07-15T04:02:00.000Z",
@@ -718,6 +746,9 @@ describe("ops route", () => {
     expect(markup).toContain("Billing email provider reconciliation");
     expect(markup).toContain("Refund and access email");
     expect(markup).toContain("Record provider evidence");
+    expect(markup).toContain("Confirmed delivered");
+    expect(markup).toContain("Provider delivery confirmation");
+    expect(markup).not.toContain("Provider acceptance log");
     expect(markup).toContain("attempt-opaque-1");
     expect(markup).not.toContain("owner@example.com");
     expect(markup).not.toContain("recipient@example.com");
@@ -739,7 +770,9 @@ describe("ops route", () => {
     form.set("attemptId", "attempt-1");
     form.set("expectedUpdatedAt", "2026-07-15T04:02:00.000Z");
     form.set("outcome", "sent");
+    form.set("evidenceClassification", "provider_delivery_confirmation");
     form.set("evidenceReference", "cloudflare-event-123");
+    form.set("observedAt", "2026-07-15T04:01:30.000Z");
     form.set("providerMessageId", "provider-message-123");
 
     const result = await action({
@@ -755,7 +788,9 @@ describe("ops route", () => {
         attemptId: "attempt-1",
         expectedUpdatedAt: "2026-07-15T04:02:00.000Z",
         outcome: "sent",
+        evidenceClassification: "provider_delivery_confirmation",
         evidenceReference: "cloudflare-event-123",
+        observedAt: "2026-07-15T04:01:30.000Z",
         providerMessageId: "provider-message-123",
       },
     );
