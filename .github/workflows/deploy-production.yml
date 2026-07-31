@@ -35,7 +35,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          archive="$RUNNER_TEMP/d1-remote-restore-evidence-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}.tar.gz"
+          archive="$RUNNER_TEMP/d1-remote-restore-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}.tar.gz"
           printf 'RESTORE_EVIDENCE_ARCHIVE=%s\n' "$archive" >> "$GITHUB_ENV"
       - run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
       - run: ./scripts/deploy-window-lock.sh run -- node scripts/validate-d1-backup.mjs
