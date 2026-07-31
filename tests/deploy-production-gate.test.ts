@@ -1351,7 +1351,14 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
         | "finder_infra"
         | "download_infra"
         | "corrupt_artifact"
-        | "gh_missing",
+        | "invalid_zip_member"
+        | "preexisting_archive"
+        | "non_302_redirect"
+        | "expired_artifact"
+        | "oversized_download"
+        | "oversized_member"
+        | "compressed_tar_bomb"
+        | "publish_failure",
     ) => {
       const root = mkdtempSync(join(tmpdir(), `0509-evidence-shell-${mode}-`));
       roots.push(root);
@@ -1359,9 +1366,16 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       const runnerTemp = join(root, "runner");
       const callsPath = join(root, "calls.log");
       const artifactMarker = join(root, "artifact");
-      const archivePath = join(root, "d1-remote-restore-evidence.tar.gz");
+      const archivePath = join(
+        runnerTemp,
+        "d1-remote-restore-evidence-30574154496-1-prepare_remote_restore_evidence.tar.gz",
+      );
       mkdirSync(bin, { recursive: true });
       mkdirSync(runnerTemp, { recursive: true });
+      writeFileSync(join(root, ".curlrc"), "url = https://attacker.invalid\n");
+      if (mode === "preexisting_archive") {
+        writeFileSync(archivePath, "stale");
+      }
       for (const name of ["chmod", "mkdir", "rm"]) {
         symlinkSync(`/bin/${name}`, join(bin, name));
       }
@@ -1389,8 +1403,14 @@ case "$*" in
       [ "$FAKE_MODE" = verifier_infra ] ||
       [ "$FAKE_MODE" = download_infra ] ||
       [ "$FAKE_MODE" = corrupt_artifact ] ||
-      [ "$FAKE_MODE" = gh_missing ]; then
-      printf '30423695493\\td1-remote-restore-evidence-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-30423695493\\n'
+      [ "$FAKE_MODE" = invalid_zip_member ] ||
+      [ "$FAKE_MODE" = non_302_redirect ] ||
+      [ "$FAKE_MODE" = expired_artifact ] ||
+      [ "$FAKE_MODE" = oversized_download ] ||
+      [ "$FAKE_MODE" = oversized_member ] ||
+      [ "$FAKE_MODE" = compressed_tar_bomb ] ||
+      [ "$FAKE_MODE" = publish_failure ]; then
+      printf '30423695493\\t987654321\\t1024\\td1-remote-restore-evidence-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-30423695493\\n'
       exit 0
     fi
     if [ "$FAKE_MODE" = finder_infra ]; then exit 2; fi
@@ -1406,34 +1426,76 @@ exit 90
 printf 'sleep %s\\n' "$*" >> "$FAKE_CALLS"
 `,
       );
-      if (mode !== "gh_missing") {
-        writeFileSync(
-          join(bin, "gh"),
-          `#!/bin/sh
-printf 'gh %s\\n' "$*" >> "$FAKE_CALLS"
+      writeFileSync(
+        join(bin, "curl"),
+        `#!/bin/sh
+printf 'curl %s\\n' "$*" >> "$FAKE_CALLS"
+[ "$1" = "--disable" ] || {
+  printf 'hostile curlrc was not disabled\\n' >&2
+  exit 100
+}
 if [ "$FAKE_MODE" = download_infra ]; then exit 1; fi
-directory=
+headers=
+output=
 while [ "$#" -gt 0 ]; do
-  if [ "$1" = "--dir" ]; then
-    directory="$2"
-    break
-  fi
+  if [ "$1" = "--dump-header" ]; then headers="$2"; shift; fi
+  if [ "$1" = "--output" ]; then output="$2"; shift; fi
   shift
 done
-[ -n "$directory" ] || exit 92
-mkdir -p "$directory"
-: > "$directory/evidence.tar.gz"
+if [ -n "$headers" ]; then
+  if [ "$FAKE_MODE" = non_302_redirect ]; then
+    printf 'HTTP/2 200\\r\\nlocation: https://artifacts.example.test/wrong\\r\\n\\r\\n' > "$headers"
+    printf '200'
+  elif [ "$FAKE_MODE" = expired_artifact ]; then
+    printf 'HTTP/2 410\\r\\n\\r\\n' > "$headers"
+    printf '410'
+  else
+    printf 'HTTP/2 302\\r\\nlocation: https://artifacts.example.test/download?signature=test\\r\\n\\r\\n' > "$headers"
+    printf '302'
+  fi
+  exit 0
+fi
+[ -n "$output" ] || exit 92
+if [ "$FAKE_MODE" = oversized_download ]; then
+  /usr/bin/head -c 11000000 /dev/zero > "$output"
+else
+  printf 'zip' > "$output"
+fi
 `,
-        );
-      }
+      );
+      writeFileSync(
+        join(bin, "unzip"),
+        `#!/bin/sh
+printf 'unzip %s\\n' "$*" >> "$FAKE_CALLS"
+case "$1" in
+  -Z1)
+    if [ "$FAKE_MODE" = invalid_zip_member ]; then
+      printf '../escape.tar.gz\\n'
+    else
+      printf 'd1-remote-restore-evidence-30423695493-1-prepare_remote_restore_evidence.tar.gz\\n'
+    fi
+    ;;
+  -Z)
+    printf '%s\\n' 'Archive: fake'
+    if [ "$FAKE_MODE" = oversized_member ]; then
+      printf '%s\\n' '-rw-------  3.0 unx 20000000 bx       64 stor 26-Jul-31 00:00 d1-remote-restore-evidence-30423695493-1-prepare_remote_restore_evidence.tar.gz'
+    else
+      printf '%s\\n' '-rw-------  3.0 unx       64 bx       64 stor 26-Jul-31 00:00 d1-remote-restore-evidence-30423695493-1-prepare_remote_restore_evidence.tar.gz'
+    fi
+    ;;
+  -p) printf 'archive' ;;
+  *) exit 96 ;;
+esac
+`,
+      );
       writeFileSync(
         join(bin, "tar"),
         `#!/bin/sh
 printf 'tar %s\\n' "$*" >> "$FAKE_CALLS"
 case "$1" in
-  -tzf) printf 'd1-remote-restore-evidence.json\\n' ;;
-  -tvzf) printf '%s\\n' '-rw------- 0/0 18 2026-07-29 00:00 d1-remote-restore-evidence.json' ;;
-  -xOzf)
+  -tzf|-tf) printf 'd1-remote-restore-evidence.json\\n' ;;
+  -tvzf|-tvf) printf '%s\\n' '-rw------- 0/0 18 2026-07-29 00:00 d1-remote-restore-evidence.json' ;;
+  -xOzf|-xOf)
     if [ "$FAKE_MODE" = corrupt_artifact ]; then exit 94; fi
     printf '{"artifact":true}'
     : > "$FAKE_ARTIFACT_MARKER"
@@ -1452,9 +1514,57 @@ case "$1" in
 esac
 `,
       );
-      writeFileSync(join(bin, "stat"), "#!/bin/sh\nprintf '600\\n'\n");
-      const executables = ["node", "sleep", "tar", "stat"];
-      if (mode !== "gh_missing") executables.push("gh");
+      writeFileSync(
+        join(bin, "gzip"),
+        `#!/bin/sh
+printf 'gzip %s\\n' "$*" >> "$FAKE_CALLS"
+if [ "$FAKE_MODE" = compressed_tar_bomb ]; then
+  /usr/bin/head -c 2000000 /dev/zero
+else
+  /bin/cat "$2"
+fi
+`,
+      );
+      writeFileSync(
+        join(bin, "stat"),
+        `#!/bin/sh
+case "$2" in
+  %a) printf '600\\n' ;;
+  %s)
+    for path do :; done
+    if /usr/bin/stat -c '%s' -- "$path" >/dev/null 2>&1; then
+      /usr/bin/stat -c '%s' -- "$path"
+    else
+      /usr/bin/stat -f '%z' -- "$path"
+    fi
+    ;;
+  %u:%a:%h:%F) printf '%s:600:1:regular file\\n' "$(/usr/bin/id -u)" ;;
+  %u:%a:%F) printf '%s:700:directory\\n' "$(/usr/bin/id -u)" ;;
+  *) exit 97 ;;
+esac
+`,
+      );
+      writeFileSync(
+        join(bin, "mv"),
+        `#!/bin/sh
+[ "$1" = "-T" ] || exit 98
+shift
+[ "$1" = "--" ] || exit 99
+shift
+if [ "$FAKE_MODE" = publish_failure ]; then exit 1; fi
+exec /bin/mv "$@"
+`,
+      );
+      const executables = [
+        "curl",
+        "gzip",
+        "mv",
+        "node",
+        "sleep",
+        "tar",
+        "stat",
+        "unzip",
+      ];
       for (const name of executables) {
         chmodSync(join(bin, name), 0o755);
       }
@@ -1467,12 +1577,16 @@ esac
           FAKE_CALLS: callsPath,
           FAKE_MODE: mode,
           FAKE_ARTIFACT_MARKER: artifactMarker,
+          CURL_HOME: root,
           RUNNER_TEMP: runnerTemp,
           GITHUB_WORKSPACE: root,
           GITHUB_SHA: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           GITHUB_RUN_ID: "30574154496",
+          GITHUB_RUN_ATTEMPT: "1",
+          GITHUB_JOB: "prepare_remote_restore_evidence",
           RESTORE_EVIDENCE_ARCHIVE: archivePath,
           GITHUB_REPOSITORY: "nish3451/0509",
+          GH_TOKEN: "test-token",
         },
         encoding: "utf8",
       });
@@ -1494,10 +1608,12 @@ esac
       `restore_evidence_archive=${artifact.archivePath}`,
     );
     expect(existsSync(artifact.archivePath)).toBe(true);
-    expect(artifact.calls.filter((call) => call.startsWith("gh ")))
-      .toHaveLength(1);
+    expect(artifact.calls.filter((call) => call.startsWith("curl ")))
+      .toHaveLength(2);
+    expect(artifact.calls.filter((call) => call.startsWith("unzip ")))
+      .toHaveLength(3);
     expect(artifact.calls.filter((call) => call.startsWith("tar ")))
-      .toHaveLength(4);
+      .toHaveLength(7);
 
     const unavailable = runMode("unavailable");
     expect(unavailable.result.status).toBe(1);
@@ -1543,7 +1659,7 @@ esac
     );
     expect(
       downloadInfrastructureFailure.calls.filter((call) =>
-        call.startsWith("gh "),
+        call.startsWith("curl "),
       ),
     ).toHaveLength(3);
 
@@ -1554,20 +1670,80 @@ esac
     );
     expect(
       corruptArtifact.calls.filter((call) => call.startsWith("tar ")),
-    ).toHaveLength(3);
+    ).toHaveLength(4);
 
-    const missingGitHubCli = runMode("gh_missing");
-    expect(missingGitHubCli.result.status).toBe(1);
-    expect(missingGitHubCli.result.stderr).toContain(
-      "GitHub CLI is unavailable on this runner",
+    const invalidZipMember = runMode("invalid_zip_member");
+    expect(invalidZipMember.result.status).toBe(1);
+    expect(invalidZipMember.result.stderr).toContain(
+      "Restore-evidence artifact zip has an unexpected member",
     );
-    expect(missingGitHubCli.result.stderr).toContain(
+    expect(invalidZipMember.result.stderr).toContain(
       "No valid pre-generated restore evidence is available.",
     );
     expect(
-      missingGitHubCli.calls.some((call) => call.startsWith("gh ")),
+      invalidZipMember.calls.filter((call) => call.startsWith("curl ")),
+    ).toHaveLength(2);
+
+    const preexistingArchive = runMode("preexisting_archive");
+    expect(preexistingArchive.result.status).toBe(1);
+    expect(preexistingArchive.result.stderr).toContain(
+      "Refusing an unexpected or pre-existing restore-evidence archive path",
+    );
+    expect(
+      preexistingArchive.calls.some((call) =>
+        call.includes("find-recent-remote-restore-artifact.mjs"),
+      ),
     ).toBe(false);
-  });
+
+    const non302 = runMode("non_302_redirect");
+    expect(non302.result.status).toBe(2);
+    expect(non302.result.stderr).toContain(
+      "artifact API returned unexpected HTTP status 200",
+    );
+    expect(non302.calls.some((call) => call.startsWith("unzip "))).toBe(false);
+
+    const expired = runMode("expired_artifact");
+    expect(expired.result.status).toBe(1);
+    expect(expired.result.stderr).toContain(
+      "artifact expired before download",
+    );
+    expect(expired.calls.some((call) => call.startsWith("unzip "))).toBe(false);
+
+    const oversizedDownload = runMode("oversized_download");
+    expect(oversizedDownload.result.status).toBe(1);
+    expect(oversizedDownload.result.stderr).toContain(
+      "artifact zip exceeds its size bound",
+    );
+    expect(
+      oversizedDownload.calls.some((call) => call.startsWith("unzip ")),
+    ).toBe(false);
+
+    const oversizedMember = runMode("oversized_member");
+    expect(oversizedMember.result.status).toBe(1);
+    expect(oversizedMember.result.stderr).toContain(
+      "artifact member exceeds its size bound",
+    );
+    expect(
+      oversizedMember.calls.some((call) =>
+        call.includes("verify-remote-restore-evidence.mjs"),
+      ),
+    ).toBe(false);
+
+    const compressedBomb = runMode("compressed_tar_bomb");
+    expect(compressedBomb.result.status).toBe(1);
+    expect(compressedBomb.result.stderr).toContain(
+      "No valid pre-generated restore evidence is available.",
+    );
+    expect(
+      compressedBomb.calls.some((call) =>
+        call.includes("verify-remote-restore-evidence.mjs"),
+      ),
+    ).toBe(false);
+
+    const publishFailure = runMode("publish_failure");
+    expect(publishFailure.result.status).toBe(1);
+    expect(existsSync(publishFailure.archivePath)).toBe(false);
+  }, 30_000);
 
   it("preserves only the explicit non-secret release evidence after every deploy attempt", () => {
     const workflow = readFileSync(
