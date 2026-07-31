@@ -129,6 +129,54 @@ describe("operator billing email reconciliation", () => {
     });
   });
 
+  it("keeps provider acceptance reconcilable until delivery evidence arrives", async () => {
+    const harness = setup();
+
+    await expect(
+      reconcileBillingEmailAttemptWithAudit(
+        { DB: harness.db } as never,
+        input({
+          classification: "cloudflare_email_log",
+          evidenceReference: "cloudflare_acceptance_12345",
+        }),
+      ),
+    ).resolves.toMatchObject({ ok: true, replayed: false, outcome: "sent" });
+
+    const accepted = harness.sqlite.prepare(`
+      SELECT status, webhook_status, sent_at, updated_at
+      FROM delivery_attempt WHERE id = 'attempt-1'
+    `).get() as Record<string, unknown>;
+    expect(accepted).toMatchObject({
+      status: "sent",
+      webhook_status: "provider_unknown",
+      sent_at: "2026-07-15T18:01:00.000Z",
+    });
+
+    await expect(
+      reconcileBillingEmailAttemptWithAudit(
+        { DB: harness.db } as never,
+        input({
+          idempotencyKey: "ops-billing-email-reconcile:22222222-2222-4222-8222-222222222222",
+          expectedUpdatedAt: String(accepted.updated_at),
+          classification: "controlled_inbox_receipt",
+          evidenceReference: "inbox_receipt_67890",
+          observedAt: "2026-07-15T18:02:00.000Z",
+        }),
+      ),
+    ).resolves.toMatchObject({ ok: true, replayed: false, outcome: "sent" });
+
+    expect(
+      harness.sqlite.prepare(`
+        SELECT status, webhook_status, sent_at
+        FROM delivery_attempt WHERE id = 'attempt-1'
+      `).get(),
+    ).toMatchObject({
+      status: "sent",
+      webhook_status: "delivered",
+      sent_at: "2026-07-15T18:01:00.000Z",
+    });
+  });
+
   it.each([
     ["sent", "controlled_inbox_receipt", "inbox_receipt_failed_unknown", "sent", "delivered"],
     ["failed", "provider_rejection_log", "provider_reject_failed_unknown", "failed", "failed"],
@@ -394,6 +442,141 @@ describe("operator digest email reconciliation", () => {
     });
   });
 
+  it("keeps acceptance-only digest evidence out of recipient delivery truth", async () => {
+    const harness = setup();
+
+    await expect(
+      reconcileDigestEmailAttemptWithAudit(
+        { DB: harness.db } as never,
+        input({
+          classification: "cloudflare_email_log",
+          evidenceReference: "digest_cloudflare_acceptance_12345",
+        }),
+      ),
+    ).resolves.toMatchObject({ ok: true, replayed: false, outcome: "sent" });
+
+    const accepted = harness.sqlite.prepare(`
+      SELECT status, webhook_status, sent_at, updated_at
+      FROM delivery_attempt WHERE id = 'digest-attempt-1'
+    `).get() as Record<string, unknown>;
+    expect(accepted).toMatchObject({
+      status: "sent",
+      webhook_status: "provider_unknown",
+      sent_at: "2026-07-15T18:01:00.000Z",
+    });
+    expect(
+      harness.sqlite.prepare(`
+        SELECT status, delivered_at
+        FROM digest_delivery WHERE digest_run_id = 'digest-1'
+      `).get(),
+    ).toMatchObject({ status: "sent", delivered_at: null });
+
+    await expect(
+      reconcileDigestEmailAttemptWithAudit(
+        { DB: harness.db } as never,
+        input({
+          idempotencyKey: "ops-digest-email-reconcile:22222222-2222-4222-8222-222222222222",
+          expectedUpdatedAt: String(accepted.updated_at),
+          classification: "controlled_inbox_receipt",
+          evidenceReference: "digest_inbox_receipt_67890",
+          observedAt: "2026-07-15T18:02:00.000Z",
+        }),
+      ),
+    ).resolves.toMatchObject({ ok: true, replayed: false, outcome: "sent" });
+
+    expect(
+      harness.sqlite.prepare(`
+        SELECT status, webhook_status
+        FROM delivery_attempt WHERE id = 'digest-attempt-1'
+      `).get(),
+    ).toMatchObject({ status: "sent", webhook_status: "delivered" });
+    expect(
+      harness.sqlite.prepare(`
+        SELECT status, delivered_at
+        FROM digest_delivery WHERE digest_run_id = 'digest-1'
+      `).get(),
+    ).toMatchObject({ status: "sent", delivered_at: "2026-07-15T18:02:00.000Z" });
+  });
+
+  it("does not let acceptance-only evidence overwrite a confirmed digest aggregate", async () => {
+    const harness = setup();
+    harness.sqlite.prepare(`
+      UPDATE digest_delivery
+      SET status = 'sent',
+          recipient_email = 'confirmed@example.com',
+          external_message_id = 'confirmed-message',
+          error_message = NULL,
+          delivered_at = '2026-07-15T18:00:20.000Z',
+          updated_at = '2026-07-15T18:00:20.000Z'
+      WHERE digest_run_id = 'digest-1'
+    `).run();
+
+    await expect(
+      reconcileDigestEmailAttemptWithAudit(
+        { DB: harness.db } as never,
+        input({
+          classification: "cloudflare_email_log",
+          evidenceReference: "digest_cloudflare_acceptance_12345",
+        }),
+      ),
+    ).resolves.toMatchObject({ ok: true, replayed: false, outcome: "sent" });
+
+    expect(
+      harness.sqlite.prepare(`
+        SELECT status, recipient_email, external_message_id, delivered_at, updated_at
+        FROM digest_delivery WHERE digest_run_id = 'digest-1'
+      `).get(),
+    ).toMatchObject({
+      status: "sent",
+      recipient_email: "confirmed@example.com",
+      external_message_id: "confirmed-message",
+      delivered_at: "2026-07-15T18:00:20.000Z",
+      updated_at: "2026-07-15T18:00:20.000Z",
+    });
+  });
+
+  it("prefers an older confirmed-delivered sibling over newer acceptance", async () => {
+    const harness = setup();
+    harness.sqlite.prepare(`
+      INSERT INTO delivery_attempt (
+        id, user_id, digest_run_id, delivery_target_id, lane, channel, provider,
+        status, webhook_status, target_value, provider_message_id,
+        provider_status_last_seen_at, payload_snapshot_json, idempotency_key,
+        error_message, sent_at, created_at, updated_at
+      ) VALUES (
+        'digest-attempt-2', 'customer-1', 'digest-1', 'email-target-2',
+        'customer', 'email', 'cloudflare_email', 'sent', 'delivered',
+        'delivered@example.com', 'delivered-message',
+        '2026-07-15T18:00:25.000Z', '{}',
+        'digest:digest-1:customer:email:delivered@example.com', NULL,
+        '2026-07-15T18:00:20.000Z',
+        '2026-07-15T18:00:00.000Z', '2026-07-15T18:00:25.000Z'
+      )
+    `).run();
+
+    await expect(
+      reconcileDigestEmailAttemptWithAudit(
+        { DB: harness.db } as never,
+        input({
+          classification: "cloudflare_email_log",
+          evidenceReference: "digest_cloudflare_acceptance_12345",
+        }),
+      ),
+    ).resolves.toMatchObject({ ok: true, replayed: false, outcome: "sent" });
+
+    expect(
+      harness.sqlite.prepare(`
+        SELECT status, recipient_email, external_message_id, delivered_at
+        FROM digest_delivery WHERE digest_run_id = 'digest-1'
+      `).get(),
+    ).toMatchObject({
+      status: "sent",
+      recipient_email: "delivered@example.com",
+      external_message_id: "delivered-message",
+      delivered_at: "2026-07-15T18:00:25.000Z",
+    });
+  });
+
   it("reconciles an accepted digest email whose final delivery remained unknown", async () => {
     const harness = setup();
     harness.sqlite.prepare(`
@@ -571,7 +754,7 @@ describe("operator digest email reconciliation", () => {
     });
   });
 
-  it("preserves a sent digest aggregate when a different recipient attempt succeeded", async () => {
+  it("preserves accepted transport without claiming delivery when only an accepted sibling remains", async () => {
     const harness = setup();
     harness.sqlite.prepare(`
       UPDATE delivery_attempt
@@ -809,6 +992,53 @@ describe("operator support-alert reconciliation", () => {
     expect(
       harness.sqlite.prepare("SELECT action_name FROM agent_action_audit").get(),
     ).toMatchObject({ action_name: "ops.support_alert.reconcile" });
+  });
+
+  it("keeps support-alert acceptance reconcilable until delivery evidence arrives", async () => {
+    const reconcileSupportAlertAttemptWithAudit = (
+      operatorReconciliation as Record<string, unknown>
+    ).reconcileSupportAlertAttemptWithAudit;
+    expect(typeof reconcileSupportAlertAttemptWithAudit).toBe("function");
+    if (typeof reconcileSupportAlertAttemptWithAudit !== "function") return;
+    const harness = setup();
+
+    await expect(
+      reconcileSupportAlertAttemptWithAudit(
+        { DB: harness.db },
+        input({
+          outcome: "sent",
+          classification: "cloudflare_email_log",
+          evidenceReference: "support_cloudflare_acceptance_12345",
+        }),
+      ),
+    ).resolves.toMatchObject({ ok: true, replayed: false, outcome: "sent" });
+
+    const accepted = harness.sqlite.prepare(`
+      SELECT status, webhook_status, updated_at
+      FROM delivery_attempt WHERE id = 'support-attempt-1'
+    `).get() as Record<string, unknown>;
+    expect(accepted).toMatchObject({ status: "sent", webhook_status: "provider_unknown" });
+
+    await expect(
+      reconcileSupportAlertAttemptWithAudit(
+        { DB: harness.db },
+        input({
+          idempotencyKey: "ops-support-alert-reconcile:22222222-2222-4222-8222-222222222222",
+          expectedUpdatedAt: String(accepted.updated_at),
+          outcome: "sent",
+          classification: "controlled_inbox_receipt",
+          evidenceReference: "support_inbox_receipt_67890",
+          observedAt: "2026-07-15T18:02:00.000Z",
+        }),
+      ),
+    ).resolves.toMatchObject({ ok: true, replayed: false, outcome: "sent" });
+
+    expect(
+      harness.sqlite.prepare(`
+        SELECT status, webhook_status
+        FROM delivery_attempt WHERE id = 'support-attempt-1'
+      `).get(),
+    ).toMatchObject({ status: "sent", webhook_status: "delivered" });
   });
 
   it("records confirmed provider acceptance as sent and replays exactly once", async () => {

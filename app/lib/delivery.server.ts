@@ -789,7 +789,10 @@ function summarizeDigestDeliveryAttempt(
     targetValue: attempt.targetValue,
     providerMessageId: attempt.providerMessageId,
     errorMessage: attempt.errorMessage,
-    deliveredAt: attempt.sentAt,
+    deliveredAt:
+      attempt.webhookStatus === "delivered"
+        ? (attempt.providerStatusLastSeenAt ?? attempt.sentAt)
+        : null,
   };
 }
 

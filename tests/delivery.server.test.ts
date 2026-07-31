@@ -860,6 +860,7 @@ webhookStatus:"pending",
 
   it("reuses an existing idempotent email attempt instead of sending twice", async () => {
     const sendMock = mockEmailSend("msg_1");
+    const upsertDigestDelivery = vi.fn();
     vi.doMock("~/lib/data.server", () => ({
       listAdsByIds: vi.fn().mockResolvedValue([]),
       createDeliveryAttempt: vi.fn(),
@@ -875,7 +876,7 @@ webhookStatus:"pending",
           channel: "email",
           provider: "postmark",
           status: "sent",
-          webhookStatus: "pending",
+          webhookStatus: "provider_unknown",
           targetValue: "owner@example.com",
           providerMessageId: "msg_1",
           providerStatusLastSeenAt: "2026-04-19T00:00:00.000Z",
@@ -931,7 +932,7 @@ webhookStatus:"pending",
         },
       ]),
       upsertDeliveryTarget: vi.fn(),
-      upsertDigestDelivery: vi.fn(),
+      upsertDigestDelivery,
     }));
     vi.doMock("~/lib/whatsapp.server", () => ({
       sendDigestWhatsApp: vi.fn(),
@@ -973,6 +974,14 @@ webhookStatus:"pending",
       ],
     });
     expect(sendMock).not.toHaveBeenCalled();
+    expect(upsertDigestDelivery).toHaveBeenCalledWith(
+      expect.anything(),
+      "digest-1",
+      expect.objectContaining({
+        status: "sent",
+        deliveredAt: null,
+      }),
+    );
   });
 
   it("re-sends a digest email when the prior attempt failed, updating the existing attempt", async () => {
