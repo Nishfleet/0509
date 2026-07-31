@@ -3,6 +3,7 @@ import {
   RELEASE_SCHEDULE_CRONS,
   type ReleaseScheduledTaskName,
 } from "~/lib/release-scheduled-observation-contract";
+import { SCHEDULED_OBSERVATION_MAX_FUTURE_SKEW_MS } from "~/lib/scheduled-observation-health.server";
 
 export type { ReleaseScheduledTaskName } from "~/lib/release-scheduled-observation-contract";
 
@@ -131,12 +132,18 @@ export function classifyScheduledTaskResult(
       recovered: safeCount(result.recovered),
       cancelled: safeCount(result.cancelled),
       redispatched: safeCount(result.redispatched),
+      redispatchFailures: safeCount(result.redispatchFailures),
       firstScanRedispatched: safeCount(firstScans.redispatched),
       firstScanCancelled: safeCount(firstScans.cancelled),
       firstScanFailures: safeCount(firstScans.failures),
     };
     return {
-      outcome: metrics.firstScanFailures > 0 ? "degraded" : hasAnyWork(metrics) ? "completed" : "no_work",
+      outcome:
+        metrics.redispatchFailures + metrics.firstScanFailures > 0
+          ? "degraded"
+          : hasAnyWork(metrics)
+            ? "completed"
+            : "no_work",
       metrics,
     };
   }
@@ -217,6 +224,12 @@ function validateRecordInput(input: RecordInput) {
   if (!Number.isSafeInteger(input.scheduledTime) || input.scheduledTime <= 0) {
     throw new Error("unsafe_release_soak_scheduled_time");
   }
+  if (
+    input.scheduledTime >
+    input.completedAt.getTime() + SCHEDULED_OBSERVATION_MAX_FUTURE_SKEW_MS
+  ) {
+    throw new Error("unsafe_release_soak_future_scheduled_time");
+  }
   const durationMs = input.completedAt.getTime() - input.startedAt.getTime();
   if (!Number.isSafeInteger(durationMs) || durationMs < 0 || durationMs > 900_000) {
     throw new Error("unsafe_release_soak_duration");
@@ -286,6 +299,10 @@ export function observeScheduledTask<T>(
         completedAt,
         ...classification,
         failureCategory: null,
+      }).catch(() => {
+        (dependencies.logObservationFailure ?? ((taskName) => {
+          console.error("release scheduled observation failed", { taskName });
+        }))(input.taskName);
       });
     },
     async (error) => {

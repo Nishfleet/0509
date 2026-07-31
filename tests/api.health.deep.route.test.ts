@@ -14,7 +14,24 @@ function createContext(env: Record<string, unknown> = {}) {
 describe("deep health route", () => {
   it("returns ok with per-dependency status when D1 answers SELECT 1", async () => {
     const first = vi.fn().mockResolvedValue({ "1": 1 });
-    const prepare = vi.fn().mockReturnValue({ first });
+    const baseline = new Date().toISOString();
+    const prepare = vi.fn((sql: string) => {
+      if (sql === "SELECT 1") return { first };
+      const statement = {
+        bind: vi.fn(() => statement),
+        all: vi.fn().mockResolvedValue({
+          results: sql.includes("release_scheduled_observation")
+            ? []
+            : [
+                "0 */3 * * *",
+                "17 */6 * * *",
+                "0 4 * * *",
+                "0 5 * * MON",
+              ].map((cron) => ({ cron, baseline_at: baseline })),
+        }),
+      };
+      return statement;
+    });
     const { loader } = await import("~/routes/api.health.deep");
     const response = await loader({
       context: createContext({
@@ -36,13 +53,13 @@ describe("deep health route", () => {
     const body = (await response.json()) as {
       status: string;
       app: string;
-      checks: { edge: string; d1: string };
+      checks: { edge: string; d1: string; scheduledWork: string };
       releaseIdentity: Record<string, unknown>;
     };
     expect(body).toMatchObject({
       status: "ok",
       app: "0509",
-      checks: { edge: "ok", d1: "ok" },
+      checks: { edge: "ok", d1: "ok", scheduledWork: "ok" },
       releaseIdentity: {
         workerVersionId: "worker-version-123",
         tag: "release-2026-07-19",
@@ -50,6 +67,62 @@ describe("deep health route", () => {
         searchRolloutMode: "shadow",
       },
     });
+  });
+
+  it("returns degraded 503 when scheduled-work evidence is overdue", async () => {
+    const first = vi.fn().mockResolvedValue({ "1": 1 });
+    const prepare = vi.fn((sql: string) => {
+      if (sql === "SELECT 1") return { first };
+      const statement = {
+        bind: vi.fn(() => statement),
+        all: vi.fn().mockResolvedValue({
+          results: sql.includes("release_scheduled_observation")
+            ? []
+            : [
+                "0 */3 * * *",
+                "17 */6 * * *",
+                "0 4 * * *",
+                "0 5 * * MON",
+              ].map((cron) => ({
+                cron,
+                baseline_at: "2026-01-01T00:00:00.000Z",
+              })),
+        }),
+      };
+      return statement;
+    });
+    const { loader } = await import("~/routes/api.health.deep");
+    const response = await loader({
+      context: createContext({ DB: { prepare } }),
+      request: new Request("https://0509.io/api/health/deep"),
+    } as never);
+
+    expect(response.status).toBe(503);
+    const body = await response.json() as Record<string, unknown> & {
+      checks: Record<string, unknown>;
+    };
+    expect(body).toMatchObject({
+      status: "degraded",
+      checks: { d1: "ok", scheduledWork: "degraded" },
+    });
+    expect(Object.keys(body).sort()).toEqual([
+      "app",
+      "checks",
+      "releaseIdentity",
+      "status",
+      "timestamp",
+    ]);
+    expect(Object.keys(body.checks).sort()).toEqual(["d1", "edge", "scheduledWork"]);
+    const serialized = JSON.stringify(body);
+    for (const privateDetail of [
+      "0 */3 * * *",
+      "2026-01-01T00:00:00.000Z",
+      "customer@example.com",
+      "provider_failure_detail",
+      "raw error",
+    ]) {
+      expect(serialized).not.toContain(privateDetail);
+    }
   });
 
   it("returns degraded 503 when D1 is missing", async () => {

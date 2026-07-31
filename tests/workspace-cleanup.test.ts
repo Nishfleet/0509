@@ -54,6 +54,7 @@ afterEach(() => {
   vi.resetModules();
   vi.doUnmock("~/lib/auth.server");
   vi.doUnmock("~/lib/data.server");
+  vi.doUnmock("~/lib/delivery-email-core.server");
   vi.doUnmock("~/lib/delivery.server");
   vi.doUnmock("~/lib/plan.server");
   vi.doUnmock("~/lib/monitoring.server");
@@ -681,14 +682,25 @@ describe("account deletion billing guard", () => {
 });
 
 describe("operator alert FK attribution", () => {
-  function deliveryDataMock(userByEmail: string | null, oldest: string | null) {
+  function deliveryDataMock(
+    userByEmail: string | null,
+    oldest: string | null,
+    claimOverride?: {
+      attemptId: string | null;
+      claimUpdatedAt: string | null;
+      duplicate: Record<string, unknown> | null;
+      reclaimed: boolean;
+    },
+  ) {
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-1");
-    const claimInstantDeliveryAttempt = vi.fn().mockResolvedValue({
-      attemptId: "attempt-1",
-      claimUpdatedAt: "2026-07-15T04:00:00.000Z",
-      duplicate: null,
-      reclaimed: false,
-    });
+    const claimInstantDeliveryAttempt = vi.fn().mockResolvedValue(
+      claimOverride ?? {
+        attemptId: "attempt-1",
+        claimUpdatedAt: "2026-07-15T04:00:00.000Z",
+        duplicate: null,
+        reclaimed: false,
+      },
+    );
     const markInstantDeliveryDispatchStarted = vi.fn().mockResolvedValue(
       "2026-07-15T04:00:01.000Z",
     );
@@ -821,6 +833,83 @@ describe("operator alert FK attribution", () => {
     expect(emailSend).not.toHaveBeenCalled();
     expect(deliveryData.claimInstantDeliveryAttempt).not.toHaveBeenCalled();
     expect(deliveryData.createDeliveryAttempt).not.toHaveBeenCalled();
+  });
+
+  it("distinguishes an already accepted idempotent duplicate from rejection", async () => {
+    const emailSend = vi.fn();
+    deliveryDataMock(null, "founder-user-id", {
+      attemptId: null,
+      claimUpdatedAt: null,
+      duplicate: { status: "sent" },
+      reclaimed: false,
+    });
+
+    const { sendOperatorAlertEmail, sendOperatorAlertEmailDetailed } = await import(
+      "~/lib/delivery.server"
+    );
+    const env = {
+      EMAIL: { send: emailSend },
+      EMAIL_FROM_EMAIL: "alerts@0509.io",
+      LAUNCH_CANARY_EMAIL: "me@inish.in",
+    } as never;
+    const input = {
+      subject: "test",
+      lines: ["signal"],
+      idempotencyKey: "cron-failure:scheduled_monitoring:1",
+    };
+
+    await expect(sendOperatorAlertEmailDetailed(env, input)).resolves.toBe(
+      "already_accepted",
+    );
+    await expect(sendOperatorAlertEmail(env, input)).resolves.toBe(false);
+    expect(emailSend).not.toHaveBeenCalled();
+  });
+
+  it("keeps provider-unknown operator sends pending and rejects only definite failures", async () => {
+    const providerResults = [
+      { status: "pending", webhookStatus: "provider_unknown" },
+      { status: "failed", webhookStatus: "provider_unknown" },
+      { status: "failed", webhookStatus: "failed" },
+      { status: "sent", webhookStatus: "provider_unknown" },
+    ].map((result) => ({
+      provider: "cloudflare_email" as const,
+      providerMessageId: null,
+      providerStatusLastSeenAt: "2026-07-15T04:00:02.000Z",
+      errorMessage: result.status === "sent" ? null : "sanitized provider outcome",
+      deliveredAt: null,
+      ...result,
+    }));
+    const sendCloudflareEmail = vi.fn();
+    for (const result of providerResults) {
+      sendCloudflareEmail.mockResolvedValueOnce(result);
+    }
+    vi.doMock("~/lib/delivery-email-core.server", async (importOriginal) => ({
+      ...(await importOriginal<typeof import("~/lib/delivery-email-core.server")>()),
+      sendCloudflareEmail,
+    }));
+    deliveryDataMock(null, "founder-user-id");
+
+    const { sendOperatorAlertEmailDetailed } = await import("~/lib/delivery.server");
+    const env = {
+      EMAIL: { send: vi.fn() },
+      EMAIL_FROM_EMAIL: "alerts@0509.io",
+      LAUNCH_CANARY_EMAIL: "me@inish.in",
+    } as never;
+    const outcomes = [];
+    for (let index = 0; index < providerResults.length; index += 1) {
+      outcomes.push(await sendOperatorAlertEmailDetailed(env, {
+        subject: "test",
+        lines: ["signal"],
+        idempotencyKey: `cron-failure:scheduled_monitoring:${index}`,
+      }));
+    }
+
+    expect(outcomes).toEqual([
+      "in_flight_or_unknown",
+      "in_flight_or_unknown",
+      "rejected",
+      "accepted",
+    ]);
   });
 
   it("retries failed operator alerts by updating the existing ledger row", async () => {

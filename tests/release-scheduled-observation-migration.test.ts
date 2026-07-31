@@ -92,6 +92,24 @@ describe("release scheduled observation migration", () => {
     ).not.toThrow();
   });
 
+  it("allows only bounded integer redispatch-failure metrics after 0071", () => {
+    const db = database();
+    applyMigration(db, "migrations/0071_release_observation_redispatch_failures.sql");
+
+    expect(() => insert(db, {
+      metrics: JSON.stringify({ redispatchFailures: 2 }),
+    })).not.toThrow();
+    expect(() => db.prepare(`
+      UPDATE release_scheduled_observation SET metrics_json = ? WHERE id = ?
+    `).run(JSON.stringify({ redispatchFailures: 3 }), "observation-1")).not.toThrow();
+    expect(() => db.prepare(`
+      UPDATE release_scheduled_observation SET metrics_json = ? WHERE id = ?
+    `).run(JSON.stringify({ redispatchFailures: "private" }), "observation-1")).toThrow();
+    expect(() => db.prepare(`
+      UPDATE release_scheduled_observation SET metrics_json = ? WHERE id = ?
+    `).run(JSON.stringify({ unknownMetric: 1 }), "observation-1")).toThrow();
+  });
+
   it("has no customer or provider identifier columns and creates both evidence indexes", () => {
     const db = database();
     const columns = db

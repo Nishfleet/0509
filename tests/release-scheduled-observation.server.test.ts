@@ -133,6 +133,15 @@ describe("release scheduled observations", () => {
       failed: 1,
     })).toMatchObject({ outcome: "degraded", metrics: { attempted: 1, alerted: 0, failures: 1 } });
     expect(classifyScheduledTaskResult("presence_polling_batch", { polled: 2, results: [{ ok: true, targetId: "private" }, { ok: false, errorCode: "private" }] })).toMatchObject({ outcome: "degraded", metrics: { polled: 2, failed: 1 } });
+    expect(classifyScheduledTaskResult("monitoring_fanout_reconciliation", {
+      recovered: 0,
+      redispatched: 0,
+      redispatchFailures: 2,
+      firstScans: { failures: 0 },
+    })).toMatchObject({
+      outcome: "degraded",
+      metrics: { redispatchFailures: 2 },
+    });
     expect(JSON.stringify(classifyScheduledTaskResult("presence_polling_batch", { polled: 1, results: [{ ok: true, targetId: "private" }] }))).not.toContain("private");
   });
 
@@ -161,5 +170,24 @@ describe("release scheduled observations", () => {
       metrics: { sent: false },
     }, { randomUUID: () => "12345678-1234-1234-1234-123456789abc" });
     expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects scheduled timestamps beyond the allowed future skew", async () => {
+    const env = {
+      CF_VERSION_METADATA: { id: "worker-v1" },
+      DB: { prepare: vi.fn() },
+    };
+
+    await expect(recordReleaseScheduledObservation(env as never, {
+      cron: "0 */3 * * *",
+      scheduledTime: Date.parse("2026-07-20T05:10:00.001Z"),
+      taskName: "scheduled_monitoring",
+      startedAt: new Date("2026-07-20T05:00:00.000Z"),
+      completedAt: new Date("2026-07-20T05:05:00.000Z"),
+      outcome: "no_work",
+      failureCategory: null,
+      metrics: {},
+    })).rejects.toThrow("unsafe_release_soak_future_scheduled_time");
+    expect(env.DB.prepare).not.toHaveBeenCalled();
   });
 });
