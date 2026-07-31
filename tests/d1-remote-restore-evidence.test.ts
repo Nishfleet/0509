@@ -209,6 +209,17 @@ describe("D1 remote restore evidence automation", () => {
     expect(workflow.jobs?.cleanup?.environment).toBe("production");
     expect(workflow.jobs?.cleanup?.if).toContain("always()");
     expect(workflow.jobs?.cleanup?.needs).toBe("restore");
+    // startup_failure class (run 30584838622): job-level env cannot use the
+    // runner context. Bind RUNNER_TEMP via a step → GITHUB_ENV instead.
+    const workflowSource = readFileSync(
+      ".github/workflows/d1-remote-restore-evidence.yml",
+      "utf8",
+    );
+    expect(workflowSource).not.toMatch(
+      /^[ \t]+[A-Z0-9_]+:[ \t]+\$\{\{[ \t]*runner\./m,
+    );
+    expect(workflowSource).toContain("runs-on: ubuntu-latest");
+    expect(workflowSource).not.toContain("vars.RECOVERY_RUNNER");
     for (const [job, consumer] of [
       [
         workflow.jobs?.restore,
@@ -220,6 +231,9 @@ describe("D1 remote restore evidence automation", () => {
       ],
     ] as const) {
       expect(job?.env?.D1_BACKUP_LOCAL_DIRECTORY).toBeUndefined();
+      for (const value of Object.values(job?.env ?? {})) {
+        expect(String(value)).not.toContain("runner.");
+      }
       const bindingIndex = job?.steps?.findIndex(
         (step) => step.name === "Bind run-scoped backup directory",
       ) ?? -1;
@@ -275,7 +289,12 @@ describe("D1 remote restore evidence automation", () => {
     expect(prepareScript).toContain(
       "node scripts/find-recent-remote-restore-artifact.mjs",
     );
-    expect(prepareScript).toContain('gh run download "$run_id"');
+    expect(prepareScript).toContain("resolve_gh_bin()");
+    expect(prepareScript).toContain(
+      'tool_root="${DEPLOY_WINDOW_TOOL_ROOT:-/opt/0509-runner/bin}"',
+    );
+    expect(prepareScript).toContain('candidate="${tool_root}/gh"');
+    expect(prepareScript).toContain('"$gh_bin" run download "$run_id"');
     expect(prepareScript).toContain(
       '[[ "$(tar -tvzf "${archives[0]}")" = -* ]]',
     );

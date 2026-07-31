@@ -52,6 +52,7 @@ function envFor(
     "DEPLOY_WINDOW_VERIFY_ROOT",
     "DEPLOY_WINDOW_VERIFY_SLOTS",
     "DEPLOY_WINDOW_VERIFY_TMP_ROOT",
+    "DEPLOY_WINDOW_TOOL_ROOT",
   ]) {
     delete env[name];
   }
@@ -1121,5 +1122,46 @@ EOF`,
     );
     expect(result.status, result.stderr).toBe(0);
     expect(readFileSync(archive, "utf8")).toBe("packed\n");
+  });
+
+  it("keeps required tooling reachable inside a verification lane via TOOL_ROOT", () => {
+    const lockFile = scratchLock();
+    const toolRoot = `${lockFile}.tool-root`;
+    const marker = `${lockFile}.tool-path`;
+    mkdirSync(toolRoot, { recursive: true });
+    writeFileSync(
+      join(toolRoot, "gh"),
+      "#!/bin/sh\nprintf 'fake-gh\\n'\n",
+      { mode: 0o755 },
+    );
+
+    const result = spawnSync(
+      script,
+      [
+        "run",
+        "--",
+        "bash",
+        "-c",
+        'command -v gh >"$1"; gh >>"$1"',
+        "lane",
+        marker,
+      ],
+      {
+        encoding: "utf8",
+        env: envFor(lockFile, {
+          DEPLOY_WINDOW_ACQUIRE_TIMEOUT: "2",
+          DEPLOY_WINDOW_VERIFY_ROOT: `${lockFile}.verify`,
+          DEPLOY_WINDOW_VERIFY_TMP_ROOT: `${lockFile}.tmp`,
+          DEPLOY_WINDOW_TOOL_ROOT: toolRoot,
+          // Simulate the hardened runner's stripped PATH: no operator home
+          // bins, only the system path. TOOL_ROOT must still surface gh.
+          PATH: "/usr/bin:/bin",
+        }),
+        timeout: 5_000,
+      },
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(readFileSync(marker, "utf8")).toBe(`${join(toolRoot, "gh")}\nfake-gh\n`);
   });
 });

@@ -1459,11 +1459,15 @@ esac
         chmodSync(join(bin, name), 0o755);
       }
 
+      const toolRoot = join(root, "tool-root");
+      mkdirSync(toolRoot, { recursive: true });
       const result = spawnSync(prepareScript, [], {
         cwd: process.cwd(),
         env: {
           ...process.env,
           PATH: `${bin}:/bin:/usr/bin`,
+          // Isolate from the live /opt/0509-runner/bin/gh install.
+          DEPLOY_WINDOW_TOOL_ROOT: toolRoot,
           FAKE_CALLS: callsPath,
           FAKE_MODE: mode,
           FAKE_ARTIFACT_MARKER: artifactMarker,
@@ -1567,6 +1571,104 @@ esac
     expect(
       missingGitHubCli.calls.some((call) => call.startsWith("gh ")),
     ).toBe(false);
+
+    // Absolute tool-root resolution: PATH has no gh, but DEPLOY_WINDOW_TOOL_ROOT does.
+    const toolRootOnly = (() => {
+      const root = mkdtempSync(join(tmpdir(), "0509-evidence-shell-toolroot-"));
+      roots.push(root);
+      const bin = join(root, "bin");
+      const toolRoot = join(root, "tool-root");
+      const runnerTemp = join(root, "runner");
+      const callsPath = join(root, "calls.log");
+      const artifactMarker = join(root, "artifact");
+      const archivePath = join(root, "d1-remote-restore-evidence.tar.gz");
+      mkdirSync(bin, { recursive: true });
+      mkdirSync(toolRoot, { recursive: true });
+      mkdirSync(runnerTemp, { recursive: true });
+      for (const name of ["chmod", "mkdir", "rm", "dirname", "test"]) {
+        const target = existsSync(`/bin/${name}`)
+          ? `/bin/${name}`
+          : `/usr/bin/${name}`;
+        if (existsSync(target)) symlinkSync(target, join(bin, name));
+      }
+      writeFileSync(
+        join(bin, "node"),
+        `#!/bin/sh
+printf 'node %s\\n' "$*" >> "$FAKE_CALLS"
+case "$*" in
+  *verify-remote-restore-evidence.mjs*)
+    if [ -f "$FAKE_ARTIFACT_MARKER" ]; then exit 0; fi
+    exit 1
+    ;;
+  *find-recent-remote-restore-artifact.mjs*)
+    printf '30423695493\\td1-remote-restore-evidence-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-30423695493\\n'
+    exit 0
+    ;;
+esac
+exit 90
+`,
+      );
+      writeFileSync(join(bin, "sleep"), "#!/bin/sh\n");
+      writeFileSync(
+        join(toolRoot, "gh"),
+        `#!/bin/sh
+printf 'gh %s\\n' "$*" >> "$FAKE_CALLS"
+directory=
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "--dir" ]; then directory="$2"; break; fi
+  shift
+done
+[ -n "$directory" ] || exit 92
+mkdir -p "$directory"
+: > "$directory/evidence.tar.gz"
+`,
+      );
+      writeFileSync(
+        join(bin, "tar"),
+        `#!/bin/sh
+printf 'tar %s\\n' "$*" >> "$FAKE_CALLS"
+case "$1" in
+  -tzf) printf 'd1-remote-restore-evidence.json\\n' ;;
+  -tvzf) printf '%s\\n' '-rw------- 0/0 18 2026-07-29 00:00 d1-remote-restore-evidence.json' ;;
+  -xOzf) printf '{"artifact":true}'; : > "$FAKE_ARTIFACT_MARKER" ;;
+  --format=posix)
+    while [ "$#" -gt 0 ]; do
+      if [ "$1" = "-czf" ]; then : > "$2"; exit 0; fi
+      shift
+    done
+    exit 95
+    ;;
+  *) exit 93 ;;
+esac
+`,
+      );
+      writeFileSync(join(bin, "stat"), "#!/bin/sh\nprintf '600\\n'\n");
+      for (const name of ["node", "sleep", "tar", "stat"]) {
+        chmodSync(join(bin, name), 0o755);
+      }
+      chmodSync(join(toolRoot, "gh"), 0o755);
+      return spawnSync(prepareScript, [], {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          PATH: `${bin}:/bin:/usr/bin`,
+          DEPLOY_WINDOW_TOOL_ROOT: toolRoot,
+          FAKE_CALLS: callsPath,
+          FAKE_ARTIFACT_MARKER: artifactMarker,
+          RUNNER_TEMP: runnerTemp,
+          GITHUB_WORKSPACE: root,
+          GITHUB_SHA: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          GITHUB_RUN_ID: "30574154496",
+          RESTORE_EVIDENCE_ARCHIVE: archivePath,
+          GITHUB_REPOSITORY: "nish3451/0509",
+        },
+        encoding: "utf8",
+      });
+    })();
+    expect(toolRootOnly.status, toolRootOnly.stderr).toBe(0);
+    expect(toolRootOnly.stdout).toContain(
+      "Recent private restore evidence is valid for this deploy.",
+    );
   });
 
   it("preserves only the explicit non-secret release evidence after every deploy attempt", () => {

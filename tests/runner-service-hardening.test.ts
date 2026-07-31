@@ -97,6 +97,10 @@ describe("hardened GitHub runner services", () => {
       "Environment=DEPLOY_WINDOW_LOCK_FILE=/run/lock/0509/deploy-window.lock",
     );
     expect(unit).toContain("Environment=PATH=/opt/0509-runner/bin:");
+    expect(provisioner).toContain("install_gh_cli");
+    expect(provisioner).toContain('"${TOOL_ROOT}/bin/gh"');
+    expect(provisioner).toContain("GH_CLI_VERSION");
+    expect(provisioner).toContain("GH_CLI_ARCHIVE_SHA256");
   });
 
   it("keeps each verification unit below the aggregate cap", () => {

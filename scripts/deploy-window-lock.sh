@@ -32,6 +32,10 @@ VERIFY_ROOT="${DEPLOY_WINDOW_VERIFY_ROOT:-${LOCK_FILE}.verify}"
 VERIFY_TMP_ROOT="${DEPLOY_WINDOW_VERIFY_TMP_ROOT:-${TMPDIR:-/tmp}/0509-verification-$(id -u)}"
 VERIFY_POLL_INTERVAL="${DEPLOY_WINDOW_VERIFY_POLL_INTERVAL:-0.1}"
 VERIFY_PORT_BASE="${DEPLOY_WINDOW_VERIFY_PORT_BASE:-4190}"
+# Hardened VPS runners pin required CI tools here (see ops/github-runners/).
+# Keep this first on PATH inside verification lanes so lane isolation cannot
+# hide gh/node wrappers that the parent step already relies on.
+TOOL_ROOT="${DEPLOY_WINDOW_TOOL_ROOT:-/opt/0509-runner/bin}"
 CAPABILITY_FILE="${DEPLOY_WINDOW_CAPABILITY_FILE:-}"
 RELEASE_TOKEN=""
 if [ -n "${DEPLOY_WINDOW_CALLER_ID:-}" ]; then
@@ -43,6 +47,18 @@ else
 fi
 
 mkdir -p "$(dirname "$LOCK_FILE")"
+
+# Prepend the hardened tool root when it exists so required binaries remain
+# reachable even if a caller inherited a stripped PATH.
+ensure_tool_root_on_path() {
+  if [ -d "$TOOL_ROOT" ]; then
+    case ":${PATH}:" in
+      *":${TOOL_ROOT}:"*) ;;
+      *) PATH="${TOOL_ROOT}${PATH:+:${PATH}}" ;;
+    esac
+    export PATH
+  fi
+}
 
 is_duration() {
   [[ "$1" =~ ^[0-9]+([.][0-9]+)?$ ]]
@@ -770,6 +786,7 @@ run_in_verification_lane() {
   fi
   chmod 700 "$VERIFY_TMP_ROOT"
   mkdir -p "$queue_dir"
+  ensure_tool_root_on_path
   deadline="$(awk -v now="$(date +%s.%N)" -v wait="$ACQUIRE_TIMEOUT" 'BEGIN { printf "%.9f", now + wait }')"
 
   trap 'interrupt_lane 130' INT
@@ -827,6 +844,8 @@ run_in_verification_lane() {
     export DEPLOY_WINDOW_SLOT="$slot"
     export DEPLOY_WINDOW_VERIFY_SLOT="$slot"
     export E2E_BASE_URL="${E2E_BASE_URL:-http://127.0.0.1:${default_port}}"
+    # Re-assert after lane env setup; TMPDIR isolation must not drop tools.
+    ensure_tool_root_on_path
 
     exec {admission_fd}>"$ADMISSION_LOCK_FILE"
     if ! flock --shared --wait "$remaining" "$admission_fd"; then

@@ -5,6 +5,10 @@ set +x
 readonly REPOSITORY_URL="${REPOSITORY_URL:-https://github.com/nish3451/0509}"
 readonly RUNNER_VERSION="${RUNNER_VERSION:-2.336.0}"
 readonly RUNNER_ARCHIVE_SHA256="${RUNNER_ARCHIVE_SHA256:-04cf0be1aff4c3ec3554466c39124ca250e3effd8873bb7e8d68535aa9505d5d}"
+# Pinned and non-overridable: the provisioner must not install a caller-selected
+# GitHub CLI artifact into the hardened tool root.
+readonly GH_CLI_VERSION="2.93.0"
+readonly GH_CLI_ARCHIVE_SHA256="02d1290eba130e0b896f3709ffff22e1c75a51475ddb70476a85abc6b5807af0"
 readonly RUNNER_REGISTRATION_TOKEN_FILE="${RUNNER_REGISTRATION_TOKEN_FILE:-/run/0509-runner-registration.token}"
 SOURCE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly SOURCE_DIR
@@ -104,12 +108,49 @@ create_accounts() {
   done
 }
 
+install_gh_cli() {
+  local archive="/var/cache/gh_${GH_CLI_VERSION}_linux_amd64.tar.gz"
+  local extract_dir archive_tmp
+
+  install -d -o root -g root -m 0755 /var/cache "${TOOL_ROOT}/bin"
+  if [[ -f "${archive}" ]] &&
+    ! printf '%s  %s\n' "${GH_CLI_ARCHIVE_SHA256}" "${archive}" | sha256sum --check --status; then
+    rm -f -- "${archive}"
+  fi
+  if [[ ! -f "${archive}" ]]; then
+    archive_tmp="$(mktemp /var/cache/gh-cli-download.XXXXXX)"
+    if ! curl --fail --silent --show-error --location \
+      --connect-timeout 30 \
+      --max-time 300 \
+      --retry 3 \
+      --retry-delay 2 \
+      "https://github.com/cli/cli/releases/download/v${GH_CLI_VERSION}/gh_${GH_CLI_VERSION}_linux_amd64.tar.gz" \
+      --output "${archive_tmp}"; then
+      rm -f -- "${archive_tmp}"
+      die "GitHub CLI download failed"
+    fi
+    if ! printf '%s  %s\n' "${GH_CLI_ARCHIVE_SHA256}" "${archive_tmp}" | sha256sum --check --status; then
+      rm -f -- "${archive_tmp}"
+      die "GitHub CLI archive digest mismatch"
+    fi
+    mv -f -- "${archive_tmp}" "${archive}"
+  fi
+  extract_dir="$(mktemp -d /var/cache/gh-cli.XXXXXX)"
+  tar --extract --gzip --file "${archive}" --directory "${extract_dir}" \
+    "gh_${GH_CLI_VERSION}_linux_amd64/bin/gh"
+  install -o root -g root -m 0755 \
+    "${extract_dir}/gh_${GH_CLI_VERSION}_linux_amd64/bin/gh" \
+    "${TOOL_ROOT}/bin/gh"
+  rm -rf -- "${extract_dir}"
+}
+
 install_policy_files() {
   install -d -o root -g root -m 0755 "${TOOL_ROOT}/bin"
   install -o root -g root -m 0755 "${SOURCE_DIR}/../../scripts/deploy-window-lock.sh" \
     "${TOOL_ROOT}/bin/deploy-window-lock"
   install -o root -g root -m 0755 "${SOURCE_DIR}/../../scripts/flock-compat.sh" \
     "${TOOL_ROOT}/bin/flock"
+  install_gh_cli
   install -o root -g root -m 0644 "${SOURCE_DIR}/github-0509.slice" \
     /etc/systemd/system/github-0509.slice
   install -o root -g root -m 0644 "${SOURCE_DIR}/github-0509-verify.slice" \

@@ -21,6 +21,31 @@ cache="$RUNNER_TEMP/d1-remote-restore-evidence-cache"
 evidence_valid=false
 archive="$RESTORE_EVIDENCE_ARCHIVE"
 
+# Resolve an executable gh even when PATH was stripped before the lane.
+# Prefer an explicit GH_BIN, then PATH, then the hardened runner tool root.
+resolve_gh_bin() {
+  local candidate
+  local tool_root="${DEPLOY_WINDOW_TOOL_ROOT:-/opt/0509-runner/bin}"
+  if [ -n "${GH_BIN:-}" ]; then
+    if [ -x "$GH_BIN" ] && [ ! -d "$GH_BIN" ]; then
+      printf '%s\n' "$GH_BIN"
+      return 0
+    fi
+    return 1
+  fi
+  candidate="$(command -v gh 2>/dev/null || true)"
+  if [ -n "$candidate" ] && [ -x "$candidate" ] && [ ! -d "$candidate" ]; then
+    printf '%s\n' "$candidate"
+    return 0
+  fi
+  candidate="${tool_root}/gh"
+  if [ -x "$candidate" ] && [ ! -d "$candidate" ]; then
+    printf '%s\n' "$candidate"
+    return 0
+  fi
+  return 1
+}
+
 verify_evidence() {
   local attempt
   local status
@@ -72,12 +97,13 @@ download_artifact() {
   local name="$2"
   local run_id="$1"
   local target="$3"
-  if ! command -v gh >/dev/null 2>&1; then
+  local gh_bin=""
+  if ! gh_bin="$(resolve_gh_bin)"; then
     printf '::warning::GitHub CLI is unavailable on this runner; restore-evidence artifact reuse is unavailable.\n' >&2
     return 1
   fi
   for attempt in 1 2 3; do
-    if gh run download "$run_id" \
+    if "$gh_bin" run download "$run_id" \
       --repo "$GITHUB_REPOSITORY" \
       --name "$name" \
       --dir "$target"; then
