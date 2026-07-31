@@ -387,6 +387,7 @@ describe("clients route agent memory", () => {
     } as never);
 
     expect(result.rooms).toHaveLength(1);
+    expect(result.roomMemoryUnavailable).toBe(true);
     expect(result.memories).toHaveLength(1);
     expect(result.memories[0]).toMatchObject({
       id: "memory-recent-1",
@@ -508,6 +509,8 @@ describe("clients route agent memory", () => {
       ],
       plan: "agency",
       canManageClientRooms: true,
+      roomMemoryUnavailable: true,
+      approvalUnavailableRoomIds: [],
     });
 
     const { default: ClientsRoute } = await import("~/routes/app.clients");
@@ -518,16 +521,19 @@ describe("clients route agent memory", () => {
     expect(markup).toContain("review_cadence");
     expect(markup).toContain("Weekly client-ready review with direct tone.");
     expect(markup).toContain("Nykaa weekly desk");
-    expect(markup).toContain("Ready for client review");
+    expect(markup).toContain("Client context status unavailable");
     expect(markup).toContain("1 evidence source");
     expect(markup).toContain("1 report");
     expect(markup).toContain("1 saved memory");
     expect(markup).toContain("room notes saved");
-    expect(markup).toContain("Open the report and share the snapshot when ready.");
+    expect(markup).toContain("Refresh before sharing; saved client context could not be loaded.");
+    expect(markup).not.toContain("Ready for client review");
+    expect(markup).not.toContain("Open the report and share the snapshot when ready.");
+    expect(markup).toContain("Saved client context could not be loaded.");
     expect(markup).toContain('name="intent" value="approve-client-room"');
   });
 
-  it("fails closed when report revalidation helpers are unavailable", async () => {
+  it("preserves saved approvals but marks readiness unavailable when revalidation helpers are unavailable", async () => {
     mockAuth();
     vi.doMock("~/lib/data.server", () => ({
       listAgentMemory: vi.fn().mockResolvedValue([]),
@@ -555,6 +561,7 @@ describe("clients route agent memory", () => {
       getLatestDigestRunSummaryForWatchlist: undefined,
       listAdsByIds: undefined,
       listCollectionItems: undefined,
+      listProofCapturePairsForEventIds: undefined,
       listWatchEvents: undefined,
       getCollection: undefined,
       getWatchlist: undefined,
@@ -566,7 +573,117 @@ describe("clients route agent memory", () => {
       request: new Request("http://localhost/app/clients"),
     } as never);
 
-    expect(result.rooms[0].notes.reportApprovals).toEqual({});
+    expect(result.rooms[0].notes.reportApprovals).toEqual({
+      "watchlist-watchlist-1": {
+        evidenceFingerprint: "approved",
+        reviewedAt: expect.any(String),
+        approvalExpiresAt: expect.any(String),
+      },
+    });
+    expect(result.approvalUnavailableRoomIds).toEqual(["room-1"]);
+  });
+
+  it("preserves a saved approval and labels it unavailable when revalidation throws", async () => {
+    mockAuth();
+    const reviewedAt = new Date(Date.now() - 60_000).toISOString();
+    const approvalExpiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    vi.doMock("~/lib/data.server", () => ({
+      listAgentMemory: vi.fn().mockResolvedValue([]),
+      listAgentMemoryForClientRooms: vi.fn().mockResolvedValue([]),
+      listClientRooms: vi.fn().mockResolvedValue([{
+        id: "room-1",
+        name: "Nykaa weekly desk",
+        clientLabel: "Nykaa",
+        status: "active",
+        notes: {
+          reportApprovals: {
+            "watchlist:watchlist-1": {
+              evidenceFingerprint: "approved",
+              reviewedAt,
+              approvalExpiresAt,
+            },
+          },
+        },
+        resourceRefs: [{ resourceType: "report", resourceId: "watchlist:watchlist-1" }],
+        createdAt: "2026-06-20T00:00:00.000Z",
+        updatedAt: "2026-06-20T00:00:00.000Z",
+      }]),
+      listCollections: vi.fn().mockResolvedValue([]),
+      listWatchlists: vi.fn().mockResolvedValue([{
+        id: "watchlist-1",
+        isActive: true,
+        updatedAt: new Date(Date.parse(reviewedAt) + 30_000).toISOString(),
+      }]),
+      getLatestDigestRunSummaryForWatchlist: vi.fn(),
+      listAdsByIds: vi.fn(),
+      listCollectionItems: vi.fn(),
+      listProofCapturePairsForEventIds: vi.fn().mockResolvedValue([]),
+      listWatchEvents: vi.fn().mockRejectedValue(new Error("transient D1 failure")),
+      getCollection: vi.fn(),
+      getWatchlist: vi.fn().mockResolvedValue({ id: "watchlist-1", isActive: true }),
+    }));
+
+    const { loader } = await import("~/routes/app.clients");
+    const result = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app/clients"),
+    } as never);
+
+    expect(result.rooms[0].notes.reportApprovals).toEqual({
+      "watchlist:watchlist-1": {
+        evidenceFingerprint: "approved",
+        reviewedAt,
+        approvalExpiresAt,
+      },
+    });
+    expect(result.approvalUnavailableRoomIds).toEqual(["room-1"]);
+    expect(result.rooms[0].resourceRefs).toEqual([
+      { resourceType: "report", resourceId: "watchlist:watchlist-1" },
+    ]);
+  });
+
+  it("renders approval read failures as unavailable without calling the saved approval revoked", async () => {
+    await mockRouter({
+      rooms: [{
+        id: "room-1",
+        name: "Nykaa weekly desk",
+        clientLabel: "Nykaa",
+        status: "active",
+        notes: {
+          goal: "Weekly proof review.",
+          reportApprovals: {
+            "watchlist:watchlist-1": {
+              evidenceFingerprint: "approved",
+              reviewedAt: new Date(Date.now() - 60_000).toISOString(),
+              approvalExpiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+            },
+          },
+        },
+        resourceRefs: [
+          { resourceType: "watchlist", resourceId: "watchlist-1" },
+          { resourceType: "report", resourceId: "watchlist:watchlist-1" },
+        ],
+        createdAt: "2026-06-20T00:00:00.000Z",
+        updatedAt: "2026-06-20T00:00:00.000Z",
+      }],
+      watchlists: [],
+      collections: [],
+      memories: [],
+      plan: "agency",
+      canManageClientRooms: true,
+      roomMemoryUnavailable: false,
+      approvalUnavailableRoomIds: ["room-1"],
+    });
+
+    const { default: ClientsRoute } = await import("~/routes/app.clients");
+    const markup = renderToStaticMarkup(createElement(ClientsRoute));
+
+    expect(markup).toContain("One or more report approvals could not be rechecked.");
+    expect(markup).toContain("Report approval status unavailable");
+    expect(markup).toContain("saved approval was not changed");
+    expect(markup).not.toContain("Ready for client review");
+    expect(markup).toContain('href="/app/reports/watchlist:watchlist-1"');
+    expect(markup).toContain('name="intent" value="approve-client-room"');
   });
 
   it("strips expired and malformed room approvals", async () => {
@@ -649,6 +766,7 @@ describe("clients route agent memory", () => {
       getLatestDigestRunSummaryForWatchlist: undefined,
       listAdsByIds: undefined,
       listCollectionItems: undefined,
+      listProofCapturePairsForEventIds: undefined,
       listWatchEvents: undefined,
       getCollection: undefined,
       getWatchlist: undefined,

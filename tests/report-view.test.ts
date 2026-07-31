@@ -72,7 +72,30 @@ describe("ReportView", () => {
 
     expect(markup).not.toContain("href=\"javascript:alert(1)\"");
     expect(markup).toContain("href=\"https://example.com/source\"");
+    expect(markup).toContain('class="f9-report-fact-link"');
+    expect(markup).not.toContain('style="');
     // The blocked URL still renders a row, honestly (brief §6.6).
+    expect(markup).toContain("none stored");
+  });
+
+  it("treats a non-http landing page value as missing instead of displaying it", () => {
+    const row = reportRow("row-landing", "https://example.com/source");
+    const report = {
+      ...legacyReport,
+      rows: [
+        {
+          ...row,
+          landingPage: {
+            ...row.landingPage,
+            url: "javascript:alert(1)",
+          },
+        },
+      ],
+    };
+
+    const markup = renderToStaticMarkup(createElement(ReportView, { report }));
+
+    expect(markup).not.toContain("javascript:alert(1)");
     expect(markup).toContain("none stored");
   });
 

@@ -215,6 +215,13 @@ img {
    The agency report now renders through the Evidence Desk `.f9-ed-report-*`
    layer at the end of this file. */
 
+.f9-report-fact-link {
+  display: inline-flex;
+  align-items: center;
+  min-width: 44px;
+  min-height: 44px;
+}
+
 .error-stack {
   overflow: auto;
   padding: 16px;
@@ -12569,6 +12576,21 @@ reds soften --- */
 .f9-wk-record {
   padding: 30px var(--wk-pad) 0;
   border-top: 1px solid var(--wk-rule);
+}
+
+.f9-wk-aggregate-unavailable {
+  margin: 0 0 18px;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+/* A failed board-rollup query must not turn unavailable aggregates into
+   believable zeroes. Keep the independent record, tabs, evidence and action
+   controls mounted; mask only the state/count surfaces fed by that rollup. */
+.f9-wk-record.is-capture-window-degraded .f9-ed-status-cell:first-child,
+.f9-wk-record.is-capture-window-degraded .f9-ed-tab-count,
+.f9-wk-record.is-capture-window-degraded .f9-ed-number-card {
+  display: none;
 }
 
 .f9-wk-split-list {

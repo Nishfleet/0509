@@ -427,7 +427,12 @@ function buildPlateFacts(row: ReportRow): FactRow[] {
       missingLabel: "none stored",
       value:
         event?.sourceUrl && isHttpUrl(event.sourceUrl) ? (
-          <a href={event.sourceUrl} rel="noreferrer" target="_blank">
+          <a
+            className="f9-report-fact-link"
+            href={event.sourceUrl}
+            rel="noreferrer"
+            target="_blank"
+          >
             Open the source
           </a>
         ) : null,
@@ -437,12 +442,15 @@ function buildPlateFacts(row: ReportRow): FactRow[] {
       missingLabel: "none stored",
       value:
         landingPageUrl && isHttpUrl(landingPageUrl) ? (
-          <a href={landingPageUrl} rel="noreferrer" target="_blank">
+          <a
+            className="f9-report-fact-link"
+            href={landingPageUrl}
+            rel="noreferrer"
+            target="_blank"
+          >
             Open the page
           </a>
-        ) : (
-          landingPageUrl
-        ),
+        ) : null,
     },
     {
       key: "Language",
