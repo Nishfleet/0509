@@ -165,13 +165,22 @@ async function auditPaint(page: Page) {
 
     const parse = (value: string) =>
       [...value.matchAll(/rgba?\(([^)]+)\)/g)].map((match) => {
-        const parts = match[1].split(/[,/\s]+/).filter(Boolean).map(Number);
+        const tokens = match[1].split(/[,/\s]+/).filter(Boolean);
+        const channels = tokens.slice(0, 3).map((token) =>
+          token.endsWith("%")
+            ? Number.parseFloat(token) * 2.55
+            : Number(token),
+        );
+        const alphaToken = tokens[3];
+        const alpha = alphaToken?.endsWith("%")
+          ? Number.parseFloat(alphaToken) / 100
+          : Number(alphaToken);
         return {
-          raw: `rgb(${parts.slice(0, 3).join(", ")})`,
-          r: parts[0],
-          g: parts[1],
-          b: parts[2],
-          a: parts[3] ?? 1,
+          raw: `rgb(${channels.join(", ")})`,
+          r: channels[0],
+          g: channels[1],
+          b: channels[2],
+          a: Number.isFinite(alpha) ? alpha : 1,
         };
       });
 
@@ -235,7 +244,8 @@ async function auditPaint(page: Page) {
         ];
         const painted = widths.filter((width) => width !== "0px").length;
         const ownGround = !pageGrounds.has(style.backgroundColor);
-        if (painted === 4 && (ownGround || style.boxShadow !== "none")) {
+        const shadowed = style.boxShadow !== "none";
+        if (shadowed || (painted === 4 && ownGround)) {
           // A form control IS a frame by design (DNA §2: inputs are frames,
           // not pills), so it is counted separately rather than held against
           // the "every boxed thing went" budget. The one sanctioned filled
@@ -433,159 +443,161 @@ test.describe("BL-033a live proof", () => {
     const failures: string[] = [];
 
     for (const surface of SURFACES) {
-      const once = "once" in surface && (surface as { once: boolean }).once;
-      for (const theme of once ? (["light"] as const) : THEMES) {
-        for (const viewport of once ? [VIEWPORTS[1]] : VIEWPORTS) {
+      for (const theme of THEMES) {
+        for (const viewport of VIEWPORTS) {
           const context = await browser.newContext({
             viewport: { width: viewport.width, height: viewport.height },
             deviceScaleFactor: 2,
           });
-          await prepare(context, base, surface.user, theme);
-          const page = await context.newPage();
-          const consoleErrors: string[] = [];
-          const pageErrors: string[] = [];
-          page.on("console", (message) => {
-            if (message.type() === "error") consoleErrors.push(message.text());
-          });
-          page.on("pageerror", (error) => pageErrors.push(String(error)));
+          try {
+            await prepare(context, base, surface.user, theme);
+            const page = await context.newPage();
+            const consoleErrors: string[] = [];
+            const pageErrors: string[] = [];
+            page.on("console", (message) => {
+              if (message.type() === "error") consoleErrors.push(message.text());
+            });
+            page.on("pageerror", (error) => pageErrors.push(String(error)));
 
-          await page.goto(`${base}${surface.url}`, { waitUntil: "networkidle" });
-          if ("open" in surface && surface.open) {
-            await page.locator(surface.open).click();
-          }
-          if (surface.name === "collections-populated") {
-            const capturedFact = page
-              .locator(".f9-wk-detail dt")
-              .filter({ hasText: /^Captured$/ });
-            await expect(capturedFact).toHaveCount(1);
-            await expect(
-              capturedFact.locator("xpath=following-sibling::dd[1]//time"),
-            ).toHaveAttribute("datetime", /\d{4}-\d{2}-\d{2}T/);
-          }
-          await page.waitForTimeout(400);
-          const measured = await measure(page);
-          const paint = await auditPaint(page);
-          const file = path.join(
-            OUT_DIR,
-            `${PREFIX}-${surface.name}-${viewport.name}-${theme}.png`,
-          );
-          await page.screenshot({ path: file, fullPage: true });
-
-          const rebuilt = surface.name.startsWith("collections-");
-          metrics.push({
-            surface: surface.name,
-            url: surface.url,
-            user: surface.user,
-            viewport: viewport.name,
-            theme,
-            resolvedTheme: measured.theme,
-            docHeight: measured.docHeight,
-            horizontalOverflow: measured.overflow,
-            filledButtons: measured.filledButtons,
-            filledInAnyViewport: measured.filledInAnyViewport,
-            rows: measured.rows,
-            firstRowTop: measured.firstRowTop,
-            firstRowStack: measured.firstRowStack,
-            greenPainted: paint.hits.length,
-            greenPaintedDetail: paint.hits,
-            greenFocusReservations: paint.focusReservations.length,
-            capsMono: paint.capsMono.length,
-            capsMonoDetail: paint.capsMono,
-            boxes: paint.boxes.length,
-            boxesDetail: paint.boxes,
-            frames: paint.frames.length,
-            smallTargets: measured.smallTargets,
-            ruleWeights: measured.ruleWeights,
-            consoleErrors,
-            pageErrors,
-            screenshot: path.basename(file),
-          });
-
-          if (consoleErrors.length || pageErrors.length) {
-            failures.push(
-              `${surface.name} ${viewport.name} ${theme}: console/page errors — ${[
-                ...consoleErrors,
-                ...pageErrors,
-              ].join(" | ")}`,
+            await page.goto(`${base}${surface.url}`, { waitUntil: "networkidle" });
+            if ("open" in surface && surface.open) {
+              await page.locator(surface.open).click();
+            }
+            if (surface.name === "collections-populated") {
+              const capturedFact = page
+                .locator(".f9-wk-detail dt")
+                .filter({ hasText: /^Captured$/ });
+              await expect(capturedFact).toHaveCount(1);
+              await expect(
+                capturedFact.locator("xpath=following-sibling::dd[1]//time"),
+              ).toHaveAttribute("datetime", /\d{4}-\d{2}-\d{2}T/);
+            }
+            await page.waitForTimeout(400);
+            const measured = await measure(page);
+            const paint = await auditPaint(page);
+            const file = path.join(
+              OUT_DIR,
+              `${PREFIX}-${surface.name}-${viewport.name}-${theme}.png`,
             );
-          }
-          if (measured.overflow > 1) {
-            failures.push(
-              `${surface.name} ${viewport.name} ${theme}: horizontal overflow ${measured.overflow}`,
-            );
-          }
-          if (!rebuilt) {
+            await page.screenshot({ path: file, fullPage: true });
+
+            const rebuilt = surface.name.startsWith("collections-");
+            metrics.push({
+              surface: surface.name,
+              url: surface.url,
+              user: surface.user,
+              viewport: viewport.name,
+              theme,
+              resolvedTheme: measured.theme,
+              docHeight: measured.docHeight,
+              horizontalOverflow: measured.overflow,
+              filledButtons: measured.filledButtons,
+              filledInAnyViewport: measured.filledInAnyViewport,
+              rows: measured.rows,
+              firstRowTop: measured.firstRowTop,
+              firstRowStack: measured.firstRowStack,
+              greenPainted: paint.hits.length,
+              greenPaintedDetail: paint.hits,
+              greenFocusReservations: paint.focusReservations.length,
+              capsMono: paint.capsMono.length,
+              capsMonoDetail: paint.capsMono,
+              boxes: paint.boxes.length,
+              boxesDetail: paint.boxes,
+              frames: paint.frames.length,
+              smallTargets: measured.smallTargets,
+              ruleWeights: measured.ruleWeights,
+              consoleErrors,
+              pageErrors,
+              screenshot: path.basename(file),
+            });
+
+            if (consoleErrors.length || pageErrors.length) {
+              failures.push(
+                `${surface.name} ${viewport.name} ${theme}: console/page errors — ${[
+                  ...consoleErrors,
+                  ...pageErrors,
+                ].join(" | ")}`,
+              );
+            }
+            if (measured.overflow > 1) {
+              failures.push(
+                `${surface.name} ${viewport.name} ${theme}: horizontal overflow ${measured.overflow}`,
+              );
+            }
+            if (!rebuilt) continue;
+
+            // One green mark per viewport is program law, so the evidence set
+            // refuses to be produced in breach.
+            if (paint.hits.length > 1) {
+              failures.push(
+                `${surface.name} ${viewport.name} ${theme}: ${paint.hits.length} painted greens — ` +
+                  paint.hits.map((hit) => `${hit.element}{${hit.property}}`).join(", "),
+              );
+            }
+            if (paint.capsMono.length > 3) {
+              failures.push(
+                `${surface.name} ${viewport.name} ${theme}: ${paint.capsMono.length} caps-mono surfaces — ` +
+                  paint.capsMono.join(" | "),
+              );
+            }
+            if (paint.boxes.length > 0) {
+              failures.push(
+                `${surface.name} ${viewport.name} ${theme}: boxed surfaces — ` +
+                  paint.boxes.join(", "),
+              );
+            }
+            if (measured.filledInAnyViewport > 1) {
+              failures.push(
+                `${surface.name} ${viewport.name} ${theme}: ${measured.filledInAnyViewport} filled buttons share one viewport ` +
+                  `(${measured.filledButtons} on the document)`,
+              );
+            }
+            if (measured.smallTargets.length > 0) {
+              failures.push(
+                `${surface.name} ${viewport.name} ${theme}: targets under 44px — ` +
+                  measured.smallTargets.join(", "),
+              );
+            }
+            const weights = measured.ruleWeights.filter((width) => width !== "0px");
+            if (weights.length > 0 && weights.join(",") !== "1px") {
+              failures.push(
+                `${surface.name} ${viewport.name} ${theme}: rule weights ${weights.join(", ")}`,
+              );
+            }
+          } finally {
             await context.close();
-            continue;
           }
-          // One green mark per viewport is program law, so the evidence set
-          // refuses to be produced in breach.
-          if (paint.hits.length > 1) {
-            failures.push(
-              `${surface.name} ${viewport.name} ${theme}: ${paint.hits.length} painted greens — ` +
-                paint.hits.map((hit) => `${hit.element}{${hit.property}}`).join(", "),
-            );
-          }
-          if (paint.capsMono.length > 3) {
-            failures.push(
-              `${surface.name} ${viewport.name} ${theme}: ${paint.capsMono.length} caps-mono surfaces — ` +
-                paint.capsMono.join(" | "),
-            );
-          }
-          if (paint.boxes.length > 0) {
-            failures.push(
-              `${surface.name} ${viewport.name} ${theme}: boxed surfaces — ` +
-                paint.boxes.join(", "),
-            );
-          }
-          if (measured.filledInAnyViewport > 1) {
-            failures.push(
-              `${surface.name} ${viewport.name} ${theme}: ${measured.filledInAnyViewport} filled buttons share one viewport ` +
-                `(${measured.filledButtons} on the document)`,
-            );
-          }
-          if (measured.smallTargets.length > 0) {
-            failures.push(
-              `${surface.name} ${viewport.name} ${theme}: targets under 44px — ` +
-                measured.smallTargets.join(", "),
-            );
-          }
-          const weights = measured.ruleWeights.filter((width) => width !== "0px");
-          if (weights.length > 0 && weights.join(",") !== "1px") {
-            failures.push(
-              `${surface.name} ${viewport.name} ${theme}: rule weights ${weights.join(", ")}`,
-            );
-          }
-          await context.close();
         }
       }
     }
 
     for (const surface of SURFACES) {
-      if ("once" in surface && (surface as { once: boolean }).once) continue;
       for (const theme of THEMES) {
         const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-        await prepare(context, base, surface.user, theme);
-        const page = await context.newPage();
-        for (const width of SWEEP_WIDTHS) {
-          await page.setViewportSize({ width, height: 900 });
-          await page.goto(`${base}${surface.url}`, { waitUntil: "networkidle" });
-          if ("open" in surface && surface.open) {
-            await page.locator(surface.open).click();
+        try {
+          await prepare(context, base, surface.user, theme);
+          const page = await context.newPage();
+          for (const width of SWEEP_WIDTHS) {
+            await page.setViewportSize({ width, height: 900 });
+            await page.goto(`${base}${surface.url}`, { waitUntil: "networkidle" });
+            if ("open" in surface && surface.open) {
+              await page.locator(surface.open).click();
+            }
+            await page.waitForTimeout(120);
+            const overflow = await page.evaluate(() =>
+              Math.max(
+                0,
+                document.documentElement.scrollWidth - document.documentElement.clientWidth,
+              ),
+            );
+            sweep.push({ surface: surface.name, theme, width, horizontalOverflow: overflow });
+            if (overflow > 1) {
+              failures.push(`sweep ${surface.name} ${theme} @${width}: overflow ${overflow}`);
+            }
           }
-          await page.waitForTimeout(120);
-          const overflow = await page.evaluate(() =>
-            Math.max(
-              0,
-              document.documentElement.scrollWidth - document.documentElement.clientWidth,
-            ),
-          );
-          sweep.push({ surface: surface.name, theme, width, horizontalOverflow: overflow });
-          if (overflow > 1) {
-            failures.push(`sweep ${surface.name} ${theme} @${width}: overflow ${overflow}`);
-          }
+        } finally {
+          await context.close();
         }
-        await context.close();
       }
     }
 

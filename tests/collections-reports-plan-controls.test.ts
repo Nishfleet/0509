@@ -56,8 +56,12 @@ function collectionLoaderData(
 async function renderCollections(
   plan: "free" | "scout" | "starter" | "agency",
   collections = [collection],
+  actionData?: unknown,
 ) {
-  installRouterMocks({ loaderData: collectionLoaderData(plan, collections) });
+  installRouterMocks({
+    loaderData: collectionLoaderData(plan, collections),
+    actionData,
+  });
   const { default: CollectionsRoute } = await import("~/routes/app.collections");
   return renderToStaticMarkup(createElement(CollectionsRoute));
 }
@@ -130,6 +134,41 @@ describe("collection plan controls", () => {
     expect(markup).toContain('placeholder="Competitor set A"');
     expect(markup).toContain("Create collection");
     expect(markup).not.toContain("Collections are not included on this plan");
+  });
+
+  it.each([
+    ["first-run", []],
+    ["disclosure", [collection]],
+  ])("renders failed create feedback once inside the %s form", async (_mode, collections) => {
+    const message = "Give the collection a name first.";
+    const markup = await renderCollections("scout", collections, {
+      ok: false,
+      intent: "create-collection",
+      message,
+    });
+    const feedbackIndex = markup.indexOf(message);
+    const formStart = markup.lastIndexOf("<form", feedbackIndex);
+    const formEnd = markup.indexOf("</form>", feedbackIndex);
+
+    expect(markup.split(message)).toHaveLength(2);
+    expect(formStart).toBeGreaterThanOrEqual(0);
+    expect(feedbackIndex).toBeGreaterThan(formStart);
+    expect(formEnd).toBeGreaterThan(feedbackIndex);
+  });
+
+  it("keeps unrelated feedback out of the create form", async () => {
+    const message = "Collection note could not be updated.";
+    const markup = await renderCollections("scout", [collection], {
+      ok: false,
+      intent: "update-item",
+      message,
+    });
+    const feedbackIndex = markup.indexOf(message);
+    const createFormIndex = markup.indexOf('name="intent" value="create-collection"');
+
+    expect(markup.match(/Collection note could not be updated\./g) ?? []).toHaveLength(1);
+    expect(feedbackIndex).toBeGreaterThanOrEqual(0);
+    expect(createFormIndex).toBeGreaterThan(feedbackIndex);
   });
 
   it("locks report, CSV/JSON export, and share behind ONE nudge for Scout", async () => {

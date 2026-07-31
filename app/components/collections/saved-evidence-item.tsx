@@ -74,8 +74,8 @@ export function SavedEvidenceItem({
         ) : null}
         {plate.captureLines.length > 0 ? (
           <blockquote className="f9-col-capture-copy">
-            {plate.captureLines.map((line) => (
-              <p key={line}>{line}</p>
+            {plate.captureLines.map((line, index) => (
+              <p key={index}>{line}</p>
             ))}
           </blockquote>
         ) : (

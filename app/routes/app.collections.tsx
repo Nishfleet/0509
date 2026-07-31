@@ -358,6 +358,35 @@ export default function CollectionsRoute() {
       "error" in actionData &&
       (actionData.error === "plan_gated" || actionData.error === "plan_limit_exceeded"),
     );
+  const feedbackStrip = feedbackMessage ? (
+    <FeedbackStrip
+      actions={
+        shareUrl ? (
+          <>
+            <a href={shareUrl} rel="noreferrer" target="_blank">
+              Open share link
+            </a>
+            <CopyButton value={shareUrl} />
+          </>
+        ) : feedbackIsPlanGate ? (
+          <Link className="f9-wk-lnk" to="/app/billing?source=collections#plans">
+            View plans <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
+          </Link>
+        ) : null
+      }
+      label={feedbackOk ? "Done" : "Not done"}
+      tone={feedbackOk ? "ok" : "bad"}
+    >
+      {feedbackMessage}
+    </FeedbackStrip>
+  ) : null;
+  const createPanelVisible = selected
+    ? canCreateCollection
+    : primarySlot === "create";
+  const createIntentFeedback =
+    actionIntent === "create-collection" && createPanelVisible
+      ? feedbackStrip
+      : null;
 
   return (
     <DashboardPage className="f9-wk-page f9-col-page">
@@ -385,28 +414,7 @@ export default function CollectionsRoute() {
         selectedId={selected?.id ?? null}
       />
 
-      {feedbackMessage ? (
-        <FeedbackStrip
-          actions={
-            shareUrl ? (
-              <>
-                <a href={shareUrl} rel="noreferrer" target="_blank">
-                  Open share link
-                </a>
-                <CopyButton value={shareUrl} />
-              </>
-            ) : feedbackIsPlanGate ? (
-              <Link className="f9-wk-lnk" to="/app/billing?source=collections#plans">
-                View plans <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
-              </Link>
-            ) : null
-          }
-          label={feedbackOk ? "Done" : "Not done"}
-          tone={feedbackOk ? "ok" : "bad"}
-        >
-          {feedbackMessage}
-        </FeedbackStrip>
-      ) : null}
+      {createIntentFeedback ? null : feedbackStrip}
 
       {selected ? (
         <>
@@ -439,6 +447,7 @@ export default function CollectionsRoute() {
             <div id="new-collection">
               <CollectionCreatePanel
                 defaultOpen={createPanelOpen}
+                feedback={createIntentFeedback}
                 mode="disclosure"
               />
             </div>
@@ -461,7 +470,10 @@ export default function CollectionsRoute() {
           )}
         </>
       ) : primarySlot === "create" ? (
-        <CollectionCreatePanel mode="first-run" />
+        <CollectionCreatePanel
+          feedback={createIntentFeedback}
+          mode="first-run"
+        />
       ) : primarySlot === "gate" ? (
         <section aria-labelledby="collections-locked-title" className="f9-wk-sec f9-col-locked">
           <p className="f9-wk-kick">Scout plan</p>
