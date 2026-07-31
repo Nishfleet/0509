@@ -299,7 +299,7 @@ describe("scheduled digest strategy budget", () => {
 		expect(data.completeDigestScheduleJob).toHaveBeenCalledTimes(3);
 	});
 
-	it.each(["disabled", "suppressed"] as const)(
+	it.each(["disabled", "suppressed", "provider_unknown"] as const)(
 		"completes scan-trouble jobs when delivery is intentionally %s",
 		async (reason) => {
 			const data = dataServerMock();

@@ -358,6 +358,9 @@ export async function deliverScanTroubleNotice(
     if (claim.duplicate?.status === "sent") {
       return { sent: true as const, reason: "sent" as const };
     }
+    if (claim.duplicate?.webhookStatus === "provider_unknown") {
+      return { sent: false as const, reason: "provider_unknown" as const };
+    }
     return { sent: false as const, reason: "duplicate" as const };
   }
 
@@ -399,8 +402,16 @@ export async function deliverScanTroubleNotice(
     expectedUpdatedAt: dispatchStartedAt,
   });
 
+  if (
+    !finalized ||
+    (providerResult.status !== "sent" &&
+      providerResult.webhookStatus === "provider_unknown")
+  ) {
+    return { sent: false as const, reason: "provider_unknown" as const };
+  }
+
   return {
-    sent: Boolean(finalized && providerResult.status === "sent"),
+    sent: providerResult.status === "sent",
     reason: providerResult.status === "sent" ? ("sent" as const) : ("failed" as const),
   };
 }
