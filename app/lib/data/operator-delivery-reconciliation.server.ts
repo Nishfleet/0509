@@ -518,10 +518,18 @@ async function reconcileDeliveryAttemptWithAudit(
                 digest_delivery.delivered_at AS existing_delivered_at,
                 digest_delivery.updated_at AS existing_updated_at,
                 CASE
-                  WHEN incoming_digest_delivery.acceptance_only = 1
-                    AND digest_delivery.status = 'sent'
-                    AND digest_delivery.delivered_at IS NOT NULL
-                    AND incoming_digest_delivery.delivered_at IS NULL
+                  WHEN digest_delivery.status = 'sent'
+                    AND (
+                      (
+                        incoming_digest_delivery.acceptance_only = 1
+                        AND digest_delivery.delivered_at IS NOT NULL
+                        AND incoming_digest_delivery.delivered_at IS NULL
+                      )
+                      OR (
+                        incoming_digest_delivery.status != 'sent'
+                        AND digest_delivery.provider != incoming_digest_delivery.provider
+                      )
+                    )
                     THEN 1
                   ELSE 0
                 END AS preserve_existing

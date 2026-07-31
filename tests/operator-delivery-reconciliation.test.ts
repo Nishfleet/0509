@@ -815,6 +815,48 @@ describe("operator digest email reconciliation", () => {
     });
   });
 
+  it("preserves a successful aggregate from another digest channel when email reconciliation fails", async () => {
+    const harness = setup();
+    harness.sqlite.prepare(`
+      UPDATE digest_delivery
+      SET provider = 'whatsapp_cloud_api',
+          status = 'sent',
+          recipient_email = '+15550000000',
+          external_message_id = 'whatsapp-message',
+          error_message = NULL,
+          delivered_at = '2026-07-15T18:00:20.000Z',
+          updated_at = '2026-07-15T18:00:20.000Z'
+      WHERE digest_run_id = 'digest-1'
+    `).run();
+
+    await expect(
+      reconcileDigestEmailAttemptWithAudit(
+        { DB: harness.db } as never,
+        input({
+          outcome: "failed",
+          classification: "provider_rejection_log",
+          evidenceReference: "digest_provider_reject_12345",
+        }),
+      ),
+    ).resolves.toMatchObject({ ok: true, replayed: false, outcome: "failed" });
+
+    expect(
+      harness.sqlite.prepare(`
+        SELECT provider, status, recipient_email, external_message_id,
+               error_message, delivered_at, updated_at
+        FROM digest_delivery WHERE digest_run_id = 'digest-1'
+      `).get(),
+    ).toMatchObject({
+      provider: "whatsapp_cloud_api",
+      status: "sent",
+      recipient_email: "+15550000000",
+      external_message_id: "whatsapp-message",
+      error_message: null,
+      delivered_at: "2026-07-15T18:00:20.000Z",
+      updated_at: "2026-07-15T18:00:20.000Z",
+    });
+  });
+
   it("preserves accepted transport without claiming delivery when only an accepted sibling remains", async () => {
     const harness = setup();
     harness.sqlite.prepare(`
