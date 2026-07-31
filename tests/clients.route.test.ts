@@ -558,6 +558,7 @@ describe("clients route agent memory", () => {
       getLatestDigestRunSummaryForWatchlist: undefined,
       listAdsByIds: undefined,
       listCollectionItems: undefined,
+      listProofCapturePairsForEventIds: undefined,
       listWatchEvents: undefined,
       getCollection: undefined,
       getWatchlist: undefined,
@@ -612,6 +613,7 @@ describe("clients route agent memory", () => {
       getLatestDigestRunSummaryForWatchlist: vi.fn(),
       listAdsByIds: vi.fn(),
       listCollectionItems: vi.fn(),
+      listProofCapturePairsForEventIds: vi.fn().mockResolvedValue([]),
       listWatchEvents: vi.fn().mockRejectedValue(new Error("transient D1 failure")),
       getCollection: vi.fn(),
       getWatchlist: vi.fn().mockResolvedValue({
@@ -716,6 +718,7 @@ describe("clients route agent memory", () => {
       getLatestDigestRunSummaryForWatchlist: undefined,
       listAdsByIds: undefined,
       listCollectionItems: undefined,
+      listProofCapturePairsForEventIds: undefined,
       listWatchEvents: undefined,
       getCollection: undefined,
       getWatchlist: undefined,
