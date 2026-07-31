@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { creativeCaptureSourceFingerprint } from "~/lib/creative-capture-policy";
 import type { AdRecord } from "~/lib/types";
 
 const baseAd: AdRecord = {
@@ -188,5 +189,220 @@ describe("WP-11 paint-fast selection enrichment", () => {
     expect(captureCreativeText).not.toHaveBeenCalled();
     expect(captureLandingPageSnapshot).not.toHaveBeenCalled();
     expect(result.selectedAd?.creativeText).toBe("Already captured");
+  });
+
+  it("OCRs whitespace-only creative text from the image when the snapshot URL is blank", async () => {
+    const captureCreativeText = vi.fn().mockResolvedValue({
+      text: "Image-only OCR",
+      captureMethod: "ad_snapshot_fetch",
+      imageUrl: "https://cdn.example.com/creative.jpg",
+      metadata: { capturedAt: "2026-07-18T00:00:00.000Z" },
+    });
+    const imageOnlyAd: AdRecord = {
+      ...baseAd,
+      landingPageUrl: null,
+      adSnapshotUrl: "   ",
+      creativeImageUrl: "https://cdn.example.com/creative.jpg",
+      creativeText: "   ",
+    };
+
+    vi.doMock("~/lib/analysis.server", () => ({
+      withStructuredAnalysis: vi.fn((ad: AdRecord) => ad),
+    }));
+    vi.doMock("~/lib/creative-text.server", () => ({
+      captureCreativeText,
+    }));
+    vi.doMock("~/lib/landing-pages.server", () => ({
+      captureLandingPageSnapshot: vi.fn(),
+    }));
+    vi.doMock("~/lib/translation.server", () => ({
+      translateAdText: vi.fn().mockResolvedValue(null),
+      buildTranslatedAnalysisField: vi.fn(),
+      withTranslatedAnalysisField: vi.fn((fields: unknown) => fields),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      hydrateAdsWithPersistedCreatives: vi.fn(async (_env: unknown, ads: AdRecord[]) => ads),
+      listAdsByIds: vi.fn().mockResolvedValue([]),
+      upsertAd: vi.fn(),
+    }));
+
+    const { prepareSearchResultSelection } = await import(
+      "~/lib/search-selection.server"
+    );
+    await prepareSearchResultSelection(
+      {} as never,
+      {
+        ads: [imageOnlyAd],
+        nextCursor: null,
+        source: "meta_library_browser",
+        cacheStatus: "hit",
+      },
+      imageOnlyAd.metaAdId,
+      { enrichSelected: true, hydratePersisted: true },
+    );
+
+    expect(captureCreativeText).toHaveBeenCalledWith(
+      expect.anything(),
+      imageOnlyAd.creativeImageUrl,
+      imageOnlyAd,
+    );
+  });
+
+  it("does not invent a capture timestamp when the capture result omits one", async () => {
+    const captureCreativeText = vi.fn().mockResolvedValue({
+      text: null,
+      captureMethod: "ad_snapshot_fetch",
+      imageUrl: "https://cdn.example.com/creative.jpg",
+      metadata: {
+        extractionStatus: "unreadable",
+        unreadableReasonCode: "no_creative_capture_stored",
+      },
+    });
+    const upsertAd = vi.fn();
+
+    vi.doMock("~/lib/analysis.server", () => ({
+      withStructuredAnalysis: vi.fn((ad: AdRecord) => ad),
+    }));
+    vi.doMock("~/lib/creative-text.server", () => ({
+      captureCreativeText,
+    }));
+    vi.doMock("~/lib/landing-pages.server", () => ({
+      captureLandingPageSnapshot: vi.fn().mockResolvedValue(null),
+    }));
+    vi.doMock("~/lib/translation.server", () => ({
+      translateAdText: vi.fn().mockResolvedValue(null),
+      buildTranslatedAnalysisField: vi.fn(),
+      withTranslatedAnalysisField: vi.fn((fields: unknown) => fields),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      hydrateAdsWithPersistedCreatives: vi.fn(async (_env: unknown, ads: AdRecord[]) => ads),
+      listAdsByIds: vi.fn().mockResolvedValue([]),
+      upsertAd,
+    }));
+
+    const { prepareSearchResultSelection } = await import(
+      "~/lib/search-selection.server"
+    );
+    await prepareSearchResultSelection(
+      { DB: {} } as never,
+      {
+        ads: [baseAd],
+        nextCursor: null,
+        source: "meta_library_browser",
+        cacheStatus: "hit",
+      },
+      baseAd.metaAdId,
+      { enrichSelected: true, hydratePersisted: true },
+    );
+
+    expect(upsertAd).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        creativeTextMetadata: expect.not.objectContaining({
+          capturedAt: expect.anything(),
+        }),
+      }),
+    );
+  });
+
+  it("honors a recent unreadable creative result while enriching the landing page", async () => {
+    const captureCreativeText = vi.fn();
+    const captureLandingPageSnapshot = vi.fn().mockResolvedValue(null);
+    const recentUnreadableAd: AdRecord = {
+      ...baseAd,
+      creativeText: null,
+      creativeTextMetadata: {
+        capturedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+        extractionStatus: "unreadable",
+        unreadableReasonCode: "ocr_binding_missing",
+        creativeSourceFingerprint: creativeCaptureSourceFingerprint(baseAd),
+      },
+    };
+
+    vi.doMock("~/lib/analysis.server", () => ({
+      withStructuredAnalysis: vi.fn((ad: AdRecord) => ad),
+    }));
+    vi.doMock("~/lib/creative-text.server", () => ({
+      captureCreativeText,
+    }));
+    vi.doMock("~/lib/landing-pages.server", () => ({
+      captureLandingPageSnapshot,
+    }));
+    vi.doMock("~/lib/translation.server", () => ({
+      translateAdText: vi.fn().mockResolvedValue(null),
+      buildTranslatedAnalysisField: vi.fn(),
+      withTranslatedAnalysisField: vi.fn((fields: unknown) => fields),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      hydrateAdsWithPersistedCreatives: vi.fn(async (_env: unknown, ads: AdRecord[]) => ads),
+      listAdsByIds: vi.fn().mockResolvedValue([]),
+      upsertAd: vi.fn(),
+    }));
+
+    const { prepareSearchResultSelection, selectionNeedsEnrichment } = await import(
+      "~/lib/search-selection.server"
+    );
+
+    expect(selectionNeedsEnrichment({
+      ...recentUnreadableAd,
+      landingPage: {
+        rawUrl: recentUnreadableAd.landingPageUrl ?? "",
+        canonicalUrl: recentUnreadableAd.landingPageUrl ?? "",
+        rawHeadline: "",
+        normalizedHeadline: "",
+        normalizedHeadlineHash: "",
+        ctaText: null,
+        priceText: null,
+        formPresent: null,
+        captureMethod: "landing_page_fetch",
+        capturedAt: new Date().toISOString(),
+      },
+    })).toBe(false);
+
+    await prepareSearchResultSelection(
+      {} as never,
+      {
+        ads: [recentUnreadableAd],
+        nextCursor: null,
+        source: "meta_library_browser",
+        cacheStatus: "hit",
+      },
+      recentUnreadableAd.metaAdId,
+      { enrichSelected: true, hydratePersisted: true },
+    );
+
+    expect(captureLandingPageSnapshot).toHaveBeenCalledTimes(1);
+    expect(captureCreativeText).not.toHaveBeenCalled();
+  });
+
+  it("retries unreadable creative capture after the selection cooldown", async () => {
+    const staleUnreadableAd: AdRecord = {
+      ...baseAd,
+      landingPage: {
+        rawUrl: baseAd.landingPageUrl ?? "",
+        canonicalUrl: baseAd.landingPageUrl ?? "",
+        rawHeadline: "",
+        normalizedHeadline: "",
+        normalizedHeadlineHash: "",
+        ctaText: null,
+        priceText: null,
+        formPresent: null,
+        captureMethod: "landing_page_fetch",
+        capturedAt: new Date().toISOString(),
+      },
+      creativeText: null,
+      creativeTextMetadata: {
+        capturedAt: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(),
+        extractionStatus: "unreadable",
+        unreadableReasonCode: "ocr_binding_missing",
+        creativeSourceFingerprint: creativeCaptureSourceFingerprint(baseAd),
+      },
+    };
+
+    const { selectionNeedsEnrichment } = await import(
+      "~/lib/search-selection.server"
+    );
+
+    expect(selectionNeedsEnrichment(staleUnreadableAd)).toBe(true);
   });
 });
