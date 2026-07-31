@@ -164,6 +164,56 @@ describe("watch event evaluator", () => {
     expect(result.events).toEqual([]);
   });
 
+  it("does not emit a form change across extractor-version boundaries", () => {
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Sale",
+        normalizedHeadline: "glow serum sale",
+        normalizedHeadlineHash: "hash-a",
+        ctaText: "Shop now",
+        priceText: "Starting at ₹499",
+        formPresent: false,
+        extractorVersion: "lp-signals-v3",
+      },
+      lastSuccessfulProof: proofCapture({
+        extractorVersion: "lp-signals-v2",
+      }),
+      recentWatchEvents: [],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("invalidated");
+    expect(result.events).toEqual([]);
+  });
+
+  it("does not emit CTA or offer changes across extractor-version boundaries", () => {
+    const result = evaluateProofBackedEvents({
+      proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
+      currentProof: {
+        rawHeadline: "Glow Serum Sale",
+        normalizedHeadline: "glow serum sale",
+        normalizedHeadlineHash: "hash-a",
+        ctaText: "Get started",
+        priceText: "Starting at ₹799",
+        formPresent: true,
+        extractorVersion: "lp-signals-v3",
+      },
+      lastSuccessfulProof: proofCapture({
+        extractorVersion: "lp-signals-v2",
+      }),
+      recentWatchEvents: [],
+      sensitivityMode: "balanced",
+      burstCount: 1,
+      now: "2026-04-18T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("invalidated");
+    expect(result.events).toEqual([]);
+  });
+
   it("invalidates low-confidence headline noise when the normalized proof is unchanged", () => {
     const result = evaluateProofBackedEvents({
       proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",

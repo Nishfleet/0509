@@ -748,6 +748,7 @@ describe("clients route agent memory", () => {
       getLatestDigestRunSummaryForWatchlist: vi.fn(),
       listAdsByIds: vi.fn(),
       listCollectionItems: vi.fn(),
+      listProofCapturePairsForEventIds: vi.fn().mockResolvedValue([]),
       listWatchEvents: vi.fn(),
       upsertAgentMemory: vi.fn(),
       upsertClientRoom,

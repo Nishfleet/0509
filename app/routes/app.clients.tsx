@@ -176,12 +176,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
         getLatestDigestRunSummaryForWatchlist,
         listAdsByIds,
         listCollectionItems,
+        listProofCapturePairsForEventIds,
         listWatchEvents,
       } = await import("~/lib/data.server");
       if (
         typeof getLatestDigestRunSummaryForWatchlist !== "function" ||
         typeof listAdsByIds !== "function" ||
         typeof listCollectionItems !== "function" ||
+        typeof listProofCapturePairsForEventIds !== "function" ||
         typeof listWatchEvents !== "function" ||
         typeof getCollection !== "function" ||
         typeof getWatchlist !== "function"
@@ -203,6 +205,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
             getWatchlist,
             listAdsByIds,
             listCollectionItems,
+            listProofCapturePairsForEventIds,
             listWatchEvents,
           });
         } catch {
@@ -320,6 +323,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       getLatestDigestRunSummaryForWatchlist,
       listAdsByIds,
       listCollectionItems,
+      listProofCapturePairsForEventIds,
       listWatchEvents,
     } = await import("~/lib/data.server");
     const roomId = readOptionalString(formData.get("roomId"));
@@ -354,6 +358,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       typeof getLatestDigestRunSummaryForWatchlist !== "function" ||
       typeof listAdsByIds !== "function" ||
       typeof listCollectionItems !== "function" ||
+      typeof listProofCapturePairsForEventIds !== "function" ||
       typeof listWatchEvents !== "function" ||
       typeof getCollection !== "function" ||
       typeof getWatchlist !== "function"
@@ -377,6 +382,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           getWatchlist,
           listAdsByIds,
           listCollectionItems,
+          listProofCapturePairsForEventIds,
           listWatchEvents,
         });
       } catch {
@@ -1173,6 +1179,7 @@ async function revalidateRoomApprovals(
     typeof data.getLatestDigestRunSummaryForWatchlist !== "function" ||
     typeof data.listAdsByIds !== "function" ||
     typeof data.listCollectionItems !== "function" ||
+    typeof data.listProofCapturePairsForEventIds !== "function" ||
     typeof data.listWatchEvents !== "function" ||
     typeof data.getCollection !== "function" ||
     typeof data.getWatchlist !== "function"
@@ -1196,6 +1203,7 @@ async function revalidateRoomApprovals(
         getLatestDigestRunSummaryForWatchlist: data.getLatestDigestRunSummaryForWatchlist,
         listAdsByIds: data.listAdsByIds,
         listCollectionItems: data.listCollectionItems,
+        listProofCapturePairsForEventIds: data.listProofCapturePairsForEventIds,
         listWatchEvents: data.listWatchEvents,
       });
     } catch {

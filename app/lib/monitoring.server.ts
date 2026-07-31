@@ -1,10 +1,11 @@
 import { buildAnalysisFields } from "~/lib/analysis.server";
-import {
-  isAdLibraryBackedAd,
-  mapAdSourceToAnalysisSource,
-} from "~/lib/ad-source-kind";
+import { mapAdSourceToAnalysisSource } from "~/lib/ad-source-kind";
 import { type DigestCadence } from "~/lib/change-intelligence";
-import { captureCreativeText } from "~/lib/creative-text.server";
+import { shouldAttemptCreativeTextCapture } from "~/lib/creative-capture-policy";
+import {
+  captureCreativeText,
+  createMissingCreativeCaptureResult,
+} from "~/lib/creative-text.server";
 import {
   createAdObservation,
   createEventCandidate,
@@ -53,7 +54,10 @@ import {
   formatScheduledObservationHealthLines,
   listScheduledObservationHealth,
 } from "~/lib/scheduled-observation-health.server";
-import { captureLandingPageSnapshot } from "~/lib/landing-pages.server";
+import {
+  captureLandingPageSnapshot,
+  type LandingPageCaptureFailureDetail,
+} from "~/lib/landing-pages.server";
 import { compensateUncommittedProofArtifacts } from "~/lib/proof-artifact-retention.server";
 import { LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION } from "~/lib/landing-page-signals.server";
 import {
@@ -83,6 +87,7 @@ import {
 import {
   buildCanonicalPageIdentity,
   buildProofTargetIdentity,
+  countRecentProofFailures,
   evaluateProofPolicy,
   V1_PROOF_BUDGETS,
 } from "~/lib/proof-policy.server";
@@ -3047,6 +3052,9 @@ async function evaluateSelectiveProofCandidates(
     env,
     proofCandidates.map((candidate) => candidate.proofTarget.id),
     20,
+    new Date(
+      Date.now() - V1_PROOF_BUDGETS.targetFailureCooldownMs,
+    ).toISOString(),
   );
   const successfulCapturesByAdId = await listLastSuccessfulProofCapturesForAds(
     env,
@@ -3107,9 +3115,7 @@ async function evaluateSelectiveProofCandidates(
         6 * 60 * 60 * 1000
       );
     });
-    const recentFailureCountForTarget = targetCaptures.filter(
-      (capture) => capture.status === "failed",
-    ).length;
+    const recentFailureCountForTarget = countRecentProofFailures(targetCaptures);
     const proofDecision = evaluateProofPolicy({
       sensitivityMode: "balanced",
       triggerEventTypes: eventTypesByAd.get(observation.ad_id) ?? [],
@@ -3139,6 +3145,10 @@ async function evaluateSelectiveProofCandidates(
           status: proofDecision.skipReason,
           skipReason: proofDecision.skipReason,
           failureReason: "Evidence policy skipped the attempt.",
+          captureMetadata:
+            recentFailureCountForTarget >= 2
+              ? { unreadableReasonCode: "landing_capture_retry_cooldown" }
+              : undefined,
           extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
           idempotencyKey: `${proofRequestKey}:skip:${proofDecision.skipReason}`,
         });
@@ -3209,10 +3219,17 @@ async function evaluateSelectiveProofCandidates(
         replayedProofCapture,
         observation.landing_page_url!,
       );
+      let captureFailureDetail: LandingPageCaptureFailureDetail | null = null;
       const freshSnapshot = replayedSnapshot
         ? null
-        : await captureLandingPageSnapshot(env, observation.landing_page_url!);
+        : await captureLandingPageSnapshot(env, observation.landing_page_url!, {
+            onFailure: (detail) => {
+              captureFailureDetail = detail;
+            },
+          });
       const snapshot = replayedSnapshot ?? freshSnapshot;
+      const failureDetail =
+        captureFailureDetail as LandingPageCaptureFailureDetail | null;
       freshSnapshotForCompensation = freshSnapshot;
 
       if (!snapshot) {
@@ -3226,8 +3243,15 @@ async function evaluateSelectiveProofCandidates(
         await createProofCapture(env, {
           proofTargetId: proofTarget.id,
           status: "failed",
-          failureCode: "proof_capture_failed",
+          failureCode:
+            failureDetail?.reasonCode ?? "proof_capture_failed",
           failureReason: "Landing-page evidence check failed.",
+          captureMetadata: failureDetail
+            ? {
+                ...failureDetail.metadata,
+                unreadableReasonCode: failureDetail.reasonCode,
+              }
+            : { unreadableReasonCode: "proof_capture_failed" },
           extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
           idempotencyKey: proofRequestKey,
         });
@@ -3324,6 +3348,9 @@ async function evaluateSelectiveProofCandidates(
           ctaText: snapshot.ctaText ?? null,
           priceText: snapshot.priceText ?? null,
           formPresent: snapshot.formPresent ?? null,
+          extractorVersion:
+            readSnapshotString(snapshot.metadata, "extractorVersion") ??
+            LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
         },
         lastSuccessfulProof,
         recentWatchEvents: proofAwareRecentEvents,
@@ -3510,6 +3537,9 @@ async function evaluateDirectWebsiteProofCandidate(
     env,
     proofTarget.id,
     20,
+    new Date(
+      Date.now() - V1_PROOF_BUDGETS.targetFailureCooldownMs,
+    ).toISOString(),
   );
   const proofRequestKeyBase = buildProofCaptureRequestIdempotencyKey({
     watchlistId: input.watchlist.id,
@@ -3540,9 +3570,7 @@ async function evaluateDirectWebsiteProofCandidate(
       Date.now() - new Date(capture.attemptedAt).getTime() < 6 * 60 * 60 * 1000
     );
   });
-  const recentFailureCountForTarget = targetCaptures.filter(
-    (capture) => capture.status === "failed",
-  ).length;
+  const recentFailureCountForTarget = countRecentProofFailures(targetCaptures);
 
   if (
     isWithinDirectWebsiteProofInterval(
@@ -3579,6 +3607,12 @@ async function evaluateDirectWebsiteProofCandidate(
       status: "skipped_due_to_rate_limit",
       skipReason: "skipped_due_to_rate_limit",
       failureReason: "Direct website evidence policy skipped the attempt.",
+      captureMetadata: {
+        unreadableReasonCode:
+          recentFailureCountForTarget >= 2
+            ? "landing_capture_retry_cooldown"
+            : "proof_run_rate_limit",
+      },
       extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
       idempotencyKey: `${proofRequestKey}:skip:rate-limit`,
     });
@@ -3653,12 +3687,18 @@ async function evaluateDirectWebsiteProofCandidate(
       replayedProofCapture,
       websiteUrl,
     );
+    let captureFailureDetail: LandingPageCaptureFailureDetail | null = null;
     const freshSnapshot = replayedSnapshot
       ? null
       : await captureLandingPageSnapshot(env, websiteUrl, {
           preferRendered: true,
+          onFailure: (detail) => {
+            captureFailureDetail = detail;
+          },
         });
     const snapshot = replayedSnapshot ?? freshSnapshot;
+    const failureDetail =
+      captureFailureDetail as LandingPageCaptureFailureDetail | null;
     freshSnapshotForCompensation = freshSnapshot;
 
     if (!snapshot) {
@@ -3672,8 +3712,18 @@ async function evaluateDirectWebsiteProofCandidate(
       await createProofCapture(env, {
         proofTargetId: proofTarget.id,
         status: "failed",
-        failureCode: "direct_website_proof_capture_failed",
+        failureCode:
+          failureDetail?.reasonCode ??
+          "direct_website_proof_capture_failed",
         failureReason: "Competitor website evidence check failed.",
+        captureMetadata: {
+          ...(failureDetail?.metadata ?? {}),
+          source: "direct_competitor_website",
+          watchlistTargetId: input.watchlist.targetId,
+          unreadableReasonCode:
+            failureDetail?.reasonCode ??
+            "direct_website_proof_capture_failed",
+        },
         extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
         idempotencyKey: proofRequestKey,
       });
@@ -3794,6 +3844,9 @@ async function evaluateDirectWebsiteProofCandidate(
         ctaText: snapshot.ctaText ?? null,
         priceText: snapshot.priceText ?? null,
         formPresent: snapshot.formPresent ?? null,
+        extractorVersion:
+          readSnapshotString(snapshot.metadata, "extractorVersion") ??
+          LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
       },
       lastSuccessfulProof: finalLastSuccessfulProof,
       recentWatchEvents: input.recentWatchEvents,
@@ -3997,9 +4050,13 @@ function normalizeIdempotencySegment(value: string) {
 }
 
 async function enrichAdForCheapScan(env: AppEnv, ad: AdRecord) {
+  const creativeSourceUrl =
+    ad.adSnapshotUrl?.trim() || ad.creativeImageUrl?.trim() || null;
   const capturedCreativeText =
-    isAdLibraryBackedAd(ad) && ad.adSnapshotUrl && !ad.creativeText
-      ? await captureCreativeText(env, ad.adSnapshotUrl, ad)
+    shouldAttemptCreativeTextCapture(ad)
+      ? creativeSourceUrl
+        ? await captureCreativeText(env, creativeSourceUrl, ad)
+        : createMissingCreativeCaptureResult(ad)
       : null;
 
   const nextAd = {
