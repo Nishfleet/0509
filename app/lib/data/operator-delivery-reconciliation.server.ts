@@ -465,7 +465,15 @@ async function reconcileDeliveryAttemptWithAudit(
                 AND candidate.channel = reconciled_attempt.channel
               ORDER BY
                 CASE WHEN candidate.webhook_status = 'delivered' THEN 0 ELSE 1 END,
-                COALESCE(candidate.sent_at, candidate.created_at) DESC,
+                CASE
+                  WHEN candidate.webhook_status = 'delivered'
+                    THEN COALESCE(
+                      candidate.provider_status_last_seen_at,
+                      candidate.sent_at,
+                      candidate.created_at
+                    )
+                  ELSE COALESCE(candidate.sent_at, candidate.created_at)
+                END DESC,
                 candidate.id DESC
               LIMIT 1
             ),

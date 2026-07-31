@@ -638,6 +638,57 @@ describe("operator digest email reconciliation", () => {
     });
   });
 
+  it("prefers the latest confirmed receipt over a later provider acceptance", async () => {
+    const harness = setup();
+    harness.sqlite.prepare(`
+      INSERT INTO delivery_attempt (
+        id, user_id, digest_run_id, delivery_target_id, lane, channel, provider,
+        status, webhook_status, target_value, provider_message_id,
+        provider_status_last_seen_at, payload_snapshot_json, idempotency_key,
+        error_message, sent_at, created_at, updated_at
+      ) VALUES
+        (
+          'digest-receipt-latest', 'customer-1', 'digest-1', 'email-target-latest',
+          'customer', 'email', 'cloudflare_email', 'sent', 'delivered',
+          'latest-receipt@example.com', 'latest-receipt-message',
+          '2026-07-15T18:00:50.000Z', '{}',
+          'digest:digest-1:customer:email:latest-receipt@example.com', NULL,
+          '2026-07-15T18:00:10.000Z',
+          '2026-07-15T18:00:00.000Z', '2026-07-15T18:00:50.000Z'
+        ),
+        (
+          'digest-acceptance-latest', 'customer-1', 'digest-1', 'email-target-accepted',
+          'customer', 'email', 'cloudflare_email', 'sent', 'delivered',
+          'later-accepted@example.com', 'later-accepted-message',
+          '2026-07-15T18:00:45.000Z', '{}',
+          'digest:digest-1:customer:email:later-accepted@example.com', NULL,
+          '2026-07-15T18:00:40.000Z',
+          '2026-07-15T18:00:30.000Z', '2026-07-15T18:00:45.000Z'
+        )
+    `).run();
+
+    await expect(
+      reconcileDigestEmailAttemptWithAudit(
+        { DB: harness.db } as never,
+        input({
+          classification: "cloudflare_email_log",
+          evidenceReference: "digest_cloudflare_acceptance_12345",
+        }),
+      ),
+    ).resolves.toMatchObject({ ok: true, replayed: false, outcome: "sent" });
+
+    expect(
+      harness.sqlite.prepare(`
+        SELECT recipient_email, external_message_id, delivered_at
+        FROM digest_delivery WHERE digest_run_id = 'digest-1'
+      `).get(),
+    ).toMatchObject({
+      recipient_email: "latest-receipt@example.com",
+      external_message_id: "latest-receipt-message",
+      delivered_at: "2026-07-15T18:00:50.000Z",
+    });
+  });
+
   it("reconciles an accepted digest email whose final delivery remained unknown", async () => {
     const harness = setup();
     harness.sqlite.prepare(`
