@@ -150,6 +150,11 @@ export function buildProductionDeployPlan({
       includeCloudflareCredentials: true,
     },
     {
+      id: "reconfirm_frozen_main_before_deploy",
+      command: "./scripts/ci-verify-provider-main-cas.sh",
+      args: [],
+    },
+    {
       id: "deploy",
       command: "wrangler",
       args: ["deploy"],

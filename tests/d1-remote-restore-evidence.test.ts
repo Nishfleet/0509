@@ -174,7 +174,9 @@ describe("D1 remote restore evidence automation", () => {
           needs?: string;
           steps?: Array<{
             name?: string;
+            if?: string;
             run?: string;
+            env?: Record<string, string>;
             with?: Record<string, unknown>;
           }>;
         };
@@ -182,7 +184,12 @@ describe("D1 remote restore evidence automation", () => {
           env?: Record<string, string>;
           environment?: string;
           "timeout-minutes"?: number;
-          steps?: Array<{ name?: string; run?: string }>;
+          steps?: Array<{
+            name?: string;
+            if?: string;
+            run?: string;
+            env?: Record<string, string>;
+          }>;
         };
       };
     };
@@ -208,7 +215,10 @@ describe("D1 remote restore evidence automation", () => {
     expect(workflow.jobs?.restore?.environment).toBe("production");
     expect(workflow.jobs?.cleanup?.environment).toBe("production");
     expect(workflow.jobs?.cleanup?.if).toContain("always()");
-    expect(workflow.jobs?.cleanup?.needs).toBe("restore");
+    expect(workflow.jobs?.cleanup?.needs).toEqual([
+      "authorize_release",
+      "restore",
+    ]);
     for (const [job, consumer] of [
       [
         workflow.jobs?.restore,
@@ -237,9 +247,37 @@ describe("D1 remote restore evidence automation", () => {
       expect(job?.steps).toContainEqual(expect.objectContaining({
         run: "./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts",
       }));
-      expect(job?.steps?.[consumerIndex]?.run).toContain(
-        "./scripts/deploy-window-lock.sh run -- node scripts/d1-remote-restore-evidence.mjs",
+      const acquireIndex = job?.steps?.findIndex(
+        (step) => step.name === "Acquire provider lane",
+      ) ?? -1;
+      const releaseIndex = job?.steps?.findIndex(
+        (step) => step.name === "Release provider lane",
+      ) ?? -1;
+      expect(acquireIndex).toBeGreaterThan(bindingIndex);
+      if (consumer.includes("--cleanup-only")) {
+        expect(consumerIndex).toBe(acquireIndex + 1);
+        expect(JSON.stringify(job)).not.toContain(
+          "ci-verify-provider-main-cas.sh",
+        );
+      } else {
+        const casIndex = job?.steps?.findIndex((step) =>
+          step.name?.startsWith("Reconfirm frozen main before"),
+        ) ?? -1;
+        expect(casIndex).toBe(acquireIndex + 1);
+        expect(consumerIndex).toBe(casIndex + 1);
+        expect(job?.steps?.[casIndex]).toMatchObject({
+          run: "./scripts/ci-verify-provider-main-cas.sh",
+          env: { GH_TOKEN: "${{ github.token }}" },
+        });
+      }
+      expect(job?.steps?.[consumerIndex]?.run).not.toContain(
+        "deploy-window-lock.sh run",
       );
+      expect(releaseIndex).toBeGreaterThan(consumerIndex);
+      expect(job?.steps?.[releaseIndex]).toMatchObject({
+        if: "always()",
+        run: "./scripts/deploy-window-lock.sh release",
+      });
     }
     expect(workflow.jobs?.restore?.["timeout-minutes"]).toBe(300);
     expect(
@@ -247,8 +285,11 @@ describe("D1 remote restore evidence automation", () => {
     ).toBe(true);
     expect(workflow.jobs?.cleanup?.steps).toContainEqual(
       expect.objectContaining({
-        run: "./scripts/deploy-window-lock.sh run -- node scripts/d1-remote-restore-evidence.mjs --cleanup-only --sweep-stale",
+        run: "node scripts/d1-remote-restore-evidence.mjs --cleanup-only",
       }),
+    );
+    expect(JSON.stringify(workflow.jobs?.cleanup)).not.toContain(
+      "--sweep-stale",
     );
   });
 
@@ -304,13 +345,23 @@ describe("D1 remote restore evidence automation", () => {
     );
     expect(deployWorkflow).toContain("retention-days: 8");
     expect(manualWorkflow).toContain("retention-days: 8");
+    expect(manualWorkflow).toContain(
+      "d1-remote-restore-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}.tar.gz",
+    );
+    expect(manualWorkflow).toContain(
+      "d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}",
+    );
+    expect(manualWorkflow).toContain("overwrite: true");
     expect(backupWorkflow).toContain("timeout-minutes: 300");
     expect(deployWorkflow).not.toContain("group: d1-production-export");
     expect(manualWorkflow).not.toContain("group: d1-production-export");
     expect(backupWorkflow).not.toContain("group: d1-production-export");
     expect(backupWorkflow).toContain(
-      "run: ./scripts/deploy-window-lock.sh run -- node scripts/d1-backup-to-r2.mjs",
+      "run: node scripts/d1-backup-to-r2.mjs",
     );
+    expect(backupWorkflow).toContain("run: ./scripts/deploy-window-lock.sh acquire");
+    expect(backupWorkflow).toContain("run: ./scripts/ci-verify-production-candidate.sh");
+    expect(backupWorkflow).toContain("run: ./scripts/deploy-window-lock.sh release");
     const backupScript = readFileSync(
       "scripts/d1-backup-to-r2.mjs",
       "utf8",

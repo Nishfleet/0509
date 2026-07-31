@@ -4,26 +4,104 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact main commit authorized for production deployment
+        required: true
+        type: string
 
 concurrency:
-  group: production-deploy-${{ github.ref }}
+  group: 0509-production-provider-mutations
   cancel-in-progress: false
+  queue: max
 
-permissions:
-  contents: read
-  actions: read
-  deployments: write
+permissions: {}
 
 jobs:
-  prepare_remote_restore_evidence:
-    name: Prepare D1 remote restore evidence
-    if: github.repository == 'nish3451/0509' && github.ref == 'refs/heads/main'
-    runs-on: [self-hosted, linux, x64, vps-verify]
-    timeout-minutes: 60
+  authorize_release:
+    name: Authorize exact production candidate
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      sha: ${{ steps.authorize.outputs.sha }}
+    steps:
+      - name: Authorize release request
+        id: authorize
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+        run: |
+          set -euo pipefail
+          sha_pattern='^[a-f0-9]{40}$'
+          test "$GITHUB_REPOSITORY" = "nish3451/0509"
+          test "$GITHUB_REF" = "refs/heads/main"
+          [[ "$GITHUB_SHA" =~ $sha_pattern ]]
+          test "$GITHUB_RUN_ATTEMPT" = "1"
+          case "$GITHUB_EVENT_NAME" in
+            push)
+              test -z "$EXPECTED_SHA"
+              ;;
+            workflow_dispatch)
+              [[ "$EXPECTED_SHA" =~ $sha_pattern ]]
+              test "$EXPECTED_SHA" = "$GITHUB_SHA"
+              ;;
+            *)
+              exit 1
+              ;;
+          esac
+          printf 'sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+
+  pin_candidate:
+    name: Pin exact production candidate
+    if: needs.authorize_release.result == 'success'
+    needs: authorize_release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      sha: ${{ steps.pin.outputs.sha }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
+          ref: ${{ needs.authorize_release.outputs.sha }}
           fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify and pin exact main candidate
+        id: pin
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+          PINNED_SHA: ${{ needs.authorize_release.outputs.sha }}
+          EMIT_PINNED_SHA: "1"
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/ci-verify-production-candidate.sh
+
+  prepare_remote_restore_evidence:
+    name: Prepare D1 remote restore evidence
+    if: needs.pin_candidate.result == 'success'
+    needs: pin_candidate
+    runs-on: [self-hosted, linux, x64, vps-verify]
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PINNED_SHA: ${{ needs.pin_candidate.outputs.sha }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ needs.pin_candidate.outputs.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify pinned candidate before self-hosted work
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/ci-verify-production-candidate.sh
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version-file: ".node-version"
@@ -65,10 +143,11 @@ jobs:
   deploy:
     name: Deploy Worker
     if: >-
-      github.repository == 'nish3451/0509' &&
-      github.ref == 'refs/heads/main' &&
+      needs.pin_candidate.result == 'success' &&
       needs.prepare_remote_restore_evidence.result == 'success'
-    needs: prepare_remote_restore_evidence
+    needs:
+      - pin_candidate
+      - prepare_remote_restore_evidence
     runs-on: ubuntu-latest
     # Budget: 180m maximum deploy-window wait + 60m conservative pipeline +
     # 30m cancellation/release slack = 270m. With cancel-in-progress: false,
@@ -78,10 +157,26 @@ jobs:
     environment:
       name: production
       url: https://0509.io
+    permissions:
+      contents: read
+      actions: read
+      deployments: write
+    env:
+      PINNED_SHA: ${{ needs.pin_candidate.outputs.sha }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
+          ref: ${{ needs.pin_candidate.outputs.sha }}
           fetch-depth: 0
+          clean: true
+          persist-credentials: false
+
+      - name: Verify pinned candidate before repository and secret work
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/ci-verify-production-candidate.sh
 
       - name: Acquire deploy window
         shell: bash
@@ -154,6 +249,13 @@ jobs:
           chmod 600 test-results/d1-remote-restore-evidence.json
           rm -rf -- test-results/remote-restore-download
 
+      - name: Reconfirm frozen main before provider mutation
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/ci-verify-production-candidate.sh
+
       - name: Synchronize private canary token
         shell: bash
         env:
@@ -172,6 +274,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}
           D1_REMOTE_RESTORE_EVIDENCE_PATH: test-results/d1-remote-restore-evidence.json
+          GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
           CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: "false"
         run: npm run deploy
@@ -224,14 +327,14 @@ jobs:
           set -euo pipefail
           umask 077
           node scripts/release-evidence-archive.mjs create \
-            --output "test-results/production-release-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz"
+            --output "test-results/production-release-evidence-${PINNED_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz"
 
       - name: Preserve release evidence
         if: success()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: production-release-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: test-results/production-release-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}.tar.gz
+          name: production-release-evidence-${{ needs.pin_candidate.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/production-release-evidence-${{ needs.pin_candidate.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}.tar.gz
           if-no-files-found: error
           retention-days: 90
 
@@ -239,7 +342,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: production-release-diagnostics-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: production-release-diagnostics-${{ needs.pin_candidate.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             test-results/deploy-readiness-*.json
             test-results/gate-b-manifest-*.json
