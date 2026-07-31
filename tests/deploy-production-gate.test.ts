@@ -1314,7 +1314,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     );
 
     expect(bindArchiveStep.run).toContain(
-      'archive="$RUNNER_TEMP/d1-remote-restore-evidence-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}.tar.gz"',
+      'archive="$RUNNER_TEMP/d1-remote-restore-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}.tar.gz"',
     );
     expect(bindArchiveStep.run).toContain(
       'printf \'RESTORE_EVIDENCE_ARCHIVE=%s\\n\' "$archive" >> "$GITHUB_ENV"',
@@ -1333,7 +1333,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     // Path pattern is authored once in the bind step; upload/cleanup use env.
     expect(
       workflowText.match(
-        /d1-remote-restore-evidence-\$\{GITHUB_RUN_ID\}-\$\{GITHUB_RUN_ATTEMPT\}-\$\{GITHUB_JOB\}/g,
+        /d1-remote-restore-evidence-\$\{GITHUB_SHA\}-\$\{GITHUB_RUN_ID\}/g,
       ) ?? [],
     ).toHaveLength(1);
   });
@@ -1368,7 +1368,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       const artifactMarker = join(root, "artifact");
       const archivePath = join(
         runnerTemp,
-        "d1-remote-restore-evidence-30574154496-1-prepare_remote_restore_evidence.tar.gz",
+        "d1-remote-restore-evidence-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-30574154496.tar.gz",
       );
       mkdirSync(bin, { recursive: true });
       mkdirSync(runnerTemp, { recursive: true });
@@ -1472,15 +1472,15 @@ case "$1" in
     if [ "$FAKE_MODE" = invalid_zip_member ]; then
       printf '../escape.tar.gz\\n'
     else
-      printf 'd1-remote-restore-evidence-30423695493-1-prepare_remote_restore_evidence.tar.gz\\n'
+      printf 'd1-remote-restore-evidence-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-30423695493.tar.gz\\n'
     fi
     ;;
   -Z)
     printf '%s\\n' 'Archive: fake'
     if [ "$FAKE_MODE" = oversized_member ]; then
-      printf '%s\\n' '-rw-------  3.0 unx 20000000 bx       64 stor 26-Jul-31 00:00 d1-remote-restore-evidence-30423695493-1-prepare_remote_restore_evidence.tar.gz'
+      printf '%s\\n' '-rw-------  3.0 unx 20000000 bx       64 stor 26-Jul-31 00:00 d1-remote-restore-evidence-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-30423695493.tar.gz'
     else
-      printf '%s\\n' '-rw-------  3.0 unx       64 bx       64 stor 26-Jul-31 00:00 d1-remote-restore-evidence-30423695493-1-prepare_remote_restore_evidence.tar.gz'
+      printf '%s\\n' '-rw-------  3.0 unx       64 bx       64 stor 26-Jul-31 00:00 d1-remote-restore-evidence-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-30423695493.tar.gz'
     fi
     ;;
   -p) printf 'archive' ;;
