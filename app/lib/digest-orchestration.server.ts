@@ -123,7 +123,8 @@ async function deliverScanTroubleNoticeOrThrow(
     if (
       delivery.reason === "disabled" ||
       delivery.reason === "unverified" ||
-      delivery.reason === "no_email"
+      delivery.reason === "no_email" ||
+      delivery.reason === "suppressed"
     ) {
       return;
     }

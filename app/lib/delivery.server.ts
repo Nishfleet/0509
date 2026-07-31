@@ -317,13 +317,14 @@ export async function deliverScanTroubleNotice(
 
   const emailTargets = await resolveDigestEmailTargets(env, input.userId, accountEmail);
   const primaryTarget = emailTargets[0] ?? null;
-  const recipient = primaryTarget?.targetValue?.trim() || accountEmail;
-  const unsubscribeUrl = primaryTarget
-    ? await buildUnsubscribeUrl(env, {
-        userId: input.userId,
-        targetId: primaryTarget.id,
-      })
-    : null;
+  if (!primaryTarget) {
+    return { sent: false as const, reason: "suppressed" as const };
+  }
+  const recipient = primaryTarget.targetValue.trim() || accountEmail;
+  const unsubscribeUrl = await buildUnsubscribeUrl(env, {
+    userId: input.userId,
+    targetId: primaryTarget.id,
+  });
 
   const idempotencyKey = `scan_trouble:${input.userId}:${input.periodKey}`;
   const base = appBaseUrl(env);
@@ -339,7 +340,7 @@ export async function deliverScanTroubleNotice(
   const claim = await claimInstantDeliveryAttempt(env, {
     userId: input.userId,
     watchlistId: null,
-    deliveryTargetId: primaryTarget?.id ?? null,
+    deliveryTargetId: primaryTarget.id,
     lane: "customer",
     channel: "email",
     provider: EMAIL_PROVIDER,
