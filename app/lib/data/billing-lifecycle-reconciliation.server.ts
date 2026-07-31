@@ -83,7 +83,9 @@ export async function listBillingLifecycleReconciliationCandidates(
             AND template_name = 'billing_refund_revoked'
           )
         )
-      ORDER BY created_at DESC
+      ORDER BY
+        CASE status WHEN 'pending' THEN 0 ELSE 1 END,
+        created_at DESC
       LIMIT 20
     `,
   );

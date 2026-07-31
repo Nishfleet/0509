@@ -382,6 +382,32 @@ describe("billing lifecycle reconciliation persistence", () => {
     expect(JSON.stringify(candidates)).not.toContain("owner@example.com");
   });
 
+  it("prioritizes pending billing attempts ahead of newer accepted sends", async () => {
+    const harness = createSqliteD1();
+    fixtures.push(harness);
+    migrate(harness);
+    for (let index = 0; index < 20; index += 1) {
+      const timestamp = `2026-07-16T10:00:${String(index).padStart(2, "0")}.000Z`;
+      seedAttempt(harness, {
+        id: `accepted-attempt-${index}`,
+        status: "sent",
+        sentAt: timestamp,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        idempotencyKey: `billing-payment-issue:user-${index + 2}:2026-07-16`,
+      });
+    }
+
+    const candidates = await listBillingLifecycleReconciliationCandidates(env(harness));
+
+    expect(candidates).toHaveLength(20);
+    expect(candidates[0]).toMatchObject({
+      attemptId: baseAttempt.id,
+      status: "pending",
+    });
+    expect(candidates.filter((candidate) => candidate.status === "sent")).toHaveLength(19);
+  });
+
   it("lists and settles an accepted billing email whose final delivery is unconfirmed", async () => {
     const harness = createSqliteD1();
     fixtures.push(harness);
