@@ -480,7 +480,7 @@ describe("ops route", () => {
     expect(sendOperatorAlertEmail).not.toHaveBeenCalled();
   });
 
-  it("never retries a failed support alert while its provider outcome is unknown", async () => {
+  it("never treats an acceptance-only sent support alert as delivered", async () => {
     const getOperatorSupportCase = vi.fn().mockResolvedValue({
       id: "case-1",
       userEmail: "requester@example.com",
@@ -490,7 +490,7 @@ describe("ops route", () => {
       detail: "Private case detail.",
     });
     const getDeliveryAttemptByIdempotencyKey = vi.fn().mockResolvedValue({
-      status: "failed",
+      status: "sent",
       webhookStatus: "provider_unknown",
     });
     const sendOperatorAlertEmail = vi.fn();
@@ -672,7 +672,7 @@ describe("ops route", () => {
     });
     const getDeliveryAttemptByIdempotencyKey = vi.fn()
       .mockResolvedValueOnce({ status: "failed", webhookStatus: "failed" })
-      .mockResolvedValueOnce({ status: "pending", webhookStatus: "provider_unknown" });
+      .mockResolvedValueOnce({ status: "sent", webhookStatus: "provider_unknown" });
     const sendOperatorAlertEmail = vi.fn().mockRejectedValue(
       new Error("raw provider failure for requester@example.com"),
     );

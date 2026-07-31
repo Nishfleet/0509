@@ -276,15 +276,15 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   const idempotencyKey =
     supportCase.alertIdempotencyKey ?? `support-case:${supportCase.id}`;
-  if (existing?.status === "sent") {
-    return { ok: true, intent, message: "The operator alert was already sent." };
-  }
   if (existing?.webhookStatus === "provider_unknown") {
     return {
       ok: false,
       intent,
       message: "Provider outcome is unknown. Check the provider console before any resend.",
     };
+  }
+  if (existing?.status === "sent") {
+    return { ok: true, intent, message: "The operator alert was already sent." };
   }
   if (existing?.status === "pending") {
     return { ok: false, intent, message: "The operator alert already has an active dispatch claim." };
@@ -314,15 +314,15 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
   try {
     const finalAttempt = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
-    if (finalAttempt?.status === "sent") {
-      return { ok: true, intent, message: "The operator alert was already sent." };
-    }
     if (finalAttempt?.webhookStatus === "provider_unknown") {
       return {
         ok: false,
         intent,
         message: "Provider outcome is unknown. Check the provider console before any resend.",
       };
+    }
+    if (finalAttempt?.status === "sent") {
+      return { ok: true, intent, message: "The operator alert was already sent." };
     }
     if (finalAttempt?.status === "pending") {
       return {

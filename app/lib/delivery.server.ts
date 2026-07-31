@@ -779,6 +779,17 @@ async function claimDigestDeliveryAttempt(
   }
 }
 
+function confirmedDeliveryTimestamp(
+  attempt: Pick<
+    DeliveryAttemptRecord,
+    "webhookStatus" | "providerStatusLastSeenAt" | "sentAt"
+  >,
+) {
+  return attempt.webhookStatus === "delivered"
+    ? (attempt.providerStatusLastSeenAt ?? attempt.sentAt)
+    : null;
+}
+
 function summarizeDigestDeliveryAttempt(
   channel: DeliveryChannel,
   attempt: DeliveryAttemptRecord,
@@ -789,10 +800,7 @@ function summarizeDigestDeliveryAttempt(
     targetValue: attempt.targetValue,
     providerMessageId: attempt.providerMessageId,
     errorMessage: attempt.errorMessage,
-    deliveredAt:
-      attempt.webhookStatus === "delivered"
-        ? (attempt.providerStatusLastSeenAt ?? attempt.sentAt)
-        : null,
+    deliveredAt: confirmedDeliveryTimestamp(attempt),
   };
 }
 
@@ -2534,7 +2542,7 @@ function summarizeDeliveryAttempt(attempt: DeliveryAttemptRecord): DigestAttempt
     targetValue: attempt.targetValue,
     providerMessageId: attempt.providerMessageId,
     errorMessage: attempt.errorMessage,
-    deliveredAt: attempt.sentAt,
+    deliveredAt: confirmedDeliveryTimestamp(attempt),
   };
 }
 
@@ -3060,6 +3068,7 @@ export async function sendPresenceDigestEmail(
     tag: "presence-digest",
     unsubscribeUrl,
   });
+  const sentAt = providerAcceptedAt(providerResult);
 
   await createDeliveryAttempt(env, {
     userId: input.userId,
@@ -3079,11 +3088,19 @@ export async function sendPresenceDigestEmail(
     payloadSnapshot: { kind: "presence_digest", lineCount: input.lines.length },
     idempotencyKey: input.idempotencyKey,
     errorMessage: providerResult.errorMessage,
-    sentAt: providerAcceptedAt(providerResult),
+    sentAt,
     failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
   });
 
-  return providerResult.status === "sent";
+  return {
+    accepted: providerResult.status === "sent",
+    delivered:
+      confirmedDeliveryTimestamp({
+        webhookStatus: providerResult.webhookStatus,
+        providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+        sentAt,
+      }) !== null,
+  };
 }
 
 function buildPresenceAppUrl(env: AppEnv) {

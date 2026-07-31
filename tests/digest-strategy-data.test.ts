@@ -181,6 +181,47 @@ harness.close();
 }
 });
 
+it("does not let acceptance-only sent state clear a confirmed delivery", async () => {
+const harness = setup();
+try {
+const env = { DB: harness.db } as never;
+const digestRunId = await createDigestRun(
+env,
+"user-1",
+"2026-07-06T05:00:00.000Z",
+"2026-07-13T05:00:00.000Z",
+{ totalEvents: 0, watchlists: 1 },
+);
+await upsertDigestDelivery(env, digestRunId, {
+provider: "cloudflare_email",
+status: "sent",
+recipientEmail: "confirmed@example.com",
+externalMessageId: "message-delivered",
+errorMessage: null,
+deliveredAt: "2026-07-13T05:02:00.000Z",
+});
+await upsertDigestDelivery(env, digestRunId, {
+provider: "cloudflare_email",
+status: "sent",
+recipientEmail: "accepted-only@example.com",
+externalMessageId: "message-accepted",
+errorMessage: null,
+deliveredAt: null,
+});
+
+expect((await getDigest(env, digestRunId))?.delivery).toMatchObject({
+provider: "cloudflare_email",
+status: "sent",
+recipientEmail: "confirmed@example.com",
+externalMessageId: "message-delivered",
+errorMessage: null,
+deliveredAt: "2026-07-13T05:02:00.000Z",
+});
+} finally {
+harness.close();
+}
+});
+
 it("never buries a failed digest delivery under an overlapping writer's pending mirror", async () => {
 // Duplicate cron fire: writer X records the failure; the losing writer Y
 // observed X's in-flight pending attempt and mirrors it afterwards. The

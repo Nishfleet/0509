@@ -346,9 +346,10 @@ describe("createLandingPageSnapshot", () => {
     });
 
     const statement = mock.statements.find((entry) => entry.sql.includes("INSERT INTO digest_delivery"));
-    expect(statement?.sql).toContain("WHEN digest_delivery.status = 'sent'");
-    expect(statement?.sql).toContain("THEN digest_delivery.provider");
-    expect(statement?.sql).toContain("THEN 'sent'");
+    expect(statement?.sql).toContain("digest_delivery.status = 'sent'");
+    expect(statement?.sql).toContain("excluded.status != 'sent'");
+    expect(statement?.sql).toContain("digest_delivery.delivered_at IS NOT NULL");
+    expect(statement?.sql).toContain("excluded.delivered_at IS NULL");
   });
 });
 

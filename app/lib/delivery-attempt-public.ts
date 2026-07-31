@@ -51,12 +51,14 @@ function deliveryRecoveryMessage(
   webhookStatus: DeliveryAttemptRecord["webhookStatus"],
   sentAt: string | null,
 ) {
-  if (
-    channel === "email" &&
-    status === "sent" &&
-    webhookStatus === "provider_unknown"
-  ) {
-    return "The email provider accepted this message, but final delivery is unconfirmed.";
+  if (status === "sent" && webhookStatus !== "delivered") {
+    if (channel === "email") {
+      return "The email provider accepted this message, but final delivery is unconfirmed.";
+    }
+    if (channel === "whatsapp") {
+      return "WhatsApp accepted this message for sending, but final delivery is unconfirmed.";
+    }
+    return "Slack accepted this message for sending, but final delivery is unconfirmed.";
   }
   if (status === "pending" && webhookStatus === "provider_unknown") {
     return "Provider outcome is unknown. Check again later or contact support.";

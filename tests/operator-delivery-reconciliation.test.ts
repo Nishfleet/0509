@@ -1,15 +1,14 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import * as operatorReconciliation from "~/lib/data/operator-delivery-reconciliation.server";
+import {
+  reconcileBillingEmailAttemptWithAudit,
+  reconcileDigestEmailAttemptWithAudit,
+  reconcileSupportAlertAttemptWithAudit,
+} from "~/lib/data/operator-delivery-reconciliation.server";
 import {
   listOutstandingDigestProviderUnknownAttempts,
 } from "~/lib/data/delivery-records-attempts.server";
 import { createSqliteD1 } from "./helpers/sqlite-d1";
-
-const {
-  reconcileBillingEmailAttemptWithAudit,
-  reconcileDigestEmailAttemptWithAudit,
-} = operatorReconciliation;
 
 describe("operator billing email reconciliation", () => {
   const fixtures: Array<ReturnType<typeof createSqliteD1>> = [];
@@ -127,6 +126,52 @@ describe("operator billing email reconciliation", () => {
       resource_id: "attempt-1",
       status: "succeeded",
     });
+  });
+
+  it.each(["pending", "failed"] as const)(
+    "rejects evidence observed before a %s attempt was created",
+    async (attemptStatus) => {
+      const harness = setup();
+      if (attemptStatus === "failed") {
+        harness.sqlite.prepare(`
+          UPDATE delivery_attempt
+          SET status = 'failed',
+              provider_status_last_seen_at = '2026-07-15T18:00:30.000Z'
+          WHERE id = 'attempt-1'
+        `).run();
+      }
+
+      await expect(
+        reconcileBillingEmailAttemptWithAudit(
+          { DB: harness.db } as never,
+          input({ observedAt: "2026-07-15T17:59:59.000Z" }),
+        ),
+      ).resolves.toMatchObject({ ok: false, reason: "stale" });
+      expect(
+        harness.sqlite.prepare("SELECT COUNT(*) AS count FROM agent_action_audit").get(),
+      ).toMatchObject({ count: 0 });
+      expect(
+        harness.sqlite.prepare(`
+          SELECT status, webhook_status, sent_at
+          FROM delivery_attempt WHERE id = 'attempt-1'
+        `).get(),
+      ).toMatchObject({
+        status: attemptStatus,
+        webhook_status: "provider_unknown",
+        sent_at: null,
+      });
+    },
+  );
+
+  it("accepts evidence observed exactly when the attempt was created", async () => {
+    const harness = setup();
+
+    await expect(
+      reconcileBillingEmailAttemptWithAudit(
+        { DB: harness.db } as never,
+        input({ observedAt: "2026-07-15T18:00:00.000Z" }),
+      ),
+    ).resolves.toMatchObject({ ok: true, replayed: false, outcome: "sent" });
   });
 
   it("keeps provider acceptance reconcilable until delivery evidence arrives", async () => {
@@ -535,7 +580,7 @@ describe("operator digest email reconciliation", () => {
     });
   });
 
-  it("prefers an older confirmed-delivered sibling over newer acceptance", async () => {
+  it("prefers a confirmed-delivered email sibling over newer cross-channel delivery and acceptance", async () => {
     const harness = setup();
     harness.sqlite.prepare(`
       INSERT INTO delivery_attempt (
@@ -551,6 +596,22 @@ describe("operator digest email reconciliation", () => {
         'digest:digest-1:customer:email:delivered@example.com', NULL,
         '2026-07-15T18:00:20.000Z',
         '2026-07-15T18:00:00.000Z', '2026-07-15T18:00:25.000Z'
+      )
+    `).run();
+    harness.sqlite.prepare(`
+      INSERT INTO delivery_attempt (
+        id, user_id, digest_run_id, delivery_target_id, lane, channel, provider,
+        status, webhook_status, target_value, provider_message_id,
+        provider_status_last_seen_at, payload_snapshot_json, idempotency_key,
+        error_message, sent_at, created_at, updated_at
+      ) VALUES (
+        'digest-attempt-whatsapp', 'customer-1', 'digest-1', 'whatsapp-target-1',
+        'customer', 'whatsapp', 'whatsapp_cloud_api', 'sent', 'delivered',
+        '+15550000000', 'whatsapp-message',
+        '2026-07-15T18:00:50.000Z', '{}',
+        'digest:digest-1:customer:whatsapp:+15550000000', NULL,
+        '2026-07-15T18:00:45.000Z',
+        '2026-07-15T18:00:40.000Z', '2026-07-15T18:00:50.000Z'
       )
     `).run();
 
@@ -942,16 +1003,11 @@ describe("operator support-alert reconciliation", () => {
   }
 
   it("rejects timezone-less provider evidence instead of shifting the audit instant", async () => {
-    const reconcileSupportAlertAttemptWithAudit = (
-      operatorReconciliation as Record<string, unknown>
-    ).reconcileSupportAlertAttemptWithAudit;
-    expect(typeof reconcileSupportAlertAttemptWithAudit).toBe("function");
-    if (typeof reconcileSupportAlertAttemptWithAudit !== "function") return;
     const harness = setup();
 
     await expect(
       reconcileSupportAlertAttemptWithAudit(
-        { DB: harness.db },
+        { DB: harness.db } as never,
         input({ observedAt: "2026-07-15T23:31:00" }),
       ),
     ).resolves.toEqual({ ok: false, reason: "invalid_evidence" });
@@ -962,15 +1018,10 @@ describe("operator support-alert reconciliation", () => {
   });
 
   it("records a confirmed rejection as safely retryable without sending", async () => {
-    const reconcileSupportAlertAttemptWithAudit = (
-      operatorReconciliation as Record<string, unknown>
-    ).reconcileSupportAlertAttemptWithAudit;
-    expect(typeof reconcileSupportAlertAttemptWithAudit).toBe("function");
-    if (typeof reconcileSupportAlertAttemptWithAudit !== "function") return;
     const harness = setup();
 
     await expect(
-      reconcileSupportAlertAttemptWithAudit({ DB: harness.db }, input()),
+      reconcileSupportAlertAttemptWithAudit({ DB: harness.db } as never, input()),
     ).resolves.toMatchObject({ ok: true, replayed: false, outcome: "failed" });
 
     expect(
@@ -995,16 +1046,11 @@ describe("operator support-alert reconciliation", () => {
   });
 
   it("keeps support-alert acceptance reconcilable until delivery evidence arrives", async () => {
-    const reconcileSupportAlertAttemptWithAudit = (
-      operatorReconciliation as Record<string, unknown>
-    ).reconcileSupportAlertAttemptWithAudit;
-    expect(typeof reconcileSupportAlertAttemptWithAudit).toBe("function");
-    if (typeof reconcileSupportAlertAttemptWithAudit !== "function") return;
     const harness = setup();
 
     await expect(
       reconcileSupportAlertAttemptWithAudit(
-        { DB: harness.db },
+        { DB: harness.db } as never,
         input({
           outcome: "sent",
           classification: "cloudflare_email_log",
@@ -1021,7 +1067,7 @@ describe("operator support-alert reconciliation", () => {
 
     await expect(
       reconcileSupportAlertAttemptWithAudit(
-        { DB: harness.db },
+        { DB: harness.db } as never,
         input({
           idempotencyKey: "ops-support-alert-reconcile:22222222-2222-4222-8222-222222222222",
           expectedUpdatedAt: String(accepted.updated_at),
@@ -1042,11 +1088,6 @@ describe("operator support-alert reconciliation", () => {
   });
 
   it("records confirmed provider acceptance as sent and replays exactly once", async () => {
-    const reconcileSupportAlertAttemptWithAudit = (
-      operatorReconciliation as Record<string, unknown>
-    ).reconcileSupportAlertAttemptWithAudit;
-    expect(typeof reconcileSupportAlertAttemptWithAudit).toBe("function");
-    if (typeof reconcileSupportAlertAttemptWithAudit !== "function") return;
     const harness = setup();
     const reconciliation = input({
       outcome: "sent",
@@ -1055,11 +1096,11 @@ describe("operator support-alert reconciliation", () => {
     });
 
     const first = await reconcileSupportAlertAttemptWithAudit(
-      { DB: harness.db },
+      { DB: harness.db } as never,
       reconciliation,
     );
     const replay = await reconcileSupportAlertAttemptWithAudit(
-      { DB: harness.db },
+      { DB: harness.db } as never,
       reconciliation,
     );
 
