@@ -233,6 +233,7 @@ function setupMocks(
         updatedAt: "2026-06-20T00:00:00.000Z",
       },
     }),
+    reclaimRetryableAgentActionAudit: vi.fn().mockResolvedValue(null),
     finishAgentActionAudit: vi.fn().mockResolvedValue(null),
     getCollection: vi.fn().mockResolvedValue(collection),
     getDigest: vi.fn().mockResolvedValue(digest),

@@ -601,7 +601,12 @@ const MCP_TOOLS = [
           type: "string",
           maxLength: 4000,
         },
-        idempotencyKey: idempotencyKeySchema(),
+        idempotencyKey: {
+          ...idempotencyKeySchema(),
+          maxLength: 120,
+          description:
+            "Stable key for safe retry. Replays a matching success and retries a matching failed or stale support-case action.",
+        },
       },
       required: ["category", "subject", "detail", "idempotencyKey"],
       additionalProperties: false,
