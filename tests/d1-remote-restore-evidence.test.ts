@@ -257,6 +257,10 @@ describe("D1 remote restore evidence automation", () => {
       ".github/workflows/deploy-production.yml",
       "utf8",
     );
+    const prepareScript = readFileSync(
+      "scripts/ci-prepare-remote-restore-evidence.sh",
+      "utf8",
+    );
     const manualWorkflow = readFileSync(
       ".github/workflows/d1-remote-restore-evidence.yml",
       "utf8",
@@ -266,14 +270,17 @@ describe("D1 remote restore evidence automation", () => {
       "utf8",
     );
     expect(deployWorkflow).toContain(
+      "./scripts/ci-prepare-remote-restore-evidence.sh",
+    );
+    expect(prepareScript).toContain(
       "node scripts/find-recent-remote-restore-artifact.mjs",
     );
-    expect(deployWorkflow).toContain('gh run download "$run_id"');
-    expect(deployWorkflow).toContain(
+    expect(prepareScript).toContain('gh run download "$run_id"');
+    expect(prepareScript).toContain(
       '[[ "$(tar -tvzf "${archives[0]}")" = -* ]]',
     );
-    expect(deployWorkflow).toContain('tar -xOzf "${archives[0]}"');
-    expect(deployWorkflow).toContain(
+    expect(prepareScript).toContain('tar -xOzf "${archives[0]}"');
+    expect(prepareScript).toContain(
       "Recent private restore evidence is valid for this deploy.",
     );
     expect(deployWorkflow).not.toContain(

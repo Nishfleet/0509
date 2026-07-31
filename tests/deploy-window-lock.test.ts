@@ -1044,4 +1044,82 @@ describe.skipIf(!hasRequiredTools)("deploy-window lock protocol", () => {
     expect(readFileSync(`${lockFile}.held`, "utf8")).toBe("");
     expect(probeIsFree(lockFile)).toBe(true);
   });
+
+  it("drops heredoc stdin for backgrounded run lanes but keeps argv scripts", () => {
+    const lockFile = scratchLock();
+    const verifyRoot = `${lockFile}.verify`;
+    const verifyTmp = `${lockFile}.tmp`;
+    const marker = `${lockFile}.argv-marker`;
+    const laneEnv = {
+      DEPLOY_WINDOW_ACQUIRE_TIMEOUT: "2",
+      DEPLOY_WINDOW_VERIFY_ROOT: verifyRoot,
+      DEPLOY_WINDOW_VERIFY_TMP_ROOT: verifyTmp,
+    };
+
+    const heredoc = spawnSync(
+      "bash",
+      [
+        "-c",
+        `${script} run -- bash -euo pipefail <<'EOF'
+printf 'heredoc-body\\n' >"$1"
+EOF`,
+        "probe",
+        marker,
+      ],
+      {
+        encoding: "utf8",
+        env: envFor(lockFile, laneEnv),
+        timeout: 5_000,
+      },
+    );
+    expect(heredoc.status, heredoc.stderr).toBe(0);
+    expect(existsSync(marker)).toBe(false);
+
+    const argv = spawnSync(
+      script,
+      [
+        "run",
+        "--",
+        "bash",
+        "-c",
+        'printf "argv-body\\n" >"$1"',
+        "probe",
+        marker,
+      ],
+      {
+        encoding: "utf8",
+        env: envFor(lockFile, laneEnv),
+        timeout: 5_000,
+      },
+    );
+    expect(argv.status, argv.stderr).toBe(0);
+    expect(readFileSync(marker, "utf8")).toBe("argv-body\n");
+  });
+
+  it("persists RESTORE_EVIDENCE_ARCHIVE written by an argv lane for the parent step", () => {
+    const lockFile = scratchLock();
+    const archive = `${lockFile}.restore-evidence.tar.gz`;
+    const result = spawnSync(
+      script,
+      [
+        "run",
+        "--",
+        "bash",
+        "-c",
+        'mkdir -p "$(dirname -- "$RESTORE_EVIDENCE_ARCHIVE")" && printf "packed\\n" >"$RESTORE_EVIDENCE_ARCHIVE"',
+      ],
+      {
+        encoding: "utf8",
+        env: envFor(lockFile, {
+          DEPLOY_WINDOW_ACQUIRE_TIMEOUT: "2",
+          DEPLOY_WINDOW_VERIFY_ROOT: `${lockFile}.verify`,
+          DEPLOY_WINDOW_VERIFY_TMP_ROOT: `${lockFile}.tmp`,
+          RESTORE_EVIDENCE_ARCHIVE: archive,
+        }),
+        timeout: 5_000,
+      },
+    );
+    expect(result.status, result.stderr).toBe(0);
+    expect(readFileSync(archive, "utf8")).toBe("packed\n");
+  });
 });
