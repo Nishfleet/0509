@@ -1425,10 +1425,21 @@ const path = process.argv[2];
 process.stdout.write(createHash("sha256").update(readFileSync(path)).digest("hex") + "  " + path + "\\n");
 `,
       );
+      const installResolution = spawnSync(
+        "/bin/sh",
+        ["-c", "command -v install"],
+        { encoding: "utf8" },
+      );
+      expect(
+        installResolution.status,
+        installResolution.stderr,
+      ).toBe(0);
+      const installPath = installResolution.stdout.trim();
+      expect(installPath).toMatch(/^\/\S+/u);
       writeFileSync(
         join(bin, "install"),
         `#!/bin/bash
-/usr/bin/install "$@"
+${JSON.stringify(installPath)} "$@"
 if [ "\${FAKE_INSTALL_MODE:-}" = byte-mismatch ]; then
   printf 'tampered' >> "\${!#}"
 fi
@@ -1475,7 +1486,15 @@ fi
       "byte-mismatch",
       "stale-upload",
     ] as const) {
-      expect(runStage(mode).result.status, mode).not.toBe(0);
+      const rejected = runStage(mode);
+      expect(rejected.result.signal, mode).toBeNull();
+      expect(
+        rejected.result.status,
+        `${mode}: ${rejected.result.stderr}`,
+      ).toBe(1);
+      if (mode !== "byte-mismatch" && mode !== "stale-upload") {
+        expect(existsSync(rejected.staged), mode).toBe(false);
+      }
     }
 
     const runCleanup = (abandoned: ReturnType<typeof runStage>) => {
@@ -1512,7 +1531,32 @@ fi
     mkdirSync(nested, { recursive: true });
     writeFileSync(join(nested, "residue"), "private");
     runCleanup(unexpected);
-  });
+
+    const foreign = runStage("wrong-mode");
+    const foreignDir = join(foreign.handoffRoot, "unrelated-directory");
+    const foreignResidue = join(foreignDir, "private");
+    mkdirSync(foreignDir, { recursive: true, mode: 0o700 });
+    writeFileSync(foreignResidue, "private");
+    const refused = spawnSync(
+      "/bin/bash",
+      ["-euo", "pipefail", "-c", cleanup.run],
+      {
+        env: {
+          ...process.env,
+          PATH: `${foreign.bin}:${process.env.PATH}`,
+          GITHUB_JOB: "prepare_remote_restore_evidence",
+          GITHUB_RUN_ATTEMPT: "1",
+          GITHUB_RUN_ID: "30574154496",
+          RESTORE_EVIDENCE_HANDOFF_DIR: foreignDir,
+          RESTORE_EVIDENCE_HANDOFF_ROOT: foreign.handoffRoot,
+          RESTORE_EVIDENCE_UPLOAD: foreign.staged,
+        },
+        encoding: "utf8",
+      },
+    );
+    expect(refused.status, refused.stderr).toBe(1);
+    expect(existsSync(foreignResidue)).toBe(true);
+  }, 30_000);
 
   it("behaviorally enforces artifact-only and infrastructure-failure evidence paths", () => {
     const workflow = parse(

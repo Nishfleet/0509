@@ -191,11 +191,11 @@ jobs:
           test "$(stat -c '%a' "$evidence")" = "600"
           prefix="$RESTORE_EVIDENCE_HANDOFF_ROOT/d1-remote-restore-handoff-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}-"
           handoff_dir="$(mktemp -d "${prefix}XXXXXXXXXXXX")"
+          printf 'RESTORE_EVIDENCE_HANDOFF_DIR=%s\n' "$handoff_dir" >> "$GITHUB_ENV"
           chmod 700 "$handoff_dir"
           test ! -L "$handoff_dir"
           test -d "$handoff_dir"
           test "$(stat -c '%u:%a:%F' -- "$handoff_dir")" = "$(id -u):700:directory"
-          printf 'RESTORE_EVIDENCE_HANDOFF_DIR=%s\n' "$handoff_dir" >> "$GITHUB_ENV"
           archive="$handoff_dir/d1-remote-restore-evidence-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}.tar.gz"
           evidence_dir="${evidence%/*}"
           evidence_name="${evidence##*/}"
@@ -214,7 +214,7 @@ jobs:
           set -euo pipefail
           umask 077
           expected_prefix="$RESTORE_EVIDENCE_HANDOFF_ROOT/d1-remote-restore-handoff-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}-"
-          case "$RESTORE_EVIDENCE_HANDOFF_DIR" in
+          case "${RESTORE_EVIDENCE_HANDOFF_DIR:-}" in
             "$expected_prefix"????????????) ;;
             *)
               printf 'Refusing an unexpected restore-evidence handoff path.\n' >&2
