@@ -598,7 +598,7 @@ export default function WatchlistsRoute() {
             // detail now counts them the same way over the loaded runs, and
             // prefers the board's rollup so one competitor never reports two
             // different failure counts on one page.
-            failedChecks={data.captureWindowDegraded ? 0 : selectedFailedChecks}
+            failedChecks={selectedFailedChecks}
             lockedToolbarUpgradeLabel={lockedToolbarUpgradeLabel}
             nextScanLabel={nextScanLabel}
             renderedAt={renderedAt}

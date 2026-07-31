@@ -609,7 +609,11 @@ describe("clients route agent memory", () => {
         updatedAt: "2026-06-20T00:00:00.000Z",
       }]),
       listCollections: vi.fn().mockResolvedValue([]),
-      listWatchlists: vi.fn().mockResolvedValue([{ id: "watchlist-1", isActive: true }]),
+      listWatchlists: vi.fn().mockResolvedValue([{
+        id: "watchlist-1",
+        isActive: true,
+        updatedAt: new Date(Date.parse(reviewedAt) + 30_000).toISOString(),
+      }]),
       getLatestDigestRunSummaryForWatchlist: vi.fn(),
       listAdsByIds: vi.fn(),
       listCollectionItems: vi.fn(),
@@ -633,6 +637,9 @@ describe("clients route agent memory", () => {
       },
     });
     expect(result.approvalUnavailableRoomIds).toEqual(["room-1"]);
+    expect(result.rooms[0].resourceRefs).toEqual([
+      { resourceType: "report", resourceId: "watchlist:watchlist-1" },
+    ]);
   });
 
   it("renders approval read failures as unavailable without calling the saved approval revoked", async () => {
@@ -675,6 +682,8 @@ describe("clients route agent memory", () => {
     expect(markup).toContain("Report approval status unavailable");
     expect(markup).toContain("saved approval was not changed");
     expect(markup).not.toContain("Ready for client review");
+    expect(markup).toContain('href="/app/reports/watchlist:watchlist-1"');
+    expect(markup).toContain('name="intent" value="approve-client-room"');
   });
 
   it("strips expired and malformed room approvals", async () => {

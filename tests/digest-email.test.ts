@@ -23,6 +23,12 @@ describe("buildScanTroubleEmail", () => {
     expect(email.html).toContain("boAt");
     expect(email.html).toContain("We'll try again at the next scheduled check");
     expect(email.html).not.toContain("Retries are already running automatically");
+    expect(email.preheader).toBe(
+      "We'll try again at the next scheduled check — open watchlists for status.",
+    );
+    expect(email.preheader).not.toContain("Retries are already running automatically");
+    expect(email.text).toContain("We'll try again at the next scheduled check.");
+    expect(email.text).not.toContain("Retries are already running automatically");
     expect(email.html).toContain("/app/watchlists");
     expect(email.text).toContain("Open watchlists: https://0509.io/app/watchlists");
   });

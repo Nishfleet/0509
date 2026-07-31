@@ -2523,10 +2523,18 @@ describe("watchlists route rendering", () => {
   });
 
   it("keeps the selected overview honest when recent capture totals are unavailable", async () => {
+    const failedRuns = Array.from({ length: 3 }, (_, index) => ({
+      ...recentRuns[0],
+      id: `failed-run-${index + 1}`,
+      status: "failed" as const,
+      errorCode: "provider_unavailable",
+      errorMessage: "Provider unavailable.",
+    }));
     const markup = await renderWatchlistsRoute({
       ...selectedPanelLoaderData,
       plan: "agency",
       captureWindowDegraded: true,
+      runs: failedRuns,
     });
 
     expect(markup).toContain("Nykaa watch");
@@ -2544,6 +2552,7 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain("Export JSON");
     expect(markup).toContain("Delivery");
     expect(markup).toContain("Setup");
+    expect(markup).toContain("the last 3 checks failed");
   });
 
   it("keeps setup, its explainers and the source-access route behind the Setup tab", async () => {

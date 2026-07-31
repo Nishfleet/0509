@@ -94,6 +94,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
             watchlists,
             collections,
             revalidation.notes,
+            revalidation.unavailable,
           ),
         },
         approvalUnavailable: revalidation.unavailable,
@@ -1032,6 +1033,7 @@ function filterCurrentRoomResourceRefs(
   watchlists: Array<{ id: string; isActive?: boolean; updatedAt?: string }>,
   collections: Array<{ id: string; updatedAt?: string }>,
   notes: Record<string, unknown>,
+  approvalUnavailable = false,
 ) {
   const activeWatchlists = new Set(
     watchlists.filter((watchlist) => watchlist.isActive !== false).map((watchlist) => watchlist.id),
@@ -1050,7 +1052,12 @@ function filterCurrentRoomResourceRefs(
         ? watchlists.find((watchlist) => watchlist.id === parsed.resourceId)
         : collections.find((collection) => collection.id === parsed.resourceId);
       const approval = approvals[ref.resourceId];
-      if (source?.updatedAt && approval && Date.parse(source.updatedAt) > Date.parse(approval.reviewedAt)) {
+      if (
+        !approvalUnavailable &&
+        source?.updatedAt &&
+        approval &&
+        Date.parse(source.updatedAt) > Date.parse(approval.reviewedAt)
+      ) {
         return false;
       }
       return parsed.resourceType === "watchlist"
