@@ -49,7 +49,7 @@ jobs:
           D1_REMOTE_RESTORE_EVIDENCE_MIN_VALIDITY_MS: "43200000"
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
-          RESTORE_EVIDENCE_ARCHIVE: /run/lock/0509/d1-remote-restore-evidence-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.tar.gz
+          RESTORE_EVIDENCE_HANDOFF_ROOT: ${{ runner.temp }}
         run: |
           ./scripts/deploy-window-lock.sh run -- bash -euo pipefail <<'VERIFY_LANE'
           set -euo pipefail
@@ -189,26 +189,92 @@ jobs:
 
           verify_evidence
           test "$(stat -c '%a' "$evidence")" = "600"
-          archive="$RESTORE_EVIDENCE_ARCHIVE"
+          prefix="$RESTORE_EVIDENCE_HANDOFF_ROOT/d1-remote-restore-handoff-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}-"
+          handoff_dir="$(mktemp -d "${prefix}XXXXXXXXXXXX")"
+          chmod 700 "$handoff_dir"
+          test ! -L "$handoff_dir"
+          test -d "$handoff_dir"
+          test "$(stat -c '%u:%a:%F' -- "$handoff_dir")" = "$(id -u):700:directory"
+          printf 'RESTORE_EVIDENCE_HANDOFF_DIR=%s\n' "$handoff_dir" >> "$GITHUB_ENV"
+          archive="$handoff_dir/d1-remote-restore-evidence-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}.tar.gz"
           evidence_dir="${evidence%/*}"
           evidence_name="${evidence##*/}"
+          test ! -e "$archive"
           tar --format=posix -czf "$archive" \
             -C "$evidence_dir" \
             "$evidence_name"
           chmod 600 "$archive"
           VERIFY_LANE
+      - name: Stage verified restore evidence for upload
+        shell: bash
+        env:
+          RESTORE_EVIDENCE_HANDOFF_ROOT: ${{ runner.temp }}
+          RESTORE_EVIDENCE_UPLOAD: ${{ github.workspace }}/test-results/d1-remote-restore-evidence-upload-${{ github.sha }}-${{ github.run_id }}.tar.gz
+        run: |
+          set -euo pipefail
+          umask 077
+          expected_prefix="$RESTORE_EVIDENCE_HANDOFF_ROOT/d1-remote-restore-handoff-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}-"
+          case "$RESTORE_EVIDENCE_HANDOFF_DIR" in
+            "$expected_prefix"????????????) ;;
+            *)
+              printf 'Refusing an unexpected restore-evidence handoff path.\n' >&2
+              exit 1
+              ;;
+          esac
+          source="$RESTORE_EVIDENCE_HANDOFF_DIR/d1-remote-restore-evidence-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}.tar.gz"
+          test ! -L "$RESTORE_EVIDENCE_HANDOFF_DIR"
+          test -d "$RESTORE_EVIDENCE_HANDOFF_DIR"
+          test "$(stat -c '%u:%a:%F' -- "$RESTORE_EVIDENCE_HANDOFF_DIR")" = "$(id -u):700:directory"
+          test ! -L "$source"
+          test -f "$source"
+          test "$(stat -c '%u:%a:%h:%F' -- "$source")" = "$(id -u):600:1:regular file"
+          test "$(tar -tzf "$source")" = "d1-remote-restore-evidence.json"
+          [[ "$(tar -tvzf "$source")" = -* ]]
+          source_sha256="$(sha256sum "$source" | awk '{print $1}')"
+          mkdir -p -- "$GITHUB_WORKSPACE/test-results"
+          test ! -e "$RESTORE_EVIDENCE_UPLOAD"
+          install -m 600 "$source" "$RESTORE_EVIDENCE_UPLOAD"
+          test ! -L "$RESTORE_EVIDENCE_UPLOAD"
+          test -f "$RESTORE_EVIDENCE_UPLOAD"
+          test "$(stat -c '%u:%a:%h:%F' -- "$RESTORE_EVIDENCE_UPLOAD")" = "$(id -u):600:1:regular file"
+          test "$(sha256sum "$RESTORE_EVIDENCE_UPLOAD" | awk '{print $1}')" = "$source_sha256"
+          cmp -s "$source" "$RESTORE_EVIDENCE_UPLOAD"
+          rm -f -- "$source"
+          rmdir -- "$RESTORE_EVIDENCE_HANDOFF_DIR"
       - name: Preserve private restore evidence for this deploy only
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}
-          path: /run/lock/0509/d1-remote-restore-evidence-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.tar.gz
+          path: ${{ github.workspace }}/test-results/d1-remote-restore-evidence-upload-${{ github.sha }}-${{ github.run_id }}.tar.gz
           if-no-files-found: error
           overwrite: true
           retention-days: 8
       - name: Remove local restore evidence archive
         if: always()
         shell: bash
-        run: rm -f -- "/run/lock/0509/d1-remote-restore-evidence-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}.tar.gz"
+        env:
+          RESTORE_EVIDENCE_HANDOFF_ROOT: ${{ runner.temp }}
+          RESTORE_EVIDENCE_UPLOAD: ${{ github.workspace }}/test-results/d1-remote-restore-evidence-upload-${{ github.sha }}-${{ github.run_id }}.tar.gz
+        run: |
+          set -euo pipefail
+          if [ -n "${RESTORE_EVIDENCE_HANDOFF_DIR:-}" ]; then
+            expected_prefix="$RESTORE_EVIDENCE_HANDOFF_ROOT/d1-remote-restore-handoff-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}-"
+            case "$RESTORE_EVIDENCE_HANDOFF_DIR" in
+              "$expected_prefix"????????????) ;;
+              *)
+                printf 'Refusing to clean an unexpected restore-evidence handoff path.\n' >&2
+                exit 1
+                ;;
+            esac
+            if [ -e "$RESTORE_EVIDENCE_HANDOFF_DIR" ] || [ -L "$RESTORE_EVIDENCE_HANDOFF_DIR" ]; then
+              test ! -L "$RESTORE_EVIDENCE_HANDOFF_DIR"
+              test -d "$RESTORE_EVIDENCE_HANDOFF_DIR"
+              test "$(stat -c '%u:%a:%F' -- "$RESTORE_EVIDENCE_HANDOFF_DIR")" = "$(id -u):700:directory"
+              find -P "$RESTORE_EVIDENCE_HANDOFF_DIR" -xdev -mindepth 1 -delete
+              rmdir -- "$RESTORE_EVIDENCE_HANDOFF_DIR"
+            fi
+          fi
+          rm -f -- "$RESTORE_EVIDENCE_UPLOAD"
 
   deploy:
     name: Deploy Worker
