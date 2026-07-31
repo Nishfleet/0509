@@ -191,7 +191,6 @@ jobs:
           test "$(stat -c '%a' "$evidence")" = "600"
           prefix="$RESTORE_EVIDENCE_HANDOFF_ROOT/d1-remote-restore-handoff-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}-"
           handoff_dir="$(mktemp -d "${prefix}XXXXXXXXXXXX")"
-          printf 'RESTORE_EVIDENCE_HANDOFF_DIR=%s\n' "$handoff_dir" >> "$GITHUB_ENV"
           chmod 700 "$handoff_dir"
           test ! -L "$handoff_dir"
           test -d "$handoff_dir"
@@ -209,12 +208,20 @@ jobs:
         shell: bash
         env:
           RESTORE_EVIDENCE_HANDOFF_ROOT: ${{ runner.temp }}
-          RESTORE_EVIDENCE_UPLOAD: ${{ github.workspace }}/test-results/d1-remote-restore-evidence-upload-${{ github.sha }}-${{ github.run_id }}.tar.gz
+          RESTORE_EVIDENCE_UPLOAD: ${{ github.workspace }}/test-results/d1-remote-restore-evidence-upload-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}.tar.gz
         run: |
           set -euo pipefail
           umask 077
           expected_prefix="$RESTORE_EVIDENCE_HANDOFF_ROOT/d1-remote-restore-handoff-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}-"
-          case "${RESTORE_EVIDENCE_HANDOFF_DIR:-}" in
+          shopt -s nullglob
+          handoff_dirs=("$expected_prefix"????????????)
+          if [ "${#handoff_dirs[@]}" -ne 1 ]; then
+            printf 'Expected exactly one restore-evidence handoff; found %s.\n' \
+              "${#handoff_dirs[@]}" >&2
+            exit 1
+          fi
+          RESTORE_EVIDENCE_HANDOFF_DIR="${handoff_dirs[0]}"
+          case "$RESTORE_EVIDENCE_HANDOFF_DIR" in
             "$expected_prefix"????????????) ;;
             *)
               printf 'Refusing an unexpected restore-evidence handoff path.\n' >&2
@@ -245,7 +252,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}
-          path: ${{ github.workspace }}/test-results/d1-remote-restore-evidence-upload-${{ github.sha }}-${{ github.run_id }}.tar.gz
+          path: ${{ github.workspace }}/test-results/d1-remote-restore-evidence-upload-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}.tar.gz
           if-no-files-found: error
           overwrite: true
           retention-days: 8
@@ -254,27 +261,43 @@ jobs:
         shell: bash
         env:
           RESTORE_EVIDENCE_HANDOFF_ROOT: ${{ runner.temp }}
-          RESTORE_EVIDENCE_UPLOAD: ${{ github.workspace }}/test-results/d1-remote-restore-evidence-upload-${{ github.sha }}-${{ github.run_id }}.tar.gz
+          RESTORE_EVIDENCE_UPLOAD: ${{ github.workspace }}/test-results/d1-remote-restore-evidence-upload-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}.tar.gz
         run: |
           set -euo pipefail
-          if [ -n "${RESTORE_EVIDENCE_HANDOFF_DIR:-}" ]; then
-            expected_prefix="$RESTORE_EVIDENCE_HANDOFF_ROOT/d1-remote-restore-handoff-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}-"
+          cleanup_failed=0
+          if ! rm -f -- "$RESTORE_EVIDENCE_UPLOAD"; then
+            cleanup_failed=1
+          fi
+          expected_prefix="$RESTORE_EVIDENCE_HANDOFF_ROOT/d1-remote-restore-handoff-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}-"
+          shopt -s nullglob
+          handoff_dirs=("$expected_prefix"????????????)
+          for RESTORE_EVIDENCE_HANDOFF_DIR in "${handoff_dirs[@]}"; do
             case "$RESTORE_EVIDENCE_HANDOFF_DIR" in
               "$expected_prefix"????????????) ;;
               *)
                 printf 'Refusing to clean an unexpected restore-evidence handoff path.\n' >&2
-                exit 1
+                cleanup_failed=1
+                continue
                 ;;
             esac
             if [ -e "$RESTORE_EVIDENCE_HANDOFF_DIR" ] || [ -L "$RESTORE_EVIDENCE_HANDOFF_DIR" ]; then
-              test ! -L "$RESTORE_EVIDENCE_HANDOFF_DIR"
-              test -d "$RESTORE_EVIDENCE_HANDOFF_DIR"
-              test "$(stat -c '%u:%a:%F' -- "$RESTORE_EVIDENCE_HANDOFF_DIR")" = "$(id -u):700:directory"
-              find -P "$RESTORE_EVIDENCE_HANDOFF_DIR" -xdev -mindepth 1 -delete
-              rmdir -- "$RESTORE_EVIDENCE_HANDOFF_DIR"
+              if [ -L "$RESTORE_EVIDENCE_HANDOFF_DIR" ] ||
+                [ ! -d "$RESTORE_EVIDENCE_HANDOFF_DIR" ] ||
+                [ "$(stat -c '%u:%a:%F' -- "$RESTORE_EVIDENCE_HANDOFF_DIR")" != "$(id -u):700:directory" ]; then
+                printf 'Refusing to clean an unsafe restore-evidence handoff entry.\n' >&2
+                cleanup_failed=1
+                continue
+              fi
+              if ! find -P "$RESTORE_EVIDENCE_HANDOFF_DIR" -xdev -mindepth 1 -delete; then
+                cleanup_failed=1
+                continue
+              fi
+              if ! rmdir -- "$RESTORE_EVIDENCE_HANDOFF_DIR"; then
+                cleanup_failed=1
+              fi
             fi
-          fi
-          rm -f -- "$RESTORE_EVIDENCE_UPLOAD"
+          done
+          exit "$cleanup_failed"
 
   deploy:
     name: Deploy Worker

@@ -1315,9 +1315,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       RESTORE_EVIDENCE_HANDOFF_ROOT: "${{ runner.temp }}",
     });
     expect(verify.run).toContain('mktemp -d "${prefix}XXXXXXXXXXXX"');
-    expect(verify.run).toContain(
-      "printf 'RESTORE_EVIDENCE_HANDOFF_DIR=%s\\n' \"$handoff_dir\" >> \"$GITHUB_ENV\"",
-    );
+    expect(verify.run).not.toContain("GITHUB_ENV");
     expect(verify.run).toContain('chmod 700 "$handoff_dir"');
     expect(verify.run).toContain('"$(id -u):700:directory"');
     expect(verify.run).toContain(
@@ -1327,8 +1325,14 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(stage.env).toEqual({
       RESTORE_EVIDENCE_HANDOFF_ROOT: "${{ runner.temp }}",
       RESTORE_EVIDENCE_UPLOAD:
-        "${{ github.workspace }}/test-results/d1-remote-restore-evidence-upload-${{ github.sha }}-${{ github.run_id }}.tar.gz",
+        "${{ github.workspace }}/test-results/d1-remote-restore-evidence-upload-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}.tar.gz",
     });
+    expect(stage.run).toContain(
+      'handoff_dirs=("$expected_prefix"????????????)',
+    );
+    expect(stage.run).toContain(
+      'if [ "${#handoff_dirs[@]}" -ne 1 ]; then',
+    );
     expect(upload.with).toMatchObject({
       path: stage.env.RESTORE_EVIDENCE_UPLOAD,
       "if-no-files-found": "error",
@@ -1345,6 +1349,9 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     });
     expect(cleanup.run).toContain('"$expected_prefix"????????????');
     expect(cleanup.run).toContain(
+      'for RESTORE_EVIDENCE_HANDOFF_DIR in "${handoff_dirs[@]}"; do',
+    );
+    expect(cleanup.run).toContain(
       'find -P "$RESTORE_EVIDENCE_HANDOFF_DIR" -xdev -mindepth 1 -delete',
     );
     expect(cleanup.run).toContain('rmdir -- "$RESTORE_EVIDENCE_HANDOFF_DIR"');
@@ -1357,6 +1364,9 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
         | "wrong-owner"
         | "wrong-mode"
         | "hardlink"
+        | "ambiguous"
+        | "missing"
+        | "previous-attempt"
         | "wrong-content"
         | "byte-mismatch"
         | "stale-upload",
@@ -1367,7 +1377,9 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       const handoffRoot = join(root, "handoffs");
       const handoffDir = join(
         handoffRoot,
-        "d1-remote-restore-handoff-30574154496-1-prepare_remote_restore_evidence-abcdefghijkl",
+        mode === "previous-attempt"
+          ? "d1-remote-restore-handoff-30574154496-0-prepare_remote_restore_evidence-abcdefghijkl"
+          : "d1-remote-restore-handoff-30574154496-1-prepare_remote_restore_evidence-abcdefghijkl",
       );
       const payload = join(root, "payload");
       const source = join(
@@ -1377,7 +1389,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       const staged = join(workspace, "test-results", "restore-evidence-upload.tar.gz");
       const bin = join(root, "bin");
       mkdirSync(workspace, { recursive: true });
-      mkdirSync(handoffDir, { recursive: true, mode: 0o700 });
+      mkdirSync(handoffRoot, { recursive: true });
       mkdirSync(payload, { recursive: true });
       mkdirSync(bin, { recursive: true });
       const member =
@@ -1386,15 +1398,27 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
           : "d1-remote-restore-evidence.json";
       writeFileSync(join(payload, member), '{"verified":true}\n');
       const archive = mode === "symlink" ? `${source}.target` : source;
-      const tar = spawnSync(
-        "tar",
-        ["-czf", archive, "-C", payload, member],
-        { encoding: "utf8" },
-      );
-      expect(tar.status, tar.stderr).toBe(0);
-      chmodSync(archive, mode === "wrong-mode" ? 0o644 : 0o600);
-      if (mode === "symlink") symlinkSync(archive, source);
-      if (mode === "hardlink") linkSync(source, `${source}.hardlink`);
+      if (mode !== "missing") {
+        mkdirSync(handoffDir, { recursive: true, mode: 0o700 });
+        const tar = spawnSync(
+          "tar",
+          ["-czf", archive, "-C", payload, member],
+          { encoding: "utf8" },
+        );
+        expect(tar.status, tar.stderr).toBe(0);
+        chmodSync(archive, mode === "wrong-mode" ? 0o644 : 0o600);
+        if (mode === "symlink") symlinkSync(archive, source);
+        if (mode === "hardlink") linkSync(source, `${source}.hardlink`);
+      }
+      if (mode === "ambiguous") {
+        mkdirSync(
+          join(
+            handoffRoot,
+            "d1-remote-restore-handoff-30574154496-1-prepare_remote_restore_evidence-mnopqrstuvwx",
+          ),
+          { mode: 0o700 },
+        );
+      }
       if (mode === "stale-upload") {
         mkdirSync(join(workspace, "test-results"), { recursive: true });
         writeFileSync(staged, "stale");
@@ -1461,7 +1485,6 @@ fi
           GITHUB_RUN_ATTEMPT: "1",
           GITHUB_RUN_ID: "30574154496",
           GITHUB_WORKSPACE: workspace,
-          RESTORE_EVIDENCE_HANDOFF_DIR: handoffDir,
           RESTORE_EVIDENCE_HANDOFF_ROOT: handoffRoot,
           RESTORE_EVIDENCE_UPLOAD: staged,
         },
@@ -1482,6 +1505,9 @@ fi
       "wrong-owner",
       "wrong-mode",
       "hardlink",
+      "ambiguous",
+      "missing",
+      "previous-attempt",
       "wrong-content",
       "byte-mismatch",
       "stale-upload",
@@ -1497,7 +1523,10 @@ fi
       }
     }
 
-    const runCleanup = (abandoned: ReturnType<typeof runStage>) => {
+    const runCleanup = (
+      abandoned: ReturnType<typeof runStage>,
+      expectedStatus = 0,
+    ) => {
       mkdirSync(join(abandoned.staged, ".."), { recursive: true });
       writeFileSync(abandoned.staged, "staged");
       const result = spawnSync(
@@ -1510,16 +1539,16 @@ fi
             GITHUB_JOB: "prepare_remote_restore_evidence",
             GITHUB_RUN_ATTEMPT: "1",
             GITHUB_RUN_ID: "30574154496",
-            RESTORE_EVIDENCE_HANDOFF_DIR: abandoned.handoffDir,
             RESTORE_EVIDENCE_HANDOFF_ROOT: abandoned.handoffRoot,
             RESTORE_EVIDENCE_UPLOAD: abandoned.staged,
           },
           encoding: "utf8",
         },
       );
-      expect(result.status, result.stderr).toBe(0);
+      expect(result.status, result.stderr).toBe(expectedStatus);
       expect(existsSync(abandoned.handoffDir)).toBe(false);
       expect(existsSync(abandoned.staged)).toBe(false);
+      return result;
     };
 
     const hardlinked = runStage("hardlink");
@@ -1531,6 +1560,28 @@ fi
     mkdirSync(nested, { recursive: true });
     writeFileSync(join(nested, "residue"), "private");
     runCleanup(unexpected);
+
+    const multiple = runStage("ambiguous");
+    runCleanup(multiple);
+    expect(
+      existsSync(
+        join(
+          multiple.handoffRoot,
+          "d1-remote-restore-handoff-30574154496-1-prepare_remote_restore_evidence-mnopqrstuvwx",
+        ),
+      ),
+    ).toBe(false);
+
+    const mixed = runStage("hardlink");
+    const unsafeTarget = join(mixed.handoffRoot, "..", "unsafe-target");
+    const unsafeEntry = join(
+      mixed.handoffRoot,
+      "d1-remote-restore-handoff-30574154496-1-prepare_remote_restore_evidence-zzzzzzzzzzzz",
+    );
+    mkdirSync(unsafeTarget, { mode: 0o700 });
+    symlinkSync(unsafeTarget, unsafeEntry);
+    runCleanup(mixed, 1);
+    expect(lstatSync(unsafeEntry).isSymbolicLink()).toBe(true);
 
     const foreign = runStage("wrong-mode");
     const foreignDir = join(foreign.handoffRoot, "unrelated-directory");
@@ -1547,14 +1598,13 @@ fi
           GITHUB_JOB: "prepare_remote_restore_evidence",
           GITHUB_RUN_ATTEMPT: "1",
           GITHUB_RUN_ID: "30574154496",
-          RESTORE_EVIDENCE_HANDOFF_DIR: foreignDir,
           RESTORE_EVIDENCE_HANDOFF_ROOT: foreign.handoffRoot,
           RESTORE_EVIDENCE_UPLOAD: foreign.staged,
         },
         encoding: "utf8",
       },
     );
-    expect(refused.status, refused.stderr).toBe(1);
+    expect(refused.status, refused.stderr).toBe(0);
     expect(existsSync(foreignResidue)).toBe(true);
   }, 30_000);
 
