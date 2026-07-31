@@ -275,11 +275,24 @@ describe("D1 remote restore evidence automation", () => {
     expect(prepareScript).toContain(
       "node scripts/find-recent-remote-restore-artifact.mjs",
     );
-    expect(prepareScript).toContain('gh run download "$run_id"');
     expect(prepareScript).toContain(
-      '[[ "$(tar -tvzf "${archives[0]}")" = -* ]]',
+      "curl --disable --config -",
     );
-    expect(prepareScript).toContain('tar -xOzf "${archives[0]}"');
+    expect(prepareScript).toContain(
+      'curl --disable --config "$download_config"',
+    );
+    expect(prepareScript).toContain("--proto '=https'");
+    expect(prepareScript).toContain(
+      '--max-filesize "$max_artifact_size"',
+    );
+    expect(prepareScript).toContain('unzip -Z1 "$download"');
+    expect(prepareScript).not.toContain("gh run download");
+    expect(prepareScript).toContain('test ! -L "$archive"');
+    expect(prepareScript).toContain('"$(id -u):600:1:regular file"');
+    expect(prepareScript).toContain(
+      '[[ "$(tar -tvf "$bounded_tar")" = -* ]]',
+    );
+    expect(prepareScript).toContain('tar -xOf "$bounded_tar"');
     expect(prepareScript).toContain(
       "Recent private restore evidence is valid for this deploy.",
     );
@@ -352,6 +365,7 @@ describe("D1 remote restore evidence automation", () => {
       id: 1,
       name,
       expired: false,
+      size_in_bytes: 1024,
       workflow_run: {
         id: runId,
         head_branch: "main",
@@ -365,7 +379,21 @@ describe("D1 remote restore evidence automation", () => {
         runs: [trustedRun],
         artifactsByRun: { [runId]: [artifact] },
       }),
-    ).toEqual({ runId, name });
+    ).toEqual({
+      artifactId: 1,
+      runId,
+      name,
+      sizeInBytes: 1024,
+    });
+    expect(() =>
+      selectRecentRemoteRestoreArtifact({
+        currentRunId: 30423695500,
+        runs: [trustedRun],
+        artifactsByRun: {
+          [runId]: [{ ...artifact, size_in_bytes: 10 * 1024 * 1024 + 1 }],
+        },
+      }),
+    ).toThrow("remote_restore_artifact_size_invalid");
     expect(
       selectRecentRemoteRestoreArtifact({
         currentRunId: 30423695500,
