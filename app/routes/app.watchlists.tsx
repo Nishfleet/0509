@@ -13,6 +13,7 @@ import { CopyButton } from "~/components/copy-button";
 import { DashboardPage } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { LocalTime } from "~/components/local-time";
+import { PartialDataNotice } from "~/components/partial-data-notice";
 import { useQuickAdd } from "~/components/quick-add-context";
 import { TertiaryAction } from "~/components/evidence/cta";
 import { BulkSelectBar } from "~/components/watchlists/bulk-select-bar";
@@ -240,18 +241,35 @@ export default function WatchlistsRoute() {
     totalCapturedChanges: 0,
     failedChecks: {},
   };
-  const rows = useMemo(
-    () =>
-      toCompetitorRows({
+  const rows = useMemo(() => {
+    const resolved = toCompetitorRows({
         watchlists: data.watchlists,
         capturedChanges: captureWindow.capturedChanges,
         failedChecks: captureWindow.failedChecks,
         windowDays: captureWindow.windowDays,
-      }),
-    [data.watchlists, captureWindow.capturedChanges, captureWindow.failedChecks, captureWindow.windowDays],
-  );
+      });
+    if (!data.captureWindowDegraded) return resolved;
+    return resolved.map((row) =>
+      row.isActive
+        ? {
+            ...row,
+            statusLabel: "Recent totals unavailable",
+            statusTone: "quiet" as const,
+            line: "Recent change and failed-check totals are unavailable. Refresh to try again.",
+          }
+        : row,
+    );
+  }, [
+    data.watchlists,
+    data.captureWindowDegraded,
+    captureWindow.capturedChanges,
+    captureWindow.failedChecks,
+    captureWindow.windowDays,
+  ]);
   const filterCounts = countCompetitorStates(rows);
-  const visibleRows = filterCompetitorRows(rows, activeFilter);
+  const visibleRows = data.captureWindowDegraded
+    ? rows
+    : filterCompetitorRows(rows, activeFilter);
   const hasCompetitors = rows.length > 0;
   const nextScanLabel = formatNextScanLabel(
     data.plan,
@@ -347,11 +365,19 @@ export default function WatchlistsRoute() {
               }
             : { label: "Add competitor", to: "/search" }
         }
-        context={formatCompetitorContextLine({ rows, windowDays: captureWindow.windowDays })}
+        context={
+          data.captureWindowDegraded && rows.length > 0
+            ? `${rows.length} ${rows.length === 1 ? "competitor" : "competitors"}. Recent totals are unavailable.`
+            : formatCompetitorContextLine({ rows, windowDays: captureWindow.windowDays })
+        }
         title="Competitors"
       />
 
-      {hasCompetitors ? (
+      {data.captureWindowDegraded && hasCompetitors ? (
+        <PartialDataNotice message="Recent change and failed-check totals could not be loaded. Aggregate counts are unavailable; saved evidence and management controls remain available." />
+      ) : null}
+
+      {hasCompetitors && !data.captureWindowDegraded ? (
         <div className="f9-wk-tabs" role="navigation" aria-label="Filter competitors by state">
           {COMPETITOR_FILTERS.map((filter) => (
             <Link
@@ -501,13 +527,17 @@ export default function WatchlistsRoute() {
                         ),
                       },
                       { key: "Next check", value: nextScanLabel },
-                      {
-                        key: `Changes in ${captureWindow.windowDays} days`,
-                        value: selectedCapturedChanges,
-                      },
-                      ...(selectedFailedChecks > 0
-                        ? [{ key: "Failed checks", value: selectedFailedChecks }]
-                        : []),
+                      ...(data.captureWindowDegraded
+                        ? [{ key: "Recent totals", value: "Unavailable — refresh to try again" }]
+                        : [
+                            {
+                              key: `Changes in ${captureWindow.windowDays} days`,
+                              value: selectedCapturedChanges,
+                            },
+                            ...(selectedFailedChecks > 0
+                              ? [{ key: "Failed checks", value: selectedFailedChecks }]
+                              : []),
+                          ]),
                       {
                         key: "Watching since",
                         value: <LocalTime iso={selectedWatchlist.createdAt} mode="date" />,
@@ -543,7 +573,15 @@ export default function WatchlistsRoute() {
       )}
 
       {selectedWatchlist ? (
-        <div className="f9-wk-record">
+        <div
+          className={`f9-wk-record${data.captureWindowDegraded ? " is-capture-window-degraded" : ""}`}
+        >
+          {data.captureWindowDegraded ? (
+            <p className="f9-wk-aggregate-unavailable" role="status">
+              Recent aggregate totals are unavailable. Saved check history and management controls
+              below are still available.
+            </p>
+          ) : null}
           <CompetitorDetail
             activeTab={activeTab}
             canConfigureDelivery={canConfigureDelivery}
@@ -553,14 +591,14 @@ export default function WatchlistsRoute() {
             canInstantAlert={canInstantAlert}
             canRefresh={canRefresh}
             canShare={canShare}
-            capturedChanges={selectedCapturedChanges}
+            capturedChanges={data.captureWindowDegraded ? 0 : selectedCapturedChanges}
             data={{ ...data, selectedWatchlist }}
             discoveryRecovery={discoveryStatus.recovery ?? null}
             // The board counts hard failures since the last success in SQL; the
             // detail now counts them the same way over the loaded runs, and
             // prefers the board's rollup so one competitor never reports two
             // different failure counts on one page.
-            failedChecks={selectedFailedChecks}
+            failedChecks={data.captureWindowDegraded ? 0 : selectedFailedChecks}
             lockedToolbarUpgradeLabel={lockedToolbarUpgradeLabel}
             nextScanLabel={nextScanLabel}
             renderedAt={renderedAt}
