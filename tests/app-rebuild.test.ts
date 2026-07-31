@@ -135,7 +135,7 @@ describe("app rebuild", () => {
     expect(collectionsRoute).toContain("Save evidence link");
     expect(collectionsRoute).toContain("Google / YouTube");
     expect(collectionsRoute).toContain("LinkedIn");
-    expect(clientsRoute).toContain("Report preferences and notes");
+    expect(clientsRoute).toContain("Client rooms");
     expect(clientsRoute).toContain("upsert-agent-memory");
     expect(digestsRoute).toContain("formatDeliveryChannelLabel");
     expect(digestsRoute).toContain('channel === "slack"');
