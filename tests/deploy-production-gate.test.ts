@@ -1461,11 +1461,13 @@ esac
 
       const toolRoot = join(root, "tool-root");
       mkdirSync(toolRoot, { recursive: true });
-      const result = spawnSync(prepareScript, [], {
+      // PATH is private-bin only so a host `gh` cannot satisfy resolve_gh_bin.
+      // Invoke via absolute bash; the script shebang would otherwise need env.
+      const result = spawnSync("/bin/bash", [prepareScript], {
         cwd: process.cwd(),
         env: {
           ...process.env,
-          PATH: `${bin}:/bin:/usr/bin`,
+          PATH: bin,
           // Isolate from the live /opt/0509-runner/bin/gh install.
           DEPLOY_WINDOW_TOOL_ROOT: toolRoot,
           FAKE_CALLS: callsPath,
@@ -1647,11 +1649,11 @@ esac
         chmodSync(join(bin, name), 0o755);
       }
       chmodSync(join(toolRoot, "gh"), 0o755);
-      return spawnSync(prepareScript, [], {
+      return spawnSync("/bin/bash", [prepareScript], {
         cwd: process.cwd(),
         env: {
           ...process.env,
-          PATH: `${bin}:/bin:/usr/bin`,
+          PATH: bin,
           DEPLOY_WINDOW_TOOL_ROOT: toolRoot,
           FAKE_CALLS: callsPath,
           FAKE_ARTIFACT_MARKER: artifactMarker,
