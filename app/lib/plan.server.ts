@@ -11,6 +11,7 @@ import {
 import { effectivePlanFromRow, type EffectivePlanRow } from "~/lib/plan-effective.server";
 import {
   getEvidenceUsageSummary,
+  isEvidenceTopUpReadError,
   listTopUpGrantHistory,
 } from "~/lib/evidence-usage.server";
 
@@ -173,7 +174,10 @@ export async function getProofUsageSummary(env: AppEnv, userId: string) {
       totalAvailable: summary.totalAvailable,
       nextPeriodStart: summary.nextPeriodStart,
     };
-  } catch {
+  } catch (error) {
+    if (isEvidenceTopUpReadError(error)) {
+      throw error;
+    }
     return getProofUsageSummaryLegacy(env, userId);
   }
 }
@@ -256,21 +260,17 @@ async function sumLegacyProofUsageCredits(env: AppEnv, userId: string, now: stri
     );
     return Number(row?.count ?? 0);
   } catch {
-    try {
-      const row = await one<CountRow>(
-        env,
-        `
-          SELECT COALESCE(SUM(quantity_remaining), 0) AS count
-          FROM evidence_top_up_grant
-          WHERE workspace_user_id = ?
-            AND status = 'active'
-        `,
-        userId,
-      );
-      return Number(row?.count ?? 0);
-    } catch {
-      return 0;
-    }
+    const row = await one<CountRow>(
+      env,
+      `
+        SELECT COALESCE(SUM(quantity_remaining), 0) AS count
+        FROM evidence_top_up_grant
+        WHERE workspace_user_id = ?
+          AND status = 'active'
+      `,
+      userId,
+    );
+    return Number(row?.count ?? 0);
   }
 }
 

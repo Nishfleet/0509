@@ -8,7 +8,9 @@ function createMockDb(options: {
     dodo_next_billing_at?: string | null;
   } | null;
   proofCreditCount?: number;
+  proofCreditReadError?: Error;
   proofUsageCount?: number;
+  topUpGrantReadError?: Error;
   watchlistCount?: number;
 }) {
   const statements: Array<{ sql: string; bindings: unknown[] }> = [];
@@ -30,9 +32,22 @@ function createMockDb(options: {
                 }
 
                 if (sql.includes("FROM proof_usage_credit")) {
+                  if (
+                    options.proofCreditReadError &&
+                    !sql.includes("LEFT JOIN proof_usage_credit_migration")
+                  ) {
+                    throw options.proofCreditReadError;
+                  }
                   return {
                     results: [{ count: options.proofCreditCount ?? 0 }] as T[],
                   };
+                }
+
+                if (sql.includes("FROM evidence_top_up_grant")) {
+                  if (options.topUpGrantReadError) {
+                    throw options.topUpGrantReadError;
+                  }
+                  return { results: [{ count: 0 }] as T[] };
                 }
 
                 if (sql.includes("FROM proof_capture")) {
@@ -274,5 +289,20 @@ describe("getProofUsageSummary", () => {
       warningLevel: "ok",
       upgradeTarget: "Agency",
     });
+  });
+
+  it("does not turn failures in both legacy credit stores into zero entitlement", async () => {
+    const topUpGrantReadError = new Error("D1 legacy top-up store failed");
+    const mock = createMockDb({
+      planRow: { plan: "starter" },
+      proofCreditReadError: new Error("D1 legacy credit store failed"),
+      proofUsageCount: 250,
+      topUpGrantReadError,
+    });
+    const { getProofUsageSummary } = await import("~/lib/plan.server");
+
+    await expect(
+      getProofUsageSummary({ DB: mock.db } as never, "user-1"),
+    ).rejects.toBe(topUpGrantReadError);
   });
 });

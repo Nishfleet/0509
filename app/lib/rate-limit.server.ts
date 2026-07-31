@@ -167,6 +167,7 @@ export async function enforceSearchSelectionRateLimit(
       windowSeconds: 10 * 60,
       failClosed: true,
       keySeed: userId,
+      atomicClaim: true,
     },
     ctx,
   );

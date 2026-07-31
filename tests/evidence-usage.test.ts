@@ -1,12 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  EvidenceTopUpReadError,
   ensureCurrentEvidenceUsagePeriod,
   ensureWorkspaceEntitlementAnchor,
   getEvidenceUsageSummary,
   grantEvidenceTopUp,
   applyTopUpRefundAdjustment,
+  isEvidenceTopUpReadError,
   isEvidenceUsageStorageUnavailableError,
+  listTopUpGrantHistory,
   migrateLegacyTopUpCreditsIfNeeded,
   reconcileStaleEvidenceReservations,
   rebuildTopUpGrantBalance,
@@ -1095,6 +1098,121 @@ describe("evidence usage periods", () => {
       source: "test",
     });
     expect(attempt).toEqual({ ok: false, reason: "top_up_inactive_plan" });
+  });
+
+  it("fails loudly when paid top-up balances cannot be read", async () => {
+    await grantEvidenceTopUp(env, {
+      workspaceUserId: "user-1",
+      skuSlug: "burst_500_v1",
+      providerPaymentId: "pay-read-failure",
+      providerProductId: "prod-burst",
+      quantityGranted: 3,
+    });
+    const originalCause = new Error("simulated D1 balance outage");
+    const realPrepare = env.DB.prepare.bind(env.DB);
+    env.DB.prepare = ((sql: string) => {
+      const statement = realPrepare(sql);
+      if (!sql.includes("ORDER BY granted_at ASC")) {
+        return statement;
+      }
+      return {
+        bind(...bindings: unknown[]) {
+          const bound = statement.bind(...bindings);
+          return {
+            ...bound,
+            async all() {
+              throw originalCause;
+            },
+          };
+        },
+      };
+    }) as typeof env.DB.prepare;
+
+    const error = await getEvidenceUsageSummary(env, "user-1").catch((caught) => caught);
+
+    expect(error).toBeInstanceOf(EvidenceTopUpReadError);
+    expect(isEvidenceTopUpReadError(error)).toBe(true);
+    expect(error).toMatchObject({
+      name: "EvidenceTopUpReadError",
+      message: "D1 top-up balance read failed",
+      cause: originalCause,
+    });
+  });
+
+  it("fails loudly when the legacy paid-credit migration join cannot be read", async () => {
+    const originalCause = new Error("simulated D1 legacy migration outage");
+    const realPrepare = env.DB.prepare.bind(env.DB);
+    env.DB.prepare = ((sql: string) => {
+      const statement = realPrepare(sql);
+      if (!sql.includes("LEFT JOIN proof_usage_credit_migration")) {
+        return statement;
+      }
+      return {
+        bind(...bindings: unknown[]) {
+          const bound = statement.bind(...bindings);
+          return {
+            ...bound,
+            async all() {
+              throw originalCause;
+            },
+          };
+        },
+      };
+    }) as typeof env.DB.prepare;
+
+    const error = await getEvidenceUsageSummary(env, "user-1").catch((caught) => caught);
+
+    expect(error).toBeInstanceOf(EvidenceTopUpReadError);
+    expect(isEvidenceTopUpReadError(error)).toBe(true);
+    expect(error).toMatchObject({
+      name: "EvidenceTopUpReadError",
+      message: "D1 legacy top-up migration read failed",
+      cause: originalCause,
+    });
+  });
+
+  it("keeps the pre-ledger absent-table compatibility path", async () => {
+    env.sqlite.exec(`
+      DROP TABLE proof_usage_credit_migration;
+      DROP TABLE proof_usage_credit;
+    `);
+
+    await expect(getEvidenceUsageSummary(env, "user-1")).resolves.toMatchObject({
+      topUpRemaining: 0,
+      totalAvailable: 250,
+    });
+  });
+
+  it("fails loudly when paid top-up history cannot be read", async () => {
+    const originalCause = new Error("simulated D1 history outage");
+    const realPrepare = env.DB.prepare.bind(env.DB);
+    env.DB.prepare = ((sql: string) => {
+      const statement = realPrepare(sql);
+      if (!sql.includes("ORDER BY granted_at DESC")) {
+        return statement;
+      }
+      return {
+        bind(...bindings: unknown[]) {
+          const bound = statement.bind(...bindings);
+          return {
+            ...bound,
+            async all() {
+              throw originalCause;
+            },
+          };
+        },
+      };
+    }) as typeof env.DB.prepare;
+
+    const error = await listTopUpGrantHistory(env, "user-1").catch((caught) => caught);
+
+    expect(error).toBeInstanceOf(EvidenceTopUpReadError);
+    expect(isEvidenceTopUpReadError(error)).toBe(true);
+    expect(error).toMatchObject({
+      name: "EvidenceTopUpReadError",
+      message: "D1 top-up history read failed",
+      cause: originalCause,
+    });
   });
 
   it("migrates legacy credits once without double counting", async () => {
