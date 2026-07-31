@@ -601,7 +601,10 @@ const MCP_TOOLS = [
           type: "string",
           maxLength: 4000,
         },
-        idempotencyKey: idempotencyKeySchema(),
+        idempotencyKey: {
+          ...idempotencyKeySchema(),
+          maxLength: 120,
+        },
       },
       required: ["category", "subject", "detail", "idempotencyKey"],
       additionalProperties: false,

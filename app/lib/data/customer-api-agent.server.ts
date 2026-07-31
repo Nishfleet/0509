@@ -114,6 +114,7 @@ export interface AtomicCustomerAgentActionResult<T extends JsonRecord = JsonReco
 
 const ATOMIC_ACTION_STARTED_STALE_AFTER_MS = 15 * 60 * 1_000;
 const ATOMIC_ACTION_TERMINALIZE_ATTEMPTS = 3;
+const AGENT_ACTION_RETRY_LEASE_MS = 15 * 60 * 1_000;
 
 type AtomicCustomerAgentActionFailureCode =
   | "atomic_prepare_failed"
@@ -328,6 +329,53 @@ export async function claimAgentActionAudit(
   return existing
     ? { audit: existing, claimed: false }
     : null;
+}
+
+export async function reclaimRetryableAgentActionAudit(
+  env: AppEnv,
+  input: {
+    auditId: string;
+    apiKeyId: string | null;
+  },
+) {
+  const timestamp = nowIso();
+  const staleBefore = new Date(Date.parse(timestamp) - AGENT_ACTION_RETRY_LEASE_MS).toISOString();
+  const result = await run(
+    env,
+    `
+      UPDATE agent_action_audit
+      SET status = 'started',
+          result_json = NULL,
+          error_code = NULL,
+          error_message = NULL,
+          updated_at = ?
+      WHERE id = ?
+        AND (
+          status = 'failed'
+          OR (status = 'started' AND updated_at <= ?)
+        )
+        AND (
+          api_key_id = ?
+          OR (api_key_id IS NULL AND ? IS NULL)
+        )
+    `,
+    timestamp,
+    input.auditId,
+    staleBefore,
+    input.apiKeyId,
+    input.apiKeyId,
+  );
+
+  if (Number(result.meta?.changes ?? 0) !== 1) {
+    return null;
+  }
+
+  const row = await one<AgentActionAuditRow>(
+    env,
+    "SELECT * FROM agent_action_audit WHERE id = ?",
+    input.auditId,
+  );
+  return row ? toAgentActionAuditRecord(row) : null;
 }
 
 export async function finishAgentActionAudit(

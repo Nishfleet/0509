@@ -201,6 +201,7 @@ function setupMocks(authOk = true, actionsWriteEnabled = true) {
       audit,
       claimed: true,
     }),
+    reclaimRetryableAgentActionAudit: vi.fn().mockResolvedValue(null),
     finishAgentActionAudit: vi.fn().mockImplementation((_env, auditId: string, input: Record<string, unknown>) =>
       Promise.resolve({
         ...audit,
@@ -476,6 +477,12 @@ describe("MCP route", () => {
     expect(body.result.tools.find((tool) => tool.name === "list_client_rooms")?.inputSchema.properties).not.toHaveProperty("idempotencyKey");
     expect(body.result.tools.find((tool) => tool.name === "create_support_case")?.inputSchema).toMatchObject({
       required: ["category", "subject", "detail", "idempotencyKey"],
+      properties: {
+        idempotencyKey: {
+          type: "string",
+          maxLength: 120,
+        },
+      },
     });
     expect(body.result.tools.find((tool) => tool.name === "list_support_cases")?.inputSchema.properties).not.toHaveProperty("idempotencyKey");
     body.result.tools.forEach((tool) => {
