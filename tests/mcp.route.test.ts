@@ -481,6 +481,8 @@ describe("MCP route", () => {
         idempotencyKey: {
           type: "string",
           maxLength: 120,
+          description:
+            "Stable key for safe retry. Replays a matching success and retries a matching failed or stale support-case action.",
         },
       },
     });
