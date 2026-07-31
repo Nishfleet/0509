@@ -908,6 +908,68 @@ describe("operator digest email reconciliation", () => {
     });
   });
 
+  it("promotes a surviving confirmed channel when the selected email later fails", async () => {
+    const harness = setup();
+    harness.sqlite.prepare(`
+      UPDATE delivery_attempt
+      SET status = 'sent',
+          error_message = NULL,
+          sent_at = '2026-07-15T18:00:10.000Z',
+          failed_at = NULL
+      WHERE id = 'digest-attempt-1'
+    `).run();
+    harness.sqlite.prepare(`
+      UPDATE digest_delivery
+      SET status = 'sent',
+          error_message = NULL,
+          delivered_at = NULL,
+          updated_at = '2026-07-15T18:00:10.000Z'
+      WHERE digest_run_id = 'digest-1'
+    `).run();
+    harness.sqlite.prepare(`
+      INSERT INTO delivery_attempt (
+        id, user_id, digest_run_id, delivery_target_id, lane, channel, provider,
+        status, webhook_status, target_value, provider_message_id,
+        provider_status_last_seen_at, payload_snapshot_json, idempotency_key,
+        error_message, sent_at, created_at, updated_at
+      ) VALUES (
+        'digest-whatsapp-survivor', 'customer-1', 'digest-1', 'whatsapp-target-1',
+        'customer', 'whatsapp', 'whatsapp_cloud_api', 'sent', 'delivered',
+        '+15550000000', 'whatsapp-message',
+        '2026-07-15T18:00:25.000Z', '{}',
+        'digest:digest-1:customer:whatsapp:+15550000000', NULL,
+        '2026-07-15T18:00:20.000Z',
+        '2026-07-15T18:00:15.000Z', '2026-07-15T18:00:25.000Z'
+      )
+    `).run();
+
+    await expect(
+      reconcileDigestEmailAttemptWithAudit(
+        { DB: harness.db } as never,
+        input({
+          outcome: "failed",
+          classification: "provider_rejection_log",
+          evidenceReference: "digest_provider_reject_12345",
+        }),
+      ),
+    ).resolves.toMatchObject({ ok: true, replayed: false, outcome: "failed" });
+
+    expect(
+      harness.sqlite.prepare(`
+        SELECT provider, status, recipient_email, external_message_id,
+               error_message, delivered_at
+        FROM digest_delivery WHERE digest_run_id = 'digest-1'
+      `).get(),
+    ).toMatchObject({
+      provider: "whatsapp_cloud_api",
+      status: "sent",
+      recipient_email: "+15550000000",
+      external_message_id: "whatsapp-message",
+      error_message: null,
+      delivered_at: "2026-07-15T18:00:25.000Z",
+    });
+  });
+
   it("preserves accepted transport without claiming delivery when only an accepted sibling remains", async () => {
     const harness = setup();
     harness.sqlite.prepare(`
