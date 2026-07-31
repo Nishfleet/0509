@@ -27,6 +27,7 @@ import type {
   AdRecord,
   CollectionItemRecord,
   CollectionRecord,
+  ProofCaptureRecord,
   WatchEventRecord,
   WatchlistRecord,
 } from "~/lib/types";
@@ -97,6 +98,7 @@ export function buildWatchlistReport(input: {
   watchlist: WatchlistRecord;
   events: WatchEventRecord[];
   adsById: Map<string, AdRecord>;
+  proofCapturesByEventId?: Map<string, ProofCaptureRecord>;
 	// Latest stored digest-run AI paragraph proven exclusive to this watchlist.
 	// Never sourced from a fresh AI call; omitted when none is stored.
 	aiWeeklySummary?: ReportAiWeeklySummary | null;
@@ -106,6 +108,7 @@ export function buildWatchlistReport(input: {
   const { eligibleEvents, sourceCoverage } = filterClientReportWatchEvents(input.events);
   const rows = eligibleEvents.map((event) => {
     const ad = event.adId ? input.adsById.get(event.adId) ?? null : null;
+    const proofCapture = input.proofCapturesByEventId?.get(event.id) ?? null;
     const intelligence = buildChangeIntelligenceSummary(event);
     const classification = classifyWatchEventSource(event);
 
@@ -126,10 +129,15 @@ export function buildWatchlistReport(input: {
         proofTrail: intelligence.proofTrail,
         proofStatusLabel: classification.label,
         sourceTypeLabel: classification.sourceTypeLabel,
-        sourceUrl: sourceUrlForAd(ad),
+        sourceUrl:
+          proofCapture
+            ? readProofString(proofCapture, "canonicalUrl")
+            : sourceUrlForAd(ad),
         metaAdId: ad?.metaAdId ?? null,
       },
       advertiserFallback: readEventAdvertiser(event),
+      captureReasonCode: readRecordString(event.metadata, "captureReasonCode"),
+      proofCapture,
     });
   });
 
@@ -169,12 +177,34 @@ function buildReportRow(
     tags?: string[];
     event?: ReportRow["event"];
     advertiserFallback?: string | null;
+    captureReasonCode?: string | null;
+    proofCapture?: ProofCaptureRecord | null;
   },
 ) {
-  const creativeText = ad?.creativeText?.trim() || findAnalysisFieldValue(ad, "ocr_text");
+  const proofCapture = options.proofCapture ?? null;
+  const creativeText = resolveCreativeText(ad);
+  const adLandingPageHeadline =
+    presentString(ad?.landingPage?.rawHeadline) ??
+    findAnalysisFieldValue(ad, "landing_page_headline_summary");
   const landingPageHeadline =
-    ad?.landingPage?.rawHeadline || findAnalysisFieldValue(ad, "landing_page_headline_summary");
-	const landingPageCaptured = Boolean(ad?.landingPage?.captureMethod);
+    proofCapture
+      ? readProofString(proofCapture, "rawHeadline", "headline")
+      : adLandingPageHeadline;
+  const landingPageUrl =
+    proofCapture
+      ? readProofString(proofCapture, "canonicalUrl")
+      : ad?.landingPage?.canonicalUrl ??
+        ad?.landingPageUrl ??
+        null;
+  const proofCaptureMethod = readProofCaptureMethod(proofCapture);
+  const proofCapturedAt =
+    proofCapture?.status === "succeeded"
+      ? proofCapture.succeededAt ?? proofCapture.attemptedAt
+      : null;
+	const landingPageCaptureMethod = proofCapture
+		? proofCaptureMethod
+		: ad?.landingPage?.captureMethod ?? null;
+	const landingPageCaptured = Boolean(landingPageCaptureMethod);
 	// Missing fields stay null so the report view can omit them entirely.
 	// Client-facing reports must never render "unavailable" placeholder prose.
   const reportRow = {
@@ -190,14 +220,22 @@ function buildReportRow(
     previewImageUrl: ad?.creativeImageUrl ?? ad?.adSnapshotUrl ?? null,
 		creativeText: presentString(creativeText),
 		translatedText: presentString(findAnalysisFieldValue(ad, "translated_text")),
+    captureReasonCode: resolveCaptureReasonCode(
+      ad,
+      proofCapture,
+      options.captureReasonCode,
+    ),
     landingPage: {
-			url: ad?.landingPage?.canonicalUrl ?? ad?.landingPageUrl ?? null,
+			url: landingPageUrl,
 			headline: presentString(landingPageHeadline),
 			captureLabel: landingPageCaptured
-				? formatCaptureMethodLabel(ad?.landingPage?.captureMethod)
+				? formatCaptureMethodLabel(landingPageCaptureMethod)
 				: null,
-      capturedAt: ad?.landingPage?.capturedAt ?? null,
-			signals: buildLandingPageSignals(ad),
+      capturedAt:
+        proofCapture
+          ? proofCapturedAt
+          : ad?.landingPage?.capturedAt ?? null,
+			signals: buildLandingPageSignals(ad, proofCapture),
     },
     analysisFields: buildAnalysisFieldList(ad),
     tags: options.tags ?? [],
@@ -221,10 +259,24 @@ function presentString(value: string | null | undefined): string | null {
 
 // Only known landing-page signals make it into the report. Undetected
 // signals are omitted rather than rendered as "Not detected" filler.
-function buildLandingPageSignals(ad: AdRecord | null): ReportField[] {
-	const ctaText = presentString(ad?.landingPage?.ctaText);
-	const priceText = presentString(ad?.landingPage?.priceText);
-	const formPresent = ad?.landingPage?.formPresent;
+function buildLandingPageSignals(
+  ad: AdRecord | null,
+  proofCapture: ProofCaptureRecord | null = null,
+): ReportField[] {
+	const ctaText = presentString(
+    proofCapture
+      ? readProofString(proofCapture, "ctaText", "cta")
+      : ad?.landingPage?.ctaText,
+  );
+	const priceText = presentString(
+    proofCapture
+      ? readProofString(proofCapture, "priceText", "offer")
+      : ad?.landingPage?.priceText,
+  );
+	const formPresent =
+    proofCapture
+      ? readProofBoolean(proofCapture, "formPresent")
+      : ad?.landingPage?.formPresent;
 
 	return [
 		...(ctaText ? [{ label: "CTA", value: ctaText }] : []),
@@ -233,6 +285,90 @@ function buildLandingPageSignals(ad: AdRecord | null): ReportField[] {
 			? [{ label: "Form present", value: formatLandingPageFormValue(formPresent) }]
 			: []),
 	];
+}
+
+function readProofString(
+  proofCapture: ProofCaptureRecord | null,
+  ...keys: string[]
+) {
+  for (const key of keys) {
+    const value = proofCapture?.extractedFields[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+function readProofBoolean(proofCapture: ProofCaptureRecord | null, key: string) {
+  const value = proofCapture?.extractedFields[key];
+  return typeof value === "boolean" ? value : null;
+}
+
+function readProofCaptureMethod(proofCapture: ProofCaptureRecord | null) {
+  if (proofCapture?.status !== "succeeded") return null;
+  const captureMethod = proofCapture?.captureMetadata.captureMethod;
+  if (captureMethod === "landing_page_fetch" || captureMethod === "browser_render") {
+    return captureMethod;
+  }
+  if (typeof proofCapture?.captureMetadata.renderProvider === "string") {
+    return "browser_render" as const;
+  }
+  return null;
+}
+
+function resolveCreativeText(ad: AdRecord | null) {
+  return ad?.creativeText?.trim() || findAnalysisFieldValue(ad, "ocr_text");
+}
+
+function resolveCaptureReasonCode(
+  ad: AdRecord | null,
+  proofCapture: ProofCaptureRecord | null,
+  eventReasonCode: string | null | undefined,
+) {
+  const landingReason = readRecordString(
+    ad?.landingPage?.metadata,
+    "unreadableReasonCode",
+  );
+  const creativeReason = readRecordString(
+    ad?.creativeTextMetadata,
+    "unreadableReasonCode",
+  );
+  const missingCreativeReason =
+    creativeReason && !presentString(resolveCreativeText(ad))
+      ? creativeReason
+      : null;
+  const eventReason = presentString(eventReasonCode);
+
+  if (proofCapture?.status === "failed") {
+    return (
+      proofCapture.failureCode ??
+      readRecordString(proofCapture.captureMetadata, "unreadableReasonCode") ??
+      missingCreativeReason ??
+      eventReason ??
+      "landing_capture_failed"
+    );
+  }
+  if (proofCapture?.status === "succeeded") {
+    return (
+      readRecordString(
+        proofCapture.captureMetadata,
+        "unreadableReasonCode",
+      ) ??
+      missingCreativeReason ??
+      eventReason
+    );
+  }
+
+  if (landingReason) return landingReason;
+  if (missingCreativeReason) return missingCreativeReason;
+  return eventReason;
+}
+
+function readRecordString(
+  record: Record<string, unknown> | null | undefined,
+  key: string,
+) {
+  const value = record?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function buildAnalysisFieldList(ad: AdRecord | null): ReportField[] {

@@ -533,6 +533,7 @@ function sanitizeReportRow(row: Record<string, unknown>, index: number): ReportD
     previewImageUrl: readString(row.previewImageUrl),
     creativeText: readString(row.creativeText),
     translatedText: readString(row.translatedText),
+    captureReasonCode: readString(row.captureReasonCode),
     landingPage: sanitizeReportLandingPage(row.landingPage),
     analysisFields: sanitizeReportFields(row.analysisFields),
     tags: sanitizeReportTags(row.tags),

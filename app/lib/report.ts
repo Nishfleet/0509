@@ -68,6 +68,8 @@ export interface ReportRow {
   previewImageUrl: string | null;
 	creativeText: string | null;
 	translatedText: string | null;
+  /** Stable server-side reason for missing capture text/signals. */
+  captureReasonCode?: string | null;
   landingPage: ReportLandingPage;
   analysisFields: ReportField[];
   tags: string[];

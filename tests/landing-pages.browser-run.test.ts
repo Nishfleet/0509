@@ -116,9 +116,9 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
     );
   });
 
-  it("prefers rendered proof after the safe fetch path validates the URL", async () => {
+  it("prefers rendered proof before static fetch after public URL validation", async () => {
     const put = vi.fn();
-    mockFetchWithDns(
+    const fetch = mockFetchWithDns(
       vi.fn(async () =>
         new Response("<html><head><title>Raw page</title></head><body>Raw offer</body></html>", {
           status: 200,
@@ -165,6 +165,222 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
       }),
     });
     expect(put).not.toHaveBeenCalled();
+    expect(nonDnsFetchCalls(fetch)).toHaveLength(0);
+  });
+
+  it("does not repeat a failed rendered-first attempt after a blocked static fetch", async () => {
+    mockFetchWithDns(
+      vi.fn(async () => new Response("blocked", { status: 403 })) as never,
+    );
+    const captureRenderedLandingPageSnapshot = vi.fn().mockResolvedValue(null);
+    vi.doMock("~/lib/browser-run.server", () => ({
+      captureRenderedLandingPageSnapshot,
+    }));
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    const onFailure = vi.fn();
+    const snapshot = await captureLandingPageSnapshot(
+      {},
+      "https://example.com/blocked",
+      { onFailure, preferRendered: true },
+    );
+
+    expect(snapshot).toBeNull();
+    expect(captureRenderedLandingPageSnapshot).toHaveBeenCalledTimes(1);
+    expect(onFailure).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reasonCode: "landing_blocked",
+      }),
+    );
+    expect(onFailure).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders a successful but signal-empty HTML shell before accepting it as evidence", async () => {
+    mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          '<html><head><title>Glow serum</title></head><body><div id="root"></div><script src="/app.js"></script></body></html>',
+          { status: 200 },
+        ),
+      ) as never,
+    );
+    const captureRenderedLandingPageSnapshot = vi.fn().mockResolvedValue({
+      rawUrl: "https://example.com/offer",
+      canonicalUrl: "https://example.com/offer",
+      rawHeadline: "Hydrated launch offer",
+      normalizedHeadline: "hydrated launch offer",
+      normalizedHeadlineHash: "hash-rendered",
+      ctaText: "Buy now",
+      priceText: "$49.99",
+      formPresent: false,
+      captureMethod: "browser_render",
+      capturedAt: "2026-07-30T00:00:00.000Z",
+      artifactKey: null,
+      metadata: {},
+    });
+    vi.doMock("~/lib/browser-run.server", () => ({
+      captureRenderedLandingPageSnapshot,
+    }));
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    const snapshot = await captureLandingPageSnapshot({}, "https://example.com/offer");
+
+    expect(captureRenderedLandingPageSnapshot).toHaveBeenCalledTimes(1);
+    expect(snapshot).toMatchObject({
+      rawHeadline: "Hydrated launch offer",
+      ctaText: "Buy now",
+      captureMethod: "browser_render",
+    });
+  });
+
+  it("renders an SPA shell whose root contains only a loading placeholder", async () => {
+    mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          '<html><head><title>Glow serum</title></head><body><div id="root">Loading…</div><script src="/app.js"></script></body></html>',
+          { status: 200 },
+        ),
+      ) as never,
+    );
+    const captureRenderedLandingPageSnapshot = vi.fn().mockResolvedValue({
+      rawUrl: "https://example.com/offer",
+      canonicalUrl: "https://example.com/offer",
+      rawHeadline: "Hydrated launch offer",
+      normalizedHeadline: "hydrated launch offer",
+      normalizedHeadlineHash: "hash-rendered",
+      ctaText: "Buy now",
+      priceText: "$49.99",
+      formPresent: false,
+      captureMethod: "browser_render",
+      capturedAt: "2026-07-30T00:00:00.000Z",
+      artifactKey: null,
+      metadata: {},
+    });
+    vi.doMock("~/lib/browser-run.server", () => ({
+      captureRenderedLandingPageSnapshot,
+    }));
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    const snapshot = await captureLandingPageSnapshot({}, "https://example.com/offer");
+
+    expect(captureRenderedLandingPageSnapshot).toHaveBeenCalledTimes(1);
+    expect(snapshot).toMatchObject({
+      rawHeadline: "Hydrated launch offer",
+      ctaText: "Buy now",
+      captureMethod: "browser_render",
+    });
+  });
+
+  it("ignores noscript boilerplate when deciding whether a page is an SPA shell", async () => {
+    mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          '<html><head><title>Glow serum</title></head><body><noscript>You need to enable JavaScript to run this app.</noscript><div id="root"></div><script src="/app.js"></script></body></html>',
+          { status: 200 },
+        ),
+      ) as never,
+    );
+    const captureRenderedLandingPageSnapshot = vi.fn().mockResolvedValue({
+      rawUrl: "https://example.com/offer",
+      canonicalUrl: "https://example.com/offer",
+      rawHeadline: "Hydrated launch offer",
+      normalizedHeadline: "hydrated launch offer",
+      normalizedHeadlineHash: "hash-rendered",
+      ctaText: "Buy now",
+      priceText: "$49.99",
+      formPresent: false,
+      captureMethod: "browser_render",
+      capturedAt: "2026-07-30T00:00:00.000Z",
+      artifactKey: null,
+      metadata: {},
+    });
+    vi.doMock("~/lib/browser-run.server", () => ({
+      captureRenderedLandingPageSnapshot,
+    }));
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    const snapshot = await captureLandingPageSnapshot({}, "https://example.com/offer");
+
+    expect(captureRenderedLandingPageSnapshot).toHaveBeenCalledTimes(1);
+    expect(snapshot).toMatchObject({
+      ctaText: "Buy now",
+      captureMethod: "browser_render",
+    });
+  });
+
+  it("ignores XHTML-style noscript boilerplate when deciding whether a page is an SPA shell", async () => {
+    mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          '<html><head><title>Glow serum</title></head><body><noscript/>You need to enable JavaScript to run this app.</noscript><div id="root"></div><script src="/app.js"></script></body></html>',
+          { status: 200 },
+        ),
+      ) as never,
+    );
+    const captureRenderedLandingPageSnapshot = vi.fn().mockResolvedValue({
+      rawUrl: "https://example.com/offer",
+      canonicalUrl: "https://example.com/offer",
+      rawHeadline: "Hydrated launch offer",
+      normalizedHeadline: "hydrated launch offer",
+      normalizedHeadlineHash: "hash-rendered",
+      ctaText: "Buy now",
+      priceText: "$49.99",
+      formPresent: false,
+      captureMethod: "browser_render",
+      capturedAt: "2026-07-30T00:00:00.000Z",
+      artifactKey: null,
+      metadata: {},
+    });
+    vi.doMock("~/lib/browser-run.server", () => ({
+      captureRenderedLandingPageSnapshot,
+    }));
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    const snapshot = await captureLandingPageSnapshot({}, "https://example.com/offer");
+
+    expect(captureRenderedLandingPageSnapshot).toHaveBeenCalledTimes(1);
+    expect(snapshot).toMatchObject({
+      ctaText: "Buy now",
+      captureMethod: "browser_render",
+    });
+  });
+
+  it("renders a body-empty SPA shell with only a bare form wrapper", async () => {
+    mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          '<html><head><title>Glow serum</title></head><body><form id="root"></form><script src="/app.js"></script></body></html>',
+          { status: 200 },
+        ),
+      ) as never,
+    );
+    const captureRenderedLandingPageSnapshot = vi.fn().mockResolvedValue({
+      rawUrl: "https://example.com/offer",
+      canonicalUrl: "https://example.com/offer",
+      rawHeadline: "Hydrated launch offer",
+      normalizedHeadline: "hydrated launch offer",
+      normalizedHeadlineHash: "hash-rendered",
+      ctaText: "Buy now",
+      priceText: "$49.99",
+      formPresent: true,
+      captureMethod: "browser_render",
+      capturedAt: "2026-07-30T00:00:00.000Z",
+      artifactKey: null,
+      metadata: {},
+    });
+    vi.doMock("~/lib/browser-run.server", () => ({
+      captureRenderedLandingPageSnapshot,
+    }));
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    const snapshot = await captureLandingPageSnapshot({}, "https://example.com/offer");
+
+    expect(captureRenderedLandingPageSnapshot).toHaveBeenCalledTimes(1);
+    expect(snapshot).toMatchObject({
+      ctaText: "Buy now",
+      formPresent: true,
+      captureMethod: "browser_render",
+    });
   });
 
   it("captures a real browser-rendered proof bundle when fetch fails", async () => {
@@ -234,7 +450,7 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
         renderMode: "mobile",
         deviceProfile: "mobile_default",
         renderProvider: "cloudflare_browser_run",
-        extractorVersion: "lp-signals-v1",
+        extractorVersion: "lp-signals-v3",
         extractionWarnings: [],
         extractedFieldConfidence: {
           headline: 0.95,
@@ -246,6 +462,94 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
     });
     expect(put).toHaveBeenCalledTimes(2);
     expect(browser.close).toHaveBeenCalled();
+  });
+
+  it("keeps rendered HTML signals when screenshot capture fails", async () => {
+    mockFetchWithDns(vi.fn(async () => {
+      throw new Error("fetch failed");
+    }) as never);
+
+    const page = {
+      goto: vi.fn(),
+      on: vi.fn(),
+      setUserAgent: vi.fn(),
+      setRequestInterception: vi.fn(),
+      setViewport: vi.fn(),
+      content: vi.fn().mockResolvedValue(
+        "<html><head><title>Readable render</title></head><body><button>Buy now</button></body></html>",
+      ),
+      screenshot: vi.fn().mockRejectedValue(new Error("screenshot failed")),
+      url: vi.fn().mockReturnValue("https://example.com/offer"),
+    };
+    const browser = {
+      newPage: vi.fn().mockResolvedValue(page),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch: vi.fn().mockResolvedValue(browser) },
+    }));
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    const snapshot = await captureLandingPageSnapshot(
+      { BROWSER: {} as Fetcher },
+      "https://example.com/offer",
+    );
+
+    expect(snapshot).toMatchObject({
+      rawHeadline: "Readable render",
+      ctaText: "Buy now",
+      metadata: {
+        screenshotArtifactKey: null,
+        captureWarningCodes: ["screenshot_capture_failed"],
+      },
+    });
+  });
+
+  it("keeps Browser Run HTML evidence when the screenshot artifact is oversized", async () => {
+    const put = vi.fn();
+    mockFetchWithDns(vi.fn(async () => {
+      throw new Error("fetch failed");
+    }) as never);
+
+    const page = {
+      goto: vi.fn(),
+      on: vi.fn(),
+      setUserAgent: vi.fn(),
+      setRequestInterception: vi.fn(),
+      setViewport: vi.fn(),
+      content: vi.fn().mockResolvedValue(
+        "<html><head><title>Oversized screenshot proof</title></head><body><button>Buy now</button></body></html>",
+      ),
+      screenshot: vi.fn().mockResolvedValue(new Uint8Array(3_000_001)),
+      url: vi.fn().mockReturnValue("https://example.com/offer"),
+    };
+    const browser = {
+      newPage: vi.fn().mockResolvedValue(page),
+      close: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.doMock("@cloudflare/puppeteer", () => ({
+      default: { launch: vi.fn().mockResolvedValue(browser) },
+    }));
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    const snapshot = await captureLandingPageSnapshot(
+      {
+        BROWSER: {} as Fetcher,
+        LANDING_PAGE_ARTIFACTS: { put } as unknown as R2Bucket,
+      },
+      "https://example.com/offer",
+    );
+
+    expect(snapshot).toMatchObject({
+      rawHeadline: "Oversized screenshot proof",
+      ctaText: "Buy now",
+      metadata: {
+        screenshotArtifactKey: null,
+        htmlArtifactKey: expect.stringMatching(/\.html$/u),
+        captureWarningCodes: ["screenshot_too_large"],
+      },
+    });
+    expect(put).toHaveBeenCalledTimes(1);
   });
 
   it("returns null when Browser Run launch does not settle", async () => {
@@ -359,7 +663,7 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
     expect(put).toHaveBeenCalledTimes(2);
   });
 
-  it("removes the screenshot object when HTML persistence fails", async () => {
+  it("keeps readable rendered evidence when HTML persistence fails", async () => {
     const screenshotBytes = new Uint8Array([8, 5, 0, 9]);
     const put = vi.fn()
       .mockResolvedValueOnce(undefined)
@@ -391,12 +695,20 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
       "https://example.com/glow",
     );
 
-    expect(snapshot).toBeNull();
+    expect(snapshot).toMatchObject({
+      rawHeadline: "Proof",
+      artifactKey: null,
+      metadata: {
+        htmlArtifactKey: null,
+        screenshotArtifactKey: expect.stringMatching(/\.jpeg$/u),
+        captureWarningCodes: ["html_persistence_failed"],
+      },
+    });
     expect(put).toHaveBeenCalledTimes(2);
     const screenshotKey = String(put.mock.calls[0]?.[0]);
     expect(screenshotKey).toMatch(/\.jpeg$/u);
     expect(String(put.mock.calls[1]?.[0])).toMatch(/\.html$/u);
-    expect(del).toHaveBeenCalledWith(screenshotKey);
+    expect(del).not.toHaveBeenCalled();
   });
 
   it("falls back to rendered capture when fetched HTML is over the byte limit", async () => {
@@ -439,7 +751,7 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
     });
   });
 
-  it("refuses oversized Browserless screenshot artifacts", async () => {
+  it("keeps Browserless HTML evidence when the screenshot artifact is oversized", async () => {
     const put = vi.fn();
     mockFetchWithDns(
       vi.fn(async (input) => {
@@ -472,8 +784,61 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
       "https://example.com/glow",
     );
 
-    expect(snapshot).toBeNull();
-    expect(put).not.toHaveBeenCalled();
+    expect(snapshot).toMatchObject({
+      rawHeadline: "Huge proof",
+      metadata: {
+        screenshotArtifactKey: null,
+        htmlArtifactKey: expect.stringMatching(/\.html$/u),
+        captureWarningCodes: ["screenshot_too_large"],
+      },
+    });
+    expect(put).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps Browserless HTML evidence when screenshot base64 is malformed", async () => {
+    const put = vi.fn();
+    mockFetchWithDns(
+      vi.fn(async (input) => {
+        if (!String(input).includes("browserless.io/stealth/bql")) {
+          throw new Error("fetch failed");
+        }
+
+        return new Response(
+          JSON.stringify({
+            data: {
+              html: {
+                html: "<html><head><title>Decoded proof</title></head><body><a>Buy now</a></body></html>",
+              },
+              screenshot: { base64: "%%%truncated%%%" },
+              documentRequests: [{ url: "https://www.example.com/glow" }],
+              url: { url: "https://www.example.com/glow" },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }) as never,
+    );
+
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+    const snapshot = await captureLandingPageSnapshot(
+      {
+        BROWSERLESS_TOKEN: "browserless-token",
+        BROWSERLESS_PROOF_ALLOWLIST_ORIGINS: "https://example.com https://www.example.com",
+        LANDING_PAGE_ARTIFACTS: { put } as unknown as R2Bucket,
+      },
+      "https://example.com/glow",
+    );
+
+    expect(snapshot).toMatchObject({
+      rawHeadline: "Decoded proof",
+      ctaText: "Buy now",
+      metadata: {
+        screenshotArtifactKey: null,
+        htmlArtifactKey: expect.stringMatching(/\.html$/u),
+        captureWarningCodes: ["screenshot_decode_failed"],
+      },
+    });
+    expect(put).toHaveBeenCalledTimes(1);
   });
 
 	it("does not send arbitrary proof URLs to Browserless without an allowlist", async () => {
@@ -507,5 +872,63 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
     const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
 
     await expect(captureLandingPageSnapshot({}, "https://example.com/glow")).resolves.toBeNull();
+  });
+
+  it("contains a rejected rendered fallback after fetch failure", async () => {
+    mockFetchWithDns(
+      vi.fn(async () => {
+        throw new Error("fetch failed");
+      }) as never,
+    );
+    const captureRenderedLandingPageSnapshot = vi
+      .fn()
+      .mockRejectedValue(new Error("render failed"));
+    vi.doMock("~/lib/browser-run.server", () => ({
+      captureRenderedLandingPageSnapshot,
+    }));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const onFailure = vi.fn();
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+
+    await expect(
+      captureLandingPageSnapshot({}, "https://example.com/glow", { onFailure }),
+    ).resolves.toBeNull();
+
+    expect(onFailure).toHaveBeenCalledOnce();
+    expect(onFailure).toHaveBeenCalledWith({
+      reasonCode: "landing_fetch_failed",
+      metadata: {},
+    });
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('"reasonCode":"rendered_fallback_failed"'),
+    );
+  });
+
+  it("preserves an HTTP failure when its rendered fallback rejects", async () => {
+    mockFetchWithDns(
+      vi.fn(async () => new Response("upstream failed", { status: 500 })) as never,
+    );
+    const captureRenderedLandingPageSnapshot = vi
+      .fn()
+      .mockRejectedValue(new Error("render failed"));
+    vi.doMock("~/lib/browser-run.server", () => ({
+      captureRenderedLandingPageSnapshot,
+    }));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const onFailure = vi.fn();
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+
+    await expect(
+      captureLandingPageSnapshot({}, "https://example.com/glow", { onFailure }),
+    ).resolves.toBeNull();
+
+    expect(onFailure).toHaveBeenCalledOnce();
+    expect(onFailure).toHaveBeenCalledWith({
+      reasonCode: "landing_http_error",
+      metadata: { fetchStatus: 500 },
+    });
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('"reasonCode":"rendered_fallback_failed"'),
+    );
   });
 });

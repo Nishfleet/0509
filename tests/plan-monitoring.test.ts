@@ -813,8 +813,26 @@ describe("runWatchlistManual cheap scan path", () => {
   it("stores scan-side observations and only lets proof policy decide later capture", async () => {
     const createAdObservation = vi.fn();
     const createLandingPageSnapshot = vi.fn();
+    const createProofCapture = vi.fn();
     const createWatchEvent = vi.fn();
-    const captureLandingPageSnapshot = vi.fn().mockResolvedValue(null);
+    const captureLandingPageSnapshot = vi.fn(
+      async (
+        _env: unknown,
+        _url: string,
+        options: {
+          onFailure?: (detail: {
+            reasonCode: string;
+            metadata: Record<string, unknown>;
+          }) => void;
+        },
+      ) => {
+        options.onFailure?.({
+          reasonCode: "landing_blocked",
+          metadata: { fetchStatus: 403 },
+        });
+        return null;
+      },
+    );
     const listObservationsForRun = vi.fn(async (_env: unknown, runId: string) => {
       if (runId === "run-1") {
         return [
@@ -855,7 +873,7 @@ describe("runWatchlistManual cheap scan path", () => {
       createDigestRun: vi.fn(),
       createEventCandidate: vi.fn().mockResolvedValue("candidate-scan-1"),
       createLandingPageSnapshot,
-      createProofCapture: vi.fn(),
+      createProofCapture,
       createWatchEvent,
       createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
       finishWatchlistRun: vi.fn(),
@@ -952,6 +970,17 @@ describe("runWatchlistManual cheap scan path", () => {
       "landing_page_url_changed",
     ]);
     expect(captureLandingPageSnapshot).toHaveBeenCalledTimes(1);
+    expect(createProofCapture).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        status: "failed",
+        failureCode: "landing_blocked",
+        captureMetadata: {
+          fetchStatus: 403,
+          unreadableReasonCode: "landing_blocked",
+        },
+      }),
+    );
   });
 
   it("detects landing-page proof-backed changes even when the cheap scan stays quiet", async () => {
@@ -1221,6 +1250,7 @@ describe("runWatchlistManual cheap scan path", () => {
     expect(captureLandingPageSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({ META_AD_LIBRARY_TOKEN: "token" }),
       "https://example.com/new-url",
+      expect.objectContaining({ onFailure: expect.any(Function) }),
     );
     expect(createProofCapture).toHaveBeenCalledWith(
       expect.objectContaining({ META_AD_LIBRARY_TOKEN: "token" }),

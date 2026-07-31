@@ -130,7 +130,10 @@ describe("creative-text SSRF protection", () => {
     const { captureCreativeText } = await import("~/lib/creative-text.server");
     const result = await captureCreativeText({} as never, "http://169.254.169.254/latest/meta-data", ad);
 
-    expect(result).toBeNull();
+    expect(result).toMatchObject({
+      text: null,
+      metadata: { unreadableReasonCode: "creative_snapshot_fetch_failed" },
+    });
     expect(calls.filter((url) => url.includes("169.254.169.254"))).toHaveLength(0);
   });
 
@@ -154,7 +157,10 @@ describe("creative-text SSRF protection", () => {
       ad,
     );
 
-    expect(result).toBeNull();
+    expect(result).toMatchObject({
+      text: null,
+      metadata: { unreadableReasonCode: "creative_image_invalid_or_oversized" },
+    });
     expect(calls.filter((url) => url.includes("10.0.0.8"))).toHaveLength(0);
   });
 
@@ -172,7 +178,10 @@ describe("creative-text SSRF protection", () => {
     const { captureCreativeText } = await import("~/lib/creative-text.server");
     const result = await captureCreativeText({} as never, "https://snapshot.example/ad/123", ad);
 
-    expect(result).toBeNull();
+    expect(result).toMatchObject({
+      text: null,
+      metadata: { unreadableReasonCode: "creative_snapshot_fetch_failed" },
+    });
     expect(calls.filter((url) => url.includes("192.168.1.10"))).toHaveLength(0);
   });
 });

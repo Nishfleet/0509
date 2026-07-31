@@ -234,6 +234,7 @@ function setupMocks(
     }),
     listAdsByIds: vi.fn().mockResolvedValue([]),
     listCollectionItems: vi.fn().mockResolvedValue([]),
+    listProofCapturePairsForEventIds: vi.fn().mockResolvedValue([]),
     listWatchEvents: vi.fn().mockResolvedValue([]),
     listDeliveryTargets: vi.fn().mockResolvedValue([deliveryTarget]),
     getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
@@ -500,6 +501,7 @@ function setupMocks(
     listAgentMemory: mocks.listAgentMemory,
     listClientRooms: mocks.listClientRooms,
     listCollectionItems: mocks.listCollectionItems,
+    listProofCapturePairsForEventIds: mocks.listProofCapturePairsForEventIds,
     listDeliveryTargets: mocks.listDeliveryTargets,
     listSupportCases: mocks.listSupportCases,
     listWatchEvents: mocks.listWatchEvents,

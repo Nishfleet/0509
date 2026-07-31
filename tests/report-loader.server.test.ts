@@ -9,6 +9,7 @@ import type {
   AdRecord,
   CollectionItemRecord,
   CollectionRecord,
+  ProofCaptureRecord,
   WatchEventRecord,
   WatchlistRecord,
 } from "~/lib/types";
@@ -108,6 +109,7 @@ function createDataSource(): OwnedReportDataSource {
     getWatchlist: vi.fn(async () => null),
     listAdsByIds: vi.fn(async () => []),
     listCollectionItems: vi.fn(async () => []),
+    listProofCapturePairsForEventIds: vi.fn(async () => []),
     listWatchEvents: vi.fn(async () => []),
   };
 }
@@ -151,6 +153,31 @@ describe("loadOwnedReportDocument", () => {
     vi.mocked(data.getWatchlist).mockResolvedValue(watchlist);
     vi.mocked(data.listWatchEvents).mockResolvedValue([confirmedEvent, excludedEvent]);
     vi.mocked(data.listAdsByIds).mockResolvedValue([ad]);
+    const proof = {
+      id: "proof-1",
+      proofTargetId: "target-1",
+      status: "succeeded",
+      skipReason: null,
+      failureCode: null,
+      failureReason: null,
+      screenshotArtifactKey: null,
+      htmlArtifactKey: null,
+      extractedFields: { rawHeadline: "Stored landing proof" },
+      fieldConfidence: {},
+      extractionWarnings: [],
+      captureMetadata: { captureMethod: "landing_page_fetch" },
+      renderMode: "mobile",
+      deviceProfile: "mobile_default",
+      extractorVersion: "lp-signals-v1",
+      idempotencyKey: "proof-1",
+      attemptedAt: now,
+      succeededAt: now,
+      createdAt: now,
+      updatedAt: now,
+    } satisfies ProofCaptureRecord;
+    vi.mocked(data.listProofCapturePairsForEventIds).mockResolvedValue([
+      { eventId: confirmedEvent.id, current: proof, previous: null },
+    ]);
     vi.mocked(data.getLatestDigestRunSummaryForWatchlist).mockResolvedValue({
       paragraph: "Stored strategy",
       generatedAt: now,
@@ -168,6 +195,12 @@ describe("loadOwnedReportDocument", () => {
     expect(data.getWatchlist).toHaveBeenCalledWith(env, watchlist.id, "user-1");
     expect(data.listWatchEvents).toHaveBeenCalledWith(env, watchlist.id, 60);
     expect(data.listAdsByIds).toHaveBeenCalledWith(env, ["ad-1", "ad-2"]);
+    expect(data.listProofCapturePairsForEventIds).toHaveBeenCalledWith(
+      env,
+      "user-1",
+      ["event-1", "event-2"],
+      { includePrevious: false },
+    );
     expect(data.getLatestDigestRunSummaryForWatchlist).toHaveBeenCalledWith(
       env,
       "user-1",
@@ -176,7 +209,12 @@ describe("loadOwnedReportDocument", () => {
     expect(report).toMatchObject({
       reportId: "watchlist:watch-1",
       resourceType: "watchlist",
-      rows: [expect.objectContaining({ advertiser: "Acme" })],
+      rows: [
+        expect.objectContaining({
+          advertiser: "Acme",
+          landingPage: expect.objectContaining({ headline: "Stored landing proof" }),
+        }),
+      ],
       sourceCoverage: { totalInput: 2, included: 1, excluded: 1 },
       aiWeeklySummary: { paragraph: "Stored strategy" },
     });
