@@ -18,6 +18,7 @@ umask 077
 : "${GITHUB_RUN_ID:?GITHUB_RUN_ID is required}"
 : "${GITHUB_RUN_ATTEMPT:?GITHUB_RUN_ATTEMPT is required}"
 : "${GITHUB_JOB:?GITHUB_JOB is required}"
+: "${GITHUB_SHA:?GITHUB_SHA is required}"
 
 MAX_ARTIFACT_SIZE_BYTES=10485760
 MAX_EVIDENCE_JSON_BYTES=1048576
@@ -29,7 +30,7 @@ cache=""
 archive_staging_dir=""
 evidence_valid=false
 archive="$RESTORE_EVIDENCE_ARCHIVE"
-expected_archive="$RUNNER_TEMP/d1-remote-restore-evidence-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}.tar.gz"
+expected_archive="$RUNNER_TEMP/d1-remote-restore-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}.tar.gz"
 
 if [ "$archive" != "$expected_archive" ] ||
   [ -e "$archive" ] ||
@@ -92,7 +93,7 @@ find_recent_artifact() {
 
 download_artifact() {
   local attempt
-  local artifact_id="$2"
+  local artifact_id="$1"
   local archive_member
   local archive_member_size
   local api_status
@@ -103,8 +104,8 @@ download_artifact() {
   local extracted
   local headers
   local location
-  local max_artifact_size="$3"
-  local run_id="$1"
+  local max_artifact_size="$2"
+  local expected_member="$3"
   local target="$4"
   local zip_listing
   if ! command -v curl >/dev/null 2>&1 ||
@@ -192,7 +193,7 @@ download_artifact() {
         rm -f -- "$download" "$download_config" "$headers"
         return 1
       }
-      if [[ ! "$archive_member" =~ ^d1-remote-restore-evidence-${run_id}-[0-9]+-prepare_remote_restore_evidence[.]tar[.]gz$ ]]; then
+      if [ "$archive_member" != "$expected_member" ]; then
         printf '::error::Restore-evidence artifact zip has an unexpected member.\n' >&2
         rm -f -- "$download" "$download_config" "$headers"
         return 1
@@ -263,9 +264,9 @@ if [ "$artifact_status" -eq 0 ]; then
   fi
   download_status=0
   download_artifact \
-    "$prior_run_id" \
     "$prior_artifact_id" \
     "$MAX_ARTIFACT_SIZE_BYTES" \
+    "$prior_name.tar.gz" \
     "$cache" ||
     download_status=$?
   if [ "$download_status" -eq 2 ]; then
