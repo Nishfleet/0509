@@ -200,6 +200,55 @@ describe("operator instant-alert email reconciliation", () => {
     ).resolves.toMatchObject([{ id: "instant-attempt-1" }]);
   });
 
+  it("prioritizes ambiguous pending attempts ahead of accepted sends", async () => {
+    const harness = setup();
+    harness.sqlite.prepare("DELETE FROM delivery_attempt").run();
+    const insert = harness.sqlite.prepare(`
+      INSERT INTO delivery_attempt (
+        id, user_id, watchlist_id, digest_run_id, delivery_target_id, lane,
+        channel, provider, status, webhook_status, target_value,
+        event_ids_json, payload_snapshot_json, idempotency_key, sent_at,
+        created_at, updated_at
+      ) VALUES (
+        ?, 'customer-1', 'watch-1', NULL, 'email-target-1', 'customer',
+        'email', 'cloudflare_email', ?, 'provider_unknown',
+        'owner@example.com', '["event-1"]', '{"kind":"instant_alert"}',
+        ?, ?, ?, ?
+      )
+    `);
+    for (let index = 0; index < 100; index += 1) {
+      const timestamp = `2026-07-15T17:00:${String(index % 60).padStart(2, "0")}.000Z`;
+      insert.run(
+        `accepted-${index}`,
+        "sent",
+        `instant:watch-1:customer:email:owner@example.com:accepted-${index}`,
+        timestamp,
+        timestamp,
+        timestamp,
+      );
+    }
+    insert.run(
+      "pending-needs-attention",
+      "pending",
+      "instant:watch-1:customer:email:owner@example.com:pending",
+      null,
+      "2026-07-15T18:00:00.000Z",
+      "2026-07-15T18:00:00.000Z",
+    );
+
+    const attempts = await listOutstandingInstantProviderUnknownAttempts(
+      { DB: harness.db } as never,
+      { limit: 100 },
+    );
+
+    expect(attempts).toHaveLength(100);
+    expect(attempts[0]).toMatchObject({
+      id: "pending-needs-attention",
+      status: "pending",
+    });
+    expect(attempts.filter((attempt) => attempt.status === "sent")).toHaveLength(99);
+  });
+
   it("lists and settles a provider-accepted instant email whose delivery is unconfirmed", async () => {
     const harness = setup();
     harness.sqlite.prepare(`
