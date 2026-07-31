@@ -137,6 +137,7 @@ function mockMonitoringDependencies(input: {
     .mockResolvedValueOnce("run-2")
     .mockResolvedValue("run-extra");
   const finishWatchlistRun = vi.fn().mockResolvedValue(undefined);
+  const getRecentSuccessfulRuns = vi.fn().mockResolvedValue([]);
   const searchAdsViaSourceResolver = vi.fn().mockResolvedValue({
     ads: [],
     nextCursor: null,
@@ -192,7 +193,7 @@ function mockMonitoringDependencies(input: {
     ),
     listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
     hasInFlightWatchlistRun: vi.fn().mockResolvedValue(false),
-    getRecentSuccessfulRuns: vi.fn().mockResolvedValue([]),
+    getRecentSuccessfulRuns,
     getSavedQuery: vi.fn(),
     getUserDeliveryProfile: vi.fn().mockResolvedValue(null),
     getWatchlist: vi.fn().mockResolvedValue(input.workflowWatchlist ?? null),
@@ -224,6 +225,7 @@ function mockMonitoringDependencies(input: {
   return {
     createWatchlistRun,
     finishWatchlistRun,
+    getRecentSuccessfulRuns,
     recordWatchlistCapacitySkip: vi.fn().mockResolvedValue("run-skip"),
     searchAdsViaSourceResolver,
   };
@@ -632,6 +634,52 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
     expect(result.inlineRuns).toBe(2);
   });
 
+  it("does not replay a completed inline scheduled slot", async () => {
+    resolveMonitoringFanoutModeMock.mockImplementation(() => "inline");
+
+    const scheduledTime = Date.parse("2026-07-01T03:00:00.000Z");
+    const mocks = mockMonitoringDependencies({
+      provider: "meta_library_browser",
+      watchlists: [activeWatchlists[0]],
+    });
+    mocks.getRecentSuccessfulRuns
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: "run-1",
+          triggerType: "scheduled",
+          startedAt: "2026-07-01T03:00:01.000Z",
+        },
+      ]);
+
+    const env = {
+      BROWSER: {
+        fetch: vi.fn(),
+      },
+      DB: {},
+      MONITORING_FANOUT_MODE: "inline",
+    };
+    const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+
+    const firstResult = await runScheduledMonitoring(env as never, {
+      includeDigests: false,
+      cron: "0 */3 * * *",
+      scheduledTime,
+    });
+    const replayResult = await runScheduledMonitoring(env as never, {
+      includeDigests: false,
+      cron: "0 */3 * * *",
+      scheduledTime,
+    });
+
+    expect(firstResult.inlineRuns).toBe(1);
+    expect(replayResult.inlineRuns).toBe(0);
+    expect(mocks.searchAdsViaSourceResolver).toHaveBeenCalledTimes(1);
+    expect(mocks.createWatchlistRun).toHaveBeenCalledTimes(1);
+    expect(mocks.finishWatchlistRun).toHaveBeenCalledTimes(1);
+  });
+
   it("records dispatch failures in fan-out mode without inline browser fallback", async () => {
     scheduleWatchlistFanoutMock.mockResolvedValueOnce({
       eligible: 2,
@@ -720,5 +768,167 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
       Date.parse("2026-07-03T06:00:00.000Z"),
     );
     expect(sixHour).toHaveLength(27);
+  });
+
+  it("skips a workspace instead of widening cadence when its plan cannot be read", async () => {
+    const planFailure = new Error("D1 plan lookup failed");
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockRejectedValue(planFailure),
+      PLAN_LIMITS: {},
+    }));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const watchlists: WatchlistRecord[] = Array.from({ length: 27 }, (_, index) => ({
+      id: `watch-${String(index + 1).padStart(2, "0")}`,
+      userId: "agency-user",
+      name: `Competitor ${index + 1}`,
+      targetType: "advertiser" as const,
+      targetId: `target-${index + 1}`,
+      targetFingerprint: `fp-${index + 1}`,
+      targetLabel: `target-${index + 1}`,
+      targetCountry: null,
+      isActive: true,
+      lastScannedAt: null,
+      createdAt: `2026-03-01T00:${String(index).padStart(2, "0")}:00.000Z`,
+      updatedAt: `2026-03-01T00:${String(index).padStart(2, "0")}:00.000Z`,
+    }));
+    const { filterWatchlistsByPriorityScanSlots } = await import("~/lib/monitoring.server");
+
+    const eligible = await filterWatchlistsByPriorityScanSlots(
+      {} as never,
+      watchlists,
+      Date.parse("2026-07-01T03:00:00.000Z"),
+    );
+
+    expect(eligible).toEqual([]);
+    expect(consoleError).toHaveBeenCalledWith(
+      "[monitoring] Plan lookup failed; scheduled scans were skipped for affected workspaces.",
+      { workspaceCount: 1 },
+    );
+  });
+
+  it("logs multiple plan-read failures once without workspace ids or raw errors", async () => {
+    const planFailure = new Error("private D1 failure details");
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockRejectedValue(planFailure),
+      PLAN_LIMITS: {},
+    }));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const watchlists: WatchlistRecord[] = [
+      activeWatchlists[0],
+      { ...activeWatchlists[1], userId: "private-workspace-two" },
+    ];
+    const { filterWatchlistsByPriorityScanSlots } = await import("~/lib/monitoring.server");
+
+    await expect(
+      filterWatchlistsByPriorityScanSlots(
+        {} as never,
+        watchlists,
+        Date.parse("2026-07-01T03:00:00.000Z"),
+      ),
+    ).resolves.toEqual([]);
+
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalledWith(
+      "[monitoring] Plan lookup failed; scheduled scans were skipped for affected workspaces.",
+      { workspaceCount: 2 },
+    );
+    expect(consoleError.mock.calls.flat()).not.toContain(planFailure);
+    const serializedLog = JSON.stringify(consoleError.mock.calls);
+    expect(serializedLog).not.toContain("user-1");
+    expect(serializedLog).not.toContain("private-workspace-two");
+    expect(serializedLog).not.toContain("private D1 failure details");
+  });
+
+  it("fails the scheduled task after preserving work for readable workspaces", async () => {
+    const planFailure = new Error("D1 plan lookup failed");
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn()
+        .mockRejectedValueOnce(planFailure)
+        .mockResolvedValue("agency"),
+      PLAN_LIMITS: {},
+    }));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const readableWatchlist = {
+      ...activeWatchlists[1],
+      userId: "user-2",
+    };
+    mockMonitoringDependencies({
+      provider: "meta_library_browser",
+      watchlists: [activeWatchlists[0], readableWatchlist],
+    });
+    scheduleWatchlistFanoutMock.mockResolvedValueOnce({
+      eligible: 1,
+      queued: 1,
+      duplicates: 0,
+      dispatchFailures: 0,
+      shadowOnly: 0,
+      inlineFallback: false,
+    });
+    const env = {
+      BROWSER: {
+        fetch: vi.fn(),
+      },
+      DB: createFanoutDbMock(),
+      MONITORING_WORKFLOW: {
+        create: vi.fn(),
+      },
+      MONITORING_FANOUT_MODE: "fanout",
+    };
+    const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+
+    const scheduledRun = runScheduledMonitoring(env as never, {
+      includeDigests: false,
+      cron: "0 */3 * * *",
+      scheduledTime: Date.parse("2026-07-01T03:00:00.000Z"),
+    });
+    await expect(scheduledRun).rejects.toThrow(
+      "Scheduled monitoring skipped 1 workspace(s) because plan lookup failed.",
+    );
+    await expect(scheduledRun).rejects.not.toThrow("D1 plan lookup failed");
+    expect(scheduleWatchlistFanoutMock).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({
+        watchlists: [readableWatchlist],
+      }),
+    );
+    expect(consoleError).toHaveBeenCalledWith(
+      "[monitoring] Plan lookup failed; scheduled scans were skipped for affected workspaces.",
+      { workspaceCount: 1 },
+    );
+  });
+
+  it("skips a workspace when its plan lookup returns no value", async () => {
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue(null),
+      PLAN_LIMITS: {},
+    }));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const watchlist: WatchlistRecord = {
+      id: "watch-null-plan",
+      userId: "unknown-plan-user",
+      name: "Unknown plan watch",
+      targetType: "advertiser",
+      targetId: "unknown-plan",
+      targetFingerprint: "fp-unknown-plan",
+      targetLabel: "Unknown plan",
+      targetCountry: null,
+      isActive: true,
+      lastScannedAt: null,
+      createdAt: "2026-03-01T00:00:00.000Z",
+      updatedAt: "2026-03-01T00:00:00.000Z",
+    };
+    const { filterWatchlistsByPriorityScanSlots } = await import("~/lib/monitoring.server");
+
+    await expect(
+      filterWatchlistsByPriorityScanSlots(
+        {} as never,
+        [watchlist],
+        Date.parse("2026-07-01T03:00:00.000Z"),
+      ),
+    ).resolves.toEqual([]);
+    expect(consoleError).toHaveBeenCalledWith(
+      "[monitoring] Plan lookup failed; scheduled scans were skipped for affected workspaces.",
+      { workspaceCount: 1 },
+    );
   });
 });
