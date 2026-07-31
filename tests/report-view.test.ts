@@ -270,9 +270,16 @@ describe("ReportView", () => {
   });
 
   it("keeps event verification when only the linked creative is unreadable", () => {
-    const verifiedUnreadableRow = unreadableReportRow(
-      "row-verified-unreadable",
-    );
+    const verifiedUnreadableRow = {
+      ...unreadableReportRow("row-verified-unreadable"),
+      landingPage: {
+        url: "https://example.com/offer",
+        headline: null,
+        captureLabel: null,
+        capturedAt: null,
+        signals: [],
+      },
+    };
 
     const markup = renderToStaticMarkup(
       createElement(ReportView, {
@@ -285,6 +292,7 @@ describe("ReportView", () => {
     );
 
     expect(markup).toContain("Verified evidence");
+    expect(markup).toContain('href="https://example.com/offer"');
     expect(markup).toContain(
       `<p class="f9-ed-mock-empty">${UNREADABLE_CAPTURE_COPY}</p>`,
     );
