@@ -704,6 +704,7 @@ describe("operator alert FK attribution", () => {
     const markInstantDeliveryDispatchStarted = vi.fn().mockResolvedValue(
       "2026-07-15T04:00:01.000Z",
     );
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
     vi.doMock("~/lib/data.server", () => ({
       claimInstantDeliveryAttempt,
       createDeliveryAttempt,
@@ -718,7 +719,7 @@ describe("operator alert FK attribution", () => {
       listDeliveryTargets: vi.fn().mockResolvedValue([]),
       markInstantDeliveryDispatchStarted,
       reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
-      updateDeliveryAttemptResult: vi.fn().mockResolvedValue(true),
+      updateDeliveryAttemptResult,
       upsertDeliveryTarget: vi.fn(),
       upsertDigestDelivery: vi.fn(),
     }));
@@ -726,6 +727,7 @@ describe("operator alert FK attribution", () => {
       claimInstantDeliveryAttempt,
       createDeliveryAttempt,
       markInstantDeliveryDispatchStarted,
+      updateDeliveryAttemptResult,
     };
   }
 
@@ -863,6 +865,57 @@ describe("operator alert FK attribution", () => {
     );
     await expect(sendOperatorAlertEmail(env, input)).resolves.toBe(false);
     expect(emailSend).not.toHaveBeenCalled();
+  });
+
+  it("keeps a lost operator dispatch claim in flight without calling the provider", async () => {
+    const emailSend = vi.fn();
+    const deliveryData = deliveryDataMock(null, "founder-user-id");
+    deliveryData.markInstantDeliveryDispatchStarted.mockResolvedValue(null);
+
+    const { sendOperatorAlertEmailDetailed } = await import("~/lib/delivery.server");
+    await expect(
+      sendOperatorAlertEmailDetailed(
+        {
+          EMAIL: { send: emailSend },
+          EMAIL_FROM_EMAIL: "alerts@0509.io",
+          LAUNCH_CANARY_EMAIL: "me@inish.in",
+        } as never,
+        {
+          subject: "test",
+          lines: ["signal"],
+          idempotencyKey: "cron-failure:scheduled_monitoring:dispatch-cas-loss",
+        },
+      ),
+    ).resolves.toBe("in_flight_or_unknown");
+
+    expect(deliveryData.markInstantDeliveryDispatchStarted).toHaveBeenCalledTimes(1);
+    expect(emailSend).not.toHaveBeenCalled();
+    expect(deliveryData.updateDeliveryAttemptResult).not.toHaveBeenCalled();
+  });
+
+  it("keeps a lost operator finalization claim in flight after one provider call", async () => {
+    const emailSend = vi.fn().mockResolvedValue({ messageId: "msg_op_cas_loss" });
+    const deliveryData = deliveryDataMock(null, "founder-user-id");
+    deliveryData.updateDeliveryAttemptResult.mockResolvedValue(false);
+
+    const { sendOperatorAlertEmailDetailed } = await import("~/lib/delivery.server");
+    await expect(
+      sendOperatorAlertEmailDetailed(
+        {
+          EMAIL: { send: emailSend },
+          EMAIL_FROM_EMAIL: "alerts@0509.io",
+          LAUNCH_CANARY_EMAIL: "me@inish.in",
+        } as never,
+        {
+          subject: "test",
+          lines: ["signal"],
+          idempotencyKey: "cron-failure:scheduled_monitoring:finalize-cas-loss",
+        },
+      ),
+    ).resolves.toBe("in_flight_or_unknown");
+
+    expect(emailSend).toHaveBeenCalledTimes(1);
+    expect(deliveryData.updateDeliveryAttemptResult).toHaveBeenCalledTimes(1);
   });
 
   it("keeps provider-unknown operator sends pending and rejects only definite failures", async () => {
