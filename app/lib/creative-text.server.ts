@@ -6,7 +6,11 @@ import {
   readResponseTextWithinLimit,
 } from "~/lib/bounded-response.server";
 import { creativeCaptureSourceFingerprint } from "~/lib/creative-capture-policy";
-import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
+import {
+  fetchWithTimeout,
+  promiseWithTimeout,
+  releaseFetchTimeout,
+} from "~/lib/fetch-timeout.server";
 import { hasClassifierScriptChar } from "~/lib/language-classifier";
 import { resolvePublicHttpUrl, resolvePublicRedirectUrl } from "~/lib/public-url.server";
 import type { AdRecord } from "~/lib/types";
@@ -34,6 +38,8 @@ const OCR_PROMPT =
 const MAX_CREATIVE_SNAPSHOT_HTML_BYTES = 750_000;
 const MAX_CREATIVE_IMAGE_BYTES = 2_000_000;
 const MAX_CREATIVE_IMAGE_CANDIDATES = 5;
+const CREATIVE_OCR_TIMEOUT_MS = 10_000;
+const CREATIVE_OCR_RETRY_BACKOFF_MS = 100;
 
 type KnownAdText = Pick<
   AdRecord,
@@ -142,7 +148,6 @@ export async function captureCreativeText(
   const primaryResult = withCreativeSourceFingerprint(
     await captureCreativeTextFromSource(env, url, ad),
     ad,
-    url,
   );
   const creativeImageUrl = ad.creativeImageUrl?.trim() ?? "";
   const primaryReasonCode =
@@ -162,7 +167,6 @@ export async function captureCreativeText(
   const fallbackResult = withCreativeSourceFingerprint(
     await captureCreativeTextFromSource(env, creativeImageUrl, ad),
     ad,
-    url,
   );
   if (!fallbackResult) return primaryResult;
 
@@ -411,11 +415,15 @@ async function extractCreativeTextFromImage(
   let lastReason: CreativeUnreadableReasonCode = "ocr_provider_failed";
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
-      const response = await env.AI.run(CREATIVE_TEXT_OCR_MODEL, {
-        image: [...image.bytes],
-        prompt: OCR_PROMPT,
-        max_tokens: 256,
-      });
+      const response = await promiseWithTimeout(
+        env.AI.run(CREATIVE_TEXT_OCR_MODEL, {
+          image: [...image.bytes],
+          prompt: OCR_PROMPT,
+          max_tokens: 256,
+        }),
+        CREATIVE_OCR_TIMEOUT_MS,
+        "Creative OCR provider timed out.",
+      );
       const rawDescription = readOcrDescription(response);
       if (!rawDescription.trim()) {
         lastReason = "ocr_empty_result";
@@ -447,7 +455,10 @@ async function extractCreativeTextFromImage(
     } catch (error) {
       lastReason = "ocr_provider_failed";
       logCreativeCaptureWarning(lastReason, error, attempt);
-      if (attempt === 1 && isTransientOcrError(error)) continue;
+      if (attempt === 1 && isTransientOcrError(error)) {
+        await delay(CREATIVE_OCR_RETRY_BACKOFF_MS);
+        continue;
+      }
       return {
         text: null,
         imageUrl: image.imageUrl,
@@ -591,15 +602,23 @@ function mergeCreativeImageCandidates(
 function withCreativeSourceFingerprint(
   result: CreativeTextCaptureResult | null,
   ad: KnownAdText,
-  captureUrl: string,
 ) {
-  const sourceFingerprint = creativeCaptureSourceFingerprint(ad, captureUrl);
+  const requestedSourceFingerprint = creativeCaptureSourceFingerprint(ad);
+  const sourceFingerprint = creativeCaptureSourceFingerprint(
+    {
+      ...ad,
+      creativeImageUrl: result?.imageUrl ?? ad.creativeImageUrl,
+    },
+  );
   if (!result || !sourceFingerprint) return result;
   return {
     ...result,
     metadata: {
       ...result.metadata,
       creativeSourceFingerprint: sourceFingerprint,
+      ...(requestedSourceFingerprint
+        ? { creativeRequestedSourceFingerprint: requestedSourceFingerprint }
+        : {}),
     },
   };
 }
@@ -674,6 +693,10 @@ function isTransientOcrError(error: unknown) {
   return /\b(?:3007|3008|3036|3040)\b|timeout|timed out|capacity|rate.?limit|temporar/i.test(
     message,
   );
+}
+
+function delay(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
 function logCreativeCaptureWarning(

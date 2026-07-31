@@ -366,7 +366,7 @@ describe("buildWatchlistReport", () => {
     });
   });
 
-  it("keeps a creative unreadable reason and proof-scoped signals when landing proof succeeded", () => {
+  it("keeps sparse successful proof evidence scoped to the historical capture", () => {
     const proof: ProofCaptureRecord = {
       id: "proof-succeeded",
       proofTargetId: "target-1",
@@ -379,7 +379,7 @@ describe("buildWatchlistReport", () => {
       extractedFields: {},
       fieldConfidence: {},
       extractionWarnings: [],
-      captureMetadata: { captureMethod: "landing_page_fetch" },
+      captureMetadata: {},
       renderMode: "mobile",
       deviceProfile: "mobile_default",
       extractorVersion: "lp-signals-v2",
@@ -395,6 +395,10 @@ describe("buildWatchlistReport", () => {
       creativeTextMetadata: {
         unreadableReasonCode: "ocr_provider_failed",
       },
+      landingPage: {
+        ...baseAd.landingPage!,
+        rawHeadline: " ",
+      },
     };
 
     const report = buildWatchlistReport({
@@ -405,9 +409,51 @@ describe("buildWatchlistReport", () => {
       generatedAt: "2026-04-01T02:00:00.000Z",
     });
 
-    expect(report.rows[0]?.captureReasonCode).toBe("ocr_provider_failed");
-    expect(report.rows[0]?.landingPage.headline).toBeNull();
-    expect(report.rows[0]?.landingPage.signals).toEqual([]);
+    expect(report.rows[0]?.creativeText).toBe("60 Hours Playback\nOnly ₹999");
+    expect(report.rows[0]?.captureReasonCode).toBeNull();
+    expect(report.rows[0]?.event?.sourceUrl).toBeNull();
+    expect(report.rows[0]?.landingPage).toMatchObject({
+      url: null,
+      headline: null,
+      captureLabel: null,
+      capturedAt: "2026-04-01T01:00:01.000Z",
+      signals: [],
+    });
+  });
+
+  it("uses current ad and analysis landing evidence when no proof is linked", () => {
+    const adWithAnalysisFallback: AdRecord = {
+      ...baseAd,
+      creativeText: null,
+      creativeTextMetadata: {
+        unreadableReasonCode: "ocr_provider_failed",
+      },
+      landingPage: {
+        ...baseAd.landingPage!,
+        rawHeadline: " ",
+      },
+    };
+
+    const report = buildWatchlistReport({
+      watchlist,
+      events: [watchEvent],
+      adsById: new Map([[baseAd.metaAdId, adWithAnalysisFallback]]),
+      generatedAt: "2026-04-01T02:00:00.000Z",
+    });
+
+    expect(report.rows[0]?.creativeText).toBe("60 Hours Playback\nOnly ₹999");
+    expect(report.rows[0]?.captureReasonCode).toBeNull();
+    expect(report.rows[0]?.landingPage).toMatchObject({
+      url: "https://boat.example.com/rockerz-neckband",
+      headline: "Buy the new Rockerz neckband",
+      captureLabel: "Page text checked",
+      capturedAt: "2026-03-31T00:00:00.000Z",
+      signals: [
+        { label: "CTA", value: "Shop now" },
+        { label: "Price", value: "₹999" },
+        { label: "Form present", value: "No" },
+      ],
+    });
   });
 
   it("does not attach a newer landing failure reason to a linked successful proof", () => {
@@ -423,6 +469,7 @@ describe("buildWatchlistReport", () => {
       extractedFields: {
         rawHeadline: "Historical captured offer",
         ctaText: "Buy now",
+        canonicalUrl: "https://historical.example.com/offer",
       },
       fieldConfidence: {},
       extractionWarnings: [],
@@ -455,7 +502,12 @@ describe("buildWatchlistReport", () => {
     });
 
     expect(report.rows[0]?.captureReasonCode).toBeNull();
+    expect(report.rows[0]?.event?.sourceUrl).toBe("https://historical.example.com/offer");
+    expect(report.rows[0]?.landingPage.url).toBe("https://historical.example.com/offer");
     expect(report.rows[0]?.landingPage.headline).toBe("Historical captured offer");
+    expect(report.rows[0]?.landingPage.signals).toEqual([
+      { label: "CTA", value: "Buy now" },
+    ]);
   });
 
 	it("emits null for missing fields instead of placeholder prose", () => {

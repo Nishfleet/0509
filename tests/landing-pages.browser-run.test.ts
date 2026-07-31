@@ -873,4 +873,62 @@ describe("captureLandingPageSnapshot Browser Run fallback", () => {
 
     await expect(captureLandingPageSnapshot({}, "https://example.com/glow")).resolves.toBeNull();
   });
+
+  it("contains a rejected rendered fallback after fetch failure", async () => {
+    mockFetchWithDns(
+      vi.fn(async () => {
+        throw new Error("fetch failed");
+      }) as never,
+    );
+    const captureRenderedLandingPageSnapshot = vi
+      .fn()
+      .mockRejectedValue(new Error("render failed"));
+    vi.doMock("~/lib/browser-run.server", () => ({
+      captureRenderedLandingPageSnapshot,
+    }));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const onFailure = vi.fn();
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+
+    await expect(
+      captureLandingPageSnapshot({}, "https://example.com/glow", { onFailure }),
+    ).resolves.toBeNull();
+
+    expect(onFailure).toHaveBeenCalledOnce();
+    expect(onFailure).toHaveBeenCalledWith({
+      reasonCode: "landing_fetch_failed",
+      metadata: {},
+    });
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('"reasonCode":"rendered_fallback_failed"'),
+    );
+  });
+
+  it("preserves an HTTP failure when its rendered fallback rejects", async () => {
+    mockFetchWithDns(
+      vi.fn(async () => new Response("upstream failed", { status: 500 })) as never,
+    );
+    const captureRenderedLandingPageSnapshot = vi
+      .fn()
+      .mockRejectedValue(new Error("render failed"));
+    vi.doMock("~/lib/browser-run.server", () => ({
+      captureRenderedLandingPageSnapshot,
+    }));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const onFailure = vi.fn();
+    const { captureLandingPageSnapshot } = await import("~/lib/landing-pages.server");
+
+    await expect(
+      captureLandingPageSnapshot({}, "https://example.com/glow", { onFailure }),
+    ).resolves.toBeNull();
+
+    expect(onFailure).toHaveBeenCalledOnce();
+    expect(onFailure).toHaveBeenCalledWith({
+      reasonCode: "landing_http_error",
+      metadata: { fetchStatus: 500 },
+    });
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('"reasonCode":"rendered_fallback_failed"'),
+    );
+  });
 });

@@ -3,6 +3,10 @@ import { DatabaseSync } from "node:sqlite";
 
 import { describe, expect, it, vi } from "vitest";
 
+import {
+  creativeCaptureSourceFingerprint,
+  shouldAttemptCreativeTextCapture,
+} from "~/lib/creative-capture-policy";
 import { CREATIVE_TEXT_EXTRACTOR_VERSION } from "~/lib/creative-text.server";
 import type { AdRecord } from "~/lib/types";
 import {
@@ -2897,6 +2901,78 @@ describe("listAdsByIds", () => {
         provenanceSource: "browser_render",
       }),
     ]));
+  });
+
+  it("keeps redirected creative cooldown stable through provider hydration", async () => {
+    const requestedImageUrl = "https://images.example.com/creative.jpg";
+    const persistedImageUrl = "https://cdn.example.com/creative-v2.jpg";
+    const capturedAt = "2026-07-31T00:00:00.000Z";
+    const incoming: AdRecord = {
+      metaAdId: "meta-redirected-creative-1",
+      advertiser: "Nykaa",
+      body: "Current provider copy",
+      previewHeadline: "Current provider headline",
+      previewSubhead: "",
+      hook: "Current hook",
+      offer: "Current offer",
+      cta: "Shop now",
+      format: "image",
+      languageLabel: "English",
+      destinationType: "website",
+      landingPageUrl: null,
+      adSnapshotUrl: null,
+      creativeImageUrl: requestedImageUrl,
+      countries: ["India"],
+      platforms: ["Instagram"],
+      firstSeenAt: null,
+      lastSeenAt: null,
+      active: true,
+      researchSummary: "Current provider summary",
+      source: "meta",
+      analysisFields: [],
+    };
+    const stored: AdRecord = {
+      ...incoming,
+      creativeImageUrl: persistedImageUrl,
+      creativeText: null,
+      creativeTextMetadata: {
+        capturedAt,
+        extractionStatus: "unreadable",
+        unreadableReasonCode: "ocr_binding_missing",
+        creativeSourceFingerprint: creativeCaptureSourceFingerprint({
+          creativeImageUrl: persistedImageUrl,
+        }),
+        creativeRequestedSourceFingerprint: creativeCaptureSourceFingerprint({
+          creativeImageUrl: requestedImageUrl,
+        }),
+      },
+    };
+    const mock = createMockDb([{
+      sqlIncludes: "FROM ad",
+      results: [{ id: stored.metaAdId, raw_json: JSON.stringify(stored) }],
+    }]);
+
+    const [hydrated] = await hydrateAdsWithPersistedCreatives(
+      { DB: mock.db } as never,
+      [incoming],
+    );
+
+    expect(hydrated.creativeImageUrl).toBe(requestedImageUrl);
+    expect(
+      shouldAttemptCreativeTextCapture(hydrated, Date.parse(capturedAt) + 1),
+    ).toBe(false);
+
+    const [changed] = await hydrateAdsWithPersistedCreatives(
+      { DB: mock.db } as never,
+      [{
+        ...incoming,
+        creativeImageUrl: "https://images.example.com/creative-new.jpg",
+      }],
+    );
+
+    expect(
+      shouldAttemptCreativeTextCapture(changed, Date.parse(capturedAt) + 1),
+    ).toBe(true);
   });
 });
 

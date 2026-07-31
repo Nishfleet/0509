@@ -130,8 +130,9 @@ export function buildWatchlistReport(input: {
         proofStatusLabel: classification.label,
         sourceTypeLabel: classification.sourceTypeLabel,
         sourceUrl:
-          sourceUrlForAd(ad) ??
-          readProofString(proofCapture, "canonicalUrl"),
+          proofCapture
+            ? readProofString(proofCapture, "canonicalUrl")
+            : sourceUrlForAd(ad),
         metaAdId: ad?.metaAdId ?? null,
       },
       advertiserFallback: readEventAdvertiser(event),
@@ -181,23 +182,28 @@ function buildReportRow(
   },
 ) {
   const proofCapture = options.proofCapture ?? null;
-  const creativeText = ad?.creativeText?.trim() || findAnalysisFieldValue(ad, "ocr_text");
+  const creativeText = resolveCreativeText(ad);
+  const adLandingPageHeadline =
+    presentString(ad?.landingPage?.rawHeadline) ??
+    findAnalysisFieldValue(ad, "landing_page_headline_summary");
   const landingPageHeadline =
     proofCapture
       ? readProofString(proofCapture, "rawHeadline", "headline")
-      : ad?.landingPage?.rawHeadline ||
-        findAnalysisFieldValue(ad, "landing_page_headline_summary");
+      : adLandingPageHeadline;
   const landingPageUrl =
-    readProofString(proofCapture, "canonicalUrl") ??
-    ad?.landingPage?.canonicalUrl ??
-    ad?.landingPageUrl ??
-    null;
+    proofCapture
+      ? readProofString(proofCapture, "canonicalUrl")
+      : ad?.landingPage?.canonicalUrl ??
+        ad?.landingPageUrl ??
+        null;
   const proofCaptureMethod = readProofCaptureMethod(proofCapture);
   const proofCapturedAt =
     proofCapture?.status === "succeeded"
       ? proofCapture.succeededAt ?? proofCapture.attemptedAt
       : null;
-	const landingPageCaptureMethod = proofCaptureMethod ?? ad?.landingPage?.captureMethod ?? null;
+	const landingPageCaptureMethod = proofCapture
+		? proofCaptureMethod
+		: ad?.landingPage?.captureMethod ?? null;
 	const landingPageCaptured = Boolean(landingPageCaptureMethod);
 	// Missing fields stay null so the report view can omit them entirely.
 	// Client-facing reports must never render "unavailable" placeholder prose.
@@ -226,9 +232,9 @@ function buildReportRow(
 				? formatCaptureMethodLabel(landingPageCaptureMethod)
 				: null,
       capturedAt:
-        proofCapturedAt ??
-        ad?.landingPage?.capturedAt ??
-        null,
+        proofCapture
+          ? proofCapturedAt
+          : ad?.landingPage?.capturedAt ?? null,
 			signals: buildLandingPageSignals(ad, proofCapture),
     },
     analysisFields: buildAnalysisFieldList(ad),
@@ -306,7 +312,11 @@ function readProofCaptureMethod(proofCapture: ProofCaptureRecord | null) {
   if (typeof proofCapture?.captureMetadata.renderProvider === "string") {
     return "browser_render" as const;
   }
-  return "landing_page_fetch" as const;
+  return null;
+}
+
+function resolveCreativeText(ad: AdRecord | null) {
+  return ad?.creativeText?.trim() || findAnalysisFieldValue(ad, "ocr_text");
 }
 
 function resolveCaptureReasonCode(
@@ -323,7 +333,7 @@ function resolveCaptureReasonCode(
     "unreadableReasonCode",
   );
   const missingCreativeReason =
-    creativeReason && !presentString(ad?.creativeText)
+    creativeReason && !presentString(resolveCreativeText(ad))
       ? creativeReason
       : null;
   const eventReason = presentString(eventReasonCode);

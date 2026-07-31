@@ -243,14 +243,19 @@ async function captureLandingPageSnapshotAt(
   }
 }
 
-function captureRenderedSnapshot(
+async function captureRenderedSnapshot(
   env: AppEnv,
   url: string,
   options: CaptureLandingPageSnapshotOptions,
 ) {
-  return options.persistArtifacts === false
-    ? captureRenderedLandingPageSnapshot(env, url, { persistArtifacts: false })
-    : captureRenderedLandingPageSnapshot(env, url);
+  try {
+    return await (options.persistArtifacts === false
+      ? captureRenderedLandingPageSnapshot(env, url, { persistArtifacts: false })
+      : captureRenderedLandingPageSnapshot(env, url));
+  } catch (error) {
+    logLandingCaptureWarning("rendered_fallback_failed", error);
+    return null;
+  }
 }
 
 function isRedirectStatus(status: number) {

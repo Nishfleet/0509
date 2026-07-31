@@ -47,9 +47,16 @@ export function shouldAttemptCreativeTextCapture(
     typeof metadata?.creativeSourceFingerprint === "string"
       ? metadata.creativeSourceFingerprint
       : null;
+  const requestedSourceFingerprint =
+    typeof metadata?.creativeRequestedSourceFingerprint === "string"
+      ? metadata.creativeRequestedSourceFingerprint
+      : null;
   if (
     !currentSourceFingerprint ||
-    capturedSourceFingerprint !== currentSourceFingerprint
+    (
+      capturedSourceFingerprint !== currentSourceFingerprint &&
+      requestedSourceFingerprint !== currentSourceFingerprint
+    )
   ) {
     return true;
   }

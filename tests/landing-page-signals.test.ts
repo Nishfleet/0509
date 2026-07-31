@@ -40,6 +40,16 @@ function mockFetchWithDns(handler: typeof fetch) {
   });
 }
 
+function medianDuration(run: () => void) {
+  run();
+  const durations = Array.from({ length: 5 }, () => {
+    const startedAt = performance.now();
+    run();
+    return performance.now() - startedAt;
+  }).sort((left, right) => left - right);
+  return durations[Math.floor(durations.length / 2)] ?? 0;
+}
+
 describe("extractLandingPageSignals", () => {
   it("treats entity-encoded loading text as an SPA shell placeholder", () => {
     expect(
@@ -63,6 +73,67 @@ describe("extractLandingPageSignals", () => {
     expect(
       hasMeaningfulLandingPageBodyText(
         "<html><head/><body>Actual offer details</body></html>",
+      ),
+    ).toBe(true);
+  });
+
+  it("implicitly closes malformed head content when body flow starts", () => {
+    expect(
+      hasMeaningfulLandingPageBodyText(
+        "<html><head><title>Metadata only</title><body>Actual offer details</body></html>",
+      ),
+    ).toBe(true);
+    expect(
+      hasMeaningfulLandingPageBodyText(
+        "<html><head><title>Metadata only</title><body>Loading…</body></html>",
+      ),
+    ).toBe(false);
+  });
+
+  it("implicitly closes malformed head content when the body tag is omitted", () => {
+    expect(
+      hasMeaningfulLandingPageBodyText(
+        '<html><head><meta name="description" content="Metadata only"><title>Metadata only</title><main>Actual offer details</main></html>',
+      ),
+    ).toBe(true);
+    expect(
+      hasMeaningfulLandingPageBodyText(
+        '<html><head><meta name="description" content="Metadata only"><title>Metadata only</title><div>Loading…</div></html>',
+      ),
+    ).toBe(false);
+  });
+
+  it("does not treat tag-looking head comments as body flow", () => {
+    expect(
+      hasMeaningfulLandingPageBodyText(
+        "<html><head><!-- <div>Fake comment content</div> --><body>Loading…</body></html>",
+      ),
+    ).toBe(false);
+    expect(
+      hasMeaningfulLandingPageBodyText(
+        "<html><head><!-- <main>Fake comment content</main> --><body>Actual offer details</body></html>",
+      ),
+    ).toBe(true);
+  });
+
+  it("does not treat tag-looking head container content as body flow", () => {
+    const hiddenHeadContent = `
+      <script>window.shell = "<div>Fake script content</div>";</script>
+      <style>.offer::before { content: "<h1>Fake style content</h1>"; }</style>
+      <template>
+        <script>window.template = "<main>Fake template script</main>";</script>
+        <template><main>Fake template content</main></template>
+      </template>
+    `;
+
+    expect(
+      hasMeaningfulLandingPageBodyText(
+        `<html><head>${hiddenHeadContent}<main>Loading…</main></html>`,
+      ),
+    ).toBe(false);
+    expect(
+      hasMeaningfulLandingPageBodyText(
+        `<html><head>${hiddenHeadContent}<main>Actual offer details</main></html>`,
       ),
     ).toBe(true);
   });
@@ -281,28 +352,40 @@ describe("extractLandingPageSignals", () => {
     });
   });
 
-  it("bounds malformed quoted-tag scanning", () => {
-    const html = `<input title="${"<".repeat(50_000)}`;
-    const startedAt = performance.now();
+  it("keeps malformed quoted-tag scanning near-linear", () => {
+    const smallHtml = `<input title="${"<".repeat(12_500)}`;
+    const largeHtml = `<input title="${"<".repeat(50_000)}`;
 
-    expect(extractLandingPageSignals(html)).toMatchObject({
+    expect(extractLandingPageSignals(largeHtml)).toMatchObject({
       ctaText: null,
       priceText: null,
       formPresent: false,
     });
-    expect(performance.now() - startedAt).toBeLessThan(750);
+    const smallDuration = medianDuration(() => {
+      extractLandingPageSignals(smallHtml);
+    });
+    const largeDuration = medianDuration(() => {
+      extractLandingPageSignals(largeHtml);
+    });
+    expect(largeDuration / Math.max(smallDuration, 0.1)).toBeLessThan(10);
   }, 3_000);
 
   it("does not rescan overlapping windows of repeated malformed tags", () => {
-    const html = "<input".repeat(5_000);
-    const startedAt = performance.now();
+    const smallHtml = "<input".repeat(1_250);
+    const largeHtml = "<input".repeat(5_000);
 
-    expect(extractLandingPageSignals(html)).toMatchObject({
+    expect(extractLandingPageSignals(largeHtml)).toMatchObject({
       ctaText: null,
       priceText: null,
       formPresent: false,
     });
-    expect(performance.now() - startedAt).toBeLessThan(300);
+    const smallDuration = medianDuration(() => {
+      extractLandingPageSignals(smallHtml);
+    });
+    const largeDuration = medianDuration(() => {
+      extractLandingPageSignals(largeHtml);
+    });
+    expect(largeDuration / Math.max(smallDuration, 0.1)).toBeLessThan(10);
   }, 3_000);
 
   it("recovers a valid submit tag after a malformed quoted tag", () => {

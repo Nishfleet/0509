@@ -17,6 +17,28 @@ const PRICE_PATTERNS = [
 const LEAD_FIELD_PATTERN = /\b(name|email|phone|mobile|tel|whatsapp)\b/i;
 const MAX_HTML_TAG_SCAN_LENGTH = 4_096;
 const HIDDEN_RECOVERY_TAG_NAMES = new Set(["script", "style", "template"]);
+const HEAD_ELEMENT_NAMES = new Set([
+  "base",
+  "basefont",
+  "bgsound",
+  "head",
+  "link",
+  "meta",
+  "noframes",
+  "noscript",
+  "script",
+  "style",
+  "template",
+  "title",
+]);
+const HEAD_CONTENT_CONTAINER_NAMES = new Set([
+  "noframes",
+  "noscript",
+  "script",
+  "style",
+  "template",
+  "title",
+]);
 const SHELL_PLACEHOLDER_PATTERN =
   /^(?:loading(?:\s+(?:app|application))?(?:,\s*please wait)?|please wait|initializing)(?:[.!…]+)?$/i;
 
@@ -83,15 +105,22 @@ function removeNonVisibleElements(
   let cursor = 0;
   let hiddenElement: string | null = null;
   let hiddenDepth = 0;
+  const headContentElements: string[] = [];
 
   while (cursor < html.length) {
     const tagStart = html.indexOf("<", cursor);
     if (tagStart < 0) break;
-    if (!hiddenElement && html.startsWith("<!--", tagStart)) {
+    if (
+      (!hiddenElement ||
+        (hiddenElement === "head" && headContentElements.length === 0)) &&
+      html.startsWith("<!--", tagStart)
+    ) {
       const commentEnd = html.indexOf("-->", tagStart + 4);
-      output.push(html.slice(copyFrom, tagStart), " ");
-      copyFrom = commentEnd < 0 ? html.length : commentEnd + 3;
-      cursor = copyFrom;
+      if (!hiddenElement) {
+        output.push(html.slice(copyFrom, tagStart), " ");
+        copyFrom = commentEnd < 0 ? html.length : commentEnd + 3;
+      }
+      cursor = commentEnd < 0 ? html.length : commentEnd + 3;
       if (commentEnd < 0) break;
       continue;
     }
@@ -133,6 +162,32 @@ function removeNonVisibleElements(
           hiddenDepth = 1;
         }
       }
+    } else if (hiddenElement === "head" && headContentElements.length > 0) {
+      const currentHeadContent =
+        headContentElements[headContentElements.length - 1];
+      if (tag.closing && tag.name === currentHeadContent) {
+        headContentElements.pop();
+      } else if (
+        currentHeadContent === "template" &&
+        !tag.closing &&
+        HEAD_CONTENT_CONTAINER_NAMES.has(tag.name)
+      ) {
+        headContentElements.push(tag.name);
+      }
+    } else if (
+      hiddenElement === "head" &&
+      !tag.closing &&
+      HEAD_CONTENT_CONTAINER_NAMES.has(tag.name)
+    ) {
+      headContentElements.push(tag.name);
+    } else if (
+      hiddenElement === "head" &&
+      !tag.closing &&
+      !HEAD_ELEMENT_NAMES.has(tag.name)
+    ) {
+      hiddenElement = null;
+      hiddenDepth = 0;
+      copyFrom = tagStart;
     } else if (tag.name === hiddenElement) {
       if (
         hiddenElement === "template" &&
