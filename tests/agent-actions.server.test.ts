@@ -730,6 +730,70 @@ describe("reclaimRetryableAgentActionAudit", () => {
     }
   });
 
+  it("rejects an old owner after reclaim while the current owner completes", async () => {
+    const harness = createAgentActionAuditHarness();
+    try {
+      const oldLeaseToken = "2026-06-18T00:00:00.000Z";
+      seedRetryableAudit(harness, {
+        id: "audit-stale-owner",
+        apiKeyId: "api-key-1",
+        status: "started",
+        updatedAt: oldLeaseToken,
+      });
+      const {
+        finishAgentActionAudit,
+        reclaimRetryableAgentActionAudit,
+      } = await import("~/lib/data/customer-api-agent.server");
+      const env = { DB: harness.db as unknown as D1Database } as never;
+
+      const reclaimed = await reclaimRetryableAgentActionAudit(env, {
+        auditId: "audit-stale-owner",
+        apiKeyId: "api-key-1",
+      });
+      expect(reclaimed?.updatedAt).not.toBe(oldLeaseToken);
+
+      const currentCompletion = await finishAgentActionAudit(
+        env,
+        "audit-stale-owner",
+        {
+          status: "succeeded",
+          leaseToken: reclaimed!.updatedAt,
+          result: { ok: true, supportCase: { id: "case-1" } },
+          metadata: { source: "mcp" },
+        },
+      );
+      const oldOwnerCompletion = await finishAgentActionAudit(
+        env,
+        "audit-stale-owner",
+        {
+          status: "failed",
+          leaseToken: oldLeaseToken,
+          errorCode: "action_failed",
+          errorMessage: "Old worker failed after the retry completed.",
+          metadata: { source: "mcp" },
+        },
+      );
+
+      expect(currentCompletion).toMatchObject({
+        status: "succeeded",
+        result: { ok: true, supportCase: { id: "case-1" } },
+      });
+      expect(oldOwnerCompletion).toBeNull();
+      expect(harness.sqlite.prepare(`
+        SELECT status, result_json, error_code, error_message
+        FROM agent_action_audit
+        WHERE id = ?
+      `).get("audit-stale-owner")).toEqual({
+        status: "succeeded",
+        result_json: '{"ok":true,"supportCase":{"id":"case-1"}}',
+        error_code: null,
+        error_message: null,
+      });
+    } finally {
+      harness.close();
+    }
+  });
+
   it("enforces API-key identity with null-safe claim semantics", async () => {
     const harness = createAgentActionAuditHarness();
     try {

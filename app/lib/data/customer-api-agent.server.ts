@@ -378,21 +378,36 @@ export async function reclaimRetryableAgentActionAudit(
   return row ? toAgentActionAuditRecord(row) : null;
 }
 
+type AgentActionAuditCompletion = {
+  status: Exclude<AgentActionAuditStatus, "started">;
+  resourceType?: string | null;
+  resourceId?: string | null;
+  result?: JsonRecord | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  metadata?: JsonRecord | null;
+};
+
 export async function finishAgentActionAudit(
   env: AppEnv,
   auditId: string,
-  input: {
-    status: Exclude<AgentActionAuditStatus, "started">;
-    resourceType?: string | null;
-    resourceId?: string | null;
-    result?: JsonRecord | null;
-    errorCode?: string | null;
-    errorMessage?: string | null;
-    metadata?: JsonRecord | null;
+  input: AgentActionAuditCompletion & {
+    /** Exact updated_at value captured when this execution acquired its lease. */
+    leaseToken: string;
   },
 ) {
+  const { leaseToken, ...completion } = input;
+  return persistAgentActionAuditCompletion(env, auditId, completion, leaseToken);
+}
+
+async function persistAgentActionAuditCompletion(
+  env: AppEnv,
+  auditId: string,
+  input: AgentActionAuditCompletion,
+  leaseToken: string | null,
+) {
   const timestamp = nowIso();
-  await run(
+  const result = await run(
     env,
     `
       UPDATE agent_action_audit
@@ -405,6 +420,10 @@ export async function finishAgentActionAudit(
           metadata_json = ?,
           updated_at = ?
       WHERE id = ?
+        AND (
+          ? IS NULL
+          OR (status = 'started' AND updated_at = ?)
+        )
     `,
     input.status,
     input.resourceType ?? null,
@@ -415,7 +434,16 @@ export async function finishAgentActionAudit(
     jsonValue(input.metadata ?? {}),
     timestamp,
     auditId,
+    leaseToken,
+    leaseToken,
   );
+
+  if (
+    typeof result.meta?.changes === "number" &&
+    result.meta.changes !== 1
+  ) {
+    return null;
+  }
 
   const row = await one<AgentActionAuditRow>(env, "SELECT * FROM agent_action_audit WHERE id = ?", auditId);
   return row ? toAgentActionAuditRecord(row) : null;
@@ -942,10 +970,14 @@ export async function closeCounterMoveFollowUp(
     brief: nextBrief,
   };
 
-  const updated = await finishAgentActionAudit(env, audit.id, {
-    status: "succeeded",
-    result: nextResult,
-  });
+  // This helper intentionally edits an already-terminal audit rather than
+  // completing a running lease, so it uses the private persistence path.
+  const updated = await persistAgentActionAuditCompletion(
+    env,
+    audit.id,
+    { status: "succeeded", result: nextResult },
+    null,
+  );
 
   return updated ? { ok: true as const, audit: updated } : { ok: false as const, reason: "update_failed" as const };
 }

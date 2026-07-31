@@ -522,6 +522,7 @@ describe("agent action audit persistence", () => {
       "audit-1",
       {
         status: "failed",
+        leaseToken: row.updated_at,
         resourceType: "watchlist",
         resourceId: "watchlist-1",
         errorCode: "action_failed",
@@ -542,6 +543,8 @@ describe("agent action audit persistence", () => {
       expect.any(String),
     ]);
     expect(update?.bindings[8]).toBe("audit-1");
+    expect(update?.bindings.slice(9)).toEqual([row.updated_at, row.updated_at]);
+    expect(update?.sql).toContain("status = 'started' AND updated_at = ?");
     expect(audit?.id).toBe("audit-1");
   });
 });

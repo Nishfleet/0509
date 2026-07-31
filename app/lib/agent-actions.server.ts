@@ -227,6 +227,7 @@ async function executeAuditedAgentAction<T extends JsonRecord>(
     const auditStatus = success.auditStatus ?? "succeeded";
     const completed = await finishAgentActionAudit(env, audit.id, {
       status: auditStatus,
+      leaseToken: audit.updatedAt,
       resourceType: normalizeOptionalString(success.resourceType ?? context.resourceType),
       resourceId: normalizeOptionalString(success.resourceId ?? context.resourceId),
       result: redactAgentActionResult(result, { actionName }),
@@ -242,14 +243,21 @@ async function executeAuditedAgentAction<T extends JsonRecord>(
       }),
     });
 
+    if (!completed) {
+      throw new AgentActionReplayUnavailableError(
+        "This action lease was reclaimed before completion.",
+      );
+    }
+
     return {
-      audit: completed ?? audit,
+      audit: completed,
       replayed: false,
       result,
     };
   } catch (error) {
     await finishAgentActionAudit(env, audit.id, {
       status: "failed",
+      leaseToken: audit.updatedAt,
       resourceType: normalizeOptionalString(context.resourceType),
       resourceId: normalizeOptionalString(context.resourceId),
       errorCode: error instanceof AgentActionIdempotencyConflictError ? "idempotency_conflict" : "action_failed",
