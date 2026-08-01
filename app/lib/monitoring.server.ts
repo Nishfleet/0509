@@ -47,8 +47,13 @@ import {
   runDigestDeliveryCycle,
   runDigestDeliveryCycleDetailed,
 } from "~/lib/digest-orchestration.server";
+import { reportScheduledTaskFailure } from "~/lib/cron-failure-alert.server";
 import { deliveryPreDispatchStaleBefore } from "~/lib/delivery-attempt-lease";
 import type { AppEnv } from "~/lib/env.server";
+import {
+  formatScheduledObservationHealthLines,
+  listScheduledObservationHealth,
+} from "~/lib/scheduled-observation-health.server";
 import {
   captureLandingPageSnapshot,
   type LandingPageCaptureFailureDetail,
@@ -681,6 +686,18 @@ export async function sendWeeklyBusinessNumbers(env: AppEnv) {
 
   const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
   const summary = await getWeeklyBusinessSummary(env);
+  let scheduledObservationHealthLines = [
+    "Scheduled-work heartbeat: unavailable",
+  ];
+  try {
+    scheduledObservationHealthLines = formatScheduledObservationHealthLines(
+      await listScheduledObservationHealth(env),
+    );
+  } catch {
+    scheduledObservationHealthLines = [
+      "Scheduled-work heartbeat: health read failed",
+    ];
+  }
   let annualValidationDriftLines: string[] = ["Annual validation: unavailable"];
   try {
     const { previewDodo0509PlanPrices } =
@@ -701,13 +718,35 @@ export async function sendWeeklyBusinessNumbers(env: AppEnv) {
     annualValidationDriftLines = ["Annual validation: preview_failed"];
   }
   const weekStamp = new Date().toISOString().slice(0, 10);
+  const idempotencyKey = `business-weekly:${weekStamp}`;
   const sent = await sendOperatorAlertEmail(env, {
     subject: "Five to Nine — weekly business numbers",
-    lines: buildWeeklyBusinessLines(summary, { annualValidationDriftLines }),
-    idempotencyKey: `business-weekly:${weekStamp}`,
+    lines: [
+      ...buildWeeklyBusinessLines(summary, { annualValidationDriftLines }),
+      ...scheduledObservationHealthLines,
+    ],
+    idempotencyKey,
   });
 
-  return { sent };
+  if (sent) {
+    return { sent: true, reason: "sent" as const };
+  }
+
+  try {
+    const { getDeliveryAttemptByIdempotencyKey } =
+      await import("~/lib/data.server");
+    const durableAttempt = await getDeliveryAttemptByIdempotencyKey(
+      env,
+      idempotencyKey,
+    );
+    if (durableAttempt?.status === "sent") {
+      return { sent: false, reason: "duplicate" as const };
+    }
+  } catch {
+    return { sent: false, reason: "delivery_state_unavailable" as const };
+  }
+
+  return { sent: false, reason: "delivery_failed" as const };
 }
 
 export async function sendCustomerAtRiskAlert(
@@ -715,6 +754,8 @@ export async function sendCustomerAtRiskAlert(
   options: {
     skippedForBudget?: number;
     dispatchFailures?: number;
+    inlineFailures?: number;
+    digestFailures?: number;
     idempotencyKey?: string;
   } = {},
 ) {
@@ -733,6 +774,16 @@ export async function sendCustomerAtRiskAlert(
   if ((options.dispatchFailures ?? 0) > 0) {
     lines.push(
       `${options.dispatchFailures} watchlist fan-out job(s) failed to dispatch in a recent scheduled scan window; reconciliation will retry, but the Workflow dispatch path needs attention.`,
+    );
+  }
+  if ((options.inlineFailures ?? 0) > 0) {
+    lines.push(
+      `${options.inlineFailures} inline scheduled scan(s) failed before completion.`,
+    );
+  }
+  if ((options.digestFailures ?? 0) > 0) {
+    lines.push(
+      `${options.digestFailures} scheduled digest(s) failed before delivery.`,
     );
   }
 
@@ -763,13 +814,46 @@ export async function sendCustomerAtRiskAlert(
   }
 
   const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
+  const idempotencyKey =
+    options.idempotencyKey ??
+    `operator-alert:${new Date().toISOString().slice(0, 10)}`;
   const sent = await sendOperatorAlertEmail(env, {
     subject: `0509 customer-at-risk: ${lines.length} signal${lines.length === 1 ? "" : "s"}`,
     lines,
-    idempotencyKey: options.idempotencyKey,
+    idempotencyKey,
   });
 
-  return { sent, signals: lines.length };
+  if (sent) {
+    return { sent: true, reason: "sent" as const, signals: lines.length };
+  }
+
+  try {
+    const { getDeliveryAttemptByIdempotencyKey } =
+      await import("~/lib/data.server");
+    const durableAttempt = await getDeliveryAttemptByIdempotencyKey(
+      env,
+      idempotencyKey,
+    );
+    if (durableAttempt?.status === "sent") {
+      return {
+        sent: false,
+        reason: "duplicate" as const,
+        signals: lines.length,
+      };
+    }
+  } catch {
+    return {
+      sent: false,
+      reason: "delivery_state_unavailable" as const,
+      signals: lines.length,
+    };
+  }
+
+  return {
+    sent: false,
+    reason: "delivery_failed" as const,
+    signals: lines.length,
+  };
 }
 
 export async function runScheduledDiscoveryWarmup(env: AppEnv) {
@@ -1794,12 +1878,50 @@ async function completeWatchlistRun(
   await finishWatchlistRun(env, runId, input);
 }
 
+function summarizeAlertDelivery(delivery: {
+  attempts: number;
+  details?: Array<{ status?: string; deferredByQuietHours?: boolean }>;
+}) {
+  // Production delivery returns one detail per attempt. Keep the fallback for
+  // narrow tests that predate per-attempt delivery state.
+  if (!Array.isArray(delivery.details)) {
+    return {
+      attempts: delivery.attempts,
+      accepted: delivery.attempts,
+      failures: 0,
+      deferrals: 0,
+    };
+  }
+
+  const deferrals = delivery.details.filter(
+    (attempt) => attempt.deferredByQuietHours === true,
+  );
+  const attemptedDeliveries = delivery.details.filter(
+    (attempt) => attempt.deferredByQuietHours !== true,
+  );
+  return {
+    attempts: attemptedDeliveries.length,
+    accepted: attemptedDeliveries.filter((attempt) => attempt.status === "sent").length,
+    failures: attemptedDeliveries.filter((attempt) => attempt.status !== "sent").length,
+    deferrals: deferrals.length,
+  };
+}
+
 class StaleOrchestratedWatchlistRunError extends Error {
   constructor() {
     super(
       "Stale orchestrated watchlist run token; refusing side effects or finalization.",
     );
     this.name = "StaleOrchestratedWatchlistRunError";
+  }
+}
+
+class RecordedAlertDeliveryFailureError extends Error {
+  constructor(failures: number, attempts: number) {
+    super(
+      `${failures} of ${attempts} alert delivery attempt${attempts === 1 ? "" : "s"} failed.`,
+    );
+    this.name = "RecordedAlertDeliveryFailureError";
   }
 }
 
@@ -1987,6 +2109,7 @@ export async function runWatchlist(
             lane: "customer",
           })
         : { attempts: 0, channels: [] };
+    const alertOutcome = summarizeAlertDelivery(alertDelivery);
 
     // WP-25: free users get no digests/instant alerts — send one activation-result
     // email when this run established the baseline (first successful scan).
@@ -2005,7 +2128,7 @@ export async function runWatchlist(
       runId,
       watchlist.id,
       {
-        status: "succeeded",
+        status: alertOutcome.failures > 0 ? "failed" : "succeeded",
         pagesScanned,
         summary: {
           adsSeen: currentObservations.length,
@@ -2021,14 +2144,23 @@ export async function runWatchlist(
             scanNativeEvents.length +
             proofEvaluation.confirmedEventCount +
             directWebsiteProofEvaluation.confirmedEventCount,
-          sendsTriggered: alertDelivery.attempts,
+          sendsTriggered: alertOutcome.accepted,
+          sendAttempts: alertOutcome.attempts,
+          sendFailures: alertOutcome.failures,
+          sendDeferrals: alertOutcome.deferrals,
           events: allEvents.length,
           eventTypes: summarizeEventTypes(allEvents),
         },
+        errorCode:
+          alertOutcome.failures > 0 ? "alert_delivery_failed" : null,
+        errorMessage:
+          alertOutcome.failures > 0
+            ? `${alertOutcome.failures} customer alert delivery attempt${alertOutcome.failures === 1 ? "" : "s"} failed.`
+            : null,
       },
       options,
     );
-    if (!options.orchestrationToken) {
+    if (!options.orchestrationToken && alertOutcome.failures === 0) {
       await touchWatchlistScanned(env, watchlist.id);
     }
     const commercialProvider = resolveCommercialDiscoveryProvider(env, {
@@ -2036,13 +2168,17 @@ export async function runWatchlist(
     });
     await logMetaIntegrationStatus(env, {
       status:
-        commercialProvider === "meta_library_browser"
+        alertOutcome.failures > 0
+          ? "degraded"
+          : commercialProvider === "meta_library_browser"
           ? "healthy"
           : commercialProvider === "meta_api"
             ? "degraded"
             : "demo",
       summary:
-        commercialProvider === "meta_library_browser"
+        alertOutcome.failures > 0
+          ? "Watchlist evidence completed, but customer alert delivery failed."
+          : commercialProvider === "meta_library_browser"
           ? "Scheduled watchlist scan completed through the commercial discovery resolver."
           : commercialProvider === "meta_api"
             ? "Scheduled watchlist scan completed with the diagnostic Meta API path."
@@ -2053,8 +2189,18 @@ export async function runWatchlist(
       },
     });
 
+    if (alertOutcome.failures > 0) {
+      throw new RecordedAlertDeliveryFailureError(
+        alertOutcome.failures,
+        alertOutcome.attempts,
+      );
+    }
+
     return { runId, events: allEvents.length };
   } catch (error) {
+    if (error instanceof RecordedAlertDeliveryFailureError) {
+      throw error;
+    }
     if (error instanceof StaleOrchestratedWatchlistRunError) {
       throw error;
     }
@@ -2150,13 +2296,14 @@ export async function runWatchlist(
               lane: "customer",
             })
           : { attempts: 0, channels: [] };
+      const alertOutcome = summarizeAlertDelivery(alertDelivery);
 
       await completeWatchlistRun(
         env,
         runId,
         watchlist.id,
         {
-          status: "succeeded",
+          status: alertOutcome.failures > 0 ? "failed" : "succeeded",
           pagesScanned: 0,
           summary: {
             adsSeen: 0,
@@ -2164,7 +2311,10 @@ export async function runWatchlist(
             candidatesDetected: directWebsiteProofEvaluation.candidateCount,
             proofsAttempted: directWebsiteProofEvaluation.proofAttemptCount,
             eventsConfirmed: directWebsiteProofEvaluation.confirmedEventCount,
-            sendsTriggered: alertDelivery.attempts,
+            sendsTriggered: alertOutcome.accepted,
+            sendAttempts: alertOutcome.attempts,
+            sendFailures: alertOutcome.failures,
+            sendDeferrals: alertOutcome.deferrals,
             events: directWebsiteProofEvaluation.events.length,
             eventTypes: summarizeEventTypes(
               directWebsiteProofEvaluation.events,
@@ -2173,24 +2323,45 @@ export async function runWatchlist(
             scanErrorCode: errorCode,
             scanErrorMessage: details,
           },
+          errorCode:
+            alertOutcome.failures > 0 ? "alert_delivery_failed" : null,
+          errorMessage:
+            alertOutcome.failures > 0
+              ? `${alertOutcome.failures} customer alert delivery attempt${alertOutcome.failures === 1 ? "" : "s"} failed.`
+              : null,
         },
         options,
       );
-      if (!options.orchestrationToken) {
+      if (!options.orchestrationToken && alertOutcome.failures === 0) {
         await touchWatchlistScanned(env, watchlist.id);
       }
       await logMetaIntegrationStatus(env, {
         status: "degraded",
         summary:
-          "Commercial discovery failed, but direct website evidence still completed.",
+          alertOutcome.failures > 0
+            ? "Commercial discovery failed; direct website evidence completed, but customer alert delivery failed."
+            : "Commercial discovery failed, but direct website evidence still completed.",
         errorCode,
         errorMessage: details,
         metadata: {
           watchlistId: watchlist.id,
           runId,
           websiteProofUrl: directWebsiteProofEvaluation.websiteUrl,
+          alertDeliveryAttempts: alertOutcome.attempts,
+          alertDeliveryAccepted: alertOutcome.accepted,
+          alertDeliveryFailures: alertOutcome.failures,
+          alertDeliveryDeferrals: alertOutcome.deferrals,
+          alertDeliveryErrorCode:
+            alertOutcome.failures > 0 ? "alert_delivery_failed" : null,
         },
       });
+
+      if (alertOutcome.failures > 0) {
+        throw new RecordedAlertDeliveryFailureError(
+          alertOutcome.failures,
+          alertOutcome.attempts,
+        );
+      }
 
       return { runId, events: directWebsiteProofEvaluation.events.length };
     }
@@ -2276,6 +2447,8 @@ export function diffWatchlistObservations(
         metadata: {
           from: baselineObservation.landing_page_url,
           to: observation.landing_page_url,
+          beforeCapturedAt: baselineObservation.seen_at,
+          capturedAt: observation.seen_at,
         },
       });
     }
@@ -2364,6 +2537,8 @@ function buildCreativeCopyDraft(
       offerFrom: from.offer || null,
       offerTo: to.offer || null,
       advertiser: typeof advertiser === "string" ? advertiser : null,
+      beforeCapturedAt: baseline.seen_at,
+      capturedAt: current.seen_at,
     },
   };
 }
@@ -3304,6 +3479,7 @@ async function evaluateSelectiveProofCandidates(
         recentWatchEvents: proofAwareRecentEvents,
         sensitivityMode: "balanced",
         burstCount: (eventTypesByAd.get(observation.ad_id) ?? []).length,
+        currentCapturedAt: snapshot.capturedAt,
       });
 
       for (const event of evaluated.events) {
@@ -3799,6 +3975,7 @@ async function evaluateDirectWebsiteProofCandidate(
       recentWatchEvents: input.recentWatchEvents,
       sensitivityMode: "balanced",
       burstCount: 1,
+      currentCapturedAt: snapshot.capturedAt,
     });
 
     const proofEvents: WatchEventRecord[] = [];
@@ -4374,11 +4551,6 @@ async function maybeSendFreeActivationResultEmail(
     userDeliveryProfile: Awaited<ReturnType<typeof getUserDeliveryProfile>>;
   },
 ) {
-  // First successful scan only — a baseline run already means activation ran.
-  if (input.baselineRunId) {
-    return;
-  }
-
   const profile = input.userDeliveryProfile;
   if (!profile?.email || profile.emailVerified !== true) {
     return;
@@ -4396,7 +4568,13 @@ async function maybeSendFreeActivationResultEmail(
       (event) =>
         ((event.metadata ?? {}) as Record<string, unknown>).kind === "baseline",
     );
-    if (!hasBaselineEvent && input.adsSeen > 0) {
+    if (
+      !shouldAttemptFreeActivationResult(
+        input.baselineRunId,
+        hasBaselineEvent,
+        input.adsSeen,
+      )
+    ) {
       return;
     }
 
@@ -4428,7 +4606,7 @@ async function maybeSendFreeActivationResultEmail(
 
     const { sendFreeActivationResultEmail } =
       await import("~/lib/delivery.server");
-    await sendFreeActivationResultEmail(env, {
+    const result = await sendFreeActivationResultEmail(env, {
       userId: input.watchlist.userId,
       email: profile.email,
       name: profile.name ?? null,
@@ -4437,7 +4615,31 @@ async function maybeSendFreeActivationResultEmail(
       adsFound: input.adsSeen,
       topAds,
     });
-  } catch {
+    if (
+      !result.sent &&
+      result.reason !== "duplicate" &&
+      result.reason !== "unsubscribed" &&
+      result.reason !== "missing_email"
+    ) {
+      await reportScheduledTaskFailure(
+        env,
+        "free_activation_result_delivery",
+        new Error(`activation result email was not sent: ${result.reason}`),
+      );
+    }
+  } catch (error) {
     // Activation email must never roll back a successful scan.
+    await reportScheduledTaskFailure(env, "free_activation_result_delivery", error);
   }
+}
+
+export function shouldAttemptFreeActivationResult(
+  baselineRunId: string | null,
+  hasBaselineEvent: boolean,
+  adsSeen: number,
+) {
+  // Later successful scans re-enter the delivery claim so a missing or
+  // definite failed first-result attempt gets another owner. The claim's
+  // idempotency key prevents a second provider call after acceptance.
+  return Boolean(baselineRunId) || hasBaselineEvent || adsSeen === 0;
 }
