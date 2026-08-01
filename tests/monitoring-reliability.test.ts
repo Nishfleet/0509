@@ -49,6 +49,27 @@ const PLAN_LIMITS_FIXTURE = {
   agency: { digests: true, digestCadence: "daily_and_weekly" },
 };
 
+function alertDetail(
+  outcome:
+    | "provider_accepted"
+    | "definitive_terminal_failure"
+    | "pending_provider_unknown"
+    | "quiet_deferral"
+    | "intentional_dedupe" = "provider_accepted",
+  claimedByThisRun = true,
+  providerAttemptedByThisRun =
+    claimedByThisRun && outcome !== "quiet_deferral" && outcome !== "intentional_dedupe",
+) {
+  return {
+    status: outcome === "provider_accepted" ? "sent" : "failed",
+    outcome,
+    claimedByThisRun,
+    providerAttemptedByThisRun,
+    duplicate: !claimedByThisRun,
+    source: claimedByThisRun ? "current_claim" : "durable_attempt",
+  };
+}
+
 function mockReliabilityDependencies(input: {
   watchlists: WatchlistRecord[];
   failingTargetLabel?: string;
@@ -102,6 +123,7 @@ function mockReliabilityDependencies(input: {
   const listWatchEventsBetween =
     input.listWatchEventsBetweenImpl ??
     vi.fn(async (_env: unknown, watchlistId: string) => [buildConfirmedEvent(watchlistId)]);
+  const logMetaIntegrationStatus = vi.fn().mockResolvedValue(undefined);
   const getDigest = input.getDigestImpl ?? vi.fn().mockResolvedValue(null);
   const listRetryableDigestRuns = vi
     .fn()
@@ -228,7 +250,7 @@ function mockReliabilityDependencies(input: {
     listAdsByIds: vi.fn().mockResolvedValue([]),
     listWatchEventsBetween,
     listWatchlists,
-    logMetaIntegrationStatus: vi.fn().mockResolvedValue(undefined),
+    logMetaIntegrationStatus,
     touchWatchlistScanned: vi.fn().mockResolvedValue(undefined),
     updateDeliveryAttemptResult: vi.fn(),
     upsertAd: vi.fn(),
@@ -238,7 +260,7 @@ function mockReliabilityDependencies(input: {
     vi.fn().mockResolvedValue({
       attempts: 1,
       channels: ["email"],
-      details: [{ status: "sent" }],
+      details: [alertDetail()],
     });
   vi.doMock("~/lib/delivery.server", () => ({
     deliverWatchlistAlerts,
@@ -270,6 +292,7 @@ function mockReliabilityDependencies(input: {
     searchAdsViaSourceResolver,
     deliverWatchlistAlerts,
     deliverWeeklyDigest,
+    logMetaIntegrationStatus,
     listWatchlists,
     listRetryableDigestRuns,
     listRetryableInstantAttempts: vi.fn().mockResolvedValue(input.retryableInstantAttempts ?? []),
@@ -698,7 +721,7 @@ describe("instant alert flush", () => {
       deliverAlertsImpl: vi.fn().mockResolvedValue({
         attempts: 1,
         channels: ["email"],
-        details: [{ status: "failed" }],
+        details: [alertDetail("definitive_terminal_failure")],
       }),
     });
 
@@ -722,7 +745,7 @@ describe("instant alert flush", () => {
 
     const { flushDeferredInstantAlerts } = await import("~/lib/monitoring.server");
     expect(await flushDeferredInstantAlerts(mocks.env as never))
-      .toEqual({ groups: 1, attempts: 1, failures: 1 });
+      .toEqual({ groups: 1, attempts: 0, failures: 1 });
   });
 });
 
@@ -813,7 +836,7 @@ describe("first-scan baseline event", () => {
       deliverAlertsImpl: vi.fn().mockResolvedValue({
         attempts: 1,
         channels: ["email"],
-        details: [{ status: "failed" }],
+        details: [alertDetail("definitive_terminal_failure")],
       }),
     });
 
@@ -853,7 +876,7 @@ describe("first-scan baseline event", () => {
       deliverAlertsImpl: vi.fn().mockResolvedValue({
         attempts: 1,
         channels: ["email"],
-        details: [{ status: "failed", deferredByQuietHours: true }],
+        details: [alertDetail("quiet_deferral")],
       }),
     });
 
@@ -876,6 +899,219 @@ describe("first-scan baseline event", () => {
           sendFailures: 0,
           sendDeferrals: 1,
         }),
+      }),
+    );
+  });
+
+  it("treats a durable accepted duplicate as logically successful without current-run counters", async () => {
+    const mocks = mockReliabilityDependencies({
+      watchlists: [buildWatchlist(1, "adspy")],
+      observationsForRun: [{
+        id: "obs-1",
+        ad_id: "ad-1",
+        landing_page_url: null,
+        metadata_json: "{}",
+      }],
+      deliverAlertsImpl: vi.fn().mockResolvedValue({
+        attempts: 1,
+        channels: ["email"],
+        details: [alertDetail("provider_accepted", false)],
+      }),
+    });
+
+    const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+    const result = await runScheduledMonitoring(mocks.env as never, {
+      includeDigests: false,
+      scheduledTime: Date.parse("2026-06-11T04:00:00.000Z"),
+    });
+
+    expect(result.inlineFailures).toBe(0);
+    expect(mocks.finishWatchlistRun).toHaveBeenCalledWith(
+      expect.anything(),
+      "run-watch-1",
+      expect.objectContaining({
+        status: "succeeded",
+        summary: expect.objectContaining({
+          sendsTriggered: 0,
+          sendAttempts: 0,
+          sendFailures: 0,
+          sendDeferrals: 0,
+        }),
+      }),
+    );
+  });
+
+  it("treats intentional dedupe as successful without current-run counters or private detail persistence", async () => {
+    const privateRecipient = "private-recipient@example.com";
+    const privateProviderId = "provider-message-private";
+    const mocks = mockReliabilityDependencies({
+      watchlists: [buildWatchlist(1, "adspy")],
+      observationsForRun: [{
+        id: "obs-1",
+        ad_id: "ad-1",
+        landing_page_url: null,
+        metadata_json: "{}",
+      }],
+      deliverAlertsImpl: vi.fn().mockResolvedValue({
+        attempts: 1,
+        channels: ["email"],
+        details: [{
+          ...alertDetail("intentional_dedupe", false),
+          targetValue: privateRecipient,
+          providerMessageId: privateProviderId,
+        }],
+      }),
+    });
+
+    const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+    const result = await runScheduledMonitoring(mocks.env as never, {
+      includeDigests: false,
+      scheduledTime: Date.parse("2026-06-11T04:00:00.000Z"),
+    });
+
+    expect(result.inlineFailures).toBe(0);
+    expect(mocks.finishWatchlistRun).toHaveBeenCalledWith(
+      expect.anything(),
+      "run-watch-1",
+      expect.objectContaining({
+        status: "succeeded",
+        summary: expect.objectContaining({
+          sendsTriggered: 0,
+          sendAttempts: 0,
+          sendFailures: 0,
+          sendDeferrals: 0,
+        }),
+      }),
+    );
+    expect(JSON.stringify(mocks.finishWatchlistRun.mock.calls)).not.toContain(privateRecipient);
+    expect(JSON.stringify(mocks.finishWatchlistRun.mock.calls)).not.toContain(privateProviderId);
+    expect(JSON.stringify(mocks.logMetaIntegrationStatus.mock.calls)).not.toContain(privateRecipient);
+    expect(JSON.stringify(mocks.logMetaIntegrationStatus.mock.calls)).not.toContain(privateProviderId);
+  });
+
+  it.each([
+    ["definitive_terminal_failure", "alert_delivery_failed"],
+    ["pending_provider_unknown", "alert_delivery_pending_provider_unknown"],
+  ] as const)(
+    "persists a durable duplicate %s as non-success without current-run counters",
+    async (outcome, errorCode) => {
+      const mocks = mockReliabilityDependencies({
+        watchlists: [buildWatchlist(1, "adspy")],
+        observationsForRun: [{
+          id: "obs-1",
+          ad_id: "ad-1",
+          landing_page_url: null,
+          metadata_json: "{}",
+        }],
+        deliverAlertsImpl: vi.fn().mockResolvedValue({
+          attempts: 1,
+          channels: ["email"],
+          details: [alertDetail(outcome, false)],
+        }),
+      });
+
+      const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+      const result = await runScheduledMonitoring(mocks.env as never, {
+        includeDigests: false,
+        scheduledTime: Date.parse("2026-06-11T04:00:00.000Z"),
+      });
+
+      expect(result.inlineFailures).toBe(1);
+      expect(mocks.finishWatchlistRun).toHaveBeenCalledWith(
+        expect.anything(),
+        "run-watch-1",
+        expect.objectContaining({
+          status: "failed",
+          errorCode,
+          summary: expect.objectContaining({
+            sendsTriggered: 0,
+            sendAttempts: 0,
+            sendFailures: 0,
+            sendDeferrals: 0,
+          }),
+        }),
+      );
+    },
+  );
+
+  it.each(["email", "whatsapp", "slack"] as const)(
+    "counts a %s provider attempt lost at finalization without owning its durable failure",
+    async (channel) => {
+      const mocks = mockReliabilityDependencies({
+        watchlists: [buildWatchlist(1, "adspy")],
+        observationsForRun: [{
+          id: "obs-1",
+          ad_id: "ad-1",
+          landing_page_url: null,
+          metadata_json: "{}",
+        }],
+        deliverAlertsImpl: vi.fn().mockResolvedValue({
+          attempts: 1,
+          channels: [channel],
+          details: [{
+            ...alertDetail("definitive_terminal_failure", false, true),
+            channel,
+          }],
+        }),
+      });
+
+      const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+      const result = await runScheduledMonitoring(mocks.env as never, {
+        includeDigests: false,
+        scheduledTime: Date.parse("2026-06-11T04:00:00.000Z"),
+      });
+
+      expect(result.inlineFailures).toBe(1);
+      expect(mocks.finishWatchlistRun).toHaveBeenCalledWith(
+        expect.anything(),
+        "run-watch-1",
+        expect.objectContaining({
+          status: "failed",
+          errorCode: "alert_delivery_failed",
+          summary: expect.objectContaining({
+            sendsTriggered: 0,
+            sendAttempts: 1,
+            sendFailures: 0,
+            sendDeferrals: 0,
+          }),
+        }),
+      );
+    },
+  );
+
+  it.each([
+    ["missing", undefined],
+    ["cardinality-mismatched", []],
+    ["malformed", [{}]],
+  ] as const)("fails closed when alert details are %s", async (_label, details) => {
+    const mocks = mockReliabilityDependencies({
+      watchlists: [buildWatchlist(1, "adspy")],
+      observationsForRun: [{
+        id: "obs-1",
+        ad_id: "ad-1",
+        landing_page_url: null,
+        metadata_json: "{}",
+      }],
+      deliverAlertsImpl: vi.fn().mockResolvedValue({
+        attempts: 1,
+        channels: ["email"],
+        ...(details === undefined ? {} : { details }),
+      }),
+    });
+
+    const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+    const result = await runScheduledMonitoring(mocks.env as never, {
+      includeDigests: false,
+      scheduledTime: Date.parse("2026-06-11T04:00:00.000Z"),
+    });
+
+    expect(result.inlineFailures).toBe(1);
+    expect(mocks.finishWatchlistRun).toHaveBeenCalledWith(
+      expect.anything(),
+      "run-watch-1",
+      expect.objectContaining({
+        status: "failed",
+        errorCode: "alert_delivery_outcome_invalid",
       }),
     );
   });

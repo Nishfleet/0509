@@ -33,6 +33,7 @@ vi.mock("~/lib/delivery.server", () => ({
   deliverWatchlistAlerts: vi.fn().mockResolvedValue({
     attempts: 0,
     channels: [],
+    details: [],
   }),
   sendOperatorAlertEmail: deliveryMocks.sendOperatorAlertEmail,
 }));

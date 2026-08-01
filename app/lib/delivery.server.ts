@@ -124,7 +124,20 @@ interface DigestAttemptSummary {
   deferredByQuietHours?: boolean;
 }
 
+type InstantDeliveryOutcome =
+  | "provider_accepted"
+  | "definitive_terminal_failure"
+  | "pending_provider_unknown"
+  | "quiet_deferral"
+  | "intentional_dedupe";
 
+interface InstantAttemptSummary extends DigestAttemptSummary {
+  outcome: InstantDeliveryOutcome;
+  claimedByThisRun: boolean;
+  providerAttemptedByThisRun: boolean;
+  duplicate: boolean;
+  source: "current_claim" | "durable_attempt";
+}
 
 export interface DigestDeliveryItem {
   eventId: string;
@@ -438,7 +451,7 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
     return {
       attempts: 0,
       channels: [] as DeliveryChannel[],
-      details: [] as DigestAttemptSummary[],
+      details: [] as InstantAttemptSummary[],
     };
   }
 
@@ -449,7 +462,7 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
       return {
         attempts: 0,
         channels: [] as DeliveryChannel[],
-        details: [] as DigestAttemptSummary[],
+        details: [] as InstantAttemptSummary[],
       };
     }
   }
@@ -461,7 +474,7 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
     return {
       attempts: 0,
       channels: [] as DeliveryChannel[],
-      details: [] as DigestAttemptSummary[],
+      details: [] as InstantAttemptSummary[],
     };
   }
 
@@ -486,7 +499,7 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
     return {
       attempts: 0,
       channels: [] as DeliveryChannel[],
-      details: [] as DigestAttemptSummary[],
+      details: [] as InstantAttemptSummary[],
     };
   }
 
@@ -507,7 +520,7 @@ export async function deliverWatchlistAlerts(env: AppEnv, input: DeliverWatchlis
       ? await loadAlertAdsById(env, input.events)
       : new Map<string, AdRecord>();
 
-  const attempts: DigestAttemptSummary[] = [];
+  const attempts: InstantAttemptSummary[] = [];
 
   for (const batch of batches) {
     const content = buildInstantAlertContent(
@@ -1082,7 +1095,7 @@ async function deliverInstantEmailBatch(
     batch: InstantAlertBatch;
     content: InstantAlertContent;
   },
-): Promise<DigestAttemptSummary> {
+): Promise<InstantAttemptSummary> {
   const attemptDedupe = await resolveInstantAttemptDedupe(env, {
     userId: input.userId,
     watchlistId: input.watchlistId,
@@ -1137,7 +1150,7 @@ async function deliverInstantEmailBatch(
       });
     }
 
-    return {
+    return summarizeCurrentInstantAttempt({
       channel: "email",
       status: "failed",
       targetValue: input.deliveryTarget.targetValue,
@@ -1145,7 +1158,9 @@ async function deliverInstantEmailBatch(
       errorMessage: null,
       deliveredAt: null,
       deferredByQuietHours: true,
-    };
+      providerAttemptedByThisRun: false,
+      webhookStatus: "provider_unknown",
+    });
   }
 
   if (!attemptDedupe.attemptId || !attemptDedupe.claimUpdatedAt) {
@@ -1181,14 +1196,16 @@ async function deliverInstantEmailBatch(
       if (durable) return summarizeDeliveryAttempt(durable);
       throw new Error("Instant email configuration-failure claim disappeared.");
     }
-    return {
+    return summarizeCurrentInstantAttempt({
       channel: "email",
       status: "failed",
       targetValue: input.deliveryTarget.targetValue,
       providerMessageId: null,
       errorMessage,
       deliveredAt: null,
-    };
+      providerAttemptedByThisRun: false,
+      webhookStatus: "failed",
+    });
   }
 
   const unsubscribeUrl = await buildUnsubscribeUrl(env, {
@@ -1223,7 +1240,7 @@ async function deliverInstantEmailBatch(
       failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
     });
     if (!finalized.won && finalized.attempt) {
-      return summarizeDeliveryAttempt(finalized.attempt);
+      return summarizeDeliveryAttempt(finalized.attempt, true);
     }
     attemptId = attemptDedupe.attemptId;
   } else if (attemptDedupe.retryAttempt) {
@@ -1277,14 +1294,16 @@ async function deliverInstantEmailBatch(
     );
   }
 
-  return {
+  return summarizeCurrentInstantAttempt({
     channel: "email",
     status: providerResult.status,
     targetValue: input.deliveryTarget.targetValue,
     providerMessageId: providerResult.providerMessageId,
     errorMessage: providerResult.errorMessage,
     deliveredAt: providerResult.deliveredAt,
-  };
+    providerAttemptedByThisRun: true,
+    webhookStatus: providerResult.webhookStatus,
+  });
 }
 
 async function deliverInstantWhatsAppBatch(
@@ -1297,7 +1316,7 @@ async function deliverInstantWhatsAppBatch(
     batch: InstantAlertBatch;
     content: InstantAlertContent;
   },
-): Promise<DigestAttemptSummary> {
+): Promise<InstantAttemptSummary> {
   const attemptDedupe = await resolveInstantAttemptDedupe(env, {
     userId: input.userId,
     watchlistId: input.watchlistId,
@@ -1352,7 +1371,7 @@ async function deliverInstantWhatsAppBatch(
       });
     }
 
-    return {
+    return summarizeCurrentInstantAttempt({
       channel: "whatsapp",
       status: "failed",
       targetValue: input.deliveryTarget.targetValue,
@@ -1360,7 +1379,9 @@ async function deliverInstantWhatsAppBatch(
       errorMessage: null,
       deliveredAt: null,
       deferredByQuietHours: true,
-    };
+      providerAttemptedByThisRun: false,
+      webhookStatus: "provider_unknown",
+    });
   }
 
   const dispatchClaim = await beginInstantDeliveryDispatch(env, attemptDedupe);
@@ -1395,7 +1416,7 @@ async function deliverInstantWhatsAppBatch(
       failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
     });
     if (!finalized.won && finalized.attempt) {
-      return summarizeDeliveryAttempt(finalized.attempt);
+      return summarizeDeliveryAttempt(finalized.attempt, true);
     }
     attemptId = attemptDedupe.attemptId;
   } else if (attemptDedupe.retryAttempt) {
@@ -1445,14 +1466,16 @@ async function deliverInstantWhatsAppBatch(
     await persistDeliveryTargetSuccess(env, input.deliveryTarget, attemptId, deliveredAt);
   }
 
-  return {
+  return summarizeCurrentInstantAttempt({
     channel: "whatsapp",
     status: providerResult.status,
     targetValue: input.deliveryTarget.targetValue,
     providerMessageId: providerResult.providerMessageId,
     errorMessage: providerResult.errorMessage,
     deliveredAt,
-  };
+    providerAttemptedByThisRun: true,
+    webhookStatus: providerResult.webhookStatus,
+  });
 }
 
 async function deliverInstantSlackBatch(
@@ -1465,7 +1488,7 @@ async function deliverInstantSlackBatch(
     batch: InstantAlertBatch;
     content: InstantAlertContent;
   },
-): Promise<DigestAttemptSummary> {
+): Promise<InstantAttemptSummary> {
   const attemptDedupe = await resolveInstantAttemptDedupe(env, {
     userId: input.userId,
     watchlistId: input.watchlistId,
@@ -1520,7 +1543,7 @@ async function deliverInstantSlackBatch(
       });
     }
 
-    return {
+    return summarizeCurrentInstantAttempt({
       channel: "slack",
       status: "failed",
       targetValue: input.deliveryTarget.targetValue,
@@ -1528,7 +1551,9 @@ async function deliverInstantSlackBatch(
       errorMessage: null,
       deliveredAt: null,
       deferredByQuietHours: true,
-    };
+      providerAttemptedByThisRun: false,
+      webhookStatus: "provider_unknown",
+    });
   }
 
   if (!attemptDedupe.attemptId || !attemptDedupe.claimUpdatedAt) {
@@ -1563,14 +1588,16 @@ async function deliverInstantSlackBatch(
       if (durable) return summarizeDeliveryAttempt(durable);
       throw new Error("Instant Slack local preparation claim disappeared.");
     }
-    return {
+    return summarizeCurrentInstantAttempt({
       channel: "slack",
       status: localResult.status,
       targetValue: input.deliveryTarget.targetValue,
       providerMessageId: null,
       errorMessage: localResult.errorMessage,
       deliveredAt: null,
-    };
+      providerAttemptedByThisRun: false,
+      webhookStatus: "failed",
+    });
   }
 
   const dispatchClaim = await beginInstantDeliveryDispatch(env, attemptDedupe);
@@ -1598,7 +1625,7 @@ async function deliverInstantSlackBatch(
       failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
     });
     if (!finalized.won && finalized.attempt) {
-      return summarizeDeliveryAttempt(finalized.attempt);
+      return summarizeDeliveryAttempt(finalized.attempt, true);
     }
     attemptId = attemptDedupe.attemptId;
   } else if (attemptDedupe.retryAttempt) {
@@ -1648,14 +1675,16 @@ async function deliverInstantSlackBatch(
     await persistDeliveryTargetSuccess(env, input.deliveryTarget, attemptId, providerResult.deliveredAt);
   }
 
-  return {
+  return summarizeCurrentInstantAttempt({
     channel: "slack",
     status: providerResult.status,
     targetValue: input.deliveryTarget.targetValue,
     providerMessageId: providerResult.providerMessageId,
     errorMessage: providerResult.errorMessage,
     deliveredAt: providerResult.deliveredAt,
-  };
+    providerAttemptedByThisRun: true,
+    webhookStatus: providerResult.webhookStatus,
+  });
 }
 
 async function deliverDigestToWhatsAppTarget(
@@ -2679,7 +2708,59 @@ async function claimInstantDeliveryAttemptWithoutDb(
   }
 }
 
-function summarizeDeliveryAttempt(attempt: DeliveryAttemptRecord): DigestAttemptSummary {
+function classifyInstantDeliveryOutcome(
+  attempt: Pick<DeliveryAttemptRecord, "status" | "webhookStatus">,
+): InstantDeliveryOutcome {
+  if (attempt.status === "skipped_due_to_quiet_hours") {
+    return "quiet_deferral";
+  }
+  if (attempt.status === "skipped_due_to_dedupe") {
+    return "intentional_dedupe";
+  }
+  if (attempt.status === "sent" && attempt.webhookStatus !== "failed") {
+    return "provider_accepted";
+  }
+  if (attempt.status === "failed" && attempt.webhookStatus === "failed") {
+    return "definitive_terminal_failure";
+  }
+  if (
+    attempt.status === "pending" ||
+    attempt.webhookStatus === "pending" ||
+    attempt.webhookStatus === "provider_unknown" ||
+    attempt.webhookStatus === "legacy_unknown"
+  ) {
+    return "pending_provider_unknown";
+  }
+  throw new Error("Instant delivery attempt has an ambiguous durable outcome.");
+}
+
+function summarizeCurrentInstantAttempt(
+  input: Omit<
+    InstantAttemptSummary,
+    "outcome" | "claimedByThisRun" | "duplicate" | "source"
+  > & {
+    webhookStatus: DeliveryAttemptRecord["webhookStatus"];
+  },
+): InstantAttemptSummary {
+  const { webhookStatus, ...summary } = input;
+  return {
+    ...summary,
+    outcome: classifyInstantDeliveryOutcome({
+      status: summary.deferredByQuietHours
+        ? "skipped_due_to_quiet_hours"
+        : summary.status,
+      webhookStatus,
+    }),
+    claimedByThisRun: true,
+    duplicate: false,
+    source: "current_claim",
+  };
+}
+
+function summarizeDeliveryAttempt(
+  attempt: DeliveryAttemptRecord,
+  providerAttemptedByThisRun = false,
+): InstantAttemptSummary {
   return {
     channel: attempt.channel,
     status: deliveryAttemptSummaryStatus(attempt.status),
@@ -2688,6 +2769,11 @@ function summarizeDeliveryAttempt(attempt: DeliveryAttemptRecord): DigestAttempt
     errorMessage: attempt.errorMessage,
     deliveredAt: confirmedDeliveryTimestamp(attempt),
     deferredByQuietHours: attempt.status === "skipped_due_to_quiet_hours",
+    outcome: classifyInstantDeliveryOutcome(attempt),
+    claimedByThisRun: false,
+    providerAttemptedByThisRun,
+    duplicate: true,
+    source: "durable_attempt",
   };
 }
 
