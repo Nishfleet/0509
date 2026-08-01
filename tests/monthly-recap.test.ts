@@ -99,7 +99,14 @@ describe("sendMonthlyCustomerRecaps", () => {
       { DB: {} } as never,
       { scheduledTime: Date.parse("2026-07-13T05:00:00.000Z") },
     );
-    expect(result).toEqual({ attempted: 0, sent: 0, skipped: 0, duplicates: 0 });
+    expect(result).toEqual({
+      attempted: 0,
+      sent: 0,
+      skipped: 0,
+      duplicates: 0,
+      claimLost: 0,
+      failed: 0,
+    });
   });
 
   it("sends one recap per paid user with activity and dedupes by month key", async () => {
@@ -109,10 +116,15 @@ describe("sendMonthlyCustomerRecaps", () => {
         attemptId: "attempt-1",
         claimUpdatedAt: "2026-07-06T05:00:00.000Z",
       })
-      .mockResolvedValueOnce({ attemptId: null, claimUpdatedAt: null });
+      .mockResolvedValueOnce({ attemptId: null, claimUpdatedAt: null })
+      .mockResolvedValueOnce({
+        attemptId: "attempt-3",
+        claimUpdatedAt: "2026-07-06T05:00:03.000Z",
+      });
     const markInstantDeliveryDispatchStarted = vi
       .fn()
-      .mockResolvedValue("2026-07-06T05:00:01.000Z");
+      .mockResolvedValueOnce("2026-07-06T05:00:01.000Z")
+      .mockResolvedValueOnce(null);
     const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
     const sendCloudflareEmail = vi.fn().mockResolvedValue({
       provider: "cloudflare",
@@ -122,6 +134,18 @@ describe("sendMonthlyCustomerRecaps", () => {
       providerStatusLastSeenAt: "2026-07-06T05:00:02.000Z",
       errorMessage: null,
       deliveredAt: null,
+    });
+    const upsertDeliveryTarget = vi.fn().mockResolvedValue({
+      id: "target-1",
+      channel: "email",
+      targetValue: "owner@example.com",
+      validationStatus: "validated",
+      isValidated: true,
+      isOptedIn: true,
+      isPaused: false,
+      optedOutAt: null,
+      optInSource: "account_email",
+      metadata: { autoProvisioned: true },
     });
 
     vi.doMock("~/lib/email-verification.server", () => ({
@@ -134,6 +158,18 @@ describe("sendMonthlyCustomerRecaps", () => {
       claimInstantDeliveryAttempt,
       markInstantDeliveryDispatchStarted,
       updateDeliveryAttemptResult,
+      getDeliveryAttemptByIdempotencyKey: vi
+        .fn()
+        .mockResolvedValueOnce({
+          status: "pending",
+          webhookStatus: "provider_unknown",
+          updatedAt: "2026-07-06T05:00:04.000Z",
+        })
+        .mockResolvedValueOnce({
+          status: "pending",
+          webhookStatus: "pending",
+          updatedAt: "2026-07-06T05:00:05.000Z",
+        }),
       getUserDeliveryProfile: vi.fn().mockResolvedValue({
         email: "owner@example.com",
         name: "Owner",
@@ -141,16 +177,9 @@ describe("sendMonthlyCustomerRecaps", () => {
       getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
         emailEnabled: true,
       }),
-      listDeliveryTargets: vi.fn().mockResolvedValue([
-        {
-          id: "target-1",
-          channel: "email",
-          targetValue: "owner@example.com",
-          isOptedIn: true,
-          isPaused: false,
-          optedOutAt: null,
-        },
-      ]),
+      listDeliveryTargets: vi.fn().mockResolvedValue([]),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: upsertDeliveryTarget,
+      upsertDeliveryTarget,
     }));
     vi.doMock("~/lib/delivery-email-core.server", () => ({
       EMAIL_PROVIDER: "cloudflare",
@@ -201,6 +230,15 @@ describe("sendMonthlyCustomerRecaps", () => {
       templateName: "monthly_recap",
       deliveryTargetId: "target-1",
     });
+    expect(upsertDeliveryTarget).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        userId: "user-1",
+        targetValue: "owner@example.com",
+        optInSource: "account_email",
+        metadata: { autoProvisioned: true },
+      }),
+    );
 
     const second = await sendMonthlyCustomerRecaps(
       { DB: {} } as never,
@@ -208,6 +246,41 @@ describe("sendMonthlyCustomerRecaps", () => {
     );
     expect(second.duplicates).toBe(1);
     expect(second.sent).toBe(0);
+
+    const claimLost = await sendMonthlyCustomerRecaps(
+      { DB: {} } as never,
+      { scheduledTime: Date.parse("2026-07-06T05:00:00.000Z") },
+    );
+    expect(claimLost).toMatchObject({
+      claimLost: 1,
+      failed: 0,
+      sent: 0,
+      duplicates: 0,
+    });
+
+    claimInstantDeliveryAttempt.mockResolvedValueOnce({
+      attemptId: "attempt-4",
+      claimUpdatedAt: "2026-07-06T05:00:05.000Z",
+    });
+    markInstantDeliveryDispatchStarted.mockResolvedValueOnce(null);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const rejected = await sendMonthlyCustomerRecaps(
+      { DB: {} } as never,
+      { scheduledTime: Date.parse("2026-07-06T05:00:00.000Z") },
+    );
+    expect(rejected).toMatchObject({
+      claimLost: 0,
+      failed: 1,
+      sent: 0,
+      duplicates: 0,
+    });
+    expect(consoleError).toHaveBeenCalledWith(
+      "Monthly recap dispatch gate rejected.",
+      expect.objectContaining({
+        userId: "user-1",
+        reason: "dispatch_gate_rejected",
+      }),
+    );
   });
 
   it("skips users with zero activity", async () => {
@@ -247,6 +320,57 @@ describe("sendMonthlyCustomerRecaps", () => {
       { DB: {} } as never,
       { force: true, scheduledTime: Date.parse("2026-07-06T05:00:00.000Z") },
     );
-    expect(result).toMatchObject({ attempted: 1, sent: 0, skipped: 1 });
+    expect(result).toMatchObject({
+      attempted: 1,
+      sent: 0,
+      skipped: 1,
+      failed: 0,
+    });
+  });
+
+  it("counts per-user data failures separately from intentional skips", async () => {
+    vi.doMock("~/lib/data.server", () => ({
+      claimInstantDeliveryAttempt: vi.fn(),
+      markInstantDeliveryDispatchStarted: vi.fn(),
+      updateDeliveryAttemptResult: vi.fn(),
+      getUserDeliveryProfile: vi.fn().mockResolvedValue({
+        email: "owner@example.com",
+        name: "Owner",
+      }),
+    }));
+    vi.doMock("~/lib/delivery-email-core.server", () => ({
+      EMAIL_PROVIDER: "cloudflare",
+      appBaseUrl: () => "https://0509.io",
+      escapeHtml: (value: string) => value,
+      providerAcceptedAt: () => null,
+      sendCloudflareEmail: vi.fn(),
+    }));
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue("starter"),
+    }));
+    vi.doMock("~/lib/data/d1.server", () => ({
+      queryAll: vi.fn().mockResolvedValue([
+        {
+          user_id: "user-1",
+          email: "owner@example.com",
+          name: "Owner",
+          plan: "starter",
+        },
+      ]),
+      queryOne: vi.fn().mockRejectedValue(new Error("recap stats unavailable")),
+    }));
+
+    const { sendMonthlyCustomerRecaps } = await import("~/lib/monthly-recap.server");
+    const result = await sendMonthlyCustomerRecaps(
+      { DB: {} } as never,
+      { force: true, scheduledTime: Date.parse("2026-07-06T05:00:00.000Z") },
+    );
+
+    expect(result).toMatchObject({
+      attempted: 1,
+      sent: 0,
+      skipped: 0,
+      failed: 1,
+    });
   });
 });

@@ -15,6 +15,7 @@ import {
   legacyWorkspaceDeliveryDefaults,
   listAdsByIds,
   listDeliveryTargets,
+  provisionVerifiedAccountEmailTargetIfUnsuppressed,
   reconcileDeliveryAttemptByProviderMessageId,
   updateDeliveryAttemptResult,
   upsertDeliveryTarget,
@@ -117,6 +118,7 @@ interface DigestAttemptSummary {
   // unset. Gates the failed→pending aggregate overwrite in
   // upsertDigestDelivery.
   claimedByThisRun?: boolean;
+  deferredByQuietHours?: boolean;
 }
 
 
@@ -1139,6 +1141,7 @@ async function deliverInstantEmailBatch(
       providerMessageId: null,
       errorMessage: null,
       deliveredAt: null,
+      deferredByQuietHours: true,
     };
   }
 
@@ -1353,6 +1356,7 @@ async function deliverInstantWhatsAppBatch(
       providerMessageId: null,
       errorMessage: null,
       deliveredAt: null,
+      deferredByQuietHours: true,
     };
   }
 
@@ -1520,6 +1524,7 @@ async function deliverInstantSlackBatch(
       providerMessageId: null,
       errorMessage: null,
       deliveredAt: null,
+      deferredByQuietHours: true,
     };
   }
 
@@ -1959,7 +1964,7 @@ async function beginDigestProviderDispatch(
   return { dispatchStartedAt: null, duplicate: current };
 }
 
-async function resolveDigestEmailTargets(
+export async function resolveDigestEmailTargets(
   env: AppEnv,
   userId: string,
   accountEmail: string | null,
@@ -1973,43 +1978,54 @@ async function resolveDigestEmailTargets(
     const migrate = deliveryData.migrateAutoProvisionedEmailTargets;
     if (typeof migrate === "function") await migrate(env, userId, accountEmail);
   }
+  const normalizedAccountEmail = normalizeDeliveryEmailValue(accountEmail);
+  if (!normalizedAccountEmail) {
+    return [];
+  }
+  if (await hasSuppressedEmailAddress(env, userId, normalizedAccountEmail)) {
+    return [];
+  }
+  // main's Gate C path needs the unfiltered target list plus its limit sentinel,
+  // so read all email targets and narrow to the account address below rather
+  // than filtering in the query as this branch previously did.
   const targetLimit = options.requireUniqueExistingTarget ? 100 : 10;
   const allTargets = await listDeliveryTargets(env, userId, {
     watchlistId: null,
     channel: "email",
     limit: targetLimit,
   });
-  const configuredTargets = allTargets.filter((target: DeliveryTargetRecord) =>
-    isUsableEmailTarget(target, accountEmail),
+  const matchingTargets = allTargets.filter((target: DeliveryTargetRecord) =>
+    isUsableEmailTarget(target, normalizedAccountEmail),
   );
 
+  // Gate C must see the raw matches: several byte-distinct rows that normalize
+  // to the same address are exactly the ambiguity it exists to reject, so it
+  // runs before this branch's dedupe rather than after it.
   if (options.requireUniqueExistingTarget) {
-    if (allTargets.length === targetLimit || configuredTargets.length !== 1) {
+    if (allTargets.length === targetLimit || matchingTargets.length !== 1) {
       throw new Error("Gate C proof email target must resolve uniquely.");
     }
-    return configuredTargets;
+    return matchingTargets;
   }
+
+  const configuredTargets = dedupeTargetsByValue(matchingTargets);
 
   if (configuredTargets.length > 0) {
     return configuredTargets;
   }
 
   // Never re-provision an address the recipient unsubscribed or paused —
-  // upsertDeliveryTarget would reset those flags.
-  if (!accountEmail || hasEmailTargetForAddress(allTargets, accountEmail)) {
+  // upsertDeliveryTarget would reset those flags. This branch expressed the
+  // same guard as "any target for this address exists", which is exactly what
+  // hasEmailTargetForAddress checks against the unfiltered list.
+  if (hasEmailTargetForAddress(allTargets, normalizedAccountEmail)) {
     return [];
   }
 
-  const fallbackTarget = await upsertDeliveryTarget(env, {
+  const fallbackTarget = await provisionVerifiedAccountEmailTargetIfUnsuppressed(env, {
     userId,
-    watchlistId: null,
-    channel: "email",
-    targetValue: accountEmail,
-    validationStatus: "validated",
-    isValidated: true,
-    isOptedIn: true,
+    targetValue: normalizedAccountEmail,
     optInSource: AUTO_PROVISIONED_EMAIL_SOURCE,
-    optedInAt: new Date().toISOString(),
     metadata: {
       autoProvisioned: true,
     },
@@ -2018,7 +2034,30 @@ async function resolveDigestEmailTargets(
   return fallbackTarget ? [fallbackTarget] : [];
 }
 
-async function resolveAlertEmailTargets(
+async function hasSuppressedEmailAddress(
+  env: AppEnv,
+  userId: string,
+  targetValue: string,
+) {
+  const suppressionReader = (
+    "hasSuppressedEmailTargetForUserAndAddress" in deliveryData
+      ? deliveryData.hasSuppressedEmailTargetForUserAndAddress
+      : undefined
+  ) as
+    | ((
+        readerEnv: AppEnv,
+        input: { userId: string; targetValue: string },
+      ) => Promise<boolean>)
+    | undefined;
+  return typeof suppressionReader === "function"
+    ? suppressionReader(env, {
+      userId,
+      targetValue,
+    })
+    : false;
+}
+
+export async function resolveAlertEmailTargets(
   env: AppEnv,
   userId: string,
   watchlistId: string,
@@ -2027,6 +2066,13 @@ async function resolveAlertEmailTargets(
   if ("migrateAutoProvisionedEmailTargets" in deliveryData && accountEmail) {
     const migrate = deliveryData.migrateAutoProvisionedEmailTargets;
     if (typeof migrate === "function") await migrate(env, userId, accountEmail);
+  }
+  const normalizedAccountEmail = normalizeDeliveryEmailValue(accountEmail);
+  if (!normalizedAccountEmail) {
+    return [];
+  }
+  if (await hasSuppressedEmailAddress(env, userId, normalizedAccountEmail)) {
+    return [];
   }
   const allTargets = dedupeTargetsByValue([
     ...(await listDeliveryTargets(env, userId, {
@@ -2040,7 +2086,9 @@ async function resolveAlertEmailTargets(
       limit: 10,
     })),
   ]);
-  const combinedTargets = allTargets.filter((target) => isUsableEmailTarget(target, accountEmail));
+  const combinedTargets = allTargets.filter((target) =>
+    isUsableEmailTarget(target, normalizedAccountEmail),
+  );
 
   if (combinedTargets.length > 0) {
     return combinedTargets;
@@ -2048,20 +2096,14 @@ async function resolveAlertEmailTargets(
 
   // Never re-provision an address the recipient unsubscribed or paused —
   // upsertDeliveryTarget would reset those flags.
-  if (!accountEmail || hasEmailTargetForAddress(allTargets, accountEmail)) {
+  if (hasEmailTargetForAddress(allTargets, normalizedAccountEmail)) {
     return [];
   }
 
-  const fallbackTarget = await upsertDeliveryTarget(env, {
+  const fallbackTarget = await provisionVerifiedAccountEmailTargetIfUnsuppressed(env, {
     userId,
-    watchlistId: null,
-    channel: "email",
-    targetValue: accountEmail,
-    validationStatus: "validated",
-    isValidated: true,
-    isOptedIn: true,
+    targetValue: normalizedAccountEmail,
     optInSource: AUTO_PROVISIONED_EMAIL_SOURCE,
-    optedInAt: new Date().toISOString(),
     metadata: {
       autoProvisioned: true,
     },
@@ -2642,6 +2684,7 @@ function summarizeDeliveryAttempt(attempt: DeliveryAttemptRecord): DigestAttempt
     providerMessageId: attempt.providerMessageId,
     errorMessage: attempt.errorMessage,
     deliveredAt: confirmedDeliveryTimestamp(attempt),
+    deferredByQuietHours: attempt.status === "skipped_due_to_quiet_hours",
   };
 }
 
@@ -2847,17 +2890,25 @@ function renderEventDiffHtml(event: WatchEventRecord) {
   if (!from || !to) {
     return "";
   }
+  const captures = resolveEventDiffCaptures(metadata);
+  if (!captures) {
+    return `
+      <p style="margin: 0 0 16px; color: #667085; font-size: 13px;">
+        Before/Now comparison not shown because one or both capture times were unavailable or invalid.
+      </p>
+    `;
+  }
 
   // The one fact the customer actually wants: what it said before, and now.
   return `
     <table style="margin: 0 0 16px; border-collapse: collapse; font-size: 14px; background-color: #ffffff; color: #0b1220;">
       <tr>
         <td style="padding: 4px 10px 4px 0; color: #98a2b3; vertical-align: top;">Before</td>
-        <td style="padding: 4px 0; color: #475467;">${escapeHtml(from)}</td>
+        <td style="padding: 4px 0; color: #475467;">${escapeHtml(from)}<br><small>Captured ${escapeHtml(formatEventCaptureTime(captures.beforeCapturedAt))}</small></td>
       </tr>
       <tr>
         <td style="padding: 4px 10px 4px 0; color: #98a2b3; vertical-align: top;">Now</td>
-        <td style="padding: 4px 0; color: #0b1220;"><strong>${escapeHtml(to)}</strong></td>
+        <td style="padding: 4px 0; color: #0b1220;"><strong>${escapeHtml(to)}</strong><br><small>Captured ${escapeHtml(formatEventCaptureTime(captures.nowCapturedAt))}</small></td>
       </tr>
     </table>
   `;
@@ -2867,7 +2918,48 @@ function renderEventDiffText(event: WatchEventRecord) {
   const metadata = (event.metadata ?? {}) as Record<string, unknown>;
   const from = typeof metadata.from === "string" ? metadata.from.trim() : "";
   const to = typeof metadata.to === "string" ? metadata.to.trim() : "";
-  return from && to ? ` — was "${from}", now "${to}"` : "";
+  if (!from || !to) return "";
+  const captures = resolveEventDiffCaptures(metadata);
+  return captures
+    ? ` — was "${from}" (captured ${formatEventCaptureTime(captures.beforeCapturedAt)}), now "${to}" (captured ${formatEventCaptureTime(captures.nowCapturedAt)})`
+    : " — changed values were recorded, but one or both capture times were unavailable or invalid.";
+}
+
+function resolveEventDiffCaptures(metadata: Record<string, unknown>) {
+  const read = (keys: string[]) => {
+    for (const key of keys) {
+      const value = metadata[key];
+      if (typeof value === "string" && value.trim()) return value.trim();
+    }
+    return null;
+  };
+  const beforeCapturedAt = read([
+    "beforeCapturedAt",
+    "fromCapturedAt",
+    "previousCapturedAt",
+    "baselineCapturedAt",
+  ]);
+  const nowCapturedAt = read(["capturedAt", "nowCapturedAt"]);
+  const beforeMs = beforeCapturedAt ? Date.parse(beforeCapturedAt) : Number.NaN;
+  const nowMs = nowCapturedAt ? Date.parse(nowCapturedAt) : Number.NaN;
+  if (
+    !beforeCapturedAt ||
+    !nowCapturedAt ||
+    !Number.isFinite(beforeMs) ||
+    !Number.isFinite(nowMs) ||
+    beforeMs >= nowMs
+  ) {
+    return null;
+  }
+  return { beforeCapturedAt, nowCapturedAt };
+}
+
+function formatEventCaptureTime(value: string) {
+  return `${new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "UTC",
+  }).format(new Date(value))} UTC`;
 }
 
 // Fetches the ads referenced by alert events in one batched call. A missing
@@ -3102,62 +3194,94 @@ export async function sendPresenceDigestEmail(
   const { renderEmailShell } = await import("~/lib/email-template.server");
   const { buildUnsubscribeUrl } = await import("~/lib/unsubscribe.server");
 
-  // Prefer an opted-in account email target so List-Unsubscribe works; never
-  // re-provision a paused/unsubscribed address.
-  let deliveryTargetId: string | null = null;
-  let unsubscribeUrl: string | null = null;
-  try {
-    const targets = await listDeliveryTargets(env, input.userId, {
-      watchlistId: null,
-      channel: "email",
-      limit: 10,
-    });
-    const normalized = input.email.trim().toLowerCase();
-    const usable = targets.find(
+  // Every exit reports the same {accepted, delivered} shape main introduced,
+  // because presence-digest.server.ts reads both fields off the result. A bare
+  // `false` would make delivery.accepted undefined and silently downgrade every
+  // one of these outcomes to "send_failed".
+  const notSent = { accepted: false, delivered: false };
+
+  const normalized = input.email.trim().toLowerCase();
+  if (!normalized) return notSent;
+  const targets = await listDeliveryTargets(env, input.userId, {
+    watchlistId: null,
+    channel: "email",
+    limit: 10,
+  });
+  const matchingTargets = targets.filter(
+    (target) => target.targetValue.trim().toLowerCase() === normalized,
+  );
+  let deliveryTarget =
+    matchingTargets.find(
       (target) =>
-        target.targetValue.trim().toLowerCase() === normalized &&
         target.isOptedIn &&
         !target.optedOutAt &&
         !target.isPaused &&
-        target.isValidated,
-    );
-    if (usable) {
-      deliveryTargetId = usable.id;
-      unsubscribeUrl = await buildUnsubscribeUrl(env, {
-        userId: input.userId,
-        targetId: usable.id,
-      });
-    } else if (!targets.some((t) => t.targetValue.trim().toLowerCase() === normalized)) {
-      const provisioned = await upsertDeliveryTarget(env, {
-        userId: input.userId,
-        watchlistId: null,
-        channel: "email",
-        targetValue: input.email.trim().toLowerCase(),
-        validationStatus: "validated",
-        isValidated: true,
-        isOptedIn: true,
-        optInSource: AUTO_PROVISIONED_EMAIL_SOURCE,
-        optedInAt: new Date().toISOString(),
-        metadata: { autoProvisioned: true, purpose: "presence_digest" },
-      });
-      if (provisioned?.id) {
-        deliveryTargetId = provisioned.id;
-        unsubscribeUrl = await buildUnsubscribeUrl(env, {
-          userId: input.userId,
-          targetId: provisioned.id,
-        });
-      }
-    }
-  } catch {
-    unsubscribeUrl = null;
+        target.isValidated &&
+        target.validationStatus === "validated",
+    ) ?? null;
+  if (!deliveryTarget && matchingTargets.length > 0) {
+    return notSent;
   }
+  deliveryTarget ??= await provisionVerifiedAccountEmailTargetIfUnsuppressed(env, {
+    userId: input.userId,
+    targetValue: normalized,
+    optInSource: AUTO_PROVISIONED_EMAIL_SOURCE,
+    metadata: { autoProvisioned: true, purpose: "presence_digest" },
+  });
+  if (!deliveryTarget) return notSent;
+
+  const unsubscribeUrl = await buildUnsubscribeUrl(env, {
+    userId: input.userId,
+    targetId: deliveryTarget.id,
+  });
 
   const bodyHtml = renderPresenceDigestHtml({
     lines: input.lines,
     appUrl: buildPresenceAppUrl(env),
   });
+  const payloadSnapshot = {
+    kind: "presence_digest",
+    lineCount: input.lines.length,
+  };
+  const claim = await claimInstantDeliveryAttempt(env, {
+    userId: input.userId,
+    watchlistId: null,
+    deliveryTargetId: deliveryTarget.id,
+    lane: "customer",
+    channel: "email",
+    provider: EMAIL_PROVIDER,
+    targetValue: normalized,
+    templateName: "presence_digest",
+    eventIds: [],
+    payloadSnapshot,
+    idempotencyKey: input.idempotencyKey,
+  });
+  if (!claim.attemptId || !claim.claimUpdatedAt) {
+    // A duplicate claim means someone else already owns this send. Report its
+    // real outcome rather than a bare boolean, so an already-confirmed duplicate
+    // is not downgraded to "unconfirmed".
+    const duplicate = claim.duplicate;
+    if (!duplicate) return notSent;
+    return {
+      accepted: duplicate.status === "sent",
+      delivered:
+        confirmedDeliveryTimestamp({
+          webhookStatus: duplicate.webhookStatus,
+          providerStatusLastSeenAt: duplicate.providerStatusLastSeenAt,
+          sentAt: duplicate.sentAt,
+        }) !== null,
+    };
+  }
+
+  const dispatchStartedAt = await markInstantDeliveryDispatchStarted(
+    env,
+    claim.attemptId,
+    claim.claimUpdatedAt,
+  );
+  if (!dispatchStartedAt) return notSent;
+
   const providerResult = await sendCloudflareEmail(env, {
-    to: input.email,
+    to: normalized,
     subject: input.subject,
     html: renderEmailShell({
       bodyHtml,
@@ -3169,30 +3293,27 @@ export async function sendPresenceDigestEmail(
   });
   const sentAt = providerAcceptedAt(providerResult);
 
-  await createDeliveryAttempt(env, {
-    userId: input.userId,
-    watchlistId: null,
-    digestRunId: null,
-    deliveryTargetId,
-    lane: "customer",
-    channel: "email",
+  const finalized = await updateDeliveryAttemptResult(env, claim.attemptId, {
     provider: providerResult.provider,
     status: providerResult.status,
     webhookStatus: providerResult.webhookStatus,
-    targetValue: input.email,
     providerMessageId: providerResult.providerMessageId,
     providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
-    templateName: "presence_digest",
-    eventIds: [],
-    payloadSnapshot: { kind: "presence_digest", lineCount: input.lines.length },
-    idempotencyKey: input.idempotencyKey,
     errorMessage: providerResult.errorMessage,
     sentAt,
     failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
+    payloadSnapshot,
+    targetValue: normalized,
+    expectedStatus: "pending",
+    expectedWebhookStatus: "provider_unknown",
+    expectedUpdatedAt: dispatchStartedAt,
   });
 
   return {
-    accepted: providerResult.status === "sent",
+    // `finalized === false` means the attempt row could not be written, so we
+    // must not report acceptance we cannot evidence (this branch's fix), while
+    // `delivered` stays main's provider-confirmation truth.
+    accepted: finalized !== false && providerResult.status === "sent",
     delivered:
       confirmedDeliveryTimestamp({
         webhookStatus: providerResult.webhookStatus,
