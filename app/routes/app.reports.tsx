@@ -694,6 +694,7 @@ async function loadReport(input: {
     getWatchlist,
     listAdsByIds,
     listCollectionItems,
+    listProofCapturePairsForEventIds,
     listWatchEvents,
   } = await import("~/lib/data.server");
   const { loadOwnedReportDocument } = await import("~/lib/report-loader.server");
@@ -716,6 +717,7 @@ async function loadReport(input: {
       getWatchlist,
       listAdsByIds,
       listCollectionItems,
+      listProofCapturePairsForEventIds,
       listWatchEvents,
     },
     { parallelWatchlistLookups: true },

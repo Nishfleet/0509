@@ -91,6 +91,17 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
     ? getWatchlist(env, requestedWatchlistId, workspaceUserId)
     : Promise.resolve(null);
   const now = new Date();
+  const captureWindowResult = loadWatchBoardCaptureWindow(
+    env,
+    workspaceUserId,
+    { now },
+  ).then(
+    (captureWindow) => ({ captureWindow, degraded: false }),
+    () => ({
+      captureWindow: emptyWatchBoardCaptureWindow(now),
+      degraded: true,
+    }),
+  );
   const [
     watchlists,
     discoveryStatus,
@@ -98,7 +109,7 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
     showPresenceNav,
     emailVerified,
     selectedWatchlist,
-    captureWindow,
+    captureWindowResultValue,
     workspaceDeliveryConfigRecord,
   ] = await Promise.all([
     watchlistsPromise,
@@ -111,15 +122,15 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
     // failure state (§6.2). A board must never take the page down, so a
     // failure degrades to an all-unchecked window rather than an error
     // boundary.
-    loadWatchBoardCaptureWindow(env, workspaceUserId, { now }).catch(() =>
-      emptyWatchBoardCaptureWindow(now),
-    ),
+    captureWindowResult,
     // The board is the DEFAULT view, so it needs the workspace delivery
     // timezone too: without it "Next check" would render in UTC while "Last
     // check" renders in the viewer's zone, and the two would disagree with
     // /app/dashboard.
     getWorkspaceDeliveryConfig(env, workspaceUserId),
   ]);
+  const captureWindow = captureWindowResultValue.captureWindow;
+  const captureWindowDegraded = captureWindowResultValue.degraded;
   const verifiedAccountEmail = emailVerified ? session.user.email : null;
   const renderedAt = now.toISOString();
   const workspaceDeliveryConfig =
@@ -130,6 +141,7 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
     return {
       renderedAt,
       captureWindow,
+      captureWindowDegraded,
       watchlists,
       selectedWatchlist: null,
       highlightedEventId: null as string | null,
@@ -247,6 +259,7 @@ export async function loadWatchlistsRoute({ context, request }: LoaderFunctionAr
   return {
     renderedAt,
     captureWindow,
+    captureWindowDegraded,
     watchlists,
     selectedWatchlist,
     highlightedEventId,

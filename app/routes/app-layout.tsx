@@ -90,7 +90,7 @@ export function shellPrimaryIsDemoted(pathname: string) {
 }
 
 /**
- * BL-030 - surfaces rebuilt in the landing language own their whole page,
+ * BL-030 / BL-040 - surfaces rebuilt in the landing language own their whole page,
  * header included: a working header is title left / one action inline right /
  * one context line, and a second right-aligned action band floating above it
  * is the "chrome explaining chrome" the concept deleted. Every other route
@@ -98,7 +98,14 @@ export function shellPrimaryIsDemoted(pathname: string) {
  * coexistence proof in the BL-030 report shows.
  */
 export function shellTopbarIsSuppressed(pathname: string) {
-  return pathname === "/app" || pathname === "/app/watchlists";
+  const normalizedPathname =
+    pathname.length > 1 ? pathname.replace(/\/+$/u, "") : pathname;
+  return (
+    normalizedPathname === "/app" ||
+    normalizedPathname === "/app/watchlists" ||
+    normalizedPathname === "/app/source-access" ||
+    normalizedPathname === "/app/developer-access"
+  );
 }
 
 export default function AppLayoutRoute() {

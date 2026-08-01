@@ -54,10 +54,10 @@ export default defineConfig({
   projects: [
     {
       name: "local-auth",
-      // Opt-in landing-language capture harnesses ride the same local fixture
-      // server. Each skips itself unless its package flag is set, so ordinary
-      // local-auth runs are unaffected.
-      testMatch: /(local-authenticated|bl030-capture|bl033b-capture)\.spec\.ts/,
+      // Landing-language live-proof captures ride the same local fixture
+      // server and skip themselves unless their package flag is set, so
+      // ordinary local-auth runs are unaffected.
+      testMatch: /(local-authenticated|bl030-capture|bl033b-capture|bl040-capture)\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         baseURL: localBaseURL,
