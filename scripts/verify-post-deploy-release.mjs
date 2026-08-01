@@ -59,6 +59,10 @@ const DEFERRED_BACKUP_REQUIRED_PASSED_STEPS = Object.freeze(
 const SHA = /^[a-f0-9]{40}$/u;
 const GATE_PHASE_IMMEDIATE = "immediate";
 const SAFE_PRIVATE_VALUE = /^[^\u0000\u0008\u000b\u000c\u000e-\u001f\u007f]*$/u;
+const RELEASE_COMPATIBLE_EMAIL_BLOCKERS = Object.freeze([
+  "no_recent_email_delivery_attempt",
+  "no_recent_email_sent",
+]);
 
 /** @typedef {{ runId: string, digestRunId: string, proofCaptureId: string }} CleanupTicket */
 /** @typedef {{ runId?: unknown, digestRunId?: unknown, proofCaptureId?: unknown, proofEmail?: unknown, [key: string]: unknown }} ProofPayload */
@@ -199,6 +203,117 @@ function readProofEmailStepDetail(payload, gateRunId) {
       subject: value.subject,
     },
     providerStatus: value.provider.status,
+  };
+}
+
+/** @param {unknown} value */
+function isRecord(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+/** @param {unknown} value */
+function hasExactlyReleaseCompatibleEmailBlockers(value) {
+  if (!Array.isArray(value) || value.length !== RELEASE_COMPATIBLE_EMAIL_BLOCKERS.length) {
+    return false;
+  }
+  const blockers = new Set(value);
+  return (
+    blockers.size === RELEASE_COMPATIBLE_EMAIL_BLOCKERS.length &&
+    RELEASE_COMPATIBLE_EMAIL_BLOCKERS.every((blocker) => blockers.has(blocker))
+  );
+}
+
+/**
+ * The public launch-readiness route intentionally remains strict about real
+ * customer digest delivery. Gate C's proof email is deliberately internal, so
+ * a release may accept only the exact customer-digest-absent response after the
+ * same-run proof email has already been provider-accepted. Every other
+ * production canary assertion remains fail-closed.
+ *
+ * @param {GateStepResult} result
+ * @param {{ journal: GateJournal, proofEmail: { detail: { gateRunId: string, dispatchStartedAt: string, subject: string }, providerStatus: string }, runId: string, workerVersionId: string }} context
+ */
+function acceptSameRunInternalProofForProductionMeta(result, context) {
+  if (result?.ok) return result;
+  if (
+    context.journal.steps.proof_email?.status !== "passed" ||
+    !validProofEmailStepDetail(context.journal.steps.proof_email.detail, context.runId) ||
+    context.proofEmail.providerStatus !== "sent" ||
+    !validProofEmailStepDetail(context.proofEmail.detail, context.runId)
+  ) {
+    return result;
+  }
+
+  const report = isRecord(result?.report) ? /** @type {any} */ (result.report) : null;
+  const readiness = isRecord(report?.launchReadiness) ? report.launchReadiness : null;
+  const signals = isRecord(readiness?.signals) ? readiness.signals : null;
+  const digestDelivery = isRecord(signals?.digestDelivery) ? signals.digestDelivery : null;
+  const emailDelivery = isRecord(signals?.emailDelivery) ? signals.emailDelivery : null;
+  const latestAttemptAt = emailDelivery?.latestAttemptAt;
+  const proofDispatchStartedAt = context.proofEmail.detail.dispatchStartedAt;
+  const healthChecks = Array.isArray(report?.healthChecks) ? report.healthChecks : [];
+  const expectedHealthUrls = DEFAULT_CANARY_HEALTH_BASE_URLS.map(
+    (baseUrl) => new URL("/api/health", baseUrl).toString(),
+  );
+  const actualHealthUrls = healthChecks.map((/** @type {any} */ check) => check?.url);
+  const healthIsExact =
+    healthChecks.length === expectedHealthUrls.length &&
+    JSON.stringify(actualHealthUrls) === JSON.stringify(expectedHealthUrls) &&
+    healthChecks.every((/** @type {any} */ check) =>
+      check?.ok === true &&
+      check?.status === 200 &&
+      check?.app === "0509" &&
+      check?.expectedWorkerVersionId === context.workerVersionId &&
+      check?.expectedSearchRolloutMode === "shadow" &&
+      check?.releaseIdentityOk === true &&
+      check?.releaseIdentity?.workerVersionId === context.workerVersionId &&
+      check?.releaseIdentity?.searchRolloutMode === "shadow"
+    );
+  const genericEmailIsCurrent =
+    Number.isFinite(emailDelivery?.recentAttempts) &&
+    emailDelivery.recentAttempts > 0 &&
+    Number.isFinite(emailDelivery?.recentSent) &&
+    emailDelivery.recentSent > 0 &&
+    validIso(latestAttemptAt) &&
+    Date.parse(latestAttemptAt) >= Date.parse(proofDispatchStartedAt);
+  const allOtherAssertionsPassed =
+    report?.passed === false &&
+    report?.expectedWorkerVersionId === context.workerVersionId &&
+    report?.expectedSearchRolloutMode === "shadow" &&
+    healthIsExact &&
+    report?.freshLiveBypass?.required === true &&
+    report?.freshLiveBypass?.configured === true &&
+    report?.freshLiveBypass?.proved === true &&
+    Array.isArray(report?.blockingFailures) &&
+    report.blockingFailures.length === 0 &&
+    report?.metaAdsBeta?.status === "ok" &&
+    Array.isArray(report?.metaAdsBeta?.failures) &&
+    report.metaAdsBeta.failures.length === 0 &&
+    readiness?.metaAdsBeta?.ok === true;
+
+  if (
+    readiness?.ok !== false ||
+    readiness?.status !== 503 ||
+    !hasExactlyReleaseCompatibleEmailBlockers(readiness?.blockers) ||
+    digestDelivery?.recentAttempts !== 0 ||
+    digestDelivery?.recentSent !== 0 ||
+    !genericEmailIsCurrent ||
+    !allOtherAssertionsPassed
+  ) {
+    return result;
+  }
+
+  return {
+    ...result,
+    ok: true,
+    report: {
+      ...report,
+      releaseCompatibility: {
+        status: "same_run_internal_proof_accepted",
+        gateRunId: context.runId,
+        customerDigestReadiness: "blocked",
+      },
+    },
   };
 }
 
@@ -679,7 +794,12 @@ export async function runVersionBoundGateC({
       }
       throw new Error("proof_email_failed");
     }
-    const live = await step("production_meta", () => productionCanary({ workerVersionId, token }));
+    const live = await step("production_meta", async () =>
+      acceptSameRunInternalProofForProductionMeta(
+        await productionCanary({ workerVersionId, token }),
+        { journal, proofEmail, runId, workerVersionId },
+      )
+    );
     journal.productionSummary = formatProductionSummary(live.report);
   } catch (error) {
     journal.errors.push(error instanceof Error ? error.message : "gate_c_primary_failed");
@@ -922,9 +1042,13 @@ async function reconcileExistingJournal({ journal, token, evidencePath, now, hea
 function formatProductionSummary(report) {
   if (!report || typeof report !== "object" || Array.isArray(report)) return "passed";
   if (!("healthChecks" in report) && !("health" in report)) return "passed";
-  return formatProductionCanaryReport(
+  const summary = formatProductionCanaryReport(
     /** @type {Awaited<ReturnType<typeof runProductionCanary>>} */ (report),
   );
+  const compatibility = /** @type {any} */ (report).releaseCompatibility;
+  return compatibility?.status === "same_run_internal_proof_accepted"
+    ? `${summary}\nrelease compatibility: same-run internal proof accepted; customer digest readiness remains blocked`
+    : summary;
 }
 
 /** @param {string} path @param {string} workerVersionId @param {string} runId @param {string} backupProofStatus @param {string | undefined} releaseSha */
