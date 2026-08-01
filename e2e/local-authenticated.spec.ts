@@ -524,7 +524,7 @@ test.describe("local authenticated E2E harness", () => {
         label: "Notifications",
         path: "/app/notifications",
         heading: "Notifications",
-        copy: ["Digest and alert delivery"],
+        copy: ["Delivery channels"],
       },
       {
         label: "Source access",

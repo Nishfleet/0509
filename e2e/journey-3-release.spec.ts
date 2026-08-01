@@ -282,10 +282,10 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
       await expect(page.getByText("Configured email recipient", { exact: true })).toBeVisible();
 
       await expectResponsiveSurface(page, viewport, "/app/notifications", "Notifications", [
-        /Digest and alert delivery/,
+        /Delivery channels/,
         /Email/,
         /Ready/,
-        /Configurable/,
+        /Not available/,
       ]);
       await page.goto("/unsubscribe");
       await expect(page.getByRole("heading", { name: "This unsubscribe link isn't valid.", exact: true })).toBeVisible();
