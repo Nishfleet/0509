@@ -46,6 +46,100 @@ function backupReport() {
   };
 }
 
+const PRODUCTION_HEALTH_URLS = [
+  "https://0509.io/api/health",
+  "https://www.0509.io/api/health",
+  "https://api.0509.io/api/health",
+];
+
+function releaseCompatibleProductionMetaReport(options: {
+  blockers?: string[];
+  digestAttempts?: number;
+  digestSent?: number;
+  emailAttempts?: number;
+  emailSent?: number;
+  latestAttemptAt?: string | null;
+  healthOk?: boolean;
+  blockingFailures?: unknown[];
+  metaStatus?: string;
+  metaReadinessOk?: boolean;
+} = {}) {
+  const healthChecks = PRODUCTION_HEALTH_URLS.map((url) => ({
+    ok: options.healthOk ?? true,
+    status: 200,
+    app: "0509",
+    expectedApp: "0509",
+    expectedWorkerVersionId: "worker-v1",
+    expectedSearchRolloutMode: "shadow",
+    releaseIdentity: {
+      workerVersionId: "worker-v1",
+      tag: null,
+      timestamp: "2026-07-18T00:00:00.000Z",
+      searchRolloutMode: "shadow",
+    },
+    releaseIdentityOk: true,
+    message: null,
+    url,
+  }));
+  const blockingFailures = options.blockingFailures ?? [];
+  const metaStatus = options.metaStatus ?? "ok";
+  const metaReadinessOk = options.metaReadinessOk ?? true;
+  return {
+    passed: false,
+    generatedAt: "2026-07-18T00:00:01.000Z",
+    baseUrl: "https://0509.io",
+    health: healthChecks[0],
+    healthChecks,
+    expectedWorkerVersionId: "worker-v1",
+    expectedSearchRolloutMode: "shadow",
+    launchReadiness: {
+      ok: false,
+      status: 503,
+      message: "no_recent_email_delivery_attempt, no_recent_email_sent",
+      url: "https://0509.io/api/launch-readiness",
+      blockers: options.blockers ?? [
+        "no_recent_email_delivery_attempt",
+        "no_recent_email_sent",
+      ],
+      signals: {
+        digestDelivery: {
+          recentAttempts: options.digestAttempts ?? 0,
+          recentSent: options.digestSent ?? 0,
+          latestAttemptAt: null,
+        },
+        emailDelivery: {
+          recentAttempts: options.emailAttempts ?? 3,
+          recentSent: options.emailSent ?? 3,
+          latestAttemptAt:
+            options.latestAttemptAt === undefined
+              ? "2026-07-18T00:00:00.131Z"
+              : options.latestAttemptAt,
+        },
+      },
+      metaAdsBeta: { ok: metaReadinessOk, blockers: [] },
+    },
+    queries: ["nykaa"],
+    country: "India",
+    mode: "advertiser",
+    requireFreshLive: true,
+    freshLiveBypass: {
+      required: true,
+      configured: true,
+      proved: true,
+      message: null,
+    },
+    blockingFailures,
+    metaAdsBeta: {
+      beta: true,
+      strict: false,
+      status: metaStatus,
+      failures: blockingFailures,
+      readiness: { ok: metaReadinessOk },
+    },
+    results: [],
+  };
+}
+
 afterEach(() => {
   while (roots.length > 0) rmSync(roots.pop()!, { recursive: true, force: true });
 });
@@ -284,6 +378,102 @@ describe("version-bound Gate C orchestrator", () => {
     );
   });
 
+  it("accepts only the same-run proof for the exact digest-only production-meta gap", async () => {
+    const productionCanary = vi.fn(async () => ({
+      ok: false,
+      report: releaseCompatibleProductionMetaReport(),
+    }));
+    const result = await runVersionBoundGateC({
+      workerVersionId: "worker-v1",
+      token: "token",
+      evidencePath: evidencePath(),
+      dependencies: {
+        healthAnchor: vi.fn(async () => ({ ok: true })),
+        backupLifecycle: vi.fn(async () => ({ ok: true, report: backupReport() })),
+        pricing: vi.fn(async () => ({ ok: true })),
+        billing: vi.fn(async () => ({ ok: true })),
+        proof: vi.fn(async () => ({ ok: true, payload: proofPayload() })),
+        productionCanary,
+        cleanup: vi.fn(async () => ({ ok: true })),
+      },
+    });
+
+    expect(result.passed).toBe(true);
+    expect(result.journal.steps.production_meta?.status).toBe("passed");
+    expect(result.journal.productionSummary).toContain(
+      "release compatibility: same-run internal proof accepted; customer digest readiness remains blocked",
+    );
+    expect(result.journal.productionSummary).toContain("ops readiness: failed");
+    expect(productionCanary).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    [
+      "an extra blocker",
+      { blockers: ["no_recent_email_delivery_attempt", "no_recent_email_sent", "no_recent_monitoring_run"] },
+    ],
+    ["missing generic email attempt", { emailAttempts: 0 }],
+    ["missing generic email acceptance", { emailSent: 0 }],
+    ["nonzero customer digest activity", { digestAttempts: 1 }],
+    ["a stale generic email attempt", { latestAttemptAt: "2026-07-17T23:59:59.999Z" }],
+    ["a malformed generic email timestamp", { latestAttemptAt: "not-a-timestamp" }],
+    ["a failed exact-worker health check", { healthOk: false }],
+    ["a fresh-live search failure", { blockingFailures: [{ query: "nykaa", status: "empty" }] }],
+    ["a Meta readiness failure", { metaStatus: "needs_proof", metaReadinessOk: false }],
+  ])("keeps production meta fatal for %s", async (_label, reportOptions) => {
+    const result = await runVersionBoundGateC({
+      workerVersionId: "worker-v1",
+      token: "token",
+      evidencePath: evidencePath(),
+      dependencies: {
+        healthAnchor: vi.fn(async () => ({ ok: true })),
+        backupLifecycle: vi.fn(async () => ({ ok: true, report: backupReport() })),
+        pricing: vi.fn(async () => ({ ok: true })),
+        billing: vi.fn(async () => ({ ok: true })),
+        proof: vi.fn(async () => ({ ok: true, payload: proofPayload() })),
+        productionCanary: vi.fn(async () => ({
+          ok: false,
+          report: releaseCompatibleProductionMetaReport(reportOptions),
+        })),
+        cleanup: vi.fn(async () => ({ ok: true })),
+      },
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.journal.errors).toContain("production_meta_failed");
+  });
+
+  it.each([undefined, "not-a-timestamp"])(
+    "does not run production meta when proof T0 is %s",
+    async (dispatchStartedAt) => {
+      const payload = proofPayload();
+      if (dispatchStartedAt === undefined) {
+        delete (payload.proofEmail as { dispatchStartedAt?: string }).dispatchStartedAt;
+      } else {
+        payload.proofEmail.dispatchStartedAt = dispatchStartedAt;
+      }
+      const productionCanary = vi.fn();
+      const result = await runVersionBoundGateC({
+        workerVersionId: "worker-v1",
+        token: "token",
+        evidencePath: evidencePath(),
+        dependencies: {
+          healthAnchor: vi.fn(async () => ({ ok: true })),
+          backupLifecycle: vi.fn(async () => ({ ok: true, report: backupReport() })),
+          pricing: vi.fn(async () => ({ ok: true })),
+          billing: vi.fn(async () => ({ ok: true })),
+          proof: vi.fn(async () => ({ ok: true, payload })),
+          productionCanary,
+          cleanup: vi.fn(async () => ({ ok: true })),
+        },
+      });
+
+      expect(result.passed).toBe(false);
+      expect(result.journal.errors).toContain("proof_email_dispatch_invalid");
+      expect(productionCanary).not.toHaveBeenCalled();
+    },
+  );
+
   it("does not hide a primary failure and still runs cleanup and the final identity check", async () => {
     const order: string[] = [];
     const result = await runVersionBoundGateC({
@@ -381,6 +571,7 @@ describe("version-bound Gate C orchestrator", () => {
 
   it("persists identifier-safe proof blockers and sanitized delivery on proof failure", async () => {
     const path = evidencePath();
+    const productionCanary = vi.fn();
     const result = await runVersionBoundGateC({
       workerVersionId: "worker-v1",
       token: "token",
@@ -418,13 +609,14 @@ describe("version-bound Gate C orchestrator", () => {
             },
           },
         })),
-        productionCanary: vi.fn(),
+        productionCanary,
         cleanup: vi.fn(async () => ({ ok: true })),
       },
     });
 
     expect(result.passed).toBe(false);
     expect(result.journal.errors).toContain("proof_email_failed");
+    expect(productionCanary).not.toHaveBeenCalled();
     // Gate C is NOT weakened: this proof failed, and it stays failed.
     const journal = JSON.parse(readFileSync(path, "utf8"));
     expect(journal.proofDiagnostics).toEqual({
