@@ -334,9 +334,9 @@ export async function sendDeliveryTestEmail(
     return false;
   }
 
-  // Cloudflare Email has no bounce webhooks, so a typo'd address shows
-  // "sent" forever while the customer receives nothing. This send gives
-  // them a way to prove the address works end-to-end.
+  // This app does not currently ingest Cloudflare Email delivery events, so
+  // provider acceptance alone cannot prove that a typo'd address received the
+  // message. This send gives the customer an end-to-end verification step.
   const providerResult = await sendCloudflareEmail(env, {
     to: recipient,
     subject: "Test email from Five to Nine",
@@ -878,11 +878,24 @@ export async function sendFreeActivationResultEmail(
     return { sent: false as const, reason: "missing_email" as const };
   }
 
+  const targetResolution = await resolveActivationEmailTarget(
+    env,
+    input.userId,
+    recipient,
+  );
+  if (!targetResolution.target) {
+    return {
+      sent: false as const,
+      reason: targetResolution.reason,
+    };
+  }
+  const deliveryTarget = targetResolution.target;
+
   const idempotencyKey = `activation-result:${input.userId}:${input.watchlistId}`;
   const claim = await claimInstantDeliveryAttempt(env, {
     userId: input.userId,
     watchlistId: input.watchlistId,
-    deliveryTargetId: null,
+    deliveryTargetId: deliveryTarget.id,
     lane: "customer",
     channel: "email",
     provider: EMAIL_PROVIDER,
@@ -909,29 +922,6 @@ export async function sendFreeActivationResultEmail(
     return { sent: false as const, reason: "claim_lost" as const };
   }
 
-  // Honor unsubscribe: if the only account-email target is opted out, skip send.
-  try {
-    const targets = await listAccountEmailTargetsForWelcome(env, input.userId, recipient);
-    const optedOut =
-      targets.length === 0 &&
-      (await hasOptedOutAccountEmail(env, input.userId, recipient));
-    if (optedOut) {
-      await updateDeliveryAttemptResult(env, claim.attemptId, {
-        provider: EMAIL_PROVIDER,
-        status: "failed",
-        webhookStatus: "failed",
-        errorMessage: "Recipient unsubscribed before activation-result dispatch.",
-        failedAt: new Date().toISOString(),
-        expectedStatus: "pending",
-        expectedWebhookStatus: "pending",
-        expectedUpdatedAt: dispatchStartedAt,
-      });
-      return { sent: false as const, reason: "unsubscribed" as const };
-    }
-  } catch {
-    // Proceed without unsubscribe gate if target lookup is unavailable.
-  }
-
   const base = appBaseUrl(env);
   const watchlistUrl = `${base}/app/watchlists?watchlist=${encodeURIComponent(input.watchlistId)}`;
   const billingUrl = `${base}/app/billing`;
@@ -945,14 +935,10 @@ export async function sendFreeActivationResultEmail(
   let unsubscribeUrl: string | null = null;
   try {
     const { buildUnsubscribeUrl } = await import("~/lib/unsubscribe.server");
-    const targets = await listAccountEmailTargetsForWelcome(env, input.userId, recipient);
-    const primary = targets[0];
-    if (primary?.id) {
-      unsubscribeUrl = await buildUnsubscribeUrl(env, {
-        userId: input.userId,
-        targetId: primary.id,
-      });
-    }
+    unsubscribeUrl = await buildUnsubscribeUrl(env, {
+      userId: input.userId,
+      targetId: deliveryTarget.id,
+    });
   } catch {
     unsubscribeUrl = null;
   }
@@ -1030,28 +1016,104 @@ async function listAccountEmailTargetsForWelcome(
   });
 }
 
-async function hasOptedOutAccountEmail(env: AppEnv, userId: string, accountEmail: string) {
-  const listTargets = ("listDeliveryTargets" in deliveryData
-    ? deliveryData.listDeliveryTargets
-    : undefined) as
+type ActivationEmailTarget = {
+  id: string;
+  targetValue: string;
+  isOptedIn: boolean;
+  optedOutAt: string | null;
+  isPaused: boolean;
+  isValidated: boolean;
+  validationStatus: string;
+};
+
+async function resolveActivationEmailTarget(
+  env: AppEnv,
+  userId: string,
+  accountEmail: string,
+): Promise<{
+  target: ActivationEmailTarget | null;
+  reason: "unsubscribed" | "target_unavailable" | "target_not_ready" | null;
+}> {
+  const normalized = normalizeDeliveryEmail(accountEmail);
+  const listTargets = deliveryData.listDeliveryTargets as
     | ((
         listEnv: AppEnv,
         listUserId: string,
-        opts: { watchlistId: null; channel: "email"; limit: number },
-      ) => Promise<Array<{ targetValue: string; isOptedIn: boolean; optedOutAt: string | null }>>)
+        opts: {
+          watchlistId: null;
+          channel: "email";
+          targetValue: string;
+          limit: number;
+        },
+      ) => Promise<ActivationEmailTarget[]>)
     | undefined;
-  if (typeof listTargets !== "function") {
-    return false;
+  const suppressionReader =
+    deliveryData.hasSuppressedEmailTargetForUserAndAddress as
+      | ((
+          readerEnv: AppEnv,
+          input: { userId: string; targetValue: string },
+        ) => Promise<boolean>)
+      | undefined;
+  const provisionTarget =
+    deliveryData.provisionVerifiedAccountEmailTargetIfUnsuppressed;
+  if (
+    !normalized ||
+    typeof listTargets !== "function" ||
+    typeof suppressionReader !== "function" ||
+    typeof provisionTarget !== "function"
+  ) {
+    return { target: null, reason: "target_unavailable" };
   }
+
   const targets = await listTargets(env, userId, {
     watchlistId: null,
     channel: "email",
+    targetValue: normalized,
     limit: 10,
   });
-  const normalized = normalizeDeliveryEmail(accountEmail);
-  return targets.some(
+  if (
+    await suppressionReader(env, {
+      userId,
+      targetValue: normalized,
+    })
+  ) {
+    return { target: null, reason: "unsubscribed" };
+  }
+
+  const usable = targets.find(
     (target) =>
       normalizeDeliveryEmail(target.targetValue) === normalized &&
-      (!target.isOptedIn || Boolean(target.optedOutAt)),
+      target.isOptedIn &&
+      !target.optedOutAt &&
+      !target.isPaused &&
+      target.isValidated &&
+      target.validationStatus === "validated",
   );
+  if (usable) {
+    return { target: usable, reason: null };
+  }
+
+  // A workspace target for this address is authoritative even when paused or
+  // invalid. Never let lazy provisioning reset its consent/readiness state.
+  // Paused/unvalidated is not an opt-out — callers should still page.
+  if (targets.length > 0) {
+    return { target: null, reason: "target_not_ready" };
+  }
+
+  const provisioned = await provisionTarget(env, {
+    userId,
+    targetValue: normalized,
+    optInSource: "account_email",
+    metadata: {
+      autoProvisioned: true,
+      purpose: "free_activation_result",
+    },
+  });
+  if (!provisioned?.id) {
+    return { target: null, reason: "target_unavailable" };
+  }
+  return {
+    target: provisioned as ActivationEmailTarget,
+    reason: null,
+  };
 }

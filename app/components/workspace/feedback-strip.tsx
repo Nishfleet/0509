@@ -27,6 +27,7 @@ export function FeedbackStrip({
 }) {
   return (
     <div
+      aria-atomic="true"
       aria-live={tone === "bad" ? "assertive" : "polite"}
       className={`f9-wk-strip${tone === "bad" ? " is-bad" : ""}`}
       role={tone === "bad" ? "alert" : "status"}

@@ -53,7 +53,7 @@ export interface SearchAdsViaSourceOptions {
  * number of extra pages on the first request. Cursor-based "Load more" stays
  * single-page. Watchlist scans never set interactive=true.
  */
-async function searchMetaApiAdsWithInteractiveDepth(
+export async function searchMetaApiAdsWithInteractiveDepth(
   env: AppEnv,
   query: NormalizedSavedQuery,
   cursor: string | null | undefined,
@@ -85,10 +85,19 @@ async function searchMetaApiAdsWithInteractiveDepth(
         ads.push(ad);
       }
       nextCursor = more.nextCursor;
-    } catch {
+    } catch (error) {
       // MINOR: a page-2/3 failure must not discard page 1 results already
       // collected for the interactive public search.
-      break;
+      return {
+        ...first,
+        ads,
+        nextCursor,
+        discoveryStatus: "healthy",
+        discoveryPartial: true,
+        discoverySummary:
+          "Some additional Meta results could not be loaded. The results shown are partial; retry to continue from the saved cursor.",
+        discoveryFailureClass: resolveMetaApiFailureClass(error),
+      };
     }
   }
 
@@ -102,6 +111,7 @@ async function searchMetaApiAdsWithInteractiveDepth(
 const PUBLIC_SEARCH_PROVIDER_COOLDOWN_MS = 2 * 60 * 1000;
 const RATE_LIMIT_PROVIDER_COOLDOWN_MS = 15 * 60 * 1000;
 const TIMEOUT_PROVIDER_COOLDOWN_MS = 5 * 60 * 1000;
+const PROVIDER_UNAVAILABLE_COOLDOWN_MS = 5 * 60 * 1000;
 const BROWSER_FAILURE_PROVIDER_COOLDOWN_MS = 5 * 60 * 1000;
 const LOGIN_WALL_PROVIDER_COOLDOWN_MS = 10 * 60 * 1000;
 const EXTRACTION_FAILURE_PROVIDER_COOLDOWN_MS = 10 * 60 * 1000;
@@ -744,53 +754,63 @@ export async function searchAdsViaSourceResolver(
       }
       const browserMsUsed = Date.now() - startedAt;
       const timestamp = new Date().toISOString();
+      const partial = liveResult.discoveryPartial === true;
 
       if (effectiveEnv.DB) {
-        await upsertDiscoveryCacheEntry(effectiveEnv, {
-          cacheKey,
-          provider,
-          routeContext,
-          queryFingerprint: fingerprintSavedQuery(query),
-          country: query.filters.country || "all",
-          cursor: cursor ?? null,
-          payload: {
-            ...liveResult,
-            source: provider,
+        if (!partial) {
+          await upsertDiscoveryCacheEntry(effectiveEnv, {
+            cacheKey,
             provider,
-            // Writer contract stamp — proves this entry was produced by the
-            // current advertiser evidence filter (see epoch doc).
-            discoveryFilterEpoch: DISCOVERY_ADVERTISER_FILTER_EPOCH,
-          },
-          fetchedAt: timestamp,
-          expiresAt: new Date(Date.now() + resolveDiscoveryCacheTtlMs(routeContext)).toISOString(),
-          browserMsUsed,
-        });
+            routeContext,
+            queryFingerprint: fingerprintSavedQuery(query),
+            country: query.filters.country || "all",
+            cursor: cursor ?? null,
+            payload: {
+              ...liveResult,
+              source: provider,
+              provider,
+              // Writer contract stamp — proves this entry was produced by the
+              // current advertiser evidence filter (see epoch doc).
+              discoveryFilterEpoch: DISCOVERY_ADVERTISER_FILTER_EPOCH,
+            },
+            fetchedAt: timestamp,
+            expiresAt: new Date(Date.now() + resolveDiscoveryCacheTtlMs(routeContext)).toISOString(),
+            browserMsUsed,
+          });
+        }
         await createDiscoveryFetchLog(effectiveEnv, {
           provider,
           routeContext,
           queryFingerprint: fingerprintSavedQuery(query),
           country: query.filters.country || "all",
-          status: "succeeded",
+          status: partial ? "failed" : "succeeded",
           cacheStatus: usableCached ? "stale" : "miss",
-          failureClass: null,
+          failureClass: liveResult.discoveryFailureClass ?? null,
           browserMsUsed,
           metadata: {
             cursor: cursor ?? null,
             customerOwned: provider === "meta_api" ? hasCustomerMetaToken : false,
+            partial,
           },
         });
         await upsertDiscoveryProviderState(effectiveEnv, {
           provider,
-          status: "healthy",
-          failureClass: null,
+          status: partial ? "degraded" : "healthy",
+          failureClass: liveResult.discoveryFailureClass ?? null,
           summary:
-            provider === "meta_library_browser"
+            partial
+              ? liveResult.discoverySummary ??
+                "Interactive discovery returned partial results."
+              : provider === "meta_library_browser"
               ? "Live commercial discovery running through Browser Run."
               : "Official Meta API is available for limited diagnostic use.",
-          lastSuccessAt: timestamp,
-          lastFailureAt: null,
+          lastSuccessAt: partial
+            ? providerState?.lastSuccessAt ?? usableCached?.fetchedAt ?? null
+            : timestamp,
+          lastFailureAt: partial ? timestamp : null,
           metadata: {
             customerOwned: provider === "meta_api" ? hasCustomerMetaToken : false,
+            partial,
             routeContext,
           },
         });
@@ -804,12 +824,16 @@ export async function searchAdsViaSourceResolver(
       source: provider,
       provider,
       cacheStatus: "miss",
-      discoveryStatus: "healthy",
-      discoverySummary: null,
-      discoveryFailureClass: null,
+      discoveryStatus: result.discoveryStatus ?? "healthy",
+      discoveryPartial: result.discoveryPartial ?? false,
+      discoverySummary: result.discoverySummary ?? null,
+      discoveryFailureClass: result.discoveryFailureClass ?? null,
     };
   } catch (error) {
-    const failureClass = resolveFailureClass(error);
+    const failureClass =
+      provider === "meta_api"
+        ? resolveMetaApiFailureClass(error)
+        : resolveFailureClass(error);
     const timestamp = new Date().toISOString();
     const cooldownState = buildDiscoveryCooldownState(error, failureClass);
     const summary = buildDiscoveryFailureSummary({
@@ -1476,10 +1500,24 @@ function resolveFailureClass(error: unknown): DiscoveryFailureClass {
   return "browser_launch_failed";
 }
 
+function resolveMetaApiFailureClass(error: unknown): DiscoveryFailureClass {
+  const failureClass = resolveFailureClass(error);
+  // The shared fallback is browser-specific. Keep opaque API failures in a
+  // provider-neutral class so persisted health, cooldowns, and operator copy
+  // never claim that the browser path failed.
+  return failureClass === "browser_launch_failed" ? "provider_unavailable" : failureClass;
+}
+
 function shouldUseProviderCooldown(
   providerState: Awaited<ReturnType<typeof getDiscoveryProviderState>>,
 ) {
   if (!providerState?.updatedAt) {
+    return false;
+  }
+
+  // A later-page failure still produced a successful first page. Keep that
+  // request visibly degraded without blocking unrelated uncached searches.
+  if (providerState.metadata?.partial === true) {
     return false;
   }
 
@@ -1587,6 +1625,8 @@ function resolveDiscoveryCooldownMs(
       return RATE_LIMIT_PROVIDER_COOLDOWN_MS;
     case "timeout":
       return TIMEOUT_PROVIDER_COOLDOWN_MS;
+    case "provider_unavailable":
+      return PROVIDER_UNAVAILABLE_COOLDOWN_MS;
     case "login_wall":
       return LOGIN_WALL_PROVIDER_COOLDOWN_MS;
     case "selector_drift":

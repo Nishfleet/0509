@@ -56,8 +56,12 @@ function collectionLoaderData(
 async function renderCollections(
   plan: "free" | "scout" | "starter" | "agency",
   collections = [collection],
+  actionData?: unknown,
 ) {
-  installRouterMocks({ loaderData: collectionLoaderData(plan, collections) });
+  installRouterMocks({
+    loaderData: collectionLoaderData(plan, collections),
+    actionData,
+  });
   const { default: CollectionsRoute } = await import("~/routes/app.collections");
   return renderToStaticMarkup(createElement(CollectionsRoute));
 }
@@ -76,6 +80,7 @@ async function renderReportsLocked(
       plan,
       preparedBy: null,
       report: null,
+      upgradePath: "/app/billing?source=reports#plans",
     },
     params,
   });
@@ -96,17 +101,31 @@ describe("collection plan controls", () => {
   it("locks collection creation before click for Free", async () => {
     const markup = await renderCollections("free", []);
 
-    // BL-014: the gate is the shared LockedFeature specimen panel (brief §6.8,
-    // DESIGN.md WP-B1), not the old dashed PlanLimitState card.
-    expect(markup).toContain("f9-ed-specimen f9-locked-feature");
-    expect(markup).toContain("Collections are not included on this plan");
-    expect(markup).toContain("Collections · Scout plan required");
+    // BL-033a: a quiet v4 explanation and one filled upgrade action, with no
+    // dashed specimen theatre or shadow card.
+    expect(markup).toContain("f9-col-locked");
+    expect(markup).toContain("Collections start on Scout");
+    expect(markup).toContain(
+      "Saved evidence stays attached to its source, recorded date, and team notes.",
+    );
+    expect(markup).not.toContain("source, capture time, and team notes");
     expect(markup).toContain("Upgrade to Scout");
     expect(markup).toContain('href="/app/billing?source=collections#plans"');
     expect(markup).not.toContain('name="intent" value="create-collection"');
     expect(markup).not.toContain('placeholder="Nykaa competitors"');
-    // The gate owns the screen's single Rank-1 (brief §5).
-    expect(markup.match(/f9-ed-cta--rank1/g) ?? []).toHaveLength(1);
+    expect(markup.match(/f9-wk-btn/g) ?? []).toHaveLength(1);
+    expect(markup).not.toContain("f9-ed-specimen");
+  });
+
+  it("keeps downgraded Free evidence visible without claiming a zero-item limit", async () => {
+    const markup = await renderCollections("free");
+
+    expect(markup).toContain("Launch proof");
+    expect(markup).toContain("New collections start on Scout");
+    expect(markup).toContain("Your saved evidence remains available");
+    expect(markup).not.toContain("using all 0 collections");
+    expect(markup).not.toContain('name="intent" value="create-collection"');
+    expect(markup).toContain("View upgrade options");
   });
 
   it("keeps collection creation available for Scout below its limit", async () => {
@@ -118,6 +137,41 @@ describe("collection plan controls", () => {
     expect(markup).not.toContain("Collections are not included on this plan");
   });
 
+  it.each([
+    ["first-run", []],
+    ["disclosure", [collection]],
+  ])("renders failed create feedback once inside the %s form", async (_mode, collections) => {
+    const message = "Give the collection a name first.";
+    const markup = await renderCollections("scout", collections, {
+      ok: false,
+      intent: "create-collection",
+      message,
+    });
+    const feedbackIndex = markup.indexOf(message);
+    const formStart = markup.lastIndexOf("<form", feedbackIndex);
+    const formEnd = markup.indexOf("</form>", feedbackIndex);
+
+    expect(markup.split(message)).toHaveLength(2);
+    expect(formStart).toBeGreaterThanOrEqual(0);
+    expect(feedbackIndex).toBeGreaterThan(formStart);
+    expect(formEnd).toBeGreaterThan(feedbackIndex);
+  });
+
+  it("keeps unrelated feedback out of the create form", async () => {
+    const message = "Collection note could not be updated.";
+    const markup = await renderCollections("scout", [collection], {
+      ok: false,
+      intent: "update-item",
+      message,
+    });
+    const feedbackIndex = markup.indexOf(message);
+    const createFormIndex = markup.indexOf('name="intent" value="create-collection"');
+
+    expect(markup.match(/Collection note could not be updated\./g) ?? []).toHaveLength(1);
+    expect(feedbackIndex).toBeGreaterThanOrEqual(0);
+    expect(createFormIndex).toBeGreaterThan(feedbackIndex);
+  });
+
   it("locks report, CSV/JSON export, and share behind ONE nudge for Scout", async () => {
     const markup = await renderCollections("scout");
 
@@ -125,6 +179,7 @@ describe("collection plan controls", () => {
     // single Rank-2 nudge instead of a disabled button plus a floating
     // "Upgrade to Agency" text link in the right rail.
     expect(markup).toContain("Upgrade to unlock client reports, exports &amp; share links");
+    expect(markup).toContain("View upgrade options");
     expect(markup).not.toContain("Open report (Agency only)");
     expect(markup).not.toContain("Upgrade to Starter for exports");
     expect(markup).not.toContain("Upgrade to Agency to share");
@@ -140,6 +195,7 @@ describe("collection plan controls", () => {
     expect(markup).toContain('href="/export/collection/collection-1"');
     expect(markup).toContain('href="/export/collection/collection-1?format=json"');
     expect(markup).toContain("Upgrade to unlock client reports");
+    expect(markup).toContain("View upgrade options");
     // WP-29: Starter gets watermarked share links; reports stay Agency-only.
     expect(markup).toContain('name="intent" value="share-collection"');
     expect(markup).toContain("Create share link");
@@ -254,17 +310,16 @@ describe("reports plan state", () => {
     expect(markup).not.toContain("is-error");
   });
 
-  it("renders the gate as a designed specimen panel, not a bare upgrade wall", async () => {
+  it("renders the gate as a quiet v4 explanation, not a specimen panel", async () => {
     const markup = await renderReportsLocked("starter");
 
-    // Brief §6.8: ink header stating the real state, an honest paragraph, a
-    // dimmed SAMPLE in a labelled slot, one Rank-1 out.
-    expect(markup).toContain("f9-ed-specimen f9-locked-feature");
-    expect(markup).toContain("Reports · Agency plan required");
-    expect(markup).toContain("f9-ed-specimen-slot");
-    expect(markup).toContain("What an Agency report looks like");
-    expect(markup).toContain("Sample · not your workspace");
-    expect(markup.match(/f9-ed-cta--rank1/g) ?? []).toHaveLength(1);
+    expect(markup).toContain("f9-wk-reports-locked f9-locked-feature");
+    expect(markup).toContain("Everything stays private until you choose to send it.");
+    expect(markup).toContain("Your workspace evidence is not used as an upgrade preview.");
+    expect(markup).not.toContain("f9-ed-specimen");
+    expect(markup).not.toContain("f9-ed-specimen-slot");
+    expect(markup).not.toContain("Sample · not your workspace");
+    expect(markup.match(/f9-wk-btn/g) ?? []).toHaveLength(1);
     expect(markup).not.toContain("f9-primary-button");
   });
 
@@ -288,6 +343,7 @@ describe("reports plan state", () => {
   });
 
   it("returns a useful loader state instead of throwing for non-Agency plans", async () => {
+    const loadOwnedReportDocument = vi.fn();
     vi.doMock("~/lib/auth.server", () => ({
       requireWorkspaceSession: vi.fn().mockResolvedValue({
         session: { user: { id: "user-1" } },
@@ -303,6 +359,7 @@ describe("reports plan state", () => {
       }),
       resolveWorkspacePreparedBy: vi.fn(),
     }));
+    vi.doMock("~/lib/report-loader.server", () => ({ loadOwnedReportDocument }));
 
     const { loader } = await import("~/routes/app.reports");
     const result = await loader({
@@ -312,5 +369,6 @@ describe("reports plan state", () => {
     } as never);
 
     expect(result).toMatchObject({ accessDenied: true, plan: "starter", report: null });
+    expect(loadOwnedReportDocument).not.toHaveBeenCalled();
   });
 });
