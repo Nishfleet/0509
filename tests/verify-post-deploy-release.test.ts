@@ -4,6 +4,9 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const { runVersionBoundGateC, sanitizeProofDiagnostics, defaultHealthAnchor } = await import("../scripts/verify-post-deploy-release.mjs");
+const { createDeferredBackupDisposition } = await import(
+  "../scripts/deploy-production-plan.mjs"
+);
 const roots: string[] = [];
 
 function evidencePath() {
@@ -20,6 +23,17 @@ function proofPayload() {
     runId: "run-1",
     digestRunId: "digest-1",
     proofCaptureId: "proof-1",
+    proofEmail: {
+      gateRunId: "gate-c-worker-v1",
+      dispatchStartedAt: "2026-07-18T00:00:00.000Z",
+      subject: "0509 Gate C proof gate-c-worker-v1",
+      provider: {
+        status: "sent",
+        accepted: true,
+        messageId: "provider-message-1",
+        error: null,
+      },
+    },
   };
 }
 
@@ -206,6 +220,70 @@ describe("version-bound Gate C orchestrator", () => {
     });
   });
 
+  it("runs the exact deferred immediate gate once without backup lifecycle or soak evidence", async () => {
+    const releaseSha = "f".repeat(40);
+    const backupLifecycle = vi.fn(async () => ({
+      ok: true,
+      report: backupReport(),
+    }));
+    const proof = vi.fn(async () => ({ ok: true, payload: proofPayload() }));
+    const cleanup = vi.fn(async () => ({ ok: true }));
+    const path = evidencePath();
+
+    const result = await runVersionBoundGateC({
+      workerVersionId: "worker-v1",
+      token: "token",
+      evidencePath: path,
+      releaseSha,
+      backupProofStatus: "deferred",
+      backupProofDisposition: createDeferredBackupDisposition(releaseSha),
+      dependencies: {
+        healthAnchor: vi.fn(async () => ({ ok: true })),
+        backupLifecycle,
+        pricing: vi.fn(async () => ({ ok: true })),
+        billing: vi.fn(async () => ({ ok: true })),
+        proof,
+        productionCanary: vi.fn(async () => ({
+          ok: true,
+          report: { passed: true },
+        })),
+        cleanup,
+      },
+    });
+
+    expect(result.passed).toBe(true);
+    expect(backupLifecycle).not.toHaveBeenCalled();
+    expect(proof).toHaveBeenCalledTimes(1);
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    const journal = JSON.parse(readFileSync(path, "utf8"));
+    expect(journal).toMatchObject({
+      gatePhase: "immediate",
+      backupProofStatus: "deferred",
+      status: "passed",
+      steps: {
+        proof_email: {
+          status: "passed",
+          detail: {
+            gateRunId: "gate-c-worker-v1",
+            dispatchStartedAt: "2026-07-18T00:00:00.000Z",
+            subject: "0509 Gate C proof gate-c-worker-v1",
+          },
+        },
+        proof_cleanup: { status: "passed" },
+      },
+    });
+    expect(Object.keys(journal.steps)).not.toContain("backup_lifecycle");
+    expect(journal.backupLifecycleSummary).toBeUndefined();
+    expect(Object.keys(journal.steps.proof_email.detail).sort()).toEqual([
+      "dispatchStartedAt",
+      "gateRunId",
+      "subject",
+    ]);
+    expect(JSON.stringify(journal.steps.proof_email.detail)).not.toMatch(
+      /accepted|messageId|error|provider/u,
+    );
+  });
+
   it("does not hide a primary failure and still runs cleanup and the final identity check", async () => {
     const order: string[] = [];
     const result = await runVersionBoundGateC({
@@ -273,6 +351,17 @@ describe("version-bound Gate C orchestrator", () => {
             runId: "run-loser",
             proofCaptureId: "proof-loser",
             blockers: ["digest_period_claim_conflict"],
+            proofEmail: {
+              gateRunId: "gate-c-worker-v1",
+              dispatchStartedAt: "2026-07-18T00:00:00.000Z",
+              subject: "0509 Gate C proof gate-c-worker-v1",
+              provider: {
+                status: "failed",
+                accepted: false,
+                messageId: null,
+                error: "provider rejected the message",
+              },
+            },
           },
         })),
         productionCanary: vi.fn(),
@@ -310,6 +399,17 @@ describe("version-bound Gate C orchestrator", () => {
             digestRunId: "digest-1",
             proofCaptureId: "proof-1",
             blockers: ["no_digest_delivery_sent"],
+            proofEmail: {
+              gateRunId: "gate-c-worker-v1",
+              dispatchStartedAt: "2026-07-18T00:00:00.000Z",
+              subject: "0509 Gate C proof gate-c-worker-v1",
+              provider: {
+                status: "pending",
+                accepted: false,
+                messageId: null,
+                error: null,
+              },
+            },
             // The route already sanitizes this via sanitizeDeliveryForCanary.
             delivery: {
               attempts: 1,
@@ -347,6 +447,8 @@ describe("version-bound Gate C orchestrator", () => {
       workerVersionId: "worker-v1",
       searchRolloutMode: "shadow",
       gateRunId: "gate-c-worker-v1",
+      gatePhase: "immediate",
+      backupProofStatus: "required",
       status: "running",
       steps: { proof_email: { status: "started", at: "2026-07-18T00:00:01.000Z" } },
       errors: [],
@@ -393,6 +495,8 @@ describe("version-bound Gate C orchestrator", () => {
       workerVersionId: "worker-v1",
       searchRolloutMode: "shadow",
       gateRunId: "gate-c-worker-v1",
+      gatePhase: "immediate",
+      backupProofStatus: "required",
       status: "running",
       steps: { backup_lifecycle: { status: "started", at: "2026-07-18T00:00:01.000Z" } },
       errors: [],
@@ -492,6 +596,8 @@ describe("version-bound Gate C orchestrator", () => {
       workerVersionId: "worker-v1",
       searchRolloutMode: "shadow",
       gateRunId: "gate-c-worker-v1",
+      gatePhase: "immediate",
+      backupProofStatus: "required",
       status: "passed",
       steps: {},
       errors: [],
@@ -545,7 +651,7 @@ describe("version-bound Gate C orchestrator", () => {
 
   it("rejects passed evidence older than 24 hours before any recheck", async () => {
     const path = evidencePath();
-    const base = {
+    const base: any = {
       schemaVersion: 1,
       generatedAt: "2026-07-16T00:00:00.000Z",
       completedAt: "2026-07-16T00:01:00.000Z",
@@ -561,6 +667,17 @@ describe("version-bound Gate C orchestrator", () => {
       cleanupTicket: { runId: "run-1", digestRunId: "digest-1", proofCaptureId: "proof-1" },
       productionSummary: "passed",
       backupLifecycleSummary: backupReport(),
+      gatePhase: "immediate",
+      backupProofStatus: "required",
+    };
+    base.steps.proof_email = {
+      status: "passed",
+      at: "2026-07-16T00:00:00.000Z",
+      detail: proofPayload().proofEmail && {
+        gateRunId: proofPayload().proofEmail.gateRunId,
+        dispatchStartedAt: proofPayload().proofEmail.dispatchStartedAt,
+        subject: proofPayload().proofEmail.subject,
+      },
     };
     writeFileSync(path, JSON.stringify(base));
     chmodSync(path, 0o600);

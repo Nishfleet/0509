@@ -7,6 +7,18 @@ on:
         description: Exact main commit authorized for production deployment
         required: true
         type: string
+      backup_proof_status:
+        description: Production D1 recovery-proof policy for this exact release
+        required: true
+        default: required
+        type: choice
+        options:
+          - required
+          - deferred
+      deferred_backup_authorization:
+        description: Exact-SHA Nish acceptance; empty unless backup proof is deferred
+        required: false
+        type: string
 
 concurrency:
   group: 0509-production-provider-mutations
@@ -22,12 +34,15 @@ jobs:
     permissions: {}
     outputs:
       sha: ${{ steps.authorize.outputs.sha }}
+      backup_proof_status: ${{ steps.authorize.outputs.backup_proof_status }}
     steps:
       - name: Authorize release request
         id: authorize
         shell: bash
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+          BACKUP_PROOF_STATUS: ${{ inputs.backup_proof_status || 'required' }}
+          DEFERRED_BACKUP_AUTHORIZATION: ${{ inputs.deferred_backup_authorization || '' }}
         run: |
           set -euo pipefail
           sha_pattern='^[a-f0-9]{40}$'
@@ -38,16 +53,31 @@ jobs:
           case "$GITHUB_EVENT_NAME" in
             push)
               test -z "$EXPECTED_SHA"
+              test "$BACKUP_PROOF_STATUS" = "required"
+              test -z "$DEFERRED_BACKUP_AUTHORIZATION"
               ;;
             workflow_dispatch)
               [[ "$EXPECTED_SHA" =~ $sha_pattern ]]
               test "$EXPECTED_SHA" = "$GITHUB_SHA"
+              case "$BACKUP_PROOF_STATUS" in
+                required)
+                  test -z "$DEFERRED_BACKUP_AUTHORIZATION"
+                  ;;
+                deferred)
+                  test "$GITHUB_ACTOR" = "nish3451"
+                  test "$DEFERRED_BACKUP_AUTHORIZATION" = "nish-accepted-no-backup-proof:$EXPECTED_SHA"
+                  ;;
+                *)
+                  exit 1
+                  ;;
+              esac
               ;;
             *)
               exit 1
               ;;
           esac
           printf 'sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          printf 'backup_proof_status=%s\n' "$BACKUP_PROOF_STATUS" >> "$GITHUB_OUTPUT"
 
   pin_candidate:
     name: Pin exact production candidate
@@ -58,6 +88,7 @@ jobs:
       contents: read
     outputs:
       sha: ${{ steps.pin.outputs.sha }}
+      backup_proof_status: ${{ needs.authorize_release.outputs.backup_proof_status }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -86,6 +117,7 @@ jobs:
       actions: read
     env:
       PINNED_SHA: ${{ needs.pin_candidate.outputs.sha }}
+      BACKUP_PROOF_STATUS: ${{ needs.pin_candidate.outputs.backup_proof_status }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -107,24 +139,30 @@ jobs:
       # Single source of truth for create + upload-artifact + cleanup.
       # jobs.<job_id>.env cannot use the runner context; bind via GITHUB_ENV.
       - name: Bind restore evidence archive path
+        if: env.BACKUP_PROOF_STATUS == 'required'
         shell: bash
         run: |
           set -euo pipefail
           archive="$RUNNER_TEMP/d1-remote-restore-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}.tar.gz"
           printf 'RESTORE_EVIDENCE_ARCHIVE=%s\n' "$archive" >> "$GITHUB_ENV"
-      - run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
-      - run: ./scripts/deploy-window-lock.sh run -- node scripts/validate-d1-backup.mjs
+      - if: env.BACKUP_PROOF_STATUS == 'required'
+        run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
+      - if: env.BACKUP_PROOF_STATUS == 'required'
+        run: ./scripts/deploy-window-lock.sh run -- node scripts/validate-d1-backup.mjs
       - name: Bind a clean exact-main candidate manifest
+        if: env.BACKUP_PROOF_STATUS == 'required'
         # Argv script — never heredoc through deploy-window-lock.sh run
         # (backgrounded lanes redirect stdin to /dev/null).
         run: ./scripts/deploy-window-lock.sh run -- ./scripts/ci-bind-remote-restore-candidate.sh
       - name: Verify pre-generated exact R2 restore evidence
+        if: env.BACKUP_PROOF_STATUS == 'required'
         env:
           D1_REMOTE_RESTORE_EVIDENCE_MIN_VALIDITY_MS: "43200000"
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
         run: ./scripts/deploy-window-lock.sh run -- ./scripts/ci-prepare-remote-restore-evidence.sh
       - name: Preserve private restore evidence for this deploy only
+        if: env.BACKUP_PROOF_STATUS == 'required'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}
@@ -133,7 +171,7 @@ jobs:
           overwrite: true
           retention-days: 8
       - name: Remove local restore evidence archive
-        if: always()
+        if: always() && env.BACKUP_PROOF_STATUS == 'required'
         shell: bash
         run: rm -f -- "$RESTORE_EVIDENCE_ARCHIVE"
 
@@ -160,6 +198,7 @@ jobs:
       deployments: write
     env:
       PINNED_SHA: ${{ needs.pin_candidate.outputs.sha }}
+      BACKUP_PROOF_STATUS: ${{ needs.pin_candidate.outputs.backup_proof_status }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -225,12 +264,14 @@ jobs:
         run: npm run test
 
       - name: Materialize private remote-restore evidence
+        if: env.BACKUP_PROOF_STATUS == 'required'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}
           path: test-results/remote-restore-download
 
       - name: Verify and extract private remote-restore evidence
+        if: env.BACKUP_PROOF_STATUS == 'required'
         shell: bash
         run: |
           set -euo pipefail
@@ -270,7 +311,8 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}
-          D1_REMOTE_RESTORE_EVIDENCE_PATH: test-results/d1-remote-restore-evidence.json
+          D1_REMOTE_RESTORE_EVIDENCE_PATH: ${{ needs.pin_candidate.outputs.backup_proof_status == 'required' && 'test-results/d1-remote-restore-evidence.json' || '' }}
+          BACKUP_PROOF_STATUS: ${{ needs.pin_candidate.outputs.backup_proof_status }}
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
           CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: "false"
@@ -313,12 +355,23 @@ jobs:
           [ "${#wrangler[@]}" -eq 1 ]
           [ "${#rollback[@]}" -eq 1 ]
           [ "${#gate_c[@]}" -eq 1 ]
-          [ "${#production_soak[@]}" -eq 1 ]
           [ -n "$(find test-results/gate-b-artifacts -type f -print -quit)" ]
-          node scripts/gate-c-soak.mjs verify-start --journal "${production_soak[0]}"
+
+          case "$BACKUP_PROOF_STATUS" in
+            required)
+              [ "${#production_soak[@]}" -eq 1 ]
+              node scripts/gate-c-soak.mjs verify-start --journal "${production_soak[0]}"
+              ;;
+            deferred)
+              [ "${#production_soak[@]}" -eq 0 ]
+              ;;
+            *)
+              exit 1
+              ;;
+          esac
 
       - name: Archive permission-preserving release evidence
-        if: success()
+        if: success() && env.BACKUP_PROOF_STATUS == 'required'
         shell: bash
         run: |
           set -euo pipefail
@@ -327,11 +380,20 @@ jobs:
             --output "test-results/production-release-evidence-${PINNED_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz"
 
       - name: Preserve release evidence
-        if: success()
+        if: success() && env.BACKUP_PROOF_STATUS == 'required'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: production-release-evidence-${{ needs.pin_candidate.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: test-results/production-release-evidence-${{ needs.pin_candidate.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}.tar.gz
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Preserve private immediate Gate C evidence
+        if: success() && env.BACKUP_PROOF_STATUS == 'deferred'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: gate-c-proof-evidence-${{ needs.pin_candidate.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/gate-c-*.json
           if-no-files-found: error
           retention-days: 90
 

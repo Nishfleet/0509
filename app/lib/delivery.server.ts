@@ -110,6 +110,8 @@ interface DigestAttemptSummary {
   providerMessageId: string | null;
   errorMessage: string | null;
   deliveredAt: string | null;
+  subject?: string | null;
+  providerDispatchStartedAt?: string | null;
   // True only when THIS execution won the delivery-attempt claim and owns
   // the outcome; mirrors of another writer's in-flight attempt leave it
   // unset. Gates the failed→pending aggregate overwrite in
@@ -154,6 +156,7 @@ export interface DeliverWeeklyDigestInput {
   strategyParagraph?: string | null;
   cadence?: DigestCadence;
   lane?: DeliveryLane;
+  proofEmailSubject?: string;
 }
 
 export interface DeliverWatchlistAlertsInput {
@@ -167,6 +170,10 @@ export interface DeliverWatchlistAlertsInput {
 
 export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDigestInput) {
   const lane = input.lane ?? "customer";
+  if (input.proofEmailSubject !== undefined &&
+      (lane !== "internal" || !isGateCProofEmailSubject(input.proofEmailSubject))) {
+    throw new Error("Gate C proof email subject is invalid.");
+  }
   // Soft product gate: unverified customers don't get digests. Never block
   // operator/internal lanes or sendOperatorAlertEmail.
   if (lane === "customer") {
@@ -813,7 +820,24 @@ function summarizeDigestDeliveryAttempt(
     providerMessageId: attempt.providerMessageId,
     errorMessage: attempt.errorMessage,
     deliveredAt: confirmedDeliveryTimestamp(attempt),
+    subject: readString(attempt.payloadSnapshot.subject),
+    providerDispatchStartedAt: readCanonicalUtcTimestamp(
+      attempt.payloadSnapshot.providerDispatchStartedAt,
+    ),
   };
+}
+
+function readCanonicalUtcTimestamp(value: unknown): string | null {
+  if (typeof value !== "string" || !value.endsWith("Z")) return null;
+  try {
+    return new Date(value).toISOString() === value ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function isGateCProofEmailSubject(value: string) {
+  return /^0509 Gate C proof [a-z0-9._-]{1,128}$/u.test(value);
 }
 
 async function readFinalizedDigestAttempt(
@@ -902,6 +926,16 @@ async function deliverDigestToEmailTarget(
     unsubscribeUrl,
     upgradeNote,
   });
+  const subject = input.proofEmailSubject ?? email.subject;
+  const payloadSnapshot = {
+    kind: "weekly_digest",
+    channel: "email",
+    subject,
+    cadence: input.cadence ?? "weekly",
+    periodStart: input.periodStart,
+    periodEnd: input.periodEnd,
+    itemCount: input.items.length,
+  };
   const attemptClaim = await claimDigestDeliveryAttempt(env, {
     userId: input.userId,
     digestRunId: input.digestRunId,
@@ -911,15 +945,7 @@ async function deliverDigestToEmailTarget(
     provider: EMAIL_PROVIDER,
     targetValue,
     eventIds: input.items.map((item) => item.eventId),
-    payloadSnapshot: {
-      kind: "weekly_digest",
-      channel: "email",
-      subject: email.subject,
-      cadence: input.cadence ?? "weekly",
-      periodStart: input.periodStart,
-      periodEnd: input.periodEnd,
-      itemCount: input.items.length,
-    },
+    payloadSnapshot,
     idempotencyKey,
   });
   if (attemptClaim.duplicate) {
@@ -952,9 +978,46 @@ async function deliverDigestToEmailTarget(
     return summarizeDigestDeliveryAttempt("email", current);
   }
 
+  if (!readCanonicalUtcTimestamp(dispatchStartedAt)) {
+    const fallback: DigestAttemptSummary = {
+      channel: "email",
+      status: "failed",
+      targetValue,
+      providerMessageId: null,
+      errorMessage: "Email dispatch timestamp was invalid before provider dispatch.",
+      deliveredAt: null,
+      subject,
+      providerDispatchStartedAt: dispatchStartedAt,
+      claimedByThisRun: true,
+    };
+    const finalized = await updateDeliveryAttemptResult(env, attemptId, {
+      provider: EMAIL_PROVIDER,
+      status: "failed",
+      webhookStatus: "failed",
+      providerMessageId: null,
+      providerStatusLastSeenAt: null,
+      errorMessage: fallback.errorMessage,
+      failedAt: new Date().toISOString(),
+      payloadSnapshot: {
+        ...payloadSnapshot,
+        providerDispatchStartedAt: dispatchStartedAt,
+      },
+      expectedStatus: "pending",
+      expectedWebhookStatus: "provider_unknown",
+      expectedUpdatedAt: dispatchStartedAt,
+    });
+    return finalized === false
+      ? readFinalizedDigestAttempt(env, {
+          channel: "email",
+          idempotencyKey,
+          fallback,
+        })
+      : fallback;
+  }
+
   const providerResult = await sendRenderedDigestEmail(env, {
     to: targetValue,
-    email,
+    email: { ...email, subject },
     unsubscribeUrl,
   });
   const finalized = await updateDeliveryAttemptResult(env, attemptId, {
@@ -967,8 +1030,12 @@ async function deliverDigestToEmailTarget(
     sentAt: providerResult.status === "sent" ? providerResult.providerStatusLastSeenAt : null,
     failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
     expectedStatus: "pending",
-    expectedWebhookStatus: dispatchStartedAt ? "provider_unknown" : "pending",
-    expectedUpdatedAt: dispatchStartedAt ?? claimUpdatedAt,
+    expectedWebhookStatus: "provider_unknown",
+    expectedUpdatedAt: dispatchStartedAt,
+    payloadSnapshot: {
+      ...payloadSnapshot,
+      providerDispatchStartedAt: dispatchStartedAt,
+    },
   });
   const providerSummary: DigestAttemptSummary = {
     channel: "email",
@@ -977,6 +1044,8 @@ async function deliverDigestToEmailTarget(
     providerMessageId: providerResult.providerMessageId,
     errorMessage: providerResult.errorMessage,
     deliveredAt: null,
+    subject,
+    providerDispatchStartedAt: dispatchStartedAt,
     claimedByThisRun: true,
   };
   if (finalized === false) {
