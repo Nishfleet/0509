@@ -301,6 +301,9 @@ describe("launch readiness canary route", () => {
           providerMessageId: "email-1",
           errorMessage: "raw provider failure detail",
           deliveredAt: new Date().toISOString(),
+          subject: "0509 Gate C proof gate-c-worker-v1",
+          providerDispatchStartedAt: "2026-08-01T00:00:00.000Z",
+          providerStatusLastSeenAt: "2026-08-01T00:05:00.000Z",
         },
       ],
     });
@@ -333,15 +336,17 @@ describe("launch readiness canary route", () => {
       request: new Request("https://0509.io/api/launch-readiness/canary", {
         method: "POST",
         headers: {
+          "content-type": "application/json",
           "x-0509-canary-token": "secret-token",
         },
+        body: JSON.stringify({ gateRunId: "gate-c-worker-v1" }),
       }),
     } as never);
 
-    const responseBody = await response.clone().json();
-    expect(JSON.stringify(responseBody)).not.toContain("owner@example.com");
-    expect(JSON.stringify(responseBody)).not.toContain("email-1");
-    expect(JSON.stringify(responseBody)).not.toContain("raw provider failure detail");
+    const responseBody = (await response.clone().json()) as { delivery: unknown };
+    expect(JSON.stringify(responseBody.delivery)).not.toContain("owner@example.com");
+    expect(JSON.stringify(responseBody.delivery)).not.toContain("email-1");
+    expect(JSON.stringify(responseBody.delivery)).not.toContain("raw provider failure detail");
     await expect(response.json()).resolves.toMatchObject({
       ok: true,
       blockers: [],
@@ -359,6 +364,17 @@ describe("launch readiness canary route", () => {
         required: false,
         sent: false,
         lane: "internal",
+      },
+      proofEmail: {
+        gateRunId: "gate-c-worker-v1",
+        dispatchStartedAt: "2026-08-01T00:00:00.000Z",
+        subject: "0509 Gate C proof gate-c-worker-v1",
+        provider: {
+          status: "sent",
+          accepted: true,
+          messageId: "email-1",
+          error: "raw provider failure detail",
+        },
       },
     });
     expect(createWatchlistRun).toHaveBeenCalledWith(
@@ -391,6 +407,7 @@ describe("launch readiness canary route", () => {
         accountEmail: "owner@example.com",
         digestRunId: "digest-1",
         lane: "internal",
+        proofEmailSubject: "0509 Gate C proof gate-c-worker-v1",
       }),
     );
     expect(finishWatchlistRun).toHaveBeenCalledWith(
@@ -415,7 +432,118 @@ describe("launch readiness canary route", () => {
 		expect(addDigestItem).not.toHaveBeenCalled();
 	});
 
-	it("fails closed without delivery when another canary owns the digest period", async () => {
+  it("rejects malformed Gate C T0 while keeping provider details out of the public delivery projection", async () => {
+    const deliverWeeklyDigest = vi.fn().mockResolvedValue({
+      attempts: 1,
+      channels: ["email"],
+      details: [
+        {
+          channel: "email",
+          status: "sent",
+          targetValue: "owner@example.com",
+          providerMessageId: "email-malformed-t0",
+          errorMessage: null,
+          subject: "0509 Gate C proof gate-c-worker-v1",
+          providerDispatchStartedAt: "not-a-timestamp",
+          deliveredAt: null,
+        },
+      ],
+    });
+    vi.doMock("~/lib/context.server", () => ({
+      getEnv: vi.fn(() => ({
+        CANARY_BYPASS_TOKEN: "secret-token",
+        DB: createDbWithTarget(),
+        LAUNCH_CANARY_EMAIL: "owner@example.com",
+      })),
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      addDigestItem: vi.fn().mockResolvedValue(undefined),
+      clearDigestItems: vi.fn().mockResolvedValue(undefined),
+      createDigestRun: vi.fn().mockResolvedValue({ digestRunId: "digest-1", created: true }),
+      createProofCapture: vi.fn().mockResolvedValue("proof-1"),
+      createWatchEvent: vi.fn().mockResolvedValue("event-1"),
+      createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
+      finishWatchlistRun: vi.fn().mockResolvedValue(undefined),
+      upsertProofTarget: vi.fn().mockResolvedValue({ id: "proof-target-1" }),
+    }));
+    vi.doMock("~/lib/delivery.server", () => ({ deliverWeeklyDigest }));
+    mockLandingPageCapture();
+
+    const { action } = await import("~/routes/api.launch-readiness.canary");
+    const response = await action({
+      context: createContext(),
+      request: new Request("https://0509.io/api/launch-readiness/canary", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-0509-canary-token": "secret-token",
+        },
+        body: JSON.stringify({ gateRunId: "gate-c-worker-v1" }),
+      }),
+    } as never);
+
+    expect(response.status).toBe(503);
+    const body = (await response.json()) as {
+      blockers: string[];
+      proofEmail: unknown;
+      delivery: unknown;
+    };
+    expect(body.blockers).toContain("proof_email_dispatch_timestamp_invalid");
+    expect(body.proofEmail).toMatchObject({
+      gateRunId: "gate-c-worker-v1",
+      dispatchStartedAt: null,
+      subject: "0509 Gate C proof gate-c-worker-v1",
+      provider: {
+        status: "sent",
+        accepted: true,
+        messageId: "email-malformed-t0",
+        error: null,
+      },
+    });
+    expect(JSON.stringify(body.delivery)).not.toContain("email-malformed-t0");
+    expect(deliverWeeklyDigest).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        lane: "internal",
+        proofEmailSubject: "0509 Gate C proof gate-c-worker-v1",
+      }),
+    );
+  });
+
+  it.each(["a", "proof", "0509"])(
+    "rejects Gate C IDs that occur more than once in the exact subject: %s",
+    async (gateRunId) => {
+      vi.doMock("~/lib/context.server", () => ({
+        getEnv: vi.fn(() => ({
+          CANARY_BYPASS_TOKEN: "secret-token",
+          DB: createDbWithTarget(),
+          LAUNCH_CANARY_EMAIL: "owner@example.com",
+        })),
+      }));
+
+      const { action } = await import("~/routes/api.launch-readiness.canary");
+      const response = await action({
+        context: createContext(),
+        request: new Request("https://0509.io/api/launch-readiness/canary", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-0509-canary-token": "secret-token",
+          },
+          body: JSON.stringify({ gateRunId }),
+        }),
+      } as never);
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual({
+        ok: false,
+        blocker: "gate_run_id_not_unique_in_proof_subject",
+        gateRunId,
+      });
+    },
+  );
+
+  it("fails closed without delivery when another canary owns the digest period", async () => {
 		const deliverWeeklyDigest = vi.fn();
 
 		vi.doMock("~/lib/context.server", () => ({
