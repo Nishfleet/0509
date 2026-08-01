@@ -118,15 +118,37 @@ describe("digests customer presentation", () => {
 			const { default: DigestsRoute } = await import("~/routes/app.digests");
 			const markup = renderToStaticMarkup(createElement(DigestsRoute));
 
-			expect(markup).toContain('class="f9-ed-brief"');
+			expect(markup).toContain('class="f9-wk-brief"');
 			expect(markup).toContain("Brief history");
+			expect(markup).toContain("Showing 1 recent brief on file.");
 			expect(markup).toContain('id="first-brief-detail"');
+			expect(markup).toContain(
+				'href="/app/digests?digest=digest-1#first-brief-detail"',
+			);
 			expect(markup).toContain("2026-07-15T09:14:00.000Z");
 			expect(markup).not.toContain("f9-wire-frontpage");
 			expect(markup).not.toContain("FIRST BRIEF · FILED");
 			expect(markup).not.toContain("05:09");
 		},
 	);
+
+	it("reports the newest filing shown even when a backfill has an older period", async () => {
+		const data = digestData(null);
+		data.digests.push({
+			...data.selectedDigest,
+			id: "digest-backfill",
+			periodEnd: "2026-07-10T00:00:00.000Z",
+			createdAt: "2026-07-20T12:30:00.000Z",
+		});
+		await mockRoute(data);
+
+		const { default: DigestsRoute } = await import("~/routes/app.digests");
+		const markup = renderToStaticMarkup(createElement(DigestsRoute));
+
+		expect(markup).toMatch(
+			/Newest filing shown <time>2026-07-20T12:30:00\.000Z<\/time>/,
+		);
+	});
 
 	it("omits cohort feedback when counts are null or omitted count is zero", async () => {
 		for (const summary of [

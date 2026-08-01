@@ -642,6 +642,38 @@ describe("clients route agent memory", () => {
     );
     expect(markup).toContain("Saved client context could not be loaded.");
     expect(markup).toContain('name="intent" value="approve-client-room"');
+    expect(markup).toContain("Create client room");
+    expect(markup).toContain("f9-wk-page f9-clients-page");
+    expect(markup).not.toContain("f9-app-panel");
+    expect(markup).not.toContain("f9-dash-state-empty");
+    expect(markup).not.toContain("f9-primary-button");
+  });
+
+  it("labels the saved-context preview honestly when more than eight loaded memories exist", async () => {
+    await mockRouter({
+      rooms: [],
+      watchlists: [],
+      collections: [],
+      memories: Array.from({ length: 9 }, (_, index) => ({
+        id: `memory-${index + 1}`,
+        key: `context_${index + 1}`,
+        scope: "workspace",
+        watchlistId: null,
+        clientRoomId: null,
+        source: "owner_ui",
+        updatedAt: "2026-06-20T00:00:00.000Z",
+        preview: `Context preview ${index + 1}`,
+      })),
+      plan: "agency",
+      canManageClientRooms: true,
+    });
+
+    const { default: ClientsRoute } = await import("~/routes/app.clients");
+    const markup = renderToStaticMarkup(createElement(ClientsRoute));
+
+    expect(markup).toContain("Showing 8 of 9 loaded memories");
+    expect(markup).toContain("Context preview 8");
+    expect(markup).not.toContain("Context preview 9");
   });
 
   it("labels the saved-context preview honestly when more than eight loaded memories exist", async () => {
@@ -1215,6 +1247,7 @@ describe("clients route agent memory", () => {
       const markup = renderToStaticMarkup(createElement(ClientsRoute));
 
       expect(markup).toContain("f9-clients-page");
+      expect(markup).toContain("f9-clients-gate");
       expect(markup).toContain("Client rooms stay readable");
       expect(markup).toContain("Agency plan unlocks creation and updates");
       expect(markup).toContain("Upgrade to Agency");
@@ -1222,6 +1255,7 @@ describe("clients route agent memory", () => {
       expect(markup.match(/Upgrade to Agency/g)).toHaveLength(1);
       expect(markup).not.toContain("is-error");
       expect(markup).not.toContain("f9-locked-feature");
+      expect(markup).not.toContain("f9-ed-specimen");
       expect(markup).not.toContain("f9-dash-state-empty");
       expect(markup).not.toContain("Create the first client room");
       expect(markup).not.toContain("Save client room");
