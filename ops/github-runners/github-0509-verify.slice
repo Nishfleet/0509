@@ -1,0 +1,12 @@
+[Unit]
+Description=0509 unprivileged verification runner budget
+
+[Slice]
+CPUAccounting=true
+CPUQuota=225%
+CPUWeight=50
+MemoryAccounting=true
+MemoryHigh=7G
+MemoryMax=8G
+TasksAccounting=true
+TasksMax=1024

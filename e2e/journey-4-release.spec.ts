@@ -206,6 +206,12 @@ async function expectReportAtViewport(
   await expect(
     page.getByText("Verified evidence", { exact: true }).first(),
   ).toBeVisible();
+  // The fixture stores these values on proof_capture (legacy field keys),
+  // not on the linked ad. Report loading must join that evidence instead of
+  // emitting the unreadable empty-plate state.
+  await expect(
+    page.getByText("New AI workflow launch", { exact: true }).first(),
+  ).toBeVisible();
   await expectCurrentEvidenceArtifactIndex(page);
   await expect(
     page.getByRole("button", { name: "Send to client" }),
@@ -357,6 +363,18 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
     await expect(
       page.getByRole("link", { name: "Package for client" }).first(),
     ).toBeVisible();
+    // BL-036: report eligibility belongs to a completed Agency check, not to
+    // whether that check happened to catch a change. This fixture has a
+    // succeeded run and unchanged before/after captures, with no watch event.
+    await page.goto("/app/watchlists?watchlist=e2e-watchlist-agency-quiet");
+    const quietPane = page.locator(".f9-wk-detail");
+    await expect(quietPane.getByText("Quiet", { exact: true })).toBeVisible();
+    await expect(
+      quietPane.getByRole("link", { name: "Package for client" }),
+    ).toHaveAttribute(
+      "href",
+      "/app/reports/watchlist:e2e-watchlist-agency-quiet",
+    );
     await expect(
       page.getByRole("button", { name: "Share summary" }),
     ).toBeVisible();

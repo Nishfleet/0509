@@ -2,24 +2,140 @@
 
 ## D1 backup posture
 
-- `npm run backup:d1:r2` is the owner-operated backup command. It exports the remote D1 database (`0509`) to `backups/d1/<timestamp>.sql` and uploads it to the R2 bucket under `backups/d1/` when production auth is available.
+- `npm run backup:d1:r2` is the owner-operated backup command. It exports the remote D1 database (`0509`) to `$HOME/.local/state/0509/backups/d1/<timestamp>.sql` and uploads it to the R2 bucket under `backups/d1/` when production auth is available. Keeping retained copies outside the checkout prevents Actions cleanup from deleting them.
 - The repository validation gate is `node scripts/validate-d1-backup.mjs`. It dry-runs backup-script prerequisites, the D1 binding, and the current migration chain through the latest migration; it does not prove that a fresh production R2 object exists.
-- `.github/workflows/d1-backup-r2.yml` is correct and runnable: it supports `workflow_dispatch` plus a weekly schedule (`17 22 * * SUN`), runs only on `main`, uses the `d1-backup-r2` GitHub Environment, validates with `node scripts/validate-d1-backup.mjs`, then runs `npm run backup:d1:r2` with `D1_BACKUP_AUTOMATION_APPROVED=0509-weekly-d1-to-r2`.
-- **Unblocked 2026-07-13:** repository secrets `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` (scoped custom token: D1 Edit + Workers R2 Storage Edit) were added by the owner, and dispatch run `29225583866` completed the full validate → export → upload chain ("Upload complete. Backup complete.", fresh timestamped object under the private R2 backup prefix). The weekly `17 22 * * SUN` schedule is now live off-machine. Historical context: scheduled runs `28339411098` (2026-06-28), `28758345164` (2026-07-05), and `29212868653` (2026-07-12) all failed at `Run approved D1-to-R2 backup` while the secrets were missing.
-- **Mac-side scheduled backup (the currently-live automated path):** a Claude scheduled task `0509-weekly-d1-backup` on Nish's Mac runs the manual-approved backup weekly (Sunday mornings, local). Caveat found 2026-07-13: its runs on 2026-07-05/12 silently produced no artifact because the task prompt predated the `D1_BACKUP_MANUAL_APPROVED` interlock; the prompt now sets the marker and verifies a fresh `backups/d1/` file plus `validate-d1-backup.mjs` before reporting success. This path depends on the Mac being awake/app open — the Actions path above remains the wanted off-machine redundancy.
+- `.github/workflows/d1-backup-r2.yml` is the explicit backup-only fallback: it supports `workflow_dispatch`, runs only on protected `main`, uses the branch-restricted `production` GitHub Environment, validates with `node scripts/validate-d1-backup.mjs`, then runs `npm run backup:d1:r2` with `D1_BACKUP_AUTOMATION_APPROVED=0509-weekly-d1-to-r2`. Scheduled off-machine backups are produced by the restore-evidence workflow below, so a second independent export cron is intentionally disabled.
+- **Unblocked 2026-07-13:** repository secrets `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` (scoped custom token: D1 Edit + Workers R2 Storage Edit) were added by the owner, and dispatch run `29225583866` completed the full validate → export → upload chain ("Upload complete. Backup complete.", fresh timestamped object under the private R2 backup prefix). Historical context: the former weekly backup-only cron produced runs `28339411098`, `28758345164`, and `29212868653` while the secrets were missing; that redundant cron is now retired in favor of the scheduled restore-evidence proof.
+- **Mac-side scheduled backup (the currently-live automated path):** a Claude scheduled task `0509-weekly-d1-backup` on Nish's Mac runs the manual-approved backup weekly (Sunday mornings, local). Caveat found 2026-07-13: its runs on 2026-07-05/12 silently produced no artifact because the task prompt predated the `D1_BACKUP_MANUAL_APPROVED` interlock; the prompt now sets the marker and verifies a fresh `$HOME/.local/state/0509/backups/d1/` file plus `validate-d1-backup.mjs` before reporting success. This path depends on the Mac being awake/app open — the Actions path above remains the wanted off-machine redundancy.
 - Cloudflare documents that D1 export blocks other database requests while it runs. Keep this schedule in a low-traffic window and move it if real customer traffic shows a better quiet period.
 - Manual run any time: `D1_BACKUP_MANUAL_APPROVED=0509-manual-d1-export npm run backup:d1:r2` from the repo root (wrangler OAuth session and R2 access must be available). This marker is the script's explicit confirmation for a production-blocking remote D1 export; unapproved manual runs fail before Wrangler starts.
 - Backup command output redacts temporary signed export URL query strings before logging.
 
-### Runner fallback
+### Hardened runner routing
 
-Routine recovery jobs run on the VPS self-hosted runner with the repository variable `RECOVERY_RUNNER=vps`. GitHub-hosted minutes are an emergency reserve only: if the VPS is down, unset `RECOVERY_RUNNER` to route these jobs to the `ubuntu-latest` fallback, then re-set it to `vps` after recovery.
+The VPS runner fleet uses immutable labels instead of repository-variable
+fallbacks:
+
+- `vps-verify`: three isolated, no-sudo verification runners. GitHub assigns
+  each waiting job to the first matching idle runner; the repository lock
+  provides three FIFO heavy-work slots and makes a fourth contender wait.
+
+The three verification units use distinct non-login accounts, a capped
+`github-0509.slice` and `github-0509-verify.slice`, and the root-created lock
+state under `/run/lock/0509`. They cannot read
+`/home/nish`, use passwordless sudo, or inherit the interactive Claude, Codex,
+Hermes, or GitHub operator credentials. Privileged backup, restore, finalization,
+production deployment, and public uptime jobs use fresh GitHub-hosted machines;
+no repository-level VPS runner is eligible to receive production secrets or
+trusted operational work.
+
+Do not restore runner-variable fallback expressions or add trusted jobs to the
+repository-level self-hosted fleet.
+An outage should queue visibly rather than silently moving protected work to a
+different trust boundary. For emergency recovery, repair or deliberately
+replace the matching hardened label and run the read-only
+`runner-hardening-proof.yml` workflow before resuming provider work.
 
 The 2026-07-26 weekly backup failed because the GitHub-hosted minutes were exhausted. Verify and record the next successful weekly backup run.
 
+### VPS-assisted remote restore evidence
+
+The `D1 remote restore evidence` workflow performs the restore drill on the
+GitHub-hosted runner during explicit low-traffic recovery windows (Monday and
+Thursday at 02:17 IST) or by manual dispatch. It reuses the protected
+branch-restricted `production` environment so provider credentials are not
+available as repository-level secrets or to pull-request jobs.
+The workflow creates a fresh D1 export, uploads it to private R2,
+download that exact R2 object, restore it into a run-scoped scratch D1 database,
+compare schema, key-bearing content digests, migration ledger, and aggregates
+through a full exported round trip, then delete the exact scratch database.
+The backup child records its exact local path and R2 key in a private
+run-temporary manifest before export. The drill validates that ownership record
+and deletes only that exact local production SQL export, including on child
+failure; private R2 remains the durable backup, so persistent self-hosted
+workspaces do not accumulate additional plaintext dumps from restore drills.
+If the drill process is hard-killed before its `finally` block, the independent
+cleanup job performs a clean checkout, removes every strict temp directory for
+the current workflow run, and
+sweeps strict temp directories older than 24 hours for runner/host recovery.
+An independent `if: always()` cleanup job deletes every
+`0509-restore-test-<current-run>-<attempt>` database after the restore job,
+including scratch databases left by an earlier failed attempt of the same
+workflow run. It also removes only strictly run-scoped
+`0509-restore-test-<run>-<attempt>` databases older than 24 hours, so a canceled
+or lost-runner drill cannot leave production data parked. Mandatory provider
+list/delete operations retry three times with bounded backoff; exhausted
+cleanup failures remain deploy-blocking.
+
+Production deploys never export D1 or create scratch databases inline. Their
+unprivileged preparation job downloads and verifies the newest private
+restore-evidence artifact from the preceding eight days. Code-only deploys can
+reuse a verified drill for seven
+days only while the Wrangler configuration hash still matches. A
+migration-bearing deploy or any change to restore workflows, scripts, runtime
+dependencies, or Wrangler configuration requires candidate-bound evidence
+from the preceding 24 hours. If no matching artifact exists, the deploy blocks
+with instructions to run the recovery workflow and then rerun the deploy.
+Already-applied migration files are immutable: modifying or deleting one
+relative to the last successful production deploy blocks preparation instead
+of allowing a fresh drill to certify the old production ledger by filename.
+Preparation inspects every first-parent commit in that range, so a migration
+added and then edited after a failed deploy is also blocked even when its final
+range status is still `A`.
+Each successful preparation republishes the validated evidence as an eight-day
+permission-preserving private artifact, so the fast path survives across
+workflow runs without rotating a GitHub secret. Claude on the VPS needs only
+GitHub workflow-dispatch access to request a recovery-window drill; Cloudflare
+credentials stay inside the protected recovery environment.
+Artifact lookup distinguishes "none found" from GitHub/API infrastructure
+failure: absence blocks with a recovery-workflow instruction, while
+infrastructure errors retry three times and then fail loudly. Artifact download
+failures follow the same three-attempt, fail-loud contract. A runner without
+the GitHub CLI, or a downloaded artifact that fails content validation, also
+blocks without touching production D1.
+Deploy preparation requires 12 hours of freshness headroom before accepting
+reused evidence. This covers the bounded cleanup and deploy-job windows while
+the deploy plan still re-checks freshness against real wall-clock time before
+any production mutation, without consuming the full 24-hour lifetime of
+migration-bearing evidence.
+
+The shared backup command retries the R2 upload four times with bounded
+backoff. D1 exports retry up to 16 times with delay capped at five minutes
+(52.5 minutes of total backoff), so an export already running for the weekly
+backup or a recovery-window drill can finish without causing a false workflow
+failure. Every attempt uses one stable timestamped local path and exact R2 key,
+so overlap cannot create ambiguous fresh-backup identities. This avoids GitHub
+concurrency groups that can cancel an older pending deploy.
+When the backup command runs in manifest-owned drill mode, it skips normal
+local retention pruning. The drill later removes only its newly created export,
+leaving the pre-existing retained set unchanged.
+The backup and remote-restore jobs allow 300 minutes, leaving room
+for setup plus the bounded export, import, round-trip export, verification, and
+retry phases. Independent cleanup jobs allow 120 minutes so multiple exact
+scratch deletions can be attempted even when one provider call is slow.
+The restore drill permits a single long provider command, including the exact
+R2 backup download, to run for up to 240 minutes; the enclosing 300-minute
+Actions job remains the fail-closed cap for the full drill.
+
+Restore imports default to a 256 MiB SQL safety ceiling. If a valid production
+export grows beyond that limit, set the repository variable
+`D1_REMOTE_RESTORE_MAX_SQL_BYTES` to an explicit byte count between 16 MiB and
+480 MiB, rerun the workflow, and review runner memory before retaining the
+higher limit. The workflow checks every export's file size before allocating a
+UTF-8 string, including the scratch round-trip export.
+The local baseline imports the untouched R2 SQL; only the scratch restore uses
+the statement-size transformer. Schema and content digests therefore detect a
+lossy transformer regression instead of comparing two transformed copies.
+
+The GitHub `production` environment token used by the backup and restore workflows must be
+able to export, create, execute against, and delete D1 databases, and read/write
+objects in the private backup R2 bucket. These capabilities are broader than a
+Worker-deploy-only token; missing capability fails the protected drill before
+an artifact is published.
+
 ### Owner actions to unblock Actions backups
 
-1. Add repository secrets (or secrets on the `d1-backup-r2` GitHub Environment): `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` (token needs D1 export + R2 write on the backup bucket).
+1. Add repository secrets (or secrets on the `d1-backup-r2` GitHub Environment): `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` (token needs D1 export/create/execute/delete + R2 read/write on the backup bucket).
 2. Confirm the GitHub Environment named `d1-backup-r2` exists for this repo.
 3. From Actions → **D1 backup to R2** → **Run workflow** on `main` (`workflow_dispatch`) and confirm the job uploads a fresh object under the private R2 `backups/d1/` prefix.
 

@@ -532,6 +532,17 @@ describe("watchlists route loader", () => {
     vi.doMock("~/lib/ad-source.server", () => ({
       resolveCommercialAdSourceStatus: vi.fn().mockResolvedValue(discoveryStatus),
     }));
+    vi.doMock("~/lib/watchlist-board.server", () => ({
+      loadWatchBoardCaptureWindow: vi.fn().mockRejectedValue(new Error("rollup unavailable")),
+      emptyWatchBoardCaptureWindow: vi.fn().mockReturnValue({
+        endDate: "2026-04-18",
+        windowDays: 30,
+        days: {},
+        capturedChanges: {},
+        totalCapturedChanges: 0,
+        failedChecks: {},
+      }),
+    }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist,
       getWatchlistDeliveryConfig: vi.fn().mockResolvedValue(watchlistDeliveryConfig),
@@ -553,12 +564,14 @@ describe("watchlists route loader", () => {
       selectedWatchlist: unknown;
       watchlists: unknown[];
       captureWindow: { windowDays: number; days: Record<string, unknown> };
+      captureWindowDegraded: boolean;
       effectiveDeliveryConfig: { timezone: string | null };
     };
 
     expect(board.selectedWatchlist).toBeNull();
     expect(board.watchlists).toEqual([watchlist]);
     expect(board.captureWindow.windowDays).toBe(30);
+    expect(board.captureWindowDegraded).toBe(true);
     // The board is the default view, so it must resolve the workspace
     // delivery timezone: "Next check" would otherwise print UTC beside a
     // viewer-local "Last check" and disagree with /app/dashboard.
@@ -2266,6 +2279,7 @@ describe("watchlists route rendering", () => {
           totalCapturedChanges: 2,
           failedChecks: {},
         },
+        captureWindowDegraded: true,
         eventCandidates: [],
         events: [],
         runs: [],
@@ -2310,7 +2324,12 @@ describe("watchlists route rendering", () => {
     expect(markup.match(/class="f9-wk-row(?: [^"]*)?"/g)).toHaveLength(2);
     expect(markup).toContain("Nykaa watch");
     expect(markup).toContain("Paused rival");
-    expect(markup).toContain("2 changes captured in the last 30 days.");
+    expect(markup).toContain("Recent change and failed-check totals could not be loaded.");
+    expect(markup).toContain("Recent change and failed-check totals are unavailable.");
+    expect(markup).toContain("Recent totals are unavailable.");
+    expect(markup).not.toContain("2 changes captured in the last 30 days.");
+    expect(markup).not.toContain("Checked, and nothing has changed");
+    expect(markup).not.toContain("competitor-detail");
     expect(markup).toContain("Paused. No checks run and the history stays.");
     expect(markup).not.toContain("f9-ed-capture-strip");
     expect(markup).not.toContain("f9-ed-ticker");
@@ -2319,10 +2338,8 @@ describe("watchlists route rendering", () => {
     expect(markup.match(/class="f9-wk-btn"/g)).toHaveLength(1);
     expect(markup).toContain("Add competitor");
     expect(markup).not.toContain("f9-ed-cta--rank1");
-    // The five state filters are navigation, with honest counts.
-    expect(markup).toContain('class="f9-wk-tab is-on"');
-    expect(markup).toContain("Caught");
-    expect(markup).toContain("Paused");
+    // Aggregate-derived state filters stand down while their rollup is unavailable.
+    expect(markup).not.toContain('class="f9-wk-tab');
     // The detail pane and the full record stay closed until a row is opened.
     expect(markup).not.toContain("f9-wk-detail");
     expect(markup).not.toContain("Evidence and alerts");
@@ -2490,6 +2507,52 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain("Watching");
     expect(markup).not.toContain("Save watchlist");
     expect(markup).not.toContain("Recent evidence checks");
+  });
+
+  it("keeps Package for client available for a quiet completed Agency check", async () => {
+    const markup = await renderWatchlistsRoute({
+      ...selectedPanelLoaderData,
+      plan: "agency",
+      events: [],
+    });
+
+    expect(markup).toContain("Package for client");
+    expect(markup).toContain(
+      'href="/app/reports/watchlist:watch-1"',
+    );
+  });
+
+  it("keeps the selected overview honest when recent capture totals are unavailable", async () => {
+    const failedRuns = Array.from({ length: 3 }, (_, index) => ({
+      ...recentRuns[0],
+      id: `failed-run-${index + 1}`,
+      status: "failed" as const,
+      errorCode: "provider_unavailable",
+      errorMessage: "Provider unavailable.",
+    }));
+    const markup = await renderWatchlistsRoute({
+      ...selectedPanelLoaderData,
+      plan: "agency",
+      captureWindowDegraded: true,
+      runs: failedRuns,
+    });
+
+    expect(markup).toContain("Nykaa watch");
+    expect(markup).toContain("Recent totals");
+    expect(markup).toContain("Unavailable — refresh to try again");
+    expect(markup).toContain("Recent aggregate totals are unavailable");
+    expect(markup).toContain("is-capture-window-degraded");
+    expect(markup).toContain('id="competitor-detail"');
+    expect(markup).toContain("Open the capture");
+    expect(markup).toContain("Package for client");
+    expect(markup).toContain("Refresh now");
+    expect(markup).toContain("Pause watching");
+    expect(markup).toContain("Share summary");
+    expect(markup).toContain("Export CSV");
+    expect(markup).toContain("Export JSON");
+    expect(markup).toContain("Delivery");
+    expect(markup).toContain("Setup");
+    expect(markup).toContain("the last 3 checks failed");
   });
 
   it("keeps setup, its explainers and the source-access route behind the Setup tab", async () => {

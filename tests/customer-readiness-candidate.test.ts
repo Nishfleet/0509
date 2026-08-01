@@ -35,6 +35,13 @@ function writeWrangler(repo: string, mode: string) {
   writeFileSync(
     join(repo, "wrangler.jsonc"),
     `{
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "0509",
+          "database_id": "746c6e3d-782e-443a-82d6-28ca93a16294"
+        }
+      ],
       "vars": {
         "SEARCH_ROLLOUT_MODE": "${mode}"
       }
@@ -85,6 +92,74 @@ describe("customer readiness candidate identity", () => {
     expect(result.code).toBe(0);
     expect(result.report).toMatchObject({ ok: true, branch: "main" });
     expect(git(repo, ["config", "--bool", "core.bare"])).toBe("false");
+  });
+
+  it("classifies a detached exact remote-main commit as protected main", () => {
+    const repo = createRepo();
+    const head = git(repo, ["rev-parse", "HEAD"]);
+    git(repo, ["update-ref", "refs/remotes/origin/main", head]);
+    git(repo, ["switch", "--detach", "-q", head]);
+
+    const result = runCandidate(repo);
+
+    expect(result.code).toBe(0);
+    expect(result.report).toMatchObject({
+      ok: true,
+      branch: "main",
+      baseCommit: head,
+      headCommit: head,
+    });
+  });
+
+  it("fails closed for missing, mismatched, or malformed detached remote-main identity", () => {
+    const missingRepo = createRepo();
+    const missingHead = git(missingRepo, ["rev-parse", "HEAD"]);
+    git(missingRepo, ["switch", "--detach", "-q", missingHead]);
+    expect(runCandidate(missingRepo).report).toMatchObject({
+      branch: "detached",
+      headCommit: missingHead,
+    });
+
+    const mismatchedRepo = createRepo();
+    const remoteMain = git(mismatchedRepo, ["rev-parse", "HEAD"]);
+    writeFileSync(join(mismatchedRepo, "tracked.txt"), "new detached commit\n");
+    git(mismatchedRepo, ["add", "tracked.txt"]);
+    git(mismatchedRepo, ["commit", "-q", "-m", "detached candidate"]);
+    const mismatchedHead = git(mismatchedRepo, ["rev-parse", "HEAD"]);
+    git(mismatchedRepo, ["update-ref", "refs/remotes/origin/main", remoteMain]);
+    git(mismatchedRepo, ["switch", "--detach", "-q", mismatchedHead]);
+    expect(runCandidate(mismatchedRepo).report).toMatchObject({
+      branch: "detached",
+      headCommit: mismatchedHead,
+    });
+
+    const malformedRepo = createRepo();
+    const malformedHead = git(malformedRepo, ["rev-parse", "HEAD"]);
+    const blobPath = join(malformedRepo, "remote-main-blob.txt");
+    writeFileSync(blobPath, "not a commit\n");
+    const blob = git(malformedRepo, ["hash-object", "-w", blobPath]);
+    rmSync(blobPath);
+    git(malformedRepo, ["update-ref", "refs/remotes/origin/main", blob]);
+    git(malformedRepo, ["switch", "--detach", "-q", malformedHead]);
+    expect(runCandidate(malformedRepo).report).toMatchObject({
+      branch: "detached",
+      headCommit: malformedHead,
+    });
+  });
+
+  it("keeps a symbolic non-main branch unprotected even at the remote-main commit", () => {
+    const repo = createRepo();
+    const head = git(repo, ["rev-parse", "HEAD"]);
+    git(repo, ["update-ref", "refs/remotes/origin/main", head]);
+    git(repo, ["switch", "-q", "-c", "codex/not-main"]);
+
+    const result = runCandidate(repo);
+
+    expect(result.code).toBe(0);
+    expect(result.report).toMatchObject({
+      branch: "codex/not-main",
+      headCommit: head,
+    });
   });
 
   it("binds the effective source tree rather than branch, base, or commit metadata", () => {
@@ -196,6 +271,18 @@ describe("customer readiness candidate identity", () => {
 
     writeWrangler(shadowRepo, "shadow");
     const noEvidence = runCandidate(shadowRepo);
+    expect(noEvidence.report?.wrangler).toMatchObject({
+      d1Database: {
+        binding: "DB",
+        name: "0509",
+        uuid: "746c6e3d-782e-443a-82d6-28ca93a16294",
+      },
+      worktreeD1Database: {
+        binding: "DB",
+        name: "0509",
+        uuid: "746c6e3d-782e-443a-82d6-28ca93a16294",
+      },
+    });
     expect(noEvidence.report?.deployedIdentity).toMatchObject({
       classification: "external_proof_required",
       evidenceProvided: false,

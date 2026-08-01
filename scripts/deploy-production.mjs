@@ -79,11 +79,13 @@ try {
   const nonce = `${process.pid}-${randomBytes(8).toString("hex")}`;
   const manifestPath = `test-results/deploy-readiness-${nonce}.json`;
   const remoteRestoreEvidencePath = process.env.D1_REMOTE_RESTORE_EVIDENCE_PATH;
+  const backupProofStatus = process.env.BACKUP_PROOF_STATUS;
   const wranglerOutputPath = `test-results/wrangler-deploy-output-${nonce}.jsonl`;
   const rollbackTargetPath = `test-results/worker-rollback-target-${nonce}.json`;
   const plan = buildProductionDeployPlan({
     manifestPath,
     remoteRestoreEvidencePath,
+    backupProofStatus,
     wranglerOutputPath,
     rollbackTargetPath,
   });

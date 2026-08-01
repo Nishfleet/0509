@@ -2,15 +2,18 @@ import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { parse } from "yaml";
 
 const deployPlanModule = await import("../scripts/deploy-production-plan.mjs");
 const {
@@ -18,7 +21,14 @@ const {
   executeProductionDeployPlan,
   printReleaseReadinessDiagnostics,
 } = deployPlanModule;
-const { hasMigrationChanges } =
+const {
+  firstParentMigrationDiffs,
+  hasAppliedMigrationMutation,
+  hasMigrationChanges,
+  hasMigrationMutationAcrossCommits,
+  hasRestoreCriticalChanges,
+  minimumValidityMs,
+} =
   await import("../scripts/verify-remote-restore-evidence.mjs");
 const rollbackTargetModule =
   await import("../scripts/worker-rollback-target.mjs");
@@ -36,6 +46,10 @@ const aria = Buffer.from('- main "0509":\n  - heading "Proof"\n', "utf8");
 const remoteRestoreEvidencePath =
   "test-results/d1-remote-restore-evidence.json";
 const wranglerOutputPath = "test-results/wrangler-deploy-output.jsonl";
+const migrationLedgerNames = ["0001_first.sql", "0002_second.sql"];
+const migrationLedgerNamesHash = createHash("sha256")
+  .update(JSON.stringify(migrationLedgerNames))
+  .digest("hex");
 
 afterEach(() => {
   while (roots.length > 0)
@@ -144,7 +158,7 @@ function passingEvidence() {
 
 function passingRemoteRestoreEvidence() {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     candidateFingerprint: fingerprint,
     generatedAt: "2026-07-16T10:00:00.000Z",
     databaseIdentitySha256: "1".repeat(64),
@@ -154,9 +168,14 @@ function passingRemoteRestoreEvidence() {
     transformedSqlSha256: "4".repeat(64),
     rowCountDigestSha256: "5".repeat(64),
     migrationLedgerSha256: "6".repeat(64),
+    migrationLedgerBaselineSha256: "9".repeat(64),
+    migrationLedgerNames,
+    migrationLedgerNamesSha256: migrationLedgerNamesHash,
+    schemaDigestSha256: "7".repeat(64),
+    contentDigestSha256: "8".repeat(64),
     wranglerWorktreeSha256: wranglerHash,
-    latestMigration: "0067_workspace_membership_invariants.sql",
-    migrationCount: 67,
+    latestMigration: "0002_second.sql",
+    migrationCount: 2,
     planRowCount: 5,
     dodoLinkedPlanRowCount: 5,
     productionSearchRolloutMode: "shadow",
@@ -209,16 +228,21 @@ describe("production deployment readiness gate", () => {
       plan.findIndex((step: any) => step.id === "post_deploy_release_canary"),
     );
     const deployIndex = plan.findIndex((step: any) => step.id === "deploy");
-    expect(plan[deployIndex - 2]).toMatchObject({
+    expect(plan[deployIndex - 3]).toMatchObject({
       id: "partial_refund_invariants_predeploy",
       command: "node",
       args: ["scripts/check-partial-refund-invariants.mjs"],
       includeCloudflareCredentials: true,
     });
-    expect(plan[deployIndex - 1]).toMatchObject({
+    expect(plan[deployIndex - 2]).toMatchObject({
       id: "capture_worker_rollback_target",
       command: "node",
       includeCloudflareCredentials: true,
+    });
+    expect(plan[deployIndex - 1]).toEqual({
+      id: "reconfirm_frozen_main_before_deploy",
+      command: "./scripts/ci-verify-provider-main-cas.sh",
+      args: [],
     });
     expect(plan[deployIndex + 1]).toMatchObject({
       id: "verify_worker_rollback_target",
@@ -280,6 +304,87 @@ describe("production deployment readiness gate", () => {
       args: ["run", "e2e:prod:public"],
     });
     expect(plan[canaryIndex + 6]).toMatchObject({ id: "oauth_branding" });
+  });
+
+  it("defaults to required backup proof and makes the exact deferred release immediate-only", () => {
+    expect(() =>
+      buildProductionDeployPlan({
+        manifestPath: "test-results/deploy-readiness-test.json",
+        wranglerOutputPath,
+      }),
+    ).toThrow("invalid_remote_restore_evidence_path");
+
+    const deferredPlan = buildProductionDeployPlan({
+      manifestPath: "test-results/deploy-readiness-test.json",
+      backupProofStatus: "deferred",
+      wranglerOutputPath,
+    });
+    expect(deferredPlan[0]).toEqual({
+      id: "deferred_release_zero_migrations",
+      command: "git",
+      args: [
+        "diff",
+        "--quiet",
+        "03174ed6d9eed749b22430fbe1bc0938bf4da0c5",
+        "HEAD",
+        "--",
+        "migrations",
+      ],
+    });
+    expect(
+      deferredPlan.find((step: any) => step.id === "remote_restore_evidence"),
+    ).toBeUndefined();
+    expect(
+      deferredPlan.find((step: any) => step.id === "start_production_soak"),
+    ).toBeUndefined();
+    expect(
+      deferredPlan.find((step: any) => step.id === "post_deploy_release_canary"),
+    ).toMatchObject({ env: { BACKUP_PROOF_STATUS: "deferred" } });
+    expect(
+      deferredPlan.find((step: any) => step.id === "rollback_failed_release"),
+    ).toMatchObject({ runOnPostDeployFailure: true });
+
+    expect(() =>
+      buildProductionDeployPlan({
+        manifestPath: "test-results/deploy-readiness-test.json",
+        remoteRestoreEvidencePath,
+        backupProofStatus: "deferred",
+        wranglerOutputPath,
+      }),
+    ).toThrow("deferred_backup_restore_evidence_conflict");
+
+    const disposition = (deployPlanModule as any)
+      .createDeferredBackupDisposition("f".repeat(40));
+    expect(disposition).toMatchObject({
+      backupProof: "not_obtained",
+      productionD1RecoveryProof: "absent",
+      releaseControlBaseSha:
+        "048e8a5991c6560a15cba485a7a4ba27af9d5004",
+      candidateSha: "f".repeat(40),
+      migrationFileCount: 0,
+    });
+  });
+
+  it("aborts on main drift after preflights and before wrangler deploy", () => {
+    const plan = buildProductionDeployPlan({
+      manifestPath: "test-results/deploy-readiness-test.json",
+      remoteRestoreEvidencePath,
+      wranglerOutputPath,
+    });
+    const executed: string[] = [];
+
+    expect(() =>
+      executeProductionDeployPlan(plan, (step: any) => {
+        executed.push(step.id);
+        if (step.id === "reconfirm_frozen_main_before_deploy") {
+          throw new Error("provider_main_sha_mismatch");
+        }
+      }),
+    ).toThrow("provider_main_sha_mismatch");
+    expect(executed).toContain("capture_worker_rollback_target");
+    expect(executed).toContain("reconfirm_frozen_main_before_deploy");
+    expect(executed).not.toContain("deploy");
+    expect(executed).not.toContain("rollback_failed_release");
   });
 
   it("captures one stable prior Worker version and emits an exact guarded rollback command", () => {
@@ -826,6 +931,15 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     });
     expect(
       validateRemoteRestoreEvidence(
+        { ...passingRemoteRestoreEvidence(), schemaVersion: 1 },
+        expected,
+      ),
+    ).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining(["remote_restore_schema"]),
+    });
+    expect(
+      validateRemoteRestoreEvidence(
         {
           ...passingRemoteRestoreEvidence(),
           generatedAt: "2026-07-14T10:00:00.000Z",
@@ -875,6 +989,46 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     ).toEqual({ ok: true, issues: [] });
   });
 
+  it("rejects a reordered same-count ledger even when its self-hash is valid", () => {
+    const validateRemoteRestoreEvidence = (
+      deployPlanModule as Record<string, unknown>
+    ).validateRemoteRestoreEvidence;
+    expect(typeof validateRemoteRestoreEvidence).toBe("function");
+    if (typeof validateRemoteRestoreEvidence !== "function") return;
+    const evidence = passingRemoteRestoreEvidence();
+    const reorderedNames = [...migrationLedgerNames].reverse();
+    const reorderedEvidence = {
+      ...evidence,
+      migrationLedgerNames: reorderedNames,
+      migrationLedgerNamesSha256: createHash("sha256")
+        .update(JSON.stringify(reorderedNames))
+        .digest("hex"),
+    };
+    expect(
+      validateRemoteRestoreEvidence(reorderedEvidence, {
+        candidateFingerprint: fingerprint,
+        wranglerWorktreeSha256: wranglerHash,
+        allowedMigrationStates: [
+          {
+            latestMigration: evidence.latestMigration,
+            migrationCount: evidence.migrationCount,
+            migrationLedgerNames,
+            migrationLedgerNamesSha256: migrationLedgerNamesHash,
+            migrationLedgerBaselineSha256:
+              evidence.migrationLedgerBaselineSha256,
+          },
+        ],
+        now: new Date("2026-07-16T12:00:00.000Z"),
+      }),
+    ).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining([
+        "remote_restore_migration_mismatch",
+        "remote_restore_migration_ledger_order",
+      ]),
+    });
+  });
+
   it("requires fresh exact restore evidence for migration deploys but permits a seven-day drill for code-only deploys", () => {
     const validateRemoteRestoreEvidence = (
       deployPlanModule as Record<string, unknown>
@@ -886,13 +1040,13 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       ...passingRemoteRestoreEvidence(),
       generatedAt: "2026-07-10T13:00:00.000Z",
       candidateFingerprint: "7".repeat(64),
-      wranglerWorktreeSha256: "8".repeat(64),
+      wranglerWorktreeSha256: wranglerHash,
     };
     const expected = {
       candidateFingerprint: fingerprint,
       wranglerWorktreeSha256: wranglerHash,
-      latestMigration: "0067_workspace_membership_invariants.sql",
-      migrationCount: 67,
+      latestMigration: "0002_second.sql",
+      migrationCount: 2,
       migrationBearing: false,
       now: new Date("2026-07-16T12:00:00.000Z"),
     };
@@ -900,6 +1054,27 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(validateRemoteRestoreEvidence(codeOnlyEvidence, expected)).toEqual({
       ok: true,
       issues: [],
+    });
+    expect(
+      validateRemoteRestoreEvidence(
+        {
+          ...codeOnlyEvidence,
+          wranglerWorktreeSha256: "8".repeat(64),
+        },
+        expected,
+      ),
+    ).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining(["remote_restore_config_mismatch"]),
+    });
+    expect(
+      validateRemoteRestoreEvidence(codeOnlyEvidence, {
+        ...expected,
+        restoreCritical: true,
+      }),
+    ).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining(["remote_restore_candidate_mismatch"]),
     });
     expect(
       validateRemoteRestoreEvidence(
@@ -925,13 +1100,129 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     });
   });
 
-  it("classifies migration-bearing deploys from the migration ledger diff only", () => {
+  it("applies freshness headroom without widening future clock-skew tolerance", () => {
+    const validateRemoteRestoreEvidence = (
+      deployPlanModule as Record<string, unknown>
+    ).validateRemoteRestoreEvidence;
+    expect(typeof validateRemoteRestoreEvidence).toBe("function");
+    if (typeof validateRemoteRestoreEvidence !== "function") return;
+
+    const expected = {
+      candidateFingerprint: fingerprint,
+      wranglerWorktreeSha256: wranglerHash,
+      migrationBearing: false,
+      now: new Date("2026-07-16T12:00:00.000Z"),
+      minimumValidityMs: 6 * 60 * 60 * 1000,
+    };
+    expect(
+      validateRemoteRestoreEvidence(
+        {
+          ...passingRemoteRestoreEvidence(),
+          generatedAt: "2026-07-09T18:00:00.000Z",
+        },
+        expected,
+      ),
+    ).toEqual({ ok: true, issues: [] });
+    expect(
+      validateRemoteRestoreEvidence(
+        {
+          ...passingRemoteRestoreEvidence(),
+          generatedAt: "2026-07-09T17:59:59.999Z",
+        },
+        expected,
+      ),
+    ).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining(["remote_restore_evidence_stale"]),
+    });
+    expect(
+      validateRemoteRestoreEvidence(
+        {
+          ...passingRemoteRestoreEvidence(),
+          generatedAt: "2026-07-16T12:05:00.001Z",
+        },
+        expected,
+      ),
+    ).toMatchObject({
+      ok: false,
+      issues: expect.arrayContaining(["remote_restore_evidence_stale"]),
+    });
+    expect(
+      validateRemoteRestoreEvidence(passingRemoteRestoreEvidence(), {
+        ...expected,
+        migrationBearing: true,
+        minimumValidityMs: 12 * 60 * 60 * 1000,
+      }),
+    ).toEqual({ ok: true, issues: [] });
+  });
+
+  it("classifies migration and restore-critical changes from the deploy diff", () => {
+    const currentHead = spawnSync(
+      "git",
+      ["rev-parse", "--verify", "HEAD^{commit}"],
+      { encoding: "utf8" },
+    ).stdout.trim();
+    expect(firstParentMigrationDiffs(currentHead)).toEqual([]);
     expect(hasMigrationChanges("app/routes/search.tsx\n")).toBe(false);
     expect(
       hasMigrationChanges(
         "migrations/0070_release_scheduled_observations.sql\n",
       ),
     ).toBe(true);
+    expect(
+      hasAppliedMigrationMutation(
+        "A\tmigrations/0071_new_release_migration.sql\n",
+      ),
+    ).toBe(false);
+    expect(
+      hasAppliedMigrationMutation(
+        "M\tmigrations/0070_release_scheduled_observations.sql\n",
+      ),
+    ).toBe(true);
+    expect(
+      hasAppliedMigrationMutation(
+        "D\tmigrations/0069_digest_cadence_preference.sql\n",
+      ),
+    ).toBe(true);
+    expect(
+      hasMigrationMutationAcrossCommits([
+        "A\tmigrations/0071_new_release_migration.sql\n",
+        "M\tmigrations/0071_new_release_migration.sql\n",
+      ]),
+    ).toBe(true);
+    expect(
+      hasMigrationMutationAcrossCommits([
+        "A\tmigrations/0071_new_release_migration.sql\n",
+        "M\tapp/routes/search.tsx\n",
+      ]),
+    ).toBe(false);
+    expect(hasRestoreCriticalChanges("app/routes/search.tsx\n")).toBe(false);
+    expect(hasRestoreCriticalChanges("wrangler.jsonc\n")).toBe(true);
+    expect(
+      hasRestoreCriticalChanges("scripts/d1-migration-sync-check.lib.mjs\n"),
+    ).toBe(true);
+    expect(
+      hasRestoreCriticalChanges(
+        "scripts/d1-remote-restore-evidence-core.mjs\n",
+      ),
+    ).toBe(true);
+    expect(
+      hasRestoreCriticalChanges(".github/workflows/deploy-production.yml\n"),
+    ).toBe(true);
+  });
+
+  it("bounds restore-evidence freshness headroom to one day", () => {
+    expect(minimumValidityMs({})).toBe(0);
+    expect(
+      minimumValidityMs({
+        D1_REMOTE_RESTORE_EVIDENCE_MIN_VALIDITY_MS: "43200000",
+      }),
+    ).toBe(43_200_000);
+    expect(() =>
+      minimumValidityMs({
+        D1_REMOTE_RESTORE_EVIDENCE_MIN_VALIDITY_MS: "86400001",
+      }),
+    ).toThrow("remote_restore_minimum_validity_invalid");
   });
 
   it("extracts the exact newly deployed Worker version from Wrangler's official output envelope", () => {
@@ -951,12 +1242,14 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     );
   });
 
-  it("wires private restore evidence and the post-deploy canary token into protected-main CI", () => {
+  it("requires pre-generated private restore evidence before the protected deploy job", () => {
     const workflow = readFileSync(
       resolve(".github/workflows/deploy-production.yml"),
       "utf8",
     );
-    const checkoutIndex = workflow.indexOf("- uses: actions/checkout@v6.0.3");
+    const checkoutIndex = workflow.indexOf(
+      "- uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+    );
     const acquireIndex = workflow.indexOf("- name: Acquire deploy window");
     const verifySecretsIndex = workflow.indexOf(
       "- name: Verify Cloudflare deploy secrets",
@@ -965,6 +1258,9 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     const materializeIndex = workflow.indexOf(
       "- name: Materialize private remote-restore evidence",
     );
+    const synchronizeCanaryIndex = workflow.indexOf(
+      "- name: Synchronize private canary token",
+    );
     const deployIndex = workflow.indexOf("- name: Deploy");
     const verifyEvidenceIndex = workflow.indexOf(
       "- name: Verify complete release evidence set",
@@ -972,9 +1268,10 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     const releaseIndex = workflow.indexOf("- name: Release deploy window");
     const verifySecretsStep = workflow.slice(
       verifySecretsIndex,
-      workflow.indexOf("- uses: actions/setup-node@v6"),
+      workflow.indexOf("- uses: actions/setup-node@", verifySecretsIndex),
     );
-    const materializeStep = workflow.slice(materializeIndex, deployIndex);
+    const materializeStep = workflow.slice(materializeIndex, synchronizeCanaryIndex);
+    const synchronizeCanaryStep = workflow.slice(synchronizeCanaryIndex, deployIndex);
     const deployStep = workflow.slice(deployIndex, verifyEvidenceIndex);
     const releaseStep = workflow.slice(releaseIndex);
 
@@ -983,7 +1280,8 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(verifySecretsIndex).toBeGreaterThan(acquireIndex);
     expect(testIndex).toBeGreaterThan(verifySecretsIndex);
     expect(materializeIndex).toBeGreaterThan(testIndex);
-    expect(deployIndex).toBeGreaterThan(materializeIndex);
+    expect(synchronizeCanaryIndex).toBeGreaterThan(materializeIndex);
+    expect(deployIndex).toBeGreaterThan(synchronizeCanaryIndex);
     expect(verifyEvidenceIndex).toBeGreaterThan(deployIndex);
     expect(releaseIndex).toBeGreaterThan(verifyEvidenceIndex);
     expect(workflow).toContain("timeout-minutes: 270");
@@ -997,20 +1295,36 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(verifySecretsStep).toContain(
       "CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}",
     );
-    expect(verifySecretsStep).toContain(
-      "D1_REMOTE_RESTORE_EVIDENCE_JSON: ${{ secrets.D1_REMOTE_RESTORE_EVIDENCE_JSON }}",
+    expect(verifySecretsStep).not.toContain(
+      "D1_REMOTE_RESTORE_EVIDENCE_JSON",
     );
     expect(materializeStep).toContain(
-      "D1_REMOTE_RESTORE_EVIDENCE_JSON: ${{ secrets.D1_REMOTE_RESTORE_EVIDENCE_JSON }}",
+      "uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
     );
     expect(materializeStep).toContain(
-      "printf '%s' \"$D1_REMOTE_RESTORE_EVIDENCE_JSON\" > test-results/d1-remote-restore-evidence.json",
+      "d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}",
+    );
+    expect(workflow).not.toContain(
+      "d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}",
+    );
+    expect(workflow).toContain("overwrite: true");
+    expect(materializeStep).toContain(
+      'chmod 600 test-results/d1-remote-restore-evidence.json',
+    );
+    expect(synchronizeCanaryStep).toContain(
+      "CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}",
+    );
+    expect(synchronizeCanaryStep).toContain(
+      "./node_modules/.bin/wrangler versions secret put CANARY_BYPASS_TOKEN --name 0509",
     );
     expect(deployStep).toContain(
       "CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}",
     );
     expect(deployStep).toContain(
-      "D1_REMOTE_RESTORE_EVIDENCE_PATH: test-results/d1-remote-restore-evidence.json",
+      "D1_REMOTE_RESTORE_EVIDENCE_PATH: ${{ needs.pin_candidate.outputs.backup_proof_status == 'required' && 'test-results/d1-remote-restore-evidence.json' || '' }}",
+    );
+    expect(deployStep).toContain(
+      "BACKUP_PROOF_STATUS: ${{ needs.pin_candidate.outputs.backup_proof_status }}",
     );
     expect(deployStep).toContain("GITHUB_TOKEN: ${{ github.token }}");
     expect(releaseStep).toContain("if: always()");
@@ -1020,19 +1334,516 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(workflow).toContain("actions: read");
     expect(workflow).toContain("fetch-depth: 0");
     expect(workflow).toContain(
-      "runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}",
+      "prepare_remote_restore_evidence:",
+    );
+    const prepareSection = workflow.slice(
+      workflow.indexOf("prepare_remote_restore_evidence:"),
+      workflow.indexOf("\n  deploy:"),
+    );
+    expect(prepareSection).not.toContain("environment: production");
+    expect(prepareSection).not.toContain("CLOUDFLARE_API_TOKEN");
+    expect(prepareSection).not.toContain("CLOUDFLARE_ACCOUNT_ID");
+    expect(prepareSection).not.toContain(
+      "npm run restore:d1:remote-evidence",
+    );
+    expect(workflow).not.toContain("cleanup_remote_restore_scratch:");
+    expect(workflow.match(/^\s+environment:/gmu)).toHaveLength(1);
+    const prepareScript = readFileSync(
+      resolve("scripts/ci-prepare-remote-restore-evidence.sh"),
+      "utf8",
+    );
+    expect(prepareScript).toContain(
+      "No valid pre-generated restore evidence is available.",
+    );
+    expect(prepareScript).toContain('if [ "$status" -ne 2 ]');
+    expect(prepareScript).toContain("return 2");
+    expect(prepareScript).toContain('archive="$RESTORE_EVIDENCE_ARCHIVE"');
+    expect(workflow).toContain(
+      'D1_REMOTE_RESTORE_EVIDENCE_MIN_VALIDITY_MS: "43200000"',
+    );
+    expect(workflow).not.toContain("gh secret set");
+    expect(workflow).toContain(
+      "runs-on: [self-hosted, linux, x64, vps-verify]",
+    );
+    expect(workflow).toContain(
+      "runs-on: ubuntu-latest",
     );
     expect(readFileSync(resolve(".github/workflows/ci.yml"), "utf8")).toContain(
-      "runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}",
+      "runs-on: [self-hosted, linux, x64, vps-verify]",
     );
     expect(
       readFileSync(resolve(".github/workflows/d1-backup-validate.yml"), "utf8"),
-    ).toContain("runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}");
+    ).toContain("runs-on: [self-hosted, linux, x64, vps-verify]");
     expect(
       readFileSync(resolve(".github/workflows/secret-scan.yml"), "utf8"),
-    ).toContain("runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}");
+    ).toContain("runs-on: [self-hosted, linux, x64, vps-verify]");
     expect(workflow).not.toContain("- name: Production public smoke");
   });
+
+  it("binds create and upload-artifact to one RESTORE_EVIDENCE_ARCHIVE env", () => {
+    const workflowText = readFileSync(
+      resolve(".github/workflows/deploy-production.yml"),
+      "utf8",
+    );
+    const workflow = parse(workflowText) as any;
+    const prepare = workflow.jobs.prepare_remote_restore_evidence;
+    const candidateVerifierStep = prepare.steps.find(
+      (step: any) =>
+        step.name === "Verify pinned candidate before self-hosted work",
+    );
+    const bindArchiveStep = prepare.steps.find(
+      (step: any) => step.name === "Bind restore evidence archive path",
+    );
+    const verifyStep = prepare.steps.find(
+      (step: any) =>
+        step.name === "Verify pre-generated exact R2 restore evidence",
+    );
+    const uploadStep = prepare.steps.find(
+      (step: any) =>
+        step.name === "Preserve private restore evidence for this deploy only",
+    );
+    const cleanupStep = prepare.steps.find(
+      (step: any) => step.name === "Remove local restore evidence archive",
+    );
+    const bindManifestStep = prepare.steps.find(
+      (step: any) =>
+        step.name === "Bind a clean exact-main candidate manifest",
+    );
+
+    expect(bindArchiveStep.run).toContain(
+      'archive="$RUNNER_TEMP/d1-remote-restore-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}.tar.gz"',
+    );
+    expect(candidateVerifierStep.run).toBe(
+      "./scripts/deploy-window-lock.sh run -- ./scripts/ci-verify-production-candidate.sh",
+    );
+    expect(bindArchiveStep.run).toContain(
+      'printf \'RESTORE_EVIDENCE_ARCHIVE=%s\\n\' "$archive" >> "$GITHUB_ENV"',
+    );
+    expect(uploadStep.with.path).toBe("${{ env.RESTORE_EVIDENCE_ARCHIVE }}");
+    expect(cleanupStep.run).toBe('rm -f -- "$RESTORE_EVIDENCE_ARCHIVE"');
+    expect(verifyStep.run).toBe(
+      "./scripts/deploy-window-lock.sh run -- ./scripts/ci-prepare-remote-restore-evidence.sh",
+    );
+    expect(bindManifestStep.run).toBe(
+      "./scripts/deploy-window-lock.sh run -- ./scripts/ci-bind-remote-restore-candidate.sh",
+    );
+    expect(workflowText).not.toContain("<<'VERIFY_LANE'");
+    expect(workflowText).not.toContain("/run/lock/0509/d1-remote-restore-evidence");
+    expect(prepare.env?.RESTORE_EVIDENCE_ARCHIVE).toBeUndefined();
+    // Path pattern is authored once in the bind step; upload/cleanup use env.
+    expect(
+      workflowText.match(
+        /d1-remote-restore-evidence-\$\{GITHUB_SHA\}-\$\{GITHUB_RUN_ID\}/g,
+      ) ?? [],
+    ).toHaveLength(1);
+  });
+
+  it("behaviorally enforces artifact-only and infrastructure-failure evidence paths", () => {
+    const prepareScript = resolve(
+      "scripts/ci-prepare-remote-restore-evidence.sh",
+    );
+
+    const runMode = (
+      mode:
+        | "artifact"
+        | "unavailable"
+        | "verifier_infra"
+        | "finder_infra"
+        | "download_infra"
+        | "corrupt_artifact"
+        | "invalid_zip_member"
+        | "preexisting_archive"
+        | "non_302_redirect"
+        | "expired_artifact"
+        | "oversized_download"
+        | "oversized_member"
+        | "compressed_tar_bomb"
+        | "publish_failure",
+    ) => {
+      const root = mkdtempSync(join(tmpdir(), `0509-evidence-shell-${mode}-`));
+      roots.push(root);
+      const bin = join(root, "bin");
+      const runnerTemp = join(root, "runner");
+      const callsPath = join(root, "calls.log");
+      const artifactMarker = join(root, "artifact");
+      const archivePath = join(
+        runnerTemp,
+        "d1-remote-restore-evidence-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-30574154496.tar.gz",
+      );
+      mkdirSync(bin, { recursive: true });
+      mkdirSync(runnerTemp, { recursive: true });
+      writeFileSync(join(root, ".curlrc"), "url = https://attacker.invalid\n");
+      if (mode === "preexisting_archive") {
+        writeFileSync(archivePath, "stale");
+      }
+      for (const name of ["chmod", "mkdir", "rm"]) {
+        symlinkSync(`/bin/${name}`, join(bin, name));
+      }
+      for (const name of ["dirname", "test"]) {
+        const target = existsSync(`/bin/${name}`)
+          ? `/bin/${name}`
+          : `/usr/bin/${name}`;
+        symlinkSync(target, join(bin, name));
+      }
+
+      writeFileSync(
+        join(bin, "node"),
+        `#!/bin/sh
+printf 'node %s\\n' "$*" >> "$FAKE_CALLS"
+case "$*" in
+  *verify-remote-restore-evidence.mjs*)
+    if [ "$FAKE_MODE" = verifier_infra ]; then exit 2; fi
+    if [ -f "$FAKE_ARTIFACT_MARKER" ]; then
+      exit 0
+    fi
+    exit 1
+    ;;
+  *find-recent-remote-restore-artifact.mjs*)
+    if [ "$FAKE_MODE" = artifact ] ||
+      [ "$FAKE_MODE" = verifier_infra ] ||
+      [ "$FAKE_MODE" = download_infra ] ||
+      [ "$FAKE_MODE" = corrupt_artifact ] ||
+      [ "$FAKE_MODE" = invalid_zip_member ] ||
+      [ "$FAKE_MODE" = non_302_redirect ] ||
+      [ "$FAKE_MODE" = expired_artifact ] ||
+      [ "$FAKE_MODE" = oversized_download ] ||
+      [ "$FAKE_MODE" = oversized_member ] ||
+      [ "$FAKE_MODE" = compressed_tar_bomb ] ||
+      [ "$FAKE_MODE" = publish_failure ]; then
+      printf '30423695493\\t987654321\\t1024\\td1-remote-restore-evidence-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-30423695493\\n'
+      exit 0
+    fi
+    if [ "$FAKE_MODE" = finder_infra ]; then exit 2; fi
+    exit 1
+    ;;
+esac
+exit 90
+`,
+      );
+      writeFileSync(
+        join(bin, "sleep"),
+        `#!/bin/sh
+printf 'sleep %s\\n' "$*" >> "$FAKE_CALLS"
+`,
+      );
+      writeFileSync(
+        join(bin, "curl"),
+        `#!/bin/sh
+printf 'curl %s\\n' "$*" >> "$FAKE_CALLS"
+[ "$1" = "--disable" ] || {
+  printf 'hostile curlrc was not disabled\\n' >&2
+  exit 100
+}
+if [ "$FAKE_MODE" = download_infra ]; then exit 1; fi
+headers=
+output=
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "--dump-header" ]; then headers="$2"; shift; fi
+  if [ "$1" = "--output" ]; then output="$2"; shift; fi
+  shift
+done
+if [ -n "$headers" ]; then
+  if [ "$FAKE_MODE" = non_302_redirect ]; then
+    printf 'HTTP/2 200\\r\\nlocation: https://artifacts.example.test/wrong\\r\\n\\r\\n' > "$headers"
+    printf '200'
+  elif [ "$FAKE_MODE" = expired_artifact ]; then
+    printf 'HTTP/2 410\\r\\n\\r\\n' > "$headers"
+    printf '410'
+  else
+    printf 'HTTP/2 302\\r\\nlocation: https://artifacts.example.test/download?signature=test\\r\\n\\r\\n' > "$headers"
+    printf '302'
+  fi
+  exit 0
+fi
+[ -n "$output" ] || exit 92
+if [ "$FAKE_MODE" = oversized_download ]; then
+  /usr/bin/head -c 11000000 /dev/zero > "$output"
+else
+  printf 'zip' > "$output"
+fi
+`,
+      );
+      writeFileSync(
+        join(bin, "unzip"),
+        `#!/bin/sh
+printf 'unzip %s\\n' "$*" >> "$FAKE_CALLS"
+case "$1" in
+  -Z1)
+    if [ "$FAKE_MODE" = invalid_zip_member ]; then
+      printf '../escape.tar.gz\\n'
+    else
+      printf 'd1-remote-restore-evidence-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-30423695493.tar.gz\\n'
+    fi
+    ;;
+  -Z)
+    printf '%s\\n' 'Archive: fake'
+    if [ "$FAKE_MODE" = oversized_member ]; then
+      printf '%s\\n' '-rw-------  3.0 unx 20000000 bx       64 stor 26-Jul-31 00:00 d1-remote-restore-evidence-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-30423695493.tar.gz'
+    else
+      printf '%s\\n' '-rw-------  3.0 unx       64 bx       64 stor 26-Jul-31 00:00 d1-remote-restore-evidence-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-30423695493.tar.gz'
+    fi
+    ;;
+  -p) printf 'archive' ;;
+  *) exit 96 ;;
+esac
+`,
+      );
+      writeFileSync(
+        join(bin, "tar"),
+        `#!/bin/sh
+printf 'tar %s\\n' "$*" >> "$FAKE_CALLS"
+case "$1" in
+  -tzf|-tf) printf 'd1-remote-restore-evidence.json\\n' ;;
+  -tvzf|-tvf) printf '%s\\n' '-rw------- 0/0 18 2026-07-29 00:00 d1-remote-restore-evidence.json' ;;
+  -xOzf|-xOf)
+    if [ "$FAKE_MODE" = corrupt_artifact ]; then exit 94; fi
+    printf '{"artifact":true}'
+    : > "$FAKE_ARTIFACT_MARKER"
+    ;;
+  --format=posix)
+    while [ "$#" -gt 0 ]; do
+      if [ "$1" = "-czf" ]; then
+        : > "$2"
+        exit 0
+      fi
+      shift
+    done
+    exit 95
+    ;;
+  *) exit 93 ;;
+esac
+`,
+      );
+      writeFileSync(
+        join(bin, "gzip"),
+        `#!/bin/sh
+printf 'gzip %s\\n' "$*" >> "$FAKE_CALLS"
+if [ "$FAKE_MODE" = compressed_tar_bomb ]; then
+  /usr/bin/head -c 2000000 /dev/zero
+else
+  /bin/cat "$2"
+fi
+`,
+      );
+      writeFileSync(
+        join(bin, "stat"),
+        `#!/bin/sh
+case "$2" in
+  %a) printf '600\\n' ;;
+  %s)
+    for path do :; done
+    if /usr/bin/stat -c '%s' -- "$path" >/dev/null 2>&1; then
+      /usr/bin/stat -c '%s' -- "$path"
+    else
+      /usr/bin/stat -f '%z' -- "$path"
+    fi
+    ;;
+  %u:%a:%h:%F) printf '%s:600:1:regular file\\n' "$(/usr/bin/id -u)" ;;
+  %u:%a:%F) printf '%s:700:directory\\n' "$(/usr/bin/id -u)" ;;
+  *) exit 97 ;;
+esac
+`,
+      );
+      writeFileSync(
+        join(bin, "mv"),
+        `#!/bin/sh
+[ "$1" = "-T" ] || exit 98
+shift
+[ "$1" = "--" ] || exit 99
+shift
+if [ "$FAKE_MODE" = publish_failure ]; then exit 1; fi
+exec /bin/mv "$@"
+`,
+      );
+      const executables = [
+        "curl",
+        "gzip",
+        "mv",
+        "node",
+        "sleep",
+        "tar",
+        "stat",
+        "unzip",
+      ];
+      for (const name of executables) {
+        chmodSync(join(bin, name), 0o755);
+      }
+
+      const result = spawnSync(prepareScript, [], {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          PATH: `${bin}:/bin:/usr/bin`,
+          FAKE_CALLS: callsPath,
+          FAKE_MODE: mode,
+          FAKE_ARTIFACT_MARKER: artifactMarker,
+          CURL_HOME: root,
+          RUNNER_TEMP: runnerTemp,
+          GITHUB_WORKSPACE: root,
+          GITHUB_SHA: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          GITHUB_RUN_ID: "30574154496",
+          GITHUB_RUN_ATTEMPT: "1",
+          GITHUB_JOB: "prepare_remote_restore_evidence",
+          RESTORE_EVIDENCE_ARCHIVE: archivePath,
+          GITHUB_REPOSITORY: "nish3451/0509",
+          GH_TOKEN: "test-token",
+        },
+        encoding: "utf8",
+      });
+      return {
+        result,
+        archivePath,
+        calls: existsSync(callsPath)
+          ? readFileSync(callsPath, "utf8").trim().split("\n").filter(Boolean)
+          : [],
+      };
+    };
+
+    const artifact = runMode("artifact");
+    expect(artifact.result.status, artifact.result.stderr).toBe(0);
+    expect(artifact.result.stdout).toContain(
+      "Recent private restore evidence is valid for this deploy.",
+    );
+    expect(artifact.result.stdout).toContain(
+      `restore_evidence_archive=${artifact.archivePath}`,
+    );
+    expect(existsSync(artifact.archivePath)).toBe(true);
+    expect(artifact.calls.filter((call) => call.startsWith("curl ")))
+      .toHaveLength(2);
+    expect(artifact.calls.filter((call) => call.startsWith("unzip ")))
+      .toHaveLength(3);
+    expect(artifact.calls.filter((call) => call.startsWith("tar ")))
+      .toHaveLength(7);
+
+    const unavailable = runMode("unavailable");
+    expect(unavailable.result.status).toBe(1);
+    expect(unavailable.result.stderr).toContain(
+      "No valid pre-generated restore evidence is available.",
+    );
+    expect(
+      unavailable.calls.some((call) =>
+        call.includes("find-recent-remote-restore-artifact.mjs"),
+      ),
+    ).toBe(true);
+
+    const infrastructureFailure = runMode("verifier_infra");
+    expect(infrastructureFailure.result.status).toBe(2);
+    expect(
+      infrastructureFailure.calls.filter((call) =>
+        call.startsWith("node scripts/verify-"),
+      ),
+    ).toHaveLength(3);
+
+    const finderInfrastructureFailure = runMode("finder_infra");
+    expect(finderInfrastructureFailure.result.status).toBe(2);
+    expect(
+      finderInfrastructureFailure.result.stderr,
+    ).toContain(
+      "Restore-evidence artifact lookup infrastructure failed after retries.",
+    );
+    expect(
+      finderInfrastructureFailure.calls.filter((call) =>
+        call.includes("find-recent-remote-restore-artifact.mjs"),
+      ),
+    ).toHaveLength(3);
+    expect(
+      finderInfrastructureFailure.result.stderr,
+    ).not.toContain("pre-generated restore evidence is available");
+
+    const downloadInfrastructureFailure = runMode("download_infra");
+    expect(downloadInfrastructureFailure.result.status).toBe(2);
+    expect(
+      downloadInfrastructureFailure.result.stderr,
+    ).toContain(
+      "Restore-evidence artifact download failed after retries.",
+    );
+    expect(
+      downloadInfrastructureFailure.calls.filter((call) =>
+        call.startsWith("curl "),
+      ),
+    ).toHaveLength(3);
+
+    const corruptArtifact = runMode("corrupt_artifact");
+    expect(corruptArtifact.result.status).toBe(1);
+    expect(corruptArtifact.result.stderr).toContain(
+      "No valid pre-generated restore evidence is available.",
+    );
+    expect(
+      corruptArtifact.calls.filter((call) => call.startsWith("tar ")),
+    ).toHaveLength(4);
+
+    const invalidZipMember = runMode("invalid_zip_member");
+    expect(invalidZipMember.result.status).toBe(1);
+    expect(invalidZipMember.result.stderr).toContain(
+      "Restore-evidence artifact zip has an unexpected member",
+    );
+    expect(invalidZipMember.result.stderr).toContain(
+      "No valid pre-generated restore evidence is available.",
+    );
+    expect(
+      invalidZipMember.calls.filter((call) => call.startsWith("curl ")),
+    ).toHaveLength(2);
+
+    const preexistingArchive = runMode("preexisting_archive");
+    expect(preexistingArchive.result.status).toBe(1);
+    expect(preexistingArchive.result.stderr).toContain(
+      "Refusing an unexpected or pre-existing restore-evidence archive path",
+    );
+    expect(
+      preexistingArchive.calls.some((call) =>
+        call.includes("find-recent-remote-restore-artifact.mjs"),
+      ),
+    ).toBe(false);
+
+    const non302 = runMode("non_302_redirect");
+    expect(non302.result.status).toBe(2);
+    expect(non302.result.stderr).toContain(
+      "artifact API returned unexpected HTTP status 200",
+    );
+    expect(non302.calls.some((call) => call.startsWith("unzip "))).toBe(false);
+
+    const expired = runMode("expired_artifact");
+    expect(expired.result.status).toBe(1);
+    expect(expired.result.stderr).toContain(
+      "artifact expired before download",
+    );
+    expect(expired.calls.some((call) => call.startsWith("unzip "))).toBe(false);
+
+    const oversizedDownload = runMode("oversized_download");
+    expect(oversizedDownload.result.status).toBe(1);
+    expect(oversizedDownload.result.stderr).toContain(
+      "artifact zip exceeds its size bound",
+    );
+    expect(
+      oversizedDownload.calls.some((call) => call.startsWith("unzip ")),
+    ).toBe(false);
+
+    const oversizedMember = runMode("oversized_member");
+    expect(oversizedMember.result.status).toBe(1);
+    expect(oversizedMember.result.stderr).toContain(
+      "artifact member exceeds its size bound",
+    );
+    expect(
+      oversizedMember.calls.some((call) =>
+        call.includes("verify-remote-restore-evidence.mjs"),
+      ),
+    ).toBe(false);
+
+    const compressedBomb = runMode("compressed_tar_bomb");
+    expect(compressedBomb.result.status).toBe(1);
+    expect(compressedBomb.result.stderr).toContain(
+      "No valid pre-generated restore evidence is available.",
+    );
+    expect(
+      compressedBomb.calls.some((call) =>
+        call.includes("verify-remote-restore-evidence.mjs"),
+      ),
+    ).toBe(false);
+
+    const publishFailure = runMode("publish_failure");
+    expect(publishFailure.result.status).toBe(1);
+    expect(existsSync(publishFailure.archivePath)).toBe(false);
+  }, 30_000);
 
   it("preserves only the explicit non-secret release evidence after every deploy attempt", () => {
     const workflow = readFileSync(
@@ -1051,6 +1862,10 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     );
     const uploadStep = workflow.slice(
       workflow.indexOf("- name: Preserve release evidence"),
+      workflow.indexOf("- name: Preserve private immediate Gate C evidence"),
+    );
+    const deferredUploadStep = workflow.slice(
+      workflow.indexOf("- name: Preserve private immediate Gate C evidence"),
       workflow.indexOf("- name: Preserve failed release diagnostics"),
     );
     const diagnosticStep = workflow.slice(
@@ -1079,7 +1894,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       "node scripts/release-evidence-archive.mjs create",
     );
     expect(archiveStep).toContain(
-      "production-release-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz",
+      "production-release-evidence-${PINNED_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz",
     );
     expect(verifyStep).toContain('[ "${#authoritative_readiness[@]}" -eq 1 ]');
     expect(verifyStep).toContain("test-results/deploy-readiness-local-release-*.json) ;;");
@@ -1087,21 +1902,33 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(verifyStep).toContain('[ "${#rollback[@]}" -eq 1 ]');
     expect(verifyStep).toContain('[ "${#gate_c[@]}" -eq 1 ]');
     expect(verifyStep).toContain('[ "${#production_soak[@]}" -eq 1 ]');
+    expect(verifyStep).toContain('[ "${#production_soak[@]}" -eq 0 ]');
     expect(verifyStep).toContain(
       "find test-results/gate-b-artifacts -type f -print -quit",
     );
     expect(uploadStep).toContain("if: success()");
-    expect(uploadStep).toContain("uses: actions/upload-artifact@v7");
     expect(uploadStep).toContain(
-      "production-release-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}",
+      "uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
     );
     expect(uploadStep).toContain(
-      "test-results/production-release-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}.tar.gz",
+      "production-release-evidence-${{ needs.pin_candidate.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}",
+    );
+    expect(uploadStep).toContain(
+      "test-results/production-release-evidence-${{ needs.pin_candidate.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}.tar.gz",
     );
     expect(uploadStep).toContain("if-no-files-found: error");
     expect(uploadStep).toContain("retention-days: 90");
     expect(uploadStep).not.toContain("d1-remote-restore-evidence");
     expect(uploadStep).not.toContain("test-results/**");
+    expect(deferredUploadStep).toContain(
+      "if: success() && env.BACKUP_PROOF_STATUS == 'deferred'",
+    );
+    expect(deferredUploadStep).toContain(
+      "gate-c-proof-evidence-${{ needs.pin_candidate.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}",
+    );
+    expect(deferredUploadStep).toContain("path: test-results/gate-c-*.json");
+    expect(deferredUploadStep).toContain("if-no-files-found: error");
+    expect(deferredUploadStep).not.toContain("production-soak");
     expect(diagnosticStep).toContain("if: failure()");
     expect(diagnosticStep).toContain("production-release-diagnostics-");
     expect(diagnosticStep).toContain(
