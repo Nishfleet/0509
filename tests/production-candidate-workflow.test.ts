@@ -73,7 +73,7 @@ function git(cwd: string, ...args: string[]) {
 
 describe("exact production candidate workflow", () => {
   it("authorizes a pinned main SHA before any privileged runner or secret", () => {
-    expect(workflow.on.push?.branches).toEqual(["main"]);
+    expect(Object.keys(workflow.on).sort()).toEqual(["workflow_dispatch"]);
     expect(workflow.on.workflow_dispatch?.inputs?.expected_sha).toEqual({
       description: "Exact main commit authorized for production deployment",
       required: true,
