@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 
 /**
  * BL-030 — the Linear-peek detail pane (concept v4).
@@ -15,12 +15,32 @@ import type { ReactNode } from "react";
 export function DetailPane({
   children,
   label,
+  id,
+  className,
+  paneRef,
+  focusable = false,
 }: {
   children: ReactNode;
   label: string;
+  /**
+   * BL-031: `/search` moves focus into the pane when a result is selected, and
+   * production canaries address it by id, so the pane needs an identity and a
+   * programmatic focus target. Both are optional — a pane that nobody focuses
+   * stays exactly what P0 shipped.
+   */
+  id?: string;
+  className?: string;
+  paneRef?: RefObject<HTMLElement | null>;
+  focusable?: boolean;
 }) {
   return (
-    <aside aria-label={label} className="f9-wk-detail">
+    <aside
+      aria-label={label}
+      className={className ? `f9-wk-detail ${className}` : "f9-wk-detail"}
+      id={id}
+      ref={paneRef}
+      tabIndex={focusable ? -1 : undefined}
+    >
       {children}
     </aside>
   );

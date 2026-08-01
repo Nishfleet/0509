@@ -5,8 +5,8 @@ import { describe, expect, it } from "vitest";
 const css = readFileSync("app/app.css", "utf8");
 const rootTsx = readFileSync("app/root.tsx", "utf8");
 const searchRoute = readFileSync("app/routes/search.tsx", "utf8");
-const searchResultCard = readFileSync(
-  "app/components/search/result-card.tsx",
+const searchResultRow = readFileSync(
+  "app/components/search/result-row.tsx",
   "utf8",
 );
 const accountRoute = readFileSync("app/routes/app.account.tsx", "utf8");
@@ -96,16 +96,17 @@ describe("WP-42: optimistic watchlist pause/resume", () => {
   });
 });
 
-describe("WP-45: sample badge on demo-sourced search results", () => {
-  it("labels demo-source ads with a Sample pill in result cards", () => {
-    // The result card (with its demo Sample badge) now lives in the shared
-    // SearchResultCard component; the badge renders via <Pill> and the CSS
-    // selector is unchanged.
-    expect(searchResultCard).toContain('ad.source === "demo"');
-    expect(searchResultCard).toContain(
-      '<Pill variant="longevity" state="sample">',
-    );
-    expect(css).toContain(".f9-longevity-pill.f9-longevity-pill.is-sample");
+describe("WP-45: demo-sourced search results say so, per result", () => {
+  it("labels demo-source ads Sample in the result row's own status column", () => {
+    // BL-031: the guarantee is unchanged — a demo-sourced result is labelled
+    // as a sample on the result itself, never only in a page-level banner.
+    // What changed is how a state is drawn: it was a boxed <Pill>, and the v4
+    // DNA states a state as a word in the row's status cell. The row also
+    // withholds quick-save from a demo result, so nothing fabricated can be
+    // saved into a workspace as evidence.
+    expect(searchResultRow).toContain('const isDemo = ad.source === "demo"');
+    expect(searchResultRow).toContain('status={isDemo ? "Sample" : formatAdActiveStatus(ad)}');
+    expect(searchResultRow).toContain("canQuickSave && !isDemo");
   });
 });
 

@@ -515,7 +515,7 @@ test.describe("local authenticated E2E harness", () => {
         label: "Shared links",
         path: "/app/shares",
         heading: "Shared links",
-        copy: ["No active share links", "expires or you revoke it"],
+        copy: ["Review and revoke snapshot or live-view links", "Anyone with a link can open"],
       },
       {
         label: "Notifications",
