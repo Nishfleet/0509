@@ -285,7 +285,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
         /Delivery channels/,
         /Email/,
         /Ready/,
-        /Not available/,
+        /Slack and WhatsApp stay dormant until their customer-facing checks pass/,
       ]);
       await page.goto("/unsubscribe");
       await expect(page.getByRole("heading", { name: "This unsubscribe link isn't valid.", exact: true })).toBeVisible();
