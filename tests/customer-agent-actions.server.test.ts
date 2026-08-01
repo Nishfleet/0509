@@ -234,6 +234,7 @@ function setupMocks(
     }),
     listAdsByIds: vi.fn().mockResolvedValue([]),
     listCollectionItems: vi.fn().mockResolvedValue([]),
+    listProofCapturePairsForEventIds: vi.fn().mockResolvedValue([]),
     listWatchEvents: vi.fn().mockResolvedValue([]),
     listDeliveryTargets: vi.fn().mockResolvedValue([deliveryTarget]),
     getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
@@ -445,6 +446,14 @@ function setupMocks(
       audit: auditRecord(),
       claimed: true,
     }),
+    reclaimRetryableAgentActionAudit: vi.fn().mockImplementation((_, input: { auditId: string }) =>
+      Promise.resolve(auditRecord({
+        id: input.auditId,
+        apiKeyId: "api-key-1",
+        actionName: "support_case.create",
+        status: "started",
+      })),
+    ),
     finishAgentActionAudit: vi.fn().mockImplementation((_, auditId: string, input: Record<string, unknown>) =>
       Promise.resolve(auditRecord({
         id: auditId,
@@ -500,6 +509,7 @@ function setupMocks(
     listAgentMemory: mocks.listAgentMemory,
     listClientRooms: mocks.listClientRooms,
     listCollectionItems: mocks.listCollectionItems,
+    listProofCapturePairsForEventIds: mocks.listProofCapturePairsForEventIds,
     listDeliveryTargets: mocks.listDeliveryTargets,
     listSupportCases: mocks.listSupportCases,
     listWatchEvents: mocks.listWatchEvents,
@@ -513,6 +523,7 @@ function setupMocks(
     upsertAgentMemory: mocks.upsertAgentMemory,
     findAgentActionAuditByIdempotencyKey: mocks.findAgentActionAuditByIdempotencyKey,
     claimAgentActionAudit: mocks.claimAgentActionAudit,
+    reclaimRetryableAgentActionAudit: mocks.reclaimRetryableAgentActionAudit,
     finishAgentActionAudit: mocks.finishAgentActionAudit,
   }));
   vi.doMock("~/lib/delivery.server", () => ({
@@ -2794,6 +2805,17 @@ describe("runCustomerAgentAction", () => {
     expect(result.supportCase).not.toHaveProperty("detail");
     expect(result.supportCase).not.toHaveProperty("context");
     expect(mocks.createSupportCase).toHaveBeenCalled();
+    expect(outcome.audit.status).toBe("failed");
+    expect(mocks.finishAgentActionAudit).toHaveBeenCalledWith(
+      expect.anything(),
+      "audit-1",
+      expect.objectContaining({
+        status: "failed",
+        errorCode: "support_notification_failed",
+        resourceType: "support_case",
+        resourceId: "case-1",
+      }),
+    );
   });
 
   it("returns a support fallback when agent operator notification rejects", async () => {
@@ -2825,6 +2847,88 @@ describe("runCustomerAgentAction", () => {
       supportCase: { id: "case-1" },
     });
     consoleError.mockRestore();
+  });
+
+  it("retries notification for the same support case after a failed audited attempt", async () => {
+    const mocks = setupMocks();
+    mocks.sendOperatorAlertEmail
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+    const context = {
+      userId: "user-1",
+      apiKeyId: "api-key-1",
+      idempotencyKey: "support-notification-retry",
+      source: "api_v1" as const,
+    };
+    const input = {
+      category: "delivery",
+      subject: "Digest did not arrive",
+      detail: "Please check the digest delivery trail.",
+    };
+
+    const first = await runCustomerAgentAction(
+      { DB: {} } as never,
+      context,
+      "support_case.create",
+      input,
+    );
+    mocks.findAgentActionAuditByIdempotencyKey.mockResolvedValue({
+      ...first.audit,
+      actionName: "support_case.create",
+      idempotencyKey: "support-notification-retry",
+    });
+
+    const retried = await runCustomerAgentAction(
+      { DB: {} } as never,
+      context,
+      "support_case.create",
+      input,
+    );
+
+    expect(first.audit.status).toBe("failed");
+    expect(retried).toMatchObject({
+      replayed: false,
+      audit: { status: "succeeded" },
+      result: { ok: true, supportCase: { id: "case-1" } },
+    });
+    expect(mocks.reclaimRetryableAgentActionAudit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ auditId: "audit-1", apiKeyId: "api-key-1" }),
+    );
+    expect(mocks.createSupportCase).toHaveBeenCalledTimes(2);
+    expect(mocks.createSupportCase.mock.calls.map((call) => call[1].requestKey)).toEqual([
+      "support-notification-retry",
+      "support-notification-retry",
+    ]);
+    expect(mocks.sendOperatorAlertEmail).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects support idempotency keys that cannot be persisted for case dedupe", async () => {
+    const mocks = setupMocks();
+    const { runCustomerAgentAction } = await import("~/lib/customer-agent-actions.server");
+
+    await expect(runCustomerAgentAction(
+      { DB: {} } as never,
+      {
+        userId: "user-1",
+        apiKeyId: "api-key-1",
+        idempotencyKey: `support-${"x".repeat(113)}`,
+        source: "api_v1",
+      },
+      "support_case.create",
+      {
+        category: "delivery",
+        subject: "Digest did not arrive",
+        detail: "Please check the digest delivery trail.",
+      },
+    )).rejects.toMatchObject({
+      code: "invalid_idempotency_key",
+      status: 400,
+    });
+
+    expect(mocks.createSupportCase).not.toHaveBeenCalled();
+    expect(mocks.claimAgentActionAudit).not.toHaveBeenCalled();
   });
 
   it("saves support but does not email the operator after API-key authority is lost", async () => {
@@ -2894,6 +2998,13 @@ describe("runCustomerAgentAction", () => {
 
   it("does not resend agent support alerts after a sent delivery attempt", async () => {
     const mocks = setupMocks();
+    mocks.findAgentActionAuditByIdempotencyKey.mockResolvedValueOnce(auditRecord({
+      apiKeyId: "api-key-1",
+      actionName: "support_case.create",
+      idempotencyKey: "support-1",
+      status: "started",
+      updatedAt: "2026-06-19T00:00:00.000Z",
+    }));
     mocks.createSupportCase.mockResolvedValueOnce({
       id: "case-1",
       userId: "user-1",
@@ -2933,6 +3044,11 @@ describe("runCustomerAgentAction", () => {
       supportCase: { id: "case-1" },
     });
     expect(mocks.getDeliveryAttemptByIdempotencyKey).toHaveBeenCalledWith(expect.anything(), "support-case:case-1");
+    expect(mocks.reclaimRetryableAgentActionAudit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ auditId: "audit-1", apiKeyId: "api-key-1" }),
+    );
+    expect(mocks.claimAgentActionAudit).not.toHaveBeenCalled();
     expect(mocks.sendOperatorAlertEmail).not.toHaveBeenCalled();
   });
 

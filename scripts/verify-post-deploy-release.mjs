@@ -16,7 +16,14 @@ import {
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { readDeployedWorkerVersionId } from "./deploy-production-plan.mjs";
+import {
+  BACKUP_PROOF_DEFERRED,
+  BACKUP_PROOF_REQUIRED,
+  createDeferredBackupDisposition,
+  normalizeBackupProofStatus,
+  readDeployedWorkerVersionId,
+  validateDeferredBackupDisposition,
+} from "./deploy-production-plan.mjs";
 import {
   DEFAULT_CANARY_HEALTH_BASE_URLS,
   formatProductionCanaryReport,
@@ -34,7 +41,6 @@ import {
   cleanupBackupLifecycleCanary,
   runBackupLifecycleCanary,
 } from "./d1-backup-lifecycle-canary.mjs";
-
 const PRICING_COUNTRIES = Object.freeze(["IN", "US", "GB"]);
 const GATE_C_EVIDENCE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const REQUIRED_PASSED_STEPS = Object.freeze([
@@ -47,9 +53,19 @@ const REQUIRED_PASSED_STEPS = Object.freeze([
   "proof_cleanup",
   "identity_post",
 ]);
+const DEFERRED_BACKUP_REQUIRED_PASSED_STEPS = Object.freeze(
+  REQUIRED_PASSED_STEPS.filter((step) => step !== "backup_lifecycle"),
+);
+const SHA = /^[a-f0-9]{40}$/u;
+const GATE_PHASE_IMMEDIATE = "immediate";
+const SAFE_PRIVATE_VALUE = /^[^\u0000\u0008\u000b\u000c\u000e-\u001f\u007f]*$/u;
+const RELEASE_COMPATIBLE_EMAIL_BLOCKERS = Object.freeze([
+  "no_recent_email_delivery_attempt",
+  "no_recent_email_sent",
+]);
 
 /** @typedef {{ runId: string, digestRunId: string, proofCaptureId: string }} CleanupTicket */
-/** @typedef {{ runId?: unknown, digestRunId?: unknown, proofCaptureId?: unknown, [key: string]: unknown }} ProofPayload */
+/** @typedef {{ runId?: unknown, digestRunId?: unknown, proofCaptureId?: unknown, proofEmail?: unknown, [key: string]: unknown }} ProofPayload */
 /** @typedef {{ ok: boolean, payload?: ProofPayload, report?: unknown, [key: string]: unknown }} GateStepResult */
 /**
  * @typedef {{
@@ -71,12 +87,15 @@ const REQUIRED_PASSED_STEPS = Object.freeze([
  *   workerVersionId: string,
  *   searchRolloutMode: string,
  *   gateRunId: string,
+ *   gatePhase?: "immediate",
  *   status: string,
- *   steps: Record<string, { status: "started" | "passed" | "failed", at: string, detail?: unknown }>,
+ *   steps: Record<string, { status: "started" | "passed" | "failed" | "reused", at: string, detail?: unknown }>,
  *   errors: string[],
  *   cleanupTicket?: CleanupTicket,
  *   productionSummary?: string,
  *   backupLifecycleSummary?: unknown,
+ *   backupProofStatus?: "required" | "deferred",
+ *   backupProofDisposition?: Record<string, unknown>,
  *   proofDiagnostics?: { blockers?: string[], delivery?: { attempts?: number, channels?: string[], details?: Array<{ channel?: string, status?: string, webhookStatus?: string }> } },
  *   completedAt?: string,
  *   ownerPid?: number
@@ -116,6 +135,209 @@ function syncDirectory(path) {
   } finally {
     closeSync(descriptor);
   }
+}
+
+/** @param {unknown} value @param {string[]} keys */
+function exactKeys(value, keys) {
+  return (
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    JSON.stringify(Object.keys(value).sort()) ===
+      JSON.stringify([...keys].sort())
+  );
+}
+
+/** @param {unknown} value */
+function validIso(value) {
+  return (
+    typeof value === "string" &&
+    Number.isFinite(Date.parse(value)) &&
+    new Date(value).toISOString() === value
+  );
+}
+
+/** @param {unknown} value @param {number} maxLength */
+function validPrivateValue(value, maxLength) {
+  return (
+    value === null ||
+    (typeof value === "string" &&
+      value.length <= maxLength &&
+      SAFE_PRIVATE_VALUE.test(value))
+  );
+}
+
+/** @param {any} value @param {string} gateRunId */
+function validateProofEmailRouteEvidence(value, gateRunId) {
+  if (
+    !exactKeys(value, ["gateRunId", "dispatchStartedAt", "subject", "provider"]) ||
+    value.gateRunId !== gateRunId ||
+    !validIso(value.dispatchStartedAt) ||
+    value.subject !== `0509 Gate C proof ${gateRunId}` ||
+    value.subject.split(gateRunId).length !== 2 ||
+    !exactKeys(value.provider, ["status", "accepted", "messageId", "error"]) ||
+    !["sent", "pending", "failed"].includes(value.provider.status) ||
+    value.provider.accepted !== (value.provider.status === "sent") ||
+    !validPrivateValue(value.provider.messageId, 512) ||
+    !validPrivateValue(value.provider.error, 1_024) ||
+    (value.provider.status === "sent" &&
+      (typeof value.provider.messageId !== "string" ||
+        value.provider.messageId.length === 0 ||
+        value.provider.error !== null))
+  ) {
+    return false;
+  }
+  return true;
+}
+
+/** @param {ProofPayload | undefined} payload @param {string} gateRunId */
+function readProofEmailStepDetail(payload, gateRunId) {
+  const value = /** @type {any} */ (payload?.proofEmail);
+  if (!validateProofEmailRouteEvidence(value, gateRunId)) {
+    throw new Error("proof_email_dispatch_invalid");
+  }
+  return {
+    detail: {
+      gateRunId,
+      dispatchStartedAt: value.dispatchStartedAt,
+      subject: value.subject,
+    },
+    providerStatus: value.provider.status,
+  };
+}
+
+/** @param {unknown} value */
+function isRecord(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+/** @param {unknown} value */
+function hasExactlyReleaseCompatibleEmailBlockers(value) {
+  if (!Array.isArray(value) || value.length !== RELEASE_COMPATIBLE_EMAIL_BLOCKERS.length) {
+    return false;
+  }
+  const blockers = new Set(value);
+  return (
+    blockers.size === RELEASE_COMPATIBLE_EMAIL_BLOCKERS.length &&
+    RELEASE_COMPATIBLE_EMAIL_BLOCKERS.every((blocker) => blockers.has(blocker))
+  );
+}
+
+/**
+ * The public launch-readiness route intentionally remains strict about real
+ * customer digest delivery. Gate C's proof email is deliberately internal, so
+ * a release may accept only the exact customer-digest-absent response after the
+ * same-run proof email has already been provider-accepted. Every other
+ * production canary assertion remains fail-closed.
+ *
+ * @param {GateStepResult} result
+ * @param {{ journal: GateJournal, proofEmail: { detail: { gateRunId: string, dispatchStartedAt: string, subject: string }, providerStatus: string }, runId: string, workerVersionId: string }} context
+ */
+function acceptSameRunInternalProofForProductionMeta(result, context) {
+  if (result?.ok) return result;
+  if (
+    context.journal.steps.proof_email?.status !== "passed" ||
+    !validProofEmailStepDetail(context.journal.steps.proof_email.detail, context.runId) ||
+    context.proofEmail.providerStatus !== "sent" ||
+    !validProofEmailStepDetail(context.proofEmail.detail, context.runId)
+  ) {
+    return result;
+  }
+
+  const report = isRecord(result?.report) ? /** @type {any} */ (result.report) : null;
+  const readiness = isRecord(report?.launchReadiness) ? report.launchReadiness : null;
+  const signals = isRecord(readiness?.signals) ? readiness.signals : null;
+  const digestDelivery = isRecord(signals?.digestDelivery) ? signals.digestDelivery : null;
+  const emailDelivery = isRecord(signals?.emailDelivery) ? signals.emailDelivery : null;
+  const latestAttemptAt = emailDelivery?.latestAttemptAt;
+  const proofDispatchStartedAt = context.proofEmail.detail.dispatchStartedAt;
+  const healthChecks = Array.isArray(report?.healthChecks) ? report.healthChecks : [];
+  const expectedHealthUrls = DEFAULT_CANARY_HEALTH_BASE_URLS.map(
+    (baseUrl) => new URL("/api/health", baseUrl).toString(),
+  );
+  const actualHealthUrls = healthChecks.map((/** @type {any} */ check) => check?.url);
+  const healthIsExact =
+    healthChecks.length === expectedHealthUrls.length &&
+    JSON.stringify(actualHealthUrls) === JSON.stringify(expectedHealthUrls) &&
+    healthChecks.every((/** @type {any} */ check) =>
+      check?.ok === true &&
+      check?.status === 200 &&
+      check?.app === "0509" &&
+      check?.expectedWorkerVersionId === context.workerVersionId &&
+      check?.expectedSearchRolloutMode === "shadow" &&
+      check?.releaseIdentityOk === true &&
+      check?.releaseIdentity?.workerVersionId === context.workerVersionId &&
+      check?.releaseIdentity?.searchRolloutMode === "shadow"
+    );
+  const genericEmailIsCurrent =
+    Number.isFinite(emailDelivery?.recentAttempts) &&
+    emailDelivery.recentAttempts > 0 &&
+    Number.isFinite(emailDelivery?.recentSent) &&
+    emailDelivery.recentSent > 0 &&
+    validIso(latestAttemptAt) &&
+    Date.parse(latestAttemptAt) >= Date.parse(proofDispatchStartedAt);
+  const allOtherAssertionsPassed =
+    report?.passed === false &&
+    report?.expectedWorkerVersionId === context.workerVersionId &&
+    report?.expectedSearchRolloutMode === "shadow" &&
+    healthIsExact &&
+    report?.freshLiveBypass?.required === true &&
+    report?.freshLiveBypass?.configured === true &&
+    report?.freshLiveBypass?.proved === true &&
+    Array.isArray(report?.blockingFailures) &&
+    report.blockingFailures.length === 0 &&
+    report?.metaAdsBeta?.status === "ok" &&
+    Array.isArray(report?.metaAdsBeta?.failures) &&
+    report.metaAdsBeta.failures.length === 0 &&
+    readiness?.metaAdsBeta?.ok === true;
+
+  if (
+    readiness?.ok !== false ||
+    readiness?.status !== 503 ||
+    !hasExactlyReleaseCompatibleEmailBlockers(readiness?.blockers) ||
+    digestDelivery?.recentAttempts !== 0 ||
+    digestDelivery?.recentSent !== 0 ||
+    !genericEmailIsCurrent ||
+    !allOtherAssertionsPassed
+  ) {
+    return result;
+  }
+
+  return {
+    ...result,
+    ok: true,
+    report: {
+      ...report,
+      releaseCompatibility: {
+        status: "same_run_internal_proof_accepted",
+        gateRunId: context.runId,
+        customerDigestReadiness: "blocked",
+      },
+    },
+  };
+}
+
+/** @param {any} value @param {string} gateRunId */
+function validProofEmailStepDetail(value, gateRunId) {
+  return (
+    exactKeys(value, ["gateRunId", "dispatchStartedAt", "subject"]) &&
+    value.gateRunId === gateRunId &&
+    validIso(value.dispatchStartedAt) &&
+    value.subject === `0509 Gate C proof ${gateRunId}` &&
+    value.subject.split(gateRunId).length === 2
+  );
+}
+
+/** @param {GateJournal} journal */
+function hasValidProofEmailContract(journal) {
+  return (
+    isCleanupTicket(journal.cleanupTicket) &&
+    journal.steps.proof_email?.status === "passed" &&
+    validProofEmailStepDetail(
+      journal.steps.proof_email.detail,
+      journal.gateRunId,
+    )
+  );
 }
 
 /** @param {string} path @param {GateJournal} journal */
@@ -399,13 +621,16 @@ async function defaultProductionCanary({ workerVersionId, token }) {
 }
 
 /**
- * @param {{ workerVersionId: string, token: string, evidencePath: string, gateRunIdOverride?: string, now?: () => Date, dependencies?: GateDependencies }} input
+ * @param {{ workerVersionId: string, token: string, evidencePath: string, gateRunIdOverride?: string, releaseSha?: string, backupProofStatus?: string, backupProofDisposition?: Record<string, unknown>, now?: () => Date, dependencies?: GateDependencies }} input
  */
 export async function runVersionBoundGateC({
   workerVersionId,
   token,
   evidencePath,
   gateRunIdOverride,
+  releaseSha,
+  backupProofStatus = BACKUP_PROOF_REQUIRED,
+  backupProofDisposition,
   now = () => new Date(),
   dependencies = {},
 }) {
@@ -417,6 +642,23 @@ export async function runVersionBoundGateC({
     !/^[a-z0-9._-]{1,128}$/u.test(runId) ||
     (gateRunIdOverride !== undefined && !runId.startsWith(`${defaultRunId}-`))
   ) throw new Error("gate_c_run_id_invalid");
+  const normalizedBackupProofStatus =
+    normalizeBackupProofStatus(backupProofStatus);
+  const normalizedReleaseSha =
+    typeof releaseSha === "string" ? releaseSha : "";
+  if (normalizedBackupProofStatus === BACKUP_PROOF_DEFERRED) {
+    if (
+      !SHA.test(normalizedReleaseSha) ||
+      !validateDeferredBackupDisposition(
+        backupProofDisposition,
+        normalizedReleaseSha,
+      )
+    ) {
+      throw new Error("gate_c_deferred_backup_proof_invalid");
+    }
+  } else if (backupProofDisposition !== undefined) {
+    throw new Error("gate_c_required_backup_proof_conflict");
+  }
   const healthAnchor = /** @type {(input: { workerVersionId: string }) => Promise<GateStepResult>} */ (dependencies.healthAnchor ?? defaultHealthAnchor);
   const backupLifecycle = dependencies.backupLifecycle ?? defaultBackupLifecycle;
   const backupLifecycleRecheck = dependencies.backupLifecycleRecheck ?? defaultBackupLifecycleRecheck;
@@ -433,6 +675,11 @@ export async function runVersionBoundGateC({
     workerVersionId,
     searchRolloutMode: "shadow",
     gateRunId: runId,
+    gatePhase: GATE_PHASE_IMMEDIATE,
+    backupProofStatus: normalizedBackupProofStatus,
+    ...(normalizedBackupProofStatus === BACKUP_PROOF_DEFERRED
+      ? { backupProofDisposition }
+      : {}),
     status: "running",
     steps: {},
     errors: [],
@@ -443,8 +690,14 @@ export async function runVersionBoundGateC({
     claimInitialJournal(evidencePath, journal);
   } catch (error) {
     if (!isAlreadyExistsError(error)) throw error;
-    const existing = readExistingJournal(evidencePath, workerVersionId, runId);
-    return reconcileExistingJournal({
+    const existing = readExistingJournal(
+      evidencePath,
+      workerVersionId,
+      runId,
+      normalizedBackupProofStatus,
+      releaseSha,
+    );
+    const reconciled = await reconcileExistingJournal({
       journal: existing,
       token,
       evidencePath,
@@ -454,6 +707,7 @@ export async function runVersionBoundGateC({
       backupLifecycleCleanup,
       cleanup,
     });
+    return reconciled;
   }
   /** @type {CleanupTicket | null} */
   let cleanupTicket = null;
@@ -488,22 +742,29 @@ export async function runVersionBoundGateC({
 
   try {
     await step("identity_pre", () => healthAnchor({ workerVersionId }));
-    const backup = await step("backup_lifecycle", () => backupLifecycle({ workerVersionId, runId }));
-    journal.backupLifecycleSummary = backup.report;
-    persist();
+    if (normalizedBackupProofStatus === BACKUP_PROOF_REQUIRED) {
+      const backup = await step("backup_lifecycle", () =>
+        backupLifecycle({ workerVersionId, runId }),
+      );
+      journal.backupLifecycleSummary = backup.report;
+      persist();
+    }
     await step("pricing", () => pricing({ workerVersionId, token }));
     await step("billing", () => billing({ workerVersionId, runId, token }));
     journal.steps.proof_email = { status: "started", at: now().toISOString() };
     persist();
-    const proofResult = await proof({ workerVersionId, runId, token });
+    let proofResult;
+    try {
+      proofResult = await proof({ workerVersionId, runId, token });
+    } catch {
+      persist();
+      throw new Error("proof_email_failed");
+    }
     const payload = proofResult.payload;
     const cleanupTicketMissing =
       typeof payload?.runId !== "string" || payload.runId.length === 0 ||
       typeof payload.digestRunId !== "string" || payload.digestRunId.length === 0 ||
       typeof payload.proofCaptureId !== "string" || payload.proofCaptureId.length === 0;
-    if (proofResult.ok && cleanupTicketMissing) {
-      throw new Error("proof_cleanup_ticket_missing");
-    }
     if (!cleanupTicketMissing) {
       cleanupTicket = {
         runId: payload.runId,
@@ -511,9 +772,21 @@ export async function runVersionBoundGateC({
         proofCaptureId: payload.proofCaptureId,
       };
       journal.cleanupTicket = cleanupTicket;
-      persist();
     }
-    if (!proofResult.ok) {
+    const proofEmail = readProofEmailStepDetail(payload, runId);
+    journal.steps.proof_email = {
+      status:
+        proofResult.ok && proofEmail.providerStatus === "sent"
+          ? "passed"
+          : "failed",
+      at: now().toISOString(),
+      detail: proofEmail.detail,
+    };
+    persist();
+    if (proofResult.ok && cleanupTicketMissing) {
+      throw new Error("proof_cleanup_ticket_missing");
+    }
+    if (!proofResult.ok || proofEmail.providerStatus !== "sent") {
       const diagnostics = sanitizeProofDiagnostics(payload);
       if (diagnostics) {
         journal.proofDiagnostics = diagnostics;
@@ -521,9 +794,12 @@ export async function runVersionBoundGateC({
       }
       throw new Error("proof_email_failed");
     }
-    journal.steps.proof_email = { status: "passed", at: now().toISOString() };
-    persist();
-    const live = await step("production_meta", () => productionCanary({ workerVersionId, token }));
+    const live = await step("production_meta", async () =>
+      acceptSameRunInternalProofForProductionMeta(
+        await productionCanary({ workerVersionId, token }),
+        { journal, proofEmail, runId, workerVersionId },
+      )
+    );
     journal.productionSummary = formatProductionSummary(live.report);
   } catch (error) {
     journal.errors.push(error instanceof Error ? error.message : "gate_c_primary_failed");
@@ -579,16 +855,57 @@ function readBackupLifecycleSummary(value) {
 }
 
 /** @param {GateJournal} journal */
+function hasValidBackupProofContract(journal) {
+  let status;
+  try {
+    status = normalizeBackupProofStatus(journal.backupProofStatus);
+  } catch {
+    return false;
+  }
+  if (status === BACKUP_PROOF_REQUIRED) {
+    return (
+      journal.steps.backup_lifecycle?.status === "passed" &&
+      readBackupLifecycleSummary(journal.backupLifecycleSummary) !== null &&
+      journal.backupProofDisposition === undefined
+    );
+  }
+  return (
+    validateDeferredBackupDisposition(
+      journal.backupProofDisposition,
+      typeof journal.backupProofDisposition?.candidateSha === "string"
+        ? journal.backupProofDisposition.candidateSha
+        : "",
+    ) &&
+    journal.backupLifecycleSummary === undefined &&
+    !Object.keys(journal.steps).some((name) =>
+      name.startsWith("backup_lifecycle"),
+    )
+  );
+}
+
+/** @param {GateJournal} journal */
 function isCompletePassedJournal(journal) {
+  let backupProofStatus;
+  try {
+    backupProofStatus = normalizeBackupProofStatus(journal.backupProofStatus);
+  } catch {
+    return false;
+  }
+  const requiredSteps =
+    backupProofStatus === BACKUP_PROOF_DEFERRED
+      ? DEFERRED_BACKUP_REQUIRED_PASSED_STEPS
+      : REQUIRED_PASSED_STEPS;
   return (
     journal.schemaVersion === 1 &&
+    journal.gatePhase === GATE_PHASE_IMMEDIATE &&
     journal.searchRolloutMode === "shadow" &&
     journal.status === "passed" &&
     journal.errors.length === 0 &&
     isCleanupTicket(journal.cleanupTicket) &&
-    readBackupLifecycleSummary(journal.backupLifecycleSummary) !== null &&
+    hasValidBackupProofContract(journal) &&
+    hasValidProofEmailContract(journal) &&
     typeof journal.productionSummary === "string" &&
-    REQUIRED_PASSED_STEPS.every((name) => journal.steps[name]?.status === "passed")
+    requiredSteps.every((name) => journal.steps[name]?.status === "passed")
   );
 }
 
@@ -627,15 +944,26 @@ async function reconcileExistingJournal({ journal, token, evidencePath, now, hea
       generatedAt > currentTime.getTime() + 5 * 60 * 1000 ||
       currentTime.getTime() - generatedAt > GATE_C_EVIDENCE_MAX_AGE_MS
     ) throw new Error("gate_c_existing_passed_journal_stale");
-    journal.steps.backup_lifecycle_recheck = { status: "started", at: currentTime.toISOString() };
-    persist();
     try {
-      const lifecycle = await backupLifecycleRecheck({
-        workerVersionId: journal.workerVersionId,
-        expectedSummary: journal.backupLifecycleSummary,
-      });
-      if (!lifecycle?.ok) throw new Error("backup_lifecycle_recheck_failed");
-      journal.steps.backup_lifecycle_recheck = { status: "passed", at: now().toISOString() };
+      if (
+        normalizeBackupProofStatus(journal.backupProofStatus) ===
+        BACKUP_PROOF_REQUIRED
+      ) {
+        journal.steps.backup_lifecycle_recheck = {
+          status: "started",
+          at: currentTime.toISOString(),
+        };
+        persist();
+        const lifecycle = await backupLifecycleRecheck({
+          workerVersionId: journal.workerVersionId,
+          expectedSummary: journal.backupLifecycleSummary,
+        });
+        if (!lifecycle?.ok) throw new Error("backup_lifecycle_recheck_failed");
+        journal.steps.backup_lifecycle_recheck = {
+          status: "passed",
+          at: now().toISOString(),
+        };
+      }
       journal.steps.identity_recheck = { status: "started", at: now().toISOString() };
       persist();
       const identity = await healthAnchor({ workerVersionId: journal.workerVersionId });
@@ -714,13 +1042,23 @@ async function reconcileExistingJournal({ journal, token, evidencePath, now, hea
 function formatProductionSummary(report) {
   if (!report || typeof report !== "object" || Array.isArray(report)) return "passed";
   if (!("healthChecks" in report) && !("health" in report)) return "passed";
-  return formatProductionCanaryReport(
+  const summary = formatProductionCanaryReport(
     /** @type {Awaited<ReturnType<typeof runProductionCanary>>} */ (report),
   );
+  const compatibility = /** @type {any} */ (report).releaseCompatibility;
+  return compatibility?.status === "same_run_internal_proof_accepted"
+    ? `${summary}\nrelease compatibility: same-run internal proof accepted; customer digest readiness remains blocked`
+    : summary;
 }
 
-/** @param {string} path @param {string} workerVersionId @param {string} runId */
-function readExistingJournal(path, workerVersionId, runId) {
+/** @param {string} path @param {string} workerVersionId @param {string} runId @param {string} backupProofStatus @param {string | undefined} releaseSha */
+function readExistingJournal(
+  path,
+  workerVersionId,
+  runId,
+  backupProofStatus,
+  releaseSha,
+) {
   const stats = lstatSync(path);
   if (!stats.isFile() || stats.isSymbolicLink() || (stats.mode & 0o777) !== 0o600) {
     throw new Error("gate_c_existing_journal_unsafe");
@@ -734,13 +1072,30 @@ function readExistingJournal(path, workerVersionId, runId) {
   } catch {
     throw new Error("gate_c_existing_journal_invalid");
   }
+  let existingBackupProofStatus;
+  try {
+    existingBackupProofStatus = normalizeBackupProofStatus(
+      parsed?.backupProofStatus,
+    );
+  } catch {
+    throw new Error("gate_c_existing_journal_conflict");
+  }
   if (
     !parsed || typeof parsed !== "object" || Array.isArray(parsed) ||
     parsed.workerVersionId !== workerVersionId || parsed.gateRunId !== runId ||
     parsed.schemaVersion !== 1 || parsed.searchRolloutMode !== "shadow" ||
     (parsed.status !== "passed" && parsed.status !== "failed" && parsed.status !== "running") ||
     !parsed.steps || typeof parsed.steps !== "object" || Array.isArray(parsed.steps) ||
-    !Array.isArray(parsed.errors)
+    !Array.isArray(parsed.errors) ||
+    existingBackupProofStatus !== backupProofStatus ||
+    parsed.gatePhase !== GATE_PHASE_IMMEDIATE ||
+    (backupProofStatus === BACKUP_PROOF_DEFERRED &&
+      !validateDeferredBackupDisposition(
+        parsed.backupProofDisposition,
+        releaseSha ?? "",
+      )) ||
+    (backupProofStatus === BACKUP_PROOF_REQUIRED &&
+      parsed.backupProofDisposition !== undefined)
   ) {
     throw new Error("gate_c_existing_journal_conflict");
   }
@@ -765,11 +1120,30 @@ async function main() {
     (!/^test-results\/gate-c-[A-Za-z0-9._-]{1,160}\.json$/u.test(requestedEvidencePath) || requestedEvidencePath.includes(".."))
   ) throw new Error("gate_c_evidence_path_invalid");
   const gateRunIdOverride = readArg("--gate-run-id") ?? undefined;
-  const result = await runVersionBoundGateC({ workerVersionId, token, evidencePath, gateRunIdOverride });
+  const backupProofStatus = normalizeBackupProofStatus(
+    process.env.BACKUP_PROOF_STATUS,
+  );
+  const releaseSha = process.env.PINNED_SHA?.trim();
+  let deferredBackupProof = {};
+  if (backupProofStatus === BACKUP_PROOF_DEFERRED) {
+    deferredBackupProof = {
+      backupProofDisposition: createDeferredBackupDisposition(releaseSha ?? ""),
+    };
+  }
+  const result = await runVersionBoundGateC({
+    workerVersionId,
+    token,
+    evidencePath,
+    gateRunIdOverride,
+    backupProofStatus,
+    releaseSha,
+    ...deferredBackupProof,
+  });
   process.stdout.write(`${JSON.stringify({
     passed: result.passed,
     workerVersionId,
     evidencePath,
+    backupProofStatus,
     errors: result.journal.errors,
     ...(result.journal.proofDiagnostics
       ? { proofDiagnostics: result.journal.proofDiagnostics }

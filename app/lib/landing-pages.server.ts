@@ -2,7 +2,11 @@ import { captureRenderedLandingPageSnapshot } from "~/lib/browser-run.server";
 import { readResponseTextWithinLimit } from "~/lib/bounded-response.server";
 import type { AppEnv } from "~/lib/env.server";
 import { fetchWithTimeout, releaseFetchTimeout } from "~/lib/fetch-timeout.server";
-import { extractLandingPageSignals } from "~/lib/landing-page-signals.server";
+import {
+  extractLandingPageSignals,
+  hasMeaningfulLandingPageBodyText,
+  LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+} from "~/lib/landing-page-signals.server";
 import { normalizeHeadline } from "~/lib/normalize";
 import {
   normalizePublicHttpUrl,
@@ -19,11 +23,31 @@ const MAX_LANDING_PAGE_REDIRECTS = 5;
 const MAX_LANDING_PAGE_HTML_BYTES = 1_000_000;
 const LANDING_PAGE_FETCH_TIMEOUT_MS = 12_000;
 
+export type LandingPageCaptureFailureReasonCode =
+  | "landing_url_invalid"
+  | "landing_redirect_blocked"
+  | "landing_redirect_limit"
+  | "landing_blocked"
+  | "landing_http_error"
+  | "landing_fetch_failed"
+  | "landing_content_empty_or_oversized";
+
+export interface LandingPageCaptureFailureDetail {
+  reasonCode: LandingPageCaptureFailureReasonCode;
+  metadata: Record<string, unknown>;
+}
+
 interface CaptureLandingPageSnapshotOptions {
   allowRenderedFallback?: boolean;
+  onFailure?: (detail: LandingPageCaptureFailureDetail) => void;
   /** Persist only when the caller will create an owner-addressable D1 reference. */
   persistArtifacts?: boolean;
   preferRendered?: boolean;
+}
+
+interface LandingPageCaptureAttemptState {
+  captureWarningCodes: string[];
+  renderedAttempted: boolean;
 }
 
 export async function captureLandingPageSnapshot(
@@ -33,10 +57,13 @@ export async function captureLandingPageSnapshot(
 ): Promise<LandingPageSnapshotData | null> {
   const publicUrl = await resolvePublicHttpUrl(url);
   if (!publicUrl) {
-    return null;
+    return failLandingCapture(options, "landing_url_invalid");
   }
 
-  return captureLandingPageSnapshotAt(env, publicUrl, options, 0);
+  return captureLandingPageSnapshotAt(env, publicUrl, options, 0, {
+    captureWarningCodes: [],
+    renderedAttempted: false,
+  });
 }
 
 async function captureLandingPageSnapshotAt(
@@ -44,15 +71,30 @@ async function captureLandingPageSnapshotAt(
   url: URL,
   options: CaptureLandingPageSnapshotOptions,
   redirectCount: number,
+  state: LandingPageCaptureAttemptState,
 ): Promise<LandingPageSnapshotData | null> {
   if (redirectCount > MAX_LANDING_PAGE_REDIRECTS) {
-    return null;
+    return failLandingCapture(options, "landing_redirect_limit", { redirectCount });
   }
 
   try {
     const resolvedUrl = await resolvePublicHttpUrl(url);
     if (!resolvedUrl) {
-      return null;
+      return failLandingCapture(options, "landing_redirect_blocked", { redirectCount });
+    }
+
+    const { captureWarningCodes } = state;
+    if (options.preferRendered && !state.renderedAttempted) {
+      state.renderedAttempted = true;
+      const renderedSnapshot = await captureRenderedSnapshot(
+        env,
+        resolvedUrl.toString(),
+        options,
+      );
+      if (renderedSnapshot) {
+        return renderedSnapshot;
+      }
+      captureWarningCodes.push("rendered_fallback_failed");
     }
 
     const response = await fetchWithTimeout(
@@ -70,30 +112,65 @@ async function captureLandingPageSnapshotAt(
       const redirectedUrl = resolvePublicRedirectUrl(response.headers.get("location"), resolvedUrl);
       releaseFetchTimeout(response);
       return redirectedUrl
-        ? captureLandingPageSnapshotAt(env, redirectedUrl, options, redirectCount + 1)
-        : null;
+        ? captureLandingPageSnapshotAt(
+            env,
+            redirectedUrl,
+            options,
+            redirectCount + 1,
+            state,
+          )
+        : failLandingCapture(options, "landing_redirect_blocked", {
+            fetchStatus: response.status,
+            redirectCount,
+          });
     }
 
     const finalUrl = await resolvePublicHttpUrl(response.url || resolvedUrl.toString());
     if (!finalUrl) {
       releaseFetchTimeout(response);
-      return null;
+      return failLandingCapture(options, "landing_redirect_blocked", {
+        fetchStatus: response.status,
+        redirectCount,
+      });
     }
 
     if (!response.ok) {
+      const fetchStatus = response.status;
       releaseFetchTimeout(response);
-      return options.allowRenderedFallback === false
-        ? null
-        : captureRenderedSnapshot(env, finalUrl.toString(), options);
+      const reasonCode =
+        fetchStatus === 401 || fetchStatus === 403 || fetchStatus === 429
+          ? "landing_blocked"
+          : "landing_http_error";
+      if (
+        options.allowRenderedFallback !== false &&
+        !state.renderedAttempted
+      ) {
+        state.renderedAttempted = true;
+        const rendered = await captureRenderedSnapshot(env, finalUrl.toString(), options);
+        if (rendered) return rendered;
+      }
+      return failLandingCapture(options, reasonCode, { fetchStatus });
     }
 
     const html = await readResponseTextWithinLimit(response, MAX_LANDING_PAGE_HTML_BYTES);
     if (!html) {
-      return options.allowRenderedFallback === false
-        ? null
-        : captureRenderedSnapshot(env, finalUrl.toString(), options);
+      if (
+        options.allowRenderedFallback !== false &&
+        !state.renderedAttempted
+      ) {
+        state.renderedAttempted = true;
+        const rendered = await captureRenderedSnapshot(env, finalUrl.toString(), options);
+        if (rendered) return rendered;
+      }
+      return failLandingCapture(options, "landing_content_empty_or_oversized", {
+        fetchStatus: response.status,
+      });
     }
-    const signals = extractLandingPageSignals(html);
+    const signals = extractLandingPageSignals(html, { documentMode: "raw" });
+    const hasMeaningfulBodyText = hasMeaningfulLandingPageBodyText(html, {
+      documentMode: "raw",
+    });
+    const looksLikeSignalEmptyShell = !hasMeaningfulBodyText;
     const headline =
       decodeHtml(findFirstMatch(html, OG_TITLE_REGEX) ?? "") ||
       decodeHtml(findFirstMatch(html, TITLE_REGEX) ?? "") ||
@@ -102,15 +179,27 @@ async function captureLandingPageSnapshotAt(
 
     const normalized = normalizeHeadline(headline);
     const canonicalUrl = finalUrl.toString();
-    if (options.preferRendered) {
+    if (
+      options.allowRenderedFallback !== false &&
+      !state.renderedAttempted &&
+      looksLikeSignalEmptyShell
+    ) {
+      state.renderedAttempted = true;
       const renderedSnapshot = await captureRenderedSnapshot(env, canonicalUrl, options);
       if (renderedSnapshot) {
         return renderedSnapshot;
       }
+      captureWarningCodes.push("signal_empty_render_failed");
     }
-    const artifactKey = options.persistArtifacts !== false && env.LANDING_PAGE_ARTIFACTS
-      ? await persistArtifact(env.LANDING_PAGE_ARTIFACTS, canonicalUrl, html)
-      : null;
+    let artifactKey: string | null = null;
+    if (options.persistArtifacts !== false && env.LANDING_PAGE_ARTIFACTS) {
+      try {
+        artifactKey = await persistArtifact(env.LANDING_PAGE_ARTIFACTS, canonicalUrl, html);
+      } catch (error) {
+        captureWarningCodes.push("artifact_persistence_failed");
+        logLandingCaptureWarning("artifact_persistence_failed", error);
+      }
+    }
 
     return {
       rawUrl: url.toString(),
@@ -125,28 +214,85 @@ async function captureLandingPageSnapshotAt(
       capturedAt: new Date().toISOString(),
       artifactKey,
       metadata: {
+        captureMethod: "landing_page_fetch",
+        captureWarningCodes,
+        ...(looksLikeSignalEmptyShell
+          ? { unreadableReasonCode: "landing_signals_not_detected" }
+          : {}),
+        extractionWarnings: buildExtractionWarnings({
+          headline,
+          ctaText: signals.ctaText,
+          priceText: signals.priceText,
+          formPresent: signals.formPresent,
+        }),
+        extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
         fetchStatus: response.status,
       },
     };
-  } catch {
-    return options.allowRenderedFallback === false
-      ? null
-      : captureRenderedSnapshot(env, url.toString(), options);
+  } catch (error) {
+    logLandingCaptureWarning("landing_fetch_failed", error);
+    if (
+      options.allowRenderedFallback !== false &&
+      !state.renderedAttempted
+    ) {
+      state.renderedAttempted = true;
+      const rendered = await captureRenderedSnapshot(env, url.toString(), options);
+      if (rendered) return rendered;
+    }
+    return failLandingCapture(options, "landing_fetch_failed");
   }
 }
 
-function captureRenderedSnapshot(
+async function captureRenderedSnapshot(
   env: AppEnv,
   url: string,
   options: CaptureLandingPageSnapshotOptions,
 ) {
-  return options.persistArtifacts === false
-    ? captureRenderedLandingPageSnapshot(env, url, { persistArtifacts: false })
-    : captureRenderedLandingPageSnapshot(env, url);
+  try {
+    return await (options.persistArtifacts === false
+      ? captureRenderedLandingPageSnapshot(env, url, { persistArtifacts: false })
+      : captureRenderedLandingPageSnapshot(env, url));
+  } catch (error) {
+    logLandingCaptureWarning("rendered_fallback_failed", error);
+    return null;
+  }
 }
 
 function isRedirectStatus(status: number) {
   return status >= 300 && status < 400;
+}
+
+function failLandingCapture(
+  options: CaptureLandingPageSnapshotOptions,
+  reasonCode: LandingPageCaptureFailureReasonCode,
+  metadata: Record<string, unknown> = {},
+) {
+  options.onFailure?.({ reasonCode, metadata });
+  return null;
+}
+
+function buildExtractionWarnings(input: {
+  headline: string;
+  ctaText: string | null;
+  priceText: string | null;
+  formPresent: boolean;
+}) {
+  return [
+    ...(input.headline === "Landing page" ? ["headline_not_detected"] : []),
+    ...(!input.ctaText ? ["cta_not_detected"] : []),
+    ...(!input.priceText ? ["price_not_detected"] : []),
+    ...(!input.formPresent ? ["form_not_detected"] : []),
+  ];
+}
+
+function logLandingCaptureWarning(reasonCode: string, error: unknown) {
+  console.warn(
+    JSON.stringify({
+      event: "landing_page_capture_warning",
+      reasonCode,
+      errorName: error instanceof Error ? error.name : "UnknownError",
+    }),
+  );
 }
 
 async function persistArtifact(bucket: R2Bucket, url: string, html: string) {

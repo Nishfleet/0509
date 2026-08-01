@@ -3,27 +3,92 @@ name: CI
 on:
   pull_request:
   workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact main commit authorized for verification
+        required: true
+        type: string
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions: {}
+
 jobs:
-  codex-node-checks:
+  authorize_release:
+    name: Authorize exact verification candidate
     if: github.repository == 'nish3451/0509' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      sha: ${{ steps.authorize.outputs.sha }}
+    steps:
+      - name: Authorize verification request
+        id: authorize
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name || '' }}
+        run: |
+          set -euo pipefail
+          sha_pattern='^[a-f0-9]{40}$'
+          test "$GITHUB_REPOSITORY" = "nish3451/0509"
+          [[ "$GITHUB_SHA" =~ $sha_pattern ]]
+          case "$GITHUB_EVENT_NAME" in
+            pull_request)
+              test -z "$EXPECTED_SHA"
+              test "$HEAD_REPOSITORY" = "$GITHUB_REPOSITORY"
+              [[ "$GITHUB_REF" =~ ^refs/pull/[1-9][0-9]*/merge$ ]]
+              ;;
+            workflow_dispatch)
+              test "$GITHUB_REF" = "refs/heads/main"
+              test "$GITHUB_RUN_ATTEMPT" = "1"
+              [[ "$EXPECTED_SHA" =~ $sha_pattern ]]
+              test "$EXPECTED_SHA" = "$GITHUB_SHA"
+              ;;
+            *)
+              exit 1
+              ;;
+          esac
+          printf 'sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+
+  codex-node-checks:
+    if: >-
+      github.repository == 'nish3451/0509' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) &&
+      needs.authorize_release.result == 'success'
+    needs: authorize_release
+    runs-on: [self-hosted, linux, x64, vps-verify]
+    permissions:
+      contents: read
     # The 270m job cap bounds setup plus all per-step waits. Each heavy step has
     # one 180m total budget shared between its lane slot and the deploy gate.
     timeout-minutes: 270
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ needs.authorize_release.outputs.sha }}
+          fetch-depth: 0
+          clean: true
           persist-credentials: false
 
-      - uses: actions/setup-node@v6
+      - name: Verify authorized checkout
+        shell: bash
+        env:
+          AUTHORIZED_SHA: ${{ needs.authorize_release.outputs.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --verify HEAD)" = "$AUTHORIZED_SHA"
+          if git symbolic-ref --quiet HEAD >/dev/null 2>&1; then
+            exit 1
+          fi
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: ".node-version"
-          cache: ${{ hashFiles('package-lock.json') != '' && 'npm' || '' }}
+          cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' && hashFiles('package-lock.json') != '' }}
       - name: Install dependencies
         run: |
           if [ -f package-lock.json ]; then
@@ -36,4 +101,9 @@ jobs:
       - name: Test
         run: ./scripts/deploy-window-lock.sh run -- npm run test
       - name: Typecheck
+        env:
+          # Node derives a ~1.2 GiB heap from the 3 GiB runner cgroup, while
+          # this project's composite TypeScript build needs more headroom.
+          # Keep it below MemoryHigh/MemoryMax so systemd still fails closed.
+          NODE_OPTIONS: --max-old-space-size=2048
         run: ./scripts/deploy-window-lock.sh run -- npm run typecheck

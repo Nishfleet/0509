@@ -54,27 +54,44 @@ export function selectLastSuccessfulProofCapture(captures: ProofCaptureRecord[])
 
 export function evaluateProofBackedEvents(input: {
   proofTargetIdentity: string;
-  currentProof: ComparableProofFields;
+  currentProof: ComparableProofFields & {
+    extractorVersion?: string | null;
+  };
   lastSuccessfulProof: ProofCaptureRecord | null;
   recentWatchEvents: WatchEventRecord[];
   sensitivityMode: SensitivityMode;
   burstCount: number;
+  currentCapturedAt?: string | null;
   now?: string;
 }) : ProofEventEvaluationResult {
-  if (!input.lastSuccessfulProof) {
+  const lastSuccessfulProof = input.lastSuccessfulProof;
+  if (!lastSuccessfulProof) {
     return {
       status: "baseline_established",
       events: [],
     };
   }
 
-  const previous = toComparableProofFields(input.lastSuccessfulProof.extractedFields);
+  const previous = toComparableProofFields(lastSuccessfulProof.extractedFields);
+  const comparablePrevious =
+    input.currentProof.extractorVersion &&
+    lastSuccessfulProof.extractorVersion !== input.currentProof.extractorVersion
+      ? {
+          ...previous,
+          // Landing-signal parsing and form detection intentionally change
+          // between extractor versions. Do not turn the one-scan rollout
+          // boundary into customer-visible CTA, offer, or form events.
+          ctaText: null,
+          priceText: null,
+          formPresent: null,
+        }
+      : previous;
   const now = input.now ?? new Date().toISOString();
   const candidateDrafts = [
-    buildFieldChangeDraft("landing_page_headline_changed", previous, input.currentProof),
-    buildFieldChangeDraft("landing_page_offer_changed", previous, input.currentProof),
-    buildFieldChangeDraft("landing_page_cta_changed", previous, input.currentProof),
-    buildFieldChangeDraft("landing_page_form_changed", previous, input.currentProof),
+    buildFieldChangeDraft("landing_page_headline_changed", comparablePrevious, input.currentProof),
+    buildFieldChangeDraft("landing_page_offer_changed", comparablePrevious, input.currentProof),
+    buildFieldChangeDraft("landing_page_cta_changed", comparablePrevious, input.currentProof),
+    buildFieldChangeDraft("landing_page_form_changed", comparablePrevious, input.currentProof),
   ].filter((draft): draft is NonNullable<typeof draft> => Boolean(draft));
 
   if (candidateDrafts.length === 0) {
@@ -116,6 +133,12 @@ export function evaluateProofBackedEvents(input: {
         from: draft.from,
         to: draft.to,
         diffHash: draft.diffHash,
+        ...(lastSuccessfulProof.succeededAt && input.currentCapturedAt
+          ? {
+              beforeCapturedAt: lastSuccessfulProof.succeededAt,
+              capturedAt: input.currentCapturedAt,
+            }
+          : {}),
       },
       dedupeReason: duplicate ? "proof_duplicate" : null,
     } satisfies EvaluatedWatchEventDraft;

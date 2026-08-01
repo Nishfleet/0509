@@ -202,6 +202,94 @@ describe("getMetaAdsBetaReadiness", () => {
     expect(readiness.blockers).toContain("recent_live_failures");
   });
 
+  it("does not treat a retained partial later-page failure as a full visual outage", async () => {
+    const readiness = await getMetaAdsBetaReadiness(
+      {
+        DB: createMockDb({
+          aggregate: {
+            attempts: 20,
+            successes: 20,
+            failures: 0,
+            recent_failures: 0,
+            latest_success_at: "2026-05-15T11:30:00.000Z",
+            latest_failure_at: null,
+          },
+          providers: [
+            {
+              provider: "meta_library_browser",
+              attempts: 20,
+              successes: 20,
+              failures: 0,
+              latest_success_at: "2026-05-15T11:30:00.000Z",
+              latest_failure_at: null,
+            },
+          ],
+          providerState: {
+            provider: "meta_library_browser",
+            status: "degraded",
+            failure_class: "browser_unavailable",
+            summary: "Page one retained; a later page was unavailable.",
+            last_success_at: "2026-05-15T11:30:00.000Z",
+            last_failure_at: "2026-05-15T11:31:00.000Z",
+            metadata_json: JSON.stringify({ partial: true }),
+            updated_at: "2026-05-15T11:31:00.000Z",
+          },
+        }),
+      } as never,
+      new Date("2026-05-15T12:00:00.000Z"),
+    );
+
+    expect(readiness.ok).toBe(true);
+    expect(readiness.blockers).not.toContain("visual_path_not_healthy");
+  });
+
+  it("blocks graduation when retained partial results exceed the reliability threshold", async () => {
+    const readiness = await getMetaAdsBetaReadiness(
+      {
+        DB: createMockDb({
+          aggregate: {
+            attempts: 22,
+            successes: 20,
+            failures: 0,
+            partial_attempts: 2,
+            recent_failures: 0,
+            latest_success_at: "2026-05-15T11:30:00.000Z",
+            latest_failure_at: null,
+          },
+          providers: [
+            {
+              provider: "meta_library_browser",
+              attempts: 22,
+              successes: 20,
+              failures: 0,
+              partial_attempts: 2,
+              latest_success_at: "2026-05-15T11:30:00.000Z",
+              latest_failure_at: null,
+            },
+          ],
+          providerState: {
+            provider: "meta_library_browser",
+            status: "degraded",
+            failure_class: "browser_unavailable",
+            summary: "Page one retained; later pages were unavailable.",
+            last_success_at: "2026-05-15T11:30:00.000Z",
+            last_failure_at: "2026-05-15T11:31:00.000Z",
+            metadata_json: JSON.stringify({ partial: true }),
+            updated_at: "2026-05-15T11:31:00.000Z",
+          },
+        }),
+      } as never,
+      new Date("2026-05-15T12:00:00.000Z"),
+    );
+
+    expect(readiness.successRate).toBe(1);
+    expect(readiness.partialAttempts).toBe(2);
+    expect(readiness.partialRate).toBeCloseTo(2 / 22);
+    expect(readiness.ok).toBe(false);
+    expect(readiness.blockers).toContain("partial_result_rate_above_5_percent");
+    expect(readiness.blockers).not.toContain("recent_live_failures");
+  });
+
   it("scores customer-owned Meta API samples but excludes old platform-token API noise", async () => {
     const statements: string[] = [];
     const db = {
@@ -233,5 +321,12 @@ describe("getMetaAdsBetaReadiness", () => {
     await getMetaAdsBetaReadiness({ DB: db } as never, new Date("2026-05-15T12:00:00.000Z"));
 
     expect(statements.join("\n")).toContain("json_extract(metadata_json, '$.customerOwned') = 1");
+    expect(statements.join("\n")).toContain(
+      "COALESCE(json_extract(metadata_json, '$.partial'), 0) != 1",
+    );
+    expect(statements.join("\n")).toMatch(
+      /SUM\(CASE WHEN status = 'failed'\s+AND COALESCE\(json_extract\(metadata_json, '\$\.partial'\), 0\) != 1\s+THEN 1 ELSE 0 END\) AS failures/s,
+    );
+    expect(statements.join("\n")).toContain("AS partial_attempts");
   });
 });
