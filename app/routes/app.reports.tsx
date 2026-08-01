@@ -496,7 +496,7 @@ export default function ReportsRoute() {
 
   if (data.accessDenied) {
     return (
-      <DashboardPage className="f9-wk-page">
+      <DashboardPage className="f9-wk-page f9-wk-report-view">
         <ReportsLockedState
           context={gatedReportContext(params.id)}
           upgradeTo={data.upgradePath}
@@ -527,8 +527,8 @@ export default function ReportsRoute() {
     report.resourceType === "collection" ? "Back to collection" : "Back to competitor";
 
   return (
-    <DashboardPage className="f9-wk-page">
-      <div>
+    <DashboardPage className="f9-wk-page f9-wk-report-view">
+      <div className="f9-wk-reports-feedback">
         <ActionFeedback data={actionData} fallback>
           {actionData &&
           "error" in actionData &&
@@ -573,109 +573,109 @@ export default function ReportsRoute() {
       </div>
 
       <ReportView
-          brandingNote={
-            <p className="f9-ed-report-footnote">
-              {preparedBy
-                ? `This report carries your agency name, ${preparedBy}, on every page you send.`
-                : "Set an agency name in Account to put your own brand on the report you send."}
+        brandingNote={
+          <p className="f9-ed-report-footnote">
+            {preparedBy
+              ? `This report carries your agency name, ${preparedBy}, on every page you send.`
+              : "Set an agency name in Account to put your own brand on the report you send."}
+          </p>
+        }
+        preparedBy={preparedBy}
+        railActions={
+          <div className="f9-ed-report-actions">
+            <p className="f9-ed-micro">
+              {reportReadiness.ok
+                ? "Approved evidence report"
+                : "Evidence report · review required"}
             </p>
-          }
-          preparedBy={preparedBy}
-          railActions={
-            <div className="f9-ed-report-actions">
-              <p className="f9-ed-micro">
-                {reportReadiness.ok
-                  ? "Approved evidence report"
-                  : "Evidence report · review required"}
+
+            {reportReadiness.ok ? null : (
+              <p className="f9-ed-report-footnote">{reportReadiness.reason}</p>
+            )}
+
+            {/* One reviewed-state control for the whole page. It is a real
+                field of the share form (so the browser still enforces it
+                without JS) and the PDF form mirrors its state, which is what
+                retires the two duplicate floating checkboxes. */}
+            <label className="f9-ed-review-check" htmlFor="report-reviewed">
+              <input
+                checked={reviewed}
+                disabled={!reportReadiness.ok}
+                form="report-share-form"
+                id="report-reviewed"
+                name="reviewed"
+                onChange={(event) => setReviewed(event.currentTarget.checked)}
+                required
+                type="checkbox"
+                value="true"
+              />
+              <span>I reviewed this evidence.</span>
+            </label>
+            {reportReadiness.ok && !reviewed ? (
+              <p className="f9-ed-report-footnote">
+                Tick the box before you send this on. Nothing leaves the workspace until you
+                have read the evidence yourself.
               </p>
+            ) : null}
 
-              {reportReadiness.ok ? null : (
-                <p className="f9-ed-report-footnote">{reportReadiness.reason}</p>
-              )}
+            <Form id="report-share-form" method="post">
+              <input name="intent" type="hidden" value="share-report" />
+              <input name="reviewFingerprint" type="hidden" value={reviewFingerprint} />
+              <input name="reviewNonce" type="hidden" value={reviewNonce} />
+              <SubmitButton
+                className="f9-ed-cta f9-ed-cta--rank1 f9-wk-btn"
+                disabled={!reportReadiness.ok}
+                intent="share-report"
+                pendingLabel="Creating…"
+              >
+                Send to client
+              </SubmitButton>
+            </Form>
 
-              {/* One reviewed-state control for the whole page. It is a real
-                  field of the share form (so the browser still enforces it
-                  without JS) and the PDF form mirrors its state, which is what
-                  retires the two duplicate floating checkboxes. */}
-              <label className="f9-ed-review-check" htmlFor="report-reviewed">
-                <input
-                  checked={reviewed}
-                  disabled={!reportReadiness.ok}
-                  form="report-share-form"
-                  id="report-reviewed"
-                  name="reviewed"
-                  onChange={(event) => setReviewed(event.currentTarget.checked)}
-                  required
-                  type="checkbox"
-                  value="true"
-                />
-                <span>I reviewed this evidence.</span>
-              </label>
-              {reportReadiness.ok && !reviewed ? (
-                <p className="f9-ed-report-footnote">
-                  Tick the box before you send this on. Nothing leaves the workspace until you
-                  have read the evidence yourself.
-                </p>
-              ) : null}
-
-              <Form id="report-share-form" method="post">
-                <input name="intent" type="hidden" value="share-report" />
+            {pdfAvailable ? (
+              // reloadDocument: a browser-native POST follows the 303 into
+              // the attachment download without routing PDF bytes through
+              // the SPA navigation.
+              <Form
+                aria-busy={pdfPreparing}
+                data-pdf-preparing={pdfPreparing ? "true" : "false"}
+                method="post"
+                onSubmit={(event) => {
+                  if (pdfPreparing) {
+                    event.preventDefault();
+                    return;
+                  }
+                  setPdfPreparing(true);
+                }}
+                reloadDocument
+              >
+                <input name="intent" type="hidden" value="download-pdf" />
                 <input name="reviewFingerprint" type="hidden" value={reviewFingerprint} />
                 <input name="reviewNonce" type="hidden" value={reviewNonce} />
+                <input name="reviewed" type="hidden" value={reviewed ? "true" : "false"} />
                 <SubmitButton
-                  className="f9-ed-cta f9-ed-cta--rank1 f9-wk-btn"
-                  disabled={!reportReadiness.ok}
-                  intent="share-report"
-                  pendingLabel="Creating…"
+                  className="f9-ed-cta f9-ed-cta--rank2 f9-wk-lnk"
+                  disabled={!reportReadiness.ok || !reviewed || pdfPreparing}
+                  intent="download-pdf"
+                  pendingLabel="Preparing…"
                 >
-                  Send to client
+                  {pdfPreparing ? "Preparing…" : "Download PDF"}
                 </SubmitButton>
               </Form>
+            ) : (
+              <p className="f9-ed-report-footnote">
+                PDF export is unavailable for this workspace. Review plan access before
+                preparing a client copy.
+              </p>
+            )}
 
-              {pdfAvailable ? (
-                // reloadDocument: a browser-native POST follows the 303 into
-                // the attachment download without routing PDF bytes through
-                // the SPA navigation.
-                <Form
-                  aria-busy={pdfPreparing}
-                  data-pdf-preparing={pdfPreparing ? "true" : "false"}
-                  method="post"
-                  onSubmit={(event) => {
-                    if (pdfPreparing) {
-                      event.preventDefault();
-                      return;
-                    }
-                    setPdfPreparing(true);
-                  }}
-                  reloadDocument
-                >
-                  <input name="intent" type="hidden" value="download-pdf" />
-                  <input name="reviewFingerprint" type="hidden" value={reviewFingerprint} />
-                  <input name="reviewNonce" type="hidden" value={reviewNonce} />
-                  <input name="reviewed" type="hidden" value={reviewed ? "true" : "false"} />
-                  <SubmitButton
-                    className="f9-ed-cta f9-ed-cta--rank2 f9-wk-lnk"
-                    disabled={!reportReadiness.ok || !reviewed || pdfPreparing}
-                    intent="download-pdf"
-                    pendingLabel="Preparing…"
-                  >
-                    {pdfPreparing ? "Preparing…" : "Download PDF"}
-                  </SubmitButton>
-                </Form>
-              ) : (
-                <p className="f9-ed-report-footnote">
-                  PDF export is unavailable for this workspace. Review plan access before
-                  preparing a client copy.
-                </p>
-              )}
-
-              <Link className="f9-wk-lnk" to={backHref}>
-                {reportReadiness.ok ? backLabel : "Review or recapture evidence"}
-                <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
-              </Link>
-            </div>
-          }
-          report={report}
+            <Link className="f9-wk-lnk" to={backHref}>
+              {reportReadiness.ok ? backLabel : "Review or recapture evidence"}
+              <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
+            </Link>
+          </div>
+        }
+        report={report}
       />
     </DashboardPage>
   );
