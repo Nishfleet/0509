@@ -109,7 +109,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
         page,
         viewport,
         "/app/watchlists?watchlist=e2e-watchlist-j3-workflow",
-        "Competitors",
+        "Workflow acceptance watch",
         [/(first scan is in line and starts automatically|first scan paused safely before an external check)/i],
       );
       await expect(
@@ -131,7 +131,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
         page,
         viewport,
         "/app/watchlists?watchlist=e2e-watchlist-j3-crash",
-        "Competitors",
+        "Crash reclaim watch",
         [/Scanning this competitor now/, /(first scan is running|First capture running|Your first scan is running)/i],
       );
       // BL-007: run history lives on the Evidence tab.
@@ -152,7 +152,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
       // promise is now checked at the URL a customer would actually be on.
       // Page-level status — the state stamp, last/next check and ad source —
       // stays on the strip above the tab bar and is checked on every tab.
-      await expectResponsiveSurface(page, viewport, "/app/watchlists?watchlist=e2e-watchlist-starter-1", "Competitors", [
+      await expectResponsiveSurface(page, viewport, "/app/watchlists?watchlist=e2e-watchlist-starter-1", "Okara competitor watch", [
         /Okara competitor watch/,
         /What changed/,
         /confirmed/i,
@@ -160,14 +160,20 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
 
       // BL-030: the list row states the competitor's state in one sentence,
       // so the promise is checked on the row rather than on its name link.
+      await page.goto("/app/watchlists");
       await expect(
         page.locator(".f9-wk-row", { hasText: "Workflow acceptance watch" }).first(),
       ).toContainText("No completed check yet");
       await expect(
         page.locator(".f9-wk-row", { hasText: "Crash reclaim watch" }).first(),
       ).toContainText("No completed check yet");
-      await expect(page.getByText("Needs source access", { exact: true })).toBeVisible();
-      await expect(page.getByText("After source access is ready", { exact: true })).toBeVisible();
+      await page.goto("/app/watchlists?watchlist=e2e-watchlist-starter-1");
+      const sourceAccessStatus = page.getByRole("link", {
+        name: "Needs source access",
+        exact: true,
+      });
+      await expect(sourceAccessStatus).toBeVisible();
+      await expect(sourceAccessStatus).toHaveAttribute("href", "/app/source-access");
       await expect(page.getByRole("heading", { name: "Landing page offer changed" }).first()).toBeVisible();
       await expect(page.getByRole("heading", { name: "Okara launched a new workflow offer" }).first()).toBeVisible();
       await expect(page.getByText("This is the stored capture, not a re-render.", { exact: true }).first()).toBeVisible();
@@ -190,7 +196,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
         page,
         viewport,
         "/app/watchlists?watchlist=e2e-watchlist-starter-1&tab=evidence",
-        "Competitors",
+        "Okara competitor watch",
         [/Evidence and alerts/, /Evidence freshness/],
       );
       await expect(page.getByText("Last good check", { exact: false })).toBeVisible();
@@ -203,7 +209,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
         page,
         viewport,
         "/app/watchlists?watchlist=e2e-watchlist-starter-1&tab=delivery",
-        "Competitors",
+        "Okara competitor watch",
         [/High-priority alerts/],
       );
       await expect(page.getByText("High-priority alerts (sent as soon as a scan confirms a major change)")).toBeVisible();
@@ -213,7 +219,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
         page,
         viewport,
         "/app/watchlists?watchlist=e2e-watchlist-starter-1&tab=setup",
-        "Competitors",
+        "Okara competitor watch",
         [/How tracking works/],
       );
       await expect(page.getByText("Monitoring history is saved; new checks need source access", { exact: true })).toBeVisible();
@@ -383,7 +389,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
 
       await signInAs(context, baseURL!, "e2e-agency");
       // BL-007: delivery config and recipient targets live on the Delivery tab.
-      await expectResponsiveSurface(page, viewport, "/app/watchlists?watchlist=e2e-watchlist-agency-1&tab=delivery", "Competitors", [
+      await expectResponsiveSurface(page, viewport, "/app/watchlists?watchlist=e2e-watchlist-agency-1&tab=delivery", "Agency client proof watch", [
         /Agency client proof watch/,
         /Targets and pauses/,
       ]);
@@ -392,7 +398,13 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
 
       await signInAs(context, baseURL!, "e2e-active-member");
       await page.goto("/app/watchlists?watchlist=e2e-watchlist-agency-1&tab=delivery");
-      await expect(page.getByRole("heading", { level: 1, name: "Competitors", exact: true })).toBeVisible();
+      await expect(
+        page.getByRole("heading", {
+          level: 1,
+          name: "Agency client proof watch",
+          exact: true,
+        }),
+      ).toBeVisible();
       await expect(page.getByText("Delivery settings and recipient targets are managed by the workspace owner.", { exact: true })).toBeVisible();
       await expect(page.locator('input[name="targetValue"]')).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Save delivery settings", exact: true })).toHaveCount(0);
@@ -427,7 +439,13 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
 
       // Competitors keeps the existing run-backed first-scan banner.
       await page.goto("/app/watchlists?watchlist=e2e-watchlist-firstscan");
-      await expect(page.getByRole("heading", { level: 1, name: "Competitors", exact: true })).toBeVisible();
+      await expect(
+        page.getByRole("heading", {
+          level: 1,
+          name: "Rival Labs first scan",
+          exact: true,
+        }),
+      ).toBeVisible();
       await expect(page.locator("body")).toContainText("Activation scan");
       await expect(page.locator("body")).toContainText("Your activation scan is running.");
       await expect(page.locator(".f9-wire-wait")).toHaveCount(0);
