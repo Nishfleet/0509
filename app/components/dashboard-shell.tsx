@@ -27,7 +27,6 @@ export interface DashboardShellProps {
   showPresenceNav?: boolean;
   showOpsNav?: boolean;
   railNote?: React.ReactNode;
-  headerActions?: React.ReactNode;
   /**
    * Opens the ⌘K command palette. BL-030: the affordance is visible chrome in
    * the rail, not folklore — it is the one navigation control whose cost does
@@ -42,13 +41,6 @@ function navLinkClassName({ isActive, isPending }: { isActive: boolean; isPendin
     .filter(Boolean)
     .join(" ") || undefined;
 }
-
-const MOBILE_UTILITY_NAV = [
-  { label: "Team", to: "/app/team" },
-  { label: "Client rooms", to: "/app/clients" },
-  { label: "Support", to: "/app/support" },
-  { label: "Billing", to: "/app/billing" },
-] as const;
 
 /**
  * BL-030 — a rail row. Text only: the concept's rail carries no icons, no
@@ -91,7 +83,6 @@ export function DashboardShell({
   showPresenceNav = false,
   showOpsNav = false,
   railNote,
-  headerActions,
   onCommandPalette,
   children,
 }: DashboardShellProps) {
@@ -104,14 +95,18 @@ export function DashboardShell({
     showOps: showOpsNav,
   });
   const staff = DASHBOARD_STAFF_NAV.filter((item) => !item.requiresOps || showOpsNav);
-  const mobileNav = isPublic ? [] : buildDashboardMobileNav({ showPresence: showPresenceNav });
+  const mobileNav = isPublic
+    ? []
+    : buildDashboardMobileNav({
+        showPresence: showPresenceNav,
+        showOps: showOpsNav,
+      });
   const navigation = useNavigation();
   const location = useLocation();
   const isNavigating = Boolean(navigation.location);
   const previousPathnameRef = useRef(location.pathname);
   const mainRef = useRef<HTMLDivElement>(null);
   const mobilePrimaryRef = useRef<HTMLElement>(null);
-  const mobileUtilityRef = useRef<HTMLElement>(null);
   const [routeAnnouncement, setRouteAnnouncement] = useState("");
   // The disclosure starts open when the customer is standing inside it, so a
   // deep link into a settings route never hides its own active row.
@@ -132,13 +127,13 @@ export function DashboardShell({
   }, [location.pathname]);
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
-      for (const nav of [mobilePrimaryRef.current, mobileUtilityRef.current]) {
-        nav?.querySelector<HTMLElement>('a[aria-current="page"]')?.scrollIntoView({
+      mobilePrimaryRef.current
+        ?.querySelector<HTMLElement>('a[aria-current="page"]')
+        ?.scrollIntoView({
           behavior: "auto",
           block: "nearest",
           inline: "center",
         });
-      }
     });
     return () => window.cancelAnimationFrame(frame);
   }, [location.pathname]);
@@ -314,24 +309,7 @@ export function DashboardShell({
                 {item.label}
               </NavLink>
             ))}
-            <span
-              aria-label="Workspace and account"
-              className="f9-dash-mobile-utility"
-              ref={mobileUtilityRef}
-              role="group"
-            >
-              {MOBILE_UTILITY_NAV.map((item) => (
-                <NavLink
-                  className={navLinkClassName}
-                  key={item.to}
-                  prefetch="intent"
-                  to={item.to}
-                >
-                  {item.label}
-                </NavLink>
-              ))}
-              <SignOutButton />
-            </span>
+            <SignOutButton />
           </nav>
         ) : null}
 
@@ -339,7 +317,6 @@ export function DashboardShell({
           {routeAnnouncement}
         </div>
         <div className="f9-cursor-main" id="f9-main-content" ref={mainRef} tabIndex={-1}>
-          {headerActions ? <header className="f9-dash-topbar">{headerActions}</header> : null}
           {children}
         </div>
       </div>

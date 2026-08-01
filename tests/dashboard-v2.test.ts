@@ -100,6 +100,27 @@ describe("dashboard v2 navigation", () => {
     );
   });
 
+  it("keeps every entitled desktop destination reachable exactly once on mobile", () => {
+    const expected = [
+      ...filterDashboardNav(DASHBOARD_PRIMARY_NAV, {
+        showPresence: true,
+        showOps: true,
+      }).flatMap((section) => section.items),
+      ...filterDashboardNav(DASHBOARD_SETTINGS_NAV, {
+        showPresence: true,
+        showOps: true,
+      }).flatMap((section) => section.items),
+      { label: "Ops", to: "/app/ops", requiresOps: true },
+    ];
+    const mobile = buildDashboardMobileNav({
+      showOps: true,
+      showPresence: true,
+    });
+
+    expect(mobile.map((item) => item.to)).toEqual(expected.map((item) => item.to));
+    expect(new Set(mobile.map((item) => item.to)).size).toBe(mobile.length);
+  });
+
   it("hides presence nav unless entitled", () => {
     const without = filterDashboardNav(DASHBOARD_PRIMARY_NAV, { showPresence: false, showOps: false });
     const withPresence = filterDashboardNav(DASHBOARD_PRIMARY_NAV, { showPresence: true, showOps: false });
@@ -125,24 +146,15 @@ describe("dashboard v2 shell", () => {
     expect(appCss).not.toMatch(/\.f9-cursor-main\s*\{[^}]*order:\s*1/s);
     expect(shellSource).toContain("f9-dash-mobile-nav");
     expect(shellSource).not.toContain("f9-dash-mobile-context");
+    expect(shellSource).not.toContain("f9-dash-mobile-utility");
     expect(shellSource).not.toContain("Swipe for more");
     expect(shellSource).toContain('aria-label="Workspace sections"');
-    expect(shellSource).toContain('role="group"');
-    expect(shellSource).toContain('aria-label="Workspace and account"');
     expect(shellSource).toContain('a[aria-current="page"]');
     expect(appCss).toContain(".f9-dash-page-app .f9-dash-mobile-nav");
-    expect(appCss).toContain(".f9-dash-page-app .f9-dash-mobile-utility a.is-active");
     expect(appCss).toContain(".f9-dash-page-app .f9-dash-nav-group");
     expect(appCss).not.toContain(".f9-cursor-rail > div:not(");
     expect(appCss).not.toMatch(/\.f9-dash(?:-page-app)?\s+\.f9-dash-mobile-nav\s*\{[^}]*position:\s*fixed/s);
-    expect(appCss).not.toMatch(/\.f9-dash(?:-page-app)?\s+\.f9-dash-mobile-utility\s*\{[^}]*position:\s*fixed/s);
-    expect(appCss).toMatch(
-      /\.f9-dash-page-app \.f9-dash-mobile-nav > \.f9-dash-mobile-utility\s*\{\s*display:\s*contents;/s,
-    );
     expect(shellSource.indexOf('className="f9-dash-mobile-nav"')).toBeLessThan(
-      shellSource.indexOf('className="f9-cursor-main"'),
-    );
-    expect(shellSource.indexOf('className="f9-dash-mobile-utility"')).toBeLessThan(
       shellSource.indexOf('className="f9-cursor-main"'),
     );
   });
@@ -213,8 +225,12 @@ describe("dashboard shell render", () => {
   });
 
   it("keeps signed-in mobile utility support in-app", () => {
-    expect(shellSource).toContain('to: "/app/support"');
-    expect(shellSource).toContain('to: "/app/billing"');
-    expect(shellSource).not.toMatch(/className="f9-dash-mobile-utility"[\s\S]*?to="\/help"/);
+    const mobile = buildDashboardMobileNav({ showPresence: false });
+    expect(mobile).toContainEqual(
+      expect.objectContaining({ label: "Help & support", to: "/app/support" }),
+    );
+    expect(mobile).toContainEqual(
+      expect.objectContaining({ label: "Billing & usage", to: "/app/billing" }),
+    );
   });
 });

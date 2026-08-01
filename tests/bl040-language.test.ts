@@ -2,9 +2,8 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { shellTopbarIsSuppressed } from "~/routes/app-layout";
-
 const layout = readFileSync("app/routes/app-layout.tsx", "utf8");
+const shell = readFileSync("app/components/dashboard-shell.tsx", "utf8");
 const sourceAccess = readFileSync(
   "app/routes/app.source-access.ui.tsx",
   "utf8",
@@ -23,14 +22,10 @@ if (cssHeadingIndex < 0) {
 const bl040Css = css.slice(cssHeadingIndex);
 
 describe("BL-040 landing-language surfaces", () => {
-  it("suppresses the old shell topbar on both rebuilt routes", () => {
-    expect(layout).toContain('normalizedPathname === "/app/source-access"');
-    expect(layout).toContain('normalizedPathname === "/app/developer-access"');
-    expect(shellTopbarIsSuppressed("/app/source-access")).toBe(true);
-    expect(shellTopbarIsSuppressed("/app/source-access/")).toBe(true);
-    expect(shellTopbarIsSuppressed("/app/developer-access")).toBe(true);
-    expect(shellTopbarIsSuppressed("/app/developer-access/")).toBe(true);
-    expect(shellTopbarIsSuppressed("/app/notifications")).toBe(false);
+  it("inherits the stronger universal shell-topbar deletion", () => {
+    expect(layout).not.toContain("shellTopbarIsSuppressed");
+    expect(layout).not.toContain("shellPrimaryIsDemoted");
+    expect(shell).not.toContain("f9-dash-topbar");
   });
 
   it("uses the working header and page layer without old panel theatre", () => {

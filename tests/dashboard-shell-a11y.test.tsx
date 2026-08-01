@@ -33,15 +33,26 @@ afterEach(async () => {
   document.body.replaceChildren();
 });
 
-async function renderShell(initialPath: string, strict = false) {
+async function renderShell(
+  initialPath: string,
+  options: {
+    isPublic?: boolean;
+    showOpsNav?: boolean;
+    showPresenceNav?: boolean;
+    strict?: boolean;
+  } = {},
+) {
   const Stub = createRoutesStub([
     {
-      path: "/app/*",
+      path: "*",
       Component: () =>
         createElement(DashboardShell, {
           accountLabel: "Workspace",
           accountTitle: "Five to Nine",
           accountDetail: "Starter plan",
+          isPublic: options.isPublic,
+          showOpsNav: options.showOpsNav,
+          showPresenceNav: options.showPresenceNav,
           children: createElement("p", null, "Body content"),
         }),
     },
@@ -53,7 +64,7 @@ async function renderShell(initialPath: string, strict = false) {
   const currentRoot = root;
   await act(async () => {
     const shell = createElement(Stub, { initialEntries: [initialPath] });
-    currentRoot.render(strict ? createElement(StrictMode, null, shell) : shell);
+    currentRoot.render(options.strict ? createElement(StrictMode, null, shell) : shell);
   });
   return container;
 }
@@ -91,18 +102,39 @@ describe("DashboardShell accessibility (WP-43)", () => {
   it("renders one mobile anchor bar without instructional swipe copy", async () => {
     const view = await renderShell("/app/watchlists");
     const tabBar = view.querySelector('nav[aria-label="Workspace sections"]');
-    const utilityGroup = tabBar?.querySelector(
-      '[role="group"][aria-label="Workspace and account"]',
-    );
 
     expect(tabBar).not.toBeNull();
-    expect(utilityGroup).not.toBeNull();
-    expect(tabBar?.contains(utilityGroup ?? null)).toBe(true);
+    expect(tabBar?.querySelector('[role="group"]')).toBeNull();
+    expect(tabBar?.querySelectorAll("nav")).toHaveLength(0);
+    expect(tabBar?.querySelectorAll("button")).toHaveLength(1);
+    expect(tabBar?.querySelector("button")?.textContent).toBe("Sign out");
     expect(view.textContent).not.toContain("Swipe for more");
   });
 
+  it("omits entitlement-only routes from the default mobile row", async () => {
+    const view = await renderShell("/app");
+    const mobile = view.querySelector('nav[aria-label="Workspace sections"]');
+    expect(mobile?.textContent).not.toContain("Presence");
+    expect(mobile?.textContent).not.toContain("Ops");
+  });
+
+  it("includes entitled routes in the same mobile row", async () => {
+    const view = await renderShell("/app/presence", {
+      showOpsNav: true,
+      showPresenceNav: true,
+    });
+    const mobile = view.querySelector('nav[aria-label="Workspace sections"]');
+    expect(mobile?.textContent).toContain("Presence");
+    expect(mobile?.textContent).toContain("Ops");
+  });
+
+  it("does not expose authenticated workspace navigation on the public shell", async () => {
+    const view = await renderShell("/search", { isPublic: true });
+    expect(view.querySelector('nav[aria-label="Workspace sections"]')).toBeNull();
+  });
+
   it("does not announce or steal focus during a StrictMode initial mount", async () => {
-    const view = await renderShell("/app/watchlists", true);
+    const view = await renderShell("/app/watchlists", { strict: true });
 
     await act(async () => {
       await new Promise((resolve) => window.requestAnimationFrame(resolve));
@@ -155,6 +187,21 @@ describe("DashboardShell accessibility (WP-43)", () => {
     );
     expect(appCss).not.toMatch(
       /(?<!public)\.f9-search-page \.f9-cursor-shell\s*\{[^}]*width:\s*min\(100%, 1390px\);/s,
+    );
+  });
+
+  it("draws mobile navigation as sentence-case text with one hairline active state", () => {
+    expect(appCss).toContain(
+      "/* === BL-042 mobile top navigation (landing language) === */",
+    );
+    expect(appCss).toMatch(
+      /\.f9-dash-page-app \.f9-dash-mobile-nav\s*\{[\s\S]*?border-bottom:\s*1px solid var\(--wk-rule\);[\s\S]*?background:\s*var\(--bone\);/,
+    );
+    expect(appCss).toMatch(
+      /\.f9-dash-page-app \.f9-dash-mobile-nav a,[\s\S]*?font-family:\s*var\(--f9-font\);[\s\S]*?text-transform:\s*none;/,
+    );
+    expect(appCss).toMatch(
+      /\.f9-dash-page-app \.f9-dash-mobile-nav a\[aria-current="page"\]\s*\{[\s\S]*?border-bottom-color:\s*var\(--ink\);[\s\S]*?background:\s*none;/,
     );
   });
 });

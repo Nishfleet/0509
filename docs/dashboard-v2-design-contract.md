@@ -50,7 +50,9 @@ Staff-only: **Ops** → `/app/ops`.
 
 ## Visual tokens (workspace)
 
-- Shell: `f9-cursor-shell`, `f9-dash-page`, `f9-dash-topbar`
+- Shell: `f9-cursor-shell`, `f9-dash-page`, `f9-dash-mobile-nav` (BL-042 deleted the
+  shell-owned `f9-dash-topbar` action row — every route carries its one action in
+  its own `WorkingHeader`)
 - Content stack: `f9-dash-content` > `f9-app-stack`
 - Panels: `f9-app-panel`, `f9-app-kicker`, `f9-panel-toolbar`
 - States: `f9-dash-state`, `f9-dash-state-*` modifiers
