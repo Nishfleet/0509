@@ -221,8 +221,13 @@ export async function deliverWeeklyDigest(env: AppEnv, input: DeliverWeeklyDiges
   }
   const isHeartbeat = input.items.length === 0 && Boolean(input.heartbeat);
   const emailTargets = config.emailEnabled
-    ? await resolveDigestEmailTargets(env, input.userId, accountEmail)
+    ? await resolveDigestEmailTargets(env, input.userId, accountEmail, {
+        requireUniqueExistingTarget: input.proofEmailSubject !== undefined,
+      })
     : [];
+  if (input.proofEmailSubject !== undefined && emailTargets.length !== 1) {
+    throw new Error("Gate C proof email target must resolve uniquely.");
+  }
   // "All quiet" heartbeats stay email-only: a WhatsApp template or Slack
   // ping saying nothing happened reads as noise on those channels.
   const whatsappTargets = !isHeartbeat && config.whatsappEnabled && isWhatsAppDeliveryCustomerFacing()
@@ -1958,19 +1963,32 @@ async function resolveDigestEmailTargets(
   env: AppEnv,
   userId: string,
   accountEmail: string | null,
+  options: { requireUniqueExistingTarget?: boolean } = {},
 ) {
-  if ("migrateAutoProvisionedEmailTargets" in deliveryData && accountEmail) {
+  if (
+    !options.requireUniqueExistingTarget &&
+    "migrateAutoProvisionedEmailTargets" in deliveryData &&
+    accountEmail
+  ) {
     const migrate = deliveryData.migrateAutoProvisionedEmailTargets;
     if (typeof migrate === "function") await migrate(env, userId, accountEmail);
   }
+  const targetLimit = options.requireUniqueExistingTarget ? 100 : 10;
   const allTargets = await listDeliveryTargets(env, userId, {
     watchlistId: null,
     channel: "email",
-    limit: 10,
+    limit: targetLimit,
   });
   const configuredTargets = allTargets.filter((target: DeliveryTargetRecord) =>
     isUsableEmailTarget(target, accountEmail),
   );
+
+  if (options.requireUniqueExistingTarget) {
+    if (allTargets.length === targetLimit || configuredTargets.length !== 1) {
+      throw new Error("Gate C proof email target must resolve uniquely.");
+    }
+    return configuredTargets;
+  }
 
   if (configuredTargets.length > 0) {
     return configuredTargets;
