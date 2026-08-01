@@ -20,7 +20,7 @@ function sha256(value: string) {
 }
 
 describe("BL-034 Presence landing language", () => {
-  it("keeps the loader and action byte-frozen", () => {
+  it("keeps the current loader and action byte-frozen", () => {
     const source = read(ROUTE_PATH);
     expect(
       sha256(
@@ -46,6 +46,8 @@ describe("BL-034 Presence landing language", () => {
     const source = read(ROUTE_PATH);
     for (const retired of [
       "DashboardPageHeader",
+      "ActionFeedback",
+      "EmptyState",
       "f9-app-panel",
       "f9-dashboard-grid",
       "f9-work-list",
@@ -59,6 +61,23 @@ describe("BL-034 Presence landing language", () => {
     expect(source).toContain('className="f9-pr-coverage"');
     expect(source).toContain("<RuledList");
     expect(source).toContain("<WorkingHeader");
+    expect(source).toContain("FeedbackStrip");
+    expect(source).toContain("Source coverage");
+    expect(source).toContain("Website and open-web");
+    expect(source).not.toContain("whole-internet scanning");
+  });
+
+  it("keeps #478's quota-aware tracking setup on the BL-034 markup", () => {
+    const source = read(ROUTE_PATH);
+    // Per-mode capacity must gate the select, not just plan entitlement.
+    expect(source).toContain("selfModeCanCreate");
+    expect(source).toContain("competitorModeCanCreate");
+    expect(source).toContain("hasAvailableTrackingMode");
+    expect(source).toContain("planAllowsEntityCreation && hasEntityCapacity && hasAvailableTrackingMode");
+    expect(source).not.toContain('defaultValue={data.competitorAllowed ? "competitor" : "self"}');
+    // Coverage rows stay honest: a reason, an action, or an explicit nothing.
+    expect(source).toContain("coverageNote");
+    expect(source).toContain("No additional action is available.");
   });
 
   it("spends no page green, one rule weight, and no rounded corner", () => {

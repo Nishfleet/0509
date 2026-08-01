@@ -13,7 +13,13 @@ import { RuledList, RuledRow } from "~/components/workspace/ruled-list";
 import { WorkingHeader } from "~/components/workspace/working-header";
 import { formatCoverageLabel, formatSourceCoverageStatus, formatTrackingMode } from "~/lib/presence-display";
 import { presenceCustomerErrorCopy, sanitizePresenceCoverageEntry } from "~/lib/presence-customer-copy";
-import type { PresenceConnectorId, PresenceTrackingMode } from "~/lib/presence-types";
+import type {
+  PresenceConnectorId,
+  PresenceItemRecord,
+  PresenceTrackingMode,
+  SourceTargetRecord,
+  TrackedEntityRecord,
+} from "~/lib/presence-types";
 
 export const meta = () => [{ title: "Presence Desk | Five to Nine" }];
 
@@ -219,6 +225,21 @@ export default function PresenceIndexRoute() {
     ? actionData
     : data.redirectFeedback;
   const planAllowsEntityCreation = data.competitorAllowed || data.selfAllowed;
+  // Per-mode capacity, ported from #478: a plan can still allow a tracking mode
+  // while that mode's own slots are full. Offering the exhausted mode in the
+  // select would be a form that cannot succeed, so each mode is gated on its
+  // own count and the whole form is gated on at least one mode surviving.
+  const selfEntityCount = data.snapshot.entities.filter(
+    (row: PresenceEntityRow) => row.entity.trackingMode === "self",
+  ).length;
+  const competitorEntityCount = data.snapshot.entities.filter(
+    (row: PresenceEntityRow) => row.entity.trackingMode === "competitor",
+  ).length;
+  const selfModeCanCreate =
+    data.selfAllowed && selfEntityCount < data.limits.maxSelfEntities;
+  const competitorModeCanCreate =
+    data.competitorAllowed && competitorEntityCount < data.limits.maxCompetitorEntities;
+  const hasAvailableTrackingMode = selfModeCanCreate || competitorModeCanCreate;
   const planLabel = `${data.plan.slice(0, 1).toUpperCase()}${data.plan.slice(1)}`;
   const entityCountLabel = `${data.snapshot.entities.length} ${
     data.snapshot.entities.length === 1 ? "entity" : "entities"
@@ -228,7 +249,8 @@ export default function PresenceIndexRoute() {
     data.limits.maxTrackedEntities - data.snapshot.entities.length,
   );
   const hasEntityCapacity = remainingEntitySlots > 0;
-  const canCreateEntity = planAllowsEntityCreation && hasEntityCapacity;
+  const canCreateEntity =
+    planAllowsEntityCreation && hasEntityCapacity && hasAvailableTrackingMode;
 
   return (
     <DashboardPage className="f9-wk-page f9-pr-page">
@@ -281,11 +303,11 @@ export default function PresenceIndexRoute() {
               <label className="f9-pr-field">
                 <span>Entity type</span>
                 <select
-                  defaultValue={data.competitorAllowed ? "competitor" : "self"}
+                  defaultValue={competitorModeCanCreate ? "competitor" : "self"}
                   name="trackingMode"
                 >
-                  {data.competitorAllowed ? <option value="competitor">Competitor</option> : null}
-                  {data.selfAllowed ? <option value="self">Your brand</option> : null}
+                  {competitorModeCanCreate ? <option value="competitor">Competitor</option> : null}
+                  {selfModeCanCreate ? <option value="self">Your brand</option> : null}
                 </select>
               </label>
               <label className="f9-pr-field">
@@ -323,8 +345,9 @@ export default function PresenceIndexRoute() {
               {planAllowsEntityCreation ? (
                 <>
                   <p>
-                    All {data.limits.maxTrackedEntities} tracked entity slots on the {planLabel} plan are in use.
-                    Open an entity below to remove it before adding another.
+                    {hasEntityCapacity
+                      ? `The available entity-type limits on the ${planLabel} plan are in use. Open an entity below before adding another.`
+                      : `All ${data.limits.maxTrackedEntities} tracked entity slots on the ${planLabel} plan are in use. Open an entity below to remove it before adding another.`}
                   </p>
                   <a className="f9-wk-btn" href="#presence-entities-title">
                     Review tracked entities
@@ -354,35 +377,61 @@ export default function PresenceIndexRoute() {
           </div>
           <dl className="f9-pr-coverage">
             {coverageRows.map(({ competitorEntry, selfEntry }) => {
+              const selfStatus = selfEntry
+                ? formatSourceCoverageStatus(selfEntry.status)
+                : "Unavailable";
+              const competitorStatus = formatSourceCoverageStatus(competitorEntry.status);
+              // Ported from #478. A row must never be silent: fall back from a
+              // shared reason, to per-side reasons, to the action needed, to an
+              // explicit "nothing more to do". Anything else leaves a gated
+              // source looking merely blank.
               const sharedReason =
                 selfEntry?.reasonMessage &&
                 selfEntry.reasonMessage === competitorEntry.reasonMessage
                   ? selfEntry.reasonMessage
                   : null;
+              const reason = sharedReason
+                ? sharedReason
+                : [
+                    selfEntry?.reasonMessage ? `Your brand: ${selfEntry.reasonMessage}` : null,
+                    competitorEntry.reasonMessage
+                      ? `Competitors: ${competitorEntry.reasonMessage}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ");
+              const sharedAction =
+                selfEntry?.actionNeeded && selfEntry.actionNeeded === competitorEntry.actionNeeded
+                  ? selfEntry.actionNeeded
+                  : null;
+              const coverageNote =
+                reason ||
+                sharedAction ||
+                [
+                  selfEntry?.actionNeeded ? `Your brand: ${selfEntry.actionNeeded}` : null,
+                  competitorEntry.actionNeeded
+                    ? `Competitors: ${competitorEntry.actionNeeded}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ") ||
+                "No additional action is available.";
               return (
                 <div key={competitorEntry.sourceId}>
                   <dt>{competitorEntry.label}</dt>
                   <dd>
-                    <span>
+                    {/* The visible pair is a two-column flex row, so the label
+                        and value are separate nodes. aria-label restores the
+                        single readable string #478 gives assistive tech. */}
+                    <span aria-label={`Your brand: ${selfStatus}`}>
                       <b>Your brand</b>
-                      {selfEntry ? formatSourceCoverageStatus(selfEntry.status) : "Unavailable"}
+                      {selfStatus}
                     </span>
-                    <span>
+                    <span aria-label={`Competitors: ${competitorStatus}`}>
                       <b>Competitors</b>
-                      {formatSourceCoverageStatus(competitorEntry.status)}
+                      {competitorStatus}
                     </span>
-                    {sharedReason ? (
-                      <small>{sharedReason}</small>
-                    ) : (
-                      <>
-                        {selfEntry?.reasonMessage ? (
-                          <small>Your brand: {selfEntry.reasonMessage}</small>
-                        ) : null}
-                        {competitorEntry.reasonMessage ? (
-                          <small>Competitors: {competitorEntry.reasonMessage}</small>
-                        ) : null}
-                      </>
-                    )}
+                    <small>{coverageNote}</small>
                   </dd>
                 </div>
               );
@@ -404,8 +453,10 @@ export default function PresenceIndexRoute() {
           </p>
         ) : (
           <RuledList aria-label="Tracked entities">
-            {data.snapshot.entities.map(({ entity, sources }) => {
-              const pollableSources = sources.filter((source) => source.connectorId === "website");
+            {data.snapshot.entities.map(({ entity, sources }: PresenceEntityRow) => {
+              const pollableSources = sources.filter(
+                (source: SourceTargetRecord) => source.connectorId === "website",
+              );
               return (
                 <RuledRow
                   key={entity.id}
@@ -414,7 +465,7 @@ export default function PresenceIndexRoute() {
                     pollableSources.length > 0
                       ? pollableSources
                           .map(
-                            (source) =>
+                            (source: SourceTargetRecord) =>
                               `${formatCoverageLabel(source.connectorId)}: ${formatCoverageLabel(source.coverageLabel)}`,
                           )
                           .join(" · ")
@@ -441,7 +492,7 @@ export default function PresenceIndexRoute() {
           </p>
         ) : (
           <div className="f9-pr-feed" role="list">
-            {data.snapshot.recentItems.map((item) => (
+            {data.snapshot.recentItems.map((item: PresenceRecentItem) => (
               <article className="f9-pr-feed-row" key={item.id} role="listitem">
                 <div>
                   <h3>
@@ -478,3 +529,9 @@ export function HydrateFallback() {
 export function ErrorBoundary({ error }: { error: unknown }) {
   return <DashboardRouteError error={error} />;
 }
+
+type PresenceEntityRow = {
+  entity: TrackedEntityRecord;
+  sources: SourceTargetRecord[];
+};
+type PresenceRecentItem = PresenceItemRecord;
