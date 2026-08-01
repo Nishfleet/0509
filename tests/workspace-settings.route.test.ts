@@ -124,7 +124,7 @@ describe("workspace settings route components", () => {
     const markup = renderToStaticMarkup(createElement(SourceAccessRoute));
 
     expect(markup).toContain("Source access");
-    expect(markup).toContain("Backup Meta access and tracking reliability");
+    expect(markup).toContain("Backup Meta ad checks");
     expect(markup).toContain("Tracking status");
     expect(markup).not.toContain("Meta coverage is beta");
     expect(markup).not.toContain("f9-beta-pill");
@@ -133,9 +133,9 @@ describe("workspace settings route components", () => {
     expect(markup).not.toContain("Recent tracking health");
     expect(markup).not.toContain("Create API key");
     expect(markup).not.toContain("Slack delivery");
-		expect(markup).toContain("showing your most recent results");
+    expect(markup).toContain("showing your most recent results");
     expect(markup).not.toContain("Cached live results");
-		expect(markup).not.toContain("degraded");
+    expect(markup).not.toContain("degraded");
   });
 
   it("locks source access controls and hides token metadata for workspace members", async () => {
@@ -159,13 +159,34 @@ describe("workspace settings route components", () => {
       await import("~/routes/app.source-access");
     const markup = renderToStaticMarkup(createElement(SourceAccessRoute));
 
-    expect(markup).toContain("Source access is managed by the account owner.");
+    expect(markup).toContain("The account owner manages source access");
     expect(markup).toContain(
-      "Only the account owner can add, retest, or disconnect backup source access.",
+      "Only the account owner can add, retest, or disconnect the backup token.",
     );
     expect(markup).not.toContain("9876");
-    expect(markup).not.toContain("Paste the full Meta access token here");
+    expect(markup).not.toContain("Paste the full Meta access token");
     expect(markup).not.toContain("Test and save access");
+  });
+
+  it("keeps the needs-setup source state as a red word, not a badge", async () => {
+    await mockRouter({
+      connection: null,
+      canManageSourceAccess: true,
+      discoveryStatus: {
+        status: "demo",
+        summary: "Tracking status will appear after the first check.",
+      },
+    });
+
+    const { default: SourceAccessRoute } =
+      await import("~/routes/app.source-access");
+    const markup = renderToStaticMarkup(createElement(SourceAccessRoute));
+
+    expect(markup).toContain(
+      '<span class="f9-bl040-status is-bad">Needs setup</span>',
+    );
+    expect(markup).not.toContain("f9-ed-stamp");
+    expect(markup).not.toContain("f9-beta-pill");
   });
 
   it("renders developer access without source-token or delivery setup", async () => {
@@ -179,10 +200,8 @@ describe("workspace settings route components", () => {
 
     expect(markup).toContain("Developer access");
     expect(markup).toContain("Connect exports and approved actions");
-    expect(markup).toContain("Tool setup");
-    expect(markup).toContain("Create a read key");
-    expect(markup).toContain("Enable write access only when needed");
-    expect(markup).toContain("Review and revoke keys");
+    expect(markup).toContain("Read keys reach saved workspace material");
+    expect(markup).toContain("Full secrets disappear after creation");
     expect(markup).toContain("Create API key");
     expect(markup).toContain("Allow approved account actions");
     expect(markup).toContain("/api/v1/watchlists/");
@@ -195,7 +214,9 @@ describe("workspace settings route components", () => {
   it("renders notifications without source-token or API-key setup", async () => {
     await mockRouter({
       emailDeliveryReady: true,
+      digestCadencePreference: "plan_default",
       showSlackDelivery: false,
+      slackDelivery: { plan: "starter", entitled: true },
       canManageWhatsAppDelivery: false,
       slackTargets: [],
       whatsappTargets: [],
@@ -214,9 +235,11 @@ describe("workspace settings route components", () => {
     const markup = renderToStaticMarkup(createElement(NotificationsRoute));
 
     expect(markup).toContain("Notifications");
-    expect(markup).toContain("Email digest delivery and alert channels");
-    expect(markup).toContain("Digest and alert delivery");
-    expect(markup).toContain("Open watchlists");
+    expect(markup).toContain(
+      "Choose how briefs and confirmed competitor changes reach your team.",
+    );
+    expect(markup).toContain("Delivery channels");
+    expect(markup).toContain("Tune on competitors");
     expect(markup).not.toContain("Ad Library API page");
     expect(markup).not.toContain("Test and save access");
     expect(markup).not.toContain("Create API key");
@@ -229,7 +252,7 @@ describe("workspace settings route components", () => {
       "WhatsApp is not available for this account yet",
     );
     expect(markup).not.toContain("Save WhatsApp delivery");
-    expect(markup).not.toContain("Delivery confirmation");
+    expect(markup).not.toContain("Delivery webhook");
     expect(markup).not.toContain("0/3 usable");
     expect(markup).not.toContain("No successful send yet");
   });

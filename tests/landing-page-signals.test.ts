@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { extractLandingPageSignals, LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION } from "~/lib/landing-page-signals.server";
+import {
+  extractLandingPageSignals,
+  hasMeaningfulLandingPageBodyText,
+  LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
+} from "~/lib/landing-page-signals.server";
 import { captureLandingPageSnapshot } from "~/lib/landing-pages.server";
 
 const DNS_JSON_ENDPOINT = "https://cloudflare-dns.com/dns-query";
@@ -36,7 +40,104 @@ function mockFetchWithDns(handler: typeof fetch) {
   });
 }
 
+function medianDuration(run: () => void) {
+  run();
+  const durations = Array.from({ length: 5 }, () => {
+    const startedAt = performance.now();
+    run();
+    return performance.now() - startedAt;
+  }).sort((left, right) => left - right);
+  return durations[Math.floor(durations.length / 2)] ?? 0;
+}
+
 describe("extractLandingPageSignals", () => {
+  it("treats entity-encoded loading text as an SPA shell placeholder", () => {
+    expect(
+      hasMeaningfulLandingPageBodyText(
+        '<body><div id="root">Loading&hellip;</div></body>',
+      ),
+    ).toBe(false);
+  });
+
+  it("decodes HTML entities once without corrupting literal entity text", () => {
+    expect(
+      extractLandingPageSignals(
+        "<button>Buy now &amp;hellip;</button>",
+      ),
+    ).toMatchObject({
+      ctaText: "Buy now &hellip;",
+    });
+  });
+
+  it("keeps body text after an XHTML-style empty head", () => {
+    expect(
+      hasMeaningfulLandingPageBodyText(
+        "<html><head/><body>Actual offer details</body></html>",
+      ),
+    ).toBe(true);
+  });
+
+  it("implicitly closes malformed head content when body flow starts", () => {
+    expect(
+      hasMeaningfulLandingPageBodyText(
+        "<html><head><title>Metadata only</title><body>Actual offer details</body></html>",
+      ),
+    ).toBe(true);
+    expect(
+      hasMeaningfulLandingPageBodyText(
+        "<html><head><title>Metadata only</title><body>Loading…</body></html>",
+      ),
+    ).toBe(false);
+  });
+
+  it("implicitly closes malformed head content when the body tag is omitted", () => {
+    expect(
+      hasMeaningfulLandingPageBodyText(
+        '<html><head><meta name="description" content="Metadata only"><title>Metadata only</title><main>Actual offer details</main></html>',
+      ),
+    ).toBe(true);
+    expect(
+      hasMeaningfulLandingPageBodyText(
+        '<html><head><meta name="description" content="Metadata only"><title>Metadata only</title><div>Loading…</div></html>',
+      ),
+    ).toBe(false);
+  });
+
+  it("does not treat tag-looking head comments as body flow", () => {
+    expect(
+      hasMeaningfulLandingPageBodyText(
+        "<html><head><!-- <div>Fake comment content</div> --><body>Loading…</body></html>",
+      ),
+    ).toBe(false);
+    expect(
+      hasMeaningfulLandingPageBodyText(
+        "<html><head><!-- <main>Fake comment content</main> --><body>Actual offer details</body></html>",
+      ),
+    ).toBe(true);
+  });
+
+  it("does not treat tag-looking head container content as body flow", () => {
+    const hiddenHeadContent = `
+      <script>window.shell = "<div>Fake script content</div>";</script>
+      <style>.offer::before { content: "<h1>Fake style content</h1>"; }</style>
+      <template>
+        <script>window.template = "<main>Fake template script</main>";</script>
+        <template><main>Fake template content</main></template>
+      </template>
+    `;
+
+    expect(
+      hasMeaningfulLandingPageBodyText(
+        `<html><head>${hiddenHeadContent}<main>Loading…</main></html>`,
+      ),
+    ).toBe(false);
+    expect(
+      hasMeaningfulLandingPageBodyText(
+        `<html><head>${hiddenHeadContent}<main>Actual offer details</main></html>`,
+      ),
+    ).toBe(true);
+  });
+
   it("extracts CTA text from a primary button", () => {
     const html = `
       <html>
@@ -87,6 +188,392 @@ describe("extractLandingPageSignals", () => {
     expect(extractLandingPageSignals(html)).toMatchObject({
       ctaText: "Get Offer",
       formPresent: true,
+    });
+  });
+
+  it("extracts submit CTA values regardless of HTML attribute order", () => {
+    const html = `
+      <form>
+        <input value="Get Offer" class="primary" type="submit" />
+      </form>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Get Offer",
+      formPresent: true,
+    });
+  });
+
+  it("extracts unquoted submit attributes", () => {
+    const html = `
+      <form>
+        <input value=Submit type=submit />
+      </form>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Submit",
+      formPresent: true,
+    });
+  });
+
+  it("keeps the opposite quote inside a quoted submit value", () => {
+    const html = `
+      <form>
+        <input type='submit' value="Buy now — customer's choice" />
+      </form>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Buy now — customer's choice",
+      formPresent: true,
+    });
+  });
+
+  it("extracts decimal prices in non-INR currencies", () => {
+    const html = `
+      <main>
+        <p>Launch price $49.99 for this week</p>
+        <a href="/checkout">Buy now</a>
+      </main>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Buy now",
+      priceText: "$49.99",
+    });
+  });
+
+  it("ignores non-visible script data before matching the displayed price", () => {
+    const html = `
+      <script>window.cfg = { price: "$9.99" };</script>
+      <style>.price::before { content: "$19.99"; }</style>
+      <main>
+        <p>Launch price $49.99 for this week</p>
+      </main>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      priceText: "$49.99",
+    });
+  });
+
+  it("treats XHTML-style script slashes as non-void HTML markup", () => {
+    const html = `
+      <script />window.offer = "$9.99";</script>
+      <main>
+        <p>Launch price $49.99 for this week</p>
+        <button>Buy now</button>
+      </main>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Buy now",
+      priceText: "$49.99",
+      formPresent: false,
+    });
+  });
+
+  it("ignores commented-out CTA, price, and form markup", () => {
+    const html = `
+      <main>
+        <!--
+          <a href="/checkout">Buy now</a>
+          <p>Old price $9.99</p>
+          <form action="/lead"><input type="submit" value="Get offer"></form>
+        -->
+        <p>Current product details.</p>
+      </main>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: null,
+      priceText: null,
+      formPresent: false,
+    });
+  });
+
+  it("keeps noscript fallback signals for raw fetch captures", () => {
+    const html = `
+      <noscript>
+        <a href="/checkout">Shop now</a>
+        <p>Fallback price $39.99</p>
+        <form action="/lead"><input name="email"></form>
+      </noscript>
+    `;
+
+    expect(extractLandingPageSignals(html, { documentMode: "raw" })).toMatchObject({
+      ctaText: "Shop now",
+      priceText: "$39.99",
+      formPresent: true,
+    });
+  });
+
+  it("ignores noscript fallback signals in rendered captures", () => {
+    const html = `
+      <noscript>
+        <a href="/checkout">Shop now</a>
+        <p>Fallback price $39.99</p>
+      </noscript>
+      <main>
+        <button>Book demo</button>
+        <p>Team plan $79.99</p>
+      </main>
+    `;
+
+    expect(extractLandingPageSignals(html, { documentMode: "rendered" })).toMatchObject({
+      ctaText: "Book demo",
+      priceText: "$79.99",
+    });
+  });
+
+  it("reads submit inputs whose quoted attributes contain greater-than signs", () => {
+    const html = `
+      <input data-rule="quantity > 1" value="Get started" type="submit">
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Get started",
+    });
+  });
+
+  it("treats the remainder of malformed unclosed script content as non-visible", () => {
+    const html = `
+      <script>
+        window.cfg = { price: "$9.99" };
+        ${"<script>".repeat(2_000)}
+        <main>Displayed-looking but still script content $49.99</main>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: null,
+      priceText: null,
+      formPresent: false,
+    });
+  });
+
+  it("keeps malformed quoted-tag scanning near-linear", () => {
+    const smallHtml = `<input title="${"<".repeat(12_500)}`;
+    const largeHtml = `<input title="${"<".repeat(50_000)}`;
+
+    expect(extractLandingPageSignals(largeHtml)).toMatchObject({
+      ctaText: null,
+      priceText: null,
+      formPresent: false,
+    });
+    const smallDuration = medianDuration(() => {
+      extractLandingPageSignals(smallHtml);
+    });
+    const largeDuration = medianDuration(() => {
+      extractLandingPageSignals(largeHtml);
+    });
+    expect(largeDuration / Math.max(smallDuration, 0.1)).toBeLessThan(10);
+  }, 3_000);
+
+  it("does not rescan overlapping windows of repeated malformed tags", () => {
+    const smallHtml = "<input".repeat(1_250);
+    const largeHtml = "<input".repeat(5_000);
+
+    expect(extractLandingPageSignals(largeHtml)).toMatchObject({
+      ctaText: null,
+      priceText: null,
+      formPresent: false,
+    });
+    const smallDuration = medianDuration(() => {
+      extractLandingPageSignals(smallHtml);
+    });
+    const largeDuration = medianDuration(() => {
+      extractLandingPageSignals(largeHtml);
+    });
+    expect(largeDuration / Math.max(smallDuration, 0.1)).toBeLessThan(10);
+  }, 3_000);
+
+  it("recovers a valid submit tag after a malformed quoted tag", () => {
+    const html = `
+      <img alt="unterminated attribute
+      <input name="email" type="submit" value="Get started">
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Get started",
+      formPresent: true,
+    });
+  });
+
+  it("keeps less-than comparisons inside quoted attributes", () => {
+    const html = `
+      <script data-rule="quantity<10">window.offer = "$9.99";</script>
+      <button>Book demo</button>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Book demo",
+      priceText: null,
+      formPresent: false,
+    });
+  });
+
+  it("keeps less-than comparisons inside multiline quoted attributes", () => {
+    const html = `
+      <script data-rule="first line
+        literal<word">window.offer = "$9.99";</script>
+      <button>Book demo</button>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Book demo",
+      priceText: null,
+      formPresent: false,
+    });
+  });
+
+  it("recovers a valid tag inside a single-line unterminated quoted attribute", () => {
+    const html = `<img alt='unterminated <input name="email" type="submit" value="Get started">`;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Get started",
+      formPresent: true,
+    });
+  });
+
+  it("removes hidden elements whose opening tag exceeds the normal scan bound", () => {
+    const html = `
+      <script data-payload="${"x".repeat(5_000)}">
+        window.offer = "$9.99";
+      </script>
+      <main>Visible price $49.99</main>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      priceText: "$49.99",
+      ctaText: null,
+      formPresent: false,
+    });
+  });
+
+  it("detects unquoted submit controls with quote-complicated attributes", () => {
+    const html = `
+      <input name="email" placeholder="Work email">
+      <input data-rule="quantity > 1" type=submit value="Get started">
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Get started",
+      formPresent: true,
+    });
+  });
+
+  it("does not treat the name attribute token itself as a lead field", () => {
+    const html = `
+      <input name="quantity" type="number">
+      <input type="submit" value="Buy now">
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Buy now",
+      formPresent: false,
+    });
+  });
+
+  it("uses semantic input attributes when the field name is opaque", () => {
+    const html = `
+      <input name="entry.123456" autocomplete="email">
+      <input type="submit" value="Get started">
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Get started",
+      formPresent: true,
+    });
+  });
+
+  it("detects phone lead forms from the language-independent tel type", () => {
+    const html = `
+      <input type="tel" name="contact" placeholder="+49 151 123456">
+      <input type="submit" value="Get started">
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Get started",
+      formPresent: true,
+    });
+  });
+
+  it("detects lead fields whose semantic names use camelCase or separators", () => {
+    const html = `
+      <input name="firstName">
+      <input id="user_email">
+      <input type="submit" value="Get started">
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Get started",
+      formPresent: true,
+    });
+  });
+
+  it("keeps content after a hidden opening tag with an unquoted less-than value", () => {
+    const html = `
+      <script data-rule=quantity<breakpoint>window.offer = "$9.99";</script>
+      <button>Buy now</button>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Buy now",
+      priceText: null,
+      formPresent: false,
+    });
+  });
+
+  it("keeps submit controls whose unquoted attributes contain less-than signs", () => {
+    const html = `
+      <input name="email">
+      <input data-rule=quantity<breakpoint type="submit" value="Buy now">
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Buy now",
+      formPresent: true,
+    });
+  });
+
+  it("recovers a tag that starts near the end of a failed unquoted scan window", () => {
+    const html = `
+      <div data-rule=${"x".repeat(4_080)}<input name="email" type="submit" value="Get started">
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Get started",
+      formPresent: true,
+    });
+  });
+
+  it("prioritizes hidden tags when recovering an unterminated quoted tag", () => {
+    const html = `
+      <div alt='broken <script>window.offer = "$9.99";</script>
+      <button>Buy now</button>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Buy now",
+      priceText: null,
+      formPresent: false,
+    });
+  });
+
+  it("prioritizes the active hidden element's closing tag during recovery", () => {
+    const html = `
+      <script>
+        if (count<items.length) render();
+        // Don't re-render
+      </script>
+      <button>Buy now</button>
+    `;
+
+    expect(extractLandingPageSignals(html)).toMatchObject({
+      ctaText: "Buy now",
+      priceText: null,
+      formPresent: false,
     });
   });
 
@@ -162,6 +649,31 @@ describe("captureLandingPageSnapshot", () => {
     expect(put).not.toHaveBeenCalled();
   });
 
+  it("keeps a readable fetch capture when optional R2 persistence fails", async () => {
+    mockFetchWithDns(
+      vi.fn(async () =>
+        new Response(
+          "<html><head><title>Readable offer</title></head><body><button>Buy now</button></body></html>",
+          { status: 200 },
+        ),
+      ) as never,
+    );
+    const put = vi.fn().mockRejectedValue(new Error("R2 unavailable"));
+
+    const snapshot = await captureLandingPageSnapshot(
+      { LANDING_PAGE_ARTIFACTS: { put } as unknown as R2Bucket },
+      "https://example.com/offer",
+    );
+
+    expect(snapshot).toMatchObject({
+      rawHeadline: "Readable offer",
+      artifactKey: null,
+      metadata: {
+        captureWarningCodes: ["artifact_persistence_failed"],
+      },
+    });
+  });
+
   it("releases fetch timeout timers on redirect responses without a usable location", async () => {
     vi.useFakeTimers();
     mockFetchWithDns(
@@ -192,5 +704,24 @@ describe("captureLandingPageSnapshot", () => {
 
     expect(snapshot).toBeNull();
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("reports a stable reason code when a blocked landing page cannot be captured", async () => {
+    mockFetchWithDns(
+      vi.fn(async () => new Response("forbidden", { status: 403 })) as never,
+    );
+    const onFailure = vi.fn();
+
+    const snapshot = await captureLandingPageSnapshot(
+      {},
+      "https://example.com/glow",
+      { allowRenderedFallback: false, onFailure },
+    );
+
+    expect(snapshot).toBeNull();
+    expect(onFailure).toHaveBeenCalledWith({
+      reasonCode: "landing_blocked",
+      metadata: { fetchStatus: 403 },
+    });
   });
 });

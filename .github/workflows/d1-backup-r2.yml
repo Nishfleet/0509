@@ -2,38 +2,114 @@ name: D1 backup to R2
 
 on:
   workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact main commit authorized for the production backup
+        required: true
+        type: string
 
 concurrency:
-  group: d1-backup-r2
+  group: 0509-production-provider-mutations
   cancel-in-progress: false
+  queue: max
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
+  authorize_release:
+    name: Authorize exact backup candidate
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      sha: ${{ steps.authorize.outputs.sha }}
+    steps:
+      - name: Authorize backup request
+        id: authorize
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+        run: |
+          set -euo pipefail
+          sha_pattern='^[a-f0-9]{40}$'
+          test "$GITHUB_REPOSITORY" = "nish3451/0509"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+          test "$GITHUB_RUN_ATTEMPT" = "1"
+          [[ "$GITHUB_SHA" =~ $sha_pattern ]]
+          [[ "$EXPECTED_SHA" =~ $sha_pattern ]]
+          test "$EXPECTED_SHA" = "$GITHUB_SHA"
+          printf 'sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+
   backup:
-    if: github.repository == 'nish3451/0509' && github.ref == 'refs/heads/main'
-    runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}
+    if: needs.authorize_release.result == 'success'
+    needs: authorize_release
+    runs-on: ubuntu-latest
     timeout-minutes: 300
-    environment: d1-backup-r2
+    environment: production
+    permissions:
+      contents: read
     env:
       D1_DATABASE_NAME: "0509"
       R2_BACKUP_BUCKET: "0509-landing-page-artifacts"
-      D1_BACKUP_LOCAL_DIRECTORY: ${{ runner.temp }}/0509-d1-backups-${{ github.run_id }}-${{ github.run_attempt }}
+      PINNED_SHA: ${{ needs.authorize_release.outputs.sha }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.authorize_release.outputs.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify pinned backup candidate
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/ci-verify-production-candidate.sh
+      - name: Bind run-scoped backup directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'D1_BACKUP_LOCAL_DIRECTORY=%s\n' \
+            "$RUNNER_TEMP/0509-d1-backups-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            >> "$GITHUB_ENV"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: ".node-version"
-          cache: npm
-      - run: npm ci --ignore-scripts
-      - run: node scripts/validate-d1-backup.mjs
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
+      - run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
+      - run: ./scripts/deploy-window-lock.sh run -- node scripts/validate-d1-backup.mjs
+      - name: Acquire provider lane
+        shell: bash
+        env:
+          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
+        run: ./scripts/deploy-window-lock.sh acquire
+      - name: Reconfirm frozen main before backup mutation
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/ci-verify-production-candidate.sh
       - name: Run approved D1-to-R2 backup
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           D1_BACKUP_AUTOMATION_APPROVED: "0509-weekly-d1-to-r2"
-        run: npm run backup:d1:r2
+        run: node scripts/d1-backup-to-r2.mjs
       - name: Remove run-scoped plaintext backup files
         if: always()
         run: node scripts/d1-backup-local-cleanup.mjs
+      - name: Release provider lane
+        if: always()
+        shell: bash
+        env:
+          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
+        run: ./scripts/deploy-window-lock.sh release
+      - name: Remove provider-lane capability file
+        if: always()
+        shell: bash
+        env:
+          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
+        run: |
+          umask 077
+          rm -f -- "$DEPLOY_WINDOW_CAPABILITY_FILE"

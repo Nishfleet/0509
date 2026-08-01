@@ -148,7 +148,7 @@ them.
 
 **Phases. Each one is a Nish gate before the next.**
 
-### BL-030 — P0: DNA foundation + the two reference surfaces 🚧 IN PROGRESS
+### BL-030 — P0: DNA foundation + the two reference surfaces ✅ LANDED (PR #421)
 **Owns:** the new `--wk-*` token layer and `.f9-wk-*` primitives in
 `app/app.css`, `app/components/workspace/*`, `app/components/dashboard-shell.tsx`,
 `app/lib/dashboard-navigation.ts`, `app/routes/app.watchlists.tsx`,
@@ -171,6 +171,17 @@ the `SubmitButton` pending prop, their regression tests).
 ### BL-031 — P1: the daily surfaces
 Briefs, Search, Collections, Reports (in-app), Presence — each its own package
 built on the BL-030 primitives, each with its own intent audit.
+
+- **`/search` — 🚧 IN REVIEW.** The results list is a ruled list, the selected
+  ad is one Linear-peek evidence pane instead of a summary card plus a detail
+  aside rendering the same header twice, the search form is DNA frames with a
+  refine disclosure that stays shut until a filter is on, and the pre-search
+  state is a sentence and one text action (no specimen). The second palette,
+  the page gradient and the UPPERCASE headings that `.f9-search-page` pinned
+  onto this route are deleted with a ledger. Report:
+  `0509-audit-artifacts-bl031/BUILD-REPORT.md`.
+- Briefs, Collections + Reports (in-app), Presence, and the full detail-surface
+  rebuild remain, in that order.
 
 ### BL-032 — P2: settings cluster + secondary desks
 Account, team, client rooms, notifications, shares, source access, developer

@@ -304,6 +304,10 @@ function createContext() {
 
 async function mockRouter(overrides: {
   actionData?: unknown;
+  fetcher?: {
+    state: "idle" | "submitting" | "loading";
+    formData?: FormData;
+  };
   loaderData?: unknown;
   searchParams?: URLSearchParams;
 }) {
@@ -326,9 +330,9 @@ async function mockRouter(overrides: {
       // WP-42: pause/resume submits through a fetcher; render it as a plain
       // form in static markup.
       useFetcher: vi.fn().mockReturnValue({
-        state: "idle",
+        state: overrides.fetcher?.state ?? "idle",
         data: undefined,
-        formData: undefined,
+        formData: overrides.fetcher?.formData,
         Form: ({ children, ...props }: MockFormProps) =>
           React.createElement("form", props, children),
       }),
@@ -352,10 +356,15 @@ async function mockRouter(overrides: {
  * the detail URL-addressable, so a render helper has to name the tab the way
  * a customer's URL does.
  */
-async function renderWatchlistsRoute(loaderData: unknown, tab?: string) {
+async function renderWatchlistsRoute(
+  loaderData: unknown,
+  tab?: string,
+  fetcher?: { state: "idle" | "submitting" | "loading"; formData?: FormData },
+) {
   vi.resetModules();
   await mockRouter({
     actionData: undefined,
+    fetcher,
     loaderData,
     searchParams: new URLSearchParams(
       tab ? `watchlist=watch-1&tab=${tab}` : "watchlist=watch-1",
@@ -532,6 +541,17 @@ describe("watchlists route loader", () => {
     vi.doMock("~/lib/ad-source.server", () => ({
       resolveCommercialAdSourceStatus: vi.fn().mockResolvedValue(discoveryStatus),
     }));
+    vi.doMock("~/lib/watchlist-board.server", () => ({
+      loadWatchBoardCaptureWindow: vi.fn().mockRejectedValue(new Error("rollup unavailable")),
+      emptyWatchBoardCaptureWindow: vi.fn().mockReturnValue({
+        endDate: "2026-04-18",
+        windowDays: 30,
+        days: {},
+        capturedChanges: {},
+        totalCapturedChanges: 0,
+        failedChecks: {},
+      }),
+    }));
     vi.doMock("~/lib/data.server", () => ({
       getWatchlist,
       getWatchlistDeliveryConfig: vi.fn().mockResolvedValue(watchlistDeliveryConfig),
@@ -553,12 +573,14 @@ describe("watchlists route loader", () => {
       selectedWatchlist: unknown;
       watchlists: unknown[];
       captureWindow: { windowDays: number; days: Record<string, unknown> };
+      captureWindowDegraded: boolean;
       effectiveDeliveryConfig: { timezone: string | null };
     };
 
     expect(board.selectedWatchlist).toBeNull();
     expect(board.watchlists).toEqual([watchlist]);
     expect(board.captureWindow.windowDays).toBe(30);
+    expect(board.captureWindowDegraded).toBe(true);
     // The board is the default view, so it must resolve the workspace
     // delivery timezone: "Next check" would otherwise print UTC beside a
     // viewer-local "Last check" and disagree with /app/dashboard.
@@ -2266,6 +2288,7 @@ describe("watchlists route rendering", () => {
           totalCapturedChanges: 2,
           failedChecks: {},
         },
+        captureWindowDegraded: true,
         eventCandidates: [],
         events: [],
         runs: [],
@@ -2310,7 +2333,12 @@ describe("watchlists route rendering", () => {
     expect(markup.match(/class="f9-wk-row(?: [^"]*)?"/g)).toHaveLength(2);
     expect(markup).toContain("Nykaa watch");
     expect(markup).toContain("Paused rival");
-    expect(markup).toContain("2 changes captured in the last 30 days.");
+    expect(markup).toContain("Recent change and failed-check totals could not be loaded.");
+    expect(markup).toContain("Recent change and failed-check totals are unavailable.");
+    expect(markup).toContain("Recent totals are unavailable.");
+    expect(markup).not.toContain("2 changes captured in the last 30 days.");
+    expect(markup).not.toContain("Checked, and nothing has changed");
+    expect(markup).not.toContain("competitor-detail");
     expect(markup).toContain("Paused. No checks run and the history stays.");
     expect(markup).not.toContain("f9-ed-capture-strip");
     expect(markup).not.toContain("f9-ed-ticker");
@@ -2319,10 +2347,8 @@ describe("watchlists route rendering", () => {
     expect(markup.match(/class="f9-wk-btn"/g)).toHaveLength(1);
     expect(markup).toContain("Add competitor");
     expect(markup).not.toContain("f9-ed-cta--rank1");
-    // The five state filters are navigation, with honest counts.
-    expect(markup).toContain('class="f9-wk-tab is-on"');
-    expect(markup).toContain("Caught");
-    expect(markup).toContain("Paused");
+    // Aggregate-derived state filters stand down while their rollup is unavailable.
+    expect(markup).not.toContain('class="f9-wk-tab');
     // The detail pane and the full record stay closed until a row is opened.
     expect(markup).not.toContain("f9-wk-detail");
     expect(markup).not.toContain("Evidence and alerts");
@@ -2451,11 +2477,112 @@ describe("watchlists route rendering", () => {
     trendDailyActivity: [],
   };
 
+  it("renders a selected competitor as one entity-owned detail surface", async () => {
+    const markup = await renderWatchlistsRoute(selectedPanelLoaderData);
+
+    expect(markup).toContain('<h1 class="f9-wk-title">Nykaa watch</h1>');
+    expect(markup).toContain('href="/app/watchlists">All competitors</a>');
+    expect(markup.match(/id="competitor-detail"/g)).toHaveLength(1);
+    expect(markup).not.toContain('aria-label="Competitors"');
+    // BL-035 keeps a split INSIDE the detail (panel + fact rail). What must be
+    // gone is the board's list/peek split that used to sit under it.
+    expect(markup).not.toContain('class="f9-wk-split is-single"');
+    expect(markup).not.toContain('class="f9-wk-split-list"');
+    expect(markup).toContain('class="f9-wk-split is-wide f9-bl035-split"');
+  });
+
+  it("does not turn a failed capture-window rollup into a quiet or zero finding", async () => {
+    const markup = await renderWatchlistsRoute({
+      ...selectedPanelLoaderData,
+      captureWindowDegraded: true,
+    });
+
+    expect(markup).toContain("Recent aggregate totals are unavailable");
+    expect(markup).toContain("Unavailable — refresh to try again");
+    expect(markup).not.toContain("Checked, and nothing has changed in 30 days.");
+    expect(markup).not.toContain('class="f9-ed-number-value">0</p>');
+    // The status strip is gone in BL-035, so the same statement is carried by
+    // the working header's context line and the caught number card.
+    expect(markup).toContain("Recent totals unavailable");
+    expect(markup).toContain('class="f9-ed-number-value">Unavailable</p>');
+  });
+
+  it("does not promise automatic checks while source access is blocked", async () => {
+    const markup = await renderWatchlistsRoute(
+      {
+        ...selectedPanelLoaderData,
+        discoveryStatus: {
+          status: "demo",
+          provider: "meta_library_browser",
+          mode: "demo",
+          summary: "Live source access is unavailable.",
+          lastCheckedAt: null,
+          lastErrorCode: null,
+          lastErrorMessage: null,
+        },
+      },
+      "setup",
+    );
+
+    expect(markup).toContain("Automatic checks are waiting for source access");
+    expect(markup).not.toContain("Automatic checks are on.");
+    expect(markup).toContain('href="/app/source-access"');
+  });
+
+  it("keeps action feedback text from becoming an external navigation sink", async () => {
+    await mockRouter({
+      actionData: { ok: true, message: "http://evil.example/phish" },
+      loaderData: selectedPanelLoaderData,
+      searchParams: new URLSearchParams("watchlist=watch-1"),
+    });
+    const { default: WatchlistsRoute } = await import("~/routes/app.watchlists");
+    const markup = renderToStaticMarkup(createElement(WatchlistsRoute));
+
+    expect(markup).toContain("http://evil.example/phish");
+    expect(markup).not.toContain('href="http://evil.example/phish"');
+    expect(markup).not.toContain('target="_blank"');
+  });
+
+  it("escapes watchlist and event text as markup-safe customer content", async () => {
+    const hostileWatchlist = {
+      ...watchlist,
+      name: '<img src=x onerror="alert(1)">',
+      targetLabel: "<script>alert(2)</script>",
+    };
+    const markup = await renderWatchlistsRoute({
+      ...selectedPanelLoaderData,
+      watchlists: [hostileWatchlist],
+      selectedWatchlist: hostileWatchlist,
+      events: recentEvents.map((event) => ({
+        ...event,
+        summary: "<b>untrusted event</b>",
+      })),
+    });
+
+    expect(markup).toContain("&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
+    expect(markup).toContain("&lt;script&gt;alert(2)&lt;/script&gt;");
+    expect(markup).toContain("&lt;b&gt;untrusted event&lt;/b&gt;");
+    expect(markup).not.toContain("<img src=x");
+    expect(markup).not.toContain("<script>alert(2)</script>");
+  });
+
   // BL-007 (brief §6.4): the opened competitor is five URL-addressable
   // surfaces, not one scroll. Each assertion below now names the tab the
   // customer has to be on to see it.
   it("opens the competitor on the change feed with the tab bar and the fact rail", async () => {
     const markup = await renderWatchlistsRoute(selectedPanelLoaderData);
+
+    // BL-035: `?watchlist=` is its own working surface. The old board + peek
+    // + below-board BL-007 record stack is gone; the entity owns the header,
+    // tabs follow immediately, and there is one content split.
+    expect(markup).toContain("<h1 class=\"f9-wk-title\">Nykaa watch</h1>");
+    expect(markup).toContain("All competitors");
+    expect(markup).toContain('class="f9-bl035-detail"');
+    expect(markup).not.toContain('aria-label="Competitors"');
+    expect(markup).not.toContain("f9-wk-detail");
+    expect(markup).not.toContain("f9-wk-record");
+    expect(markup).not.toContain("f9-ed-detail-head");
+    expect(markup).not.toContain("f9-ed-status-strip");
 
     // The tab bar is real navigation: five links, fixed order, the active one
     // marked with aria-current and not by ink alone (brief §10).
@@ -2470,7 +2597,9 @@ describe("watchlists route rendering", () => {
       expect(markup).toContain(`href="${href}"`);
       expect(markup).toContain(label);
     }
-    expect(markup).toContain('aria-current="page"');
+    expect(markup).toMatch(
+      /<a(?=[^>]*aria-current="page")(?=[^>]*class="f9-wk-tab is-on")(?=[^>]*href="\/app\/watchlists\?watchlist=watch-1")[^>]*><span>What changed<\/span><\/a>/,
+    );
 
     // The change feed is the default panel.
     expect(markup).toContain("What changed");
@@ -2503,6 +2632,232 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain(
       'href="/app/reports/watchlist:watch-1"',
     );
+  });
+
+  it.each([
+    {
+      plan: "free",
+      share: false,
+      export: false,
+      report: false,
+      primary: "Upgrade plan",
+    },
+    {
+      plan: "scout",
+      share: false,
+      export: false,
+      report: false,
+      primary: "Upgrade plan",
+    },
+    {
+      plan: "starter",
+      share: true,
+      export: true,
+      report: false,
+      primary: "Upgrade plan",
+    },
+    {
+      plan: "agency",
+      share: true,
+      export: true,
+      report: true,
+      primary: "Refresh now",
+    },
+  ])(
+    "re-proves the completed active $plan action contract",
+    async ({ plan, share, export: canExport, report, primary }) => {
+      const markup = await renderWatchlistsRoute(
+        { ...selectedPanelLoaderData, plan },
+        "evidence",
+      );
+
+      expect(markup.match(/class="f9-wk-btn"/g)).toHaveLength(1);
+      expect(markup).toContain(`>${primary}</`);
+      expect(markup.includes("Share summary")).toBe(share);
+      expect(markup.includes("Export CSV")).toBe(canExport);
+      expect(markup.includes("Export JSON")).toBe(canExport);
+      expect(markup.includes("Package for client")).toBe(report);
+      expect(markup).not.toContain("f9-ed-detail-head");
+      expect(markup).not.toContain("f9-ed-status-strip");
+    },
+  );
+
+  it.each([
+    { plan: "free", hasLockedCapabilities: true },
+    { plan: "scout", hasLockedCapabilities: true },
+    { plan: "starter", hasLockedCapabilities: true },
+    { plan: "agency", hasLockedCapabilities: false },
+  ])(
+    "makes resume the one Rank-1 action for a paused $plan competitor",
+    async ({ plan, hasLockedCapabilities }) => {
+      const paused = { ...watchlist, isActive: false };
+      const markup = await renderWatchlistsRoute(
+        {
+          ...selectedPanelLoaderData,
+          plan,
+          watchlists: [paused],
+          selectedWatchlist: paused,
+        },
+        "setup",
+      );
+
+      expect(markup.match(/class="f9-wk-btn"/g)).toHaveLength(1);
+      expect(markup).toContain(">Resume watching</button>");
+      expect(markup).toContain(
+        "Watching is paused. The evidence already on file stays here.",
+      );
+      expect(markup.includes(">Upgrade plan</a>")).toBe(hasLockedCapabilities);
+      expect(markup).not.toContain(">Refresh now</button>");
+    },
+  );
+
+  it("keeps manual refresh for an active Agency competitor before its first successful scan", async () => {
+    const firstScanWatchlist = { ...watchlist, lastScannedAt: null };
+    const markup = await renderWatchlistsRoute(
+      {
+        ...selectedPanelLoaderData,
+        plan: "agency",
+        watchlists: [firstScanWatchlist],
+        selectedWatchlist: firstScanWatchlist,
+      },
+    );
+
+    expect(markup.match(/>Refresh now<\/button>/g)).toHaveLength(1);
+    expect(markup).not.toContain(">Upgrade plan</a>");
+  });
+
+  it("shows the fetcher-backed resume pending state in the working header", async () => {
+    const paused = { ...watchlist, isActive: false };
+    const formData = new FormData();
+    formData.set("intent", "resume-watchlist");
+    formData.set("watchlistId", paused.id);
+    const markup = await renderWatchlistsRoute(
+      {
+        ...selectedPanelLoaderData,
+        plan: "agency",
+        watchlists: [paused],
+        selectedWatchlist: paused,
+      },
+      "setup",
+      { state: "submitting", formData },
+    );
+
+    expect(markup).toMatch(
+      /<button(?=[^>]*aria-busy="true")(?=[^>]*disabled)[^>]*>[\s\S]*?Resuming…<\/button>/,
+    );
+  });
+
+  it("keeps repeated failures as page state and points to the Evidence section", async () => {
+    const failedRuns = Array.from({ length: 3 }, (_, index) => ({
+      ...recentRuns[0],
+      id: `failed-${index}`,
+      status: "failed" as const,
+      finishedAt: `2026-04-18T0${8 - index}:01:00.000Z`,
+      errorCode: "source_timeout",
+      errorMessage: "private provider detail",
+    }));
+    const markup = await renderWatchlistsRoute({
+      ...selectedPanelLoaderData,
+      runs: failedRuns,
+      captureWindow: {
+        endDate: "2026-04-18",
+        windowDays: 30,
+        days: {},
+        capturedChanges: {},
+        totalCapturedChanges: 0,
+        failedChecks: { "watch-1": 3 },
+      },
+    });
+
+    expect(markup).toContain("the last 3 checks failed");
+    expect(markup).toContain("recent errors are listed under Evidence");
+    expect(markup).not.toContain("private provider detail");
+  });
+
+  it("keeps the entity detail coherent if the parallel board list misses its selected row", async () => {
+    const markup = await renderWatchlistsRoute({
+      ...selectedPanelLoaderData,
+      watchlists: [],
+    });
+
+    expect(markup).toContain("<h1 class=\"f9-wk-title\">Nykaa watch</h1>");
+    expect(markup).toContain("All competitors");
+    expect(markup).toContain('aria-label="Competitor sections"');
+    expect(markup).toContain('class="f9-bl035-detail"');
+    expect(markup).not.toContain('aria-label="Competitors"');
+  });
+
+  it("keeps blocked source access actionable in the compressed working header", async () => {
+    const markup = await renderWatchlistsRoute(
+      {
+        ...selectedPanelLoaderData,
+        discoveryStatus: {
+          status: "demo",
+          provider: "meta_library_browser",
+          mode: "demo",
+          summary: "Live source access is unavailable.",
+          lastCheckedAt: null,
+          lastErrorCode: null,
+          lastErrorMessage: null,
+        },
+      },
+      "setup",
+    );
+
+    expect(markup).toContain('href="/app/source-access"');
+    expect(markup).toContain("Needs source access");
+    expect(markup).toContain(
+      "Automatic checks are waiting for source access. The evidence already on file stays here.",
+    );
+    expect(markup).not.toContain("Automatic checks are on.");
+    expect(markup.indexOf("Needs source access")).toBeLessThan(
+      markup.indexOf('aria-label="Competitor sections"'),
+    );
+  });
+
+  // Reconciled with BL-035: every honesty assertion from main's degraded test
+  // is kept; the control assertions follow the controls to the tab that now
+  // owns them (pause -> Setup, share/export -> Evidence).
+  it("keeps the selected overview honest when recent capture totals are unavailable", async () => {
+    const failedRuns = Array.from({ length: 3 }, (_, index) => ({
+      ...recentRuns[0],
+      id: `failed-run-${index + 1}`,
+      status: "failed" as const,
+      errorCode: "provider_unavailable",
+      errorMessage: "Provider unavailable.",
+    }));
+    const degraded = {
+      ...selectedPanelLoaderData,
+      plan: "agency",
+      captureWindowDegraded: true,
+      runs: failedRuns,
+    };
+    const markup = await renderWatchlistsRoute(degraded);
+
+    expect(markup).toContain("Nykaa watch");
+    expect(markup).toContain("Unavailable — refresh to try again");
+    expect(markup).toContain("Recent aggregate totals are unavailable");
+    expect(markup).toContain("is-capture-window-degraded");
+    expect(markup).toContain('id="competitor-detail"');
+    expect(markup).toContain("Open the capture");
+    expect(markup).toContain("Package for client");
+    expect(markup).toContain("Refresh now");
+    expect(markup).toContain("Delivery");
+    expect(markup).toContain("Setup");
+    expect(markup).toContain("the last 3 checks failed");
+    // A failed rollup must never read as a believable zero.
+    expect(markup).not.toContain("Checked, and nothing has changed in 30 days.");
+    expect(markup).not.toContain('class="f9-ed-number-value">0</p>');
+
+    const setupMarkup = await renderWatchlistsRoute(degraded, "setup");
+    expect(setupMarkup).toContain("Pause watching");
+    expect(setupMarkup).toContain("Recent aggregate totals are unavailable");
+
+    const evidenceMarkup = await renderWatchlistsRoute(degraded, "evidence");
+    expect(evidenceMarkup).toContain("Share summary");
+    expect(evidenceMarkup).toContain("Export CSV");
+    expect(evidenceMarkup).toContain("Export JSON");
+    expect(evidenceMarkup).toContain("Recent aggregate totals are unavailable");
   });
 
   it("keeps setup, its explainers and the source-access route behind the Setup tab", async () => {

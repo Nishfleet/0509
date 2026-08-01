@@ -9,11 +9,18 @@ const team = readFileSync("app/routes/app.team.tsx", "utf8");
 const billing = readFileSync("app/routes/app.billing.tsx", "utf8");
 const account = readFileSync("app/routes/app.account.tsx", "utf8");
 const MARKER = "/* === BL-041 team, billing, and account (landing language) === */";
+// BL-040 owns the final CSS section — tests/bl040-language.test.ts asserts that
+// and counts declarations from its heading to EOF, so BL-041 is appended
+// immediately BEFORE it rather than at the tail. The layer under audit here is
+// therefore bounded by the BL-040 heading, not by end-of-file.
+const NEXT_MARKER = "/* === BL-040 source + developer access (landing language) === */";
 
 function layer() {
   const index = css.indexOf(MARKER);
   expect(index).toBeGreaterThan(0);
-  return css.slice(index);
+  const end = css.indexOf(NEXT_MARKER, index);
+  expect(end).toBeGreaterThan(index);
+  return css.slice(index, end);
 }
 
 function stripComments(source: string) {
@@ -21,7 +28,7 @@ function stripComments(source: string) {
 }
 
 describe("BL-041 landing-language settings layer", () => {
-  it("is the one final appended CSS section and scopes all three routes", () => {
+  it("is one self-contained CSS section ahead of the BL-040 tail and scopes all three routes", () => {
     expect(css.match(new RegExp(MARKER.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"))).toHaveLength(1);
     expect(layer().slice(MARKER.length)).not.toMatch(/\/\* === BL-0\d{2}/);
     for (const source of [team, billing, account]) {

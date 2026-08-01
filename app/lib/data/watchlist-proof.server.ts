@@ -103,10 +103,34 @@ export async function listProofCapturesForTarget(
   env: AppEnv,
   proofTargetId: string,
   limit = 20,
+  recentFailureCutoff?: string,
 ) {
-  const rows = await many<ProofCaptureRow>(
-    env,
-    `
+  const rows = recentFailureCutoff
+    ? await many<ProofCaptureRow>(
+        env,
+        `
+      SELECT *
+      FROM (
+        SELECT
+          ${PROOF_CAPTURE_LIST_COLUMNS},
+          ROW_NUMBER() OVER (
+            PARTITION BY proof_capture.proof_target_id
+            ORDER BY proof_capture.attempted_at DESC
+          ) AS rn
+        FROM proof_capture
+        WHERE proof_capture.proof_target_id = ?
+      )
+      WHERE rn <= ?
+        OR (status = 'failed' AND attempted_at >= ?)
+      ORDER BY attempted_at DESC
+    `,
+        proofTargetId,
+        limit,
+        recentFailureCutoff,
+      )
+    : await many<ProofCaptureRow>(
+        env,
+        `
       SELECT
         id,
         proof_target_id,
@@ -133,9 +157,9 @@ export async function listProofCapturesForTarget(
       ORDER BY attempted_at DESC
       LIMIT ?
     `,
-    proofTargetId,
-    limit,
-  );
+        proofTargetId,
+        limit,
+      );
 
   return rows.map(toProofCaptureRecord);
 }
@@ -165,6 +189,7 @@ export async function listProofCapturesForTargets(
   env: AppEnv,
   proofTargetIds: string[],
   limitPerTarget = 20,
+  recentFailureCutoff?: string,
 ) {
   const uniqueIds = [...new Set(proofTargetIds.filter(Boolean))];
   const capturesByTargetId = new Map<string, ProofCaptureRecord[]>();
@@ -186,11 +211,17 @@ export async function listProofCapturesForTargets(
         FROM proof_capture
         WHERE proof_capture.proof_target_id IN (${placeholders})
       )
-      WHERE rn <= ?
+      WHERE rn <= ?${
+        recentFailureCutoff
+          ? "\n        OR (status = 'failed' AND attempted_at >= ?)"
+          : ""
+      }
       ORDER BY proof_target_id ASC, attempted_at DESC
     `,
     values: uniqueIds,
-    suffix: [perTarget],
+    suffix: recentFailureCutoff
+      ? [perTarget, recentFailureCutoff]
+      : [perTarget],
   });
 
   for (const row of rows) {
@@ -207,6 +238,7 @@ export async function listProofCapturePairsForEventIds(
   env: AppEnv,
   userId: string,
   eventIds: string[],
+  options: { includePrevious?: boolean } = {},
 ) {
   const uniqueEventIds = [...new Set(eventIds.filter(Boolean))];
   if (uniqueEventIds.length === 0) return [];
@@ -231,6 +263,14 @@ export async function listProofCapturePairsForEventIds(
     values: uniqueEventIds,
     suffix: [userId],
   });
+
+  if (options.includePrevious === false) {
+    return currentRows.map((current) => ({
+      eventId: current.event_id,
+      current: toProofCaptureRecord(current),
+      previous: null,
+    }));
+  }
 
   const previousRows = await Promise.all(
     currentRows.map((current) => {

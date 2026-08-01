@@ -233,7 +233,11 @@ describe("billing lifecycle attempt selection", () => {
 		const attemptIds = attempts.map((attempt) => attempt.id);
 		expect(attemptIds[0]).toBe("old-provider-unknown");
 		expect(attemptIds.slice(1).sort()).toEqual(
-			["recent-provider-unknown", "thrown-provider-unknown"].sort(),
+			[
+				"accepted-provider-unknown",
+				"recent-provider-unknown",
+				"thrown-provider-unknown",
+			].sort(),
 		);
 	});
 });

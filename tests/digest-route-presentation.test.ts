@@ -40,7 +40,10 @@ async function mockRoute(loaderData: unknown, search = "") {
 	vi.doMock("~/components/submit-button", () => ({ SubmitButton: component("button") }));
 }
 
-function digestData(summary: Record<string, unknown> | null | undefined) {
+function digestData(
+	summary: Record<string, unknown> | null | undefined,
+	attempts: Array<Record<string, unknown>> = [],
+) {
 	const digest = {
 		id: "digest-1",
 		periodStart: "2026-07-08T00:00:00.000Z",
@@ -51,9 +54,9 @@ function digestData(summary: Record<string, unknown> | null | undefined) {
 	};
 	return {
 		digests: [digest],
-		digestAttemptsByDigestId: { "digest-1": [] },
+		digestAttemptsByDigestId: { "digest-1": attempts },
 		selectedDigest: digest,
-		selectedDigestAttempts: [],
+		selectedDigestAttempts: attempts,
 		canAccessDigests: true,
 	};
 }
@@ -115,15 +118,37 @@ describe("digests customer presentation", () => {
 			const { default: DigestsRoute } = await import("~/routes/app.digests");
 			const markup = renderToStaticMarkup(createElement(DigestsRoute));
 
-			expect(markup).toContain('class="f9-ed-brief"');
+			expect(markup).toContain('class="f9-wk-brief"');
 			expect(markup).toContain("Brief history");
+			expect(markup).toContain("Showing 1 recent brief on file.");
 			expect(markup).toContain('id="first-brief-detail"');
+			expect(markup).toContain(
+				'href="/app/digests?digest=digest-1#first-brief-detail"',
+			);
 			expect(markup).toContain("2026-07-15T09:14:00.000Z");
 			expect(markup).not.toContain("f9-wire-frontpage");
 			expect(markup).not.toContain("FIRST BRIEF · FILED");
 			expect(markup).not.toContain("05:09");
 		},
 	);
+
+	it("reports the newest filing shown even when a backfill has an older period", async () => {
+		const data = digestData(null);
+		data.digests.push({
+			...data.selectedDigest,
+			id: "digest-backfill",
+			periodEnd: "2026-07-10T00:00:00.000Z",
+			createdAt: "2026-07-20T12:30:00.000Z",
+		});
+		await mockRoute(data);
+
+		const { default: DigestsRoute } = await import("~/routes/app.digests");
+		const markup = renderToStaticMarkup(createElement(DigestsRoute));
+
+		expect(markup).toMatch(
+			/Newest filing shown <time>2026-07-20T12:30:00\.000Z<\/time>/,
+		);
+	});
 
 	it("omits cohort feedback when counts are null or omitted count is zero", async () => {
 		for (const summary of [
@@ -138,5 +163,80 @@ describe("digests customer presentation", () => {
 			const markup = renderToStaticMarkup(createElement(DigestsRoute));
 			expect(markup).not.toContain("eligible changes;");
 		}
+	});
+
+	it("does not call a provider-accepted email delivered or sent while delivery is unconfirmed", async () => {
+		await mockRoute(
+			digestData(null, [{
+				channel: "email",
+				targetValue: "Configured email recipient",
+				status: "sent",
+				webhookStatus: "provider_unknown",
+				errorMessage: "The email provider accepted this message, but final delivery is unconfirmed.",
+				providerStatusLastSeenAt: null,
+				sentAt: "2026-07-15T09:14:00.000Z",
+				createdAt: "2026-07-15T09:14:00.000Z",
+			}]),
+		);
+
+		const { default: DigestsRoute } = await import("~/routes/app.digests");
+		const markup = renderToStaticMarkup(createElement(DigestsRoute));
+
+		expect(markup).toContain("Delivery unconfirmed");
+		expect(markup).toContain("Email delivery unconfirmed");
+		expect(markup).not.toContain(">Sent<");
+		expect(markup).not.toContain("Email sent");
+	});
+
+	it.each([
+		["WhatsApp", "pending", "whatsapp"],
+		["WhatsApp", "provider_unknown", "whatsapp"],
+		["Slack", "pending", "slack"],
+		["Slack", "provider_unknown", "slack"],
+	])(
+		"does not call provider-accepted %s sent while receipt state is %s",
+		async (channelLabel, webhookStatus, channel) => {
+			await mockRoute(
+				digestData(null, [{
+					channel,
+					targetValue: channel === "whatsapp" ? "Configured WhatsApp recipient" : "Connected Slack workspace",
+					status: "sent",
+					webhookStatus,
+					errorMessage: `${channelLabel} accepted this message for sending, but final delivery is unconfirmed.`,
+					providerStatusLastSeenAt: null,
+					sentAt: "2026-07-15T09:14:00.000Z",
+					createdAt: "2026-07-15T09:14:00.000Z",
+				}]),
+			);
+
+			const { default: DigestsRoute } = await import("~/routes/app.digests");
+			const markup = renderToStaticMarkup(createElement(DigestsRoute));
+
+			expect(markup).toContain("Delivery unconfirmed");
+			expect(markup).toContain(`${channelLabel} delivery unconfirmed`);
+			expect(markup).not.toContain(`${channelLabel} sent`);
+		},
+	);
+
+	it("keeps a confirmed WhatsApp receipt labelled delivered", async () => {
+		await mockRoute(
+			digestData(null, [{
+				channel: "whatsapp",
+				targetValue: "Configured WhatsApp recipient",
+				status: "sent",
+				webhookStatus: "delivered",
+				errorMessage: null,
+				providerStatusLastSeenAt: "2026-07-15T09:15:00.000Z",
+				sentAt: "2026-07-15T09:14:00.000Z",
+				createdAt: "2026-07-15T09:14:00.000Z",
+			}]),
+		);
+
+		const { default: DigestsRoute } = await import("~/routes/app.digests");
+		const markup = renderToStaticMarkup(createElement(DigestsRoute));
+
+		expect(markup).toContain("WhatsApp delivered");
+		expect(markup).toContain(">Delivered<");
+		expect(markup).not.toContain("Delivery unconfirmed");
 	});
 });

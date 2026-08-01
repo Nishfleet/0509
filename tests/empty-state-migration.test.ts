@@ -10,7 +10,7 @@ describe("deferred empty-state consolidation", () => {
 		// BL-006: the watch board's two EmptyState panels became one designed
 		// specimen panel (brief §6.8) — there is no bare empty box left there.
 		["watchlists", watchlists, 0],
-		// BL-015: Briefs now has one specimen panel for the whole empty desk.
+		// BL-032: Briefs uses quiet in-flow absence states, not an empty box.
 		["digests", digests, 0],
 		// BL-009: the report's last EmptyState became the §6.8 specimen plate
 		// (a panel with a reserved, numbered slot), so the count is now zero.
@@ -36,9 +36,12 @@ describe("deferred empty-state consolidation", () => {
 		expect(watchlists).toContain("See a sample brief");
 	});
 
-	it("gives the brief desk one specimen panel instead of parallel empty boxes", () => {
-		expect(digests.match(/<SpecimenEmptyState\b/g) ?? []).toHaveLength(1);
-		expect(digests).toContain('headline="Your first brief lands after the first scan"');
+	it("gives the brief desk quiet empty and defensive-locked states instead of boxes", () => {
+		expect(digests.match(/f9-wk-quiet-state/g) ?? []).toHaveLength(2);
+		expect(digests).toContain("Your first brief lands after the first scan");
+		expect(digests).toContain("Competitor change briefs");
+		expect(digests).not.toContain("<SpecimenEmptyState");
+		expect(digests).not.toContain("<LockedFeature");
 		expect(digests).not.toContain("<EmptyState");
 	});
 });
