@@ -326,7 +326,15 @@ async function reconcileDeliveryAttemptWithAudit(
     reconciliationMode: "provider_evidence_only",
   };
   const status = normalized.outcome === "sent" ? "sent" : "failed";
-  const webhookStatus = normalized.outcome === "sent" ? "delivered" : "failed";
+  const acceptanceOnly =
+    normalized.outcome === "sent" && normalized.classification === "cloudflare_email_log";
+  const webhookStatus =
+    normalized.outcome === "failed"
+      ? "failed"
+      : acceptanceOnly
+        ? "provider_unknown"
+        : "delivered";
+  const canReconcileAcceptedAttempt = normalized.outcome === "failed" || !acceptanceOnly;
   const errorMessage =
     normalized.outcome === "failed"
       ? "Provider reconciliation confirmed this delivery was not accepted."
@@ -345,8 +353,13 @@ async function reconcileDeliveryAttemptWithAudit(
         FROM delivery_attempt
         WHERE delivery_attempt.id = ?
           AND delivery_attempt.updated_at = ?
+          AND (
+            delivery_attempt.sent_at IS NULL
+            OR julianday(?) >= julianday(delivery_attempt.sent_at)
+          )
+          AND julianday(?) >= julianday(delivery_attempt.created_at)
           AND delivery_attempt.lane = '${scope.lane}'
-          ${reconciliationStatePredicate(scope, "delivery_attempt.")}
+          ${reconciliationStatePredicate(scope, "delivery_attempt.", canReconcileAcceptedAttempt)}
           ${scope.attemptPredicate}
       `,
     )
@@ -361,6 +374,8 @@ async function reconcileDeliveryAttemptWithAudit(
       reconciledAt,
       normalized.attemptId,
       normalized.expectedUpdatedAt,
+      normalized.observedAt,
+      normalized.observedAt,
     );
   const updateAttempt = db
     .prepare(
@@ -380,14 +395,20 @@ async function reconcileDeliveryAttemptWithAudit(
             error_message = ?,
             sent_at = CASE
               WHEN ? = 'failed' THEN sent_at
+              WHEN sent_at IS NOT NULL THEN sent_at
               ELSE ?
             END,
             failed_at = ?,
             updated_at = ?
         WHERE id = ?
           AND updated_at = ?
+          AND (
+            sent_at IS NULL
+            OR julianday(?) >= julianday(sent_at)
+          )
+          AND julianday(?) >= julianday(created_at)
           AND lane = '${scope.lane}'
-          ${reconciliationStatePredicate(scope, "")}
+          ${reconciliationStatePredicate(scope, "", canReconcileAcceptedAttempt)}
           ${scope.attemptPredicate}
           AND EXISTS (
             SELECT 1
@@ -410,6 +431,8 @@ async function reconcileDeliveryAttemptWithAudit(
       reconciledAt,
       normalized.attemptId,
       normalized.expectedUpdatedAt,
+      normalized.observedAt,
+      normalized.observedAt,
       auditId,
     );
 
@@ -419,120 +442,161 @@ async function reconcileDeliveryAttemptWithAudit(
       db
         .prepare(
           `
+            WITH reconciled_attempt AS (
+              SELECT delivery_attempt.*
+              FROM delivery_attempt
+              WHERE delivery_attempt.id = ?
+                AND delivery_attempt.digest_run_id IS NOT NULL
+                AND EXISTS (
+                  SELECT 1
+                  FROM agent_action_audit
+                  WHERE agent_action_audit.id = ?
+                    AND agent_action_audit.status = 'succeeded'
+                )
+            ),
+            preferred_sent_attempt AS (
+              SELECT candidate.*
+              FROM delivery_attempt AS candidate
+              INNER JOIN reconciled_attempt
+                ON candidate.digest_run_id = reconciled_attempt.digest_run_id
+              WHERE candidate.status = 'sent'
+                AND candidate.user_id = reconciled_attempt.user_id
+                AND candidate.lane = reconciled_attempt.lane
+              ORDER BY
+                CASE
+                  WHEN candidate.webhook_status = 'delivered'
+                    AND candidate.channel = reconciled_attempt.channel THEN 0
+                  WHEN candidate.webhook_status = 'delivered' THEN 1
+                  WHEN candidate.channel = reconciled_attempt.channel THEN 2
+                  ELSE 3
+                END,
+                CASE
+                  WHEN candidate.webhook_status = 'delivered'
+                    THEN COALESCE(
+                      candidate.provider_status_last_seen_at,
+                      candidate.sent_at,
+                      candidate.created_at
+                    )
+                  ELSE COALESCE(candidate.sent_at, candidate.created_at)
+                END DESC,
+                candidate.id DESC
+              LIMIT 1
+            ),
+            incoming_digest_delivery AS (
+              SELECT
+                ? AS id,
+                reconciled_attempt.digest_run_id,
+                CASE
+                  WHEN preferred_sent_attempt.id IS NOT NULL THEN preferred_sent_attempt.provider
+                  ELSE reconciled_attempt.provider
+                END AS provider,
+                CASE
+                  WHEN preferred_sent_attempt.id IS NOT NULL THEN 'sent'
+                  ELSE reconciled_attempt.status
+                END AS status,
+                CASE
+                  WHEN preferred_sent_attempt.id IS NOT NULL THEN preferred_sent_attempt.target_value
+                  ELSE reconciled_attempt.target_value
+                END AS recipient_email,
+                CASE
+                  WHEN preferred_sent_attempt.id IS NOT NULL THEN preferred_sent_attempt.provider_message_id
+                  ELSE reconciled_attempt.provider_message_id
+                END AS external_message_id,
+                CASE
+                  WHEN preferred_sent_attempt.id IS NOT NULL THEN preferred_sent_attempt.error_message
+                  ELSE reconciled_attempt.error_message
+                END AS error_message,
+                CASE
+                  WHEN preferred_sent_attempt.webhook_status = 'delivered'
+                    THEN COALESCE(
+                      preferred_sent_attempt.provider_status_last_seen_at,
+                      preferred_sent_attempt.sent_at
+                    )
+                  ELSE NULL
+                END AS delivered_at,
+                ? AS created_at,
+                ? AS updated_at,
+                ? AS acceptance_only
+              FROM reconciled_attempt
+              LEFT JOIN preferred_sent_attempt ON TRUE
+            ),
+            digest_delivery_decision AS (
+              SELECT
+                incoming_digest_delivery.*,
+                digest_delivery.provider AS existing_provider,
+                digest_delivery.status AS existing_status,
+                digest_delivery.recipient_email AS existing_recipient_email,
+                digest_delivery.external_message_id AS existing_external_message_id,
+                digest_delivery.error_message AS existing_error_message,
+                digest_delivery.delivered_at AS existing_delivered_at,
+                digest_delivery.updated_at AS existing_updated_at,
+                CASE
+                  WHEN digest_delivery.status = 'sent'
+                    AND (
+                      (
+                        incoming_digest_delivery.acceptance_only = 1
+                        AND digest_delivery.delivered_at IS NOT NULL
+                        AND incoming_digest_delivery.delivered_at IS NULL
+                      )
+                      OR (
+                        incoming_digest_delivery.status != 'sent'
+                        AND digest_delivery.provider != incoming_digest_delivery.provider
+                      )
+                    )
+                    THEN 1
+                  ELSE 0
+                END AS preserve_existing
+              FROM incoming_digest_delivery
+              LEFT JOIN digest_delivery
+                ON digest_delivery.digest_run_id = incoming_digest_delivery.digest_run_id
+            )
             INSERT INTO digest_delivery (
               id, digest_run_id, provider, status, recipient_email,
               external_message_id, error_message, delivered_at, created_at, updated_at
             )
-            SELECT ?, delivery_attempt.digest_run_id, delivery_attempt.provider, ?,
-              delivery_attempt.target_value, delivery_attempt.provider_message_id,
-              ?, ?, ?, ?
-            FROM delivery_attempt
-            WHERE delivery_attempt.id = ?
-              AND delivery_attempt.digest_run_id IS NOT NULL
-              AND EXISTS (
-                SELECT 1
-                FROM agent_action_audit
-                WHERE agent_action_audit.id = ?
-                  AND agent_action_audit.status = 'succeeded'
-              )
+            SELECT
+              id,
+              digest_run_id,
+              CASE WHEN preserve_existing = 1 THEN existing_provider ELSE provider END,
+              CASE WHEN preserve_existing = 1 THEN existing_status ELSE status END,
+              CASE
+                WHEN preserve_existing = 1 THEN existing_recipient_email
+                ELSE recipient_email
+              END,
+              CASE
+                WHEN preserve_existing = 1 THEN existing_external_message_id
+                ELSE external_message_id
+              END,
+              CASE
+                WHEN preserve_existing = 1 THEN existing_error_message
+                ELSE error_message
+              END,
+              CASE
+                WHEN preserve_existing = 1 THEN existing_delivered_at
+                ELSE delivered_at
+              END,
+              created_at,
+              CASE WHEN preserve_existing = 1 THEN existing_updated_at ELSE updated_at END
+            FROM digest_delivery_decision
+            WHERE TRUE
             ON CONFLICT(digest_run_id)
             DO UPDATE SET
-              provider = CASE
-                WHEN digest_delivery.status = 'sent'
-                  AND excluded.status != 'sent'
-                  AND EXISTS (
-                    SELECT 1
-                    FROM delivery_attempt AS other_attempt
-                    WHERE other_attempt.digest_run_id = digest_delivery.digest_run_id
-                      AND other_attempt.id != ?
-                      AND other_attempt.status = 'sent'
-                  )
-                  THEN digest_delivery.provider
-                ELSE excluded.provider
-              END,
-              status = CASE
-                WHEN digest_delivery.status = 'sent'
-                  AND excluded.status != 'sent'
-                  AND EXISTS (
-                    SELECT 1
-                    FROM delivery_attempt AS other_attempt
-                    WHERE other_attempt.digest_run_id = digest_delivery.digest_run_id
-                      AND other_attempt.id != ?
-                      AND other_attempt.status = 'sent'
-                  )
-                  THEN 'sent'
-                ELSE excluded.status
-              END,
-              recipient_email = CASE
-                WHEN digest_delivery.status = 'sent'
-                  AND excluded.status != 'sent'
-                  AND EXISTS (
-                    SELECT 1
-                    FROM delivery_attempt AS other_attempt
-                    WHERE other_attempt.digest_run_id = digest_delivery.digest_run_id
-                      AND other_attempt.id != ?
-                      AND other_attempt.status = 'sent'
-                  )
-                  THEN digest_delivery.recipient_email
-                ELSE excluded.recipient_email
-              END,
-              external_message_id = CASE
-                WHEN digest_delivery.status = 'sent'
-                  AND excluded.status != 'sent'
-                  AND EXISTS (
-                    SELECT 1
-                    FROM delivery_attempt AS other_attempt
-                    WHERE other_attempt.digest_run_id = digest_delivery.digest_run_id
-                      AND other_attempt.id != ?
-                      AND other_attempt.status = 'sent'
-                  )
-                  THEN digest_delivery.external_message_id
-                ELSE excluded.external_message_id
-              END,
-              error_message = CASE
-                WHEN digest_delivery.status = 'sent'
-                  AND excluded.status != 'sent'
-                  AND EXISTS (
-                    SELECT 1
-                    FROM delivery_attempt AS other_attempt
-                    WHERE other_attempt.digest_run_id = digest_delivery.digest_run_id
-                      AND other_attempt.id != ?
-                      AND other_attempt.status = 'sent'
-                  )
-                  THEN digest_delivery.error_message
-                ELSE excluded.error_message
-              END,
-              delivered_at = CASE
-                WHEN digest_delivery.status = 'sent'
-                  AND excluded.status != 'sent'
-                  AND EXISTS (
-                    SELECT 1
-                    FROM delivery_attempt AS other_attempt
-                    WHERE other_attempt.digest_run_id = digest_delivery.digest_run_id
-                      AND other_attempt.id != ?
-                      AND other_attempt.status = 'sent'
-                  )
-                  THEN digest_delivery.delivered_at
-                ELSE excluded.delivered_at
-              END,
+              provider = excluded.provider,
+              status = excluded.status,
+              recipient_email = excluded.recipient_email,
+              external_message_id = excluded.external_message_id,
+              error_message = excluded.error_message,
+              delivered_at = excluded.delivered_at,
               updated_at = excluded.updated_at
           `,
         )
         .bind(
-          createId(),
-          status,
-          errorMessage,
-          normalized.outcome === "sent" ? normalized.observedAt : null,
-          reconciledAt,
-          reconciledAt,
           normalized.attemptId,
           auditId,
-          normalized.attemptId,
-          normalized.attemptId,
-          normalized.attemptId,
-          normalized.attemptId,
-          normalized.attemptId,
-          normalized.attemptId,
+          createId(),
+          reconciledAt,
+          reconciledAt,
+          acceptanceOnly ? 1 : 0,
         ),
     );
   }
@@ -640,6 +704,7 @@ function normalizeInput(
 function reconciliationStatePredicate(
   scope: DeliveryReconciliationScope,
   qualifier: "" | "delivery_attempt.",
+  canReconcileAcceptedAttempt: boolean,
 ) {
   const providerUnknown = `
     (
@@ -657,7 +722,7 @@ function reconciliationStatePredicate(
             ? ""
             : `AND ${qualifier}provider_status_last_seen_at IS NOT NULL`}
         )
-        ${scope.allowsAcceptedProviderUnknown
+        ${scope.allowsAcceptedProviderUnknown && canReconcileAcceptedAttempt
           ? `OR ${qualifier}status = 'sent'`
           : ""}
       )

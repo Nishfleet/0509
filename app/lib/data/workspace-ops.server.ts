@@ -481,7 +481,11 @@ export async function getOperatorSnapshot(env: AppEnv) {
           )
           AND delivery_attempt.created_at >= ?
         ORDER BY
-          CASE WHEN delivery_attempt.status = 'failed' THEN 0 ELSE 1 END,
+          CASE
+            WHEN delivery_attempt.status = 'failed' THEN 0
+            WHEN delivery_attempt.status = 'pending' THEN 1
+            ELSE 2
+          END,
           delivery_attempt.created_at DESC
         LIMIT 8
       `,

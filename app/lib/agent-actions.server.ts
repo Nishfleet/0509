@@ -135,9 +135,10 @@ export async function runAuditedAgentAction<T extends JsonRecord>(
   const {
     findAgentActionAuditByIdempotencyKey,
     claimAgentActionAudit,
-    reclaimFailedAgentActionAudit,
+    reclaimRetryableAgentActionAudit,
   } = await import("~/lib/data.server");
   const actionName = normalizeActionName(context.actionName);
+  const apiKeyId = normalizeOptionalString(context.apiKeyId);
   const idempotencyKey = normalizeOptionalString(context.idempotencyKey);
 
   if (idempotencyKey) {
@@ -154,8 +155,12 @@ export async function runAuditedAgentAction<T extends JsonRecord>(
           result: (await options.replayCompleted?.(existing)) ?? existing.result as T,
         };
       }
-      if (existing.status === "failed" && options.retryFailed) {
-        const reclaimed = await reclaimFailedAgentActionAudit(env, existing.id);
+      if ((existing.status === "failed" || existing.status === "started") && options.retryFailed) {
+        assertRetryApiKeyMatches(existing, apiKeyId);
+        const reclaimed = await reclaimRetryableAgentActionAudit(env, {
+          auditId: existing.id,
+          apiKeyId,
+        });
         if (!reclaimed) {
           throw new AgentActionReplayUnavailableError();
         }
@@ -167,7 +172,7 @@ export async function runAuditedAgentAction<T extends JsonRecord>(
 
   const claim = await claimAgentActionAudit(env, {
     userId: context.userId,
-    apiKeyId: normalizeOptionalString(context.apiKeyId),
+    apiKeyId,
     actionName,
     resourceType: normalizeOptionalString(context.resourceType),
     resourceId: normalizeOptionalString(context.resourceId),
@@ -191,8 +196,12 @@ export async function runAuditedAgentAction<T extends JsonRecord>(
         result: (await options.replayCompleted?.(claim.audit)) ?? claim.audit.result as T,
       };
     }
-    if (claim.audit.status === "failed" && options.retryFailed) {
-      const reclaimed = await reclaimFailedAgentActionAudit(env, claim.audit.id);
+    if ((claim.audit.status === "failed" || claim.audit.status === "started") && options.retryFailed) {
+      assertRetryApiKeyMatches(claim.audit, apiKeyId);
+      const reclaimed = await reclaimRetryableAgentActionAudit(env, {
+        auditId: claim.audit.id,
+        apiKeyId,
+      });
       if (!reclaimed) {
         throw new AgentActionReplayUnavailableError();
       }
@@ -201,13 +210,7 @@ export async function runAuditedAgentAction<T extends JsonRecord>(
     throw new AgentActionReplayUnavailableError();
   }
 
-  return executeAuditedAgentAction(
-    env,
-    context,
-    actionName,
-    claim.audit,
-    action,
-  );
+  return executeAuditedAgentAction(env, context, actionName, claim.audit, action);
 }
 
 async function executeAuditedAgentAction<T extends JsonRecord>(
@@ -224,31 +227,37 @@ async function executeAuditedAgentAction<T extends JsonRecord>(
     const auditStatus = success.auditStatus ?? "succeeded";
     const completed = await finishAgentActionAudit(env, audit.id, {
       status: auditStatus,
+      leaseToken: audit.updatedAt,
       resourceType: normalizeOptionalString(success.resourceType ?? context.resourceType),
       resourceId: normalizeOptionalString(success.resourceId ?? context.resourceId),
       result: redactAgentActionResult(result, { actionName }),
-      errorCode:
-        auditStatus === "failed"
-          ? normalizeOptionalString(success.errorCode) ?? "action_incomplete"
-          : null,
-      errorMessage:
-        auditStatus === "failed"
-          ? normalizeOptionalString(success.errorMessage) ?? "Agent action did not complete."
-          : null,
+      errorCode: auditStatus === "failed"
+        ? normalizeOptionalString(success.errorCode) ?? "action_incomplete"
+        : null,
+      errorMessage: auditStatus === "failed"
+        ? normalizeOptionalString(success.errorMessage) ?? "Agent action did not complete."
+        : null,
       metadata: sanitizeAgentActionMetadata({
         ...(context.metadata ?? {}),
         ...(success.metadata ?? {}),
       }),
     });
 
+    if (!completed) {
+      throw new AgentActionReplayUnavailableError(
+        "This action lease was reclaimed before completion.",
+      );
+    }
+
     return {
-      audit: completed ?? audit,
+      audit: completed,
       replayed: false,
       result,
     };
   } catch (error) {
     await finishAgentActionAudit(env, audit.id, {
       status: "failed",
+      leaseToken: audit.updatedAt,
       resourceType: normalizeOptionalString(context.resourceType),
       resourceId: normalizeOptionalString(context.resourceId),
       errorCode: error instanceof AgentActionIdempotencyConflictError ? "idempotency_conflict" : "action_failed",
@@ -336,6 +345,14 @@ function assertIdempotencyRequestMatches(existing: AgentActionAuditRecord, metad
   const actualFingerprint = readRequestFingerprint(existing.metadata);
   if (expectedFingerprint && actualFingerprint && expectedFingerprint !== actualFingerprint) {
     throw new AgentActionIdempotencyConflictError("Idempotency key was already used for different input.");
+  }
+}
+
+function assertRetryApiKeyMatches(existing: AgentActionAuditRecord, apiKeyId: string | null) {
+  if ((existing.apiKeyId ?? null) !== apiKeyId) {
+    throw new AgentActionIdempotencyConflictError(
+      "Idempotency key was already used by a different API key.",
+    );
   }
 }
 

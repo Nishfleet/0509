@@ -1181,6 +1181,7 @@ async function loadReportDocumentForAgent(
     getWatchlist,
     listAdsByIds,
     listCollectionItems,
+    listProofCapturePairsForEventIds,
     listWatchEvents,
   } = await import("~/lib/data.server");
   const parsedReport = parseReportId(readString(input, "reportId") ?? "");
@@ -1196,6 +1197,7 @@ async function loadReportDocumentForAgent(
       getWatchlist,
       listAdsByIds,
       listCollectionItems,
+      listProofCapturePairsForEventIds,
       listWatchEvents,
     },
     {

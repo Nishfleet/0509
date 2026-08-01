@@ -165,4 +165,56 @@ describe("digests customer presentation", () => {
 		expect(markup).not.toContain(">Sent<");
 		expect(markup).not.toContain("Email sent");
 	});
+
+	it.each([
+		["WhatsApp", "pending", "whatsapp"],
+		["WhatsApp", "provider_unknown", "whatsapp"],
+		["Slack", "pending", "slack"],
+		["Slack", "provider_unknown", "slack"],
+	])(
+		"does not call provider-accepted %s sent while receipt state is %s",
+		async (channelLabel, webhookStatus, channel) => {
+			await mockRoute(
+				digestData(null, [{
+					channel,
+					targetValue: channel === "whatsapp" ? "Configured WhatsApp recipient" : "Connected Slack workspace",
+					status: "sent",
+					webhookStatus,
+					errorMessage: `${channelLabel} accepted this message for sending, but final delivery is unconfirmed.`,
+					providerStatusLastSeenAt: null,
+					sentAt: "2026-07-15T09:14:00.000Z",
+					createdAt: "2026-07-15T09:14:00.000Z",
+				}]),
+			);
+
+			const { default: DigestsRoute } = await import("~/routes/app.digests");
+			const markup = renderToStaticMarkup(createElement(DigestsRoute));
+
+			expect(markup).toContain("Delivery unconfirmed");
+			expect(markup).toContain(`${channelLabel} delivery unconfirmed`);
+			expect(markup).not.toContain(`${channelLabel} sent`);
+		},
+	);
+
+	it("keeps a confirmed WhatsApp receipt labelled delivered", async () => {
+		await mockRoute(
+			digestData(null, [{
+				channel: "whatsapp",
+				targetValue: "Configured WhatsApp recipient",
+				status: "sent",
+				webhookStatus: "delivered",
+				errorMessage: null,
+				providerStatusLastSeenAt: "2026-07-15T09:15:00.000Z",
+				sentAt: "2026-07-15T09:14:00.000Z",
+				createdAt: "2026-07-15T09:14:00.000Z",
+			}]),
+		);
+
+		const { default: DigestsRoute } = await import("~/routes/app.digests");
+		const markup = renderToStaticMarkup(createElement(DigestsRoute));
+
+		expect(markup).toContain("WhatsApp delivered");
+		expect(markup).toContain(">Delivered<");
+		expect(markup).not.toContain("Delivery unconfirmed");
+	});
 });
