@@ -1321,6 +1321,10 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     );
     const workflow = parse(workflowText) as any;
     const prepare = workflow.jobs.prepare_remote_restore_evidence;
+    const candidateVerifierStep = prepare.steps.find(
+      (step: any) =>
+        step.name === "Verify pinned candidate before self-hosted work",
+    );
     const bindArchiveStep = prepare.steps.find(
       (step: any) => step.name === "Bind restore evidence archive path",
     );
@@ -1342,6 +1346,9 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
 
     expect(bindArchiveStep.run).toContain(
       'archive="$RUNNER_TEMP/d1-remote-restore-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}.tar.gz"',
+    );
+    expect(candidateVerifierStep.run).toBe(
+      "./scripts/deploy-window-lock.sh run -- ./scripts/ci-verify-production-candidate.sh",
     );
     expect(bindArchiveStep.run).toContain(
       'printf \'RESTORE_EVIDENCE_ARCHIVE=%s\\n\' "$archive" >> "$GITHUB_ENV"',

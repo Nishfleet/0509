@@ -101,7 +101,7 @@ jobs:
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
           GH_TOKEN: ${{ github.token }}
-        run: ./scripts/ci-verify-production-candidate.sh
+        run: ./scripts/deploy-window-lock.sh run -- ./scripts/ci-verify-production-candidate.sh
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version-file: ".node-version"

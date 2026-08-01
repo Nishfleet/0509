@@ -140,11 +140,17 @@ describe("exact production candidate workflow", () => {
       deployments: "write",
     });
 
-    for (const candidate of [prepare, deploy]) {
+    for (const [candidate, verifier] of [
+      [
+        prepare,
+        "./scripts/deploy-window-lock.sh run -- ./scripts/ci-verify-production-candidate.sh",
+      ],
+      [deploy, "./scripts/ci-verify-production-candidate.sh"],
+    ] as const) {
       const steps = candidate?.steps ?? [];
       const checkoutIndex = steps.findIndex((step) => step.uses?.startsWith("actions/checkout@"));
       const verifyIndex = steps.findIndex(
-        (step) => step.run === "./scripts/ci-verify-production-candidate.sh",
+        (step) => step.run === verifier,
       );
       expect(checkoutIndex).toBeGreaterThanOrEqual(0);
       expect(verifyIndex).toBe(checkoutIndex + 1);

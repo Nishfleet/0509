@@ -189,6 +189,7 @@ describe("D1 remote restore evidence automation", () => {
           needs?: string | string[];
           steps?: Array<{
             name?: string;
+            id?: string;
             if?: string;
             run?: string;
             env?: Record<string, string>;
@@ -281,7 +282,16 @@ describe("D1 remote restore evidence automation", () => {
     const applyAcquireIndex = apply?.steps?.findIndex(
       (step) => step.name === "Acquire provider lane",
     ) ?? -1;
-    const applyCasIndex = apply?.steps?.findIndex(
+    const applyBackupCasIndex = apply?.steps?.findIndex(
+      (step) => step.name === "Reconfirm frozen main before pre-migration backup",
+    ) ?? -1;
+    const applyBackupIndex = apply?.steps?.findIndex(
+      (step) => step.name === "Create pre-migration D1-to-R2 backup",
+    ) ?? -1;
+    const applyLocalCleanupIndex = apply?.steps?.findIndex(
+      (step) => step.name === "Remove run-scoped plaintext backup files",
+    ) ?? -1;
+    const applyMigrationCasIndex = apply?.steps?.findIndex(
       (step) => step.name === "Reconfirm frozen main before migration apply",
     ) ?? -1;
     const applyMigrationIndex = apply?.steps?.findIndex(
@@ -293,17 +303,60 @@ describe("D1 remote restore evidence automation", () => {
     const applyCapabilityCleanupIndex = apply?.steps?.findIndex(
       (step) => step.name === "Remove provider-lane capability file",
     ) ?? -1;
-    expect(applyCasIndex).toBe(applyAcquireIndex + 1);
-    expect(applyMigrationIndex).toBe(applyCasIndex + 1);
+    const applyBackupValidationIndex = apply?.steps?.findIndex(
+      (step) =>
+        step.run ===
+        "./scripts/deploy-window-lock.sh run -- node scripts/validate-d1-backup.mjs",
+    ) ?? -1;
+    const applyBindingIndex = apply?.steps?.findIndex(
+      (step) => step.name === "Bind run-scoped backup directory",
+    ) ?? -1;
+    expect(applyBindingIndex).toBeGreaterThanOrEqual(0);
+    expect(apply?.steps?.[applyBindingIndex]?.run).toContain(
+      "$RUNNER_TEMP/0509-d1-backups-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}",
+    );
+    expect(applyBackupValidationIndex).toBeGreaterThanOrEqual(0);
+    expect(applyBackupValidationIndex).toBeLessThan(applyAcquireIndex);
+    expect(applyBackupCasIndex).toBe(applyAcquireIndex + 1);
+    expect(applyBackupIndex).toBe(applyBackupCasIndex + 1);
+    expect(applyLocalCleanupIndex).toBe(applyBackupIndex + 1);
+    expect(applyMigrationCasIndex).toBe(applyLocalCleanupIndex + 1);
+    expect(applyMigrationIndex).toBe(applyMigrationCasIndex + 1);
     expect(applyReleaseIndex).toBe(applyMigrationIndex + 1);
     expect(applyCapabilityCleanupIndex).toBe(applyReleaseIndex + 1);
-    expect(apply?.steps?.[applyCasIndex]).toMatchObject({
+    expect(apply?.steps?.[applyBackupCasIndex]).toMatchObject({
       run: "./scripts/ci-verify-provider-main-cas.sh",
       env: { GH_TOKEN: "${{ github.token }}" },
+    });
+    expect(apply?.steps?.[applyBackupIndex]).toMatchObject({
+      id: "pre_migration_backup",
+      run: "node scripts/d1-backup-to-r2.mjs",
+      env: {
+        CLOUDFLARE_ACCOUNT_ID: "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}",
+        CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}",
+        D1_BACKUP_AUTOMATION_APPROVED: "0509-weekly-d1-to-r2",
+      },
+    });
+    expect(apply?.steps?.[applyLocalCleanupIndex]).toMatchObject({
+      if: "always()",
+      run: "node scripts/d1-backup-local-cleanup.mjs",
+    });
+    expect(apply?.steps?.[applyMigrationCasIndex]).toMatchObject({
+      if: "success() && steps.pre_migration_backup.outcome == 'success'",
+      run: "./scripts/ci-verify-provider-main-cas.sh",
+      env: { GH_TOKEN: "${{ github.token }}" },
+    });
+    expect(apply?.steps?.[applyMigrationIndex]).toMatchObject({
+      if: "success() && steps.pre_migration_backup.outcome == 'success'",
     });
     expect(apply?.steps?.[applyMigrationIndex]?.run).toContain(
       "npx wrangler d1 migrations apply 0509 --remote",
     );
+    expect(apply?.env).toMatchObject({
+      D1_DATABASE_NAME: "0509",
+      R2_BACKUP_BUCKET: "0509-landing-page-artifacts",
+    });
+    expect(apply?.env).not.toHaveProperty("D1_BACKUP_LOCAL_DIRECTORY");
     expect(apply?.env).not.toHaveProperty("CLOUDFLARE_ACCOUNT_ID");
     expect(apply?.env).not.toHaveProperty("CLOUDFLARE_API_TOKEN");
     const applyProviderSecretSteps = apply?.steps?.filter(
@@ -311,14 +364,10 @@ describe("D1 remote restore evidence automation", () => {
         step.env?.CLOUDFLARE_ACCOUNT_ID !== undefined ||
         step.env?.CLOUDFLARE_API_TOKEN !== undefined,
     );
-    expect(applyProviderSecretSteps).toHaveLength(1);
-    expect(applyProviderSecretSteps?.[0]).toBe(
+    expect(applyProviderSecretSteps).toEqual([
+      apply?.steps?.[applyBackupIndex],
       apply?.steps?.[applyMigrationIndex],
-    );
-    expect(applyProviderSecretSteps?.[0]?.env).toMatchObject({
-      CLOUDFLARE_ACCOUNT_ID: "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}",
-      CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}",
-    });
+    ]);
     expect(apply?.steps?.[applyReleaseIndex]).toMatchObject({
       if: "always()",
       run: "./scripts/deploy-window-lock.sh release",
