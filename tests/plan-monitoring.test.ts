@@ -1573,7 +1573,9 @@ describe("runWatchlistManual cheap scan path", () => {
     );
   });
 
-  it("still captures direct competitor website proof when ad discovery fails", async () => {
+  it.each(["failed", "pending"])(
+    "keeps the run failed when direct website proof succeeds but alert delivery is %s",
+    async (alertStatus) => {
     class MockCommercialDiscoveryError extends Error {
       failureClass = "browser_launch_failed" as const;
     }
@@ -1582,9 +1584,11 @@ describe("runWatchlistManual cheap scan path", () => {
     const createProofCapture = vi.fn().mockResolvedValue("proof-direct-1");
     const createWatchEvent = vi.fn().mockResolvedValue("event-direct-1");
     const finishWatchlistRun = vi.fn();
+    const logMetaIntegrationStatus = vi.fn();
     const deliverWatchlistAlerts = vi.fn().mockResolvedValue({
       attempts: 1,
       channels: ["email"],
+      details: [{ status: alertStatus }],
     });
     const websiteWatchlist: WatchlistRecord = {
       ...watchlist,
@@ -1698,7 +1702,7 @@ describe("runWatchlistManual cheap scan path", () => {
       listAdsByIds: vi.fn().mockResolvedValue([]),
       listWatchEventsBetween: vi.fn(),
       listWatchlists: vi.fn(),
-      logMetaIntegrationStatus: vi.fn(),
+      logMetaIntegrationStatus,
       touchWatchlistScanned: vi.fn(),
       upsertAd: vi.fn(),
       upsertDigestDelivery: vi.fn(),
@@ -1733,9 +1737,11 @@ describe("runWatchlistManual cheap scan path", () => {
 
     const { runWatchlistManual } = await import("~/lib/monitoring.server");
 
-    const result = await runWatchlistManual({} as never, websiteWatchlist);
+    const result = runWatchlistManual({} as never, websiteWatchlist);
 
-    expect(result.events).toBeGreaterThan(0);
+    await expect(result).rejects.toThrow(
+      "1 of 1 alert delivery attempt failed.",
+    );
     expect(captureLandingPageSnapshot).toHaveBeenCalledWith(
       expect.anything(),
       "https://competitor.example/onboarding",
@@ -1752,16 +1758,35 @@ describe("runWatchlistManual cheap scan path", () => {
       expect.anything(),
       "run-1",
       expect.objectContaining({
-        status: "succeeded",
+        status: "failed",
+        errorCode: "alert_delivery_failed",
         summary: expect.objectContaining({
           scanStatus: "degraded",
           scanErrorCode: "browser_launch_failed",
+          sendsTriggered: 0,
+          sendAttempts: 1,
+          sendFailures: 1,
           events: expect.any(Number),
         }),
       }),
     );
-	  expect(deliverWatchlistAlerts).toHaveBeenCalled();
-	});
+    expect(logMetaIntegrationStatus).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        status: "degraded",
+        summary:
+          "Commercial discovery failed; direct website evidence completed, but customer alert delivery failed.",
+        metadata: expect.objectContaining({
+          alertDeliveryAttempts: 1,
+          alertDeliveryAccepted: 0,
+          alertDeliveryFailures: 1,
+          alertDeliveryErrorCode: "alert_delivery_failed",
+        }),
+      }),
+    );
+    expect(deliverWatchlistAlerts).toHaveBeenCalled();
+    },
+  );
 
 	it("keeps failed discovery failed when direct website fallback skips", async () => {
 	  class MockCommercialDiscoveryError extends Error {
