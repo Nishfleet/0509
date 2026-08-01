@@ -98,7 +98,9 @@ describe("app rebuild", () => {
     expect(ruledList).toContain('prefetch="intent"');
     expect(ruledList).not.toContain("href=");
     expect(watchlistsRoute).toContain("watchlistDetailTabHref(row.id)");
-    expect(digestsRoute).toContain("to={`/app/digests?digest=${digest.id}`}");
+    expect(digestsRoute).toContain(
+      "to={`/app/digests?digest=${digest.id}#first-brief-detail`}",
+    );
     expect(digestsRoute).toContain("preventScrollReset");
     expect(digestsRoute).not.toContain("href={`/app/digests?digest=${digest.id}`}");
   });
