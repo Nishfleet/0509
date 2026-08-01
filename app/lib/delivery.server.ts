@@ -96,10 +96,13 @@ export {
   sendDeliveryTestEmail,
   sendEmailVerificationEmail,
   sendFreeActivationResultEmail,
+  readOperatorAlertEmailOutcome,
   sendOperatorAlertEmail,
+  sendOperatorAlertEmailDetailed,
   sendPasswordResetEmail,
   sendTeamInviteEmail,
   sendWelcomeEmail,
+  type OperatorAlertEmailOutcome,
 } from "~/lib/delivery-account-emails.server";
 
 const AUTO_PROVISIONED_EMAIL_SOURCE = "account_email";

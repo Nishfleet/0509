@@ -11,6 +11,7 @@ import {
   DELIVERY_PRE_DISPATCH_LEASE_MS,
   isStalePreDispatchAttempt,
 } from "~/lib/delivery-attempt-lease";
+import { readOperatorAlertEmailOutcome } from "~/lib/delivery-account-emails.server";
 import { createSqliteD1 } from "./helpers/sqlite-d1";
 
 describe("delivery attempt retry claim (sqlite)", () => {
@@ -704,6 +705,77 @@ describe("delivery attempt retry claim (sqlite)", () => {
       status: "pending",
       webhook_status: "pending",
       updated_at: "2026-07-13T09:02:00.000Z",
+    });
+  });
+
+  it("reads persisted operator delivery outcomes without treating provider-unknown as rejected", async () => {
+    const harness = createSqliteD1();
+    fixtures.push(harness);
+    harness.sqlite.exec(`
+      CREATE TABLE delivery_attempt (
+        id TEXT PRIMARY KEY NOT NULL,
+        user_id TEXT NOT NULL,
+        watchlist_id TEXT,
+        digest_run_id TEXT,
+        delivery_target_id TEXT,
+        lane TEXT NOT NULL,
+        channel TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        status TEXT NOT NULL,
+        webhook_status TEXT NOT NULL,
+        target_value TEXT NOT NULL,
+        provider_message_id TEXT,
+        provider_status_last_seen_at TEXT,
+        template_name TEXT,
+        event_ids_json TEXT NOT NULL DEFAULT '[]',
+        payload_snapshot_json TEXT NOT NULL DEFAULT '{}',
+        idempotency_key TEXT UNIQUE,
+        error_message TEXT,
+        sent_at TEXT,
+        failed_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      INSERT INTO delivery_attempt (
+        id, user_id, lane, channel, provider, status, webhook_status,
+        target_value, idempotency_key, created_at, updated_at
+      ) VALUES (
+        'attempt-operator', 'user-1', 'internal', 'email', 'cloudflare_email',
+        'pending', 'provider_unknown', 'owner@example.com',
+        'cron-failure:scheduled_monitoring:1',
+        '2026-07-12T06:00:00.000Z', '2026-07-12T06:00:01.000Z'
+      );
+    `);
+    const env = { DB: harness.db } as never;
+    const key = "cron-failure:scheduled_monitoring:1";
+
+    await expect(readOperatorAlertEmailOutcome(env, key)).resolves.toEqual({
+      outcome: "in_flight_or_unknown",
+      observedAt: "2026-07-12T06:00:01.000Z",
+    });
+
+    harness.sqlite.prepare(`
+      UPDATE delivery_attempt
+      SET status = 'failed', webhook_status = 'failed',
+          failed_at = '2026-07-12T06:00:02.000Z',
+          updated_at = '2026-07-12T06:00:02.000Z'
+      WHERE id = 'attempt-operator'
+    `).run();
+    await expect(readOperatorAlertEmailOutcome(env, key)).resolves.toEqual({
+      outcome: "rejected",
+      observedAt: "2026-07-12T06:00:02.000Z",
+    });
+
+    harness.sqlite.prepare(`
+      UPDATE delivery_attempt
+      SET status = 'sent', webhook_status = 'provider_unknown',
+          sent_at = '2026-07-12T06:00:03.000Z',
+          updated_at = '2026-07-12T06:00:03.000Z'
+      WHERE id = 'attempt-operator'
+    `).run();
+    await expect(readOperatorAlertEmailOutcome(env, key)).resolves.toEqual({
+      outcome: "already_accepted",
+      observedAt: "2026-07-12T06:00:03.000Z",
     });
   });
 });

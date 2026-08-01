@@ -1,6 +1,8 @@
 import type { AppEnv } from "~/lib/env.server";
 
-export const SCHEDULED_OBSERVATION_HEARTBEAT_CRON = "13 * * * *";
+export const SCHEDULED_OBSERVATION_GAP_CHECK_CRON = "13 * * * *";
+export const SCHEDULED_OBSERVATION_MAX_FUTURE_SKEW_MS = 5 * 60 * 1000;
+export const SCHEDULED_OBSERVATION_ALERT_THROTTLE_MS = 6 * 60 * 60 * 1000;
 
 export const SCHEDULED_OBSERVATION_DEADLINES = Object.freeze([
   { cron: "0 */3 * * *", maxAgeMs: 4 * 60 * 60 * 1000 },
@@ -14,11 +16,12 @@ export type ScheduledObservationHealth = {
   lastScheduledAt: string | null;
   maxAgeMs: number;
   overdue: boolean;
+  futureEvidence: boolean;
 };
 
 /**
- * Reads schedule freshness after lazily initializing/updating aggregate health
- * state for every configured cron. Callers should account for those D1 writes.
+ * Reads schedule freshness without mutating health state. Migration 0072 seeds
+ * the durable activation baselines used before a cron's first observation.
  */
 export async function listScheduledObservationHealth(
   env: AppEnv,
@@ -29,28 +32,29 @@ export async function listScheduledObservationHealth(
   }
 
   const now = options.now ?? new Date();
+  const latestAllowedIso = new Date(
+    now.getTime() + SCHEDULED_OBSERVATION_MAX_FUTURE_SKEW_MS,
+  ).toISOString();
   const result = await env.DB.prepare(`
-      SELECT cron, MAX(scheduled_at) AS last_scheduled_at
+      SELECT
+        cron,
+        MAX(CASE WHEN scheduled_at <= ? THEN scheduled_at END) AS last_scheduled_at,
+        SUM(CASE WHEN scheduled_at > ? THEN 1 ELSE 0 END) AS future_observation_count
       FROM release_scheduled_observation
       GROUP BY cron
-    `).all<{ cron: string; last_scheduled_at: string | null }>();
+    `).bind(latestAllowedIso, latestAllowedIso).all<{
+      cron: string;
+      last_scheduled_at: string | null;
+      future_observation_count: number | null;
+    }>();
   const lastByCron = new Map(
     (result.results ?? []).map((row) => [row.cron, row.last_scheduled_at]),
   );
-  const nowIso = now.toISOString();
-  const observedCrons = new Set(lastByCron.keys());
-
-  await env.DB.batch(
-    SCHEDULED_OBSERVATION_DEADLINES.map(({ cron }) =>
-      env.DB!.prepare(`
-          INSERT INTO scheduled_observation_health_state (
-            cron, baseline_at, had_observation, updated_at
-          ) VALUES (?, ?, ?, ?)
-          ON CONFLICT(cron) DO UPDATE SET
-            had_observation = excluded.had_observation,
-            updated_at = excluded.updated_at
-        `).bind(cron, nowIso, observedCrons.has(cron) ? 1 : 0, nowIso),
-    ),
+  const futureByCron = new Map(
+    (result.results ?? []).map((row) => [
+      row.cron,
+      Number(row.future_observation_count ?? 0) > 0,
+    ]),
   );
 
   const stateResult = await env.DB.prepare(`
@@ -77,6 +81,7 @@ export async function listScheduledObservationHealth(
       lastScheduledAt,
       maxAgeMs,
       overdue: now.getTime() - freshnessReferenceMs > maxAgeMs,
+      futureEvidence: futureByCron.get(cron) === true,
     };
   });
 }
@@ -84,40 +89,136 @@ export async function listScheduledObservationHealth(
 export function formatScheduledObservationHealthLines(
   health: ScheduledObservationHealth[],
 ) {
-  const overdue = health.filter((entry) => entry.overdue);
-  if (overdue.length === 0) {
-    return ["Scheduled-work heartbeat: all four production schedules are fresh"];
+  const unhealthy = health.filter((entry) => entry.overdue || entry.futureEvidence);
+  if (unhealthy.length === 0) {
+    return ["Scheduled-work gap check: all four production schedules are fresh"];
   }
 
-  return overdue.map(
-    (entry) =>
-      `Scheduled-work heartbeat OVERDUE for ${entry.cron}; last observed: ${entry.lastScheduledAt ?? "never"}.`,
-  );
+  return unhealthy.map((entry) => {
+    if (entry.futureEvidence) {
+      return `Scheduled-work gap check found quarantined future evidence for ${entry.cron}.`;
+    }
+    return `Scheduled-work gap check OVERDUE for ${entry.cron}; last observed: ${entry.lastScheduledAt ?? "never"}.`;
+  });
 }
 
-export async function sendScheduledObservationHeartbeat(
+export async function sendScheduledObservationGapAlert(
   env: AppEnv,
   options: { now?: Date } = {},
 ) {
   const now = options.now ?? new Date();
   const health = await listScheduledObservationHealth(env, { now });
-  const overdue = health.filter((entry) => entry.overdue);
-  if (overdue.length === 0) {
+  const unhealthy = health.filter((entry) => entry.overdue || entry.futureEvidence);
+  if (unhealthy.length === 0) {
     return { sent: false, reason: "healthy" as const, health };
   }
 
-  const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
-  const sixHourWindow = Math.floor(now.getTime() / (6 * 60 * 60 * 1000));
-  const sent = await sendOperatorAlertEmail(env, {
-    subject: `0509 scheduler heartbeat: ${overdue.length} overdue`,
-    intro: "A production schedule has not produced its expected heartbeat:",
-    lines: formatScheduledObservationHealthLines(overdue),
-    idempotencyKey: `scheduled-observation-heartbeat:${sixHourWindow}`,
+  const unhealthyMask = health.reduce(
+    (mask, entry, index) =>
+      entry.overdue || entry.futureEvidence ? mask | (1 << index) : mask,
+    0,
+  );
+  const previous = await env.DB!.prepare(
+    `SELECT last_alerted_at, unhealthy_mask, last_attempted_at, last_attempt_outcome
+     FROM scheduled_observation_alert_state
+     WHERE alert_key = 'scheduled_observation_gap'`,
+  ).first<{
+    last_alerted_at: string | null;
+    unhealthy_mask: number;
+    last_attempted_at: string;
+    last_attempt_outcome: "accepted" | "rejected" | "provider_unknown";
+  }>();
+  const previousAlertedMs = previous?.last_alerted_at
+    ? Date.parse(previous.last_alerted_at)
+    : Number.NaN;
+  const hasNewlyUnhealthySchedule = previous
+    ? (unhealthyMask & ~previous.unhealthy_mask) !== 0
+    : true;
+  if (
+    Number.isFinite(previousAlertedMs) &&
+    previousAlertedMs <= now.getTime() &&
+    now.getTime() - previousAlertedMs < SCHEDULED_OBSERVATION_ALERT_THROTTLE_MS &&
+    !hasNewlyUnhealthySchedule
+  ) {
+    return { sent: false, reason: "throttled" as const, health };
+  }
+
+  const previousAttemptedMs = previous
+    ? Date.parse(previous.last_attempted_at)
+    : Number.NaN;
+  if (
+    previous?.last_attempt_outcome === "rejected" &&
+    Number.isFinite(previousAttemptedMs) &&
+    previousAttemptedMs <= now.getTime() &&
+    now.getTime() - previousAttemptedMs < SCHEDULED_OBSERVATION_ALERT_THROTTLE_MS &&
+    !hasNewlyUnhealthySchedule
+  ) {
+    return { sent: false, reason: "retry_throttled" as const, health };
+  }
+
+  const { sendOperatorAlertEmailDetailed } = await import("~/lib/delivery.server");
+  const outcome = await sendOperatorAlertEmailDetailed(env, {
+    subject: `0509 scheduled-work gap: ${unhealthy.length} unhealthy`,
+    intro: "A production schedule is overdue or produced invalid future evidence:",
+    lines: formatScheduledObservationHealthLines(unhealthy),
+    // Until an accepted page advances last_alerted_at, every retry uses the
+    // same durable key. Provider-unknown outcomes therefore cannot resend just
+    // because a wall-clock bucket rotated, and a repaired state write observes
+    // the already-accepted delivery instead of sending again.
+    idempotencyKey: `scheduled-observation-gap:${unhealthyMask}:${previous?.last_alerted_at ?? "initial"}`,
   });
 
+  const accepted = outcome === "accepted" || outcome === "already_accepted";
+  const attemptOutcome = accepted
+    ? "accepted"
+    : outcome === "rejected"
+      ? "rejected"
+      : "provider_unknown";
+  await env.DB!.prepare(
+    `INSERT INTO scheduled_observation_alert_state (
+       alert_key, last_alerted_at, unhealthy_mask,
+       last_attempted_at, last_attempt_outcome
+     ) VALUES ('scheduled_observation_gap', ?, ?, ?, ?)
+     ON CONFLICT(alert_key) DO UPDATE SET
+       last_alerted_at = CASE
+         WHEN excluded.last_alerted_at IS NOT NULL AND (
+           scheduled_observation_alert_state.last_alerted_at IS NULL
+           OR scheduled_observation_alert_state.last_alerted_at < excluded.last_alerted_at
+         ) THEN excluded.last_alerted_at
+         ELSE scheduled_observation_alert_state.last_alerted_at
+       END,
+       unhealthy_mask = CASE
+         WHEN scheduled_observation_alert_state.last_attempted_at < excluded.last_attempted_at
+         THEN excluded.unhealthy_mask
+         ELSE scheduled_observation_alert_state.unhealthy_mask
+       END,
+       last_attempted_at = CASE
+         WHEN scheduled_observation_alert_state.last_attempted_at < excluded.last_attempted_at
+         THEN excluded.last_attempted_at
+         ELSE scheduled_observation_alert_state.last_attempted_at
+       END,
+       last_attempt_outcome = CASE
+         WHEN scheduled_observation_alert_state.last_attempted_at < excluded.last_attempted_at
+         THEN excluded.last_attempt_outcome
+         ELSE scheduled_observation_alert_state.last_attempt_outcome
+       END`,
+  ).bind(
+    accepted ? now.toISOString() : null,
+    unhealthyMask,
+    now.toISOString(),
+    attemptOutcome,
+  ).run();
+
   return {
-    sent,
-    reason: sent ? ("sent" as const) : ("alert_not_sent" as const),
+    sent: outcome === "accepted",
+    reason:
+      outcome === "accepted"
+        ? ("sent" as const)
+        : outcome === "already_accepted"
+          ? ("already_sent" as const)
+          : outcome === "in_flight_or_unknown"
+            ? ("alert_pending" as const)
+            : ("alert_not_sent" as const),
     health,
   };
 }

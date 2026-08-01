@@ -1,6 +1,7 @@
 import {
   claimInstantDeliveryAttempt,
   createDeliveryAttempt,
+  getDeliveryAttemptByIdempotencyKey,
   getOldestUserId,
   getUserDeliveryProfile,
   getUserIdByEmail,
@@ -59,7 +60,43 @@ export function renderOperatorAlertHtml(input: {
 // One daily "customer-at-risk" email to the operator when monitoring or
 // delivery is degrading for paying customers — the ops dashboard is
 // pull-only and nobody is paged to it. Day-keyed idempotency: max one/day.
-export async function sendOperatorAlertEmail(
+export type OperatorAlertEmailOutcome =
+  | "accepted"
+  | "already_accepted"
+  | "in_flight_or_unknown"
+  | "rejected";
+
+export async function readOperatorAlertEmailOutcome(
+  env: AppEnv,
+  idempotencyKey: string,
+) {
+  const attempt = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
+  if (!attempt) return null;
+  if (attempt.status === "sent") {
+    return {
+      outcome: "already_accepted" as const,
+      observedAt: attempt.sentAt ?? attempt.updatedAt,
+    };
+  }
+  if (attempt.webhookStatus === "provider_unknown") {
+    return {
+      outcome: "in_flight_or_unknown" as const,
+      observedAt: attempt.updatedAt,
+    };
+  }
+  if (attempt.status === "failed" && attempt.webhookStatus === "failed") {
+    return {
+      outcome: "rejected" as const,
+      observedAt: attempt.failedAt ?? attempt.updatedAt,
+    };
+  }
+  return {
+    outcome: "in_flight_or_unknown" as const,
+    observedAt: attempt.updatedAt,
+  };
+}
+
+export async function sendOperatorAlertEmailDetailed(
   env: AppEnv,
   input: {
     subject: string;
@@ -70,7 +107,7 @@ export async function sendOperatorAlertEmail(
 ) {
   const recipient = env.LAUNCH_CANARY_EMAIL?.trim();
   if (!recipient) {
-    return false;
+    return "rejected" as const;
   }
 
   const dayKey = new Date().toISOString().slice(0, 10);
@@ -84,7 +121,7 @@ export async function sendOperatorAlertEmail(
     (await getUserIdByEmail(env, recipient)) ?? (await getOldestUserId(env));
   if (!attemptUserId) {
     // Never call the provider when the alert cannot first be durably owned.
-    return false;
+    return "rejected" as const;
   }
 
   const payloadSnapshot = operatorAlertPayloadSnapshot(idempotencyKey, input.lines);
@@ -102,7 +139,9 @@ export async function sendOperatorAlertEmail(
     idempotencyKey,
   });
   if (!claim.attemptId || !claim.claimUpdatedAt) {
-    return false;
+    return claim.duplicate?.status === "sent"
+      ? ("already_accepted" as const)
+      : ("in_flight_or_unknown" as const);
   }
 
   const dispatchStartedAt = await markInstantDeliveryDispatchStarted(
@@ -111,7 +150,7 @@ export async function sendOperatorAlertEmail(
     claim.claimUpdatedAt,
   );
   if (!dispatchStartedAt) {
-    return false;
+    return "in_flight_or_unknown" as const;
   }
 
   const providerResult = await sendCloudflareEmail(env, {
@@ -138,7 +177,27 @@ export async function sendOperatorAlertEmail(
     expectedUpdatedAt: dispatchStartedAt,
   });
 
-  return finalized && providerResult.status === "sent";
+  if (!finalized) {
+    return "in_flight_or_unknown" as const;
+  }
+  if (providerResult.status === "sent") {
+    return "accepted" as const;
+  }
+  return providerResult.webhookStatus === "provider_unknown"
+    ? ("in_flight_or_unknown" as const)
+    : ("rejected" as const);
+}
+
+export async function sendOperatorAlertEmail(
+  env: AppEnv,
+  input: {
+    subject: string;
+    lines: string[];
+    idempotencyKey?: string;
+    intro?: string;
+  },
+) {
+  return (await sendOperatorAlertEmailDetailed(env, input)) === "accepted";
 }
 
 function operatorAlertPayloadSnapshot(idempotencyKey: string, lines: string[]) {
