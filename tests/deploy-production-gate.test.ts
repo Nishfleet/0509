@@ -1311,7 +1311,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       "CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}",
     );
     expect(synchronizeCanaryStep).toContain(
-      "./node_modules/.bin/wrangler secret put CANARY_BYPASS_TOKEN --name 0509",
+      "./node_modules/.bin/wrangler versions secret put CANARY_BYPASS_TOKEN --name 0509",
     );
     expect(deployStep).toContain(
       "CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}",

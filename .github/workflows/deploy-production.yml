@@ -304,7 +304,7 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s' "$CANARY_BYPASS_TOKEN" |
-            ./node_modules/.bin/wrangler secret put CANARY_BYPASS_TOKEN --name 0509
+            ./node_modules/.bin/wrangler versions secret put CANARY_BYPASS_TOKEN --name 0509
 
       - name: Deploy
         env:
