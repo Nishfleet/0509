@@ -122,15 +122,17 @@ describe("report client action card", () => {
 	it("makes 'Send to client' the single Rank-1 and demotes the PDF download to Rank 2", async () => {
 		const { container, root } = await renderRoute();
 		try {
-				const rank1 = container.querySelectorAll(".f9-ed-cta--rank1");
-				expect(rank1).toHaveLength(1);
-				expect(rank1[0].textContent).toContain("Send to client");
-				expect(rank1[0].classList.contains("f9-wk-btn")).toBe(true);
+			const rank1 = container.querySelectorAll(".f9-ed-cta--rank1");
+			expect(rank1).toHaveLength(1);
+			expect(rank1[0].textContent).toContain("Send to client");
+			expect(rank1[0].classList.contains("f9-wk-btn")).toBe(true);
 
-				const rank2 = container.querySelector(".f9-ed-cta--rank2") as HTMLElement;
-				expect(rank2.textContent).toContain("Download PDF");
-				expect(rank2.classList.contains("f9-wk-lnk")).toBe(true);
-				expect((rank2 as HTMLButtonElement).disabled).toBe(true);
+			const rank2 = container.querySelector(".f9-ed-cta--rank2") as HTMLElement;
+			expect(rank2.textContent).toContain("Download PDF");
+			expect(rank2.classList.contains("f9-wk-lnk")).toBe(true);
+			// #478: the PDF deliverable is gated on the same review tick as the
+			// share form, so it starts disabled until the box is ticked.
+			expect((rank2 as HTMLButtonElement).disabled).toBe(true);
 
 			// The retired styles never ship again (brief §5).
 			expect(container.querySelector(".f9-primary-button")).toBeNull();

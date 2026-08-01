@@ -20,7 +20,7 @@ export function ReportsLockedState({
   return (
     <section
       aria-labelledby="reports-locked-title"
-      className="f9-locked-feature"
+      className="f9-wk-reports-locked f9-locked-feature"
     >
       <WorkingHeader
         action={{ label: "Upgrade to Agency", to: upgradeTo }}
@@ -30,10 +30,10 @@ export function ReportsLockedState({
       />
       <div className="f9-wk-sec">
         <p className="f9-wk-kick">Agency reports</p>
-        <h2 className="f9-wk-change">
+        <h2 className="f9-wk-reports-state-title">
           Everything stays private until you choose to send it.
         </h2>
-        <p className="f9-wk-lede">
+        <p className="f9-wk-reports-state-copy">
           Agency adds in-workspace review, client links, and PDF preparation
           from the evidence you already keep.
           {context ? (
