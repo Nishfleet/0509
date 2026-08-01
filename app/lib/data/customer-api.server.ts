@@ -9,6 +9,7 @@ export {
   listRecentAgentActionAudits,
   createAgentActionAudit,
   claimAgentActionAudit,
+  reclaimRetryableAgentActionAudit,
   finishAgentActionAudit,
   closeCounterMoveFollowUp,
 } from "~/lib/data/customer-api-agent.server";

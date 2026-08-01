@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { creativeCaptureSourceFingerprint } from "~/lib/creative-capture-policy";
 import type { AdRecord, WatchlistRecord } from "~/lib/types";
 
 const watchlist: WatchlistRecord = {
@@ -47,18 +48,81 @@ afterEach(() => {
 });
 
 describe("runWatchlistManual OCR reuse", () => {
-  it("hydrates stored creative text before deciding whether to capture OCR", async () => {
+  it.each([
+    {
+      creativeText: "60 Hours Playback\nOnly ₹999",
+      creativeTextMetadata: {
+        source: "stored",
+      },
+      expectedCaptureCalls: 0,
+      scenario: "reuses non-empty stored creative text",
+    },
+    {
+      creativeText: "   ",
+      creativeTextMetadata: {
+        source: "stored",
+      },
+      expectedCaptureCalls: 1,
+      scenario: "recaptures whitespace-only stored creative text",
+    },
+    {
+      creativeText: null,
+      creativeTextMetadata: {
+        capturedAt: new Date().toISOString(),
+        extractionStatus: "unreadable",
+        unreadableReasonCode: "ocr_binding_missing",
+        creativeSourceFingerprint: "different-source",
+      },
+      expectedCaptureCalls: 1,
+      scenario: "recaptures when recent unreadable metadata belongs to another source",
+    },
+    {
+      creativeText: null,
+      creativeTextMetadata: {
+        capturedAt: new Date().toISOString(),
+        extractionStatus: "unreadable",
+        unreadableReasonCode: "ocr_binding_missing",
+        creativeSourceFingerprint: creativeCaptureSourceFingerprint(baseAd),
+      },
+      expectedCaptureCalls: 0,
+      scenario: "reuses a recent persisted unreadable OCR result",
+    },
+    {
+      creativeText: null,
+      creativeTextMetadata: {
+        capturedAt: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(),
+        extractionStatus: "unreadable",
+        unreadableReasonCode: "ocr_binding_missing",
+        creativeSourceFingerprint: creativeCaptureSourceFingerprint(baseAd),
+      },
+      expectedCaptureCalls: 1,
+      scenario: "recaptures an unreadable OCR result after the cooldown",
+    },
+    {
+      creativeText: null,
+      creativeTextMetadata: {
+        capturedAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        extractionStatus: "unreadable",
+        unreadableReasonCode: "ocr_binding_missing",
+        creativeSourceFingerprint: creativeCaptureSourceFingerprint(baseAd),
+      },
+      expectedCaptureCalls: 1,
+      scenario: "recaptures when the unreadable timestamp is in the future",
+    },
+  ])("$scenario", async ({
+    creativeText,
+    creativeTextMetadata,
+    expectedCaptureCalls,
+  }) => {
     const env = {
       ALLOW_PLATFORM_META_API_FALLBACK: "true",
       META_AD_LIBRARY_TOKEN: "token",
     };
     const hydratedAd: AdRecord = {
       ...baseAd,
-      creativeText: "60 Hours Playback\nOnly ₹999",
+      creativeText,
       creativeTextCaptureMethod: "ad_snapshot_fetch",
-      creativeTextMetadata: {
-        source: "stored",
-      },
+      creativeTextMetadata,
     };
     const captureCreativeText = vi.fn().mockResolvedValue({
       text: "Fresh OCR",
@@ -141,6 +205,6 @@ describe("runWatchlistManual OCR reuse", () => {
     await runWatchlistManual(env as never, watchlist);
 
     expect(hydrateAdsWithPersistedCreatives).toHaveBeenCalledWith(env, [baseAd]);
-    expect(captureCreativeText).not.toHaveBeenCalled();
+    expect(captureCreativeText).toHaveBeenCalledTimes(expectedCaptureCalls);
   });
 });
