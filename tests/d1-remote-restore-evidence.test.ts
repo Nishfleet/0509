@@ -163,15 +163,43 @@ describe("D1 remote restore evidence automation", () => {
       ),
     ) as {
       on?: {
-        workflow_dispatch?: unknown;
+        workflow_dispatch?: {
+          inputs?: Record<string, {
+            description?: string;
+            required?: boolean;
+            type?: string;
+            options?: string[];
+          }>;
+        };
         schedule?: Array<{ cron?: string }>;
       };
+      permissions?: Record<string, string>;
       jobs?: {
+        authorize_release?: {
+          steps?: Array<{
+            name?: string;
+            run?: string;
+            env?: Record<string, string>;
+          }>;
+        };
+        apply_and_restore?: {
+          env?: Record<string, string>;
+          environment?: string;
+          if?: string;
+          needs?: string | string[];
+          steps?: Array<{
+            name?: string;
+            if?: string;
+            run?: string;
+            env?: Record<string, string>;
+            with?: Record<string, unknown>;
+          }>;
+        };
         cleanup?: {
           env?: Record<string, string>;
           environment?: string;
           if?: string;
-          needs?: string;
+          needs?: string | string[];
           steps?: Array<{
             name?: string;
             if?: string;
@@ -183,6 +211,8 @@ describe("D1 remote restore evidence automation", () => {
         restore?: {
           env?: Record<string, string>;
           environment?: string;
+          if?: string;
+          needs?: string | string[];
           "timeout-minutes"?: number;
           steps?: Array<{
             name?: string;
@@ -212,13 +242,96 @@ describe("D1 remote restore evidence automation", () => {
     expect(workflow.on?.schedule).toEqual([
       { cron: "47 20 * * SUN,WED" },
     ]);
-    expect(workflow.jobs?.restore?.environment).toBe("production");
-    expect(workflow.jobs?.cleanup?.environment).toBe("production");
-    expect(workflow.jobs?.cleanup?.if).toContain("always()");
+    expect(workflow.permissions).toEqual({ contents: "read" });
+    expect(workflow.on?.workflow_dispatch?.inputs?.operation).toMatchObject({
+      required: true,
+      type: "choice",
+      options: ["apply_and_restore"],
+    });
+    const authorizeStep = workflow.jobs?.authorize_release?.steps?.find(
+      (step) => step.name === "Authorize restore request",
+    );
+    expect(authorizeStep?.env?.OPERATION).toBe("${{ inputs.operation || '' }}");
+    expect(authorizeStep?.run).toContain(
+      'test "$OPERATION" = "apply_and_restore"',
+    );
+    const apply = workflow.jobs?.apply_and_restore;
+    expect(apply?.if).toContain("github.event_name == 'workflow_dispatch'");
+    expect(apply?.if).toContain("inputs.operation == 'apply_and_restore'");
+    expect(apply?.if).toContain(
+      "needs.authorize_release.result == 'success'",
+    );
+    expect(apply?.needs).toBe("authorize_release");
+    expect(apply?.environment).toBe("production");
+    const exactApplyRestoreGate =
+      "always() && needs.authorize_release.result == 'success' && (github.event_name == 'schedule' || needs.apply_and_restore.result == 'success')";
+    expect(workflow.jobs?.restore?.if).toBe(exactApplyRestoreGate);
+    expect(workflow.jobs?.cleanup?.if).toBe(
+      "always() && needs.authorize_release.result == 'success'",
+    );
+    expect(workflow.jobs?.restore?.needs).toEqual([
+      "authorize_release",
+      "apply_and_restore",
+    ]);
     expect(workflow.jobs?.cleanup?.needs).toEqual([
       "authorize_release",
+      "apply_and_restore",
       "restore",
     ]);
+    const applyAcquireIndex = apply?.steps?.findIndex(
+      (step) => step.name === "Acquire provider lane",
+    ) ?? -1;
+    const applyCasIndex = apply?.steps?.findIndex(
+      (step) => step.name === "Reconfirm frozen main before migration apply",
+    ) ?? -1;
+    const applyMigrationIndex = apply?.steps?.findIndex(
+      (step) => step.name === "Apply exact repository migrations remotely",
+    ) ?? -1;
+    const applyReleaseIndex = apply?.steps?.findIndex(
+      (step) => step.name === "Release provider lane",
+    ) ?? -1;
+    const applyCapabilityCleanupIndex = apply?.steps?.findIndex(
+      (step) => step.name === "Remove provider-lane capability file",
+    ) ?? -1;
+    expect(applyCasIndex).toBe(applyAcquireIndex + 1);
+    expect(applyMigrationIndex).toBe(applyCasIndex + 1);
+    expect(applyReleaseIndex).toBe(applyMigrationIndex + 1);
+    expect(applyCapabilityCleanupIndex).toBe(applyReleaseIndex + 1);
+    expect(apply?.steps?.[applyCasIndex]).toMatchObject({
+      run: "./scripts/ci-verify-provider-main-cas.sh",
+      env: { GH_TOKEN: "${{ github.token }}" },
+    });
+    expect(apply?.steps?.[applyMigrationIndex]?.run).toContain(
+      "npx wrangler d1 migrations apply 0509 --remote",
+    );
+    expect(apply?.env).not.toHaveProperty("CLOUDFLARE_ACCOUNT_ID");
+    expect(apply?.env).not.toHaveProperty("CLOUDFLARE_API_TOKEN");
+    const applyProviderSecretSteps = apply?.steps?.filter(
+      (step) =>
+        step.env?.CLOUDFLARE_ACCOUNT_ID !== undefined ||
+        step.env?.CLOUDFLARE_API_TOKEN !== undefined,
+    );
+    expect(applyProviderSecretSteps).toHaveLength(1);
+    expect(applyProviderSecretSteps?.[0]).toBe(
+      apply?.steps?.[applyMigrationIndex],
+    );
+    expect(applyProviderSecretSteps?.[0]?.env).toMatchObject({
+      CLOUDFLARE_ACCOUNT_ID: "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}",
+      CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}",
+    });
+    expect(apply?.steps?.[applyReleaseIndex]).toMatchObject({
+      if: "always()",
+      run: "./scripts/deploy-window-lock.sh release",
+    });
+    expect(apply?.steps?.[applyCapabilityCleanupIndex]).toMatchObject({
+      if: "always()",
+    });
+    expect(JSON.stringify(apply)).not.toContain("d1 execute");
+    expect(JSON.stringify(apply)).not.toContain("--cleanup-only");
+    expect(JSON.stringify(apply)).not.toContain("--sweep-stale");
+    expect(workflow.jobs?.restore).not.toBe(apply);
+    expect(workflow.jobs?.restore?.environment).toBe("production");
+    expect(workflow.jobs?.cleanup?.environment).toBe("production");
     for (const [job, consumer] of [
       [
         workflow.jobs?.restore,

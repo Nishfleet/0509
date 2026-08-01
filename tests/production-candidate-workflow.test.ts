@@ -261,9 +261,21 @@ describe("exact production candidate workflow", () => {
     });
 
     const restore = readWorkflow("d1-remote-restore-evidence.yml").parsed.jobs;
-    expect(restore.restore?.needs).toBe("authorize_release");
-    expect(restore.cleanup?.needs).toEqual(["authorize_release", "restore"]);
-    for (const job of [restore.restore, restore.cleanup]) {
+    expect(restore.apply_and_restore?.needs).toBe("authorize_release");
+    expect(restore.restore?.needs).toEqual([
+      "authorize_release",
+      "apply_and_restore",
+    ]);
+    expect(restore.cleanup?.needs).toEqual([
+      "authorize_release",
+      "apply_and_restore",
+      "restore",
+    ]);
+    for (const job of [
+      restore.apply_and_restore,
+      restore.restore,
+      restore.cleanup,
+    ]) {
       const steps = job?.steps ?? [];
       const checkout = steps.findIndex((step) =>
         step.uses?.startsWith("actions/checkout@"),
@@ -299,6 +311,9 @@ describe("exact production candidate workflow", () => {
       "Delete every exact scratch database from this run",
     );
     expect(cleanupMutation).toBe(cleanupAcquire + 1);
+    const exactApplyRestoreGate =
+      "always() && needs.authorize_release.result == 'success' && (github.event_name == 'schedule' || needs.apply_and_restore.result == 'success')";
+    expect(restore.restore?.if).toBe(exactApplyRestoreGate);
     expect(restore.cleanup?.if).toBe(
       "always() && needs.authorize_release.result == 'success'",
     );

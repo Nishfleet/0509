@@ -7,6 +7,12 @@ on:
         description: Exact main commit authorized for remote restore evidence
         required: true
         type: string
+      operation:
+        description: Explicit production operation for this manual run
+        required: true
+        type: choice
+        options:
+          - apply_and_restore
   schedule:
     # Explicit low-traffic recovery windows: Monday/Thursday 02:17 IST.
     - cron: "47 20 * * SUN,WED"
@@ -32,6 +38,7 @@ jobs:
         shell: bash
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+          OPERATION: ${{ inputs.operation || '' }}
         run: |
           set -euo pipefail
           sha_pattern='^[a-f0-9]{40}$'
@@ -46,6 +53,7 @@ jobs:
             workflow_dispatch)
               [[ "$EXPECTED_SHA" =~ $sha_pattern ]]
               test "$EXPECTED_SHA" = "$GITHUB_SHA"
+              test "$OPERATION" = "apply_and_restore"
               ;;
             *)
               exit 1
@@ -53,9 +61,79 @@ jobs:
           esac
           printf 'sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
-  restore:
-    if: needs.authorize_release.result == 'success'
+  apply_and_restore:
+    name: Apply migrations for apply_and_restore
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      inputs.operation == 'apply_and_restore' &&
+      needs.authorize_release.result == 'success'
     needs: authorize_release
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment: production
+    env:
+      PINNED_SHA: ${{ needs.authorize_release.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.authorize_release.outputs.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify authorized apply checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --verify HEAD)" = "$PINNED_SHA"
+          if git symbolic-ref --quiet HEAD >/dev/null 2>&1; then
+            exit 1
+          fi
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: ".node-version"
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
+      - run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
+      - name: Acquire provider lane
+        shell: bash
+        env:
+          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
+        run: ./scripts/deploy-window-lock.sh acquire
+      - name: Reconfirm frozen main before migration apply
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/ci-verify-provider-main-cas.sh
+      - name: Apply exact repository migrations remotely
+        shell: bash
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          D1_APPLY_AND_RESTORE_AUTOMATION_APPROVED: "0509-apply-and-restore"
+        run: |
+          set -euo pipefail
+          test "$D1_APPLY_AND_RESTORE_AUTOMATION_APPROVED" = "0509-apply-and-restore"
+          npx wrangler d1 migrations apply 0509 --remote
+      - name: Release provider lane
+        if: always()
+        shell: bash
+        env:
+          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
+        run: ./scripts/deploy-window-lock.sh release
+      - name: Remove provider-lane capability file
+        if: always()
+        shell: bash
+        env:
+          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
+        run: |
+          umask 077
+          rm -f -- "$DEPLOY_WINDOW_CAPABILITY_FILE"
+
+  restore:
+    if: "always() && needs.authorize_release.result == 'success' && (github.event_name == 'schedule' || needs.apply_and_restore.result == 'success')"
+    needs:
+      - authorize_release
+      - apply_and_restore
     runs-on: ubuntu-latest
     timeout-minutes: 300
     environment: production
@@ -152,9 +230,10 @@ jobs:
 
   cleanup:
     name: Confirm scratch D1 cleanup
-    if: always() && needs.authorize_release.result == 'success'
+    if: "always() && needs.authorize_release.result == 'success'"
     needs:
       - authorize_release
+      - apply_and_restore
       - restore
     runs-on: ubuntu-latest
     timeout-minutes: 120

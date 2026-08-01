@@ -53,6 +53,7 @@ describe("workflow routing hardening", () => {
     }
     for (const [file, id] of [
       ["d1-backup-r2.yml", "backup"],
+      ["d1-remote-restore-evidence.yml", "apply_and_restore"],
       ["d1-remote-restore-evidence.yml", "restore"],
       ["d1-remote-restore-evidence.yml", "cleanup"],
       ["deploy-production.yml", "deploy"],
