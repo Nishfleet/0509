@@ -9630,90 +9630,6 @@ reds soften --- */
   box-shadow: none;
 }
 
-/* --- §6.2 capture strip --- */
-
-.f9-ed-capture {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-}
-
-/* Wide objects scroll inside their own container, never the page (brief
-   §9.1). The container is RTL so the strip is anchored to its right edge:
-   the newest day — today, the one that matters — is the default view at any
-   width, and the older days scroll into reach on the left. The track flips
-   back to LTR so the bars keep their oldest-to-newest reading order. */
-.f9-ed-capture-strip {
-  display: flex;
-  direction: rtl;
-  height: 34px;
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-
-.f9-ed-capture-track {
-  display: flex;
-  direction: ltr;
-  align-items: flex-end;
-  gap: 3px;
-  height: 34px;
-  margin-left: 0;
-}
-
-.f9-ed-capture-bar {
-  flex: 0 0 9px;
-  width: 9px;
-}
-
-.f9-ed-capture-bar.is-quiet {
-  height: 8px;
-  background: var(--ed-bar-quiet);
-}
-
-.f9-ed-capture-bar.is-captured {
-  height: 34px;
-  background: var(--ed-rule);
-}
-
-/* Bar height is monotonic and load-bearing: TALL means we captured a change,
-   SHORT means no change. A day we never checked must therefore be short —
-   a full-height dashed slot has the silhouette of a caught change and would
-   read an outage as a run of findings, inverting brief §8.1. The dashed
-   edge and the empty fill are what say "no data"; the height never does. */
-.f9-ed-capture-bar.is-unchecked {
-  box-sizing: border-box;
-  height: 8px;
-  background: none;
-  border: 1px dashed var(--ed-rule-dashed);
-}
-
-/* Before the watch existed there was nothing to check, so the slot is a void:
-   it holds the day's place in the window and says nothing at all. A dash here
-   would read as a monitoring gap we are responsible for (BL-006). */
-.f9-ed-capture-bar.is-prewatch {
-  height: 8px;
-  background: none;
-  border: 0;
-}
-
-.f9-ed-capture-legend {
-  margin: 0;
-  font-family: var(--ed-mono);
-  font-weight: 400;
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  color: var(--ink-soft);
-}
-
-.f9-ed-capture-finding {
-  margin: 0;
-  font-family: var(--ed-mono);
-  font-weight: 500;
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  color: var(--ink);
-}
-
 /* --- §6.3 status strip --- */
 
 .f9-ed-status-strip {
@@ -13160,10 +13076,6 @@ reds soften --- */
   border-top: 1px solid var(--wk-rule);
   font-family: var(--ld-mono);
   font-size: 11.5px;
-}
-
-.f9-wk-page .f9-ed-capture-bar.is-unchecked {
-  border-width: 1px;
 }
 
 /* The last boxes the probe found: the before/now pane frame and its divider,
