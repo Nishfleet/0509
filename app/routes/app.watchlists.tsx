@@ -341,11 +341,9 @@ export default function WatchlistsRoute() {
   };
 
   const selectedWatchlist = data.selectedWatchlist;
-  const selectedRow = selectedWatchlist
-    ? rows.find((row) => row.id === selectedWatchlist.id) ?? null
-    : null;
   const selectedStatusLabel = selectedWatchlist
-    ? selectedRow?.statusLabel ?? (selectedWatchlist.isActive ? "Watching" : "Paused")
+    ? rows.find((row) => row.id === selectedWatchlist.id)?.statusLabel ??
+      (selectedWatchlist.isActive ? "Watching" : "Paused")
     : null;
   const selectedCapturedChanges = selectedWatchlist
     ? captureWindow.capturedChanges[selectedWatchlist.id] ?? 0

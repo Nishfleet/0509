@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 import { Form, Link } from "react-router";
 
@@ -25,6 +26,7 @@ import {
   buildCompetitorFactRows,
   formatCaughtNote,
   formatCaughtNumber,
+  formatLastCheck,
 } from "~/lib/watchlist-detail-display";
 import { createReportId } from "~/lib/report";
 import {
@@ -99,6 +101,8 @@ export interface CompetitorDetailProps {
   showSlackDelivery: boolean;
   /** Capabilities named by the one page-level upgrade action. */
   lockedCapabilities: string[];
+  /** The capture-window rollup failed; aggregate counts must not become zero/quiet. */
+  captureWindowDegraded?: boolean;
   /**
    * Pause lives with Monitoring in Setup for an active competitor. Resume is
    * promoted to the page header when paused; the route keeps the fetcher's
@@ -111,6 +115,7 @@ export interface CompetitorDetailProps {
 
 export function CompetitorDetail(props: CompetitorDetailProps) {
   const { data, watchlist, activeTab } = props;
+  const captureWindowDegraded = Boolean(props.captureWindowDegraded);
   const trackingRole = normalizeWatchlistTrackingRole(watchlist.trackingRole);
   const targetNoun = formatWatchlistTargetNoun(trackingRole);
   const deliveryHref = watchlistDetailTabHref(watchlist.id, "delivery");
@@ -126,6 +131,9 @@ export function CompetitorDetail(props: CompetitorDetailProps) {
     plan: data.plan,
     createdAt: watchlist.createdAt,
     lastScannedAt: watchlist.lastScannedAt,
+    lastCheckValue: watchlist.lastScannedAt ? (
+      <LiveLastCheck iso={watchlist.lastScannedAt} initialNow={props.renderedAt} />
+    ) : null,
     now: props.renderedAt,
     proofSummary: data.proofSummary,
     storedChanges: data.events.length,
@@ -184,13 +192,17 @@ export function CompetitorDetail(props: CompetitorDetailProps) {
         </div>
 
         <CompetitorRail
-          caughtNote={formatCaughtNote({
-            capturedChanges: props.capturedChanges,
-            windowDays: props.windowDays,
-            lastScannedAt: watchlist.lastScannedAt,
-            isActive: watchlist.isActive,
-          })}
-          caughtValue={formatCaughtNumber(props.capturedChanges)}
+          caughtNote={
+            captureWindowDegraded
+              ? "Unavailable — refresh to try again. Recent change totals are unavailable."
+              : formatCaughtNote({
+                  capturedChanges: props.capturedChanges,
+                  windowDays: props.windowDays,
+                  lastScannedAt: watchlist.lastScannedAt,
+                  isActive: watchlist.isActive,
+                })
+          }
+          caughtValue={captureWindowDegraded ? "Unavailable" : formatCaughtNumber(props.capturedChanges)}
           deliveryHref={deliveryHref}
           deliveryLines={deliveryLines}
           factRows={factRows}
@@ -199,6 +211,17 @@ export function CompetitorDetail(props: CompetitorDetailProps) {
       </div>
     </article>
   );
+}
+
+function LiveLastCheck({ iso, initialNow }: { iso: string; initialNow: Date }) {
+  const [now, setNow] = useState(initialNow);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return <time dateTime={iso}>{formatLastCheck(iso, now) ?? "not recorded"}</time>;
 }
 
 function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string }): ReactNode {
@@ -284,8 +307,11 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
           <h3>{props.trackingPresentation.headline}</h3>
           <p className="f9-muted-copy">{props.trackingPresentation.summary}</p>
           <p className="f9-muted-copy">
-            Five to Nine checks public ad signals and shows Recent results when live checks are
-            delayed.
+            {!watchlist.isActive
+              ? "Watching is paused. The evidence already on file stays here."
+              : props.sourceCanSchedule
+                ? `Automatic checks are on. The next one is ${props.nextScanLabel}. Recent results remain available when checks are delayed.`
+                : "Automatic checks are waiting for source access. The evidence already on file stays here."}
           </p>
           {props.discoveryRecovery ? (
             <p className="f9-muted-copy">{props.discoveryRecovery}</p>
@@ -358,8 +384,11 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
         sourceCanSchedule={props.sourceCanSchedule}
         watchlistId={watchlist.id}
       />
-      {props.canReport && watchlist.lastScannedAt ? (
-        <p className="f9-bl035-after-panel">
+      <p className="f9-bl035-after-panel">
+        <Link className="f9-wk-lnk" to={watchlistDetailTabHref(watchlist.id, "evidence")}>
+          Open the capture <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
+        </Link>
+        {props.canReport && watchlist.lastScannedAt ? (
           <Link
             className="f9-wk-lnk"
             to={`/app/reports/${createReportId("watchlist", watchlist.id)}`}
@@ -367,8 +396,8 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
             Package for client
             <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
           </Link>
-        </p>
-      ) : null}
+        ) : null}
+      </p>
     </>
   );
 }

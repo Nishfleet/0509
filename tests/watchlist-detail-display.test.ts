@@ -150,6 +150,7 @@ describe("fact rail rows (brief §6.6)", () => {
       storedChanges: 4,
     });
     expect(rows.length).toBeLessThanOrEqual(FACT_RAIL_MAX_ROWS);
+    expect(new Map(rows.map((row) => [row.key, row])).get("Last check")?.value).toBe("59m ago");
   });
 
   it("keeps a row for every unknown value instead of dropping it", () => {

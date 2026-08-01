@@ -2477,6 +2477,88 @@ describe("watchlists route rendering", () => {
     trendDailyActivity: [],
   };
 
+  it("renders a selected competitor as one entity-owned detail surface", async () => {
+    const markup = await renderWatchlistsRoute(selectedPanelLoaderData);
+
+    expect(markup).toContain('<h1 class="f9-wk-title">Nykaa watch</h1>');
+    expect(markup).toContain('href="/app/watchlists">All competitors</a>');
+    expect(markup.match(/id="competitor-detail"/g)).toHaveLength(1);
+    expect(markup).not.toContain('aria-label="Competitors"');
+    expect(markup).not.toContain('class="f9-wk-split');
+  });
+
+  it("does not turn a failed capture-window rollup into a quiet or zero finding", async () => {
+    const markup = await renderWatchlistsRoute({
+      ...selectedPanelLoaderData,
+      captureWindowDegraded: true,
+    });
+
+    expect(markup).toContain("Recent aggregate totals are unavailable");
+    expect(markup).toContain("Unavailable — refresh to try again");
+    expect(markup).not.toContain("Checked, and nothing has changed in 30 days.");
+    expect(markup).not.toContain('class="f9-ed-number-value">0</p>');
+    expect(markup).toContain('class="f9-ed-status-value">Recent totals unavailable</span>');
+  });
+
+  it("does not promise automatic checks while source access is blocked", async () => {
+    const markup = await renderWatchlistsRoute(
+      {
+        ...selectedPanelLoaderData,
+        discoveryStatus: {
+          status: "demo",
+          provider: "meta_library_browser",
+          mode: "demo",
+          summary: "Live source access is unavailable.",
+          lastCheckedAt: null,
+          lastErrorCode: null,
+          lastErrorMessage: null,
+        },
+      },
+      "setup",
+    );
+
+    expect(markup).toContain("Automatic checks are waiting for source access");
+    expect(markup).not.toContain("Automatic checks are on.");
+    expect(markup).toContain('href="/app/source-access"');
+  });
+
+  it("keeps action feedback text from becoming an external navigation sink", async () => {
+    await mockRouter({
+      actionData: { ok: true, message: "http://evil.example/phish" },
+      loaderData: selectedPanelLoaderData,
+      searchParams: new URLSearchParams("watchlist=watch-1"),
+    });
+    const { default: WatchlistsRoute } = await import("~/routes/app.watchlists");
+    const markup = renderToStaticMarkup(createElement(WatchlistsRoute));
+
+    expect(markup).toContain("http://evil.example/phish");
+    expect(markup).not.toContain('href="http://evil.example/phish"');
+    expect(markup).not.toContain('target="_blank"');
+  });
+
+  it("escapes watchlist and event text as markup-safe customer content", async () => {
+    const hostileWatchlist = {
+      ...watchlist,
+      name: '<img src=x onerror="alert(1)">',
+      targetLabel: "<script>alert(2)</script>",
+    };
+    const markup = await renderWatchlistsRoute({
+      ...selectedPanelLoaderData,
+      watchlists: [hostileWatchlist],
+      selectedWatchlist: hostileWatchlist,
+      events: recentEvents.map((event) => ({
+        ...event,
+        summary: "<b>untrusted event</b>",
+      })),
+    });
+
+    expect(markup).toContain("&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
+    expect(markup).toContain("&lt;script&gt;alert(2)&lt;/script&gt;");
+    expect(markup).toContain("&lt;b&gt;untrusted event&lt;/b&gt;");
+    expect(markup).not.toContain("<img src=x");
+    expect(markup).not.toContain("<script>alert(2)</script>");
+  });
+
   // BL-007 (brief §6.4): the opened competitor is five URL-addressable
   // surfaces, not one scroll. Each assertion below now names the tab the
   // customer has to be on to see it.

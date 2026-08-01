@@ -1,4 +1,5 @@
 import type { FactRow } from "~/components/evidence/fact-rail";
+import type { ReactNode } from "react";
 import { countryNameFromIso } from "~/lib/countries";
 import type {
   WatchlistProofSummary,
@@ -93,7 +94,7 @@ export function formatWatchAge(createdAt: string | null, now: Date): string | nu
   return days === 1 ? "Watching 1 day" : `Watching ${days} days`;
 }
 
-/** Compact freshness for the rail, stable from the loader's rendered-at time. */
+/** Relative freshness for the fact rail; callers may re-render it as time moves. */
 export function formatLastCheck(lastScannedAt: string | null, now: Date): string | null {
   if (!lastScannedAt) return null;
   const checkedAt = Date.parse(lastScannedAt);
@@ -128,9 +129,10 @@ export function formatEvidenceAttempts(summary: WatchlistProofSummary): string |
  * loader returns (§6.6). Eight rows is the hard ceiling and this rail sits
  * at it; adding a ninth means removing one.
  *
- * BL-035 removed the status strip, so Last check stays in this shared rail
- * across every URL tab. Next check remains Setup work and source health stays
- * in the working header.
+ * BL-035 removed the status strip, so Last check lives in this shared rail
+ * across every URL tab and stays the freshness anchor when the detail is
+ * deep-linked. Next check remains Setup work and source health stays in the
+ * working header.
  */
 export function buildCompetitorFactRows(input: {
   targetLabel: string;
@@ -140,6 +142,8 @@ export function buildCompetitorFactRows(input: {
   plan: string;
   createdAt: string | null;
   lastScannedAt: string | null;
+  /** Optional live value so the UI can re-render relative freshness. */
+  lastCheckValue?: ReactNode;
   now: Date;
   proofSummary: WatchlistProofSummary;
   storedChanges: number;
@@ -161,7 +165,7 @@ export function buildCompetitorFactRows(input: {
     },
     {
       key: "Last check",
-      value: formatLastCheck(input.lastScannedAt, input.now),
+      value: input.lastCheckValue ?? formatLastCheck(input.lastScannedAt, input.now),
       missingLabel: "none yet",
     },
     {
