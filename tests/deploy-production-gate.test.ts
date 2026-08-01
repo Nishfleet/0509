@@ -1248,7 +1248,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       "utf8",
     );
     const checkoutIndex = workflow.indexOf(
-      "- uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10",
+      "- uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
     );
     const acquireIndex = workflow.indexOf("- name: Acquire deploy window");
     const verifySecretsIndex = workflow.indexOf(
