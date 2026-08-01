@@ -58,14 +58,14 @@ export const COLLECTION_ITEMS_EMPTY_COPY =
   "Nothing saved here yet. Anything you save from a search or a watchlist shows up here with the capture that proves it.";
 
 export const COLLECTION_BOARD_EMPTY_COPY =
-  "A collection is where the evidence you want to reuse lives — the ad, the offer and the landing page exactly as we captured them, ready to drop into a client report.";
+  "A collection keeps reusable evidence together — the ad, the offer, the landing page, its recorded source, and your team's notes.";
 
 export const COLLECTION_FILTERED_EMPTY_COPY =
   "Nothing saved here matches that competitor. Clear the filter to see everything in this collection, or switch to another one.";
 
-/** The numbered reserved slot's copy on the first-run panel (§6.8 part 3). */
+/** Provenance promise shown before the first collection exists. */
 export const RESERVED_COLLECTION_SLOT_COPY =
-  "The first thing you save lands here as plate 01 — the ad exactly as we captured it, its offer and call to action, and the time we took it.";
+  "The first thing you save lands here with its source, the evidence itself, and the note your team adds.";
 
 /** Brief §6.5.4 honesty note, restated for a saved capture. */
 export const COLLECTION_CAPTURE_NOTE =
@@ -122,6 +122,18 @@ export function resolveSavedItemSourceKind(
   if (source === "external") return "filed";
   if (source === "demo") return "sample";
   return "captured";
+}
+
+/** Sentence-case provenance for the ruled row and its detail pane. */
+export function resolveSavedItemStatus(source: AdRecord["source"] | undefined): string {
+  switch (resolveSavedItemSourceKind(source)) {
+    case "filed":
+      return "Filed";
+    case "sample":
+      return "Sample";
+    default:
+      return "Captured";
+  }
 }
 
 /** Brief §8.3: demo and external material is labelled inline, in mono. */
@@ -291,6 +303,22 @@ export function savedItemProofLink(item: CollectionItemRecord): string | null {
   return proofLinkForAd(item.ad);
 }
 
+/** One plain sentence for the ruled list; depth stays in the detail pane. */
+export function savedItemRowSummary(item: CollectionItemRecord): string {
+  const candidates = [
+    item.ad.hook,
+    item.ad.previewHeadline,
+    item.ad.offer,
+    item.ad.body,
+    item.ad.creativeText,
+    item.note,
+  ];
+  return (
+    candidates.map((value) => value?.trim() ?? "").find(Boolean) ??
+    "Evidence saved without readable copy."
+  );
+}
+
 /* ------------------------------------------------------------------ *
  * §6.6 — the ONE fact rail that replaces the five-action rail
  * ------------------------------------------------------------------ */
@@ -310,6 +338,7 @@ export function buildCollectionFacts(input: {
   collectionLimit: number;
 }): FactRow[] {
   const { items } = input;
+  const filteredMissingLabel = input.hiddenByFilter > 0 ? "hidden by filter" : "none yet";
   const advertisers = new Set<string>();
   const channels = new Set<string>();
   const tags = new Set<string>();
@@ -329,33 +358,38 @@ export function buildCollectionFacts(input: {
   return [
     {
       key: "Saved evidence",
-      value: items.length > 0 ? `${items.length}` : null,
+      value:
+        input.hiddenByFilter > 0
+          ? formatSavedItemsValue(items.length, input.hiddenByFilter)
+          : items.length > 0
+            ? `${items.length}`
+            : null,
       missingLabel: "none yet",
     },
     {
       key: "Competitors",
       value: advertisers.size > 0 ? `${advertisers.size}` : null,
-      missingLabel: "none yet",
+      missingLabel: filteredMissingLabel,
     },
     {
       key: "Channels",
       value: channels.size > 0 ? Array.from(channels).slice(0, 3).join(", ") : null,
-      missingLabel: "none yet",
+      missingLabel: filteredMissingLabel,
     },
     {
       key: "Filed by your team",
       value: external > 0 ? `${external}` : null,
-      missingLabel: "none yet",
+      missingLabel: filteredMissingLabel,
     },
     {
       key: "Openable evidence",
       value: items.length > 0 ? `${withProof} of ${items.length}` : null,
-      missingLabel: "none yet",
+      missingLabel: filteredMissingLabel,
     },
     {
       key: "Tags in use",
       value: tags.size > 0 ? Array.from(tags).slice(0, 4).join(", ") : null,
-      missingLabel: "none yet",
+      missingLabel: filteredMissingLabel,
     },
     {
       key: "Hidden by filter",
@@ -389,6 +423,17 @@ export function formatLockedActionsLabel(locked: readonly string[]): string | nu
 /** Keeps the collection deep-link shape in one place. */
 export function collectionHref(collectionId: string, advertiserFilter?: string | null): string {
   const params = new URLSearchParams({ collection: collectionId });
+  if (advertiserFilter) params.set("advertiser", advertiserFilter);
+  return `/app/collections?${params.toString()}`;
+}
+
+/** Deep-link one saved record without changing the loader's collection read. */
+export function collectionItemHref(
+  collectionId: string,
+  itemId: string,
+  advertiserFilter?: string | null,
+): string {
+  const params = new URLSearchParams({ collection: collectionId, item: itemId });
   if (advertiserFilter) params.set("advertiser", advertiserFilter);
   return `/app/collections?${params.toString()}`;
 }

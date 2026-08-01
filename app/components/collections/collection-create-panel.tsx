@@ -13,12 +13,8 @@ import { COLLECTION_BOARD_EMPTY_COPY, RESERVED_COLLECTION_SLOT_COPY } from "~/li
  *
  * Two modes, one form:
  *
- * - `first-run` — there are no collections yet, so there is no saved evidence
- *   to put first. The form IS the page, rendered as the brief's specimen panel:
- *   ink header stating the real state, a headline and one honest paragraph,
- *   the form with the screen's single Rank-1 submit, and a numbered reserved
- *   slot so the state reads as *reserved*, not broken. Exactly one empty panel
- *   on the screen — never a grid of them (A2) and never a mascot in a void (A3).
+ * - `first-run` — there are no collections yet, so the quiet explanation and
+ *   form ARE the page. The form owns the screen's single Rank-1 submit.
  * - `disclosure` — collections exist, so saved evidence owns the page and
  *   creating another one is a Rank-2 action that reveals a panel (§7), with a
  *   Rank-2 submit. The screen's Rank-1 budget stays free.
@@ -26,14 +22,16 @@ import { COLLECTION_BOARD_EMPTY_COPY, RESERVED_COLLECTION_SLOT_COPY } from "~/li
 export function CollectionCreatePanel({
   mode,
   feedback,
+  defaultOpen = false,
 }: {
   mode: "first-run" | "disclosure";
   /** Inline action feedback for the create intent, rendered inside the form. */
   feedback?: ReactNode;
+  /** Opens the form when the header's New collection command is followed. */
+  defaultOpen?: boolean;
 }) {
-  const submitRank = mode === "first-run" ? 1 : 2;
   const fields = (
-    <Form className="f9-ed-form" method="post">
+    <Form className="f9-col-form" method="post">
       <input name="intent" type="hidden" value="create-collection" />
       <label className="f9-field">
         <span>Name</span>
@@ -45,7 +43,7 @@ export function CollectionCreatePanel({
       </label>
       {feedback}
       <SubmitButton
-        className={`f9-ed-cta f9-ed-cta--rank${submitRank}`}
+        className={mode === "first-run" ? "f9-wk-btn" : "f9-wk-lnk"}
         intent="create-collection"
         pendingLabel="Creating…"
       >
@@ -57,7 +55,8 @@ export function CollectionCreatePanel({
   if (mode === "disclosure") {
     return (
       <CollectionDisclosure
-        className="f9-ed-collection-create"
+        className="f9-col-create"
+        defaultOpen={defaultOpen}
         group={COLLECTION_PANEL_GROUP}
         summary="New collection"
       >
@@ -67,24 +66,14 @@ export function CollectionCreatePanel({
   }
 
   return (
-    <section className="f9-ed-specimen f9-ed-collection-create">
-      <header className="f9-ed-plate-header f9-ed-micro">
-        <span>Collections · none yet</span>
-      </header>
-      <div className="f9-ed-specimen-body">
-        <h2 className="f9-ed-specimen-headline">Start your first collection</h2>
-        <p className="f9-ed-specimen-copy">{COLLECTION_BOARD_EMPTY_COPY}</p>
-        {fields}
-        <div className="f9-ed-specimen-slot">
-          <div aria-hidden="true" className="f9-ed-specimen-scan" />
-          <div className="f9-ed-specimen-slot-header f9-ed-micro">Plate 01 — reserved</div>
-          {/* A description of what lands here, not content: out of the
-              accessibility tree and out of the tab order. */}
-          <div aria-hidden="true" className="f9-ed-specimen-slot-inner" inert>
-            <p className="f9-ed-specimen-copy">{RESERVED_COLLECTION_SLOT_COPY}</p>
-          </div>
-        </div>
-      </div>
+    <section aria-labelledby="collections-first-title" className="f9-wk-sec f9-col-empty">
+      <p className="f9-wk-kick">Nothing filed yet</p>
+      <h2 className="f9-col-section-title" id="collections-first-title">
+        Start your first collection
+      </h2>
+      <p className="f9-wk-lede">{COLLECTION_BOARD_EMPTY_COPY}</p>
+      <p className="f9-col-note">{RESERVED_COLLECTION_SLOT_COPY}</p>
+      {fields}
     </section>
   );
 }

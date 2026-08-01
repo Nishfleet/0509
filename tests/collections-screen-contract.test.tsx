@@ -16,7 +16,7 @@ import type { CollectionItemRecord } from "~/lib/types";
  * workspace shell carries its own standing ink-filled "+ Add competitor", so a
  * page primary made two. Everything here renders the real app layout with the
  * real route inside it and counts every ink-filled primary on the screen —
- * `.f9-ed-cta--rank1` (the Evidence Desk rank) and `.f9-primary-button` (the
+ * `.f9-wk-btn` (the landing-language rank) and `.f9-primary-button` (the
  * legacy shell style) together.
  *
  * These are live-DOM specs, so they also cover what static markup cannot: the
@@ -124,7 +124,7 @@ async function renderScreen(loaderData: Record<string, unknown>) {
 
 /** Every ink-filled primary on the screen, shell included. */
 function screenPrimaries(view: HTMLElement) {
-  return Array.from(view.querySelectorAll(".f9-ed-cta--rank1, .f9-primary-button"));
+  return Array.from(view.querySelectorAll(".f9-wk-btn, .f9-primary-button"));
 }
 
 describe("collections screen-level Rank-1 budget (brief §5)", () => {
@@ -139,7 +139,7 @@ describe("collections screen-level Rank-1 budget (brief §5)", () => {
     ["free plan gate", { collections: [], plan: "free", selectedCollection: null }, 1],
     ["first run", { collections: [], plan: "agency", selectedCollection: null }, 1],
     ["collection selected, nothing filed", {}, 1],
-    ["populated", { items: [savedItem()] }, 0],
+    ["populated", { items: [savedItem()] }, 1],
   ])("shows at most one ink primary for %s", async (_label, loaderData, expected) => {
     const view = await renderScreen(loaderData as Record<string, unknown>);
 
@@ -168,33 +168,29 @@ describe("collections screen-level Rank-1 budget (brief §5)", () => {
       selectedCollection: atLimit[0],
     });
 
-    expect(screenPrimaries(view)).toHaveLength(0);
+    expect(screenPrimaries(view)).toHaveLength(1);
+    expect(screenPrimaries(view)[0]?.textContent).toContain("View upgrade options");
   });
 });
 
-describe("collections action row (brief §5)", () => {
-  it("keeps an Agency action row to three Rank-2 controls", async () => {
+describe("collections plan × action surface", () => {
+  it("keeps every Agency collection action as quiet text below the evidence", async () => {
     const view = await renderScreen({ items: [savedItem()] });
 
-    const row = view.querySelector(".f9-ed-collection-head .f9-ed-action-row");
+    const row = view.querySelector(".f9-col-actions");
     expect(row).not.toBeNull();
-    const rank2 = Array.from(row?.querySelectorAll(".f9-ed-cta--rank2") ?? []).filter(
-      // The two export links live INSIDE the Export disclosure; the row itself
-      // only spends one slot on them.
-      (element) => element.closest(".f9-ed-collection-export") === null || element.tagName === "SUMMARY",
-    );
-    expect(rank2.map((element) => element.textContent)).toEqual([
-      "Package for client",
-      "Export",
-      "Create share link",
-    ]);
-    expect(row?.querySelectorAll(".f9-ed-cta--rank3")).toHaveLength(1);
+    expect(row?.textContent).toContain("Package for client");
+    expect(row?.textContent).toContain("Export collection");
+    expect(row?.textContent).toContain("Create share link");
+    expect(row?.textContent).toContain("Delete collection");
+    expect(row?.textContent).not.toContain("Compare plans");
+    expect(row?.querySelectorAll(".f9-wk-btn")).toHaveLength(0);
   });
 
   it("still exposes both export formats behind the one control", async () => {
     const view = await renderScreen({ items: [savedItem()] });
 
-    const exportPanel = view.querySelector(".f9-ed-collection-export");
+    const exportPanel = view.querySelector(".f9-col-export");
     const links = Array.from(exportPanel?.querySelectorAll("a") ?? []).map((a) =>
       a.getAttribute("href"),
     );
@@ -209,7 +205,7 @@ describe("collections disclosures and switcher (live DOM)", () => {
   it("toggles a disclosure open and closed from its summary", async () => {
     const view = await renderScreen({ items: [savedItem()] });
 
-    const details = view.querySelector<HTMLDetailsElement>(".f9-ed-collection-external");
+    const details = view.querySelector<HTMLDetailsElement>(".f9-col-external");
     const summary = details?.querySelector<HTMLElement>("summary");
     expect(details?.open).toBe(false);
 
@@ -223,7 +219,7 @@ describe("collections disclosures and switcher (live DOM)", () => {
   it("puts focus on the summary, which is the control", async () => {
     const view = await renderScreen({ items: [savedItem()] });
 
-    const summary = view.querySelector<HTMLElement>(".f9-ed-collection-export summary");
+    const summary = view.querySelector<HTMLElement>(".f9-col-export summary");
     expect(summary).not.toBeNull();
     await act(async () => summary?.focus());
     expect(document.activeElement).toBe(summary);
@@ -240,8 +236,8 @@ describe("collections disclosures and switcher (live DOM)", () => {
       .map((details) => details.getAttribute("name"))
       .filter(Boolean);
     expect(panelGroups).toEqual([
-      "f9-collection-panel", // Export
       "f9-collection-item", // the item's editor
+      "f9-collection-panel", // Export
       "f9-collection-panel", // Add an evidence link
       "f9-collection-panel", // New collection
     ]);
@@ -254,14 +250,14 @@ describe("collections disclosures and switcher (live DOM)", () => {
       items: [savedItem()],
     });
 
-    const links = Array.from(view.querySelectorAll(".f9-ed-switch-item"));
+    const links = Array.from(view.querySelectorAll(".f9-col-switch-item"));
     expect(links).toHaveLength(2);
     const current = links.filter((link) => link.getAttribute("aria-current") === "page");
     expect(current).toHaveLength(1);
     expect(current[0]?.textContent).toBe("Launch proof");
     // Navigation, never a CTA (§5 "Non-button — Navigation").
     for (const link of links) {
-      expect(link.className).not.toContain("f9-ed-cta");
+      expect(link.className).not.toContain("f9-wk-btn");
     }
   });
 });
