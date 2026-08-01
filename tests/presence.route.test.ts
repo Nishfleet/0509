@@ -2,16 +2,18 @@ import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { FeedbackStrip } from "~/components/workspace/feedback-strip";
+
 type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
 type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
 
-async function mockRouter(loaderData: unknown) {
+async function mockRouter(loaderData: unknown, actionData: unknown = null) {
   vi.doMock("react-router", async () => {
     const actual = await vi.importActual<typeof import("react-router")>("react-router");
     return {
       ...actual,
       useLoaderData: () => loaderData,
-      useActionData: () => null,
+      useActionData: () => actionData,
       useNavigation: () => ({ state: "idle", formData: null }),
       Form: ({ children, ...props }: MockFormProps) => createElement("form", props, children),
       Link: ({ children, to, ...props }: MockLinkProps) => createElement("a", { href: to, ...props }, children),
@@ -89,12 +91,17 @@ describe("presence desk routes", () => {
     ]);
   });
 
-  it("renders repositioned Presence Desk index copy", async () => {
+  it("renders the quiet Presence instrument and honest source coverage", async () => {
     vi.resetModules();
     await mockRouter({
       snapshot: { entities: [], recentItems: [] },
       plan: "starter",
-      limits: { maxTrackedEntities: 5, maxWebsiteSourcesPerEntity: 3 },
+      limits: {
+        maxTrackedEntities: 5,
+        maxSelfEntities: 2,
+        maxCompetitorEntities: 5,
+        maxWebsiteSourcesPerEntity: 3,
+      },
       access: { rolloutState: "ga", allowed: true },
       selfAllowed: true,
       competitorAllowed: true,
@@ -151,13 +158,316 @@ describe("presence desk routes", () => {
 
     const route = await import("~/routes/app.presence");
     const html = renderToStaticMarkup(createElement(route.default));
-    expect(html).toContain("Presence Desk");
-    expect(html).toContain("Proof-backed entity tracking");
-    expect(html).toContain("Declared sources");
+    expect(html).toContain(">Presence<");
+    expect(html).toContain("Start with a website");
+    expect(html).toContain("Source coverage");
     expect(html).toContain("Your brand");
     expect(html).toContain("Competitors");
     expect(html).toContain("Planned");
+    expect(
+      html.match(/This source is not available for customer checks yet\./g) ?? [],
+    ).toHaveLength(1);
+    expect(html).not.toContain("f9-app-panel");
+    expect(html).not.toContain("PRESENCE DESK");
     expect(html).not.toContain("whole-internet scanning");
+  });
+
+  it("keeps divergent self and competitor coverage reasons labelled and sanitized", async () => {
+    vi.resetModules();
+    await mockRouter({
+      snapshot: { entities: [], recentItems: [] },
+      plan: "scout",
+      limits: {
+        maxTrackedEntities: 5,
+        maxSelfEntities: 0,
+        maxCompetitorEntities: 5,
+        maxWebsiteSourcesPerEntity: 3,
+      },
+      access: { rolloutState: "ga", allowed: true },
+      selfAllowed: false,
+      competitorAllowed: true,
+      connectors: [],
+      sourceCoverage: {
+        self: [
+          {
+            sourceId: "website",
+            label: "Website / open web",
+            status: "unavailable",
+            coverageLabel: "UNAVAILABLE",
+            reasonCode: "mode_not_in_plan",
+            reasonMessage: "raw provider detail must not leak",
+            actionNeeded: "internal detail",
+            connectorId: "website",
+          },
+        ],
+        competitor: [
+          {
+            sourceId: "website",
+            label: "Website / open web",
+            status: "available",
+            coverageLabel: "PUBLIC_WEB_BEST_EFFORT",
+            reasonCode: null,
+            reasonMessage: null,
+            actionNeeded: "Add a source target",
+            connectorId: "website",
+          },
+        ],
+      },
+      partialDataNotice: null,
+      redirectFeedback: null,
+      userEmail: "owner@example.com",
+    });
+
+    const route = await import("~/routes/app.presence");
+    const html = renderToStaticMarkup(createElement(route.default));
+    expect(html).toContain("Your brand: This entity type is not included in your current plan.");
+    expect(html).toContain("Competitors: Available");
+    expect(html).not.toContain("raw provider detail must not leak");
+    expect(html).not.toContain("internal detail");
+  });
+
+  it("announces success and failure feedback atomically", () => {
+    const success = renderToStaticMarkup(
+      createElement(FeedbackStrip, { children: "Saved.", label: "Done" }),
+    );
+    const failure = renderToStaticMarkup(
+      createElement(FeedbackStrip, {
+        children: "Could not save.",
+        label: "Not done",
+        tone: "bad",
+      }),
+    );
+    expect(success).toContain('role="status"');
+    expect(success).toContain('aria-live="polite"');
+    expect(success).toContain('aria-atomic="true"');
+    expect(failure).toContain('role="alert"');
+    expect(failure).toContain('aria-live="assertive"');
+    expect(failure).toContain('aria-atomic="true"');
+  });
+
+  it("routes action feedback through the atomic strip before redirect feedback", async () => {
+    vi.resetModules();
+    await mockRouter(
+      {
+        snapshot: { entities: [], recentItems: [] },
+        plan: "starter",
+        limits: {
+          maxTrackedEntities: 5,
+          maxSelfEntities: 2,
+          maxCompetitorEntities: 5,
+          maxWebsiteSourcesPerEntity: 3,
+        },
+        access: { rolloutState: "ga", allowed: true },
+        selfAllowed: true,
+        competitorAllowed: true,
+        connectors: [],
+        sourceCoverage: { self: [], competitor: [] },
+        partialDataNotice: null,
+        redirectFeedback: { ok: true, message: "Entity deleted." },
+        userEmail: "owner@example.com",
+      },
+      { ok: false, message: "The latest source check could not complete." },
+    );
+
+    const route = await import("~/routes/app.presence");
+    const html = renderToStaticMarkup(createElement(route.default));
+    expect(html).toContain("The latest source check could not complete.");
+    expect(html).not.toContain("Entity deleted.");
+    expect(html).toContain('role="alert"');
+    expect(html).toContain('aria-live="assertive"');
+    expect(html).toContain('aria-atomic="true"');
+  });
+
+  it.each([
+    {
+      plan: "free",
+      selfAllowed: false,
+      competitorAllowed: false,
+      expectedAction: "Upgrade to Scout",
+      expectedOptions: 0,
+    },
+    {
+      plan: "scout",
+      selfAllowed: false,
+      competitorAllowed: true,
+      expectedAction: "Start tracking",
+      expectedOptions: 1,
+    },
+    {
+      plan: "starter",
+      selfAllowed: true,
+      competitorAllowed: true,
+      expectedAction: "Start tracking",
+      expectedOptions: 2,
+    },
+    {
+      plan: "agency",
+      selfAllowed: true,
+      competitorAllowed: true,
+      expectedAction: "Start tracking",
+      expectedOptions: 2,
+    },
+  ])(
+    "renders exactly one primary action for the $plan entitlement state",
+    async ({ plan, selfAllowed, competitorAllowed, expectedAction, expectedOptions }) => {
+      vi.resetModules();
+      await mockRouter({
+        snapshot: { entities: [], recentItems: [] },
+        plan,
+        limits: {
+          maxTrackedEntities: plan === "free" ? 0 : 8,
+          maxSelfEntities: plan === "free" ? 0 : 2,
+          maxCompetitorEntities: plan === "free" ? 0 : 8,
+          maxWebsiteSourcesPerEntity: plan === "free" ? 0 : 4,
+        },
+        access: { rolloutState: "ga", allowed: true },
+        selfAllowed,
+        competitorAllowed,
+        connectors: [],
+        sourceCoverage: { self: [], competitor: [] },
+        partialDataNotice: null,
+        redirectFeedback: null,
+        userEmail: "owner@example.com",
+      });
+
+      const route = await import("~/routes/app.presence");
+      const html = renderToStaticMarkup(createElement(route.default));
+      expect(html.match(/class="f9-wk-btn"/g) ?? []).toHaveLength(1);
+      const primaryAction = html.match(
+        /class="f9-wk-btn"[^>]*>([\s\S]*?)<\/(?:a|button)>/,
+      )?.[1] ?? "";
+      expect(primaryAction).toContain(expectedAction);
+      const trackingModeOptions = html.match(
+        /<select[^>]*name="trackingMode"[^>]*>([\s\S]*?)<\/select>/,
+      )?.[1] ?? "";
+      expect(trackingModeOptions.match(/<option/g) ?? []).toHaveLength(expectedOptions);
+      if (plan === "free") {
+        expect(html).not.toContain('name="trackingMode"');
+        expect(html).toContain("read-only");
+      } else {
+        expect(html).toContain('name="trackingMode"');
+      }
+    },
+  );
+
+  it("turns a full paid-plan instrument into a capacity-specific primary action", async () => {
+    vi.resetModules();
+    const entities = Array.from({ length: 8 }, (_, index) => ({
+      entity: {
+        id: `entity-${index}`,
+        label: `Tracked entity ${index + 1}`,
+        trackingMode: "competitor" as const,
+        updatedAt: "2026-07-02T00:00:00.000Z",
+      },
+      sources: [],
+    }));
+    await mockRouter({
+      snapshot: { entities, recentItems: [] },
+      plan: "starter",
+      limits: {
+        maxTrackedEntities: 8,
+        maxSelfEntities: 2,
+        maxCompetitorEntities: 8,
+        maxWebsiteSourcesPerEntity: 4,
+      },
+      access: { rolloutState: "ga", allowed: true },
+      selfAllowed: true,
+      competitorAllowed: true,
+      connectors: [],
+      sourceCoverage: { self: [], competitor: [] },
+      partialDataNotice: null,
+      redirectFeedback: null,
+      userEmail: "owner@example.com",
+    });
+
+    const route = await import("~/routes/app.presence");
+    const html = renderToStaticMarkup(createElement(route.default));
+    expect(html.match(/class="f9-wk-btn"/g) ?? []).toHaveLength(1);
+    expect(html).toContain("All 8 tracked entity slots on the Starter plan are in use.");
+    expect(html).toContain("Review tracked entities");
+    expect(html).not.toContain('name="trackingMode"');
+    expect(html).not.toContain("read-only on the Starter plan");
+  });
+
+  it("omits a tracking mode whose per-mode capacity is exhausted", async () => {
+    vi.resetModules();
+    const entities = Array.from({ length: 2 }, (_, index) => ({
+      entity: {
+        id: `self-${index}`,
+        label: `Brand ${index + 1}`,
+        trackingMode: "self" as const,
+        updatedAt: "2026-07-02T00:00:00.000Z",
+      },
+      sources: [],
+    }));
+    await mockRouter({
+      snapshot: { entities, recentItems: [] },
+      plan: "starter",
+      limits: {
+        maxTrackedEntities: 8,
+        maxSelfEntities: 2,
+        maxCompetitorEntities: 8,
+        maxWebsiteSourcesPerEntity: 4,
+      },
+      access: { rolloutState: "ga", allowed: true },
+      selfAllowed: true,
+      competitorAllowed: true,
+      connectors: [],
+      sourceCoverage: { self: [], competitor: [] },
+      partialDataNotice: null,
+      redirectFeedback: null,
+      userEmail: "owner@example.com",
+    });
+
+    const route = await import("~/routes/app.presence");
+    const html = renderToStaticMarkup(createElement(route.default));
+    const trackingModeOptions = html.match(
+      /<select[^>]*name="trackingMode"[^>]*>([\s\S]*?)<\/select>/,
+    )?.[1] ?? "";
+    expect(trackingModeOptions).not.toContain("Your brand");
+    expect(trackingModeOptions).toContain("Competitor");
+    expect(html).toContain('value="competitor"');
+    expect(html).not.toContain("entity-type limits");
+  });
+
+  it("keeps a downgraded workspace slot count at zero", async () => {
+    vi.resetModules();
+    await mockRouter({
+      snapshot: {
+        entities: [
+          {
+            entity: {
+              id: "entity-retained",
+              label: "Retained competitor",
+              trackingMode: "competitor",
+              updatedAt: "2026-07-02T00:00:00.000Z",
+            },
+            sources: [],
+          },
+        ],
+        recentItems: [],
+      },
+      plan: "free",
+      limits: {
+        maxTrackedEntities: 0,
+        maxSelfEntities: 0,
+        maxCompetitorEntities: 0,
+        maxWebsiteSourcesPerEntity: 0,
+      },
+      access: { rolloutState: "ga", allowed: true },
+      selfAllowed: false,
+      competitorAllowed: false,
+      connectors: [],
+      sourceCoverage: { self: [], competitor: [] },
+      partialDataNotice: null,
+      redirectFeedback: null,
+      userEmail: "owner@example.com",
+    });
+
+    const route = await import("~/routes/app.presence");
+    const html = renderToStaticMarkup(createElement(route.default));
+    expect(html).toContain("0 entity slots left");
+    expect(html).not.toContain("-1 entity slots left");
   });
 
   it("does not render retained unsupported social targets as active index coverage", async () => {
@@ -184,7 +494,12 @@ describe("presence desk routes", () => {
         recentItems: [],
       },
       plan: "starter",
-      limits: { maxTrackedEntities: 5, maxWebsiteSourcesPerEntity: 3 },
+      limits: {
+        maxTrackedEntities: 5,
+        maxSelfEntities: 2,
+        maxCompetitorEntities: 5,
+        maxWebsiteSourcesPerEntity: 3,
+      },
       access: { rolloutState: "ga", allowed: true },
       selfAllowed: true,
       competitorAllowed: true,
@@ -534,7 +849,12 @@ describe("presence desk routes", () => {
 		await mockRouter({
 			snapshot: { entities: [], recentItems: [] },
 			plan: "starter",
-			limits: { maxTrackedEntities: 5, maxWebsiteSourcesPerEntity: 3 },
+			limits: {
+        maxTrackedEntities: 5,
+        maxSelfEntities: 2,
+        maxCompetitorEntities: 5,
+        maxWebsiteSourcesPerEntity: 3,
+      },
 			access: { rolloutState: "ga", allowed: true },
 			selfAllowed: true,
 			competitorAllowed: true,

@@ -80,6 +80,7 @@ async function renderReportsLocked(
       plan,
       preparedBy: null,
       report: null,
+      upgradePath: "/app/billing?source=reports#plans",
     },
     params,
   });
@@ -342,6 +343,7 @@ describe("reports plan state", () => {
   });
 
   it("returns a useful loader state instead of throwing for non-Agency plans", async () => {
+    const loadOwnedReportDocument = vi.fn();
     vi.doMock("~/lib/auth.server", () => ({
       requireWorkspaceSession: vi.fn().mockResolvedValue({
         session: { user: { id: "user-1" } },
@@ -357,6 +359,7 @@ describe("reports plan state", () => {
       }),
       resolveWorkspacePreparedBy: vi.fn(),
     }));
+    vi.doMock("~/lib/report-loader.server", () => ({ loadOwnedReportDocument }));
 
     const { loader } = await import("~/routes/app.reports");
     const result = await loader({
@@ -366,5 +369,6 @@ describe("reports plan state", () => {
     } as never);
 
     expect(result).toMatchObject({ accessDenied: true, plan: "starter", report: null });
+    expect(loadOwnedReportDocument).not.toHaveBeenCalled();
   });
 });

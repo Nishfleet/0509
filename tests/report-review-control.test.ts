@@ -130,6 +130,9 @@ describe("report client action card", () => {
 			const rank2 = container.querySelector(".f9-ed-cta--rank2") as HTMLElement;
 			expect(rank2.textContent).toContain("Download PDF");
 			expect(rank2.classList.contains("f9-wk-lnk")).toBe(true);
+			// #478: the PDF deliverable is gated on the same review tick as the
+			// share form, so it starts disabled until the box is ticked.
+			expect((rank2 as HTMLButtonElement).disabled).toBe(true);
 
 			// The retired styles never ship again (brief §5).
 			expect(container.querySelector(".f9-primary-button")).toBeNull();

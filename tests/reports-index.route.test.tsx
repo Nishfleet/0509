@@ -119,8 +119,12 @@ describe("reports index", () => {
     expect(markup).toContain("Offer tests");
     expect(markup).toContain('href="/app/reports/collection%3Acollection-1"');
 
+    expect(markup).toContain(">Available reports</h2>");
+    expect(markup).toContain('aria-label="Available reports"');
+    expect(markup).toContain('role="list"');
     expect(markup).toContain("f9-wk-rows");
     expect(markup.match(/class="[^"]*\bf9-wk-row\b[^"]*"/g) ?? []).toHaveLength(1);
+    expect(markup.match(/role="listitem"/g) ?? []).toHaveLength(1);
     expect(markup).not.toContain("f9-ed-report-shelf");
     expect(markup).not.toContain("f9-ed-report-band");
     expect(markup).not.toContain("f9-work-row");

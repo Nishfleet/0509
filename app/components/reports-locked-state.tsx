@@ -13,7 +13,10 @@ export interface ReportsLockedStateProps {
  * report. In the landing language the explanation is the surface: one quiet
  * header, one short reason, and one filled way forward.
  */
-export function ReportsLockedState({ context, upgradeTo }: ReportsLockedStateProps) {
+export function ReportsLockedState({
+  context,
+  upgradeTo,
+}: ReportsLockedStateProps) {
   return (
     <section
       aria-labelledby="reports-locked-title"
@@ -31,13 +34,13 @@ export function ReportsLockedState({ context, upgradeTo }: ReportsLockedStatePro
           Everything stays private until you choose to send it.
         </h2>
         <p className="f9-wk-reports-state-copy">
-          Agency adds in-workspace review, client links, and PDF preparation from the
-          evidence you already keep.
+          Agency adds in-workspace review, client links, and PDF preparation
+          from the evidence you already keep.
           {context ? (
             <>
               {" "}
-              <strong>{context}</strong> requested. Its workspace evidence is not shown
-              while access is locked.
+              <strong>{context}</strong> requested. Its workspace evidence is
+              not shown while access is locked.
             </>
           ) : (
             " Your workspace evidence is not used as an upgrade preview."

@@ -499,7 +499,7 @@ export default function ReportsRoute() {
       <DashboardPage className="f9-wk-page f9-wk-report-view">
         <ReportsLockedState
           context={gatedReportContext(params.id)}
-          upgradeTo="/app/billing?source=reports#plans"
+          upgradeTo={data.upgradePath}
         />
       </DashboardPage>
     );
@@ -655,7 +655,7 @@ export default function ReportsRoute() {
                 <input name="reviewed" type="hidden" value={reviewed ? "true" : "false"} />
                 <SubmitButton
                   className="f9-ed-cta f9-ed-cta--rank2 f9-wk-lnk"
-                  disabled={!reportReadiness.ok || pdfPreparing}
+                  disabled={!reportReadiness.ok || !reviewed || pdfPreparing}
                   intent="download-pdf"
                   pendingLabel="Preparing…"
                 >

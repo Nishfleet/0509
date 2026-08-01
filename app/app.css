@@ -98,12 +98,6 @@
   gap: 8px;
 }
 
-.f9-result-card-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
 
 * {
   box-sizing: border-box;
@@ -778,15 +772,21 @@ img {
 }
 
 /* Five to Nine search rebuild */
+/* BL-031: this rule used to pin a navy SaaS palette (`#f6f9fc` ground,
+   `#061629` ink) and its own `ui-sans-serif` stack onto the whole search page,
+   which the public reskin then fought back with a second set of `--ld-*`
+   overrides. Two palettes arguing on one route is exactly the hybrid the owner
+   called slop. The tokens survive because the public rail and the focus
+   contract read them; they now resolve to the product's own tokens in BOTH
+   themes, the way the dark remap already did. */
 .f9-search-page {
-  --f9-search-ink: #061629;
-  --f9-search-muted: #40546a;
-  --f9-search-soft: #64788d;
-  --f9-search-line: rgba(6, 22, 41, 0.1);
+  --f9-search-ink: var(--ink);
+  --f9-search-muted: var(--ink-soft);
+  --f9-search-soft: var(--ink-faint);
+  --f9-search-line: var(--line);
   min-height: 100vh;
-  background: #f6f9fc;
-  color: var(--f9-search-ink);
-  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--bone);
+  color: var(--ink);
 }
 
 .f9-search-page *,
@@ -807,9 +807,7 @@ img {
 }
 
 .f9-search-nav-links,
-.f9-action-row,
-.f9-panel-head,
-.f9-discovery-banner {
+.f9-action-row {
   display: flex;
   align-items: center;
 }
@@ -835,37 +833,15 @@ img {
   color: #fff;
 }
 
-.f9-discovery-banner span,
-.f9-side-note span,
-.f9-panel-head span,
-.f9-result-card span,
-.f9-proof-block > span {
-  color: #65d5bb;
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
 
 .f9-quick-track-form {
   display: grid;
   gap: 12px;
 }
 
-.f9-search-empty-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 16px;
-}
 
-.f9-search-workspace {
-  margin-top: -44px;
-  padding: 0 0 88px;
-}
 
-.f9-message,
-.f9-discovery-banner {
+.f9-message {
   position: relative;
   z-index: 2;
   margin-bottom: 16px;
@@ -1004,49 +980,14 @@ button[aria-busy="true"] {
   color: var(--red);
 }
 
-.f9-discovery-banner {
-  justify-content: space-between;
-  gap: 18px;
-}
 
-.f9-discovery-banner p {
-  flex: 1;
-  color: var(--f9-search-muted);
-}
 
-.f9-discovery-banner small {
-  color: var(--f9-search-soft);
-  font-weight: 700;
-}
 
-.f9-search-grid {
-  position: relative;
-  z-index: 2;
-  display: grid;
-  grid-template-columns: minmax(280px, 0.86fr) minmax(360px, 1.08fr) minmax(330px, 0.92fr);
-  gap: 18px;
-  align-items: start;
-}
 
-.f9-results-panel,
-.f9-proof-detail {
-  border: 1px solid var(--f9-search-line);
-  border-radius: 26px;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 28px 80px rgba(6, 22, 41, 0.09);
-}
 
-.f9-proof-detail {
-  padding: 22px;
-}
 
-.f9-results-panel {
-  overflow: hidden;
-}
 
-.f9-save-stack,
-.f9-results-list,
-.f9-proof-detail {
+.f9-save-stack {
   display: grid;
   gap: 14px;
 }
@@ -1201,76 +1142,14 @@ button[aria-busy="true"] {
   transform: translateY(-1px);
 }
 
-.f9-side-note {
-  display: grid;
-  gap: 12px;
-  margin-top: 18px;
-  padding: 18px;
-  border: 1px solid rgba(6, 22, 41, 0.09);
-  border-radius: 20px;
-  background: #f7fafc;
-}
 
-.f9-side-note p {
-  color: var(--f9-search-muted);
-}
 
-.f9-panel-head {
-  justify-content: space-between;
-  gap: 16px;
-  padding: 22px;
-  border-bottom: 1px solid rgba(6, 22, 41, 0.08);
-}
 
-.f9-panel-head h2 {
-  margin: 4px 0 0;
-  color: var(--f9-search-ink);
-  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 1.35rem;
-  line-height: 1.16;
-}
 
-.f9-panel-head em,
-.f9-result-card em {
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: rgba(100, 116, 139, 0.12);
-  color: var(--f9-search-muted);
-  font-style: normal;
-  font-size: 0.82rem;
-  font-weight: 700;
-}
 
-.f9-panel-head em.is-active {
-  background: rgba(10, 169, 130, 0.12);
-  color: #07725f;
-}
 
-.f9-results-list {
-  padding: 14px;
-}
 
-.f9-result-card {
-  position: relative;
-  display: flex;
-  gap: 14px;
-  align-items: flex-start;
-  padding: 18px;
-  border: 1px solid rgba(6, 22, 41, 0.08);
-  border-radius: 18px;
-  background: #fff;
-  transition:
-    border-color 160ms ease,
-    box-shadow 160ms ease,
-    transform 160ms ease;
-}
 
-.f9-result-card-body {
-  display: grid;
-  flex: 1;
-  gap: 10px;
-  min-width: 0;
-}
 
 .f9-ad-thumb {
   width: 72px;
@@ -1309,36 +1188,12 @@ button[aria-busy="true"] {
   min-width: 0;
 }
 
-.f9-result-card:hover,
-.f9-result-card.is-active {
-  border-color: rgba(10, 169, 130, 0.36);
-  box-shadow: 0 16px 34px rgba(6, 22, 41, 0.08);
-  transform: translateY(-1px);
-}
 
-.f9-result-card h2,
-.f9-result-card h3 {
-  margin: 4px 0 0;
-  color: var(--f9-search-ink);
-  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 1.12rem;
-  line-height: 1.24;
-}
 
-.f9-result-card p,
-.f9-result-card small,
-.f9-detail-hero p,
-.f9-proof-block small,
-.f9-proof-block a,
 .f9-empty-state p {
   color: var(--f9-search-muted);
 }
 
-.f9-result-card em {
-  position: absolute;
-  right: 14px;
-  top: 14px;
-}
 
 .f9-empty-state {
   display: grid;
@@ -1359,67 +1214,15 @@ button[aria-busy="true"] {
   font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-.f9-detail-hero,
-.f9-proof-block {
-  display: grid;
-  gap: 10px;
-  padding: 18px;
-  border: 1px solid rgba(6, 22, 41, 0.08);
-  border-radius: 18px;
-  background: #fff;
-}
 
-.f9-detail-hero h3,
-.f9-proof-block h3 {
-  margin: 0;
-  color: var(--f9-search-ink);
-  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 1.18rem;
-  line-height: 1.24;
-}
 
-.f9-detail-grid {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-}
 
-.f9-detail-row {
-  display: grid;
-  gap: 3px;
-  padding: 12px 13px;
-  border-radius: 14px;
-  background: #f7fafc;
-}
 
-.f9-detail-row dt {
-  color: var(--f9-search-soft);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
 
-.f9-detail-row dd {
-  margin: 0;
-  color: var(--f9-search-ink);
-  font-weight: 700;
-}
 
-@media (max-width: 1180px) {
-  .f9-search-grid{
-    grid-template-columns: 1fr;
-  }
-
-  .f9-proof-detail {
-    grid-column: 1;
-  }
-}
 
 @media (max-width: 760px) {
-  .f9-search-nav-links,
-  .f9-discovery-banner,
-  .f9-panel-head {
+  .f9-search-nav-links {
     align-items: stretch;
     flex-direction: column;
   }
@@ -1429,14 +1232,8 @@ button[aria-busy="true"] {
     flex-wrap: wrap;
   }
 
-  .f9-search-workspace {
-    margin-top: -30px;
-  }
-
-  .f9-proof-detail {
-    padding: 16px;
-  }
-
+  
+  
   .f9-field-grid,
   .f9-mode-toggle {
     grid-template-columns: 1fr;
@@ -1447,11 +1244,7 @@ button[aria-busy="true"] {
     width: 100%;
   }
 
-  .f9-result-card em {
-    position: static;
-    justify-self: start;
   }
-}
 
 /* Five to Nine auth rebuild */
 .f9-auth-page {
@@ -1855,8 +1648,9 @@ button[aria-busy="true"] {
   color: #b13c30;
 }
 
-/* Doubled class keeps the longevity badge styling ahead of contextual span
-   rules like `.f9-result-card span` and `.f9-panel-head span`. */
+/* Doubled class keeps the longevity badge styling ahead of the contextual
+   span rules it still shares a page with (share, collections, creative wall).
+   BL-031 deleted the search-side ones with the result card. */
 .f9-longevity-pill.f9-longevity-pill {
   display: inline-flex;
   align-items: center;
@@ -4400,22 +4194,11 @@ one signal-green accent.
   text-shadow: none;
 }
 
-/* Smallest coherent palette fix per Codex decision review (post public reskin block ~4596):
-   Override the search-specific tokens (defined at .f9-search-page:866 with workspace navy)
-   to use the public "Caught in the act" ld- / bone-ink system precisely when
-   .f9-dash-page-public (from isPublic DashboardShell) is also present.
-   This is the minimal change to address hybrid design system for /search public.
-   Border weight parity and full runtime visual confirmation (browser) remain limitations.
-*/
-.f9-search-page.f9-dash-page-public {
-  --f9-search-ink: var(--ld-ink);
-  --f9-search-muted: var(--ld-ink-soft);
-  --f9-search-soft: var(--ld-ink-faint);
-  --f9-search-line: var(--ld-line);
-  background: var(--ld-bone);
-  color: var(--ld-ink);
-  font-family: var(--f9-font);
-}
+/* The `.f9-search-page.f9-dash-page-public` token override that used to sit
+   here is deleted. It existed to repair the navy palette for signed-out
+   visitors only, which left the signed-in search page on the other one — the
+   hybrid the owner called slop. The base rule now resolves to the product
+   tokens for both, so there is one palette and no repair layer. */
 
 .f9-auth-page .f9-wordmark-bridge,
 .f9-search-page .f9-wordmark-bridge,
@@ -4427,10 +4210,13 @@ one signal-green accent.
   color: var(--ld-bone);
 }
 
+/* BL-031: `.f9-search-page h1` and `h2` are gone from this group. They set
+   the search page's headings in UPPERCASE Bricolage at (0,1,1), which beat
+   `.f9-wk-title` at (0,1,0) and shouted "FIND COMPETITOR ADS" and
+   "1 VERIFIED AD LINKED TO NYKAA.COM" across the rebuilt page. v4's title is
+   28px Bricolage in sentence case and its section titles are Inter 600. */
 .f9-auth-page h1,
 .f9-auth-page h2,
-.f9-search-page h1,
-.f9-search-page h2,
 .f9-legal-page h1,
 .f9-error-page h1,
 .f9-share-page h1 {
@@ -4481,9 +4267,7 @@ one signal-green accent.
 .f9-auth-page .f9-auth-switch { color: var(--ld-ink-soft); }
 .f9-auth-page .f9-auth-switch a { color: var(--ld-green-ink); }
 
-.f9-auth-page .f9-field input,
-.f9-search-page .f9-field input,
-.f9-search-page .f9-field select {
+.f9-auth-page .f9-field input {
   background: var(--ld-bone);
   border: 1.5px solid var(--ld-line);
   border-radius: 8px;
@@ -4491,16 +4275,13 @@ one signal-green accent.
   font-family: var(--ld-mono);
 }
 
-.f9-auth-page .f9-field input:focus,
-.f9-search-page .f9-field input:focus,
-.f9-search-page .f9-field select:focus {
+.f9-auth-page .f9-field input:focus {
   border-color: var(--ld-ink);
   box-shadow: 0 0 0 3px var(--ld-green);
   outline: none;
 }
 
-.f9-auth-page .f9-field label,
-.f9-search-page .f9-field label {
+.f9-auth-page .f9-field label {
   font-family: var(--ld-mono);
   font-size: 0.7rem;
   letter-spacing: 0.12em;
@@ -4564,36 +4345,9 @@ one signal-green accent.
 .f9-search-page .f9-search-nav-links a { color: var(--ld-ink-soft); }
 .f9-search-page .f9-search-nav-links a:hover { color: var(--ld-ink); }
 
-.f9-search-page .f9-results-panel,
-.f9-search-page .f9-discovery-banner,
-.f9-search-page .f9-empty-state,
-.f9-search-page .f9-proof-block,
-.f9-search-page .f9-proof-detail,
-.f9-search-page .f9-detail-hero,
-.f9-search-page .f9-quick-track-form {
-  background: var(--ld-card);
-  border-color: var(--ld-ink);
-  border-radius: 0;
-  box-shadow: none;
-}
 
-.f9-search-page .f9-results-list > article,
-.f9-search-page .f9-result-card-body {
-  background: var(--ld-card);
-  border-color: var(--ld-line);
-  box-shadow: none;
-}
 
-.f9-search-page .f9-mode-toggle {
-  font-family: var(--ld-mono);
-  border-color: var(--ld-ink);
-}
 
-.f9-search-page .f9-panel-head {
-  font-family: var(--ld-mono);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
 
 .f9-legal-page .f9-legal-card,
 .f9-error-page .f9-error-card {
@@ -4754,223 +4508,38 @@ one signal-green accent.
   line-height: 1.6;
 }
 
-.f9-search-page label.f9-field > span,
-.f9-search-page .f9-field > span {
-  font-family: var(--ld-mono);
-  font-size: 0.7rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ld-ink-soft);
-}
 
-.f9-search-page .f9-discovery-banner > span,
-.f9-search-page .f9-panel-head > span,
-.f9-search-page .f9-results-panel .f9-panel-head span,
-.f9-search-page .f9-result-card span,
-.f9-search-page .f9-proof-block > span,
-.f9-search-page .f9-side-note span {
-  font-family: var(--ld-mono);
-  font-size: 0.7rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ld-green-ink);
-}
 
-/* Search dashboard base refinement (2026-06-22): compact information hierarchy in 0509 materials. */
-.f9-search-page {
-  background:
-    linear-gradient(180deg, rgba(255, 253, 246, 0.92), rgba(244, 241, 232, 0.96)),
-    var(--ld-bone);
-}
+/* BL-031: the two-stop page gradient is deleted. The DNA has no gradients
+   anywhere — the ground is one flat bone, and depth comes from rules. */
 
-.f9-search-page h1,
-.f9-search-page h2,
-.f9-search-page h3 {
-  letter-spacing: 0;
-}
 
-.f9-search-page .f9-search-workspace {
-  margin-top: 0;
-  padding: 10px 0 88px;
-}
 
-.f9-search-page .f9-search-signup-cta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 16px 18px;
-  border-top: 1px solid #e7e2d7;
-  background: #f5f8ed;
-}
 
-.f9-search-page .f9-search-signup-cta strong,
-.f9-search-page .f9-search-signup-cta p {
-  margin: 0;
-}
 
-.f9-search-page .f9-search-signup-cta p {
-  max-width: 62ch;
-  margin-top: 4px;
-  color: #6f6a60;
-  font-size: 0.84rem;
-  line-height: 1.4;
-}
 
-.f9-search-page .f9-proof-provenance {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 12px;
-  margin: 0;
-  padding: 10px 16px;
-  border-bottom: 1px solid #e7e2d7;
-  color: #6f6a60;
-  font-size: 0.78rem;
-}
 
-.f9-search-page .f9-proof-provenance strong {
-  color: #343127;
-}
 
-.f9-search-page .f9-proof-summary {
-  display: grid;
-  gap: 14px;
-  overflow: hidden;
-  padding: 0 0 16px;
-  border: 1.5px solid var(--ld-ink);
-  border-radius: 18px;
-  background: var(--ld-card);
-}
 
-.f9-search-page .f9-proof-summary > :not(.f9-panel-head, .f9-proof-provenance) {
-  margin-right: 16px;
-  margin-left: 16px;
-}
 
-.f9-search-page .f9-proof-summary:focus {
-  outline: 3px solid #0a8f78;
-  outline-offset: 3px;
-}
 
-.f9-search-page .f9-search-refine-disclosure {
-  grid-column: 1 / -1;
-  min-width: 0;
-  max-width: 100%;
-  border: 1px solid #d8d2c5;
-  border-radius: 10px;
-  background: #fffdf7;
-}
 
-.f9-search-page .f9-search-refine-disclosure > summary {
-  padding: 10px 12px;
-  color: #343127;
-  font-size: 0.84rem;
-  font-weight: 700;
-  cursor: pointer;
-}
 
-.f9-search-page .f9-search-refine-disclosure[open] > summary {
-  border-bottom: 1px solid #e7e2d7;
-}
 
-.f9-search-page .f9-search-refine-disclosure .f9-search-refine {
-  padding: 12px;
-}
 
-.f9-search-page .f9-search-grid {
-  grid-template-columns: minmax(250px, 0.72fr) minmax(390px, 1.16fr) minmax(310px, 0.88fr);
-  gap: 12px;
-  align-items: start;
-}
 
-.f9-search-page .f9-results-panel,
-.f9-search-page .f9-proof-detail {
-  overflow: hidden;
-  border-width: 1.5px;
-  border-radius: 18px;
-}
 
-.f9-search-page .f9-results-panel,
-.f9-search-page .f9-proof-detail,
-.f9-search-page .f9-discovery-banner,
-.f9-search-page .f9-empty-state,
-.f9-search-page .f9-proof-block,
-.f9-search-page .f9-detail-hero,
-.f9-search-page .f9-quick-track-form {
-  background: var(--ld-card);
-  border-color: var(--ld-ink);
-  border-radius: 14px;
-}
 
-.f9-search-page .f9-panel-head {
-  letter-spacing: 0;
-  text-transform: none;
-}
 
-.f9-search-page .f9-panel-head h2,
-.f9-search-page .f9-empty-state h2,
-.f9-search-page .f9-empty-state h3 {
-  font-family: var(--ld-display);
-  font-size: clamp(1.15rem, 1.75vw, 1.55rem);
-  letter-spacing: 0;
-  line-height: 1.12;
-  text-transform: none;
-}
 
-.f9-search-page .f9-mode-toggle {
-  gap: 5px;
-  padding: 5px;
-  border: 1.5px solid var(--ld-line);
-  border-radius: 14px;
-  background: #e9eef0;
-}
 
-.f9-search-page .f9-mode-toggle label {
-  min-height: 38px;
-  border-radius: 10px;
-  color: #3d4b5a;
-  font-size: clamp(0.86rem, 1.1vw, 0.96rem);
-  letter-spacing: 0;
-  text-transform: none;
-}
 
-.f9-search-page .f9-mode-toggle label.is-active {
-  background: #fff;
-  box-shadow: 0 6px 16px rgba(14, 13, 10, 0.08);
-  color: var(--ld-ink);
-}
 
-.f9-search-page .f9-field {
-  gap: 6px;
-}
 
-.f9-search-page .f9-field input,
-.f9-search-page .f9-field select,
-.f9-search-page .f9-field textarea{
-  min-height: 42px;
-  padding: 9px 11px;
-  border-width: 1.5px;
-  border-radius: 10px;
-  font-size: 0.95rem;
-}
 
-.f9-search-page .f9-field.is-primary input {
-  min-height: 50px;
-  font-size: 1rem;
-}
 
-.f9-search-page .f9-field small {
-  color: var(--ld-ink-soft);
-  font-size: 0.86rem;
-}
 
-.f9-search-page .f9-field-grid {
-  gap: 9px;
-}
 
-.f9-search-page .f9-action-row {
-  gap: 8px;
-}
 
 .f9-search-page .f9-primary-button,
 .f9-search-page .f9-secondary-button {
@@ -4978,146 +4547,24 @@ one signal-green accent.
   border-radius: 10px;
 }
 
-.f9-search-page .f9-side-note {
-  margin: 0 18px 18px;
-  border-color: var(--ld-line);
-  border-radius: 14px;
-  background: #f7fafb;
-}
 
-.f9-search-page .f9-panel-head {
-  min-height: 76px;
-  padding: 16px 18px;
-  background: rgba(255, 253, 246, 0.84);
-}
 
-.f9-search-page .f9-results-list {
-  max-height: min(920px, 72vh);
-  overflow: auto;
-  padding: 12px;
-}
 
-.f9-search-page .f9-result-card {
-  padding: 13px;
-  border-color: var(--ld-line);
-  border-radius: 14px;
-  background: #fffdf9;
-}
 
-.f9-search-page .f9-result-card.is-active,
-.f9-search-page .f9-result-card:hover {
-  border-color: var(--ld-green-ink);
-  box-shadow: 0 10px 28px rgba(14, 13, 10, 0.08);
-}
 
-.f9-search-page .f9-result-card h2,
-.f9-search-page .f9-result-card h3 {
-  font-size: 1rem;
-  letter-spacing: 0;
-}
 
-.f9-search-page .f9-result-card p {
-  margin: 0;
-  line-height: 1.42;
-}
 
-.f9-search-page .f9-ad-thumb {
-  width: 64px;
-  height: 64px;
-  border-radius: 10px;
-}
 
-.f9-search-page .f9-proof-detail {
-  position: sticky;
-  top: 92px;
-  max-height: calc(100vh - 112px);
-  overflow: auto;
-  padding: 0;
-}
 
-.f9-search-page .f9-proof-detail > :not(.f9-panel-head) {
-  margin-inline: 16px;
-}
 
-.f9-search-page .f9-proof-detail > :last-child {
-  margin-bottom: 16px;
-}
 
-.f9-search-page .f9-proof-block a {
-  display: inline-flex;
-  align-items: center;
-  min-width: 44px;
-  min-height: 44px;
-  overflow-wrap: anywhere;
-}
 
-.f9-search-page .f9-detail-hero,
-.f9-search-page .f9-proof-block {
-  padding: 14px;
-  border-color: var(--ld-line);
-  background: #fffdf9;
-}
 
-.f9-search-page .f9-detail-grid {
-  gap: 7px;
-}
 
-.f9-search-page .f9-detail-row {
-  border: 1px solid var(--ld-line);
-  border-radius: 10px;
-  background: #f8f5ec;
-}
 
-.f9-search-page .f9-empty-state {
-  min-height: 170px;
-  margin: 12px;
-  border-color: var(--ld-line);
-  background: #f8f5ec;
-}
 
-@media (max-width: 1240px) {
 
-  .f9-search-page .f9-search-grid {
-    grid-template-columns: minmax(260px, 0.75fr) minmax(0, 1fr);
-  }
 
-  .f9-search-page .f9-proof-detail {
-    position: static;
-    grid-column: 1 / -1;
-    max-height: none;
-  }
-}
-
-@media (max-width: 900px) {
-  .f9-search-page .f9-search-grid {
-    grid-template-columns: 1fr;
-  }
-
-}
-
-@media (max-width: 620px) {
-  .f9-search-page .f9-search-workspace {
-    padding-bottom: 48px;
-  }
-
-  .f9-search-page .f9-panel-head {
-    padding: 14px;
-  }
-
-  .f9-search-page .f9-field-grid,
-  .f9-search-page .f9-mode-toggle {
-    grid-template-columns: 1fr;
-  }
-
-  .f9-search-page .f9-result-card {
-    display: grid;
-  }
-
-  .f9-search-page .f9-result-card em {
-    position: static;
-    justify-self: start;
-  }
-}
 
 .f9-auth-page .f9-auth-brand .f9-wordmark,
 .f9-auth-page .f9-brand .f9-wordmark {
@@ -5210,8 +4657,7 @@ one signal-green accent.
   background: var(--card);
 }
 
-.f9-cursor-account,
-.f9-cursor-rail-note {
+.f9-cursor-account {
   display: grid;
   gap: 4px;
   padding: 12px;
@@ -5220,8 +4666,7 @@ one signal-green accent.
   background: #f8f6ef;
 }
 
-.f9-cursor-account span,
-.f9-cursor-rail-note span {
+.f9-cursor-account span {
   color: var(--ld-green-ink);
   font-family: var(--ld-mono);
   font-size: 0.66rem;
@@ -5230,15 +4675,13 @@ one signal-green accent.
   text-transform: uppercase;
 }
 
-.f9-cursor-account strong,
-.f9-cursor-rail-note strong {
+.f9-cursor-account strong {
   color: var(--ink);
   font-size: 0.96rem;
   line-height: 1.2;
 }
 
-.f9-cursor-account small,
-.f9-cursor-rail-note small {
+.f9-cursor-account small {
   color: #706b61;
   font-weight: 700;
 }
@@ -5492,158 +4935,28 @@ one signal-green accent.
   }
 }
 
-.f9-search-page .f9-search-workspace {
-  padding: 14px 0 0;
-}
-.f9-search-page .f9-results-panel,
-.f9-search-page .f9-proof-detail {
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--card);
-}
 
-.f9-search-page .f9-search-grid {
-  grid-template-columns: minmax(260px, 0.62fr) minmax(390px, 1fr) minmax(300px, 0.75fr);
-  gap: 10px;
-}
 
-.f9-search-page .f9-panel-head {
-  padding: 14px;
-}
 
-.f9-search-page .f9-panel-head {
-  min-height: 64px;
-  border-bottom: 1px solid #e7e2d7;
-  background: #fbfaf5;
-}
 
-.f9-search-page .f9-search-answer {
-  display: grid;
-  gap: 10px;
-  padding: 14px;
-  border-bottom: 1px solid #e7e2d7;
-  background: var(--card);
-}
 
-.f9-search-page .f9-search-answer > div {
-  display: grid;
-  gap: 4px;
-}
 
-.f9-search-page .f9-search-answer span {
-  color: #0a7b62;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
 
-.f9-search-page .f9-search-answer h3,
-.f9-search-page .f9-search-answer p {
-  margin: 0;
-}
 
-.f9-search-page .f9-search-answer h3 {
-  color: var(--ink);
-  font-size: 1.05rem;
-  line-height: 1.2;
-}
 
-.f9-search-page .f9-search-answer p {
-  color: #5f5a52;
-  font-size: 0.88rem;
-  line-height: 1.42;
-}
 
-.f9-search-page .f9-search-answer dl {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 8px;
-  margin: 0;
-}
 
-.f9-search-page .f9-search-answer dl div {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-  padding: 9px;
-  border: 1px solid #e7e2d7;
-  border-radius: 8px;
-  background: #f8f6ef;
-}
 
-.f9-search-page .f9-search-answer dt,
-.f9-search-page .f9-search-answer small {
-  color: #706b61;
-  font-size: 0.72rem;
-  font-weight: 600;
-}
 
-.f9-search-page .f9-search-answer dd {
-  margin: 0;
-  color: var(--ink);
-  font-size: 0.94rem;
-  font-weight: 700;
-}
 
-.f9-search-page .f9-search-answer-note {
-  padding: 9px 10px;
-  border-radius: 8px;
-  background: #f8f6ef;
-}
 
-.f9-search-page .f9-search-answer-steal {
-  display: grid;
-  gap: 6px;
-  padding: 10px;
-  border: 1px solid #e7e2d7;
-  border-radius: 8px;
-  background: #f8f6ef;
-}
 
-.f9-search-page .f9-search-answer-steal ul {
-  display: grid;
-  gap: 5px;
-  margin: 0;
-  padding-left: 18px;
-}
 
-.f9-search-page .f9-search-answer-steal li {
-  color: #171611;
-  font-size: 0.88rem;
-  line-height: 1.42;
-}
 
-.f9-search-page .f9-search-answer-steal small {
-  color: #706b61;
-  font-size: 0.72rem;
-  font-weight: 600;
-}
 
-.f9-search-page .f9-mode-toggle {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #eceff0;
-}
 
-.f9-search-page .f9-mode-toggle label {
-  min-height: 44px;
-  border-radius: 7px;
-}
 
-.f9-search-page .f9-field input,
-.f9-search-page .f9-field select,
-.f9-search-page .f9-field textarea{
-  min-height: 44px;
-  border: 1px solid #ded8cb;
-  border-radius: 8px;
-  background: #f8f6ef;
-  font-size: 0.9rem;
-}
 
-.f9-search-page .f9-field.is-primary input {
-  min-height: 44px;
-}
 
 .f9-search-page .f9-primary-button,
 .f9-search-page .f9-secondary-button {
@@ -5651,34 +4964,10 @@ one signal-green accent.
   border-radius: 8px;
 }
 
-.f9-search-page .f9-results-list {
-  max-height: min(860px, 72vh);
-  padding: 8px;
-}
 
-.f9-search-page .f9-result-card {
-  grid-template-columns: 48px minmax(0, 1fr);
-  gap: 10px;
-  padding: 10px;
-  border: 1px solid #e7e2d7;
-  border-radius: 9px;
-  background: #fbfaf5;
-}
 
-.f9-search-page .f9-ad-thumb {
-  width: 48px;
-  height: 48px;
-  border-radius: 8px;
-}
 
-.f9-search-page .f9-result-card h3 {
-  font-size: 0.94rem;
-}
 
-.f9-search-page .f9-proof-detail {
-  top: 76px;
-  max-height: calc(100vh - 94px);
-}
 
 @media (max-width: 1180px) {
   .f9-cursor-shell {
@@ -5698,8 +4987,7 @@ one signal-green accent.
     border-radius: 10px;
   }
 
-  .f9-dash-page-app .f9-cursor-account,
-  .f9-dash-page-app .f9-cursor-rail-note {
+  .f9-dash-page-app .f9-cursor-account {
     display: none;
   }
 
@@ -5738,15 +5026,8 @@ one signal-green accent.
     font-size: 0.78rem;
   }
 
-  .f9-search-page .f9-search-grid {
-    grid-template-columns: 1fr;
+  
   }
-
-  .f9-search-page .f9-proof-detail {
-    position: static;
-    max-height: none;
-  }
-}
 
 .f9-dash-page-app .f9-work-row > label {
   display: flex;
@@ -6333,77 +5614,23 @@ one signal-green accent.
   max-width: 18ch;
 }
 
-.f9-search-page .f9-search-grid {
-  grid-template-columns: minmax(0, 1fr);
-}
 
-.f9-search-page .f9-proof-detail {
-  min-width: 0;
-  max-width: 100%;
-}
 
-.f9-search-page .f9-proof-detail:has(> .f9-empty-state) {
-  display: none;
-}
 
-.f9-search-page .f9-results-panel {
-  min-height: 0;
-}
 
-.f9-search-page .f9-results-panel .f9-panel-head {
-  min-height: 54px;
-}
 
-.f9-search-page .f9-results-panel .f9-panel-head h2 {
-  font-size: 1rem;
-}
 
-.f9-search-page .f9-results-panel .f9-results-list {
-  max-height: none;
-  padding: 0;
-}
 
-.f9-search-page .f9-results-panel .f9-empty-state {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  min-height: 0;
-  margin: 0;
-  padding: 18px;
-  border: 0;
-  border-top: 1px solid #e7e2d7;
-  border-radius: 0;
-  background: #fbfaf5;
-  text-align: left;
-}
 
-.f9-search-page .f9-results-panel .f9-empty-state h3 {
-  margin: 0;
-  font-size: 1rem;
-  line-height: 1.2;
-}
 
-.f9-search-page .f9-results-panel .f9-empty-state p {
-  max-width: 54ch;
-  margin: 0;
-  color: #706b61;
-  font-size: 0.86rem;
-  line-height: 1.35;
-}
 
-@media (max-width: 760px) {
-  .f9-search-page .f9-results-panel .f9-empty-state {
-    grid-template-columns: 1fr;
-  }
-
-  .f9-search-page .f9-results-panel .f9-empty-state {
-    display: grid;
-  }
-}
 
 /* Final search cleanup: keep the Cursor-style rail unboxed. */
-.f9-search-page .f9-cursor-shell {
+/* BL-031: scoped to the PUBLIC variant. Unscoped, this offset the workspace
+   ink rail on the signed-in search page — a 20px inset and `min-height: auto`
+   on a rail that P0 pins to `top: 0; height: 100vh` — so /search was the one
+   workspace page whose shell did not match the others. */
+.f9-dash-page-public.f9-search-page .f9-cursor-shell {
   gap: 24px;
   padding-top: 20px;
 }
@@ -6415,7 +5642,7 @@ one signal-green accent.
   }
 }
 
-.f9-search-page .f9-cursor-rail {
+.f9-dash-page-public.f9-search-page .f9-cursor-rail {
   min-height: auto;
   top: 20px;
   padding: 14px 0;
@@ -6424,23 +5651,26 @@ one signal-green accent.
   background: transparent;
 }
 
-.f9-search-page .f9-cursor-account,
-.f9-search-page .f9-cursor-rail-note {
+.f9-dash-page-public.f9-search-page .f9-cursor-account {
   padding: 0 10px 12px;
   border: 0;
   border-radius: 0;
   background: transparent;
 }
 
-.f9-search-page .f9-cursor-account span,
-.f9-search-page .f9-cursor-rail-note span {
+.f9-search-page .f9-cursor-account span {
   color: #6f6a60;
   font-size: 0.64rem;
   letter-spacing: 0.08em;
 }
 
-.f9-search-page .f9-cursor-rail nav a {
-  min-height: 34px;
+/* BL-031: 34px, and the 44px overrides only existed inside two media
+   queries, so at every other width the public rail's own nav links measured
+   38px. They inherited enough height from the pinned `ui-sans-serif` stack to
+   scrape past; taking that stack off exposed the real number. A 44px target
+   is a rule at every width, not at two of them. */
+.f9-dash-page-public.f9-search-page .f9-cursor-rail nav a {
+  min-height: 44px;
   padding: 7px 10px;
   border-radius: 7px;
   transition: background-color 140ms ease, color 140ms ease;
@@ -6452,25 +5682,23 @@ one signal-green accent.
 }
 
 .f9-search-page .f9-primary-button,
-.f9-search-page .f9-secondary-button,
-.f9-search-page .f9-mode-toggle label,
-.f9-search-page .f9-result-card {
+.f9-search-page .f9-secondary-button {
   transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease, transform 140ms ease;
 }
 
 @media (max-width: 760px) {
-  .f9-search-page .f9-cursor-shell {
+  .f9-dash-page-public.f9-search-page .f9-cursor-shell {
     grid-template-columns: 1fr;
     gap: 14px;
     padding-inline: 18px;
   }
 
-  .f9-search-page .f9-cursor-rail {
+  .f9-dash-page-public.f9-search-page .f9-cursor-rail {
     position: static;
     padding: 4px 0 0;
   }
 
-  .f9-search-page .f9-cursor-account {
+  .f9-dash-page-public.f9-search-page .f9-cursor-account {
     display: none;
   }
 
@@ -6500,234 +5728,33 @@ one signal-green accent.
 }
 
 /* Cursor-grade public search command: one field, quiet chrome. */
-.f9-search-page .f9-cursor-main {
+.f9-dash-page-public.f9-search-page .f9-cursor-main {
   display: grid;
   align-content: start;
   gap: 18px;
 }
 
-.f9-search-page .f9-search-command {
-  display: grid;
-  gap: 10px;
-  max-width: 780px;
-  padding: 32px 0 10px;
-}
 
-.f9-search-page .f9-search-command-head {
-  display: grid;
-  gap: 6px;
-}
 
-.f9-search-page .f9-search-command-head h1 {
-  margin: 0;
-  color: var(--ink);
-  font-family: var(--f9-font);
-  font-size: clamp(1.05rem, 1.4vw, 1.24rem);
-  font-weight: 600;
-  letter-spacing: 0;
-  line-height: 1.12;
-  text-transform: none;
-}
 
-.f9-search-page .f9-search-command-head p {
-  max-width: 56ch;
-  margin: 0;
-  color: #6f6a60;
-  font-size: 0.9rem;
-  font-weight: 700;
-  line-height: 1.38;
-  text-align: left;
-}
 
-.f9-search-page .f9-search-command-form {
-  display: grid;
-  grid-template-columns: minmax(320px, 1fr) max-content;
-  align-items: end;
-  gap: 8px;
-  max-width: 760px;
-}
 
-.f9-search-page .f9-search-refine {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-}
 
-.f9-search-page .f9-search-field {
-  display: grid;
-  gap: 7px;
-  min-width: 0;
-}
 
-.f9-search-page .f9-search-field span {
-  color: #6f6a60;
-  font-family: var(--f9-font);
-  font-size: 0.84rem;
-  font-weight: 600;
-  letter-spacing: 0;
-  text-transform: none;
-}
 
-.f9-search-page .f9-search-field input,
-.f9-search-page .f9-search-field select {
-  width: 100%;
-  min-width: 0;
-  height: 44px;
-  padding: 0 12px;
-  border: 1px solid #ddd8cd;
-  border-radius: 8px;
-  background: #fffdfa;
-  color: var(--ink);
-  font: inherit;
-  font-size: 0.92rem;
-  font-weight: 600;
-  outline: 0;
-}
 
-.f9-search-page .f9-search-field input::placeholder {
-  color: #9b978f;
-  opacity: 1;
-}
 
-.f9-search-page .f9-search-field input:focus,
-.f9-search-page .f9-search-field input:focus-visible,
-.f9-search-page .f9-search-field select:focus,
-.f9-search-page .f9-search-field select:focus-visible {
-  border-color: #9c9485;
-  background: #fff;
-  outline: 2px solid rgba(23, 112, 80, 0.72);
-  outline-offset: 2px;
-}
 
-.f9-search-page .f9-search-actions {
-  display: flex;
-  align-items: end;
-  gap: 8px;
-}
 
-.f9-search-page .f9-search-retention {
-  display: grid;
-  gap: 10px;
-  max-width: 760px;
-}
 
-.f9-search-page .f9-save-query-form {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) max-content;
-  align-items: end;
-  gap: 8px;
-}
 
-.f9-search-page .f9-search-command .f9-primary-button,
-.f9-search-page .f9-search-command .f9-secondary-button {
-  min-height: 44px;
-  border-radius: 8px;
-  font-size: 0.86rem;
-  line-height: 1;
-  white-space: nowrap;
-}
 
-.f9-search-page .f9-search-command .f9-primary-button {
-  padding-inline: 16px;
-}
 
-.f9-search-page .f9-search-command .f9-secondary-button {
-  padding-inline: 14px;
-  border-color: #ddd8cd;
-  background: #fffdfa;
-  color: var(--ink);
-  box-shadow: none;
-}
 
-.f9-search-page .f9-search-command-hint {
-  margin: -2px 0 0;
-  color: #6f6a60;
-  font-size: 0.84rem;
-  font-weight: 600;
-}
 
-.f9-search-page .f9-search-command-hint a {
-  color: var(--ink);
-  font-weight: 700;
-  text-decoration: underline;
-  text-decoration-color: #cfc9bd;
-  text-underline-offset: 3px;
-}
 
-.f9-search-page .f9-search-command-hint a:hover {
-  text-decoration-color: var(--ink);
-}
 
-.f9-search-page .f9-search-command .f9-quick-track-form {
-  width: fit-content;
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
 
-.f9-search-page .f9-search-workspace {
-  margin-top: 0;
-  padding-top: 2px;
-}
-
-@media (max-width: 900px) {
-  .f9-search-page .f9-search-command-head {
-    display: grid;
-    gap: 8px;
-  }
-
-  .f9-search-page .f9-search-command-head p {
-    max-width: 52ch;
-    text-align: left;
-  }
-
-  .f9-search-page .f9-search-command-form {
-    grid-template-columns: 1fr;
-  }
-
-  .f9-search-page .f9-search-refine {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .f9-search-page .f9-save-query-form {
-    grid-template-columns: 1fr;
-  }
-
-  .f9-search-page .f9-search-actions {
-    justify-content: start;
-  }
-}
-
-@media (max-width: 520px) {
-  .f9-search-page .f9-search-command {
-    padding-top: 18px;
-  }
-
-  .f9-search-page .f9-search-refine {
-    grid-template-columns: 1fr;
-  }
-
-  .f9-search-page .f9-search-actions {
-    display: grid;
-    grid-template-columns: 1fr;
-  }
-
-  .f9-search-page .f9-search-command .f9-primary-button {
-    justify-content: center;
-    min-height: 45px;
-    width: 100%;
-  }
-
-  .f9-search-page .f9-side-note .f9-primary-button {
-    text-align: center;
-    white-space: normal;
-  }
-
-  .f9-search-page .f9-search-signup-cta {
-    display: grid;
-  }
-}
 
 /* BL-017 — Overview completion pass (§7 order, §5 CTA ranks, §6.5/6.8).
    This replaces the rounded dashboard hero/snapshot/auto-fit metrics. */
@@ -7763,14 +6790,12 @@ one signal-green accent.
 
 /* --- Shell chrome: rail, nav, footer, topbar, mobile nav --- */
 
-[data-f9-theme="dark"] .f9-cursor-account,
-[data-f9-theme="dark"] .f9-cursor-rail-note {
+[data-f9-theme="dark"] .f9-cursor-account {
   border-color: var(--line);
   background: var(--dk-well);
 }
 
-[data-f9-theme="dark"] .f9-search-page .f9-cursor-account,
-[data-f9-theme="dark"] .f9-search-page .f9-cursor-rail-note {
+[data-f9-theme="dark"] .f9-search-page .f9-cursor-account {
   background: transparent;
 }
 
@@ -7835,36 +6860,19 @@ one signal-green accent.
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.28);
 }
 
-[data-f9-theme="dark"] .f9-results-panel,
-[data-f9-theme="dark"] .f9-proof-detail {
-  background: var(--card);
-  box-shadow: none;
-}
 
 [data-f9-theme="dark"] .f9-message,
-[data-f9-theme="dark"] .f9-discovery-banner,
 [data-f9-theme="dark"] .f9-import-row,
 [data-f9-theme="dark"] .f9-event-card,
 [data-f9-theme="dark"] .f9-app-plan-card,
 [data-f9-theme="dark"] .f9-topup-card,
-[data-f9-theme="dark"] .f9-result-card,
-[data-f9-theme="dark"] .f9-detail-hero,
-[data-f9-theme="dark"] .f9-proof-block,
 [data-f9-theme="dark"] .f9-creative-tile,
 [data-f9-theme="dark"] .f9-trend-card,
-[data-f9-theme="dark"] .f9-search-page .f9-result-card,
-[data-f9-theme="dark"] .f9-search-page .f9-detail-hero,
-[data-f9-theme="dark"] .f9-search-page .f9-proof-block,
-[data-f9-theme="dark"] .f9-search-page .f9-search-refine-disclosure,
-[data-f9-theme="dark"] .f9-inline-details,
-[data-f9-theme="dark"] .f9-search-page .f9-search-command .f9-secondary-button {
+[data-f9-theme="dark"] .f9-inline-details {
   background: var(--card);
 }
 
-[data-f9-theme="dark"] .f9-search-page .f9-result-card,
-[data-f9-theme="dark"] .f9-search-page .f9-search-refine-disclosure,
-[data-f9-theme="dark"] .f9-inline-details,
-[data-f9-theme="dark"] .f9-search-page .f9-search-command .f9-secondary-button {
+[data-f9-theme="dark"] .f9-inline-details {
   border-color: var(--line);
 }
 
@@ -7886,36 +6894,14 @@ one signal-green accent.
 [data-f9-theme="dark"] .f9-detail-cell,
 [data-f9-theme="dark"] .f9-annual-note,
 [data-f9-theme="dark"] .f9-import-summary span,
-[data-f9-theme="dark"] .f9-side-note,
-[data-f9-theme="dark"] .f9-search-page .f9-side-note,
 [data-f9-theme="dark"] .f9-empty-state,
-[data-f9-theme="dark"] .f9-search-page .f9-empty-state,
-[data-f9-theme="dark"] .f9-search-page .f9-results-panel .f9-empty-state,
-[data-f9-theme="dark"] .f9-detail-row,
-[data-f9-theme="dark"] .f9-search-page .f9-detail-row,
 [data-f9-theme="dark"] .f9-trend-sparse,
-[data-f9-theme="dark"] .f9-search-page .f9-search-answer dl div,
-[data-f9-theme="dark"] .f9-search-page .f9-search-answer-note,
-[data-f9-theme="dark"] .f9-search-page .f9-search-answer-steal,
-[data-f9-theme="dark"] .f9-search-page .f9-panel-head,
-[data-f9-theme="dark"] .f9-search-page .f9-search-signup-cta,
 [data-f9-theme="dark"] .f9-cycle-toggle {
   background: var(--dk-well);
 }
 
-[data-f9-theme="dark"] .f9-search-page .f9-search-answer-steal li {
-  color: var(--ink);
-}
 
-[data-f9-theme="dark"] .f9-search-page .f9-search-answer dl div,
-[data-f9-theme="dark"] .f9-search-page .f9-search-answer-steal,
-[data-f9-theme="dark"] .f9-search-page .f9-panel-head,
-[data-f9-theme="dark"] .f9-search-page .f9-search-answer,
-[data-f9-theme="dark"] .f9-search-page .f9-search-signup-cta,
-[data-f9-theme="dark"] .f9-search-page .f9-proof-provenance,
-[data-f9-theme="dark"] .f9-search-page .f9-search-refine-disclosure[open] > summary,
-[data-f9-theme="dark"] .f9-settings-details[open] > summary,
-[data-f9-theme="dark"] .f9-search-page .f9-results-panel .f9-empty-state {
+[data-f9-theme="dark"] .f9-settings-details[open] > summary {
   border-color: var(--line);
 }
 
@@ -7972,12 +6958,7 @@ toggles --- */
 [data-f9-theme="dark"] .f9-field input,
 [data-f9-theme="dark"] .f9-field select,
 [data-f9-theme="dark"] .f9-field textarea,
-[data-f9-theme="dark"] .f9-search-page .f9-field input,
-[data-f9-theme="dark"] .f9-search-page .f9-field select,
-[data-f9-theme="dark"] .f9-search-page .f9-field textarea,
-[data-f9-theme="dark"] .f9-field input[type="file"],
-[data-f9-theme="dark"] .f9-search-page .f9-search-field input,
-[data-f9-theme="dark"] .f9-search-page .f9-search-field select {
+[data-f9-theme="dark"] .f9-field input[type="file"] {
   border-color: var(--line);
   background: var(--dk-input);
   color: var(--ink);
@@ -7987,29 +6968,14 @@ toggles --- */
   background: var(--card);
 }
 
-[data-f9-theme="dark"] .f9-search-page .f9-search-field input::placeholder {
-  color: var(--ink-faint);
-}
 
-[data-f9-theme="dark"] .f9-search-page .f9-search-field input:focus,
-[data-f9-theme="dark"] .f9-search-page .f9-search-field input:focus-visible,
-[data-f9-theme="dark"] .f9-search-page .f9-search-field select:focus,
-[data-f9-theme="dark"] .f9-search-page .f9-search-field select:focus-visible {
-  border-color: var(--ink-faint);
+
+[data-f9-theme="dark"] .f9-mode-toggle {
   background: var(--dk-well);
 }
 
-[data-f9-theme="dark"] .f9-mode-toggle,
-[data-f9-theme="dark"] .f9-search-page .f9-mode-toggle {
-  background: var(--dk-well);
-}
 
-[data-f9-theme="dark"] .f9-search-page .f9-mode-toggle label {
-  color: var(--ink-soft);
-}
-
-[data-f9-theme="dark"] .f9-mode-toggle label.is-active,
-[data-f9-theme="dark"] .f9-search-page .f9-mode-toggle label.is-active {
+[data-f9-theme="dark"] .f9-mode-toggle label.is-active {
   background: var(--dk-chip);
   color: var(--ink);
 }
@@ -8104,8 +7070,6 @@ reds soften --- */
 [data-f9-theme="dark"] .f9-text-link,
 [data-f9-theme="dark"] .f9-annual-note.is-valid,
 [data-f9-theme="dark"] .f9-message.is-success,
-[data-f9-theme="dark"] .f9-panel-head em.is-active,
-[data-f9-theme="dark"] .f9-search-page .f9-search-answer span,
 [data-f9-theme="dark"] .proof-trail-list dt {
   color: var(--green-ink);
 }
@@ -8116,42 +7080,21 @@ reds soften --- */
   color: var(--dk-red-soft);
 }
 
-[data-f9-theme="dark"] .f9-search-page .f9-proof-summary:focus {
-  outline-color: var(--green);
-}
 
 /* --- Muted copy on legacy hardcoded grays --- */
 
 [data-f9-theme="dark"] .f9-numbered-guide,
 [data-f9-theme="dark"] .f9-app-plan-card .f9-plan-feature-list,
-[data-f9-theme="dark"] .f9-search-page .f9-mode-toggle label,
-[data-f9-theme="dark"] .f9-inline-details > summary,
-[data-f9-theme="dark"] .f9-search-page .f9-search-answer p {
+[data-f9-theme="dark"] .f9-inline-details > summary {
   color: var(--ink-soft);
 }
 
-[data-f9-theme="dark"] .f9-search-page .f9-search-signup-cta p,
-[data-f9-theme="dark"] .f9-search-page .f9-proof-provenance,
 [data-f9-theme="dark"] .f9-search-page .f9-cursor-account span,
-[data-f9-theme="dark"] .f9-search-page .f9-cursor-rail-note span,
-[data-f9-theme="dark"] .f9-search-page .f9-search-command-head p,
-[data-f9-theme="dark"] .f9-search-page .f9-search-field span,
-[data-f9-theme="dark"] .f9-search-page .f9-search-command-hint,
-[data-f9-theme="dark"] .f9-search-page .f9-search-answer dt,
-[data-f9-theme="dark"] .f9-search-page .f9-search-answer small,
-[data-f9-theme="dark"] .f9-search-page .f9-results-panel .f9-empty-state p,
 [data-f9-theme="dark"] .f9-settings-details > summary::after {
   color: var(--ink-faint);
 }
 
-[data-f9-theme="dark"] .f9-search-page .f9-proof-provenance strong,
-[data-f9-theme="dark"] .f9-search-page .f9-search-refine-disclosure > summary {
-  color: var(--ink);
-}
 
-[data-f9-theme="dark"] .f9-search-page .f9-search-command-hint a {
-  text-decoration-color: var(--ink-faint);
-}
 
 /* --- Skeletons / loading shimmer --- */
 
@@ -8239,65 +7182,41 @@ reds soften --- */
   color: var(--ink);
 }
 
-/* Inline quick-save on search result cards (workflow-friction pass). */
-.f9-result-card-wrap {
-  position: relative;
-}
+/* Inline quick-save on a search result row (workflow-friction pass).
+   BL-031: it used to be an absolutely-positioned box in the corner of a card,
+   revealed on hover at `opacity: 0`. The card is gone, the reveal is gone —
+   an interactive control that is invisible until you hover it is not
+   discoverable, and it was already forced visible on every touch device — and
+   the accent fill on the saved state is gone with it: a green that marks
+   "saved" is a second green moment competing with the caught change. */
 
 .f9-quick-save {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 2;
-  display: grid;
-  gap: 6px;
-  justify-items: end;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-/* BL-014: quick-save is the entry point INTO a collection, so it uses the
-   Rank-2 button API (brief §5) instead of a fourth bespoke chip style. This
-   class now carries only the card-reveal behaviour. */
-.f9-quick-save-button {
-  opacity: 0;
-  transition: opacity 140ms ease;
-}
-
-.f9-result-card-wrap:hover .f9-quick-save-button,
-.f9-result-card-wrap:focus-within .f9-quick-save-button,
-.f9-quick-save-button:disabled[aria-busy="true"],
-.f9-quick-save-button:focus-visible {
-  opacity: 1;
-}
-
-/* Phones have no hover: keep quick-save visible and comfortably tappable. */
-@media (max-width: 600px) {
-  .f9-quick-save-button {
-    opacity: 1;
-  }
-}
-
-/* Saved is a STATE, not an affordance: the accent marks the finished row on a
-   control that is no longer clickable (brief §4.5). */
+/* Saved is a STATE, not an affordance: it says the word and stops being
+   clickable (brief §4.5). */
 .f9-quick-save-button:disabled {
   cursor: default;
-  opacity: 1;
-  background: var(--ed-accent-mark);
-}
-
-@media (hover: none) {
-  .f9-quick-save-button {
-    opacity: 1;
-  }
+  color: var(--ink-faint);
+  text-decoration: none;
 }
 
 .f9-quick-save-note {
+  position: absolute;
+  z-index: 3;
+  top: calc(100% + 4px);
+  right: 0;
+  width: max-content;
   max-width: 240px;
   padding: 8px 10px;
-  border: 2px solid var(--ed-rule);
-  background: var(--ed-surface);
+  border: 1px solid var(--line);
+  background: var(--card);
   color: var(--ink-soft);
   font-size: 0.75rem;
-  text-align: right;
 }
 
 /* Red stays diff-deletion and genuine errors only (brief §4.5) — this is a
@@ -8337,71 +7256,14 @@ reds soften --- */
    hit area rather than a second column of chrome. */
 
 /* Keyboard navigation on search results (workflow-friction pass). */
-.f9-result-card-wrap.is-key-focus > .f9-result-card {
-  border-color: var(--green);
-  box-shadow: 0 0 0 3px var(--green-wash);
-}
 
-.f9-keyboard-hints {
-  position: relative;
-}
 
 /* Keyboard shortcuts assume a hardware keyboard; hide the trigger on phones. */
-@media (max-width: 600px) {
-  .f9-keyboard-hints {
-    display: none;
-  }
-}
 
-.f9-keyboard-hints-trigger {
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--line);
-  border-radius: 50%;
-  background: var(--card);
-  color: var(--ink-soft);
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.85rem;
-  font-weight: 700;
-  line-height: 1;
-}
 
-.f9-keyboard-hints-popover {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 20;
-  display: grid;
-  gap: 8px;
-  min-width: 240px;
-  margin: 0;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--card);
-  box-shadow: 0 14px 36px rgba(6, 22, 41, 0.16);
-}
 
-.f9-keyboard-hints-popover > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
 
-.f9-keyboard-hints-popover dt {
-  font-family: var(--ld-mono);
-  font-size: 0.75rem;
-  color: var(--ink);
-  white-space: nowrap;
-}
 
-.f9-keyboard-hints-popover dd {
-  margin: 0;
-  font-size: 0.78rem;
-  color: var(--ink-soft);
-  text-align: right;
-}
 
 /* ==========================================================================
    /ads/:domain — "Case File" acquisition page (Direction 1 hybrid)
@@ -11520,6 +10382,17 @@ reds soften --- */
   white-space: nowrap;
 }
 
+/* ROUND 2 — caught by eyeball, not by a probe: `.f9-search-page a { color:
+   inherit }` is (0,1,1) and beats `.f9-wk-btn` (0,1,0), so a Rank-1 button
+   rendered as a <Link> painted ink-on-ink and its label disappeared. Nothing
+   in the harness measures label contrast; the same trap already has a
+   hand-written escape for `a.f9-primary-button` further up this file. Fixed at
+   the primitive so every page's link-shaped Rank-1 is safe, not just this
+   one. */
+a.f9-wk-btn {
+  color: var(--wk-on-fill);
+}
+
 .f9-wk-btn:hover {
   opacity: 0.86;
 }
@@ -12846,6 +11719,752 @@ reds soften --- */
   .f9-wk-sec {
     padding-top: 26px;
   }
+}
+
+/* ================================================================
+   BL-031 — /search in the landing language (2026-07-29)
+   P1 of the rebuild program. Built on BL-030's primitives: the working
+   header, the ruled row, the Linear-peek detail pane, the ink feedback
+   strip, `.f9-wk-page` scope, one rule weight (1px), radius 0.
+
+   Two things this layer adds to the P0 vocabulary, because a search page
+   needs them and no rebuilt surface had them yet:
+
+     1. FORM CONTROLS (DNA §2). An input is a frame: 1px rule, radius 0, no
+        inner shadow, no placeholder-as-label, and a machine-shaped value
+        (a URL, a date) set in mono. Its label sits above it.
+        DEVIATION, named rather than taken quietly: DNA §2 specifies the
+        label as a 10px caps-mono micro-label. v4 supersedes it — the
+        boringness budget allows THREE caps-mono surfaces per page and the
+        refine panel alone would spend six. Labels are sentence-case body
+        text, exactly like v4's rail labels and account block.
+     2. A SECTION HEAD — a title with at most two quiet controls on its
+        right — because a result list has a sort and a shortcut affordance
+        and the page header already spent its one action.
+
+   Everything else is P0's. There is no new colour and no new rule weight.
+   ================================================================ */
+
+/* ---------------------------------------------------------------
+   Form controls
+   --------------------------------------------------------------- */
+
+.f9-wk-field {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.f9-wk-lab {
+  color: var(--ink-soft);
+  font-family: var(--f9-font);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.f9-wk-in,
+.f9-wk-sel {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--wk-rule);
+  border-radius: 0;
+  background: var(--card);
+  color: var(--ink);
+  font-family: var(--f9-font);
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+/* Machine-shaped values are mono; prose is not. Same split the rest of the
+   system uses. */
+input.f9-wk-in {
+  font-family: var(--ld-mono);
+  font-size: 13.5px;
+}
+
+textarea.f9-wk-in {
+  min-height: 78px;
+  font-family: var(--f9-font);
+  font-size: 14px;
+  resize: vertical;
+}
+
+.f9-wk-in::placeholder {
+  color: var(--ink-faint);
+}
+
+.f9-wk-sel {
+  appearance: none;
+  padding-right: 30px;
+}
+
+/* The caret is drawn, not imported: a background-image caret cannot follow
+   the theme, and this system has no icon font. */
+.f9-wk-field:has(> select)::after {
+  position: absolute;
+  right: 12px;
+  bottom: 14px;
+  color: var(--ink-faint);
+  content: "\25BE";
+  font-size: 11px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.f9-wk-field.is-inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.f9-wk-field.is-inline .f9-wk-sel {
+  width: auto;
+  min-width: 152px;
+}
+
+.f9-wk-field.is-inline:has(> select)::after {
+  bottom: 15px;
+}
+
+/* ---------------------------------------------------------------
+   The command band. One field, one filled button, one hint, and a
+   disclosure that stays shut until the visitor actually has filters on.
+   --------------------------------------------------------------- */
+
+/* ROUND 2 — the instrument's vertical rhythm, tightened against the v4 scale.
+   The header above it is P0's, unmodified (26/20 around a 28px title). This
+   band opens at 14px rather than 22px because the header rule already does the
+   separating work; the 22px was landing rhythm on a workspace screen, which is
+   the correction v3 recorded and this row had quietly kept. */
+.f9-wk-command {
+  padding: 14px var(--wk-pad) 0;
+}
+
+.f9-wk-command-row {
+  display: flex;
+  max-width: 640px;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.f9-wk-command-row .f9-wk-field {
+  flex: 1 1 auto;
+}
+
+.f9-wk-hint {
+  max-width: 62ch;
+  margin: 9px 0 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Validation speaks in product voice under the field, and it says so in
+   words as well as colour — red alone is never the message. */
+.f9-wk-hint.is-bad {
+  color: var(--red);
+}
+
+.f9-wk-refine {
+  margin-top: 8px;
+}
+
+.f9-wk-refine > summary {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 13.5px;
+  list-style: none;
+}
+
+.f9-wk-refine > summary::-webkit-details-marker {
+  display: none;
+}
+
+.f9-wk-refine > summary::before {
+  color: var(--ink-faint);
+  content: "\25B8";
+  font-size: 10px;
+}
+
+.f9-wk-refine[open] > summary::before {
+  content: "\25BE";
+}
+
+.f9-wk-refine > summary:hover {
+  color: var(--ink);
+}
+
+.f9-wk-refine-n {
+  color: var(--ink-faint);
+}
+
+.f9-search-refine {
+  display: grid;
+  max-width: 880px;
+  margin: 2px 0 6px;
+  gap: 14px 18px;
+  grid-template-columns: repeat(auto-fit, minmax(178px, 1fr));
+}
+
+.f9-wk-refine.is-inline {
+  margin-top: 0;
+}
+
+/* ROUND 2 — the refine disclosure is an INSTRUMENT control, so above the
+   width where there is room for it, it sits in the instrument's own row
+   rather than on a row of its own. That is the header contract measured off
+   incident.io (title left, actions inline right, ONE row) applied to the
+   command band, and it removes a whole 52px band from every state without
+   removing a control: closed, `Refine search` is a word beside the button;
+   open, its panel fills the space to the right of the 640px command row
+   instead of pushing the results down a second time.
+
+   Below 1080px the two columns cannot both be honest widths, so it falls back
+   to the stacked layout — the phone has the vertical room the desktop does
+   not. */
+@media (min-width: 1080px) {
+  .f9-search-page .f9-wk-command-form {
+    display: grid;
+    align-items: end;
+    column-gap: 28px;
+    grid-template-columns: minmax(0, 640px) minmax(0, 1fr);
+  }
+
+  .f9-search-page .f9-wk-command-form > .f9-wk-command-row {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .f9-search-page .f9-wk-command-form > .f9-wk-hint {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .f9-search-page .f9-wk-command-form > .f9-wk-refine {
+    align-self: end;
+    margin-top: 0;
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .f9-search-page .f9-wk-command-form > .f9-wk-refine > .f9-search-refine {
+    margin-bottom: 0;
+  }
+}
+
+.f9-save-query-form {
+  display: flex;
+  max-width: 480px;
+  align-items: flex-end;
+  gap: 12px;
+  padding-bottom: 6px;
+}
+
+.f9-save-query-form .f9-wk-field {
+  flex: 1 1 auto;
+}
+
+/* The retention actions are text, not a second and third filled button. */
+.f9-wk-acts.is-row {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 24px;
+  margin-top: 4px;
+}
+
+.f9-quick-track-form {
+  display: flex;
+  align-items: center;
+}
+
+/* ---------------------------------------------------------------
+   The results section
+   --------------------------------------------------------------- */
+
+.f9-wk-sec-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  /* ROUND 2: 30/14 → 20/12. The answer needs air above it, not a section gap
+     from a 6,000px marketing scroll. */
+  padding: 20px 0 12px;
+}
+
+.f9-wk-sec-headings {
+  min-width: 0;
+}
+
+.f9-wk-sec-title {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--f9-font);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.3;
+  text-transform: none;
+}
+
+.f9-wk-sec-sub {
+  margin: 5px 0 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.f9-wk-sec-acts {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 16px;
+}
+
+.f9-wk-hints {
+  position: relative;
+}
+
+.f9-wk-hints-body {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 2px);
+  right: 0;
+  display: grid;
+  min-width: 224px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--wk-rule);
+  background: var(--card);
+  font-size: 12.5px;
+  gap: 7px 14px;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.f9-wk-hints-body > div {
+  display: contents;
+}
+
+.f9-wk-hints-body dt {
+  color: var(--ink);
+  font-family: var(--ld-mono);
+}
+
+.f9-wk-hints-body dd {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+/* The keyboard cursor is a cursor, not a selection: the selected row owns the
+   sunk ground, so the roving highlight is a rule on the leading edge. */
+.f9-wk-row.is-key-focus {
+  box-shadow: inset 2px 0 0 var(--ink);
+}
+
+.f9-wk-empty {
+  padding: 6px 0 24px;
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-wk-empty > * + .f9-wk-acts,
+.f9-wk-empty > div > .f9-wk-sec-title {
+  margin-top: 0;
+}
+
+.f9-wk-empty .f9-wk-sec-title {
+  padding-top: 22px;
+}
+
+.f9-wk-empty .f9-wk-acts {
+  margin-top: 14px;
+}
+
+.f9-wk-more-results {
+  padding: 14px 0 0;
+}
+
+/* ---------------------------------------------------------------
+   The retention band (round 2). The page's second and last conversion
+   moment, below the whole split rather than at the foot of the left
+   column, and the same object for both audiences.
+
+   It carries NO new type role and NO new colour: its line is the
+   section title (17px Inter 600) it shares with the results head, and
+   its weight comes from isolation, not from scale — v3's lesson, that
+   scale is not a carrier of character. What makes it unmissable is
+   that it is alone: a full-width rule, 44px of air above the line, and
+   nothing else in its viewport. The commit is the one filled button
+   the DNA allows per viewport; the landing does exactly this with its
+   `.ld-final` band, 6,000px below the hero's.
+   --------------------------------------------------------------- */
+
+.f9-wk-retain {
+  padding: 44px var(--wk-pad) 52px;
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-wk-retain-say {
+  max-width: 58ch;
+  margin: 10px 0 0;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.f9-wk-retain .f9-wk-acts {
+  margin-top: 20px;
+}
+
+.f9-wk-retain .f9-wk-acts.is-row {
+  margin-top: 20px;
+}
+
+/* ---------------------------------------------------------------
+   The evidence pane. Wider than the Competitors peek pane because an ad's
+   creative is the material and 336px is not enough to read one.
+   `:not(.is-single)` so this never overrides P0's single-column state.
+   --------------------------------------------------------------- */
+
+.f9-wk-split.is-wide:not(.is-single) {
+  grid-template-columns: minmax(0, 1fr) 384px;
+}
+
+.f9-wk-creative {
+  margin-top: 18px;
+}
+
+.f9-wk-creative .f9-ad-thumb {
+  display: block;
+  width: 100%;
+  max-height: 280px;
+  height: auto;
+  border: 1px solid var(--wk-rule);
+  border-radius: 0;
+  background: var(--wk-sunk);
+  object-fit: cover;
+}
+
+.f9-wk-creative .f9-ad-thumb-fallback.f9-ad-thumb-fallback {
+  display: flex;
+  min-height: 96px;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-faint);
+  font-size: 12.5px;
+}
+
+.f9-wk-creative-head {
+  margin: 12px 0 0;
+  color: var(--ink);
+  font-family: var(--f9-font);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+/* Provenance is told once, and it belongs to the capture. */
+.f9-wk-prov {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 14px 0 0;
+  color: var(--ink-faint);
+  font-size: 12.5px;
+  gap: 2px 0;
+}
+
+.f9-wk-prov span + span::before {
+  margin: 0 8px;
+  content: "\00B7";
+  opacity: 0.55;
+}
+
+.f9-wk-small {
+  margin: 9px 0 0;
+  color: var(--ink-faint);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.f9-wk-blk-head {
+  margin: 10px 0 0;
+  color: var(--ink);
+  font-family: var(--f9-font);
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* A URL is a link you tap, so it carries the layer's 44px target even though
+   the text it draws is 18px tall. The harness measured this one at 210x18 and
+   refused to write the evidence set. */
+.f9-wk-url {
+  display: block;
+  min-height: 44px;
+  margin-top: 4px;
+  padding: 13px 0 11px;
+  color: var(--ink-soft);
+  font-family: var(--ld-mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.f9-wk-url:hover {
+  color: var(--ink);
+}
+
+.f9-wk-detail .f9-wk-dl + .f9-wk-quote,
+.f9-wk-detail .f9-wk-blk-head + .f9-wk-dl {
+  margin-top: 12px;
+}
+
+.f9-wk-detail .f9-wk-blk .f9-wk-acts {
+  margin-top: 12px;
+}
+
+.f9-wk-detail .f9-save-stack {
+  display: grid;
+  margin-top: 12px;
+  gap: 12px;
+  justify-items: start;
+}
+
+.f9-wk-detail .f9-save-stack .f9-wk-field {
+  width: 100%;
+}
+
+/* A pane fact on this page can be a whole hook sentence, so the value wraps
+   and reads left. Scoped to /search — the Competitors pane's facts are short
+   and stay right-aligned. */
+.f9-search-page .f9-wk-dl {
+  grid-template-columns: 112px minmax(0, 1fr);
+}
+
+.f9-search-page .f9-wk-dl dd {
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+/* ---------------------------------------------------------------
+   Coexistence seam — the search answer panel keeps its component and its
+   copy; only its volume comes down to this layer's. It was a bordered
+   card holding a boxed 3-up stat grid, a boxed note and a boxed "what to
+   steal" panel, with a hardcoded `#0a7b62` caps-mono label — a green that
+   never went through a token and a fourth caps-mono surface.
+   --------------------------------------------------------------- */
+
+.f9-wk-page .f9-search-answer {
+  display: grid;
+  margin: 18px 0 0;
+  padding: 16px 0 0;
+  border: 0;
+  border-top: 1px solid var(--wk-rule);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  gap: 12px;
+}
+
+.f9-wk-page .f9-search-answer > div {
+  display: grid;
+  gap: 4px;
+}
+
+.f9-wk-page .f9-search-answer h3,
+.f9-wk-page .f9-search-answer p {
+  margin: 0;
+}
+
+.f9-wk-page .f9-search-answer dl {
+  display: grid;
+  margin: 0;
+  gap: 0;
+}
+
+.f9-wk-page .f9-search-answer dl div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.f9-wk-page .f9-search-answer-steal ul {
+  display: grid;
+  margin: 0;
+  padding-left: 18px;
+  gap: 5px;
+}
+
+.f9-wk-page .f9-search-answer span {
+  color: var(--ink-faint);
+  font-family: var(--f9-font);
+  font-size: 12.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.f9-wk-page .f9-search-answer h3 {
+  color: var(--ink);
+  font-family: var(--f9-font);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.f9-wk-page .f9-search-answer p {
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.f9-wk-page .f9-search-answer dl div,
+.f9-wk-page .f9-search-answer-note,
+.f9-wk-page .f9-search-answer-steal {
+  padding: 12px 0 0;
+  border: 0;
+  border-top: 1px solid var(--wk-rule);
+  border-radius: 0;
+  background: none;
+}
+
+.f9-wk-page .f9-search-answer dt,
+.f9-wk-page .f9-search-answer small {
+  color: var(--ink-faint);
+  font-size: 12.5px;
+  font-weight: 400;
+}
+
+.f9-wk-page .f9-search-answer dd {
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.f9-wk-page .f9-search-answer-steal li {
+  color: var(--ink);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+/* ---------------------------------------------------------------
+   Responsive. The public shell has no ink rail, so the page column has to
+   fill the main area itself; below the split's fold width the pane stacks
+   under the list and keeps its own top rule.
+   --------------------------------------------------------------- */
+
+.f9-dash-page-public .f9-cursor-main:has(.f9-wk-page) {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+}
+
+@media (max-width: 1180px) {
+  .f9-wk-split.is-wide:not(.is-single) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .f9-wk-command {
+    padding-top: 18px;
+  }
+
+  /* ROUND 2 — DNA §1 says the Rank-1 button is NEVER full-width, and the phone
+     rule that stacked `See ads` under the field and stretched it across the
+     screen was an unnamed deviation from it. The instrument stays one row at
+     every width: it obeys the rule, it reads as one object rather than two,
+     and it takes 56px off the top of every phone search. */
+  .f9-wk-command-row {
+    gap: 10px;
+  }
+
+  .f9-wk-command-row .f9-wk-btn {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .f9-wk-sec-head {
+    flex-wrap: wrap;
+    padding-top: 24px;
+  }
+
+  .f9-wk-sec-acts {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+
+  .f9-search-refine {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .f9-save-query-form {
+    flex-wrap: wrap;
+  }
+}
+
+/* The evidence pane is a programmatic focus target: selecting a result moves
+   focus into it so a screen reader lands on the evidence, and production
+   canaries assert that. A 2px green ring around a 384px pane on every page
+   load is not a keyboard affordance, it is a green moment spent on a scroll
+   position — so the ring is suppressed on the container while every control
+   inside it keeps P0's. */
+.f9-wk-page [tabindex="-1"]:focus,
+.f9-wk-page [tabindex="-1"]:focus-visible {
+  outline: none;
+}
+
+/* The search answer's facts are provenance, not a stat deck: one quiet strip
+   above the rows rather than three stacked blocks that push the first result
+   past the 20% mark every legit SaaS list holds to. */
+.f9-wk-page .f9-search-answer dl {
+  gap: 4px 26px;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+}
+
+.f9-wk-page .f9-search-answer dl div {
+  padding: 0;
+  border: 0;
+  gap: 0;
+}
+
+.f9-wk-page .f9-search-answer dd {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+/* The bleed belongs to the results SECTION, not to the ruled list inside it.
+   A negative margin on a child makes that child wider than its parent, which
+   is a nested horizontal overflow even when the document itself never
+   scrolls — the capture harness measures the document and would never have
+   seen it; the release journeys measure nested elements and caught it at
+   375px immediately. Same lesson BL-030 round 3 recorded on the setup card,
+   relearned here rather than assumed. */
+.f9-wk-split-list > .f9-results-panel {
+  margin-right: calc(var(--wk-pad) * -1);
+  margin-left: calc(var(--wk-pad) * -1);
+}
+
+.f9-results-panel > :not(.f9-wk-rows) {
+  padding-right: var(--wk-pad);
+  padding-left: var(--wk-pad);
+}
+
+.f9-results-panel > .f9-wk-rows.is-bleed {
+  margin: 0;
 }
 
 /* === BL-033b reports (landing language) === */

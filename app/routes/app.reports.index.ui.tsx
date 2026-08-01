@@ -93,14 +93,15 @@ export function ReportsIndexRoute() {
         </section>
       ) : (
         <section aria-labelledby="reports-list-title" className="f9-wk-sec">
-          <p className="f9-wk-kick" id="reports-list-title">
+          <h2 className="f9-wk-kick" id="reports-list-title">
             Available reports
-          </p>
-          <RuledList aria-label="Available reports">
+          </h2>
+          <RuledList aria-label="Available reports" role="list">
             {data.reports.map((report) => (
               <RuledRow
                 key={report.id}
                 name={report.title}
+                role="listitem"
                 say={report.description}
                 status={report.typeLabel}
                 time={<LocalTime fallback={report.updatedAt} iso={report.updatedAt} />}
