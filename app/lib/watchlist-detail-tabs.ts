@@ -16,7 +16,7 @@ export const WATCHLIST_DETAIL_TAB_PARAM = "tab";
 
 export interface WatchlistDetailTabDefinition {
   id: WatchlistDetailTabId;
-  /** Rendered uppercase in mono by the bar; written in product voice. */
+  /** Rendered sentence-case in the shared working tab bar. */
   label: string;
   /** Spoken name for the panel this tab controls. */
   panelLabel: string;
