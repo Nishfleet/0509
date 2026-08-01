@@ -65,8 +65,6 @@ import {
   resolveCommercialDiscoveryProvider,
   searchAdsViaSourceResolver,
 } from "~/lib/ad-source.server";
-import { bindD1Named } from "~/lib/d1-bind.server";
-import { reportConsecutiveWatchlistFailure } from "~/lib/watchlist-failure-alert.server";
 import { normalizeSavedQuery } from "~/lib/normalize";
 import { getUserPlan, PLAN_LIMITS } from "~/lib/plan.server";
 import { resolveScheduledScanCacheMaxAgeMs } from "~/lib/discovery-cache.server";
@@ -1002,8 +1000,8 @@ export async function reserveFirstWatchlistScanDailyQuota(
   const now = input.now ?? new Date();
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
   const timestamp = now.toISOString();
-  const result = await bindD1Named(
-    ensureDb(env).prepare(
+  const result = await ensureDb(env)
+    .prepare(
       `
         UPDATE watchlist_run
         SET summary_json = json_set(
@@ -1035,22 +1033,15 @@ export async function reserveFirstWatchlistScanDailyQuota(
               ) = 1
           ) < ?
       `,
-    ),
-    [
-      ["firstScanQuota.updatedAt", timestamp],
-      ["firstScanQuota.runId", input.runId],
-      ["firstScanQuota.userId", input.userId],
-      ["firstScanQuota.reservedUserId", input.userId],
-      ["firstScanQuota.since", since],
-      ["firstScanQuota.limit", limit],
-    ],
-  ).run();
+    )
+    .bind(timestamp, input.runId, input.userId, input.userId, since, limit)
+    .run();
   if (Number(result.meta?.changes ?? 0) > 0) {
     return true;
   }
 
-  const existing = await bindD1Named(
-    ensureDb(env).prepare(
+  const existing = await ensureDb(env)
+    .prepare(
       `
         SELECT COALESCE(json_extract(summary_json, '$.firstScanQuotaReserved'), 0) AS reserved
         FROM watchlist_run
@@ -1059,12 +1050,9 @@ export async function reserveFirstWatchlistScanDailyQuota(
           AND watchlist.user_id = ?
         LIMIT 1
       `,
-    ),
-    [
-      ["firstScanQuota.runId", input.runId],
-      ["firstScanQuota.userId", input.userId],
-    ],
-  ).first<{ reserved: number }>();
+    )
+    .bind(input.runId, input.userId)
+    .first<{ reserved: number }>();
   return Number(existing?.reserved ?? 0) === 1;
 }
 
@@ -1098,8 +1086,8 @@ async function requeueClaimedFirstWatchlistScan(
       ? input.error.message
       : "First scan setup failed.";
   const timestamp = new Date().toISOString();
-  const result = await bindD1Named(
-    ensureDb(env).prepare(
+  const result = await ensureDb(env)
+    .prepare(
       `
         UPDATE watchlist_run
         SET status = 'pending',
@@ -1113,15 +1101,15 @@ async function requeueClaimedFirstWatchlistScan(
           AND status = 'running'
           AND processing_token = ?
       `,
-    ),
-    [
-      ["firstScanRequeue.errorMessage", errorMessage],
-      ["firstScanRequeue.retryAfter", timestamp],
-      ["firstScanRequeue.updatedAt", timestamp],
-      ["firstScanRequeue.runId", input.runId],
-      ["firstScanRequeue.processingToken", input.processingToken],
-    ],
-  ).run();
+    )
+    .bind(
+      errorMessage,
+      timestamp,
+      timestamp,
+      input.runId,
+      input.processingToken,
+    )
+    .run();
   return Number(result.meta?.changes ?? 0) > 0;
 }
 
@@ -1131,21 +1119,21 @@ const RETRYABLE_FIRST_SCAN_PROVIDER_CODES = new Set([
   "rate_limited",
 ]);
 async function readFirstWatchlistScanState(env: AppEnv, runId: string) {
-  return bindD1Named(
-    ensureDb(env).prepare(
+  return ensureDb(env)
+    .prepare(
       `
         SELECT status, error_code, attempt_count
         FROM watchlist_run
         WHERE id = ?
         LIMIT 1
       `,
-    ),
-    [["firstScanState.runId", runId]],
-  ).first<{
-    status: WatchlistRunRecord["status"];
-    error_code: string | null;
-    attempt_count: number;
-  }>();
+    )
+    .bind(runId)
+    .first<{
+      status: WatchlistRunRecord["status"];
+      error_code: string | null;
+      attempt_count: number;
+    }>();
 }
 
 async function requeueRetryableFirstWatchlistScanFailure(
@@ -1163,8 +1151,8 @@ async function requeueRetryableFirstWatchlistScanFailure(
   }
 
   const timestamp = new Date().toISOString();
-  const result = await bindD1Named(
-    ensureDb(env).prepare(
+  const result = await ensureDb(env)
+    .prepare(
       `
         UPDATE watchlist_run
         SET status = 'pending',
@@ -1178,15 +1166,9 @@ async function requeueRetryableFirstWatchlistScanFailure(
           AND error_code = ?
           AND attempt_count = ?
       `,
-    ),
-    [
-      ["firstScanRetry.retryAfter", timestamp],
-      ["firstScanRetry.updatedAt", timestamp],
-      ["firstScanRetry.runId", runId],
-      ["firstScanRetry.errorCode", state.error_code],
-      ["firstScanRetry.attemptCount", state.attempt_count],
-    ],
-  ).run();
+    )
+    .bind(timestamp, timestamp, runId, state.error_code, state.attempt_count)
+    .run();
   return Number(result.meta?.changes ?? 0) > 0;
 }
 
@@ -1209,21 +1191,21 @@ async function assertFirstWatchlistScanWorkflowPayload(
     );
   }
 
-  const row = await bindD1Named(
-    ensureDb(env).prepare(
+  const row = await ensureDb(env)
+    .prepare(
       `
         SELECT watchlist_id, idempotency_key, workflow_instance_id
         FROM watchlist_run
         WHERE id = ?
         LIMIT 1
       `,
-    ),
-    [["firstScanPayload.runId", params.runId]],
-  ).first<{
-    watchlist_id: string;
-    idempotency_key: string | null;
-    workflow_instance_id: string | null;
-  }>();
+    )
+    .bind(params.runId)
+    .first<{
+      watchlist_id: string;
+      idempotency_key: string | null;
+      workflow_instance_id: string | null;
+    }>();
   if (
     !row ||
     row.watchlist_id !== params.watchlistId ||
@@ -1274,8 +1256,8 @@ export async function prepareFirstWatchlistScanRun(
   watchlist: WatchlistRecord,
 ) {
   const executionKey = firstWatchlistScanExecutionKey(watchlist.id);
-  const activeRun = await bindD1Named(
-    ensureDb(env).prepare(
+  const activeRun = await ensureDb(env)
+    .prepare(
       `
         SELECT id
         FROM watchlist_run
@@ -1287,9 +1269,9 @@ export async function prepareFirstWatchlistScanRun(
           )
         LIMIT 1
       `,
-    ),
-    [["firstScanActive.watchlistId", watchlist.id]],
-  ).first<{ id: string }>();
+    )
+    .bind(watchlist.id)
+    .first<{ id: string }>();
   if (activeRun) {
     throw new Error(
       "A scan for this watchlist is already running; activation will retry later.",
@@ -1307,12 +1289,10 @@ export async function prepareFirstWatchlistScanRun(
     allowActiveRunFallback: false,
   });
 
-  const row = await bindD1Named(
-    ensureDb(env).prepare(
-      "SELECT queued_at FROM watchlist_run WHERE id = ? LIMIT 1",
-    ),
-    [["firstScanQueued.runId", ensured.runId]],
-  ).first<{ queued_at: string | null }>();
+  const row = await ensureDb(env)
+    .prepare("SELECT queued_at FROM watchlist_run WHERE id = ? LIMIT 1")
+    .bind(ensured.runId)
+    .first<{ queued_at: string | null }>();
   return {
     runId: ensured.runId,
     watchlistId: watchlist.id,
@@ -2282,12 +2262,6 @@ export async function runWatchlist(
           },
           options,
         );
-        await reportConsecutiveWatchlistFailure(env, {
-          watchlistId: watchlist.id,
-          watchlistName: watchlist.name,
-          runId,
-          triggerType,
-        });
         await logMetaIntegrationStatus(env, {
           status: "degraded",
           summary:
@@ -2408,12 +2382,6 @@ export async function runWatchlist(
       },
       options,
     );
-    await reportConsecutiveWatchlistFailure(env, {
-      watchlistId: watchlist.id,
-      watchlistName: watchlist.name,
-      runId,
-      triggerType,
-    });
     await logMetaIntegrationStatus(env, {
       status: "degraded",
       summary:
@@ -4416,22 +4384,17 @@ async function sumActiveProofUsageCredits(
   if (!env.DB || typeof env.DB.prepare !== "function") return 0;
 
   try {
-    const result = await bindD1Named(
-      env.DB.prepare(
-        `
-          SELECT COALESCE(SUM(credits), 0) AS total
-          FROM proof_usage_credit
-          WHERE user_id = ?
-            AND granted_at >= ?
-            AND expires_at > ?
-        `,
-      ),
-      [
-        ["proofUsageCredit.userId", userId],
-        ["proofUsageCredit.grantedSince", grantedSince],
-        ["proofUsageCredit.now", now],
-      ],
-    ).all<{ total: number }>();
+    const result = await env.DB.prepare(
+      `
+        SELECT COALESCE(SUM(credits), 0) AS total
+        FROM proof_usage_credit
+        WHERE user_id = ?
+          AND granted_at >= ?
+          AND expires_at > ?
+      `,
+    )
+      .bind(userId, grantedSince, now)
+      .all<{ total: number }>();
     return Number(result.results?.[0]?.total ?? 0);
   } catch (error) {
     if (

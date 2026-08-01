@@ -101,16 +101,20 @@ export function NotificationsRoute() {
             name="Email"
             status={data.emailDeliveryReady ? "Ready" : "Needs email"}
           />
-          <ChannelRow
-            copy={slackChannelCopy(data)}
-            name="Slack"
-            status={slackChannelStatus(data)}
-          />
-          <ChannelRow
-            copy={whatsAppChannelCopy(data, showWhatsAppDelivery)}
-            name="WhatsApp"
-            status={whatsAppChannelStatus(data, showWhatsAppDelivery)}
-          />
+          {data.showSlackDelivery ? (
+            <ChannelRow
+              copy={slackChannelCopy(data)}
+              name="Slack"
+              status={slackChannelStatus(data)}
+            />
+          ) : null}
+          {showWhatsAppDelivery ? (
+            <ChannelRow
+              copy={whatsAppChannelCopy(data, showWhatsAppDelivery)}
+              name="WhatsApp"
+              status={whatsAppChannelStatus(data, showWhatsAppDelivery)}
+            />
+          ) : null}
         </dl>
       </section>
 
@@ -376,6 +380,27 @@ function WhatsAppDelivery({ data }: { data: NotificationsLoaderData }) {
           WhatsApp setup is not ready for this account. Use email delivery until provider
           access, account access, and delivery confirmation are all configured.
         </p>
+        <dl className="f9-nt-definitions is-compact">
+          <ChannelRow
+            copy="Provider access for the WhatsApp sender."
+            name="Provider access"
+            status={
+              data.whatsappDelivery.providerConfigured ? "Configured" : "Not configured"
+            }
+          />
+          <ChannelRow
+            copy="WhatsApp delivery is enabled for this account."
+            name="Account access"
+            status={data.whatsappDelivery.customerReady ? "Enabled" : "Not enabled"}
+          />
+          <ChannelRow
+            copy="The confirmation webhook records delivery receipts."
+            name="Delivery webhook"
+            status={
+              data.whatsappDelivery.webhookConfigured ? "Configured" : "Not configured"
+            }
+          />
+        </dl>
       </section>
     );
   }
@@ -388,45 +413,58 @@ function WhatsAppDelivery({ data }: { data: NotificationsLoaderData }) {
         title="WhatsApp delivery"
       />
 
-      <Form className="f9-nt-connect-row" method="post">
-        <input name="intent" type="hidden" value="save-whatsapp-target" />
-        <WorkRowCopy
-          name="Connect recipient"
-          say="Delivery turns on after Meta confirms the setup template was delivered."
-        />
-        <label className="f9-nt-field">
-          <span className="f9-nt-label">Recipient label</span>
-          <input
-            autoComplete="off"
-            className="f9-nt-input"
-            name="whatsappDestinationName"
-            placeholder="Founder, growth lead..."
-            type="text"
+      {whatsAppSetupPending(data) ? (
+        <div className="f9-nt-lock" role="status">
+          <div>
+            <h3>Recipient setup is pending</h3>
+            <p>
+              Review the existing recipient while validation or template confirmation
+              completes. New recipient setup is paused to avoid duplicate delivery
+              attempts.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <Form className="f9-nt-connect-row" method="post">
+          <input name="intent" type="hidden" value="save-whatsapp-target" />
+          <WorkRowCopy
+            name="Connect recipient"
+            say="Delivery turns on after Meta confirms the setup template was delivered."
           />
-        </label>
-        <label className="f9-nt-field">
-          <span className="f9-nt-label">WhatsApp number</span>
-          <input
-            autoComplete="off"
-            className="f9-nt-input"
-            inputMode="tel"
-            name="whatsappTargetValue"
-            placeholder="+15551234567"
-            type="tel"
-          />
-        </label>
-        <label className="f9-nt-check-row">
-          <input name="whatsappExplicitOptIn" type="checkbox" value="yes" />
-          <span>Recipient has opted in to receive Five to Nine WhatsApp updates.</span>
-        </label>
-        <SubmitButton
-          className="f9-wk-lnk f9-nt-submit"
-          intent="save-whatsapp-target"
-          pendingLabel="Saving…"
-        >
-          Save WhatsApp delivery
-        </SubmitButton>
-      </Form>
+          <label className="f9-nt-field">
+            <span className="f9-nt-label">Recipient label</span>
+            <input
+              autoComplete="off"
+              className="f9-nt-input"
+              name="whatsappDestinationName"
+              placeholder="Founder, growth lead..."
+              type="text"
+            />
+          </label>
+          <label className="f9-nt-field">
+            <span className="f9-nt-label">WhatsApp number</span>
+            <input
+              autoComplete="off"
+              className="f9-nt-input"
+              inputMode="tel"
+              name="whatsappTargetValue"
+              placeholder="+15551234567"
+              type="tel"
+            />
+          </label>
+          <label className="f9-nt-check-row">
+            <input name="whatsappExplicitOptIn" type="checkbox" value="yes" />
+            <span>Recipient has opted in to receive Five to Nine WhatsApp updates.</span>
+          </label>
+          <SubmitButton
+            className="f9-wk-lnk f9-nt-submit"
+            intent="save-whatsapp-target"
+            pendingLabel="Saving…"
+          >
+            Save WhatsApp delivery
+          </SubmitButton>
+        </Form>
+      )}
 
       <dl className="f9-nt-definitions is-compact">
         <ChannelRow
@@ -437,10 +475,26 @@ function WhatsAppDelivery({ data }: { data: NotificationsLoaderData }) {
         <ChannelRow
           copy="Meta must approve the message template before updates can be sent."
           name="Template approval"
+          status="Required"
+        />
+        <ChannelRow
+          copy="Provider access for the WhatsApp sender."
+          name="Availability"
+          status={
+            data.whatsappDelivery.providerConfigured ? "Configured" : "Not configured"
+          }
+        />
+        <ChannelRow
+          copy="WhatsApp delivery is enabled for this account."
+          name="Account access"
           status={data.whatsappDelivery.customerReady ? "Enabled" : "Not enabled"}
         />
         <ChannelRow
-          copy="The confirmation webhook is configured for delivery receipts."
+          copy={
+            data.whatsappDelivery.webhookConfigured
+              ? "The confirmation webhook is configured for delivery receipts."
+              : "Configure the confirmation webhook for delivery receipts."
+          }
           name="Delivery webhook"
           status={data.whatsappDelivery.webhookConfigured ? "Configured" : "Not configured"}
         />
@@ -474,9 +528,11 @@ function WhatsAppDelivery({ data }: { data: NotificationsLoaderData }) {
             <div>
               <strong>{target.displayName}</strong>
               <p>
-                {target.validationStatus === "validated" && target.templateEligible
-                  ? "Template-ready"
-                  : "Needs validation"}
+                {target.isPaused
+                  ? "Paused"
+                  : target.validationStatus === "validated" && target.templateEligible
+                    ? "Template-ready"
+                    : "Needs validation"}
                 {target.lastSuccessfulDeliveryAt ? (
                   <> · last sent <LocalTime iso={target.lastSuccessfulDeliveryAt} /></>
                 ) : (
@@ -544,7 +600,10 @@ function whatsAppChannelStatus(
 ) {
   if (!showWhatsAppDelivery) return "Not available";
   if (!data.canManageWhatsAppDelivery) return "Setup not ready";
-  return data.whatsappDelivery.usableTargets > 0 ? "Connected" : "Available";
+  if (data.whatsappDelivery.usableTargets > 0) return "Connected";
+  if (whatsAppSetupPending(data)) return "Pending";
+  if (pausedWhatsAppTargetCount(data) > 0) return "Paused";
+  return data.whatsappDelivery.configuredTargets > 0 ? "Pending" : "Available";
 }
 
 function whatsAppChannelCopy(
@@ -556,6 +615,38 @@ function whatsAppChannelCopy(
     return "WhatsApp delivery is not ready for this account yet. Use email delivery.";
   }
   return data.whatsappDelivery.usableTargets > 0
-    ? `${data.whatsappDelivery.usableTargets} opted-in recipient${data.whatsappDelivery.usableTargets === 1 ? "" : "s"} ready.`
-    : "Add an opted-in recipient, then wait for Meta to confirm the setup template.";
+    ? `${data.whatsappDelivery.usableTargets} opted-in recipient${
+        data.whatsappDelivery.usableTargets === 1 ? "" : "s"
+      } ready.`
+    : whatsAppSetupPending(data)
+      ? `${data.whatsappDelivery.configuredTargets} configured recipient${
+          data.whatsappDelivery.configuredTargets === 1 ? "" : "s"
+        } awaiting validation or template confirmation. Review the existing recipient before adding another.`
+      : pausedWhatsAppTargetCount(data) > 0
+        ? `${pausedWhatsAppTargetCount(data)} configured recipient${
+            pausedWhatsAppTargetCount(data) === 1 ? "" : "s"
+          } paused. Review the existing recipient before adding another.`
+        : "Add an opted-in recipient, then wait for Meta to confirm the setup template.";
+}
+
+function whatsAppSetupPending(data: NotificationsLoaderData) {
+  return (
+    data.whatsappDelivery.usableTargets === 0 &&
+    pendingWhatsAppTargetCount(data) > 0
+  );
+}
+
+function pendingWhatsAppTargetCount(data: NotificationsLoaderData) {
+  return data.whatsappTargets.filter(isPendingWhatsAppTarget).length;
+}
+
+function pausedWhatsAppTargetCount(data: NotificationsLoaderData) {
+  return data.whatsappTargets.filter((target) => target.isPaused).length;
+}
+
+function isPendingWhatsAppTarget(target: WhatsAppTargetView) {
+  return (
+    !target.isPaused &&
+    (target.validationStatus !== "validated" || !target.templateEligible)
+  );
 }
