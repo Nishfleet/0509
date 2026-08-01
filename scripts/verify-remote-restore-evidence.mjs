@@ -52,26 +52,64 @@ export function hasMigrationChanges(diffOutput) {
 }
 
 /** @param {unknown} diffOutput */
-export function hasAppliedMigrationMutation(diffOutput) {
+export function hasAppliedMigrationMutation(diffOutput, deployedMigrations) {
+  const scoped = deployedMigrations instanceof Set;
   return String(diffOutput)
     .split(/\r?\n/u)
     .some((line) => {
       const [status = "", ...paths] = line.split("\t");
-      return (
-        status !== "A" &&
-        paths.some((name) =>
-          /^migrations\/\d{4}_.+\.sql$/u.test(name.trim()),
-        )
-      );
+      if (status === "A") return false;
+      return paths.some((name) => {
+        const path = name.trim();
+        if (!/^migrations\/\d{4}_.+\.sql$/u.test(path)) return false;
+        // Without an explicit deployed set, stay strict: any modification or
+        // deletion of any migration counts. That is the safe default for any
+        // caller that cannot establish what production actually ran.
+        if (!scoped) return true;
+        // Scoped: only a migration that was already in the deployed tree could
+        // have been applied to production, so only editing one of those is a
+        // mutation. A migration introduced after the last deploy has never run
+        // anywhere, and refining it before it ships is not a hazard.
+        return deployedMigrations.has(path);
+      });
     });
 }
 
 /** @param {unknown[]} commitDiffs */
-export function hasMigrationMutationAcrossCommits(commitDiffs) {
+export function hasMigrationMutationAcrossCommits(
+  commitDiffs,
+  deployedMigrations,
+) {
   if (!Array.isArray(commitDiffs)) {
     throw new Error("remote_restore_migration_history_invalid");
   }
-  return commitDiffs.some((diff) => hasAppliedMigrationMutation(diff));
+  return commitDiffs.some((diff) =>
+    hasAppliedMigrationMutation(diff, deployedMigrations),
+  );
+}
+
+/**
+ * Migration files present in the tree at `commit` — i.e. the ones the release
+ * running at that commit could have applied to production.
+ *
+ * @param {string} commit
+ * @returns {Set<string>}
+ */
+export function migrationsAtCommit(commit) {
+  if (typeof commit !== "string" || !/^[a-f0-9]{40}$/u.test(commit)) {
+    throw new Error("remote_restore_migration_history_invalid");
+  }
+  const listed = execFileSync(
+    "git",
+    ["ls-tree", "-r", "--name-only", commit, "--", "migrations"],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+  );
+  return new Set(
+    listed
+      .split(/\r?\n/u)
+      .map((name) => name.trim())
+      .filter((name) => /^migrations\/\d{4}_.+\.sql$/u.test(name)),
+  );
 }
 
 /** @param {string} previousHead */
@@ -201,6 +239,7 @@ async function restoreEvidenceClassification() {
   if (
     hasMigrationMutationAcrossCommits(
       firstParentMigrationDiffs(previousHead),
+      migrationsAtCommit(previousHead),
     )
   ) {
     throw new Error("remote_restore_applied_migration_mutation");
