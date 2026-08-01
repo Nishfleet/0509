@@ -56,8 +56,10 @@ export default defineConfig({
       name: "local-auth",
       // Landing-language live-proof captures ride the same local fixture
       // server and skip themselves unless their package flag is set, so
-      // ordinary local-auth runs are unaffected.
-      testMatch: /(local-authenticated|bl030-capture|bl040-capture)\.spec\.ts/,
+      // ordinary local-auth runs are unaffected. Listed explicitly because a
+      // bl0\d+ pattern silently misses lettered ids such as bl033a.
+      testMatch:
+        /(local-authenticated|bl030-capture|bl031-capture|bl033a-capture|bl040-capture)\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         baseURL: localBaseURL,
