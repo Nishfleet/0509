@@ -1530,6 +1530,15 @@ printf 'curl %s\\n' "$*" >> "$FAKE_CALLS"
   printf 'hostile curlrc was not disabled\\n' >&2
   exit 100
 }
+# Real curl consumes stdin when the config path is "-". The caller writes its
+# auth config into that pipe under \`set -o pipefail\`, so a fake that exits
+# without draining can kill the writer with SIGPIPE and turn a healthy API call
+# into a 141 pipeline status. The script then reads that as an infrastructure
+# failure and burns an extra retry, which makes the call-count contract below
+# depend on runner scheduling. Drain stdin exactly like curl does.
+case " $* " in
+  *" --config - "*) /bin/cat > /dev/null ;;
+esac
 if [ "$FAKE_MODE" = download_infra ]; then exit 1; fi
 headers=
 output=
