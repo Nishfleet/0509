@@ -17,19 +17,14 @@ import {
   resolveSavedItemChannel,
   resolveSavedItemPlate,
   resolveSavedItemSourceKind,
+  resolveSavedItemStatus,
   resolveSavedItemVerification,
   savedItemCaptureLines,
   savedItemFootnote,
 } from "~/lib/collections-display";
 import type { CollectionItemRecord } from "~/lib/types";
 
-/**
- * BL-014 — the collections IA inversion.
- *
- * Brief: docs/design/EVIDENCE-DESK-BRIEF.md §5 (one Rank-1 per screen), §6.3
- * (one status strip), §6.6 (fact rail + honest inline values), §6.8 (specimen
- * empty state), §6.9 (evidence plate), §7 (content first, create demoted).
- */
+/** BL-033a — collections in the shared landing-language workspace grammar. */
 
 type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
 type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
@@ -116,7 +111,7 @@ async function render(loaderData: Record<string, unknown>) {
 }
 
 function rank1Count(markup: string) {
-  return (markup.match(/f9-ed-cta--rank1/g) ?? []).length;
+  return (markup.match(/f9-wk-btn/g) ?? []).length;
 }
 
 beforeEach(() => vi.resetModules());
@@ -177,7 +172,7 @@ describe("collections Rank-1 budget (brief §5)", () => {
     ["free gate", { collections: [], plan: "free", selectedCollection: null }, 1],
     ["first run", { collections: [], plan: "agency", selectedCollection: null }, 1],
     ["selected but empty", {}, 1],
-    ["populated", { items: [savedItem()] }, 0],
+    ["populated", { items: [savedItem()] }, 1],
   ])("renders exactly the expected primaries for %s", async (_label, loaderData, expected) => {
     const markup = await render(loaderData as Record<string, unknown>);
     expect(rank1Count(markup)).toBe(expected);
@@ -199,10 +194,11 @@ describe("collections Rank-1 budget (brief §5)", () => {
       selectedCollection: atLimit[0],
     });
 
-    // A limit note, at Rank 2, beside the evidence — never a wall over it.
-    expect(rank1Count(markup)).toBe(0);
-    expect(markup).toContain("Collections · limit reached");
-    expect(markup).toContain("View plans");
+    // The quiet capability gate owns the one filled action; the evidence is
+    // still visible and the limit note never becomes a second button.
+    expect(rank1Count(markup)).toBe(1);
+    expect(markup).toContain("Collection limit reached");
+    expect(markup).toContain("View upgrade options");
     expect(markup).not.toContain('value="create-collection"');
   });
 });
@@ -211,7 +207,7 @@ describe("collections IA inversion (brief §7)", () => {
   it("puts the saved evidence before the create form in the document", async () => {
     const markup = await render({ items: [savedItem()] });
 
-    const plate = markup.indexOf("f9-ed-collection-items");
+    const plate = markup.indexOf("f9-wk-row");
     const create = markup.indexOf('value="create-collection"');
     expect(plate).toBeGreaterThan(-1);
     expect(create).toBeGreaterThan(-1);
@@ -221,22 +217,39 @@ describe("collections IA inversion (brief §7)", () => {
   it("demotes the create form and the evidence form to Rank-2 disclosures", async () => {
     const markup = await render({ items: [savedItem()] });
 
-    expect(markup).toContain(
-      '<summary class="f9-ed-cta f9-ed-cta--rank2">New collection</summary>',
-    );
-    expect(markup).toContain(
-      '<summary class="f9-ed-cta f9-ed-cta--rank2">Add an evidence link</summary>',
-    );
+    expect(markup).toContain("f9-col-create");
+    expect(markup).toContain(">New collection<");
+    expect(markup).toContain("f9-col-external");
+    expect(markup).toContain(">Add an evidence link<");
   });
 
   it("renders the create form open, with the primary, when there is nothing to put first", async () => {
     const markup = await render({ collections: [], selectedCollection: null });
 
     expect(markup).toContain("Start your first collection");
-    expect(markup).toContain("Plate 01 — reserved");
+    expect(markup).toContain("its recorded source, and your team&#x27;s notes");
+    expect(markup).not.toContain("exactly as we captured them");
+    expect(markup).toContain("The first thing you save lands here with its source");
     expect(markup).toContain('value="create-collection"');
     expect(markup).not.toContain("<summary");
   });
+
+  it.each(["free", "agency"])(
+    "does not render first-run or an empty-plan lock when %s has collections but a stale selection",
+    async (plan) => {
+      const markup = await render({
+        collections: [collection],
+        plan,
+        selectedCollection: null,
+      });
+
+      expect(markup).toContain("Launch proof");
+      expect(markup).toContain("Choose another collection above.");
+      expect(markup).not.toContain("Start your first collection");
+      expect(markup).not.toContain("Collections start on Scout");
+      expect(markup).not.toContain("no collection exists on this plan yet");
+    },
+  );
 
   it("leaves no retired workspace styles on the route", async () => {
     const markup = await render({ items: [savedItem()] });
@@ -248,33 +261,45 @@ describe("collections IA inversion (brief §7)", () => {
     expect(markup).not.toContain("f9-master-detail");
     expect(markup).not.toContain("f9-side-panel");
     expect(markup).not.toContain("f9-work-row");
+    expect(markup).not.toContain("f9-ed-specimen");
+    expect(markup).not.toContain("f9-ed-evidence-plate");
     // A2: the six-box insight grid is gone from this route.
     expect(markup).not.toContain("f9-insight-grid");
     expect(markup).not.toContain("Insight depth");
   });
 
-  it("renders one status strip and one page-level fact rail", async () => {
+  it("renders ruled evidence rows, one selected-record pane, and quiet facts", async () => {
     const markup = await render({ items: [savedItem(), savedItem({ id: "item-2" })] });
 
-    // §6.3: the strip is the only place page-level status renders.
-    expect(markup.match(/f9-ed-status-strip/g) ?? []).toHaveLength(1);
-    // §7: the right rail carries ONE fact rail, not five inconsistent actions.
-    expect(markup.match(/f9-ed-collection-rail/g) ?? []).toHaveLength(1);
-    // Each plate keeps its own rail (§6.9) — that is the plate, not the page.
-    expect(markup.match(/f9-ed-evidence-side/g) ?? []).toHaveLength(2);
+    expect(markup.match(/class="f9-wk-row(?: |")/g) ?? []).toHaveLength(2);
+    expect(markup.match(/class="f9-wk-detail"/g) ?? []).toHaveLength(1);
+    // Depth is rendered once for the selected row, not repeated in every row.
+    expect(markup.match(/Captured from the ad library/g) ?? []).toHaveLength(1);
+    expect(markup).not.toContain("f9-ed-status-strip");
+    expect(markup).not.toContain("f9-ed-fact-rail");
   });
 });
 
-describe("collections evidence plates (brief §6.9)", () => {
-  it("renders each saved item as a numbered, stamped plate", async () => {
-    const markup = await render({ items: [savedItem(), savedItem({ id: "item-2" })] });
+describe("collections evidence rows and detail (BL-033a)", () => {
+  it("keeps every record in the list and opens depth only for the selected row", async () => {
+    const markup = await render({
+      items: [
+        savedItem(),
+        savedItem({ id: "item-2", ad: { advertiser: "Rival" } as never }),
+      ],
+    });
 
-    expect(markup).toContain("PLATE 01 — Meta · STORED CAPTURE");
-    expect(markup).toContain("PLATE 02 — Meta · STORED CAPTURE");
+    expect(markup).toContain("Okara");
+    expect(markup).toContain("Rival");
     expect(markup).toContain("This is the stored capture, not a re-render.");
+    expect(markup).not.toContain("PLATE 01");
+    expect(markup).not.toContain("f9-ed-evidence-plate");
   });
 
-  it("labels externally filed evidence inline, in mono (brief §8.3)", () => {
+  it("labels provenance in sentence case while retaining export-facing labels", () => {
+    expect(resolveSavedItemStatus("external")).toBe("Filed");
+    expect(resolveSavedItemStatus("demo")).toBe("Sample");
+    expect(resolveSavedItemStatus("meta_api")).toBe("Captured");
     expect(resolveSavedItemVerification("external")).toBe("EXTERNAL EVIDENCE");
     expect(resolveSavedItemVerification("demo")).toBe("DEMO DATA — SAMPLE RESULTS");
     expect(resolveSavedItemVerification("meta_api")).toBe("STORED CAPTURE");
@@ -355,6 +380,18 @@ describe("saved-item provenance is source-aware (brief §8.1, §13.1)", () => {
     ).toBeNull();
   });
 
+  it("keeps a real capture's precise timestamp in the selected detail", async () => {
+    const capturedAt = "2026-07-20T08:55:00.000Z";
+    const markup = await render({
+      items: [savedItem({ ad: { evidenceCapturedAt: capturedAt } as never })],
+    });
+    const detail = markup.match(/<aside[^>]*class="f9-wk-detail"[^>]*>.*?<\/aside>/s)?.[0];
+
+    expect(detail).toContain(
+      `<dt>Captured</dt><dd><time dateTime="${capturedAt}">20 Jul 2026, 08:55 UTC</time></dd>`,
+    );
+  });
+
   it("never stamps a filed link with the time it was filed", () => {
     // Regression: `evidenceCapturedAt ?? item.createdAt` printed the filing
     // time as a capture time, so a link observed on 24 Jul was stamped 27 Jul.
@@ -415,17 +452,15 @@ describe("saved-item provenance is source-aware (brief §8.1, §13.1)", () => {
       ],
     });
 
-    const plateHeader = markup.match(/<header class="f9-ed-plate-header[^>]*>.*?<\/header>/s)?.[0];
+    const detail = markup.match(/<aside[^>]*class="f9-wk-detail"[^>]*>.*?<\/aside>/s)?.[0];
 
-    expect(plateHeader).toContain("EXTERNAL EVIDENCE");
-    expect(plateHeader).toContain("capture time not recorded");
-    // The filing time (27 Jul) never reaches the plate. It is still allowed to
-    // appear elsewhere on the page — the status strip's "Last saved" cell is
-    // exactly that fact, correctly labelled.
-    expect(plateHeader).not.toContain("Jul 2026");
+    expect(detail).toContain("Filed");
+    expect(detail).toContain(
+      "Filed by your team from a link they saw. We did not capture this page ourselves.",
+    );
     expect(markup).toContain("24 Jul 2026");
-    expect(markup).not.toContain("Running");
-    expect(markup).not.toContain("This is the stored capture, not a re-render.");
+    expect(detail).not.toContain("Running");
+    expect(detail).not.toContain("This is the stored capture, not a re-render.");
   });
 });
 
@@ -434,7 +469,8 @@ describe("collections empty and filtered states (brief §6.7, §6.8)", () => {
     const markup = await render({});
 
     expect(markup).toContain(COLLECTION_ITEMS_EMPTY_COPY);
-    expect(markup).toContain("f9-ed-specimen-slot");
+    expect(markup).toContain("f9-col-list-empty");
+    expect(markup).not.toContain("f9-ed-specimen-slot");
     expect(markup).not.toContain("f9-dash-state-empty");
     expect(markup).not.toContain("Nothing saved yet");
   });
@@ -446,11 +482,12 @@ describe("collections empty and filtered states (brief §6.7, §6.8)", () => {
       items: [],
     });
 
-    expect(markup).toContain("f9-ed-quiet-line");
+    expect(markup).toContain("f9-col-list-empty");
     expect(markup).toContain(COLLECTION_FILTERED_EMPTY_COPY);
-    // Filtered-to-zero is not empty, so no specimen and no Rank-1.
+    // Filtered-to-zero is not empty; the one filled
+    // action remains the header's New collection command.
     expect(markup).not.toContain(COLLECTION_ITEMS_EMPTY_COPY);
-    expect(rank1Count(markup)).toBe(0);
+    expect(rank1Count(markup)).toBe(1);
     expect(markup).toContain("Clear filter");
   });
 
@@ -463,6 +500,18 @@ describe("collections empty and filtered states (brief §6.7, §6.8)", () => {
 
     expect(markup).toContain("1 other saved item is hidden.");
     expect(markup).not.toContain("is-success");
+  });
+
+  it("never labels filtered-away evidence as if nothing has ever been filed", async () => {
+    const markup = await render({
+      advertiserFilter: "Okara",
+      hiddenByAdvertiserFilter: 1,
+      items: [],
+    });
+
+    expect(markup).toContain("<dt>Saved evidence</dt><dd>0 of 1 shown</dd>");
+    expect(markup).toContain("<dt>Competitors</dt><dd>hidden by filter</dd>");
+    expect(markup).not.toContain(">none yet<");
   });
 });
 
@@ -529,5 +578,26 @@ describe("collections display helpers", () => {
     expect(rows.find((row) => row.key === "Collections")?.missingLabel).toBe(
       "not included on this plan",
     );
+  });
+
+  it("uses the hidden total instead of 'none yet' when a filter removes every item", () => {
+    const rows = buildCollectionFacts({
+      collection,
+      collectionLimit: 25,
+      collectionsUsed: 1,
+      hiddenByFilter: 1,
+      items: [],
+    });
+
+    expect(rows.find((row) => row.key === "Saved evidence")?.value).toBe("0 of 1 shown");
+    for (const key of [
+      "Competitors",
+      "Channels",
+      "Filed by your team",
+      "Openable evidence",
+      "Tags in use",
+    ]) {
+      expect(rows.find((row) => row.key === key)?.missingLabel).toBe("hidden by filter");
+    }
   });
 });
