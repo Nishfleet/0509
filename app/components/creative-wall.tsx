@@ -1,7 +1,6 @@
 import { AdLongevityPill } from "~/components/ad-longevity-pill";
 import { AdThumb } from "~/components/ad-thumb";
 import { Pill } from "~/components/pill";
-import { SpecimenEmptyState } from "~/components/evidence/specimen-empty-state";
 import { adLongevityDays } from "~/lib/ad-display";
 import { formatAdvertiserLabel } from "~/lib/landing-page-display";
 import {
@@ -39,17 +38,14 @@ export function CreativeWall({ items, plan }: { items: CreativeWallItem[]; plan:
         ) : null}
       </div>
       {items.length === 0 ? (
-        <SpecimenEmptyState
-          copy={
-            plan === "free"
-              ? "The free plan takes one snapshot when a watchlist is created; paid plans check every 3–6 hours. The wall fills in after the first successful scan."
-              : "The wall fills in after the first successful scan — every creative we capture lands here with the check that proved it."
-          }
-          headline="No creatives captured yet"
-          headingLevel={3}
-          specimenLabel="CREATIVE 01 — RESERVED"
-          stateLabel="CREATIVE WALL · WAITING ON FIRST SCAN"
-        />
+        <div className="f9-bl035-empty">
+          <p className="f9-bl035-empty-title">No creatives captured yet</p>
+          <p>
+            {plan === "free"
+              ? "The free plan takes one snapshot when a competitor is added; paid plans check every 3–6 hours. This fills in after the first successful scan."
+              : "This fills in after the first successful scan. Every creative we capture stays attached to the check that proved it."}
+          </p>
+        </div>
       ) : (
         <ul className="f9-creative-wall">
           {previewItems.map((item) => (

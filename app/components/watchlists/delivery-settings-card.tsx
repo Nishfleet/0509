@@ -1,6 +1,5 @@
 import { Form } from "react-router";
 
-import { TertiaryAction } from "~/components/evidence/cta";
 import { SubmitButton } from "~/components/submit-button";
 import type { EffectiveDeliveryConfig, WatchlistDeliveryConfigRecord } from "~/lib/types";
 
@@ -82,12 +81,11 @@ export function DeliverySettingsCard(props: {
             <span>High-priority alerts (sent as soon as a scan confirms a major change)</span>
           </label>
         ) : (
-          <div className="f9-field f9-action-row">
+          <div className="f9-field">
             <label className="f9-field-inline">
               <input disabled type="checkbox" />
               <span>High-priority alerts require Starter.</span>
             </label>
-            <TertiaryAction to="/app/billing?source=watchlists#plans">View plans</TertiaryAction>
           </div>
         )}
         <label className="f9-field f9-field-inline">
@@ -103,8 +101,7 @@ export function DeliverySettingsCard(props: {
           <label className="f9-field f9-field-inline">
             <input disabled type="checkbox" />
             <span>
-              Email delivery requires Scout. {" "}
-              <TertiaryAction to="/app/billing?source=watchlists#plans">View plans</TertiaryAction>
+              Email delivery requires Scout.
             </span>
           </label>
         )}
