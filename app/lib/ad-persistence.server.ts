@@ -1,9 +1,5 @@
 import { buildAnalysisFields } from "~/lib/analysis.server";
 import { mapAdSourceToAnalysisSource } from "~/lib/ad-source-kind";
-import {
-  bindD1Named,
-  type NamedD1Binding,
-} from "~/lib/d1-bind.server";
 import { chunkForBoundParams } from "~/lib/d1-chunk.server";
 import type { AppEnv } from "~/lib/env.server";
 import type { AdRecord, AnalysisFieldInput } from "~/lib/types";
@@ -52,23 +48,15 @@ function ensureDb(env: AppEnv) {
   return env.DB;
 }
 
-async function many<T>(
-  env: AppEnv,
-  sql: string,
-  bindings: readonly NamedD1Binding[],
-) {
+async function many<T>(env: AppEnv, sql: string, ...bindings: unknown[]) {
   const db = ensureDb(env);
-  const result = await bindD1Named(db.prepare(sql), bindings).all<T>();
+  const result = await db.prepare(sql).bind(...bindings).all<T>();
   return result.results ?? [];
 }
 
-async function run(
-  env: AppEnv,
-  sql: string,
-  bindings: readonly NamedD1Binding[],
-) {
+async function run(env: AppEnv, sql: string, ...bindings: unknown[]) {
   const db = ensureDb(env);
-  await bindD1Named(db.prepare(sql), bindings).run();
+  await db.prepare(sql).bind(...bindings).run();
 }
 
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
@@ -141,10 +129,7 @@ export async function listAdsByIds(env: AppEnv, adIds: string[]) {
           FROM ad
           WHERE id IN (${placeholders})
         `,
-        chunk.map(
-          (adId, index) =>
-            [`adIds[${index}]`, adId] as const,
-        ),
+        ...chunk,
       );
     }),
   );
@@ -283,12 +268,8 @@ export async function upsertAd(env: AppEnv, ad: AdRecord) {
   const lastSeenAt = normalizeSeenAt(ad.lastSeenAt);
   const evidenceCapturedAt = latestEvidenceCapturedAt(ad);
   const canonicalRevision = createId();
-  const landingPageUrl = ad.landingPageUrl ?? null;
-  const adSnapshotUrl = ad.adSnapshotUrl ?? null;
   const rawJson = jsonValue({
     ...ad,
-    landingPageUrl,
-    adSnapshotUrl,
     firstSeenAt,
     lastSeenAt,
     evidenceCapturedAt,
@@ -590,57 +571,33 @@ export async function upsertAd(env: AppEnv, ad: AdRecord) {
                     ),
                     updated_at = excluded.updated_at
     `,
-    [
-      ["ad.id", ad.metaAdId],
-      ["ad.advertiser", ad.advertiser],
-      ["ad.body", ad.body],
-      ["ad.bodySecondary", ad.bodySecondary, "null"],
-      ["ad.previewHeadline", ad.previewHeadline],
-      ["ad.previewSubhead", ad.previewSubhead],
-      ["ad.hook", ad.hook],
-      ["ad.offer", ad.offer],
-      ["ad.cta", ad.cta],
-      ["ad.format", ad.format],
-      ["ad.languageLabel", ad.languageLabel],
-      ["ad.destinationType", ad.destinationType],
-      ["ad.landingPageUrl", landingPageUrl, "null"],
-      ["ad.adSnapshotUrl", adSnapshotUrl, "null"],
-      [
-        "ad.countries",
-        ad.countries === undefined
-          ? undefined
-          : jsonValue(ad.countries),
-      ],
-      [
-        "ad.platforms",
-        ad.platforms === undefined
-          ? undefined
-          : jsonValue(ad.platforms),
-      ],
-      ["ad.firstSeenAt", firstSeenAt],
-      ["ad.lastSeenAt", lastSeenAt],
-      [
-        "ad.active",
-        ad.active === undefined ? undefined : ad.active ? 1 : 0,
-      ],
-      ["ad.source", ad.source],
-      ["ad.researchSummary", ad.researchSummary],
-      ["ad.creativeText", ad.creativeText, "null"],
-      [
-        "ad.creativeTextCaptureMethod",
-        ad.creativeTextCaptureMethod,
-        "null",
-      ],
-      [
-        "ad.creativeTextMetadata",
-        ad.creativeTextMetadata
-          ? jsonValue(ad.creativeTextMetadata)
-          : null,
-      ],
-      ["ad.rawJson", rawJson],
-      ["ad.createdAt", timestamp],
-      ["ad.updatedAt", timestamp],
-    ],
+    ad.metaAdId,
+    ad.advertiser,
+    ad.body,
+    ad.bodySecondary ?? null,
+    ad.previewHeadline,
+    ad.previewSubhead,
+    ad.hook,
+    ad.offer,
+    ad.cta,
+    ad.format,
+    ad.languageLabel,
+    ad.destinationType,
+    ad.landingPageUrl,
+    ad.adSnapshotUrl,
+    jsonValue(ad.countries),
+    jsonValue(ad.platforms),
+    firstSeenAt,
+    lastSeenAt,
+    ad.active ? 1 : 0,
+    ad.source,
+    ad.researchSummary,
+    ad.creativeText ?? null,
+    ad.creativeTextCaptureMethod ?? null,
+    ad.creativeTextMetadata ? jsonValue(ad.creativeTextMetadata) : null,
+    rawJson,
+    timestamp,
+    timestamp,
   );
 
   const [persistedAd] = await listAdsByIds(env, [ad.metaAdId]);
@@ -678,73 +635,46 @@ export async function replaceAnalysisFields(
   const projectionGuard = canonicalRevision && scopeType === "ad"
     ? " AND EXISTS (SELECT 1 FROM ad WHERE id = ? AND json_extract(raw_json, '$.canonicalRevision') = ?)"
     : "";
-  const statements = [
-    bindD1Named(
-      db.prepare(
-        `DELETE FROM analysis_field WHERE scope_type = ? AND scope_id = ?${projectionGuard}`,
-      ),
-      [
-        ["analysisField.scopeType", scopeType],
-        ["analysisField.scopeId", scopeId],
-        ...(projectionGuard
-          ? ([
-              ["analysisField.projectionScopeId", scopeId],
-              [
-                "analysisField.canonicalRevision",
-                canonicalRevision,
-              ],
-            ] satisfies NamedD1Binding[])
-          : []),
-      ],
-    ),
-  ];
+  const statements = [db.prepare(
+    `DELETE FROM analysis_field WHERE scope_type = ? AND scope_id = ?${projectionGuard}`,
+  ).bind(
+    scopeType,
+    scopeId,
+    ...(projectionGuard ? [scopeId, canonicalRevision] : []),
+  )];
 
   for (const field of fields) {
     statements.push(
-      bindD1Named(
-        db.prepare(`
-          INSERT INTO analysis_field (
-            id,
-            scope_type,
-            scope_id,
-            field_key,
-            field_value,
-            provenance_source,
-            extractor_version,
-            confidence,
-            metadata_json,
-            created_at,
-            updated_at
-          )
-          ${projectionGuard
-            ? "SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM ad WHERE id = ? AND json_extract(raw_json, '$.canonicalRevision') = ?)"
-            : "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"}
-        `),
-        [
-          ["analysisField.id", createId()],
-          ["analysisField.scopeType", scopeType],
-          ["analysisField.scopeId", scopeId],
-          ["analysisField.fieldKey", field.fieldKey],
-          ["analysisField.fieldValue", field.fieldValue],
-          ["analysisField.provenanceSource", field.provenanceSource],
-          ["analysisField.extractorVersion", field.extractorVersion],
-          ["analysisField.confidence", field.confidence, "null"],
-          [
-            "analysisField.metadata",
-            jsonValue(field.metadata ?? null),
-          ],
-          ["analysisField.createdAt", timestamp],
-          ["analysisField.updatedAt", timestamp],
-          ...(projectionGuard
-            ? ([
-                ["analysisField.projectionScopeId", scopeId],
-                [
-                  "analysisField.canonicalRevision",
-                  canonicalRevision,
-                ],
-              ] satisfies NamedD1Binding[])
-            : []),
-        ],
+      db.prepare(`
+        INSERT INTO analysis_field (
+          id,
+          scope_type,
+          scope_id,
+          field_key,
+          field_value,
+          provenance_source,
+          extractor_version,
+          confidence,
+          metadata_json,
+          created_at,
+          updated_at
+        )
+        ${projectionGuard
+          ? "SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM ad WHERE id = ? AND json_extract(raw_json, '$.canonicalRevision') = ?)"
+          : "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"}
+      `).bind(
+        createId(),
+        scopeType,
+        scopeId,
+        field.fieldKey,
+        field.fieldValue,
+        field.provenanceSource,
+        field.extractorVersion,
+        field.confidence ?? null,
+        jsonValue(field.metadata ?? null),
+        timestamp,
+        timestamp,
+        ...(projectionGuard ? [scopeId, canonicalRevision] : []),
       ),
     );
   }
