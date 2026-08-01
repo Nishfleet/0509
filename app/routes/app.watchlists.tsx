@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  Form,
   Link,
   useActionData,
   useFetcher,
@@ -16,6 +17,7 @@ import { LocalTime } from "~/components/local-time";
 import { PartialDataNotice } from "~/components/partial-data-notice";
 import { useQuickAdd } from "~/components/quick-add-context";
 import { TertiaryAction } from "~/components/evidence/cta";
+import { SubmitButton } from "~/components/submit-button";
 import { BulkSelectBar } from "~/components/watchlists/bulk-select-bar";
 import { CompetitorDetail } from "~/components/watchlists/competitor-detail";
 import { FeedbackStrip } from "~/components/workspace/feedback-strip";
@@ -38,7 +40,6 @@ import {
   isWhatsAppDeliveryCustomerFacing,
 } from "~/lib/ga-customer-surface";
 import { canUsePlanFeature } from "~/lib/plan-entitlements";
-import { createReportId } from "~/lib/report";
 import { formatNextScanLabel } from "~/lib/schedule-display";
 import { countHardFailuresSinceLastSuccess } from "~/lib/watchlist-detail-display";
 import {
@@ -214,24 +215,15 @@ export default function WatchlistsRoute() {
   const canReport = canUsePlanFeature(data.plan, "client_reports");
   const canShare = canUsePlanFeature(data.plan, "share_links");
   const canRefresh = data.plan !== "free";
-  // Toolbar de-gauntlet: collapse every locked action into ONE upgrade nudge
-  // instead of stacking a separate "Upgrade for X" button beside each real
-  // action. Computed from the same capability flags, so paid tiers keep every
-  // real button and never see this.
-  const lockedToolbarCapabilities = [
+  // The deep view has one upgrade story, not a separate gate beside every
+  // locked control. The same capability flags still decide which local
+  // controls exist; this list only writes the quiet explanation.
+  const lockedCapabilities = [
     !canReport ? "reports" : null,
     !canExport ? "exports" : null,
     !canShare ? "sharing" : null,
     data.selectedWatchlist?.isActive && !canRefresh ? "fresh checks" : null,
   ].filter((label): label is string => label !== null);
-  const lockedToolbarUpgradeLabel =
-    lockedToolbarCapabilities.length === 0
-      ? null
-      : lockedToolbarCapabilities.length === 1
-        ? `Upgrade to unlock ${lockedToolbarCapabilities[0]}`
-        : `Upgrade to unlock ${lockedToolbarCapabilities
-            .slice(0, -1)
-            .join(", ")} & ${lockedToolbarCapabilities[lockedToolbarCapabilities.length - 1]}`;
   const canManageWorkspaceDelivery = data.canManageDelivery ?? true;
   // Full delivery config (extra targets, channels) stays paid-only; free
   // owners still manage their weekly digest email settings below.
@@ -359,51 +351,96 @@ export default function WatchlistsRoute() {
   const selectedFailedChecks = selectedWatchlist
     ? captureWindow.failedChecks?.[selectedWatchlist.id] ?? countHardFailuresSinceLastSuccess(data.runs)
     : 0;
-  const packageForClientAction =
-    canReport && selectedWatchlist?.lastScannedAt ? (
-      <Link
-        className="f9-wk-lnk"
-        to={`/app/reports/${createReportId("watchlist", selectedWatchlist.id)}`}
+  const selectedHeaderAction = !selectedWatchlist ? null : !selectedWatchlist.isActive ? (
+    <pauseResumeFetcher.Form method="post">
+      <input name="intent" type="hidden" value="resume-watchlist" />
+      <input name="watchlistId" type="hidden" value={selectedWatchlist.id} />
+      <SubmitButton
+        className="f9-wk-btn"
+        disabled={pauseResumePending}
+        intent="resume-watchlist"
+        match={{ watchlistId: selectedWatchlist.id }}
+        pending={
+          pauseResumePending &&
+          pauseResumeFetcher.formData?.get("watchlistId") === selectedWatchlist.id
+        }
+        pendingLabel="Resuming…"
       >
-        Package for client <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
-      </Link>
-    ) : null;
+        Resume watching
+      </SubmitButton>
+    </pauseResumeFetcher.Form>
+  ) : lockedCapabilities.length > 0 ? (
+    <Link className="f9-wk-btn" to="/app/billing?source=watchlists#plans">
+      Upgrade plan
+    </Link>
+  ) : canRefresh ? (
+    <Form method="post">
+      <input name="intent" type="hidden" value="refresh-watchlist" />
+      <input name="watchlistId" type="hidden" value={selectedWatchlist.id} />
+      <SubmitButton
+        className="f9-wk-btn"
+        intent="refresh-watchlist"
+        pendingLabel="Checking…"
+      >
+        Refresh now
+      </SubmitButton>
+    </Form>
+  ) : null;
   const actionShareLink = actionData?.ok ? resolveSafeShareLink(actionData.message) : null;
 
   return (
-    <DashboardPage className="f9-wk-page">
+    <DashboardPage className={`f9-wk-page${selectedWatchlist ? " f9-bl035-page" : ""}`}>
       <WorkingHeader
         action={
           selectedWatchlist
             ? null
             : quickAdd
-            ? {
-                label: "Add competitor",
-                onClick: quickAdd.open,
-                "aria-haspopup": "dialog",
-                "aria-keyshortcuts": "Meta+K Control+K",
-              }
-            : { label: "Add competitor", to: "/search" }
+              ? {
+                  label: "Add competitor",
+                  onClick: quickAdd.open,
+                  "aria-haspopup": "dialog",
+                  "aria-keyshortcuts": "Meta+K Control+K",
+                }
+              : { label: "Add competitor", to: "/search" }
         }
+        actionSlot={selectedHeaderAction}
         context={
           selectedWatchlist ? (
             <>
-              <Link className="f9-wk-lnk" to="/app/watchlists">
+              <Link className="f9-bl035-back" to="/app/watchlists">
                 All competitors
               </Link>
               <span aria-hidden="true"> &rsaquo; </span>
               {selectedWatchlist.targetLabel} · {selectedStatusLabel} ·{" "}
-              {sourceCanSchedule && trackingPresentation.statusLabel !== "Needs source access" ? (
+              {sourceCanSchedule &&
+              trackingPresentation.statusLabel !== "Needs source access" ? (
                 trackingPresentation.statusLabel
               ) : (
-                <Link className="f9-wk-lnk f9-wk-lnk--quiet" to="/app/source-access">
+                <Link
+                  className="f9-wk-lnk f9-wk-lnk--quiet"
+                  to="/app/source-access"
+                >
                   {trackingPresentation.statusLabel}
                 </Link>
               )}
+              {!selectedWatchlist.isActive && lockedCapabilities.length > 0 ? (
+                <>
+                  {" "}
+                  ·{" "}
+                  <Link
+                    className="f9-wk-lnk f9-wk-lnk--quiet"
+                    to="/app/billing?source=watchlists#plans"
+                  >
+                    Upgrade plan
+                  </Link>
+                </>
+              ) : null}
             </>
-          ) : data.captureWindowDegraded && rows.length > 0
-            ? `${rows.length} ${rows.length === 1 ? "competitor" : "competitors"}. Recent totals are unavailable.`
-            : formatCompetitorContextLine({ rows, windowDays: captureWindow.windowDays })
+          ) : data.captureWindowDegraded && rows.length > 0 ? (
+            `${rows.length} ${rows.length === 1 ? "competitor" : "competitors"}. Recent totals are unavailable.`
+          ) : (
+            formatCompetitorContextLine({ rows, windowDays: captureWindow.windowDays })
+          )
         }
         title={selectedWatchlist?.name ?? "Competitors"}
       />
@@ -456,11 +493,14 @@ export default function WatchlistsRoute() {
       ) : null}
 
       {selectedWatchlist ? (
+        // A failed capture-window rollup must not read as a believable zero.
+        // The record stays mounted and keeps every control; the degraded flag
+        // masks only the surfaces that rollup feeds.
         <div
-          className={`f9-wk-record${data.captureWindowDegraded ? " is-capture-window-degraded" : ""}`}
+          className={`f9-bl035-record${data.captureWindowDegraded ? " is-capture-window-degraded" : ""}`}
         >
           {data.captureWindowDegraded ? (
-            <p className="f9-wk-aggregate-unavailable" role="status">
+            <p className="f9-bl035-aggregate-unavailable" role="status">
               Recent aggregate totals are unavailable. Saved check history and management controls
               below are still available.
             </p>
@@ -473,17 +513,18 @@ export default function WatchlistsRoute() {
             canExport={canExport}
             canInstantAlert={canInstantAlert}
             canRefresh={canRefresh}
+            canReport={canReport}
             canShare={canShare}
             capturedChanges={data.captureWindowDegraded ? 0 : selectedCapturedChanges}
             captureWindowDegraded={data.captureWindowDegraded}
             data={{ ...data, selectedWatchlist }}
             discoveryRecovery={discoveryStatus.recovery ?? null}
-            // The board counts hard failures in SQL; the detail keeps the same
-            // rollup while masking only the unavailable capture-window totals.
+            // The board counts hard failures since the last success in SQL; the
+            // detail uses the same rollup so one competitor never reports two
+            // different failure counts on one page.
             failedChecks={selectedFailedChecks}
-            lockedToolbarUpgradeLabel={lockedToolbarUpgradeLabel}
+            lockedCapabilities={lockedCapabilities}
             nextScanLabel={nextScanLabel}
-            packageForClientAction={packageForClientAction}
             renderedAt={renderedAt}
             showSlackDelivery={showSlackDelivery}
             sourceCanSchedule={sourceCanSchedule}
@@ -549,7 +590,6 @@ export default function WatchlistsRoute() {
                 ) : null}
               </RuledList>
             </div>
-
           </div>
         </>
       ) : (
@@ -580,22 +620,19 @@ export default function WatchlistsRoute() {
           {rows.length} {rows.length === 1 ? "competitor" : "competitors"}
         </span>
         <span>Next check {nextScanLabel}</span>
-        {/* Source state is told ONCE per screen. With a competitor open its
-            own status strip carries it, so the board line stands down rather
-            than repeating the same words 400px apart. On the board it stays a
-            LINK when something is actually blocking the next check — the
-            deleted status strip carried that link, and a label you cannot act
-            on is a worse answer than the one we shipped. */}
+        {/* The deep view compresses source health into its working-header
+            context. The board keeps it here, linked only when access blocks
+            the next check. */}
         {selectedWatchlist ? null : sourceCanSchedule &&
           trackingPresentation.statusLabel !== "Needs source access" ? (
-          <span>{trackingPresentation.statusLabel}</span>
-        ) : (
-          <span>
-            <Link className="f9-wk-lnk f9-wk-lnk--quiet" to="/app/source-access">
-              {trackingPresentation.statusLabel}
-            </Link>
-          </span>
-        )}
+            <span>{trackingPresentation.statusLabel}</span>
+          ) : (
+            <span>
+              <Link className="f9-wk-lnk f9-wk-lnk--quiet" to="/app/source-access">
+                {trackingPresentation.statusLabel}
+              </Link>
+            </span>
+          )}
       </div>
     </DashboardPage>
   );

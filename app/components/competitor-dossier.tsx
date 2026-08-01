@@ -176,8 +176,8 @@ function CounterBriefCard({
 			<div className="f9-counter-brief is-locked">
 				<p className="f9-dossier-subhead">Counter-Brief</p>
 				<p className="f9-counter-brief-upgrade">
-					Counter-Brief is part of paid plans — Scout unlocks it.{" "}
-					<Link to="/app/billing?source=counter-brief#plans">View plans</Link>
+					Counter-Brief is part of paid plans. Scout unlocks it. Use Upgrade plan above
+					to compare options.
 				</p>
 			</div>
 		);

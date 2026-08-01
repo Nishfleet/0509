@@ -27,17 +27,28 @@ export interface WorkingHeaderProps {
   /** The one line that qualifies the title: date, count, whether it ran. */
   context?: ReactNode;
   action?: WorkingHeaderAction | null;
+  /**
+   * A form-backed primary for routes whose one working action is a mutation.
+   * The header owns placement; the route keeps submission and pending state.
+   */
+  actionSlot?: ReactNode;
   titleId?: string;
 }
 
-export function WorkingHeader({ title, context, action, titleId }: WorkingHeaderProps) {
+export function WorkingHeader({
+  title,
+  context,
+  action,
+  actionSlot,
+  titleId,
+}: WorkingHeaderProps) {
   return (
     <header className="f9-wk-head">
       <div className="f9-wk-head-top">
         <h1 className="f9-wk-title" id={titleId}>
           {title}
         </h1>
-        {action ? <WorkingHeaderButton action={action} /> : null}
+        {actionSlot ?? (action ? <WorkingHeaderButton action={action} /> : null)}
       </div>
       {context ? <p className="f9-wk-context">{context}</p> : null}
     </header>

@@ -1,6 +1,5 @@
 import { Form } from "react-router";
 
-import { TertiaryAction } from "~/components/evidence/cta";
 import { SubmitButton } from "~/components/submit-button";
 import {
   toPublicDeliveryTarget,
@@ -74,9 +73,7 @@ export function DeliveryTargetsSection(props: {
                   </SubmitButton>
                 </Form>
               ) : target.channel === "email" ? (
-                <TertiaryAction to="/app/billing?source=watchlists#plans">
-                  Upgrade for email
-                </TertiaryAction>
+                <span className="f9-muted-copy">Email requires Scout</span>
               ) : null}
               <Form method="post">
                 <input name="intent" type="hidden" value="toggle-delivery-target" />
@@ -196,11 +193,9 @@ export function DeliveryTargetsSection(props: {
           {data.canManageDelivery ? (
             <>
               <p className="f9-muted-copy">
-                Paid plans can send proof-backed alerts to email. Upgrade to add a delivery target.
+                Paid plans can send proof-backed alerts to email. Use Upgrade plan above to
+                compare options.
               </p>
-              <TertiaryAction to="/app/billing?source=watchlists#plans">
-                Upgrade for delivery
-              </TertiaryAction>
             </>
           ) : (
             <p className="f9-muted-copy">

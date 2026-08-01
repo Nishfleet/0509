@@ -240,34 +240,34 @@ for (const viewport of viewports) {
     await expectPhoneTouchTargets(page);
     await submit.press("Enter");
     await expect(page).toHaveURL(/\/app\/watchlists\?watchlist=[^&]+/);
-    await expect(page.getByRole("heading", { level: 1, name: "Competitors", exact: true })).toBeVisible();
-    // BL-030 replaced BL-006's competitor band with a ruled list row and a
-    // peek pane. The guarantees are unchanged: the newly tracked competitor is
-    // identifiable in the list by name, its target is named on the surface,
-    // and on a phone its identity is not stretched apart down the screen.
-    const nykaaRow = page.locator(".f9-wk-row", { hasText: "Nykaa watch" }).first();
-    await expect(nykaaRow).toBeVisible();
+    // BL-035 makes `?watchlist=` the entity's own working surface. The
+    // activation guarantee is unchanged: the created competitor and target
+    // are immediately identifiable, and the first-scan state is attached to
+    // that record rather than hidden below a board.
+    const entityHeading = page.getByRole("heading", {
+      level: 1,
+      name: "Nykaa watch",
+      exact: true,
+    });
+    const entityContext = page.locator(".f9-wk-context");
+    await expect(entityHeading).toBeVisible();
+    await expect(entityContext).toContainText("Nykaa");
+    await expect(page.locator(".f9-bl035-detail")).toBeVisible();
     await expect(
-      nykaaRow.getByRole("link", { name: "Nykaa watch", exact: true }),
-    ).toBeVisible();
-    // The pane opened by ?watchlist=<id> names the competitor and its target.
-    const nykaaPane = page.locator(".f9-wk-detail");
-    await expect(nykaaPane.getByRole("heading", { name: "Nykaa watch", exact: true })).toBeVisible();
-    await expect(nykaaPane.getByText("Nykaa", { exact: true })).toBeVisible();
+      page.getByRole("navigation", { name: "Competitor sections" }).getByRole("link"),
+    ).toHaveCount(5);
     if (viewport.name === "mobile") {
-      const rowName = nykaaRow.getByRole("link", { name: "Nykaa watch", exact: true });
-      const rowLine = nykaaRow.locator(".f9-wk-say");
-      const [nameBox, lineBox] = await Promise.all([
-        rowName.boundingBox(),
-        rowLine.boundingBox(),
+      const [nameBox, contextBox] = await Promise.all([
+        entityHeading.boundingBox(),
+        entityContext.boundingBox(),
       ]);
-      expect(nameBox, "mobile row name should be measurable").not.toBeNull();
-      expect(lineBox, "mobile row sentence should be measurable").not.toBeNull();
-      if (nameBox && lineBox) {
+      expect(nameBox, "mobile entity heading should be measurable").not.toBeNull();
+      expect(contextBox, "mobile entity context should be measurable").not.toBeNull();
+      if (nameBox && contextBox) {
         expect(
-          lineBox.y - (nameBox.y + nameBox.height),
-          "mobile row content should not be stretched apart",
-        ).toBeLessThanOrEqual(72);
+          contextBox.y - (nameBox.y + nameBox.height),
+          "mobile entity context should stay attached to its title",
+        ).toBeLessThanOrEqual(48);
       }
     }
     const scanBanner = page.locator("article[aria-live='polite']").filter({ hasText: /Activation scan/i }).first();
@@ -285,7 +285,14 @@ for (const viewport of viewports) {
     await attachReleaseStateArtifacts({ page, testInfo, prefix: "j2-activation", state: "activation-paused" });
     const createdWatchlistId = finalUrl.searchParams.get("watchlist");
     expect(createdWatchlistId).toBeTruthy();
-    await expect(page.locator('input[name="watchlistId"]').first()).toHaveValue(createdWatchlistId!);
+    const activeTab = page
+      .getByRole("navigation", { name: "Competitor sections" })
+      .getByRole("link", { name: "What changed", exact: true });
+    await expect(activeTab).toHaveAttribute("aria-current", "page");
+    await expect(activeTab).toHaveAttribute(
+      "href",
+      `/app/watchlists?watchlist=${createdWatchlistId}`,
+    );
     test.info().annotations.push({ type: "finalUrl", description: `${finalUrl.pathname}${finalUrl.search}` });
   });
 }

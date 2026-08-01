@@ -10,11 +10,10 @@ import {
 /**
  * Anchor tab bar — brief §6.4.
  *
- * Mono uppercase labels, a 2.5px rule between tabs, the active tab ink
- * filled, and an optional accent count suffix. These are REAL links, so the
- * bar is URL-addressable, deep-linkable and back-button correct (§6.4), the
- * ink fill is never the only active signal (`aria-current`, §10), and the
- * whole thing needs no client state (§11).
+ * BL-035 moves the same URL contract onto the P0 working tabs: sentence-case
+ * labels, one 1px underline, and an optional quiet count. These are REAL
+ * links, so the bar stays deep-linkable and back-button correct (§6.4);
+ * `aria-current` is the non-visual active signal (§10).
  *
  * On mobile the bar scrolls inside its own container and must never cause
  * page horizontal scroll (§9.1).
@@ -30,8 +29,8 @@ export function DetailTabBar({
   capturedChanges: number;
 }) {
   return (
-    <nav aria-label="Competitor sections" className="f9-ed-tabbar">
-      <ul className="f9-ed-tabbar-track">
+    <nav aria-label="Competitor sections" className="f9-wk-tabs f9-bl035-tabs">
+      <ul>
         {WATCHLIST_DETAIL_TABS.map((tab) => {
           const isActive = tab.id === activeTab;
           const count = watchlistDetailTabCount(tab.id, capturedChanges);
@@ -39,13 +38,13 @@ export function DetailTabBar({
             <li key={tab.id}>
               <Link
                 aria-current={isActive ? "page" : undefined}
-                className={isActive ? "f9-ed-tab is-active" : "f9-ed-tab"}
+                className={isActive ? "f9-wk-tab is-on" : "f9-wk-tab"}
                 preventScrollReset
                 to={watchlistDetailTabHref(watchlistId, tab.id)}
               >
-                <span className="f9-ed-tab-label">{tab.label}</span>
+                <span>{tab.label}</span>
                 {count === null ? null : (
-                  <span className="f9-ed-tab-count">{count}</span>
+                  <span className="f9-wk-tab-n">{count}</span>
                 )}
               </Link>
             </li>

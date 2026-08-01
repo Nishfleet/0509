@@ -211,5 +211,18 @@ describe("the coexistence seam inside a rebuilt page (BL-030 round 2)", () => {
       expect(body).toContain("font-family: var(--f9-font);");
       expect(body).toContain("letter-spacing: 0;");
     }
+
+    // BL-035 closes the remaining ledger item: the setup card's useful
+    // capacity/alternate-path links remain, but no longer spend caps-mono.
+    for (const selector of [
+      ".f9-wk-page .f9-ed-setup-links .f9-ed-cta--rank3",
+      ".f9-wk-page .f9-ed-setup-capacity .f9-ed-cta--rank3",
+    ]) {
+      const block = scoped.slice(scoped.indexOf(selector));
+      const body = block.slice(0, block.indexOf("}"));
+      expect(body).toContain("text-transform: none;");
+      expect(body).toContain("font-family: var(--f9-font);");
+      expect(body).toContain("letter-spacing: 0;");
+    }
   });
 });

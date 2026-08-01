@@ -10630,38 +10630,6 @@ a.f9-wk-btn {
   font-size: 11.5px;
 }
 
-.f9-wk-foot-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 14px;
-  margin-top: 10px;
-}
-
-.f9-dash-page-app .f9-wk-foot-links a,
-.f9-dash-page-app .f9-wk-foot-links button {
-  display: inline-flex;
-  align-items: center;
-  min-width: 44px;
-  min-height: 44px;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: none;
-  color: var(--wk-on-band-dim);
-  font-family: var(--f9-font);
-  font-size: 11.5px;
-  font-weight: 400;
-  text-decoration: none;
-}
-
-.f9-dash-page-app .f9-wk-foot-links a:hover,
-.f9-dash-page-app .f9-wk-foot-links button:hover {
-  background: none;
-  color: var(--wk-on-band);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
 /* ---------------------------------------------------------------
    The working page: header, sections, the list that is a list, the
    detail pane, the tab bar, and the one quiet operational line.
@@ -10895,29 +10863,6 @@ a.f9-wk-btn {
 
 .f9-wk-split.is-single {
   grid-template-columns: minmax(0, 1fr);
-}
-
-/* The opened competitor's full record keeps the Evidence Desk tab surfaces
-   (BL-007) until their own phase; it sits below the list/pane split so the
-   peek pane stays the fast answer and the tabs stay the deep one. */
-.f9-wk-record {
-  padding: 30px var(--wk-pad) 0;
-  border-top: 1px solid var(--wk-rule);
-}
-
-.f9-wk-aggregate-unavailable {
-  margin: 0 0 18px;
-  color: var(--ink-soft);
-  font-size: 13px;
-}
-
-/* A failed board-rollup query must not turn unavailable aggregates into
-   believable zeroes. Keep the independent record, tabs, evidence and action
-   controls mounted; mask only the state/count surfaces fed by that rollup. */
-.f9-wk-record.is-capture-window-degraded .f9-ed-status-cell:first-child,
-.f9-wk-record.is-capture-window-degraded .f9-ed-tab-count,
-.f9-wk-record.is-capture-window-degraded .f9-ed-number-card {
-  display: none;
 }
 
 .f9-wk-split-list {
@@ -11176,27 +11121,6 @@ a.f9-wk-btn {
 }
 
 .f9-wk-page .f9-ed-setup-row[data-state="next"] .f9-ed-setup-stamp {
-  color: var(--ink);
-}
-
-/* The opened competitor's BL-007 record sits inside the same page, and its
-   state stamps and tab counts paint green — the caught stamp's 5px accent
-   edge and the "what changed" tab count's accent fill both land inside the
-   FIRST viewport at 1440 and 1920. Green is program law, not a rule weight,
-   so the named coexistence deviation does not cover it: the record keeps its
-   own geometry until phase P1, but it gives the accent back. The state is
-   still stated in words on the stamp itself, so nothing becomes colour-only. */
-.f9-wk-page .f9-ed-stamp.is-caught {
-  border-left-color: var(--ed-rule);
-}
-
-.f9-wk-page .f9-ed-stamp.is-watching {
-  background: var(--ed-surface-sunk);
-  color: var(--ink);
-}
-
-.f9-wk-page .f9-ed-tab-count {
-  background: var(--ed-surface-sunk);
   color: var(--ink);
 }
 
@@ -11624,10 +11548,6 @@ a.f9-wk-btn {
 
   .f9-wk-foot {
     margin-left: auto;
-  }
-
-  .f9-wk-foot-links {
-    margin-top: 0;
   }
 
   .f9-wk-split {
@@ -13614,6 +13534,681 @@ textarea.f9-wk-in {
   .f9-nt-definition-copy {
     grid-column: auto;
   }
+}
+
+/* === BL-035 competitor detail (landing language) === */
+
+/* The selected competitor is a working surface, not a second record bolted
+   under the board. Header -> five URL tabs -> current work starts inside the
+   Mobbin-calibrated first-row band. */
+.f9-bl035-page .f9-wk-head {
+  padding-bottom: 14px;
+}
+
+.f9-bl035-back {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  margin: -14px 0;
+  color: var(--ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.f9-bl035-back:hover {
+  color: var(--ink);
+}
+
+.f9-bl035-tabs {
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+
+.f9-bl035-tabs ul {
+  display: flex;
+  gap: 0 22px;
+  min-width: max-content;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.f9-bl035-tabs li {
+  display: flex;
+}
+
+.f9-bl035-detail {
+  min-width: 0;
+  animation: f9-wk-settle var(--wk-settle) both;
+}
+
+.f9-bl035-split {
+  display: grid;
+  min-width: 0;
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+
+.f9-bl035-main {
+  min-width: 0;
+  padding: 26px var(--wk-pad) 48px;
+}
+
+.f9-bl035-detail .f9-ed-detail-rail {
+  position: sticky;
+  top: 0;
+  min-width: 0;
+  padding: 26px 28px 48px;
+  border-left: 1px solid var(--wk-rule);
+}
+
+/* No global action bar. Each secondary action sits with the record, delivery
+   target, or monitoring setting it changes. The filled Rank-1 stays in the
+   WorkingHeader and is therefore one-per-viewport by construction. */
+.f9-bl035-local-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 22px;
+  margin-top: 12px;
+}
+
+.f9-bl035-local-actions > form {
+  display: flex;
+}
+
+.f9-bl035-detail .f9-ed-cta,
+.f9-bl035-detail .f9-ed-cta--rank1,
+.f9-bl035-detail .f9-ed-cta--rank2,
+.f9-bl035-detail .f9-ed-cta--rank3 {
+  display: inline-flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink);
+  font-family: var(--f9-font);
+  font-size: 13.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-decoration: underline;
+  text-decoration-color: currentColor;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-transform: none;
+}
+
+.f9-bl035-detail .f9-ed-cta:hover {
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.f9-bl035-section {
+  padding: 0 0 24px;
+  border-bottom: 1px solid var(--wk-rule);
+}
+
+.f9-bl035-section + section,
+.f9-bl035-section + article {
+  margin-top: 28px;
+}
+
+.f9-bl035-section h3,
+.f9-bl035-empty h3,
+.f9-bl035-detail .f9-panel-toolbar h3,
+.f9-bl035-detail .f9-trend-heading {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--f9-font);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.f9-bl035-section .f9-muted-copy {
+  max-width: 62ch;
+  margin: 7px 0 0;
+}
+
+.f9-bl035-lock-note {
+  max-width: 62ch;
+  margin: 10px 0 0;
+  color: var(--ink-faint);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.f9-bl035-after-panel {
+  margin: 18px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--wk-rule);
+}
+
+/* Quiet honest states: one heading, one explanation, text actions. No dashed
+   reserved slot and no pretend specimen of data that does not exist. */
+.f9-bl035-empty {
+  padding: 22px 0 26px;
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-bl035-empty p {
+  max-width: 62ch;
+  margin: 8px 0 0;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.f9-bl035-empty p.f9-bl035-empty-title {
+  margin: 0;
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.f9-bl035-detail .f9-ed-specimen {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.f9-bl035-detail .f9-ed-specimen-slot,
+.f9-bl035-detail .f9-ed-specimen-scan {
+  display: none;
+}
+
+.f9-bl035-detail .f9-ed-specimen-body {
+  padding: 20px 0 26px;
+}
+
+.f9-bl035-detail .f9-ed-specimen-headline {
+  font-family: var(--f9-font);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+/* Type budget. Bricolage is already spent by the page title (the watched
+   entity). Inside the record, headings and machine facts stay in Inter.
+   Capture timestamps are sentence-case too so a long feed cannot spend more
+   than three caps-mono kickers by repetition. */
+.f9-bl035-detail h3,
+.f9-bl035-detail h4,
+.f9-bl035-detail .f9-ed-diff-headline,
+.f9-bl035-detail .f9-ed-number-value,
+.f9-bl035-detail .f9-trend-value,
+.f9-bl035-detail .f9-aggression-number {
+  font-family: var(--f9-font);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.f9-bl035-detail .f9-ed-micro,
+.f9-bl035-detail .f9-app-kicker,
+.f9-bl035-detail .f9-ed-plate-header .f9-ed-micro,
+.f9-bl035-detail .f9-trend-label,
+.f9-bl035-detail .f9-trend-series-label,
+.f9-bl035-detail .f9-dossier-window,
+.f9-bl035-detail .f9-dossier-stat dt,
+.f9-bl035-detail .f9-dossier-subhead,
+.f9-bl035-detail .f9-aggression-band {
+  color: var(--ink-faint);
+  font-family: var(--f9-font);
+  font-size: 12.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.f9-bl035-detail .f9-ed-number-value,
+.f9-bl035-detail .f9-trend-value,
+.f9-bl035-detail .f9-aggression-number {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+/* One rule weight, no sheets, no floating cards. The child components retain
+   their behavior and semantic landmarks; the selected surface supplies the
+   geometry. */
+.f9-bl035-detail,
+.f9-bl035-detail * {
+  border-radius: 0;
+}
+
+.f9-bl035-detail :is(
+    .f9-ed-panel,
+    .f9-ed-diff-plate,
+    .f9-ed-change-record,
+    .f9-ed-evidence-plate,
+    .f9-ed-number-card,
+    .f9-ed-rail-card,
+    .f9-ed-fact-rail,
+    .f9-ed-first-scan,
+    .f9-detail-cell,
+    .f9-work-list,
+    .f9-work-row,
+    .f9-trend-card,
+    .f9-dossier-stat,
+    .f9-dossier-leader,
+    .f9-dossier-hooks li,
+    .f9-aggression-card,
+    .f9-counter-brief,
+    .f9-creative-tile
+  ) {
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.f9-bl035-detail :is(
+    .f9-ed-panel,
+    .f9-ed-diff-plate,
+    .f9-ed-change-record,
+    .f9-ed-evidence-plate,
+    .f9-ed-first-scan,
+    .f9-detail-cell,
+    .f9-trend-card,
+    .f9-aggression-card,
+    .f9-counter-brief
+  ) {
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-bl035-detail .f9-ed-change-feed,
+.f9-bl035-detail .f9-dossier-body {
+  gap: 24px;
+}
+
+.f9-bl035-detail .f9-panel-toolbar {
+  align-items: flex-start;
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--wk-rule);
+}
+
+.f9-bl035-detail .f9-panel-toolbar + * {
+  margin-top: 18px;
+}
+
+.f9-bl035-detail .f9-ed-plate-header,
+.f9-bl035-detail .f9-ed-first-scan-header,
+.f9-bl035-detail .f9-ed-fact-rail-header {
+  padding: 12px 0 10px;
+  border-bottom: 1px solid var(--wk-rule);
+  background: transparent;
+  color: var(--ink);
+}
+
+.f9-bl035-detail .f9-ed-diff-body,
+.f9-bl035-detail .f9-ed-evidence-body,
+.f9-bl035-detail .f9-ed-first-scan-body {
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.f9-bl035-detail .f9-ed-diff-panes,
+.f9-bl035-detail .f9-ed-evidence-capture,
+.f9-bl035-detail .f9-proof-packet {
+  border: 1px solid var(--wk-rule);
+  background: transparent;
+}
+
+.f9-bl035-detail .f9-ed-diff-pane.is-before {
+  border-right: 1px solid var(--wk-rule);
+  background: transparent;
+}
+
+.f9-bl035-detail .f9-ed-diff-pane.is-now {
+  background: var(--wk-sunk);
+}
+
+.f9-bl035-detail .f9-ed-quiet-line,
+.f9-bl035-detail .f9-trend-sparse {
+  padding: 12px 0;
+  border: 0;
+  border-top: 1px solid var(--wk-rule);
+  background: transparent;
+}
+
+.f9-bl035-detail .f9-ed-fact-row,
+.f9-bl035-detail .f9-ed-rail-line,
+.f9-bl035-detail .f9-work-row {
+  padding: 11px 0;
+  border-top: 1px solid var(--wk-rule);
+  background: transparent;
+}
+
+.f9-bl035-detail .f9-ed-fact-row:first-child,
+.f9-bl035-detail .f9-ed-rail-line:first-child,
+.f9-bl035-detail .f9-work-row:first-child {
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-bl035-detail .f9-ed-number-card,
+.f9-bl035-detail .f9-ed-rail-card,
+.f9-bl035-detail .f9-ed-fact-rail {
+  padding: 0 0 24px;
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-bl035-detail .f9-ed-detail-rail > * + * {
+  margin-top: 26px;
+}
+
+.f9-bl035-detail .f9-ed-number-note,
+.f9-bl035-detail .f9-ed-rail-card > p,
+.f9-bl035-detail .f9-ed-fact-value,
+.f9-bl035-detail .f9-ed-rail-line dd {
+  font-family: var(--f9-font);
+  font-size: 13px;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Delivery and setup forms: frames, not pills; labels stay sentence-case.
+   Every target remains at least 44px. */
+.f9-bl035-detail .f9-detail-split {
+  display: grid;
+  gap: 26px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.f9-bl035-detail .f9-work-list.is-compact {
+  gap: 0;
+  padding: 0;
+}
+
+.f9-bl035-detail .f9-work-row {
+  min-height: 44px;
+}
+
+.f9-bl035-detail .f9-field {
+  gap: 6px;
+}
+
+.f9-bl035-detail .f9-field > span,
+.f9-bl035-detail .f9-field > label > span {
+  color: var(--ink-soft);
+  font-family: var(--f9-font);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.f9-bl035-detail .f9-field input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]),
+.f9-bl035-detail .f9-field select,
+.f9-bl035-detail .f9-field textarea {
+  min-height: 44px;
+  border: 1px solid var(--wk-rule);
+  border-radius: 0;
+  background: var(--card);
+  box-shadow: none;
+  color: var(--ink);
+}
+
+.f9-bl035-detail .f9-field input:focus,
+.f9-bl035-detail .f9-field select:focus,
+.f9-bl035-detail .f9-field textarea:focus {
+  outline: 2px solid var(--wk-focus);
+  outline-offset: 2px;
+}
+
+.f9-bl035-detail summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  cursor: pointer;
+}
+
+/* Creative and intelligence are evidence collections, not decks of cards.
+   Images may form a gallery; facts underneath use the shared ruled rhythm. */
+.f9-bl035-detail .f9-creative-wall {
+  gap: 16px;
+}
+
+.f9-bl035-detail .f9-creative-tile {
+  padding: 0 0 14px;
+  border-bottom: 1px solid var(--wk-rule);
+  transition:
+    background-color var(--wk-snap),
+    color var(--wk-snap);
+}
+
+.f9-bl035-detail .f9-creative-tile:hover {
+  border-color: var(--wk-rule);
+}
+
+.f9-bl035-detail .f9-creative-tile .f9-ad-thumb {
+  border: 1px solid var(--wk-rule);
+  border-radius: 0;
+}
+
+.f9-bl035-detail .f9-creative-tile-status,
+.f9-bl035-detail :is(.f9-status-pill, .f9-longevity-pill, .f9-angle-pill) {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  font-family: var(--f9-font);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.f9-bl035-detail .f9-trend-grid {
+  display: grid;
+  gap: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.f9-bl035-detail .f9-trend-card {
+  padding: 20px 0 24px;
+}
+
+.f9-bl035-detail .f9-dossier-stats,
+.f9-bl035-detail .f9-dossier-leaders {
+  gap: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.f9-bl035-detail .f9-dossier-stat,
+.f9-bl035-detail .f9-dossier-leader,
+.f9-bl035-detail .f9-dossier-hooks li {
+  padding: 12px 0;
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-bl035-detail .f9-aggression-card,
+.f9-bl035-detail .f9-counter-brief {
+  padding: 18px 0 0;
+}
+
+/* Green is news, never decoration. Diff values retain exactly one green
+   announcement on the newest marked event; charts, longevity, state chips
+   and AI guidance return to ink. */
+.f9-bl035-detail
+  .f9-ed-diff-plate:not(.is-newest)
+  .f9-ed-diff-value
+  mark {
+  background: var(--wk-sunk);
+  color: var(--ink);
+}
+
+.f9-bl035-detail .f9-trend-bar.is-accent {
+  fill: var(--ink-soft);
+}
+
+.f9-bl035-detail .f9-trend-leader-fill,
+.f9-bl035-detail .f9-aggression-bar-fill {
+  background: var(--ink-soft);
+}
+
+.f9-bl035-detail .f9-dossier-leader-days,
+.f9-bl035-detail .f9-dossier-hook-count {
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.f9-bl035-detail .f9-counter-brief {
+  border-left: 0;
+}
+
+.f9-bl035-detail .f9-message {
+  margin: 16px var(--wk-pad) 0;
+  border: 1px solid var(--wk-rule);
+  border-radius: 0;
+  background: transparent;
+}
+
+/* Setup inherits the search mode switch and cross-route links. On the deep
+   surface they are one ruled instrument and quiet 44px actions, not a
+   floating selected pill or two proof-green decorations. */
+.f9-bl035-detail .f9-mode-toggle {
+  gap: 0;
+  padding: 0;
+  border: 1px solid var(--wk-rule);
+  background: transparent;
+}
+
+.f9-bl035-detail .f9-mode-toggle label + label {
+  border-left: 1px solid var(--wk-rule);
+}
+
+.f9-bl035-detail .f9-mode-toggle label.is-active {
+  background: var(--wk-sunk);
+  box-shadow: none;
+  color: var(--ink);
+}
+
+.f9-bl035-detail .f9-crosslink-row .f9-text-link {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  color: var(--ink);
+  font-weight: 400;
+  text-decoration: underline;
+  text-decoration-color: currentColor;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+/* The signed-in rail foot owns identity plus one session action. Help, Docs
+   and the support address were designed out because Help & support already
+   exists as a first-class route inside Workspace & account. */
+.f9-wk-foot-action {
+  margin-top: 8px;
+}
+
+.f9-dash-page-app .f9-wk-foot-action button {
+  display: inline-flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--wk-on-band-dim);
+  cursor: pointer;
+  font-family: var(--f9-font);
+  font-size: 11.5px;
+  font-weight: 400;
+}
+
+.f9-dash-page-app .f9-wk-foot-action button:hover {
+  color: var(--wk-on-band);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Re-adjudication: Overview's setup capacity and alternate-path links remain
+   useful, but Rank 3's old caps-mono treatment made them read like commands.
+   They stay in place as quiet, sentence-case text actions. */
+.f9-wk-page .f9-ed-setup-links .f9-ed-cta--rank3,
+.f9-wk-page .f9-ed-setup-capacity .f9-ed-cta--rank3 {
+  font-family: var(--f9-font);
+  font-size: 13.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-decoration-thickness: 1px;
+  text-transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .f9-bl035-detail,
+  .f9-bl035-detail .f9-creative-tile {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media (max-width: 1180px) {
+  .f9-bl035-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .f9-bl035-detail .f9-ed-detail-rail {
+    position: static;
+    padding: 28px var(--wk-pad) 44px;
+    border-top: 1px solid var(--wk-rule);
+    border-left: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .f9-bl035-main {
+    padding-top: 22px;
+  }
+
+  .f9-bl035-detail .f9-ed-diff-panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .f9-bl035-detail .f9-ed-diff-pane.is-before {
+    border-right: 0;
+    border-bottom: 1px solid var(--wk-rule);
+  }
+
+  .f9-bl035-detail .f9-field-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The record wrapper carries the degraded-rollup state for the whole opened
+   competitor. It adds no geometry of its own — BL-035's detail owns that —
+   so it participates in the page flow as if it were not there. */
+.f9-bl035-record {
+  display: contents;
+}
+
+.f9-bl035-aggregate-unavailable {
+  margin: 0 0 18px;
+  padding: 0 var(--wk-pad);
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+/* A failed board-rollup query must not turn unavailable aggregates into
+   believable zeroes. Keep the record, tabs, evidence and action controls
+   mounted; mask only the count surfaces that rollup feeds. The tab badge
+   needs no rule — a zeroed rollup renders no badge at all — so the caught
+   number card is the one surface left to mask. */
+.f9-bl035-record.is-capture-window-degraded .f9-ed-number-card {
+  display: none;
 }
 
 /* === BL-040 source + developer access (landing language) === */
