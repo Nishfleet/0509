@@ -275,9 +275,9 @@ export async function sendDeliveryTestEmail(
     return false;
   }
 
-  // Cloudflare Email has no bounce webhooks, so a typo'd address shows
-  // "sent" forever while the customer receives nothing. This send gives
-  // them a way to prove the address works end-to-end.
+  // This app does not currently ingest Cloudflare Email delivery events, so
+  // provider acceptance alone cannot prove that a typo'd address received the
+  // message. This send gives the customer an end-to-end verification step.
   const providerResult = await sendCloudflareEmail(env, {
     to: recipient,
     subject: "Test email from Five to Nine",
