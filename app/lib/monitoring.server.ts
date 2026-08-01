@@ -594,17 +594,11 @@ export async function flushDeferredInstantAlerts(env: AppEnv) {
       });
 
       flushedGroups += 1;
-      attempts += delivery.attempts;
-      if (
-        !Array.isArray(delivery.details) ||
-        delivery.details.length !== delivery.attempts
-      ) {
-        failures += Math.max(1, delivery.attempts);
-      } else {
-        failures += delivery.details.filter(
-          (attempt) => attempt.status !== "sent",
-        ).length;
-      }
+      const alertOutcome = summarizeAlertDelivery(delivery);
+      attempts += alertOutcome.attempts;
+      failures += alertOutcome.errorCode === "alert_delivery_outcome_invalid"
+        ? 1
+        : alertOutcome.terminalOutcomes + alertOutcome.pendingOutcomes;
     } catch (error) {
       failures += 1;
       console.error(
@@ -1898,32 +1892,112 @@ async function completeWatchlistRun(
   await finishWatchlistRun(env, runId, input);
 }
 
-function summarizeAlertDelivery(delivery: {
-  attempts: number;
-  details?: Array<{ status?: string; deferredByQuietHours?: boolean }>;
-}) {
-  // Production delivery returns one detail per attempt. Keep the fallback for
-  // narrow tests that predate per-attempt delivery state.
-  if (!Array.isArray(delivery.details)) {
-    return {
-      attempts: delivery.attempts,
-      accepted: delivery.attempts,
-      failures: 0,
-      deferrals: 0,
-    };
-  }
+const ALERT_DELIVERY_OUTCOMES = new Set([
+  "provider_accepted",
+  "definitive_terminal_failure",
+  "pending_provider_unknown",
+  "quiet_deferral",
+  "intentional_dedupe",
+]);
 
-  const deferrals = delivery.details.filter(
-    (attempt) => attempt.deferredByQuietHours === true,
-  );
-  const attemptedDeliveries = delivery.details.filter(
-    (attempt) => attempt.deferredByQuietHours !== true,
-  );
+type CanonicalAlertDeliveryDetail = {
+  outcome:
+    | "provider_accepted"
+    | "definitive_terminal_failure"
+    | "pending_provider_unknown"
+    | "quiet_deferral"
+    | "intentional_dedupe";
+  claimedByThisRun: boolean;
+  providerAttemptedByThisRun: boolean;
+  duplicate: boolean;
+  source: "current_claim" | "durable_attempt";
+};
+
+function parseAlertDeliveryDetail(value: unknown): CanonicalAlertDeliveryDetail | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const detail = value as Record<string, unknown>;
+  if (
+    typeof detail.outcome !== "string" ||
+    !ALERT_DELIVERY_OUTCOMES.has(detail.outcome) ||
+    typeof detail.claimedByThisRun !== "boolean" ||
+    typeof detail.providerAttemptedByThisRun !== "boolean" ||
+    typeof detail.duplicate !== "boolean" ||
+    (detail.source !== "current_claim" && detail.source !== "durable_attempt")
+  ) {
+    return null;
+  }
+  const isCurrent = detail.claimedByThisRun === true;
+  if (
+    detail.duplicate === isCurrent ||
+    (isCurrent ? detail.source !== "current_claim" : detail.source !== "durable_attempt") ||
+    (detail.outcome === "provider_accepted" &&
+      isCurrent &&
+      !detail.providerAttemptedByThisRun) ||
+    ((detail.outcome === "quiet_deferral" || detail.outcome === "intentional_dedupe") &&
+      detail.providerAttemptedByThisRun) ||
+    (detail.outcome === "intentional_dedupe" && isCurrent)
+  ) {
+    return null;
+  }
+  return detail as CanonicalAlertDeliveryDetail;
+}
+
+function invalidAlertDeliverySummary(reason: string) {
   return {
-    attempts: attemptedDeliveries.length,
-    accepted: attemptedDeliveries.filter((attempt) => attempt.status === "sent").length,
-    failures: attemptedDeliveries.filter((attempt) => attempt.status !== "sent").length,
-    deferrals: deferrals.length,
+    accepted: 0,
+    attempts: 0,
+    failures: 0,
+    deferrals: 0,
+    terminalOutcomes: 0,
+    pendingOutcomes: 0,
+    errorCode: "alert_delivery_outcome_invalid",
+    errorMessage: reason,
+  };
+}
+
+function summarizeAlertDelivery(delivery: { attempts: number; details?: unknown }) {
+  if (!Number.isInteger(delivery.attempts) || delivery.attempts < 0) {
+    return invalidAlertDeliverySummary("Alert delivery attempt count is invalid.");
+  }
+  if (!Array.isArray(delivery.details)) {
+    return invalidAlertDeliverySummary("Alert delivery details are missing.");
+  }
+  if (delivery.details.length !== delivery.attempts) {
+    return invalidAlertDeliverySummary("Alert delivery detail cardinality is invalid.");
+  }
+  const details = delivery.details.map(parseAlertDeliveryDetail);
+  if (details.some((detail) => detail === null)) {
+    return invalidAlertDeliverySummary("Alert delivery details are malformed or ambiguous.");
+  }
+  const canonicalDetails = details as CanonicalAlertDeliveryDetail[];
+  const current = canonicalDetails.filter((detail) => detail.claimedByThisRun);
+  const terminalOutcomes = canonicalDetails.filter(
+    (detail) => detail.outcome === "definitive_terminal_failure",
+  ).length;
+  const pendingOutcomes = canonicalDetails.filter(
+    (detail) => detail.outcome === "pending_provider_unknown",
+  ).length;
+  const errorCode = terminalOutcomes > 0
+    ? "alert_delivery_failed"
+    : pendingOutcomes > 0
+      ? "alert_delivery_pending_provider_unknown"
+      : null;
+  const errorMessage = terminalOutcomes > 0
+    ? `${terminalOutcomes} customer alert delivery outcome${terminalOutcomes === 1 ? "" : "s"} definitively failed.`
+    : pendingOutcomes > 0
+      ? `${pendingOutcomes} customer alert delivery outcome${pendingOutcomes === 1 ? " is" : "s are"} pending provider confirmation.`
+      : null;
+  return {
+    accepted: current.filter((detail) => detail.outcome === "provider_accepted").length,
+    attempts: canonicalDetails.filter((detail) => detail.providerAttemptedByThisRun).length,
+    failures: current.filter(
+      (detail) => detail.outcome === "definitive_terminal_failure",
+    ).length,
+    deferrals: current.filter((detail) => detail.outcome === "quiet_deferral").length,
+    terminalOutcomes,
+    pendingOutcomes,
+    errorCode,
+    errorMessage,
   };
 }
 
@@ -1936,12 +2010,13 @@ class StaleOrchestratedWatchlistRunError extends Error {
   }
 }
 
-class RecordedAlertDeliveryFailureError extends Error {
-  constructor(failures: number, attempts: number) {
-    super(
-      `${failures} of ${attempts} alert delivery attempt${attempts === 1 ? "" : "s"} failed.`,
-    );
-    this.name = "RecordedAlertDeliveryFailureError";
+class RecordedAlertDeliveryOutcomeError extends Error {
+  constructor(
+    readonly errorCode: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = "RecordedAlertDeliveryOutcomeError";
   }
 }
 
@@ -2128,8 +2203,9 @@ export async function runWatchlist(
             events: allEvents,
             lane: "customer",
           })
-        : { attempts: 0, channels: [] };
+        : { attempts: 0, channels: [], details: [] };
     const alertOutcome = summarizeAlertDelivery(alertDelivery);
+    const alertDeliveryFailed = alertOutcome.errorCode !== null;
 
     // WP-25: free users get no digests/instant alerts — send one activation-result
     // email when this run established the baseline (first successful scan).
@@ -2148,7 +2224,7 @@ export async function runWatchlist(
       runId,
       watchlist.id,
       {
-        status: alertOutcome.failures > 0 ? "failed" : "succeeded",
+        status: alertDeliveryFailed ? "failed" : "succeeded",
         pagesScanned,
         summary: {
           adsSeen: currentObservations.length,
@@ -2171,16 +2247,12 @@ export async function runWatchlist(
           events: allEvents.length,
           eventTypes: summarizeEventTypes(allEvents),
         },
-        errorCode:
-          alertOutcome.failures > 0 ? "alert_delivery_failed" : null,
-        errorMessage:
-          alertOutcome.failures > 0
-            ? `${alertOutcome.failures} customer alert delivery attempt${alertOutcome.failures === 1 ? "" : "s"} failed.`
-            : null,
+        errorCode: alertOutcome.errorCode,
+        errorMessage: alertOutcome.errorMessage,
       },
       options,
     );
-    if (!options.orchestrationToken && alertOutcome.failures === 0) {
+    if (!options.orchestrationToken && !alertDeliveryFailed) {
       await touchWatchlistScanned(env, watchlist.id);
     }
     const commercialProvider = resolveCommercialDiscoveryProvider(env, {
@@ -2188,7 +2260,7 @@ export async function runWatchlist(
     });
     await logMetaIntegrationStatus(env, {
       status:
-        alertOutcome.failures > 0
+        alertDeliveryFailed
           ? "degraded"
           : commercialProvider === "meta_library_browser"
           ? "healthy"
@@ -2196,8 +2268,8 @@ export async function runWatchlist(
             ? "degraded"
             : "demo",
       summary:
-        alertOutcome.failures > 0
-          ? "Watchlist evidence completed, but customer alert delivery failed."
+        alertDeliveryFailed
+          ? "Watchlist evidence completed, but customer alert delivery did not reach a confirmed successful outcome."
           : commercialProvider === "meta_library_browser"
           ? "Scheduled watchlist scan completed through the commercial discovery resolver."
           : commercialProvider === "meta_api"
@@ -2209,16 +2281,16 @@ export async function runWatchlist(
       },
     });
 
-    if (alertOutcome.failures > 0) {
-      throw new RecordedAlertDeliveryFailureError(
-        alertOutcome.failures,
-        alertOutcome.attempts,
+    if (alertOutcome.errorCode !== null) {
+      throw new RecordedAlertDeliveryOutcomeError(
+        alertOutcome.errorCode,
+        alertOutcome.errorMessage ?? "Alert delivery did not reach a confirmed successful outcome.",
       );
     }
 
     return { runId, events: allEvents.length };
   } catch (error) {
-    if (error instanceof RecordedAlertDeliveryFailureError) {
+    if (error instanceof RecordedAlertDeliveryOutcomeError) {
       throw error;
     }
     if (error instanceof StaleOrchestratedWatchlistRunError) {
@@ -2321,15 +2393,16 @@ export async function runWatchlist(
               events: directWebsiteProofEvaluation.events,
               lane: "customer",
             })
-          : { attempts: 0, channels: [] };
+          : { attempts: 0, channels: [], details: [] };
       const alertOutcome = summarizeAlertDelivery(alertDelivery);
+      const alertDeliveryFailed = alertOutcome.errorCode !== null;
 
       await completeWatchlistRun(
         env,
         runId,
         watchlist.id,
         {
-          status: alertOutcome.failures > 0 ? "failed" : "succeeded",
+          status: alertDeliveryFailed ? "failed" : "succeeded",
           pagesScanned: 0,
           summary: {
             adsSeen: 0,
@@ -2349,23 +2422,19 @@ export async function runWatchlist(
             scanErrorCode: errorCode,
             scanErrorMessage: details,
           },
-          errorCode:
-            alertOutcome.failures > 0 ? "alert_delivery_failed" : null,
-          errorMessage:
-            alertOutcome.failures > 0
-              ? `${alertOutcome.failures} customer alert delivery attempt${alertOutcome.failures === 1 ? "" : "s"} failed.`
-              : null,
+          errorCode: alertOutcome.errorCode,
+          errorMessage: alertOutcome.errorMessage,
         },
         options,
       );
-      if (!options.orchestrationToken && alertOutcome.failures === 0) {
+      if (!options.orchestrationToken && !alertDeliveryFailed) {
         await touchWatchlistScanned(env, watchlist.id);
       }
       await logMetaIntegrationStatus(env, {
         status: "degraded",
         summary:
-          alertOutcome.failures > 0
-            ? "Commercial discovery failed; direct website evidence completed, but customer alert delivery failed."
+          alertDeliveryFailed
+            ? "Commercial discovery failed; direct website evidence completed, but customer alert delivery did not reach a confirmed successful outcome."
             : "Commercial discovery failed, but direct website evidence still completed.",
         errorCode,
         errorMessage: details,
@@ -2377,15 +2446,14 @@ export async function runWatchlist(
           alertDeliveryAccepted: alertOutcome.accepted,
           alertDeliveryFailures: alertOutcome.failures,
           alertDeliveryDeferrals: alertOutcome.deferrals,
-          alertDeliveryErrorCode:
-            alertOutcome.failures > 0 ? "alert_delivery_failed" : null,
+          alertDeliveryErrorCode: alertOutcome.errorCode,
         },
       });
 
-      if (alertOutcome.failures > 0) {
-        throw new RecordedAlertDeliveryFailureError(
-          alertOutcome.failures,
-          alertOutcome.attempts,
+      if (alertOutcome.errorCode !== null) {
+        throw new RecordedAlertDeliveryOutcomeError(
+          alertOutcome.errorCode,
+          alertOutcome.errorMessage ?? "Alert delivery did not reach a confirmed successful outcome.",
         );
       }
 
