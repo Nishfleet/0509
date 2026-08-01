@@ -42,7 +42,12 @@ function component(tag: string) {
 
 async function mockTeamPresentation(
 	actionData: unknown | (() => unknown),
-	options: { members?: Array<Record<string, unknown>> } = {},
+	options: {
+		isMember?: boolean;
+		members?: Array<Record<string, unknown>>;
+		ownerName?: string | null;
+		plan?: "free" | "scout" | "starter" | "agency";
+	} = {},
 ) {
 	const confirmButtonProps: Props[] = [];
 
@@ -55,9 +60,9 @@ async function mockTeamPresentation(
 				createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
 			useActionData: () => (typeof actionData === "function" ? actionData() : actionData),
 			useLoaderData: () => ({
-				isMember: false,
-				ownerName: null,
-				plan: "agency",
+				isMember: options.isMember ?? false,
+				ownerName: options.ownerName ?? null,
+				plan: options.plan ?? "agency",
 				seatLimit: 10,
 			members: options.members ?? [
 					{
@@ -178,6 +183,69 @@ describe("team action result contract", () => {
 });
 
 describe("team feedback placement", () => {
+	it.each(["free", "scout", "starter"] as const)(
+		"keeps %s owners behind one quiet Agency upgrade action",
+		async (plan) => {
+			await mockTeamPresentation(null, { plan });
+			const { default: TeamRoute } = await import("~/routes/app.team");
+			const markup = renderToStaticMarkup(createElement(TeamRoute));
+
+			expect(markup).toContain("f9-bl041-lock");
+			expect(markup).toContain("Invite your teammates");
+			expect(markup).toContain('href="/app/billing?source=team#plans"');
+			expect(markup.match(/f9-ed-cta--rank1/g)).toHaveLength(1);
+			expect(markup).not.toContain('name="email"');
+		},
+	);
+
+	it("shows the invite instrument only to Agency owners with room", async () => {
+		await mockTeamPresentation(null, { plan: "agency", members: [] });
+		const { default: TeamRoute } = await import("~/routes/app.team");
+		const markup = renderToStaticMarkup(createElement(TeamRoute));
+
+		expect(markup).not.toContain("f9-bl041-lock");
+		expect(markup).toContain("1 of 10 seats in use");
+		expect(markup).toContain('name="email"');
+		expect(markup).toContain("Send invite");
+		expect(markup).toContain("No teammates have been invited yet.");
+	});
+
+	it("withholds the invite instrument when every Agency seat is occupied", async () => {
+		await mockTeamPresentation(null, {
+			plan: "agency",
+			members: Array.from({ length: 9 }, (_, index) => ({
+				acceptedAt: "2026-07-01T12:00:00.000Z",
+				createdAt: "2026-06-30T12:00:00.000Z",
+				email: `member-${index}@example.invalid`,
+				id: `member-${index}`,
+				status: "active",
+				tokenExpiresAt: null,
+			})),
+		});
+		const { default: TeamRoute } = await import("~/routes/app.team");
+		const markup = renderToStaticMarkup(createElement(TeamRoute));
+
+		expect(markup).toContain("10 of 10 seats in use");
+		expect(markup).toContain("All 10 seats are occupied");
+		expect(markup).not.toContain('name="email"');
+	});
+
+	it("shows members their shared seat without owner actions", async () => {
+		await mockTeamPresentation(null, {
+			isMember: true,
+			ownerName: "Asha",
+			plan: "free",
+			members: [],
+		});
+		const { default: TeamRoute } = await import("~/routes/app.team");
+		const markup = renderToStaticMarkup(createElement(TeamRoute));
+
+		expect(markup).toContain("A seat in Asha&#x27;s workspace");
+		expect(markup).toContain("workspace owner manages seats and billing");
+		expect(markup).not.toContain('name="email"');
+		expect(markup).not.toContain("f9-bl041-lock");
+	});
+
 	it("renders invite feedback in the global slot above member rows", async () => {
 		await mockTeamPresentation({
 			ok: false,
@@ -281,7 +349,7 @@ describe("team feedback placement", () => {
 		const { default: TeamRoute } = await import("~/routes/app.team");
 		const markup = renderToStaticMarkup(createElement(TeamRoute));
 
-		expect(markup).toContain("2 of 10 Agency seats in use");
+		expect(markup).toContain("2 of 10 seats in use");
 		expect(markup).toContain("Invite expired");
 		expect(markup).toContain('name="email"');
 	});

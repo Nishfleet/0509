@@ -81,20 +81,29 @@ async function expectCompactHeaderActions(page: Page) {
   // "Overview" link plus the "+ Add competitor" quick-add button (a real
   // <button>, not a link — it opens the palette dialog).
   const pathname = new URL(page.url()).pathname;
-  if (
-    pathname === "/app" ||
-    pathname === "/app/watchlists" ||
-    pathname === "/app/source-access" ||
-    pathname === "/app/developer-access"
-  ) {
+  // Routes whose single primary is conditional (it can legitimately be absent —
+  // e.g. Billing renders "Current plan" rather than an ink CTA on the plan you
+  // are already on) still may never carry a second one, so they assert the §5
+  // ceiling instead of an exact count.
+  const conditionalPrimaryRoutes = new Set([
+    "/app/source-access",
+    "/app/developer-access",
+    "/app/team",
+    "/app/billing",
+    "/app/account",
+  ]);
+  const workingHeaderRoutes = new Set([
+    "/app",
+    "/app/watchlists",
+    ...conditionalPrimaryRoutes,
+  ]);
+  if (workingHeaderRoutes.has(pathname)) {
     await expect(page.locator(".f9-dash-topbar")).toHaveCount(0);
+    await expect(page.locator(".f9-wk-head")).toHaveCount(1);
     const filledButtonCount = await page
       .locator(".f9-wk-page .f9-wk-btn")
       .count();
-    if (
-      pathname === "/app/source-access" ||
-      pathname === "/app/developer-access"
-    ) {
+    if (conditionalPrimaryRoutes.has(pathname)) {
       expect(filledButtonCount).toBeLessThanOrEqual(1);
     } else {
       expect(filledButtonCount).toBe(1);
@@ -405,7 +414,7 @@ test.describe("local authenticated E2E harness", () => {
     await page.goto("/app/account");
     await expectAppPage(page);
     await expect(page.getByRole("heading", { name: "Account & security" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "E2E Starter" })).toBeVisible();
+    await expect(page.getByText(/Signed in as e2e-starter@example\.invalid/)).toBeVisible();
     await expect(page.getByLabel("My brand website")).toHaveValue("https://starter.example.invalid");
 
     await page.goto("/app/notifications");
@@ -419,7 +428,7 @@ test.describe("local authenticated E2E harness", () => {
     ).toBeVisible();
     await expect(
       page.locator("#f9-main-content").getByText(
-        "Invite teammates to share watchlists, collections, and digests on Agency.",
+        "Team access is included with Agency.",
         { exact: true },
       ),
     ).toBeVisible();
@@ -533,7 +542,7 @@ test.describe("local authenticated E2E harness", () => {
         heading: "Developer access",
         copy: ["Connect exports and approved actions"],
       },
-      { label: "Team", path: "/app/team", heading: "Team", copy: ["Agency seats in use"] },
+      { label: "Team", path: "/app/team", heading: "Team", copy: ["2 of 10 seats in use"] },
       {
         label: "Client rooms",
         path: "/app/clients",

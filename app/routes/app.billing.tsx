@@ -4,10 +4,11 @@ import type { ReactNode } from "react";
 
 import { CheckoutReturnNotice } from "~/components/checkout-return-notice";
 import { Pill } from "~/components/pill";
-import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardPage } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
+import { WorkingHeader } from "~/components/workspace/working-header";
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 import { billingSkuForPlanCheckout, TOP_UP_PACK_DISPLAY } from "~/lib/billing-sku-catalog";
 import { agencyCheckoutHeldCustomerCopy } from "~/lib/customer-billing-copy";
@@ -286,13 +287,16 @@ export default function BillingRoute() {
         : "Not included";
 
   return (
-    <DashboardPage>
-      <DashboardPageHeader
-        kicker="Plan"
-        lead="Current plan, evidence usage, and renewal status."
+    <DashboardPage className="f9-wk-page f9-bl041-page f9-bl041-billing">
+      <WorkingHeader
+        context={
+          canManageBilling
+            ? `${planLabel} plan. Usage, renewal, and provider-backed billing controls.`
+            : `${planLabel} plan. Billing changes are managed by the workspace owner.`
+        }
         title="Billing & usage"
       />
-    <section className="f9-app-stack">
+    <section className="f9-bl041-flow">
       <BillingLifecycleSummary
         billing={billing}
         canManageBilling={canManageBilling}
@@ -437,7 +441,7 @@ export default function BillingRoute() {
         </div>
       ) : null}
 
-      <article className="f9-app-panel f9-plan-picker-panel" id="plans">
+      <article className="f9-bl041-section f9-plan-picker-panel" id="plans">
         <div className="f9-panel-toolbar">
           <div>
             <span className="f9-app-kicker">Choose inside the app</span>
@@ -574,7 +578,7 @@ export default function BillingRoute() {
                       <input name="sku" type="hidden" value={checkoutSku} />
                       {selectedSource ? <input name="source" type="hidden" value={selectedSource} /> : null}
                       <SubmitButton
-                        className="f9-primary-button"
+                        className={selected ? "f9-wk-btn" : "f9-bl041-text-action"}
                         match={{ sku: checkoutSku }}
                         pendingLabel="Redirecting…"
                       >
@@ -594,7 +598,7 @@ export default function BillingRoute() {
                       <input name="intent" type="hidden" value="preview" />
                       <input name="sku" type="hidden" value={checkoutSku} />
                       <SubmitButton
-                        className="f9-primary-button"
+                        className={selected ? "f9-wk-btn" : "f9-bl041-text-action"}
                         intent="preview"
                         match={{ sku: checkoutSku }}
                         pendingLabel="Previewing…"
@@ -646,7 +650,7 @@ export default function BillingRoute() {
         </div>
       </article>
 
-      <article className="f9-app-panel">
+      <article className="f9-bl041-section">
         <div className="f9-panel-toolbar">
           <div>
             <span className="f9-app-kicker">Plan &amp; billing</span>
@@ -762,7 +766,7 @@ export default function BillingRoute() {
         </div>
       </article>
 
-      <article className="f9-app-panel" id="top-ups">
+      <article className="f9-bl041-section" id="top-ups">
         <div className="f9-panel-toolbar">
           <div>
             <span className="f9-app-kicker">Check packs</span>
@@ -828,7 +832,7 @@ export default function BillingRoute() {
         </div>
       </article>
 
-      <article className="f9-app-panel">
+      <article className="f9-bl041-section">
         <div className="f9-panel-toolbar">
           <div>
             <span className="f9-app-kicker">Manage billing</span>
