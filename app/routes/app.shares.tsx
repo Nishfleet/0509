@@ -1,13 +1,17 @@
 import { Form, Link, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
-import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
-import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
-import { ActionFeedback } from "~/components/action-feedback";
+import { DashboardPage } from "~/components/dashboard-page";
+import {
+  DashboardRouteError,
+  DashboardRouteLoading,
+} from "~/components/dashboard-route-loading";
 import { ConfirmSubmitButton } from "~/components/confirm-button";
 import { CopyButton } from "~/components/copy-button";
-import { EmptyState } from "~/components/empty-state";
+import { FeedbackStrip } from "~/components/workspace/feedback-strip";
+import { RuledList, RuledRow } from "~/components/workspace/ruled-list";
 import { LocalTime } from "~/components/local-time";
+import { WorkingHeader } from "~/components/workspace/working-header";
 import { isApprovedReportSnapshot } from "~/lib/report-approval";
 
 const RESOURCE_LABELS: Record<string, string> = {
@@ -92,87 +96,128 @@ export default function SharesRoute() {
   const actionData = useActionData<typeof action>();
 
   return (
-    <DashboardPage>
-      <section className="f9-app-stack">
-        <DashboardPageHeader
-          kicker="Access"
-          lead="Review and revoke snapshot or live-view links shared with clients or teammates."
-          title="Shared links"
-        />
+    <DashboardPage className="f9-wk-page">
+      <WorkingHeader
+        context={`${data.shares.length} ${data.shares.length === 1 ? "link" : "links"} shown`}
+        title="Shared links"
+      />
 
-			<ActionFeedback data={actionData} fallback />
+      {actionData?.message ? (
+        <FeedbackStrip
+          label={actionData.ok ? "Done" : "Not done"}
+          tone={actionData.ok ? "ok" : "bad"}
+        >
+          {actionData.message}
+        </FeedbackStrip>
+      ) : null}
 
-      <article className="f9-app-panel">
-				<ActionFeedback data={actionData} intent="revoke-share" />
-        {data.shares.length === 0 ? (
-					<EmptyState
-						action={{ label: "Open competitors", to: "/app/watchlists" }}
-						description="Share a competitor, collection, or report from its own page and the link shows up here to revoke any time."
-						title="No active share links"
-					/>
-        ) : (
-          <div className="f9-work-list is-compact">
-            {data.shares.map((share) => (
-              <div className="f9-work-row" key={share.id}>
-                <div>
-                  <strong>
-                    {share.resourceLabel} · {share.state}
-                  </strong>
-                  <p>
-                    {"recoveryPath" in share && typeof share.recoveryPath === "string" ? (
-                      <>This link is withheld until the evidence is reviewed again.</>
-                    ) : (
-                      <a href={share.url} rel="noreferrer" target="_blank">
-                        {share.url}
-                      </a>
-                    )}
-                  </p>
-                  <small>
-                    Created {formatDate(share.createdAt)} ·{" "}
-                    {share.expiresAt ? (
-                      <>Expires {formatDate(share.expiresAt)}</>
-                    ) : (
-                      "No expiry (created before expiry rollout)"
-                    )}
-                  </small>
-                </div>
-                <div className="f9-action-row">
-                  {"recoveryPath" in share && typeof share.recoveryPath === "string" ? (
-                    <Link className="f9-secondary-button" to={share.recoveryPath}>
-                      Review report
-                    </Link>
+      {data.shares.length > 0 ? (
+        <div className="f9-bl038-list">
+          <RuledList aria-label="Active share links">
+            {data.shares.map((share) => {
+              const recoveryPath =
+                "recoveryPath" in share && typeof share.recoveryPath === "string"
+                  ? share.recoveryPath
+                  : null;
+              const isWithheld = recoveryPath !== null;
+              const state =
+                share.state === "Approved current evidence"
+                  ? { label: "Approved", tone: "on" as const }
+                  : share.state === "Approval expired · review again"
+                    ? { label: "Expired", tone: "bad" as const }
+                    : { label: share.state, tone: "quiet" as const };
+
+              return (
+                <RuledRow
+                key={share.id}
+                name={`${share.resourceLabel} · ${share.mode}`}
+                plain
+                say={
+                  isWithheld ? (
+                    "This link stays unavailable. Review the evidence to create a new link."
                   ) : (
-                    <CopyButton value={share.url} />
-                  )}
-                  <Form method="post">
-                    <input name="intent" type="hidden" value="revoke-share" />
-										<input name="shareLinkId" type="hidden" value={share.id} />
-										<ConfirmSubmitButton
-											className="f9-secondary-button"
-											confirmLabel="Confirm — revoke link?"
-											intent="revoke-share"
-											match={{ shareLinkId: share.id }}
-											pendingLabel="Removing…"
-										>
-											Revoke
-										</ConfirmSubmitButton>
-                  </Form>
-                </div>
-              </div>
-            ))}
+                    <a
+                      className="f9-bl038-url"
+                      href={share.url}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      {share.url}
+                    </a>
+                  )
+                }
+                status={state.label}
+                statusTone={state.tone}
+                time={
+                  share.expiresAt ? (
+                    <LocalTime iso={share.expiresAt} mode="date" />
+                  ) : (
+                    "No expiry"
+                  )
+                }
+                trail={
+                  <span className="f9-bl038-actions">
+                    {recoveryPath ? (
+                      <Link className="f9-wk-lnk" to={recoveryPath}>
+                        Review report{" "}
+                        <span aria-hidden="true" className="f9-wk-chev">
+                          &rsaquo;
+                        </span>
+                      </Link>
+                    ) : (
+                      <CopyButton
+                        className="f9-wk-lnk f9-copy-button"
+                        value={share.url}
+                      />
+                    )}
+                    <Form method="post">
+                      <input name="intent" type="hidden" value="revoke-share" />
+                      <input name="shareLinkId" type="hidden" value={share.id} />
+                      <ConfirmSubmitButton
+                        className="f9-wk-lnk"
+                        confirmLabel="Confirm — revoke link?"
+                        intent="revoke-share"
+                        match={{ shareLinkId: share.id }}
+                        pendingLabel="Removing…"
+                      >
+                        Revoke
+                      </ConfirmSubmitButton>
+                    </Form>
+                  </span>
+                }
+              />
+              );
+            })}
+          </RuledList>
+        </div>
+      ) : (
+        <section aria-labelledby="shares-empty-title" className="f9-wk-sec">
+          <p className="f9-wk-kick" id="shares-empty-title">
+            No active share links
+          </p>
+          <p className="f9-wk-lede">
+            Share a competitor, collection, or report from its own page and the link shows up here
+            to revoke any time.
+          </p>
+          <div className="f9-wk-acts">
+            <Link className="f9-wk-lnk" to="/app/watchlists">
+              Open competitors <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
+            </Link>
           </div>
-        )}
+        </section>
+      )}
 
-        <p>
-          Anyone with a link can open what it points to until it expires or you revoke it. New links
-          expire automatically after 90 days.
-        </p>
-      </article>
-      </section>
+      <p className="f9-bl038-note f9-wk-note">
+        Anyone with a link can open what it points to until it expires or you revoke it.
+        Approval-expired report links stay unavailable; reviewing again creates a new link to share.
+        New links expire automatically after 90 days.
+      </p>
+
+      <div className="f9-wk-opline">
+        <span>
+          {data.shares.length} {data.shares.length === 1 ? "link" : "links"} shown
+        </span>
+      </div>
     </DashboardPage>
   );
-}
-
-function formatDate(value: string) {
-  return <LocalTime fallback={value} iso={value} mode="date" />;
 }
