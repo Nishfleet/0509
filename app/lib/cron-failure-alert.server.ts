@@ -2,6 +2,7 @@ import type { AppEnv } from "~/lib/env.server";
 
 /** One operator alert per scheduled task per this window. */
 export const CRON_FAILURE_ALERT_THROTTLE_MS = 6 * 60 * 60 * 1000;
+export const CRON_FAILURE_ALERT_COUNT_MAX = 1_000_000;
 
 export type CronFailureAlertResult = {
   sent: boolean;
@@ -30,7 +31,7 @@ function throttleWindowKey(nowMs: number) {
 
 /**
  * Log is the caller's job. This only decides whether to email the operator
- * and records the throttle row when a send is attempted/accepted.
+ * and records the page attempt. Only an accepted page activates the throttle.
  */
 export async function alertScheduledTaskFailure(
   env: AppEnv,
@@ -48,7 +49,9 @@ export async function alertScheduledTaskFailure(
   const failureCategory = safeFailureCategory(error);
 
   const existing = await env.DB.prepare(
-    `SELECT last_alerted_at FROM cron_failure_alert_throttle WHERE task_key = ?`,
+    `SELECT last_alerted_at
+     FROM cron_failure_alert_throttle
+     WHERE task_key = ? AND last_error = 'operator_alert_sent'`,
   )
     .bind(normalizedTaskKey)
     .first<{ last_alerted_at: string }>();
@@ -76,7 +79,10 @@ export async function alertScheduledTaskFailure(
   });
 
   if (!sent) {
-    await recordThrottleAttempt(env, normalizedTaskKey, nowIso, "operator_alert_not_sent");
+    // A channel that did not accept the page has not alerted anyone. Do not
+    // activate the successful-alert throttle: the next failure must retry.
+    // Keep one durable failed-page fact so the channel outage stays observable.
+    await recordFailedAttempt(env, normalizedTaskKey, nowIso);
     return { sent: false, reason: "email_skipped" };
   }
 
@@ -95,6 +101,39 @@ async function recordThrottleAttempt(env: AppEnv, taskKey: string, at: string, d
        alert_count = cron_failure_alert_throttle.alert_count + 1`,
   )
     .bind(taskKey, at, detail)
+    .run();
+}
+
+async function recordFailedAttempt(env: AppEnv, taskKey: string, at: string) {
+  await env.DB!.prepare(
+    `INSERT INTO cron_failure_alert_throttle (
+       task_key, last_alerted_at, last_error, alert_count,
+       last_failed_at, failed_count
+     )
+     VALUES (?, ?, 'operator_alert_not_sent', 0, ?, 1)
+     ON CONFLICT(task_key) DO UPDATE SET
+       last_alerted_at = CASE
+         WHEN cron_failure_alert_throttle.last_error = 'operator_alert_sent'
+         THEN cron_failure_alert_throttle.last_alerted_at
+         ELSE excluded.last_alerted_at
+       END,
+       last_error = CASE
+         WHEN cron_failure_alert_throttle.last_error = 'operator_alert_sent'
+         THEN cron_failure_alert_throttle.last_error
+         ELSE excluded.last_error
+       END,
+       alert_count = CASE
+         WHEN cron_failure_alert_throttle.last_error = 'operator_alert_sent'
+         THEN cron_failure_alert_throttle.alert_count
+         ELSE 0
+       END,
+       last_failed_at = excluded.last_failed_at,
+       failed_count = MIN(
+         cron_failure_alert_throttle.failed_count + 1,
+         ${CRON_FAILURE_ALERT_COUNT_MAX}
+       )`,
+  )
+    .bind(taskKey, at, at)
     .run();
 }
 

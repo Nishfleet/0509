@@ -1,19 +1,25 @@
 import { Form, Link, redirect, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
-import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardPage } from "~/components/dashboard-page";
 import {
   DashboardRouteError,
   DashboardRouteLoading,
 } from "~/components/dashboard-route-loading";
-import { ActionFeedback } from "~/components/action-feedback";
-import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
-import { PartialDataNotice } from "~/components/partial-data-notice";
 import { SubmitButton } from "~/components/submit-button";
+import { FeedbackStrip } from "~/components/workspace/feedback-strip";
+import { RuledList, RuledRow } from "~/components/workspace/ruled-list";
+import { WorkingHeader } from "~/components/workspace/working-header";
 import { formatCoverageLabel, formatSourceCoverageStatus, formatTrackingMode } from "~/lib/presence-display";
 import { presenceCustomerErrorCopy, sanitizePresenceCoverageEntry } from "~/lib/presence-customer-copy";
-import type { PresenceConnectorId, PresenceTrackingMode } from "~/lib/presence-types";
+import type {
+  PresenceConnectorId,
+  PresenceItemRecord,
+  PresenceTrackingMode,
+  SourceTargetRecord,
+  TrackedEntityRecord,
+} from "~/lib/presence-types";
 
 export const meta = () => [{ title: "Presence Desk | Five to Nine" }];
 
@@ -215,166 +221,303 @@ export default function PresenceIndexRoute() {
     competitorEntry,
     selfEntry: sourceCoverage.self.find((entry) => entry.sourceId === competitorEntry.sourceId) ?? null,
   }));
+  const feedback = actionData?.message
+    ? actionData
+    : data.redirectFeedback;
+  const planAllowsEntityCreation = data.competitorAllowed || data.selfAllowed;
+  // Per-mode capacity, ported from #478: a plan can still allow a tracking mode
+  // while that mode's own slots are full. Offering the exhausted mode in the
+  // select would be a form that cannot succeed, so each mode is gated on its
+  // own count and the whole form is gated on at least one mode surviving.
+  const selfEntityCount = data.snapshot.entities.filter(
+    (row: PresenceEntityRow) => row.entity.trackingMode === "self",
+  ).length;
+  const competitorEntityCount = data.snapshot.entities.filter(
+    (row: PresenceEntityRow) => row.entity.trackingMode === "competitor",
+  ).length;
+  const selfModeCanCreate =
+    data.selfAllowed && selfEntityCount < data.limits.maxSelfEntities;
+  const competitorModeCanCreate =
+    data.competitorAllowed && competitorEntityCount < data.limits.maxCompetitorEntities;
+  const hasAvailableTrackingMode = selfModeCanCreate || competitorModeCanCreate;
+  const planLabel = `${data.plan.slice(0, 1).toUpperCase()}${data.plan.slice(1)}`;
+  const entityCountLabel = `${data.snapshot.entities.length} ${
+    data.snapshot.entities.length === 1 ? "entity" : "entities"
+  }`;
+  const remainingEntitySlots = Math.max(
+    0,
+    data.limits.maxTrackedEntities - data.snapshot.entities.length,
+  );
+  const hasEntityCapacity = remainingEntitySlots > 0;
+  const canCreateEntity =
+    planAllowsEntityCreation && hasEntityCapacity && hasAvailableTrackingMode;
 
   return (
-    <DashboardPage>
-      <section className="f9-app-stack">
-        <DashboardPageHeader
-          kicker="Presence Desk"
-          lead="Track market entities across declared sources. See proof-backed changes from website and open-web coverage first — social and marketplace sources roll out only when platform access is approved."
-          title="Proof-backed entity tracking"
-        />
+    <DashboardPage className="f9-wk-page f9-pr-page">
+      <WorkingHeader
+        context={
+          !planAllowsEntityCreation
+            ? `${entityCountLabel} ${
+                data.snapshot.entities.length > 0 ? "retained" : "tracked"
+              } · Presence tracking is read-only on the ${planLabel} plan.`
+            : hasEntityCapacity
+            ? `${entityCountLabel} tracked · Website and open-web coverage is active where your plan allows it.`
+            : `${entityCountLabel} tracked · All ${data.limits.maxTrackedEntities} entity slots are in use.`
+        }
+        title="Presence"
+      />
 
-        <ActionFeedback data={actionData} fallback />
-        <ActionFeedback data={actionData} intent="poll-source" />
-        <ActionFeedback data={data.redirectFeedback} />
+      {feedback?.message ? (
+        <FeedbackStrip
+          label={feedback.ok ? "Done" : "Not done"}
+          tone={feedback.ok ? "ok" : "bad"}
+        >
+          {feedback.message}
+        </FeedbackStrip>
+      ) : null}
 
+      <div className="f9-pr-notices">
         {data.access.rolloutState === "ga" ? (
-          <PartialDataNotice message="Coverage depends on robots rules and public accessibility. Notifications stay off until you opt in on each source." />
+          <p role="status">
+            Coverage depends on robots rules and public accessibility. Notifications stay off until you opt in on
+            each source.
+          </p>
         ) : null}
+        {data.partialDataNotice ? <p role="status">{data.partialDataNotice}</p> : null}
+      </div>
 
-        {data.partialDataNotice ? <PartialDataNotice message={data.partialDataNotice} /> : null}
+      <div className="f9-pr-desk">
+        <section aria-labelledby="presence-add-title" className="f9-pr-instrument" id="add-entity">
+          <div className="f9-pr-section-head">
+            <h2 id="presence-add-title">Start with a website</h2>
+            <p>Add a declared website source. Presence files its public updates here.</p>
+          </div>
 
-        <div className="f9-dashboard-grid">
-          <article className="f9-app-panel" id="add-entity">
-            <span className="f9-app-kicker">Add tracked entity</span>
-            <h2>Start with a website</h2>
-            <ActionFeedback data={actionData} intent={["create-entity", "add-source"]} />
-            <Form className="f9-auth-form" method="post">
+          {canCreateEntity ? (
+            <Form className="f9-pr-form" data-bl034-first-row method="post">
               <input name="intent" type="hidden" value="create-entity" />
-              <label className="f9-field">
-                <span>Entity label</span>
-                <input name="label" placeholder="Acme Corp" required />
+              <label className="f9-pr-field">
+                <span>Entity name</span>
+                <input autoComplete="organization" name="label" placeholder="Acme Corp" required />
               </label>
-              <label className="f9-field">
+              <label className="f9-pr-field">
                 <span>Entity type</span>
-                <select defaultValue="competitor" name="trackingMode">
-                  {data.competitorAllowed ? <option value="competitor">Competitor</option> : null}
-                  {data.selfAllowed ? <option value="self">Your brand</option> : null}
+                <select
+                  defaultValue={competitorModeCanCreate ? "competitor" : "self"}
+                  name="trackingMode"
+                >
+                  {competitorModeCanCreate ? <option value="competitor">Competitor</option> : null}
+                  {selfModeCanCreate ? <option value="self">Your brand</option> : null}
                 </select>
               </label>
-              <label className="f9-field">
+              <label className="f9-pr-field">
                 <span>Website URL</span>
-                <input name="websiteUrl" placeholder="https://brand.com/blog" />
+                <input
+                  autoComplete="url"
+                  inputMode="url"
+                  name="websiteUrl"
+                  placeholder="https://brand.com/blog"
+                  spellCheck={false}
+                />
               </label>
-              <label className="f9-field">
-                <span>Canonical URL (optional)</span>
-                <input name="canonicalUrl" placeholder="https://brand.com" />
+              <label className="f9-pr-field">
+                <span>Canonical URL <small>Optional</small></span>
+                <input
+                  autoComplete="url"
+                  inputMode="url"
+                  name="canonicalUrl"
+                  placeholder="https://brand.com"
+                  spellCheck={false}
+                />
               </label>
-              <SubmitButton className="f9-primary-button" pendingLabel="Saving…">
-                Start tracking
-              </SubmitButton>
+              <div className="f9-pr-form-commit">
+                <SubmitButton className="f9-wk-btn" pendingLabel="Saving…">
+                  Start tracking
+                </SubmitButton>
+                <p>
+                  {data.limits.maxTrackedEntities} entities · {data.limits.maxWebsiteSourcesPerEntity} website
+                  sources each
+                </p>
+              </div>
             </Form>
-            <p className="f9-muted-copy">
-              Limits: {data.limits.maxTrackedEntities} entities, {data.limits.maxWebsiteSourcesPerEntity} website sources
-              each.
-            </p>
-          </article>
-
-          <article className="f9-app-panel">
-            <span className="f9-app-kicker">Source coverage</span>
-            <h2>Declared sources</h2>
-            <p className="f9-muted-copy">
-              Coverage is honest by source. Website/open-web is the active GA path; other sources stay gated,
-              planned, or manual-only until provider gates pass.
-            </p>
-            <div className="f9-work-list is-compact">
-              {coverageRows.map(({ competitorEntry, selfEntry }) => (
-                <div className="f9-work-row" key={competitorEntry.sourceId}>
-                  <div>
-                    <strong>{competitorEntry.label}</strong>
-                    <p className="f9-muted-copy">
-                      Your brand: {selfEntry ? formatSourceCoverageStatus(selfEntry.status) : "Unavailable"} ·
-                      Competitors: {formatSourceCoverageStatus(competitorEntry.status)}
-                    </p>
-                    {competitorEntry.reasonMessage ? (
-                      <p className="f9-muted-copy">{competitorEntry.reasonMessage}</p>
-                    ) : null}
-                  </div>
-                </div>
-              ))}
+          ) : (
+            <div className="f9-pr-lock" data-bl034-first-row>
+              {planAllowsEntityCreation ? (
+                <>
+                  <p>
+                    {hasEntityCapacity
+                      ? `The available entity-type limits on the ${planLabel} plan are in use. Open an entity below before adding another.`
+                      : `All ${data.limits.maxTrackedEntities} tracked entity slots on the ${planLabel} plan are in use. Open an entity below to remove it before adding another.`}
+                  </p>
+                  <a className="f9-wk-btn" href="#presence-entities-title">
+                    Review tracked entities
+                  </a>
+                </>
+              ) : (
+                <>
+                  <p>
+                    Presence tracking starts on Scout. Your current plan keeps this instrument read-only; no source
+                    is presented as active.
+                  </p>
+                  <Link className="f9-wk-btn" to="/app/billing?source=presence#plans">
+                    Upgrade to Scout
+                  </Link>
+                </>
+              )}
             </div>
-          </article>
+          )}
+        </section>
+
+        <section aria-labelledby="presence-coverage-title" className="f9-pr-coverage-section">
+          <div className="f9-pr-section-head">
+            <h2 id="presence-coverage-title">Source coverage</h2>
+            <p>
+              Website and open-web tracking is active where allowed. Every other source keeps its real gate.
+            </p>
+          </div>
+          <dl className="f9-pr-coverage">
+            {coverageRows.map(({ competitorEntry, selfEntry }) => {
+              const selfStatus = selfEntry
+                ? formatSourceCoverageStatus(selfEntry.status)
+                : "Unavailable";
+              const competitorStatus = formatSourceCoverageStatus(competitorEntry.status);
+              // Ported from #478. A row must never be silent: fall back from a
+              // shared reason, to per-side reasons, to the action needed, to an
+              // explicit "nothing more to do". Anything else leaves a gated
+              // source looking merely blank.
+              const sharedReason =
+                selfEntry?.reasonMessage &&
+                selfEntry.reasonMessage === competitorEntry.reasonMessage
+                  ? selfEntry.reasonMessage
+                  : null;
+              const reason = sharedReason
+                ? sharedReason
+                : [
+                    selfEntry?.reasonMessage ? `Your brand: ${selfEntry.reasonMessage}` : null,
+                    competitorEntry.reasonMessage
+                      ? `Competitors: ${competitorEntry.reasonMessage}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ");
+              const sharedAction =
+                selfEntry?.actionNeeded && selfEntry.actionNeeded === competitorEntry.actionNeeded
+                  ? selfEntry.actionNeeded
+                  : null;
+              const coverageNote =
+                reason ||
+                sharedAction ||
+                [
+                  selfEntry?.actionNeeded ? `Your brand: ${selfEntry.actionNeeded}` : null,
+                  competitorEntry.actionNeeded
+                    ? `Competitors: ${competitorEntry.actionNeeded}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ") ||
+                "No additional action is available.";
+              return (
+                <div key={competitorEntry.sourceId}>
+                  <dt>{competitorEntry.label}</dt>
+                  <dd>
+                    {/* The visible pair is a two-column flex row, so the label
+                        and value are separate nodes. aria-label restores the
+                        single readable string #478 gives assistive tech. */}
+                    <span aria-label={`Your brand: ${selfStatus}`}>
+                      <b>Your brand</b>
+                      {selfStatus}
+                    </span>
+                    <span aria-label={`Competitors: ${competitorStatus}`}>
+                      <b>Competitors</b>
+                      {competitorStatus}
+                    </span>
+                    <small>{coverageNote}</small>
+                  </dd>
+                </div>
+              );
+            })}
+          </dl>
+        </section>
+      </div>
+
+      <section aria-labelledby="presence-entities-title" className="f9-wk-sec f9-pr-list-section">
+        <div className="f9-pr-list-head">
+          <h2 id="presence-entities-title">Tracked entities</h2>
+          <span>{data.snapshot.entities.length}</span>
         </div>
-
-        <article className="f9-app-panel">
-          <div className="f9-panel-toolbar">
-            <div>
-              <span className="f9-app-kicker">Tracked entities</span>
-              <h2>Market entities</h2>
-            </div>
-          </div>
-          {data.snapshot.entities.length === 0 ? (
-            <EmptyState
-              action={{ label: "Add your first entity above", to: "#add-entity" }}
-              description="Add your brand or a competitor with a website source to start collecting proof-backed updates."
-              title="No entities yet"
-            />
-          ) : (
-            <div className="f9-work-list is-compact">
-              {data.snapshot.entities.map(({ entity, sources }) => {
-                const pollableSources = sources.filter((source) => source.connectorId === "website");
-                return (
-                  <div className="f9-work-row" key={entity.id}>
-                    <div>
-                      <h3>
-                        <Link to={`/app/presence/${entity.id}`}>{entity.label}</Link>
-                      </h3>
-                      <p className="f9-muted-copy">
-                        {formatTrackingMode(entity.trackingMode)} ·{" "}
-                        {pollableSources.length > 0
-                          ? pollableSources.map((source) => (
-                              <span key={source.id}>
-                                {formatCoverageLabel(source.connectorId)}: {formatCoverageLabel(source.coverageLabel)}{" "}
-                              </span>
-                            ))
-                          : "Website source not configured"}
-                      </p>
-                    </div>
-                    <small>
-                      Updated <LocalTime iso={entity.updatedAt} />
-                    </small>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </article>
-
-        <article className="f9-app-panel">
-          <div className="f9-panel-toolbar">
-            <div>
-              <span className="f9-app-kicker">Feed</span>
-              <h2>Recent public updates</h2>
-            </div>
-          </div>
-          {data.snapshot.recentItems.length === 0 ? (
-            <EmptyState
-              description="Check a website source to fetch updates."
-              title="No presence items yet"
-              variant="inline"
-            />
-          ) : (
-            <div className="f9-work-list is-compact">
-              {data.snapshot.recentItems.map((item) => (
-                <div className="f9-work-row" key={item.id}>
-                  <div>
-                    <h3>
-                      <a href={item.canonicalUrl} rel="noreferrer" target="_blank">
-                        {item.title}
-                      </a>
-                    </h3>
-                    <p className="f9-muted-copy">
-                      {item.connectorId} · <LocalTime iso={item.observedAt} />
-                    </p>
-                    {item.bodyExcerpt ? <p>{item.bodyExcerpt}</p> : null}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </article>
+        {data.snapshot.entities.length === 0 ? (
+          <p className="f9-wk-note">
+            {canCreateEntity
+              ? "Nothing is tracked yet. Add an entity above and its first website check can begin."
+              : "Nothing is tracked on this plan. Upgrade to make the website instrument available."}
+          </p>
+        ) : (
+          <RuledList aria-label="Tracked entities">
+            {data.snapshot.entities.map(({ entity, sources }: PresenceEntityRow) => {
+              const pollableSources = sources.filter(
+                (source: SourceTargetRecord) => source.connectorId === "website",
+              );
+              return (
+                <RuledRow
+                  key={entity.id}
+                  name={entity.label}
+                  say={
+                    pollableSources.length > 0
+                      ? pollableSources
+                          .map(
+                            (source: SourceTargetRecord) =>
+                              `${formatCoverageLabel(source.connectorId)}: ${formatCoverageLabel(source.coverageLabel)}`,
+                          )
+                          .join(" · ")
+                      : "Website source not configured"
+                  }
+                  status={formatTrackingMode(entity.trackingMode)}
+                  time={<LocalTime iso={entity.updatedAt} mode="date" />}
+                  to={`/app/presence/${entity.id}`}
+                />
+              );
+            })}
+          </RuledList>
+        )}
       </section>
+
+      <section aria-labelledby="presence-feed-title" className="f9-wk-sec f9-pr-list-section">
+        <div className="f9-pr-list-head">
+          <h2 id="presence-feed-title">Recent public updates</h2>
+          <span>{data.snapshot.recentItems.length}</span>
+        </div>
+        {data.snapshot.recentItems.length === 0 ? (
+          <p className="f9-wk-note">
+            No public updates are filed yet. Check a website source to fetch its latest items.
+          </p>
+        ) : (
+          <div className="f9-pr-feed" role="list">
+            {data.snapshot.recentItems.map((item: PresenceRecentItem) => (
+              <article className="f9-pr-feed-row" key={item.id} role="listitem">
+                <div>
+                  <h3>
+                    <a href={item.canonicalUrl} rel="noreferrer" target="_blank">
+                      {item.title}
+                    </a>
+                  </h3>
+                  {item.bodyExcerpt ? <p>{item.bodyExcerpt}</p> : null}
+                </div>
+                <span>{formatCoverageLabel(item.connectorId)}</span>
+                <span className="f9-pr-feed-time">
+                  <LocalTime iso={item.observedAt} mode="date" />
+                </span>
+                <span aria-hidden="true">&rsaquo;</span>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <div className="f9-wk-opline">
+        <span>{planLabel} plan</span>
+        <span>{remainingEntitySlots} entity slots left</span>
+        <span>Public sources only</span>
+      </div>
     </DashboardPage>
   );
 }
@@ -386,3 +529,9 @@ export function HydrateFallback() {
 export function ErrorBoundary({ error }: { error: unknown }) {
   return <DashboardRouteError error={error} />;
 }
+
+type PresenceEntityRow = {
+  entity: TrackedEntityRecord;
+  sources: SourceTargetRecord[];
+};
+type PresenceRecentItem = PresenceItemRecord;

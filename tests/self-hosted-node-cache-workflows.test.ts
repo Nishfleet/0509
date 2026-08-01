@@ -16,7 +16,10 @@ const runnerRoutedWorkflows = [
   [".github/workflows/cross-browser-matrix.yml", ["matrix"]],
   [".github/workflows/d1-backup-r2.yml", ["backup"]],
   [".github/workflows/d1-backup-validate.yml", ["validate"]],
-  [".github/workflows/d1-remote-restore-evidence.yml", ["restore", "cleanup"]],
+  [
+    ".github/workflows/d1-remote-restore-evidence.yml",
+    ["restore", "cleanup", "apply_and_restore"],
+  ],
   [
     ".github/workflows/deploy-production.yml",
     ["prepare_remote_restore_evidence", "deploy"],
@@ -53,7 +56,7 @@ describe("runner-routed setup-node cache workflows", () => {
       },
     );
 
-    expect(runnerRoutedJobs).toHaveLength(11);
+    expect(runnerRoutedJobs).toHaveLength(12);
     for (const { workflowPath, jobName, job } of runnerRoutedJobs) {
       const isVerificationJob = new Set([
         ".github/workflows/ci.yml:codex-node-checks",
@@ -73,7 +76,7 @@ describe("runner-routed setup-node cache workflows", () => {
           .filter((step) => step.uses?.startsWith("actions/setup-node@"))
           .map((step) => ({ workflowPath, jobName, step })),
     );
-    expect(setupNodeSteps).toHaveLength(9);
+    expect(setupNodeSteps).toHaveLength(10);
     for (const { workflowPath, jobName, step } of setupNodeSteps) {
       const preservesNoLockfileFallback =
         workflowPath === ".github/workflows/ci.yml" &&

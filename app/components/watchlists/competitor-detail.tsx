@@ -1,12 +1,10 @@
+import { useEffect, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 import { Form, Link } from "react-router";
 
 import { CompetitorDossierPanel } from "~/components/competitor-dossier";
 import { CreativeWall } from "~/components/creative-wall";
 import { SecondaryAction, TertiaryAction } from "~/components/evidence/cta";
-import { StatusStrip, type StatusCell } from "~/components/evidence/status-strip";
-import { LocalTime } from "~/components/local-time";
-import { Pill } from "~/components/pill";
 import { ProofGlossary } from "~/components/proof-glossary";
 import { SubmitButton } from "~/components/submit-button";
 import { WatchlistTrends } from "~/components/watchlist-trends";
@@ -28,7 +26,9 @@ import {
   buildCompetitorFactRows,
   formatCaughtNote,
   formatCaughtNumber,
+  formatLastCheck,
 } from "~/lib/watchlist-detail-display";
+import { createReportId } from "~/lib/report";
 import {
   WATCHLIST_DETAIL_TABS,
   watchlistDetailTabHref,
@@ -36,7 +36,6 @@ import {
 } from "~/lib/watchlist-detail-tabs";
 import {
   buildLastAttemptByEventId,
-  resolveWatchBandState,
   type resolveWatchlistTrackingPresentation,
 } from "~/lib/watchlist-display";
 import { watchlistLiveSearchHref, watchlistSavedAdsHref } from "~/lib/watchlist-links";
@@ -47,8 +46,8 @@ import {
 } from "~/lib/watchlist-role";
 
 /**
- * The opened competitor — brief §6.4 (anchor tab bar), §6.3 (status strip),
- * §6.6 (fact rail), §7 (detail composition).
+ * The opened competitor — brief §6.4 (anchor tab bar), §6.6 (fact rail),
+ * §7 (detail composition), re-adjudicated into the BL-035 working surface.
  *
  * BL-006 turned the list into a board; this is the other half of that split.
  * The detail used to be one 9,814px mobile scroll that stacked the change
@@ -92,6 +91,7 @@ export interface CompetitorDetailProps {
   trackingPresentation: ReturnType<typeof resolveWatchlistTrackingPresentation>;
   discoveryRecovery: string | null;
   canExport: boolean;
+  canReport: boolean;
   canShare: boolean;
   canRefresh: boolean;
   canConfigureDelivery: boolean;
@@ -99,66 +99,29 @@ export interface CompetitorDetailProps {
   canInstantAlert: boolean;
   canEmailDelivery: boolean;
   showSlackDelivery: boolean;
-  lockedToolbarUpgradeLabel: string | null;
+  /** Capabilities named by the one page-level upgrade action. */
+  lockedCapabilities: string[];
+  /** The capture-window rollup failed; aggregate counts must not become zero/quiet. */
+  captureWindowDegraded?: boolean;
   /**
-   * BL-030: pause/resume moved here when the list stopped carrying per-band
-   * action rows. It is still ONE control for this competitor, rendered by the
-   * route so the fetcher's per-watchlist busy state is unchanged.
+   * Pause lives with Monitoring in Setup for an active competitor. Resume is
+   * promoted to the page header when paused; the route keeps the fetcher's
+   * per-watchlist busy state unchanged in both placements.
    */
   pauseAction?: ReactNode;
   /** URL-driven disclosure for quiet-line collapse (brief §6.7, §11). */
   checksExpanded?: boolean;
 }
 
-const RANK2 = "f9-ed-cta f9-ed-cta--rank2";
-
 export function CompetitorDetail(props: CompetitorDetailProps) {
   const { data, watchlist, activeTab } = props;
+  const captureWindowDegraded = Boolean(props.captureWindowDegraded);
   const trackingRole = normalizeWatchlistTrackingRole(watchlist.trackingRole);
   const targetNoun = formatWatchlistTargetNoun(trackingRole);
   const deliveryHref = watchlistDetailTabHref(watchlist.id, "delivery");
-  const stamp = resolveWatchBandState({
-    isActive: watchlist.isActive,
-    lastScannedAt: watchlist.lastScannedAt,
-    capturedChanges: props.capturedChanges,
-    failedChecks: props.failedChecks,
-  });
   const latestRun = data.runs[0] ?? null;
   const panelLabel =
     WATCHLIST_DETAIL_TABS.find((tab) => tab.id === activeTab)?.panelLabel ?? "What changed";
-
-  const statusCells: StatusCell[] = [
-    {
-      key: "State",
-      value: (
-        <Pill state={stamp.pillState} variant="stamp">
-          {stamp.label}
-        </Pill>
-      ),
-    },
-    {
-      key: "Last check",
-      value: watchlist.lastScannedAt ? <LocalTime iso={watchlist.lastScannedAt} /> : null,
-      missingLabel: "no completed check yet",
-    },
-    {
-      key: "Next check",
-      value: !watchlist.isActive
-        ? null
-        : props.canRefresh
-          ? props.sourceCanSchedule
-            ? props.nextScanLabel
-            : null
-          : `weekly — ${props.nextScanLabel}`,
-      missingLabel: !watchlist.isActive
-        ? "paused — no checks run"
-        : "After source access is ready",
-    },
-    {
-      key: "Ad source",
-      value: props.trackingPresentation.statusLabel,
-    },
-  ];
 
   const factRows = buildCompetitorFactRows({
     targetLabel: watchlist.targetLabel,
@@ -167,6 +130,10 @@ export function CompetitorDetail(props: CompetitorDetailProps) {
     isActive: watchlist.isActive,
     plan: data.plan,
     createdAt: watchlist.createdAt,
+    lastScannedAt: watchlist.lastScannedAt,
+    lastCheckValue: watchlist.lastScannedAt ? (
+      <LiveLastCheck iso={watchlist.lastScannedAt} initialNow={props.renderedAt} />
+    ) : null,
     now: props.renderedAt,
     proofSummary: data.proofSummary,
     storedChanges: data.events.length,
@@ -185,70 +152,18 @@ export function CompetitorDetail(props: CompetitorDetailProps) {
   return (
     <article
       aria-label={`${watchlist.name} — opened ${targetNoun}`}
-      className="f9-ed-opened-detail"
+      className="f9-bl035-detail"
       id="competitor-detail"
     >
-      {/* §6.1 open state: the detail attaches directly beneath its band, and
-          that band already carries the name, the target, the market and the
-          watch age. Repeating them here was 105px of mobile scroll saying
-          nothing new, so the heading stays for assistive tech only and the
-          head is the action line. */}
-      <header className="f9-ed-detail-head">
-        <h2 className="f9-sr-only">
-          {watchlist.name} · {watchlist.targetLabel} ·{" "}
-          {formatWatchlistTrackingRole(trackingRole)}
-        </h2>
-        <div className="f9-ed-action-row">
-          {watchlist.isActive && props.canRefresh ? (
-            <Form method="post">
-              <input name="intent" type="hidden" value="refresh-watchlist" />
-              <input name="watchlistId" type="hidden" value={watchlist.id} />
-              <SubmitButton className={RANK2} intent="refresh-watchlist" pendingLabel="Scanning live…">
-                Refresh now
-              </SubmitButton>
-            </Form>
-          ) : null}
-          {/* BL-030: the list no longer carries per-row action rows, so this
-              is now the single home for pause/resume. "Package for client"
-              lives once, in the peek pane above. */}
-          {props.pauseAction}
-          {props.canShare ? (
-            <Form method="post">
-              <input name="intent" type="hidden" value="share-watchlist" />
-              <input name="watchlistId" type="hidden" value={watchlist.id} />
-              <SubmitButton
-                className="f9-ed-cta f9-ed-cta--rank3"
-                intent="share-watchlist"
-                pendingLabel="Sharing…"
-              >
-                Share summary
-              </SubmitButton>
-            </Form>
-          ) : null}
-          {props.canExport ? (
-            <>
-              <TertiaryAction href={`/export/watchlist/${watchlist.id}`}>Export CSV</TertiaryAction>
-              <TertiaryAction href={`/export/watchlist/${watchlist.id}?format=json`}>
-                Export JSON
-              </TertiaryAction>
-            </>
-          ) : null}
-          {props.lockedToolbarUpgradeLabel ? (
-            <TertiaryAction to="/app/billing?source=watchlists#plans">
-              {props.lockedToolbarUpgradeLabel}
-            </TertiaryAction>
-          ) : null}
-        </div>
-      </header>
+      <h2 className="f9-sr-only">
+        {watchlist.name} · {watchlist.targetLabel} ·{" "}
+        {formatWatchlistTrackingRole(trackingRole)}
+      </h2>
 
-      <StatusStrip
-        action={
-          props.sourceCanSchedule && props.trackingPresentation.statusLabel !== "Needs source access"
-            ? { label: "Alert delivery", to: deliveryHref }
-            : { label: "Source access", to: "/app/source-access" }
-        }
-        ariaLabel="Competitor status"
-        cells={statusCells}
+      <DetailTabBar
+        activeTab={activeTab}
+        capturedChanges={props.capturedChanges}
+        watchlistId={watchlist.id}
       />
 
       {watchlist.isActive && !watchlist.lastScannedAt ? (
@@ -266,16 +181,10 @@ export function CompetitorDetail(props: CompetitorDetailProps) {
         </div>
       ) : null}
 
-      <DetailTabBar
-        activeTab={activeTab}
-        capturedChanges={props.capturedChanges}
-        watchlistId={watchlist.id}
-      />
-
-      <div className="f9-ed-detail-body">
+      <div className="f9-wk-split is-wide f9-bl035-split">
         <div
           aria-label={panelLabel}
-          className="f9-ed-detail-main"
+          className="f9-bl035-main"
           id={`competitor-panel-${activeTab}`}
           role="region"
         >
@@ -283,13 +192,17 @@ export function CompetitorDetail(props: CompetitorDetailProps) {
         </div>
 
         <CompetitorRail
-          caughtNote={formatCaughtNote({
-            capturedChanges: props.capturedChanges,
-            windowDays: props.windowDays,
-            lastScannedAt: watchlist.lastScannedAt,
-            isActive: watchlist.isActive,
-          })}
-          caughtValue={formatCaughtNumber(props.capturedChanges)}
+          caughtNote={
+            captureWindowDegraded
+              ? "Unavailable — refresh to try again. Recent change totals are unavailable."
+              : formatCaughtNote({
+                  capturedChanges: props.capturedChanges,
+                  windowDays: props.windowDays,
+                  lastScannedAt: watchlist.lastScannedAt,
+                  isActive: watchlist.isActive,
+                })
+          }
+          caughtValue={captureWindowDegraded ? "Unavailable" : formatCaughtNumber(props.capturedChanges)}
           deliveryHref={deliveryHref}
           deliveryLines={deliveryLines}
           factRows={factRows}
@@ -298,6 +211,17 @@ export function CompetitorDetail(props: CompetitorDetailProps) {
       </div>
     </article>
   );
+}
+
+function LiveLastCheck({ iso, initialNow }: { iso: string; initialNow: Date }) {
+  const [now, setNow] = useState(initialNow);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return <time dateTime={iso}>{formatLastCheck(iso, now) ?? "not recorded"}</time>;
 }
 
 function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string }): ReactNode {
@@ -340,6 +264,39 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
   if (props.activeTab === "setup") {
     return (
       <>
+        <section aria-labelledby="competitor-monitoring-title" className="f9-bl035-section">
+          <h3 id="competitor-monitoring-title">Monitoring</h3>
+          <p className="f9-muted-copy">
+            {!watchlist.isActive
+              ? "Watching is paused. The evidence already on file stays here."
+              : props.sourceCanSchedule
+                ? `Automatic checks are on. The next one is ${props.nextScanLabel}.`
+                : "Automatic checks are waiting for source access. The evidence already on file stays here."}
+          </p>
+          {watchlist.isActive ? (
+            <div className="f9-bl035-local-actions">
+              {/* Lower paid plans keep Upgrade as the header's Rank-1 action,
+                  so their entitled manual refresh settles here as quiet
+                  Setup work. Agency uses Refresh in the header and must not
+                  duplicate it in this panel. */}
+              {props.canRefresh && props.lockedCapabilities.length > 0 ? (
+                <Form method="post">
+                  <input name="intent" type="hidden" value="refresh-watchlist" />
+                  <input name="watchlistId" type="hidden" value={watchlist.id} />
+                  <SubmitButton
+                    className="f9-ed-cta f9-ed-cta--rank3"
+                    intent="refresh-watchlist"
+                    pendingLabel="Checking…"
+                  >
+                    Refresh now
+                  </SubmitButton>
+                </Form>
+              ) : null}
+              {props.pauseAction}
+            </div>
+          ) : null}
+        </section>
+
         <WatchlistSetupCard
           data={{ selectedWatchlist: watchlist }}
           selectedTrackingRole={normalizeWatchlistTrackingRole(watchlist.trackingRole)}
@@ -350,8 +307,11 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
           <h3>{props.trackingPresentation.headline}</h3>
           <p className="f9-muted-copy">{props.trackingPresentation.summary}</p>
           <p className="f9-muted-copy">
-            Five to Nine checks public ad signals and shows Recent results when live checks are
-            delayed.
+            {!watchlist.isActive
+              ? "Watching is paused. The evidence already on file stays here."
+              : props.sourceCanSchedule
+                ? `Automatic checks are on. The next one is ${props.nextScanLabel}. Recent results remain available when checks are delayed.`
+                : "Automatic checks are waiting for source access. The evidence already on file stays here."}
           </p>
           {props.discoveryRecovery ? (
             <p className="f9-muted-copy">{props.discoveryRecovery}</p>
@@ -379,6 +339,7 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
   if (props.activeTab === "evidence") {
     return (
       <>
+        <EvidenceHandoff props={props} />
         {data.dossier ? (
           <CompetitorDossierPanel
             aggression={data.aggression}
@@ -410,17 +371,91 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
   }
 
   return (
-    <EventChangesSection
-      checksExpanded={props.checksExpanded}
-      data={data}
-      lastAttemptByEventId={buildLastAttemptByEventId(data.recentDeliveryAttempts)}
-      proofCapturesById={
-        new Map(data.recentProofCaptures.map((capture) => [capture.id, capture]))
-      }
-      recentProofCaptures={data.recentProofCaptures}
-      renderedAt={props.renderedAt}
-      sourceCanSchedule={props.sourceCanSchedule}
-      watchlistId={watchlist.id}
-    />
+    <>
+      <EventChangesSection
+        checksExpanded={props.checksExpanded}
+        data={data}
+        lastAttemptByEventId={buildLastAttemptByEventId(data.recentDeliveryAttempts)}
+        proofCapturesById={
+          new Map(data.recentProofCaptures.map((capture) => [capture.id, capture]))
+        }
+        recentProofCaptures={data.recentProofCaptures}
+        renderedAt={props.renderedAt}
+        sourceCanSchedule={props.sourceCanSchedule}
+        watchlistId={watchlist.id}
+      />
+      <p className="f9-bl035-after-panel">
+        <Link className="f9-wk-lnk" to={watchlistDetailTabHref(watchlist.id, "evidence")}>
+          Open the capture <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
+        </Link>
+        {props.canReport && watchlist.lastScannedAt ? (
+          <Link
+            className="f9-wk-lnk"
+            to={`/app/reports/${createReportId("watchlist", watchlist.id)}`}
+          >
+            Package for client
+            <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
+          </Link>
+        ) : null}
+      </p>
+    </>
   );
+}
+
+function EvidenceHandoff({ props }: { props: CompetitorDetailProps }) {
+  const { watchlist } = props;
+  const lockedCopy =
+    props.lockedCapabilities.length > 0
+      ? `This plan does not include ${formatCapabilityList(
+          props.lockedCapabilities,
+        )}. Use Upgrade plan above to compare options.`
+      : null;
+
+  return (
+    <section aria-labelledby="competitor-handoff-title" className="f9-bl035-section">
+      <h3 id="competitor-handoff-title">Share this record</h3>
+      <p className="f9-muted-copy">
+        Send the stored evidence without changing the capture on file.
+      </p>
+      <div className="f9-bl035-local-actions">
+        {props.canShare ? (
+          <Form method="post">
+            <input name="intent" type="hidden" value="share-watchlist" />
+            <input name="watchlistId" type="hidden" value={watchlist.id} />
+            <SubmitButton
+              className="f9-ed-cta f9-ed-cta--rank3"
+              intent="share-watchlist"
+              pendingLabel="Sharing…"
+            >
+              Share summary
+            </SubmitButton>
+          </Form>
+        ) : null}
+        {props.canExport ? (
+          <>
+            <TertiaryAction href={`/export/watchlist/${watchlist.id}`}>Export CSV</TertiaryAction>
+            <TertiaryAction href={`/export/watchlist/${watchlist.id}?format=json`}>
+              Export JSON
+            </TertiaryAction>
+          </>
+        ) : null}
+        {props.canReport && watchlist.lastScannedAt ? (
+          <TertiaryAction
+            to={`/app/reports/${createReportId("watchlist", watchlist.id)}`}
+          >
+            Package for client
+          </TertiaryAction>
+        ) : null}
+      </div>
+      {lockedCopy ? <p className="f9-bl035-lock-note">{lockedCopy}</p> : null}
+    </section>
+  );
+}
+
+function formatCapabilityList(capabilities: string[]): string {
+  if (capabilities.length <= 1) return capabilities[0] ?? "";
+  if (capabilities.length === 2) return capabilities.join(" and ");
+  return `${capabilities.slice(0, -1).join(", ")}, and ${
+    capabilities[capabilities.length - 1]
+  }`;
 }

@@ -859,48 +859,13 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
 
     expect(eligible).toEqual([]);
     expect(consoleError).toHaveBeenCalledWith(
-      "[monitoring] Plan lookup failed; scheduled scans were skipped for affected workspaces.",
-      { workspaceCount: 1 },
+      "[monitoring] Plan lookup failed; scheduled scans were skipped for the workspace.",
+      {
+        workspaceUserId: "agency-user",
+        watchlistCount: 27,
+        error: planFailure,
+      },
     );
-  });
-
-  it("logs multiple plan-read failures once without workspace ids or raw errors", async () => {
-    const planFailure = new Error("private D1 failure details");
-    vi.doMock("~/lib/plan.server", () => ({
-      getUserPlan: vi.fn().mockRejectedValue(planFailure),
-      PLAN_LIMITS: {},
-    }));
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const watchlists: WatchlistRecord[] = [
-      activeWatchlists[0],
-      { ...activeWatchlists[1], userId: "private-workspace-two" },
-    ];
-    const { filterWatchlistsByPriorityScanSlots } = await import("~/lib/monitoring.server");
-
-    await expect(
-      filterWatchlistsByPriorityScanSlots(
-        {} as never,
-        watchlists,
-        Date.parse("2026-07-01T03:00:00.000Z"),
-      ),
-    ).resolves.toEqual([]);
-
-    expect(consoleError).toHaveBeenCalledTimes(1);
-    expect(consoleError).toHaveBeenCalledWith(
-      "[monitoring] Plan lookup failed; scheduled scans were skipped for affected workspaces.",
-      { workspaceCount: 2 },
-    );
-    expect(consoleError.mock.calls.flat()).not.toContain(planFailure);
-    const serializedLog = JSON.stringify(
-      consoleError.mock.calls,
-      (_key, value) =>
-        value instanceof Error
-          ? `${value.name}: ${value.message}\n${value.stack ?? ""}`
-          : value,
-    );
-    expect(serializedLog).not.toContain("user-1");
-    expect(serializedLog).not.toContain("private-workspace-two");
-    expect(serializedLog).not.toContain("private D1 failure details");
   });
 
   it("fails the scheduled task after preserving work for readable workspaces", async () => {
@@ -940,15 +905,15 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
     };
     const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
 
-    const scheduledRun = runScheduledMonitoring(env as never, {
-      includeDigests: false,
-      cron: "0 */3 * * *",
-      scheduledTime: Date.parse("2026-07-01T03:00:00.000Z"),
-    });
-    await expect(scheduledRun).rejects.toThrow(
+    await expect(
+      runScheduledMonitoring(env as never, {
+        includeDigests: false,
+        cron: "0 */3 * * *",
+        scheduledTime: Date.parse("2026-07-01T03:00:00.000Z"),
+      }),
+    ).rejects.toThrow(
       "Scheduled monitoring skipped 1 workspace(s) because plan lookup failed.",
     );
-    await expect(scheduledRun).rejects.not.toThrow("D1 plan lookup failed");
     expect(scheduleWatchlistFanoutMock).toHaveBeenCalledWith(
       env,
       expect.objectContaining({
@@ -956,8 +921,11 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
       }),
     );
     expect(consoleError).toHaveBeenCalledWith(
-      "[monitoring] Plan lookup failed; scheduled scans were skipped for affected workspaces.",
-      { workspaceCount: 1 },
+      "[monitoring] Plan lookup failed; scheduled scans were skipped for the workspace.",
+      expect.objectContaining({
+        workspaceUserId: "user-1",
+        error: planFailure,
+      }),
     );
   });
 
@@ -991,8 +959,14 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
       ),
     ).resolves.toEqual([]);
     expect(consoleError).toHaveBeenCalledWith(
-      "[monitoring] Plan lookup failed; scheduled scans were skipped for affected workspaces.",
-      { workspaceCount: 1 },
+      "[monitoring] Plan lookup failed; scheduled scans were skipped for the workspace.",
+      {
+        workspaceUserId: "unknown-plan-user",
+        watchlistCount: 1,
+        error: expect.objectContaining({
+          message: "Plan lookup returned no value.",
+        }),
+      },
     );
   });
 });

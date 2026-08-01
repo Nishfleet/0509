@@ -315,8 +315,11 @@ test.describe("local authenticated E2E harness", () => {
     await page.keyboard.press("Enter");
 
     await expect(page).toHaveURL(/\/app\/watchlists\?watchlist=/);
-    await expect(page.getByRole("heading", { name: "Competitors" })).toBeVisible();
-    await expect(page.getByText("Nykaa watch").first()).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Nykaa watch", exact: true }),
+    ).toBeVisible();
+    await expect(page.locator(".f9-wk-context")).toContainText("Nykaa");
+    await expect(page.locator(".f9-bl035-detail")).toBeVisible();
   });
 
   test("starter customer journey covers dashboard, search, watchlists, presence, digests, billing, developer, support, and account", async ({
@@ -365,12 +368,7 @@ test.describe("local authenticated E2E harness", () => {
     await expect(
       page.locator("#f9-main-content").getByRole("heading", { level: 1, name: "Briefs", exact: true }),
     ).toBeVisible();
-    await expect(
-      page.locator("#f9-main-content").getByText(
-        "Read each period as one brief: the finding, the captured changes, the quiet checks, and the facts behind it.",
-        { exact: true },
-      ),
-    ).toBeVisible();
+    await expect(page.locator("#f9-main-content")).toContainText("brief on file");
     await expect(
       page
         .locator("#f9-main-content")
@@ -502,26 +500,26 @@ test.describe("local authenticated E2E harness", () => {
         label: "Collections",
         path: "/app/collections",
         heading: "Collections",
-        copy: ["Save the best competitor examples", "Create collection"],
+        copy: ["Saved evidence stays attached", "Start your first collection"],
       },
       { label: "Briefs", path: "/app/digests", heading: "Briefs", copy: ["Brief history"] },
       {
         label: "Reports",
         path: "/app/reports",
         heading: "Reports",
-        copy: ["Open a current proof-backed report"],
+        copy: ["Each one carries the captures behind it."],
       },
       {
         label: "Shared links",
         path: "/app/shares",
         heading: "Shared links",
-        copy: ["Review and revoke snapshot or live-view links", "Anyone with a link can open"],
+        copy: ["No active share links", "expires or you revoke it"],
       },
       {
         label: "Notifications",
         path: "/app/notifications",
         heading: "Notifications",
-        copy: ["Digest and alert delivery"],
+        copy: ["Delivery channels"],
       },
       {
         label: "Source access",
@@ -540,7 +538,7 @@ test.describe("local authenticated E2E harness", () => {
         label: "Client rooms",
         path: "/app/clients",
         heading: "Client rooms",
-        copy: ["Package evidence and reports"],
+        copy: ["Keep reviewed evidence and client context"],
       },
       {
         label: "Billing & usage",
