@@ -5,6 +5,7 @@ import {
   queryIn,
   queryOne as one,
 } from "~/lib/data/d1.server";
+import { bindD1Named } from "~/lib/d1-bind.server";
 import { billingCanaryMutationGuardSql } from "~/lib/data/billing-canary-lock.server";
 import { createId, createStableId, jsonValue, nowIso, type JsonRecord } from "~/lib/data/helpers.server";
 import {
@@ -236,37 +237,40 @@ export async function recordWatchlistCapacitySkip(
   };
 
   const db = ensureDb(env);
-  const insert = await db.prepare(`
-      INSERT OR IGNORE INTO watchlist_run (
-        id,
-        watchlist_id,
-        trigger_type,
-        status,
-        page_budget,
-        pages_scanned,
-        baseline_from_run_id,
-        summary_json,
-        started_at,
-        finished_at,
-        error_code,
-        error_message,
-        idempotency_key,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, 'skipped', 0, 0, NULL, ?, ?, ?, 'capacity_budget', ?, ?, ?, ?)
-    `).bind(
-      id,
-      watchlistId,
-      triggerType,
-      jsonValue(summary),
-      timestamp,
-      timestamp,
-      summary.message,
-      idempotencyKey,
-      timestamp,
-      timestamp,
-    ).run();
+  const insert = await bindD1Named(
+    db.prepare(`
+        INSERT OR IGNORE INTO watchlist_run (
+          id,
+          watchlist_id,
+          trigger_type,
+          status,
+          page_budget,
+          pages_scanned,
+          baseline_from_run_id,
+          summary_json,
+          started_at,
+          finished_at,
+          error_code,
+          error_message,
+          idempotency_key,
+          created_at,
+          updated_at
+        )
+        VALUES (?, ?, ?, 'skipped', 0, 0, NULL, ?, ?, ?, 'capacity_budget', ?, ?, ?, ?)
+      `),
+    [
+      ["capacitySkip.id", id],
+      ["capacitySkip.watchlistId", watchlistId],
+      ["capacitySkip.triggerType", triggerType],
+      ["capacitySkip.summary", jsonValue(summary)],
+      ["capacitySkip.startedAt", timestamp],
+      ["capacitySkip.finishedAt", timestamp],
+      ["capacitySkip.errorMessage", summary.message],
+      ["capacitySkip.idempotencyKey", idempotencyKey],
+      ["capacitySkip.createdAt", timestamp],
+      ["capacitySkip.updatedAt", timestamp],
+    ],
+  ).run();
 
   if (Number(insert.meta?.changes ?? 0) > 0) {
     return id;
@@ -390,9 +394,8 @@ export async function createAdObservation(
   },
 ) {
   const id = await createStableId("ad_observation", [input.watchlistRunId, input.adId]);
-  await run(
-    env,
-    `
+  await bindD1Named(
+    ensureDb(env).prepare(`
       INSERT INTO ad_observation (
         id,
         ad_id,
@@ -414,17 +417,30 @@ export async function createAdObservation(
         is_active = excluded.is_active,
         landing_page_url = COALESCE(excluded.landing_page_url, ad_observation.landing_page_url),
         metadata_json = excluded.metadata_json
-    `,
-    id,
-    input.adId,
-    input.watchlistRunId,
-    input.landingPageSnapshotId,
-    input.seenAt,
-    input.isActive ? 1 : 0,
-    input.landingPageUrl,
-    jsonValue(input.metadata ?? {}),
-    nowIso(),
-  );
+    `),
+    [
+      ["adObservation.id", id],
+      ["adObservation.adId", input.adId],
+      ["adObservation.watchlistRunId", input.watchlistRunId],
+      [
+        "adObservation.landingPageSnapshotId",
+        input.landingPageSnapshotId,
+        "null",
+      ],
+      ["adObservation.seenAt", input.seenAt],
+      [
+        "adObservation.isActive",
+        input.isActive === undefined
+          ? undefined
+          : input.isActive
+            ? 1
+            : 0,
+      ],
+      ["adObservation.landingPageUrl", input.landingPageUrl, "null"],
+      ["adObservation.metadata", jsonValue(input.metadata ?? {})],
+      ["adObservation.createdAt", nowIso()],
+    ],
+  ).run();
 
   return id;
 }
