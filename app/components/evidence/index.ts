@@ -21,12 +21,8 @@ export {
 } from "./cta";
 
 export {
-  CaptureStrip,
   buildCaptureWindow,
   trailingQuietRun,
-  CAPTURE_QUIET_RUN_THRESHOLD,
-  CAPTURE_STRIP_GAP_LEGEND,
-  CAPTURE_STRIP_LEGEND_BASE,
   CAPTURE_WINDOW_DAYS,
   type CaptureDay,
   type CaptureDayState,
