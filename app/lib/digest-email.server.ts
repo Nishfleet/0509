@@ -179,9 +179,9 @@ export function buildScanTroubleEmail(input: {
   const failedCount = names.length;
   const subject =
     failedCount === 0
-      ? "Your competitor checks failed — we're retrying automatically"
-      : `${failedCount} competitor check${failedCount === 1 ? "" : "s"} failed — we're retrying automatically`;
-  const preheader = "Retries are running automatically — open watchlists for status.";
+      ? "Your competitor checks did not complete"
+      : `${failedCount} competitor check${failedCount === 1 ? "" : "s"} did not complete`;
+  const preheader = "We'll try again at the next scheduled check — open watchlists for status.";
   const html = `
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
     ${renderEmailContentSurface(`
@@ -189,7 +189,7 @@ export function buildScanTroubleEmail(input: {
       <h1 style="${EMAIL_H1_STYLE}">We hit a problem checking your competitors.</h1>
       <p style="margin: 0 0 16px; color: #475467;">
         We couldn't complete checks for <strong>${escapeHtml(listed)}</strong> in this period.
-        Retries are already running automatically — you don't need to do anything.
+        We'll try again at the next scheduled check. You don't need to do anything now.
       </p>
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.watchlistsUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">Open watchlists</a>
@@ -208,7 +208,7 @@ export function buildScanTroubleEmail(input: {
     "",
     "We hit a problem checking your competitors.",
     "",
-    `We couldn't complete checks for ${listed} in this period. Retries are already running automatically.`,
+    `We couldn't complete checks for ${listed} in this period. We'll try again at the next scheduled check.`,
     "",
     `Open watchlists: ${input.watchlistsUrl}`,
     `Manage frequency: ${input.manageFrequencyUrl}`,

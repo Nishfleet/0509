@@ -286,6 +286,20 @@ export async function action({ context, request }: ActionFunctionArgs) {
     : null;
   const requireSlackDelivery = readBooleanSearchParam(requestUrl, "requireSlack");
   const requireWhatsAppDelivery = readBooleanSearchParam(requestUrl, "requireWhatsApp");
+  const gateCProofRequested = gateRunId !== null && !requireWhatsAppDelivery;
+  const proofEmailSubject = gateCProofRequested
+    ? buildGateCProofEmailSubject(gateRunId)
+    : undefined;
+  if (gateCProofRequested && !proofEmailSubject) {
+    return Response.json(
+      {
+        ok: false,
+        blocker: "gate_run_id_not_unique_in_proof_subject",
+        gateRunId,
+      },
+      { status: 400, headers: { "cache-control": "no-store" } },
+    );
+  }
   const metadata = {
     kind: "launch_readiness_canary",
     gateRunId,
@@ -495,9 +509,23 @@ export async function action({ context, request }: ActionFunctionArgs) {
     ],
     cadence: "daily",
     lane: requireWhatsAppDelivery ? "customer" : "internal",
+    ...(proofEmailSubject ? { proofEmailSubject } : {}),
   });
   const deliveryDetails = delivery.details as Array<CanaryDeliveryDetail>;
-  const deliverySent = deliveryDetails.some((attempt) => attempt.status === "sent");
+  const emailAttempts = deliveryDetails.filter((attempt) => attempt.channel === "email");
+  const proofEmail = gateCProofRequested
+    ? buildPrivateProofEmail(emailAttempts, gateRunId!, proofEmailSubject!)
+    : null;
+  const proofEmailBlockers = gateCProofRequested
+    ? [
+        emailAttempts.length === 1 ? null : "proof_email_not_unique",
+        proofEmail?.subject ? null : "proof_email_subject_invalid",
+        proofEmail?.dispatchStartedAt ? null : "proof_email_dispatch_timestamp_invalid",
+      ].filter((value): value is string => Boolean(value))
+    : [];
+  const deliverySent = gateCProofRequested
+    ? proofEmail?.provider.status === "sent" && proofEmail.subject !== null && proofEmail.dispatchStartedAt !== null
+    : deliveryDetails.some((attempt) => attempt.status === "sent");
   const slackDeliverySent = deliveryDetails.some(
     (attempt) => attempt.channel === "slack" && attempt.status === "sent",
   );
@@ -514,6 +542,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     deliverySent ? null : "no_digest_delivery_sent",
     requireSlackDelivery && !slackDeliverySent ? "no_slack_digest_sent" : null,
     requireWhatsAppDelivery && !whatsappDeliverySent ? "no_whatsapp_digest_sent" : null,
+    ...proofEmailBlockers,
   ].filter((value): value is string => Boolean(value));
 
   return Response.json(
@@ -526,6 +555,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       proofCaptureId,
       digestRunId,
       delivery: sanitizeDeliveryForCanary(deliveryDetails, delivery.attempts, delivery.channels),
+      ...(proofEmail ? { proofEmail } : {}),
       slackDelivery: {
         required: requireSlackDelivery,
         sent: slackDeliverySent,
@@ -554,6 +584,56 @@ interface CanaryDeliveryDetail {
   status: string;
   deliveredAt?: string | null;
   webhookStatus?: string;
+  providerMessageId?: string | null;
+  errorMessage?: string | null;
+  subject?: string | null;
+  providerDispatchStartedAt?: string | null;
+}
+
+function buildPrivateProofEmail(
+  emailAttempts: CanaryDeliveryDetail[],
+  gateRunId: string,
+  expectedSubject: string,
+) {
+  const attempt = emailAttempts.length === 1 ? emailAttempts[0] : null;
+  const dispatchStartedAt = readCanonicalUtcTimestamp(attempt?.providerDispatchStartedAt);
+  return {
+    gateRunId,
+    dispatchStartedAt,
+    subject: attempt?.subject === expectedSubject ? expectedSubject : null,
+    provider: {
+      status: attempt?.status ?? null,
+      accepted: attempt?.status === "sent",
+      messageId: attempt?.providerMessageId ?? null,
+      error: attempt?.errorMessage ?? null,
+    },
+  };
+}
+
+function readCanonicalUtcTimestamp(value: unknown): string | null {
+  if (typeof value !== "string" || !value.endsWith("Z")) return null;
+  try {
+    return new Date(value).toISOString() === value ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function buildGateCProofEmailSubject(gateRunId: string): string | null {
+  const subject = `0509 Gate C proof ${gateRunId}`;
+  return countExactOccurrences(subject, gateRunId) === 1 ? subject : null;
+}
+
+function countExactOccurrences(value: string, needle: string) {
+  if (!needle) return 0;
+  let count = 0;
+  let offset = 0;
+  while (true) {
+    const index = value.indexOf(needle, offset);
+    if (index === -1) return count;
+    count += 1;
+    offset = index + needle.length;
+  }
 }
 
 function sanitizeDeliveryForCanary(
