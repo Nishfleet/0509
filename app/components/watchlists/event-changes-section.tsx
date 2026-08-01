@@ -7,7 +7,6 @@ import {
   type DiffCapture,
 } from "~/components/evidence/diff-plate";
 import { QuietLine, QuietLineList, type QuietLineItem } from "~/components/evidence/quiet-line";
-import { SpecimenEmptyState } from "~/components/evidence/specimen-empty-state";
 import { buildChangeIntelligenceSummary } from "~/lib/change-intelligence";
 import type { PublicDeliveryAttemptSummary } from "~/lib/delivery-attempt-public";
 import {
@@ -32,8 +31,9 @@ import {
 } from "~/lib/watchlist-display";
 
 /**
- * Change feed — brief §6.5 diff plates, §6.7 quiet lines, §6.8 specimen empty
- * state, §8 proof architecture (two timestamps or no diff).
+ * Change feed — brief §6.5 diff plates, §6.7 quiet lines, and §8 proof
+ * architecture (two timestamps or no diff). BL-035 replaces the specimen
+ * theater with a quiet explanation while the first capture is running.
  */
 
 export function formatCaughtStamp(iso: string): string {
@@ -202,7 +202,7 @@ export function formatEventDeliveryLine(
   lastAttempt: PublicDeliveryAttemptSummary | null,
 ): string {
   return lastAttempt
-    ? `Last send: ${formatDeliveryAttemptStatusLabel(lastAttempt.status, lastAttempt.channel)} · ${lastAttempt.targetValue}.`
+    ? `Last send: ${formatDeliveryAttemptStatusLabel(lastAttempt.status, lastAttempt.channel, lastAttempt.webhookStatus)} · ${lastAttempt.targetValue}.`
     : EVENT_DELIVERY_NONE_COPY;
 }
 
@@ -374,20 +374,19 @@ export function EventChangesSection(props: {
       <p className="f9-ed-micro">What changed</p>
       {data.events.length === 0 ? (
         awaitingFirstCapture ? (
-          <SpecimenEmptyState
-            copy="About ten minutes. We take the ads, the offer page and the price — the before that every future change gets measured against."
-            headline="First capture running"
-            headingLevel={3}
-            primaryAction={{
-              label: "Check source access",
-              to: "/app/source-access",
-            }}
-            secondaryAction={{
-              label: "Open Evidence",
-              to: watchlistDetailTabHref(props.watchlistId, "evidence"),
-            }}
-            stateLabel={`${data.selectedWatchlist.name.toUpperCase()} · FIRST CAPTURE RUNNING`}
-          />
+          <div className="f9-bl035-empty">
+            <h3>First capture running</h3>
+            <p>
+              About ten minutes. We take the ads, the offer page and the price — the
+              before that every future change gets measured against.
+            </p>
+            <div className="f9-bl035-local-actions">
+              <SecondaryAction to="/app/source-access">Check source access</SecondaryAction>
+              <SecondaryAction to={watchlistDetailTabHref(props.watchlistId, "evidence")}>
+                Open evidence
+              </SecondaryAction>
+            </div>
+          </div>
         ) : (
           <QuietLine
             copy={resolveEmptyWatchlistEventCopy({

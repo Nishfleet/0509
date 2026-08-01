@@ -3,7 +3,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type MockFormProps = { children?: ReactNode } & Record<string, unknown>;
-type MockLinkProps = { children?: ReactNode; to?: string } & Record<string, unknown>;
+type MockLinkProps = { children?: ReactNode; to?: string } & Record<
+  string,
+  unknown
+>;
 
 const session = {
   user: {
@@ -29,7 +32,8 @@ function createContext(env = {}) {
 
 async function mockRouter(loaderData: unknown, actionData?: unknown) {
   vi.doMock("react-router", async () => {
-    const actual = await vi.importActual<typeof import("react-router")>("react-router");
+    const actual =
+      await vi.importActual<typeof import("react-router")>("react-router");
     const React = await import("react");
 
     return {
@@ -37,7 +41,11 @@ async function mockRouter(loaderData: unknown, actionData?: unknown) {
       Form: ({ children, ...props }: MockFormProps) =>
         React.createElement("form", props, children),
       Link: ({ children, to, ...props }: MockLinkProps) =>
-        React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
+        React.createElement(
+          "a",
+          { ...props, href: typeof to === "string" ? to : "" },
+          children,
+        ),
       useActionData: vi.fn().mockReturnValue(actionData),
       useLoaderData: vi.fn().mockReturnValue(loaderData),
       useNavigation: vi.fn().mockReturnValue({ state: "idle" }),
@@ -72,13 +80,78 @@ function mockAuth(plan: "free" | "scout" | "starter" | "agency" = "agency") {
 }
 
 describe("clients route agent memory", () => {
+  it("closes the composer only after its own successful navigation completes", async () => {
+    const { transitionClientRoomComposerSubmission } =
+      await import("~/routes/app.clients");
+
+    const submitting = transitionClientRoomComposerSubmission(
+      false,
+      "submitting",
+      "upsert-client-room",
+      undefined,
+      undefined,
+    );
+    expect(submitting).toEqual({ pending: true, close: false });
+    expect(
+      transitionClientRoomComposerSubmission(
+        submitting.pending,
+        "idle",
+        undefined,
+        "upsert-client-room",
+        true,
+      ),
+    ).toEqual({ pending: false, close: true });
+    expect(
+      transitionClientRoomComposerSubmission(
+        submitting.pending,
+        "idle",
+        undefined,
+        "upsert-client-room",
+        false,
+      ),
+    ).toEqual({ pending: false, close: false });
+    expect(
+      transitionClientRoomComposerSubmission(
+        false,
+        "submitting",
+        "upsert-agent-memory",
+        undefined,
+        undefined,
+      ),
+    ).toEqual({ pending: false, close: false });
+    expect(
+      transitionClientRoomComposerSubmission(
+        submitting.pending,
+        "idle",
+        undefined,
+        "upsert-agent-memory",
+        true,
+      ),
+    ).toEqual({ pending: true, close: false });
+  });
+
+  it("does not offer inactive watchlists as client-room choices", async () => {
+    const { filterSelectableClientRoomWatchlists } =
+      await import("~/routes/app.clients");
+
+    expect(
+      filterSelectableClientRoomWatchlists([
+        { id: "active", isActive: true },
+        { id: "implicit-active" },
+        { id: "inactive", isActive: false },
+      ]),
+    ).toEqual([{ id: "active", isActive: true }, { id: "implicit-active" }]);
+  });
+
   it("saves owner-created operating memory through existing account storage", async () => {
     mockAuth();
     const upsertAgentMemory = vi.fn().mockResolvedValue({
       id: "memory-1",
     });
     vi.doMock("~/lib/data.server", () => ({
-      getClientRoom: vi.fn().mockResolvedValue({ id: "room-1", name: "Nykaa weekly desk" }),
+      getClientRoom: vi
+        .fn()
+        .mockResolvedValue({ id: "room-1", name: "Nykaa weekly desk" }),
       getCollection: vi.fn(),
       getWatchlist: vi.fn(),
       upsertAgentMemory,
@@ -137,7 +210,10 @@ describe("clients route agent memory", () => {
       }),
     } as never);
 
-    expect(result).toEqual({ ok: false, message: "Memory values cannot contain secrets or credentials." });
+    expect(result).toEqual({
+      ok: false,
+      message: "Memory values cannot contain secrets or credentials.",
+    });
     expect(upsertAgentMemory).not.toHaveBeenCalled();
   });
 
@@ -167,7 +243,11 @@ describe("clients route agent memory", () => {
       }),
     } as never);
 
-    expect(result).toEqual({ ok: false, message: "Client label cannot contain secrets or credentials." });
+    expect(result).toEqual({
+      ok: false,
+      intent: "upsert-client-room",
+      message: "Client label cannot contain secrets or credentials.",
+    });
     expect(upsertClientRoom).not.toHaveBeenCalled();
   });
 
@@ -209,14 +289,18 @@ describe("clients route agent memory", () => {
       }),
     } as never);
 
-    expect(result).toMatchObject({ ok: true });
-    expect(upsertClientRoom).toHaveBeenCalledWith(expect.anything(), "user-1", expect.objectContaining({
-      name: "Token Metrics",
-      clientLabel: "Secret Sales",
-      notes: expect.objectContaining({
-        goal: "Webhook QA review.",
+    expect(result).toMatchObject({ ok: true, intent: "upsert-client-room" });
+    expect(upsertClientRoom).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      expect.objectContaining({
+        name: "Token Metrics",
+        clientLabel: "Secret Sales",
+        notes: expect.objectContaining({
+          goal: "Webhook QA review.",
+        }),
       }),
-    }));
+    );
   });
 
   it("does not save client-room memory when the room is not owned by the workspace", async () => {
@@ -248,7 +332,8 @@ describe("clients route agent memory", () => {
 
     expect(result).toEqual({
       ok: false,
-      message: "We couldn't find that client room. Refresh the page and try again.",
+      message:
+        "We couldn't find that client room. Refresh the page and try again.",
     });
     expect(upsertAgentMemory).not.toHaveBeenCalled();
   });
@@ -283,7 +368,10 @@ describe("clients route agent memory", () => {
     } as never);
 
     expect(JSON.stringify(result)).not.toContain("hooks.slack.com");
-    expect(result).toMatchObject({ plan: "agency", canManageClientRooms: true });
+    expect(result).toMatchObject({
+      plan: "agency",
+      canManageClientRooms: true,
+    });
     expect(result.memories[0]).toMatchObject({
       key: "slack-note",
       preview: "[redacted]",
@@ -334,7 +422,12 @@ describe("clients route agent memory", () => {
     } as never);
 
     expect(listAgentMemory).toHaveBeenCalledWith({}, "user-1", { limit: 20 });
-    expect(listAgentMemoryForClientRooms).toHaveBeenCalledWith({}, "user-1", ["room-1"], { limitPerRoom: 20 });
+    expect(listAgentMemoryForClientRooms).toHaveBeenCalledWith(
+      {},
+      "user-1",
+      ["room-1"],
+      { limitPerRoom: 20 },
+    );
     expect(result.memories).toHaveLength(1);
     expect(result.memories[0]).toMatchObject({
       id: "memory-room-1",
@@ -346,7 +439,9 @@ describe("clients route agent memory", () => {
 
   it("keeps client rooms available when optional room memory lookup fails", async () => {
     mockAuth();
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
     vi.doMock("~/lib/data.server", () => ({
       listAgentMemory: vi.fn().mockResolvedValue([
         {
@@ -362,7 +457,9 @@ describe("clients route agent memory", () => {
           updatedAt: "2026-06-20T00:00:00.000Z",
         },
       ]),
-      listAgentMemoryForClientRooms: vi.fn().mockRejectedValue(new Error("D1 unavailable")),
+      listAgentMemoryForClientRooms: vi
+        .fn()
+        .mockRejectedValue(new Error("D1 unavailable")),
       listClientRooms: vi.fn().mockResolvedValue([
         {
           id: "room-1",
@@ -387,13 +484,17 @@ describe("clients route agent memory", () => {
     } as never);
 
     expect(result.rooms).toHaveLength(1);
+    expect(result.roomMemoryUnavailable).toBe(true);
     expect(result.memories).toHaveLength(1);
     expect(result.memories[0]).toMatchObject({
       id: "memory-recent-1",
       key: "review_cadence",
       preview: "Weekly review.",
     });
-    expect(consoleError).toHaveBeenCalledWith("[clients] room memory lookup failed", expect.any(Error));
+    expect(consoleError).toHaveBeenCalledWith(
+      "[clients] room memory lookup failed",
+      expect.any(Error),
+    );
   });
 
   it("redacts legacy secret-like client-room fields from loader data", async () => {
@@ -472,7 +573,9 @@ describe("clients route agent memory", () => {
               "watchlist-watchlist-1": {
                 evidenceFingerprint: "fixture-approved-evidence",
                 reviewedAt: new Date(Date.now() - 60_000).toISOString(),
-                approvalExpiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+                approvalExpiresAt: new Date(
+                  Date.now() + 60 * 60 * 1000,
+                ).toISOString(),
               },
             },
           },
@@ -508,53 +611,133 @@ describe("clients route agent memory", () => {
       ],
       plan: "agency",
       canManageClientRooms: true,
+      roomMemoryUnavailable: true,
+      approvalUnavailableRoomIds: [],
     });
 
     const { default: ClientsRoute } = await import("~/routes/app.clients");
     const markup = renderToStaticMarkup(createElement(ClientsRoute));
 
-    expect(markup).toContain("Report preferences and notes");
+    expect(markup).toContain("Report preferences, tone, and follow-up notes");
     expect(markup).toContain("Save context");
     expect(markup).toContain("review_cadence");
     expect(markup).toContain("Weekly client-ready review with direct tone.");
     expect(markup).toContain("Nykaa weekly desk");
-    expect(markup).toContain("Ready for client review");
+    expect(markup).toContain("Create client room");
+    expect(markup).toContain("f9-wk-page f9-clients-page");
+    expect(markup).not.toContain("f9-app-panel");
+    expect(markup).not.toContain("f9-dash-state-empty");
+    expect(markup).not.toContain("f9-primary-button");
+    expect(markup).toContain("Client context status unavailable");
     expect(markup).toContain("1 evidence source");
     expect(markup).toContain("1 report");
-    expect(markup).toContain("1 saved memory");
+    expect(markup).toContain("1 loaded memory");
     expect(markup).toContain("room notes saved");
-    expect(markup).toContain("Open the report and share the snapshot when ready.");
+    expect(markup).toContain(
+      "Refresh before sharing; saved client context could not be loaded.",
+    );
+    expect(markup).not.toContain("Ready for client review");
+    expect(markup).not.toContain(
+      "Open the report and share the snapshot when ready.",
+    );
+    expect(markup).toContain("Saved client context could not be loaded.");
     expect(markup).toContain('name="intent" value="approve-client-room"');
+    expect(markup).toContain("Create client room");
+    expect(markup).toContain("f9-wk-page f9-clients-page");
+    expect(markup).not.toContain("f9-app-panel");
+    expect(markup).not.toContain("f9-dash-state-empty");
+    expect(markup).not.toContain("f9-primary-button");
   });
 
-  it("fails closed when report revalidation helpers are unavailable", async () => {
+  it("labels the saved-context preview honestly when more than eight loaded memories exist", async () => {
+    await mockRouter({
+      rooms: [],
+      watchlists: [],
+      collections: [],
+      memories: Array.from({ length: 9 }, (_, index) => ({
+        id: `memory-${index + 1}`,
+        key: `context_${index + 1}`,
+        scope: "workspace",
+        watchlistId: null,
+        clientRoomId: null,
+        source: "owner_ui",
+        updatedAt: "2026-06-20T00:00:00.000Z",
+        preview: `Context preview ${index + 1}`,
+      })),
+      plan: "agency",
+      canManageClientRooms: true,
+    });
+
+    const { default: ClientsRoute } = await import("~/routes/app.clients");
+    const markup = renderToStaticMarkup(createElement(ClientsRoute));
+
+    expect(markup).toContain("Showing 8 of 9 loaded memories");
+    expect(markup).toContain("Context preview 8");
+    expect(markup).not.toContain("Context preview 9");
+  });
+
+  it("labels the saved-context preview honestly when more than eight loaded memories exist", async () => {
+    await mockRouter({
+      rooms: [],
+      watchlists: [],
+      collections: [],
+      memories: Array.from({ length: 9 }, (_, index) => ({
+        id: `memory-${index + 1}`,
+        key: `context_${index + 1}`,
+        scope: "workspace",
+        watchlistId: null,
+        clientRoomId: null,
+        source: "owner_ui",
+        updatedAt: "2026-06-20T00:00:00.000Z",
+        preview: `Context preview ${index + 1}`,
+      })),
+      plan: "agency",
+      canManageClientRooms: true,
+    });
+
+    const { default: ClientsRoute } = await import("~/routes/app.clients");
+    const markup = renderToStaticMarkup(createElement(ClientsRoute));
+
+    expect(markup).toContain("Showing 8 of 9 loaded memories");
+    expect(markup).toContain("Context preview 8");
+    expect(markup).not.toContain("Context preview 9");
+  });
+
+  it("preserves saved approvals but marks readiness unavailable when revalidation helpers are unavailable", async () => {
     mockAuth();
     vi.doMock("~/lib/data.server", () => ({
       listAgentMemory: vi.fn().mockResolvedValue([]),
       listAgentMemoryForClientRooms: vi.fn().mockResolvedValue([]),
-      listClientRooms: vi.fn().mockResolvedValue([{
-        id: "room-1",
-        name: "Nykaa weekly desk",
-        clientLabel: "Nykaa",
-        status: "active",
-        notes: {
-          reportApprovals: {
-            "watchlist-watchlist-1": {
-              evidenceFingerprint: "approved",
-              reviewedAt: new Date(Date.now() - 60_000).toISOString(),
-              approvalExpiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      listClientRooms: vi.fn().mockResolvedValue([
+        {
+          id: "room-1",
+          name: "Nykaa weekly desk",
+          clientLabel: "Nykaa",
+          status: "active",
+          notes: {
+            reportApprovals: {
+              "watchlist-watchlist-1": {
+                evidenceFingerprint: "approved",
+                reviewedAt: new Date(Date.now() - 60_000).toISOString(),
+                approvalExpiresAt: new Date(
+                  Date.now() + 60 * 60 * 1000,
+                ).toISOString(),
+              },
             },
           },
+          resourceRefs: [
+            { resourceType: "report", resourceId: "watchlist-watchlist-1" },
+          ],
+          createdAt: "2026-06-20T00:00:00.000Z",
+          updatedAt: "2026-06-20T00:00:00.000Z",
         },
-        resourceRefs: [{ resourceType: "report", resourceId: "watchlist-watchlist-1" }],
-        createdAt: "2026-06-20T00:00:00.000Z",
-        updatedAt: "2026-06-20T00:00:00.000Z",
-      }]),
+      ]),
       listCollections: vi.fn().mockResolvedValue([]),
       listWatchlists: vi.fn().mockResolvedValue([]),
       getLatestDigestRunSummaryForWatchlist: undefined,
       listAdsByIds: undefined,
       listCollectionItems: undefined,
+      listProofCapturePairsForEventIds: undefined,
       listWatchEvents: undefined,
       getCollection: undefined,
       getWatchlist: undefined,
@@ -566,7 +749,135 @@ describe("clients route agent memory", () => {
       request: new Request("http://localhost/app/clients"),
     } as never);
 
-    expect(result.rooms[0].notes.reportApprovals).toEqual({});
+    expect(result.rooms[0].notes.reportApprovals).toEqual({
+      "watchlist-watchlist-1": {
+        evidenceFingerprint: "approved",
+        reviewedAt: expect.any(String),
+        approvalExpiresAt: expect.any(String),
+      },
+    });
+    expect(result.approvalUnavailableRoomIds).toEqual(["room-1"]);
+  });
+
+  it("preserves a saved approval and labels it unavailable when revalidation throws", async () => {
+    mockAuth();
+    const reviewedAt = new Date(Date.now() - 60_000).toISOString();
+    const approvalExpiresAt = new Date(
+      Date.now() + 60 * 60 * 1000,
+    ).toISOString();
+    vi.doMock("~/lib/data.server", () => ({
+      listAgentMemory: vi.fn().mockResolvedValue([]),
+      listAgentMemoryForClientRooms: vi.fn().mockResolvedValue([]),
+      listClientRooms: vi.fn().mockResolvedValue([
+        {
+          id: "room-1",
+          name: "Nykaa weekly desk",
+          clientLabel: "Nykaa",
+          status: "active",
+          notes: {
+            reportApprovals: {
+              "watchlist:watchlist-1": {
+                evidenceFingerprint: "approved",
+                reviewedAt,
+                approvalExpiresAt,
+              },
+            },
+          },
+          resourceRefs: [
+            { resourceType: "report", resourceId: "watchlist:watchlist-1" },
+          ],
+          createdAt: "2026-06-20T00:00:00.000Z",
+          updatedAt: "2026-06-20T00:00:00.000Z",
+        },
+      ]),
+      listCollections: vi.fn().mockResolvedValue([]),
+      listWatchlists: vi.fn().mockResolvedValue([
+        {
+          id: "watchlist-1",
+          isActive: true,
+          updatedAt: new Date(Date.parse(reviewedAt) + 30_000).toISOString(),
+        },
+      ]),
+      getLatestDigestRunSummaryForWatchlist: vi.fn(),
+      listAdsByIds: vi.fn(),
+      listCollectionItems: vi.fn(),
+      listProofCapturePairsForEventIds: vi.fn().mockResolvedValue([]),
+      listWatchEvents: vi
+        .fn()
+        .mockRejectedValue(new Error("transient D1 failure")),
+      getCollection: vi.fn(),
+      getWatchlist: vi
+        .fn()
+        .mockResolvedValue({ id: "watchlist-1", isActive: true }),
+    }));
+
+    const { loader } = await import("~/routes/app.clients");
+    const result = await loader({
+      context: createContext(),
+      request: new Request("http://localhost/app/clients"),
+    } as never);
+
+    expect(result.rooms[0].notes.reportApprovals).toEqual({
+      "watchlist:watchlist-1": {
+        evidenceFingerprint: "approved",
+        reviewedAt,
+        approvalExpiresAt,
+      },
+    });
+    expect(result.approvalUnavailableRoomIds).toEqual(["room-1"]);
+    expect(result.rooms[0].resourceRefs).toEqual([
+      { resourceType: "report", resourceId: "watchlist:watchlist-1" },
+    ]);
+  });
+
+  it("renders approval read failures as unavailable without calling the saved approval revoked", async () => {
+    await mockRouter({
+      rooms: [
+        {
+          id: "room-1",
+          name: "Nykaa weekly desk",
+          clientLabel: "Nykaa",
+          status: "active",
+          notes: {
+            goal: "Weekly proof review.",
+            reportApprovals: {
+              "watchlist:watchlist-1": {
+                evidenceFingerprint: "approved",
+                reviewedAt: new Date(Date.now() - 60_000).toISOString(),
+                approvalExpiresAt: new Date(
+                  Date.now() + 60 * 60 * 1000,
+                ).toISOString(),
+              },
+            },
+          },
+          resourceRefs: [
+            { resourceType: "watchlist", resourceId: "watchlist-1" },
+            { resourceType: "report", resourceId: "watchlist:watchlist-1" },
+          ],
+          createdAt: "2026-06-20T00:00:00.000Z",
+          updatedAt: "2026-06-20T00:00:00.000Z",
+        },
+      ],
+      watchlists: [],
+      collections: [],
+      memories: [],
+      plan: "agency",
+      canManageClientRooms: true,
+      roomMemoryUnavailable: false,
+      approvalUnavailableRoomIds: ["room-1"],
+    });
+
+    const { default: ClientsRoute } = await import("~/routes/app.clients");
+    const markup = renderToStaticMarkup(createElement(ClientsRoute));
+
+    expect(markup).toContain(
+      "One or more report approvals could not be rechecked.",
+    );
+    expect(markup).toContain("Report approval status unavailable");
+    expect(markup).toContain("saved approval was not changed");
+    expect(markup).not.toContain("Ready for client review");
+    expect(markup).toContain('href="/app/reports/watchlist:watchlist-1"');
+    expect(markup).toContain('name="intent" value="approve-client-room"');
   });
 
   it("strips expired and malformed room approvals", async () => {
@@ -577,34 +888,38 @@ describe("clients route agent memory", () => {
     vi.doMock("~/lib/data.server", () => ({
       listAgentMemory: vi.fn().mockResolvedValue([]),
       listAgentMemoryForClientRooms: vi.fn().mockResolvedValue([]),
-      listClientRooms: vi.fn().mockResolvedValue([{
-        id: "room-1",
-        name: "Nykaa weekly desk",
-        clientLabel: "Nykaa",
-        status: "active",
-        notes: {
-          reportApprovals: {
-            valid: {
-              evidenceFingerprint: "current",
-              reviewedAt: validReviewedAt,
-              approvalExpiresAt: validApprovalExpiresAt,
-            },
-            expired: {
-              evidenceFingerprint: "old",
-              reviewedAt: new Date(now - 2 * 24 * 60 * 60 * 1000).toISOString(),
-              approvalExpiresAt: new Date(now - 60_000).toISOString(),
-            },
-            malformed: {
-              evidenceFingerprint: "missing-expiry",
-              reviewedAt: "not-a-date",
-              approvalExpiresAt: validApprovalExpiresAt,
+      listClientRooms: vi.fn().mockResolvedValue([
+        {
+          id: "room-1",
+          name: "Nykaa weekly desk",
+          clientLabel: "Nykaa",
+          status: "active",
+          notes: {
+            reportApprovals: {
+              valid: {
+                evidenceFingerprint: "current",
+                reviewedAt: validReviewedAt,
+                approvalExpiresAt: validApprovalExpiresAt,
+              },
+              expired: {
+                evidenceFingerprint: "old",
+                reviewedAt: new Date(
+                  now - 2 * 24 * 60 * 60 * 1000,
+                ).toISOString(),
+                approvalExpiresAt: new Date(now - 60_000).toISOString(),
+              },
+              malformed: {
+                evidenceFingerprint: "missing-expiry",
+                reviewedAt: "not-a-date",
+                approvalExpiresAt: validApprovalExpiresAt,
+              },
             },
           },
+          resourceRefs: [],
+          createdAt: "2026-06-20T00:00:00.000Z",
+          updatedAt: "2026-06-20T00:00:00.000Z",
         },
-        resourceRefs: [],
-        createdAt: "2026-06-20T00:00:00.000Z",
-        updatedAt: "2026-06-20T00:00:00.000Z",
-      }]),
+      ]),
       listCollections: vi.fn().mockResolvedValue([]),
       listWatchlists: vi.fn().mockResolvedValue([]),
     }));
@@ -629,26 +944,37 @@ describe("clients route agent memory", () => {
     vi.doMock("~/lib/data.server", () => ({
       listAgentMemory: vi.fn().mockResolvedValue([]),
       listAgentMemoryForClientRooms: vi.fn().mockResolvedValue([]),
-      listClientRooms: vi.fn().mockResolvedValue([{
-        id: "room-1",
-        name: "Nykaa weekly desk",
-        clientLabel: "Nykaa",
-        status: "active",
-        notes: {},
-        resourceRefs: [
-          { resourceType: "watchlist", resourceId: "watchlist-inactive", label: "Inactive" },
-          { resourceType: "report", resourceId: "synthetic-report", label: "Synthetic" },
-        ],
-        createdAt: "2026-06-20T00:00:00.000Z",
-        updatedAt: "2026-06-20T00:00:00.000Z",
-      }]),
-      listCollections: vi.fn().mockResolvedValue([]),
-      listWatchlists: vi.fn().mockResolvedValue([
-        { id: "watchlist-inactive", isActive: false },
+      listClientRooms: vi.fn().mockResolvedValue([
+        {
+          id: "room-1",
+          name: "Nykaa weekly desk",
+          clientLabel: "Nykaa",
+          status: "active",
+          notes: {},
+          resourceRefs: [
+            {
+              resourceType: "watchlist",
+              resourceId: "watchlist-inactive",
+              label: "Inactive",
+            },
+            {
+              resourceType: "report",
+              resourceId: "synthetic-report",
+              label: "Synthetic",
+            },
+          ],
+          createdAt: "2026-06-20T00:00:00.000Z",
+          updatedAt: "2026-06-20T00:00:00.000Z",
+        },
       ]),
+      listCollections: vi.fn().mockResolvedValue([]),
+      listWatchlists: vi
+        .fn()
+        .mockResolvedValue([{ id: "watchlist-inactive", isActive: false }]),
       getLatestDigestRunSummaryForWatchlist: undefined,
       listAdsByIds: undefined,
       listCollectionItems: undefined,
+      listProofCapturePairsForEventIds: undefined,
       listWatchEvents: undefined,
       getCollection: undefined,
       getWatchlist: undefined,
@@ -674,13 +1000,18 @@ describe("clients route agent memory", () => {
         clientLabel: "Nykaa",
         status: "active",
         notes: {},
-        resourceRefs: [{ resourceType: "report", resourceId: "watchlist:watchlist-1" }],
+        resourceRefs: [
+          { resourceType: "report", resourceId: "watchlist:watchlist-1" },
+        ],
       }),
       getCollection: vi.fn(),
-      getWatchlist: vi.fn().mockResolvedValue({ id: "watchlist-1", isActive: false }),
+      getWatchlist: vi
+        .fn()
+        .mockResolvedValue({ id: "watchlist-1", isActive: false }),
       getLatestDigestRunSummaryForWatchlist: vi.fn(),
       listAdsByIds: vi.fn(),
       listCollectionItems: vi.fn(),
+      listProofCapturePairsForEventIds: vi.fn().mockResolvedValue([]),
       listWatchEvents: vi.fn(),
       upsertAgentMemory: vi.fn(),
       upsertClientRoom,
@@ -755,17 +1086,27 @@ describe("clients route agent memory", () => {
 
       const { action } = await import("~/routes/app.clients");
       for (const [intent, fields] of [
-        ["upsert-client-room", { name: "Nykaa weekly desk", watchlistIds: "watchlist-1" }],
-        ["upsert-agent-memory", { key: "tone", value: "Direct weekly review." }],
+        [
+          "upsert-client-room",
+          { name: "Nykaa weekly desk", watchlistIds: "watchlist-1" },
+        ],
+        [
+          "upsert-agent-memory",
+          { key: "tone", value: "Direct weekly review." },
+        ],
         ["set-client-room-status", { roomId: "room-1", status: "archived" }],
         ["approve-client-room", { roomId: "room-1" }],
       ] as const) {
         const formData = new FormData();
         formData.set("intent", intent);
-        for (const [key, value] of Object.entries(fields)) formData.set(key, value);
+        for (const [key, value] of Object.entries(fields))
+          formData.set(key, value);
         const result = await action({
           context: createContext(),
-          request: new Request("http://localhost/app/clients", { method: "POST", body: formData }),
+          request: new Request("http://localhost/app/clients", {
+            method: "POST",
+            body: formData,
+          }),
         } as never);
 
         expect(result).toMatchObject({
@@ -808,7 +1149,10 @@ describe("clients route agent memory", () => {
     formData.set("status", "archived");
     const result = await action({
       context: createContext(),
-      request: new Request("http://localhost/app/clients", { method: "POST", body: formData }),
+      request: new Request("http://localhost/app/clients", {
+        method: "POST",
+        body: formData,
+      }),
     } as never);
 
     expect(result).toEqual({ ok: true, message: "Client room archived." });
@@ -832,7 +1176,13 @@ describe("clients route agent memory", () => {
           clientLabel: "Nykaa",
           status: "active",
           notes: { goal: "Weekly proof review." },
-          resourceRefs: [{ resourceType: "watchlist", resourceId: "watchlist-1", label: "Nykaa watchlist" }],
+          resourceRefs: [
+            {
+              resourceType: "watchlist",
+              resourceId: "watchlist-1",
+              label: "Nykaa watchlist",
+            },
+          ],
           createdAt: "2026-06-20T00:00:00.000Z",
           updatedAt: "2026-06-20T00:00:00.000Z",
         },
@@ -849,16 +1199,18 @@ describe("clients route agent memory", () => {
       ],
       watchlists: [],
       collections: [],
-      memories: [{
-        id: "memory-1",
-        key: "review_tone",
-        scope: "workspace",
-        watchlistId: null,
-        clientRoomId: "room-1",
-        source: "owner_ui",
-        updatedAt: "2026-06-20T00:00:00.000Z",
-        preview: "Direct and evidence-led.",
-      }],
+      memories: [
+        {
+          id: "memory-1",
+          key: "review_tone",
+          scope: "workspace",
+          watchlistId: null,
+          clientRoomId: "room-1",
+          source: "owner_ui",
+          updatedAt: "2026-06-20T00:00:00.000Z",
+          preview: "Direct and evidence-led.",
+        },
+      ],
     });
 
     const { default: ClientsRoute } = await import("~/routes/app.clients");
@@ -879,28 +1231,36 @@ describe("clients route agent memory", () => {
     expect(markup).not.toContain(">Restore<");
   });
 
-  it("renders a locked empty state instead of a dead-end create prompt", async () => {
-    await mockRouter({
-      plan: "free",
-      canManageClientRooms: false,
-      rooms: [],
-      watchlists: [],
-      collections: [],
-      memories: [],
-    });
+  it.each(["free", "scout", "starter"] as const)(
+    "renders a quiet locked empty state instead of a dead-end create prompt on %s",
+    async (plan) => {
+      await mockRouter({
+        plan,
+        canManageClientRooms: false,
+        rooms: [],
+        watchlists: [],
+        collections: [],
+        memories: [],
+      });
 
-    const { default: ClientsRoute } = await import("~/routes/app.clients");
-    const markup = renderToStaticMarkup(createElement(ClientsRoute));
+      const { default: ClientsRoute } = await import("~/routes/app.clients");
+      const markup = renderToStaticMarkup(createElement(ClientsRoute));
 
-    expect(markup).toContain("f9-locked-feature");
-    expect(markup).toContain("included in the Agency plan.");
-    expect(markup).toContain("Upgrade to Agency");
-    expect(markup).toContain("/app/billing?source=clients#plans");
-    expect(markup.match(/Upgrade to Agency/g)).toHaveLength(1);
-    expect(markup).not.toContain("is-error");
-    expect(markup).not.toContain("Create the first client room");
-    expect(markup).not.toContain("Save client room");
-    expect(markup).not.toContain("Save context");
-    expect(markup).not.toContain("<form");
-  });
+      expect(markup).toContain("f9-clients-page");
+      expect(markup).toContain("f9-clients-gate");
+      expect(markup).toContain("Client rooms stay readable");
+      expect(markup).toContain("Agency plan unlocks creation and updates");
+      expect(markup).toContain("Upgrade to Agency");
+      expect(markup).toContain("/app/billing?source=clients#plans");
+      expect(markup.match(/Upgrade to Agency/g)).toHaveLength(1);
+      expect(markup).not.toContain("is-error");
+      expect(markup).not.toContain("f9-locked-feature");
+      expect(markup).not.toContain("f9-ed-specimen");
+      expect(markup).not.toContain("f9-dash-state-empty");
+      expect(markup).not.toContain("Create the first client room");
+      expect(markup).not.toContain("Save client room");
+      expect(markup).not.toContain("Save context");
+      expect(markup).not.toContain("<form");
+    },
+  );
 });

@@ -3,6 +3,10 @@ import { DatabaseSync } from "node:sqlite";
 
 import { describe, expect, it, vi } from "vitest";
 
+import {
+  creativeCaptureSourceFingerprint,
+  shouldAttemptCreativeTextCapture,
+} from "~/lib/creative-capture-policy";
 import { CREATIVE_TEXT_EXTRACTOR_VERSION } from "~/lib/creative-text.server";
 import type { AdRecord } from "~/lib/types";
 import {
@@ -52,6 +56,8 @@ import {
   markDodoSubscriptionPlanChangeScheduled,
   listRecentAgentActionAudits,
   listRecentWorkspaceWatchEvents,
+  listProofCapturesForTarget,
+  listProofCapturesForTargets,
   listClientRooms,
   listAgentMemory,
   listAgentMemoryForClientRooms,
@@ -76,6 +82,7 @@ import {
   upsertCustomerMetaConnection,
   upsertClientRoom,
   upsertDeliveryTarget,
+  provisionVerifiedAccountEmailTargetIfUnsuppressed,
   upsertProofTarget,
   upsertWatchlistDeliveryConfig,
   upsertWorkspaceDeliveryConfig,
@@ -116,6 +123,46 @@ function createMockDb(
     },
   };
 }
+
+describe("proof capture history windows", () => {
+  it("keeps every recent failed capture alongside the capped target history", async () => {
+    const cutoff = "2026-07-30T06:00:00.000Z";
+    const mock = createMockDb();
+
+    await (
+      listProofCapturesForTarget as unknown as (
+        env: unknown,
+        proofTargetId: string,
+        limit: number,
+        recentFailureCutoff: string,
+      ) => Promise<unknown>
+    )({ DB: mock.db }, "proof-target-1", 20, cutoff);
+
+    const query = findStatement(mock.statements, "FROM proof_capture");
+    expect(query?.sql).toContain("rn <= ?");
+    expect(query?.sql).toContain("OR (status = 'failed'");
+    expect(query?.bindings).toContain(cutoff);
+  });
+
+  it("keeps every recent failed capture in batched target history", async () => {
+    const cutoff = "2026-07-30T06:00:00.000Z";
+    const mock = createMockDb();
+
+    await (
+      listProofCapturesForTargets as unknown as (
+        env: unknown,
+        proofTargetIds: string[],
+        limit: number,
+        recentFailureCutoff: string,
+      ) => Promise<unknown>
+    )({ DB: mock.db }, ["proof-target-1", "proof-target-2"], 20, cutoff);
+
+    const query = findStatement(mock.statements, "FROM proof_capture");
+    expect(query?.sql).toContain("rn <= ?");
+    expect(query?.sql).toContain("OR (status = 'failed'");
+    expect(query?.bindings).toContain(cutoff);
+  });
+});
 
 function createMissingTableDb(tableName: string) {
   return {
@@ -284,7 +331,7 @@ describe("createLandingPageSnapshot", () => {
     expect(analysisInserts.some((statement) => statement.bindings.includes("cta_text"))).toBe(true);
     expect(analysisInserts.some((statement) => statement.bindings.includes("price_text"))).toBe(true);
     expect(analysisInserts.some((statement) => statement.bindings.includes("form_present"))).toBe(true);
-    expect(analysisInserts.every((statement) => statement.bindings.includes("lp-signals-v1"))).toBe(true);
+    expect(analysisInserts.every((statement) => statement.bindings.includes("lp-signals-v3"))).toBe(true);
   });
 
   it("keeps an accepted digest immutable when a stale retry result arrives", async () => {
@@ -300,9 +347,10 @@ describe("createLandingPageSnapshot", () => {
     });
 
     const statement = mock.statements.find((entry) => entry.sql.includes("INSERT INTO digest_delivery"));
-    expect(statement?.sql).toContain("WHEN digest_delivery.status = 'sent'");
-    expect(statement?.sql).toContain("THEN digest_delivery.provider");
-    expect(statement?.sql).toContain("THEN 'sent'");
+    expect(statement?.sql).toContain("digest_delivery.status = 'sent'");
+    expect(statement?.sql).toContain("excluded.status != 'sent'");
+    expect(statement?.sql).toContain("digest_delivery.delivered_at IS NOT NULL");
+    expect(statement?.sql).toContain("excluded.delivered_at IS NULL");
   });
 });
 
@@ -476,6 +524,7 @@ describe("agent action audit persistence", () => {
       "audit-1",
       {
         status: "failed",
+        leaseToken: row.updated_at,
         resourceType: "watchlist",
         resourceId: "watchlist-1",
         errorCode: "action_failed",
@@ -496,6 +545,8 @@ describe("agent action audit persistence", () => {
       expect.any(String),
     ]);
     expect(update?.bindings[8]).toBe("audit-1");
+    expect(update?.bindings.slice(9)).toEqual([row.updated_at, row.updated_at]);
+    expect(update?.sql).toContain("status = 'started' AND updated_at = ?");
     expect(audit?.id).toBe("audit-1");
   });
 });
@@ -2743,6 +2794,134 @@ describe("listAdsByIds", () => {
     expect(result).toEqual([ad]);
   });
 
+  it("hydrates canonical SQL columns when raw_json is sparse", async () => {
+    const row = {
+      id: "e2e-ad-1",
+      advertiser: "Okara",
+      body: "Fixture creative text",
+      body_secondary: null,
+      preview_headline: "Free trial",
+      preview_subhead: "",
+      hook: "Free trial",
+      offer_text: "Starting at ₹499",
+      cta: "Learn more",
+      creative_format: "image",
+      language_label: "English",
+      destination_type: "website",
+      landing_page_url: "https://okara.example.invalid/launch",
+      ad_snapshot_url: "https://facebook.example.invalid/ad/1",
+      countries_json: '["India"]',
+      platforms_json: '["Facebook"]',
+      first_seen_at: null,
+      last_seen_at: null,
+      is_active: 1,
+      source: "meta_api",
+      research_summary: "Stored fixture evidence",
+      creative_text: "Fixture creative text",
+      creative_text_capture_method: "ad_snapshot_fetch",
+      creative_text_metadata_json: '{"captured":true}',
+      raw_json: JSON.stringify({
+        metaAdId: "stale-raw-id",
+        advertiser: "Stale raw advertiser",
+        languageLabel: "Stale raw language",
+        landingPageUrl: "https://stale.example.invalid",
+        creativeText: "Stale raw creative",
+      }),
+    };
+    const db = {
+      prepare: vi.fn(() => ({
+        bind: vi.fn(() => ({
+          all: vi.fn().mockResolvedValue({ results: [row] }),
+        })),
+      })),
+    };
+
+    const [ad] = await listAdsByIds({ DB: db } as never, ["e2e-ad-1"]);
+
+    expect(ad).toMatchObject({
+      metaAdId: "e2e-ad-1",
+      advertiser: "Okara",
+      languageLabel: "English",
+      landingPageUrl: "https://okara.example.invalid/launch",
+      creativeText: "Fixture creative text",
+      analysisFields: [],
+    });
+  });
+
+  it("falls back to raw JSON when nullable canonical columns are NULL", async () => {
+    const row = {
+      id: "legacy-ad-1",
+      advertiser: "Legacy brand",
+      body: "Legacy body",
+      body_secondary: null,
+      preview_headline: "",
+      preview_subhead: "",
+      hook: "",
+      offer_text: "",
+      cta: "",
+      creative_format: "image",
+      language_label: "",
+      destination_type: "unknown",
+      landing_page_url: null,
+      ad_snapshot_url: null,
+      countries_json: "[]",
+      platforms_json: "[]",
+      first_seen_at: null,
+      last_seen_at: null,
+      is_active: 1,
+      source: "meta_api",
+      research_summary: "",
+      creative_text: null,
+      creative_text_capture_method: null,
+      creative_text_metadata_json: null,
+      raw_json: JSON.stringify({
+        metaAdId: "legacy-ad-1",
+        bodySecondary: "Secondary text retained in the legacy payload",
+        landingPageUrl: "https://legacy.example.invalid/launch",
+        adSnapshotUrl: "https://legacy.example.invalid/ad.png",
+        firstSeenAt: "2026-01-02T03:04:05.000Z",
+        lastSeenAt: "2026-02-03T04:05:06.000Z",
+        creativeText: "Text retained in the legacy payload",
+        creativeTextCaptureMethod: "ad_snapshot_fetch",
+        creativeTextMetadata: { extractor: "legacy" },
+        analysisFields: [
+          {
+            scopeType: "ad",
+            fieldKey: "hook",
+            fieldValue: "Legacy hook",
+            provenanceSource: "meta_api",
+          },
+        ],
+      }),
+    };
+    const db = {
+      prepare: vi.fn(() => ({
+        bind: vi.fn(() => ({
+          all: vi.fn().mockResolvedValue({ results: [row] }),
+        })),
+      })),
+    };
+
+    const [ad] = await listAdsByIds({ DB: db } as never, ["legacy-ad-1"]);
+
+    expect(ad).toMatchObject({
+      bodySecondary: "Secondary text retained in the legacy payload",
+      landingPageUrl: "https://legacy.example.invalid/launch",
+      adSnapshotUrl: "https://legacy.example.invalid/ad.png",
+      firstSeenAt: "2026-01-02T03:04:05.000Z",
+      lastSeenAt: "2026-02-03T04:05:06.000Z",
+      creativeText: "Text retained in the legacy payload",
+      creativeTextCaptureMethod: "ad_snapshot_fetch",
+      creativeTextMetadata: { extractor: "legacy" },
+      analysisFields: [
+        expect.objectContaining({
+          fieldKey: "hook",
+          fieldValue: "Legacy hook",
+        }),
+      ],
+    });
+  });
+
   it("chunks lookups so 150 ad ids never exceed D1's bound-parameter cap", async () => {
     const adIds = Array.from({ length: 150 }, (_, index) => `ad-${index}`);
     const statements: Array<{ sql: string; bindings: unknown[] }> = [];
@@ -2855,6 +3034,78 @@ describe("listAdsByIds", () => {
         provenanceSource: "browser_render",
       }),
     ]));
+  });
+
+  it("keeps redirected creative cooldown stable through provider hydration", async () => {
+    const requestedImageUrl = "https://images.example.com/creative.jpg";
+    const persistedImageUrl = "https://cdn.example.com/creative-v2.jpg";
+    const capturedAt = "2026-07-31T00:00:00.000Z";
+    const incoming: AdRecord = {
+      metaAdId: "meta-redirected-creative-1",
+      advertiser: "Nykaa",
+      body: "Current provider copy",
+      previewHeadline: "Current provider headline",
+      previewSubhead: "",
+      hook: "Current hook",
+      offer: "Current offer",
+      cta: "Shop now",
+      format: "image",
+      languageLabel: "English",
+      destinationType: "website",
+      landingPageUrl: null,
+      adSnapshotUrl: null,
+      creativeImageUrl: requestedImageUrl,
+      countries: ["India"],
+      platforms: ["Instagram"],
+      firstSeenAt: null,
+      lastSeenAt: null,
+      active: true,
+      researchSummary: "Current provider summary",
+      source: "meta",
+      analysisFields: [],
+    };
+    const stored: AdRecord = {
+      ...incoming,
+      creativeImageUrl: persistedImageUrl,
+      creativeText: null,
+      creativeTextMetadata: {
+        capturedAt,
+        extractionStatus: "unreadable",
+        unreadableReasonCode: "ocr_binding_missing",
+        creativeSourceFingerprint: creativeCaptureSourceFingerprint({
+          creativeImageUrl: persistedImageUrl,
+        }),
+        creativeRequestedSourceFingerprint: creativeCaptureSourceFingerprint({
+          creativeImageUrl: requestedImageUrl,
+        }),
+      },
+    };
+    const mock = createMockDb([{
+      sqlIncludes: "FROM ad",
+      results: [{ id: stored.metaAdId, raw_json: JSON.stringify(stored) }],
+    }]);
+
+    const [hydrated] = await hydrateAdsWithPersistedCreatives(
+      { DB: mock.db } as never,
+      [incoming],
+    );
+
+    expect(hydrated.creativeImageUrl).toBe(requestedImageUrl);
+    expect(
+      shouldAttemptCreativeTextCapture(hydrated, Date.parse(capturedAt) + 1),
+    ).toBe(false);
+
+    const [changed] = await hydrateAdsWithPersistedCreatives(
+      { DB: mock.db } as never,
+      [{
+        ...incoming,
+        creativeImageUrl: "https://images.example.com/creative-new.jpg",
+      }],
+    );
+
+    expect(
+      shouldAttemptCreativeTextCapture(changed, Date.parse(capturedAt) + 1),
+    ).toBe(true);
   });
 });
 
@@ -3512,9 +3763,26 @@ describe("getOperatorSnapshot", () => {
       expect(failedProofs?.bindings).toContain(recentWindowIso);
       expect(budgetBlockedProofs?.bindings).toContain(recentWindowIso);
       expect(deliveryFailures?.bindings).toContain(recentWindowIso);
+      expect(deliveryFailures?.bindings).toContain("2026-04-26T09:45:00.000Z");
       expect(deliveryFailures?.sql).toContain("delivery_attempt.status = 'pending'");
+      expect(deliveryFailures?.sql).toContain("delivery_attempt.status = 'sent'");
       expect(deliveryFailures?.sql).toContain("delivery_attempt.webhook_status = 'provider_unknown'");
+      expect(deliveryFailures?.sql).toContain("delivery_attempt.updated_at <= ?");
+      expect(deliveryFailures?.sql).toMatch(
+        /WHEN delivery_attempt\.status = 'failed' THEN 0\s+WHEN delivery_attempt\.status = 'pending' THEN 1\s+ELSE 2/,
+      );
       expect(discoveryFailures?.bindings).toContain(recentWindowIso);
+      expect(discoveryFailures?.sql).toContain(
+        "json_extract(discovery_fetch_log.metadata_json, '$.partial') AS partial",
+      );
+      const discoveryProviders = findStatement(
+        mock.statements,
+        "FROM discovery_provider_state",
+        "ORDER BY updated_at DESC",
+      );
+      expect(discoveryProviders?.sql).toContain(
+        "json_extract(metadata_json, '$.partial') AS partial",
+      );
     } finally {
       vi.useRealTimers();
     }
@@ -4320,6 +4588,90 @@ describe("upsertDeliveryTarget", () => {
 });
 
 describe("email target dispatch and unsubscribe ordering", () => {
+  it("atomically refuses lazy provisioning after an account-wide unsubscribe", async () => {
+    const sqlite = createSqliteD1();
+    try {
+      sqlite.sqlite.exec(`
+        CREATE TABLE delivery_target (
+          id TEXT PRIMARY KEY NOT NULL,
+          user_id TEXT NOT NULL,
+          watchlist_id TEXT,
+          channel TEXT NOT NULL,
+          target_value TEXT NOT NULL,
+          validation_status TEXT NOT NULL,
+          is_validated INTEGER NOT NULL,
+          is_opted_in INTEGER NOT NULL,
+          opt_in_source TEXT,
+          opted_in_at TEXT,
+          is_paused INTEGER NOT NULL,
+          paused_at TEXT,
+          opted_out_at TEXT,
+          template_eligible INTEGER NOT NULL,
+          last_successful_delivery_at TEXT,
+          last_successful_attempt_id TEXT,
+          provider_identifier TEXT,
+          metadata_json TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+        CREATE UNIQUE INDEX idx_delivery_target_unique_workspace
+          ON delivery_target(user_id, channel, target_value)
+          WHERE watchlist_id IS NULL;
+        INSERT INTO delivery_target (
+          id, user_id, watchlist_id, channel, target_value, validation_status,
+          is_validated, is_opted_in, opt_in_source, opted_in_at, is_paused,
+          paused_at, opted_out_at, template_eligible, last_successful_delivery_at,
+          last_successful_attempt_id, provider_identifier, metadata_json,
+          created_at, updated_at
+        ) VALUES (
+          'target-watchlist-suppressed', 'user-1', 'watch-1', 'email',
+          'OWNER@example.com', 'validated', 1, 0, 'account_email',
+          '2026-07-30T00:00:00.000Z', 1, '2026-07-30T01:00:00.000Z',
+          '2026-07-30T01:00:00.000Z', 0, NULL, NULL, NULL, '{}',
+          '2026-07-30T00:00:00.000Z', '2026-07-30T01:00:00.000Z'
+        );
+      `);
+
+      await expect(
+        provisionVerifiedAccountEmailTargetIfUnsuppressed(
+          { DB: sqlite.db } as never,
+          {
+            userId: "user-1",
+            targetValue: "owner@example.com",
+            optInSource: "account_email",
+            metadata: { autoProvisioned: true },
+          },
+        ),
+      ).resolves.toBeNull();
+      expect(
+        sqlite.sqlite
+          .prepare(
+            "SELECT COUNT(*) AS count FROM delivery_target WHERE user_id = 'user-1' AND watchlist_id IS NULL",
+          )
+          .get(),
+      ).toMatchObject({ count: 0 });
+
+      await expect(
+        provisionVerifiedAccountEmailTargetIfUnsuppressed(
+          { DB: sqlite.db } as never,
+          {
+            userId: "user-2",
+            targetValue: "fresh@example.com",
+            optInSource: "account_email",
+          },
+        ),
+      ).resolves.toMatchObject({
+        userId: "user-2",
+        targetValue: "fresh@example.com",
+        isOptedIn: true,
+        isValidated: true,
+        validationStatus: "validated",
+      });
+    } finally {
+      sqlite.close();
+    }
+  });
+
   it("claims only the current verified account email and atomically suppresses every matching target", async () => {
     const sqlite = createSqliteD1();
     try {

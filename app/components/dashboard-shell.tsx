@@ -13,7 +13,6 @@ import {
   isSettingsNavPath,
   type DashboardNavItem,
 } from "~/lib/dashboard-navigation";
-import { SUPPORT_EMAIL } from "~/lib/support";
 
 export interface DashboardShellProps {
   /** Signed-out search uses a minimal public rail */
@@ -283,14 +282,10 @@ export function DashboardShell({
                   <small>{userEmail?.trim() || accountDetail}</small>
                 </span>
               </div>
-              <div className="f9-dash-rail-footer f9-wk-foot-links">
-                <Link prefetch="intent" to="/help">
-                  Help
-                </Link>
-                <Link prefetch="intent" to="/docs">
-                  Docs
-                </Link>
-                <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
+              {/* BL-035 re-adjudication: Help, Docs and the support address
+                  duplicated the Help & support route inside the disclosure.
+                  The foot now owns identity and the one session action only. */}
+              <div className="f9-wk-foot-action">
                 <SignOutButton />
               </div>
             </div>

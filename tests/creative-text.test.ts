@@ -1,8 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  creativeCaptureSourceFingerprint,
+  shouldAttemptCreativeTextCapture,
+} from "~/lib/creative-capture-policy";
+import {
   captureCreativeText,
+  createMissingCreativeCaptureResult,
   CREATIVE_TEXT_EXTRACTOR_VERSION,
+  CREATIVE_TEXT_OCR_MODEL,
   extractCreativeTextFromSnapshotHtml,
 } from "~/lib/creative-text.server";
 
@@ -31,6 +37,23 @@ function mockFetchWithDns(handler: (url: string) => Response | Promise<Response>
 afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
+});
+
+describe("createMissingCreativeCaptureResult", () => {
+  it("does not timestamp an absent creative source as captured evidence", () => {
+    const result = createMissingCreativeCaptureResult({
+      creativeImageUrl: null,
+    });
+
+    expect(result).toMatchObject({
+      text: null,
+      metadata: {
+        extractionStatus: "unreadable",
+        unreadableReasonCode: "no_creative_capture_stored",
+      },
+    });
+    expect(result.metadata).not.toHaveProperty("capturedAt");
+  });
 });
 
 describe("extractCreativeTextFromSnapshotHtml", () => {
@@ -157,6 +180,30 @@ describe("extractCreativeTextFromSnapshotHtml", () => {
 });
 
 describe("captureCreativeText", () => {
+  it("records an unreadable reason when the stored capture URL is invalid", async () => {
+    const result = await captureCreativeText(
+      {
+        AI: undefined,
+      } as never,
+      "not-a-public-http-url",
+      {
+        advertiser: "Nykaa",
+        body: "",
+        previewHeadline: "",
+        previewSubhead: "",
+        cta: "",
+      },
+    );
+
+    expect(result).toMatchObject({
+      text: null,
+      metadata: {
+        extractionStatus: "unreadable",
+        unreadableReasonCode: "creative_capture_url_invalid",
+      },
+    });
+  });
+
   it("fetches the ad snapshot and returns best-effort creative text metadata", async () => {
     mockFetchWithDns(
       () =>
@@ -197,6 +244,289 @@ describe("captureCreativeText", () => {
         fetchStatus: 200,
       },
     });
+  });
+
+  it("falls back to the stored creative image when the snapshot fetch fails", async () => {
+    const aiRun = vi.fn().mockResolvedValue({
+      description: "Fallback Creative\n40% OFF",
+    });
+    mockFetchWithDns((url) => {
+      if (url.includes("facebook.example.com")) {
+        return new Response("expired snapshot", { status: 404 });
+      }
+      return new Response(Uint8Array.from([255, 216, 255, 217]), {
+        status: 200,
+        headers: { "content-type": "image/jpeg" },
+      });
+    });
+
+    const result = await captureCreativeText(
+      { AI: { run: aiRun } } as never,
+      "https://facebook.example.com/ad-snapshot",
+      {
+        advertiser: "Nykaa",
+        body: "",
+        previewHeadline: "",
+        previewSubhead: "",
+        cta: "",
+        creativeImageUrl: "https://cdn.example.com/creative.jpg",
+      },
+    );
+
+    expect(aiRun).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      text: "Fallback Creative\n40% OFF",
+      imageUrl: "https://cdn.example.com/creative.jpg",
+      metadata: {
+        extractionStatus: "readable",
+        extractionPath: "direct_image_ocr",
+        sourceFallbackAttempted: true,
+        sourceFallbackFromReasonCode: "creative_snapshot_http_error",
+      },
+    });
+  });
+
+  it("does not re-OCR the stored creative image after snapshot OCR already tried it", async () => {
+    const aiRun = vi.fn().mockResolvedValue({ description: "" });
+    mockFetchWithDns((url) => {
+      if (url.includes("cdn.example.com")) {
+        return new Response(Uint8Array.from([255, 216, 255, 217]), {
+          status: 200,
+          headers: { "content-type": "image/jpeg" },
+        });
+      }
+      return new Response("<html><body><div>Nykaa</div></body></html>", {
+        status: 200,
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    });
+
+    const result = await captureCreativeText(
+      { AI: { run: aiRun } } as never,
+      "https://facebook.example.com/ad-snapshot",
+      {
+        advertiser: "Nykaa",
+        body: "",
+        previewHeadline: "",
+        previewSubhead: "",
+        cta: "",
+        creativeImageUrl: "https://cdn.example.com/creative.jpg",
+      },
+    );
+
+    expect(aiRun).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({
+      text: null,
+      imageUrl: "https://cdn.example.com/creative.jpg",
+      metadata: {
+        extractionPath: "snapshot_image_ocr",
+        ocrAttemptCount: 2,
+        unreadableReasonCode: "ocr_empty_result",
+      },
+    });
+    expect(result?.metadata).not.toHaveProperty("sourceFallbackAttempted");
+  });
+
+  it("retries a stored creative image omitted by the snapshot candidate cap", async () => {
+    const aiRun = vi.fn().mockResolvedValue({
+      description: "Stored creative\n50% OFF",
+    });
+    const discoveredImages = Array.from(
+      { length: 5 },
+      (_, index) =>
+        `<meta property="og:image" content="https://cdn.example.com/discovered-${index}.jpg">`,
+    ).join("");
+    mockFetchWithDns((url) => {
+      if (url.includes("stored.jpg")) {
+        return new Response(Uint8Array.from([255, 216, 255, 217]), {
+          status: 200,
+          headers: { "content-type": "image/jpeg" },
+        });
+      }
+      if (url.includes("discovered-")) {
+        return new Response("<html></html>", {
+          status: 200,
+          headers: { "content-type": "text/html" },
+        });
+      }
+      return new Response(`${discoveredImages}<div>Nykaa</div>`, {
+        status: 200,
+        headers: { "content-type": "text/html" },
+      });
+    });
+
+    const result = await captureCreativeText(
+      { AI: { run: aiRun } } as never,
+      "https://facebook.example.com/ad-snapshot",
+      {
+        advertiser: "Nykaa",
+        body: "",
+        previewHeadline: "",
+        previewSubhead: "",
+        cta: "",
+        creativeImageUrl: "https://cdn.example.com/stored.jpg",
+      },
+    );
+
+    expect(aiRun).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      text: "Stored creative\n50% OFF",
+      imageUrl: "https://cdn.example.com/stored.jpg",
+      metadata: {
+        extractionPath: "direct_image_ocr",
+        sourceFallbackAttempted: true,
+      },
+    });
+  });
+
+  it("never persists an inline-image sentinel as the creative thumbnail", async () => {
+    const aiRun = vi.fn().mockResolvedValue({
+      description: "Inline creative\n50% OFF",
+    });
+    mockFetchWithDns((url) => {
+      if (url.includes("facebook.example.com")) {
+        return new Response(
+          '<meta property="og:image" content="data:image/png;base64,iVBORw0KGgo="><img src="https://cdn.example.com/fallback.jpg"><div>Nykaa</div>',
+          { status: 200, headers: { "content-type": "text/html" } },
+        );
+      }
+      return new Response(Uint8Array.from([255, 216, 255, 217]), {
+        status: 200,
+        headers: { "content-type": "image/jpeg" },
+      });
+    });
+
+    const result = await captureCreativeText(
+      { AI: { run: aiRun } } as never,
+      "https://facebook.example.com/ad-snapshot",
+      {
+        advertiser: "Nykaa",
+        body: "",
+        previewHeadline: "",
+        previewSubhead: "",
+        cta: "",
+      },
+    );
+
+    expect(result).toMatchObject({
+      text: "Inline creative\n50% OFF",
+      imageUrl: "https://cdn.example.com/fallback.jpg",
+    });
+  });
+
+  it("prefers a snapshot-discovered image over a stale persisted image", async () => {
+    const aiRun = vi.fn(async (_model: string, input: { image: number[] }) => ({
+      description:
+        input.image[0] === 4 ? "Fresh snapshot creative" : "Stale persisted creative",
+    }));
+    mockFetchWithDns((url) => {
+      if (url.includes("current.jpg")) {
+        return new Response(Uint8Array.from([4, 5, 6]), {
+          status: 200,
+          headers: { "content-type": "image/jpeg" },
+        });
+      }
+      if (url.includes("persisted.jpg")) {
+        return new Response(Uint8Array.from([1, 2, 3]), {
+          status: 200,
+          headers: { "content-type": "image/jpeg" },
+        });
+      }
+      return new Response(
+        '<meta property="og:image" content="https://cdn.example.com/current.jpg"><div>Nykaa</div>',
+        { status: 200, headers: { "content-type": "text/html" } },
+      );
+    });
+
+    const result = await captureCreativeText(
+      { AI: { run: aiRun } } as never,
+      "https://facebook.example.com/ad-snapshot",
+      {
+        advertiser: "Nykaa",
+        body: "",
+        previewHeadline: "",
+        previewSubhead: "",
+        cta: "",
+        adSnapshotUrl: "https://facebook.example.com/ad-snapshot",
+        creativeImageUrl: "https://cdn.example.com/persisted.jpg",
+      },
+    );
+
+    expect(result).toMatchObject({
+      text: "Fresh snapshot creative",
+      imageUrl: "https://cdn.example.com/current.jpg",
+      metadata: {
+        extractionPath: "snapshot_image_ocr",
+        creativeSourceFingerprint: creativeCaptureSourceFingerprint({
+          adSnapshotUrl: "https://facebook.example.com/ad-snapshot",
+          creativeImageUrl: "https://cdn.example.com/current.jpg",
+        }),
+      },
+    });
+    expect(aiRun).toHaveBeenCalledTimes(1);
+    expect(aiRun).toHaveBeenCalledWith(
+      CREATIVE_TEXT_OCR_MODEL,
+      expect.objectContaining({ image: [4, 5, 6] }),
+    );
+  });
+
+  it("fingerprints a redirected direct image by the URL that will be persisted", async () => {
+    const requestedImageUrl = "https://images.example.com/creative.jpg";
+    const redirectedImageUrl = "https://cdn.example.com/creative-v2.jpg";
+    mockFetchWithDns((url) => {
+      if (url === requestedImageUrl) {
+        return new Response(null, {
+          status: 302,
+          headers: { location: redirectedImageUrl },
+        });
+      }
+
+      const response = new Response(Uint8Array.from([255, 216, 255, 217]), {
+        status: 200,
+        headers: { "content-type": "image/jpeg" },
+      });
+      Object.defineProperty(response, "url", { value: redirectedImageUrl });
+      return response;
+    });
+
+    const result = await captureCreativeText(
+      {} as never,
+      requestedImageUrl,
+      {
+        advertiser: "Nykaa",
+        body: "",
+        previewHeadline: "",
+        previewSubhead: "",
+        cta: "",
+        creativeImageUrl: requestedImageUrl,
+      },
+    );
+
+    expect(result).toMatchObject({
+      text: null,
+      imageUrl: redirectedImageUrl,
+      metadata: {
+        unreadableReasonCode: "ocr_binding_missing",
+        creativeSourceFingerprint: creativeCaptureSourceFingerprint({
+          creativeImageUrl: redirectedImageUrl,
+        }),
+        creativeRequestedSourceFingerprint: creativeCaptureSourceFingerprint({
+          creativeImageUrl: requestedImageUrl,
+        }),
+      },
+    });
+    expect(
+      shouldAttemptCreativeTextCapture(
+        {
+          source: "meta",
+          adSnapshotUrl: null,
+          creativeImageUrl: result?.imageUrl,
+          creativeText: result?.text,
+          creativeTextMetadata: result?.metadata,
+        } as never,
+        Date.now(),
+      ),
+    ).toBe(false);
   });
 
   it("falls back to Workers AI OCR when the snapshot HTML has no distinct creative text", async () => {
@@ -274,6 +604,221 @@ describe("captureCreativeText", () => {
     });
   });
 
+  it("retries one transient Workers AI failure before declaring the image unreadable", async () => {
+    vi.useFakeTimers();
+    const transient = Object.assign(new Error("Workers AI request timeout (3007)"), {
+      status: 408,
+    });
+    const aiRun = vi.fn()
+      .mockRejectedValueOnce(transient)
+      .mockResolvedValueOnce({
+        description: "Launch Sale\nFlat ₹400 Off",
+      });
+
+    mockFetchWithDns((url) => {
+      if (url.includes("cdn.example.com")) {
+        return new Response(Uint8Array.from([255, 216, 255, 217]), {
+          status: 200,
+          headers: { "content-type": "image/jpeg" },
+        });
+      }
+      return new Response(
+        '<meta property="og:image" content="https://cdn.example.com/creative.jpg"><div>Nykaa</div>',
+        { status: 200, headers: { "content-type": "text/html" } },
+      );
+    });
+
+    const resultPromise = captureCreativeText(
+      { AI: { run: aiRun } } as never,
+      "https://facebook.example.com/ad-snapshot",
+      {
+        advertiser: "Nykaa",
+        body: "Glow Days are live.",
+        previewHeadline: "Festive glow",
+        previewSubhead: "",
+        cta: "Shop now",
+      },
+    );
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(aiRun).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(99);
+    expect(aiRun).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    const result = await resultPromise;
+
+    expect(aiRun).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({
+      text: "Launch Sale\nFlat ₹400 Off",
+      metadata: {
+        extractionStatus: "readable",
+        ocrAttemptCount: 2,
+      },
+    });
+  });
+
+  it("bounds each Workers AI OCR call before retrying with backoff", async () => {
+    vi.useFakeTimers();
+    const aiRun = vi.fn()
+      .mockImplementationOnce(() => new Promise(() => undefined))
+      .mockResolvedValueOnce({
+        description: "Launch Sale\nFlat ₹400 Off",
+      });
+
+    mockFetchWithDns((url) => {
+      if (url.includes("cdn.example.com")) {
+        return new Response(Uint8Array.from([255, 216, 255, 217]), {
+          status: 200,
+          headers: { "content-type": "image/jpeg" },
+        });
+      }
+      return new Response(
+        '<meta property="og:image" content="https://cdn.example.com/creative.jpg"><div>Nykaa</div>',
+        { status: 200, headers: { "content-type": "text/html" } },
+      );
+    });
+
+    const resultPromise = captureCreativeText(
+      { AI: { run: aiRun } } as never,
+      "https://facebook.example.com/ad-snapshot",
+      {
+        advertiser: "Nykaa",
+        body: "Glow Days are live.",
+        previewHeadline: "Festive glow",
+        previewSubhead: "",
+        cta: "Shop now",
+      },
+    );
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(aiRun).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(aiRun).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(aiRun).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(99);
+    expect(aiRun).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    const result = await resultPromise;
+
+    expect(aiRun).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({
+      text: "Launch Sale\nFlat ₹400 Off",
+      metadata: {
+        extractionStatus: "readable",
+        ocrAttemptCount: 2,
+      },
+    });
+  });
+
+  it("OCRs a direct image-only creative instead of treating the bytes as snapshot HTML", async () => {
+    const aiRun = vi.fn().mockResolvedValue({
+      description: "Summer Drop\n30% OFF",
+    });
+    mockFetchWithDns(
+      () =>
+        new Response(Uint8Array.from([255, 216, 255, 217]), {
+          status: 200,
+          headers: { "content-type": "image/jpeg" },
+        }),
+    );
+
+    const result = await captureCreativeText(
+      { AI: { run: aiRun } } as never,
+      "https://cdn.example.com/creative.jpg",
+      {
+        advertiser: "Nykaa",
+        body: "",
+        previewHeadline: "",
+        previewSubhead: "",
+        cta: "",
+      },
+    );
+
+    expect(aiRun).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      text: "Summer Drop\n30% OFF",
+      imageUrl: "https://cdn.example.com/creative.jpg",
+      metadata: {
+        extractionPath: "direct_image_ocr",
+        extractionStatus: "readable",
+      },
+    });
+  });
+
+  it("OCRs image bytes served with a generic content type", async () => {
+    const aiRun = vi.fn().mockResolvedValue({
+      description: "Summer Drop\n30% OFF",
+    });
+    mockFetchWithDns(
+      () =>
+        new Response(Uint8Array.from([255, 216, 255, 217]), {
+          status: 200,
+          headers: { "content-type": "application/octet-stream" },
+        }),
+    );
+
+    const result = await captureCreativeText(
+      { AI: { run: aiRun } } as never,
+      "https://cdn.example.com/creative",
+      {
+        advertiser: "Nykaa",
+        body: "",
+        previewHeadline: "",
+        previewSubhead: "",
+        cta: "",
+        creativeImageUrl: "https://cdn.example.com/creative",
+      },
+    );
+
+    expect(aiRun).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      text: "Summer Drop\n30% OFF",
+      imageUrl: "https://cdn.example.com/creative",
+      metadata: {
+        extractionPath: "direct_image_ocr",
+        extractionStatus: "readable",
+      },
+    });
+  });
+
+  it("retains the creative image and a persisted reason when the AI binding is missing", async () => {
+    mockFetchWithDns((url) => {
+      if (url.includes("cdn.example.com")) {
+        return new Response(Uint8Array.from([255, 216, 255, 217]), {
+          status: 200,
+          headers: { "content-type": "image/jpeg" },
+        });
+      }
+      return new Response(
+        '<meta property="og:image" content="https://cdn.example.com/creative.jpg"><div>Nykaa</div>',
+        { status: 200, headers: { "content-type": "text/html" } },
+      );
+    });
+
+    const result = await captureCreativeText(
+      { AI: undefined } as never,
+      "https://facebook.example.com/ad-snapshot",
+      {
+        advertiser: "Nykaa",
+        body: "",
+        previewHeadline: "",
+        previewSubhead: "",
+        cta: "",
+      },
+    );
+
+    expect(result).toMatchObject({
+      text: null,
+      imageUrl: "https://cdn.example.com/creative.jpg",
+      metadata: {
+        extractionStatus: "unreadable",
+        unreadableReasonCode: "ocr_binding_missing",
+        capturedAt: expect.any(String),
+      },
+    });
+  });
+
   it("refuses oversized snapshot HTML before OCR", async () => {
     const aiRun = vi.fn();
     mockFetchWithDns(
@@ -298,7 +843,13 @@ describe("captureCreativeText", () => {
       },
     );
 
-    expect(result).toBeNull();
+    expect(result).toMatchObject({
+      text: null,
+      metadata: {
+        extractionStatus: "unreadable",
+        unreadableReasonCode: "creative_snapshot_empty_or_oversized",
+      },
+    });
     expect(aiRun).not.toHaveBeenCalled();
   });
 
@@ -346,7 +897,13 @@ describe("captureCreativeText", () => {
       },
     );
 
-    expect(result).toBeNull();
+    expect(result).toMatchObject({
+      text: null,
+      imageUrl: "https://cdn.example.com/creative.jpg",
+      metadata: {
+        unreadableReasonCode: "creative_image_invalid_or_oversized",
+      },
+    });
     expect(aiRun).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
   });
@@ -373,7 +930,12 @@ describe("captureCreativeText", () => {
       },
     );
 
-    expect(result).toBeNull();
+    expect(result).toMatchObject({
+      text: null,
+      metadata: {
+        unreadableReasonCode: "creative_snapshot_fetch_failed",
+      },
+    });
     expect(aiRun).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
   });
@@ -421,7 +983,13 @@ describe("captureCreativeText", () => {
       },
     );
 
-    expect(result).toBeNull();
+    expect(result).toMatchObject({
+      text: null,
+      imageUrl: "https://cdn.example.com/creative.jpg",
+      metadata: {
+        unreadableReasonCode: "creative_image_invalid_or_oversized",
+      },
+    });
     expect(aiRun).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
   });

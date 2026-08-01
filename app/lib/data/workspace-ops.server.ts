@@ -280,8 +280,12 @@ export async function getOperatorRiskSummary(env: AppEnv): Promise<OperatorRiskS
 }
 
 export async function getOperatorSnapshot(env: AppEnv) {
-  const stuckThresholdIso = new Date(Date.now() - 30 * 60 * 1000).toISOString();
-  const recentWindowIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const now = Date.now();
+  const stuckThresholdIso = new Date(now - 30 * 60 * 1000).toISOString();
+  const recentWindowIso = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const acceptedEmailAttentionBeforeIso = new Date(
+    now - 15 * 60 * 1000,
+  ).toISOString();
   const warnings: Array<{ section: string; message: string }> = [];
   const isolate = async <T,>(section: string, promise: Promise<T>, fallback: T) => {
     try {
@@ -467,12 +471,25 @@ export async function getOperatorSnapshot(env: AppEnv) {
             (
               delivery_attempt.status = 'pending' AND
               delivery_attempt.webhook_status = 'provider_unknown'
+            ) OR
+            (
+              delivery_attempt.channel = 'email' AND
+              delivery_attempt.status = 'sent' AND
+              delivery_attempt.webhook_status = 'provider_unknown' AND
+              delivery_attempt.updated_at <= ?
             )
           )
           AND delivery_attempt.created_at >= ?
-        ORDER BY delivery_attempt.created_at DESC
+        ORDER BY
+          CASE
+            WHEN delivery_attempt.status = 'failed' THEN 0
+            WHEN delivery_attempt.status = 'pending' THEN 1
+            ELSE 2
+          END,
+          delivery_attempt.created_at DESC
         LIMIT 8
       `,
+      acceptedEmailAttentionBeforeIso,
       recentWindowIso,
     ), []),
     isolate("degradedWatchlists", many<{
@@ -545,6 +562,7 @@ export async function getOperatorSnapshot(env: AppEnv) {
       cacheStatus: DiscoveryCacheStatus;
       failureClass: DiscoveryFailureClass | null;
       browserMsUsed: number | null;
+      partial: number | null;
       createdAt: string;
     }>(
       env,
@@ -557,6 +575,7 @@ export async function getOperatorSnapshot(env: AppEnv) {
           discovery_fetch_log.cache_status AS cacheStatus,
           discovery_fetch_log.failure_class AS failureClass,
           discovery_fetch_log.browser_ms_used AS browserMsUsed,
+          json_extract(discovery_fetch_log.metadata_json, '$.partial') AS partial,
           discovery_fetch_log.created_at AS createdAt
         FROM discovery_fetch_log
         WHERE discovery_fetch_log.status = 'failed'
@@ -572,6 +591,7 @@ export async function getOperatorSnapshot(env: AppEnv) {
       failureClass: DiscoveryFailureClass | null;
       lastSuccessAt: string | null;
       lastFailureAt: string | null;
+      partial: number | null;
       updatedAt: string;
     }>(
       env,
@@ -582,6 +602,7 @@ export async function getOperatorSnapshot(env: AppEnv) {
           failure_class AS failureClass,
           last_success_at AS lastSuccessAt,
           last_failure_at AS lastFailureAt,
+          json_extract(metadata_json, '$.partial') AS partial,
           updated_at AS updatedAt
         FROM discovery_provider_state
         ORDER BY updated_at DESC

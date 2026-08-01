@@ -4,6 +4,7 @@ export const DAILY_DIGEST_CRON = "0 4 * * *";
 /** @deprecated The 04:00 cron now sends daily digests only. */
 export const DAILY_MONITORING_CRON = DAILY_DIGEST_CRON;
 export const WEEKLY_DIGEST_CRON = "0 5 * * MON";
+export { SCHEDULED_OBSERVATION_GAP_CHECK_CRON } from "../app/lib/scheduled-observation-health.server";
 
 export type ScheduledTask =
   | {
@@ -66,19 +67,48 @@ export function resolveScheduledTask(cron: string): ScheduledTask {
 
 export function resolveOperationalRiskAlertIdempotencyKey(
   dayKey: string,
-  input: { skippedForBudget: number; dispatchFailures: number },
+  input: {
+    skippedForBudget: number;
+    dispatchFailures: number;
+    inlineFailures?: number;
+    digestFailures?: number;
+  },
 ) {
-  if (input.skippedForBudget > 0 && input.dispatchFailures > 0) {
+  const budgetSkipped = input.skippedForBudget > 0;
+  const dispatchFailed = input.dispatchFailures > 0;
+  const inlineFailed = (input.inlineFailures ?? 0) > 0;
+  const digestFailed = (input.digestFailures ?? 0) > 0;
+
+  if (budgetSkipped && dispatchFailed && !inlineFailed && !digestFailed) {
     return `operator-alert:scan-budget-and-fanout-dispatch:${dayKey}`;
   }
 
-  if (input.skippedForBudget > 0) {
+  if (budgetSkipped && !dispatchFailed && !inlineFailed && !digestFailed) {
     return `operator-alert:scan-budget:${dayKey}`;
   }
 
-  if (input.dispatchFailures > 0) {
+  if (dispatchFailed && !budgetSkipped && !inlineFailed && !digestFailed) {
     return `operator-alert:fanout-dispatch:${dayKey}`;
   }
 
-  return null;
+  if (!budgetSkipped && !dispatchFailed && (inlineFailed || digestFailed)) {
+    const failureMode =
+      inlineFailed && digestFailed
+        ? "inline-and-digest"
+        : inlineFailed
+          ? "inline"
+          : "digest";
+    return `operator-alert:scheduled-degraded-${failureMode}:${dayKey}`;
+  }
+
+  const failureModes = [
+    budgetSkipped ? "scan-budget" : null,
+    dispatchFailed ? "fanout-dispatch" : null,
+    inlineFailed ? "inline" : null,
+    digestFailed ? "digest" : null,
+  ].filter((mode): mode is string => mode !== null);
+
+  return failureModes.length > 0
+    ? `operator-alert:scheduled-degraded-${failureModes.join("-and-")}:${dayKey}`
+    : null;
 }

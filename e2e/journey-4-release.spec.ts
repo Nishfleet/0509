@@ -206,6 +206,12 @@ async function expectReportAtViewport(
   await expect(
     page.getByText("Verified evidence", { exact: true }).first(),
   ).toBeVisible();
+  // The fixture stores these values on proof_capture (legacy field keys),
+  // not on the linked ad. Report loading must join that evidence instead of
+  // emitting the unreadable empty-plate state.
+  await expect(
+    page.getByText("New AI workflow launch", { exact: true }).first(),
+  ).toBeVisible();
   await expectCurrentEvidenceArtifactIndex(page);
   await expect(
     page.getByRole("button", { name: "Send to client" }),
@@ -322,7 +328,9 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
     testInfo.annotations.push({ type: "viewport", description: `${viewport.width}x${viewport.height}` });
     await signInAs(context, baseURL!, "e2e-agency");
     await page.setViewportSize(viewport);
-    await page.goto("/app/watchlists?watchlist=e2e-watchlist-agency-1");
+    await page.goto(
+      "/app/watchlists?watchlist=e2e-watchlist-agency-1&tab=evidence",
+    );
     await expect(
       page.getByRole("link", { name: "Export CSV" }),
     ).toHaveAttribute("href", "/export/watchlist/e2e-watchlist-agency-1");
@@ -352,26 +360,30 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
       "JSON export should be an executable local surface",
     ).toBe(200);
     expect(jsonResponse.headers()["content-type"] ?? "").toMatch(/json/i);
-    // BL-007: the opened competitor no longer repeats the band's report link;
-    // "Package for client" on the band is the one control to the same report.
+    // BL-035: client handoff is attached to stored evidence. The Evidence tab
+    // keeps the completed-check report destination alongside share/export.
     await expect(
       page.getByRole("link", { name: "Package for client" }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Share summary" }),
     ).toBeVisible();
     // BL-036: report eligibility belongs to a completed Agency check, not to
     // whether that check happened to catch a change. This fixture has a
     // succeeded run and unchanged before/after captures, with no watch event.
     await page.goto("/app/watchlists?watchlist=e2e-watchlist-agency-quiet");
-    const quietPane = page.locator(".f9-wk-detail");
-    await expect(quietPane.getByText("Quiet", { exact: true })).toBeVisible();
+    const quietPane = page.locator(".f9-bl035-detail");
+    await expect(page.locator(".f9-wk-context")).toContainText("Quiet");
     await expect(
       quietPane.getByRole("link", { name: "Package for client" }),
     ).toHaveAttribute(
       "href",
       "/app/reports/watchlist:e2e-watchlist-agency-quiet",
     );
-    await expect(
-      page.getByRole("button", { name: "Share summary" }),
-    ).toBeVisible();
+    await page.goto(
+      "/app/watchlists?watchlist=e2e-watchlist-agency-quiet&tab=evidence",
+    );
+    await expect(page.getByRole("button", { name: "Share summary" })).toBeVisible();
     const reportPage = await page.request.get(
       "/app/reports/watchlist:e2e-watchlist-agency-1",
       { headers: { [fixtureModeHeader]: "1" } },
@@ -529,10 +541,14 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
       page.getByRole("heading", { name: "Client rooms", exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Bundle evidence and notes." }),
+      page.getByRole("button", { name: "Create client room" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Create the first client room" }),
+      page.getByRole("heading", { name: "No client rooms yet" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Create client room" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Bundle evidence and notes" }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Save client room" }),
@@ -549,22 +565,19 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
       await starterPage.goto("/app/clients");
       await expect(
         starterPage.getByRole("heading", {
-          level: 2,
+          level: 1,
           name: "Client rooms",
           exact: true,
         }),
       ).toBeVisible();
       await expect(
-        starterPage.getByText(
-          "Keep watchlists, collections, reports, and client context together for agency delivery — included in the Agency plan.",
-          { exact: true },
-        ),
+        starterPage.getByRole("heading", { name: "Client rooms stay readable" }),
       ).toBeVisible();
       await expect(
         starterPage.getByRole("link", { name: "Upgrade to Agency" }),
       ).toBeVisible();
       await expect(
-        starterPage.getByText("Existing rooms remain available below.", {
+        starterPage.getByText("Existing rooms remain available below", {
           exact: false,
         }),
       ).toBeVisible();
@@ -664,13 +677,15 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
         concurrentOwnerPage.goto("/app/shares"),
       ]);
       const shareRowFor = (ownerPage: Page) => ownerPage
-        .locator(".f9-work-row")
+        .locator(".f9-wk-row")
         .filter({ hasText: firstShareUrl });
       const firstShareRow = shareRowFor(page);
       const concurrentShareRow = shareRowFor(concurrentOwnerPage);
       await Promise.all([
-        expect(firstShareRow).toContainText("Report · Approved current evidence"),
-        expect(concurrentShareRow).toContainText("Report · Approved current evidence"),
+        expect(firstShareRow).toContainText("Report · Snapshot"),
+        expect(concurrentShareRow).toContainText("Report · Snapshot"),
+        expect(firstShareRow).toContainText("Approved"),
+        expect(concurrentShareRow).toContainText("Approved"),
       ]);
       const armRevoke = async (ownerPage: Page) => {
         const revokeButton = shareRowFor(ownerPage).getByRole("button", {
@@ -689,7 +704,7 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
       ]);
       await Promise.all([firstConfirm.click(), concurrentConfirm.click()]);
       const feedbackText = async (ownerPage: Page) => {
-        const feedback = ownerPage.locator(".f9-action-feedback");
+        const feedback = ownerPage.locator(".f9-wk-strip p");
         await expect(feedback).toBeVisible();
         return (await feedback.innerText()).trim();
       };
@@ -703,10 +718,10 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
       ].sort());
       await Promise.all([page.reload(), concurrentOwnerPage.reload()]);
       await expect(
-        page.locator(".f9-work-row").filter({ hasText: firstShareUrl }),
+        page.locator(".f9-wk-row").filter({ hasText: firstShareUrl }),
       ).toHaveCount(0);
       await expect(
-        concurrentOwnerPage.locator(".f9-work-row").filter({ hasText: firstShareUrl }),
+        concurrentOwnerPage.locator(".f9-wk-row").filter({ hasText: firstShareUrl }),
       ).toHaveCount(0);
       await concurrentOwnerPage.close();
       const revokedResponse = await anonymousPage.goto(firstShareUrl);
@@ -731,9 +746,9 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
       await expectNoOverflow(anonymousPage);
       await expectKeyboardFocus(anonymousPage);
       await page.goto("/app/shares");
-      await expect(
-        page.locator(".f9-work-row").filter({ hasText: secondShareUrl }),
-      ).toContainText("Report · Approved current evidence");
+      const replacementRow = page.locator(".f9-wk-row").filter({ hasText: secondShareUrl });
+      await expect(replacementRow).toContainText("Report · Snapshot");
+      await expect(replacementRow).toContainText("Approved");
       await attachReleaseStateArtifacts({ page, testInfo, prefix: "j4-share", state: "share-revoke-rereview" });
       annotateFinalUrl(testInfo, page);
     } finally {

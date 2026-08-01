@@ -2,6 +2,8 @@ import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { PLAN_LIMITS } from "~/lib/plan-entitlements";
+
 type MockProps = { children?: ReactNode } & Record<string, unknown>;
 
 const digest = {
@@ -36,7 +38,10 @@ afterEach(() => {
   vi.resetModules();
 });
 
-async function renderDigest(plan: "free" | "scout" | "starter" | "agency") {
+async function renderDigest(
+  plan: "free" | "scout" | "starter" | "agency",
+  state: "filed" | "empty" | "locked" = "filed",
+) {
   vi.doMock("react-router", async () => {
     const actual = await vi.importActual<typeof import("react-router")>("react-router");
     const React = await import("react");
@@ -47,9 +52,25 @@ async function renderDigest(plan: "free" | "scout" | "starter" | "agency") {
         React.createElement("a", { ...props, href: typeof to === "string" ? to : "" }, children),
       useActionData: vi.fn().mockReturnValue(undefined),
       useLoaderData: vi.fn().mockReturnValue(
-        plan === "free"
-          ? { digests: [], selectedDigest: null, canAccessDigests: false, plan }
-          : {
+        state === "locked"
+          ? {
+              digests: [],
+              selectedDigest: null,
+              selectedDigestAttempts: [],
+              digestAttemptsByDigestId: {},
+              canAccessDigests: false,
+              plan,
+            }
+          : state === "empty"
+            ? {
+                digests: [],
+                selectedDigest: null,
+                selectedDigestAttempts: [],
+                digestAttemptsByDigestId: {},
+                canAccessDigests: true,
+                plan,
+              }
+            : {
               digests: [digest],
               selectedDigest: digest,
               selectedDigestAttempts: [],
@@ -82,6 +103,13 @@ async function renderDigest(plan: "free" | "scout" | "starter" | "agency") {
 }
 
 describe("digest plan-aware controls", () => {
+  it.each(["free", "scout", "starter", "agency"] as const)(
+    "keeps retained Briefs access enabled by the canonical %s plan contract",
+    (plan) => {
+      expect(PLAN_LIMITS[plan].digests).toBe(true);
+    },
+  );
+
   it("returns a structured share gate before creating a digest link on Scout", async () => {
     vi.doMock("~/lib/auth.server", () => ({
       requireWorkspaceSession: vi.fn().mockResolvedValue({
@@ -124,7 +152,7 @@ describe("digest plan-aware controls", () => {
   });
 
   it("keeps free activation honest with an upgrade state and no recurring controls", async () => {
-    const markup = await renderDigest("free");
+    const markup = await renderDigest("free", "locked");
 
     expect(markup).toContain("Competitor change briefs");
     expect(markup).toContain("See plans");
@@ -134,6 +162,7 @@ describe("digest plan-aware controls", () => {
   });
 
   it.each([
+    ["free", false, false],
     ["scout", false, false],
     ["starter", true, true],
     ["agency", true, true],
@@ -145,4 +174,20 @@ describe("digest plan-aware controls", () => {
     expect(markup).not.toContain(canExport ? "Upgrade for exports" : "/export/digest/digest-1");
     expect(markup).not.toContain(canShare ? "Upgrade to share" : 'name="intent" value="share-digest"');
   });
+
+  it.each(["free", "scout", "starter", "agency"] as const)(
+    "shows the same honest first-brief action for the %s empty state",
+    async (plan) => {
+      const markup = await renderDigest(plan, "empty");
+
+      expect(markup).toContain("Your first brief lands after the first scan");
+      expect(markup).toContain("Add competitor");
+      expect(markup).toContain('href="/search"');
+      expect(markup).not.toContain("Export CSV");
+      expect(markup).not.toContain("Export JSON");
+      expect(markup).not.toContain("Share snapshot");
+      expect(markup).not.toContain("Upgrade for exports");
+      expect(markup).not.toContain("Upgrade to share");
+    },
+  );
 });

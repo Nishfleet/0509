@@ -26,6 +26,10 @@ import {
   type ReleaseScheduledTaskName,
 } from "../app/lib/release-scheduled-observation.server";
 import { runRetentionSweep } from "../app/lib/retention.server";
+import {
+  sendScheduledObservationGapAlert,
+  SCHEDULED_OBSERVATION_GAP_CHECK_CRON,
+} from "../app/lib/scheduled-observation-health.server";
 import { scheduleBillingLifecycleEmailRecovery } from "./delivery-recovery";
 import { scheduleDigestScheduleExhaustionRecovery } from "./digest-schedule-recovery";
 import { primaryDomainRedirect } from "./primary-domain";
@@ -128,18 +132,44 @@ export default {
     return withSecurityHeaders(response, request);
   },
   async scheduled(controller, env, ctx) {
+    const observationContext = Object.freeze({
+      cron: controller.cron,
+      scheduledTime: controller.scheduledTime,
+    });
+
+    if (controller.cron === SCHEDULED_OBSERVATION_GAP_CHECK_CRON) {
+      // This in-Worker check detects gaps among individual workload crons. The
+      // external GitHub deep-health probe detects a total Worker cron outage.
+      // Preserve the shared outbox drain without trying to record this check
+      // cron in the release-soak observation table, whose contract intentionally
+      // accepts only the four production workload schedules.
+      scheduleBillingLifecycleEmailRecovery(env, ctx);
+      ctx.waitUntil(
+        sendScheduledObservationGapAlert(env).then(
+          (result) => {
+            if (result.reason !== "healthy") {
+              console.log("scheduled observation gap check completed", {
+                unhealthy: result.health.filter(
+                  (entry) => entry.overdue || entry.futureEvidence,
+                ).length,
+                sent: result.sent,
+              });
+            }
+          },
+          (error) =>
+            reportScheduledTaskFailure(env, "scheduled_observation_gap_check", error),
+        ),
+      );
+      return;
+    }
+
     const scheduledTask = resolveScheduledTask(controller.cron);
-		const observationContext = Object.freeze({
-			cron: controller.cron,
-			scheduledTime: controller.scheduledTime,
-		});
+    // Every cron also drains a bounded customer-email outbox. Keeping this
+    // before the warmup early return ensures a worker that stopped after the
+    // durable pre-dispatch claim cannot strand a finalized billing event.
+    scheduleBillingLifecycleEmailRecovery(env, ctx, { observationContext });
 		const observe = <T>(taskName: ReleaseScheduledTaskName, taskPromise: Promise<T>) =>
 			observeScheduledTask(env, ctx, { ...observationContext, taskName }, taskPromise);
-
-		// Every cron also drains a bounded customer-email outbox. Keeping this
-		// before the warmup early return ensures a worker that stopped after the
-		// durable pre-dispatch claim cannot strand a finalized billing event.
-		scheduleBillingLifecycleEmailRecovery(env, ctx, { observationContext });
 
     if (controller.cron === WEEKLY_DIGEST_CRON) {
       // Monday morning: the operator gets last week's business numbers
@@ -158,9 +188,16 @@ export default {
       // WP-26: first Monday of the month → prior-month customer recap.
       ctx.waitUntil(
         sendMonthlyCustomerRecaps(env, { scheduledTime: controller.scheduledTime }).then(
-          (result) => {
+          async (result) => {
             if (result.sent > 0) {
               console.log("monthly customer recaps sent", result);
+            }
+            if (result.failed > 0) {
+              await reportScheduledTaskFailure(
+                env,
+                "monthly_customer_recaps_degraded",
+                new Error(`monthly customer recaps completed with ${result.failed} failed recipients`),
+              );
             }
           },
           (error) => reportScheduledTaskFailure(env, "monthly_customer_recaps", error),
@@ -195,7 +232,7 @@ export default {
             leaseMs: resolveMonitoringOrchestrationLeaseMs(env),
           }),
         )).then(
-          (result) => {
+          async (result) => {
             const firstScans = result.firstScans ?? {
               redispatched: 0,
               cancelled: 0,
@@ -205,11 +242,19 @@ export default {
               result.redispatched > 0 ||
               result.recovered > 0 ||
               result.cancelled > 0 ||
+              result.redispatchFailures > 0 ||
               firstScans.redispatched > 0 ||
               firstScans.cancelled > 0 ||
               firstScans.failures > 0
             ) {
               console.log("monitoring fanout reconciliation completed", result);
+            }
+            if (result.redispatchFailures > 0) {
+              await reportScheduledTaskFailure(
+                env,
+                "monitoring_fanout_reconciliation_redispatch",
+                new Error("one or more monitoring fanout redispatches failed"),
+              );
             }
           },
           (error) => reportScheduledTaskFailure(env, "monitoring_fanout_reconciliation", error),
@@ -281,7 +326,9 @@ export default {
           if (
             scheduledTask.includeRiskAlert ||
             result.skippedForBudget > 0 ||
-            result.dispatchFailures > 0
+            result.dispatchFailures > 0 ||
+            result.inlineFailures > 0 ||
+            result.digestFailures > 0
           ) {
             const scheduledDay = new Date(controller.scheduledTime).toISOString().slice(0, 10);
             const operationalIdempotencyKey = resolveOperationalRiskAlertIdempotencyKey(
@@ -289,12 +336,16 @@ export default {
               {
                 skippedForBudget: result.skippedForBudget,
                 dispatchFailures: result.dispatchFailures,
+                inlineFailures: result.inlineFailures,
+                digestFailures: result.digestFailures,
               },
             );
             try {
               const alert = await observe("customer_at_risk_alert", sendCustomerAtRiskAlert(env, {
                 skippedForBudget: result.skippedForBudget,
                 dispatchFailures: result.dispatchFailures,
+                inlineFailures: result.inlineFailures,
+                digestFailures: result.digestFailures,
                 idempotencyKey: scheduledTask.includeRiskAlert
                   ? undefined
                   : operationalIdempotencyKey ?? undefined,

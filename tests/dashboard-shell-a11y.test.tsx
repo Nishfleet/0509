@@ -9,6 +9,13 @@ import { DashboardShell } from "~/components/dashboard-shell";
 
 const appCss = readFileSync("app/app.css", "utf8");
 
+function styleRulesFor(selectorFragment: string) {
+  const cssWithoutComments = appCss.replace(/\/\*[\s\S]*?\*\//g, "");
+  return [...cssWithoutComments.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .filter(([, selector]) => selector.includes(selectorFragment))
+    .map(([, selector, body]) => ({ selector, body }));
+}
+
 let root: Root | null = null;
 let container: HTMLElement | null = null;
 
@@ -137,7 +144,7 @@ describe("DashboardShell accessibility (WP-43)", () => {
     expect(view.querySelector('[role="status"]')?.textContent).toBe("");
   });
 
-  it("keeps the route focus target ringless without weakening interactive focus", () => {
+  it("keeps the route focus target ringless and monochrome without weakening interactive focus", () => {
     expect(appCss).toMatch(
       /\.f9-cursor-main:focus,\s*\.f9-cursor-main:focus-visible\s*\{\s*outline:\s*none;/s,
     );
@@ -145,10 +152,23 @@ describe("DashboardShell accessibility (WP-43)", () => {
       /a:focus-visible,\s*button:focus-visible,[\s\S]*?\[tabindex\]:focus-visible\s*\{[\s\S]*?outline:\s*2px solid var\(--green-ink\);/,
     );
     expect(appCss).toMatch(
-      /\.f9-cursor-main:focus-visible\s*\{\s*box-shadow:\s*inset 0 3px 0 var\(--green-ink\);/,
+      /\.f9-cursor-main:focus-visible\s*\{\s*box-shadow:\s*inset 0 3px 0 var\(--ink\);/,
     );
     expect(appCss).toMatch(
-      /\.f9-cursor-main:target\s*\{\s*box-shadow:\s*inset 0 3px 0 var\(--green-ink\);/,
+      /\.f9-cursor-main:target\s*\{\s*box-shadow:\s*inset 0 3px 0 var\(--ink\);/,
+    );
+  });
+
+  it("keeps shell progress out of the work's green budget", () => {
+    const routeProgressRules = styleRulesFor(".f9-route-progress");
+    expect(routeProgressRules.some(({ body }) => /background:\s*var\(--ink\);/.test(body)))
+      .toBe(true);
+    expect(routeProgressRules).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          body: expect.stringMatching(/--green|#0aa982|#16c47f/),
+        }),
+      ]),
     );
   });
 

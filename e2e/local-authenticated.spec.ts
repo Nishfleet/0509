@@ -77,10 +77,93 @@ async function expectNoFixedAppChrome(page: Page) {
   expect(fixedChrome).toEqual([]);
 }
 
+// Routes whose single primary is conditional (it can legitimately be absent —
+// e.g. Billing renders "Current plan" rather than an ink CTA on the plan you
+// are already on) still may never carry a second one, so they assert the §5
+// ceiling instead of an exact count. BL-042 adds the surfaces that BL-033a/b,
+// BL-034 and BL-037..BL-039 rebuilt but never registered anywhere: they were
+// silently exercising the old topbar branch below until the bar was deleted.
+const conditionalPrimaryRoutes = new Set([
+  "/app/clients",
+  "/app/collections",
+  "/app/digests",
+  "/app/notifications",
+  "/app/presence",
+  "/app/reports",
+  "/app/shares",
+  "/app/source-access",
+  "/app/developer-access",
+  "/app/team",
+  "/app/billing",
+  "/app/account",
+]);
+// Surfaces rebuilt in the landing language: they own their whole page, header
+// included, and carry their single action in the working header.
+const workingHeaderRoutes = new Set([
+  "/app",
+  "/app/watchlists",
+  ...conditionalPrimaryRoutes,
+]);
+
 async function expectNoShellActionRow(page: Page) {
-  // BL-042: actions belong to the route's working header. The shell must not
-  // prepend the old boxed "Overview / + Add competitor" twin to any page.
+  // BL-042: actions belong to the route's working header. The shell-owned
+  // action row is deleted outright, so the old boxed "Overview / + Add
+  // competitor" twin must not appear above ANY page — this is the universal
+  // form of the per-route suppression BL-030/BL-040/BL-041 grew one entry at a
+  // time (and kept forgetting to grow).
   await expect(page.locator(".f9-dash-topbar")).toHaveCount(0);
+
+  // Brief §5 — exactly one ink-filled primary per screen. BL-030 asserted this
+  // only on the routes it had rebuilt, because elsewhere the shell's own ink
+  // primary was the screen's one primary. With the shell bar gone the ceiling
+  // is purely a page property, so it is asserted on every route instead.
+  const pathname = new URL(page.url()).pathname;
+
+  if (!workingHeaderRoutes.has(pathname)) {
+    // Still on the pre-landing-language DashboardPage system (the /app/sources
+    // settings signpost, Help & support, Ops, presence detail). They ship no
+    // working header at all, and a pure signpost legitimately carries no
+    // primary — but it may never carry two.
+    await expect(page.locator(".f9-wk-head")).toHaveCount(0);
+    expect(await page.locator(".f9-primary-button:visible").count()).toBeLessThanOrEqual(1);
+    return;
+  }
+
+  await expect(page.locator(".f9-wk-head")).toHaveCount(1);
+  const filledButtonCount = await page.locator(".f9-wk-page .f9-wk-btn").count();
+  if (conditionalPrimaryRoutes.has(pathname)) {
+    expect(filledButtonCount).toBeLessThanOrEqual(1);
+  } else {
+    expect(filledButtonCount).toBe(1);
+  }
+}
+
+async function expectMobileSettingsRoutesReachable(page: Page) {
+  // BL-042 folds the separate fixed utility rail into the one scrolling nav
+  // row, so the shipped utility contract is retargeted rather than dropped:
+  // the long-dwell settings destinations and the session action must still be
+  // present and vertically inside the viewport. Labels are the rail's own
+  // ("Billing & usage", "Help & support"); horizontal reach is proven by
+  // expectMobileNavLinksInContainer.
+  const navActions = await page.evaluate(() =>
+    Array.from(document.querySelectorAll(".f9-dash-mobile-nav a, .f9-dash-mobile-nav button")).map(
+      (element) => {
+        const rect = element.getBoundingClientRect();
+        return {
+          bottom: Math.round(rect.bottom),
+          text: element.textContent?.trim() ?? "",
+          top: Math.round(rect.top),
+        };
+      },
+    ),
+  );
+
+  for (const text of ["Team", "Client rooms", "Help & support", "Billing & usage", "Sign out"]) {
+    expect(navActions).toContainEqual(expect.objectContaining({ text }));
+    const action = navActions.find((item) => item.text === text);
+    expect(action?.top).toBeGreaterThanOrEqual(0);
+    expect(action?.bottom).toBeLessThanOrEqual(page.viewportSize()!.height);
+  }
 }
 
 async function expectMobileNavLinksInContainer(page: Page) {
@@ -250,8 +333,11 @@ test.describe("local authenticated E2E harness", () => {
     await page.keyboard.press("Enter");
 
     await expect(page).toHaveURL(/\/app\/watchlists\?watchlist=/);
-    await expect(page.getByRole("heading", { name: "Competitors" })).toBeVisible();
-    await expect(page.getByText("Nykaa watch").first()).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Nykaa watch", exact: true }),
+    ).toBeVisible();
+    await expect(page.locator(".f9-wk-context")).toContainText("Nykaa");
+    await expect(page.locator(".f9-bl035-detail")).toBeVisible();
   });
 
   test("starter customer journey covers dashboard, search, watchlists, presence, digests, billing, developer, support, and account", async ({
@@ -300,12 +386,7 @@ test.describe("local authenticated E2E harness", () => {
     await expect(
       page.locator("#f9-main-content").getByRole("heading", { level: 1, name: "Briefs", exact: true }),
     ).toBeVisible();
-    await expect(
-      page.locator("#f9-main-content").getByText(
-        "Read each period as one brief: the finding, the captured changes, the quiet checks, and the facts behind it.",
-        { exact: true },
-      ),
-    ).toBeVisible();
+    await expect(page.locator("#f9-main-content")).toContainText("brief on file");
     await expect(
       page
         .locator("#f9-main-content")
@@ -342,7 +423,7 @@ test.describe("local authenticated E2E harness", () => {
     await page.goto("/app/account");
     await expectAppPage(page);
     await expect(page.getByRole("heading", { name: "Account & security" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "E2E Starter" })).toBeVisible();
+    await expect(page.getByText(/Signed in as e2e-starter@example\.invalid/)).toBeVisible();
     await expect(page.getByLabel("My brand website")).toHaveValue("https://starter.example.invalid");
 
     await page.goto("/app/notifications");
@@ -356,7 +437,7 @@ test.describe("local authenticated E2E harness", () => {
     ).toBeVisible();
     await expect(
       page.locator("#f9-main-content").getByText(
-        "Invite teammates to share watchlists, collections, and digests on Agency.",
+        "Team access is included with Agency.",
         { exact: true },
       ),
     ).toBeVisible();
@@ -437,26 +518,26 @@ test.describe("local authenticated E2E harness", () => {
         label: "Collections",
         path: "/app/collections",
         heading: "Collections",
-        copy: ["Save the best competitor examples", "Create collection"],
+        copy: ["Saved evidence stays attached", "Start your first collection"],
       },
       { label: "Briefs", path: "/app/digests", heading: "Briefs", copy: ["Brief history"] },
       {
         label: "Reports",
         path: "/app/reports",
         heading: "Reports",
-        copy: ["Open a current proof-backed report"],
+        copy: ["Each one carries the captures behind it."],
       },
       {
         label: "Shared links",
         path: "/app/shares",
         heading: "Shared links",
-        copy: ["Review and revoke snapshot or live-view links", "Anyone with a link can open"],
+        copy: ["No active share links", "expires or you revoke it"],
       },
       {
         label: "Notifications",
         path: "/app/notifications",
         heading: "Notifications",
-        copy: ["Digest and alert delivery"],
+        copy: ["Delivery channels"],
       },
       {
         label: "Source access",
@@ -470,12 +551,12 @@ test.describe("local authenticated E2E harness", () => {
         heading: "Developer access",
         copy: ["Connect exports and approved actions"],
       },
-      { label: "Team", path: "/app/team", heading: "Team", copy: ["Agency seats in use"] },
+      { label: "Team", path: "/app/team", heading: "Team", copy: ["2 of 10 seats in use"] },
       {
         label: "Client rooms",
         path: "/app/clients",
         heading: "Client rooms",
-        copy: ["Package evidence and reports"],
+        copy: ["Keep reviewed evidence and client context"],
       },
       {
         label: "Billing & usage",
@@ -583,48 +664,66 @@ test.describe("local authenticated E2E harness", () => {
     await expect(page).toHaveURL(/\/auth\/login/);
   });
 
-  test("mobile dashboard navigation stays usable across target breakpoints", async ({ page, context, baseURL }) => {
-    await signInAs(context, baseURL!, "e2e-starter");
-    const viewports = [
-      { width: 320, height: 700 },
-      { width: 375, height: 812 },
-      { width: 430, height: 932 },
-      { width: 640, height: 900 },
-      { width: 641, height: 900 },
-      { width: 750, height: 900 },
-      { width: 760, height: 900 },
-      { width: 761, height: 900 },
-      { width: 1024, height: 768 },
-    ];
-    const routes = [
-      "/app",
-      "/app/watchlists",
-      "/app/sources",
-      "/app/notifications",
-      "/app/source-access",
-      "/app/developer-access",
-      "/app/billing",
-      "/app/reports",
-    ];
+  // The app-shell cuts are 640px and 1180px. Sample 640/641 for mobile chrome;
+  // 760/761 is a search-page-scoped cut that remains load-bearing here through
+  // generic .f9-primary-button/.f9-mode-toggle rules. Keep 1024 as the sole
+  // width above the 900px f9-ed-band/detail-body, 920px plan/topup-grid, and
+  // 980px dashboard-grid/status-strip/panel-toolbar/work-row cuts.
+  for (const { label, viewports } of [
+    {
+      label: "mobile app chrome",
+      viewports: [
+        { width: 320, height: 700 },
+        { width: 640, height: 900 },
+        { width: 641, height: 900 },
+      ],
+    },
+    {
+      label: "responsive shell",
+      viewports: [
+        { width: 760, height: 900 },
+        { width: 761, height: 900 },
+        { width: 1024, height: 768 },
+      ],
+    },
+  ]) {
+    test(`mobile dashboard navigation stays usable across target breakpoints: ${label}`, async ({
+      page,
+      context,
+      baseURL,
+    }) => {
+      await signInAs(context, baseURL!, "e2e-starter");
+      const routes = [
+        "/app",
+        "/app/watchlists",
+        "/app/sources",
+        "/app/notifications",
+        "/app/source-access",
+        "/app/developer-access",
+        "/app/billing",
+        "/app/reports",
+      ];
 
-    for (const viewport of viewports) {
-      await page.setViewportSize(viewport);
-      for (const route of routes) {
-        await page.goto(route);
-        await expectAppPage(page);
-        await expect(page.getByRole("link", { name: "Competitors" }).first()).toBeVisible();
-        await expect(page.getByRole("link", { name: "Notifications" }).first()).toBeVisible();
-        await expect(page.getByRole("button", { name: "Sign out" }).first()).toBeVisible();
-        await expectNoFixedAppChrome(page);
-        await expectNoShellActionRow(page);
-        if (viewport.width <= 640) {
-          await expect(page.getByRole("link", { name: "Developer access" }).first()).toBeVisible();
-          await expectMobileNavLinksInContainer(page);
+      for (const viewport of viewports) {
+        await page.setViewportSize(viewport);
+        for (const route of routes) {
+          await page.goto(route);
+          await expectAppPage(page);
+          await expect(page.getByRole("link", { name: "Competitors" }).first()).toBeVisible();
+          await expect(page.getByRole("link", { name: "Notifications" }).first()).toBeVisible();
+          await expect(page.getByRole("button", { name: "Sign out" }).first()).toBeVisible();
+          await expectNoFixedAppChrome(page);
+          await expectNoShellActionRow(page);
+          if (viewport.width <= 640) {
+            await expect(page.getByRole("link", { name: "Developer access" }).first()).toBeVisible();
+            await expectMobileNavLinksInContainer(page);
+            await expectMobileSettingsRoutesReachable(page);
+          }
+          await expectNoHorizontalOverflow(page);
         }
-        await expectNoHorizontalOverflow(page);
       }
-    }
-  });
+    });
+  }
 
   test("billing cycle picker keeps monthly and annual intent accessible on small screens", async ({
     page,

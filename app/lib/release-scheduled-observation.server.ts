@@ -3,6 +3,7 @@ import {
   RELEASE_SCHEDULE_CRONS,
   type ReleaseScheduledTaskName,
 } from "~/lib/release-scheduled-observation-contract";
+import { SCHEDULED_OBSERVATION_MAX_FUTURE_SKEW_MS } from "~/lib/scheduled-observation-health.server";
 
 export type { ReleaseScheduledTaskName } from "~/lib/release-scheduled-observation-contract";
 
@@ -30,6 +31,8 @@ type ObservationDependencies = {
   randomUUID?: () => string;
   record?: (env: AppEnv, input: RecordInput) => Promise<void>;
   logObservationFailure?: (taskName: ReleaseScheduledTaskName) => void;
+  logDegradedReportFailure?: (taskName: ReleaseScheduledTaskName) => void;
+  reportDegraded?: (taskName: ReleaseScheduledTaskName) => Promise<unknown>;
 };
 
 const SAFE_WORKER_VERSION = /^[A-Za-z0-9._-]{1,128}$/u;
@@ -85,7 +88,30 @@ export function classifyScheduledTaskResult(
 
   if (taskName === "weekly_business_numbers") {
     const metrics = { sent: result.sent === true };
-    return { outcome: metrics.sent ? "completed" : "degraded", metrics };
+    return {
+      outcome: metrics.sent
+        ? "completed"
+        : result.reason === "duplicate"
+          ? "no_work"
+          : "degraded",
+      metrics,
+    };
+  }
+
+  if (taskName === "customer_at_risk_alert") {
+    const metrics = {
+      sent: result.sent === true,
+      signals: safeCount(result.signals),
+    };
+    return {
+      outcome:
+        metrics.signals === 0 || result.reason === "duplicate"
+          ? "no_work"
+          : metrics.sent
+            ? "completed"
+            : "degraded",
+      metrics,
+    };
   }
 
   if (taskName === "digest_schedule_exhaustion_recovery") {
@@ -131,12 +157,18 @@ export function classifyScheduledTaskResult(
       recovered: safeCount(result.recovered),
       cancelled: safeCount(result.cancelled),
       redispatched: safeCount(result.redispatched),
+      redispatchFailures: safeCount(result.redispatchFailures),
       firstScanRedispatched: safeCount(firstScans.redispatched),
       firstScanCancelled: safeCount(firstScans.cancelled),
       firstScanFailures: safeCount(firstScans.failures),
     };
     return {
-      outcome: metrics.firstScanFailures > 0 ? "degraded" : hasAnyWork(metrics) ? "completed" : "no_work",
+      outcome:
+        metrics.redispatchFailures + metrics.firstScanFailures > 0
+          ? "degraded"
+          : hasAnyWork(metrics)
+            ? "completed"
+            : "no_work",
       metrics,
     };
   }
@@ -190,7 +222,7 @@ export function classifyScheduledTaskResult(
       digestAttempts: safeCount(result.digestAttempts),
       digestFailures: safeCount(result.digestFailures),
     };
-    const degraded = metrics.inlineFailures + metrics.skippedForBudget + metrics.dispatchFailures + metrics.duplicates + metrics.digestFailures > 0;
+    const degraded = metrics.inlineFailures + metrics.skippedForBudget + metrics.dispatchFailures + metrics.digestFailures > 0;
     const productive = metrics.queued + metrics.inlineRuns + metrics.digests > 0;
     return { outcome: degraded ? "degraded" : productive ? "completed" : "no_work", metrics };
   }
@@ -216,6 +248,12 @@ function validateRecordInput(input: RecordInput) {
   if (!SAFE_CRONS.has(input.cron)) throw new Error("unsafe_release_soak_cron");
   if (!Number.isSafeInteger(input.scheduledTime) || input.scheduledTime <= 0) {
     throw new Error("unsafe_release_soak_scheduled_time");
+  }
+  if (
+    input.scheduledTime >
+    input.completedAt.getTime() + SCHEDULED_OBSERVATION_MAX_FUTURE_SKEW_MS
+  ) {
+    throw new Error("unsafe_release_soak_future_scheduled_time");
   }
   const durationMs = input.completedAt.getTime() - input.startedAt.getTime();
   if (!Number.isSafeInteger(durationMs) || durationMs < 0 || durationMs > 900_000) {
@@ -275,6 +313,18 @@ export function observeScheduledTask<T>(
 ) {
   const now = dependencies.now ?? (() => new Date());
   const record = dependencies.record ?? recordReleaseScheduledObservation;
+  const reportDegraded =
+    dependencies.reportDegraded ??
+    (async (taskName: ReleaseScheduledTaskName) => {
+      const { reportScheduledTaskFailure } = await import(
+        "~/lib/cron-failure-alert.server"
+      );
+      return reportScheduledTaskFailure(
+        env,
+        `${taskName}_degraded`,
+        new Error("scheduled task completed with a degraded outcome"),
+      );
+    });
   const startedAt = now();
   const observationPromise = taskPromise.then(
     async (value) => {
@@ -286,7 +336,29 @@ export function observeScheduledTask<T>(
         completedAt,
         ...classification,
         failureCategory: null,
+      }).catch(() => {
+        (dependencies.logObservationFailure ?? ((taskName) => {
+          console.error("release scheduled observation failed", { taskName });
+        }))(input.taskName);
       });
+      if (
+        classification.outcome === "degraded" &&
+        // Retention already has a dedicated failed-step page in workers/app.ts;
+        // scheduled monitoring likewise has a dedicated risk page with
+        // failure-mode-specific idempotency. Suppress generic duplicates.
+        input.taskName !== "retention_sweep" &&
+        input.taskName !== "scheduled_monitoring"
+      ) {
+        try {
+          await reportDegraded(input.taskName);
+        } catch {
+          (dependencies.logDegradedReportFailure ?? ((taskName) => {
+            console.error("release scheduled degraded alert failed", {
+              taskName,
+            });
+          }))(input.taskName);
+        }
+      }
     },
     async (error) => {
       const completedAt = now();

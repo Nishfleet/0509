@@ -148,7 +148,7 @@ describe("runScheduledMonitoring workflow idempotency", () => {
       searchAds: vi.fn(),
     }));
     vi.doMock("~/lib/plan.server", () => ({
-      getUserPlan: vi.fn(),
+      getUserPlan: vi.fn().mockResolvedValue("starter"),
       PLAN_LIMITS: {
         free: { digests: false, digestCadence: "none" },
         starter: { digests: true, digestCadence: "weekly" },

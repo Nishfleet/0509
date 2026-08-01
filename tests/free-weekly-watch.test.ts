@@ -282,6 +282,7 @@ function digestDeliveryDataMocks(upsertDigestDelivery = vi.fn()) {
     }),
     legacyWorkspaceDeliveryDefaults: vi.fn(),
     listDeliveryTargets: vi.fn().mockResolvedValue([]),
+    provisionVerifiedAccountEmailTargetIfUnsuppressed: upsertDeliveryTarget,
     upsertDeliveryTarget,
     upsertDigestDelivery,
   };
