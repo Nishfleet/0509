@@ -309,10 +309,31 @@ function safeRolloutMode(mode) {
   return mode === "shadow" ? "shadow" : "non_shadow_or_missing";
 }
 
+function resolveCandidateBranch(cwd, head) {
+  const symbolicBranch = optionalGitText(
+    cwd,
+    ["symbolic-ref", "--quiet", "--short", "HEAD"],
+    null,
+  );
+  if (symbolicBranch !== null) return symbolicBranch;
+
+  const remoteMain = optionalGitText(
+    cwd,
+    [
+      "rev-parse",
+      "--verify",
+      "--end-of-options",
+      "refs/remotes/origin/main^{commit}",
+    ],
+    null,
+  );
+  return remoteMain === head ? "main" : "detached";
+}
+
 function createReport(cwd, args) {
   const head = gitText(cwd, ["rev-parse", "--verify", "HEAD^{commit}"]);
   const base = gitText(cwd, ["rev-parse", "--verify", "--end-of-options", `${args.base}^{commit}`]);
-  const branch = optionalGitText(cwd, ["symbolic-ref", "--quiet", "--short", "HEAD"], "detached");
+  const branch = resolveCandidateBranch(cwd, head);
   const trackedDiff = git(cwd, ["diff", "--binary", "--no-ext-diff", "--no-textconv", "--no-renames", base, "--"]);
   const trackedFiles = splitNul(git(cwd, ["diff", "--name-only", "-z", "--no-renames", base, "--"]));
   const status = parseStatus(git(cwd, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]));
