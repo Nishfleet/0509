@@ -1196,6 +1196,60 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
         "M\tapp/routes/search.tsx\n",
       ]),
     ).toBe(false);
+
+    // Scoped by what the previously deployed tree actually contained.
+    // A migration that shipped in the last deploy may have run on production,
+    // so editing or deleting it is still a mutation.
+    const deployed = new Set([
+      "migrations/0069_digest_cadence_preference.sql",
+      "migrations/0070_release_scheduled_observations.sql",
+    ]);
+    expect(
+      hasAppliedMigrationMutation(
+        "M\tmigrations/0070_release_scheduled_observations.sql\n",
+        deployed,
+      ),
+    ).toBe(true);
+    expect(
+      hasAppliedMigrationMutation(
+        "D\tmigrations/0069_digest_cadence_preference.sql\n",
+        deployed,
+      ),
+    ).toBe(true);
+    // A migration introduced after that deploy has never run anywhere, so
+    // refining it before it ships is not a hazard.
+    expect(
+      hasAppliedMigrationMutation(
+        "M\tmigrations/0072_scheduled_observation_health_state.sql\n",
+        deployed,
+      ),
+    ).toBe(false);
+    expect(
+      hasMigrationMutationAcrossCommits(
+        [
+          "A\tmigrations/0072_scheduled_observation_health_state.sql\n",
+          "M\tmigrations/0072_scheduled_observation_health_state.sql\n",
+        ],
+        deployed,
+      ),
+    ).toBe(false);
+    // Mixing the two: the undeployed edit is fine, the deployed one is not.
+    expect(
+      hasMigrationMutationAcrossCommits(
+        [
+          "M\tmigrations/0072_scheduled_observation_health_state.sql\n",
+          "M\tmigrations/0070_release_scheduled_observations.sql\n",
+        ],
+        deployed,
+      ),
+    ).toBe(true);
+    // With no scope supplied the strict default stands.
+    expect(
+      hasMigrationMutationAcrossCommits([
+        "A\tmigrations/0072_scheduled_observation_health_state.sql\n",
+        "M\tmigrations/0072_scheduled_observation_health_state.sql\n",
+      ]),
+    ).toBe(true);
     expect(hasRestoreCriticalChanges("app/routes/search.tsx\n")).toBe(false);
     expect(hasRestoreCriticalChanges("wrangler.jsonc\n")).toBe(true);
     expect(
