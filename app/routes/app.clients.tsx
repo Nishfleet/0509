@@ -741,7 +741,7 @@ export default function ClientsRoute() {
         />
       ) : null}
 
-      <section aria-labelledby="client-rooms-active-title" className="f9-wk-sec f9-clients-active">
+      <section aria-labelledby="client-rooms-active-title" className="f9-wk-sec">
         <div className="f9-clients-section-head">
           <div>
             <p className="f9-wk-kick">Active rooms</p>
@@ -790,7 +790,6 @@ export default function ClientsRoute() {
     </DashboardPage>
   );
 }
-
 function ClientRoomComposer({
   collections,
   headingRef,
