@@ -439,6 +439,7 @@ export async function claimInstantDeliveryAttempt(
       failedAt: null,
       payloadSnapshot: input.payloadSnapshot,
       targetValue,
+      deliveryTargetId: input.deliveryTargetId,
       updatedAt: claimUpdatedAt,
       expectedStatus,
       expectedWebhookStatus,
@@ -908,6 +909,7 @@ export async function updateDeliveryAttemptResult(
     expectedUpdatedAt?: string;
     payloadSnapshot?: JsonRecord;
     targetValue?: string;
+    deliveryTargetId?: string | null;
     updatedAt?: string;
   },
 ) {
@@ -919,6 +921,7 @@ export async function updateDeliveryAttemptResult(
     `
       UPDATE delivery_attempt
       SET provider = ?,
+          delivery_target_id = COALESCE(delivery_target_id, ?),
           status = ?,
           webhook_status = ?,
           provider_message_id = ?,
@@ -936,6 +939,7 @@ export async function updateDeliveryAttemptResult(
         AND (? IS NULL OR updated_at = ?)
     `,
     input.provider,
+    input.deliveryTargetId ?? null,
     input.status,
     input.webhookStatus,
     input.providerMessageId ?? null,
