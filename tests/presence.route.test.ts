@@ -387,6 +387,10 @@ describe("presence desk routes", () => {
     expect(html).toContain("Review tracked entities");
     expect(html).not.toContain('name="trackingMode"');
     expect(html).not.toContain("read-only on the Starter plan");
+    // BL-034: the locked panel is ordinary prose, not a live region. Feedback
+    // is announced by the shared strip, so a second announcing role here would
+    // double-speak on every render.
+    expect(html).not.toMatch(/<div class="f9-pr-lock"[^>]*role=/);
   });
 
   it("omits a tracking mode whose per-mode capacity is exhausted", async () => {

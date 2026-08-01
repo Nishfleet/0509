@@ -170,6 +170,15 @@ INSERT INTO user_plan (user_id, plan, plan_updated_at, dodo_payment_id, dodo_pro
   ('e2e-ops', 'free', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
   ('e2e-support-recovery', 'free', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
+-- The ordinary E2E server keeps Presence disabled. BL-034's opt-in capture
+-- switches to pilot rollout so each real plan shape, including the Free lock,
+-- can be rendered without weakening the production access gate.
+INSERT INTO presence_pilot_workspace (workspace_id_hash, invited_at, invited_by, notes, revoked_at) VALUES
+  ('xxdEN4qKgyUC63z-jrlzSFsfjUSGb__mn8KwoP44xBE', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), 'bl034-capture', 'E2E Free Presence landing-language capture.', NULL),
+  ('puMOELosW_e1o9-peJaO03gLJghwS1j2o9F2qQEuhwU', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), 'bl034-capture', 'E2E Scout Presence landing-language capture.', NULL),
+  ('ipb72GO-WQGR_xPjqR2BQmlJve2SGSXYPtyenTGuuFM', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), 'bl034-capture', 'E2E Starter Presence landing-language capture.', NULL),
+  ('a2FYRL0GgCwMHWZ9nfV7Np4h1DEB2QPUlRKA05Otntg', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), 'bl034-capture', 'E2E Agency Presence landing-language capture.', NULL);
+
 INSERT INTO dodo_webhook_event (event_id, event_type, user_id, received_at, payload_timestamp, processed_at, outcome, metadata_json, processing_started_at) VALUES
   ('e2e-webhook-payment-issue', 'payment.failed', 'e2e-payment-issue', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 hours'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 hours'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 hours'), 'processed', '{"fixture":true}', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-2 hours')),
   ('e2e-webhook-cancelled', 'subscription.cancelled', 'e2e-cancelled', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 day'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 day'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 day'), 'processed', '{"fixture":true}', strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 day')),

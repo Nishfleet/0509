@@ -225,6 +225,10 @@ export default function PresenceIndexRoute() {
     ? actionData
     : data.redirectFeedback;
   const planAllowsEntityCreation = data.competitorAllowed || data.selfAllowed;
+  // Per-mode capacity, ported from #478: a plan can still allow a tracking mode
+  // while that mode's own slots are full. Offering the exhausted mode in the
+  // select would be a form that cannot succeed, so each mode is gated on its
+  // own count and the whole form is gated on at least one mode surviving.
   const selfEntityCount = data.snapshot.entities.filter(
     (row: PresenceEntityRow) => row.entity.trackingMode === "self",
   ).length;
@@ -249,7 +253,7 @@ export default function PresenceIndexRoute() {
     planAllowsEntityCreation && hasEntityCapacity && hasAvailableTrackingMode;
 
   return (
-    <DashboardPage className="f9-wk-page">
+    <DashboardPage className="f9-wk-page f9-pr-page">
       <WorkingHeader
         context={
           !planAllowsEntityCreation
@@ -257,8 +261,8 @@ export default function PresenceIndexRoute() {
                 data.snapshot.entities.length > 0 ? "retained" : "tracked"
               } · Presence tracking is read-only on the ${planLabel} plan.`
             : hasEntityCapacity
-              ? `${entityCountLabel} tracked · Website and open-web coverage is active where your plan allows it.`
-              : `${entityCountLabel} tracked · All ${data.limits.maxTrackedEntities} entity slots are in use.`
+            ? `${entityCountLabel} tracked · Website and open-web coverage is active where your plan allows it.`
+            : `${entityCountLabel} tracked · All ${data.limits.maxTrackedEntities} entity slots are in use.`
         }
         title="Presence"
       />
@@ -272,164 +276,175 @@ export default function PresenceIndexRoute() {
         </FeedbackStrip>
       ) : null}
 
-      {data.access.rolloutState === "ga" || data.partialDataNotice ? (
-        <div className="f9-wk-sec">
-          {data.access.rolloutState === "ga" ? (
-            <p className="f9-wk-note" role="status">
-              Coverage depends on robots rules and public accessibility. Notifications stay off until you opt in on
-              each source.
-            </p>
-          ) : null}
-          {data.partialDataNotice ? (
-            <p className="f9-wk-note" role="status">
-              {data.partialDataNotice}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-
-      <section aria-labelledby="presence-add-title" className="f9-wk-sec" id="add-entity">
-        <h2 id="presence-add-title">Start with a website</h2>
-        <p className="f9-wk-lede">Add a declared website source. Presence files its public updates here.</p>
-
-        {canCreateEntity ? (
-          <Form className="f9-auth-form" method="post">
-            <input name="intent" type="hidden" value="create-entity" />
-            <label className="f9-field">
-              <span>Entity name</span>
-              <input autoComplete="organization" name="label" placeholder="Acme Corp" required />
-            </label>
-            <label className="f9-field">
-              <span>Entity type</span>
-              <select
-                defaultValue={competitorModeCanCreate ? "competitor" : "self"}
-                name="trackingMode"
-              >
-                {competitorModeCanCreate ? <option value="competitor">Competitor</option> : null}
-                {selfModeCanCreate ? <option value="self">Your brand</option> : null}
-              </select>
-            </label>
-            <label className="f9-field">
-              <span>Website URL</span>
-              <input
-                autoComplete="url"
-                inputMode="url"
-                name="websiteUrl"
-                placeholder="https://brand.com/blog"
-                spellCheck={false}
-              />
-            </label>
-            <label className="f9-field">
-              <span>Canonical URL <small>Optional</small></span>
-              <input
-                autoComplete="url"
-                inputMode="url"
-                name="canonicalUrl"
-                placeholder="https://brand.com"
-                spellCheck={false}
-              />
-            </label>
-            <SubmitButton className="f9-wk-btn" pendingLabel="Saving…">
-              Start tracking
-            </SubmitButton>
-          </Form>
-        ) : (
-          <div className="f9-wk-note">
-            {planAllowsEntityCreation ? (
-              <>
-                <p>
-                  {hasEntityCapacity
-                    ? `The available entity-type limits on the ${planLabel} plan are in use. Open an entity below before adding another.`
-                    : `All ${data.limits.maxTrackedEntities} tracked entity slots on the ${planLabel} plan are in use. Open an entity below to remove it before adding another.`}
-                </p>
-                <a className="f9-wk-btn" href="#presence-entities-title">
-                  Review tracked entities
-                </a>
-              </>
-            ) : (
-              <>
-                <p>
-                  Presence tracking starts on Scout. Your current plan keeps this instrument read-only; no source
-                  is presented as active.
-                </p>
-                <Link className="f9-wk-btn" to="/app/billing?source=presence#plans">
-                  Upgrade to Scout
-                </Link>
-              </>
-            )}
-          </div>
-        )}
-        {canCreateEntity ? (
-          <p className="f9-wk-note">
-            {data.limits.maxTrackedEntities} entities · {data.limits.maxWebsiteSourcesPerEntity} website sources each
+      <div className="f9-pr-notices">
+        {data.access.rolloutState === "ga" ? (
+          <p role="status">
+            Coverage depends on robots rules and public accessibility. Notifications stay off until you opt in on
+            each source.
           </p>
         ) : null}
-      </section>
+        {data.partialDataNotice ? <p role="status">{data.partialDataNotice}</p> : null}
+      </div>
 
-      <section aria-labelledby="presence-coverage-title" className="f9-wk-sec">
-        <h2 id="presence-coverage-title">Source coverage</h2>
-        <p className="f9-wk-lede">
-          Website and open-web tracking is active where allowed. Every other source keeps its real gate.
-        </p>
-        <dl aria-label="Source coverage" className="f9-wk-rows">
-          {coverageRows.map(({ competitorEntry, selfEntry }) => {
-            const selfStatus = selfEntry ? formatSourceCoverageStatus(selfEntry.status) : "Unavailable";
-            const competitorStatus = formatSourceCoverageStatus(competitorEntry.status);
-            const sharedReason =
-              selfEntry?.reasonMessage && selfEntry.reasonMessage === competitorEntry.reasonMessage
-                ? selfEntry.reasonMessage
-                : null;
-            const reason = sharedReason
-              ? sharedReason
-              : [
-                  selfEntry?.reasonMessage ? `Your brand: ${selfEntry.reasonMessage}` : null,
-                  competitorEntry.reasonMessage ? `Competitors: ${competitorEntry.reasonMessage}` : null,
+      <div className="f9-pr-desk">
+        <section aria-labelledby="presence-add-title" className="f9-pr-instrument" id="add-entity">
+          <div className="f9-pr-section-head">
+            <h2 id="presence-add-title">Start with a website</h2>
+            <p>Add a declared website source. Presence files its public updates here.</p>
+          </div>
+
+          {canCreateEntity ? (
+            <Form className="f9-pr-form" data-bl034-first-row method="post">
+              <input name="intent" type="hidden" value="create-entity" />
+              <label className="f9-pr-field">
+                <span>Entity name</span>
+                <input autoComplete="organization" name="label" placeholder="Acme Corp" required />
+              </label>
+              <label className="f9-pr-field">
+                <span>Entity type</span>
+                <select
+                  defaultValue={competitorModeCanCreate ? "competitor" : "self"}
+                  name="trackingMode"
+                >
+                  {competitorModeCanCreate ? <option value="competitor">Competitor</option> : null}
+                  {selfModeCanCreate ? <option value="self">Your brand</option> : null}
+                </select>
+              </label>
+              <label className="f9-pr-field">
+                <span>Website URL</span>
+                <input
+                  autoComplete="url"
+                  inputMode="url"
+                  name="websiteUrl"
+                  placeholder="https://brand.com/blog"
+                  spellCheck={false}
+                />
+              </label>
+              <label className="f9-pr-field">
+                <span>Canonical URL <small>Optional</small></span>
+                <input
+                  autoComplete="url"
+                  inputMode="url"
+                  name="canonicalUrl"
+                  placeholder="https://brand.com"
+                  spellCheck={false}
+                />
+              </label>
+              <div className="f9-pr-form-commit">
+                <SubmitButton className="f9-wk-btn" pendingLabel="Saving…">
+                  Start tracking
+                </SubmitButton>
+                <p>
+                  {data.limits.maxTrackedEntities} entities · {data.limits.maxWebsiteSourcesPerEntity} website
+                  sources each
+                </p>
+              </div>
+            </Form>
+          ) : (
+            <div className="f9-pr-lock" data-bl034-first-row>
+              {planAllowsEntityCreation ? (
+                <>
+                  <p>
+                    {hasEntityCapacity
+                      ? `The available entity-type limits on the ${planLabel} plan are in use. Open an entity below before adding another.`
+                      : `All ${data.limits.maxTrackedEntities} tracked entity slots on the ${planLabel} plan are in use. Open an entity below to remove it before adding another.`}
+                  </p>
+                  <a className="f9-wk-btn" href="#presence-entities-title">
+                    Review tracked entities
+                  </a>
+                </>
+              ) : (
+                <>
+                  <p>
+                    Presence tracking starts on Scout. Your current plan keeps this instrument read-only; no source
+                    is presented as active.
+                  </p>
+                  <Link className="f9-wk-btn" to="/app/billing?source=presence#plans">
+                    Upgrade to Scout
+                  </Link>
+                </>
+              )}
+            </div>
+          )}
+        </section>
+
+        <section aria-labelledby="presence-coverage-title" className="f9-pr-coverage-section">
+          <div className="f9-pr-section-head">
+            <h2 id="presence-coverage-title">Source coverage</h2>
+            <p>
+              Website and open-web tracking is active where allowed. Every other source keeps its real gate.
+            </p>
+          </div>
+          <dl className="f9-pr-coverage">
+            {coverageRows.map(({ competitorEntry, selfEntry }) => {
+              const selfStatus = selfEntry
+                ? formatSourceCoverageStatus(selfEntry.status)
+                : "Unavailable";
+              const competitorStatus = formatSourceCoverageStatus(competitorEntry.status);
+              // Ported from #478. A row must never be silent: fall back from a
+              // shared reason, to per-side reasons, to the action needed, to an
+              // explicit "nothing more to do". Anything else leaves a gated
+              // source looking merely blank.
+              const sharedReason =
+                selfEntry?.reasonMessage &&
+                selfEntry.reasonMessage === competitorEntry.reasonMessage
+                  ? selfEntry.reasonMessage
+                  : null;
+              const reason = sharedReason
+                ? sharedReason
+                : [
+                    selfEntry?.reasonMessage ? `Your brand: ${selfEntry.reasonMessage}` : null,
+                    competitorEntry.reasonMessage
+                      ? `Competitors: ${competitorEntry.reasonMessage}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ");
+              const sharedAction =
+                selfEntry?.actionNeeded && selfEntry.actionNeeded === competitorEntry.actionNeeded
+                  ? selfEntry.actionNeeded
+                  : null;
+              const coverageNote =
+                reason ||
+                sharedAction ||
+                [
+                  selfEntry?.actionNeeded ? `Your brand: ${selfEntry.actionNeeded}` : null,
+                  competitorEntry.actionNeeded
+                    ? `Competitors: ${competitorEntry.actionNeeded}`
+                    : null,
                 ]
                   .filter(Boolean)
-                  .join(" · ");
-            const sharedAction =
-              selfEntry?.actionNeeded && selfEntry.actionNeeded === competitorEntry.actionNeeded
-                ? selfEntry.actionNeeded
-                : null;
-            const coverageNote =
-              reason ||
-              sharedAction ||
-              [
-                selfEntry?.actionNeeded ? `Your brand: ${selfEntry.actionNeeded}` : null,
-                competitorEntry.actionNeeded ? `Competitors: ${competitorEntry.actionNeeded}` : null,
-              ]
-                .filter(Boolean)
-                .join(" · ") ||
-              "No additional action is available.";
-            return (
-              <div className="f9-wk-row is-plain" key={competitorEntry.sourceId}>
-                <dt className="f9-wk-nm">{competitorEntry.label}</dt>
-                <dd
-                  className="f9-wk-say"
-                  style={{
-                    margin: 0,
-                    overflow: "visible",
-                    textOverflow: "clip",
-                    whiteSpace: "normal",
-                    overflowWrap: "anywhere",
-                  }}
-                >
-                  <span>{coverageNote}</span>
-                </dd>
-                <dd aria-label={`Competitors: ${competitorStatus}`} className="f9-wk-st" style={{ margin: 0 }}>
-                  <span>Competitors: {competitorStatus}</span>
-                </dd>
-                <dd aria-label={`Your brand: ${selfStatus}`} className="f9-wk-tm" style={{ margin: 0 }}>
-                  <span>Your brand: {selfStatus}</span>
-                </dd>
-              </div>
-            );
-          })}
-        </dl>
-      </section>
+                  .join(" · ") ||
+                "No additional action is available.";
+              return (
+                <div key={competitorEntry.sourceId}>
+                  <dt>{competitorEntry.label}</dt>
+                  <dd>
+                    {/* The visible pair is a two-column flex row, so the label
+                        and value are separate nodes. aria-label restores the
+                        single readable string #478 gives assistive tech. */}
+                    <span aria-label={`Your brand: ${selfStatus}`}>
+                      <b>Your brand</b>
+                      {selfStatus}
+                    </span>
+                    <span aria-label={`Competitors: ${competitorStatus}`}>
+                      <b>Competitors</b>
+                      {competitorStatus}
+                    </span>
+                    <small>{coverageNote}</small>
+                  </dd>
+                </div>
+              );
+            })}
+          </dl>
+        </section>
+      </div>
 
-      <section aria-labelledby="presence-entities-title" className="f9-wk-sec">
-        <h2 id="presence-entities-title">Tracked entities <span>{data.snapshot.entities.length}</span></h2>
+      <section aria-labelledby="presence-entities-title" className="f9-wk-sec f9-pr-list-section">
+        <div className="f9-pr-list-head">
+          <h2 id="presence-entities-title">Tracked entities</h2>
+          <span>{data.snapshot.entities.length}</span>
+        </div>
         {data.snapshot.entities.length === 0 ? (
           <p className="f9-wk-note">
             {canCreateEntity
@@ -437,60 +452,64 @@ export default function PresenceIndexRoute() {
               : "Nothing is tracked on this plan. Upgrade to make the website instrument available."}
           </p>
         ) : (
-          <RuledList aria-label="Tracked entities" role="list">
+          <RuledList aria-label="Tracked entities">
             {data.snapshot.entities.map(({ entity, sources }: PresenceEntityRow) => {
               const pollableSources = sources.filter(
                 (source: SourceTargetRecord) => source.connectorId === "website",
               );
               return (
-                <div key={entity.id} role="listitem">
-                  <RuledRow
-                    name={entity.label}
-                    say={
-                      pollableSources.length > 0
-                        ? pollableSources
-                            .map(
-                              (source: SourceTargetRecord) =>
-                                `${formatCoverageLabel(source.connectorId)}: ${formatCoverageLabel(source.coverageLabel)}`,
-                            )
-                            .join(" · ")
-                        : "Website source not configured"
-                    }
-                    status={formatTrackingMode(entity.trackingMode)}
-                    time={<LocalTime iso={entity.updatedAt} mode="date" />}
-                    to={`/app/presence/${entity.id}`}
-                  />
-                </div>
+                <RuledRow
+                  key={entity.id}
+                  name={entity.label}
+                  say={
+                    pollableSources.length > 0
+                      ? pollableSources
+                          .map(
+                            (source: SourceTargetRecord) =>
+                              `${formatCoverageLabel(source.connectorId)}: ${formatCoverageLabel(source.coverageLabel)}`,
+                          )
+                          .join(" · ")
+                      : "Website source not configured"
+                  }
+                  status={formatTrackingMode(entity.trackingMode)}
+                  time={<LocalTime iso={entity.updatedAt} mode="date" />}
+                  to={`/app/presence/${entity.id}`}
+                />
               );
             })}
           </RuledList>
         )}
       </section>
 
-      <section aria-labelledby="presence-feed-title" className="f9-wk-sec">
-        <h2 id="presence-feed-title">Recent public updates <span>{data.snapshot.recentItems.length}</span></h2>
+      <section aria-labelledby="presence-feed-title" className="f9-wk-sec f9-pr-list-section">
+        <div className="f9-pr-list-head">
+          <h2 id="presence-feed-title">Recent public updates</h2>
+          <span>{data.snapshot.recentItems.length}</span>
+        </div>
         {data.snapshot.recentItems.length === 0 ? (
           <p className="f9-wk-note">
             No public updates are filed yet. Check a website source to fetch its latest items.
           </p>
         ) : (
-          <RuledList aria-label="Recent public updates" role="list">
+          <div className="f9-pr-feed" role="list">
             {data.snapshot.recentItems.map((item: PresenceRecentItem) => (
-              <div key={item.id} role="listitem">
-                <RuledRow
-                  name={
+              <article className="f9-pr-feed-row" key={item.id} role="listitem">
+                <div>
+                  <h3>
                     <a href={item.canonicalUrl} rel="noreferrer" target="_blank">
                       {item.title}
                     </a>
-                  }
-                  plain
-                  say={item.bodyExcerpt ?? "The latest capture did not include a text summary."}
-                  status={formatCoverageLabel(item.connectorId)}
-                  time={<LocalTime iso={item.observedAt} mode="date" />}
-                />
-              </div>
+                  </h3>
+                  {item.bodyExcerpt ? <p>{item.bodyExcerpt}</p> : null}
+                </div>
+                <span>{formatCoverageLabel(item.connectorId)}</span>
+                <span className="f9-pr-feed-time">
+                  <LocalTime iso={item.observedAt} mode="date" />
+                </span>
+                <span aria-hidden="true">&rsaquo;</span>
+              </article>
             ))}
-          </RuledList>
+          </div>
         )}
       </section>
 
