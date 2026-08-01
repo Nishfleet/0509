@@ -1990,18 +1990,21 @@ export async function resolveDigestEmailTargets(
     channel: "email",
     limit: targetLimit,
   });
-  const configuredTargets = dedupeTargetsByValue(
-    allTargets.filter((target: DeliveryTargetRecord) =>
-      isUsableEmailTarget(target, normalizedAccountEmail),
-    ),
+  const matchingTargets = allTargets.filter((target: DeliveryTargetRecord) =>
+    isUsableEmailTarget(target, normalizedAccountEmail),
   );
 
+  // Gate C must see the raw matches: several byte-distinct rows that normalize
+  // to the same address are exactly the ambiguity it exists to reject, so it
+  // runs before this branch's dedupe rather than after it.
   if (options.requireUniqueExistingTarget) {
-    if (allTargets.length === targetLimit || configuredTargets.length !== 1) {
+    if (allTargets.length === targetLimit || matchingTargets.length !== 1) {
       throw new Error("Gate C proof email target must resolve uniquely.");
     }
-    return configuredTargets;
+    return matchingTargets;
   }
+
+  const configuredTargets = dedupeTargetsByValue(matchingTargets);
 
   if (configuredTargets.length > 0) {
     return configuredTargets;

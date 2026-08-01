@@ -2926,6 +2926,10 @@ describe("sendPresenceDigestEmail", () => {
       createDeliveryAttempt,
       listDeliveryTargets: vi.fn().mockResolvedValue([]),
       upsertDeliveryTarget: vi.fn().mockResolvedValue(null),
+      // This branch provisions through the atomic helper rather than calling
+      // upsertDeliveryTarget directly, so the mock must expose it or the module
+      // import fails. Same null result, so the test's intent is unchanged.
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn().mockResolvedValue(null),
     }));
 
     const { sendPresenceDigestEmail } = await import("~/lib/delivery.server");
