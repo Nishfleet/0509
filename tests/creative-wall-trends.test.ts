@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CreativeWall } from "~/components/creative-wall";
 import { WatchlistTrends } from "~/components/watchlist-trends";
@@ -22,14 +22,15 @@ const daily: WatchlistDailyActivity[] = [
 	{ date: "2026-07-12", runs: 8, adsSeenPeak: 12, eventsConfirmed: 3 },
 	{ date: "2026-07-13", runs: 4, adsSeenPeak: 10, eventsConfirmed: 0 },
 ];
+const CREATIVE_TRENDS_TEST_NOW = new Date("2026-07-15T00:00:00.000Z");
 
 describe("creative wall + trend cards rendering", () => {
-	beforeAll(() => {
+	beforeEach(() => {
 		vi.useFakeTimers();
-		vi.setSystemTime(new Date("2026-07-15T00:00:00.000Z"));
+		vi.setSystemTime(CREATIVE_TRENDS_TEST_NOW);
 	});
 
-	afterAll(() => {
+	afterEach(() => {
 		vi.useRealTimers();
 	});
 
