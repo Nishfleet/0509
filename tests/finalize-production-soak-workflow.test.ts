@@ -31,7 +31,7 @@ describe("production soak finalization workflow", () => {
     const provenance = parsed.jobs?.finalize?.steps?.find((step) => step.name === "Verify successful protected production deploy");
     expect(provenance?.id).toBe("verify_deploy_run");
     expect(provenance?.uses).toBe(
-      "actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd",
+      "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3",
     );
     const script = String(provenance?.with?.script);
     expect(script).toContain("github.rest.actions.getWorkflowRun");
