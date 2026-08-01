@@ -133,9 +133,9 @@ describe("workspace settings route components", () => {
     expect(markup).not.toContain("Recent tracking health");
     expect(markup).not.toContain("Create API key");
     expect(markup).not.toContain("Slack delivery");
-		expect(markup).toContain("showing your most recent results");
+    expect(markup).toContain("showing your most recent results");
     expect(markup).not.toContain("Cached live results");
-		expect(markup).not.toContain("degraded");
+    expect(markup).not.toContain("degraded");
   });
 
   it("locks source access controls and hides token metadata for workspace members", async () => {
@@ -214,7 +214,9 @@ describe("workspace settings route components", () => {
   it("renders notifications without source-token or API-key setup", async () => {
     await mockRouter({
       emailDeliveryReady: true,
+      digestCadencePreference: "plan_default",
       showSlackDelivery: false,
+      slackDelivery: { plan: "starter", entitled: true },
       canManageWhatsAppDelivery: false,
       slackTargets: [],
       whatsappTargets: [],
@@ -233,9 +235,11 @@ describe("workspace settings route components", () => {
     const markup = renderToStaticMarkup(createElement(NotificationsRoute));
 
     expect(markup).toContain("Notifications");
-    expect(markup).toContain("Email digest delivery and alert channels");
-    expect(markup).toContain("Digest and alert delivery");
-    expect(markup).toContain("Open watchlists");
+    expect(markup).toContain(
+      "Choose how briefs and confirmed competitor changes reach your team.",
+    );
+    expect(markup).toContain("Delivery channels");
+    expect(markup).toContain("Tune on competitors");
     expect(markup).not.toContain("Ad Library API page");
     expect(markup).not.toContain("Test and save access");
     expect(markup).not.toContain("Create API key");
@@ -248,7 +252,7 @@ describe("workspace settings route components", () => {
       "WhatsApp is not available for this account yet",
     );
     expect(markup).not.toContain("Save WhatsApp delivery");
-    expect(markup).not.toContain("Delivery confirmation");
+    expect(markup).not.toContain("Delivery webhook");
     expect(markup).not.toContain("0/3 usable");
     expect(markup).not.toContain("No successful send yet");
   });
