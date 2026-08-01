@@ -306,6 +306,65 @@ describe("production deployment readiness gate", () => {
     expect(plan[canaryIndex + 6]).toMatchObject({ id: "oauth_branding" });
   });
 
+  it("defaults to required backup proof and makes the exact deferred release immediate-only", () => {
+    expect(() =>
+      buildProductionDeployPlan({
+        manifestPath: "test-results/deploy-readiness-test.json",
+        wranglerOutputPath,
+      }),
+    ).toThrow("invalid_remote_restore_evidence_path");
+
+    const deferredPlan = buildProductionDeployPlan({
+      manifestPath: "test-results/deploy-readiness-test.json",
+      backupProofStatus: "deferred",
+      wranglerOutputPath,
+    });
+    expect(deferredPlan[0]).toEqual({
+      id: "deferred_release_zero_migrations",
+      command: "git",
+      args: [
+        "diff",
+        "--quiet",
+        "03174ed6d9eed749b22430fbe1bc0938bf4da0c5",
+        "HEAD",
+        "--",
+        "migrations",
+      ],
+    });
+    expect(
+      deferredPlan.find((step: any) => step.id === "remote_restore_evidence"),
+    ).toBeUndefined();
+    expect(
+      deferredPlan.find((step: any) => step.id === "start_production_soak"),
+    ).toBeUndefined();
+    expect(
+      deferredPlan.find((step: any) => step.id === "post_deploy_release_canary"),
+    ).toMatchObject({ env: { BACKUP_PROOF_STATUS: "deferred" } });
+    expect(
+      deferredPlan.find((step: any) => step.id === "rollback_failed_release"),
+    ).toMatchObject({ runOnPostDeployFailure: true });
+
+    expect(() =>
+      buildProductionDeployPlan({
+        manifestPath: "test-results/deploy-readiness-test.json",
+        remoteRestoreEvidencePath,
+        backupProofStatus: "deferred",
+        wranglerOutputPath,
+      }),
+    ).toThrow("deferred_backup_restore_evidence_conflict");
+
+    const disposition = (deployPlanModule as any)
+      .createDeferredBackupDisposition("f".repeat(40));
+    expect(disposition).toMatchObject({
+      backupProof: "not_obtained",
+      productionD1RecoveryProof: "absent",
+      releaseControlBaseSha:
+        "048e8a5991c6560a15cba485a7a4ba27af9d5004",
+      candidateSha: "f".repeat(40),
+      migrationFileCount: 0,
+    });
+  });
+
   it("aborts on main drift after preflights and before wrangler deploy", () => {
     const plan = buildProductionDeployPlan({
       manifestPath: "test-results/deploy-readiness-test.json",
@@ -1258,7 +1317,10 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       "CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}",
     );
     expect(deployStep).toContain(
-      "D1_REMOTE_RESTORE_EVIDENCE_PATH: test-results/d1-remote-restore-evidence.json",
+      "D1_REMOTE_RESTORE_EVIDENCE_PATH: ${{ needs.pin_candidate.outputs.backup_proof_status == 'required' && 'test-results/d1-remote-restore-evidence.json' || '' }}",
+    );
+    expect(deployStep).toContain(
+      "BACKUP_PROOF_STATUS: ${{ needs.pin_candidate.outputs.backup_proof_status }}",
     );
     expect(deployStep).toContain("GITHUB_TOKEN: ${{ github.token }}");
     expect(releaseStep).toContain("if: always()");
@@ -1796,6 +1858,10 @@ exec /bin/mv "$@"
     );
     const uploadStep = workflow.slice(
       workflow.indexOf("- name: Preserve release evidence"),
+      workflow.indexOf("- name: Preserve private immediate Gate C evidence"),
+    );
+    const deferredUploadStep = workflow.slice(
+      workflow.indexOf("- name: Preserve private immediate Gate C evidence"),
       workflow.indexOf("- name: Preserve failed release diagnostics"),
     );
     const diagnosticStep = workflow.slice(
@@ -1832,6 +1898,7 @@ exec /bin/mv "$@"
     expect(verifyStep).toContain('[ "${#rollback[@]}" -eq 1 ]');
     expect(verifyStep).toContain('[ "${#gate_c[@]}" -eq 1 ]');
     expect(verifyStep).toContain('[ "${#production_soak[@]}" -eq 1 ]');
+    expect(verifyStep).toContain('[ "${#production_soak[@]}" -eq 0 ]');
     expect(verifyStep).toContain(
       "find test-results/gate-b-artifacts -type f -print -quit",
     );
@@ -1849,6 +1916,15 @@ exec /bin/mv "$@"
     expect(uploadStep).toContain("retention-days: 90");
     expect(uploadStep).not.toContain("d1-remote-restore-evidence");
     expect(uploadStep).not.toContain("test-results/**");
+    expect(deferredUploadStep).toContain(
+      "if: success() && env.BACKUP_PROOF_STATUS == 'deferred'",
+    );
+    expect(deferredUploadStep).toContain(
+      "gate-c-proof-evidence-${{ needs.pin_candidate.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}",
+    );
+    expect(deferredUploadStep).toContain("path: test-results/gate-c-*.json");
+    expect(deferredUploadStep).toContain("if-no-files-found: error");
+    expect(deferredUploadStep).not.toContain("production-soak");
     expect(diagnosticStep).toContain("if: failure()");
     expect(diagnosticStep).toContain("production-release-diagnostics-");
     expect(diagnosticStep).toContain(

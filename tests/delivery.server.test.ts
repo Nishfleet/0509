@@ -45,6 +45,8 @@ afterEach(() => {
   vi.useRealTimers();
   vi.doUnmock("~/lib/email-verification.server");
   vi.doUnmock("~/lib/plan.server");
+  vi.doUnmock("~/lib/data/delivery-records-attempts.server");
+  vi.doUnmock("~/lib/delivery-attempt-lease");
 });
 
 describe("deliverWeeklyDigest", () => {
@@ -238,6 +240,132 @@ expectedWebhookStatus:"provider_unknown",
         lastSuccessfulDeliveryAt: expect.any(String),
       }),
     );
+  });
+
+  it("uses the Gate C subject and the pre-provider T0 in the durable proof summary", async () => {
+    const t0 = "2026-08-01T00:00:00.000Z";
+    const t1 = "2026-08-01T00:05:00.000Z";
+    vi.useFakeTimers();
+    vi.setSystemTime(t0);
+    emailSend = vi.fn().mockResolvedValue({ messageId: "gate-c-message" });
+    const sendMock = emailSend;
+    const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-gate-c");
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+    const upsertDigestDelivery = vi.fn();
+    const markInstantDeliveryDispatchStarted = vi.fn().mockImplementation(async () => {
+      vi.setSystemTime(t1);
+      return t0;
+    });
+    const target = {
+      id: "email-target-gate-c",
+      userId: "user-gate-c",
+      watchlistId: null,
+      channel: "email",
+      targetValue: "owner@example.com",
+      validationStatus: "validated",
+      isValidated: true,
+      isOptedIn: true,
+      optInSource: "account_email",
+      optedInAt: t0,
+      isPaused: false,
+      pausedAt: null,
+      optedOutAt: null,
+      templateEligible: false,
+      lastSuccessfulDeliveryAt: null,
+      lastSuccessfulAttemptId: null,
+      providerIdentifier: null,
+      metadata: {},
+      createdAt: t0,
+      updatedAt: t0,
+    };
+
+    vi.doMock("~/lib/delivery-attempt-lease", () => ({
+      DIGEST_PROVIDER_CLAIM_PROTOCOL: "digest_preclaim_v1",
+      INSTANT_PROVIDER_CLAIM_PROTOCOL: "instant_preclaim_v1",
+      hasTrustedDigestProviderRetryEvidence: vi.fn().mockReturnValue(false),
+      hasTrustedInstantProviderRetryEvidence: vi.fn().mockReturnValue(false),
+      isStalePreDispatchAttempt: vi.fn().mockReturnValue(false),
+      markDeliveryAttemptProviderDispatch: vi.fn().mockResolvedValue(t0),
+    }));
+    vi.doMock("~/lib/data/delivery-records-attempts.server", () => ({
+      claimInstantDeliveryAttempt: vi.fn(),
+      markInstantDeliveryDispatchStarted,
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds: vi.fn().mockResolvedValue([]),
+      createDeliveryAttempt,
+      updateDeliveryAttemptResult,
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
+        id: "workspace-gate-c",
+        userId: "user-gate-c",
+        sensitivityMode: "balanced",
+        instantEnabled: false,
+        digestEnabled: true,
+        digestCadencePreference: "plan_default",
+        emailEnabled: true,
+        whatsappEnabled: false,
+        slackEnabled: false,
+        quietHours: null,
+        timezone: "UTC",
+        createdAt: t0,
+        updatedAt: t0,
+      }),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn().mockResolvedValue([target]),
+      upsertDeliveryTarget: vi.fn(),
+      upsertDigestDelivery,
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({ sendDigestWhatsApp: vi.fn() }));
+
+    const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+    const result = await deliverWeeklyDigest(
+      {
+        ...emailEnv,
+        DB: {},
+        APP_ORIGIN: "https://app.0509.test",
+        BETTER_AUTH_SECRET: "test-secret-with-at-least-32-characters",
+        BETTER_AUTH_URL: "https://0509.io",
+      } as never,
+      {
+        userId: "user-gate-c",
+        userName: "Owner",
+        accountEmail: "owner@example.com",
+        digestRunId: "digest-gate-c",
+        periodStart: t0,
+        periodEnd: "2026-08-01T01:00:00.000Z",
+        items: [],
+        cadence: "daily",
+        lane: "internal",
+        proofEmailSubject: "0509 Gate C proof gate-c-worker-v1",
+      },
+    );
+
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(emailSendPayload(sendMock).subject).toBe("0509 Gate C proof gate-c-worker-v1");
+    expect(createDeliveryAttempt).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        payloadSnapshot: expect.objectContaining({
+          subject: "0509 Gate C proof gate-c-worker-v1",
+        }),
+      }),
+    );
+    const finalUpdate = updateDeliveryAttemptResult.mock.calls.at(-1)?.[2];
+    expect(finalUpdate).toEqual(expect.objectContaining({
+      payloadSnapshot: expect.objectContaining({ providerDispatchStartedAt: t0 }),
+    }));
+    expect(markInstantDeliveryDispatchStarted).toHaveBeenCalledWith(
+      expect.anything(),
+      "attempt-gate-c",
+      t0,
+    );
+    expect(finalUpdate.providerStatusLastSeenAt).toBe(t1);
+    expect(result.details[0]).toMatchObject({
+      subject: "0509 Gate C proof gate-c-worker-v1",
+      providerDispatchStartedAt: t0,
+      status: "sent",
+    });
   });
 
   it("records an untyped email rejection as failed while provider outcome stays unknown", async () => {
