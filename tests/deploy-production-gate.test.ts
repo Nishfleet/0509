@@ -1273,7 +1273,26 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     const materializeStep = workflow.slice(materializeIndex, synchronizeCanaryIndex);
     const synchronizeCanaryStep = workflow.slice(synchronizeCanaryIndex, deployIndex);
     const deployStep = workflow.slice(deployIndex, verifyEvidenceIndex);
-    const releaseStep = workflow.slice(releaseIndex);
+    const parsedWorkflow = parse(workflow) as any;
+    const deploySteps = parsedWorkflow.jobs.deploy.steps as Array<{
+      name?: string;
+      run?: string;
+      if?: string;
+    }>;
+    const acquireCommandSteps = deploySteps.filter(
+      (step) => step.run === "./scripts/deploy-window-lock.sh acquire",
+    );
+    const releaseCommandSteps = deploySteps.filter(
+      (step) => step.run === "./scripts/deploy-window-lock.sh release",
+    );
+    const nonExactLockSteps = (parse(`steps:
+  - run: |
+      ./scripts/deploy-window-lock.sh acquire
+  - run: "./scripts/deploy-window-lock.sh release\\n"
+`) as any).steps as Array<{ run?: string }>;
+    const capabilityCleanupSteps = deploySteps.filter(
+      (step) => step.name === "Remove deploy-window capability file",
+    );
 
     expect(checkoutIndex).toBeGreaterThanOrEqual(0);
     expect(acquireIndex).toBeGreaterThan(checkoutIndex);
@@ -1285,9 +1304,18 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(verifyEvidenceIndex).toBeGreaterThan(deployIndex);
     expect(releaseIndex).toBeGreaterThan(verifyEvidenceIndex);
     expect(workflow).toContain("timeout-minutes: 270");
-    expect(workflow.slice(acquireIndex, verifySecretsIndex)).toContain(
-      "run: ./scripts/deploy-window-lock.sh acquire",
-    );
+    expect(acquireCommandSteps).toHaveLength(1);
+    expect(acquireCommandSteps[0]?.name).toBe("Acquire deploy window");
+    expect(
+      nonExactLockSteps.filter(
+        (step) => step.run === "./scripts/deploy-window-lock.sh acquire",
+      ),
+    ).toHaveLength(0);
+    expect(
+      nonExactLockSteps.filter(
+        (step) => step.run === "./scripts/deploy-window-lock.sh release",
+      ),
+    ).toHaveLength(0);
     expect(verifySecretsStep).toContain(
       "CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}",
     );
@@ -1323,9 +1351,13 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       "BACKUP_PROOF_STATUS: ${{ needs.pin_candidate.outputs.backup_proof_status }}",
     );
     expect(deployStep).toContain("GITHUB_TOKEN: ${{ github.token }}");
-    expect(releaseStep).toContain("if: always()");
-    expect(releaseStep).toContain(
-      "run: ./scripts/deploy-window-lock.sh release",
+    expect(releaseCommandSteps).toHaveLength(1);
+    expect(releaseCommandSteps[0]?.name).toBe("Release deploy window");
+    expect(releaseCommandSteps[0]?.if).toBe("always()");
+    expect(capabilityCleanupSteps).toHaveLength(1);
+    expect(capabilityCleanupSteps[0]?.if).toBe("always()");
+    expect(capabilityCleanupSteps[0]?.run).toBe(
+      'umask 077\nrm -f -- "$DEPLOY_WINDOW_CAPABILITY_FILE"\n',
     );
     expect(workflow).toContain("actions: read");
     expect(workflow).toContain("fetch-depth: 0");
@@ -1530,14 +1562,8 @@ printf 'curl %s\\n' "$*" >> "$FAKE_CALLS"
   printf 'hostile curlrc was not disabled\\n' >&2
   exit 100
 }
-# Real curl consumes stdin when the config path is "-". The caller writes its
-# auth config into that pipe under \`set -o pipefail\`, so a fake that exits
-# without draining can kill the writer with SIGPIPE and turn a healthy API call
-# into a 141 pipeline status. The script then reads that as an infrastructure
-# failure and burns an extra retry, which makes the call-count contract below
-# depend on runner scheduling. Drain stdin exactly like curl does.
 case " $* " in
-  *" --config - "*) /bin/cat > /dev/null ;;
+  *" --config - "*) /bin/cat >/dev/null ;;
 esac
 if [ "$FAKE_MODE" = download_infra ]; then exit 1; fi
 headers=
