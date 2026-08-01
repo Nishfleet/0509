@@ -13,6 +13,7 @@ describe("manual D1 backup workflow", () => {
     jobs: {
       backup?: {
         if?: string;
+        needs?: string;
         environment?: string;
         env?: Record<string, string>;
         steps?: Array<{ name?: string; run?: string; env?: Record<string, string> }>;
@@ -20,12 +21,13 @@ describe("manual D1 backup workflow", () => {
     };
   };
 
-  it("runs the existing D1-to-R2 backup script only on explicit dispatch", () => {
+  it("runs the existing D1-to-R2 backup script only after exact authorization", () => {
     expect(parsed.on.workflow_dispatch).toBeDefined();
     expect(parsed.on.schedule).toBeUndefined();
     expect(parsed.jobs.backup?.if).toBe(
-      "github.repository == 'nish3451/0509' && github.ref == 'refs/heads/main'",
+      "needs.authorize_release.result == 'success'",
     );
+    expect(parsed.jobs.backup?.needs).toBe("authorize_release");
     expect(parsed.jobs.backup?.environment).toBe("production");
 
     const backupSteps = parsed.jobs.backup?.steps
@@ -59,9 +61,7 @@ describe("manual D1 backup workflow", () => {
     const backupStep = steps.find(
       (step) => step.name === "Run approved D1-to-R2 backup",
     );
-    expect(backupStep?.run).toBe(
-      "./scripts/deploy-window-lock.sh run -- node scripts/d1-backup-to-r2.mjs",
-    );
+    expect(backupStep?.run).toBe("node scripts/d1-backup-to-r2.mjs");
     expect(backupStep?.env?.CLOUDFLARE_ACCOUNT_ID).toBe("${{ secrets.CLOUDFLARE_ACCOUNT_ID }}");
     expect(backupStep?.env?.CLOUDFLARE_API_TOKEN).toBe("${{ secrets.CLOUDFLARE_API_TOKEN }}");
     expect(backupStep?.env?.D1_BACKUP_AUTOMATION_APPROVED).toBe("0509-weekly-d1-to-r2");
