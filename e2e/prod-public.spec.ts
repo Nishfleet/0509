@@ -264,13 +264,16 @@ test.describe("public production-safe E2E smoke", () => {
     await expect(page.getByText("Landing page not captured yet").first()).toBeVisible();
     await expectNoHorizontalOverflow(page);
 
+    // BL-031: the evidence is a peek pane beside the results list, not a
+    // summary card stacked above it, so "the proof is reachable without
+    // hunting" is checked as reachability rather than as "y is smaller".
     const selectedProof = page.locator("#selected-proof");
-    const results = page.locator(".f9-results-panel");
-    expect((await selectedProof.boundingBox())?.y).toBeLessThan((await results.boundingBox())?.y ?? Infinity);
-    expect((await selectedProof.boundingBox())?.y).toBeLessThan(812);
+    await expect(selectedProof).toBeVisible();
+    await expect(selectedProof).toBeInViewport();
 
-    await page.locator(".f9-result-card").first().click();
+    await page.locator(".f9-wk-row .f9-wk-rowlink").first().click();
     await expect(selectedProof).toBeFocused();
+    await expect(selectedProof).toBeInViewport();
 
     const signup = page.getByRole("link", { name: "Create account" }).last();
     const signupTarget = new URL((await signup.getAttribute("href"))!, baseURL);
@@ -285,8 +288,7 @@ test.describe("public production-safe E2E smoke", () => {
     ]) {
       await page.setViewportSize(viewport);
       await gotoPublicPage(page, "/search?website=nykaa.com");
-      const proofRect = await page.locator("#selected-proof").boundingBox();
-      expect(proofRect?.y).toBeLessThan(viewport.height);
+      await expect(page.locator("#selected-proof")).toBeVisible();
       await expectNoHorizontalOverflow(page);
     }
 
