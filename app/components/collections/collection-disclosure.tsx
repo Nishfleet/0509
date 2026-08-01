@@ -1,24 +1,6 @@
 import type { ReactNode } from "react";
 
 /**
- * Rank-2 disclosure — brief §5 (Rank 2 is the default rank), §7 (the
- * collections create form is "demoted to a Rank-2 action that reveals a
- * panel"), §11 (no new client-side JS beyond what tabs and disclosure
- * require).
- *
- * Native `<details>`: zero JavaScript, keyboard-operable for free, and the
- * summary always exposes the expanded/collapsed state to assistive tech. While
- * closed the panel's content is absent from the accessibility tree and out of
- * the tab order — the same as any collapsed disclosure — and it returns in
- * full on open; it is collapsed, not deleted from the document. The native
- * disclosure triangle is suppressed in CSS; the audit called those triangles
- * out by name on the old onboarding page.
- *
- * The summary carries the Rank-2 class pair rather than the `SecondaryAction`
- * component because a `<summary>` is the control here — wrapping a button
- * inside one would break the native toggle.
- */
-/**
  * The page's own panels — Export, Add an evidence link, New collection — open
  * one at a time, so the route can never stack every form open at once.
  */
@@ -35,7 +17,7 @@ export function CollectionDisclosure({
   rank = 2,
   group,
 }: {
-  /** Mono uppercase label, e.g. "New collection". */
+  /** Sentence-case navigation label, e.g. "New collection". */
   summary: string;
   children: ReactNode;
   defaultOpen?: boolean;
@@ -52,12 +34,17 @@ export function CollectionDisclosure({
 }) {
   return (
     <details
-      className={className ? `f9-ed-disclosure ${className}` : "f9-ed-disclosure"}
+      className={className ? `f9-col-disclosure ${className}` : "f9-col-disclosure"}
       name={group}
       open={defaultOpen}
     >
-      <summary className={`f9-ed-cta f9-ed-cta--rank${rank}`}>{summary}</summary>
-      <div className="f9-ed-disclosure-body">{children}</div>
+      <summary className={`f9-wk-lnk f9-col-disclosure-summary is-rank-${rank}`}>
+        {summary}
+        <span aria-hidden="true" className="f9-wk-chev">
+          &rsaquo;
+        </span>
+      </summary>
+      <div className="f9-col-disclosure-body">{children}</div>
     </details>
   );
 }
