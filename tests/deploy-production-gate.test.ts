@@ -228,16 +228,21 @@ describe("production deployment readiness gate", () => {
       plan.findIndex((step: any) => step.id === "post_deploy_release_canary"),
     );
     const deployIndex = plan.findIndex((step: any) => step.id === "deploy");
-    expect(plan[deployIndex - 2]).toMatchObject({
+    expect(plan[deployIndex - 3]).toMatchObject({
       id: "partial_refund_invariants_predeploy",
       command: "node",
       args: ["scripts/check-partial-refund-invariants.mjs"],
       includeCloudflareCredentials: true,
     });
-    expect(plan[deployIndex - 1]).toMatchObject({
+    expect(plan[deployIndex - 2]).toMatchObject({
       id: "capture_worker_rollback_target",
       command: "node",
       includeCloudflareCredentials: true,
+    });
+    expect(plan[deployIndex - 1]).toEqual({
+      id: "reconfirm_frozen_main_before_deploy",
+      command: "./scripts/ci-verify-provider-main-cas.sh",
+      args: [],
     });
     expect(plan[deployIndex + 1]).toMatchObject({
       id: "verify_worker_rollback_target",
@@ -299,6 +304,28 @@ describe("production deployment readiness gate", () => {
       args: ["run", "e2e:prod:public"],
     });
     expect(plan[canaryIndex + 6]).toMatchObject({ id: "oauth_branding" });
+  });
+
+  it("aborts on main drift after preflights and before wrangler deploy", () => {
+    const plan = buildProductionDeployPlan({
+      manifestPath: "test-results/deploy-readiness-test.json",
+      remoteRestoreEvidencePath,
+      wranglerOutputPath,
+    });
+    const executed: string[] = [];
+
+    expect(() =>
+      executeProductionDeployPlan(plan, (step: any) => {
+        executed.push(step.id);
+        if (step.id === "reconfirm_frozen_main_before_deploy") {
+          throw new Error("provider_main_sha_mismatch");
+        }
+      }),
+    ).toThrow("provider_main_sha_mismatch");
+    expect(executed).toContain("capture_worker_rollback_target");
+    expect(executed).toContain("reconfirm_frozen_main_before_deploy");
+    expect(executed).not.toContain("deploy");
+    expect(executed).not.toContain("rollback_failed_release");
   });
 
   it("captures one stable prior Worker version and emits an exact guarded rollback command", () => {
@@ -1294,6 +1321,10 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     );
     const workflow = parse(workflowText) as any;
     const prepare = workflow.jobs.prepare_remote_restore_evidence;
+    const candidateVerifierStep = prepare.steps.find(
+      (step: any) =>
+        step.name === "Verify pinned candidate before self-hosted work",
+    );
     const bindArchiveStep = prepare.steps.find(
       (step: any) => step.name === "Bind restore evidence archive path",
     );
@@ -1315,6 +1346,9 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
 
     expect(bindArchiveStep.run).toContain(
       'archive="$RUNNER_TEMP/d1-remote-restore-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}.tar.gz"',
+    );
+    expect(candidateVerifierStep.run).toBe(
+      "./scripts/deploy-window-lock.sh run -- ./scripts/ci-verify-production-candidate.sh",
     );
     expect(bindArchiveStep.run).toContain(
       'printf \'RESTORE_EVIDENCE_ARCHIVE=%s\\n\' "$archive" >> "$GITHUB_ENV"',
@@ -1790,7 +1824,7 @@ exec /bin/mv "$@"
       "node scripts/release-evidence-archive.mjs create",
     );
     expect(archiveStep).toContain(
-      "production-release-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz",
+      "production-release-evidence-${PINNED_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz",
     );
     expect(verifyStep).toContain('[ "${#authoritative_readiness[@]}" -eq 1 ]');
     expect(verifyStep).toContain("test-results/deploy-readiness-local-release-*.json) ;;");
@@ -1806,10 +1840,10 @@ exec /bin/mv "$@"
       "uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
     );
     expect(uploadStep).toContain(
-      "production-release-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}",
+      "production-release-evidence-${{ needs.pin_candidate.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}",
     );
     expect(uploadStep).toContain(
-      "test-results/production-release-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}.tar.gz",
+      "test-results/production-release-evidence-${{ needs.pin_candidate.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}.tar.gz",
     );
     expect(uploadStep).toContain("if-no-files-found: error");
     expect(uploadStep).toContain("retention-days: 90");
