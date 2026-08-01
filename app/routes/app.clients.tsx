@@ -741,36 +741,32 @@ export default function ClientsRoute() {
         />
       ) : null}
 
-      <section
-        aria-labelledby="client-rooms-active-title"
-        className="f9-wk-sec"
-      >
-        <p className="f9-wk-kick">Active rooms</p>
-        <div className="f9-panel-toolbar">
-          <h2 id="client-rooms-active-title">Client delivery</h2>
+      <section aria-labelledby="client-rooms-active-title" className="f9-wk-sec">
+        <div className="f9-clients-section-head">
+          <div>
+            <p className="f9-wk-kick">Active rooms</p>
+            <h2 id="client-rooms-active-title">Client delivery</h2>
+          </div>
           <span>
             {activeRooms.length} {activeRooms.length === 1 ? "room" : "rooms"}
           </span>
         </div>
-        <div className="f9-work-list f9-client-room-list">
+
+        <div className="f9-clients-rooms">
           {activeRooms.map((room, index) => (
             <ClientRoomCard
               key={room.id}
+              approvalUnavailable={approvalUnavailableRoomIds.has(room.id)}
               canManage={canManageClientRooms}
               initiallyOpen={index === 0}
               memories={memoriesByClientRoomId.get(room.id) ?? []}
-              approvalUnavailable={approvalUnavailableRoomIds.has(room.id)}
               roomMemoryUnavailable={data.roomMemoryUnavailable}
               room={room}
             />
           ))}
           {activeRooms.length === 0 ? (
-            <div className="f9-wk-note" role="status">
-              <strong>
-                {canManageClientRooms
-                  ? "No client rooms yet"
-                  : "No existing client rooms"}
-              </strong>
+            <div className="f9-clients-empty" role="status">
+              <h3>{canManageClientRooms ? "No client rooms yet" : "No existing client rooms"}</h3>
               <p>
                 {canManageClientRooms
                   ? "Create one room when a client needs reviewed evidence, reports, and delivery notes kept together."
@@ -794,7 +790,6 @@ export default function ClientsRoute() {
     </DashboardPage>
   );
 }
-
 function ClientRoomComposer({
   collections,
   headingRef,
@@ -807,27 +802,23 @@ function ClientRoomComposer({
   watchlists: Array<{ id: string; name: string }>;
 }) {
   return (
-    <section aria-labelledby="client-room-create-title" className="f9-wk-sec">
-      <div className="f9-panel-toolbar">
+    <section aria-labelledby="client-room-create-title" className="f9-wk-sec f9-clients-composer">
+      <div className="f9-clients-section-head">
         <div>
-          <span className="f9-app-kicker">New client room</span>
+          <p className="f9-wk-kick">New client room</p>
           <h2 id="client-room-create-title" ref={headingRef} tabIndex={-1}>
             Bundle evidence and notes
           </h2>
         </div>
-        <button
-          className="f9-secondary-button"
-          onClick={onCancel}
-          type="button"
-        >
+        <button className="f9-wk-lnk" onClick={onCancel} type="button">
           Cancel
         </button>
       </div>
 
-      <Form className="f9-auth-form" method="post">
+      <Form className="f9-clients-form" method="post">
         <input name="intent" type="hidden" value="upsert-client-room" />
         <input name="status" type="hidden" value="active" />
-        <div className="f9-field-grid">
+        <div className="f9-clients-field-grid">
           <label className="f9-field">
             <span>Name</span>
             <input name="name" placeholder="Nykaa weekly desk" required />
@@ -845,7 +836,7 @@ function ClientRoomComposer({
             rows={3}
           />
         </label>
-        <div className="f9-field-grid">
+        <div className="f9-clients-field-grid">
           <label className="f9-field">
             <span>Cadence</span>
             <input name="cadence" placeholder="Weekly" />
@@ -897,22 +888,22 @@ function ResourceChoices({
   resourceName: "watchlistIds" | "collectionIds";
 }) {
   return (
-    <fieldset>
-      <legend className="f9-app-kicker">{label}</legend>
+    <fieldset className="f9-clients-choice-group">
+      <legend>{label}</legend>
       {items.length > 0 ? (
-        <div className="f9-work-list is-compact">
+        <div className="f9-clients-choice-list">
           {items.map((item) => {
             const displayName = safeClientRoomDisplayText(
               item.name,
               label === "Competitors" ? "Competitor" : "Collection",
             );
             return (
-              <div className="f9-work-row" key={item.id}>
+              <div className="f9-clients-choice-row" key={item.id}>
                 <label>
                   <input name={resourceName} type="checkbox" value={item.id} />
                   <span>{displayName}</span>
                 </label>
-                <label className="f9-muted-copy">
+                <label>
                   <input
                     aria-label={`Include reviewed report for ${displayName}`}
                     name="approvedReportIds"
@@ -926,7 +917,7 @@ function ResourceChoices({
           })}
         </div>
       ) : (
-        <p className="f9-muted-copy">{emptyCopy}</p>
+        <p className="f9-clients-quiet">{emptyCopy}</p>
       )}
     </fieldset>
   );
@@ -949,25 +940,27 @@ function ClientContextSection({
   }>;
 }) {
   return (
-    <details className="f9-wk-sec">
+    <details className="f9-clients-disclosure">
       <summary>
-        <strong>Saved context</strong>
-        <span>Report preferences, tone, and follow-up notes</span>
+        <span>
+          <strong>Saved context</strong>
+          <small>Report preferences, tone, and follow-up notes</small>
+        </span>
         <span>
           {memories.length > 8
             ? `Showing 8 of ${memories.length} loaded memories`
             : `${memories.length} loaded ${memories.length === 1 ? "memory" : "memories"}`}
         </span>
       </summary>
-      <div className="f9-app-stack">
+      <div className="f9-clients-disclosure-body">
         {canManage ? (
-          <Form className="f9-auth-form" method="post">
+          <Form className="f9-clients-form" method="post">
             <input name="intent" type="hidden" value="upsert-agent-memory" />
             <label className="f9-field">
               <span>Label</span>
               <input name="key" placeholder="Review cadence" required />
             </label>
-            <div className="f9-field-grid">
+            <div className="f9-clients-field-grid">
               <label className="f9-field">
                 <span>Scope</span>
                 <select name="scope" defaultValue="workspace">
@@ -998,37 +991,32 @@ function ClientContextSection({
                 rows={4}
               />
             </label>
-            <SubmitButton
-              className="f9-wk-btn"
-              intent="upsert-agent-memory"
-              pendingLabel="Saving…"
-            >
-              Save context
+            <SubmitButton className="f9-wk-lnk" intent="upsert-agent-memory" pendingLabel="Saving…">
+              Save context <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
             </SubmitButton>
           </Form>
         ) : (
-          <p className="f9-muted-copy">
-            Saved context is read-only on your current plan. Existing notes
-            remain visible.
+          <p className="f9-clients-quiet">
+            Saved context is read-only on your current plan. Existing notes remain visible.
           </p>
         )}
 
-        <div className="f9-work-list is-compact">
+        <div className="f9-clients-memory-list">
           {memories.slice(0, 8).map((memory) => (
-            <div className="f9-work-row" key={memory.id}>
+            <article className="f9-clients-memory-row" key={memory.id}>
               <div>
                 <h3>{memory.key}</h3>
                 <p>{memory.preview}</p>
-                <p className="f9-muted-copy">
-                  {memory.scope}
-                  {memory.watchlistId ? " · competitor" : ""}
-                  {memory.clientRoomId ? " · client room" : ""}
-                </p>
               </div>
-            </div>
+              <span>
+                {memory.scope}
+                {memory.watchlistId ? " · competitor" : ""}
+                {memory.clientRoomId ? " · client room" : ""}
+              </span>
+            </article>
           ))}
           {memories.length === 0 ? (
-            <p className="f9-muted-copy">
+            <p className="f9-clients-quiet">
               {canManage
                 ? "No context saved yet. Add only the goals and delivery preferences future reports should reuse."
                 : "No saved client-room context exists on this account."}
@@ -1048,50 +1036,44 @@ function ArchivedRoomsSection({
   rooms: ClientRoomRecord[];
 }) {
   return (
-    <details className="f9-wk-sec">
+    <details className="f9-clients-disclosure">
       <summary>
-        <strong>Archived rooms</strong>
-        <span>Kept out of the active handoff list</span>
+        <span>
+          <strong>Archived rooms</strong>
+          <small>Kept out of the active handoff list</small>
+        </span>
         <span>{rooms.length} archived</span>
       </summary>
-      <div className="f9-work-list is-compact">
+      <div className="f9-clients-disclosure-body">
         {rooms.length > 0 ? (
-          rooms.map((room) => (
-            <div className="f9-work-row" key={room.id}>
-              <div>
-                <h3>{room.name}</h3>
-                <p className="f9-muted-copy">
-                  {room.clientLabel ?? "No client label yet."}
-                </p>
-              </div>
-              {canManage ? (
-                <Form method="post">
-                  <input
-                    name="intent"
-                    type="hidden"
-                    value="set-client-room-status"
-                  />
-                  <input name="roomId" type="hidden" value={room.id} />
-                  <input
-                    name="expectedUpdatedAt"
-                    type="hidden"
-                    value={room.updatedAt}
-                  />
-                  <input name="status" type="hidden" value="active" />
-                  <SubmitButton
-                    className="f9-secondary-button"
-                    intent="set-client-room-status"
-                    match={{ roomId: room.id }}
-                    pendingLabel="Restoring…"
-                  >
-                    Restore
-                  </SubmitButton>
-                </Form>
-              ) : null}
-            </div>
-          ))
+          <div className="f9-clients-archive-list">
+            {rooms.map((room) => (
+              <article className="f9-clients-archive-row" key={room.id}>
+                <div>
+                  <h3>{room.name}</h3>
+                  <p>{room.clientLabel ?? "No client label yet."}</p>
+                </div>
+                {canManage ? (
+                  <Form method="post">
+                    <input name="intent" type="hidden" value="set-client-room-status" />
+                    <input name="roomId" type="hidden" value={room.id} />
+                    <input name="expectedUpdatedAt" type="hidden" value={room.updatedAt} />
+                    <input name="status" type="hidden" value="active" />
+                    <SubmitButton
+                      className="f9-wk-lnk"
+                      intent="set-client-room-status"
+                      match={{ roomId: room.id }}
+                      pendingLabel="Restoring…"
+                    >
+                      Restore <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
+                    </SubmitButton>
+                  </Form>
+                ) : null}
+              </article>
+            ))}
+          </div>
         ) : (
-          <p className="f9-muted-copy">No rooms are archived.</p>
+          <p className="f9-clients-quiet">No rooms are archived.</p>
         )}
       </div>
     </details>
@@ -1137,12 +1119,12 @@ function AgencyPlanNotice() {
   return (
     <section
       aria-labelledby="client-rooms-gate-title"
-      className="f9-wk-sec"
+      className="f9-wk-sec f9-clients-gate"
       role="status"
     >
       <p className="f9-wk-kick">Agency plan</p>
       <h2 id="client-rooms-gate-title">Client rooms stay readable</h2>
-      <p className="f9-wk-lede">
+      <p>
         Keep competitors, collections, reviewed reports, and client context
         together for agency delivery. Existing rooms remain available below; the
         Agency plan unlocks creation and updates.
@@ -1173,31 +1155,28 @@ function ClientRoomCard({
     approvalUnavailable,
     roomMemoryUnavailable,
   );
-
   const [open, setOpen] = useState(initiallyOpen);
 
   return (
     <details
-      className="f9-work-row f9-client-room-card"
+      className="f9-client-room-card f9-clients-room"
       onToggle={(event) => setOpen(event.currentTarget.open)}
       open={open}
     >
       <summary>
         <span className="f9-wk-nm">{room.name}</span>
-        <span className="f9-wk-say">
+        <span className="f9-clients-room-summary">
           {room.clientLabel ?? "No client label yet"} · {handoff.next}
         </span>
-        <span
-          className={`f9-wk-st${handoff.status === "Ready for client review" ? " is-on" : ""}`}
-        >
+        <span className={`f9-wk-st${handoff.status === "Ready for client review" ? " is-on" : ""}`}>
           {handoff.status}
         </span>
+        <span aria-hidden="true" className="f9-clients-caret">›</span>
       </summary>
-      <div>
-        <p>{formatRoomNotes(room.notes)}</p>
+      <div className="f9-clients-room-body">
+        <p className="f9-clients-room-notes">{formatRoomNotes(room.notes)}</p>
 
-        <dl className="f9-wk-dl" aria-label={`${room.name} handoff status`}>
-          <div>
+        <dl className="f9-clients-room-facts" aria-label={`${room.name} handoff status`}>          <div>
             <dt>Evidence</dt>
             <dd>{handoff.proof}</dd>
           </div>
@@ -1211,68 +1190,39 @@ function ClientRoomCard({
           </div>
         </dl>
 
-        <div className="f9-action-row">
+        <div className="f9-clients-actions">
           {room.resourceRefs.map((ref) => (
-            <Link
-              className="f9-wk-lnk"
-              key={`${ref.resourceType}:${ref.resourceId}`}
-              to={resourceHref(ref)}
-            >
-              {ref.label ?? resourceLabel(ref)}{" "}
-              <span aria-hidden="true" className="f9-wk-chev">
-                &rsaquo;
-              </span>
+            <Link className="f9-wk-lnk" key={`${ref.resourceType}:${ref.resourceId}`} to={resourceHref(ref)}>
+              {ref.label ?? resourceLabel(ref)} <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
             </Link>
           ))}
-          {canManage &&
-          room.resourceRefs.some((ref) => ref.resourceType === "report") ? (
-            <Form method="post">
-              <input name="intent" type="hidden" value="approve-client-room" />
-              <input name="roomId" type="hidden" value={room.id} />
-              <input
-                name="expectedUpdatedAt"
-                type="hidden"
-                value={room.updatedAt}
-              />
-              <SubmitButton
-                className="f9-wk-lnk"
-                intent="approve-client-room"
-                match={{ roomId: room.id }}
-                pendingLabel="Reviewing…"
-              >
-                Review and approve evidence{" "}
-                <span aria-hidden="true" className="f9-wk-chev">
-                  &rsaquo;
-                </span>
-              </SubmitButton>
-            </Form>
-          ) : null}
+          {canManage && room.resourceRefs.some((ref) => ref.resourceType === "report") ? (
+          <Form method="post">
+            <input name="intent" type="hidden" value="approve-client-room" />
+            <input name="roomId" type="hidden" value={room.id} />
+            <input name="expectedUpdatedAt" type="hidden" value={room.updatedAt} />
+            <SubmitButton
+              className="f9-wk-lnk"
+              intent="approve-client-room"
+              match={{ roomId: room.id }}
+              pendingLabel="Reviewing…"
+            >
+              Review and approve evidence <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
+            </SubmitButton>
+          </Form>          ) : null}
           {room.resourceRefs.length === 0 ? (
             canManage ? (
               <Link className="f9-wk-lnk" to="/app/watchlists">
-                Choose evidence{" "}
-                <span aria-hidden="true" className="f9-wk-chev">
-                  &rsaquo;
-                </span>
+                Choose evidence <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
               </Link>
             ) : (
-              <span className="f9-muted-copy">No linked resources</span>
-            )
+              <span className="f9-clients-quiet">No linked resources</span>            )
           ) : null}
           {canManage ? (
             <Form method="post">
-              <input
-                name="intent"
-                type="hidden"
-                value="set-client-room-status"
-              />
+              <input name="intent" type="hidden" value="set-client-room-status" />
               <input name="roomId" type="hidden" value={room.id} />
-              <input
-                name="expectedUpdatedAt"
-                type="hidden"
-                value={room.updatedAt}
-              />
-              <input name="status" type="hidden" value="archived" />
+              <input name="expectedUpdatedAt" type="hidden" value={room.updatedAt} />              <input name="status" type="hidden" value="archived" />
               <ConfirmSubmitButton
                 className="f9-wk-lnk"
                 confirmLabel="Confirm — archive room?"
@@ -1281,11 +1231,7 @@ function ClientRoomCard({
                 pendingLabel="Archiving…"
                 variant="light"
               >
-                Archive{" "}
-                <span aria-hidden="true" className="f9-wk-chev">
-                  &rsaquo;
-                </span>
-              </ConfirmSubmitButton>
+                Archive              </ConfirmSubmitButton>
             </Form>
           ) : null}
         </div>

@@ -541,10 +541,14 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
       page.getByRole("heading", { name: "Client rooms", exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Bundle evidence and notes." }),
+      page.getByRole("button", { name: "Create client room" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Create the first client room" }),
+      page.getByRole("heading", { name: "No client rooms yet" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Create client room" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Bundle evidence and notes" }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Save client room" }),
@@ -561,22 +565,19 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
       await starterPage.goto("/app/clients");
       await expect(
         starterPage.getByRole("heading", {
-          level: 2,
+          level: 1,
           name: "Client rooms",
           exact: true,
         }),
       ).toBeVisible();
       await expect(
-        starterPage.getByText(
-          "Keep watchlists, collections, reports, and client context together for agency delivery — included in the Agency plan.",
-          { exact: true },
-        ),
+        starterPage.getByRole("heading", { name: "Client rooms stay readable" }),
       ).toBeVisible();
       await expect(
         starterPage.getByRole("link", { name: "Upgrade to Agency" }),
       ).toBeVisible();
       await expect(
-        starterPage.getByText("Existing rooms remain available below.", {
+        starterPage.getByText("Existing rooms remain available below", {
           exact: false,
         }),
       ).toBeVisible();
