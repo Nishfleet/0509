@@ -562,6 +562,7 @@ export async function getOperatorSnapshot(env: AppEnv) {
       cacheStatus: DiscoveryCacheStatus;
       failureClass: DiscoveryFailureClass | null;
       browserMsUsed: number | null;
+      partial: number | null;
       createdAt: string;
     }>(
       env,
@@ -574,6 +575,7 @@ export async function getOperatorSnapshot(env: AppEnv) {
           discovery_fetch_log.cache_status AS cacheStatus,
           discovery_fetch_log.failure_class AS failureClass,
           discovery_fetch_log.browser_ms_used AS browserMsUsed,
+          json_extract(discovery_fetch_log.metadata_json, '$.partial') AS partial,
           discovery_fetch_log.created_at AS createdAt
         FROM discovery_fetch_log
         WHERE discovery_fetch_log.status = 'failed'
@@ -589,6 +591,7 @@ export async function getOperatorSnapshot(env: AppEnv) {
       failureClass: DiscoveryFailureClass | null;
       lastSuccessAt: string | null;
       lastFailureAt: string | null;
+      partial: number | null;
       updatedAt: string;
     }>(
       env,
@@ -599,6 +602,7 @@ export async function getOperatorSnapshot(env: AppEnv) {
           failure_class AS failureClass,
           last_success_at AS lastSuccessAt,
           last_failure_at AS lastFailureAt,
+          json_extract(metadata_json, '$.partial') AS partial,
           updated_at AS updatedAt
         FROM discovery_provider_state
         ORDER BY updated_at DESC
