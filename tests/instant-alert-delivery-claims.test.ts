@@ -178,6 +178,7 @@ function installDeliveryMocks(options: {
     listDeliveryTargets: vi.fn().mockResolvedValue([]),
     reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
     updateDeliveryAttemptResult,
+    provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn().mockResolvedValue(target),
     upsertDeliveryTarget: vi.fn().mockResolvedValue(target),
     upsertDigestDelivery: vi.fn(),
   }));
@@ -221,16 +222,81 @@ describe("instant alert email delivery claims", () => {
     const state = installDeliveryMocks();
     const { deliverWatchlistAlerts } = await import("~/lib/delivery.server");
 
-    await expect(
-      Promise.all([
-        deliverWatchlistAlerts(configuredEmailEnv as never, alertInput as never),
-        deliverWatchlistAlerts(configuredEmailEnv as never, alertInput as never),
-      ]),
-    ).resolves.toHaveLength(2);
+    const results = await Promise.all([
+      deliverWatchlistAlerts(configuredEmailEnv as never, alertInput as never),
+      deliverWatchlistAlerts(configuredEmailEnv as never, alertInput as never),
+    ]);
 
+    expect(results).toHaveLength(2);
     expect(emailSend).toHaveBeenCalledTimes(1);
     expect(state.createDeliveryAttempt).toHaveBeenCalledTimes(1);
     expect(state.attempt).toMatchObject({ status: "sent", webhookStatus: "provider_unknown" });
+  });
+
+  it("keeps provider acceptance time out of a duplicate delivery summary", async () => {
+    installDeliveryMocks({
+      initialAttempt: {
+        id: "attempt-accepted-1",
+        idempotencyKey:
+          "instant:watch-1:customer:email:owner@example.com:watch-1:nykaa:1982304:send",
+        status: "sent",
+        webhookStatus: "provider_unknown",
+        channel: "email",
+        targetValue: "owner@example.com",
+        providerMessageId: "msg-instant-accepted",
+        providerStatusLastSeenAt: "2026-07-15T11:59:00.000Z",
+        errorMessage: null,
+        sentAt: "2026-07-15T11:59:00.000Z",
+        updatedAt: "2026-07-15T11:59:00.000Z",
+      },
+    });
+    const { deliverWatchlistAlerts } = await import("~/lib/delivery.server");
+
+    const result = await deliverWatchlistAlerts(
+      configuredEmailEnv as never,
+      alertInput as never,
+    );
+
+    expect(result).toMatchObject({
+      details: [{ channel: "email", status: "sent", deliveredAt: null }],
+    });
+    expect(emailSend).not.toHaveBeenCalled();
+  });
+
+  it("uses genuine receipt time for an already-delivered duplicate", async () => {
+    installDeliveryMocks({
+      initialAttempt: {
+        id: "attempt-delivered-1",
+        idempotencyKey:
+          "instant:watch-1:customer:email:owner@example.com:watch-1:nykaa:1982304:send",
+        status: "sent",
+        webhookStatus: "delivered",
+        channel: "email",
+        targetValue: "owner@example.com",
+        providerMessageId: "msg-instant-delivered",
+        providerStatusLastSeenAt: "2026-07-15T12:00:00.000Z",
+        errorMessage: null,
+        sentAt: "2026-07-15T11:59:00.000Z",
+        updatedAt: "2026-07-15T12:00:00.000Z",
+      },
+    });
+    const { deliverWatchlistAlerts } = await import("~/lib/delivery.server");
+
+    const result = await deliverWatchlistAlerts(
+      configuredEmailEnv as never,
+      alertInput as never,
+    );
+
+    expect(result).toMatchObject({
+      details: [
+        {
+          channel: "email",
+          status: "sent",
+          deliveredAt: "2026-07-15T12:00:00.000Z",
+        },
+      ],
+    });
+    expect(emailSend).not.toHaveBeenCalled();
   });
 
   it("reclaims only a stale pre-dispatch lease after an injected local failure", async () => {

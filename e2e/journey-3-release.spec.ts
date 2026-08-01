@@ -274,10 +274,11 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
       await expectResponsiveSurface(page, viewport, "/app/digests", "Briefs", [
         /Brief history/,
         /Landing page offer changed/,
-        /sent/i,
+        /Email delivery unconfirmed/,
       ]);
       await expect(page.getByText("proof", { exact: false }).first()).toBeVisible();
-      await expect(page.getByText("Sent", { exact: true })).toBeVisible();
+      await expect(page.getByText("Delivery unconfirmed", { exact: true })).toBeVisible();
+      await expect(page.getByText("No sends recorded yet", { exact: true })).toBeVisible();
       await expect(page.getByText("Configured email recipient", { exact: true })).toBeVisible();
 
       await expectResponsiveSurface(page, viewport, "/app/notifications", "Notifications", [

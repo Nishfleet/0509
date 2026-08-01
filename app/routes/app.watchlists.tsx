@@ -14,6 +14,7 @@ import { CopyButton } from "~/components/copy-button";
 import { DashboardPage } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { LocalTime } from "~/components/local-time";
+import { PartialDataNotice } from "~/components/partial-data-notice";
 import { useQuickAdd } from "~/components/quick-add-context";
 import { TertiaryAction } from "~/components/evidence/cta";
 import { SubmitButton } from "~/components/submit-button";
@@ -71,6 +72,32 @@ export {
 export { WatchlistProofAge } from "~/components/watchlists/watchlist-proof-age";
 
 export const meta = () => [{ title: "Competitors | Five to Nine" }];
+
+function resolveSafeShareLink(message: unknown): { href: string; label: string } | null {
+  if (typeof message !== "string") return null;
+
+  try {
+    const url = new URL(message);
+    const token = url.pathname.slice("/share/".length);
+    if (
+      (url.protocol !== "http:" && url.protocol !== "https:") ||
+      !url.pathname.startsWith("/share/") ||
+      !token ||
+      token.includes("/") ||
+      url.username ||
+      url.password ||
+      url.hash
+    ) {
+      return null;
+    }
+
+    // Keep navigation same-origin even if a malformed action response contains
+    // an absolute host. The server-generated message remains the copy value.
+    return { href: `${url.pathname}${url.search}`, label: message };
+  } catch {
+    return null;
+  }
+}
 
 export function HydrateFallback() {
   return <DashboardRouteLoading title="Competitors" />;
@@ -225,18 +252,35 @@ export default function WatchlistsRoute() {
     totalCapturedChanges: 0,
     failedChecks: {},
   };
-  const rows = useMemo(
-    () =>
-      toCompetitorRows({
+  const rows = useMemo(() => {
+    const resolved = toCompetitorRows({
         watchlists: data.watchlists,
         capturedChanges: captureWindow.capturedChanges,
         failedChecks: captureWindow.failedChecks,
         windowDays: captureWindow.windowDays,
-      }),
-    [data.watchlists, captureWindow.capturedChanges, captureWindow.failedChecks, captureWindow.windowDays],
-  );
+      });
+    if (!data.captureWindowDegraded) return resolved;
+    return resolved.map((row) =>
+      row.isActive
+        ? {
+            ...row,
+            statusLabel: "Recent totals unavailable",
+            statusTone: "quiet" as const,
+            line: "Recent change and failed-check totals are unavailable. Refresh to try again.",
+          }
+        : row,
+    );
+  }, [
+    data.watchlists,
+    data.captureWindowDegraded,
+    captureWindow.capturedChanges,
+    captureWindow.failedChecks,
+    captureWindow.windowDays,
+  ]);
   const filterCounts = countCompetitorStates(rows);
-  const visibleRows = filterCompetitorRows(rows, activeFilter);
+  const visibleRows = data.captureWindowDegraded
+    ? rows
+    : filterCompetitorRows(rows, activeFilter);
   const hasCompetitors = rows.length > 0;
   const nextScanLabel = formatNextScanLabel(
     data.plan,
@@ -344,6 +388,7 @@ export default function WatchlistsRoute() {
       </SubmitButton>
     </Form>
   ) : null;
+  const actionShareLink = actionData?.ok ? resolveSafeShareLink(actionData.message) : null;
 
   return (
     <DashboardPage className={`f9-wk-page${selectedWatchlist ? " f9-bl035-page" : ""}`}>
@@ -393,6 +438,8 @@ export default function WatchlistsRoute() {
                 </>
               ) : null}
             </>
+          ) : data.captureWindowDegraded && rows.length > 0 ? (
+            `${rows.length} ${rows.length === 1 ? "competitor" : "competitors"}. Recent totals are unavailable.`
           ) : (
             formatCompetitorContextLine({ rows, windowDays: captureWindow.windowDays })
           )
@@ -400,7 +447,11 @@ export default function WatchlistsRoute() {
         title={selectedWatchlist?.name ?? "Competitors"}
       />
 
-      {hasCompetitors && !selectedWatchlist ? (
+      {data.captureWindowDegraded && (hasCompetitors || selectedWatchlist) ? (
+        <PartialDataNotice message="Recent change and failed-check totals could not be loaded. Aggregate counts are unavailable; saved evidence and management controls remain available." />
+      ) : null}
+
+      {hasCompetitors && !selectedWatchlist && !data.captureWindowDegraded ? (
         <div className="f9-wk-tabs" role="navigation" aria-label="Filter competitors by state">
           {COMPETITOR_FILTERS.map((filter) => (
             <Link
@@ -422,12 +473,12 @@ export default function WatchlistsRoute() {
           label={actionData.ok ? "Done" : "Not done"}
           tone={actionData.ok ? "ok" : "bad"}
         >
-          {actionData.ok && actionData.message.startsWith("http") ? (
+          {actionShareLink ? (
             <>
-              <a href={actionData.message} rel="noreferrer" target="_blank">
-                {actionData.message}
+              <a href={actionShareLink.href} rel="noreferrer" target="_blank">
+                {actionShareLink.label}
               </a>{" "}
-              <CopyButton value={actionData.message} />
+              <CopyButton value={actionShareLink.label} />
             </>
           ) : (
             actionData.message
@@ -444,34 +495,48 @@ export default function WatchlistsRoute() {
       ) : null}
 
       {selectedWatchlist ? (
-        <CompetitorDetail
-          activeTab={activeTab}
-          canConfigureDelivery={canConfigureDelivery}
-          canConfigureDigestSettings={canConfigureDigestSettings}
-          canEmailDelivery={canEmailDelivery}
-          canExport={canExport}
-          canInstantAlert={canInstantAlert}
-          canRefresh={canRefresh}
-          canReport={canReport}
-          canShare={canShare}
-          capturedChanges={selectedCapturedChanges}
-          data={{ ...data, selectedWatchlist }}
-          discoveryRecovery={discoveryStatus.recovery ?? null}
-          // The board counts hard failures since the last success in SQL; the
-          // detail uses the same rollup so one competitor never reports two
-          // different failure counts on one page.
-          failedChecks={selectedFailedChecks}
-          lockedCapabilities={lockedCapabilities}
-          nextScanLabel={nextScanLabel}
-          renderedAt={renderedAt}
-          showSlackDelivery={showSlackDelivery}
-          sourceCanSchedule={sourceCanSchedule}
-          trackingPresentation={trackingPresentation}
-          watchlist={selectedWatchlist}
-          windowDays={captureWindow.windowDays}
-          pauseAction={renderPauseAction(selectedWatchlist)}
-          checksExpanded={searchParams.get("checks") === "all"}
-        />
+        // A failed capture-window rollup must not read as a believable zero.
+        // The record stays mounted and keeps every control; the degraded flag
+        // masks only the surfaces that rollup feeds.
+        <div
+          className={`f9-bl035-record${data.captureWindowDegraded ? " is-capture-window-degraded" : ""}`}
+        >
+          {data.captureWindowDegraded ? (
+            <p className="f9-bl035-aggregate-unavailable" role="status">
+              Recent aggregate totals are unavailable. Saved check history and management controls
+              below are still available.
+            </p>
+          ) : null}
+          <CompetitorDetail
+            activeTab={activeTab}
+            canConfigureDelivery={canConfigureDelivery}
+            canConfigureDigestSettings={canConfigureDigestSettings}
+            canEmailDelivery={canEmailDelivery}
+            canExport={canExport}
+            canInstantAlert={canInstantAlert}
+            canRefresh={canRefresh}
+            canReport={canReport}
+            canShare={canShare}
+            capturedChanges={data.captureWindowDegraded ? 0 : selectedCapturedChanges}
+            captureWindowDegraded={data.captureWindowDegraded}
+            data={{ ...data, selectedWatchlist }}
+            discoveryRecovery={discoveryStatus.recovery ?? null}
+            // The board counts hard failures since the last success in SQL; the
+            // detail uses the same rollup so one competitor never reports two
+            // different failure counts on one page.
+            failedChecks={selectedFailedChecks}
+            lockedCapabilities={lockedCapabilities}
+            nextScanLabel={nextScanLabel}
+            renderedAt={renderedAt}
+            showSlackDelivery={showSlackDelivery}
+            sourceCanSchedule={sourceCanSchedule}
+            trackingPresentation={trackingPresentation}
+            watchlist={selectedWatchlist}
+            windowDays={captureWindow.windowDays}
+            pauseAction={renderPauseAction(selectedWatchlist)}
+            checksExpanded={searchParams.get("checks") === "all"}
+          />
+        </div>
       ) : hasCompetitors ? (
         <>
           <BulkSelectBar

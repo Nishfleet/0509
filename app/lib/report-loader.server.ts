@@ -8,6 +8,7 @@ export type OwnedReportDataSource = Pick<
   | "getWatchlist"
   | "listAdsByIds"
   | "listCollectionItems"
+  | "listProofCapturePairsForEventIds"
   | "listWatchEvents"
 >;
 
@@ -53,14 +54,24 @@ export async function loadOwnedReportDocument(
     const loadAds = () => data.listAdsByIds(env, adIds);
     const loadSummary = () =>
       data.getLatestDigestRunSummaryForWatchlist(env, userId, watchlist.id);
-    const [ads, aiWeeklySummary] = options.parallelWatchlistLookups
-      ? await Promise.all([loadAds(), loadSummary()])
-      : [await loadAds(), await loadSummary()];
+    const loadProofCaptures = () =>
+      data.listProofCapturePairsForEventIds(
+        env,
+        userId,
+        events.map((event) => event.id),
+        { includePrevious: false },
+      );
+    const [ads, proofCapturePairs, aiWeeklySummary] = options.parallelWatchlistLookups
+      ? await Promise.all([loadAds(), loadProofCaptures(), loadSummary()])
+      : [await loadAds(), await loadProofCaptures(), await loadSummary()];
 
     report = buildWatchlistReport({
       watchlist,
       events,
       adsById: new Map(ads.map((ad) => [ad.metaAdId, ad])),
+      proofCapturesByEventId: new Map(
+        proofCapturePairs.map((pair) => [pair.eventId, pair.current]),
+      ),
       aiWeeklySummary,
     });
   }

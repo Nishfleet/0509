@@ -8,6 +8,10 @@ const routeConfig = readFileSync("app/routes.ts", "utf8");
 const dashboardRoute = readFileSync("app/routes/app.dashboard.tsx", "utf8");
 const setupChecklist = readFileSync("app/components/setup-checklist-card.tsx", "utf8");
 const collectionsRoute = readFileSync("app/routes/app.collections.tsx", "utf8");
+const collectionExternalProof = readFileSync(
+  "app/components/collections/collection-external-proof-section.tsx",
+  "utf8",
+);
 const clientsRoute = readFileSync("app/routes/app.clients.tsx", "utf8");
 const digestsRoute = readFileSync("app/routes/app.digests.tsx", "utf8");
 const watchlistsRoute = readFileSync("app/routes/app.watchlists.tsx", "utf8");
@@ -24,7 +28,7 @@ const digestIntelligence = readFileSync("app/components/digest-intelligence.tsx"
 const reportView = readFileSync("app/components/report-view.tsx", "utf8");
 const signOutButton = readFileSync("app/components/sign-out-button.tsx", "utf8");
 const appCss = readFileSync("app/app.css", "utf8");
-const appSurface = `${appLayout}\n${shellComponent}\n${dashboardRoute}\n${setupChecklist}\n${collectionsRoute}\n${clientsRoute}\n${digestsRoute}\n${watchlistsRoute}\n${notificationsUiRoute}\n${sourceAccessUiRoute}\n${developerAccessUiRoute}\n${sourcesCompatibilityRoute}\n${reportsRoute}\n${opsRoute}\n${digestIntelligence}\n${reportView}\n${signOutButton}`;
+const appSurface = `${appLayout}\n${shellComponent}\n${dashboardRoute}\n${setupChecklist}\n${collectionsRoute}\n${collectionExternalProof}\n${clientsRoute}\n${digestsRoute}\n${watchlistsRoute}\n${notificationsUiRoute}\n${sourceAccessUiRoute}\n${developerAccessUiRoute}\n${sourcesCompatibilityRoute}\n${reportsRoute}\n${opsRoute}\n${digestIntelligence}\n${reportView}\n${signOutButton}`;
 const appClasses = Array.from(appSurface.matchAll(/className=(?:"([^"]+)"|{`([^`]+)`})/g)).flatMap((match) =>
   (match[1] ?? match[2])
     .split(/\s+/)
@@ -133,10 +137,14 @@ describe("app rebuild", () => {
     expect(appSurface).toContain("approved actions");
     expect(appSurface).toContain("Create API key");
     expect(appSurface).toContain("/api/v1");
-    expect(collectionsRoute).toContain("External evidence");
-    expect(collectionsRoute).toContain("Save evidence link");
-    expect(collectionsRoute).toContain("Google / YouTube");
-    expect(collectionsRoute).toContain("LinkedIn");
+    expect(collectionsRoute).toContain(
+      'import { CollectionExternalProofSection } from "~/components/collections/collection-external-proof-section";',
+    );
+    expect(collectionsRoute).toContain("<CollectionExternalProofSection");
+    expect(appSurface).toContain("File evidence from another source");
+    expect(appSurface).toContain("Save evidence link");
+    expect(appSurface).toContain("Google / YouTube");
+    expect(appSurface).toContain("LinkedIn");
     expect(clientsRoute).toContain("Report preferences and notes");
     expect(clientsRoute).toContain("upsert-agent-memory");
     expect(digestsRoute).toContain("formatDeliveryChannelLabel");

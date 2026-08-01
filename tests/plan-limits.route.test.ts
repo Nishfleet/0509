@@ -783,7 +783,7 @@ describe("pricing CTA rendering", () => {
     const { default: CollectionsRoute } = await import("~/routes/app.collections");
     const markup = renderToStaticMarkup(createElement(CollectionsRoute));
 
-    expect(markup).toContain("External evidence");
+    expect(markup).toContain("File evidence from another source");
     expect(markup).toContain("add-external-proof");
     expect(markup).toContain("Google / YouTube");
     expect(markup).toContain("LinkedIn");

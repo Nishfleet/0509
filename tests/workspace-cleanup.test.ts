@@ -658,6 +658,38 @@ describe("customer-at-risk operator alert", () => {
     expect(call.lines[0]).toContain("fan-out job(s) failed to dispatch");
     expect(call.lines[0]).not.toContain("check window filled");
   });
+
+  it("distinguishes an accepted customer-risk replay from a delivery failure", async () => {
+    const sendOperatorAlertEmail = vi.fn().mockResolvedValue(false);
+    const getDeliveryAttemptByIdempotencyKey = vi.fn().mockResolvedValue({
+      status: "sent",
+    });
+    vi.doMock("~/lib/delivery.server", () => ({ sendOperatorAlertEmail }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDeliveryAttemptByIdempotencyKey,
+      getOperatorRiskSummary: vi.fn().mockResolvedValue({
+        troubleWatchlists: [],
+        staleWatchlists: [],
+        deliveryFailures24h: 0,
+        stuckRuns: 0,
+      }),
+    }));
+
+    const { sendCustomerAtRiskAlert } = await import("~/lib/monitoring.server");
+    const result = await sendCustomerAtRiskAlert({ DB: {} } as never, {
+      inlineFailures: 1,
+    });
+
+    expect(result).toMatchObject({
+      sent: false,
+      reason: "duplicate",
+      signals: 1,
+    });
+    expect(getDeliveryAttemptByIdempotencyKey).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringMatching(/^operator-alert:\d{4}-\d{2}-\d{2}$/),
+    );
+  });
 });
 
 describe("account deletion billing guard", () => {
@@ -1004,6 +1036,32 @@ describe("weekly business numbers", () => {
     expect(lines[1]).toContain("none yet");
     expect(lines[4]).toContain("no digests sent");
     expect(lines[5]).toContain("n/a");
+  });
+
+  it("distinguishes an accepted idempotent replay from a delivery failure", async () => {
+    const sendOperatorAlertEmail = vi.fn().mockResolvedValue(false);
+    vi.doMock("~/lib/delivery.server", () => ({ sendOperatorAlertEmail }));
+    vi.doMock("~/lib/data.server", () => ({
+      getWeeklyBusinessSummary: vi.fn().mockResolvedValue({
+        signups7d: 0,
+        activated7d: 0,
+        payingByPlan: [],
+        dunningCount: 0,
+        revokedToFree7d: 0,
+        digestAttempts7d: 0,
+        digestSent7d: 0,
+        oldestActivePaidScanAt: null,
+      }),
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue({
+        status: "sent",
+      }),
+    }));
+
+    const { sendWeeklyBusinessNumbers } = await import("~/lib/monitoring.server");
+    await expect(sendWeeklyBusinessNumbers({ DB: {} } as never)).resolves.toMatchObject({
+      sent: false,
+      reason: "duplicate",
+    });
   });
 
   it("includes annual validation drift lines for operators (WP-38)", async () => {

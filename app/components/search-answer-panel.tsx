@@ -3,9 +3,19 @@ import type { SearchAnswer, SearchStealSummary } from "~/lib/search-answer";
 export function SearchAnswerPanel({
   answer,
   steal = null,
+  showHeadline = true,
 }: {
   answer: SearchAnswer;
   steal?: SearchStealSummary | null;
+  /**
+   * BL-031: `/search` renders `answer.title` as the results section's own
+   * heading and `answer.summary` as its sub-line, so the panel would
+   * otherwise state the same two sentences a second time 40px lower — the
+   * "three tellings of one fact" the v2 reduction pass named. With this off
+   * the panel is only what it uniquely knows: the facts, the steal summary
+   * and the honest note. Callers that own no heading keep the default.
+   */
+  showHeadline?: boolean;
 }) {
   return (
     <section
@@ -14,11 +24,13 @@ export function SearchAnswerPanel({
       className={`f9-search-answer is-${answer.state}`}
       role="status"
     >
-      <div>
-        <span>Search answer</span>
-        <h3>{answer.title}</h3>
-        <p>{answer.summary}</p>
-      </div>
+      {showHeadline ? (
+        <div>
+          <span>Search answer</span>
+          <h3>{answer.title}</h3>
+          <p>{answer.summary}</p>
+        </div>
+      ) : null}
       <dl>
         {answer.facts.map((fact) => (
           <div key={`${fact.label}:${fact.value}`}>

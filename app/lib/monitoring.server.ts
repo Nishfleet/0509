@@ -1,10 +1,11 @@
 import { buildAnalysisFields } from "~/lib/analysis.server";
-import {
-  isAdLibraryBackedAd,
-  mapAdSourceToAnalysisSource,
-} from "~/lib/ad-source-kind";
+import { mapAdSourceToAnalysisSource } from "~/lib/ad-source-kind";
 import { type DigestCadence } from "~/lib/change-intelligence";
-import { captureCreativeText } from "~/lib/creative-text.server";
+import { shouldAttemptCreativeTextCapture } from "~/lib/creative-capture-policy";
+import {
+  captureCreativeText,
+  createMissingCreativeCaptureResult,
+} from "~/lib/creative-text.server";
 import {
   createAdObservation,
   createEventCandidate,
@@ -46,9 +47,17 @@ import {
   runDigestDeliveryCycle,
   runDigestDeliveryCycleDetailed,
 } from "~/lib/digest-orchestration.server";
+import { reportScheduledTaskFailure } from "~/lib/cron-failure-alert.server";
 import { deliveryPreDispatchStaleBefore } from "~/lib/delivery-attempt-lease";
 import type { AppEnv } from "~/lib/env.server";
-import { captureLandingPageSnapshot } from "~/lib/landing-pages.server";
+import {
+  formatScheduledObservationHealthLines,
+  listScheduledObservationHealth,
+} from "~/lib/scheduled-observation-health.server";
+import {
+  captureLandingPageSnapshot,
+  type LandingPageCaptureFailureDetail,
+} from "~/lib/landing-pages.server";
 import { compensateUncommittedProofArtifacts } from "~/lib/proof-artifact-retention.server";
 import { LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION } from "~/lib/landing-page-signals.server";
 import {
@@ -78,6 +87,7 @@ import {
 import {
   buildCanonicalPageIdentity,
   buildProofTargetIdentity,
+  countRecentProofFailures,
   evaluateProofPolicy,
   V1_PROOF_BUDGETS,
 } from "~/lib/proof-policy.server";
@@ -256,6 +266,7 @@ export async function runScheduledMonitoring(
   let skippedForBudget = 0;
   let skippedForBilling = 0;
   let dispatchFailures = 0;
+  let planLookupFailures = 0;
 
   if (options.includeScans !== false) {
     const listedWatchlists = await listActiveWatchlists(env, {
@@ -268,11 +279,13 @@ export async function runScheduledMonitoring(
     );
     const scheduledTime = options.scheduledTime ?? Date.now();
     // WP-37: agency overflow watchlists only on 6h-aligned slots.
-    const watchlists = await filterWatchlistsByPriorityScanSlots(
+    const priorityScanResult = await filterWatchlistsByPriorityScanSlotsDetailed(
       env,
       browserAccess.watchlists,
       scheduledTime,
     );
+    const watchlists = priorityScanResult.watchlists;
+    planLookupFailures = priorityScanResult.planLookupFailures;
     skippedForBilling = browserAccess.skipped;
 
     const fanoutMode = resolveMonitoringFanoutMode(env);
@@ -376,6 +389,12 @@ export async function runScheduledMonitoring(
     }
   }
 
+  if (planLookupFailures > 0) {
+    throw new Error(
+      `Scheduled monitoring skipped ${planLookupFailures} workspace(s) because plan lookup failed.`,
+    );
+  }
+
   return {
     queued,
     duplicates,
@@ -419,8 +438,21 @@ export async function filterWatchlistsByPriorityScanSlots(
   watchlists: WatchlistRecord[],
   scheduledTime: number,
 ): Promise<WatchlistRecord[]> {
+  const result = await filterWatchlistsByPriorityScanSlotsDetailed(
+    env,
+    watchlists,
+    scheduledTime,
+  );
+  return result.watchlists;
+}
+
+async function filterWatchlistsByPriorityScanSlotsDetailed(
+  env: AppEnv,
+  watchlists: WatchlistRecord[],
+  scheduledTime: number,
+) {
   if (watchlists.length === 0) {
-    return watchlists;
+    return { watchlists, planLookupFailures: 0 };
   }
 
   const scheduledAt = new Date(scheduledTime);
@@ -433,28 +465,39 @@ export async function filterWatchlistsByPriorityScanSlots(
 
   const planByUser = new Map<string, PlanFamily>();
   const eligibleIds = new Set<string>();
+  let planLookupFailures = 0;
 
   for (const [userId, userWatchlists] of byUser) {
     let plan = planByUser.get(userId);
     if (!plan) {
       try {
-        // Runtime mocks may omit a plan; keep billing-eligible watchlists rather
-        // than inventing free (starve) or agency (wrong priority slots).
         const raw = (await getUserPlan(env, userId)) as
           | PlanFamily
           | null
           | undefined;
         if (raw == null) {
-          for (const watchlist of userWatchlists) {
-            eligibleIds.add(watchlist.id);
-          }
+          planLookupFailures += 1;
+          console.error(
+            "[monitoring] Plan lookup failed; scheduled scans were skipped for the workspace.",
+            {
+              workspaceUserId: userId,
+              watchlistCount: userWatchlists.length,
+              error: new Error("Plan lookup returned no value."),
+            },
+          );
           continue;
         }
         plan = parsePlanFamily(raw);
-      } catch {
-        for (const watchlist of userWatchlists) {
-          eligibleIds.add(watchlist.id);
-        }
+      } catch (error) {
+        planLookupFailures += 1;
+        console.error(
+          "[monitoring] Plan lookup failed; scheduled scans were skipped for the workspace.",
+          {
+            workspaceUserId: userId,
+            watchlistCount: userWatchlists.length,
+            error,
+          },
+        );
         continue;
       }
       planByUser.set(userId, plan);
@@ -479,7 +522,10 @@ export async function filterWatchlistsByPriorityScanSlots(
     });
   }
 
-  return watchlists.filter((watchlist) => eligibleIds.has(watchlist.id));
+  return {
+    watchlists: watchlists.filter((watchlist) => eligibleIds.has(watchlist.id)),
+    planLookupFailures,
+  };
 }
 
 const INSTANT_ALERT_FLUSH_LOOKBACK_HOURS = 48;
@@ -640,6 +686,18 @@ export async function sendWeeklyBusinessNumbers(env: AppEnv) {
 
   const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
   const summary = await getWeeklyBusinessSummary(env);
+  let scheduledObservationHealthLines = [
+    "Scheduled-work heartbeat: unavailable",
+  ];
+  try {
+    scheduledObservationHealthLines = formatScheduledObservationHealthLines(
+      await listScheduledObservationHealth(env),
+    );
+  } catch {
+    scheduledObservationHealthLines = [
+      "Scheduled-work heartbeat: health read failed",
+    ];
+  }
   let annualValidationDriftLines: string[] = ["Annual validation: unavailable"];
   try {
     const { previewDodo0509PlanPrices } =
@@ -660,13 +718,35 @@ export async function sendWeeklyBusinessNumbers(env: AppEnv) {
     annualValidationDriftLines = ["Annual validation: preview_failed"];
   }
   const weekStamp = new Date().toISOString().slice(0, 10);
+  const idempotencyKey = `business-weekly:${weekStamp}`;
   const sent = await sendOperatorAlertEmail(env, {
     subject: "Five to Nine — weekly business numbers",
-    lines: buildWeeklyBusinessLines(summary, { annualValidationDriftLines }),
-    idempotencyKey: `business-weekly:${weekStamp}`,
+    lines: [
+      ...buildWeeklyBusinessLines(summary, { annualValidationDriftLines }),
+      ...scheduledObservationHealthLines,
+    ],
+    idempotencyKey,
   });
 
-  return { sent };
+  if (sent) {
+    return { sent: true, reason: "sent" as const };
+  }
+
+  try {
+    const { getDeliveryAttemptByIdempotencyKey } =
+      await import("~/lib/data.server");
+    const durableAttempt = await getDeliveryAttemptByIdempotencyKey(
+      env,
+      idempotencyKey,
+    );
+    if (durableAttempt?.status === "sent") {
+      return { sent: false, reason: "duplicate" as const };
+    }
+  } catch {
+    return { sent: false, reason: "delivery_state_unavailable" as const };
+  }
+
+  return { sent: false, reason: "delivery_failed" as const };
 }
 
 export async function sendCustomerAtRiskAlert(
@@ -674,6 +754,8 @@ export async function sendCustomerAtRiskAlert(
   options: {
     skippedForBudget?: number;
     dispatchFailures?: number;
+    inlineFailures?: number;
+    digestFailures?: number;
     idempotencyKey?: string;
   } = {},
 ) {
@@ -692,6 +774,16 @@ export async function sendCustomerAtRiskAlert(
   if ((options.dispatchFailures ?? 0) > 0) {
     lines.push(
       `${options.dispatchFailures} watchlist fan-out job(s) failed to dispatch in a recent scheduled scan window; reconciliation will retry, but the Workflow dispatch path needs attention.`,
+    );
+  }
+  if ((options.inlineFailures ?? 0) > 0) {
+    lines.push(
+      `${options.inlineFailures} inline scheduled scan(s) failed before completion.`,
+    );
+  }
+  if ((options.digestFailures ?? 0) > 0) {
+    lines.push(
+      `${options.digestFailures} scheduled digest(s) failed before delivery.`,
     );
   }
 
@@ -722,13 +814,46 @@ export async function sendCustomerAtRiskAlert(
   }
 
   const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
+  const idempotencyKey =
+    options.idempotencyKey ??
+    `operator-alert:${new Date().toISOString().slice(0, 10)}`;
   const sent = await sendOperatorAlertEmail(env, {
     subject: `0509 customer-at-risk: ${lines.length} signal${lines.length === 1 ? "" : "s"}`,
     lines,
-    idempotencyKey: options.idempotencyKey,
+    idempotencyKey,
   });
 
-  return { sent, signals: lines.length };
+  if (sent) {
+    return { sent: true, reason: "sent" as const, signals: lines.length };
+  }
+
+  try {
+    const { getDeliveryAttemptByIdempotencyKey } =
+      await import("~/lib/data.server");
+    const durableAttempt = await getDeliveryAttemptByIdempotencyKey(
+      env,
+      idempotencyKey,
+    );
+    if (durableAttempt?.status === "sent") {
+      return {
+        sent: false,
+        reason: "duplicate" as const,
+        signals: lines.length,
+      };
+    }
+  } catch {
+    return {
+      sent: false,
+      reason: "delivery_state_unavailable" as const,
+      signals: lines.length,
+    };
+  }
+
+  return {
+    sent: false,
+    reason: "delivery_failed" as const,
+    signals: lines.length,
+  };
 }
 
 export async function runScheduledDiscoveryWarmup(env: AppEnv) {
@@ -1753,12 +1878,50 @@ async function completeWatchlistRun(
   await finishWatchlistRun(env, runId, input);
 }
 
+function summarizeAlertDelivery(delivery: {
+  attempts: number;
+  details?: Array<{ status?: string; deferredByQuietHours?: boolean }>;
+}) {
+  // Production delivery returns one detail per attempt. Keep the fallback for
+  // narrow tests that predate per-attempt delivery state.
+  if (!Array.isArray(delivery.details)) {
+    return {
+      attempts: delivery.attempts,
+      accepted: delivery.attempts,
+      failures: 0,
+      deferrals: 0,
+    };
+  }
+
+  const deferrals = delivery.details.filter(
+    (attempt) => attempt.deferredByQuietHours === true,
+  );
+  const attemptedDeliveries = delivery.details.filter(
+    (attempt) => attempt.deferredByQuietHours !== true,
+  );
+  return {
+    attempts: attemptedDeliveries.length,
+    accepted: attemptedDeliveries.filter((attempt) => attempt.status === "sent").length,
+    failures: attemptedDeliveries.filter((attempt) => attempt.status !== "sent").length,
+    deferrals: deferrals.length,
+  };
+}
+
 class StaleOrchestratedWatchlistRunError extends Error {
   constructor() {
     super(
       "Stale orchestrated watchlist run token; refusing side effects or finalization.",
     );
     this.name = "StaleOrchestratedWatchlistRunError";
+  }
+}
+
+class RecordedAlertDeliveryFailureError extends Error {
+  constructor(failures: number, attempts: number) {
+    super(
+      `${failures} of ${attempts} alert delivery attempt${attempts === 1 ? "" : "s"} failed.`,
+    );
+    this.name = "RecordedAlertDeliveryFailureError";
   }
 }
 
@@ -1946,6 +2109,7 @@ export async function runWatchlist(
             lane: "customer",
           })
         : { attempts: 0, channels: [] };
+    const alertOutcome = summarizeAlertDelivery(alertDelivery);
 
     // WP-25: free users get no digests/instant alerts — send one activation-result
     // email when this run established the baseline (first successful scan).
@@ -1964,7 +2128,7 @@ export async function runWatchlist(
       runId,
       watchlist.id,
       {
-        status: "succeeded",
+        status: alertOutcome.failures > 0 ? "failed" : "succeeded",
         pagesScanned,
         summary: {
           adsSeen: currentObservations.length,
@@ -1980,14 +2144,23 @@ export async function runWatchlist(
             scanNativeEvents.length +
             proofEvaluation.confirmedEventCount +
             directWebsiteProofEvaluation.confirmedEventCount,
-          sendsTriggered: alertDelivery.attempts,
+          sendsTriggered: alertOutcome.accepted,
+          sendAttempts: alertOutcome.attempts,
+          sendFailures: alertOutcome.failures,
+          sendDeferrals: alertOutcome.deferrals,
           events: allEvents.length,
           eventTypes: summarizeEventTypes(allEvents),
         },
+        errorCode:
+          alertOutcome.failures > 0 ? "alert_delivery_failed" : null,
+        errorMessage:
+          alertOutcome.failures > 0
+            ? `${alertOutcome.failures} customer alert delivery attempt${alertOutcome.failures === 1 ? "" : "s"} failed.`
+            : null,
       },
       options,
     );
-    if (!options.orchestrationToken) {
+    if (!options.orchestrationToken && alertOutcome.failures === 0) {
       await touchWatchlistScanned(env, watchlist.id);
     }
     const commercialProvider = resolveCommercialDiscoveryProvider(env, {
@@ -1995,13 +2168,17 @@ export async function runWatchlist(
     });
     await logMetaIntegrationStatus(env, {
       status:
-        commercialProvider === "meta_library_browser"
+        alertOutcome.failures > 0
+          ? "degraded"
+          : commercialProvider === "meta_library_browser"
           ? "healthy"
           : commercialProvider === "meta_api"
             ? "degraded"
             : "demo",
       summary:
-        commercialProvider === "meta_library_browser"
+        alertOutcome.failures > 0
+          ? "Watchlist evidence completed, but customer alert delivery failed."
+          : commercialProvider === "meta_library_browser"
           ? "Scheduled watchlist scan completed through the commercial discovery resolver."
           : commercialProvider === "meta_api"
             ? "Scheduled watchlist scan completed with the diagnostic Meta API path."
@@ -2012,8 +2189,18 @@ export async function runWatchlist(
       },
     });
 
+    if (alertOutcome.failures > 0) {
+      throw new RecordedAlertDeliveryFailureError(
+        alertOutcome.failures,
+        alertOutcome.attempts,
+      );
+    }
+
     return { runId, events: allEvents.length };
   } catch (error) {
+    if (error instanceof RecordedAlertDeliveryFailureError) {
+      throw error;
+    }
     if (error instanceof StaleOrchestratedWatchlistRunError) {
       throw error;
     }
@@ -2109,13 +2296,14 @@ export async function runWatchlist(
               lane: "customer",
             })
           : { attempts: 0, channels: [] };
+      const alertOutcome = summarizeAlertDelivery(alertDelivery);
 
       await completeWatchlistRun(
         env,
         runId,
         watchlist.id,
         {
-          status: "succeeded",
+          status: alertOutcome.failures > 0 ? "failed" : "succeeded",
           pagesScanned: 0,
           summary: {
             adsSeen: 0,
@@ -2123,7 +2311,10 @@ export async function runWatchlist(
             candidatesDetected: directWebsiteProofEvaluation.candidateCount,
             proofsAttempted: directWebsiteProofEvaluation.proofAttemptCount,
             eventsConfirmed: directWebsiteProofEvaluation.confirmedEventCount,
-            sendsTriggered: alertDelivery.attempts,
+            sendsTriggered: alertOutcome.accepted,
+            sendAttempts: alertOutcome.attempts,
+            sendFailures: alertOutcome.failures,
+            sendDeferrals: alertOutcome.deferrals,
             events: directWebsiteProofEvaluation.events.length,
             eventTypes: summarizeEventTypes(
               directWebsiteProofEvaluation.events,
@@ -2132,24 +2323,45 @@ export async function runWatchlist(
             scanErrorCode: errorCode,
             scanErrorMessage: details,
           },
+          errorCode:
+            alertOutcome.failures > 0 ? "alert_delivery_failed" : null,
+          errorMessage:
+            alertOutcome.failures > 0
+              ? `${alertOutcome.failures} customer alert delivery attempt${alertOutcome.failures === 1 ? "" : "s"} failed.`
+              : null,
         },
         options,
       );
-      if (!options.orchestrationToken) {
+      if (!options.orchestrationToken && alertOutcome.failures === 0) {
         await touchWatchlistScanned(env, watchlist.id);
       }
       await logMetaIntegrationStatus(env, {
         status: "degraded",
         summary:
-          "Commercial discovery failed, but direct website evidence still completed.",
+          alertOutcome.failures > 0
+            ? "Commercial discovery failed; direct website evidence completed, but customer alert delivery failed."
+            : "Commercial discovery failed, but direct website evidence still completed.",
         errorCode,
         errorMessage: details,
         metadata: {
           watchlistId: watchlist.id,
           runId,
           websiteProofUrl: directWebsiteProofEvaluation.websiteUrl,
+          alertDeliveryAttempts: alertOutcome.attempts,
+          alertDeliveryAccepted: alertOutcome.accepted,
+          alertDeliveryFailures: alertOutcome.failures,
+          alertDeliveryDeferrals: alertOutcome.deferrals,
+          alertDeliveryErrorCode:
+            alertOutcome.failures > 0 ? "alert_delivery_failed" : null,
         },
       });
+
+      if (alertOutcome.failures > 0) {
+        throw new RecordedAlertDeliveryFailureError(
+          alertOutcome.failures,
+          alertOutcome.attempts,
+        );
+      }
 
       return { runId, events: directWebsiteProofEvaluation.events.length };
     }
@@ -2235,6 +2447,8 @@ export function diffWatchlistObservations(
         metadata: {
           from: baselineObservation.landing_page_url,
           to: observation.landing_page_url,
+          beforeCapturedAt: baselineObservation.seen_at,
+          capturedAt: observation.seen_at,
         },
       });
     }
@@ -2323,6 +2537,8 @@ function buildCreativeCopyDraft(
       offerFrom: from.offer || null,
       offerTo: to.offer || null,
       advertiser: typeof advertiser === "string" ? advertiser : null,
+      beforeCapturedAt: baseline.seen_at,
+      capturedAt: current.seen_at,
     },
   };
 }
@@ -2959,6 +3175,9 @@ async function evaluateSelectiveProofCandidates(
     env,
     proofCandidates.map((candidate) => candidate.proofTarget.id),
     20,
+    new Date(
+      Date.now() - V1_PROOF_BUDGETS.targetFailureCooldownMs,
+    ).toISOString(),
   );
   const successfulCapturesByAdId = await listLastSuccessfulProofCapturesForAds(
     env,
@@ -3019,9 +3238,7 @@ async function evaluateSelectiveProofCandidates(
         6 * 60 * 60 * 1000
       );
     });
-    const recentFailureCountForTarget = targetCaptures.filter(
-      (capture) => capture.status === "failed",
-    ).length;
+    const recentFailureCountForTarget = countRecentProofFailures(targetCaptures);
     const proofDecision = evaluateProofPolicy({
       sensitivityMode: "balanced",
       triggerEventTypes: eventTypesByAd.get(observation.ad_id) ?? [],
@@ -3051,6 +3268,10 @@ async function evaluateSelectiveProofCandidates(
           status: proofDecision.skipReason,
           skipReason: proofDecision.skipReason,
           failureReason: "Evidence policy skipped the attempt.",
+          captureMetadata:
+            recentFailureCountForTarget >= 2
+              ? { unreadableReasonCode: "landing_capture_retry_cooldown" }
+              : undefined,
           extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
           idempotencyKey: `${proofRequestKey}:skip:${proofDecision.skipReason}`,
         });
@@ -3121,10 +3342,17 @@ async function evaluateSelectiveProofCandidates(
         replayedProofCapture,
         observation.landing_page_url!,
       );
+      let captureFailureDetail: LandingPageCaptureFailureDetail | null = null;
       const freshSnapshot = replayedSnapshot
         ? null
-        : await captureLandingPageSnapshot(env, observation.landing_page_url!);
+        : await captureLandingPageSnapshot(env, observation.landing_page_url!, {
+            onFailure: (detail) => {
+              captureFailureDetail = detail;
+            },
+          });
       const snapshot = replayedSnapshot ?? freshSnapshot;
+      const failureDetail =
+        captureFailureDetail as LandingPageCaptureFailureDetail | null;
       freshSnapshotForCompensation = freshSnapshot;
 
       if (!snapshot) {
@@ -3138,8 +3366,15 @@ async function evaluateSelectiveProofCandidates(
         await createProofCapture(env, {
           proofTargetId: proofTarget.id,
           status: "failed",
-          failureCode: "proof_capture_failed",
+          failureCode:
+            failureDetail?.reasonCode ?? "proof_capture_failed",
           failureReason: "Landing-page evidence check failed.",
+          captureMetadata: failureDetail
+            ? {
+                ...failureDetail.metadata,
+                unreadableReasonCode: failureDetail.reasonCode,
+              }
+            : { unreadableReasonCode: "proof_capture_failed" },
           extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
           idempotencyKey: proofRequestKey,
         });
@@ -3236,11 +3471,15 @@ async function evaluateSelectiveProofCandidates(
           ctaText: snapshot.ctaText ?? null,
           priceText: snapshot.priceText ?? null,
           formPresent: snapshot.formPresent ?? null,
+          extractorVersion:
+            readSnapshotString(snapshot.metadata, "extractorVersion") ??
+            LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
         },
         lastSuccessfulProof,
         recentWatchEvents: proofAwareRecentEvents,
         sensitivityMode: "balanced",
         burstCount: (eventTypesByAd.get(observation.ad_id) ?? []).length,
+        currentCapturedAt: snapshot.capturedAt,
       });
 
       for (const event of evaluated.events) {
@@ -3421,6 +3660,9 @@ async function evaluateDirectWebsiteProofCandidate(
     env,
     proofTarget.id,
     20,
+    new Date(
+      Date.now() - V1_PROOF_BUDGETS.targetFailureCooldownMs,
+    ).toISOString(),
   );
   const proofRequestKeyBase = buildProofCaptureRequestIdempotencyKey({
     watchlistId: input.watchlist.id,
@@ -3451,9 +3693,7 @@ async function evaluateDirectWebsiteProofCandidate(
       Date.now() - new Date(capture.attemptedAt).getTime() < 6 * 60 * 60 * 1000
     );
   });
-  const recentFailureCountForTarget = targetCaptures.filter(
-    (capture) => capture.status === "failed",
-  ).length;
+  const recentFailureCountForTarget = countRecentProofFailures(targetCaptures);
 
   if (
     isWithinDirectWebsiteProofInterval(
@@ -3490,6 +3730,12 @@ async function evaluateDirectWebsiteProofCandidate(
       status: "skipped_due_to_rate_limit",
       skipReason: "skipped_due_to_rate_limit",
       failureReason: "Direct website evidence policy skipped the attempt.",
+      captureMetadata: {
+        unreadableReasonCode:
+          recentFailureCountForTarget >= 2
+            ? "landing_capture_retry_cooldown"
+            : "proof_run_rate_limit",
+      },
       extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
       idempotencyKey: `${proofRequestKey}:skip:rate-limit`,
     });
@@ -3564,12 +3810,18 @@ async function evaluateDirectWebsiteProofCandidate(
       replayedProofCapture,
       websiteUrl,
     );
+    let captureFailureDetail: LandingPageCaptureFailureDetail | null = null;
     const freshSnapshot = replayedSnapshot
       ? null
       : await captureLandingPageSnapshot(env, websiteUrl, {
           preferRendered: true,
+          onFailure: (detail) => {
+            captureFailureDetail = detail;
+          },
         });
     const snapshot = replayedSnapshot ?? freshSnapshot;
+    const failureDetail =
+      captureFailureDetail as LandingPageCaptureFailureDetail | null;
     freshSnapshotForCompensation = freshSnapshot;
 
     if (!snapshot) {
@@ -3583,8 +3835,18 @@ async function evaluateDirectWebsiteProofCandidate(
       await createProofCapture(env, {
         proofTargetId: proofTarget.id,
         status: "failed",
-        failureCode: "direct_website_proof_capture_failed",
+        failureCode:
+          failureDetail?.reasonCode ??
+          "direct_website_proof_capture_failed",
         failureReason: "Competitor website evidence check failed.",
+        captureMetadata: {
+          ...(failureDetail?.metadata ?? {}),
+          source: "direct_competitor_website",
+          watchlistTargetId: input.watchlist.targetId,
+          unreadableReasonCode:
+            failureDetail?.reasonCode ??
+            "direct_website_proof_capture_failed",
+        },
         extractorVersion: LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
         idempotencyKey: proofRequestKey,
       });
@@ -3705,11 +3967,15 @@ async function evaluateDirectWebsiteProofCandidate(
         ctaText: snapshot.ctaText ?? null,
         priceText: snapshot.priceText ?? null,
         formPresent: snapshot.formPresent ?? null,
+        extractorVersion:
+          readSnapshotString(snapshot.metadata, "extractorVersion") ??
+          LANDING_PAGE_SIGNALS_EXTRACTOR_VERSION,
       },
       lastSuccessfulProof: finalLastSuccessfulProof,
       recentWatchEvents: input.recentWatchEvents,
       sensitivityMode: "balanced",
       burstCount: 1,
+      currentCapturedAt: snapshot.capturedAt,
     });
 
     const proofEvents: WatchEventRecord[] = [];
@@ -3907,9 +4173,13 @@ function normalizeIdempotencySegment(value: string) {
 }
 
 async function enrichAdForCheapScan(env: AppEnv, ad: AdRecord) {
+  const creativeSourceUrl =
+    ad.adSnapshotUrl?.trim() || ad.creativeImageUrl?.trim() || null;
   const capturedCreativeText =
-    isAdLibraryBackedAd(ad) && ad.adSnapshotUrl && !ad.creativeText
-      ? await captureCreativeText(env, ad.adSnapshotUrl, ad)
+    shouldAttemptCreativeTextCapture(ad)
+      ? creativeSourceUrl
+        ? await captureCreativeText(env, creativeSourceUrl, ad)
+        : createMissingCreativeCaptureResult(ad)
       : null;
 
   const nextAd = {
@@ -4281,11 +4551,6 @@ async function maybeSendFreeActivationResultEmail(
     userDeliveryProfile: Awaited<ReturnType<typeof getUserDeliveryProfile>>;
   },
 ) {
-  // First successful scan only — a baseline run already means activation ran.
-  if (input.baselineRunId) {
-    return;
-  }
-
   const profile = input.userDeliveryProfile;
   if (!profile?.email || profile.emailVerified !== true) {
     return;
@@ -4303,7 +4568,13 @@ async function maybeSendFreeActivationResultEmail(
       (event) =>
         ((event.metadata ?? {}) as Record<string, unknown>).kind === "baseline",
     );
-    if (!hasBaselineEvent && input.adsSeen > 0) {
+    if (
+      !shouldAttemptFreeActivationResult(
+        input.baselineRunId,
+        hasBaselineEvent,
+        input.adsSeen,
+      )
+    ) {
       return;
     }
 
@@ -4335,7 +4606,7 @@ async function maybeSendFreeActivationResultEmail(
 
     const { sendFreeActivationResultEmail } =
       await import("~/lib/delivery.server");
-    await sendFreeActivationResultEmail(env, {
+    const result = await sendFreeActivationResultEmail(env, {
       userId: input.watchlist.userId,
       email: profile.email,
       name: profile.name ?? null,
@@ -4344,7 +4615,31 @@ async function maybeSendFreeActivationResultEmail(
       adsFound: input.adsSeen,
       topAds,
     });
-  } catch {
+    if (
+      !result.sent &&
+      result.reason !== "duplicate" &&
+      result.reason !== "unsubscribed" &&
+      result.reason !== "missing_email"
+    ) {
+      await reportScheduledTaskFailure(
+        env,
+        "free_activation_result_delivery",
+        new Error(`activation result email was not sent: ${result.reason}`),
+      );
+    }
+  } catch (error) {
     // Activation email must never roll back a successful scan.
+    await reportScheduledTaskFailure(env, "free_activation_result_delivery", error);
   }
+}
+
+export function shouldAttemptFreeActivationResult(
+  baselineRunId: string | null,
+  hasBaselineEvent: boolean,
+  adsSeen: number,
+) {
+  // Later successful scans re-enter the delivery claim so a missing or
+  // definite failed first-result attempt gets another owner. The claim's
+  // idempotency key prevents a second provider call after acceptance.
+  return Boolean(baselineRunId) || hasBaselineEvent || adsSeen === 0;
 }
