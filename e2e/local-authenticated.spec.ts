@@ -504,7 +504,7 @@ test.describe("local authenticated E2E harness", () => {
         label: "Reports",
         path: "/app/reports",
         heading: "Reports",
-        copy: ["Open a current proof-backed report"],
+        copy: ["Each one carries the captures behind it."],
       },
       {
         label: "Shared links",

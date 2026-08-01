@@ -64,6 +64,13 @@ export interface RuledRowProps {
    */
   plain?: boolean;
   id?: string;
+  /**
+   * Set to "listitem" when the enclosing RuledList declares `role="list"`.
+   * An explicit list needs explicit items, otherwise assistive tech announces
+   * a list with nothing in it. Left undefined the row emits no role at all,
+   * so every existing caller renders byte-identical markup.
+   */
+  role?: "listitem";
 }
 
 export function RuledList({
@@ -105,6 +112,7 @@ export function RuledRow({
   plain = false,
   keyFocused = false,
   id,
+  role,
 }: RuledRowProps) {
   const className = [
     "f9-wk-row",
@@ -145,7 +153,7 @@ export function RuledRow({
   }
 
   return (
-    <div className={className} id={id}>
+    <div className={className} id={id} role={role}>
       {lead ? <span className="f9-wk-row-lead">{lead}</span> : null}
       {nameCell}
       <span className="f9-wk-say">{say}</span>
