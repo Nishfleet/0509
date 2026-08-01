@@ -5,6 +5,7 @@ import { DashboardPage } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { LocalTime } from "~/components/local-time";
 import { ReportsLockedState } from "~/components/reports-locked-state";
+import { RuledList, RuledRow } from "~/components/workspace/ruled-list";
 import { WorkingHeader } from "~/components/workspace/working-header";
 
 export type ReportsIndexLoaderData =
@@ -50,7 +51,7 @@ export function ReportsIndexRoute() {
 
   if (data.accessDenied) {
     return (
-      <DashboardPage className="f9-wk-page">
+      <DashboardPage className="f9-wk-page f9-wk-reports-index">
         <ReportsLockedState upgradeTo={data.upgradePath} />
       </DashboardPage>
     );
@@ -60,7 +61,7 @@ export function ReportsIndexRoute() {
   const sourceCount = data.reports.length;
 
   return (
-    <DashboardPage className="f9-wk-page">
+    <DashboardPage className="f9-wk-page f9-wk-reports-index">
       <WorkingHeader
         action={latest ? { label: "Open the latest report", to: latest.href } : undefined}
         context={
@@ -74,14 +75,14 @@ export function ReportsIndexRoute() {
       {sourceCount === 0 ? (
         <section aria-labelledby="reports-empty-title" className="f9-wk-sec">
           <p className="f9-wk-kick">Report sources</p>
-          <h2 className="f9-wk-change" id="reports-empty-title">
+          <h2 className="f9-wk-reports-state-title" id="reports-empty-title">
             No report source yet
           </h2>
-          <p className="f9-wk-lede">
+          <p className="f9-wk-reports-state-copy">
             A report starts with something you already track. Save ads into a collection
             or add a competitor; its report will open here with the captures that prove it.
           </p>
-          <div className="f9-wk-acts">
+          <div className="f9-wk-reports-actions">
             <Link className="f9-wk-btn" to="/app/collections">
               Open collections
             </Link>
@@ -92,29 +93,23 @@ export function ReportsIndexRoute() {
         </section>
       ) : (
         <section aria-labelledby="reports-list-title" className="f9-wk-sec">
-          <h2 className="f9-wk-change" id="reports-list-title">
+          <h2 className="f9-wk-kick" id="reports-list-title">
             Available reports
           </h2>
-          <div aria-label="Available reports" className="f9-wk-rows" role="list">
+          <RuledList aria-label="Available reports" role="list">
             {data.reports.map((report) => (
-              <div className="f9-wk-row" key={report.id} role="listitem">
-                <span className="f9-wk-nm">
-                  <Link className="f9-wk-rowlink" prefetch="intent" to={report.href}>
-                    {report.title}
-                  </Link>
-                </span>
-                <span className="f9-wk-say">{report.description}</span>
-                <span className="f9-wk-st">{report.typeLabel}</span>
-                <span className="f9-wk-tm">
-                  <LocalTime fallback={report.updatedAt} iso={report.updatedAt} />
-                </span>
-                <span aria-hidden="true" className="f9-wk-go">
-                  &rsaquo;
-                </span>
-              </div>
+              <RuledRow
+                key={report.id}
+                name={report.title}
+                role="listitem"
+                say={report.description}
+                status={report.typeLabel}
+                time={<LocalTime fallback={report.updatedAt} iso={report.updatedAt} />}
+                to={report.href}
+              />
             ))}
-          </div>
-          <div className="f9-wk-acts">
+          </RuledList>
+          <div className="f9-wk-reports-links">
             <Link className="f9-wk-lnk" to="/app/shares">
               Manage shared links{" "}
               <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
