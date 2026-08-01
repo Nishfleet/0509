@@ -64,7 +64,14 @@ describe("BL-034 Presence landing language", () => {
   it("spends no page green, one rule weight, and no rounded corner", () => {
     const css = read(CSS_PATH);
     expect(css.match(new RegExp(MARKER.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"))).toHaveLength(1);
-    const section = css.slice(css.indexOf(MARKER));
+    // BL-034 is no longer the last section in app.css — BL-040 owns the
+    // final one — so bound this slice at the next `/* === ` section heading
+    // instead of at EOF. Every assertion below still covers the whole
+    // BL-034 block; it just stops leaking into the block after it.
+    const start = css.indexOf(MARKER);
+    const nextHeading = css.indexOf("\n/* === ", start + MARKER.length);
+    const section =
+      nextHeading < 0 ? css.slice(start) : css.slice(start, nextHeading);
     expect(section).not.toMatch(/--green\b|--ed-accent\b|#16c47f|#0a7b62|#65d5bb/i);
     expect([...section.matchAll(/border(?:-(?:top|right|bottom|left))?:\s*([0-9.]+px)/g)]
       .map((match) => match[1])
