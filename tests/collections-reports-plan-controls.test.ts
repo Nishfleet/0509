@@ -313,7 +313,7 @@ describe("reports plan state", () => {
   it("renders the gate as a quiet v4 explanation, not a specimen panel", async () => {
     const markup = await renderReportsLocked("starter");
 
-    expect(markup).toContain("f9-locked-feature");
+    expect(markup).toContain("f9-wk-reports-locked f9-locked-feature");
     expect(markup).toContain("Everything stays private until you choose to send it.");
     expect(markup).toContain("Your workspace evidence is not used as an upgrade preview.");
     expect(markup).not.toContain("f9-ed-specimen");

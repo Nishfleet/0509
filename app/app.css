@@ -9773,122 +9773,6 @@ reds soften --- */
   cursor: not-allowed;
 }
 
-/* --- the report shelf (/app/reports): one band per source, never a grid --- */
-
-.f9-ed-report-shelf {
-  display: grid;
-  gap: 0;
-  border: 2.5px solid var(--ed-rule);
-  background: var(--ed-surface);
-}
-
-.f9-ed-report-band {
-  display: grid;
-  grid-template-columns: minmax(0, 230px) minmax(0, 1fr) minmax(0, 200px);
-  align-items: center;
-  gap: 16px 22px;
-  padding: 18px;
-  border-top: 2.5px solid var(--ed-rule-soft);
-  min-width: 0;
-}
-
-.f9-ed-report-band:first-child {
-  border-top: 0;
-}
-
-.f9-ed-report-band-id {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-}
-
-.f9-ed-report-band-id p {
-  margin: 0;
-  color: var(--ink-soft);
-}
-
-.f9-ed-report-band-id h2 {
-  margin: 0;
-  font-family: var(--ed-display);
-  font-weight: 800;
-  font-size: 23px;
-  letter-spacing: -0.02em;
-  line-height: 1.05;
-  text-transform: uppercase;
-  color: var(--ink);
-  overflow-wrap: anywhere;
-}
-
-.f9-ed-report-band-body {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-}
-
-.f9-ed-report-band-body p {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--ink-soft);
-}
-
-.f9-ed-report-band-action {
-  display: flex;
-  justify-content: flex-end;
-  min-width: 0;
-}
-
-.f9-ed-report-shelf-foot {
-  display: flex;
-  margin: 0;
-}
-
-/* --- §6.8 gate/empty specimen: a SAMPLE report, never a redacted preview --- */
-
-.f9-ed-report-specimen {
-  display: grid;
-  gap: 12px;
-  min-width: 0;
-}
-
-.f9-ed-report-specimen-headline {
-  margin: 0;
-  max-width: 18ch;
-  font-family: var(--ed-display);
-  font-weight: 800;
-  font-size: 26px;
-  letter-spacing: -0.03em;
-  line-height: 1.05;
-  text-transform: uppercase;
-  color: var(--ink);
-}
-
-.f9-ed-report-specimen-numbers {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.f9-ed-report-specimen-numbers span {
-  display: grid;
-  gap: 4px;
-  font-family: var(--ed-mono);
-  font-weight: 500;
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
-
-.f9-ed-report-specimen-numbers strong {
-  font-family: var(--ed-display);
-  font-weight: 800;
-  font-size: 30px;
-  letter-spacing: -0.04em;
-  line-height: 1;
-  color: var(--ink);
-}
-
 /* The report is ONE document wherever it renders. `/share/:token` repaints
    headings and paragraphs into the public system's ink (`.f9-share-page h1`,
    `.f9-share-page .f9-app-panel p`), which turned the ink cover into ink text
@@ -9983,17 +9867,6 @@ reds soften --- */
     border-top: 0;
   }
 
-  .f9-ed-report-band {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .f9-ed-report-band-action {
-    justify-content: flex-start;
-  }
-
-  .f9-ed-report-specimen-numbers {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 /* At phone width a long value squeezes the key column to nothing, and the
@@ -12512,6 +12385,440 @@ textarea.f9-wk-in {
 
 .f9-results-panel > .f9-wk-rows.is-bleed {
   margin: 0;
+}
+
+/* === BL-033b reports (landing language) === */
+
+/* Reports have three honest shelf states: sources, no sources, and the plan
+   boundary. All three use the same working header and spend at most one
+   filled commit in a viewport. */
+.f9-wk-reports-locked {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  max-width: none;
+}
+
+.f9-wk-reports-state-title {
+  max-width: 36ch;
+  margin: 13px 0 0;
+  color: var(--ink);
+  font-family: var(--f9-font);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.35;
+}
+
+.f9-wk-reports-state-copy {
+  max-width: 62ch;
+  margin: 9px 0 0;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.f9-wk-reports-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 18px;
+  margin-top: 18px;
+}
+
+.f9-wk-reports-links {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 8px;
+}
+
+.f9-wk-reports-index .f9-wk-row {
+  grid-template-columns: minmax(170px, 220px) minmax(0, 1fr) 132px 150px 10px;
+}
+
+.f9-wk-reports-index .f9-wk-nm {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.f9-wk-reports-index .f9-wk-rowlink {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+/* The shared report document remains byte-identical for /share and PDF.
+   Only its in-app host is turned down to v4: no elevation, one hairline,
+   sentence-case hierarchy, and one filled action ("Send to client"). */
+.f9-wk-report-view .f9-ed-report,
+.f9-wk-report-view .f9-ed-report * {
+  border-width: 1px;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.f9-wk-report-view .f9-ed-report {
+  display: grid;
+  width: auto;
+  margin: 28px var(--wk-pad) 48px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  grid-template-columns: minmax(0, 1fr) 286px;
+}
+
+.f9-wk-report-view .f9-ed-report-main {
+  border-right: 1px solid var(--wk-rule);
+}
+
+.f9-wk-report-view .f9-ed-report-cover {
+  gap: 10px;
+  padding: 0 30px 28px 0;
+  border-bottom: 1px solid var(--wk-rule);
+  background: transparent;
+  color: var(--ink);
+}
+
+.f9-wk-report-view .f9-ed-report-kicker,
+.f9-wk-report-view .f9-ed-report-cover p,
+.f9-wk-report-view .f9-ed-report-byline dt,
+.f9-wk-report-view .f9-ed-report-byline dd {
+  color: var(--ink-soft);
+}
+
+.f9-wk-report-view .f9-ed-report-kicker,
+.f9-wk-report-view .f9-ed-report .f9-ed-micro {
+  font-family: var(--f9-font);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.f9-wk-report-view .f9-ed-report-headline {
+  max-width: 28ch;
+  color: var(--ink);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.022em;
+  line-height: 1.1;
+  text-transform: none;
+}
+
+.f9-wk-report-view .f9-ed-report-standfirst {
+  max-width: 62ch;
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.55;
+  opacity: 1;
+}
+
+.f9-wk-report-view .f9-ed-report-byline {
+  gap: 8px 20px;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-wk-report-view .f9-ed-report-byline-cell {
+  gap: 3px;
+}
+
+.f9-wk-report-view .f9-ed-report-byline-cell dd {
+  font-family: var(--f9-font);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.f9-wk-report-view .f9-ed-report-numbers {
+  border-bottom: 1px solid var(--wk-rule);
+  background: transparent;
+}
+
+.f9-wk-report-view .f9-ed-report-number {
+  gap: 5px;
+  padding: 20px;
+  border-left: 1px solid var(--wk-rule);
+}
+
+.f9-wk-report-view .f9-ed-report-number:first-child {
+  border-left: 0;
+}
+
+.f9-wk-report-view .f9-ed-report-number-value {
+  font-family: var(--f9-font);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.f9-wk-report-view .f9-ed-report-section {
+  gap: 14px;
+  padding: 28px 30px 28px 0;
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-wk-report-view .f9-ed-report-section-heading,
+.f9-wk-report-view .f9-ed-report-read-verdict,
+.f9-wk-report-view .f9-ed-evidence-headline {
+  max-width: 36ch;
+  font-family: var(--f9-font);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.f9-wk-report-view .f9-ed-report-section-number {
+  font-family: var(--f9-font);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.f9-wk-report-view .f9-ed-report-read {
+  gap: 6px;
+  padding: 14px 0;
+  border: 0;
+  border-top: 1px solid var(--wk-rule);
+  border-bottom: 1px solid var(--wk-rule);
+  background: transparent;
+  color: var(--ink);
+}
+
+.f9-wk-report-view .f9-ed-report-read p,
+.f9-wk-report-view .f9-ed-report-read-verdict {
+  color: var(--ink);
+}
+
+.f9-wk-report-view .f9-ed-report-aside {
+  padding: 14px 16px;
+  border-left: 1px solid var(--wk-rule);
+  background: var(--wk-sunk);
+}
+
+.f9-wk-report-view .f9-ed-report-plates {
+  gap: 0;
+}
+
+.f9-wk-report-view .f9-ed-report-section > .f9-ed-specimen {
+  border: 0;
+  background: transparent;
+}
+
+.f9-wk-report-view .f9-ed-report-section > .f9-ed-specimen > .f9-ed-plate-header {
+  padding: 0;
+  border: 0;
+  color: var(--ink-soft);
+}
+
+.f9-wk-report-view .f9-ed-report-section > .f9-ed-specimen .f9-ed-specimen-body {
+  gap: 8px;
+  padding: 12px 0 0;
+}
+
+.f9-wk-report-view .f9-ed-report-section > .f9-ed-specimen .f9-ed-specimen-headline {
+  max-width: 36ch;
+  font-family: var(--f9-font);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.f9-wk-report-view .f9-ed-report-section > .f9-ed-specimen .f9-ed-specimen-slot {
+  display: none;
+}
+
+.f9-wk-report-view .f9-ed-evidence-plate,
+.f9-wk-report-view .f9-proof-packet {
+  border-right: 0;
+  border-left: 0;
+  background: transparent;
+}
+
+.f9-wk-report-view .f9-ed-plate-header,
+.f9-wk-report-view .f9-ed-first-scan-header,
+.f9-wk-report-view .f9-ed-fact-rail-header {
+  border-bottom: 1px solid var(--wk-rule);
+  background: transparent;
+  color: var(--ink);
+}
+
+.f9-wk-report-view .f9-ed-plate-header span {
+  color: var(--ink);
+}
+
+.f9-wk-report-view .f9-ed-report-moves {
+  border: 0;
+  border-top: 1px solid var(--wk-rule);
+  background: transparent;
+}
+
+.f9-wk-report-view .f9-ed-report-moves li {
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-wk-report-view .f9-ed-report-moves li:first-child {
+  border-top: 0;
+}
+
+.f9-wk-report-view .f9-ed-report-rail {
+  position: sticky;
+  top: 18px;
+  gap: 20px;
+  padding: 0 0 0 24px;
+  background: transparent;
+}
+
+.f9-wk-report-view .f9-ed-report-actions {
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.f9-wk-report-view .f9-ed-review-check {
+  font-family: var(--f9-font);
+  font-size: 13.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.f9-wk-report-view .f9-ed-report .f9-wk-btn {
+  width: fit-content;
+  border: 1px solid var(--wk-fill);
+  background: var(--wk-fill);
+  color: var(--wk-on-fill);
+  font-family: var(--f9-font);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.f9-wk-report-view .f9-ed-report .f9-ed-cta--rank2.f9-wk-lnk {
+  justify-content: flex-start;
+  width: fit-content;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-family: var(--f9-font);
+  font-size: 13.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.f9-wk-report-view .f9-ed-report-contents ol {
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-wk-report-view .f9-ed-report-contents a {
+  border-bottom: 1px solid var(--wk-rule);
+  font-family: var(--f9-font);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.f9-wk-report-view .f9-ed-report-glossary > summary {
+  font-family: var(--f9-font);
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.f9-wk-report-view .f9-ed-report-glossary .proof-trail-list dt,
+.f9-wk-report-view .f9-ed-report-footnote {
+  font-family: var(--f9-font);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.f9-wk-report-view .f9-ed-report-footnote {
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.f9-wk-reports-feedback {
+  padding: 18px var(--wk-pad) 0;
+}
+
+.f9-wk-report-view .f9-message {
+  padding: 12px 14px;
+  border: 1px solid var(--wk-band);
+  border-radius: 0;
+  background: var(--wk-band);
+  color: var(--wk-on-band);
+  box-shadow: none;
+}
+
+.f9-wk-report-view .f9-message p,
+.f9-wk-report-view .f9-message a {
+  color: var(--wk-on-band);
+}
+
+.f9-wk-report-view .f9-copy-button {
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid currentcolor;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: none;
+  font-family: var(--f9-font);
+  font-size: 13px;
+  font-weight: 400;
+  transform: none;
+}
+
+@media (max-width: 1080px) {
+  .f9-wk-report-view .f9-ed-report {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .f9-wk-report-view .f9-ed-report-main {
+    border-right: 0;
+  }
+
+  .f9-wk-report-view .f9-ed-report-rail {
+    position: static;
+    padding: 24px 0 0;
+    border-top: 1px solid var(--wk-rule);
+  }
+}
+
+@media (max-width: 900px) {
+  .f9-wk-reports-index .f9-wk-row {
+    grid-template-columns: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .f9-wk-reports-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .f9-wk-reports-links {
+    justify-content: flex-start;
+  }
+
+  .f9-wk-report-view .f9-ed-report {
+    margin-top: 22px;
+    margin-bottom: 34px;
+  }
+
+  .f9-wk-report-view .f9-ed-report-cover,
+  .f9-wk-report-view .f9-ed-report-section {
+    padding-right: 0;
+  }
 }
 
 /* === BL-033a collections (landing language) === */
