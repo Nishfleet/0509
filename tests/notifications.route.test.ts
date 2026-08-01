@@ -1328,4 +1328,46 @@ describe("notifications route", () => {
       expect(upsertWorkspaceDeliveryConfig).not.toHaveBeenCalled();
     },
   );
+
+  // BL-039 presentation proof. The dormant-channel policy itself is owned by
+  // "hides dormant channels without exposing their controls" above; this test
+  // only asserts the landing-language shape the GA surface renders in.
+  it("renders the GA surface as quiet ruled channel definitions", async () => {
+    await mockRouter({
+      emailDeliveryReady: true,
+      digestCadencePreference: "plan_default",
+      showSlackDelivery: false,
+      slackDelivery: { plan: "starter", entitled: true },
+      canManageWhatsAppDelivery: false,
+      slackTargets: [],
+      whatsappTargets: [],
+      whatsappDelivery: {
+        providerConfigured: false,
+        customerReady: false,
+        webhookConfigured: false,
+        configuredTargets: 0,
+        usableTargets: 0,
+        lastSuccessfulDeliveryAt: null,
+      },
+    });
+
+    const { default: NotificationsRoute } = await import("~/routes/app.notifications");
+    const markup = renderToStaticMarkup(createElement(NotificationsRoute));
+
+    expect(markup).toContain("f9-wk-page f9-nt-page");
+    expect(markup).toContain("Delivery channels");
+    // Email is the only generally-available channel, so exactly one ruled
+    // definition row renders; dormant channels are hidden, not shown as rows.
+    expect(markup.match(/f9-nt-definition-row/g)).toHaveLength(1);
+    expect(markup).toContain("Digest delivery can use the account email.");
+    expect(markup).not.toContain("Slack delivery");
+    expect(markup).not.toContain("WhatsApp delivery");
+    expect(markup).toContain("Quiet hours");
+    expect(markup).toContain("Recipients");
+    expect(markup).toContain("name=\"digestCadencePreference\"");
+    expect(markup).not.toContain("f9-app-panel");
+    expect(markup).not.toContain("f9-status-strip");
+    expect(markup).not.toContain("Save Slack delivery");
+    expect(markup).not.toContain("Save WhatsApp delivery");
+  });
 });
