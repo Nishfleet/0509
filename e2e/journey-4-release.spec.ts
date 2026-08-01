@@ -328,7 +328,9 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
     testInfo.annotations.push({ type: "viewport", description: `${viewport.width}x${viewport.height}` });
     await signInAs(context, baseURL!, "e2e-agency");
     await page.setViewportSize(viewport);
-    await page.goto("/app/watchlists?watchlist=e2e-watchlist-agency-1");
+    await page.goto(
+      "/app/watchlists?watchlist=e2e-watchlist-agency-1&tab=evidence",
+    );
     await expect(
       page.getByRole("link", { name: "Export CSV" }),
     ).toHaveAttribute("href", "/export/watchlist/e2e-watchlist-agency-1");
@@ -358,26 +360,30 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
       "JSON export should be an executable local surface",
     ).toBe(200);
     expect(jsonResponse.headers()["content-type"] ?? "").toMatch(/json/i);
-    // BL-007: the opened competitor no longer repeats the band's report link;
-    // "Package for client" on the band is the one control to the same report.
+    // BL-035: client handoff is attached to stored evidence. The Evidence tab
+    // keeps the completed-check report destination alongside share/export.
     await expect(
       page.getByRole("link", { name: "Package for client" }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Share summary" }),
     ).toBeVisible();
     // BL-036: report eligibility belongs to a completed Agency check, not to
     // whether that check happened to catch a change. This fixture has a
     // succeeded run and unchanged before/after captures, with no watch event.
     await page.goto("/app/watchlists?watchlist=e2e-watchlist-agency-quiet");
-    const quietPane = page.locator(".f9-wk-detail");
-    await expect(quietPane.getByText("Quiet", { exact: true })).toBeVisible();
+    const quietPane = page.locator(".f9-bl035-detail");
+    await expect(page.locator(".f9-wk-context")).toContainText("Quiet");
     await expect(
       quietPane.getByRole("link", { name: "Package for client" }),
     ).toHaveAttribute(
       "href",
       "/app/reports/watchlist:e2e-watchlist-agency-quiet",
     );
-    await expect(
-      page.getByRole("button", { name: "Share summary" }),
-    ).toBeVisible();
+    await page.goto(
+      "/app/watchlists?watchlist=e2e-watchlist-agency-quiet&tab=evidence",
+    );
+    await expect(page.getByRole("button", { name: "Share summary" })).toBeVisible();
     const reportPage = await page.request.get(
       "/app/reports/watchlist:e2e-watchlist-agency-1",
       { headers: { [fixtureModeHeader]: "1" } },
