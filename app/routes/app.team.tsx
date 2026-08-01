@@ -2,13 +2,14 @@ import { Form, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useEffect, useRef } from "react";
 
-import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardPage } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { ActionFeedback } from "~/components/action-feedback";
 import { ConfirmSubmitButton } from "~/components/confirm-button";
 import { LocalTime } from "~/components/local-time";
 import { LockedFeature } from "~/components/locked-feature";
 import { SubmitButton } from "~/components/submit-button";
+import { WorkingHeader } from "~/components/workspace/working-header";
 
 export const meta = () => [{ title: "Team | Five to Nine" }];
 
@@ -155,20 +156,20 @@ export default function TeamRoute() {
 
   if (data.isMember) {
     return (
-      <DashboardPage>
-        <section className="f9-app-stack">
-          <DashboardPageHeader
-            lead="Watchlists, collections, and digests here are shared with the whole team. Your sign-in stays your own."
-            title="Team"
-          />
-
-        <article className="f9-app-panel">
-          <div className="f9-panel-toolbar">
-            <div>
-              <h2>Your seat in {data.ownerName ? `${data.ownerName}'s` : "a shared"} account</h2>
-            </div>
-          </div>
-        </article>
+      <DashboardPage className="f9-wk-page f9-bl041-page f9-bl041-team">
+        <WorkingHeader
+          context="Watchlists, collections, and briefs are shared. Your sign-in stays your own."
+          title="Team"
+        />
+        <section className="f9-bl041-section" aria-labelledby="team-membership-title">
+          <p className="f9-wk-kick">Your access</p>
+          <h2 id="team-membership-title">
+            A seat in {data.ownerName ? `${data.ownerName}'s` : "a shared"} workspace
+          </h2>
+          <p className="f9-bl041-copy">
+            The workspace owner manages seats and billing. You keep a separate sign-in and share
+            the workspace&apos;s competitors, collections, and briefs.
+          </p>
         </section>
       </DashboardPage>
     );
@@ -179,12 +180,15 @@ export default function TeamRoute() {
   ).length + 1;
 
   return (
-    <DashboardPage>
-      <section className="f9-app-stack">
-        <DashboardPageHeader
-          lead="Invite teammates to share watchlists, collections, and digests on Agency."
-          title="Team"
-        />
+    <DashboardPage className="f9-wk-page f9-bl041-page f9-bl041-team">
+      <WorkingHeader
+        context={
+          data.plan === "agency"
+            ? `${seatsUsed} of ${data.seatLimit} Agency seats are in use.`
+            : "Team access is included with Agency."
+        }
+        title="Team"
+      />
 
       <div id="team-action-feedback" ref={revokeFeedbackRef} tabIndex={-1}>
         {showRevocationCompletion ? (
@@ -195,53 +199,59 @@ export default function TeamRoute() {
       </div>
 
       {data.plan !== "agency" ? (
-        <LockedFeature
-          eyebrow="Team"
-          title="Invite your teammates"
-          reason="Share watchlists, collections, and briefs with teammates — billing stays with you"
-          planNeeded="Agency plan"
-          upgradeTo="/app/billing?source=team#plans"
-          headingLevel="h2"
-        />
+        <div className="f9-bl041-lock">
+          <LockedFeature
+            eyebrow="Team"
+            title="Invite your teammates"
+            reason="Share watchlists, collections, and briefs with teammates — billing stays with you"
+            planNeeded="Agency plan"
+            upgradeTo="/app/billing?source=team#plans"
+            headingLevel="h2"
+          />
+        </div>
       ) : (
-      <article className="f9-app-panel">
-        <div className="f9-panel-toolbar">
+      <section className="f9-bl041-section" aria-labelledby="team-seats-title">
+        <p className="f9-wk-kick">Workspace seats</p>
+        <div className="f9-bl041-section-head">
           <div>
-            <h2>{`${seatsUsed} of ${data.seatLimit} Agency seats in use`}</h2>
+            <h2 id="team-seats-title">{`${seatsUsed} of ${data.seatLimit} seats in use`}</h2>
+            <p className="f9-bl041-copy">
+              Teammates share your watchlists, collections, and briefs. Billing stays with you.
+            </p>
           </div>
         </div>
 
-        <p>
-          {data.plan === "agency"
-            ? "Teammates you invite share your watchlists, collections, and digests — billing stays with you."
-            : "Upgrade to the Agency plan to share your account with teammates."}
-        </p>
-
         <ActionFeedback data={actionData} intent="invite" />
-        {data.plan === "agency" && seatsUsed < data.seatLimit ? (
-          <Form method="post" className="f9-action-row">
+        {seatsUsed < data.seatLimit ? (
+          <Form method="post" className="f9-bl041-invite">
             <input type="hidden" name="intent" value="invite" />
-            <input
-              aria-label="Teammate email"
-              name="email"
-              type="email"
-              required
-              placeholder="teammate@agency.com"
-            />
-            <SubmitButton className="f9-primary-button" intent="invite" pendingLabel="Sending…">
+            <label className="f9-bl041-field">
+              <span>Teammate email</span>
+              <input
+                name="email"
+                type="email"
+                required
+                placeholder="teammate@agency.com"
+              />
+            </label>
+            <SubmitButton className="f9-wk-btn" intent="invite" pendingLabel="Sending…">
               Send invite
             </SubmitButton>
           </Form>
-        ) : null}
+        ) : (
+          <p className="f9-bl041-note">
+            All {data.seatLimit} seats are occupied. Revoke a seat before inviting someone else.
+          </p>
+        )}
 
         {data.members.length > 0 ? (
-          <div className="f9-work-list is-compact">
+          <div className="f9-bl041-member-list" aria-label="Workspace members">
             {data.members.map((member) => {
               const inviteExpired = member.status === "invited" && isInviteExpired(member.tokenExpiresAt);
               return (
-                <div className="f9-work-row" key={member.id}>
+                <div className="f9-bl041-member-row" key={member.id}>
                   <div>
-                    <strong>{member.email}</strong>
+                    <strong className="f9-bl041-entity">{member.email}</strong>
                     <p>
                       {member.status === "active" ? (
                         <>
@@ -270,13 +280,13 @@ export default function TeamRoute() {
                     intent="revoke"
                     match={{ memberId: member.id }}
                   />
-                  <div className="f9-action-row">
+                  <div className="f9-bl041-row-actions">
                     {member.status === "invited" ? (
                       <Form method="post">
                         <input type="hidden" name="intent" value="resend-invite" />
                         <input type="hidden" name="memberId" value={member.id} />
                         <SubmitButton
-                          className="f9-secondary-button"
+                          className="f9-bl041-text-action"
                           intent="resend-invite"
                           match={{ memberId: member.id }}
                           pendingLabel="Sending…"
@@ -289,7 +299,7 @@ export default function TeamRoute() {
                       <input type="hidden" name="intent" value="revoke" />
                       <input type="hidden" name="memberId" value={member.id} />
                       <ConfirmSubmitButton
-                        className="f9-secondary-button"
+                        className="f9-bl041-text-action"
                         confirmLabel="Confirm — revoke seat?"
                         intent="revoke"
                         match={{ memberId: member.id }}
@@ -303,10 +313,11 @@ export default function TeamRoute() {
               );
             })}
           </div>
-        ) : null}
-      </article>
-      )}
+        ) : (
+          <p className="f9-bl041-empty">No teammates have been invited yet.</p>
+        )}
       </section>
+      )}
     </DashboardPage>
   );
 }

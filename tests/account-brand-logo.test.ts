@@ -428,7 +428,7 @@ expect(result.brandLogo).toBeNull();
 describe("account agency logo UI", () => {
 async function renderAccount(input: {
 actionData?: Record<string, unknown>;
-plan?: "starter" | "agency";
+plan?: "free" | "scout" | "starter" | "agency";
 } = {}) {
 vi.doMock("react-router", async () => {
 const actual = await vi.importActual<typeof import("react-router")>("react-router");
@@ -512,11 +512,16 @@ expect(error).toContain('role="alert"');
 expect(error).toContain('aria-invalid="true"');
 });
 
-it("does not render stored Agency identity controls after downgrade", async () => {
-const markup = await renderAccount({ plan: "starter" });
+it.each(["free", "scout", "starter"] as const)(
+"renders one quiet Agency-branding gate for %s without exposing stored identity controls",
+async (plan) => {
+const markup = await renderAccount({ plan });
 
 expect(markup).not.toContain('alt="Northwind Growth logo"');
 expect(markup).not.toContain('name="brandLogo"');
 expect(markup).toContain("Branded reports are part of Agency");
-});
+expect(markup).toContain('class="f9-wk-btn"');
+expect(markup.match(/See Agency plans/g)).toHaveLength(1);
+},
+);
 });

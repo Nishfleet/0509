@@ -159,7 +159,7 @@ describe("account page", () => {
     expect(markup).toContain("Sign-in security");
     expect(markup).toContain("Session and account controls");
     expect(markup).toContain("This device is signed in until");
-    expect(markup).toContain("sign-in options");
+    expect(markup).toContain("sensitive requests live here");
     expect(markup).not.toContain("session-1");
     expect(markup).toContain("Request account deletion support");
     expect(markup).toContain("This sends a support deletion request");

@@ -2,16 +2,16 @@ import { Form, Link, useActionData, useLoaderData, useRevalidator } from "react-
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useState } from "react";
 
-import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardPage } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { ActionFeedback } from "~/components/action-feedback";
-import { Pill } from "~/components/pill";
 import { AccountBrandingForm } from "~/components/account-branding-form";
 import { ConfirmSubmitButton } from "~/components/confirm-button";
 import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import { ThemeToggle } from "~/components/theme-toggle";
+import { WorkingHeader } from "~/components/workspace/working-header";
 import {
   hasInvalidCompetitorWebsite,
   normalizeCompetitorWebsiteInput,
@@ -445,94 +445,85 @@ export default function AccountRoute() {
   const otherSessionCount = data.activeSessions.filter((session) => !session.isCurrent).length;
 
   return (
-    <DashboardPage>
-      <section className="f9-app-stack">
-        <DashboardPageHeader
-          lead="Signed-in profile, brand setup, passkeys, and sensitive account requests."
-          title="Account & security"
-        />
+    <DashboardPage className="f9-wk-page f9-bl041-page f9-bl041-account">
+      <WorkingHeader
+        context={
+          <>
+            Signed in as {data.email}. Sign-in security, brand setup, and sensitive requests live
+            here.
+          </>
+        }
+        title="Account & security"
+      />
 
-      <article className="f9-app-panel">
-        <div className="f9-panel-toolbar">
+      <section className="f9-bl041-section">
+        <div className="f9-bl041-section-head">
           <div>
-            <h2>{data.name || data.email}</h2>
-          </div>
-        </div>
-
-        <p className="f9-muted-copy">
-          Signed in as {data.email}. Sign-in security is managed on this page — use it for brand setup,
-          sign-in options, and sensitive account requests.
-        </p>
-      </article>
-
-      <article className="f9-app-panel">
-        <div className="f9-panel-toolbar">
-          <div>
-            <span className="f9-app-kicker">Appearance</span>
+            <span className="f9-bl041-label">Appearance</span>
             <h2>Workspace theme</h2>
           </div>
         </div>
-        <p className="f9-muted-copy">
+        <p className="f9-bl041-copy">
           Choose how the workspace looks on this device. "System" follows your operating system
           setting. Saved in this browser only — public pages and shared reports stay light.
         </p>
         <ThemeToggle />
-      </article>
+      </section>
 
       {!data.emailVerified ? (
-        <article className="f9-app-panel">
-          <div className="f9-panel-toolbar">
+        <section className="f9-bl041-section">
+          <div className="f9-bl041-section-head">
             <div>
-              <span className="f9-app-kicker">Email</span>
+              <span className="f9-bl041-label">Email</span>
               <h2>Verify your email</h2>
             </div>
             <Form method="post">
               <input name="intent" type="hidden" value="resend-verification" />
-              <SubmitButton className="f9-secondary-button" intent="resend-verification" pendingLabel="Sending…">
+              <SubmitButton className="f9-bl041-text-action" intent="resend-verification" pendingLabel="Sending…">
                 Resend verification email
               </SubmitButton>
             </Form>
           </div>
-          <p className="f9-muted-copy">
+          <p className="f9-bl041-copy">
             {resendVerificationAction?.message ??
               `Watchlists, digests, and alerts stay locked until ${data.email} is verified.`}
           </p>
-        </article>
+        </section>
       ) : null}
 
-      <article className="f9-app-panel">
-        <div className="f9-panel-toolbar">
+      <section className="f9-bl041-section">
+        <div className="f9-bl041-section-head">
           <div>
-            <span className="f9-app-kicker">Setup</span>
+            <span className="f9-bl041-label">Workspace setup</span>
             <h2>Add another competitor</h2>
           </div>
-          <Link className="f9-secondary-button" to="/app/watchlists">
+          <Link className="f9-bl041-text-action" to="/app/watchlists">
             Add competitor
           </Link>
         </div>
-        <p className="f9-muted-copy">
+        <p className="f9-bl041-copy">
           Extend the watch board without resetting the account, or{" "}
-          <Link to="#brand-profile">update your own brand website</Link> above.
+          <Link to="#brand-profile">update your own brand website</Link> below.
         </p>
-      </article>
+      </section>
 
       {data.passkeysEnabled ? (
-        <article className="f9-app-panel">
-          <div className="f9-panel-toolbar">
+        <section className="f9-bl041-section">
+          <div className="f9-bl041-section-head">
             <div>
-              <span className="f9-app-kicker">Passkeys</span>
+              <span className="f9-bl041-label">Passkeys</span>
               <h2>Use this device to sign in faster</h2>
             </div>
           </div>
           {passkeyMessage ? <p aria-live="polite" className="f9-message is-success" role="status">{passkeyMessage}</p> : null}
           {passkeyError ? <p aria-live="polite" className="f9-message is-error" role="alert">{passkeyError}</p> : null}
           {data.passkeyControlsMessage ? (
-            <p className="f9-muted-copy">{data.passkeyControlsMessage}</p>
+            <p className="f9-bl041-copy">{data.passkeyControlsMessage}</p>
           ) : (
             <>
               <div className="f9-account-security-actions">
                 <button
-                  className="f9-secondary-button"
+                  className="f9-bl041-text-action"
                   disabled={passkeyPending}
                   onClick={() => {
                     void registerPasskey({
@@ -566,7 +557,7 @@ export default function AccountRoute() {
                         {passkeyConfirmId === passkey.id ? (
                           <>
                             <button
-                              className="f9-secondary-button"
+                              className="f9-bl041-text-action"
                               disabled={passkeyPendingId === passkey.id}
                               onClick={() => setPasskeyConfirmId(null)}
                               type="button"
@@ -574,7 +565,7 @@ export default function AccountRoute() {
                               Cancel
                             </button>
                             <button
-                              className="f9-secondary-button"
+                              className="f9-bl041-text-action"
                               disabled={passkeyPendingId === passkey.id}
                               onClick={() => {
                                 void removePasskey({
@@ -593,7 +584,7 @@ export default function AccountRoute() {
                           </>
                         ) : (
                           <button
-                            className="f9-secondary-button"
+                            className="f9-bl041-text-action"
                             disabled={passkeyPendingId !== null}
                             onClick={() => {
                               setPasskeyError(null);
@@ -613,13 +604,13 @@ export default function AccountRoute() {
               )}
             </>
           )}
-        </article>
+        </section>
       ) : null}
 
-      <article className="f9-app-panel" id="brand-profile">
-        <div className="f9-panel-toolbar">
+      <section className="f9-bl041-section" id="brand-profile">
+        <div className="f9-bl041-section-head">
           <div>
-            <span className="f9-app-kicker">My brand</span>
+            <span className="f9-bl041-label">My brand</span>
             <h2>Set your own website once</h2>
           </div>
         </div>
@@ -647,22 +638,22 @@ export default function AccountRoute() {
             />
           </label>
           <SubmitButton
-            className="f9-secondary-button"
+            className="f9-bl041-text-action"
             intent="save-brand-profile"
             pendingLabel="Saving…"
           >
             Save my brand
           </SubmitButton>
-          <p className="f9-muted-copy">
+          <p className="f9-bl041-copy">
             Optional. Set it once; competitor search stays separate.
           </p>
         </Form>
-      </article>
+      </section>
 
-      <article className="f9-app-panel">
-        <div className="f9-panel-toolbar">
+      <section className="f9-bl041-section">
+        <div className="f9-bl041-section-head">
           <div>
-            <span className="f9-app-kicker">Agency reports</span>
+            <span className="f9-bl041-label">Agency reports</span>
             <h2>Put your agency name on shared reports</h2>
           </div>
         </div>
@@ -685,19 +676,22 @@ export default function AccountRoute() {
             brandName={data.brandName}
           />
         ) : (
-          <p className="f9-muted-copy">
-            Branded reports are part of Agency.{" "}
-            <Link prefetch="intent" to="/app/billing?source=branding#plans">
-              See plans
+          <div className="f9-bl041-entitlement">
+            <p>
+              Branded reports are part of Agency. Add your name and logo to client-facing
+              reports without changing the evidence underneath.
+            </p>
+            <Link className="f9-wk-btn" prefetch="intent" to="/app/billing?source=branding#plans">
+              See Agency plans
             </Link>
-          </p>
+          </div>
         )}
-      </article>
+      </section>
 
-      <article className="f9-app-panel">
-        <div className="f9-panel-toolbar">
+      <section className="f9-bl041-section">
+        <div className="f9-bl041-section-head">
           <div>
-            <span className="f9-app-kicker">Security</span>
+            <span className="f9-bl041-label">Security</span>
             <h2>Session and account controls</h2>
           </div>
         </div>
@@ -710,7 +704,7 @@ export default function AccountRoute() {
             <p>{sessionAction.message}</p>
           </div>
         ) : null}
-        <p className="f9-muted-copy">
+        <p className="f9-bl041-copy">
           This device is signed in until <LocalTime iso={data.sessionExpiresAt} />. Sign out from the navigation
           menu to remove access on this device.
         </p>
@@ -732,13 +726,13 @@ export default function AccountRoute() {
                   <span>{formatSessionLocation(session.ipAddress, session.userAgent)}</span>
                 </div>
                 {session.isCurrent ? (
-                  <Pill state="healthy">Current</Pill>
+                  <span className="f9-bl041-current">Current</span>
                 ) : (
                   <Form method="post">
                     <input name="intent" type="hidden" value="revoke-session" />
                     <input name="sessionId" type="hidden" value={session.id} />
                     <ConfirmSubmitButton
-                      className="f9-secondary-button"
+                      className="f9-bl041-text-action"
                       confirmLabel="Confirm — revoke?"
                       intent="revoke-session"
                       match={{ sessionId: session.id }}
@@ -757,7 +751,7 @@ export default function AccountRoute() {
           <Form method="post">
             <input name="intent" type="hidden" value="revoke-other-sessions" />
             <ConfirmSubmitButton
-              className="f9-secondary-button"
+              className="f9-bl041-text-action"
               confirmLabel="Confirm — revoke all others?"
               disabled={otherSessionCount === 0}
               intent="revoke-other-sessions"
@@ -769,13 +763,13 @@ export default function AccountRoute() {
           </Form>
         </div>
 
-        <div className="f9-panel-toolbar">
+        <div className="f9-bl041-section-head f9-bl041-subsection">
           <div>
-            <span className="f9-app-kicker">Email</span>
+            <span className="f9-bl041-label">Email</span>
             <h3>Change your email</h3>
           </div>
         </div>
-        <p className="f9-muted-copy">
+        <p className="f9-bl041-copy">
           Support completes email changes so we can verify it's really you. This opens a tracked
           support request — your email doesn't change automatically or in-app.
         </p>
@@ -809,19 +803,19 @@ export default function AccountRoute() {
             </span>
           </label>
           <SubmitButton
-            className="f9-secondary-button"
+            className="f9-bl041-text-action"
             intent="request-email-change"
             pendingLabel="Sending request…"
           >
             Request email change
           </SubmitButton>
         </Form>
-      </article>
+      </section>
 
-      <article className="f9-app-panel">
-        <div className="f9-panel-toolbar">
+      <section className="f9-bl041-section f9-bl041-danger">
+        <div className="f9-bl041-section-head">
           <div>
-            <span className="f9-app-kicker">Danger zone</span>
+            <span className="f9-wk-kick">Danger zone</span>
             <h2>Request account deletion support</h2>
           </div>
         </div>
@@ -846,14 +840,13 @@ export default function AccountRoute() {
             <span>I understand this is a support request, not an in-app deletion, and support will review and verify it.</span>
           </label>
           <SubmitButton
-            className="f9-secondary-button"
+            className="f9-bl041-danger-action"
             intent="request-account-deletion"
             pendingLabel="Sending request…"
           >
             Send support deletion request
           </SubmitButton>
         </Form>
-      </article>
       </section>
     </DashboardPage>
   );
