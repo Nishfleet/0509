@@ -129,10 +129,10 @@ export function formatEvidenceAttempts(summary: WatchlistProofSummary): string |
  * loader returns (§6.6). Eight rows is the hard ceiling and this rail sits
  * at it; adding a ninth means removing one.
  *
- * Rows deliberately do NOT repeat the status strip (state, last check, next
- * check, ad source) — the rail answers "what exactly are we watching and how
- * do we know", the strip answers "where does it stand right now". Last check
- * is included here as the stable freshness anchor when the detail is deep-linked.
+ * BL-035 removed the status strip, so Last check lives in this shared rail
+ * across every URL tab and stays the freshness anchor when the detail is
+ * deep-linked. Next check remains Setup work and source health stays in the
+ * working header.
  */
 export function buildCompetitorFactRows(input: {
   targetLabel: string;

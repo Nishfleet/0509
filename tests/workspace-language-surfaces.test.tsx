@@ -365,6 +365,11 @@ describe("the rail", () => {
     expect(markup).toContain('class="f9-wk-foot"');
     expect(markup).toContain('class="f9-wk-avatar"');
     expect(markup).toContain("Sign out");
+    // BL-035 re-adjudication: these duplicated the signed-in Help & support
+    // destination. Identity + the session action are the complete foot.
+    expect(markup).not.toContain('href="/help"');
+    expect(markup).not.toContain('href="/docs"');
+    expect(markup).not.toContain("mailto:support@0509.io");
     for (const item of [...DASHBOARD_PRIMARY_NAV, ...DASHBOARD_SETTINGS_NAV].flatMap(
       (section) => section.items,
     )) {

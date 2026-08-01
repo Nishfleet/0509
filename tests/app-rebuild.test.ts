@@ -45,7 +45,9 @@ describe("app rebuild", () => {
     expect(appSurface).toContain('className="f9-overview-search"');
     // BL-030: the two rebuilt surfaces run on the workspace-language layer.
     expect(dashboardRoute).toContain('className="f9-wk-page f9-overview"');
-    expect(watchlistsRoute).toContain('className="f9-wk-page"');
+    expect(watchlistsRoute).toContain(
+      'className={`f9-wk-page${selectedWatchlist ? " f9-bl035-page" : ""}`}',
+    );
     expect(appSurface).toContain('id="setup-checklist"');
     expect(appSurface).not.toContain('className="f9-onboard-page"');
     expect(appClasses).not.toEqual(
