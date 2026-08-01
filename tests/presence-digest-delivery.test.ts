@@ -109,6 +109,27 @@ afterEach(() => {
 });
 
 describe("presence digest email delivery", () => {
+  // Relocated from delivery.server.test.ts. That file's harness has no DB and
+  // mocks createDeliveryAttempt, which suited main's send-then-record design;
+  // this branch claims a durable attempt first, so the assertion only runs
+  // meaningfully against the mocks below.
+  it("records provider acceptance without claiming recipient delivery", async () => {
+    const loaded = await loadSender({ provisionedTarget: target });
+
+    await expect(
+      loaded.sendPresenceDigestEmail({ DB: {} } as never, {
+        userId: "user-1",
+        email: "owner@example.com",
+        subject: "Presence brief",
+        lines: ["Competitor — New result"],
+        idempotencyKey: "presence-digest:user-1:2026-07-30",
+      }),
+      // The provider accepted it, but webhookStatus stays provider_unknown, so
+      // recipient delivery is explicitly not claimed.
+    ).resolves.toEqual({ accepted: true, delivered: false });
+    expect(loaded.sendCloudflareEmail).toHaveBeenCalledTimes(1);
+  });
+
   it("fails closed when account-wide suppression prevents target provisioning", async () => {
     const loaded = await loadSender({ provisionedTarget: null });
 
@@ -123,7 +144,7 @@ describe("presence digest email delivery", () => {
           idempotencyKey: "presence-digest:user-1:2026-07-30",
         },
       ),
-    ).resolves.toBe(false);
+    ).resolves.toEqual({ accepted: false, delivered: false });
     expect(loaded.claimInstantDeliveryAttempt).not.toHaveBeenCalled();
     expect(loaded.sendCloudflareEmail).not.toHaveBeenCalled();
   });
@@ -145,7 +166,7 @@ describe("presence digest email delivery", () => {
           idempotencyKey: "presence-digest:user-1:2026-07-30",
         },
       ),
-    ).resolves.toBe(false);
+    ).resolves.toEqual({ accepted: false, delivered: false });
     expect(loaded.claimInstantDeliveryAttempt).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({

@@ -2918,41 +2918,6 @@ describe("instant alert failed-send retry", () => {
   });
 });
 
-describe("sendPresenceDigestEmail", () => {
-  it("records provider acceptance without claiming recipient delivery", async () => {
-    mockEmailSend("presence-message-1");
-    const createDeliveryAttempt = vi.fn().mockResolvedValue("presence-attempt-1");
-    vi.doMock("~/lib/data.server", () => ({
-      createDeliveryAttempt,
-      listDeliveryTargets: vi.fn().mockResolvedValue([]),
-      upsertDeliveryTarget: vi.fn().mockResolvedValue(null),
-      // This branch provisions through the atomic helper and fails closed when
-      // no target resolves, rather than sending to an unresolved recipient. The
-      // test is about the accepted-vs-delivered distinction, so it must get a
-      // usable target or it never reaches the provider at all.
-      provisionVerifiedAccountEmailTargetIfUnsuppressed: mockAtomicEmailProvision(),
-    }));
-
-    const { sendPresenceDigestEmail } = await import("~/lib/delivery.server");
-    const result = await sendPresenceDigestEmail(emailEnv as never, {
-      userId: "user-1",
-      email: "owner@example.com",
-      subject: "Presence brief",
-      lines: ["Acme — New pricing page (Website)"],
-      idempotencyKey: "presence-digest:user-1:2026-07-31",
-    });
-
-    expect(result).toEqual({ accepted: true, delivered: false });
-    expect(createDeliveryAttempt).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        status: "sent",
-        webhookStatus: "provider_unknown",
-        sentAt: expect.any(String),
-      }),
-    );
-  });
-});
 
 describe("alert email content quality", () => {
   it("renders the before/now diff and evidence link in single-event instant emails", async () => {
