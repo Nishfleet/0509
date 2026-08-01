@@ -11,6 +11,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { sanitizeCustomerFacingMessage } from "~/lib/customer-route-error";
 import { DashboardPage } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
+import { PartialDataNotice } from "~/components/partial-data-notice";
 import { ConfirmSubmitButton } from "~/components/confirm-button";
 import { SubmitButton } from "~/components/submit-button";
 import { FeedbackStrip } from "~/components/workspace/feedback-strip";
@@ -71,6 +72,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   ]);
   // Room memories and per-room approval revalidation only depend on the first
   // wave — run both in a single second wave instead of serially.
+  let roomMemoryUnavailable = false;
   const [roomMemories, currentRoomStates] = await Promise.all([
     listAgentMemoryForClientRooms(
       env,
@@ -79,14 +81,24 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       { limitPerRoom: 20 },
     ).catch((error): AgentMemoryRecord[] => {
       console.error("[clients] room memory lookup failed", error);
+      roomMemoryUnavailable = true;
       return [];
     }),
     Promise.all(rooms.map(async (room) => {
-      const notes = await revalidateRoomApprovals(env, workspaceUserId, room);
+      const revalidation = await revalidateRoomApprovals(env, workspaceUserId, room);
       return {
-        ...room,
-        notes,
-        resourceRefs: filterCurrentRoomResourceRefs(room.resourceRefs, watchlists, collections, notes),
+        room: {
+          ...room,
+          notes: revalidation.notes,
+          resourceRefs: filterCurrentRoomResourceRefs(
+            room.resourceRefs,
+            watchlists,
+            collections,
+            revalidation.notes,
+            revalidation.unavailable,
+          ),
+        },
+        approvalUnavailable: revalidation.unavailable,
       };
     })),
   ]);
@@ -95,7 +107,11 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   return {
     plan,
     canManageClientRooms: canUsePlanFeature(plan, "client_reports"),
-    rooms: currentRoomStates.map(safeClientRoomForUi),
+    rooms: currentRoomStates.map((state) => safeClientRoomForUi(state.room)),
+    roomMemoryUnavailable,
+    approvalUnavailableRoomIds: currentRoomStates
+      .filter((state) => state.approvalUnavailable)
+      .map((state) => state.room.id),
     watchlists,
     collections,
     memories: memories.map((memory) => toMemorySummary(safeAgentMemoryRecord(memory), summarizeAgentMemoryValue)),
@@ -162,12 +178,14 @@ export async function action({ context, request }: ActionFunctionArgs) {
         getLatestDigestRunSummaryForWatchlist,
         listAdsByIds,
         listCollectionItems,
+        listProofCapturePairsForEventIds,
         listWatchEvents,
       } = await import("~/lib/data.server");
       if (
         typeof getLatestDigestRunSummaryForWatchlist !== "function" ||
         typeof listAdsByIds !== "function" ||
         typeof listCollectionItems !== "function" ||
+        typeof listProofCapturePairsForEventIds !== "function" ||
         typeof listWatchEvents !== "function" ||
         typeof getCollection !== "function" ||
         typeof getWatchlist !== "function"
@@ -189,6 +207,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
             getWatchlist,
             listAdsByIds,
             listCollectionItems,
+            listProofCapturePairsForEventIds,
             listWatchEvents,
           });
         } catch {
@@ -306,6 +325,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       getLatestDigestRunSummaryForWatchlist,
       listAdsByIds,
       listCollectionItems,
+      listProofCapturePairsForEventIds,
       listWatchEvents,
     } = await import("~/lib/data.server");
     const roomId = readOptionalString(formData.get("roomId"));
@@ -340,6 +360,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       typeof getLatestDigestRunSummaryForWatchlist !== "function" ||
       typeof listAdsByIds !== "function" ||
       typeof listCollectionItems !== "function" ||
+      typeof listProofCapturePairsForEventIds !== "function" ||
       typeof listWatchEvents !== "function" ||
       typeof getCollection !== "function" ||
       typeof getWatchlist !== "function"
@@ -363,6 +384,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           getWatchlist,
           listAdsByIds,
           listCollectionItems,
+          listProofCapturePairsForEventIds,
           listWatchEvents,
         });
       } catch {
@@ -456,6 +478,9 @@ export default function ClientsRoute() {
   const [composerOpen, setComposerOpen] = useState(false);
   const composerSubmissionPending = useRef(false);
   const canManageClientRooms = data.canManageClientRooms;
+  const approvalUnavailableRoomIds = new Set(
+    data.approvalUnavailableRoomIds ?? [],
+  );
   const activeRooms = data.rooms.filter((room) => room.status === "active");
   const archivedRooms = data.rooms.filter((room) => room.status === "archived");
   const memoriesByClientRoomId = new Map<string, Array<(typeof data.memories)[number]>>();
@@ -506,6 +531,13 @@ export default function ClientsRoute() {
         title="Client rooms"
       />
 
+      {data.roomMemoryUnavailable ? (
+        <PartialDataNotice message="Saved client context could not be loaded. Existing room memory may be missing from this view; refresh before editing or sending." />
+      ) : null}
+      {approvalUnavailableRoomIds.size > 0 ? (
+        <PartialDataNotice message="One or more report approvals could not be rechecked. Their saved approvals remain unchanged, but client readiness is unavailable until the evidence check recovers." />
+      ) : null}
+
       {actionData?.message ? (
         <FeedbackStrip
           actions={
@@ -554,9 +586,11 @@ export default function ClientsRoute() {
           {activeRooms.map((room, index) => (
             <ClientRoomCard
               key={room.id}
+              approvalUnavailable={approvalUnavailableRoomIds.has(room.id)}
               canManage={canManageClientRooms}
               initiallyOpen={index === 0}
               memories={memoriesByClientRoomId.get(room.id) ?? []}
+              roomMemoryUnavailable={data.roomMemoryUnavailable}
               room={room}
             />
           ))}
@@ -900,17 +934,27 @@ function AgencyPlanNotice() {
 }
 
 function ClientRoomCard({
+  approvalUnavailable,
   canManage,
   initiallyOpen,
   memories,
+  roomMemoryUnavailable,
   room,
 }: {
+  approvalUnavailable: boolean;
   canManage: boolean;
   initiallyOpen: boolean;
   memories: Array<{ key: string }>;
+  roomMemoryUnavailable: boolean;
   room: ClientRoomRecord;
 }) {
-  const handoff = summarizeClientRoomHandoff(room, memories, canManage);
+  const handoff = summarizeClientRoomHandoff(
+    room,
+    memories,
+    canManage,
+    approvalUnavailable,
+    roomMemoryUnavailable,
+  );
   const [open, setOpen] = useState(initiallyOpen);
 
   return (
@@ -1005,6 +1049,8 @@ function summarizeClientRoomHandoff(
   room: ClientRoomRecord,
   memories: Array<{ key: string }>,
   canManage = true,
+  approvalUnavailable = false,
+  roomMemoryUnavailable = false,
 ) {
   const watchlistCount = countRoomRefs(room.resourceRefs, "watchlist");
   const collectionCount = countRoomRefs(room.resourceRefs, "collection");
@@ -1027,11 +1073,18 @@ function summarizeClientRoomHandoff(
       : hasRoomNotes
         ? "Room notes saved"
         : "No client context saved";
-  const status =
-    linkedProofCount > 0 && reportCount > 0 && approvedReportCount === reportCount && hasContext
+  const status = roomMemoryUnavailable
+    ? "Client context status unavailable"
+    : approvalUnavailable
+    ? "Report approval status unavailable"
+    : linkedProofCount > 0 && reportCount > 0 && approvedReportCount === reportCount && hasContext
       ? "Ready for client review"
       : "Needs setup before client review";
-  const next = !canManage
+  const next = roomMemoryUnavailable
+    ? "Refresh before sharing; saved client context could not be loaded."
+    : approvalUnavailable
+    ? "Refresh before sharing; saved approval was not changed."
+    : !canManage
     ? "Upgrade to the Agency plan to manage this client room."
     : linkedProofCount === 0
     ? "Link a watchlist or collection to this room."
@@ -1132,6 +1185,7 @@ function filterCurrentRoomResourceRefs(
   watchlists: Array<{ id: string; isActive?: boolean; updatedAt?: string }>,
   collections: Array<{ id: string; updatedAt?: string }>,
   notes: Record<string, unknown>,
+  approvalUnavailable = false,
 ) {
   const activeWatchlists = new Set(
     watchlists.filter((watchlist) => watchlist.isActive !== false).map((watchlist) => watchlist.id),
@@ -1150,7 +1204,12 @@ function filterCurrentRoomResourceRefs(
         ? watchlists.find((watchlist) => watchlist.id === parsed.resourceId)
         : collections.find((collection) => collection.id === parsed.resourceId);
       const approval = approvals[ref.resourceId];
-      if (source?.updatedAt && approval && Date.parse(source.updatedAt) > Date.parse(approval.reviewedAt)) {
+      if (
+        !approvalUnavailable &&
+        source?.updatedAt &&
+        approval &&
+        Date.parse(source.updatedAt) > Date.parse(approval.reviewedAt)
+      ) {
         return false;
       }
       return parsed.resourceType === "watchlist"
@@ -1275,9 +1334,12 @@ async function revalidateRoomApprovals(
   const approvals = readRoomApprovals(room.notes);
   const reportRefs = room.resourceRefs.filter((ref) => ref.resourceType === "report");
   if (reportRefs.length === 0) {
-    return Object.prototype.hasOwnProperty.call(room.notes, "reportApprovals")
-      ? { ...room.notes, reportApprovals: approvals }
-      : room.notes;
+    return {
+      notes: Object.prototype.hasOwnProperty.call(room.notes, "reportApprovals")
+        ? { ...room.notes, reportApprovals: approvals }
+        : room.notes,
+      unavailable: false,
+    };
   }
 
   const data = await import("~/lib/data.server");
@@ -1285,14 +1347,19 @@ async function revalidateRoomApprovals(
     typeof data.getLatestDigestRunSummaryForWatchlist !== "function" ||
     typeof data.listAdsByIds !== "function" ||
     typeof data.listCollectionItems !== "function" ||
+    typeof data.listProofCapturePairsForEventIds !== "function" ||
     typeof data.listWatchEvents !== "function" ||
     typeof data.getCollection !== "function" ||
     typeof data.getWatchlist !== "function"
   ) {
-    return { ...room.notes, reportApprovals: {} };
+    return {
+      notes: { ...room.notes, reportApprovals: approvals },
+      unavailable: true,
+    };
   }
 
   const currentApprovals = { ...approvals };
+  let unavailable = false;
   for (const ref of reportRefs) {
     const approval = currentApprovals[ref.resourceId];
     if (!approval) continue;
@@ -1304,16 +1371,21 @@ async function revalidateRoomApprovals(
         getLatestDigestRunSummaryForWatchlist: data.getLatestDigestRunSummaryForWatchlist,
         listAdsByIds: data.listAdsByIds,
         listCollectionItems: data.listCollectionItems,
+        listProofCapturePairsForEventIds: data.listProofCapturePairsForEventIds,
         listWatchEvents: data.listWatchEvents,
       });
     } catch {
-      report = null;
+      unavailable = true;
+      continue;
     }
     if (!report || !evaluateReportReadiness(report).ok || reportEvidenceFingerprint(report) !== approval.evidenceFingerprint) {
       delete currentApprovals[ref.resourceId];
     }
   }
-  return { ...room.notes, reportApprovals: currentApprovals };
+  return {
+    notes: { ...room.notes, reportApprovals: currentApprovals },
+    unavailable,
+  };
 }
 
 async function loadOwnedRoomReport(
