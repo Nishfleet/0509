@@ -12533,7 +12533,15 @@ textarea.f9-wk-in {
 }
 
 .f9-wk-sec-title {
-=======
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--f9-font);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.3;
+  text-transform: none;
+}
 
 /* === BL-040 source + developer access (landing language) === */
 
@@ -12791,6 +12799,10 @@ textarea.f9-wk-in {
   font-family: var(--ld-mono);
   font-size: 12px;
   overflow-wrap: anywhere;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .f9-bl040-text-action {
   display: inline-flex;
   align-items: center;
@@ -12973,6 +12985,9 @@ textarea.f9-wk-in {
 @media (max-width: 1180px) {
   .f9-wk-split.is-wide:not(.is-single) {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .f9-bl040-text-action.is-danger,
 .f9-bl040-page .f9-confirm-armed {
   color: var(--red);
