@@ -96,12 +96,13 @@ describe("workspace language layer (BL-030)", () => {
     expect(greenUses).toHaveLength(0);
   });
 
-  it("spends Bricolage on the page title and watched-entity names only", () => {
+  it("spends Bricolage on titles and entity names only", () => {
     const section = stripComments(layer());
     const displayRules = [...section.matchAll(/([^{}]+)\{[^}]*var\(--ld-display\)[^}]*\}/g)].map(
       (match) => match[1].trim().replace(/\s+/g, " "),
     );
     expect(displayRules.sort()).toEqual([
+      ".f9-bl040-key-name",
       ".f9-wk-avatar",
       ".f9-wk-detail-name",
       ".f9-wk-entity",

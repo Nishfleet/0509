@@ -1,216 +1,189 @@
 name: Deploy production
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact main commit authorized for production deployment
+        required: true
+        type: string
+      backup_proof_status:
+        description: Production D1 recovery-proof policy for this exact release
+        required: true
+        default: required
+        type: choice
+        options:
+          - required
+          - deferred
+      deferred_backup_authorization:
+        description: Exact-SHA Nish acceptance; empty unless backup proof is deferred
+        required: false
+        type: string
 
 concurrency:
-  group: production-deploy-${{ github.ref }}
+  group: 0509-production-provider-mutations
   cancel-in-progress: false
+  queue: max
 
-permissions:
-  contents: read
-  actions: read
-  deployments: write
+permissions: {}
 
 jobs:
+  authorize_release:
+    name: Authorize exact production candidate
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      sha: ${{ steps.authorize.outputs.sha }}
+      backup_proof_status: ${{ steps.authorize.outputs.backup_proof_status }}
+    steps:
+      - name: Authorize release request
+        id: authorize
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+          BACKUP_PROOF_STATUS: ${{ inputs.backup_proof_status || 'required' }}
+          DEFERRED_BACKUP_AUTHORIZATION: ${{ inputs.deferred_backup_authorization || '' }}
+        run: |
+          set -euo pipefail
+          sha_pattern='^[a-f0-9]{40}$'
+          test "$GITHUB_REPOSITORY" = "nish3451/0509"
+          test "$GITHUB_REF" = "refs/heads/main"
+          [[ "$GITHUB_SHA" =~ $sha_pattern ]]
+          test "$GITHUB_RUN_ATTEMPT" = "1"
+          case "$GITHUB_EVENT_NAME" in
+            push)
+              test -z "$EXPECTED_SHA"
+              test "$BACKUP_PROOF_STATUS" = "required"
+              test -z "$DEFERRED_BACKUP_AUTHORIZATION"
+              ;;
+            workflow_dispatch)
+              [[ "$EXPECTED_SHA" =~ $sha_pattern ]]
+              test "$EXPECTED_SHA" = "$GITHUB_SHA"
+              case "$BACKUP_PROOF_STATUS" in
+                required)
+                  test -z "$DEFERRED_BACKUP_AUTHORIZATION"
+                  ;;
+                deferred)
+                  test "$GITHUB_ACTOR" = "nish3451"
+                  test "$DEFERRED_BACKUP_AUTHORIZATION" = "nish-accepted-no-backup-proof:$EXPECTED_SHA"
+                  ;;
+                *)
+                  exit 1
+                  ;;
+              esac
+              ;;
+            *)
+              exit 1
+              ;;
+          esac
+          printf 'sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          printf 'backup_proof_status=%s\n' "$BACKUP_PROOF_STATUS" >> "$GITHUB_OUTPUT"
+
+  pin_candidate:
+    name: Pin exact production candidate
+    if: needs.authorize_release.result == 'success'
+    needs: authorize_release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      sha: ${{ steps.pin.outputs.sha }}
+      backup_proof_status: ${{ needs.authorize_release.outputs.backup_proof_status }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.authorize_release.outputs.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify and pin exact main candidate
+        id: pin
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+          PINNED_SHA: ${{ needs.authorize_release.outputs.sha }}
+          EMIT_PINNED_SHA: "1"
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/ci-verify-production-candidate.sh
+
   prepare_remote_restore_evidence:
     name: Prepare D1 remote restore evidence
-    if: github.repository == 'nish3451/0509' && github.ref == 'refs/heads/main'
-    runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}
+    if: needs.pin_candidate.result == 'success'
+    needs: pin_candidate
+    runs-on: [self-hosted, linux, x64, vps-verify]
     timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PINNED_SHA: ${{ needs.pin_candidate.outputs.sha }}
+      BACKUP_PROOF_STATUS: ${{ needs.pin_candidate.outputs.backup_proof_status }}
     steps:
-      - uses: actions/checkout@v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.pin_candidate.outputs.sha }}
           fetch-depth: 0
-      - uses: actions/setup-node@v6
+          clean: true
+          persist-credentials: false
+      - name: Verify pinned candidate before self-hosted work
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/deploy-window-lock.sh run -- ./scripts/ci-verify-production-candidate.sh
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: ".node-version"
-          cache: npm
-      - run: npm ci --ignore-scripts
-      - run: node scripts/validate-d1-backup.mjs
-      - name: Bind a clean exact-main candidate manifest
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
+      # Single source of truth for create + upload-artifact + cleanup.
+      # jobs.<job_id>.env cannot use the runner context; bind via GITHUB_ENV.
+      - name: Bind restore evidence archive path
+        if: env.BACKUP_PROOF_STATUS == 'required'
         shell: bash
         run: |
           set -euo pipefail
-          umask 077
-          node scripts/customer-readiness-candidate.mjs --base HEAD \
-            > "$RUNNER_TEMP/d1-remote-restore-candidate.json"
-          node scripts/build-remote-restore-candidate-manifest.mjs \
-            --candidate "$RUNNER_TEMP/d1-remote-restore-candidate.json" \
-            --output "$RUNNER_TEMP/d1-remote-restore-candidate-manifest.json"
+          archive="$RUNNER_TEMP/d1-remote-restore-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}.tar.gz"
+          printf 'RESTORE_EVIDENCE_ARCHIVE=%s\n' "$archive" >> "$GITHUB_ENV"
+      - if: env.BACKUP_PROOF_STATUS == 'required'
+        run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
+      - if: env.BACKUP_PROOF_STATUS == 'required'
+        run: ./scripts/deploy-window-lock.sh run -- node scripts/validate-d1-backup.mjs
+      - name: Bind a clean exact-main candidate manifest
+        if: env.BACKUP_PROOF_STATUS == 'required'
+        # Argv script — never heredoc through deploy-window-lock.sh run
+        # (backgrounded lanes redirect stdin to /dev/null).
+        run: ./scripts/deploy-window-lock.sh run -- ./scripts/ci-bind-remote-restore-candidate.sh
       - name: Verify pre-generated exact R2 restore evidence
-        shell: bash
+        if: env.BACKUP_PROOF_STATUS == 'required'
         env:
           D1_REMOTE_RESTORE_EVIDENCE_MIN_VALIDITY_MS: "43200000"
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          umask 077
-          evidence="$RUNNER_TEMP/d1-remote-restore-evidence.json"
-          manifest="$RUNNER_TEMP/d1-remote-restore-candidate-manifest.json"
-          cache="$RUNNER_TEMP/d1-remote-restore-evidence-cache"
-          evidence_valid=false
-
-          verify_evidence() {
-            local attempt
-            local status
-            for attempt in 1 2 3; do
-              set +e
-              node scripts/verify-remote-restore-evidence.mjs \
-                --manifest "$manifest" \
-                --remote-evidence "$evidence"
-              status=$?
-              set -e
-              if [ "$status" -ne 2 ]; then
-                return "$status"
-              fi
-              if [ "$attempt" -lt 3 ]; then
-                sleep $((attempt * 5))
-              fi
-            done
-            return 2
-          }
-
-          find_recent_artifact() {
-            local attempt
-            local output
-            local status
-            for attempt in 1 2 3; do
-              set +e
-              output="$(
-                node scripts/find-recent-remote-restore-artifact.mjs
-              )"
-              status=$?
-              set -e
-              if [ "$status" -ne 2 ]; then
-                if [ "$status" -eq 0 ]; then
-                  printf '%s\n' "$output"
-                fi
-                return "$status"
-              fi
-              printf '::warning::Restore-evidence artifact lookup infrastructure failure; retrying (%s/3).\n' \
-                "$attempt" >&2
-              if [ "$attempt" -lt 3 ]; then
-                sleep $((attempt * 5))
-              fi
-            done
-            return 2
-          }
-
-          download_artifact() {
-            local attempt
-            local name="$2"
-            local run_id="$1"
-            local target="$3"
-            if ! command -v gh >/dev/null 2>&1; then
-              printf '::warning::GitHub CLI is unavailable on this runner; restore-evidence artifact reuse is unavailable.\n' >&2
-              return 1
-            fi
-            for attempt in 1 2 3; do
-              if gh run download "$run_id" \
-                --repo "$GITHUB_REPOSITORY" \
-                --name "$name" \
-                --dir "$target"; then
-                return 0
-              fi
-              printf '::warning::Restore-evidence artifact download infrastructure failure; retrying (%s/3).\n' \
-                "$attempt" >&2
-              if [ "$attempt" -lt 3 ]; then
-                sleep $((attempt * 5))
-              fi
-            done
-            return 2
-          }
-
-          rm -f -- "$evidence"
-          mkdir -p -- "$cache"
-          artifact_status=0
-          artifact_tsv=""
-          artifact_tsv="$(find_recent_artifact)" ||
-            artifact_status=$?
-          if [ "$artifact_status" -eq 0 ]; then
-            prior_run_id=""
-            prior_name=""
-            IFS=$'\t' read -r prior_run_id prior_name <<< "$artifact_tsv"
-            if [[ ! "$prior_run_id" =~ ^[0-9]+$ ]] ||
-              [[ ! "$prior_name" =~ ^d1-remote-restore-evidence-[a-f0-9]{40}-[0-9]+$ ]]; then
-              printf '::error::Restore-evidence artifact finder returned an invalid identity.\n' >&2
-              exit 2
-            fi
-            download_status=0
-            download_artifact "$prior_run_id" "$prior_name" "$cache" ||
-              download_status=$?
-            if [ "$download_status" -eq 2 ]; then
-              printf '::error::Restore-evidence artifact download failed after retries.\n' >&2
-              exit "$download_status"
-            fi
-            if [ "$download_status" -eq 0 ]; then
-              shopt -s nullglob
-              archives=("$cache"/*.tar.gz)
-              if [ "${#archives[@]}" -eq 1 ] &&
-                [ "$(tar -tzf "${archives[0]}")" = "d1-remote-restore-evidence.json" ] &&
-                [[ "$(tar -tvzf "${archives[0]}")" = -* ]]; then
-                if tar -xOzf "${archives[0]}" \
-                  d1-remote-restore-evidence.json > "$evidence"; then
-                  chmod 600 "$evidence"
-                  verification_status=0
-                  verify_evidence || verification_status=$?
-                  if [ "$verification_status" -eq 0 ]; then
-                    printf 'Recent private restore evidence is valid for this deploy.\n'
-                    evidence_valid=true
-                  elif [ "$verification_status" -eq 1 ]; then
-                    rm -f -- "$evidence"
-                  else
-                    exit "$verification_status"
-                  fi
-                else
-                  rm -f -- "$evidence"
-                fi
-              fi
-            fi
-          elif [ "$artifact_status" -ne 1 ]; then
-            printf '::error::Restore-evidence artifact lookup infrastructure failed after retries.\n' >&2
-            exit "$artifact_status"
-          fi
-
-          rm -rf -- "$cache"
-          if [ "$evidence_valid" != true ]; then
-            printf '::error::No valid pre-generated restore evidence is available. Run the D1 remote restore evidence workflow in its recovery window, then rerun this deploy.\n' >&2
-            exit 1
-          fi
-
-          verify_evidence
-          test "$(stat -c '%a' "$evidence")" = "600"
-      - name: Archive permission-preserving restore evidence
-        shell: bash
-        run: |
-          set -euo pipefail
-          umask 077
-          tar --format=posix -czf \
-            "$RUNNER_TEMP/d1-remote-restore-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}.tar.gz" \
-            -C "$RUNNER_TEMP" \
-            d1-remote-restore-evidence.json
+        run: ./scripts/deploy-window-lock.sh run -- ./scripts/ci-prepare-remote-restore-evidence.sh
       - name: Preserve private restore evidence for this deploy only
-        uses: actions/upload-artifact@v7
+        if: env.BACKUP_PROOF_STATUS == 'required'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}
-          path: ${{ runner.temp }}/d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}.tar.gz
+          path: ${{ env.RESTORE_EVIDENCE_ARCHIVE }}
           if-no-files-found: error
           overwrite: true
           retention-days: 8
+      - name: Remove local restore evidence archive
+        if: always() && env.BACKUP_PROOF_STATUS == 'required'
+        shell: bash
+        run: rm -f -- "$RESTORE_EVIDENCE_ARCHIVE"
 
   deploy:
     name: Deploy Worker
     if: >-
-      github.repository == 'nish3451/0509' &&
-      github.ref == 'refs/heads/main' &&
+      needs.pin_candidate.result == 'success' &&
       needs.prepare_remote_restore_evidence.result == 'success'
-    needs: prepare_remote_restore_evidence
-    runs-on: ${{ vars.RECOVERY_RUNNER || 'ubuntu-latest' }}
+    needs:
+      - pin_candidate
+      - prepare_remote_restore_evidence
+    runs-on: ubuntu-latest
     # Budget: 180m maximum deploy-window wait + 60m conservative pipeline +
     # 30m cancellation/release slack = 270m. With cancel-in-progress: false,
     # a queued deploy cannot drain until the running job (including its lock
@@ -219,13 +192,32 @@ jobs:
     environment:
       name: production
       url: https://0509.io
+    permissions:
+      contents: read
+      actions: read
+      deployments: write
+    env:
+      PINNED_SHA: ${{ needs.pin_candidate.outputs.sha }}
+      BACKUP_PROOF_STATUS: ${{ needs.pin_candidate.outputs.backup_proof_status }}
     steps:
-      - uses: actions/checkout@v6.0.3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.pin_candidate.outputs.sha }}
           fetch-depth: 0
+          clean: true
+          persist-credentials: false
 
-      - name: Acquire deploy window (serialize with fleet lanes on the VPS runner)
+      - name: Verify pinned candidate before repository and secret work
         shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/ci-verify-production-candidate.sh
+
+      - name: Acquire deploy window
+        shell: bash
+        env:
+          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
         run: ./scripts/deploy-window-lock.sh acquire
 
       - name: Verify Cloudflare deploy secrets
@@ -253,10 +245,11 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: ".node-version"
-          cache: npm
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
 
       - name: Install dependencies
         run: npm ci --ignore-scripts
@@ -271,12 +264,14 @@ jobs:
         run: npm run test
 
       - name: Materialize private remote-restore evidence
-        uses: actions/download-artifact@v8
+        if: env.BACKUP_PROOF_STATUS == 'required'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}
           path: test-results/remote-restore-download
 
       - name: Verify and extract private remote-restore evidence
+        if: env.BACKUP_PROOF_STATUS == 'required'
         shell: bash
         run: |
           set -euo pipefail
@@ -292,12 +287,33 @@ jobs:
           chmod 600 test-results/d1-remote-restore-evidence.json
           rm -rf -- test-results/remote-restore-download
 
+      - name: Reconfirm frozen main before provider mutation
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/ci-verify-production-candidate.sh
+
+      - name: Synchronize private canary token
+        shell: bash
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}
+          CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: "false"
+        run: |
+          set -euo pipefail
+          printf '%s' "$CANARY_BYPASS_TOKEN" |
+            ./node_modules/.bin/wrangler versions secret put CANARY_BYPASS_TOKEN --name 0509
+
       - name: Deploy
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}
-          D1_REMOTE_RESTORE_EVIDENCE_PATH: test-results/d1-remote-restore-evidence.json
+          D1_REMOTE_RESTORE_EVIDENCE_PATH: ${{ needs.pin_candidate.outputs.backup_proof_status == 'required' && 'test-results/d1-remote-restore-evidence.json' || '' }}
+          BACKUP_PROOF_STATUS: ${{ needs.pin_candidate.outputs.backup_proof_status }}
+          GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
           CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: "false"
         run: npm run deploy
@@ -339,33 +355,53 @@ jobs:
           [ "${#wrangler[@]}" -eq 1 ]
           [ "${#rollback[@]}" -eq 1 ]
           [ "${#gate_c[@]}" -eq 1 ]
-          [ "${#production_soak[@]}" -eq 1 ]
           [ -n "$(find test-results/gate-b-artifacts -type f -print -quit)" ]
-          node scripts/gate-c-soak.mjs verify-start --journal "${production_soak[0]}"
+
+          case "$BACKUP_PROOF_STATUS" in
+            required)
+              [ "${#production_soak[@]}" -eq 1 ]
+              node scripts/gate-c-soak.mjs verify-start --journal "${production_soak[0]}"
+              ;;
+            deferred)
+              [ "${#production_soak[@]}" -eq 0 ]
+              ;;
+            *)
+              exit 1
+              ;;
+          esac
 
       - name: Archive permission-preserving release evidence
-        if: success()
+        if: success() && env.BACKUP_PROOF_STATUS == 'required'
         shell: bash
         run: |
           set -euo pipefail
           umask 077
           node scripts/release-evidence-archive.mjs create \
-            --output "test-results/production-release-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz"
+            --output "test-results/production-release-evidence-${PINNED_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz"
 
       - name: Preserve release evidence
-        if: success()
-        uses: actions/upload-artifact@v7
+        if: success() && env.BACKUP_PROOF_STATUS == 'required'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: production-release-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: test-results/production-release-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}.tar.gz
+          name: production-release-evidence-${{ needs.pin_candidate.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/production-release-evidence-${{ needs.pin_candidate.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}.tar.gz
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Preserve private immediate Gate C evidence
+        if: success() && env.BACKUP_PROOF_STATUS == 'deferred'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: gate-c-proof-evidence-${{ needs.pin_candidate.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: test-results/gate-c-*.json
           if-no-files-found: error
           retention-days: 90
 
       - name: Preserve failed release diagnostics
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: production-release-diagnostics-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: production-release-diagnostics-${{ needs.pin_candidate.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             test-results/deploy-readiness-*.json
             test-results/gate-b-manifest-*.json
@@ -380,4 +416,15 @@ jobs:
       - name: Release deploy window
         if: always()
         shell: bash
+        env:
+          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
         run: ./scripts/deploy-window-lock.sh release
+
+      - name: Remove deploy-window capability file
+        if: always()
+        shell: bash
+        env:
+          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
+        run: |
+          umask 077
+          rm -f -- "$DEPLOY_WINDOW_CAPABILITY_FILE"

@@ -271,6 +271,64 @@ describe("scheduled digest strategy budget", () => {
 		expect(data.failDigestScheduleJob).toHaveBeenCalledTimes(1);
 	});
 
+	it("keeps a scan-trouble digest job retryable when its notice is not accepted", async () => {
+		const data = dataServerMock();
+		data.listWatchEventsBetween.mockResolvedValue([]);
+		const deliverScanTroubleNotice = vi.fn()
+			.mockResolvedValueOnce({ sent: false, reason: "failed" })
+			.mockResolvedValue({ sent: true, reason: "sent" });
+
+		vi.doMock("~/lib/auth.server", () => ({}));
+		vi.doMock("~/lib/data.server", () => data);
+		vi.doMock("~/lib/delivery.server", () => ({
+			deliverScanTroubleNotice,
+			deliverWeeklyDigest: vi.fn(),
+		}));
+		vi.doMock("~/lib/plan.server", () => planServerMock());
+
+		const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+		const result = await runScheduledMonitoring(envWith(vi.fn()), {
+			includeScans: false,
+			includeDigests: true,
+			digestCadence: "weekly",
+			scheduledTime: Date.parse("2026-07-13T05:00:00.000Z"),
+		});
+
+		expect(result).toMatchObject({ digests: 0, digestAttempts: 4, digestFailures: 1 });
+		expect(data.failDigestScheduleJob).toHaveBeenCalledTimes(1);
+		expect(data.completeDigestScheduleJob).toHaveBeenCalledTimes(3);
+	});
+
+	it.each(["disabled", "suppressed", "provider_unknown"] as const)(
+		"completes scan-trouble jobs when delivery is intentionally %s",
+		async (reason) => {
+			const data = dataServerMock();
+			data.listWatchEventsBetween.mockResolvedValue([]);
+			const deliverScanTroubleNotice = vi.fn()
+				.mockResolvedValue({ sent: false, reason });
+
+			vi.doMock("~/lib/auth.server", () => ({}));
+			vi.doMock("~/lib/data.server", () => data);
+			vi.doMock("~/lib/delivery.server", () => ({
+				deliverScanTroubleNotice,
+				deliverWeeklyDigest: vi.fn(),
+			}));
+			vi.doMock("~/lib/plan.server", () => planServerMock());
+
+			const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+			const result = await runScheduledMonitoring(envWith(vi.fn()), {
+				includeScans: false,
+				includeDigests: true,
+				digestCadence: "weekly",
+				scheduledTime: Date.parse("2026-07-13T05:00:00.000Z"),
+			});
+
+			expect(result).toMatchObject({ digests: 0, digestAttempts: 4, digestFailures: 0 });
+			expect(data.failDigestScheduleJob).not.toHaveBeenCalled();
+			expect(data.completeDigestScheduleJob).toHaveBeenCalledTimes(4);
+		},
+	);
+
 	it("fails an unresolved strategy job without masking later successful customers", async () => {
 		const data = dataServerMock();
 		data.completeDigestStrategyGeneration

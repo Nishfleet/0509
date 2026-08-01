@@ -9,6 +9,7 @@ const TRUSTED_WORKFLOWS = new Set([
   "d1-remote-restore-evidence.yml",
 ]);
 const SHA_PATTERN = /^[a-f0-9]{40}$/u;
+const MAX_ARTIFACT_SIZE_BYTES = 10 * 1024 * 1024;
 
 /**
  * @typedef {{
@@ -29,6 +30,7 @@ const SHA_PATTERN = /^[a-f0-9]{40}$/u;
  *   id?: number,
  *   name?: string,
  *   expired?: boolean,
+ *   size_in_bytes?: number,
  *   workflow_run?: {
  *     id?: number,
  *     head_branch?: string,
@@ -91,6 +93,8 @@ export function selectRecentRemoteRestoreArtifact({
       `d1-remote-restore-evidence-${headSha}-${runId}`;
     const matches = (artifactsByRun[String(runId)] ?? []).filter(
       (artifact) =>
+        Number.isInteger(artifact?.id) &&
+        Number(artifact.id) > 0 &&
         artifact?.name === expectedName &&
         artifact?.expired === false &&
         artifact?.workflow_run?.id === runId &&
@@ -98,7 +102,19 @@ export function selectRecentRemoteRestoreArtifact({
         artifact?.workflow_run?.head_sha === headSha,
     );
     if (matches.length === 1) {
-      return { runId, name: expectedName };
+      if (
+        !Number.isInteger(matches[0].size_in_bytes) ||
+        Number(matches[0].size_in_bytes) < 1 ||
+        Number(matches[0].size_in_bytes) > MAX_ARTIFACT_SIZE_BYTES
+      ) {
+        throw new Error("remote_restore_artifact_size_invalid");
+      }
+      return {
+        artifactId: Number(matches[0].id),
+        runId,
+        name: expectedName,
+        sizeInBytes: Number(matches[0].size_in_bytes),
+      };
     }
     if (matches.length > 1) {
       throw new Error("remote_restore_artifact_identity_ambiguous");
@@ -188,7 +204,9 @@ async function main() {
       repository,
     });
     if (selected) {
-      process.stdout.write(`${selected.runId}\t${selected.name}\n`);
+      process.stdout.write(
+        `${selected.runId}\t${selected.artifactId}\t${selected.sizeInBytes}\t${selected.name}\n`,
+      );
       return true;
     }
   }
