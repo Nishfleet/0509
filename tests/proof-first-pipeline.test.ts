@@ -201,6 +201,14 @@ function installSharedMocks(input: {
     deliverWatchlistAlerts: vi.fn().mockResolvedValue({
       attempts: 1,
       channels: ["email"],
+      details: [{
+        status: "sent",
+        outcome: "provider_accepted",
+        claimedByThisRun: true,
+        providerAttemptedByThisRun: true,
+        duplicate: false,
+        source: "current_claim",
+      }],
     }),
     deliverWeeklyDigest: vi.fn().mockResolvedValue({
       attempts: 1,

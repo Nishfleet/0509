@@ -224,6 +224,19 @@ const manualDirectWebsiteWatchlist: WatchlistRecord = {
   targetLabel: "Example",
 };
 
+function alertDetail(
+  outcome: "definitive_terminal_failure" | "pending_provider_unknown",
+) {
+  return {
+    status: outcome === "definitive_terminal_failure" ? "failed" : "pending",
+    outcome,
+    claimedByThisRun: true,
+    providerAttemptedByThisRun: true,
+    duplicate: false,
+    source: "current_claim",
+  };
+}
+
 const manualAd: AdRecord = {
   metaAdId: "meta-nykaa-1",
   advertiser: "Nykaa",
@@ -333,6 +346,7 @@ async function installManualRunMocks(input: {
   createdCandidates: Array<Record<string, unknown>>;
   createdEvents: WatchEventRecord[];
   deliverWatchlistAlerts: ReturnType<typeof vi.fn>;
+  useRealFinishWatchlistRun?: boolean;
 }) {
   const createProofCapture = vi.fn().mockImplementation(async (_env, payload) => {
     input.createdProofCaptures.push(payload as Record<string, unknown>);
@@ -409,7 +423,7 @@ async function installManualRunMocks(input: {
     createProofCapture,
     createWatchEvent,
     createWatchlistRun: vi.fn().mockResolvedValue("run-1"),
-    finishWatchlistRun: vi.fn(),
+    ...(input.useRealFinishWatchlistRun ? {} : { finishWatchlistRun: vi.fn() }),
     getRecentSuccessfulRuns: vi.fn().mockResolvedValue([{ id: "run-0" }]),
     getUserDeliveryProfile: vi.fn().mockResolvedValue({
       id: "user-1",
@@ -573,6 +587,57 @@ describe("monitoring evidence lifecycle acceptance", () => {
 });
 
 describe("monitoring evidence lifecycle through runWatchlistManual", () => {
+  it.each([
+    ["definitive_terminal_failure", "alert_delivery_failed"],
+    ["pending_provider_unknown", "alert_delivery_pending_provider_unknown"],
+  ] as const)(
+    "persists the %s run outcome before propagating the recorded delivery error",
+    async (outcome, errorCode) => {
+      vi.resetModules();
+      const env = createEvidenceEnv();
+      env.sqlite.exec(`
+        INSERT INTO watchlist_run (id, watchlist_id, status, processing_token)
+        VALUES ('run-1', 'watch-1', 'running', NULL);
+      `);
+      const createdProofCaptures: Array<Record<string, unknown>> = [];
+      const createdCandidates: Array<Record<string, unknown>> = [];
+      const createdEvents: WatchEventRecord[] = [];
+      const deliverWatchlistAlerts = vi.fn().mockResolvedValue({
+        attempts: 1,
+        channels: ["email"],
+        details: [alertDetail(outcome)],
+      });
+      await installManualRunMocks({
+        capture: "success",
+        createdProofCaptures,
+        createdCandidates,
+        createdEvents,
+        deliverWatchlistAlerts,
+        useRealFinishWatchlistRun: true,
+      });
+      const { runWatchlistManual } = await import("~/lib/monitoring.server");
+
+      await expect(runWatchlistManual(env, manualWatchlist)).rejects.toThrow(
+        outcome === "definitive_terminal_failure"
+          ? "definitively failed"
+          : "pending provider confirmation",
+      );
+
+      const stored = env.sqlite.prepare(`
+        SELECT status, error_code, summary_json
+        FROM watchlist_run
+        WHERE id = 'run-1'
+      `).get() as { status: string; error_code: string; summary_json: string };
+      expect(stored.status).toBe("failed");
+      expect(stored.error_code).toBe(errorCode);
+      expect(JSON.parse(stored.summary_json)).toMatchObject({
+        sendAttempts: 1,
+        sendFailures: outcome === "definitive_terminal_failure" ? 1 : 0,
+        sendsTriggered: 0,
+      });
+    },
+  );
+
   it("does not compensate quota after a Workflow lease is lost during capture", async () => {
     vi.resetModules();
     const env = createEvidenceEnv();

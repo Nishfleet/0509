@@ -41,6 +41,28 @@ const baseAd: AdRecord = {
   analysisFields: [],
 };
 
+function alertDetail(
+  outcome:
+    | "provider_accepted"
+    | "definitive_terminal_failure"
+    | "pending_provider_unknown"
+    | "quiet_deferral"
+    | "intentional_dedupe" = "provider_accepted",
+  claimedByThisRun = true,
+) {
+  return {
+    status: outcome === "provider_accepted" ? "sent" : "failed",
+    outcome,
+    claimedByThisRun,
+    providerAttemptedByThisRun:
+      claimedByThisRun &&
+      outcome !== "quiet_deferral" &&
+      outcome !== "intentional_dedupe",
+    duplicate: !claimedByThisRun,
+    source: claimedByThisRun ? "current_claim" : "durable_attempt",
+  };
+}
+
 function observation(overrides: Record<string, unknown> = {}) {
   return {
     id: "obs-1",
@@ -560,7 +582,11 @@ describe("runWeeklyDigests", () => {
       upsertAd: vi.fn(),
     }));
     vi.doMock("~/lib/delivery.server", () => ({
-      deliverWatchlistAlerts: vi.fn().mockResolvedValue({ attempts: 0, channels: [] }),
+      deliverWatchlistAlerts: vi.fn().mockResolvedValue({
+        attempts: 0,
+        channels: [],
+        details: [],
+      }),
       deliverWeeklyDigest,
     }));
     vi.doMock("~/lib/landing-pages.server", () => ({
@@ -928,6 +954,7 @@ describe("runWatchlistManual cheap scan path", () => {
       deliverWatchlistAlerts: vi.fn().mockResolvedValue({
         attempts: 0,
         channels: [],
+        details: [],
       }),
     }));
     vi.doMock("~/lib/meta-api.server", () => ({
@@ -1221,6 +1248,7 @@ describe("runWatchlistManual cheap scan path", () => {
       deliverWatchlistAlerts: vi.fn().mockResolvedValue({
         attempts: 0,
         channels: [],
+        details: [],
       }),
     }));
     vi.doMock("~/lib/meta-api.server", () => ({
@@ -1292,6 +1320,7 @@ describe("runWatchlistManual cheap scan path", () => {
     const deliverWatchlistAlerts = vi.fn().mockResolvedValue({
       attempts: 1,
       channels: ["email"],
+      details: [alertDetail()],
     });
     const websiteWatchlist: WatchlistRecord = {
       ...watchlist,
@@ -1573,9 +1602,14 @@ describe("runWatchlistManual cheap scan path", () => {
     );
   });
 
-  it.each(["failed", "pending"])(
-    "keeps the run failed when direct website proof succeeds but alert delivery is %s",
-    async (alertStatus) => {
+  it.each([
+    ["failed", true],
+    ["pending", true],
+    ["failed", false],
+    ["pending", false],
+  ] as const)(
+    "keeps the run failed when direct website proof succeeds but alert delivery is %s (current claim: %s)",
+    async (alertStatus, claimedByThisRun) => {
     class MockCommercialDiscoveryError extends Error {
       failureClass = "browser_launch_failed" as const;
     }
@@ -1588,7 +1622,14 @@ describe("runWatchlistManual cheap scan path", () => {
     const deliverWatchlistAlerts = vi.fn().mockResolvedValue({
       attempts: 1,
       channels: ["email"],
-      details: [{ status: alertStatus }],
+      details: [
+        alertDetail(
+          alertStatus === "failed"
+            ? "definitive_terminal_failure"
+            : "pending_provider_unknown",
+          claimedByThisRun,
+        ),
+      ],
     });
     const websiteWatchlist: WatchlistRecord = {
       ...watchlist,
@@ -1738,10 +1779,14 @@ describe("runWatchlistManual cheap scan path", () => {
     const { runWatchlistManual } = await import("~/lib/monitoring.server");
 
     const result = runWatchlistManual({} as never, websiteWatchlist);
+    const expectedErrorCode = alertStatus === "failed"
+      ? "alert_delivery_failed"
+      : "alert_delivery_pending_provider_unknown";
+    const expectedMessage = alertStatus === "failed"
+      ? "1 customer alert delivery outcome definitively failed."
+      : "1 customer alert delivery outcome is pending provider confirmation.";
 
-    await expect(result).rejects.toThrow(
-      "1 of 1 alert delivery attempt failed.",
-    );
+    await expect(result).rejects.toThrow(expectedMessage);
     expect(captureLandingPageSnapshot).toHaveBeenCalledWith(
       expect.anything(),
       "https://competitor.example/onboarding",
@@ -1759,13 +1804,13 @@ describe("runWatchlistManual cheap scan path", () => {
       "run-1",
       expect.objectContaining({
         status: "failed",
-        errorCode: "alert_delivery_failed",
+        errorCode: expectedErrorCode,
         summary: expect.objectContaining({
           scanStatus: "degraded",
           scanErrorCode: "browser_launch_failed",
           sendsTriggered: 0,
-          sendAttempts: 1,
-          sendFailures: 1,
+          sendAttempts: claimedByThisRun ? 1 : 0,
+          sendFailures: claimedByThisRun && alertStatus === "failed" ? 1 : 0,
           events: expect.any(Number),
         }),
       }),
@@ -1775,12 +1820,12 @@ describe("runWatchlistManual cheap scan path", () => {
       expect.objectContaining({
         status: "degraded",
         summary:
-          "Commercial discovery failed; direct website evidence completed, but customer alert delivery failed.",
+          "Commercial discovery failed; direct website evidence completed, but customer alert delivery did not reach a confirmed successful outcome.",
         metadata: expect.objectContaining({
-          alertDeliveryAttempts: 1,
+          alertDeliveryAttempts: claimedByThisRun ? 1 : 0,
           alertDeliveryAccepted: 0,
-          alertDeliveryFailures: 1,
-          alertDeliveryErrorCode: "alert_delivery_failed",
+          alertDeliveryFailures: claimedByThisRun && alertStatus === "failed" ? 1 : 0,
+          alertDeliveryErrorCode: expectedErrorCode,
         }),
       }),
     );
@@ -2238,6 +2283,7 @@ describe("runWatchlistManual cheap scan path", () => {
       deliverWatchlistAlerts: vi.fn().mockResolvedValue({
         attempts: 0,
         channels: [],
+        details: [],
       }),
     }));
     vi.doMock("~/lib/plan.server", () => ({
@@ -2279,6 +2325,7 @@ describe("runWatchlistManual cheap scan path", () => {
     const deliverWatchlistAlerts = vi.fn().mockResolvedValue({
       attempts: 1,
       channels: ["email"],
+      details: [alertDetail()],
     });
 
     vi.doMock("~/lib/analysis.server", () => ({
