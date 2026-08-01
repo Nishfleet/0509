@@ -15,7 +15,7 @@ type Job = {
   steps?: Step[];
 };
 type Workflow = {
-  concurrency?: { group?: string; "cancel-in-progress"?: boolean };
+  concurrency?: { group?: string; "cancel-in-progress"?: boolean; queue?: string };
   jobs?: Record<string, Job>;
 };
 
@@ -53,6 +53,7 @@ describe("workflow routing hardening", () => {
     }
     for (const [file, id] of [
       ["d1-backup-r2.yml", "backup"],
+      ["d1-remote-restore-evidence.yml", "apply_and_restore"],
       ["d1-remote-restore-evidence.yml", "restore"],
       ["d1-remote-restore-evidence.yml", "cleanup"],
       ["deploy-production.yml", "deploy"],
@@ -115,7 +116,7 @@ describe("workflow routing hardening", () => {
     }
   });
 
-  it("never cancels an active protected operation while allowing latest-only CI", () => {
+  it("serializes every provider mutation without cancelling or replacing queued work", () => {
     for (const filename of [
       "d1-backup-r2.yml",
       "d1-remote-restore-evidence.yml",
@@ -123,8 +124,11 @@ describe("workflow routing hardening", () => {
       "finalize-production-soak.yml",
     ]) {
       const concurrency = workflow(filename).parsed.concurrency;
-      expect(concurrency?.["cancel-in-progress"], filename).toBe(false);
-      expect(JSON.stringify(concurrency), filename).not.toContain('"queue"');
+      expect(concurrency, filename).toEqual({
+        group: "0509-production-provider-mutations",
+        "cancel-in-progress": false,
+        queue: "max",
+      });
     }
     for (const filename of ["ci.yml", "cross-browser-matrix.yml", "d1-backup-validate.yml", "secret-scan.yml"]) {
       expect(workflow(filename).parsed.concurrency?.["cancel-in-progress"], filename).toBe(true);
@@ -135,7 +139,7 @@ describe("workflow routing hardening", () => {
     const deploy = workflow("deploy-production.yml").source;
     const finalize = workflow("finalize-production-soak.yml").source;
     const crossBrowser = workflow("cross-browser-matrix.yml").source;
-    expect(deploy).toContain("github.ref == 'refs/heads/main'");
+    expect(deploy).toContain('test "$GITHUB_REF" = "refs/heads/main"');
     expect(finalize).toContain("run.head_branch === \"main\"");
     expect(finalize).toContain("run.head_sha === expectedSha");
     expect(crossBrowser).toContain("github.ref == 'refs/heads/main'");

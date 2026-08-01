@@ -17,8 +17,9 @@ on:
         type: string
 
 concurrency:
-  group: production-deploy-refs/heads/main
+  group: 0509-production-provider-mutations
   cancel-in-progress: false
+  queue: max
 
 permissions:
   actions: read

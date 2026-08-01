@@ -7,7 +7,7 @@ describe("production soak finalization workflow", () => {
   const workflow = readFileSync(".github/workflows/finalize-production-soak.yml", "utf8");
   const parsed = parse(workflow) as {
     on: { workflow_dispatch?: { inputs?: Record<string, { required?: boolean }> } };
-    concurrency?: { group?: string; "cancel-in-progress"?: boolean };
+    concurrency?: { group?: string; "cancel-in-progress"?: boolean; queue?: string };
     permissions?: Record<string, string>;
     jobs?: { finalize?: { environment?: { name?: string }; steps?: Array<{ id?: string; name?: string; uses?: string; run?: string; with?: Record<string, unknown> }> } };
   };
@@ -19,8 +19,9 @@ describe("production soak finalization workflow", () => {
       deploy_sha: { required: true },
     });
     expect(parsed.concurrency).toEqual({
-      group: "production-deploy-refs/heads/main",
+      group: "0509-production-provider-mutations",
       "cancel-in-progress": false,
+      queue: "max",
     });
     expect(parsed.permissions).toEqual({ actions: "read", contents: "read" });
     expect(parsed.jobs?.finalize?.environment?.name).toBe("production");
