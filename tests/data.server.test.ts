@@ -346,9 +346,10 @@ describe("createLandingPageSnapshot", () => {
     });
 
     const statement = mock.statements.find((entry) => entry.sql.includes("INSERT INTO digest_delivery"));
-    expect(statement?.sql).toContain("WHEN digest_delivery.status = 'sent'");
-    expect(statement?.sql).toContain("THEN digest_delivery.provider");
-    expect(statement?.sql).toContain("THEN 'sent'");
+    expect(statement?.sql).toContain("digest_delivery.status = 'sent'");
+    expect(statement?.sql).toContain("excluded.status != 'sent'");
+    expect(statement?.sql).toContain("digest_delivery.delivered_at IS NOT NULL");
+    expect(statement?.sql).toContain("excluded.delivered_at IS NULL");
   });
 });
 
@@ -3638,8 +3639,8 @@ describe("getOperatorSnapshot", () => {
       expect(deliveryFailures?.sql).toContain("delivery_attempt.status = 'sent'");
       expect(deliveryFailures?.sql).toContain("delivery_attempt.webhook_status = 'provider_unknown'");
       expect(deliveryFailures?.sql).toContain("delivery_attempt.updated_at <= ?");
-      expect(deliveryFailures?.sql).toContain(
-        "CASE WHEN delivery_attempt.status = 'failed' THEN 0 ELSE 1 END",
+      expect(deliveryFailures?.sql).toMatch(
+        /WHEN delivery_attempt\.status = 'failed' THEN 0\s+WHEN delivery_attempt\.status = 'pending' THEN 1\s+ELSE 2/,
       );
       expect(discoveryFailures?.bindings).toContain(recentWindowIso);
     } finally {

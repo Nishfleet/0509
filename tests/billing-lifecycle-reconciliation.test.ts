@@ -218,6 +218,56 @@ describe("billing lifecycle reconciliation persistence", () => {
     });
   });
 
+  it("records provider acceptance without manufacturing delivery truth", async () => {
+    const harness = createSqliteD1();
+    fixtures.push(harness);
+    migrate(harness);
+
+    const result = await reconcileBillingLifecycleEmailAttempt(
+      env(harness),
+      input({
+        outcome: "sent",
+        evidenceClassification: "provider_acceptance_log",
+        providerMessageId: "cf-message-accepted",
+      }),
+    );
+
+    expect(result.reconciled).toBe(true);
+    expect(readAttempt(harness)).toMatchObject({
+      status: "sent",
+      webhook_status: "provider_unknown",
+      provider_message_id: "cf-message-accepted",
+      error_message: null,
+      sent_at: "2026-07-15T10:04:00.000Z",
+    });
+    const audit = harness.sqlite.prepare(
+      "SELECT result_json FROM agent_action_audit WHERE resource_id = ?",
+    ).get(baseAttempt.id) as { result_json: string };
+    expect(JSON.parse(audit.result_json)).toMatchObject({
+      deliveryAttemptStatus: "sent",
+      webhookStatus: "provider_unknown",
+    });
+
+    await expect(
+      reconcileBillingLifecycleEmailAttempt(
+        env(harness),
+        input({
+          expectedUpdatedAt: "2026-07-15T10:05:00.000Z",
+          outcome: "sent",
+          evidenceClassification: "provider_delivery_confirmation",
+          evidenceReference: "https://dash.cloudflare.com/evidence/evt-456",
+          observedAt: "2026-07-15T10:06:00.000Z",
+          reconciledAt: "2026-07-15T10:07:00.000Z",
+        }),
+      ),
+    ).resolves.toMatchObject({ reconciled: true });
+    expect(readAttempt(harness)).toMatchObject({
+      status: "sent",
+      webhook_status: "delivered",
+      sent_at: "2026-07-15T10:04:00.000Z",
+    });
+  });
+
   it("requires bounded evidence and rejects invalid outcome fields", async () => {
     const harness = createSqliteD1();
     fixtures.push(harness);
@@ -330,6 +380,32 @@ describe("billing lifecycle reconciliation persistence", () => {
       },
     ]);
     expect(JSON.stringify(candidates)).not.toContain("owner@example.com");
+  });
+
+  it("prioritizes pending billing attempts ahead of newer accepted sends", async () => {
+    const harness = createSqliteD1();
+    fixtures.push(harness);
+    migrate(harness);
+    for (let index = 0; index < 20; index += 1) {
+      const timestamp = `2026-07-16T10:00:${String(index).padStart(2, "0")}.000Z`;
+      seedAttempt(harness, {
+        id: `accepted-attempt-${index}`,
+        status: "sent",
+        sentAt: timestamp,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        idempotencyKey: `billing-payment-issue:user-${index + 2}:2026-07-16`,
+      });
+    }
+
+    const candidates = await listBillingLifecycleReconciliationCandidates(env(harness));
+
+    expect(candidates).toHaveLength(20);
+    expect(candidates[0]).toMatchObject({
+      attemptId: baseAttempt.id,
+      status: "pending",
+    });
+    expect(candidates.filter((candidate) => candidate.status === "sent")).toHaveLength(19);
   });
 
   it("lists and settles an accepted billing email whose final delivery is unconfirmed", async () => {

@@ -299,32 +299,35 @@ describe("scheduled digest strategy budget", () => {
 		expect(data.completeDigestScheduleJob).toHaveBeenCalledTimes(3);
 	});
 
-	it("completes scan-trouble jobs when delivery is intentionally disabled", async () => {
-		const data = dataServerMock();
-		data.listWatchEventsBetween.mockResolvedValue([]);
-		const deliverScanTroubleNotice = vi.fn()
-			.mockResolvedValue({ sent: false, reason: "disabled" });
+	it.each(["disabled", "suppressed", "provider_unknown"] as const)(
+		"completes scan-trouble jobs when delivery is intentionally %s",
+		async (reason) => {
+			const data = dataServerMock();
+			data.listWatchEventsBetween.mockResolvedValue([]);
+			const deliverScanTroubleNotice = vi.fn()
+				.mockResolvedValue({ sent: false, reason });
 
-		vi.doMock("~/lib/auth.server", () => ({}));
-		vi.doMock("~/lib/data.server", () => data);
-		vi.doMock("~/lib/delivery.server", () => ({
-			deliverScanTroubleNotice,
-			deliverWeeklyDigest: vi.fn(),
-		}));
-		vi.doMock("~/lib/plan.server", () => planServerMock());
+			vi.doMock("~/lib/auth.server", () => ({}));
+			vi.doMock("~/lib/data.server", () => data);
+			vi.doMock("~/lib/delivery.server", () => ({
+				deliverScanTroubleNotice,
+				deliverWeeklyDigest: vi.fn(),
+			}));
+			vi.doMock("~/lib/plan.server", () => planServerMock());
 
-		const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
-		const result = await runScheduledMonitoring(envWith(vi.fn()), {
-			includeScans: false,
-			includeDigests: true,
-			digestCadence: "weekly",
-			scheduledTime: Date.parse("2026-07-13T05:00:00.000Z"),
-		});
+			const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+			const result = await runScheduledMonitoring(envWith(vi.fn()), {
+				includeScans: false,
+				includeDigests: true,
+				digestCadence: "weekly",
+				scheduledTime: Date.parse("2026-07-13T05:00:00.000Z"),
+			});
 
-		expect(result).toMatchObject({ digests: 0, digestAttempts: 4, digestFailures: 0 });
-		expect(data.failDigestScheduleJob).not.toHaveBeenCalled();
-		expect(data.completeDigestScheduleJob).toHaveBeenCalledTimes(4);
-	});
+			expect(result).toMatchObject({ digests: 0, digestAttempts: 4, digestFailures: 0 });
+			expect(data.failDigestScheduleJob).not.toHaveBeenCalled();
+			expect(data.completeDigestScheduleJob).toHaveBeenCalledTimes(4);
+		},
+	);
 
 	it("fails an unresolved strategy job without masking later successful customers", async () => {
 		const data = dataServerMock();

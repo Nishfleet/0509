@@ -1,6 +1,100 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 
+export const BACKUP_PROOF_REQUIRED = "required";
+export const BACKUP_PROOF_DEFERRED = "deferred";
+
+/** @param {unknown} value */
+export function normalizeBackupProofStatus(value) {
+  const status = value === undefined || value === ""
+    ? BACKUP_PROOF_REQUIRED
+    : value;
+  if (status !== BACKUP_PROOF_REQUIRED && status !== BACKUP_PROOF_DEFERRED) {
+    throw new Error("invalid_backup_proof_status");
+  }
+  return status;
+}
+
+const RELEASE_SHA_PATTERN = /^[a-f0-9]{40}$/u;
+const DEFERRED_BACKUP_DISPOSITION_KEYS = Object.freeze([
+  "backupProof",
+  "backupObjectKey",
+  "backupRunId",
+  "backupFingerprint",
+  "productionD1RecoveryProof",
+  "localFixtureScratchRestore",
+  "workerRollback",
+  "deployedBaselineSha",
+  "releaseControlBaseSha",
+  "candidateSha",
+  "migrationFileCount",
+  "payingCustomerCount",
+  "customerOwnedWatchlistCount",
+  "customerOwnedClientRoomCount",
+  "dormantExternalSignupRowCount",
+  "authorizedBy",
+  "authorizationScope",
+]);
+
+/** @param {unknown} value @param {string} candidateSha */
+export function validateDeferredBackupDisposition(value, candidateSha) {
+  const disposition = /** @type {Record<string, unknown>} */ (value);
+  return (
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    JSON.stringify(Object.keys(disposition).sort()) ===
+      JSON.stringify([...DEFERRED_BACKUP_DISPOSITION_KEYS].sort()) &&
+    disposition.backupProof === "not_obtained" &&
+    disposition.backupObjectKey === null &&
+    disposition.backupRunId === null &&
+    disposition.backupFingerprint === null &&
+    disposition.productionD1RecoveryProof === "absent" &&
+    disposition.localFixtureScratchRestore === "not_production_recovery" &&
+    disposition.workerRollback === "separate_not_d1_recovery" &&
+    disposition.deployedBaselineSha ===
+      "03174ed6d9eed749b22430fbe1bc0938bf4da0c5" &&
+    disposition.releaseControlBaseSha ===
+      "048e8a5991c6560a15cba485a7a4ba27af9d5004" &&
+    disposition.candidateSha === candidateSha &&
+    RELEASE_SHA_PATTERN.test(candidateSha ?? "") &&
+    disposition.migrationFileCount === 0 &&
+    disposition.payingCustomerCount === 0 &&
+    disposition.customerOwnedWatchlistCount === 0 &&
+    disposition.customerOwnedClientRoomCount === 0 &&
+    disposition.dormantExternalSignupRowCount === 2 &&
+    disposition.authorizedBy === "nish3451" &&
+    disposition.authorizationScope === "exact_workflow_dispatch_sha"
+  );
+}
+
+/** @param {string} candidateSha */
+export function createDeferredBackupDisposition(candidateSha) {
+  const value = {
+    backupProof: "not_obtained",
+    backupObjectKey: null,
+    backupRunId: null,
+    backupFingerprint: null,
+    productionD1RecoveryProof: "absent",
+    localFixtureScratchRestore: "not_production_recovery",
+    workerRollback: "separate_not_d1_recovery",
+    deployedBaselineSha: "03174ed6d9eed749b22430fbe1bc0938bf4da0c5",
+    releaseControlBaseSha: "048e8a5991c6560a15cba485a7a4ba27af9d5004",
+    candidateSha,
+    migrationFileCount: 0,
+    payingCustomerCount: 0,
+    customerOwnedWatchlistCount: 0,
+    customerOwnedClientRoomCount: 0,
+    dormantExternalSignupRowCount: 2,
+    authorizedBy: "nish3451",
+    authorizationScope: "exact_workflow_dispatch_sha",
+  };
+  if (!validateDeferredBackupDisposition(value, candidateSha)) {
+    throw new Error("invalid_deferred_backup_disposition");
+  }
+  return value;
+}
+
 const MANIFEST_PATH_PATTERN =
   /^test-results\/deploy-readiness-[a-z0-9-]{1,96}\.json$/u;
 const REMOTE_RESTORE_PATH_PATTERN =
@@ -25,12 +119,13 @@ const SAFE_IDENTIFIER_PATTERN = /^[A-Za-z0-9._-]{1,128}$/u;
  */
 
 /**
- * @param {{ manifestPath: string, remoteRestoreEvidencePath: string, wranglerOutputPath: string, rollbackTargetPath?: string }} input
+ * @param {{ manifestPath: string, remoteRestoreEvidencePath?: string, backupProofStatus?: string, wranglerOutputPath: string, rollbackTargetPath?: string }} input
  * @returns {ProductionDeployStep[]}
  */
 export function buildProductionDeployPlan({
   manifestPath,
   remoteRestoreEvidencePath,
+  backupProofStatus = BACKUP_PROOF_REQUIRED,
   wranglerOutputPath,
   rollbackTargetPath = "test-results/worker-rollback-target.json",
 }) {
@@ -40,11 +135,17 @@ export function buildProductionDeployPlan({
   ) {
     throw new Error("invalid_deploy_readiness_manifest_path");
   }
-  if (
-    typeof remoteRestoreEvidencePath !== "string" ||
-    !REMOTE_RESTORE_PATH_PATTERN.test(remoteRestoreEvidencePath)
-  ) {
-    throw new Error("invalid_remote_restore_evidence_path");
+  const normalizedBackupProofStatus =
+    normalizeBackupProofStatus(backupProofStatus);
+  if (normalizedBackupProofStatus === BACKUP_PROOF_REQUIRED) {
+    if (
+      typeof remoteRestoreEvidencePath !== "string" ||
+      !REMOTE_RESTORE_PATH_PATTERN.test(remoteRestoreEvidencePath)
+    ) {
+      throw new Error("invalid_remote_restore_evidence_path");
+    }
+  } else if (remoteRestoreEvidencePath) {
+    throw new Error("deferred_backup_restore_evidence_conflict");
   }
   if (
     typeof wranglerOutputPath !== "string" ||
@@ -60,6 +161,20 @@ export function buildProductionDeployPlan({
   }
 
   return [
+    ...(normalizedBackupProofStatus === BACKUP_PROOF_DEFERRED
+      ? [{
+          id: "deferred_release_zero_migrations",
+          command: "git",
+          args: [
+            "diff",
+            "--quiet",
+            "03174ed6d9eed749b22430fbe1bc0938bf4da0c5",
+            "HEAD",
+            "--",
+            "migrations",
+          ],
+        }]
+      : []),
     {
       id: "public_source_truth",
       command: "node",
@@ -117,17 +232,19 @@ export function buildProductionDeployPlan({
       // owned by Codex: re-home this matrix in a scheduled workflow.
       nonBlockingDiagnostic: true,
     },
-    {
-      id: "remote_restore_evidence",
-      command: "node",
-      args: [
-        "scripts/verify-remote-restore-evidence.mjs",
-        "--manifest",
-        manifestPath,
-        "--remote-evidence",
-        remoteRestoreEvidencePath,
-      ],
-    },
+    ...(normalizedBackupProofStatus === BACKUP_PROOF_REQUIRED
+      ? [{
+          id: "remote_restore_evidence",
+          command: "node",
+          args: [
+            "scripts/verify-remote-restore-evidence.mjs",
+            "--manifest",
+            manifestPath,
+            "--remote-evidence",
+            /** @type {string} */ (remoteRestoreEvidencePath),
+          ],
+        }]
+      : []),
     {
       id: "public_runtime_truth",
       command: "node",
@@ -148,6 +265,11 @@ export function buildProductionDeployPlan({
         rollbackTargetPath,
       ],
       includeCloudflareCredentials: true,
+    },
+    {
+      id: "reconfirm_frozen_main_before_deploy",
+      command: "./scripts/ci-verify-provider-main-cas.sh",
+      args: [],
     },
     {
       id: "deploy",
@@ -199,6 +321,9 @@ export function buildProductionDeployPlan({
         "--wrangler-output",
         wranglerOutputPath,
       ],
+      env: {
+        BACKUP_PROOF_STATUS: normalizedBackupProofStatus,
+      },
       includeCloudflareCredentials: true,
     },
     {
@@ -207,20 +332,25 @@ export function buildProductionDeployPlan({
       args: ["scripts/check-partial-refund-invariants.mjs"],
       includeCloudflareCredentials: true,
     },
-    {
-      id: "start_production_soak",
-      command: "node",
-      args: [
-        "scripts/gate-c-soak.mjs",
-        "start",
-        "--manifest",
-        manifestPath,
-        "--wrangler-output",
-        wranglerOutputPath,
-        "--rollback-target",
-        rollbackTargetPath,
-      ],
-    },
+    ...(normalizedBackupProofStatus === BACKUP_PROOF_REQUIRED
+      ? [{
+          id: "start_production_soak",
+          command: "node",
+          args: [
+            "scripts/gate-c-soak.mjs",
+            "start",
+            "--manifest",
+            manifestPath,
+            "--wrangler-output",
+            wranglerOutputPath,
+            "--rollback-target",
+            rollbackTargetPath,
+          ],
+          env: {
+            BACKUP_PROOF_STATUS: normalizedBackupProofStatus,
+          },
+        }]
+      : []),
     {
       id: "rollback_failed_release",
       command: "node",

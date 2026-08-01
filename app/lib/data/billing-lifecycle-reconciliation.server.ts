@@ -83,7 +83,9 @@ export async function listBillingLifecycleReconciliationCandidates(
             AND template_name = 'billing_refund_revoked'
           )
         )
-      ORDER BY created_at DESC
+      ORDER BY
+        CASE status WHEN 'pending' THEN 0 ELSE 1 END,
+        created_at DESC
       LIMIT 20
     `,
   );
@@ -206,7 +208,12 @@ export async function reconcileBillingLifecycleEmailAttempt(
   const reconciliationIdempotencyKey = `billing-lifecycle-reconcile:${validated.attemptId}:${validated.expectedUpdatedAt}`;
   const auditId = createId();
   const nextStatus = validated.outcome === "sent" ? "sent" : "failed";
-  const nextWebhookStatus = validated.outcome === "sent" ? "delivered" : "failed";
+  const nextWebhookStatus =
+    validated.outcome === "failed"
+      ? "failed"
+      : validated.evidenceClassification === "provider_acceptance_log"
+        ? "provider_unknown"
+        : "delivered";
   const nextErrorMessage = validated.outcome === "failed" ? BILLING_LIFECYCLE_RECONCILIATION_ERROR : null;
   const transition = db
     .prepare(`

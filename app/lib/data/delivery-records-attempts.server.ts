@@ -289,7 +289,13 @@ export async function listOutstandingInstantProviderUnknownAttempts(
             AND provider = 'slack_incoming_webhook'
             AND idempotency_key LIKE 'instant:%:customer:slack:%')
         )
-      ORDER BY created_at ASC
+      ORDER BY
+        CASE
+          WHEN status = 'pending' THEN 0
+          WHEN status = 'failed' THEN 1
+          ELSE 2
+        END,
+        created_at ASC
       LIMIT ?
     `,
     limit,
