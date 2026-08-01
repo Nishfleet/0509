@@ -103,6 +103,7 @@ export function shellTopbarIsSuppressed(pathname: string) {
   return (
     normalizedPathname === "/app" ||
     normalizedPathname === "/app/watchlists" ||
+    normalizedPathname === "/app/clients" ||
     normalizedPathname === "/app/source-access" ||
     normalizedPathname === "/app/developer-access"
   );
