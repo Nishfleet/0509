@@ -280,8 +280,12 @@ export async function getOperatorRiskSummary(env: AppEnv): Promise<OperatorRiskS
 }
 
 export async function getOperatorSnapshot(env: AppEnv) {
-  const stuckThresholdIso = new Date(Date.now() - 30 * 60 * 1000).toISOString();
-  const recentWindowIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const now = Date.now();
+  const stuckThresholdIso = new Date(now - 30 * 60 * 1000).toISOString();
+  const recentWindowIso = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const acceptedEmailAttentionBeforeIso = new Date(
+    now - 15 * 60 * 1000,
+  ).toISOString();
   const warnings: Array<{ section: string; message: string }> = [];
   const isolate = async <T,>(section: string, promise: Promise<T>, fallback: T) => {
     try {
@@ -467,12 +471,25 @@ export async function getOperatorSnapshot(env: AppEnv) {
             (
               delivery_attempt.status = 'pending' AND
               delivery_attempt.webhook_status = 'provider_unknown'
+            ) OR
+            (
+              delivery_attempt.channel = 'email' AND
+              delivery_attempt.status = 'sent' AND
+              delivery_attempt.webhook_status = 'provider_unknown' AND
+              delivery_attempt.updated_at <= ?
             )
           )
           AND delivery_attempt.created_at >= ?
-        ORDER BY delivery_attempt.created_at DESC
+        ORDER BY
+          CASE
+            WHEN delivery_attempt.status = 'failed' THEN 0
+            WHEN delivery_attempt.status = 'pending' THEN 1
+            ELSE 2
+          END,
+          delivery_attempt.created_at DESC
         LIMIT 8
       `,
+      acceptedEmailAttentionBeforeIso,
       recentWindowIso,
     ), []),
     isolate("degradedWatchlists", many<{

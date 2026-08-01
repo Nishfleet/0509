@@ -964,43 +964,33 @@ export async function upsertDigestDelivery(
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(digest_run_id)
-      DO UPDATE SET provider = CASE
-                      WHEN (digest_delivery.status = 'sent' AND excluded.status != 'sent')
-                        OR (digest_delivery.status = 'failed' AND excluded.status = 'pending' AND ? = 0)
-                        THEN digest_delivery.provider
-                      ELSE excluded.provider
-                    END,
-                    status = CASE
-                      WHEN digest_delivery.status = 'sent' THEN 'sent'
-                      WHEN digest_delivery.status = 'failed' AND excluded.status = 'pending' AND ? = 0
-                        THEN 'failed'
-                      ELSE excluded.status
-                    END,
-                    recipient_email = CASE
-                      WHEN (digest_delivery.status = 'sent' AND excluded.status != 'sent')
-                        OR (digest_delivery.status = 'failed' AND excluded.status = 'pending' AND ? = 0)
-                        THEN digest_delivery.recipient_email
-                      ELSE excluded.recipient_email
-                    END,
-                    external_message_id = CASE
-                      WHEN (digest_delivery.status = 'sent' AND excluded.status != 'sent')
-                        OR (digest_delivery.status = 'failed' AND excluded.status = 'pending' AND ? = 0)
-                        THEN digest_delivery.external_message_id
-                      ELSE excluded.external_message_id
-                    END,
-                    error_message = CASE
-                      WHEN (digest_delivery.status = 'sent' AND excluded.status != 'sent')
-                        OR (digest_delivery.status = 'failed' AND excluded.status = 'pending' AND ? = 0)
-                        THEN digest_delivery.error_message
-                      ELSE excluded.error_message
-                    END,
-                    delivered_at = CASE
-                      WHEN (digest_delivery.status = 'sent' AND excluded.status != 'sent')
-                        OR (digest_delivery.status = 'failed' AND excluded.status = 'pending' AND ? = 0)
-                        THEN digest_delivery.delivered_at
-                      ELSE excluded.delivered_at
-                    END,
+      DO UPDATE SET provider = excluded.provider,
+                    status = excluded.status,
+                    recipient_email = excluded.recipient_email,
+                    external_message_id = excluded.external_message_id,
+                    error_message = excluded.error_message,
+                    delivered_at = excluded.delivered_at,
                     updated_at = excluded.updated_at
+      WHERE NOT (
+        digest_delivery.status = 'sent'
+        AND (
+          excluded.status != 'sent'
+          OR (
+            digest_delivery.delivered_at IS NOT NULL
+            AND excluded.delivered_at IS NULL
+          )
+          OR (
+            digest_delivery.delivered_at IS NOT NULL
+            AND excluded.delivered_at IS NOT NULL
+            AND julianday(excluded.delivered_at) < julianday(digest_delivery.delivered_at)
+          )
+        )
+      )
+      AND NOT (
+        digest_delivery.status = 'failed'
+        AND excluded.status = 'pending'
+        AND ? = 0
+      )
     `,
     createId(),
     digestRunId,
@@ -1012,12 +1002,7 @@ export async function upsertDigestDelivery(
     input.deliveredAt,
     timestamp,
     timestamp,
-		allowPendingOverFailed,
-		allowPendingOverFailed,
-		allowPendingOverFailed,
-		allowPendingOverFailed,
-		allowPendingOverFailed,
-		allowPendingOverFailed,
+			allowPendingOverFailed,
   );
 }
 

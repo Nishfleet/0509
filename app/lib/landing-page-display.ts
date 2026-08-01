@@ -3,6 +3,7 @@ import type {
   CaptureMethod,
   DeliveryAttemptStatus,
   DeliveryChannel,
+  WebhookReconciliationStatus,
   WatchEventStatus,
   WatchEventType,
 } from "~/lib/types";
@@ -235,11 +236,10 @@ export function formatWhyAlertedLabel(input: {
 export function formatDeliveryAttemptStatusLabel(
   status: DeliveryAttemptStatus,
   channel: DeliveryChannel,
+  webhookStatus: WebhookReconciliationStatus | null = null,
 ) {
   if (status === "sent") {
-    if (channel === "email") return "Accepted by email provider";
-    if (channel === "slack") return "Sent to Slack";
-    return "Sent to WhatsApp";
+    return webhookStatus === "delivered" ? "Delivered" : "Delivery unconfirmed";
   }
 
   if (status === "failed") {

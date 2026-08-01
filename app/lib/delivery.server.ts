@@ -317,13 +317,14 @@ export async function deliverScanTroubleNotice(
 
   const emailTargets = await resolveDigestEmailTargets(env, input.userId, accountEmail);
   const primaryTarget = emailTargets[0] ?? null;
-  const recipient = primaryTarget?.targetValue?.trim() || accountEmail;
-  const unsubscribeUrl = primaryTarget
-    ? await buildUnsubscribeUrl(env, {
-        userId: input.userId,
-        targetId: primaryTarget.id,
-      })
-    : null;
+  if (!primaryTarget) {
+    return { sent: false as const, reason: "suppressed" as const };
+  }
+  const recipient = primaryTarget.targetValue.trim() || accountEmail;
+  const unsubscribeUrl = await buildUnsubscribeUrl(env, {
+    userId: input.userId,
+    targetId: primaryTarget.id,
+  });
 
   const idempotencyKey = `scan_trouble:${input.userId}:${input.periodKey}`;
   const base = appBaseUrl(env);
@@ -339,7 +340,7 @@ export async function deliverScanTroubleNotice(
   const claim = await claimInstantDeliveryAttempt(env, {
     userId: input.userId,
     watchlistId: null,
-    deliveryTargetId: primaryTarget?.id ?? null,
+    deliveryTargetId: primaryTarget.id,
     lane: "customer",
     channel: "email",
     provider: EMAIL_PROVIDER,
@@ -354,6 +355,12 @@ export async function deliverScanTroubleNotice(
     idempotencyKey,
   });
   if (!claim.attemptId || !claim.claimUpdatedAt) {
+    if (claim.duplicate?.status === "sent") {
+      return { sent: true as const, reason: "sent" as const };
+    }
+    if (claim.duplicate?.webhookStatus === "provider_unknown") {
+      return { sent: false as const, reason: "provider_unknown" as const };
+    }
     return { sent: false as const, reason: "duplicate" as const };
   }
 
@@ -395,8 +402,16 @@ export async function deliverScanTroubleNotice(
     expectedUpdatedAt: dispatchStartedAt,
   });
 
+  if (
+    !finalized ||
+    (providerResult.status !== "sent" &&
+      providerResult.webhookStatus === "provider_unknown")
+  ) {
+    return { sent: false as const, reason: "provider_unknown" as const };
+  }
+
   return {
-    sent: Boolean(finalized && providerResult.status === "sent"),
+    sent: providerResult.status === "sent",
     reason: providerResult.status === "sent" ? ("sent" as const) : ("failed" as const),
   };
 }
@@ -776,6 +791,17 @@ async function claimDigestDeliveryAttempt(
   }
 }
 
+function confirmedDeliveryTimestamp(
+  attempt: Pick<
+    DeliveryAttemptRecord,
+    "webhookStatus" | "providerStatusLastSeenAt" | "sentAt"
+  >,
+) {
+  return attempt.webhookStatus === "delivered"
+    ? (attempt.providerStatusLastSeenAt ?? attempt.sentAt)
+    : null;
+}
+
 function summarizeDigestDeliveryAttempt(
   channel: DeliveryChannel,
   attempt: DeliveryAttemptRecord,
@@ -786,7 +812,7 @@ function summarizeDigestDeliveryAttempt(
     targetValue: attempt.targetValue,
     providerMessageId: attempt.providerMessageId,
     errorMessage: attempt.errorMessage,
-    deliveredAt: attempt.sentAt,
+    deliveredAt: confirmedDeliveryTimestamp(attempt),
   };
 }
 
@@ -2528,7 +2554,7 @@ function summarizeDeliveryAttempt(attempt: DeliveryAttemptRecord): DigestAttempt
     targetValue: attempt.targetValue,
     providerMessageId: attempt.providerMessageId,
     errorMessage: attempt.errorMessage,
-    deliveredAt: attempt.sentAt,
+    deliveredAt: confirmedDeliveryTimestamp(attempt),
   };
 }
 
@@ -3054,6 +3080,7 @@ export async function sendPresenceDigestEmail(
     tag: "presence-digest",
     unsubscribeUrl,
   });
+  const sentAt = providerAcceptedAt(providerResult);
 
   await createDeliveryAttempt(env, {
     userId: input.userId,
@@ -3073,11 +3100,19 @@ export async function sendPresenceDigestEmail(
     payloadSnapshot: { kind: "presence_digest", lineCount: input.lines.length },
     idempotencyKey: input.idempotencyKey,
     errorMessage: providerResult.errorMessage,
-    sentAt: providerAcceptedAt(providerResult),
+    sentAt,
     failedAt: providerResult.status === "failed" ? new Date().toISOString() : null,
   });
 
-  return providerResult.status === "sent";
+  return {
+    accepted: providerResult.status === "sent",
+    delivered:
+      confirmedDeliveryTimestamp({
+        webhookStatus: providerResult.webhookStatus,
+        providerStatusLastSeenAt: providerResult.providerStatusLastSeenAt,
+        sentAt,
+      }) !== null,
+  };
 }
 
 function buildPresenceAppUrl(env: AppEnv) {

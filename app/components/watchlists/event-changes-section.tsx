@@ -202,7 +202,7 @@ export function formatEventDeliveryLine(
   lastAttempt: PublicDeliveryAttemptSummary | null,
 ): string {
   return lastAttempt
-    ? `Last send: ${formatDeliveryAttemptStatusLabel(lastAttempt.status, lastAttempt.channel)} · ${lastAttempt.targetValue}.`
+    ? `Last send: ${formatDeliveryAttemptStatusLabel(lastAttempt.status, lastAttempt.channel, lastAttempt.webhookStatus)} · ${lastAttempt.targetValue}.`
     : EVENT_DELIVERY_NONE_COPY;
 }
 

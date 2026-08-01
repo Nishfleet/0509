@@ -199,7 +199,6 @@ export default function DigestsRoute() {
             (attempt) =>
               describeAttemptStatus(
                 attempt.status,
-                attempt.channel,
                 attempt.webhookStatus ?? null,
               ),
           )
@@ -526,7 +525,7 @@ function formatDigestSidebarStatus(
   }
 
   return attempts
-    .map((attempt) => `${formatDeliveryChannelLabel(attempt.channel)} ${describeAttemptStatus(attempt.status, attempt.channel, attempt.webhookStatus ?? null).toLowerCase()}`)
+    .map((attempt) => `${formatDeliveryChannelLabel(attempt.channel)} ${describeAttemptStatus(attempt.status, attempt.webhookStatus ?? null).toLowerCase()}`)
     .join(" · ");
 }
 
@@ -553,16 +552,13 @@ function formatDeliveryChannelLabel(channel: string) {
   return channel.replaceAll("_", " ");
 }
 
-function describeAttemptStatus(status: string, channel: string, webhookStatus: string | null) {
+function describeAttemptStatus(status: string, webhookStatus: string | null) {
   switch (status) {
     case "sent":
       if (webhookStatus === "delivered") {
         return "Delivered";
       }
-      if (channel === "email") {
-        return "Sent";
-      }
-      return "Sent";
+      return "Delivery unconfirmed";
     case "failed":
       return "Failed";
     case "skipped_due_to_quiet_hours":

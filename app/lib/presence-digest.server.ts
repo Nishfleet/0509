@@ -42,7 +42,7 @@ export async function deliverPresenceDigestForUser(
   });
 
   const subject = `Five to Nine presence brief — ${items.length} update${items.length === 1 ? "" : "s"}`;
-  const delivered = await sendPresenceDigestEmail(env, {
+  const delivery = await sendPresenceDigestEmail(env, {
     userId,
     email: userEmail,
     subject,
@@ -50,7 +50,9 @@ export async function deliverPresenceDigestForUser(
     idempotencyKey: `presence-digest:${userId}:${since.slice(0, 10)}`,
   });
 
-  return delivered
+  return delivery.delivered
     ? { delivered: true as const, itemCount: items.length }
-    : { delivered: false, reason: "send_failed" as const };
+    : delivery.accepted
+      ? { delivered: false, reason: "delivery_unconfirmed" as const }
+      : { delivered: false, reason: "send_failed" as const };
 }

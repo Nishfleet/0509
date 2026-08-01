@@ -55,7 +55,9 @@ const input = (
   attemptId: baseAttempt.id,
   expectedUpdatedAt: baseAttempt.updatedAt,
   outcome: "failed",
+  evidenceClassification: "provider_rejection_log",
   evidenceReference: "https://dash.cloudflare.com/evidence/evt-123",
+  observedAt: "2026-07-15T10:04:00.000Z",
   providerMessageId: null,
   reconciledAt: "2026-07-15T10:05:00.000Z",
   ...overrides,
@@ -173,7 +175,7 @@ describe("billing lifecycle reconciliation persistence", () => {
       status: "failed",
       webhook_status: "failed",
       error_message: "Provider evidence confirmed the billing lifecycle email was not accepted.",
-      failed_at: "2026-07-15T10:05:00.000Z",
+      failed_at: "2026-07-15T10:04:00.000Z",
       updated_at: "2026-07-15T10:05:00.000Z",
     });
     const audit = harness.sqlite.prepare("SELECT * FROM agent_action_audit").get() as Record<
@@ -201,6 +203,7 @@ describe("billing lifecycle reconciliation persistence", () => {
       env(harness),
       input({
         outcome: "sent",
+        evidenceClassification: "provider_delivery_confirmation",
         providerMessageId: "cf-message-123",
       }),
     );
@@ -211,7 +214,57 @@ describe("billing lifecycle reconciliation persistence", () => {
       webhook_status: "delivered",
       provider_message_id: "cf-message-123",
       error_message: null,
-      sent_at: "2026-07-15T10:05:00.000Z",
+      sent_at: "2026-07-15T10:04:00.000Z",
+    });
+  });
+
+  it("records provider acceptance without manufacturing delivery truth", async () => {
+    const harness = createSqliteD1();
+    fixtures.push(harness);
+    migrate(harness);
+
+    const result = await reconcileBillingLifecycleEmailAttempt(
+      env(harness),
+      input({
+        outcome: "sent",
+        evidenceClassification: "provider_acceptance_log",
+        providerMessageId: "cf-message-accepted",
+      }),
+    );
+
+    expect(result.reconciled).toBe(true);
+    expect(readAttempt(harness)).toMatchObject({
+      status: "sent",
+      webhook_status: "provider_unknown",
+      provider_message_id: "cf-message-accepted",
+      error_message: null,
+      sent_at: "2026-07-15T10:04:00.000Z",
+    });
+    const audit = harness.sqlite.prepare(
+      "SELECT result_json FROM agent_action_audit WHERE resource_id = ?",
+    ).get(baseAttempt.id) as { result_json: string };
+    expect(JSON.parse(audit.result_json)).toMatchObject({
+      deliveryAttemptStatus: "sent",
+      webhookStatus: "provider_unknown",
+    });
+
+    await expect(
+      reconcileBillingLifecycleEmailAttempt(
+        env(harness),
+        input({
+          expectedUpdatedAt: "2026-07-15T10:05:00.000Z",
+          outcome: "sent",
+          evidenceClassification: "provider_delivery_confirmation",
+          evidenceReference: "https://dash.cloudflare.com/evidence/evt-456",
+          observedAt: "2026-07-15T10:06:00.000Z",
+          reconciledAt: "2026-07-15T10:07:00.000Z",
+        }),
+      ),
+    ).resolves.toMatchObject({ reconciled: true });
+    expect(readAttempt(harness)).toMatchObject({
+      status: "sent",
+      webhook_status: "delivered",
+      sent_at: "2026-07-15T10:04:00.000Z",
     });
   });
 
@@ -244,6 +297,21 @@ describe("billing lifecycle reconciliation persistence", () => {
         input({ providerMessageId: "x".repeat(256) }),
       ),
     ).rejects.toThrow("providerMessageId");
+    await expect(
+      reconcileBillingLifecycleEmailAttempt(
+        env(harness),
+        input({ observedAt: "not-a-timestamp" }),
+      ),
+    ).rejects.toThrow("observedAt");
+    await expect(
+      reconcileBillingLifecycleEmailAttempt(
+        env(harness),
+        input({
+          outcome: "sent",
+          evidenceClassification: "provider_rejection_log",
+        }),
+      ),
+    ).rejects.toThrow("evidenceClassification");
     await expect(
       reconcileBillingLifecycleEmailAttempt(
         env(harness),
@@ -305,12 +373,138 @@ describe("billing lifecycle reconciliation persistence", () => {
       {
         attemptId: baseAttempt.id,
         lifecycleKind: "payment_issue",
+        status: "pending",
         providerStatusLastSeenAt: baseAttempt.providerStatusLastSeenAt,
         createdAt: baseAttempt.createdAt,
         updatedAt: baseAttempt.updatedAt,
       },
     ]);
     expect(JSON.stringify(candidates)).not.toContain("owner@example.com");
+  });
+
+  it("prioritizes pending billing attempts ahead of newer accepted sends", async () => {
+    const harness = createSqliteD1();
+    fixtures.push(harness);
+    migrate(harness);
+    for (let index = 0; index < 20; index += 1) {
+      const timestamp = `2026-07-16T10:00:${String(index).padStart(2, "0")}.000Z`;
+      seedAttempt(harness, {
+        id: `accepted-attempt-${index}`,
+        status: "sent",
+        sentAt: timestamp,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        idempotencyKey: `billing-payment-issue:user-${index + 2}:2026-07-16`,
+      });
+    }
+
+    const candidates = await listBillingLifecycleReconciliationCandidates(env(harness));
+
+    expect(candidates).toHaveLength(20);
+    expect(candidates[0]).toMatchObject({
+      attemptId: baseAttempt.id,
+      status: "pending",
+    });
+    expect(candidates.filter((candidate) => candidate.status === "sent")).toHaveLength(19);
+  });
+
+  it("lists and settles an accepted billing email whose final delivery is unconfirmed", async () => {
+    const harness = createSqliteD1();
+    fixtures.push(harness);
+    migrate(harness);
+    harness.sqlite.prepare(`
+      UPDATE delivery_attempt
+      SET status = 'sent',
+          sent_at = '2026-07-15T10:00:30.000Z'
+      WHERE id = ?
+    `).run(baseAttempt.id);
+
+    await expect(
+      listBillingLifecycleReconciliationCandidates(env(harness)),
+    ).resolves.toMatchObject([{ attemptId: baseAttempt.id }]);
+    await expect(
+      reconcileBillingLifecycleEmailAttempt(env(harness), input()),
+    ).resolves.toMatchObject({ reconciled: true });
+    expect(readAttempt(harness)).toMatchObject({
+      status: "failed",
+      webhook_status: "failed",
+      sent_at: "2026-07-15T10:00:30.000Z",
+      failed_at: "2026-07-15T10:04:00.000Z",
+    });
+  });
+
+  it("rejects evidence that predates provider acceptance", async () => {
+    const harness = createSqliteD1();
+    fixtures.push(harness);
+    migrate(harness);
+    harness.sqlite.prepare(`
+      UPDATE delivery_attempt
+      SET status = 'sent',
+          sent_at = '2026-07-15T10:00:30.000Z'
+      WHERE id = ?
+    `).run(baseAttempt.id);
+
+    await expect(
+      reconcileBillingLifecycleEmailAttempt(
+        env(harness),
+        input({ observedAt: "2026-07-15T09:59:59.000Z" }),
+      ),
+    ).resolves.toMatchObject({ reconciled: false, auditId: null });
+    expect(readAttempt(harness)).toMatchObject({
+      status: "sent",
+      webhook_status: "provider_unknown",
+      sent_at: "2026-07-15T10:00:30.000Z",
+    });
+  });
+
+  it("rejects evidence outside the attempt lifecycle or too far in the future", async () => {
+    const harness = createSqliteD1();
+    fixtures.push(harness);
+    migrate(harness);
+
+    await expect(
+      reconcileBillingLifecycleEmailAttempt(
+        env(harness),
+        input({ observedAt: "2026-07-15T09:59:59.000Z" }),
+      ),
+    ).resolves.toMatchObject({ reconciled: false, auditId: null });
+    await expect(
+      reconcileBillingLifecycleEmailAttempt(
+        env(harness),
+        input({ observedAt: "2026-07-15T10:10:01.000Z" }),
+      ),
+    ).resolves.toMatchObject({ reconciled: false, auditId: null });
+  });
+
+  it("requires delivery evidence before finalizing an already-accepted email", async () => {
+    const harness = createSqliteD1();
+    fixtures.push(harness);
+    migrate(harness);
+    harness.sqlite.prepare(`
+      UPDATE delivery_attempt
+      SET status = 'sent',
+          sent_at = '2026-07-15T10:00:30.000Z'
+      WHERE id = ?
+    `).run(baseAttempt.id);
+
+    await expect(
+      reconcileBillingLifecycleEmailAttempt(
+        env(harness),
+        input({
+          outcome: "sent",
+          evidenceClassification: "provider_acceptance_log",
+        }),
+      ),
+    ).resolves.toMatchObject({ reconciled: false, auditId: null });
+    await expect(
+      reconcileBillingLifecycleEmailAttempt(
+        env(harness),
+        input({
+          outcome: "sent",
+          evidenceClassification: "provider_delivery_confirmation",
+        }),
+      ),
+    ).resolves.toMatchObject({ reconciled: true });
   });
 
   it("loses stale and delayed-provider races without creating an audit", async () => {

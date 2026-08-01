@@ -12,13 +12,20 @@ export const BILLING_LIFECYCLE_RECONCILIATION_ERROR =
   "Provider evidence confirmed the billing lifecycle email was not accepted.";
 
 export type BillingLifecycleReconciliationOutcome = "sent" | "failed";
+export type BillingLifecycleEvidenceClassification =
+  | "controlled_inbox_receipt"
+  | "provider_acceptance_log"
+  | "provider_delivery_confirmation"
+  | "provider_rejection_log";
 
 export interface BillingLifecycleEmailReconciliationInput {
   operatorUserId: string;
   attemptId: string;
   expectedUpdatedAt: string;
   outcome: BillingLifecycleReconciliationOutcome;
+  evidenceClassification: BillingLifecycleEvidenceClassification;
   evidenceReference: string;
+  observedAt: string;
   providerMessageId?: string | null;
   reconciledAt?: string;
 }
@@ -32,6 +39,7 @@ export interface BillingLifecycleEmailReconciliationResult {
 export interface BillingLifecycleReconciliationCandidate {
   attemptId: string;
   lifecycleKind: "payment_issue" | "cancellation_scheduled" | "access_ended" | "refund_revoked";
+  status: "pending" | "sent";
   providerStatusLastSeenAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -51,6 +59,7 @@ export async function listBillingLifecycleReconciliationCandidates(
           WHEN 'billing_access_ended' THEN 'access_ended'
           WHEN 'billing_refund_revoked' THEN 'refund_revoked'
         END AS lifecycleKind,
+        status,
         provider_status_last_seen_at AS providerStatusLastSeenAt,
         created_at AS createdAt,
         updated_at AS updatedAt
@@ -61,7 +70,7 @@ export async function listBillingLifecycleReconciliationCandidates(
         AND watchlist_id IS NULL
         AND digest_run_id IS NULL
         AND delivery_target_id IS NULL
-        AND status = 'pending'
+        AND status IN ('pending', 'sent')
         AND webhook_status = 'provider_unknown'
         AND (
           (idempotency_key LIKE 'billing-payment-issue:%' AND template_name = 'billing_payment_issue')
@@ -74,7 +83,9 @@ export async function listBillingLifecycleReconciliationCandidates(
             AND template_name = 'billing_refund_revoked'
           )
         )
-      ORDER BY created_at DESC
+      ORDER BY
+        CASE status WHEN 'pending' THEN 0 ELSE 1 END,
+        created_at DESC
       LIMIT 20
     `,
   );
@@ -130,11 +141,23 @@ function validateInput(input: BillingLifecycleEmailReconciliationInput) {
     MAX_EVIDENCE_REFERENCE_LENGTH,
     { required: true },
   )!;
+  const evidenceClassification = boundedText(
+    "evidenceClassification",
+    input.evidenceClassification,
+    64,
+    { required: true, safeIdentifier: true },
+  ) as BillingLifecycleEvidenceClassification;
   const providerMessageId = boundedText(
     "providerMessageId",
     input.providerMessageId,
     MAX_PROVIDER_MESSAGE_ID_LENGTH,
   );
+  const observedAt = boundedText(
+    "observedAt",
+    input.observedAt,
+    MAX_TIMESTAMP_LENGTH,
+    { required: true },
+  )!;
   const reconciledAt = boundedText(
     "reconciledAt",
     input.reconciledAt ?? nowIso(),
@@ -145,12 +168,26 @@ function validateInput(input: BillingLifecycleEmailReconciliationInput) {
   if (input.outcome !== "sent" && input.outcome !== "failed") {
     throw new TypeError("outcome must be sent or failed.");
   }
+  const allowedClassification =
+    input.outcome === "failed"
+      ? evidenceClassification === "provider_rejection_log"
+      : evidenceClassification === "controlled_inbox_receipt" ||
+        evidenceClassification === "provider_acceptance_log" ||
+        evidenceClassification === "provider_delivery_confirmation";
+  if (!allowedClassification) {
+    throw new TypeError("evidenceClassification does not prove the selected outcome.");
+  }
+  if (!Number.isFinite(Date.parse(observedAt))) {
+    throw new TypeError("observedAt must be a valid timestamp.");
+  }
 
   return {
     operatorUserId,
     attemptId,
     expectedUpdatedAt,
+    evidenceClassification,
     evidenceReference,
+    observedAt,
     providerMessageId,
     reconciledAt,
     outcome: input.outcome,
@@ -171,11 +208,13 @@ export async function reconcileBillingLifecycleEmailAttempt(
   const reconciliationIdempotencyKey = `billing-lifecycle-reconcile:${validated.attemptId}:${validated.expectedUpdatedAt}`;
   const auditId = createId();
   const nextStatus = validated.outcome === "sent" ? "sent" : "failed";
-  const nextWebhookStatus = validated.outcome === "sent" ? "delivered" : "failed";
+  const nextWebhookStatus =
+    validated.outcome === "failed"
+      ? "failed"
+      : validated.evidenceClassification === "provider_acceptance_log"
+        ? "provider_unknown"
+        : "delivered";
   const nextErrorMessage = validated.outcome === "failed" ? BILLING_LIFECYCLE_RECONCILIATION_ERROR : null;
-  const nextSentAt = validated.outcome === "sent" ? validated.reconciledAt : null;
-  const nextFailedAt = validated.outcome === "failed" ? validated.reconciledAt : null;
-
   const transition = db
     .prepare(`
       UPDATE delivery_attempt
@@ -184,8 +223,14 @@ export async function reconcileBillingLifecycleEmailAttempt(
           provider_message_id = COALESCE(?, provider_message_id),
           provider_status_last_seen_at = ?,
           error_message = ?,
-          sent_at = ?,
-          failed_at = ?,
+          sent_at = CASE
+            WHEN ? = 'sent' THEN COALESCE(sent_at, ?)
+            ELSE sent_at
+          END,
+          failed_at = CASE
+            WHEN ? = 'failed' THEN ?
+            ELSE NULL
+          END,
           updated_at = ?
       WHERE id = ?
         AND lane = 'customer'
@@ -194,9 +239,19 @@ export async function reconcileBillingLifecycleEmailAttempt(
         AND watchlist_id IS NULL
         AND digest_run_id IS NULL
         AND delivery_target_id IS NULL
-        AND status = 'pending'
+        AND status IN ('pending', 'sent')
         AND webhook_status = 'provider_unknown'
         AND updated_at = ?
+        AND (
+          sent_at IS NULL
+          OR julianday(?) >= julianday(sent_at)
+        )
+        AND julianday(?) >= julianday(created_at)
+        AND julianday(?) <= julianday(?, '+5 minutes')
+        AND (
+          status = 'pending'
+          OR ? != 'provider_acceptance_log'
+        )
         AND (
           (idempotency_key LIKE 'billing-payment-issue:%' AND template_name = 'billing_payment_issue')
           OR (
@@ -213,18 +268,27 @@ export async function reconcileBillingLifecycleEmailAttempt(
       nextStatus,
       nextWebhookStatus,
       validated.providerMessageId,
-      validated.reconciledAt,
+      validated.observedAt,
       nextErrorMessage,
-      nextSentAt,
-      nextFailedAt,
+      validated.outcome,
+      validated.observedAt,
+      validated.outcome,
+      validated.observedAt,
       validated.reconciledAt,
       validated.attemptId,
       validated.expectedUpdatedAt,
+      validated.observedAt,
+      validated.observedAt,
+      validated.observedAt,
+      validated.reconciledAt,
+      validated.evidenceClassification,
     );
 
   const auditMetadata = jsonValue({
     outcome: validated.outcome,
+    evidenceClassification: validated.evidenceClassification,
     evidenceReference: validated.evidenceReference,
+    observedAt: validated.observedAt,
     providerMessageId: validated.providerMessageId,
   });
   const auditResult = jsonValue({
