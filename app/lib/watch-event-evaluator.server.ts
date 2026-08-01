@@ -61,20 +61,21 @@ export function evaluateProofBackedEvents(input: {
   recentWatchEvents: WatchEventRecord[];
   sensitivityMode: SensitivityMode;
   burstCount: number;
+  currentCapturedAt?: string | null;
   now?: string;
 }) : ProofEventEvaluationResult {
-  if (!input.lastSuccessfulProof) {
+  const lastSuccessfulProof = input.lastSuccessfulProof;
+  if (!lastSuccessfulProof) {
     return {
       status: "baseline_established",
       events: [],
     };
   }
 
-  const previous = toComparableProofFields(input.lastSuccessfulProof.extractedFields);
+  const previous = toComparableProofFields(lastSuccessfulProof.extractedFields);
   const comparablePrevious =
     input.currentProof.extractorVersion &&
-    input.lastSuccessfulProof.extractorVersion !==
-      input.currentProof.extractorVersion
+    lastSuccessfulProof.extractorVersion !== input.currentProof.extractorVersion
       ? {
           ...previous,
           // Landing-signal parsing and form detection intentionally change
@@ -132,6 +133,12 @@ export function evaluateProofBackedEvents(input: {
         from: draft.from,
         to: draft.to,
         diffHash: draft.diffHash,
+        ...(lastSuccessfulProof.succeededAt && input.currentCapturedAt
+          ? {
+              beforeCapturedAt: lastSuccessfulProof.succeededAt,
+              capturedAt: input.currentCapturedAt,
+            }
+          : {}),
       },
       dedupeReason: duplicate ? "proof_duplicate" : null,
     } satisfies EvaluatedWatchEventDraft;
