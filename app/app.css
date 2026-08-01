@@ -14939,6 +14939,411 @@ textarea.f9-wk-in {
   display: none;
 }
 
+/* === BL-034 presence (landing language) === */
+
+/*
+ * Presence is a working instrument, not a desk of panels. The page spends the
+ * shared v4 character budget on its WorkingHeader title and entity names;
+ * every other label is sentence-case Inter, every visible rule is 1px, every
+ * corner is square, and green is intentionally unspent because source
+ * availability is not a caught change.
+ */
+
+.f9-pr-page {
+  --pr-rule: var(--wk-rule);
+}
+
+.f9-pr-page .f9-wk-strip {
+  margin-top: 18px;
+}
+
+.f9-pr-notices {
+  padding: 0 var(--wk-pad);
+}
+
+.f9-pr-notices:empty {
+  display: none;
+}
+
+.f9-pr-notices p {
+  margin: 0;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--pr-rule);
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.f9-pr-desk {
+  display: grid;
+  min-width: 0;
+  border-bottom: 1px solid var(--pr-rule);
+  grid-template-columns: minmax(360px, 0.88fr) minmax(480px, 1.12fr);
+}
+
+.f9-pr-instrument,
+.f9-pr-coverage-section {
+  min-width: 0;
+  padding: 24px var(--wk-pad) 28px;
+}
+
+.f9-pr-instrument {
+  border-right: 1px solid var(--pr-rule);
+}
+
+.f9-pr-section-head h2,
+.f9-pr-list-head h2 {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--f9-font);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.3;
+  text-transform: none;
+}
+
+.f9-pr-section-head p {
+  max-width: 58ch;
+  margin: 6px 0 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.f9-pr-form {
+  display: grid;
+  margin-top: 18px;
+  border-top: 1px solid var(--pr-rule);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.f9-pr-field {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 0 14px;
+  border-bottom: 1px solid var(--pr-rule);
+}
+
+.f9-pr-field:nth-of-type(odd) {
+  padding-right: 12px;
+  border-right: 1px solid var(--pr-rule);
+}
+
+.f9-pr-field:nth-of-type(even) {
+  padding-left: 12px;
+}
+
+.f9-pr-field > span {
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.f9-pr-field > span small {
+  margin-left: 4px;
+  color: var(--ink-faint);
+  font-size: inherit;
+  font-weight: 400;
+}
+
+.f9-pr-field input,
+.f9-pr-field select {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--pr-rule);
+  border-radius: 0;
+  background: var(--card);
+  color: var(--ink);
+  font-family: var(--ld-mono);
+  font-size: 13.5px;
+  line-height: 1.3;
+  transition: border-color var(--wk-snap), background-color var(--wk-snap);
+}
+
+.f9-pr-field select {
+  appearance: none;
+  padding-right: 30px;
+}
+
+.f9-pr-field:has(> select)::after {
+  position: absolute;
+  right: 12px;
+  bottom: 31px;
+  color: var(--ink-faint);
+  content: "\25BE";
+  font-size: 11px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.f9-pr-field input::placeholder {
+  color: var(--ink-faint);
+}
+
+.f9-pr-form-commit {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 14px;
+  grid-column: 1 / -1;
+}
+
+.f9-pr-form-commit p {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 12.5px;
+  text-align: right;
+}
+
+.f9-pr-lock {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--pr-rule);
+}
+
+.f9-pr-lock p {
+  max-width: 50ch;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.f9-pr-lock .f9-wk-btn {
+  flex: none;
+}
+
+.f9-pr-coverage {
+  margin: 18px 0 0;
+  border-top: 1px solid var(--pr-rule);
+}
+
+.f9-pr-coverage > div {
+  display: grid;
+  min-width: 0;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--pr-rule);
+  gap: 18px;
+  grid-template-columns: minmax(128px, 0.7fr) minmax(0, 1.3fr);
+}
+
+.f9-pr-coverage dt {
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.f9-pr-coverage dd {
+  display: grid;
+  min-width: 0;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  gap: 5px 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.f9-pr-coverage dd span {
+  display: flex;
+  min-width: 0;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.f9-pr-coverage dd b {
+  color: var(--ink-faint);
+  font-weight: 400;
+}
+
+.f9-pr-coverage dd small {
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  line-height: 1.45;
+  grid-column: 1 / -1;
+}
+
+.f9-pr-list-section {
+  padding-top: 26px;
+}
+
+.f9-pr-list-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+  padding-bottom: 12px;
+}
+
+.f9-pr-list-head > span {
+  color: var(--ink-faint);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.f9-pr-list-section > .f9-wk-note {
+  margin-top: 0;
+  padding: 15px 0;
+  border-top: 1px solid var(--pr-rule);
+  border-bottom: 1px solid var(--pr-rule);
+}
+
+.f9-pr-feed {
+  margin: 0 calc(var(--wk-pad) * -1);
+  border-top: 1px solid var(--pr-rule);
+}
+
+.f9-pr-feed-row {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  align-items: center;
+  gap: 20px;
+  padding: 14px var(--wk-pad);
+  border-bottom: 1px solid var(--pr-rule);
+  grid-template-columns: minmax(0, 1fr) 110px 96px 10px;
+  transition: background-color var(--wk-snap);
+}
+
+.f9-pr-feed-row:hover {
+  background: var(--wk-sunk);
+}
+
+.f9-pr-feed-row h3,
+.f9-pr-feed-row p {
+  margin: 0;
+}
+
+.f9-pr-feed-row h3 {
+  font-family: var(--f9-font);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.f9-pr-feed-row h3 a {
+  display: inline-flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.f9-pr-feed-row h3 a::after {
+  position: absolute;
+  content: "";
+  inset: 0;
+}
+
+.f9-pr-feed-row p {
+  overflow: hidden;
+  margin-top: 4px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.f9-pr-feed-row > span {
+  color: var(--ink-faint);
+  font-size: 13px;
+}
+
+.f9-pr-feed-time {
+  text-align: right;
+}
+
+.f9-pr-page .f9-wk-opline {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 1120px) {
+  .f9-pr-desk {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .f9-pr-instrument {
+    border-right: 0;
+    border-bottom: 1px solid var(--pr-rule);
+  }
+}
+
+@media (max-width: 720px) {
+  .f9-pr-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .f9-pr-field:nth-of-type(odd),
+  .f9-pr-field:nth-of-type(even) {
+    padding-right: 0;
+    padding-left: 0;
+    border-right: 0;
+  }
+
+  .f9-pr-field:has(> select)::after {
+    right: 12px;
+  }
+
+  .f9-pr-form-commit,
+  .f9-pr-lock {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .f9-pr-form-commit p {
+    text-align: left;
+  }
+
+  .f9-pr-coverage > div {
+    gap: 7px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .f9-pr-coverage dd {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .f9-pr-coverage dd small {
+    grid-column: auto;
+  }
+
+  .f9-pr-feed-row {
+    gap: 5px 12px;
+    grid-template-columns: minmax(0, 1fr) auto 10px;
+  }
+
+  .f9-pr-feed-row > div {
+    grid-column: 1 / -1;
+  }
+
+  .f9-pr-feed-time {
+    text-align: left;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .f9-pr-page *,
+  .f9-pr-page *::before,
+  .f9-pr-page *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* === BL-040 source + developer access (landing language) === */
 
 .f9-bl040-page {
