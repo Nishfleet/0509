@@ -13834,6 +13834,12 @@ textarea.f9-wk-in {
     align-items: flex-start;
   }
 
+  .f9-clients-section-head h2[tabindex="-1"] {
+    display: flex;
+    min-height: 44px;
+    align-items: center;
+  }
+
   .f9-clients-field-grid,
   .f9-clients-choice-row {
     grid-template-columns: minmax(0, 1fr);

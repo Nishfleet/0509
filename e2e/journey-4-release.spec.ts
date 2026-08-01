@@ -412,15 +412,11 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
     await expect(reviewControl).not.toBeChecked();
     const pdfReview = pdfForm.locator('input[type="hidden"][name="reviewed"]');
     await expect(pdfReview).toHaveValue("false");
+    const pdfButton = pdfForm.getByRole("button", { name: "Download PDF" });
+    await expect(pdfButton).toBeDisabled();
 
     await reviewControl.evaluate((control) => control.removeAttribute("required"));
     await shareForm.getByRole("button", { name: "Send to client" }).click();
-    await expectLiveRegion(
-      page,
-      "Review the current evidence before sharing or downloading this report.",
-    );
-
-    await pdfForm.getByRole("button", { name: "Download PDF" }).click();
     await expectLiveRegion(
       page,
       "Review the current evidence before sharing or downloading this report.",
@@ -433,6 +429,7 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
     await expect(pdfForm.locator('input[type="hidden"][name="reviewed"]')).toHaveValue(
       "true",
     );
+    await expect(pdfButton).toBeEnabled();
     await staleShareForm
       .locator('input[name="reviewFingerprint"]')
       .evaluate((control) => {
