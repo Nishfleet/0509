@@ -8,8 +8,6 @@ import {
 } from "~/lib/competitor-website";
 import type { AppEnv } from "~/lib/env.server";
 import {
-  AgentActionIdempotencyConflictError,
-  AgentActionReplayUnavailableError,
   AgentActionStaleWriteError,
   runAtomicAgentAction,
   runAuditedAgentAction,
@@ -17,7 +15,6 @@ import {
 } from "~/lib/agent-actions.server";
 import {
   AgentMemoryInputError,
-  isSecretishMemoryField,
   isSecretishMemoryString,
   readOptionalSafeAgentMemoryScope,
   readSafeAgentMemoryKey,
@@ -28,10 +25,7 @@ import {
   safeAgentMemoryRecord,
   sanitizeAgentFacingValue,
 } from "~/lib/agent-memory.server";
-import {
-  isCustomerAgentActionName,
-  type CustomerAgentActionName,
-} from "~/lib/agent-action-catalog";
+import type { CustomerAgentActionName } from "~/lib/agent-action-catalog";
 import {
   isSlackDeliveryCustomerFacing,
   isWhatsAppDeliveryCustomerFacing,
@@ -62,6 +56,25 @@ import {
   strictlyNewerClientRoomTimestamp,
 } from "~/lib/data/customer-api-rooms.server";
 import type { CounterMoveFollowUpChannel } from "~/lib/counter-move-brief.server";
+import {
+  buildAgentActionRequestFingerprint,
+  clampListLimit,
+  CustomerAgentActionError,
+  customerAgentActionRequiresIdempotency,
+  customerAgentActionSupportsIdempotency,
+  readBoolean,
+  readInteger,
+  readOptionalBoolean,
+  readString,
+  readStringList,
+  requireString,
+  type CustomerAgentActionContext,
+} from "~/lib/customer-agent-actions/request.server";
+import {
+  createSupportCaseFromAgent,
+  listSupportCasesFromAgent,
+} from "~/lib/customer-agent-actions/support-cases.server";
+import { listWebMentionsFromAgent } from "~/lib/customer-agent-actions/web-mentions.server";
 import type {
   AgentActionAuditRecord,
   AgentMemoryRecord,
@@ -74,43 +87,20 @@ import type {
   DiscoveryFailureClass,
   SensitivityMode,
   ShareResourceType,
-  SupportCaseRecord,
-  SupportCaseStatus,
   WatchlistDeliveryConfigRecord,
   WatchEventRecord,
-  WebMentionSource,
-  WebMentionTargetRecord,
 } from "~/lib/types";
 
 export { CUSTOMER_AGENT_ACTION_NAMES } from "~/lib/agent-action-catalog";
 export type { CustomerAgentActionName } from "~/lib/agent-action-catalog";
-
-const IDEMPOTENCY_REQUIRED_ACTIONS = new Set<CustomerAgentActionName>([
-  "counter_move_brief.create",
-  "source.meta.retest",
-  "watchlist.create",
-  "watchlist.update",
-  "watchlist.refresh",
-  "watchlist.pause",
-  "watchlist.resume",
-  "collection.create",
-  "proof.add_external",
-  "share.create",
-  "report.share",
-  "memory.upsert",
-  "client_room.upsert",
-  "support_case.create",
-  "delivery_settings.update",
-  "delivery_target.update",
-]);
-
-const IDEMPOTENCY_IGNORED_ACTIONS = new Set<CustomerAgentActionName>([
-  "delivery_targets.list",
-  "web_mentions.list",
-  "memory.list",
-  "client_room.list",
-  "support_case.list",
-]);
+export {
+  buildAgentActionRequestFingerprint,
+  CustomerAgentActionError,
+  customerAgentActionErrorPayload,
+  customerAgentActionRequiresIdempotency,
+  normalizeCustomerAgentActionName,
+} from "~/lib/customer-agent-actions/request.server";
+export type { CustomerAgentActionContext } from "~/lib/customer-agent-actions/request.server";
 
 const WORKSPACE_OWNER_ONLY_ACTIONS = new Set<CustomerAgentActionName>([
   "source.meta.retest",
@@ -118,95 +108,6 @@ const WORKSPACE_OWNER_ONLY_ACTIONS = new Set<CustomerAgentActionName>([
   "delivery_settings.update",
   "delivery_target.update",
 ]);
-
-export interface CustomerAgentActionContext {
-  userId: string;
-  apiKeyId: string | null;
-  idempotencyKey?: string | null;
-  source: "mcp" | "api_v1";
-  executionContext?: ExecutionContext | null;
-  origin?: string | null;
-  authorizeExternalEffect?: () => void | Promise<void>;
-}
-
-export class CustomerAgentActionError extends Error {
-  readonly code: string;
-  readonly status: number;
-  readonly details: Record<string, unknown>;
-
-  constructor(
-    code: string,
-    message: string,
-    options: {
-      status?: number;
-      details?: Record<string, unknown>;
-    } = {},
-  ) {
-    super(message);
-    this.name = "CustomerAgentActionError";
-    this.code = code;
-    this.status = options.status ?? 400;
-    this.details = options.details ?? {};
-  }
-}
-
-export function customerAgentActionErrorPayload(error: unknown) {
-  if (error instanceof CustomerAgentActionError) {
-    return {
-      status: error.status,
-      body: {
-        ok: false,
-        error: error.code,
-        message: error.message,
-        ...error.details,
-      },
-    };
-  }
-
-  if (error instanceof AgentActionIdempotencyConflictError) {
-    return {
-      status: 409,
-      body: {
-        ok: false,
-        error: "idempotency_conflict",
-        message: error.message,
-      },
-    };
-  }
-
-  if (error instanceof AgentActionReplayUnavailableError) {
-    return {
-      status: 409,
-      body: {
-        ok: false,
-        error: "idempotency_replay_unavailable",
-        message: error.message,
-      },
-    };
-  }
-
-  return {
-    status: 500,
-    body: {
-      ok: false,
-      error: "agent_action_failed",
-      message: "Agent action failed.",
-    },
-  };
-}
-
-export function normalizeCustomerAgentActionName(value: string | null | undefined): CustomerAgentActionName | null {
-  const normalized = value?.trim().toLowerCase();
-  return isCustomerAgentActionName(normalized) ? normalized : null;
-}
-
-export function customerAgentActionRequiresIdempotency(actionName: CustomerAgentActionName) {
-  return IDEMPOTENCY_REQUIRED_ACTIONS.has(actionName);
-}
-
-function customerAgentActionSupportsIdempotency(actionName: CustomerAgentActionName) {
-  return !IDEMPOTENCY_IGNORED_ACTIONS.has(actionName);
-}
 
 function actionReversal(
   action: CustomerAgentActionName,
@@ -236,6 +137,13 @@ export async function runCustomerAgentAction(
     throw new CustomerAgentActionError(
       "missing_idempotency_key",
       "Provide idempotencyKey or an Idempotency-Key header before running this action.",
+    );
+  }
+  if (actionName === "support_case.create" && idempotencyKey && idempotencyKey.length > 120) {
+    throw new CustomerAgentActionError(
+      "invalid_idempotency_key",
+      "Support-case idempotency keys must be 120 characters or fewer.",
+      { status: 400 },
     );
   }
 
@@ -555,6 +463,11 @@ export async function runCustomerAgentAction(
           resourceType: "support_case",
           resourceId: result.supportCase.id,
           result,
+          auditStatus: result.ok ? "succeeded" as const : "failed" as const,
+          errorCode: result.ok ? null : "support_notification_failed",
+          errorMessage: result.ok
+            ? null
+            : "Support case was saved, but the operator notification failed.",
           metadata: {
             supportCaseId: result.supportCase.id,
             category: result.supportCase.category,
@@ -588,6 +501,7 @@ export async function runCustomerAgentAction(
     }
   }, {
     replayCompleted: (audit) => replayCustomerAgentAction(env, context, actionName, audit),
+    retryFailed: actionName === "support_case.create",
   });
 }
 
@@ -1267,6 +1181,7 @@ async function loadReportDocumentForAgent(
     getWatchlist,
     listAdsByIds,
     listCollectionItems,
+    listProofCapturePairsForEventIds,
     listWatchEvents,
   } = await import("~/lib/data.server");
   const parsedReport = parseReportId(readString(input, "reportId") ?? "");
@@ -1282,6 +1197,7 @@ async function loadReportDocumentForAgent(
       getWatchlist,
       listAdsByIds,
       listCollectionItems,
+      listProofCapturePairsForEventIds,
       listWatchEvents,
     },
     {
@@ -1446,140 +1362,6 @@ async function listClientRoomsFromAgent(
     action: "client_room.list",
     status,
     rooms: rooms.map(safeClientRoomRecord),
-  };
-}
-
-async function createSupportCaseFromAgent(
-  env: AppEnv,
-  workspaceUserId: string,
-  context: CustomerAgentActionContext,
-  input: Record<string, unknown>,
-) {
-  const { createSupportCase } = await import("~/lib/data.server");
-  const requestKey = context.idempotencyKey;
-  let supportCase;
-  try {
-    supportCase = await createSupportCase(env, {
-      userId: context.userId,
-      category: input.category,
-      priority: input.priority ?? "normal",
-      subject: input.subject,
-      detail: input.detail,
-      requestKey,
-      context: {
-        createdFrom: "agent_action",
-        source: context.source,
-        apiKeyId: context.apiKeyId,
-        requesterUserId: context.userId,
-        workspaceUserId,
-      },
-    });
-  } catch (error) {
-    if (error instanceof SupportCaseInputError) {
-      throw new CustomerAgentActionError(error.code, error.message, { status: error.status });
-    }
-    throw error;
-  }
-
-  if (!supportCase) {
-    throw new CustomerAgentActionError("support_case_create_failed", "Could not open this support case.", {
-      status: 500,
-    });
-  }
-  const requester = await getSupportRequesterProfile(env, context.userId);
-  const operatorNotified = await notifySupportCaseOperatorFromAgent(env, {
-    caseId: supportCase.id,
-    requesterEmail: requester?.email ?? "unknown",
-    input,
-    source: context.source,
-    authorizeExternalEffect: context.authorizeExternalEffect,
-  });
-
-  return {
-    ok: operatorNotified,
-    action: "support_case.create",
-    supportCase: safeSupportCaseSummary(supportCase),
-    message: operatorNotified
-      ? "Support case opened. Support will reply by email."
-      : "Support case saved, but support could not be notified. Email support@0509.io now so we can reply.",
-  };
-}
-
-async function getSupportRequesterProfile(env: AppEnv, userId: string) {
-  try {
-    const { getUserDeliveryProfile } = await import("~/lib/data.server");
-    return await getUserDeliveryProfile(env, userId);
-  } catch {
-    console.error("[support]", { event: "requester_profile_lookup_failed" });
-    return null;
-  }
-}
-
-async function notifySupportCaseOperatorFromAgent(
-  env: AppEnv,
-  input: {
-    caseId: string;
-    requesterEmail: string;
-    input: Record<string, unknown>;
-    source: CustomerAgentActionContext["source"];
-    authorizeExternalEffect?: CustomerAgentActionContext["authorizeExternalEffect"];
-  },
-) {
-  const idempotencyKey = `support-case:${input.caseId}`;
-  try {
-    const { getDeliveryAttemptByIdempotencyKey } = await import("~/lib/data.server");
-    const existingAttempt = await getDeliveryAttemptByIdempotencyKey(env, idempotencyKey);
-    if (existingAttempt?.status === "sent") {
-      return true;
-    }
-
-    const { SUPPORT_CASE_CATEGORY_LABELS, SUPPORT_CASE_PRIORITY_LABELS, normalizeSupportCaseInput } = await import("~/lib/support");
-    const { sendOperatorAlertEmail } = await import("~/lib/delivery.server");
-    const normalized = normalizeSupportCaseInput({
-      category: input.input.category,
-      priority: input.input.priority ?? "normal",
-      subject: input.input.subject,
-      detail: input.input.detail,
-    });
-
-    await input.authorizeExternalEffect?.();
-
-    return await sendOperatorAlertEmail(env, {
-      subject: `0509 support case: ${normalized.subject}`,
-      lines: [
-        `Case: ${input.caseId}`,
-        `Requester: ${input.requesterEmail}`,
-        `Source: ${input.source}`,
-        `Category: ${SUPPORT_CASE_CATEGORY_LABELS[normalized.category]}`,
-        `Priority: ${SUPPORT_CASE_PRIORITY_LABELS[normalized.priority]}`,
-        `Subject: ${normalized.subject}`,
-        `Details: ${normalized.detail}`,
-      ],
-      idempotencyKey,
-    });
-  } catch {
-    console.error("[support]", { event: "agent_operator_alert_failed" });
-    return false;
-  }
-}
-
-async function listSupportCasesFromAgent(
-  env: AppEnv,
-  userId: string,
-  input: Record<string, unknown>,
-) {
-  const { listSupportCases } = await import("~/lib/data.server");
-  const status = readOptionalSupportCaseStatus(input) ?? "all";
-  const cases = await listSupportCases(env, userId, {
-    status,
-    limit: readInteger(input, "limit", 20),
-  });
-
-  return {
-    ok: true,
-    action: "support_case.list",
-    status,
-    cases: cases.map(safeSupportCaseSummary),
   };
 }
 
@@ -1822,67 +1604,6 @@ function rejectDormantDeliveryActionInput(input: Record<string, unknown>) {
   }
 }
 
-async function listWebMentionsFromAgent(
-  env: AppEnv,
-  userId: string,
-  input: Record<string, unknown>,
-) {
-  const {
-    getWatchlist,
-    listWebMentionObservations,
-    listWebMentionTargets,
-  } = await import("~/lib/data.server");
-  const watchlistId = readString(input, "watchlistId");
-  if (watchlistId) {
-    const watchlist = await getWatchlist(env, watchlistId, userId);
-    if (!watchlist) {
-      throw new CustomerAgentActionError("watchlist_not_found", "Watchlist not found.", { status: 404 });
-    }
-  }
-
-  const sources = readWebMentionSources(input);
-  const includeInactive = readBoolean(input, "includeInactive", false);
-  const [targets, observations] = await Promise.all([
-    listWebMentionTargets(env, userId, {
-      ...(watchlistId ? { watchlistId } : {}),
-      includeInactive,
-      limit: readInteger(input, "targetLimit", 50),
-    }),
-    listWebMentionObservations(env, userId, {
-      ...(watchlistId ? { watchlistId } : {}),
-      sources,
-      includeInactive,
-      limit: readInteger(input, "limit", 50),
-    }),
-  ]);
-
-  return {
-    ok: true,
-    action: "web_mentions.list",
-    status: "available",
-    boundary:
-      "Returns existing source-backed website, blog, and Substack observations only. X, Reddit, YouTube, LinkedIn, and broad social listening are not live.",
-    watchlistId,
-    supportedSources: supportedWebMentionSources,
-    targets: targets.map(safeWebMentionTargetRecord),
-    observations: observations.map((observation) => ({
-      id: observation.id,
-      targetId: observation.targetId,
-      source: observation.source,
-      sourceId: observation.sourceId,
-      url: observation.url,
-      title: observation.title,
-      author: observation.author,
-      excerpt: observation.excerpt,
-      publishedAt: observation.publishedAt,
-      observedAt: observation.observedAt,
-      sentiment: observation.sentiment,
-      engagement: sanitizeAgentActionMetadata(observation.engagement),
-      createdAt: observation.createdAt,
-    })),
-  };
-}
-
 async function refreshWatchlistFromAgent(
   env: AppEnv,
   workspaceUserId: string,
@@ -2045,75 +1766,6 @@ async function setWatchlistActiveFromAgent(
         ? "Watchlist was already active. No change was made."
         : "Watchlist was already paused. No change was made.",
   };
-}
-
-function requireString(input: Record<string, unknown>, field: string) {
-  const value = readString(input, field);
-  if (!value) {
-    throw new CustomerAgentActionError("missing_field", `${field} is required.`);
-  }
-  return value;
-}
-
-function readString(input: Record<string, unknown>, field: string) {
-  const value = input[field];
-  return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
-function readBoolean(input: Record<string, unknown>, field: string, fallback: boolean) {
-  const value = input[field];
-  return typeof value === "boolean" ? value : fallback;
-}
-
-function readOptionalBoolean(input: Record<string, unknown>, field: string) {
-  if (!Object.prototype.hasOwnProperty.call(input, field)) {
-    return undefined;
-  }
-  const value = input[field];
-  if (typeof value === "boolean") {
-    return value;
-  }
-  if (typeof value === "string") {
-    const normalized = value.trim().toLowerCase();
-    if (normalized === "true" || normalized === "1") {
-      return true;
-    }
-    if (normalized === "false" || normalized === "0") {
-      return false;
-    }
-  }
-  throw new CustomerAgentActionError("invalid_boolean", `${field} must be true or false.`);
-}
-
-function readInteger(input: Record<string, unknown>, field: string, fallback: number) {
-  const value = input[field];
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return Math.floor(value);
-  }
-  if (typeof value === "string" && value.trim() && Number.isFinite(Number(value))) {
-    return Math.floor(Number(value));
-  }
-  return fallback;
-}
-
-function clampListLimit(value: number, max = 100) {
-  return Math.max(1, Math.min(max, Math.floor(value)));
-}
-
-function readStringList(input: Record<string, unknown>, field: string) {
-  const value = input[field];
-  if (Array.isArray(value)) {
-    return value
-      .filter((entry): entry is string => typeof entry === "string" && Boolean(entry.trim()))
-      .map((entry) => entry.trim());
-  }
-  const single = readString(input, field);
-  return single
-    ? single
-      .split(",")
-      .map((entry) => entry.trim())
-      .filter(Boolean)
-    : [];
 }
 
 function readSensitivityMode(input: Record<string, unknown>): SensitivityMode | null {
@@ -2404,18 +2056,6 @@ function safeClientRoomRecord(room: ClientRoomRecord): ClientRoomRecord {
   };
 }
 
-function safeSupportCaseSummary(supportCase: SupportCaseRecord) {
-  return {
-    id: supportCase.id,
-    category: supportCase.category,
-    priority: supportCase.priority,
-    status: supportCase.status,
-    subject: supportCase.subject,
-    createdAt: supportCase.createdAt,
-    updatedAt: supportCase.updatedAt,
-  };
-}
-
 function safeWatchlistDeliveryConfigRecord(config: WatchlistDeliveryConfigRecord) {
   return {
     id: config.id,
@@ -2432,17 +2072,6 @@ function safeWatchlistDeliveryConfigRecord(config: WatchlistDeliveryConfigRecord
     createdAt: config.createdAt,
     updatedAt: config.updatedAt,
   };
-}
-
-function readOptionalSupportCaseStatus(input: Record<string, unknown>): SupportCaseStatus | "all" | null {
-  const value = readString(input, "status");
-  if (!value) {
-    return null;
-  }
-  if (value === "open" || value === "closed" || value === "all") {
-    return value;
-  }
-  throw new CustomerAgentActionError("invalid_support_case_status", "status must be open, closed, or all.");
 }
 
 function safeDeliveryTargetRecord(target: DeliveryTargetRecord) {
@@ -2514,41 +2143,6 @@ function maskEmail(value: string) {
 function maskPhone(value: string) {
   const digits = value.replace(/\D/g, "");
   return digits ? `***${digits.slice(-4)}` : "[redacted-phone]";
-}
-
-const supportedWebMentionSources: WebMentionSource[] = ["blog", "substack", "web"];
-
-function readWebMentionSources(input: Record<string, unknown>) {
-  const requested = readStringList(input, "sources");
-  if (requested.length === 0) {
-    return supportedWebMentionSources;
-  }
-
-  return Array.from(new Set(requested.map((source) => {
-    if (supportedWebMentionSources.includes(source as WebMentionSource)) {
-      return source as WebMentionSource;
-    }
-    throw new CustomerAgentActionError(
-      "unsupported_web_mention_source",
-      "web_mentions.list currently supports blog, substack, and web only.",
-    );
-  })));
-}
-
-function safeWebMentionTargetRecord(target: WebMentionTargetRecord) {
-  return {
-    id: target.id,
-    watchlistId: target.watchlistId,
-    trackingRole: target.trackingRole,
-    label: target.label,
-    queryText: target.queryText,
-    domain: target.domain,
-    sources: target.sources.filter((source) => supportedWebMentionSources.includes(source)),
-    isActive: target.isActive,
-    lastCheckedAt: target.lastCheckedAt,
-    createdAt: target.createdAt,
-    updatedAt: target.updatedAt,
-  };
 }
 
 function sanitizeClientRoomNotesForResponse(notes: Record<string, unknown>) {
@@ -2795,82 +2389,4 @@ function formatRetryAfterLabel(retryAfterSeconds: number) {
   const hours = Math.floor(minutes / 60);
   const remainingMinutes = minutes % 60;
   return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
-}
-
-export function buildAgentActionRequestFingerprint(actionName: CustomerAgentActionName, input: Record<string, unknown>) {
-  return fnv1a32(`${actionName}:${stableStringify(sanitizeAgentActionInputForFingerprint(actionName, input))}`);
-}
-
-function sanitizeAgentActionInputForFingerprint(actionName: CustomerAgentActionName, input: Record<string, unknown>) {
-  return sanitizeFingerprintObject(input, {
-    actionName,
-    topLevel: true,
-  });
-}
-
-function sanitizeFingerprintObject(
-  input: Record<string, unknown>,
-  options: {
-    actionName: CustomerAgentActionName;
-    topLevel?: boolean;
-  },
-): Record<string, unknown> {
-  const output: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(input)) {
-    if (options.topLevel && (key === "action" || key === "idempotencyKey")) {
-      continue;
-    }
-    const preservesSchemaKey = options.topLevel && options.actionName === "memory.upsert" && key === "key";
-    if (isSecretishMemoryField(key) && !preservesSchemaKey) {
-      output[key] = "[redacted]";
-      continue;
-    }
-    const sanitized = sanitizeFingerprintValue(value, options.actionName);
-    if (typeof sanitized !== "undefined") {
-      output[key] = sanitized;
-    }
-  }
-  return output;
-}
-
-function sanitizeFingerprintValue(value: unknown, actionName: CustomerAgentActionName): unknown {
-  if (value === null || typeof value === "number" || typeof value === "boolean") {
-    return value;
-  }
-  if (typeof value === "string") {
-    return isSecretishMemoryString(value) ? "[redacted]" : value;
-  }
-  if (Array.isArray(value)) {
-    return value.map((entry) => sanitizeFingerprintValue(entry, actionName))
-      .filter((entry) => typeof entry !== "undefined");
-  }
-  if (value && typeof value === "object") {
-    return sanitizeFingerprintObject(value as Record<string, unknown>, { actionName });
-  }
-  return undefined;
-}
-
-function stableStringify(value: unknown): string {
-  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-    return JSON.stringify(value);
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map(stableStringify).join(",")}]`;
-  }
-  if (value && typeof value === "object") {
-    const entries = Object.entries(value as Record<string, unknown>)
-      .filter(([, nestedValue]) => typeof nestedValue !== "undefined")
-      .sort(([left], [right]) => left.localeCompare(right));
-    return `{${entries.map(([key, nestedValue]) => `${JSON.stringify(key)}:${stableStringify(nestedValue)}`).join(",")}}`;
-  }
-  return "null";
-}
-
-function fnv1a32(value: string) {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return `fnv1a:${(hash >>> 0).toString(16).padStart(8, "0")}`;
 }

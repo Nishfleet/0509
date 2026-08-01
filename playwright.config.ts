@@ -54,10 +54,11 @@ export default defineConfig({
   projects: [
     {
       name: "local-auth",
-      // BL-030's live-proof capture rides the same local fixture server; it
-      // skips itself unless its package flag is set, so ordinary runs are
-      // unaffected. BL-034 follows the same opt-in evidence contract.
-      testMatch: /(local-authenticated|bl030-capture|bl034-capture)\.spec\.ts/,
+      // Landing-language live-proof captures ride the same local fixture
+      // server and skip themselves unless their package flag is set, so
+      // ordinary local-auth runs are unaffected.
+      testMatch:
+        /(local-authenticated|bl030-capture|bl034-capture|bl040-capture)\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         baseURL: localBaseURL,

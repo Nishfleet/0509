@@ -227,19 +227,6 @@ describe("shared report agency identity", () => {
 		expect(printCss).not.toMatch(/\.f9-share-header,[\s\S]{0,160}display:\s*none/);
 	});
 
-	it("keeps the screen-rendered PDF variant full-width without its contents rail", () => {
-		const appCss = readFileSync("app/app.css", "utf8");
-		const pdfStart = appCss.indexOf(".f9-share-pdf {");
-		const pdfCss = appCss.slice(pdfStart, appCss.indexOf("@media print", pdfStart));
-
-		expect(pdfCss).toMatch(
-			/\.f9-share-pdf \.f9-ed-report\s*{[\s\S]*?display:\s*block;[\s\S]*?width:\s*100%;/,
-		);
-		expect(pdfCss).toMatch(
-			/\.f9-share-pdf \.f9-ed-report-rail\s*{[\s\S]*?display:\s*none !important;/,
-		);
-		expect(pdfCss).toMatch(
-			/\.f9-share-pdf \.f9-ed-evidence-body\s*{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\);/,
-		);
-	});
+	// The PDF rail and width contract is exercised against rendered DOM and
+	// computed styles in share-pdf-rail-visibility.test.tsx.
 });

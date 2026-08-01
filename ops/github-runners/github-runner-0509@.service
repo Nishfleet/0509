@@ -1,0 +1,51 @@
+[Unit]
+Description=0509 hardened GitHub Actions runner (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=gha0509-%i
+Group=gha0509-%i
+SupplementaryGroups=gha0509-lock
+WorkingDirectory=/var/lib/github-runners/%i
+ExecStart=/var/lib/github-runners/%i/run.sh
+Restart=always
+RestartSec=5
+Slice=github-0509.slice
+
+Environment=PATH=/opt/0509-runner/bin:/usr/local/bin:/usr/bin:/bin
+Environment=DEPLOY_WINDOW_LOCK_FILE=/run/lock/0509/deploy-window.lock
+Environment=DEPLOY_WINDOW_VERIFY_ROOT=/run/lock/0509/verify
+Environment=DEPLOY_WINDOW_VERIFY_TMP_ROOT=/var/lib/github-runners/%i/_work/_temp/0509-lanes
+Environment=DEPLOY_WINDOW_VERIFY_SLOTS=3
+
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+# Cross-user FIFO stale-ticket recovery reads /proc/<pid>/stat. Distinct UIDs
+# still prevent jobs from reading another runner's process environments.
+ProtectProc=default
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077
+ReadWritePaths=/var/lib/github-runners/%i /run/lock/0509
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+KillMode=control-group
+TimeoutStopSec=25s
+TasksMax=512
+
+[Install]
+WantedBy=multi-user.target

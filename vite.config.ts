@@ -11,6 +11,7 @@ const reactRouterDevRoot = path.dirname(require.resolve("@react-router/dev/packa
 const e2ePersistPath = process.env.E2E_PERSIST_PATH ?? ".wrangler/e2e-state";
 const isE2ETestMode = String(process.env.E2E_TEST_MODE) === "1";
 const isBl034Capture = String(process.env.BL034_CAPTURE) === "1";
+const isVerificationLane = Boolean(process.env.DEPLOY_WINDOW_VERIFY_SLOT);
 const e2eOrigin = process.env.APP_ORIGIN ?? "http://127.0.0.1:4179";
 const e2eBetterAuthSecret =
   process.env.BETTER_AUTH_SECRET ??
@@ -54,5 +55,7 @@ export default defineConfig(({ mode }) => ({
     environment: "node",
     include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
     testTimeout: 10_000,
+    maxWorkers: isVerificationLane ? 1 : undefined,
+    fileParallelism: !isVerificationLane,
   },
 }));

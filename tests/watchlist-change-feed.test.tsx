@@ -22,6 +22,7 @@ import {
   resolvePriorProofCapture,
 } from "~/components/watchlists/event-changes-section";
 import { buildChangeIntelligenceSummary } from "~/lib/change-intelligence";
+import type { PublicDeliveryAttemptSummary } from "~/lib/delivery-attempt-public";
 import type { ProofCaptureRecord, WatchEventRecord, WatchlistRunRecord } from "~/lib/types";
 
 const offerEvent: WatchEventRecord = {
@@ -233,6 +234,51 @@ describe("event change feed helpers", () => {
         intelligence,
       }),
     ).toBe("The landing-page offer changed.");
+  });
+
+  it.each([
+    ["email", "provider_unknown", "Configured email recipient"],
+    ["whatsapp", "pending", "Configured WhatsApp recipient"],
+    ["slack", "provider_unknown", "Connected Slack workspace"],
+  ] as const)(
+    "labels accepted-only %s delivery as unconfirmed",
+    (channel, webhookStatus, targetValue) => {
+      const attempt: PublicDeliveryAttemptSummary = {
+        digestRunId: null,
+        channel,
+        status: "sent",
+        webhookStatus,
+        targetValue,
+        eventIds: [offerEvent.id],
+        providerStatusLastSeenAt: null,
+        sentAt: "2026-07-15T09:14:00.000Z",
+        createdAt: "2026-07-15T09:14:00.000Z",
+        errorMessage: "Provider accepted this message, but final delivery is unconfirmed.",
+      };
+
+      expect(formatEventDeliveryLine(attempt)).toBe(
+        `Last send: Delivery unconfirmed · ${targetValue}.`,
+      );
+    },
+  );
+
+  it("labels only a confirmed receipt delivered", () => {
+    const attempt: PublicDeliveryAttemptSummary = {
+      digestRunId: null,
+      channel: "whatsapp",
+      status: "sent",
+      webhookStatus: "delivered",
+      targetValue: "Configured WhatsApp recipient",
+      eventIds: [offerEvent.id],
+      providerStatusLastSeenAt: "2026-07-15T09:15:00.000Z",
+      sentAt: "2026-07-15T09:14:00.000Z",
+      createdAt: "2026-07-15T09:14:00.000Z",
+      errorMessage: null,
+    };
+
+    expect(formatEventDeliveryLine(attempt)).toBe(
+      "Last send: Delivered · Configured WhatsApp recipient.",
+    );
   });
 
   it("does not pair confidence pending with verified when no confidence is stored", () => {

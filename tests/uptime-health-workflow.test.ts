@@ -31,9 +31,7 @@ describe("uptime health workflow", () => {
     expect(parsed.on.schedule).toEqual([
       { cron: "2,7,12,17,22,27,32,37,42,47,52,57 * * * *" },
     ]);
-    expect(parsed.jobs.health?.["runs-on"]).toBe(
-      "${{ vars.MONITORING_RUNNER || 'ubuntu-latest' }}",
-    );
+    expect(parsed.jobs.health?.["runs-on"]).toBe("ubuntu-latest");
     expect(parsed.jobs.health?.["timeout-minutes"]).toBe(4);
 
     const healthStep = parsed.jobs.health?.steps?.find((step) => step.name === "Check production health endpoint");
@@ -66,7 +64,9 @@ describe("uptime health workflow", () => {
     expect(persistStep?.env?.WORKER_VERSION).toContain("steps.shallow.outputs.worker_version");
     expect(persistStep?.run).toContain('"workerVersionId"');
     expect(persistStep?.run).toContain('"runId"');
-    expect(uploadStep?.uses).toBe("actions/upload-artifact@v7");
+    expect(uploadStep?.uses).toBe(
+      "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+    );
     expect(uploadStep?.with?.name).toContain("uptime-worker-");
     expect(uploadStep?.with?.["retention-days"]).toBe(2);
   });
