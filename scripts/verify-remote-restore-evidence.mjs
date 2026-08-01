@@ -51,7 +51,11 @@ export function hasMigrationChanges(diffOutput) {
     .some((name) => /^migrations\/\d{4}_.+\.sql$/u.test(name.trim()));
 }
 
-/** @param {unknown} diffOutput */
+/**
+ * @param {unknown} diffOutput
+ * @param {Set<string>} [deployedMigrations] Migrations present at the
+ *   previously deployed commit. Omit to keep the strict rule.
+ */
 export function hasAppliedMigrationMutation(diffOutput, deployedMigrations) {
   const scoped = deployedMigrations instanceof Set;
   return String(diffOutput)
@@ -75,7 +79,11 @@ export function hasAppliedMigrationMutation(diffOutput, deployedMigrations) {
     });
 }
 
-/** @param {unknown[]} commitDiffs */
+/**
+ * @param {unknown[]} commitDiffs
+ * @param {Set<string>} [deployedMigrations] Migrations present at the
+ *   previously deployed commit. Omit to keep the strict rule.
+ */
 export function hasMigrationMutationAcrossCommits(
   commitDiffs,
   deployedMigrations,
