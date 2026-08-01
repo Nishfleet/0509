@@ -143,7 +143,11 @@ describe("app rebuild", () => {
     expect(appSurface).toContain("Save evidence link");
     expect(appSurface).toContain("Google / YouTube");
     expect(appSurface).toContain("LinkedIn");
-    expect(clientsRoute).toContain("Report preferences and notes");
+    // The integrated client-rooms surface renamed the report-preferences
+    // heading to a single spoken line. Keep asserting the surface itself, not
+    // just the page title, so the rename cannot quietly delete the section.
+    expect(clientsRoute).toContain("Client rooms");
+    expect(clientsRoute).toContain("Report preferences, tone, and follow-up notes");
     expect(clientsRoute).toContain("upsert-agent-memory");
     expect(digestsRoute).toContain("formatDeliveryChannelLabel");
     expect(digestsRoute).toContain('channel === "slack"');
