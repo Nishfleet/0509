@@ -24,30 +24,31 @@ const statusSource = readFileSync("app/routes/status.tsx", "utf8");
 const helpCatalog = readFileSync("app/lib/agent-action-catalog.ts", "utf8");
 
 describe("dashboard v2 production hotfix", () => {
-  it("keeps compact mobile navigation in page flow without burying the page action", () => {
+  it("keeps one quiet mobile navigation row in page flow", () => {
     expect(shellSource).toContain("f9-dash-mobile-nav");
-    expect(shellSource).toContain("f9-dash-mobile-utility");
+    expect(shellSource).not.toContain("f9-dash-mobile-utility");
     expect(appCss).not.toMatch(/\.f9-cursor-main\s*\{[^}]*order:\s*1/s);
     expect(appCss).toContain("f9-cursor-rail-desktop");
     expect(appCss).toMatch(
       /\.f9-dash-page-app \.f9-dash-mobile-nav\s*\{[^}]*display:\s*flex[^}]*overflow-x:\s*auto/s,
     );
-    expect(appCss).toMatch(
-      /\.f9-dash-page-app \.f9-dash-mobile-utility\s*\{[^}]*flex-wrap:\s*nowrap[^}]*overflow-x:\s*auto/s,
-    );
     expect(buildDashboardMobileNav({ showPresence: true }).map((item) => item.label)).toEqual([
       "Overview",
-      "Search",
       "Competitors",
       "Presence",
-      "Collections",
+      "Search",
       "Briefs",
+      "Collections",
       "Reports",
       "Shared links",
+      "Client rooms",
       "Notifications",
       "Source access",
       "Developer access",
-      "Account",
+      "Team",
+      "Billing & usage",
+      "Account & security",
+      "Help & support",
     ]);
   });
 
@@ -82,15 +83,11 @@ describe("dashboard v2 production hotfix", () => {
     );
   });
 
-  it("removes duplicate search topbar CTAs", () => {
-    // Workflow-friction pass: the topbar CTA is now the quick-add palette
-    // button rather than a /search link, so no search links remain here.
-    const searchLinks = appLayout.match(/to="\/search"/g) ?? [];
-    expect(searchLinks).toHaveLength(0);
+  it("leaves Rank-1 actions with each page instead of shell chrome", () => {
     expect(appLayout).toContain("QuickAddPalette");
-    expect(appLayout).toContain("Add competitor");
-    expect(appLayout).toContain('to="/app"');
-    expect(appLayout).toContain("Overview");
+    expect(appLayout).not.toContain("headerActions=");
+    expect(appLayout).not.toContain("+ Add competitor");
+    expect(shellSource).not.toContain("f9-dash-topbar");
   });
 
   it("removes internal and MCP leakage from customer surfaces", () => {
@@ -103,7 +100,7 @@ describe("dashboard v2 production hotfix", () => {
     expect(helpCatalog).not.toContain("Better Auth");
   });
 
-  it("exposes Team and Client rooms in the mobile utility strip", () => {
+  it("exposes Team and Client rooms once in the canonical mobile row", () => {
     // BL-030 moved Client rooms into the rail's daily jobs (it is delivery
     // work, not a settings screen); Team stayed behind the disclosure. Both
     // are still in the mobile utility strip, which is what this guards.
@@ -114,9 +111,10 @@ describe("dashboard v2 production hotfix", () => {
     expect(
       DASHBOARD_PRIMARY_NAV.flatMap((section) => section.items),
     ).toEqual(expect.arrayContaining([{ label: "Client rooms", to: "/app/clients" }]));
-    expect(shellSource).toContain("f9-dash-mobile-utility");
-    expect(shellSource).toContain("MOBILE_UTILITY_NAV.map");
-    expect(appCss).toMatch(/\.f9-dash-mobile-utility\s*\{[^}]*display:\s*none/s);
+    const mobileItems = buildDashboardMobileNav({ showPresence: false });
+    expect(mobileItems.filter((item) => item.to === "/app/team")).toHaveLength(1);
+    expect(mobileItems.filter((item) => item.to === "/app/clients")).toHaveLength(1);
+    expect(shellSource).not.toContain("MOBILE_UTILITY_NAV");
   });
 
   it("keeps customer terminology out of primary app surfaces", () => {

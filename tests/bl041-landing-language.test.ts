@@ -2,9 +2,9 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { shellTopbarIsSuppressed } from "~/routes/app-layout";
-
 const css = readFileSync("app/app.css", "utf8");
+const layout = readFileSync("app/routes/app-layout.tsx", "utf8");
+const shell = readFileSync("app/components/dashboard-shell.tsx", "utf8");
 const team = readFileSync("app/routes/app.team.tsx", "utf8");
 const billing = readFileSync("app/routes/app.billing.tsx", "utf8");
 const account = readFileSync("app/routes/app.account.tsx", "utf8");
@@ -40,11 +40,21 @@ describe("BL-041 landing-language settings layer", () => {
   });
 
   it("suppresses the legacy shell topbar on all three working-header routes", () => {
-    for (const pathname of ["/app/team", "/app/billing", "/app/account"]) {
-      expect(shellTopbarIsSuppressed(pathname)).toBe(true);
-      expect(shellTopbarIsSuppressed(`${pathname}/`)).toBe(true);
+    // BL-041 originally proved this by calling shellTopbarIsSuppressed() for
+    // each of the three pathnames. BL-042 deletes the shell action row itself,
+    // so the per-route allowlist — and the routes it kept forgetting to list —
+    // is gone. The guarantee is now unconditional and structural, which is
+    // strictly stronger than the three-pathname check it replaces: there is no
+    // topbar to suppress on ANY route, and no prop left to inject one through.
+    expect(shell).not.toContain("f9-dash-topbar");
+    expect(shell).not.toContain("headerActions");
+    expect(layout).not.toContain("headerActions=");
+    expect(layout).not.toContain("shellTopbarIsSuppressed");
+    // The three routes still each own their single working header, so removing
+    // the shell row leaves them with a header rather than none.
+    for (const source of [team, billing, account]) {
+      expect(source).toContain("<WorkingHeader");
     }
-    expect(shellTopbarIsSuppressed("/app/teams")).toBe(false);
   });
 
   it("uses one 1px rule weight and square geometry", () => {

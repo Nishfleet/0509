@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { createRoutesStub } from "react-router";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import AppLayoutRoute, { shellPrimaryIsDemoted } from "~/routes/app-layout";
+import AppLayoutRoute from "~/routes/app-layout";
 import CollectionsRoute from "~/routes/app.collections";
 import type { CollectionItemRecord } from "~/lib/types";
 
@@ -13,11 +13,14 @@ import type { CollectionItemRecord } from "~/lib/types";
  *
  * The first version of these specs rendered the collections route on its own,
  * which pinned the component boundary instead of what the customer sees: the
- * workspace shell carries its own standing ink-filled "+ Add competitor", so a
- * page primary made two. Everything here renders the real app layout with the
- * real route inside it and counts every ink-filled primary on the screen —
- * `.f9-wk-btn` (the landing-language rank) and `.f9-primary-button` (the
- * legacy shell style) together.
+ * workspace shell used to carry its own standing ink-filled "+ Add competitor",
+ * so a page primary made two. BL-042 deleted that shell-owned row outright, so
+ * the shell now contributes no primary on any route and the page's own primary
+ * is the screen's only one. The contract is unchanged and still asserted the
+ * same way: everything here renders the real app layout with the real route
+ * inside it and counts every ink-filled primary on the screen — `.f9-wk-btn`
+ * (the landing-language rank) and `.f9-primary-button` (the legacy style)
+ * together — plus proves the deleted row is absent.
  *
  * These are live-DOM specs, so they also cover what static markup cannot: the
  * disclosures actually toggling, focus landing on the summary, and the
@@ -128,13 +131,6 @@ function screenPrimaries(view: HTMLElement) {
 }
 
 describe("collections screen-level Rank-1 budget (brief §5)", () => {
-  it("demotes the shell primary on this route", () => {
-    expect(shellPrimaryIsDemoted("/app/collections")).toBe(true);
-    // Unchanged for its neighbours — this is a surgical, route-scoped entry.
-    expect(shellPrimaryIsDemoted("/app/watchlists")).toBe(false);
-    expect(shellPrimaryIsDemoted("/app")).toBe(true);
-  });
-
   it.each([
     ["free plan gate", { collections: [], plan: "free", selectedCollection: null }, 1],
     ["first run", { collections: [], plan: "agency", selectedCollection: null }, 1],
@@ -144,12 +140,7 @@ describe("collections screen-level Rank-1 budget (brief §5)", () => {
     const view = await renderScreen(loaderData as Record<string, unknown>);
 
     expect(screenPrimaries(view)).toHaveLength(expected);
-    // The shell's own button is still there, just no longer ink-filled.
-    // BL-030 added a second ⌘K affordance — the rail's visible command bar —
-    // so this has to name the topbar button rather than the first match.
-    const shellButton = view.querySelector('.f9-dash-topbar button[aria-keyshortcuts]');
-    expect(shellButton?.textContent).toContain("Add competitor");
-    expect(shellButton?.classList.contains("f9-primary-button")).toBe(false);
+    expect(view.querySelector(".f9-dash-topbar")).toBeNull();
   });
 
   it("keeps the whole screen free of a second primary when a plan is at its limit", async () => {
