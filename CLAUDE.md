@@ -18,6 +18,11 @@ npm run build
 npm test
 ```
 
+On the shared VPS, fleet and self-hosted-runner verification must use
+`scripts/deploy-window-lock.sh run -- <command>` rather than calling `flock`
+directly. The wrapper provides three bounded, temp-isolated verification lanes;
+production `acquire`/`release` remains exclusive.
+
 ## Dev
 ```bash
 npm run dev

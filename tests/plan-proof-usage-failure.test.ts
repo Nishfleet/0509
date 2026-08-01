@@ -1,41 +1,38 @@
 import { describe, expect, it, vi } from "vitest";
 
-const topUpReadFailure = new Error("D1 top-up balance read failed");
+const { originalCause, topUpReadFailure, EvidenceTopUpReadError } = vi.hoisted(() => {
+  class HoistedEvidenceTopUpReadError extends Error {
+    override readonly name = "EvidenceTopUpReadError";
+
+    constructor(message: string, cause: unknown) {
+      super(message, { cause });
+    }
+  }
+  const cause = new Error("simulated D1 top-up outage");
+  return {
+    originalCause: cause,
+    topUpReadFailure: new HoistedEvidenceTopUpReadError("D1 top-up balance read failed", cause),
+    EvidenceTopUpReadError: HoistedEvidenceTopUpReadError,
+  };
+});
 
 vi.mock("~/lib/evidence-usage.server", () => ({
+  EvidenceTopUpReadError,
   getEvidenceUsageSummary: vi.fn().mockRejectedValue(topUpReadFailure),
-  isEvidenceTopUpReadError: (error: unknown) => error === topUpReadFailure,
+  isEvidenceTopUpReadError: (error: unknown) => error instanceof EvidenceTopUpReadError,
   listTopUpGrantHistory: vi.fn(),
 }));
 
 describe("getProofUsageSummary top-up read failures", () => {
-  it("does not replace an unreadable paid balance with a legacy zero", async () => {
-    const db = {
-      prepare(sql: string) {
-        return {
-          bind() {
-            return {
-              async all<T>() {
-                if (sql.includes("FROM user_plan")) {
-                  return { results: [{ plan: "starter" }] as T[] };
-                }
-                if (sql.includes("FROM proof_usage_credit")) {
-                  return { results: [{ count: 0 }] as T[] };
-                }
-                if (sql.includes("FROM proof_capture")) {
-                  return { results: [{ count: 250 }] as T[] };
-                }
-                return { results: [] as T[] };
-              },
-            };
-          },
-        };
-      },
-    };
+  it("rethrows a typed paid-balance read failure with its original cause", async () => {
     const { getProofUsageSummary } = await import("~/lib/plan.server");
 
-    await expect(
-      getProofUsageSummary({ DB: db } as never, "user-1"),
-    ).rejects.toBe(topUpReadFailure);
+    const error = await getProofUsageSummary({ DB: {} } as never, "user-1").catch(
+      (caught) => caught,
+    );
+
+    expect(error).toBe(topUpReadFailure);
+    expect(error).toBeInstanceOf(EvidenceTopUpReadError);
+    expect(error).toMatchObject({ cause: originalCause });
   });
 });

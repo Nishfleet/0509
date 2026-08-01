@@ -339,6 +339,17 @@ export function resolveReportPlateContent(row: ReportRow) {
     presentReportValue(row.landingPage.headline),
   ].filter((line): line is string => Boolean(line));
 
+  // Verification qualifies the watch event's stored proof capture and matched
+  // change, not OCR/readability of the linked ad creative shown in this frame.
+  // Report building admits only events classified as verified proof: current
+  // events carry a proofCaptureId, while authoritative legacy rows may carry
+  // the explicit verified_proof status. An empty creative frame can therefore
+  // honestly coexist with "Verified evidence"; do not weaken that real
+  // verification when creative enrichment is absent.
+  const verification = row.event
+    ? legacyReportLabelText(row.event.proofStatusLabel)
+    : "Saved evidence";
+
   return {
     advertiserLabel,
     artefactKind,
@@ -346,9 +357,7 @@ export function resolveReportPlateContent(row: ReportRow) {
     headline,
     captureLines,
     subject: advertiserLabel ?? headline ?? previewHeadline ?? "Saved ad",
-    verification: row.event
-      ? legacyReportLabelText(row.event.proofStatusLabel)
-      : "Saved evidence",
+    verification,
     capturedAt: row.landingPage.capturedAt ?? row.event?.createdAt ?? null,
     // A capture note may only claim a capture exists when one does.
     hasCapture: Boolean(row.previewImageUrl) || captureLines.length > 0,
@@ -418,26 +427,34 @@ function buildPlateFacts(row: ReportRow): FactRow[] {
       missingLabel: "none stored",
       value:
         event?.sourceUrl && isHttpUrl(event.sourceUrl) ? (
-          <a href={event.sourceUrl} rel="noreferrer" target="_blank">
+          <a
+            className="f9-report-fact-link"
+            href={event.sourceUrl}
+            rel="noreferrer"
+            target="_blank"
+          >
             Open the source
           </a>
         ) : null,
     },
     {
       key: "Still live at",
-      missingLabel: "we could not read this one",
+      missingLabel: "none stored",
       value:
         landingPageUrl && isHttpUrl(landingPageUrl) ? (
-          <a href={landingPageUrl} rel="noreferrer" target="_blank">
+          <a
+            className="f9-report-fact-link"
+            href={landingPageUrl}
+            rel="noreferrer"
+            target="_blank"
+          >
             Open the page
           </a>
-        ) : (
-          landingPageUrl
-        ),
+        ) : null,
     },
     {
       key: "Language",
-      missingLabel: "we could not read this one",
+      missingLabel: "Not detected",
       value: presentReportValue(row.languageLabel),
     },
     {

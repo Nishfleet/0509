@@ -262,7 +262,7 @@ describe("enforceAuthenticatedSearchRateLimit", () => {
 });
 
 describe("enforceSearchSelectionRateLimit", () => {
-  it("claims the spend budget synchronously without a deferred event write", async () => {
+  it("claims the warm-selection budget synchronously instead of deferring admission", async () => {
     const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.99);
     const env = { DB: createFakeD1() } as unknown as AppEnv;
     const waitUntil = vi.fn();

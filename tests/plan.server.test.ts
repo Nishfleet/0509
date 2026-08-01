@@ -32,7 +32,10 @@ function createMockDb(options: {
                 }
 
                 if (sql.includes("FROM proof_usage_credit")) {
-                  if (options.proofCreditReadError) {
+                  if (
+                    options.proofCreditReadError &&
+                    !sql.includes("LEFT JOIN proof_usage_credit_migration")
+                  ) {
                     throw options.proofCreditReadError;
                   }
                   return {

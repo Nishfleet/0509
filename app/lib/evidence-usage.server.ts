@@ -67,7 +67,9 @@ export class EvidenceTopUpReadError extends Error {
   }
 }
 
-export function isEvidenceTopUpReadError(error: unknown) {
+export function isEvidenceTopUpReadError(
+  error: unknown,
+): error is EvidenceTopUpReadError {
   return error instanceof EvidenceTopUpReadError;
 }
 
@@ -154,6 +156,13 @@ export function isEvidenceUsageStorageUnavailableError(message: string) {
     /no such table:\s*(?:main\.)?(?:evidence_usage_period|evidence_usage_reservation|evidence_top_up_grant|evidence_top_up_adjustment|evidence_top_up_ledger_entry|proof_usage_credit|proof_usage_credit_migration)\b/i.test(
       message,
     )
+  );
+}
+
+function isLegacyCreditSchemaCompatibilityError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /no such table:\s*(?:main\.)?(?:proof_usage_credit|proof_usage_credit_migration)\b/i.test(
+    message,
   );
 }
 
@@ -279,8 +288,11 @@ async function listUnmigratedLegacyCredits(env: AppEnv, workspaceUserId: string,
         granted_at: string;
       }>();
     return result.results ?? [];
-  } catch {
-    return [];
+  } catch (error) {
+    if (isLegacyCreditSchemaCompatibilityError(error)) {
+      return [];
+    }
+    throw new EvidenceTopUpReadError("D1 legacy top-up migration read failed", error);
   }
 }
 

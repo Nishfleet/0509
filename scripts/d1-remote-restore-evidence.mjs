@@ -26,6 +26,10 @@ import {
   DEFAULT_MAX_STATEMENT_BYTES,
   transformD1RestoreSql,
 } from "./d1-restore-transform.mjs";
+import {
+  allowedProductionMigrationLedgers,
+  migrationLedgerState,
+} from "./d1-migration-sync-check.lib.mjs";
 import { validateRemoteRestoreEvidence } from "./deploy-production-plan.mjs";
 import { redactSensitiveOutput } from "./safe-command-output.mjs";
 import {
@@ -76,6 +80,38 @@ const FORCE_KILL_DELAY_MS = 5_000;
 const STALE_LOCAL_RESTORE_AGE_MS = 24 * 60 * 60 * 1000;
 
 /**
+ * Preserve the fail-closed error while exposing only migration filenames
+ * needed to reconcile an append-only production ledger.
+ *
+ * @param {unknown} error
+ * @param {Array<{ name: string }>} ledger
+ * @param {string[]} repositoryMigrations
+ * @param {(message: string) => void} write
+ * @returns {never}
+ */
+export function rethrowWithMigrationLedgerDiagnostics(
+  error,
+  ledger,
+  repositoryMigrations,
+  write = console.error,
+) {
+  if (
+    error instanceof Error &&
+    error.message === "source_backup_migration_ledger_stale"
+  ) {
+    write(
+      `source_backup_migration_ledger_names:${JSON.stringify(
+        ledger.map((entry) => entry.name),
+      )}`,
+    );
+    write(
+      `repository_migration_names:${JSON.stringify(repositoryMigrations)}`,
+    );
+  }
+  throw error;
+}
+
+/**
  * Capture raw stdout only in memory while writing redacted output to Actions.
  * @param {string} command
  * @param {string[]} args
@@ -85,7 +121,7 @@ const STALE_LOCAL_RESTORE_AGE_MS = 24 * 60 * 60 * 1000;
  *   env?: Record<string, string>,
  * }} options
  */
-function runCaptured(
+export function runCaptured(
   command,
   args,
   {
@@ -110,8 +146,10 @@ function runCaptured(
     let stdout = "";
     let stderr = "";
     let outputBytes = 0;
-    /** @type {"timeout" | "output" | null} */
+    /** @type {"timeout" | "output" | "signal" | null} */
     let terminationReason = null;
+    /** @type {NodeJS.Signals | null} */
+    let forwardedSignal = null;
     /** @type {NodeJS.Timeout | null} */
     let forceKillTimer = null;
 
@@ -129,7 +167,7 @@ function runCaptured(
         }
       }
     };
-    /** @param {"timeout" | "output"} reason */
+    /** @param {"timeout" | "output" | "signal"} reason */
     const requestTermination = (reason) => {
       if (terminationReason) return;
       terminationReason = reason;
@@ -138,6 +176,20 @@ function runCaptured(
         () => signalProcessTree("SIGKILL"),
         FORCE_KILL_DELAY_MS,
       );
+    };
+    /** @param {NodeJS.Signals} signal */
+    const forwardParentSignal = (signal) => {
+      if (forwardedSignal) return;
+      forwardedSignal = signal;
+      requestTermination("signal");
+    };
+    const onSigint = () => forwardParentSignal("SIGINT");
+    const onSigterm = () => forwardParentSignal("SIGTERM");
+    process.on("SIGINT", onSigint);
+    process.on("SIGTERM", onSigterm);
+    const clearProcessSignalHandlers = () => {
+      process.removeListener("SIGINT", onSigint);
+      process.removeListener("SIGTERM", onSigterm);
     };
     const timer = setTimeout(
       () => requestTermination("timeout"),
@@ -178,11 +230,17 @@ function runCaptured(
     child.on("error", (error) => {
       clearTimeout(timer);
       if (forceKillTimer) clearTimeout(forceKillTimer);
+      clearProcessSignalHandlers();
+      if (forwardedSignal) {
+        process.kill(process.pid, forwardedSignal);
+        return;
+      }
       reject(error);
     });
     child.on("close", (code, signal) => {
       clearTimeout(timer);
       if (forceKillTimer) clearTimeout(forceKillTimer);
+      clearProcessSignalHandlers();
       if (!quiet) {
         if (pendingStdout) {
           process.stdout.write(redactSensitiveOutput(pendingStdout));
@@ -191,7 +249,9 @@ function runCaptured(
           process.stderr.write(redactSensitiveOutput(pendingStderr));
         }
       }
-      if (terminationReason === "output") {
+      if (forwardedSignal) {
+        process.kill(process.pid, forwardedSignal);
+      } else if (terminationReason === "output") {
         reject(new Error("remote_restore_command_output_too_large"));
       } else if (terminationReason === "timeout") {
         reject(new Error("remote_restore_command_timeout"));
@@ -689,6 +749,21 @@ async function runAutomation(outputPath) {
     ) {
       throw new Error("source_backup_integrity_failed");
     }
+    const migrations = readdirSync(resolve("migrations"))
+      .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
+      .sort();
+    try {
+      assertMigrationLedgerMatchesRepository(
+        sourceAggregate.migrationLedger,
+        migrations,
+      );
+    } catch (error) {
+      rethrowWithMigrationLedgerDiagnostics(
+        error,
+        sourceAggregate.migrationLedger,
+        migrations,
+      );
+    }
 
     const databases = await assertScratchAbsent(scratchName);
     const productionMatches = databases.filter(
@@ -774,7 +849,10 @@ async function runAutomation(outputPath) {
             "--command",
             `SELECT
              (SELECT COUNT(*) FROM d1_migrations) AS migration_count,
-             (SELECT COALESCE(MAX(name), '') FROM d1_migrations) AS latest_migration,
+             (SELECT COALESCE(
+                (SELECT name FROM d1_migrations ORDER BY id DESC LIMIT 1),
+                ''
+              )) AS latest_migration,
              (SELECT COUNT(*) FROM user_plan) AS plan_row_count,
              (SELECT COUNT(*) FROM user_plan
                WHERE dodo_payment_id IS NOT NULL
@@ -848,13 +926,6 @@ async function runAutomation(outputPath) {
     const databaseBookmark = scratchLifecycle.result;
     const scratchRemoved = scratchLifecycle.scratchRemoved;
 
-    const migrations = readdirSync(resolve("migrations"))
-      .filter((name) => /^\d{4}_.+\.sql$/u.test(name))
-      .sort();
-    assertMigrationLedgerMatchesRepository(
-      sourceAggregate.migrationLedger,
-      migrations,
-    );
     const sourceMigrationNames = sourceAggregate.migrationLedger.map(
       (entry) => entry.name,
     );
@@ -876,8 +947,9 @@ async function runAutomation(outputPath) {
     const verdict = validateRemoteRestoreEvidence(evidence, {
       candidateFingerprint: candidate.fingerprint,
       wranglerWorktreeSha256: candidate.wrangler.worktreeSha256,
-      latestMigration,
-      migrationCount,
+      allowedMigrationStates: allowedProductionMigrationLedgers(
+        migrations,
+      ).map((ledger) => migrationLedgerState(ledger)),
       migrationBearing: true,
     });
     if (!verdict.ok) {
@@ -895,6 +967,7 @@ async function runAutomation(outputPath) {
         latestMigration,
         rowCountDigestSha256: evidence.rowCountDigestSha256,
         migrationLedgerSha256: evidence.migrationLedgerSha256,
+        migrationLedgerNamesSha256: evidence.migrationLedgerNamesSha256,
       })}\n`,
     );
   } catch (error) {
