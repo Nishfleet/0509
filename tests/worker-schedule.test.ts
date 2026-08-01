@@ -76,5 +76,31 @@ describe("worker schedule", () => {
       skippedForBudget: 0,
       dispatchFailures: 0,
     })).toBeNull();
+    expect(resolveOperationalRiskAlertIdempotencyKey("2026-07-03", {
+      skippedForBudget: 0,
+      dispatchFailures: 0,
+      inlineFailures: 1,
+      digestFailures: 0,
+    })).toBe("operator-alert:scheduled-degraded-inline:2026-07-03");
+    expect(resolveOperationalRiskAlertIdempotencyKey("2026-07-03", {
+      skippedForBudget: 0,
+      dispatchFailures: 0,
+      inlineFailures: 0,
+      digestFailures: 1,
+    })).toBe("operator-alert:scheduled-degraded-digest:2026-07-03");
+    expect(resolveOperationalRiskAlertIdempotencyKey("2026-07-03", {
+      skippedForBudget: 0,
+      dispatchFailures: 0,
+      inlineFailures: 1,
+      digestFailures: 1,
+    })).toBe("operator-alert:scheduled-degraded-inline-and-digest:2026-07-03");
+    expect(resolveOperationalRiskAlertIdempotencyKey("2026-07-03", {
+      skippedForBudget: 2,
+      dispatchFailures: 1,
+      inlineFailures: 1,
+      digestFailures: 1,
+    })).toBe(
+      "operator-alert:scheduled-degraded-scan-budget-and-fanout-dispatch-and-inline-and-digest:2026-07-03",
+    );
   });
 });

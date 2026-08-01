@@ -29,7 +29,12 @@ import type {
 export async function listDeliveryTargets(
   env: AppEnv,
   userId: string,
-  options: { watchlistId?: string | null; channel?: DeliveryChannel; limit?: number } = {},
+  options: {
+    watchlistId?: string | null;
+    channel?: DeliveryChannel;
+    targetValue?: string;
+    limit?: number;
+  } = {},
 ) {
   const limit = Math.max(1, Math.min(100, Math.floor(options.limit ?? 20)));
   const clauses = ["user_id = ?"];
@@ -43,6 +48,10 @@ export async function listDeliveryTargets(
   if (options.channel) {
     clauses.push("channel = ?");
     bindings.push(options.channel);
+  }
+  if (options.targetValue !== undefined) {
+    clauses.push("lower(trim(target_value)) = lower(trim(?))");
+    bindings.push(options.targetValue);
   }
 
   const rows = await many<DeliveryTargetRow>(
@@ -59,6 +68,115 @@ export async function listDeliveryTargets(
   );
 
   return rows.map(toDeliveryTargetRecord);
+}
+
+export async function hasSuppressedEmailTargetForUserAndAddress(
+  env: AppEnv,
+  input: { userId: string; targetValue: string },
+) {
+  const row = await one<{ suppressed: number }>(
+    env,
+    `
+      SELECT 1 AS suppressed
+      FROM delivery_target
+      WHERE user_id = ?
+        AND channel = 'email'
+        AND lower(trim(target_value)) = lower(trim(?))
+        AND opted_out_at IS NOT NULL
+      LIMIT 1
+    `,
+    input.userId,
+    input.targetValue,
+  );
+  return row?.suppressed === 1;
+}
+
+/**
+ * Lazily creates one validated workspace email target without reopening an
+ * address that was unsubscribed in any target scope. The NOT EXISTS predicate
+ * and insert share one SQLite statement, so a concurrent unsubscribe either
+ * blocks this insert or suppresses the inserted row before the later dispatch
+ * CAS can advance.
+ */
+export async function provisionVerifiedAccountEmailTargetIfUnsuppressed(
+  env: AppEnv,
+  input: {
+    userId: string;
+    targetValue: string;
+    optInSource: string;
+    metadata?: JsonRecord;
+  },
+) {
+  const targetValue = normalizeDeliveryTargetValue("email", input.targetValue);
+  if (!targetValue) return null;
+
+  const timestamp = nowIso();
+  await run(
+    env,
+    `
+      INSERT OR IGNORE INTO delivery_target (
+        id,
+        user_id,
+        watchlist_id,
+        channel,
+        target_value,
+        validation_status,
+        is_validated,
+        is_opted_in,
+        opt_in_source,
+        opted_in_at,
+        is_paused,
+        paused_at,
+        opted_out_at,
+        template_eligible,
+        last_successful_delivery_at,
+        last_successful_attempt_id,
+        provider_identifier,
+        metadata_json,
+        created_at,
+        updated_at
+      )
+      SELECT
+        ?, ?, NULL, 'email', ?, 'validated', 1, 1, ?, ?, 0, NULL, NULL,
+        0, NULL, NULL, NULL, ?, ?, ?
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM delivery_target
+        WHERE user_id = ?
+          AND channel = 'email'
+          AND lower(trim(target_value)) = lower(trim(?))
+          AND opted_out_at IS NOT NULL
+      )
+    `,
+    createId(),
+    input.userId,
+    targetValue,
+    input.optInSource,
+    timestamp,
+    jsonValue(input.metadata ?? {}),
+    timestamp,
+    timestamp,
+    input.userId,
+    targetValue,
+  );
+
+  const target = await getDeliveryTargetByUniqueFields(env, {
+    userId: input.userId,
+    watchlistId: null,
+    channel: "email",
+    targetValue,
+  });
+  if (
+    !target ||
+    !target.isOptedIn ||
+    target.isPaused ||
+    target.optedOutAt ||
+    !target.isValidated ||
+    target.validationStatus !== "validated"
+  ) {
+    return null;
+  }
+  return target;
 }
 
 export async function getDeliveryTargetReadinessStats(env: AppEnv, userId: string) {

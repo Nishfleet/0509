@@ -284,6 +284,55 @@ describe("ops route", () => {
     expect(markup).not.toContain("No recent delivery failures.");
   });
 
+  it("retains the failure class when a discovery failure has partial results", async () => {
+    await mockRouter(() => ({
+      snapshot: {
+        summary: {
+          failingRuns: 0,
+          stuckRuns: 0,
+          failedProofs: 0,
+          budgetBlockedProofs: 0,
+          blockedTargets: 0,
+          deliveryFailures: 0,
+          deliveryAttention: 0,
+          degradedWatchlists: 0,
+          discoveryFailures: 1,
+          discoveryProvidersNeedingAttention: 0,
+        },
+        failingRuns: [],
+        stuckRuns: [],
+        failedProofs: [],
+        budgetBlockedProofs: [],
+        blockedTargets: [],
+        deliveryFailures: [],
+        deliveryAttention: [],
+        degradedWatchlists: [],
+        discoveryFailures: [
+          {
+            fetchId: "fetch-partial-1",
+            provider: "meta",
+            routeContext: "search",
+            country: "US",
+            cacheStatus: "miss",
+            failureClass: "provider_timeout",
+            partial: 1,
+            createdAt: "2026-07-02T00:00:00.000Z",
+          },
+        ],
+        discoveryProviders: [],
+      },
+    }));
+
+    const { default: OpsRoute } = await import("~/routes/app.ops");
+    const markup = renderToStaticMarkup(createElement(OpsRoute));
+
+    expect(markup).toContain("Partial discovery result");
+    expect(markup).toContain(
+      "Any first-page results were retained; later-page retrieval failed.",
+    );
+    expect(markup).toContain("Failure class: provider_timeout.");
+  });
+
   it("renders partial-load warnings without exposing internal failure text", async () => {
     await mockRouter(() => ({
       snapshot: {

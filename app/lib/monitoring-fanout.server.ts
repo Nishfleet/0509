@@ -1989,7 +1989,13 @@ export async function reconcileOrchestratedWatchlistRuns(
   });
   if (input.mode === "inline") {
     const cancelled = await cancelOrchestratedRunsForInlineRollback(env);
-    return { recovered: 0, cancelled, redispatched: 0, firstScans };
+    return {
+      recovered: 0,
+      cancelled,
+      redispatched: 0,
+      redispatchFailures: 0,
+      firstScans,
+    };
   }
 
   const leaseMs = input.leaseMs ?? resolveMonitoringOrchestrationLeaseMs(env);
@@ -1999,6 +2005,7 @@ export async function reconcileOrchestratedWatchlistRuns(
   let recovered = 0;
   let cancelled = 0;
   let redispatched = 0;
+  let redispatchFailures = 0;
 
   for (const row of staleRuns) {
     const watchlist = await one<{ id: string; user_id: string; is_active: number }>(
@@ -2079,6 +2086,7 @@ export async function reconcileOrchestratedWatchlistRuns(
       if (dispatch.status === "accepted" || dispatch.status === "restarted") {
         redispatched += 1;
       } else if (dispatch.status === "failed") {
+        redispatchFailures += 1;
         await markOrchestratedDispatchFailure(env, {
           runId: row.id,
           errorCode: "reconcile_dispatch_failed",
@@ -2086,6 +2094,7 @@ export async function reconcileOrchestratedWatchlistRuns(
         });
       }
     } catch (error) {
+      redispatchFailures += 1;
       await markOrchestratedDispatchFailure(env, {
         runId: row.id,
         errorCode: isRateLimitWorkflowError(error) ? "dispatch_rate_limited" : "reconcile_dispatch_failed",
@@ -2094,7 +2103,7 @@ export async function reconcileOrchestratedWatchlistRuns(
     }
   }
 
-  return { recovered, cancelled, redispatched, firstScans };
+  return { recovered, cancelled, redispatched, redispatchFailures, firstScans };
 }
 
 export async function collectMonitoringOrchestrationMetrics(

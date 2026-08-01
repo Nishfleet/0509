@@ -5,6 +5,7 @@
 
 import {
   claimInstantDeliveryAttempt,
+  getDeliveryAttemptByIdempotencyKey,
   getUserDeliveryProfile,
   markInstantDeliveryDispatchStarted,
   updateDeliveryAttemptResult,
@@ -255,15 +256,22 @@ export async function loadMonthlyRecapStats(
 export async function sendMonthlyCustomerRecaps(
   env: AppEnv,
   options: { scheduledTime?: number; force?: boolean } = {},
-): Promise<{ attempted: number; sent: number; skipped: number; duplicates: number }> {
+): Promise<{
+  attempted: number;
+  sent: number;
+  skipped: number;
+  duplicates: number;
+  claimLost: number;
+  failed: number;
+}> {
   if (!env.DB) {
-    return { attempted: 0, sent: 0, skipped: 0, duplicates: 0 };
+    return { attempted: 0, sent: 0, skipped: 0, duplicates: 0, claimLost: 0, failed: 0 };
   }
 
   const now =
     options.scheduledTime === undefined ? new Date() : new Date(options.scheduledTime);
   if (!options.force && !isFirstMondayOfMonth(now)) {
-    return { attempted: 0, sent: 0, skipped: 0, duplicates: 0 };
+    return { attempted: 0, sent: 0, skipped: 0, duplicates: 0, claimLost: 0, failed: 0 };
   }
 
   const monthKey = previousCalendarMonthKey(now);
@@ -272,6 +280,8 @@ export async function sendMonthlyCustomerRecaps(
   let sent = 0;
   let skipped = 0;
   let duplicates = 0;
+  let claimLost = 0;
+  let failed = 0;
   const billingUrl = `${appBaseUrl(env)}/app/billing`;
 
   for (const user of users) {
@@ -311,13 +321,21 @@ export async function sendMonthlyCustomerRecaps(
       });
       if (result.reason === "duplicate") {
         duplicates += 1;
+      } else if (result.reason === "claim_lost") {
+        claimLost += 1;
       } else if (result.sent) {
         sent += 1;
-      } else {
+      } else if (
+        result.reason === "unverified" ||
+        result.reason === "disabled" ||
+        result.reason === "missing_email"
+      ) {
         skipped += 1;
+      } else {
+        failed += 1;
       }
     } catch (error) {
-      skipped += 1;
+      failed += 1;
       console.error(
         `Monthly recap failed for user ${user.userId}; continuing with remaining users.`,
         error,
@@ -325,7 +343,7 @@ export async function sendMonthlyCustomerRecaps(
     }
   }
 
-  return { attempted, sent, skipped, duplicates };
+  return { attempted, sent, skipped, duplicates, claimLost, failed };
 }
 
 async function sendOneMonthlyRecap(
@@ -338,28 +356,23 @@ async function sendOneMonthlyRecap(
     return { sent: false as const, reason: "unverified" as const };
   }
 
-  const {
-    listDeliveryTargets,
-    getWorkspaceDeliveryConfig,
-  } = await import("~/lib/data.server");
+  const { getWorkspaceDeliveryConfig } = await import("~/lib/data.server");
   const workspaceConfig = await getWorkspaceDeliveryConfig(env, stats.userId);
   if (workspaceConfig && !workspaceConfig.emailEnabled) {
     return { sent: false as const, reason: "disabled" as const };
   }
 
-  const targets = await listDeliveryTargets(env, stats.userId);
-  const emailTargets = targets.filter(
-    (target) =>
-      target.channel === "email" &&
-      target.isOptedIn &&
-      !target.isPaused &&
-      !target.optedOutAt,
+  const { resolveDigestEmailTargets } = await import("~/lib/delivery.server");
+  const emailTargets = await resolveDigestEmailTargets(
+    env,
+    stats.userId,
+    stats.email.trim().toLowerCase() || null,
   );
   const primaryTarget = emailTargets[0] ?? null;
-  const recipient = (
-    primaryTarget?.targetValue?.trim() ||
-    stats.email.trim()
-  ).toLowerCase();
+  if (!primaryTarget) {
+    return { sent: false as const, reason: "disabled" as const };
+  }
+  const recipient = primaryTarget.targetValue.trim().toLowerCase();
   if (!recipient) {
     return { sent: false as const, reason: "missing_email" as const };
   }
@@ -406,7 +419,30 @@ async function sendOneMonthlyRecap(
     claim.claimUpdatedAt,
   );
   if (!dispatchStartedAt) {
-    return { sent: false as const, reason: "claim_lost" as const };
+    const durableAttempt = await getDeliveryAttemptByIdempotencyKey(
+      env,
+      idempotencyKey,
+    );
+    const anotherOwnerAdvanced =
+      durableAttempt !== null &&
+      (
+        durableAttempt.status !== "pending" ||
+        durableAttempt.webhookStatus !== "pending" ||
+        durableAttempt.updatedAt !== claim.claimUpdatedAt
+      );
+    if (!anotherOwnerAdvanced) {
+      console.error("Monthly recap dispatch gate rejected.", {
+        userId: stats.userId,
+        reason: "dispatch_gate_rejected",
+        durableAttemptPresent: durableAttempt !== null,
+      });
+    }
+    return {
+      sent: false as const,
+      reason: anotherOwnerAdvanced
+        ? ("claim_lost" as const)
+        : ("dispatch_gate_rejected" as const),
+    };
   }
 
   const model = buildMonthlyRecapEmail(stats);

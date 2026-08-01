@@ -122,6 +122,7 @@ describe("watch event evaluator", () => {
       recentWatchEvents: [],
       sensitivityMode: "balanced",
       burstCount: 1,
+      currentCapturedAt: "2026-04-18T00:00:00.000Z",
       now: "2026-04-18T00:00:00.000Z",
     });
 
@@ -134,6 +135,8 @@ describe("watch event evaluator", () => {
           proofTargetIdentity: "watch-1:meta-boat-1:example.com/glow",
           from: "Glow Serum Sale",
           to: "Glow Serum Weekend Sale",
+          beforeCapturedAt: "2026-04-10T00:00:01.000Z",
+          capturedAt: "2026-04-18T00:00:00.000Z",
         }),
       }),
     ]);

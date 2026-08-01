@@ -45,8 +45,31 @@ function mockClaimPath(options?: {
       isOptedIn: true,
       optedOutAt: null,
       isPaused: false,
+      isValidated: true,
+      validationStatus: "validated",
     },
   ]);
+  const hasSuppressedEmailTargetForUserAndAddress = vi.fn().mockResolvedValue(false);
+  const upsertDeliveryTarget = vi.fn().mockResolvedValue({
+    id: "target-provisioned",
+    targetValue: "owner@example.com",
+    isOptedIn: true,
+    optedOutAt: null,
+    isPaused: false,
+    isValidated: true,
+    validationStatus: "validated",
+  });
+  const provisionVerifiedAccountEmailTargetIfUnsuppressed = vi
+    .fn()
+    .mockResolvedValue({
+      id: "target-provisioned",
+      targetValue: "owner@example.com",
+      isOptedIn: true,
+      optedOutAt: null,
+      isPaused: false,
+      isValidated: true,
+      validationStatus: "validated",
+    });
 
   vi.doMock("~/lib/data.server", () => ({
     claimInstantDeliveryAttempt,
@@ -60,11 +83,13 @@ function mockClaimPath(options?: {
     getWorkspaceDeliveryConfig: vi.fn(),
     legacyWorkspaceDeliveryDefaults: vi.fn(),
     listDeliveryTargets,
+    hasSuppressedEmailTargetForUserAndAddress,
+    provisionVerifiedAccountEmailTargetIfUnsuppressed,
     getOldestUserId: vi.fn(),
     getUserDeliveryProfile: vi.fn(),
     getUserIdByEmail: vi.fn(),
     reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
-    upsertDeliveryTarget: vi.fn(),
+    upsertDeliveryTarget,
     upsertDigestDelivery: vi.fn(),
   }));
 
@@ -77,6 +102,9 @@ function mockClaimPath(options?: {
     markInstantDeliveryDispatchStarted,
     updateDeliveryAttemptResult,
     listDeliveryTargets,
+    hasSuppressedEmailTargetForUserAndAddress,
+    provisionVerifiedAccountEmailTargetIfUnsuppressed,
+    upsertDeliveryTarget,
   };
 }
 
@@ -199,6 +227,7 @@ describe("sendFreeActivationResultEmail", () => {
     expect(claimInput.idempotencyKey).toBe("activation-result:user-1:wl-1");
     expect(claimInput.templateName).toBe("activation_result");
     expect(claimInput.watchlistId).toBe("wl-1");
+    expect(claimInput.deliveryTargetId).toBe("target-1");
 
     const payload = emailSend.mock.calls[0]?.[0];
     expect(payload.subject).toContain("12 ads");
@@ -211,20 +240,59 @@ describe("sendFreeActivationResultEmail", () => {
     expect(payload.headers["List-Unsubscribe"]).toBeTruthy();
   });
 
+  it("provisions and attaches a validated account-email target before dispatch", async () => {
+    const emailSend = vi.fn().mockResolvedValue({ messageId: "msg_act_provisioned" });
+    const {
+      claimInstantDeliveryAttempt,
+      listDeliveryTargets,
+      provisionVerifiedAccountEmailTargetIfUnsuppressed,
+      upsertDeliveryTarget,
+    } = mockClaimPath();
+    listDeliveryTargets.mockResolvedValue([]);
+
+    const env = {
+      EMAIL: { send: emailSend },
+      EMAIL_FROM_EMAIL: "alerts@0509.io",
+      APP_ORIGIN: "https://0509.io",
+      UNSUBSCRIBE_SIGNING_SECRET: "test-secret",
+    };
+
+    const { sendFreeActivationResultEmail } = await import("~/lib/delivery.server");
+    const result = await sendFreeActivationResultEmail(env as never, {
+      userId: "user-1",
+      email: "owner@example.com",
+      name: "Owner",
+      watchlistId: "wl-1",
+      competitorName: "Glossier",
+      adsFound: 1,
+      topAds: [],
+    });
+
+    expect(result).toEqual({ sent: true, reason: "sent" });
+    expect(provisionVerifiedAccountEmailTargetIfUnsuppressed).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        userId: "user-1",
+        targetValue: "owner@example.com",
+      }),
+    );
+    expect(upsertDeliveryTarget).not.toHaveBeenCalled();
+    expect(claimInstantDeliveryAttempt).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ deliveryTargetId: "target-provisioned" }),
+    );
+    expect(emailSend).toHaveBeenCalledTimes(1);
+  });
+
   it("skips send when the recipient has unsubscribed", async () => {
     const emailSend = vi.fn().mockResolvedValue({ messageId: "msg_x" });
-    const { listDeliveryTargets, updateDeliveryAttemptResult } = mockClaimPath();
-    listDeliveryTargets
-      .mockResolvedValueOnce([]) // usable targets empty
-      .mockResolvedValueOnce([
-        {
-          id: "target-1",
-          targetValue: "owner@example.com",
-          isOptedIn: false,
-          optedOutAt: "2026-07-01T00:00:00.000Z",
-          isPaused: false,
-        },
-      ]);
+    const {
+      claimInstantDeliveryAttempt,
+      hasSuppressedEmailTargetForUserAndAddress,
+      listDeliveryTargets,
+    } = mockClaimPath();
+    listDeliveryTargets.mockResolvedValue([]);
+    hasSuppressedEmailTargetForUserAndAddress.mockResolvedValue(true);
 
     const env = {
       EMAIL: { send: emailSend },
@@ -245,13 +313,43 @@ describe("sendFreeActivationResultEmail", () => {
 
     expect(result).toEqual({ sent: false, reason: "unsubscribed" });
     expect(emailSend).not.toHaveBeenCalled();
-    expect(updateDeliveryAttemptResult).toHaveBeenCalledWith(
-      expect.anything(),
-      "attempt-welcome-1",
-      expect.objectContaining({
-        status: "failed",
-        errorMessage: expect.stringMatching(/unsubscribed/i),
-      }),
-    );
+    expect(claimInstantDeliveryAttempt).not.toHaveBeenCalled();
+  });
+
+  it("does not treat a paused workspace target as an unsubscribe", async () => {
+    const emailSend = vi.fn().mockResolvedValue({ messageId: "msg_x" });
+    const { claimInstantDeliveryAttempt, listDeliveryTargets } = mockClaimPath();
+    listDeliveryTargets.mockResolvedValue([
+      {
+        id: "target-paused",
+        targetValue: "owner@example.com",
+        isOptedIn: true,
+        optedOutAt: null,
+        isPaused: true,
+        isValidated: true,
+        validationStatus: "validated",
+      },
+    ]);
+
+    const env = {
+      EMAIL: { send: emailSend },
+      EMAIL_FROM_EMAIL: "alerts@0509.io",
+      APP_ORIGIN: "https://0509.io",
+    };
+
+    const { sendFreeActivationResultEmail } = await import("~/lib/delivery.server");
+    const result = await sendFreeActivationResultEmail(env as never, {
+      userId: "user-1",
+      email: "owner@example.com",
+      name: null,
+      watchlistId: "wl-1",
+      competitorName: "Nike",
+      adsFound: 3,
+      topAds: [],
+    });
+
+    expect(result).toEqual({ sent: false, reason: "target_not_ready" });
+    expect(emailSend).not.toHaveBeenCalled();
+    expect(claimInstantDeliveryAttempt).not.toHaveBeenCalled();
   });
 });

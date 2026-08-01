@@ -57,6 +57,170 @@ export function buildSearchAnswer(input: {
         : "Not captured yet; use the ad cards as creative signals only",
   };
 
+  if (result.discoveryPartial && adCount === 0) {
+    return {
+      state: "degraded",
+      title: "Search results are partial",
+      summary: broaderCount > 0
+        ? `${broaderCount} related candidate${broaderCount === 1 ? " is" : "s are"} available on the partial page. Additional results could not be loaded, so this is not a complete no-ads result.`
+        : "Additional results could not be loaded, so this is not a complete no-ads result.",
+      facts: [
+        { label: "Fresh ads", value: "Partial", detail: sourceLabel },
+        {
+          label: "Related candidates loaded so far",
+          value: String(broaderCount),
+          detail: broaderCount > 0
+            ? "Available to review separately without a verified website claim"
+            : "No related candidates are present on the partial page",
+        },
+        landingFact,
+      ],
+      // Do not route through customerDiscoverySummary: that helper remaps
+      // unknown/partial text into "temporarily delayed" copy.
+      note: "Retry to continue loading the remaining results.",
+    };
+  }
+
+  const answer = buildCompleteSearchAnswer({
+    result,
+    displayDomain: domain,
+    isDomainSearch: input.isDomainSearch,
+    isBroaderScope: input.isBroaderScope,
+    adCount,
+    broaderCount,
+    verifiedCount,
+    landingFact,
+    sourceLabel,
+    landingPageCount,
+  });
+  if (!result.discoveryPartial || adCount === 0) {
+    return answer;
+  }
+  const qualified = qualifyPartialSearchAnswer(answer, {
+    adCount,
+    domain,
+    verifiedCount,
+  });
+  return {
+    ...qualified,
+    state: "degraded",
+    summary: `${qualified.summary} Additional results could not be loaded, so this page is partial.`,
+    note: qualified.note
+      ? `${qualified.note} Retry to continue loading the remaining results.`
+      : "Retry to continue loading the remaining results.",
+  };
+}
+
+function qualifyPartialSearchAnswer(
+  answer: SearchAnswer,
+  input: {
+    adCount: number;
+    domain: string | null;
+    verifiedCount: number;
+  },
+): SearchAnswer {
+  const relatedOnlyCount = Math.max(0, input.adCount - input.verifiedCount);
+
+  if (answer.state === "broader" && input.domain) {
+    return {
+      ...answer,
+      title: input.verifiedCount > 0
+        ? `${input.verifiedCount} verified and ${relatedOnlyCount} related match${relatedOnlyCount === 1 ? "" : "es"} loaded so far for ${input.domain}`
+        : `${input.adCount} broader match${input.adCount === 1 ? "" : "es"} loaded so far for ${input.domain}`,
+      facts: answer.facts.map((fact) => {
+        if (fact.label === "Verified matches") {
+          return {
+            label: "Verified matches loaded so far",
+            value: fact.value,
+            detail: "Connected to this website on the partial page",
+          };
+        }
+        if (fact.label === "Related matches") {
+          return {
+            label: "Related matches loaded so far",
+            value: fact.value,
+            detail: "Unverified advertiser/text candidates on the partial page",
+          };
+        }
+        return fact;
+      }),
+    };
+  }
+
+  if (answer.state === "verified") {
+    return {
+      ...answer,
+      title: input.domain
+        ? `${input.verifiedCount} verified ad${input.verifiedCount === 1 ? "" : "s"} loaded so far for ${input.domain}`
+        : `${input.adCount} ad${input.adCount === 1 ? "" : "s"} loaded so far`,
+      facts: answer.facts.map((fact) => {
+        if (fact.label === "Verified ads") {
+          return {
+            label: "Verified ads loaded so far",
+            value: fact.value,
+            detail: "Connected to this domain on the partial page",
+          };
+        }
+        if (fact.label === "Ads found") {
+          return {
+            label: "Ads loaded so far",
+            value: fact.value,
+            detail: "Visible on the partial page",
+          };
+        }
+        return fact;
+      }),
+    };
+  }
+
+  if (answer.state === "no_verified" && input.domain) {
+    return {
+      ...answer,
+      title: `No verified ads in the results loaded so far for ${input.domain}`,
+      facts: answer.facts.map((fact) => {
+        if (fact.label === "Verified ads") {
+          return {
+            label: "Verified ads loaded so far",
+            value: fact.value,
+            detail: "Exact website match on the partial page",
+          };
+        }
+        if (fact.label === "Returned ads") {
+          return {
+            label: "Returned ads loaded so far",
+            value: fact.value,
+            detail: "Review as unverified candidates on the partial page",
+          };
+        }
+        return fact;
+      }),
+    };
+  }
+
+  return answer;
+}
+
+function buildCompleteSearchAnswer(input: {
+  result: SearchResponse;
+  displayDomain: string | null;
+  isDomainSearch: boolean;
+  isBroaderScope: boolean;
+  adCount: number;
+  broaderCount: number;
+  verifiedCount: number;
+  landingFact: SearchAnswer["facts"][number];
+  sourceLabel: string;
+  landingPageCount: number;
+}): SearchAnswer {
+  const result = input.result;
+  const adCount = input.adCount;
+  const domain = input.displayDomain;
+  const broaderCount = input.broaderCount;
+  const verifiedCount = input.verifiedCount;
+  const landingFact = input.landingFact;
+  const sourceLabel = input.sourceLabel;
+  const landingPageCount = input.landingPageCount;
+
   if (isDelayedSearchStatus(result.discoveryStatus) && adCount === 0) {
     return {
       state: "degraded",

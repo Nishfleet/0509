@@ -178,6 +178,7 @@ function installDeliveryMocks(options: {
     listDeliveryTargets: vi.fn().mockResolvedValue([]),
     reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
     updateDeliveryAttemptResult,
+    provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn().mockResolvedValue(target),
     upsertDeliveryTarget: vi.fn().mockResolvedValue(target),
     upsertDigestDelivery: vi.fn(),
   }));

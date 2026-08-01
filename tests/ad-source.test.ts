@@ -52,6 +52,274 @@ function buildLiveBrowserResult(overrides: Partial<SearchResponse> = {}): Search
   };
 }
 
+describe("interactive Meta pagination honesty", () => {
+  it("labels and preserves a partial result when a bounded later page fails", async () => {
+    const firstAd = buildLiveBrowserResult().ads[0];
+    const searchAds = vi.fn()
+      .mockResolvedValueOnce({
+        ads: [firstAd],
+        nextCursor: "cursor-2",
+        source: "meta_api",
+      })
+      .mockRejectedValueOnce(new Error("page 2 unavailable"));
+    vi.doMock("~/lib/meta-api.server", () => ({
+      searchAds,
+      demoSearch: vi.fn(),
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: vi.fn(),
+      getInteractiveMetaApiExtraPages: vi.fn().mockReturnValue(2),
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+
+    const { searchMetaApiAdsWithInteractiveDepth } = await import(
+      "~/lib/ad-source.server"
+    );
+    const result = await searchMetaApiAdsWithInteractiveDepth(
+      {} as never,
+      {
+        mode: "advertiser",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      { interactive: true },
+    );
+
+    expect(result).toMatchObject({
+      ads: [firstAd],
+      nextCursor: "cursor-2",
+      discoveryStatus: "healthy",
+      discoveryPartial: true,
+      discoverySummary: expect.stringContaining("results shown are partial"),
+      discoveryFailureClass: "provider_unavailable",
+    });
+  });
+
+  it("preserves prior provider success when a later Meta page degrades", async () => {
+    const firstAd = buildLiveBrowserResult().ads[0];
+    const previousSuccess = "2026-07-29T12:00:00.000Z";
+    const searchAds = vi.fn()
+      .mockResolvedValueOnce({
+        ads: [firstAd],
+        nextCursor: "cursor-2",
+        source: "meta_api",
+      })
+      .mockRejectedValueOnce(new Error("page 2 unavailable"));
+    const upsertDiscoveryProviderState = vi.fn();
+    const upsertDiscoveryCacheEntry = vi.fn();
+
+    vi.doMock("~/lib/meta-api.server", () => ({
+      searchAds,
+      demoSearch: vi.fn(),
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: vi.fn(),
+      getInteractiveMetaApiExtraPages: vi.fn().mockReturnValue(2),
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState: vi.fn().mockResolvedValue({
+        provider: "meta_api",
+        status: "healthy",
+        failureClass: null,
+        summary: "Official Meta API is available for limited diagnostic use.",
+        lastSuccessAt: previousSuccess,
+        lastFailureAt: null,
+        metadata: null,
+        updatedAt: previousSuccess,
+      }),
+      upsertDiscoveryCacheEntry,
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState,
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+    const result = await searchAdsViaSourceResolver(
+      {
+        DB: {} as D1Database,
+        META_AD_LIBRARY_TOKEN: "platform-token",
+        ALLOW_PLATFORM_META_API_FALLBACK: "true",
+      } as never,
+      {
+        mode: "advertiser",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      { purpose: "public_search" },
+    );
+
+    expect(result).toMatchObject({
+      ads: [firstAd],
+      nextCursor: "cursor-2",
+      discoveryStatus: "healthy",
+      discoveryPartial: true,
+      discoveryFailureClass: "provider_unavailable",
+    });
+    expect(upsertDiscoveryProviderState).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        provider: "meta_api",
+        status: "degraded",
+        failureClass: "provider_unavailable",
+        lastSuccessAt: previousSuccess,
+        lastFailureAt: expect.any(String),
+        metadata: expect.objectContaining({ partial: true }),
+      }),
+    );
+    expect(upsertDiscoveryCacheEntry).not.toHaveBeenCalled();
+  });
+
+  it("maps unclassified Meta API first-page failures to provider_unavailable", async () => {
+    const upsertDiscoveryProviderState = vi.fn();
+    const before = Date.now();
+    vi.doMock("~/lib/meta-api.server", () => ({
+      searchAds: vi.fn().mockRejectedValue(new Error("upstream opaque failure")),
+      demoSearch: vi.fn(),
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: vi.fn(),
+      getInteractiveMetaApiExtraPages: vi.fn().mockReturnValue(0),
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState,
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+    const result = await searchAdsViaSourceResolver(
+      {
+        DB: {} as D1Database,
+        META_AD_LIBRARY_TOKEN: "platform-token",
+        ALLOW_PLATFORM_META_API_FALLBACK: "true",
+      } as never,
+      {
+        mode: "advertiser",
+        filters: {
+          query: "nykaa",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      { purpose: "public_search" },
+    );
+
+    expect(result.discoveryFailureClass).toBe("provider_unavailable");
+    expect(result.discoveryFailureClass).not.toBe("browser_launch_failed");
+    expect(result.discoveryFailureClass).not.toBe("browser_unavailable");
+    expect(upsertDiscoveryProviderState).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        provider: "meta_api",
+        failureClass: "provider_unavailable",
+      }),
+    );
+    const providerStateInput = upsertDiscoveryProviderState.mock.calls[0]?.[1];
+    const cooldownUntil = Date.parse(providerStateInput.metadata.cooldownUntil);
+    expect(cooldownUntil).toBeGreaterThanOrEqual(before + 5 * 60 * 1000);
+    expect(cooldownUntil).toBeLessThanOrEqual(Date.now() + 5 * 60 * 1000);
+  });
+
+  it("does not globally cool down Meta after a successful first page was partial", async () => {
+    const firstAd = buildLiveBrowserResult().ads[0];
+    const searchAds = vi.fn().mockResolvedValue({
+      ads: [firstAd],
+      nextCursor: null,
+      source: "meta_api",
+    });
+
+    vi.doMock("~/lib/meta-api.server", () => ({
+      searchAds,
+      demoSearch: vi.fn(),
+      filterAdsBySearchFilters: (ads: unknown[]) => ads,
+      MetaApiError: class MetaApiError extends Error {},
+    }));
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: vi.fn(),
+      getInteractiveMetaApiExtraPages: vi.fn().mockReturnValue(2),
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState: vi.fn().mockResolvedValue({
+        provider: "meta_api",
+        status: "degraded",
+        failureClass: "browser_unavailable",
+        summary: "A later page was unavailable.",
+        lastSuccessAt: "2026-07-29T12:00:00.000Z",
+        lastFailureAt: new Date().toISOString(),
+        metadata: { partial: true, routeContext: "public_search" },
+        updatedAt: new Date().toISOString(),
+      }),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+    const result = await searchAdsViaSourceResolver(
+      {
+        DB: {} as D1Database,
+        META_AD_LIBRARY_TOKEN: "platform-token",
+        ALLOW_PLATFORM_META_API_FALLBACK: "true",
+      } as never,
+      {
+        mode: "advertiser",
+        filters: {
+          query: "another-brand",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      { purpose: "public_search" },
+    );
+
+    expect(searchAds).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      ads: [firstAd],
+      discoveryStatus: "healthy",
+      discoveryPartial: false,
+      discoveryFailureClass: null,
+    });
+  });
+});
+
 describe("resolveCommercialAdSourceStatus", () => {
   it("treats the official Meta API as diagnostic-only even when a token exists", async () => {
     vi.doMock(
