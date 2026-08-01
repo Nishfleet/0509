@@ -3189,8 +3189,14 @@ export async function sendPresenceDigestEmail(
   const { renderEmailShell } = await import("~/lib/email-template.server");
   const { buildUnsubscribeUrl } = await import("~/lib/unsubscribe.server");
 
+  // Every exit reports the same {accepted, delivered} shape main introduced,
+  // because presence-digest.server.ts reads both fields off the result. A bare
+  // `false` would make delivery.accepted undefined and silently downgrade every
+  // one of these outcomes to "send_failed".
+  const notSent = { accepted: false, delivered: false };
+
   const normalized = input.email.trim().toLowerCase();
-  if (!normalized) return false;
+  if (!normalized) return notSent;
   const targets = await listDeliveryTargets(env, input.userId, {
     watchlistId: null,
     channel: "email",
@@ -3209,7 +3215,7 @@ export async function sendPresenceDigestEmail(
         target.validationStatus === "validated",
     ) ?? null;
   if (!deliveryTarget && matchingTargets.length > 0) {
-    return false;
+    return notSent;
   }
   deliveryTarget ??= await provisionVerifiedAccountEmailTargetIfUnsuppressed(env, {
     userId: input.userId,
@@ -3217,7 +3223,7 @@ export async function sendPresenceDigestEmail(
     optInSource: AUTO_PROVISIONED_EMAIL_SOURCE,
     metadata: { autoProvisioned: true, purpose: "presence_digest" },
   });
-  if (!deliveryTarget) return false;
+  if (!deliveryTarget) return notSent;
 
   const unsubscribeUrl = await buildUnsubscribeUrl(env, {
     userId: input.userId,
@@ -3246,7 +3252,20 @@ export async function sendPresenceDigestEmail(
     idempotencyKey: input.idempotencyKey,
   });
   if (!claim.attemptId || !claim.claimUpdatedAt) {
-    return claim.duplicate?.status === "sent";
+    // A duplicate claim means someone else already owns this send. Report its
+    // real outcome rather than a bare boolean, so an already-confirmed duplicate
+    // is not downgraded to "unconfirmed".
+    const duplicate = claim.duplicate;
+    if (!duplicate) return notSent;
+    return {
+      accepted: duplicate.status === "sent",
+      delivered:
+        confirmedDeliveryTimestamp({
+          webhookStatus: duplicate.webhookStatus,
+          providerStatusLastSeenAt: duplicate.providerStatusLastSeenAt,
+          sentAt: duplicate.sentAt,
+        }) !== null,
+    };
   }
 
   const dispatchStartedAt = await markInstantDeliveryDispatchStarted(
@@ -3254,7 +3273,7 @@ export async function sendPresenceDigestEmail(
     claim.attemptId,
     claim.claimUpdatedAt,
   );
-  if (!dispatchStartedAt) return false;
+  if (!dispatchStartedAt) return notSent;
 
   const providerResult = await sendCloudflareEmail(env, {
     to: normalized,
