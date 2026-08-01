@@ -270,4 +270,23 @@ describe("release scheduled observations", () => {
     }, { randomUUID: () => "12345678-1234-1234-1234-123456789abc" });
     expect(run).toHaveBeenCalledTimes(1);
   });
+
+  it("rejects scheduled timestamps beyond the allowed future skew", async () => {
+    const env = {
+      CF_VERSION_METADATA: { id: "worker-v1" },
+      DB: { prepare: vi.fn() },
+    };
+
+    await expect(recordReleaseScheduledObservation(env as never, {
+      cron: "0 */3 * * *",
+      scheduledTime: Date.parse("2026-07-20T05:10:00.001Z"),
+      taskName: "scheduled_monitoring",
+      startedAt: new Date("2026-07-20T05:00:00.000Z"),
+      completedAt: new Date("2026-07-20T05:05:00.000Z"),
+      outcome: "no_work",
+      failureCategory: null,
+      metrics: {},
+    })).rejects.toThrow("unsafe_release_soak_future_scheduled_time");
+    expect(env.DB.prepare).not.toHaveBeenCalled();
+  });
 });
