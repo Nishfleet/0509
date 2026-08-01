@@ -3,8 +3,6 @@ import { spawnSync } from "node:child_process";
 import {
   chmodSync,
   existsSync,
-  linkSync,
-  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -230,16 +228,21 @@ describe("production deployment readiness gate", () => {
       plan.findIndex((step: any) => step.id === "post_deploy_release_canary"),
     );
     const deployIndex = plan.findIndex((step: any) => step.id === "deploy");
-    expect(plan[deployIndex - 2]).toMatchObject({
+    expect(plan[deployIndex - 3]).toMatchObject({
       id: "partial_refund_invariants_predeploy",
       command: "node",
       args: ["scripts/check-partial-refund-invariants.mjs"],
       includeCloudflareCredentials: true,
     });
-    expect(plan[deployIndex - 1]).toMatchObject({
+    expect(plan[deployIndex - 2]).toMatchObject({
       id: "capture_worker_rollback_target",
       command: "node",
       includeCloudflareCredentials: true,
+    });
+    expect(plan[deployIndex - 1]).toEqual({
+      id: "reconfirm_frozen_main_before_deploy",
+      command: "./scripts/ci-verify-provider-main-cas.sh",
+      args: [],
     });
     expect(plan[deployIndex + 1]).toMatchObject({
       id: "verify_worker_rollback_target",
@@ -301,6 +304,87 @@ describe("production deployment readiness gate", () => {
       args: ["run", "e2e:prod:public"],
     });
     expect(plan[canaryIndex + 6]).toMatchObject({ id: "oauth_branding" });
+  });
+
+  it("defaults to required backup proof and makes the exact deferred release immediate-only", () => {
+    expect(() =>
+      buildProductionDeployPlan({
+        manifestPath: "test-results/deploy-readiness-test.json",
+        wranglerOutputPath,
+      }),
+    ).toThrow("invalid_remote_restore_evidence_path");
+
+    const deferredPlan = buildProductionDeployPlan({
+      manifestPath: "test-results/deploy-readiness-test.json",
+      backupProofStatus: "deferred",
+      wranglerOutputPath,
+    });
+    expect(deferredPlan[0]).toEqual({
+      id: "deferred_release_zero_migrations",
+      command: "git",
+      args: [
+        "diff",
+        "--quiet",
+        "03174ed6d9eed749b22430fbe1bc0938bf4da0c5",
+        "HEAD",
+        "--",
+        "migrations",
+      ],
+    });
+    expect(
+      deferredPlan.find((step: any) => step.id === "remote_restore_evidence"),
+    ).toBeUndefined();
+    expect(
+      deferredPlan.find((step: any) => step.id === "start_production_soak"),
+    ).toBeUndefined();
+    expect(
+      deferredPlan.find((step: any) => step.id === "post_deploy_release_canary"),
+    ).toMatchObject({ env: { BACKUP_PROOF_STATUS: "deferred" } });
+    expect(
+      deferredPlan.find((step: any) => step.id === "rollback_failed_release"),
+    ).toMatchObject({ runOnPostDeployFailure: true });
+
+    expect(() =>
+      buildProductionDeployPlan({
+        manifestPath: "test-results/deploy-readiness-test.json",
+        remoteRestoreEvidencePath,
+        backupProofStatus: "deferred",
+        wranglerOutputPath,
+      }),
+    ).toThrow("deferred_backup_restore_evidence_conflict");
+
+    const disposition = (deployPlanModule as any)
+      .createDeferredBackupDisposition("f".repeat(40));
+    expect(disposition).toMatchObject({
+      backupProof: "not_obtained",
+      productionD1RecoveryProof: "absent",
+      releaseControlBaseSha:
+        "048e8a5991c6560a15cba485a7a4ba27af9d5004",
+      candidateSha: "f".repeat(40),
+      migrationFileCount: 0,
+    });
+  });
+
+  it("aborts on main drift after preflights and before wrangler deploy", () => {
+    const plan = buildProductionDeployPlan({
+      manifestPath: "test-results/deploy-readiness-test.json",
+      remoteRestoreEvidencePath,
+      wranglerOutputPath,
+    });
+    const executed: string[] = [];
+
+    expect(() =>
+      executeProductionDeployPlan(plan, (step: any) => {
+        executed.push(step.id);
+        if (step.id === "reconfirm_frozen_main_before_deploy") {
+          throw new Error("provider_main_sha_mismatch");
+        }
+      }),
+    ).toThrow("provider_main_sha_mismatch");
+    expect(executed).toContain("capture_worker_rollback_target");
+    expect(executed).toContain("reconfirm_frozen_main_before_deploy");
+    expect(executed).not.toContain("deploy");
+    expect(executed).not.toContain("rollback_failed_release");
   });
 
   it("captures one stable prior Worker version and emits an exact guarded rollback command", () => {
@@ -1164,7 +1248,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       "utf8",
     );
     const checkoutIndex = workflow.indexOf(
-      "- uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10",
+      "- uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
     );
     const acquireIndex = workflow.indexOf("- name: Acquire deploy window");
     const verifySecretsIndex = workflow.indexOf(
@@ -1227,13 +1311,16 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       "CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}",
     );
     expect(synchronizeCanaryStep).toContain(
-      "./node_modules/.bin/wrangler secret put CANARY_BYPASS_TOKEN --name 0509",
+      "./node_modules/.bin/wrangler versions secret put CANARY_BYPASS_TOKEN --name 0509",
     );
     expect(deployStep).toContain(
       "CANARY_BYPASS_TOKEN: ${{ secrets.CANARY_BYPASS_TOKEN }}",
     );
     expect(deployStep).toContain(
-      "D1_REMOTE_RESTORE_EVIDENCE_PATH: test-results/d1-remote-restore-evidence.json",
+      "D1_REMOTE_RESTORE_EVIDENCE_PATH: ${{ needs.pin_candidate.outputs.backup_proof_status == 'required' && 'test-results/d1-remote-restore-evidence.json' || '' }}",
+    );
+    expect(deployStep).toContain(
+      "BACKUP_PROOF_STATUS: ${{ needs.pin_candidate.outputs.backup_proof_status }}",
     );
     expect(deployStep).toContain("GITHUB_TOKEN: ${{ github.token }}");
     expect(releaseStep).toContain("if: always()");
@@ -1257,14 +1344,19 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     );
     expect(workflow).not.toContain("cleanup_remote_restore_scratch:");
     expect(workflow.match(/^\s+environment:/gmu)).toHaveLength(1);
-    expect(workflow).toContain(
+    const prepareScript = readFileSync(
+      resolve("scripts/ci-prepare-remote-restore-evidence.sh"),
+      "utf8",
+    );
+    expect(prepareScript).toContain(
       "No valid pre-generated restore evidence is available.",
     );
+    expect(prepareScript).toContain('if [ "$status" -ne 2 ]');
+    expect(prepareScript).toContain("return 2");
+    expect(prepareScript).toContain('archive="$RESTORE_EVIDENCE_ARCHIVE"');
     expect(workflow).toContain(
       'D1_REMOTE_RESTORE_EVIDENCE_MIN_VALIDITY_MS: "43200000"',
     );
-    expect(workflow).toContain('if [ "$status" -ne 2 ]');
-    expect(workflow).toContain('return 2');
     expect(workflow).not.toContain("gh secret set");
     expect(workflow).toContain(
       "runs-on: [self-hosted, linux, x64, vps-verify]",
@@ -1284,302 +1376,68 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     expect(workflow).not.toContain("- name: Production public smoke");
   });
 
-  it("hands the verified archive to upload without weakening identity or cleanup", () => {
-    const workflow = parse(
-      readFileSync(resolve(".github/workflows/deploy-production.yml"), "utf8"),
-    ) as any;
-    const steps = workflow.jobs.prepare_remote_restore_evidence.steps;
-    const verifyIndex = steps.findIndex(
+  it("binds create and upload-artifact to one RESTORE_EVIDENCE_ARCHIVE env", () => {
+    const workflowText = readFileSync(
+      resolve(".github/workflows/deploy-production.yml"),
+      "utf8",
+    );
+    const workflow = parse(workflowText) as any;
+    const prepare = workflow.jobs.prepare_remote_restore_evidence;
+    const candidateVerifierStep = prepare.steps.find(
+      (step: any) =>
+        step.name === "Verify pinned candidate before self-hosted work",
+    );
+    const bindArchiveStep = prepare.steps.find(
+      (step: any) => step.name === "Bind restore evidence archive path",
+    );
+    const verifyStep = prepare.steps.find(
       (step: any) =>
         step.name === "Verify pre-generated exact R2 restore evidence",
     );
-    const stageIndex = steps.findIndex(
-      (step: any) => step.name === "Stage verified restore evidence for upload",
-    );
-    const uploadIndex = steps.findIndex(
+    const uploadStep = prepare.steps.find(
       (step: any) =>
         step.name === "Preserve private restore evidence for this deploy only",
     );
-    const cleanupIndex = steps.findIndex(
+    const cleanupStep = prepare.steps.find(
       (step: any) => step.name === "Remove local restore evidence archive",
     );
-    const verify = steps[verifyIndex];
-    const stage = steps[stageIndex];
-    const upload = steps[uploadIndex];
-    const cleanup = steps[cleanupIndex];
-
-    expect(verifyIndex).toBeLessThan(stageIndex);
-    expect(stageIndex).toBeLessThan(uploadIndex);
-    expect(uploadIndex).toBeLessThan(cleanupIndex);
-    expect(verify.env).toMatchObject({
-      RESTORE_EVIDENCE_HANDOFF_ROOT: "${{ runner.temp }}",
-    });
-    expect(verify.run).toContain('mktemp -d "${prefix}XXXXXXXXXXXX"');
-    expect(verify.run).toContain(
-      "printf 'RESTORE_EVIDENCE_HANDOFF_DIR=%s\\n' \"$handoff_dir\" >> \"$GITHUB_ENV\"",
+    const bindManifestStep = prepare.steps.find(
+      (step: any) =>
+        step.name === "Bind a clean exact-main candidate manifest",
     );
-    expect(verify.run).toContain('chmod 700 "$handoff_dir"');
-    expect(verify.run).toContain('"$(id -u):700:directory"');
-    expect(verify.run).toContain(
-      'archive="$handoff_dir/d1-remote-restore-evidence-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}.tar.gz"',
+
+    expect(bindArchiveStep.run).toContain(
+      'archive="$RUNNER_TEMP/d1-remote-restore-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}.tar.gz"',
     );
-    expect(verify.run).toContain('test ! -e "$archive"');
-    expect(stage.env).toEqual({
-      RESTORE_EVIDENCE_HANDOFF_ROOT: "${{ runner.temp }}",
-      RESTORE_EVIDENCE_UPLOAD:
-        "${{ github.workspace }}/test-results/d1-remote-restore-evidence-upload-${{ github.sha }}-${{ github.run_id }}.tar.gz",
-    });
-    expect(upload.with).toMatchObject({
-      path: stage.env.RESTORE_EVIDENCE_UPLOAD,
-      "if-no-files-found": "error",
-    });
-    expect(stage.run).toContain('"$(id -u):600:1:regular file"');
-    expect(stage.run).toContain('sha256sum "$source"');
-    expect(stage.run).toContain(
-      'cmp -s "$source" "$RESTORE_EVIDENCE_UPLOAD"',
+    expect(candidateVerifierStep.run).toBe(
+      "./scripts/deploy-window-lock.sh run -- ./scripts/ci-verify-production-candidate.sh",
     );
-    expect(cleanup.if).toBe("always()");
-    expect(cleanup.env).toEqual({
-      RESTORE_EVIDENCE_HANDOFF_ROOT: "${{ runner.temp }}",
-      RESTORE_EVIDENCE_UPLOAD: stage.env.RESTORE_EVIDENCE_UPLOAD,
-    });
-    expect(cleanup.run).toContain('"$expected_prefix"????????????');
-    expect(cleanup.run).toContain(
-      'find -P "$RESTORE_EVIDENCE_HANDOFF_DIR" -xdev -mindepth 1 -delete',
+    expect(bindArchiveStep.run).toContain(
+      'printf \'RESTORE_EVIDENCE_ARCHIVE=%s\\n\' "$archive" >> "$GITHUB_ENV"',
     );
-    expect(cleanup.run).toContain('rmdir -- "$RESTORE_EVIDENCE_HANDOFF_DIR"');
-    expect(cleanup.run).toContain('rm -f -- "$RESTORE_EVIDENCE_UPLOAD"');
-
-    const runStage = (
-      mode:
-        | "valid"
-        | "symlink"
-        | "wrong-owner"
-        | "wrong-mode"
-        | "hardlink"
-        | "wrong-content"
-        | "byte-mismatch"
-        | "stale-upload",
-    ) => {
-      const root = mkdtempSync(join(tmpdir(), `0509-restore-handoff-${mode}-`));
-      roots.push(root);
-      const workspace = join(root, "workspace");
-      const handoffRoot = join(root, "handoffs");
-      const handoffDir = join(
-        handoffRoot,
-        "d1-remote-restore-handoff-30574154496-1-prepare_remote_restore_evidence-abcdefghijkl",
-      );
-      const payload = join(root, "payload");
-      const source = join(
-        handoffDir,
-        "d1-remote-restore-evidence-30574154496-1-prepare_remote_restore_evidence.tar.gz",
-      );
-      const staged = join(workspace, "test-results", "restore-evidence-upload.tar.gz");
-      const bin = join(root, "bin");
-      mkdirSync(workspace, { recursive: true });
-      mkdirSync(handoffDir, { recursive: true, mode: 0o700 });
-      mkdirSync(payload, { recursive: true });
-      mkdirSync(bin, { recursive: true });
-      const member =
-        mode === "wrong-content"
-          ? "unexpected.json"
-          : "d1-remote-restore-evidence.json";
-      writeFileSync(join(payload, member), '{"verified":true}\n');
-      const archive = mode === "symlink" ? `${source}.target` : source;
-      const tar = spawnSync(
-        "tar",
-        ["-czf", archive, "-C", payload, member],
-        { encoding: "utf8" },
-      );
-      expect(tar.status, tar.stderr).toBe(0);
-      chmodSync(archive, mode === "wrong-mode" ? 0o644 : 0o600);
-      if (mode === "symlink") symlinkSync(archive, source);
-      if (mode === "hardlink") linkSync(source, `${source}.hardlink`);
-      if (mode === "stale-upload") {
-        mkdirSync(join(workspace, "test-results"), { recursive: true });
-        writeFileSync(staged, "stale");
-      }
-      writeFileSync(
-        join(bin, "stat"),
-        `#!/usr/bin/env node
-const fs = require("node:fs");
-const args = process.argv.slice(2);
-const format = args[1];
-const path = args.at(-1);
-const value = fs.lstatSync(path);
-let uid = value.uid;
-if (process.env.FAKE_STAT_MODE === "wrong-owner" && path === process.env.FAKE_SOURCE) uid += 1;
-const mode = (value.mode & 0o777).toString(8);
-const type = value.isFile() ? "regular file" : value.isDirectory() ? "directory" : value.isSymbolicLink() ? "symbolic link" : "other";
-if (format === "%u:%a:%F") process.stdout.write(uid + ":" + mode + ":" + type + "\\n");
-else if (format === "%u:%a:%h:%F") process.stdout.write(uid + ":" + mode + ":" + value.nlink + ":" + type + "\\n");
-else process.exit(91);
-`,
-      );
-      writeFileSync(
-        join(bin, "sha256sum"),
-        `#!/usr/bin/env node
-const { createHash } = require("node:crypto");
-const { readFileSync } = require("node:fs");
-const path = process.argv[2];
-process.stdout.write(createHash("sha256").update(readFileSync(path)).digest("hex") + "  " + path + "\\n");
-`,
-      );
-      const installResolution = spawnSync(
-        "/bin/sh",
-        ["-c", "command -v install"],
-        { encoding: "utf8" },
-      );
-      expect(
-        installResolution.status,
-        installResolution.stderr,
-      ).toBe(0);
-      const installPath = installResolution.stdout.trim();
-      expect(installPath).toMatch(/^\/\S+/u);
-      writeFileSync(
-        join(bin, "install"),
-        `#!/bin/bash
-${JSON.stringify(installPath)} "$@"
-if [ "\${FAKE_INSTALL_MODE:-}" = byte-mismatch ]; then
-  printf 'tampered' >> "\${!#}"
-fi
-`,
-      );
-      for (const executable of ["stat", "sha256sum", "install"]) {
-        chmodSync(join(bin, executable), 0o755);
-      }
-
-      const result = spawnSync("/bin/bash", ["-euo", "pipefail", "-c", stage.run], {
-        cwd: process.cwd(),
-        env: {
-          ...process.env,
-          PATH: `${bin}:${process.env.PATH}`,
-          FAKE_INSTALL_MODE: mode === "byte-mismatch" ? mode : "",
-          FAKE_SOURCE: source,
-          FAKE_STAT_MODE: mode === "wrong-owner" ? mode : "",
-          GITHUB_JOB: "prepare_remote_restore_evidence",
-          GITHUB_RUN_ATTEMPT: "1",
-          GITHUB_RUN_ID: "30574154496",
-          GITHUB_WORKSPACE: workspace,
-          RESTORE_EVIDENCE_HANDOFF_DIR: handoffDir,
-          RESTORE_EVIDENCE_HANDOFF_ROOT: handoffRoot,
-          RESTORE_EVIDENCE_UPLOAD: staged,
-        },
-        encoding: "utf8",
-      });
-      return { result, bin, handoffDir, handoffRoot, source, staged };
-    };
-
-    const valid = runStage("valid");
-    expect(valid.result.status, valid.result.stderr).toBe(0);
-    expect(existsSync(valid.source)).toBe(false);
-    expect(existsSync(valid.handoffDir)).toBe(false);
-    expect(lstatSync(valid.staged).isFile()).toBe(true);
-    expect(lstatSync(valid.staged).mode & 0o777).toBe(0o600);
-
-    for (const mode of [
-      "symlink",
-      "wrong-owner",
-      "wrong-mode",
-      "hardlink",
-      "wrong-content",
-      "byte-mismatch",
-      "stale-upload",
-    ] as const) {
-      const rejected = runStage(mode);
-      expect(rejected.result.signal, mode).toBeNull();
-      expect(
-        rejected.result.status,
-        `${mode}: ${rejected.result.stderr}`,
-      ).toBe(1);
-      if (mode !== "byte-mismatch" && mode !== "stale-upload") {
-        expect(existsSync(rejected.staged), mode).toBe(false);
-      }
-    }
-
-    const runCleanup = (abandoned: ReturnType<typeof runStage>) => {
-      mkdirSync(join(abandoned.staged, ".."), { recursive: true });
-      writeFileSync(abandoned.staged, "staged");
-      const result = spawnSync(
-        "/bin/bash",
-        ["-euo", "pipefail", "-c", cleanup.run],
-        {
-          env: {
-            ...process.env,
-            PATH: `${abandoned.bin}:${process.env.PATH}`,
-            GITHUB_JOB: "prepare_remote_restore_evidence",
-            GITHUB_RUN_ATTEMPT: "1",
-            GITHUB_RUN_ID: "30574154496",
-            RESTORE_EVIDENCE_HANDOFF_DIR: abandoned.handoffDir,
-            RESTORE_EVIDENCE_HANDOFF_ROOT: abandoned.handoffRoot,
-            RESTORE_EVIDENCE_UPLOAD: abandoned.staged,
-          },
-          encoding: "utf8",
-        },
-      );
-      expect(result.status, result.stderr).toBe(0);
-      expect(existsSync(abandoned.handoffDir)).toBe(false);
-      expect(existsSync(abandoned.staged)).toBe(false);
-    };
-
-    const hardlinked = runStage("hardlink");
-    runCleanup(hardlinked);
-    expect(existsSync(`${hardlinked.source}.hardlink`)).toBe(false);
-
-    const unexpected = runStage("wrong-mode");
-    const nested = join(unexpected.handoffDir, "unexpected", "nested");
-    mkdirSync(nested, { recursive: true });
-    writeFileSync(join(nested, "residue"), "private");
-    runCleanup(unexpected);
-
-    const foreign = runStage("wrong-mode");
-    const foreignDir = join(foreign.handoffRoot, "unrelated-directory");
-    const foreignResidue = join(foreignDir, "private");
-    mkdirSync(foreignDir, { recursive: true, mode: 0o700 });
-    writeFileSync(foreignResidue, "private");
-    const refused = spawnSync(
-      "/bin/bash",
-      ["-euo", "pipefail", "-c", cleanup.run],
-      {
-        env: {
-          ...process.env,
-          PATH: `${foreign.bin}:${process.env.PATH}`,
-          GITHUB_JOB: "prepare_remote_restore_evidence",
-          GITHUB_RUN_ATTEMPT: "1",
-          GITHUB_RUN_ID: "30574154496",
-          RESTORE_EVIDENCE_HANDOFF_DIR: foreignDir,
-          RESTORE_EVIDENCE_HANDOFF_ROOT: foreign.handoffRoot,
-          RESTORE_EVIDENCE_UPLOAD: foreign.staged,
-        },
-        encoding: "utf8",
-      },
+    expect(uploadStep.with.path).toBe("${{ env.RESTORE_EVIDENCE_ARCHIVE }}");
+    expect(cleanupStep.run).toBe('rm -f -- "$RESTORE_EVIDENCE_ARCHIVE"');
+    expect(verifyStep.run).toBe(
+      "./scripts/deploy-window-lock.sh run -- ./scripts/ci-prepare-remote-restore-evidence.sh",
     );
-    expect(refused.status, refused.stderr).toBe(1);
-    expect(existsSync(foreignResidue)).toBe(true);
-  }, 30_000);
+    expect(bindManifestStep.run).toBe(
+      "./scripts/deploy-window-lock.sh run -- ./scripts/ci-bind-remote-restore-candidate.sh",
+    );
+    expect(workflowText).not.toContain("<<'VERIFY_LANE'");
+    expect(workflowText).not.toContain("/run/lock/0509/d1-remote-restore-evidence");
+    expect(prepare.env?.RESTORE_EVIDENCE_ARCHIVE).toBeUndefined();
+    // Path pattern is authored once in the bind step; upload/cleanup use env.
+    expect(
+      workflowText.match(
+        /d1-remote-restore-evidence-\$\{GITHUB_SHA\}-\$\{GITHUB_RUN_ID\}/g,
+      ) ?? [],
+    ).toHaveLength(1);
+  });
 
   it("behaviorally enforces artifact-only and infrastructure-failure evidence paths", () => {
-    const workflow = parse(
-      readFileSync(
-        resolve(".github/workflows/deploy-production.yml"),
-        "utf8",
-      ),
-    ) as any;
-    const shell = workflow.jobs.prepare_remote_restore_evidence.steps.find(
-      (step: any) =>
-        step.name ===
-        "Verify pre-generated exact R2 restore evidence",
-    )?.run;
-    expect(typeof shell).toBe("string");
-    expect(shell).toContain(
-      "./scripts/deploy-window-lock.sh run -- bash -euo pipefail <<'VERIFY_LANE'",
+    const prepareScript = resolve(
+      "scripts/ci-prepare-remote-restore-evidence.sh",
     );
-    const executableShell = shell
-      .replace(
-        "./scripts/deploy-window-lock.sh run -- bash -euo pipefail <<'VERIFY_LANE'\n",
-        "",
-      )
-      .replace(/\nVERIFY_LANE\s*$/u, "");
 
     const runMode = (
       mode:
@@ -1589,22 +1447,40 @@ fi
         | "finder_infra"
         | "download_infra"
         | "corrupt_artifact"
-        | "gh_missing",
+        | "invalid_zip_member"
+        | "preexisting_archive"
+        | "non_302_redirect"
+        | "expired_artifact"
+        | "oversized_download"
+        | "oversized_member"
+        | "compressed_tar_bomb"
+        | "publish_failure",
     ) => {
       const root = mkdtempSync(join(tmpdir(), `0509-evidence-shell-${mode}-`));
       roots.push(root);
       const bin = join(root, "bin");
       const runnerTemp = join(root, "runner");
       const callsPath = join(root, "calls.log");
-      const githubEnv = join(root, "github-env");
       const artifactMarker = join(root, "artifact");
+      const archivePath = join(
+        runnerTemp,
+        "d1-remote-restore-evidence-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-30574154496.tar.gz",
+      );
       mkdirSync(bin, { recursive: true });
       mkdirSync(runnerTemp, { recursive: true });
+      writeFileSync(join(root, ".curlrc"), "url = https://attacker.invalid\n");
+      if (mode === "preexisting_archive") {
+        writeFileSync(archivePath, "stale");
+      }
       for (const name of ["chmod", "mkdir", "rm"]) {
         symlinkSync(`/bin/${name}`, join(bin, name));
       }
-      symlinkSync("/usr/bin/id", join(bin, "id"));
-      symlinkSync("/usr/bin/mktemp", join(bin, "mktemp"));
+      for (const name of ["dirname", "test"]) {
+        const target = existsSync(`/bin/${name}`)
+          ? `/bin/${name}`
+          : `/usr/bin/${name}`;
+        symlinkSync(target, join(bin, name));
+      }
 
       writeFileSync(
         join(bin, "node"),
@@ -1623,8 +1499,14 @@ case "$*" in
       [ "$FAKE_MODE" = verifier_infra ] ||
       [ "$FAKE_MODE" = download_infra ] ||
       [ "$FAKE_MODE" = corrupt_artifact ] ||
-      [ "$FAKE_MODE" = gh_missing ]; then
-      printf '30423695493\\td1-remote-restore-evidence-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-30423695493\\n'
+      [ "$FAKE_MODE" = invalid_zip_member ] ||
+      [ "$FAKE_MODE" = non_302_redirect ] ||
+      [ "$FAKE_MODE" = expired_artifact ] ||
+      [ "$FAKE_MODE" = oversized_download ] ||
+      [ "$FAKE_MODE" = oversized_member ] ||
+      [ "$FAKE_MODE" = compressed_tar_bomb ] ||
+      [ "$FAKE_MODE" = publish_failure ]; then
+      printf '30423695493\\t987654321\\t1024\\td1-remote-restore-evidence-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-30423695493\\n'
       exit 0
     fi
     if [ "$FAKE_MODE" = finder_infra ]; then exit 2; fi
@@ -1640,34 +1522,76 @@ exit 90
 printf 'sleep %s\\n' "$*" >> "$FAKE_CALLS"
 `,
       );
-      if (mode !== "gh_missing") {
-        writeFileSync(
-          join(bin, "gh"),
-          `#!/bin/sh
-printf 'gh %s\\n' "$*" >> "$FAKE_CALLS"
+      writeFileSync(
+        join(bin, "curl"),
+        `#!/bin/sh
+printf 'curl %s\\n' "$*" >> "$FAKE_CALLS"
+[ "$1" = "--disable" ] || {
+  printf 'hostile curlrc was not disabled\\n' >&2
+  exit 100
+}
 if [ "$FAKE_MODE" = download_infra ]; then exit 1; fi
-directory=
+headers=
+output=
 while [ "$#" -gt 0 ]; do
-  if [ "$1" = "--dir" ]; then
-    directory="$2"
-    break
-  fi
+  if [ "$1" = "--dump-header" ]; then headers="$2"; shift; fi
+  if [ "$1" = "--output" ]; then output="$2"; shift; fi
   shift
 done
-[ -n "$directory" ] || exit 92
-mkdir -p "$directory"
-: > "$directory/evidence.tar.gz"
+if [ -n "$headers" ]; then
+  if [ "$FAKE_MODE" = non_302_redirect ]; then
+    printf 'HTTP/2 200\\r\\nlocation: https://artifacts.example.test/wrong\\r\\n\\r\\n' > "$headers"
+    printf '200'
+  elif [ "$FAKE_MODE" = expired_artifact ]; then
+    printf 'HTTP/2 410\\r\\n\\r\\n' > "$headers"
+    printf '410'
+  else
+    printf 'HTTP/2 302\\r\\nlocation: https://artifacts.example.test/download?signature=test\\r\\n\\r\\n' > "$headers"
+    printf '302'
+  fi
+  exit 0
+fi
+[ -n "$output" ] || exit 92
+if [ "$FAKE_MODE" = oversized_download ]; then
+  /usr/bin/head -c 11000000 /dev/zero > "$output"
+else
+  printf 'zip' > "$output"
+fi
 `,
-        );
-      }
+      );
+      writeFileSync(
+        join(bin, "unzip"),
+        `#!/bin/sh
+printf 'unzip %s\\n' "$*" >> "$FAKE_CALLS"
+case "$1" in
+  -Z1)
+    if [ "$FAKE_MODE" = invalid_zip_member ]; then
+      printf '../escape.tar.gz\\n'
+    else
+      printf 'd1-remote-restore-evidence-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-30423695493.tar.gz\\n'
+    fi
+    ;;
+  -Z)
+    printf '%s\\n' 'Archive: fake'
+    if [ "$FAKE_MODE" = oversized_member ]; then
+      printf '%s\\n' '-rw-------  3.0 unx 20000000 bx       64 stor 26-Jul-31 00:00 d1-remote-restore-evidence-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-30423695493.tar.gz'
+    else
+      printf '%s\\n' '-rw-------  3.0 unx       64 bx       64 stor 26-Jul-31 00:00 d1-remote-restore-evidence-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-30423695493.tar.gz'
+    fi
+    ;;
+  -p) printf 'archive' ;;
+  *) exit 96 ;;
+esac
+`,
+      );
       writeFileSync(
         join(bin, "tar"),
         `#!/bin/sh
 printf 'tar %s\\n' "$*" >> "$FAKE_CALLS"
 case "$1" in
-  -tzf) printf 'd1-remote-restore-evidence.json\\n' ;;
-  -tvzf) printf '%s\\n' '-rw------- 0/0 18 2026-07-29 00:00 d1-remote-restore-evidence.json' ;;
-  -xOzf)
+  -tzf|-tf) printf 'd1-remote-restore-evidence.json\\n' ;;
+  -tvzf|-tvf) printf '%s\\n' '-rw------- 0/0 18 2026-07-29 00:00 d1-remote-restore-evidence.json' ;;
+  -xOzf|-xOf)
     if [ "$FAKE_MODE" = corrupt_artifact ]; then exit 94; fi
     printf '{"artifact":true}'
     : > "$FAKE_ARTIFACT_MARKER"
@@ -1687,44 +1611,87 @@ esac
 `,
       );
       writeFileSync(
-        join(bin, "stat"),
+        join(bin, "gzip"),
         `#!/bin/sh
-if [ "$1" = "-c" ] && [ "$2" = "%u:%a:%F" ]; then
-  printf '%s:700:directory\\n' "$(/usr/bin/id -u)"
+printf 'gzip %s\\n' "$*" >> "$FAKE_CALLS"
+if [ "$FAKE_MODE" = compressed_tar_bomb ]; then
+  /usr/bin/head -c 2000000 /dev/zero
 else
-  printf '600\\n'
+  /bin/cat "$2"
 fi
 `,
       );
-      const executables = ["node", "sleep", "tar", "stat"];
-      if (mode !== "gh_missing") executables.push("gh");
+      writeFileSync(
+        join(bin, "stat"),
+        `#!/bin/sh
+case "$2" in
+  %a) printf '600\\n' ;;
+  %s)
+    for path do :; done
+    if /usr/bin/stat -c '%s' -- "$path" >/dev/null 2>&1; then
+      /usr/bin/stat -c '%s' -- "$path"
+    else
+      /usr/bin/stat -f '%z' -- "$path"
+    fi
+    ;;
+  %u:%a:%h:%F) printf '%s:600:1:regular file\\n' "$(/usr/bin/id -u)" ;;
+  %u:%a:%F) printf '%s:700:directory\\n' "$(/usr/bin/id -u)" ;;
+  *) exit 97 ;;
+esac
+`,
+      );
+      writeFileSync(
+        join(bin, "mv"),
+        `#!/bin/sh
+[ "$1" = "-T" ] || exit 98
+shift
+[ "$1" = "--" ] || exit 99
+shift
+if [ "$FAKE_MODE" = publish_failure ]; then exit 1; fi
+exec /bin/mv "$@"
+`,
+      );
+      const executables = [
+        "curl",
+        "gzip",
+        "mv",
+        "node",
+        "sleep",
+        "tar",
+        "stat",
+        "unzip",
+      ];
       for (const name of executables) {
         chmodSync(join(bin, name), 0o755);
       }
 
-      const result = spawnSync("/bin/bash", ["-c", executableShell], {
+      const result = spawnSync(prepareScript, [], {
         cwd: process.cwd(),
         env: {
           ...process.env,
-          PATH: bin,
+          PATH: `${bin}:/bin:/usr/bin`,
           FAKE_CALLS: callsPath,
           FAKE_MODE: mode,
           FAKE_ARTIFACT_MARKER: artifactMarker,
+          CURL_HOME: root,
           RUNNER_TEMP: runnerTemp,
-          RESTORE_EVIDENCE_HANDOFF_ROOT: runnerTemp,
-          GITHUB_ENV: githubEnv,
           GITHUB_WORKSPACE: root,
           GITHUB_SHA: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           GITHUB_RUN_ID: "30574154496",
           GITHUB_RUN_ATTEMPT: "1",
           GITHUB_JOB: "prepare_remote_restore_evidence",
+          RESTORE_EVIDENCE_ARCHIVE: archivePath,
           GITHUB_REPOSITORY: "nish3451/0509",
+          GH_TOKEN: "test-token",
         },
         encoding: "utf8",
       });
       return {
         result,
-        calls: readFileSync(callsPath, "utf8").trim().split("\n"),
+        archivePath,
+        calls: existsSync(callsPath)
+          ? readFileSync(callsPath, "utf8").trim().split("\n").filter(Boolean)
+          : [],
       };
     };
 
@@ -1733,10 +1700,16 @@ fi
     expect(artifact.result.stdout).toContain(
       "Recent private restore evidence is valid for this deploy.",
     );
-    expect(artifact.calls.filter((call) => call.startsWith("gh ")))
-      .toHaveLength(1);
+    expect(artifact.result.stdout).toContain(
+      `restore_evidence_archive=${artifact.archivePath}`,
+    );
+    expect(existsSync(artifact.archivePath)).toBe(true);
+    expect(artifact.calls.filter((call) => call.startsWith("curl ")))
+      .toHaveLength(2);
+    expect(artifact.calls.filter((call) => call.startsWith("unzip ")))
+      .toHaveLength(3);
     expect(artifact.calls.filter((call) => call.startsWith("tar ")))
-      .toHaveLength(4);
+      .toHaveLength(7);
 
     const unavailable = runMode("unavailable");
     expect(unavailable.result.status).toBe(1);
@@ -1782,7 +1755,7 @@ fi
     );
     expect(
       downloadInfrastructureFailure.calls.filter((call) =>
-        call.startsWith("gh "),
+        call.startsWith("curl "),
       ),
     ).toHaveLength(3);
 
@@ -1793,20 +1766,80 @@ fi
     );
     expect(
       corruptArtifact.calls.filter((call) => call.startsWith("tar ")),
-    ).toHaveLength(3);
+    ).toHaveLength(4);
 
-    const missingGitHubCli = runMode("gh_missing");
-    expect(missingGitHubCli.result.status).toBe(1);
-    expect(missingGitHubCli.result.stderr).toContain(
-      "GitHub CLI is unavailable on this runner",
+    const invalidZipMember = runMode("invalid_zip_member");
+    expect(invalidZipMember.result.status).toBe(1);
+    expect(invalidZipMember.result.stderr).toContain(
+      "Restore-evidence artifact zip has an unexpected member",
     );
-    expect(missingGitHubCli.result.stderr).toContain(
+    expect(invalidZipMember.result.stderr).toContain(
       "No valid pre-generated restore evidence is available.",
     );
     expect(
-      missingGitHubCli.calls.some((call) => call.startsWith("gh ")),
+      invalidZipMember.calls.filter((call) => call.startsWith("curl ")),
+    ).toHaveLength(2);
+
+    const preexistingArchive = runMode("preexisting_archive");
+    expect(preexistingArchive.result.status).toBe(1);
+    expect(preexistingArchive.result.stderr).toContain(
+      "Refusing an unexpected or pre-existing restore-evidence archive path",
+    );
+    expect(
+      preexistingArchive.calls.some((call) =>
+        call.includes("find-recent-remote-restore-artifact.mjs"),
+      ),
     ).toBe(false);
-  });
+
+    const non302 = runMode("non_302_redirect");
+    expect(non302.result.status).toBe(2);
+    expect(non302.result.stderr).toContain(
+      "artifact API returned unexpected HTTP status 200",
+    );
+    expect(non302.calls.some((call) => call.startsWith("unzip "))).toBe(false);
+
+    const expired = runMode("expired_artifact");
+    expect(expired.result.status).toBe(1);
+    expect(expired.result.stderr).toContain(
+      "artifact expired before download",
+    );
+    expect(expired.calls.some((call) => call.startsWith("unzip "))).toBe(false);
+
+    const oversizedDownload = runMode("oversized_download");
+    expect(oversizedDownload.result.status).toBe(1);
+    expect(oversizedDownload.result.stderr).toContain(
+      "artifact zip exceeds its size bound",
+    );
+    expect(
+      oversizedDownload.calls.some((call) => call.startsWith("unzip ")),
+    ).toBe(false);
+
+    const oversizedMember = runMode("oversized_member");
+    expect(oversizedMember.result.status).toBe(1);
+    expect(oversizedMember.result.stderr).toContain(
+      "artifact member exceeds its size bound",
+    );
+    expect(
+      oversizedMember.calls.some((call) =>
+        call.includes("verify-remote-restore-evidence.mjs"),
+      ),
+    ).toBe(false);
+
+    const compressedBomb = runMode("compressed_tar_bomb");
+    expect(compressedBomb.result.status).toBe(1);
+    expect(compressedBomb.result.stderr).toContain(
+      "No valid pre-generated restore evidence is available.",
+    );
+    expect(
+      compressedBomb.calls.some((call) =>
+        call.includes("verify-remote-restore-evidence.mjs"),
+      ),
+    ).toBe(false);
+
+    const publishFailure = runMode("publish_failure");
+    expect(publishFailure.result.status).toBe(1);
+    expect(existsSync(publishFailure.archivePath)).toBe(false);
+  }, 30_000);
 
   it("preserves only the explicit non-secret release evidence after every deploy attempt", () => {
     const workflow = readFileSync(
@@ -1825,6 +1858,10 @@ fi
     );
     const uploadStep = workflow.slice(
       workflow.indexOf("- name: Preserve release evidence"),
+      workflow.indexOf("- name: Preserve private immediate Gate C evidence"),
+    );
+    const deferredUploadStep = workflow.slice(
+      workflow.indexOf("- name: Preserve private immediate Gate C evidence"),
       workflow.indexOf("- name: Preserve failed release diagnostics"),
     );
     const diagnosticStep = workflow.slice(
@@ -1853,7 +1890,7 @@ fi
       "node scripts/release-evidence-archive.mjs create",
     );
     expect(archiveStep).toContain(
-      "production-release-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz",
+      "production-release-evidence-${PINNED_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz",
     );
     expect(verifyStep).toContain('[ "${#authoritative_readiness[@]}" -eq 1 ]');
     expect(verifyStep).toContain("test-results/deploy-readiness-local-release-*.json) ;;");
@@ -1861,6 +1898,7 @@ fi
     expect(verifyStep).toContain('[ "${#rollback[@]}" -eq 1 ]');
     expect(verifyStep).toContain('[ "${#gate_c[@]}" -eq 1 ]');
     expect(verifyStep).toContain('[ "${#production_soak[@]}" -eq 1 ]');
+    expect(verifyStep).toContain('[ "${#production_soak[@]}" -eq 0 ]');
     expect(verifyStep).toContain(
       "find test-results/gate-b-artifacts -type f -print -quit",
     );
@@ -1869,15 +1907,24 @@ fi
       "uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
     );
     expect(uploadStep).toContain(
-      "production-release-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}",
+      "production-release-evidence-${{ needs.pin_candidate.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}",
     );
     expect(uploadStep).toContain(
-      "test-results/production-release-evidence-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}.tar.gz",
+      "test-results/production-release-evidence-${{ needs.pin_candidate.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}.tar.gz",
     );
     expect(uploadStep).toContain("if-no-files-found: error");
     expect(uploadStep).toContain("retention-days: 90");
     expect(uploadStep).not.toContain("d1-remote-restore-evidence");
     expect(uploadStep).not.toContain("test-results/**");
+    expect(deferredUploadStep).toContain(
+      "if: success() && env.BACKUP_PROOF_STATUS == 'deferred'",
+    );
+    expect(deferredUploadStep).toContain(
+      "gate-c-proof-evidence-${{ needs.pin_candidate.outputs.sha }}-${{ github.run_id }}-${{ github.run_attempt }}",
+    );
+    expect(deferredUploadStep).toContain("path: test-results/gate-c-*.json");
+    expect(deferredUploadStep).toContain("if-no-files-found: error");
+    expect(deferredUploadStep).not.toContain("production-soak");
     expect(diagnosticStep).toContain("if: failure()");
     expect(diagnosticStep).toContain("production-release-diagnostics-");
     expect(diagnosticStep).toContain(

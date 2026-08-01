@@ -163,26 +163,64 @@ describe("D1 remote restore evidence automation", () => {
       ),
     ) as {
       on?: {
-        workflow_dispatch?: unknown;
+        workflow_dispatch?: {
+          inputs?: Record<string, {
+            description?: string;
+            required?: boolean;
+            type?: string;
+            options?: string[];
+          }>;
+        };
         schedule?: Array<{ cron?: string }>;
       };
+      permissions?: Record<string, string>;
       jobs?: {
+        authorize_release?: {
+          steps?: Array<{
+            name?: string;
+            run?: string;
+            env?: Record<string, string>;
+          }>;
+        };
+        apply_and_restore?: {
+          env?: Record<string, string>;
+          environment?: string;
+          if?: string;
+          needs?: string | string[];
+          steps?: Array<{
+            name?: string;
+            id?: string;
+            if?: string;
+            run?: string;
+            env?: Record<string, string>;
+            with?: Record<string, unknown>;
+          }>;
+        };
         cleanup?: {
           env?: Record<string, string>;
           environment?: string;
           if?: string;
-          needs?: string;
+          needs?: string | string[];
           steps?: Array<{
             name?: string;
+            if?: string;
             run?: string;
+            env?: Record<string, string>;
             with?: Record<string, unknown>;
           }>;
         };
         restore?: {
           env?: Record<string, string>;
           environment?: string;
+          if?: string;
+          needs?: string | string[];
           "timeout-minutes"?: number;
-          steps?: Array<{ name?: string; run?: string }>;
+          steps?: Array<{
+            name?: string;
+            if?: string;
+            run?: string;
+            env?: Record<string, string>;
+          }>;
         };
       };
     };
@@ -205,10 +243,144 @@ describe("D1 remote restore evidence automation", () => {
     expect(workflow.on?.schedule).toEqual([
       { cron: "47 20 * * SUN,WED" },
     ]);
+    expect(workflow.permissions).toEqual({ contents: "read" });
+    expect(workflow.on?.workflow_dispatch?.inputs?.operation).toMatchObject({
+      required: true,
+      type: "choice",
+      options: ["apply_and_restore"],
+    });
+    const authorizeStep = workflow.jobs?.authorize_release?.steps?.find(
+      (step) => step.name === "Authorize restore request",
+    );
+    expect(authorizeStep?.env?.OPERATION).toBe("${{ inputs.operation || '' }}");
+    expect(authorizeStep?.run).toContain(
+      'test "$OPERATION" = "apply_and_restore"',
+    );
+    const apply = workflow.jobs?.apply_and_restore;
+    expect(apply?.if).toContain("github.event_name == 'workflow_dispatch'");
+    expect(apply?.if).toContain("inputs.operation == 'apply_and_restore'");
+    expect(apply?.if).toContain(
+      "needs.authorize_release.result == 'success'",
+    );
+    expect(apply?.needs).toBe("authorize_release");
+    expect(apply?.environment).toBe("production");
+    const exactApplyRestoreGate =
+      "always() && needs.authorize_release.result == 'success' && (github.event_name == 'schedule' || needs.apply_and_restore.result == 'success')";
+    expect(workflow.jobs?.restore?.if).toBe(exactApplyRestoreGate);
+    expect(workflow.jobs?.cleanup?.if).toBe(
+      "always() && needs.authorize_release.result == 'success'",
+    );
+    expect(workflow.jobs?.restore?.needs).toEqual([
+      "authorize_release",
+      "apply_and_restore",
+    ]);
+    expect(workflow.jobs?.cleanup?.needs).toEqual([
+      "authorize_release",
+      "apply_and_restore",
+      "restore",
+    ]);
+    const applyAcquireIndex = apply?.steps?.findIndex(
+      (step) => step.name === "Acquire provider lane",
+    ) ?? -1;
+    const applyBackupCasIndex = apply?.steps?.findIndex(
+      (step) => step.name === "Reconfirm frozen main before pre-migration backup",
+    ) ?? -1;
+    const applyBackupIndex = apply?.steps?.findIndex(
+      (step) => step.name === "Create pre-migration D1-to-R2 backup",
+    ) ?? -1;
+    const applyLocalCleanupIndex = apply?.steps?.findIndex(
+      (step) => step.name === "Remove run-scoped plaintext backup files",
+    ) ?? -1;
+    const applyMigrationCasIndex = apply?.steps?.findIndex(
+      (step) => step.name === "Reconfirm frozen main before migration apply",
+    ) ?? -1;
+    const applyMigrationIndex = apply?.steps?.findIndex(
+      (step) => step.name === "Apply exact repository migrations remotely",
+    ) ?? -1;
+    const applyReleaseIndex = apply?.steps?.findIndex(
+      (step) => step.name === "Release provider lane",
+    ) ?? -1;
+    const applyCapabilityCleanupIndex = apply?.steps?.findIndex(
+      (step) => step.name === "Remove provider-lane capability file",
+    ) ?? -1;
+    const applyBackupValidationIndex = apply?.steps?.findIndex(
+      (step) =>
+        step.run ===
+        "./scripts/deploy-window-lock.sh run -- node scripts/validate-d1-backup.mjs",
+    ) ?? -1;
+    const applyBindingIndex = apply?.steps?.findIndex(
+      (step) => step.name === "Bind run-scoped backup directory",
+    ) ?? -1;
+    expect(applyBindingIndex).toBeGreaterThanOrEqual(0);
+    expect(apply?.steps?.[applyBindingIndex]?.run).toContain(
+      "$RUNNER_TEMP/0509-d1-backups-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}",
+    );
+    expect(applyBackupValidationIndex).toBeGreaterThanOrEqual(0);
+    expect(applyBackupValidationIndex).toBeLessThan(applyAcquireIndex);
+    expect(applyBackupCasIndex).toBe(applyAcquireIndex + 1);
+    expect(applyBackupIndex).toBe(applyBackupCasIndex + 1);
+    expect(applyLocalCleanupIndex).toBe(applyBackupIndex + 1);
+    expect(applyMigrationCasIndex).toBe(applyLocalCleanupIndex + 1);
+    expect(applyMigrationIndex).toBe(applyMigrationCasIndex + 1);
+    expect(applyReleaseIndex).toBe(applyMigrationIndex + 1);
+    expect(applyCapabilityCleanupIndex).toBe(applyReleaseIndex + 1);
+    expect(apply?.steps?.[applyBackupCasIndex]).toMatchObject({
+      run: "./scripts/ci-verify-provider-main-cas.sh",
+      env: { GH_TOKEN: "${{ github.token }}" },
+    });
+    expect(apply?.steps?.[applyBackupIndex]).toMatchObject({
+      id: "pre_migration_backup",
+      run: "node scripts/d1-backup-to-r2.mjs",
+      env: {
+        CLOUDFLARE_ACCOUNT_ID: "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}",
+        CLOUDFLARE_API_TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}",
+        D1_BACKUP_AUTOMATION_APPROVED: "0509-weekly-d1-to-r2",
+      },
+    });
+    expect(apply?.steps?.[applyLocalCleanupIndex]).toMatchObject({
+      if: "always()",
+      run: "node scripts/d1-backup-local-cleanup.mjs",
+    });
+    expect(apply?.steps?.[applyMigrationCasIndex]).toMatchObject({
+      if: "success() && steps.pre_migration_backup.outcome == 'success'",
+      run: "./scripts/ci-verify-provider-main-cas.sh",
+      env: { GH_TOKEN: "${{ github.token }}" },
+    });
+    expect(apply?.steps?.[applyMigrationIndex]).toMatchObject({
+      if: "success() && steps.pre_migration_backup.outcome == 'success'",
+    });
+    expect(apply?.steps?.[applyMigrationIndex]?.run).toContain(
+      "npx wrangler d1 migrations apply 0509 --remote",
+    );
+    expect(apply?.env).toMatchObject({
+      D1_DATABASE_NAME: "0509",
+      R2_BACKUP_BUCKET: "0509-landing-page-artifacts",
+    });
+    expect(apply?.env).not.toHaveProperty("D1_BACKUP_LOCAL_DIRECTORY");
+    expect(apply?.env).not.toHaveProperty("CLOUDFLARE_ACCOUNT_ID");
+    expect(apply?.env).not.toHaveProperty("CLOUDFLARE_API_TOKEN");
+    const applyProviderSecretSteps = apply?.steps?.filter(
+      (step) =>
+        step.env?.CLOUDFLARE_ACCOUNT_ID !== undefined ||
+        step.env?.CLOUDFLARE_API_TOKEN !== undefined,
+    );
+    expect(applyProviderSecretSteps).toEqual([
+      apply?.steps?.[applyBackupIndex],
+      apply?.steps?.[applyMigrationIndex],
+    ]);
+    expect(apply?.steps?.[applyReleaseIndex]).toMatchObject({
+      if: "always()",
+      run: "./scripts/deploy-window-lock.sh release",
+    });
+    expect(apply?.steps?.[applyCapabilityCleanupIndex]).toMatchObject({
+      if: "always()",
+    });
+    expect(JSON.stringify(apply)).not.toContain("d1 execute");
+    expect(JSON.stringify(apply)).not.toContain("--cleanup-only");
+    expect(JSON.stringify(apply)).not.toContain("--sweep-stale");
+    expect(workflow.jobs?.restore).not.toBe(apply);
     expect(workflow.jobs?.restore?.environment).toBe("production");
     expect(workflow.jobs?.cleanup?.environment).toBe("production");
-    expect(workflow.jobs?.cleanup?.if).toContain("always()");
-    expect(workflow.jobs?.cleanup?.needs).toBe("restore");
     for (const [job, consumer] of [
       [
         workflow.jobs?.restore,
@@ -237,9 +409,37 @@ describe("D1 remote restore evidence automation", () => {
       expect(job?.steps).toContainEqual(expect.objectContaining({
         run: "./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts",
       }));
-      expect(job?.steps?.[consumerIndex]?.run).toContain(
-        "./scripts/deploy-window-lock.sh run -- node scripts/d1-remote-restore-evidence.mjs",
+      const acquireIndex = job?.steps?.findIndex(
+        (step) => step.name === "Acquire provider lane",
+      ) ?? -1;
+      const releaseIndex = job?.steps?.findIndex(
+        (step) => step.name === "Release provider lane",
+      ) ?? -1;
+      expect(acquireIndex).toBeGreaterThan(bindingIndex);
+      if (consumer.includes("--cleanup-only")) {
+        expect(consumerIndex).toBe(acquireIndex + 1);
+        expect(JSON.stringify(job)).not.toContain(
+          "ci-verify-provider-main-cas.sh",
+        );
+      } else {
+        const casIndex = job?.steps?.findIndex((step) =>
+          step.name?.startsWith("Reconfirm frozen main before"),
+        ) ?? -1;
+        expect(casIndex).toBe(acquireIndex + 1);
+        expect(consumerIndex).toBe(casIndex + 1);
+        expect(job?.steps?.[casIndex]).toMatchObject({
+          run: "./scripts/ci-verify-provider-main-cas.sh",
+          env: { GH_TOKEN: "${{ github.token }}" },
+        });
+      }
+      expect(job?.steps?.[consumerIndex]?.run).not.toContain(
+        "deploy-window-lock.sh run",
       );
+      expect(releaseIndex).toBeGreaterThan(consumerIndex);
+      expect(job?.steps?.[releaseIndex]).toMatchObject({
+        if: "always()",
+        run: "./scripts/deploy-window-lock.sh release",
+      });
     }
     expect(workflow.jobs?.restore?.["timeout-minutes"]).toBe(300);
     expect(
@@ -247,14 +447,21 @@ describe("D1 remote restore evidence automation", () => {
     ).toBe(true);
     expect(workflow.jobs?.cleanup?.steps).toContainEqual(
       expect.objectContaining({
-        run: "./scripts/deploy-window-lock.sh run -- node scripts/d1-remote-restore-evidence.mjs --cleanup-only --sweep-stale",
+        run: "node scripts/d1-remote-restore-evidence.mjs --cleanup-only",
       }),
+    );
+    expect(JSON.stringify(workflow.jobs?.cleanup)).not.toContain(
+      "--sweep-stale",
     );
   });
 
   it("retains and reuses private evidence without mutating GitHub secrets", () => {
     const deployWorkflow = readFileSync(
       ".github/workflows/deploy-production.yml",
+      "utf8",
+    );
+    const prepareScript = readFileSync(
+      "scripts/ci-prepare-remote-restore-evidence.sh",
       "utf8",
     );
     const manualWorkflow = readFileSync(
@@ -266,14 +473,30 @@ describe("D1 remote restore evidence automation", () => {
       "utf8",
     );
     expect(deployWorkflow).toContain(
+      "./scripts/ci-prepare-remote-restore-evidence.sh",
+    );
+    expect(prepareScript).toContain(
       "node scripts/find-recent-remote-restore-artifact.mjs",
     );
-    expect(deployWorkflow).toContain('gh run download "$run_id"');
-    expect(deployWorkflow).toContain(
-      '[[ "$(tar -tvzf "${archives[0]}")" = -* ]]',
+    expect(prepareScript).toContain(
+      "curl --disable --config -",
     );
-    expect(deployWorkflow).toContain('tar -xOzf "${archives[0]}"');
-    expect(deployWorkflow).toContain(
+    expect(prepareScript).toContain(
+      'curl --disable --config "$download_config"',
+    );
+    expect(prepareScript).toContain("--proto '=https'");
+    expect(prepareScript).toContain(
+      '--max-filesize "$max_artifact_size"',
+    );
+    expect(prepareScript).toContain('unzip -Z1 "$download"');
+    expect(prepareScript).not.toContain("gh run download");
+    expect(prepareScript).toContain('test ! -L "$archive"');
+    expect(prepareScript).toContain('"$(id -u):600:1:regular file"');
+    expect(prepareScript).toContain(
+      '[[ "$(tar -tvf "$bounded_tar")" = -* ]]',
+    );
+    expect(prepareScript).toContain('tar -xOf "$bounded_tar"');
+    expect(prepareScript).toContain(
       "Recent private restore evidence is valid for this deploy.",
     );
     expect(deployWorkflow).not.toContain(
@@ -284,13 +507,23 @@ describe("D1 remote restore evidence automation", () => {
     );
     expect(deployWorkflow).toContain("retention-days: 8");
     expect(manualWorkflow).toContain("retention-days: 8");
+    expect(manualWorkflow).toContain(
+      "d1-remote-restore-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}.tar.gz",
+    );
+    expect(manualWorkflow).toContain(
+      "d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}",
+    );
+    expect(manualWorkflow).toContain("overwrite: true");
     expect(backupWorkflow).toContain("timeout-minutes: 300");
     expect(deployWorkflow).not.toContain("group: d1-production-export");
     expect(manualWorkflow).not.toContain("group: d1-production-export");
     expect(backupWorkflow).not.toContain("group: d1-production-export");
     expect(backupWorkflow).toContain(
-      "run: ./scripts/deploy-window-lock.sh run -- node scripts/d1-backup-to-r2.mjs",
+      "run: node scripts/d1-backup-to-r2.mjs",
     );
+    expect(backupWorkflow).toContain("run: ./scripts/deploy-window-lock.sh acquire");
+    expect(backupWorkflow).toContain("run: ./scripts/ci-verify-production-candidate.sh");
+    expect(backupWorkflow).toContain("run: ./scripts/deploy-window-lock.sh release");
     const backupScript = readFileSync(
       "scripts/d1-backup-to-r2.mjs",
       "utf8",
@@ -345,6 +578,7 @@ describe("D1 remote restore evidence automation", () => {
       id: 1,
       name,
       expired: false,
+      size_in_bytes: 1024,
       workflow_run: {
         id: runId,
         head_branch: "main",
@@ -358,7 +592,21 @@ describe("D1 remote restore evidence automation", () => {
         runs: [trustedRun],
         artifactsByRun: { [runId]: [artifact] },
       }),
-    ).toEqual({ runId, name });
+    ).toEqual({
+      artifactId: 1,
+      runId,
+      name,
+      sizeInBytes: 1024,
+    });
+    expect(() =>
+      selectRecentRemoteRestoreArtifact({
+        currentRunId: 30423695500,
+        runs: [trustedRun],
+        artifactsByRun: {
+          [runId]: [{ ...artifact, size_in_bytes: 10 * 1024 * 1024 + 1 }],
+        },
+      }),
+    ).toThrow("remote_restore_artifact_size_invalid");
     expect(
       selectRecentRemoteRestoreArtifact({
         currentRunId: 30423695500,

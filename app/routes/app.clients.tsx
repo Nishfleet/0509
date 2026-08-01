@@ -94,6 +94,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
             watchlists,
             collections,
             revalidation.notes,
+            revalidation.unavailable,
           ),
         },
         approvalUnavailable: revalidation.unavailable,
@@ -613,6 +614,7 @@ export default function ClientsRoute() {
                 canManage={canManageClientRooms}
                 memories={memoriesByClientRoomId.get(room.id) ?? []}
                 approvalUnavailable={approvalUnavailableRoomIds.has(room.id)}
+                roomMemoryUnavailable={data.roomMemoryUnavailable}
                 room={room}
               />
             ))}
@@ -797,11 +799,13 @@ function ClientRoomCard({
   approvalUnavailable,
   canManage,
   memories,
+  roomMemoryUnavailable,
   room,
 }: {
   approvalUnavailable: boolean;
   canManage: boolean;
   memories: Array<{ key: string }>;
+  roomMemoryUnavailable: boolean;
   room: ClientRoomRecord;
 }) {
   const handoff = summarizeClientRoomHandoff(
@@ -809,6 +813,7 @@ function ClientRoomCard({
     memories,
     canManage,
     approvalUnavailable,
+    roomMemoryUnavailable,
   );
 
   return (
@@ -893,6 +898,7 @@ function summarizeClientRoomHandoff(
   memories: Array<{ key: string }>,
   canManage = true,
   approvalUnavailable = false,
+  roomMemoryUnavailable = false,
 ) {
   const watchlistCount = countRoomRefs(room.resourceRefs, "watchlist");
   const collectionCount = countRoomRefs(room.resourceRefs, "collection");
@@ -915,12 +921,16 @@ function summarizeClientRoomHandoff(
       : hasRoomNotes
         ? "Room notes saved"
         : "No client context saved";
-  const status = approvalUnavailable
+  const status = roomMemoryUnavailable
+    ? "Client context status unavailable"
+    : approvalUnavailable
     ? "Report approval status unavailable"
     : linkedProofCount > 0 && reportCount > 0 && approvedReportCount === reportCount && hasContext
       ? "Ready for client review"
       : "Needs setup before client review";
-  const next = approvalUnavailable
+  const next = roomMemoryUnavailable
+    ? "Refresh before sharing; saved client context could not be loaded."
+    : approvalUnavailable
     ? "Refresh before sharing; saved approval was not changed."
     : !canManage
     ? "Upgrade to the Agency plan to manage this client room."
@@ -1023,6 +1033,7 @@ function filterCurrentRoomResourceRefs(
   watchlists: Array<{ id: string; isActive?: boolean; updatedAt?: string }>,
   collections: Array<{ id: string; updatedAt?: string }>,
   notes: Record<string, unknown>,
+  approvalUnavailable = false,
 ) {
   const activeWatchlists = new Set(
     watchlists.filter((watchlist) => watchlist.isActive !== false).map((watchlist) => watchlist.id),
@@ -1041,7 +1052,12 @@ function filterCurrentRoomResourceRefs(
         ? watchlists.find((watchlist) => watchlist.id === parsed.resourceId)
         : collections.find((collection) => collection.id === parsed.resourceId);
       const approval = approvals[ref.resourceId];
-      if (source?.updatedAt && approval && Date.parse(source.updatedAt) > Date.parse(approval.reviewedAt)) {
+      if (
+        !approvalUnavailable &&
+        source?.updatedAt &&
+        approval &&
+        Date.parse(source.updatedAt) > Date.parse(approval.reviewedAt)
+      ) {
         return false;
       }
       return parsed.resourceType === "watchlist"

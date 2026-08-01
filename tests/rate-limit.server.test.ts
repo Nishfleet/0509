@@ -262,6 +262,27 @@ describe("enforceAuthenticatedSearchRateLimit", () => {
 });
 
 describe("enforceSearchSelectionRateLimit", () => {
+  it("claims the warm-selection budget synchronously instead of deferring admission", async () => {
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.99);
+    const env = { DB: createFakeD1() } as unknown as AppEnv;
+    const waitUntil = vi.fn();
+
+    try {
+      await expect(
+        enforceSearchSelectionRateLimit(
+          new Request("https://0509.io/search?query=nykaa&selected=meta-1"),
+          env,
+          "user-1",
+          { waitUntil } as unknown as ExecutionContext,
+        ),
+      ).resolves.toBeNull();
+
+      expect(waitUntil).not.toHaveBeenCalled();
+    } finally {
+      randomSpy.mockRestore();
+    }
+  });
+
   it("refuses the 121st warm selection in the window without touching the fresh-search bucket", async () => {
     const env = { DB: createFakeD1() } as unknown as AppEnv;
 

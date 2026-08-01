@@ -59,6 +59,18 @@ export interface EvidenceFinalizationLease {
   processingToken: string;
 }
 
+export class EvidenceTopUpReadError extends Error {
+  override readonly name = "EvidenceTopUpReadError";
+
+  constructor(message: string, cause: unknown) {
+    super(message, { cause });
+  }
+}
+
+export function isEvidenceTopUpReadError(error: unknown): error is EvidenceTopUpReadError {
+  return error instanceof EvidenceTopUpReadError;
+}
+
 function createId() {
   return crypto.randomUUID();
 }
@@ -145,6 +157,13 @@ export function isEvidenceUsageStorageUnavailableError(message: string) {
   );
 }
 
+function isLegacyCreditSchemaCompatibilityError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /no such table:\s*(?:main\.)?(?:proof_usage_credit|proof_usage_credit_migration)\b/i.test(
+    message,
+  );
+}
+
 async function readWorkspacePlanFamily(env: AppEnv, workspaceUserId: string): Promise<PlanFamily> {
   return getUserPlan(env, workspaceUserId);
 }
@@ -207,8 +226,8 @@ async function listActiveTopUpGrants(env: AppEnv, workspaceUserId: string) {
       .bind(workspaceUserId)
       .all<TopUpGrantRow>();
     return result.results ?? [];
-  } catch {
-    return [];
+  } catch (error) {
+    throw new EvidenceTopUpReadError("D1 top-up balance read failed", error);
   }
 }
 
@@ -267,8 +286,11 @@ async function listUnmigratedLegacyCredits(env: AppEnv, workspaceUserId: string,
         granted_at: string;
       }>();
     return result.results ?? [];
-  } catch {
-    return [];
+  } catch (error) {
+    if (isLegacyCreditSchemaCompatibilityError(error)) {
+      return [];
+    }
+    throw new EvidenceTopUpReadError("D1 legacy top-up migration read failed", error);
   }
 }
 
@@ -468,8 +490,8 @@ export async function listTopUpGrantHistory(env: AppEnv, workspaceUserId: string
       .bind(workspaceUserId, limit)
       .all<TopUpGrantRow>();
     return result.results ?? [];
-  } catch {
-    return [];
+  } catch (error) {
+    throw new EvidenceTopUpReadError("D1 top-up history read failed", error);
   }
 }
 

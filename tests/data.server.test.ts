@@ -347,9 +347,10 @@ describe("createLandingPageSnapshot", () => {
     });
 
     const statement = mock.statements.find((entry) => entry.sql.includes("INSERT INTO digest_delivery"));
-    expect(statement?.sql).toContain("WHEN digest_delivery.status = 'sent'");
-    expect(statement?.sql).toContain("THEN digest_delivery.provider");
-    expect(statement?.sql).toContain("THEN 'sent'");
+    expect(statement?.sql).toContain("digest_delivery.status = 'sent'");
+    expect(statement?.sql).toContain("excluded.status != 'sent'");
+    expect(statement?.sql).toContain("digest_delivery.delivered_at IS NOT NULL");
+    expect(statement?.sql).toContain("excluded.delivered_at IS NULL");
   });
 });
 
@@ -523,6 +524,7 @@ describe("agent action audit persistence", () => {
       "audit-1",
       {
         status: "failed",
+        leaseToken: row.updated_at,
         resourceType: "watchlist",
         resourceId: "watchlist-1",
         errorCode: "action_failed",
@@ -543,6 +545,8 @@ describe("agent action audit persistence", () => {
       expect.any(String),
     ]);
     expect(update?.bindings[8]).toBe("audit-1");
+    expect(update?.bindings.slice(9)).toEqual([row.updated_at, row.updated_at]);
+    expect(update?.sql).toContain("status = 'started' AND updated_at = ?");
     expect(audit?.id).toBe("audit-1");
   });
 });
@@ -3759,8 +3763,14 @@ describe("getOperatorSnapshot", () => {
       expect(failedProofs?.bindings).toContain(recentWindowIso);
       expect(budgetBlockedProofs?.bindings).toContain(recentWindowIso);
       expect(deliveryFailures?.bindings).toContain(recentWindowIso);
+      expect(deliveryFailures?.bindings).toContain("2026-04-26T09:45:00.000Z");
       expect(deliveryFailures?.sql).toContain("delivery_attempt.status = 'pending'");
+      expect(deliveryFailures?.sql).toContain("delivery_attempt.status = 'sent'");
       expect(deliveryFailures?.sql).toContain("delivery_attempt.webhook_status = 'provider_unknown'");
+      expect(deliveryFailures?.sql).toContain("delivery_attempt.updated_at <= ?");
+      expect(deliveryFailures?.sql).toMatch(
+        /WHEN delivery_attempt\.status = 'failed' THEN 0\s+WHEN delivery_attempt\.status = 'pending' THEN 1\s+ELSE 2/,
+      );
       expect(discoveryFailures?.bindings).toContain(recentWindowIso);
       expect(discoveryFailures?.sql).toContain(
         "json_extract(discovery_fetch_log.metadata_json, '$.partial') AS partial",

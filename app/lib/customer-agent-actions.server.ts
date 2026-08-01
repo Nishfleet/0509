@@ -139,6 +139,13 @@ export async function runCustomerAgentAction(
       "Provide idempotencyKey or an Idempotency-Key header before running this action.",
     );
   }
+  if (actionName === "support_case.create" && idempotencyKey && idempotencyKey.length > 120) {
+    throw new CustomerAgentActionError(
+      "invalid_idempotency_key",
+      "Support-case idempotency keys must be 120 characters or fewer.",
+      { status: 400 },
+    );
+  }
 
   if (actionName === "share.create" || actionName === "report.share" || actionName === "client_room.upsert") {
     const { resolveWorkspaceDataUserId } = await import("~/lib/workspace.server");
@@ -456,6 +463,11 @@ export async function runCustomerAgentAction(
           resourceType: "support_case",
           resourceId: result.supportCase.id,
           result,
+          auditStatus: result.ok ? "succeeded" as const : "failed" as const,
+          errorCode: result.ok ? null : "support_notification_failed",
+          errorMessage: result.ok
+            ? null
+            : "Support case was saved, but the operator notification failed.",
           metadata: {
             supportCaseId: result.supportCase.id,
             category: result.supportCase.category,
@@ -489,6 +501,7 @@ export async function runCustomerAgentAction(
     }
   }, {
     replayCompleted: (audit) => replayCustomerAgentAction(env, context, actionName, audit),
+    retryFailed: actionName === "support_case.create",
   });
 }
 
