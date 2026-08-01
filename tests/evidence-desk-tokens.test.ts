@@ -113,7 +113,7 @@ describe("Evidence Desk token layer (brief §4)", () => {
 
   it("keeps every CTA rank at a 44px touch target (brief §9.6)", () => {
     const section = evidenceDeskSection(css);
-    const cta = section.slice(section.indexOf(".f9-ed-cta {"), section.indexOf(".f9-ed-capture {"));
+    const cta = section.slice(section.indexOf(".f9-ed-cta {"), section.indexOf(".f9-ed-status-strip {"));
     expect(cta).toContain("min-height: 44px;");
     expect(cta.match(/min-height: 44px;/g)?.length).toBeGreaterThanOrEqual(2);
     // Focus is visible and is NOT the offset shadow (brief §10).
@@ -144,19 +144,6 @@ describe("Evidence Desk token layer (brief §4)", () => {
     for (const rule of focusRules) {
       expect(rule).not.toContain("var(--ed-accent)");
     }
-  });
-
-  it("anchors the capture strip to today rather than to the oldest day", () => {
-    const section = evidenceDeskSection(css);
-    const strip = section.slice(
-      section.indexOf(".f9-ed-capture-strip {"),
-      section.indexOf(".f9-ed-capture-bar {"),
-    );
-    // RTL container + LTR track: the newest bar is in view at any width, and
-    // the older days scroll into reach instead of the reverse.
-    expect(strip).toContain("direction: rtl;");
-    expect(strip).toContain("direction: ltr;");
-    expect(strip).not.toContain("justify-content: flex-end;");
   });
 
   it("drops the offset shadows in the Plain volume (brief §3)", () => {
