@@ -2762,8 +2762,27 @@ async function runScheduledWatchlistInline(
     scheduledTime: options.scheduledTime,
     cron: options.cron,
   });
+  const durableClaim =
+    env.DB &&
+    typeof env.DB.prepare === "function" &&
+    typeof env.DB.batch === "function"
+      ? await claimInlineScheduledWatchlistRun(env, {
+          watchlistId: watchlist.id,
+          executionKey,
+          scheduledTime: options.scheduledTime,
+        })
+      : null;
+  if (durableClaim && !durableClaim.claimed) {
+    return false;
+  }
   if (
-    await hasOrchestratedRunBlockingInlineScan(env, watchlist.id, executionKey)
+    !durableClaim &&
+    ((await hasOrchestratedRunBlockingInlineScan(env, watchlist.id, executionKey)) ||
+      (await hasCompletedScheduledInlineScan(
+        env,
+        watchlist.id,
+        options.scheduledTime,
+      )))
   ) {
     return false;
   }
@@ -2775,6 +2794,15 @@ async function runScheduledWatchlistInline(
   // In-process dedupe is still per user; cross-workspace reuse is the shared
   // discovery_cache_entry path (acceptCacheYoungerThanMs / WP-36).
   const scanCacheKey = `${watchlist.userId}:${watchlist.targetFingerprint}`;
+
+  const runOptions: ScanOptions = {
+    customerMetaAdLibraryToken,
+  };
+  if (durableClaim?.claimed) {
+    runOptions.existingRunId = durableClaim.runId;
+    runOptions.orchestrationRunId = durableClaim.runId;
+    runOptions.orchestrationToken = durableClaim.processingToken;
+  }
 
   await runWatchlist(
     env,
@@ -2793,11 +2821,64 @@ async function runScheduledWatchlistInline(
       }
       return scanCache.get(scanCacheKey)!;
     },
-    {
-      customerMetaAdLibraryToken,
-    },
+    runOptions,
   );
   return true;
+}
+
+async function claimInlineScheduledWatchlistRun(
+  env: AppEnv,
+  input: {
+    watchlistId: string;
+    executionKey: string;
+    scheduledTime?: number;
+  },
+) {
+  const ensured = await ensureOrchestratedWatchlistRun(env, {
+    watchlistId: input.watchlistId,
+    triggerType: "scheduled",
+    executionKey: input.executionKey,
+    pageBudget: DEFAULT_PAGE_BUDGET,
+    scheduledTime: input.scheduledTime ?? Date.now(),
+    allowActiveRunFallback: false,
+  });
+  const claim = await claimOrchestratedWatchlistRun(env, {
+    runId: ensured.runId,
+    leaseMs: resolveMonitoringOrchestrationLeaseMs(env),
+  });
+  if (!claim.claimed) {
+    return { claimed: false as const };
+  }
+  return {
+    claimed: true as const,
+    runId: ensured.runId,
+    processingToken: claim.processingToken,
+  };
+}
+
+/**
+ * The no-DB fallback cannot persist an execution-key claim. A replay after
+ * partial scheduled-work dispatch must therefore recognize the same slot from
+ * a successful scheduled run before starting provider work again. Production
+ * inline mode uses the durable claim above.
+ */
+async function hasCompletedScheduledInlineScan(
+  env: AppEnv,
+  watchlistId: string,
+  scheduledTime?: number,
+) {
+  const scheduledAt = scheduledTime === undefined ? NaN : scheduledTime;
+  if (!Number.isFinite(scheduledAt) || scheduledAt > Date.now()) {
+    return false;
+  }
+
+  const recentRuns = await getRecentSuccessfulRuns(env, watchlistId, 3);
+  return recentRuns.some(
+    (run) =>
+      run.triggerType === "scheduled" &&
+      Number.isFinite(Date.parse(run.startedAt)) &&
+      Date.parse(run.startedAt) >= scheduledAt,
+  );
 }
 
 async function resolveScheduledScanSharedCacheMaxAgeMs(
