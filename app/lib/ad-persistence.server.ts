@@ -1,5 +1,9 @@
 import { buildAnalysisFields } from "~/lib/analysis.server";
 import { mapAdSourceToAnalysisSource } from "~/lib/ad-source-kind";
+import {
+  bindD1Named,
+  type NamedD1Binding,
+} from "~/lib/d1-bind.server";
 import { chunkForBoundParams } from "~/lib/d1-chunk.server";
 import type { AppEnv } from "~/lib/env.server";
 import type { AdRecord, AnalysisFieldInput } from "~/lib/types";
@@ -7,6 +11,29 @@ import type { AdRecord, AnalysisFieldInput } from "~/lib/types";
 interface AdLookupRow {
   id: string;
   raw_json: string;
+  advertiser: string;
+  body: string;
+  body_secondary: string | null;
+  preview_headline: string;
+  preview_subhead: string;
+  hook: string;
+  offer_text: string;
+  cta: string;
+  creative_format: AdRecord["format"];
+  language_label: string;
+  destination_type: AdRecord["destinationType"];
+  landing_page_url: string | null;
+  ad_snapshot_url: string | null;
+  countries_json: string;
+  platforms_json: string;
+  first_seen_at: string | null;
+  last_seen_at: string | null;
+  is_active: number;
+  source: AdRecord["source"];
+  research_summary: string;
+  creative_text: string | null;
+  creative_text_capture_method: AdRecord["creativeTextCaptureMethod"];
+  creative_text_metadata_json: string | null;
 }
 
 function nowIso() {
@@ -25,15 +52,23 @@ function ensureDb(env: AppEnv) {
   return env.DB;
 }
 
-async function many<T>(env: AppEnv, sql: string, ...bindings: unknown[]) {
+async function many<T>(
+  env: AppEnv,
+  sql: string,
+  bindings: readonly NamedD1Binding[],
+) {
   const db = ensureDb(env);
-  const result = await db.prepare(sql).bind(...bindings).all<T>();
+  const result = await bindD1Named(db.prepare(sql), bindings).all<T>();
   return result.results ?? [];
 }
 
-async function run(env: AppEnv, sql: string, ...bindings: unknown[]) {
+async function run(
+  env: AppEnv,
+  sql: string,
+  bindings: readonly NamedD1Binding[],
+) {
   const db = ensureDb(env);
-  await db.prepare(sql).bind(...bindings).run();
+  await bindD1Named(db.prepare(sql), bindings).run();
 }
 
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
@@ -96,21 +131,94 @@ export async function listAdsByIds(env: AppEnv, adIds: string[]) {
       return many<AdLookupRow>(
         env,
         `
-          SELECT id, raw_json
+          SELECT
+            id, raw_json, advertiser, body, body_secondary, preview_headline,
+            preview_subhead, hook, offer_text, cta, creative_format,
+            language_label, destination_type, landing_page_url, ad_snapshot_url,
+            countries_json, platforms_json, first_seen_at, last_seen_at,
+            is_active, source, research_summary, creative_text,
+            creative_text_capture_method, creative_text_metadata_json
           FROM ad
           WHERE id IN (${placeholders})
         `,
-        ...chunk,
+        chunk.map(
+          (adId, index) =>
+            [`adIds[${index}]`, adId] as const,
+        ),
       );
     }),
   );
   const adsById = new Map<string, AdRecord>();
 
   for (const row of chunkedRows.flat()) {
-    const ad = parseJson<AdRecord | null>(row.raw_json, null);
-    if (ad) {
-      adsById.set(row.id, ad);
-    }
+    const raw = parseJson<Partial<AdRecord> | null>(row.raw_json, null) ?? {};
+    const hydrated = {
+      ...raw,
+      metaAdId: row.id,
+      advertiser:
+        typeof row.advertiser === "undefined" ? raw.advertiser : row.advertiser,
+      body: typeof row.body === "undefined" ? raw.body : row.body,
+      bodySecondary: row.body_secondary ?? raw.bodySecondary,
+      previewHeadline:
+        typeof row.preview_headline === "undefined"
+          ? raw.previewHeadline
+          : row.preview_headline,
+      previewSubhead:
+        typeof row.preview_subhead === "undefined"
+          ? raw.previewSubhead
+          : row.preview_subhead,
+      hook: typeof row.hook === "undefined" ? raw.hook : row.hook,
+      offer: typeof row.offer_text === "undefined" ? raw.offer : row.offer_text,
+      cta: typeof row.cta === "undefined" ? raw.cta : row.cta,
+      format:
+        typeof row.creative_format === "undefined"
+          ? raw.format
+          : row.creative_format,
+      languageLabel:
+        typeof row.language_label === "undefined"
+          ? raw.languageLabel
+          : row.language_label,
+      destinationType:
+        typeof row.destination_type === "undefined"
+          ? raw.destinationType
+          : row.destination_type,
+      landingPageUrl: row.landing_page_url ?? raw.landingPageUrl,
+      adSnapshotUrl: row.ad_snapshot_url ?? raw.adSnapshotUrl,
+      countries:
+        typeof row.countries_json === "undefined"
+          ? raw.countries
+          : parseJson<string[]>(row.countries_json, []),
+      platforms:
+        typeof row.platforms_json === "undefined"
+          ? raw.platforms
+          : parseJson<string[]>(row.platforms_json, []),
+      firstSeenAt: row.first_seen_at ?? raw.firstSeenAt,
+      lastSeenAt: row.last_seen_at ?? raw.lastSeenAt,
+      active:
+        typeof row.is_active === "undefined" ? raw.active : row.is_active === 1,
+      source: typeof row.source === "undefined" ? raw.source : row.source,
+      researchSummary:
+        typeof row.research_summary === "undefined"
+          ? raw.researchSummary
+          : row.research_summary,
+      analysisFields: raw.analysisFields ?? [],
+      creativeText: row.creative_text ?? raw.creativeText,
+      creativeTextCaptureMethod:
+        row.creative_text_capture_method ?? raw.creativeTextCaptureMethod,
+      creativeTextMetadata:
+        row.creative_text_metadata_json == null
+          ? raw.creativeTextMetadata
+          : parseJson<Record<string, unknown> | null>(
+              row.creative_text_metadata_json,
+              null,
+            ),
+    };
+    adsById.set(
+      row.id,
+      Object.fromEntries(
+        Object.entries(hydrated).filter((entry) => entry[1] !== undefined),
+      ) as unknown as AdRecord,
+    );
   }
 
   return uniqueIds
@@ -175,8 +283,12 @@ export async function upsertAd(env: AppEnv, ad: AdRecord) {
   const lastSeenAt = normalizeSeenAt(ad.lastSeenAt);
   const evidenceCapturedAt = latestEvidenceCapturedAt(ad);
   const canonicalRevision = createId();
+  const landingPageUrl = ad.landingPageUrl ?? null;
+  const adSnapshotUrl = ad.adSnapshotUrl ?? null;
   const rawJson = jsonValue({
     ...ad,
+    landingPageUrl,
+    adSnapshotUrl,
     firstSeenAt,
     lastSeenAt,
     evidenceCapturedAt,
@@ -478,33 +590,57 @@ export async function upsertAd(env: AppEnv, ad: AdRecord) {
                     ),
                     updated_at = excluded.updated_at
     `,
-    ad.metaAdId,
-    ad.advertiser,
-    ad.body,
-    ad.bodySecondary ?? null,
-    ad.previewHeadline,
-    ad.previewSubhead,
-    ad.hook,
-    ad.offer,
-    ad.cta,
-    ad.format,
-    ad.languageLabel,
-    ad.destinationType,
-    ad.landingPageUrl,
-    ad.adSnapshotUrl,
-    jsonValue(ad.countries),
-    jsonValue(ad.platforms),
-    firstSeenAt,
-    lastSeenAt,
-    ad.active ? 1 : 0,
-    ad.source,
-    ad.researchSummary,
-    ad.creativeText ?? null,
-    ad.creativeTextCaptureMethod ?? null,
-    ad.creativeTextMetadata ? jsonValue(ad.creativeTextMetadata) : null,
-    rawJson,
-    timestamp,
-    timestamp,
+    [
+      ["ad.id", ad.metaAdId],
+      ["ad.advertiser", ad.advertiser],
+      ["ad.body", ad.body],
+      ["ad.bodySecondary", ad.bodySecondary, "null"],
+      ["ad.previewHeadline", ad.previewHeadline],
+      ["ad.previewSubhead", ad.previewSubhead],
+      ["ad.hook", ad.hook],
+      ["ad.offer", ad.offer],
+      ["ad.cta", ad.cta],
+      ["ad.format", ad.format],
+      ["ad.languageLabel", ad.languageLabel],
+      ["ad.destinationType", ad.destinationType],
+      ["ad.landingPageUrl", landingPageUrl, "null"],
+      ["ad.adSnapshotUrl", adSnapshotUrl, "null"],
+      [
+        "ad.countries",
+        ad.countries === undefined
+          ? undefined
+          : jsonValue(ad.countries),
+      ],
+      [
+        "ad.platforms",
+        ad.platforms === undefined
+          ? undefined
+          : jsonValue(ad.platforms),
+      ],
+      ["ad.firstSeenAt", firstSeenAt],
+      ["ad.lastSeenAt", lastSeenAt],
+      [
+        "ad.active",
+        ad.active === undefined ? undefined : ad.active ? 1 : 0,
+      ],
+      ["ad.source", ad.source],
+      ["ad.researchSummary", ad.researchSummary],
+      ["ad.creativeText", ad.creativeText, "null"],
+      [
+        "ad.creativeTextCaptureMethod",
+        ad.creativeTextCaptureMethod,
+        "null",
+      ],
+      [
+        "ad.creativeTextMetadata",
+        ad.creativeTextMetadata
+          ? jsonValue(ad.creativeTextMetadata)
+          : null,
+      ],
+      ["ad.rawJson", rawJson],
+      ["ad.createdAt", timestamp],
+      ["ad.updatedAt", timestamp],
+    ],
   );
 
   const [persistedAd] = await listAdsByIds(env, [ad.metaAdId]);
@@ -542,46 +678,73 @@ export async function replaceAnalysisFields(
   const projectionGuard = canonicalRevision && scopeType === "ad"
     ? " AND EXISTS (SELECT 1 FROM ad WHERE id = ? AND json_extract(raw_json, '$.canonicalRevision') = ?)"
     : "";
-  const statements = [db.prepare(
-    `DELETE FROM analysis_field WHERE scope_type = ? AND scope_id = ?${projectionGuard}`,
-  ).bind(
-    scopeType,
-    scopeId,
-    ...(projectionGuard ? [scopeId, canonicalRevision] : []),
-  )];
+  const statements = [
+    bindD1Named(
+      db.prepare(
+        `DELETE FROM analysis_field WHERE scope_type = ? AND scope_id = ?${projectionGuard}`,
+      ),
+      [
+        ["analysisField.scopeType", scopeType],
+        ["analysisField.scopeId", scopeId],
+        ...(projectionGuard
+          ? ([
+              ["analysisField.projectionScopeId", scopeId],
+              [
+                "analysisField.canonicalRevision",
+                canonicalRevision,
+              ],
+            ] satisfies NamedD1Binding[])
+          : []),
+      ],
+    ),
+  ];
 
   for (const field of fields) {
     statements.push(
-      db.prepare(`
-        INSERT INTO analysis_field (
-          id,
-          scope_type,
-          scope_id,
-          field_key,
-          field_value,
-          provenance_source,
-          extractor_version,
-          confidence,
-          metadata_json,
-          created_at,
-          updated_at
-        )
-        ${projectionGuard
-          ? "SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM ad WHERE id = ? AND json_extract(raw_json, '$.canonicalRevision') = ?)"
-          : "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"}
-      `).bind(
-        createId(),
-        scopeType,
-        scopeId,
-        field.fieldKey,
-        field.fieldValue,
-        field.provenanceSource,
-        field.extractorVersion,
-        field.confidence ?? null,
-        jsonValue(field.metadata ?? null),
-        timestamp,
-        timestamp,
-        ...(projectionGuard ? [scopeId, canonicalRevision] : []),
+      bindD1Named(
+        db.prepare(`
+          INSERT INTO analysis_field (
+            id,
+            scope_type,
+            scope_id,
+            field_key,
+            field_value,
+            provenance_source,
+            extractor_version,
+            confidence,
+            metadata_json,
+            created_at,
+            updated_at
+          )
+          ${projectionGuard
+            ? "SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM ad WHERE id = ? AND json_extract(raw_json, '$.canonicalRevision') = ?)"
+            : "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"}
+        `),
+        [
+          ["analysisField.id", createId()],
+          ["analysisField.scopeType", scopeType],
+          ["analysisField.scopeId", scopeId],
+          ["analysisField.fieldKey", field.fieldKey],
+          ["analysisField.fieldValue", field.fieldValue],
+          ["analysisField.provenanceSource", field.provenanceSource],
+          ["analysisField.extractorVersion", field.extractorVersion],
+          ["analysisField.confidence", field.confidence, "null"],
+          [
+            "analysisField.metadata",
+            jsonValue(field.metadata ?? null),
+          ],
+          ["analysisField.createdAt", timestamp],
+          ["analysisField.updatedAt", timestamp],
+          ...(projectionGuard
+            ? ([
+                ["analysisField.projectionScopeId", scopeId],
+                [
+                  "analysisField.canonicalRevision",
+                  canonicalRevision,
+                ],
+              ] satisfies NamedD1Binding[])
+            : []),
+        ],
       ),
     );
   }

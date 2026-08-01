@@ -103,6 +103,8 @@ describe("workspace language layer (BL-030)", () => {
     );
     expect(displayRules.sort()).toEqual([
       ".f9-bl040-key-name",
+      ".f9-col-entity-title",
+      ".f9-col-switch-item",
       ".f9-wk-avatar",
       ".f9-wk-detail-name",
       ".f9-wk-nm",

@@ -1,9 +1,19 @@
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createRoutesStub } from "react-router";
 import { describe, expect, it } from "vitest";
 
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { Pill } from "~/components/pill";
+
+const appCss = readFileSync("app/app.css", "utf8");
+
+function styleRulesFor(selectorFragment: string) {
+  const cssWithoutComments = appCss.replace(/\/\*[\s\S]*?\*\//g, "");
+  return [...cssWithoutComments.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .filter(([, selector]) => selector.includes(selectorFragment))
+    .map(([, selector, body]) => ({ selector, body }));
+}
 
 /**
  * BL-005 — the shell adopts the foundation: the header action slot is the
@@ -41,6 +51,16 @@ describe("DashboardPage volume", () => {
 });
 
 describe("DashboardPageHeader", () => {
+  it("keeps the shared kicker monochrome in both themes", () => {
+    expect(appCss).toMatch(
+      /\.f9-app-kicker\s*\{[^}]*color:\s*var\(--ink-soft\);/s,
+    );
+    const darkThemeKickerRules = styleRulesFor(".f9-app-kicker").filter(({ selector }) =>
+      /data-f9-theme\s*=\s*(?:"dark"|'dark'|dark)/.test(selector),
+    );
+    expect(darkThemeKickerRules).toEqual([]);
+  });
+
   it("renders the action slot as the page's one Rank-1 action", () => {
     const markup = renderRouted(
       <DashboardPageHeader
