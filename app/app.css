@@ -1850,16 +1850,6 @@ button[aria-busy="true"] {
   justify-content: flex-end;
 }
 
-.f9-client-room-card {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 14px;
-}
-
-.f9-client-room-list {
-  padding-inline: 4px;
-}
-
 .f9-plan-picker-panel {
   border-radius: 8px;
 }
@@ -13197,6 +13187,495 @@ textarea.f9-wk-in {
 
   #new-collection {
     padding-top: 26px;
+  }
+}
+/* === BL-037 Client rooms (landing language) === */
+
+/* Client rooms are a handoff ledger, not a deck of agency-feature cards.
+   The working header names the page and owns the one filled action. Everything
+   below is a sentence-case ruled section: active rooms, reusable context and
+   archived rooms. No shadow, dashed preview or framed empty specimen survives. */
+
+.f9-clients-page h2,
+.f9-clients-page h3 {
+  font-family: var(--f9-font);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.f9-clients-section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 12px;
+}
+
+.f9-clients-section-head h2 {
+  margin: 7px 0 0;
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.f9-clients-section-head > span {
+  color: var(--ink-faint);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.f9-clients-gate {
+  max-width: 760px;
+}
+
+.f9-clients-gate h2 {
+  margin: 13px 0 0;
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.f9-clients-gate > p:last-child {
+  max-width: 62ch;
+  margin: 8px 0 0;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+/* The composer replaces the header's Create button while it is open, so its
+   Save control is the only fill in that viewport. Settle is structural motion;
+   the form arrives, evidence values never animate. */
+.f9-clients-composer {
+  animation: f9-wk-settle var(--wk-settle) both;
+}
+
+.f9-clients-form {
+  display: grid;
+  max-width: 860px;
+  padding: 20px 0 28px;
+  border-top: 1px solid var(--wk-rule);
+  gap: 18px;
+}
+
+.f9-clients-field-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.f9-clients-page .f9-field {
+  min-width: 0;
+}
+
+.f9-clients-page .f9-field > span,
+.f9-clients-choice-group legend {
+  color: var(--ink-soft);
+  font-family: var(--f9-font);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.f9-clients-page .f9-field input,
+.f9-clients-page .f9-field select,
+.f9-clients-page .f9-field textarea {
+  min-height: 44px;
+  border-color: var(--wk-rule);
+  border-radius: 0;
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.f9-clients-page .f9-field textarea {
+  min-height: 88px;
+}
+
+.f9-clients-choice-group {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.f9-clients-choice-group legend {
+  margin-bottom: 8px;
+}
+
+.f9-clients-choice-list {
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-clients-choice-row {
+  display: grid;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  border-bottom: 1px solid var(--wk-rule);
+  grid-template-columns: minmax(0, 1fr) minmax(180px, auto);
+}
+
+.f9-clients-choice-row label {
+  display: flex;
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 13.5px;
+}
+
+.f9-clients-choice-row label:last-child {
+  color: var(--ink-soft);
+}
+
+.f9-clients-choice-row input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border-radius: 0;
+  accent-color: var(--ink);
+}
+
+.f9-clients-rooms {
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-clients-room {
+  border-bottom: 1px solid var(--wk-rule);
+}
+
+.f9-clients-room > summary {
+  display: grid;
+  min-height: 58px;
+  align-items: center;
+  gap: 18px;
+  padding: 7px 0;
+  color: var(--ink);
+  cursor: pointer;
+  grid-template-columns: 180px minmax(0, 1fr) minmax(154px, auto) 12px;
+  list-style: none;
+  transition:
+    background-color var(--wk-snap),
+    color var(--wk-snap);
+}
+
+.f9-clients-room > summary::-webkit-details-marker {
+  display: none;
+}
+
+.f9-clients-room > summary:hover {
+  background: var(--wk-sunk);
+}
+
+.f9-clients-room > summary .f9-wk-nm {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.f9-clients-room-summary {
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.f9-clients-room > summary .f9-wk-st {
+  text-align: right;
+}
+
+.f9-clients-caret {
+  display: inline-grid;
+  width: 12px;
+  height: 12px;
+  place-items: center;
+  justify-self: center;
+  overflow: clip;
+  color: var(--ink-faint);
+  font-size: 16px;
+  line-height: 1;
+  transform: rotate(0deg);
+  transform-origin: center;
+  transition: transform var(--wk-settle);
+}
+
+.f9-clients-room[open] .f9-clients-caret {
+  transform: rotate(90deg);
+}
+
+.f9-clients-room-body {
+  padding: 4px 0 24px;
+  animation: f9-wk-settle var(--wk-settle) both;
+}
+
+.f9-clients-room-notes {
+  max-width: 66ch;
+  margin: 0 0 18px;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.f9-clients-room-facts {
+  display: grid;
+  max-width: 820px;
+  margin: 0;
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-clients-room-facts > div {
+  display: grid;
+  gap: 20px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--wk-rule);
+  font-size: 13px;
+  grid-template-columns: 92px minmax(0, 1fr);
+}
+
+.f9-clients-room-facts dt {
+  color: var(--ink-faint);
+}
+
+.f9-clients-room-facts dd {
+  margin: 0;
+  color: var(--ink);
+}
+
+.f9-clients-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 22px;
+  margin-top: 10px;
+}
+
+.f9-clients-actions form {
+  margin: 0;
+}
+
+.f9-clients-empty {
+  padding: 22px 0 28px;
+}
+
+.f9-clients-empty h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.f9-clients-empty p,
+.f9-clients-quiet {
+  max-width: 62ch;
+  margin: 7px 0 0;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+/* Saved context and archive history are secondary working sets. Native
+   disclosures keep them reachable without manufacturing two more panels. */
+.f9-clients-disclosure {
+  margin: 34px var(--wk-pad) 0;
+  border-top: 1px solid var(--wk-rule);
+  border-bottom: 1px solid var(--wk-rule);
+}
+
+.f9-clients-disclosure + .f9-clients-disclosure {
+  margin-top: 0;
+  border-top: 0;
+}
+
+.f9-clients-disclosure > summary {
+  display: flex;
+  min-height: 62px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  color: var(--ink);
+  cursor: pointer;
+  list-style: none;
+  transition:
+    background-color var(--wk-snap),
+    color var(--wk-snap);
+}
+
+.f9-clients-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.f9-clients-disclosure > summary > span:last-child {
+  margin-left: auto;
+}
+
+.f9-clients-disclosure > summary::after {
+  display: inline-grid;
+  width: 12px;
+  height: 12px;
+  place-items: center;
+  overflow: clip;
+  color: var(--ink-faint);
+  content: "›";
+  font-size: 16px;
+  line-height: 1;
+  transform: rotate(0deg);
+  transform-origin: center;
+  transition: transform var(--wk-settle);
+}
+
+.f9-clients-disclosure[open] > summary::after {
+  transform: rotate(90deg);
+}
+
+.f9-clients-disclosure > summary:hover {
+  background: var(--wk-sunk);
+}
+
+.f9-clients-disclosure > summary strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.f9-clients-disclosure > summary small,
+.f9-clients-disclosure > summary > span:last-child {
+  color: var(--ink-faint);
+  font-size: 12.5px;
+  font-weight: 400;
+}
+
+.f9-clients-disclosure > summary small {
+  display: block;
+  margin-top: 3px;
+}
+
+.f9-clients-disclosure-body {
+  padding: 0 0 26px;
+  animation: f9-wk-settle var(--wk-settle) both;
+}
+
+.f9-clients-disclosure-body .f9-clients-form {
+  max-width: 760px;
+}
+
+.f9-clients-memory-list,
+.f9-clients-archive-list {
+  max-width: 860px;
+  border-top: 1px solid var(--wk-rule);
+}
+
+.f9-clients-memory-row,
+.f9-clients-archive-row {
+  display: grid;
+  align-items: center;
+  gap: 20px;
+  min-height: 58px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--wk-rule);
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.f9-clients-memory-row h3,
+.f9-clients-archive-row h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.f9-clients-memory-row p,
+.f9-clients-archive-row p {
+  margin: 4px 0 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.f9-clients-memory-row > span {
+  color: var(--ink-faint);
+  font-size: 12.5px;
+  text-align: right;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .f9-clients-composer,
+  .f9-clients-room-body,
+  .f9-clients-disclosure-body {
+    animation: none !important;
+  }
+
+  .f9-clients-caret,
+  .f9-clients-room > summary,
+  .f9-clients-disclosure > summary,
+  .f9-clients-disclosure > summary::after {
+    transition: none !important;
+  }
+}
+
+@media (max-width: 820px) {
+  .f9-clients-room > summary {
+    gap: 3px 14px;
+    grid-template-columns: minmax(0, 1fr) auto 12px;
+  }
+
+  .f9-clients-room-summary {
+    overflow: visible;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .f9-clients-room > summary .f9-wk-st {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .f9-clients-caret {
+    grid-column: 3;
+    grid-row: 1;
+  }
+}
+
+@media (max-width: 640px) {
+  .f9-clients-section-head {
+    align-items: flex-start;
+  }
+
+  .f9-clients-field-grid,
+  .f9-clients-choice-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .f9-clients-choice-row {
+    gap: 0;
+  }
+
+  .f9-clients-choice-row label + label {
+    border-top: 1px solid var(--wk-rule);
+  }
+
+  .f9-clients-disclosure {
+    margin-right: var(--wk-pad);
+    margin-left: var(--wk-pad);
+  }
+
+  .f9-clients-memory-row,
+  .f9-clients-archive-row {
+    align-items: flex-start;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .f9-clients-memory-row > span {
+    text-align: left;
   }
 }
 
