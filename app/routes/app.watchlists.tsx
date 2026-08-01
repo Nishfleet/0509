@@ -18,17 +18,10 @@ import { useQuickAdd } from "~/components/quick-add-context";
 import { TertiaryAction } from "~/components/evidence/cta";
 import { BulkSelectBar } from "~/components/watchlists/bulk-select-bar";
 import { CompetitorDetail } from "~/components/watchlists/competitor-detail";
-import {
-  DetailBlock,
-  DetailFacts,
-  DetailPane,
-  DetailPaneHead,
-} from "~/components/workspace/detail-pane";
 import { FeedbackStrip } from "~/components/workspace/feedback-strip";
 import { RuledList, RuledRow } from "~/components/workspace/ruled-list";
 import { useFirstCapturePolling } from "~/components/workspace/use-first-capture-polling";
 import { WorkingHeader } from "~/components/workspace/working-header";
-import { firstChangeMark } from "~/lib/change-mark";
 import {
   COMPETITOR_FILTER_PARAM,
   COMPETITOR_FILTERS,
@@ -78,6 +71,32 @@ export {
 export { WatchlistProofAge } from "~/components/watchlists/watchlist-proof-age";
 
 export const meta = () => [{ title: "Competitors | Five to Nine" }];
+
+function resolveSafeShareLink(message: unknown): { href: string; label: string } | null {
+  if (typeof message !== "string") return null;
+
+  try {
+    const url = new URL(message);
+    const token = url.pathname.slice("/share/".length);
+    if (
+      (url.protocol !== "http:" && url.protocol !== "https:") ||
+      !url.pathname.startsWith("/share/") ||
+      !token ||
+      token.includes("/") ||
+      url.username ||
+      url.password ||
+      url.hash
+    ) {
+      return null;
+    }
+
+    // Keep navigation same-origin even if a malformed action response contains
+    // an absolute host. The server-generated message remains the copy value.
+    return { href: `${url.pathname}${url.search}`, label: message };
+  } catch {
+    return null;
+  }
+}
 
 export function HydrateFallback() {
   return <DashboardRouteLoading title="Competitors" />;
@@ -330,8 +349,9 @@ export default function WatchlistsRoute() {
   };
 
   const selectedWatchlist = data.selectedWatchlist;
-  const selectedRow = selectedWatchlist
-    ? rows.find((row) => row.id === selectedWatchlist.id) ?? null
+  const selectedStatusLabel = selectedWatchlist
+    ? rows.find((row) => row.id === selectedWatchlist.id)?.statusLabel ??
+      (selectedWatchlist.isActive ? "Watching" : "Paused")
     : null;
   const selectedCapturedChanges = selectedWatchlist
     ? captureWindow.capturedChanges[selectedWatchlist.id] ?? 0
@@ -339,9 +359,6 @@ export default function WatchlistsRoute() {
   const selectedFailedChecks = selectedWatchlist
     ? captureWindow.failedChecks?.[selectedWatchlist.id] ?? countHardFailuresSinceLastSuccess(data.runs)
     : 0;
-  const marked = selectedWatchlist ? firstChangeMark(data.events ?? []) : null;
-  // Preserve the pre-BL-030 entitlement contract independently of whether
-  // this check caught a change: Agency can package every completed check.
   const packageForClientAction =
     canReport && selectedWatchlist?.lastScannedAt ? (
       <Link
@@ -351,12 +368,15 @@ export default function WatchlistsRoute() {
         Package for client <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
       </Link>
     ) : null;
+  const actionShareLink = actionData?.ok ? resolveSafeShareLink(actionData.message) : null;
 
   return (
     <DashboardPage className="f9-wk-page">
       <WorkingHeader
         action={
-          quickAdd
+          selectedWatchlist
+            ? null
+            : quickAdd
             ? {
                 label: "Add competitor",
                 onClick: quickAdd.open,
@@ -366,18 +386,33 @@ export default function WatchlistsRoute() {
             : { label: "Add competitor", to: "/search" }
         }
         context={
-          data.captureWindowDegraded && rows.length > 0
+          selectedWatchlist ? (
+            <>
+              <Link className="f9-wk-lnk" to="/app/watchlists">
+                All competitors
+              </Link>
+              <span aria-hidden="true"> &rsaquo; </span>
+              {selectedWatchlist.targetLabel} · {selectedStatusLabel} ·{" "}
+              {sourceCanSchedule && trackingPresentation.statusLabel !== "Needs source access" ? (
+                trackingPresentation.statusLabel
+              ) : (
+                <Link className="f9-wk-lnk f9-wk-lnk--quiet" to="/app/source-access">
+                  {trackingPresentation.statusLabel}
+                </Link>
+              )}
+            </>
+          ) : data.captureWindowDegraded && rows.length > 0
             ? `${rows.length} ${rows.length === 1 ? "competitor" : "competitors"}. Recent totals are unavailable.`
             : formatCompetitorContextLine({ rows, windowDays: captureWindow.windowDays })
         }
-        title="Competitors"
+        title={selectedWatchlist?.name ?? "Competitors"}
       />
 
-      {data.captureWindowDegraded && hasCompetitors ? (
+      {data.captureWindowDegraded && (hasCompetitors || selectedWatchlist) ? (
         <PartialDataNotice message="Recent change and failed-check totals could not be loaded. Aggregate counts are unavailable; saved evidence and management controls remain available." />
       ) : null}
 
-      {hasCompetitors && !data.captureWindowDegraded ? (
+      {hasCompetitors && !selectedWatchlist && !data.captureWindowDegraded ? (
         <div className="f9-wk-tabs" role="navigation" aria-label="Filter competitors by state">
           {COMPETITOR_FILTERS.map((filter) => (
             <Link
@@ -399,12 +434,12 @@ export default function WatchlistsRoute() {
           label={actionData.ok ? "Done" : "Not done"}
           tone={actionData.ok ? "ok" : "bad"}
         >
-          {actionData.ok && actionData.message.startsWith("http") ? (
+          {actionShareLink ? (
             <>
-              <a href={actionData.message} rel="noreferrer" target="_blank">
-                {actionData.message}
+              <a href={actionShareLink.href} rel="noreferrer" target="_blank">
+                {actionShareLink.label}
               </a>{" "}
-              <CopyButton value={actionData.message} />
+              <CopyButton value={actionShareLink.label} />
             </>
           ) : (
             actionData.message
@@ -420,7 +455,46 @@ export default function WatchlistsRoute() {
         </FeedbackStrip>
       ) : null}
 
-      {hasCompetitors ? (
+      {selectedWatchlist ? (
+        <div
+          className={`f9-wk-record${data.captureWindowDegraded ? " is-capture-window-degraded" : ""}`}
+        >
+          {data.captureWindowDegraded ? (
+            <p className="f9-wk-aggregate-unavailable" role="status">
+              Recent aggregate totals are unavailable. Saved check history and management controls
+              below are still available.
+            </p>
+          ) : null}
+          <CompetitorDetail
+            activeTab={activeTab}
+            canConfigureDelivery={canConfigureDelivery}
+            canConfigureDigestSettings={canConfigureDigestSettings}
+            canEmailDelivery={canEmailDelivery}
+            canExport={canExport}
+            canInstantAlert={canInstantAlert}
+            canRefresh={canRefresh}
+            canShare={canShare}
+            capturedChanges={data.captureWindowDegraded ? 0 : selectedCapturedChanges}
+            captureWindowDegraded={data.captureWindowDegraded}
+            data={{ ...data, selectedWatchlist }}
+            discoveryRecovery={discoveryStatus.recovery ?? null}
+            // The board counts hard failures in SQL; the detail keeps the same
+            // rollup while masking only the unavailable capture-window totals.
+            failedChecks={selectedFailedChecks}
+            lockedToolbarUpgradeLabel={lockedToolbarUpgradeLabel}
+            nextScanLabel={nextScanLabel}
+            packageForClientAction={packageForClientAction}
+            renderedAt={renderedAt}
+            showSlackDelivery={showSlackDelivery}
+            sourceCanSchedule={sourceCanSchedule}
+            trackingPresentation={trackingPresentation}
+            watchlist={selectedWatchlist}
+            windowDays={captureWindow.windowDays}
+            pauseAction={renderPauseAction(selectedWatchlist)}
+            checksExpanded={searchParams.get("checks") === "all"}
+          />
+        </div>
+      ) : hasCompetitors ? (
         <>
           <BulkSelectBar
             onClear={clearBulkSelection}
@@ -431,7 +505,7 @@ export default function WatchlistsRoute() {
             selectedCount={selectedBulkIds.length}
           />
 
-          <div className={`f9-wk-split${selectedWatchlist ? "" : " is-single"}`}>
+          <div className="f9-wk-split is-single">
             <div className="f9-wk-split-list">
               <RuledList aria-label="Competitors" flush>
                 {visibleRows.map((row) => (
@@ -454,7 +528,7 @@ export default function WatchlistsRoute() {
                     off={!row.isActive}
                     pending={pendingWatchlistId === row.id}
                     say={row.line}
-                    selected={selectedWatchlist?.id === row.id}
+                    selected={false}
                     status={row.statusLabel}
                     statusTone={row.statusTone}
                     time={
@@ -476,77 +550,6 @@ export default function WatchlistsRoute() {
               </RuledList>
             </div>
 
-            {selectedWatchlist && selectedRow ? (
-              <DetailPane label={selectedWatchlist.name}>
-                <DetailPaneHead
-                  name={selectedWatchlist.name}
-                  site={selectedWatchlist.targetLabel}
-                />
-
-                {marked ? (
-                  <DetailBlock kicker="Caught">
-                    <p className="f9-wk-change">
-                      <s className="f9-wk-del">{marked.mark.from}</s> &rarr;{" "}
-                      <ins className="f9-wk-ins">{marked.mark.to}</ins>
-                    </p>
-                    <p className="f9-wk-quote">{marked.event.summary}</p>
-                    <div className="f9-wk-acts">
-                      <Link
-                        className="f9-wk-lnk"
-                        to={watchlistDetailTabHref(selectedWatchlist.id, "evidence")}
-                      >
-                        Open the capture <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
-                      </Link>
-                      {packageForClientAction}
-                    </div>
-                  </DetailBlock>
-                ) : (
-                  <DetailBlock kicker={selectedRow.statusLabel}>
-                    <p className="f9-wk-quote">{selectedRow.line}</p>
-                    <div className="f9-wk-acts">
-                      <Link
-                        className="f9-wk-lnk"
-                        to={watchlistDetailTabHref(selectedWatchlist.id, "evidence")}
-                      >
-                        Open the capture <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
-                      </Link>
-                      {packageForClientAction}
-                    </div>
-                  </DetailBlock>
-                )}
-
-                <DetailBlock>
-                  <DetailFacts
-                    rows={[
-                      {
-                        key: "Last check",
-                        value: selectedWatchlist.lastScannedAt ? (
-                          <LocalTime iso={selectedWatchlist.lastScannedAt} mode="date" />
-                        ) : (
-                          "No completed check yet"
-                        ),
-                      },
-                      { key: "Next check", value: nextScanLabel },
-                      ...(data.captureWindowDegraded
-                        ? [{ key: "Recent totals", value: "Unavailable — refresh to try again" }]
-                        : [
-                            {
-                              key: `Changes in ${captureWindow.windowDays} days`,
-                              value: selectedCapturedChanges,
-                            },
-                            ...(selectedFailedChecks > 0
-                              ? [{ key: "Failed checks", value: selectedFailedChecks }]
-                              : []),
-                          ]),
-                      {
-                        key: "Watching since",
-                        value: <LocalTime iso={selectedWatchlist.createdAt} mode="date" />,
-                      },
-                    ]}
-                  />
-                </DetailBlock>
-              </DetailPane>
-            ) : null}
           </div>
         </>
       ) : (
@@ -571,47 +574,6 @@ export default function WatchlistsRoute() {
           </div>
         </section>
       )}
-
-      {selectedWatchlist ? (
-        <div
-          className={`f9-wk-record${data.captureWindowDegraded ? " is-capture-window-degraded" : ""}`}
-        >
-          {data.captureWindowDegraded ? (
-            <p className="f9-wk-aggregate-unavailable" role="status">
-              Recent aggregate totals are unavailable. Saved check history and management controls
-              below are still available.
-            </p>
-          ) : null}
-          <CompetitorDetail
-            activeTab={activeTab}
-            canConfigureDelivery={canConfigureDelivery}
-            canConfigureDigestSettings={canConfigureDigestSettings}
-            canEmailDelivery={canEmailDelivery}
-            canExport={canExport}
-            canInstantAlert={canInstantAlert}
-            canRefresh={canRefresh}
-            canShare={canShare}
-            capturedChanges={data.captureWindowDegraded ? 0 : selectedCapturedChanges}
-            data={{ ...data, selectedWatchlist }}
-            discoveryRecovery={discoveryStatus.recovery ?? null}
-            // The board counts hard failures since the last success in SQL; the
-            // detail now counts them the same way over the loaded runs, and
-            // prefers the board's rollup so one competitor never reports two
-            // different failure counts on one page.
-            failedChecks={selectedFailedChecks}
-            lockedToolbarUpgradeLabel={lockedToolbarUpgradeLabel}
-            nextScanLabel={nextScanLabel}
-            renderedAt={renderedAt}
-            showSlackDelivery={showSlackDelivery}
-            sourceCanSchedule={sourceCanSchedule}
-            trackingPresentation={trackingPresentation}
-            watchlist={selectedWatchlist}
-            windowDays={captureWindow.windowDays}
-            pauseAction={renderPauseAction(selectedWatchlist)}
-            checksExpanded={searchParams.get("checks") === "all"}
-          />
-        </div>
-      ) : null}
 
       <div className="f9-wk-opline">
         <span>

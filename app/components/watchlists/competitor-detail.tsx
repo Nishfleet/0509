@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 import { Form, Link } from "react-router";
 
@@ -28,6 +29,7 @@ import {
   buildCompetitorFactRows,
   formatCaughtNote,
   formatCaughtNumber,
+  formatLastCheck,
 } from "~/lib/watchlist-detail-display";
 import {
   WATCHLIST_DETAIL_TABS,
@@ -100,6 +102,10 @@ export interface CompetitorDetailProps {
   canEmailDelivery: boolean;
   showSlackDelivery: boolean;
   lockedToolbarUpgradeLabel: string | null;
+  /** The capture-window rollup failed; aggregate counts must not become zero/quiet. */
+  captureWindowDegraded?: boolean;
+  /** Existing report handoff retained while the shared Reports surface stays out of scope. */
+  packageForClientAction?: ReactNode;
   /**
    * BL-030: pause/resume moved here when the list stopped carrying per-band
    * action rows. It is still ONE control for this competitor, rendered by the
@@ -114,6 +120,7 @@ const RANK2 = "f9-ed-cta f9-ed-cta--rank2";
 
 export function CompetitorDetail(props: CompetitorDetailProps) {
   const { data, watchlist, activeTab } = props;
+  const captureWindowDegraded = Boolean(props.captureWindowDegraded);
   const trackingRole = normalizeWatchlistTrackingRole(watchlist.trackingRole);
   const targetNoun = formatWatchlistTargetNoun(trackingRole);
   const deliveryHref = watchlistDetailTabHref(watchlist.id, "delivery");
@@ -130,7 +137,7 @@ export function CompetitorDetail(props: CompetitorDetailProps) {
   const statusCells: StatusCell[] = [
     {
       key: "State",
-      value: (
+      value: captureWindowDegraded ? "Recent totals unavailable" : (
         <Pill state={stamp.pillState} variant="stamp">
           {stamp.label}
         </Pill>
@@ -167,6 +174,10 @@ export function CompetitorDetail(props: CompetitorDetailProps) {
     isActive: watchlist.isActive,
     plan: data.plan,
     createdAt: watchlist.createdAt,
+    lastScannedAt: watchlist.lastScannedAt,
+    lastCheckValue: watchlist.lastScannedAt ? (
+      <LiveLastCheck iso={watchlist.lastScannedAt} initialNow={props.renderedAt} />
+    ) : null,
     now: props.renderedAt,
     proofSummary: data.proofSummary,
     storedChanges: data.events.length,
@@ -233,6 +244,7 @@ export function CompetitorDetail(props: CompetitorDetailProps) {
               </TertiaryAction>
             </>
           ) : null}
+          {props.packageForClientAction}
           {props.lockedToolbarUpgradeLabel ? (
             <TertiaryAction to="/app/billing?source=watchlists#plans">
               {props.lockedToolbarUpgradeLabel}
@@ -283,13 +295,17 @@ export function CompetitorDetail(props: CompetitorDetailProps) {
         </div>
 
         <CompetitorRail
-          caughtNote={formatCaughtNote({
-            capturedChanges: props.capturedChanges,
-            windowDays: props.windowDays,
-            lastScannedAt: watchlist.lastScannedAt,
-            isActive: watchlist.isActive,
-          })}
-          caughtValue={formatCaughtNumber(props.capturedChanges)}
+          caughtNote={
+            captureWindowDegraded
+              ? "Unavailable — refresh to try again. Recent change totals are unavailable."
+              : formatCaughtNote({
+                  capturedChanges: props.capturedChanges,
+                  windowDays: props.windowDays,
+                  lastScannedAt: watchlist.lastScannedAt,
+                  isActive: watchlist.isActive,
+                })
+          }
+          caughtValue={captureWindowDegraded ? "Unavailable" : formatCaughtNumber(props.capturedChanges)}
           deliveryHref={deliveryHref}
           deliveryLines={deliveryLines}
           factRows={factRows}
@@ -298,6 +314,17 @@ export function CompetitorDetail(props: CompetitorDetailProps) {
       </div>
     </article>
   );
+}
+
+function LiveLastCheck({ iso, initialNow }: { iso: string; initialNow: Date }) {
+  const [now, setNow] = useState(initialNow);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return <time dateTime={iso}>{formatLastCheck(iso, now) ?? "not recorded"}</time>;
 }
 
 function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string }): ReactNode {
@@ -350,8 +377,11 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
           <h3>{props.trackingPresentation.headline}</h3>
           <p className="f9-muted-copy">{props.trackingPresentation.summary}</p>
           <p className="f9-muted-copy">
-            Five to Nine checks public ad signals and shows Recent results when live checks are
-            delayed.
+            {!watchlist.isActive
+              ? "Watching is paused. The evidence already on file stays here."
+              : props.sourceCanSchedule
+                ? `Automatic checks are on. The next one is ${props.nextScanLabel}. Recent results remain available when checks are delayed.`
+                : "Automatic checks are waiting for source access. The evidence already on file stays here."}
           </p>
           {props.discoveryRecovery ? (
             <p className="f9-muted-copy">{props.discoveryRecovery}</p>
@@ -410,17 +440,24 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
   }
 
   return (
-    <EventChangesSection
-      checksExpanded={props.checksExpanded}
-      data={data}
-      lastAttemptByEventId={buildLastAttemptByEventId(data.recentDeliveryAttempts)}
-      proofCapturesById={
-        new Map(data.recentProofCaptures.map((capture) => [capture.id, capture]))
-      }
-      recentProofCaptures={data.recentProofCaptures}
-      renderedAt={props.renderedAt}
-      sourceCanSchedule={props.sourceCanSchedule}
-      watchlistId={watchlist.id}
-    />
+    <>
+      <EventChangesSection
+        checksExpanded={props.checksExpanded}
+        data={data}
+        lastAttemptByEventId={buildLastAttemptByEventId(data.recentDeliveryAttempts)}
+        proofCapturesById={
+          new Map(data.recentProofCaptures.map((capture) => [capture.id, capture]))
+        }
+        recentProofCaptures={data.recentProofCaptures}
+        renderedAt={props.renderedAt}
+        sourceCanSchedule={props.sourceCanSchedule}
+        watchlistId={watchlist.id}
+      />
+      <p className="f9-wk-acts">
+        <Link className="f9-wk-lnk" to={watchlistDetailTabHref(watchlist.id, "evidence")}>
+          Open the capture <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
+        </Link>
+      </p>
+    </>
   );
 }
