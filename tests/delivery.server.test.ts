@@ -2926,10 +2926,11 @@ describe("sendPresenceDigestEmail", () => {
       createDeliveryAttempt,
       listDeliveryTargets: vi.fn().mockResolvedValue([]),
       upsertDeliveryTarget: vi.fn().mockResolvedValue(null),
-      // This branch provisions through the atomic helper rather than calling
-      // upsertDeliveryTarget directly, so the mock must expose it or the module
-      // import fails. Same null result, so the test's intent is unchanged.
-      provisionVerifiedAccountEmailTargetIfUnsuppressed: vi.fn().mockResolvedValue(null),
+      // This branch provisions through the atomic helper and fails closed when
+      // no target resolves, rather than sending to an unresolved recipient. The
+      // test is about the accepted-vs-delivered distinction, so it must get a
+      // usable target or it never reaches the provider at all.
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: mockAtomicEmailProvision(),
     }));
 
     const { sendPresenceDigestEmail } = await import("~/lib/delivery.server");
