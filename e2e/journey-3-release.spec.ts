@@ -310,7 +310,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
       // Free Weekly Competitor Watch: the free plan now includes a weekly
       // brief, so /app/digests is a real (empty) surface, not a paid gate.
       await expect(page.getByRole("heading", { name: "Briefs", exact: true })).toBeVisible();
-      await expect(page.getByRole("heading", { name: "Brief history", exact: true })).toBeVisible();
+      await expect(page.getByRole("list", { name: "Brief history", exact: true })).toHaveCount(0);
       await expect(
         page.getByRole("heading", { name: "Your first brief lands after the first scan", exact: true }).first(),
       ).toBeVisible();
@@ -478,7 +478,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
       await page.getByRole("link", { name: "Read latest brief", exact: true }).click();
       await expect(page).toHaveURL("/app/digests?firstrun=1");
       await expect(page.getByRole("heading", { level: 1, name: "Briefs", exact: true })).toBeVisible();
-      await expect(page.locator(".f9-ed-brief")).toHaveCount(1);
+      await expect(page.locator(".f9-wk-brief")).toHaveCount(1);
       await expect(
         page.getByRole("heading", { name: "Rival Labs launched a new offer", exact: true }),
       ).toBeVisible();
@@ -496,7 +496,7 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
       await expect(page.getByRole("heading", { level: 1, name: "Briefs", exact: true })).toBeVisible();
       await expect(page.locator("body")).not.toContainText("FIRST BRIEF · FILED");
       await expect(page.getByRole("heading", { name: "Brief history", exact: true })).toBeVisible();
-      await expect(page.locator(".f9-ed-brief")).toHaveCount(1);
+      await expect(page.locator(".f9-wk-brief")).toHaveCount(1);
 
       // Scout is weekly too — its Briefs surface never promises the daily 05:09.
       await signInAs(context, baseURL!, "e2e-scout");

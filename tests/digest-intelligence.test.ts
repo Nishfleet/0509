@@ -9,6 +9,7 @@ import {
   DigestMovementSummary,
   DigestProofPacket,
   resolveDigestDiffCaptures,
+  resolveNewestMarkedDigestItem,
 } from "~/components/digest-intelligence";
 
 describe("DesignedDigestBrief", () => {
@@ -48,7 +49,7 @@ describe("DesignedDigestBrief", () => {
       }),
     );
 
-    expect(markup).toContain("f9-ed-diff-plate");
+    expect(markup).toContain("f9-wk-brief-change");
     expect(markup).toContain('dateTime="2026-07-26T04:00:00.000Z"');
     expect(markup).toContain('dateTime="2026-07-27T06:05:00.000Z"');
     expect(markup).toContain("This is the stored capture, not a re-render.");
@@ -67,9 +68,9 @@ describe("DesignedDigestBrief", () => {
       }),
     );
 
-    expect(markup).not.toContain("f9-ed-diff-plate");
+    expect(markup).not.toContain("f9-wk-brief-change");
     expect(markup).toContain("not two stored capture times");
-    expect(markup.match(/f9-ed-fact-rail"/g)).toHaveLength(1);
+    expect(markup.match(/f9-wk-brief-facts/g)).toHaveLength(1);
     expect(markup.match(/evidence unavailable/gi) ?? []).toHaveLength(0);
   });
 
@@ -83,6 +84,39 @@ describe("DesignedDigestBrief", () => {
         },
       }),
     ).toBeNull();
+  });
+
+  it("announces the newest complete comparison, not the first or highest-priority row", () => {
+    const older = {
+      ...baseItem,
+      id: "older",
+      metadata: {
+        ...baseItem.metadata,
+        priorityScore: 99,
+        beforeCapturedAt: "2026-07-24T04:00:00.000Z",
+        confirmedAt: "2026-07-25T04:00:00.000Z",
+      },
+    };
+    const newest = {
+      ...baseItem,
+      id: "newest",
+      metadata: {
+        ...baseItem.metadata,
+        priorityScore: 60,
+        beforeCapturedAt: "2026-07-26T04:00:00.000Z",
+        confirmedAt: "2026-07-27T04:00:00.000Z",
+      },
+    };
+    const incomplete = {
+      ...baseItem,
+      id: "latest-but-incomplete",
+      metadata: {
+        ...baseItem.metadata,
+        confirmedAt: "2026-07-28T04:00:00.000Z",
+      },
+    };
+
+    expect(resolveNewestMarkedDigestItem([older, incomplete, newest])?.id).toBe("newest");
   });
 
   it("states an unread source once instead of repeating empty evidence labels", () => {

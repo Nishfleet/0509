@@ -107,6 +107,7 @@ describe("workspace language layer (BL-030)", () => {
       ".f9-col-switch-item",
       ".f9-wk-avatar",
       ".f9-wk-detail-name",
+      ".f9-wk-entity",
       ".f9-wk-nm",
       ".f9-wk-title",
       ".f9-wk-wordmark",
@@ -179,16 +180,17 @@ describe("the coexistence seam inside a rebuilt page (BL-030 round 2)", () => {
       const block = scoped.slice(scoped.indexOf(`${selector} {`));
       expect(block.slice(0, block.indexOf("}"))).not.toMatch(/green/);
     }
-    // The scoped seam may reach for the accent in EXACTLY one place: the NOW
-    // token of the newest change, which is this view's single green mark.
-    // Every other rule in the seam is monochrome, and the archived plates
-    // below the newest one render the same token in ink — records are not
-    // highlighted, the same rule that already forbids animating a diff.
+    // Each rebuilt surface may reach for the accent in exactly one
+    // structurally newest announcement. These selectors cannot coexist in
+    // one view: the first belongs to the Competitors record, the second to
+    // the Briefs reader. Their paint-real tests resolve both against live
+    // markup, and the capture harness enforces the per-viewport budget.
     const accentRules = [...scoped.matchAll(/([^{}]+)\{([^}]*)\}/g)]
       .filter(([, , body]) => /--green\b|--ed-accent\b/.test(body))
       .map(([, selector]) => selector.trim().replace(/\s+/g, " "));
     expect(accentRules).toEqual([
       ".f9-wk-page .f9-ed-diff-plate.is-newest .f9-ed-diff-value mark",
+      ".f9-wk-brief-announcement.is-newest .f9-wk-ins",
     ]);
     // And the default for every other plate's token is the sunk ground.
     expect(scoped).toMatch(

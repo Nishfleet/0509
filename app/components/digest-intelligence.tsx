@@ -1,12 +1,5 @@
 import type { ReactNode } from "react";
 
-import {
-  DiffPlate,
-  FactRail,
-  QuietLine,
-  SecondaryAction,
-  type FactRow,
-} from "~/components/evidence";
 import { LocalTime } from "~/components/local-time";
 import { readDigestIntelligence } from "~/lib/change-intelligence";
 import { readDigestStrategyNote } from "~/lib/digest-strategy";
@@ -49,7 +42,7 @@ export interface DesignedDigestBriefProps {
 }
 
 /**
- * One designed brief — BL-015, brief §7.
+ * One retained reading brief — BL-032.
  *
  * The route hands this component a selected, optionally filtered item set.
  * The component deliberately partitions it into real two-capture diffs and
@@ -87,125 +80,196 @@ export function DesignedDigestBrief({
       classifyDigestItemSource(item).status,
     ),
   );
+  const newestMarked = resolveNewestMarkedDigestItem(allItems);
+  const newestMarkedIsVisible =
+    newestMarked !== null &&
+    items.some((item) => (item.id ?? itemKey(item)) === newestMarked.id);
+  const facts = buildDigestFacts({
+    allItems,
+    cohortNote,
+    createdAt,
+    deliveryLabel,
+    deliveryRecipient,
+    periodEnd,
+    periodStart,
+  });
 
   return (
-    <article className="f9-ed-brief" id={id}>
-      <header className="f9-ed-brief-header">
-        <div className="f9-ed-brief-date f9-ed-micro">
-          <span>
-            Brief · <LocalTime iso={periodStart} mode="date" /> –{" "}
+    <article className="f9-wk-brief" id={id}>
+      <header className="f9-wk-brief-head">
+        <div className="f9-wk-brief-meta">
+          <p>
+            <LocalTime iso={periodStart} mode="date" /> –{" "}
             <LocalTime iso={periodEnd} mode="date" />
-          </span>
-          <span>
+          </p>
+          <p>
             Filed <LocalTime iso={createdAt} />
-          </span>
+          </p>
         </div>
-        <div className="f9-ed-brief-heading">
-          <p className="f9-ed-micro">The finding</p>
+        <div className="f9-wk-brief-heading">
           <h2>{finding}</h2>
-          {strategy ? (
-            <aside aria-label="AI summary of the week" className="f9-ed-brief-read">
-              <p className="f9-ed-micro">
-                AI summary · checked against the filed changes
-                {strategy.generatedAt ? (
-                  <>
-                    {" · "}
-                    <LocalTime iso={strategy.generatedAt} />
-                  </>
-                ) : null}
-              </p>
-              <p>{strategy.paragraph}</p>
-            </aside>
-          ) : null}
-          {actions ? <div className="f9-ed-action-row">{actions}</div> : null}
+          {actions ? <div className="f9-wk-brief-actions">{actions}</div> : null}
         </div>
+        {strategy ? (
+          <aside aria-label="AI summary of the week" className="f9-wk-brief-read">
+            <p>
+              AI summary · checked against the filed changes
+              {strategy.generatedAt ? (
+                <>
+                  {" · "}
+                  <LocalTime iso={strategy.generatedAt} />
+                </>
+              ) : null}
+            </p>
+            <p>{strategy.paragraph}</p>
+          </aside>
+        ) : null}
       </header>
 
-      <section aria-label="Changes in this brief" className="f9-ed-brief-section">
-        <h3 className="f9-ed-brief-section-title">What changed</h3>
+      {newestMarked ? (
+        <section
+          aria-label="Newest change in this brief"
+          className="f9-wk-brief-announcement is-newest"
+        >
+          <p className="f9-wk-kick">Latest change</p>
+          <p className="f9-wk-brief-announcement-line">
+            <strong className="f9-wk-entity">
+              {newestMarked.item.watchlistName || "Competitor"}
+            </strong>{" "}
+            <span>{newestMarked.item.title || "changed"}</span>{" "}
+            <s>{newestMarked.captures.before.value}</s>{" "}
+            <span aria-hidden="true">→</span>{" "}
+            <ins className="f9-wk-ins">{newestMarked.captures.now.value}</ins>
+          </p>
+          <p className="f9-wk-brief-announcement-time">
+            Captured <LocalTime iso={newestMarked.captures.now.capturedAt} />
+            {!newestMarkedIsVisible ? " · Outside the current filter" : null}
+          </p>
+        </section>
+      ) : null}
+
+      <section aria-labelledby={`${id}-changes`} className="f9-wk-brief-section">
+        <h3 id={`${id}-changes`}>What changed</h3>
         {diffs.length > 0 ? (
-          <div className="f9-ed-brief-diffs">
+          <div className="f9-wk-brief-changes">
             {diffs.map(({ item, captures }) => {
               const sourceUrl = readSafeSourceUrl(item.metadata);
+              const itemId = item.id ?? itemKey(item);
               return (
-                <DiffPlate
-                  actions={
-                    sourceUrl ? (
-                      <SecondaryAction href={sourceUrl} rel="noreferrer" small target="_blank">
-                        Open the source
-                      </SecondaryAction>
-                    ) : undefined
-                  }
-                  before={captures.before}
-                  caughtLabel={`Caught · ${item.watchlistName || "Competitor"}`}
-                  field={formatWatchEventTypeLabel(item.eventType ?? "change")}
-                  headline={item.title || "Change captured"}
-                  key={item.id ?? itemKey(item)}
-                  now={captures.now}
-                  verification={classifyDigestItemSource(item).label}
-                  why={item.summary}
-                />
+                <article
+                  className={`f9-wk-brief-change${
+                    newestMarked?.id === itemId ? " is-newest" : ""
+                  }`}
+                  key={itemId}
+                >
+                  <div className="f9-wk-brief-change-head">
+                    <div>
+                      <h4 className="f9-wk-entity">
+                        {item.watchlistName || "Competitor"}
+                      </h4>
+                      <p>{item.title || "Change captured"}</p>
+                    </div>
+                    <p>
+                      {formatWatchEventTypeLabel(item.eventType ?? "change")} ·{" "}
+                      {classifyDigestItemSource(item).label}
+                    </p>
+                  </div>
+                  {item.summary ? <p className="f9-wk-brief-change-why">{item.summary}</p> : null}
+                  <dl className="f9-wk-brief-comparison">
+                    <div>
+                      <dt>Before</dt>
+                      <dd>
+                        <s>{captures.before.value}</s>
+                        <small>
+                          <LocalTime iso={captures.before.capturedAt} />
+                        </small>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Now</dt>
+                      <dd>
+                        <span>{captures.now.value}</span>
+                        <small>
+                          <LocalTime iso={captures.now.capturedAt} />
+                        </small>
+                      </dd>
+                    </div>
+                  </dl>
+                  <p className="f9-wk-brief-capture-note">
+                    This is the stored capture, not a re-render.
+                  </p>
+                  {sourceUrl ? (
+                    <a
+                      className="f9-wk-lnk"
+                      href={sourceUrl}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      Open the source{" "}
+                      <span aria-hidden="true" className="f9-wk-chev">
+                        &rsaquo;
+                      </span>
+                    </a>
+                  ) : null}
+                </article>
               );
             })}
           </div>
         ) : (
-          <QuietLine
-            copy={
-              allItems.length === 0
-                ? "Checked throughout this window. Nothing changed. That is the finding."
-                : items.length === 0
-                  ? "No filed changes match this filter. Clear the filters to read every check."
-                  : "No item in this brief has both stored capture times, so no before-and-after is shown."
-            }
-            stamp={<LocalTime iso={periodEnd} mode="date" />}
-          />
+          <p className="f9-wk-note">
+            {allItems.length === 0
+              ? "Checked throughout this window. Nothing changed. That is the finding."
+              : items.length === 0
+                ? "No filed changes match this filter. Clear the filters to read every check."
+                : "No item in this brief has both stored capture times, so no before-and-after is shown."}
+          </p>
         )}
       </section>
 
-      <section aria-label="Checks without a comparison" className="f9-ed-brief-section">
-        <h3 className="f9-ed-brief-section-title">What we checked</h3>
-        <div className="f9-ed-quiet-list">
+      <section aria-labelledby={`${id}-checked`} className="f9-wk-brief-section">
+        <h3 id={`${id}-checked`}>What we checked</h3>
+        <div className="f9-wk-brief-checks">
           {quietItems.map((item) => (
-            <QuietLine
-              copy={digestQuietCopy(item)}
-              key={item.id ?? itemKey(item)}
-              stamp={<LocalTime iso={readDigestDecisionTimestamp(item) ?? createdAt} />}
-            />
+            <div className="f9-wk-brief-check" key={item.id ?? itemKey(item)}>
+              <h4 className="f9-wk-entity">{item.watchlistName || "Competitor"}</h4>
+              <p>{digestQuietCopy(item)}</p>
+              <span>
+                <LocalTime iso={readDigestDecisionTimestamp(item) ?? createdAt} />
+              </span>
+            </div>
           ))}
           {hasUnreadSource ? (
-            <QuietLine
-              copy={
-                <>
-                  We could not read this source on <LocalTime iso={periodEnd} mode="date" />.
-                  Everything else in this brief was checked.
-                </>
-              }
-              stamp="Source"
-            />
+            <div className="f9-wk-brief-check">
+              <h4>Source attention</h4>
+              <p>
+                We could not read this source on <LocalTime iso={periodEnd} mode="date" />.
+                Everything else in this brief was checked.
+              </p>
+              <span>Needs review</span>
+            </div>
           ) : null}
           {quietItems.length === 0 && !hasUnreadSource ? (
-            <QuietLine
-              copy="Every filed change above has a complete two-capture comparison."
-              stamp="Checks"
-            />
+            <p className="f9-wk-note">
+              Every filed change above has a complete two-capture comparison.
+            </p>
           ) : null}
         </div>
       </section>
 
-      <section aria-label="Brief facts" className="f9-ed-brief-section">
-        <h3 className="f9-ed-brief-section-title">At a glance</h3>
-        <FactRail
-          rows={buildDigestFacts({
-            allItems,
-            cohortNote,
-            createdAt,
-            deliveryLabel,
-            deliveryRecipient,
-            periodEnd,
-            periodStart,
-          })}
-          title="Brief facts"
-        />
+      <section aria-labelledby={`${id}-facts`} className="f9-wk-brief-section">
+        <h3 id={`${id}-facts`}>At a glance</h3>
+        <dl className="f9-wk-dl f9-wk-brief-facts">
+          {facts.map((row) => (
+            <div key={row.key} style={{ display: "contents" }}>
+              <dt>{row.key}</dt>
+              <dd>
+                {(typeof row.value === "string" ? row.value.trim() || null : row.value) ??
+                  row.missingLabel ??
+                  "Not recorded"}
+              </dd>
+            </div>
+          ))}
+        </dl>
       </section>
     </article>
   );
@@ -563,6 +627,34 @@ export function resolveDigestDiffCaptures(item: DigestProofPacketItem) {
   };
 }
 
+/**
+ * The announcement belongs to the newest stored comparison in the whole
+ * brief, not whichever filtered row happens to render first. This is the
+ * digest equivalent of BL-031's structural `is-newest` contract: filtering
+ * can narrow the reading rows, but it cannot rewrite which change was news.
+ */
+export function resolveNewestMarkedDigestItem(items: DigestProofPacketItem[]) {
+  return items.reduce<{
+    id: string;
+    item: DigestProofPacketItem;
+    captures: NonNullable<ReturnType<typeof resolveDigestDiffCaptures>>;
+  } | null>((newest, item) => {
+    const captures = resolveDigestDiffCaptures(item);
+    if (!captures) return newest;
+    if (
+      newest &&
+      Date.parse(newest.captures.now.capturedAt) >= Date.parse(captures.now.capturedAt)
+    ) {
+      return newest;
+    }
+    return {
+      id: item.id ?? itemKey(item),
+      item,
+      captures,
+    };
+  }, null);
+}
+
 function digestQuietCopy(item: DigestProofPacketItem) {
   const from = readMetadataString(item.metadata, ["from"]);
   const to = readMetadataString(item.metadata, ["to"]);
@@ -591,6 +683,12 @@ function readSafeSourceUrl(metadata: Record<string, unknown> | undefined) {
   }
 }
 
+interface DigestFactRow {
+  key: string;
+  value: ReactNode | null;
+  missingLabel?: string;
+}
+
 function buildDigestFacts(input: {
   allItems: DigestProofPacketItem[];
   cohortNote?: string | null;
@@ -599,7 +697,7 @@ function buildDigestFacts(input: {
   deliveryRecipient?: string | null;
   periodStart: string;
   periodEnd: string;
-}): FactRow[] {
+}): DigestFactRow[] {
   const competitors = new Set(
     input.allItems.map((item) => item.watchlistName).filter(Boolean),
   );
