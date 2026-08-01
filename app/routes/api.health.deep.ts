@@ -3,8 +3,10 @@ import type { LoaderFunctionArgs } from "react-router";
 import { getCloudflareContext } from "~/lib/cloudflare-context";
 import { readReleaseIdentity } from "~/lib/canary-release-identity.server";
 import type { AppEnv } from "~/lib/env.server";
+import { listScheduledObservationHealth } from "~/lib/scheduled-observation-health.server";
 
 type DependencyStatus = "ok" | "error" | "missing";
+type ScheduledWorkStatus = "ok" | "degraded" | "missing";
 
 type DeepHealthBody = {
   status: "ok" | "degraded";
@@ -13,6 +15,7 @@ type DeepHealthBody = {
   checks: {
     edge: "ok";
     d1: DependencyStatus;
+    scheduledWork: ScheduledWorkStatus;
   };
   releaseIdentity: ReturnType<typeof readReleaseIdentity>;
 };
@@ -37,7 +40,20 @@ export async function loader({ context }: LoaderFunctionArgs) {
   const cloudflare = getCloudflareContext(context);
   const env = cloudflare.env;
   const d1 = await probeD1(env);
-  const healthy = d1 === "ok";
+  let scheduledWork: ScheduledWorkStatus = "missing";
+  if (d1 === "ok") {
+    try {
+      const health = await listScheduledObservationHealth(env);
+      scheduledWork = health.some(
+        (entry) => entry.overdue || entry.futureEvidence,
+      )
+        ? "degraded"
+        : "ok";
+    } catch {
+      scheduledWork = "missing";
+    }
+  }
+  const healthy = d1 === "ok" && scheduledWork === "ok";
 
   const body: DeepHealthBody = {
     status: healthy ? "ok" : "degraded",
@@ -46,6 +62,7 @@ export async function loader({ context }: LoaderFunctionArgs) {
     checks: {
       edge: "ok",
       d1,
+      scheduledWork,
     },
     releaseIdentity: readReleaseIdentity(env),
   };

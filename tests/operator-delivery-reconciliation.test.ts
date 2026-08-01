@@ -1275,4 +1275,51 @@ describe("operator support-alert reconciliation", () => {
       harness.sqlite.prepare("SELECT COUNT(*) AS count FROM agent_action_audit").get(),
     ).toMatchObject({ count: 1 });
   });
+
+  it("reconciles an accepted provider-unknown support alert without rewriting acceptance time", async () => {
+    const harness = setup();
+    harness.sqlite.prepare(`
+      UPDATE delivery_attempt
+      SET status = 'sent',
+          error_message = NULL,
+          sent_at = '2026-07-15T18:00:30.000Z',
+          failed_at = NULL
+      WHERE id = 'support-attempt-1'
+    `).run();
+
+    await expect(
+      reconcileSupportAlertAttemptWithAudit(
+        { DB: harness.db } as never,
+        input({
+          outcome: "sent",
+          classification: "controlled_inbox_receipt",
+          evidenceReference: "support_inbox_receipt_sent_unknown",
+        }),
+      ),
+    ).resolves.toMatchObject({ ok: true, replayed: false, outcome: "sent" });
+
+    const attempt = harness.sqlite.prepare(`
+      SELECT
+        status, webhook_status, provider_status_last_seen_at,
+        sent_at, failed_at, error_message, payload_snapshot_json
+      FROM delivery_attempt
+      WHERE id = 'support-attempt-1'
+    `).get() as Record<string, unknown>;
+    expect(attempt).toMatchObject({
+      status: "sent",
+      webhook_status: "delivered",
+      provider_status_last_seen_at: "2026-07-15T18:01:00.000Z",
+      sent_at: "2026-07-15T18:00:30.000Z",
+      failed_at: null,
+      error_message: null,
+    });
+    expect(JSON.parse(String(attempt.payload_snapshot_json))).toMatchObject({
+      supportAlertProviderEvidence: {
+        outcome: "sent",
+        classification: "controlled_inbox_receipt",
+        reference: "support_inbox_receipt_sent_unknown",
+        observedAt: "2026-07-15T18:01:00.000Z",
+      },
+    });
+  });
 });

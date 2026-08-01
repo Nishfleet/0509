@@ -4,7 +4,7 @@ export const DAILY_DIGEST_CRON = "0 4 * * *";
 /** @deprecated The 04:00 cron now sends daily digests only. */
 export const DAILY_MONITORING_CRON = DAILY_DIGEST_CRON;
 export const WEEKLY_DIGEST_CRON = "0 5 * * MON";
-export { SCHEDULED_OBSERVATION_HEARTBEAT_CRON } from "../app/lib/scheduled-observation-health.server";
+export { SCHEDULED_OBSERVATION_GAP_CHECK_CRON } from "../app/lib/scheduled-observation-health.server";
 
 export type ScheduledTask =
   | {

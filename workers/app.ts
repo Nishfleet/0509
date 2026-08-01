@@ -27,8 +27,8 @@ import {
 } from "../app/lib/release-scheduled-observation.server";
 import { runRetentionSweep } from "../app/lib/retention.server";
 import {
-  sendScheduledObservationHeartbeat,
-  SCHEDULED_OBSERVATION_HEARTBEAT_CRON,
+  sendScheduledObservationGapAlert,
+  SCHEDULED_OBSERVATION_GAP_CHECK_CRON,
 } from "../app/lib/scheduled-observation-health.server";
 import { scheduleBillingLifecycleEmailRecovery } from "./delivery-recovery";
 import { scheduleDigestScheduleExhaustionRecovery } from "./digest-schedule-recovery";
@@ -137,29 +137,36 @@ export default {
       scheduledTime: controller.scheduledTime,
     });
 
-    if (controller.cron === SCHEDULED_OBSERVATION_HEARTBEAT_CRON) {
-      // Preserve the shared outbox drain without trying to record the heartbeat
+    if (controller.cron === SCHEDULED_OBSERVATION_GAP_CHECK_CRON) {
+      // This in-Worker check detects gaps among individual workload crons. The
+      // external GitHub deep-health probe detects a total Worker cron outage.
+      // Preserve the shared outbox drain without trying to record this check
       // cron in the release-soak observation table, whose contract intentionally
       // accepts only the four production workload schedules.
       scheduleBillingLifecycleEmailRecovery(env, ctx);
       ctx.waitUntil(
-        sendScheduledObservationHeartbeat(env).then(
+        sendScheduledObservationGapAlert(env).then(
           (result) => {
             if (result.reason !== "healthy") {
-              console.log("scheduled observation heartbeat completed", {
-                overdue: result.health.filter((entry) => entry.overdue).length,
+              console.log("scheduled observation gap check completed", {
+                unhealthy: result.health.filter(
+                  (entry) => entry.overdue || entry.futureEvidence,
+                ).length,
                 sent: result.sent,
               });
             }
           },
           (error) =>
-            reportScheduledTaskFailure(env, "scheduled_observation_heartbeat", error),
+            reportScheduledTaskFailure(env, "scheduled_observation_gap_check", error),
         ),
       );
       return;
     }
 
     const scheduledTask = resolveScheduledTask(controller.cron);
+    // Every cron also drains a bounded customer-email outbox. Keeping this
+    // before the warmup early return ensures a worker that stopped after the
+    // durable pre-dispatch claim cannot strand a finalized billing event.
     scheduleBillingLifecycleEmailRecovery(env, ctx, { observationContext });
 		const observe = <T>(taskName: ReleaseScheduledTaskName, taskPromise: Promise<T>) =>
 			observeScheduledTask(env, ctx, { ...observationContext, taskName }, taskPromise);
@@ -225,7 +232,7 @@ export default {
             leaseMs: resolveMonitoringOrchestrationLeaseMs(env),
           }),
         )).then(
-          (result) => {
+          async (result) => {
             const firstScans = result.firstScans ?? {
               redispatched: 0,
               cancelled: 0,
@@ -241,6 +248,13 @@ export default {
               firstScans.failures > 0
             ) {
               console.log("monitoring fanout reconciliation completed", result);
+            }
+            if (result.redispatchFailures > 0) {
+              await reportScheduledTaskFailure(
+                env,
+                "monitoring_fanout_reconciliation_redispatch",
+                new Error("one or more monitoring fanout redispatches failed"),
+              );
             }
           },
           (error) => reportScheduledTaskFailure(env, "monitoring_fanout_reconciliation", error),

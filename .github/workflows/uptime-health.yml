@@ -81,12 +81,11 @@ jobs:
           retention-days: 2
           compression-level: 0
 
-      # The shallow check above deliberately never touches D1, so it stays
-      # green through a database outage. This step is the one that pages on
-      # D1 failure: /api/health/deep returns 503 when the SELECT 1 fails, and
-      # curl treats 503 as retryable, so a blip must persist across three
-      # probes before the run fails.
-      - name: Check production deep health endpoint (D1)
+      # The shallow check above deliberately never touches D1. This external
+      # GitHub-hosted probe detects D1 failures and total Worker-cron outages;
+      # the in-Worker gap check can only detect individual workload cron gaps.
+      # GitHub notification receipt remains owner-unverified.
+      - name: Check production deep health endpoint (D1 and scheduled work)
         shell: bash
         env:
           DEEP_HEALTH_URL: https://0509.io/api/health/deep
@@ -105,6 +104,10 @@ jobs:
           checks = payload.get("checks") or {}
           if checks.get("d1") != "ok":
               raise SystemExit(f"deep health d1 check was {checks.get('d1')!r}, expected 'ok'")
+          if checks.get("scheduledWork") != "ok":
+              raise SystemExit(
+                  f"deep health scheduled-work check was {checks.get('scheduledWork')!r}, expected 'ok'"
+              )
           identity = payload.get("releaseIdentity") or {}
           if identity.get("workerVersionId") != os.environ["EXPECTED_WORKER_VERSION"]:
               raise SystemExit("deep health worker version did not match shallow health")

@@ -3,6 +3,7 @@ import {
   RELEASE_SCHEDULE_CRONS,
   type ReleaseScheduledTaskName,
 } from "~/lib/release-scheduled-observation-contract";
+import { SCHEDULED_OBSERVATION_MAX_FUTURE_SKEW_MS } from "~/lib/scheduled-observation-health.server";
 
 export type { ReleaseScheduledTaskName } from "~/lib/release-scheduled-observation-contract";
 
@@ -247,6 +248,12 @@ function validateRecordInput(input: RecordInput) {
   if (!SAFE_CRONS.has(input.cron)) throw new Error("unsafe_release_soak_cron");
   if (!Number.isSafeInteger(input.scheduledTime) || input.scheduledTime <= 0) {
     throw new Error("unsafe_release_soak_scheduled_time");
+  }
+  if (
+    input.scheduledTime >
+    input.completedAt.getTime() + SCHEDULED_OBSERVATION_MAX_FUTURE_SKEW_MS
+  ) {
+    throw new Error("unsafe_release_soak_future_scheduled_time");
   }
   const durationMs = input.completedAt.getTime() - input.startedAt.getTime();
   if (!Number.isSafeInteger(durationMs) || durationMs < 0 || durationMs > 900_000) {
