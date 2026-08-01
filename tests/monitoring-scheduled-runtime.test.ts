@@ -721,4 +721,146 @@ describe("runScheduledMonitoring scheduled runtime selection", () => {
     );
     expect(sixHour).toHaveLength(27);
   });
+
+  it("skips a workspace instead of widening cadence when its plan cannot be read", async () => {
+    const planFailure = new Error("D1 plan lookup failed");
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockRejectedValue(planFailure),
+      PLAN_LIMITS: {},
+    }));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const watchlists: WatchlistRecord[] = Array.from({ length: 27 }, (_, index) => ({
+      id: `watch-${String(index + 1).padStart(2, "0")}`,
+      userId: "agency-user",
+      name: `Competitor ${index + 1}`,
+      targetType: "advertiser" as const,
+      targetId: `target-${index + 1}`,
+      targetFingerprint: `fp-${index + 1}`,
+      targetLabel: `target-${index + 1}`,
+      targetCountry: null,
+      isActive: true,
+      lastScannedAt: null,
+      createdAt: `2026-03-01T00:${String(index).padStart(2, "0")}:00.000Z`,
+      updatedAt: `2026-03-01T00:${String(index).padStart(2, "0")}:00.000Z`,
+    }));
+    const { filterWatchlistsByPriorityScanSlots } = await import("~/lib/monitoring.server");
+
+    const eligible = await filterWatchlistsByPriorityScanSlots(
+      {} as never,
+      watchlists,
+      Date.parse("2026-07-01T03:00:00.000Z"),
+    );
+
+    expect(eligible).toEqual([]);
+    expect(consoleError).toHaveBeenCalledWith(
+      "[monitoring] Plan lookup failed; scheduled scans were skipped for the workspace.",
+      {
+        workspaceUserId: "agency-user",
+        watchlistCount: 27,
+        error: planFailure,
+      },
+    );
+  });
+
+  it("fails the scheduled task after preserving work for readable workspaces", async () => {
+    const planFailure = new Error("D1 plan lookup failed");
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn()
+        .mockRejectedValueOnce(planFailure)
+        .mockResolvedValue("agency"),
+      PLAN_LIMITS: {},
+    }));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const readableWatchlist = {
+      ...activeWatchlists[1],
+      userId: "user-2",
+    };
+    mockMonitoringDependencies({
+      provider: "meta_library_browser",
+      watchlists: [activeWatchlists[0], readableWatchlist],
+    });
+    scheduleWatchlistFanoutMock.mockResolvedValueOnce({
+      eligible: 1,
+      queued: 1,
+      duplicates: 0,
+      dispatchFailures: 0,
+      shadowOnly: 0,
+      inlineFallback: false,
+    });
+    const env = {
+      BROWSER: {
+        fetch: vi.fn(),
+      },
+      DB: createFanoutDbMock(),
+      MONITORING_WORKFLOW: {
+        create: vi.fn(),
+      },
+      MONITORING_FANOUT_MODE: "fanout",
+    };
+    const { runScheduledMonitoring } = await import("~/lib/monitoring.server");
+
+    await expect(
+      runScheduledMonitoring(env as never, {
+        includeDigests: false,
+        cron: "0 */3 * * *",
+        scheduledTime: Date.parse("2026-07-01T03:00:00.000Z"),
+      }),
+    ).rejects.toThrow(
+      "Scheduled monitoring skipped 1 workspace(s) because plan lookup failed.",
+    );
+    expect(scheduleWatchlistFanoutMock).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({
+        watchlists: [readableWatchlist],
+      }),
+    );
+    expect(consoleError).toHaveBeenCalledWith(
+      "[monitoring] Plan lookup failed; scheduled scans were skipped for the workspace.",
+      expect.objectContaining({
+        workspaceUserId: "user-1",
+        error: planFailure,
+      }),
+    );
+  });
+
+  it("skips a workspace when its plan lookup returns no value", async () => {
+    vi.doMock("~/lib/plan.server", () => ({
+      getUserPlan: vi.fn().mockResolvedValue(null),
+      PLAN_LIMITS: {},
+    }));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const watchlist: WatchlistRecord = {
+      id: "watch-null-plan",
+      userId: "unknown-plan-user",
+      name: "Unknown plan watch",
+      targetType: "advertiser",
+      targetId: "unknown-plan",
+      targetFingerprint: "fp-unknown-plan",
+      targetLabel: "Unknown plan",
+      targetCountry: null,
+      isActive: true,
+      lastScannedAt: null,
+      createdAt: "2026-03-01T00:00:00.000Z",
+      updatedAt: "2026-03-01T00:00:00.000Z",
+    };
+    const { filterWatchlistsByPriorityScanSlots } = await import("~/lib/monitoring.server");
+
+    await expect(
+      filterWatchlistsByPriorityScanSlots(
+        {} as never,
+        [watchlist],
+        Date.parse("2026-07-01T03:00:00.000Z"),
+      ),
+    ).resolves.toEqual([]);
+    expect(consoleError).toHaveBeenCalledWith(
+      "[monitoring] Plan lookup failed; scheduled scans were skipped for the workspace.",
+      {
+        workspaceUserId: "unknown-plan-user",
+        watchlistCount: 1,
+        error: expect.objectContaining({
+          message: "Plan lookup returned no value.",
+        }),
+      },
+    );
+  });
 });

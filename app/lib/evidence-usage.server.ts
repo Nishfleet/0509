@@ -67,7 +67,9 @@ export class EvidenceTopUpReadError extends Error {
   }
 }
 
-export function isEvidenceTopUpReadError(error: unknown): error is EvidenceTopUpReadError {
+export function isEvidenceTopUpReadError(
+  error: unknown,
+): error is EvidenceTopUpReadError {
   return error instanceof EvidenceTopUpReadError;
 }
 
