@@ -53,7 +53,49 @@ export function parseExactLoopbackOrigin(value) {
  */
 export function buildLocalReleaseServerCommand(origin) {
   const parsed = parseExactLoopbackOrigin(origin);
-  return `node scripts/e2e-prepare-local.mjs && E2E_TEST_MODE=1 E2E_PROVIDER_NETWORK_DENY=1 E2E_SEARCH_ROLLOUT_MODE=v2 AUTH_PROVIDER=better-auth BETTER_AUTH_SECRET=local-test-secret-local-test-secret-local BETTER_AUTH_URL=${parsed.origin} APP_ORIGIN=${parsed.origin} ./node_modules/.bin/react-router dev --host 127.0.0.1 --port ${parsed.port} --strictPort`;
+  const server = `E2E_TEST_MODE=1 E2E_PROVIDER_NETWORK_DENY=1 E2E_SEARCH_ROLLOUT_MODE=v2 AUTH_PROVIDER=better-auth BETTER_AUTH_SECRET=local-test-secret-local-test-secret-local BETTER_AUTH_URL=${parsed.origin} APP_ORIGIN=${parsed.origin} ./node_modules/.bin/react-router dev --host 127.0.0.1 --port ${parsed.port} --strictPort`;
+  // The self-hosted verify runners intermittently fail the dev server at boot
+  // with `uv_interface_addresses returned Unknown system error 97`
+  // (EAFNOSUPPORT) while Vite enumerates interfaces for its startup banner.
+  // It is environmental and transient — a second attempt starts cleanly.
+  //
+  // Retry ONLY a fast boot failure. If the server stayed up for
+  // LOCAL_RELEASE_SERVER_BOOT_SECONDS or longer, its exit is a real result
+  // (Playwright tearing it down, or a genuine crash) and is passed straight
+  // through. This cannot mask a server that starts and then misbehaves.
+  return `node scripts/e2e-prepare-local.mjs && ${buildLocalReleaseServerRetryScript(server)}`;
+}
+
+/**
+ * Seconds a dev server must survive before an exit counts as a real result
+ * rather than a boot failure worth retrying.
+ */
+export const LOCAL_RELEASE_SERVER_BOOT_SECONDS = 15;
+
+export const LOCAL_RELEASE_SERVER_MAX_ATTEMPTS = 3;
+export const LOCAL_RELEASE_SERVER_RETRY_DELAY_SECONDS = 3;
+
+/**
+ * Build the bounded shell retry loop. The command parameters are shell
+ * fragments so tests can inject deterministic clocks and pauses without
+ * starting a server or sleeping.
+ *
+ * @param {string} serverCommand
+ * @param {{ clockStartCommand?: string, clockEndCommand?: string, pauseCommand?: string }} [commands]
+ * @returns {string}
+ */
+export function buildLocalReleaseServerRetryScript(
+  serverCommand,
+  {
+    clockStartCommand = "date +%s",
+    clockEndCommand = "date +%s",
+    pauseCommand = `sleep ${LOCAL_RELEASE_SERVER_RETRY_DELAY_SECONDS}`,
+  } = {},
+) {
+  if (typeof serverCommand !== "string" || serverCommand.length === 0) {
+    throw new Error("invalid_local_release_server_command");
+  }
+  return `for attempt in 1 2 3; do started=$(${clockStartCommand}); ${serverCommand}; rc=$?; ran=$(( $(${clockEndCommand}) - started )); if [ "$rc" -eq 0 ] || [ "$ran" -ge ${LOCAL_RELEASE_SERVER_BOOT_SECONDS} ] || [ "$attempt" -eq ${LOCAL_RELEASE_SERVER_MAX_ATTEMPTS} ]; then exit "$rc"; fi; echo "local-release-server: boot failed in ${"${ran}"}s (attempt ${"${attempt}"}/${LOCAL_RELEASE_SERVER_MAX_ATTEMPTS}), retrying" >&2; ${pauseCommand}; done; exit 1`;
 }
 
 /**

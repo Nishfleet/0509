@@ -1,15 +1,39 @@
+import { spawnSync } from "node:child_process";
 import { createServer } from "node:net";
 import { describe, expect, it } from "vitest";
 
 // @ts-ignore JavaScript release-server module is intentionally exercised through Vitest.
 const {
   buildLocalReleaseServerCommand,
+  buildLocalReleaseServerRetryScript,
+  LOCAL_RELEASE_SERVER_BOOT_SECONDS,
+  LOCAL_RELEASE_SERVER_MAX_ATTEMPTS,
+  LOCAL_RELEASE_SERVER_RETRY_DELAY_SECONDS,
   createLocalReleaseServerIdentity,
   isLocalReleaseServerIdentity,
   parseExactLoopbackOrigin,
   reserveLocalReleaseOrigin,
   resolveLocalReleaseRunTimeout,
 } = await import("../scripts/local-release-server.mjs");
+
+function runRetryScript(exitCodes: number[], runtimes: number[]) {
+  const serverCases = exitCodes
+    .map((exitCode, index) => `${index + 1}) printf 'invoke:%s\\n' "$attempt"; return ${exitCode};;`)
+    .join(" ");
+  const clockEndCommand = `${runtimes
+    .map((runtime, index) => `${index === 0 ? "if" : "elif"} [ "$attempt" -eq ${index + 1} ]; then printf '%s' '${runtime}';`)
+    .join(" ")} fi`;
+  const script = `
+server() { case "$attempt" in ${serverCases} esac; }
+record_pause() { printf 'pause:%s\\n' "$1"; }
+  ${buildLocalReleaseServerRetryScript("server", {
+    clockStartCommand: "printf '%s' '0'",
+    clockEndCommand,
+    pauseCommand: "record_pause 3",
+  })}
+`;
+  return spawnSync("bash", ["-c", script], { encoding: "utf8" });
+}
 
 function listenOnLoopback(server: ReturnType<typeof createServer>, port = 0) {
   return new Promise<number>((resolve, reject) => {
@@ -91,6 +115,50 @@ describe("local release proof server identity", () => {
     expect(command).toContain("APP_ORIGIN=http://127.0.0.1:43127");
     expect(command).toContain("--port 43127 --strictPort");
     expect(command).not.toContain("4179");
+  });
+
+  it("retries a fast failure once, then returns a successful server exit", () => {
+    const result = runRetryScript([17, 0], [14, 0]);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe("invoke:1\npause:3\ninvoke:2\n");
+    expect(result.stderr).toContain("attempt 1/3");
+  });
+
+  it("returns zero immediately without a pause when the first server exits cleanly", () => {
+    const result = runRetryScript([0], [0]);
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe("invoke:1\n");
+    expect(result.stderr).toBe("");
+  });
+
+  it("returns the third fast failure without a final retry log or pause", () => {
+    const result = runRetryScript([11, 13, 17], [14, 14, 14]);
+    expect(result.status).toBe(17);
+    expect(result.stdout).toBe("invoke:1\npause:3\ninvoke:2\npause:3\ninvoke:3\n");
+    expect(result.stderr).toContain("attempt 1/3");
+    expect(result.stderr).toContain("attempt 2/3");
+    expect(result.stderr).not.toContain("attempt 3/3");
+  });
+
+  it("retries at 14 seconds but returns immediately at the 15-second threshold", () => {
+    const fast = runRetryScript([19, 0], [14, 0]);
+    expect(fast.status).toBe(0);
+    expect(fast.stdout).toContain("pause:3\n");
+
+    const threshold = runRetryScript([23], [15]);
+    expect(threshold.status).toBe(23);
+    expect(threshold.stdout).toBe("invoke:1\n");
+    expect(threshold.stderr).toBe("");
+  });
+
+  it("keeps the public command bounded to three attempts and a 15-second window", () => {
+    const command = buildLocalReleaseServerCommand("http://127.0.0.1:43127");
+    expect(command).toContain("for attempt in 1 2 3");
+    expect(command).toContain(`-ge ${LOCAL_RELEASE_SERVER_BOOT_SECONDS}`);
+    expect(command).toContain(`sleep ${LOCAL_RELEASE_SERVER_RETRY_DELAY_SECONDS}`);
+    expect(command).toContain(`attempt ${"${attempt}"}/${LOCAL_RELEASE_SERVER_MAX_ATTEMPTS}`);
+    expect(LOCAL_RELEASE_SERVER_BOOT_SECONDS).toBe(15);
+    expect(LOCAL_RELEASE_SERVER_MAX_ATTEMPTS).toBe(3);
   });
 
   it("bounds the browser process instead of hiding hangs behind unbounded waits", () => {
