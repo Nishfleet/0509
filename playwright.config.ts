@@ -58,7 +58,7 @@ export default defineConfig({
       // server and skip themselves unless their package flag is set, so
       // ordinary local-auth runs are unaffected.
       testMatch:
-        /(local-authenticated|bl030-capture|bl034-capture|bl040-capture)\.spec\.ts/,
+        /(local-authenticated|bl030-capture|bl033a-capture|bl034-capture|bl040-capture)\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         baseURL: localBaseURL,
