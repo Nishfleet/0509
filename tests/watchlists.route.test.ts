@@ -2484,7 +2484,11 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain('href="/app/watchlists">All competitors</a>');
     expect(markup.match(/id="competitor-detail"/g)).toHaveLength(1);
     expect(markup).not.toContain('aria-label="Competitors"');
-    expect(markup).not.toContain('class="f9-wk-split');
+    // BL-035 keeps a split INSIDE the detail (panel + fact rail). What must be
+    // gone is the board's list/peek split that used to sit under it.
+    expect(markup).not.toContain('class="f9-wk-split is-single"');
+    expect(markup).not.toContain('class="f9-wk-split-list"');
+    expect(markup).toContain('class="f9-wk-split is-wide f9-bl035-split"');
   });
 
   it("does not turn a failed capture-window rollup into a quiet or zero finding", async () => {
@@ -2497,7 +2501,10 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain("Unavailable — refresh to try again");
     expect(markup).not.toContain("Checked, and nothing has changed in 30 days.");
     expect(markup).not.toContain('class="f9-ed-number-value">0</p>');
-    expect(markup).toContain('class="f9-ed-status-value">Recent totals unavailable</span>');
+    // The status strip is gone in BL-035, so the same statement is carried by
+    // the working header's context line and the caught number card.
+    expect(markup).toContain("Recent totals unavailable");
+    expect(markup).toContain('class="f9-ed-number-value">Unavailable</p>');
   });
 
   it("does not promise automatic checks while source access is blocked", async () => {
