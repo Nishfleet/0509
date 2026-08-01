@@ -4,6 +4,9 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const { runVersionBoundGateC, sanitizeProofDiagnostics, defaultHealthAnchor } = await import("../scripts/verify-post-deploy-release.mjs");
+const { createDeferredBackupDisposition } = await import(
+  "../scripts/deploy-production-plan.mjs"
+);
 const roots: string[] = [];
 
 function evidencePath() {
@@ -20,6 +23,17 @@ function proofPayload() {
     runId: "run-1",
     digestRunId: "digest-1",
     proofCaptureId: "proof-1",
+    proofEmail: {
+      gateRunId: "gate-c-worker-v1",
+      dispatchStartedAt: "2026-07-18T00:00:00.000Z",
+      subject: "0509 Gate C proof gate-c-worker-v1",
+      provider: {
+        status: "sent",
+        accepted: true,
+        messageId: "provider-message-1",
+        error: null,
+      },
+    },
   };
 }
 
@@ -29,6 +43,100 @@ function backupReport() {
     remoteObjectAbsent: true,
     lifecycleConfigSha256: "a".repeat(64),
     policySha256: "b".repeat(64),
+  };
+}
+
+const PRODUCTION_HEALTH_URLS = [
+  "https://0509.io/api/health",
+  "https://www.0509.io/api/health",
+  "https://api.0509.io/api/health",
+];
+
+function releaseCompatibleProductionMetaReport(options: {
+  blockers?: string[];
+  digestAttempts?: number;
+  digestSent?: number;
+  emailAttempts?: number;
+  emailSent?: number;
+  latestAttemptAt?: string | null;
+  healthOk?: boolean;
+  blockingFailures?: unknown[];
+  metaStatus?: string;
+  metaReadinessOk?: boolean;
+} = {}) {
+  const healthChecks = PRODUCTION_HEALTH_URLS.map((url) => ({
+    ok: options.healthOk ?? true,
+    status: 200,
+    app: "0509",
+    expectedApp: "0509",
+    expectedWorkerVersionId: "worker-v1",
+    expectedSearchRolloutMode: "shadow",
+    releaseIdentity: {
+      workerVersionId: "worker-v1",
+      tag: null,
+      timestamp: "2026-07-18T00:00:00.000Z",
+      searchRolloutMode: "shadow",
+    },
+    releaseIdentityOk: true,
+    message: null,
+    url,
+  }));
+  const blockingFailures = options.blockingFailures ?? [];
+  const metaStatus = options.metaStatus ?? "ok";
+  const metaReadinessOk = options.metaReadinessOk ?? true;
+  return {
+    passed: false,
+    generatedAt: "2026-07-18T00:00:01.000Z",
+    baseUrl: "https://0509.io",
+    health: healthChecks[0],
+    healthChecks,
+    expectedWorkerVersionId: "worker-v1",
+    expectedSearchRolloutMode: "shadow",
+    launchReadiness: {
+      ok: false,
+      status: 503,
+      message: "no_recent_email_delivery_attempt, no_recent_email_sent",
+      url: "https://0509.io/api/launch-readiness",
+      blockers: options.blockers ?? [
+        "no_recent_email_delivery_attempt",
+        "no_recent_email_sent",
+      ],
+      signals: {
+        digestDelivery: {
+          recentAttempts: options.digestAttempts ?? 0,
+          recentSent: options.digestSent ?? 0,
+          latestAttemptAt: null,
+        },
+        emailDelivery: {
+          recentAttempts: options.emailAttempts ?? 3,
+          recentSent: options.emailSent ?? 3,
+          latestAttemptAt:
+            options.latestAttemptAt === undefined
+              ? "2026-07-18T00:00:00.131Z"
+              : options.latestAttemptAt,
+        },
+      },
+      metaAdsBeta: { ok: metaReadinessOk, blockers: [] },
+    },
+    queries: ["nykaa"],
+    country: "India",
+    mode: "advertiser",
+    requireFreshLive: true,
+    freshLiveBypass: {
+      required: true,
+      configured: true,
+      proved: true,
+      message: null,
+    },
+    blockingFailures,
+    metaAdsBeta: {
+      beta: true,
+      strict: false,
+      status: metaStatus,
+      failures: blockingFailures,
+      readiness: { ok: metaReadinessOk },
+    },
+    results: [],
   };
 }
 
@@ -206,6 +314,166 @@ describe("version-bound Gate C orchestrator", () => {
     });
   });
 
+  it("runs the exact deferred immediate gate once without backup lifecycle or soak evidence", async () => {
+    const releaseSha = "f".repeat(40);
+    const backupLifecycle = vi.fn(async () => ({
+      ok: true,
+      report: backupReport(),
+    }));
+    const proof = vi.fn(async () => ({ ok: true, payload: proofPayload() }));
+    const cleanup = vi.fn(async () => ({ ok: true }));
+    const path = evidencePath();
+
+    const result = await runVersionBoundGateC({
+      workerVersionId: "worker-v1",
+      token: "token",
+      evidencePath: path,
+      releaseSha,
+      backupProofStatus: "deferred",
+      backupProofDisposition: createDeferredBackupDisposition(releaseSha),
+      dependencies: {
+        healthAnchor: vi.fn(async () => ({ ok: true })),
+        backupLifecycle,
+        pricing: vi.fn(async () => ({ ok: true })),
+        billing: vi.fn(async () => ({ ok: true })),
+        proof,
+        productionCanary: vi.fn(async () => ({
+          ok: true,
+          report: { passed: true },
+        })),
+        cleanup,
+      },
+    });
+
+    expect(result.passed).toBe(true);
+    expect(backupLifecycle).not.toHaveBeenCalled();
+    expect(proof).toHaveBeenCalledTimes(1);
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    const journal = JSON.parse(readFileSync(path, "utf8"));
+    expect(journal).toMatchObject({
+      gatePhase: "immediate",
+      backupProofStatus: "deferred",
+      status: "passed",
+      steps: {
+        proof_email: {
+          status: "passed",
+          detail: {
+            gateRunId: "gate-c-worker-v1",
+            dispatchStartedAt: "2026-07-18T00:00:00.000Z",
+            subject: "0509 Gate C proof gate-c-worker-v1",
+          },
+        },
+        proof_cleanup: { status: "passed" },
+      },
+    });
+    expect(Object.keys(journal.steps)).not.toContain("backup_lifecycle");
+    expect(journal.backupLifecycleSummary).toBeUndefined();
+    expect(Object.keys(journal.steps.proof_email.detail).sort()).toEqual([
+      "dispatchStartedAt",
+      "gateRunId",
+      "subject",
+    ]);
+    expect(JSON.stringify(journal.steps.proof_email.detail)).not.toMatch(
+      /accepted|messageId|error|provider/u,
+    );
+  });
+
+  it("accepts only the same-run proof for the exact digest-only production-meta gap", async () => {
+    const productionCanary = vi.fn(async () => ({
+      ok: false,
+      report: releaseCompatibleProductionMetaReport(),
+    }));
+    const result = await runVersionBoundGateC({
+      workerVersionId: "worker-v1",
+      token: "token",
+      evidencePath: evidencePath(),
+      dependencies: {
+        healthAnchor: vi.fn(async () => ({ ok: true })),
+        backupLifecycle: vi.fn(async () => ({ ok: true, report: backupReport() })),
+        pricing: vi.fn(async () => ({ ok: true })),
+        billing: vi.fn(async () => ({ ok: true })),
+        proof: vi.fn(async () => ({ ok: true, payload: proofPayload() })),
+        productionCanary,
+        cleanup: vi.fn(async () => ({ ok: true })),
+      },
+    });
+
+    expect(result.passed).toBe(true);
+    expect(result.journal.steps.production_meta?.status).toBe("passed");
+    expect(result.journal.productionSummary).toContain(
+      "release compatibility: same-run internal proof accepted; customer digest readiness remains blocked",
+    );
+    expect(result.journal.productionSummary).toContain("ops readiness: failed");
+    expect(productionCanary).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    [
+      "an extra blocker",
+      { blockers: ["no_recent_email_delivery_attempt", "no_recent_email_sent", "no_recent_monitoring_run"] },
+    ],
+    ["missing generic email attempt", { emailAttempts: 0 }],
+    ["missing generic email acceptance", { emailSent: 0 }],
+    ["nonzero customer digest activity", { digestAttempts: 1 }],
+    ["a stale generic email attempt", { latestAttemptAt: "2026-07-17T23:59:59.999Z" }],
+    ["a malformed generic email timestamp", { latestAttemptAt: "not-a-timestamp" }],
+    ["a failed exact-worker health check", { healthOk: false }],
+    ["a fresh-live search failure", { blockingFailures: [{ query: "nykaa", status: "empty" }] }],
+    ["a Meta readiness failure", { metaStatus: "needs_proof", metaReadinessOk: false }],
+  ])("keeps production meta fatal for %s", async (_label, reportOptions) => {
+    const result = await runVersionBoundGateC({
+      workerVersionId: "worker-v1",
+      token: "token",
+      evidencePath: evidencePath(),
+      dependencies: {
+        healthAnchor: vi.fn(async () => ({ ok: true })),
+        backupLifecycle: vi.fn(async () => ({ ok: true, report: backupReport() })),
+        pricing: vi.fn(async () => ({ ok: true })),
+        billing: vi.fn(async () => ({ ok: true })),
+        proof: vi.fn(async () => ({ ok: true, payload: proofPayload() })),
+        productionCanary: vi.fn(async () => ({
+          ok: false,
+          report: releaseCompatibleProductionMetaReport(reportOptions),
+        })),
+        cleanup: vi.fn(async () => ({ ok: true })),
+      },
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.journal.errors).toContain("production_meta_failed");
+  });
+
+  it.each([undefined, "not-a-timestamp"])(
+    "does not run production meta when proof T0 is %s",
+    async (dispatchStartedAt) => {
+      const payload = proofPayload();
+      if (dispatchStartedAt === undefined) {
+        delete (payload.proofEmail as { dispatchStartedAt?: string }).dispatchStartedAt;
+      } else {
+        payload.proofEmail.dispatchStartedAt = dispatchStartedAt;
+      }
+      const productionCanary = vi.fn();
+      const result = await runVersionBoundGateC({
+        workerVersionId: "worker-v1",
+        token: "token",
+        evidencePath: evidencePath(),
+        dependencies: {
+          healthAnchor: vi.fn(async () => ({ ok: true })),
+          backupLifecycle: vi.fn(async () => ({ ok: true, report: backupReport() })),
+          pricing: vi.fn(async () => ({ ok: true })),
+          billing: vi.fn(async () => ({ ok: true })),
+          proof: vi.fn(async () => ({ ok: true, payload })),
+          productionCanary,
+          cleanup: vi.fn(async () => ({ ok: true })),
+        },
+      });
+
+      expect(result.passed).toBe(false);
+      expect(result.journal.errors).toContain("proof_email_dispatch_invalid");
+      expect(productionCanary).not.toHaveBeenCalled();
+    },
+  );
+
   it("does not hide a primary failure and still runs cleanup and the final identity check", async () => {
     const order: string[] = [];
     const result = await runVersionBoundGateC({
@@ -273,6 +541,17 @@ describe("version-bound Gate C orchestrator", () => {
             runId: "run-loser",
             proofCaptureId: "proof-loser",
             blockers: ["digest_period_claim_conflict"],
+            proofEmail: {
+              gateRunId: "gate-c-worker-v1",
+              dispatchStartedAt: "2026-07-18T00:00:00.000Z",
+              subject: "0509 Gate C proof gate-c-worker-v1",
+              provider: {
+                status: "failed",
+                accepted: false,
+                messageId: null,
+                error: "provider rejected the message",
+              },
+            },
           },
         })),
         productionCanary: vi.fn(),
@@ -292,6 +571,7 @@ describe("version-bound Gate C orchestrator", () => {
 
   it("persists identifier-safe proof blockers and sanitized delivery on proof failure", async () => {
     const path = evidencePath();
+    const productionCanary = vi.fn();
     const result = await runVersionBoundGateC({
       workerVersionId: "worker-v1",
       token: "token",
@@ -310,6 +590,17 @@ describe("version-bound Gate C orchestrator", () => {
             digestRunId: "digest-1",
             proofCaptureId: "proof-1",
             blockers: ["no_digest_delivery_sent"],
+            proofEmail: {
+              gateRunId: "gate-c-worker-v1",
+              dispatchStartedAt: "2026-07-18T00:00:00.000Z",
+              subject: "0509 Gate C proof gate-c-worker-v1",
+              provider: {
+                status: "pending",
+                accepted: false,
+                messageId: null,
+                error: null,
+              },
+            },
             // The route already sanitizes this via sanitizeDeliveryForCanary.
             delivery: {
               attempts: 1,
@@ -318,13 +609,14 @@ describe("version-bound Gate C orchestrator", () => {
             },
           },
         })),
-        productionCanary: vi.fn(),
+        productionCanary,
         cleanup: vi.fn(async () => ({ ok: true })),
       },
     });
 
     expect(result.passed).toBe(false);
     expect(result.journal.errors).toContain("proof_email_failed");
+    expect(productionCanary).not.toHaveBeenCalled();
     // Gate C is NOT weakened: this proof failed, and it stays failed.
     const journal = JSON.parse(readFileSync(path, "utf8"));
     expect(journal.proofDiagnostics).toEqual({
@@ -347,6 +639,8 @@ describe("version-bound Gate C orchestrator", () => {
       workerVersionId: "worker-v1",
       searchRolloutMode: "shadow",
       gateRunId: "gate-c-worker-v1",
+      gatePhase: "immediate",
+      backupProofStatus: "required",
       status: "running",
       steps: { proof_email: { status: "started", at: "2026-07-18T00:00:01.000Z" } },
       errors: [],
@@ -393,6 +687,8 @@ describe("version-bound Gate C orchestrator", () => {
       workerVersionId: "worker-v1",
       searchRolloutMode: "shadow",
       gateRunId: "gate-c-worker-v1",
+      gatePhase: "immediate",
+      backupProofStatus: "required",
       status: "running",
       steps: { backup_lifecycle: { status: "started", at: "2026-07-18T00:00:01.000Z" } },
       errors: [],
@@ -492,6 +788,8 @@ describe("version-bound Gate C orchestrator", () => {
       workerVersionId: "worker-v1",
       searchRolloutMode: "shadow",
       gateRunId: "gate-c-worker-v1",
+      gatePhase: "immediate",
+      backupProofStatus: "required",
       status: "passed",
       steps: {},
       errors: [],
@@ -545,7 +843,7 @@ describe("version-bound Gate C orchestrator", () => {
 
   it("rejects passed evidence older than 24 hours before any recheck", async () => {
     const path = evidencePath();
-    const base = {
+    const base: any = {
       schemaVersion: 1,
       generatedAt: "2026-07-16T00:00:00.000Z",
       completedAt: "2026-07-16T00:01:00.000Z",
@@ -561,6 +859,17 @@ describe("version-bound Gate C orchestrator", () => {
       cleanupTicket: { runId: "run-1", digestRunId: "digest-1", proofCaptureId: "proof-1" },
       productionSummary: "passed",
       backupLifecycleSummary: backupReport(),
+      gatePhase: "immediate",
+      backupProofStatus: "required",
+    };
+    base.steps.proof_email = {
+      status: "passed",
+      at: "2026-07-16T00:00:00.000Z",
+      detail: proofPayload().proofEmail && {
+        gateRunId: proofPayload().proofEmail.gateRunId,
+        dispatchStartedAt: proofPayload().proofEmail.dispatchStartedAt,
+        subject: proofPayload().proofEmail.subject,
+      },
     };
     writeFileSync(path, JSON.stringify(base));
     chmodSync(path, 0o600);

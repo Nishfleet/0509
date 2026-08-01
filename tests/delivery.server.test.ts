@@ -18,6 +18,21 @@ function emailSendPayload(sendMock: ReturnType<typeof vi.fn>) {
   return sendMock.mock.calls[0]?.[0];
 }
 
+function mockAtomicEmailProvision() {
+  return vi.fn().mockResolvedValue({
+    id: "email-target-1",
+    userId: "user-1",
+    watchlistId: null,
+    channel: "email",
+    targetValue: "owner@example.com",
+    validationStatus: "validated",
+    isValidated: true,
+    isOptedIn: true,
+    isPaused: false,
+    optedOutAt: null,
+  });
+}
+
 beforeEach(() => {
   vi.resetModules();
   emailSend = vi.fn();
@@ -45,6 +60,8 @@ afterEach(() => {
   vi.useRealTimers();
   vi.doUnmock("~/lib/email-verification.server");
   vi.doUnmock("~/lib/plan.server");
+  vi.doUnmock("~/lib/data/delivery-records-attempts.server");
+  vi.doUnmock("~/lib/delivery-attempt-lease");
 });
 
 describe("deliverWeeklyDigest", () => {
@@ -98,6 +115,7 @@ describe("deliverWeeklyDigest", () => {
       }),
       legacyWorkspaceDeliveryDefaults: vi.fn(),
       listDeliveryTargets: vi.fn().mockResolvedValue([]),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: upsertDeliveryTarget,
       upsertDeliveryTarget,
       upsertDigestDelivery,
     }));
@@ -237,6 +255,240 @@ expectedWebhookStatus:"provider_unknown",
         lastSuccessfulAttemptId: "attempt-1",
         lastSuccessfulDeliveryAt: expect.any(String),
       }),
+    );
+  });
+
+  it("uses the Gate C subject and the pre-provider T0 in the durable proof summary", async () => {
+    const t0 = "2026-08-01T00:00:00.000Z";
+    const t1 = "2026-08-01T00:05:00.000Z";
+    vi.useFakeTimers();
+    vi.setSystemTime(t0);
+    emailSend = vi.fn().mockResolvedValue({ messageId: "gate-c-message" });
+    const sendMock = emailSend;
+    const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-gate-c");
+    const updateDeliveryAttemptResult = vi.fn().mockResolvedValue(true);
+    const upsertDigestDelivery = vi.fn();
+    const markInstantDeliveryDispatchStarted = vi.fn().mockImplementation(async () => {
+      vi.setSystemTime(t1);
+      return t0;
+    });
+    const target = {
+      id: "email-target-gate-c",
+      userId: "user-gate-c",
+      watchlistId: null,
+      channel: "email",
+      targetValue: "owner@example.com",
+      validationStatus: "validated",
+      isValidated: true,
+      isOptedIn: true,
+      optInSource: "account_email",
+      optedInAt: t0,
+      isPaused: false,
+      pausedAt: null,
+      optedOutAt: null,
+      templateEligible: false,
+      lastSuccessfulDeliveryAt: null,
+      lastSuccessfulAttemptId: null,
+      providerIdentifier: null,
+      metadata: {},
+      createdAt: t0,
+      updatedAt: t0,
+    };
+
+    vi.doMock("~/lib/delivery-attempt-lease", () => ({
+      DIGEST_PROVIDER_CLAIM_PROTOCOL: "digest_preclaim_v1",
+      INSTANT_PROVIDER_CLAIM_PROTOCOL: "instant_preclaim_v1",
+      hasTrustedDigestProviderRetryEvidence: vi.fn().mockReturnValue(false),
+      hasTrustedInstantProviderRetryEvidence: vi.fn().mockReturnValue(false),
+      isStalePreDispatchAttempt: vi.fn().mockReturnValue(false),
+      markDeliveryAttemptProviderDispatch: vi.fn().mockResolvedValue(t0),
+    }));
+    vi.doMock("~/lib/data/delivery-records-attempts.server", () => ({
+      claimInstantDeliveryAttempt: vi.fn(),
+      markInstantDeliveryDispatchStarted,
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds: vi.fn().mockResolvedValue([]),
+      createDeliveryAttempt,
+      updateDeliveryAttemptResult,
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
+        id: "workspace-gate-c",
+        userId: "user-gate-c",
+        sensitivityMode: "balanced",
+        instantEnabled: false,
+        digestEnabled: true,
+        digestCadencePreference: "plan_default",
+        emailEnabled: true,
+        whatsappEnabled: false,
+        slackEnabled: false,
+        quietHours: null,
+        timezone: "UTC",
+        createdAt: t0,
+        updatedAt: t0,
+      }),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: vi.fn().mockResolvedValue([target]),
+      upsertDeliveryTarget: vi.fn(),
+      upsertDigestDelivery,
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({ sendDigestWhatsApp: vi.fn() }));
+
+    const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+    const result = await deliverWeeklyDigest(
+      {
+        ...emailEnv,
+        DB: {},
+        APP_ORIGIN: "https://app.0509.test",
+        BETTER_AUTH_SECRET: "test-secret-with-at-least-32-characters",
+        BETTER_AUTH_URL: "https://0509.io",
+      } as never,
+      {
+        userId: "user-gate-c",
+        userName: "Owner",
+        accountEmail: "owner@example.com",
+        digestRunId: "digest-gate-c",
+        periodStart: t0,
+        periodEnd: "2026-08-01T01:00:00.000Z",
+        items: [],
+        cadence: "daily",
+        lane: "internal",
+        proofEmailSubject: "0509 Gate C proof gate-c-worker-v1",
+      },
+    );
+
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(emailSendPayload(sendMock).subject).toBe("0509 Gate C proof gate-c-worker-v1");
+    expect(createDeliveryAttempt).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        payloadSnapshot: expect.objectContaining({
+          subject: "0509 Gate C proof gate-c-worker-v1",
+        }),
+      }),
+    );
+    const finalUpdate = updateDeliveryAttemptResult.mock.calls.at(-1)?.[2];
+    expect(finalUpdate).toEqual(expect.objectContaining({
+      payloadSnapshot: expect.objectContaining({ providerDispatchStartedAt: t0 }),
+    }));
+    expect(markInstantDeliveryDispatchStarted).toHaveBeenCalledWith(
+      expect.anything(),
+      "attempt-gate-c",
+      t0,
+    );
+    expect(finalUpdate.providerStatusLastSeenAt).toBe(t1);
+    expect(result.details[0]).toMatchObject({
+      subject: "0509 Gate C proof gate-c-worker-v1",
+      providerDispatchStartedAt: t0,
+      status: "sent",
+    });
+  });
+
+  it.each([
+    {
+      name: "no normalized account-email target",
+      targets: [],
+    },
+    {
+      name: "multiple byte-distinct targets normalize to the account email",
+      targets: ["OWNER@example.com", " owner@example.com "],
+    },
+    {
+      name: "a saturated target page cannot prove global uniqueness",
+      targets: Array.from({ length: 100 }, (_, index) =>
+        index === 0 ? "owner@example.com" : `other-${index}@example.com`,
+      ),
+    },
+  ])("fails before Gate C provider I/O for $name", async ({ targets }) => {
+    const sendMock = mockEmailSend("must-not-send");
+    const createDeliveryAttempt = vi.fn();
+    const upsertDeliveryTarget = vi.fn();
+    const listDeliveryTargets = vi.fn();
+    const migrateAutoProvisionedEmailTargets = vi.fn();
+    const now = "2026-08-01T00:00:00.000Z";
+    const deliveryTargets = targets.map((targetValue, index) => ({
+      id: `email-target-gate-c-${index + 1}`,
+      userId: "user-gate-c",
+      watchlistId: null,
+      channel: "email",
+      targetValue,
+      validationStatus: "validated",
+      isValidated: true,
+      isOptedIn: true,
+      optInSource: "account_email",
+      optedInAt: now,
+      isPaused: false,
+      pausedAt: null,
+      optedOutAt: null,
+      templateEligible: false,
+      lastSuccessfulDeliveryAt: null,
+      lastSuccessfulAttemptId: null,
+      providerIdentifier: null,
+      metadata: {},
+      createdAt: now,
+      updatedAt: now,
+    }));
+
+    vi.doMock("~/lib/data.server", () => ({
+      listAdsByIds: vi.fn().mockResolvedValue([]),
+      createDeliveryAttempt,
+      updateDeliveryAttemptResult: vi.fn(),
+      getDeliveryAttemptByIdempotencyKey: vi.fn().mockResolvedValue(null),
+      getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue({
+        id: "workspace-gate-c",
+        userId: "user-gate-c",
+        sensitivityMode: "balanced",
+        instantEnabled: false,
+        digestEnabled: true,
+        digestCadencePreference: "plan_default",
+        emailEnabled: true,
+        whatsappEnabled: false,
+        slackEnabled: false,
+        quietHours: null,
+        timezone: "UTC",
+        createdAt: now,
+        updatedAt: now,
+      }),
+      legacyWorkspaceDeliveryDefaults: vi.fn(),
+      listDeliveryTargets: listDeliveryTargets.mockResolvedValue(deliveryTargets),
+      migrateAutoProvisionedEmailTargets,
+      upsertDeliveryTarget,
+      upsertDigestDelivery: vi.fn(),
+    }));
+    vi.doMock("~/lib/whatsapp.server", () => ({ sendDigestWhatsApp: vi.fn() }));
+
+    const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+    await expect(
+      deliverWeeklyDigest(
+        {
+          ...emailEnv,
+          APP_ORIGIN: "https://app.0509.test",
+          BETTER_AUTH_SECRET: "test-secret-with-at-least-32-characters",
+          BETTER_AUTH_URL: "https://0509.io",
+        } as never,
+        {
+          userId: "user-gate-c",
+          userName: "Owner",
+          accountEmail: "owner@example.com",
+          digestRunId: "digest-gate-c",
+          periodStart: now,
+          periodEnd: "2026-08-01T01:00:00.000Z",
+          items: [],
+          cadence: "daily",
+          lane: "internal",
+          proofEmailSubject: "0509 Gate C proof gate-c-worker-v1",
+        },
+      ),
+    ).rejects.toThrow("Gate C proof email target must resolve uniquely.");
+
+    expect(sendMock).not.toHaveBeenCalled();
+    expect(createDeliveryAttempt).not.toHaveBeenCalled();
+    expect(upsertDeliveryTarget).not.toHaveBeenCalled();
+    expect(migrateAutoProvisionedEmailTargets).not.toHaveBeenCalled();
+    expect(listDeliveryTargets).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-gate-c",
+      { watchlistId: null, channel: "email", limit: 100 },
     );
   });
 
@@ -577,6 +829,7 @@ webhookStatus:"pending",
 
         return [];
       }),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: upsertDeliveryTarget,
       upsertDeliveryTarget,
       upsertDigestDelivery: vi.fn(),
     }));
@@ -698,6 +951,7 @@ webhookStatus:"pending",
 
         return [];
       }),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: mockAtomicEmailProvision(),
       upsertDeliveryTarget: vi.fn().mockResolvedValue({
         id: "email-target-1",
         userId: "user-1",
@@ -860,6 +1114,7 @@ webhookStatus:"pending",
 
   it("reuses an existing idempotent email attempt instead of sending twice", async () => {
     const sendMock = mockEmailSend("msg_1");
+    const upsertDigestDelivery = vi.fn();
     vi.doMock("~/lib/data.server", () => ({
       listAdsByIds: vi.fn().mockResolvedValue([]),
       createDeliveryAttempt: vi.fn(),
@@ -875,7 +1130,7 @@ webhookStatus:"pending",
           channel: "email",
           provider: "postmark",
           status: "sent",
-          webhookStatus: "pending",
+          webhookStatus: "provider_unknown",
           targetValue: "owner@example.com",
           providerMessageId: "msg_1",
           providerStatusLastSeenAt: "2026-04-19T00:00:00.000Z",
@@ -931,7 +1186,7 @@ webhookStatus:"pending",
         },
       ]),
       upsertDeliveryTarget: vi.fn(),
-      upsertDigestDelivery: vi.fn(),
+      upsertDigestDelivery,
     }));
     vi.doMock("~/lib/whatsapp.server", () => ({
       sendDigestWhatsApp: vi.fn(),
@@ -973,6 +1228,14 @@ webhookStatus:"pending",
       ],
     });
     expect(sendMock).not.toHaveBeenCalled();
+    expect(upsertDigestDelivery).toHaveBeenCalledWith(
+      expect.anything(),
+      "digest-1",
+      expect.objectContaining({
+        status: "sent",
+        deliveredAt: null,
+      }),
+    );
   });
 
   it("re-sends a digest email when the prior attempt failed, updating the existing attempt", async () => {
@@ -1223,7 +1486,39 @@ webhookStatus:"pending",
 
   it("skips opted-out email targets and never re-provisions the account email", async () => {
     const sendMock = mockEmailSend("msg_1");
-		const upsertDeliveryTarget = vi.fn();
+    const upsertDeliveryTarget = vi.fn();
+    const optedOutWatchlistTarget = {
+      id: "email-target-1",
+      userId: "user-1",
+      watchlistId: "watch-1",
+      channel: "email",
+      targetValue: "owner@example.com",
+      validationStatus: "validated",
+      isValidated: true,
+      isOptedIn: false,
+      optInSource: "account_email",
+      optedInAt: "2026-04-19T00:00:00.000Z",
+      isPaused: true,
+      pausedAt: "2026-05-01T00:00:00.000Z",
+      optedOutAt: "2026-05-01T00:00:00.000Z",
+      templateEligible: false,
+      lastSuccessfulDeliveryAt: null,
+      lastSuccessfulAttemptId: null,
+      providerIdentifier: null,
+      metadata: {},
+      createdAt: "2026-04-19T00:00:00.000Z",
+      updatedAt: "2026-05-01T00:00:00.000Z",
+    };
+    const listDeliveryTargets = vi.fn().mockImplementation(
+      async (
+        _env: unknown,
+        _userId: string,
+        options?: { watchlistId?: string | null },
+      ) => options?.watchlistId === null ? [] : [optedOutWatchlistTarget],
+    );
+    const hasSuppressedEmailTargetForUserAndAddress = vi
+      .fn()
+      .mockResolvedValue(true);
 
     vi.doMock("~/lib/data.server", () => ({
       listAdsByIds: vi.fn().mockResolvedValue([]),
@@ -1245,30 +1540,8 @@ webhookStatus:"pending",
         updatedAt: "2026-04-19T00:00:00.000Z",
       }),
       legacyWorkspaceDeliveryDefaults: vi.fn(),
-      listDeliveryTargets: vi.fn().mockResolvedValue([
-        {
-          id: "email-target-1",
-          userId: "user-1",
-          watchlistId: null,
-          channel: "email",
-          targetValue: "owner@example.com",
-          validationStatus: "validated",
-          isValidated: true,
-          isOptedIn: false,
-          optInSource: "account_email",
-          optedInAt: "2026-04-19T00:00:00.000Z",
-          isPaused: true,
-          pausedAt: "2026-05-01T00:00:00.000Z",
-          optedOutAt: "2026-05-01T00:00:00.000Z",
-          templateEligible: false,
-          lastSuccessfulDeliveryAt: null,
-          lastSuccessfulAttemptId: null,
-          providerIdentifier: null,
-          metadata: {},
-          createdAt: "2026-04-19T00:00:00.000Z",
-          updatedAt: "2026-05-01T00:00:00.000Z",
-        },
-      ]),
+      listDeliveryTargets,
+      hasSuppressedEmailTargetForUserAndAddress,
       upsertDeliveryTarget,
       upsertDigestDelivery: vi.fn(),
     }));
@@ -1302,6 +1575,73 @@ webhookStatus:"pending",
     });
     expect(sendMock).not.toHaveBeenCalled();
     expect(upsertDeliveryTarget).not.toHaveBeenCalled();
+    expect(hasSuppressedEmailTargetForUserAndAddress).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        userId: "user-1",
+        targetValue: "owner@example.com",
+      },
+    );
+  });
+
+  it("keeps paused watchlist targets separate from workspace digest preferences", async () => {
+    const workspaceTarget = {
+      id: "workspace-email-target",
+      userId: "user-1",
+      watchlistId: null,
+      channel: "email",
+      targetValue: "owner@example.com",
+      validationStatus: "validated",
+      isValidated: true,
+      isOptedIn: true,
+      optInSource: "account_email",
+      optedInAt: "2026-04-19T00:00:00.000Z",
+      isPaused: false,
+      pausedAt: null,
+      optedOutAt: null,
+      templateEligible: false,
+      lastSuccessfulDeliveryAt: null,
+      lastSuccessfulAttemptId: null,
+      providerIdentifier: null,
+      metadata: { autoProvisioned: true },
+      createdAt: "2026-04-19T00:00:00.000Z",
+      updatedAt: "2026-05-01T00:00:00.000Z",
+    };
+    // Digest resolution only reads workspace-scoped targets (watchlistId: null).
+    // An empty workspace list must still provision even if a paused watchlist
+    // target exists elsewhere; this mock never returns watchlist-scoped rows.
+    const listDeliveryTargets = vi.fn().mockResolvedValue([]);
+    const upsertDeliveryTarget = vi.fn().mockResolvedValue(workspaceTarget);
+
+    vi.doMock("~/lib/data.server", () => ({
+      listDeliveryTargets,
+      hasSuppressedEmailTargetForUserAndAddress: vi.fn().mockResolvedValue(false),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: upsertDeliveryTarget,
+      upsertDeliveryTarget,
+    }));
+
+    const { resolveDigestEmailTargets } = await import("~/lib/delivery.server");
+    const targets = await resolveDigestEmailTargets(
+      emailEnv as never,
+      "user-1",
+      "owner@example.com",
+    );
+
+    expect(targets).toEqual([workspaceTarget]);
+    expect(listDeliveryTargets).toHaveBeenCalledWith(
+      expect.anything(),
+      "user-1",
+      expect.objectContaining({ watchlistId: null }),
+    );
+    expect(upsertDeliveryTarget).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        userId: "user-1",
+        targetValue: "owner@example.com",
+        optInSource: "account_email",
+        metadata: { autoProvisioned: true },
+      }),
+    );
   });
 
   it("binds auto-provisioned delivery to the current verified account email", async () => {
@@ -1419,6 +1759,56 @@ webhookStatus:"pending",
 });
 
 describe("deliverWatchlistAlerts", () => {
+  it("does not reuse an alert target for a globally suppressed email address", async () => {
+    const existingTarget = {
+      id: "email-target-suppressed",
+      userId: "user-1",
+      watchlistId: null,
+      channel: "email",
+      targetValue: "owner@example.com",
+      validationStatus: "validated",
+      isValidated: true,
+      isOptedIn: true,
+      optInSource: "account_email",
+      optedInAt: "2026-04-19T00:00:00.000Z",
+      isPaused: false,
+      pausedAt: null,
+      optedOutAt: null,
+      templateEligible: false,
+      lastSuccessfulDeliveryAt: null,
+      lastSuccessfulAttemptId: null,
+      providerIdentifier: null,
+      metadata: {},
+      createdAt: "2026-04-19T00:00:00.000Z",
+      updatedAt: "2026-04-19T00:00:00.000Z",
+    };
+    const hasSuppressedEmailTargetForUserAndAddress = vi
+      .fn()
+      .mockResolvedValue(true);
+
+    vi.doMock("~/lib/data.server", () => ({
+      listDeliveryTargets: vi.fn().mockResolvedValue([existingTarget]),
+      hasSuppressedEmailTargetForUserAndAddress,
+    }));
+
+    const { resolveAlertEmailTargets } = await import("~/lib/delivery.server");
+    const targets = await resolveAlertEmailTargets(
+      emailEnv as never,
+      "user-1",
+      "watch-1",
+      "owner@example.com",
+    );
+
+    expect(targets).toEqual([]);
+    expect(hasSuppressedEmailTargetForUserAndAddress).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        userId: "user-1",
+        targetValue: "owner@example.com",
+      },
+    );
+  });
+
   it("sends instant alerts for confirmed watch events that clear delivery policy", async () => {
     const sendMock = mockEmailSend("msg_instant_1");
     const createDeliveryAttempt = vi.fn().mockResolvedValue("attempt-instant-1");
@@ -1470,6 +1860,7 @@ describe("deliverWatchlistAlerts", () => {
       listDeliveryTargets: vi.fn().mockResolvedValue([]),
       reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
       updateDeliveryAttemptResult,
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: upsertDeliveryTarget,
       upsertDeliveryTarget,
       upsertDigestDelivery: vi.fn(),
     }));
@@ -1746,6 +2137,7 @@ from:{email:"alerts@0509.io",name:"Five to Nine"},
       listDeliveryTargets: vi.fn().mockResolvedValue([]),
       reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
       updateDeliveryAttemptResult: vi.fn().mockResolvedValue(true),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: mockAtomicEmailProvision(),
       upsertDeliveryTarget: vi.fn().mockResolvedValue({
         id: "email-target-1",
         userId: "user-1",
@@ -1929,6 +2321,7 @@ from:{email:"alerts@0509.io",name:"Five to Nine"},
       listDeliveryTargets: vi.fn().mockResolvedValue([]),
       reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
       updateDeliveryAttemptResult: vi.fn().mockResolvedValue(true),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: upsertDeliveryTarget,
       upsertDeliveryTarget,
       upsertDigestDelivery: vi.fn(),
     }));
@@ -2441,6 +2834,7 @@ describe("instant alert failed-send retry", () => {
       legacyWorkspaceDeliveryDefaults: vi.fn(),
       listDeliveryTargets: vi.fn().mockResolvedValue([]),
       reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: mockAtomicEmailProvision(),
       upsertDeliveryTarget: vi.fn().mockResolvedValue({
         id: "email-target-1",
         userId: "user-1",
@@ -2524,6 +2918,7 @@ describe("instant alert failed-send retry", () => {
   });
 });
 
+
 describe("alert email content quality", () => {
   it("renders the before/now diff and evidence link in single-event instant emails", async () => {
     const sendMock = mockEmailSend("msg_diff_1");
@@ -2551,6 +2946,7 @@ describe("alert email content quality", () => {
       listDeliveryTargets: vi.fn().mockResolvedValue([]),
       reconcileDeliveryAttemptByProviderMessageId: vi.fn(),
       updateDeliveryAttemptResult: vi.fn(),
+      provisionVerifiedAccountEmailTargetIfUnsuppressed: mockAtomicEmailProvision(),
       upsertDeliveryTarget: vi.fn().mockResolvedValue({
         id: "email-target-1",
         userId: "user-1",
@@ -2610,6 +3006,8 @@ describe("alert email content quality", () => {
               advertiser: "Nykaa",
               from: "Glow Serum Sale",
               to: "Glow Serum Weekend Sale",
+              beforeCapturedAt: "2026-04-18T00:00:00.000Z",
+              capturedAt: "2026-04-19T00:00:00.000Z",
             },
             confirmedAt: "2026-04-19T00:00:00.000Z",
             suppressedAt: null,
@@ -2625,8 +3023,55 @@ describe("alert email content quality", () => {
     expect(payload.html).toContain("Before");
     expect(payload.html).toContain("Glow Serum Sale");
     expect(payload.html).toContain("Glow Serum Weekend Sale");
+    expect(payload.html).toContain("Captured 18 Apr 2026");
+    expect(payload.html).toContain("Captured 19 Apr 2026");
     expect(payload.html).toContain("See the evidence");
     // WP-24: evidence link deep-links to the event row.
     expect(payload.html).toContain("/app/watchlists?watchlist=watch-1&event=event-1");
+  });
+
+  it("does not label changed values Before/Now when capture times are missing", async () => {
+    const { buildInstantAlertContent } = await import("~/lib/delivery.server");
+    const event = {
+      id: "event-1",
+      watchlistId: "watch-1",
+      runId: "run-1",
+      eventType: "landing_page_offer_changed",
+      status: "confirmed",
+      importanceScore: 90,
+      adId: "meta-1",
+      baselineFromRunId: null,
+      candidateId: "candidate-1",
+      proofCaptureId: "proof-1",
+      title: "Offer changed",
+      summary: "The offer changed.",
+      metadata: { from: "20% off", to: "40% off" },
+      confirmedAt: "2026-04-19T00:00:00.000Z",
+      suppressedAt: null,
+      invalidatedAt: null,
+      lastEvaluatedAt: "2026-04-19T00:00:00.000Z",
+      createdAt: "2026-04-19T00:00:00.000Z",
+    } as const;
+    const single = buildInstantAlertContent(
+      { id: "watch-1", name: "Nykaa watch" },
+      [event],
+      false,
+      { APP_ORIGIN: "https://0509.io" } as never,
+    );
+    const content = buildInstantAlertContent(
+      { id: "watch-1", name: "Nykaa watch" },
+      [event, { ...event, id: "event-2" }],
+      false,
+      { APP_ORIGIN: "https://0509.io" } as never,
+    );
+
+    expect(single.html).toContain(
+      "Before/Now comparison not shown because one or both capture times were unavailable or invalid.",
+    );
+    expect(content.html).toContain(
+      "changed values were recorded, but one or both capture times were unavailable or invalid.",
+    );
+    expect(single.html).not.toContain(">Before<");
+    expect(single.html).not.toContain(">Now<");
   });
 });
