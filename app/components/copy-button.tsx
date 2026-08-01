@@ -1,6 +1,10 @@
 import { useEffect, useId, useState } from "react";
 
-export function CopyButton(props: { value: string; label?: string }) {
+export function CopyButton(props: {
+  value: string;
+  label?: string;
+  className?: string;
+}) {
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
   const copyErrorId = `copy-button-error-${useId().replace(/:/g, "")}`;
@@ -26,7 +30,7 @@ export function CopyButton(props: { value: string; label?: string }) {
     <span>
       <button
         aria-describedby={copyError ? copyErrorId : undefined}
-        className="f9-secondary-button f9-copy-button"
+        className={props.className ?? "f9-secondary-button f9-copy-button"}
         type="button"
         onClick={() => void copyToClipboard()}
       >
