@@ -860,6 +860,7 @@ webhookStatus:"pending",
 
   it("reuses an existing idempotent email attempt instead of sending twice", async () => {
     const sendMock = mockEmailSend("msg_1");
+    const upsertDigestDelivery = vi.fn();
     vi.doMock("~/lib/data.server", () => ({
       listAdsByIds: vi.fn().mockResolvedValue([]),
       createDeliveryAttempt: vi.fn(),
@@ -875,7 +876,7 @@ webhookStatus:"pending",
           channel: "email",
           provider: "postmark",
           status: "sent",
-          webhookStatus: "pending",
+          webhookStatus: "provider_unknown",
           targetValue: "owner@example.com",
           providerMessageId: "msg_1",
           providerStatusLastSeenAt: "2026-04-19T00:00:00.000Z",
@@ -931,7 +932,7 @@ webhookStatus:"pending",
         },
       ]),
       upsertDeliveryTarget: vi.fn(),
-      upsertDigestDelivery: vi.fn(),
+      upsertDigestDelivery,
     }));
     vi.doMock("~/lib/whatsapp.server", () => ({
       sendDigestWhatsApp: vi.fn(),
@@ -973,6 +974,14 @@ webhookStatus:"pending",
       ],
     });
     expect(sendMock).not.toHaveBeenCalled();
+    expect(upsertDigestDelivery).toHaveBeenCalledWith(
+      expect.anything(),
+      "digest-1",
+      expect.objectContaining({
+        status: "sent",
+        deliveredAt: null,
+      }),
+    );
   });
 
   it("re-sends a digest email when the prior attempt failed, updating the existing attempt", async () => {
@@ -2521,6 +2530,37 @@ describe("instant alert failed-send retry", () => {
       expect.objectContaining({ status: "sent" }),
     );
     expect(createDeliveryAttempt).not.toHaveBeenCalled();
+  });
+});
+
+describe("sendPresenceDigestEmail", () => {
+  it("records provider acceptance without claiming recipient delivery", async () => {
+    mockEmailSend("presence-message-1");
+    const createDeliveryAttempt = vi.fn().mockResolvedValue("presence-attempt-1");
+    vi.doMock("~/lib/data.server", () => ({
+      createDeliveryAttempt,
+      listDeliveryTargets: vi.fn().mockResolvedValue([]),
+      upsertDeliveryTarget: vi.fn().mockResolvedValue(null),
+    }));
+
+    const { sendPresenceDigestEmail } = await import("~/lib/delivery.server");
+    const result = await sendPresenceDigestEmail(emailEnv as never, {
+      userId: "user-1",
+      email: "owner@example.com",
+      subject: "Presence brief",
+      lines: ["Acme — New pricing page (Website)"],
+      idempotencyKey: "presence-digest:user-1:2026-07-31",
+    });
+
+    expect(result).toEqual({ accepted: true, delivered: false });
+    expect(createDeliveryAttempt).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        status: "sent",
+        webhookStatus: "provider_unknown",
+        sentAt: expect.any(String),
+      }),
+    );
   });
 });
 
