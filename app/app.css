@@ -13284,6 +13284,74 @@ reds soften --- */
 
 /* === BL-033a collections (landing language) === */
 
+/* === BL-038 shares (landing language) === */
+
+.f9-bl038-url {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.f9-bl038-url:hover {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.f9-bl038-list {
+  padding: 0 var(--wk-pad);
+}
+
+.f9-bl038-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0 16px;
+}
+
+.f9-bl038-actions form {
+  margin: 0;
+}
+
+/* ConfirmSubmitButton keeps its two-activation semantics while the armed
+   state stays a text action. Red remains reserved for diff deletion. */
+.f9-bl038-actions .f9-danger-button.f9-confirm-armed {
+  min-width: 44px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--ink);
+  font-family: var(--f9-font);
+  font-size: 13.5px;
+  font-weight: 400;
+  text-align: left;
+  transform: none;
+  animation: none;
+  transition:
+    background-color var(--wk-snap),
+    color var(--wk-snap),
+    border-color var(--wk-snap);
+}
+
+.f9-bl038-actions .f9-danger-button.f9-confirm-armed:hover {
+  border: 0;
+  background: none;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.f9-bl038-note {
+  margin: 0 var(--wk-pad);
+  padding-top: 34px;
+}
+
 /* The collection switch is navigation: one quiet hairline, sentence case,
    and horizontal containment at narrow widths. Collection names are entities,
    so this is one of the sanctioned Bricolage slots. */
