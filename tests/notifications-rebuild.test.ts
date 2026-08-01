@@ -14,6 +14,23 @@ function stripComments(source: string) {
   return source.replace(/\/\*[\s\S]*?\*\//g, "");
 }
 
+// The owned layer runs from the BL-039 marker to the next lane's section
+// marker (BL-040 landed after this branch was cut) or to the end of the file.
+// Bounding it here keeps these assertions about BL-039's own CSS instead of
+// silently grading whichever landing-language lane merged last.
+function ownedLayer() {
+  const markerIndex = css.indexOf(MARKER);
+  if (markerIndex < 0) return null;
+  const rest = css.slice(markerIndex + MARKER.length);
+  const nextSection = rest.search(/\/\* === BL-\d+ /u);
+  const end =
+    nextSection < 0 ? css.length : markerIndex + MARKER.length + nextSection;
+  return {
+    markerIndex,
+    layer: stripComments(css.slice(markerIndex, end)),
+  };
+}
+
 describe("BL-039 notifications rebuild", () => {
   it("keeps the loader and action module byte-frozen", () => {
     expect(createHash("sha256").update(route).digest("hex")).toBe(
@@ -33,13 +50,13 @@ describe("BL-039 notifications rebuild", () => {
     expect(ui).not.toContain("f9-dashboard-grid");
   });
 
-  it("appends exactly one owned CSS section at the end of app.css", () => {
+  it("adds exactly one owned CSS section after the BL-030 layer", () => {
     expect(css.match(/BL-039 notifications \(landing language\)/g)).toHaveLength(
       1,
     );
-    const markerIndex = css.indexOf(MARKER);
-    expect(markerIndex).toBeGreaterThan(-1);
-    const layer = stripComments(css.slice(markerIndex));
+    const owned = ownedLayer();
+    expect(owned).not.toBeNull();
+    const { markerIndex, layer } = owned!;
     expect(layer.length).toBeGreaterThan(1_000);
     expect(markerIndex).toBeGreaterThan(css.indexOf("BL-030"));
 
@@ -60,9 +77,9 @@ describe("BL-039 notifications rebuild", () => {
   });
 
   it("keeps the owned layer square, flat, and token-based", () => {
-    const markerIndex = css.indexOf(MARKER);
-    expect(markerIndex).toBeGreaterThan(-1);
-    const layer = stripComments(css.slice(markerIndex));
+    const owned = ownedLayer();
+    expect(owned).not.toBeNull();
+    const { layer } = owned!;
     const radii = [...layer.matchAll(/border-radius:\s*([^;]+);/g)].map(
       (match) => match[1].trim(),
     );
