@@ -50,6 +50,8 @@
     "e2e/helpers/release-test.ts",
     "e2e/journey-*-release.spec.ts",
     "scripts/safe-command-output.mjs",
+    "scripts/market-signal-snapshot.mjs",
+    "scripts/validate-market-signal-report.mjs",
     "tests/**/*",
     "extension/lib/**/*.mjs",
     "app/**/*",
