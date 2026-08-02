@@ -133,6 +133,7 @@ function main() {
   if (outputIndex >= 0 && !outputPath) throw new Error("--output requires a path.");
 
   const d1 = runJson("wrangler", ["d1", "execute", DATABASE, "--remote", "--command", SIGNAL_SQL, "--json"]);
+  /** @type {Array<Array<any>>} */
   const issuePages = runJson("gh", [
     "api",
     "--paginate",
