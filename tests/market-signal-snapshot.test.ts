@@ -48,9 +48,25 @@ describe("market signal snapshot", () => {
   });
 
   it("labels the snapshot as aggregate-only customer-safe evidence", () => {
-    const snapshot = buildSnapshot({ d1: d1Payload, issues: [], generatedAt: new Date("2026-08-02T12:00:00Z") });
+    const snapshot = buildSnapshot({
+      d1: d1Payload,
+      issues: [{
+        number: 9,
+        title: "customer@example.com",
+        state: "OPEN",
+        labels: [],
+        createdAt: "2026-08-02T10:00:00Z",
+        closedAt: null,
+        url: "https://github.test/9",
+      }],
+      generatedAt: new Date("2026-08-02T12:00:00Z"),
+    });
     expect(snapshot.sourceHealth).toEqual({ cloudflareD1: "ok", githubIssues: "ok" });
     expect(snapshot.privacy).toContain("no customer identity or message body");
     expect(JSON.stringify(snapshot)).not.toContain("customer@example.com");
+    expect(snapshot.windows.recent24h).toEqual({
+      start: "2026-08-01T12:00:00.000Z",
+      end: "2026-08-02T12:00:00.000Z",
+    });
   });
 });

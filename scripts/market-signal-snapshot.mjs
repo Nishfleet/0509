@@ -43,6 +43,7 @@ function runJson(command, args) {
     encoding: "utf8",
     env: process.env,
     maxBuffer: 4 * 1024 * 1024,
+    timeout: 30_000,
     stdio: ["ignore", "pipe", "pipe"],
   });
   return JSON.parse(output);
@@ -94,7 +95,6 @@ export function summarizeIssues(issues, now = new Date()) {
       .slice(0, 10)
       .map((issue) => ({
         number: issue.number,
-        title: issue.title,
         state: issue.state,
         labels: (issue.labels || []).map((label) => label.name).filter(Boolean),
         createdAt: issue.createdAt,
@@ -106,10 +106,20 @@ export function summarizeIssues(issues, now = new Date()) {
 
 /** @param {{d1: any; issues: Issue[]; generatedAt?: Date}} input */
 export function buildSnapshot({ d1, issues, generatedAt = new Date() }) {
+  /** @param {number} milliseconds */
+  const iso = (milliseconds) => new Date(milliseconds).toISOString();
+  const end = generatedAt.getTime();
+  const day = 86_400_000;
   return {
     schemaVersion: 1,
     generatedAt: generatedAt.toISOString(),
-    windows: { recent: "last 24 hours and 7 days", comparison: "immediately preceding equal window" },
+    windows: {
+      timezone: "UTC",
+      recent24h: { start: iso(end - day), end: iso(end) },
+      previous24h: { start: iso(end - 2 * day), end: iso(end - day) },
+      recent7d: { start: iso(end - 7 * day), end: iso(end) },
+      previous7d: { start: iso(end - 14 * day), end: iso(end - 7 * day) },
+    },
     product: parseD1Response(d1),
     github: summarizeIssues(issues, generatedAt),
     sourceHealth: { cloudflareD1: "ok", githubIssues: "ok" },
@@ -123,18 +133,21 @@ function main() {
   if (outputIndex >= 0 && !outputPath) throw new Error("--output requires a path.");
 
   const d1 = runJson("wrangler", ["d1", "execute", DATABASE, "--remote", "--command", SIGNAL_SQL, "--json"]);
-  const issues = runJson("gh", [
-    "issue",
-    "list",
-    "--repo",
-    REPOSITORY,
-    "--state",
-    "all",
-    "--limit",
-    "100",
-    "--json",
-    "number,title,state,labels,createdAt,closedAt,url",
+  const issuePages = runJson("gh", [
+    "api",
+    "--paginate",
+    "--slurp",
+    `repos/${REPOSITORY}/issues?state=all&per_page=100`,
   ]);
+  const issues = issuePages.flat().filter((issue) => !issue.pull_request).map((issue) => ({
+    number: issue.number,
+    title: issue.title,
+    state: String(issue.state).toUpperCase(),
+    labels: issue.labels,
+    createdAt: issue.created_at,
+    closedAt: issue.closed_at,
+    url: issue.html_url,
+  }));
   const rendered = `${JSON.stringify(buildSnapshot({ d1, issues }), null, 2)}\n`;
   if (outputPath) {
     mkdirSync(dirname(outputPath), { recursive: true, mode: 0o700 });
