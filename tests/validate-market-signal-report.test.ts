@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { validateReport } from "../scripts/validate-market-signal-report.mjs";
+import { isValidReportDate, validateReport } from "../scripts/validate-market-signal-report.mjs";
 
 const validReport = `---
 authored_by: hermes-vps
@@ -42,5 +42,26 @@ describe("market signal report validation", () => {
     const issues = validateReport(validReport.replace("## Receipts", "Customer customer@example.com"), "2026-08-02");
     expect(issues).toContain("missing_section:## Receipts");
     expect(issues).toContain("sensitive_content_detected");
+  });
+
+  it("does not accept frontmatter fields or source statuses from the report body", () => {
+    const bodyFrontmatter = validReport
+      .replace("authored_by: hermes-vps", "authored_by: somebody-else")
+      .concat("\nauthored_by: hermes-vps\n");
+    expect(validateReport(bodyFrontmatter, "2026-08-02")).toContain("invalid_frontmatter_field:authored_by");
+
+    const misplacedStatuses = validReport
+      .replace(
+        "PostHog: unavailable. CRM: unavailable. call-transcript: unavailable. external support-platform: unavailable.",
+        "PostHog, CRM, call-transcript, external support-platform.",
+      )
+      .concat("\nAll statuses elsewhere: unavailable and failed.\n");
+    expect(validateReport(misplacedStatuses, "2026-08-02")).toContain("missing_unavailable_source_status:PostHog");
+  });
+
+  it("rejects impossible calendar dates", () => {
+    expect(isValidReportDate("2026-08-02")).toBe(true);
+    expect(isValidReportDate("2026-02-30")).toBe(false);
+    expect(isValidReportDate("2026-13-01")).toBe(false);
   });
 });
