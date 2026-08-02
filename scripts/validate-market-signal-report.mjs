@@ -29,7 +29,23 @@ const FORBIDDEN_PATTERNS = [
   /\bgithub_pat_[A-Za-z0-9_]{20,}\b/,
   /\bAKIA[0-9A-Z]{16}\b/,
   /-----BEGIN (?:RSA|OPENSSH|EC|DSA) PRIVATE KEY-----/,
+  /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}\b/i,
+  /\b(?:api[_ -]?key|secret|token|password|customer[_ -]?id|user[_ -]?id)\s*[:=]\s*\S{4,}/i,
+  /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/i,
+  /https?:\/\/(?:localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|[^/]+\.internal)\b/i,
+  /https:\/\/github\.com\/nish3451\/0509(?:\/|\b)/i,
 ];
+
+/** @param {string} content @param {string} heading */
+function sectionContent(content, heading) {
+  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return content.match(new RegExp(`${escaped}\\n([\\s\\S]*?)(?=\\n## |$)`))?.[1]?.trim() ?? "";
+}
+
+/** @param {string} content */
+export function sensitiveContentIssues(content) {
+  return FORBIDDEN_PATTERNS.some((pattern) => pattern.test(content)) ? ["sensitive_content_detected"] : [];
+}
 
 /**
  * @param {string} content
@@ -57,17 +73,29 @@ export function validateReport(content, reportDate) {
   for (const section of REQUIRED_SECTIONS) {
     if (!content.includes(section)) issues.push(`missing_section:${section}`);
   }
+  for (const section of REQUIRED_SECTIONS.filter((heading) => heading.startsWith("## "))) {
+    if (sectionContent(content, section).length < 12) issues.push(`empty_section:${section}`);
+  }
+  const evidenceWindow = sectionContent(content, "## Evidence window");
+  if (!evidenceWindow.includes("UTC") || (evidenceWindow.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z/g) || []).length < 4) {
+    issues.push("invalid_evidence_window");
+  }
+  const receipts = sectionContent(content, "## Receipts");
+  if (!/\d|https:\/\//.test(receipts)) issues.push("missing_receipt_evidence");
+  const confidence = sectionContent(content, "## Confidence and falsification test");
+  if (!/\b(?:low|medium|high)\b/i.test(confidence) || !/\b(?:if|when|threshold|wrong|falsif)/i.test(confidence)) {
+    issues.push("invalid_confidence_or_falsification");
+  }
+  if (!/\b(?:ok|failed|unavailable)\b/i.test(sectionContent(content, "## Source health"))) issues.push("invalid_source_health");
   if (!content.includes(reportDate)) issues.push("wrong_report_date");
   const unavailableSection = content.match(/## Unavailable sources\n([\s\S]*?)(?=\n## |$)/)?.[1] ?? "";
   for (const source of ["PostHog", "CRM", "call-transcript", "external support-platform"]) {
     const escaped = source.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    if (!new RegExp(`${escaped}[^\\n]*(?:unavailable|failed)`, "i").test(unavailableSection)) {
+    if (!new RegExp(`${escaped}[^\\n]*unavailable[^\\n]*(?:not checked|was not checked)`, "i").test(unavailableSection)) {
       issues.push(`missing_unavailable_source_status:${source}`);
     }
   }
-  for (const pattern of FORBIDDEN_PATTERNS) {
-    if (pattern.test(content)) issues.push("sensitive_content_detected");
-  }
+  issues.push(...sensitiveContentIssues(content));
   return [...new Set(issues)];
 }
 
@@ -82,11 +110,12 @@ function main() {
   const dateIndex = process.argv.indexOf("--date");
   const reportDate = dateIndex >= 0 ? process.argv[dateIndex + 1] : "";
   const paths = process.argv.slice(2).filter((value, index, args) => value !== "--date" && args[index - 1] !== "--date");
-  if (!isValidReportDate(reportDate) || paths.length !== 2) {
-    throw new Error("Usage: validate-market-signal-report.mjs --date YYYY-MM-DD CURRENT RAW");
+  if (!isValidReportDate(reportDate) || paths.length !== 3) {
+    throw new Error("Usage: validate-market-signal-report.mjs --date YYYY-MM-DD CURRENT RAW TELEGRAM");
   }
 
-  const failures = paths.flatMap((path) => validateReport(readFileSync(path, "utf8"), reportDate).map((issue) => `${path}:${issue}`));
+  const failures = paths.slice(0, 2).flatMap((path) => validateReport(readFileSync(path, "utf8"), reportDate).map((issue) => `${path}:${issue}`));
+  failures.push(...sensitiveContentIssues(readFileSync(paths[2], "utf8")).map((issue) => `${paths[2]}:${issue}`));
   if (failures.length > 0) throw new Error(failures.join(","));
   process.stdout.write(`market_signal_report_valid date=${reportDate}\n`);
 }

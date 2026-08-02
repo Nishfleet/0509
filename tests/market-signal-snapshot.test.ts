@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildSnapshot, parseD1Response, summarizeIssues } from "../scripts/market-signal-snapshot.mjs";
+import { buildSignalSql, buildSnapshot, parseD1Response, summarizeIssues } from "../scripts/market-signal-snapshot.mjs";
 
 const d1Payload = [
   {
@@ -68,5 +68,11 @@ describe("market signal snapshot", () => {
       start: "2026-08-01T12:00:00.000Z",
       end: "2026-08-02T12:00:00.000Z",
     });
+  });
+
+  it("binds every query window to the snapshot timestamp", () => {
+    const sql = buildSignalSql(new Date("2026-08-02T12:00:00Z"));
+    expect(sql).toContain("2026-08-02T12:00:00.000Z");
+    expect(sql).not.toContain("datetime('now')");
   });
 });

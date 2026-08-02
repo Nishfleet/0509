@@ -47,13 +47,13 @@ Both files must use the vault's required provenance frontmatter with `authored_b
 8. `## Source health`
 9. `## Unavailable sources`
 
-Unavailable sources are facts, not failures. Until connected, state that direct PostHog, CRM, call-transcript, and external support-platform feeds are unavailable. Do not imply they were checked.
+Unavailable sources are facts, not failures. Until connected, state separately for each that direct PostHog, CRM, call-transcript, and external support-platform feeds are `unavailable; not checked`.
 
 For an empty state, write `No strong new signal` under `## Strongest changes`; put the unchanged aggregate receipts under `## Receipts`; write `Keep observing; no product or GTM change recommended` under `## Decision affected`; use low confidence and a concrete threshold that would change the conclusion under `## Confidence and falsification test`. Telegram the same empty-state conclusion without inventing a strongest signal.
 
 ## Delivery
 
-Write both reports as candidate files in their destination directories. The raw candidate must use a new UTC timestamp. Run `npm run signal:market:validate -- --date YYYY-MM-DD CURRENT_CANDIDATE RAW_CANDIDATE` using today's Asia/Kolkata date. It must print `market_signal_report_valid` before publication.
+Write both reports and the exact Telegram message as candidate files. The raw candidate must use a new UTC timestamp. Run `npm run signal:market:validate -- --date YYYY-MM-DD CURRENT_CANDIDATE RAW_CANDIDATE TELEGRAM_CANDIDATE` using today's Asia/Kolkata date. It must print `market_signal_report_valid` before publication.
 
 After validation, create the final raw note with shell noclobber semantics so an existing timestamped note is never overwritten, then atomically rename the current candidate to `what_the_market_is_telling_us.md`. A validation or publication failure must leave the previous current report unchanged.
 

@@ -5,33 +5,45 @@ import { dirname } from "node:path";
 const DATABASE = "0509";
 const REPOSITORY = "nish3451/0509";
 
-const SIGNAL_SQL = `
+/** @param {Date} generatedAt */
+export function buildSignalSql(generatedAt) {
+  const end = generatedAt.toISOString();
+  return `
+WITH bounds AS (
+  SELECT
+    datetime('${end}') AS end_at,
+    datetime('${end}', '-1 day') AS recent_24h,
+    datetime('${end}', '-2 day') AS previous_24h,
+    datetime('${end}', '-7 day') AS recent_7d,
+    datetime('${end}', '-14 day') AS previous_7d
+)
 SELECT
   (SELECT COUNT(*) FROM user) AS users_total,
-  (SELECT COUNT(*) FROM user WHERE datetime(createdAt) >= datetime('now', '-1 day')) AS users_24h,
-  (SELECT COUNT(*) FROM user WHERE datetime(createdAt) >= datetime('now', '-2 day') AND datetime(createdAt) < datetime('now', '-1 day')) AS users_previous_24h,
-  (SELECT COUNT(*) FROM user WHERE datetime(createdAt) >= datetime('now', '-7 day')) AS users_7d,
-  (SELECT COUNT(*) FROM user WHERE datetime(createdAt) >= datetime('now', '-14 day') AND datetime(createdAt) < datetime('now', '-7 day')) AS users_previous_7d,
+  (SELECT COUNT(*) FROM user WHERE datetime(createdAt) >= (SELECT recent_24h FROM bounds) AND datetime(createdAt) < (SELECT end_at FROM bounds)) AS users_24h,
+  (SELECT COUNT(*) FROM user WHERE datetime(createdAt) >= (SELECT previous_24h FROM bounds) AND datetime(createdAt) < (SELECT recent_24h FROM bounds)) AS users_previous_24h,
+  (SELECT COUNT(*) FROM user WHERE datetime(createdAt) >= (SELECT recent_7d FROM bounds) AND datetime(createdAt) < (SELECT end_at FROM bounds)) AS users_7d,
+  (SELECT COUNT(*) FROM user WHERE datetime(createdAt) >= (SELECT previous_7d FROM bounds) AND datetime(createdAt) < (SELECT recent_7d FROM bounds)) AS users_previous_7d,
   (SELECT COUNT(*) FROM watchlist WHERE is_active = 1) AS active_watchlists,
-  (SELECT COUNT(*) FROM watchlist WHERE datetime(created_at) >= datetime('now', '-7 day')) AS watchlists_7d,
-  (SELECT COUNT(*) FROM watchlist WHERE datetime(created_at) >= datetime('now', '-14 day') AND datetime(created_at) < datetime('now', '-7 day')) AS watchlists_previous_7d,
-  (SELECT COUNT(*) FROM watchlist_run WHERE datetime(created_at) >= datetime('now', '-1 day')) AS runs_24h,
-  (SELECT COUNT(*) FROM watchlist_run WHERE datetime(created_at) >= datetime('now', '-2 day') AND datetime(created_at) < datetime('now', '-1 day')) AS runs_previous_24h,
-  (SELECT COUNT(*) FROM watchlist_run WHERE datetime(created_at) >= datetime('now', '-1 day') AND status = 'failed') AS failed_runs_24h,
-  (SELECT COUNT(*) FROM watch_event WHERE datetime(created_at) >= datetime('now', '-1 day')) AS events_24h,
-  (SELECT COUNT(*) FROM watch_event WHERE datetime(created_at) >= datetime('now', '-2 day') AND datetime(created_at) < datetime('now', '-1 day')) AS events_previous_24h,
-  (SELECT COUNT(*) FROM digest_delivery WHERE datetime(created_at) >= datetime('now', '-1 day') AND status = 'sent') AS digests_sent_24h,
-  (SELECT COUNT(*) FROM digest_delivery WHERE datetime(created_at) >= datetime('now', '-1 day') AND status = 'failed') AS digests_failed_24h,
+  (SELECT COUNT(*) FROM watchlist WHERE datetime(created_at) >= (SELECT recent_7d FROM bounds) AND datetime(created_at) < (SELECT end_at FROM bounds)) AS watchlists_7d,
+  (SELECT COUNT(*) FROM watchlist WHERE datetime(created_at) >= (SELECT previous_7d FROM bounds) AND datetime(created_at) < (SELECT recent_7d FROM bounds)) AS watchlists_previous_7d,
+  (SELECT COUNT(*) FROM watchlist_run WHERE datetime(created_at) >= (SELECT recent_24h FROM bounds) AND datetime(created_at) < (SELECT end_at FROM bounds)) AS runs_24h,
+  (SELECT COUNT(*) FROM watchlist_run WHERE datetime(created_at) >= (SELECT previous_24h FROM bounds) AND datetime(created_at) < (SELECT recent_24h FROM bounds)) AS runs_previous_24h,
+  (SELECT COUNT(*) FROM watchlist_run WHERE datetime(created_at) >= (SELECT recent_24h FROM bounds) AND datetime(created_at) < (SELECT end_at FROM bounds) AND status = 'failed') AS failed_runs_24h,
+  (SELECT COUNT(*) FROM watch_event WHERE datetime(created_at) >= (SELECT recent_24h FROM bounds) AND datetime(created_at) < (SELECT end_at FROM bounds)) AS events_24h,
+  (SELECT COUNT(*) FROM watch_event WHERE datetime(created_at) >= (SELECT previous_24h FROM bounds) AND datetime(created_at) < (SELECT recent_24h FROM bounds)) AS events_previous_24h,
+  (SELECT COUNT(*) FROM digest_delivery WHERE datetime(created_at) >= (SELECT recent_24h FROM bounds) AND datetime(created_at) < (SELECT end_at FROM bounds) AND status = 'sent') AS digests_sent_24h,
+  (SELECT COUNT(*) FROM digest_delivery WHERE datetime(created_at) >= (SELECT recent_24h FROM bounds) AND datetime(created_at) < (SELECT end_at FROM bounds) AND status = 'failed') AS digests_failed_24h,
   (SELECT COUNT(*) FROM support_case WHERE status = 'open') AS support_open,
-  (SELECT COUNT(*) FROM support_case WHERE datetime(created_at) >= datetime('now', '-7 day')) AS support_7d,
-  (SELECT COUNT(*) FROM support_case WHERE datetime(created_at) >= datetime('now', '-14 day') AND datetime(created_at) < datetime('now', '-7 day')) AS support_previous_7d,
-  (SELECT COUNT(*) FROM dodo_webhook_event WHERE datetime(received_at) >= datetime('now', '-1 day')) AS billing_events_24h,
-  (SELECT COUNT(*) FROM dodo_webhook_event WHERE datetime(received_at) >= datetime('now', '-1 day') AND outcome NOT IN ('processed', 'success', 'received')) AS billing_problem_events_24h,
+  (SELECT COUNT(*) FROM support_case WHERE datetime(created_at) >= (SELECT recent_7d FROM bounds) AND datetime(created_at) < (SELECT end_at FROM bounds)) AS support_7d,
+  (SELECT COUNT(*) FROM support_case WHERE datetime(created_at) >= (SELECT previous_7d FROM bounds) AND datetime(created_at) < (SELECT recent_7d FROM bounds)) AS support_previous_7d,
+  (SELECT COUNT(*) FROM dodo_webhook_event WHERE datetime(received_at) >= (SELECT recent_24h FROM bounds) AND datetime(received_at) < (SELECT end_at FROM bounds)) AS billing_events_24h,
+  (SELECT COUNT(*) FROM dodo_webhook_event WHERE datetime(received_at) >= (SELECT recent_24h FROM bounds) AND datetime(received_at) < (SELECT end_at FROM bounds) AND outcome NOT IN ('processed', 'success', 'received')) AS billing_problem_events_24h,
   (SELECT COUNT(*) FROM user_plan WHERE plan != 'free' AND COALESCE(dodo_status, '') IN ('active', 'on_hold', 'trialing')) AS paid_accounts,
   COALESCE((SELECT json_group_object(plan, total) FROM (SELECT plan, COUNT(*) AS total FROM user_plan GROUP BY plan)), '{}') AS plan_mix_json,
-  COALESCE((SELECT json_group_object(category, total) FROM (SELECT category, COUNT(*) AS total FROM support_case WHERE datetime(created_at) >= datetime('now', '-7 day') GROUP BY category)), '{}') AS support_categories_json,
-  COALESCE((SELECT json_group_object(event_type, total) FROM (SELECT event_type, COUNT(*) AS total FROM dodo_webhook_event WHERE datetime(received_at) >= datetime('now', '-7 day') GROUP BY event_type)), '{}') AS billing_event_types_json;
+  COALESCE((SELECT json_group_object(category, total) FROM (SELECT category, COUNT(*) AS total FROM support_case WHERE datetime(created_at) >= (SELECT recent_7d FROM bounds) AND datetime(created_at) < (SELECT end_at FROM bounds) GROUP BY category)), '{}') AS support_categories_json,
+  COALESCE((SELECT json_group_object(event_type, total) FROM (SELECT event_type, COUNT(*) AS total FROM dodo_webhook_event WHERE datetime(received_at) >= (SELECT recent_7d FROM bounds) AND datetime(received_at) < (SELECT end_at FROM bounds) GROUP BY event_type)), '{}') AS billing_event_types_json;
 `;
+}
 
 /**
  * @param {string} command
@@ -99,7 +111,6 @@ export function summarizeIssues(issues, now = new Date()) {
         labels: (issue.labels || []).map((label) => label.name).filter(Boolean),
         createdAt: issue.createdAt,
         closedAt: issue.closedAt,
-        url: issue.url,
       })),
   };
 }
@@ -132,7 +143,8 @@ function main() {
   const outputPath = outputIndex >= 0 ? process.argv[outputIndex + 1] : null;
   if (outputIndex >= 0 && !outputPath) throw new Error("--output requires a path.");
 
-  const d1 = runJson("wrangler", ["d1", "execute", DATABASE, "--remote", "--command", SIGNAL_SQL, "--json"]);
+  const generatedAt = new Date();
+  const d1 = runJson("wrangler", ["d1", "execute", DATABASE, "--remote", "--command", buildSignalSql(generatedAt), "--json"]);
   /** @type {Array<Array<any>>} */
   const issuePages = runJson("gh", [
     "api",
@@ -149,7 +161,7 @@ function main() {
     closedAt: issue.closed_at,
     url: issue.html_url,
   }));
-  const rendered = `${JSON.stringify(buildSnapshot({ d1, issues }), null, 2)}\n`;
+  const rendered = `${JSON.stringify(buildSnapshot({ d1, issues, generatedAt }), null, 2)}\n`;
   if (outputPath) {
     mkdirSync(dirname(outputPath), { recursive: true, mode: 0o700 });
     writeFileSync(outputPath, rendered, { encoding: "utf8", mode: 0o600 });

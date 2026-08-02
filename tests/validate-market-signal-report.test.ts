@@ -18,11 +18,11 @@ human_locked: false
 # What the market is telling 0509
 2026-08-02
 ## Evidence window
-UTC boundaries
+UTC: 2026-08-01T00:00:00Z to 2026-08-02T00:00:00Z; previous 2026-07-31T00:00:00Z to 2026-08-01T00:00:00Z.
 ## Strongest changes
 No strong new signal.
 ## Receipts
-Aggregate counts.
+15 aggregate users observed.
 ## Decision affected
 Keep observing.
 ## Confidence and falsification test
@@ -30,7 +30,7 @@ Low; revisit if activation changes.
 ## Source health
 D1 and GitHub ok.
 ## Unavailable sources
-PostHog: unavailable. CRM: unavailable. call-transcript: unavailable. external support-platform: unavailable.
+PostHog: unavailable; not checked. CRM: unavailable; not checked. call-transcript: unavailable; not checked. external support-platform: unavailable; not checked.
 `;
 
 describe("market signal report validation", () => {
@@ -52,7 +52,7 @@ describe("market signal report validation", () => {
 
     const misplacedStatuses = validReport
       .replace(
-        "PostHog: unavailable. CRM: unavailable. call-transcript: unavailable. external support-platform: unavailable.",
+        "PostHog: unavailable; not checked. CRM: unavailable; not checked. call-transcript: unavailable; not checked. external support-platform: unavailable; not checked.",
         "PostHog, CRM, call-transcript, external support-platform.",
       )
       .concat("\nAll statuses elsewhere: unavailable and failed.\n");
