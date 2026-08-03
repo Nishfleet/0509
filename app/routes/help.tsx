@@ -3,7 +3,12 @@ import type { LinksFunction, MetaFunction } from "react-router";
 
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
 import { CUSTOMER_SUPPORT_PATHS } from "~/lib/agent-action-catalog";
-import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
+import {
+  canonicalLinks,
+  jsonLdScriptProps,
+  publicSeoMeta,
+  webPageJsonLd,
+} from "~/lib/seo";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 
 const description =
@@ -25,6 +30,11 @@ export default function HelpRoute() {
       title="Get Five to Nine working for your team."
       intro="The fastest path is one competitor, one watchlist, one proof-backed change, then one delivery channel."
     >
+      <script
+        {...jsonLdScriptProps(
+          webPageJsonLd({ name: "Help | Five to Nine", description, pathname: "/help" }),
+        )}
+      />
       <PublicDocBlock title="Start here">
         <ol className="f9-numbered-guide">
           <li>Run a public search from the homepage or Search page.</li>

@@ -4,7 +4,12 @@ import { useLoaderData } from "react-router";
 
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
-import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
+import {
+  canonicalLinks,
+  jsonLdScriptProps,
+  publicSeoMeta,
+  webPageJsonLd,
+} from "~/lib/seo";
 
 const description =
   "Configuration and scope information for Five to Nine; this page is not a live provider-health monitor.";
@@ -39,6 +44,11 @@ export default function StatusRoute() {
       title="Five to Nine service status."
       intro="This page provides configuration and scope information, not a live provider-health monitor. It does not measure live search, email, billing, or provider availability."
     >
+      <script
+        {...jsonLdScriptProps(
+          webPageJsonLd({ name: "Status | Five to Nine", description, pathname: "/status" }),
+        )}
+      />
       <PublicDocBlock title="Core surfaces">
         <dl className="proof-trail-list">
           <div>
