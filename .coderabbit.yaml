@@ -1,0 +1,8 @@
+# CodeRabbit is the LOCAL gate on this machine, run through `crgate` before a
+# commit. It is deliberately not a PR reviewer: Greptile reviews PRs, and having
+# both engines on the same diff at the same stage wastes two rations to learn
+# one thing. See ~/.codex/AGENTS.md.
+reviews:
+  auto_review:
+    enabled: false
+    drafts: false
