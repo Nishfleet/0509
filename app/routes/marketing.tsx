@@ -25,8 +25,11 @@ import {
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import type { RootLoaderData } from "~/root";
 
+// Kept under ~155 characters so search results show the whole line instead of
+// truncating mid-sentence. The audit flagged the previous 166-character copy.
+// Same claims, nothing new promised.
 const marketingDescription =
-  "Five to Nine watches competitors' Meta ads and landing pages for marketing teams and agencies — screenshot evidence, change alerts, and briefs before the next meeting.";
+  "Five to Nine watches competitors' Meta ads and landing pages, then sends screenshot evidence and change alerts before your next meeting.";
 const publicSearchTrialPath =
   "/search?query=nykaa&mode=advertiser&website=https%3A%2F%2Fnykaa.com";
 
