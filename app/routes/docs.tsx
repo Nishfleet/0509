@@ -2,7 +2,12 @@ import { Link } from "react-router";
 import type { LinksFunction, MetaFunction } from "react-router";
 
 import { PublicDocBlock, PublicDocShell } from "~/components/public-doc-shell";
-import { canonicalLinks, publicSeoMeta } from "~/lib/seo";
+import {
+  canonicalLinks,
+  jsonLdScriptProps,
+  publicSeoMeta,
+  webPageJsonLd,
+} from "~/lib/seo";
 
 const description =
   "Five to Nine product docs for setup, delivery, billing, integrations, and safety.";
@@ -23,6 +28,11 @@ export default function DocsRoute() {
       title="Five to Nine docs."
       intro="Task-focused guidance for finding one competitor, judging the proof, saving the work, and knowing what your plan actually includes. This documentation does not measure live provider availability."
     >
+      <script
+        {...jsonLdScriptProps(
+          webPageJsonLd({ name: "Docs | Five to Nine", description, pathname: "/docs" }),
+        )}
+      />
       <nav className="f9-doc-toc" aria-label="On this page">
         <span className="f9-doc-toc-label">On this page</span>
         <ul>

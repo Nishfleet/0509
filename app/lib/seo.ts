@@ -106,6 +106,29 @@ export function faqPageJsonLd(entries: ReadonlyArray<FaqJsonLdEntry>) {
 }
 
 /**
+ * schema.org WebPage for a public informational page. Deliberately plain: it
+ * states only what the page already shows — its name, its description, and the
+ * site it belongs to. The audit found no structured data on /help, /docs or
+ * /status; this closes that without asserting anything the visible page does
+ * not already say.
+ */
+export function webPageJsonLd(input: {
+  name: string;
+  description: string;
+  pathname: string;
+}) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name: input.name,
+    description: input.description,
+    url: canonicalUrl(input.pathname),
+    isPartOf: { "@type": "WebSite", name: SITE_NAME, url: SITE_ORIGIN },
+    publisher: { "@type": "Organization", name: SITE_NAME, url: SITE_ORIGIN },
+  } as const;
+}
+
+/**
  * Props for a JSON-LD <script> tag. Escapes `<` so page data can never break
  * out of the script element.
  */
