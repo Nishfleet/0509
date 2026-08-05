@@ -185,6 +185,12 @@ const errorLoaderData: Record<string, unknown> = {
   inputError: "That website looks incomplete. Add the full domain, like brand.com.",
 };
 
+const enrichmentPendingLoaderData: Record<string, unknown> = {
+  ...resultsLoaderData,
+  selectedAd: resultAd,
+  selectionEnrichmentPending: true,
+};
+
 const warmingLoaderData: Record<string, unknown> = {
   ...idleLoaderData,
   filters: { ...idleLoaderData.filters, query: "nykaa.com" },
@@ -397,5 +403,45 @@ describe("public search submission settle", () => {
       vi.advanceTimersByTime(5_000);
     });
     expect(revalidatorRef.revalidate).toHaveBeenCalledTimes(2);
+  });
+  it("does not spend the one-shot enrichment revalidation while a navigation is in flight", async () => {
+    // Regression: the 4s selection-enrichment revalidation is one-shot per
+    // selection key. Burning the key before the navigation-idle guard spent
+    // the single attempt on a skipped run, so enrichment that had already
+    // finished server-side was never fetched and the creative fell back to
+    // "Not detected…" with the data sitting ready.
+    loaderData = enrichmentPendingLoaderData;
+    locationObj = { pathname: "/search", search: TARGET_SEARCH, hash: "" };
+    navigationState = {
+      state: "loading",
+      location: { pathname: "/search", search: TARGET_SEARCH },
+    };
+
+    const { root, SearchRoute } = await mountRoute();
+
+    // Navigation in flight at the 4s mark: the revalidation must be skipped...
+    await act(async () => {
+      vi.advanceTimersByTime(4_000);
+    });
+    expect(revalidatorRef.revalidate).toHaveBeenCalledTimes(0);
+
+    // ...and the one-shot must still be available once navigation settles.
+    navigationState = { state: "idle", location: null };
+    await act(async () => {
+      root.render(createElement(SearchRoute));
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(4_000);
+    });
+    expect(revalidatorRef.revalidate).toHaveBeenCalledTimes(1);
+
+    // Still one-shot: it does not keep firing for the same selection key.
+    await act(async () => {
+      root.render(createElement(SearchRoute));
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(4_000);
+    });
+    expect(revalidatorRef.revalidate).toHaveBeenCalledTimes(1);
   });
 });
