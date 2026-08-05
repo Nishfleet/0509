@@ -1,6 +1,20 @@
 import { spawnSync } from "node:child_process";
 import { createServer } from "node:net";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// The wiring test below imports `vite.config.ts`, so stub the heavy plugin
+// factories it calls and capture the Cloudflare plugin options as they are
+// constructed. Only the wiring test imports those modules; the rest of this
+// file exercises the release-server module directly.
+const capturedCloudflareOptions = vi.hoisted(() => [] as unknown[]);
+vi.mock("@cloudflare/vite-plugin", () => ({
+  cloudflare: (options: unknown) => {
+    capturedCloudflareOptions.push(options);
+    return [];
+  },
+}));
+vi.mock("@react-router/dev/vite", () => ({ reactRouter: () => [] }));
+vi.mock("vite-tsconfig-paths", () => ({ default: () => [] }));
 
 // @ts-ignore JavaScript release-server module is intentionally exercised through Vitest.
 const {
@@ -13,6 +27,7 @@ const {
   isLocalReleaseServerIdentity,
   parseExactLoopbackOrigin,
   reserveLocalReleaseOrigin,
+  resolveLocalReleaseCloudflareInspectorPort,
   resolveLocalReleaseRunTimeout,
 } = await import("../scripts/local-release-server.mjs");
 
@@ -111,10 +126,44 @@ describe("local release proof server identity", () => {
 
   it("builds one strict-port server command from the exact run origin", () => {
     const command = buildLocalReleaseServerCommand("http://127.0.0.1:43127");
+    expect(command).toContain("E2E_TEST_MODE=1");
     expect(command).toContain("BETTER_AUTH_URL=http://127.0.0.1:43127");
     expect(command).toContain("APP_ORIGIN=http://127.0.0.1:43127");
     expect(command).toContain("--port 43127 --strictPort");
     expect(command).not.toContain("4179");
+  });
+
+  it("disables the Cloudflare inspector in E2E test mode and keeps the default otherwise", () => {
+    expect(resolveLocalReleaseCloudflareInspectorPort({ E2E_TEST_MODE: "1" })).toBe(false);
+    expect(resolveLocalReleaseCloudflareInspectorPort({ E2E_TEST_MODE: "0" })).toBeUndefined();
+    expect(resolveLocalReleaseCloudflareInspectorPort({})).toBeUndefined();
+    vi.stubEnv("E2E_TEST_MODE", undefined);
+    try {
+      expect(resolveLocalReleaseCloudflareInspectorPort(undefined)).toBeUndefined();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("passes the disabled inspector to the Cloudflare plugin when the release server boots", async () => {
+    capturedCloudflareOptions.length = 0;
+
+    try {
+      vi.stubEnv("E2E_TEST_MODE", "1");
+      vi.resetModules();
+      const { default: viteConfigE2E } = await import("../vite.config");
+      viteConfigE2E({ command: "serve", mode: "development" });
+      expect(capturedCloudflareOptions.at(-1)).toMatchObject({ inspectorPort: false });
+
+      vi.unstubAllEnvs();
+      vi.resetModules();
+      const { default: viteConfigDefault } = await import("../vite.config");
+      viteConfigDefault({ command: "serve", mode: "development" });
+      expect(capturedCloudflareOptions.at(-1)).toMatchObject({ inspectorPort: undefined });
+    } finally {
+      vi.unstubAllEnvs();
+      vi.resetModules();
+    }
   });
 
   it("retries a fast failure once, then returns a successful server exit", () => {
