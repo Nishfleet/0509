@@ -48,17 +48,36 @@ export function parseExactLoopbackOrigin(value) {
 }
 
 /**
+ * Resolve the Cloudflare Vite plugin's `inspectorPort` option for the local
+ * release server. Choosing a worker inspector port makes the plugin enumerate
+ * the host's network interfaces (`getLocalHosts` -> `os.networkInterfaces()`),
+ * which aborts boot on the hardened self-hosted verify runners with
+ * `uv_interface_addresses returned Unknown system error 97` (EAFNOSUPPORT).
+ * Headless local release proofs never attach an inspector, so E2E test mode
+ * opts the plugin out of port selection entirely through its documented
+ * `inspectorPort: false` option and the enumeration is never reached. Outside
+ * E2E test mode the inspector keeps its default behavior.
+ *
+ * @param {Record<string, string | undefined> | undefined} [env]
+ * @returns {false | undefined}
+ */
+export function resolveLocalReleaseCloudflareInspectorPort(env = process.env) {
+  return String(env?.E2E_TEST_MODE) === "1" ? false : undefined;
+}
+
+/**
  * @param {string} origin
  * @returns {string}
  */
 export function buildLocalReleaseServerCommand(origin) {
   const parsed = parseExactLoopbackOrigin(origin);
+  // `E2E_TEST_MODE=1` is the explicit environment contract that disables the
+  // Cloudflare plugin's interface enumeration for its inspector port (see
+  // `resolveLocalReleaseCloudflareInspectorPort`). The self-hosted verify
+  // runners otherwise fail the dev server at boot with
+  // `uv_interface_addresses returned Unknown system error 97` (EAFNOSUPPORT)
+  // while Vite enumerates interfaces for its startup banner.
   const server = `E2E_TEST_MODE=1 E2E_PROVIDER_NETWORK_DENY=1 E2E_SEARCH_ROLLOUT_MODE=v2 AUTH_PROVIDER=better-auth BETTER_AUTH_SECRET=local-test-secret-local-test-secret-local BETTER_AUTH_URL=${parsed.origin} APP_ORIGIN=${parsed.origin} ./node_modules/.bin/react-router dev --host 127.0.0.1 --port ${parsed.port} --strictPort`;
-  // The self-hosted verify runners intermittently fail the dev server at boot
-  // with `uv_interface_addresses returned Unknown system error 97`
-  // (EAFNOSUPPORT) while Vite enumerates interfaces for its startup banner.
-  // It is environmental and transient — a second attempt starts cleanly.
-  //
   // Retry ONLY a fast boot failure. If the server stayed up for
   // LOCAL_RELEASE_SERVER_BOOT_SECONDS or longer, its exit is a real result
   // (Playwright tearing it down, or a genuine crash) and is passed straight
