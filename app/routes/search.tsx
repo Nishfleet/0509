@@ -1191,13 +1191,17 @@ export default function SearchRoute() {
       return;
     }
     const timer = setTimeout(() => {
-      setSelectionEnrichmentRevalidatedFor(selectionEnrichmentKey);
       // Same rule as warming: a revalidation here would abort/restart an
       // in-flight GET navigation, so wait until navigation is idle too.
+      // Burn the one-shot key only when the revalidation actually fires —
+      // marking it first spends the single attempt on a run that was skipped,
+      // so enrichment that finished server-side would never be fetched and the
+      // UI would fall back to "Not detected…" with the data sitting ready.
       if (
         revalidator.state === "idle" &&
         navigation.state === "idle"
       ) {
+        setSelectionEnrichmentRevalidatedFor(selectionEnrichmentKey);
         revalidator.revalidate();
       }
     }, 4_000);
