@@ -248,6 +248,8 @@ function mockReliabilityDependencies(input: {
     listWatchEvents: vi.fn().mockResolvedValue([]),
     listWatchEventsForRun: vi.fn().mockResolvedValue([]),
     listAdsByIds: vi.fn().mockResolvedValue([]),
+    listEventCandidates: vi.fn().mockResolvedValue([]),
+    listRecentProofCapturesForWatchlist: vi.fn().mockResolvedValue([]),
     listWatchEventsBetween,
     listWatchlists,
     logMetaIntegrationStatus,

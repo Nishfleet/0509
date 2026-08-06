@@ -5,6 +5,18 @@ import type {
   WatchEventStatus,
   WatchEventType,
 } from "~/lib/types";
+// Zero-noise period triage lives in an isomorphic module (the app route
+// renders it client-side); server callers keep importing this module.
+export {
+  WATCH_PERIOD_TRIAGE_STATUSES,
+  classifyWatchPeriodTriage,
+  readTriageFromDigestSummary,
+  triageToDigestSummary,
+  type WatchPeriodTriage,
+  type WatchPeriodTriageInput,
+  type WatchPeriodTriageSourceStatus,
+  type WatchPeriodTriageStatus,
+} from "~/lib/watch-period-triage";
 
 // Must exceed the regular scan cadence: without a wider window, repeated
 // variants of the same change (A/B tests, countdown headlines) re-alert forever.

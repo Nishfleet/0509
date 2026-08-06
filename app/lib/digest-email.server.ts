@@ -19,6 +19,7 @@ import {
   type DigestTrustItem,
 } from "~/lib/proof-classification";
 import { safeTimeZone } from "~/lib/safe-timezone";
+import type { WatchPeriodTriageStatus } from "~/lib/watch-event-evaluator.server";
 import {
   EMAIL_H1_STYLE,
   EMAIL_H2_STYLE,
@@ -36,6 +37,24 @@ export interface DigestEmailHeartbeat {
   runs: number;
   watchlistsChecked: number;
   adsSeen: number;
+  /**
+   * Zero-noise period triage (2026-08-06): the truthful classification of the
+   * period carried by the orchestration. Absent (legacy periods / retries of
+   * pre-triage digests) renders the classic all-quiet heartbeat unchanged.
+   */
+  triage?: DigestEmailHeartbeatTriage | null;
+}
+
+export interface DigestEmailHeartbeatTriage {
+  status: WatchPeriodTriageStatus;
+  label: string;
+  explanation: string;
+  checkedAt: string | null;
+  checksCompleted: number;
+  suppressedChanges: number;
+  suppressionReasons: string[];
+  nextAction: string;
+  noActionLine: string | null;
 }
 
 /*
@@ -82,6 +101,12 @@ export interface DigestEmailInput {
 
 export function buildDigestEmail(input: DigestEmailInput): DigestEmailModel {
   if (input.items.length === 0 && input.heartbeat) {
+    const triage = input.heartbeat.triage;
+    // Routine-only and incomplete periods are never "all quiet": they get
+    // their own honest email. A missing triage keeps the legacy heartbeat.
+    if (triage && triage.status !== "all_quiet") {
+      return buildTriageDigestEmail(input);
+    }
     return buildQuietDigestEmail(input);
   }
 
@@ -227,6 +252,7 @@ export function buildScanTroubleEmail(input: {
 
 function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
   const heartbeat = input.heartbeat!;
+  const triage = input.heartbeat!.triage ?? null;
   const cadenceLabel = digestCadenceLabel(input.cadence);
   const quietPeriodLabel = input.cadence === "daily" ? "today" : "this period";
   const mondayBriefNote =
@@ -234,6 +260,14 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
   const subject = `All quiet: no competitor moves worth action ${quietPeriodLabel}${mondayBriefNote}`;
   const dateRange = `${formatDate(input.periodStart, input.timeZone)} to ${formatDate(input.periodEnd, input.timeZone)}`;
   const preheader = `${heartbeat.runs} checks across ${heartbeat.watchlistsChecked} competitors found no action-worthy movement.`;
+  // Zero-noise record (2026-08-06): the all-quiet claim is only honest when
+  // checks actually completed, so the record names the checked-at time, the
+  // source status, and an explicit no-action + next-action line. Legacy
+  // heartbeats without a triage stay byte-identical.
+  const recordHtml = triage
+    ? `<p style="margin: 0 0 16px; color: #475467;">${renderTriageRecordText(triage, input.timeZone)}</p>`
+    : "";
+  const recordText = triage ? renderTriageRecordText(triage, input.timeZone) : null;
   const html = `
     <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
     ${renderEmailContentSurface(`
@@ -244,6 +278,7 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
         We ran ${heartbeat.runs} check${heartbeat.runs === 1 ? "" : "s"} across ${heartbeat.watchlistsChecked} competitor${heartbeat.watchlistsChecked === 1 ? "" : "s"}
         and reviewed ${heartbeat.adsSeen} ad${heartbeat.adsSeen === 1 ? "" : "s"}. Completed checks found no action-worthy movement across the sources that ran.
       </p>
+      ${recordHtml}
       <p style="margin: 0 0 20px;">
         <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">Review digest history</a>
       </p>
@@ -259,6 +294,7 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
     dateRange,
     "",
     `${heartbeat.runs} checks across ${heartbeat.watchlistsChecked} competitors reviewed ${heartbeat.adsSeen} ads. Completed checks found no action-worthy movement across the sources that ran.`,
+    ...(recordText ? ["", recordText] : []),
     "",
     `Review digest history: ${input.fullDigestUrl}`,
     ...renderUpgradeNoteText(input),
@@ -273,6 +309,114 @@ function buildQuietDigestEmail(input: DigestEmailInput): DigestEmailModel {
     html,
     text,
   };
+}
+
+const TRIAGE_EMAIL_SUBJECTS: Record<WatchPeriodTriageStatus, string> = {
+  changed: "Competitor changes are ready to review",
+  evidence_failed: "Some competitor checks couldn't finish",
+  evidence_pending: "Some competitor changes are still waiting for evidence",
+  routine_only: "Routine changes only — nothing new to act on",
+  all_quiet: "All quiet: no competitor moves worth action",
+  not_run: "No competitor checks completed this period",
+};
+
+const TRIAGE_EMAIL_HEADLINES: Record<WatchPeriodTriageStatus, string> = {
+  changed: "Competitor changes are ready to review.",
+  evidence_failed: "We couldn't finish some competitor checks.",
+  evidence_pending: "Evidence is still pending on some changes.",
+  routine_only: "Routine changes only — nothing new to act on.",
+  all_quiet: "All quiet: no competitor moves worth action.",
+  not_run: "No competitor checks completed this period.",
+};
+
+const TRIAGE_SOURCE_LABELS: Record<WatchPeriodTriageStatus, string> = {
+  changed: "completed checks",
+  evidence_failed: "evidence check failed",
+  evidence_pending: "evidence pending",
+  routine_only: "completed checks",
+  all_quiet: "completed checks",
+  not_run: "no completed checks",
+};
+
+/**
+ * Zero-noise triage email (2026-08-06): routine-only and incomplete periods
+ * are never presented as "all quiet". The email states what was checked, what
+ * was found (including suppression reasons), and the honest next step. Copy
+ * comes from the shared triage vocabulary so app and email never diverge.
+ */
+function buildTriageDigestEmail(input: DigestEmailInput): DigestEmailModel {
+  const heartbeat = input.heartbeat!;
+  const triage = input.heartbeat!.triage!;
+  const cadenceLabel = digestCadenceLabel(input.cadence);
+  const dateRange = `${formatDate(input.periodStart, input.timeZone)} to ${formatDate(input.periodEnd, input.timeZone)}`;
+  const subject =
+    TRIAGE_EMAIL_SUBJECTS[triage.status] ?? TRIAGE_EMAIL_SUBJECTS.changed;
+  const headline =
+    TRIAGE_EMAIL_HEADLINES[triage.status] ?? TRIAGE_EMAIL_HEADLINES.changed;
+  const preheader = `${triage.explanation} ${triage.noActionLine ?? triage.nextAction}`;
+  const checksLine = `We ran ${heartbeat.runs} check${heartbeat.runs === 1 ? "" : "s"} across ${heartbeat.watchlistsChecked} competitor${heartbeat.watchlistsChecked === 1 ? "" : "s"} this period.`;
+  const suppressionHtml =
+    triage.suppressionReasons.length > 0
+      ? `<p style="margin: 0 0 16px; color: #475467;">Held back: ${escapeHtml(triage.suppressionReasons.join("; "))}.</p>`
+      : "";
+  const recordText = renderTriageRecordText(triage, input.timeZone);
+  const html = `
+    <div style="display:none; max-height:0; overflow:hidden; opacity:0;">${escapeHtml(preheader)}</div>
+    ${renderEmailContentSurface(`
+      <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: #98a2b3;">Five to Nine ${escapeHtml(cadenceLabel)}</p>
+      <h1 style="${EMAIL_H1_STYLE}">${escapeHtml(headline)}</h1>
+      <p style="margin: 0 0 18px; color: #475467;">${escapeHtml(dateRange)}</p>
+      <p style="margin: 0 0 16px; color: #475467;">${escapeHtml(checksLine)}</p>
+      ${suppressionHtml}
+      <p style="margin: 0 0 16px; color: #475467;">${escapeHtml(recordText)}</p>
+      <p style="margin: 0 0 20px;">
+        <a href="${escapeHtml(input.fullDigestUrl)}" style="display:inline-block; background-color:#101828; color:#ffffff; text-decoration:none; padding:11px 18px; border-radius:8px; font-weight:700;">View the full brief</a>
+      </p>
+      ${renderUpgradeNoteHtml(input)}<p style="margin: 0; color: #98a2b3; font-size: 13px;">
+        Source coverage: verified evidence means a stored screenshot, page record, or source link is attached. Manage frequency in <a href="${escapeHtml(input.manageFrequencyUrl)}" style="color:#344054;">Notifications</a>, unsubscribe below, or contact <a href="${escapeHtml(input.supportMailto)}" style="color:#344054;">${escapeHtml(input.supportEmail)}</a>.
+      </p>
+    `)}
+  `;
+  const text = [
+    `Five to Nine ${cadenceLabel}`,
+    "",
+    headline,
+    dateRange,
+    "",
+    checksLine,
+    ...(triage.suppressionReasons.length > 0
+      ? [`Held back: ${triage.suppressionReasons.join("; ")}.`]
+      : []),
+    recordText,
+    "",
+    `View the full brief: ${input.fullDigestUrl}`,
+    ...renderUpgradeNoteText(input),
+    `Manage frequency: ${input.manageFrequencyUrl}`,
+    input.unsubscribeUrl ? `Unsubscribe: ${input.unsubscribeUrl}` : null,
+    `Support: ${input.supportEmail}`,
+  ].filter((line): line is string => typeof line === "string").join("\n");
+
+  return {
+    subject,
+    preheader,
+    html,
+    text,
+  };
+}
+
+function renderTriageRecordText(
+  triage: DigestEmailHeartbeatTriage,
+  timeZone: string | null | undefined,
+) {
+  const checkedAt = triage.checkedAt
+    ? ` Checked at ${formatDateTime(triage.checkedAt, timeZone)}.`
+    : "";
+  // Both lines are load-bearing: the no-action line states the honest verdict
+  // and the next-action line always says what happens next.
+  const actionLines = [triage.noActionLine, triage.nextAction]
+    .filter((line): line is string => typeof line === "string" && line.length > 0)
+    .join(" ");
+  return `${triage.explanation} ${actionLines}${checkedAt} Source: ${TRIAGE_SOURCE_LABELS[triage.status] ?? "completed checks"}.`;
 }
 
 type TopMoveGroup = {

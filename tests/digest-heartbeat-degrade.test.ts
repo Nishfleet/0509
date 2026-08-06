@@ -58,6 +58,8 @@ function dataServerMock(overrides: Record<string, unknown> = {}) {
     getWorkspaceDeliveryConfig: vi.fn().mockResolvedValue(null),
     listAdsByIds: vi.fn().mockResolvedValue([]),
     listDigests: vi.fn().mockResolvedValue([]),
+    listEventCandidates: vi.fn().mockResolvedValue([]),
+    listRecentProofCapturesForWatchlist: vi.fn().mockResolvedValue([]),
     listRetryableDigestRuns: vi.fn().mockResolvedValue([]),
     listWatchEventsBetween: vi.fn().mockResolvedValue([]),
     listWatchlists: vi
@@ -171,7 +173,13 @@ describe("WP-21 daily heartbeat auto-degrade", () => {
     expect(deliverWeeklyDigest).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        heartbeat: { runs: 4, watchlistsChecked: 1, adsSeen: 20 },
+        heartbeat: expect.objectContaining({
+          runs: 4,
+          watchlistsChecked: 1,
+          adsSeen: 20,
+          // Zero-noise triage: the period is truthfully all-quiet.
+          triage: expect.objectContaining({ status: "all_quiet" }),
+        }),
         items: [],
       }),
     );
@@ -197,7 +205,12 @@ describe("WP-21 daily heartbeat auto-degrade", () => {
     expect(deliverWeeklyDigest).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        heartbeat: { runs: 4, watchlistsChecked: 1, adsSeen: 20 },
+        heartbeat: expect.objectContaining({
+          runs: 4,
+          watchlistsChecked: 1,
+          adsSeen: 20,
+          triage: expect.objectContaining({ status: "all_quiet" }),
+        }),
       }),
     );
   });
@@ -217,7 +230,12 @@ describe("WP-21 daily heartbeat auto-degrade", () => {
     expect(deliverWeeklyDigest).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        heartbeat: { runs: 4, watchlistsChecked: 1, adsSeen: 20 },
+        heartbeat: expect.objectContaining({
+          runs: 4,
+          watchlistsChecked: 1,
+          adsSeen: 20,
+          triage: expect.objectContaining({ status: "all_quiet" }),
+        }),
       }),
     );
   });
