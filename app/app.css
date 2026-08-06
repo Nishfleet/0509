@@ -3267,6 +3267,13 @@ one signal-green accent.
   padding: 1px 7px;
 }
 
+.ld-trail-note {
+  margin: 10px 0 0;
+  font-size: 0.74rem;
+  line-height: 1.5;
+  color: var(--ld-ink-soft);
+}
+
 .ld-intel {
   grid-column: 1 / -1;
   display: grid;

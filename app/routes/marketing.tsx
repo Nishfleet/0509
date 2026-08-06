@@ -322,6 +322,12 @@ function hasBundlePrice(preview: LocalPricingPreview | null, bundleId: UsageBund
   return Boolean(preview?.usageBundles?.[bundleId]?.display);
 }
 
+// Sample-proof fields must never render blank. An empty fixture value
+// degrades to the explicit unavailable state instead of an empty label.
+export function sampleProofValue(value: string): string {
+  return value.trim() || "Not available in this sample";
+}
+
 export function planIntentPath(
   signedIn: boolean,
   plan: PricingPlanSlug,
@@ -622,7 +628,7 @@ export default function MarketingRoute() {
                 <li>New CTA pushing buyers to book</li>
                 <li>Lead form added overnight</li>
               </ul>
-              <small>Screenshots saved. Next move ready by 05:09.</small>
+              <small>Sample evidence — no live captures attached. Next move ready by 05:09.</small>
             </aside>
           </div>
         </div>
@@ -657,31 +663,31 @@ export default function MarketingRoute() {
             <dl>
               <div>
                 <dt>What changed</dt>
-                <dd>{demoProof.digestPreview.whatChanged}</dd>
+                <dd>{sampleProofValue(demoProof.digestPreview.whatChanged)}</dd>
               </div>
               <div>
                 <dt>Why it matters</dt>
-                <dd>{demoProof.digestPreview.whyItMatters}</dd>
+                <dd>{sampleProofValue(demoProof.digestPreview.whyItMatters)}</dd>
               </div>
               <div>
                 <dt>Urgency</dt>
-                <dd>{demoProof.digestPreview.priority}</dd>
+                <dd>{sampleProofValue(demoProof.digestPreview.priority)}</dd>
               </div>
               <div>
                 <dt>Proof status</dt>
-                <dd>{demoProof.digestPreview.proofStatus}</dd>
+                <dd>{sampleProofValue(demoProof.digestPreview.proofStatus)}</dd>
               </div>
               <div>
                 <dt>Source</dt>
-                <dd>{demoProof.digestPreview.source}</dd>
+                <dd>{sampleProofValue(demoProof.digestPreview.source)}</dd>
               </div>
               <div>
                 <dt>Freshness</dt>
-                <dd>{demoProof.digestPreview.freshness}</dd>
+                <dd>{sampleProofValue(demoProof.digestPreview.freshness)}</dd>
               </div>
               <div>
                 <dt>Next action</dt>
-                <dd>{demoProof.digestPreview.recommendedMove}</dd>
+                <dd>{sampleProofValue(demoProof.digestPreview.recommendedMove)}</dd>
               </div>
             </dl>
           </article>
@@ -691,12 +697,16 @@ export default function MarketingRoute() {
             <ul className="ld-trail">
               {demoProof.proofTrail.map((item) => (
                 <li key={item.signal}>
-                  <strong>{item.signal}</strong>
-                  <p>{item.evidence}</p>
-                  <em>{item.source}</em>
+                  <strong>{sampleProofValue(item.signal)}</strong>
+                  <p>{sampleProofValue(item.evidence)}</p>
+                  <em>{sampleProofValue(item.source)}</em>
                 </li>
               ))}
             </ul>
+            <p className="ld-trail-note" role="note">
+              This sample trail is illustrative — no live captures are attached to this preview.
+              Saved watches attach real screenshots, page text, and original links.
+            </p>
           </article>
 
           <article className="ld-case-card">
