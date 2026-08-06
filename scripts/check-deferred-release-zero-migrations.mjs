@@ -56,6 +56,11 @@ export const SHA_PATTERN = /^[0-9a-f]{40}$/u;
  */
 export const BASELINE_EVIDENCE_PATH = "test-results/deferred-release-baseline.json";
 
+/**
+ * @typedef {{ status: number, stdout: string, stderr: string }} ExecResult
+ * @typedef {(command: string, args: string[]) => ExecResult} Exec
+ */
+
 /** Thrown for every refusal, so the CLI can render one and exit non-zero. */
 export class GateRefusal extends Error {
   /** @param {string} reason @param {string} detail */
@@ -66,7 +71,13 @@ export class GateRefusal extends Error {
   }
 }
 
-/** Default executor. Never throws: a spawn error is just a non-zero result. */
+/**
+ * Default executor. Never throws: a spawn error is just a non-zero result.
+ *
+ * @param {string} command
+ * @param {string[]} args
+ * @returns {ExecResult}
+ */
 export function defaultExec(command, args) {
   const result = spawnSync(command, args, {
     cwd: root,
@@ -113,7 +124,8 @@ export function resolveLiveSha(exec = defaultExec) {
   } catch (error) {
     throw new GateRefusal(
       "live_release_unparsable",
-      `Could not read the live release lookup as JSON: ${error.message}`,
+      "Could not read the live release lookup as JSON: " +
+        `${error instanceof Error ? error.message : String(error)}`,
     );
   }
   const sha = Array.isArray(parsed) ? parsed[0]?.headSha : undefined;
@@ -135,6 +147,9 @@ export function resolveLiveSha(exec = defaultExec) {
  * fetch is a fallback for shallow contexts. Success is judged by whether the
  * object is actually present afterwards, never by the fetch's exit code — a
  * fetch that reports success without materialising the commit must still refuse.
+ *
+ * @param {string} sha
+ * @param {Exec} [exec]
  */
 export function ensureCommitPresent(sha, exec = defaultExec) {
   const present = () => exec("git", ["cat-file", "-e", `${sha}^{commit}`]).status === 0;
@@ -153,6 +168,10 @@ export function ensureCommitPresent(sha, exec = defaultExec) {
  *
  * `git diff --quiet` reports through its exit code: 0 identical, 1 differs.
  * Anything else is a real git error and must not be read as either answer.
+ *
+ * @param {string} baselineSha
+ * @param {Exec} [exec]
+ * @returns {{ changed: boolean, files: string[] }}
  */
 export function compareMigrations(baselineSha, exec = defaultExec) {
   const diff = exec("git", [
@@ -192,7 +211,12 @@ export function checkDeferredRelease(exec = defaultExec) {
   return { ok: true, baselineSha, migrationFileCount: 0 };
 }
 
-/** Persist the baseline so the Gate C journal records what was really used. */
+/**
+ * Persist the baseline so the Gate C journal records what was really used.
+ *
+ * @param {Record<string, unknown>} evidence
+ * @param {string} [base]
+ */
 export function writeBaselineEvidence(evidence, base = root) {
   const target = join(base, BASELINE_EVIDENCE_PATH);
   mkdirSync(dirname(target), { recursive: true });

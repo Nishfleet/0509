@@ -55,7 +55,8 @@ export function validateDeferredBackupDisposition(value, candidateSha) {
     // Shape, not a fixed value: the baseline is whatever was live when the
     // schema check ran, so pinning one sha here recorded a baseline the gate
     // had stopped using. Every other field below stays exactly as pinned.
-    RELEASE_SHA_PATTERN.test(disposition.deployedBaselineSha ?? "") &&
+    typeof disposition.deployedBaselineSha === "string" &&
+    RELEASE_SHA_PATTERN.test(disposition.deployedBaselineSha) &&
     disposition.releaseControlBaseSha ===
       "048e8a5991c6560a15cba485a7a4ba27af9d5004" &&
     disposition.candidateSha === candidateSha &&
