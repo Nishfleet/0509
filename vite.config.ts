@@ -5,6 +5,7 @@ import { reactRouter } from "@react-router/dev/vite";
 import { cloudflare } from "@cloudflare/vite-plugin";
 import { defineConfig, searchForWorkspaceRoot } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
+import { resolveLocalReleaseCloudflareInspectorPort } from "./scripts/local-release-server.mjs";
 
 const require = createRequire(import.meta.url);
 const reactRouterDevRoot = path.dirname(require.resolve("@react-router/dev/package.json"));
@@ -16,6 +17,11 @@ const e2eOrigin = process.env.APP_ORIGIN ?? "http://127.0.0.1:4179";
 const e2eBetterAuthSecret =
   process.env.BETTER_AUTH_SECRET ??
   "7f2c0cb9d8f541dfb58d94397b67953f37a3843cd9dd4fb582ec912b4db67093";
+// E2E test mode disables the Cloudflare plugin's inspector port selection so
+// the dev server never enumerates host interfaces at boot (`os.networkInterfaces`
+// can abort boot on hardened runners with `uv_interface_addresses ... system
+// error 97`). Manual `npm run dev` keeps the default inspector.
+const cloudflareInspectorPort = resolveLocalReleaseCloudflareInspectorPort();
 
 export default defineConfig(({ mode }) => ({
   plugins:
@@ -41,6 +47,7 @@ export default defineConfig(({ mode }) => ({
                 }
               : {}),
             persistState: isE2ETestMode ? { path: e2ePersistPath } : true,
+            inspectorPort: cloudflareInspectorPort,
             viteEnvironment: { name: "ssr" },
           }),
           reactRouter(),
