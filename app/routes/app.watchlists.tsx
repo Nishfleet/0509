@@ -16,6 +16,7 @@ import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboa
 import { LocalTime } from "~/components/local-time";
 import { PartialDataNotice } from "~/components/partial-data-notice";
 import { useQuickAdd } from "~/components/quick-add-context";
+import { QuietLine } from "~/components/evidence/quiet-line";
 import { TertiaryAction } from "~/components/evidence/cta";
 import { SubmitButton } from "~/components/submit-button";
 import { BulkSelectBar } from "~/components/watchlists/bulk-select-bar";
@@ -33,6 +34,7 @@ import {
   formatCompetitorContextLine,
   resolveCompetitorFilter,
   toCompetitorRows,
+  type CompetitorRow,
 } from "~/lib/competitor-list-display";
 import { toCustomerDiscoveryStatus } from "~/lib/discovery-customer-copy";
 import {
@@ -41,6 +43,13 @@ import {
 } from "~/lib/ga-customer-surface";
 import { canUsePlanFeature } from "~/lib/plan-entitlements";
 import { formatNextScanLabel } from "~/lib/schedule-display";
+import type {
+  EventCandidateRecord,
+  ProofCaptureRecord,
+  WatchEventRecord,
+  WatchlistRunRecord,
+} from "~/lib/types";
+import { classifyWatchPeriodTriage } from "~/lib/watch-period-triage";
 import { countHardFailuresSinceLastSuccess } from "~/lib/watchlist-detail-display";
 import {
   resolveWatchlistDetailTab,
@@ -70,6 +79,77 @@ export {
 // WatchlistProofAge now lives in its own component module; re-exported here for
 // the hydration test that imports it from "~/routes/app.watchlists".
 export { WatchlistProofAge } from "~/components/watchlists/watchlist-proof-age";
+
+/* ============================================================================
+   Zero-noise record (2026-08-06, zero-noise proof triage packet).
+
+   The app surface states the same period classification the digest email
+   uses: all quiet is a finding with a checked-at time and a no-action line,
+   routine-only changes name their suppression reason, and a failed or
+   pending evidence check is never presented as quiet. Copy comes from the
+   shared triage vocabulary in ~/lib/watch-event-evaluator.server so the two
+   surfaces never diverge.
+   ========================================================================== */
+
+export interface WatchlistTriageRecord {
+  label: string;
+  line: string;
+  reasons: string[];
+  stampIso: string | null;
+}
+
+/**
+ * The truthful period record for the opened competitor. Returns null when the
+ * change feed already carries the story (confirmed changes), or when an
+ * existing surface owns the state (first capture still running / in line).
+ */
+export function resolveWatchlistTriageRecord(input: {
+  events: readonly WatchEventRecord[];
+  candidates: readonly EventCandidateRecord[];
+  runs: readonly WatchlistRunRecord[];
+  proofCaptures: readonly ProofCaptureRecord[];
+  lastScannedAt: string | null;
+}): WatchlistTriageRecord | null {
+  const latestRun = input.runs[0] ?? null;
+  if (latestRun && (latestRun.status === "running" || latestRun.status === "pending")) {
+    // The first-capture banner and the change feed already own these states.
+    return null;
+  }
+  if (latestRun && (latestRun.status === "failed" || latestRun.status === "skipped")) {
+    return {
+      label: "Latest check didn't complete",
+      line: "The latest check didn't complete. We're retrying — open Recent checks for what happened and what runs next.",
+      reasons: [],
+      stampIso: null,
+    };
+  }
+  const succeededRuns = input.runs.filter((run) => run.status === "succeeded");
+  const lastSuccessfulCheckAt =
+    succeededRuns.reduce<string | null>((latest, run) => {
+      if (!run.finishedAt) return latest;
+      return !latest || run.finishedAt > latest ? run.finishedAt : latest;
+    }, null) ?? input.lastScannedAt;
+  const triage = classifyWatchPeriodTriage({
+    events: input.events,
+    candidates: input.candidates,
+    proofCaptures: input.proofCaptures,
+    successfulRuns: succeededRuns.length,
+    lastSuccessfulCheckAt,
+  });
+  if (triage.status === "changed") {
+    // The change feed renders the confirmed changes with their evidence.
+    return null;
+  }
+  const line = [triage.explanation, triage.noActionLine ?? triage.nextAction]
+    .filter(Boolean)
+    .join(" ");
+  return {
+    label: triage.label,
+    line,
+    reasons: triage.suppressionReasons,
+    stampIso: triage.checkedAt,
+  };
+}
 
 export const meta = () => [{ title: "Competitors | Five to Nine" }];
 
@@ -341,6 +421,15 @@ export default function WatchlistsRoute() {
   };
 
   const selectedWatchlist = data.selectedWatchlist;
+  const triageRecord = selectedWatchlist
+    ? resolveWatchlistTriageRecord({
+        events: data.events,
+        candidates: data.eventCandidates,
+        runs: data.runs,
+        proofCaptures: data.recentProofCaptures,
+        lastScannedAt: selectedWatchlist.lastScannedAt,
+      })
+    : null;
   const selectedStatusLabel = selectedWatchlist
     ? rows.find((row) => row.id === selectedWatchlist.id)?.statusLabel ??
       (selectedWatchlist.isActive ? "Watching" : "Paused")
@@ -504,6 +593,30 @@ export default function WatchlistsRoute() {
               Recent aggregate totals are unavailable. Saved check history and management controls
               below are still available.
             </p>
+          ) : null}
+          {/* Zero-noise record: the period's truthful finding sits above the
+              feed. Quiet is a finding (checked at, nothing changed, no action
+              needed); suppressed repeats and failed or pending evidence are
+              stated, never hidden. */}
+          {triageRecord ? (
+            <QuietLine
+              stamp={
+                triageRecord.stampIso ? (
+                  <LocalTime iso={triageRecord.stampIso} />
+                ) : null
+              }
+              copy={
+                <>
+                  <strong>{triageRecord.label}</strong> — {triageRecord.line}
+                  {triageRecord.reasons.length > 0 ? (
+                    <>
+                      {" "}
+                      Held back: {triageRecord.reasons.join("; ")}.
+                    </>
+                  ) : null}
+                </>
+              }
+            />
           ) : null}
           <CompetitorDetail
             activeTab={activeTab}
