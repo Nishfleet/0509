@@ -5,6 +5,8 @@ import {
   buildScanTroubleEmail,
   digestItemDeepLink,
   groupTopMovesByWatchlist,
+  type DigestEmailHeartbeat,
+  type DigestEmailHeartbeatTriage,
 } from "~/lib/digest-email.server";
 
 describe("buildScanTroubleEmail", () => {
@@ -503,7 +505,7 @@ describe("buildDigestEmail", () => {
 		expect(withoutKey.html).not.toContain("unavailable");
 	});
 
-	it("keeps heartbeat digests unaffected by a stray paragraph", () => {
+  it("keeps heartbeat digests unaffected by a stray paragraph", () => {
 		const heartbeatInput = {
 			...strategyEmailInput(),
 			items: [],
@@ -519,6 +521,205 @@ describe("buildDigestEmail", () => {
 		expect(withParagraph.html).not.toContain("AI summary");
 		expect(withParagraph.text).not.toContain("AI summary");
 		expect(withParagraph.html).not.toContain("Should never appear");
+	});
+
+	it("keeps legacy heartbeat emails byte-identical without a triage record", () => {
+		const legacy = buildDigestEmail({
+			name: "Owner",
+			periodStart: "2026-06-01T00:00:00.000Z",
+			periodEnd: "2026-06-02T00:00:00.000Z",
+			cadence: "daily",
+			timeZone: "UTC",
+			items: [],
+			heartbeat: { runs: 3, watchlistsChecked: 2, adsSeen: 42 },
+			fullDigestUrl: "https://0509.io/app/digests",
+			manageFrequencyUrl: "https://0509.io/app/notifications",
+			supportEmail: "support@0509.io",
+			supportMailto: "mailto:support@0509.io",
+			unsubscribeUrl: null,
+		});
+
+		expect(legacy.subject).toBe("All quiet: no competitor moves worth action today");
+		expect(legacy.html).toContain("We ran 3 checks across 2 competitors");
+		expect(legacy.html).not.toContain("No action needed");
+		expect(legacy.text).not.toContain("Source: completed checks.");
+	});
+});
+
+describe("zero-noise triage digest emails (2026-08-06)", () => {
+	function triageEmailInput(heartbeat: DigestEmailHeartbeat) {
+		return {
+			name: "Owner",
+			periodStart: "2026-06-01T00:00:00.000Z",
+			periodEnd: "2026-06-08T00:00:00.000Z",
+			cadence: "weekly" as const,
+			timeZone: "UTC",
+			items: [],
+			heartbeat,
+			fullDigestUrl: "https://0509.io/app/digests",
+			manageFrequencyUrl: "https://0509.io/app/notifications",
+			supportEmail: "support@0509.io",
+			supportMailto: "mailto:support@0509.io",
+			unsubscribeUrl: null,
+		};
+	}
+
+	function triage(
+		status: DigestEmailHeartbeatTriage["status"],
+		overrides: Partial<DigestEmailHeartbeatTriage> = {},
+	): DigestEmailHeartbeatTriage {
+		return {
+			status,
+			label: "Label",
+			explanation: "Explanation sentence.",
+			checkedAt: "2026-06-08T04:00:00.000Z",
+			checksCompleted: 7,
+			suppressedChanges: 0,
+			suppressionReasons: [],
+			nextAction: "We check again at the next scheduled scan.",
+			noActionLine: "No action needed — nothing new to act on.",
+			...overrides,
+		};
+	}
+
+	it("renders an all-quiet record with checked-at, source status, and no-action line", () => {
+		const email = buildDigestEmail(
+			triageEmailInput({
+				runs: 7,
+				watchlistsChecked: 4,
+				adsSeen: 128,
+				triage: triage("all_quiet"),
+			}),
+		);
+
+		// Same honest subject family as the legacy all-quiet email.
+		expect(email.subject).toBe(
+			"All quiet: no competitor moves worth action this period (including your Monday brief)",
+		);
+		expect(email.html).toContain("Checked at");
+		expect(email.html).toContain("Source: completed checks.");
+		expect(email.html).toContain("No action needed — nothing new to act on.");
+		expect(email.html).toContain("We check again at the next scheduled scan.");
+		expect(email.text).toContain("Source: completed checks.");
+		expect(email.text).not.toContain("proof-backed");
+	});
+
+	it("renders routine-only suppression with its reason instead of claiming all quiet", () => {
+		const email = buildDigestEmail(
+			triageEmailInput({
+				runs: 7,
+				watchlistsChecked: 4,
+				adsSeen: 128,
+				triage: triage("routine_only", {
+					label: "Routine changes only",
+					explanation:
+						"We saw 3 routine changes and held the alert — each one repeats a change already reported this period.",
+					suppressedChanges: 3,
+					suppressionReasons: [
+						"Repeat of a change already reported this period",
+					],
+					noActionLine: "No action needed — these are repeats, not new moves.",
+					nextAction: "We alert on a change only when it's new.",
+				}),
+			}),
+		);
+
+		expect(email.subject).toBe("Routine changes only — nothing new to act on");
+		expect(email.html).toContain("Routine changes only — nothing new to act on.");
+		expect(email.html).toContain("held the alert");
+		expect(email.html).toContain(
+			"Held back: Repeat of a change already reported this period.",
+		);
+		expect(email.html).toContain("No action needed — these are repeats, not new moves.");
+		expect(email.text).toContain("Held back: Repeat of a change already reported this period.");
+		expect(email.html).not.toContain("All quiet: no competitor moves worth action");
+		expect(email.subject).not.toContain("All quiet");
+	});
+
+	it("renders an evidence-failed period as evidence-failed, never as all quiet", () => {
+		const email = buildDigestEmail(
+			triageEmailInput({
+				runs: 7,
+				watchlistsChecked: 4,
+				adsSeen: 128,
+				triage: triage("evidence_failed", {
+					label: "Evidence check failed",
+					explanation:
+						"An evidence check couldn't finish, so nothing is confirmed yet.",
+					noActionLine: "No change is confirmed without proof.",
+					nextAction:
+						"We'll retry at the next scheduled check. If it persists, email support and we'll dig in.",
+				}),
+			}),
+		);
+
+		expect(email.subject).toBe("Some competitor checks couldn't finish");
+		expect(email.text).toContain("We couldn't finish some competitor checks.");
+		expect(email.html).toContain("We couldn&#039;t finish some competitor checks.");
+		expect(email.text).toContain(
+			"An evidence check couldn't finish, so nothing is confirmed yet.",
+		);
+		expect(email.text).not.toContain("provider timed out");
+		expect(email.text).not.toContain("possible change was detected");
+		expect(email.text).toContain("No change is confirmed without proof.");
+		expect(email.text).toContain("We'll retry at the next scheduled check");
+		expect(email.text).toContain("Source: evidence check failed.");
+		expect(email.html).not.toContain("All quiet");
+		expect(email.subject).not.toContain("All quiet");
+	});
+
+	it("renders proof-pending as evidence-pending, never as all quiet", () => {
+		const email = buildDigestEmail(
+			triageEmailInput({
+				runs: 7,
+				watchlistsChecked: 4,
+				adsSeen: 128,
+				triage: triage("evidence_pending", {
+					label: "Evidence pending",
+					explanation:
+						"A possible change was detected, but its evidence check hasn't completed, so nothing is confirmed yet.",
+					noActionLine: "No change is confirmed until its evidence lands.",
+					nextAction:
+						"We're retrying the evidence check. Open watchlists for status.",
+				}),
+			}),
+		);
+
+		expect(email.subject).toBe(
+			"Some competitor changes are still waiting for evidence",
+		);
+		expect(email.text).toContain("Evidence is still pending on some changes.");
+		expect(email.text).toContain("nothing is confirmed yet");
+		expect(email.text).toContain("No change is confirmed until its evidence lands.");
+		expect(email.text).toContain("Source: evidence pending.");
+		expect(email.html).not.toContain("All quiet");
+	});
+
+	it("keeps meaningful price/CTA change items with their evidence and next action", () => {
+		const email = buildDigestEmail({
+			name: "Owner",
+			periodStart: "2026-06-01T00:00:00.000Z",
+			periodEnd: "2026-06-08T00:00:00.000Z",
+			cadence: "weekly",
+			timeZone: "UTC",
+			items: [
+				digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed"),
+				digestItem("boAt", "CTA changed", 80, "scan_backed"),
+			],
+			fullDigestUrl: "https://0509.io/app/digests",
+			manageFrequencyUrl: "https://0509.io/app/notifications",
+			supportEmail: "support@0509.io",
+			supportMailto: "mailto:support@0509.io",
+			unsubscribeUrl: null,
+		});
+
+		// SubjectForDigest leads with the top competitor name.
+		expect(email.subject).toBe("Nykaa leads 2 competitor moves worth seeing");
+		expect(email.html).toContain("Landing page offer changed");
+		expect(email.html).toContain("CTA changed");
+		expect(email.html).toContain("Verified evidence");
+		expect(email.html).toContain("Suggested next action:");
+		expect(email.text).toContain("Suggested next action:");
 	});
 });
 

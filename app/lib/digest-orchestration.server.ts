@@ -3,13 +3,13 @@ import {
   digestMetadataForEvent,
 } from "~/lib/change-intelligence";
 import {
-	claimDigestScheduleJob,
-	claimDigestScheduleJobExhaustionAlert,
-	completeDigestScheduleJob,
+  claimDigestScheduleJob,
+  claimDigestScheduleJobExhaustionAlert,
+  completeDigestScheduleJob,
   createDigestRun,
 	enqueueDigestScheduleJobs,
   exhaustStaleMaxAttemptDigestScheduleJobs,
-	failDigestScheduleJob,
+  failDigestScheduleJob,
   getDigest,
   getDigestByPeriod,
   getSuccessfulRunStatsForUserBetween,
@@ -17,6 +17,8 @@ import {
   listAdsByIds,
 	listDigestScheduleJobsAwaitingAlert,
   listDigests,
+  listEventCandidates,
+  listRecentProofCapturesForWatchlist,
   listRetryableDigestRuns,
 	listRetryableDigestScheduleJobs,
 	settleDigestScheduleJobExhaustionAlert,
@@ -47,10 +49,18 @@ import { getUserPlan, PLAN_LIMITS } from "~/lib/plan.server";
 import { planAllowsDigestCadence } from "~/lib/plan-entitlements";
 import type {
   DigestRecord,
+  EventCandidateRecord,
+  ProofCaptureRecord,
   WatchEventRecord,
   WatchEventType,
   WatchlistRecord,
 } from "~/lib/types";
+import {
+  classifyWatchPeriodTriage,
+  readTriageFromDigestSummary,
+  triageToDigestSummary,
+  type WatchPeriodTriage,
+} from "~/lib/watch-event-evaluator.server";
 
 const DAILY_DIGEST_LOOKBACK_DAYS = 1;
 const WEEKLY_DIGEST_LOOKBACK_DAYS = 7;
@@ -61,6 +71,12 @@ const DIGEST_SCHEDULE_JOB_MAX_ATTEMPTS = 5;
 const DIGEST_SCHEDULE_JOB_LEASE_MS = 15 * 60 * 1000;
 const DIGEST_SCHEDULE_JOB_ALERT_LEASE_MS = 15 * 60 * 1000;
 const DAILY_HEARTBEAT_QUIET_STREAK = 3;
+// Zero-noise triage sources: recent candidates carry the suppressed/detected
+// statuses that never become watch events, and recent proof captures carry
+// the failed/pending evidence states. Both are loaded newest-first with a
+// generous cap and filtered to the digest period below.
+const DIGEST_TRIAGE_CANDIDATE_LIMIT = 500;
+const DIGEST_TRIAGE_PROOF_LIMIT = 100;
 
 export interface DigestOrchestrationOptions {
   cadence?: DigestCadence;
@@ -445,6 +461,10 @@ async function runDigestForUser(
     watchlist: WatchlistRecord;
     events: WatchEventRecord[];
   }> = [];
+  // Zero-noise triage (2026-08-06): all period watch events are collected
+  // unfiltered so the period's truthful classification never depends on the
+  // customer-eligibility filter dropping suppressed or pending records.
+  const triageEvents: Array<Pick<WatchEventRecord, "status">> = [];
   for (const watchlist of watchlists) {
     const events = await listWatchEventsBetween(
       env,
@@ -452,6 +472,7 @@ async function runDigestForUser(
       periodStart,
       periodEnd,
     );
+    triageEvents.push(...events);
     eligibleByWatchlist.push({
       watchlist,
       events: events.filter(isCustomerDigestEligibleEvent),
@@ -505,6 +526,10 @@ async function runDigestForUser(
     watchlistsChecked: number;
     adsSeen: number;
   } | null = null;
+  // Zero-noise triage: only the quiet path needs it (periods with digest
+  // items already carry their truth as change events), so the extra
+  // candidate/proof queries only run when they decide the story.
+  let periodTriage: WatchPeriodTriage | null = null;
   if (!existingDigest && digestItems.length === 0) {
     const runStats = await getSuccessfulRunStatsForUserBetween(
       env,
@@ -525,17 +550,39 @@ async function runDigestForUser(
       }
       return 0;
     }
+    heartbeat = runStats;
+    periodTriage = classifyWatchPeriodTriage({
+      events: triageEvents,
+      candidates: await collectPeriodEventCandidates(env, watchlists, {
+        periodStart,
+        periodEnd,
+      }),
+      proofCaptures: await collectPeriodProofCaptures(env, watchlists, {
+        periodStart,
+        periodEnd,
+      }),
+      successfulRuns: runStats.runs,
+      lastSuccessfulCheckAt: lastSuccessfulCheckAtInPeriod(
+        watchlists,
+        periodStart,
+        periodEnd,
+      ),
+    });
     // WP-21 heartbeat auto-degrade: after 3 consecutive daily all-quiet
-    // heartbeats, stay silent on further quiet days. No digest run is created
-    // for the skipped day, so the derived streak persists until a period with
-    // events resets the history. Weekly heartbeats are unaffected.
+    // heartbeats, stay silent on further quiet days. Only a genuinely
+    // all-quiet current period may be auto-silenced; a non-quiet triage
+    // (evidence-failed, evidence-pending, routine-only) is classified,
+    // persisted, and delivered so it breaks the streak instead of being
+    // silently lost. No digest run is created for a skipped day, so the
+    // derived streak persists until a period with findings resets it.
+    // Weekly heartbeats are unaffected.
     if (
       cadence === "daily" &&
+      periodTriage.status === "all_quiet" &&
       (await hasDailyQuietHeartbeatStreak(env, user.id))
     ) {
       return 0;
     }
-    heartbeat = runStats;
   }
 
   let strategyParagraph: string | null = null;
@@ -552,6 +599,7 @@ async function runDigestForUser(
     includedEvents: digestCohort.includedEvents,
     omittedEvents: digestCohort.omittedEvents,
     watchlists: watchlists.length,
+    ...(periodTriage ? triageToDigestSummary(periodTriage) : {}),
     ...(initialStrategyLease
       ? {
           strategyGenerationStatus: DIGEST_STRATEGY_GENERATION_PENDING,
@@ -668,8 +716,20 @@ async function runDigestForUser(
   }
 
   const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+  // Zero-noise triage rides the heartbeat so the email renderer sees the
+  // period's truthful classification without touching the delivery module:
+  // the persisted summary is the durable source, replayed on retries too.
+  // Legacy digests without a triage keep a byte-identical heartbeat.
+  const persistedTriage = readTriageFromDigestSummary(
+    canonicalDigest?.summary ?? digestSummary,
+  );
+  const deliveryHeartbeat = heartbeat
+    ? persistedTriage
+      ? { ...heartbeat, triage: persistedTriage }
+      : heartbeat
+    : null;
   const delivery = await deliverWeeklyDigest(env, {
-    heartbeat,
+    heartbeat: deliveryHeartbeat,
     userId: user.id,
     userName: user.name,
     accountEmail: user.email,
@@ -753,8 +813,17 @@ async function retryFailedDigests(
       }
 
       const { deliverWeeklyDigest } = await import("~/lib/delivery.server");
+      // Retries replay the persisted triage verbatim: a period that was
+      // routine-only or evidence-failed must not re-render as an all-quiet
+      // heartbeat after recovery. Legacy digests stay byte-identical.
+      const persistedTriage = readTriageFromDigestSummary(deliveryDigest.summary);
+      const deliveryHeartbeat = heartbeat
+        ? persistedTriage
+          ? { ...heartbeat, triage: persistedTriage }
+          : heartbeat
+        : null;
       const delivery = await deliverWeeklyDigest(env, {
-        heartbeat,
+        heartbeat: deliveryHeartbeat,
         userId: candidate.userId,
         userName: candidate.userName,
         accountEmail: candidate.userEmail,
@@ -890,6 +959,10 @@ function readNonNegativeInteger(value: unknown) {
  * DAILY_HEARTBEAT_QUIET_STREAK digest runs are all daily all-quiet heartbeats
  * (zero items over a daily-sized period). Any digest with movement — or a
  * weekly digest — breaks the streak and lets daily heartbeats resume.
+ *
+ * Zero-noise (2026-08-06): a routine-only or evidence-pending day is NOT a
+ * quiet day, so its persisted triage also breaks the streak — silence must
+ * never auto-degrade over days that had real findings.
  */
 async function hasDailyQuietHeartbeatStreak(env: AppEnv, userId: string) {
   const recentDigests = await listDigests(
@@ -903,9 +976,75 @@ async function hasDailyQuietHeartbeatStreak(env: AppEnv, userId: string) {
       (digest) =>
         digest.items.length === 0 &&
         digestCadenceForPeriod(digest.periodStart, digest.periodEnd) ===
-          "daily",
+          "daily" &&
+        isQuietTriageDigest(digest.summary),
     )
   );
+}
+
+/** Legacy digests without a triage count as quiet; any real finding breaks the streak. */
+function isQuietTriageDigest(summary: Record<string, unknown> | undefined) {
+  const triage = readTriageFromDigestSummary(summary);
+  return triage === null || triage.status === "all_quiet";
+}
+
+async function collectPeriodEventCandidates(
+  env: AppEnv,
+  watchlists: WatchlistRecord[],
+  period: { periodStart: string; periodEnd: string },
+) {
+  const candidates: Array<
+    Pick<EventCandidateRecord, "status" | "dedupeReason">
+  > = [];
+  for (const watchlist of watchlists) {
+    const recent = await listEventCandidates(
+      env,
+      watchlist.id,
+      DIGEST_TRIAGE_CANDIDATE_LIMIT,
+    );
+    for (const candidate of recent) {
+      const at = candidate.detectedAt ?? candidate.createdAt;
+      if (at >= period.periodStart && at <= period.periodEnd) {
+        candidates.push(candidate);
+      }
+    }
+  }
+  return candidates;
+}
+
+async function collectPeriodProofCaptures(
+  env: AppEnv,
+  watchlists: WatchlistRecord[],
+  period: { periodStart: string; periodEnd: string },
+) {
+  const captures: Array<
+    Pick<ProofCaptureRecord, "status">
+  > = [];
+  for (const watchlist of watchlists) {
+    const recent = await listRecentProofCapturesForWatchlist(
+      env,
+      watchlist.id,
+      DIGEST_TRIAGE_PROOF_LIMIT,
+    );
+    for (const capture of recent) {
+      if (capture.attemptedAt >= period.periodStart && capture.attemptedAt <= period.periodEnd) {
+        captures.push(capture);
+      }
+    }
+  }
+  return captures;
+}
+
+function lastSuccessfulCheckAtInPeriod(
+  watchlists: WatchlistRecord[],
+  periodStart: string,
+  periodEnd: string,
+) {
+  return watchlists.reduce<string | null>((latest, watchlist) => {
+    const at = watchlist.lastScannedAt;
+    if (!at || at < periodStart || at > periodEnd) return latest;
+    return !latest || at > latest ? at : latest;
+  }, null);
 }
 
 function digestCadenceForPeriod(

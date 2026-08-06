@@ -194,6 +194,8 @@ describe("runWeeklyDigests", () => {
       listObservationsForRun: vi.fn(),
       listWatchEvents: vi.fn(),
       listAdsByIds: vi.fn().mockResolvedValue([]),
+      listEventCandidates: vi.fn().mockResolvedValue([]),
+      listRecentProofCapturesForWatchlist: vi.fn().mockResolvedValue([]),
       listWatchEventsBetween: vi.fn().mockResolvedValue([]),
       listWatchlists,
       logMetaIntegrationStatus: vi.fn(),
