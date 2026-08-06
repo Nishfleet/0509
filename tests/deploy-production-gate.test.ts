@@ -306,6 +306,26 @@ describe("production deployment readiness gate", () => {
     expect(plan[canaryIndex + 6]).toMatchObject({ id: "oauth_branding" });
   });
 
+  it("resolves the deferred-release schema baseline at run time, never from a pinned sha", () => {
+    // A pinned baseline is a guarantee with an expiry date. On 2026-08-06 the
+    // sha in this plan was six days old, four migrations had landed after it,
+    // and every deferred release failed for a schema change that had already
+    // shipped - reported only as "git diff --quiet ... failed". The baseline
+    // must be resolved from what is live at run time so it cannot go stale.
+    const deferredPlan = buildProductionDeployPlan({
+      manifestPath: "test-results/deploy-readiness-test.json",
+      backupProofStatus: "deferred",
+      wranglerOutputPath,
+    });
+    const step = deferredPlan.find(
+      (candidate: any) => candidate.id === "deferred_release_zero_migrations",
+    );
+    expect(step).toBeDefined();
+    for (const argument of (step as any).args as string[]) {
+      expect(argument).not.toMatch(/^[0-9a-f]{40}$/u);
+    }
+  });
+
   it("defaults to required backup proof and makes the exact deferred release immediate-only", () => {
     expect(() =>
       buildProductionDeployPlan({
@@ -321,15 +341,8 @@ describe("production deployment readiness gate", () => {
     });
     expect(deferredPlan[0]).toEqual({
       id: "deferred_release_zero_migrations",
-      command: "git",
-      args: [
-        "diff",
-        "--quiet",
-        "03174ed6d9eed749b22430fbe1bc0938bf4da0c5",
-        "HEAD",
-        "--",
-        "migrations",
-      ],
+      command: "node",
+      args: ["scripts/check-deferred-release-zero-migrations.mjs"],
     });
     expect(
       deferredPlan.find((step: any) => step.id === "remote_restore_evidence"),

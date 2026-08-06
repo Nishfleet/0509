@@ -163,16 +163,13 @@ export function buildProductionDeployPlan({
   return [
     ...(normalizedBackupProofStatus === BACKUP_PROOF_DEFERRED
       ? [{
+          // Resolves the live commit at run time. A pinned sha here is a
+          // guarantee with an expiry date: once any migration lands after it,
+          // every deferred release fails forever over a change that already
+          // shipped. See scripts/check-deferred-release-zero-migrations.mjs.
           id: "deferred_release_zero_migrations",
-          command: "git",
-          args: [
-            "diff",
-            "--quiet",
-            "03174ed6d9eed749b22430fbe1bc0938bf4da0c5",
-            "HEAD",
-            "--",
-            "migrations",
-          ],
+          command: "node",
+          args: ["scripts/check-deferred-release-zero-migrations.mjs"],
         }]
       : []),
     {
