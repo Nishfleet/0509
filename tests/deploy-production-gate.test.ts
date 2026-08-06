@@ -367,7 +367,7 @@ describe("production deployment readiness gate", () => {
     ).toThrow("deferred_backup_restore_evidence_conflict");
 
     const disposition = (deployPlanModule as any)
-      .createDeferredBackupDisposition("f".repeat(40));
+      .createDeferredBackupDisposition("f".repeat(40), "a".repeat(40));
     expect(disposition).toMatchObject({
       backupProof: "not_obtained",
       productionD1RecoveryProof: "absent",

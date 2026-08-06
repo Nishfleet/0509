@@ -52,8 +52,10 @@ export function validateDeferredBackupDisposition(value, candidateSha) {
     disposition.productionD1RecoveryProof === "absent" &&
     disposition.localFixtureScratchRestore === "not_production_recovery" &&
     disposition.workerRollback === "separate_not_d1_recovery" &&
-    disposition.deployedBaselineSha ===
-      "03174ed6d9eed749b22430fbe1bc0938bf4da0c5" &&
+    // Shape, not a fixed value: the baseline is whatever was live when the
+    // schema check ran, so pinning one sha here recorded a baseline the gate
+    // had stopped using. Every other field below stays exactly as pinned.
+    RELEASE_SHA_PATTERN.test(disposition.deployedBaselineSha ?? "") &&
     disposition.releaseControlBaseSha ===
       "048e8a5991c6560a15cba485a7a4ba27af9d5004" &&
     disposition.candidateSha === candidateSha &&
@@ -68,8 +70,18 @@ export function validateDeferredBackupDisposition(value, candidateSha) {
   );
 }
 
-/** @param {string} candidateSha */
-export function createDeferredBackupDisposition(candidateSha) {
+/**
+ * Record what a deferred release actually shipped against.
+ *
+ * `baselineSha` is the live commit the schema gate compared against, so the
+ * journal states the baseline that was really used. It used to be a constant,
+ * which meant the recorded evidence and the executed check could disagree
+ * without anything noticing.
+ *
+ * @param {string} candidateSha
+ * @param {string} baselineSha
+ */
+export function createDeferredBackupDisposition(candidateSha, baselineSha) {
   const value = {
     backupProof: "not_obtained",
     backupObjectKey: null,
@@ -78,7 +90,7 @@ export function createDeferredBackupDisposition(candidateSha) {
     productionD1RecoveryProof: "absent",
     localFixtureScratchRestore: "not_production_recovery",
     workerRollback: "separate_not_d1_recovery",
-    deployedBaselineSha: "03174ed6d9eed749b22430fbe1bc0938bf4da0c5",
+    deployedBaselineSha: baselineSha,
     releaseControlBaseSha: "048e8a5991c6560a15cba485a7a4ba27af9d5004",
     candidateSha,
     migrationFileCount: 0,
