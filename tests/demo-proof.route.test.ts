@@ -20,7 +20,16 @@ describe("demo proof API", () => {
     expect(body.trackedPreview.loop).toContain("Run the public search preview");
     expect(body.proofTrail.length).toBeGreaterThanOrEqual(3);
     expect(body.digestPreview.recommendedMove).toContain("counter-test");
-    expect(body.digestPreview.confidence).toBe("Verified evidence with source and freshness attached.");
+    expect(body.digestPreview.proofStatus).toBe("Not available in this sample");
+    expect(body.digestPreview.confidence).toBe(
+      "Not available in this sample — no live capture is attached to this preview.",
+    );
+    expect(body.digestPreview.source).toContain("Sample sources");
+    for (const item of body.proofTrail) {
+      expect(item.source).toMatch(/^Illustrative — /);
+      expect(item.signal.length).toBeGreaterThan(0);
+      expect(item.evidence.length).toBeGreaterThan(0);
+    }
     expect(body.exports.apiPath).toBe("/api/demo-proof");
     expect(body.trackedPreview.deliveryPreview).not.toContain("Slack-ready");
     expect(body.exports.digestMarkdown).toContain("\nPriority:");
@@ -45,7 +54,7 @@ describe("demo proof API", () => {
     expect(body).toContain("## Digest Markdown");
     expect(body).not.toContain("Slack Export");
     expect(body).toContain("\nPriority: Review before next campaign refresh");
-    expect(body).toContain("- Confidence: Verified evidence with source and freshness attached.");
+    expect(body).toContain("- Confidence: Not available in this sample — no live capture is attached to this preview.");
     expect(body).not.toContain("Deprecated sample field");
     expect(body).not.toContain("\\nPriority");
   });

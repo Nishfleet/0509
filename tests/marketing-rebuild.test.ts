@@ -164,7 +164,7 @@ describe("marketing rebuild", () => {
     expect(marketingRoute).toContain("Morning brief — 3 moves to beat");
     expect(marketingRoute).toContain("Price drop spotted before breakfast");
     expect(marketingRoute).toContain("New CTA pushing buyers to book");
-    expect(marketingRoute).toContain("Screenshots saved. Next move ready by 05:09.");
+    expect(marketingRoute).toContain("Sample evidence — no live captures attached. Next move ready by 05:09.");
     expect(marketingRoute).not.toContain("Visible offer text changed");
     expect(marketingRoute).not.toContain("CTA changed on the destination page");
     expect(marketingRoute).not.toContain("Evidence on file. No screenshots, no claim.");

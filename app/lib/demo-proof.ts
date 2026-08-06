@@ -23,19 +23,19 @@ export const demoProof = {
     {
       signal: "Offer text changed",
       evidence: "Hero copy changed from sale-led messaging to a routine-first bundle.",
-      source: "Landing-page snapshot",
+      source: "Illustrative — landing-page snapshot",
       age: "sample",
     },
     {
       signal: "CTA changed",
       evidence: "Primary action moved from Shop now to Build your routine.",
-      source: "Page text capture",
+      source: "Illustrative — page text capture",
       age: "sample",
     },
     {
       signal: "Ad hook repeated",
       evidence: "Three active Meta creatives repeat the same routine-first hook.",
-      source: "Meta Ad Library capture",
+      source: "Illustrative — Meta Ad Library capture",
       age: "sample",
     },
   ],
@@ -45,9 +45,9 @@ export const demoProof = {
     whyItMatters: "The page now sells a bundle habit, not a one-off discount, so your counter-offer should be reviewed before the next campaign refresh.",
     priority: "Review before next campaign refresh",
     recommendedMove: "Compare the bundle angle against your own acquisition offer and brief one counter-test.",
-    confidence: "Verified evidence with source and freshness attached.",
-    proofStatus: "Verified evidence",
-    source: "Landing-page snapshot + page text capture",
+    confidence: "Not available in this sample — no live capture is attached to this preview.",
+    proofStatus: "Not available in this sample",
+    source: "Sample sources — landing-page snapshot + page text capture",
     freshness: "Sample captured at 05:09",
   },
   reportPreview: {
@@ -77,7 +77,7 @@ export const demoProof = {
   },
   exports: {
     digestMarkdown:
-      "*Nykaa changed the routine bundle angle*\nPriority: Review before next campaign refresh\nSources: Landing-page snapshot, page text capture, Meta Ad Library capture",
+      "*Nykaa changed the routine bundle angle*\nPriority: Review before next campaign refresh\nSources: illustrative sample captures — landing-page snapshot, page text capture, Meta Ad Library capture",
     apiPath: "/api/demo-proof",
   },
 } as const;
