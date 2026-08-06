@@ -2,6 +2,14 @@
 
 Narrative records moved out of `CLAUDE.md` so per-session guidance stays operational. Entries below preserve the original wording and are organized by the date of the event.
 
+## 2026-08-06
+
+### Stale codex:rollback issue triage
+
+- Closed **42** open `codex:rollback` issues (#57, #63, #65, #68, #74–#90 even, #93–#149 odd) that had sat since May–June 2026 as post-merge-guard noise: GitHub Actions prepared a rollback branch but could not open the PR (workflow permissions). None had comments, linked open PRs, or still-live work; each got a one-line resolution comment and was closed (not deleted). Rollback: reopen the issue.
+- Verification (`gh issue list --state open`): **3** open issues remain — #491 (closeout landing order), #27 (`codex:prod-canary`), #19 (`codex:prod-canary` / discovery cached-degraded). Zero open `codex:rollback` issues.
+- Out of scope for this pass: #27 and #19 are a different automation class and need a separate live-canary truth check before close.
+
 ## 2026-06-11
 
 ### Billing and webhook state recorded during launch hardening
