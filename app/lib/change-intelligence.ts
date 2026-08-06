@@ -112,6 +112,7 @@ function digestSourceMetadata(metadata: Record<string, unknown> | undefined) {
     "websiteProofUrl",
     "canonicalUrl",
     "capturedAt",
+    "beforeCapturedAt",
   ];
   const result: Record<string, string> = {};
   const source = metadata ?? {};

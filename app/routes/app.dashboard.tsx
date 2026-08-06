@@ -5,7 +5,7 @@ import {
   useActionData,
   useLoaderData,
 } from "react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { DashboardPage } from "~/components/dashboard-page";
@@ -24,7 +24,12 @@ import { WorkingHeader } from "~/components/workspace/working-header";
 import { getOptionalCloudflareContext } from "~/lib/cloudflare-context";
 import { toPublicDeliveryTarget } from "~/lib/delivery-target-public";
 import { isSecretishMemoryString } from "~/lib/agent-redaction";
-import { firstChangeMark } from "~/lib/change-mark";
+import {
+  firstChangeMark,
+  firstLandingPageEvidence,
+  type LandingPageEvidence,
+} from "~/lib/change-mark";
+import { buildChangeIntelligenceSummary } from "~/lib/change-intelligence";
 import { buildMarketDeskBrief } from "~/lib/market-desk-brief";
 import { buildOvernightSentence } from "~/lib/overnight-sentence";
 import { pendingBlockingSetupItems } from "~/lib/setup-checklist";
@@ -33,7 +38,7 @@ import { formatNextScanLabel } from "~/lib/schedule-display";
 import { formatMachineTokenLabel } from "~/lib/landing-page-display";
 import { SUPPORT_EMAIL, SUPPORT_MAILTO } from "~/lib/support";
 import type { AppEnv } from "~/lib/env.server";
-import type { AgentActionAuditRecord } from "~/lib/types";
+import type { AgentActionAuditRecord, WatchEventRecord } from "~/lib/types";
 import type { WorkspaceReadiness } from "~/lib/workspace-readiness.server";
 
 export const meta = () => [{ title: "Overview | Five to Nine" }];
@@ -620,6 +625,10 @@ export default function AppDashboardRoute() {
     mark: firstChangeMark(visibleRecentEvents)?.mark ?? null,
     quietCompetitors: Math.max(0, activeWatchlists - changedWatchlistCount),
   });
+  // The evidence card carries what the token mark cannot: long landing-page
+  // values and the stored before/after screenshot pair, each in its own
+  // honest proof state.
+  const landingEvidence = firstLandingPageEvidence(visibleRecentEvents);
 
   return (
     <DashboardPage className="f9-wk-page f9-overview">
@@ -748,6 +757,13 @@ export default function AppDashboardRoute() {
           ) : null}
           {overnight.tail}
         </p>
+        {landingEvidence ? (
+          <LandingPageEvidenceCard
+            event={landingEvidence.event}
+            evidence={landingEvidence.evidence}
+            timeZone={data.workspaceDeliveryTimezone}
+          />
+        ) : null}
       </section>
 
       <section aria-labelledby="overview-changes-title" className="f9-wk-sec">
@@ -1196,4 +1212,114 @@ function WakeGreeting() {
   }, []);
 
   return <>{greeting}</>;
+}
+
+const IMG_FRAME_STYLE: CSSProperties = {
+  display: "block",
+  width: "100%",
+  marginTop: "4px",
+  border: "1px solid var(--wk-rule)",
+  borderRadius: "6px",
+  background: "var(--wk-sunk)",
+};
+
+const EVIDENCE_NOTE_STYLE: CSSProperties = { marginTop: "8px" };
+
+/**
+ * BL-030 extension — the landing-page evidence card.
+ *
+ * The one green mark is a token that refuses paragraphs; this card is where a
+ * landing-page rewrite stays readable. It always names the changed region and
+ * the exact source, shows the before/after screenshot pair ONLY when both
+ * stored artifact URLs are valid HTTPS images, and otherwise says plainly that
+ * screenshot proof is pending or unavailable — never a broken image.
+ */
+export function LandingPageEvidenceCard(props: {
+  event: WatchEventRecord;
+  evidence: LandingPageEvidence;
+  timeZone?: string | null;
+}) {
+  const { event, evidence, timeZone } = props;
+  const intelligence = buildChangeIntelligenceSummary(event, timeZone);
+  const from = evidence.from;
+  const to = evidence.to;
+  return (
+    <div
+      aria-label="Landing page evidence"
+      className="f9-wk-landing-evidence"
+      style={{
+        marginTop: "16px",
+        paddingTop: "12px",
+        borderTop: "1px solid var(--wk-rule)",
+      }}
+    >
+      <p className="f9-wk-note" style={{ marginTop: 0 }}>
+        <strong>Landing page evidence</strong> · {evidence.changedField} changed ·{" "}
+        {event.summary}
+      </p>
+      {from || to ? (
+        <p className="f9-wk-note" style={EVIDENCE_NOTE_STYLE}>
+          Before: &ldquo;{from ?? "not stored"}&rdquo;
+          <br />
+          After: &ldquo;{to ?? "not stored"}&rdquo;
+        </p>
+      ) : null}
+      {evidence.proofState === "screenshot_proof" ? (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+            gap: "12px",
+            marginTop: "10px",
+          }}
+        >
+          <figure style={{ margin: 0 }}>
+            <figcaption className="f9-wk-note" style={{ marginTop: 0 }}>
+              Before
+            </figcaption>
+            <img
+              alt="Landing page before the change"
+              src={evidence.beforeImageUrl ?? undefined}
+              style={IMG_FRAME_STYLE}
+            />
+          </figure>
+          <figure style={{ margin: 0 }}>
+            <figcaption className="f9-wk-note" style={{ marginTop: 0 }}>
+              After
+            </figcaption>
+            <img
+              alt="Landing page after the change"
+              src={evidence.afterImageUrl ?? undefined}
+              style={IMG_FRAME_STYLE}
+            />
+          </figure>
+        </div>
+      ) : (
+        <p className="f9-wk-note" style={EVIDENCE_NOTE_STYLE}>
+          {evidence.proofState === "proof_pending"
+            ? "Screenshot proof pending — the stored before/after pair is incomplete, so no screenshot is shown."
+            : "No screenshots stored for this change — the stored text and source are the evidence on file."}
+        </p>
+      )}
+      {evidence.sourceUrl ? (
+        <p className="f9-wk-note" style={EVIDENCE_NOTE_STYLE}>
+          Source: {evidence.sourceUrl}
+        </p>
+      ) : null}
+      {evidence.beforeCapturedAt || evidence.capturedAt ? (
+        <p className="f9-wk-note" style={EVIDENCE_NOTE_STYLE}>
+          Before: <LocalTime iso={evidence.beforeCapturedAt} mode="datetime" />
+          {evidence.capturedAt ? (
+            <>
+              {" "}
+              · After: <LocalTime iso={evidence.capturedAt} mode="datetime" />
+            </>
+          ) : null}
+        </p>
+      ) : null}
+      <p className="f9-wk-note" style={EVIDENCE_NOTE_STYLE}>
+        Recommended: {intelligence.recommendedAction}
+      </p>
+    </div>
+  );
 }
