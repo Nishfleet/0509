@@ -11863,6 +11863,12 @@ a.f9-wk-btn {
 .f9-wk-in,
 .f9-wk-sel {
   width: 100%;
+  /* WebKit text inputs keep an intrinsic min-width from the default size
+     attribute and report scrollWidth > clientWidth for long values while
+     overflow-x stays "visible". min-width:0 + overflow-x:hidden keep the
+     control inside its flex parent and make long values clip/scroll inside
+     the field instead of counting as page-level nested overflow. */
+  min-width: 0;
   min-height: 44px;
   padding: 10px 12px;
   border: 1px solid var(--wk-rule);
@@ -11877,6 +11883,7 @@ a.f9-wk-btn {
 /* Machine-shaped values are mono; prose is not. Same split the rest of the
    system uses. */
 input.f9-wk-in {
+  overflow-x: hidden;
   font-family: var(--ld-mono);
   font-size: 13.5px;
 }
