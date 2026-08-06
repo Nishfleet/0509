@@ -20,9 +20,10 @@ gate for future work; it enables nothing at runtime.
 
 ### In scope
 
-- Anonymous and account-scoped events covering the funnel: homepage view, search preview
-  submit/result/error, signup start/complete, first watchlist, first proof, and paid
-  conversion as a future read-only reconciliation metric.
+- Anonymous request-scoped events and account-scoped derived measures covering the
+  funnel: homepage view, search preview submit/result/error, and signup start (emitted
+  events); signup complete, first watchlist, first proof, and paid conversion (derived
+  read-only metrics).
 - The field allowlist that bounds what any future implementation may record.
 - Consent, opt-out, Global Privacy Control (GPC), and no-collection behavior.
 - Retention, deletion, storage, and read-only query rules.
@@ -43,29 +44,46 @@ gate for future work; it enables nothing at runtime.
 Events use the existing structured-JSON log operation style (`snake_case`, as in
 `monitoring_fanout_scheduled`). The `funnel_` prefix reserves the namespace so funnel
 events are distinguishable from operational logs. "Anonymous" means no account or
-workspace is identified; "account/workspace" means the event attaches to an opaque
-server-generated account/workspace identifier.
+workspace is identified and the event is **request-scoped** (see §4); "account/workspace"
+means the measure attaches to an opaque server-generated account/workspace identifier.
+The account/workspace measures in §3.2 are **derived metrics, not emitted events**.
 
-| Event | Trigger | Purpose | Required fields | Forbidden fields | Scope |
-|---|---|---|---|---|---|
-| `funnel_home_view` | Homepage renders for a visitor | Count anonymous homepage reach | `event_id`, `timestamp`, `route` | All §4 forbidden fields | Anonymous |
-| `funnel_search_preview_submit` | Visitor submits a public search preview | Measure anonymous search intent | `event_id`, `timestamp`, `route` | Query text, typed terms, `referrer` with query string | Anonymous |
-| `funnel_search_preview_result` | Public search preview returns results | Measure search success | `event_id`, `timestamp`, `route`, `result_count_bucket` | Query text, result content, result URLs, ad creative text | Anonymous |
-| `funnel_search_preview_error` | Public search preview fails | Measure search failure rate | `event_id`, `timestamp`, `route`, `error_kind` | Error message body, stack trace, provider response bodies | Anonymous |
-| `funnel_signup_start` | Visitor begins signup (email magic link or OAuth) | Measure signup initiation | `event_id`, `timestamp`, `route` | Email, name, OAuth provider tokens | Anonymous (no PII, see §5) |
-| `funnel_signup_complete` | Account becomes active (session created) | Measure signup completion | `event_id`, `timestamp`, `workspace_id` | Email, name, auth/session tokens | Account/workspace |
-| `funnel_first_watchlist` | First watchlist is created in a workspace | Measure activation step 1 | `event_id`, `timestamp`, `workspace_id` | Watchlist query, competitor names, watchlist content | Account/workspace |
-| `funnel_first_proof` | First successful proof capture completes | Measure activation step 2 | `event_id`, `timestamp`, `workspace_id` | Ad text, ad URLs, proof content | Account/workspace |
-| `funnel_paid_conversion` | Plan transitions free → paid (read-only reconciliation) | Future metric; reconcile against existing `user_plan` records; never duplicates billing data | `timestamp`, `workspace_id` | Payment details, card data, invoice content, provider credentials | Account/workspace |
+### 3.1 Emitted events (v1, anonymous, request-scoped)
+
+| Event | Trigger | Purpose | Required fields | Forbidden fields |
+|---|---|---|---|---|
+| `funnel_home_view` | Homepage renders for a visitor | Count anonymous homepage reach | `event_id`, `timestamp`, `route` | All §4 forbidden fields |
+| `funnel_search_preview_submit` | Visitor submits a public search preview | Measure anonymous search intent | `event_id`, `timestamp`, `route` | Query text, typed terms, `referrer` with query string |
+| `funnel_search_preview_result` | Public search preview returns results | Measure search success | `event_id`, `timestamp`, `route`, `result_count_bucket` | Query text, result content, result URLs, ad creative text |
+| `funnel_search_preview_error` | Public search preview fails | Measure search failure rate | `event_id`, `timestamp`, `route`, `error_kind` | Error message body, stack trace, provider response bodies |
+| `funnel_signup_start` | Visitor begins signup (email magic link or OAuth) | Measure signup initiation | `event_id`, `timestamp`, `route` | Email, name, OAuth provider tokens |
+
+All v1 emitted events are anonymous and request-scoped: they carry no identifier that
+can join one request to another or connect them to an account (see §4).
+
+### 3.2 Derived activation metrics (read-only, not emitted)
+
+The account-scoped measures below are **not events**. They are derived by read-only
+aggregate queries over existing business tables (see §7). They are never written to log
+records and are never dual-logged alongside the events in §3.1.
+
+| Measure | Derivation (read-only) | Purpose | Never includes |
+|---|---|---|---|
+| Signup completion | `user` rows (`created_at`) | Measure activation step 0 | Email, name, auth/session tokens |
+| First watchlist | `watchlist` rows | Measure activation step 1 | Watchlist query, competitor names, watchlist content |
+| First proof | `proof_capture` rows | Measure activation step 2 | Ad text, ad URLs, proof content |
+| Paid conversion | `user_plan` free → paid transitions | Future metric; reconcile against existing `user_plan` records; never duplicates billing data | Payment details, card data, invoice content, provider credentials |
 
 Notes:
 
-- `funnel_paid_conversion` is a **future read-only reconciliation metric** only: it must be
-  derived from existing `user_plan` records, not from payment instrumentation. It is listed
-  now so the funnel contract is complete, but it is not part of the minimum v1 event set.
+- The paid-conversion measure is a **future read-only reconciliation metric** only: it
+  must be derived from existing `user_plan` records, not from payment instrumentation. It
+  is listed now so the funnel contract is complete, but it is not part of the minimum v1
+  event set and is not emitted.
 - Search preview events never record what was searched or what was shown — only coarse
   outcome signals (`result_count_bucket`, `error_kind`).
-- Anonymous events must not be joinable to an identity through any stored field (§4).
+- Anonymous emitted events must not be joinable to each other, to an account, or to any
+  identity through any stored field (§4).
 
 ## 4. Field allowlist
 
@@ -75,9 +93,7 @@ is forbidden.
 | Field | Meaning | Notes |
 |---|---|---|
 | `event_id` | Opaque server-generated event identifier | Generated server-side per event; unique; not derived from user input |
-| `visitor_id` | Opaque server-generated stable identifier for anonymous events | Must be opaque, server-generated, and first-party only (see below) |
-| `session_id` | Opaque server-generated coarse session identifier | Short-lived; not a tracking profile |
-| `workspace_id` | Opaque server-generated workspace identifier | Only on account/workspace-scoped events |
+| `workspace_id` | Opaque server-generated workspace identifier | Only on account/workspace-scoped derived measures; never on anonymous events |
 | `timestamp` | ISO-8601 UTC time of event | Server clock, never client-supplied |
 | `route` | Coarse route label from an allowlist (`home`, `search_preview`, `signup`, `activation`) | Never a full URL |
 | `result_count_bucket` | Coarse bucket of search-preview result count (`0`, `1-10`, `11-50`, `51+`) | Never exact counts |
@@ -85,14 +101,23 @@ is forbidden.
 | `referrer_domain` | Coarse eTLD+1 of the referring site | Optional; never a full referrer URL |
 | `account_scope` | `anonymous` or `workspace` | Derived server-side |
 
-### Stable identifier rules
+### Identity and join rules
 
-- A stable identifier (`visitor_id`) must be an **opaque server-generated identifier**
-  (for example a random 128-bit value). It must never be derived from email, name, IP
-  address, device, browser, or any fingerprint signal.
-- It must never be used across unrelated sites or services. It exists only inside the
-  0509 first-party runtime and dies with the retention period (§6).
-- No third party ever receives it.
+- **v1 anonymous events are request-scoped.** No stored field identifies a visitor,
+  links one request to another, or connects an anonymous event to an account. There is
+  no `visitor_id` or `session_id` in v1, and no implementation may add one to this
+  allowlist.
+- **Multi-visit identity is out of scope.** Any future identifier meant to recognize a
+  visitor across requests (for example a `visitor_id`, `session_id`, or any
+  client-carried value) is a separate decision requiring explicit owner approval and a
+  new spec change; the §8 rollout gates alone do not authorize it. Same-visitor
+  conversion measurement would require such a join key and is likewise a future
+  owner-approved decision, not part of v1.
+- **If ever approved**, such an identifier must be an opaque server-generated value,
+  never derived from email, name, IP address, device, browser, or any fingerprint
+  signal. It must never be used across unrelated sites or services; it exists only
+  inside the 0509 first-party runtime and dies with the retention period (§6).
+- No third party ever receives identifiers.
 
 ### Explicitly forbidden fields (non-exhaustive)
 
@@ -125,10 +150,11 @@ is forbidden.
   legally binding opt-out, and compliance must not be claimed from it. A future
   implementation may optionally honor DNT as a best-effort opt-out, but it must not be
   the basis of any legal claim.
-- **No cookie-based tracking by default.** Anonymous funnel measurement must not rely on
-  persistent tracking cookies. `visitor_id`/`session_id` are server-side opaque values
-  carried without new persistent client storage; the existing auth cookies are never
-  used for measurement.
+- **No persistent client storage and no cross-request identity.** Anonymous funnel
+  measurement must not rely on cookies, localStorage, or any new persistent client
+  storage, and must not use fingerprinting. v1 anonymous events are request-scoped and
+  carry no client-carried identifier (§4); the existing auth cookies are never used for
+  measurement. Multi-visit identity is out of scope (§4).
 - **No-collection path.** Every product feature (homepage, search preview, signup,
   watchlists, proofs) works identically with measurement fully disabled. Measurement is
   an observational layer with no user-visible functional dependency; a visitor who opts
@@ -140,9 +166,10 @@ is forbidden.
   deleted. **The exact final retention period is not owner-approved; it is an explicit
   decision gate** to be set by Nish before any implementation enables collection (a
   candidate default of 90 days exists but is not settled by this document).
-- **Deletion with account.** When an account or workspace is deleted, all
-  account/workspace-scoped funnel events for it are deleted in the same operation.
-  Anonymous events are not linkable to an account and are deleted on the retention
+- **Deletion with account.** When an account or workspace is deleted, existing flows
+  delete its business records; account/workspace-scoped measures are derived read-only
+  from those records and leave no separate stored copy to clean up (§3.2, §7). Anonymous
+  events are request-scoped, not linkable to an account, and are deleted on the retention
   schedule.
 - **No raw export.** Raw events are never exported to docs, logs, support cases, or any
   deliverable. Aggregate answers may appear in docs only with the field allowlist intact
@@ -160,28 +187,40 @@ implementation uses only existing surfaces:
 1. **Structured JSON logs (existing).** Anonymous funnel events (`funnel_home_view`,
    `funnel_search_preview_*`, `funnel_signup_start`) are written as structured JSON log
    records via the existing `app/lib/log.server.ts` mechanism (`operation: funnel_*`),
-   which already redacts sensitive keys. This keeps anonymous pre-auth measurement out of
-   any new database.
+   which scrubs values under credential-named keys (`secret`, `password`, `token`,
+   `signature`, `cookie`, `authorization`, `api_key`, etc.). That scrubbing is narrow
+   key-based redaction of credential material, not a privacy allowlist: the privacy
+   controls are the §4 field allowlist and the redaction tests in §8. This keeps
+   anonymous pre-auth measurement out of any new database.
 2. **Existing D1 records (existing, read-only).** Account/workspace-scoped activation
-   metrics (`funnel_signup_complete`, `funnel_first_watchlist`, `funnel_first_proof`,
-   `funnel_paid_conversion`) are derived from existing business tables
-   (`user`, `user_plan`, `watchlist`, `proof_capture`, `evidence_usage_period`) by
-   read-only aggregate queries, matching how `docs/ga-metrics.md` already infers the
-   manual funnel. No migration or schema implementation is part of this PR.
+   measures (signup completion, first watchlist, first proof, paid conversion; §3.2)
+   are derived from existing business tables (`user`, `user_plan`, `watchlist`,
+   `proof_capture`, `evidence_usage_period`) by read-only aggregate queries, matching
+   how `docs/ga-metrics.md` already infers the manual funnel. They are never emitted or
+   logged as events, so no dual-logged copy exists. No migration or schema
+   implementation is part of this PR.
 3. **Query rules.** Production queries run read-only against production D1. No raw event
    export; aggregation thresholds per §6; no credentials in queries or outputs.
 
 ### Example aggregate questions (no credentials, no PII)
 
-- How many anonymous `funnel_home_view` events per day, and what share reach
-  `funnel_search_preview_submit`?
-- What share of `funnel_search_preview_submit` events produce a `funnel_search_preview_result`
-  with `result_count_bucket` ≥ 1, and what is the `funnel_search_preview_error` rate?
-- What share of `funnel_signup_start` events reach `funnel_signup_complete` within the
-  retention window?
-- Median time from `funnel_signup_complete` to `funnel_first_watchlist`, and from
-  `funnel_first_watchlist` to `funnel_first_proof` (derived from D1 timestamps).
-- Free → paid conversion count per period (derived from `user_plan` transitions, read-only).
+- Daily count of `funnel_home_view` and of `funnel_search_preview_submit` events, and
+  their ratio per day (time-bucket population rates; v1 does not measure same-visitor
+  progression).
+- Daily count of `funnel_search_preview_result` events with `result_count_bucket` ≥ 1
+  and of `funnel_search_preview_error` events, and their ratio per day.
+- Daily counts of anonymous `funnel_signup_start` events and of derived signup
+  completion (from `user`), reported as independent populations; same-visitor
+  start → complete conversion is not measurable in v1.
+- Median time from signup completion to first watchlist, and from first watchlist to
+  first proof (derived from D1 timestamps; §3.2).
+- Free → paid conversion count per period (derived from `user_plan` transitions,
+  read-only).
+
+All v1 questions are answered from request-scoped event counts or read-only D1
+aggregates. None require joining anonymous events to each other or to an account; any
+future same-visitor conversion question would need a join key, which is a separate
+owner-approved decision (§4).
 
 ## 8. Rollout gates
 
