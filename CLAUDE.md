@@ -1,14 +1,37 @@
 # 0509.io — Five to Nine
 
-## Agent operating model (Nish, 2026-07-19)
+## Agent operating model (Nish, 2026-07-19; revised 2026-08-06)
 
-Three roles stay separate as Nish's standing model:
+What separates is **duties, not identities**. The 2026-07-19 version assigned
+roles by model — Claude reviews, Codex merges — which stopped matching how the
+work is actually done: Claude now implements, reviews and lands changes here.
+Naming models in a rule makes it go stale the moment the fleet changes, and a
+stale rule gets argued with instead of followed. These are stated as duties so
+they survive that.
 
-- **Builders** (fast models: Grok, Cursor Composer): implement from meticulous work-package specs (`docs/PRODUCT-READINESS-SPEC-*` pattern — anchor strings, acceptance criteria, guardrails). Builders never merge or deploy their own work.
-- **Prod-touchers** (Codex or any TTY session that can pass safe-deploy admin auth, or Nish): merges that trigger deploys, remote D1 migrations, secrets, restore drills, provider mutations. Headless agent sessions are fail-closed by the safe-deploy wrapper — by design; do not route around it.
-- **Reviewer/coordinator** (Claude): audits, spec authoring, independent multi-domain review of every builder stack BEFORE merge (`docs/REVIEW-FIXES-*` pattern), landing-order coordination across agents, live prod verification after deploy.
+The separations that matter, and why:
 
-Every substantial builder stack gets an independent review before merge. Deploy-gate e2e (Gate-B journeys, restore-evidence) is Codex-owned; product changes that alter public copy/states require the gate specs to be updated in the same landing sequence.
+- **Nothing merges on its own author's say-so.** Every substantial change gets an
+  independent review before merge — a different agent or Nish, never the author
+  reviewing itself. This is the rule the other two exist to protect.
+- **Builders do not land their own work.** A builder implements from a spec
+  (`docs/PRODUCT-READINESS-SPEC-*` — anchor strings, acceptance criteria,
+  guardrails) and stops at a pushed branch.
+- **Production state stays gated regardless of who is asking.** Remote D1
+  migrations, secrets, restore drills, and provider mutations need Nish's
+  explicit authorization, recorded where it will outlive the session. Merging a
+  reviewed PR is ordinary work; mutating production data is not.
+- **Do not route around safe-deploy.** Headless agent sessions are fail-closed by
+  the wrapper by design. If it blocks you, that is the control working — fix the
+  cause or ask Nish, never bypass it.
+
+Who may merge: anyone — Nish, Codex, or Claude — once the change has an
+independent review and its checks are green. Do not merge over a failing or
+pending required check, and never force-merge.
+
+Deploy-gate e2e (Gate-B journeys, restore-evidence) is Codex-owned; product
+changes that alter public copy/states require the gate specs to be updated in the
+same landing sequence.
 
 History: `docs/PROJECT-HISTORY.md`.
 
