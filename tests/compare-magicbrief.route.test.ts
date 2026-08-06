@@ -86,4 +86,20 @@ describe("compare magicbrief route", () => {
     expect(markup).toContain("Try it free, no account");
     expect(markup).toContain("mailto:support@0509.io");
   });
+
+  it("does not overclaim manual migration and states the customer recreates non-imported data", async () => {
+    const markup = await renderRouteMarkup();
+
+    expect(markup).not.toContain("anything the import does not carry, we move by hand");
+    expect(markup).not.toContain("we move by hand");
+    expect(markup).toContain("are not migrated by Five to Nine");
+    expect(markup).toContain("you recreate them with our help");
+  });
+
+  it("states client rooms are plan-gated in the import card", async () => {
+    const markup = await renderRouteMarkup();
+
+    expect(markup).toContain("client labels (client rooms on plans with client reporting)");
+    expect(markup).not.toContain("client grouping");
+  });
 });

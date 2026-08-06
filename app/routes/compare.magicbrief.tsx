@@ -21,7 +21,7 @@ export const meta: MetaFunction = () =>
 const imports = [
   {
     theirs: "Your tracked brands",
-    ours: "A plain list — domains, URLs, or brand names, pasted or as a CSV — imports as watchlists, carrying your notes, tags, and client grouping. That is what transfers.",
+    ours: "A plain list — domains, URLs, or brand names, pasted or as a CSV — imports as watchlists, carrying your notes, tags, and client labels (client rooms on plans with client reporting). That is what transfers.",
   },
   {
     theirs: "Preview before you commit",
@@ -148,8 +148,9 @@ export default function CompareMagicBriefRoute() {
         </h2>
         <p className="ld-pricing-note">
           Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> with your MagicBrief export (or just
-          a list of brands you tracked) and we&rsquo;ll set up your watchlists with you — anything
-          the import does not carry, we move by hand, person to person. Plans from the{" "}
+          a list of brands you tracked) and we&rsquo;ll set up your watchlists with you, person to
+          person. Collections, boards, analytics history, and past evidence are not migrated by
+          Five to Nine — you recreate them with our help. Plans from the{" "}
           <Link to="/#pricing">pricing page</Link> — the public search preview stays free either
           way.
         </p>
