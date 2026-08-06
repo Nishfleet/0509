@@ -330,6 +330,177 @@ describe("buildDigestEmail", () => {
     expect(email.text).not.toMatch(/Mamaearth[\s\S]*Creative thumbnail/);
   });
 
+  it("renders landing-page before/after screenshots as a labelled evidence card", () => {
+    const email = buildDigestEmail({
+      name: "Owner",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      cadence: "weekly",
+      timeZone: "UTC",
+      fullDigestUrl: "https://0509.io/app/digests",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+      items: [
+        {
+          ...digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed"),
+          metadata: {
+            ...digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed").metadata,
+            from: "Starting at ₹499",
+            to: "Starting at ₹799",
+            sourceUrl: "https://nykaa.com/festive-glow",
+            beforeCreativeImageUrl: "https://cdn.example.com/lp-before.png",
+            afterCreativeImageUrl: "https://cdn.example.com/lp-after.png",
+            beforeCapturedAt: "2026-06-07T04:00:00.000Z",
+            capturedAt: "2026-06-08T04:00:00.000Z",
+          },
+        },
+      ],
+    });
+
+    expect(email.html).toContain("Landing page evidence");
+    expect(email.html).toContain("Offer / price changed");
+    expect(email.html).toContain('src="https://cdn.example.com/lp-before.png"');
+    expect(email.html).toContain('src="https://cdn.example.com/lp-after.png"');
+    expect(email.html).toContain("https://nykaa.com/festive-glow");
+    expect(email.html).toContain("Starting at ₹499");
+    expect(email.html).toContain("Starting at ₹799");
+    expect(email.text).toContain("Landing page evidence: Offer / price changed");
+    expect(email.text).toContain("Source: https://nykaa.com/festive-glow");
+    expect(email.html).not.toContain("Screenshot proof pending");
+  });
+
+  it("renders an explicit pending state — never a broken image — when one landing-page artifact is missing", () => {
+    const email = buildDigestEmail({
+      name: "Owner",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      cadence: "weekly",
+      timeZone: "UTC",
+      fullDigestUrl: "https://0509.io/app/digests",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+      items: [
+        {
+          ...digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed"),
+          metadata: {
+            ...digestItem("Nykaa", "Landing page offer changed", 95, "proof_backed").metadata,
+            beforeCreativeImageUrl: "https://cdn.example.com/lp-before.png",
+          },
+        },
+      ],
+    });
+
+    expect(email.html).toContain("Landing page evidence");
+    expect(email.html).toContain("Screenshot proof pending");
+    expect(email.html).not.toContain("<img");
+    expect(email.text).toContain("Screenshot proof pending");
+  });
+
+  it("treats invalid landing-page artifact URLs as pending proof, not stored proof", () => {
+    const email = buildDigestEmail({
+      name: "Owner",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      cadence: "weekly",
+      timeZone: "UTC",
+      fullDigestUrl: "https://0509.io/app/digests",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+      items: [
+        {
+          ...digestItem("Nykaa", "Landing page headline changed", 95, "proof_backed"),
+          eventType: "landing_page_headline_changed",
+          metadata: {
+            ...digestItem("Nykaa", "Landing page headline changed", 95, "proof_backed").metadata,
+            beforeCreativeImageUrl: "http://insecure.example.com/lp-before.png",
+            afterCreativeImageUrl: "not a url",
+          },
+        },
+      ],
+    });
+
+    expect(email.html).toContain("Landing page evidence");
+    expect(email.html).toContain("Screenshot proof pending");
+    expect(email.html).not.toContain("<img");
+    expect(email.html).not.toContain("http://insecure.example.com");
+  });
+
+  it("omits the landing-page card entirely when no artifact URLs are stored", () => {
+    const email = buildDigestEmail({
+      name: "Owner",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      cadence: "weekly",
+      timeZone: "UTC",
+      fullDigestUrl: "https://0509.io/app/digests",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+      items: [
+        {
+          ...digestItem("Nykaa", "Landing page headline changed", 95, "proof_backed"),
+          eventType: "landing_page_headline_changed",
+          metadata: {
+            ...digestItem("Nykaa", "Landing page headline changed", 95, "proof_backed").metadata,
+            from: "A rewritten headline that is far too long for any short token mark",
+            to: "Short headline",
+          },
+        },
+      ],
+    });
+
+    expect(email.html).not.toContain("Landing page evidence");
+    expect(email.html).not.toContain("Screenshot proof pending");
+    expect(email.html).not.toContain("<img");
+    expect(email.text).not.toContain("Landing page evidence");
+  });
+
+  it("keeps ad creative thumbnails unchanged beside the landing-page card", () => {
+    const email = buildDigestEmail({
+      name: "Owner",
+      periodStart: "2026-06-01T00:00:00.000Z",
+      periodEnd: "2026-06-08T00:00:00.000Z",
+      cadence: "weekly",
+      timeZone: "UTC",
+      fullDigestUrl: "https://0509.io/app/digests",
+      manageFrequencyUrl: "https://0509.io/app/notifications",
+      supportEmail: "support@0509.io",
+      supportMailto: "mailto:support@0509.io",
+      unsubscribeUrl: null,
+      items: [
+        {
+          ...digestItem("Nykaa", "Creative rotated", 95, "proof_backed"),
+          metadata: {
+            ...digestItem("Nykaa", "Creative rotated", 95, "proof_backed").metadata,
+            beforeCreativeImageUrl: "https://cdn.example.com/before.jpg",
+            afterCreativeImageUrl: "https://cdn.example.com/after.jpg",
+          },
+        },
+        {
+          ...digestItem("Nykaa", "Landing page offer changed", 90, "proof_backed"),
+          metadata: {
+            ...digestItem("Nykaa", "Landing page offer changed", 90, "proof_backed").metadata,
+            beforeCreativeImageUrl: "https://cdn.example.com/lp-before.png",
+            afterCreativeImageUrl: "https://cdn.example.com/lp-after.png",
+          },
+        },
+      ],
+    });
+
+    expect(email.html).toContain('src="https://cdn.example.com/before.jpg"');
+    expect(email.html).toContain("Landing page evidence");
+    expect(email.html).toContain('src="https://cdn.example.com/lp-before.png"');
+    expect(email.text).toContain("Creative: before/after thumbnails attached in the HTML email.");
+    expect(email.text).toContain("Landing page evidence: Offer / price changed");
+  });
+
   it("omits thumbnail markup entirely when no https creative url is present", () => {
     const email = buildDigestEmail({
       name: "Owner",
