@@ -67,11 +67,19 @@ export function ActionFeedback({
 	const showPlanLimitLink =
 		Boolean(planLimitTo) && data.error === "plan_limit_exceeded";
 
+	// Key on outcome + message so a successive error (e.g. review_required →
+	// review_stale) remounts the live region. Reusing one node and only swapping
+	// text can fail both screen-reader re-announcement and Playwright
+	// hasText waits when the previous assertive alert is still the same node.
+	const outcomeKey = `${data.ok ? "ok" : "err"}:${String(data.error ?? "")}:${message}`;
+
 	return (
 		<div
+			key={outcomeKey}
 			aria-atomic="true"
 			aria-live={data.ok ? "polite" : "assertive"}
 			className={`f9-message f9-action-feedback ${data.ok ? "is-success" : "is-error"}`}
+			data-f9-action-feedback={outcomeKey}
 			role={data.ok ? "status" : "alert"}
 		>
 			<p>
