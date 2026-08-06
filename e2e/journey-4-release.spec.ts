@@ -147,12 +147,62 @@ async function expectTouchTargets(page: Page) {
 }
 
 async function expectLiveRegion(page: Page, message: string) {
+  // Prefer `.f9-action-feedback` so empty layout `role=status` nodes cannot
+  // steal a `.last()` match under concurrent paint. Fall back to any live
+  // region for pages that surface the same copy without that class.
   const region = page
-    .locator('[role="status"], [role="alert"]')
+    .locator(".f9-action-feedback")
     .filter({ hasText: message })
-    .last();
-  await expect(region).toBeVisible();
+    .or(
+      page
+        .locator('[role="status"], [role="alert"]')
+        .filter({ hasText: message }),
+    )
+    .first();
+  await expect(region).toBeVisible({ timeout: 15_000 });
   await expect(region).toHaveAttribute("aria-live", /^(polite|assertive)$/);
+}
+
+/**
+ * Wait until the share button is idle after a document POST so a still-running
+ * revalidation cannot rewrite controlled fingerprint fields under the next
+ * mutation (Gate-B journey-4 stale-share flake).
+ */
+async function expectShareSubmitIdle(form: ReturnType<Page["locator"]>) {
+  const sendButton = form.getByRole("button", { name: "Send to client" });
+  await expect(sendButton).toBeEnabled();
+  await expect(sendButton).not.toHaveAttribute("aria-busy", "true");
+  await expect
+    .poll(async () => {
+      const busy = await sendButton.getAttribute("aria-busy");
+      return busy === "true" ? "busy" : "idle";
+    })
+    .toBe("idle");
+}
+
+/**
+ * Set a deliberate stale fingerprint and submit in one evaluate so a late
+ * React re-render cannot restore the loader fingerprint between write and
+ * click.
+ */
+async function submitShareWithStaleFingerprint(
+  form: ReturnType<Page["locator"]>,
+) {
+  await form.evaluate((node) => {
+    const shareForm = node as HTMLFormElement;
+    const fingerprint = shareForm.querySelector(
+      'input[name="reviewFingerprint"]',
+    ) as HTMLInputElement | null;
+    if (!fingerprint) {
+      throw new Error("share form is missing reviewFingerprint");
+    }
+    fingerprint.value = "stale";
+    if (typeof shareForm.requestSubmit === "function") {
+      shareForm.requestSubmit();
+      return;
+    }
+    shareForm.submit();
+  });
 }
 
 async function expectKeyboardFocus(page: Page) {
@@ -421,6 +471,10 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
       page,
       "Review the current evidence before sharing or downloading this report.",
     );
+    // Stabilise after the validation-only failure: the reports route must not
+    // rotate fingerprint/nonce under a customer mid-recovery, and the button
+    // must leave its pending state before the next deliberate mutation.
+    await expectShareSubmitIdle(shareForm);
 
     const staleShareForm = page.locator("form").filter({
       has: page.locator('input[name="intent"][value="share-report"]'),
@@ -430,16 +484,21 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
       "true",
     );
     await expect(pdfButton).toBeEnabled();
-    await staleShareForm
-      .locator('input[name="reviewFingerprint"]')
-      .evaluate((control) => {
-        (control as HTMLInputElement).value = "stale";
-      });
-    await staleShareForm.getByRole("button", { name: "Send to client" }).click();
+    // Atomic stale write + submit: separate evaluate-then-click left a window
+    // where loader revalidation rewrote the controlled fingerprint field and
+    // the second submit published successfully (no review_stale live region).
+    await submitShareWithStaleFingerprint(staleShareForm);
     await expectLiveRegion(
       page,
       "The report changed after you opened it. Review the current evidence before sharing or downloading.",
     );
+    await expectShareSubmitIdle(staleShareForm);
+    // Guard against the accidental-success path that used to flake this gate.
+    await expect(
+      page
+        .locator(".f9-action-feedback")
+        .filter({ hasText: "Snapshot link created." }),
+    ).toHaveCount(0);
 
     await page.reload();
     const currentPdfForm = page.locator("form").filter({
