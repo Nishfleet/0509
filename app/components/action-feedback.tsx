@@ -71,6 +71,10 @@ export function ActionFeedback({
 	// review_stale) remounts the live region. Reusing one node and only swapping
 	// text can fail both screen-reader re-announcement and Playwright
 	// hasText waits when the previous assertive alert is still the same node.
+	// The key is React-only and never reaches the HTML, so it can hold the raw
+	// message safely. Do NOT also render it as an attribute: the message would
+	// then appear twice in the markup, and the server-render tests count
+	// occurrences of the message text and require exactly one.
 	const outcomeKey = `${data.ok ? "ok" : "err"}:${String(data.error ?? "")}:${message}`;
 
 	return (
@@ -79,7 +83,6 @@ export function ActionFeedback({
 			aria-atomic="true"
 			aria-live={data.ok ? "polite" : "assertive"}
 			className={`f9-message f9-action-feedback ${data.ok ? "is-success" : "is-error"}`}
-			data-f9-action-feedback={outcomeKey}
 			role={data.ok ? "status" : "alert"}
 		>
 			<p>
