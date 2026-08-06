@@ -44,6 +44,29 @@ const ghSuccess = (sha = LIVE): [RegExp, any] => [
 const commitPresent: [RegExp, any] = [/^git cat-file/u, { status: 0 }];
 
 describe("resolveLiveSha", () => {
+  it("asks GitHub for exactly the right run: this workflow, successful, newest", () => {
+    // The filters ARE the gate. Drop --workflow and it can pick an unrelated
+    // workflow's run; drop --status success and a failed run becomes the
+    // baseline; drop --limit 1 and "newest" stops being guaranteed. Any of
+    // those could select the candidate's own HEAD and wave a schema change
+    // through, so the exact argv is asserted rather than merely "some gh call".
+    let seen: string[] | undefined;
+    const exec = (command: string, args: string[]) => {
+      seen = [command, ...args];
+      return { status: 0, stdout: JSON.stringify([{ headSha: LIVE }]), stderr: "" };
+    };
+    resolveLiveSha(exec);
+    expect(seen).toEqual([
+      "gh",
+      "run", "list",
+      "--repo", "nish3451/0509",
+      "--workflow", "deploy-production.yml",
+      "--status", "success",
+      "--limit", "1",
+      "--json", "headSha",
+    ]);
+  });
+
   it("uses the newest successful production deploy", () => {
     expect(resolveLiveSha(execFrom([ghSuccess()]))).toBe(LIVE);
   });
