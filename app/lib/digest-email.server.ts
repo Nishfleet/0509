@@ -4,6 +4,10 @@ import {
   readDigestIntelligence,
   safeHttpsImageUrl,
 } from "~/lib/change-intelligence";
+import {
+  isLandingPageEventType,
+  landingPageChangedFieldLabel,
+} from "~/lib/change-mark";
 import { buildDigestTrendRollups } from "~/lib/insight-depth";
 import {
   classifyDigestItemSource,
@@ -417,6 +421,7 @@ function renderTopMoveHtml(
     : `${intelligence.priorityBand} · ${intelligence.priorityScore}/100`;
   const metricLines = readMetricBandLines(item.metadata);
   const creativeHtml = renderCreativeThumbnailHtml(item.metadata);
+  const landingEvidenceHtml = renderLandingPageEvidenceHtml(item, timeZone);
   // WP-24: top-move links land on the watchlist event row when ids exist.
   // W2-C: derive the deep-link origin from the env-built fullDigestUrl (same
   // source the "View full brief" link uses) instead of the hardcoded default,
@@ -431,7 +436,7 @@ function renderTopMoveHtml(
     <li style="margin-bottom: 18px;">
       <p style="margin: 0 0 4px;"><strong>${heading}</strong></p>
       <p style="margin: 0 0 8px; color: #475467;">${escapeHtml(truncate(summary, 220))}</p>
-      ${creativeHtml}
+      ${landingEvidenceHtml || creativeHtml}
       ${metricLines
         .map(
           (line) =>
@@ -464,14 +469,22 @@ function renderTopMoveText(
     ? intelligence.priorityBand
     : `${intelligence.priorityBand} (${intelligence.priorityScore}/100)`;
   const metricLines = readMetricBandLines(item.metadata);
-  const creativeNote = creativeThumbnailTextNote(item.metadata);
+  const landingEvidenceLines = renderLandingPageEvidenceText(item, timeZone);
+  const creativeNote =
+    landingEvidenceLines.length > 0
+      ? null
+      : creativeThumbnailTextNote(item.metadata);
   const reviewUrl =
     digestItemDeepLink(item, originFromDigestUrl(fullDigestUrl)) ?? fullDigestUrl;
   const heading = options.omitWatchlistPrefix ? title : `${watchlistName}: ${title}`;
   return [
     `${index}. ${heading}`,
     `   What changed: ${truncate(summary, 220)}`,
-    creativeNote ? `   ${creativeNote}` : null,
+    ...(landingEvidenceLines.length > 0
+      ? landingEvidenceLines
+      : creativeNote
+        ? [`   ${creativeNote}`]
+        : []),
     ...metricLines.map((line) => `   ${line}`),
     `   Priority: ${priority}`,
     `   Source status: ${classification.label}`,
@@ -628,6 +641,113 @@ function creativeThumbnailTextNote(metadata: Record<string, unknown> | undefined
     return "Creative thumbnail attached in the HTML email.";
   }
   return null;
+}
+
+const LANDING_PAGE_EVIDENCE_PENDING_COPY =
+  "Screenshot proof pending — the before/after pair is incomplete, so no screenshots are shown.";
+
+/**
+ * Landing-page evidence card: replaces the creative thumbnail treatment for
+ * landing-page items that carry stored before/after screenshot artifact URLs.
+ * The pair renders only when BOTH URLs validate as HTTPS images; a missing or
+ * invalid artifact renders an explicit pending state, never a broken image.
+ * Items without artifact URLs are untouched — their output is byte-identical.
+ */
+function readLandingPageEmailEvidence(item: DigestTrustItem) {
+  const metadata = item.metadata ?? {};
+  if (!isLandingPageEventType(item.eventType)) return null;
+  const beforeUrl =
+    safeHttpsImageUrl(metadata.beforeCreativeImageUrl) ??
+    safeHttpsImageUrl(metadata.fromCreativeImageUrl);
+  const afterUrl =
+    safeHttpsImageUrl(metadata.afterCreativeImageUrl) ??
+    safeHttpsImageUrl(metadata.toCreativeImageUrl);
+  const hasArtifactIntent =
+    readString(metadata.beforeCreativeImageUrl) !== null ||
+    readString(metadata.fromCreativeImageUrl) !== null ||
+    readString(metadata.afterCreativeImageUrl) !== null ||
+    readString(metadata.toCreativeImageUrl) !== null;
+  if (!hasArtifactIntent) return null;
+  return {
+    beforeUrl,
+    afterUrl,
+    changedField: landingPageChangedFieldLabel(item.eventType),
+    from: readString(metadata.from),
+    to: readString(metadata.to),
+    sourceUrl:
+      readString(metadata.sourceUrl) ??
+      readString(metadata.landingPageUrl) ??
+      readString(metadata.proofUrl) ??
+      readString(metadata.websiteUrl) ??
+      readString(metadata.canonicalUrl),
+    beforeCapturedAt: readString(metadata.beforeCapturedAt),
+    capturedAt: readString(metadata.capturedAt),
+    screenshotProof: Boolean(beforeUrl && afterUrl),
+  };
+}
+
+function renderLandingPageEvidenceHtml(item: DigestTrustItem, timeZone: string | null | undefined) {
+  const evidence = readLandingPageEmailEvidence(item);
+  if (!evidence) return "";
+  const changedLine =
+    evidence.from || evidence.to
+      ? `<p style="margin: 0 0 8px; color: #475467; font-size: 13px; word-break: break-word;">Changed: ${escapeHtml(evidence.changedField)} — “${escapeHtml(evidence.from ?? "not stored")}” → “${escapeHtml(evidence.to ?? "not stored")}”</p>`
+      : "";
+  const shotsHtml = evidence.screenshotProof
+    ? `
+      <table role="presentation" style="margin: 0 0 10px; border-collapse: collapse; background-color: ${EMAIL_SURFACE_BG}; color: ${EMAIL_TEXT_PRIMARY};">
+        <tr>
+          <td style="padding: 0 10px 0 0; vertical-align: top; background-color: ${EMAIL_SURFACE_BG};">
+            <p style="margin: 0 0 4px; color: #98a2b3; font-size: 12px;">Before</p>
+            <img src="${escapeHtml(evidence.beforeUrl!)}" alt="Landing page before the change" width="140" style="display:block; max-width:140px; width:140px; border-radius:8px; border:1px solid #e4e7ec; background-color:${EMAIL_SURFACE_BG};">
+          </td>
+          <td style="padding: 0; vertical-align: top; background-color: ${EMAIL_SURFACE_BG};">
+            <p style="margin: 0 0 4px; color: #98a2b3; font-size: 12px;">Now</p>
+            <img src="${escapeHtml(evidence.afterUrl!)}" alt="Landing page after the change" width="140" style="display:block; max-width:140px; width:140px; border-radius:8px; border:1px solid #e4e7ec; background-color:${EMAIL_SURFACE_BG};">
+          </td>
+        </tr>
+      </table>
+    `
+    : `<p style="margin: 0 0 8px; color: #475467; font-size: 13px;">${LANDING_PAGE_EVIDENCE_PENDING_COPY}</p>`;
+  const sourceHtml = evidence.sourceUrl
+    ? `<p style="margin: 0 0 8px; color: #98a2b3; font-size: 12px;">Source: ${escapeHtml(evidence.sourceUrl)}</p>`
+    : "";
+  const timeHtml =
+    evidence.beforeCapturedAt || evidence.capturedAt
+      ? `<p style="margin: 0 0 8px; color: #98a2b3; font-size: 12px;">Before: ${escapeHtml(formatDateTime(evidence.beforeCapturedAt ?? "", timeZone))} · Now: ${escapeHtml(formatDateTime(evidence.capturedAt ?? "", timeZone))}</p>`
+      : "";
+  return `
+      <div style="margin: 0 0 10px; padding: 10px; border: 1px solid #d7dce5; border-radius: 12px; background-color: ${EMAIL_SURFACE_BG}; color: ${EMAIL_TEXT_PRIMARY};">
+        <p style="margin: 0 0 4px; color: #101828; font-size: 13px;"><strong>Landing page evidence</strong> · ${escapeHtml(evidence.changedField)} changed</p>
+        ${changedLine}
+        ${shotsHtml}
+        ${sourceHtml}
+        ${timeHtml}
+      </div>
+  `;
+}
+
+function renderLandingPageEvidenceText(item: DigestTrustItem, timeZone: string | null | undefined) {
+  const evidence = readLandingPageEmailEvidence(item);
+  if (!evidence) return [];
+  const lines = [`   Landing page evidence: ${evidence.changedField} changed`];
+  if (evidence.from || evidence.to) {
+    lines.push(
+      `   Before: “${evidence.from ?? "not stored"}” → After: “${evidence.to ?? "not stored"}”`,
+    );
+  }
+  if (!evidence.screenshotProof) {
+    lines.push(`   ${LANDING_PAGE_EVIDENCE_PENDING_COPY}`);
+  }
+  if (evidence.sourceUrl) {
+    lines.push(`   Source: ${evidence.sourceUrl}`);
+  }
+  if (evidence.beforeCapturedAt || evidence.capturedAt) {
+    lines.push(
+      `   Before: ${formatDateTime(evidence.beforeCapturedAt ?? "", timeZone)} · Now: ${formatDateTime(evidence.capturedAt ?? "", timeZone)}`,
+    );
+  }
+  return lines;
 }
 
 /**
