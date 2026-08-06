@@ -55,6 +55,7 @@ export interface CompetitorImportPreview {
   selectedCount: number;
   rows: CompetitorImportRow[];
   summary: Record<CompetitorImportRowStatus, number>;
+  rejectedColumns: string[];
 }
 
 interface ParsedImportRow {
@@ -242,6 +243,7 @@ export function buildCompetitorImportPreview(input: CompetitorImportPreviewInput
     selectedCount: rows.filter((row) => row.selected && row.status === "valid").length,
     rows,
     summary,
+    rejectedColumns: parsedRows.rejectedColumns,
   };
 }
 
@@ -260,18 +262,23 @@ function emptyPreview(input: {
     selectedCount: 0,
     rows: [],
     summary: emptySummary(),
+    rejectedColumns: [],
   };
 }
 
-function parseCompetitorImportRows(rawText: string, maxRows: number): { rows: ParsedImportRow[]; error: string | null } {
+function parseCompetitorImportRows(
+  rawText: string,
+  maxRows: number,
+): { rows: ParsedImportRow[]; error: string | null; rejectedColumns: string[] } {
   const trimmed = rawText.trim();
   if (!trimmed) {
-    return { rows: [], error: null };
+    return { rows: [], error: null, rejectedColumns: [] };
   }
 
   const csv = parseCsvRecords(trimmed);
-  const rows = shouldUseCsvRows(csv)
-    ? parsedRowsFromCsv(csv)
+  const parsedCsv = shouldUseCsvRows(csv) ? parsedRowsFromCsv(csv) : null;
+  const rows = parsedCsv
+    ? parsedCsv.rows
     : trimmed
       .split(/\r?\n/)
       .map((line, index) => parsedRowFromLine(line, index + 1))
@@ -281,10 +288,11 @@ function parseCompetitorImportRows(rawText: string, maxRows: number): { rows: Pa
     return {
       rows: [],
       error: `Import has ${rows.length} rows. Keep one import to ${maxRows} rows or fewer.`,
+      rejectedColumns: [],
     };
   }
 
-  return { rows, error: null };
+  return { rows, error: null, rejectedColumns: parsedCsv?.rejectedColumns ?? [] };
 }
 
 function shouldUseCsvRows(records: string[][]) {
@@ -306,24 +314,45 @@ function parsedRowsFromCsv(records: string[][]) {
   const headerMap = hasHeader ? buildHeaderMap(header) : null;
   const dataRows = hasHeader ? records.slice(1) : records;
 
-  return dataRows
-    .map((record, index) => {
-      const rowNumber = index + (hasHeader ? 2 : 1);
-      const raw = record.join(", ").trim();
-      if (!raw) return null;
-      const name = headerMap ? readMappedCell(record, headerMap.name) : cleanCell(record[0]);
-      const website = headerMap ? readMappedCell(record, headerMap.website) : cleanCell(record[1]);
-      return {
-        rowNumber,
-        raw,
-        name,
-        website,
-        notes: headerMap ? readMappedCell(record, headerMap.notes) : cleanCell(record[2]),
-        tags: splitTags(headerMap ? readMappedCell(record, headerMap.tags) : cleanCell(record[3])),
-        client: headerMap ? readMappedCell(record, headerMap.client) : cleanCell(record[4]),
-      };
-    })
-    .filter((row): row is ParsedImportRow => Boolean(row));
+  return {
+    rows: dataRows
+      .map((record, index) => {
+        const rowNumber = index + (hasHeader ? 2 : 1);
+        const raw = record.join(", ").trim();
+        if (!raw) return null;
+        const name = headerMap ? readMappedCell(record, headerMap.name) : cleanCell(record[0]);
+        const website = headerMap ? readMappedCell(record, headerMap.website) : cleanCell(record[1]);
+        return {
+          rowNumber,
+          raw,
+          name,
+          website,
+          notes: headerMap ? readMappedCell(record, headerMap.notes) : cleanCell(record[2]),
+          tags: splitTags(headerMap ? readMappedCell(record, headerMap.tags) : cleanCell(record[3])),
+          client: headerMap ? readMappedCell(record, headerMap.client) : cleanCell(record[4]),
+        };
+      })
+      .filter((row): row is ParsedImportRow => Boolean(row)),
+    rejectedColumns: rejectedCsvColumns(header, headerMap),
+  };
+}
+
+function rejectedCsvColumns(
+  header: string[],
+  headerMap: ReturnType<typeof buildHeaderMap> | null,
+) {
+  if (!headerMap) {
+    return [];
+  }
+
+  const consumedIndexes = new Set(
+    [headerMap.name, headerMap.website, headerMap.notes, headerMap.tags, headerMap.client]
+      .filter((index): index is number => index !== null),
+  );
+  return header
+    .map((cell, index) => ({ cell, index }))
+    .filter((entry) => entry.cell && !consumedIndexes.has(entry.index))
+    .map((entry) => entry.cell);
 }
 
 function parsedRowFromLine(line: string, rowNumber: number): ParsedImportRow | null {
