@@ -7,7 +7,14 @@ import { describe, expect, it } from "vitest";
 import { DashboardShell } from "~/components/dashboard-shell";
 import { RuledList, RuledRow } from "~/components/workspace/ruled-list";
 import { WorkingHeader } from "~/components/workspace/working-header";
-import { firstChangeMark, readChangeMark } from "~/lib/change-mark";
+import {
+  firstChangeMark,
+  firstLandingPageEvidence,
+  landingPageChangedFieldLabel,
+  readChangeMark,
+  readLandingPageEvidence,
+} from "~/lib/change-mark";
+import { LandingPageEvidenceCard } from "~/routes/app.dashboard";
 import {
   countCompetitorStates,
   filterCompetitorRows,
@@ -102,6 +109,207 @@ describe("the one green mark", () => {
       event({ id: "marked" }),
     ]);
     expect(marked?.event.id).toBe("marked");
+  });
+});
+
+describe("the landing-page evidence card", () => {
+  function landingEvent(
+    overrides: Partial<WatchEventRecord> = {},
+  ): WatchEventRecord {
+    return event({
+      eventType: "landing_page_headline_changed",
+      title: "Landing page headline changed",
+      summary: "The landing-page headline changed.",
+      ...overrides,
+    });
+  }
+
+  it("reads stored before/after screenshot artifacts into a labelled proof card", () => {
+    const evidence = readLandingPageEvidence(
+      landingEvent({
+        metadata: {
+          from: "Glow like never before with our festival edit, live for 7 days only",
+          to: "Festival glow starts here",
+          beforeCreativeImageUrl: "https://cdn.example.com/lp-before.png",
+          afterCreativeImageUrl: "https://cdn.example.com/lp-after.png",
+          sourceUrl: "https://nykaa.com/festive-glow",
+          beforeCapturedAt: "2026-07-27T04:00:00.000Z",
+          capturedAt: "2026-07-28T04:00:00.000Z",
+        },
+      }),
+    );
+
+    expect(evidence?.proofState).toBe("screenshot_proof");
+    expect(evidence?.beforeImageUrl).toBe("https://cdn.example.com/lp-before.png");
+    expect(evidence?.afterImageUrl).toBe("https://cdn.example.com/lp-after.png");
+    expect(evidence?.sourceUrl).toBe("https://nykaa.com/festive-glow");
+    expect(evidence?.beforeCapturedAt).toBe("2026-07-27T04:00:00.000Z");
+    expect(evidence?.capturedAt).toBe("2026-07-28T04:00:00.000Z");
+    expect(evidence?.changedField).toBe("Headline");
+  });
+
+  it("keeps long landing-page values readable instead of forcing them through the short-token mark", () => {
+    const long =
+      "Flat 40% off everything in your cart with code FESTIVE40 when you spend over ₹1,499, today only.";
+    const changed = landingEvent({ metadata: { from: long, to: "Festival sale live" } });
+
+    expect(readChangeMark(changed)).toBeNull();
+    const evidence = readLandingPageEvidence(changed);
+    expect(evidence?.from).toBe(long);
+    expect(evidence?.to).toBe("Festival sale live");
+    expect(evidence?.proofState).toBe("proof_unavailable");
+  });
+
+  it("marks the card proof-pending when one artifact is missing, never screenshot proof", () => {
+    const evidence = readLandingPageEvidence(
+      landingEvent({
+        metadata: {
+          from: "First headline variant with a long body copy",
+          to: "Second variant",
+          beforeCreativeImageUrl: "https://cdn.example.com/lp-before.png",
+        },
+      }),
+    );
+
+    expect(evidence?.proofState).toBe("proof_pending");
+    expect(evidence?.beforeImageUrl).toBe("https://cdn.example.com/lp-before.png");
+    expect(evidence?.afterImageUrl).toBeNull();
+  });
+
+  it("treats an invalid artifact URL as missing, not as stored proof", () => {
+    const evidence = readLandingPageEvidence(
+      landingEvent({
+        metadata: {
+          from: "Long headline text that exceeds the token mark limit",
+          to: "Short",
+          beforeCreativeImageUrl: "http://insecure.example.com/lp-before.png",
+          afterCreativeImageUrl: "not a url",
+        },
+      }),
+    );
+
+    expect(evidence?.beforeImageUrl).toBeNull();
+    expect(evidence?.afterImageUrl).toBeNull();
+    expect(evidence?.proofState).toBe("proof_pending");
+  });
+
+  it("leaves short token-markable landing-page changes to the existing mark", () => {
+    const short = landingEvent({ metadata: { from: "$68", to: "$52" } });
+    expect(readChangeMark(short)).toEqual({ from: "$68", to: "$52" });
+    expect(readLandingPageEvidence(short)).toBeNull();
+  });
+
+  it("takes the newest event that carries landing-page evidence", () => {
+    const found = firstLandingPageEvidence([
+      event({ id: "plain-offer", metadata: { from: "$68", to: "$52" } }),
+      landingEvent({
+        id: "evidence",
+        metadata: { from: "A long headline that certainly exceeds the token limit", to: "x" },
+      }),
+    ]);
+    expect(found?.event.id).toBe("evidence");
+  });
+
+  it("names the changed region from the event type with a truthful fallback", () => {
+    expect(landingPageChangedFieldLabel("landing_page_url_changed")).toBe("Destination URL");
+    expect(landingPageChangedFieldLabel("landing_page_offer_changed")).toBe("Offer / price");
+    expect(landingPageChangedFieldLabel("landing_page_form_changed")).toBe("Form state");
+    expect(landingPageChangedFieldLabel("mystery_event")).toBe("Landing page");
+  });
+
+  it("renders the dashboard card with screenshots, source and timestamps", () => {
+    const markup = renderRouted(
+      <LandingPageEvidenceCard
+        event={landingEvent({
+          metadata: {
+            from: "Glow like never before with our festival edit",
+            to: "Festival glow starts here",
+            beforeCreativeImageUrl: "https://cdn.example.com/lp-before.png",
+            afterCreativeImageUrl: "https://cdn.example.com/lp-after.png",
+            sourceUrl: "https://nykaa.com/festive-glow",
+            beforeCapturedAt: "2026-07-27T04:00:00.000Z",
+            capturedAt: "2026-07-28T04:00:00.000Z",
+          },
+        })}
+        evidence={{
+          from: "Glow like never before with our festival edit",
+          to: "Festival glow starts here",
+          beforeImageUrl: "https://cdn.example.com/lp-before.png",
+          afterImageUrl: "https://cdn.example.com/lp-after.png",
+          sourceUrl: "https://nykaa.com/festive-glow",
+          beforeCapturedAt: "2026-07-27T04:00:00.000Z",
+          capturedAt: "2026-07-28T04:00:00.000Z",
+          changedField: "Headline",
+          proofState: "screenshot_proof",
+        }}
+        timeZone="UTC"
+      />,
+    );
+
+    expect(markup).toContain("Landing page evidence");
+    expect(markup).toContain('src="https://cdn.example.com/lp-before.png"');
+    expect(markup).toContain('src="https://cdn.example.com/lp-after.png"');
+    expect(markup).toContain("https://nykaa.com/festive-glow");
+    expect(markup).toContain("27 Jul 2026");
+    expect(markup).toContain("28 Jul 2026");
+    expect(markup).not.toContain("Screenshot proof pending");
+  });
+
+  it("renders an explicit pending state with no image when an artifact is missing", () => {
+    const markup = renderRouted(
+      <LandingPageEvidenceCard
+        event={landingEvent({
+          metadata: {
+            from: "First headline variant with a long body copy",
+            to: "Second variant",
+            beforeCreativeImageUrl: "https://cdn.example.com/lp-before.png",
+          },
+        })}
+        evidence={{
+          from: "First headline variant with a long body copy",
+          to: "Second variant",
+          beforeImageUrl: "https://cdn.example.com/lp-before.png",
+          afterImageUrl: null,
+          sourceUrl: "https://nykaa.com/festive-glow",
+          beforeCapturedAt: null,
+          capturedAt: "2026-07-28T04:00:00.000Z",
+          changedField: "Headline",
+          proofState: "proof_pending",
+        }}
+      />,
+    );
+
+    expect(markup).not.toContain("<img");
+    expect(markup).toContain("Screenshot proof pending");
+    expect(markup).toContain("https://nykaa.com/festive-glow");
+  });
+
+  it("never fabricates a screenshot for an event with no stored artifacts", () => {
+    const markup = renderRouted(
+      <LandingPageEvidenceCard
+        event={landingEvent({
+          metadata: {
+            from: "Flat 40% off everything in your cart today only",
+            to: "Festival sale live",
+          },
+        })}
+        evidence={{
+          from: "Flat 40% off everything in your cart today only",
+          to: "Festival sale live",
+          beforeImageUrl: null,
+          afterImageUrl: null,
+          sourceUrl: null,
+          beforeCapturedAt: null,
+          capturedAt: null,
+          changedField: "Headline",
+          proofState: "proof_unavailable",
+        }}
+      />,
+    );
+
+    expect(markup).not.toContain("<img");
+    expect(markup).toContain("No screenshots stored for this change");
+    expect(markup).toContain("Flat 40% off everything in your cart today only");
   });
 });
 
