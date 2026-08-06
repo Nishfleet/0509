@@ -6,7 +6,11 @@ import {
   useLoaderData,
   useParams,
 } from "react-router";
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import type {
+  ActionFunctionArgs,
+  LoaderFunctionArgs,
+  ShouldRevalidateFunctionArgs,
+} from "react-router";
 import { useEffect, useState } from "react";
 
 import { DashboardPage } from "~/components/dashboard-page";
@@ -28,6 +32,38 @@ import {
 } from "~/lib/report-approval";
 
 export const meta = () => [{ title: "Reports | Five to Nine" }];
+
+/**
+ * Validation-only share/PDF failures do not change report content. Re-running
+ * the loader after those actions would mint a fresh `reviewNonce` (and rewrite
+ * the controlled fingerprint fields), which races any in-flight client mutation
+ * of those fields and can turn a deliberate stale-fingerprint probe into an
+ * accidental successful publish. Keep the open report stable; revalidate on
+ * success and on failures that imply content moved under the customer.
+ */
+export function shouldRevalidate({
+  actionResult,
+  defaultShouldRevalidate,
+}: ShouldRevalidateFunctionArgs) {
+  if (isReportValidationOnlyFailure(actionResult)) {
+    return false;
+  }
+  return defaultShouldRevalidate;
+}
+
+export function isReportValidationOnlyFailure(actionResult: unknown): boolean {
+  if (!actionResult || typeof actionResult !== "object") return false;
+  const result = actionResult as {
+    ok?: unknown;
+    error?: unknown;
+  };
+  if (result.ok !== false || typeof result.error !== "string") return false;
+  return (
+    result.error === "review_required" ||
+    result.error === "plan_gated" ||
+    result.error === "evidence_not_ready"
+  );
+}
 
 export function HydrateFallback() {
   return <DashboardRouteLoading title="Reports" />;
