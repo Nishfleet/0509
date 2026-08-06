@@ -135,6 +135,11 @@ export type { SearchAccumulationState };
 
 const SEARCH_WARMING_POLL_MS = 5_000;
 const SEARCH_WARMING_POLL_LIMIT = 12; // 60s cap
+// Long-horizon escape hatch for the public submit hang: how long an in-flight
+// /search GET may keep the idle pre-search page spinning before the client
+// forces a fresh page load to the exact target URL. Exported so tests can pin
+// the exact grace window.
+export const SEARCH_NAVIGATION_SETTLE_GRACE_MS = 90_000;
 
 const searchDescription =
   "Preview public competitor ad results before creating an account; sign in to save examples and track offer changes over time. Provider coverage and freshness vary.";
@@ -851,6 +856,12 @@ export default function SearchRoute() {
   const [recoveredSearchKey, setRecoveredSearchKey] = useState<string | null>(
     null,
   );
+  // When the SPA never commits a submitted /search target (server settled but
+  // the router keeps navigation.state=loading on the idle page), this holds the
+  // in-flight target search string so the recovery block can reload it exactly.
+  const [searchNavigationRecovery, setSearchNavigationRecovery] = useState<
+    string | null
+  >(null);
   const locationSearchParams = new URLSearchParams(location.search);
   const [resultSort, setResultSort] = useState<SearchResultSort>(
     () =>
@@ -981,6 +992,22 @@ export default function SearchRoute() {
     !data.inputError;
   const discoverySummary = formatDiscoverySummary(visibleResult);
   const hasSearchQuery = Boolean(data.filters.query || competitorWebsite.raw);
+  // Candidate-3 root-cause fix for the public submit hang: the See ads button
+  // stays pending only while a GET navigation to /search targets a URL that is
+  // NOT the committed location.search. Once the server commits results or an
+  // error for the submitted URL — even if useNavigation still reports loading
+  // — the target matches the committed location and the button re-enables
+  // instead of spinning forever. The long-horizon recovery overrides it so the
+  // button is never stuck disabled behind a navigation that cannot settle.
+  const commandNavigationTarget =
+    navigation.state === "loading" &&
+    navigation.location?.pathname === "/search"
+      ? (navigation.location.search ?? "")
+      : null;
+  const commandNavigationPending =
+    commandNavigationTarget !== null &&
+    commandNavigationTarget !== location.search &&
+    searchNavigationRecovery === null;
   const displayDomain =
     data.displayDomain ?? competitorWebsite.host ?? competitorWebsite.raw;
   const isDomainSearch = Boolean(
@@ -1106,17 +1133,52 @@ export default function SearchRoute() {
     }
     const timer = setTimeout(() => {
       setWarmingPollCount((count) => count + 1);
-      if (revalidator.state === "idle") {
+      // Never revalidate while a route navigation is in flight: that
+      // revalidation aborts/restarts the in-flight GET search. Resume only
+      // once both the revalidator and the navigation are idle.
+      if (
+        revalidator.state === "idle" &&
+        navigation.state === "idle"
+      ) {
         revalidator.revalidate();
       }
     }, SEARCH_WARMING_POLL_MS);
     return () => clearTimeout(timer);
-  }, [isSearchWarming, warmingPollCount, revalidator]);
+  }, [isSearchWarming, warmingPollCount, revalidator, navigation.state]);
 
   useEffect(() => {
     // Reset warming poll budget when the query identity changes.
     setWarmingPollCount(0);
   }, [searchKey]);
+
+  // Long-horizon recovery: while a /search GET is genuinely loading and the
+  // committed page is still the untouched idle pre-search form, arm a 90s
+  // grace timer. If the target never commits (server settled but the SPA
+  // never updates the URL), surface the recovery block with a fresh page load
+  // to the exact in-flight target. Clearing happens on the same effect run:
+  // the moment navigation settles, the target changes, or the committed page
+  // leaves the idle state, the timer is torn down and recovery is reset.
+  useEffect(() => {
+    const target = navigation.location?.search ?? "";
+    const isInFlightIdleSearch =
+      navigation.state === "loading" &&
+      navigation.location?.pathname === "/search" &&
+      target !== "" &&
+      !hasSearchQuery;
+    setSearchNavigationRecovery(null);
+    if (!isInFlightIdleSearch) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      setSearchNavigationRecovery(target);
+    }, SEARCH_NAVIGATION_SETTLE_GRACE_MS);
+    return () => clearTimeout(timer);
+  }, [
+    navigation.state,
+    navigation.location?.pathname,
+    navigation.location?.search,
+    hasSearchQuery,
+  ]);
 
   // WP-11: single revalidation ~4s after deferred selection enrichment starts.
   // FIX-13: only one shot per selection key — if still pending after that,
@@ -1129,8 +1191,17 @@ export default function SearchRoute() {
       return;
     }
     const timer = setTimeout(() => {
-      setSelectionEnrichmentRevalidatedFor(selectionEnrichmentKey);
-      if (revalidator.state === "idle") {
+      // Same rule as warming: a revalidation here would abort/restart an
+      // in-flight GET navigation, so wait until navigation is idle too.
+      // Burn the one-shot key only when the revalidation actually fires —
+      // marking it first spends the single attempt on a run that was skipped,
+      // so enrichment that finished server-side would never be fetched and the
+      // UI would fall back to "Not detected…" with the data sitting ready.
+      if (
+        revalidator.state === "idle" &&
+        navigation.state === "idle"
+      ) {
+        setSelectionEnrichmentRevalidatedFor(selectionEnrichmentKey);
         revalidator.revalidate();
       }
     }, 4_000);
@@ -1140,6 +1211,7 @@ export default function SearchRoute() {
     selectionEnrichmentKey,
     selectionEnrichmentRevalidatedFor,
     revalidator,
+    navigation.state,
   ]);
   // After the one-shot revalidation, do not keep advertising in-flight analysis.
   const selectionEnrichmentUiPending =
@@ -1355,6 +1427,7 @@ export default function SearchRoute() {
             <SubmitButton
               className="f9-wk-btn"
               getAction="/search"
+              pending={commandNavigationPending}
               pendingLabel="Searching…"
             >
               See ads
@@ -1467,6 +1540,38 @@ export default function SearchRoute() {
             </div>
             </details>
           </Form>
+
+          {/* Long-horizon recovery for the submit hang: the server settled but
+              the SPA never committed the target URL, so offer a fresh page
+              load to the exact in-flight /search target instead of an eternal
+              "Searching…". reloadDocument forces the full document load. */}
+          {searchNavigationRecovery !== null ? (
+            <div
+              aria-live="assertive"
+              className="f9-wk-note f9-search-settle-recovery"
+              role="alert"
+            >
+              <p className="f9-wk-lede">
+                This search never finished loading
+              </p>
+              <p className="f9-wk-note">
+                It has been waiting for about a minute and a half. Reload the
+                search to open it in a fresh page load.
+              </p>
+              <div className="f9-wk-acts">
+                <Link
+                  className="f9-wk-lnk"
+                  reloadDocument
+                  to={`/search${searchNavigationRecovery}`}
+                >
+                  Reload the search{" "}
+                  <span aria-hidden="true" className="f9-wk-chev">
+                    &rsaquo;
+                  </span>
+                </Link>
+              </div>
+            </div>
+          ) : null}
 
         </section>
 
