@@ -109,7 +109,6 @@ describe("app layout loader", () => {
 
     expect(result).toEqual({
       session,
-      showOpsNav: false,
       showPresenceNav: false,
     });
   });
