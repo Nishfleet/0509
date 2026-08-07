@@ -341,14 +341,20 @@ export function resolveReportPlateContent(row: ReportRow) {
 
   // Verification qualifies the watch event's stored proof capture and matched
   // change, not OCR/readability of the linked ad creative shown in this frame.
-  // Report building admits only events classified as verified proof: current
-  // events carry a proofCaptureId, while authoritative legacy rows may carry
-  // the explicit verified_proof status. An empty creative frame can therefore
-  // honestly coexist with "Verified evidence"; do not weaken that real
-  // verification when creative enrichment is absent.
-  const verification = row.event
+  // Report building admits only events classified as verified proof. But the
+  // external reader can only trust what they can inspect: a bare "Verified
+  // evidence" stamp beside an empty frame asks them to trust an internal
+  // classification, so when nothing visible backs the stamp the label says
+  // exactly what was verified and what is missing.
+  const plateHasVisibleCapture =
+    Boolean(row.previewImageUrl) || captureLines.length > 0;
+  const rawVerification = row.event
     ? legacyReportLabelText(row.event.proofStatusLabel)
     : "Saved evidence";
+  const verification =
+    row.event && !plateHasVisibleCapture && /verified/i.test(rawVerification)
+      ? "Verified from stored page capture — no creative stored for this frame"
+      : rawVerification;
 
   return {
     advertiserLabel,
@@ -360,7 +366,7 @@ export function resolveReportPlateContent(row: ReportRow) {
     verification,
     capturedAt: row.landingPage.capturedAt ?? row.event?.createdAt ?? null,
     // A capture note may only claim a capture exists when one does.
-    hasCapture: Boolean(row.previewImageUrl) || captureLines.length > 0,
+    hasCapture: plateHasVisibleCapture,
   };
 }
 

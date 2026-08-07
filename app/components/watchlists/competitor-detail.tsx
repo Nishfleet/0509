@@ -141,6 +141,7 @@ export function CompetitorDetail(props: CompetitorDetailProps) {
 
   const deliveryLines = buildCompetitorDeliveryLines({
     emailEnabled: data.effectiveDeliveryConfig.emailEnabled,
+    canEmailDelivery: props.canEmailDelivery,
     instantEnabled: data.effectiveDeliveryConfig.instantEnabled,
     digestEnabled: data.effectiveDeliveryConfig.digestEnabled,
     quietHours: data.effectiveDeliveryConfig.quietHours ?? null,

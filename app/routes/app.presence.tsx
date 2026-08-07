@@ -453,7 +453,7 @@ export default function PresenceIndexRoute() {
           </p>
         ) : (
           <RuledList aria-label="Tracked entities">
-            {data.snapshot.entities.map(({ entity, sources }: PresenceEntityRow) => {
+            {data.snapshot.entities.map(({ entity, sources, lastPollAt, lastPollFailed }: PresenceEntityRow) => {
               const pollableSources = sources.filter(
                 (source: SourceTargetRecord) => source.connectorId === "website",
               );
@@ -472,7 +472,18 @@ export default function PresenceIndexRoute() {
                       : "Website source not configured"
                   }
                   status={formatTrackingMode(entity.trackingMode)}
-                  time={<LocalTime iso={entity.updatedAt} mode="date" />}
+                  time={
+                    // Check time, never record-edit time. No successful
+                    // check renders as exactly that — not as freshness.
+                    lastPollAt ? (
+                      <>
+                        Checked <LocalTime iso={lastPollAt} mode="date" />
+                        {lastPollFailed ? " · latest check failed" : null}
+                      </>
+                    ) : (
+                      "No successful check yet"
+                    )
+                  }
                   to={`/app/presence/${entity.id}`}
                 />
               );
@@ -533,5 +544,7 @@ export function ErrorBoundary({ error }: { error: unknown }) {
 type PresenceEntityRow = {
   entity: TrackedEntityRecord;
   sources: SourceTargetRecord[];
+  lastPollAt: string | null;
+  lastPollFailed: boolean;
 };
 type PresenceRecentItem = PresenceItemRecord;

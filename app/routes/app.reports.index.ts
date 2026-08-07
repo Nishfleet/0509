@@ -32,6 +32,11 @@ export async function loader({ context, request }: LoaderFunctionArgs): Promise<
     listCollections(env, workspaceUserId),
     listWatchlists(env, workspaceUserId, { includeInactive: true }),
   ]);
+  // Honesty: the time a customer sees on this list must be evidence time,
+  // not record-mutation time. A watchlist's truth is its last completed
+  // check; a collection has no check of its own, so its edit time is
+  // labeled as exactly that. Renaming a record must never outrank this
+  // morning's caught change.
   const reports = [
     ...collections.map((collection) => ({
       id: createReportId("collection", collection.id),
@@ -39,19 +44,24 @@ export async function loader({ context, request }: LoaderFunctionArgs): Promise<
       typeLabel: "Collection report",
       title: collection.name,
       description: collection.description?.trim() || "Saved ads and evidence from this collection.",
-      updatedAt: collection.updatedAt,
+      timeLabel: "Edited",
+      timeAt: collection.updatedAt as string | null,
     })),
     ...watchlists.map((watchlist) => ({
       id: createReportId("watchlist", watchlist.id),
       href: `/app/reports/${encodeURIComponent(createReportId("watchlist", watchlist.id))}`,
       typeLabel: "Competitor report",
       title: watchlist.name,
-      description: `${watchlist.isActive ? "Active" : "Paused"} monitoring · ${watchlist.targetLabel}`,
-      updatedAt: watchlist.updatedAt,
+      description: watchlist.lastScannedAt
+        ? `${watchlist.isActive ? "Watching" : "Paused"} · ${watchlist.targetLabel}`
+        : `No check has run yet · ${watchlist.targetLabel}`,
+      timeLabel: watchlist.lastScannedAt ? "Checked" : null,
+      timeAt: watchlist.lastScannedAt ?? null,
     })),
   ].sort((left, right) => {
-    const updatedOrder = Date.parse(right.updatedAt) - Date.parse(left.updatedAt);
-    return updatedOrder || left.id.localeCompare(right.id);
+    const leftTime = left.timeAt ? Date.parse(left.timeAt) : 0;
+    const rightTime = right.timeAt ? Date.parse(right.timeAt) : 0;
+    return rightTime - leftTime || left.id.localeCompare(right.id);
   });
 
   return {
