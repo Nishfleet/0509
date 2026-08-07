@@ -18,6 +18,8 @@ import { describe, expect, it } from "vitest";
  * every ceiling at zero, after which a fourth design era is structurally
  * impossible to ship.
  */
+const root = join(__dirname, "..");
+
 describe("design-system ratchet", () => {
   const root = join(__dirname, "..");
 
@@ -82,5 +84,76 @@ describe("the ratchet cannot be gamed", () => {
   it("the real checked-in ceilings match reality exactly", () => {
     const result = spawnSync(process.execPath, [script], { encoding: "utf8" });
     expect(result.status, result.stderr).toBe(0);
+  });
+});
+
+describe("the marker list itself is pinned (Sol wave-2)", () => {
+  it("BANNED_MARKERS matches the canonical manifest — silent source edits fail", () => {
+    const source = readFileSync(
+      join(root, "scripts", "design-system-ratchet.mjs"),
+      "utf8",
+    );
+    const listMatch = source.match(/BANNED_MARKERS = \[([^\]]+)\]/);
+    expect(listMatch).not.toBeNull();
+    const markers = [...(listMatch?.[1] ?? "").matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+    // The canonical manifest. Changing the banned list is a reviewed act:
+    // update BOTH places deliberately or this fails.
+    expect(markers).toEqual([
+      "f9-ed-",
+      "f9-app-",
+      "f9-work-",
+      "f9-dashboard-grid",
+      "f9-muted-copy",
+      "f9-secondary-button",
+      "f9-primary-button",
+      "f9-text-link",
+      "f9-message",
+      "f9-bl0",
+      "f9-pr-",
+      "f9-nt-",
+      "f9-col-",
+      "f9-clients-",
+      "f9-search-page",
+      "DashboardPageHeader",
+      "EmptyState",
+      "style={",
+    ]);
+    // The scan scope is part of the contract too.
+    expect(source).toContain('const SCAN_DIRS = ["app"]');
+  });
+
+  it("--update obeys both laws: tightens on decrease, refuses to raise", () => {
+    const dir = mkdtempSync(join(tmpdir(), "ratchet-update-"));
+    const file = join(dir, "ceilings.json");
+    const realCeilings = JSON.parse(
+      readFileSync(join(root, "docs", "design-system-ratchet.json"), "utf8"),
+    ) as Record<string, number>;
+    const inflated = Object.fromEntries(
+      Object.entries(realCeilings).map(([key, value]) => [key, (value as number) + 5]),
+    );
+    writeFileSync(file, JSON.stringify(inflated));
+    const tighten = spawnSync(
+      process.execPath,
+      [join(root, "scripts", "design-system-ratchet.mjs"), "--update", `--ceilings=${file}`],
+      { encoding: "utf8" },
+    );
+    expect(tighten.status).toBe(0);
+    expect(JSON.parse(readFileSync(file, "utf8"))).toEqual(realCeilings);
+
+    const deflated = Object.fromEntries(
+      Object.entries(realCeilings).map(([key, value]) => [key, Math.max(0, (value as number) - 5)]),
+    );
+    writeFileSync(file, JSON.stringify(deflated));
+    const refuse = spawnSync(
+      process.execPath,
+      [join(root, "scripts", "design-system-ratchet.mjs"), "--update", `--ceilings=${file}`],
+      { encoding: "utf8" },
+    );
+    expect(refuse.status).toBe(2);
+    const kept = JSON.parse(readFileSync(file, "utf8")) as Record<string, number>;
+    for (const [key, value] of Object.entries(kept)) {
+      expect(value as number, key).toBeLessThanOrEqual(deflated[key] as number);
+    }
+    rmSync(dir, { recursive: true, force: true });
   });
 });
