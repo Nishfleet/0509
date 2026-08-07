@@ -260,17 +260,33 @@ export function DashboardShell({
             className="f9-dash-mobile-nav"
             ref={mobilePrimaryRef}
           >
-            {mobileNav.map((item) => (
-              <NavLink
-                className={navLinkClassName}
-                end={item.end}
-                key={item.to}
-                prefetch="intent"
-                to={item.to}
-              >
-                {item.label}
-              </NavLink>
-            ))}
+            {mobileNav.map((item) => {
+              // Same member-page ownership as the rail: Settings stays the
+              // active mobile row on /app/billing (PR-5a review, Grok 2).
+              const memberActive = Boolean(
+                item.activePaths?.some(
+                  (path) =>
+                    location.pathname === path ||
+                    location.pathname.startsWith(`${path}/`),
+                ),
+              );
+              return (
+                <NavLink
+                  className={(state) =>
+                    navLinkClassName({
+                      ...state,
+                      isActive: state.isActive || memberActive,
+                    })
+                  }
+                  end={item.end}
+                  key={item.to}
+                  prefetch="intent"
+                  to={item.to}
+                >
+                  {item.label}
+                </NavLink>
+              );
+            })}
             <SignOutButton />
           </nav>
         ) : null}

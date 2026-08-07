@@ -42,7 +42,7 @@ async function signInAs(context: BrowserContext, baseURL: string, userId: string
 
 async function expectAppPage(page: Page) {
   await expect(page).not.toHaveURL(/\/auth\/login/);
-  await expect(page.getByRole("link", { name: "Overview" }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "Today" }).first()).toBeVisible();
 }
 
 async function expectNoHorizontalOverflow(page: Page) {
@@ -100,6 +100,8 @@ const conditionalPrimaryRoutes = new Set([
 const workingHeaderRoutes = new Set([
   "/app",
   "/app/watchlists",
+  "/app/deliver",
+  "/app/settings",
   ...conditionalPrimaryRoutes,
 ]);
 
@@ -363,7 +365,7 @@ test.describe("local authenticated E2E harness", () => {
     await page.goto("/app/watchlists");
     await expectAppPage(page);
     await expect(
-      page.locator("#f9-main-content").getByRole("heading", { level: 1, name: "Competitors", exact: true }),
+      page.locator("#f9-main-content").getByRole("heading", { level: 1, name: "Watch", exact: true }),
     ).toBeVisible();
     await expect(page.getByText("Okara competitor watch").first()).toBeVisible();
 
@@ -727,7 +729,7 @@ test.describe("local authenticated E2E harness", () => {
         for (const route of routes) {
           await page.goto(route);
           await expectAppPage(page);
-          await expect(page.getByRole("link", { name: "Competitors" }).first()).toBeVisible();
+          await expect(page.getByRole("link", { name: "Watch" }).first()).toBeVisible();
           await expect(page.getByRole("link", { name: "Notifications" }).first()).toBeVisible();
           await expect(page.getByRole("button", { name: "Sign out" }).first()).toBeVisible();
           await expectNoFixedAppChrome(page);

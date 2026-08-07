@@ -7,7 +7,7 @@ import { RuledList, RuledRow } from "~/components/workspace/ruled-list";
 import { WorkingHeader } from "~/components/workspace/working-header";
 
 /**
- * Settings — ONE destination for everything long-dwell (design-unification
+ * Settings — ONE destination for the set-once controls (design-unification
  * PR-5a). The old rail advertised seven settings rows behind a disclosure;
  * a solo customer's plan could use four of them. Rows the plan cannot use
  * are not advertised (gate-visibility principle). The deep consolidation
@@ -54,7 +54,7 @@ export default function SettingsRoute() {
   return (
     <DashboardPage className="f9-wk-page">
       <WorkingHeader
-        context="The long-dwell controls: account, billing, delivery, and access."
+        context="Account, billing, delivery, and access — the controls you set once and revisit rarely."
         title="Settings"
       />
 
