@@ -13,7 +13,7 @@ import { mockAgencyWorkspacePlan } from "./helpers/agency-plan-mock";
 vi.mock("~/lib/ga-customer-surface", () => ({
   isSlackDeliveryCustomerFacing: vi.fn(() => false),
   slackDeliveryUnavailableMessage: vi.fn(
-    () => "Slack delivery is not available at general availability yet. Use email delivery.",
+    () => "Slack delivery isn’t available. Nothing was saved — use email delivery instead.",
   ),
 }));
 

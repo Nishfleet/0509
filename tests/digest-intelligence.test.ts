@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   DesignedDigestBrief,
-  DigestDecisionSummary,
   DigestIntelligence,
   DigestMovementSummary,
   DigestProofPacket,
@@ -140,91 +139,6 @@ describe("DesignedDigestBrief", () => {
 
     expect(markup.match(/We could not read this source on/g)).toHaveLength(1);
     expect(markup).not.toContain("Source unavailable");
-  });
-});
-
-describe("DigestDecisionSummary", () => {
-  it("leads with the highest-priority customer decision", () => {
-    const markup = renderToStaticMarkup(
-      createElement(DigestDecisionSummary, {
-        items: [
-          {
-            title: "CTA changed",
-            summary: "The competitor is pushing lead capture harder.",
-            eventType: "landing_page_cta_changed",
-            watchlistName: "Mamaearth",
-            metadata: {
-              priorityScore: 66,
-              priorityBand: "Medium priority",
-              recommendedAction: "Next review: compare the new CTA.",
-              proofTrail: "Spotted in the scheduled scan",
-              sourceStatus: "scan_backed",
-              confirmedAt: "2026-06-20T04:00:00.000Z",
-            },
-            createdAt: "2026-06-20T04:00:00.000Z",
-          },
-          {
-            title: "Offer changed",
-            summary: "The competitor lowered the anchor price.",
-            eventType: "landing_page_offer_changed",
-            watchlistName: "Nykaa",
-            metadata: {
-              priorityScore: 92,
-              priorityBand: "High priority",
-              recommendedAction: "Today: brief one counter-test.",
-              proofTrail: "Verified from a page snapshot",
-              proofCaptureId: "proof-1",
-              sourceStatus: "proof_backed",
-              confirmedAt: "2026-06-20T05:09:00.000Z",
-            },
-            createdAt: "2026-06-20T05:09:00.000Z",
-          },
-        ],
-      }),
-    );
-
-    expect(markup).toContain("Decision summary");
-    expect(markup).toContain("Nykaa needs review");
-    expect(markup).toContain("What changed");
-    expect(markup).toContain("Offer changed");
-    expect(markup).toContain("Signal summary");
-    expect(markup).toContain("Evidence summary");
-    expect(markup).not.toContain("Why it matters");
-    expect(markup).toContain("The competitor lowered the anchor price.");
-    expect(markup.match(/The competitor lowered the anchor price\./g)).toHaveLength(1);
-    expect(markup).toContain("Verified evidence attached. Review before sharing.");
-    expect(markup).toContain("High priority");
-    expect(markup).toContain("Verified evidence");
-    expect(markup).toContain("Saved evidence");
-    expect(markup).toContain("Today: brief one counter-test.");
-  });
-
-  it("uses evidence freshness from metadata before the digest packaging time", () => {
-    const markup = renderToStaticMarkup(
-      createElement(DigestDecisionSummary, {
-        items: [
-          {
-            title: "Offer changed",
-            summary: "The competitor lowered the anchor price.",
-            eventType: "landing_page_offer_changed",
-            watchlistName: "Nykaa",
-            metadata: {
-              priorityScore: 92,
-              priorityBand: "High priority",
-              recommendedAction: "Today: brief one counter-test.",
-              proofTrail: "Verified from a page snapshot",
-              proofCaptureId: "proof-1",
-              sourceStatus: "proof_backed",
-              createdAt: "2026-06-20T04:00:00.000Z",
-            },
-            createdAt: "2026-06-25T10:00:00.000Z",
-          },
-        ],
-      }),
-    );
-
-    expect(markup).toContain('dateTime="2026-06-20T04:00:00.000Z"');
-    expect(markup).not.toContain('dateTime="2026-06-25T10:00:00.000Z"');
   });
 });
 

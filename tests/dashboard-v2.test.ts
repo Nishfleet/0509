@@ -158,6 +158,8 @@ describe("dashboard v2 shell", () => {
     const wrapperRoutes = new Set([
       "app.developer-access.tsx",
       "app.source-access.tsx",
+      // Pure redirect since the subtraction pass (S5) — renders nothing.
+      "app.sources.tsx",
     ]);
     const missing = PRIMARY_APP_ROUTE_FILES.filter((file) => {
       if (file === "app.ops.tsx") return false;

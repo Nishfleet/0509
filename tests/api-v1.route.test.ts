@@ -636,7 +636,7 @@ describe("customer API v1", () => {
     expect(response.status).toBe(403);
     expect(body).toEqual({
       error: "slack_export_unavailable",
-      message: "Slack delivery is not available at general availability yet. Use email delivery.",
+      message: "Slack delivery isn’t available. Nothing was saved — use email delivery instead.",
     });
   });
 
@@ -805,7 +805,7 @@ describe("customer API v1", () => {
     expect(body).toMatchObject({
       ok: false,
       error: "whatsapp_delivery_unavailable",
-      message: "WhatsApp delivery is not available at general availability yet. Use email delivery.",
+      message: "WhatsApp delivery isn’t available. Nothing was saved — use email delivery instead.",
     });
   });
 
