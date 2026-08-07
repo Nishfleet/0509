@@ -894,9 +894,13 @@ export default function MarketingRoute() {
                         </span>
                       )
                       : annualStatusCopy
-                      : hasPrice(localPricing, plan.slug, "yearly")
+                      // Monthly is selected: mention the annual cadence only
+                      // when annual checkout is actually available for this
+                      // plan. Otherwise the note stays on the monthly cadence
+                      // and never claims the annual savings offer.
+                      : annualIsValid && planSaleOpen && hasPrice(localPricing, plan.slug, "yearly")
                         ? `${priceLabel(localPricing, plan.slug, "yearly", plan.yearlyLabel)} annual`
-                        : plan.yearlyLabel}
+                        : "Billed monthly"}
                 </small>
                 <div className="f9-plan-value" aria-label={`${plan.name} value summary`}>
                   <strong>{planValueSummary(plan.slug)}</strong>
