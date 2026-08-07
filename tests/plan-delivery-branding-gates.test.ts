@@ -142,7 +142,7 @@ describe("watchlists save-delivery-config gates", () => {
 
     expect(result).toMatchObject({
       ok: false,
-      message: "Slack delivery is not available at general availability yet. Use email delivery.",
+      message: "Slack delivery isn’t available. Nothing was saved — use email delivery instead.",
     });
   });
 

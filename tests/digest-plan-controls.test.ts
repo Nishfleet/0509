@@ -86,7 +86,6 @@ async function renderDigest(
   vi.doMock("~/components/digest-intelligence", () => ({
     DesignedDigestBrief: ({ actions }: MockProps & { actions?: ReactNode }) =>
       createElement("article", null, actions),
-    DigestDecisionSummary: () => null,
     DigestIntelligence: () => null,
     DigestMovementSummary: () => null,
     DigestProofPacket: () => null,

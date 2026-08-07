@@ -22,11 +22,11 @@ import {
 import type { PresenceConnectorId } from "~/lib/presence-types";
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData }) => [
-  { title: loaderData?.entity ? `${loaderData.entity.label} | Presence Desk` : "Presence Desk | Five to Nine" },
+  { title: loaderData?.entity ? `${loaderData.entity.label} | Presence` : "Presence | Five to Nine" },
 ];
 
 export function HydrateFallback() {
-  return <DashboardRouteLoading title="Presence Desk" />;
+  return <DashboardRouteLoading title="Presence" />;
 }
 
 export function ErrorBoundary({ error }: { error: unknown }) {
@@ -201,7 +201,7 @@ export default function PresenceEntityRoute() {
     <DashboardPage>
       <section className="f9-app-stack">
         <DashboardPageHeader
-          kicker={`Presence Desk · ${formatTrackingMode(entity.trackingMode)}`}
+          kicker={`Presence · ${formatTrackingMode(entity.trackingMode)}`}
           lead={safeBrief.summary}
           title={entity.label}
         />

@@ -84,7 +84,12 @@ describe("app rebuild", () => {
   });
 
   it("uses the Five to Nine wordmark in the app shell", () => {
-    expect(appLayout).toContain('accountTitle="Five to Nine"');
+    // The wordmark lives in the shell itself; the app layout no longer
+    // passes decorative account props that only ever rendered as fallbacks
+    // for missing user identity (tri-audit S7).
+    expect(shellComponent).toContain("f9-wk-wordmark");
+    expect(shellComponent).toContain("Five to Nine");
+    expect(appLayout).not.toContain("accountTitle=");
   });
 
   it("keeps internal app navigation on React Router transitions", () => {

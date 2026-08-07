@@ -443,12 +443,10 @@ test.describe("local authenticated E2E harness", () => {
     ).toBeVisible();
     await expect(page.locator("#f9-main-content")).toContainText("Invite your teammates");
 
+    // /app/sources is a 301 into Notifications (tri-audit S5); the legacy
+    // hub page no longer exists.
     await page.goto("/app/sources");
-    await expect(page).toHaveURL(/\/app\/sources/);
-    await expect(page.getByRole("heading", { name: "Workspace settings" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Open notifications" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Open source access" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Open developer access" })).toBeVisible();
+    await expect(page).toHaveURL(/\/app\/notifications/);
 
     await page.goto("/app/reports");
     await expect(page.getByRole("heading", { name: "Reports" })).toBeVisible();

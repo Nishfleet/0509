@@ -820,7 +820,7 @@ describe("MCP route", () => {
 
     expect(body.error).toMatchObject({
       code: -32602,
-      message: "Slack delivery is not available at general availability yet. Use email delivery.",
+      message: "Slack delivery isn’t available. Nothing was saved — use email delivery instead.",
     });
   });
 
@@ -1273,7 +1273,7 @@ describe("MCP route", () => {
     expect(body.result.isError).toBe(true);
     expect(body.result.structuredContent).toMatchObject({
       error: "whatsapp_delivery_unavailable",
-      message: "WhatsApp delivery is not available at general availability yet. Use email delivery.",
+      message: "WhatsApp delivery isn’t available. Nothing was saved — use email delivery instead.",
     });
   });
 

@@ -16,11 +16,11 @@ vi.mock("~/lib/ga-customer-surface", () => ({
   isWhatsAppDeliveryCustomerFacing: vi.fn(() => false),
   slackDeliveryUnavailableMessage: vi.fn(
     () =>
-      "Slack delivery is not available at general availability yet. Use email delivery.",
+      "Slack delivery isn’t available. Nothing was saved — use email delivery instead.",
   ),
   whatsappDeliveryUnavailableMessage: vi.fn(
     () =>
-      "WhatsApp delivery is not available at general availability yet. Use email delivery.",
+      "WhatsApp delivery isn’t available. Nothing was saved — use email delivery instead.",
   ),
 }));
 
@@ -78,39 +78,16 @@ afterEach(() => {
 });
 
 describe("workspace settings route components", () => {
-  it("renders the legacy sources compatibility hub", async () => {
-    await mockRouter(null);
-
-    const { default: SourcesCompatibilityRoute } =
-      await import("~/routes/app.sources");
-    const markup = renderToStaticMarkup(
-      createElement(SourcesCompatibilityRoute),
-    );
-
-    expect(markup).toContain("Workspace settings");
-    expect(markup).toContain("Open notifications");
-    expect(markup).toContain("Open source access");
-    expect(markup).toContain("Open developer access");
+  it("redirects the legacy sources URL into Notifications", async () => {
+    const { loader } = await import("~/routes/app.sources");
+    const response = loader() as Response;
+    expect(response.status).toBe(301);
+    expect(response.headers.get("Location")).toBe("/app/notifications");
   });
 
-  it("renders legacy sources action feedback with one-time API keys", async () => {
-    await mockRouter(null, {
-      ok: true,
-      message: "API key created. Copy it now; it will not be shown again.",
-      apiKeySecret: "example-legacy-secret",
-      apiKeyPrefix: "example-legacy-prefix",
-    });
-
-    const { default: SourcesCompatibilityRoute } =
-      await import("~/routes/app.sources");
-    const markup = renderToStaticMarkup(
-      createElement(SourcesCompatibilityRoute),
-    );
-
-    expect(markup).toContain("Copy this key now");
-    expect(markup).toContain("example-legacy-prefix");
-    expect(markup).toContain("example-legacy-secret");
-    expect(markup).toContain("Open developer access");
+  it("renders nothing on the legacy sources route — no API key can appear there", async () => {
+    const { default: SourcesRoute } = await import("~/routes/app.sources");
+    expect(SourcesRoute()).toBeNull();
   });
 
   it("renders source access without developer or notification setup", async () => {
@@ -212,22 +189,11 @@ describe("workspace settings route components", () => {
   });
 
   it("renders notifications without source-token or API-key setup", async () => {
+    // Exactly the loader's real shape — extra fields here would hide
+    // loader/UI shape drift because React ignores unknown props.
     await mockRouter({
       emailDeliveryReady: true,
       digestCadencePreference: "plan_default",
-      showSlackDelivery: false,
-      slackDelivery: { plan: "starter", entitled: true },
-      canManageWhatsAppDelivery: false,
-      slackTargets: [],
-      whatsappTargets: [],
-      whatsappDelivery: {
-        providerConfigured: false,
-        customerReady: false,
-        webhookConfigured: false,
-        configuredTargets: 3,
-        usableTargets: 0,
-        lastSuccessfulDeliveryAt: null,
-      },
     });
 
     const { default: NotificationsRoute } =
@@ -236,9 +202,9 @@ describe("workspace settings route components", () => {
 
     expect(markup).toContain("Notifications");
     expect(markup).toContain(
-      "Choose how briefs and confirmed competitor changes reach your team.",
+      "Briefs and confirmed competitor changes reach your team by email.",
     );
-    expect(markup).toContain("Delivery channels");
+    expect(markup).toContain("Delivery channel");
     expect(markup).toContain("Tune on competitors");
     expect(markup).not.toContain("Ad Library API page");
     expect(markup).not.toContain("Test and save access");

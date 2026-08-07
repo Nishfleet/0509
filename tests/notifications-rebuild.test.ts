@@ -32,10 +32,16 @@ function ownedLayer() {
 }
 
 describe("BL-039 notifications rebuild", () => {
-  it("keeps the loader and action module byte-frozen", () => {
-    expect(createHash("sha256").update(route).digest("hex")).toBe(
-      FROZEN_ROUTE_SHA256,
-    );
+  it("keeps the loader/action surface minimal after the subtraction pass", () => {
+    // The BL-039 byte-freeze served the reskin era; the design-unification
+    // subtraction pass (S1) deliberately edits this module. What must hold
+    // now: no dormant-channel handler code returns, and the loader exposes
+    // only the live delivery surface.
+    expect(route).not.toContain("saveSlackWebhookTarget");
+    expect(route).not.toContain("saveWhatsAppDeliveryTarget");
+    expect(route).not.toContain("listDeliveryTargets");
+    expect(route).toContain("save-digest-cadence");
+    expect(route).toContain("slackDeliveryUnavailableMessage");
   });
 
   it("uses the shared working header and removes the old card dashboard", () => {
@@ -43,7 +49,7 @@ describe("BL-039 notifications rebuild", () => {
       '<DashboardPage className="f9-wk-page f9-nt-page">',
     );
     expect(ui).toContain("<WorkingHeader");
-    expect(ui).toContain('title="Delivery channels"');
+    expect(ui).toContain('title="Delivery channel"');
     expect(ui).not.toContain("DashboardPageHeader");
     expect(ui).not.toContain("f9-app-panel");
     expect(ui).not.toContain("f9-status-strip");

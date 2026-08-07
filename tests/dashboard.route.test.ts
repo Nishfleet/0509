@@ -755,7 +755,10 @@ describe("dashboard route agent memory", () => {
     expect(markup).toContain('id="setup-checklist"');
     expect(markup).toContain("Setup status is temporarily unavailable");
     expect(markup).toContain("Retry setup status");
-    expect(markup).toContain("/app?retrySetup=1#setup-checklist");
+    // A real retry is a revalidation button, not a same-page link that
+    // never re-runs the loader (Sol's PR-3 review).
+    expect(markup).toContain('type="button"');
+    expect(markup).not.toContain("retrySetup");
     expect(markup).not.toContain("Search ads");
   });
 

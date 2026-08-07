@@ -1,9 +1,9 @@
 /**
- * Evidence Desk primitives (BL-005) — the shared vocabulary every Evidence
- * Desk work package builds from. Brief: docs/design/EVIDENCE-DESK-BRIEF.md.
- *
- * The button API of the workspace is `PrimaryAction` / `SecondaryAction` /
- * `TertiaryAction` and nothing else (brief §5). No fourth style ships again.
+ * HISTORICAL: Evidence Desk-era primitives, retained only where the report
+ * document and watchlist detail still consume them. The Evidence Desk
+ * program is CLOSED; the v4 landing language (f9-wk-*) is the product's one
+ * design system, and these exports shrink with every era-wipe package until
+ * this barrel is deleted (design-unification ledger, E-items).
  */
 
 export {
@@ -19,14 +19,6 @@ export {
   type EvidenceActionProps,
   type EvidenceActionRank,
 } from "./cta";
-
-export {
-  buildCaptureWindow,
-  trailingQuietRun,
-  CAPTURE_WINDOW_DAYS,
-  type CaptureDay,
-  type CaptureDayState,
-} from "./capture-strip";
 
 export {
   DiffPlate,
@@ -67,9 +59,3 @@ export {
   type SpecimenAction,
 } from "./specimen-empty-state";
 
-export {
-  StatusStrip,
-  STATUS_STRIP_MAX_CELLS,
-  type StatusCell,
-  type StatusStripAction,
-} from "./status-strip";
