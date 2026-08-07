@@ -186,3 +186,24 @@ describe("BL-033a route-owned CSS", () => {
     }
   });
 });
+
+describe("saved evidence kicker completeness (remediation T17)", () => {
+  const source = readFileSync("app/components/collections/saved-evidence-item.tsx", "utf8");
+
+  it("the bare Captured kicker is gated on both a capture time and stored content", () => {
+    expect(source).toContain('"Captured — time not recorded"');
+    expect(source).toContain('"Captured — content not stored"');
+    expect(source).toContain("hasStoredContent");
+    // The component must never pass the raw status straight into the kicker.
+    expect(source).not.toContain("kicker={resolveSavedItemStatus(");
+  });
+
+  it("the list time cell never renders a bare dash for a captured item", () => {
+    const workspace = readFileSync(
+      "app/components/collections/collection-evidence-workspace.tsx",
+      "utf8",
+    );
+    expect(workspace).toContain('"Capture time not recorded"');
+    expect(workspace).not.toContain('return "—"');
+  });
+});

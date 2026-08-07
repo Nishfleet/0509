@@ -17,6 +17,10 @@ import {
   formatWatchEventStatusLabel,
   formatWatchEventTypeLabel,
 } from "~/lib/landing-page-display";
+import {
+  canRenderVerifiedDiff,
+  resolveCustomerEvidenceState,
+} from "~/lib/evidence-render-contract";
 import { formatNextScanLabel } from "~/lib/schedule-display";
 import type {
   ProofCaptureRecord,
@@ -98,6 +102,9 @@ export const EVENT_CHANGE_BASELINE_COPY =
 export const EVENT_CHANGE_NO_FIELD_DIFF_COPY =
   "Checked. We recorded this change without stored before-and-after field values.";
 
+export const EVENT_CHANGE_UNVERIFIED_COPY =
+  "Recorded, not verified. This change has no successful stored capture behind it, so we do not show it as a before-and-after.";
+
 export function hasStoredDiffFieldValues(event: WatchEventRecord): boolean {
   return Boolean(
     readMetadataString(event.metadata, "from") && readMetadataString(event.metadata, "to"),
@@ -106,6 +113,7 @@ export function hasStoredDiffFieldValues(event: WatchEventRecord): boolean {
 
 export function canRenderEventDiffPlate(input: {
   event: WatchEventRecord;
+  proofCapture?: ProofCaptureRecord | null;
   before: DiffCapture;
   now: DiffCapture;
 }): boolean {
@@ -113,7 +121,18 @@ export function canRenderEventDiffPlate(input: {
     return false;
   }
 
-  return hasOrderedCapturePair(input.before.capturedAt, input.now.capturedAt);
+  // The render contract is the gate, not a suggestion: only a confirmed
+  // event with a succeeded capture and an ordered pair may render the
+  // product's proof object. A suppressed event with perfect stored fields
+  // is still an audit record, never a diff plate.
+  return canRenderVerifiedDiff(
+    resolveCustomerEvidenceState({
+      event: input.event,
+      proofCapture: input.proofCapture ?? null,
+      beforeCapturedAt: input.before.capturedAt,
+      nowCapturedAt: input.now.capturedAt,
+    }),
+  );
 }
 
 /**
@@ -157,7 +176,7 @@ export function resolveNewestMarkedEventId(input: {
       priorProofCapture,
       runsById: input.runsById,
     });
-    if (canRenderEventDiffPlate({ event, before, now })) {
+    if (canRenderEventDiffPlate({ event, proofCapture, before, now })) {
       return event.id;
     }
   }
@@ -175,6 +194,14 @@ export function resolveEventChangeQuietCopy(input: {
 
   if (input.hasStoredDiffFields && !input.hasBothCaptureTimes) {
     return DIFF_PLATE_DEGRADE_COPY;
+  }
+
+  // Complete fields and both capture times, yet no plate: the render
+  // contract refused verification (unconfirmed status or no succeeded
+  // capture). Say that — the generic "no stored field values" line would be
+  // false here.
+  if (input.hasStoredDiffFields && input.hasBothCaptureTimes) {
+    return EVENT_CHANGE_UNVERIFIED_COPY;
   }
 
   if (input.event.metadata?.kind === "baseline") {
@@ -216,20 +243,27 @@ export function formatPlateVerification(input: {
     return `${formatImportanceBandLabel(input.event.importanceScore)} · ${formatWatchEventStatusLabel(input.event.status).toUpperCase()}`;
   }
 
+  // "VERIFIED" — in any casing, including inside a proof-trail sentence — is
+  // earned only by a confirmed event whose capture succeeded. This guard
+  // runs BEFORE every verified-shaped return, so no branch can leak the
+  // word from the mere presence of a capture id.
+  const isVerified =
+    input.event.status === "confirmed" && input.proofCapture.status === "succeeded";
+
   const confidenceValues = Object.values(input.proofCapture.fieldConfidence ?? {}).filter((value) =>
     Number.isFinite(value),
   );
   if (confidenceValues.length === 0) {
+    if (!isVerified) {
+      return `${formatImportanceBandLabel(input.event.importanceScore)} · ${formatWatchEventStatusLabel(input.event.status).toUpperCase()}`;
+    }
     return (
       input.intelligence.proofTrail ||
       `${formatImportanceBandLabel(input.event.importanceScore)} · ${formatWatchEventStatusLabel(input.event.status).toUpperCase()}`
     );
   }
 
-  // "VERIFIED" is the strongest word in the product. It is earned only by a
-  // confirmed event whose proof capture succeeded — stored confidence values
-  // are a measurement and render as their own fact, never as verification.
-  if (input.event.status !== "confirmed" || input.proofCapture.status !== "succeeded") {
+  if (!isVerified) {
     return `${formatConfidenceBandLabel(input.proofCapture.fieldConfidence)} · ${formatWatchEventStatusLabel(input.event.status).toUpperCase()}`;
   }
 
@@ -469,7 +503,7 @@ export function EventChangesSection(props: {
               [isHighlighted ? "is-highlighted" : null, isNewestMarked ? "is-newest" : null]
                 .filter(Boolean)
                 .join(" ") || undefined;
-            const plate = canRenderEventDiffPlate({ event, before, now }) ? (
+            const plate = canRenderEventDiffPlate({ event, proofCapture, before, now }) ? (
               <DiffPlate
                 actions={actions}
                 before={before}

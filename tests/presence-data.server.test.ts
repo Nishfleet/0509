@@ -4,6 +4,7 @@ import type { AppEnv } from "~/lib/env.server";
 import {
   countSourceTargetsForEntity,
   countTrackedEntities,
+  listPollCursorsForTargets,
   listPresenceItems,
   reconcilePresenceItemsAfterPoll,
   upsertPresenceItems,
@@ -334,6 +335,48 @@ describe("presence-data observation aggregation scoping", () => {
       }),
     ).resolves.toEqual({ tombstoned: 0, tombstonedUrlHashes: [] });
 
+    expect(statements).toHaveLength(0);
+  });
+});
+
+describe("workspace cursor batching (remediation)", () => {
+  it("reads any number of cursors in exactly one parameterized statement", async () => {
+    const { env, statements } = createMockDb({
+      allResults: [
+        {
+          sqlIncludes: "FROM presence_poll_cursor",
+          results: [
+            {
+              source_target_id: "target-1",
+              cursor_json: null,
+              etag: null,
+              last_modified: null,
+              last_polled_at: "2026-07-20T00:00:00.000Z",
+              last_success_at: "2026-07-20T00:00:00.000Z",
+              last_error_code: null,
+              last_error_message: null,
+              updated_at: "2026-07-20T00:00:00.000Z",
+            },
+          ],
+        },
+      ],
+    });
+
+    const cursors = await listPollCursorsForTargets(env, [
+      "target-1",
+      "target-2",
+      "target-3",
+    ]);
+
+    expect(cursors).toHaveLength(1);
+    expect(statements).toHaveLength(1);
+    expect(statements[0].sql).toContain("IN (?, ?, ?)");
+    expect(statements[0].bindings).toEqual(["target-1", "target-2", "target-3"]);
+  });
+
+  it("issues zero queries for an empty target list", async () => {
+    const { env, statements } = createMockDb();
+    await expect(listPollCursorsForTargets(env, [])).resolves.toEqual([]);
     expect(statements).toHaveLength(0);
   });
 });
