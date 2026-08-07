@@ -10923,7 +10923,9 @@ a.f9-wk-btn {
    weight is a rule at every width, not only at 1440. */
 @media (max-width: 720px) {
   .f9-wk-page .f9-ed-diff-pane.is-before,
-  .f9-wk-page .f9-ed-evidence-capture,
+  .f9-wk-page .f9-ed-evidence-capture {
+    border-width: 1px;
+  }
 }
 
 /* 8. Type: nothing inside the record may out-shout the 28px page title,
