@@ -16,7 +16,7 @@ import { describe, expect, it } from "vitest";
 
 const ROUTES_DIR = join(__dirname, "..", "app", "routes");
 const LIB_DIR = join(__dirname, "..", "app", "lib");
-const GUARD = "isE2ETestRequestEnabled";
+const GUARD = "isE2ETestRequestEnabled(";
 
 function readRoute(name: string): string {
   return readFileSync(join(ROUTES_DIR, name), "utf8");
@@ -57,8 +57,34 @@ describe("every api/e2e route is fail-closed", () => {
   });
 
   for (const name of e2eRoutes) {
-    it(`${name} carries or inherits the ${GUARD} guard`, () => {
+    it(`${name} carries or inherits the ${GUARD}...) guard call`, () => {
       expect(isGuarded(readRoute(name), new Set([name]))).toBe(true);
     });
   }
+});
+
+describe("the fixture-session predicate fails closed (G1)", () => {
+  it("requires env flag AND local host AND fixture id shape — every leg alone is refused", async () => {
+    const { isE2EFixtureWorkspaceSession } = await import("~/lib/e2e-auth.server");
+    const fixtureId = "e2e-session-e2e-starter";
+    const localRequest = new Request("http://localhost/app/account");
+    const prodRequest = new Request("https://0509.io/app/account");
+    const on = { E2E_TEST_MODE: "1" } as never;
+    const off = {} as never;
+
+    expect(isE2EFixtureWorkspaceSession(on, localRequest, fixtureId)).toBe(true);
+    expect(isE2EFixtureWorkspaceSession(off, localRequest, fixtureId)).toBe(false);
+    expect(isE2EFixtureWorkspaceSession(on, prodRequest, fixtureId)).toBe(false);
+    expect(isE2EFixtureWorkspaceSession(on, localRequest, "real-session-id")).toBe(false);
+    expect(isE2EFixtureWorkspaceSession(off, prodRequest, fixtureId)).toBe(false);
+  });
+});
+
+describe("/app/ops redirects out of the customer app (G4)", () => {
+  it("301s to /ops", async () => {
+    const { loader } = await import("~/routes/app.ops-redirect");
+    const response = loader();
+    expect(response.status).toBe(301);
+    expect(response.headers.get("Location")).toBe("/ops");
+  });
 });
