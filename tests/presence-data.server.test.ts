@@ -380,3 +380,19 @@ describe("workspace cursor batching (remediation)", () => {
     expect(statements).toHaveLength(0);
   });
 });
+
+describe("cursor batching respects the D1 parameter cap", () => {
+  it("chunks large target lists instead of one over-limit IN clause", async () => {
+    const targetIds = Array.from({ length: 240 }, (_, index) => `target-${index}`);
+    const { env, statements } = createMockDb({
+      allResults: [{ sqlIncludes: "FROM presence_poll_cursor", results: [] }],
+    });
+
+    await listPollCursorsForTargets(env, targetIds);
+
+    expect(statements.length).toBe(3);
+    for (const statement of statements) {
+      expect(statement.bindings.length).toBeLessThanOrEqual(90);
+    }
+  });
+});
