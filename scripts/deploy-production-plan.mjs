@@ -429,8 +429,27 @@ export function validateRemoteRestoreEvidence(evidence, expected) {
   const migrationBearing = expected.migrationBearing !== false;
   const exactEvidenceRequired =
     migrationBearing || expected.restoreCritical === true;
-  const maxAgeMs =
-    (exactEvidenceRequired ? 24 : 7 * 24) * 60 * 60 * 1000;
+  // Nish's call, 2026-08-07: one bound of 14 days, replacing 24h for
+  // migration/restore-critical releases and 7d for everything else.
+  //
+  // 14 rather than the 90 first considered. 90 would have matched how long the
+  // backups themselves are kept (config/r2-retention-policy.json, expireDays
+  // 90), but retention and freshness measure different things: retention is how
+  // long the FILE survives, freshness is how recently the restore was PROVEN to
+  // work. A backup that exists but has not been restored in three months is
+  // exactly the one that fails when it is needed. 14 days tolerates a bad week
+  // of drill failures without pretending a quarter-old proof is current, and
+  // stays well inside retention so evidence never outlives its own backup.
+  //
+  // The nightly drill (d1-remote-restore-evidence.yml) keeps real evidence
+  // under a day old, so this bound should almost never be what decides a
+  // release. If it starts deciding releases, the drill is broken - fix that
+  // rather than raising this.
+  //
+  // The other bound is unchanged and still binds hard: a migration-bearing or
+  // restore-critical release must match the candidate EXACTLY, so age is not the
+  // only thing between a schema change and production.
+  const maxAgeMs = 14 * 24 * 60 * 60 * 1000;
   const minimumValidityMs =
     Number.isSafeInteger(expected.minimumValidityMs) &&
     Number(expected.minimumValidityMs) >= 0
