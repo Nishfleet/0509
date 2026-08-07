@@ -89,7 +89,14 @@ export function parseRenderedMetaLibraryHtml(
         );
     const contextLineText = stripHtmlPreservingLines(contextHtml);
     const localAnchorIndex = contextHtml.indexOf(match[0]);
-    const advertiser = extractRenderedAdvertiser(contextHtml, localAnchorIndex);
+    const relayIdentity = pageIdentities.get(libraryId);
+    // Prefer a DOM-scraped name when present; fall back to the Relay
+    // page_name (authoritative advertiser identity Meta ships with each
+    // ad_archive_id). Never invent a name from the search query.
+    const advertiser =
+      extractRenderedAdvertiser(contextHtml, localAnchorIndex) ||
+      relayIdentity?.pageName ||
+      null;
     const body = /(^|\n)Sponsored($|\n)/i.test(contextLineText)
       ? extractAdCopyFromCardText(contextLineText)
       : extractRenderedParagraphCopy(contextHtml) ||
@@ -122,14 +129,16 @@ export function parseRenderedMetaLibraryHtml(
       hasVideo: media.hasVideo,
       variantCount,
       pageId:
-        pageIdentities.get(libraryId)?.pageId ??
+        relayIdentity?.pageId ??
         extractNumericPageIdFromAdvertiserHtml(contextHtml),
     });
   }
 
+  const resolvedCards =
+    cards.length > 0 ? cards : extractTextCardsFromVisibleText(visibleText);
+
   return {
-    cards:
-      cards.length > 0 ? cards : extractTextCardsFromVisibleText(visibleText),
+    cards: applyRelayPageIdentitiesToCards(resolvedCards, pageIdentities),
     loginWall:
       /log in|login|sign in|sign into/.test(text) && text.includes("facebook"),
     noResults: hasNoResultsSignal(visibleText),
@@ -140,13 +149,31 @@ export function parseRenderedMetaLibraryHtml(
   };
 }
 
+function isPlausibleAdvertiserName(value: string) {
+  // Reject HTML fragments (e.g. a dangling "<div" left when the Sponsored
+  // match starts at the closing ">" of an open tag) and other non-names.
+  if (!value || /[<>{}]/.test(value)) {
+    return false;
+  }
+  if (isTextCardUiLine(value)) {
+    return false;
+  }
+  return value.length > 1 && value.length <= 60 && value.split(/\s+/).length <= 6;
+}
+
 function extractRenderedAdvertiser(contextHtml: string, anchorIndex: number) {
   const prefix = anchorIndex >= 0 ? contextHtml.slice(0, anchorIndex) : "";
-  const sponsoredIndex = prefix.search(/(?:^|>)\s*Sponsored\s*(?:<|$)/i);
-  if (sponsoredIndex < 0) {
+  const sponsoredMatch = prefix.match(/(?:^|>)\s*Sponsored\s*(?:<|$)/i);
+  if (!sponsoredMatch || sponsoredMatch.index === undefined) {
     return null;
   }
-  const advertiserRegion = prefix.slice(0, sponsoredIndex);
+  // When the match begins on the ">" of an open tag (`<div>Sponsored`), slice
+  // after that ">" so the dangling open tag is not treated as a name.
+  const matchStartsOnTagClose = prefix[sponsoredMatch.index] === ">";
+  const regionEnd = matchStartsOnTagClose
+    ? sponsoredMatch.index + 1
+    : sponsoredMatch.index;
+  const advertiserRegion = prefix.slice(0, regionEnd);
   const matches = Array.from(
     advertiserRegion.matchAll(
       /<(?:strong|h3|h4)\b[^>]*>([\s\S]*?)<\/(?:strong|h3|h4)>/gi,
@@ -156,10 +183,26 @@ function extractRenderedAdvertiser(contextHtml: string, anchorIndex: number) {
     ...new Set(
       matches
         .map((match) => stripHtml(match[1] ?? ""))
-        .filter((value) => value && !isTextCardUiLine(value)),
+        .filter((value) => isPlausibleAdvertiserName(value)),
     ),
   ];
-  return candidates.length === 1 ? candidates[0] : null;
+  if (candidates.length === 1) {
+    return candidates[0];
+  }
+  // Logged-out grid cards frequently render the advertiser as a plain text
+  // line (or unstyled span/link) above "Sponsored" with no strong/h3 wrapper.
+  // Recover the nearest short, non-UI line so we do not invent an identity.
+  if (candidates.length === 0) {
+    const lines = stripHtmlPreservingLines(advertiserRegion)
+      .split(/\n+/)
+      .map((line) => line.replace(/\s+/g, " ").trim())
+      .filter((value) => isPlausibleAdvertiserName(value));
+    const nearest = lines[lines.length - 1];
+    if (nearest) {
+      return nearest;
+    }
+  }
+  return null;
 }
 
 function extractRenderedParagraphCopy(contextHtml: string) {
@@ -740,24 +783,33 @@ export function extractExternalLink(html: string) {
 }
 
 /**
+ * Hard upper bound on how far past each ad_archive_id we scan for page_id /
+ * page_name when the next ad_archive_id is missing or extremely far. Real
+ * collated_results nodes are ~12k chars; page_name often sits inside
+ * `snapshot` after several other fields, so the old 800-char cap captured
+ * page_id but dropped page_name on live payloads.
+ */
+const RELAY_IDENTITY_WINDOW_MAX = 50_000;
+
+/**
  * The rendered Ad Library ships a Relay payload where each result node carries
  * `ad_archive_id` alongside the advertiser's numeric `page_id` and `page_name`
  * (e.g. `"ad_archive_id":"186…","…","page_id":"15087023444","…"`). That map is
  * the authoritative, per-ad advertiser identity — far more reliable than DOM
  * scraping — so we key it by library id (= ad_archive_id) for page-scoped
- * re-scans. Bounded to the first identity seen per id (Relay repeats it).
+ * re-scans and for filling the advertiser name when the card DOM has no
+ * strong/h3 name. Bounded to the first identity seen per id (Relay repeats it).
  */
 export function extractAdArchivePageIdentities(
   content: string,
 ): Map<string, AdArchivePageIdentity> {
   const identities = new Map<string, AdArchivePageIdentity>();
   // Anchor on each ad_archive_id, then read the page_id/page_name from a forward
-  // window bounded by the NEXT ad_archive_id (else +800 chars). The window must
-  // NOT be terminated by a lookahead on the next node — real Ad Library nodes
-  // sit ~12k chars apart, so any fixed-size lookahead window would never reach
-  // the next node and every match would be discarded. In the live payload
-  // page_id sits ~95 chars past ad_archive_id. `[\\]?` tolerates the escaped
-  // quotes Meta uses when the Relay JSON is embedded as a string.
+  // window bounded by the NEXT ad_archive_id (else +RELAY_IDENTITY_WINDOW_MAX).
+  // Real Ad Library nodes sit ~12k chars apart; page_id is usually ~95 chars
+  // past ad_archive_id, while page_name often lives deeper inside snapshot.
+  // `[\\]?` tolerates the escaped quotes Meta uses when Relay JSON is embedded
+  // as a string.
   const idRegex = /[\\]?"ad_archive_id[\\]?"\s*:\s*[\\]?"(\d+)[\\]?"/g;
   const matches = [...content.matchAll(idRegex)];
   for (let index = 0; index < matches.length; index += 1) {
@@ -768,7 +820,10 @@ export function extractAdArchivePageIdentities(
     }
     const windowStart = match.index + match[0].length;
     const nextIndex = matches[index + 1]?.index ?? content.length;
-    const windowEnd = Math.min(nextIndex, windowStart + 800);
+    const windowEnd = Math.min(
+      nextIndex,
+      windowStart + RELAY_IDENTITY_WINDOW_MAX,
+    );
     const window = content.slice(windowStart, windowEnd);
     const pageId =
       window.match(/[\\]?"page_id[\\]?"\s*:\s*[\\]?"(\d{5,})[\\]?"/)?.[1] ?? null;
@@ -785,6 +840,49 @@ export function extractAdArchivePageIdentities(
     });
   }
   return identities;
+}
+
+/**
+ * Fill missing advertiser / pageId on scraped cards from the Relay identity
+ * map. DOM names win when present (they are what the customer saw on the
+ * card); Relay page_name fills honest gaps only. Never invents a name from
+ * the customer's search term.
+ */
+export function applyRelayPageIdentitiesToCards(
+  cards: ExtractedAdCard[],
+  identities: Map<string, AdArchivePageIdentity>,
+): ExtractedAdCard[] {
+  if (cards.length === 0 || identities.size === 0) {
+    return cards;
+  }
+
+  return cards.map((card) => {
+    const identity = identities.get(card.libraryId);
+    if (!identity) {
+      return card;
+    }
+
+    const scrapedAdvertiser = card.advertiser?.trim() || "";
+    // Treat HTML fragments / non-names as missing so Relay page_name can fill
+    // the honest gap instead of locking in garbage that became "confirmed".
+    const usableScraped =
+      scrapedAdvertiser && !/[<>{}]/.test(scrapedAdvertiser)
+        ? scrapedAdvertiser
+        : "";
+    const relayAdvertiser = identity.pageName?.trim() || "";
+    const advertiser = usableScraped || relayAdvertiser || null;
+    const pageId = card.pageId || identity.pageId || null;
+
+    if (advertiser === card.advertiser && pageId === card.pageId) {
+      return card;
+    }
+
+    return {
+      ...card,
+      advertiser,
+      pageId,
+    };
+  });
 }
 
 /**
