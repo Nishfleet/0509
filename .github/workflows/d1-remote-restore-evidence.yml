@@ -14,8 +14,20 @@ on:
         options:
           - apply_and_restore
   schedule:
-    # Explicit low-traffic recovery windows: Monday/Thursday 02:17 IST.
-    - cron: "47 20 * * SUN,WED"
+    # Daily, 02:17 IST - the same low-traffic window the twice-weekly schedule
+    # used, now every night (Nish, 2026-08-07).
+    #
+    # Twice weekly left restore evidence stale for most of the week. Evidence is
+    # only accepted while it is under 24h old for a migration- or
+    # restore-critical release, so a Tuesday schema change had no valid proof
+    # and the release stopped. On 2026-08-06 that stranded 14 merged changes for
+    # a day and needed a hand-dispatched drill to clear.
+    #
+    # A nightly drill also closes a quieter gap: this workflow's export is the
+    # only thing currently writing to backups/d1/ in R2. d1-backup-r2.yml is
+    # workflow_dispatch-only with no schedule, and its last runs failed on
+    # 2026-07-30 - so backup cadence has in practice been drill cadence.
+    - cron: "47 20 * * *"
 
 concurrency:
   group: 0509-production-provider-mutations
