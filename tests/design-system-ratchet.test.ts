@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -35,9 +36,51 @@ describe("design-system ratchet", () => {
     const ceilings = JSON.parse(
       readFileSync(join(root, "docs", "design-system-ratchet.json"), "utf8"),
     ) as Record<string, unknown>;
-    expect(Object.keys(ceilings).length).toBeGreaterThanOrEqual(20);
+    expect(Object.keys(ceilings).length).toBeGreaterThanOrEqual(17);
     for (const [marker, ceiling] of Object.entries(ceilings)) {
       expect(Number.isFinite(ceiling), marker).toBe(true);
     }
+  });
+});
+
+describe("the ratchet cannot be gamed", () => {
+  const root = join(__dirname, "..");
+  const script = join(root, "scripts", "design-system-ratchet.mjs");
+  const realCeilings = JSON.parse(
+    readFileSync(join(root, "docs", "design-system-ratchet.json"), "utf8"),
+  ) as Record<string, number>;
+
+  function runWithCeilings(ceilings: Record<string, number>): {
+    status: number | null;
+    stderr: string;
+  } {
+    const dir = mkdtempSync(join(tmpdir(), "ratchet-"));
+    const file = join(dir, "ceilings.json");
+    writeFileSync(file, JSON.stringify(ceilings));
+    const result = spawnSync(process.execPath, [script, `--ceilings=${file}`], {
+      encoding: "utf8",
+    });
+    rmSync(dir, { recursive: true, force: true });
+    return { status: result.status, stderr: result.stderr };
+  }
+
+  it("a hand-raised ceiling fails — exact match means every sweep must --update", () => {
+    const firstKey = Object.keys(realCeilings)[0];
+    const tampered = { ...realCeilings, [firstKey]: realCeilings[firstKey] + 50 };
+    const result = runWithCeilings(tampered);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("!== ceiling");
+  });
+
+  it("deleting a marker's ceiling key fails — no exemption by omission", () => {
+    const { [Object.keys(realCeilings)[0]]: _dropped, ...rest } = realCeilings;
+    const result = runWithCeilings(rest);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("disagree");
+  });
+
+  it("the real checked-in ceilings match reality exactly", () => {
+    const result = spawnSync(process.execPath, [script], { encoding: "utf8" });
+    expect(result.status, result.stderr).toBe(0);
   });
 });

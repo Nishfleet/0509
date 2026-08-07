@@ -14,17 +14,19 @@ import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const ROOT = new URL("..", import.meta.url).pathname;
-const CEILING_PATH = join(ROOT, "docs", "design-system-ratchet.json");
+const ceilingArg = process.argv.find((arg) => arg.startsWith("--ceilings="));
+// --ceilings=PATH exists ONLY so the test suite can prove tampered ceiling
+// files fail; CI always runs against the checked-in file.
+const CEILING_PATH = ceilingArg
+  ? ceilingArg.slice("--ceilings=".length)
+  : join(ROOT, "docs", "design-system-ratchet.json");
 
 // Every marker of a retired design era or a per-package namespace. The v4
 // system (`f9-wk-*`) and true page-scoped semantics are not listed — they
 // are the destination, not debt.
 export const BANNED_MARKERS = [
   "f9-ed-",
-  "f9-app-panel",
-  "f9-app-kicker",
-  "f9-app-stack",
-  "f9-app-plan-card",
+  "f9-app-",
   "f9-work-",
   "f9-dashboard-grid",
   "f9-muted-copy",
@@ -32,17 +34,15 @@ export const BANNED_MARKERS = [
   "f9-primary-button",
   "f9-text-link",
   "f9-message",
-  "f9-bl035-",
-  "f9-bl038-",
-  "f9-bl040-",
-  "f9-bl041-",
+  "f9-bl0",
   "f9-pr-",
   "f9-nt-",
   "f9-col-",
   "f9-clients-",
   "f9-search-page",
   "DashboardPageHeader",
-  "style={{",
+  "EmptyState",
+  "style={",
 ];
 
 const SCAN_DIRS = ["app"];
@@ -115,10 +115,20 @@ if (invokedDirectly) {
 
   const ceilings = readCeilings();
   const violations = [];
+  const ceilingKeys = Object.keys(ceilings).sort();
+  const markerKeys = [...BANNED_MARKERS].sort();
+  if (JSON.stringify(ceilingKeys) !== JSON.stringify(markerKeys)) {
+    violations.push(
+      `ceiling keys and BANNED_MARKERS disagree — a marker cannot be exempted by deleting its key`,
+    );
+  }
   for (const marker of BANNED_MARKERS) {
     const ceiling = ceilings[marker] ?? 0;
-    if (counts[marker] > ceiling) {
-      violations.push(`${marker}: ${counts[marker]} > ceiling ${ceiling}`);
+    // Exact match: an increase is new debt; a decrease without --update is a
+    // silent slack refill waiting to happen; a hand-raised ceiling fails
+    // because the count no longer equals it.
+    if (counts[marker] !== ceiling) {
+      violations.push(`${marker}: count ${counts[marker]} !== ceiling ${ceiling} (run --update in this PR)`);
     }
   }
   const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
