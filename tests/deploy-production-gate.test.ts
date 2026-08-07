@@ -326,6 +326,38 @@ describe("production deployment readiness gate", () => {
     }
   });
 
+  it("states unverified blast radius instead of asserting fabricated business facts", () => {
+    // These four fields were constants checked against themselves, never
+    // measured: payingCustomerCount 0, customerOwnedWatchlistCount 0,
+    // customerOwnedClientRoomCount 0, dormantExternalSignupRowCount 2. They
+    // encoded "no customer data is at risk", which is the entire justification
+    // for shipping without backup proof - and it was true only before launch.
+    // Billing is live and nothing rechecked them, so the record would have kept
+    // asserting zero customers after the first sale. A safety record that
+    // states an unverified fact is worse than one that omits it.
+    const disposition = (
+      deployPlanModule as Record<string, any>
+    ).createDeferredBackupDisposition("f".repeat(40), "a".repeat(40));
+
+    for (const fabricated of [
+      "payingCustomerCount",
+      "customerOwnedWatchlistCount",
+      "customerOwnedClientRoomCount",
+      "dormantExternalSignupRowCount",
+    ]) {
+      expect(disposition).not.toHaveProperty(fabricated);
+    }
+    expect(disposition.blastRadiusVerified).toBe(false);
+    expect(disposition.authorizedBy).toBe("nish3451");
+
+    // And the validator must reject a disposition that claims otherwise.
+    const validate = (deployPlanModule as Record<string, any>)
+      .validateDeferredBackupDisposition;
+    expect(
+      validate({ ...disposition, blastRadiusVerified: true }, "f".repeat(40)),
+    ).toBe(false);
+  });
+
   it("defaults to required backup proof and makes the exact deferred release immediate-only", () => {
     expect(() =>
       buildProductionDeployPlan({
@@ -955,7 +987,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       validateRemoteRestoreEvidence(
         {
           ...passingRemoteRestoreEvidence(),
-          generatedAt: "2026-07-14T10:00:00.000Z",
+          generatedAt: "2026-07-01T10:00:00.000Z",
         },
         expected,
       ),
@@ -1042,7 +1074,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     });
   });
 
-  it("requires fresh exact restore evidence for migration deploys but permits a seven-day drill for code-only deploys", () => {
+  it("tiers EXACTNESS by migration/restore-critical, and applies one 14-day age bound to both", () => {
     const validateRemoteRestoreEvidence = (
       deployPlanModule as Record<string, unknown>
     ).validateRemoteRestoreEvidence;
@@ -1091,7 +1123,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     });
     expect(
       validateRemoteRestoreEvidence(
-        { ...codeOnlyEvidence, generatedAt: "2026-07-08T10:00:00.000Z" },
+        { ...codeOnlyEvidence, generatedAt: "2026-07-01T11:59:59.999Z" },
         expected,
       ),
     ).toMatchObject({
@@ -1131,7 +1163,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       validateRemoteRestoreEvidence(
         {
           ...passingRemoteRestoreEvidence(),
-          generatedAt: "2026-07-09T18:00:00.000Z",
+          generatedAt: "2026-07-02T18:00:00.000Z",
         },
         expected,
       ),
@@ -1140,7 +1172,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       validateRemoteRestoreEvidence(
         {
           ...passingRemoteRestoreEvidence(),
-          generatedAt: "2026-07-09T17:59:59.999Z",
+          generatedAt: "2026-07-02T17:59:59.999Z",
         },
         expected,
       ),
