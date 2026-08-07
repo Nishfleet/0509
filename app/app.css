@@ -16571,3 +16571,15 @@ textarea.f9-wk-in {
     transition: none;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Staff ops — standalone container (tri-audit G4). Ops left the       */
+/* customer shell; this is deliberately minimal chrome for a           */
+/* staff-only surface and is NOT part of the customer design system.   */
+/* ------------------------------------------------------------------ */
+.f9-ops-standalone {
+  display: block;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}

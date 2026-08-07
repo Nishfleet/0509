@@ -280,7 +280,7 @@ export function buildPresenceEntityBrief(input: BuildPresenceEntityBriefInput): 
       // Coverage-derived confidence would claim "High — verified feed"
       // before anything has ever been checked. Confidence is earned by a
       // successful check, not by configuration.
-      sourceConfidence: "Not checked yet — first check pending",
+      sourceConfidence: "Not checked yet — we run the first check shortly",
       nextAction: { label: "Check website source now" },
       recentChanges: [],
       sourceCoverage: scopedCoverage,
@@ -308,8 +308,8 @@ export function buildPresenceEntityBrief(input: BuildPresenceEntityBriefInput): 
       state: "degraded",
       headline: "Latest website check failed",
       summary: lastSuccessAt
-        ? "The most recent check could not read this entity's website. Nothing here is newer than the last successful check."
-        : "No check has succeeded for this entity's website yet, so there is no proof-backed content to show.",
+        ? "The most recent check could not read this entity's website. We keep retrying on schedule; nothing here is newer than the last successful check."
+        : "No check has succeeded for this entity's website yet. We keep retrying on schedule; there is no proof-backed content to show.",
       proofStrength: lastSuccessAt ? "Stale — last check failed" : "No successful check yet",
       sourceConfidence: "Low — latest check failed",
       nextAction: { label: "Retry source check" },
@@ -329,7 +329,12 @@ export function buildPresenceEntityBrief(input: BuildPresenceEntityBriefInput): 
         ? `Found ${latestPollDisplayCount} proof-backed website change${latestPollDisplayCount === 1 ? "" : "s"}, including removals or unavailable public content.`
         : `Found ${latestPollDisplayCount} proof-backed update${latestPollDisplayCount === 1 ? "" : "s"} from website sources.`,
       proofStrength: proofStrengthFromItems(latestPollItems, scopedSources),
-      sourceConfidence: sourceConfidenceFromCoverage(scopedCoverage),
+      // One source succeeded, another is failing: confidence must say so —
+      // a newer failure cannot hide behind an older success.
+      sourceConfidence:
+        failingSources.length > 0
+          ? "Mixed — a source check is failing; we keep retrying"
+          : sourceConfidenceFromCoverage(scopedCoverage),
       nextAction: { label: "Review latest changes" },
       recentChanges,
       sourceCoverage: scopedCoverage,

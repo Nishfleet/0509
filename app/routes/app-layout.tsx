@@ -34,7 +34,6 @@ export function isQuickAddShortcut(event: {
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getCachedWorkspaceForRequest, requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
-  const { isOpsUserAllowed } = await import("~/lib/env.server");
   const { presenceNavVisible } = await import("~/lib/presence-internal-access.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
@@ -43,7 +42,6 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
   return {
     session,
-    showOpsNav: isOpsUserAllowed(env, session.user.email),
     showPresenceNav,
   };
 }
@@ -66,7 +64,7 @@ export function shouldRevalidate({
 }
 
 export default function AppLayoutRoute() {
-  const { session, showOpsNav, showPresenceNav } = useLoaderData<typeof loader>();
+  const { session, showPresenceNav } = useLoaderData<typeof loader>();
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const closeQuickAdd = useCallback(() => setQuickAddOpen(false), []);
   const openQuickAdd = useCallback(() => setQuickAddOpen(true), []);
@@ -85,7 +83,6 @@ export default function AppLayoutRoute() {
   return (
     <DashboardShell
       onCommandPalette={openQuickAdd}
-      showOpsNav={showOpsNav}
       showPresenceNav={showPresenceNav}
       userEmail={session.user.email}
       userName={session.user.name}

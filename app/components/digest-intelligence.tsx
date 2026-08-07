@@ -66,7 +66,11 @@ export function DesignedDigestBrief({
 }: DesignedDigestBriefProps) {
   const finding = resolveDigestFinding(allItems);
   const strategy = readDigestStrategyNote(summary);
+  // The proof comparison is a decision object: only decision candidates
+  // (verified / scan-spotted) may render one. Pending and unknown items keep
+  // their honest labels in "What we checked" instead.
   const diffs = items
+    .filter((item) => isDigestDecisionCandidate(item))
     .map((item) => ({ item, captures: resolveDigestDiffCaptures(item) }))
     .filter(
       (entry): entry is {
@@ -248,8 +252,7 @@ export function DesignedDigestBrief({
         // derived — never above the changes with a verification-shaped label.
         <aside aria-label="AI summary of the week" className="f9-wk-brief-read">
           <p>
-            AI summary · a reading of the changes above — every claim it makes
-            is checkable against them
+            AI summary · a reading of the changes above — check it against them
             {strategy.generatedAt ? (
               <>
                 {" · "}
@@ -466,10 +469,14 @@ function resolveDigestFinding(items: DigestProofPacketItem[]) {
   const diffBacked = ranked.filter(
     ({ item }) => resolveDigestDiffCaptures(item) !== null,
   );
-  return (
-    (diffBacked[0] ?? ranked[0])?.item.title?.trim() ||
-    "Nothing changed in this window"
-  );
+  const headline = (diffBacked[0] ?? ranked[0])?.item.title?.trim();
+  if (headline) return headline;
+  // Items exist but none qualifies as a decision candidate: the window is
+  // NOT quiet — we just cannot verify a finding. Never claim nothing
+  // changed when something unverified is on file.
+  return items.length > 0
+    ? "No verified finding this window — unverified items are listed below"
+    : "Nothing changed in this window";
 }
 
 function readMetadataString(
@@ -528,7 +535,9 @@ export function resolveDigestDiffCaptures(item: DigestProofPacketItem) {
  * can narrow the reading rows, but it cannot rewrite which change was news.
  */
 export function resolveNewestMarkedDigestItem(items: DigestProofPacketItem[]) {
-  return items.reduce<{
+  // Only a decision candidate may own the "Latest change" announcement —
+  // the same gate the visible diffs use.
+  return items.filter((item) => isDigestDecisionCandidate(item)).reduce<{
     id: string;
     item: DigestProofPacketItem;
     captures: NonNullable<ReturnType<typeof resolveDigestDiffCaptures>>;

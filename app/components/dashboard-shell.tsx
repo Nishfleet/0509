@@ -6,7 +6,6 @@ import { navIconFor } from "~/components/icons";
 import {
   DASHBOARD_PRIMARY_NAV,
   DASHBOARD_SETTINGS_NAV,
-  DASHBOARD_STAFF_NAV,
   PUBLIC_SEARCH_NAV,
   buildDashboardMobileNav,
   filterDashboardNav,
@@ -27,7 +26,6 @@ export interface DashboardShellProps {
   userName?: string | null;
   userEmail?: string | null;
   showPresenceNav?: boolean;
-  showOpsNav?: boolean;
   railNote?: React.ReactNode;
   /**
    * Opens the ⌘K command palette. BL-030: the affordance is visible chrome in
@@ -83,26 +81,19 @@ export function DashboardShell({
   userName,
   userEmail,
   showPresenceNav = false,
-  showOpsNav = false,
   railNote,
   onCommandPalette,
   children,
 }: DashboardShellProps) {
   const primary = filterDashboardNav(DASHBOARD_PRIMARY_NAV, {
     showPresence: showPresenceNav,
-    showOps: showOpsNav,
   });
   const settings = filterDashboardNav(DASHBOARD_SETTINGS_NAV, {
     showPresence: showPresenceNav,
-    showOps: showOpsNav,
   });
-  const staff = DASHBOARD_STAFF_NAV.filter((item) => !item.requiresOps || showOpsNav);
   const mobileNav = isPublic
     ? []
-    : buildDashboardMobileNav({
-        showPresence: showPresenceNav,
-        showOps: showOpsNav,
-      });
+    : buildDashboardMobileNav({ showPresence: showPresenceNav });
   const navigation = useNavigation();
   const location = useLocation();
   const isNavigating = Boolean(navigation.location);
@@ -261,15 +252,6 @@ export function DashboardShell({
                 </div>
               ) : null}
 
-              {staff.length > 0 ? (
-                <div className="f9-dash-nav-group">
-                  <nav aria-label="Staff">
-                    {staff.map((item) => (
-                      <WorkspaceNavLink item={item} key={item.to} />
-                    ))}
-                  </nav>
-                </div>
-              ) : null}
             </div>
 
             {railNote}

@@ -281,7 +281,7 @@ export function resolveWatchlistListScanPresentation(input: {
     return { label: "Latest check failed — open for next steps", timestamp: null };
   }
   if (run.status === "skipped") {
-    if (run.errorCode === "e2e_provider_network_denied") {
+    if (run.errorCode?.endsWith("provider_network_denied")) {
       return { label: "New checks paused — source access needed", timestamp: null };
     }
     if (run.errorCode === "capacity_budget") {
@@ -341,7 +341,7 @@ export function resolveEmptyWatchlistEventCopy(input: {
       ? "Your activation scan couldn't finish. Check Source access, and email support if the next attempt fails too."
       : "Your first scan couldn't finish. Check Source access, then retry — or email support and we'll dig in.";
   }
-  if (input.latestRun.errorCode === "e2e_provider_network_denied") {
+  if (input.latestRun.errorCode?.endsWith("provider_network_denied")) {
     return activationOnly
       ? "Your activation scan paused safely before an external check. Check Source access; email support if it doesn't resume."
       : "Your first scan paused safely before an external check. Check Source access before retrying.";
