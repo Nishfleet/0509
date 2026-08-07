@@ -511,3 +511,65 @@ describe("buildPresenceEntityBrief", () => {
     expect(brief.recentChanges).toHaveLength(0);
   });
 });
+
+describe("proof honesty — failed checks can never read as quiet or confident", () => {
+  it("reports degraded, not all_quiet, when the latest poll failed after an earlier success", () => {
+    const brief = buildPresenceEntityBrief({
+      entity: entity(),
+      sources: [source({ coverageLabel: "VERIFIED_PUBLIC_FEED" })],
+      items: [],
+      sourceCoverage: [websiteCoverage("connected")],
+      pollCursors: [
+        {
+          sourceTargetId: "target-1",
+          cursor: cursor({
+            lastPolledAt: "2026-07-20T00:00:00.000Z",
+            lastSuccessAt: "2026-07-02T00:00:00.000Z",
+            lastErrorCode: "fetch_failed",
+          }),
+        },
+      ],
+    });
+
+    expect(brief.state).toBe("degraded");
+    expect(brief.headline).toBe("Latest website check failed");
+    expect(brief.proofStrength).toBe("Stale — last check failed");
+    expect(brief.sourceConfidence).toBe("Low — latest check failed");
+  });
+
+  it("never claims high confidence before the first check has run", () => {
+    const brief = buildPresenceEntityBrief({
+      entity: entity(),
+      sources: [source({ coverageLabel: "VERIFIED_PUBLIC_FEED" })],
+      items: [],
+      sourceCoverage: [websiteCoverage("connected")],
+      pollCursors: [{ sourceTargetId: "target-1", cursor: null }],
+    });
+
+    expect(brief.state).toBe("queued");
+    expect(brief.sourceConfidence).toBe("Not checked yet — we run the first check shortly");
+    expect(brief.sourceConfidence).not.toContain("High");
+  });
+
+  it("says no successful check exists instead of all quiet when polls only ever failed", () => {
+    const brief = buildPresenceEntityBrief({
+      entity: entity(),
+      sources: [source()],
+      items: [],
+      sourceCoverage: [websiteCoverage("connected")],
+      pollCursors: [
+        {
+          sourceTargetId: "target-1",
+          cursor: cursor({
+            lastPolledAt: "2026-07-20T00:00:00.000Z",
+            lastSuccessAt: null,
+            lastErrorCode: "fetch_failed",
+          }),
+        },
+      ],
+    });
+
+    expect(brief.state).toBe("degraded");
+    expect(brief.proofStrength).toBe("No successful check yet");
+  });
+});

@@ -204,6 +204,7 @@ describe("the rail delivery card (brief §7)", () => {
   it("states the policy in words, including quiet hours and who the recipients are", () => {
     const lines = buildCompetitorDeliveryLines({
       emailEnabled: true,
+      canEmailDelivery: true,
       instantEnabled: true,
       digestEnabled: false,
       quietHours: { startHour: 22, endHour: 8 },
@@ -221,6 +222,7 @@ describe("the rail delivery card (brief §7)", () => {
   it("says the workspace default is in use rather than pretending there is none", () => {
     const lines = buildCompetitorDeliveryLines({
       emailEnabled: false,
+      canEmailDelivery: true,
       instantEnabled: false,
       digestEnabled: true,
       quietHours: null,
@@ -236,6 +238,7 @@ describe("the rail delivery card (brief §7)", () => {
   it("tells a member who owns delivery instead of showing them a count they cannot change", () => {
     const lines = buildCompetitorDeliveryLines({
       emailEnabled: true,
+      canEmailDelivery: true,
       instantEnabled: false,
       digestEnabled: true,
       quietHours: null,
@@ -245,6 +248,22 @@ describe("the rail delivery card (brief §7)", () => {
     });
     expect(lines.find((line) => line.key === "Recipients")?.value).toBe(
       "Managed by the workspace owner",
+    );
+  });
+
+  it("never claims email is on when the plan has no email delivery", () => {
+    const lines = buildCompetitorDeliveryLines({
+      emailEnabled: true,
+      canEmailDelivery: false,
+      instantEnabled: false,
+      digestEnabled: true,
+      quietHours: null,
+      timezone: null,
+      targetCount: 1,
+      canManageDelivery: true,
+    });
+    expect(lines.find((line) => line.key === "Email")?.value).toBe(
+      "Off — requires Scout",
     );
   });
 });

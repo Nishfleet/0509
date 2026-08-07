@@ -15,6 +15,7 @@ import {
   createTrackedEntity,
   getPollCursor,
   getSourceConnectionForEntity,
+  listPollCursorsForTargets,
   getTrackedEntity,
   listPresenceItems,
   listSourceTargetsForEntity,
@@ -358,15 +359,47 @@ export async function runPresencePollingBatch(env: AppEnv, options: { limit?: nu
 export async function getPresenceWorkspaceSnapshot(env: AppEnv, userId: string) {
   const entities = await listTrackedEntities(env, userId);
   const items = await listPresenceItems(env, userId, { connectorId: "website", limit: 30 });
-  const enriched = await Promise.all(
+  const perEntitySources = await Promise.all(
     entities.map(async (entity) => {
       const sources = await listSourceTargetsForEntity(env, userId, entity.id);
       return {
         entity,
-        sources: sources.filter((source) => connectorHasCustomerPollPath(source.connectorId)),
+        sources: sources.filter((source) =>
+          connectorHasCustomerPollPath(source.connectorId),
+        ),
       };
     }),
   );
+  // ONE cursor query for the whole workspace — the per-target read in a
+  // loop was an N+1 costing hundreds of D1 reads at Agency caps.
+  const allTargetIds = perEntitySources.flatMap(({ sources }) =>
+    sources.map((source) => source.id),
+  );
+  const cursorsById = new Map(
+    (await listPollCursorsForTargets(env, allTargetIds)).map((cursor) => [
+      cursor.sourceTargetId,
+      cursor,
+    ]),
+  );
+  const enriched = perEntitySources.map(({ entity, sources }) => {
+    // The list row must show CHECK time, not record-mutation time — an
+    // entity edited yesterday but never successfully polled has no
+    // freshness to claim.
+    const cursors = sources.map((source) => cursorsById.get(source.id) ?? null);
+    const lastPollAt = cursors.reduce<string | null>((latest, cursor) => {
+      const at = cursor?.lastSuccessAt ?? null;
+      if (!at) return latest;
+      return !latest || at > latest ? at : latest;
+    }, null);
+    const lastPollFailed = cursors.some(
+      (cursor) =>
+        Boolean(cursor?.lastPolledAt) &&
+        (Boolean(cursor?.lastErrorCode) ||
+          !cursor?.lastSuccessAt ||
+          (cursor.lastPolledAt as string) > (cursor.lastSuccessAt as string)),
+    );
+    return { entity, sources, lastPollAt, lastPollFailed };
+  });
   return { entities: enriched, recentItems: items };
 }
 

@@ -135,6 +135,11 @@ export async function listWatchEventsForRun(
  * keeps ownership and active-watch filtering in SQL, avoiding one query per
  * watchlist (and the dashboard's old first-six truncation).
  */
+/**
+ * The Overview's decision feed. Suppressed and invalidated events are
+ * excluded at the query: they belong in the per-competitor audit trail, and
+ * must never lead the Overnight sentence or count toward daily decisions.
+ */
 export async function listRecentWorkspaceWatchEvents(
   env: AppEnv,
   userId: string,
@@ -151,6 +156,7 @@ export async function listRecentWorkspaceWatchEvents(
       INNER JOIN watchlist ON watchlist.id = watch_event.watchlist_id
       WHERE watchlist.user_id = ?
         AND watchlist.is_active = 1
+        AND watch_event.status NOT IN ('suppressed', 'invalidated')
       ORDER BY watch_event.created_at DESC, watch_event.id DESC
       LIMIT ?
     `,

@@ -113,15 +113,20 @@ export function isClientReportEligibleWatchEvent(
   return isClientReportEligibleClassification(classifyWatchEventSource(event), options);
 }
 
+// Decision candidacy is an allowlist, not a blocklist: only statuses that
+// represent a completed, customer-trustable observation may enter ranked
+// decision flows or become the recommended finding. proof_pending,
+// needs_review, and unknown can be displayed with honest labels, but an
+// unqualified item must be prevented from ranking — not cautioned after
+// selection.
+const DIGEST_DECISION_CANDIDATE_STATUSES: readonly CustomerProofStatus[] = [
+  "verified_proof",
+  "scan_spotted",
+];
+
 export function isDigestDecisionCandidate(item: DigestTrustItem) {
   const status = classifyDigestItemSource(item).status;
-  return ![
-    "suppressed",
-    "invalidated",
-    "internal_only",
-    "canary_or_test",
-    "proof_failed",
-  ].includes(status);
+  return DIGEST_DECISION_CANDIDATE_STATUSES.includes(status);
 }
 
 export function summarizeDigestProofMix(items: DigestTrustItem[]): ProofMix {

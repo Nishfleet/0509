@@ -617,18 +617,24 @@ export default function AppDashboardRoute() {
     return !latest || watchlist.lastScannedAt > latest ? watchlist.lastScannedAt : latest;
   }, null);
 
+  // Only a confirmed event may lead the Overnight sentence or carry the green
+  // mark — a detected event is provisional and cannot render a proven diff.
+  // The feed itself already excludes suppressed/invalidated at the query.
+  const confirmedRecentEvents = visibleRecentEvents.filter(
+    (event) => event.status === "confirmed",
+  );
   const overnight = buildOvernightSentence({
     briefTitle: marketDeskBrief.title,
     briefSummary: marketDeskBrief.summary,
-    changeCount: visibleRecentEvents.length,
-    headline: visibleRecentEvents[0]?.title ?? null,
-    mark: firstChangeMark(visibleRecentEvents)?.mark ?? null,
+    changeCount: confirmedRecentEvents.length,
+    headline: confirmedRecentEvents[0]?.title ?? null,
+    mark: firstChangeMark(confirmedRecentEvents)?.mark ?? null,
     quietCompetitors: Math.max(0, activeWatchlists - changedWatchlistCount),
   });
   // The evidence card carries what the token mark cannot: long landing-page
   // values and the stored before/after screenshot pair, each in its own
   // honest proof state.
-  const landingEvidence = firstLandingPageEvidence(visibleRecentEvents);
+  const landingEvidence = firstLandingPageEvidence(confirmedRecentEvents);
 
   return (
     <DashboardPage className="f9-wk-page f9-overview">
@@ -777,8 +783,20 @@ export default function AppDashboardRoute() {
                 key={event.id}
                 name={watchlistNameById.get(event.watchlistId) ?? event.title}
                 say={event.summary}
-                status="Caught"
-                statusTone="on"
+                status={
+                  event.status === "confirmed"
+                    ? "Caught"
+                    : event.status === "proof_failed"
+                      ? "Check failed"
+                      : "Needs review"
+                }
+                statusTone={
+                  event.status === "confirmed"
+                    ? "on"
+                    : event.status === "proof_failed"
+                      ? "bad"
+                      : "quiet"
+                }
                 time={<LocalTime iso={event.createdAt} mode="date" />}
                 to={`/app/watchlists?watchlist=${encodeURIComponent(event.watchlistId)}&event=${encodeURIComponent(event.id)}`}
               />

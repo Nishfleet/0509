@@ -63,7 +63,14 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
   const recentEvents = activeCount > 0 ? input.recentEvents ?? [] : [];
   const isFreePlan = input.plan === "free";
   const sourceHealthy = !input.sourceStatus || input.sourceStatus === "healthy";
-  const confirmedChanges = recentEvents.filter((event) => event.status === "confirmed" || event.status === "detected");
+  // "Moves found" is a proof claim. Only confirmed events may increment it —
+  // detected events are provisional signals that invite review but must not
+  // enter the confirmed count or drive the daily action as if proven.
+  const confirmedChanges = recentEvents.filter((event) => event.status === "confirmed");
+  const provisionalChanges = recentEvents.filter(
+    (event) => event.status === "detected" || event.status === "proof_pending",
+  );
+  const failedChecks = recentEvents.filter((event) => event.status === "proof_failed");
   const sentDigests = (input.digests ?? []).filter((digest) => digest.delivery?.status === "sent").length;
   const overnightRuns = Math.max(0, Math.floor(input.overnightStats?.runs ?? 0));
   const overnightWatchlists = Math.max(0, Math.floor(input.overnightStats?.watchlistsChecked ?? 0));
@@ -92,11 +99,13 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
         ? "Paused"
         : confirmedChanges.length > 0
           ? "Ready to review"
-          : hasOvernightCheck
-            ? "Quiet check complete"
-            : isFreePlan
-              ? "Waiting for activation scan"
-              : "Waiting for first scan",
+          : provisionalChanges.length > 0
+            ? `${provisionalChanges.length} possible ${provisionalChanges.length === 1 ? "change" : "changes"} still unproven`
+            : hasOvernightCheck
+              ? "Quiet check complete"
+              : isFreePlan
+                ? "Waiting for activation scan"
+                : "Waiting for first scan",
     },
     {
       label: "Evidence checks",
@@ -147,6 +156,46 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
       action: { href: "/app/watchlists", label: "Review moves" },
       metrics,
       items: confirmedChanges.slice(0, 3).map((event) => ({
+        label: event.eventType.replaceAll("_", " "),
+        title: event.title,
+        detail: event.summary,
+      })),
+      hasMetrics,
+    };
+  }
+
+  // Provisional-only state: something was spotted but nothing is proven yet.
+  // The copy claims a check, not a move — a "move" needs stored proof.
+  if (provisionalChanges.length > 0) {
+    const count = provisionalChanges.length;
+    return {
+      state: "changes",
+      kicker: "Brief",
+      title: `${count} possible ${count === 1 ? "change" : "changes"} to check`,
+      summary: "We spotted something but have not confirmed it with stored proof yet. Open the trail and check it before acting on it.",
+      action: { href: "/app/watchlists", label: "Check the signals" },
+      metrics,
+      items: provisionalChanges.slice(0, 3).map((event) => ({
+        label: event.eventType.replaceAll("_", " "),
+        title: event.title,
+        detail: event.summary,
+      })),
+      hasMetrics,
+    };
+  }
+
+  // A failed check can never fall through to a quiet claim: quiet is a
+  // proof statement, and a failed check is missing exactly that proof.
+  if (failedChecks.length > 0) {
+    const count = failedChecks.length;
+    return {
+      state: "queued",
+      kicker: "Brief",
+      title: `${count} check${count === 1 ? "" : "s"} failed`,
+      summary: "A recent check could not finish, so this period cannot be called quiet. We retry automatically; open the trail to see what failed.",
+      action: { href: "/app/watchlists", label: "See what failed" },
+      metrics,
+      items: failedChecks.slice(0, 3).map((event) => ({
         label: event.eventType.replaceAll("_", " "),
         title: event.title,
         detail: event.summary,

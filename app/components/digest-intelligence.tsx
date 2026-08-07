@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { LocalTime } from "~/components/local-time";
+import { hasOrderedCapturePair } from "~/components/evidence/diff-plate";
 import { readDigestIntelligence } from "~/lib/change-intelligence";
 import { readDigestStrategyNote } from "~/lib/digest-strategy";
 import { formatWatchEventTypeLabel } from "~/lib/landing-page-display";
@@ -65,7 +66,11 @@ export function DesignedDigestBrief({
 }: DesignedDigestBriefProps) {
   const finding = resolveDigestFinding(allItems);
   const strategy = readDigestStrategyNote(summary);
+  // The proof comparison is a decision object: only decision candidates
+  // (verified / scan-spotted) may render one. Pending and unknown items keep
+  // their honest labels in "What we checked" instead.
   const diffs = items
+    .filter((item) => isDigestDecisionCandidate(item))
     .map((item) => ({ item, captures: resolveDigestDiffCaptures(item) }))
     .filter(
       (entry): entry is {
@@ -110,20 +115,6 @@ export function DesignedDigestBrief({
           <h2>{finding}</h2>
           {actions ? <div className="f9-wk-brief-actions">{actions}</div> : null}
         </div>
-        {strategy ? (
-          <aside aria-label="AI summary of the week" className="f9-wk-brief-read">
-            <p>
-              AI summary · checked against the filed changes
-              {strategy.generatedAt ? (
-                <>
-                  {" · "}
-                  <LocalTime iso={strategy.generatedAt} />
-                </>
-              ) : null}
-            </p>
-            <p>{strategy.paragraph}</p>
-          </aside>
-        ) : null}
       </header>
 
       {newestMarked ? (
@@ -255,6 +246,23 @@ export function DesignedDigestBrief({
           ) : null}
         </div>
       </section>
+
+      {strategy ? (
+        // The machine's reading sits BELOW the evidence it reads, framed as
+        // derived — never above the changes with a verification-shaped label.
+        <aside aria-label="AI summary of the week" className="f9-wk-brief-read">
+          <p>
+            AI summary · a reading of the changes above — check it against them
+            {strategy.generatedAt ? (
+              <>
+                {" · "}
+                <LocalTime iso={strategy.generatedAt} />
+              </>
+            ) : null}
+          </p>
+          <p>{strategy.paragraph}</p>
+        </aside>
+      ) : null}
 
       <section aria-labelledby={`${id}-facts`} className="f9-wk-brief-section">
         <h3 id={`${id}-facts`}>At a glance</h3>
@@ -569,7 +577,21 @@ function resolveDigestFinding(items: DigestProofPacketItem[]) {
     }))
     .filter(({ item }) => isDigestDecisionCandidate(item))
     .sort((left, right) => right.score - left.score || left.index - right.index);
-  return ranked[0]?.item.title?.trim() || "Nothing changed in this window";
+  // The headline is the brief's biggest claim. An item whose before/after
+  // fails the two-capture gate would be a headline the brief then declines
+  // to show a diff for — so a diff-backed candidate always outranks one
+  // that is not, regardless of priority score.
+  const diffBacked = ranked.filter(
+    ({ item }) => resolveDigestDiffCaptures(item) !== null,
+  );
+  const headline = (diffBacked[0] ?? ranked[0])?.item.title?.trim();
+  if (headline) return headline;
+  // Items exist but none qualifies as a decision candidate: the window is
+  // NOT quiet — we just cannot verify a finding. Never claim nothing
+  // changed when something unverified is on file.
+  return items.length > 0
+    ? "No verified finding this window — unverified items are listed below"
+    : "Nothing changed in this window";
 }
 
 function readMetadataString(
@@ -596,18 +618,12 @@ export function resolveDigestDiffCaptures(item: DigestProofPacketItem) {
     "confirmedAt",
     "capturedAt",
   ]);
-  const beforeTime = beforeCapturedAt ? Date.parse(beforeCapturedAt) : Number.NaN;
-  const nowTime = nowCapturedAt ? Date.parse(nowCapturedAt) : Number.NaN;
-
-  if (
-    !from ||
-    !to ||
-    !beforeCapturedAt ||
-    !nowCapturedAt ||
-    Number.isNaN(beforeTime) ||
-    Number.isNaN(nowTime) ||
-    beforeTime >= nowTime
-  ) {
+  if (!from || !to || !hasOrderedCapturePair(beforeCapturedAt, nowCapturedAt)) {
+    return null;
+  }
+  // hasOrderedCapturePair already guarantees both exist and parse; this
+  // re-check only narrows the types.
+  if (!beforeCapturedAt || !nowCapturedAt) {
     return null;
   }
 
@@ -634,7 +650,9 @@ export function resolveDigestDiffCaptures(item: DigestProofPacketItem) {
  * can narrow the reading rows, but it cannot rewrite which change was news.
  */
 export function resolveNewestMarkedDigestItem(items: DigestProofPacketItem[]) {
-  return items.reduce<{
+  // Only a decision candidate may own the "Latest change" announcement —
+  // the same gate the visible diffs use.
+  return items.filter((item) => isDigestDecisionCandidate(item)).reduce<{
     id: string;
     item: DigestProofPacketItem;
     captures: NonNullable<ReturnType<typeof resolveDigestDiffCaptures>>;

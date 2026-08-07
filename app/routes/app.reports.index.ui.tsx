@@ -26,7 +26,8 @@ export type ReportsIndexLoaderData =
         typeLabel: string;
         title: string;
         description: string;
-        updatedAt: string;
+        timeLabel: string | null;
+        timeAt: string | null;
       }>;
     };
 
@@ -67,7 +68,7 @@ export function ReportsIndexRoute() {
         context={
           sourceCount === 0
             ? "Reports are built from the collections and competitors you already keep."
-            : `${sourceCount} report ${sourceCount === 1 ? "source" : "sources"} ready. Each one carries the captures behind it.`
+            : `${sourceCount} report ${sourceCount === 1 ? "source" : "sources"} on file. Open one to see the captures behind it.`
         }
         title="Reports"
       />
@@ -104,7 +105,16 @@ export function ReportsIndexRoute() {
                 role="listitem"
                 say={report.description}
                 status={report.typeLabel}
-                time={<LocalTime fallback={report.updatedAt} iso={report.updatedAt} />}
+                time={
+                  report.timeAt && report.timeLabel ? (
+                    <>
+                      {report.timeLabel}{" "}
+                      <LocalTime fallback={report.timeAt} iso={report.timeAt} />
+                    </>
+                  ) : (
+                    "No check yet"
+                  )
+                }
                 to={report.href}
               />
             ))}
