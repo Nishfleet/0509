@@ -8,7 +8,6 @@ import { BILLING_SKU_SLUGS } from "~/lib/billing-sku-catalog";
 import {
   DASHBOARD_PRIMARY_NAV,
   DASHBOARD_SETTINGS_NAV,
-  DASHBOARD_STAFF_NAV,
   PUBLIC_SEARCH_NAV,
 } from "~/lib/dashboard-navigation";
 import {
@@ -239,7 +238,7 @@ function registryContractSha256() {
 // stack (free weekly watch, sitemap additions, /ads/:domain) — all reopened
 // as assessed_pending_reproof, no proof fabricated.
 const EXPECTED_REGISTRY_CONTRACT_SHA256 =
-  "a01572b56652111574736c69526167807e50c9c83fcbef8b57261d20828e2ac7";
+  "54722e8c51c4cad059107522abd818052ef712dc6adc37ba3523d27252361da9";
 
 type Catalogs = {
   agentActions: string[];
@@ -262,7 +261,6 @@ const actualCatalogs: Catalogs = {
   customerNavPaths: uniqueSorted([
     ...DASHBOARD_PRIMARY_NAV.flatMap((section) => section.items.map((item) => item.to)),
     ...DASHBOARD_SETTINGS_NAV.flatMap((section) => section.items.map((item) => item.to)),
-    ...DASHBOARD_STAFF_NAV.map((item) => item.to),
     ...PUBLIC_SEARCH_NAV.map((item) => item.to),
   ]),
   publicMarkdownPaths: [...PUBLIC_MARKDOWN_PATHS],
@@ -301,7 +299,7 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
   customerNavPaths: [
     "/", "/#pricing", "/app", "/app/account", "/app/billing", "/app/clients",
     "/app/collections", "/app/developer-access", "/app/digests", "/app/notifications",
-    "/app/ops", "/app/presence", "/app/reports", "/app/shares", "/app/source-access",
+    "/app/presence", "/app/reports", "/app/shares", "/app/source-access",
     "/app/support", "/app/team", "/app/watchlists", "/help", "/search",
   ],
   publicMarkdownPaths: ["/", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],

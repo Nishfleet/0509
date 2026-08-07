@@ -356,7 +356,7 @@
       "surface": "monitoring runtime, operator desk and customer state",
       "audience": "customers and operators",
       "owner": "monitoring operations",
-      "source": ["docs/monitoring-fanout-rollout.md", "app/routes/app.ops.tsx"],
+      "source": ["docs/monitoring-fanout-rollout.md", "app/routes/ops.tsx"],
       "requiredGate": "G11-CAPACITY-SLO,G360-P1-OPS",
       "requiredEvidence": "plan-limit load, completed scans, quota reconciliation, failure/compensation and deployed soak",
       "status": "assessed_gate_c_pending",

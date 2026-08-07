@@ -375,6 +375,7 @@ export default function OpsRoute() {
   ];
 
   return (
+    <main className="f9-ops-standalone">
     <DashboardPage>
     <section className="f9-app-stack">
       <DashboardPageHeader
@@ -788,6 +789,7 @@ export default function OpsRoute() {
       </div>
     </section>
     </DashboardPage>
+    </main>
   );
 }
 

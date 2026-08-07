@@ -9,7 +9,6 @@ export interface DashboardNavItem {
   end?: boolean;
   /** Hide unless condition met (e.g. presence entitlement) */
   requiresPresence?: boolean;
-  requiresOps?: boolean;
 }
 
 export interface DashboardNavSection {
@@ -68,10 +67,6 @@ export function isSettingsNavPath(pathname: string) {
   );
 }
 
-export const DASHBOARD_STAFF_NAV: DashboardNavItem[] = [
-  { label: "Ops", to: "/app/ops", requiresOps: true },
-];
-
 export const PUBLIC_SEARCH_NAV: DashboardNavItem[] = [
   { label: "Home", to: "/" },
   { label: "Search", to: "/search", end: true },
@@ -81,14 +76,13 @@ export const PUBLIC_SEARCH_NAV: DashboardNavItem[] = [
 
 export function filterDashboardNav(
   sections: DashboardNavSection[],
-  options: { showPresence: boolean; showOps: boolean },
+  options: { showPresence: boolean },
 ) {
   return sections
     .map((section) => ({
       ...section,
       items: section.items.filter((item) => {
         if (item.requiresPresence && !options.showPresence) return false;
-        if (item.requiresOps && !options.showOps) return false;
         return true;
       }),
     }))
@@ -106,21 +100,14 @@ export function filterDashboardNav(
  */
 export function buildDashboardMobileNav(options: {
   showPresence: boolean;
-  showOps?: boolean;
 }) {
-  const visible = {
-    showPresence: options.showPresence,
-    showOps: options.showOps ?? false,
-  };
+  const visible = { showPresence: options.showPresence };
   const primary = filterDashboardNav(DASHBOARD_PRIMARY_NAV, visible).flatMap(
     (section) => section.items,
   );
   const settings = filterDashboardNav(DASHBOARD_SETTINGS_NAV, visible).flatMap(
     (section) => section.items,
   );
-  const staff = DASHBOARD_STAFF_NAV.filter(
-    (item) => !item.requiresOps || visible.showOps,
-  );
 
-  return [...primary, ...settings, ...staff];
+  return [...primary, ...settings];
 }

@@ -388,6 +388,7 @@ listBetterAuthSessions: vi.fn().mockResolvedValue([]),
 vi.doMock("~/lib/data.server", () => ({ getWorkspaceBranding }));
 vi.doMock("~/lib/e2e-auth.server", () => ({
 isE2ETestSessionId: vi.fn().mockReturnValue(false),
+	isE2EFixtureWorkspaceSession: vi.fn().mockReturnValue(false),
 }));
 vi.doMock("~/lib/email-verification.server", () => ({
 isUserEmailVerified: vi.fn().mockResolvedValue(true),
