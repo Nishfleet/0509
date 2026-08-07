@@ -2,11 +2,49 @@
 
 The single source of unattended work. Rules: agents pull ONLY from this queue —
 never self-invented work; every run ends with a PR link or a named blocker.
-Design-code items are gated on a Nish-picked direction. Direction 2, "The
-Evidence Desk", cleared that gate on 2026-07-27 and shipped; Nish re-directed
-on 2026-07-28 and picked the v4 landing-language concepts on 2026-07-29, which
-is the direction P1 now builds to. Ranked by Nish; maintained by the tech-lead
-session.
+
+## ACTIVE PROGRAM: design unification (Nish, ratified 2026-08-08)
+
+The tri-audit (Sol + Grok + Fable, 2026-08-07/08) superseded the remaining
+BL phase plan. Canonical program state lives OUTSIDE this repo at
+`/home/nish/workspaces/agent-state/0509-design-unification-ledger.md` —
+that ledger, not this file, is the source of truth for what remains.
+
+Ratified by Nish, non-negotiable:
+
+1. The v4 landing language (`f9-wk-*`) is the ONLY design system. The
+   Evidence Desk (`f9-ed-*`) and every older era are being wiped — report
+   documents included, proof semantics preserved exactly.
+2. The 5-destination IA: Today / Watch / Library / Deliver / Settings.
+   Presence merges into Watch; locked features are hidden from nav
+   (gate-visibility); member pages keep URLs with owning-row active state.
+3. Free plan = weekly watch (implemented behavior wins; all copy derives).
+4. `scripts/design-system-ratchet.mjs` + `docs/design-system-ratchet.json`
+   enforce exact-match legacy-marker ceilings in CI — the program's
+   terminal condition is every ceiling at zero, plus a zero-S1/S2 fresh
+   tri-audit. A fourth design era cannot ship while the gate exists.
+5. Dual review (Sol + Grok) before merge for every program PR; tri-council
+   (Sol + Grok + Fable) resolves splits; drafts until verdicts land.
+
+Landed so far: PR #530+#531 (truth: unproven cannot render as proven,
+evidence render contract), #532 (safety: fixture guards fail closed, ops
+extracted from the customer app), #533 (the ratchet), #534 (subtraction:
+dormant/dead surfaces deleted), #535 (the 5-destination IA shell).
+Next: deep destination rebuilds (Today decision queue, Watch merge with
+one history object, Settings consolidation, Deliver merge), the report
+document re-set with frozen proof semantics, `/search` into the one
+shell, the CSS endgame, and the email/copy-catalog pass — sequenced in
+the ledger.
+
+## Historical note
+
+Everything below this line predates the design-unification ratification
+and is retained as history. The "Evidence Desk" program (BL-005..BL-020)
+is CLOSED; the BL-030..BL-042 landing-language rollout shipped but its
+phase numbering drifted from git reality (BL-032..035 shipped as different
+packages than planned here). Do not plan from the sections below.
+
+---
 
 ## Continuous program (standing order, Nish 2026-07-27)
 
