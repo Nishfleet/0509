@@ -547,7 +547,7 @@ describe("proof honesty — failed checks can never read as quiet or confident",
     });
 
     expect(brief.state).toBe("queued");
-    expect(brief.sourceConfidence).toBe("Not checked yet — first check pending");
+    expect(brief.sourceConfidence).toBe("Not checked yet — we run the first check shortly");
     expect(brief.sourceConfidence).not.toContain("High");
   });
 
