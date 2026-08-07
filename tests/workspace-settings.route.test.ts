@@ -189,22 +189,11 @@ describe("workspace settings route components", () => {
   });
 
   it("renders notifications without source-token or API-key setup", async () => {
+    // Exactly the loader's real shape — extra fields here would hide
+    // loader/UI shape drift because React ignores unknown props.
     await mockRouter({
       emailDeliveryReady: true,
       digestCadencePreference: "plan_default",
-      showSlackDelivery: false,
-      slackDelivery: { plan: "starter", entitled: true },
-      canManageWhatsAppDelivery: false,
-      slackTargets: [],
-      whatsappTargets: [],
-      whatsappDelivery: {
-        providerConfigured: false,
-        customerReady: false,
-        webhookConfigured: false,
-        configuredTargets: 3,
-        usableTargets: 0,
-        lastSuccessfulDeliveryAt: null,
-      },
     });
 
     const { default: NotificationsRoute } =
