@@ -33,6 +33,7 @@
     "scripts/launch-readiness-canary-cycle.mjs",
     "scripts/local-release-server.mjs",
     "scripts/playwright-release-manifest-reporter.mjs",
+    "scripts/check-deferred-release-zero-migrations.mjs",
     "scripts/deploy-production-plan.mjs",
     "scripts/verify-deploy-readiness.mjs",
     "scripts/verify-remote-restore-evidence.mjs",
