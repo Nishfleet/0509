@@ -49,7 +49,7 @@ describe("BL-039 notifications rebuild", () => {
       '<DashboardPage className="f9-wk-page f9-nt-page">',
     );
     expect(ui).toContain("<WorkingHeader");
-    expect(ui).toContain('title="Delivery channels"');
+    expect(ui).toContain('title="Delivery channel"');
     expect(ui).not.toContain("DashboardPageHeader");
     expect(ui).not.toContain("f9-app-panel");
     expect(ui).not.toContain("f9-status-strip");

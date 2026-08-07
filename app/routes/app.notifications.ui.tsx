@@ -3,7 +3,6 @@ import { Form, Link, useActionData, useLoaderData } from "react-router";
 import type { MetaFunction } from "react-router";
 
 import { DashboardPage } from "~/components/dashboard-page";
-import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import { FeedbackStrip } from "~/components/workspace/feedback-strip";
 import { WorkingHeader } from "~/components/workspace/working-header";
@@ -16,14 +15,6 @@ export const notificationsMeta: MetaFunction = () => [
     content: "Manage email digest delivery and alert channels for Five to Nine.",
   },
 ];
-
-type DeliveryTargetView = {
-  id: string;
-  displayName: string;
-  isPaused: boolean;
-  lastSuccessfulDeliveryAt: NullableString;
-  createdAt: string;
-};
 
 export type NotificationsLoaderData = {
   emailDeliveryReady: boolean;
@@ -45,7 +36,7 @@ export function NotificationsRoute() {
   return (
     <DashboardPage className="f9-wk-page f9-nt-page">
       <WorkingHeader
-        context="Choose how briefs and confirmed competitor changes reach your team."
+        context="Briefs and confirmed competitor changes reach your team by email."
         title="Notifications"
       />
 
@@ -61,13 +52,13 @@ export function NotificationsRoute() {
       <section aria-labelledby="notification-channels-title" className="f9-nt-section is-first">
         <SectionHeading
           id="notification-channels-title"
-          title="Delivery channels"
+          title="Delivery channel"
         />
         <dl className="f9-nt-definitions" data-testid="notification-channel-rows">
           <ChannelRow
             copy={
               data.emailDeliveryReady
-                ? "Digest delivery can use the account email."
+                ? "Briefs go to the account email."
                 : "Add an account email first."
             }
             name="Email"
@@ -78,7 +69,7 @@ export function NotificationsRoute() {
 
       <section aria-labelledby="email-delivery-title" className="f9-nt-section">
         <SectionHeading
-          context="Email is generally available. Each workspace keeps one frequency, while quiet hours stay with the competitor they protect."
+          context="Each workspace keeps one frequency; quiet hours stay with the competitor they protect."
           id="email-delivery-title"
           title="Email delivery"
         />
@@ -126,7 +117,7 @@ export function NotificationsRoute() {
               name="Recipients"
               say={
                 data.emailDeliveryReady
-                  ? "Briefs go to the account email. Channel-specific recipients appear below only when that channel is available."
+                  ? "Briefs go to the account email. Per-competitor recipients live with each competitor's delivery settings."
                   : "No account email is ready, so email delivery cannot start yet."
               }
             />
@@ -148,7 +139,7 @@ export function NotificationsRoute() {
 
 
       <div className="f9-wk-opline">
-        <span>Email delivery generally available</span>
+        <span>Delivery channel: email</span>
       </div>
     </DashboardPage>
   );
@@ -204,36 +195,6 @@ function WorkRowCopy({ name, say }: { name: string; say: ReactNode }) {
 
 
 
-function TargetList({
-  title,
-  emptyTitle,
-  emptyCopy,
-  children,
-}: {
-  title: string;
-  emptyTitle: string;
-  emptyCopy: string;
-  children: ReactNode;
-}) {
-  const targets = Array.isArray(children) ? children : [children];
-  const hasTargets = targets.some(Boolean);
-
-  return (
-    <div className="f9-nt-targets">
-      <h3>{title}</h3>
-      {hasTargets ? (
-        children
-      ) : (
-        <div className="f9-nt-target-row">
-          <div>
-            <strong>{emptyTitle}</strong>
-            <p>{emptyCopy}</p>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 
 

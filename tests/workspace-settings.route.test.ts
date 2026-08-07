@@ -16,11 +16,11 @@ vi.mock("~/lib/ga-customer-surface", () => ({
   isWhatsAppDeliveryCustomerFacing: vi.fn(() => false),
   slackDeliveryUnavailableMessage: vi.fn(
     () =>
-      "Slack delivery is not available at general availability yet. Use email delivery.",
+      "Slack delivery isn’t available. Nothing was saved — use email delivery instead.",
   ),
   whatsappDeliveryUnavailableMessage: vi.fn(
     () =>
-      "WhatsApp delivery is not available at general availability yet. Use email delivery.",
+      "WhatsApp delivery isn’t available. Nothing was saved — use email delivery instead.",
   ),
 }));
 
@@ -213,9 +213,9 @@ describe("workspace settings route components", () => {
 
     expect(markup).toContain("Notifications");
     expect(markup).toContain(
-      "Choose how briefs and confirmed competitor changes reach your team.",
+      "Briefs and confirmed competitor changes reach your team by email.",
     );
-    expect(markup).toContain("Delivery channels");
+    expect(markup).toContain("Delivery channel");
     expect(markup).toContain("Tune on competitors");
     expect(markup).not.toContain("Ad Library API page");
     expect(markup).not.toContain("Test and save access");

@@ -1720,7 +1720,7 @@ describe("watchlists route actions", () => {
 
     expect(result).toEqual({
       message:
-        "WhatsApp delivery is not available at general availability yet. Use email delivery.",
+        "WhatsApp delivery isn’t available. Nothing was saved — use email delivery instead.",
       ok: false,
     });
     expect(upsertDeliveryTarget).not.toHaveBeenCalled();
@@ -1761,7 +1761,7 @@ describe("watchlists route actions", () => {
 
     expect(result).toEqual({
       message:
-        "Slack delivery is not available at general availability yet. Use email delivery.",
+        "Slack delivery isn’t available. Nothing was saved — use email delivery instead.",
       ok: false,
     });
     expect(upsertDeliveryTarget).not.toHaveBeenCalled();
@@ -2035,7 +2035,7 @@ describe("watchlists route actions", () => {
 
     expect(result).toEqual({
       message:
-        "WhatsApp delivery is not available at general availability yet. Use email delivery.",
+        "WhatsApp delivery isn’t available. Nothing was saved — use email delivery instead.",
       ok: false,
     });
     expect(upsertDeliveryTarget).not.toHaveBeenCalled();
@@ -2083,7 +2083,7 @@ describe("watchlists route actions", () => {
 
     expect(result).toEqual({
       message:
-        "Slack delivery is not available at general availability yet. Use email delivery.",
+        "Slack delivery isn’t available. Nothing was saved — use email delivery instead.",
       ok: false,
     });
     expect(upsertDeliveryTarget).not.toHaveBeenCalled();

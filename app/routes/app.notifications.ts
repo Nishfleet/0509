@@ -111,46 +111,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
     };
   }
 
-  if (intent === "pause-slack-webhook") {
-    const { isSlackDeliveryCustomerFacing, slackDeliveryUnavailableMessage } = await import(
-      "~/lib/ga-customer-surface"
-    );
-    if (!isSlackDeliveryCustomerFacing()) {
-      return { ok: false, message: slackDeliveryUnavailableMessage() };
-    }
-    const { pauseSlackWebhookTarget } = await import("~/lib/slack.server");
-    const targetId = String(formData.get("slackTargetId") ?? "");
-    const paused = await pauseSlackWebhookTarget(env, {
-      userId: workspaceUserId,
-      targetId,
-    });
-
-    return {
-      ok: paused,
-      message: paused ? "Slack delivery paused." : "Slack delivery target was not found.",
-    };
-  }
-
-  if (intent === "resume-slack-webhook") {
-    const { isSlackDeliveryCustomerFacing, slackDeliveryUnavailableMessage } = await import(
-      "~/lib/ga-customer-surface"
-    );
-    if (!isSlackDeliveryCustomerFacing()) {
-      return { ok: false, message: slackDeliveryUnavailableMessage() };
-    }
-    const { resumeSlackWebhookTarget } = await import("~/lib/slack.server");
-    const targetId = String(formData.get("slackTargetId") ?? "");
-    const resumed = await resumeSlackWebhookTarget(env, {
-      userId: workspaceUserId,
-      targetId,
-    });
-
-    return {
-      ok: resumed,
-      message: resumed ? "Slack delivery resumed." : "Slack delivery target was not found.",
-    };
-  }
-
   return {
     ok: false,
     message: "Unknown notification action.",

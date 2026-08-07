@@ -15,12 +15,10 @@ vi.mock("~/lib/ga-customer-surface", () => ({
   isSlackDeliveryCustomerFacing: vi.fn(() => false),
   isWhatsAppDeliveryCustomerFacing: vi.fn(() => false),
   slackDeliveryUnavailableMessage: vi.fn(
-    () =>
-      "Slack delivery is not available at general availability yet. Use email delivery.",
+    () => "Slack delivery isn’t available. Nothing was saved — use email delivery instead.",
   ),
   whatsappDeliveryUnavailableMessage: vi.fn(
-    () =>
-      "WhatsApp delivery is not available at general availability yet. Use email delivery.",
+    () => "WhatsApp delivery isn’t available. Nothing was saved — use email delivery instead.",
   ),
 }));
 
@@ -139,10 +137,10 @@ describe("notifications route (post-subtraction surface)", () => {
 
     const { action } = await import("~/routes/app.notifications");
     for (const [intent, expected] of [
-      ["save-slack-webhook", /Slack delivery is not available/],
-      ["pause-slack-webhook", /Slack delivery is not available/],
-      ["resume-slack-webhook", /Slack delivery is not available/],
-      ["save-whatsapp-target", /WhatsApp delivery is not available/],
+      ["save-slack-webhook", /Slack delivery isn\u2019t available/],
+      ["pause-slack-webhook", /Slack delivery isn\u2019t available/],
+      ["resume-slack-webhook", /Slack delivery isn\u2019t available/],
+      ["save-whatsapp-target", /WhatsApp delivery isn\u2019t available/],
     ] as const) {
       const formData = new FormData();
       formData.set("intent", intent);
@@ -243,12 +241,12 @@ describe("notifications route (post-subtraction surface)", () => {
     const { NotificationsRoute } = await import("~/routes/app.notifications.ui");
     const markup = renderToStaticMarkup(createElement(NotificationsRoute));
 
-    expect(markup).toContain("Delivery channels");
+    expect(markup).toContain("Delivery channel");
     expect(markup).toContain("Email");
     expect(markup).not.toContain("Slack");
     expect(markup).not.toContain("WhatsApp");
     expect(markup).not.toContain("stay dormant");
-    expect(markup).toContain("Email delivery generally available");
+    expect(markup).toContain("Delivery channel: email");
   });
 
   it("keeps missing-email delivery honest and points to the account", async () => {

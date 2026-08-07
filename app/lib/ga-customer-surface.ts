@@ -7,7 +7,7 @@ export function isSlackDeliveryCustomerFacing() {
 }
 
 export function slackDeliveryUnavailableMessage() {
-  return "Slack delivery is not available at general availability yet. Use email delivery.";
+  return "Slack delivery isn’t available. Nothing was saved — use email delivery instead.";
 }
 
 export function isWhatsAppDeliveryCustomerFacing() {
@@ -15,5 +15,5 @@ export function isWhatsAppDeliveryCustomerFacing() {
 }
 
 export function whatsappDeliveryUnavailableMessage() {
-  return "WhatsApp delivery is not available at general availability yet. Use email delivery.";
+  return "WhatsApp delivery isn’t available. Nothing was saved — use email delivery instead.";
 }

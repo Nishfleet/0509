@@ -4,8 +4,9 @@ import {
   redirect,
   useActionData,
   useLoaderData,
+  useRevalidator,
 } from "react-router";
-import { useEffect, useState, type CSSProperties } from "react";
+import type { CSSProperties } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { DashboardPage } from "~/components/dashboard-page";
@@ -540,6 +541,7 @@ export default function AppDashboardRoute() {
   const collections = data.collections ?? [];
   const watchlists = data.watchlists ?? [];
   const digests = data.digests ?? [];
+  const revalidator = useRevalidator();
   const recentEvents = data.recentEvents ?? [];
   const recentProofCaptures = data.recentProofCaptures ?? [];
   const proofUsage = data.proofUsage ?? {
@@ -725,7 +727,9 @@ export default function AppDashboardRoute() {
             headline="Setup status is temporarily unavailable"
             primaryAction={{
               label: "Retry setup status",
-              href: "/app#setup-checklist",
+              // A same-page link never re-runs the loader; a real retry
+              // revalidates the route data (Sol's PR-3 review, item 1).
+              onClick: () => revalidator.revalidate(),
             }}
             specimenLabel="SETUP CHECKS — RETRY REQUIRED"
             stateLabel="SETUP · STATUS UNAVAILABLE"

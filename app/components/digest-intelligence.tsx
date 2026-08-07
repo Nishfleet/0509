@@ -429,67 +429,6 @@ function summarizeProofPacket(items: DigestProofPacketItem[]) {
   };
 }
 
-function summarizeDecision(items: DigestProofPacketItem[]) {
-  const rankedItems = items
-    .map((item, index) => ({
-      item,
-      intelligence: readDigestIntelligence(item.metadata ?? {}),
-      classification: classifyDigestItemSource({
-        watchlistName: item.watchlistName,
-        eventType: item.eventType ?? "ad_new",
-        title: item.title,
-        summary: item.summary ?? "",
-        metadata: item.metadata ?? {},
-        proofStatus: item.proofStatus,
-        createdAt: item.createdAt ?? "",
-      }),
-      index,
-    }))
-    .filter((entry) => isDigestDecisionCandidate(entry.item))
-    .sort((a, b) => {
-      const scoreA = a.intelligence.priorityScore ?? -1;
-      const scoreB = b.intelligence.priorityScore ?? -1;
-      return scoreB - scoreA || a.index - b.index;
-    });
-  const top = rankedItems[0] ?? null;
-
-  if (!top) {
-    return {
-      title: "No action-worthy changes yet",
-      description: "This digest is safe to skim: nothing needs a customer decision right now.",
-      whatChanged: "No competitor movement worth action.",
-      signalSummary: "Silence is useful only because the checks still ran.",
-      evidenceSummary: "No evidence signals attached yet.",
-      urgency: "No action needed",
-      proofStatus: "Evidence unavailable",
-      source: "No source change detected",
-      lastSeen: null,
-      nextAction: "Review digest history only if you need the audit trail.",
-    };
-  }
-
-  const title = top.item.title || "Change detected";
-  const summary = top.item.summary || "Review the full digest for details.";
-  const urgency = top.intelligence.priorityScore === null
-    ? top.intelligence.priorityBand
-    : `${top.intelligence.priorityBand} · ${top.intelligence.priorityScore}/100`;
-
-  return {
-    title: `${top.item.watchlistName || "Competitor"} needs review`,
-    description: "Review the evidence trail and next action before sharing.",
-    whatChanged: title,
-    signalSummary: summary,
-    evidenceSummary:
-      top.classification.status === "verified_proof"
-        ? "Verified evidence attached. Review before sharing."
-        : `Evidence status: ${top.classification.label}. Review before sharing.`,
-    urgency,
-    proofStatus: top.classification.label,
-    source: top.classification.sourceTypeLabel,
-    lastSeen: readDigestDecisionTimestamp(top.item),
-    nextAction: top.intelligence.recommendedAction,
-  };
-}
 
 function readDigestDecisionTimestamp(item: DigestProofPacketItem) {
   return readString(item.metadata?.confirmedAt)
