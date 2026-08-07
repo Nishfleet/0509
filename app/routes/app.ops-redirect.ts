@@ -7,6 +7,13 @@ export function loader() {
   return redirect("/ops", 301);
 }
 
+// A form still open on a pre-deploy /app/ops page must not 405: a 307
+// preserves the method and body, and the /ops action re-authenticates and
+// re-checks the allowlist before any mutation runs.
+export function action() {
+  return redirect("/ops", 307);
+}
+
 export default function AppOpsRedirect() {
   return null;
 }

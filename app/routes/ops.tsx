@@ -1,19 +1,49 @@
 import type { ReactNode } from "react";
-import { Form, useActionData, useLoaderData } from "react-router";
+import { Form, Link, useActionData, useLoaderData } from "react-router";
 import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { LocalTime } from "~/components/local-time";
 import { ProviderObservationTimeField } from "~/components/provider-observation-time";
+import { SignOutButton } from "~/components/sign-out-button";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 export const meta = () => [{ title: "Ops | Five to Nine" }];
 
+/**
+ * Minimal staff shell (tri-audit G4). Ops is standalone — outside the
+ * customer app — so this owns the affordances every state needs: identity
+ * of the surface, a way back to the app, and sign out. All three route
+ * states (page, loading, error) render inside it.
+ */
+function OpsShell({ children }: { children: ReactNode }) {
+  return (
+    <main className="f9-ops-standalone">
+      <header className="f9-ops-standalone-head">
+        <strong>Staff ops</strong>
+        <nav aria-label="Ops">
+          <Link to="/app">Back to the app</Link>
+          <SignOutButton />
+        </nav>
+      </header>
+      {children}
+    </main>
+  );
+}
+
 export function HydrateFallback() {
-  return <DashboardRouteLoading title="Ops" />;
+  return (
+    <OpsShell>
+      <DashboardRouteLoading title="Ops" />
+    </OpsShell>
+  );
 }
 
 export function ErrorBoundary({ error }: { error: unknown }) {
-  return <DashboardRouteError error={error} />;
+  return (
+    <OpsShell>
+      <DashboardRouteError error={error} />
+    </OpsShell>
+  );
 }
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
@@ -375,7 +405,7 @@ export default function OpsRoute() {
   ];
 
   return (
-    <main className="f9-ops-standalone">
+    <OpsShell>
     <DashboardPage>
     <section className="f9-app-stack">
       <DashboardPageHeader
@@ -789,7 +819,7 @@ export default function OpsRoute() {
       </div>
     </section>
     </DashboardPage>
-    </main>
+    </OpsShell>
   );
 }
 

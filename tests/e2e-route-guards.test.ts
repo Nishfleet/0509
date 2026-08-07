@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -86,5 +86,61 @@ describe("/app/ops redirects out of the customer app (G4)", () => {
     const response = loader();
     expect(response.status).toBe(301);
     expect(response.headers.get("Location")).toBe("/ops");
+  });
+});
+
+describe("the bare fixture-id check stays out of product code (G1 gate)", () => {
+  it("no route or component calls isE2ETestSessionId directly", () => {
+    const APP_DIRS = ["routes", "components"].map((dir) =>
+      join(__dirname, "..", "app", dir),
+    );
+    const offenders: string[] = [];
+    const visit = (dir: string) => {
+      for (const entry of readdirSync(dir)) {
+        const full = join(dir, entry);
+        if (statSync(full).isDirectory()) visit(full);
+        else if (/\.(ts|tsx)$/.test(entry) && readFileSync(full, "utf8").includes("isE2ETestSessionId")) {
+          offenders.push(full);
+        }
+      }
+    };
+    for (const dir of APP_DIRS) visit(dir);
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe("behavioral fail-closed proof: e2e routes on a production host", () => {
+  const prodContext = { cloudflare: { env: {} } } as never;
+
+  it("every e2e replay loader refuses a production-host request", async () => {
+    const routes = [
+      "~/routes/api.e2e.j3.replay",
+      "~/routes/api.e2e.j4.replay",
+      "~/routes/api.e2e.billing.replay",
+      "~/routes/api.e2e.j6.support",
+      "~/routes/api.e2e.j6.team",
+      "~/routes/api.e2e.j6.retention",
+      "~/routes/api.e2e.j6.auth",
+    ];
+    for (const path of routes) {
+      const module = (await import(/* @vite-ignore */ path)) as {
+        loader?: (args: unknown) => Promise<unknown>;
+      };
+      if (!module.loader) continue;
+      const request = new Request("https://0509.io/api/e2e/anything");
+      let status: number | null = null;
+      try {
+        const result = (await module.loader({
+          context: prodContext,
+          params: {},
+          request,
+        })) as Response;
+        status = result?.status ?? null;
+      } catch (thrown) {
+        status = thrown instanceof Response ? thrown.status : null;
+      }
+      expect(status, path).not.toBeNull();
+      expect(status ?? 0, path).toBeGreaterThanOrEqual(400);
+    }
   });
 });

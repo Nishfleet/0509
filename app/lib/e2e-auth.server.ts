@@ -117,6 +117,12 @@ export function isE2ETestSessionId(sessionId: string | null | undefined) {
  * harness: a session id that merely LOOKS like a fixture id can never flip
  * customer-facing behavior in production, because production hosts fail the
  * host check and E2E_TEST_MODE is never set there.
+ *
+ * DELIBERATE EXCLUSION: the async database-sentinel path that
+ * isE2ETestRequestEnabled accepts is NOT honored here. This predicate is
+ * synchronous by design, and every supported local-release harness sets
+ * E2E_TEST_MODE=1. A sentinel-only environment therefore takes the real
+ * customer path on these branches — the safe direction to fail.
  */
 export function isE2EFixtureWorkspaceSession(
   env: AppEnv,
