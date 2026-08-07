@@ -32,6 +32,12 @@ Run on production D1 read-only; do not export PII to docs.
 3. First watchlist → first successful proof (`proof_capture` stats).
 4. Free → paid (`user_plan` transitions).
 
+## Funnel measurement status
+
+Specification only: see [docs/funnel-measurement-spec.md](./funnel-measurement-spec.md).
+The funnel remains manual with no automated collection until the rollout gates in that
+spec pass. No event logging or instrumentation is enabled by the spec itself.
+
 ## Canary metrics (private)
 
 - `npm run canary:prod` — JSON report via `CANARY_BYPASS_TOKEN`
