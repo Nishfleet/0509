@@ -955,7 +955,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       validateRemoteRestoreEvidence(
         {
           ...passingRemoteRestoreEvidence(),
-          generatedAt: "2026-07-14T10:00:00.000Z",
+          generatedAt: "2026-07-01T10:00:00.000Z",
         },
         expected,
       ),
@@ -1042,7 +1042,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     });
   });
 
-  it("requires fresh exact restore evidence for migration deploys but permits a seven-day drill for code-only deploys", () => {
+  it("tiers EXACTNESS by migration/restore-critical, and applies one 14-day age bound to both", () => {
     const validateRemoteRestoreEvidence = (
       deployPlanModule as Record<string, unknown>
     ).validateRemoteRestoreEvidence;
@@ -1091,7 +1091,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
     });
     expect(
       validateRemoteRestoreEvidence(
-        { ...codeOnlyEvidence, generatedAt: "2026-07-08T10:00:00.000Z" },
+        { ...codeOnlyEvidence, generatedAt: "2026-07-01T11:59:59.999Z" },
         expected,
       ),
     ).toMatchObject({
@@ -1131,7 +1131,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       validateRemoteRestoreEvidence(
         {
           ...passingRemoteRestoreEvidence(),
-          generatedAt: "2026-07-09T18:00:00.000Z",
+          generatedAt: "2026-07-02T18:00:00.000Z",
         },
         expected,
       ),
@@ -1140,7 +1140,7 @@ writeFileSync(process.env.FAKE_WRANGLER_INVOCATION, JSON.stringify(process.argv.
       validateRemoteRestoreEvidence(
         {
           ...passingRemoteRestoreEvidence(),
-          generatedAt: "2026-07-09T17:59:59.999Z",
+          generatedAt: "2026-07-02T17:59:59.999Z",
         },
         expected,
       ),
