@@ -189,7 +189,7 @@ test.describe("Journey 5 release: plan, checkout, entitlements, billing", () => 
       // or product ids. Assert that honest unavailable state exactly; a
       // checkout form would require an explicit provider-configured proof run.
       await expect(checkoutForm).toHaveCount(0);
-      await expect(starterCard.getByRole("button", { name: "Price unavailable", exact: true })).toBeDisabled();
+      await expect(starterCard.getByRole("button", { name: "Waiting for the live price", exact: true })).toBeDisabled();
       expect(billingSkuForPlanCheckout("starter", "monthly")).toBe("starter_monthly_v1");
       testInfo.annotations.push({
         type: "canonicalSku",
