@@ -527,7 +527,7 @@ export default function BillingRoute() {
                     {planCyclePrice ? (
                       <strong>{planCyclePrice}</strong>
                     ) : planPriceUnavailable ? (
-                      <strong>Price unavailable</strong>
+                      <strong>Price didn’t load — try again shortly</strong>
                     ) : (
                       <PriceLoadingSkeleton />
                     )}
@@ -571,7 +571,7 @@ export default function BillingRoute() {
                     </button>
                   ) : planPriceUnavailable && planCanUseInAppChange ? (
                     <button className="f9-secondary-button" disabled type="button">
-                      Price unavailable
+                      Checkout needs a live price
                     </button>
                   ) : canStartCheckout && checkoutSku ? (
                     <Form action="/api/billing/dodo/checkout" method="post">
@@ -790,7 +790,7 @@ export default function BillingRoute() {
                 {previewPrice ? (
                   <strong>{previewPrice}</strong>
                 ) : bundlePriceUnavailable ? (
-                  <strong>Price unavailable</strong>
+                  <strong>Price didn’t load — try again shortly</strong>
                 ) : (
                   <PriceLoadingSkeleton />
                 )}
@@ -801,7 +801,7 @@ export default function BillingRoute() {
                   </button>
                 ) : bundlePriceUnavailable && isPaid ? (
                   <button className="f9-secondary-button" disabled type="button">
-                    Price unavailable
+                    Checkout needs a live price
                   </button>
                 ) : isPaid && ready ? (
                   <Form action="/api/billing/dodo/checkout" method="post">

@@ -30,6 +30,20 @@ import type { CollectionItemRecord } from "~/lib/types";
  * the page's green mark. Provenance remains explicit in words: captured by
  * Five to Nine, filed by the team, or sample data.
  */
+// The kicker may only say a bare "Captured" when a capture time exists —
+// an item with a capture record but no stored time keeps the ambiguity
+// visible instead of dressing it as a completed capture.
+function savedItemKicker(
+  item: CollectionItemRecord,
+  capturedAt: string | null,
+): string {
+  const status = resolveSavedItemStatus(item.ad.source);
+  if (status === "Captured" && !capturedAt) {
+    return "Captured — time not recorded";
+  }
+  return status;
+}
+
 export function SavedEvidenceItem({
   item,
   collectionName,
@@ -65,7 +79,7 @@ export function SavedEvidenceItem({
         name={formatAdvertiserLabel(item.ad.advertiser)}
         site={`${resolveSavedItemChannel(item.ad)} · ${collectionName}`}
       />
-      <DetailBlock kicker={resolveSavedItemStatus(item.ad.source)}>
+      <DetailBlock kicker={savedItemKicker(item, capturedAt)}>
         {plate.headline ? <h3 className="f9-col-detail-headline">{plate.headline}</h3> : null}
         {item.ad.creativeImageUrl ? (
           <div className="f9-col-detail-thumb">

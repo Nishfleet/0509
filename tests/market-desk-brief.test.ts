@@ -238,3 +238,36 @@ describe("buildMarketDeskBrief", () => {
     });
   });
 });
+
+describe("proof honesty — detected events are provisional", () => {
+  it("never counts detected events as confirmed moves", () => {
+    const brief = buildMarketDeskBrief(baseInput({
+      watchlists: [watchlist({ id: "watch-1", lastScannedAt: "2026-06-20T00:00:00.000Z" })],
+      recentEvents: [
+        event({ id: "event-1", status: "confirmed" }),
+        event({ id: "event-2", status: "detected", confirmedAt: null }),
+        event({ id: "event-3", status: "detected", confirmedAt: null }),
+      ],
+    }));
+
+    expect(brief.title).toBe("1 competitor move to review");
+    const moves = brief.metrics.find((metric) => metric.label === "Moves found");
+    expect(moves?.value).toBe(1);
+  });
+
+  it("states possible changes without claiming a move when nothing is confirmed", () => {
+    const brief = buildMarketDeskBrief(baseInput({
+      watchlists: [watchlist({ id: "watch-1", lastScannedAt: "2026-06-20T00:00:00.000Z" })],
+      recentEvents: [
+        event({ id: "event-1", status: "detected", confirmedAt: null }),
+        event({ id: "event-2", status: "detected", confirmedAt: null }),
+      ],
+    }));
+
+    expect(brief.title).toBe("2 possible changes to check");
+    expect(brief.summary).toContain("have not confirmed");
+    const moves = brief.metrics.find((metric) => metric.label === "Moves found");
+    expect(moves?.value).toBe(0);
+    expect(moves?.detail).toBe("2 possible changes still unproven");
+  });
+});

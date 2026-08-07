@@ -4,6 +4,7 @@ import {
   DiffPlate,
   DIFF_PLATE_DEGRADE_COPY,
   hasCaptureTime,
+  hasOrderedCapturePair,
   type DiffCapture,
 } from "~/components/evidence/diff-plate";
 import { QuietLine, QuietLineList, type QuietLineItem } from "~/components/evidence/quiet-line";
@@ -112,7 +113,7 @@ export function canRenderEventDiffPlate(input: {
     return false;
   }
 
-  return hasCaptureTime(input.before.capturedAt) && hasCaptureTime(input.now.capturedAt);
+  return hasOrderedCapturePair(input.before.capturedAt, input.now.capturedAt);
 }
 
 /**
@@ -223,6 +224,13 @@ export function formatPlateVerification(input: {
       input.intelligence.proofTrail ||
       `${formatImportanceBandLabel(input.event.importanceScore)} · ${formatWatchEventStatusLabel(input.event.status).toUpperCase()}`
     );
+  }
+
+  // "VERIFIED" is the strongest word in the product. It is earned only by a
+  // confirmed event whose proof capture succeeded — stored confidence values
+  // are a measurement and render as their own fact, never as verification.
+  if (input.event.status !== "confirmed" || input.proofCapture.status !== "succeeded") {
+    return `${formatConfidenceBandLabel(input.proofCapture.fieldConfidence)} · ${formatWatchEventStatusLabel(input.event.status).toUpperCase()}`;
   }
 
   return `${formatConfidenceBandLabel(input.proofCapture.fieldConfidence)} · VERIFIED`;
@@ -410,7 +418,19 @@ export function EventChangesSection(props: {
         )
       ) : (
         <div className="f9-ed-change-feed">
-          {data.events.map((event) => {
+          {/* Suppressed and invalidated events are audit records, not
+              findings — they never sit above a verified change no matter how
+              new they are. Recency is preserved within each group. */}
+          {[...data.events]
+            .map((event, index) => ({ event, index }))
+            .sort((left, right) => {
+              const leftAudit =
+                left.event.status === "suppressed" || left.event.status === "invalidated" ? 1 : 0;
+              const rightAudit =
+                right.event.status === "suppressed" || right.event.status === "invalidated" ? 1 : 0;
+              return leftAudit - rightAudit || left.index - right.index;
+            })
+            .map(({ event }) => {
             const proofCapture = event.proofCaptureId
               ? proofCapturesById.get(event.proofCaptureId) ?? null
               : null;

@@ -118,6 +118,13 @@ describe("app rebuild", () => {
     expect(dashboardRoute).toContain("Overnight");
     expect(dashboardRoute).toContain("What changed");
     expect(dashboardRoute).toContain("Still running");
+    // Proof honesty: only a confirmed event may lead the Overnight sentence
+    // or carry the green mark, and a What-changed row may only say "Caught"
+    // for a confirmed event — provisional events render "Needs review".
+    expect(dashboardRoute).toContain("confirmedRecentEvents");
+    expect(dashboardRoute).toContain("firstChangeMark(confirmedRecentEvents)");
+    expect(dashboardRoute).toContain('"Needs review"');
+    expect(dashboardRoute).not.toContain('status="Caught"');
     expect(dashboardRoute).toContain("Competitor website");
     expect(dashboardRoute).toContain("f9-overview-search");
     expect(dashboardRoute).not.toContain("f9-overview-stat-band");

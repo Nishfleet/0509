@@ -81,7 +81,13 @@ describe("digests customer presentation", () => {
 
 		expect(markup).toContain("AI summary of the week");
 		expect(markup).toContain("Competitors leaned into creator-led proof this week.");
-		expect(markup).toContain("AI summary · checked against the filed changes");
+		// The machine's reading is framed as derived and sits BELOW the evidence
+		// it reads — never above the changes with a verification-shaped label.
+		expect(markup).toContain("AI summary · a reading of the changes above");
+		expect(markup).not.toContain("checked against the filed changes");
+		const summaryAt = markup.indexOf("AI summary · a reading of the changes above");
+		const checkedSectionAt = markup.indexOf("What we checked");
+		expect(summaryAt).toBeGreaterThan(checkedSectionAt);
 	});
 
 	it.each([

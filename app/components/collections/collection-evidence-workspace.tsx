@@ -148,8 +148,14 @@ export function CollectionEvidenceWorkspace({
 function savedItemTime(item: CollectionItemRecord) {
   const capturedAt = resolveSavedItemCapturedAt(item);
   if (capturedAt) return <LocalTime iso={capturedAt} mode="date" />;
-  if (resolveSavedItemSourceKind(item.ad.source) === "filed") {
+  const kind = resolveSavedItemSourceKind(item.ad.source);
+  if (kind === "filed") {
     return formatRecordedObservationDate(item.ad.firstSeenAt) ?? "Date not recorded";
   }
-  return "—";
+  if (kind === "sample") {
+    return "Sample";
+  }
+  // A captured item with no stored capture time is the most ambiguous case
+  // in the list; a bare dash reads as decoration, not as a missing value.
+  return "Capture time not recorded";
 }

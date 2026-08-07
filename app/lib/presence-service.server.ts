@@ -361,9 +361,32 @@ export async function getPresenceWorkspaceSnapshot(env: AppEnv, userId: string) 
   const enriched = await Promise.all(
     entities.map(async (entity) => {
       const sources = await listSourceTargetsForEntity(env, userId, entity.id);
+      const pollable = sources.filter((source) =>
+        connectorHasCustomerPollPath(source.connectorId),
+      );
+      // The list row must show CHECK time, not record-mutation time — an
+      // entity edited yesterday but never successfully polled has no
+      // freshness to claim.
+      const cursors = await Promise.all(
+        pollable.map((source) => getPollCursor(env, source.id)),
+      );
+      const lastPollAt = cursors.reduce<string | null>((latest, cursor) => {
+        const at = cursor?.lastSuccessAt ?? null;
+        if (!at) return latest;
+        return !latest || at > latest ? at : latest;
+      }, null);
+      const lastPollFailed = cursors.some(
+        (cursor) =>
+          Boolean(cursor?.lastPolledAt) &&
+          (Boolean(cursor?.lastErrorCode) ||
+            !cursor?.lastSuccessAt ||
+            (cursor.lastPolledAt as string) > (cursor.lastSuccessAt as string)),
+      );
       return {
         entity,
-        sources: sources.filter((source) => connectorHasCustomerPollPath(source.connectorId)),
+        sources: pollable,
+        lastPollAt,
+        lastPollFailed,
       };
     }),
   );

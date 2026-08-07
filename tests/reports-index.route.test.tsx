@@ -42,6 +42,17 @@ describe("reports index", () => {
         targetLabel: "nykaa.com",
         isActive: true,
         updatedAt: "2026-07-16T08:00:00.000Z",
+        lastScannedAt: "2026-07-16T06:00:00.000Z",
+      },
+      {
+        id: "watch-2",
+        name: "Never Scanned Co",
+        targetLabel: "neverscanned.com",
+        isActive: true,
+        // A record rename must never outrank real evidence time, and a
+        // never-checked watchlist must not claim a time at all.
+        updatedAt: "2026-07-18T08:00:00.000Z",
+        lastScannedAt: null,
       },
     ]);
 
@@ -68,11 +79,22 @@ describe("reports index", () => {
           id: "watchlist:watch-1",
           href: "/app/reports/watchlist%3Awatch-1",
           title: "Nykaa",
+          timeLabel: "Checked",
+          timeAt: "2026-07-16T06:00:00.000Z",
         },
         {
           id: "collection:collection-1",
           href: "/app/reports/collection%3Acollection-1",
           title: "Offer tests",
+          timeLabel: "Edited",
+          timeAt: "2026-07-15T08:00:00.000Z",
+        },
+        {
+          id: "watchlist:watch-2",
+          title: "Never Scanned Co",
+          description: "No check has run yet · neverscanned.com",
+          timeLabel: null,
+          timeAt: null,
         },
       ],
     });
@@ -108,7 +130,8 @@ describe("reports index", () => {
           typeLabel: "Collection report",
           title: "Offer tests",
           description: "Claims worth reviewing",
-          updatedAt: "2026-07-15T08:00:00.000Z",
+          timeLabel: "Edited",
+          timeAt: "2026-07-15T08:00:00.000Z",
         },
       ],
     });

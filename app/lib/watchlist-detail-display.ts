@@ -198,6 +198,7 @@ export interface CompetitorDeliveryLine {
  */
 export function buildCompetitorDeliveryLines(input: {
   emailEnabled: boolean;
+  canEmailDelivery: boolean;
   instantEnabled: boolean;
   digestEnabled: boolean;
   quietHours: { startHour: number; endHour: number } | null;
@@ -208,7 +209,14 @@ export function buildCompetitorDeliveryLines(input: {
   const lines: CompetitorDeliveryLine[] = [
     {
       key: "Email",
-      value: input.emailEnabled ? "On" : "Off",
+      // The rail must tell the same truth as the Delivery tab: a stored
+      // email target does not mean email is going out when the plan has no
+      // email delivery entitlement.
+      value: !input.canEmailDelivery
+        ? "Off — requires Scout"
+        : input.emailEnabled
+          ? "On"
+          : "Off",
     },
     {
       key: "Instant alerts",
