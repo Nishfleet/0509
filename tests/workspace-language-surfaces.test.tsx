@@ -581,7 +581,7 @@ describe("the rail", () => {
     for (const item of [...DASHBOARD_PRIMARY_NAV, ...DASHBOARD_SETTINGS_NAV].flatMap(
       (section) => section.items,
     )) {
-      if (item.requiresPresence || item.requiresOps) continue;
+      if (item.requiresPresence) continue;
       expect(markup).toContain(`href="${item.to}"`);
     }
   });

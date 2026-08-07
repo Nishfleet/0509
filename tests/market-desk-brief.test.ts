@@ -271,3 +271,28 @@ describe("proof honesty — detected events are provisional", () => {
     expect(moves?.detail).toBe("2 possible changes still unproven");
   });
 });
+
+describe("quiet is a proof claim (remediation)", () => {
+  it("proof_pending events read as possible changes, never as a quiet check", () => {
+    const brief = buildMarketDeskBrief(baseInput({
+      watchlists: [watchlist({ id: "watch-1", lastScannedAt: "2026-06-20T00:00:00.000Z" })],
+      recentEvents: [event({ id: "event-1", status: "proof_pending", confirmedAt: null })],
+      overnightStats: { runs: 2, watchlistsChecked: 1, adsSeen: 12 },
+    }));
+
+    expect(brief.title).toBe("1 possible change to check");
+    expect(brief.state).not.toBe("quiet");
+  });
+
+  it("a failed check can never produce a quiet brief", () => {
+    const brief = buildMarketDeskBrief(baseInput({
+      watchlists: [watchlist({ id: "watch-1", lastScannedAt: "2026-06-20T00:00:00.000Z" })],
+      recentEvents: [event({ id: "event-1", status: "proof_failed", confirmedAt: null })],
+      overnightStats: { runs: 2, watchlistsChecked: 1, adsSeen: 12 },
+    }));
+
+    expect(brief.title).toBe("1 check failed");
+    expect(brief.state).toBe("queued");
+    expect(brief.summary).toContain("cannot be called quiet");
+  });
+});

@@ -188,12 +188,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         showPresenceNav: await (
           await import("~/lib/presence-internal-access.server")
         ).presenceNavVisible(env, workspaceUserId!),
-        showOpsNav: (await import("~/lib/env.server")).isOpsUserAllowed(
-          env,
-          session.user.email,
-        ),
       }
-    : { showPresenceNav: false, showOpsNav: false };
+    : { showPresenceNav: false };
   const url = new URL(request.url);
   const visitorCountry = defaultCountryForVisitor(
     cloudflare?.country ??
@@ -1385,7 +1381,6 @@ export default function SearchRoute() {
       accountTitle="Five to Nine"
       isPublic={!rootData.session}
       pageClassName="f9-search-page"
-      showOpsNav={data.showOpsNav}
       showPresenceNav={data.showPresenceNav}
       userEmail={rootData.session?.user.email}
       userName={rootData.session?.user.name}

@@ -626,7 +626,7 @@ export default function AppDashboardRoute() {
   const overnight = buildOvernightSentence({
     briefTitle: marketDeskBrief.title,
     briefSummary: marketDeskBrief.summary,
-    changeCount: visibleRecentEvents.length,
+    changeCount: confirmedRecentEvents.length,
     headline: confirmedRecentEvents[0]?.title ?? null,
     mark: firstChangeMark(confirmedRecentEvents)?.mark ?? null,
     quietCompetitors: Math.max(0, activeWatchlists - changedWatchlistCount),
@@ -634,7 +634,7 @@ export default function AppDashboardRoute() {
   // The evidence card carries what the token mark cannot: long landing-page
   // values and the stored before/after screenshot pair, each in its own
   // honest proof state.
-  const landingEvidence = firstLandingPageEvidence(visibleRecentEvents);
+  const landingEvidence = firstLandingPageEvidence(confirmedRecentEvents);
 
   return (
     <DashboardPage className="f9-wk-page f9-overview">

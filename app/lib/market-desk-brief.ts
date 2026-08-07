@@ -67,7 +67,10 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
   // detected events are provisional signals that invite review but must not
   // enter the confirmed count or drive the daily action as if proven.
   const confirmedChanges = recentEvents.filter((event) => event.status === "confirmed");
-  const provisionalChanges = recentEvents.filter((event) => event.status === "detected");
+  const provisionalChanges = recentEvents.filter(
+    (event) => event.status === "detected" || event.status === "proof_pending",
+  );
+  const failedChecks = recentEvents.filter((event) => event.status === "proof_failed");
   const sentDigests = (input.digests ?? []).filter((digest) => digest.delivery?.status === "sent").length;
   const overnightRuns = Math.max(0, Math.floor(input.overnightStats?.runs ?? 0));
   const overnightWatchlists = Math.max(0, Math.floor(input.overnightStats?.watchlistsChecked ?? 0));
@@ -173,6 +176,26 @@ export function buildMarketDeskBrief(input: MarketDeskBriefInput): MarketDeskBri
       action: { href: "/app/watchlists", label: "Check the signals" },
       metrics,
       items: provisionalChanges.slice(0, 3).map((event) => ({
+        label: event.eventType.replaceAll("_", " "),
+        title: event.title,
+        detail: event.summary,
+      })),
+      hasMetrics,
+    };
+  }
+
+  // A failed check can never fall through to a quiet claim: quiet is a
+  // proof statement, and a failed check is missing exactly that proof.
+  if (failedChecks.length > 0) {
+    const count = failedChecks.length;
+    return {
+      state: "queued",
+      kicker: "Brief",
+      title: `${count} check${count === 1 ? "" : "s"} failed`,
+      summary: "A recent check could not finish, so this period cannot be called quiet. We retry automatically; open the trail to see what failed.",
+      action: { href: "/app/watchlists", label: "See what failed" },
+      metrics,
+      items: failedChecks.slice(0, 3).map((event) => ({
         label: event.eventType.replaceAll("_", " "),
         title: event.title,
         detail: event.summary,

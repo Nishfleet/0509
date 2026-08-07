@@ -29,7 +29,7 @@ export function buildOvernightSentence(input: {
   briefTitle: string;
   /** `buildMarketDeskBrief(...).summary` — already honest per state. */
   briefSummary: string;
-  /** Confirmed/detected changes in the recent feed. */
+  /** CONFIRMED changes in the recent feed — provisional signals never count here. */
   changeCount: number;
   /** Title of the newest change, when there is one. */
   headline: string | null;

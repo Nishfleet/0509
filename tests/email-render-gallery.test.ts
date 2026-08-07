@@ -466,7 +466,7 @@ describe("email render gallery", () => {
       ],
     });
     record("operator-alert", "Operator alert (internal)", false, "Customer-at-risk signals — Five to Nine", html, null);
-    expect(html).toContain("app/ops");
+    expect(html).toContain("0509.io/ops");
   });
 
   it("presence digest", () => {
