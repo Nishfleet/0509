@@ -15,6 +15,7 @@ import {
   formatEventChangeWhy,
   formatEventDeliveryLine,
   formatPlateVerification,
+  EVENT_CHANGE_UNVERIFIED_COPY,
   formatQuietCheckCopy,
   hasStoredDiffFieldValues,
   resolveEventChangeQuietCopy,
@@ -428,13 +429,93 @@ describe("the shared two-timestamp gate (T11)", () => {
     ).toBe(false);
   });
 
-  it("accepts a correctly ordered pair", () => {
+  it("accepts a correctly ordered pair when the capture succeeded", () => {
     expect(
       canRenderEventDiffPlate({
         event: offerEvent,
+        proofCapture: { ...captures[0], status: "succeeded" },
         before: { value: "₹999", capturedAt: "2026-07-14T10:00:00.000Z" },
         now: { value: "₹799", capturedAt: "2026-07-15T10:00:00.000Z" },
       }),
     ).toBe(true);
+  });
+});
+
+describe("the render contract is the plate gate (T16 wired)", () => {
+  const orderedPair = {
+    before: { value: "₹999", capturedAt: "2026-07-14T10:00:00.000Z" },
+    now: { value: "₹799", capturedAt: "2026-07-15T10:00:00.000Z" },
+  };
+  const succeededCapture = { ...captures[0], status: "succeeded" as const };
+
+  it("a suppressed event with perfect stored fields and timestamps never renders a diff plate", () => {
+    expect(
+      canRenderEventDiffPlate({
+        event: suppressedEvent,
+        proofCapture: succeededCapture,
+        ...orderedPair,
+      }),
+    ).toBe(false);
+  });
+
+  it("a detected event never renders a diff plate regardless of stored evidence", () => {
+    expect(
+      canRenderEventDiffPlate({
+        event: { ...offerEvent, status: "detected", confirmedAt: null },
+        proofCapture: succeededCapture,
+        ...orderedPair,
+      }),
+    ).toBe(false);
+  });
+
+  it("a confirmed event without a succeeded capture never renders a diff plate", () => {
+    expect(
+      canRenderEventDiffPlate({
+        event: offerEvent,
+        proofCapture: { ...captures[0], status: "failed" as const },
+        ...orderedPair,
+      }),
+    ).toBe(false);
+    expect(
+      canRenderEventDiffPlate({ event: offerEvent, proofCapture: null, ...orderedPair }),
+    ).toBe(false);
+  });
+
+  it("confirmed + succeeded capture + ordered pair renders", () => {
+    expect(
+      canRenderEventDiffPlate({
+        event: offerEvent,
+        proofCapture: succeededCapture,
+        ...orderedPair,
+      }),
+    ).toBe(true);
+  });
+
+  it("verification wording cannot leak any casing of verified for unverified evidence", () => {
+    const intelligence = buildChangeIntelligenceSummary(offerEvent, "UTC");
+    const pendingEvent = { ...offerEvent, status: "proof_pending" as const, confirmedAt: null };
+    const emptyConfidenceFailedCapture = {
+      ...captures[0],
+      status: "failed" as const,
+      fieldConfidence: {},
+    };
+    for (const [event, capture] of [
+      [pendingEvent, succeededCapture],
+      [offerEvent, emptyConfidenceFailedCapture],
+      [pendingEvent, emptyConfidenceFailedCapture],
+    ] as const) {
+      const label = formatPlateVerification({ event, proofCapture: capture, intelligence });
+      expect(label).not.toMatch(/verified/i);
+    }
+  });
+
+  it("unverified-but-complete evidence gets the honest recorded-not-verified line", () => {
+    expect(
+      resolveEventChangeQuietCopy({
+        event: { ...offerEvent, status: "detected", confirmedAt: null },
+        hasStoredDiffFields: true,
+        hasBothCaptureTimes: true,
+      }),
+    ).toBe(EVENT_CHANGE_UNVERIFIED_COPY);
   });
 });

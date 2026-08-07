@@ -328,6 +328,51 @@ export async function getPollCursor(env: AppEnv, sourceTargetId: string) {
   } satisfies PresencePollCursorRecord;
 }
 
+/**
+ * Batch cursor read for workspace-wide views. One query for any number of
+ * targets — the per-target `getPollCursor` in a loop cost up to 240+ D1
+ * reads on an Agency workspace snapshot.
+ */
+const POLL_CURSOR_CHUNK_SIZE = 90;
+
+export async function listPollCursorsForTargets(
+  env: AppEnv,
+  sourceTargetIds: readonly string[],
+): Promise<PresencePollCursorRecord[]> {
+  if (sourceTargetIds.length === 0) return [];
+  const db = requireDb(env);
+  // D1 caps bound parameters per statement; chunk so Agency-scale
+  // workspaces (hundreds of targets) stay a handful of queries, never a
+  // runtime error and never an N+1.
+  const chunks: string[][] = [];
+  for (let i = 0; i < sourceTargetIds.length; i += POLL_CURSOR_CHUNK_SIZE) {
+    chunks.push([...sourceTargetIds.slice(i, i + POLL_CURSOR_CHUNK_SIZE)]);
+  }
+  const chunkRows = await Promise.all(
+    chunks.map(async (chunk) => {
+      const placeholders = chunk.map(() => "?").join(", ");
+      const rows = await db
+        .prepare(
+          `SELECT * FROM presence_poll_cursor WHERE source_target_id IN (${placeholders})`,
+        )
+        .bind(...chunk)
+        .all<Record<string, unknown>>();
+      return rows.results ?? [];
+    }),
+  );
+  return chunkRows.flat().map((row) => ({
+    sourceTargetId: String(row.source_target_id),
+    cursor: parseJsonObject(row.cursor_json ? String(row.cursor_json) : null),
+    etag: row.etag ? String(row.etag) : null,
+    lastModified: row.last_modified ? String(row.last_modified) : null,
+    lastPolledAt: row.last_polled_at ? String(row.last_polled_at) : null,
+    lastSuccessAt: row.last_success_at ? String(row.last_success_at) : null,
+    lastErrorCode: row.last_error_code ? String(row.last_error_code) : null,
+    lastErrorMessage: row.last_error_message ? String(row.last_error_message) : null,
+    updatedAt: String(row.updated_at),
+  } satisfies PresencePollCursorRecord));
+}
+
 export async function upsertPollCursor(
   env: AppEnv,
   sourceTargetId: string,

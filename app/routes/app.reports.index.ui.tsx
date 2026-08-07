@@ -68,7 +68,7 @@ export function ReportsIndexRoute() {
         context={
           sourceCount === 0
             ? "Reports are built from the collections and competitors you already keep."
-            : `${sourceCount} report ${sourceCount === 1 ? "source" : "sources"} on file. Each report shows exactly the captures it has — nothing more is claimed here.`
+            : `${sourceCount} report ${sourceCount === 1 ? "source" : "sources"} on file. Open one to see the captures behind it.`
         }
         title="Reports"
       />

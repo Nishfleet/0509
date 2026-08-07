@@ -150,3 +150,30 @@ describe("the Briefs announcement green", () => {
     expect(body.querySelectorAll(".f9-wk-brief-announcement")).toHaveLength(0);
   });
 });
+
+describe("only decision candidates may own proof shapes (remediation)", () => {
+  it("a pending item with a complete pair renders no diff, no announcement, and an honest headline", () => {
+    const base = item(
+      "pending",
+      "2026-07-26T04:00:00.000Z",
+      "2026-07-27T04:00:00.000Z",
+      "₹999",
+      "₹799",
+    );
+    const pending = {
+      ...base,
+      metadata: {
+        ...base.metadata,
+        proofCaptureId: undefined,
+        status: "proof_pending",
+      },
+    } as unknown as Parameters<typeof render>[0][number];
+    const body = render([pending]);
+
+    expect(body.querySelectorAll(greenSelector)).toHaveLength(0);
+    expect(body.querySelector(".f9-wk-brief-announcement")).toBeNull();
+    expect(body.querySelectorAll(".f9-wk-brief-change")).toHaveLength(0);
+    expect(body.textContent).not.toContain("Nothing changed in this window");
+    expect(body.textContent).toContain("No verified finding this window");
+  });
+});

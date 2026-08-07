@@ -348,12 +348,16 @@ export function resolveReportPlateContent(row: ReportRow) {
   // exactly what was verified and what is missing.
   const plateHasVisibleCapture =
     Boolean(row.previewImageUrl) || captureLines.length > 0;
+  // "Verified evidence" as a bare stamp requires something the reader can
+  // open and inspect — a stored screenshot. Capture text alone keeps the
+  // verification but says what is and is not stored, in plain words.
+  const plateHasInspectableCapture = Boolean(row.previewImageUrl);
   const rawVerification = row.event
     ? legacyReportLabelText(row.event.proofStatusLabel)
     : "Saved evidence";
   const verification =
-    row.event && !plateHasVisibleCapture && /verified/i.test(rawVerification)
-      ? "Verified from stored page capture — no creative stored for this frame"
+    row.event && !plateHasInspectableCapture && /verified/i.test(rawVerification)
+      ? "We verified this change from the stored page capture. No screenshot is stored to show here."
       : rawVerification;
 
   return {
