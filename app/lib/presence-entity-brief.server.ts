@@ -277,8 +277,42 @@ export function buildPresenceEntityBrief(input: BuildPresenceEntityBriefInput): 
         ? `${unpolledSources.length} website source target${unpolledSources.length === 1 ? "" : "s"} for ${input.entity.label} still need a first check.`
         : `Website sources are configured for ${input.entity.label}. Run a check to fetch the latest public content.`,
       proofStrength: "Awaiting first poll",
-      sourceConfidence: sourceConfidenceFromCoverage(scopedCoverage),
+      // Coverage-derived confidence would claim "High — verified feed"
+      // before anything has ever been checked. Confidence is earned by a
+      // successful check, not by configuration.
+      sourceConfidence: "Not checked yet — first check pending",
       nextAction: { label: "Check website source now" },
+      recentChanges: [],
+      sourceCoverage: scopedCoverage,
+      lastPollAt,
+      lastChangeAt,
+    };
+  }
+
+  // A failed or never-successful latest poll can never produce a quiet
+  // claim. Without this branch, an entity whose checks have been failing
+  // falls through to "All quiet" with full source confidence — an unproven
+  // claim rendered as proven.
+  const failingSources = scopedSources.filter((source) => {
+    const cursor = cursorByTarget.get(source.id);
+    if (!cursor?.lastPolledAt) return false;
+    if (cursor.lastErrorCode) return true;
+    if (!cursor.lastSuccessAt) return true;
+    return cursor.lastPolledAt > cursor.lastSuccessAt;
+  });
+  if (failingSources.length > 0 && recentChanges.length === 0 && latestPollChangeCount === 0) {
+    const lastSuccessAt = latestTimestamp(
+      scopedSources.map((source) => cursorByTarget.get(source.id)?.lastSuccessAt ?? null),
+    );
+    return {
+      state: "degraded",
+      headline: "Latest website check failed",
+      summary: lastSuccessAt
+        ? "The most recent check could not read this entity's website. Nothing here is newer than the last successful check."
+        : "No check has succeeded for this entity's website yet, so there is no proof-backed content to show.",
+      proofStrength: lastSuccessAt ? "Stale — last check failed" : "No successful check yet",
+      sourceConfidence: "Low — latest check failed",
+      nextAction: { label: "Retry source check" },
       recentChanges: [],
       sourceCoverage: scopedCoverage,
       lastPollAt,

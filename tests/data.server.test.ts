@@ -2599,6 +2599,11 @@ describe("workspace recent watch events", () => {
     expect(mock.statements[0]?.sql).toContain("JOIN watchlist");
     expect(mock.statements[0]?.sql).toContain("watchlist.user_id = ?");
     expect(mock.statements[0]?.sql).toContain("watchlist.is_active = 1");
+    // The Overview decision feed must never surface suppressed or
+    // invalidated events — they belong in the per-competitor audit trail.
+    expect(mock.statements[0]?.sql).toContain(
+      "watch_event.status NOT IN ('suppressed', 'invalidated')",
+    );
     expect(mock.statements[0]?.sql).toContain("ORDER BY watch_event.created_at DESC");
     expect(mock.statements[0]?.sql).toContain("LIMIT ?");
     expect(mock.statements[0]?.bindings).toEqual(["workspace-1", 8]);

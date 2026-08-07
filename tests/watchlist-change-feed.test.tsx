@@ -416,3 +416,25 @@ describe("EventChangesSection", () => {
     expect(markup).not.toContain(DIFF_PLATE_DEGRADE_COPY);
   });
 });
+
+describe("the shared two-timestamp gate (T11)", () => {
+  it("refuses a watchlist diff whose before capture is newer than its now", () => {
+    expect(
+      canRenderEventDiffPlate({
+        event: offerEvent,
+        before: { value: "₹999", capturedAt: "2026-07-15T10:00:00.000Z" },
+        now: { value: "₹799", capturedAt: "2026-07-14T10:00:00.000Z" },
+      }),
+    ).toBe(false);
+  });
+
+  it("accepts a correctly ordered pair", () => {
+    expect(
+      canRenderEventDiffPlate({
+        event: offerEvent,
+        before: { value: "₹999", capturedAt: "2026-07-14T10:00:00.000Z" },
+        now: { value: "₹799", capturedAt: "2026-07-15T10:00:00.000Z" },
+      }),
+    ).toBe(true);
+  });
+});

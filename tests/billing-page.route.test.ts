@@ -1485,7 +1485,8 @@ describe("billing page", () => {
 
     expect(markup).toContain("$19");
     expect(markup).toContain("$25");
-    expect(markup.match(/Price unavailable/g)?.length ?? 0).toBeGreaterThanOrEqual(4);
+    expect(markup.match(/Price didn’t load — try again shortly/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+    expect(markup).not.toContain("Price unavailable");
     expect(markup).not.toContain("f9-skeleton-price");
     expect(markup).not.toContain("Loading price");
     expect(markup).not.toContain('aria-busy="true"');
@@ -1505,7 +1506,8 @@ describe("billing page", () => {
     const markup = renderToStaticMarkup(createElement(BillingRoute));
 
     expect(markup.match(/Prices are temporarily unavailable — try again shortly/g)).toHaveLength(1);
-    expect(markup).toContain("Price unavailable");
+    expect(markup).toContain("Price didn’t load — try again shortly");
+    expect(markup).not.toContain("Price unavailable");
     expect(markup).not.toContain("f9-skeleton-price");
     expect(markup).not.toContain("Loading price");
     expect(markup).not.toContain('aria-busy="true"');

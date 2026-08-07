@@ -42,6 +42,21 @@ export function hasCaptureTime(iso: string | null | undefined): boolean {
   return !Number.isNaN(new Date(iso).getTime());
 }
 
+/**
+ * THE two-timestamp gate, shared by every diff surface. A before/after may
+ * only render when both capture times exist, parse, and are correctly
+ * ordered — a "before" newer than its "now" is corrupt evidence, not a
+ * comparison. The digest enforced ordering from day one; the watchlist gate
+ * did not, so the two surfaces could disagree about the same event.
+ */
+export function hasOrderedCapturePair(
+  beforeAt: string | null | undefined,
+  nowAt: string | null | undefined,
+): boolean {
+  if (!hasCaptureTime(beforeAt) || !hasCaptureTime(nowAt)) return false;
+  return Date.parse(beforeAt as string) < Date.parse(nowAt as string);
+}
+
 function Pane({
   capture,
   label,

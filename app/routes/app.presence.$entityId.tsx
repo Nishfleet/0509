@@ -233,17 +233,24 @@ export default function PresenceEntityRoute() {
               <p>{safeBrief.nextAction.label}</p>
             </div>
           </div>
-          {safeBrief.lastPollAt ? (
-            <p className="f9-muted-copy">
-              Last check <LocalTime iso={safeBrief.lastPollAt} />
-              {safeBrief.lastChangeAt ? (
-                <>
-                  {" "}
-                  · Last change <LocalTime iso={safeBrief.lastChangeAt} />
-                </>
-              ) : null}
-            </p>
-          ) : null}
+          {/* The check-time line always renders: confidence claims without a
+              visible check time are exactly how an unproven claim reads as
+              proven. "Never checked" is a fact the customer must see. */}
+          <p className="f9-muted-copy">
+            {safeBrief.lastPollAt ? (
+              <>
+                Last check <LocalTime iso={safeBrief.lastPollAt} />
+                {safeBrief.lastChangeAt ? (
+                  <>
+                    {" "}
+                    · Last change <LocalTime iso={safeBrief.lastChangeAt} />
+                  </>
+                ) : null}
+              </>
+            ) : (
+              "No check has run yet — nothing above is verified against the live site."
+            )}
+          </p>
           {safeBrief.recentChanges.length > 0 ? (
             <div className="f9-work-list is-compact">
               {safeBrief.recentChanges.map((change) => (
