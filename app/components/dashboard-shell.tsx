@@ -5,11 +5,9 @@ import { SignOutButton } from "~/components/sign-out-button";
 import { navIconFor } from "~/components/icons";
 import {
   DASHBOARD_PRIMARY_NAV,
-  DASHBOARD_SETTINGS_NAV,
   PUBLIC_SEARCH_NAV,
   buildDashboardMobileNav,
   filterDashboardNav,
-  isSettingsNavPath,
   type DashboardNavItem,
 } from "~/lib/dashboard-navigation";
 
@@ -49,10 +47,21 @@ function navLinkClassName({ isActive, isPending }: { isActive: boolean; isPendin
  * green belongs to the work.
  */
 function WorkspaceNavLink({ item }: { item: DashboardNavItem }) {
+  const location = useLocation();
+  // A destination owns its member pages: Settings is the active row on
+  // /app/billing, Deliver on /app/digests — the customer is never nowhere.
+  const memberActive = Boolean(
+    item.activePaths?.some(
+      (path) => location.pathname === path || location.pathname.startsWith(`${path}/`),
+    ),
+  );
   return (
     <NavLink
       className={(state) => {
-        const base = navLinkClassName(state);
+        const base = navLinkClassName({
+          ...state,
+          isActive: state.isActive || memberActive,
+        });
         return ["f9-dash-nav-link", "f9-wk-nav-a", base].filter(Boolean).join(" ");
       }}
       end={item.end}
@@ -88,9 +97,6 @@ export function DashboardShell({
   const primary = filterDashboardNav(DASHBOARD_PRIMARY_NAV, {
     showPresence: showPresenceNav,
   });
-  const settings = filterDashboardNav(DASHBOARD_SETTINGS_NAV, {
-    showPresence: showPresenceNav,
-  });
   const mobileNav = isPublic
     ? []
     : buildDashboardMobileNav({ showPresence: showPresenceNav });
@@ -101,12 +107,6 @@ export function DashboardShell({
   const mainRef = useRef<HTMLDivElement>(null);
   const mobilePrimaryRef = useRef<HTMLElement>(null);
   const [routeAnnouncement, setRouteAnnouncement] = useState("");
-  // The disclosure starts open when the customer is standing inside it, so a
-  // deep link into a settings route never hides its own active row.
-  const [settingsOpen, setSettingsOpen] = useState(() => isSettingsNavPath(location.pathname));
-  useEffect(() => {
-    if (isSettingsNavPath(location.pathname)) setSettingsOpen(true);
-  }, [location.pathname]);
   useEffect(() => {
     if (previousPathnameRef.current === location.pathname) return;
     previousPathnameRef.current = location.pathname;
@@ -229,28 +229,6 @@ export function DashboardShell({
                   </nav>
                 </div>
               ))}
-
-              {settings.length > 0 ? (
-                <div className="f9-dash-nav-group f9-wk-more-group">
-                  <button
-                    aria-controls="f9-wk-settings-nav"
-                    aria-expanded={settingsOpen}
-                    className="f9-wk-more"
-                    onClick={() => setSettingsOpen((open) => !open)}
-                    type="button"
-                  >
-                    Workspace &amp; account
-                    <span aria-hidden="true" className="f9-wk-caret">
-                      {settingsOpen ? "▴" : "▾"}
-                    </span>
-                  </button>
-                  <nav aria-label="Workspace and account" hidden={!settingsOpen} id="f9-wk-settings-nav">
-                    {settings.flatMap((section) =>
-                      section.items.map((item) => <WorkspaceNavLink item={item} key={item.to} />),
-                    )}
-                  </nav>
-                </div>
-              ) : null}
 
             </div>
 

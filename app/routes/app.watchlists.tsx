@@ -151,7 +151,7 @@ export function resolveWatchlistTriageRecord(input: {
   };
 }
 
-export const meta = () => [{ title: "Competitors | Five to Nine" }];
+export const meta = () => [{ title: "Watch | Five to Nine" }];
 
 function resolveSafeShareLink(message: unknown): { href: string; label: string } | null {
   if (typeof message !== "string") return null;
@@ -180,7 +180,7 @@ function resolveSafeShareLink(message: unknown): { href: string; label: string }
 }
 
 export function HydrateFallback() {
-  return <DashboardRouteLoading title="Competitors" />;
+  return <DashboardRouteLoading title="Watch" />;
 }
 
 export function ErrorBoundary({ error }: { error: unknown }) {
@@ -531,7 +531,7 @@ export default function WatchlistsRoute() {
             formatCompetitorContextLine({ rows, windowDays: captureWindow.windowDays })
           )
         }
-        title={selectedWatchlist?.name ?? "Competitors"}
+        title={selectedWatchlist?.name ?? "Watch"}
       />
 
       {data.captureWindowDegraded && (hasCompetitors || selectedWatchlist) ? (
@@ -727,6 +727,26 @@ export default function WatchlistsRoute() {
           </div>
         </section>
       )}
+
+      {/* PR-5a: Presence lives inside Watch — an entity is a tracked thing,
+          not a parallel product. The deep merge lands with the Watch
+          rebuild; until then this is the doorway. */}
+      {data.showPresenceNav && !selectedWatchlist ? (
+        <section aria-labelledby="watch-presence-title" className="f9-wk-sec">
+          <p className="f9-wk-kick" id="watch-presence-title">
+            Your brand
+          </p>
+          <RuledList aria-label="Presence tracking">
+            <RuledRow
+              name="Presence"
+              say="Track your own brand and entities across declared sources."
+              status="Included"
+              time=""
+              to="/app/presence"
+            />
+          </RuledList>
+        </section>
+      ) : null}
 
       <div className="f9-wk-opline">
         <span>

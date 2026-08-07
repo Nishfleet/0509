@@ -238,7 +238,7 @@ function registryContractSha256() {
 // stack (free weekly watch, sitemap additions, /ads/:domain) — all reopened
 // as assessed_pending_reproof, no proof fabricated.
 const EXPECTED_REGISTRY_CONTRACT_SHA256 =
-  "54722e8c51c4cad059107522abd818052ef712dc6adc37ba3523d27252361da9";
+  "a01572b56652111574736c69526167807e50c9c83fcbef8b57261d20828e2ac7";
 
 type Catalogs = {
   agentActions: string[];
@@ -260,6 +260,10 @@ const actualCatalogs: Catalogs = {
   presenceSources: [...PRESENCE_SOURCE_IDS],
   customerNavPaths: uniqueSorted([
     ...DASHBOARD_PRIMARY_NAV.flatMap((section) => section.items.map((item) => item.to)),
+    // Member pages a destination owns are customer nav surface too (PR-5a).
+    ...DASHBOARD_PRIMARY_NAV.flatMap((section) =>
+      section.items.flatMap((item) => [...(item.activePaths ?? [])]),
+    ),
     ...DASHBOARD_SETTINGS_NAV.flatMap((section) => section.items.map((item) => item.to)),
     ...PUBLIC_SEARCH_NAV.map((item) => item.to),
   ]),
@@ -296,11 +300,14 @@ const expectedCatalogs: Record<CatalogName, readonly string[]> = {
     "presence_digest_alerts",
   ],
   presenceSources: ["website", "x", "reddit", "linkedin", "youtube", "amazon", "context_dev"],
+  // PR-5a: the rail carries five destinations; Deliver and Settings own
+  // their member pages. Presence left the nav (it lives inside Watch).
   customerNavPaths: [
     "/", "/#pricing", "/app", "/app/account", "/app/billing", "/app/clients",
-    "/app/collections", "/app/developer-access", "/app/digests", "/app/notifications",
-    "/app/presence", "/app/reports", "/app/shares", "/app/source-access",
-    "/app/support", "/app/team", "/app/watchlists", "/help", "/search",
+    "/app/collections", "/app/deliver", "/app/developer-access", "/app/digests",
+    "/app/notifications", "/app/presence", "/app/reports", "/app/settings",
+    "/app/shares", "/app/source-access", "/app/support", "/app/team",
+    "/app/watchlists", "/help", "/search",
   ],
   publicMarkdownPaths: ["/", "/help", "/docs", "/api/docs", "/status", "/changelog", "/trust", "/privacy", "/terms"],
   // 2026-07-20 merge: overnight stack wins — sitemap gained /search, /auth/signup

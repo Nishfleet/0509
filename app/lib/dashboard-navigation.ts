@@ -9,6 +9,8 @@ export interface DashboardNavItem {
   end?: boolean;
   /** Hide unless condition met (e.g. presence entitlement) */
   requiresPresence?: boolean;
+  /** Member pages this destination owns — the row stays active on them. */
+  activePaths?: readonly string[];
 }
 
 export interface DashboardNavSection {
@@ -27,27 +29,55 @@ export interface DashboardNavSection {
  * settings routes. Nine visible rows instead of sixteen, and every route in
  * `app/routes.ts` is still one click or one disclosure away.
  */
+/**
+ * Design-unification PR-5a — the ratified 5-destination IA (tri-audit,
+ * Nish 2026-08-08). Five customer jobs, no disclosure, nothing in the rail
+ * a customer's plan cannot use. Search is the ⌘K overlay and one rail
+ * button, not a destination. Deliver and Settings are sectioned index
+ * pages that own the surfaces the old 16-row rail advertised; the deep
+ * per-destination rebuilds land as the follow-on PR-5 packages.
+ */
 export const DASHBOARD_PRIMARY_NAV: DashboardNavSection[] = [
   {
     items: [
-      { label: "Overview", to: "/app", end: true },
-      { label: "Competitors", to: "/app/watchlists" },
-      { label: "Presence", to: "/app/presence", requiresPresence: true },
-      { label: "Search", to: "/search" },
-      { label: "Briefs", to: "/app/digests" },
-      { label: "Collections", to: "/app/collections" },
-      { label: "Reports", to: "/app/reports" },
-      { label: "Shared links", to: "/app/shares" },
-      { label: "Client rooms", to: "/app/clients" },
+      { label: "Today", to: "/app", end: true },
+      {
+        label: "Watch",
+        to: "/app/watchlists",
+        activePaths: ["/app/presence"],
+      },
+      { label: "Library", to: "/app/collections" },
+      {
+        label: "Deliver",
+        to: "/app/deliver",
+        activePaths: ["/app/digests", "/app/reports", "/app/shares", "/app/clients"],
+      },
+      {
+        label: "Settings",
+        to: "/app/settings",
+        activePaths: [
+          "/app/notifications",
+          "/app/source-access",
+          "/app/developer-access",
+          "/app/team",
+          "/app/billing",
+          "/app/account",
+          "/app/support",
+        ],
+      },
     ],
   },
 ];
 
-/** The seven long-dwell settings routes, behind the one disclosure row. */
+/**
+ * Routes that now live INSIDE a destination (Deliver or Settings). Kept as
+ * a map so the rail can mark the owning destination active while the
+ * customer is on one of its member pages.
+ */
 export const DASHBOARD_SETTINGS_NAV: DashboardNavSection[] = [
   {
     items: [
-      { label: "Notifications", to: "/app/notifications" },
+      { label: "Delivery", to: "/app/notifications" },
       { label: "Source access", to: "/app/source-access" },
       { label: "Developer access", to: "/app/developer-access" },
       { label: "Team", to: "/app/team" },
@@ -57,6 +87,14 @@ export const DASHBOARD_SETTINGS_NAV: DashboardNavSection[] = [
     ],
   },
 ];
+
+/** Member pages of the Deliver destination. */
+export const DELIVER_MEMBER_PATHS = [
+  "/app/digests",
+  "/app/reports",
+  "/app/shares",
+  "/app/clients",
+] as const;
 
 /** Pathnames that live inside the "Workspace & account" disclosure. */
 export function isSettingsNavPath(pathname: string) {
@@ -105,9 +143,8 @@ export function buildDashboardMobileNav(options: {
   const primary = filterDashboardNav(DASHBOARD_PRIMARY_NAV, visible).flatMap(
     (section) => section.items,
   );
-  const settings = filterDashboardNav(DASHBOARD_SETTINGS_NAV, visible).flatMap(
-    (section) => section.items,
-  );
 
-  return [...primary, ...settings];
+  // Five destinations fit a phone without a scroll of sixteen peers; the
+  // member pages live inside Deliver/Settings, not in the strip.
+  return [...primary];
 }

@@ -542,15 +542,12 @@ describe("the rail", () => {
     );
   }
 
-  it("shows nine rows: eight daily jobs plus one disclosure", () => {
+  it("shows five destinations and no disclosure — the ratified IA", () => {
     const markup = renderShell();
     const rows = markup.match(/class="f9-dash-nav-link f9-wk-nav-a[^"]*"/g) ?? [];
-    // Eight visible jobs; the seven settings routes are inside the disclosure
-    // and are rendered (hidden) so a deep link still finds its own row.
-    expect(rows).toHaveLength(15);
-    expect(markup).toContain("Workspace &amp; account");
-    expect(markup).toContain('aria-expanded="false"');
-    expect(markup).toContain('hidden=""');
+    expect(rows).toHaveLength(5);
+    expect(markup).not.toContain("Workspace &amp; account");
+    expect(markup).not.toContain("f9-wk-more");
   });
 
   it("makes ⌘K visible chrome rather than folklore", () => {
@@ -560,12 +557,13 @@ describe("the rail", () => {
     expect(markup).toContain("⌘K");
   });
 
-  it("opens the disclosure when the customer is standing inside it", () => {
+  it("marks the owning destination active on a member page", () => {
+    // On /app/billing the Settings row is the active row — a customer deep
+    // inside a member page is never nowhere.
     const markup = renderShell("/app/billing");
-    expect(markup).toContain('aria-expanded="true"');
-    expect(markup).not.toContain('hidden=""');
-    expect(isSettingsNavPath("/app/billing")).toBe(true);
-    expect(isSettingsNavPath("/app/watchlists")).toBe(false);
+    const active = markup.match(/f9-dash-nav-link[^"]*is-active[^"]*"[^>]*href="([^"]+)"/);
+    expect(markup).toContain('href="/app/settings"');
+    expect(active?.[1]).toBe("/app/settings");
   });
 
   it("carries a workspace footer block, and every route is still reachable", () => {
@@ -578,9 +576,7 @@ describe("the rail", () => {
     expect(markup).not.toContain('href="/help"');
     expect(markup).not.toContain('href="/docs"');
     expect(markup).not.toContain("mailto:support@0509.io");
-    for (const item of [...DASHBOARD_PRIMARY_NAV, ...DASHBOARD_SETTINGS_NAV].flatMap(
-      (section) => section.items,
-    )) {
+    for (const item of DASHBOARD_PRIMARY_NAV.flatMap((section) => section.items)) {
       if (item.requiresPresence) continue;
       expect(markup).toContain(`href="${item.to}"`);
     }
