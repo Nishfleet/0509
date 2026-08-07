@@ -326,6 +326,38 @@ describe("production deployment readiness gate", () => {
     }
   });
 
+  it("states unverified blast radius instead of asserting fabricated business facts", () => {
+    // These four fields were constants checked against themselves, never
+    // measured: payingCustomerCount 0, customerOwnedWatchlistCount 0,
+    // customerOwnedClientRoomCount 0, dormantExternalSignupRowCount 2. They
+    // encoded "no customer data is at risk", which is the entire justification
+    // for shipping without backup proof - and it was true only before launch.
+    // Billing is live and nothing rechecked them, so the record would have kept
+    // asserting zero customers after the first sale. A safety record that
+    // states an unverified fact is worse than one that omits it.
+    const disposition = (
+      deployPlanModule as Record<string, any>
+    ).createDeferredBackupDisposition("f".repeat(40), "a".repeat(40));
+
+    for (const fabricated of [
+      "payingCustomerCount",
+      "customerOwnedWatchlistCount",
+      "customerOwnedClientRoomCount",
+      "dormantExternalSignupRowCount",
+    ]) {
+      expect(disposition).not.toHaveProperty(fabricated);
+    }
+    expect(disposition.blastRadiusVerified).toBe(false);
+    expect(disposition.authorizedBy).toBe("nish3451");
+
+    // And the validator must reject a disposition that claims otherwise.
+    const validate = (deployPlanModule as Record<string, any>)
+      .validateDeferredBackupDisposition;
+    expect(
+      validate({ ...disposition, blastRadiusVerified: true }, "f".repeat(40)),
+    ).toBe(false);
+  });
+
   it("defaults to required backup proof and makes the exact deferred release immediate-only", () => {
     expect(() =>
       buildProductionDeployPlan({
