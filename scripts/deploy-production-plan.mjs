@@ -28,10 +28,7 @@ const DEFERRED_BACKUP_DISPOSITION_KEYS = Object.freeze([
   "releaseControlBaseSha",
   "candidateSha",
   "migrationFileCount",
-  "payingCustomerCount",
-  "customerOwnedWatchlistCount",
-  "customerOwnedClientRoomCount",
-  "dormantExternalSignupRowCount",
+  "blastRadiusVerified",
   "authorizedBy",
   "authorizationScope",
 ]);
@@ -62,10 +59,18 @@ export function validateDeferredBackupDisposition(value, candidateSha) {
     disposition.candidateSha === candidateSha &&
     RELEASE_SHA_PATTERN.test(candidateSha ?? "") &&
     disposition.migrationFileCount === 0 &&
-    disposition.payingCustomerCount === 0 &&
-    disposition.customerOwnedWatchlistCount === 0 &&
-    disposition.customerOwnedClientRoomCount === 0 &&
-    disposition.dormantExternalSignupRowCount === 2 &&
+    // The blast-radius fields that used to sit here - payingCustomerCount,
+    // customerOwnedWatchlistCount, customerOwnedClientRoomCount,
+    // dormantExternalSignupRowCount - were CONSTANTS asserted against
+    // themselves, never measured. They encoded "no customer data is at risk",
+    // which was true before launch and is the whole justification for shipping
+    // without backup proof. Billing is live; nothing rechecked them. A safety
+    // record that states an unverified fact is worse than one that omits it,
+    // because it reads like evidence. Removed 2026-08-07 rather than faked.
+    //
+    // What actually justifies a deferred release is the recorded human
+    // authorization below, which is real and checkable.
+    disposition.blastRadiusVerified === false &&
     disposition.authorizedBy === "nish3451" &&
     disposition.authorizationScope === "exact_workflow_dispatch_sha"
   );
@@ -95,10 +100,9 @@ export function createDeferredBackupDisposition(candidateSha, baselineSha) {
     releaseControlBaseSha: "048e8a5991c6560a15cba485a7a4ba27af9d5004",
     candidateSha,
     migrationFileCount: 0,
-    payingCustomerCount: 0,
-    customerOwnedWatchlistCount: 0,
-    customerOwnedClientRoomCount: 0,
-    dormantExternalSignupRowCount: 2,
+    // Stated plainly rather than guessed at: this release shipped without
+    // backup proof and nobody measured what was at risk when it did.
+    blastRadiusVerified: false,
     authorizedBy: "nish3451",
     authorizationScope: "exact_workflow_dispatch_sha",
   };
@@ -429,8 +433,27 @@ export function validateRemoteRestoreEvidence(evidence, expected) {
   const migrationBearing = expected.migrationBearing !== false;
   const exactEvidenceRequired =
     migrationBearing || expected.restoreCritical === true;
-  const maxAgeMs =
-    (exactEvidenceRequired ? 24 : 7 * 24) * 60 * 60 * 1000;
+  // Nish's call, 2026-08-07: one bound of 14 days, replacing 24h for
+  // migration/restore-critical releases and 7d for everything else.
+  //
+  // 14 rather than the 90 first considered. 90 would have matched how long the
+  // backups themselves are kept (config/r2-retention-policy.json, expireDays
+  // 90), but retention and freshness measure different things: retention is how
+  // long the FILE survives, freshness is how recently the restore was PROVEN to
+  // work. A backup that exists but has not been restored in three months is
+  // exactly the one that fails when it is needed. 14 days tolerates a bad week
+  // of drill failures without pretending a quarter-old proof is current, and
+  // stays well inside retention so evidence never outlives its own backup.
+  //
+  // The nightly drill (d1-remote-restore-evidence.yml) keeps real evidence
+  // under a day old, so this bound should almost never be what decides a
+  // release. If it starts deciding releases, the drill is broken - fix that
+  // rather than raising this.
+  //
+  // The other bound is unchanged and still binds hard: a migration-bearing or
+  // restore-critical release must match the candidate EXACTLY, so age is not the
+  // only thing between a schema change and production.
+  const maxAgeMs = 14 * 24 * 60 * 60 * 1000;
   const minimumValidityMs =
     Number.isSafeInteger(expected.minimumValidityMs) &&
     Number(expected.minimumValidityMs) >= 0
