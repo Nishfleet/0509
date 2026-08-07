@@ -57,7 +57,6 @@ describe("dashboard v2 navigation", () => {
   it("keeps the rail to nine visible rows: eight daily jobs plus one disclosure", () => {
     const visible = filterDashboardNav(DASHBOARD_PRIMARY_NAV, {
       showPresence: false,
-      showOps: false,
     }).flatMap((section) => section.items);
     expect(visible).toHaveLength(8);
     // Every section is ungrouped: no mono label may reappear above a row.
@@ -104,16 +103,12 @@ describe("dashboard v2 navigation", () => {
     const expected = [
       ...filterDashboardNav(DASHBOARD_PRIMARY_NAV, {
         showPresence: true,
-        showOps: true,
       }).flatMap((section) => section.items),
       ...filterDashboardNav(DASHBOARD_SETTINGS_NAV, {
         showPresence: true,
-        showOps: true,
       }).flatMap((section) => section.items),
-      { label: "Ops", to: "/app/ops", requiresOps: true },
     ];
     const mobile = buildDashboardMobileNav({
-      showOps: true,
       showPresence: true,
     });
 
@@ -122,8 +117,8 @@ describe("dashboard v2 navigation", () => {
   });
 
   it("hides presence nav unless entitled", () => {
-    const without = filterDashboardNav(DASHBOARD_PRIMARY_NAV, { showPresence: false, showOps: false });
-    const withPresence = filterDashboardNav(DASHBOARD_PRIMARY_NAV, { showPresence: true, showOps: false });
+    const without = filterDashboardNav(DASHBOARD_PRIMARY_NAV, { showPresence: false });
+    const withPresence = filterDashboardNav(DASHBOARD_PRIMARY_NAV, { showPresence: true });
 
     expect(without.flatMap((s) => s.items).some((item) => item.label === "Presence")).toBe(false);
     expect(withPresence.flatMap((s) => s.items).some((item) => item.label === "Presence")).toBe(true);

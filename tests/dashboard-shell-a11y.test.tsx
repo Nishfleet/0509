@@ -37,7 +37,6 @@ async function renderShell(
   initialPath: string,
   options: {
     isPublic?: boolean;
-    showOpsNav?: boolean;
     showPresenceNav?: boolean;
     strict?: boolean;
   } = {},
@@ -51,7 +50,6 @@ async function renderShell(
           accountTitle: "Five to Nine",
           accountDetail: "Starter plan",
           isPublic: options.isPublic,
-          showOpsNav: options.showOpsNav,
           showPresenceNav: options.showPresenceNav,
           children: createElement("p", null, "Body content"),
         }),
@@ -120,12 +118,12 @@ describe("DashboardShell accessibility (WP-43)", () => {
 
   it("includes entitled routes in the same mobile row", async () => {
     const view = await renderShell("/app/presence", {
-      showOpsNav: true,
       showPresenceNav: true,
     });
     const mobile = view.querySelector('nav[aria-label="Workspace sections"]');
     expect(mobile?.textContent).toContain("Presence");
-    expect(mobile?.textContent).toContain("Ops");
+    // Staff Ops left the customer shell entirely (tri-audit G4).
+    expect(mobile?.textContent).not.toContain("Ops");
   });
 
   it("does not expose authenticated workspace navigation on the public shell", async () => {

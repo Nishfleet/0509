@@ -98,12 +98,12 @@ describe("ops route", () => {
       listStaleDodoSubscriptionPlanChangeClaims,
     }));
 
-    const { loader } = await import("~/routes/app.ops");
+    const { loader } = await import("~/routes/ops");
     const result = await loader({
       context: createContext({
         OPS_ALLOWLIST_EMAILS: "owner@example.com, teammate@example.com",
       }),
-      request: new Request("http://localhost/app/ops"),
+      request: new Request("http://localhost/ops"),
     } as never);
 
     expect(result).toEqual({
@@ -141,14 +141,14 @@ describe("ops route", () => {
       getOperatorSnapshot,
     }));
 
-    const { loader } = await import("~/routes/app.ops");
+    const { loader } = await import("~/routes/ops");
 
     await expect(
       loader({
         context: createContext({
           OPS_ALLOWLIST_EMAILS: "owner@example.com",
         }),
-        request: new Request("http://localhost/app/ops"),
+        request: new Request("http://localhost/ops"),
       } as never),
     ).rejects.toMatchObject({
       status: 403,
@@ -172,12 +172,12 @@ describe("ops route", () => {
       getOperatorSnapshot,
     }));
 
-    const { loader } = await import("~/routes/app.ops");
+    const { loader } = await import("~/routes/ops");
 
     await expect(
       loader({
         context: createContext({}),
-        request: new Request("http://localhost/app/ops"),
+        request: new Request("http://localhost/ops"),
       } as never),
     ).rejects.toMatchObject({
       status: 403,
@@ -201,14 +201,14 @@ describe("ops route", () => {
       getOperatorSnapshot,
     }));
 
-    const { loader } = await import("~/routes/app.ops");
+    const { loader } = await import("~/routes/ops");
 
     await expect(
       loader({
         context: createContext({
           OPS_ALLOWLIST_EMAILS: "someone-else@example.com",
         }),
-        request: new Request("http://localhost/app/ops"),
+        request: new Request("http://localhost/ops"),
       } as never),
     ).rejects.toMatchObject({
       status: 403,
@@ -269,7 +269,7 @@ describe("ops route", () => {
       },
     }));
 
-    const { default: OpsRoute } = await import("~/routes/app.ops");
+    const { default: OpsRoute } = await import("~/routes/ops");
     const markup = renderToStaticMarkup(createElement(OpsRoute));
 
     expect(markup).toContain("Delivery attention");
@@ -323,7 +323,7 @@ describe("ops route", () => {
       },
     }));
 
-    const { default: OpsRoute } = await import("~/routes/app.ops");
+    const { default: OpsRoute } = await import("~/routes/ops");
     const markup = renderToStaticMarkup(createElement(OpsRoute));
 
     expect(markup).toContain("Partial discovery result");
@@ -362,7 +362,7 @@ describe("ops route", () => {
       },
     }));
 
-    const { default: OpsRoute } = await import("~/routes/app.ops");
+    const { default: OpsRoute } = await import("~/routes/ops");
     const markup = renderToStaticMarkup(createElement(OpsRoute));
 
     expect(markup).toContain("Some operational sections could not be loaded");
@@ -410,7 +410,7 @@ describe("ops route", () => {
       },
     }));
 
-    const { default: OpsRoute } = await import("~/routes/app.ops");
+    const { default: OpsRoute } = await import("~/routes/ops");
     const markup = renderToStaticMarkup(createElement(OpsRoute));
 
     expect(markup).toContain("Open support cases");
@@ -472,7 +472,7 @@ describe("ops route", () => {
       },
     }));
 
-    const { default: OpsRoute } = await import("~/routes/app.ops");
+    const { default: OpsRoute } = await import("~/routes/ops");
     const markup = renderToStaticMarkup(createElement(OpsRoute));
 
     expect(markup).toContain("Record provider evidence");
@@ -499,7 +499,7 @@ describe("ops route", () => {
     }));
     vi.doMock("~/lib/delivery.server", () => ({ sendOperatorAlertEmail }));
 
-    const { action } = await import("~/routes/app.ops");
+    const { action } = await import("~/routes/ops");
     const form = new FormData();
     form.set("intent", "reconcile-support-alert");
     form.set("attemptId", "support-attempt-1");
@@ -510,7 +510,7 @@ describe("ops route", () => {
     form.set("observedAt", "2026-07-15T04:02:00.000Z");
     const result = await action({
       context: createContext({ OPS_ALLOWLIST_EMAILS: "owner@example.com" }),
-      request: new Request("http://localhost/app/ops", { method: "POST", body: form }),
+      request: new Request("http://localhost/ops", { method: "POST", body: form }),
     } as never);
 
     expect(result).toMatchObject({
@@ -550,13 +550,13 @@ describe("ops route", () => {
     }));
     vi.doMock("~/lib/delivery.server", () => ({ sendOperatorAlertEmail }));
 
-    const { action } = await import("~/routes/app.ops");
+    const { action } = await import("~/routes/ops");
     const form = new FormData();
     form.set("intent", "retry-support-alert");
     form.set("caseId", "case-1");
     const result = await action({
       context: createContext({ OPS_ALLOWLIST_EMAILS: "owner@example.com" }),
-      request: new Request("http://localhost/app/ops", { method: "POST", body: form }),
+      request: new Request("http://localhost/ops", { method: "POST", body: form }),
     } as never);
 
     expect(result).toMatchObject({
@@ -587,13 +587,13 @@ describe("ops route", () => {
     }));
     vi.doMock("~/lib/delivery.server", () => ({ sendOperatorAlertEmail }));
 
-    const { action } = await import("~/routes/app.ops");
+    const { action } = await import("~/routes/ops");
     const form = new FormData();
     form.set("intent", "retry-support-alert");
     form.set("caseId", "case-1");
     const result = await action({
       context: createContext({ OPS_ALLOWLIST_EMAILS: "owner@example.com" }),
-      request: new Request("http://localhost/app/ops", { method: "POST", body: form }),
+      request: new Request("http://localhost/ops", { method: "POST", body: form }),
     } as never);
 
     expect(result).toMatchObject({ ok: true, intent: "retry-support-alert" });
@@ -628,13 +628,13 @@ describe("ops route", () => {
     }));
     vi.doMock("~/lib/delivery.server", () => ({ sendOperatorAlertEmail }));
 
-    const { action } = await import("~/routes/app.ops");
+    const { action } = await import("~/routes/ops");
     const form = new FormData();
     form.set("intent", "retry-support-alert");
     form.set("caseId", "case-1");
     const result = await action({
       context: createContext({ OPS_ALLOWLIST_EMAILS: "owner@example.com" }),
-      request: new Request("http://localhost/app/ops", { method: "POST", body: form }),
+      request: new Request("http://localhost/ops", { method: "POST", body: form }),
     } as never);
 
     expect(result).toMatchObject({ ok: true, intent: "retry-support-alert" });
@@ -656,13 +656,13 @@ describe("ops route", () => {
       getDeliveryAttemptByIdempotencyKey: vi.fn(),
     }));
 
-    const { action } = await import("~/routes/app.ops");
+    const { action } = await import("~/routes/ops");
     const form = new FormData();
     form.set("intent", "retry-support-alert");
     form.set("caseId", "case-1");
     const result = await action({
       context: createContext({ OPS_ALLOWLIST_EMAILS: "owner@example.com" }),
-      request: new Request("http://localhost/app/ops", { method: "POST", body: form }),
+      request: new Request("http://localhost/ops", { method: "POST", body: form }),
     } as never);
 
     expect(result).toEqual({
@@ -694,13 +694,13 @@ describe("ops route", () => {
     }));
     vi.doMock("~/lib/delivery.server", () => ({ sendOperatorAlertEmail }));
 
-    const { action } = await import("~/routes/app.ops");
+    const { action } = await import("~/routes/ops");
     const form = new FormData();
     form.set("intent", "retry-support-alert");
     form.set("caseId", "case-1");
     const result = await action({
       context: createContext({ OPS_ALLOWLIST_EMAILS: "owner@example.com" }),
-      request: new Request("http://localhost/app/ops", { method: "POST", body: form }),
+      request: new Request("http://localhost/ops", { method: "POST", body: form }),
     } as never);
 
     expect(result).toEqual({
@@ -732,13 +732,13 @@ describe("ops route", () => {
     }));
     vi.doMock("~/lib/delivery.server", () => ({ sendOperatorAlertEmail }));
 
-    const { action } = await import("~/routes/app.ops");
+    const { action } = await import("~/routes/ops");
     const form = new FormData();
     form.set("intent", "retry-support-alert");
     form.set("caseId", "case-1");
     const result = await action({
       context: createContext({ OPS_ALLOWLIST_EMAILS: "owner@example.com" }),
-      request: new Request("http://localhost/app/ops", { method: "POST", body: form }),
+      request: new Request("http://localhost/ops", { method: "POST", body: form }),
     } as never);
 
     expect(result).toEqual({
@@ -789,7 +789,7 @@ describe("ops route", () => {
       },
     }));
 
-    const { default: OpsRoute } = await import("~/routes/app.ops");
+    const { default: OpsRoute } = await import("~/routes/ops");
     const markup = renderToStaticMarkup(createElement(OpsRoute));
 
     expect(markup).toContain("Billing email provider reconciliation");
@@ -813,7 +813,7 @@ describe("ops route", () => {
     vi.doMock("~/lib/auth.server", () => ({ requireSession: vi.fn().mockResolvedValue(session) }));
     vi.doMock("~/lib/data.server", () => ({ reconcileBillingLifecycleEmailAttempt }));
 
-    const { action } = await import("~/routes/app.ops");
+    const { action } = await import("~/routes/ops");
     const form = new FormData();
     form.set("intent", "reconcile-billing-lifecycle-email");
     form.set("attemptId", "attempt-1");
@@ -826,7 +826,7 @@ describe("ops route", () => {
 
     const result = await action({
       context: createContext({ OPS_ALLOWLIST_EMAILS: "owner@example.com" }),
-      request: new Request("http://localhost/app/ops", { method: "POST", body: form }),
+      request: new Request("http://localhost/ops", { method: "POST", body: form }),
     } as never);
 
     expect(result).toMatchObject({ ok: true, intent: "reconcile-billing-lifecycle-email" });
@@ -890,7 +890,7 @@ describe("ops route", () => {
       },
     }));
 
-    const { default: OpsRoute } = await import("~/routes/app.ops");
+    const { default: OpsRoute } = await import("~/routes/ops");
     const markup = renderToStaticMarkup(createElement(OpsRoute));
     expect(markup).toContain("Partial refunds awaiting operator reconciliation");
     expect(markup).toContain("Record refund reconciliation");
@@ -922,10 +922,10 @@ describe("ops route", () => {
     form.set("evidenceReference", "dodo-refund-observation-123");
     form.set("observedAt", "2026-07-17T02:00:00.000Z");
 
-    const { action } = await import("~/routes/app.ops");
+    const { action } = await import("~/routes/ops");
     const result = await action({
       context: createContext({ OPS_ALLOWLIST_EMAILS: "owner@example.com" }),
-      request: new Request("http://localhost/app/ops", { method: "POST", body: form }),
+      request: new Request("http://localhost/ops", { method: "POST", body: form }),
     } as never);
 
     expect(result).toMatchObject({
@@ -983,7 +983,7 @@ describe("ops route", () => {
       },
     }));
 
-    const { default: OpsRoute } = await import("~/routes/app.ops");
+    const { default: OpsRoute } = await import("~/routes/ops");
     const markup = renderToStaticMarkup(createElement(OpsRoute));
     expect(markup).toContain("Plan changes awaiting provider reconciliation");
     expect(markup).toContain("Check current Dodo state");
@@ -1003,10 +1003,10 @@ describe("ops route", () => {
     const form = new FormData();
     form.set("intent", "reconcile-dodo-plan-change");
     form.set("subjectUserId", "owner-ambiguous-1234");
-    const { action } = await import("~/routes/app.ops");
+    const { action } = await import("~/routes/ops");
     const result = await action({
       context: createContext({ OPS_ALLOWLIST_EMAILS: "owner@example.com" }),
-      request: new Request("http://localhost/app/ops", { method: "POST", body: form }),
+      request: new Request("http://localhost/ops", { method: "POST", body: form }),
     } as never);
     expect(result).toMatchObject({
       ok: true,
@@ -1037,10 +1037,10 @@ describe("ops route", () => {
       listStaleDodoSubscriptionPlanChangeClaims,
     }));
 
-    const { loader } = await import("~/routes/app.ops");
+    const { loader } = await import("~/routes/ops");
     const result = await loader({
       context: createContext({ OPS_ALLOWLIST_EMAILS: "owner@example.com" }),
-      request: new Request("http://localhost/app/ops"),
+      request: new Request("http://localhost/ops"),
     } as never);
 
     expect(result).toEqual({

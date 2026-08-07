@@ -38,10 +38,10 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const { getUserPlan } = await import("~/lib/plan.server");
   const { getWorkspaceBranding } = await import("~/lib/data.server");
   const { resolveWorkspaceBrandIdentity } = await import("~/lib/plan-feature-gate.server");
-  const { isE2ETestSessionId } = await import("~/lib/e2e-auth.server");
+  const { isE2EFixtureWorkspaceSession } = await import("~/lib/e2e-auth.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
-  const isE2EFixtureSession = isE2ETestSessionId(session.session.id);
+  const isE2EFixtureSession = isE2EFixtureWorkspaceSession(env, request, session.session.id);
 
   const passkeysEnabled = !isE2EFixtureSession && isBetterAuthPasskeyEnabled(env);
   // Every lookup below is independent — run them as one parallel wave. Each
@@ -100,7 +100,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const { requireSession } = await import("~/lib/auth.server");
   const { getEnv } = await import("~/lib/context.server");
   const { upsertWorkspaceBranding } = await import("~/lib/data.server");
-  const { isE2ETestSessionId } = await import("~/lib/e2e-auth.server");
+  const { isE2EFixtureWorkspaceSession } = await import("~/lib/e2e-auth.server");
   const env = getEnv(context);
   const session = await requireSession(env, request);
   const contentType = request.headers.get("content-type") ?? "";
@@ -132,7 +132,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     formData = await request.formData();
   }
   const intent = String(formData.get("intent") ?? "");
-  const isE2EFixtureSession = isE2ETestSessionId(session.session.id);
+  const isE2EFixtureSession = isE2EFixtureWorkspaceSession(env, request, session.session.id);
 
   if (intent === "save-report-branding") {
     const { requireWorkspacePlanFeature } = await import("~/lib/plan-feature-gate.server");

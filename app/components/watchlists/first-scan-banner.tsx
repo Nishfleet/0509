@@ -50,8 +50,12 @@ export function FirstScanBanner(props: {
       "first_scan_setup_failed",
       "workflow_binding_missing",
     ].includes(props.run.errorCode ?? "");
+  // The calm "safely paused" state keys off the SEMANTIC (a provider
+  // network denial skipped the scan), not off the e2e fixture's exact code —
+  // product copy must never be shaped by a fixture-only identifier.
   const safelyPaused =
-    props.run?.status === "skipped" && props.run.errorCode === "e2e_provider_network_denied";
+    props.run?.status === "skipped" &&
+    Boolean(props.run.errorCode?.endsWith("provider_network_denied"));
   const completed = props.run?.status === "succeeded";
   const failed = props.run?.status === "failed";
   const skipped = props.run?.status === "skipped" && !safelyPaused;

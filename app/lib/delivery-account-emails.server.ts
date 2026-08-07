@@ -51,7 +51,7 @@ export function renderOperatorAlertHtml(input: {
           ${input.lines.map((line) => `<li style="margin: 0 0 6px;">${escapeHtml(line)}</li>`).join("")}
         </ul>
         <p style="margin: 0; color: #5b6577; font-size: 12px;">
-          Details: https://0509.io/app/ops
+          Details: https://0509.io/ops
         </p>
       </div>
     `;

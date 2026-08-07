@@ -46,10 +46,10 @@ function createCapturingDb(rows: unknown[] = []) {
   };
 }
 
-function createContext() {
+function createContext(env: Record<string, unknown> = {}) {
   return {
     cloudflare: {
-      env: {},
+      env,
     },
   };
 }
@@ -322,7 +322,7 @@ describe("account report-branding action", () => {
     }
 
     const result = await action({
-      context: createContext(),
+      context: createContext({ E2E_TEST_MODE: "1" }),
       request: new Request("http://localhost/app/account", {
         method: "POST",
         body: formData,
@@ -369,7 +369,7 @@ describe("account report-branding action", () => {
     formData.set("confirmDeletion", "yes");
 
     const result = await action({
-      context: createContext(),
+      context: createContext({ E2E_TEST_MODE: "1" }),
       request: new Request("http://localhost/app/account", {
         method: "POST",
         body: formData,
@@ -412,7 +412,7 @@ describe("account report-branding action", () => {
     formData.set("brandName", "Northwind Growth");
 
     const result = await action({
-      context: createContext(),
+      context: createContext({ E2E_TEST_MODE: "1" }),
       request: new Request("http://localhost/app/account", {
         method: "POST",
         body: formData,
@@ -456,7 +456,7 @@ describe("account report-branding action", () => {
     formData.set("brandName", "Northwind Growth");
 
     const result = await action({
-      context: createContext(),
+      context: createContext({ E2E_TEST_MODE: "1" }),
       request: new Request("http://localhost/app/account", {
         method: "POST",
         body: formData,
@@ -501,7 +501,7 @@ describe("account report-branding action", () => {
     formData.set("brandWebsite", "northwind.example");
 
     const result = await action({
-      context: createContext(),
+      context: createContext({ E2E_TEST_MODE: "1" }),
       request: new Request("http://localhost/app/account", {
         method: "POST",
         body: formData,
@@ -544,7 +544,7 @@ describe("account report-branding action", () => {
     formData.set("brandWebsite", "samplebrand");
 
     const result = await action({
-      context: createContext(),
+      context: createContext({ E2E_TEST_MODE: "1" }),
       request: new Request("http://localhost/app/account", {
         method: "POST",
         body: formData,
@@ -605,7 +605,7 @@ describe("account report-branding action", () => {
     formData.set("confirmDeletion", "yes");
 
     const result = await action({
-      context: createContext(),
+      context: createContext({ E2E_TEST_MODE: "1" }),
       request: new Request("http://localhost/app/account", {
         method: "POST",
         body: formData,
@@ -669,7 +669,7 @@ describe("account report-branding action", () => {
     formData.set("confirmDeletion", "yes");
 
     const result = await action({
-      context: createContext(),
+      context: createContext({ E2E_TEST_MODE: "1" }),
       request: new Request("http://localhost/app/account", {
         method: "POST",
         body: formData,
