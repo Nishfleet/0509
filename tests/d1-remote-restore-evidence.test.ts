@@ -240,9 +240,12 @@ describe("D1 remote restore evidence automation", () => {
     );
     expect(core).toContain("fresh_r2_backup_hash_mismatch");
     expect(workflow.on?.workflow_dispatch).toBeDefined();
-    expect(workflow.on?.schedule).toEqual([
-      { cron: "47 20 * * SUN,WED" },
-    ]);
+    // Nightly, not twice weekly (2026-08-07). Evidence is only accepted while
+    // it is under the age bound, so SUN,WED left most of the week with no
+    // usable proof - on 2026-08-06 that stranded 14 merged changes for a day.
+    // Still pinned exactly: the hour is a deliberate low-traffic window and a
+    // silent drift out of it should fail here.
+    expect(workflow.on?.schedule).toEqual([{ cron: "47 20 * * *" }]);
     expect(workflow.permissions).toEqual({ contents: "read" });
     expect(workflow.on?.workflow_dispatch?.inputs?.operation).toMatchObject({
       required: true,
