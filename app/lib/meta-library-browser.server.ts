@@ -22,7 +22,9 @@ import {
 } from "~/lib/meta-ad-dates";
 import {
   absolutizeMetaAdUrl,
+  applyRelayPageIdentitiesToCards,
   decodeHtmlEntity,
+  extractAdArchivePageIdentities,
   extractCreativeMediaFromHtml,
   extractAdCopyFromCardText,
   extractExternalLink,
@@ -261,6 +263,11 @@ async function searchMetaLibraryViaSessions(
       normalizedExtraction.cards.length > 0
         ? normalizedExtraction.cards
         : extractTextCardsFromVisibleText(normalizedExtraction.pageText);
+    // Relay page_name is the authoritative advertiser identity. The in-page
+    // DOM extractor often leaves advertiser empty on the logged-out grid
+    // (no strong/h3 wrapper), while page_id was already captured. Re-read
+    // identities from the full HTML and fill advertiser/pageId gaps only.
+    extractedCards = await mergeRelayIdentitiesFromPage(page, extractedCards);
     const noResults =
       normalizedExtraction.noResults ||
       hasNoResultsSignal(normalizedExtraction.pageText);
@@ -297,6 +304,7 @@ async function searchMetaLibraryViaSessions(
         page,
         extractedCards,
       );
+      extractedCards = await mergeRelayIdentitiesFromPage(page, extractedCards);
     } else {
       extractedCards = dedupeExtractedCardsByLibraryId(extractedCards);
     }
@@ -375,6 +383,30 @@ async function collectCardsWithInteractiveScroll(
   }
 
   return cards;
+}
+
+/**
+ * Re-read the full page HTML for Relay ad_archive_id → page_id/page_name and
+ * fill advertiser/pageId gaps on already-scraped cards. Never overwrites a
+ * DOM-captured advertiser name and never invents one from the search query.
+ */
+async function mergeRelayIdentitiesFromPage(
+  page: BrowserPage,
+  cards: ExtractedAdCard[],
+): Promise<ExtractedAdCard[]> {
+  if (cards.length === 0) {
+    return cards;
+  }
+
+  try {
+    const pageHtml = await page.content();
+    return applyRelayPageIdentitiesToCards(
+      cards,
+      extractAdArchivePageIdentities(pageHtml),
+    );
+  } catch {
+    return cards;
+  }
 }
 
 function delayMs(ms: number) {
@@ -541,15 +573,14 @@ function createSessionCardExtractionScript() {
     }
 
     // Relay payload map: each Ad Library result node carries the advertiser's
-    // numeric page_id keyed by ad_archive_id (= library id). This is the
-    // authoritative advertiser identity and covers vanity-linked brands (Nike)
-    // whose card link has no numeric id. Parsed once from the page HTML.
+    // numeric page_id and page_name keyed by ad_archive_id (= library id).
+    // page_name is the authoritative advertiser identity when the card DOM
+    // has no strong/h3 name (logged-out grid). Window reaches the next node
+    // (capped) so page_name nested inside snapshot is still found.
     const pageIdByLibraryId = new Map<string, string>();
+    const pageNameByLibraryId = new Map<string, string>();
     try {
       const relayHtml = document.documentElement.innerHTML;
-      // Window bounded by the NEXT ad_archive_id (real nodes are ~12k chars
-      // apart; a fixed lookahead window would never reach the next node and
-      // discard every match). `[\\]?` tolerates Meta's escaped Relay quotes.
       const idRegex = /[\\]?"ad_archive_id[\\]?"\s*:\s*[\\]?"(\d+)[\\]?"/g;
       const relayMatches: RegExpExecArray[] = [];
       let relayMatch: RegExpExecArray | null;
@@ -566,11 +597,28 @@ function createSessionCardExtractionScript() {
         const nextIndex = relayMatches[index + 1]?.index ?? relayHtml.length;
         const window = relayHtml.slice(
           windowStart,
-          Math.min(nextIndex, windowStart + 800),
+          Math.min(nextIndex, windowStart + 50_000),
         );
         const pid = window.match(/[\\]?"page_id[\\]?"\s*:\s*[\\]?"(\d{5,})[\\]?"/);
-        if (pid) {
-          pageIdByLibraryId.set(libId, pid[1]);
+        if (!pid) {
+          continue;
+        }
+        pageIdByLibraryId.set(libId, pid[1]);
+        const pname = window.match(
+          /[\\]?"page_name[\\]?"\s*:\s*[\\]?"((?:[^"\\]|\\.){0,120}?)[\\]?"/,
+        );
+        if (pname?.[1]) {
+          const decoded = pname[1]
+            .replace(/\\u([0-9a-fA-F]{4})/g, (_, code) =>
+              String.fromCharCode(Number.parseInt(code, 16)),
+            )
+            .replace(/\\"/g, '"')
+            .replace(/\\\//g, "/")
+            .replace(/\\\\/g, "\\")
+            .trim();
+          if (decoded) {
+            pageNameByLibraryId.set(libId, decoded);
+          }
         }
       }
     } catch {
@@ -666,7 +714,9 @@ function createSessionCardExtractionScript() {
         const externalLink = resolveExternalLink(card);
         const text = normalizeText(card.innerText);
         // Advertiser honesty (#353): accept only a single unambiguous candidate
-        // that appears before the "Sponsored" marker and is not UI chrome.
+        // that appears before the "Sponsored" marker and is not UI chrome. When
+        // the logged-out grid has no strong/h3 wrapper, recover the plain-text
+        // line above Sponsored; if that is also empty, use Relay page_name.
         const advertiser = (() => {
           const isUiLine = (value: string) =>
             /^(?:Active|Inactive|Library ID:\s*\d+|Started running on\b.*|Platforms|This ad has multiple versions|\d+\s+ads?\s+use this creative and text|Menu|See (?:ad|summary) details|View ad details|Meta Ad Library result|Instagram|Facebook|Messenger|WhatsApp|Audience Network|Threads|Shop now|Learn more|Sign up|Apply now|Book now|Contact us)$/i.test(
@@ -676,7 +726,9 @@ function createSessionCardExtractionScript() {
           const sponsoredIndex = lines.findIndex((line) =>
             /^Sponsored$/i.test(line),
           );
-          if (sponsoredIndex < 0) return null;
+          if (sponsoredIndex < 0) {
+            return pageNameByLibraryId.get(libraryId) ?? null;
+          }
           const beforeSponsored = new Set(
             lines
               .slice(0, sponsoredIndex)
@@ -698,7 +750,27 @@ function createSessionCardExtractionScript() {
                 ),
             ),
           ];
-          return candidates.length === 1 ? candidates[0] : null;
+          if (candidates.length === 1) {
+            return candidates[0];
+          }
+          if (candidates.length === 0) {
+            const priorLines = lines
+              .slice(0, sponsoredIndex)
+              .map((line) => line.replace(/\s+/g, " ").trim())
+              .filter(
+                (value) =>
+                  value &&
+                  value.length > 1 &&
+                  value.length <= 60 &&
+                  value.split(" ").length <= 6 &&
+                  !isUiLine(value),
+              );
+            const nearest = priorLines[priorLines.length - 1];
+            if (nearest) {
+              return nearest;
+            }
+          }
+          return pageNameByLibraryId.get(libraryId) ?? null;
         })();
         const headline =
           card.querySelector<HTMLElement>("h1, h2, h3, [data-headline]")
@@ -1284,11 +1356,11 @@ function buildQuickActionExtractionScript() {
       .trim();
 
   const pageIdByLibraryId = new Map();
+  const pageNameByLibraryId = new Map();
   try {
     const relayHtml = document.documentElement.innerHTML;
-    // Window bounded by the NEXT ad_archive_id (real nodes are ~12k chars apart;
-    // a fixed lookahead window would never reach the next node and discard every
-    // match). [\\]? tolerates Meta's escaped Relay quotes.
+    // Window reaches the next ad_archive_id (capped) so page_name nested in
+    // snapshot is found. [\\]? tolerates Meta's escaped Relay quotes.
     const idRegex = /[\\\\]?"ad_archive_id[\\\\]?"\\s*:\\s*[\\\\]?"(\\d+)[\\\\]?"/g;
     const relayMatches = [];
     let relayMatch;
@@ -1303,10 +1375,23 @@ function buildQuickActionExtractionScript() {
       }
       const windowStart = current.index + current[0].length;
       const nextIndex = relayMatches[index + 1] ? relayMatches[index + 1].index : relayHtml.length;
-      const relayWindow = relayHtml.slice(windowStart, Math.min(nextIndex, windowStart + 800));
+      const relayWindow = relayHtml.slice(windowStart, Math.min(nextIndex, windowStart + 50000));
       const pid = relayWindow.match(/[\\\\]?"page_id[\\\\]?"\\s*:\\s*[\\\\]?"(\\d{5,})[\\\\]?"/);
-      if (pid) {
-        pageIdByLibraryId.set(libId, pid[1]);
+      if (!pid) {
+        continue;
+      }
+      pageIdByLibraryId.set(libId, pid[1]);
+      const pname = relayWindow.match(/[\\\\]?"page_name[\\\\]?"\\s*:\\s*[\\\\]?"((?:[^"\\\\]|\\\\.){0,120}?)[\\\\]?"/);
+      if (pname && pname[1]) {
+        const decoded = pname[1]
+          .replace(/\\\\u([0-9a-fA-F]{4})/g, (_, code) => String.fromCharCode(Number.parseInt(code, 16)))
+          .replace(/\\\\"/g, '"')
+          .replace(/\\\\\\//g, "/")
+          .replace(/\\\\\\\\/g, "\\\\")
+          .trim();
+        if (decoded) {
+          pageNameByLibraryId.set(libId, decoded);
+        }
       }
     }
   } catch (relayError) {
@@ -1396,7 +1481,9 @@ function buildQuickActionExtractionScript() {
           ) || /^\\d+:\\d+\\s*\\/\\s*\\d+/.test(value);
         const lines = text.split("\\n");
         const sponsoredIndex = lines.findIndex((line) => /^Sponsored$/i.test(line));
-        if (sponsoredIndex < 0) return null;
+        if (sponsoredIndex < 0) {
+          return pageNameByLibraryId.get(libraryId) || null;
+        }
         const beforeSponsored = new Set(
           lines.slice(0, sponsoredIndex).map((line) => line.replace(/\\s+/g, " ").trim()),
         );
@@ -1412,7 +1499,7 @@ function buildQuickActionExtractionScript() {
         // text line directly above "Sponsored" with no <strong>/<h3> wrapper,
         // so the element scan finds nothing. Recover the closest name-like,
         // non-UI line before "Sponsored" (bounded so headlines/body never leak
-        // in as a false advertiser name).
+        // in as a false advertiser name). Then fall back to Relay page_name.
         if (candidates.length === 0) {
           const priorLines = lines
             .slice(0, sponsoredIndex)
@@ -1428,7 +1515,7 @@ function buildQuickActionExtractionScript() {
           const nearest = priorLines[priorLines.length - 1];
           if (nearest) return nearest;
         }
-        return null;
+        return pageNameByLibraryId.get(libraryId) || null;
       })();
       const headline = card?.querySelector("h1, h2, h3, [data-headline]")?.textContent ?? null;
       const cta =
@@ -1658,6 +1745,18 @@ function parseQuickActionExtractionPayload(
 
   const renderedHtmlPayload =
     extractQuickActionPayloadFromRenderedHtml(content);
+  const withRelayIdentities = (
+    payload: QuickActionExtractionPayload,
+  ): QuickActionExtractionPayload => ({
+    ...payload,
+    // Server-side Relay re-parse is the choke point that turns empty
+    // DOM advertisers into confirmed page_name identities for every
+    // quick-action / browserless path that still has the page HTML.
+    cards: applyRelayPageIdentitiesToCards(
+      payload.cards,
+      extractAdArchivePageIdentities(content),
+    ),
+  });
   if (!payloadText) {
     if (
       renderedHtmlPayload.cards.length > 0 ||
@@ -1665,7 +1764,7 @@ function parseQuickActionExtractionPayload(
       renderedHtmlPayload.noResults ||
       renderedHtmlPayload.rateLimited
     ) {
-      return renderedHtmlPayload;
+      return withRelayIdentities(renderedHtmlPayload);
     }
 
     throw new CommercialDiscoveryError(
@@ -1682,10 +1781,10 @@ function parseQuickActionExtractionPayload(
       (!Array.isArray(parsed.cards) || parsed.cards.length === 0) &&
       renderedHtmlPayload.cards.length > 0
     ) {
-      return renderedHtmlPayload;
+      return withRelayIdentities(renderedHtmlPayload);
     }
 
-    return parsed;
+    return withRelayIdentities(parsed);
   } catch {
     if (
       renderedHtmlPayload.cards.length > 0 ||
@@ -1693,7 +1792,7 @@ function parseQuickActionExtractionPayload(
       renderedHtmlPayload.noResults ||
       renderedHtmlPayload.rateLimited
     ) {
-      return renderedHtmlPayload;
+      return withRelayIdentities(renderedHtmlPayload);
     }
 
     throw new CommercialDiscoveryError(
