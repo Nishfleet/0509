@@ -112,16 +112,13 @@ describe("the bare fixture-id check stays out of product code (G1 gate)", () => 
 describe("behavioral fail-closed proof: e2e routes on a production host", () => {
   const prodContext = { cloudflare: { env: {} } } as never;
 
-  it("every e2e replay loader refuses a production-host request", async () => {
-    const routes = [
-      "~/routes/api.e2e.j3.replay",
-      "~/routes/api.e2e.j4.replay",
-      "~/routes/api.e2e.billing.replay",
-      "~/routes/api.e2e.j6.support",
-      "~/routes/api.e2e.j6.team",
-      "~/routes/api.e2e.j6.retention",
-      "~/routes/api.e2e.j6.auth",
-    ];
+  it("every e2e route file's loader refuses a production-host request", async () => {
+    // Derived from the directory, not a hand-kept list — a NEW e2e route is
+    // covered the moment it exists (Sol's PR-2 review, item 2).
+    const routes = readdirSync(join(__dirname, "..", "app", "routes"))
+      .filter((name) => name.startsWith("api.e2e.") && name.endsWith(".ts"))
+      .map((name) => `~/routes/${name.slice(0, -3)}`);
+    expect(routes.length).toBeGreaterThanOrEqual(11);
     for (const path of routes) {
       const module = (await import(/* @vite-ignore */ path)) as {
         loader?: (args: unknown) => Promise<unknown>;
@@ -142,5 +139,14 @@ describe("behavioral fail-closed proof: e2e routes on a production host", () => 
       expect(status, path).not.toBeNull();
       expect(status ?? 0, path).toBeGreaterThanOrEqual(400);
     }
+  });
+});
+
+describe("legacy /app/ops POSTs survive the extraction (G4)", () => {
+  it("307s into /ops preserving the method", async () => {
+    const { action } = await import("~/routes/app.ops-redirect");
+    const response = action();
+    expect(response.status).toBe(307);
+    expect(response.headers.get("Location")).toBe("/ops");
   });
 });
