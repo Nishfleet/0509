@@ -330,7 +330,10 @@ describe("version-bound Gate C orchestrator", () => {
       evidencePath: path,
       releaseSha,
       backupProofStatus: "deferred",
-      backupProofDisposition: createDeferredBackupDisposition(releaseSha),
+      backupProofDisposition: createDeferredBackupDisposition(
+        releaseSha,
+        "a".repeat(40),
+      ),
       dependencies: {
         healthAnchor: vi.fn(async () => ({ ok: true })),
         backupLifecycle,
