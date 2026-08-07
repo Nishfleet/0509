@@ -238,7 +238,7 @@ function registryContractSha256() {
 // stack (free weekly watch, sitemap additions, /ads/:domain) — all reopened
 // as assessed_pending_reproof, no proof fabricated.
 const EXPECTED_REGISTRY_CONTRACT_SHA256 =
-  "a01572b56652111574736c69526167807e50c9c83fcbef8b57261d20828e2ac7";
+  "54722e8c51c4cad059107522abd818052ef712dc6adc37ba3523d27252361da9";
 
 type Catalogs = {
   agentActions: string[];
