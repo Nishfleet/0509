@@ -49,7 +49,13 @@ describe("manual D1 backup workflow", () => {
       required: true,
       type: "string",
     });
-    expect(parsed.on.schedule).toBeUndefined();
+    // Nightly, from 2026-08-07. This previously asserted NO schedule, which is
+    // why the repo went a week with no automated backup at all: the workflow
+    // ran on push, failed at startup every time because the authorization below
+    // demands workflow_dispatch, and the push trigger was removed to stop the
+    // noise. Nothing then took its place. Pinned exactly, so the hour cannot
+    // drift out of the low-traffic window unnoticed.
+    expect(parsed.on.schedule).toEqual([{ cron: "7 20 * * *" }]);
     const authorize = parsed.jobs.authorize_release;
     expect(authorize?.permissions).toEqual({});
     expect(authorize?.outputs?.sha).toBe("${{ steps.authorize.outputs.sha }}");
@@ -62,11 +68,28 @@ describe("manual D1 backup workflow", () => {
       "sha_pattern='^[a-f0-9]{40}$'",
       'test "$GITHUB_REPOSITORY" = "nish3451/0509"',
       'test "$GITHUB_REF" = "refs/heads/main"',
-      'test "$GITHUB_EVENT_NAME" = "workflow_dispatch"',
       'test "$GITHUB_RUN_ATTEMPT" = "1"',
       '[[ "$GITHUB_SHA" =~ $sha_pattern ]]',
-      '[[ "$EXPECTED_SHA" =~ $sha_pattern ]]',
-      'test "$EXPECTED_SHA" = "$GITHUB_SHA"',
+      '# Same shape as d1-remote-restore-evidence.yml: a scheduled run backs',
+      '# up whatever main is and must NOT carry an expected_sha, so nothing',
+      '# can smuggle a chosen commit into an unattended run. A manual run',
+      '# still has to name the exact commit and have it match.',
+      // Scheduled runs back up whatever main is and must carry NO expected_sha,
+      // so nothing can smuggle a chosen commit into an unattended run. Manual
+      // runs still have to name the exact commit and have it match. Same shape
+      // as d1-remote-restore-evidence.yml, which has always had both triggers.
+      'case "$GITHUB_EVENT_NAME" in',
+      '  schedule)',
+      '    test -z "$EXPECTED_SHA"',
+      '    ;;',
+      '  workflow_dispatch)',
+      '    [[ "$EXPECTED_SHA" =~ $sha_pattern ]]',
+      '    test "$EXPECTED_SHA" = "$GITHUB_SHA"',
+      '    ;;',
+      '  *)',
+      '    exit 1',
+      '    ;;',
+      'esac',
       "printf 'sha=%s\\n' \"$GITHUB_SHA\" >> \"$GITHUB_OUTPUT\"",
       "",
     ].join("\n"));

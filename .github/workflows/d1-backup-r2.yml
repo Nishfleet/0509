@@ -7,6 +7,20 @@ on:
         description: Exact main commit authorized for the production backup
         required: true
         type: string
+  schedule:
+    # Nightly at 01:37 IST, inside the same low-traffic window the restore drill
+    # uses, and 40 minutes ahead of it so a fresh backup exists before the drill
+    # proves a restore. Both share the 0509-production-provider-mutations
+    # concurrency group, so they queue rather than collide.
+    #
+    # This workflow was dispatch-only, and before that ran on push, where it
+    # failed at startup every time: the authorize step below demanded
+    # GITHUB_EVENT_NAME = workflow_dispatch and an expected_sha that a push can
+    # never supply. The push trigger was removed to stop the noise, which left
+    # the repo with no scheduled backup at all - its last successful run was
+    # 2026-07-30. Since then the only thing writing to backups/d1/ has been the
+    # restore-evidence drill, as a side effect.
+    - cron: "7 20 * * *"
 
 concurrency:
   group: 0509-production-provider-mutations
@@ -33,11 +47,24 @@ jobs:
           sha_pattern='^[a-f0-9]{40}$'
           test "$GITHUB_REPOSITORY" = "nish3451/0509"
           test "$GITHUB_REF" = "refs/heads/main"
-          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
           test "$GITHUB_RUN_ATTEMPT" = "1"
           [[ "$GITHUB_SHA" =~ $sha_pattern ]]
-          [[ "$EXPECTED_SHA" =~ $sha_pattern ]]
-          test "$EXPECTED_SHA" = "$GITHUB_SHA"
+          # Same shape as d1-remote-restore-evidence.yml: a scheduled run backs
+          # up whatever main is and must NOT carry an expected_sha, so nothing
+          # can smuggle a chosen commit into an unattended run. A manual run
+          # still has to name the exact commit and have it match.
+          case "$GITHUB_EVENT_NAME" in
+            schedule)
+              test -z "$EXPECTED_SHA"
+              ;;
+            workflow_dispatch)
+              [[ "$EXPECTED_SHA" =~ $sha_pattern ]]
+              test "$EXPECTED_SHA" = "$GITHUB_SHA"
+              ;;
+            *)
+              exit 1
+              ;;
+          esac
           printf 'sha=%s\n' "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
 
   backup:
