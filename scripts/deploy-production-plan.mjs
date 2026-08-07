@@ -28,10 +28,7 @@ const DEFERRED_BACKUP_DISPOSITION_KEYS = Object.freeze([
   "releaseControlBaseSha",
   "candidateSha",
   "migrationFileCount",
-  "payingCustomerCount",
-  "customerOwnedWatchlistCount",
-  "customerOwnedClientRoomCount",
-  "dormantExternalSignupRowCount",
+  "blastRadiusVerified",
   "authorizedBy",
   "authorizationScope",
 ]);
@@ -62,10 +59,18 @@ export function validateDeferredBackupDisposition(value, candidateSha) {
     disposition.candidateSha === candidateSha &&
     RELEASE_SHA_PATTERN.test(candidateSha ?? "") &&
     disposition.migrationFileCount === 0 &&
-    disposition.payingCustomerCount === 0 &&
-    disposition.customerOwnedWatchlistCount === 0 &&
-    disposition.customerOwnedClientRoomCount === 0 &&
-    disposition.dormantExternalSignupRowCount === 2 &&
+    // The blast-radius fields that used to sit here - payingCustomerCount,
+    // customerOwnedWatchlistCount, customerOwnedClientRoomCount,
+    // dormantExternalSignupRowCount - were CONSTANTS asserted against
+    // themselves, never measured. They encoded "no customer data is at risk",
+    // which was true before launch and is the whole justification for shipping
+    // without backup proof. Billing is live; nothing rechecked them. A safety
+    // record that states an unverified fact is worse than one that omits it,
+    // because it reads like evidence. Removed 2026-08-07 rather than faked.
+    //
+    // What actually justifies a deferred release is the recorded human
+    // authorization below, which is real and checkable.
+    disposition.blastRadiusVerified === false &&
     disposition.authorizedBy === "nish3451" &&
     disposition.authorizationScope === "exact_workflow_dispatch_sha"
   );
@@ -95,10 +100,9 @@ export function createDeferredBackupDisposition(candidateSha, baselineSha) {
     releaseControlBaseSha: "048e8a5991c6560a15cba485a7a4ba27af9d5004",
     candidateSha,
     migrationFileCount: 0,
-    payingCustomerCount: 0,
-    customerOwnedWatchlistCount: 0,
-    customerOwnedClientRoomCount: 0,
-    dormantExternalSignupRowCount: 2,
+    // Stated plainly rather than guessed at: this release shipped without
+    // backup proof and nobody measured what was at risk when it did.
+    blastRadiusVerified: false,
     authorizedBy: "nish3451",
     authorizationScope: "exact_workflow_dispatch_sha",
   };
