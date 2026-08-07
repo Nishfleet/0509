@@ -47,7 +47,7 @@ export function DeliveryTargetsSection(props: {
                 {target.isPaused
                   ? "Paused"
                   : target.channel === "whatsapp" && !data.whatsappAvailable
-                    ? "Not yet available — WhatsApp delivery isn't live"
+                    ? "Not available — email is the delivery channel"
                     : target.channel === "whatsapp" && !target.templateEligible
                       ? "Waiting for WhatsApp approval"
                       : "Ready"}
@@ -131,7 +131,7 @@ export function DeliveryTargetsSection(props: {
                       {paused
                         ? "Paused — digests and alerts are switched off"
                         : target.channel === "whatsapp" && !data.whatsappAvailable
-                          ? "Not yet available — WhatsApp delivery isn't live"
+                          ? "Not available — email is the delivery channel"
                           : target.channel === "whatsapp" && !target.templateEligible
                             ? "Waiting for WhatsApp approval"
                             : "Ready"}
@@ -163,20 +163,13 @@ export function DeliveryTargetsSection(props: {
         <p className="f9-app-kicker">Add delivery target</p>
         <input name="intent" type="hidden" value="add-delivery-target" />
         <input name="watchlistId" type="hidden" value={watchlistId} />
+        {/* Email is the delivery channel; a one-option select was theater. */}
+        <input name="channel" type="hidden" value="email" />
         <label className="f9-field">
-          <span>Channel</span>
-          <select defaultValue="email" name="channel">
-            <option value="email">Email</option>
-            {data.whatsappAvailable ? (
-              <option value="whatsapp">WhatsApp</option>
-            ) : null}
-          </select>
-        </label>
-        <label className="f9-field">
-          <span>Target</span>
+          <span>Email address</span>
           <input
             name="targetValue"
-            placeholder={data.whatsappAvailable ? "owner@example.com or +919999999999" : "owner@example.com"}
+            placeholder="owner@example.com"
             type="text"
           />
         </label>

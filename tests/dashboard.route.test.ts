@@ -755,7 +755,8 @@ describe("dashboard route agent memory", () => {
     expect(markup).toContain('id="setup-checklist"');
     expect(markup).toContain("Setup status is temporarily unavailable");
     expect(markup).toContain("Retry setup status");
-    expect(markup).toContain("/app?retrySetup=1#setup-checklist");
+    expect(markup).toContain("/app#setup-checklist");
+    expect(markup).not.toContain("retrySetup");
     expect(markup).not.toContain("Search ads");
   });
 

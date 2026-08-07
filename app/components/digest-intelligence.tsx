@@ -280,60 +280,6 @@ export function DesignedDigestBrief({
   );
 }
 
-export function DigestDecisionSummary({ items }: { items: DigestProofPacketItem[] }) {
-  const decision = summarizeDecision(items);
-
-  return (
-    <section className="f9-proof-packet" aria-label="Digest decision summary">
-      <div>
-        <span className="f9-app-kicker">Decision summary</span>
-        <h3>{decision.title}</h3>
-        <p className="f9-muted-copy">{decision.description}</p>
-      </div>
-      <dl className="proof-trail-list">
-        <div>
-          <dt>What changed</dt>
-          <dd>{decision.whatChanged}</dd>
-        </div>
-        <div>
-          <dt>Signal summary</dt>
-          <dd>{decision.signalSummary}</dd>
-        </div>
-        <div>
-          <dt>Evidence summary</dt>
-          <dd>{decision.evidenceSummary}</dd>
-        </div>
-        <div>
-          <dt>Urgency</dt>
-          <dd>{decision.urgency}</dd>
-        </div>
-        <div>
-          <dt>Source status</dt>
-          <dd>{decision.proofStatus}</dd>
-        </div>
-        <div>
-          <dt>Source</dt>
-          <dd>{decision.source}</dd>
-        </div>
-        <div>
-          <dt>Last seen</dt>
-          <dd>
-            {decision.lastSeen ? (
-              <LocalTime iso={decision.lastSeen} />
-            ) : (
-              "Freshness unavailable"
-            )}
-          </dd>
-        </div>
-        <div>
-          <dt>Next action</dt>
-          <dd>{decision.nextAction}</dd>
-        </div>
-      </dl>
-    </section>
-  );
-}
-
 export function DigestProofPacket({ items }: { items: DigestProofPacketItem[] }) {
   const packet = summarizeProofPacket(items);
 

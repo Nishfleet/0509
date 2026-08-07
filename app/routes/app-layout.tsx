@@ -84,9 +84,6 @@ export default function AppLayoutRoute() {
 
   return (
     <DashboardShell
-      accountDetail="Competitor intelligence workspace"
-      accountLabel="Workspace"
-      accountTitle="Five to Nine"
       onCommandPalette={openQuickAdd}
       showOpsNav={showOpsNav}
       showPresenceNav={showPresenceNav}

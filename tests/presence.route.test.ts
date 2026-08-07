@@ -85,9 +85,9 @@ describe("presence desk routes", () => {
 
     expect(meta({
       loaderData: { entity: { label: "Acme Corp" } },
-    } as never)).toEqual([{ title: "Acme Corp | Presence Desk" }]);
+    } as never)).toEqual([{ title: "Acme Corp | Presence" }]);
     expect(meta({ loaderData: undefined } as never)).toEqual([
-      { title: "Presence Desk | Five to Nine" },
+      { title: "Presence | Five to Nine" },
     ]);
   });
 

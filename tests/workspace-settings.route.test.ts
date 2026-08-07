@@ -78,39 +78,16 @@ afterEach(() => {
 });
 
 describe("workspace settings route components", () => {
-  it("renders the legacy sources compatibility hub", async () => {
-    await mockRouter(null);
-
-    const { default: SourcesCompatibilityRoute } =
-      await import("~/routes/app.sources");
-    const markup = renderToStaticMarkup(
-      createElement(SourcesCompatibilityRoute),
-    );
-
-    expect(markup).toContain("Workspace settings");
-    expect(markup).toContain("Open notifications");
-    expect(markup).toContain("Open source access");
-    expect(markup).toContain("Open developer access");
+  it("redirects the legacy sources URL into Notifications", async () => {
+    const { loader } = await import("~/routes/app.sources");
+    const response = loader() as Response;
+    expect(response.status).toBe(301);
+    expect(response.headers.get("Location")).toBe("/app/notifications");
   });
 
-  it("renders legacy sources action feedback with one-time API keys", async () => {
-    await mockRouter(null, {
-      ok: true,
-      message: "API key created. Copy it now; it will not be shown again.",
-      apiKeySecret: "example-legacy-secret",
-      apiKeyPrefix: "example-legacy-prefix",
-    });
-
-    const { default: SourcesCompatibilityRoute } =
-      await import("~/routes/app.sources");
-    const markup = renderToStaticMarkup(
-      createElement(SourcesCompatibilityRoute),
-    );
-
-    expect(markup).toContain("Copy this key now");
-    expect(markup).toContain("example-legacy-prefix");
-    expect(markup).toContain("example-legacy-secret");
-    expect(markup).toContain("Open developer access");
+  it("renders nothing on the legacy sources route — no API key can appear there", async () => {
+    const { default: SourcesRoute } = await import("~/routes/app.sources");
+    expect(SourcesRoute()).toBeNull();
   });
 
   it("renders source access without developer or notification setup", async () => {

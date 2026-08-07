@@ -19,9 +19,11 @@ export interface DashboardShellProps {
   isPublic?: boolean;
   /** Page wrapper class, e.g. f9-search-page for search-specific overrides */
   pageClassName?: string;
-  accountLabel: string;
-  accountTitle: string;
-  accountDetail: string;
+  /** Public-shell identity block; signed-in shells use the user's own
+   * name/email and need none of these (tri-audit S7). */
+  accountLabel?: string;
+  accountTitle?: string;
+  accountDetail?: string;
   userName?: string | null;
   userEmail?: string | null;
   showPresenceNav?: boolean;
@@ -75,9 +77,9 @@ function initialFor(...candidates: (string | null | undefined)[]) {
 export function DashboardShell({
   isPublic = false,
   pageClassName,
-  accountLabel,
-  accountTitle,
-  accountDetail,
+  accountLabel = "Workspace",
+  accountTitle = "Five to Nine",
+  accountDetail = "",
   userName,
   userEmail,
   showPresenceNav = false,

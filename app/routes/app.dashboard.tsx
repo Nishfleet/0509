@@ -646,7 +646,7 @@ export default function AppDashboardRoute() {
         }
         context={
           <>
-            <WakeGreeting />.{" "}
+            Welcome back.{" "}
             {latestDigest ? (
               <>
                 Your latest brief was filed{" "}
@@ -725,7 +725,7 @@ export default function AppDashboardRoute() {
             headline="Setup status is temporarily unavailable"
             primaryAction={{
               label: "Retry setup status",
-              href: "/app?retrySetup=1#setup-checklist",
+              href: "/app#setup-checklist",
             }}
             specimenLabel="SETUP CHECKS — RETRY REQUIRED"
             stateLabel="SETUP · STATUS UNAVAILABLE"
@@ -1218,19 +1218,6 @@ export function formatOverviewSectionWarnings(
 
 // Viewer-local greeting: SSR renders a neutral fallback, the browser swaps in
 // the time-of-day version after mount (same hydration-safe pattern as LocalTime).
-function WakeGreeting() {
-  const [greeting, setGreeting] = useState("Welcome back");
-
-  useEffect(() => {
-    const hour = new Date().getHours();
-    if (hour < 5) setGreeting("Working late");
-    else if (hour < 12) setGreeting("Good morning");
-    else if (hour < 17) setGreeting("Good afternoon");
-    else setGreeting("Good evening");
-  }, []);
-
-  return <>{greeting}</>;
-}
 
 const IMG_FRAME_STYLE: CSSProperties = {
   display: "block",
