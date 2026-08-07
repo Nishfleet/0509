@@ -7,6 +7,7 @@ import {
   DASHBOARD_PRIMARY_NAV,
   PUBLIC_SEARCH_NAV,
   buildDashboardMobileNav,
+  isDestinationMemberActive,
   filterDashboardNav,
   type DashboardNavItem,
 } from "~/lib/dashboard-navigation";
@@ -50,11 +51,7 @@ function WorkspaceNavLink({ item }: { item: DashboardNavItem }) {
   const location = useLocation();
   // A destination owns its member pages: Settings is the active row on
   // /app/billing, Deliver on /app/digests — the customer is never nowhere.
-  const memberActive = Boolean(
-    item.activePaths?.some(
-      (path) => location.pathname === path || location.pathname.startsWith(`${path}/`),
-    ),
-  );
+  const memberActive = isDestinationMemberActive(item, location.pathname);
   return (
     <NavLink
       className={(state) => {
@@ -263,13 +260,7 @@ export function DashboardShell({
             {mobileNav.map((item) => {
               // Same member-page ownership as the rail: Settings stays the
               // active mobile row on /app/billing (PR-5a review, Grok 2).
-              const memberActive = Boolean(
-                item.activePaths?.some(
-                  (path) =>
-                    location.pathname === path ||
-                    location.pathname.startsWith(`${path}/`),
-                ),
-              );
+              const memberActive = isDestinationMemberActive(item, location.pathname);
               return (
                 <NavLink
                   className={(state) =>

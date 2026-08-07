@@ -57,7 +57,7 @@ export default function DeliverRoute() {
   return (
     <DashboardPage className="f9-wk-page">
       <WorkingHeader
-        context="Everything that leaves this workspace starts here."
+        context="Send briefs, reports, and shared evidence from one place."
         title="Deliver"
       />
 
@@ -68,7 +68,7 @@ export default function DeliverRoute() {
         <RuledList aria-label="Delivery surfaces">
           <RuledRow
             name="Briefs"
-            say="Every filed brief, its evidence, and its delivery trail."
+            say="Read every filed brief with its evidence and delivery trail."
             status="Included"
             time=""
             to="/app/digests"
@@ -76,7 +76,7 @@ export default function DeliverRoute() {
           {data.canUseReports ? (
             <RuledRow
               name="Reports"
-              say="Client-ready documents built from what you track."
+              say="Build client-ready documents from what you track."
               status="Included"
               time=""
               to="/app/reports"
@@ -85,7 +85,7 @@ export default function DeliverRoute() {
           {data.canUseShareLinks ? (
             <RuledRow
               name="Shared links"
-              say="Everything currently shared outside the workspace, revocable here."
+              say="See everything shared outside the workspace and revoke it here."
               status="Included"
               time=""
               to="/app/shares"
@@ -94,7 +94,7 @@ export default function DeliverRoute() {
           {data.canUseClientRooms ? (
             <RuledRow
               name="Client rooms"
-              say="Per-client spaces holding the evidence you hand over."
+              say="Hand evidence to each client in its own room."
               status="Included"
               time=""
               to="/app/clients"

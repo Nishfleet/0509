@@ -88,6 +88,22 @@ export const DASHBOARD_SETTINGS_NAV: DashboardNavSection[] = [
   },
 ];
 
+/**
+ * The ONE member-page ownership resolver — desktop rail and mobile strip
+ * both use it, so a destination can never be active on one and idle on the
+ * other (Sol, wave-2).
+ */
+export function isDestinationMemberActive(
+  item: DashboardNavItem,
+  pathname: string,
+): boolean {
+  return Boolean(
+    item.activePaths?.some(
+      (path) => pathname === path || pathname.startsWith(`${path}/`),
+    ),
+  );
+}
+
 /** Member pages of the Deliver destination. */
 export const DELIVER_MEMBER_PATHS = [
   "/app/digests",

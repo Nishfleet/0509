@@ -65,28 +65,28 @@ export default function SettingsRoute() {
         <RuledList aria-label="Workspace settings">
           <RuledRow
             name="Account & security"
-            say="Email, passkeys, sessions, and workspace identity."
+            say="Manage your email, passkeys, sessions, and workspace identity."
             status="Account"
             time=""
             to="/app/account"
           />
           <RuledRow
             name="Billing & usage"
-            say="Plan, evidence checks, invoices, and upgrades."
+            say="See your plan, evidence checks, and invoices — change plan here."
             status="Billing"
             time=""
             to="/app/billing"
           />
           <RuledRow
             name="Delivery"
-            say="How briefs and confirmed changes reach your team."
+            say="Choose the frequency briefs reach your team at."
             status="Email"
             time=""
             to="/app/notifications"
           />
           <RuledRow
             name="Source access"
-            say="Tracking status and the optional backup source token."
+            say="Check tracking status and the optional backup source token."
             status="Sources"
             time=""
             to="/app/source-access"
@@ -103,7 +103,7 @@ export default function SettingsRoute() {
             {data.canUseTeam ? (
               <RuledRow
                 name="Team"
-                say="Seats, invitations, and member access."
+                say="Invite teammates and manage seats."
                 status="Team"
                 time=""
                 to="/app/team"
@@ -112,7 +112,7 @@ export default function SettingsRoute() {
             {data.canUseApiAccess ? (
               <RuledRow
                 name="Developer access"
-                say="API keys and the customer API."
+                say="Create API keys for the customer API."
                 status="API"
                 time=""
                 to="/app/developer-access"
@@ -129,7 +129,7 @@ export default function SettingsRoute() {
         <RuledList aria-label="Help and support">
           <RuledRow
             name="Help & support"
-            say="Open a support case; we answer from the workspace that saw the problem."
+            say="Open a support case — we answer from the workspace that saw the problem."
             status="Support"
             time=""
             to="/app/support"
