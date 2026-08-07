@@ -2581,4 +2581,170 @@ describe("Ad Library relay page-identity parsing", () => {
     expect(result.cards).toHaveLength(1);
     expect(result.cards[0].pageId).toBe("15087023444");
   });
+
+  it("fills an empty DOM advertiser from Relay page_name (live search regression)", async () => {
+    // Live 2026-08-07: every public search card had advertiserPageId but
+    // empty advertiser ("Advertiser unconfirmed"). The capture path must
+    // promote Relay page_name into advertiser when the card DOM has no
+    // strong/h3 name — never invent a name from the search query.
+    const {
+      applyRelayPageIdentitiesToCards,
+      extractAdArchivePageIdentities,
+      parseRenderedMetaLibraryHtml,
+    } = await import("~/lib/meta-library-rendered-card-parser.server");
+    const { normalizeExtractedCard } = await import(
+      "~/lib/meta-library-browser.server"
+    );
+
+    const html = `
+      <script>
+        {"ad_archive_id":"1111111111","is_active":true,"page_id":"872580559271410","page_is_deleted":false,"snapshot":{"page_id":"872580559271410","page_name":"Ktein","body":{"text":"Say Goodbye to Bad Hair Days!"}}}
+        {"ad_archive_id":"2222222222","page_id":"589349284560350","snapshot":{"page_name":"Coloressence"}}
+      </script>
+      <article role="article">
+        <div>Active</div>
+        <div>Library ID: 1111111111</div>
+        <div>Sponsored</div>
+        <p>Say Goodbye to Bad Hair Days!</p>
+        <a href="/ads/library/?id=1111111111">View ad details</a>
+      </article>
+      <article role="article">
+        <div>Active</div>
+        <div>Library ID: 2222222222</div>
+        <div>Sponsored</div>
+        <p>Get your favorite makeup essentials</p>
+        <a href="/ads/library/?id=2222222222">View ad details</a>
+      </article>
+    `;
+
+    const parsed = parseRenderedMetaLibraryHtml(html);
+    expect(parsed.cards.length).toBeGreaterThanOrEqual(1);
+
+    const byId = new Map(parsed.cards.map((card) => [card.libraryId, card]));
+    expect(byId.get("1111111111")?.advertiser).toBe("Ktein");
+    expect(byId.get("1111111111")?.pageId).toBe("872580559271410");
+    expect(byId.get("2222222222")?.advertiser).toBe("Coloressence");
+    expect(byId.get("2222222222")?.pageId).toBe("589349284560350");
+
+    // Session-path shape: DOM cards with empty advertiser + pageId only,
+    // then server merge from the same HTML (what mergeRelayIdentitiesFromPage does).
+    const identities = extractAdArchivePageIdentities(html);
+    const sessionShaped = applyRelayPageIdentitiesToCards(
+      [
+        {
+          libraryId: "1111111111",
+          advertiser: "",
+          body: "Say Goodbye to Bad Hair Days!",
+          previewHeadline: "Say Goodbye to Bad Hair Days!",
+          previewSubhead: null,
+          cta: null,
+          adSnapshotUrl: "https://www.facebook.com/ads/library/?id=1111111111",
+          landingPageUrl: "https://www.nykaa.com/brands/ktein",
+          platforms: ["Instagram"],
+          active: true,
+          pageId: "872580559271410",
+        },
+        {
+          libraryId: "2222222222",
+          advertiser: null,
+          body: "Get your favorite makeup essentials",
+          previewHeadline: null,
+          previewSubhead: null,
+          cta: null,
+          adSnapshotUrl: "https://www.facebook.com/ads/library/?id=2222222222",
+          landingPageUrl: null,
+          platforms: [],
+          active: true,
+          pageId: "589349284560350",
+        },
+      ],
+      identities,
+    );
+
+    expect(sessionShaped[0]?.advertiser).toBe("Ktein");
+    expect(sessionShaped[1]?.advertiser).toBe("Coloressence");
+
+    const ad = normalizeExtractedCard(sessionShaped[0]!, buildQuery());
+    expect(ad.advertiser).toBe("Ktein");
+    expect(ad.advertiserPageId).toBe("872580559271410");
+    expect(ad.previewHeadline).toMatch(/Say Goodbye to Bad Hair Days/i);
+  });
+
+  it("does not invent an advertiser from the search query when Relay has no page_name", async () => {
+    const { applyRelayPageIdentitiesToCards, extractAdArchivePageIdentities } =
+      await import("~/lib/meta-library-rendered-card-parser.server");
+
+    const identities = extractAdArchivePageIdentities(
+      `{"ad_archive_id":"9999999999","page_id":"111222333444555"}`,
+    );
+    const merged = applyRelayPageIdentitiesToCards(
+      [
+        {
+          libraryId: "9999999999",
+          advertiser: "",
+          body: "Some ad copy",
+          previewHeadline: null,
+          previewSubhead: null,
+          cta: null,
+          adSnapshotUrl: "https://www.facebook.com/ads/library/?id=9999999999",
+          landingPageUrl: null,
+          platforms: [],
+          active: true,
+          pageId: "111222333444555",
+        },
+      ],
+      identities,
+    );
+
+    expect(merged[0]?.pageId).toBe("111222333444555");
+    // Honest gap: still empty — display layer keeps "Advertiser unconfirmed".
+    expect(merged[0]?.advertiser).toBeNull();
+  });
+
+  it("keeps a DOM-scraped advertiser over Relay page_name", async () => {
+    const { applyRelayPageIdentitiesToCards, extractAdArchivePageIdentities } =
+      await import("~/lib/meta-library-rendered-card-parser.server");
+
+    const identities = extractAdArchivePageIdentities(
+      `{"ad_archive_id":"3333333333","page_id":"15087023444","page_name":"Nike Official"}`,
+    );
+    const merged = applyRelayPageIdentitiesToCards(
+      [
+        {
+          libraryId: "3333333333",
+          advertiser: "Nike",
+          body: "Just do it",
+          previewHeadline: null,
+          previewSubhead: null,
+          cta: null,
+          adSnapshotUrl: "https://www.facebook.com/ads/library/?id=3333333333",
+          landingPageUrl: null,
+          platforms: [],
+          active: true,
+          pageId: null,
+        },
+      ],
+      identities,
+    );
+
+    expect(merged[0]?.advertiser).toBe("Nike");
+    expect(merged[0]?.pageId).toBe("15087023444");
+  });
+
+  it("reads page_name nested deep in snapshot beyond the old 800-char window", async () => {
+    const { extractAdArchivePageIdentities } = await import(
+      "~/lib/meta-library-rendered-card-parser.server"
+    );
+    // page_id early, then ~2k of snapshot filler, then page_name — the old
+    // 800-char cap captured page_id and dropped the name on live payloads.
+    const filler = `"x":"${"a".repeat(2000)}"`;
+    const relay = `{"ad_archive_id":"4444444444","page_id":"15087023444","snapshot":{${filler},"page_name":"Nykaa"}}`;
+
+    const identities = extractAdArchivePageIdentities(relay);
+
+    expect(identities.get("4444444444")).toEqual({
+      pageId: "15087023444",
+      pageName: "Nykaa",
+    });
+  });
 });
