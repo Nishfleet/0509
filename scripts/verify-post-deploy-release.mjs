@@ -36,6 +36,32 @@ import {
   validateBillingCanaryResult,
 } from "./dodo-billing-canary.mjs";
 import { runCanary as runProofCanary } from "./launch-readiness-canary.mjs";
+
+/**
+ * The live commit the deferred schema gate compared against, as recorded by
+ * scripts/check-deferred-release-zero-migrations.mjs earlier in this deploy.
+ *
+ * Refuses rather than guessing: a deferred release whose baseline cannot be
+ * read has no trustworthy evidence to journal, and the disposition validator
+ * would reject a malformed one anyway.
+ */
+function readDeferredBaselineSha() {
+  const path = resolve(
+    process.cwd(),
+    "test-results/deferred-release-baseline.json",
+  );
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(path, "utf8"));
+  } catch (error) {
+    throw new Error("deferred_release_baseline_unreadable");
+  }
+  const sha = parsed?.baselineSha;
+  if (typeof sha !== "string" || !/^[0-9a-f]{40}$/u.test(sha)) {
+    throw new Error("deferred_release_baseline_invalid");
+  }
+  return sha;
+}
 import {
   checkBackupLifecyclePolicy,
   cleanupBackupLifecycleCanary,
@@ -1126,8 +1152,15 @@ async function main() {
   const releaseSha = process.env.PINNED_SHA?.trim();
   let deferredBackupProof = {};
   if (backupProofStatus === BACKUP_PROOF_DEFERRED) {
+    // The baseline is read from the evidence the schema gate wrote earlier in
+    // this same deploy, so the journal records the commit that was actually
+    // compared against. It used to be a constant in the disposition, which let
+    // the recorded evidence and the executed check drift apart silently.
     deferredBackupProof = {
-      backupProofDisposition: createDeferredBackupDisposition(releaseSha ?? ""),
+      backupProofDisposition: createDeferredBackupDisposition(
+        releaseSha ?? "",
+        readDeferredBaselineSha(),
+      ),
     };
   }
   const result = await runVersionBoundGateC({
