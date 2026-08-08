@@ -319,7 +319,10 @@ export function formatDiscoverySummary(result: SearchResponse) {
     .replace(/Commercial discovery/gi, "Competitor ad checks")
     .replace(/commercial discovery/gi, "competitor ad checks")
     .replace(
-      /competitor ad checks is already warming this query\.?/gi,
+      // First-request cold-path warming says "is warming this query"; a
+      // concurrent retry says "is already warming this query". Same customer
+      // line for both.
+      /competitor ad checks is (?:already )?warming this query\.?/gi,
       "We are checking this competitor now.",
     )
     .replace(/query/gi, "competitor")

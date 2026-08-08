@@ -468,6 +468,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
           {
             purpose: "public_search",
             forceLive,
+            // Cold path: an uncached first query returns the warming state
+            // immediately and the browser capture finishes via waitUntil.
+            executionContext: cloudflare?.ctx ?? null,
             ...(customerMetaAdLibraryToken
               ? { customerMetaAdLibraryToken }
               : {}),

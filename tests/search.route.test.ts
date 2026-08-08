@@ -315,7 +315,7 @@ describe("search loader", () => {
         }),
       }),
       null,
-      { purpose: "public_search", forceLive: false },
+      { purpose: "public_search", forceLive: false, executionContext: null },
     );
     expect(prepareSearchResultSelection).toHaveBeenCalledWith(
       env,
@@ -384,7 +384,7 @@ describe("search loader", () => {
         }),
       }),
       null,
-      { purpose: "public_search", forceLive: false },
+      { purpose: "public_search", forceLive: false, executionContext: null },
     );
     expect(result).toMatchObject({
       inputError: null,
@@ -507,7 +507,7 @@ describe("search loader", () => {
         }),
       }),
       null,
-      { purpose: "public_search", forceLive: false },
+      { purpose: "public_search", forceLive: false, executionContext: null },
     );
     expect(enforcePublicSearchRateLimit).not.toHaveBeenCalled();
     expect(prepareSearchResultSelection).toHaveBeenCalledWith(
@@ -1119,7 +1119,7 @@ describe("search loader", () => {
         }),
       }),
       null,
-      { purpose: "public_search", forceLive: false },
+      { purpose: "public_search", forceLive: false, executionContext: null },
     );
     expect(enforcePublicSearchRateLimit).not.toHaveBeenCalled();
     expect(prepareSearchResultSelection).toHaveBeenCalledWith(
@@ -1280,7 +1280,7 @@ describe("search loader", () => {
         }),
       }),
       null,
-      { purpose: "public_search", forceLive: false },
+      { purpose: "public_search", forceLive: false, executionContext: null },
     );
     expect(enforcePublicSearchRateLimit).toHaveBeenCalledTimes(1);
     searchAdsViaSourceResolver.mockClear();
@@ -1304,7 +1304,7 @@ describe("search loader", () => {
         }),
       }),
       null,
-      { purpose: "public_search", forceLive: false },
+      { purpose: "public_search", forceLive: false, executionContext: null },
     );
     searchAdsViaSourceResolver.mockClear();
     prepareSearchResultSelection.mockClear();
@@ -1328,7 +1328,7 @@ describe("search loader", () => {
         }),
       }),
       null,
-      { purpose: "public_search", forceLive: true },
+      { purpose: "public_search", forceLive: true, executionContext: null },
     );
     expect(prepareSearchResultSelection).toHaveBeenCalledWith(
       env,
@@ -1826,5 +1826,24 @@ describe("search status copy", () => {
         discoveryFailureClass: null,
       }),
     ).toBe("Fresh visual checks are delayed; alternate Meta checks found no ads.");
+  });
+
+  it("renders the first-request cold-path warming summary as an honest in-progress line", async () => {
+    const { formatDiscoverySummary } = await import("~/routes/search");
+
+    expect(
+      formatDiscoverySummary({
+        ads: [],
+        nextCursor: null,
+        source: "meta_library_browser",
+        provider: "meta_library_browser",
+        cacheStatus: "miss",
+        discoveryStatus: "degraded",
+        discoveryProgress: "warming",
+        discoverySummary:
+          "Commercial discovery is warming this query. Results should appear shortly.",
+        discoveryFailureClass: null,
+      }),
+    ).toBe("We are checking this competitor now. Results should appear shortly.");
   });
 });

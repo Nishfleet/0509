@@ -62,6 +62,9 @@ export async function executeSearchWithRelevance(options: ExecuteSearchOptions):
   const resolverOptions = {
     purpose: "public_search" as const,
     forceLive: options.forceLive,
+    // Cold path: let an uncached public search return the warming state
+    // immediately while the browser capture finishes via waitUntil.
+    executionContext: options.executionContext ?? null,
     ...(options.customerMetaAdLibraryToken ? { customerMetaAdLibraryToken: options.customerMetaAdLibraryToken } : {}),
   };
 
