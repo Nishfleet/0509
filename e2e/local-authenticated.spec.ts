@@ -11,8 +11,6 @@ const clientSideButtonLabels = new Set([
   // "Workspace & account" disclosure, and the Competitors page action, which
   // opens the same quick-add dialog rather than navigating.
   "Search…⌘K",
-  "Workspace & account▾",
-  "Workspace & account▴",
   "Add competitor",
 ]);
 
@@ -44,7 +42,7 @@ async function signInAs(context: BrowserContext, baseURL: string, userId: string
 
 async function expectAppPage(page: Page) {
   await expect(page).not.toHaveURL(/\/auth\/login/);
-  await expect(page.getByRole("link", { name: "Overview" }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "Today" }).first()).toBeVisible();
 }
 
 async function expectNoHorizontalOverflow(page: Page) {
@@ -102,6 +100,8 @@ const conditionalPrimaryRoutes = new Set([
 const workingHeaderRoutes = new Set([
   "/app",
   "/app/watchlists",
+  "/app/deliver",
+  "/app/settings",
   ...conditionalPrimaryRoutes,
 ]);
 
@@ -365,7 +365,7 @@ test.describe("local authenticated E2E harness", () => {
     await page.goto("/app/watchlists");
     await expectAppPage(page);
     await expect(
-      page.locator("#f9-main-content").getByRole("heading", { level: 1, name: "Competitors", exact: true }),
+      page.locator("#f9-main-content").getByRole("heading", { level: 1, name: "Watch", exact: true }),
     ).toBeVisible();
     await expect(page.getByText("Okara competitor watch").first()).toBeVisible();
 
@@ -503,73 +503,94 @@ test.describe("local authenticated E2E harness", () => {
   }) => {
     await signInAs(context, baseURL!, "e2e-agency");
 
-    const routes = [
-      { label: "Overview", path: "/app", heading: null, copy: ["Overnight"] },
-      { label: "Search", path: "/search", heading: "Find competitor ads", copy: ["Competitor website", "See ads"] },
+    const routes: Array<{ label: string; path: string; heading: string | null; copy: string[]; direct?: boolean }> = [
+      { label: "Today", path: "/app", heading: null, copy: ["Overnight"] },
       {
-        label: "Competitors",
+        label: "Watch",
         path: "/app/watchlists",
-        heading: "Competitors",
+        heading: "Watch",
         copy: ["changed in the last 30 days"],
       },
       {
-        label: "Collections",
+        label: "Library",
         path: "/app/collections",
-        heading: "Collections",
+        heading: "Library",
         copy: ["Saved evidence stays attached", "Start your first collection"],
       },
-      { label: "Briefs", path: "/app/digests", heading: "Briefs", copy: ["Brief history"] },
       {
-        label: "Reports",
-        path: "/app/reports",
-        heading: "Reports",
-        copy: ["Each one carries the captures behind it."],
+        label: "Deliver",
+        path: "/app/deliver",
+        heading: "Deliver",
+        copy: ["Delivery surfaces", "Briefs"],
       },
       {
-        label: "Shared links",
+        label: "Settings",
+        path: "/app/settings",
+        heading: "Settings",
+        copy: ["Account & security", "Billing & usage"],
+      },
+      { label: "Deliver", path: "/app/digests", heading: "Briefs", copy: ["Brief history"], direct: true },
+      { label: "Today", path: "/search", heading: "Find competitor ads", copy: ["Competitor website", "See ads"], direct: true },
+      {
+        label: "Deliver",
+        path: "/app/reports",
+        heading: "Reports",
+        copy: ["report"],
+        direct: true,
+      },
+      {
+        label: "Deliver",
         path: "/app/shares",
         heading: "Shared links",
         copy: ["No active share links", "expires or you revoke it"],
+        direct: true,
       },
       {
-        label: "Notifications",
+        label: "Settings",
+        direct: true,
         path: "/app/notifications",
         heading: "Notifications",
         copy: ["Delivery channels"],
       },
       {
-        label: "Source access",
+        label: "Settings",
+        direct: true,
         path: "/app/source-access",
         heading: "Source access",
         copy: ["Backup Meta ad checks"],
       },
       {
-        label: "Developer access",
+        label: "Settings",
+        direct: true,
         path: "/app/developer-access",
         heading: "Developer access",
         copy: ["Connect exports and approved actions"],
       },
-      { label: "Team", path: "/app/team", heading: "Team", copy: ["2 of 10 seats in use"] },
+      { label: "Settings", path: "/app/team", heading: "Team", copy: ["2 of 10 seats in use"], direct: true },
       {
-        label: "Client rooms",
+        label: "Deliver",
+        direct: true,
         path: "/app/clients",
         heading: "Client rooms",
         copy: ["Keep reviewed evidence and client context"],
       },
       {
-        label: "Billing & usage",
+        label: "Settings",
+        direct: true,
         path: "/app/billing",
         heading: "Billing & usage",
         copy: ["Current plan"],
       },
       {
-        label: "Account & security",
+        label: "Settings",
+        direct: true,
         path: "/app/account",
         heading: "Account & security",
         copy: ["Signed in as"],
       },
       {
-        label: "Help & support",
+        label: "Settings",
+        direct: true,
         path: "/app/support",
         heading: "Help & support",
         copy: ["Tell us what needs attention"],
@@ -591,19 +612,20 @@ test.describe("local authenticated E2E harness", () => {
     await page.goto("/app");
     for (const route of routes) {
       const link = page.locator(".f9-cursor-rail").getByRole("link", { name: route.label, exact: true }).first();
-      // BL-030 regrouped the rail: the seven long-dwell settings routes sit
-      // behind one "Workspace & account" disclosure. Every section is still
-      // reachable from the sidebar — one row may have to be opened first.
-      if (!(await link.isVisible())) {
-        await page.locator(".f9-cursor-rail").getByRole("button", { name: /Workspace & account/ }).click();
-      }
+      // PR-5a: five destinations in the rail; member pages navigate
+      // directly and their owning destination row stays visible (and
+      // active) in the rail.
       await expect(link, `${route.label} sidebar link should be visible`).toBeVisible();
 
       if (new URL(page.url()).pathname !== route.path) {
-        await Promise.all([
-          page.waitForURL((url) => url.pathname === route.path),
-          link.click(),
-        ]);
+        if (route.direct) {
+          await page.goto(route.path);
+        } else {
+          await Promise.all([
+            page.waitForURL((url) => url.pathname === route.path),
+            link.click(),
+          ]);
+        }
       }
 
       await expect(page).toHaveURL((url) => url.pathname === route.path);
@@ -691,7 +713,7 @@ test.describe("local authenticated E2E harness", () => {
       baseURL,
     }) => {
       await signInAs(context, baseURL!, "e2e-starter");
-      const routes = [
+      const routes: Array<{ label: string; path: string; heading: string | null; copy: string[]; direct?: boolean }> = [
         "/app",
         "/app/watchlists",
         "/app/sources",
@@ -707,7 +729,7 @@ test.describe("local authenticated E2E harness", () => {
         for (const route of routes) {
           await page.goto(route);
           await expectAppPage(page);
-          await expect(page.getByRole("link", { name: "Competitors" }).first()).toBeVisible();
+          await expect(page.getByRole("link", { name: "Watch" }).first()).toBeVisible();
           await expect(page.getByRole("link", { name: "Notifications" }).first()).toBeVisible();
           await expect(page.getByRole("button", { name: "Sign out" }).first()).toBeVisible();
           await expectNoFixedAppChrome(page);

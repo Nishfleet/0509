@@ -71,6 +71,8 @@ export default [
   route("app", "routes/app-layout.tsx", [
     index("routes/app.dashboard.tsx"),
     route("collections", "routes/app.collections.tsx"),
+    route("deliver", "routes/app.deliver.tsx"),
+    route("settings", "routes/app.settings.tsx"),
     route("watchlists", "routes/app.watchlists.tsx"),
     route("clients", "routes/app.clients.tsx"),
     route("digests", "routes/app.digests.tsx"),

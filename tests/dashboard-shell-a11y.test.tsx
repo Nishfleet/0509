@@ -116,13 +116,16 @@ describe("DashboardShell accessibility (WP-43)", () => {
     expect(mobile?.textContent).not.toContain("Ops");
   });
 
-  it("includes entitled routes in the same mobile row", async () => {
+  it("keeps the mobile row to the five destinations — member pages live inside them", async () => {
     const view = await renderShell("/app/presence", {
       showPresenceNav: true,
     });
     const mobile = view.querySelector('nav[aria-label="Workspace sections"]');
-    expect(mobile?.textContent).toContain("Presence");
-    // Staff Ops left the customer shell entirely (tri-audit G4).
+    // PR-5a: Presence is a member of Watch, not a strip peer; staff ops
+    // left the customer shell entirely (G4).
+    expect(mobile?.textContent).not.toContain("Presence");
+    expect(mobile?.textContent).toContain("Watch");
+    expect(mobile?.textContent).toContain("Settings");
     expect(mobile?.textContent).not.toContain("Ops");
   });
 

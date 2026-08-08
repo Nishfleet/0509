@@ -33,30 +33,19 @@ describe("dashboard v2 production hotfix", () => {
       /\.f9-dash-page-app \.f9-dash-mobile-nav\s*\{[^}]*display:\s*flex[^}]*overflow-x:\s*auto/s,
     );
     expect(buildDashboardMobileNav({ showPresence: true }).map((item) => item.label)).toEqual([
-      "Overview",
-      "Competitors",
-      "Presence",
-      "Search",
-      "Briefs",
-      "Collections",
-      "Reports",
-      "Shared links",
-      "Client rooms",
-      "Notifications",
-      "Source access",
-      "Developer access",
-      "Team",
-      "Billing & usage",
-      "Account & security",
-      "Help & support",
+      "Today",
+      "Watch",
+      "Library",
+      "Deliver",
+      "Settings",
     ]);
   });
 
   it.each([
-    { label: "Competitors", path: "/app/watchlists" },
-    { label: "Briefs", path: "/app/digests" },
-    { label: "Reports", path: "/app/reports" },
-    { label: "Shared links", path: "/app/shares" },
+    { label: "Watch", path: "/app/watchlists" },
+    { label: "Library", path: "/app/collections" },
+    { label: "Deliver", path: "/app/deliver" },
+    { label: "Settings", path: "/app/settings" },
   ] as const)("keeps $label reachable from the mobile nav at $path", ({ label, path }) => {
     expect(buildDashboardMobileNav({ showPresence: false })).toContainEqual(
       expect.objectContaining({ label, to: path }),
@@ -100,21 +89,16 @@ describe("dashboard v2 production hotfix", () => {
     expect(helpCatalog).not.toContain("Better Auth");
   });
 
-  it("exposes Team and Client rooms once in the canonical mobile row", () => {
-    // BL-030 moved Client rooms into the rail's daily jobs (it is delivery
-    // work, not a settings screen); Team stayed behind the disclosure. Both
-    // are still in the mobile utility strip, which is what this guards.
-    const settingsItems = DASHBOARD_SETTINGS_NAV.flatMap((section) => section.items);
-    expect(settingsItems).toEqual(
-      expect.arrayContaining([{ label: "Team", to: "/app/team" }]),
-    );
-    expect(
-      DASHBOARD_PRIMARY_NAV.flatMap((section) => section.items),
-    ).toEqual(expect.arrayContaining([{ label: "Client rooms", to: "/app/clients" }]));
+  it("keeps Team and Client rooms owned by their destinations, not strip peers", () => {
+    // PR-5a: Team belongs to Settings, Client rooms to Deliver — both stay
+    // URL-reachable and mark their owning rail row active.
+    const settings = DASHBOARD_PRIMARY_NAV[0].items.find((item) => item.label === "Settings");
+    expect(settings?.activePaths).toContain("/app/team");
+    const deliver = DASHBOARD_PRIMARY_NAV[0].items.find((item) => item.label === "Deliver");
+    expect(deliver?.activePaths).toContain("/app/clients");
     const mobileItems = buildDashboardMobileNav({ showPresence: false });
-    expect(mobileItems.filter((item) => item.to === "/app/team")).toHaveLength(1);
-    expect(mobileItems.filter((item) => item.to === "/app/clients")).toHaveLength(1);
-    expect(shellSource).not.toContain("MOBILE_UTILITY_NAV");
+    expect(mobileItems.filter((item) => item.to === "/app/team")).toHaveLength(0);
+    expect(mobileItems.map((item) => item.label)).toContain("Settings");
   });
 
   it("keeps customer terminology out of primary app surfaces", () => {
