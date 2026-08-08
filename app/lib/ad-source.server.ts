@@ -46,6 +46,13 @@ export interface SearchAdsViaSourceOptions {
   acceptCacheYoungerThanMs?: number;
   customerMetaAdLibraryToken?: string | null;
   cacheKeyOverride?: string | null;
+  /**
+   * Request ExecutionContext for the cold path: when present, an uncached
+   * public search that owns the discovery lease returns the typed warming
+   * state immediately and finishes the browser capture in the background.
+   * Callers without a request context (tests, scheduled handlers) omit it.
+   */
+  executionContext?: Pick<ExecutionContext, "waitUntil"> | null;
 }
 
 /**
@@ -120,6 +127,13 @@ const EXTRACTION_FAILURE_PROVIDER_COOLDOWN_MS = 10 * 60 * 1000;
 // Keep the distributed single-flight lease beyond that complete fallback chain
 // so a public retry cannot start duplicate work in another isolate.
 const DISCOVERY_QUERY_LEASE_TTL_MS = 180 * 1000;
+// Cold-path background captures run inside waitUntil, which cancels work that
+// has not settled 30s after the response. Hold only a short lease there (and
+// renew it while the run is alive) so a canceled run self-heals: the lease
+// expires and the next poll re-acquires and runs discovery inline, instead of
+// leaving the visitor warming for the full fallback-chain TTL.
+const COLD_WARM_DISCOVERY_LEASE_TTL_MS = 60 * 1000;
+const COLD_WARM_DISCOVERY_LEASE_HEARTBEAT_MS = 20 * 1000;
 const PUBLIC_SEARCH_LEASE_WAIT_MS = 12 * 1000;
 const BACKGROUND_LEASE_WAIT_MS = 25 * 1000;
 const DISCOVERY_QUERY_LEASE_POLL_MS = 250;
@@ -632,14 +646,39 @@ export async function searchAdsViaSourceResolver(
   const leaseFreshAfterMs = forceLive
     ? Date.now() - DISCOVERY_QUERY_LEASE_FRESHNESS_SKEW_MS
     : null;
+  // COLD-PATH (0509 lane 1): the first public search for an uncached advertiser
+  // used to keep the request open for the entire ~20s browser capture before
+  // any useful response. When THIS request owns the discovery lease, run the
+  // capture in the background (waitUntil) and return the typed warming state
+  // right away; the search page's existing warming poll (5s x 12) picks up the
+  // finished cache entry. Only the true cold path qualifies - no usable cache
+  // entry, first page (no cursor), live browser provider, and a request
+  // ExecutionContext. Cached/stale, forceLive, API, cursor, and
+  // background-route behavior is unchanged. The lease owner check happens
+  // after acquisition below.
+  const wantsBackgroundWarm =
+    provider === "meta_library_browser" &&
+    routeContext === "public_search" &&
+    !forceLive &&
+    !usableCached &&
+    !cursor &&
+    typeof options.executionContext?.waitUntil === "function";
   const discoveryLease =
     canUseDistributedDiscoveryLease(effectiveEnv.DB)
       ? await acquireDiscoveryQueryLease(effectiveEnv, {
           cacheKey,
           provider,
           routeContext,
+          // Background captures live inside waitUntil, which cancels work not
+          // settled 30s after the response. Hold a shorter lease there and
+          // renew it while the run is alive, so a canceled run self-heals.
+          leaseTtlMs: wantsBackgroundWarm
+            ? COLD_WARM_DISCOVERY_LEASE_TTL_MS
+            : DISCOVERY_QUERY_LEASE_TTL_MS,
         })
       : null;
+  const canWarmInBackground =
+    wantsBackgroundWarm && discoveryLease?.acquired === true;
 
   if (discoveryLease && !discoveryLease.acquired) {
     const settledResponse = await waitForDiscoveryLeaseResolution(effectiveEnv, {
@@ -704,227 +743,239 @@ export async function searchAdsViaSourceResolver(
     );
   }
 
-  try {
-    const result = await runWithSharedDiscoveryRequest(cacheKey, async () => {
-      const startedAt = Date.now();
-      const liveResultRaw =
-        provider === "meta_library_browser"
-          ? await searchMetaLibraryByBrowser(effectiveEnv, query, {
-              // Deep scroll only for interactive public search. Watchlist and
-              // scheduled warmup keep the shallow default so DEFAULT_PAGE_BUDGET
-              // remains the scan-cost guard.
-              mode: routeContext === "public_search" ? "interactive" : "shallow",
-            })
-          : normalizeSearchResponse(
-              await searchMetaApiAdsWithInteractiveDepth(
-                {
-                  ...effectiveEnv,
-                  META_AD_LIBRARY_TOKEN: metaApiToken ?? effectiveEnv.META_AD_LIBRARY_TOKEN,
-                },
-                query,
-                cursor,
-                {
-                  allowDemoFallback: false,
-                  interactive: routeContext === "public_search" && !cursor,
-                },
-              ),
-              provider,
-            );
-      // Browser scrape only encodes country/query in the Ad Library URL — apply
-      // platform/creative/status filters client-side so exposed UI filters work.
-      // A usable scrape narrowed to zero ads by those filters is an honest
-      // empty result; without the explicit reason it would be misclassified as
-      // a provider failure, degrade shared provider health, and burn the
-      // gated API fallback on a scrape that actually worked.
-      const liveResult = (() => {
-        if (provider !== "meta_library_browser") {
-          return liveResultRaw;
+  const runDiscoveryWithLease = async (): Promise<SearchResponse> => {
+    // The background (cold-path) run renews its shorter lease while alive so
+    // it cannot be stolen mid-capture; when it is canceled by the waitUntil
+    // 30s cap, the lease expires and the next poll re-acquires it.
+    const leaseHeartbeat = canWarmInBackground
+      ? startDiscoveryLeaseHeartbeat(
+          effectiveEnv,
+          cacheKey,
+          discoveryLease?.holderId ?? null,
+        )
+      : null;
+    try {
+      const result = await runWithSharedDiscoveryRequest(cacheKey, async () => {
+        const startedAt = Date.now();
+        const liveResultRaw =
+          provider === "meta_library_browser"
+            ? await searchMetaLibraryByBrowser(effectiveEnv, query, {
+                // Deep scroll only for interactive public search. Watchlist and
+                // scheduled warmup keep the shallow default so DEFAULT_PAGE_BUDGET
+                // remains the scan-cost guard.
+                mode: routeContext === "public_search" ? "interactive" : "shallow",
+              })
+            : normalizeSearchResponse(
+                await searchMetaApiAdsWithInteractiveDepth(
+                  {
+                    ...effectiveEnv,
+                    META_AD_LIBRARY_TOKEN: metaApiToken ?? effectiveEnv.META_AD_LIBRARY_TOKEN,
+                  },
+                  query,
+                  cursor,
+                  {
+                    allowDemoFallback: false,
+                    interactive: routeContext === "public_search" && !cursor,
+                  },
+                ),
+                provider,
+              );
+        // Browser scrape only encodes country/query in the Ad Library URL — apply
+        // platform/creative/status filters client-side so exposed UI filters work.
+        // A usable scrape narrowed to zero ads by those filters is an honest
+        // empty result; without the explicit reason it would be misclassified as
+        // a provider failure, degrade shared provider health, and burn the
+        // gated API fallback on a scrape that actually worked.
+        const liveResult = (() => {
+          if (provider !== "meta_library_browser") {
+            return liveResultRaw;
+          }
+          const filteredAds = filterAdsBySearchFilters(liveResultRaw.ads, query);
+          if (filteredAds.length === 0 && isUsableLiveDiscoveryResult(provider, liveResultRaw)) {
+            return { ...liveResultRaw, ads: filteredAds, discoveryEmptyReason: "no_results" as const };
+          }
+          return { ...liveResultRaw, ads: filteredAds };
+        })();
+        if (!isUsableLiveDiscoveryResult(provider, liveResult)) {
+          throw new CommercialDiscoveryError(
+            "Live commercial discovery returned no extractable ad cards.",
+            "empty_result",
+          );
         }
-        const filteredAds = filterAdsBySearchFilters(liveResultRaw.ads, query);
-        if (filteredAds.length === 0 && isUsableLiveDiscoveryResult(provider, liveResultRaw)) {
-          return { ...liveResultRaw, ads: filteredAds, discoveryEmptyReason: "no_results" as const };
-        }
-        return { ...liveResultRaw, ads: filteredAds };
-      })();
-      if (!isUsableLiveDiscoveryResult(provider, liveResult)) {
-        throw new CommercialDiscoveryError(
-          "Live commercial discovery returned no extractable ad cards.",
-          "empty_result",
-        );
-      }
-      const browserMsUsed = Date.now() - startedAt;
-      const timestamp = new Date().toISOString();
-      const partial = liveResult.discoveryPartial === true;
+        const browserMsUsed = Date.now() - startedAt;
+        const timestamp = new Date().toISOString();
+        const partial = liveResult.discoveryPartial === true;
 
-      if (effectiveEnv.DB) {
-        if (!partial) {
-          await upsertDiscoveryCacheEntry(effectiveEnv, {
-            cacheKey,
+        if (effectiveEnv.DB) {
+          if (!partial) {
+            await upsertDiscoveryCacheEntry(effectiveEnv, {
+              cacheKey,
+              provider,
+              routeContext,
+              queryFingerprint: fingerprintSavedQuery(query),
+              country: query.filters.country || "all",
+              cursor: cursor ?? null,
+              payload: {
+                ...liveResult,
+                source: provider,
+                provider,
+                // Writer contract stamp — proves this entry was produced by the
+                // current advertiser evidence filter (see epoch doc).
+                discoveryFilterEpoch: DISCOVERY_ADVERTISER_FILTER_EPOCH,
+              },
+              fetchedAt: timestamp,
+              expiresAt: new Date(Date.now() + resolveDiscoveryCacheTtlMs(routeContext)).toISOString(),
+              browserMsUsed,
+            });
+          }
+          await createDiscoveryFetchLog(effectiveEnv, {
             provider,
             routeContext,
             queryFingerprint: fingerprintSavedQuery(query),
             country: query.filters.country || "all",
-            cursor: cursor ?? null,
-            payload: {
-              ...liveResult,
-              source: provider,
-              provider,
-              // Writer contract stamp — proves this entry was produced by the
-              // current advertiser evidence filter (see epoch doc).
-              discoveryFilterEpoch: DISCOVERY_ADVERTISER_FILTER_EPOCH,
-            },
-            fetchedAt: timestamp,
-            expiresAt: new Date(Date.now() + resolveDiscoveryCacheTtlMs(routeContext)).toISOString(),
+            status: partial ? "failed" : "succeeded",
+            cacheStatus: usableCached ? "stale" : "miss",
+            failureClass: liveResult.discoveryFailureClass ?? null,
             browserMsUsed,
+            metadata: {
+              cursor: cursor ?? null,
+              customerOwned: provider === "meta_api" ? hasCustomerMetaToken : false,
+              partial,
+            },
+          });
+          await upsertDiscoveryProviderState(effectiveEnv, {
+            provider,
+            status: partial ? "degraded" : "healthy",
+            failureClass: liveResult.discoveryFailureClass ?? null,
+            summary:
+              partial
+                ? liveResult.discoverySummary ??
+                  "Interactive discovery returned partial results."
+                : provider === "meta_library_browser"
+                ? "Live commercial discovery running through Browser Run."
+                : "Official Meta API is available for limited diagnostic use.",
+            lastSuccessAt: partial
+              ? providerState?.lastSuccessAt ?? usableCached?.fetchedAt ?? null
+              : timestamp,
+            lastFailureAt: partial ? timestamp : null,
+            metadata: {
+              customerOwned: provider === "meta_api" ? hasCustomerMetaToken : false,
+              partial,
+              routeContext,
+            },
           });
         }
+
+        return liveResult;
+      });
+
+      return {
+        ...result,
+        source: provider,
+        provider,
+        cacheStatus: "miss",
+        discoveryStatus: result.discoveryStatus ?? "healthy",
+        discoveryPartial: result.discoveryPartial ?? false,
+        discoverySummary: result.discoverySummary ?? null,
+        discoveryFailureClass: result.discoveryFailureClass ?? null,
+      };
+    } catch (error) {
+      const failureClass =
+        provider === "meta_api"
+          ? resolveMetaApiFailureClass(error)
+          : resolveFailureClass(error);
+      const timestamp = new Date().toISOString();
+      const cooldownState = buildDiscoveryCooldownState(error, failureClass);
+      const summary = buildDiscoveryFailureSummary({
+        cached: Boolean(usableCached),
+        cooldownState,
+        failureClass,
+        provider,
+      });
+
+      if (effectiveEnv.DB) {
         await createDiscoveryFetchLog(effectiveEnv, {
           provider,
           routeContext,
           queryFingerprint: fingerprintSavedQuery(query),
           country: query.filters.country || "all",
-          status: partial ? "failed" : "succeeded",
+          status: "failed",
           cacheStatus: usableCached ? "stale" : "miss",
-          failureClass: liveResult.discoveryFailureClass ?? null,
-          browserMsUsed,
+          failureClass,
+          browserMsUsed: null,
           metadata: {
+            cooldownUntil: cooldownState?.cooldownUntil ?? null,
             cursor: cursor ?? null,
             customerOwned: provider === "meta_api" ? hasCustomerMetaToken : false,
-            partial,
+            errorMessage: error instanceof Error ? error.message : "Unknown discovery error.",
+            retryAfterSeconds: cooldownState?.retryAfterSeconds ?? null,
           },
         });
         await upsertDiscoveryProviderState(effectiveEnv, {
           provider,
-          status: partial ? "degraded" : "healthy",
-          failureClass: liveResult.discoveryFailureClass ?? null,
-          summary:
-            partial
-              ? liveResult.discoverySummary ??
-                "Interactive discovery returned partial results."
-              : provider === "meta_library_browser"
-              ? "Live commercial discovery running through Browser Run."
-              : "Official Meta API is available for limited diagnostic use.",
-          lastSuccessAt: partial
-            ? providerState?.lastSuccessAt ?? usableCached?.fetchedAt ?? null
-            : timestamp,
-          lastFailureAt: partial ? timestamp : null,
+          status: usableCached ? "cache_only" : "degraded",
+          failureClass,
+          summary,
+          lastSuccessAt: usableCached?.fetchedAt ?? null,
+          lastFailureAt: timestamp,
           metadata: {
+            cooldownUntil: cooldownState?.cooldownUntil ?? null,
             customerOwned: provider === "meta_api" ? hasCustomerMetaToken : false,
-            partial,
+            retryAfterSeconds: cooldownState?.retryAfterSeconds ?? null,
             routeContext,
           },
         });
       }
 
-      return liveResult;
-    });
-
-    return {
-      ...result,
-      source: provider,
-      provider,
-      cacheStatus: "miss",
-      discoveryStatus: result.discoveryStatus ?? "healthy",
-      discoveryPartial: result.discoveryPartial ?? false,
-      discoverySummary: result.discoverySummary ?? null,
-      discoveryFailureClass: result.discoveryFailureClass ?? null,
-    };
-  } catch (error) {
-    const failureClass =
-      provider === "meta_api"
-        ? resolveMetaApiFailureClass(error)
-        : resolveFailureClass(error);
-    const timestamp = new Date().toISOString();
-    const cooldownState = buildDiscoveryCooldownState(error, failureClass);
-    const summary = buildDiscoveryFailureSummary({
-      cached: Boolean(usableCached),
-      cooldownState,
-      failureClass,
-      provider,
-    });
-
-    if (effectiveEnv.DB) {
-      await createDiscoveryFetchLog(effectiveEnv, {
-        provider,
-        routeContext,
-        queryFingerprint: fingerprintSavedQuery(query),
-        country: query.filters.country || "all",
-        status: "failed",
-        cacheStatus: usableCached ? "stale" : "miss",
-        failureClass,
-        browserMsUsed: null,
-        metadata: {
-          cooldownUntil: cooldownState?.cooldownUntil ?? null,
-          cursor: cursor ?? null,
-          customerOwned: provider === "meta_api" ? hasCustomerMetaToken : false,
-          errorMessage: error instanceof Error ? error.message : "Unknown discovery error.",
-          retryAfterSeconds: cooldownState?.retryAfterSeconds ?? null,
-        },
-      });
-      await upsertDiscoveryProviderState(effectiveEnv, {
-        provider,
-        status: usableCached ? "cache_only" : "degraded",
-        failureClass,
-        summary,
-        lastSuccessAt: usableCached?.fetchedAt ?? null,
-        lastFailureAt: timestamp,
-        metadata: {
-          cooldownUntil: cooldownState?.cooldownUntil ?? null,
-          customerOwned: provider === "meta_api" ? hasCustomerMetaToken : false,
-          retryAfterSeconds: cooldownState?.retryAfterSeconds ?? null,
+      if (provider === "meta_library_browser" && (!forceLive || options.customerMetaAdLibraryToken?.trim())) {
+        const apiFallback = await tryMetaApiFallback(effectiveEnv, query, cursor, {
+          browserFailureClass: failureClass,
+          browserSummary: summary,
           routeContext,
-        },
-      });
-    }
-
-    if (provider === "meta_library_browser" && (!forceLive || options.customerMetaAdLibraryToken?.trim())) {
-      const apiFallback = await tryMetaApiFallback(effectiveEnv, query, cursor, {
-        browserFailureClass: failureClass,
-        browserSummary: summary,
-        routeContext,
-        customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
-      });
-      if (apiFallback) {
-        if (forceLive && effectiveEnv.DB) {
-          await publishDiscoveryLeaseFallbackResult(effectiveEnv, {
-            cacheKey: customerFallbackCacheKey ?? cacheKey,
-            routeContext,
-            query,
-            cursor,
-            fallback: apiFallback,
-          }).catch(() => undefined);
+          customerMetaAdLibraryToken: options.customerMetaAdLibraryToken ?? null,
+        });
+        if (apiFallback) {
+          if (forceLive && effectiveEnv.DB) {
+            await publishDiscoveryLeaseFallbackResult(effectiveEnv, {
+              cacheKey: customerFallbackCacheKey ?? cacheKey,
+              routeContext,
+              query,
+              cursor,
+              fallback: apiFallback,
+            }).catch(() => undefined);
+          }
+          return apiFallback;
         }
-        return apiFallback;
       }
-    }
 
-    if (!forceLive && usableCached) {
-      return {
-        ...toServableDiscoveryPayload(usableCached.payload),
-        source: provider,
-        provider,
-        cacheStatus: "stale",
-        discoveryStatus: "cache_only",
-        discoverySummary: summary,
-        discoveryFailureClass: failureClass,
-      };
-    }
+      if (!forceLive && usableCached) {
+        return {
+          ...toServableDiscoveryPayload(usableCached.payload),
+          source: provider,
+          provider,
+          cacheStatus: "stale",
+          discoveryStatus: "cache_only",
+          discoverySummary: summary,
+          discoveryFailureClass: failureClass,
+        };
+      }
 
-    if (routeContext === "public_search") {
-      return {
-        ads: [],
-        nextCursor: null,
-        source: provider,
-        provider,
-        cacheStatus: "miss",
-        discoveryStatus: "degraded",
-        discoverySummary: summary,
-        discoveryFailureClass: failureClass,
-      };
-    }
+      if (routeContext === "public_search") {
+        return {
+          ads: [],
+          nextCursor: null,
+          source: provider,
+          provider,
+          cacheStatus: "miss",
+          discoveryStatus: "degraded",
+          discoverySummary: summary,
+          discoveryFailureClass: failureClass,
+        };
+      }
 
-    throw error;
+      throw error;
   } finally {
+    leaseHeartbeat?.stop();
     if (discoveryLease?.acquired) {
       await releaseDiscoveryQueryLease(effectiveEnv, {
         cacheKey,
@@ -932,6 +983,37 @@ export async function searchAdsViaSourceResolver(
       }).catch(() => undefined);
     }
   }
+  };
+
+  if (canWarmInBackground) {
+    options.executionContext!.waitUntil(
+      runDiscoveryWithLease().catch((error) => {
+        // The public-search failure path always returns a response; a rethrow
+        // here must never take the isolate down after the response is sent.
+        console.warn(
+          JSON.stringify({
+            event: "public_search_cold_warm_background_failed",
+            errorName: error instanceof Error ? error.name : "UnknownError",
+          }),
+        );
+      }),
+    );
+
+    return {
+      ads: [],
+      nextCursor: null,
+      source: provider,
+      provider,
+      cacheStatus: "miss",
+      discoveryStatus: "degraded",
+      discoveryProgress: "warming",
+      discoverySummary:
+        "Commercial discovery is warming this query. Results should appear shortly.",
+      discoveryFailureClass: null,
+    };
+  }
+
+  return runDiscoveryWithLease();
 }
 
 async function tryMetaApiFallback(
@@ -1106,6 +1188,11 @@ async function acquireDiscoveryQueryLease(
     cacheKey: string;
     provider: AdDiscoveryProvider;
     routeContext: DiscoveryRouteContext;
+    /**
+     * Lease TTL override for the cold-path background capture; defaults to
+     * the full fallback-chain TTL for inline discovery.
+     */
+    leaseTtlMs?: number;
   },
 ): Promise<DiscoveryQueryLease> {
   const db = env.DB;
@@ -1115,7 +1202,9 @@ async function acquireDiscoveryQueryLease(
 
   const holderId = crypto.randomUUID();
   const now = new Date().toISOString();
-  const leaseExpiresAt = new Date(Date.now() + DISCOVERY_QUERY_LEASE_TTL_MS).toISOString();
+  const leaseExpiresAt = new Date(
+    Date.now() + (input.leaseTtlMs ?? DISCOVERY_QUERY_LEASE_TTL_MS),
+  ).toISOString();
   let leaseRow: { holder_id: string; lease_expires_at: string } | null | undefined;
 
   try {
@@ -1198,6 +1287,61 @@ async function releaseDiscoveryQueryLease(
         throw error;
       }
     });
+}
+
+/**
+ * Cold-path background captures renew their shorter lease every 20s while the
+ * capture is alive. If the isolate is terminated by the waitUntil 30s cap, the
+ * renewal stops with it and the lease expires ~60s after the last beat, so the
+ * next public poll re-acquires the lease and runs discovery inline instead of
+ * leaving the visitor warming for the full fallback-chain TTL.
+ */
+function startDiscoveryLeaseHeartbeat(
+  env: AppEnv,
+  cacheKey: string,
+  holderId: string | null,
+) {
+  if (!holderId) {
+    return null;
+  }
+
+  const renew = () => {
+    const db = env.DB;
+    if (!db) {
+      return;
+    }
+
+    db.prepare(
+      `UPDATE discovery_query_lease
+          SET lease_expires_at = ?, updated_at = ?
+        WHERE cache_key = ? AND holder_id = ?`,
+    )
+      .bind(
+        new Date(Date.now() + COLD_WARM_DISCOVERY_LEASE_TTL_MS).toISOString(),
+        new Date().toISOString(),
+        cacheKey,
+        holderId,
+      )
+      .run()
+      .catch((error) => {
+        if (!isMissingDiscoveryLeaseTableError(error)) {
+          console.warn(
+            JSON.stringify({
+              event: "discovery_lease_heartbeat_failed",
+              errorName: error instanceof Error ? error.name : "UnknownError",
+            }),
+          );
+        }
+      });
+  };
+
+  renew();
+  const timer = setInterval(renew, COLD_WARM_DISCOVERY_LEASE_HEARTBEAT_MS);
+  return {
+    stop() {
+      clearInterval(timer);
+    },
+  };
 }
 
 function canUseDistributedDiscoveryLease(db: AppEnv["DB"] | undefined): db is D1Database {

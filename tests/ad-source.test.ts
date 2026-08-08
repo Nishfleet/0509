@@ -3535,6 +3535,255 @@ describe("searchAdsViaSourceResolver", () => {
     expect(leaseExpiresAt - startedAt).toBeGreaterThanOrEqual(179_000);
   });
 
+  it("returns the warming state immediately and finishes the capture in the background when this request owns the lease", async () => {
+    let resolveSearch!: (value: SearchResponse) => void;
+    const browserSearch = vi.fn().mockImplementation(
+      () =>
+        new Promise<SearchResponse>((resolve) => {
+          resolveSearch = resolve;
+        }),
+    );
+    const upsertDiscoveryCacheEntry = vi.fn();
+    const createDiscoveryFetchLog = vi.fn();
+    const upsertDiscoveryProviderState = vi.fn();
+    let insertedLeaseValues: unknown[] = [];
+    const prepare = vi.fn((sql: string) => ({
+      bind: vi.fn((...values: unknown[]) => {
+        if (sql.includes("INSERT OR IGNORE INTO discovery_query_lease")) {
+          insertedLeaseValues = values;
+        }
+
+        return {
+          run: vi.fn().mockResolvedValue({ success: true }),
+          first: vi.fn().mockImplementation(async () =>
+            sql.includes("SELECT holder_id, lease_expires_at")
+              ? {
+                  holder_id: insertedLeaseValues[3],
+                  lease_expires_at: insertedLeaseValues[4],
+                }
+              : null,
+          ),
+        };
+      }),
+    }));
+    const db = { prepare } as unknown as D1Database;
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry,
+      createDiscoveryFetchLog,
+      upsertDiscoveryProviderState,
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+    const waitUntil = vi.fn();
+    const query: NormalizedSavedQuery = {
+      mode: "keyword" as const,
+      filters: {
+        query: "cold-path-warm",
+        country: "India",
+        platform: "all",
+        creativeType: "all",
+        status: "all",
+        firstSeenFrom: "",
+        lastSeenFrom: "",
+      },
+    };
+
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: db,
+      } as never,
+      query,
+      null,
+      { purpose: "public_search", executionContext: { waitUntil } },
+    );
+
+    expect(result).toMatchObject({
+      ads: [],
+      source: "meta_library_browser",
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "degraded",
+      discoveryProgress: "warming",
+      discoveryFailureClass: null,
+    });
+    // The response is out while the capture is still running: the browser
+    // promise is unresolved, so no cache write or fetch log has happened yet,
+    // and the capture was handed to waitUntil instead of being awaited.
+    expect(browserSearch).toHaveBeenCalledTimes(1);
+    expect(upsertDiscoveryCacheEntry).not.toHaveBeenCalled();
+    expect(createDiscoveryFetchLog).not.toHaveBeenCalled();
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+
+    const background = waitUntil.mock.calls[0]?.[0];
+    resolveSearch(buildLiveBrowserResult());
+    await background;
+
+    expect(upsertDiscoveryCacheEntry).toHaveBeenCalledTimes(1);
+    expect(createDiscoveryFetchLog).toHaveBeenCalledTimes(1);
+    expect(upsertDiscoveryProviderState).toHaveBeenCalledTimes(1);
+    // The background run released the lease it owned (expired-cleanup DELETE
+    // from acquire + owner DELETE from release).
+    const releaseCalls = prepare.mock.calls
+      .map((call) => String(call[0] ?? ""))
+      .filter((sql) => sql.includes("DELETE FROM discovery_query_lease"));
+    expect(releaseCalls).toHaveLength(2);
+    // The cold-path lease is short (60s) so a canceled background run
+    // self-heals, and the run renewed it while alive (heartbeat UPDATE).
+    const leaseExpiresAtMs = Date.parse(String(insertedLeaseValues[4]));
+    expect(leaseExpiresAtMs - Date.now()).toBeGreaterThan(55_000);
+    expect(leaseExpiresAtMs - Date.now()).toBeLessThanOrEqual(61_000);
+    const heartbeatUpdates = prepare.mock.calls
+      .map((call) => String(call[0] ?? ""))
+      .filter((sql) => sql.includes("UPDATE discovery_query_lease"));
+    expect(heartbeatUpdates).toHaveLength(1);
+  });
+
+  it("keeps cursor (load-more) requests on the synchronous discovery path", async () => {
+    const browserSearch = vi.fn().mockResolvedValue(buildLiveBrowserResult());
+    const waitUntil = vi.fn();
+    let insertedLeaseValues: unknown[] = [];
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((...values: unknown[]) => {
+          if (sql.includes("INSERT OR IGNORE INTO discovery_query_lease")) {
+            insertedLeaseValues = values;
+          }
+
+          return {
+            run: vi.fn().mockResolvedValue({ success: true }),
+            first: vi.fn().mockImplementation(async () =>
+              sql.includes("SELECT holder_id, lease_expires_at")
+                ? {
+                    holder_id: insertedLeaseValues[3],
+                    lease_expires_at: insertedLeaseValues[4],
+                  }
+                : null,
+            ),
+          };
+        }),
+      })),
+    } as unknown as D1Database;
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: db,
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "load-more-cold",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      "cursor-2",
+      { purpose: "public_search", executionContext: { waitUntil } },
+    );
+
+    expect(result).toMatchObject({
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+    });
+    expect(browserSearch).toHaveBeenCalledTimes(1);
+    expect(waitUntil).not.toHaveBeenCalled();
+  });
+
+  it("keeps forceLive public searches on the synchronous discovery path", async () => {
+    const browserSearch = vi.fn().mockResolvedValue(buildLiveBrowserResult());
+    const waitUntil = vi.fn();
+    let insertedLeaseValues: unknown[] = [];
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((...values: unknown[]) => {
+          if (sql.includes("INSERT OR IGNORE INTO discovery_query_lease")) {
+            insertedLeaseValues = values;
+          }
+
+          return {
+            run: vi.fn().mockResolvedValue({ success: true }),
+            first: vi.fn().mockImplementation(async () =>
+              sql.includes("SELECT holder_id, lease_expires_at")
+                ? {
+                    holder_id: insertedLeaseValues[3],
+                    lease_expires_at: insertedLeaseValues[4],
+                  }
+                : null,
+            ),
+          };
+        }),
+      })),
+    } as unknown as D1Database;
+
+    vi.doMock("~/lib/meta-library-browser.server", () => ({
+      searchMetaLibraryByBrowser: browserSearch,
+      CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
+    }));
+    vi.doMock("~/lib/data.server", () => ({
+      getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
+      getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+      upsertDiscoveryCacheEntry: vi.fn(),
+      createDiscoveryFetchLog: vi.fn(),
+      upsertDiscoveryProviderState: vi.fn(),
+    }));
+
+    const { searchAdsViaSourceResolver } = await import("~/lib/ad-source.server");
+    const result = await searchAdsViaSourceResolver(
+      {
+        BROWSER: { fetch: vi.fn() } as unknown as Fetcher,
+        DB: db,
+      } as never,
+      {
+        mode: "keyword",
+        filters: {
+          query: "force-live-cold",
+          country: "India",
+          platform: "all",
+          creativeType: "all",
+          status: "all",
+          firstSeenFrom: "",
+          lastSeenFrom: "",
+        },
+      },
+      null,
+      { purpose: "public_search", forceLive: true, executionContext: { waitUntil } },
+    );
+
+    expect(result).toMatchObject({
+      provider: "meta_library_browser",
+      cacheStatus: "miss",
+      discoveryStatus: "healthy",
+    });
+    expect(browserSearch).toHaveBeenCalledTimes(1);
+    expect(waitUntil).not.toHaveBeenCalled();
+  });
+
   it("returns a typed warming state while another isolate owns the live search", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-16T04:00:00.000Z"));
