@@ -39,7 +39,30 @@ scheduled it.
     was carefully scoped ("no confirmed changes", "demo data — sample results")
     keeps its exact meaning after any rewrite.
 
-## One system, two volumes (since 2026-07-27)
+## THE system: v4 landing language (ratified 2026-08-08 — read this first)
+
+The design-unification program (tri-audit by Sol + Grok + Fable; ratified by
+Nish 2026-08-08) made the v4 landing language — the `--wk-*` token layer and
+`f9-wk-*` primitives in `app/app.css` plus `app/components/workspace/*` —
+the product's ONLY design system. The Evidence Desk (`f9-ed-*`) and every
+earlier era are being wiped, report documents included (their proof
+semantics survive verbatim; their skin does not). Enforcement is
+mechanical: `scripts/design-system-ratchet.mjs` holds exact-match ceilings
+on every legacy marker in CI, and the ceilings only go down.
+
+The IA is the ratified five destinations — Today, Watch, Library, Deliver,
+Settings — with gate-visibility (nothing in the nav a plan cannot use) and
+member pages keeping their URLs under an owning destination. Program state:
+`/home/nish/workspaces/agent-state/0509-design-unification-ledger.md`.
+
+What SURVIVES from the section below, restated as v4 rules: the volume
+concept (full-volume deliverables, workspace volume, plain long-dwell
+surfaces), the dark-theme token-alias rule, the header-action rule (WP-A3),
+the badge semantics (WP-A4), and the voice rules above. What does NOT
+survive: any `f9-ed-*` vocabulary, the Evidence Desk chrome, and the
+Vercel-era reference further down — both are historical.
+
+## HISTORICAL — One system, two volumes (2026-07-27, Evidence Desk era)
 
 Supersedes "Two design systems" (2026-06-12), which split the product into a
 loud public system and a calm Vercel-inspired workspace. The 2026-07-27
