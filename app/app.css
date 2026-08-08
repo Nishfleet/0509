@@ -15280,6 +15280,11 @@ a.f9-wk-workrow:hover, .f9-wk-workrow.is-selected { background: var(--wk-sunk); 
   overflow-wrap: anywhere;
 }
 .f9-wk-plan-card-head > * { min-width: 0; }
+/* A squeezed single-word pill keeps painting its full text width, which
+   inflates document scrollWidth invisibly; wrap the head and keep the pill
+   whole so it drops to its own line instead. */
+.f9-wk-plan-card-head { flex-wrap: wrap; }
+.f9-wk-plan-card-head .f9-status-pill { flex-shrink: 0; }
 .f9-wk-plan-card p,
 .f9-topup-card p {
   margin: 0;
