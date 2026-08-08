@@ -102,7 +102,7 @@ describe("EvidencePlate", () => {
       />,
     );
 
-    expect(markup).toContain('<h2 class="f9-evidence-evidence-headline">Okara cut its team price</h2>');
+    expect(markup).toContain('<h2 class="f9-evidence-headline">Okara cut its team price</h2>');
     expect(markup).toContain("The anchor price moved down before the weekend.");
   });
 
@@ -117,8 +117,8 @@ describe("EvidencePlate", () => {
       />,
     );
 
-    expect(markup).not.toContain("f9-evidence-evidence-headline");
-    expect(markup).not.toContain("f9-evidence-evidence-why");
+    expect(markup).not.toContain("f9-evidence-headline");
+    expect(markup).not.toContain("f9-evidence-why");
   });
 
   it("keeps a stored capture in the frame and does not call it unreadable", () => {

@@ -70,7 +70,7 @@ export function EvidencePlate({
   const Heading = `h${headingLevel}` as "h2" | "h3" | "h4";
 
   return (
-    <article className={className ? `f9-evidence-evidence-plate ${className}` : "f9-evidence-evidence-plate"}>
+    <article className={className ? `f9-evidence-plate ${className}` : "f9-evidence-plate"}>
       <header className="f9-evidence-plate-header f9-evidence-micro">
         <span>
           PLATE {formatPlateNumber(number)} — {title}
@@ -80,10 +80,10 @@ export function EvidencePlate({
           {stamp ? <LocalTime iso={capturedAt} /> : MISSING_CAPTURE_TIME_LABEL}
         </span>
       </header>
-      {headline ? <Heading className="f9-evidence-evidence-headline">{headline}</Heading> : null}
-      {why ? <p className="f9-evidence-evidence-why">{why}</p> : null}
-      <div className="f9-evidence-evidence-body">
-        <div className="f9-evidence-evidence-capture">
+      {headline ? <Heading className="f9-evidence-headline">{headline}</Heading> : null}
+      {why ? <p className="f9-evidence-why">{why}</p> : null}
+      <div className="f9-evidence-body">
+        <div className="f9-evidence-capture">
           <div className="f9-evidence-mock-frame">
             {capture}
             {lines.length > 0 ? (
@@ -98,11 +98,11 @@ export function EvidencePlate({
             )}
           </div>
         </div>
-        <div className="f9-evidence-evidence-side">
+        <div className="f9-evidence-side">
           <FactRail rows={facts} />
         </div>
       </div>
-      {footnote ? <p className="f9-evidence-evidence-footnote">{footnote}</p> : null}
+      {footnote ? <p className="f9-evidence-footnote">{footnote}</p> : null}
     </article>
   );
 }

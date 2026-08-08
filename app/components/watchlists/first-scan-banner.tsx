@@ -129,7 +129,7 @@ export function FirstScanBanner(props: {
                 Check now
               </SecondaryAction>
               {pastFastPoll && !timedOut ? (
-                <span className="f9-evidence-evidence-line">
+                <span className="f9-evidence-line">
                   Still waiting — checking every 30 seconds.
                 </span>
               ) : null}

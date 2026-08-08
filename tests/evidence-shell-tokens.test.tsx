@@ -35,7 +35,7 @@ describe("DashboardPage volume", () => {
     );
 
     expect(markup).toContain('class="f9-dash-content"');
-    expect(markup).toContain('data-ed-volume="workspace"');
+    expect(markup).toContain('data-wk-volume="workspace"');
   });
 
   it("stamps the plain volume for long-dwell settings surfaces", () => {
@@ -46,7 +46,7 @@ describe("DashboardPage volume", () => {
     );
 
     expect(markup).toContain('class="f9-dash-content f9-account"');
-    expect(markup).toContain('data-ed-volume="plain"');
+    expect(markup).toContain('data-wk-volume="plain"');
   });
 });
 

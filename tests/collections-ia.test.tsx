@@ -262,7 +262,7 @@ describe("collections IA inversion (brief §7)", () => {
     expect(markup).not.toContain("f9-side-panel");
     expect(markup).not.toContain("f9-work-row");
     expect(markup).not.toContain("f9-evidence-specimen");
-    expect(markup).not.toContain("f9-evidence-evidence-plate");
+    expect(markup).not.toContain("f9-evidence-plate");
     // A2: the six-box insight grid is gone from this route.
     expect(markup).not.toContain("f9-insight-grid");
     expect(markup).not.toContain("Insight depth");
@@ -293,7 +293,7 @@ describe("collections evidence rows and detail (BL-033a)", () => {
     expect(markup).toContain("Rival");
     expect(markup).toContain("This is the stored capture, not a re-render.");
     expect(markup).not.toContain("PLATE 01");
-    expect(markup).not.toContain("f9-evidence-evidence-plate");
+    expect(markup).not.toContain("f9-evidence-plate");
   });
 
   it("labels provenance in sentence case while retaining export-facing labels", () => {

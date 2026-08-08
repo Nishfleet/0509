@@ -71,7 +71,7 @@ function Pane({
   return (
     <div className={`f9-evidence-diff-pane is-${variant}`}>
       <span className="f9-evidence-diff-label">{label}</span>
-      <span className="f9-evidence-evidence-line">
+      <span className="f9-evidence-line">
         <LocalTime iso={capture.capturedAt ?? null} />
       </span>
       <span className="f9-evidence-diff-value">

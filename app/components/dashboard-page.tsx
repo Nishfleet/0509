@@ -5,7 +5,7 @@ import { PrimaryAction } from "~/components/evidence/cta";
 /**
  * The workspace page shell.
  *
- * Evidence Desk (BL-005): `volume` stamps `data-ed-volume` on the content
+ * Evidence Desk (BL-005): `volume` stamps `data-wk-volume` on the content
  * wrapper so the Plain volume (brief §3 — long-dwell settings surfaces) keeps
  * the tokens and the CTA hierarchy while dropping the offset shadows. The
  * default is the Workspace volume.
@@ -23,7 +23,7 @@ export function DashboardPage({ children, className, volume = "workspace" }: Das
   return (
     <div
       className={className ? `f9-dash-content ${className}` : "f9-dash-content"}
-      data-ed-volume={volume}
+      data-wk-volume={volume}
     >
       {children}
     </div>

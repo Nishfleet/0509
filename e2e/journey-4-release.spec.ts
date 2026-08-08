@@ -233,7 +233,7 @@ async function expectCurrentEvidenceArtifactIndex(page: Page) {
     "the current report must index at least one verified evidence artifact",
   ).toBeGreaterThan(0);
   const plates = page.locator(
-    'section[aria-label="Report evidence plates"] .f9-evidence-evidence-plate',
+    'section[aria-label="Report evidence plates"] .f9-evidence-plate',
   );
   expect(
     await plates.count(),

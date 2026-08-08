@@ -135,7 +135,7 @@ describe("BL-033a presentation-only boundary", () => {
       "f9-evidence-collection-item",
       "f9-evidence-status-strip",
       "f9-evidence-specimen",
-      "f9-evidence-evidence-plate",
+      "f9-evidence-plate",
       "f9-evidence-disclosure",
       "f9-evidence-switch",
     ]) {

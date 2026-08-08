@@ -121,7 +121,7 @@ describe("share PDF rail visibility", () => {
 		expect(getComputedStyle(report!).display).toBe("block");
 		expect(getComputedStyle(report!).width).toBe("100%");
 
-		const evidenceBody = body.querySelector(".f9-evidence-evidence-body") as HTMLElement | null;
+		const evidenceBody = body.querySelector(".f9-evidence-body") as HTMLElement | null;
 		expect(evidenceBody, "the one-row fixture must mount the evidence body").not.toBeNull();
 		expect(getComputedStyle(evidenceBody!).gridTemplateColumns).toBe("minmax(0, 1fr)");
 	});

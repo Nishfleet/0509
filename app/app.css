@@ -93,11 +93,6 @@
   background: var(--red-wash);
 }
 
-.f9-empty-row {
-  display: grid;
-  gap: 8px;
-}
-
 
 * {
   box-sizing: border-box;
@@ -1127,32 +1122,6 @@ button[aria-busy="true"] {
 
 
 
-.f9-empty-state p {
-  color: var(--f9-search-muted);
-}
-
-
-.f9-empty-state {
-  display: grid;
-  gap: 10px;
-  min-height: 180px;
-  place-content: center;
-  padding: 24px;
-  border: 1px dashed rgba(6, 22, 41, 0.16);
-  border-radius: 20px;
-  background: #f7fafc;
-  text-align: center;
-}
-
-.f9-empty-state h2,
-.f9-empty-state h3 {
-  margin: 0;
-  color: var(--f9-search-ink);
-  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
-
-
-
 
 
 
@@ -1400,13 +1369,6 @@ button[aria-busy="true"] {
 }
 
 /* WP-17: display face on paid workspace page titles + panel headings */
-.f9-dash-page-app .f9-dash-page-header h1,
-.f9-dash-page-app .f9-wk-panel > h2,
-.f9-dash-page-app .f9-dash-state h2 {
-  font-family: "Bricolage Grotesque", var(--f9-font, Inter, system-ui, sans-serif);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
 
 .f9-icon {
   display: inline-block;
@@ -1431,14 +1393,7 @@ button[aria-busy="true"] {
   opacity: 1;
 }
 
-.f9-wk-panel {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 18px;
-  padding: 24px;
-  border-radius: 8px;
-  min-width: 0;
-}
+
 
 .f9-numbered-guide {
   margin: 10px 0 0;
@@ -2265,7 +2220,7 @@ button[aria-busy="true"] {
 
   .f9-evidence-report-cover,
   .f9-evidence-report-number,
-  .f9-evidence-evidence-plate,
+  .f9-evidence-plate,
   .f9-evidence-report-read,
   .f9-evidence-report-section {
     break-inside: avoid;
@@ -2310,11 +2265,11 @@ button[aria-busy="true"] {
 /* The PDF page is narrower than the desktop viewport that hosts it. Stack the
    plate internally too, so long values cannot squeeze fact labels into
    letter columns merely because the viewport media query has not fired. */
-.f9-share-pdf .f9-evidence-evidence-body {
+.f9-share-pdf .f9-evidence-body {
   grid-template-columns: minmax(0, 1fr);
 }
 
-.f9-share-pdf .f9-evidence-evidence-capture {
+.f9-share-pdf .f9-evidence-capture {
   border-right: 0;
   border-bottom: 2.5px solid var(--ed-rule);
 }
@@ -2338,7 +2293,7 @@ button[aria-busy="true"] {
   padding: 0;
 }
 
-.f9-share-pdf .f9-evidence-evidence-plate,
+.f9-share-pdf .f9-evidence-plate,
 .f9-share-pdf .f9-evidence-report-number,
 .f9-share-pdf .f9-evidence-report-read,
 .f9-share-pdf .f9-evidence-report-section,
@@ -4383,27 +4338,6 @@ one signal-green accent.
   line-height: 1.12;
 }
 
-.f9-dash-state {
-  display: grid;
-  gap: 10px;
-  padding: 20px 22px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--card);
-}
-
-.f9-dash-state h2 {
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: 700;
-}
-
-.f9-dash-state p {
-  margin: 0;
-  color: #5f5a52;
-  line-height: 1.45;
-}
-
 .f9-dash-state-empty {
   border-style: dashed;
   text-align: center;
@@ -5363,16 +5297,6 @@ one signal-green accent.
 /* Feedback inside the workspace stays flat and warm: hairline border,
    card surface, no floating shadow (matches the customer-grade cleanup). */
 
-.f9-dash-state h3 {
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: 700;
-}
-
-.f9-empty-inline {
-  margin: 0;
-}
-
 .f9-field input[type="file"] {
   padding: 8px;
   border: 1px dashed rgba(6, 22, 41, 0.16);
@@ -6236,17 +6160,6 @@ one signal-green accent.
   border-color: var(--line);
 }
 
-[data-f9-theme="dark"] .f9-status-strip > div,
-[data-f9-theme="dark"] .f9-passkey-row,
-[data-f9-theme="dark"] .f9-detail-cell,
-[data-f9-theme="dark"] .f9-annual-note,
-[data-f9-theme="dark"] .f9-import-summary span,
-[data-f9-theme="dark"] .f9-empty-state,
-[data-f9-theme="dark"] .f9-trend-sparse,
-[data-f9-theme="dark"] .f9-cycle-toggle {
-  background: var(--dk-well);
-}
-
 
 [data-f9-theme="dark"] .f9-settings-details[open] > summary {
   border-color: var(--line);
@@ -6388,10 +6301,6 @@ toggles --- */
 [data-f9-theme="dark"] .f9-dash-state-permission {
   border-color: var(--line);
   background: var(--dk-well);
-}
-
-[data-f9-theme="dark"] .f9-dash-state p {
-  color: var(--ink-soft);
 }
 
 [data-f9-theme="dark"] .f9-dash-state-partial,
@@ -7607,7 +7516,7 @@ reds soften --- */
   text-transform: uppercase;
 }
 
-.f9-evidence-evidence-line {
+.f9-evidence-line {
   font-family: var(--ed-mono);
   font-weight: 400;
   font-size: 10.5px;
@@ -7772,14 +7681,14 @@ reds soften --- */
 
 /* Plain volume (brief §3): settings surfaces keep the ranks and lose the
    offset shadows. Set by <DashboardPage volume="plain">. */
-[data-ed-volume="plain"] .f9-evidence-cta--rank1,
-[data-ed-volume="plain"] .f9-evidence-cta--rank1:hover,
-[data-ed-volume="plain"] .f9-evidence-cta--rank2:hover,
-[data-ed-volume="plain"] .f9-evidence-panel,
-[data-ed-volume="plain"] .f9-evidence-diff-plate,
-[data-ed-volume="plain"] .f9-evidence-change-record,
-[data-ed-volume="plain"] .f9-evidence-evidence-plate,
-[data-ed-volume="plain"] .f9-evidence-specimen {
+[data-wk-volume="plain"] .f9-evidence-cta--rank1,
+[data-wk-volume="plain"] .f9-evidence-cta--rank1:hover,
+[data-wk-volume="plain"] .f9-evidence-cta--rank2:hover,
+[data-wk-volume="plain"] .f9-evidence-panel,
+[data-wk-volume="plain"] .f9-evidence-diff-plate,
+[data-wk-volume="plain"] .f9-evidence-change-record,
+[data-wk-volume="plain"] .f9-evidence-plate,
+[data-wk-volume="plain"] .f9-evidence-specimen {
   box-shadow: none;
 }
 
@@ -7891,7 +7800,7 @@ reds soften --- */
 
 .f9-evidence-diff-plate,
 .f9-evidence-change-record,
-.f9-evidence-evidence-plate,
+.f9-evidence-plate,
 .f9-evidence-specimen,
 .f9-evidence-panel {
   border: 2.5px solid var(--ed-rule);
@@ -8102,18 +8011,18 @@ reds soften --- */
 
 /* --- §6.9 evidence plate --- */
 
-.f9-evidence-evidence-body {
+.f9-evidence-body {
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
 }
 
-.f9-evidence-evidence-capture {
+.f9-evidence-capture {
   padding: 16px;
   border-right: 2.5px solid var(--ed-rule);
   min-width: 0;
 }
 
-.f9-evidence-evidence-side {
+.f9-evidence-side {
   display: grid;
   align-content: start;
   gap: 10px;
@@ -8147,7 +8056,7 @@ reds soften --- */
   color: var(--ink-faint);
 }
 
-.f9-evidence-evidence-footnote {
+.f9-evidence-footnote {
   margin: 0;
   padding: 0 16px 14px;
   font-family: var(--ed-mono);
@@ -8372,7 +8281,7 @@ reds soften --- */
 
 @media (max-width: 720px) {
   .f9-evidence-diff-panes,
-  .f9-evidence-evidence-body {
+  .f9-evidence-body {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -8381,7 +8290,7 @@ reds soften --- */
     border-bottom: 2.5px solid var(--ed-rule);
   }
 
-  .f9-evidence-evidence-capture {
+  .f9-evidence-capture {
     border-right: 0;
     border-bottom: 2.5px solid var(--ed-rule);
   }
@@ -8390,7 +8299,7 @@ reds soften --- */
 
   .f9-evidence-diff-plate,
   .f9-evidence-change-record,
-  .f9-evidence-evidence-plate,
+  .f9-evidence-plate,
   .f9-evidence-specimen,
   .f9-evidence-panel,
   .f9-evidence-opened-detail {
@@ -8720,12 +8629,12 @@ reds soften --- */
 
 /* The capture cell stretches to the plate's row height; its frame must not,
    or a short capture next to a long fact rail renders as a tall empty box. */
-.f9-evidence-report .f9-evidence-evidence-capture {
+.f9-evidence-report .f9-evidence-capture {
   display: grid;
   align-content: start;
 }
 
-.f9-evidence-evidence-headline {
+.f9-evidence-headline {
   margin: 0;
   padding: 16px 16px 0;
   max-width: 34ch;
@@ -8738,7 +8647,7 @@ reds soften --- */
   color: var(--ink);
 }
 
-.f9-evidence-evidence-why {
+.f9-evidence-why {
   margin: 0;
   padding: 8px 16px 0;
   max-width: 60ch;
@@ -8934,7 +8843,7 @@ reds soften --- */
 
 /* --- §3 full volume: the report and the shared view are the loud surfaces --- */
 
-[data-ed-volume="full"] {
+[data-wk-volume="full"] {
   box-shadow: var(--ed-shadow-lg);
 }
 
@@ -8948,11 +8857,11 @@ reds soften --- */
   /* One column earlier than the primitive's own 720px breakpoint: inside the
      report the plate shares its width with the contents rail, so the fact
      rail runs out of room while the viewport is still a tablet. */
-  .f9-evidence-report .f9-evidence-evidence-body {
+  .f9-evidence-report .f9-evidence-body {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .f9-evidence-report .f9-evidence-evidence-capture {
+  .f9-evidence-report .f9-evidence-capture {
     border-right: 0;
     border-bottom: 2.5px solid var(--ed-rule);
   }
@@ -8971,7 +8880,7 @@ reds soften --- */
 
 @media (max-width: 720px) {
   .f9-evidence-report,
-  [data-ed-volume="full"] {
+  [data-wk-volume="full"] {
     box-shadow: 4px 4px 0 var(--ed-shadow-ink);
   }
 
@@ -10076,7 +9985,7 @@ a.f9-wk-btn {
 .f9-wk-page .f9-evidence-panel,
 .f9-wk-page .f9-evidence-diff-plate,
 .f9-wk-page .f9-evidence-change-record,
-.f9-wk-page .f9-evidence-evidence-plate,
+.f9-wk-page .f9-evidence-plate,
 .f9-wk-page .f9-evidence-number-card,
 .f9-wk-page .f9-evidence-rail-card,
 .f9-wk-page .f9-evidence-fact-rail,
@@ -10094,7 +10003,7 @@ a.f9-wk-btn {
 .f9-wk-page .f9-evidence-panel,
 .f9-wk-page .f9-evidence-diff-plate,
 .f9-wk-page .f9-evidence-change-record,
-.f9-wk-page .f9-evidence-evidence-plate,
+.f9-wk-page .f9-evidence-plate,
 .f9-wk-page .f9-evidence-number-card,
 .f9-wk-page .f9-evidence-rail-card,
 .f9-wk-page .f9-evidence-first-scan {
@@ -10267,7 +10176,7 @@ a.f9-wk-btn {
    weight is a rule at every width, not only at 1440. */
 @media (max-width: 720px) {
   .f9-wk-page .f9-evidence-diff-pane.is-before,
-  .f9-wk-page .f9-evidence-evidence-capture {
+  .f9-wk-page .f9-evidence-capture {
     border-width: 1px;
   }
 }
@@ -12007,7 +11916,7 @@ textarea.f9-wk-in {
 
 .f9-wk-report-view .f9-evidence-report-section-heading,
 .f9-wk-report-view .f9-evidence-report-read-verdict,
-.f9-wk-report-view .f9-evidence-evidence-headline {
+.f9-wk-report-view .f9-evidence-headline {
   max-width: 36ch;
   font-family: var(--f9-font);
   font-size: 17px;
@@ -12079,7 +11988,7 @@ textarea.f9-wk-in {
   display: none;
 }
 
-.f9-wk-report-view .f9-evidence-evidence-plate,
+.f9-wk-report-view .f9-evidence-plate,
 .f9-wk-report-view .f9-proof-packet {
   border-right: 0;
   border-left: 0;
@@ -13677,7 +13586,7 @@ textarea.f9-wk-in {
     .f9-evidence-panel,
     .f9-evidence-diff-plate,
     .f9-evidence-change-record,
-    .f9-evidence-evidence-plate,
+    .f9-evidence-plate,
     .f9-evidence-first-scan,
     .f9-detail-cell,
     .f9-trend-card,
@@ -13712,14 +13621,14 @@ textarea.f9-wk-in {
 }
 
 .f9-watchdetail-detail .f9-evidence-diff-body,
-.f9-watchdetail-detail .f9-evidence-evidence-body,
+.f9-watchdetail-detail .f9-evidence-body,
 .f9-watchdetail-detail .f9-evidence-first-scan-body {
   padding-right: 0;
   padding-left: 0;
 }
 
 .f9-watchdetail-detail .f9-evidence-diff-panes,
-.f9-watchdetail-detail .f9-evidence-evidence-capture,
+.f9-watchdetail-detail .f9-evidence-capture,
 .f9-watchdetail-detail .f9-proof-packet {
   border: 1px solid var(--wk-rule);
   background: transparent;

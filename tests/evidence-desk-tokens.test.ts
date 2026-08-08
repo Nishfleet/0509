@@ -148,13 +148,13 @@ describe("Evidence Desk token layer (brief §4)", () => {
 
   it("drops the offset shadows in the Plain volume (brief §3)", () => {
     const section = evidenceDeskSection(css);
-    expect(section).toContain('[data-ed-volume="plain"] .f9-evidence-cta--rank1');
-    expect(section).toContain('[data-ed-volume="plain"] .f9-evidence-diff-plate');
+    expect(section).toContain('[data-wk-volume="plain"] .f9-evidence-cta--rank1');
+    expect(section).toContain('[data-wk-volume="plain"] .f9-evidence-diff-plate');
     // Hover states are shadows too: every rule that paints an offset shadow
     // needs a Plain-volume counterpart, or the suppression list quietly rots.
     const suppressed = section.slice(
-      section.indexOf('[data-ed-volume="plain"]'),
-      section.indexOf("}", section.indexOf('[data-ed-volume="plain"]')),
+      section.indexOf('[data-wk-volume="plain"]'),
+      section.indexOf("}", section.indexOf('[data-wk-volume="plain"]')),
     );
     const shadowRules = section
       .split("\n")
@@ -162,7 +162,7 @@ describe("Evidence Desk token layer (brief §4)", () => {
       .map((line) => line.trim().replace(" {", ""));
     expect(shadowRules.length).toBeGreaterThan(0);
     for (const rule of shadowRules) {
-      expect(suppressed).toContain(`[data-ed-volume="plain"] ${rule}`);
+      expect(suppressed).toContain(`[data-wk-volume="plain"] ${rule}`);
     }
   });
 });

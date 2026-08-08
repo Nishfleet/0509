@@ -378,7 +378,7 @@ describe("ReportView", () => {
 
     const markup = renderToStaticMarkup(createElement(ReportView, { report }));
 
-    expect(markup).toContain("f9-evidence-evidence-why");
+    expect(markup).toContain("f9-evidence-why");
     expect(markup).not.toContain("Why it matters");
     expect(markup).not.toContain("Signal summary");
     expect(markup.match(/A new offer launched\./g)).toHaveLength(1);
