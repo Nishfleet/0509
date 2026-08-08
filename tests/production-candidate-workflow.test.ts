@@ -355,6 +355,10 @@ describe("exact production candidate workflow", () => {
       "utf8",
     );
     expect(verifier).toContain("ci-verify-provider-main-cas.sh");
+    // Nightly D1 backup (d1-backup-r2.yml schedule) uses this gate; schedule
+    // must accept empty expected_sha and reject a smuggled one.
+    expect(verifier).toContain("unexpected_schedule_expected_sha");
+    expect(verifier).toMatch(/schedule\)\s*\n[\s\S]*unexpected_schedule_expected_sha/);
     expect(providerCas).toContain("curl --disable");
     expect(providerCas).toContain("command -v curl");
     expect(providerCas).toContain("command -v jq");
@@ -439,6 +443,12 @@ printf '{"object":{"sha":"%s"}}\n' "$FAKE_REMOTE_SHA"
         GITHUB_EVENT_NAME: "workflow_dispatch",
         EXPECTED_SHA: candidateSha,
       }).status).toBe(0);
+      // Scheduled unattended runs pin main tip with empty expected_sha (same
+      // contract as authorize in d1-backup-r2.yml / restore-evidence).
+      expect(run({
+        GITHUB_EVENT_NAME: "schedule",
+        EXPECTED_SHA: "",
+      }).status).toBe(0);
       const invalidOverrides: Array<Record<string, string>> = [
         { GITHUB_REPOSITORY: "fork/0509" },
         { GITHUB_REF: "refs/heads/feature" },
@@ -446,6 +456,10 @@ printf '{"object":{"sha":"%s"}}\n' "$FAKE_REMOTE_SHA"
         { GITHUB_RUN_ATTEMPT: "2" },
         { GH_TOKEN: "" },
         { GITHUB_EVENT_NAME: "workflow_dispatch", EXPECTED_SHA: "f".repeat(40) },
+        // Schedule must not accept a smuggled expected_sha.
+        { GITHUB_EVENT_NAME: "schedule", EXPECTED_SHA: "f".repeat(40) },
+        // Still reject unknown event names.
+        { GITHUB_EVENT_NAME: "pull_request" },
       ];
       for (const overrides of invalidOverrides) {
         expect(run(overrides).status).not.toBe(0);
