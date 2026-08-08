@@ -670,7 +670,7 @@ export default function ClientsRoute() {
     : `${activeRooms.length} active · ${archivedRooms.length} archived. Keep reviewed evidence and client context together for handoff.`;
 
   return (
-    <DashboardPage className="f9-wk-page f9-clients-page">
+    <DashboardPage className="f9-wk-page f9-rooms-page">
       <WorkingHeader
         action={
           canManageClientRooms
@@ -742,7 +742,7 @@ export default function ClientsRoute() {
       ) : null}
 
       <section aria-labelledby="client-rooms-active-title" className="f9-wk-sec">
-        <div className="f9-clients-section-head">
+        <div className="f9-rooms-section-head">
           <div>
             <p className="f9-wk-kick">Active rooms</p>
             <h2 id="client-rooms-active-title">Client delivery</h2>
@@ -752,7 +752,7 @@ export default function ClientsRoute() {
           </span>
         </div>
 
-        <div className="f9-clients-rooms">
+        <div className="f9-rooms-rooms">
           {activeRooms.map((room, index) => (
             <ClientRoomCard
               key={room.id}
@@ -765,7 +765,7 @@ export default function ClientsRoute() {
             />
           ))}
           {activeRooms.length === 0 ? (
-            <div className="f9-clients-empty" role="status">
+            <div className="f9-rooms-empty" role="status">
               <h3>{canManageClientRooms ? "No client rooms yet" : "No existing client rooms"}</h3>
               <p>
                 {canManageClientRooms
@@ -802,8 +802,8 @@ function ClientRoomComposer({
   watchlists: Array<{ id: string; name: string }>;
 }) {
   return (
-    <section aria-labelledby="client-room-create-title" className="f9-wk-sec f9-clients-composer">
-      <div className="f9-clients-section-head">
+    <section aria-labelledby="client-room-create-title" className="f9-wk-sec f9-rooms-composer">
+      <div className="f9-rooms-section-head">
         <div>
           <p className="f9-wk-kick">New client room</p>
           <h2 id="client-room-create-title" ref={headingRef} tabIndex={-1}>
@@ -815,10 +815,10 @@ function ClientRoomComposer({
         </button>
       </div>
 
-      <Form className="f9-clients-form" method="post">
+      <Form className="f9-rooms-form" method="post">
         <input name="intent" type="hidden" value="upsert-client-room" />
         <input name="status" type="hidden" value="active" />
-        <div className="f9-clients-field-grid">
+        <div className="f9-rooms-field-grid">
           <label className="f9-field">
             <span>Name</span>
             <input name="name" placeholder="Nykaa weekly desk" required />
@@ -836,7 +836,7 @@ function ClientRoomComposer({
             rows={3}
           />
         </label>
-        <div className="f9-clients-field-grid">
+        <div className="f9-rooms-field-grid">
           <label className="f9-field">
             <span>Cadence</span>
             <input name="cadence" placeholder="Weekly" />
@@ -888,17 +888,17 @@ function ResourceChoices({
   resourceName: "watchlistIds" | "collectionIds";
 }) {
   return (
-    <fieldset className="f9-clients-choice-group">
+    <fieldset className="f9-rooms-choice-group">
       <legend>{label}</legend>
       {items.length > 0 ? (
-        <div className="f9-clients-choice-list">
+        <div className="f9-rooms-choice-list">
           {items.map((item) => {
             const displayName = safeClientRoomDisplayText(
               item.name,
               label === "Competitors" ? "Competitor" : "Collection",
             );
             return (
-              <div className="f9-clients-choice-row" key={item.id}>
+              <div className="f9-rooms-choice-row" key={item.id}>
                 <label>
                   <input name={resourceName} type="checkbox" value={item.id} />
                   <span>{displayName}</span>
@@ -917,7 +917,7 @@ function ResourceChoices({
           })}
         </div>
       ) : (
-        <p className="f9-clients-quiet">{emptyCopy}</p>
+        <p className="f9-rooms-quiet">{emptyCopy}</p>
       )}
     </fieldset>
   );
@@ -940,7 +940,7 @@ function ClientContextSection({
   }>;
 }) {
   return (
-    <details className="f9-clients-disclosure">
+    <details className="f9-rooms-disclosure">
       <summary>
         <span>
           <strong>Saved context</strong>
@@ -952,15 +952,15 @@ function ClientContextSection({
             : `${memories.length} loaded ${memories.length === 1 ? "memory" : "memories"}`}
         </span>
       </summary>
-      <div className="f9-clients-disclosure-body">
+      <div className="f9-rooms-disclosure-body">
         {canManage ? (
-          <Form className="f9-clients-form" method="post">
+          <Form className="f9-rooms-form" method="post">
             <input name="intent" type="hidden" value="upsert-agent-memory" />
             <label className="f9-field">
               <span>Label</span>
               <input name="key" placeholder="Review cadence" required />
             </label>
-            <div className="f9-clients-field-grid">
+            <div className="f9-rooms-field-grid">
               <label className="f9-field">
                 <span>Scope</span>
                 <select name="scope" defaultValue="workspace">
@@ -996,14 +996,14 @@ function ClientContextSection({
             </SubmitButton>
           </Form>
         ) : (
-          <p className="f9-clients-quiet">
+          <p className="f9-rooms-quiet">
             Saved context is read-only on your current plan. Existing notes remain visible.
           </p>
         )}
 
-        <div className="f9-clients-memory-list">
+        <div className="f9-rooms-memory-list">
           {memories.slice(0, 8).map((memory) => (
-            <article className="f9-clients-memory-row" key={memory.id}>
+            <article className="f9-rooms-memory-row" key={memory.id}>
               <div>
                 <h3>{memory.key}</h3>
                 <p>{memory.preview}</p>
@@ -1016,7 +1016,7 @@ function ClientContextSection({
             </article>
           ))}
           {memories.length === 0 ? (
-            <p className="f9-clients-quiet">
+            <p className="f9-rooms-quiet">
               {canManage
                 ? "No context saved yet. Add only the goals and delivery preferences future reports should reuse."
                 : "No saved client-room context exists on this account."}
@@ -1036,7 +1036,7 @@ function ArchivedRoomsSection({
   rooms: ClientRoomRecord[];
 }) {
   return (
-    <details className="f9-clients-disclosure">
+    <details className="f9-rooms-disclosure">
       <summary>
         <span>
           <strong>Archived rooms</strong>
@@ -1044,11 +1044,11 @@ function ArchivedRoomsSection({
         </span>
         <span>{rooms.length} archived</span>
       </summary>
-      <div className="f9-clients-disclosure-body">
+      <div className="f9-rooms-disclosure-body">
         {rooms.length > 0 ? (
-          <div className="f9-clients-archive-list">
+          <div className="f9-rooms-archive-list">
             {rooms.map((room) => (
-              <article className="f9-clients-archive-row" key={room.id}>
+              <article className="f9-rooms-archive-row" key={room.id}>
                 <div>
                   <h3>{room.name}</h3>
                   <p>{room.clientLabel ?? "No client label yet."}</p>
@@ -1073,7 +1073,7 @@ function ArchivedRoomsSection({
             ))}
           </div>
         ) : (
-          <p className="f9-clients-quiet">No rooms are archived.</p>
+          <p className="f9-rooms-quiet">No rooms are archived.</p>
         )}
       </div>
     </details>
@@ -1119,7 +1119,7 @@ function AgencyPlanNotice() {
   return (
     <section
       aria-labelledby="client-rooms-gate-title"
-      className="f9-wk-sec f9-clients-gate"
+      className="f9-wk-sec f9-rooms-gate"
       role="status"
     >
       <p className="f9-wk-kick">Agency plan</p>
@@ -1159,24 +1159,24 @@ function ClientRoomCard({
 
   return (
     <details
-      className="f9-client-room-card f9-clients-room"
+      className="f9-client-room-card f9-rooms-room"
       onToggle={(event) => setOpen(event.currentTarget.open)}
       open={open}
     >
       <summary>
         <span className="f9-wk-nm">{room.name}</span>
-        <span className="f9-clients-room-summary">
+        <span className="f9-rooms-room-summary">
           {room.clientLabel ?? "No client label yet"} · {handoff.next}
         </span>
         <span className={`f9-wk-st${handoff.status === "Ready for client review" ? " is-on" : ""}`}>
           {handoff.status}
         </span>
-        <span aria-hidden="true" className="f9-clients-caret">›</span>
+        <span aria-hidden="true" className="f9-rooms-caret">›</span>
       </summary>
-      <div className="f9-clients-room-body">
-        <p className="f9-clients-room-notes">{formatRoomNotes(room.notes)}</p>
+      <div className="f9-rooms-room-body">
+        <p className="f9-rooms-room-notes">{formatRoomNotes(room.notes)}</p>
 
-        <dl className="f9-clients-room-facts" aria-label={`${room.name} handoff status`}>          <div>
+        <dl className="f9-rooms-room-facts" aria-label={`${room.name} handoff status`}>          <div>
             <dt>Evidence</dt>
             <dd>{handoff.proof}</dd>
           </div>
@@ -1190,7 +1190,7 @@ function ClientRoomCard({
           </div>
         </dl>
 
-        <div className="f9-clients-actions">
+        <div className="f9-rooms-actions">
           {room.resourceRefs.map((ref) => (
             <Link className="f9-wk-lnk" key={`${ref.resourceType}:${ref.resourceId}`} to={resourceHref(ref)}>
               {ref.label ?? resourceLabel(ref)} <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
@@ -1216,7 +1216,7 @@ function ClientRoomCard({
                 Choose evidence <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
               </Link>
             ) : (
-              <span className="f9-clients-quiet">No linked resources</span>            )
+              <span className="f9-rooms-quiet">No linked resources</span>            )
           ) : null}
           {canManage ? (
             <Form method="post">

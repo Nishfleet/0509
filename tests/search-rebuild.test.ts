@@ -10,7 +10,7 @@ const searchClasses = Array.from(searchRoute.matchAll(/className=(?:"([^"]+)"|{`
 
 describe("search rebuild", () => {
   it("uses the fresh search surface instead of the legacy app/search system", () => {
-    expect(searchRoute).toContain('pageClassName="f9-search-page"');
+    expect(searchRoute).toContain('pageClassName="f9-find-page"');
     expect(searchClasses).not.toEqual(
       expect.arrayContaining([
         "app-shell",
@@ -110,7 +110,7 @@ describe("search rebuild", () => {
   });
 
   it("keeps primary search links legible on dark buttons", () => {
-    expect(searchCss).toContain(".f9-search-page a.f9-primary-button");
+    expect(searchCss).toContain(".f9-find-page a.f9-wk-btn");
     expect(searchCss).toContain("color: #fff;");
   });
 });

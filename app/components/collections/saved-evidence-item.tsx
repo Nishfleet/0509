@@ -88,22 +88,22 @@ export function SavedEvidenceItem({
             Boolean(item.ad.creativeImageUrl) || plate.captureLines.length > 0,
         })}
       >
-        {plate.headline ? <h3 className="f9-col-detail-headline">{plate.headline}</h3> : null}
+        {plate.headline ? <h3 className="f9-library-detail-headline">{plate.headline}</h3> : null}
         {item.ad.creativeImageUrl ? (
-          <div className="f9-col-detail-thumb">
+          <div className="f9-library-detail-thumb">
             <AdThumb ad={item.ad} />
           </div>
         ) : null}
         {plate.captureLines.length > 0 ? (
-          <blockquote className="f9-col-capture-copy">
+          <blockquote className="f9-library-capture-copy">
             {plate.captureLines.map((line, index) => (
               <p key={index}>{line}</p>
             ))}
           </blockquote>
         ) : (
-          <p className="f9-col-note">No readable copy was stored with this evidence.</p>
+          <p className="f9-library-note">No readable copy was stored with this evidence.</p>
         )}
-        <p className="f9-col-provenance">{savedItemFootnote(item)}</p>
+        <p className="f9-library-provenance">{savedItemFootnote(item)}</p>
         <div className="f9-wk-acts">
         {proofLink ? (
             <a className="f9-wk-lnk" href={proofLink} rel="noreferrer" target="_blank">
@@ -118,7 +118,7 @@ export function SavedEvidenceItem({
       {editor ? (
         <DetailBlock>
           <CollectionDisclosure
-            className="f9-col-item-editor"
+            className="f9-library-item-editor"
             group={COLLECTION_ITEM_GROUP}
             rank={3}
             summary="Edit note and tags"

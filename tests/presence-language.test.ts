@@ -48,7 +48,7 @@ describe("BL-034 Presence landing language", () => {
       "DashboardPageHeader",
       "ActionFeedback",
       "EmptyState",
-      "f9-app-panel",
+      "f9-wk-panel",
       "f9-dashboard-grid",
       "f9-work-list",
       "f9-work-row",
@@ -57,8 +57,8 @@ describe("BL-034 Presence landing language", () => {
     ]) {
       expect(source).not.toContain(retired);
     }
-    expect(source).toContain('className="f9-wk-page f9-pr-page"');
-    expect(source).toContain('className="f9-pr-coverage"');
+    expect(source).toContain('className="f9-wk-page f9-presence-page"');
+    expect(source).toContain('className="f9-presence-coverage"');
     expect(source).toContain("<RuledList");
     expect(source).toContain("<WorkingHeader");
     expect(source).toContain("FeedbackStrip");

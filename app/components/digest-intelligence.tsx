@@ -268,7 +268,7 @@ export function DesignedDigestBrief({
         <h3 id={`${id}-facts`}>At a glance</h3>
         <dl className="f9-wk-dl f9-wk-brief-facts">
           {facts.map((row) => (
-            <div key={row.key} style={{ display: "contents" }}>
+            <div key={row.key} className="f9-wk-contents">
               <dt>{row.key}</dt>
               <dd>
                 {(typeof row.value === "string" ? row.value.trim() || null : row.value) ??
@@ -289,9 +289,9 @@ export function DigestProofPacket({ items }: { items: DigestProofPacketItem[] })
   return (
     <section className="f9-proof-packet" aria-label="Digest evidence packet">
       <div>
-        <span className="f9-app-kicker">Evidence and source details</span>
+        <span className="f9-wk-kick">Evidence and source details</span>
         <h3>{packet.title}</h3>
-        <p className="f9-muted-copy">{packet.summary}</p>
+        <p className="f9-wk-dim">{packet.summary}</p>
       </div>
 
       <dl className="proof-trail-list">

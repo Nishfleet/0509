@@ -125,7 +125,7 @@ async function expectNoShellActionRow(page: Page) {
     // working header at all, and a pure signpost legitimately carries no
     // primary — but it may never carry two.
     await expect(page.locator(".f9-wk-head")).toHaveCount(0);
-    expect(await page.locator(".f9-primary-button:visible").count()).toBeLessThanOrEqual(1);
+    expect(await page.locator(".f9-wk-btn:visible").count()).toBeLessThanOrEqual(1);
     return;
   }
 
@@ -337,7 +337,7 @@ test.describe("local authenticated E2E harness", () => {
       page.getByRole("heading", { level: 1, name: "Nykaa watch", exact: true }),
     ).toBeVisible();
     await expect(page.locator(".f9-wk-context")).toContainText("Nykaa");
-    await expect(page.locator(".f9-bl035-detail")).toBeVisible();
+    await expect(page.locator(".f9-watchdetail-detail")).toBeVisible();
   });
 
   test("starter customer journey covers dashboard, search, watchlists, presence, digests, billing, developer, support, and account", async ({
@@ -490,7 +490,7 @@ test.describe("local authenticated E2E harness", () => {
     await expectAppPage(page);
     // BL-009: the report opens on its cover, whose mono kicker names the
     // document and whose headline is the finding (brief §6.10).
-    await expect(page.locator(".f9-ed-report-kicker")).toContainText(
+    await expect(page.locator(".f9-evidence-report-kicker")).toContainText(
       "Competitor evidence report",
     );
     await expect(page.locator("#f9-main-content").getByRole("heading", { level: 1 })).toBeVisible();
@@ -687,7 +687,7 @@ test.describe("local authenticated E2E harness", () => {
   // The app-shell cuts are 640px and 1180px. Sample 640/641 for mobile chrome;
   // 760/761 is a search-page-scoped cut that remains load-bearing here through
   // generic .f9-primary-button/.f9-mode-toggle rules. Keep 1024 as the sole
-  // width above the 900px f9-ed-band/detail-body, 920px plan/topup-grid, and
+  // width above the 900px f9-evidence-band/detail-body, 920px plan/topup-grid, and
   // 980px dashboard-grid/status-strip/panel-toolbar/work-row cuts.
   for (const { label, viewports } of [
     {

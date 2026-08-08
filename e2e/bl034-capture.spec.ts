@@ -112,7 +112,7 @@ async function auditPaint(page: Page) {
           : ""
       }`;
 
-    const page = document.querySelector(".f9-pr-page");
+    const page = document.querySelector(".f9-presence-page");
     const pageGrounds = new Set([
       page ? getComputedStyle(page).backgroundColor : "",
       getComputedStyle(document.body).backgroundColor,
@@ -203,7 +203,7 @@ async function auditPaint(page: Page) {
 
 async function measure(page: Page) {
   return page.evaluate(() => {
-    const buttons = [...document.querySelectorAll(".f9-pr-page .f9-wk-btn")]
+    const buttons = [...document.querySelectorAll(".f9-presence-page .f9-wk-btn")]
       .map((node) => {
         const rect = node.getBoundingClientRect();
         return {
@@ -227,10 +227,10 @@ async function measure(page: Page) {
             ]),
           );
     const firstRow = document.querySelector(
-      ".f9-pr-page [data-bl034-first-row]",
+      ".f9-presence-page [data-bl034-first-row]",
     );
     const firstRowStack = (() => {
-      const page = document.querySelector(".f9-pr-page");
+      const page = document.querySelector(".f9-presence-page");
       if (!page || !firstRow) return null;
       const name = (node: Element) =>
         `${node.tagName.toLowerCase()}${
@@ -259,7 +259,7 @@ async function measure(page: Page) {
     })();
     const smallTargets = [
       ...document.querySelectorAll(
-        ".f9-pr-page a, .f9-pr-page button, .f9-pr-page input, .f9-pr-page select, .f9-pr-page textarea",
+        ".f9-presence-page a, .f9-presence-page button, .f9-presence-page input, .f9-presence-page select, .f9-presence-page textarea",
       ),
     ]
       .filter((node) => {
@@ -289,7 +289,7 @@ async function measure(page: Page) {
       });
     const ruleWeights = [
       ...new Set(
-        [...document.querySelectorAll(".f9-pr-page, .f9-pr-page *")]
+        [...document.querySelectorAll(".f9-presence-page, .f9-presence-page *")]
           .flatMap((node) => {
             const style = getComputedStyle(node);
             return [
@@ -357,7 +357,7 @@ test.describe("BL-034 live proof", () => {
             page.on("pageerror", (error) => pageErrors.push(String(error)));
 
             await page.goto(`${base}/app/presence`, { waitUntil: "networkidle" });
-            await page.locator(".f9-pr-page").waitFor();
+            await page.locator(".f9-presence-page").waitFor();
             const measured = await measure(page);
             const paint = await auditPaint(page);
             const expectedTheme = theme === "dark" ? "dark" : null;
@@ -464,7 +464,7 @@ test.describe("BL-034 live proof", () => {
               await page.goto(`${base}/app/presence`, {
                 waitUntil: "domcontentloaded",
               });
-              await page.locator(".f9-pr-page").waitFor();
+              await page.locator(".f9-presence-page").waitFor();
               const overflow = await page.evaluate(() =>
                 Math.max(
                   0,

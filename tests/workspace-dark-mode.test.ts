@@ -56,8 +56,8 @@ describe("workspace dark mode (tokens + boot)", () => {
   });
 
   it("remaps the search shell's pinned light palette in dark mode", () => {
-    expect(css).toContain('[data-f9-theme="dark"] .f9-search-page {');
-    const remap = css.slice(css.indexOf('[data-f9-theme="dark"] .f9-search-page {'));
+    expect(css).toContain('[data-f9-theme="dark"] .f9-find-page {');
+    const remap = css.slice(css.indexOf('[data-f9-theme="dark"] .f9-find-page {'));
     expect(remap).toContain("--ld-bone: var(--bone)");
     expect(remap).toContain("--f9-search-ink: var(--ink)");
   });

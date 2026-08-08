@@ -253,7 +253,7 @@ export default function PresenceIndexRoute() {
     planAllowsEntityCreation && hasEntityCapacity && hasAvailableTrackingMode;
 
   return (
-    <DashboardPage className="f9-wk-page f9-pr-page">
+    <DashboardPage className="f9-wk-page f9-presence-page">
       <WorkingHeader
         context={
           !planAllowsEntityCreation
@@ -276,7 +276,7 @@ export default function PresenceIndexRoute() {
         </FeedbackStrip>
       ) : null}
 
-      <div className="f9-pr-notices">
+      <div className="f9-presence-notices">
         {data.access.rolloutState === "ga" ? (
           <p role="status">
             Coverage depends on robots rules and public accessibility. Notifications stay off until you opt in on
@@ -286,21 +286,21 @@ export default function PresenceIndexRoute() {
         {data.partialDataNotice ? <p role="status">{data.partialDataNotice}</p> : null}
       </div>
 
-      <div className="f9-pr-desk">
-        <section aria-labelledby="presence-add-title" className="f9-pr-instrument" id="add-entity">
-          <div className="f9-pr-section-head">
+      <div className="f9-presence-desk">
+        <section aria-labelledby="presence-add-title" className="f9-presence-instrument" id="add-entity">
+          <div className="f9-presence-section-head">
             <h2 id="presence-add-title">Start with a website</h2>
             <p>Add a declared website source. Presence files its public updates here.</p>
           </div>
 
           {canCreateEntity ? (
-            <Form className="f9-pr-form" data-bl034-first-row method="post">
+            <Form className="f9-presence-form" data-bl034-first-row method="post">
               <input name="intent" type="hidden" value="create-entity" />
-              <label className="f9-pr-field">
+              <label className="f9-presence-field">
                 <span>Entity name</span>
                 <input autoComplete="organization" name="label" placeholder="Acme Corp" required />
               </label>
-              <label className="f9-pr-field">
+              <label className="f9-presence-field">
                 <span>Entity type</span>
                 <select
                   defaultValue={competitorModeCanCreate ? "competitor" : "self"}
@@ -310,7 +310,7 @@ export default function PresenceIndexRoute() {
                   {selfModeCanCreate ? <option value="self">Your brand</option> : null}
                 </select>
               </label>
-              <label className="f9-pr-field">
+              <label className="f9-presence-field">
                 <span>Website URL</span>
                 <input
                   autoComplete="url"
@@ -320,7 +320,7 @@ export default function PresenceIndexRoute() {
                   spellCheck={false}
                 />
               </label>
-              <label className="f9-pr-field">
+              <label className="f9-presence-field">
                 <span>Canonical URL <small>Optional</small></span>
                 <input
                   autoComplete="url"
@@ -330,7 +330,7 @@ export default function PresenceIndexRoute() {
                   spellCheck={false}
                 />
               </label>
-              <div className="f9-pr-form-commit">
+              <div className="f9-presence-form-commit">
                 <SubmitButton className="f9-wk-btn" pendingLabel="Saving…">
                   Start tracking
                 </SubmitButton>
@@ -341,7 +341,7 @@ export default function PresenceIndexRoute() {
               </div>
             </Form>
           ) : (
-            <div className="f9-pr-lock" data-bl034-first-row>
+            <div className="f9-presence-lock" data-bl034-first-row>
               {planAllowsEntityCreation ? (
                 <>
                   <p>
@@ -368,14 +368,14 @@ export default function PresenceIndexRoute() {
           )}
         </section>
 
-        <section aria-labelledby="presence-coverage-title" className="f9-pr-coverage-section">
-          <div className="f9-pr-section-head">
+        <section aria-labelledby="presence-coverage-title" className="f9-presence-coverage-section">
+          <div className="f9-presence-section-head">
             <h2 id="presence-coverage-title">Source coverage</h2>
             <p>
               Website and open-web tracking is active where allowed. Every other source keeps its real gate.
             </p>
           </div>
-          <dl className="f9-pr-coverage">
+          <dl className="f9-presence-coverage">
             {coverageRows.map(({ competitorEntry, selfEntry }) => {
               const selfStatus = selfEntry
                 ? formatSourceCoverageStatus(selfEntry.status)
@@ -440,8 +440,8 @@ export default function PresenceIndexRoute() {
         </section>
       </div>
 
-      <section aria-labelledby="presence-entities-title" className="f9-wk-sec f9-pr-list-section">
-        <div className="f9-pr-list-head">
+      <section aria-labelledby="presence-entities-title" className="f9-wk-sec f9-presence-list-section">
+        <div className="f9-presence-list-head">
           <h2 id="presence-entities-title">Tracked entities</h2>
           <span>{data.snapshot.entities.length}</span>
         </div>
@@ -492,8 +492,8 @@ export default function PresenceIndexRoute() {
         )}
       </section>
 
-      <section aria-labelledby="presence-feed-title" className="f9-wk-sec f9-pr-list-section">
-        <div className="f9-pr-list-head">
+      <section aria-labelledby="presence-feed-title" className="f9-wk-sec f9-presence-list-section">
+        <div className="f9-presence-list-head">
           <h2 id="presence-feed-title">Recent public updates</h2>
           <span>{data.snapshot.recentItems.length}</span>
         </div>
@@ -502,9 +502,9 @@ export default function PresenceIndexRoute() {
             No public updates are filed yet. Check a website source to fetch its latest items.
           </p>
         ) : (
-          <div className="f9-pr-feed" role="list">
+          <div className="f9-presence-feed" role="list">
             {data.snapshot.recentItems.map((item: PresenceRecentItem) => (
-              <article className="f9-pr-feed-row" key={item.id} role="listitem">
+              <article className="f9-presence-feed-row" key={item.id} role="listitem">
                 <div>
                   <h3>
                     <a href={item.canonicalUrl} rel="noreferrer" target="_blank">
@@ -514,7 +514,7 @@ export default function PresenceIndexRoute() {
                   {item.bodyExcerpt ? <p>{item.bodyExcerpt}</p> : null}
                 </div>
                 <span>{formatCoverageLabel(item.connectorId)}</span>
-                <span className="f9-pr-feed-time">
+                <span className="f9-presence-feed-time">
                   <LocalTime iso={item.observedAt} mode="date" />
                 </span>
                 <span aria-hidden="true">&rsaquo;</span>

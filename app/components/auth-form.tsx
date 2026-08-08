@@ -72,10 +72,10 @@ export function AuthForm({
 
       {showSentRecovery ? (
         <div className="f9-auth-form" aria-live="polite">
-          <p className="f9-message is-success" role="status">
+          <p className="f9-wk-notice is-success" role="status">
             Link sent to <strong>{sentEmail}</strong>
           </p>
-          {error ? <p aria-live="assertive" className="f9-message is-error" role="alert">{error}</p> : null}
+          {error ? <p aria-live="assertive" className="f9-wk-notice is-error" role="alert">{error}</p> : null}
           <Form method="post">
             <input name="mode" type="hidden" value={mode} />
             <input name="redirectTo" type="hidden" value={redirectTo} />
@@ -83,11 +83,11 @@ export function AuthForm({
             {isSignup ? (
               <input name="name" type="hidden" value={(initialName ?? "").trim() || "Account"} />
             ) : null}
-            <button className="f9-primary-button" disabled={pending} type="submit">
+            <button className="f9-wk-btn" disabled={pending} type="submit">
               {emailPending ? "Sending…" : "Resend link"}
             </button>
           </Form>
-          <p className="f9-auth-switch" style={{ marginTop: "1rem" }}>
+          <p className="f9-auth-switch f9-wk-mt1">
             Wrong address?{" "}
             <Link to={changeEmailHref}>Use a different email</Link>
           </p>
@@ -115,11 +115,11 @@ export function AuthForm({
           />
         </label>
 
-        {message ? <p aria-live="polite" className="f9-message is-success" role="status">{message}</p> : null}
-        {error ? <p aria-live="assertive" className="f9-message is-error" role="alert">{error}</p> : null}
-        {passkeyError ? <p aria-live="assertive" className="f9-message is-error" role="alert">{passkeyError}</p> : null}
+        {message ? <p aria-live="polite" className="f9-wk-notice is-success" role="status">{message}</p> : null}
+        {error ? <p aria-live="assertive" className="f9-wk-notice is-error" role="alert">{error}</p> : null}
+        {passkeyError ? <p aria-live="assertive" className="f9-wk-notice is-error" role="alert">{passkeyError}</p> : null}
 
-        <button className="f9-primary-button" disabled={pending} type="submit">
+        <button className="f9-wk-btn" disabled={pending} type="submit">
           {emailPending
             ? "Sending…"
             : isSignup

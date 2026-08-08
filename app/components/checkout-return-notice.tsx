@@ -56,7 +56,7 @@ export function CheckoutReturnNotice({
 
   if (checkoutConfirmed && kind === "top_up") {
     return (
-      <div className="f9-message is-success" role="status">
+      <div className="f9-wk-notice is-success" role="status">
         <p>Your top-up pack is live. Purchased checks and usage limits are now updated.</p>
       </div>
     );
@@ -65,7 +65,7 @@ export function CheckoutReturnNotice({
   if (checkoutConfirmed) {
     const planLabel = plan.charAt(0).toUpperCase() + plan.slice(1);
     return (
-      <div className="f9-message is-success" role="status">
+      <div className="f9-wk-notice is-success" role="status">
         <p>Your {planLabel} plan is live. Billing, usage limits, and top-ups are now updated.</p>
       </div>
     );
@@ -73,7 +73,7 @@ export function CheckoutReturnNotice({
 
   if (pollCount >= CHECKOUT_ACTIVATION_POLL_LIMIT) {
     return (
-      <div className="f9-message" role="status">
+      <div className="f9-wk-notice" role="status">
         <p>
           Confirmation is taking longer than usual. Dodo may still be sending the signed confirmation.
           Email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> from this account if the{" "}
@@ -84,7 +84,7 @@ export function CheckoutReturnNotice({
   }
 
   return (
-    <div className="f9-message is-success" role="status">
+    <div className="f9-wk-notice is-success" role="status">
       <p>
         Dodo is confirming the {kind === "top_up" ? "top-up" : "payment"}. This page will check
         again automatically.

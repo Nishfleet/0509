@@ -202,7 +202,7 @@ export default function ShareRoute() {
             {hasAgencyIdentity && data.brandIdentity ? (
               <ShareBrandIdentity identity={data.brandIdentity} />
             ) : (
-              <Link className="f9-app-brand" to="/">
+              <Link className="f9-brandmark" to="/">
                 <BrandWordmark meta="Shared evidence" />
               </Link>
             )}
@@ -217,12 +217,12 @@ export default function ShareRoute() {
               preparedBy={data.preparedBy}
               railActions={
                 pdfVariant ? null : (
-                  <div className="f9-ed-report-actions">
+                  <div className="f9-evidence-report-actions">
                     {pdfPath ? (
                       <a
                         aria-busy={pdfPreparing}
                         aria-disabled={pdfPreparing}
-                        className="f9-ed-cta f9-ed-cta--rank2"
+                        className="f9-evidence-cta f9-evidence-cta--rank2"
                         data-pdf-preparing={pdfPreparing ? "true" : "false"}
                         href={pdfPath}
                         onClick={(event) => {
@@ -237,7 +237,7 @@ export default function ShareRoute() {
                       </a>
                     ) : (
                       <button
-                        className="f9-ed-cta f9-ed-cta--rank2"
+                        className="f9-evidence-cta f9-evidence-cta--rank2"
                         onClick={() => window.print()}
                         type="button"
                       >
@@ -251,10 +251,10 @@ export default function ShareRoute() {
             />
           </article>
         ) : digestSnapshot ? (
-          <article className="f9-app-panel">
+          <article className="f9-wk-panel">
             <div className="f9-panel-toolbar f9-report-toolbar">
               <div>
-                <p className="f9-app-kicker">Shared digest snapshot</p>
+                <p className="f9-wk-kick">Shared digest snapshot</p>
                 <h1>
                   <LocalTime iso={digestSnapshot.periodStart} mode="date" /> to{" "}
                   <LocalTime iso={digestSnapshot.periodEnd} mode="date" />
@@ -262,7 +262,7 @@ export default function ShareRoute() {
               </div>
               {pdfVariant ? null : (
                 <button
-                  className="f9-secondary-button"
+                  className="f9-wk-btn-quiet"
                   onClick={() => window.print()}
                   type="button"
                 >
@@ -277,7 +277,7 @@ export default function ShareRoute() {
                 <li className="f9-event-card" key={item.id}>
                   <div className="f9-panel-toolbar">
                     <div>
-                      <p className="f9-app-kicker">{item.watchlistName}</p>
+                      <p className="f9-wk-kick">{item.watchlistName}</p>
                       <h2>{item.title}</h2>
                     </div>
                     <Pill>{formatWatchEventTypeLabel(item.eventType)}</Pill>
@@ -289,28 +289,28 @@ export default function ShareRoute() {
             </ul>
           </article>
         ) : "payload" in data ? (
-          <article className="f9-app-panel">
-            <p className="f9-app-kicker">Shared snapshot</p>
+          <article className="f9-wk-panel">
+            <p className="f9-wk-kick">Shared snapshot</p>
             <h1>Snapshot unavailable</h1>
-            <p className="f9-muted-copy">
+            <p className="f9-wk-dim">
               This shared snapshot uses an older format that cannot be shown safely. Ask the sender
               to create a fresh share link.
             </p>
           </article>
         ) : data.resourceType === "collection" ? (
-          <article className="f9-app-panel">
-            <p className="f9-app-kicker">Shared collection</p>
+          <article className="f9-wk-panel">
+            <p className="f9-wk-kick">Shared collection</p>
             <h1>{data.collection?.name ?? "Collection unavailable"}</h1>
-            <div className="f9-work-list">
+            <div className="f9-wk-worklist">
               {data.items.map((item) => (
-                <div className="f9-work-row" key={item.id}>
+                <div className="f9-wk-workrow" key={item.id}>
                   <div className="f9-ad-thumb-row">
                     <AdThumb ad={item.ad} />
                     <div>
                       <h2>{formatAdvertiserLabel(item.ad.advertiser)}</h2>
                       <AdLongevityPill ad={item.ad} />
                       <p>{item.ad.hook}</p>
-                      <p className="f9-muted-copy">{item.tags.join(", ") || "No tags"}</p>
+                      <p className="f9-wk-dim">{item.tags.join(", ") || "No tags"}</p>
                     </div>
                   </div>
                 </div>
@@ -318,11 +318,11 @@ export default function ShareRoute() {
             </div>
           </article>
         ) : data.resourceType === "watchlist" ? (
-          <article className="f9-app-panel">
-            <p className="f9-app-kicker">Shared watchlist</p>
+          <article className="f9-wk-panel">
+            <p className="f9-wk-kick">Shared watchlist</p>
             <h1>{data.watchlist?.name ?? "Watchlist unavailable"}</h1>
             {"sourceCoverage" in data && data.sourceCoverage ? (
-              <p className="f9-muted-copy">{data.sourceCoverage.note}</p>
+              <p className="f9-wk-dim">{data.sourceCoverage.note}</p>
             ) : null}
             <ul className="event-list">
               {data.events.map((event) => (
@@ -334,8 +334,8 @@ export default function ShareRoute() {
             </ul>
           </article>
         ) : (
-          <article className="f9-app-panel">
-            <p className="f9-app-kicker">Shared digest</p>
+          <article className="f9-wk-panel">
+            <p className="f9-wk-kick">Shared digest</p>
             <h1>Weekly digest</h1>
             <ul className="event-list">
               {data.digest?.items.map((item) => (
@@ -380,7 +380,7 @@ export function ErrorBoundary({ error }: { error: unknown }) {
     <main className="f9-share-page">
       <div className="f9-container">
         <div className="f9-share-header">
-          <Link className="f9-app-brand" to="/">
+          <Link className="f9-brandmark" to="/">
             <BrandWordmark meta={MARKETING_TAGLINE} />
           </Link>
         </div>

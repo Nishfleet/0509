@@ -133,7 +133,7 @@ async function auditPaint(page: Page) {
     const focusReservations: { element: string; value: string }[] = [];
     const capsMono: string[] = [];
     const viewportHeight = window.innerHeight;
-    const page = document.querySelector(".f9-nt-page");
+    const page = document.querySelector(".f9-notif-page");
 
     for (const node of document.querySelectorAll("body *")) {
       const style = getComputedStyle(node);
@@ -196,7 +196,7 @@ async function auditPaint(page: Page) {
 
 async function measure(page: Page) {
   return page.evaluate(() => {
-    const filled = [...document.querySelectorAll(".f9-nt-page .f9-wk-btn")]
+    const filled = [...document.querySelectorAll(".f9-notif-page .f9-wk-btn")]
       .map((node) => {
         const rect = node.getBoundingClientRect();
         return {
@@ -219,8 +219,8 @@ async function measure(page: Page) {
               countInWindow(box.bottom - viewportHeight),
             ]),
           );
-    const page = document.querySelector(".f9-nt-page");
-    const firstRow = page?.querySelector(".f9-nt-definition-row");
+    const page = document.querySelector(".f9-notif-page");
+    const firstRow = page?.querySelector(".f9-notif-definition-row");
     const firstRowStack: { el: string; top: number; height: number }[] = [];
     if (page && firstRow) {
       let node: Element | null = firstRow;
@@ -247,7 +247,7 @@ async function measure(page: Page) {
 
     const interactive = [
       ...document.querySelectorAll(
-        ".f9-nt-page a, .f9-nt-page button, .f9-nt-page input, .f9-nt-page select, .f9-nt-page textarea",
+        ".f9-notif-page a, .f9-notif-page button, .f9-notif-page input, .f9-notif-page select, .f9-notif-page textarea",
       ),
     ];
     const smallTargets = interactive
@@ -296,7 +296,7 @@ async function measure(page: Page) {
 
     const ruleWeights = [
       ...new Set(
-        [...document.querySelectorAll(".f9-nt-page, .f9-nt-page *")]
+        [...document.querySelectorAll(".f9-notif-page, .f9-notif-page *")]
           .flatMap((node) => {
             const style = getComputedStyle(node);
             return [

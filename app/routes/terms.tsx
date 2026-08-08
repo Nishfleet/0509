@@ -24,7 +24,7 @@ export default function TermsRoute() {
       <SimpleHeader />
       <section className="f9-container f9-legal-section">
         <article className="f9-legal-card">
-          <span className="f9-app-kicker">Terms</span>
+          <span className="f9-wk-kick">Terms</span>
           <h1>Five to Nine terms.</h1>
           <p>These plain-English operating terms cover accounts using Five to Nine.</p>
 
@@ -83,7 +83,7 @@ function SimpleHeader() {
   return (
     <header className="f9-legal-nav">
       <div className="f9-container f9-legal-nav-inner">
-        <Link className="f9-app-brand" to="/">
+        <Link className="f9-brandmark" to="/">
           <BrandWordmark meta="Competitor change monitoring" />
         </Link>
         <nav className="f9-search-nav-links" aria-label="Legal navigation">

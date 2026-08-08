@@ -51,7 +51,7 @@ export function SourceAccessRoute() {
   const discoveryStatus = formatDiscoveryStatus(data.discoveryStatus.status);
 
   return (
-    <DashboardPage className="f9-wk-page f9-bl040-page f9-bl040-source">
+    <DashboardPage className="f9-wk-page f9-access-page f9-access-source">
       <WorkingHeader
         context="Public checks run first. Backup Meta access keeps this workspace checking when Meta limits them."
         title="Source access"
@@ -66,8 +66,8 @@ export function SourceAccessRoute() {
         </FeedbackStrip>
       ) : null}
 
-      <section aria-labelledby="source-status-title" className="f9-bl040-section">
-        <div className="f9-bl040-section-head">
+      <section aria-labelledby="source-status-title" className="f9-access-section">
+        <div className="f9-access-section-head">
           <div>
             <h2 id="source-status-title">Backup Meta ad checks</h2>
             <p>
@@ -75,14 +75,14 @@ export function SourceAccessRoute() {
               account.
             </p>
           </div>
-          <Link className="f9-bl040-text-action" to="/app/notifications">
+          <Link className="f9-access-text-action" to="/app/notifications">
             Notification settings <span aria-hidden="true">&rsaquo;</span>
           </Link>
         </div>
 
-        <div aria-label="Source access status" className="f9-bl040-rows" role="list">
+        <div aria-label="Source access status" className="f9-access-rows" role="list">
           <div
-            className="f9-bl040-status-row"
+            className="f9-access-status-row"
             data-bl040-first-row
             role="listitem"
           >
@@ -91,12 +91,12 @@ export function SourceAccessRoute() {
               <p>{formatTrackingStatusSummary(data.discoveryStatus.summary)}</p>
             </div>
             <span
-              className={`f9-bl040-status${discoveryStatus.tone === "bad" ? " is-bad" : ""}`}
+              className={`f9-access-status${discoveryStatus.tone === "bad" ? " is-bad" : ""}`}
             >
               {discoveryStatus.label}
             </span>
           </div>
-          <div className="f9-bl040-status-row" role="listitem">
+          <div className="f9-access-status-row" role="listitem">
             <div>
               <strong>Backup access</strong>
               {data.connection && canManageSourceAccess ? (
@@ -118,7 +118,7 @@ export function SourceAccessRoute() {
               )}
             </div>
             <span
-              className={`f9-bl040-status${
+              className={`f9-access-status${
                 data.connection?.status === "degraded" ? " is-bad" : ""
               }`}
             >
@@ -129,8 +129,8 @@ export function SourceAccessRoute() {
       </section>
 
       {canManageSourceAccess ? (
-        <section aria-labelledby="source-connect-title" className="f9-bl040-section">
-          <div className="f9-bl040-section-head">
+        <section aria-labelledby="source-connect-title" className="f9-access-section">
+          <div className="f9-access-section-head">
             <div>
               <h2 id="source-connect-title">Add backup Meta access</h2>
               <p>
@@ -139,8 +139,8 @@ export function SourceAccessRoute() {
             </div>
           </div>
 
-          <div className="f9-bl040-setup">
-            <div className="f9-bl040-instructions">
+          <div className="f9-access-setup">
+            <div className="f9-access-instructions">
               <h3>Get a token from Meta</h3>
               <ol>
                 <li>
@@ -171,10 +171,10 @@ export function SourceAccessRoute() {
               </ol>
             </div>
 
-            <div className="f9-bl040-form-column">
-              <Form className="f9-bl040-form" method="post">
+            <div className="f9-access-form-column">
+              <Form className="f9-access-form" method="post">
                 <input name="intent" type="hidden" value="connect-meta-token" />
-                <label className="f9-bl040-field">
+                <label className="f9-access-field">
                   <span>Meta access token</span>
                   <textarea
                     autoComplete="off"
@@ -193,11 +193,11 @@ export function SourceAccessRoute() {
               </Form>
 
               {data.connection ? (
-                <div className="f9-bl040-text-actions">
+                <div className="f9-access-text-actions">
                   <Form method="post">
                     <input name="intent" type="hidden" value="retest-meta-token" />
                     <SubmitButton
-                      className="f9-bl040-text-action"
+                      className="f9-access-text-action"
                       intent="retest-meta-token"
                       pendingLabel="Testing…"
                     >
@@ -211,7 +211,7 @@ export function SourceAccessRoute() {
                       value="disconnect-meta-token"
                     />
                     <ConfirmSubmitButton
-                      className="f9-bl040-text-action is-danger"
+                      className="f9-access-text-action is-danger"
                       confirmLabel="Confirm — disconnect?"
                       intent="disconnect-meta-token"
                       pendingLabel="Removing…"
@@ -226,8 +226,8 @@ export function SourceAccessRoute() {
           </div>
         </section>
       ) : (
-        <section aria-labelledby="source-owner-title" className="f9-bl040-section">
-          <div className="f9-bl040-quiet">
+        <section aria-labelledby="source-owner-title" className="f9-access-section">
+          <div className="f9-access-quiet">
             <h2 id="source-owner-title">The account owner manages source access</h2>
             <p>
               You can read the current tracking state here. Only the account owner can add,

@@ -26,8 +26,8 @@ export function CreativeWall({ items, plan }: { items: CreativeWallItem[]; plan:
     <section aria-label="Creative wall">
       <div className="f9-panel-toolbar">
         <div>
-          <p className="f9-ed-micro">Creative wall</p>
-          <h3 style={{ marginTop: 0 }}>What they&rsquo;re running</h3>
+          <p className="f9-evidence-micro">Creative wall</p>
+          <h3 className="f9-wk-mt0">What they&rsquo;re running</h3>
         </div>
         {items.length > 0 ? (
           <Pill>
@@ -38,8 +38,8 @@ export function CreativeWall({ items, plan }: { items: CreativeWallItem[]; plan:
         ) : null}
       </div>
       {items.length === 0 ? (
-        <div className="f9-bl035-empty">
-          <p className="f9-bl035-empty-title">No creatives captured yet</p>
+        <div className="f9-watchdetail-empty">
+          <p className="f9-watchdetail-empty-title">No creatives captured yet</p>
           <p>
             {plan === "free"
               ? "The free plan takes one snapshot when a competitor is added; paid plans check every 3–6 hours. This fills in after the first successful scan."

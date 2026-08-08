@@ -23,7 +23,7 @@ export function RouteSkeleton({ label = "Loading workspace…" }: RouteSkeletonP
         <span />
       </div>
       {slow ? (
-        <p className="f9-muted-copy">
+        <p className="f9-wk-dim">
           Still loading — check your connection or try refreshing the page.
         </p>
       ) : null}

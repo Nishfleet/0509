@@ -167,7 +167,7 @@ describe("presence desk routes", () => {
     expect(
       html.match(/This source is not available for customer checks yet\./g) ?? [],
     ).toHaveLength(1);
-    expect(html).not.toContain("f9-app-panel");
+    expect(html).not.toContain("f9-wk-panel");
     expect(html).not.toContain("PRESENCE DESK");
     expect(html).not.toContain("whole-internet scanning");
   });
@@ -390,7 +390,7 @@ describe("presence desk routes", () => {
     // BL-034: the locked panel is ordinary prose, not a live region. Feedback
     // is announced by the shared strip, so a second announcing role here would
     // double-speak on every render.
-    expect(html).not.toMatch(/<div class="f9-pr-lock"[^>]*role=/);
+    expect(html).not.toMatch(/<div class="f9-presence-lock"[^>]*role=/);
   });
 
   it("omits a tracking mode whose per-mode capacity is exhausted", async () => {
@@ -644,7 +644,7 @@ describe("presence desk routes", () => {
 
     const route = await import("~/routes/app.presence.$entityId");
     const html = renderToStaticMarkup(createElement(route.default));
-    expect(html).toContain("No checkable website targets yet");
+    expect(html).toContain("No checkable website target yet");
     expect(html).toContain("Unavailable");
     expect(html).not.toContain("Check now");
   });
@@ -698,7 +698,7 @@ describe("presence desk routes", () => {
 
     const route = await import("~/routes/app.presence.$entityId");
     const html = renderToStaticMarkup(createElement(route.default));
-    expect(html).toContain("No checkable website targets yet");
+    expect(html).toContain("No checkable website target yet");
     expect(html).not.toContain("Check now");
   });
 

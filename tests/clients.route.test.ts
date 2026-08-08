@@ -624,8 +624,8 @@ describe("clients route agent memory", () => {
     expect(markup).toContain("Weekly client-ready review with direct tone.");
     expect(markup).toContain("Nykaa weekly desk");
     expect(markup).toContain("Create client room");
-    expect(markup).toContain("f9-wk-page f9-clients-page");
-    expect(markup).not.toContain("f9-app-panel");
+    expect(markup).toContain("f9-wk-page f9-rooms-page");
+    expect(markup).not.toContain("f9-wk-panel");
     expect(markup).not.toContain("f9-dash-state-empty");
     expect(markup).not.toContain("f9-primary-button");
     expect(markup).toContain("Client context status unavailable");
@@ -643,8 +643,8 @@ describe("clients route agent memory", () => {
     expect(markup).toContain("Saved client context could not be loaded.");
     expect(markup).toContain('name="intent" value="approve-client-room"');
     expect(markup).toContain("Create client room");
-    expect(markup).toContain("f9-wk-page f9-clients-page");
-    expect(markup).not.toContain("f9-app-panel");
+    expect(markup).toContain("f9-wk-page f9-rooms-page");
+    expect(markup).not.toContain("f9-wk-panel");
     expect(markup).not.toContain("f9-dash-state-empty");
     expect(markup).not.toContain("f9-primary-button");
   });
@@ -1246,8 +1246,8 @@ describe("clients route agent memory", () => {
       const { default: ClientsRoute } = await import("~/routes/app.clients");
       const markup = renderToStaticMarkup(createElement(ClientsRoute));
 
-      expect(markup).toContain("f9-clients-page");
-      expect(markup).toContain("f9-clients-gate");
+      expect(markup).toContain("f9-rooms-page");
+      expect(markup).toContain("f9-rooms-gate");
       expect(markup).toContain("Client rooms stay readable");
       expect(markup).toContain("Agency plan unlocks creation and updates");
       expect(markup).toContain("Upgrade to Agency");
@@ -1255,7 +1255,7 @@ describe("clients route agent memory", () => {
       expect(markup.match(/Upgrade to Agency/g)).toHaveLength(1);
       expect(markup).not.toContain("is-error");
       expect(markup).not.toContain("f9-locked-feature");
-      expect(markup).not.toContain("f9-ed-specimen");
+      expect(markup).not.toContain("f9-evidence-specimen");
       expect(markup).not.toContain("f9-dash-state-empty");
       expect(markup).not.toContain("Create the first client room");
       expect(markup).not.toContain("Save client room");

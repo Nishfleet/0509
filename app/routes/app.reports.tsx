@@ -610,7 +610,7 @@ export default function ReportsRoute() {
 
       <ReportView
         brandingNote={
-          <p className="f9-ed-report-footnote">
+          <p className="f9-evidence-report-footnote">
             {preparedBy
               ? `This report carries your agency name, ${preparedBy}, on every page you send.`
               : "Set an agency name in Account to put your own brand on the report you send."}
@@ -618,22 +618,22 @@ export default function ReportsRoute() {
         }
         preparedBy={preparedBy}
         railActions={
-          <div className="f9-ed-report-actions">
-            <p className="f9-ed-micro">
+          <div className="f9-evidence-report-actions">
+            <p className="f9-evidence-micro">
               {reportReadiness.ok
                 ? "Approved evidence report"
                 : "Evidence report · review required"}
             </p>
 
             {reportReadiness.ok ? null : (
-              <p className="f9-ed-report-footnote">{reportReadiness.reason}</p>
+              <p className="f9-evidence-report-footnote">{reportReadiness.reason}</p>
             )}
 
             {/* One reviewed-state control for the whole page. It is a real
                 field of the share form (so the browser still enforces it
                 without JS) and the PDF form mirrors its state, which is what
                 retires the two duplicate floating checkboxes. */}
-            <label className="f9-ed-review-check" htmlFor="report-reviewed">
+            <label className="f9-evidence-review-check" htmlFor="report-reviewed">
               <input
                 checked={reviewed}
                 disabled={!reportReadiness.ok}
@@ -648,7 +648,7 @@ export default function ReportsRoute() {
               <span>I reviewed this evidence.</span>
             </label>
             {reportReadiness.ok && !reviewed ? (
-              <p className="f9-ed-report-footnote">
+              <p className="f9-evidence-report-footnote">
                 Tick the box before you send this on. Nothing leaves the workspace until you
                 have read the evidence yourself.
               </p>
@@ -659,7 +659,7 @@ export default function ReportsRoute() {
               <input name="reviewFingerprint" type="hidden" value={reviewFingerprint} />
               <input name="reviewNonce" type="hidden" value={reviewNonce} />
               <SubmitButton
-                className="f9-ed-cta f9-ed-cta--rank1 f9-wk-btn"
+                className="f9-evidence-cta f9-evidence-cta--rank1 f9-wk-btn"
                 disabled={!reportReadiness.ok}
                 intent="share-report"
                 pendingLabel="Creating…"
@@ -690,7 +690,7 @@ export default function ReportsRoute() {
                 <input name="reviewNonce" type="hidden" value={reviewNonce} />
                 <input name="reviewed" type="hidden" value={reviewed ? "true" : "false"} />
                 <SubmitButton
-                  className="f9-ed-cta f9-ed-cta--rank2 f9-wk-lnk"
+                  className="f9-evidence-cta f9-evidence-cta--rank2 f9-wk-lnk"
                   disabled={!reportReadiness.ok || !reviewed || pdfPreparing}
                   intent="download-pdf"
                   pendingLabel="Preparing…"
@@ -699,7 +699,7 @@ export default function ReportsRoute() {
                 </SubmitButton>
               </Form>
             ) : (
-              <p className="f9-ed-report-footnote">
+              <p className="f9-evidence-report-footnote">
                 PDF export is unavailable for this workspace. Review plan access before
                 preparing a client copy.
               </p>

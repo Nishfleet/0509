@@ -32,7 +32,7 @@ describe("BL-041 landing-language settings layer", () => {
     expect(css.match(new RegExp(MARKER.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"))).toHaveLength(1);
     expect(layer().slice(MARKER.length)).not.toMatch(/\/\* === BL-0\d{2}/);
     for (const source of [team, billing, account]) {
-      expect(source).toContain("f9-bl041-page");
+      expect(source).toContain("f9-acct-page");
       expect(source).toContain("f9-wk-page");
       expect(source).toContain("<WorkingHeader");
       expect(source).not.toContain("<DashboardPageHeader");
@@ -93,27 +93,27 @@ describe("BL-041 landing-language settings layer", () => {
 
   it("renders quiet locked states with one upgrade fill and no specimen theatre", () => {
     const section = stripComments(layer());
-    const start = section.indexOf(".f9-bl041-lock .f9-locked-feature");
-    const end = section.indexOf(".f9-bl041-member-list", start);
+    const start = section.indexOf(".f9-acct-lock .f9-locked-feature");
+    const end = section.indexOf(".f9-acct-member-list", start);
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
     const locked = section.slice(start, end);
     expect(locked).toContain("box-shadow: none;");
     expect(locked).toContain("background: transparent;");
     expect(locked).toMatch(
-      /\.f9-bl041-lock \.f9-ed-cta--rank1 \{[^}]*background: var\(--wk-fill\)/,
+      /\.f9-acct-lock \.f9-evidence-cta--rank1 \{[^}]*background: var\(--wk-fill\)/,
     );
-    expect(locked).not.toMatch(/dashed|f9-ed-specimen-slot/);
-    expect(team).toContain('className="f9-bl041-lock"');
-    expect(account).toContain('className="f9-bl041-entitlement"');
+    expect(locked).not.toMatch(/dashed|f9-evidence-specimen-slot/);
+    expect(team).toContain('className="f9-acct-lock"');
+    expect(account).toContain('className="f9-acct-entitlement"');
   });
 
   it("removes the Team action-gate tautology while preserving owner and member branches", () => {
     expect(team.match(/data\.plan !== "agency"/g)).toHaveLength(1);
     const agencyBranch = team.slice(team.indexOf('data.plan !== "agency"'));
     const inviteForm = agencyBranch.slice(
-      agencyBranch.indexOf('className="f9-bl041-invite"'),
-      agencyBranch.indexOf('className="f9-bl041-member-list"'),
+      agencyBranch.indexOf('className="f9-acct-invite"'),
+      agencyBranch.indexOf('className="f9-acct-member-list"'),
     );
     expect(inviteForm).not.toContain('data.plan === "agency"');
     expect(agencyBranch).toContain("seatsUsed < data.seatLimit");
@@ -126,33 +126,39 @@ describe("BL-041 landing-language settings layer", () => {
       billing.indexOf("</article>", billing.indexOf("plans.map")),
     );
     expect(
-      billing.match(/className=\{selected \? "f9-wk-btn" : "f9-bl041-text-action"\}/g),
+      billing.match(/className=\{selected \? "f9-wk-btn" : "f9-acct-text-action"\}/g),
     ).toHaveLength(2);
     expect(planPicker).not.toContain('className="f9-primary-button"');
+    // The flatten group deliberately EXCLUDES the filled rank (Sol's
+    // endgame review): the selected plan's one filled action stays filled;
+    // quiet buttons and text actions flatten to underlined text.
     expect(layer()).toMatch(
-      /\.f9-bl041-page :is\([\s\S]*?\.f9-primary-button,[\s\S]*?\)\s*\{[\s\S]*?background: transparent;/,
+      /\.f9-acct-page :is\([\s\S]*?\.f9-wk-btn-quiet,[\s\S]*?\)\s*\{[\s\S]*?background: transparent;/,
+    );
+    expect(layer()).not.toMatch(
+      /\.f9-acct-page :is\(\s*\.f9-wk-btn,/,
     );
     expect(layer()).toMatch(
-      /\.f9-bl041-page a\.f9-wk-btn \{[^}]*color: var\(--wk-on-fill\)/,
+      /\.f9-acct-page a\.f9-wk-btn \{[^}]*color: var\(--wk-on-fill\)/,
     );
   });
 
   it("makes the danger zone quiet but unmistakable", () => {
-    expect(account).toContain("f9-bl041-section f9-bl041-danger");
-    expect(account).toContain('className="f9-bl041-danger-action"');
+    expect(account).toContain("f9-acct-section f9-acct-danger");
+    expect(account).toContain('className="f9-acct-danger-action"');
     const section = stripComments(layer());
     expect(section).toMatch(
-      /\.f9-bl041-danger \{[^}]*border-top: 1px solid var\(--red\);[^}]*border-bottom-color: var\(--red\)/,
+      /\.f9-acct-danger \{[^}]*border-top: 1px solid var\(--red\);[^}]*border-bottom-color: var\(--red\)/,
     );
     expect(section).toMatch(
-      /\.f9-bl041-danger-action \{[^}]*border: 1px solid var\(--red\);[^}]*background: transparent/,
+      /\.f9-acct-danger-action \{[^}]*border: 1px solid var\(--red\);[^}]*background: transparent/,
     );
   });
 
   it("keeps the current session legible without restoring a pill", () => {
-    expect(account).toContain('className="f9-bl041-current"');
+    expect(account).toContain('className="f9-acct-current"');
     expect(layer()).toMatch(
-      /\.f9-bl041-account \.f9-passkey-row > \.f9-bl041-current \{[^}]*font-family: var\(--ld-mono\);[^}]*font-weight: 700;/,
+      /\.f9-acct-account \.f9-passkey-row > \.f9-acct-current \{[^}]*font-family: var\(--ld-mono\);[^}]*font-weight: 700;/,
     );
   });
 });

@@ -76,11 +76,11 @@ for (const vp of viewports) {
           scrollWidth: Math.round(document.documentElement.scrollWidth),
           innerWidth: window.innerWidth,
           theme: document.documentElement.getAttribute("data-f9-theme") ?? "light",
-          diffPlates: document.querySelectorAll(".f9-ed-diff-plate").length,
-          quietLines: document.querySelectorAll(".f9-ed-quiet-line").length,
+          diffPlates: document.querySelectorAll(".f9-evidence-diff-plate").length,
+          quietLines: document.querySelectorAll(".f9-evidence-quiet-line").length,
           insightGrid: document.querySelectorAll(".f9-insight-grid").length,
           eventCards: document.querySelectorAll(".f9-event-card").length,
-          glossaryCollapsed: document.querySelectorAll(".f9-ed-report-glossary").length,
+          glossaryCollapsed: document.querySelectorAll(".f9-evidence-report-glossary").length,
           overflowing,
         };
       });

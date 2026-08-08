@@ -76,7 +76,7 @@ export default function TeamAcceptRoute() {
             <>
               <h1>Invite not available</h1>
               <p>{data.reason}</p>
-              <Link className="f9-primary-button" to="/app">
+              <Link className="f9-wk-btn" to="/app">
                 Go to your account
               </Link>
             </>
@@ -88,13 +88,13 @@ export default function TeamAcceptRoute() {
                 stays your own, and the account owner handles billing.
               </p>
 							{actionData && !actionData.ok ? (
-								<div className="f9-message is-error" role="alert">
+								<div className="f9-wk-notice is-error" role="alert">
 									<p>{actionData.reason}</p>
 								</div>
 							) : null}
               <Form method="post">
                 <input type="hidden" name="token" value={data.token} />
-								<SubmitButton className="f9-primary-button" pendingLabel="Joining…">
+								<SubmitButton className="f9-wk-btn" pendingLabel="Joining…">
 									Join the team
 								</SubmitButton>
               </Form>

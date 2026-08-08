@@ -1180,7 +1180,7 @@ describe("billing page", () => {
       const markup = renderToStaticMarkup(createElement(BillingRoute));
       const selectedCard = markup.match(
         new RegExp(
-          `<section class="[^"]*is-selected[^"]*">[\\s\\S]*?<span class="f9-app-kicker">${scenario.name}<\\/span>[\\s\\S]*?<\\/section>`,
+          `<section class="[^"]*is-selected[^"]*">[\\s\\S]*?<span class="f9-wk-kick">${scenario.name}<\\/span>[\\s\\S]*?<\\/section>`,
         ),
       )?.[0];
 
@@ -1489,7 +1489,7 @@ describe("billing page", () => {
     expect(markup).not.toContain("Price unavailable");
     // A plan whose price did not load is not selectable in any form: no
     // checkout form, and no Select link that implies a priced SKU.
-    const agencyCard = markup.split('f9-app-plan-card').find((chunk) => chunk.includes("didn’t load"));
+    const agencyCard = markup.split('f9-wk-plan-card').find((chunk) => chunk.includes("didn’t load"));
     expect(agencyCard).toBeDefined();
     expect(agencyCard).not.toContain(">Select<");
     expect(markup).not.toContain("f9-skeleton-price");
@@ -1534,9 +1534,9 @@ describe("billing page", () => {
 
     expect(markup.indexOf('id="billing-lifecycle-heading"')).toBeGreaterThan(-1);
     expect(markup.indexOf('id="billing-lifecycle-heading"')).toBeLessThan(markup.indexOf('id="plans"'));
-    expect(markup).toMatch(/<h3><span class="f9-app-kicker">Scout<\/span><\/h3>/);
-    expect(markup).toMatch(/<h3><span class="f9-app-kicker">Starter<\/span><\/h3>/);
-    expect(markup).toMatch(/<h3><span class="f9-app-kicker">Agency<\/span><\/h3>/);
+    expect(markup).toMatch(/<h3><span class="f9-wk-kick">Scout<\/span><\/h3>/);
+    expect(markup).toMatch(/<h3><span class="f9-wk-kick">Starter<\/span><\/h3>/);
+    expect(markup).toMatch(/<h3><span class="f9-wk-kick">Agency<\/span><\/h3>/);
   });
 
   it.each([

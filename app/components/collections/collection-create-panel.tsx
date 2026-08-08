@@ -31,7 +31,7 @@ export function CollectionCreatePanel({
   defaultOpen?: boolean;
 }) {
   const fields = (
-    <Form className="f9-col-form" method="post">
+    <Form className="f9-library-form" method="post">
       <input name="intent" type="hidden" value="create-collection" />
       <label className="f9-field">
         <span>Name</span>
@@ -55,7 +55,7 @@ export function CollectionCreatePanel({
   if (mode === "disclosure") {
     return (
       <CollectionDisclosure
-        className="f9-col-create"
+        className="f9-library-create"
         defaultOpen={defaultOpen}
         group={COLLECTION_PANEL_GROUP}
         summary="New collection"
@@ -66,13 +66,13 @@ export function CollectionCreatePanel({
   }
 
   return (
-    <section aria-labelledby="collections-first-title" className="f9-wk-sec f9-col-empty">
+    <section aria-labelledby="collections-first-title" className="f9-wk-sec f9-library-empty">
       <p className="f9-wk-kick">Nothing filed yet</p>
-      <h2 className="f9-col-section-title" id="collections-first-title">
+      <h2 className="f9-library-section-title" id="collections-first-title">
         Start your first collection
       </h2>
       <p className="f9-wk-lede">{COLLECTION_BOARD_EMPTY_COPY}</p>
-      <p className="f9-col-note">{RESERVED_COLLECTION_SLOT_COPY}</p>
+      <p className="f9-library-note">{RESERVED_COLLECTION_SLOT_COPY}</p>
       {fields}
     </section>
   );

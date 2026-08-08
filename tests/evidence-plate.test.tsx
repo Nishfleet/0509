@@ -63,7 +63,7 @@ describe("EvidencePlate", () => {
     );
 
     expect(markup).toContain(UNREADABLE_CAPTURE_COPY);
-    expect(markup).toContain("f9-ed-mock-frame");
+    expect(markup).toContain("f9-evidence-mock-frame");
     expect(markup).toContain("not published");
     expect(markup).toContain("is-missing");
   });
@@ -102,7 +102,7 @@ describe("EvidencePlate", () => {
       />,
     );
 
-    expect(markup).toContain('<h2 class="f9-ed-evidence-headline">Okara cut its team price</h2>');
+    expect(markup).toContain('<h2 class="f9-evidence-headline">Okara cut its team price</h2>');
     expect(markup).toContain("The anchor price moved down before the weekend.");
   });
 
@@ -117,8 +117,8 @@ describe("EvidencePlate", () => {
       />,
     );
 
-    expect(markup).not.toContain("f9-ed-evidence-headline");
-    expect(markup).not.toContain("f9-ed-evidence-why");
+    expect(markup).not.toContain("f9-evidence-headline");
+    expect(markup).not.toContain("f9-evidence-why");
   });
 
   it("keeps a stored capture in the frame and does not call it unreadable", () => {

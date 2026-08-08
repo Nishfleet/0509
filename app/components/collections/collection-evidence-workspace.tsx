@@ -35,7 +35,7 @@ export function CollectionEvidenceWorkspace({
 }) {
   return (
     <>
-      <div className={`f9-wk-split f9-col-split${selectedItem ? "" : " is-single"}`}>
+      <div className={`f9-wk-split f9-library-split${selectedItem ? "" : " is-single"}`}>
         <div className="f9-wk-split-list">
           {items.length > 0 ? (
             <RuledList aria-label={`Saved evidence in ${collection.name}`} flush>
@@ -55,8 +55,8 @@ export function CollectionEvidenceWorkspace({
               ))}
             </RuledList>
           ) : (
-            <section aria-labelledby="collection-empty-title" className="f9-col-list-empty">
-              <h2 className="f9-col-section-title" id="collection-empty-title">
+            <section aria-labelledby="collection-empty-title" className="f9-library-list-empty">
+              <h2 className="f9-library-section-title" id="collection-empty-title">
                 {advertiserFilter ? "No matching evidence" : "Nothing filed here yet"}
               </h2>
               <p>
@@ -89,7 +89,7 @@ export function CollectionEvidenceWorkspace({
               collectionName={collection.name}
               editor={
                 <>
-                  <Form className="f9-col-form" method="post">
+                  <Form className="f9-library-form" method="post">
                     <input name="intent" type="hidden" value="update-item" />
                     <input name="itemId" type="hidden" value={selectedItem.id} />
                     <label className="f9-field">
@@ -132,7 +132,7 @@ export function CollectionEvidenceWorkspace({
       </div>
 
       {advertiserFilter && items.length > 0 ? (
-        <p className="f9-col-filter-line">
+        <p className="f9-library-filter-line">
           Showing saved evidence matching “{advertiserFilter}”.
           {hiddenByFilter > 0
             ? ` ${hiddenByFilter} other saved ${hiddenByFilter === 1 ? "item is" : "items are"} hidden.`

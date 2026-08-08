@@ -122,14 +122,14 @@ export default function UnsubscribeRoute() {
     <main className="f9-legal-page">
       <header className="f9-legal-nav">
         <div className="f9-container f9-legal-nav-inner">
-          <Link className="f9-app-brand" to="/">
+          <Link className="f9-brandmark" to="/">
             <BrandWordmark meta="Competitor change monitoring" />
           </Link>
         </div>
       </header>
       <section className="f9-container f9-legal-section">
         <article className="f9-legal-card">
-          <span className="f9-app-kicker">Email preferences</span>
+          <span className="f9-wk-kick">Email preferences</span>
           {data.adapterUnavailable ? (
             <>
               <h1>We couldn't switch this off just now.</h1>
@@ -139,7 +139,7 @@ export default function UnsubscribeRoute() {
                 for you.
               </p>
               <Form method="post">
-                <SubmitButton className="f9-primary-button" pendingLabel="Working…">
+                <SubmitButton className="f9-wk-btn" pendingLabel="Working…">
                   Try again
                 </SubmitButton>
               </Form>
@@ -169,7 +169,7 @@ export default function UnsubscribeRoute() {
                 account.
               </p>
               <Form method="post">
-                <SubmitButton className="f9-primary-button" pendingLabel="Working…">
+                <SubmitButton className="f9-wk-btn" pendingLabel="Working…">
                   Unsubscribe
                 </SubmitButton>
               </Form>

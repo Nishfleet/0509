@@ -149,7 +149,7 @@ function useCurrentUrl() {
  *  label is exactly what changes while the fetcher is in flight. */
 function quickCreateSubmit(view: HTMLElement) {
   return view.querySelector<HTMLButtonElement>(
-    "form.f9-ed-setup-primary button[type='submit']",
+    "form.f9-evidence-setup-primary button[type='submit']",
   )!;
 }
 

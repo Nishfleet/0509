@@ -7,7 +7,8 @@ import {
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { sanitizeCustomerFacingMessage } from "~/lib/customer-route-error";
-import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardPage } from "~/components/dashboard-page";
+import { WorkingHeader } from "~/components/workspace/working-header";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
@@ -223,9 +224,9 @@ export default function SupportRoute() {
 
   return (
     <DashboardPage>
-      <section className="f9-app-stack">
-        <DashboardPageHeader
-          lead="Get account help without losing the trail."
+      <section className="f9-wk-stack">
+        <WorkingHeader
+          context="Get account help without losing the trail."
           title="Help & support"
         />
 
@@ -233,7 +234,7 @@ export default function SupportRoute() {
         <div
           aria-atomic="true"
           aria-live={actionData.ok ? "polite" : "assertive"}
-          className={`f9-message ${actionData.ok ? "is-success" : "is-error"}`}
+          className={`f9-wk-notice ${actionData.ok ? "is-success" : "is-error"}`}
           role={actionData.ok ? "status" : "alert"}
         >
           <p>{actionData.message}</p>
@@ -241,16 +242,16 @@ export default function SupportRoute() {
       ) : null}
 
       <p className="f9-action-row">
-        <a className="f9-secondary-button" href={SUPPORT_MAILTO}>
+        <a className="f9-wk-btn-quiet" href={SUPPORT_MAILTO}>
           Email support
         </a>
       </p>
 
-      <div className="f9-dashboard-grid">
-        <article className="f9-app-panel f9-side-panel">
+      <div className="f9-wk-grid2">
+        <article className="f9-wk-panel f9-side-panel">
           <div className="f9-panel-toolbar">
             <div>
-              <span className="f9-app-kicker">Open a case</span>
+              <span className="f9-wk-kick">Open a case</span>
               <h2>Tell us what needs attention.</h2>
             </div>
           </div>
@@ -297,26 +298,26 @@ export default function SupportRoute() {
                 rows={6}
               />
             </label>
-            <p className="f9-app-muted">
+            <p className="f9-wk-dim">
               Do not paste passwords, private keys, webhook URLs, card numbers, or provider tokens.
             </p>
-            <SubmitButton className="f9-primary-button" intent="create-support-case" pendingLabel="Opening case…">
+            <SubmitButton className="f9-wk-btn" intent="create-support-case" pendingLabel="Opening case…">
               Open support case
             </SubmitButton>
           </Form>
         </article>
 
-        <article className="f9-app-panel">
+        <article className="f9-wk-panel">
           <div className="f9-panel-toolbar">
             <div>
-              <span className="f9-app-kicker">Recent cases</span>
+              <span className="f9-wk-kick">Recent cases</span>
               <h2>Account support history.</h2>
             </div>
             <small>{data.email}</small>
           </div>
 
           {data.cases.length ? (
-            <div className="f9-work-list">
+            <div className="f9-wk-worklist">
               {data.cases.map((supportCase) => (
                 <SupportCaseRow
                   isSelected={data.selectedCase?.id === supportCase.id}
@@ -326,13 +327,13 @@ export default function SupportRoute() {
               ))}
             </div>
           ) : (
-            <div className="f9-message" role="status">
+            <div className="f9-wk-notice" role="status">
               <p>No support cases yet. Billing, cancellation, setup, deletion, and security requests can start here.</p>
             </div>
           )}
 
           {data.requestedCaseMissing ? (
-            <div aria-live="assertive" className="f9-message is-error" role="alert">
+            <div aria-live="assertive" className="f9-wk-notice is-error" role="alert">
               <p>That support case is not available for this login.</p>
             </div>
           ) : null}
@@ -342,7 +343,7 @@ export default function SupportRoute() {
           ) : null}
 
           {data.isWorkspaceMember ? (
-            <div className="f9-message" role="status">
+            <div className="f9-wk-notice" role="status">
               <p>
                 Your support history is private to your login. Account billing changes may still need
                 the owner to confirm.
@@ -350,20 +351,20 @@ export default function SupportRoute() {
             </div>
           ) : null}
 
-          <div className="f9-work-list is-compact">
-            <div className="f9-work-row">
+          <div className="f9-wk-worklist is-compact">
+            <div className="f9-wk-workrow">
               <strong>Fallback</strong>
               <span>
                 Email <a href={SUPPORT_MAILTO}>{data.supportEmail}</a> from {data.email}.
               </span>
             </div>
-            <div className="f9-work-row">
+            <div className="f9-wk-workrow">
               <strong>Billing</strong>
               <span>
                 Plan changes start from the billing page. Cancellation and sensitive billing help stay backed by support.
               </span>
             </div>
-            <div className="f9-work-row">
+            <div className="f9-wk-workrow">
               <strong>Docs</strong>
               <span>
                 <Link to="/help">Help center</Link> and{" "}
@@ -407,7 +408,7 @@ function SupportCaseRow({
   supportCase: SupportCaseSummary;
 }) {
   return (
-    <Link className={`f9-work-row ${isSelected ? "is-active" : ""}`} to={`/app/support?case=${supportCase.id}`}>
+    <Link className={`f9-wk-workrow ${isSelected ? "is-active" : ""}`} to={`/app/support?case=${supportCase.id}`}>
       <div>
         <h3>{supportCase.subject}</h3>
         <small>
@@ -415,7 +416,7 @@ function SupportCaseRow({
           <LocalTime iso={supportCase.createdAt} />
         </small>
       </div>
-      <span>{SUPPORT_CASE_STATUS_LABELS[supportCase.status]}</span>
+      <span className="f9-wk-status">{SUPPORT_CASE_STATUS_LABELS[supportCase.status]}</span>
     </Link>
   );
 }
@@ -428,36 +429,36 @@ function SupportCaseDetail({
   supportCase: SupportCaseDetailSummary;
 }) {
   return (
-    <section className="f9-work-list is-compact" aria-label="Selected support case">
-      <div className="f9-work-row">
+    <section className="f9-wk-worklist is-compact" aria-label="Selected support case">
+      <div className="f9-wk-workrow">
         <div>
-          <span className="f9-app-kicker">Selected case</span>
+          <span className="f9-wk-kick">Selected case</span>
           <h3>{supportCase.subject}</h3>
           <small>
             {SUPPORT_CASE_CATEGORY_LABELS[supportCase.category]} · {SUPPORT_CASE_PRIORITY_LABELS[supportCase.priority]} ·{" "}
             opened <LocalTime iso={supportCase.createdAt} />
           </small>
-          <p className="f9-muted-copy">{supportCase.detail}</p>
+          <p className="f9-wk-dim">{supportCase.detail}</p>
         </div>
-        <span>{SUPPORT_CASE_STATUS_LABELS[supportCase.status]}</span>
+        <span className="f9-wk-status">{SUPPORT_CASE_STATUS_LABELS[supportCase.status]}</span>
       </div>
 
       <div>
-        <span className="f9-app-kicker">Case trail</span>
+        <span className="f9-wk-kick">Case trail</span>
         {events.length ? (
-          <div className="f9-work-list is-compact">
+          <div className="f9-wk-worklist is-compact">
             {events.map((event) => (
-              <div className="f9-work-row" key={event.id}>
+              <div className="f9-wk-workrow" key={event.id}>
                 <div>
                   <h3>{SUPPORT_CASE_EVENT_LABELS[event.eventType]}</h3>
-                  <p className="f9-muted-copy">{event.message}</p>
+                  <p className="f9-wk-dim">{event.message}</p>
                 </div>
                 <small><LocalTime iso={event.createdAt} /></small>
               </div>
             ))}
           </div>
         ) : (
-          <p className="f9-muted-copy">No customer-visible events recorded yet.</p>
+          <p className="f9-wk-dim">No customer-visible events recorded yet.</p>
         )}
       </div>
     </section>

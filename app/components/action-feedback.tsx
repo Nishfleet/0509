@@ -82,7 +82,7 @@ export function ActionFeedback({
 			key={outcomeKey}
 			aria-atomic="true"
 			aria-live={data.ok ? "polite" : "assertive"}
-			className={`f9-message f9-action-feedback ${data.ok ? "is-success" : "is-error"}`}
+			className={`f9-wk-notice f9-action-feedback ${data.ok ? "is-success" : "is-error"}`}
 			role={data.ok ? "status" : "alert"}
 		>
 			<p>

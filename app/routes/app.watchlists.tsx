@@ -478,7 +478,7 @@ export default function WatchlistsRoute() {
   const actionShareLink = actionData?.ok ? resolveSafeShareLink(actionData.message) : null;
 
   return (
-    <DashboardPage className={`f9-wk-page${selectedWatchlist ? " f9-bl035-page" : ""}`}>
+    <DashboardPage className={`f9-wk-page${selectedWatchlist ? " f9-watchdetail-page" : ""}`}>
       <WorkingHeader
         action={
           selectedWatchlist
@@ -496,7 +496,7 @@ export default function WatchlistsRoute() {
         context={
           selectedWatchlist ? (
             <>
-              <Link className="f9-bl035-back" to="/app/watchlists">
+              <Link className="f9-watchdetail-back" to="/app/watchlists">
                 All competitors
               </Link>
               <span aria-hidden="true"> &rsaquo; </span>
@@ -586,10 +586,10 @@ export default function WatchlistsRoute() {
         // The record stays mounted and keeps every control; the degraded flag
         // masks only the surfaces that rollup feeds.
         <div
-          className={`f9-bl035-record${data.captureWindowDegraded ? " is-capture-window-degraded" : ""}`}
+          className={`f9-watchdetail-record${data.captureWindowDegraded ? " is-capture-window-degraded" : ""}`}
         >
           {data.captureWindowDegraded ? (
-            <p className="f9-bl035-aggregate-unavailable" role="status">
+            <p className="f9-watchdetail-aggregate-unavailable" role="status">
               Recent aggregate totals are unavailable. Saved check history and management controls
               below are still available.
             </p>

@@ -1,11 +1,11 @@
 import { Form, Link, redirect, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 
-import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardPage } from "~/components/dashboard-page";
+import { WorkingHeader } from "~/components/workspace/working-header";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { ActionFeedback } from "~/components/action-feedback";
 import { ConfirmSubmitButton } from "~/components/confirm-button";
-import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import {
@@ -127,7 +127,16 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
     pollCursors,
   }));
 
-  return { entity, sources, pollableSources, items, compareEntities, sourceCoverage, brief };
+  return {
+    entity,
+    sources,
+    pollableSources,
+    items,
+    compareEntities,
+    sourceCoverage,
+    brief,
+    websiteSourcesAllowed: sourcePlanGates.modeAllowed && sourcePlanGates.websiteSourcesAllowed,
+  };
 }
 
 export async function action({ context, request, params }: ActionFunctionArgs) {
@@ -192,21 +201,20 @@ export async function action({ context, request, params }: ActionFunctionArgs) {
 }
 
 export default function PresenceEntityRoute() {
-  const { entity, pollableSources, items, compareEntities, sourceCoverage, brief } = useLoaderData<typeof loader>();
+  const { entity, pollableSources, items, compareEntities, sourceCoverage, brief, websiteSourcesAllowed } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const safeSourceCoverage = sourceCoverage.map(sanitizePresenceCoverageEntry);
   const safeBrief = sanitizePresenceEntityBrief(brief);
 
   return (
     <DashboardPage>
-      <section className="f9-app-stack">
-        <DashboardPageHeader
-          kicker={`Presence · ${formatTrackingMode(entity.trackingMode)}`}
-          lead={safeBrief.summary}
+      <section className="f9-wk-stack">
+        <WorkingHeader
+          context={`${formatTrackingMode(entity.trackingMode)} · ${safeBrief.summary}`}
           title={entity.label}
         />
         {entity.canonicalUrl ? (
-          <p className="f9-muted-copy">
+          <p className="f9-wk-dim">
             <a href={entity.canonicalUrl} rel="noreferrer" target="_blank">
               {entity.canonicalUrl}
             </a>
@@ -215,28 +223,28 @@ export default function PresenceEntityRoute() {
 
         <ActionFeedback data={actionData} fallback />
 
-        <article className="f9-app-panel">
-          <span className="f9-app-kicker">Entity brief</span>
+        <article className="f9-wk-panel">
+          <span className="f9-wk-kick">Entity brief</span>
           <h2>{safeBrief.headline}</h2>
           <p>{safeBrief.summary}</p>
-          <div className="f9-dashboard-grid">
+          <div className="f9-wk-grid2">
             <div>
-              <p className="f9-muted-copy">Proof strength</p>
+              <p className="f9-wk-dim">Proof strength</p>
               <p>{safeBrief.proofStrength}</p>
             </div>
             <div>
-              <p className="f9-muted-copy">Source confidence</p>
+              <p className="f9-wk-dim">Source confidence</p>
               <p>{safeBrief.sourceConfidence}</p>
             </div>
             <div>
-              <p className="f9-muted-copy">Next action</p>
+              <p className="f9-wk-dim">Next action</p>
               <p>{safeBrief.nextAction.label}</p>
             </div>
           </div>
           {/* The check-time line always renders: confidence claims without a
               visible check time are exactly how an unproven claim reads as
               proven. "Never checked" is a fact the customer must see. */}
-          <p className="f9-muted-copy">
+          <p className="f9-wk-dim">
             {safeBrief.lastPollAt ? (
               <>
                 Last check <LocalTime iso={safeBrief.lastPollAt} />
@@ -252,16 +260,16 @@ export default function PresenceEntityRoute() {
             )}
           </p>
           {safeBrief.recentChanges.length > 0 ? (
-            <div className="f9-work-list is-compact">
+            <div className="f9-wk-worklist is-compact">
               {safeBrief.recentChanges.map((change) => (
-                <div className="f9-work-row" key={change.id}>
+                <div className="f9-wk-workrow" key={change.id}>
                   <div>
                     <h3>
                       <a href={change.canonicalUrl} rel="noreferrer" target="_blank">
                         {change.title}
                       </a>
                     </h3>
-                    <p className="f9-muted-copy">
+                    <p className="f9-wk-dim">
                       {formatCoverageLabel(change.connectorId)} · <LocalTime iso={change.observedAt} />
                     </p>
                   </div>
@@ -271,25 +279,25 @@ export default function PresenceEntityRoute() {
           ) : null}
         </article>
 
-        <div className="f9-dashboard-grid">
-          <article className="f9-app-panel">
-            <span className="f9-app-kicker">Sources</span>
+        <div className="f9-wk-grid2">
+          <article className="f9-wk-panel">
+            <span className="f9-wk-kick">Sources</span>
             <h2>Connected targets</h2>
-            <div className="f9-work-list is-compact">
+            <div className="f9-wk-worklist is-compact">
               {pollableSources.length === 0 ? (
-                <EmptyState
-                  description="Add a website source to run proof-backed checks."
-                  title="No checkable website targets yet"
-                  variant="row"
-                />
+                <p className="f9-wk-note">
+                  {websiteSourcesAllowed
+                    ? "No checkable website target yet — add a website source and proof-backed checks start with the next poll."
+                    : "No checkable website target yet. Your current plan keeps this instrument read-only; no source is presented as active."}
+                </p>
               ) : null}
               {pollableSources.map((source) => (
-                <div className="f9-work-row" key={source.id}>
+                <div className="f9-wk-workrow" key={source.id}>
                   <div>
                     <strong>{formatCoverageLabel(source.connectorId)}</strong>
-                    <p className="f9-muted-copy">{formatCoverageLabel(source.coverageLabel)}</p>
-                    {source.targetUrl ? <p className="f9-muted-copy">{source.targetUrl}</p> : null}
-                    {source.targetHandle ? <p className="f9-muted-copy">@{source.targetHandle}</p> : null}
+                    <p className="f9-wk-dim">{formatCoverageLabel(source.coverageLabel)}</p>
+                    {source.targetUrl ? <p className="f9-wk-dim">{source.targetUrl}</p> : null}
+                    {source.targetHandle ? <p className="f9-wk-dim">@{source.targetHandle}</p> : null}
                     <ActionFeedback
                       data={actionData}
                       intent="poll-source"
@@ -300,7 +308,7 @@ export default function PresenceEntityRoute() {
                     <input name="intent" type="hidden" value="poll-source" />
                     <input name="targetId" type="hidden" value={source.id} />
                     <SubmitButton
-                      className="f9-secondary-button"
+                      className="f9-wk-btn-quiet"
                       intent="poll-source"
                       match={{ targetId: source.id }}
                       pendingLabel="Checking…"
@@ -319,45 +327,45 @@ export default function PresenceEntityRoute() {
                 <span>Add website source</span>
                 <input name="targetUrl" placeholder="https://brand.com/blog" />
               </label>
-              <SubmitButton className="f9-secondary-button" intent="add-source" pendingLabel="Adding…">
+              <SubmitButton className="f9-wk-btn-quiet" intent="add-source" pendingLabel="Adding…">
                 Add website
               </SubmitButton>
             </Form>
           </article>
 
-          <article className="f9-app-panel">
-            <span className="f9-app-kicker">Source coverage</span>
+          <article className="f9-wk-panel">
+            <span className="f9-wk-kick">Source coverage</span>
             <h2>All declared sources</h2>
-            <div className="f9-work-list is-compact">
+            <div className="f9-wk-worklist is-compact">
               {safeSourceCoverage.map((entry) => (
-                <div className="f9-work-row" key={entry.sourceId}>
+                <div className="f9-wk-workrow" key={entry.sourceId}>
                   <div>
                     <strong>{entry.label}</strong>
-                    <p className="f9-muted-copy">
+                    <p className="f9-wk-dim">
                       {formatSourceCoverageStatus(entry.status)}
                       {entry.coverageLabel ? ` · ${formatCoverageLabel(entry.coverageLabel)}` : ""}
                     </p>
-                    {entry.actionNeeded ? <p className="f9-muted-copy">{entry.actionNeeded}</p> : null}
+                    {entry.actionNeeded ? <p className="f9-wk-dim">{entry.actionNeeded}</p> : null}
                   </div>
                 </div>
               ))}
             </div>
           </article>
 
-          <article className="f9-app-panel">
-            <span className="f9-app-kicker">Compare</span>
+          <article className="f9-wk-panel">
+            <span className="f9-wk-kick">Compare</span>
             <h2>Related entities</h2>
             {compareEntities.length === 0 ? (
-              <EmptyState
-                title="Add another entity type to compare coverage side by side."
-                variant="inline"
-              />
+              <p className="f9-wk-note">
+                Track an entity of the other kind — your brand next to a
+                competitor — and their coverage compares here side by side.
+              </p>
             ) : (
-              <div className="f9-work-list is-compact">
+              <div className="f9-wk-worklist is-compact">
                 {compareEntities.map((other) => (
-                  <div className="f9-work-row" key={other.id}>
+                  <div className="f9-wk-workrow" key={other.id}>
                     <Link to={`/app/presence/${other.id}`}>{other.label}</Link>
-                    <span className="f9-muted-copy">({formatTrackingMode(other.trackingMode)})</span>
+                    <span className="f9-wk-dim">({formatTrackingMode(other.trackingMode)})</span>
                   </div>
                 ))}
               </div>
@@ -365,26 +373,25 @@ export default function PresenceEntityRoute() {
           </article>
         </div>
 
-        <article className="f9-app-panel">
-          <span className="f9-app-kicker">Feed</span>
+        <article className="f9-wk-panel">
+          <span className="f9-wk-kick">Feed</span>
           <h2>Latest public content</h2>
           {items.length === 0 ? (
-            <EmptyState
-              description="Check a source to fetch the latest public content."
-              title="No items yet"
-              variant="inline"
-            />
+            <p className="f9-wk-note">
+              Nothing fetched yet. The latest public content files here after
+              the next successful check.
+            </p>
           ) : (
-            <div className="f9-work-list is-compact">
+            <div className="f9-wk-worklist is-compact">
               {items.map((item) => (
-                <div className="f9-work-row" key={item.id}>
+                <div className="f9-wk-workrow" key={item.id}>
                   <div>
                     <h3>
                       <a href={item.canonicalUrl} rel="noreferrer" target="_blank">
                         {item.title}
                       </a>
                     </h3>
-                    <p className="f9-muted-copy">
+                    <p className="f9-wk-dim">
                       {formatCoverageLabel(item.connectorId)} · <LocalTime iso={item.observedAt} />
                     </p>
                     {item.bodyExcerpt ? <p>{item.bodyExcerpt}</p> : null}
@@ -395,16 +402,16 @@ export default function PresenceEntityRoute() {
           )}
         </article>
 
-        <article className="f9-app-panel">
-          <span className="f9-app-kicker">Danger zone</span>
+        <article className="f9-wk-panel">
+          <span className="f9-wk-kick">Danger zone</span>
           <h2>Delete this entity</h2>
-          <p className="f9-muted-copy">
+          <p className="f9-wk-dim">
             Removes {entity.label}, its sources, and its collected feed items. This cannot be undone.
           </p>
           <Form method="post">
             <input name="intent" type="hidden" value="delete-entity" />
             <ConfirmSubmitButton
-              className="f9-secondary-button"
+              className="f9-wk-btn-quiet"
               confirmLabel="Confirm — delete entity?"
               intent="delete-entity"
               pendingLabel="Deleting…"

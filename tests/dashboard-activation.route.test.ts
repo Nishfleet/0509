@@ -129,14 +129,14 @@ describe("dashboard first 15 minutes activation", () => {
     expect(markup).toContain("First competitor");
     expect(markup).toContain("Next");
     expect(markup).toContain('aria-current="step"');
-    expect(markup).not.toContain('aria-hidden="true" class="f9-ed-setup-stamp"');
+    expect(markup).not.toContain('aria-hidden="true" class="f9-evidence-setup-stamp"');
     expect(markup).toContain("Competitor website");
     expect(markup).toContain("Track this competitor");
     expect(markup).toContain("Add several competitors by paste or CSV");
     expect(markup).toContain("Search first instead");
     expect(markup).toContain("Add your brand website");
     expect(markup).not.toContain("f9-first-run-spine");
-    expect(markup.match(/f9-ed-cta--rank1/g)?.length ?? 0).toBe(1);
+    expect(markup.match(/f9-evidence-cta--rank1/g)?.length ?? 0).toBe(1);
   });
 
   it("keeps the filed brief reachable while setup still has another step", async () => {
@@ -152,8 +152,8 @@ describe("dashboard first 15 minutes activation", () => {
 
     expect(markup).toContain('href="/app/digests?firstrun=1"');
     expect(markup).toContain("Read latest brief");
-    expect(markup).toContain('class="f9-ed-cta f9-ed-cta--rank2"');
-    expect(markup.match(/f9-ed-cta--rank1/g)?.length ?? 0).toBe(1);
+    expect(markup).toContain('class="f9-evidence-cta f9-evidence-cta--rank2"');
+    expect(markup.match(/f9-evidence-cta--rank1/g)?.length ?? 0).toBe(1);
   });
 
   it("restores the state-specific Overview action after setup is complete", async () => {
@@ -404,7 +404,7 @@ describe("dashboard first 15 minutes activation", () => {
     expect(markup).toContain("Track this competitor");
     expect(markup).toContain("No ready competitors found.");
     expect(markup).not.toContain("Create 0 watchlists");
-    expect(markup.match(/f9-ed-cta--rank1/g)?.length ?? 0).toBe(1);
+    expect(markup.match(/f9-evidence-cta--rank1/g)?.length ?? 0).toBe(1);
   });
 
   it("does not let a retained quick-create refusal mask a bulk-import preview", async () => {

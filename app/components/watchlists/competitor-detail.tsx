@@ -153,7 +153,7 @@ export function CompetitorDetail(props: CompetitorDetailProps) {
   return (
     <article
       aria-label={`${watchlist.name} — opened ${targetNoun}`}
-      className="f9-bl035-detail"
+      className="f9-watchdetail-detail"
       id="competitor-detail"
     >
       <h2 className="f9-sr-only">
@@ -172,7 +172,7 @@ export function CompetitorDetail(props: CompetitorDetailProps) {
       ) : null}
 
       {props.failedChecks >= 3 ? (
-        <div aria-live="assertive" className="f9-message is-error" role="alert">
+        <div aria-live="assertive" className="f9-wk-notice is-error" role="alert">
           <p>
             We're having trouble checking this {targetNoun} — the last {props.failedChecks} checks
             failed. We keep retrying every night; recent errors are listed under Evidence. If this
@@ -182,10 +182,10 @@ export function CompetitorDetail(props: CompetitorDetailProps) {
         </div>
       ) : null}
 
-      <div className="f9-wk-split is-wide f9-bl035-split">
+      <div className="f9-wk-split is-wide f9-watchdetail-split">
         <div
           aria-label={panelLabel}
-          className="f9-bl035-main"
+          className="f9-watchdetail-main"
           id={`competitor-panel-${activeTab}`}
           role="region"
         >
@@ -265,9 +265,9 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
   if (props.activeTab === "setup") {
     return (
       <>
-        <section aria-labelledby="competitor-monitoring-title" className="f9-bl035-section">
+        <section aria-labelledby="competitor-monitoring-title" className="f9-watchdetail-section">
           <h3 id="competitor-monitoring-title">Monitoring</h3>
-          <p className="f9-muted-copy">
+          <p className="f9-wk-dim">
             {!watchlist.isActive
               ? "Watching is paused. The evidence already on file stays here."
               : props.sourceCanSchedule
@@ -275,7 +275,7 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
                 : "Automatic checks are waiting for source access. The evidence already on file stays here."}
           </p>
           {watchlist.isActive ? (
-            <div className="f9-bl035-local-actions">
+            <div className="f9-watchdetail-local-actions">
               {/* Lower paid plans keep Upgrade as the header's Rank-1 action,
                   so their entitled manual refresh settles here as quiet
                   Setup work. Agency uses Refresh in the header and must not
@@ -285,7 +285,7 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
                   <input name="intent" type="hidden" value="refresh-watchlist" />
                   <input name="watchlistId" type="hidden" value={watchlist.id} />
                   <SubmitButton
-                    className="f9-ed-cta f9-ed-cta--rank3"
+                    className="f9-evidence-cta f9-evidence-cta--rank3"
                     intent="refresh-watchlist"
                     pendingLabel="Checking…"
                   >
@@ -303,11 +303,11 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
           selectedTrackingRole={normalizeWatchlistTrackingRole(watchlist.trackingRole)}
         />
 
-        <section aria-label="How tracking works" className="f9-ed-panel">
-          <p className="f9-ed-micro">How tracking works</p>
+        <section aria-label="How tracking works" className="f9-evidence-panel">
+          <p className="f9-evidence-micro">How tracking works</p>
           <h3>{props.trackingPresentation.headline}</h3>
-          <p className="f9-muted-copy">{props.trackingPresentation.summary}</p>
-          <p className="f9-muted-copy">
+          <p className="f9-wk-dim">{props.trackingPresentation.summary}</p>
+          <p className="f9-wk-dim">
             {!watchlist.isActive
               ? "Watching is paused. The evidence already on file stays here."
               : props.sourceCanSchedule
@@ -315,9 +315,9 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
                 : "Automatic checks are waiting for source access. The evidence already on file stays here."}
           </p>
           {props.discoveryRecovery ? (
-            <p className="f9-muted-copy">{props.discoveryRecovery}</p>
+            <p className="f9-wk-dim">{props.discoveryRecovery}</p>
           ) : null}
-          <div className="f9-ed-action-row">
+          <div className="f9-evidence-action-row">
             <SecondaryAction to="/app/source-access">Check source access</SecondaryAction>
             {data.showPresenceNav ? (
               <TertiaryAction to="/app/presence">Open Presence</TertiaryAction>
@@ -326,10 +326,10 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
         </section>
 
         <p className="f9-crosslink-row">
-          <Link className="f9-text-link" to={watchlistLiveSearchHref(watchlist)}>
+          <Link className="f9-wk-lnk" to={watchlistLiveSearchHref(watchlist)}>
             Search their ads live
           </Link>
-          <Link className="f9-text-link" to={watchlistSavedAdsHref(watchlist)}>
+          <Link className="f9-wk-lnk" to={watchlistSavedAdsHref(watchlist)}>
             Saved ads from this {context.targetNoun}
           </Link>
         </p>
@@ -352,8 +352,8 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
         ) : null}
         <div className="f9-panel-toolbar">
           <div>
-            <p className="f9-ed-micro">Evidence and delivery</p>
-            <h3 style={{ marginTop: 0 }}>Evidence and alerts</h3>
+            <p className="f9-evidence-micro">Evidence and delivery</p>
+            <h3 className="f9-wk-mt0">Evidence and alerts</h3>
           </div>
         </div>
         <RecentEvidenceChecksCard data={data} />
@@ -363,8 +363,8 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
           watchlistId={watchlist.id}
         />
         <CandidateHistory candidates={data.eventCandidates} />
-        <details className="f9-ed-report-glossary">
-          <summary className="f9-ed-micro">Evidence labels</summary>
+        <details className="f9-evidence-report-glossary">
+          <summary className="f9-evidence-micro">Evidence labels</summary>
           <ProofGlossary />
         </details>
       </>
@@ -385,7 +385,7 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
         sourceCanSchedule={props.sourceCanSchedule}
         watchlistId={watchlist.id}
       />
-      <p className="f9-bl035-after-panel">
+      <p className="f9-watchdetail-after-panel">
         <Link className="f9-wk-lnk" to={watchlistDetailTabHref(watchlist.id, "evidence")}>
           Open the capture <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
         </Link>
@@ -413,18 +413,18 @@ function EvidenceHandoff({ props }: { props: CompetitorDetailProps }) {
       : null;
 
   return (
-    <section aria-labelledby="competitor-handoff-title" className="f9-bl035-section">
+    <section aria-labelledby="competitor-handoff-title" className="f9-watchdetail-section">
       <h3 id="competitor-handoff-title">Share this record</h3>
-      <p className="f9-muted-copy">
+      <p className="f9-wk-dim">
         Send the stored evidence without changing the capture on file.
       </p>
-      <div className="f9-bl035-local-actions">
+      <div className="f9-watchdetail-local-actions">
         {props.canShare ? (
           <Form method="post">
             <input name="intent" type="hidden" value="share-watchlist" />
             <input name="watchlistId" type="hidden" value={watchlist.id} />
             <SubmitButton
-              className="f9-ed-cta f9-ed-cta--rank3"
+              className="f9-evidence-cta f9-evidence-cta--rank3"
               intent="share-watchlist"
               pendingLabel="Sharing…"
             >
@@ -448,7 +448,7 @@ function EvidenceHandoff({ props }: { props: CompetitorDetailProps }) {
           </TertiaryAction>
         ) : null}
       </div>
-      {lockedCopy ? <p className="f9-bl035-lock-note">{lockedCopy}</p> : null}
+      {lockedCopy ? <p className="f9-watchdetail-lock-note">{lockedCopy}</p> : null}
     </section>
   );
 }

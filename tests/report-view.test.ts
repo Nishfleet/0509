@@ -30,7 +30,7 @@ describe("ReportView", () => {
     expect(markup).not.toContain("Pending");
     // §6.8: an empty report is a specimen panel with a reserved slot, never
     // a bare "No data" box.
-    expect(markup).toContain("f9-ed-specimen");
+    expect(markup).toContain("f9-evidence-specimen");
     expect(markup).toContain("No plate is filed yet");
     expect(markup).not.toContain("f9-empty-panel");
     expect(markup).not.toContain("f9-dash-state-empty");
@@ -129,7 +129,7 @@ describe("ReportView", () => {
     // §6.10 cover: kicker, the finding as the headline, standfirst, byline.
     expect(markup).toContain("Competitor evidence report");
     expect(markup).toContain(
-      '<h1 class="f9-ed-report-headline">Pricing page changed</h1>',
+      '<h1 class="f9-evidence-report-headline">Pricing page changed</h1>',
     );
     expect(markup).not.toContain("Report for");
     expect(markup).toContain("2 verified-evidence watch events.");
@@ -165,10 +165,10 @@ describe("ReportView", () => {
 
     // Three, because a 3-up band cannot produce the 3+1 orphan hole.
     expect(markup).toContain('data-count="3"');
-    expect(markup.match(/f9-ed-report-number"/g)).toHaveLength(3);
+    expect(markup.match(/f9-evidence-report-number"/g)).toHaveLength(3);
     expect(markup).toContain("Changes we captured and kept");
     // The fourth number is a fact row, not a fourth tile.
-    expect(markup).toContain('<span class="f9-ed-fact-key">Excluded</span>');
+    expect(markup).toContain('<span class="f9-evidence-fact-key">Excluded</span>');
   });
 
   it("renders evidence as numbered plates and references them by number in the prose", () => {
@@ -214,9 +214,9 @@ describe("ReportView", () => {
     const withoutActions = renderToStaticMarkup(
       createElement(ReportView, { report: legacyReport }),
     );
-    expect(withoutActions).toContain("f9-ed-report-contents");
+    expect(withoutActions).toContain("f9-evidence-report-contents");
     expect(withoutActions).toContain('href="#report-05"');
-    expect(withoutActions).not.toContain("f9-ed-report-rail-actions");
+    expect(withoutActions).not.toContain("f9-evidence-report-rail-actions");
 
     const withActions = renderToStaticMarkup(
       createElement(ReportView, {
@@ -225,7 +225,7 @@ describe("ReportView", () => {
         railActions: createElement("button", { type: "button" }, "Send to client"),
       }),
     );
-    expect(withActions).toContain("f9-ed-report-rail-actions");
+    expect(withActions).toContain("f9-evidence-report-rail-actions");
     expect(withActions).toContain("Send to client");
     expect(withActions).toContain("Agency Fixture Studio");
   });
@@ -252,9 +252,9 @@ describe("ReportView", () => {
     expect(markup).not.toContain("Translation unavailable");
     expect(markup).not.toContain("Landing page unavailable");
     expect(markup).toMatch(
-      /<span class="f9-ed-fact-key">Still live at<\/span><span class="f9-ed-fact-value is-missing">none stored<\/span>/,
+      /<span class="f9-evidence-fact-key">Still live at<\/span><span class="f9-evidence-fact-value is-missing">none stored<\/span>/,
     );
-    expect(markup).toContain("f9-ed-fact-value is-missing");
+    expect(markup).toContain("f9-evidence-fact-value is-missing");
     // The row still leads with what is known.
     expect(markup).toContain("New offer");
   });
@@ -270,7 +270,7 @@ describe("ReportView", () => {
     );
 
     expect(markup).toMatch(
-      /<span class="f9-ed-fact-key">Language<\/span><span class="f9-ed-fact-value is-missing">Not detected<\/span>/,
+      /<span class="f9-evidence-fact-key">Language<\/span><span class="f9-evidence-fact-value is-missing">Not detected<\/span>/,
     );
   });
 
@@ -284,11 +284,11 @@ describe("ReportView", () => {
     );
 
     expect(markup).toContain(
-      `<p class="f9-ed-mock-empty">${UNREADABLE_CAPTURE_COPY}</p>`,
+      `<p class="f9-evidence-mock-empty">${UNREADABLE_CAPTURE_COPY}</p>`,
     );
     expect(markup.split(UNREADABLE_CAPTURE_COPY)).toHaveLength(2);
     expect(markup).not.toContain(
-      `<span class="f9-ed-fact-value is-missing">${UNREADABLE_CAPTURE_COPY}</span>`,
+      `<span class="f9-evidence-fact-value is-missing">${UNREADABLE_CAPTURE_COPY}</span>`,
     );
   });
 
@@ -317,7 +317,7 @@ describe("ReportView", () => {
     expect(markup).toContain("Verified evidence");
     expect(markup).toContain('href="https://example.com/offer"');
     expect(markup).toContain(
-      `<p class="f9-ed-mock-empty">${UNREADABLE_CAPTURE_COPY}</p>`,
+      `<p class="f9-evidence-mock-empty">${UNREADABLE_CAPTURE_COPY}</p>`,
     );
   });
 
@@ -353,7 +353,7 @@ describe("ReportView", () => {
     // "Not detected" is the honest Language fact-row fallback.
     expect(markup.match(/Not detected/g)).toHaveLength(1);
     expect(markup).toMatch(
-      /<span class="f9-ed-fact-key">Language<\/span><span class="f9-ed-fact-value is-missing">Not detected<\/span>/,
+      /<span class="f9-evidence-fact-key">Language<\/span><span class="f9-evidence-fact-value is-missing">Not detected<\/span>/,
     );
     expect(markup).not.toContain("Not checked yet");
   });
@@ -378,7 +378,7 @@ describe("ReportView", () => {
 
     const markup = renderToStaticMarkup(createElement(ReportView, { report }));
 
-    expect(markup).toContain("f9-ed-evidence-why");
+    expect(markup).toContain("f9-evidence-why");
     expect(markup).not.toContain("Why it matters");
     expect(markup).not.toContain("Signal summary");
     expect(markup.match(/A new offer launched\./g)).toHaveLength(1);
@@ -448,7 +448,7 @@ describe("ReportView", () => {
     expect(markup.match(new RegExp(eventTitle, "g")) ?? []).toHaveLength(2);
     expect(markup).toContain("PLATE 01 — New ad");
     expect(markup).toContain("Plate 01 — New ad");
-    expect(markup).not.toContain(`<p class="f9-ed-mock-line">${eventTitle}</p>`);
+    expect(markup).not.toContain(`<p class="f9-evidence-mock-line">${eventTitle}</p>`);
   });
 
   it("does not claim a stored capture on a plate that captured nothing", () => {
@@ -493,7 +493,7 @@ describe("ReportView", () => {
 
     expect(markup).toContain("Our read");
     expect(markup).toContain("We have not scored a next move on this one.");
-    expect(markup).not.toContain('<p class="f9-ed-report-read-verdict"></p>');
+    expect(markup).not.toContain('<p class="f9-evidence-report-read-verdict"></p>');
   });
 
   it("renders the stored creative capture inside the plate's mock frame", () => {
@@ -509,7 +509,7 @@ describe("ReportView", () => {
 
     const markup = renderToStaticMarkup(createElement(ReportView, { report }));
 
-    expect(markup).toContain("f9-ed-mock-capture");
+    expect(markup).toContain("f9-evidence-mock-capture");
     expect(markup).toContain('src="https://cdn.example.com/creative.png"');
     expect(markup).toContain('referrerPolicy="no-referrer"');
   });

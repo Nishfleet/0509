@@ -8,7 +8,7 @@ import { DashboardShell } from "~/components/dashboard-shell";
  * Public (logged-out) loading + error states for the /search route.
  *
  * These now wrap in DashboardShell(isPublic) to match the loaded public
- * /search chrome (minimal PUBLIC_SEARCH_NAV rail + f9-search-page), eliminating
+ * /search chrome (minimal PUBLIC_SEARCH_NAV rail + f9-find-page), eliminating
  * layout shift on hydration/error. The shell with isPublic provides the
  * appropriate public bone "Caught in the act" framing without full workspace
  * nav. Voice rule 6 for errors.
@@ -20,7 +20,7 @@ export function PublicSearchLoading() {
       accountLabel="Search"
       accountTitle="Five to Nine"
       isPublic
-      pageClassName="f9-search-page"
+      pageClassName="f9-find-page"
     >
       <RouteSkeleton label="Loading competitor ads and landing pages" />
     </DashboardShell>
@@ -42,7 +42,7 @@ export function PublicSearchError({ error }: { error: unknown }) {
       accountLabel="Search"
       accountTitle="Five to Nine"
       isPublic
-      pageClassName="f9-search-page"
+      pageClassName="f9-find-page"
     >
       <div
         aria-live="assertive"
@@ -55,7 +55,7 @@ export function PublicSearchError({ error }: { error: unknown }) {
         <div className="f9-inline-actions">
           {canRetry ? (
             <button
-              className="f9-primary-button"
+              className="f9-wk-btn"
               disabled={revalidator.state === "loading"}
               onClick={() => revalidator.revalidate()}
               type="button"
@@ -63,7 +63,7 @@ export function PublicSearchError({ error }: { error: unknown }) {
               {revalidator.state === "loading" ? "Retrying…" : "Try again"}
             </button>
           ) : null}
-          <Link className="f9-secondary-button" to="/">
+          <Link className="f9-wk-btn-quiet" to="/">
             Back to Five to Nine
           </Link>
         </div>

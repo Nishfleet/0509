@@ -46,12 +46,12 @@ describe("BL-039 notifications rebuild", () => {
 
   it("uses the shared working header and removes the old card dashboard", () => {
     expect(ui).toContain(
-      '<DashboardPage className="f9-wk-page f9-nt-page">',
+      '<DashboardPage className="f9-wk-page f9-notif-page">',
     );
     expect(ui).toContain("<WorkingHeader");
     expect(ui).toContain('title="Delivery channel"');
     expect(ui).not.toContain("DashboardPageHeader");
-    expect(ui).not.toContain("f9-app-panel");
+    expect(ui).not.toContain("f9-wk-panel");
     expect(ui).not.toContain("f9-status-strip");
     expect(ui).not.toContain("f9-dashboard-grid");
   });

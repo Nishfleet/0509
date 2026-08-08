@@ -14,8 +14,8 @@ export function WatchlistSetupCard(props: {
   const { data, selectedTrackingRole } = props;
   return (
     <section className="f9-detail-cell">
-      <p className="f9-app-kicker">Watchlist setup</p>
-      <Form method="post" className="f9-work-list is-compact">
+      <p className="f9-wk-kick">Watchlist setup</p>
+      <Form method="post" className="f9-wk-worklist is-compact">
         <input name="intent" type="hidden" value="update-watchlist" />
         <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
         <label className="f9-field">
@@ -69,7 +69,7 @@ export function WatchlistSetupCard(props: {
             type="text"
           />
         </label>
-        <SubmitButton className="f9-ed-cta f9-ed-cta--rank2" intent="update-watchlist" pendingLabel="Saving…">
+        <SubmitButton className="f9-evidence-cta f9-evidence-cta--rank2" intent="update-watchlist" pendingLabel="Saving…">
           Save watchlist
         </SubmitButton>
       </Form>

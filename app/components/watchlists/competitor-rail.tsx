@@ -27,20 +27,20 @@ export function CompetitorRail({
   deliveryHref: string;
 }) {
   return (
-    <aside aria-label="Competitor facts" className="f9-ed-detail-rail">
-      <div className="f9-ed-number-card">
-        <p className="f9-ed-micro">{`Caught · ${windowDays} days`}</p>
-        <p className="f9-ed-number-value">{caughtValue}</p>
-        <p className="f9-ed-number-note">{caughtNote}</p>
+    <aside aria-label="Competitor facts" className="f9-evidence-detail-rail">
+      <div className="f9-evidence-number-card">
+        <p className="f9-evidence-micro">{`Caught · ${windowDays} days`}</p>
+        <p className="f9-evidence-number-value">{caughtValue}</p>
+        <p className="f9-evidence-number-note">{caughtNote}</p>
       </div>
 
       <FactRail rows={factRows} title="What we watch" />
 
-      <div className="f9-ed-rail-card">
-        <p className="f9-ed-micro">Who gets told</p>
-        <dl className="f9-ed-rail-lines">
+      <div className="f9-evidence-rail-card">
+        <p className="f9-evidence-micro">Who gets told</p>
+        <dl className="f9-evidence-rail-lines">
           {deliveryLines.map((line) => (
-            <div className="f9-ed-rail-line" key={line.key}>
+            <div className="f9-evidence-rail-line" key={line.key}>
               <dt>{line.key}</dt>
               <dd>{line.value}</dd>
             </div>

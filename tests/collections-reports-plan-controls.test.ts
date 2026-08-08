@@ -103,7 +103,7 @@ describe("collection plan controls", () => {
 
     // BL-033a: a quiet v4 explanation and one filled upgrade action, with no
     // dashed specimen theatre or shadow card.
-    expect(markup).toContain("f9-col-locked");
+    expect(markup).toContain("f9-library-locked");
     expect(markup).toContain("Collections start on Scout");
     expect(markup).toContain(
       "Saved evidence stays attached to its source, recorded date, and team notes.",
@@ -114,7 +114,7 @@ describe("collection plan controls", () => {
     expect(markup).not.toContain('name="intent" value="create-collection"');
     expect(markup).not.toContain('placeholder="Nykaa competitors"');
     expect(markup.match(/f9-wk-btn/g) ?? []).toHaveLength(1);
-    expect(markup).not.toContain("f9-ed-specimen");
+    expect(markup).not.toContain("f9-evidence-specimen");
   });
 
   it("keeps downgraded Free evidence visible without claiming a zero-item limit", async () => {
@@ -316,8 +316,8 @@ describe("reports plan state", () => {
     expect(markup).toContain("f9-wk-reports-locked f9-locked-feature");
     expect(markup).toContain("Everything stays private until you choose to send it.");
     expect(markup).toContain("Your workspace evidence is not used as an upgrade preview.");
-    expect(markup).not.toContain("f9-ed-specimen");
-    expect(markup).not.toContain("f9-ed-specimen-slot");
+    expect(markup).not.toContain("f9-evidence-specimen");
+    expect(markup).not.toContain("f9-evidence-specimen-slot");
     expect(markup).not.toContain("Sample · not your workspace");
     expect(markup.match(/f9-wk-btn/g) ?? []).toHaveLength(1);
     expect(markup).not.toContain("f9-primary-button");
