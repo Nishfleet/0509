@@ -1,3 +1,10 @@
+> **SUPERSEDED (2026-08-08).** This contract described an IA that no
+> longer exists (it disagreed with the shipped nav on five of seven
+> labels). The ratified IA is the five destinations — Today, Watch,
+> Library, Deliver, Settings — defined in `app/lib/dashboard-navigation.ts`
+> and governed by the design-unification ledger in agent-state. Retained
+> as history only; do not plan from this file.
+
 # Dashboard V2 — Design Contract
 
 Locked IA, navigation, tokens, and state policy for the Five to Nine workspace.
