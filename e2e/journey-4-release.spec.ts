@@ -122,7 +122,7 @@ async function expectNoOverflow(page: Page) {
 async function expectTouchTargets(page: Page) {
   await expectPhoneTouchTargets(page);
   const undersized = await page
-    .locator("button, a.f9-primary-button, a.f9-secondary-button, a.f9-ed-cta")
+    .locator("button, a.f9-wk-btn, a.f9-wk-btn-quiet, a.f9-ed-cta")
     .evaluateAll((elements) =>
       elements.flatMap((element) => {
         const rect = element.getBoundingClientRect();

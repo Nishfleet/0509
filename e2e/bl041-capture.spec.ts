@@ -227,7 +227,7 @@ async function measure(page: Page) {
         if (
           node.tagName === "A" &&
           style.display === "inline" &&
-          node.closest("p, li, dd, .f9-work-row > span")
+          node.closest("p, li, dd, .f9-wk-workrow > span")
         ) {
           return false;
         }

@@ -125,7 +125,7 @@ async function expectNoShellActionRow(page: Page) {
     // working header at all, and a pure signpost legitimately carries no
     // primary — but it may never carry two.
     await expect(page.locator(".f9-wk-head")).toHaveCount(0);
-    expect(await page.locator(".f9-primary-button:visible").count()).toBeLessThanOrEqual(1);
+    expect(await page.locator(".f9-wk-btn:visible").count()).toBeLessThanOrEqual(1);
     return;
   }
 

@@ -15152,6 +15152,16 @@ textarea.f9-wk-in {
   background: transparent;
 }
 .f9-wk-notice.is-error { color: var(--red); border-color: var(--red); }
+/* Accessibility floor: every actionable link inside a notice, work row, or
+   plan card keeps a 44px target even as a plain inline anchor — the legacy
+   rules that once guaranteed this died with their era. */
+.f9-wk-notice a,
+.f9-wk-workrow a,
+.f9-wk-plan-card a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
 .f9-wk-btn-quiet {
   display: inline-flex;
   align-items: center;
