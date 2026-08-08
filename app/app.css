@@ -15078,20 +15078,26 @@ textarea.f9-wk-in {
   background: transparent;
 }
 .f9-wk-workrow > * { min-width: 0; }
-/* Single-word label cells keep their intrinsic width instead of being
+/* Short label and status cells keep their intrinsic width instead of being
    flex-crushed into invisible scrollWidth overflow; max-width + anywhere
-   keeps a genuinely long label from widening the row. */
+   keeps a genuinely long label from widening the row. Prose value spans
+   stay shrinkable — only cells marked f9-wk-status are keep-whole. */
 .f9-wk-workrow > strong,
-.f9-wk-workrow > span {
+.f9-wk-workrow > .f9-wk-status {
   flex-shrink: 0;
   max-width: 100%;
   overflow-wrap: anywhere;
 }
 a.f9-wk-workrow { color: inherit; text-decoration: none; }
 a.f9-wk-workrow:hover, .f9-wk-workrow.is-selected { background: var(--wk-sunk); }
-/* Wrap at every width: with label/status cells shrink-proof, a cramped row
-   (narrow rail column, long titles) must wrap rather than overflow. */
-.f9-wk-workrow { flex-wrap: wrap; }
+/* Rows carrying a shrink-proof status cell must be free to wrap at any
+   width — a cramped rail row wraps visibly rather than overflowing
+   invisibly. Prose rows keep single-line flow so values stay beside
+   their labels; on phones every row may wrap. */
+.f9-wk-workrow:has(> .f9-wk-status) { flex-wrap: wrap; }
+@media (max-width: 640px) {
+  .f9-wk-workrow { flex-wrap: wrap; }
+}
 .f9-wk-grid2 {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);

@@ -416,7 +416,7 @@ function SupportCaseRow({
           <LocalTime iso={supportCase.createdAt} />
         </small>
       </div>
-      <span>{SUPPORT_CASE_STATUS_LABELS[supportCase.status]}</span>
+      <span className="f9-wk-status">{SUPPORT_CASE_STATUS_LABELS[supportCase.status]}</span>
     </Link>
   );
 }
@@ -440,7 +440,7 @@ function SupportCaseDetail({
           </small>
           <p className="f9-wk-dim">{supportCase.detail}</p>
         </div>
-        <span>{SUPPORT_CASE_STATUS_LABELS[supportCase.status]}</span>
+        <span className="f9-wk-status">{SUPPORT_CASE_STATUS_LABELS[supportCase.status]}</span>
       </div>
 
       <div>
