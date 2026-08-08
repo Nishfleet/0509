@@ -122,7 +122,7 @@ body {
   margin: 0;
   min-height: 100vh;
   color: var(--f9-global-ink);
-  background: #f6f9fc;
+  background: var(--bone);
   font-family: var(--f9-font);
   line-height: 1.5;
 }
