@@ -30,6 +30,11 @@ case "$GITHUB_EVENT_NAME" in
   push)
     [[ -z "${EXPECTED_SHA:-}" ]] || fail "unexpected_push_expected_sha"
     ;;
+  schedule)
+    # Unattended backup/restore pins whatever main tip the run started on.
+    # expected_sha must stay empty so nothing can smuggle a chosen commit.
+    [[ -z "${EXPECTED_SHA:-}" ]] || fail "unexpected_schedule_expected_sha"
+    ;;
   workflow_dispatch)
     [[ "${EXPECTED_SHA:-}" =~ $sha_pattern ]] || fail "expected_sha"
     [[ "$EXPECTED_SHA" == "$GITHUB_SHA" ]] || fail "dispatch_sha_mismatch"

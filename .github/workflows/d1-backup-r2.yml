@@ -89,7 +89,7 @@ jobs:
       - name: Verify pinned backup candidate
         shell: bash
         env:
-          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/ci-verify-production-candidate.sh
       - name: Bind run-scoped backup directory
@@ -114,7 +114,7 @@ jobs:
       - name: Reconfirm frozen main before backup mutation
         shell: bash
         env:
-          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          EXPECTED_SHA: ${{ inputs.expected_sha || '' }}
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/ci-verify-production-candidate.sh
       - name: Run approved D1-to-R2 backup
