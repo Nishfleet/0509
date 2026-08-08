@@ -743,6 +743,63 @@ describe("Better Auth magic links", () => {
     expect(redirectResponse.headers.get("Location")).not.toContain("ticket=");
   });
 
+  it("stages a fresh ticket even when the email link host was rewritten before the open", async () => {
+    const { verifyBetterAuthMagicLink } = await mockBetterAuthMagicLinkServer();
+
+    const { loader } = await import("~/routes/auth.better.magic-link");
+    const ticketDb = dbWithMagicLinkTickets();
+    // No pinned BETTER_AUTH_URL/APP_ORIGIN: the effective origin follows the
+    // request host (forwarded-origin fallback), like production before the
+    // canonical-origin pinning. The link is issued on www.0509.io, then the
+    // Worker's own www -> apex redirect rewrites the open request to 0509.io.
+    const testEnv = env({ APP_ORIGIN: undefined, BETTER_AUTH_URL: undefined, DB: ticketDb.db });
+    const ticketUrl = await betterAuthMagicLinkConfirmationUrl(testEnv, {
+      email: "owner@example.com",
+      mode: "login",
+      url: "https://www.0509.io/api/auth/magic-link/verify?token=secret-token&callbackURL=https%3A%2F%2Fwww.0509.io%2Fapp",
+    });
+
+    const openUrl = new URL(ticketUrl);
+    openUrl.host = "0509.io";
+    const openUrlString = openUrl.toString();
+    const redirectResponse = (await Promise.resolve(
+      loader({
+        context: context(testEnv),
+        params: {},
+        pattern: "/auth/better/magic-link",
+        request: new Request(openUrlString, {
+          headers: {
+            "x-forwarded-host": "0509.io",
+            "x-forwarded-proto": "https",
+          },
+        }),
+        url: openUrlString,
+      } as never),
+    ).catch((error) => error)) as Response;
+
+    expect(redirectResponse.status).toBe(302);
+    expect(redirectResponse.headers.get("Location")).toBe("/auth/better/magic-link?mode=login");
+    expect(verifyBetterAuthMagicLink).not.toHaveBeenCalled();
+    const [ticket] = ticketDb.tickets.values();
+    expect(ticket?.consumed_at).toBeNull();
+    const stagingCookie = cookieHeader(setCookieValues(redirectResponse.headers), "f9_better_magic");
+
+    const cleanResponse = await loader({
+      context: context(testEnv),
+      params: {},
+      pattern: "/auth/better/magic-link",
+      request: new Request("https://0509.io/auth/better/magic-link?mode=login", {
+        headers: { cookie: stagingCookie },
+      }),
+      url: "https://0509.io/auth/better/magic-link?mode=login",
+    } as never);
+    expect(cleanResponse.status).toBe(200);
+    await expect(cleanResponse.json()).resolves.toEqual({
+      error: "",
+      mode: "login",
+    });
+  });
+
   it("signs in after a same-origin confirmation POST", async () => {
     const { verifyBetterAuthMagicLink } = await mockBetterAuthMagicLinkServer();
 

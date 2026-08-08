@@ -1050,14 +1050,14 @@ async function readBetterAuthLegacyMagicLinkConfirmationCookie(
     }
 
     const origin = new URL(betterAuthBaseURL(env, request)).origin;
-    const callbackURL = parseSameOriginUrl(parsed.callbackURL, origin);
+    const callbackURL = parseStoredSameOriginUrl(parsed.callbackURL, origin);
     const errorCallbackURL =
       typeof parsed.errorCallbackURL === "string"
-        ? parseSameOriginUrl(parsed.errorCallbackURL, origin)
+        ? parseStoredSameOriginUrl(parsed.errorCallbackURL, origin)
         : undefined;
     const newUserCallbackURL =
       typeof parsed.newUserCallbackURL === "string"
-        ? parseSameOriginUrl(parsed.newUserCallbackURL, origin)
+        ? parseStoredSameOriginUrl(parsed.newUserCallbackURL, origin)
         : undefined;
     if (
       !callbackURL ||
@@ -1098,14 +1098,14 @@ async function parseBetterAuthMagicLinkTicketPayload(
   }
 
   const origin = new URL(betterAuthBaseURL(env, request)).origin;
-  const callbackURL = parseSameOriginUrl(parsed.callbackURL, origin);
+  const callbackURL = parseStoredSameOriginUrl(parsed.callbackURL, origin);
   const errorCallbackURL =
     typeof parsed.errorCallbackURL === "string"
-      ? parseSameOriginUrl(parsed.errorCallbackURL, origin)
+      ? parseStoredSameOriginUrl(parsed.errorCallbackURL, origin)
       : undefined;
   const newUserCallbackURL =
     typeof parsed.newUserCallbackURL === "string"
-      ? parseSameOriginUrl(parsed.newUserCallbackURL, origin)
+      ? parseStoredSameOriginUrl(parsed.newUserCallbackURL, origin)
       : undefined;
   if (
     !callbackURL ||
@@ -1597,6 +1597,29 @@ function parseSameOriginUrl(value: string, origin: string) {
   try {
     const parsed = new URL(value, origin);
     return parsed.origin === origin ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Read-time same-origin resolution for stored magic-link destinations. Stored
+ * values were validated against the app's own origin when the ticket/cookie
+ * was created (sameOriginMagicLinkUrl), so when request-driven origin drift —
+ * the Worker's www/apex redirects or forwarded-host headers — makes that
+ * origin differ from the open-time baseURL origin, the stored path is still
+ * safe to resolve against the current origin. Absolute foreign origins stay
+ * rejected, so open-redirect protection is unchanged.
+ */
+function parseStoredSameOriginUrl(value: string, origin: string) {
+  const direct = parseSameOriginUrl(value, origin);
+  if (direct) {
+    return direct;
+  }
+  try {
+    const parsed = new URL(value, origin);
+    const resolved = new URL(`${parsed.pathname}${parsed.search}${parsed.hash}`, origin);
+    return resolved.origin === origin ? resolved.toString() : null;
   } catch {
     return null;
   }
