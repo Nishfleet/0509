@@ -449,20 +449,51 @@ export default function MarketingRoute() {
     if (localPricing?.available) return undefined;
 
     let active = true;
+    let started = false;
+    let observer: IntersectionObserver | undefined;
+    let fallbackTimer = 0;
 
-    fetch("/api/pricing-preview")
-      .then((response) => (response.ok ? response.json() : null))
-      .then((value: unknown) => {
-        const preview = value as LocalPricingPreview | null;
-        if (active && preview?.available) setLocalPricing(preview);
-      })
-      .catch(() => {
-        // Keep honest checkout-localized fallbacks on fetch failure.
-        if (active) setLocalPricing(null);
-      });
+    const startPricingPreview = () => {
+      if (!active || started) return;
+      started = true;
+      window.clearTimeout(fallbackTimer);
+      observer?.disconnect();
+      // The pricing section sits far below the fold, and the preview can take
+      // seconds (Dodo checkout-preview latency). Fetching it eagerly on mount
+      // kept the page's network busy after render (dogfood c99ff5d9b87b:
+      // rendered audit reached network idle in 5136ms). Fetch only when the
+      // visitor is close to the section, so the document load settles fast
+      // while prices still arrive before the section becomes visible.
+      fetch("/api/pricing-preview")
+        .then((response) => (response.ok ? response.json() : null))
+        .then((value: unknown) => {
+          const preview = value as LocalPricingPreview | null;
+          if (active && preview?.available) setLocalPricing(preview);
+        })
+        .catch(() => {
+          // Keep honest checkout-localized fallbacks on fetch failure.
+          if (active) setLocalPricing(null);
+        });
+    };
+
+    observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) startPricingPreview();
+      },
+      { rootMargin: "0px 0px 100% 0px", threshold: 0.01 },
+    );
+    const pricingSection = document.getElementById("pricing");
+    if (pricingSection) observer.observe(pricingSection);
+
+    // Safety net for viewers who never scroll (print, landmark-jumping screen
+    // readers, find-in-page jumps): prices still arrive eventually. Fires long
+    // after the document has settled, so it never delays the initial load.
+    fallbackTimer = window.setTimeout(startPricingPreview, 10_000);
 
     return () => {
       active = false;
+      window.clearTimeout(fallbackTimer);
+      observer?.disconnect();
     };
   }, [localPricing?.available]);
 
