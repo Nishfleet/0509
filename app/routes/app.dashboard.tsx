@@ -4,8 +4,9 @@ import {
   redirect,
   useActionData,
   useLoaderData,
+  useRevalidator,
 } from "react-router";
-import { useEffect, useState, type CSSProperties } from "react";
+import type { CSSProperties } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { DashboardPage } from "~/components/dashboard-page";
@@ -41,10 +42,10 @@ import type { AppEnv } from "~/lib/env.server";
 import type { AgentActionAuditRecord, WatchEventRecord } from "~/lib/types";
 import type { WorkspaceReadiness } from "~/lib/workspace-readiness.server";
 
-export const meta = () => [{ title: "Overview | Five to Nine" }];
+export const meta = () => [{ title: "Today | Five to Nine" }];
 
 export function HydrateFallback() {
-  return <DashboardRouteLoading title="Overview" />;
+  return <DashboardRouteLoading title="Today" />;
 }
 
 export function ErrorBoundary({ error }: { error: unknown }) {
@@ -540,6 +541,7 @@ export default function AppDashboardRoute() {
   const collections = data.collections ?? [];
   const watchlists = data.watchlists ?? [];
   const digests = data.digests ?? [];
+  const revalidator = useRevalidator();
   const recentEvents = data.recentEvents ?? [];
   const recentProofCaptures = data.recentProofCaptures ?? [];
   const proofUsage = data.proofUsage ?? {
@@ -646,7 +648,7 @@ export default function AppDashboardRoute() {
         }
         context={
           <>
-            <WakeGreeting />.{" "}
+            Welcome back.{" "}
             {latestDigest ? (
               <>
                 Your latest brief was filed{" "}
@@ -657,7 +659,7 @@ export default function AppDashboardRoute() {
             )}
           </>
         }
-        title="Overview"
+        title="Today"
       />
 
       {sectionWarningCopy ? (
@@ -725,7 +727,9 @@ export default function AppDashboardRoute() {
             headline="Setup status is temporarily unavailable"
             primaryAction={{
               label: "Retry setup status",
-              href: "/app?retrySetup=1#setup-checklist",
+              // A same-page link never re-runs the loader; a real retry
+              // revalidates the route data (Sol's PR-3 review, item 1).
+              onClick: () => revalidator.revalidate(),
             }}
             specimenLabel="SETUP CHECKS — RETRY REQUIRED"
             stateLabel="SETUP · STATUS UNAVAILABLE"
@@ -1218,19 +1222,6 @@ export function formatOverviewSectionWarnings(
 
 // Viewer-local greeting: SSR renders a neutral fallback, the browser swaps in
 // the time-of-day version after mount (same hydration-safe pattern as LocalTime).
-function WakeGreeting() {
-  const [greeting, setGreeting] = useState("Welcome back");
-
-  useEffect(() => {
-    const hour = new Date().getHours();
-    if (hour < 5) setGreeting("Working late");
-    else if (hour < 12) setGreeting("Good morning");
-    else if (hour < 17) setGreeting("Good afternoon");
-    else setGreeting("Good evening");
-  }, []);
-
-  return <>{greeting}</>;
-}
 
 const IMG_FRAME_STYLE: CSSProperties = {
   display: "block",

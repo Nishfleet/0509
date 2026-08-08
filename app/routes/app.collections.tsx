@@ -34,10 +34,10 @@ export {
   resolveCollectionPrimarySlot,
 };
 
-export const meta = () => [{ title: "Collections | Five to Nine" }];
+export const meta = () => [{ title: "Library | Five to Nine" }];
 
 export function HydrateFallback() {
-  return <DashboardRouteLoading title="Collections" />;
+  return <DashboardRouteLoading title="Library" />;
 }
 
 export function ErrorBoundary({ error }: { error: unknown }) {
@@ -405,7 +405,7 @@ export default function CollectionsRoute() {
             "Saved evidence stays attached to its source, recorded date, and team notes."
           )
         }
-        title="Collections"
+        title="Library"
       />
 
       <CollectionSwitch

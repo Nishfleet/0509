@@ -29,18 +29,17 @@ const PRIMARY_APP_ROUTE_FILES = readdirSync("app/routes").filter(
 );
 
 /**
- * BL-030 regrouped the rail: the six mono section labels are gone (six labels
- * over sixteen destinations read as soup), the daily jobs are one ungrouped
- * list, and the seven long-dwell settings routes sit behind one disclosure.
- * The guarantee these cases carry is unchanged — every customer destination
- * still maps to exactly one path, and it is still reachable from the rail.
+ * PR-5a — the ratified 5-destination IA (design-unification, Nish
+ * 2026-08-08). Five customer jobs in the rail, no disclosure, and nothing
+ * advertised that the plan cannot use. Member pages stay URL-reachable and
+ * keep their owning destination's rail row active via activePaths.
  */
 const CUSTOMER_NAV_CASES = [
-  { label: "Competitors", path: "/app/watchlists", group: "primary" },
-  { label: "Briefs", path: "/app/digests", group: "primary" },
-  { label: "Reports", path: "/app/reports", group: "primary" },
-  { label: "Shared links", path: "/app/shares", group: "primary" },
-  { label: "Client rooms", path: "/app/clients", group: "primary" },
+  { label: "Today", path: "/app", group: "primary" },
+  { label: "Watch", path: "/app/watchlists", group: "primary" },
+  { label: "Library", path: "/app/collections", group: "primary" },
+  { label: "Deliver", path: "/app/deliver", group: "primary" },
+  { label: "Settings", path: "/app/settings", group: "primary" },
   { label: "Billing & usage", path: "/app/billing", group: "settings" },
   { label: "Account & security", path: "/app/account", group: "settings" },
 ] as const;
@@ -54,11 +53,11 @@ describe("dashboard v2 navigation", () => {
     expect(other.flatMap((section) => section.items).map((item) => item.to)).not.toContain(path);
   });
 
-  it("keeps the rail to nine visible rows: eight daily jobs plus one disclosure", () => {
+  it("keeps the rail to five destinations — the ratified IA", () => {
     const visible = filterDashboardNav(DASHBOARD_PRIMARY_NAV, {
       showPresence: false,
     }).flatMap((section) => section.items);
-    expect(visible).toHaveLength(8);
+    expect(visible).toHaveLength(5);
     // Every section is ungrouped: no mono label may reappear above a row.
     expect(DASHBOARD_PRIMARY_NAV.every((section) => section.title === undefined)).toBe(true);
     expect(DASHBOARD_SETTINGS_NAV.every((section) => section.title === undefined)).toBe(true);
@@ -66,62 +65,57 @@ describe("dashboard v2 navigation", () => {
     expect(DASHBOARD_SETTINGS_NAV.flatMap((section) => section.items)).toHaveLength(7);
   });
 
-  it("exposes the unified customer IA", () => {
-    const labels = [
-      ...DASHBOARD_PRIMARY_NAV.flatMap((section) => section.items.map((item) => item.label)),
-      ...DASHBOARD_SETTINGS_NAV.flatMap((section) => section.items.map((item) => item.label)),
-    ];
-
-    expect(labels).toContain("Overview");
-    expect(labels).toContain("Search");
-    expect(labels).toContain("Competitors");
-    expect(labels).toContain("Collections");
-    expect(labels).toContain("Briefs");
-    expect(labels).toContain("Reports");
-    expect(labels).toContain("Shared links");
-    expect(labels).toContain("Client rooms");
-    expect(labels).toContain("Notifications");
-    expect(labels).toContain("Source access");
-    expect(labels).toContain("Developer access");
-    expect(labels).not.toContain("Boards");
-    expect(labels).not.toContain("Watchlists");
-    expect(labels).not.toContain("Digests");
+  it("exposes the unified 5-destination IA and retires the old row soup", () => {
+    const primaryLabels = DASHBOARD_PRIMARY_NAV.flatMap((section) =>
+      section.items.map((item) => item.label),
+    );
+    expect(primaryLabels).toEqual(["Today", "Watch", "Library", "Deliver", "Settings"]);
+    // Old destinations survive as URLs owned by a destination, never as rows.
+    for (const retired of [
+      "Overview", "Competitors", "Presence", "Search", "Briefs",
+      "Collections", "Reports", "Shared links", "Client rooms",
+    ]) {
+      expect(primaryLabels).not.toContain(retired);
+    }
+    const deliver = DASHBOARD_PRIMARY_NAV[0].items.find((item) => item.label === "Deliver");
+    expect(deliver?.activePaths).toEqual([
+      "/app/digests", "/app/reports", "/app/shares", "/app/clients",
+    ]);
+    const settings = DASHBOARD_PRIMARY_NAV[0].items.find((item) => item.label === "Settings");
+    expect(settings?.activePaths).toContain("/app/billing");
+    expect(settings?.activePaths).toContain("/app/account");
   });
 
   it.each([
-    { label: "Competitors", path: "/app/watchlists" },
-    { label: "Briefs", path: "/app/digests" },
-    { label: "Reports", path: "/app/reports" },
-    { label: "Shared links", path: "/app/shares" },
+    { label: "Today", path: "/app" },
+    { label: "Watch", path: "/app/watchlists" },
+    { label: "Library", path: "/app/collections" },
+    { label: "Deliver", path: "/app/deliver" },
+    { label: "Settings", path: "/app/settings" },
   ] as const)("keeps $label reachable on mobile at $path", ({ label, path }) => {
     expect(buildDashboardMobileNav({ showPresence: false })).toContainEqual(
       expect.objectContaining({ label, to: path }),
     );
   });
 
-  it("keeps every entitled desktop destination reachable exactly once on mobile", () => {
-    const expected = [
-      ...filterDashboardNav(DASHBOARD_PRIMARY_NAV, {
-        showPresence: true,
-      }).flatMap((section) => section.items),
-      ...filterDashboardNav(DASHBOARD_SETTINGS_NAV, {
-        showPresence: true,
-      }).flatMap((section) => section.items),
-    ];
-    const mobile = buildDashboardMobileNav({
-      showPresence: true,
-    });
-
-    expect(mobile.map((item) => item.to)).toEqual(expected.map((item) => item.to));
+  it("keeps mobile to the five destinations — never a strip of sixteen", () => {
+    // Staff ops left the customer app entirely (G4); the strip is the five
+    // customer destinations for everyone.
+    const mobile = buildDashboardMobileNav({ showPresence: true });
+    expect(mobile.map((item) => item.label)).toEqual([
+      "Today", "Watch", "Library", "Deliver", "Settings",
+    ]);
     expect(new Set(mobile.map((item) => item.to)).size).toBe(mobile.length);
   });
 
-  it("hides presence nav unless entitled", () => {
-    const without = filterDashboardNav(DASHBOARD_PRIMARY_NAV, { showPresence: false });
+  it("presence is never a rail row — it lives inside Watch", () => {
+    // PR-5a: an entity is a tracked thing, not a parallel product. The
+    // Watch board carries the doorway when the plan is entitled; the rail
+    // stays five rows for everyone.
     const withPresence = filterDashboardNav(DASHBOARD_PRIMARY_NAV, { showPresence: true });
-
-    expect(without.flatMap((s) => s.items).some((item) => item.label === "Presence")).toBe(false);
-    expect(withPresence.flatMap((s) => s.items).some((item) => item.label === "Presence")).toBe(true);
+    expect(withPresence.flatMap((s) => s.items).some((item) => item.label === "Presence")).toBe(false);
+    const watch = DASHBOARD_PRIMARY_NAV[0].items.find((item) => item.label === "Watch");
+    expect(watch?.activePaths).toContain("/app/presence");
   });
 });
 
@@ -158,9 +152,11 @@ describe("dashboard v2 shell", () => {
     const wrapperRoutes = new Set([
       "app.developer-access.tsx",
       "app.source-access.tsx",
+      // Pure redirect since the subtraction pass (S5) — renders nothing.
+      "app.sources.tsx",
     ]);
     const missing = PRIMARY_APP_ROUTE_FILES.filter((file) => {
-      if (file === "app.ops.tsx") return false;
+      if (file === "ops.tsx") return false;
       if (wrapperRoutes.has(file)) return false;
       const source = readFileSync(join("app/routes", file), "utf8");
       return !source.includes("DashboardPage");
@@ -219,13 +215,14 @@ describe("dashboard shell render", () => {
     expect(shellSource).toContain("f9-cursor-main");
   });
 
-  it("keeps signed-in mobile utility support in-app", () => {
+  it("keeps signed-in mobile utilities one hop away inside Settings", () => {
+    // PR-5a: support and billing are member pages of the Settings
+    // destination — reachable from the mobile Settings row, not peers in
+    // the strip.
+    const settings = DASHBOARD_PRIMARY_NAV[0].items.find((item) => item.label === "Settings");
+    expect(settings?.activePaths).toContain("/app/support");
+    expect(settings?.activePaths).toContain("/app/billing");
     const mobile = buildDashboardMobileNav({ showPresence: false });
-    expect(mobile).toContainEqual(
-      expect.objectContaining({ label: "Help & support", to: "/app/support" }),
-    );
-    expect(mobile).toContainEqual(
-      expect.objectContaining({ label: "Billing & usage", to: "/app/billing" }),
-    );
+    expect(mobile.map((item) => item.label)).toContain("Settings");
   });
 });

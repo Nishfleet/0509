@@ -282,11 +282,15 @@ test.describe("Gate-B Journey 3 — monitoring, alerts, and digests", () => {
       await expect(page.getByText("Configured email recipient", { exact: true })).toBeVisible();
 
       await expectResponsiveSurface(page, viewport, "/app/notifications", "Notifications", [
-        /Delivery channels/,
+        /Delivery channel/,
         /Email/,
         /Ready/,
-        /Slack and WhatsApp stay dormant until their customer-facing checks pass/,
+        // PR-3 subtraction: email is the one delivery channel; the dormant
+        // Slack/WhatsApp rows and their roadmap sentence are gone.
+        /Delivery channel: email/,
       ]);
+      await expect(page.locator("#f9-main-content")).not.toContainText("Slack");
+      await expect(page.locator("#f9-main-content")).not.toContainText("WhatsApp");
       await page.goto("/unsubscribe");
       await expect(page.getByRole("heading", { name: "This unsubscribe link isn't valid.", exact: true })).toBeVisible();
       await expect(page.locator("body")).toContainText(/link may be incomplete or expired/i);

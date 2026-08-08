@@ -8337,57 +8337,6 @@ reds soften --- */
   box-shadow: none;
 }
 
-/* --- §6.3 status strip --- */
-
-.f9-ed-status-strip {
-  display: flex;
-  flex-wrap: wrap;
-  border: 2.5px solid var(--ed-rule);
-  background: var(--ed-surface);
-}
-
-/* Basis 0, not 160px: at 720-900px a 160px basis wrapped the last cell onto
-   its own full-width row (BL-005 known defect 5, found by BL-006 as the first
-   consumer). With a zero basis the cells shrink together and the strip stays
-   one row at every width above the mobile stack. */
-.f9-ed-status-cell {
-  display: grid;
-  gap: 5px;
-  flex: 1 1 0;
-  min-width: 0;
-  padding: 12px 16px;
-  border-left: 2.5px solid var(--ed-rule);
-}
-
-.f9-ed-status-cell:first-child {
-  border-left: 0;
-}
-
-.f9-ed-status-key {
-  font-family: var(--ed-mono);
-  font-weight: 600;
-  font-size: 9.5px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
-
-.f9-ed-status-value {
-  font-family: var(--ed-mono);
-  font-weight: 600;
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  color: var(--ink);
-  overflow-wrap: anywhere;
-}
-
-.f9-ed-status-value.is-missing {
-  font-weight: 400;
-  letter-spacing: normal;
-  text-transform: none;
-  color: var(--ink-faint);
-}
-
 /* --- §6.6 fact rail + honest inline values --- */
 
 .f9-ed-fact-rail {
@@ -9073,15 +9022,7 @@ reds soften --- */
     border-bottom: 2.5px solid var(--ed-rule);
   }
 
-  .f9-ed-status-cell {
-    flex: 1 1 100%;
-    border-left: 0;
-    border-top: 2.5px solid var(--ed-rule);
-  }
 
-  .f9-ed-status-cell:first-child {
-    border-top: 0;
-  }
 
   .f9-ed-diff-plate,
   .f9-ed-change-record,
@@ -9103,23 +9044,9 @@ reds soften --- */
 
   /* The competitor strip pairs its cells rather than stacking five full-width
      rows — same cells, same copy, half the scroll (§9.2). */
-  .f9-ed-opened-detail .f9-ed-status-cell {
-    flex: 1 1 42%;
-    padding: 9px 12px;
-  }
 
-  .f9-ed-opened-detail .f9-ed-status-cell:nth-child(odd) {
-    border-left: 0;
-  }
 
-  .f9-ed-opened-detail .f9-ed-status-cell:nth-child(even) {
-    border-left: 2.5px solid var(--ed-rule);
-    border-top: 2.5px solid var(--ed-rule);
-  }
 
-  .f9-ed-opened-detail .f9-ed-status-cell:nth-child(2) {
-    border-top: 0;
-  }
 
   /* §9.1: the action line scrolls inside itself, exactly like the tab bar,
      instead of wrapping into three rows of buttons. */
@@ -10800,7 +10727,6 @@ a.f9-wk-btn {
 .f9-wk-page .f9-ed-evidence-plate,
 .f9-wk-page .f9-ed-number-card,
 .f9-wk-page .f9-ed-rail-card,
-.f9-wk-page .f9-ed-status-strip,
 .f9-wk-page .f9-ed-fact-rail,
 .f9-wk-page .f9-ed-first-scan,
 .f9-wk-page .f9-ed-tabbar {
@@ -10942,16 +10868,6 @@ a.f9-wk-btn {
 
 /* 5. The status strip loses its 2.5px cage; the cells stay a strip,
       divided by the one rule weight. */
-.f9-wk-page .f9-ed-status-strip {
-  border-top: 1px solid var(--wk-rule);
-  border-bottom: 1px solid var(--wk-rule);
-}
-
-.f9-wk-page .f9-ed-status-cell {
-  border-left: 1px solid var(--wk-rule);
-}
-
-.f9-wk-page .f9-ed-status-value,
 .f9-wk-page .f9-ed-fact-value,
 .f9-wk-page .f9-ed-rail-line dd {
   font-family: var(--f9-font);
@@ -11007,9 +10923,7 @@ a.f9-wk-btn {
    weight is a rule at every width, not only at 1440. */
 @media (max-width: 720px) {
   .f9-wk-page .f9-ed-diff-pane.is-before,
-  .f9-wk-page .f9-ed-evidence-capture,
-  .f9-wk-page .f9-ed-status-cell,
-  .f9-wk-page .f9-ed-opened-detail .f9-ed-status-cell:nth-child(even) {
+  .f9-wk-page .f9-ed-evidence-capture {
     border-width: 1px;
   }
 }

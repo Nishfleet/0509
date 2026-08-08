@@ -21,7 +21,7 @@ import type {
   TrackedEntityRecord,
 } from "~/lib/presence-types";
 
-export const meta = () => [{ title: "Presence Desk | Five to Nine" }];
+export const meta = () => [{ title: "Presence | Five to Nine" }];
 
 export function readPresenceRedirectFeedback(request: Request) {
   const notice = new URL(request.url).searchParams.get("notice");
@@ -534,7 +534,7 @@ export default function PresenceIndexRoute() {
 }
 
 export function HydrateFallback() {
-  return <DashboardRouteLoading title="Presence Desk" />;
+  return <DashboardRouteLoading title="Presence" />;
 }
 
 export function ErrorBoundary({ error }: { error: unknown }) {
