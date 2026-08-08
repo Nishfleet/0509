@@ -97,7 +97,7 @@ describe("BL-031 — the search result row", () => {
     // The `s` shortcut clicks this element, so the hook and the row must ship
     // together; the frame it used to carry does not.
     expect(markup).toContain("f9-wk-lnk");
-    expect(markup).not.toContain("f9-ed-cta--rank2");
+    expect(markup).not.toContain("f9-evidence-cta--rank2");
   });
 
   it("states an unobserved active status in words rather than guessing", () => {

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Form, Link, useActionData, useLoaderData } from "react-router";
-import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardPage } from "~/components/dashboard-page";
+import { WorkingHeader } from "~/components/workspace/working-header";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { LocalTime } from "~/components/local-time";
 import { ProviderObservationTimeField } from "~/components/provider-observation-time";
@@ -407,15 +408,14 @@ export default function OpsRoute() {
   return (
     <OpsShell>
     <DashboardPage>
-    <section className="f9-app-stack">
-      <DashboardPageHeader
-        kicker="Ops"
-        lead="Evidence-first monitoring health for failing runs, stuck jobs, and delivery issues."
+    <section className="f9-wk-stack">
+      <WorkingHeader
+        context="Evidence-first monitoring health for failing runs, stuck jobs, and delivery issues."
         title="Ops"
       />
 
       {warnings.length ? (
-        <div className="f9-app-panel" role="status">
+        <div className="f9-wk-panel" role="status">
           <p className="f9-wk-kick">Partial operational view</p>
           <h2>Some operational sections could not be loaded</h2>
           {warnings.map((warning) => (
@@ -427,13 +427,13 @@ export default function OpsRoute() {
       ) : null}
 
       {actionData ? (
-        <div aria-live="polite" className="f9-app-panel" role={actionData.ok ? "status" : "alert"}>
+        <div aria-live="polite" className="f9-wk-panel" role={actionData.ok ? "status" : "alert"}>
           <p>{actionData.message}</p>
         </div>
       ) : null}
 
       <div className="f9-wk-grid2">
-        <article className="f9-app-panel f9-side-panel">
+        <article className="f9-wk-panel f9-side-panel">
           <div className="f9-wk-worklist is-compact">
             <MetricCard label="Failing runs" value={snapshot.summary.failingRuns} />
             <MetricCard label="Stuck runs" value={snapshot.summary.stuckRuns} />
@@ -467,7 +467,7 @@ export default function OpsRoute() {
           </div>
         </article>
 
-        <article className="f9-app-panel">
+        <article className="f9-wk-panel">
           <OpsSection
             empty="No open support cases."
             items={snapshot.supportCases ?? []}

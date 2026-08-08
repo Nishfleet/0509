@@ -69,7 +69,7 @@ export function WatchlistSetupCard(props: {
             type="text"
           />
         </label>
-        <SubmitButton className="f9-ed-cta f9-ed-cta--rank2" intent="update-watchlist" pendingLabel="Saving…">
+        <SubmitButton className="f9-evidence-cta f9-evidence-cta--rank2" intent="update-watchlist" pendingLabel="Saving…">
           Save watchlist
         </SubmitButton>
       </Form>

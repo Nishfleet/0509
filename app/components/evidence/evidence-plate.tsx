@@ -70,39 +70,39 @@ export function EvidencePlate({
   const Heading = `h${headingLevel}` as "h2" | "h3" | "h4";
 
   return (
-    <article className={className ? `f9-ed-evidence-plate ${className}` : "f9-ed-evidence-plate"}>
-      <header className="f9-ed-plate-header f9-ed-micro">
+    <article className={className ? `f9-evidence-evidence-plate ${className}` : "f9-evidence-evidence-plate"}>
+      <header className="f9-evidence-plate-header f9-evidence-micro">
         <span>
           PLATE {formatPlateNumber(number)} — {title}
           {verification ? ` · ${verification}` : ""}
         </span>
-        <span className="f9-ed-plate-header-end">
+        <span className="f9-evidence-plate-header-end">
           {stamp ? <LocalTime iso={capturedAt} /> : MISSING_CAPTURE_TIME_LABEL}
         </span>
       </header>
-      {headline ? <Heading className="f9-ed-evidence-headline">{headline}</Heading> : null}
-      {why ? <p className="f9-ed-evidence-why">{why}</p> : null}
-      <div className="f9-ed-evidence-body">
-        <div className="f9-ed-evidence-capture">
-          <div className="f9-ed-mock-frame">
+      {headline ? <Heading className="f9-evidence-evidence-headline">{headline}</Heading> : null}
+      {why ? <p className="f9-evidence-evidence-why">{why}</p> : null}
+      <div className="f9-evidence-evidence-body">
+        <div className="f9-evidence-evidence-capture">
+          <div className="f9-evidence-mock-frame">
             {capture}
             {lines.length > 0 ? (
               lines.map((line, index) => (
                 // Index key: a stored capture can repeat a line verbatim.
-                <p className="f9-ed-mock-line" key={`${index}-${line}`}>
+                <p className="f9-evidence-mock-line" key={`${index}-${line}`}>
                   {line}
                 </p>
               ))
             ) : capture ? null : (
-              <p className="f9-ed-mock-empty">{UNREADABLE_CAPTURE_COPY}</p>
+              <p className="f9-evidence-mock-empty">{UNREADABLE_CAPTURE_COPY}</p>
             )}
           </div>
         </div>
-        <div className="f9-ed-evidence-side">
+        <div className="f9-evidence-evidence-side">
           <FactRail rows={facts} />
         </div>
       </div>
-      {footnote ? <p className="f9-ed-evidence-footnote">{footnote}</p> : null}
+      {footnote ? <p className="f9-evidence-evidence-footnote">{footnote}</p> : null}
     </article>
   );
 }

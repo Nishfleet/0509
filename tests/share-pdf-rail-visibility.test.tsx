@@ -112,16 +112,16 @@ describe("share PDF rail visibility", () => {
 		const body = await renderPdfShareVariant();
 
 		expect(body.querySelector("main.f9-share-pdf")).not.toBeNull();
-		const rail = body.querySelector("aside.f9-ed-report-rail") as HTMLElement | null;
+		const rail = body.querySelector("aside.f9-evidence-report-rail") as HTMLElement | null;
 		expect(rail, "ReportView must mount the contents rail in the PDF tree").not.toBeNull();
 		expect(getComputedStyle(rail!).display).toBe("none");
 
-		const report = body.querySelector(".f9-ed-report") as HTMLElement | null;
+		const report = body.querySelector(".f9-evidence-report") as HTMLElement | null;
 		expect(report).not.toBeNull();
 		expect(getComputedStyle(report!).display).toBe("block");
 		expect(getComputedStyle(report!).width).toBe("100%");
 
-		const evidenceBody = body.querySelector(".f9-ed-evidence-body") as HTMLElement | null;
+		const evidenceBody = body.querySelector(".f9-evidence-evidence-body") as HTMLElement | null;
 		expect(evidenceBody, "the one-row fixture must mount the evidence body").not.toBeNull();
 		expect(getComputedStyle(evidenceBody!).gridTemplateColumns).toBe("minmax(0, 1fr)");
 	});

@@ -27,7 +27,7 @@ describe("SpecimenEmptyState", () => {
 
     expect(markup).toContain(RESERVED_SLOT_LABEL);
     expect(markup).toContain(RESERVED_SLOT_COPY);
-    expect(markup).toContain("f9-ed-specimen-slot");
+    expect(markup).toContain("f9-evidence-specimen-slot");
     // The real state, never a bare "No data".
     expect(markup).toContain("FIRST CAPTURE RUNNING");
     expect(markup).not.toContain("No data");
@@ -46,7 +46,7 @@ describe("SpecimenEmptyState", () => {
 
     expect(markup).toContain("Sample plate body");
     expect(markup).not.toContain(RESERVED_SLOT_COPY);
-    expect(markup).toContain("f9-ed-specimen-slot-inner");
+    expect(markup).toContain("f9-evidence-specimen-slot-inner");
   });
 
   it("allows exactly one Rank-1 and at most one Rank-2", () => {
@@ -58,14 +58,14 @@ describe("SpecimenEmptyState", () => {
       />,
     );
 
-    expect(markup.match(/f9-ed-cta--rank1/g)).toHaveLength(1);
-    expect(markup.match(/f9-ed-cta--rank2/g)).toHaveLength(1);
-    expect(markup).not.toContain("f9-ed-cta--rank3");
+    expect(markup.match(/f9-evidence-cta--rank1/g)).toHaveLength(1);
+    expect(markup.match(/f9-evidence-cta--rank2/g)).toHaveLength(1);
+    expect(markup).not.toContain("f9-evidence-cta--rank3");
   });
 
   it("renders the panel without an action row when there is nothing to do meanwhile", () => {
     const markup = renderToStaticMarkup(<SpecimenEmptyState {...base} />);
-    expect(markup).not.toContain("f9-ed-action-row");
-    expect(markup).toContain("f9-ed-specimen");
+    expect(markup).not.toContain("f9-evidence-action-row");
+    expect(markup).toContain("f9-evidence-specimen");
   });
 });

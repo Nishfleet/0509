@@ -165,18 +165,18 @@ describe("the coexistence seam inside a rebuilt page (BL-030 round 2)", () => {
    */
   it("spends no green on the setup card inside a rebuilt page", () => {
     const section = stripComments(layer());
-    const scoped = section.slice(section.indexOf(".f9-wk-page .f9-ed-cta {"));
-    expect(scoped).toContain(".f9-wk-page .f9-ed-setup-stamp");
-    expect(scoped).toContain(".f9-wk-page .f9-ed-cta--rank3");
+    const scoped = section.slice(section.indexOf(".f9-wk-page .f9-evidence-cta {"));
+    expect(scoped).toContain(".f9-wk-page .f9-evidence-setup-stamp");
+    expect(scoped).toContain(".f9-wk-page .f9-evidence-cta--rank3");
     // Rank 3's accent underline and the step stamps are the two green
     // moments that used to sit beside the Overnight mark.
     expect(scoped).toMatch(
-      /\.f9-wk-page \.f9-ed-cta--rank3 \{[^}]*text-decoration-color: currentColor/,
+      /\.f9-wk-page \.f9-evidence-cta--rank3 \{[^}]*text-decoration-color: currentColor/,
     );
     for (const selector of [
-      ".f9-wk-page .f9-ed-setup-stamp",
-      '.f9-wk-page .f9-ed-setup-row[data-state="done"] .f9-ed-setup-stamp',
-      '.f9-wk-page .f9-ed-setup-row[data-state="next"] .f9-ed-setup-stamp',
+      ".f9-wk-page .f9-evidence-setup-stamp",
+      '.f9-wk-page .f9-evidence-setup-row[data-state="done"] .f9-evidence-setup-stamp',
+      '.f9-wk-page .f9-evidence-setup-row[data-state="next"] .f9-evidence-setup-stamp',
     ]) {
       const block = scoped.slice(scoped.indexOf(`${selector} {`));
       expect(block.slice(0, block.indexOf("}"))).not.toMatch(/green/);
@@ -190,23 +190,23 @@ describe("the coexistence seam inside a rebuilt page (BL-030 round 2)", () => {
       .filter(([, , body]) => /--green\b|--ed-accent\b/.test(body))
       .map(([, selector]) => selector.trim().replace(/\s+/g, " "));
     expect(accentRules).toEqual([
-      ".f9-wk-page .f9-ed-diff-plate.is-newest .f9-ed-diff-value mark",
+      ".f9-wk-page .f9-evidence-diff-plate.is-newest .f9-evidence-diff-value mark",
       ".f9-wk-brief-announcement.is-newest .f9-wk-ins",
     ]);
     // And the default for every other plate's token is the sunk ground.
     expect(scoped).toMatch(
-      /\.f9-wk-page \.f9-ed-diff-value mark \{[^}]*background: var\(--wk-sunk\)/,
+      /\.f9-wk-page \.f9-evidence-diff-value mark \{[^}]*background: var\(--wk-sunk\)/,
     );
   });
 
   it("keeps the caps-mono budget to the page's own three kickers", () => {
     const section = stripComments(layer());
-    const scoped = section.slice(section.indexOf(".f9-wk-page .f9-ed-cta {"));
+    const scoped = section.slice(section.indexOf(".f9-wk-page .f9-evidence-cta {"));
     // The setup card shipped a fourth and fifth caps-mono surface: its
     // "SETUP · N OF 4 DONE" kicker and its DONE / NEXT / PENDING stamps.
     for (const selector of [
-      ".f9-wk-page .f9-ed-setup-stamp",
-      ".f9-wk-page .f9-ed-setup-header .f9-ed-micro",
+      ".f9-wk-page .f9-evidence-setup-stamp",
+      ".f9-wk-page .f9-evidence-setup-header .f9-evidence-micro",
     ]) {
       const block = scoped.slice(scoped.indexOf(`${selector} {`));
       const body = block.slice(0, block.indexOf("}"));
@@ -218,8 +218,8 @@ describe("the coexistence seam inside a rebuilt page (BL-030 round 2)", () => {
     // BL-035 closes the remaining ledger item: the setup card's useful
     // capacity/alternate-path links remain, but no longer spend caps-mono.
     for (const selector of [
-      ".f9-wk-page .f9-ed-setup-links .f9-ed-cta--rank3",
-      ".f9-wk-page .f9-ed-setup-capacity .f9-ed-cta--rank3",
+      ".f9-wk-page .f9-evidence-setup-links .f9-evidence-cta--rank3",
+      ".f9-wk-page .f9-evidence-setup-capacity .f9-evidence-cta--rank3",
     ]) {
       const block = scoped.slice(scoped.indexOf(selector));
       const body = block.slice(0, block.indexOf("}"));

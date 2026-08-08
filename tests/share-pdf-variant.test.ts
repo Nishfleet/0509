@@ -508,7 +508,7 @@ describe("/share/:token PDF variant markup", () => {
 
     expect(markup).toContain("Download PDF");
     expect(markup).not.toContain("Print report");
-    expect(markup).toContain('class="f9-ed-report-actions"');
+    expect(markup).toContain('class="f9-evidence-report-actions"');
     expect(markup).not.toContain("f9-panel-toolbar-heading");
   });
 

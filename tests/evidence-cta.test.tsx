@@ -33,9 +33,9 @@ describe("Evidence Desk CTA ranks", () => {
       </>,
     );
 
-    expect(markup).toContain("f9-ed-cta f9-ed-cta--rank1");
-    expect(markup).toContain("f9-ed-cta f9-ed-cta--rank2");
-    expect(markup).toContain("f9-ed-cta f9-ed-cta--rank3");
+    expect(markup).toContain("f9-evidence-cta f9-evidence-cta--rank1");
+    expect(markup).toContain("f9-evidence-cta f9-evidence-cta--rank2");
+    expect(markup).toContain("f9-evidence-cta f9-evidence-cta--rank3");
     expect(markup).not.toContain("f9-primary-button");
     expect(markup).not.toContain("f9-secondary-button");
   });
@@ -43,7 +43,7 @@ describe("Evidence Desk CTA ranks", () => {
   it("renders an internal target as a real link, not a button with a handler", () => {
     const markup = renderRouted(<PrimaryAction to="/app/watchlists">Add competitor</PrimaryAction>);
     expect(markup).toContain('href="/app/watchlists"');
-    expect(markup).toContain("f9-ed-cta--rank1");
+    expect(markup).toContain("f9-evidence-cta--rank1");
   });
 
   it("falls back to a button element when there is no destination", () => {
@@ -67,6 +67,6 @@ describe("Evidence Desk CTA ranks", () => {
 
   it("supports the dense 10px label without inventing a fourth style", () => {
     const markup = renderToStaticMarkup(<TertiaryAction small>Check now</TertiaryAction>);
-    expect(markup).toContain("f9-ed-cta f9-ed-cta--rank3 is-small");
+    expect(markup).toContain("f9-evidence-cta f9-evidence-cta--rank3 is-small");
   });
 });

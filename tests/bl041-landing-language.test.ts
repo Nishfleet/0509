@@ -101,9 +101,9 @@ describe("BL-041 landing-language settings layer", () => {
     expect(locked).toContain("box-shadow: none;");
     expect(locked).toContain("background: transparent;");
     expect(locked).toMatch(
-      /\.f9-acct-lock \.f9-ed-cta--rank1 \{[^}]*background: var\(--wk-fill\)/,
+      /\.f9-acct-lock \.f9-evidence-cta--rank1 \{[^}]*background: var\(--wk-fill\)/,
     );
-    expect(locked).not.toMatch(/dashed|f9-ed-specimen-slot/);
+    expect(locked).not.toMatch(/dashed|f9-evidence-specimen-slot/);
     expect(team).toContain('className="f9-acct-lock"');
     expect(account).toContain('className="f9-acct-entitlement"');
   });

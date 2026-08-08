@@ -58,9 +58,9 @@ export function RecentEvidenceChecksCard({
   }));
 
   return (
-    <section aria-label="Evidence freshness" className="f9-ed-panel">
-      <p className="f9-ed-micro">Recent evidence checks</p>
-      <h3 className="f9-ed-panel-title">Evidence freshness</h3>
+    <section aria-label="Evidence freshness" className="f9-evidence-panel">
+      <p className="f9-evidence-micro">Recent evidence checks</p>
+      <h3 className="f9-evidence-panel-title">Evidence freshness</h3>
       <FactRail rows={rows} title="Summary" />
       {recentRows.length > 0 ? (
         <FactRail rows={recentRows} title="Latest captures" />

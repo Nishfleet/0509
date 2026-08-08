@@ -117,7 +117,7 @@ export function DeliverySettingsCard(props: {
           <span>Slack enabled</span>
         </label>
         ) : null}
-        <SubmitButton className="f9-ed-cta f9-ed-cta--rank2" intent="save-delivery-config" pendingLabel="Saving…">
+        <SubmitButton className="f9-evidence-cta f9-evidence-cta--rank2" intent="save-delivery-config" pendingLabel="Saving…">
           Save delivery settings
         </SubmitButton>
       </Form> : (

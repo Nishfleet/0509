@@ -472,7 +472,7 @@ describe("the ruled row", () => {
     expect(markup).toContain('class="f9-wk-go"');
     // No boxes: a status is a word, never a chip or a pill.
     expect(markup).not.toContain("f9-pill");
-    expect(markup).not.toContain("f9-ed-stamp");
+    expect(markup).not.toContain("f9-evidence-stamp");
   });
 
   it("gives a summary row the body face — Bricolage means a watched entity", () => {

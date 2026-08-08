@@ -148,8 +148,8 @@ describe("reports index", () => {
     expect(markup).toContain("f9-wk-rows");
     expect(markup.match(/class="[^"]*\bf9-wk-row\b[^"]*"/g) ?? []).toHaveLength(1);
     expect(markup.match(/role="listitem"/g) ?? []).toHaveLength(1);
-    expect(markup).not.toContain("f9-ed-report-shelf");
-    expect(markup).not.toContain("f9-ed-report-band");
+    expect(markup).not.toContain("f9-evidence-report-shelf");
+    expect(markup).not.toContain("f9-evidence-report-band");
     expect(markup).not.toContain("f9-work-row");
     expect(markup).not.toContain("Open report");
 
@@ -170,8 +170,8 @@ describe("reports index", () => {
     expect(markup).toContain("No report source yet");
     expect(markup).toContain("Open collections");
     expect(markup).toContain("Open competitors");
-    expect(markup).not.toContain("f9-ed-specimen");
-    expect(markup).not.toContain("f9-ed-specimen-slot");
+    expect(markup).not.toContain("f9-evidence-specimen");
+    expect(markup).not.toContain("f9-evidence-specimen-slot");
     expect(markup.match(/f9-wk-btn/g) ?? []).toHaveLength(1);
     expect(markup).not.toContain("Open the latest report");
   });
@@ -195,7 +195,7 @@ describe("reports index", () => {
     expect(markup).toContain('href="/app/billing?source=reports#plans"');
     expect(markup).toContain("Upgrade to Agency");
     expect(markup).toContain("Your workspace evidence is not used as an upgrade preview.");
-    expect(markup).not.toContain("f9-ed-specimen-slot");
+    expect(markup).not.toContain("f9-evidence-specimen-slot");
     expect(markup).not.toContain("Sample · not your workspace");
     expect(markup).not.toContain("What an Agency report looks like");
     expect(markup.match(/f9-wk-btn/g) ?? []).toHaveLength(1);

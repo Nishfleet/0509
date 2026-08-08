@@ -7,7 +7,8 @@ import {
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { sanitizeCustomerFacingMessage } from "~/lib/customer-route-error";
-import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardPage } from "~/components/dashboard-page";
+import { WorkingHeader } from "~/components/workspace/working-header";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
@@ -223,9 +224,9 @@ export default function SupportRoute() {
 
   return (
     <DashboardPage>
-      <section className="f9-app-stack">
-        <DashboardPageHeader
-          lead="Get account help without losing the trail."
+      <section className="f9-wk-stack">
+        <WorkingHeader
+          context="Get account help without losing the trail."
           title="Help & support"
         />
 
@@ -247,7 +248,7 @@ export default function SupportRoute() {
       </p>
 
       <div className="f9-wk-grid2">
-        <article className="f9-app-panel f9-side-panel">
+        <article className="f9-wk-panel f9-side-panel">
           <div className="f9-panel-toolbar">
             <div>
               <span className="f9-wk-kick">Open a case</span>
@@ -297,7 +298,7 @@ export default function SupportRoute() {
                 rows={6}
               />
             </label>
-            <p className="f9-app-muted">
+            <p className="f9-wk-dim">
               Do not paste passwords, private keys, webhook URLs, card numbers, or provider tokens.
             </p>
             <SubmitButton className="f9-wk-btn" intent="create-support-case" pendingLabel="Opening case…">
@@ -306,7 +307,7 @@ export default function SupportRoute() {
           </Form>
         </article>
 
-        <article className="f9-app-panel">
+        <article className="f9-wk-panel">
           <div className="f9-panel-toolbar">
             <div>
               <span className="f9-wk-kick">Recent cases</span>

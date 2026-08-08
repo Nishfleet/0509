@@ -28,9 +28,9 @@ export interface QuietLineItem {
 
 export function QuietLine({ stamp, copy }: { stamp?: ReactNode | null; copy: ReactNode }) {
   return (
-    <div className="f9-ed-quiet-line">
-      {stamp ? <span className="f9-ed-quiet-stamp">{stamp}</span> : null}
-      <p className="f9-ed-quiet-copy">{copy}</p>
+    <div className="f9-evidence-quiet-line">
+      {stamp ? <span className="f9-evidence-quiet-stamp">{stamp}</span> : null}
+      <p className="f9-evidence-quiet-copy">{copy}</p>
     </div>
   );
 }
@@ -57,7 +57,7 @@ export function QuietLineList({
   const hidden = items.length - visible.length;
 
   return (
-    <div className="f9-ed-quiet-list">
+    <div className="f9-evidence-quiet-list">
       {visible.map((item) => (
         <QuietLine key={item.id} stamp={item.stamp} copy={item.copy} />
       ))}

@@ -382,7 +382,7 @@ describe("watchlists route render — zero-noise record", () => {
 
     expect(markup).toContain("All quiet");
     expect(markup).toContain("No action needed — nothing new to act on.");
-    expect(markup).toContain("f9-ed-quiet-line");
+    expect(markup).toContain("f9-evidence-quiet-line");
     expect(markup).not.toContain("All quiet: no competitor moves worth action");
   });
 

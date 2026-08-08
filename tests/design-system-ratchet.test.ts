@@ -115,7 +115,7 @@ describe("the marker list itself is pinned (Sol wave-2)", () => {
       "f9-clients-",
       "f9-search-page",
       "DashboardPageHeader",
-      "EmptyState",
+      "components/empty-state",
       "style={",
     ]);
     // The scan scope is part of the contract too.
@@ -140,9 +140,10 @@ describe("the marker list itself is pinned (Sol wave-2)", () => {
     expect(tighten.status).toBe(0);
     expect(JSON.parse(readFileSync(file, "utf8"))).toEqual(realCeilings);
 
-    const deflated = Object.fromEntries(
-      Object.entries(realCeilings).map(([key, value]) => [key, Math.max(0, (value as number) - 5)]),
-    );
+    // The refuse-to-raise law needs a ceiling BELOW reality; with the
+    // program at zero, synthesize one by setting a ceiling to -1 (below
+    // any possible count).
+    const deflated = { ...realCeilings, [Object.keys(realCeilings)[0]]: -1 };
     writeFileSync(file, JSON.stringify(deflated));
     const refuse = spawnSync(
       process.execPath,
@@ -151,9 +152,7 @@ describe("the marker list itself is pinned (Sol wave-2)", () => {
     );
     expect(refuse.status).toBe(2);
     const kept = JSON.parse(readFileSync(file, "utf8")) as Record<string, number>;
-    for (const [key, value] of Object.entries(kept)) {
-      expect(value as number, key).toBeLessThanOrEqual(deflated[key] as number);
-    }
+    expect(kept[Object.keys(realCeilings)[0]]).toBe(-1);
     rmSync(dir, { recursive: true, force: true });
   });
 });

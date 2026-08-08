@@ -66,35 +66,35 @@ export function LockedFeature({
   return (
     <section
       aria-labelledby={titleId}
-      className="f9-ed-specimen f9-locked-feature"
+      className="f9-evidence-specimen f9-locked-feature"
       role="status"
     >
-      <header className="f9-ed-plate-header f9-ed-micro">
+      <header className="f9-evidence-plate-header f9-evidence-micro">
         <span>
           {eyebrow} · {planNeeded} required
         </span>
-        {context ? <span className="f9-ed-plate-header-end">{context}</span> : null}
+        {context ? <span className="f9-evidence-plate-header-end">{context}</span> : null}
       </header>
-      <div className="f9-ed-specimen-body">
-        <Heading className="f9-ed-specimen-headline" id={titleId}>
+      <div className="f9-evidence-specimen-body">
+        <Heading className="f9-evidence-specimen-headline" id={titleId}>
           {title}
         </Heading>
-        <p className="f9-ed-specimen-copy">
+        <p className="f9-evidence-specimen-copy">
           {reason} — included in the {planNeeded}.
         </p>
         {specimen ? (
-          <div className="f9-ed-specimen-slot">
-            <div aria-hidden="true" className="f9-ed-specimen-scan" />
-            <div className="f9-ed-specimen-slot-header f9-ed-micro">{specimenLabel}</div>
+          <div className="f9-evidence-specimen-slot">
+            <div aria-hidden="true" className="f9-evidence-specimen-scan" />
+            <div className="f9-evidence-specimen-slot-header f9-evidence-micro">{specimenLabel}</div>
             {/* A preview of what the plan unlocks, not content: hidden from
                 assistive tech AND removed from the tab order so no dimmed
                 control can be reached. */}
-            <div aria-hidden="true" className="f9-ed-specimen-slot-inner" inert>
+            <div aria-hidden="true" className="f9-evidence-specimen-slot-inner" inert>
               {specimen}
             </div>
           </div>
         ) : null}
-        <div className="f9-ed-action-row">
+        <div className="f9-evidence-action-row">
           <PrimaryAction to={upgradeTo}>{upgradeLabel}</PrimaryAction>
           {seeExampleTo ? (
             <SecondaryAction to={seeExampleTo}>{seeExampleLabel}</SecondaryAction>

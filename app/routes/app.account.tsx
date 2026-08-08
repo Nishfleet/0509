@@ -7,7 +7,6 @@ import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboa
 import { ActionFeedback } from "~/components/action-feedback";
 import { AccountBrandingForm } from "~/components/account-branding-form";
 import { ConfirmSubmitButton } from "~/components/confirm-button";
-import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import { ThemeToggle } from "~/components/theme-toggle";
@@ -600,7 +599,7 @@ export default function AccountRoute() {
                   ))}
                 </div>
               ) : (
-                <EmptyState title="No passkeys are attached to this account yet." variant="inline" />
+                <p className="f9-wk-note">No passkey is attached yet — add one and it signs you in without a link.</p>
               )}
             </>
           )}

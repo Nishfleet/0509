@@ -37,9 +37,9 @@ export function isMissingFactValue(value: ReactNode | null | undefined): boolean
 export function FactRailRow({ row }: { row: FactRow }) {
   const missing = isMissingFactValue(row.value);
   return (
-    <div className="f9-ed-fact-row" title={row.title}>
-      <span className="f9-ed-fact-key">{row.key}</span>
-      <span className={missing ? "f9-ed-fact-value is-missing" : "f9-ed-fact-value"}>
+    <div className="f9-evidence-fact-row" title={row.title}>
+      <span className="f9-evidence-fact-key">{row.key}</span>
+      <span className={missing ? "f9-evidence-fact-value is-missing" : "f9-evidence-fact-value"}>
         {missing ? (row.missingLabel ?? DEFAULT_MISSING_VALUE) : row.value}
       </span>
     </div>
@@ -60,8 +60,8 @@ export function FactRail({
   if (visible.length === 0) return null;
 
   return (
-    <div className={className ? `f9-ed-fact-rail ${className}` : "f9-ed-fact-rail"}>
-      {title ? <div className="f9-ed-fact-rail-header f9-ed-micro">{title}</div> : null}
+    <div className={className ? `f9-evidence-fact-rail ${className}` : "f9-evidence-fact-rail"}>
+      {title ? <div className="f9-evidence-fact-rail-header f9-evidence-micro">{title}</div> : null}
       {visible.map((row, index) => (
         // Index key: a rail may legitimately repeat a key (two "Source" rows
         // from two captures), and rows never reorder within a render.

@@ -267,12 +267,12 @@ async function auditGreen(page: Page) {
      * announcement may sit below the fold, and "the rule matched nothing" is
      * exactly the defect that shipped in round 3.
      */
-    const plateMarks = [...document.querySelectorAll(".f9-ed-diff-value mark")];
+    const plateMarks = [...document.querySelectorAll(".f9-evidence-diff-value mark")];
     const paintedPlateMarks = plateMarks.filter((node) =>
       isGreen(getComputedStyle(node).backgroundColor),
     );
     const markablePlates = document.querySelectorAll(
-      ".f9-ed-diff-plate.is-newest",
+      ".f9-evidence-diff-plate.is-newest",
     ).length;
 
     return {

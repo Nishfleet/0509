@@ -29,7 +29,7 @@ export function AccountBrandingSection({
 }) {
   return (
     <>
-      <article className="f9-app-panel">
+      <article className="f9-wk-panel">
         <div className="f9-panel-toolbar">
           <div>
             <span className="f9-wk-kick">My brand</span>
@@ -70,7 +70,7 @@ export function AccountBrandingSection({
         </Form>
       </article>
 
-      <article className="f9-app-panel">
+      <article className="f9-wk-panel">
         <div className="f9-panel-toolbar">
           <div>
             <span className="f9-wk-kick">Agency reports</span>

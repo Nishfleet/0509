@@ -48,7 +48,7 @@ describe("BL-034 Presence landing language", () => {
       "DashboardPageHeader",
       "ActionFeedback",
       "EmptyState",
-      "f9-app-panel",
+      "f9-wk-panel",
       "f9-dashboard-grid",
       "f9-work-list",
       "f9-work-row",

@@ -30,27 +30,9 @@ export function DashboardPage({ children, className, volume = "workspace" }: Das
   );
 }
 
-export interface DashboardPageHeaderProps {
-  kicker?: ReactNode;
-  title: ReactNode;
-  lead?: string;
-  action?: { label: string; to: string };
-}
 
 /**
  * The `action` slot carries the page's single Rank-1 primary action (brief
  * §5, DESIGN.md WP-A3) — the one thing the page exists to do, never a
  * cross-navigation shortcut to a sidebar destination.
  */
-export function DashboardPageHeader({ kicker, title, lead, action }: DashboardPageHeaderProps) {
-  return (
-    <header className="f9-dash-page-header">
-      <div>
-        {kicker ? <span className="f9-wk-kick">{kicker}</span> : null}
-        <h1>{title}</h1>
-        {lead ? <p className="f9-wk-dim">{lead}</p> : null}
-      </div>
-      {action ? <PrimaryAction to={action.to}>{action.label}</PrimaryAction> : null}
-    </header>
-  );
-}

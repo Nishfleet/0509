@@ -122,7 +122,7 @@ export default function UnsubscribeRoute() {
     <main className="f9-legal-page">
       <header className="f9-legal-nav">
         <div className="f9-container f9-legal-nav-inner">
-          <Link className="f9-app-brand" to="/">
+          <Link className="f9-brandmark" to="/">
             <BrandWordmark meta="Competitor change monitoring" />
           </Link>
         </div>

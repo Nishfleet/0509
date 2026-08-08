@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createRoutesStub } from "react-router";
 import { describe, expect, it } from "vitest";
 
-import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardPage } from "~/components/dashboard-page";
 import { Pill } from "~/components/pill";
 
 const appCss = readFileSync("app/app.css", "utf8");
@@ -50,7 +50,7 @@ describe("DashboardPage volume", () => {
   });
 });
 
-describe("DashboardPageHeader", () => {
+describe("workspace kicker", () => {
   it("keeps the shared kicker monochrome in both themes", () => {
     // The kicker vocabulary is f9-wk-kick since the CSS endgame swap.
     expect(appCss).toMatch(
@@ -61,38 +61,15 @@ describe("DashboardPageHeader", () => {
     );
     expect(darkThemeKickerRules).toEqual([]);
   });
-
-  it("renders the action slot as the page's one Rank-1 action", () => {
-    const markup = renderRouted(
-      <DashboardPageHeader
-        kicker="Competitors"
-        title="Watch board"
-        lead="Everything we caught since you last looked."
-        action={{ label: "Add competitor", to: "/app/watchlists/new" }}
-      />,
-    );
-
-    expect(markup.match(/f9-ed-cta--rank1/g)).toHaveLength(1);
-    expect(markup).toContain('href="/app/watchlists/new"');
-    expect(markup).toContain("Add competitor");
-    expect(markup).not.toContain("f9-primary-button");
-  });
-
-  it("renders no CTA at all when the page has no primary action", () => {
-    const markup = renderToStaticMarkup(<DashboardPageHeader title="Account" />);
-
-    expect(markup).not.toContain("f9-ed-cta");
-    expect(markup).toContain("Account");
-  });
 });
 
 describe("Pill stamp variant", () => {
   it("adds the Evidence Desk state stamp without disturbing the existing families", () => {
     expect(renderToStaticMarkup(<Pill variant="stamp" state="caught">Caught</Pill>)).toContain(
-      'class="f9-ed-stamp is-caught"',
+      'class="f9-evidence-stamp is-caught"',
     );
     expect(renderToStaticMarkup(<Pill variant="stamp" state="quiet">Quiet</Pill>)).toContain(
-      'class="f9-ed-stamp is-quiet"',
+      'class="f9-evidence-stamp is-quiet"',
     );
     expect(renderToStaticMarkup(<Pill state="healthy">Active</Pill>)).toContain(
       'class="f9-status-pill is-healthy"',

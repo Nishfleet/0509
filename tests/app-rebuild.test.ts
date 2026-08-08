@@ -40,7 +40,7 @@ describe("app rebuild", () => {
   it("uses the Dashboard V2 shell and dashboard classes", () => {
     expect(appLayout).toContain("DashboardShell");
     expect(shellComponent).toContain("f9-cursor-shell");
-    expect(appSurface).toContain('className="f9-app-stack"');
+    expect(appSurface).toContain('className="f9-wk-stack"');
     expect(appSurface).toContain("f9-overview");
     expect(appSurface).toContain('className="f9-overview-search"');
     // BL-030: the two rebuilt surfaces run on the workspace-language layer.

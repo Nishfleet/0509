@@ -13,8 +13,8 @@ export function CandidateHistory({ candidates }: { candidates: EventCandidateRec
   }));
 
   return (
-    <details className="f9-ed-candidate-history">
-      <summary className="f9-ed-micro">Candidate history</summary>
+    <details className="f9-evidence-candidate-history">
+      <summary className="f9-evidence-micro">Candidate history</summary>
       {candidates.length === 0 ? (
         <p className="f9-wk-dim">
           No candidates yet — possible changes appear here before we confirm them.

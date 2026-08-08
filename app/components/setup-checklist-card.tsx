@@ -113,11 +113,11 @@ export function SetupChecklistCard({
   return (
     <section
       aria-labelledby="setup-checklist-title"
-      className="f9-ed-setup-card"
+      className="f9-evidence-setup-card"
       id="setup-checklist"
     >
-      <header className="f9-ed-setup-header">
-        <span className="f9-ed-micro">
+      <header className="f9-evidence-setup-header">
+        <span className="f9-evidence-micro">
           Setup · {readyCount} of {items.length} done
         </span>
         <h2 id="setup-checklist-title">Finish the workspace that sends your first brief</h2>
@@ -137,7 +137,7 @@ export function SetupChecklistCard({
       ) : null}
 
       {!hasActionableImportPreview && nextIsCompetitor ? (
-        <createFetcher.Form className="f9-ed-setup-primary" method="post">
+        <createFetcher.Form className="f9-evidence-setup-primary" method="post">
           <input name="intent" type="hidden" value="create-watchlist" />
           <input name="country" type="hidden" value={prefillCountry} />
           <label className="f9-field" htmlFor="setup-competitor-website">
@@ -160,7 +160,7 @@ export function SetupChecklistCard({
             </small>
           </label>
           <SubmitButton
-            className="f9-ed-cta f9-ed-cta--rank1"
+            className="f9-evidence-cta f9-evidence-cta--rank1"
             disabled={!canSubmitWebsite}
             intent="create-watchlist"
             // A fetcher submit never enters `useNavigation()`, so the pending
@@ -173,23 +173,23 @@ export function SetupChecklistCard({
           </SubmitButton>
         </createFetcher.Form>
       ) : !hasActionableImportPreview && nextItem.action ? (
-        <div className="f9-ed-action-row">
+        <div className="f9-evidence-action-row">
           <PrimaryAction to={nextItem.action.href}>{nextItem.action.label}</PrimaryAction>
         </div>
       ) : null}
 
-      <ol className="f9-ed-setup-list">
+      <ol className="f9-evidence-setup-list">
         {items.map((item) => {
           const done = isBlockingSetupItemComplete(readiness, item);
           const isNext = item.id === nextItem.id;
           return (
             <li
               aria-current={isNext ? "step" : undefined}
-              className="f9-ed-setup-row"
+              className="f9-evidence-setup-row"
               data-state={done ? "done" : isNext ? "next" : "pending"}
               key={item.id}
             >
-              <span className="f9-ed-setup-stamp">
+              <span className="f9-evidence-setup-stamp">
                 {done ? "Done" : isNext ? "Next" : "Pending"}
               </span>
               <span>
@@ -202,7 +202,7 @@ export function SetupChecklistCard({
       </ol>
 
       {hasWatchlistCapacity ? (
-        <details className="f9-ed-setup-import" open={Boolean(importPreview) || undefined}>
+        <details className="f9-evidence-setup-import" open={Boolean(importPreview) || undefined}>
           <summary>Add several competitors by paste or CSV</summary>
           <Form encType="multipart/form-data" method="post">
           <label className="f9-field">
@@ -221,9 +221,9 @@ export function SetupChecklistCard({
             <input accept=".csv,.txt,text/csv,text/plain" name="competitorFile" type="file" />
           </label>
           {importPreview ? <ImportPreview preview={importPreview} /> : null}
-          <div className="f9-ed-action-row">
+          <div className="f9-evidence-action-row">
             <SubmitButton
-              className="f9-ed-cta f9-ed-cta--rank2"
+              className="f9-evidence-cta f9-evidence-cta--rank2"
               intent="preview-market-desk-import"
               name="intent"
               pendingLabel="Checking…"
@@ -233,7 +233,7 @@ export function SetupChecklistCard({
             </SubmitButton>
             {hasActionableImportPreview && importPreview ? (
               <SubmitButton
-                className="f9-ed-cta f9-ed-cta--rank1"
+                className="f9-evidence-cta f9-evidence-cta--rank1"
                 intent="create-market-desk-import"
                 name="intent"
                 pendingLabel="Creating…"
@@ -248,7 +248,7 @@ export function SetupChecklistCard({
           </Form>
         </details>
       ) : (
-        <p className="f9-ed-setup-capacity">
+        <p className="f9-evidence-setup-capacity">
           Your current plan is at its competitor limit.{" "}
           <TertiaryAction to="/app/billing?source=setup-checklist#plans">
             View plans
@@ -256,7 +256,7 @@ export function SetupChecklistCard({
         </p>
       )}
 
-      <div className="f9-ed-setup-links">
+      <div className="f9-evidence-setup-links">
         <TertiaryAction href={website.trim() ? `/search?website=${encodeURIComponent(website.trim())}` : "/search"}>
           Search first instead
         </TertiaryAction>

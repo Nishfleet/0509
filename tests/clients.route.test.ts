@@ -625,7 +625,7 @@ describe("clients route agent memory", () => {
     expect(markup).toContain("Nykaa weekly desk");
     expect(markup).toContain("Create client room");
     expect(markup).toContain("f9-wk-page f9-rooms-page");
-    expect(markup).not.toContain("f9-app-panel");
+    expect(markup).not.toContain("f9-wk-panel");
     expect(markup).not.toContain("f9-dash-state-empty");
     expect(markup).not.toContain("f9-primary-button");
     expect(markup).toContain("Client context status unavailable");
@@ -644,7 +644,7 @@ describe("clients route agent memory", () => {
     expect(markup).toContain('name="intent" value="approve-client-room"');
     expect(markup).toContain("Create client room");
     expect(markup).toContain("f9-wk-page f9-rooms-page");
-    expect(markup).not.toContain("f9-app-panel");
+    expect(markup).not.toContain("f9-wk-panel");
     expect(markup).not.toContain("f9-dash-state-empty");
     expect(markup).not.toContain("f9-primary-button");
   });
@@ -1255,7 +1255,7 @@ describe("clients route agent memory", () => {
       expect(markup.match(/Upgrade to Agency/g)).toHaveLength(1);
       expect(markup).not.toContain("is-error");
       expect(markup).not.toContain("f9-locked-feature");
-      expect(markup).not.toContain("f9-ed-specimen");
+      expect(markup).not.toContain("f9-evidence-specimen");
       expect(markup).not.toContain("f9-dash-state-empty");
       expect(markup).not.toContain("Create the first client room");
       expect(markup).not.toContain("Save client room");

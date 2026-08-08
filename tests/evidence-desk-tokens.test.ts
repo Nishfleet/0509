@@ -108,29 +108,29 @@ describe("Evidence Desk token layer (brief §4)", () => {
   it("pauses the specimen scan line under prefers-reduced-motion (brief §11)", () => {
     const section = evidenceDeskSection(css);
     expect(section).toContain("@media (prefers-reduced-motion: reduce)");
-    expect(section).toContain(".f9-ed-specimen-scan {\n    animation: none;");
+    expect(section).toContain(".f9-evidence-specimen-scan {\n    animation: none;");
   });
 
   it("keeps every CTA rank at a 44px touch target (brief §9.6)", () => {
     const section = evidenceDeskSection(css);
-    const cta = section.slice(section.indexOf(".f9-ed-cta {"), section.indexOf(".f9-ed-status-strip {"));
+    const cta = section.slice(section.indexOf(".f9-evidence-cta {"), section.indexOf(".f9-evidence-status-strip {"));
     expect(cta).toContain("min-height: 44px;");
     expect(cta.match(/min-height: 44px;/g)?.length).toBeGreaterThanOrEqual(2);
     // Focus is visible and is NOT the offset shadow (brief §10).
-    expect(cta).toContain(".f9-ed-cta:focus-visible");
+    expect(cta).toContain(".f9-evidence-cta:focus-visible");
     expect(cta).toContain("outline: 2.5px solid var(--ed-focus);");
     // The app-wide `button:focus-visible` rule ships `border-radius: 6px` at
-    // (0,1,1) and outranks `.f9-ed-cta` at (0,1,0), so the focus rule must
+    // (0,1,1) and outranks `.f9-evidence-cta` at (0,1,0), so the focus rule must
     // restate square corners or every CTA rounds itself on focus.
     const focusRule = cta.slice(
-      cta.indexOf(".f9-ed-cta:focus-visible {"),
-      cta.indexOf("}", cta.indexOf(".f9-ed-cta:focus-visible {")),
+      cta.indexOf(".f9-evidence-cta:focus-visible {"),
+      cta.indexOf("}", cta.indexOf(".f9-evidence-cta:focus-visible {")),
     );
     expect(focusRule).toContain("border-radius: 0;");
     // Every rank gives hover feedback too, so focus is not the only signal.
-    expect(cta).toContain(".f9-ed-cta--rank1:hover");
-    expect(cta).toContain(".f9-ed-cta--rank2:hover");
-    expect(cta).toContain(".f9-ed-cta--rank3:hover");
+    expect(cta).toContain(".f9-evidence-cta--rank1:hover");
+    expect(cta).toContain(".f9-evidence-cta--rank2:hover");
+    expect(cta).toContain(".f9-evidence-cta--rank3:hover");
   });
 
   it("never paints a focus ring in the marker accent, which cannot reach 3:1", () => {
@@ -148,8 +148,8 @@ describe("Evidence Desk token layer (brief §4)", () => {
 
   it("drops the offset shadows in the Plain volume (brief §3)", () => {
     const section = evidenceDeskSection(css);
-    expect(section).toContain('[data-ed-volume="plain"] .f9-ed-cta--rank1');
-    expect(section).toContain('[data-ed-volume="plain"] .f9-ed-diff-plate');
+    expect(section).toContain('[data-ed-volume="plain"] .f9-evidence-cta--rank1');
+    expect(section).toContain('[data-ed-volume="plain"] .f9-evidence-diff-plate');
     // Hover states are shadows too: every rule that paints an offset shadow
     // needs a Plain-volume counterpart, or the suppression list quietly rots.
     const suppressed = section.slice(
@@ -158,7 +158,7 @@ describe("Evidence Desk token layer (brief §4)", () => {
     );
     const shadowRules = section
       .split("\n")
-      .filter((line) => /^\.f9-ed-cta--rank[12]:hover/.test(line.trim()))
+      .filter((line) => /^\.f9-evidence-cta--rank[12]:hover/.test(line.trim()))
       .map((line) => line.trim().replace(" {", ""));
     expect(shadowRules.length).toBeGreaterThan(0);
     for (const rule of shadowRules) {

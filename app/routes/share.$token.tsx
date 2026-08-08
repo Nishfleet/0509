@@ -202,7 +202,7 @@ export default function ShareRoute() {
             {hasAgencyIdentity && data.brandIdentity ? (
               <ShareBrandIdentity identity={data.brandIdentity} />
             ) : (
-              <Link className="f9-app-brand" to="/">
+              <Link className="f9-brandmark" to="/">
                 <BrandWordmark meta="Shared evidence" />
               </Link>
             )}
@@ -217,12 +217,12 @@ export default function ShareRoute() {
               preparedBy={data.preparedBy}
               railActions={
                 pdfVariant ? null : (
-                  <div className="f9-ed-report-actions">
+                  <div className="f9-evidence-report-actions">
                     {pdfPath ? (
                       <a
                         aria-busy={pdfPreparing}
                         aria-disabled={pdfPreparing}
-                        className="f9-ed-cta f9-ed-cta--rank2"
+                        className="f9-evidence-cta f9-evidence-cta--rank2"
                         data-pdf-preparing={pdfPreparing ? "true" : "false"}
                         href={pdfPath}
                         onClick={(event) => {
@@ -237,7 +237,7 @@ export default function ShareRoute() {
                       </a>
                     ) : (
                       <button
-                        className="f9-ed-cta f9-ed-cta--rank2"
+                        className="f9-evidence-cta f9-evidence-cta--rank2"
                         onClick={() => window.print()}
                         type="button"
                       >
@@ -251,7 +251,7 @@ export default function ShareRoute() {
             />
           </article>
         ) : digestSnapshot ? (
-          <article className="f9-app-panel">
+          <article className="f9-wk-panel">
             <div className="f9-panel-toolbar f9-report-toolbar">
               <div>
                 <p className="f9-wk-kick">Shared digest snapshot</p>
@@ -289,7 +289,7 @@ export default function ShareRoute() {
             </ul>
           </article>
         ) : "payload" in data ? (
-          <article className="f9-app-panel">
+          <article className="f9-wk-panel">
             <p className="f9-wk-kick">Shared snapshot</p>
             <h1>Snapshot unavailable</h1>
             <p className="f9-wk-dim">
@@ -298,7 +298,7 @@ export default function ShareRoute() {
             </p>
           </article>
         ) : data.resourceType === "collection" ? (
-          <article className="f9-app-panel">
+          <article className="f9-wk-panel">
             <p className="f9-wk-kick">Shared collection</p>
             <h1>{data.collection?.name ?? "Collection unavailable"}</h1>
             <div className="f9-wk-worklist">
@@ -318,7 +318,7 @@ export default function ShareRoute() {
             </div>
           </article>
         ) : data.resourceType === "watchlist" ? (
-          <article className="f9-app-panel">
+          <article className="f9-wk-panel">
             <p className="f9-wk-kick">Shared watchlist</p>
             <h1>{data.watchlist?.name ?? "Watchlist unavailable"}</h1>
             {"sourceCoverage" in data && data.sourceCoverage ? (
@@ -334,7 +334,7 @@ export default function ShareRoute() {
             </ul>
           </article>
         ) : (
-          <article className="f9-app-panel">
+          <article className="f9-wk-panel">
             <p className="f9-wk-kick">Shared digest</p>
             <h1>Weekly digest</h1>
             <ul className="event-list">
@@ -380,7 +380,7 @@ export function ErrorBoundary({ error }: { error: unknown }) {
     <main className="f9-share-page">
       <div className="f9-container">
         <div className="f9-share-header">
-          <Link className="f9-app-brand" to="/">
+          <Link className="f9-brandmark" to="/">
             <BrandWordmark meta={MARKETING_TAGLINE} />
           </Link>
         </div>

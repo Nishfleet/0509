@@ -26,7 +26,7 @@ export function CreativeWall({ items, plan }: { items: CreativeWallItem[]; plan:
     <section aria-label="Creative wall">
       <div className="f9-panel-toolbar">
         <div>
-          <p className="f9-ed-micro">Creative wall</p>
+          <p className="f9-evidence-micro">Creative wall</p>
           <h3 className="f9-wk-mt0">What they&rsquo;re running</h3>
         </div>
         {items.length > 0 ? (

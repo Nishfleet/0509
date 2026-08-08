@@ -131,13 +131,13 @@ describe("BL-033a presentation-only boundary", () => {
       expect(presentation).toContain(primitive);
     }
     for (const orphan of [
-      "f9-ed-collection-layout",
-      "f9-ed-collection-item",
-      "f9-ed-status-strip",
-      "f9-ed-specimen",
-      "f9-ed-evidence-plate",
-      "f9-ed-disclosure",
-      "f9-ed-switch",
+      "f9-evidence-collection-layout",
+      "f9-evidence-collection-item",
+      "f9-evidence-status-strip",
+      "f9-evidence-specimen",
+      "f9-evidence-evidence-plate",
+      "f9-evidence-disclosure",
+      "f9-evidence-switch",
     ]) {
       expect(presentation).not.toContain(orphan);
     }
@@ -177,10 +177,10 @@ describe("BL-033a route-owned CSS", () => {
 
   it("deletes only the orphaned BL-014 collections selectors", () => {
     for (const orphan of [
-      ".f9-ed-disclosure",
-      ".f9-ed-switch",
-      ".f9-ed-collection-layout",
-      ".f9-ed-collection-item",
+      ".f9-evidence-disclosure",
+      ".f9-evidence-switch",
+      ".f9-evidence-collection-layout",
+      ".f9-evidence-collection-item",
     ]) {
       expect(css).not.toContain(orphan);
     }

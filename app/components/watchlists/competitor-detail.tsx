@@ -285,7 +285,7 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
                   <input name="intent" type="hidden" value="refresh-watchlist" />
                   <input name="watchlistId" type="hidden" value={watchlist.id} />
                   <SubmitButton
-                    className="f9-ed-cta f9-ed-cta--rank3"
+                    className="f9-evidence-cta f9-evidence-cta--rank3"
                     intent="refresh-watchlist"
                     pendingLabel="Checking…"
                   >
@@ -303,8 +303,8 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
           selectedTrackingRole={normalizeWatchlistTrackingRole(watchlist.trackingRole)}
         />
 
-        <section aria-label="How tracking works" className="f9-ed-panel">
-          <p className="f9-ed-micro">How tracking works</p>
+        <section aria-label="How tracking works" className="f9-evidence-panel">
+          <p className="f9-evidence-micro">How tracking works</p>
           <h3>{props.trackingPresentation.headline}</h3>
           <p className="f9-wk-dim">{props.trackingPresentation.summary}</p>
           <p className="f9-wk-dim">
@@ -317,7 +317,7 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
           {props.discoveryRecovery ? (
             <p className="f9-wk-dim">{props.discoveryRecovery}</p>
           ) : null}
-          <div className="f9-ed-action-row">
+          <div className="f9-evidence-action-row">
             <SecondaryAction to="/app/source-access">Check source access</SecondaryAction>
             {data.showPresenceNav ? (
               <TertiaryAction to="/app/presence">Open Presence</TertiaryAction>
@@ -352,7 +352,7 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
         ) : null}
         <div className="f9-panel-toolbar">
           <div>
-            <p className="f9-ed-micro">Evidence and delivery</p>
+            <p className="f9-evidence-micro">Evidence and delivery</p>
             <h3 className="f9-wk-mt0">Evidence and alerts</h3>
           </div>
         </div>
@@ -363,8 +363,8 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
           watchlistId={watchlist.id}
         />
         <CandidateHistory candidates={data.eventCandidates} />
-        <details className="f9-ed-report-glossary">
-          <summary className="f9-ed-micro">Evidence labels</summary>
+        <details className="f9-evidence-report-glossary">
+          <summary className="f9-evidence-micro">Evidence labels</summary>
           <ProofGlossary />
         </details>
       </>
@@ -424,7 +424,7 @@ function EvidenceHandoff({ props }: { props: CompetitorDetailProps }) {
             <input name="intent" type="hidden" value="share-watchlist" />
             <input name="watchlistId" type="hidden" value={watchlist.id} />
             <SubmitButton
-              className="f9-ed-cta f9-ed-cta--rank3"
+              className="f9-evidence-cta f9-evidence-cta--rank3"
               intent="share-watchlist"
               pendingLabel="Sharing…"
             >

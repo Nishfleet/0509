@@ -27,16 +27,16 @@ describe("QuietLine", () => {
       <QuietLine stamp="26 Jul · 04:00" copy="Checked. Nothing changed." />,
     );
 
-    expect(markup).toContain("f9-ed-quiet-line");
+    expect(markup).toContain("f9-evidence-quiet-line");
     expect(markup).toContain("Checked. Nothing changed.");
     expect(markup).not.toContain("is-warning");
-    expect(markup).not.toContain("f9-ed-panel");
+    expect(markup).not.toContain("f9-evidence-panel");
   });
 
   it("drops the stamp instead of inventing one when the timestamp is missing", () => {
     const markup = renderToStaticMarkup(<QuietLine stamp={null} copy="Checked. Nothing changed." />);
 
-    expect(markup).not.toContain("f9-ed-quiet-stamp");
+    expect(markup).not.toContain("f9-evidence-quiet-stamp");
     expect(markup).toContain("Checked. Nothing changed.");
   });
 });
@@ -45,9 +45,9 @@ describe("QuietLineList", () => {
   it("collapses past the fifth line into a Rank-3 load-more", () => {
     const markup = renderRouted(<QuietLineList items={checks} loadMore={{ to: "?checks=all" }} />);
 
-    expect(markup.match(/f9-ed-quiet-line/g)).toHaveLength(QUIET_LINE_VISIBLE_LIMIT);
+    expect(markup.match(/f9-evidence-quiet-line/g)).toHaveLength(QUIET_LINE_VISIBLE_LIMIT);
     expect(markup).toContain("Load 41 earlier checks");
-    expect(markup).toContain("f9-ed-cta--rank3");
+    expect(markup).toContain("f9-evidence-cta--rank3");
     // The control is a real destination, never a handler-less button.
     expect(markup).toContain('href="/?checks=all"');
   });
@@ -61,15 +61,15 @@ describe("QuietLineList", () => {
       <QuietLineList items={six} loadMore={{ to: "?checks=all" }} expanded />,
     );
     expect(expanded).not.toContain("earlier check");
-    expect(expanded.match(/f9-ed-quiet-line/g)).toHaveLength(6);
+    expect(expanded.match(/f9-evidence-quiet-line/g)).toHaveLength(6);
   });
 
   it("shows the whole trail rather than a dead control when there is nowhere to go", () => {
     const markup = renderToStaticMarkup(<QuietLineList items={checks} />);
 
-    expect(markup.match(/f9-ed-quiet-line/g)).toHaveLength(checks.length);
+    expect(markup.match(/f9-evidence-quiet-line/g)).toHaveLength(checks.length);
     expect(markup).not.toContain("earlier check");
-    expect(markup).not.toContain("f9-ed-cta");
+    expect(markup).not.toContain("f9-evidence-cta");
   });
 
   it("accepts a handler as a destination for client-side disclosure", () => {

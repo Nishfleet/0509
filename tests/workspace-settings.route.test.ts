@@ -162,7 +162,7 @@ describe("workspace settings route components", () => {
     expect(markup).toContain(
       '<span class="f9-access-status is-bad">Needs setup</span>',
     );
-    expect(markup).not.toContain("f9-ed-stamp");
+    expect(markup).not.toContain("f9-evidence-stamp");
     expect(markup).not.toContain("f9-beta-pill");
   });
 

@@ -497,7 +497,7 @@ describe("dashboard route agent memory", () => {
     // The screen still carries exactly one filled button.
     expect(markup.match(/class="f9-wk-row"/g)).toHaveLength(3);
     expect(markup.match(/class="f9-wk-btn"/g)).toHaveLength(1);
-    expect(markup).not.toContain("f9-ed-diff-plate");
+    expect(markup).not.toContain("f9-evidence-diff-plate");
     expect(markup).toContain(
       'href="/app/watchlists?watchlist=watch-1&amp;event=event-0"',
     );

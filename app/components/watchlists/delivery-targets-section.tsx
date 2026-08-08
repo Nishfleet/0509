@@ -64,7 +64,7 @@ export function DeliveryTargetsSection(props: {
                     value={data.deliveryTestRequestTokens[target.id] ?? ""}
                   />
                   <SubmitButton
-                    className="f9-ed-cta f9-ed-cta--rank3"
+                    className="f9-evidence-cta f9-evidence-cta--rank3"
                     intent="send-test-email"
                     match={{ targetId: target.id }}
                     pendingLabel="Sending…"
@@ -79,7 +79,7 @@ export function DeliveryTargetsSection(props: {
                 <input name="intent" type="hidden" value="toggle-delivery-target" />
                 <input name="targetId" type="hidden" value={target.id} />
                 <SubmitButton
-                  className="f9-ed-cta f9-ed-cta--rank3"
+                  className="f9-evidence-cta f9-evidence-cta--rank3"
                   intent="toggle-delivery-target"
                   match={{ targetId: target.id }}
                   pendingLabel={target.isPaused ? "Resuming…" : "Pausing…"}
@@ -142,7 +142,7 @@ export function DeliveryTargetsSection(props: {
                       <input name="intent" type="hidden" value="toggle-delivery-target" />
                       <input name="targetId" type="hidden" value={target.id} />
                       <SubmitButton
-                        className="f9-ed-cta f9-ed-cta--rank3"
+                        className="f9-evidence-cta f9-evidence-cta--rank3"
                         intent="toggle-delivery-target"
                         match={{ targetId: target.id }}
                         pendingLabel={paused ? "Resuming…" : "Pausing…"}
@@ -177,7 +177,7 @@ export function DeliveryTargetsSection(props: {
           <input defaultChecked name="explicitOptIn" type="checkbox" />
           <span>Explicit opt-in confirmed</span>
         </label>
-        <SubmitButton className="f9-ed-cta f9-ed-cta--rank2" intent="add-delivery-target" pendingLabel="Adding…">
+        <SubmitButton className="f9-evidence-cta f9-evidence-cta--rank2" intent="add-delivery-target" pendingLabel="Adding…">
           Add delivery target
         </SubmitButton>
       </Form> : (

@@ -24,11 +24,11 @@ export function BulkSelectBar(props: {
   const noun = props.selectedCount === 1 ? "competitor" : "competitors";
 
   return (
-    <div aria-live="polite" className="f9-ed-bulk-bar" role="status">
-      <span className="f9-ed-bulk-count f9-ed-micro">
+    <div aria-live="polite" className="f9-evidence-bulk-bar" role="status">
+      <span className="f9-evidence-bulk-count f9-evidence-micro">
         {props.selectedCount} {noun} selected
       </span>
-      <div className="f9-ed-action-row">
+      <div className="f9-evidence-action-row">
         <SecondaryAction disabled={props.pending} onClick={props.onPause} small>
           {props.pending && props.pendingAction === "pause"
             ? `Pausing ${props.selectedCount}…`

@@ -33,7 +33,7 @@ describe("BL-040 landing-language surfaces", () => {
       expect(route).toContain("<WorkingHeader");
       expect(route).toContain('className="f9-wk-page f9-access-page');
       expect(route).not.toContain("DashboardPageHeader");
-      expect(route).not.toContain("f9-app-panel");
+      expect(route).not.toContain("f9-wk-panel");
       expect(route).not.toContain("f9-status-strip");
       expect(route).not.toContain("f9-source-guide");
     }
@@ -44,7 +44,7 @@ describe("BL-040 landing-language surfaces", () => {
       'return { label: "Needs setup", tone: "bad" }',
     );
     expect(sourceAccess).toContain("f9-access-status");
-    expect(sourceAccess).not.toContain("f9-ed-stamp");
+    expect(sourceAccess).not.toContain("f9-evidence-stamp");
   });
 
   it("keeps API-key secrets and danger actions as ruled text controls", () => {

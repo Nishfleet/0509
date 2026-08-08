@@ -69,16 +69,16 @@ function Pane({
   children?: ReactNode;
 }) {
   return (
-    <div className={`f9-ed-diff-pane is-${variant}`}>
-      <span className="f9-ed-diff-label">{label}</span>
-      <span className="f9-ed-evidence-line">
+    <div className={`f9-evidence-diff-pane is-${variant}`}>
+      <span className="f9-evidence-diff-label">{label}</span>
+      <span className="f9-evidence-evidence-line">
         <LocalTime iso={capture.capturedAt ?? null} />
       </span>
-      <span className="f9-ed-diff-value">
+      <span className="f9-evidence-diff-value">
         {variant === "before" ? <s>{capture.value}</s> : <mark>{capture.value}</mark>}
       </span>
-      {capture.quote ? <p className="f9-ed-diff-quote">“{capture.quote}”</p> : null}
-      {capture.note ? <p className="f9-ed-diff-note">{capture.note}</p> : null}
+      {capture.quote ? <p className="f9-evidence-diff-quote">“{capture.quote}”</p> : null}
+      {capture.note ? <p className="f9-evidence-diff-note">{capture.note}</p> : null}
       {children}
     </div>
   );
@@ -131,26 +131,26 @@ export function DiffPlate({
   const Heading = `h${headingLevel}` as "h2" | "h3" | "h4";
 
   return (
-    <article className={className ? `f9-ed-diff-plate ${className}` : "f9-ed-diff-plate"}>
-      <header className="f9-ed-plate-header f9-ed-micro">
+    <article className={className ? `f9-evidence-diff-plate ${className}` : "f9-evidence-diff-plate"}>
+      <header className="f9-evidence-plate-header f9-evidence-micro">
         <span>
           {caughtLabel} · {field}
         </span>
-        {verification ? <span className="f9-ed-plate-header-end">{verification}</span> : null}
+        {verification ? <span className="f9-evidence-plate-header-end">{verification}</span> : null}
       </header>
-      <div className="f9-ed-diff-body">
-        <Heading className="f9-ed-diff-headline">{headline}</Heading>
-        {why ? <p className="f9-ed-diff-why">{why}</p> : null}
-        {delivery ? <p className="f9-ed-diff-delivery">{delivery}</p> : null}
-        <div className="f9-ed-diff-panes">
+      <div className="f9-evidence-diff-body">
+        <Heading className="f9-evidence-diff-headline">{headline}</Heading>
+        {why ? <p className="f9-evidence-diff-why">{why}</p> : null}
+        {delivery ? <p className="f9-evidence-diff-delivery">{delivery}</p> : null}
+        <div className="f9-evidence-diff-panes">
           <Pane capture={before} label="Before" variant="before" />
           <Pane capture={now} label="Now" variant="now">
             {extraChanges.length > 0 ? (
-              <div className="f9-ed-diff-extra">
+              <div className="f9-evidence-diff-extra">
                 {extraChanges.map((change, index) => (
                   // Index key: two rows may legitimately report the same
                   // field name from different captures.
-                  <span className="f9-ed-diff-note" key={`${index}-${change.key}`}>
+                  <span className="f9-evidence-diff-note" key={`${index}-${change.key}`}>
                     {change.key}: {change.value}
                   </span>
                 ))}
@@ -158,8 +158,8 @@ export function DiffPlate({
             ) : null}
           </Pane>
         </div>
-        <p className="f9-ed-diff-note">{STORED_CAPTURE_NOTE}</p>
-        {actions ? <div className="f9-ed-action-row">{actions}</div> : null}
+        <p className="f9-evidence-diff-note">{STORED_CAPTURE_NOTE}</p>
+        {actions ? <div className="f9-evidence-action-row">{actions}</div> : null}
       </div>
     </article>
   );

@@ -1,11 +1,11 @@
 import { Form, Link, redirect, useActionData, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 
-import { DashboardPage, DashboardPageHeader } from "~/components/dashboard-page";
+import { DashboardPage } from "~/components/dashboard-page";
+import { WorkingHeader } from "~/components/workspace/working-header";
 import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboard-route-loading";
 import { ActionFeedback } from "~/components/action-feedback";
 import { ConfirmSubmitButton } from "~/components/confirm-button";
-import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import {
@@ -199,10 +199,9 @@ export default function PresenceEntityRoute() {
 
   return (
     <DashboardPage>
-      <section className="f9-app-stack">
-        <DashboardPageHeader
-          kicker={`Presence · ${formatTrackingMode(entity.trackingMode)}`}
-          lead={safeBrief.summary}
+      <section className="f9-wk-stack">
+        <WorkingHeader
+          context={`${formatTrackingMode(entity.trackingMode)} · ${safeBrief.summary}`}
           title={entity.label}
         />
         {entity.canonicalUrl ? (
@@ -215,7 +214,7 @@ export default function PresenceEntityRoute() {
 
         <ActionFeedback data={actionData} fallback />
 
-        <article className="f9-app-panel">
+        <article className="f9-wk-panel">
           <span className="f9-wk-kick">Entity brief</span>
           <h2>{safeBrief.headline}</h2>
           <p>{safeBrief.summary}</p>
@@ -272,16 +271,15 @@ export default function PresenceEntityRoute() {
         </article>
 
         <div className="f9-wk-grid2">
-          <article className="f9-app-panel">
+          <article className="f9-wk-panel">
             <span className="f9-wk-kick">Sources</span>
             <h2>Connected targets</h2>
             <div className="f9-wk-worklist is-compact">
               {pollableSources.length === 0 ? (
-                <EmptyState
-                  description="Add a website source to run proof-backed checks."
-                  title="No checkable website targets yet"
-                  variant="row"
-                />
+                <p className="f9-wk-note">
+                  No checkable website target yet — add a website source and
+                  proof-backed checks start with the next poll.
+                </p>
               ) : null}
               {pollableSources.map((source) => (
                 <div className="f9-wk-workrow" key={source.id}>
@@ -325,7 +323,7 @@ export default function PresenceEntityRoute() {
             </Form>
           </article>
 
-          <article className="f9-app-panel">
+          <article className="f9-wk-panel">
             <span className="f9-wk-kick">Source coverage</span>
             <h2>All declared sources</h2>
             <div className="f9-wk-worklist is-compact">
@@ -344,14 +342,14 @@ export default function PresenceEntityRoute() {
             </div>
           </article>
 
-          <article className="f9-app-panel">
+          <article className="f9-wk-panel">
             <span className="f9-wk-kick">Compare</span>
             <h2>Related entities</h2>
             {compareEntities.length === 0 ? (
-              <EmptyState
-                title="Add another entity type to compare coverage side by side."
-                variant="inline"
-              />
+              <p className="f9-wk-note">
+                Track another entity and its coverage appears here, side by
+                side with this one.
+              </p>
             ) : (
               <div className="f9-wk-worklist is-compact">
                 {compareEntities.map((other) => (
@@ -365,15 +363,14 @@ export default function PresenceEntityRoute() {
           </article>
         </div>
 
-        <article className="f9-app-panel">
+        <article className="f9-wk-panel">
           <span className="f9-wk-kick">Feed</span>
           <h2>Latest public content</h2>
           {items.length === 0 ? (
-            <EmptyState
-              description="Check a source to fetch the latest public content."
-              title="No items yet"
-              variant="inline"
-            />
+            <p className="f9-wk-note">
+              Nothing fetched yet — run a source check and the latest public
+              content files here.
+            </p>
           ) : (
             <div className="f9-wk-worklist is-compact">
               {items.map((item) => (
@@ -395,7 +392,7 @@ export default function PresenceEntityRoute() {
           )}
         </article>
 
-        <article className="f9-app-panel">
+        <article className="f9-wk-panel">
           <span className="f9-wk-kick">Danger zone</span>
           <h2>Delete this entity</h2>
           <p className="f9-wk-dim">

@@ -85,11 +85,11 @@ for (const viewport of viewports) {
     await expectMinimumTouchTarget(onboardingWebsite);
     await expectFocusTransition(
       onboardingWebsite,
-      page.locator("form.f9-ed-setup-primary button[type='submit']"),
+      page.locator("form.f9-evidence-setup-primary button[type='submit']"),
     );
     await expectVisibleKeyboardFocus(onboardingWebsite);
     await expectPhoneTouchTargets(page);
-    const onboardingSubmit = page.locator("form.f9-ed-setup-primary button[type='submit']");
+    const onboardingSubmit = page.locator("form.f9-evidence-setup-primary button[type='submit']");
     await expect(onboardingSubmit).toHaveAccessibleName("Track Nykaa");
     await expect(onboardingSubmit).toBeEnabled();
     await onboardingWebsite.fill("");
@@ -225,11 +225,11 @@ for (const viewport of viewports) {
     await expectMinimumTouchTarget(website);
     await expectFocusTransition(
       website,
-      page.locator(".f9-ed-setup-import > summary").first(),
+      page.locator(".f9-evidence-setup-import > summary").first(),
     );
     await expectVisibleKeyboardFocus(website);
     await expectPhoneTouchTargets(page);
-    const submit = page.locator("form.f9-ed-setup-primary button[type='submit']");
+    const submit = page.locator("form.f9-evidence-setup-primary button[type='submit']");
     await expect(submit).toBeDisabled();
     await attachReleaseStateArtifacts({ page, testInfo, prefix: "j2-activation", state: "onboard" });
     await website.fill("https://nykaa.com");

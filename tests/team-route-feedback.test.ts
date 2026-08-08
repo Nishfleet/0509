@@ -193,7 +193,7 @@ describe("team feedback placement", () => {
 			expect(markup).toContain("f9-acct-lock");
 			expect(markup).toContain("Invite your teammates");
 			expect(markup).toContain('href="/app/billing?source=team#plans"');
-			expect(markup.match(/f9-ed-cta--rank1/g)).toHaveLength(1);
+			expect(markup.match(/f9-evidence-cta--rank1/g)).toHaveLength(1);
 			expect(markup).not.toContain('name="email"');
 		},
 	);
