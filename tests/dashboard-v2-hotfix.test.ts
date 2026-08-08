@@ -111,7 +111,7 @@ describe("dashboard v2 production hotfix", () => {
   });
 
   it("restores scoped public brand styling without legacy shell", () => {
-    expect(appCss).toContain(".f9-app-brand");
+    expect(appCss).toContain(".f9-brandmark");
     expect(appCss).not.toContain(".f9-app-shell");
   });
 });

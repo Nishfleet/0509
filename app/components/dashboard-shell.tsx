@@ -15,7 +15,7 @@ import {
 export interface DashboardShellProps {
   /** Signed-out search uses a minimal public rail */
   isPublic?: boolean;
-  /** Page wrapper class, e.g. f9-search-page for search-specific overrides */
+  /** Page wrapper class, e.g. f9-find-page for search-specific overrides */
   pageClassName?: string;
   /** Public-shell identity block; signed-in shells use the user's own
    * name/email and need none of these (tri-audit S7). */

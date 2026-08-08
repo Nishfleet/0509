@@ -32,7 +32,7 @@ export function SignOutButton() {
           });
       }}
     >
-      <button className="f9-secondary-button f9-sign-out-button" disabled={pending} type="submit">
+      <button className="f9-wk-btn-quiet f9-sign-out-button" disabled={pending} type="submit">
         {pending ? "Signing out..." : "Sign out"}
       </button>
     </form>

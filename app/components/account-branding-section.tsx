@@ -29,17 +29,17 @@ export function AccountBrandingSection({
 }) {
   return (
     <>
-      <article className="f9-app-panel">
+      <article className="f9-wk-panel">
         <div className="f9-panel-toolbar">
           <div>
-            <span className="f9-app-kicker">My brand</span>
+            <span className="f9-wk-kick">My brand</span>
             <h2>Set your own website once</h2>
           </div>
         </div>
         {brandProfileAction?.message ? (
           <div
             aria-live={brandProfileAction.ok ? "polite" : "assertive"}
-            className={`f9-message ${brandProfileAction.ok ? "is-success" : "is-error"}`}
+            className={`f9-wk-notice ${brandProfileAction.ok ? "is-success" : "is-error"}`}
             role={brandProfileAction.ok ? "status" : "alert"}
           >
             <p>{brandProfileAction.message}</p>
@@ -60,20 +60,20 @@ export function AccountBrandingSection({
             />
           </label>
           <SubmitButton
-            className="f9-secondary-button"
+            className="f9-wk-btn-quiet"
             intent="save-brand-profile"
             pendingLabel="Saving…"
           >
             Save my brand
           </SubmitButton>
-          <p className="f9-muted-copy">Optional. Set it once; competitor search stays separate.</p>
+          <p className="f9-wk-dim">Optional. Set it once; competitor search stays separate.</p>
         </Form>
       </article>
 
-      <article className="f9-app-panel">
+      <article className="f9-wk-panel">
         <div className="f9-panel-toolbar">
           <div>
-            <span className="f9-app-kicker">Agency reports</span>
+            <span className="f9-wk-kick">Agency reports</span>
             <h2>Put your agency name on shared reports</h2>
           </div>
         </div>
@@ -96,7 +96,7 @@ export function AccountBrandingSection({
             brandName={brandName}
           />
         ) : (
-          <p className="f9-muted-copy">
+          <p className="f9-wk-dim">
             Branded reports are part of Agency.{" "}
             <Link prefetch="intent" to="/app/billing?source=branding#plans">
               See plans

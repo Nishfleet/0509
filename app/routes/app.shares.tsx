@@ -112,7 +112,7 @@ export default function SharesRoute() {
       ) : null}
 
       {data.shares.length > 0 ? (
-        <div className="f9-bl038-list">
+        <div className="f9-shares-list">
           <RuledList aria-label="Active share links">
             {data.shares.map((share) => {
               const recoveryPath =
@@ -137,7 +137,7 @@ export default function SharesRoute() {
                     "This link stays unavailable. Review the evidence to create a new link."
                   ) : (
                     <a
-                      className="f9-bl038-url"
+                      className="f9-shares-url"
                       href={share.url}
                       rel="noreferrer"
                       target="_blank"
@@ -156,7 +156,7 @@ export default function SharesRoute() {
                   )
                 }
                 trail={
-                  <span className="f9-bl038-actions">
+                  <span className="f9-shares-actions">
                     {recoveryPath ? (
                       <Link className="f9-wk-lnk" to={recoveryPath}>
                         Review report{" "}
@@ -207,7 +207,7 @@ export default function SharesRoute() {
         </section>
       )}
 
-      <p className="f9-bl038-note f9-wk-note">
+      <p className="f9-shares-note f9-wk-note">
         Anyone with a link can open what it points to until it expires or you revoke it.
         Approval-expired report links stay unavailable; reviewing again creates a new link to share.
         New links expire automatically after 90 days.

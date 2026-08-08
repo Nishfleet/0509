@@ -99,22 +99,22 @@ export function FirstScanBanner(props: {
 
   return (
     <article
-      className={`f9-ed-first-scan ${failed || skipped ? "is-error" : completed ? "is-success" : "is-pending"}`}
+      className={`f9-evidence-first-scan ${failed || skipped ? "is-error" : completed ? "is-success" : "is-pending"}`}
       aria-live="polite"
       role="status"
     >
-      <header className="f9-ed-first-scan-header f9-ed-micro">
+      <header className="f9-evidence-first-scan-header f9-evidence-micro">
         {props.plan === "free" ? "Activation scan" : "First scan"}
       </header>
-      <div className="f9-ed-first-scan-body">
-        <h2 className="f9-ed-first-scan-headline">
+      <div className="f9-evidence-first-scan-body">
+        <h2 className="f9-evidence-first-scan-headline">
           {props.run?.status === "running" ? (
             <span className="f9-checkout-pulse" aria-hidden="true" />
           ) : null}
           {heading}
         </h2>
-        <p className="f9-ed-first-scan-copy">{message}</p>
-        <div className="f9-ed-action-row">
+        <p className="f9-evidence-first-scan-copy">{message}</p>
+        <div className="f9-evidence-action-row">
           {failed ? <TertiaryAction to="/app/source-access">Check source access</TertiaryAction> : null}
           {(pastFastPoll || timedOut) && shouldPoll ? (
             <>
@@ -129,7 +129,7 @@ export function FirstScanBanner(props: {
                 Check now
               </SecondaryAction>
               {pastFastPoll && !timedOut ? (
-                <span className="f9-ed-evidence-line">
+                <span className="f9-evidence-line">
                   Still waiting — checking every 30 seconds.
                 </span>
               ) : null}

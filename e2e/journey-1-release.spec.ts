@@ -115,7 +115,7 @@ const publicTruthSurfaces = [
 ] as const;
 
 async function expectReadableBrandContrast(page: Page): Promise<void> {
-  const brand = page.locator(".f9-legal-nav .f9-app-brand .f9-wordmark").first();
+  const brand = page.locator(".f9-legal-nav .f9-brandmark .f9-wordmark").first();
   const contrast = await brand.evaluate((element) => {
     const nav = element.closest<HTMLElement>(".f9-legal-nav");
     const parseRgb = (value: string): [number, number, number] | null => {
@@ -162,7 +162,7 @@ async function expectPublicTruthSurface(
     await expect(page.getByText(truth, { exact: false })).toBeVisible();
   }
   await expectReadableBrandContrast(page);
-  await expectVisibleKeyboardFocus(page.locator(".f9-legal-nav .f9-app-brand").first());
+  await expectVisibleKeyboardFocus(page.locator(".f9-legal-nav .f9-brandmark").first());
   await expectPhoneTouchTargets(page);
   await expectNoHorizontalOverflow(page);
   await attachReleaseStateArtifacts({ page, testInfo, prefix: "j1", state: surface.state });

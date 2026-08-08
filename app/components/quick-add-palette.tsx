@@ -64,7 +64,7 @@ export function QuickAddPalette({ onClose }: QuickAddPaletteProps) {
   return (
     <ModalDialog className="f9-quick-add-dialog" labelledBy="quick-add-title" onClose={onClose}>
       <form className="f9-quick-add-form" onSubmit={handleSubmit}>
-        <h2 className="f9-app-kicker" id="quick-add-title">
+        <h2 className="f9-wk-kick" id="quick-add-title">
           Add competitor
         </h2>
         <label className="f9-field">
@@ -84,7 +84,7 @@ export function QuickAddPalette({ onClose }: QuickAddPaletteProps) {
           Enter creates the watchlist and opens it. Esc closes.
         </p>
         {feedback?.message ? (
-          <p aria-live="polite" className="f9-message is-error" role="status">
+          <p aria-live="polite" className="f9-wk-notice is-error" role="status">
             {feedback.message}
             {feedback.error === "plan_limit_exceeded" ? (
               <>
@@ -98,10 +98,10 @@ export function QuickAddPalette({ onClose }: QuickAddPaletteProps) {
           </p>
         ) : null}
         <div className="f9-quick-add-actions">
-          <button className="f9-secondary-button" onClick={onClose} type="button">
+          <button className="f9-wk-btn-quiet" onClick={onClose} type="button">
             Cancel
           </button>
-          <button aria-busy={pending || undefined} className="f9-primary-button" disabled={pending} type="submit">
+          <button aria-busy={pending || undefined} className="f9-wk-btn" disabled={pending} type="submit">
             {pending ? "Creating…" : "Track competitor"}
           </button>
         </div>

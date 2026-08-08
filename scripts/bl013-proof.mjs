@@ -114,7 +114,7 @@ async function captureSurface(page, consoleErrors, file, checks = {}) {
         maxCharactersOnOneLine: Math.max(0, ...lineCharacterCounts),
       };
     };
-    const factRailLabels = [...document.querySelectorAll(".f9-ed-fact-key")]
+    const factRailLabels = [...document.querySelectorAll(".f9-evidence-fact-key")]
       .map(textMetrics)
       .map((metric) => ({
         ...metric,
@@ -126,7 +126,7 @@ async function captureSurface(page, consoleErrors, file, checks = {}) {
           metric.estimatedLines > 2 &&
           metric.maxCharactersOnOneLine <= 2,
       }));
-    const headlineNumbers = [...document.querySelectorAll(".f9-ed-report-number-value")]
+    const headlineNumbers = [...document.querySelectorAll(".f9-evidence-report-number-value")]
       .map(textMetrics)
       .map((metric) => ({
         ...metric,
@@ -137,8 +137,8 @@ async function captureSurface(page, consoleErrors, file, checks = {}) {
       docHeight: Math.round(document.documentElement.scrollHeight),
       scrollWidth: Math.round(document.documentElement.scrollWidth),
       innerWidth: window.innerWidth,
-      cover: Boolean(document.querySelector(".f9-ed-report-cover")),
-      plates: document.querySelectorAll(".f9-ed-evidence-plate").length,
+      cover: Boolean(document.querySelector(".f9-evidence-report-cover")),
+      plates: document.querySelectorAll(".f9-evidence-evidence-plate").length,
       toolbarHeading: document.querySelectorAll(".f9-panel-toolbar-heading").length,
       fiveToNineInDocument: (document.querySelector("[data-report-root]")?.textContent ?? "").includes(
         "Five to Nine",

@@ -8,7 +8,7 @@ describe("public accessibility source contract", () => {
   it("uses dark focus treatments on light marketing, share, and mobile app surfaces", () => {
     expect(css).toContain(`.f9-home :is(a, button, input):focus-visible {
   outline: 3px solid var(--ld-green-ink);`);
-    expect(css).toContain(`.f9-share-header .f9-app-brand:focus-visible {
+    expect(css).toContain(`.f9-share-header .f9-brandmark:focus-visible {
   outline-color: var(--f9-search-ink);`);
     expect(css).toContain(`.f9-dash-page-app .f9-dash-mobile-nav :is(a, button):focus-visible {
     outline: 2px solid var(--wk-focus);`);
@@ -30,7 +30,7 @@ describe("public accessibility source contract", () => {
     expect(css).toContain(`.f9-dash-page-app .f9-cursor-rail nav a {
     min-height: 44px;`);
     expect(css).toContain(`@media (min-width: 761px) and (max-width: 900px) {
-  .f9-search-page .f9-cursor-rail nav a {
+  .f9-find-page .f9-cursor-rail nav a {
     min-height: 44px;`);
   });
 

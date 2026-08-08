@@ -1,3 +1,4 @@
+import { meterWidthClass } from "~/lib/meter-width";
 import type { BrandPageAggression } from "~/lib/brand-page.server";
 
 const COMPONENT_ROWS: { key: keyof BrandPageAggression["components"]; label: string }[] = [
@@ -53,7 +54,7 @@ export function BrandScoreCard({ aggression }: { aggression: BrandPageAggression
             <div className="f9-ads-comp" key={key}>
               <span className="f9-ads-comp-name">{label}</span>
               <span className="f9-ads-comp-track">
-                <span className="f9-ads-comp-fill" style={{ width: `${pct}%` }} />
+                <span className={`f9-ads-comp-fill ${meterWidthClass(pct)}`} />
               </span>
               <span className="f9-ads-comp-val">{value}</span>
             </div>

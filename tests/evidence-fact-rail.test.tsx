@@ -28,7 +28,7 @@ describe("FactRail", () => {
     expect(markup.match(/is-missing/g)).toHaveLength(2);
     expect(markup).toContain("example.com/offer");
     // The honest degrade is a row, never an empty card.
-    expect(markup).not.toContain("f9-ed-panel");
+    expect(markup).not.toContain("f9-evidence-panel");
   });
 
   it("edits the rail down to what an agency would quote", () => {
@@ -38,7 +38,7 @@ describe("FactRail", () => {
     }));
     const markup = renderToStaticMarkup(<FactRail rows={rows} />);
 
-    expect(markup.match(/f9-ed-fact-row/g)).toHaveLength(FACT_RAIL_MAX_ROWS);
+    expect(markup.match(/f9-evidence-fact-row/g)).toHaveLength(FACT_RAIL_MAX_ROWS);
     expect(markup).not.toContain("Fact 8");
   });
 

@@ -389,7 +389,7 @@ export default function CollectionsRoute() {
       : null;
 
   return (
-    <DashboardPage className="f9-wk-page f9-col-page">
+    <DashboardPage className="f9-wk-page f9-library-page">
       <WorkingHeader
         action={headerAction}
         context={
@@ -452,13 +452,13 @@ export default function CollectionsRoute() {
               />
             </div>
           ) : (
-            <section aria-labelledby="collection-limit-title" className="f9-wk-sec f9-col-limit">
-              <h2 className="f9-col-section-title" id="collection-limit-title">
+            <section aria-labelledby="collection-limit-title" className="f9-wk-sec f9-library-limit">
+              <h2 className="f9-library-section-title" id="collection-limit-title">
                 {collectionLimit === 0
                   ? "New collections start on Scout"
                   : "Collection limit reached"}
               </h2>
-              <p className="f9-col-note">
+              <p className="f9-library-note">
                 {collectionLimit === 0
                   ? "Your saved evidence remains available, but Free does not include new collections. Compare plans to create another."
                   : `You are using all ${collectionLimit} collections on this plan. Delete one you no longer need, or compare plans to keep more evidence sets side by side.`}
@@ -475,9 +475,9 @@ export default function CollectionsRoute() {
           mode="first-run"
         />
       ) : primarySlot === "gate" ? (
-        <section aria-labelledby="collections-locked-title" className="f9-wk-sec f9-col-locked">
+        <section aria-labelledby="collections-locked-title" className="f9-wk-sec f9-library-locked">
           <p className="f9-wk-kick">Scout plan</p>
-          <h2 className="f9-col-section-title" id="collections-locked-title">
+          <h2 className="f9-library-section-title" id="collections-locked-title">
             Collections start on Scout
           </h2>
           <p className="f9-wk-lede">
@@ -492,12 +492,12 @@ export default function CollectionsRoute() {
       ) : (
         <section
           aria-labelledby="collection-selection-missing-title"
-          className="f9-wk-sec f9-col-empty"
+          className="f9-wk-sec f9-library-empty"
         >
-          <h2 className="f9-col-section-title" id="collection-selection-missing-title">
+          <h2 className="f9-library-section-title" id="collection-selection-missing-title">
             That collection is no longer available
           </h2>
-          <p className="f9-col-note">
+          <p className="f9-library-note">
             Choose another collection above.
           </p>
         </section>

@@ -184,10 +184,10 @@ describe("DashboardShell accessibility (WP-43)", () => {
       /\.f9-dash-content\s*\{[^}]*max-width:\s*1120px;/s,
     );
     expect(appCss).toMatch(
-      /@media \(min-width: 761px\)\s*\{\s*\.f9-dash-page-public\.f9-search-page \.f9-cursor-shell\s*\{[\s\S]*?grid-template-columns:\s*218px minmax\(0, 1fr\);[\s\S]*?width:\s*min\(100%, 1390px\);/,
+      /@media \(min-width: 761px\)\s*\{\s*\.f9-dash-page-public\.f9-find-page \.f9-cursor-shell\s*\{[\s\S]*?grid-template-columns:\s*218px minmax\(0, 1fr\);[\s\S]*?width:\s*min\(100%, 1390px\);/,
     );
     expect(appCss).not.toMatch(
-      /(?<!public)\.f9-search-page \.f9-cursor-shell\s*\{[^}]*width:\s*min\(100%, 1390px\);/s,
+      /(?<!public)\.f9-find-page \.f9-cursor-shell\s*\{[^}]*width:\s*min\(100%, 1390px\);/s,
     );
   });
 

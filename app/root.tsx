@@ -298,17 +298,17 @@ export function ErrorBoundary({ error }: { error: unknown }) {
     >
       <div className="f9-container f9-error-layout">
         <section className="f9-error-card">
-          <span className="f9-app-kicker">Five to Nine</span>
+          <span className="f9-wk-kick">Five to Nine</span>
           <h1>{heading}</h1>
           {paragraphs.map((paragraph) => (
             <p key={paragraph}>{paragraph}</p>
           ))}
           {isNotFound ? (
             <div className="f9-action-row">
-              <Link className="f9-primary-button" to="/">
+              <Link className="f9-wk-btn" to="/">
                 Back to Five to Nine
               </Link>
-              <Link className="f9-secondary-button" to="/search">
+              <Link className="f9-wk-btn-quiet" to="/search">
                 Open search
               </Link>
             </div>
@@ -320,7 +320,7 @@ export function ErrorBoundary({ error }: { error: unknown }) {
               </p>
               <div className="f9-action-row">
                 <button
-                  className="f9-primary-button"
+                  className="f9-wk-btn"
                   onClick={() => {
                     if (typeof window !== "undefined") window.location.reload();
                   }}
@@ -328,7 +328,7 @@ export function ErrorBoundary({ error }: { error: unknown }) {
                 >
                   Try again
                 </button>
-                <Link className="f9-secondary-button" to="/">
+                <Link className="f9-wk-btn-quiet" to="/">
                   Back to the start
                 </Link>
               </div>

@@ -328,7 +328,7 @@ async function measure(page: Page) {
       const viewportHeight = window.innerHeight;
       const boxes = [
         ...document.querySelectorAll<HTMLElement>(
-          ".f9-wk-btn, .f9-ed-cta--rank1, .f9-primary-button",
+          ".f9-wk-btn, .f9-evidence-cta--rank1",
         ),
       ]
         .filter((node) => {

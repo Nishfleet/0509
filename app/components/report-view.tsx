@@ -119,10 +119,10 @@ export function ReportView({ report, preparedBy, railActions, brandingNote }: Re
   const plateCount = report.rows.length;
 
   return (
-    <div className="f9-ed-report" data-ed-volume="full">
-      <div className="f9-ed-report-main">
-        <header className="f9-ed-report-cover">
-          <p className="f9-ed-report-kicker f9-ed-micro">
+    <div className="f9-evidence-report" data-wk-volume="full">
+      <div className="f9-evidence-report-main">
+        <header className="f9-evidence-report-cover">
+          <p className="f9-evidence-report-kicker f9-evidence-micro">
             {report.resourceType === "watchlist"
               ? "Competitor evidence report"
               : "Collection evidence report"}
@@ -139,9 +139,9 @@ export function ReportView({ report, preparedBy, railActions, brandingNote }: Re
               </>
             ) : null}
           </p>
-          <h1 className="f9-ed-report-headline">{finding.headline}</h1>
-          <p className="f9-ed-report-standfirst">{report.summary}</p>
-          <dl className="f9-ed-report-byline">
+          <h1 className="f9-evidence-report-headline">{finding.headline}</h1>
+          <p className="f9-evidence-report-standfirst">{report.summary}</p>
+          <dl className="f9-evidence-report-byline">
             {/* White-label: an agency's report carries the agency's name or no
                 byline at all. Five to Nine never signs a document it did not
                 prepare — the product credit lives in the shared page's
@@ -168,14 +168,14 @@ export function ReportView({ report, preparedBy, railActions, brandingNote }: Re
         {headlineNumbers.length > 0 ? (
           <section
             aria-label="Report headline numbers"
-            className="f9-ed-report-numbers"
+            className="f9-evidence-report-numbers"
             data-count={headlineNumbers.length}
           >
             {headlineNumbers.map((stat) => (
-              <article className="f9-ed-report-number" key={stat.label}>
-                <p className="f9-ed-report-number-key f9-ed-micro">{stat.label}</p>
-                <strong className="f9-ed-report-number-value">{stat.value}</strong>
-                <p className="f9-ed-report-number-note">
+              <article className="f9-evidence-report-number" key={stat.label}>
+                <p className="f9-evidence-report-number-key f9-evidence-micro">{stat.label}</p>
+                <strong className="f9-evidence-report-number-value">{stat.value}</strong>
+                <p className="f9-evidence-report-number-note">
                   {HEADLINE_NUMBER_NOTES[stat.label] ?? HEADLINE_NUMBER_FALLBACK_NOTE}
                 </p>
               </article>
@@ -183,22 +183,22 @@ export function ReportView({ report, preparedBy, railActions, brandingNote }: Re
           </section>
         ) : null}
 
-        <section className="f9-ed-report-section" id="report-01">
+        <section className="f9-evidence-report-section" id="report-01">
           <ReportSectionHeading number="01" title="What we found" />
-          <aside className="f9-ed-report-read">
-            <p className="f9-ed-micro">Our read</p>
-            <p className="f9-ed-report-read-verdict">{finding.verdict}</p>
+          <aside className="f9-evidence-report-read">
+            <p className="f9-evidence-micro">Our read</p>
+            <p className="f9-evidence-report-read-verdict">{finding.verdict}</p>
           </aside>
-          <p className="f9-ed-report-prose">{describeWhatWeFound(report)}</p>
-          <p className="f9-ed-report-prose">{describePlateReference(plateCount)}</p>
+          <p className="f9-evidence-report-prose">{describeWhatWeFound(report)}</p>
+          <p className="f9-evidence-report-prose">{describePlateReference(plateCount)}</p>
           {report.aiWeeklySummary ? (
-            <div className="f9-ed-report-aside">
-              <p className="f9-ed-micro">
+            <div className="f9-evidence-report-aside">
+              <p className="f9-evidence-micro">
                 AI weekly summary · week ending{" "}
                 <LocalTime iso={report.aiWeeklySummary.periodEnd} mode="date" />
               </p>
-              <p className="f9-ed-report-prose">{report.aiWeeklySummary.paragraph}</p>
-              <p className="f9-ed-report-footnote">
+              <p className="f9-evidence-report-prose">{report.aiWeeklySummary.paragraph}</p>
+              <p className="f9-evidence-report-footnote">
                 Written by AI from the stored digest. Every claim it makes is checkable against the
                 plates below.
               </p>
@@ -208,12 +208,12 @@ export function ReportView({ report, preparedBy, railActions, brandingNote }: Re
 
         <section
           aria-label="Report evidence plates"
-          className="f9-ed-report-section"
+          className="f9-evidence-report-section"
           id="report-02"
         >
           <ReportSectionHeading number="02" title="The evidence" />
           {plateCount > 0 ? (
-            <div className="f9-ed-report-plates">
+            <div className="f9-evidence-report-plates">
               {report.rows.map((row, index) => (
                 <ReportEvidencePlate key={row.id} number={index + 1} row={row} />
               ))}
@@ -228,60 +228,60 @@ export function ReportView({ report, preparedBy, railActions, brandingNote }: Re
           )}
         </section>
 
-        <section className="f9-ed-report-section" id="report-03">
+        <section className="f9-evidence-report-section" id="report-03">
           <ReportSectionHeading number="03" title="What we recommend" />
           <ReportMoves report={report} />
         </section>
 
-        <section className="f9-ed-report-section" id="report-04">
+        <section className="f9-evidence-report-section" id="report-04">
           <ReportSectionHeading number="04" title="Every capture" />
-          <p className="f9-ed-report-prose">
+          <p className="f9-evidence-report-prose">
             The complete trail behind this report — every capture that made it in, with the time it
             was taken.
           </p>
           {plateCount > 0 ? (
             <QuietLineList items={buildCaptureTrail(report)} />
           ) : (
-            <p className="f9-ed-report-prose">
+            <p className="f9-evidence-report-prose">
               No capture has been filed in this window yet.
             </p>
           )}
         </section>
 
-        <section className="f9-ed-report-section" id="report-05">
+        <section className="f9-evidence-report-section" id="report-05">
           <ReportSectionHeading number="05" title="How this was checked" />
           <FactRail rows={buildMethodRows(report, captureWindow, overflowNumbers)} title="Method" />
           {report.sourceCoverage ? (
-            <p className="f9-ed-report-prose">
+            <p className="f9-evidence-report-prose">
               {legacyReportLabelText(report.sourceCoverage.note)}
             </p>
           ) : null}
-          <p className="f9-ed-report-prose">{REPORT_METHOD_SENTENCE}</p>
+          <p className="f9-evidence-report-prose">{REPORT_METHOD_SENTENCE}</p>
           {/* Brief §6.10: the glossary sits at the END of the document, out of
               the reading flow — it is reference material, not the report. */}
-          <details className="f9-ed-report-glossary">
-            <summary className="f9-ed-micro">Evidence labels</summary>
+          <details className="f9-evidence-report-glossary">
+            <summary className="f9-evidence-micro">Evidence labels</summary>
             <ProofGlossary audience="deliverable" />
           </details>
         </section>
       </div>
 
-      <aside aria-label="Report contents and actions" className="f9-ed-report-rail">
-        {railActions ? <div className="f9-ed-report-rail-actions">{railActions}</div> : null}
-        <nav aria-label="Report contents" className="f9-ed-report-contents">
-          <p className="f9-ed-micro">Contents</p>
+      <aside aria-label="Report contents and actions" className="f9-evidence-report-rail">
+        {railActions ? <div className="f9-evidence-report-rail-actions">{railActions}</div> : null}
+        <nav aria-label="Report contents" className="f9-evidence-report-contents">
+          <p className="f9-evidence-micro">Contents</p>
           <ol>
             {REPORT_SECTIONS.map((section) => (
               <li key={section.id}>
                 <a href={`#${section.id}`}>
-                  <span className="f9-ed-report-contents-number">{section.number}</span>
+                  <span className="f9-evidence-report-contents-number">{section.number}</span>
                   <span>{section.title}</span>
                 </a>
               </li>
             ))}
           </ol>
         </nav>
-        {brandingNote ? <div className="f9-ed-report-rail-brand">{brandingNote}</div> : null}
+        {brandingNote ? <div className="f9-evidence-report-rail-brand">{brandingNote}</div> : null}
       </aside>
     </div>
   );
@@ -289,8 +289,8 @@ export function ReportView({ report, preparedBy, railActions, brandingNote }: Re
 
 function ReportSectionHeading({ number, title }: { number: string; title: string }) {
   return (
-    <h2 className="f9-ed-report-section-heading">
-      <span className="f9-ed-report-section-number">{number}</span>
+    <h2 className="f9-evidence-report-section-heading">
+      <span className="f9-evidence-report-section-number">{number}</span>
       <span>{title}</span>
     </h2>
   );
@@ -298,8 +298,8 @@ function ReportSectionHeading({ number, title }: { number: string; title: string
 
 function ReportBylineCell({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="f9-ed-report-byline-cell">
-      <dt className="f9-ed-micro">{label}</dt>
+    <div className="f9-evidence-report-byline-cell">
+      <dt className="f9-evidence-micro">{label}</dt>
       <dd>{value}</dd>
     </div>
   );
@@ -383,7 +383,7 @@ function ReportEvidencePlate({ number, row }: { number: number; row: ReportRow }
         row.previewImageUrl ? (
           <img
             alt={`${plate.subject} — stored creative capture`}
-            className="f9-ed-mock-capture"
+            className="f9-evidence-mock-capture"
             referrerPolicy="no-referrer"
             src={row.previewImageUrl}
           />
@@ -523,7 +523,7 @@ function ReportMoves({ report }: { report: ReportDocument }) {
 
   if (moves.length === 0) {
     return (
-      <p className="f9-ed-report-prose">
+      <p className="f9-evidence-report-prose">
         {report.rows.length > 0
           ? "Nothing here needs a move today. Read the plates, then send this on."
           : "Nothing needs action from this window. The next check that finds something changes that."}
@@ -532,10 +532,10 @@ function ReportMoves({ report }: { report: ReportDocument }) {
   }
 
   return (
-    <ol className="f9-ed-report-moves">
+    <ol className="f9-evidence-report-moves">
       {moves.map((move) => (
         <li key={`${move.plate}-${move.action}`}>
-          <span className="f9-ed-micro">Plate {formatPlateNumber(move.plate)}</span>
+          <span className="f9-evidence-micro">Plate {formatPlateNumber(move.plate)}</span>
           <p>{move.action}</p>
         </li>
       ))}

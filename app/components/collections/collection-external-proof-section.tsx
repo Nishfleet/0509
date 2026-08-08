@@ -24,21 +24,21 @@ export function CollectionExternalProofSection({
   defaultOpen?: boolean;
 }) {
   return (
-    <section aria-labelledby="collection-file-title" className="f9-wk-sec f9-col-section">
-      <h2 className="f9-col-section-title" id="collection-file-title">
+    <section aria-labelledby="collection-file-title" className="f9-wk-sec f9-library-section">
+      <h2 className="f9-library-section-title" id="collection-file-title">
         File evidence from another source
       </h2>
-      <p className="f9-col-note">
+      <p className="f9-library-note">
         Add an ad or landing page we do not scan ourselves. It stays labelled as
         team-filed evidence, with the date you saw it.
       </p>
       <CollectionDisclosure
-        className="f9-col-external"
+        className="f9-library-external"
         defaultOpen={defaultOpen}
         group={COLLECTION_PANEL_GROUP}
         summary="Add an evidence link"
       >
-        <Form className="f9-col-form" method="post">
+        <Form className="f9-library-form" method="post">
           <input name="intent" type="hidden" value="add-external-proof" />
           <input name="collectionId" type="hidden" value={collectionId} />
           <div className="f9-field-grid">

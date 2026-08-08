@@ -50,6 +50,10 @@ semantics survive verbatim; their skin does not). Enforcement is
 mechanical: `scripts/design-system-ratchet.mjs` holds exact-match ceilings
 on every legacy marker in CI, and the ceilings only go down.
 
+`f9-evidence-*` is the system's evidence-document vocabulary — the
+full-volume proof surfaces (report cover, plates, diff panes) named for
+what they are, styled by the same tokens.
+
 The IA is the ratified five destinations — Today, Watch, Library, Deliver,
 Settings — with gate-visibility (nothing in the nav a plan cannot use) and
 member pages keeping their URLs under an owning destination. Program state:

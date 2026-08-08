@@ -24,7 +24,7 @@ export function ErrorState({ error, title, message, retryable }: ErrorStateProps
       <div className="f9-inline-actions">
         {canRetry ? (
           <button
-            className="f9-secondary-button"
+            className="f9-wk-btn-quiet"
             disabled={revalidator.state === "loading"}
             onClick={() => revalidator.revalidate()}
             type="button"
@@ -32,7 +32,7 @@ export function ErrorState({ error, title, message, retryable }: ErrorStateProps
             {revalidator.state === "loading" ? "Retrying…" : "Try again"}
           </button>
         ) : null}
-        <Link className="f9-secondary-button" to="/app/support">
+        <Link className="f9-wk-btn-quiet" to="/app/support">
           Contact support
         </Link>
       </div>

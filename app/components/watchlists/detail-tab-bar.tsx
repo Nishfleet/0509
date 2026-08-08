@@ -29,7 +29,7 @@ export function DetailTabBar({
   capturedChanges: number;
 }) {
   return (
-    <nav aria-label="Competitor sections" className="f9-wk-tabs f9-bl035-tabs">
+    <nav aria-label="Competitor sections" className="f9-wk-tabs f9-watchdetail-tabs">
       <ul>
         {WATCHLIST_DETAIL_TABS.map((tab) => {
           const isActive = tab.id === activeTab;

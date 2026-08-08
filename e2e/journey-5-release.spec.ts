@@ -180,7 +180,7 @@ test.describe("Journey 5 release: plan, checkout, entitlements, billing", () => 
 
       // A local fixture must show the complete boundary before any checkout control is activated.
       await page.goto("/app/billing?plan=starter&cycle=monthly&source=e2e#plans");
-      const starterCard = page.locator("section.f9-app-plan-card").filter({ hasText: /^Starter/ }).first();
+      const starterCard = page.locator("section.f9-wk-plan-card").filter({ hasText: /^Starter/ }).first();
       await expect(starterCard).toBeVisible();
       await expect(starterCard.getByLabel("Starter limits")).toContainText("10 watchlists");
       await expect(starterCard.getByLabel("Starter limits")).toContainText("250 checks/mo");

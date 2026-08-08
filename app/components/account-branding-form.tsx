@@ -48,13 +48,13 @@ export function AccountBrandingForm({
 				</div>
 			) : null}
 			<SubmitButton
-				className="f9-secondary-button"
+				className="f9-wk-btn-quiet"
 				intent="save-report-branding"
 				pendingLabel="Saving…"
 			>
 				Save branding
 			</SubmitButton>
-			<p className="f9-muted-copy">
+			<p className="f9-wk-dim">
 				Shared report links lead with your agency name and optional logo. Five to Nine stays as a
 				small attribution in the footer. Leave the name empty to clear it; an empty file selection
 				keeps the current logo.

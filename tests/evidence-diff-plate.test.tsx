@@ -47,9 +47,9 @@ describe("DiffPlate", () => {
       />,
     );
 
-    expect(markup).toContain("f9-ed-quiet-line");
+    expect(markup).toContain("f9-evidence-quiet-line");
     expect(markup).toContain(DIFF_PLATE_DEGRADE_COPY);
-    expect(markup).not.toContain("f9-ed-diff-panes");
+    expect(markup).not.toContain("f9-evidence-diff-panes");
     expect(markup).not.toContain("<s>");
   });
 
@@ -62,7 +62,7 @@ describe("DiffPlate", () => {
       />,
     );
 
-    expect(markup).toContain("f9-ed-quiet-line");
+    expect(markup).toContain("f9-evidence-quiet-line");
     expect(markup).not.toContain("yesterday-ish");
   });
 
@@ -80,10 +80,10 @@ describe("DiffPlate", () => {
       />,
     );
 
-    expect(markup.match(/f9-ed-diff-plate/g)).toHaveLength(1);
+    expect(markup.match(/f9-evidence-diff-plate/g)).toHaveLength(1);
     expect(markup).toContain("CTA: Book a demo → Start free");
-    expect(markup).toContain("f9-ed-cta--rank2");
-    expect(markup).not.toContain("f9-ed-cta--rank1");
+    expect(markup).toContain("f9-evidence-cta--rank2");
+    expect(markup).not.toContain("f9-evidence-cta--rank1");
   });
 
   it("labels the stored capture rather than implying a live re-render", () => {

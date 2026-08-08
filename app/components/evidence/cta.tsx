@@ -54,7 +54,7 @@ export interface EvidenceActionProps {
 }
 
 function classesFor(rank: EvidenceActionRank, small?: boolean, className?: string): string {
-  return ["f9-ed-cta", `f9-ed-cta--rank${rank}`, small ? "is-small" : "", className]
+  return ["f9-evidence-cta", `f9-evidence-cta--rank${rank}`, small ? "is-small" : "", className]
     .filter(Boolean)
     .join(" ");
 }

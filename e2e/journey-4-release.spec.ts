@@ -122,7 +122,7 @@ async function expectNoOverflow(page: Page) {
 async function expectTouchTargets(page: Page) {
   await expectPhoneTouchTargets(page);
   const undersized = await page
-    .locator("button, a.f9-primary-button, a.f9-secondary-button, a.f9-ed-cta")
+    .locator("button, a.f9-wk-btn, a.f9-wk-btn-quiet, a.f9-evidence-cta")
     .evaluateAll((elements) =>
       elements.flatMap((element) => {
         const rect = element.getBoundingClientRect();
@@ -224,16 +224,16 @@ async function expectCurrentEvidenceArtifactIndex(page: Page) {
   const method = page.locator("#report-05");
   await expect(method).toBeVisible();
   const verifiedEvidence = method
-    .locator(".f9-ed-fact-row")
+    .locator(".f9-evidence-fact-row")
     .filter({ hasText: "Verified evidence" })
-    .locator(".f9-ed-fact-value");
+    .locator(".f9-evidence-fact-value");
   await expect(verifiedEvidence).toHaveText(/^\d+$/u);
   expect(
     Number(await verifiedEvidence.textContent()),
     "the current report must index at least one verified evidence artifact",
   ).toBeGreaterThan(0);
   const plates = page.locator(
-    'section[aria-label="Report evidence plates"] .f9-ed-evidence-plate',
+    'section[aria-label="Report evidence plates"] .f9-evidence-plate',
   );
   expect(
     await plates.count(),
@@ -352,7 +352,7 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
       await expect(method).toContainText("How this was checked");
       // The proof mix is the method rail, not the glossary that closes the
       // section — both legitimately use these labels.
-      const methodRail = method.locator(".f9-ed-fact-rail");
+      const methodRail = method.locator(".f9-evidence-fact-rail");
       await expect(methodRail.getByText("Verified evidence", { exact: true })).toBeVisible();
       await expect(methodRail.getByText("Check-spotted", { exact: true })).toBeVisible();
       await expect(methodRail.getByText("Needs review", { exact: true })).toBeVisible();
@@ -425,7 +425,7 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
     // whether that check happened to catch a change. This fixture has a
     // succeeded run and unchanged before/after captures, with no watch event.
     await page.goto("/app/watchlists?watchlist=e2e-watchlist-agency-quiet");
-    const quietPane = page.locator(".f9-bl035-detail");
+    const quietPane = page.locator(".f9-watchdetail-detail");
     await expect(page.locator(".f9-wk-context")).toContainText("Quiet");
     await expect(
       quietPane.getByRole("link", { name: "Package for client" }),
@@ -712,7 +712,7 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
         "an anonymous client should be able to open the approved snapshot",
       ).toBe(200);
       await expect(
-        anonymousPage.locator(".f9-ed-report-kicker"),
+        anonymousPage.locator(".f9-evidence-report-kicker"),
       ).toContainText("Competitor evidence report");
       // BL-009: the finding is no longer a row heading inside the snapshot —
       // it IS the shared document's headline (brief §6.10). Asserting level 1
@@ -799,7 +799,7 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
         "the replacement approved snapshot should open anonymously",
       ).toBe(200);
       await expect(
-        anonymousPage.locator(".f9-ed-report-kicker"),
+        anonymousPage.locator(".f9-evidence-report-kicker"),
       ).toContainText("Competitor evidence report");
       await expectTouchTargets(anonymousPage);
       await expectNoOverflow(anonymousPage);

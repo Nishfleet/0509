@@ -6,7 +6,6 @@ import {
   useLoaderData,
   useRevalidator,
 } from "react-router";
-import type { CSSProperties } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { DashboardPage } from "~/components/dashboard-page";
@@ -956,7 +955,7 @@ export default function AppDashboardRoute() {
               />
             </label>
             <SubmitButton
-              className="f9-ed-cta f9-ed-cta--rank2"
+              className="f9-evidence-cta f9-evidence-cta--rank2"
               getAction="/search"
               pendingLabel="Searching…"
             >
@@ -1223,16 +1222,7 @@ export function formatOverviewSectionWarnings(
 // Viewer-local greeting: SSR renders a neutral fallback, the browser swaps in
 // the time-of-day version after mount (same hydration-safe pattern as LocalTime).
 
-const IMG_FRAME_STYLE: CSSProperties = {
-  display: "block",
-  width: "100%",
-  marginTop: "4px",
-  border: "1px solid var(--wk-rule)",
-  borderRadius: "6px",
-  background: "var(--wk-sunk)",
-};
 
-const EVIDENCE_NOTE_STYLE: CSSProperties = { marginTop: "8px" };
 
 /**
  * BL-030 extension — the landing-page evidence card.
@@ -1255,19 +1245,14 @@ export function LandingPageEvidenceCard(props: {
   return (
     <div
       aria-label="Landing page evidence"
-      className="f9-wk-landing-evidence"
-      style={{
-        marginTop: "16px",
-        paddingTop: "12px",
-        borderTop: "1px solid var(--wk-rule)",
-      }}
+      className="f9-wk-landing-evidence f9-wk-evidence-split"
     >
-      <p className="f9-wk-note" style={{ marginTop: 0 }}>
+      <p className="f9-wk-note f9-wk-mt0">
         <strong>Landing page evidence</strong> · {evidence.changedField} changed ·{" "}
         {event.summary}
       </p>
       {from || to ? (
-        <p className="f9-wk-note" style={EVIDENCE_NOTE_STYLE}>
+        <p className="f9-wk-note f9-wk-evidence-note">
           Before: &ldquo;{from ?? "not stored"}&rdquo;
           <br />
           After: &ldquo;{to ?? "not stored"}&rdquo;
@@ -1275,48 +1260,43 @@ export function LandingPageEvidenceCard(props: {
       ) : null}
       {evidence.proofState === "screenshot_proof" ? (
         <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
-            gap: "12px",
-            marginTop: "10px",
-          }}
+          className="f9-wk-evidence-grid"
         >
-          <figure style={{ margin: 0 }}>
-            <figcaption className="f9-wk-note" style={{ marginTop: 0 }}>
+          <figure className="f9-wk-m0">
+            <figcaption className="f9-wk-note f9-wk-mt0">
               Before
             </figcaption>
             <img
               alt="Landing page before the change"
               src={evidence.beforeImageUrl ?? undefined}
-              style={IMG_FRAME_STYLE}
+              className="f9-wk-img-frame"
             />
           </figure>
-          <figure style={{ margin: 0 }}>
-            <figcaption className="f9-wk-note" style={{ marginTop: 0 }}>
+          <figure className="f9-wk-m0">
+            <figcaption className="f9-wk-note f9-wk-mt0">
               After
             </figcaption>
             <img
               alt="Landing page after the change"
               src={evidence.afterImageUrl ?? undefined}
-              style={IMG_FRAME_STYLE}
+              className="f9-wk-img-frame"
             />
           </figure>
         </div>
       ) : (
-        <p className="f9-wk-note" style={EVIDENCE_NOTE_STYLE}>
+        <p className="f9-wk-note f9-wk-evidence-note">
           {evidence.proofState === "proof_pending"
             ? "Screenshot proof pending — the stored before/after pair is incomplete, so no screenshot is shown."
             : "No screenshots stored for this change — the stored text and source are the evidence on file."}
         </p>
       )}
       {evidence.sourceUrl ? (
-        <p className="f9-wk-note" style={EVIDENCE_NOTE_STYLE}>
+        <p className="f9-wk-note f9-wk-evidence-note">
           Source: {evidence.sourceUrl}
         </p>
       ) : null}
       {evidence.beforeCapturedAt || evidence.capturedAt ? (
-        <p className="f9-wk-note" style={EVIDENCE_NOTE_STYLE}>
+        <p className="f9-wk-note f9-wk-evidence-note">
           Before: <LocalTime iso={evidence.beforeCapturedAt} mode="datetime" />
           {evidence.capturedAt ? (
             <>
@@ -1326,7 +1306,7 @@ export function LandingPageEvidenceCard(props: {
           ) : null}
         </p>
       ) : null}
-      <p className="f9-wk-note" style={EVIDENCE_NOTE_STYLE}>
+      <p className="f9-wk-note f9-wk-evidence-note">
         Recommended: {intelligence.recommendedAction}
       </p>
     </div>

@@ -379,7 +379,7 @@ describe("EventChangesSection", () => {
       watchlistId: "watch-1",
     });
 
-    expect(markup).toContain("f9-ed-diff-plate");
+    expect(markup).toContain("f9-evidence-diff-plate");
     expect(markup).toContain("17 Apr 2026, 09:59 UTC");
     expect(markup).toContain("18 Apr 2026, 09:59 UTC");
     expect(markup).toContain(STORED_CAPTURE_NOTE);
@@ -410,8 +410,8 @@ describe("EventChangesSection", () => {
       watchlistId: "watch-1",
     });
 
-    expect(markup).not.toContain("f9-ed-diff-plate");
-    expect(markup).toContain("f9-ed-change-record");
+    expect(markup).not.toContain("f9-evidence-diff-plate");
+    expect(markup).toContain("f9-evidence-change-record");
     expect(markup).toContain(EVENT_CHANGE_AD_NEW_COPY);
     expect(markup).toContain(EVENT_CHANGE_SUPPRESSED_COPY);
     expect(markup).not.toContain(DIFF_PLATE_DEGRADE_COPY);

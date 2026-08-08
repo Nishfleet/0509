@@ -132,7 +132,7 @@ describe("shared report agency identity", () => {
 		expect(markup).toContain("Northwind Growth");
 		expect(markup).toContain('href="https://northwind.example/work"');
 		expect(markup).toContain("northwind.example");
-		expect(markup).not.toContain('class="f9-app-brand"');
+		expect(markup).not.toContain('class="f9-brandmark"');
 		expect(markup).toContain('class="f9-share-powered-by"');
 		expect(markup).toContain("Powered by");
 		expect(markup).toContain("Five to Nine");
@@ -141,7 +141,7 @@ describe("shared report agency identity", () => {
 	it("keeps the Five to Nine header when no entitled identity is present", async () => {
 		const markup = await renderShare(null);
 
-		expect(markup).toContain('class="f9-app-brand"');
+		expect(markup).toContain('class="f9-brandmark"');
 		expect(markup).toContain("Shared evidence");
 		expect(markup).not.toContain('class="f9-share-brand-identity"');
 	});
@@ -170,13 +170,13 @@ describe("shared report agency identity", () => {
 			brandLogo: logo,
 		});
 
-		expect(markup).toContain("f9-ed-report-cover");
+		expect(markup).toContain("f9-evidence-report-cover");
 		expect(markup).toContain("Prepared by");
 		expect(markup).toContain("Northwind Growth");
 
 		const cover = markup.slice(
-			markup.indexOf("f9-ed-report-cover"),
-			markup.indexOf("f9-ed-report-numbers"),
+			markup.indexOf("f9-evidence-report-cover"),
+			markup.indexOf("f9-evidence-report-numbers"),
 		);
 		expect(cover).toContain("Northwind Growth");
 		expect(cover).not.toContain("Five to Nine");
@@ -184,7 +184,7 @@ describe("shared report agency identity", () => {
 		// Our name appears nowhere in the report document itself; the only
 		// credit is the powered-by footer the plan catalog governs.
 		const document = markup.slice(
-			markup.indexOf("f9-ed-report-cover"),
+			markup.indexOf("f9-evidence-report-cover"),
 			markup.indexOf("f9-share-powered-by"),
 		);
 		expect(document).not.toContain("Five to Nine");
@@ -195,10 +195,10 @@ describe("shared report agency identity", () => {
 	it("renders no byline cell at all when the sharer has no entitled agency name", async () => {
 		const markup = await renderReportShare(null);
 
-		expect(markup).toContain("f9-ed-report-cover");
+		expect(markup).toContain("f9-evidence-report-cover");
 		const cover = markup.slice(
-			markup.indexOf("f9-ed-report-cover"),
-			markup.indexOf("f9-ed-report-numbers"),
+			markup.indexOf("f9-evidence-report-cover"),
+			markup.indexOf("f9-evidence-report-numbers"),
 		);
 		expect(cover).not.toContain("Prepared by");
 		expect(cover).not.toContain("Five to Nine");
@@ -223,7 +223,7 @@ describe("shared report agency identity", () => {
 
 		expect(printCss).toContain(".f9-share-brand-identity");
 		expect(printCss).toContain(".f9-share-powered-by");
-		expect(printCss).toContain(".f9-ed-report-rail");
+		expect(printCss).toContain(".f9-evidence-report-rail");
 		expect(printCss).not.toMatch(/\.f9-share-header,[\s\S]{0,160}display:\s*none/);
 	});
 

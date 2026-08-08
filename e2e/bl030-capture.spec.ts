@@ -51,25 +51,25 @@ const SURFACES = [
     name: "detail-changed",
     url: "/app/watchlists?watchlist=e2e-watchlist-starter-1",
     user: "e2e-starter",
-    anchor: ".f9-bl035-tabs",
+    anchor: ".f9-watchdetail-tabs",
   },
   {
     name: "detail-evidence",
     url: "/app/watchlists?watchlist=e2e-watchlist-starter-1&tab=evidence",
     user: "e2e-starter",
-    anchor: ".f9-bl035-tabs",
+    anchor: ".f9-watchdetail-tabs",
   },
   {
     name: "detail-delivery",
     url: "/app/watchlists?watchlist=e2e-watchlist-starter-1&tab=delivery",
     user: "e2e-starter",
-    anchor: ".f9-bl035-tabs",
+    anchor: ".f9-watchdetail-tabs",
   },
   {
     name: "detail-setup",
     url: "/app/watchlists?watchlist=e2e-watchlist-starter-1&tab=setup",
     user: "e2e-starter",
-    anchor: ".f9-bl035-tabs",
+    anchor: ".f9-watchdetail-tabs",
   },
   { name: "collections-untouched", url: "/app/collections", user: "e2e-agency" },
 ] as const;
@@ -267,12 +267,12 @@ async function auditGreen(page: Page) {
      * announcement may sit below the fold, and "the rule matched nothing" is
      * exactly the defect that shipped in round 3.
      */
-    const plateMarks = [...document.querySelectorAll(".f9-ed-diff-value mark")];
+    const plateMarks = [...document.querySelectorAll(".f9-evidence-diff-value mark")];
     const paintedPlateMarks = plateMarks.filter((node) =>
       isGreen(getComputedStyle(node).backgroundColor),
     );
     const markablePlates = document.querySelectorAll(
-      ".f9-ed-diff-plate.is-newest",
+      ".f9-evidence-diff-plate.is-newest",
     ).length;
 
     return {
@@ -323,13 +323,13 @@ async function measure(page: Page) {
       );
     })(),
     firstContentTop: (() => {
-      const content = document.querySelector(".f9-bl035-main");
+      const content = document.querySelector(".f9-watchdetail-main");
       if (!content) return null;
       return Math.round(content.getBoundingClientRect().top + window.scrollY);
     })(),
     firstRowStack: (() => {
       const page = document.querySelector(".f9-wk-page");
-      const content = page?.querySelector(".f9-bl035-main");
+      const content = page?.querySelector(".f9-watchdetail-main");
       if (!page || !content) return null;
       const name = (node: Element) =>
         `${node.tagName.toLowerCase()}${
@@ -591,7 +591,7 @@ test.describe("BL-036 quiet Agency detail proof", () => {
         { waitUntil: "networkidle" },
       );
       await expect(
-        page.locator(".f9-bl035-detail").getByRole("link", {
+        page.locator(".f9-watchdetail-detail").getByRole("link", {
           name: "Package for client",
         }),
       ).toBeVisible();
@@ -675,7 +675,7 @@ test.describe("BL-035 competitor detail live proof", () => {
 
           await page.goto(`${base}${surface.url}`, { waitUntil: "networkidle" });
           await page.waitForTimeout(400);
-          await expect(page.locator(".f9-bl035-detail")).toBeVisible();
+          await expect(page.locator(".f9-watchdetail-detail")).toBeVisible();
           await expect(page.locator(".f9-wk-board")).toHaveCount(0);
           await expect(
             page.getByRole("navigation", { name: "Competitor sections" }).getByRole("link"),

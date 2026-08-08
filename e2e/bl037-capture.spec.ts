@@ -268,7 +268,7 @@ async function measure(page: Page) {
 
     const smallTargets = [
       ...root.querySelectorAll(
-        "button, a, summary, input:not([type='hidden']):not([type='checkbox']), select, textarea, .f9-clients-choice-row label",
+        "button, a, summary, input:not([type='hidden']):not([type='checkbox']), select, textarea, .f9-rooms-choice-row label",
       ),
     ]
       .filter(visible)
@@ -318,7 +318,7 @@ async function measure(page: Page) {
       });
 
     const firstRow = root.querySelector(
-      ".f9-clients-room > summary, .f9-clients-choice-row, .f9-clients-empty",
+      ".f9-rooms-room > summary, .f9-rooms-choice-row, .f9-rooms-empty",
     );
 
     return {

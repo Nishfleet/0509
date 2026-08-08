@@ -7,7 +7,6 @@ import { DashboardRouteError, DashboardRouteLoading } from "~/components/dashboa
 import { ActionFeedback } from "~/components/action-feedback";
 import { AccountBrandingForm } from "~/components/account-branding-form";
 import { ConfirmSubmitButton } from "~/components/confirm-button";
-import { EmptyState } from "~/components/empty-state";
 import { LocalTime } from "~/components/local-time";
 import { SubmitButton } from "~/components/submit-button";
 import { ThemeToggle } from "~/components/theme-toggle";
@@ -445,7 +444,7 @@ export default function AccountRoute() {
   const otherSessionCount = data.activeSessions.filter((session) => !session.isCurrent).length;
 
   return (
-    <DashboardPage className="f9-wk-page f9-bl041-page f9-bl041-account">
+    <DashboardPage className="f9-wk-page f9-acct-page f9-acct-account">
       <WorkingHeader
         context={
           <>
@@ -456,14 +455,14 @@ export default function AccountRoute() {
         title="Account & security"
       />
 
-      <section className="f9-bl041-section">
-        <div className="f9-bl041-section-head">
+      <section className="f9-acct-section">
+        <div className="f9-acct-section-head">
           <div>
-            <span className="f9-bl041-label">Appearance</span>
+            <span className="f9-acct-label">Appearance</span>
             <h2>Workspace theme</h2>
           </div>
         </div>
-        <p className="f9-bl041-copy">
+        <p className="f9-acct-copy">
           Choose how the workspace looks on this device. "System" follows your operating system
           setting. Saved in this browser only — public pages and shared reports stay light.
         </p>
@@ -471,59 +470,59 @@ export default function AccountRoute() {
       </section>
 
       {!data.emailVerified ? (
-        <section className="f9-bl041-section">
-          <div className="f9-bl041-section-head">
+        <section className="f9-acct-section">
+          <div className="f9-acct-section-head">
             <div>
-              <span className="f9-bl041-label">Email</span>
+              <span className="f9-acct-label">Email</span>
               <h2>Verify your email</h2>
             </div>
             <Form method="post">
               <input name="intent" type="hidden" value="resend-verification" />
-              <SubmitButton className="f9-bl041-text-action" intent="resend-verification" pendingLabel="Sending…">
+              <SubmitButton className="f9-acct-text-action" intent="resend-verification" pendingLabel="Sending…">
                 Resend verification email
               </SubmitButton>
             </Form>
           </div>
-          <p className="f9-bl041-copy">
+          <p className="f9-acct-copy">
             {resendVerificationAction?.message ??
               `Watchlists, digests, and alerts stay locked until ${data.email} is verified.`}
           </p>
         </section>
       ) : null}
 
-      <section className="f9-bl041-section">
-        <div className="f9-bl041-section-head">
+      <section className="f9-acct-section">
+        <div className="f9-acct-section-head">
           <div>
-            <span className="f9-bl041-label">Workspace setup</span>
+            <span className="f9-acct-label">Workspace setup</span>
             <h2>Add another competitor</h2>
           </div>
-          <Link className="f9-bl041-text-action" to="/app/watchlists">
+          <Link className="f9-acct-text-action" to="/app/watchlists">
             Add competitor
           </Link>
         </div>
-        <p className="f9-bl041-copy">
+        <p className="f9-acct-copy">
           Extend the watch board without resetting the account, or{" "}
           <Link to="#brand-profile">update your own brand website</Link> below.
         </p>
       </section>
 
       {data.passkeysEnabled ? (
-        <section className="f9-bl041-section">
-          <div className="f9-bl041-section-head">
+        <section className="f9-acct-section">
+          <div className="f9-acct-section-head">
             <div>
-              <span className="f9-bl041-label">Passkeys</span>
+              <span className="f9-acct-label">Passkeys</span>
               <h2>Use this device to sign in faster</h2>
             </div>
           </div>
-          {passkeyMessage ? <p aria-live="polite" className="f9-message is-success" role="status">{passkeyMessage}</p> : null}
-          {passkeyError ? <p aria-live="polite" className="f9-message is-error" role="alert">{passkeyError}</p> : null}
+          {passkeyMessage ? <p aria-live="polite" className="f9-wk-notice is-success" role="status">{passkeyMessage}</p> : null}
+          {passkeyError ? <p aria-live="polite" className="f9-wk-notice is-error" role="alert">{passkeyError}</p> : null}
           {data.passkeyControlsMessage ? (
-            <p className="f9-bl041-copy">{data.passkeyControlsMessage}</p>
+            <p className="f9-acct-copy">{data.passkeyControlsMessage}</p>
           ) : (
             <>
               <div className="f9-account-security-actions">
                 <button
-                  className="f9-bl041-text-action"
+                  className="f9-acct-text-action"
                   disabled={passkeyPending}
                   onClick={() => {
                     void registerPasskey({
@@ -557,7 +556,7 @@ export default function AccountRoute() {
                         {passkeyConfirmId === passkey.id ? (
                           <>
                             <button
-                              className="f9-bl041-text-action"
+                              className="f9-acct-text-action"
                               disabled={passkeyPendingId === passkey.id}
                               onClick={() => setPasskeyConfirmId(null)}
                               type="button"
@@ -565,7 +564,7 @@ export default function AccountRoute() {
                               Cancel
                             </button>
                             <button
-                              className="f9-bl041-text-action"
+                              className="f9-acct-text-action"
                               disabled={passkeyPendingId === passkey.id}
                               onClick={() => {
                                 void removePasskey({
@@ -584,7 +583,7 @@ export default function AccountRoute() {
                           </>
                         ) : (
                           <button
-                            className="f9-bl041-text-action"
+                            className="f9-acct-text-action"
                             disabled={passkeyPendingId !== null}
                             onClick={() => {
                               setPasskeyError(null);
@@ -600,24 +599,24 @@ export default function AccountRoute() {
                   ))}
                 </div>
               ) : (
-                <EmptyState title="No passkeys are attached to this account yet." variant="inline" />
+                <p className="f9-wk-note">No passkey is attached yet — add one and it signs you in without a link.</p>
               )}
             </>
           )}
         </section>
       ) : null}
 
-      <section className="f9-bl041-section" id="brand-profile">
-        <div className="f9-bl041-section-head">
+      <section className="f9-acct-section" id="brand-profile">
+        <div className="f9-acct-section-head">
           <div>
-            <span className="f9-bl041-label">My brand</span>
+            <span className="f9-acct-label">My brand</span>
             <h2>Set your own website once</h2>
           </div>
         </div>
         {brandProfileAction?.message ? (
           <div
             aria-live={brandProfileAction.ok ? "polite" : "assertive"}
-            className={`f9-message ${brandProfileAction.ok ? "is-success" : "is-error"}`}
+            className={`f9-wk-notice ${brandProfileAction.ok ? "is-success" : "is-error"}`}
             role={brandProfileAction.ok ? "status" : "alert"}
           >
             <p>{brandProfileAction.message}</p>
@@ -638,22 +637,22 @@ export default function AccountRoute() {
             />
           </label>
           <SubmitButton
-            className="f9-bl041-text-action"
+            className="f9-acct-text-action"
             intent="save-brand-profile"
             pendingLabel="Saving…"
           >
             Save my brand
           </SubmitButton>
-          <p className="f9-bl041-copy">
+          <p className="f9-acct-copy">
             Optional. Set it once; competitor search stays separate.
           </p>
         </Form>
       </section>
 
-      <section className="f9-bl041-section">
-        <div className="f9-bl041-section-head">
+      <section className="f9-acct-section">
+        <div className="f9-acct-section-head">
           <div>
-            <span className="f9-bl041-label">Agency reports</span>
+            <span className="f9-acct-label">Agency reports</span>
             <h2>Put your agency name on shared reports</h2>
           </div>
         </div>
@@ -676,7 +675,7 @@ export default function AccountRoute() {
             brandName={data.brandName}
           />
         ) : (
-          <div className="f9-bl041-entitlement">
+          <div className="f9-acct-entitlement">
             <p>
               Branded reports are part of Agency. Add your name and logo to client-facing
               reports without changing the evidence underneath.
@@ -688,28 +687,28 @@ export default function AccountRoute() {
         )}
       </section>
 
-      <section className="f9-bl041-section">
-        <div className="f9-bl041-section-head">
+      <section className="f9-acct-section">
+        <div className="f9-acct-section-head">
           <div>
-            <span className="f9-bl041-label">Security</span>
+            <span className="f9-acct-label">Security</span>
             <h2>Session and account controls</h2>
           </div>
         </div>
         {sessionAction?.message ? (
           <div
             aria-live={sessionAction.ok ? "polite" : "assertive"}
-            className={`f9-message ${sessionAction.ok ? "is-success" : "is-error"}`}
+            className={`f9-wk-notice ${sessionAction.ok ? "is-success" : "is-error"}`}
             role={sessionAction.ok ? "status" : "alert"}
           >
             <p>{sessionAction.message}</p>
           </div>
         ) : null}
-        <p className="f9-bl041-copy">
+        <p className="f9-acct-copy">
           This device is signed in until <LocalTime iso={data.sessionExpiresAt} />. Sign out from the navigation
           menu to remove access on this device.
         </p>
         {data.sessionControlsMessage ? (
-          <p aria-live="assertive" className="f9-message is-error" role="alert">
+          <p aria-live="assertive" className="f9-wk-notice is-error" role="alert">
             {data.sessionControlsMessage}
           </p>
         ) : null}
@@ -726,13 +725,13 @@ export default function AccountRoute() {
                   <span>{formatSessionLocation(session.ipAddress, session.userAgent)}</span>
                 </div>
                 {session.isCurrent ? (
-                  <span className="f9-bl041-current">Current</span>
+                  <span className="f9-acct-current">Current</span>
                 ) : (
                   <Form method="post">
                     <input name="intent" type="hidden" value="revoke-session" />
                     <input name="sessionId" type="hidden" value={session.id} />
                     <ConfirmSubmitButton
-                      className="f9-bl041-text-action"
+                      className="f9-acct-text-action"
                       confirmLabel="Confirm — revoke?"
                       intent="revoke-session"
                       match={{ sessionId: session.id }}
@@ -751,7 +750,7 @@ export default function AccountRoute() {
           <Form method="post">
             <input name="intent" type="hidden" value="revoke-other-sessions" />
             <ConfirmSubmitButton
-              className="f9-bl041-text-action"
+              className="f9-acct-text-action"
               confirmLabel="Confirm — revoke all others?"
               disabled={otherSessionCount === 0}
               intent="revoke-other-sessions"
@@ -763,20 +762,20 @@ export default function AccountRoute() {
           </Form>
         </div>
 
-        <div className="f9-bl041-section-head f9-bl041-subsection">
+        <div className="f9-acct-section-head f9-acct-subsection">
           <div>
-            <span className="f9-bl041-label">Email</span>
+            <span className="f9-acct-label">Email</span>
             <h3>Change your email</h3>
           </div>
         </div>
-        <p className="f9-bl041-copy">
+        <p className="f9-acct-copy">
           Support completes email changes so we can verify it's really you. This opens a tracked
           support request — your email doesn't change automatically or in-app.
         </p>
         {emailChangeAction?.message ? (
           <div
             aria-live={emailChangeAction.ok ? "polite" : "assertive"}
-            className={`f9-message ${emailChangeAction.ok ? "is-success" : "is-error"}`}
+            className={`f9-wk-notice ${emailChangeAction.ok ? "is-success" : "is-error"}`}
             role={emailChangeAction.ok ? "status" : "alert"}
           >
             <p>{emailChangeAction.message}</p>
@@ -803,7 +802,7 @@ export default function AccountRoute() {
             </span>
           </label>
           <SubmitButton
-            className="f9-bl041-text-action"
+            className="f9-acct-text-action"
             intent="request-email-change"
             pendingLabel="Sending request…"
           >
@@ -812,8 +811,8 @@ export default function AccountRoute() {
         </Form>
       </section>
 
-      <section className="f9-bl041-section f9-bl041-danger">
-        <div className="f9-bl041-section-head">
+      <section className="f9-acct-section f9-acct-danger">
+        <div className="f9-acct-section-head">
           <div>
             <span className="f9-wk-kick">Danger zone</span>
             <h2>Request account deletion support</h2>
@@ -822,7 +821,7 @@ export default function AccountRoute() {
         {deletionAction?.message ? (
           <div
             aria-live={deletionAction.ok ? "polite" : "assertive"}
-            className={`f9-message ${deletionAction.ok ? "is-success" : "is-error"}`}
+            className={`f9-wk-notice ${deletionAction.ok ? "is-success" : "is-error"}`}
             role={deletionAction.ok ? "status" : "alert"}
           >
             <p>{deletionAction.message}</p>
@@ -840,7 +839,7 @@ export default function AccountRoute() {
             <span>I understand this is a support request, not an in-app deletion, and support will review and verify it.</span>
           </label>
           <SubmitButton
-            className="f9-bl041-danger-action"
+            className="f9-acct-danger-action"
             intent="request-account-deletion"
             pendingLabel="Sending request…"
           >

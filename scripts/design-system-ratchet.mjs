@@ -41,7 +41,7 @@ export const BANNED_MARKERS = [
   "f9-clients-",
   "f9-search-page",
   "DashboardPageHeader",
-  "EmptyState",
+  "components/empty-state",
   "style={",
 ];
 

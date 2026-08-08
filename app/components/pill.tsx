@@ -8,7 +8,7 @@ import type { ReactNode } from "react";
  * - `status`    → `f9-status-pill` (neutral metadata / health chips)
  * - `longevity` → `f9-longevity-pill` (green "Running N days" + neutral kin)
  * - `angle`     → `f9-longevity-pill f9-angle-pill` (marketing-angle chip)
- * - `stamp`     → `f9-ed-stamp` (Evidence Desk state stamp, brief §6.1)
+ * - `stamp`     → `f9-evidence-stamp` (Evidence Desk state stamp, brief §6.1)
  *
  * `state` appends the family's `is-*` modifier (e.g. status "healthy",
  * longevity "strong" | "tracked" | "sample", angle "tentative", stamp
@@ -26,7 +26,7 @@ const VARIANT_BASE_CLASS: Record<PillVariant, string> = {
   status: "f9-status-pill",
   longevity: "f9-longevity-pill",
   angle: "f9-longevity-pill f9-angle-pill",
-  stamp: "f9-ed-stamp",
+  stamp: "f9-evidence-stamp",
 };
 
 export function Pill({

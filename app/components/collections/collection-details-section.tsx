@@ -33,13 +33,13 @@ export function CollectionDetailsSection({
   lockedActionsLabel: string | null;
 }) {
   return (
-    <section aria-labelledby="collection-details-title" className="f9-wk-sec f9-col-section">
+    <section aria-labelledby="collection-details-title" className="f9-wk-sec f9-library-section">
       <p className="f9-wk-kick">Collection details</p>
-      <h2 className="f9-col-entity-title" id="collection-details-title">
+      <h2 className="f9-library-entity-title" id="collection-details-title">
         {collection.name}
       </h2>
-      {collection.description ? <p className="f9-col-note">{collection.description}</p> : null}
-      <div className="f9-col-facts">
+      {collection.description ? <p className="f9-library-note">{collection.description}</p> : null}
+      <div className="f9-library-facts">
         <DetailFacts
           rows={buildCollectionFacts({
             collection,
@@ -54,7 +54,7 @@ export function CollectionDetailsSection({
         />
       </div>
 
-      <div aria-label="Collection actions" className="f9-col-actions">
+      <div aria-label="Collection actions" className="f9-library-actions">
         {canOpenReport ? (
           <Link
             className="f9-wk-lnk"
@@ -66,7 +66,7 @@ export function CollectionDetailsSection({
 
         {canExport ? (
           <CollectionDisclosure
-            className="f9-col-export"
+            className="f9-library-export"
             group={COLLECTION_PANEL_GROUP}
             summary="Export collection"
           >
@@ -97,7 +97,7 @@ export function CollectionDetailsSection({
         ) : null}
 
         {lockedActionsLabel ? (
-          <div className="f9-col-upgrade-note">
+          <div className="f9-library-upgrade-note">
             <p>{lockedActionsLabel}. Your saved evidence stays available on this plan.</p>
             <Link className="f9-wk-lnk" to="/app/billing?source=collections#plans">
               Compare plans <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>

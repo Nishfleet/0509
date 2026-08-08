@@ -97,7 +97,7 @@ describe("BL-031 — the search result row", () => {
     // The `s` shortcut clicks this element, so the hook and the row must ship
     // together; the frame it used to carry does not.
     expect(markup).toContain("f9-wk-lnk");
-    expect(markup).not.toContain("f9-ed-cta--rank2");
+    expect(markup).not.toContain("f9-evidence-cta--rank2");
   });
 
   it("states an unobserved active status in words rather than guessing", () => {
@@ -204,7 +204,7 @@ describe("BL-031 — the page budgets", () => {
   });
 
   it("stops pinning a second palette and a gradient onto the search page", () => {
-    const base = cssRules.slice(cssRules.indexOf(".f9-search-page {"));
+    const base = cssRules.slice(cssRules.indexOf(".f9-find-page {"));
     const rule = base.slice(0, base.indexOf("}"));
     expect(rule).toContain("--f9-search-ink: var(--ink)");
     expect(rule).not.toContain("#061629");

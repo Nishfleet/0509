@@ -168,7 +168,7 @@ describe("collections plan × action surface", () => {
   it("keeps every Agency collection action as quiet text below the evidence", async () => {
     const view = await renderScreen({ items: [savedItem()] });
 
-    const row = view.querySelector(".f9-col-actions");
+    const row = view.querySelector(".f9-library-actions");
     expect(row).not.toBeNull();
     expect(row?.textContent).toContain("Package for client");
     expect(row?.textContent).toContain("Export collection");
@@ -181,7 +181,7 @@ describe("collections plan × action surface", () => {
   it("still exposes both export formats behind the one control", async () => {
     const view = await renderScreen({ items: [savedItem()] });
 
-    const exportPanel = view.querySelector(".f9-col-export");
+    const exportPanel = view.querySelector(".f9-library-export");
     const links = Array.from(exportPanel?.querySelectorAll("a") ?? []).map((a) =>
       a.getAttribute("href"),
     );
@@ -196,7 +196,7 @@ describe("collections disclosures and switcher (live DOM)", () => {
   it("toggles a disclosure open and closed from its summary", async () => {
     const view = await renderScreen({ items: [savedItem()] });
 
-    const details = view.querySelector<HTMLDetailsElement>(".f9-col-external");
+    const details = view.querySelector<HTMLDetailsElement>(".f9-library-external");
     const summary = details?.querySelector<HTMLElement>("summary");
     expect(details?.open).toBe(false);
 
@@ -210,7 +210,7 @@ describe("collections disclosures and switcher (live DOM)", () => {
   it("puts focus on the summary, which is the control", async () => {
     const view = await renderScreen({ items: [savedItem()] });
 
-    const summary = view.querySelector<HTMLElement>(".f9-col-export summary");
+    const summary = view.querySelector<HTMLElement>(".f9-library-export summary");
     expect(summary).not.toBeNull();
     await act(async () => summary?.focus());
     expect(document.activeElement).toBe(summary);
@@ -241,7 +241,7 @@ describe("collections disclosures and switcher (live DOM)", () => {
       items: [savedItem()],
     });
 
-    const links = Array.from(view.querySelectorAll(".f9-col-switch-item"));
+    const links = Array.from(view.querySelectorAll(".f9-library-switch-item"));
     expect(links).toHaveLength(2);
     const current = links.filter((link) => link.getAttribute("aria-current") === "page");
     expect(current).toHaveLength(1);

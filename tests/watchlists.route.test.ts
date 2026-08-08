@@ -2340,13 +2340,13 @@ describe("watchlists route rendering", () => {
     expect(markup).not.toContain("Checked, and nothing has changed");
     expect(markup).not.toContain("competitor-detail");
     expect(markup).toContain("Paused. No checks run and the history stays.");
-    expect(markup).not.toContain("f9-ed-capture-strip");
-    expect(markup).not.toContain("f9-ed-ticker");
-    expect(markup).not.toContain("f9-ed-status-strip");
+    expect(markup).not.toContain("f9-evidence-capture-strip");
+    expect(markup).not.toContain("f9-evidence-ticker");
+    expect(markup).not.toContain("f9-evidence-status-strip");
     // Exactly one filled button — the page's single action.
     expect(markup.match(/class="f9-wk-btn"/g)).toHaveLength(1);
     expect(markup).toContain("Add competitor");
-    expect(markup).not.toContain("f9-ed-cta--rank1");
+    expect(markup).not.toContain("f9-evidence-cta--rank1");
     // Aggregate-derived state filters stand down while their rollup is unavailable.
     expect(markup).not.toContain('class="f9-wk-tab');
     // The detail pane and the full record stay closed until a row is opened.
@@ -2416,7 +2416,7 @@ describe("watchlists route rendering", () => {
     // BL-030 round 2: an empty board gets a sentence and a way in, not a
     // dimmed specimen plate. The caps-mono "BAND 01 — RESERVED" diagram of the
     // thing the customer does not have yet was the v3 ornament habit.
-    expect(markup).not.toContain("f9-ed-specimen");
+    expect(markup).not.toContain("f9-evidence-specimen");
     expect(markup).not.toContain("BAND 01 — RESERVED");
     expect(markup).not.toContain("WATCH BOARD · NOTHING TRACKED YET");
     expect(markup).toContain("Nothing tracked yet");
@@ -2426,12 +2426,12 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain("See a sample brief");
     // The screen still carries exactly one filled button, and it is the
     // header's — the one thing this page exists to do.
-    expect(markup).not.toContain("f9-ed-cta--rank1");
+    expect(markup).not.toContain("f9-evidence-cta--rank1");
     expect(markup.match(/class="f9-wk-btn"/g)).toHaveLength(1);
     // No board chrome without competitors.
     expect(markup).not.toContain("f9-wk-tabs");
-    expect(markup).not.toContain("f9-ed-ticker");
-    expect(markup).not.toContain("f9-ed-status-strip");
+    expect(markup).not.toContain("f9-evidence-ticker");
+    expect(markup).not.toContain("f9-evidence-status-strip");
   });
 
   const selectedPanelLoaderData = {
@@ -2488,7 +2488,7 @@ describe("watchlists route rendering", () => {
     // gone is the board's list/peek split that used to sit under it.
     expect(markup).not.toContain('class="f9-wk-split is-single"');
     expect(markup).not.toContain('class="f9-wk-split-list"');
-    expect(markup).toContain('class="f9-wk-split is-wide f9-bl035-split"');
+    expect(markup).toContain('class="f9-wk-split is-wide f9-watchdetail-split"');
   });
 
   it("does not turn a failed capture-window rollup into a quiet or zero finding", async () => {
@@ -2500,11 +2500,11 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain("Recent aggregate totals are unavailable");
     expect(markup).toContain("Unavailable — refresh to try again");
     expect(markup).not.toContain("Checked, and nothing has changed in 30 days.");
-    expect(markup).not.toContain('class="f9-ed-number-value">0</p>');
+    expect(markup).not.toContain('class="f9-evidence-number-value">0</p>');
     // The status strip is gone in BL-035, so the same statement is carried by
     // the working header's context line and the caught number card.
     expect(markup).toContain("Recent totals unavailable");
-    expect(markup).toContain('class="f9-ed-number-value">Unavailable</p>');
+    expect(markup).toContain('class="f9-evidence-number-value">Unavailable</p>');
   });
 
   it("does not promise automatic checks while source access is blocked", async () => {
@@ -2577,12 +2577,12 @@ describe("watchlists route rendering", () => {
     // tabs follow immediately, and there is one content split.
     expect(markup).toContain("<h1 class=\"f9-wk-title\">Nykaa watch</h1>");
     expect(markup).toContain("All competitors");
-    expect(markup).toContain('class="f9-bl035-detail"');
+    expect(markup).toContain('class="f9-watchdetail-detail"');
     expect(markup).not.toContain('aria-label="Competitors"');
     expect(markup).not.toContain("f9-wk-detail");
     expect(markup).not.toContain("f9-wk-record");
-    expect(markup).not.toContain("f9-ed-detail-head");
-    expect(markup).not.toContain("f9-ed-status-strip");
+    expect(markup).not.toContain("f9-evidence-detail-head");
+    expect(markup).not.toContain("f9-evidence-status-strip");
 
     // The tab bar is real navigation: five links, fixed order, the active one
     // marked with aria-current and not by ink alone (brief §10).
@@ -2603,7 +2603,7 @@ describe("watchlists route rendering", () => {
 
     // The change feed is the default panel.
     expect(markup).toContain("What changed");
-    expect(markup).toContain("f9-ed-diff-plate");
+    expect(markup).toContain("f9-evidence-diff-plate");
     expect(markup).toContain("High confidence");
     expect(markup).toContain("This is the stored capture, not a re-render.");
     expect(markup).toContain("Starting at ₹499");
@@ -2613,8 +2613,8 @@ describe("watchlists route rendering", () => {
 
     // The rail is exactly three objects (brief §7): number card, fact rail,
     // delivery card — and nothing from the other tabs leaks onto this one.
-    expect(markup).toContain("f9-ed-number-card");
-    expect(markup).toContain("f9-ed-fact-rail");
+    expect(markup).toContain("f9-evidence-number-card");
+    expect(markup).toContain("f9-evidence-fact-rail");
     expect(markup).toContain("Who gets told");
     expect(markup).toContain("Watching");
     expect(markup).not.toContain("Save watchlist");
@@ -2677,8 +2677,8 @@ describe("watchlists route rendering", () => {
       expect(markup.includes("Export CSV")).toBe(canExport);
       expect(markup.includes("Export JSON")).toBe(canExport);
       expect(markup.includes("Package for client")).toBe(report);
-      expect(markup).not.toContain("f9-ed-detail-head");
-      expect(markup).not.toContain("f9-ed-status-strip");
+      expect(markup).not.toContain("f9-evidence-detail-head");
+      expect(markup).not.toContain("f9-evidence-status-strip");
     },
   );
 
@@ -2783,7 +2783,7 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain("<h1 class=\"f9-wk-title\">Nykaa watch</h1>");
     expect(markup).toContain("All competitors");
     expect(markup).toContain('aria-label="Competitor sections"');
-    expect(markup).toContain('class="f9-bl035-detail"');
+    expect(markup).toContain('class="f9-watchdetail-detail"');
     expect(markup).not.toContain('aria-label="Competitors"');
   });
 
@@ -2847,7 +2847,7 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain("the last 3 checks failed");
     // A failed rollup must never read as a believable zero.
     expect(markup).not.toContain("Checked, and nothing has changed in 30 days.");
-    expect(markup).not.toContain('class="f9-ed-number-value">0</p>');
+    expect(markup).not.toContain('class="f9-evidence-number-value">0</p>');
 
     const setupMarkup = await renderWatchlistsRoute(degraded, "setup");
     expect(setupMarkup).toContain("Pause watching");
@@ -2870,7 +2870,7 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain("Check source access");
     // The change feed panel is not also rendered underneath it (tab label may still show).
     expect(markup).not.toContain('aria-label="What changed"');
-    expect(markup).not.toContain("f9-ed-diff-plate");
+    expect(markup).not.toContain("f9-evidence-diff-plate");
   });
 
   it("keeps evidence, freshness and the glossary behind the Evidence tab", async () => {
@@ -2881,7 +2881,7 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain("Last good check");
     expect(markup).toContain("1h ago");
     expect(markup).toContain("Evidence labels");
-    expect(markup).toContain("f9-ed-report-glossary");
+    expect(markup).toContain("f9-evidence-report-glossary");
     expect(markup).not.toContain("Insight depth");
     expect(markup).not.toContain("No evidence yet");
   });

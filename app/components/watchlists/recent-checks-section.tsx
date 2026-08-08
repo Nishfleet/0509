@@ -17,9 +17,9 @@ export function RecentChecksSection({
 
   return (
     <section aria-label="Recent checks">
-      <p className="f9-ed-micro">Recent checks</p>
+      <p className="f9-evidence-micro">Recent checks</p>
       {items.length === 0 ? (
-        <p className="f9-muted-copy">
+        <p className="f9-wk-dim">
           No checks yet — the first one shows up here automatically.
         </p>
       ) : (

@@ -217,9 +217,9 @@ describe("collections IA inversion (brief §7)", () => {
   it("demotes the create form and the evidence form to Rank-2 disclosures", async () => {
     const markup = await render({ items: [savedItem()] });
 
-    expect(markup).toContain("f9-col-create");
+    expect(markup).toContain("f9-library-create");
     expect(markup).toContain(">New collection<");
-    expect(markup).toContain("f9-col-external");
+    expect(markup).toContain("f9-library-external");
     expect(markup).toContain(">Add an evidence link<");
   });
 
@@ -261,8 +261,8 @@ describe("collections IA inversion (brief §7)", () => {
     expect(markup).not.toContain("f9-master-detail");
     expect(markup).not.toContain("f9-side-panel");
     expect(markup).not.toContain("f9-work-row");
-    expect(markup).not.toContain("f9-ed-specimen");
-    expect(markup).not.toContain("f9-ed-evidence-plate");
+    expect(markup).not.toContain("f9-evidence-specimen");
+    expect(markup).not.toContain("f9-evidence-plate");
     // A2: the six-box insight grid is gone from this route.
     expect(markup).not.toContain("f9-insight-grid");
     expect(markup).not.toContain("Insight depth");
@@ -275,8 +275,8 @@ describe("collections IA inversion (brief §7)", () => {
     expect(markup.match(/class="f9-wk-detail"/g) ?? []).toHaveLength(1);
     // Depth is rendered once for the selected row, not repeated in every row.
     expect(markup.match(/Captured from the ad library/g) ?? []).toHaveLength(1);
-    expect(markup).not.toContain("f9-ed-status-strip");
-    expect(markup).not.toContain("f9-ed-fact-rail");
+    expect(markup).not.toContain("f9-evidence-status-strip");
+    expect(markup).not.toContain("f9-evidence-fact-rail");
   });
 });
 
@@ -293,7 +293,7 @@ describe("collections evidence rows and detail (BL-033a)", () => {
     expect(markup).toContain("Rival");
     expect(markup).toContain("This is the stored capture, not a re-render.");
     expect(markup).not.toContain("PLATE 01");
-    expect(markup).not.toContain("f9-ed-evidence-plate");
+    expect(markup).not.toContain("f9-evidence-plate");
   });
 
   it("labels provenance in sentence case while retaining export-facing labels", () => {
@@ -469,8 +469,8 @@ describe("collections empty and filtered states (brief §6.7, §6.8)", () => {
     const markup = await render({});
 
     expect(markup).toContain(COLLECTION_ITEMS_EMPTY_COPY);
-    expect(markup).toContain("f9-col-list-empty");
-    expect(markup).not.toContain("f9-ed-specimen-slot");
+    expect(markup).toContain("f9-library-list-empty");
+    expect(markup).not.toContain("f9-evidence-specimen-slot");
     expect(markup).not.toContain("f9-dash-state-empty");
     expect(markup).not.toContain("Nothing saved yet");
   });
@@ -482,7 +482,7 @@ describe("collections empty and filtered states (brief §6.7, §6.8)", () => {
       items: [],
     });
 
-    expect(markup).toContain("f9-col-list-empty");
+    expect(markup).toContain("f9-library-list-empty");
     expect(markup).toContain(COLLECTION_FILTERED_EMPTY_COPY);
     // Filtered-to-zero is not empty; the one filled
     // action remains the header's New collection command.

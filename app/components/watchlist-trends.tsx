@@ -1,3 +1,4 @@
+import { meterWidthClass } from "~/lib/meter-width";
 import {
 	buildLaunchTimeline,
 	buildLongevityLeaderboard,
@@ -33,7 +34,7 @@ export function WatchlistTrends({
 		<section aria-label="Watchlist trends">
 			<div className="f9-panel-toolbar">
 				<div>
-					<p className="f9-app-kicker">Trends</p>
+					<p className="f9-wk-kick">Trends</p>
 					<h3 className="f9-trend-heading">How this competitor is moving</h3>
 				</div>
 			</div>
@@ -150,8 +151,7 @@ function LongevityLeaderboardCard({
 							</div>
 							<div className="f9-trend-leader-track">
 								<div
-									className={`f9-trend-leader-fill${entry.kind === "tracked" ? " is-tracked" : ""}`}
-									style={{ width: `${Math.max(4, (entry.days / Math.max(1, leaderboard.maxDays)) * 100)}%` }}
+									className={`f9-trend-leader-fill${entry.kind === "tracked" ? " is-tracked" : ""} ${meterWidthClass(Math.max(4, (entry.days / Math.max(1, leaderboard.maxDays)) * 100))}`}
 								/>
 							</div>
 						</li>

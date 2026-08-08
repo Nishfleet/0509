@@ -1380,7 +1380,7 @@ export default function SearchRoute() {
       accountLabel={rootData.session ? "Workspace" : "Search"}
       accountTitle="Five to Nine"
       isPublic={!rootData.session}
-      pageClassName="f9-search-page"
+      pageClassName="f9-find-page"
       showPresenceNav={data.showPresenceNav}
       userEmail={rootData.session?.user.email}
       userName={rootData.session?.user.name}

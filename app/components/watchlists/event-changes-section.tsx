@@ -145,7 +145,7 @@ export function canRenderEventDiffPlate(input: {
  *
  * This is computed here, where the list is built and the order is known,
  * rather than guessed with a CSS positional selector. Round 3 tried
- * `.f9-ed-change-feed > :first-child` and `.f9-ed-detail-main > .f9-ed-diff-plate:first-of-type`;
+ * `.f9-evidence-change-feed > :first-child` and `.f9-evidence-detail-main > .f9-evidence-diff-plate:first-of-type`;
  * both missed the live DOM — every event is wrapped in a `<div>`, and the
  * newest event on the release fixture is a suppressed change RECORD with no
  * `<mark>` at all — so the announcement green was dead on this surface and
@@ -413,16 +413,16 @@ export function EventChangesSection(props: {
 
   return (
     <section aria-label="What changed">
-      <p className="f9-ed-micro">What changed</p>
+      <p className="f9-evidence-micro">What changed</p>
       {data.events.length === 0 ? (
         awaitingFirstCapture ? (
-          <div className="f9-bl035-empty">
+          <div className="f9-watchdetail-empty">
             <h3>First capture running</h3>
             <p>
               About ten minutes. We take the ads, the offer page and the price — the
               before that every future change gets measured against.
             </p>
-            <div className="f9-bl035-local-actions">
+            <div className="f9-watchdetail-local-actions">
               <SecondaryAction to="/app/source-access">Check source access</SecondaryAction>
               <SecondaryAction to={watchlistDetailTabHref(props.watchlistId, "evidence")}>
                 Open evidence
@@ -451,7 +451,7 @@ export function EventChangesSection(props: {
           />
         )
       ) : (
-        <div className="f9-ed-change-feed">
+        <div className="f9-evidence-change-feed">
           {/* Suppressed and invalidated events are audit records, not
               findings — they never sit above a verified change no matter how
               new they are. Recency is preserved within each group. */}
@@ -520,19 +520,19 @@ export function EventChangesSection(props: {
             ) : (
               <article
                 className={
-                  isHighlighted ? "f9-ed-change-record is-highlighted" : "f9-ed-change-record"
+                  isHighlighted ? "f9-evidence-change-record is-highlighted" : "f9-evidence-change-record"
                 }
               >
-                <header className="f9-ed-plate-header f9-ed-micro">
+                <header className="f9-evidence-plate-header f9-evidence-micro">
                   <span>
                     {caughtLabel} · {diffFieldLabel(event)}
                   </span>
-                  <span className="f9-ed-plate-header-end">{verification}</span>
+                  <span className="f9-evidence-plate-header-end">{verification}</span>
                 </header>
-                <div className="f9-ed-diff-body">
-                  <h3 className="f9-ed-diff-headline">{event.title}</h3>
-                  <p className="f9-ed-diff-why">{why}</p>
-                  <p className="f9-ed-diff-delivery">{delivery}</p>
+                <div className="f9-evidence-diff-body">
+                  <h3 className="f9-evidence-diff-headline">{event.title}</h3>
+                  <p className="f9-evidence-diff-why">{why}</p>
+                  <p className="f9-evidence-diff-delivery">{delivery}</p>
                   <QuietLine
                     copy={resolveEventChangeQuietCopy({
                       event,
@@ -541,7 +541,7 @@ export function EventChangesSection(props: {
                     })}
                     stamp={degradeStamp}
                   />
-                  <div className="f9-ed-action-row">{actions}</div>
+                  <div className="f9-evidence-action-row">{actions}</div>
                 </div>
               </article>
             );

@@ -19,8 +19,8 @@ import type {
  * BL-030 round 4 — the announcement green, proved against a real tree.
  *
  * Round 3 shipped a CSS rule whose selector matched NOTHING in the live DOM
- * (`.f9-ed-change-feed > :first-child` selects the per-event wrapper div, and
- * `.f9-ed-detail-main > .f9-ed-diff-plate:first-of-type` needs a direct child
+ * (`.f9-evidence-change-feed > :first-child` selects the per-event wrapper div, and
+ * `.f9-evidence-detail-main > .f9-evidence-diff-plate:first-of-type` needs a direct child
  * that does not exist), so every plate's NOW token painted ink and the
  * surface's advertised green was dead. It shipped because the spec asserted
  * that the selector STRING existed in app.css — an assertion that cannot fail
@@ -47,7 +47,7 @@ function shippedGreenMarkSelector(): string {
     .replace(/\/\*[\s\S]*?\*\//g, "");
   const rules = [...scoped.matchAll(/([^{}]+)\{([^}]*)\}/g)].filter(
     ([, selector, body]) =>
-      /\.f9-ed-diff-value mark/.test(selector) && /background:\s*var\(--green\)/.test(body),
+      /\.f9-evidence-diff-value mark/.test(selector) && /background:\s*var\(--green\)/.test(body),
   );
   expect(rules, "exactly one rule may paint a NOW token green").toHaveLength(1);
   return rules[0][1].trim().replace(/\s+/g, " ");
@@ -198,15 +198,15 @@ describe("the announcement green on the competitor record", () => {
 
   it("puts is-newest on exactly one plate — the newest markable one", () => {
     const body = renderFeed();
-    const plates = [...body.querySelectorAll(".f9-ed-diff-plate")];
+    const plates = [...body.querySelectorAll(".f9-evidence-diff-plate")];
     expect(plates.length).toBeGreaterThanOrEqual(2);
-    const newest = body.querySelectorAll(".f9-ed-diff-plate.is-newest");
+    const newest = body.querySelectorAll(".f9-evidence-diff-plate.is-newest");
     expect(newest).toHaveLength(1);
     // It is the first plate in document order, and the suppressed record above
     // it never becomes a plate at all.
     expect(plates[0]).toBe(newest[0]);
-    expect(body.querySelectorAll(".f9-ed-change-record.is-newest")).toHaveLength(0);
-    expect(body.querySelectorAll(".f9-ed-change-record")).toHaveLength(1);
+    expect(body.querySelectorAll(".f9-evidence-change-record.is-newest")).toHaveLength(0);
+    expect(body.querySelectorAll(".f9-evidence-change-record")).toHaveLength(1);
   });
 
   it("RESOLVES THE REAL RULE from app.css against the rendered tree", () => {
@@ -225,11 +225,11 @@ describe("the announcement green on the competitor record", () => {
 
     // Every other NOW token in the feed is an archived record and is NOT
     // selected by the green rule.
-    const allMarks = body.querySelectorAll(".f9-ed-diff-value mark");
+    const allMarks = body.querySelectorAll(".f9-evidence-diff-value mark");
     expect(allMarks.length).toBeGreaterThan(1);
     expect(allMarks.length - painted.length).toBeGreaterThanOrEqual(1);
-    const olderPlate = [...body.querySelectorAll(".f9-ed-diff-plate")][1];
-    expect(olderPlate.querySelectorAll(".f9-ed-diff-value mark")).toHaveLength(1);
+    const olderPlate = [...body.querySelectorAll(".f9-evidence-diff-plate")][1];
+    expect(olderPlate.querySelectorAll(".f9-evidence-diff-value mark")).toHaveLength(1);
     expect(olderPlate.matches(".is-newest")).toBe(false);
   });
 
@@ -265,6 +265,6 @@ describe("the announcement green on the competitor record", () => {
     // A workspace whose only stored change is suppressed announces nothing,
     // and shows no green. That is a real state, not a failure.
     expect(document.body.querySelectorAll(GREEN_RULE)).toHaveLength(0);
-    expect(document.body.querySelectorAll(".f9-ed-diff-plate")).toHaveLength(0);
+    expect(document.body.querySelectorAll(".f9-evidence-diff-plate")).toHaveLength(0);
   });
 });

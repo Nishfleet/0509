@@ -1,3 +1,4 @@
+import { meterWidthClass } from "~/lib/meter-width";
 import { Link } from "react-router";
 
 import { LocalTime } from "~/components/local-time";
@@ -40,8 +41,8 @@ export function CompetitorDossierPanel({
 		<section aria-label="Competitor intelligence">
 			<div className="f9-panel-toolbar">
 				<div>
-					<p className="f9-app-kicker">Intelligence</p>
-					<h3 style={{ marginTop: 0 }}>What this history adds up to</h3>
+					<p className="f9-wk-kick">Intelligence</p>
+					<h3 className="f9-wk-mt0">What this history adds up to</h3>
 				</div>
 				{dossier.status === "ready" ? (
 					<p className="f9-dossier-window">
@@ -87,7 +88,7 @@ export function CompetitorDossierPanel({
 					<div>
 						<p className="f9-dossier-subhead">Proven runners</p>
 						{dossier.longevityLeaders.length === 0 ? (
-							<p className="f9-muted-copy">No longevity signal yet.</p>
+							<p className="f9-wk-dim">No longevity signal yet.</p>
 						) : (
 							<div className="f9-dossier-leaders">
 								{dossier.longevityLeaders.map((leader) => (
@@ -100,7 +101,7 @@ export function CompetitorDossierPanel({
 					<div>
 						<p className="f9-dossier-subhead">Recurring hooks</p>
 						{dossier.hookPatterns.length === 0 ? (
-							<p className="f9-muted-copy">
+							<p className="f9-wk-dim">
 								No hook opening repeats yet — every observed ad leads differently.
 							</p>
 						) : (
@@ -269,8 +270,7 @@ function AggressionScorecard({ aggression }: { aggression: AggressionScore | nul
 						<span className="f9-aggression-bar-label">{row.label}</span>
 						<span aria-hidden="true" className="f9-aggression-bar-track">
 							<span
-								className="f9-aggression-bar-fill"
-								style={{ width: `${(row.value / 25) * 100}%` }}
+								className={`f9-aggression-bar-fill ${meterWidthClass((row.value / 25) * 100)}`}
 							/>
 						</span>
 						<span className="f9-aggression-bar-value">{row.value}/25</span>
@@ -323,7 +323,7 @@ function AngleMixRow({ angleMix }: { angleMix: DossierAngleMix }) {
 					) : null}
 				</>
 			) : (
-				<span className="f9-muted-copy">No confident angle reads yet.</span>
+				<span className="f9-wk-dim">No confident angle reads yet.</span>
 			)}
 			{angleMix.unclassifiedCount > 0 ? (
 				<span className="f9-dossier-angle-note">

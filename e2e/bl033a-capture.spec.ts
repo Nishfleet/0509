@@ -55,13 +55,13 @@ const SURFACES = [
     name: "collections-item-editor",
     url: "/app/collections",
     user: "e2e-starter",
-    open: ".f9-col-item-editor > summary",
+    open: ".f9-library-item-editor > summary",
   },
   {
     name: "collections-external-form",
     url: "/app/collections",
     user: "e2e-starter",
-    open: ".f9-col-external > summary",
+    open: ".f9-library-external > summary",
   },
   {
     name: "collections-new-form",

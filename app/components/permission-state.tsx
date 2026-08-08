@@ -16,10 +16,10 @@ export function PermissionState({
       <h2>{title}</h2>
       <p>{message}</p>
       <div className="f9-inline-actions">
-        <Link className="f9-secondary-button" to="/app">
+        <Link className="f9-wk-btn-quiet" to="/app">
           Back to overview
         </Link>
-        <a className="f9-secondary-button" href={SUPPORT_MAILTO}>
+        <a className="f9-wk-btn-quiet" href={SUPPORT_MAILTO}>
           Email support
         </a>
       </div>

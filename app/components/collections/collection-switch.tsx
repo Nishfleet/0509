@@ -27,13 +27,13 @@ export function CollectionSwitch({
   if (collections.length === 0) return null;
 
   return (
-    <nav aria-label="Collections" className="f9-wk-tabs f9-col-switch">
+    <nav aria-label="Collections" className="f9-wk-tabs f9-library-switch">
       {collections.map((collection) => {
         const active = collection.id === selectedId;
         return (
           <Link
             aria-current={active ? "page" : undefined}
-            className={active ? "f9-wk-tab f9-col-switch-item is-on" : "f9-wk-tab f9-col-switch-item"}
+            className={active ? "f9-wk-tab f9-library-switch-item is-on" : "f9-wk-tab f9-library-switch-item"}
             key={collection.id}
             to={collectionHref(collection.id, advertiserFilter)}
           >
