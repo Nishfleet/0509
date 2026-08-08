@@ -775,7 +775,7 @@ img {
    contract read them; they now resolve to the product's own tokens in BOTH
    themes, the way the dark remap already did. */
 .f9-find-page a.f9-wk-btn {
-  color: #fff;
+  color: var(--wk-on-fill);
 }
 
 .f9-find-page {
@@ -14433,7 +14433,6 @@ textarea.f9-wk-in {
  */
 
 .f9-acct-page :is(
-  .f9-wk-btn,
   .f9-wk-btn-quiet,
   .f9-wk-lnk,
   .f9-acct-text-action
@@ -14465,7 +14464,6 @@ textarea.f9-wk-in {
 }
 
 .f9-acct-page :is(
-  .f9-wk-btn,
   .f9-wk-btn-quiet,
   .f9-wk-lnk,
   .f9-acct-text-action
@@ -14476,7 +14474,6 @@ textarea.f9-wk-in {
 }
 
 .f9-acct-page :is(
-  .f9-wk-btn,
   .f9-wk-btn-quiet,
   .f9-wk-lnk,
   .f9-acct-text-action
@@ -14853,6 +14850,17 @@ textarea.f9-wk-in {
   background: transparent;
 }
 
+/* Billing reuses the marketing plan-feature list; on the light account
+   surface it reads in ink, not the landing page's near-white (the old
+   override died with its legacy selector group — Sol, endgame review). */
+.f9-acct-billing .f9-plan-feature-list {
+  color: inherit;
+}
+.f9-acct-billing .f9-plan-feature-list li::before {
+  background: var(--ink-soft);
+  box-shadow: none;
+}
+
 .f9-acct-billing .f9-cycle-toggle a,
 .f9-acct-billing .f9-cycle-toggle button {
   min-width: 44px;
@@ -15059,7 +15067,22 @@ textarea.f9-wk-in {
 .f9-wk-btn-quiet:disabled { opacity: 0.55; cursor: default; }
 .f9-wk-dim { color: var(--ink-soft, inherit); line-height: 1.55; }
 .f9-wk-worklist { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
-.f9-wk-workrow { border: 1px solid var(--wk-rule); padding: 12px 14px; background: transparent; }
+.f9-wk-workrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  border: 1px solid var(--wk-rule);
+  padding: 12px 14px;
+  background: transparent;
+}
+.f9-wk-workrow > * { min-width: 0; }
+a.f9-wk-workrow { color: inherit; text-decoration: none; }
+a.f9-wk-workrow:hover, .f9-wk-workrow.is-selected { background: var(--wk-sunk); }
+@media (max-width: 640px) {
+  .f9-wk-workrow { flex-wrap: wrap; }
+}
 .f9-wk-grid2 {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
@@ -15195,6 +15218,199 @@ textarea.f9-wk-in {
 .f9-wk-w98 { width: 98%; }
 .f9-wk-w99 { width: 99%; }
 .f9-wk-w100 { width: 100%; }
+
+
+/* ================================================================== */
+/* Restored survivors (Sol's endgame review): rules whose grouped      */
+/* selectors died with a legacy member while these classes lived on.   */
+/* Selectors renamed to the current vocabulary; bodies verbatim.       */
+/* ================================================================== */
+.f9-dash-page-app .f9-dash-page-header h1,
+.f9-dash-page-app .f9-wk-panel > h2,
+.f9-dash-page-app .f9-dash-state h2 {
+  font-family: "Bricolage Grotesque", var(--f9-font, Inter, system-ui, sans-serif);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.f9-wk-workrow h2,
+.f9-wk-workrow h3,
+.f9-wk-workrow .f9-ops-metric-value {
+  margin: 0 0 6px;
+  font-size: 1.05rem;
+}
+.f9-wk-workrow .f9-ops-metric-value {
+  font-weight: 600;
+}
+.f9-topup-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.f9-topup-card {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border-radius: 0;
+  background: var(--card, var(--bone));
+}
+.f9-wk-plan-card-head strong,
+.f9-topup-card strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--ink);
+  font-size: 1.35rem;
+  line-height: 1.1;
+}
+.f9-wk-plan-card p,
+.f9-topup-card p {
+  margin: 0;
+  color: var(--f9-search-muted);
+  line-height: 1.5;
+}
+.f9-wk-plan-card .f9-plan-actions,
+.f9-topup-card form {
+  margin-top: auto;
+}
+.f9-topup-card .f9-wk-btn-quiet,
+.f9-wk-plan-card .f9-wk-btn,
+.f9-wk-plan-card .f9-wk-btn-quiet {
+  width: 100%;
+}
+.f9-dash-state {
+  display: grid;
+  gap: 10px;
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--card);
+}
+.f9-dash-state h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+.f9-dash-state p {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.45;
+}
+.f9-dash-state h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+[data-f9-theme="dark"] .f9-wk-notice,
+[data-f9-theme="dark"] .f9-import-row,
+[data-f9-theme="dark"] .f9-event-card,
+[data-f9-theme="dark"] .f9-wk-plan-card,
+[data-f9-theme="dark"] .f9-topup-card,
+[data-f9-theme="dark"] .f9-creative-tile,
+[data-f9-theme="dark"] .f9-trend-card {
+  background: var(--card);
+}
+[data-f9-theme="dark"] .f9-dash-state p {
+  color: var(--ink-soft);
+}
+.f9-acct-label,
+.f9-acct-page .f9-wk-kick {
+  display: block;
+  margin: 0;
+  color: var(--ink-faint);
+  font-family: var(--f9-font);
+  font-size: 12.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+.f9-acct-copy,
+.f9-acct-note,
+.f9-acct-empty,
+.f9-acct-page .f9-wk-dim {
+  max-width: var(--bl041-max-copy);
+  margin: 10px 0 0;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.58;
+}
+.f9-acct-billing .f9-wk-plan-grid,
+.f9-acct-billing .f9-topup-grid {
+  display: grid;
+  gap: 0;
+  margin-top: 22px;
+  border-top: 1px solid var(--wk-rule);
+  border-bottom: 1px solid var(--wk-rule);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.f9-acct-billing .f9-wk-plan-card,
+.f9-acct-billing .f9-topup-card {
+  display: flex;
+  min-width: 0;
+  min-height: 100%;
+  flex-direction: column;
+  align-content: initial;
+  gap: 11px;
+  padding: 18px;
+  border: 0;
+  border-right: 1px solid var(--wk-rule);
+  background: transparent;
+}
+.f9-acct-billing :is(.f9-wk-plan-card,
+.f9-topup-card):last-child {
+  border-right: 0;
+}
+.f9-acct-billing .f9-wk-plan-card-head strong,
+.f9-acct-billing .f9-topup-card strong {
+  margin-top: 5px;
+  color: var(--ink);
+  font-family: var(--f9-font);
+  font-size: 20px;
+  font-weight: 600;
+}
+.f9-acct-billing .f9-wk-plan-card p,
+.f9-acct-billing .f9-topup-card p {
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.f9-acct-page :is(
+  a,
+.f9-locked-feature,
+.f9-evidence-specimen-body,
+.f9-evidence-cta,
+.f9-brand-logo-preview,
+.f9-checkout-banner,
+.f9-cycle-toggle,
+.f9-topup-card,
+.f9-status-pill,
+.f9-plan-limit-strip span,
+.f9-annual-note,
+.f9-skeleton-line,
+.f9-button-spinner,
+.f9-checkout-pulse
+) {
+  border-radius: 0;
+}
+@media (max-width: 920px) {
+  .f9-topup-grid {
+    grid-template-columns: 1fr;
+  }
+  .f9-acct-billing .f9-wk-plan-grid,
+.f9-acct-billing .f9-topup-grid {
+    grid-template-columns: 1fr;
+  }
+  .f9-acct-billing .f9-wk-plan-card,
+.f9-acct-billing .f9-topup-card {
+    border-right: 0;
+  border-bottom: 1px solid var(--wk-rule);
+  }
+  .f9-acct-billing :is(.f9-wk-plan-card,
+.f9-topup-card):last-child {
+    border-bottom: 0;
+  }
+}
 
 /* === BL-040 source + developer access (landing language) === */
 

@@ -127,7 +127,16 @@ export async function loader({ context, request, params }: LoaderFunctionArgs) {
     pollCursors,
   }));
 
-  return { entity, sources, pollableSources, items, compareEntities, sourceCoverage, brief };
+  return {
+    entity,
+    sources,
+    pollableSources,
+    items,
+    compareEntities,
+    sourceCoverage,
+    brief,
+    websiteSourcesAllowed: sourcePlanGates.modeAllowed && sourcePlanGates.websiteSourcesAllowed,
+  };
 }
 
 export async function action({ context, request, params }: ActionFunctionArgs) {
@@ -192,7 +201,7 @@ export async function action({ context, request, params }: ActionFunctionArgs) {
 }
 
 export default function PresenceEntityRoute() {
-  const { entity, pollableSources, items, compareEntities, sourceCoverage, brief } = useLoaderData<typeof loader>();
+  const { entity, pollableSources, items, compareEntities, sourceCoverage, brief, websiteSourcesAllowed } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const safeSourceCoverage = sourceCoverage.map(sanitizePresenceCoverageEntry);
   const safeBrief = sanitizePresenceEntityBrief(brief);
@@ -277,8 +286,9 @@ export default function PresenceEntityRoute() {
             <div className="f9-wk-worklist is-compact">
               {pollableSources.length === 0 ? (
                 <p className="f9-wk-note">
-                  No checkable website target yet — add a website source and
-                  proof-backed checks start with the next poll.
+                  {websiteSourcesAllowed
+                    ? "No checkable website target yet — add a website source and proof-backed checks start with the next poll."
+                    : "No checkable website target yet. Your current plan keeps this instrument read-only; no source is presented as active."}
                 </p>
               ) : null}
               {pollableSources.map((source) => (
@@ -347,8 +357,8 @@ export default function PresenceEntityRoute() {
             <h2>Related entities</h2>
             {compareEntities.length === 0 ? (
               <p className="f9-wk-note">
-                Track another entity and its coverage appears here, side by
-                side with this one.
+                Track an entity of the other kind — your brand next to a
+                competitor — and their coverage compares here side by side.
               </p>
             ) : (
               <div className="f9-wk-worklist is-compact">
@@ -368,8 +378,8 @@ export default function PresenceEntityRoute() {
           <h2>Latest public content</h2>
           {items.length === 0 ? (
             <p className="f9-wk-note">
-              Nothing fetched yet — run a source check and the latest public
-              content files here.
+              Nothing fetched yet. The latest public content files here after
+              the next successful check.
             </p>
           ) : (
             <div className="f9-wk-worklist is-compact">

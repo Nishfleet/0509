@@ -129,8 +129,14 @@ describe("BL-041 landing-language settings layer", () => {
       billing.match(/className=\{selected \? "f9-wk-btn" : "f9-acct-text-action"\}/g),
     ).toHaveLength(2);
     expect(planPicker).not.toContain('className="f9-primary-button"');
+    // The flatten group deliberately EXCLUDES the filled rank (Sol's
+    // endgame review): the selected plan's one filled action stays filled;
+    // quiet buttons and text actions flatten to underlined text.
     expect(layer()).toMatch(
-      /\.f9-acct-page :is\([\s\S]*?\.f9-wk-btn,[\s\S]*?\)\s*\{[\s\S]*?background: transparent;/,
+      /\.f9-acct-page :is\([\s\S]*?\.f9-wk-btn-quiet,[\s\S]*?\)\s*\{[\s\S]*?background: transparent;/,
+    );
+    expect(layer()).not.toMatch(
+      /\.f9-acct-page :is\(\s*\.f9-wk-btn,/,
     );
     expect(layer()).toMatch(
       /\.f9-acct-page a\.f9-wk-btn \{[^}]*color: var\(--wk-on-fill\)/,
