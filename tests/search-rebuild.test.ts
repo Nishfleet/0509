@@ -110,7 +110,7 @@ describe("search rebuild", () => {
   });
 
   it("keeps primary search links legible on dark buttons", () => {
-    expect(searchCss).toContain(".f9-find-page a.f9-primary-button");
+    expect(searchCss).toContain(".f9-find-page a.f9-wk-btn");
     expect(searchCss).toContain("color: #fff;");
   });
 });

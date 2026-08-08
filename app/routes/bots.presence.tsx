@@ -12,9 +12,9 @@ export default function PresenceBotInfoRoute() {
       <PublicDocHeader />
       <section className="f9-container f9-legal-section">
         <article className="f9-legal-card">
-          <span className="f9-app-kicker">Crawler information</span>
+          <span className="f9-wk-kick">Crawler information</span>
           <h1>FiveToNinePresenceBot</h1>
-          <p className="f9-muted-copy">
+          <p className="f9-wk-dim">
             Five to Nine uses this crawler to monitor public websites and blogs that customers explicitly
             choose to track for competitor and brand presence updates.
           </p>

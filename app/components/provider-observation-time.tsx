@@ -34,7 +34,7 @@ export function ProviderObservationTimeField() {
         type="datetime-local"
       />
       <input name="observedAt" type="hidden" value={observedAt} />
-      <span className="f9-muted-copy" id={helpId}>
+      <span className="f9-wk-dim" id={helpId}>
         Five to Nine converts this to an exact UTC instant before recording the evidence.
       </span>
     </label>

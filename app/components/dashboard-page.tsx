@@ -46,9 +46,9 @@ export function DashboardPageHeader({ kicker, title, lead, action }: DashboardPa
   return (
     <header className="f9-dash-page-header">
       <div>
-        {kicker ? <span className="f9-app-kicker">{kicker}</span> : null}
+        {kicker ? <span className="f9-wk-kick">{kicker}</span> : null}
         <h1>{title}</h1>
-        {lead ? <p className="f9-muted-copy">{lead}</p> : null}
+        {lead ? <p className="f9-wk-dim">{lead}</p> : null}
       </div>
       {action ? <PrimaryAction to={action.to}>{action.label}</PrimaryAction> : null}
     </header>

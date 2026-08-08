@@ -26,14 +26,14 @@ export function DeliverySettingsCard(props: {
   } = props;
   return (
     <article className="f9-detail-cell">
-      <p className="f9-app-kicker">Delivery settings</p>
+      <p className="f9-wk-kick">Delivery settings</p>
       <h3>Channel policy</h3>
       {!data.watchlistDeliveryConfig ? (
-        <p className="f9-muted-copy">
+        <p className="f9-wk-dim">
           Using the default alert settings for this account.
         </p>
       ) : null}
-      {canConfigureDigestSettings ? <Form method="post" className="f9-work-list is-compact">
+      {canConfigureDigestSettings ? <Form method="post" className="f9-wk-worklist is-compact">
         <input name="intent" type="hidden" value="save-delivery-config" />
         <input name="watchlistId" type="hidden" value={watchlistId} />
         <label className="f9-field">
@@ -53,7 +53,7 @@ export function DeliverySettingsCard(props: {
             name="timezone"
             type="text"
           />
-          <small className="f9-muted-copy" id="delivery-timezone-help">
+          <small className="f9-wk-dim" id="delivery-timezone-help">
             Use an IANA timezone such as Asia/Kolkata or UTC.
           </small>
         </label>
@@ -121,8 +121,8 @@ export function DeliverySettingsCard(props: {
           Save delivery settings
         </SubmitButton>
       </Form> : (
-        <div className="f9-work-list is-compact">
-          <p className="f9-muted-copy">
+        <div className="f9-wk-worklist is-compact">
+          <p className="f9-wk-dim">
             Delivery settings are managed by the workspace owner.
           </p>
         </div>

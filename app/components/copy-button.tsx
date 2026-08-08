@@ -30,7 +30,7 @@ export function CopyButton(props: {
     <span>
       <button
         aria-describedby={copyError ? copyErrorId : undefined}
-        className={props.className ?? "f9-secondary-button f9-copy-button"}
+        className={props.className ?? "f9-wk-btn-quiet f9-copy-button"}
         type="button"
         onClick={() => void copyToClipboard()}
       >
@@ -39,7 +39,7 @@ export function CopyButton(props: {
       <span aria-live="polite" className="f9-sr-only" id={copyErrorId} role="status">
         {copyError ?? (copied ? "Copied." : "")}
       </span>
-      {copyError ? <span className="f9-message is-error">{copyError}</span> : null}
+      {copyError ? <span className="f9-wk-notice is-error">{copyError}</span> : null}
     </span>
   );
 }

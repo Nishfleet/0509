@@ -130,7 +130,7 @@ describe("BL-041 landing-language settings layer", () => {
     ).toHaveLength(2);
     expect(planPicker).not.toContain('className="f9-primary-button"');
     expect(layer()).toMatch(
-      /\.f9-acct-page :is\([\s\S]*?\.f9-primary-button,[\s\S]*?\)\s*\{[\s\S]*?background: transparent;/,
+      /\.f9-acct-page :is\([\s\S]*?\.f9-wk-btn,[\s\S]*?\)\s*\{[\s\S]*?background: transparent;/,
     );
     expect(layer()).toMatch(
       /\.f9-acct-page a\.f9-wk-btn \{[^}]*color: var\(--wk-on-fill\)/,

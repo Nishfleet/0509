@@ -14,7 +14,7 @@ export interface EmptyStateProps {
 	/**
 	 * panel — dashed workspace card (default, f9-dash-state-empty)
 	 * inline — single muted sentence inside an existing panel
-	 * row — placeholder row inside an f9-work-list
+	 * row — placeholder row inside an f9-wk-worklist
 	 */
 	variant?: "panel" | "inline" | "row";
 	children?: ReactNode;
@@ -36,7 +36,7 @@ export function EmptyState({
 		// the title doesn't already end a sentence.
 		const leadNeedsStop = Boolean(description) && !/[.!?…]$/.test(title.trim());
 		return (
-			<p className="f9-muted-copy f9-empty-inline" role="status">
+			<p className="f9-wk-dim f9-empty-inline" role="status">
 				{leadNeedsStop ? `${title}.` : title}
 				{description ? <> {description}</> : null}
 			</p>
@@ -45,10 +45,10 @@ export function EmptyState({
 
 	if (variant === "row") {
 		return (
-			<div className="f9-work-row f9-empty-row" role="status">
+			<div className="f9-wk-workrow f9-empty-row" role="status">
 				<div>
 					<strong>{title}</strong>
-					{description ? <p className="f9-muted-copy">{description}</p> : null}
+					{description ? <p className="f9-wk-dim">{description}</p> : null}
 				</div>
 				{children}
 			</div>
@@ -65,12 +65,12 @@ export function EmptyState({
       {action || sample ? (
         <div className="f9-empty-actions">
           {action ? (
-            <Link className="f9-primary-button" to={action.to}>
+            <Link className="f9-wk-btn" to={action.to}>
               {action.label}
             </Link>
           ) : null}
           {sample ? (
-            <Link className="f9-secondary-button" to={sample.to}>
+            <Link className="f9-wk-btn-quiet" to={sample.to}>
               {sample.label}
             </Link>
           ) : null}

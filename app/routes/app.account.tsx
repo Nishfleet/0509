@@ -515,8 +515,8 @@ export default function AccountRoute() {
               <h2>Use this device to sign in faster</h2>
             </div>
           </div>
-          {passkeyMessage ? <p aria-live="polite" className="f9-message is-success" role="status">{passkeyMessage}</p> : null}
-          {passkeyError ? <p aria-live="polite" className="f9-message is-error" role="alert">{passkeyError}</p> : null}
+          {passkeyMessage ? <p aria-live="polite" className="f9-wk-notice is-success" role="status">{passkeyMessage}</p> : null}
+          {passkeyError ? <p aria-live="polite" className="f9-wk-notice is-error" role="alert">{passkeyError}</p> : null}
           {data.passkeyControlsMessage ? (
             <p className="f9-acct-copy">{data.passkeyControlsMessage}</p>
           ) : (
@@ -617,7 +617,7 @@ export default function AccountRoute() {
         {brandProfileAction?.message ? (
           <div
             aria-live={brandProfileAction.ok ? "polite" : "assertive"}
-            className={`f9-message ${brandProfileAction.ok ? "is-success" : "is-error"}`}
+            className={`f9-wk-notice ${brandProfileAction.ok ? "is-success" : "is-error"}`}
             role={brandProfileAction.ok ? "status" : "alert"}
           >
             <p>{brandProfileAction.message}</p>
@@ -698,7 +698,7 @@ export default function AccountRoute() {
         {sessionAction?.message ? (
           <div
             aria-live={sessionAction.ok ? "polite" : "assertive"}
-            className={`f9-message ${sessionAction.ok ? "is-success" : "is-error"}`}
+            className={`f9-wk-notice ${sessionAction.ok ? "is-success" : "is-error"}`}
             role={sessionAction.ok ? "status" : "alert"}
           >
             <p>{sessionAction.message}</p>
@@ -709,7 +709,7 @@ export default function AccountRoute() {
           menu to remove access on this device.
         </p>
         {data.sessionControlsMessage ? (
-          <p aria-live="assertive" className="f9-message is-error" role="alert">
+          <p aria-live="assertive" className="f9-wk-notice is-error" role="alert">
             {data.sessionControlsMessage}
           </p>
         ) : null}
@@ -776,7 +776,7 @@ export default function AccountRoute() {
         {emailChangeAction?.message ? (
           <div
             aria-live={emailChangeAction.ok ? "polite" : "assertive"}
-            className={`f9-message ${emailChangeAction.ok ? "is-success" : "is-error"}`}
+            className={`f9-wk-notice ${emailChangeAction.ok ? "is-success" : "is-error"}`}
             role={emailChangeAction.ok ? "status" : "alert"}
           >
             <p>{emailChangeAction.message}</p>
@@ -822,7 +822,7 @@ export default function AccountRoute() {
         {deletionAction?.message ? (
           <div
             aria-live={deletionAction.ok ? "polite" : "assertive"}
-            className={`f9-message ${deletionAction.ok ? "is-success" : "is-error"}`}
+            className={`f9-wk-notice ${deletionAction.ok ? "is-success" : "is-error"}`}
             role={deletionAction.ok ? "status" : "alert"}
           >
             <p>{deletionAction.message}</p>

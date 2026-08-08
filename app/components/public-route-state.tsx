@@ -55,7 +55,7 @@ export function PublicSearchError({ error }: { error: unknown }) {
         <div className="f9-inline-actions">
           {canRetry ? (
             <button
-              className="f9-primary-button"
+              className="f9-wk-btn"
               disabled={revalidator.state === "loading"}
               onClick={() => revalidator.revalidate()}
               type="button"
@@ -63,7 +63,7 @@ export function PublicSearchError({ error }: { error: unknown }) {
               {revalidator.state === "loading" ? "Retrying…" : "Try again"}
             </button>
           ) : null}
-          <Link className="f9-secondary-button" to="/">
+          <Link className="f9-wk-btn-quiet" to="/">
             Back to Five to Nine
           </Link>
         </div>

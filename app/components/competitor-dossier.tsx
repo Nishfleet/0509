@@ -40,7 +40,7 @@ export function CompetitorDossierPanel({
 		<section aria-label="Competitor intelligence">
 			<div className="f9-panel-toolbar">
 				<div>
-					<p className="f9-app-kicker">Intelligence</p>
+					<p className="f9-wk-kick">Intelligence</p>
 					<h3 className="f9-wk-mt0">What this history adds up to</h3>
 				</div>
 				{dossier.status === "ready" ? (
@@ -87,7 +87,7 @@ export function CompetitorDossierPanel({
 					<div>
 						<p className="f9-dossier-subhead">Proven runners</p>
 						{dossier.longevityLeaders.length === 0 ? (
-							<p className="f9-muted-copy">No longevity signal yet.</p>
+							<p className="f9-wk-dim">No longevity signal yet.</p>
 						) : (
 							<div className="f9-dossier-leaders">
 								{dossier.longevityLeaders.map((leader) => (
@@ -100,7 +100,7 @@ export function CompetitorDossierPanel({
 					<div>
 						<p className="f9-dossier-subhead">Recurring hooks</p>
 						{dossier.hookPatterns.length === 0 ? (
-							<p className="f9-muted-copy">
+							<p className="f9-wk-dim">
 								No hook opening repeats yet — every observed ad leads differently.
 							</p>
 						) : (
@@ -322,7 +322,7 @@ function AngleMixRow({ angleMix }: { angleMix: DossierAngleMix }) {
 					) : null}
 				</>
 			) : (
-				<span className="f9-muted-copy">No confident angle reads yet.</span>
+				<span className="f9-wk-dim">No confident angle reads yet.</span>
 			)}
 			{angleMix.unclassifiedCount > 0 ? (
 				<span className="f9-dossier-angle-note">

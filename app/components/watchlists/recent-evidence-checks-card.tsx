@@ -65,7 +65,7 @@ export function RecentEvidenceChecksCard({
       {recentRows.length > 0 ? (
         <FactRail rows={recentRows} title="Latest captures" />
       ) : (
-        <p className="f9-muted-copy">
+        <p className="f9-wk-dim">
           Evidence checks will appear here after the next proof-backed check.
         </p>
       )}

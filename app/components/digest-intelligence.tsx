@@ -289,9 +289,9 @@ export function DigestProofPacket({ items }: { items: DigestProofPacketItem[] })
   return (
     <section className="f9-proof-packet" aria-label="Digest evidence packet">
       <div>
-        <span className="f9-app-kicker">Evidence and source details</span>
+        <span className="f9-wk-kick">Evidence and source details</span>
         <h3>{packet.title}</h3>
-        <p className="f9-muted-copy">{packet.summary}</p>
+        <p className="f9-wk-dim">{packet.summary}</p>
       </div>
 
       <dl className="proof-trail-list">

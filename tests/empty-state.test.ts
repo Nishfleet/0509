@@ -47,7 +47,7 @@ describe("EmptyState", () => {
 		expect(markup).toContain("<h2>No entities yet</h2>");
 		expect(markup).toContain("Add your brand or a competitor to start.");
 		expect(markup).toContain('href="/search"');
-		expect(markup).toContain("f9-primary-button");
+		expect(markup).toContain("f9-wk-btn");
 		expect(markup).toContain("Add from search");
 	});
 
@@ -61,8 +61,8 @@ describe("EmptyState", () => {
 		});
 
 		expect(markup).toContain("f9-empty-actions");
-		expect(markup).toContain("f9-primary-button");
-		expect(markup).toContain("f9-secondary-button");
+		expect(markup).toContain("f9-wk-btn");
+		expect(markup).toContain("f9-wk-btn-quiet");
 		expect(markup).toContain('href="/#demo"');
 		expect(markup).toContain("See a sample brief");
 	});
@@ -86,7 +86,7 @@ describe("EmptyState", () => {
 			variant: "inline",
 		});
 
-		expect(markup).toContain("f9-muted-copy f9-empty-inline");
+		expect(markup).toContain("f9-wk-dim f9-empty-inline");
 		expect(markup).toContain('role="status"');
 		expect(markup).toContain("No presence items yet.");
 		expect(markup).toContain("Check a website source to fetch updates.");
@@ -101,7 +101,7 @@ describe("EmptyState", () => {
 			variant: "row",
 		});
 
-		expect(markup).toContain("f9-work-row f9-empty-row");
+		expect(markup).toContain("f9-wk-workrow f9-empty-row");
 		expect(markup).toContain('role="status"');
 		expect(markup).toContain("<strong>No API keys yet</strong>");
 		expect(markup).toContain("Create one when you are ready to connect an external tool.");

@@ -14,8 +14,8 @@ export function WatchlistSetupCard(props: {
   const { data, selectedTrackingRole } = props;
   return (
     <section className="f9-detail-cell">
-      <p className="f9-app-kicker">Watchlist setup</p>
-      <Form method="post" className="f9-work-list is-compact">
+      <p className="f9-wk-kick">Watchlist setup</p>
+      <Form method="post" className="f9-wk-worklist is-compact">
         <input name="intent" type="hidden" value="update-watchlist" />
         <input name="watchlistId" type="hidden" value={data.selectedWatchlist.id} />
         <label className="f9-field">

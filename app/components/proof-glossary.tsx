@@ -9,9 +9,9 @@ export function ProofGlossary({
   return (
     <section className="f9-proof-packet" aria-label="Source status glossary">
       <div>
-        <span className="f9-app-kicker">Source glossary</span>
+        <span className="f9-wk-kick">Source glossary</span>
         <h3>How to read evidence labels</h3>
-        <p className="f9-muted-copy">
+        <p className="f9-wk-dim">
           {isDeliverable
             ? "These are the labels stamped on the evidence in this report."
             : "Use these labels before sharing a change with teammates or clients."}

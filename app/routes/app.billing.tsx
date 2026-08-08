@@ -307,7 +307,7 @@ export default function BillingRoute() {
         <div
           aria-atomic="true"
           aria-live="assertive"
-          className="f9-message is-error"
+          className="f9-wk-notice is-error"
           role="alert"
         >
           <p>
@@ -318,7 +318,7 @@ export default function BillingRoute() {
       ) : null}
 
       {data.blockedCheckout ? (
-        <div aria-live="assertive" className="f9-message is-error" role="alert">
+        <div aria-live="assertive" className="f9-wk-notice is-error" role="alert">
           <p>
             You already have an active {planLabel} plan, so we stopped that checkout — finishing it
             would have started a second, overlapping subscription. To switch plans or change billing,
@@ -328,7 +328,7 @@ export default function BillingRoute() {
       ) : null}
 
       {data.pendingCheckout ? (
-        <div aria-live="assertive" className="f9-message is-error" role="alert">
+        <div aria-live="assertive" className="f9-wk-notice is-error" role="alert">
           <p>
             A Dodo checkout is already open for this account. Finish that checkout, or wait until
             that payment link expires before starting a new one. If you need help, email{" "}
@@ -338,7 +338,7 @@ export default function BillingRoute() {
       ) : null}
 
       {data.cancelledCheckout ? (
-        <div className="f9-message" role="status">
+        <div className="f9-wk-notice" role="status">
           <p>
             Checkout was cancelled. No plan change was made. If that Dodo payment link is still
             active, finish it or let it expire; a new monthly or annual checkout opens after Dodo
@@ -348,13 +348,13 @@ export default function BillingRoute() {
       ) : null}
 
       {data.agencyCheckoutHeld ? (
-        <div aria-live="assertive" className="f9-message is-error" role="alert">
+        <div aria-live="assertive" className="f9-wk-notice is-error" role="alert">
           <p>{agencyCheckoutHeldCustomerCopy()}</p>
         </div>
       ) : null}
 
       {data.planCheckoutUnavailable ? (
-        <div aria-live="assertive" className="f9-message is-error" role="alert">
+        <div aria-live="assertive" className="f9-wk-notice is-error" role="alert">
           <p>
             That plan checkout is temporarily unavailable while billing finishes setup. Email{" "}
             <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> from {data.email} and we will help.
@@ -363,7 +363,7 @@ export default function BillingRoute() {
       ) : null}
 
       {data.topUpRequiresPlan ? (
-        <div className="f9-message is-error" role="alert">
+        <div className="f9-wk-notice is-error" role="alert">
           <p>
             Top-up packs can only be added to a paid plan. Choose a plan first, then add extra
             checks whenever you need them.
@@ -372,7 +372,7 @@ export default function BillingRoute() {
       ) : null}
 
       {data.topUpCheckoutUnavailable ? (
-        <div className="f9-message is-error" role="alert">
+        <div className="f9-wk-notice is-error" role="alert">
           <p>
             That top-up pack is temporarily unavailable while billing pricing is verified. Your plan
             is unchanged.
@@ -381,7 +381,7 @@ export default function BillingRoute() {
       ) : null}
 
       {data.portalUnavailable ? (
-        <div aria-live="assertive" className="f9-message is-error" role="alert">
+        <div aria-live="assertive" className="f9-wk-notice is-error" role="alert">
           <p>
             We couldn't open your billing portal just now. Email{" "}
             <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> or{" "}
@@ -416,7 +416,7 @@ export default function BillingRoute() {
       ) : null}
 
       {data.checkoutTerminalFailure ? (
-        <div className="f9-message is-error" role="alert">
+        <div className="f9-wk-notice is-error" role="alert">
           <p>
             Dodo did not complete that checkout. No billing change has been applied; wait for the
             signed provider update or email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> if you need
@@ -426,13 +426,13 @@ export default function BillingRoute() {
       ) : null}
 
       {data.annualCheckoutUnavailable ? (
-        <div className="f9-message is-error" role="alert">
+        <div className="f9-wk-notice is-error" role="alert">
           <p>{dodoAnnualUnavailableCopy(selectedAnnualValidation)}</p>
         </div>
       ) : null}
 
       {!canManageBilling ? (
-        <div className="f9-message" role="status">
+        <div className="f9-wk-notice" role="status">
           <p>
             Billing is managed by the workspace owner
             {data.billingOwnerName ? `, ${data.billingOwnerName}` : ""}. You can view usage here,
@@ -444,9 +444,9 @@ export default function BillingRoute() {
       <article className="f9-acct-section f9-plan-picker-panel" id="plans">
         <div className="f9-panel-toolbar">
           <div>
-            <span className="f9-app-kicker">Choose inside the app</span>
+            <span className="f9-wk-kick">Choose inside the app</span>
             <h2>Pick a plan and billing cycle</h2>
-            <p className="f9-muted-copy">
+            <p className="f9-wk-dim">
               Prices are shown in your local currency automatically. Pay annually and get{" "}
               {DODO_ANNUAL_SAVINGS_LABEL}.
             </p>
@@ -470,12 +470,12 @@ export default function BillingRoute() {
         </div>
 
         {pricingUnavailable ? (
-          <div className="f9-message is-error" role="status">
+          <div className="f9-wk-notice is-error" role="status">
             <p>Prices are temporarily unavailable — try again shortly</p>
           </div>
         ) : null}
 
-        <div className="f9-app-plan-grid">
+        <div className="f9-wk-plan-grid">
           {plans.map((plan) => {
             const planCyclePrice = planPrice(pricingPreview, plan.slug, selectedCycle);
             const annualValidation = annualValidationFor(pricingPreview, plan.slug);
@@ -516,13 +516,13 @@ export default function BillingRoute() {
             const selected = selectedPlan === plan.slug;
             return (
               <section
-                className={`f9-app-plan-card${plan.slug === "starter" ? " is-recommended" : ""}${selected ? " is-selected" : ""}`}
+                className={`f9-wk-plan-card${plan.slug === "starter" ? " is-recommended" : ""}${selected ? " is-selected" : ""}`}
                 key={plan.slug}
               >
-                <div className="f9-app-plan-card-head">
+                <div className="f9-wk-plan-card-head">
                   <div>
                     <h3>
-                      <span className="f9-app-kicker">{plan.name}</span>
+                      <span className="f9-wk-kick">{plan.name}</span>
                     </h3>
                     {planCyclePrice ? (
                       <strong>{planCyclePrice}</strong>
@@ -562,15 +562,15 @@ export default function BillingRoute() {
                 </ul>
                 <div className="f9-plan-actions">
                   {!canManageBilling ? (
-                    <button className="f9-secondary-button" disabled type="button">
+                    <button className="f9-wk-btn-quiet" disabled type="button">
                       Owner managed
                     </button>
                   ) : isCurrentBillingChoice ? (
-                    <button className="f9-secondary-button" disabled type="button">
+                    <button className="f9-wk-btn-quiet" disabled type="button">
                       Current plan
                     </button>
                   ) : planPriceUnavailable && planCanUseInAppChange ? (
-                    <button className="f9-secondary-button" disabled type="button">
+                    <button className="f9-wk-btn-quiet" disabled type="button">
                       Waiting for the live price
                     </button>
                   ) : canStartCheckout && checkoutSku ? (
@@ -586,11 +586,11 @@ export default function BillingRoute() {
                       </SubmitButton>
                     </Form>
                   ) : !planCanUseInAppChange ? (
-                    <Link className="f9-secondary-button" to="/app/support?category=billing">
+                    <Link className="f9-wk-btn-quiet" to="/app/support?category=billing">
                       Request Agency access
                     </Link>
                   ) : !planSaleOpen ? (
-                    <button className="f9-secondary-button" disabled type="button">
+                    <button className="f9-wk-btn-quiet" disabled type="button">
                       {billing.plan === "free" ? "Checkout unavailable" : "Change unavailable"}
                     </button>
                   ) : canChangePlan && checkoutSku ? (
@@ -607,12 +607,12 @@ export default function BillingRoute() {
                       </SubmitButton>
                     </Form>
                   ) : billing.plan !== "free" && !data.hasDodoSubscription ? (
-                    <Link className="f9-secondary-button" to="/app/support?category=billing">
+                    <Link className="f9-wk-btn-quiet" to="/app/support?category=billing">
                       Request billing help
                     </Link>
                   ) : billing.plan !== "free" ? (
                     hasCancellationScheduled || hasPlanChangePending || annualBlocked || !checkoutSku ? (
-                      <button className="f9-secondary-button" disabled type="button">
+                      <button className="f9-wk-btn-quiet" disabled type="button">
                         {hasCancellationScheduled
                           ? "Cancellation scheduled"
                           : hasPlanChangePending
@@ -622,14 +622,14 @@ export default function BillingRoute() {
                               : "Change unavailable"}
                       </button>
                     ) : hasPaymentIssue ? (
-                      <Link className="f9-secondary-button" to="/app/support?category=billing">
+                      <Link className="f9-wk-btn-quiet" to="/app/support?category=billing">
                         Contact billing support
                       </Link>
                     ) : (
                       <PriceLoadingButton />
                     )
                   ) : annualBlocked || !checkoutSku ? (
-                    <button className="f9-secondary-button" disabled type="button">
+                    <button className="f9-wk-btn-quiet" disabled type="button">
                       {annualBlocked ? "Annual unavailable" : "Checkout unavailable"}
                     </button>
                   ) : (
@@ -637,7 +637,7 @@ export default function BillingRoute() {
                   )}
                   {!selected && !planPriceUnavailable ? (
                     <Link
-                      className="f9-text-link"
+                      className="f9-wk-lnk"
                       to={billingPickerPath(plan.slug, selectedCycle, selectedSource)}
                     >
                       Select
@@ -653,20 +653,20 @@ export default function BillingRoute() {
       <article className="f9-acct-section">
         <div className="f9-panel-toolbar">
           <div>
-            <span className="f9-app-kicker">Plan &amp; billing</span>
+            <span className="f9-wk-kick">Plan &amp; billing</span>
             <h2>
               {planLabel} plan{isPaid ? "" : " — free account"}
             </h2>
           </div>
           {!isPaid ? (
-            <Link className="f9-primary-button" to="/app/billing?source=billing#plans">
+            <Link className="f9-wk-btn" to="/app/billing?source=billing#plans">
               View plans
             </Link>
           ) : null}
         </div>
 
-        <div className="f9-work-list is-compact">
-          <div className="f9-work-row">
+        <div className="f9-wk-worklist is-compact">
+          <div className="f9-wk-workrow">
             <strong>Status</strong>
             <span>
               {formatBillingStatus(
@@ -678,24 +678,24 @@ export default function BillingRoute() {
             </span>
           </div>
           {isPaid && billing.dodoNextBillingAt ? (
-            <div className="f9-work-row">
+            <div className="f9-wk-workrow">
               <strong>Renews on</strong>
               <span>{formatDate(billing.dodoNextBillingAt)}</span>
             </div>
           ) : null}
           {isPaid && billingCycleLabel ? (
-            <div className="f9-work-row">
+            <div className="f9-wk-workrow">
               <strong>Billing cycle</strong>
               <span>{billingCycleLabel}</span>
             </div>
           ) : null}
           {billing.planUpdatedAt ? (
-            <div className="f9-work-row">
+            <div className="f9-wk-workrow">
               <strong>Last billing change</strong>
               <span>{formatDate(billing.planUpdatedAt)}</span>
             </div>
           ) : null}
-          <div className="f9-work-row">
+          <div className="f9-wk-workrow">
             <strong>Competitor watchlists</strong>
             <span>
               {data.watchlistUsage.limit > 0 ? (
@@ -707,7 +707,7 @@ export default function BillingRoute() {
               )}
             </span>
           </div>
-          <div className="f9-work-row">
+          <div className="f9-wk-workrow">
             <strong>Collections</strong>
             <span>
               {data.collectionUsage.limit > 0 ? (
@@ -719,7 +719,7 @@ export default function BillingRoute() {
               )}
             </span>
           </div>
-          <div className="f9-work-row">
+          <div className="f9-wk-workrow">
             <strong>Checks (this month)</strong>
             <span>
               {data.proofUsage.limit > 0 ? (
@@ -745,21 +745,21 @@ export default function BillingRoute() {
               )}
             </span>
           </div>
-          <p className="f9-muted-copy">{EVIDENCE_USAGE_CUSTOMER_COPY}</p>
+          <p className="f9-wk-dim">{EVIDENCE_USAGE_CUSTOMER_COPY}</p>
           {!data.proofUsage.canSpendTopUps &&
           data.proofUsage.topUpRetainedWhileInactive &&
           data.proofUsage.topUpRetainedWhileInactive > 0 ? (
-            <p className="f9-muted-copy">{TOP_UP_INACTIVE_PLAN_COPY}</p>
+            <p className="f9-wk-dim">{TOP_UP_INACTIVE_PLAN_COPY}</p>
           ) : null}
           {data.creditGrants.map((grant) => (
-            <div className="f9-work-row" key={`${grant.skuSlug ?? "grant"}-${grant.grantedAt}`}>
+            <div className="f9-wk-workrow" key={`${grant.skuSlug ?? "grant"}-${grant.grantedAt}`}>
               <strong>Purchased pack</strong>
               <span>
                 {grant.credits} checks from {topUpPackName(grant.skuSlug, grant.credits)} — never expire
               </span>
             </div>
           ))}
-          <div className="f9-work-row">
+          <div className="f9-wk-workrow">
             <strong>Digest schedule</strong>
             <span>{digestCadenceLabel}</span>
           </div>
@@ -769,9 +769,9 @@ export default function BillingRoute() {
       <article className="f9-acct-section" id="top-ups">
         <div className="f9-panel-toolbar">
           <div>
-            <span className="f9-app-kicker">Check packs</span>
+            <span className="f9-wk-kick">Check packs</span>
             <h2>Top up busy weeks without changing plans</h2>
-            <p className="f9-muted-copy">
+            <p className="f9-wk-dim">
               Purchased checks never expire. They add check volume only; they do not
               change watchlist limits, cadence, or plan features.
             </p>
@@ -785,7 +785,7 @@ export default function BillingRoute() {
             const bundlePriceUnavailable = pricingPreviewResolved && !previewPrice;
             return (
               <section className="f9-topup-card" key={bundle.slug}>
-                <span className="f9-app-kicker">{bundle.creditLabel}</span>
+                <span className="f9-wk-kick">{bundle.creditLabel}</span>
                 <h3>{bundle.name}</h3>
                 {previewPrice ? (
                   <strong>{previewPrice}</strong>
@@ -796,11 +796,11 @@ export default function BillingRoute() {
                 )}
                 <p>{bundle.detail}</p>
                 {!canManageBilling ? (
-                  <button className="f9-secondary-button" disabled type="button">
+                  <button className="f9-wk-btn-quiet" disabled type="button">
                     Owner managed
                   </button>
                 ) : bundlePriceUnavailable && isPaid ? (
-                  <button className="f9-secondary-button" disabled type="button">
+                  <button className="f9-wk-btn-quiet" disabled type="button">
                     Waiting for the live price
                   </button>
                 ) : isPaid && ready ? (
@@ -808,7 +808,7 @@ export default function BillingRoute() {
                     <input name="sku" type="hidden" value={sku} />
                     {selectedSource ? <input name="source" type="hidden" value={selectedSource} /> : null}
                     <SubmitButton
-                      className="f9-secondary-button"
+                      className="f9-wk-btn-quiet"
                       match={{ sku }}
                       pendingLabel="Redirecting…"
                     >
@@ -818,11 +818,11 @@ export default function BillingRoute() {
                 ) : isPaid && sku ? (
                   <PriceLoadingButton />
                 ) : isPaid ? (
-                  <button className="f9-secondary-button" disabled type="button">
+                  <button className="f9-wk-btn-quiet" disabled type="button">
                     Pack unavailable
                   </button>
                 ) : (
-                  <Link className="f9-secondary-button" to="/app/billing?source=top-up#plans">
+                  <Link className="f9-wk-btn-quiet" to="/app/billing?source=top-up#plans">
                     Choose a plan first
                   </Link>
                 )}
@@ -835,32 +835,32 @@ export default function BillingRoute() {
       <article className="f9-acct-section">
         <div className="f9-panel-toolbar">
           <div>
-            <span className="f9-app-kicker">Manage billing</span>
+            <span className="f9-wk-kick">Manage billing</span>
             <h2>Change, cancel, or get invoices</h2>
           </div>
         </div>
-        <div className="f9-work-list is-compact">
+        <div className="f9-wk-worklist is-compact">
           {!canManageBilling ? (
-            <div className="f9-work-row">
+            <div className="f9-wk-workrow">
               <strong>Manage subscription</strong>
               <span>Owner managed</span>
             </div>
           ) : isPaid && data.hasPortal ? (
-            <div className="f9-work-row">
+            <div className="f9-wk-workrow">
               <strong>Manage subscription</strong>
               <span>
                   Cancel anytime — email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we'll
                   confirm your cancellation request. Open the billing portal for card and invoice
                   tasks. Use the plan cards above to switch plans or billing cycles.{" "}
                 <Form action="/api/billing/dodo/portal" method="post" className="f9-wk-inline">
-                  <SubmitButton className="f9-secondary-button" pendingLabel="Redirecting…">
+                  <SubmitButton className="f9-wk-btn-quiet" pendingLabel="Redirecting…">
                     Open billing portal
                   </SubmitButton>
                 </Form>
               </span>
             </div>
           ) : null}
-          <div className="f9-work-row">
+          <div className="f9-wk-workrow">
             <strong>Change or cancel your plan</strong>
             <span>
               {isPaid && data.hasPortal
@@ -870,14 +870,14 @@ export default function BillingRoute() {
               {data.email}. {cancellationAccessCopy(billingLifecycleKind(billing))}
             </span>
           </div>
-          <div className="f9-work-row">
+          <div className="f9-wk-workrow">
             <strong>Receipts and invoices</strong>
             <span>
               Dodo Payments emails a receipt for every charge. Need a copy or a GST invoice?{" "}
               <Link to="/app/support?category=billing">Open a billing support case</Link>.
             </span>
           </div>
-          <div className="f9-work-row">
+          <div className="f9-wk-workrow">
             <strong>Refunds</strong>
             <span>
               Questions about a charge, cancellation, or refund?{" "}
@@ -1017,27 +1017,27 @@ function BillingLifecycleSummary({
   return (
     <article aria-labelledby={headingId} aria-live="polite" className={className}>
       <div>
-        <span className="f9-app-kicker">{kicker}</span>
+        <span className="f9-wk-kick">{kicker}</span>
         <h2 id={headingId}>{title}</h2>
         <p>{message}</p>
         {kind === "payment-issue" && canManageBilling && hasPortal ? (
           <Form action="/api/billing/dodo/portal" method="post">
-            <SubmitButton className="f9-primary-button" pendingLabel="Redirecting…">
+            <SubmitButton className="f9-wk-btn" pendingLabel="Redirecting…">
               Update payment method
             </SubmitButton>
           </Form>
         ) : kind === "free" || kind === "refunded" || kind === "cancelled" || kind === "expired" ? (
-          <Link className="f9-primary-button" to="/app/billing?source=billing#plans">
+          <Link className="f9-wk-btn" to="/app/billing?source=billing#plans">
             Choose a plan
           </Link>
         ) : canManageBilling && hasPortal ? (
           <Form action="/api/billing/dodo/portal" method="post">
-            <SubmitButton className="f9-primary-button" pendingLabel="Redirecting…">
+            <SubmitButton className="f9-wk-btn" pendingLabel="Redirecting…">
               Open billing portal
             </SubmitButton>
           </Form>
         ) : (
-          <Link className="f9-primary-button" to="/app/support?category=billing">
+          <Link className="f9-wk-btn" to="/app/support?category=billing">
             Open billing support
           </Link>
         )}
@@ -1088,7 +1088,7 @@ function PriceLoadingSkeleton() {
 
 function PriceLoadingButton() {
   return (
-    <button aria-busy="true" className="f9-secondary-button" disabled type="button">
+    <button aria-busy="true" className="f9-wk-btn-quiet" disabled type="button">
       <span aria-hidden="true" className="f9-button-spinner" />
       Loading price…
     </button>
@@ -1112,7 +1112,7 @@ function PlanChangeNotice({
       ? "at the next billing date"
       : "now";
     return (
-      <div className="f9-message" role="status">
+      <div className="f9-wk-notice" role="status">
         <p>
           Dodo calculated {preview.charge} due now for the {targetCycleLabel} {targetPlanLabel}
           change. Confirm to apply it {timingLabel} with the saved payment method.
@@ -1122,7 +1122,7 @@ function PlanChangeNotice({
           <input name="sku" type="hidden" value={preview.sku} />
           <input name="preview_token" type="hidden" value={preview.previewToken} />
           <SubmitButton
-            className="f9-primary-button"
+            className="f9-wk-btn"
             intent="confirm"
             match={{ sku: preview.sku }}
             pendingLabel="Confirming…"
@@ -1135,7 +1135,7 @@ function PlanChangeNotice({
   }
   if (notice === "accepted") {
     return (
-      <div className="f9-message" role="status">
+      <div className="f9-wk-notice" role="status">
         <p>
           Dodo accepted that plan change. Your account will update here after Dodo sends the signed
           billing event.
@@ -1145,7 +1145,7 @@ function PlanChangeNotice({
   }
   if (notice === "scheduled") {
     return (
-      <div className="f9-message" role="status">
+      <div className="f9-wk-notice" role="status">
         <p>
           Dodo scheduled that plan change for the next billing date. Your current plan stays active
           until then.
@@ -1155,28 +1155,28 @@ function PlanChangeNotice({
   }
   if (notice === "current") {
     return (
-      <div className="f9-message" role="status">
+      <div className="f9-wk-notice" role="status">
         <p>You are already on that plan and billing cycle.</p>
       </div>
     );
   }
   if (notice === "requires-subscription") {
     return (
-      <div className="f9-message is-error" role="alert">
+      <div className="f9-wk-notice is-error" role="alert">
         <p>Choose a paid plan first. After that, you can switch plans or billing cycles here.</p>
       </div>
     );
   }
   if (notice === "pending-checkout") {
     return (
-      <div className="f9-message is-error" role="alert">
+      <div className="f9-wk-notice is-error" role="alert">
         <p>Finish the open Dodo checkout or wait for it to expire before changing plans.</p>
       </div>
     );
   }
   if (notice === "pending-change") {
     return (
-      <div className="f9-message" role="status">
+      <div className="f9-wk-notice" role="status">
         <p>
           This plan change is still awaiting a confirmed Dodo result. No second plan change will be
           sent while the provider outcome is unknown.
@@ -1185,14 +1185,14 @@ function PlanChangeNotice({
           <Form action="/api/billing/dodo/plan-change" method="post">
             <input name="intent" type="hidden" value="reconcile" />
             <SubmitButton
-              className="f9-secondary-button"
+              className="f9-wk-btn-quiet"
               intent="reconcile"
               pendingLabel="Checking…"
             >
               Check Dodo status
             </SubmitButton>
           </Form>
-          <Link className="f9-text-link" to="/app/support?category=billing">
+          <Link className="f9-wk-lnk" to="/app/support?category=billing">
             Get billing help
           </Link>
         </div>
@@ -1201,14 +1201,14 @@ function PlanChangeNotice({
   }
   if (notice === "reconciled") {
     return (
-      <div className="f9-message" role="status">
+      <div className="f9-wk-notice" role="status">
         <p>Dodo confirms the plan change. Your current plan and limits now match its latest state.</p>
       </div>
     );
   }
   if (notice === "recovered") {
     return (
-      <div className="f9-message" role="status">
+      <div className="f9-wk-notice" role="status">
         <p>
           Dodo confirms no plan change was applied. The stale hold is cleared; review the price and
           confirm again if you still want to switch.
@@ -1218,27 +1218,27 @@ function PlanChangeNotice({
   }
   if (notice === "status-refreshed") {
     return (
-      <div className="f9-message" role="status">
+      <div className="f9-wk-notice" role="status">
         <p>Billing changed while we checked. The current provider-backed state is shown below.</p>
       </div>
     );
   }
   if (notice === "cancellation-scheduled") {
     return (
-      <div className="f9-message is-error" role="alert">
+      <div className="f9-wk-notice is-error" role="alert">
         <p>Cancel the scheduled subscription cancellation before changing plans.</p>
       </div>
     );
   }
   if (notice === "payment-issue") {
     return (
-      <div className="f9-message is-error" role="alert">
+      <div className="f9-wk-notice is-error" role="alert">
         <p>Update your payment method before changing plans. Dodo marked the payment as failed.</p>
       </div>
     );
   }
   return (
-    <div className="f9-message is-error" role="alert">
+    <div className="f9-wk-notice is-error" role="alert">
       <p>
         Dodo could not verify that {cycleLabel} plan change just now. Your plan is unchanged. Email{" "}
         <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> if you need us to handle it directly.

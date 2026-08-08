@@ -254,7 +254,7 @@ export default function ShareRoute() {
           <article className="f9-app-panel">
             <div className="f9-panel-toolbar f9-report-toolbar">
               <div>
-                <p className="f9-app-kicker">Shared digest snapshot</p>
+                <p className="f9-wk-kick">Shared digest snapshot</p>
                 <h1>
                   <LocalTime iso={digestSnapshot.periodStart} mode="date" /> to{" "}
                   <LocalTime iso={digestSnapshot.periodEnd} mode="date" />
@@ -262,7 +262,7 @@ export default function ShareRoute() {
               </div>
               {pdfVariant ? null : (
                 <button
-                  className="f9-secondary-button"
+                  className="f9-wk-btn-quiet"
                   onClick={() => window.print()}
                   type="button"
                 >
@@ -277,7 +277,7 @@ export default function ShareRoute() {
                 <li className="f9-event-card" key={item.id}>
                   <div className="f9-panel-toolbar">
                     <div>
-                      <p className="f9-app-kicker">{item.watchlistName}</p>
+                      <p className="f9-wk-kick">{item.watchlistName}</p>
                       <h2>{item.title}</h2>
                     </div>
                     <Pill>{formatWatchEventTypeLabel(item.eventType)}</Pill>
@@ -290,27 +290,27 @@ export default function ShareRoute() {
           </article>
         ) : "payload" in data ? (
           <article className="f9-app-panel">
-            <p className="f9-app-kicker">Shared snapshot</p>
+            <p className="f9-wk-kick">Shared snapshot</p>
             <h1>Snapshot unavailable</h1>
-            <p className="f9-muted-copy">
+            <p className="f9-wk-dim">
               This shared snapshot uses an older format that cannot be shown safely. Ask the sender
               to create a fresh share link.
             </p>
           </article>
         ) : data.resourceType === "collection" ? (
           <article className="f9-app-panel">
-            <p className="f9-app-kicker">Shared collection</p>
+            <p className="f9-wk-kick">Shared collection</p>
             <h1>{data.collection?.name ?? "Collection unavailable"}</h1>
-            <div className="f9-work-list">
+            <div className="f9-wk-worklist">
               {data.items.map((item) => (
-                <div className="f9-work-row" key={item.id}>
+                <div className="f9-wk-workrow" key={item.id}>
                   <div className="f9-ad-thumb-row">
                     <AdThumb ad={item.ad} />
                     <div>
                       <h2>{formatAdvertiserLabel(item.ad.advertiser)}</h2>
                       <AdLongevityPill ad={item.ad} />
                       <p>{item.ad.hook}</p>
-                      <p className="f9-muted-copy">{item.tags.join(", ") || "No tags"}</p>
+                      <p className="f9-wk-dim">{item.tags.join(", ") || "No tags"}</p>
                     </div>
                   </div>
                 </div>
@@ -319,10 +319,10 @@ export default function ShareRoute() {
           </article>
         ) : data.resourceType === "watchlist" ? (
           <article className="f9-app-panel">
-            <p className="f9-app-kicker">Shared watchlist</p>
+            <p className="f9-wk-kick">Shared watchlist</p>
             <h1>{data.watchlist?.name ?? "Watchlist unavailable"}</h1>
             {"sourceCoverage" in data && data.sourceCoverage ? (
-              <p className="f9-muted-copy">{data.sourceCoverage.note}</p>
+              <p className="f9-wk-dim">{data.sourceCoverage.note}</p>
             ) : null}
             <ul className="event-list">
               {data.events.map((event) => (
@@ -335,7 +335,7 @@ export default function ShareRoute() {
           </article>
         ) : (
           <article className="f9-app-panel">
-            <p className="f9-app-kicker">Shared digest</p>
+            <p className="f9-wk-kick">Shared digest</p>
             <h1>Weekly digest</h1>
             <ul className="event-list">
               {data.digest?.items.map((item) => (

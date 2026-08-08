@@ -172,7 +172,7 @@ export function CompetitorDetail(props: CompetitorDetailProps) {
       ) : null}
 
       {props.failedChecks >= 3 ? (
-        <div aria-live="assertive" className="f9-message is-error" role="alert">
+        <div aria-live="assertive" className="f9-wk-notice is-error" role="alert">
           <p>
             We're having trouble checking this {targetNoun} — the last {props.failedChecks} checks
             failed. We keep retrying every night; recent errors are listed under Evidence. If this
@@ -267,7 +267,7 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
       <>
         <section aria-labelledby="competitor-monitoring-title" className="f9-watchdetail-section">
           <h3 id="competitor-monitoring-title">Monitoring</h3>
-          <p className="f9-muted-copy">
+          <p className="f9-wk-dim">
             {!watchlist.isActive
               ? "Watching is paused. The evidence already on file stays here."
               : props.sourceCanSchedule
@@ -306,8 +306,8 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
         <section aria-label="How tracking works" className="f9-ed-panel">
           <p className="f9-ed-micro">How tracking works</p>
           <h3>{props.trackingPresentation.headline}</h3>
-          <p className="f9-muted-copy">{props.trackingPresentation.summary}</p>
-          <p className="f9-muted-copy">
+          <p className="f9-wk-dim">{props.trackingPresentation.summary}</p>
+          <p className="f9-wk-dim">
             {!watchlist.isActive
               ? "Watching is paused. The evidence already on file stays here."
               : props.sourceCanSchedule
@@ -315,7 +315,7 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
                 : "Automatic checks are waiting for source access. The evidence already on file stays here."}
           </p>
           {props.discoveryRecovery ? (
-            <p className="f9-muted-copy">{props.discoveryRecovery}</p>
+            <p className="f9-wk-dim">{props.discoveryRecovery}</p>
           ) : null}
           <div className="f9-ed-action-row">
             <SecondaryAction to="/app/source-access">Check source access</SecondaryAction>
@@ -326,10 +326,10 @@ function renderPanel(props: CompetitorDetailProps, context: { targetNoun: string
         </section>
 
         <p className="f9-crosslink-row">
-          <Link className="f9-text-link" to={watchlistLiveSearchHref(watchlist)}>
+          <Link className="f9-wk-lnk" to={watchlistLiveSearchHref(watchlist)}>
             Search their ads live
           </Link>
-          <Link className="f9-text-link" to={watchlistSavedAdsHref(watchlist)}>
+          <Link className="f9-wk-lnk" to={watchlistSavedAdsHref(watchlist)}>
             Saved ads from this {context.targetNoun}
           </Link>
         </p>
@@ -415,7 +415,7 @@ function EvidenceHandoff({ props }: { props: CompetitorDetailProps }) {
   return (
     <section aria-labelledby="competitor-handoff-title" className="f9-watchdetail-section">
       <h3 id="competitor-handoff-title">Share this record</h3>
-      <p className="f9-muted-copy">
+      <p className="f9-wk-dim">
         Send the stored evidence without changing the capture on file.
       </p>
       <div className="f9-watchdetail-local-actions">

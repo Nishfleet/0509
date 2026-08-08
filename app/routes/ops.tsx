@@ -416,10 +416,10 @@ export default function OpsRoute() {
 
       {warnings.length ? (
         <div className="f9-app-panel" role="status">
-          <p className="f9-app-kicker">Partial operational view</p>
+          <p className="f9-wk-kick">Partial operational view</p>
           <h2>Some operational sections could not be loaded</h2>
           {warnings.map((warning) => (
-            <p className="f9-muted-copy" key={warning.section}>
+            <p className="f9-wk-dim" key={warning.section}>
               {warning.message}
             </p>
           ))}
@@ -432,9 +432,9 @@ export default function OpsRoute() {
         </div>
       ) : null}
 
-      <div className="f9-dashboard-grid">
+      <div className="f9-wk-grid2">
         <article className="f9-app-panel f9-side-panel">
-          <div className="f9-work-list is-compact">
+          <div className="f9-wk-worklist is-compact">
             <MetricCard label="Failing runs" value={snapshot.summary.failingRuns} />
             <MetricCard label="Stuck runs" value={snapshot.summary.stuckRuns} />
             <MetricCard label="Failed evidence checks" value={snapshot.summary.failedProofs} />
@@ -474,7 +474,7 @@ export default function OpsRoute() {
             title="Open support cases"
             renderItem={(item) => (
               <>
-                <p className="f9-app-kicker">{readableCode(item.priority)} priority</p>
+                <p className="f9-wk-kick">{readableCode(item.priority)} priority</p>
                 <h2>{item.subject}</h2>
                 <p>{describeSupportAlert(item)}</p>
                 {item.alert_webhook_status === "provider_unknown" &&
@@ -506,7 +506,7 @@ export default function OpsRoute() {
                       <input maxLength={160} name="evidenceReference" required />
                     </label>
                     <ProviderObservationTimeField />
-                    <button className="f9-secondary-button" type="submit">
+                    <button className="f9-wk-btn-quiet" type="submit">
                       Record provider evidence
                     </button>
                   </Form>
@@ -514,12 +514,12 @@ export default function OpsRoute() {
                   <Form method="post">
                     <input name="intent" type="hidden" value="retry-support-alert" />
                     <input name="caseId" type="hidden" value={item.case_id} />
-                    <button className="f9-secondary-button" type="submit">
+                    <button className="f9-wk-btn-quiet" type="submit">
                       {item.alert_status === "failed" ? "Retry operator alert" : "Send operator alert"}
                     </button>
                   </Form>
                 ) : null}
-                <p className="f9-muted-copy">Updated {formatTimestamp(item.updated_at)}</p>
+                <p className="f9-wk-dim">Updated {formatTimestamp(item.updated_at)}</p>
               </>
             )}
           />
@@ -530,7 +530,7 @@ export default function OpsRoute() {
             title="Billing email provider reconciliation"
             renderItem={(item) => (
               <>
-                <p className="f9-app-kicker">{formatBillingLifecycleKind(item.lifecycleKind)}</p>
+                <p className="f9-wk-kick">{formatBillingLifecycleKind(item.lifecycleKind)}</p>
                 <h2>Provider outcome needs evidence</h2>
                 <p>
                   Record only a confirmed provider outcome. This action never resends an email and does not expose the
@@ -571,11 +571,11 @@ export default function OpsRoute() {
                     <input maxLength={255} name="providerMessageId" />
                   </label>
                   <ProviderObservationTimeField />
-                  <button className="f9-secondary-button" type="submit">
+                  <button className="f9-wk-btn-quiet" type="submit">
                     Record provider evidence
                   </button>
                 </Form>
-                <p className="f9-muted-copy">
+                <p className="f9-wk-dim">
                   Recorded {formatTimestamp(item.createdAt)}
                   {item.providerStatusLastSeenAt
                     ? <> · Provider last checked {formatTimestamp(item.providerStatusLastSeenAt)}</>
@@ -591,19 +591,19 @@ export default function OpsRoute() {
             title="Plan changes awaiting provider reconciliation"
             renderItem={(item) => (
               <>
-                <p className="f9-app-kicker">{item.plan} plan · provider outcome unknown</p>
+                <p className="f9-wk-kick">{item.plan} plan · provider outcome unknown</p>
                 <h2>Subscription plan change needs a current-state check</h2>
                 <p>
                   Read Dodo's current subscription state and reconcile it atomically. This action
                   never sends another plan-change request.
                 </p>
-                <p className="f9-muted-copy">
+                <p className="f9-wk-dim">
                   Account {maskIdentifier(item.userId)} · waiting since {formatTimestamp(item.claimedAt)}
                 </p>
                 <Form method="post">
                   <input name="intent" type="hidden" value="reconcile-dodo-plan-change" />
                   <input name="subjectUserId" type="hidden" value={item.userId} />
-                  <button className="f9-secondary-button" type="submit">
+                  <button className="f9-wk-btn-quiet" type="submit">
                     Check current Dodo state
                   </button>
                 </Form>
@@ -617,13 +617,13 @@ export default function OpsRoute() {
             title="Partial refunds awaiting operator reconciliation"
             renderItem={(item) => (
               <>
-                <p className="f9-app-kicker">Partial provider refund · {maskIdentifier(item.eventId)}</p>
+                <p className="f9-wk-kick">Partial provider refund · {maskIdentifier(item.eventId)}</p>
                 <h2>Proof-credit decision needs provider evidence</h2>
                 <p>
                   Record whether existing proof credits should be retained or revoked. This action
                   never sends another refund request to the provider.
                 </p>
-                <p className="f9-muted-copy">
+                <p className="f9-wk-dim">
                   {item.availableCredits} proof credits currently available · processed {formatTimestamp(item.processedAt)}
                 </p>
                 <Form className="f9-auth-form" method="post">
@@ -655,7 +655,7 @@ export default function OpsRoute() {
                     <input maxLength={512} name="evidenceReference" required />
                   </label>
                   <ProviderObservationTimeField />
-                  <button className="f9-secondary-button" type="submit">
+                  <button className="f9-wk-btn-quiet" type="submit">
                     Record refund reconciliation
                   </button>
                 </Form>
@@ -669,10 +669,10 @@ export default function OpsRoute() {
             title="What is failing"
             renderItem={(item) => (
               <>
-                <p className="f9-app-kicker">{item.watchlist_name}</p>
+                <p className="f9-wk-kick">{item.watchlist_name}</p>
                 <h2>Run failed</h2>
                 <p>{describeRunFailure(item.error_code)}</p>
-                <p className="f9-muted-copy">{formatTimestamp(item.started_at)}</p>
+                <p className="f9-wk-dim">{formatTimestamp(item.started_at)}</p>
               </>
             )}
           />
@@ -683,9 +683,9 @@ export default function OpsRoute() {
             title="What is stuck"
             renderItem={(item) => (
               <>
-                <p className="f9-app-kicker">{item.watchlist_name}</p>
+                <p className="f9-wk-kick">{item.watchlist_name}</p>
                 <h2>{item.status === "running" ? "Run still running" : "Run still pending"}</h2>
-                <p className="f9-muted-copy">{formatTimestamp(item.started_at)}</p>
+                <p className="f9-wk-dim">{formatTimestamp(item.started_at)}</p>
               </>
             )}
           />
@@ -696,9 +696,9 @@ export default function OpsRoute() {
             title="Recent evidence-check failures"
             renderItem={(item) => (
               <>
-                <p className="f9-app-kicker">{item.watchlist_name}</p>
+                <p className="f9-wk-kick">{item.watchlist_name}</p>
                 <h2>{describeProofFailure(item.failure_code)}</h2>
-                <p className="f9-muted-copy">{formatTimestamp(item.attempted_at)}</p>
+                <p className="f9-wk-dim">{formatTimestamp(item.attempted_at)}</p>
               </>
             )}
           />
@@ -709,9 +709,9 @@ export default function OpsRoute() {
             title="What is paused by budget"
             renderItem={(item) => (
               <>
-                <p className="f9-app-kicker">{item.watchlist_name}</p>
+                <p className="f9-wk-kick">{item.watchlist_name}</p>
                 <h2>{item.status === "skipped_due_to_rate_limit" ? "Rate-limited evidence check" : "Budget-skipped evidence check"}</h2>
-                <p className="f9-muted-copy">{formatTimestamp(item.attempted_at)}</p>
+                <p className="f9-wk-dim">{formatTimestamp(item.attempted_at)}</p>
               </>
             )}
           />
@@ -722,10 +722,10 @@ export default function OpsRoute() {
             title="Recent delivery attention"
             renderItem={(item) => (
               <>
-                <p className="f9-app-kicker">{item.watchlist_name ?? "Account default"}</p>
+                <p className="f9-wk-kick">{item.watchlist_name ?? "Account default"}</p>
                 <h2>{item.channel === "email" ? "Email delivery" : "WhatsApp delivery"}</h2>
                 <p>{describeDeliveryAttention(item)}</p>
-                <p className="f9-muted-copy">{formatTimestamp(item.created_at)}</p>
+                <p className="f9-wk-dim">{formatTimestamp(item.created_at)}</p>
               </>
             )}
           />
@@ -736,10 +736,10 @@ export default function OpsRoute() {
             title="What is blocked by provider or template state"
             renderItem={(item) => (
               <>
-                <p className="f9-app-kicker">{item.watchlist_name ?? "Account default"}</p>
+                <p className="f9-wk-kick">{item.watchlist_name ?? "Account default"}</p>
                 <h2>WhatsApp delivery destination</h2>
                 <p>{describeBlockedTarget(item)}</p>
-                <p className="f9-muted-copy">{formatTimestamp(item.updated_at)}</p>
+                <p className="f9-wk-dim">{formatTimestamp(item.updated_at)}</p>
               </>
             )}
           />
@@ -750,7 +750,7 @@ export default function OpsRoute() {
             title="Recent discovery failures"
             renderItem={(item) => (
               <>
-                <p className="f9-app-kicker">
+                <p className="f9-wk-kick">
                   {formatDiscoveryProvider(item.provider)} · {formatRouteContext(item.routeContext)}
                 </p>
                 <h2>
@@ -766,7 +766,7 @@ export default function OpsRoute() {
                       )
                     : `${item.country}${item.cacheStatus === "stale" ? " · stale cache served" : " · no fresh cache"}`}
                 </p>
-                <p className="f9-muted-copy">{formatTimestamp(item.createdAt)}</p>
+                <p className="f9-wk-dim">{formatTimestamp(item.createdAt)}</p>
               </>
             )}
           />
@@ -777,14 +777,14 @@ export default function OpsRoute() {
             title="Commercial discovery provider state"
             renderItem={(item) => (
               <>
-                <p className="f9-app-kicker">{formatDiscoveryProvider(item.provider)}</p>
+                <p className="f9-wk-kick">{formatDiscoveryProvider(item.provider)}</p>
                 <h2>{item.partial ? "Partial results retained" : formatDiscoveryStatus(item.status)}</h2>
                 <p>
                   {item.partial
                     ? "Any retained first-page results remain usable, but later-page retrieval is degraded."
                     : describeDiscoveryProviderState(item.status)}
                 </p>
-                <p className="f9-muted-copy">
+                <p className="f9-wk-dim">
                   {item.lastFailureAt ? (
                     <>Last failure {formatTimestamp(item.lastFailureAt)}</>
                   ) : item.lastSuccessAt ? (
@@ -804,12 +804,12 @@ export default function OpsRoute() {
             title="Which watchlists are degraded right now"
             renderItem={(item) => (
               <>
-                <p className="f9-app-kicker">{item.watchlist_name}</p>
+                <p className="f9-wk-kick">{item.watchlist_name}</p>
                 <h2>{item.failed_runs + item.failed_proofs + item.failed_deliveries} recent issues</h2>
                 <p>
                   {item.failed_runs} failed runs · {item.failed_proofs} failed evidence checks · {item.failed_deliveries} failed deliveries
                 </p>
-                <p className="f9-muted-copy">
+                <p className="f9-wk-dim">
                   {item.last_seen_at ? formatTimestamp(item.last_seen_at) : "No recent timestamp"}
                 </p>
               </>
@@ -825,8 +825,8 @@ export default function OpsRoute() {
 
 function MetricCard(props: { label: string; value: number }) {
   return (
-    <div className="f9-work-row">
-      <p className="f9-app-kicker">{props.label}</p>
+    <div className="f9-wk-workrow">
+      <p className="f9-wk-kick">{props.label}</p>
       <p className="f9-ops-metric-value">{props.value}</p>
     </div>
   );
@@ -840,9 +840,9 @@ function OpsSection<T>(props: {
 }) {
   return (
     <section className="f9-wk-mt15">
-      <p className="f9-app-kicker">{props.title}</p>
+      <p className="f9-wk-kick">{props.title}</p>
       {props.items.length === 0 ? (
-        <p className="f9-muted-copy">{props.empty}</p>
+        <p className="f9-wk-dim">{props.empty}</p>
       ) : (
         <ul className="event-list">
           {props.items.map((item, index) => (

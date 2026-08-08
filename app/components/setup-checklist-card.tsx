@@ -126,7 +126,7 @@ export function SetupChecklistCard({
       {setupActionData?.message ? (
         <div
           aria-live={setupActionData.ok ? "polite" : "assertive"}
-          className={`f9-message ${setupActionData.ok ? "is-success" : "is-error"}`}
+          className={`f9-wk-notice ${setupActionData.ok ? "is-success" : "is-error"}`}
           role={setupActionData.ok ? "status" : "alert"}
         >
           <p>{setupActionData.message}</p>

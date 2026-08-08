@@ -24,7 +24,7 @@ export default function PrivacyRoute() {
       <SimpleHeader />
       <section className="f9-container f9-legal-section">
         <article className="f9-legal-card">
-          <span className="f9-app-kicker">Privacy</span>
+          <span className="f9-wk-kick">Privacy</span>
           <h1>Five to Nine privacy basics.</h1>
           <p>This is a plain-English summary of the current product behavior.</p>
 

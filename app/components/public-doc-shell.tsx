@@ -15,7 +15,7 @@ export function PublicDocShell(props: {
       <PublicDocHeader />
       <section className="f9-container f9-legal-section">
         <article className="f9-legal-card">
-          <span className="f9-app-kicker">{props.kicker}</span>
+          <span className="f9-wk-kick">{props.kicker}</span>
           <h1>{props.title}</h1>
           <p>{props.intro}</p>
           {props.children}

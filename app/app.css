@@ -779,6 +779,10 @@ img {
    called slop. The tokens survive because the public rail and the focus
    contract read them; they now resolve to the product's own tokens in BOTH
    themes, the way the dark remap already did. */
+.f9-find-page a.f9-wk-btn {
+  color: #fff;
+}
+
 .f9-find-page {
   --f9-search-ink: var(--ink);
   --f9-search-muted: var(--ink-soft);
@@ -837,23 +841,6 @@ img {
 .f9-quick-track-form {
   display: grid;
   gap: 12px;
-}
-
-
-
-.f9-message {
-  position: relative;
-  z-index: 2;
-  margin-bottom: 16px;
-  padding: 14px 16px;
-  border-radius: 18px;
-  border: 1px solid var(--f9-search-line);
-  background: #fff;
-  box-shadow: 0 18px 44px rgba(6, 22, 41, 0.08);
-}
-
-.f9-message.is-success {
-  color: #07725f;
 }
 
 .f9-checkout-banner {
@@ -976,10 +963,6 @@ button[aria-busy="true"] {
   }
 }
 
-.f9-message.is-error {
-  color: var(--red);
-}
-
 
 
 
@@ -1096,52 +1079,6 @@ button[aria-busy="true"] {
   gap: 10px;
 }
 
-.f9-primary-button,
-.f9-secondary-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 44px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  cursor: pointer;
-  font: inherit;
-  font-weight: 700;
-  padding: 10px 16px;
-  white-space: nowrap;
-  transition:
-    transform 160ms ease,
-    border-color 160ms ease,
-    box-shadow 160ms ease,
-    background-color 160ms ease;
-}
-
-.f9-primary-button {
-  background: var(--f9-search-ink, var(--f9-global-ink));
-  color: #fff;
-  box-shadow: none;
-}
-
-.f9-secondary-button {
-  border: 1px solid rgba(6, 22, 41, 0.12);
-  background: #fff;
-  color: var(--f9-search-ink, var(--f9-global-ink));
-}
-
-.f9-find-page a.f9-primary-button {
-  color: #fff;
-}
-
-.f9-find-page a.f9-secondary-button {
-  color: var(--f9-search-ink, var(--f9-global-ink));
-}
-
-.f9-primary-button:hover,
-.f9-secondary-button:hover,
-.f9-email-cta button:hover {
-  transform: translateY(-1px);
-}
-
 
 
 
@@ -1237,11 +1174,6 @@ button[aria-busy="true"] {
   .f9-field-grid,
   .f9-mode-toggle {
     grid-template-columns: 1fr;
-  }
-
-  .f9-primary-button,
-  .f9-secondary-button{
-    width: 100%;
   }
 
   }
@@ -1378,11 +1310,6 @@ button[aria-busy="true"] {
   accent-color: var(--f9-search-accent);
 }
 
-.f9-auth-form .f9-primary-button {
-  width: 100%;
-  min-height: 48px;
-}
-
 .f9-auth-oauth {
   display: grid;
   gap: 12px;
@@ -1472,15 +1399,6 @@ button[aria-busy="true"] {
   color: var(--f9-search-ink);
 }
 
-.f9-app-kicker {
-  color: var(--ink-soft);
-  font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
 /* WP-17: display face on paid workspace page titles + panel headings */
 .f9-dash-page-app .f9-dash-page-header h1,
 .f9-dash-page-app .f9-app-panel > h2,
@@ -1511,28 +1429,6 @@ button[aria-busy="true"] {
 .f9-cursor-rail a.is-active .f9-icon,
 .f9-dash-nav-link.is-active .f9-icon {
   opacity: 1;
-}
-
-.f9-app-stack,
-.f9-work-list {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
-}
-
-.f9-app-stack > *,
-.f9-work-list > *,
-.f9-app-panel > * {
-  min-width: 0;
-  max-width: 100%;
-}
-
-.f9-app-panel,
-.f9-work-row {
-  border: 1px solid var(--f9-search-line);
-  background: rgba(255, 255, 255, 0.92);
-  /* FIX-12: match billing-card ring shadow (no heavy drop). */
-  box-shadow: 0 0 0 1px rgba(6, 22, 41, 0.04), 0 8px 24px rgba(6, 22, 41, 0.04);
 }
 
 .f9-app-panel {
@@ -1581,14 +1477,6 @@ button[aria-busy="true"] {
 }
 
 /* Share/list cards under a page h1 use h2; keep prior h3 card title size */
-.f9-event-card > h2,
-.f9-event-card .f9-panel-toolbar h2,
-.f9-work-row .f9-ad-thumb-row h2 {
-  margin: 0;
-  font-size: 1.05rem;
-  line-height: 1.25;
-  font-weight: 600;
-}
 
 .f9-proof-packet > div > h2 {
   margin: 4px 0 0;
@@ -1700,11 +1588,6 @@ button[aria-busy="true"] {
   color: var(--ink-soft);
 }
 
-.f9-muted-copy {
-  color: var(--f9-search-muted);
-  line-height: 1.58;
-}
-
 .f9-account-security-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1748,13 +1631,6 @@ button[aria-busy="true"] {
   }
 }
 
-.f9-dashboard-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
-  gap: 16px;
-  align-items: start;
-}
-
 /* Two-up flow for detail sections that can share a row; collapses on its
    own once a column would fall under 300px. */
 .f9-detail-split {
@@ -1774,11 +1650,6 @@ button[aria-busy="true"] {
   margin: 0;
 }
 
-.f9-detail-cell > .f9-primary-button,
-.f9-detail-cell > .f9-secondary-button {
-  justify-self: start;
-}
-
 .f9-field-pair {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1789,65 +1660,12 @@ button[aria-busy="true"] {
   min-height: 420px;
 }
 
-.f9-work-list.is-compact {
-  gap: 10px;
-}
-
-.f9-work-list.is-compact .f9-dashboard-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.f9-work-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: flex-start;
-  padding: 18px;
-  border-radius: 20px;
-  box-shadow: none;
-  min-width: 0;
-}
-
-.f9-work-row > div {
-  min-width: 0;
-}
-
-.f9-work-row.is-active {
-  border-color: rgba(10, 169, 130, 0.34);
-  box-shadow: inset 0 0 0 3px rgba(10, 169, 130, 0.1);
-}
-
 .f9-inline-touch-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 44px;
   min-height: 44px;
-}
-
-.f9-work-row.is-pending {
-  border-color: rgba(88, 197, 255, 0.46);
-}
-
-.f9-work-row h2,
-.f9-work-row h3,
-.f9-work-row .f9-ops-metric-value {
-  margin: 0 0 6px;
-  font-size: 1.05rem;
-}
-
-.f9-work-row .f9-ops-metric-value {
-  font-weight: 600;
-}
-
-.f9-work-row small {
-  color: var(--f9-search-soft);
-  font-weight: 700;
-}
-
-.f9-work-row .f9-action-row {
-  justify-content: flex-end;
 }
 
 .f9-plan-picker-panel {
@@ -1889,42 +1707,6 @@ button[aria-busy="true"] {
   box-shadow: 0 8px 22px rgba(6, 22, 41, 0.12);
 }
 
-.f9-app-plan-grid,
-.f9-topup-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.f9-app-plan-card,
-.f9-topup-card {
-  display: grid;
-  align-content: start;
-  gap: 12px;
-  min-width: 0;
-  padding: 16px;
-  border-radius: 8px;
-  background: #fff;
-  box-shadow:
-    rgba(0, 0, 0, 0.08) 0 0 0 1px,
-    rgba(0, 0, 0, 0.04) 0 2px 2px,
-    #fafafa 0 0 0 1px;
-}
-
-.f9-app-plan-card.is-selected {
-  box-shadow:
-    rgba(23, 23, 23, 0.26) 0 0 0 1px,
-    rgba(0, 0, 0, 0.08) 0 2px 6px,
-    #fafafa 0 0 0 1px;
-}
-
-.f9-app-plan-card.is-recommended {
-  box-shadow:
-    rgba(23, 23, 23, 0.18) 0 0 0 1px,
-    rgba(0, 0, 0, 0.05) 0 2px 4px,
-    #fafafa 0 0 0 1px;
-}
-
 .f9-app-plan-card-head {
   display: flex;
   align-items: flex-start;
@@ -1939,13 +1721,6 @@ button[aria-busy="true"] {
   color: var(--ink);
   font-size: 1.35rem;
   line-height: 1.1;
-}
-
-.f9-app-plan-card p,
-.f9-topup-card p {
-  margin: 0;
-  color: var(--f9-search-muted);
-  line-height: 1.5;
 }
 
 .f9-plan-limit-strip {
@@ -1987,36 +1762,6 @@ button[aria-busy="true"] {
 
 /* The base feature list is styled for the dark marketing commerce card;
    on white app plan cards it needs readable ink and a quiet bullet. */
-.f9-app-plan-card .f9-plan-feature-list {
-  margin: 0;
-  color: #425466;
-  font-size: 0.9rem;
-}
-
-.f9-app-plan-card .f9-plan-feature-list li::before {
-  width: 6px;
-  height: 6px;
-  background: var(--ink);
-  box-shadow: none;
-}
-
-.f9-app-plan-card .f9-plan-actions,
-.f9-topup-card form {
-  margin-top: auto;
-}
-
-.f9-topup-card .f9-secondary-button,
-.f9-app-plan-card .f9-primary-button,
-.f9-app-plan-card .f9-secondary-button {
-  width: 100%;
-}
-
-@media (max-width: 920px) {
-  .f9-app-plan-grid,
-  .f9-topup-grid {
-    grid-template-columns: 1fr;
-  }
-}
 
 @media (max-width: 620px) {
   .f9-cycle-toggle {
@@ -2026,13 +1771,6 @@ button[aria-busy="true"] {
   .f9-cycle-toggle a,
   .f9-cycle-toggle button {
     flex: 1;
-  }
-
-  .f9-plan-actions .f9-text-link,
-  .f9-work-row > span a {
-    display: inline-flex;
-    min-height: 44px;
-    align-items: center;
   }
 }
 
@@ -2114,11 +1852,6 @@ button[aria-busy="true"] {
 .f9-import-row.is-invalid em,
 .f9-import-row.is-over_cap em {
   color: #9b341f;
-}
-
-.f9-text-link {
-  color: #07725f;
-  font-weight: 600;
 }
 
 .f9-field-inline {
@@ -2436,17 +2169,6 @@ button[aria-busy="true"] {
 }
 
 @media (max-width: 980px) {
-  .f9-panel-toolbar,
-  .f9-work-row {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .f9-dashboard-grid,
-  .f9-work-list.is-compact .f9-dashboard-grid,
-  .f9-status-strip {
-    grid-template-columns: 1fr;
-  }
 
   .f9-auth-layout,
   .f9-auth-proof-list {
@@ -2624,11 +2346,6 @@ button[aria-busy="true"] {
 }
 
 /* No interactive chrome may survive into the printed document. */
-.f9-share-pdf button,
-.f9-share-pdf .f9-primary-button,
-.f9-share-pdf .f9-secondary-button {
-  display: none !important;
-}
 
 .f9-share-pdf .f9-app-panel {
   border: 0;
@@ -4224,18 +3941,6 @@ one signal-green accent.
   color: var(--ld-ink);
 }
 
-.f9-auth-page .f9-auth-story > div > span,
-.f9-legal-page .f9-app-kicker,
-.f9-share-page .f9-app-kicker {
-  font-family: var(--ld-mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ld-green-ink);
-  background: var(--ld-green-wash);
-  padding: 3px 9px;
-}
-
 .f9-auth-page .f9-auth-story p { color: var(--ld-ink-soft); }
 
 .f9-auth-page .f9-auth-proof-list > div {
@@ -4285,22 +3990,6 @@ one signal-green accent.
   color: var(--ld-ink-soft);
 }
 
-.f9-auth-page .f9-primary-button,
-.f9-find-page .f9-primary-button,
-.f9-legal-page .f9-primary-button,
-.f9-error-page .f9-primary-button,
-.f9-share-page .f9-primary-button {
-  background: var(--ld-ink);
-  color: var(--ld-bone);
-  border: 0;
-  border-radius: 8px;
-  font-weight: 700;
-  box-shadow: none;
-}
-
-.f9-auth-page .f9-primary-button:hover,
-.f9-find-page .f9-primary-button:hover { background: #2a2820; }
-
 .f9-auth-page .f9-auth-divider {
   color: var(--ld-ink-soft);
 }
@@ -4319,17 +4008,6 @@ one signal-green accent.
 .f9-auth-page .f9-oauth-button:hover {
   background: #f8fafd;
   border-color: #d2e3fc;
-}
-
-.f9-find-page .f9-secondary-button,
-.f9-legal-page .f9-secondary-button,
-.f9-error-page .f9-secondary-button,
-.f9-share-page .f9-secondary-button {
-  background: transparent;
-  color: var(--ld-ink);
-  border: 1.5px solid var(--ld-ink);
-  border-radius: 8px;
-  box-shadow: none;
 }
 
 .f9-find-page .f9-search-nav {
@@ -4398,28 +4076,9 @@ one signal-green accent.
   color: inherit;
 }
 
-.f9-share-page .f9-event-card,
-.f9-share-page .f9-work-row {
-  background: var(--ld-card);
-  border: 1.5px solid var(--ld-line);
-  border-radius: 0;
-  box-shadow: none;
-  color: var(--ld-ink);
-}
-
-.f9-share-page .f9-app-kicker {
-  display: inline-block;
-  width: fit-content;
-}
-
 .f9-share-page .f9-panel-toolbar-heading,
 .f9-share-page .f9-app-panel strong {
   color: var(--ld-ink);
-}
-
-.f9-share-page .f9-muted-copy,
-.f9-share-page .f9-app-panel p {
-  color: var(--ld-ink-soft);
 }
 
 .f9-share-page .f9-ed-report-prose,
@@ -4508,40 +4167,6 @@ one signal-green accent.
 
 /* BL-031: the two-stop page gradient is deleted. The DNA has no gradients
    anywhere — the ground is one flat bone, and depth comes from rules. */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-.f9-find-page .f9-primary-button,
-.f9-find-page .f9-secondary-button {
-  min-height: 44px;
-  border-radius: 10px;
-}
 
 
 
@@ -4703,12 +4328,6 @@ one signal-green accent.
 .f9-cursor-rail nav a.active {
   background: #efede6;
   color: #11100d;
-}
-
-.f9-cursor-rail nav a.is-pending,
-.f9-dash-mobile-nav a.is-pending,
-.f9-work-row.is-pending {
-  opacity: 0.72;
 }
 
 .f9-dash-page {
@@ -4903,35 +4522,6 @@ one signal-green accent.
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-.f9-find-page .f9-primary-button,
-.f9-find-page .f9-secondary-button {
-  min-height: 44px;
-  border-radius: 8px;
-}
-
-
-
-
-
-
 @media (max-width: 1180px) {
   .f9-cursor-shell {
     grid-template-columns: 1fr;
@@ -4991,12 +4581,6 @@ one signal-green accent.
 
   
   }
-
-.f9-dash-page-app .f9-work-row > label {
-  display: flex;
-  align-items: center;
-  min-height: 44px;
-}
 
 @media (max-width: 640px) {
   .f9-cursor-shell {
@@ -5475,21 +5059,6 @@ one signal-green accent.
   50% { box-shadow: 0 0 0 7px rgba(22, 196, 127, 0); }
 }
 
-.f9-app-panel,
-.f9-work-row {
-  transition: transform 0.25s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.25s cubic-bezier(0.2, 0.7, 0.2, 1);
-}
-
-.f9-work-row:hover {
-  border-color: rgba(10, 169, 130, 0.28);
-}
-
-@media (prefers-reduced-motion: reduce) {
-
-  .f9-app-panel,
-  .f9-work-row { transition: none; }
-}
-
 .ld-wall-compact {
   font-size: clamp(2.2rem, 5.2vw, 4.6rem);
   text-transform: none;
@@ -5562,11 +5131,6 @@ one signal-green accent.
 .f9-find-page :is(a, button, input, select, textarea):focus-visible {
   outline: 2px solid rgba(23, 112, 80, 0.72);
   outline-offset: 2px;
-}
-
-.f9-find-page .f9-primary-button,
-.f9-find-page .f9-secondary-button {
-  transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease, transform 140ms ease;
 }
 
 @media (max-width: 760px) {
@@ -5814,18 +5378,6 @@ one signal-green accent.
 
 /* Feedback inside the workspace stays flat and warm: hairline border,
    card surface, no floating shadow (matches the customer-grade cleanup). */
-.f9-dash-page .f9-message {
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--card);
-  box-shadow: none;
-  margin-bottom: 0;
-}
-
-.f9-dash-page .f9-message p {
-  margin: 0;
-  line-height: 1.45;
-}
 
 .f9-dash-state h3 {
   margin: 0;
@@ -6340,10 +5892,6 @@ one signal-green accent.
   gap: 8px;
 }
 
-.f9-dossier-angles .f9-muted-copy {
-  font-size: 0.86rem;
-}
-
 .f9-dossier-angle-note {
   color: var(--ink-faint);
   font-size: 0.82rem;
@@ -6700,39 +6248,8 @@ one signal-green accent.
 
 /* --- Panels, cards, wells --- */
 
-[data-f9-theme="dark"] .f9-app-panel,
-[data-f9-theme="dark"] .f9-work-row {
-  background: var(--card);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.28);
-}
-
-
-[data-f9-theme="dark"] .f9-message,
-[data-f9-theme="dark"] .f9-import-row,
-[data-f9-theme="dark"] .f9-event-card,
-[data-f9-theme="dark"] .f9-app-plan-card,
-[data-f9-theme="dark"] .f9-topup-card,
-[data-f9-theme="dark"] .f9-creative-tile,
-[data-f9-theme="dark"] .f9-trend-card,
-[data-f9-theme="dark"] .f9-inline-details {
-  background: var(--card);
-}
-
 [data-f9-theme="dark"] .f9-inline-details {
   border-color: var(--line);
-}
-
-[data-f9-theme="dark"] .f9-app-plan-card,
-[data-f9-theme="dark"] .f9-topup-card {
-  box-shadow: 0 0 0 1px var(--line);
-}
-
-[data-f9-theme="dark"] .f9-app-plan-card.is-selected {
-  box-shadow: 0 0 0 1px var(--ink-faint);
-}
-
-[data-f9-theme="dark"] .f9-app-plan-card.is-recommended {
-  box-shadow: 0 0 0 1px var(--ink-faint), 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 [data-f9-theme="dark"] .f9-status-strip > div,
@@ -6770,17 +6287,6 @@ one signal-green accent.
 /* --- Buttons,
 inputs,
 toggles --- */
-
-[data-f9-theme="dark"] .f9-primary-button,
-[data-f9-theme="dark"] .f9-find-page a.f9-primary-button {
-  color: var(--bone);
-}
-
-[data-f9-theme="dark"] .f9-secondary-button,
-[data-f9-theme="dark"] .f9-sign-out-button {
-  border-color: var(--line);
-  background: var(--card);
-}
 
 [data-f9-theme="dark"] .f9-danger-button {
   background: var(--card);
@@ -6912,14 +6418,6 @@ toggles --- */
 /* --- Accent text: greens brighten,
 reds soften --- */
 
-[data-f9-theme="dark"] .f9-import-row.is-valid em,
-[data-f9-theme="dark"] .f9-text-link,
-[data-f9-theme="dark"] .f9-annual-note.is-valid,
-[data-f9-theme="dark"] .f9-message.is-success,
-[data-f9-theme="dark"] .proof-trail-list dt {
-  color: var(--green-ink);
-}
-
 [data-f9-theme="dark"] .f9-import-row.is-invalid em,
 [data-f9-theme="dark"] .f9-import-row.is-over_cap em,
 [data-f9-theme="dark"] .f9-annual-note.is-unavailable {
@@ -6928,12 +6426,6 @@ reds soften --- */
 
 
 /* --- Muted copy on legacy hardcoded grays --- */
-
-[data-f9-theme="dark"] .f9-numbered-guide,
-[data-f9-theme="dark"] .f9-app-plan-card .f9-plan-feature-list,
-[data-f9-theme="dark"] .f9-inline-details > summary {
-  color: var(--ink-soft);
-}
 
 [data-f9-theme="dark"] .f9-find-page .f9-cursor-account span,
 [data-f9-theme="dark"] .f9-settings-details > summary::after {
@@ -7085,12 +6577,6 @@ reds soften --- */
 @media (max-width: 600px) {
   .f9-crosslink-row {
     gap: 0 14px;
-  }
-
-  .f9-crosslink-row .f9-text-link {
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
   }
 }
 
@@ -8056,15 +7542,6 @@ reds soften --- */
   color: var(--ink-soft);
 }
 
-.f9-ed-setup-primary,
-.f9-ed-setup-import,
-.f9-ed-setup-links,
-.f9-ed-setup-card > .f9-ed-action-row,
-.f9-ed-setup-capacity,
-.f9-ed-setup-card > .f9-message {
-  margin: 14px 16px 0;
-}
-
 .f9-ed-setup-primary {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -8119,14 +7596,6 @@ reds soften --- */
 
   .f9-ed-setup-primary {
     grid-template-columns: 1fr;
-    margin-inline: 12px;
-  }
-
-  .f9-ed-setup-import,
-  .f9-ed-setup-links,
-  .f9-ed-setup-card > .f9-ed-action-row,
-  .f9-ed-setup-capacity,
-  .f9-ed-setup-card > .f9-message {
     margin-inline: 12px;
   }
 }
@@ -10584,18 +10053,6 @@ a.f9-wk-btn {
   border-top-width: 1px;
 }
 
-.f9-wk-page .f9-ed-setup-primary,
-.f9-wk-page .f9-ed-setup-import,
-.f9-wk-page .f9-ed-setup-links,
-.f9-wk-page .f9-ed-setup-capacity,
-.f9-wk-page .f9-ed-setup-card > .f9-ed-action-row,
-.f9-wk-page .f9-ed-setup-card > .f9-message {
-  margin-right: 0;
-  margin-left: 0;
-  padding-right: var(--wk-pad);
-  padding-left: var(--wk-pad);
-}
-
 .f9-wk-page .f9-ed-setup-list {
   margin: 14px 0 0;
   border-top: 1px solid var(--wk-rule);
@@ -10749,14 +10206,6 @@ a.f9-wk-btn {
        green moment and a fourth caps-mono surface at once, so inside a
        rebuilt page they become the same quiet sentence-case label the rest
        of the record now uses. */
-.f9-wk-page .f9-app-kicker {
-  color: var(--ink-faint);
-  font-family: var(--f9-font);
-  font-size: 12.5px;
-  font-weight: 400;
-  letter-spacing: 0;
-  text-transform: none;
-}
 
 /* 4. A state is a word. The boxed, caps-mono, accent-edged stamp becomes
       the same "Caught" / "Quiet" the ruled rows use. */
@@ -12763,20 +12212,6 @@ textarea.f9-wk-in {
   padding: 18px var(--wk-pad) 0;
 }
 
-.f9-wk-report-view .f9-message {
-  padding: 12px 14px;
-  border: 1px solid var(--wk-band);
-  border-radius: 0;
-  background: var(--wk-band);
-  color: var(--wk-on-band);
-  box-shadow: none;
-}
-
-.f9-wk-report-view .f9-message p,
-.f9-wk-report-view .f9-message a {
-  color: var(--wk-on-band);
-}
-
 .f9-wk-report-view .f9-copy-button {
   padding: 0;
   border: 0;
@@ -13173,23 +12608,6 @@ textarea.f9-wk-in {
   font-size: 13.5px;
   font-weight: 400;
   transform: none;
-}
-
-.f9-library-page .f9-secondary-button.f9-copy-button {
-  min-width: 44px;
-  min-height: 44px;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: none;
-  box-shadow: none;
-  color: currentcolor;
-  font-family: var(--f9-font);
-  font-size: 13.5px;
-  font-weight: 400;
-  transform: none;
-  text-decoration: underline;
-  text-underline-offset: 3px;
 }
 
 @media (max-width: 640px) {
@@ -14180,11 +13598,6 @@ textarea.f9-wk-in {
   text-transform: none;
 }
 
-.f9-watchdetail-section .f9-muted-copy {
-  max-width: 62ch;
-  margin: 7px 0 0;
-}
-
 .f9-watchdetail-lock-note {
   max-width: 62ch;
   margin: 10px 0 0;
@@ -14261,23 +13674,6 @@ textarea.f9-wk-in {
   text-transform: none;
 }
 
-.f9-watchdetail-detail .f9-ed-micro,
-.f9-watchdetail-detail .f9-app-kicker,
-.f9-watchdetail-detail .f9-ed-plate-header .f9-ed-micro,
-.f9-watchdetail-detail .f9-trend-label,
-.f9-watchdetail-detail .f9-trend-series-label,
-.f9-watchdetail-detail .f9-dossier-window,
-.f9-watchdetail-detail .f9-dossier-stat dt,
-.f9-watchdetail-detail .f9-dossier-subhead,
-.f9-watchdetail-detail .f9-aggression-band {
-  color: var(--ink-faint);
-  font-family: var(--f9-font);
-  font-size: 12.5px;
-  font-weight: 400;
-  letter-spacing: 0;
-  text-transform: none;
-}
-
 .f9-watchdetail-detail .f9-ed-number-value,
 .f9-watchdetail-detail .f9-trend-value,
 .f9-watchdetail-detail .f9-aggression-number {
@@ -14291,33 +13687,6 @@ textarea.f9-wk-in {
 .f9-watchdetail-detail,
 .f9-watchdetail-detail * {
   border-radius: 0;
-}
-
-.f9-watchdetail-detail :is(
-    .f9-ed-panel,
-    .f9-ed-diff-plate,
-    .f9-ed-change-record,
-    .f9-ed-evidence-plate,
-    .f9-ed-number-card,
-    .f9-ed-rail-card,
-    .f9-ed-fact-rail,
-    .f9-ed-first-scan,
-    .f9-detail-cell,
-    .f9-work-list,
-    .f9-work-row,
-    .f9-trend-card,
-    .f9-dossier-stat,
-    .f9-dossier-leader,
-    .f9-dossier-hooks li,
-    .f9-aggression-card,
-    .f9-counter-brief,
-    .f9-creative-tile
-  ) {
-  border-right: 0;
-  border-bottom: 0;
-  border-left: 0;
-  background: transparent;
-  box-shadow: none;
 }
 
 .f9-watchdetail-detail :is(
@@ -14389,20 +13758,6 @@ textarea.f9-wk-in {
   background: transparent;
 }
 
-.f9-watchdetail-detail .f9-ed-fact-row,
-.f9-watchdetail-detail .f9-ed-rail-line,
-.f9-watchdetail-detail .f9-work-row {
-  padding: 11px 0;
-  border-top: 1px solid var(--wk-rule);
-  background: transparent;
-}
-
-.f9-watchdetail-detail .f9-ed-fact-row:first-child,
-.f9-watchdetail-detail .f9-ed-rail-line:first-child,
-.f9-watchdetail-detail .f9-work-row:first-child {
-  border-top: 1px solid var(--wk-rule);
-}
-
 .f9-watchdetail-detail .f9-ed-number-card,
 .f9-watchdetail-detail .f9-ed-rail-card,
 .f9-watchdetail-detail .f9-ed-fact-rail {
@@ -14430,15 +13785,6 @@ textarea.f9-wk-in {
   display: grid;
   gap: 26px;
   grid-template-columns: minmax(0, 1fr);
-}
-
-.f9-watchdetail-detail .f9-work-list.is-compact {
-  gap: 0;
-  padding: 0;
-}
-
-.f9-watchdetail-detail .f9-work-row {
-  min-height: 44px;
 }
 
 .f9-watchdetail-detail .f9-field {
@@ -14575,13 +13921,6 @@ textarea.f9-wk-in {
   border-left: 0;
 }
 
-.f9-watchdetail-detail .f9-message {
-  margin: 16px var(--wk-pad) 0;
-  border: 1px solid var(--wk-rule);
-  border-radius: 0;
-  background: transparent;
-}
-
 /* Setup inherits the search mode switch and cross-route links. On the deep
    surface they are one ruled instrument and quiet 44px actions, not a
    floating selected pill or two proof-green decorations. */
@@ -14600,18 +13939,6 @@ textarea.f9-wk-in {
   background: var(--wk-sunk);
   box-shadow: none;
   color: var(--ink);
-}
-
-.f9-watchdetail-detail .f9-crosslink-row .f9-text-link {
-  display: inline-flex;
-  min-height: 44px;
-  align-items: center;
-  color: var(--ink);
-  font-weight: 400;
-  text-decoration: underline;
-  text-decoration-color: currentColor;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
 }
 
 /* The signed-in rail foot owns identity plus one session action. Help, Docs
@@ -15196,30 +14523,6 @@ textarea.f9-wk-in {
   line-height: 1.4;
 }
 
-.f9-acct-label,
-.f9-acct-page .f9-app-kicker {
-  display: block;
-  margin: 0;
-  color: var(--ink-faint);
-  font-family: var(--f9-font);
-  font-size: 12.5px;
-  font-weight: 400;
-  letter-spacing: 0;
-  line-height: 1.35;
-  text-transform: none;
-}
-
-.f9-acct-copy,
-.f9-acct-note,
-.f9-acct-empty,
-.f9-acct-page .f9-muted-copy {
-  max-width: var(--bl041-max-copy);
-  margin: 10px 0 0;
-  color: var(--ink-soft);
-  font-size: 13.5px;
-  line-height: 1.58;
-}
-
 .f9-acct-page a {
   color: inherit;
   text-underline-offset: 3px;
@@ -15237,9 +14540,9 @@ textarea.f9-wk-in {
  */
 
 .f9-acct-page :is(
-  .f9-primary-button,
-  .f9-secondary-button,
-  .f9-text-link,
+  .f9-wk-btn,
+  .f9-wk-btn-quiet,
+  .f9-wk-lnk,
   .f9-acct-text-action
 ) {
   display: inline-flex;
@@ -15264,17 +14567,14 @@ textarea.f9-wk-in {
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
   text-transform: none;
-  /* The legacy `.f9-primary-button:hover` lift is killed here, at rest, rather
-     than inside a :hover block: the workspace contract is that hover moves
-     colour and rule weight only, so no :hover rule in this layer may name a
-     transform at all. This rule outranks the legacy one by source order. */
+  /* Hover moves colour and rule weight only — no transform in this layer. */
   transform: none;
 }
 
 .f9-acct-page :is(
-  .f9-primary-button,
-  .f9-secondary-button,
-  .f9-text-link,
+  .f9-wk-btn,
+  .f9-wk-btn-quiet,
+  .f9-wk-lnk,
   .f9-acct-text-action
 ):hover {
   border: 0;
@@ -15283,9 +14583,9 @@ textarea.f9-wk-in {
 }
 
 .f9-acct-page :is(
-  .f9-primary-button,
-  .f9-secondary-button,
-  .f9-text-link,
+  .f9-wk-btn,
+  .f9-wk-btn-quiet,
+  .f9-wk-lnk,
   .f9-acct-text-action
 ):disabled {
   border: 0;
@@ -15402,36 +14702,6 @@ textarea.f9-wk-in {
 }
 
 /* Quiet, in-flow notices. Errors keep deletion red as a second text channel. */
-
-.f9-acct-page .f9-message {
-  position: relative;
-  z-index: auto;
-  max-width: var(--bl041-max-copy);
-  margin: 14px 0 0;
-  padding: 9px 0 9px 13px;
-  border: 0;
-  border-left: 1px solid var(--wk-rule);
-  background: transparent;
-  box-shadow: none;
-  color: var(--ink-soft);
-  font-size: 13.5px;
-  line-height: 1.55;
-}
-
-.f9-acct-page .f9-message p {
-  margin: 0;
-}
-
-.f9-acct-page .f9-message.is-error {
-  border-left-color: var(--red);
-  background: transparent;
-  color: var(--ink);
-}
-
-.f9-acct-page .f9-message.is-success {
-  border-left-color: var(--wk-rule);
-  color: var(--ink);
-}
 
 .f9-acct-team > #team-action-feedback {
   margin: 0 var(--wk-pad);
@@ -15681,11 +14951,6 @@ textarea.f9-wk-in {
   margin-top: 8px;
 }
 
-.f9-acct-billing > .f9-acct-flow > .f9-message {
-  margin-right: var(--wk-pad);
-  margin-left: var(--wk-pad);
-}
-
 .f9-acct-billing .f9-cycle-toggle {
   display: inline-flex;
   align-items: center;
@@ -15717,44 +14982,6 @@ textarea.f9-wk-in {
   color: var(--ink);
 }
 
-.f9-acct-billing .f9-app-plan-grid,
-.f9-acct-billing .f9-topup-grid {
-  display: grid;
-  gap: 0;
-  margin-top: 22px;
-  border-top: 1px solid var(--wk-rule);
-  border-bottom: 1px solid var(--wk-rule);
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.f9-acct-billing .f9-app-plan-card,
-.f9-acct-billing .f9-topup-card {
-  display: flex;
-  min-width: 0;
-  min-height: 100%;
-  flex-direction: column;
-  align-content: initial;
-  gap: 11px;
-  padding: 18px;
-  border: 0;
-  border-right: 1px solid var(--wk-rule);
-  background: transparent;
-  box-shadow: none;
-}
-
-.f9-acct-billing :is(.f9-app-plan-card, .f9-topup-card):last-child {
-  border-right: 0;
-}
-
-.f9-acct-billing .f9-app-plan-card.is-selected {
-  background: var(--wk-sunk);
-  box-shadow: none;
-}
-
-.f9-acct-billing .f9-app-plan-card.is-recommended {
-  box-shadow: none;
-}
-
 .f9-acct-billing .f9-app-plan-card-head {
   gap: 16px;
 }
@@ -15766,13 +14993,6 @@ textarea.f9-wk-in {
   font-family: var(--f9-font);
   font-size: 20px;
   font-weight: 600;
-}
-
-.f9-acct-billing .f9-app-plan-card p,
-.f9-acct-billing .f9-topup-card p {
-  color: var(--ink-soft);
-  font-size: 13px;
-  line-height: 1.5;
 }
 
 .f9-acct-billing :is(.f9-status-pill, .f9-plan-limit-strip span) {
@@ -15813,11 +15033,6 @@ textarea.f9-wk-in {
   font-weight: 400;
 }
 
-.f9-acct-billing .f9-app-plan-card .f9-plan-feature-list {
-  color: var(--ink-soft);
-  font-size: 13px;
-}
-
 .f9-acct-billing .f9-plan-actions {
   display: flex;
   flex-wrap: wrap;
@@ -15828,49 +15043,6 @@ textarea.f9-wk-in {
 
 .f9-acct-billing .f9-plan-actions form {
   width: auto;
-}
-
-.f9-acct-billing .f9-app-plan-card .f9-wk-btn {
-  width: auto;
-}
-
-.f9-acct-billing .f9-work-list {
-  display: block;
-  margin-top: 20px;
-  border-top: 1px solid var(--wk-rule);
-}
-
-.f9-acct-billing .f9-work-row {
-  display: grid;
-  align-items: start;
-  gap: 24px;
-  margin: 0;
-  padding: 13px 0;
-  border: 0;
-  border-bottom: 1px solid var(--wk-rule);
-  background: transparent;
-  box-shadow: none;
-  grid-template-columns: minmax(180px, 0.55fr) minmax(0, 1.45fr);
-}
-
-.f9-acct-billing .f9-work-row > strong {
-  color: var(--ink);
-  font-size: 13.5px;
-  font-weight: 600;
-}
-
-.f9-acct-billing .f9-work-row > span {
-  min-width: 0;
-  color: var(--ink-soft);
-  font-size: 13.5px;
-  line-height: 1.55;
-}
-
-.f9-acct-billing .f9-work-list > .f9-muted-copy {
-  max-width: none;
-  margin: 0;
-  padding: 13px 0;
-  border-bottom: 1px solid var(--wk-rule);
 }
 
 .f9-acct-billing .f9-skeleton-line {
@@ -15891,40 +15063,6 @@ textarea.f9-wk-in {
  * these surfaces; the capture harness verifies the computed result.
  */
 
-.f9-acct-page :is(
-  a,
-  button,
-  input[type="text"],
-  input[type="email"],
-  input[type="password"],
-  input[type="number"],
-  input[type="search"],
-  input[type="tel"],
-  input[type="url"],
-  input[type="file"],
-  input[type="checkbox"],
-  select,
-  textarea,
-  .f9-message,
-  .f9-locked-feature,
-  .f9-ed-specimen-body,
-  .f9-ed-cta,
-  .f9-dash-state-empty,
-  .f9-brand-logo-preview,
-  .f9-checkout-banner,
-  .f9-cycle-toggle,
-  .f9-app-plan-card,
-  .f9-topup-card,
-  .f9-status-pill,
-  .f9-plan-limit-strip span,
-  .f9-annual-note,
-  .f9-skeleton-line,
-  .f9-button-spinner,
-  .f9-checkout-pulse
-) {
-  border-radius: 0;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .f9-acct-page *,
   .f9-acct-page *::before,
@@ -15935,20 +15073,6 @@ textarea.f9-wk-in {
 }
 
 @media (max-width: 920px) {
-  .f9-acct-billing .f9-app-plan-grid,
-  .f9-acct-billing .f9-topup-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .f9-acct-billing .f9-app-plan-card,
-  .f9-acct-billing .f9-topup-card {
-    border-right: 0;
-    border-bottom: 1px solid var(--wk-rule);
-  }
-
-  .f9-acct-billing :is(.f9-app-plan-card, .f9-topup-card):last-child {
-    border-bottom: 0;
-  }
 
   .f9-acct-member-row,
   .f9-acct-account .f9-passkey-row {
@@ -15972,12 +15096,6 @@ textarea.f9-wk-in {
   }
 
   .f9-acct-invite {
-    grid-template-columns: 1fr;
-  }
-
-  .f9-acct-member-row,
-  .f9-acct-account .f9-passkey-row,
-  .f9-acct-billing .f9-work-row {
     grid-template-columns: 1fr;
   }
 
@@ -16023,6 +15141,47 @@ textarea.f9-wk-in {
   border-radius: 0;
   background: var(--wk-sunk);
 }
+/* v4 vocabulary primitives (CSS endgame phase B): the ONE notice, the quiet
+   button, dim copy, work rows, and the plan cards — all in wk tokens, so
+   the legacy Vercel-era rules can finally be deleted. */
+.f9-wk-notice {
+  position: relative;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--wk-rule);
+  background: transparent;
+}
+.f9-wk-notice.is-error { color: var(--red); border-color: var(--red); }
+.f9-wk-btn-quiet {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border: 1px solid var(--wk-rule);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  padding: 10px 16px;
+  white-space: nowrap;
+}
+.f9-wk-btn-quiet:disabled { opacity: 0.55; cursor: default; }
+.f9-wk-dim { color: var(--ink-soft, inherit); line-height: 1.55; }
+.f9-wk-worklist { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.f9-wk-workrow { border: 1px solid var(--wk-rule); padding: 12px 14px; background: transparent; }
+.f9-wk-grid2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 860px) { .f9-wk-grid2 { grid-template-columns: minmax(0, 1fr); } }
+.f9-wk-plan-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.f9-wk-plan-card { border: 1px solid var(--wk-rule); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.f9-wk-plan-card.is-selected { outline: 2px solid var(--wk-fill); outline-offset: -2px; }
+.f9-wk-plan-card-head { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+
 /* Data-driven meter widths in 5% steps — a meter's fill is data, but its
    rendering is still CSS, not a hand-written style attribute. */
 .f9-wk-meter-fill { transition: width 0.2s ease; }

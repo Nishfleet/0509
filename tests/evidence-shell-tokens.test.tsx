@@ -52,10 +52,11 @@ describe("DashboardPage volume", () => {
 
 describe("DashboardPageHeader", () => {
   it("keeps the shared kicker monochrome in both themes", () => {
+    // The kicker vocabulary is f9-wk-kick since the CSS endgame swap.
     expect(appCss).toMatch(
-      /\.f9-app-kicker\s*\{[^}]*color:\s*var\(--ink-soft\);/s,
+      /\.f9-wk-kick\s*\{[^}]*color:\s*var\(--ink-faint\);/s,
     );
-    const darkThemeKickerRules = styleRulesFor(".f9-app-kicker").filter(({ selector }) =>
+    const darkThemeKickerRules = styleRulesFor(".f9-wk-kick").filter(({ selector }) =>
       /data-f9-theme\s*=\s*(?:"dark"|'dark'|dark)/.test(selector),
     );
     expect(darkThemeKickerRules).toEqual([]);
