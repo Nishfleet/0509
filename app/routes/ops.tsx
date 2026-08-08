@@ -839,7 +839,7 @@ function OpsSection<T>(props: {
   renderItem: (item: T) => ReactNode;
 }) {
   return (
-    <section className="f9-wk-mt15">
+    <section className="f9-wk-mb15">
       <p className="f9-wk-kick">{props.title}</p>
       {props.items.length === 0 ? (
         <p className="f9-wk-dim">{props.empty}</p>

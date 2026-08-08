@@ -1,3 +1,4 @@
+import { meterWidthClass } from "~/lib/meter-width";
 import { Link } from "react-router";
 
 import { LocalTime } from "~/components/local-time";
@@ -269,7 +270,7 @@ function AggressionScorecard({ aggression }: { aggression: AggressionScore | nul
 						<span className="f9-aggression-bar-label">{row.label}</span>
 						<span aria-hidden="true" className="f9-aggression-bar-track">
 							<span
-								className={`f9-aggression-bar-fill f9-wk-meter-fill f9-wk-w${Math.min(100, Math.max(0, Math.round((row.value / 25) * 100))) - (Math.min(100, Math.max(0, Math.round((row.value / 25) * 100))) % 5)}`}
+								className={`f9-aggression-bar-fill ${meterWidthClass((row.value / 25) * 100)}`}
 							/>
 						</span>
 						<span className="f9-aggression-bar-value">{row.value}/25</span>

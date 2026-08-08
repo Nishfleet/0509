@@ -15088,7 +15088,7 @@ textarea.f9-wk-in {
 .f9-wk-m0 { margin: 0; }
 .f9-wk-mt0 { margin-top: 0; }
 .f9-wk-mt1 { margin-top: 1rem; }
-.f9-wk-mt15 { margin-bottom: 1.5rem; }
+.f9-wk-mb15 { margin-bottom: 1.5rem; }
 .f9-wk-mb025 { margin-bottom: 0.25rem; }
 .f9-wk-inline { display: inline; }
 .f9-wk-row-gap { display: flex; gap: 0.5rem; }
@@ -15179,29 +15179,112 @@ textarea.f9-wk-in {
   text-decoration: none;
 }
 
-/* Data-driven meter widths in 5% steps — a meter's fill is data, but its
-   rendering is still CSS, not a hand-written style attribute. */
+/* Data-driven meter widths in exact 1% steps — a meter's fill is data,
+   but its rendering is still CSS, never a hand-written style attribute. */
 .f9-wk-meter-fill { transition: width 0.2s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .f9-wk-meter-fill { transition: none; }
+}
 .f9-wk-w0 { width: 0%; }
+.f9-wk-w1 { width: 1%; }
+.f9-wk-w2 { width: 2%; }
+.f9-wk-w3 { width: 3%; }
+.f9-wk-w4 { width: 4%; }
 .f9-wk-w5 { width: 5%; }
+.f9-wk-w6 { width: 6%; }
+.f9-wk-w7 { width: 7%; }
+.f9-wk-w8 { width: 8%; }
+.f9-wk-w9 { width: 9%; }
 .f9-wk-w10 { width: 10%; }
+.f9-wk-w11 { width: 11%; }
+.f9-wk-w12 { width: 12%; }
+.f9-wk-w13 { width: 13%; }
+.f9-wk-w14 { width: 14%; }
 .f9-wk-w15 { width: 15%; }
+.f9-wk-w16 { width: 16%; }
+.f9-wk-w17 { width: 17%; }
+.f9-wk-w18 { width: 18%; }
+.f9-wk-w19 { width: 19%; }
 .f9-wk-w20 { width: 20%; }
+.f9-wk-w21 { width: 21%; }
+.f9-wk-w22 { width: 22%; }
+.f9-wk-w23 { width: 23%; }
+.f9-wk-w24 { width: 24%; }
 .f9-wk-w25 { width: 25%; }
+.f9-wk-w26 { width: 26%; }
+.f9-wk-w27 { width: 27%; }
+.f9-wk-w28 { width: 28%; }
+.f9-wk-w29 { width: 29%; }
 .f9-wk-w30 { width: 30%; }
+.f9-wk-w31 { width: 31%; }
+.f9-wk-w32 { width: 32%; }
+.f9-wk-w33 { width: 33%; }
+.f9-wk-w34 { width: 34%; }
 .f9-wk-w35 { width: 35%; }
+.f9-wk-w36 { width: 36%; }
+.f9-wk-w37 { width: 37%; }
+.f9-wk-w38 { width: 38%; }
+.f9-wk-w39 { width: 39%; }
 .f9-wk-w40 { width: 40%; }
+.f9-wk-w41 { width: 41%; }
+.f9-wk-w42 { width: 42%; }
+.f9-wk-w43 { width: 43%; }
+.f9-wk-w44 { width: 44%; }
 .f9-wk-w45 { width: 45%; }
+.f9-wk-w46 { width: 46%; }
+.f9-wk-w47 { width: 47%; }
+.f9-wk-w48 { width: 48%; }
+.f9-wk-w49 { width: 49%; }
 .f9-wk-w50 { width: 50%; }
+.f9-wk-w51 { width: 51%; }
+.f9-wk-w52 { width: 52%; }
+.f9-wk-w53 { width: 53%; }
+.f9-wk-w54 { width: 54%; }
 .f9-wk-w55 { width: 55%; }
+.f9-wk-w56 { width: 56%; }
+.f9-wk-w57 { width: 57%; }
+.f9-wk-w58 { width: 58%; }
+.f9-wk-w59 { width: 59%; }
 .f9-wk-w60 { width: 60%; }
+.f9-wk-w61 { width: 61%; }
+.f9-wk-w62 { width: 62%; }
+.f9-wk-w63 { width: 63%; }
+.f9-wk-w64 { width: 64%; }
 .f9-wk-w65 { width: 65%; }
+.f9-wk-w66 { width: 66%; }
+.f9-wk-w67 { width: 67%; }
+.f9-wk-w68 { width: 68%; }
+.f9-wk-w69 { width: 69%; }
 .f9-wk-w70 { width: 70%; }
+.f9-wk-w71 { width: 71%; }
+.f9-wk-w72 { width: 72%; }
+.f9-wk-w73 { width: 73%; }
+.f9-wk-w74 { width: 74%; }
 .f9-wk-w75 { width: 75%; }
+.f9-wk-w76 { width: 76%; }
+.f9-wk-w77 { width: 77%; }
+.f9-wk-w78 { width: 78%; }
+.f9-wk-w79 { width: 79%; }
 .f9-wk-w80 { width: 80%; }
+.f9-wk-w81 { width: 81%; }
+.f9-wk-w82 { width: 82%; }
+.f9-wk-w83 { width: 83%; }
+.f9-wk-w84 { width: 84%; }
 .f9-wk-w85 { width: 85%; }
+.f9-wk-w86 { width: 86%; }
+.f9-wk-w87 { width: 87%; }
+.f9-wk-w88 { width: 88%; }
+.f9-wk-w89 { width: 89%; }
 .f9-wk-w90 { width: 90%; }
+.f9-wk-w91 { width: 91%; }
+.f9-wk-w92 { width: 92%; }
+.f9-wk-w93 { width: 93%; }
+.f9-wk-w94 { width: 94%; }
 .f9-wk-w95 { width: 95%; }
+.f9-wk-w96 { width: 96%; }
+.f9-wk-w97 { width: 97%; }
+.f9-wk-w98 { width: 98%; }
+.f9-wk-w99 { width: 99%; }
 .f9-wk-w100 { width: 100%; }
 
 /* === BL-040 source + developer access (landing language) === */
