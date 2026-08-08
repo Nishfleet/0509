@@ -15258,11 +15258,14 @@ a.f9-wk-workrow:hover, .f9-wk-workrow.is-selected { background: var(--wk-sunk); 
 .f9-wk-plan-card-head strong,
 .f9-topup-card strong {
   display: block;
+  min-width: 0;
   margin-top: 4px;
   color: var(--ink);
   font-size: 1.35rem;
   line-height: 1.1;
+  overflow-wrap: anywhere;
 }
+.f9-wk-plan-card-head > * { min-width: 0; }
 .f9-wk-plan-card p,
 .f9-topup-card p {
   margin: 0;
