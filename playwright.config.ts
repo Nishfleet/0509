@@ -23,6 +23,20 @@ if (strictReleaseProof && !isLocalReleaseServerIdentity(releaseServerIdentity)) 
 const outputDir = strictReleaseProof
   ? `test-results/e2e/${releaseServerIdentity}`
   : "test-results/e2e";
+// Diagnostic engine matrix (firefox/webkit/mobile) is not the release gate.
+// On the hardened vps-verify runner, Journey 1 desktop under mobile-safari
+// regularly needs ~31–33s (run 31236680609: mobile 25.9s pass, tablet 29.5s
+// pass, desktop 31.6s fail ×3). The previous retries:2 fix only recovered
+// intermittent single-timeout flakes when median stayed under 30s; once the
+// slow path is systematically over budget, every attempt fails. Give the
+// diagnostic engines 60s so first-attempt proof can complete. Chromium
+// local-release stays on the global 30s timeout with retries: 0.
+const diagnosticEngineProject = {
+  testMatch: journeyReleaseMatch,
+  timeout: 60_000,
+  retries: 2,
+  workers: 1,
+} as const;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -77,16 +91,7 @@ export default defineConfig({
     },
     {
       name: "local-release-firefox",
-      testMatch: journeyReleaseMatch,
-      // Cross-browser risk proofs run on a shared CI runner where WebKit
-      // starves under load: three consecutive deploy runs each timed out ONE
-      // rotating journey (J2-tablet, J5-mobile, then J1-mobile) at ~32s while
-      // every previously-failed test passed on the next run. Retries prove
-      // "this journey CAN pass on this engine" — the proof's actual claim —
-      // without letting a coin-flip runner block production. The canonical
-      // chromium local-release lane stays retries: 0.
-      retries: 2,
-      workers: 1,
+      ...diagnosticEngineProject,
       use: {
         ...devices["Desktop Firefox"],
         baseURL: localBaseURL,
@@ -94,16 +99,7 @@ export default defineConfig({
     },
     {
       name: "local-release-webkit",
-      testMatch: journeyReleaseMatch,
-      // Cross-browser risk proofs run on a shared CI runner where WebKit
-      // starves under load: three consecutive deploy runs each timed out ONE
-      // rotating journey (J2-tablet, J5-mobile, then J1-mobile) at ~32s while
-      // every previously-failed test passed on the next run. Retries prove
-      // "this journey CAN pass on this engine" — the proof's actual claim —
-      // without letting a coin-flip runner block production. The canonical
-      // chromium local-release lane stays retries: 0.
-      retries: 2,
-      workers: 1,
+      ...diagnosticEngineProject,
       use: {
         ...devices["Desktop Safari"],
         baseURL: localBaseURL,
@@ -111,16 +107,7 @@ export default defineConfig({
     },
     {
       name: "local-release-mobile-safari",
-      testMatch: journeyReleaseMatch,
-      // Cross-browser risk proofs run on a shared CI runner where WebKit
-      // starves under load: three consecutive deploy runs each timed out ONE
-      // rotating journey (J2-tablet, J5-mobile, then J1-mobile) at ~32s while
-      // every previously-failed test passed on the next run. Retries prove
-      // "this journey CAN pass on this engine" — the proof's actual claim —
-      // without letting a coin-flip runner block production. The canonical
-      // chromium local-release lane stays retries: 0.
-      retries: 2,
-      workers: 1,
+      ...diagnosticEngineProject,
       use: {
         ...devices["iPhone 15"],
         baseURL: localBaseURL,
@@ -128,16 +115,7 @@ export default defineConfig({
     },
     {
       name: "local-release-mobile-chrome",
-      testMatch: journeyReleaseMatch,
-      // Cross-browser risk proofs run on a shared CI runner where WebKit
-      // starves under load: three consecutive deploy runs each timed out ONE
-      // rotating journey (J2-tablet, J5-mobile, then J1-mobile) at ~32s while
-      // every previously-failed test passed on the next run. Retries prove
-      // "this journey CAN pass on this engine" — the proof's actual claim —
-      // without letting a coin-flip runner block production. The canonical
-      // chromium local-release lane stays retries: 0.
-      retries: 2,
-      workers: 1,
+      ...diagnosticEngineProject,
       use: {
         ...devices["Pixel 7"],
         baseURL: localBaseURL,

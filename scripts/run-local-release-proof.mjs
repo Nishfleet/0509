@@ -258,12 +258,11 @@ const run = spawnSync(
     "--config=playwright.config.ts",
     `--project=${releaseProject}`,
     // Canonical (chromium) proofs stay strict at zero retries. Diagnostic
-    // cross-browser subsets retry: six deploy runs each lost ONE rotating
-    // engine journey to a ~32s starvation timeout on the shared CI runner
-    // (J2-tablet, J5-mobile, J1-mobile, J1-desktop/mobile-safari…) while the
-    // previous failure passed — the proof's claim is "this journey CAN pass
-    // on this engine", which retries preserve. CLI beats playwright.config,
-    // so this is the authoritative knob.
+    // cross-browser subsets keep retries for residual single-engine flakes,
+    // but the primary budget lives on playwright.config.ts diagnostic
+    // engine projects (60s): nightly run 31236680609 showed mobile-safari
+    // J1 desktop systematically at ~31–33s, so retries alone never recover.
+    // CLI --retries beats playwright.config, so this remains the knob.
     `--retries=${diagnosticSubset ? 2 : 0}`,
     "--workers=1",
   ],
