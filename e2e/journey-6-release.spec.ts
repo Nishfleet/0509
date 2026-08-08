@@ -121,6 +121,8 @@ test.describe("Journey 6 release: recovery across account, support, retention, a
       await page.setViewportSize(viewport);
       await page.goto("/app");
       await expect(page.locator("#f9-main-content").getByRole("heading", { level: 1 })).toBeVisible();
+      await page.locator('a[href="/app/settings"]:visible').first().click();
+      await expect(page.getByRole("heading", { level: 1, name: "Settings", exact: true })).toBeVisible();
       await page.locator('a[href="/app/account"]:visible').first().click();
       await expect(page.getByRole("heading", { name: "Account & security" })).toBeVisible();
       await expectRouteAnnouncement(page, "Navigated to Account.");
@@ -253,7 +255,9 @@ test.describe("Journey 6 release: recovery across account, support, retention, a
       });
       const state = await readState(page, "/api/e2e/retention/state", recoveryKey, recoveryRun);
       expect(state).toMatchObject({ outcome: "recovery", fixture: { rowsBefore: 1, rowsAfter: 0 } });
-      await expectVisibleKeyboardFocus(page.locator('a[href="/app/account"]:visible').first());
+      await expectVisibleKeyboardFocus(page.locator('a[href="/app/settings"]:visible').first());
+      await page.locator('a[href="/app/settings"]:visible').first().click();
+      await expect(page.getByRole("heading", { level: 1, name: "Settings", exact: true })).toBeVisible();
       await page.locator('a[href="/app/account"]:visible').first().click();
       await expect(page.getByRole("heading", { name: "Account & security" })).toBeVisible();
       await expectRouteAnnouncement(page, "Navigated to Account.");
@@ -297,7 +301,7 @@ test.describe("Journey 6 release: recovery across account, support, retention, a
       expect(recovery).toMatchObject({ action: "auth_recovery", outcome: "recovery", auth: { status: "recovered" } });
       await page.goto("/app");
       await expect(page.locator("#f9-main-content").getByRole("heading", { level: 1 })).toBeVisible();
-      await expectVisibleKeyboardFocus(page.locator('a[href="/app/account"]:visible').first());
+      await expectVisibleKeyboardFocus(page.locator('a[href="/app/settings"]:visible').first());
       await expectExperience(page);
       await attachReleaseStateArtifacts({ page, testInfo, prefix: "j6-auth", state: "auth-outage-recovery" });
       testInfo.annotations.push({ type: "finalUrl", description: finalPath(page) });
@@ -328,9 +332,13 @@ test.describe("Journey 6 release: recovery across account, support, retention, a
       });
       const state = await readState(page, "/api/e2e/team/state", idempotencyKey, runId);
       expect(state).toMatchObject({ action: "team_invite_concurrency_recovery", concurrency: { exactlyOneSuccess: true }, rotation: { staleTokenRejected: true } });
+      await page.locator('a[href="/app/settings"]:visible').first().click();
+      await expect(page.getByRole("heading", { level: 1, name: "Settings", exact: true })).toBeVisible();
       await page.locator('a[href="/app/account"]:visible').first().click();
       await expect(page.getByRole("heading", { name: "Account & security" })).toBeVisible();
       await expectRouteAnnouncement(page, "Navigated to Account.");
+      await page.locator('a[href="/app/settings"]:visible').first().click();
+      await expect(page.getByRole("heading", { level: 1, name: "Settings", exact: true })).toBeVisible();
       await page.locator('a[href="/app/team"]:visible').first().click();
       await expect(page.getByRole("heading", { name: "Team" })).toBeVisible();
       await expectRouteAnnouncement(page, "Navigated to Team.");

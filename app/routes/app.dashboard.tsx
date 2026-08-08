@@ -42,10 +42,10 @@ import type { AppEnv } from "~/lib/env.server";
 import type { AgentActionAuditRecord, WatchEventRecord } from "~/lib/types";
 import type { WorkspaceReadiness } from "~/lib/workspace-readiness.server";
 
-export const meta = () => [{ title: "Overview | Five to Nine" }];
+export const meta = () => [{ title: "Today | Five to Nine" }];
 
 export function HydrateFallback() {
-  return <DashboardRouteLoading title="Overview" />;
+  return <DashboardRouteLoading title="Today" />;
 }
 
 export function ErrorBoundary({ error }: { error: unknown }) {
@@ -659,7 +659,7 @@ export default function AppDashboardRoute() {
             )}
           </>
         }
-        title="Overview"
+        title="Today"
       />
 
       {sectionWarningCopy ? (

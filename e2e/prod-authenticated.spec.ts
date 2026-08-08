@@ -30,7 +30,7 @@ test.describe("production authenticated smoke with owner-captured auth state", (
   test("internal account can reach core authenticated surfaces without magic-link automation", async ({ page }) => {
     await page.goto("/app");
     await expect(page).not.toHaveURL(/\/auth\/login/);
-    await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Today" })).toBeVisible();
 
     await page.goto("/app/account");
     await expect(page.getByRole("heading", { name: "Account & security" })).toBeVisible();
