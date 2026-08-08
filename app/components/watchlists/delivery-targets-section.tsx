@@ -25,7 +25,7 @@ export function DeliveryTargetsSection(props: {
       <div className="f9-panel-toolbar">
         <div>
           <p className="f9-app-kicker">Delivery targets</p>
-          <h3 style={{ marginTop: 0 }}>Targets and pauses</h3>
+          <h3 className="f9-wk-mt0">Targets and pauses</h3>
         </div>
       </div>
       <div className="f9-detail-split">
@@ -35,7 +35,7 @@ export function DeliveryTargetsSection(props: {
         {data.deliveryTargets.map((target) => (
           <div className="f9-work-row" key={target.id}>
             <div>
-              <h4 style={{ marginBottom: "0.25rem" }}>
+              <h4 className="f9-wk-mb025">
                 {target.channel === "email" ? "Email" : "WhatsApp"}
               </h4>
               <p className="f9-muted-copy">
@@ -53,7 +53,7 @@ export function DeliveryTargetsSection(props: {
                       : "Ready"}
               </p>
             </div>
-            <div style={{ display: "flex", gap: "0.5rem" }}>
+            <div className="f9-wk-row-gap">
               {target.channel === "email" && canEmailDelivery ? (
                 <Form method="post">
                   <input name="intent" type="hidden" value="send-test-email" />
@@ -117,7 +117,7 @@ export function DeliveryTargetsSection(props: {
               return (
                 <div className="f9-work-row" key={target.id}>
                   <div>
-                    <h4 style={{ marginBottom: "0.25rem" }}>
+                    <h4 className="f9-wk-mb025">
                       {target.channel === "email"
                         ? "Workspace default email"
                         : "Workspace default WhatsApp"}

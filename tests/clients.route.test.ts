@@ -624,7 +624,7 @@ describe("clients route agent memory", () => {
     expect(markup).toContain("Weekly client-ready review with direct tone.");
     expect(markup).toContain("Nykaa weekly desk");
     expect(markup).toContain("Create client room");
-    expect(markup).toContain("f9-wk-page f9-clients-page");
+    expect(markup).toContain("f9-wk-page f9-rooms-page");
     expect(markup).not.toContain("f9-app-panel");
     expect(markup).not.toContain("f9-dash-state-empty");
     expect(markup).not.toContain("f9-primary-button");
@@ -643,7 +643,7 @@ describe("clients route agent memory", () => {
     expect(markup).toContain("Saved client context could not be loaded.");
     expect(markup).toContain('name="intent" value="approve-client-room"');
     expect(markup).toContain("Create client room");
-    expect(markup).toContain("f9-wk-page f9-clients-page");
+    expect(markup).toContain("f9-wk-page f9-rooms-page");
     expect(markup).not.toContain("f9-app-panel");
     expect(markup).not.toContain("f9-dash-state-empty");
     expect(markup).not.toContain("f9-primary-button");
@@ -1246,8 +1246,8 @@ describe("clients route agent memory", () => {
       const { default: ClientsRoute } = await import("~/routes/app.clients");
       const markup = renderToStaticMarkup(createElement(ClientsRoute));
 
-      expect(markup).toContain("f9-clients-page");
-      expect(markup).toContain("f9-clients-gate");
+      expect(markup).toContain("f9-rooms-page");
+      expect(markup).toContain("f9-rooms-gate");
       expect(markup).toContain("Client rooms stay readable");
       expect(markup).toContain("Agency plan unlocks creation and updates");
       expect(markup).toContain("Upgrade to Agency");

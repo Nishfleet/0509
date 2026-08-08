@@ -103,7 +103,7 @@ describe("collection plan controls", () => {
 
     // BL-033a: a quiet v4 explanation and one filled upgrade action, with no
     // dashed specimen theatre or shadow card.
-    expect(markup).toContain("f9-col-locked");
+    expect(markup).toContain("f9-library-locked");
     expect(markup).toContain("Collections start on Scout");
     expect(markup).toContain(
       "Saved evidence stays attached to its source, recorded date, and team notes.",

@@ -287,7 +287,7 @@ export default function BillingRoute() {
         : "Not included";
 
   return (
-    <DashboardPage className="f9-wk-page f9-bl041-page f9-bl041-billing">
+    <DashboardPage className="f9-wk-page f9-acct-page f9-acct-billing">
       <WorkingHeader
         context={
           canManageBilling
@@ -296,7 +296,7 @@ export default function BillingRoute() {
         }
         title="Billing & usage"
       />
-    <section className="f9-bl041-flow">
+    <section className="f9-acct-flow">
       <BillingLifecycleSummary
         billing={billing}
         canManageBilling={canManageBilling}
@@ -441,7 +441,7 @@ export default function BillingRoute() {
         </div>
       ) : null}
 
-      <article className="f9-bl041-section f9-plan-picker-panel" id="plans">
+      <article className="f9-acct-section f9-plan-picker-panel" id="plans">
         <div className="f9-panel-toolbar">
           <div>
             <span className="f9-app-kicker">Choose inside the app</span>
@@ -578,7 +578,7 @@ export default function BillingRoute() {
                       <input name="sku" type="hidden" value={checkoutSku} />
                       {selectedSource ? <input name="source" type="hidden" value={selectedSource} /> : null}
                       <SubmitButton
-                        className={selected ? "f9-wk-btn" : "f9-bl041-text-action"}
+                        className={selected ? "f9-wk-btn" : "f9-acct-text-action"}
                         match={{ sku: checkoutSku }}
                         pendingLabel="Redirecting…"
                       >
@@ -598,7 +598,7 @@ export default function BillingRoute() {
                       <input name="intent" type="hidden" value="preview" />
                       <input name="sku" type="hidden" value={checkoutSku} />
                       <SubmitButton
-                        className={selected ? "f9-wk-btn" : "f9-bl041-text-action"}
+                        className={selected ? "f9-wk-btn" : "f9-acct-text-action"}
                         intent="preview"
                         match={{ sku: checkoutSku }}
                         pendingLabel="Previewing…"
@@ -650,7 +650,7 @@ export default function BillingRoute() {
         </div>
       </article>
 
-      <article className="f9-bl041-section">
+      <article className="f9-acct-section">
         <div className="f9-panel-toolbar">
           <div>
             <span className="f9-app-kicker">Plan &amp; billing</span>
@@ -766,7 +766,7 @@ export default function BillingRoute() {
         </div>
       </article>
 
-      <article className="f9-bl041-section" id="top-ups">
+      <article className="f9-acct-section" id="top-ups">
         <div className="f9-panel-toolbar">
           <div>
             <span className="f9-app-kicker">Check packs</span>
@@ -832,7 +832,7 @@ export default function BillingRoute() {
         </div>
       </article>
 
-      <article className="f9-bl041-section">
+      <article className="f9-acct-section">
         <div className="f9-panel-toolbar">
           <div>
             <span className="f9-app-kicker">Manage billing</span>
@@ -852,7 +852,7 @@ export default function BillingRoute() {
                   Cancel anytime — email <a href={SUPPORT_MAILTO}>{SUPPORT_EMAIL}</a> and we'll
                   confirm your cancellation request. Open the billing portal for card and invoice
                   tasks. Use the plan cards above to switch plans or billing cycles.{" "}
-                <Form action="/api/billing/dodo/portal" method="post" style={{ display: "inline" }}>
+                <Form action="/api/billing/dodo/portal" method="post" className="f9-wk-inline">
                   <SubmitButton className="f9-secondary-button" pendingLabel="Redirecting…">
                     Open billing portal
                   </SubmitButton>

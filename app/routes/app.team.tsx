@@ -156,17 +156,17 @@ export default function TeamRoute() {
 
   if (data.isMember) {
     return (
-      <DashboardPage className="f9-wk-page f9-bl041-page f9-bl041-team">
+      <DashboardPage className="f9-wk-page f9-acct-page f9-acct-team">
         <WorkingHeader
           context="Watchlists, collections, and briefs are shared. Your sign-in stays your own."
           title="Team"
         />
-        <section className="f9-bl041-section" aria-labelledby="team-membership-title">
+        <section className="f9-acct-section" aria-labelledby="team-membership-title">
           <p className="f9-wk-kick">Your access</p>
           <h2 id="team-membership-title">
             A seat in {data.ownerName ? `${data.ownerName}'s` : "a shared"} workspace
           </h2>
-          <p className="f9-bl041-copy">
+          <p className="f9-acct-copy">
             The workspace owner manages seats and billing. You keep a separate sign-in and share
             the workspace&apos;s competitors, collections, and briefs.
           </p>
@@ -180,7 +180,7 @@ export default function TeamRoute() {
   ).length + 1;
 
   return (
-    <DashboardPage className="f9-wk-page f9-bl041-page f9-bl041-team">
+    <DashboardPage className="f9-wk-page f9-acct-page f9-acct-team">
       <WorkingHeader
         context={
           data.plan === "agency"
@@ -199,7 +199,7 @@ export default function TeamRoute() {
       </div>
 
       {data.plan !== "agency" ? (
-        <div className="f9-bl041-lock">
+        <div className="f9-acct-lock">
           <LockedFeature
             eyebrow="Team"
             title="Invite your teammates"
@@ -210,12 +210,12 @@ export default function TeamRoute() {
           />
         </div>
       ) : (
-      <section className="f9-bl041-section" aria-labelledby="team-seats-title">
+      <section className="f9-acct-section" aria-labelledby="team-seats-title">
         <p className="f9-wk-kick">Workspace seats</p>
-        <div className="f9-bl041-section-head">
+        <div className="f9-acct-section-head">
           <div>
             <h2 id="team-seats-title">{`${seatsUsed} of ${data.seatLimit} seats in use`}</h2>
-            <p className="f9-bl041-copy">
+            <p className="f9-acct-copy">
               Teammates share your watchlists, collections, and briefs. Billing stays with you.
             </p>
           </div>
@@ -223,9 +223,9 @@ export default function TeamRoute() {
 
         <ActionFeedback data={actionData} intent="invite" />
         {seatsUsed < data.seatLimit ? (
-          <Form method="post" className="f9-bl041-invite">
+          <Form method="post" className="f9-acct-invite">
             <input type="hidden" name="intent" value="invite" />
-            <label className="f9-bl041-field">
+            <label className="f9-acct-field">
               <span>Teammate email</span>
               <input
                 name="email"
@@ -239,19 +239,19 @@ export default function TeamRoute() {
             </SubmitButton>
           </Form>
         ) : (
-          <p className="f9-bl041-note">
+          <p className="f9-acct-note">
             All {data.seatLimit} seats are occupied. Revoke a seat before inviting someone else.
           </p>
         )}
 
         {data.members.length > 0 ? (
-          <div className="f9-bl041-member-list" aria-label="Workspace members">
+          <div className="f9-acct-member-list" aria-label="Workspace members">
             {data.members.map((member) => {
               const inviteExpired = member.status === "invited" && isInviteExpired(member.tokenExpiresAt);
               return (
-                <div className="f9-bl041-member-row" key={member.id}>
+                <div className="f9-acct-member-row" key={member.id}>
                   <div>
-                    <strong className="f9-bl041-entity">{member.email}</strong>
+                    <strong className="f9-acct-entity">{member.email}</strong>
                     <p>
                       {member.status === "active" ? (
                         <>
@@ -280,13 +280,13 @@ export default function TeamRoute() {
                     intent="revoke"
                     match={{ memberId: member.id }}
                   />
-                  <div className="f9-bl041-row-actions">
+                  <div className="f9-acct-row-actions">
                     {member.status === "invited" ? (
                       <Form method="post">
                         <input type="hidden" name="intent" value="resend-invite" />
                         <input type="hidden" name="memberId" value={member.id} />
                         <SubmitButton
-                          className="f9-bl041-text-action"
+                          className="f9-acct-text-action"
                           intent="resend-invite"
                           match={{ memberId: member.id }}
                           pendingLabel="Sending…"
@@ -299,7 +299,7 @@ export default function TeamRoute() {
                       <input type="hidden" name="intent" value="revoke" />
                       <input type="hidden" name="memberId" value={member.id} />
                       <ConfirmSubmitButton
-                        className="f9-bl041-text-action"
+                        className="f9-acct-text-action"
                         confirmLabel="Confirm — revoke seat?"
                         intent="revoke"
                         match={{ memberId: member.id }}
@@ -314,7 +314,7 @@ export default function TeamRoute() {
             })}
           </div>
         ) : (
-          <p className="f9-bl041-empty">No teammates have been invited yet.</p>
+          <p className="f9-acct-empty">No teammates have been invited yet.</p>
         )}
       </section>
       )}

@@ -66,7 +66,7 @@ export function DeveloperAccessRoute() {
   const planLocked = Boolean(createDisabledReason && !ownerManagedApiKeys);
 
   return (
-    <DashboardPage className="f9-wk-page f9-bl040-page f9-bl040-developer">
+    <DashboardPage className="f9-wk-page f9-access-page f9-access-developer">
       <WorkingHeader
         action={
           planLocked
@@ -91,8 +91,8 @@ export function DeveloperAccessRoute() {
         </FeedbackStrip>
       ) : null}
 
-      <section aria-labelledby="developer-scope-title" className="f9-bl040-section">
-        <div className="f9-bl040-section-head">
+      <section aria-labelledby="developer-scope-title" className="f9-access-section">
+        <div className="f9-access-section-head">
           <div>
             <h2 id="developer-scope-title">Connect exports and approved actions</h2>
             <p>
@@ -101,7 +101,7 @@ export function DeveloperAccessRoute() {
             </p>
           </div>
           <a
-            className="f9-bl040-text-action"
+            className="f9-access-text-action"
             href="/api/docs"
             rel="noreferrer"
             target="_blank"
@@ -110,20 +110,20 @@ export function DeveloperAccessRoute() {
           </a>
         </div>
 
-        <div aria-label="API connection facts" className="f9-bl040-rows" role="list">
+        <div aria-label="API connection facts" className="f9-access-rows" role="list">
           <div
-            className="f9-bl040-fact-row"
+            className="f9-access-fact-row"
             data-bl040-first-row
             role="listitem"
           >
             <span>JSON endpoint</span>
             <code>{"/api/v1/watchlists/{id}?format=json"}</code>
           </div>
-          <div className="f9-bl040-fact-row" role="listitem">
+          <div className="f9-access-fact-row" role="listitem">
             <span>Authorization</span>
             <code>Bearer your Five to Nine API key</code>
           </div>
-          <div className="f9-bl040-fact-row" role="listitem">
+          <div className="f9-access-fact-row" role="listitem">
             <span>Coverage</span>
             <p>
               Saved account data and manual external evidence links. This does not add
@@ -140,10 +140,10 @@ export function DeveloperAccessRoute() {
         <section
           aria-labelledby="new-key-title"
           aria-live="polite"
-          className="f9-bl040-section"
+          className="f9-access-section"
           role="status"
         >
-          <div className="f9-bl040-section-head">
+          <div className="f9-access-section-head">
             <div>
               <h2 id="new-key-title">Copy the new key now</h2>
               <p>
@@ -161,8 +161,8 @@ export function DeveloperAccessRoute() {
       ) : null}
 
       {canCreateApiKeys ? (
-        <section aria-labelledby="create-key-title" className="f9-bl040-section">
-          <div className="f9-bl040-section-head">
+        <section aria-labelledby="create-key-title" className="f9-access-section">
+          <div className="f9-access-section-head">
             <div>
               <h2 id="create-key-title">Create an API key</h2>
               <p>
@@ -171,9 +171,9 @@ export function DeveloperAccessRoute() {
               </p>
             </div>
           </div>
-          <Form className="f9-bl040-key-form" method="post">
+          <Form className="f9-access-key-form" method="post">
             <input name="intent" type="hidden" value="create-api-key" />
-            <label className="f9-bl040-field">
+            <label className="f9-access-field">
               <span>Key name</span>
               <input
                 autoComplete="off"
@@ -182,7 +182,7 @@ export function DeveloperAccessRoute() {
                 type="text"
               />
             </label>
-            <label className="f9-bl040-check">
+            <label className="f9-access-check">
               <input
                 name="actionsWriteEnabled"
                 type="checkbox"
@@ -203,8 +203,8 @@ export function DeveloperAccessRoute() {
           </Form>
         </section>
       ) : (
-        <section aria-labelledby="developer-lock-title" className="f9-bl040-section">
-          <div className="f9-bl040-quiet">
+        <section aria-labelledby="developer-lock-title" className="f9-access-section">
+          <div className="f9-access-quiet">
             <h2 id="developer-lock-title">
               {ownerManagedApiKeys
                 ? "API keys are managed by the account owner"
@@ -224,8 +224,8 @@ export function DeveloperAccessRoute() {
         </section>
       )}
 
-      <section aria-labelledby="api-keys-title" className="f9-bl040-section">
-        <div className="f9-bl040-section-head">
+      <section aria-labelledby="api-keys-title" className="f9-access-section">
+        <div className="f9-access-section-head">
           <div>
             <h2 id="api-keys-title">API keys</h2>
             <p>
@@ -235,16 +235,16 @@ export function DeveloperAccessRoute() {
           </div>
         </div>
 
-        <div aria-label="API keys" className="f9-bl040-key-rows" role="list">
+        <div aria-label="API keys" className="f9-access-key-rows" role="list">
           {data.apiKeys.length > 0 ? (
             data.apiKeys.map((apiKey) => (
               <article
-                className={`f9-bl040-key-row${apiKey.revokedAt ? " is-revoked" : ""}`}
+                className={`f9-access-key-row${apiKey.revokedAt ? " is-revoked" : ""}`}
                 key={apiKey.id}
                 role="listitem"
               >
                 <div>
-                  <strong className="f9-bl040-key-name">{apiKey.name}</strong>
+                  <strong className="f9-access-key-name">{apiKey.name}</strong>
                   <code>{apiKey.keyPrefix}…</code>
                 </div>
                 <p>
@@ -259,7 +259,7 @@ export function DeveloperAccessRoute() {
                   )}
                 </p>
                 <span
-                  className={`f9-bl040-status${apiKey.revokedAt ? " is-bad" : ""}`}
+                  className={`f9-access-status${apiKey.revokedAt ? " is-bad" : ""}`}
                 >
                   {apiKey.revokedAt ? (
                     <>
@@ -270,13 +270,13 @@ export function DeveloperAccessRoute() {
                   )}
                 </span>
                 {apiKey.revokedAt ? (
-                  <span aria-hidden="true" className="f9-bl040-key-spacer" />
+                  <span aria-hidden="true" className="f9-access-key-spacer" />
                 ) : (
                   <Form method="post">
                     <input name="intent" type="hidden" value="revoke-api-key" />
                     <input name="apiKeyId" type="hidden" value={apiKey.id} />
                     <ConfirmSubmitButton
-                      className="f9-bl040-text-action is-danger"
+                      className="f9-access-text-action is-danger"
                       confirmLabel="Confirm — revoke key?"
                       intent="revoke-api-key"
                       match={{ apiKeyId: apiKey.id }}
@@ -290,7 +290,7 @@ export function DeveloperAccessRoute() {
               </article>
             ))
           ) : (
-            <div className="f9-bl040-empty-row" role="listitem">
+            <div className="f9-access-empty-row" role="listitem">
               <strong>
                 {ownerManagedApiKeys
                   ? "No keys are visible to workspace members"
@@ -346,18 +346,18 @@ function NewApiKeySecret({
   }
 
   return (
-    <div className="f9-bl040-secret-row">
+    <div className="f9-access-secret-row">
       <input
         aria-label={`New API key beginning ${prefix}`}
-        className="f9-bl040-secret-control"
+        className="f9-access-secret-control"
         readOnly
         type={revealed ? "text" : "password"}
         value={secret}
       />
-      <div className="f9-bl040-text-actions">
+      <div className="f9-access-text-actions">
         <button
           aria-pressed={revealed}
-          className="f9-bl040-text-action"
+          className="f9-access-text-action"
           onClick={() => setRevealed((value) => !value)}
           type="button"
         >
@@ -365,7 +365,7 @@ function NewApiKeySecret({
         </button>
         <button
           aria-describedby={statusId}
-          className="f9-bl040-text-action"
+          className="f9-access-text-action"
           onClick={() => void copySecret()}
           type="button"
         >

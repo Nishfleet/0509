@@ -2488,7 +2488,7 @@ describe("watchlists route rendering", () => {
     // gone is the board's list/peek split that used to sit under it.
     expect(markup).not.toContain('class="f9-wk-split is-single"');
     expect(markup).not.toContain('class="f9-wk-split-list"');
-    expect(markup).toContain('class="f9-wk-split is-wide f9-bl035-split"');
+    expect(markup).toContain('class="f9-wk-split is-wide f9-watchdetail-split"');
   });
 
   it("does not turn a failed capture-window rollup into a quiet or zero finding", async () => {
@@ -2577,7 +2577,7 @@ describe("watchlists route rendering", () => {
     // tabs follow immediately, and there is one content split.
     expect(markup).toContain("<h1 class=\"f9-wk-title\">Nykaa watch</h1>");
     expect(markup).toContain("All competitors");
-    expect(markup).toContain('class="f9-bl035-detail"');
+    expect(markup).toContain('class="f9-watchdetail-detail"');
     expect(markup).not.toContain('aria-label="Competitors"');
     expect(markup).not.toContain("f9-wk-detail");
     expect(markup).not.toContain("f9-wk-record");
@@ -2783,7 +2783,7 @@ describe("watchlists route rendering", () => {
     expect(markup).toContain("<h1 class=\"f9-wk-title\">Nykaa watch</h1>");
     expect(markup).toContain("All competitors");
     expect(markup).toContain('aria-label="Competitor sections"');
-    expect(markup).toContain('class="f9-bl035-detail"');
+    expect(markup).toContain('class="f9-watchdetail-detail"');
     expect(markup).not.toContain('aria-label="Competitors"');
   });
 

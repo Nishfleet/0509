@@ -779,7 +779,7 @@ img {
    called slop. The tokens survive because the public rail and the focus
    contract read them; they now resolve to the product's own tokens in BOTH
    themes, the way the dark remap already did. */
-.f9-search-page {
+.f9-find-page {
   --f9-search-ink: var(--ink);
   --f9-search-muted: var(--ink-soft);
   --f9-search-soft: var(--ink-faint);
@@ -789,13 +789,13 @@ img {
   color: var(--ink);
 }
 
-.f9-search-page *,
-.f9-search-page *::before,
-.f9-search-page *::after {
+.f9-find-page *,
+.f9-find-page *::before,
+.f9-find-page *::after {
   box-sizing: border-box;
 }
 
-.f9-search-page a {
+.f9-find-page a {
   color: inherit;
   text-decoration: none;
 }
@@ -1128,11 +1128,11 @@ button[aria-busy="true"] {
   color: var(--f9-search-ink, var(--f9-global-ink));
 }
 
-.f9-search-page a.f9-primary-button {
+.f9-find-page a.f9-primary-button {
   color: #fff;
 }
 
-.f9-search-page a.f9-secondary-button {
+.f9-find-page a.f9-secondary-button {
   color: var(--f9-search-ink, var(--f9-global-ink));
 }
 
@@ -4160,7 +4160,7 @@ one signal-green accent.
    ============================================================ */
 
 .f9-auth-page,
-.f9-search-page,
+.f9-find-page,
 .f9-legal-page,
 .f9-error-page,
 .f9-share-page {
@@ -4181,7 +4181,7 @@ one signal-green accent.
 }
 
 .f9-auth-page .f9-wordmark,
-.f9-search-page .f9-wordmark,
+.f9-find-page .f9-wordmark,
 .f9-legal-page .f9-wordmark,
 .f9-error-page .f9-wordmark,
 .f9-share-page .f9-wordmark {
@@ -4190,14 +4190,14 @@ one signal-green accent.
   text-shadow: none;
 }
 
-/* The `.f9-search-page.f9-dash-page-public` token override that used to sit
+/* The `.f9-find-page.f9-dash-page-public` token override that used to sit
    here is deleted. It existed to repair the navy palette for signed-out
    visitors only, which left the signed-in search page on the other one — the
    hybrid the owner called slop. The base rule now resolves to the product
    tokens for both, so there is one palette and no repair layer. */
 
 .f9-auth-page .f9-wordmark-bridge,
-.f9-search-page .f9-wordmark-bridge,
+.f9-find-page .f9-wordmark-bridge,
 .f9-legal-page .f9-wordmark-bridge,
 .f9-error-page .f9-wordmark-bridge,
 .f9-share-page .f9-wordmark-bridge {
@@ -4206,7 +4206,7 @@ one signal-green accent.
   color: var(--ld-bone);
 }
 
-/* BL-031: `.f9-search-page h1` and `h2` are gone from this group. They set
+/* BL-031: `.f9-find-page h1` and `h2` are gone from this group. They set
    the search page's headings in UPPERCASE Bricolage at (0,1,1), which beat
    `.f9-wk-title` at (0,1,0) and shouted "FIND COMPETITOR ADS" and
    "1 VERIFIED AD LINKED TO NYKAA.COM" across the rebuilt page. v4's title is
@@ -4286,7 +4286,7 @@ one signal-green accent.
 }
 
 .f9-auth-page .f9-primary-button,
-.f9-search-page .f9-primary-button,
+.f9-find-page .f9-primary-button,
 .f9-legal-page .f9-primary-button,
 .f9-error-page .f9-primary-button,
 .f9-share-page .f9-primary-button {
@@ -4299,7 +4299,7 @@ one signal-green accent.
 }
 
 .f9-auth-page .f9-primary-button:hover,
-.f9-search-page .f9-primary-button:hover { background: #2a2820; }
+.f9-find-page .f9-primary-button:hover { background: #2a2820; }
 
 .f9-auth-page .f9-auth-divider {
   color: var(--ld-ink-soft);
@@ -4321,7 +4321,7 @@ one signal-green accent.
   border-color: #d2e3fc;
 }
 
-.f9-search-page .f9-secondary-button,
+.f9-find-page .f9-secondary-button,
 .f9-legal-page .f9-secondary-button,
 .f9-error-page .f9-secondary-button,
 .f9-share-page .f9-secondary-button {
@@ -4332,14 +4332,14 @@ one signal-green accent.
   box-shadow: none;
 }
 
-.f9-search-page .f9-search-nav {
+.f9-find-page .f9-search-nav {
   background: var(--ld-bone);
   border-bottom: 2.5px solid var(--ld-ink);
   box-shadow: none;
 }
 
-.f9-search-page .f9-search-nav-links a { color: var(--ld-ink-soft); }
-.f9-search-page .f9-search-nav-links a:hover { color: var(--ld-ink); }
+.f9-find-page .f9-search-nav-links a { color: var(--ld-ink-soft); }
+.f9-find-page .f9-search-nav-links a:hover { color: var(--ld-ink); }
 
 
 
@@ -4537,8 +4537,8 @@ one signal-green accent.
 
 
 
-.f9-search-page .f9-primary-button,
-.f9-search-page .f9-secondary-button {
+.f9-find-page .f9-primary-button,
+.f9-find-page .f9-secondary-button {
   min-height: 44px;
   border-radius: 10px;
 }
@@ -4574,11 +4574,11 @@ one signal-green accent.
 }
 
 /* Cursor dashboard pivot (2026-06-22): compact app shell, quiet utility surfaces, proof-first activity. */
-.f9-search-page {
+.f9-find-page {
   background: #f7f6f1;
 }
 
-.f9-search-page .f9-search-nav {
+.f9-find-page .f9-search-nav {
   border-bottom: 1px solid #e4e0d7;
   background: rgba(247, 246, 241, 0.94);
 }
@@ -4921,8 +4921,8 @@ one signal-green accent.
 
 
 
-.f9-search-page .f9-primary-button,
-.f9-search-page .f9-secondary-button {
+.f9-find-page .f9-primary-button,
+.f9-find-page .f9-secondary-button {
   min-height: 44px;
   border-radius: 8px;
 }
@@ -5513,19 +5513,19 @@ one signal-green accent.
    ink rail on the signed-in search page — a 20px inset and `min-height: auto`
    on a rail that P0 pins to `top: 0; height: 100vh` — so /search was the one
    workspace page whose shell did not match the others. */
-.f9-dash-page-public.f9-search-page .f9-cursor-shell {
+.f9-dash-page-public.f9-find-page .f9-cursor-shell {
   gap: 24px;
   padding-top: 20px;
 }
 
 @media (min-width: 761px) {
-  .f9-dash-page-public.f9-search-page .f9-cursor-shell {
+  .f9-dash-page-public.f9-find-page .f9-cursor-shell {
     grid-template-columns: 218px minmax(0, 1fr);
     width: min(100%, 1390px);
   }
 }
 
-.f9-dash-page-public.f9-search-page .f9-cursor-rail {
+.f9-dash-page-public.f9-find-page .f9-cursor-rail {
   min-height: auto;
   top: 20px;
   padding: 14px 0;
@@ -5534,14 +5534,14 @@ one signal-green accent.
   background: transparent;
 }
 
-.f9-dash-page-public.f9-search-page .f9-cursor-account {
+.f9-dash-page-public.f9-find-page .f9-cursor-account {
   padding: 0 10px 12px;
   border: 0;
   border-radius: 0;
   background: transparent;
 }
 
-.f9-search-page .f9-cursor-account span {
+.f9-find-page .f9-cursor-account span {
   color: #6f6a60;
   font-size: 0.64rem;
   letter-spacing: 0.08em;
@@ -5552,40 +5552,40 @@ one signal-green accent.
    38px. They inherited enough height from the pinned `ui-sans-serif` stack to
    scrape past; taking that stack off exposed the real number. A 44px target
    is a rule at every width, not at two of them. */
-.f9-dash-page-public.f9-search-page .f9-cursor-rail nav a {
+.f9-dash-page-public.f9-find-page .f9-cursor-rail nav a {
   min-height: 44px;
   padding: 7px 10px;
   border-radius: 7px;
   transition: background-color 140ms ease, color 140ms ease;
 }
 
-.f9-search-page :is(a, button, input, select, textarea):focus-visible {
+.f9-find-page :is(a, button, input, select, textarea):focus-visible {
   outline: 2px solid rgba(23, 112, 80, 0.72);
   outline-offset: 2px;
 }
 
-.f9-search-page .f9-primary-button,
-.f9-search-page .f9-secondary-button {
+.f9-find-page .f9-primary-button,
+.f9-find-page .f9-secondary-button {
   transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease, transform 140ms ease;
 }
 
 @media (max-width: 760px) {
-  .f9-dash-page-public.f9-search-page .f9-cursor-shell {
+  .f9-dash-page-public.f9-find-page .f9-cursor-shell {
     grid-template-columns: 1fr;
     gap: 14px;
     padding-inline: 18px;
   }
 
-  .f9-dash-page-public.f9-search-page .f9-cursor-rail {
+  .f9-dash-page-public.f9-find-page .f9-cursor-rail {
     position: static;
     padding: 4px 0 0;
   }
 
-  .f9-dash-page-public.f9-search-page .f9-cursor-account {
+  .f9-dash-page-public.f9-find-page .f9-cursor-account {
     display: none;
   }
 
-  .f9-search-page .f9-cursor-rail nav {
+  .f9-find-page .f9-cursor-rail nav {
     display: flex;
     gap: 6px;
     overflow-x: auto;
@@ -5593,25 +5593,25 @@ one signal-green accent.
     scrollbar-width: none;
   }
 
-  .f9-search-page .f9-cursor-rail nav::-webkit-scrollbar {
+  .f9-find-page .f9-cursor-rail nav::-webkit-scrollbar {
     display: none;
   }
 
-  .f9-search-page .f9-cursor-rail nav a {
+  .f9-find-page .f9-cursor-rail nav a {
     flex: 0 0 auto;
     min-height: 44px;
     padding-inline: 10px;
     white-space: nowrap;
   }
 
-  .f9-search-page .f9-dash-rail-footer a,
-  .f9-search-page .f9-dash-rail-footer button {
+  .f9-find-page .f9-dash-rail-footer a,
+  .f9-find-page .f9-dash-rail-footer button {
     min-height: 44px;
   }
 }
 
 /* Cursor-grade public search command: one field, quiet chrome. */
-.f9-dash-page-public.f9-search-page .f9-cursor-main {
+.f9-dash-page-public.f9-find-page .f9-cursor-main {
   display: grid;
   align-content: start;
   gap: 18px;
@@ -6168,7 +6168,7 @@ one signal-green accent.
 }
 
 @media (min-width: 761px) and (max-width: 900px) {
-  .f9-search-page .f9-cursor-rail nav a {
+  .f9-find-page .f9-cursor-rail nav a {
     min-height: 44px;
   }
 }
@@ -6638,9 +6638,9 @@ one signal-green accent.
 }
 
 /* --- Search shell: neutralize the container-level light palettes that
-       the public funnel reskin pins onto .f9-search-page. --- */
+       the public funnel reskin pins onto .f9-find-page. --- */
 
-[data-f9-theme="dark"] .f9-search-page {
+[data-f9-theme="dark"] .f9-find-page {
   --f9-search-ink: var(--ink);
   --f9-search-muted: var(--ink-soft);
   --f9-search-soft: var(--ink-faint);
@@ -6663,7 +6663,7 @@ one signal-green accent.
   background: var(--dk-well);
 }
 
-[data-f9-theme="dark"] .f9-search-page .f9-cursor-account {
+[data-f9-theme="dark"] .f9-find-page .f9-cursor-account {
   background: transparent;
 }
 
@@ -6694,7 +6694,7 @@ one signal-green accent.
   color: var(--ink);
 }
 
-[data-f9-theme="dark"] .f9-search-page :is(a, button, input, select, textarea):focus-visible {
+[data-f9-theme="dark"] .f9-find-page :is(a, button, input, select, textarea):focus-visible {
   outline-color: var(--green-ink);
 }
 
@@ -6772,7 +6772,7 @@ inputs,
 toggles --- */
 
 [data-f9-theme="dark"] .f9-primary-button,
-[data-f9-theme="dark"] .f9-search-page a.f9-primary-button {
+[data-f9-theme="dark"] .f9-find-page a.f9-primary-button {
   color: var(--bone);
 }
 
@@ -6935,7 +6935,7 @@ reds soften --- */
   color: var(--ink-soft);
 }
 
-[data-f9-theme="dark"] .f9-search-page .f9-cursor-account span,
+[data-f9-theme="dark"] .f9-find-page .f9-cursor-account span,
 [data-f9-theme="dark"] .f9-settings-details > summary::after {
   color: var(--ink-faint);
 }
@@ -8162,13 +8162,6 @@ reds soften --- */
   color: var(--ink-faint);
 }
 
-.f9-ed-display {
-  font-family: var(--ed-display);
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: -0.02em;
-  line-height: 1.05;
-}
 
 /* --- §6.1 state stamp (also the Pill `stamp` variant) --- */
 
@@ -8814,102 +8807,20 @@ reds soften --- */
    `border-top: 0` and shares the band's rule weight (§6.1 open state).
    ============================================================ */
 
-.f9-ed-opened-detail {
-  display: grid;
-  gap: 18px;
-  padding: 20px;
-  border: 2.5px solid var(--ed-rule);
-  border-radius: 0;
-  background: var(--ed-surface);
-  box-shadow: var(--ed-shadow);
-  min-width: 0;
-}
 
 /* Grid and flex children default to `min-width: auto`, which lets a
    horizontally scrolling child (the tab bar, the action line) push the whole
    panel wider than the viewport. Zero here is what makes §9.1 hold. */
-.f9-ed-opened-detail > *,
-.f9-ed-detail-head > * {
-  min-width: 0;
-}
 
-.f9-ed-detail-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px 24px;
-}
 
-/* --- §6.4 anchor tab bar --- */
 
-.f9-ed-tabbar {
-  border: 2.5px solid var(--ed-rule);
-  background: var(--ed-surface);
-  /* §9.1: the bar scrolls inside its own container, never the page. */
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-}
 
-.f9-ed-tabbar-track {
-  display: flex;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  min-width: max-content;
-}
 
-.f9-ed-tab {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 10px 18px;
-  border-left: 2.5px solid var(--ed-rule);
-  font-family: var(--ed-mono);
-  font-weight: 600;
-  font-size: 10.5px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  text-decoration: none;
-  white-space: nowrap;
-  color: var(--ink-soft);
-  background: transparent;
-}
 
-.f9-ed-tabbar-track > li:first-child .f9-ed-tab {
-  border-left: 0;
-}
 
-.f9-ed-tab:hover {
-  color: var(--ink);
-}
-
-.f9-ed-tab.is-active {
-  background: var(--ed-fill);
-  color: var(--ed-on-fill);
-}
-
-.f9-ed-tab:focus-visible {
-  outline: 2px solid var(--ed-focus);
-  outline-offset: -4px;
-}
-
-.f9-ed-tab-count {
-  padding: 1px 6px;
-  background: var(--ed-accent);
-  color: var(--ed-on-accent);
-  letter-spacing: 0.08em;
-}
 
 /* --- §7 detail composition: panel + the three-object rail --- */
 
-.f9-ed-detail-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 24px;
-  align-items: start;
-}
 
 .f9-ed-detail-main {
   display: grid;
@@ -9881,7 +9792,7 @@ reds soften --- */
   white-space: nowrap;
 }
 
-/* ROUND 2 — caught by eyeball, not by a probe: `.f9-search-page a { color:
+/* ROUND 2 — caught by eyeball, not by a probe: `.f9-find-page a { color:
    inherit }` is (0,1,1) and beats `.f9-wk-btn` (0,1,0), so a Rank-1 button
    rendered as a <Link> painted ink-on-ink and its label disappeared. Nothing
    in the harness measures label contrast; the same trap already has a
@@ -11954,31 +11865,31 @@ textarea.f9-wk-in {
    to the stacked layout — the phone has the vertical room the desktop does
    not. */
 @media (min-width: 1080px) {
-  .f9-search-page .f9-wk-command-form {
+  .f9-find-page .f9-wk-command-form {
     display: grid;
     align-items: end;
     column-gap: 28px;
     grid-template-columns: minmax(0, 640px) minmax(0, 1fr);
   }
 
-  .f9-search-page .f9-wk-command-form > .f9-wk-command-row {
+  .f9-find-page .f9-wk-command-form > .f9-wk-command-row {
     grid-column: 1;
     grid-row: 1;
   }
 
-  .f9-search-page .f9-wk-command-form > .f9-wk-hint {
+  .f9-find-page .f9-wk-command-form > .f9-wk-hint {
     grid-column: 1;
     grid-row: 2;
   }
 
-  .f9-search-page .f9-wk-command-form > .f9-wk-refine {
+  .f9-find-page .f9-wk-command-form > .f9-wk-refine {
     align-self: end;
     margin-top: 0;
     grid-column: 2;
     grid-row: 1;
   }
 
-  .f9-search-page .f9-wk-command-form > .f9-wk-refine > .f9-search-refine {
+  .f9-find-page .f9-wk-command-form > .f9-wk-refine > .f9-search-refine {
     margin-bottom: 0;
   }
 }
@@ -12270,11 +12181,11 @@ textarea.f9-wk-in {
 /* A pane fact on this page can be a whole hook sentence, so the value wraps
    and reads left. Scoped to /search — the Competitors pane's facts are short
    and stay right-aligned. */
-.f9-search-page .f9-wk-dl {
+.f9-find-page .f9-wk-dl {
   grid-template-columns: 112px minmax(0, 1fr);
 }
 
-.f9-search-page .f9-wk-dl dd {
+.f9-find-page .f9-wk-dl dd {
   overflow-wrap: anywhere;
   text-align: left;
 }
@@ -12927,7 +12838,7 @@ textarea.f9-wk-in {
 
 /* === BL-038 shares (landing language) === */
 
-.f9-bl038-url {
+.f9-shares-url {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
@@ -12935,17 +12846,17 @@ textarea.f9-wk-in {
   text-decoration: none;
 }
 
-.f9-bl038-url:hover {
+.f9-shares-url:hover {
   color: var(--ink);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 
-.f9-bl038-list {
+.f9-shares-list {
   padding: 0 var(--wk-pad);
 }
 
-.f9-bl038-actions {
+.f9-shares-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -12953,13 +12864,13 @@ textarea.f9-wk-in {
   gap: 0 16px;
 }
 
-.f9-bl038-actions form {
+.f9-shares-actions form {
   margin: 0;
 }
 
 /* ConfirmSubmitButton keeps its two-activation semantics while the armed
    state stays a text action. Red remains reserved for diff deletion. */
-.f9-bl038-actions .f9-danger-button.f9-confirm-armed {
+.f9-shares-actions .f9-danger-button.f9-confirm-armed {
   min-width: 44px;
   min-height: 44px;
   margin: 0;
@@ -12980,7 +12891,7 @@ textarea.f9-wk-in {
     border-color var(--wk-snap);
 }
 
-.f9-bl038-actions .f9-danger-button.f9-confirm-armed:hover {
+.f9-shares-actions .f9-danger-button.f9-confirm-armed:hover {
   border: 0;
   background: none;
   color: var(--ink);
@@ -12988,7 +12899,7 @@ textarea.f9-wk-in {
   text-underline-offset: 3px;
 }
 
-.f9-bl038-note {
+.f9-shares-note {
   margin: 0 var(--wk-pad);
   padding-top: 34px;
 }
@@ -12996,13 +12907,13 @@ textarea.f9-wk-in {
 /* The collection switch is navigation: one quiet hairline, sentence case,
    and horizontal containment at narrow widths. Collection names are entities,
    so this is one of the sanctioned Bricolage slots. */
-.f9-col-switch {
+.f9-library-switch {
   flex-wrap: nowrap;
   overflow-x: auto;
   scrollbar-width: thin;
 }
 
-.f9-col-switch-item {
+.f9-library-switch-item {
   flex: 0 0 auto;
   font-family: var(--ld-display);
   font-size: 14px;
@@ -13011,15 +12922,15 @@ textarea.f9-wk-in {
   white-space: nowrap;
 }
 
-.f9-col-split {
+.f9-library-split {
   border-bottom: 1px solid var(--wk-rule);
 }
 
-.f9-col-list-empty {
+.f9-library-list-empty {
   padding: 34px 0;
 }
 
-.f9-col-list-empty p {
+.f9-library-list-empty p {
   max-width: 58ch;
   margin: 10px 0 0;
   color: var(--ink-soft);
@@ -13027,14 +12938,14 @@ textarea.f9-wk-in {
   line-height: 1.55;
 }
 
-.f9-col-section,
-.f9-col-empty,
-.f9-col-limit,
-.f9-col-locked {
+.f9-library-section,
+.f9-library-empty,
+.f9-library-limit,
+.f9-library-locked {
   max-width: 860px;
 }
 
-.f9-col-section-title {
+.f9-library-section-title {
   margin: 12px 0 0;
   color: var(--ink);
   font-family: var(--f9-font);
@@ -13044,7 +12955,7 @@ textarea.f9-wk-in {
   line-height: 1.3;
 }
 
-.f9-col-entity-title {
+.f9-library-entity-title {
   margin: 12px 0 0;
   color: var(--ink);
   font-family: var(--ld-display);
@@ -13054,9 +12965,9 @@ textarea.f9-wk-in {
   line-height: 1.2;
 }
 
-.f9-col-note,
-.f9-col-provenance,
-.f9-col-filter-line {
+.f9-library-note,
+.f9-library-provenance,
+.f9-library-filter-line {
   max-width: 62ch;
   margin: 10px 0 0;
   color: var(--ink-soft);
@@ -13064,18 +12975,18 @@ textarea.f9-wk-in {
   line-height: 1.55;
 }
 
-.f9-col-filter-line {
+.f9-library-filter-line {
   max-width: none;
   margin: 0;
   padding: 13px var(--wk-pad);
   border-bottom: 1px solid var(--wk-rule);
 }
 
-.f9-col-filter-line a {
+.f9-library-filter-line a {
   color: var(--ink);
 }
 
-.f9-col-detail-headline {
+.f9-library-detail-headline {
   margin: 11px 0 0;
   color: var(--ink);
   font-family: var(--f9-font);
@@ -13085,7 +12996,7 @@ textarea.f9-wk-in {
   line-height: 1.4;
 }
 
-.f9-col-capture-copy {
+.f9-library-capture-copy {
   margin: 12px 0 0;
   padding: 0;
   border: 0;
@@ -13094,19 +13005,19 @@ textarea.f9-wk-in {
   line-height: 1.55;
 }
 
-.f9-col-capture-copy p {
+.f9-library-capture-copy p {
   margin: 0;
 }
 
-.f9-col-capture-copy p + p {
+.f9-library-capture-copy p + p {
   margin-top: 8px;
 }
 
-.f9-col-detail-thumb {
+.f9-library-detail-thumb {
   margin-top: 12px;
 }
 
-.f9-col-detail-thumb .f9-ad-thumb {
+.f9-library-detail-thumb .f9-ad-thumb {
   display: block;
   width: 100%;
   height: auto;
@@ -13115,23 +13026,23 @@ textarea.f9-wk-in {
   box-shadow: none;
 }
 
-.f9-col-facts {
+.f9-library-facts {
   max-width: 520px;
   margin-top: 18px;
   padding-top: 18px;
   border-top: 1px solid var(--wk-rule);
 }
 
-.f9-col-facts .f9-wk-dl {
+.f9-library-facts .f9-wk-dl {
   grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr);
 }
 
-.f9-col-facts .f9-wk-dl dd {
+.f9-library-facts .f9-wk-dl dd {
   overflow-wrap: anywhere;
   text-align: left;
 }
 
-.f9-col-actions {
+.f9-library-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
@@ -13142,17 +13053,17 @@ textarea.f9-wk-in {
   border-top: 1px solid var(--wk-rule);
 }
 
-.f9-col-actions > form {
+.f9-library-actions > form {
   display: contents;
 }
 
-.f9-col-upgrade-note {
+.f9-library-upgrade-note {
   flex: 1 1 100%;
   padding: 10px 0;
   border-bottom: 1px solid var(--wk-rule);
 }
 
-.f9-col-upgrade-note p {
+.f9-library-upgrade-note p {
   margin: 0;
   color: var(--ink-soft);
   font-size: 13.5px;
@@ -13161,32 +13072,32 @@ textarea.f9-wk-in {
 
 /* Native disclosure, zero client-side state. The summary is text navigation,
    not a bordered button; opening adds one section rule, not a card. */
-.f9-col-disclosure {
+.f9-library-disclosure {
   min-width: 0;
 }
 
-.f9-col-disclosure > summary {
+.f9-library-disclosure > summary {
   list-style: none;
   user-select: none;
 }
 
-.f9-col-disclosure > summary::-webkit-details-marker {
+.f9-library-disclosure > summary::-webkit-details-marker {
   display: none;
 }
 
-.f9-col-disclosure > summary .f9-wk-chev {
+.f9-library-disclosure > summary .f9-wk-chev {
   transition: transform var(--wk-snap);
 }
 
-.f9-col-disclosure[open] > summary .f9-wk-chev {
+.f9-library-disclosure[open] > summary .f9-wk-chev {
   transform: rotate(90deg);
 }
 
-.f9-col-disclosure > .f9-col-disclosure-body {
+.f9-library-disclosure > .f9-library-disclosure-body {
   display: none;
 }
 
-.f9-col-disclosure[open] > .f9-col-disclosure-body {
+.f9-library-disclosure[open] > .f9-library-disclosure-body {
   display: grid;
   gap: 14px;
   min-width: 0;
@@ -13195,13 +13106,13 @@ textarea.f9-wk-in {
   border-top: 1px solid var(--wk-rule);
 }
 
-.f9-col-export[open] > .f9-col-disclosure-body {
+.f9-library-export[open] > .f9-library-disclosure-body {
   display: flex;
   flex-wrap: wrap;
   gap: 0 18px;
 }
 
-.f9-col-form {
+.f9-library-form {
   display: grid;
   gap: 12px;
   width: 100%;
@@ -13209,12 +13120,12 @@ textarea.f9-wk-in {
   min-width: 0;
 }
 
-.f9-col-empty .f9-col-form,
-.f9-col-locked .f9-wk-btn {
+.f9-library-empty .f9-library-form,
+.f9-library-locked .f9-wk-btn {
   margin-top: 20px;
 }
 
-.f9-col-section > .f9-col-disclosure {
+.f9-library-section > .f9-library-disclosure {
   margin-top: 4px;
 }
 
@@ -13222,23 +13133,23 @@ textarea.f9-wk-in {
   padding: 34px var(--wk-pad) 0;
 }
 
-#new-collection .f9-col-disclosure {
+#new-collection .f9-library-disclosure {
   max-width: 620px;
 }
 
 /* Inputs are the one legitimate frame in v4. They keep the page's single
    1px rule, square corners, and a focus ring that does not alter layout. */
-.f9-col-page .f9-field input,
-.f9-col-page .f9-field select,
-.f9-col-page .f9-field textarea {
+.f9-library-page .f9-field input,
+.f9-library-page .f9-field select,
+.f9-library-page .f9-field textarea {
   border: 1px solid var(--wk-rule);
   border-radius: 0;
   box-shadow: none;
 }
 
-.f9-col-page .f9-field input:focus,
-.f9-col-page .f9-field select:focus,
-.f9-col-page .f9-field textarea:focus {
+.f9-library-page .f9-field input:focus,
+.f9-library-page .f9-field select:focus,
+.f9-library-page .f9-field textarea:focus {
   border-color: var(--wk-rule);
   box-shadow: none;
   outline: 2px solid var(--wk-focus);
@@ -13248,8 +13159,8 @@ textarea.f9-wk-in {
 /* The shared confirm component swaps its class while armed. On this surface
    confirmation changes the words only: destructive actions never borrow red,
    elevation, rounding, or motion. */
-.f9-col-page .f9-confirm-armed,
-.f9-col-page .f9-danger-button.f9-confirm-armed {
+.f9-library-page .f9-confirm-armed,
+.f9-library-page .f9-danger-button.f9-confirm-armed {
   min-width: 44px;
   min-height: 44px;
   padding: 0;
@@ -13264,7 +13175,7 @@ textarea.f9-wk-in {
   transform: none;
 }
 
-.f9-col-page .f9-secondary-button.f9-copy-button {
+.f9-library-page .f9-secondary-button.f9-copy-button {
   min-width: 44px;
   min-height: 44px;
   padding: 0;
@@ -13282,16 +13193,16 @@ textarea.f9-wk-in {
 }
 
 @media (max-width: 640px) {
-  .f9-col-list-empty {
+  .f9-library-list-empty {
     padding-top: 26px;
     padding-bottom: 26px;
   }
 
-  .f9-col-facts .f9-wk-dl {
+  .f9-library-facts .f9-wk-dl {
     grid-template-columns: minmax(96px, 1fr) minmax(0, 1.5fr);
   }
 
-  .f9-col-actions {
+  .f9-library-actions {
     flex-direction: column;
     flex-wrap: nowrap;
     gap: 0;
@@ -13308,14 +13219,14 @@ textarea.f9-wk-in {
    below is a sentence-case ruled section: active rooms, reusable context and
    archived rooms. No shadow, dashed preview or framed empty specimen survives. */
 
-.f9-clients-page h2,
-.f9-clients-page h3 {
+.f9-rooms-page h2,
+.f9-rooms-page h3 {
   font-family: var(--f9-font);
   letter-spacing: 0;
   text-transform: none;
 }
 
-.f9-clients-section-head {
+.f9-rooms-section-head {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
@@ -13323,7 +13234,7 @@ textarea.f9-wk-in {
   padding-bottom: 12px;
 }
 
-.f9-clients-section-head h2 {
+.f9-rooms-section-head h2 {
   margin: 7px 0 0;
   color: var(--ink);
   font-size: 17px;
@@ -13331,17 +13242,17 @@ textarea.f9-wk-in {
   line-height: 1.3;
 }
 
-.f9-clients-section-head > span {
+.f9-rooms-section-head > span {
   color: var(--ink-faint);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
-.f9-clients-gate {
+.f9-rooms-gate {
   max-width: 760px;
 }
 
-.f9-clients-gate h2 {
+.f9-rooms-gate h2 {
   margin: 13px 0 0;
   color: var(--ink);
   font-size: 17px;
@@ -13349,7 +13260,7 @@ textarea.f9-wk-in {
   line-height: 1.35;
 }
 
-.f9-clients-gate > p:last-child {
+.f9-rooms-gate > p:last-child {
   max-width: 62ch;
   margin: 8px 0 0;
   color: var(--ink-soft);
@@ -13360,11 +13271,11 @@ textarea.f9-wk-in {
 /* The composer replaces the header's Create button while it is open, so its
    Save control is the only fill in that viewport. Settle is structural motion;
    the form arrives, evidence values never animate. */
-.f9-clients-composer {
+.f9-rooms-composer {
   animation: f9-wk-settle var(--wk-settle) both;
 }
 
-.f9-clients-form {
+.f9-rooms-form {
   display: grid;
   max-width: 860px;
   padding: 20px 0 28px;
@@ -13372,18 +13283,18 @@ textarea.f9-wk-in {
   gap: 18px;
 }
 
-.f9-clients-field-grid {
+.f9-rooms-field-grid {
   display: grid;
   gap: 18px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.f9-clients-page .f9-field {
+.f9-rooms-page .f9-field {
   min-width: 0;
 }
 
-.f9-clients-page .f9-field > span,
-.f9-clients-choice-group legend {
+.f9-rooms-page .f9-field > span,
+.f9-rooms-choice-group legend {
   color: var(--ink-soft);
   font-family: var(--f9-font);
   font-size: 13px;
@@ -13392,9 +13303,9 @@ textarea.f9-wk-in {
   text-transform: none;
 }
 
-.f9-clients-page .f9-field input,
-.f9-clients-page .f9-field select,
-.f9-clients-page .f9-field textarea {
+.f9-rooms-page .f9-field input,
+.f9-rooms-page .f9-field select,
+.f9-rooms-page .f9-field textarea {
   min-height: 44px;
   border-color: var(--wk-rule);
   border-radius: 0;
@@ -13403,26 +13314,26 @@ textarea.f9-wk-in {
   box-shadow: none;
 }
 
-.f9-clients-page .f9-field textarea {
+.f9-rooms-page .f9-field textarea {
   min-height: 88px;
 }
 
-.f9-clients-choice-group {
+.f9-rooms-choice-group {
   min-width: 0;
   margin: 0;
   padding: 0;
   border: 0;
 }
 
-.f9-clients-choice-group legend {
+.f9-rooms-choice-group legend {
   margin-bottom: 8px;
 }
 
-.f9-clients-choice-list {
+.f9-rooms-choice-list {
   border-top: 1px solid var(--wk-rule);
 }
 
-.f9-clients-choice-row {
+.f9-rooms-choice-row {
   display: grid;
   align-items: center;
   gap: 16px;
@@ -13431,7 +13342,7 @@ textarea.f9-wk-in {
   grid-template-columns: minmax(0, 1fr) minmax(180px, auto);
 }
 
-.f9-clients-choice-row label {
+.f9-rooms-choice-row label {
   display: flex;
   min-width: 0;
   min-height: 44px;
@@ -13442,11 +13353,11 @@ textarea.f9-wk-in {
   font-size: 13.5px;
 }
 
-.f9-clients-choice-row label:last-child {
+.f9-rooms-choice-row label:last-child {
   color: var(--ink-soft);
 }
 
-.f9-clients-choice-row input {
+.f9-rooms-choice-row input {
   flex: none;
   width: 16px;
   height: 16px;
@@ -13455,15 +13366,15 @@ textarea.f9-wk-in {
   accent-color: var(--ink);
 }
 
-.f9-clients-rooms {
+.f9-rooms-rooms {
   border-top: 1px solid var(--wk-rule);
 }
 
-.f9-clients-room {
+.f9-rooms-room {
   border-bottom: 1px solid var(--wk-rule);
 }
 
-.f9-clients-room > summary {
+.f9-rooms-room > summary {
   display: grid;
   min-height: 58px;
   align-items: center;
@@ -13478,21 +13389,21 @@ textarea.f9-wk-in {
     color var(--wk-snap);
 }
 
-.f9-clients-room > summary::-webkit-details-marker {
+.f9-rooms-room > summary::-webkit-details-marker {
   display: none;
 }
 
-.f9-clients-room > summary:hover {
+.f9-rooms-room > summary:hover {
   background: var(--wk-sunk);
 }
 
-.f9-clients-room > summary .f9-wk-nm {
+.f9-rooms-room > summary .f9-wk-nm {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.f9-clients-room-summary {
+.f9-rooms-room-summary {
   overflow: hidden;
   color: var(--ink-soft);
   font-size: 13.5px;
@@ -13500,11 +13411,11 @@ textarea.f9-wk-in {
   white-space: nowrap;
 }
 
-.f9-clients-room > summary .f9-wk-st {
+.f9-rooms-room > summary .f9-wk-st {
   text-align: right;
 }
 
-.f9-clients-caret {
+.f9-rooms-caret {
   display: inline-grid;
   width: 12px;
   height: 12px;
@@ -13519,16 +13430,16 @@ textarea.f9-wk-in {
   transition: transform var(--wk-settle);
 }
 
-.f9-clients-room[open] .f9-clients-caret {
+.f9-rooms-room[open] .f9-rooms-caret {
   transform: rotate(90deg);
 }
 
-.f9-clients-room-body {
+.f9-rooms-room-body {
   padding: 4px 0 24px;
   animation: f9-wk-settle var(--wk-settle) both;
 }
 
-.f9-clients-room-notes {
+.f9-rooms-room-notes {
   max-width: 66ch;
   margin: 0 0 18px;
   color: var(--ink-soft);
@@ -13536,14 +13447,14 @@ textarea.f9-wk-in {
   line-height: 1.55;
 }
 
-.f9-clients-room-facts {
+.f9-rooms-room-facts {
   display: grid;
   max-width: 820px;
   margin: 0;
   border-top: 1px solid var(--wk-rule);
 }
 
-.f9-clients-room-facts > div {
+.f9-rooms-room-facts > div {
   display: grid;
   gap: 20px;
   padding: 11px 0;
@@ -13552,16 +13463,16 @@ textarea.f9-wk-in {
   grid-template-columns: 92px minmax(0, 1fr);
 }
 
-.f9-clients-room-facts dt {
+.f9-rooms-room-facts dt {
   color: var(--ink-faint);
 }
 
-.f9-clients-room-facts dd {
+.f9-rooms-room-facts dd {
   margin: 0;
   color: var(--ink);
 }
 
-.f9-clients-actions {
+.f9-rooms-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -13569,23 +13480,23 @@ textarea.f9-wk-in {
   margin-top: 10px;
 }
 
-.f9-clients-actions form {
+.f9-rooms-actions form {
   margin: 0;
 }
 
-.f9-clients-empty {
+.f9-rooms-empty {
   padding: 22px 0 28px;
 }
 
-.f9-clients-empty h3 {
+.f9-rooms-empty h3 {
   margin: 0;
   color: var(--ink);
   font-size: 15px;
   font-weight: 600;
 }
 
-.f9-clients-empty p,
-.f9-clients-quiet {
+.f9-rooms-empty p,
+.f9-rooms-quiet {
   max-width: 62ch;
   margin: 7px 0 0;
   color: var(--ink-soft);
@@ -13595,18 +13506,18 @@ textarea.f9-wk-in {
 
 /* Saved context and archive history are secondary working sets. Native
    disclosures keep them reachable without manufacturing two more panels. */
-.f9-clients-disclosure {
+.f9-rooms-disclosure {
   margin: 34px var(--wk-pad) 0;
   border-top: 1px solid var(--wk-rule);
   border-bottom: 1px solid var(--wk-rule);
 }
 
-.f9-clients-disclosure + .f9-clients-disclosure {
+.f9-rooms-disclosure + .f9-rooms-disclosure {
   margin-top: 0;
   border-top: 0;
 }
 
-.f9-clients-disclosure > summary {
+.f9-rooms-disclosure > summary {
   display: flex;
   min-height: 62px;
   align-items: center;
@@ -13620,15 +13531,15 @@ textarea.f9-wk-in {
     color var(--wk-snap);
 }
 
-.f9-clients-disclosure > summary::-webkit-details-marker {
+.f9-rooms-disclosure > summary::-webkit-details-marker {
   display: none;
 }
 
-.f9-clients-disclosure > summary > span:last-child {
+.f9-rooms-disclosure > summary > span:last-child {
   margin-left: auto;
 }
 
-.f9-clients-disclosure > summary::after {
+.f9-rooms-disclosure > summary::after {
   display: inline-grid;
   width: 12px;
   height: 12px;
@@ -13643,49 +13554,49 @@ textarea.f9-wk-in {
   transition: transform var(--wk-settle);
 }
 
-.f9-clients-disclosure[open] > summary::after {
+.f9-rooms-disclosure[open] > summary::after {
   transform: rotate(90deg);
 }
 
-.f9-clients-disclosure > summary:hover {
+.f9-rooms-disclosure > summary:hover {
   background: var(--wk-sunk);
 }
 
-.f9-clients-disclosure > summary strong {
+.f9-rooms-disclosure > summary strong {
   display: block;
   font-size: 14px;
   font-weight: 600;
 }
 
-.f9-clients-disclosure > summary small,
-.f9-clients-disclosure > summary > span:last-child {
+.f9-rooms-disclosure > summary small,
+.f9-rooms-disclosure > summary > span:last-child {
   color: var(--ink-faint);
   font-size: 12.5px;
   font-weight: 400;
 }
 
-.f9-clients-disclosure > summary small {
+.f9-rooms-disclosure > summary small {
   display: block;
   margin-top: 3px;
 }
 
-.f9-clients-disclosure-body {
+.f9-rooms-disclosure-body {
   padding: 0 0 26px;
   animation: f9-wk-settle var(--wk-settle) both;
 }
 
-.f9-clients-disclosure-body .f9-clients-form {
+.f9-rooms-disclosure-body .f9-rooms-form {
   max-width: 760px;
 }
 
-.f9-clients-memory-list,
-.f9-clients-archive-list {
+.f9-rooms-memory-list,
+.f9-rooms-archive-list {
   max-width: 860px;
   border-top: 1px solid var(--wk-rule);
 }
 
-.f9-clients-memory-row,
-.f9-clients-archive-row {
+.f9-rooms-memory-row,
+.f9-rooms-archive-row {
   display: grid;
   align-items: center;
   gap: 20px;
@@ -13695,50 +13606,50 @@ textarea.f9-wk-in {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
-.f9-clients-memory-row h3,
-.f9-clients-archive-row h3 {
+.f9-rooms-memory-row h3,
+.f9-rooms-archive-row h3 {
   margin: 0;
   color: var(--ink);
   font-size: 13.5px;
   font-weight: 600;
 }
 
-.f9-clients-memory-row p,
-.f9-clients-archive-row p {
+.f9-rooms-memory-row p,
+.f9-rooms-archive-row p {
   margin: 4px 0 0;
   color: var(--ink-soft);
   font-size: 13px;
   line-height: 1.45;
 }
 
-.f9-clients-memory-row > span {
+.f9-rooms-memory-row > span {
   color: var(--ink-faint);
   font-size: 12.5px;
   text-align: right;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .f9-clients-composer,
-  .f9-clients-room-body,
-  .f9-clients-disclosure-body {
+  .f9-rooms-composer,
+  .f9-rooms-room-body,
+  .f9-rooms-disclosure-body {
     animation: none !important;
   }
 
-  .f9-clients-caret,
-  .f9-clients-room > summary,
-  .f9-clients-disclosure > summary,
-  .f9-clients-disclosure > summary::after {
+  .f9-rooms-caret,
+  .f9-rooms-room > summary,
+  .f9-rooms-disclosure > summary,
+  .f9-rooms-disclosure > summary::after {
     transition: none !important;
   }
 }
 
 @media (max-width: 820px) {
-  .f9-clients-room > summary {
+  .f9-rooms-room > summary {
     gap: 3px 14px;
     grid-template-columns: minmax(0, 1fr) auto 12px;
   }
 
-  .f9-clients-room-summary {
+  .f9-rooms-room-summary {
     overflow: visible;
     grid-column: 1 / -1;
     grid-row: 2;
@@ -13746,53 +13657,53 @@ textarea.f9-wk-in {
     white-space: normal;
   }
 
-  .f9-clients-room > summary .f9-wk-st {
+  .f9-rooms-room > summary .f9-wk-st {
     grid-column: 2;
     grid-row: 1;
   }
 
-  .f9-clients-caret {
+  .f9-rooms-caret {
     grid-column: 3;
     grid-row: 1;
   }
 }
 
 @media (max-width: 640px) {
-  .f9-clients-section-head {
+  .f9-rooms-section-head {
     align-items: flex-start;
   }
 
-  .f9-clients-section-head h2[tabindex="-1"] {
+  .f9-rooms-section-head h2[tabindex="-1"] {
     display: flex;
     min-height: 44px;
     align-items: center;
   }
 
-  .f9-clients-field-grid,
-  .f9-clients-choice-row {
+  .f9-rooms-field-grid,
+  .f9-rooms-choice-row {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .f9-clients-choice-row {
+  .f9-rooms-choice-row {
     gap: 0;
   }
 
-  .f9-clients-choice-row label + label {
+  .f9-rooms-choice-row label + label {
     border-top: 1px solid var(--wk-rule);
   }
 
-  .f9-clients-disclosure {
+  .f9-rooms-disclosure {
     margin-right: var(--wk-pad);
     margin-left: var(--wk-pad);
   }
 
-  .f9-clients-memory-row,
-  .f9-clients-archive-row {
+  .f9-rooms-memory-row,
+  .f9-rooms-archive-row {
     align-items: flex-start;
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .f9-clients-memory-row > span {
+  .f9-rooms-memory-row > span {
     text-align: left;
   }
 }
@@ -13806,19 +13717,19 @@ textarea.f9-wk-in {
    first-row band; depth arrives only as ruled working-form rows.
 */
 
-.f9-nt-page {
+.f9-notif-page {
   min-height: 100%;
 }
 
-.f9-nt-section {
+.f9-notif-section {
   padding: 28px var(--wk-pad) 0;
 }
 
-.f9-nt-section.is-first {
+.f9-notif-section.is-first {
   padding-top: 14px;
 }
 
-.f9-nt-section-head {
+.f9-notif-section-head {
   display: flex;
   min-height: 44px;
   align-items: flex-start;
@@ -13827,7 +13738,7 @@ textarea.f9-wk-in {
   padding: 0 0 12px;
 }
 
-.f9-nt-section-title {
+.f9-notif-section-title {
   margin: 0;
   color: var(--ink);
   font-family: var(--f9-font);
@@ -13838,7 +13749,7 @@ textarea.f9-wk-in {
   text-transform: none;
 }
 
-.f9-nt-section-context {
+.f9-notif-section-context {
   max-width: 72ch;
   margin: 5px 0 0;
   color: var(--ink-soft);
@@ -13846,14 +13757,14 @@ textarea.f9-wk-in {
   line-height: 1.5;
 }
 
-.f9-nt-definitions,
-.f9-nt-working-rows,
-.f9-nt-targets {
+.f9-notif-definitions,
+.f9-notif-working-rows,
+.f9-notif-targets {
   margin: 0 calc(var(--wk-pad) * -1);
   border-top: 1px solid var(--wk-rule);
 }
 
-.f9-nt-definition-row {
+.f9-notif-definition-row {
   display: grid;
   min-height: 58px;
   align-items: center;
@@ -13863,35 +13774,35 @@ textarea.f9-wk-in {
   grid-template-columns: 150px 124px minmax(0, 1fr);
 }
 
-.f9-nt-definition-row dt,
-.f9-nt-definition-row dd {
+.f9-notif-definition-row dt,
+.f9-notif-definition-row dd {
   margin: 0;
 }
 
-.f9-nt-definition-row dt {
+.f9-notif-definition-row dt {
   color: var(--ink);
   font-size: 14px;
   font-weight: 600;
 }
 
-.f9-nt-definition-status {
+.f9-notif-definition-status {
   color: var(--ink);
   font-size: 13px;
 }
 
-.f9-nt-definition-copy {
+.f9-notif-definition-copy {
   color: var(--ink-soft);
   font-size: 13.5px;
   line-height: 1.5;
 }
 
-.f9-nt-definitions.is-compact {
+.f9-notif-definitions.is-compact {
   margin-top: 18px;
 }
 
-.f9-nt-work-row,
-.f9-nt-connect-row,
-.f9-nt-target-row {
+.f9-notif-work-row,
+.f9-notif-connect-row,
+.f9-notif-target-row {
   display: grid;
   min-height: 64px;
   align-items: center;
@@ -13900,16 +13811,16 @@ textarea.f9-wk-in {
   border-bottom: 1px solid var(--wk-rule);
 }
 
-.f9-nt-work-row {
+.f9-notif-work-row {
   grid-template-columns: minmax(220px, 0.72fr) minmax(0, 1.28fr);
 }
 
-.f9-nt-work-copy {
+.f9-notif-work-copy {
   min-width: 0;
 }
 
-.f9-nt-work-copy h3,
-.f9-nt-targets > h3 {
+.f9-notif-work-copy h3,
+.f9-notif-targets > h3 {
   margin: 0;
   color: var(--ink);
   font-family: var(--f9-font);
@@ -13920,17 +13831,17 @@ textarea.f9-wk-in {
   text-transform: none;
 }
 
-.f9-nt-work-copy p,
-.f9-nt-target-row p,
-.f9-nt-lock p,
-.f9-nt-quiet {
+.f9-notif-work-copy p,
+.f9-notif-target-row p,
+.f9-notif-lock p,
+.f9-notif-quiet {
   margin: 4px 0 0;
   color: var(--ink-soft);
   font-size: 13px;
   line-height: 1.5;
 }
 
-.f9-nt-inline-form {
+.f9-notif-inline-form {
   display: flex;
   min-width: 0;
   align-items: flex-end;
@@ -13938,11 +13849,11 @@ textarea.f9-wk-in {
   gap: 12px;
 }
 
-.f9-nt-inline-form .f9-nt-field {
+.f9-notif-inline-form .f9-notif-field {
   width: min(100%, 420px);
 }
 
-.f9-nt-field {
+.f9-notif-field {
   position: relative;
   display: flex;
   min-width: 0;
@@ -13950,7 +13861,7 @@ textarea.f9-wk-in {
   gap: 6px;
 }
 
-.f9-nt-label {
+.f9-notif-label {
   color: var(--ink-soft);
   font-family: var(--f9-font);
   font-size: 12.5px;
@@ -13959,8 +13870,8 @@ textarea.f9-wk-in {
   text-transform: none;
 }
 
-.f9-nt-input,
-.f9-nt-select {
+.f9-notif-input,
+.f9-notif-select {
   width: 100%;
   min-height: 44px;
   padding: 10px 12px;
@@ -13973,17 +13884,17 @@ textarea.f9-wk-in {
   line-height: 1.3;
 }
 
-.f9-nt-input::placeholder {
+.f9-notif-input::placeholder {
   color: var(--ink-faint);
 }
 
-.f9-nt-submit {
+.f9-notif-submit {
   flex: none;
   justify-content: flex-start;
   white-space: nowrap;
 }
 
-.f9-nt-connect-row {
+.f9-notif-connect-row {
   margin: 0 calc(var(--wk-pad) * -1);
   border-top: 1px solid var(--wk-rule);
   grid-template-columns:
@@ -13993,11 +13904,11 @@ textarea.f9-wk-in {
     auto;
 }
 
-.f9-nt-connect-row .f9-nt-check-row {
+.f9-notif-connect-row .f9-notif-check-row {
   grid-column: 2 / 4;
 }
 
-.f9-nt-check-row {
+.f9-notif-check-row {
   display: flex;
   min-height: 44px;
   align-items: flex-start;
@@ -14008,14 +13919,14 @@ textarea.f9-wk-in {
   line-height: 1.45;
 }
 
-.f9-nt-check-row input {
+.f9-notif-check-row input {
   width: 16px;
   height: 16px;
   margin: 2px 0 0;
   accent-color: var(--ink);
 }
 
-.f9-nt-lock {
+.f9-notif-lock {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -14026,109 +13937,109 @@ textarea.f9-wk-in {
   border-bottom: 1px solid var(--wk-rule);
 }
 
-.f9-nt-lock h3 {
+.f9-notif-lock h3 {
   margin: 0;
   color: var(--ink);
   font-size: 15px;
   font-weight: 600;
 }
 
-.f9-nt-targets {
+.f9-notif-targets {
   margin-top: 18px;
 }
 
-.f9-nt-targets > h3 {
+.f9-notif-targets > h3 {
   padding: 14px var(--wk-pad) 10px;
   border-bottom: 1px solid var(--wk-rule);
 }
 
-.f9-nt-target-row {
+.f9-notif-target-row {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
-.f9-nt-target-row strong {
+.f9-notif-target-row strong {
   color: var(--ink);
   font-size: 14px;
   font-weight: 600;
 }
 
-.f9-nt-quiet {
+.f9-notif-quiet {
   max-width: 72ch;
   margin: 0;
   padding-bottom: 8px;
 }
 
-.f9-nt-page > .f9-wk-strip {
+.f9-notif-page > .f9-wk-strip {
   margin-top: 18px;
 }
 
-.f9-nt-page > .f9-wk-opline {
+.f9-notif-page > .f9-wk-opline {
   margin-top: 32px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .f9-nt-page *,
-  .f9-nt-page *::before,
-  .f9-nt-page *::after {
+  .f9-notif-page *,
+  .f9-notif-page *::before,
+  .f9-notif-page *::after {
     scroll-behavior: auto !important;
   }
 }
 
 @media (max-width: 1080px) {
-  .f9-nt-work-row,
-  .f9-nt-connect-row {
+  .f9-notif-work-row,
+  .f9-notif-connect-row {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .f9-nt-inline-form {
+  .f9-notif-inline-form {
     justify-content: flex-start;
   }
 
-  .f9-nt-connect-row .f9-nt-check-row {
+  .f9-notif-connect-row .f9-notif-check-row {
     grid-column: auto;
   }
 }
 
 @media (max-width: 760px) {
-  .f9-nt-definition-row {
+  .f9-notif-definition-row {
     gap: 4px 12px;
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .f9-nt-definition-copy {
+  .f9-notif-definition-copy {
     grid-column: 1 / -1;
   }
 
-  .f9-nt-inline-form {
+  .f9-notif-inline-form {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .f9-nt-inline-form .f9-nt-field {
+  .f9-notif-inline-form .f9-notif-field {
     width: 100%;
   }
 
-  .f9-nt-lock {
+  .f9-notif-lock {
     align-items: flex-start;
     flex-direction: column;
   }
 }
 
 @media (max-width: 480px) {
-  .f9-nt-section-head {
+  .f9-notif-section-head {
     min-height: 0;
   }
 
-  .f9-nt-definition-row,
-  .f9-nt-target-row {
+  .f9-notif-definition-row,
+  .f9-notif-target-row {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .f9-nt-definition-status {
+  .f9-notif-definition-status {
     grid-row: 2;
   }
 
-  .f9-nt-definition-copy {
+  .f9-notif-definition-copy {
     grid-column: auto;
   }
 }
@@ -14138,11 +14049,11 @@ textarea.f9-wk-in {
 /* The selected competitor is a working surface, not a second record bolted
    under the board. Header -> five URL tabs -> current work starts inside the
    Mobbin-calibrated first-row band. */
-.f9-bl035-page .f9-wk-head {
+.f9-watchdetail-page .f9-wk-head {
   padding-bottom: 14px;
 }
 
-.f9-bl035-back {
+.f9-watchdetail-back {
   display: inline-flex;
   min-height: 44px;
   align-items: center;
@@ -14152,17 +14063,17 @@ textarea.f9-wk-in {
   text-underline-offset: 3px;
 }
 
-.f9-bl035-back:hover {
+.f9-watchdetail-back:hover {
   color: var(--ink);
 }
 
-.f9-bl035-tabs {
+.f9-watchdetail-tabs {
   overflow-x: auto;
   overscroll-behavior-inline: contain;
   scrollbar-width: thin;
 }
 
-.f9-bl035-tabs ul {
+.f9-watchdetail-tabs ul {
   display: flex;
   gap: 0 22px;
   min-width: max-content;
@@ -14171,28 +14082,28 @@ textarea.f9-wk-in {
   list-style: none;
 }
 
-.f9-bl035-tabs li {
+.f9-watchdetail-tabs li {
   display: flex;
 }
 
-.f9-bl035-detail {
+.f9-watchdetail-detail {
   min-width: 0;
   animation: f9-wk-settle var(--wk-settle) both;
 }
 
-.f9-bl035-split {
+.f9-watchdetail-split {
   display: grid;
   min-width: 0;
   align-items: start;
   grid-template-columns: minmax(0, 1fr) 320px;
 }
 
-.f9-bl035-main {
+.f9-watchdetail-main {
   min-width: 0;
   padding: 26px var(--wk-pad) 48px;
 }
 
-.f9-bl035-detail .f9-ed-detail-rail {
+.f9-watchdetail-detail .f9-ed-detail-rail {
   position: sticky;
   top: 0;
   min-width: 0;
@@ -14203,7 +14114,7 @@ textarea.f9-wk-in {
 /* No global action bar. Each secondary action sits with the record, delivery
    target, or monitoring setting it changes. The filled Rank-1 stays in the
    WorkingHeader and is therefore one-per-viewport by construction. */
-.f9-bl035-local-actions {
+.f9-watchdetail-local-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -14211,14 +14122,14 @@ textarea.f9-wk-in {
   margin-top: 12px;
 }
 
-.f9-bl035-local-actions > form {
+.f9-watchdetail-local-actions > form {
   display: flex;
 }
 
-.f9-bl035-detail .f9-ed-cta,
-.f9-bl035-detail .f9-ed-cta--rank1,
-.f9-bl035-detail .f9-ed-cta--rank2,
-.f9-bl035-detail .f9-ed-cta--rank3 {
+.f9-watchdetail-detail .f9-ed-cta,
+.f9-watchdetail-detail .f9-ed-cta--rank1,
+.f9-watchdetail-detail .f9-ed-cta--rank2,
+.f9-watchdetail-detail .f9-ed-cta--rank3 {
   display: inline-flex;
   min-width: 44px;
   min-height: 44px;
@@ -14240,25 +14151,25 @@ textarea.f9-wk-in {
   text-transform: none;
 }
 
-.f9-bl035-detail .f9-ed-cta:hover {
+.f9-watchdetail-detail .f9-ed-cta:hover {
   background: transparent;
   color: var(--ink-soft);
 }
 
-.f9-bl035-section {
+.f9-watchdetail-section {
   padding: 0 0 24px;
   border-bottom: 1px solid var(--wk-rule);
 }
 
-.f9-bl035-section + section,
-.f9-bl035-section + article {
+.f9-watchdetail-section + section,
+.f9-watchdetail-section + article {
   margin-top: 28px;
 }
 
-.f9-bl035-section h3,
-.f9-bl035-empty h3,
-.f9-bl035-detail .f9-panel-toolbar h3,
-.f9-bl035-detail .f9-trend-heading {
+.f9-watchdetail-section h3,
+.f9-watchdetail-empty h3,
+.f9-watchdetail-detail .f9-panel-toolbar h3,
+.f9-watchdetail-detail .f9-trend-heading {
   margin: 0;
   color: var(--ink);
   font-family: var(--f9-font);
@@ -14269,12 +14180,12 @@ textarea.f9-wk-in {
   text-transform: none;
 }
 
-.f9-bl035-section .f9-muted-copy {
+.f9-watchdetail-section .f9-muted-copy {
   max-width: 62ch;
   margin: 7px 0 0;
 }
 
-.f9-bl035-lock-note {
+.f9-watchdetail-lock-note {
   max-width: 62ch;
   margin: 10px 0 0;
   color: var(--ink-faint);
@@ -14282,7 +14193,7 @@ textarea.f9-wk-in {
   line-height: 1.5;
 }
 
-.f9-bl035-after-panel {
+.f9-watchdetail-after-panel {
   margin: 18px 0 0;
   padding-top: 10px;
   border-top: 1px solid var(--wk-rule);
@@ -14290,12 +14201,12 @@ textarea.f9-wk-in {
 
 /* Quiet honest states: one heading, one explanation, text actions. No dashed
    reserved slot and no pretend specimen of data that does not exist. */
-.f9-bl035-empty {
+.f9-watchdetail-empty {
   padding: 22px 0 26px;
   border-top: 1px solid var(--wk-rule);
 }
 
-.f9-bl035-empty p {
+.f9-watchdetail-empty p {
   max-width: 62ch;
   margin: 8px 0 0;
   color: var(--ink-soft);
@@ -14303,7 +14214,7 @@ textarea.f9-wk-in {
   line-height: 1.55;
 }
 
-.f9-bl035-empty p.f9-bl035-empty-title {
+.f9-watchdetail-empty p.f9-watchdetail-empty-title {
   margin: 0;
   color: var(--ink);
   font-size: 17px;
@@ -14311,22 +14222,22 @@ textarea.f9-wk-in {
   line-height: 1.35;
 }
 
-.f9-bl035-detail .f9-ed-specimen {
+.f9-watchdetail-detail .f9-ed-specimen {
   border: 0;
   background: transparent;
   box-shadow: none;
 }
 
-.f9-bl035-detail .f9-ed-specimen-slot,
-.f9-bl035-detail .f9-ed-specimen-scan {
+.f9-watchdetail-detail .f9-ed-specimen-slot,
+.f9-watchdetail-detail .f9-ed-specimen-scan {
   display: none;
 }
 
-.f9-bl035-detail .f9-ed-specimen-body {
+.f9-watchdetail-detail .f9-ed-specimen-body {
   padding: 20px 0 26px;
 }
 
-.f9-bl035-detail .f9-ed-specimen-headline {
+.f9-watchdetail-detail .f9-ed-specimen-headline {
   font-family: var(--f9-font);
   font-size: 17px;
   font-weight: 600;
@@ -14339,26 +14250,26 @@ textarea.f9-wk-in {
    entity). Inside the record, headings and machine facts stay in Inter.
    Capture timestamps are sentence-case too so a long feed cannot spend more
    than three caps-mono kickers by repetition. */
-.f9-bl035-detail h3,
-.f9-bl035-detail h4,
-.f9-bl035-detail .f9-ed-diff-headline,
-.f9-bl035-detail .f9-ed-number-value,
-.f9-bl035-detail .f9-trend-value,
-.f9-bl035-detail .f9-aggression-number {
+.f9-watchdetail-detail h3,
+.f9-watchdetail-detail h4,
+.f9-watchdetail-detail .f9-ed-diff-headline,
+.f9-watchdetail-detail .f9-ed-number-value,
+.f9-watchdetail-detail .f9-trend-value,
+.f9-watchdetail-detail .f9-aggression-number {
   font-family: var(--f9-font);
   letter-spacing: 0;
   text-transform: none;
 }
 
-.f9-bl035-detail .f9-ed-micro,
-.f9-bl035-detail .f9-app-kicker,
-.f9-bl035-detail .f9-ed-plate-header .f9-ed-micro,
-.f9-bl035-detail .f9-trend-label,
-.f9-bl035-detail .f9-trend-series-label,
-.f9-bl035-detail .f9-dossier-window,
-.f9-bl035-detail .f9-dossier-stat dt,
-.f9-bl035-detail .f9-dossier-subhead,
-.f9-bl035-detail .f9-aggression-band {
+.f9-watchdetail-detail .f9-ed-micro,
+.f9-watchdetail-detail .f9-app-kicker,
+.f9-watchdetail-detail .f9-ed-plate-header .f9-ed-micro,
+.f9-watchdetail-detail .f9-trend-label,
+.f9-watchdetail-detail .f9-trend-series-label,
+.f9-watchdetail-detail .f9-dossier-window,
+.f9-watchdetail-detail .f9-dossier-stat dt,
+.f9-watchdetail-detail .f9-dossier-subhead,
+.f9-watchdetail-detail .f9-aggression-band {
   color: var(--ink-faint);
   font-family: var(--f9-font);
   font-size: 12.5px;
@@ -14367,9 +14278,9 @@ textarea.f9-wk-in {
   text-transform: none;
 }
 
-.f9-bl035-detail .f9-ed-number-value,
-.f9-bl035-detail .f9-trend-value,
-.f9-bl035-detail .f9-aggression-number {
+.f9-watchdetail-detail .f9-ed-number-value,
+.f9-watchdetail-detail .f9-trend-value,
+.f9-watchdetail-detail .f9-aggression-number {
   font-size: 24px;
   font-weight: 600;
 }
@@ -14377,12 +14288,12 @@ textarea.f9-wk-in {
 /* One rule weight, no sheets, no floating cards. The child components retain
    their behavior and semantic landmarks; the selected surface supplies the
    geometry. */
-.f9-bl035-detail,
-.f9-bl035-detail * {
+.f9-watchdetail-detail,
+.f9-watchdetail-detail * {
   border-radius: 0;
 }
 
-.f9-bl035-detail :is(
+.f9-watchdetail-detail :is(
     .f9-ed-panel,
     .f9-ed-diff-plate,
     .f9-ed-change-record,
@@ -14409,7 +14320,7 @@ textarea.f9-wk-in {
   box-shadow: none;
 }
 
-.f9-bl035-detail :is(
+.f9-watchdetail-detail :is(
     .f9-ed-panel,
     .f9-ed-diff-plate,
     .f9-ed-change-record,
@@ -14423,90 +14334,90 @@ textarea.f9-wk-in {
   border-top: 1px solid var(--wk-rule);
 }
 
-.f9-bl035-detail .f9-ed-change-feed,
-.f9-bl035-detail .f9-dossier-body {
+.f9-watchdetail-detail .f9-ed-change-feed,
+.f9-watchdetail-detail .f9-dossier-body {
   gap: 24px;
 }
 
-.f9-bl035-detail .f9-panel-toolbar {
+.f9-watchdetail-detail .f9-panel-toolbar {
   align-items: flex-start;
   padding: 0 0 12px;
   border-bottom: 1px solid var(--wk-rule);
 }
 
-.f9-bl035-detail .f9-panel-toolbar + * {
+.f9-watchdetail-detail .f9-panel-toolbar + * {
   margin-top: 18px;
 }
 
-.f9-bl035-detail .f9-ed-plate-header,
-.f9-bl035-detail .f9-ed-first-scan-header,
-.f9-bl035-detail .f9-ed-fact-rail-header {
+.f9-watchdetail-detail .f9-ed-plate-header,
+.f9-watchdetail-detail .f9-ed-first-scan-header,
+.f9-watchdetail-detail .f9-ed-fact-rail-header {
   padding: 12px 0 10px;
   border-bottom: 1px solid var(--wk-rule);
   background: transparent;
   color: var(--ink);
 }
 
-.f9-bl035-detail .f9-ed-diff-body,
-.f9-bl035-detail .f9-ed-evidence-body,
-.f9-bl035-detail .f9-ed-first-scan-body {
+.f9-watchdetail-detail .f9-ed-diff-body,
+.f9-watchdetail-detail .f9-ed-evidence-body,
+.f9-watchdetail-detail .f9-ed-first-scan-body {
   padding-right: 0;
   padding-left: 0;
 }
 
-.f9-bl035-detail .f9-ed-diff-panes,
-.f9-bl035-detail .f9-ed-evidence-capture,
-.f9-bl035-detail .f9-proof-packet {
+.f9-watchdetail-detail .f9-ed-diff-panes,
+.f9-watchdetail-detail .f9-ed-evidence-capture,
+.f9-watchdetail-detail .f9-proof-packet {
   border: 1px solid var(--wk-rule);
   background: transparent;
 }
 
-.f9-bl035-detail .f9-ed-diff-pane.is-before {
+.f9-watchdetail-detail .f9-ed-diff-pane.is-before {
   border-right: 1px solid var(--wk-rule);
   background: transparent;
 }
 
-.f9-bl035-detail .f9-ed-diff-pane.is-now {
+.f9-watchdetail-detail .f9-ed-diff-pane.is-now {
   background: var(--wk-sunk);
 }
 
-.f9-bl035-detail .f9-ed-quiet-line,
-.f9-bl035-detail .f9-trend-sparse {
+.f9-watchdetail-detail .f9-ed-quiet-line,
+.f9-watchdetail-detail .f9-trend-sparse {
   padding: 12px 0;
   border: 0;
   border-top: 1px solid var(--wk-rule);
   background: transparent;
 }
 
-.f9-bl035-detail .f9-ed-fact-row,
-.f9-bl035-detail .f9-ed-rail-line,
-.f9-bl035-detail .f9-work-row {
+.f9-watchdetail-detail .f9-ed-fact-row,
+.f9-watchdetail-detail .f9-ed-rail-line,
+.f9-watchdetail-detail .f9-work-row {
   padding: 11px 0;
   border-top: 1px solid var(--wk-rule);
   background: transparent;
 }
 
-.f9-bl035-detail .f9-ed-fact-row:first-child,
-.f9-bl035-detail .f9-ed-rail-line:first-child,
-.f9-bl035-detail .f9-work-row:first-child {
+.f9-watchdetail-detail .f9-ed-fact-row:first-child,
+.f9-watchdetail-detail .f9-ed-rail-line:first-child,
+.f9-watchdetail-detail .f9-work-row:first-child {
   border-top: 1px solid var(--wk-rule);
 }
 
-.f9-bl035-detail .f9-ed-number-card,
-.f9-bl035-detail .f9-ed-rail-card,
-.f9-bl035-detail .f9-ed-fact-rail {
+.f9-watchdetail-detail .f9-ed-number-card,
+.f9-watchdetail-detail .f9-ed-rail-card,
+.f9-watchdetail-detail .f9-ed-fact-rail {
   padding: 0 0 24px;
   border-top: 1px solid var(--wk-rule);
 }
 
-.f9-bl035-detail .f9-ed-detail-rail > * + * {
+.f9-watchdetail-detail .f9-ed-detail-rail > * + * {
   margin-top: 26px;
 }
 
-.f9-bl035-detail .f9-ed-number-note,
-.f9-bl035-detail .f9-ed-rail-card > p,
-.f9-bl035-detail .f9-ed-fact-value,
-.f9-bl035-detail .f9-ed-rail-line dd {
+.f9-watchdetail-detail .f9-ed-number-note,
+.f9-watchdetail-detail .f9-ed-rail-card > p,
+.f9-watchdetail-detail .f9-ed-fact-value,
+.f9-watchdetail-detail .f9-ed-rail-line dd {
   font-family: var(--f9-font);
   font-size: 13px;
   letter-spacing: 0;
@@ -14515,27 +14426,27 @@ textarea.f9-wk-in {
 
 /* Delivery and setup forms: frames, not pills; labels stay sentence-case.
    Every target remains at least 44px. */
-.f9-bl035-detail .f9-detail-split {
+.f9-watchdetail-detail .f9-detail-split {
   display: grid;
   gap: 26px;
   grid-template-columns: minmax(0, 1fr);
 }
 
-.f9-bl035-detail .f9-work-list.is-compact {
+.f9-watchdetail-detail .f9-work-list.is-compact {
   gap: 0;
   padding: 0;
 }
 
-.f9-bl035-detail .f9-work-row {
+.f9-watchdetail-detail .f9-work-row {
   min-height: 44px;
 }
 
-.f9-bl035-detail .f9-field {
+.f9-watchdetail-detail .f9-field {
   gap: 6px;
 }
 
-.f9-bl035-detail .f9-field > span,
-.f9-bl035-detail .f9-field > label > span {
+.f9-watchdetail-detail .f9-field > span,
+.f9-watchdetail-detail .f9-field > label > span {
   color: var(--ink-soft);
   font-family: var(--f9-font);
   font-size: 12.5px;
@@ -14544,9 +14455,9 @@ textarea.f9-wk-in {
   text-transform: none;
 }
 
-.f9-bl035-detail .f9-field input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]),
-.f9-bl035-detail .f9-field select,
-.f9-bl035-detail .f9-field textarea {
+.f9-watchdetail-detail .f9-field input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]),
+.f9-watchdetail-detail .f9-field select,
+.f9-watchdetail-detail .f9-field textarea {
   min-height: 44px;
   border: 1px solid var(--wk-rule);
   border-radius: 0;
@@ -14555,14 +14466,14 @@ textarea.f9-wk-in {
   color: var(--ink);
 }
 
-.f9-bl035-detail .f9-field input:focus,
-.f9-bl035-detail .f9-field select:focus,
-.f9-bl035-detail .f9-field textarea:focus {
+.f9-watchdetail-detail .f9-field input:focus,
+.f9-watchdetail-detail .f9-field select:focus,
+.f9-watchdetail-detail .f9-field textarea:focus {
   outline: 2px solid var(--wk-focus);
   outline-offset: 2px;
 }
 
-.f9-bl035-detail summary {
+.f9-watchdetail-detail summary {
   display: flex;
   min-height: 44px;
   align-items: center;
@@ -14571,11 +14482,11 @@ textarea.f9-wk-in {
 
 /* Creative and intelligence are evidence collections, not decks of cards.
    Images may form a gallery; facts underneath use the shared ruled rhythm. */
-.f9-bl035-detail .f9-creative-wall {
+.f9-watchdetail-detail .f9-creative-wall {
   gap: 16px;
 }
 
-.f9-bl035-detail .f9-creative-tile {
+.f9-watchdetail-detail .f9-creative-tile {
   padding: 0 0 14px;
   border-bottom: 1px solid var(--wk-rule);
   transition:
@@ -14583,17 +14494,17 @@ textarea.f9-wk-in {
     color var(--wk-snap);
 }
 
-.f9-bl035-detail .f9-creative-tile:hover {
+.f9-watchdetail-detail .f9-creative-tile:hover {
   border-color: var(--wk-rule);
 }
 
-.f9-bl035-detail .f9-creative-tile .f9-ad-thumb {
+.f9-watchdetail-detail .f9-creative-tile .f9-ad-thumb {
   border: 1px solid var(--wk-rule);
   border-radius: 0;
 }
 
-.f9-bl035-detail .f9-creative-tile-status,
-.f9-bl035-detail :is(.f9-status-pill, .f9-longevity-pill, .f9-angle-pill) {
+.f9-watchdetail-detail .f9-creative-tile-status,
+.f9-watchdetail-detail :is(.f9-status-pill, .f9-longevity-pill, .f9-angle-pill) {
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -14606,38 +14517,38 @@ textarea.f9-wk-in {
   text-transform: none;
 }
 
-.f9-bl035-detail .f9-trend-grid {
+.f9-watchdetail-detail .f9-trend-grid {
   display: grid;
   gap: 0;
   grid-template-columns: minmax(0, 1fr);
 }
 
-.f9-bl035-detail .f9-trend-card {
+.f9-watchdetail-detail .f9-trend-card {
   padding: 20px 0 24px;
 }
 
-.f9-bl035-detail .f9-dossier-stats,
-.f9-bl035-detail .f9-dossier-leaders {
+.f9-watchdetail-detail .f9-dossier-stats,
+.f9-watchdetail-detail .f9-dossier-leaders {
   gap: 0;
   grid-template-columns: minmax(0, 1fr);
 }
 
-.f9-bl035-detail .f9-dossier-stat,
-.f9-bl035-detail .f9-dossier-leader,
-.f9-bl035-detail .f9-dossier-hooks li {
+.f9-watchdetail-detail .f9-dossier-stat,
+.f9-watchdetail-detail .f9-dossier-leader,
+.f9-watchdetail-detail .f9-dossier-hooks li {
   padding: 12px 0;
   border-top: 1px solid var(--wk-rule);
 }
 
-.f9-bl035-detail .f9-aggression-card,
-.f9-bl035-detail .f9-counter-brief {
+.f9-watchdetail-detail .f9-aggression-card,
+.f9-watchdetail-detail .f9-counter-brief {
   padding: 18px 0 0;
 }
 
 /* Green is news, never decoration. Diff values retain exactly one green
    announcement on the newest marked event; charts, longevity, state chips
    and AI guidance return to ink. */
-.f9-bl035-detail
+.f9-watchdetail-detail
   .f9-ed-diff-plate:not(.is-newest)
   .f9-ed-diff-value
   mark {
@@ -14645,26 +14556,26 @@ textarea.f9-wk-in {
   color: var(--ink);
 }
 
-.f9-bl035-detail .f9-trend-bar.is-accent {
+.f9-watchdetail-detail .f9-trend-bar.is-accent {
   fill: var(--ink-soft);
 }
 
-.f9-bl035-detail .f9-trend-leader-fill,
-.f9-bl035-detail .f9-aggression-bar-fill {
+.f9-watchdetail-detail .f9-trend-leader-fill,
+.f9-watchdetail-detail .f9-aggression-bar-fill {
   background: var(--ink-soft);
 }
 
-.f9-bl035-detail .f9-dossier-leader-days,
-.f9-bl035-detail .f9-dossier-hook-count {
+.f9-watchdetail-detail .f9-dossier-leader-days,
+.f9-watchdetail-detail .f9-dossier-hook-count {
   background: transparent;
   color: var(--ink-soft);
 }
 
-.f9-bl035-detail .f9-counter-brief {
+.f9-watchdetail-detail .f9-counter-brief {
   border-left: 0;
 }
 
-.f9-bl035-detail .f9-message {
+.f9-watchdetail-detail .f9-message {
   margin: 16px var(--wk-pad) 0;
   border: 1px solid var(--wk-rule);
   border-radius: 0;
@@ -14674,24 +14585,24 @@ textarea.f9-wk-in {
 /* Setup inherits the search mode switch and cross-route links. On the deep
    surface they are one ruled instrument and quiet 44px actions, not a
    floating selected pill or two proof-green decorations. */
-.f9-bl035-detail .f9-mode-toggle {
+.f9-watchdetail-detail .f9-mode-toggle {
   gap: 0;
   padding: 0;
   border: 1px solid var(--wk-rule);
   background: transparent;
 }
 
-.f9-bl035-detail .f9-mode-toggle label + label {
+.f9-watchdetail-detail .f9-mode-toggle label + label {
   border-left: 1px solid var(--wk-rule);
 }
 
-.f9-bl035-detail .f9-mode-toggle label.is-active {
+.f9-watchdetail-detail .f9-mode-toggle label.is-active {
   background: var(--wk-sunk);
   box-shadow: none;
   color: var(--ink);
 }
 
-.f9-bl035-detail .f9-crosslink-row .f9-text-link {
+.f9-watchdetail-detail .f9-crosslink-row .f9-text-link {
   display: inline-flex;
   min-height: 44px;
   align-items: center;
@@ -14746,19 +14657,19 @@ textarea.f9-wk-in {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .f9-bl035-detail,
-  .f9-bl035-detail .f9-creative-tile {
+  .f9-watchdetail-detail,
+  .f9-watchdetail-detail .f9-creative-tile {
     animation: none !important;
     transition: none !important;
   }
 }
 
 @media (max-width: 1180px) {
-  .f9-bl035-split {
+  .f9-watchdetail-split {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .f9-bl035-detail .f9-ed-detail-rail {
+  .f9-watchdetail-detail .f9-ed-detail-rail {
     position: static;
     padding: 28px var(--wk-pad) 44px;
     border-top: 1px solid var(--wk-rule);
@@ -14767,20 +14678,20 @@ textarea.f9-wk-in {
 }
 
 @media (max-width: 720px) {
-  .f9-bl035-main {
+  .f9-watchdetail-main {
     padding-top: 22px;
   }
 
-  .f9-bl035-detail .f9-ed-diff-panes {
+  .f9-watchdetail-detail .f9-ed-diff-panes {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .f9-bl035-detail .f9-ed-diff-pane.is-before {
+  .f9-watchdetail-detail .f9-ed-diff-pane.is-before {
     border-right: 0;
     border-bottom: 1px solid var(--wk-rule);
   }
 
-  .f9-bl035-detail .f9-field-pair {
+  .f9-watchdetail-detail .f9-field-pair {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -14788,11 +14699,11 @@ textarea.f9-wk-in {
 /* The record wrapper carries the degraded-rollup state for the whole opened
    competitor. It adds no geometry of its own — BL-035's detail owns that —
    so it participates in the page flow as if it were not there. */
-.f9-bl035-record {
+.f9-watchdetail-record {
   display: contents;
 }
 
-.f9-bl035-aggregate-unavailable {
+.f9-watchdetail-aggregate-unavailable {
   margin: 0 0 18px;
   padding: 0 var(--wk-pad);
   color: var(--ink-soft);
@@ -14804,7 +14715,7 @@ textarea.f9-wk-in {
    mounted; mask only the count surfaces that rollup feeds. The tab badge
    needs no rule — a zeroed rollup renders no badge at all — so the caught
    number card is the one surface left to mask. */
-.f9-bl035-record.is-capture-window-degraded .f9-ed-number-card {
+.f9-watchdetail-record.is-capture-window-degraded .f9-ed-number-card {
   display: none;
 }
 
@@ -14818,23 +14729,23 @@ textarea.f9-wk-in {
  * availability is not a caught change.
  */
 
-.f9-pr-page {
+.f9-presence-page {
   --pr-rule: var(--wk-rule);
 }
 
-.f9-pr-page .f9-wk-strip {
+.f9-presence-page .f9-wk-strip {
   margin-top: 18px;
 }
 
-.f9-pr-notices {
+.f9-presence-notices {
   padding: 0 var(--wk-pad);
 }
 
-.f9-pr-notices:empty {
+.f9-presence-notices:empty {
   display: none;
 }
 
-.f9-pr-notices p {
+.f9-presence-notices p {
   margin: 0;
   padding: 11px 0;
   border-bottom: 1px solid var(--pr-rule);
@@ -14843,25 +14754,25 @@ textarea.f9-wk-in {
   line-height: 1.5;
 }
 
-.f9-pr-desk {
+.f9-presence-desk {
   display: grid;
   min-width: 0;
   border-bottom: 1px solid var(--pr-rule);
   grid-template-columns: minmax(360px, 0.88fr) minmax(480px, 1.12fr);
 }
 
-.f9-pr-instrument,
-.f9-pr-coverage-section {
+.f9-presence-instrument,
+.f9-presence-coverage-section {
   min-width: 0;
   padding: 24px var(--wk-pad) 28px;
 }
 
-.f9-pr-instrument {
+.f9-presence-instrument {
   border-right: 1px solid var(--pr-rule);
 }
 
-.f9-pr-section-head h2,
-.f9-pr-list-head h2 {
+.f9-presence-section-head h2,
+.f9-presence-list-head h2 {
   margin: 0;
   color: var(--ink);
   font-family: var(--f9-font);
@@ -14872,7 +14783,7 @@ textarea.f9-wk-in {
   text-transform: none;
 }
 
-.f9-pr-section-head p {
+.f9-presence-section-head p {
   max-width: 58ch;
   margin: 6px 0 0;
   color: var(--ink-soft);
@@ -14880,14 +14791,14 @@ textarea.f9-wk-in {
   line-height: 1.5;
 }
 
-.f9-pr-form {
+.f9-presence-form {
   display: grid;
   margin-top: 18px;
   border-top: 1px solid var(--pr-rule);
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.f9-pr-field {
+.f9-presence-field {
   position: relative;
   display: flex;
   min-width: 0;
@@ -14897,30 +14808,30 @@ textarea.f9-wk-in {
   border-bottom: 1px solid var(--pr-rule);
 }
 
-.f9-pr-field:nth-of-type(odd) {
+.f9-presence-field:nth-of-type(odd) {
   padding-right: 12px;
   border-right: 1px solid var(--pr-rule);
 }
 
-.f9-pr-field:nth-of-type(even) {
+.f9-presence-field:nth-of-type(even) {
   padding-left: 12px;
 }
 
-.f9-pr-field > span {
+.f9-presence-field > span {
   color: var(--ink-soft);
   font-size: 12.5px;
   font-weight: 500;
 }
 
-.f9-pr-field > span small {
+.f9-presence-field > span small {
   margin-left: 4px;
   color: var(--ink-faint);
   font-size: inherit;
   font-weight: 400;
 }
 
-.f9-pr-field input,
-.f9-pr-field select {
+.f9-presence-field input,
+.f9-presence-field select {
   width: 100%;
   min-height: 44px;
   padding: 10px 12px;
@@ -14934,12 +14845,12 @@ textarea.f9-wk-in {
   transition: border-color var(--wk-snap), background-color var(--wk-snap);
 }
 
-.f9-pr-field select {
+.f9-presence-field select {
   appearance: none;
   padding-right: 30px;
 }
 
-.f9-pr-field:has(> select)::after {
+.f9-presence-field:has(> select)::after {
   position: absolute;
   right: 12px;
   bottom: 31px;
@@ -14950,11 +14861,11 @@ textarea.f9-wk-in {
   pointer-events: none;
 }
 
-.f9-pr-field input::placeholder {
+.f9-presence-field input::placeholder {
   color: var(--ink-faint);
 }
 
-.f9-pr-form-commit {
+.f9-presence-form-commit {
   display: flex;
   min-width: 0;
   align-items: center;
@@ -14964,14 +14875,14 @@ textarea.f9-wk-in {
   grid-column: 1 / -1;
 }
 
-.f9-pr-form-commit p {
+.f9-presence-form-commit p {
   margin: 0;
   color: var(--ink-faint);
   font-size: 12.5px;
   text-align: right;
 }
 
-.f9-pr-lock {
+.f9-presence-lock {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -14981,7 +14892,7 @@ textarea.f9-wk-in {
   border-top: 1px solid var(--pr-rule);
 }
 
-.f9-pr-lock p {
+.f9-presence-lock p {
   max-width: 50ch;
   margin: 0;
   color: var(--ink-soft);
@@ -14989,16 +14900,16 @@ textarea.f9-wk-in {
   line-height: 1.55;
 }
 
-.f9-pr-lock .f9-wk-btn {
+.f9-presence-lock .f9-wk-btn {
   flex: none;
 }
 
-.f9-pr-coverage {
+.f9-presence-coverage {
   margin: 18px 0 0;
   border-top: 1px solid var(--pr-rule);
 }
 
-.f9-pr-coverage > div {
+.f9-presence-coverage > div {
   display: grid;
   min-width: 0;
   padding: 11px 0;
@@ -15007,13 +14918,13 @@ textarea.f9-wk-in {
   grid-template-columns: minmax(128px, 0.7fr) minmax(0, 1.3fr);
 }
 
-.f9-pr-coverage dt {
+.f9-presence-coverage dt {
   color: var(--ink);
   font-size: 13.5px;
   font-weight: 600;
 }
 
-.f9-pr-coverage dd {
+.f9-presence-coverage dd {
   display: grid;
   min-width: 0;
   margin: 0;
@@ -15023,30 +14934,30 @@ textarea.f9-wk-in {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.f9-pr-coverage dd span {
+.f9-presence-coverage dd span {
   display: flex;
   min-width: 0;
   justify-content: space-between;
   gap: 8px;
 }
 
-.f9-pr-coverage dd b {
+.f9-presence-coverage dd b {
   color: var(--ink-faint);
   font-weight: 400;
 }
 
-.f9-pr-coverage dd small {
+.f9-presence-coverage dd small {
   color: var(--ink-faint);
   font-size: 11.5px;
   line-height: 1.45;
   grid-column: 1 / -1;
 }
 
-.f9-pr-list-section {
+.f9-presence-list-section {
   padding-top: 26px;
 }
 
-.f9-pr-list-head {
+.f9-presence-list-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -15054,25 +14965,25 @@ textarea.f9-wk-in {
   padding-bottom: 12px;
 }
 
-.f9-pr-list-head > span {
+.f9-presence-list-head > span {
   color: var(--ink-faint);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
-.f9-pr-list-section > .f9-wk-note {
+.f9-presence-list-section > .f9-wk-note {
   margin-top: 0;
   padding: 15px 0;
   border-top: 1px solid var(--pr-rule);
   border-bottom: 1px solid var(--pr-rule);
 }
 
-.f9-pr-feed {
+.f9-presence-feed {
   margin: 0 calc(var(--wk-pad) * -1);
   border-top: 1px solid var(--pr-rule);
 }
 
-.f9-pr-feed-row {
+.f9-presence-feed-row {
   position: relative;
   display: grid;
   min-width: 0;
@@ -15084,23 +14995,23 @@ textarea.f9-wk-in {
   transition: background-color var(--wk-snap);
 }
 
-.f9-pr-feed-row:hover {
+.f9-presence-feed-row:hover {
   background: var(--wk-sunk);
 }
 
-.f9-pr-feed-row h3,
-.f9-pr-feed-row p {
+.f9-presence-feed-row h3,
+.f9-presence-feed-row p {
   margin: 0;
 }
 
-.f9-pr-feed-row h3 {
+.f9-presence-feed-row h3 {
   font-family: var(--f9-font);
   font-size: 14px;
   font-weight: 600;
   line-height: 1.4;
 }
 
-.f9-pr-feed-row h3 a {
+.f9-presence-feed-row h3 a {
   display: inline-flex;
   min-width: 44px;
   min-height: 44px;
@@ -15109,13 +15020,13 @@ textarea.f9-wk-in {
   text-decoration: none;
 }
 
-.f9-pr-feed-row h3 a::after {
+.f9-presence-feed-row h3 a::after {
   position: absolute;
   content: "";
   inset: 0;
 }
 
-.f9-pr-feed-row p {
+.f9-presence-feed-row p {
   overflow: hidden;
   margin-top: 4px;
   color: var(--ink-soft);
@@ -15124,88 +15035,88 @@ textarea.f9-wk-in {
   white-space: nowrap;
 }
 
-.f9-pr-feed-row > span {
+.f9-presence-feed-row > span {
   color: var(--ink-faint);
   font-size: 13px;
 }
 
-.f9-pr-feed-time {
+.f9-presence-feed-time {
   text-align: right;
 }
 
-.f9-pr-page .f9-wk-opline {
+.f9-presence-page .f9-wk-opline {
   display: flex;
   flex-wrap: wrap;
 }
 
 @media (max-width: 1120px) {
-  .f9-pr-desk {
+  .f9-presence-desk {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .f9-pr-instrument {
+  .f9-presence-instrument {
     border-right: 0;
     border-bottom: 1px solid var(--pr-rule);
   }
 }
 
 @media (max-width: 720px) {
-  .f9-pr-form {
+  .f9-presence-form {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .f9-pr-field:nth-of-type(odd),
-  .f9-pr-field:nth-of-type(even) {
+  .f9-presence-field:nth-of-type(odd),
+  .f9-presence-field:nth-of-type(even) {
     padding-right: 0;
     padding-left: 0;
     border-right: 0;
   }
 
-  .f9-pr-field:has(> select)::after {
+  .f9-presence-field:has(> select)::after {
     right: 12px;
   }
 
-  .f9-pr-form-commit,
-  .f9-pr-lock {
+  .f9-presence-form-commit,
+  .f9-presence-lock {
     align-items: flex-start;
     flex-direction: column;
   }
 
-  .f9-pr-form-commit p {
+  .f9-presence-form-commit p {
     text-align: left;
   }
 
-  .f9-pr-coverage > div {
+  .f9-presence-coverage > div {
     gap: 7px;
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .f9-pr-coverage dd {
+  .f9-presence-coverage dd {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .f9-pr-coverage dd small {
+  .f9-presence-coverage dd small {
     grid-column: auto;
   }
 
-  .f9-pr-feed-row {
+  .f9-presence-feed-row {
     gap: 5px 12px;
     grid-template-columns: minmax(0, 1fr) auto 10px;
   }
 
-  .f9-pr-feed-row > div {
+  .f9-presence-feed-row > div {
     grid-column: 1 / -1;
   }
 
-  .f9-pr-feed-time {
+  .f9-presence-feed-time {
     text-align: left;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .f9-pr-page *,
-  .f9-pr-page *::before,
-  .f9-pr-page *::after {
+  .f9-presence-page *,
+  .f9-presence-page *::before,
+  .f9-presence-page *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
@@ -15223,27 +15134,27 @@ textarea.f9-wk-in {
  * actionable selected plan may spend the viewport's one filled action.
  */
 
-.f9-bl041-page {
+.f9-acct-page {
   --bl041-max-copy: 68ch;
 
   border-radius: 0;
   color: var(--ink);
 }
 
-.f9-bl041-page *,
-.f9-bl041-page *::before,
-.f9-bl041-page *::after {
+.f9-acct-page *,
+.f9-acct-page *::before,
+.f9-acct-page *::after {
   border-radius: 0;
 }
 
-.f9-bl041-flow {
+.f9-acct-flow {
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
 
-.f9-bl041-section,
-.f9-bl041-lock {
+.f9-acct-section,
+.f9-acct-lock {
   margin: 0;
   padding: 30px var(--wk-pad);
   border: 0;
@@ -15252,8 +15163,8 @@ textarea.f9-wk-in {
   box-shadow: none;
 }
 
-.f9-bl041-section-head,
-.f9-bl041-page .f9-panel-toolbar {
+.f9-acct-section-head,
+.f9-acct-page .f9-panel-toolbar {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -15263,9 +15174,9 @@ textarea.f9-wk-in {
   border: 0;
 }
 
-.f9-bl041-section h2,
-.f9-bl041-lock h2,
-.f9-bl041-page .f9-checkout-banner h2 {
+.f9-acct-section h2,
+.f9-acct-lock h2,
+.f9-acct-page .f9-checkout-banner h2 {
   margin: 3px 0 0;
   color: var(--ink);
   font-family: var(--f9-font);
@@ -15276,7 +15187,7 @@ textarea.f9-wk-in {
   text-transform: none;
 }
 
-.f9-bl041-section h3 {
+.f9-acct-section h3 {
   margin: 3px 0 0;
   color: var(--ink);
   font-family: var(--f9-font);
@@ -15285,8 +15196,8 @@ textarea.f9-wk-in {
   line-height: 1.4;
 }
 
-.f9-bl041-label,
-.f9-bl041-page .f9-app-kicker {
+.f9-acct-label,
+.f9-acct-page .f9-app-kicker {
   display: block;
   margin: 0;
   color: var(--ink-faint);
@@ -15298,10 +15209,10 @@ textarea.f9-wk-in {
   text-transform: none;
 }
 
-.f9-bl041-copy,
-.f9-bl041-note,
-.f9-bl041-empty,
-.f9-bl041-page .f9-muted-copy {
+.f9-acct-copy,
+.f9-acct-note,
+.f9-acct-empty,
+.f9-acct-page .f9-muted-copy {
   max-width: var(--bl041-max-copy);
   margin: 10px 0 0;
   color: var(--ink-soft);
@@ -15309,12 +15220,12 @@ textarea.f9-wk-in {
   line-height: 1.58;
 }
 
-.f9-bl041-page a {
+.f9-acct-page a {
   color: inherit;
   text-underline-offset: 3px;
 }
 
-.f9-bl041-page a.f9-wk-btn {
+.f9-acct-page a.f9-wk-btn {
   color: var(--wk-on-fill);
   text-decoration: none;
 }
@@ -15325,11 +15236,11 @@ textarea.f9-wk-in {
  * visual rank changes inside these three routes.
  */
 
-.f9-bl041-page :is(
+.f9-acct-page :is(
   .f9-primary-button,
   .f9-secondary-button,
   .f9-text-link,
-  .f9-bl041-text-action
+  .f9-acct-text-action
 ) {
   display: inline-flex;
   align-items: center;
@@ -15360,22 +15271,22 @@ textarea.f9-wk-in {
   transform: none;
 }
 
-.f9-bl041-page :is(
+.f9-acct-page :is(
   .f9-primary-button,
   .f9-secondary-button,
   .f9-text-link,
-  .f9-bl041-text-action
+  .f9-acct-text-action
 ):hover {
   border: 0;
   background: transparent;
   color: var(--ink-soft);
 }
 
-.f9-bl041-page :is(
+.f9-acct-page :is(
   .f9-primary-button,
   .f9-secondary-button,
   .f9-text-link,
-  .f9-bl041-text-action
+  .f9-acct-text-action
 ):disabled {
   border: 0;
   background: transparent;
@@ -15384,7 +15295,7 @@ textarea.f9-wk-in {
   opacity: 1;
 }
 
-.f9-bl041-danger-action {
+.f9-acct-danger-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -15400,31 +15311,31 @@ textarea.f9-wk-in {
   font-weight: 500;
 }
 
-.f9-bl041-danger-action:hover {
+.f9-acct-danger-action:hover {
   background: var(--wk-sunk);
 }
 
-.f9-bl041-page :focus-visible {
+.f9-acct-page :focus-visible {
   outline: 2px solid var(--wk-focus);
   outline-offset: 2px;
 }
 
 /* Forms are frames, not pills. Labels sit above real values. */
 
-.f9-bl041-page :is(.f9-auth-form, .f9-bl041-invite) {
+.f9-acct-page :is(.f9-auth-form, .f9-acct-invite) {
   display: grid;
   width: min(100%, 640px);
   gap: 12px;
   margin-top: 18px;
 }
 
-.f9-bl041-invite {
+.f9-acct-invite {
   grid-template-columns: minmax(220px, 420px) auto;
   align-items: end;
 }
 
-.f9-bl041-field,
-.f9-bl041-page .f9-field {
+.f9-acct-field,
+.f9-acct-page .f9-field {
   display: grid;
   gap: 7px;
   margin: 0;
@@ -15433,7 +15344,7 @@ textarea.f9-wk-in {
   font-weight: 400;
 }
 
-.f9-bl041-page :is(
+.f9-acct-page :is(
   input[type="text"],
   input[type="email"],
   input[type="password"],
@@ -15456,7 +15367,7 @@ textarea.f9-wk-in {
   font-size: 14px;
 }
 
-.f9-bl041-page input[type="file"]::file-selector-button {
+.f9-acct-page input[type="file"]::file-selector-button {
   min-height: 32px;
   margin-right: 10px;
   padding: 4px 9px;
@@ -15466,12 +15377,12 @@ textarea.f9-wk-in {
   color: var(--ink);
 }
 
-.f9-bl041-page :is(input, select, textarea)::placeholder {
+.f9-acct-page :is(input, select, textarea)::placeholder {
   color: var(--ink-faint);
   opacity: 1;
 }
 
-.f9-bl041-page .f9-checkbox-row {
+.f9-acct-page .f9-checkbox-row {
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -15482,7 +15393,7 @@ textarea.f9-wk-in {
   line-height: 1.5;
 }
 
-.f9-bl041-page .f9-checkbox-row input {
+.f9-acct-page .f9-checkbox-row input {
   flex: none;
   width: 16px;
   height: 16px;
@@ -15492,7 +15403,7 @@ textarea.f9-wk-in {
 
 /* Quiet, in-flow notices. Errors keep deletion red as a second text channel. */
 
-.f9-bl041-page .f9-message {
+.f9-acct-page .f9-message {
   position: relative;
   z-index: auto;
   max-width: var(--bl041-max-copy);
@@ -15507,22 +15418,22 @@ textarea.f9-wk-in {
   line-height: 1.55;
 }
 
-.f9-bl041-page .f9-message p {
+.f9-acct-page .f9-message p {
   margin: 0;
 }
 
-.f9-bl041-page .f9-message.is-error {
+.f9-acct-page .f9-message.is-error {
   border-left-color: var(--red);
   background: transparent;
   color: var(--ink);
 }
 
-.f9-bl041-page .f9-message.is-success {
+.f9-acct-page .f9-message.is-success {
   border-left-color: var(--wk-rule);
   color: var(--ink);
 }
 
-.f9-bl041-team > #team-action-feedback {
+.f9-acct-team > #team-action-feedback {
   margin: 0 var(--wk-pad);
 }
 
@@ -15531,8 +15442,8 @@ textarea.f9-wk-in {
  * One quiet explanation and one filled upgrade action.
  */
 
-.f9-bl041-lock .f9-locked-feature,
-.f9-bl041-lock .f9-ed-specimen-body {
+.f9-acct-lock .f9-locked-feature,
+.f9-acct-lock .f9-ed-specimen-body {
   margin: 0;
   padding: 0;
   border: 0;
@@ -15540,7 +15451,7 @@ textarea.f9-wk-in {
   box-shadow: none;
 }
 
-.f9-bl041-lock .f9-ed-plate-header {
+.f9-acct-lock .f9-ed-plate-header {
   display: block;
   margin: 0 0 4px;
   padding: 0;
@@ -15554,11 +15465,11 @@ textarea.f9-wk-in {
   text-transform: none;
 }
 
-.f9-bl041-lock .f9-ed-specimen-headline {
+.f9-acct-lock .f9-ed-specimen-headline {
   margin-top: 0;
 }
 
-.f9-bl041-lock .f9-ed-specimen-copy {
+.f9-acct-lock .f9-ed-specimen-copy {
   max-width: var(--bl041-max-copy);
   margin: 10px 0 0;
   color: var(--ink-soft);
@@ -15566,11 +15477,11 @@ textarea.f9-wk-in {
   line-height: 1.58;
 }
 
-.f9-bl041-lock .f9-ed-action-row {
+.f9-acct-lock .f9-ed-action-row {
   margin-top: 18px;
 }
 
-.f9-bl041-lock .f9-ed-cta--rank1 {
+.f9-acct-lock .f9-ed-cta--rank1 {
   min-height: 44px;
   padding: 9px 14px;
   border: 1px solid var(--wk-fill);
@@ -15586,12 +15497,12 @@ textarea.f9-wk-in {
 
 /* Team: one invite instrument, then one ruled list. */
 
-.f9-bl041-member-list {
+.f9-acct-member-list {
   margin-top: 20px;
   border-top: 1px solid var(--wk-rule);
 }
 
-.f9-bl041-member-row {
+.f9-acct-member-row {
   display: grid;
   align-items: center;
   gap: 8px 24px;
@@ -15601,26 +15512,26 @@ textarea.f9-wk-in {
   grid-template-columns: minmax(220px, 1fr) minmax(0, 1fr) auto;
 }
 
-.f9-bl041-member-row > div:first-child {
+.f9-acct-member-row > div:first-child {
   min-width: 0;
 }
 
-.f9-bl041-entity {
+.f9-acct-entity {
   font-family: var(--ld-display);
   font-size: 15.5px;
   font-weight: 700;
   letter-spacing: -0.012em;
 }
 
-.f9-bl041-member-row p {
+.f9-acct-member-row p {
   margin: 4px 0 0;
   color: var(--ink-faint);
   font-size: 13px;
   line-height: 1.45;
 }
 
-.f9-bl041-row-actions,
-.f9-bl041-page .f9-account-security-actions {
+.f9-acct-row-actions,
+.f9-acct-page .f9-account-security-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -15628,25 +15539,25 @@ textarea.f9-wk-in {
   gap: 0 18px;
 }
 
-.f9-bl041-empty {
+.f9-acct-empty {
   padding: 17px 0;
   border-top: 1px solid var(--wk-rule);
 }
 
 /* Account: flat records and a deliberately unmistakable final boundary. */
 
-.f9-bl041-account .f9-theme-field {
+.f9-acct-account .f9-theme-field {
   width: min(100%, 260px);
   margin-top: 16px;
 }
 
-.f9-bl041-account .f9-passkey-list {
+.f9-acct-account .f9-passkey-list {
   display: block;
   margin-top: 18px;
   border-top: 1px solid var(--wk-rule);
 }
 
-.f9-bl041-account .f9-passkey-row {
+.f9-acct-account .f9-passkey-row {
   display: grid;
   align-items: center;
   gap: 12px 24px;
@@ -15659,22 +15570,22 @@ textarea.f9-wk-in {
   grid-template-columns: minmax(220px, 1fr) auto auto;
 }
 
-.f9-bl041-account .f9-passkey-row div {
+.f9-acct-account .f9-passkey-row div {
   gap: 3px;
 }
 
-.f9-bl041-account .f9-passkey-row strong {
+.f9-acct-account .f9-passkey-row strong {
   color: var(--ink);
   font-size: 14px;
   font-weight: 600;
 }
 
-.f9-bl041-account .f9-passkey-row span {
+.f9-acct-account .f9-passkey-row span {
   color: var(--ink-faint);
   font-size: 12.5px;
 }
 
-.f9-bl041-account .f9-passkey-row > .f9-bl041-current {
+.f9-acct-account .f9-passkey-row > .f9-acct-current {
   color: var(--ink-soft);
   font-family: var(--ld-mono);
   font-size: 11.5px;
@@ -15682,7 +15593,7 @@ textarea.f9-wk-in {
   letter-spacing: 0.02em;
 }
 
-.f9-bl041-account .f9-dash-state-empty {
+.f9-acct-account .f9-dash-state-empty {
   min-height: 0;
   margin-top: 14px;
   padding: 13px 0;
@@ -15692,7 +15603,7 @@ textarea.f9-wk-in {
   box-shadow: none;
 }
 
-.f9-bl041-account .f9-brand-logo-preview {
+.f9-acct-account .f9-brand-logo-preview {
   padding: 13px 0;
   border: 0;
   border-top: 1px solid var(--wk-rule);
@@ -15700,7 +15611,7 @@ textarea.f9-wk-in {
   background: transparent;
 }
 
-.f9-bl041-entitlement {
+.f9-acct-entitlement {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -15710,7 +15621,7 @@ textarea.f9-wk-in {
   border-top: 1px solid var(--wk-rule);
 }
 
-.f9-bl041-entitlement p {
+.f9-acct-entitlement p {
   max-width: var(--bl041-max-copy);
   margin: 0;
   color: var(--ink-soft);
@@ -15718,18 +15629,18 @@ textarea.f9-wk-in {
   line-height: 1.55;
 }
 
-.f9-bl041-subsection {
+.f9-acct-subsection {
   margin-top: 30px;
   padding-top: 24px;
   border-top: 1px solid var(--wk-rule);
 }
 
-.f9-bl041-danger {
+.f9-acct-danger {
   border-top: 1px solid var(--red);
   border-bottom-color: var(--red);
 }
 
-.f9-bl041-danger > p {
+.f9-acct-danger > p {
   max-width: var(--bl041-max-copy);
   margin: 12px 0 0;
   color: var(--ink);
@@ -15739,7 +15650,7 @@ textarea.f9-wk-in {
 
 /* Billing: price choices form one ruled comparison, not a card deck. */
 
-.f9-bl041-billing .f9-checkout-banner {
+.f9-acct-billing .f9-checkout-banner {
   position: relative;
   z-index: auto;
   display: block;
@@ -15751,13 +15662,13 @@ textarea.f9-wk-in {
   box-shadow: none;
 }
 
-.f9-bl041-billing .f9-checkout-banner.is-active,
-.f9-bl041-billing .f9-checkout-banner.is-pending {
+.f9-acct-billing .f9-checkout-banner.is-active,
+.f9-acct-billing .f9-checkout-banner.is-pending {
   border-color: var(--wk-rule);
   background: transparent;
 }
 
-.f9-bl041-billing .f9-checkout-banner p {
+.f9-acct-billing .f9-checkout-banner p {
   max-width: var(--bl041-max-copy);
   margin: 8px 0 0;
   color: var(--ink-soft);
@@ -15765,17 +15676,17 @@ textarea.f9-wk-in {
   line-height: 1.55;
 }
 
-.f9-bl041-billing .f9-checkout-banner form,
-.f9-bl041-billing .f9-checkout-banner > div > a {
+.f9-acct-billing .f9-checkout-banner form,
+.f9-acct-billing .f9-checkout-banner > div > a {
   margin-top: 8px;
 }
 
-.f9-bl041-billing > .f9-bl041-flow > .f9-message {
+.f9-acct-billing > .f9-acct-flow > .f9-message {
   margin-right: var(--wk-pad);
   margin-left: var(--wk-pad);
 }
 
-.f9-bl041-billing .f9-cycle-toggle {
+.f9-acct-billing .f9-cycle-toggle {
   display: inline-flex;
   align-items: center;
   gap: 20px;
@@ -15784,8 +15695,8 @@ textarea.f9-wk-in {
   background: transparent;
 }
 
-.f9-bl041-billing .f9-cycle-toggle a,
-.f9-bl041-billing .f9-cycle-toggle button {
+.f9-acct-billing .f9-cycle-toggle a,
+.f9-acct-billing .f9-cycle-toggle button {
   min-width: 44px;
   min-height: 44px;
   margin-bottom: -1px;
@@ -15799,15 +15710,15 @@ textarea.f9-wk-in {
   font-weight: 400;
 }
 
-.f9-bl041-billing .f9-cycle-toggle :is(a, button).is-active {
+.f9-acct-billing .f9-cycle-toggle :is(a, button).is-active {
   border-bottom-color: var(--ink);
   background: transparent;
   box-shadow: none;
   color: var(--ink);
 }
 
-.f9-bl041-billing .f9-app-plan-grid,
-.f9-bl041-billing .f9-topup-grid {
+.f9-acct-billing .f9-app-plan-grid,
+.f9-acct-billing .f9-topup-grid {
   display: grid;
   gap: 0;
   margin-top: 22px;
@@ -15816,8 +15727,8 @@ textarea.f9-wk-in {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.f9-bl041-billing .f9-app-plan-card,
-.f9-bl041-billing .f9-topup-card {
+.f9-acct-billing .f9-app-plan-card,
+.f9-acct-billing .f9-topup-card {
   display: flex;
   min-width: 0;
   min-height: 100%;
@@ -15831,25 +15742,25 @@ textarea.f9-wk-in {
   box-shadow: none;
 }
 
-.f9-bl041-billing :is(.f9-app-plan-card, .f9-topup-card):last-child {
+.f9-acct-billing :is(.f9-app-plan-card, .f9-topup-card):last-child {
   border-right: 0;
 }
 
-.f9-bl041-billing .f9-app-plan-card.is-selected {
+.f9-acct-billing .f9-app-plan-card.is-selected {
   background: var(--wk-sunk);
   box-shadow: none;
 }
 
-.f9-bl041-billing .f9-app-plan-card.is-recommended {
+.f9-acct-billing .f9-app-plan-card.is-recommended {
   box-shadow: none;
 }
 
-.f9-bl041-billing .f9-app-plan-card-head {
+.f9-acct-billing .f9-app-plan-card-head {
   gap: 16px;
 }
 
-.f9-bl041-billing .f9-app-plan-card-head strong,
-.f9-bl041-billing .f9-topup-card strong {
+.f9-acct-billing .f9-app-plan-card-head strong,
+.f9-acct-billing .f9-topup-card strong {
   margin-top: 5px;
   color: var(--ink);
   font-family: var(--f9-font);
@@ -15857,14 +15768,14 @@ textarea.f9-wk-in {
   font-weight: 600;
 }
 
-.f9-bl041-billing .f9-app-plan-card p,
-.f9-bl041-billing .f9-topup-card p {
+.f9-acct-billing .f9-app-plan-card p,
+.f9-acct-billing .f9-topup-card p {
   color: var(--ink-soft);
   font-size: 13px;
   line-height: 1.5;
 }
 
-.f9-bl041-billing :is(.f9-status-pill, .f9-plan-limit-strip span) {
+.f9-acct-billing :is(.f9-status-pill, .f9-plan-limit-strip span) {
   min-height: 0;
   padding: 0;
   border: 0;
@@ -15877,23 +15788,23 @@ textarea.f9-wk-in {
   text-transform: none;
 }
 
-.f9-bl041-billing .f9-status-pill.is-healthy {
+.f9-acct-billing .f9-status-pill.is-healthy {
   color: var(--ink);
 }
 
-.f9-bl041-billing .f9-plan-limit-strip {
+.f9-acct-billing .f9-plan-limit-strip {
   gap: 0;
 }
 
-.f9-bl041-billing .f9-plan-limit-strip span + span::before {
+.f9-acct-billing .f9-plan-limit-strip span + span::before {
   margin: 0 7px;
   color: var(--ink-faint);
   content: "·";
 }
 
-.f9-bl041-billing .f9-annual-note,
-.f9-bl041-billing .f9-annual-note.is-valid,
-.f9-bl041-billing .f9-annual-note.is-unavailable {
+.f9-acct-billing .f9-annual-note,
+.f9-acct-billing .f9-annual-note.is-valid,
+.f9-acct-billing .f9-annual-note.is-unavailable {
   padding: 0;
   border: 0;
   background: transparent;
@@ -15902,12 +15813,12 @@ textarea.f9-wk-in {
   font-weight: 400;
 }
 
-.f9-bl041-billing .f9-app-plan-card .f9-plan-feature-list {
+.f9-acct-billing .f9-app-plan-card .f9-plan-feature-list {
   color: var(--ink-soft);
   font-size: 13px;
 }
 
-.f9-bl041-billing .f9-plan-actions {
+.f9-acct-billing .f9-plan-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -15915,21 +15826,21 @@ textarea.f9-wk-in {
   margin-top: auto;
 }
 
-.f9-bl041-billing .f9-plan-actions form {
+.f9-acct-billing .f9-plan-actions form {
   width: auto;
 }
 
-.f9-bl041-billing .f9-app-plan-card .f9-wk-btn {
+.f9-acct-billing .f9-app-plan-card .f9-wk-btn {
   width: auto;
 }
 
-.f9-bl041-billing .f9-work-list {
+.f9-acct-billing .f9-work-list {
   display: block;
   margin-top: 20px;
   border-top: 1px solid var(--wk-rule);
 }
 
-.f9-bl041-billing .f9-work-row {
+.f9-acct-billing .f9-work-row {
   display: grid;
   align-items: start;
   gap: 24px;
@@ -15942,34 +15853,34 @@ textarea.f9-wk-in {
   grid-template-columns: minmax(180px, 0.55fr) minmax(0, 1.45fr);
 }
 
-.f9-bl041-billing .f9-work-row > strong {
+.f9-acct-billing .f9-work-row > strong {
   color: var(--ink);
   font-size: 13.5px;
   font-weight: 600;
 }
 
-.f9-bl041-billing .f9-work-row > span {
+.f9-acct-billing .f9-work-row > span {
   min-width: 0;
   color: var(--ink-soft);
   font-size: 13.5px;
   line-height: 1.55;
 }
 
-.f9-bl041-billing .f9-work-list > .f9-muted-copy {
+.f9-acct-billing .f9-work-list > .f9-muted-copy {
   max-width: none;
   margin: 0;
   padding: 13px 0;
   border-bottom: 1px solid var(--wk-rule);
 }
 
-.f9-bl041-billing .f9-skeleton-line {
+.f9-acct-billing .f9-skeleton-line {
   border: 0;
   background: var(--wk-sunk);
   box-shadow: none;
 }
 
-.f9-bl041-billing .f9-button-spinner,
-.f9-bl041-billing .f9-checkout-pulse {
+.f9-acct-billing .f9-button-spinner,
+.f9-acct-billing .f9-checkout-pulse {
   border-color: var(--ink-faint);
   background: transparent;
 }
@@ -15980,7 +15891,7 @@ textarea.f9-wk-in {
  * these surfaces; the capture harness verifies the computed result.
  */
 
-.f9-bl041-page :is(
+.f9-acct-page :is(
   a,
   button,
   input[type="text"],
@@ -16015,95 +15926,152 @@ textarea.f9-wk-in {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .f9-bl041-page *,
-  .f9-bl041-page *::before,
-  .f9-bl041-page *::after {
+  .f9-acct-page *,
+  .f9-acct-page *::before,
+  .f9-acct-page *::after {
     animation: none !important;
     transition: none !important;
   }
 }
 
 @media (max-width: 920px) {
-  .f9-bl041-billing .f9-app-plan-grid,
-  .f9-bl041-billing .f9-topup-grid {
+  .f9-acct-billing .f9-app-plan-grid,
+  .f9-acct-billing .f9-topup-grid {
     grid-template-columns: 1fr;
   }
 
-  .f9-bl041-billing .f9-app-plan-card,
-  .f9-bl041-billing .f9-topup-card {
+  .f9-acct-billing .f9-app-plan-card,
+  .f9-acct-billing .f9-topup-card {
     border-right: 0;
     border-bottom: 1px solid var(--wk-rule);
   }
 
-  .f9-bl041-billing :is(.f9-app-plan-card, .f9-topup-card):last-child {
+  .f9-acct-billing :is(.f9-app-plan-card, .f9-topup-card):last-child {
     border-bottom: 0;
   }
 
-  .f9-bl041-member-row,
-  .f9-bl041-account .f9-passkey-row {
+  .f9-acct-member-row,
+  .f9-acct-account .f9-passkey-row {
     grid-template-columns: minmax(0, 1fr) auto;
   }
 }
 
 @media (max-width: 640px) {
-  .f9-bl041-section,
-  .f9-bl041-lock {
+  .f9-acct-section,
+  .f9-acct-lock {
     padding-top: 24px;
     padding-bottom: 24px;
   }
 
-  .f9-bl041-section-head,
-  .f9-bl041-page .f9-panel-toolbar,
-  .f9-bl041-entitlement {
+  .f9-acct-section-head,
+  .f9-acct-page .f9-panel-toolbar,
+  .f9-acct-entitlement {
     align-items: stretch;
     flex-direction: column;
     gap: 10px;
   }
 
-  .f9-bl041-invite {
+  .f9-acct-invite {
     grid-template-columns: 1fr;
   }
 
-  .f9-bl041-member-row,
-  .f9-bl041-account .f9-passkey-row,
-  .f9-bl041-billing .f9-work-row {
+  .f9-acct-member-row,
+  .f9-acct-account .f9-passkey-row,
+  .f9-acct-billing .f9-work-row {
     grid-template-columns: 1fr;
   }
 
-  .f9-bl041-row-actions,
-  .f9-bl041-page .f9-account-security-actions {
+  .f9-acct-row-actions,
+  .f9-acct-page .f9-account-security-actions {
     justify-content: flex-start;
   }
 
-  .f9-bl041-billing .f9-cycle-toggle {
+  .f9-acct-billing .f9-cycle-toggle {
     width: auto;
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* v4 utilities (design-unification CSS endgame): the small set that   */
+/* replaces every hand-written inline style. Layout belongs in CSS.    */
+/* ------------------------------------------------------------------ */
+.f9-wk-contents { display: contents; }
+.f9-wk-m0 { margin: 0; }
+.f9-wk-mt0 { margin-top: 0; }
+.f9-wk-mt1 { margin-top: 1rem; }
+.f9-wk-mt15 { margin-bottom: 1.5rem; }
+.f9-wk-mb025 { margin-bottom: 0.25rem; }
+.f9-wk-inline { display: inline; }
+.f9-wk-row-gap { display: flex; gap: 0.5rem; }
+.f9-wk-evidence-note { margin-top: 8px; }
+.f9-wk-evidence-split {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--wk-rule);
+}
+.f9-wk-evidence-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 10px;
+}
+.f9-wk-img-frame {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  border: 1px solid var(--wk-rule);
+  border-radius: 0;
+  background: var(--wk-sunk);
+}
+/* Data-driven meter widths in 5% steps — a meter's fill is data, but its
+   rendering is still CSS, not a hand-written style attribute. */
+.f9-wk-meter-fill { transition: width 0.2s ease; }
+.f9-wk-w0 { width: 0%; }
+.f9-wk-w5 { width: 5%; }
+.f9-wk-w10 { width: 10%; }
+.f9-wk-w15 { width: 15%; }
+.f9-wk-w20 { width: 20%; }
+.f9-wk-w25 { width: 25%; }
+.f9-wk-w30 { width: 30%; }
+.f9-wk-w35 { width: 35%; }
+.f9-wk-w40 { width: 40%; }
+.f9-wk-w45 { width: 45%; }
+.f9-wk-w50 { width: 50%; }
+.f9-wk-w55 { width: 55%; }
+.f9-wk-w60 { width: 60%; }
+.f9-wk-w65 { width: 65%; }
+.f9-wk-w70 { width: 70%; }
+.f9-wk-w75 { width: 75%; }
+.f9-wk-w80 { width: 80%; }
+.f9-wk-w85 { width: 85%; }
+.f9-wk-w90 { width: 90%; }
+.f9-wk-w95 { width: 95%; }
+.f9-wk-w100 { width: 100%; }
+
 /* === BL-040 source + developer access (landing language) === */
 
-.f9-bl040-page {
+.f9-access-page {
   --bl040-copy: min(70ch, 100%);
 }
 
-.f9-bl040-page .f9-wk-strip {
+.f9-access-page .f9-wk-strip {
   margin-top: 18px;
   margin-bottom: 0;
 }
 
-.f9-bl040-section {
+.f9-access-section {
   padding: 30px var(--wk-pad) 0;
 }
 
-.f9-bl040-page > .f9-bl040-section:first-of-type {
+.f9-access-page > .f9-access-section:first-of-type {
   padding-top: 20px;
 }
 
-.f9-bl040-page > .f9-bl040-section:first-of-type .f9-bl040-section-head {
+.f9-access-page > .f9-access-section:first-of-type .f9-access-section-head {
   margin-bottom: 10px;
 }
 
-.f9-bl040-section-head {
+.f9-access-section-head {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
@@ -16111,12 +16079,12 @@ textarea.f9-wk-in {
   margin-bottom: 16px;
 }
 
-.f9-bl040-section-head > div {
+.f9-access-section-head > div {
   min-width: 0;
 }
 
-.f9-bl040-section h2,
-.f9-bl040-quiet h2 {
+.f9-access-section h2,
+.f9-access-quiet h2 {
   margin: 0;
   color: var(--ink);
   font-family: var(--f9-font);
@@ -16126,8 +16094,8 @@ textarea.f9-wk-in {
   line-height: 1.3;
 }
 
-.f9-bl040-section-head p,
-.f9-bl040-quiet p {
+.f9-access-section-head p,
+.f9-access-quiet p {
   max-width: var(--bl040-copy);
   margin: 6px 0 0;
   color: var(--ink-soft);
@@ -16135,7 +16103,7 @@ textarea.f9-wk-in {
   line-height: 1.55;
 }
 
-.f9-bl040-text-action {
+.f9-access-text-action {
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
@@ -16157,18 +16125,18 @@ textarea.f9-wk-in {
   transition: color var(--wk-snap);
 }
 
-.f9-bl040-text-action:hover {
+.f9-access-text-action:hover {
   color: var(--ink);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 
-.f9-bl040-text-action.is-danger,
-.f9-bl040-page .f9-confirm-armed {
+.f9-access-text-action.is-danger,
+.f9-access-page .f9-confirm-armed {
   color: var(--red);
 }
 
-.f9-bl040-page .f9-confirm-armed {
+.f9-access-page .f9-confirm-armed {
   min-width: 44px;
   min-height: 44px;
   padding: 0;
@@ -16182,12 +16150,12 @@ textarea.f9-wk-in {
   text-transform: none;
 }
 
-.f9-bl040-rows,
-.f9-bl040-key-rows {
+.f9-access-rows,
+.f9-access-key-rows {
   border-top: 1px solid var(--wk-rule);
 }
 
-.f9-bl040-status-row {
+.f9-access-status-row {
   display: grid;
   align-items: center;
   gap: 24px;
@@ -16197,15 +16165,15 @@ textarea.f9-wk-in {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
-.f9-bl040-status-row strong,
-.f9-bl040-empty-row strong {
+.f9-access-status-row strong,
+.f9-access-empty-row strong {
   color: var(--ink);
   font-size: 14px;
   font-weight: 600;
 }
 
-.f9-bl040-status-row p,
-.f9-bl040-empty-row p {
+.f9-access-status-row p,
+.f9-access-empty-row p {
   max-width: var(--bl040-copy);
   margin: 4px 0 0;
   color: var(--ink-soft);
@@ -16213,47 +16181,47 @@ textarea.f9-wk-in {
   line-height: 1.45;
 }
 
-.f9-bl040-status {
+.f9-access-status {
   color: var(--ink-soft);
   font-size: 13px;
   text-align: right;
   white-space: nowrap;
 }
 
-.f9-bl040-status.is-bad {
+.f9-access-status.is-bad {
   color: var(--red);
 }
 
-.f9-bl040-setup {
+.f9-access-setup {
   display: grid;
   border-top: 1px solid var(--wk-rule);
   border-bottom: 1px solid var(--wk-rule);
   grid-template-columns: minmax(0, 0.8fr) minmax(320px, 1.2fr);
 }
 
-.f9-bl040-instructions,
-.f9-bl040-form-column {
+.f9-access-instructions,
+.f9-access-form-column {
   min-width: 0;
   padding: 22px 0 24px;
 }
 
-.f9-bl040-instructions {
+.f9-access-instructions {
   padding-right: 32px;
 }
 
-.f9-bl040-form-column {
+.f9-access-form-column {
   padding-left: 32px;
   border-left: 1px solid var(--wk-rule);
 }
 
-.f9-bl040-instructions h3 {
+.f9-access-instructions h3 {
   margin: 0;
   color: var(--ink);
   font-size: 14px;
   font-weight: 600;
 }
 
-.f9-bl040-instructions ol {
+.f9-access-instructions ol {
   max-width: 54ch;
   margin: 14px 0 0;
   padding-left: 20px;
@@ -16262,19 +16230,19 @@ textarea.f9-wk-in {
   line-height: 1.55;
 }
 
-.f9-bl040-instructions li + li {
+.f9-access-instructions li + li {
   margin-top: 7px;
 }
 
-.f9-bl040-instructions a,
-.f9-bl040-page .f9-wk-context a {
+.f9-access-instructions a,
+.f9-access-page .f9-wk-context a {
   color: var(--ink);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 
-.f9-bl040-form,
-.f9-bl040-key-form {
+.f9-access-form,
+.f9-access-key-form {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -16282,13 +16250,13 @@ textarea.f9-wk-in {
   max-width: 720px;
 }
 
-.f9-bl040-key-form {
+.f9-access-key-form {
   padding: 22px 0 24px;
   border-top: 1px solid var(--wk-rule);
   border-bottom: 1px solid var(--wk-rule);
 }
 
-.f9-bl040-field {
+.f9-access-field {
   display: grid;
   gap: 7px;
   width: 100%;
@@ -16296,12 +16264,12 @@ textarea.f9-wk-in {
   font-size: 13px;
 }
 
-.f9-bl040-field > span {
+.f9-access-field > span {
   font-weight: 500;
 }
 
-.f9-bl040-field input,
-.f9-bl040-field textarea {
+.f9-access-field input,
+.f9-access-field textarea {
   width: 100%;
   min-height: 44px;
   padding: 11px 12px;
@@ -16315,16 +16283,16 @@ textarea.f9-wk-in {
   resize: vertical;
 }
 
-.f9-bl040-field textarea {
+.f9-access-field textarea {
   min-height: 116px;
 }
 
-.f9-bl040-field input::placeholder,
-.f9-bl040-field textarea::placeholder {
+.f9-access-field input::placeholder,
+.f9-access-field textarea::placeholder {
   color: var(--ink-faint);
 }
 
-.f9-bl040-check {
+.f9-access-check {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -16334,38 +16302,38 @@ textarea.f9-wk-in {
   font-size: 13px;
 }
 
-.f9-bl040-check input {
+.f9-access-check input {
   width: 16px;
   height: 16px;
   margin: 0;
   accent-color: var(--ink);
 }
 
-.f9-bl040-check span {
+.f9-access-check span {
   display: grid;
   gap: 2px;
 }
 
-.f9-bl040-check small {
+.f9-access-check small {
   color: var(--ink-faint);
   font-size: 12px;
 }
 
-.f9-bl040-text-actions {
+.f9-access-text-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0 20px;
 }
 
-.f9-bl040-quiet {
+.f9-access-quiet {
   max-width: 760px;
   padding: 22px 0 24px;
   border-top: 1px solid var(--wk-rule);
   border-bottom: 1px solid var(--wk-rule);
 }
 
-.f9-bl040-fact-row {
+.f9-access-fact-row {
   display: grid;
   align-items: center;
   gap: 24px;
@@ -16375,12 +16343,12 @@ textarea.f9-wk-in {
   grid-template-columns: 142px minmax(0, 1fr);
 }
 
-.f9-bl040-fact-row > span {
+.f9-access-fact-row > span {
   color: var(--ink-soft);
   font-size: 13px;
 }
 
-.f9-bl040-fact-row code {
+.f9-access-fact-row code {
   overflow: hidden;
   color: var(--ink);
   font-family: var(--ld-mono);
@@ -16389,14 +16357,14 @@ textarea.f9-wk-in {
   white-space: nowrap;
 }
 
-.f9-bl040-fact-row p {
+.f9-access-fact-row p {
   margin: 0;
   color: var(--ink-soft);
   font-size: 13px;
   line-height: 1.5;
 }
 
-.f9-bl040-secret-row {
+.f9-access-secret-row {
   display: grid;
   align-items: center;
   gap: 20px;
@@ -16407,7 +16375,7 @@ textarea.f9-wk-in {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
-.f9-bl040-secret-control {
+.f9-access-secret-control {
   width: 100%;
   min-width: 0;
   min-height: 44px;
@@ -16423,12 +16391,12 @@ textarea.f9-wk-in {
   white-space: nowrap;
 }
 
-.f9-bl040-secret-control:focus-visible {
+.f9-access-secret-control:focus-visible {
   outline: 1px solid var(--wk-focus);
   outline-offset: 3px;
 }
 
-.f9-bl040-key-row {
+.f9-access-key-row {
   display: grid;
   align-items: center;
   gap: 18px;
@@ -16442,17 +16410,17 @@ textarea.f9-wk-in {
     minmax(176px, auto);
 }
 
-.f9-bl040-key-row.is-revoked {
+.f9-access-key-row.is-revoked {
   color: var(--ink-faint);
 }
 
-.f9-bl040-key-row > div:first-child {
+.f9-access-key-row > div:first-child {
   display: grid;
   gap: 3px;
   min-width: 0;
 }
 
-.f9-bl040-key-name {
+.f9-access-key-name {
   overflow: hidden;
   color: var(--ink);
   font-family: var(--ld-display);
@@ -16463,7 +16431,7 @@ textarea.f9-wk-in {
   white-space: nowrap;
 }
 
-.f9-bl040-key-row code {
+.f9-access-key-row code {
   overflow: hidden;
   color: var(--ink-faint);
   font-family: var(--ld-mono);
@@ -16472,104 +16440,104 @@ textarea.f9-wk-in {
   white-space: nowrap;
 }
 
-.f9-bl040-key-row > p {
+.f9-access-key-row > p {
   margin: 0;
   color: var(--ink-soft);
   font-size: 13px;
   line-height: 1.45;
 }
 
-.f9-bl040-key-row form {
+.f9-access-key-row form {
   display: flex;
   justify-content: flex-end;
 }
 
-.f9-bl040-key-spacer {
+.f9-access-key-spacer {
   min-width: 44px;
 }
 
-.f9-bl040-empty-row {
+.f9-access-empty-row {
   min-height: 76px;
   padding: 16px 0;
   border-bottom: 1px solid var(--wk-rule);
 }
 
 @media (max-width: 860px) {
-  .f9-bl040-setup {
+  .f9-access-setup {
     grid-template-columns: 1fr;
   }
 
-  .f9-bl040-instructions,
-  .f9-bl040-form-column {
+  .f9-access-instructions,
+  .f9-access-form-column {
     padding-right: 0;
     padding-left: 0;
   }
 
-  .f9-bl040-form-column {
+  .f9-access-form-column {
     border-top: 1px solid var(--wk-rule);
     border-left: 0;
   }
 
-  .f9-bl040-key-row {
+  .f9-access-key-row {
     gap: 7px 16px;
     padding: 14px 0;
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .f9-bl040-key-row > p {
+  .f9-access-key-row > p {
     grid-column: 1;
   }
 
-  .f9-bl040-key-row > .f9-bl040-status {
+  .f9-access-key-row > .f9-access-status {
     grid-column: 2;
     grid-row: 1;
   }
 
-  .f9-bl040-key-row > form,
-  .f9-bl040-key-spacer {
+  .f9-access-key-row > form,
+  .f9-access-key-spacer {
     grid-column: 2;
     grid-row: 2;
   }
 }
 
 @media (max-width: 640px) {
-  .f9-bl040-section {
+  .f9-access-section {
     padding-top: 26px;
   }
 
-  .f9-bl040-section-head {
+  .f9-access-section-head {
     display: block;
     margin-bottom: 12px;
   }
 
-  .f9-bl040-section-head > .f9-bl040-text-action {
+  .f9-access-section-head > .f9-access-text-action {
     margin-top: 4px;
   }
 
-  .f9-bl040-status-row,
-  .f9-bl040-fact-row,
-  .f9-bl040-secret-row {
+  .f9-access-status-row,
+  .f9-access-fact-row,
+  .f9-access-secret-row {
     align-items: start;
     gap: 6px;
     grid-template-columns: 1fr;
   }
 
-  .f9-bl040-status {
+  .f9-access-status {
     text-align: left;
   }
 
-  .f9-bl040-fact-row {
+  .f9-access-fact-row {
     padding: 13px 0;
   }
 
-  .f9-bl040-secret-row .f9-bl040-text-actions {
+  .f9-access-secret-row .f9-access-text-actions {
     margin-top: 2px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .f9-dash-page-app .f9-dash-mobile-nav :is(a, button),
-  .f9-bl040-text-action {
+  .f9-access-text-action {
     transition: none;
   }
 }

@@ -243,7 +243,7 @@ async function measure(page: Page) {
       });
 
     const firstRow = pageRoot.querySelector(
-      ".f9-bl041-section, .f9-bl041-lock, .f9-checkout-banner",
+      ".f9-acct-section, .f9-acct-lock, .f9-checkout-banner",
     );
     const rounded = [pageRoot, ...pageRoot.querySelectorAll("*")]
       .filter((node) => {

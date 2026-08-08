@@ -217,9 +217,9 @@ describe("collections IA inversion (brief §7)", () => {
   it("demotes the create form and the evidence form to Rank-2 disclosures", async () => {
     const markup = await render({ items: [savedItem()] });
 
-    expect(markup).toContain("f9-col-create");
+    expect(markup).toContain("f9-library-create");
     expect(markup).toContain(">New collection<");
-    expect(markup).toContain("f9-col-external");
+    expect(markup).toContain("f9-library-external");
     expect(markup).toContain(">Add an evidence link<");
   });
 
@@ -469,7 +469,7 @@ describe("collections empty and filtered states (brief §6.7, §6.8)", () => {
     const markup = await render({});
 
     expect(markup).toContain(COLLECTION_ITEMS_EMPTY_COPY);
-    expect(markup).toContain("f9-col-list-empty");
+    expect(markup).toContain("f9-library-list-empty");
     expect(markup).not.toContain("f9-ed-specimen-slot");
     expect(markup).not.toContain("f9-dash-state-empty");
     expect(markup).not.toContain("Nothing saved yet");
@@ -482,7 +482,7 @@ describe("collections empty and filtered states (brief §6.7, §6.8)", () => {
       items: [],
     });
 
-    expect(markup).toContain("f9-col-list-empty");
+    expect(markup).toContain("f9-library-list-empty");
     expect(markup).toContain(COLLECTION_FILTERED_EMPTY_COPY);
     // Filtered-to-zero is not empty; the one filled
     // action remains the header's New collection command.

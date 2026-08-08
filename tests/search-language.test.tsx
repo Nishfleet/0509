@@ -204,7 +204,7 @@ describe("BL-031 — the page budgets", () => {
   });
 
   it("stops pinning a second palette and a gradient onto the search page", () => {
-    const base = cssRules.slice(cssRules.indexOf(".f9-search-page {"));
+    const base = cssRules.slice(cssRules.indexOf(".f9-find-page {"));
     const rule = base.slice(0, base.indexOf("}"));
     expect(rule).toContain("--f9-search-ink: var(--ink)");
     expect(rule).not.toContain("#061629");

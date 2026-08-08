@@ -34,7 +34,7 @@ export function NotificationsRoute() {
   const actionData = useActionData<RouteActionData>();
 
   return (
-    <DashboardPage className="f9-wk-page f9-nt-page">
+    <DashboardPage className="f9-wk-page f9-notif-page">
       <WorkingHeader
         context="Briefs and confirmed competitor changes reach your team by email."
         title="Notifications"
@@ -49,12 +49,12 @@ export function NotificationsRoute() {
         </FeedbackStrip>
       ) : null}
 
-      <section aria-labelledby="notification-channels-title" className="f9-nt-section is-first">
+      <section aria-labelledby="notification-channels-title" className="f9-notif-section is-first">
         <SectionHeading
           id="notification-channels-title"
           title="Delivery channel"
         />
-        <dl className="f9-nt-definitions" data-testid="notification-channel-rows">
+        <dl className="f9-notif-definitions" data-testid="notification-channel-rows">
           <ChannelRow
             copy={
               data.emailDeliveryReady
@@ -67,24 +67,24 @@ export function NotificationsRoute() {
         </dl>
       </section>
 
-      <section aria-labelledby="email-delivery-title" className="f9-nt-section">
+      <section aria-labelledby="email-delivery-title" className="f9-notif-section">
         <SectionHeading
           context="Each workspace keeps one frequency; quiet hours stay with the competitor they protect."
           id="email-delivery-title"
           title="Email delivery"
         />
-        <div className="f9-nt-working-rows">
-          <div className="f9-nt-work-row">
+        <div className="f9-notif-working-rows">
+          <div className="f9-notif-work-row">
             <WorkRowCopy
               name="Digest frequency"
               say="Use the plan cadence, or keep every workspace brief weekly."
             />
-            <Form className="f9-nt-inline-form" method="post">
+            <Form className="f9-notif-inline-form" method="post">
               <input name="intent" type="hidden" value="save-digest-cadence" />
-              <label className="f9-nt-field">
-                <span className="f9-nt-label">Frequency</span>
+              <label className="f9-notif-field">
+                <span className="f9-notif-label">Frequency</span>
                 <select
-                  className="f9-nt-select"
+                  className="f9-notif-select"
                   defaultValue={data.digestCadencePreference ?? "plan_default"}
                   name="digestCadencePreference"
                 >
@@ -95,7 +95,7 @@ export function NotificationsRoute() {
                 </select>
               </label>
               <SubmitButton
-                className="f9-wk-lnk f9-nt-submit"
+                className="f9-wk-lnk f9-notif-submit"
                 intent="save-digest-cadence"
                 pendingLabel="Saving…"
               >
@@ -103,7 +103,7 @@ export function NotificationsRoute() {
               </SubmitButton>
             </Form>
           </div>
-          <div className="f9-nt-work-row">
+          <div className="f9-notif-work-row">
             <WorkRowCopy
               name="Quiet hours"
               say="Instant alerts wait during each competitor’s quiet hours. Digests keep their scheduled cadence."
@@ -112,7 +112,7 @@ export function NotificationsRoute() {
               Tune on competitors <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
             </Link>
           </div>
-          <div className="f9-nt-work-row">
+          <div className="f9-notif-work-row">
             <WorkRowCopy
               name="Recipients"
               say={
@@ -125,7 +125,7 @@ export function NotificationsRoute() {
               Open account <span aria-hidden="true" className="f9-wk-chev">&rsaquo;</span>
             </Link>
           </div>
-          <div className="f9-nt-work-row">
+          <div className="f9-notif-work-row">
             <WorkRowCopy
               name="Delivery history"
               say="Briefs keep the sent, pending, and all-quiet delivery trail."
@@ -155,12 +155,12 @@ function SectionHeading({
   context?: string;
 }) {
   return (
-    <div className="f9-nt-section-head">
+    <div className="f9-notif-section-head">
       <div>
-        <h2 className="f9-nt-section-title" id={id}>
+        <h2 className="f9-notif-section-title" id={id}>
           {title}
         </h2>
-        {context ? <p className="f9-nt-section-context">{context}</p> : null}
+        {context ? <p className="f9-notif-section-context">{context}</p> : null}
       </div>
     </div>
   );
@@ -176,17 +176,17 @@ function ChannelRow({
   copy: ReactNode;
 }) {
   return (
-    <div className="f9-nt-definition-row">
+    <div className="f9-notif-definition-row">
       <dt>{name}</dt>
-      <dd className="f9-nt-definition-status">{status}</dd>
-      <dd className="f9-nt-definition-copy">{copy}</dd>
+      <dd className="f9-notif-definition-status">{status}</dd>
+      <dd className="f9-notif-definition-copy">{copy}</dd>
     </div>
   );
 }
 
 function WorkRowCopy({ name, say }: { name: string; say: ReactNode }) {
   return (
-    <div className="f9-nt-work-copy">
+    <div className="f9-notif-work-copy">
       <h3>{name}</h3>
       <p>{say}</p>
     </div>

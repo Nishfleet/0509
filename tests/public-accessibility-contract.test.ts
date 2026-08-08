@@ -30,7 +30,7 @@ describe("public accessibility source contract", () => {
     expect(css).toContain(`.f9-dash-page-app .f9-cursor-rail nav a {
     min-height: 44px;`);
     expect(css).toContain(`@media (min-width: 761px) and (max-width: 900px) {
-  .f9-search-page .f9-cursor-rail nav a {
+  .f9-find-page .f9-cursor-rail nav a {
     min-height: 44px;`);
   });
 

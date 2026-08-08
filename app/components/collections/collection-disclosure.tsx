@@ -34,17 +34,17 @@ export function CollectionDisclosure({
 }) {
   return (
     <details
-      className={className ? `f9-col-disclosure ${className}` : "f9-col-disclosure"}
+      className={className ? `f9-library-disclosure ${className}` : "f9-library-disclosure"}
       name={group}
       open={defaultOpen}
     >
-      <summary className={`f9-wk-lnk f9-col-disclosure-summary is-rank-${rank}`}>
+      <summary className={`f9-wk-lnk f9-library-disclosure-summary is-rank-${rank}`}>
         {summary}
         <span aria-hidden="true" className="f9-wk-chev">
           &rsaquo;
         </span>
       </summary>
-      <div className="f9-col-disclosure-body">{children}</div>
+      <div className="f9-library-disclosure-body">{children}</div>
     </details>
   );
 }

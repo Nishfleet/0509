@@ -53,7 +53,7 @@ export function BrandScoreCard({ aggression }: { aggression: BrandPageAggression
             <div className="f9-ads-comp" key={key}>
               <span className="f9-ads-comp-name">{label}</span>
               <span className="f9-ads-comp-track">
-                <span className="f9-ads-comp-fill" style={{ width: `${pct}%` }} />
+                <span className={`f9-ads-comp-fill f9-wk-meter-fill f9-wk-w${Math.min(100, Math.max(0, Math.round(pct))) - (Math.min(100, Math.max(0, Math.round(pct))) % 5)}`} />
               </span>
               <span className="f9-ads-comp-val">{value}</span>
             </div>

@@ -102,10 +102,10 @@ describe("workspace language layer (BL-030)", () => {
       (match) => match[1].trim().replace(/\s+/g, " "),
     );
     expect(displayRules.sort()).toEqual([
-      ".f9-bl040-key-name",
-      ".f9-bl041-entity",
-      ".f9-col-entity-title",
-      ".f9-col-switch-item",
+      ".f9-access-key-name",
+      ".f9-acct-entity",
+      ".f9-library-entity-title",
+      ".f9-library-switch-item",
       ".f9-wk-avatar",
       ".f9-wk-detail-name",
       ".f9-wk-entity",

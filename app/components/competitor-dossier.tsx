@@ -41,7 +41,7 @@ export function CompetitorDossierPanel({
 			<div className="f9-panel-toolbar">
 				<div>
 					<p className="f9-app-kicker">Intelligence</p>
-					<h3 style={{ marginTop: 0 }}>What this history adds up to</h3>
+					<h3 className="f9-wk-mt0">What this history adds up to</h3>
 				</div>
 				{dossier.status === "ready" ? (
 					<p className="f9-dossier-window">
@@ -269,8 +269,7 @@ function AggressionScorecard({ aggression }: { aggression: AggressionScore | nul
 						<span className="f9-aggression-bar-label">{row.label}</span>
 						<span aria-hidden="true" className="f9-aggression-bar-track">
 							<span
-								className="f9-aggression-bar-fill"
-								style={{ width: `${(row.value / 25) * 100}%` }}
+								className={`f9-aggression-bar-fill f9-wk-meter-fill f9-wk-w${Math.min(100, Math.max(0, Math.round((row.value / 25) * 100))) - (Math.min(100, Math.max(0, Math.round((row.value / 25) * 100))) % 5)}`}
 							/>
 						</span>
 						<span className="f9-aggression-bar-value">{row.value}/25</span>

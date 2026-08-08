@@ -268,7 +268,7 @@ export function DesignedDigestBrief({
         <h3 id={`${id}-facts`}>At a glance</h3>
         <dl className="f9-wk-dl f9-wk-brief-facts">
           {facts.map((row) => (
-            <div key={row.key} style={{ display: "contents" }}>
+            <div key={row.key} className="f9-wk-contents">
               <dt>{row.key}</dt>
               <dd>
                 {(typeof row.value === "string" ? row.value.trim() || null : row.value) ??

@@ -839,7 +839,7 @@ function OpsSection<T>(props: {
   renderItem: (item: T) => ReactNode;
 }) {
   return (
-    <section style={{ marginBottom: "1.5rem" }}>
+    <section className="f9-wk-mt15">
       <p className="f9-app-kicker">{props.title}</p>
       {props.items.length === 0 ? (
         <p className="f9-muted-copy">{props.empty}</p>

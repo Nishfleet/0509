@@ -416,13 +416,13 @@ export function EventChangesSection(props: {
       <p className="f9-ed-micro">What changed</p>
       {data.events.length === 0 ? (
         awaitingFirstCapture ? (
-          <div className="f9-bl035-empty">
+          <div className="f9-watchdetail-empty">
             <h3>First capture running</h3>
             <p>
               About ten minutes. We take the ads, the offer page and the price — the
               before that every future change gets measured against.
             </p>
-            <div className="f9-bl035-local-actions">
+            <div className="f9-watchdetail-local-actions">
               <SecondaryAction to="/app/source-access">Check source access</SecondaryAction>
               <SecondaryAction to={watchlistDetailTabHref(props.watchlistId, "evidence")}>
                 Open evidence

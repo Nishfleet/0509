@@ -190,7 +190,7 @@ describe("team feedback placement", () => {
 			const { default: TeamRoute } = await import("~/routes/app.team");
 			const markup = renderToStaticMarkup(createElement(TeamRoute));
 
-			expect(markup).toContain("f9-bl041-lock");
+			expect(markup).toContain("f9-acct-lock");
 			expect(markup).toContain("Invite your teammates");
 			expect(markup).toContain('href="/app/billing?source=team#plans"');
 			expect(markup.match(/f9-ed-cta--rank1/g)).toHaveLength(1);
@@ -203,7 +203,7 @@ describe("team feedback placement", () => {
 		const { default: TeamRoute } = await import("~/routes/app.team");
 		const markup = renderToStaticMarkup(createElement(TeamRoute));
 
-		expect(markup).not.toContain("f9-bl041-lock");
+		expect(markup).not.toContain("f9-acct-lock");
 		expect(markup).toContain("1 of 10 seats in use");
 		expect(markup).toContain('name="email"');
 		expect(markup).toContain("Send invite");
@@ -243,7 +243,7 @@ describe("team feedback placement", () => {
 		expect(markup).toContain("A seat in Asha&#x27;s workspace");
 		expect(markup).toContain("workspace owner manages seats and billing");
 		expect(markup).not.toContain('name="email"');
-		expect(markup).not.toContain("f9-bl041-lock");
+		expect(markup).not.toContain("f9-acct-lock");
 	});
 
 	it("renders invite feedback in the global slot above member rows", async () => {

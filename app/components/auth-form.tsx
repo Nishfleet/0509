@@ -87,7 +87,7 @@ export function AuthForm({
               {emailPending ? "Sending…" : "Resend link"}
             </button>
           </Form>
-          <p className="f9-auth-switch" style={{ marginTop: "1rem" }}>
+          <p className="f9-auth-switch f9-wk-mt1">
             Wrong address?{" "}
             <Link to={changeEmailHref}>Use a different email</Link>
           </p>

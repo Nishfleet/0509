@@ -425,7 +425,7 @@ test.describe("Gate-B Journey 4 — evidence, reports, sharing, export, and clie
     // whether that check happened to catch a change. This fixture has a
     // succeeded run and unchanged before/after captures, with no watch event.
     await page.goto("/app/watchlists?watchlist=e2e-watchlist-agency-quiet");
-    const quietPane = page.locator(".f9-bl035-detail");
+    const quietPane = page.locator(".f9-watchdetail-detail");
     await expect(page.locator(".f9-wk-context")).toContainText("Quiet");
     await expect(
       quietPane.getByRole("link", { name: "Package for client" }),

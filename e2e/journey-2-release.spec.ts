@@ -252,7 +252,7 @@ for (const viewport of viewports) {
     const entityContext = page.locator(".f9-wk-context");
     await expect(entityHeading).toBeVisible();
     await expect(entityContext).toContainText("Nykaa");
-    await expect(page.locator(".f9-bl035-detail")).toBeVisible();
+    await expect(page.locator(".f9-watchdetail-detail")).toBeVisible();
     await expect(
       page.getByRole("navigation", { name: "Competitor sections" }).getByRole("link"),
     ).toHaveCount(5);

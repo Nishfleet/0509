@@ -160,7 +160,7 @@ describe("workspace settings route components", () => {
     const markup = renderToStaticMarkup(createElement(SourceAccessRoute));
 
     expect(markup).toContain(
-      '<span class="f9-bl040-status is-bad">Needs setup</span>',
+      '<span class="f9-access-status is-bad">Needs setup</span>',
     );
     expect(markup).not.toContain("f9-ed-stamp");
     expect(markup).not.toContain("f9-beta-pill");

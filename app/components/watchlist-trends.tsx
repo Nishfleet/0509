@@ -150,8 +150,7 @@ function LongevityLeaderboardCard({
 							</div>
 							<div className="f9-trend-leader-track">
 								<div
-									className={`f9-trend-leader-fill${entry.kind === "tracked" ? " is-tracked" : ""}`}
-									style={{ width: `${Math.max(4, (entry.days / Math.max(1, leaderboard.maxDays)) * 100)}%` }}
+									className={`f9-trend-leader-fill${entry.kind === "tracked" ? " is-tracked" : ""} f9-wk-meter-fill f9-wk-w${Math.min(100, Math.max(0, Math.round(Math.max(5, (entry.days / Math.max(1, leaderboard.maxDays)) * 100)))) - (Math.min(100, Math.max(0, Math.round(Math.max(5, (entry.days / Math.max(1, leaderboard.maxDays)) * 100)))) % 5)}`}
 								/>
 							</div>
 						</li>

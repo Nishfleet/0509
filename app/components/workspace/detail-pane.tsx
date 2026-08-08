@@ -85,7 +85,7 @@ export function DetailFacts({ rows }: { rows: DetailFact[] }) {
   return (
     <dl className="f9-wk-dl">
       {rows.map((row) => (
-        <div key={row.key} style={{ display: "contents" }}>
+        <div key={row.key} className="f9-wk-contents">
           <dt>{row.key}</dt>
           <dd>{row.value}</dd>
         </div>

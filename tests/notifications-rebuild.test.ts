@@ -46,7 +46,7 @@ describe("BL-039 notifications rebuild", () => {
 
   it("uses the shared working header and removes the old card dashboard", () => {
     expect(ui).toContain(
-      '<DashboardPage className="f9-wk-page f9-nt-page">',
+      '<DashboardPage className="f9-wk-page f9-notif-page">',
     );
     expect(ui).toContain("<WorkingHeader");
     expect(ui).toContain('title="Delivery channel"');
