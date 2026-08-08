@@ -15246,6 +15246,20 @@ a.f9-wk-workrow:hover, .f9-wk-workrow.is-selected { background: var(--wk-sunk); 
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
+@media (max-width: 920px) {
+  .f9-topup-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.f9-topup-card .f9-wk-btn-quiet,
+.f9-wk-plan-card .f9-wk-btn,
+.f9-wk-plan-card .f9-wk-btn-quiet {
+  width: 100%;
+}
+[data-f9-theme="dark"] .f9-wk-plan-card,
+[data-f9-theme="dark"] .f9-topup-card {
+  background: var(--card);
+}
 .f9-topup-card {
   display: grid;
   align-content: start;
