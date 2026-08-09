@@ -39,7 +39,17 @@ History: `docs/PROJECT-HISTORY.md`.
 ```bash
 npm run build
 npm test
+npm run typecheck
 ```
+
+**`npm run typecheck` is the only real type gate. `tsc --noEmit -p tsconfig.json` is a
+no-op here and will pass on anything.** `tsconfig.json` is `"files": []` plus two project
+references, so without `-b` it type-checks zero files and exits 0. `npm run typecheck` is
+`cf-typegen && react-router typegen && tsc -b`, which is what CI's `codex-node-checks` runs
+— the generated `worker-configuration.d.ts` and route types only exist after those first two
+steps. PR #552 shipped a `verify:` line claiming `npx tsc --noEmit -p tsconfig.json → clean`
+and CI failed it on a `TS2339` in the same diff. A gate that cannot go red is a missing gate,
+not a weak one: never cite `tsc --noEmit -p tsconfig.json` as type evidence.
 
 On the shared VPS, fleet and self-hosted-runner verification must use
 `scripts/deploy-window-lock.sh run -- <command>` rather than calling `flock`
