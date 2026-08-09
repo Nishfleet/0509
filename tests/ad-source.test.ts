@@ -1408,7 +1408,8 @@ describe("searchAdsViaSourceResolver", () => {
         null,
         { purpose: "public_search" },
       );
-      await vi.advanceTimersByTimeAsync(12_500);
+      // The public waiter with no servable entry returns immediately (no 12s
+      // wait-budget burn); the result below is what it resolves to.
       const result = await resultPromise;
 
       // Pre-fix: cacheStatus "hit" with the zero payload. Post-fix: honest warming state.
@@ -1706,7 +1707,8 @@ describe("searchAdsViaSourceResolver", () => {
         null,
         { purpose: "public_search" },
       );
-      await vi.advanceTimersByTimeAsync(12_500);
+      // The public waiter with no servable entry returns immediately (no 12s
+      // wait-budget burn); the result below is what it resolves to.
       const result = await resultPromise;
 
       // Pre-fix: the scan entry resolved as a healthy cross-route "hit".
@@ -3989,7 +3991,7 @@ describe("searchAdsViaSourceResolver", () => {
     expect(waitUntil).not.toHaveBeenCalled();
   });
 
-  it("returns a typed warming state while another isolate owns the live search", async () => {
+  it("returns a typed warming state immediately while another isolate owns the live search", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-16T04:00:00.000Z"));
 
@@ -4012,9 +4014,11 @@ describe("searchAdsViaSourceResolver", () => {
         searchMetaLibraryByBrowser: browserSearch,
         CommercialDiscoveryError: class CommercialDiscoveryError extends Error {},
       }));
+      const getDiscoveryCacheEntry = vi.fn().mockResolvedValue(null);
+      const getDiscoveryProviderState = vi.fn().mockResolvedValue(null);
       vi.doMock("~/lib/data.server", () => ({
-        getDiscoveryCacheEntry: vi.fn().mockResolvedValue(null),
-        getDiscoveryProviderState: vi.fn().mockResolvedValue(null),
+        getDiscoveryCacheEntry,
+        getDiscoveryProviderState,
         upsertDiscoveryCacheEntry: vi.fn(),
         createDiscoveryFetchLog: vi.fn(),
         upsertDiscoveryProviderState: vi.fn(),
@@ -4042,14 +4046,23 @@ describe("searchAdsViaSourceResolver", () => {
         { purpose: "public_search" },
       );
 
-      await vi.advanceTimersByTimeAsync(12_500);
+      // Lane-3 cold path: the waiter must NOT burn its 12s wait budget on a
+      // true miss — the holder's capture cannot land inside that budget, so
+      // the request resolves to the warming state without any timer firing.
+      // Awaiting with fake timers (never advancing) proves no sleep happened.
       await expect(resultPromise).resolves.toMatchObject({
         ads: [],
+        cacheStatus: "miss",
         discoveryStatus: "degraded",
         discoveryProgress: "warming",
         discoveryFailureClass: null,
       });
       expect(browserSearch).not.toHaveBeenCalled();
+      // Exactly two cache reads (resolver pre-lease read + the waiter's single
+      // poll iteration): the early return skips the 250ms poll loop entirely.
+      expect(getDiscoveryCacheEntry).toHaveBeenCalledTimes(2);
+      // The provider-cooldown check still runs before the warming return.
+      expect(getDiscoveryProviderState).toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }
