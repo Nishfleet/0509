@@ -7,15 +7,19 @@ const TICKER_MAX_ITEMS = 6;
  * The capture ticker — motion before a word is read. Built from the REAL
  * cached ads (each item is one ad actually in the cache, with its real source
  * tag), so it is decorative but never fabricated. Reuses the landing's
- * `ld-ticker*` marquee so the funnel feels like one product.
+ * `ld-ticker*` marquee so the funnel feels like one product. The brand-level
+ * "live" tag only appears while the capture is fresh enough for a live claim;
+ * older captures tag the brand "on record".
  */
 export function BrandTicker({
   ads,
   brandName,
+  fresh,
   now = new Date(),
 }: {
   ads: AdRecord[];
   brandName: string;
+  fresh: boolean;
   now?: Date;
 }) {
   const items = ads
@@ -23,7 +27,7 @@ export function BrandTicker({
     .slice(0, TICKER_MAX_ITEMS)
     .map((ad) => ({
       id: ad.metaAdId,
-      time: tickerTime(ad, now),
+      time: tickerTime(ad, now, fresh),
       event: ad.previewHeadline?.trim() || ad.hook?.trim() || "",
       source: sourceLabel(ad.source),
     }));
@@ -32,7 +36,7 @@ export function BrandTicker({
 
   const run = (
     <span className="ld-ticker-run">
-      <em>{`${brandName} · live`}</em>
+      <em>{`${brandName} · ${fresh ? "live" : "on record"}`}</em>
       {items.map((item) => (
         <span className="ld-ticker-item" key={item.id}>
           <b>{item.time}</b> {item.event} <small>[{item.source}]</small>
@@ -51,9 +55,9 @@ export function BrandTicker({
   );
 }
 
-function tickerTime(ad: AdRecord, now: Date): string {
+function tickerTime(ad: AdRecord, now: Date, fresh: boolean): string {
   const days = adLongevityDays(ad, now);
-  if (days === null) return "live";
+  if (days === null) return fresh ? "live" : "on record";
   if (days < 1) return "new";
   if (days === 1) return "1d";
   return `${days}d`;

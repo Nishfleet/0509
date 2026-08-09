@@ -14,7 +14,9 @@ interface StatCell {
  * "Nike, by the numbers" — the box-score stat strip. Every cell traces to a
  * real loader field; cells whose data is missing are DROPPED (the grid
  * reflows) rather than zero-stuffed, and the whole strip is hidden if fewer
- * than two cells survive. Never invents a number.
+ * than two cells survive. Never invents a number. The "Ads live" caption
+ * only applies while the capture is fresh enough for a live claim — older
+ * captures read "Ads on record".
  */
 export function BrandStatLine({
   teaser,
@@ -22,12 +24,14 @@ export function BrandStatLine({
   ads,
   movesThisWeek,
   freshnessLabel,
+  fresh,
 }: {
   teaser: BrandIntelTeaser;
   aggression: BrandPageAggression | null;
   ads: AdRecord[];
   movesThisWeek: number;
   freshnessLabel: string | null;
+  fresh: boolean;
 }) {
   const testedCount = ads.filter((ad) => (ad.variantCount ?? 0) > 1).length;
   const cells: StatCell[] = [];
@@ -35,7 +39,7 @@ export function BrandStatLine({
   cells.push({
     key: "ads-live",
     value: String(teaser.totalCount),
-    caption: "Ads live",
+    caption: fresh ? "Ads live" : "Ads on record",
     context: `${teaser.activeCount} marked active`,
   });
 
