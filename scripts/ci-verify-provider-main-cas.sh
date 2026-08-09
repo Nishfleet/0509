@@ -48,6 +48,16 @@ remote_sha="$(
     jq -er '.object.sha'
 )" || fail "remote_main_unavailable"
 [[ "$remote_sha" =~ $sha_pattern ]] || fail "remote_main_sha"
-[[ "$remote_sha" == "$PINNED_SHA" ]] || fail "remote_main_drift"
-
-printf 'Provider main CAS verified at %s.\n' "$PINNED_SHA"
+if [[ "$remote_sha" == "$PINNED_SHA" ]]; then
+  printf 'Provider main CAS verified at %s.\n' "$PINNED_SHA"
+elif [[ "${TOLERATE_MAIN_DRIFT:-0}" == "1" ]]; then
+  # Post-gate drift tolerance: the caller (Deploy production, after its full
+  # verification gate) deploys exactly PINNED_SHA, so a mid-run move of main
+  # does not change what ships. Record the move and continue with the verified
+  # SHA instead of failing the whole run. Every other failure above stays
+  # fail-closed even with this flag set; drift is the only downgrade.
+  printf 'Deploying pinned SHA %s behind main: provider main moved to %s while the exact candidate was verified.\n' \
+    "$PINNED_SHA" "$remote_sha" >&2
+else
+  fail "remote_main_drift"
+fi
