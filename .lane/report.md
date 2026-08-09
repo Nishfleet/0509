@@ -314,7 +314,7 @@ item closes on merge + deploy + same-engine dogfood rerun. No duplicate PR opene
 
 Branch: `fix/ai-answer-readiness-content-depth`
 Base: `origin/main` at `6f1026f3`
-Pull request: <PR URL filled at push time>
+Pull request: https://github.com/nish3451/0509/pull/566
 
 ## Item
 
