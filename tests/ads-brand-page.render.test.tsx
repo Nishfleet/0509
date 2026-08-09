@@ -286,6 +286,22 @@ describe("/ads/:domain — Case File render", () => {
     expect(stale).not.toContain("Nike's real ads");
     expect(stale).not.toContain("34 Meta ads are pointing at");
   });
+
+  it("never labels a creative with the brand name when its advertiser is unconfirmed", async () => {
+    const ads = Array.from({ length: 5 }, (_v, i) =>
+      ad({ metaAdId: `ad-${i}`, advertiser: i === 0 ? "" : "Nike" }),
+    );
+    const markup = await render(
+      populated({ ads, brandOwnedAdCount: 4, teaser: { ...teaser, totalCount: 5 } }),
+    );
+
+    // The unconfirmed creative is counted as other advertisers' — never
+    // brand-owned — and its card is labeled honestly, not with the brand name.
+    expect(markup).toContain("Nike was running ");
+    expect(markup).toContain("4 of these 5 Meta ads");
+    expect(markup).toContain("Advertiser unconfirmed · nike.com");
+    expect((markup.match(/Nike · nike\.com/g) ?? []).length).toBe(4);
+  });
 });
 
 describe("/ads/:domain — truthful WebPage JSON-LD", () => {

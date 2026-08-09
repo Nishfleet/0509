@@ -386,7 +386,6 @@ function BrandAdsResults({
           </div>
           <BrandAdWall
             ads={data.ads}
-            brandName={data.brandName}
             domain={data.domain}
             fresh={data.freshForLiveClaim}
             signupPath={signupPath}
