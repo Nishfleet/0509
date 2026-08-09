@@ -46,7 +46,7 @@ import type {
   BrandIntelTeaser,
   BrandPageAggression,
 } from "~/lib/brand-page.server";
-import { canonicalUrl, publicSeoMeta } from "~/lib/seo";
+import { canonicalUrl, jsonLdScriptProps, publicSeoMeta, webPageJsonLd } from "~/lib/seo";
 import { SUPPORT_EMAIL } from "~/lib/support";
 import type { AdRecord } from "~/lib/types";
 
@@ -56,6 +56,11 @@ export interface BrandPageLoaderData {
   hasCachedAds: boolean;
   ads: AdRecord[];
   checkedAgo: string | null;
+  /**
+   * ISO timestamp of the underlying Ad Library check — the machine-readable
+   * twin of the visible "Last checked …" stamp. Null on the cache-miss shell.
+   */
+  lastCheckedAt: string | null;
   /**
    * True only when the capture is young enough (≤ 1 hour) for the page to
    * honestly say "right now"/"live". Older captures render past-tense copy.
@@ -127,6 +132,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     hasCachedAds: Boolean(snapshot),
     ads: snapshot?.ads ?? [],
     checkedAgo: snapshot ? formatBrandPageCheckedAgo(snapshot.fetchedAt, now) : null,
+    lastCheckedAt: snapshot?.fetchedAt ?? null,
     freshForLiveClaim: snapshot?.freshForLiveClaim ?? false,
     teaser: snapshot ? buildBrandIntelTeaser(snapshot.ads, now) : null,
     aggression: snapshot ? computeBrandPageAggressionScore(snapshot.ads, now) : null,
@@ -134,6 +140,34 @@ export async function loader({ context, params, request }: LoaderFunctionArgs): 
     noindex,
     canonicalPath: `/ads/${brand.domain}`,
   };
+}
+
+/**
+ * Single source of truth for the page title — shared by the <title>/og:title
+ * meta and the WebPage JSON-LD `name` so structured data always states exactly
+ * what the visible page states.
+ */
+export function brandPageTitle(data: BrandPageLoaderData): string {
+  // "Right now" is a live-scrape claim — it must never appear when the page
+  // renders from a cache older than an hour, or on the cache-miss shell, and
+  // it needs the visible checked-ago stamp as its evidence.
+  if (!data.hasCachedAds) {
+    return `${data.brandName} Facebook & Instagram ads | Five to Nine`;
+  }
+  if (data.freshForLiveClaim && data.checkedAgo) {
+    return `${data.brandName} Facebook & Instagram ads right now | Five to Nine`;
+  }
+  return `${data.brandName} Facebook & Instagram ads — checked ${data.checkedAgo ?? "recently"} | Five to Nine`;
+}
+
+/**
+ * Single source of truth for the meta description — shared by the
+ * <meta name="description"> and the WebPage JSON-LD `description`.
+ */
+export function brandPageDescription(data: BrandPageLoaderData): string {
+  return data.hasCachedAds
+    ? `See ${data.ads.length} Meta ${data.ads.length === 1 ? "ad" : "ads"} from ${data.brandName} (${data.domain}), from a public Ad Library check ${data.checkedAgo}. Get an email when their ads or offer change.`
+    : `We haven't checked ${data.domain} recently. Run a free live Meta Ad Library search and track ${data.brandName}'s ads with Five to Nine.`;
 }
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
@@ -144,17 +178,8 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
     ];
   }
 
-  // "Right now" is a live-scrape claim — it must never appear when the page
-  // renders from a cache older than an hour, or on the cache-miss shell, and
-  // it needs the visible checked-ago stamp as its evidence.
-  const title = loaderData.hasCachedAds
-    ? loaderData.freshForLiveClaim && loaderData.checkedAgo
-      ? `${loaderData.brandName} Facebook & Instagram ads right now | Five to Nine`
-      : `${loaderData.brandName} Facebook & Instagram ads — checked ${loaderData.checkedAgo ?? "recently"} | Five to Nine`
-    : `${loaderData.brandName} Facebook & Instagram ads | Five to Nine`;
-  const description = loaderData.hasCachedAds
-    ? `See ${loaderData.ads.length} Meta ${loaderData.ads.length === 1 ? "ad" : "ads"} from ${loaderData.brandName} (${loaderData.domain}), from a public Ad Library check ${loaderData.checkedAgo}. Get an email when their ads or offer change.`
-    : `We haven't checked ${loaderData.domain} recently. Run a free live Meta Ad Library search and track ${loaderData.brandName}'s ads with Five to Nine.`;
+  const title = brandPageTitle(loaderData);
+  const description = brandPageDescription(loaderData);
 
   return [
     ...publicSeoMeta({ title, description, pathname: loaderData.canonicalPath }),
@@ -173,6 +198,28 @@ export default function BrandAdsRoute() {
 
   return (
     <main className="f9-home f9-ads-page">
+      {/*
+       * Truthful WebPage JSON-LD, and ONLY on indexable pages: the honest
+       * shell, demo-sourced entries, stale (> 7 days) captures, and the
+       * emergency-brake flag all carry noindex — structured data on those
+       * states would be dead weight at best and a freshness lie at worst.
+       * Every field mirrors the visible page: the meta title/description,
+       * the canonical URL, the on-screen "Last checked" stamp (dateModified),
+       * and the brand the page is about.
+       */}
+      {!data.noindex ? (
+        <script
+          {...jsonLdScriptProps(
+            webPageJsonLd({
+              name: brandPageTitle(data),
+              description: brandPageDescription(data),
+              pathname: data.canonicalPath,
+              dateModified: data.lastCheckedAt ?? undefined,
+              aboutName: data.brandName,
+            }),
+          )}
+        />
+      ) : null}
       {data.hasCachedAds ? (
         <BrandTicker ads={data.ads} brandName={data.brandName} fresh={data.freshForLiveClaim} />
       ) : null}
