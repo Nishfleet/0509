@@ -115,6 +115,9 @@ jobs:
     permissions:
       contents: read
       actions: read
+    outputs:
+      backup_proof_status: ${{ needs.pin_candidate.outputs.backup_proof_status }}
+      evidence_valid: ${{ steps.verify_evidence.outputs.restore_evidence_available }}
     env:
       PINNED_SHA: ${{ needs.pin_candidate.outputs.sha }}
       BACKUP_PROOF_STATUS: ${{ needs.pin_candidate.outputs.backup_proof_status }}
@@ -155,6 +158,7 @@ jobs:
         # (backgrounded lanes redirect stdin to /dev/null).
         run: ./scripts/deploy-window-lock.sh run -- ./scripts/ci-bind-remote-restore-candidate.sh
       - name: Verify pre-generated exact R2 restore evidence
+        id: verify_evidence
         if: env.BACKUP_PROOF_STATUS == 'required'
         env:
           D1_REMOTE_RESTORE_EVIDENCE_MIN_VALIDITY_MS: "43200000"
@@ -162,7 +166,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: ./scripts/deploy-window-lock.sh run -- ./scripts/ci-prepare-remote-restore-evidence.sh
       - name: Preserve private restore evidence for this deploy only
-        if: env.BACKUP_PROOF_STATUS == 'required'
+        if: env.BACKUP_PROOF_STATUS == 'required' && steps.verify_evidence.outputs.restore_evidence_available == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}
@@ -175,14 +179,217 @@ jobs:
         shell: bash
         run: rm -f -- "$RESTORE_EVIDENCE_ARCHIVE"
 
+  generate_restore_evidence:
+    name: Generate D1 remote restore evidence
+    # Runs only when the preparation job found no verified pre-generated
+    # evidence for this exact pinned candidate. It performs the same fresh
+    # backup + isolated remote restore drill as the D1 remote restore evidence
+    # workflow, on a fresh GitHub-hosted machine under the protected production
+    # environment, and publishes the evidence for the deploy job's exact
+    # verifier. This removes the deploy's dependency on a separate workflow
+    # having run at this SHA first: the first deploy of a new migration-bearing
+    # or restore-critical main commit generates its own exact evidence instead
+    # of hard-failing.
+    if: >-
+      needs.prepare_remote_restore_evidence.outputs.backup_proof_status == 'required' &&
+      needs.prepare_remote_restore_evidence.outputs.evidence_valid == 'false'
+    needs:
+      - pin_candidate
+      - prepare_remote_restore_evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    environment: production
+    permissions:
+      contents: read
+      actions: read
+    env:
+      D1_DATABASE_NAME: "0509"
+      R2_BACKUP_BUCKET: "0509-landing-page-artifacts"
+      PINNED_SHA: ${{ needs.pin_candidate.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.pin_candidate.outputs.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify authorized evidence checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --verify HEAD)" = "$PINNED_SHA"
+          if git symbolic-ref --quiet HEAD >/dev/null 2>&1; then
+            exit 1
+          fi
+      - name: Bind run-scoped backup directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'D1_BACKUP_LOCAL_DIRECTORY=%s\n' \
+            "$RUNNER_TEMP/0509-d1-backups-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            >> "$GITHUB_ENV"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".node-version"
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
+      - run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
+      - run: ./scripts/deploy-window-lock.sh run -- node scripts/validate-d1-backup.mjs
+      - name: Acquire provider lane
+        shell: bash
+        env:
+          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
+        run: ./scripts/deploy-window-lock.sh acquire
+      - name: Reconfirm frozen main before evidence mutation
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/ci-verify-provider-main-cas.sh
+      - name: Create fresh backup and prove an isolated remote restore
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          D1_BACKUP_AUTOMATION_APPROVED: "0509-weekly-d1-to-r2"
+          D1_REMOTE_RESTORE_AUTOMATION_APPROVED: "0509-remote-restore-evidence"
+          D1_REMOTE_RESTORE_MAX_SQL_BYTES: ${{ vars.D1_REMOTE_RESTORE_MAX_SQL_BYTES }}
+        run: |
+          set -euo pipefail
+          umask 077
+          node scripts/d1-remote-restore-evidence.mjs \
+            --output test-results/d1-remote-restore-evidence.json
+      - name: Remove run-scoped plaintext backup files
+        if: always()
+        run: node scripts/d1-backup-local-cleanup.mjs
+      - name: Release provider lane
+        if: always()
+        shell: bash
+        env:
+          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
+        run: ./scripts/deploy-window-lock.sh release
+      - name: Remove provider-lane capability file
+        if: always()
+        shell: bash
+        env:
+          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
+        run: |
+          umask 077
+          rm -f -- "$DEPLOY_WINDOW_CAPABILITY_FILE"
+      - name: Archive permission-preserving restore evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$(stat -c '%a' test-results/d1-remote-restore-evidence.json)" = "600"
+          tar --format=posix -czf \
+            "test-results/d1-remote-restore-evidence-${GITHUB_SHA}-${GITHUB_RUN_ID}.tar.gz" \
+            -C test-results \
+            d1-remote-restore-evidence.json
+      - name: Preserve private restore evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}
+          path: test-results/d1-remote-restore-evidence-${{ github.sha }}-${{ github.run_id }}.tar.gz
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 8
+
+  cleanup_restore_evidence:
+    name: Confirm scratch D1 cleanup
+    # Mirrors the drill workflow's independent cleanup job: deletes every exact
+    # scratch database from this run, including any left by a hard-killed
+    # generation attempt, so a lost runner cannot park production data.
+    if: >-
+      always() &&
+      needs.prepare_remote_restore_evidence.result == 'success' &&
+      needs.prepare_remote_restore_evidence.outputs.backup_proof_status == 'required' &&
+      needs.prepare_remote_restore_evidence.outputs.evidence_valid == 'false'
+    needs:
+      - pin_candidate
+      - prepare_remote_restore_evidence
+      - generate_restore_evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment: production
+    permissions:
+      contents: read
+      actions: read
+    env:
+      D1_DATABASE_NAME: "0509"
+      R2_BACKUP_BUCKET: "0509-landing-page-artifacts"
+      PINNED_SHA: ${{ needs.pin_candidate.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.pin_candidate.outputs.sha }}
+          fetch-depth: 0
+          clean: true
+          persist-credentials: false
+      - name: Verify authorized cleanup checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse --verify HEAD)" = "$PINNED_SHA"
+          if git symbolic-ref --quiet HEAD >/dev/null 2>&1; then
+            exit 1
+          fi
+      - name: Bind run-scoped backup directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'D1_BACKUP_LOCAL_DIRECTORY=%s\n' \
+            "$RUNNER_TEMP/0509-d1-backups-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            >> "$GITHUB_ENV"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: ".node-version"
+          cache: ${{ runner.environment == 'github-hosted' && 'npm' || '' }}
+          package-manager-cache: ${{ runner.environment == 'github-hosted' }}
+      - run: ./scripts/deploy-window-lock.sh run -- npm ci --ignore-scripts
+      - name: Acquire provider lane
+        shell: bash
+        env:
+          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
+        run: ./scripts/deploy-window-lock.sh acquire
+      - name: Delete every exact scratch database from this run
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          D1_REMOTE_RESTORE_AUTOMATION_APPROVED: "0509-remote-restore-evidence"
+        run: node scripts/d1-remote-restore-evidence.mjs --cleanup-only
+      - name: Release provider lane
+        if: always()
+        shell: bash
+        env:
+          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
+        run: ./scripts/deploy-window-lock.sh release
+      - name: Remove provider-lane capability file
+        if: always()
+        shell: bash
+        env:
+          DEPLOY_WINDOW_CAPABILITY_FILE: ${{ runner.temp }}/deploy-window-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}.capability
+        run: |
+          umask 077
+          rm -f -- "$DEPLOY_WINDOW_CAPABILITY_FILE"
+
   deploy:
     name: Deploy Worker
     if: >-
       needs.pin_candidate.result == 'success' &&
-      needs.prepare_remote_restore_evidence.result == 'success'
+      needs.prepare_remote_restore_evidence.result == 'success' &&
+      always() &&
+      (
+        needs.generate_restore_evidence.result == 'success' ||
+        needs.generate_restore_evidence.result == 'skipped'
+      ) &&
+      (
+        needs.cleanup_restore_evidence.result == 'success' ||
+        needs.cleanup_restore_evidence.result == 'skipped'
+      )
     needs:
       - pin_candidate
       - prepare_remote_restore_evidence
+      - generate_restore_evidence
+      - cleanup_restore_evidence
     runs-on: ubuntu-latest
     # Budget: 180m maximum deploy-window wait + 60m conservative pipeline +
     # 30m cancellation/release slack = 270m. With cancel-in-progress: false,
